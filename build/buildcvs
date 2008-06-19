@@ -7,6 +7,7 @@ snmptag="HEAD"
 ldiskfstag="HEAD"
 ldiskfstag_head="b1_8_iam"
 lustreiokittag="HEAD"
+libcfstag=""
 dmutag=""
 hg_base_url="http://www.wizy.org/mercurial"
 
@@ -169,11 +170,6 @@ case "$lustretag" in
         ldiskfstag="$ldiskfstag_head"
 	;;
 
-    HEAD|b_HEAD_*|b_head_*|b_hd_*)
-        lnettag="HEAD"
-        ldiskfstag="$ldiskfstag_head"
-        ;;
-
     # CMD3
     b_post_cmd3|b_new_cmd_sles10|b1_6_head_sync|b_mixed_layout_req|b_mount_perm|b1_8_gns|b1_8_quota|b1_8_interop_server|b_som)
         # Update b1_8 above when changing this.
@@ -249,6 +245,19 @@ case "$lustretag" in
         snmptag="$lustretag"
         ldiskfstag="$lustretag"
         ;;
+
+    b_HEAD_*|b_head_*|b_hd_*)
+        lnettag="b1_x"
+        ldiskfstag="$ldiskfstag_head"
+        ;;
+
+    # Branches that have been updated to include
+    # the libcfs split should be added here
+    HEAD)
+        lnettag="HEAD"
+        ldiskfstag="$ldiskfstag_head"
+        libcfstag="HEAD"
+        ;;
 esac
 
 cvs_cmd libsysio libsysio "$libsysiotag"
@@ -259,5 +268,8 @@ cvs_cmd lustre lustre-core "$lustretag"
 cvs_cmd ldiskfs ldiskfs "$ldiskfstag"
 cvs_cmd lustre-iokit lustre-iokit "$lustreiokittag"
 hg_cmd zfs-lustre "$hg_base_url" "$dmutag"
+if [ -n $libcfstag ]; then
+    cvs_cmd libcfs libcfs "$libcfstag"
+fi
 
 [ -a ldiskfs/build ] || ln -sf ../build ldiskfs/build
