@@ -238,6 +238,14 @@ case "$lustretag" in
         snmptag="$lustretag"
         ;;
 
+    # Branches that have been updated to include
+    # the libcfs split should be added here
+    HEAD)
+        lnettag="HEAD"
+        ldiskfstag="$ldiskfstag_head"
+        libcfstag="HEAD"
+        ;;
+
     # all later v* tags
     v[1-9]*)
         lnettag="$lustretag"
@@ -249,14 +257,6 @@ case "$lustretag" in
     b_HEAD_*|b_head_*|b_hd_*)
         lnettag="b1_x"
         ldiskfstag="$ldiskfstag_head"
-        ;;
-
-    # Branches that have been updated to include
-    # the libcfs split should be added here
-    HEAD)
-        lnettag="HEAD"
-        ldiskfstag="$ldiskfstag_head"
-        libcfstag="HEAD"
         ;;
 esac
 
