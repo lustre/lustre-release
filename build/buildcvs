@@ -7,7 +7,7 @@ snmptag="HEAD"
 ldiskfstag="HEAD"
 ldiskfstag_head="b1_8_iam"
 lustreiokittag="HEAD"
-libcfstag=""
+libcfstag="b1_x"
 dmutag=""
 hg_base_url="http://www.wizy.org/mercurial"
 
@@ -268,8 +268,6 @@ cvs_cmd lustre lustre-core "$lustretag"
 cvs_cmd ldiskfs ldiskfs "$ldiskfstag"
 cvs_cmd lustre-iokit lustre-iokit "$lustreiokittag"
 hg_cmd zfs-lustre "$hg_base_url" "$dmutag"
-if [ -n $libcfstag ]; then
-    cvs_cmd libcfs libcfs "$libcfstag"
-fi
+cvs_cmd libcfs libcfs "$libcfstag"
 
 [ -a ldiskfs/build ] || ln -sf ../build ldiskfs/build
