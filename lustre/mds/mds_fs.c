@@ -104,8 +104,8 @@ int mds_client_add(struct obd_device *obd, struct obd_export *exp,
         LASSERT(bitmap != NULL);
         LASSERTF(cl_idx > -2, "%d\n", cl_idx);
 
-        /* XXX if mcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
-        if (!strcmp(med->med_mcd->mcd_uuid, obd->obd_uuid.uuid))
+        /* XXX if lcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
+        if (!strcmp(med->med_lcd->lcd_uuid, obd->obd_uuid.uuid))
                 RETURN(0);
 
         /* the bitmap operations can handle cl_idx > sizeof(long) * 8, so
@@ -134,7 +134,7 @@ int mds_client_add(struct obd_device *obd, struct obd_export *exp,
         }
 
         CDEBUG(D_INFO, "client at idx %d with UUID '%s' added\n",
-               cl_idx, med->med_mcd->mcd_uuid);
+               cl_idx, med->med_lcd->lcd_uuid);
 
         med->med_lr_idx = cl_idx;
         med->med_lr_off = le32_to_cpu(mds->mds_server_data->lsd_client_start) +
@@ -162,8 +162,8 @@ int mds_client_add(struct obd_device *obd, struct obd_export *exp,
                                 exp->exp_need_sync = 1;
                                 spin_unlock(&exp->exp_lock);
                         }
-                        rc = fsfilt_write_record(obd, file, med->med_mcd,
-                                                 sizeof(*med->med_mcd),
+                        rc = fsfilt_write_record(obd, file, med->med_lcd,
+                                                 sizeof(*med->med_lcd),
                                                  &off, rc /* sync if no cb */);
                         fsfilt_commit(obd, file->f_dentry->d_inode, handle, 0);
                 }
@@ -172,9 +172,9 @@ int mds_client_add(struct obd_device *obd, struct obd_export *exp,
 
                 if (rc)
                         return rc;
-                CDEBUG(D_INFO, "wrote client mcd at idx %u off %llu (len %u)\n",
+                CDEBUG(D_INFO, "wrote client lcd at idx %u off %llu (len %u)\n",
                        med->med_lr_idx, med->med_lr_off,
-                       (unsigned int)sizeof(*med->med_mcd));
+                       (unsigned int)sizeof(*med->med_lcd));
         }
         return 0;
 }
@@ -184,21 +184,21 @@ int mds_client_free(struct obd_export *exp)
         struct mds_export_data *med = &exp->exp_mds_data;
         struct mds_obd *mds = &exp->exp_obd->u.mds;
         struct obd_device *obd = exp->exp_obd;
-        struct mds_client_data zero_mcd;
+        struct lsd_client_data zero_lcd;
         struct lvfs_run_ctxt saved;
         int rc;
         loff_t off;
         ENTRY;
 
-        if (!med->med_mcd)
+        if (!med->med_lcd)
                 RETURN(0);
 
-        /* XXX if mcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
-        if (!strcmp(med->med_mcd->mcd_uuid, obd->obd_uuid.uuid))
+        /* XXX if lcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
+        if (!strcmp(med->med_lcd->lcd_uuid, obd->obd_uuid.uuid))
                 GOTO(free, 0);
 
         CDEBUG(D_INFO, "freeing client at idx %u, offset %lld with UUID '%s'\n",
-               med->med_lr_idx, med->med_lr_off, med->med_mcd->mcd_uuid);
+               med->med_lr_idx, med->med_lr_off, med->med_lcd->lcd_uuid);
 
         LASSERT(mds->mds_client_bitmap != NULL);
 
@@ -223,17 +223,17 @@ int mds_client_free(struct obd_export *exp)
         }
 
         if (!(exp->exp_flags & OBD_OPT_FAILOVER)) {
-                memset(&zero_mcd, 0, sizeof zero_mcd);
+                memset(&zero_lcd, 0, sizeof(zero_lcd));
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                rc = fsfilt_write_record(obd, mds->mds_rcvd_filp, &zero_mcd,
-                                         sizeof(zero_mcd), &off,
+                rc = fsfilt_write_record(obd, mds->mds_rcvd_filp, &zero_lcd,
+                                         sizeof(zero_lcd), &off,
                                          (!exp->exp_libclient ||
                                           exp->exp_need_sync));
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
                 CDEBUG(rc == 0 ? D_INFO : D_ERROR,
                        "zeroing out client %s idx %u in %s rc %d\n",
-                       med->med_mcd->mcd_uuid, med->med_lr_idx, LAST_RCVD, rc);
+                       med->med_lcd->lcd_uuid, med->med_lr_idx, LAST_RCVD, rc);
         }
 
         if (!test_and_clear_bit(med->med_lr_idx, mds->mds_client_bitmap)) {
@@ -250,8 +250,8 @@ int mds_client_free(struct obd_export *exp)
 
         EXIT;
  free:
-        OBD_FREE(med->med_mcd, sizeof(*med->med_mcd));
-        med->med_mcd = NULL;
+        OBD_FREE_PTR(med->med_lcd);
+        med->med_lcd = NULL;
 
         return 0;
 }
@@ -269,7 +269,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lr_server_data *lsd;
-        struct mds_client_data *mcd = NULL;
+        struct lsd_client_data *lcd = NULL;
         loff_t off = 0;
         unsigned long last_rcvd_size = i_size_read(file->f_dentry->d_inode);
         __u64 mount_count;
@@ -279,8 +279,8 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
         /* ensure padding in the struct is the correct size */
         LASSERT(offsetof(struct lr_server_data, lsd_padding) +
                 sizeof(lsd->lsd_padding) == LR_SERVER_SIZE);
-        LASSERT(offsetof(struct mds_client_data, mcd_padding) +
-                sizeof(mcd->mcd_padding) == LR_CLIENT_SIZE);
+        LASSERT(offsetof(struct lsd_client_data, lcd_padding) +
+                sizeof(lcd->lcd_padding) == LR_CLIENT_SIZE);
 
         OBD_ALLOC_WAIT(lsd, sizeof(*lsd));
         if (!lsd)
@@ -377,59 +377,59 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 struct obd_export *exp;
                 struct mds_export_data *med;
 
-                if (!mcd) {
-                        OBD_ALLOC_WAIT(mcd, sizeof(*mcd));
-                        if (!mcd)
+                if (!lcd) {
+                        OBD_ALLOC_WAIT(lcd, sizeof(*lcd));
+                        if (!lcd)
                                 GOTO(err_client, rc = -ENOMEM);
                 }
 
                 /* Don't assume off is incremented properly by
-                 * fsfilt_read_record(), in case sizeof(*mcd)
+                 * fsfilt_read_record(), in case sizeof(*lcd)
                  * isn't the same as lsd->lsd_client_size.  */
                 off = le32_to_cpu(lsd->lsd_client_start) +
                         cl_idx * le16_to_cpu(lsd->lsd_client_size);
-                rc = fsfilt_read_record(obd, file, mcd, sizeof(*mcd), &off);
+                rc = fsfilt_read_record(obd, file, lcd, sizeof(*lcd), &off);
                 if (rc) {
                         CERROR("error reading MDS %s idx %d, off %llu: rc %d\n",
                                LAST_RCVD, cl_idx, off, rc);
                         break; /* read error shouldn't cause startup to fail */
                 }
 
-                if (mcd->mcd_uuid[0] == '\0') {
+                if (lcd->lcd_uuid[0] == '\0') {
                         CDEBUG(D_INFO, "skipping zeroed client at offset %d\n",
                                cl_idx);
                         continue;
                 }
 
-                last_transno = le64_to_cpu(mcd->mcd_last_transno) >
-                               le64_to_cpu(mcd->mcd_last_close_transno) ?
-                               le64_to_cpu(mcd->mcd_last_transno) :
-                               le64_to_cpu(mcd->mcd_last_close_transno);
+                last_transno = le64_to_cpu(lcd->lcd_last_transno) >
+                               le64_to_cpu(lcd->lcd_last_close_transno) ?
+                               le64_to_cpu(lcd->lcd_last_transno) :
+                               le64_to_cpu(lcd->lcd_last_close_transno);
 
                 /* These exports are cleaned up by mds_disconnect(), so they
                  * need to be set up like real exports as mds_connect() does.
                  */
                 CDEBUG(D_HA, "RCVRNG CLIENT uuid: %s idx: %d lr: "LPU64
-                       " srv lr: "LPU64" lx: "LPU64"\n", mcd->mcd_uuid, cl_idx,
+                       " srv lr: "LPU64" lx: "LPU64"\n", lcd->lcd_uuid, cl_idx,
                        last_transno, le64_to_cpu(lsd->lsd_last_transno),
-                       le64_to_cpu(mcd->mcd_last_xid));
+                       le64_to_cpu(lcd->lcd_last_xid));
 
-                exp = class_new_export(obd, (struct obd_uuid *)mcd->mcd_uuid);
+                exp = class_new_export(obd, (struct obd_uuid *)lcd->lcd_uuid);
                 if (IS_ERR(exp)) {
                         if (PTR_ERR(exp) == -EALREADY) {
                                 /* export already exists, zero out this one */
-                                mcd->mcd_uuid[0] = '\0';
+                                lcd->lcd_uuid[0] = '\0';
                         } else {
                                 GOTO(err_client, rc = PTR_ERR(exp));
                         }
                 } else {
                         med = &exp->exp_mds_data;
-                        med->med_mcd = mcd;
+                        med->med_lcd = lcd;
                         rc = mds_client_add(obd, exp, cl_idx, NULL);
                         /* can't fail for existing client */
                         LASSERTF(rc == 0, "rc = %d\n", rc);
 
-                        mcd = NULL;
+                        lcd = NULL;
 
                         spin_lock(&exp->exp_lock);
                         exp->exp_replay_needed = 1;
@@ -449,8 +449,8 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                         mds->mds_last_transno = last_transno;
         }
 
-        if (mcd)
-                OBD_FREE(mcd, sizeof(*mcd));
+        if (lcd)
+                OBD_FREE_PTR(lcd);
 
         obd->obd_last_committed = mds->mds_last_transno;
 
