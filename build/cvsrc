@@ -1,5 +1,0 @@
-cvs -z3 -q
-diff -u -p
-co -d -P
-update -d -P
-commit

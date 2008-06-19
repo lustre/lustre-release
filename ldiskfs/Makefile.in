@@ -1,3 +1,0 @@
-subdir-m += ldiskfs
-
-@INCLUDE_RULES@

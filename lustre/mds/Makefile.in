@@ -1,4 +1,0 @@
-MODULES := mds
-mds-objs := handler.o  lproc_mds.o  mds_fs.o  mds_log.o  mds_lov.o
-
-@INCLUDE_RULES@
