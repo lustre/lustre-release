@@ -123,58 +123,58 @@ void mdt_trans_stop(const struct lu_env *env,
 }
 
 /* last_rcvd handling */
-static inline void msd_le_to_cpu(struct mdt_server_data *buf,
-                                 struct mdt_server_data *msd)
+static inline void lsd_le_to_cpu(struct lr_server_data *buf,
+                                 struct lr_server_data *lsd)
 {
-        memcpy(msd->msd_uuid, buf->msd_uuid, sizeof (msd->msd_uuid));
-        msd->msd_last_transno     = le64_to_cpu(buf->msd_last_transno);
-        msd->msd_mount_count      = le64_to_cpu(buf->msd_mount_count);
-        msd->msd_feature_compat   = le32_to_cpu(buf->msd_feature_compat);
-        msd->msd_feature_rocompat = le32_to_cpu(buf->msd_feature_rocompat);
-        msd->msd_feature_incompat = le32_to_cpu(buf->msd_feature_incompat);
-        msd->msd_server_size      = le32_to_cpu(buf->msd_server_size);
-        msd->msd_client_start     = le32_to_cpu(buf->msd_client_start);
-        msd->msd_client_size      = le16_to_cpu(buf->msd_client_size);
+        memcpy(lsd->lsd_uuid, buf->lsd_uuid, sizeof (lsd->lsd_uuid));
+        lsd->lsd_last_transno     = le64_to_cpu(buf->lsd_last_transno);
+        lsd->lsd_mount_count      = le64_to_cpu(buf->lsd_mount_count);
+        lsd->lsd_feature_compat   = le32_to_cpu(buf->lsd_feature_compat);
+        lsd->lsd_feature_rocompat = le32_to_cpu(buf->lsd_feature_rocompat);
+        lsd->lsd_feature_incompat = le32_to_cpu(buf->lsd_feature_incompat);
+        lsd->lsd_server_size      = le32_to_cpu(buf->lsd_server_size);
+        lsd->lsd_client_start     = le32_to_cpu(buf->lsd_client_start);
+        lsd->lsd_client_size      = le16_to_cpu(buf->lsd_client_size);
 }
 
-static inline void msd_cpu_to_le(struct mdt_server_data *msd,
-                                 struct mdt_server_data *buf)
+static inline void lsd_cpu_to_le(struct lr_server_data *lsd,
+                                 struct lr_server_data *buf)
 {
-        memcpy(buf->msd_uuid, msd->msd_uuid, sizeof (msd->msd_uuid));
-        buf->msd_last_transno     = cpu_to_le64(msd->msd_last_transno);
-        buf->msd_mount_count      = cpu_to_le64(msd->msd_mount_count);
-        buf->msd_feature_compat   = cpu_to_le32(msd->msd_feature_compat);
-        buf->msd_feature_rocompat = cpu_to_le32(msd->msd_feature_rocompat);
-        buf->msd_feature_incompat = cpu_to_le32(msd->msd_feature_incompat);
-        buf->msd_server_size      = cpu_to_le32(msd->msd_server_size);
-        buf->msd_client_start     = cpu_to_le32(msd->msd_client_start);
-        buf->msd_client_size      = cpu_to_le16(msd->msd_client_size);
+        memcpy(buf->lsd_uuid, lsd->lsd_uuid, sizeof (lsd->lsd_uuid));
+        buf->lsd_last_transno     = cpu_to_le64(lsd->lsd_last_transno);
+        buf->lsd_mount_count      = cpu_to_le64(lsd->lsd_mount_count);
+        buf->lsd_feature_compat   = cpu_to_le32(lsd->lsd_feature_compat);
+        buf->lsd_feature_rocompat = cpu_to_le32(lsd->lsd_feature_rocompat);
+        buf->lsd_feature_incompat = cpu_to_le32(lsd->lsd_feature_incompat);
+        buf->lsd_server_size      = cpu_to_le32(lsd->lsd_server_size);
+        buf->lsd_client_start     = cpu_to_le32(lsd->lsd_client_start);
+        buf->lsd_client_size      = cpu_to_le16(lsd->lsd_client_size);
 }
 
-static inline void mcd_le_to_cpu(struct mdt_client_data *buf,
-                                 struct mdt_client_data *mcd)
+static inline void lcd_le_to_cpu(struct lsd_client_data *buf,
+                                 struct lsd_client_data *lcd)
 {
-        memcpy(mcd->mcd_uuid, buf->mcd_uuid, sizeof (mcd->mcd_uuid));
-        mcd->mcd_last_transno       = le64_to_cpu(buf->mcd_last_transno);
-        mcd->mcd_last_xid           = le64_to_cpu(buf->mcd_last_xid);
-        mcd->mcd_last_result        = le32_to_cpu(buf->mcd_last_result);
-        mcd->mcd_last_data          = le32_to_cpu(buf->mcd_last_data);
-        mcd->mcd_last_close_transno = le64_to_cpu(buf->mcd_last_close_transno);
-        mcd->mcd_last_close_xid     = le64_to_cpu(buf->mcd_last_close_xid);
-        mcd->mcd_last_close_result  = le32_to_cpu(buf->mcd_last_close_result);
+        memcpy(lcd->lcd_uuid, buf->lcd_uuid, sizeof (lcd->lcd_uuid));
+        lcd->lcd_last_transno       = le64_to_cpu(buf->lcd_last_transno);
+        lcd->lcd_last_xid           = le64_to_cpu(buf->lcd_last_xid);
+        lcd->lcd_last_result        = le32_to_cpu(buf->lcd_last_result);
+        lcd->lcd_last_data          = le32_to_cpu(buf->lcd_last_data);
+        lcd->lcd_last_close_transno = le64_to_cpu(buf->lcd_last_close_transno);
+        lcd->lcd_last_close_xid     = le64_to_cpu(buf->lcd_last_close_xid);
+        lcd->lcd_last_close_result  = le32_to_cpu(buf->lcd_last_close_result);
 }
 
-static inline void mcd_cpu_to_le(struct mdt_client_data *mcd,
-                                 struct mdt_client_data *buf)
+static inline void lcd_cpu_to_le(struct lsd_client_data *lcd,
+                                 struct lsd_client_data *buf)
 {
-        memcpy(buf->mcd_uuid, mcd->mcd_uuid, sizeof (mcd->mcd_uuid));
-        buf->mcd_last_transno       = cpu_to_le64(mcd->mcd_last_transno);
-        buf->mcd_last_xid           = cpu_to_le64(mcd->mcd_last_xid);
-        buf->mcd_last_result        = cpu_to_le32(mcd->mcd_last_result);
-        buf->mcd_last_data          = cpu_to_le32(mcd->mcd_last_data);
-        buf->mcd_last_close_transno = cpu_to_le64(mcd->mcd_last_close_transno);
-        buf->mcd_last_close_xid     = cpu_to_le64(mcd->mcd_last_close_xid);
-        buf->mcd_last_close_result  = cpu_to_le32(mcd->mcd_last_close_result);
+        memcpy(buf->lcd_uuid, lcd->lcd_uuid, sizeof (lcd->lcd_uuid));
+        buf->lcd_last_transno       = cpu_to_le64(lcd->lcd_last_transno);
+        buf->lcd_last_xid           = cpu_to_le64(lcd->lcd_last_xid);
+        buf->lcd_last_result        = cpu_to_le32(lcd->lcd_last_result);
+        buf->lcd_last_data          = cpu_to_le32(lcd->lcd_last_data);
+        buf->lcd_last_close_transno = cpu_to_le64(lcd->lcd_last_close_transno);
+        buf->lcd_last_close_xid     = cpu_to_le64(lcd->lcd_last_close_xid);
+        buf->lcd_last_close_result  = cpu_to_le32(lcd->lcd_last_close_result);
 }
 
 static inline int mdt_last_rcvd_header_read(const struct lu_env *env,
@@ -187,16 +187,16 @@ static inline int mdt_last_rcvd_header_read(const struct lu_env *env,
 
         mti->mti_off = 0;
         rc = mdt_record_read(env, mdt->mdt_last_rcvd,
-                             mdt_buf(env, &mti->mti_msd, sizeof(mti->mti_msd)),
+                             mdt_buf(env, &mti->mti_lsd, sizeof(mti->mti_lsd)),
                              &mti->mti_off);
         if (rc == 0)
-                msd_le_to_cpu(&mti->mti_msd, &mdt->mdt_msd);
+                lsd_le_to_cpu(&mti->mti_lsd, &mdt->mdt_lsd);
 
         CDEBUG(D_INFO, "read last_rcvd header rc = %d:\n"
                        "uuid = %s\n"
                        "last_transno = "LPU64"\n",
-                        rc, mdt->mdt_msd.msd_uuid,
-                        mdt->mdt_msd.msd_last_transno);
+                        rc, mdt->mdt_lsd.lsd_uuid,
+                        mdt->mdt_lsd.lsd_last_transno);
         return rc;
 }
 
@@ -215,37 +215,37 @@ static inline int mdt_last_rcvd_header_write(const struct lu_env *env,
                 RETURN(PTR_ERR(th));
 
         mti->mti_off = 0;        
-        msd_cpu_to_le(&mdt->mdt_msd, &mti->mti_msd);
+        lsd_cpu_to_le(&mdt->mdt_lsd, &mti->mti_lsd);
 
         rc = mdt_record_write(env, mdt->mdt_last_rcvd,
-                              mdt_buf_const(env, &mti->mti_msd, sizeof(mti->mti_msd)),
+                              mdt_buf_const(env, &mti->mti_lsd, sizeof(mti->mti_lsd)),
                               &mti->mti_off, th);
 
         mdt_trans_stop(env, mdt, th);
 
         CDEBUG(D_INFO, "write last_rcvd header rc = %d:\n"
                "uuid = %s\nlast_transno = "LPU64"\n",
-               rc, mdt->mdt_msd.msd_uuid, mdt->mdt_msd.msd_last_transno);
+               rc, mdt->mdt_lsd.lsd_uuid, mdt->mdt_lsd.lsd_last_transno);
         
         RETURN(rc);
 }
 
 static int mdt_last_rcvd_read(const struct lu_env *env,
                               struct mdt_device *mdt,
-                              struct mdt_client_data *mcd, loff_t *off)
+                              struct lsd_client_data *lcd, loff_t *off)
 {
         struct mdt_thread_info *mti;
-        struct mdt_client_data *tmp;
+        struct lsd_client_data *tmp;
         int rc;
 
         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-        tmp = &mti->mti_mcd;
+        tmp = &mti->mti_lcd;
         rc = mdt_record_read(env, mdt->mdt_last_rcvd,
                              mdt_buf(env, tmp, sizeof(*tmp)), off);
         if (rc == 0)
-                mcd_le_to_cpu(tmp, mcd);
+                lcd_le_to_cpu(tmp, lcd);
 
-        CDEBUG(D_INFO, "read mcd @%d rc = %d:\n"
+        CDEBUG(D_INFO, "read lcd @%d rc = %d:\n"
                        "uuid = %s\n"
                        "last_transno = "LPU64"\n"
                        "last_xid = "LPU64"\n"
@@ -256,36 +256,36 @@ static int mdt_last_rcvd_read(const struct lu_env *env,
                        "last_close_result = %d\n",
                         (int)*off - sizeof(*tmp),
                         rc,
-                        mcd->mcd_uuid,
-                        mcd->mcd_last_transno,
-                        mcd->mcd_last_xid,
-                        mcd->mcd_last_result,
-                        mcd->mcd_last_data,
-                        mcd->mcd_last_close_transno,
-                        mcd->mcd_last_close_xid,
-                        mcd->mcd_last_close_result);
+                        lcd->lcd_uuid,
+                        lcd->lcd_last_transno,
+                        lcd->lcd_last_xid,
+                        lcd->lcd_last_result,
+                        lcd->lcd_last_data,
+                        lcd->lcd_last_close_transno,
+                        lcd->lcd_last_close_xid,
+                        lcd->lcd_last_close_result);
         return rc;
 }
 
 static int mdt_last_rcvd_write(const struct lu_env *env,
                                struct mdt_device *mdt,
-                               struct mdt_client_data *mcd,
+                               struct lsd_client_data *lcd,
                                loff_t *off, struct thandle *th)
 {
         struct mdt_thread_info *mti;
-        struct mdt_client_data *tmp;
+        struct lsd_client_data *tmp;
         int rc;
 
         LASSERT(th != NULL);
         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-        tmp = &mti->mti_mcd;
+        tmp = &mti->mti_lcd;
 
-        mcd_cpu_to_le(mcd, tmp);
+        lcd_cpu_to_le(lcd, tmp);
 
         rc = mdt_record_write(env, mdt->mdt_last_rcvd,
                               mdt_buf_const(env, tmp, sizeof(*tmp)), off, th);
 
-        CDEBUG(D_INFO, "write mcd @%d rc = %d:\n"
+        CDEBUG(D_INFO, "write lcd @%d rc = %d:\n"
                        "uuid = %s\n"
                        "last_transno = "LPU64"\n"
                        "last_xid = "LPU64"\n"
@@ -296,14 +296,14 @@ static int mdt_last_rcvd_write(const struct lu_env *env,
                        "last_close_result = %d\n",
                         (int)*off - sizeof(*tmp),
                         rc,
-                        mcd->mcd_uuid,
-                        mcd->mcd_last_transno,
-                        mcd->mcd_last_xid,
-                        mcd->mcd_last_result,
-                        mcd->mcd_last_data,
-                        mcd->mcd_last_close_transno,
-                        mcd->mcd_last_close_xid,
-                        mcd->mcd_last_close_result);
+                        lcd->lcd_uuid,
+                        lcd->lcd_last_transno,
+                        lcd->lcd_last_xid,
+                        lcd->lcd_last_result,
+                        lcd->lcd_last_data,
+                        lcd->lcd_last_close_transno,
+                        lcd->lcd_last_close_xid,
+                        lcd->lcd_last_close_result);
         return rc;
 }
 
@@ -312,8 +312,8 @@ static int mdt_clients_data_init(const struct lu_env *env,
                                  struct mdt_device *mdt,
                                  unsigned long last_size)
 {
-        struct mdt_server_data *msd = &mdt->mdt_msd;
-        struct mdt_client_data *mcd = NULL;
+        struct lr_server_data  *lsd = &mdt->mdt_lsd;
+        struct lsd_client_data *lcd = NULL;
         struct obd_device      *obd = mdt->mdt_md_dev.md_lu_dev.ld_obd;
         loff_t off;
         int cl_idx;
@@ -324,21 +324,21 @@ static int mdt_clients_data_init(const struct lu_env *env,
          * the header.  If we find clients with higher last_transno values
          * then those clients may need recovery done. */
         LASSERT(atomic_read(&obd->obd_req_replay_clients) == 0);
-        for (cl_idx = 0, off = msd->msd_client_start;
+        for (cl_idx = 0, off = lsd->lsd_client_start;
              off < last_size; cl_idx++) {
                 __u64 last_transno;
                 struct obd_export *exp;
 
-                if (!mcd) {
-                        OBD_ALLOC_PTR(mcd);
-                        if (!mcd)
+                if (!lcd) {
+                        OBD_ALLOC_PTR(lcd);
+                        if (!lcd)
                                 RETURN(-ENOMEM);
                 }
 
-                off = msd->msd_client_start +
-                        cl_idx * msd->msd_client_size;
+                off = lsd->lsd_client_start +
+                        cl_idx * lsd->lsd_client_size;
 
-                rc = mdt_last_rcvd_read(env, mdt, mcd, &off);
+                rc = mdt_last_rcvd_read(env, mdt, lcd, &off);
                 if (rc) {
                         CERROR("error reading MDS %s idx %d, off %llu: rc %d\n",
                                LAST_RCVD, cl_idx, off, rc);
@@ -346,28 +346,28 @@ static int mdt_clients_data_init(const struct lu_env *env,
                         break; /* read error shouldn't cause startup to fail */
                 }
 
-                if (mcd->mcd_uuid[0] == '\0') {
+                if (lcd->lcd_uuid[0] == '\0') {
                         CDEBUG(D_INFO, "skipping zeroed client at offset %d\n",
                                cl_idx);
                         continue;
                 }
 
-                last_transno = mcd_last_transno(mcd);
+                last_transno = lcd_last_transno(lcd);
 
                 /* These exports are cleaned up by mdt_obd_disconnect(), so
                  * they need to be set up like real exports as
                  * mdt_obd_connect() does.
                  */
                 CDEBUG(D_HA, "RCVRNG CLIENT uuid: %s idx: %d lr: "LPU64
-                       " srv lr: "LPU64" lx: "LPU64"\n", mcd->mcd_uuid, cl_idx,
-                       last_transno, msd->msd_last_transno,
-                       mcd_last_xid(mcd));
+                       " srv lr: "LPU64" lx: "LPU64"\n", lcd->lcd_uuid, cl_idx,
+                       last_transno, lsd->lsd_last_transno,
+                       lcd_last_xid(lcd));
 
-                exp = class_new_export(obd, (struct obd_uuid *)mcd->mcd_uuid);
+                exp = class_new_export(obd, (struct obd_uuid *)lcd->lcd_uuid);
                 if (IS_ERR(exp)) {
                         if (PTR_ERR(exp) == -EALREADY) {
                                 /* export already exists, zero out this one */
-                                mcd->mcd_uuid[0] = '\0'; 
+                                lcd->lcd_uuid[0] = '\0'; 
                         } else
                                 GOTO(err_client, rc = PTR_ERR(exp));
                 } else {
@@ -375,11 +375,11 @@ static int mdt_clients_data_init(const struct lu_env *env,
                         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
                         LASSERT(mti != NULL);
                         mti->mti_exp = exp;
-                        exp->exp_mdt_data.med_mcd = mcd;
+                        exp->exp_mdt_data.med_lcd = lcd;
                         rc = mdt_client_add(env, mdt, cl_idx);
                         /* can't fail existing */
                         LASSERTF(rc == 0, "rc = %d\n", rc); 
-                        mcd = NULL;
+                        lcd = NULL;
                         spin_lock(&exp->exp_lock);
                         exp->exp_connecting = 0;
                         exp->exp_in_recovery = 0;
@@ -398,16 +398,16 @@ static int mdt_clients_data_init(const struct lu_env *env,
         }
 
 err_client:
-        if (mcd)
-                OBD_FREE_PTR(mcd);
+        if (lcd)
+                OBD_FREE_PTR(lcd);
         RETURN(rc);
 }
 
 static int mdt_server_data_init(const struct lu_env *env,
                                 struct mdt_device *mdt)
 {
-        struct mdt_server_data *msd = &mdt->mdt_msd;
-        struct mdt_client_data *mcd = NULL;
+        struct lr_server_data  *lsd = &mdt->mdt_lsd;
+        struct lsd_client_data *lcd = NULL;
         struct obd_device      *obd = mdt->mdt_md_dev.md_lu_dev.ld_obd;
         struct mdt_thread_info *mti;
         struct dt_object       *obj;
@@ -418,10 +418,10 @@ static int mdt_server_data_init(const struct lu_env *env,
         ENTRY;
 
         /* ensure padding in the struct is the correct size */
-        CLASSERT(offsetof(struct mdt_server_data, msd_padding) +
-                sizeof(msd->msd_padding) == LR_SERVER_SIZE);
-        CLASSERT(offsetof(struct mdt_client_data, mcd_padding) +
-                sizeof(mcd->mcd_padding) == LR_CLIENT_SIZE);
+        CLASSERT(offsetof(struct lr_server_data, lsd_padding) +
+                sizeof(lsd->lsd_padding) == LR_SERVER_SIZE);
+        CLASSERT(offsetof(struct lsd_client_data, lcd_padding) +
+                sizeof(lcd->lcd_padding) == LR_CLIENT_SIZE);
 
         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
         LASSERT(mti != NULL);
@@ -437,15 +437,15 @@ static int mdt_server_data_init(const struct lu_env *env,
         if (last_rcvd_size == 0) {
                 LCONSOLE_WARN("%s: new disk, initializing\n", obd->obd_name);
 
-                memcpy(msd->msd_uuid, obd->obd_uuid.uuid,
-                       sizeof(msd->msd_uuid));
-                msd->msd_last_transno = 0;
-                msd->msd_mount_count = 0;
-                msd->msd_server_size = LR_SERVER_SIZE;
-                msd->msd_client_start = LR_CLIENT_START;
-                msd->msd_client_size = LR_CLIENT_SIZE;
-                msd->msd_feature_rocompat = OBD_ROCOMPAT_LOVOBJID;
-                msd->msd_feature_incompat = OBD_INCOMPAT_MDT |
+                memcpy(lsd->lsd_uuid, obd->obd_uuid.uuid,
+                       sizeof(lsd->lsd_uuid));
+                lsd->lsd_last_transno = 0;
+                lsd->lsd_mount_count = 0;
+                lsd->lsd_server_size = LR_SERVER_SIZE;
+                lsd->lsd_client_start = LR_CLIENT_START;
+                lsd->lsd_client_size = LR_CLIENT_SIZE;
+                lsd->lsd_feature_rocompat = OBD_ROCOMPAT_LOVOBJID;
+                lsd->lsd_feature_incompat = OBD_INCOMPAT_MDT |
                                                        OBD_INCOMPAT_COMMON_LR;
         } else {
                 LCONSOLE_WARN("%s: used disk, loading\n", obd->obd_name);
@@ -454,20 +454,20 @@ static int mdt_server_data_init(const struct lu_env *env,
                         CERROR("error reading MDS %s: rc %d\n", LAST_RCVD, rc);
                         GOTO(out, rc);
                 }
-                if (strcmp(msd->msd_uuid, obd->obd_uuid.uuid) != 0) {
+                if (strcmp(lsd->lsd_uuid, obd->obd_uuid.uuid) != 0) {
                         LCONSOLE_ERROR_MSG(0x157, "Trying to start OBD %s using"
                                            "the wrong disk %s. Were the /dev/ "
                                            "assignments rearranged?\n",
-                                           obd->obd_uuid.uuid, msd->msd_uuid);
+                                           obd->obd_uuid.uuid, lsd->lsd_uuid);
                         GOTO(out, rc = -EINVAL);
                 }
         }
-        mount_count = msd->msd_mount_count;
+        mount_count = lsd->lsd_mount_count;
 
-        msd->msd_feature_compat = OBD_COMPAT_MDT;
+        lsd->lsd_feature_compat = OBD_COMPAT_MDT;
 
         spin_lock(&mdt->mdt_transno_lock);
-        mdt->mdt_last_transno = msd->msd_last_transno;
+        mdt->mdt_last_transno = lsd->lsd_last_transno;
         spin_unlock(&mdt->mdt_transno_lock);
 
         CDEBUG(D_INODE, "========BEGIN DUMPING LAST_RCVD========\n");
@@ -476,21 +476,21 @@ static int mdt_server_data_init(const struct lu_env *env,
         CDEBUG(D_INODE, "%s: server mount_count: "LPU64"\n",
                obd->obd_name, mount_count + 1);
         CDEBUG(D_INODE, "%s: server data size: %u\n",
-               obd->obd_name, msd->msd_server_size);
+               obd->obd_name, lsd->lsd_server_size);
         CDEBUG(D_INODE, "%s: per-client data start: %u\n",
-               obd->obd_name, msd->msd_client_start);
+               obd->obd_name, lsd->lsd_client_start);
         CDEBUG(D_INODE, "%s: per-client data size: %u\n",
-               obd->obd_name, msd->msd_client_size);
+               obd->obd_name, lsd->lsd_client_size);
         CDEBUG(D_INODE, "%s: last_rcvd size: %lu\n",
                obd->obd_name, last_rcvd_size);
         CDEBUG(D_INODE, "%s: last_rcvd clients: %lu\n", obd->obd_name,
-               last_rcvd_size <= msd->msd_client_start ? 0 :
-               (last_rcvd_size - msd->msd_client_start) /
-                msd->msd_client_size);
+               last_rcvd_size <= lsd->lsd_client_start ? 0 :
+               (last_rcvd_size - lsd->lsd_client_start) /
+                lsd->lsd_client_size);
         CDEBUG(D_INODE, "========END DUMPING LAST_RCVD========\n");
 
-        if (!msd->msd_server_size || !msd->msd_client_start ||
-            !msd->msd_client_size) {
+        if (!lsd->lsd_server_size || !lsd->lsd_client_start ||
+            !lsd->lsd_client_size) {
                 CERROR("Bad last_rcvd contents!\n");
                 GOTO(out, rc = -EINVAL);
         }
@@ -506,7 +506,7 @@ static int mdt_server_data_init(const struct lu_env *env,
         spin_unlock(&mdt->mdt_transno_lock);
 
         mdt->mdt_mount_count++;
-        msd->msd_mount_count = mdt->mdt_mount_count;
+        lsd->lsd_mount_count = mdt->mdt_mount_count;
 
         /* save it, so mount count and last_transno is current */
         rc = mdt_server_data_update(env, mdt);
@@ -531,7 +531,7 @@ static int mdt_server_data_update(const struct lu_env *env,
                mdt->mdt_mount_count, mdt->mdt_last_transno);
 
         spin_lock(&mdt->mdt_transno_lock);
-        mdt->mdt_msd.msd_last_transno = mdt->mdt_last_transno;
+        mdt->mdt_lsd.lsd_last_transno = mdt->mdt_last_transno;
         spin_unlock(&mdt->mdt_transno_lock);
 
         /*
@@ -547,7 +547,7 @@ void mdt_cb_new_client(const struct mdt_device *mdt, __u64 transno,
                                   void *data, int err) 
 {
         struct obd_device *obd = mdt->mdt_md_dev.md_lu_dev.ld_obd;
-        
+
         target_client_add_cb(obd, transno, data, err);
 }
 
@@ -556,8 +556,8 @@ int mdt_client_new(const struct lu_env *env, struct mdt_device *mdt)
         unsigned long *bitmap = mdt->mdt_client_bitmap;
         struct mdt_thread_info *mti;
         struct mdt_export_data *med;
-        struct mdt_client_data *mcd;
-        struct mdt_server_data *msd = &mdt->mdt_msd;
+        struct lsd_client_data *lcd;
+        struct lr_server_data  *lsd = &mdt->mdt_lsd;
         struct obd_device *obd = mdt->mdt_md_dev.md_lu_dev.ld_obd;
         struct thandle *th;
         loff_t off;
@@ -569,10 +569,10 @@ int mdt_client_new(const struct lu_env *env, struct mdt_device *mdt)
         LASSERT(mti != NULL);
 
         med = &mti->mti_exp->exp_mdt_data;
-        mcd = med->med_mcd;
+        lcd = med->med_lcd;
 
         LASSERT(bitmap != NULL);
-        if (!strcmp(med->med_mcd->mcd_uuid, obd->obd_uuid.uuid))
+        if (!strcmp(med->med_lcd->lcd_uuid, obd->obd_uuid.uuid))
                 RETURN(0);
 
         /* the bitmap operations can handle cl_idx > sizeof(long) * 8, so
@@ -591,12 +591,12 @@ int mdt_client_new(const struct lu_env *env, struct mdt_device *mdt)
         spin_unlock(&mdt->mdt_client_bitmap_lock);
 
         CDEBUG(D_INFO, "client at idx %d with UUID '%s' added\n",
-               cl_idx, med->med_mcd->mcd_uuid);
+               cl_idx, med->med_lcd->lcd_uuid);
 
         med->med_lr_idx = cl_idx;
-        med->med_lr_off = msd->msd_client_start +
-                          (cl_idx * msd->msd_client_size);
-        init_mutex(&med->med_mcd_lock);
+        med->med_lr_off = lsd->lsd_client_start +
+                          (cl_idx * lsd->lsd_client_size);
+        init_mutex(&med->med_lcd_lock);
 
         LASSERTF(med->med_lr_off > 0, "med_lr_off = %llu\n", med->med_lr_off);
         /* write new client data */
@@ -612,9 +612,9 @@ int mdt_client_new(const struct lu_env *env, struct mdt_device *mdt)
         mti->mti_exp->exp_need_sync = 1;
         spin_unlock(&mti->mti_exp->exp_lock);
 
-        rc = mdt_last_rcvd_write(env, mdt, mcd, &off, th);
-        CDEBUG(D_INFO, "wrote client mcd at idx %u off %llu (len %u)\n",
-               cl_idx, med->med_lr_off, sizeof(*mcd));
+        rc = mdt_last_rcvd_write(env, mdt, lcd, &off, th);
+        CDEBUG(D_INFO, "wrote client lcd at idx %u off %llu (len %u)\n",
+               cl_idx, med->med_lr_off, sizeof(*lcd));
         mdt_trans_stop(env, mdt, th);
 
         RETURN(rc);
@@ -635,7 +635,7 @@ int mdt_client_add(const struct lu_env *env,
         struct mdt_export_data *med;
         unsigned long *bitmap = mdt->mdt_client_bitmap;
         struct obd_device *obd = mdt->mdt_md_dev.md_lu_dev.ld_obd;
-        struct mdt_server_data *msd = &mdt->mdt_msd;
+        struct lr_server_data *lsd = &mdt->mdt_lsd;
         int rc = 0;
         ENTRY;
 
@@ -647,7 +647,7 @@ int mdt_client_add(const struct lu_env *env,
         LASSERT(bitmap != NULL);
         LASSERTF(cl_idx >= 0, "%d\n", cl_idx);
 
-        if (!strcmp(med->med_mcd->mcd_uuid, obd->obd_uuid.uuid))
+        if (!strcmp(med->med_lcd->lcd_uuid, obd->obd_uuid.uuid))
                 RETURN(0);
 
         spin_lock(&mdt->mdt_client_bitmap_lock);
@@ -659,12 +659,12 @@ int mdt_client_add(const struct lu_env *env,
         spin_unlock(&mdt->mdt_client_bitmap_lock);
 
         CDEBUG(D_INFO, "client at idx %d with UUID '%s' added\n",
-               cl_idx, med->med_mcd->mcd_uuid);
+               cl_idx, med->med_lcd->lcd_uuid);
 
         med->med_lr_idx = cl_idx;
-        med->med_lr_off = msd->msd_client_start +
-                          (cl_idx * msd->msd_client_size);
-        init_mutex(&med->med_mcd_lock);
+        med->med_lr_off = lsd->lsd_client_start +
+                          (cl_idx * lsd->lsd_client_size);
+        init_mutex(&med->med_lcd_lock);
 
         LASSERTF(med->med_lr_off > 0, "med_lr_off = %llu\n", med->med_lr_off);
 
@@ -675,7 +675,7 @@ int mdt_client_del(const struct lu_env *env, struct mdt_device *mdt)
 {
         struct mdt_thread_info *mti;
         struct mdt_export_data *med;
-        struct mdt_client_data *mcd;
+        struct lsd_client_data *lcd;
         struct obd_device      *obd = mdt->mdt_md_dev.md_lu_dev.ld_obd;
         struct thandle *th;
         loff_t off;
@@ -686,12 +686,12 @@ int mdt_client_del(const struct lu_env *env, struct mdt_device *mdt)
         LASSERT(mti != NULL);
 
         med = &mti->mti_exp->exp_mdt_data;
-        mcd = med->med_mcd;
-        if (!mcd)
+        lcd = med->med_lcd;
+        if (!lcd)
                 RETURN(0);
 
-        /* XXX: If mcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
-        if (!strcmp(med->med_mcd->mcd_uuid, obd->obd_uuid.uuid))
+        /* XXX: If lcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
+        if (!strcmp(med->med_lcd->lcd_uuid, obd->obd_uuid.uuid))
                 GOTO(free, 0);
 
         CDEBUG(D_INFO, "freeing client at idx %u, offset %lld\n",
@@ -728,11 +728,11 @@ int mdt_client_del(const struct lu_env *env, struct mdt_device *mdt)
                 if (IS_ERR(th))
                         GOTO(free, rc = PTR_ERR(th));
 
-                mutex_down(&med->med_mcd_lock);
-                memset(mcd, 0, sizeof *mcd);
+                mutex_down(&med->med_lcd_lock);
+                memset(lcd, 0, sizeof *lcd);
 
-                rc = mdt_last_rcvd_write(env, mdt, mcd, &off, th);
-                mutex_up(&med->med_mcd_lock);
+                rc = mdt_last_rcvd_write(env, mdt, lcd, &off, th);
+                mutex_up(&med->med_lcd_lock);
                 mdt_trans_stop(env, mdt, th);
         }
 
@@ -742,7 +742,7 @@ int mdt_client_del(const struct lu_env *env, struct mdt_device *mdt)
         spin_lock(&mdt->mdt_client_bitmap_lock);
         clear_bit(med->med_lr_idx, mdt->mdt_client_bitmap);
         spin_unlock(&mdt->mdt_client_bitmap_lock);
-        
+
         /*
          * Make sure the server's last_transno is up to date. Do this after the
          * client is freed so we know all the client's transactions have been
@@ -751,8 +751,8 @@ int mdt_client_del(const struct lu_env *env, struct mdt_device *mdt)
         mdt_server_data_update(env, mdt);
         EXIT;
 free:
-        OBD_FREE_PTR(mcd);
-        med->med_mcd = NULL;
+        OBD_FREE_PTR(lcd);
+        med->med_lcd = NULL;
         return 0;
 }
 
@@ -765,7 +765,7 @@ static int mdt_last_rcvd_update(struct mdt_thread_info *mti,
         struct mdt_device *mdt = mti->mti_mdt;
         struct ptlrpc_request *req = mdt_info_req(mti);
         struct mdt_export_data *med;
-        struct mdt_client_data *mcd;
+        struct lsd_client_data *lcd;
         loff_t off;
         int err;
         __s32 rc = th->th_result;
@@ -777,7 +777,7 @@ static int mdt_last_rcvd_update(struct mdt_thread_info *mti,
         LASSERT(mdt);
         med = &req->rq_export->exp_mdt_data;
         LASSERT(med);
-        mcd = med->med_mcd;
+        lcd = med->med_lcd;
         /* if the export has already been failed, we have no last_rcvd slot */
         if (req->rq_export->exp_failed) {
                 CWARN("commit transaction for disconnected client %s: rc %d\n",
@@ -788,25 +788,25 @@ static int mdt_last_rcvd_update(struct mdt_thread_info *mti,
         }
 
         off = med->med_lr_off;
-        mutex_down(&med->med_mcd_lock);
+        mutex_down(&med->med_lcd_lock);
         if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE ||
             lustre_msg_get_opc(req->rq_reqmsg) == MDS_DONE_WRITING) {
-                transno_p = &mcd->mcd_last_close_transno;
-                mcd->mcd_last_close_xid = req->rq_xid;
-                mcd->mcd_last_close_result = rc;
+                transno_p = &lcd->lcd_last_close_transno;
+                lcd->lcd_last_close_xid = req->rq_xid;
+                lcd->lcd_last_close_result = rc;
         } else {
-                transno_p = &mcd->mcd_last_transno;
-                mcd->mcd_last_xid = req->rq_xid;
-                mcd->mcd_last_result = rc;
+                transno_p = &lcd->lcd_last_transno;
+                lcd->lcd_last_xid = req->rq_xid;
+                lcd->lcd_last_result = rc;
                 /*XXX: save intent_disposition in mdt_thread_info?
                  * also there is bug - intent_dispostion is __u64,
                  * see struct ldlm_reply->lock_policy_res1; */
-                 mcd->mcd_last_data = mti->mti_opdata;
+                lcd->lcd_last_data = mti->mti_opdata;
         }
 
         /*
-         * When we store zero transno in mcd we can lost last transno value
-         * because mcd contains 0, but msd is not yet written
+         * When we store zero transno in lcd we can lost last transno value
+         * because lcd contains 0, but lsd is not yet written
          * The server data should be updated also if the latest 
          * transno is rewritten by zero. See the bug 11125 for details.
          */
@@ -820,9 +820,9 @@ static int mdt_last_rcvd_update(struct mdt_thread_info *mti,
                 CERROR("client idx %d has offset %lld\n", med->med_lr_idx, off);
                 err = -EINVAL;
         } else {
-                err = mdt_last_rcvd_write(mti->mti_env, mdt, mcd, &off, th);
+                err = mdt_last_rcvd_write(mti->mti_env, mdt, lcd, &off, th);
         }
-        mutex_up(&med->med_mcd_lock);
+        mutex_up(&med->med_lcd_lock);
         RETURN(err);
 }
 
@@ -889,7 +889,7 @@ static int mdt_txn_stop_cb(const struct lu_env *env,
         req->rq_transno = mti->mti_transno;
         lustre_msg_set_transno(req->rq_repmsg, mti->mti_transno);
         lustre_msg_set_last_xid(req->rq_repmsg,
-                         mcd_last_xid(req->rq_export->exp_mdt_data.med_mcd));
+                         lcd_last_xid(req->rq_export->exp_mdt_data.med_lcd));
         /* save transno for the commit callback */
         txi->txi_transno = mti->mti_transno;
         spin_unlock(&mdt->mdt_transno_lock);
@@ -1050,21 +1050,21 @@ static void mdt_steal_ack_locks(struct ptlrpc_request *req)
         spin_unlock(&exp->exp_lock);
 }
 
-void mdt_req_from_mcd(struct ptlrpc_request *req,
-                      struct mdt_client_data *mcd)
+void mdt_req_from_lcd(struct ptlrpc_request *req,
+                      struct lsd_client_data *lcd)
 {
         DEBUG_REQ(D_HA, req, "restoring transno "LPD64"/status %d",
-                  mcd->mcd_last_transno, mcd->mcd_last_result);
+                  lcd->lcd_last_transno, lcd->lcd_last_result);
 
         if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE ||
             lustre_msg_get_opc(req->rq_repmsg) == MDS_DONE_WRITING) {
-                req->rq_transno = mcd->mcd_last_close_transno;
-                req->rq_status = mcd->mcd_last_close_result;
+                req->rq_transno = lcd->lcd_last_close_transno;
+                req->rq_status = lcd->lcd_last_close_result;
                 lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
                 lustre_msg_set_status(req->rq_repmsg, req->rq_status);
         } else {
-                req->rq_transno = mcd->mcd_last_transno;
-                req->rq_status = mcd->mcd_last_result;
+                req->rq_transno = lcd->lcd_last_transno;
+                req->rq_status = lcd->lcd_last_result;
                 lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
                 lustre_msg_set_status(req->rq_repmsg, req->rq_status);
         }
@@ -1077,7 +1077,7 @@ void mdt_reconstruct_generic(struct mdt_thread_info *mti,
         struct ptlrpc_request *req = mdt_info_req(mti);
         struct mdt_export_data *med = &req->rq_export->exp_mdt_data;
 
-        return mdt_req_from_mcd(req, med->med_mcd);
+        return mdt_req_from_lcd(req, med->med_lcd);
 }
 
 static void mdt_reconstruct_create(struct mdt_thread_info *mti,
@@ -1091,7 +1091,7 @@ static void mdt_reconstruct_create(struct mdt_thread_info *mti,
         struct mdt_body *body;
         int rc;
 
-        mdt_req_from_mcd(req, med->med_mcd);
+        mdt_req_from_lcd(req, med->med_lcd);
         if (req->rq_status)
                 return;
 
@@ -1130,7 +1130,7 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
         struct mdt_object *obj;
         struct mdt_body *body;
 
-        mdt_req_from_mcd(req, med->med_mcd);
+        mdt_req_from_lcd(req, med->med_lcd);
         if (req->rq_status)
                 return;
 

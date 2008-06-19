@@ -58,59 +58,23 @@
 #include <lustre_idmap.h>
 #include <lustre_eacl.h>
 
-
-/* Data stored per client in the last_rcvd file.  In le32 order. */
-struct mdt_client_data {
-        __u8  mcd_uuid[40];     /* client UUID */
-        __u64 mcd_last_transno; /* last completed transaction ID */
-        __u64 mcd_last_xid;     /* xid for the last transaction */
-        __u32 mcd_last_result;  /* result from last RPC */
-        __u32 mcd_last_data;    /* per-op data (disposition for open &c.) */
-        /* for MDS_CLOSE and MDS_DONE_WRITTING requests */
-        __u64 mcd_last_close_transno; /* last completed transaction ID */
-        __u64 mcd_last_close_xid;     /* xid for the last transaction */
-        __u32 mcd_last_close_result;  /* result from last RPC */
-        __u8 mcd_padding[LR_CLIENT_SIZE - 84];
-};
-
-static inline __u64 mcd_last_transno(struct mdt_client_data *mcd)
+static inline __u64 lcd_last_transno(struct lsd_client_data *lcd)
 {
-        return max(mcd->mcd_last_transno, mcd->mcd_last_close_transno);
+        return max(lcd->lcd_last_transno, lcd->lcd_last_close_transno);
 }
 
-static inline __u64 mcd_last_xid(struct mdt_client_data *mcd)
+static inline __u64 lcd_last_xid(struct lsd_client_data *lcd)
 {
-        return max(mcd->mcd_last_xid, mcd->mcd_last_close_xid);
+        return max(lcd->lcd_last_xid, lcd->lcd_last_close_xid);
 }
 
 /* check if request's xid is equal to last one or not*/
 static inline int req_xid_is_last(struct ptlrpc_request *req)
 {
-        struct mdt_client_data *mcd = req->rq_export->exp_mdt_data.med_mcd;
-        return (req->rq_xid == mcd->mcd_last_xid ||
-                req->rq_xid == mcd->mcd_last_close_xid);
+        struct lsd_client_data *lcd = req->rq_export->exp_mdt_data.med_lcd;
+        return (req->rq_xid == lcd->lcd_last_xid ||
+                req->rq_xid == lcd->lcd_last_close_xid);
 }
-
-/* copied from lr_server_data.
- * mds data stored at the head of last_rcvd file. In le32 order. */
-struct mdt_server_data {
-        __u8  msd_uuid[40];        /* server UUID */
-        __u64 msd_last_transno;    /* last completed transaction ID */
-        __u64 msd_mount_count;     /* incarnation number */
-        __u32 msd_feature_compat;  /* compatible feature flags */
-        __u32 msd_feature_rocompat;/* read-only compatible feature flags */
-        __u32 msd_feature_incompat;/* incompatible feature flags */
-        __u32 msd_server_size;     /* size of server data area */
-        __u32 msd_client_start;    /* start of per-client data area */
-        __u16 msd_client_size;     /* size of per-client data area */
-        //__u16 msd_subdir_count;    /* number of subdirectories for objects */
-        //__u64 msd_catalog_oid;     /* recovery catalog object id */
-        //__u32 msd_catalog_ogen;    /* recovery catalog inode generation */
-        //__u8  msd_peeruuid[40];    /* UUID of MDS associated with this OST */
-        //__u32 msd_ost_index;       /* index number of OST in LOV */
-        //__u32 msd_mdt_index;       /* index number of MDT in LMV */
-        __u8  msd_padding[LR_SERVER_SIZE - 78];
-};
 
 struct mdt_object;
 /* file data for open files on MDS */
@@ -174,7 +138,7 @@ struct mdt_device {
         __u64                      mdt_mount_count;
 
         /* last_rcvd data */
-        struct mdt_server_data     mdt_msd;
+        struct lr_server_data      mdt_lsd;
         spinlock_t                 mdt_client_bitmap_lock;
         unsigned long              mdt_client_bitmap[(LR_MAX_CLIENTS >> 3) / sizeof(long)];
 
@@ -381,8 +345,8 @@ struct mdt_thread_info {
         __u64                      mti_replayepoch;
 
         /* server and client data buffers */
-        struct mdt_server_data     mti_msd;
-        struct mdt_client_data     mti_mcd;
+        struct lr_server_data      mti_lsd;
+        struct lsd_client_data     mti_lcd;
         loff_t                     mti_off;
         struct txn_param           mti_txn_param;
         struct lu_buf              mti_buf;
@@ -677,7 +641,7 @@ static inline int mdt_check_resent(struct mdt_thread_info *info,
                         RETURN(1);
                 }
                 DEBUG_REQ(D_HA, req, "no reply for RESENT req (have "LPD64")",
-                          req->rq_export->exp_mdt_data.med_mcd->mcd_last_xid);
+                          req->rq_export->exp_mdt_data.med_lcd->lcd_last_xid);
         }
         RETURN(0);
 }

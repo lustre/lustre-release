@@ -640,8 +640,8 @@ static int mdt_finish_open(struct mdt_thread_info *info,
         RETURN(rc);
 }
 
-extern void mdt_req_from_mcd(struct ptlrpc_request *req,
-                             struct mdt_client_data *mcd);
+extern void mdt_req_from_lcd(struct ptlrpc_request *req,
+                             struct lsd_client_data *lcd);
 
 void mdt_reconstruct_open(struct mdt_thread_info *info,
                           struct mdt_lock_handle *lhc)
@@ -651,7 +651,7 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
         struct req_capsule      *pill = info->mti_pill;
         struct ptlrpc_request   *req  = mdt_info_req(info);
         struct mdt_export_data  *med  = &req->rq_export->exp_mdt_data;
-        struct mdt_client_data  *mcd  = med->med_mcd;
+        struct lsd_client_data  *lcd  = med->med_lcd;
         struct md_attr          *ma   = &info->mti_attr;
         struct mdt_reint_record *rr   = &info->mti_rr;
         __u32                   flags = info->mti_spec.sp_cr_flags;
@@ -672,8 +672,8 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
         ma->ma_need = MA_INODE | MA_LOV;
         ma->ma_valid = 0;
 
-        mdt_req_from_mcd(req, med->med_mcd);
-        mdt_set_disposition(info, ldlm_rep, mcd->mcd_last_data);
+        mdt_req_from_lcd(req, med->med_lcd);
+        mdt_set_disposition(info, ldlm_rep, lcd->lcd_last_data);
 
         CERROR("This is reconstruct open: disp="LPX64", result=%d\n",
                 ldlm_rep->lock_policy_res1, req->rq_status);

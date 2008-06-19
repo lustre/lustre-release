@@ -4264,7 +4264,7 @@ static int mdt_obd_connect(const struct lu_env *env,
                            void *localdata)
 {
         struct mdt_thread_info *info;
-        struct mdt_client_data *mcd;
+        struct lsd_client_data *lcd;
         struct obd_export      *exp;
         struct mdt_device      *mdt;
         struct ptlrpc_request  *req;
@@ -4308,19 +4308,19 @@ static int mdt_obd_connect(const struct lu_env *env,
 
         rc = mdt_connect_internal(exp, mdt, data);
         if (rc == 0) {
-                OBD_ALLOC_PTR(mcd);
-                if (mcd != NULL) {
+                OBD_ALLOC_PTR(lcd);
+                if (lcd != NULL) {
                         struct mdt_thread_info *mti;
                         mti = lu_context_key_get(&env->le_ctx,
                                                  &mdt_thread_key);
                         LASSERT(mti != NULL);
                         mti->mti_exp = exp;
-                        memcpy(mcd->mcd_uuid, cluuid, sizeof mcd->mcd_uuid);
-                        exp->exp_mdt_data.med_mcd = mcd;
+                        memcpy(lcd->lcd_uuid, cluuid, sizeof lcd->lcd_uuid);
+                        exp->exp_mdt_data.med_lcd = lcd;
                         rc = mdt_client_new(env, mdt);
                         if (rc != 0) {
-                                OBD_FREE_PTR(mcd);
-                                exp->exp_mdt_data.med_mcd = NULL;
+                                OBD_FREE_PTR(lcd);
+                                exp->exp_mdt_data.med_lcd = NULL;
                         }
                 } else
                         rc = -ENOMEM;

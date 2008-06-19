@@ -15,23 +15,11 @@ struct mdt_client_data;
 struct mds_idmap_table;
 struct mdt_idmap_table;
 
-struct mds_export_data {
-        struct list_head        med_open_head;
-        spinlock_t              med_open_lock; /* lock med_open_head, mfd_list*/
-        struct mds_client_data *med_mcd;
-        __u64                   med_ibits_known;
-        loff_t                  med_lr_off;
-        int                     med_lr_idx;
-        unsigned int            med_rmtclient:1; /* remote client? */
-        struct semaphore           med_idmap_sem;
-        struct lustre_idmap_table *med_idmap;
-};
-
 struct mdt_export_data {
         struct list_head        med_open_head;
         spinlock_t              med_open_lock; /* lock med_open_head, mfd_list*/
-        struct semaphore        med_mcd_lock; 
-        struct mdt_client_data *med_mcd;
+        struct semaphore        med_lcd_lock;
+        struct lsd_client_data *med_lcd;
         __u64                   med_ibits_known;
         loff_t                  med_lr_off;
         int                     med_lr_idx;
@@ -62,10 +50,9 @@ struct ec_export_data { /* echo client */
 };
 
 /* In-memory access to client data from OST struct */
-struct filter_client_data;
 struct filter_export_data {
         spinlock_t                 fed_lock;      /* protects fed_open_head */
-        struct filter_client_data *fed_fcd;
+        struct lsd_client_data    *fed_lcd;
         loff_t                     fed_lr_off;
         int                        fed_lr_idx;
         long                       fed_dirty;    /* in bytes */
@@ -129,16 +116,13 @@ struct obd_export {
         cfs_time_t                exp_flvr_expire[2];   /* seconds */
 
         union {
-                struct mds_export_data    eu_mds_data;
                 struct mdt_export_data    eu_mdt_data;
                 struct filter_export_data eu_filter_data;
                 struct ec_export_data     eu_ec_data;
         } u;
 };
 
-#define exp_mds_data    u.eu_mds_data
 #define exp_mdt_data    u.eu_mdt_data
-#define exp_lov_data    u.eu_lov_data
 #define exp_filter_data u.eu_filter_data
 #define exp_ec_data     u.eu_ec_data
 
