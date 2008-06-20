@@ -205,7 +205,9 @@ case "$lustretag" in
 
     # client io stack cleanup
     b_client_io_layering)
+        lnettag="HEAD"
         ldiskfstag="$ldiskfstag_head"
+        libcfstag="HEAD"
         ;;
     
     # windows client porting (lustre: b_client_io_layering, lnet: HEAD) 

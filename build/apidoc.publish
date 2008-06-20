@@ -59,7 +59,7 @@ if [ x$branch = x ] ;then
     exit 1
 fi
 
-echo "Updating documentation for branch \`$branch\'"
+echo "Updating documentation for branch \`$branch'"
 if [ x$label != x ] ;then
     echo "Label: $label"
 fi
