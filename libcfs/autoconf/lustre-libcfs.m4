@@ -1,9 +1,9 @@
 #
-# LIBCFS_CONFIG_CDEBUG
+# LN_CONFIG_CDEBUG
 #
 # whether to enable various libcfs debugs (CDEBUG, ENTRY/EXIT, LASSERT, etc.)
 #
-AC_DEFUN([LIBCFS_CONFIG_CDEBUG],
+AC_DEFUN([LN_CONFIG_CDEBUG],
 [
 AC_MSG_CHECKING([whether to enable CDEBUG, CWARN])
 AC_ARG_ENABLE([libcfs_cdebug],
