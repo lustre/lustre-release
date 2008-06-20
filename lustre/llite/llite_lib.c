@@ -1529,9 +1529,19 @@ out:
 
 int ll_setattr(struct dentry *de, struct iattr *attr)
 {
+        int mode;
+
         if ((attr->ia_valid & (ATTR_CTIME|ATTR_SIZE|ATTR_MODE)) ==
             (ATTR_CTIME|ATTR_SIZE|ATTR_MODE))
                 attr->ia_valid |= MDS_OPEN_OWNEROVERRIDE;
+        if ((attr->ia_valid & (ATTR_MODE|ATTR_FORCE|ATTR_SIZE)) == 
+            (ATTR_SIZE|ATTR_MODE)) {
+                mode = de->d_inode->i_mode;
+                if (((mode & S_ISUID) && (!(attr->ia_mode & S_ISUID))) ||
+                    ((mode & S_ISGID) && (mode & S_IXGRP) &&
+                    (!(attr->ia_mode & S_ISGID))))
+                        attr->ia_valid |= ATTR_FORCE;
+        }
 
         return ll_setattr_raw(de->d_inode, attr);
 }
