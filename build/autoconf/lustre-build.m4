@@ -244,6 +244,23 @@ AM_CONDITIONAL(LDISKFS_ENABLED, test x$with_ldiskfs != xno)
 AC_CONFIG_SUBDIRS(ldiskfs)
 ])
 
+# Define no libcfs by default.
+AC_DEFUN([LB_LIBCFS_DIR],
+[
+case x$libcfs_is_module in
+	xyes)
+          LIBCFS_INCLUDE_DIR="libcfs/include"
+          LIBCFS_SUBDIR="libcfs"
+          ;;
+        x*)
+          LIBCFS_INCLUDE_DIR="lnet/include"
+          LIBCFS_SUBDIR=""
+          ;;
+esac
+AC_SUBST(LIBCFS_SUBDIR)
+AC_SUBST(LIBCFS_INCLUDE_DIR)
+])
+
 #
 # LB_DEFINE_LDISKFS_OPTIONS
 #
@@ -585,7 +602,7 @@ if test $ac_cv_sizeof_unsigned_long_long != 8 ; then
         AC_MSG_ERROR([** we assume that sizeof(long long) == 8.  Tell phil@clusterfs.com])
 fi
 
-CPPFLAGS="-I\$(top_builddir)/libcfs/include -I\$(top_srcdir)/libcfs/include -I\$(top_builddir)/lnet/include -I\$(top_srcdir)/lnet/include -I\$(top_builddir)/lustre/include -I\$(top_srcdir)/lustre/include $CPPFLAGS"
+CPPFLAGS="-I\$(top_builddir)/$LIBCFS_INCLUDE_DIR -I\$(top_srcdir)/$LIBCFS_INCLUDE_DIR-I\$(top_builddir)/lnet/include -I\$(top_srcdir)/lnet/include -I\$(top_builddir)/lustre/include -I\$(top_srcdir)/lustre/include $CPPFLAGS"
 
 LLCPPFLAGS="-D__arch_lib__ -D_LARGEFILE64_SOURCE=1"
 AC_SUBST(LLCPPFLAGS)
@@ -594,7 +611,7 @@ LLCFLAGS="-g -Wall -fPIC"
 AC_SUBST(LLCFLAGS)
 
 # everyone builds against lnet and lustre
-EXTRA_KCFLAGS="$EXTRA_KCFLAGS -g -I$PWD/libcfs/include -I$PWD/lnet/include -I$PWD/lustre/include"
+EXTRA_KCFLAGS="$EXTRA_KCFLAGS -g -I$PWD/$LIBCFS_INCLUDE_DIR -I$PWD/lnet/include -I$PWD/lustre/include"
 AC_SUBST(EXTRA_KCFLAGS)
 ])
 
@@ -657,6 +674,8 @@ AC_PACKAGE_TARNAME[.spec]
 AC_DEFUN([LB_CONFIGURE],
 [LB_CANONICAL_SYSTEM
 
+LB_LIBCFS_DIR
+
 LB_INCLUDE_RULES
 
 LB_CONFIG_CRAY_XT3
@@ -695,6 +714,7 @@ LC_CONFIGURE
 if test "$SNMP_DIST_SUBDIR" ; then
 	LS_CONFIGURE
 fi
+
 
 LB_CONDITIONALS
 LB_CONFIG_HEADERS
