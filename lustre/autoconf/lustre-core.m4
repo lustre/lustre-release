@@ -1449,9 +1449,9 @@ fi
 AC_DEFUN([LC_CONFIG_ADAPTIVE_TIMEOUTS],
 [AC_MSG_CHECKING([whether to enable ptlrpc adaptive timeouts support])
 AC_ARG_ENABLE([adaptive_timeouts],
-	AC_HELP_STRING([--enable-adaptive-timeouts],
-			[enable ptlrpc adaptive timeouts support]),
-	[],[enable_adaptive_timeouts='no'])
+	AC_HELP_STRING([--disable-adaptive-timeouts],
+			[disable ptlrpc adaptive timeouts support]),
+	[],[enable_adaptive_timeouts='yes'])
 AC_MSG_RESULT([$enable_adaptive_timeouts])
 if test x$enable_adaptive_timeouts == xyes; then
    AC_DEFINE(HAVE_AT_SUPPORT, 1, [Enable adaptive timeouts support])
