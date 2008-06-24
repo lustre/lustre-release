@@ -667,7 +667,6 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
                         DEBUG_REQ(D_ERROR, req, "invalidate in flight");
                         *status = -EIO;
                 }
-
         } else if ((imp->imp_invalid && (!imp->imp_recon_bk)) ||
                                          imp->imp_obd->obd_no_recov) {
                 /* If the import has been invalidated (such as by an OST

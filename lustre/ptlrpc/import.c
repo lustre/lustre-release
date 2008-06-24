@@ -170,12 +170,6 @@ static void ptlrpc_deactivate_and_unlock_import(struct obd_import *imp)
         ENTRY;
         LASSERT_SPIN_LOCKED(&imp->imp_lock);
 
-        if (imp->imp_invalid) {
-                spin_unlock(&imp->imp_lock);
-                EXIT;
-                return;
-        }
-
         CDEBUG(D_HA, "setting import %s INVALID\n", obd2cli_tgt(imp->imp_obd));
         imp->imp_invalid = 1;
         imp->imp_generation++;
@@ -223,7 +217,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
         LASSERT(imp->imp_invalid);
 
         /* wait for all requests to error out and call completion callbacks */
-        lwi = LWI_TIMEOUT_INTERVAL(cfs_timeout_cap(cfs_time_seconds(obd_timeout)), 
+        lwi = LWI_TIMEOUT_INTERVAL(cfs_timeout_cap(cfs_time_seconds(obd_timeout)),
                                    HZ, NULL, NULL);
         rc = l_wait_event(imp->imp_recovery_waitq,
                           (atomic_read(&imp->imp_inflight) == 0), &lwi);
@@ -245,7 +239,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                         DEBUG_REQ(D_ERROR, req, "still on delayed list");
                 }
                 spin_unlock(&imp->imp_lock);
-//                LASSERT(atomic_read(&imp->imp_inflight) == 0);
+                LASSERT(atomic_read(&imp->imp_inflight) == 0);
         }
 
 out:
