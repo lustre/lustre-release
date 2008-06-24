@@ -14,7 +14,8 @@ sbin_scripts = lrun
 bin_scripts = llstat llobdstat plot-llstat llbackup
 
 if UTILS
-noinst_PROGRAMS = wirecheck obdio obdbarrier
+noinst_PROGRAMS = obdio obdbarrier
+EXTRA_PROGRAMS = wirecheck
 
 # mount only finds helpers in /sbin
 rootsbin_PROGRAMS = mount.lustre
@@ -102,7 +103,7 @@ EXTRA_DIST = $(sbin_scripts) $(bin_scripts)
 # NOTE: this should only be run on i386.
 newwiretest: wirehdr.c wirecheck
 	cp wirehdr.c wiretest.c
-	./wirecheck >> wiretest.c
+	LANG=C ./wirecheck >> wiretest.c
 	cp ../ptlrpc/wirehdr.c ../ptlrpc/wiretest.c
-	./wirecheck >> ../ptlrpc/wiretest.c
+	LANG=C ./wirecheck >> ../ptlrpc/wiretest.c
 
