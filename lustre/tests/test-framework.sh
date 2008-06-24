@@ -612,6 +612,12 @@ h2gm () {
     fi
 }
 
+h2name_or_ip() {
+    if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
+        echo $1"@$2"
+    fi
+}
+
 h2ptl() {
    if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
        ID=`xtprocadmin -n $1 2>/dev/null | egrep -v 'NID' | awk '{print $1}'`
@@ -650,6 +656,11 @@ h2openib() {
     fi
 }
 declare -fx h2openib
+
+h2o2ib() {
+    h2name_or_ip "$1" "o2ib"
+}
+declare -fx h2o2ib
 
 facet_host() {
     local facet=$1
