@@ -3178,7 +3178,7 @@ set_checksum_type()
 	[ "$ORIG_CSUM_TYPE" ] || \
 		ORIG_CSUM_TYPE=`lctl get_param -n osc.*osc-[^mM]*.checksum_type | sed 's/.*\[\(.*\)\].*/\1/g' \
 	                        | head -n1`
-	lctl set_param -n osc.*osc-*.checksum_type $1
+	lctl set_param -n osc.*osc-[^mM]*.checksum_type $1
 	log "set checksum type to $1"
 	return 0
 }
