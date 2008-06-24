@@ -1,22 +1,29 @@
-diff -pur linux-2.6.9-full.mid/fs/ext3/ialloc.c linux-2.6.9-full/fs/ext3/ialloc.c
---- linux-2.6.9-full.mid/fs/ext3/ialloc.c	2008-04-16 13:49:22.000000000 +0800
-+++ linux-2.6.9-full/fs/ext3/ialloc.c	2008-04-16 15:26:40.000000000 +0800
-@@ -440,6 +440,9 @@ struct inode *ext3_new_inode(handle_t *h
- 	if (!dir || !dir->i_nlink)
+diff -pur linux-stage.orig/fs/ext3/ialloc.c linux-stage/fs/ext3/ialloc.c
+--- linux-stage.orig/fs/ext3/ialloc.c	2008-06-01 16:18:53.000000000 +0800
++++ linux-stage/fs/ext3/ialloc.c	2008-06-03 02:21:02.000000000 +0800
+@@ -519,12 +519,15 @@ struct inode *ext3_new_inode(handle_t *h
  		return ERR_PTR(-EPERM);
  
-+	if (ext3_max_dir_size > 0 && i_size_read(dir) >= ext3_max_dir_size)
+ 	sb = dir->i_sb;
++	sbi = EXT3_SB(sb);
++	if (sbi->s_max_dir_size > 0 && i_size_read(dir) >= sbi->s_max_dir_size)
 +		return ERR_PTR(-EFBIG);
 +
- 	sb = dir->i_sb;
  	inode = new_inode(sb);
  	if (!inode)
-diff -pur linux-2.6.9-full.mid/fs/ext3/super.c linux-2.6.9-full/fs/ext3/super.c
---- linux-2.6.9-full.mid/fs/ext3/super.c	2008-05-06 16:07:23.000000000 +0800
-+++ linux-2.6.9-full/fs/ext3/super.c	2008-05-12 02:05:36.000000000 +0800
-@@ -2610,6 +2610,53 @@ static struct file_system_type ext3_fs_t
- 	.fs_flags	= FS_REQUIRES_DEV,
- };
+ 		return ERR_PTR(-ENOMEM);
+ 	ei = EXT3_I(inode);
+ 
+-	sbi = EXT3_SB(sb);
+ 	es = sbi->s_es;
+ 	if (goal) {
+ 		group = (goal - 1) / EXT3_INODES_PER_GROUP(sb);
+diff -pur linux-stage.orig/fs/ext3/super.c linux-stage/fs/ext3/super.c
+--- linux-stage.orig/fs/ext3/super.c	2008-06-03 01:53:34.000000000 +0800
++++ linux-stage/fs/ext3/super.c	2008-06-03 19:39:19.000000000 +0800
+@@ -42,6 +42,12 @@
+ #include "acl.h"
+ #include "group.h"
  
 +/*
 + * max directory size tunable
@@ -24,18 +31,32 @@ diff -pur linux-2.6.9-full.mid/fs/ext3/super.c linux-2.6.9-full/fs/ext3/super.c
 +#define EXT3_DEFAULT_MAX_DIR_SIZE		0
 +#define EXT3_MAX_DIR_SIZE_NAME		"max_dir_size"
 +
-+unsigned long ext3_max_dir_size;
-+
+ static int ext3_load_journal(struct super_block *, struct ext3_super_block *,
+ 			     unsigned long journal_devnum);
+ static int ext3_create_journal(struct super_block *, struct ext3_super_block *,
+@@ -446,6 +452,7 @@ void ext3_put_super (struct super_block 
+ 	if (sbi->s_mmp_tsk)
+ 		kthread_stop(sbi->s_mmp_tsk);
+ 
++	remove_proc_entry(EXT3_MAX_DIR_SIZE_NAME, sbi->s_dev_proc);
+ 	remove_proc_entry(sb->s_id, proc_root_ext3);
+ 	sbi->s_dev_proc = NULL;
+ 	sb->s_fs_info = NULL;
+@@ -1765,6 +1772,45 @@ failed:
+ 	return 1;
+ }
+ 
 +static int ext3_max_dir_size_read(char *page, char **start, off_t off,
 +                                  int count, int *eof, void *data)
 +{
++	struct ext3_sb_info *sbi = data;
 +	int len;
 +
 +	*eof = 1;
 +	if (off != 0)
 +		return 0;
 +
-+	len = sprintf(page, "%lu\n", ext3_max_dir_size);
++	len = sprintf(page, "%lu\n", sbi->s_max_dir_size);
 +	*start = page;
 +	return len;
 +}
@@ -43,6 +64,7 @@ diff -pur linux-2.6.9-full.mid/fs/ext3/super.c linux-2.6.9-full/fs/ext3/super.c
 +static int ext3_max_dir_size_write(struct file *file, const char *buffer,
 +                                   unsigned long count, void *data)
 +{
++	struct ext3_sb_info *sbi = data;
 +	char str[32];
 +	unsigned long value;
 +	char *end;
@@ -60,54 +82,60 @@ diff -pur linux-2.6.9-full.mid/fs/ext3/super.c linux-2.6.9-full/fs/ext3/super.c
 +	if (value < 0)
 +		return -ERANGE;
 +
-+	ext3_max_dir_size = value;
++	sbi->s_max_dir_size = value;
 +	return count;
 +}
-+
-+
- #define EXT3_ROOT "ext3"
- struct proc_dir_entry *proc_root_ext3;
  
-@@ -2628,8 +2675,22 @@ int __init init_ext3_proc(void)
- 		goto out_mb_proc;
+ static int ext3_fill_super (struct super_block *sb, void *data, int silent)
+ {
+@@ -1785,6 +1831,7 @@ static int ext3_fill_super (struct super
+ 	int i;
+ 	int needs_recovery;
+ 	__le32 features;
++	struct proc_dir_entry *proc;
+ 
+ 	sbi = kmalloc(sizeof(*sbi), GFP_KERNEL);
+ 	if (!sbi)
+@@ -1802,6 +1849,23 @@ static int ext3_fill_super (struct super
+ 		return -ENOMEM;
  	}
  
++	sbi->s_max_dir_size = EXT3_DEFAULT_MAX_DIR_SIZE;
 +	proc = create_proc_entry(EXT3_MAX_DIR_SIZE_NAME,
-+		                 S_IFREG | S_IRUGO | S_IWUSR, proc_root_ext3);
++		                 S_IFREG | S_IRUGO | S_IWUSR, sbi->s_dev_proc);
 +	if (proc == NULL) {
-+		printk(KERN_ERR "EXT3-fs: Unable to create %s/%s\n",
-+			EXT3_ROOT, EXT3_MAX_DIR_SIZE_NAME);
-+		ret = -ENOMEM;
-+		goto out_proc_root;
++		printk(KERN_ERR "EXT3-fs: unable to create %s\n", 
++		       EXT3_MAX_DIR_SIZE_NAME);
++		remove_proc_entry(EXT3_MAX_DIR_SIZE_NAME, sbi->s_dev_proc);
++		remove_proc_entry(sb->s_id, proc_root_ext3);
++		sbi->s_dev_proc = NULL;
++		sb->s_fs_info = NULL;
++		kfree(sbi);
++		return -ENOMEM;
 +	}
-+
-+	proc->data = NULL;
++	proc->data = sbi;
 +	proc->read_proc = ext3_max_dir_size_read;
 +	proc->write_proc = ext3_max_dir_size_write;
- 	return 0;
- 
-+out_proc_root:
-+	remove_proc_entry(EXT3_ROOT, proc_root_fs);
- out_mb_proc:
- 	exit_ext3_mb_proc();
- out:
-@@ -2639,6 +2700,7 @@ out:
- void exit_ext3_proc(void)
- {
- 	exit_ext3_mb_proc();
-+	remove_proc_entry(EXT3_MAX_DIR_SIZE_NAME, proc_root_ext3);
- 	remove_proc_entry(EXT3_ROOT, proc_root_fs);
- }
- 
-diff -pur linux-2.6.9-full.mid/include/linux/ext3_fs.h linux-2.6.9-full/include/linux/ext3_fs.h
---- linux-2.6.9-full.mid/include/linux/ext3_fs.h	2008-04-16 14:02:18.000000000 +0800
-+++ linux-2.6.9-full/include/linux/ext3_fs.h	2008-04-15 00:59:38.000000000 +0800
-@@ -854,6 +854,8 @@ extern struct proc_dir_entry *proc_root_
- extern int __init init_ext3_proc(void);
- extern void exit_ext3_proc(void);
- 
-+extern unsigned long ext3_max_dir_size;
 +
- extern void ext3_error (struct super_block *, const char *, const char *, ...)
- 	__attribute__ ((format (printf, 3, 4)));
- extern void __ext3_std_error (struct super_block *, const char *, int);
+ 	blocksize = sb_min_blocksize(sb, EXT3_MIN_BLOCK_SIZE);
+ 	if (!blocksize) {
+ 		printk(KERN_ERR "EXT3-fs: unable to set blocksize\n");
+@@ -2224,6 +2288,7 @@ failed_mount:
+ 	ext3_blkdev_remove(sbi);
+ 	brelse(bh);
+ out_fail:
++	remove_proc_entry(EXT3_MAX_DIR_SIZE_NAME, sbi->s_dev_proc);
+ 	remove_proc_entry(sb->s_id, proc_root_ext3);
+ 	sbi->s_dev_proc = NULL;
+ 	sb->s_fs_info = NULL;
+diff -pur linux-stage.orig/include/linux/ext3_fs_sb.h linux-stage/include/linux/ext3_fs_sb.h
+--- linux-stage.orig/include/linux/ext3_fs_sb.h	2008-06-01 16:18:54.000000000 +0800
++++ linux-stage/include/linux/ext3_fs_sb.h	2008-06-03 02:21:02.000000000 +0800
+@@ -114,6 +114,7 @@ struct ext3_sb_info {
+ 	unsigned long s_mb_max_groups_to_scan;
+ 	unsigned long s_mb_stats;
+ 	unsigned long s_mb_order2_reqs;
++	unsigned long s_max_dir_size;
+ 
+ 	/* history to debug policy */
+ 	struct ext3_mb_history *s_mb_history;
