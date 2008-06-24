@@ -639,6 +639,7 @@ static int lfs_osts(int argc, char **argv)
                 memset(&param, 0, sizeof(param));
                 param.obduuid = obduuid;
                 while (feof(fp) == 0 && ferror(fp) ==0) {
+                        fprintf(stderr, "%s:\n", mnt->mnt_dir);
                         if (llapi_is_lustre_mnt(mnt)) {
                                 rc = llapi_getstripe(mnt->mnt_dir, &param);
                                 if (rc)
@@ -869,7 +870,7 @@ static int lfs_df(int argc, char **argv)
         FILE *fp;
         char *path = NULL;
         struct mntent *mnt = NULL;
-        char mntdir[PATH_MAX] = {'\0'};
+        char *mntdir = NULL;
         int ishow = 0, cooked = 0;
         int c, rc = 0;
 
@@ -896,10 +897,19 @@ static int lfs_df(int argc, char **argv)
                         argv[0], MOUNTED, strerror(errno));
                 return rc;
         }
+
+        if ((mntdir = malloc(PATH_MAX)) == NULL) {
+                fprintf(stderr, "error: cannot allocate %d bytes\n",
+                        PATH_MAX);
+                return -ENOMEM;
+        }
+        memset(mntdir, 0, PATH_MAX);
+
         if (path) {
-                rc = path2mnt(path, fp, mntdir, sizeof(mntdir));
+                rc = path2mnt(path, fp, mntdir, PATH_MAX);
                 if (rc) {
                         endmntent(fp);
+                        free(mntdir);
                         return rc;
                 }
 
@@ -920,6 +930,7 @@ static int lfs_df(int argc, char **argv)
                 endmntent(fp);
         }
 
+        free(mntdir);
         return rc;
 }
 
