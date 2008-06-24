@@ -175,7 +175,7 @@ static void ptlrpc_pinger_process_import(struct obd_import *imp,
                 /* wait at least a timeout before trying recovery again */
                 imp->imp_next_ping = ptlrpc_next_reconnect(imp);
                 ptlrpc_initiate_recovery(imp);
-        } else if (level != LUSTRE_IMP_FULL || 
+        } else if (level != LUSTRE_IMP_FULL ||
                    imp->imp_obd->obd_no_recov ||
                    imp->imp_deactive) {
                 CDEBUG(D_HA, "not pinging %s (in recovery "
@@ -215,8 +215,8 @@ static int ptlrpc_pinger_main(void *arg)
                         ptlrpc_pinger_process_import(imp, this_ping);
                         /* obd_timeout might have changed */
                         if (imp->imp_pingable && imp->imp_next_ping &&
-                            cfs_time_after(imp->imp_next_ping, 
-                                           cfs_time_add(this_ping, 
+                            cfs_time_after(imp->imp_next_ping,
+                                           cfs_time_add(this_ping,
                                                         cfs_time_seconds(PING_INTERVAL))))
                                 ptlrpc_update_next_ping(imp);
                 }
@@ -225,21 +225,24 @@ static int ptlrpc_pinger_main(void *arg)
                 obd_update_maxusage();
 
                 /* Wait until the next ping time, or until we're stopped. */
-                time_to_next_ping = cfs_time_sub(cfs_time_add(this_ping, 
-                                                 cfs_time_seconds(PING_INTERVAL)), 
-                                                 cfs_time_current());
+                time_to_next_ping = cfs_time_sub(cfs_time_add(this_ping,
+                                               cfs_time_seconds(PING_INTERVAL)),
+                                               cfs_time_current());
 
                 /* The ping sent by ptlrpc_send_rpc may get sent out
                    say .01 second after this.
-                   ptlrpc_pinger_eending_on_import will then set the
+                   ptlrpc_pinger_sending_on_import will then set the
                    next ping time to next_ping + .01 sec, which means
                    we will SKIP the next ping at next_ping, and the
                    ping will get sent 2 timeouts from now!  Beware. */
-                CDEBUG(D_INFO, "next ping in "CFS_DURATION_T" ("CFS_TIME_T")\n", 
-                               time_to_next_ping, 
-                               cfs_time_add(this_ping, cfs_time_seconds(PING_INTERVAL)));
+                CDEBUG(D_INFO, "next ping in "CFS_DURATION_T" ("CFS_TIME_T")\n",
+                               time_to_next_ping,
+                               cfs_time_add(this_ping,
+                                            cfs_time_seconds(PING_INTERVAL)));
                 if (time_to_next_ping > 0) {
-                        lwi = LWI_TIMEOUT(max_t(cfs_duration_t, time_to_next_ping, cfs_time_seconds(1)),
+                        lwi = LWI_TIMEOUT(max_t(cfs_duration_t,
+                                                time_to_next_ping,
+                                                cfs_time_seconds(1)),
                                           NULL, NULL);
                         l_wait_event(thread->t_ctl_waitq,
                                      thread->t_flags & (SVC_STOPPING|SVC_EVENT),
@@ -282,7 +285,7 @@ int ptlrpc_start_pinger(void)
                 RETURN(-ENOMEM);
         cfs_waitq_init(&pinger_thread->t_ctl_waitq);
         cfs_waitq_init(&suspend_timeouts_waitq);
-        
+
         d.name = "ll_ping";
         d.thread = pinger_thread;
 
@@ -568,7 +571,7 @@ static int pinger_check_rpcs(void *arg)
                         list_entry(iter, struct obd_import, imp_pinger_chain);
                 int generation, level;
 
-                if (cfs_time_aftereq(pd->pd_this_ping, 
+                if (cfs_time_aftereq(pd->pd_this_ping,
                                      imp->imp_next_ping - 5 * CFS_TICK)) {
                         /* Add a ping. */
                         spin_lock(&imp->imp_lock);
