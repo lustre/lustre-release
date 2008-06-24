@@ -163,13 +163,13 @@ do {                                                                    \
                        "%s:%d\n", s, __FILE__, __LINE__);               \
                 break;                                                  \
         }                                                               \
+        libcfs_kmem_dec((ptr), s);                                      \
+        CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %d).\n",     \
+               s, (ptr), atomic_read(&libcfs_kmemory));                 \
         if (unlikely(s > LIBCFS_VMALLOC_SIZE))                          \
                 cfs_free_large(ptr);                                    \
         else                                                            \
                 cfs_free(ptr);                                          \
-        libcfs_kmem_dec((ptr), s);                                      \
-        CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %d).\n",     \
-               s, (ptr), atomic_read(&libcfs_kmemory));                 \
 } while (0)
 
 /******************************************************************************/
