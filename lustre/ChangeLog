@@ -24,6 +24,12 @@ tbd Sun Microsystems, Inc.
 	  	'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
 	  For more information, please refer to bugzilla 13904.
 
+Severity   : major
+Bugzilla   : 15924
+Description: do not process already freed flock
+Details    : flock can possibly be freed by another thread before it reaches
+             to ldlm_flock_completion_ast.
+
 Severity   : normal
 Bugzilla   : 14480
 Description: LBUG during stress test
