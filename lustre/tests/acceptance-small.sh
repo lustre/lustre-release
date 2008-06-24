@@ -201,7 +201,7 @@ for NAME in $CONFIGS; do
 		[ $THREADS -lt $IOZ_THREADS ] && IOZ_THREADS=$THREADS
 		IOZVER=`iozone -v | awk '/Revision:/ {print $3}' | tr -d .`
 		if [ "$IOZ_THREADS" -gt 1 -a "$IOZVER" -ge 3145 ]; then
-			$LFS setstripe -c 1 $IOZDIR
+			$LFS setstripe -c -1 $IOZDIR
 			$DEBUG_OFF
 			THREAD=1
 			IOZFILE="-F "
