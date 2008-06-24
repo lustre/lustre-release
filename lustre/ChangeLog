@@ -4,7 +4,7 @@ tbd Sun Microsystems, Inc.
 	 2.6.5-7.311 (SLES 9),
 	 2.6.9-67.0.15.EL (RHEL 4),
 	 2.6.16.54-0.2.5 (SLES 10),
-         2.6.18-53.1.19.el5 (RHEL 5),
+         2.6.18-53.1.21.el5 (RHEL 5),
 	 2.6.22.14 vanilla (kernel.org)
 	* Client support for unpatched kernels:
 	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
@@ -23,6 +23,10 @@ tbd Sun Microsystems, Inc.
 	  the following command on the MDS:
 	  	'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
 	  For more information, please refer to bugzilla 13904.
+
+Severity   : enhancement
+Bugzilla   : 15865
+Description: Update to RHEL5 kernel-2.6.18-53.1.21.el5.
 
 Severity   : major
 Bugzilla   : 15924

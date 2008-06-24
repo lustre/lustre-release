@@ -511,7 +511,7 @@ cleanup:
 static inline int ldlm_req_handles_avail(struct obd_export *exp,
                                          int *size, int bufcount, int off)
 {
-        int avail = min_t(int, LDLM_MAXREQSIZE, PAGE_SIZE - 512);
+        int avail = min_t(int, LDLM_MAXREQSIZE, CFS_PAGE_SIZE - 512);
 
         avail -= lustre_msg_size(class_exp2cliimp(exp)->imp_msg_magic,
                                  bufcount, size);
