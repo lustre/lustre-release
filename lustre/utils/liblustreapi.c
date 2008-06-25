@@ -143,18 +143,23 @@ void llapi_printf(int level, char *fmt, ...)
         va_end(args);
 }
 
+/* size_units is unchanged if no specifier used */
 int parse_size(char *optarg, unsigned long long *size,
-               unsigned long long *size_units)
+               unsigned long long *size_units, int bytes_spec)
 {
         char *end;
 
-        *size = strtoul(optarg, &end, 0);
+        *size = strtoull(optarg, &end, 0);
 
         if (*end != '\0') {
                 if ((*end == 'b') && *(end+1) == '\0' &&
-                    (*size & (~0ULL << (64 - 9))) == 0) {
+                    (*size & (~0ULL << (64 - 9))) == 0 &&
+                    !bytes_spec) {
                         *size <<= 9;
                         *size_units = 1 << 9;
+                } else if ((*end == 'b') && *(end+1) == '\0' &&
+                           bytes_spec) {
+                        *size_units = 1;
                 } else if ((*end == 'k' || *end == 'K') &&
                            *(end+1) == '\0' && (*size &
                            (~0ULL << (64 - 10))) == 0) {
