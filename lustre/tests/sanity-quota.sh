@@ -143,8 +143,9 @@ test_0() {
 	$LFS quotaoff -ug $DIR
 	$LFS quotacheck -ug $DIR
 
-	$LFS setquota -u $TSTUSR 0 0 0 0 $DIR
-	$LFS setquota -g $TSTUSR 0 0 0 0 $DIR
+ 	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
+ 	$LFS setquota -g $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
+
 	lctl set_param debug="+quota"
 	do_facet mds "lctl set_param debug=+quota"
 	for num in `seq $OSTCOUNT`; do
@@ -164,7 +165,7 @@ test_1_sub() {
 
         # test for user
         log "  User quota (limit: $LIMIT kbytes)"
-        $LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $DIR
+        $LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
 	sleep 3
         $SHOW_QUOTA_USER
 
@@ -189,12 +190,12 @@ test_1_sub() {
 	[ $OST0_QUOTA_USED -ne 0 ] && \
 	    ($SHOW_QUOTA_USER; error "quota deleted isn't released")
 	$SHOW_QUOTA_USER
-        $LFS setquota -u $TSTUSR 0 0 0 0 $DIR		# clear user limit
+        $LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
 
         # test for group
 	log "--------------------------------------"
         log "  Group quota (limit: $LIMIT kbytes)"
-        $LFS setquota -g $TSTUSR 0 $LIMIT 0 0 $DIR
+        $LFS setquota -g $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
 	sleep 3
         $SHOW_QUOTA_GROUP
         TESTFILE="$DIR/$tdir/$tfile-1"
@@ -220,7 +221,7 @@ test_1_sub() {
 	[ $OST0_QUOTA_USED -ne 0 ] && \
 	    ($SHOW_QUOTA_USER; error "quota deleted isn't released")
 	$SHOW_QUOTA_GROUP
-        $LFS setquota -g $TSTUSR 0 0 0 0 $DIR		# clear group limit
+        $LFS setquota -g $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
 }
 
 # block hard limit (normal use and out of quota)
@@ -253,7 +254,7 @@ test_2_sub() {
 
         # test for user
         log "  User quota (limit: $LIMIT files)"
-        $LFS setquota -u $TSTUSR 0 0 0 $LIMIT $DIR
+        $LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I $LIMIT $DIR
 	sleep 3
         $SHOW_QUOTA_USER
 
@@ -275,12 +276,12 @@ test_2_sub() {
 	[ $MDS_QUOTA_USED -ne 0 ] && \
 	    ($SHOW_QUOTA_USER; error "quota deleted isn't released")
 	$SHOW_QUOTA_USER
-        $LFS setquota -u $TSTUSR 0 0 0 0 $DIR		# clear user limit
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
 
         # test for group
 	log "--------------------------------------"
         log "  Group quota (limit: $LIMIT FILE)"
-        $LFS setquota -g $TSTUSR 0 0 0 $LIMIT $DIR
+        $LFS setquota -g $TSTUSR -b 0 -B 0 -i 0 -I $LIMIT $DIR
 	sleep 3
         $SHOW_QUOTA_GROUP
         TESTFILE=$DIR/$tdir/$tfile-1
@@ -303,7 +304,7 @@ test_2_sub() {
 	[ $MDS_QUOTA_USED -ne 0 ] && \
 	    ($SHOW_QUOTA_USER; error "quota deleted isn't released")
 	$SHOW_QUOTA_GROUP
-        $LFS setquota -g $TSTUSR 0 0 0 0 $DIR		# clear user limit
+        $LFS setquota -g $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
 }
 
 # file hard limit (normal use and out of quota)
@@ -402,11 +403,11 @@ test_3() {
 	$LFS setstripe $TESTFILE -c 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
 
-	$LFS setquota -t -u $GRACE $MAX_IQ_TIME $DIR
-	$LFS setquota -u $TSTUSR $LIMIT 0 0 0 $DIR
+	$LFS setquota -t -u --block-grace $GRACE --inode-grace $MAX_IQ_TIME $DIR
+	$LFS setquota -u $TSTUSR -b $LIMIT -B 0 -i 0 -I 0 $DIR
 
 	test_block_soft $TESTFILE $GRACE
-	$LFS setquota -u $TSTUSR 0 0 0 0 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
 
 	echo "  Group quota (soft limit: $LIMIT kbytes  grace: $GRACE seconds)"
 	TESTFILE=$DIR/$tdir/$tfile-1
@@ -414,11 +415,11 @@ test_3() {
 	$LFS setstripe $TESTFILE -c 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
 
-	$LFS setquota -t -g $GRACE $MAX_IQ_TIME $DIR
-	$LFS setquota -g $TSTUSR $LIMIT 0 0 0 $DIR
+	$LFS setquota -t -g --block-grace $GRACE --inode-grace $MAX_IQ_TIME $DIR
+	$LFS setquota -g $TSTUSR -b $LIMIT -B 0 -i 0 -I 0 $DIR
 
 	test_block_soft $TESTFILE $GRACE
-	$LFS setquota -g $TSTUSR 0 0 0 0 $DIR
+	$LFS setquota -g $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
 }
 run_test 3 "Block soft limit (start timer, timer goes off, stop timer) ==="
 
@@ -482,25 +483,25 @@ test_4a() {	# was test_4
 	GRACE=5
 
 	echo "  User quota (soft limit: $LIMIT files  grace: $GRACE seconds)"
-	$LFS setquota -t -u $MAX_DQ_TIME $GRACE $DIR
-	$LFS setquota -u $TSTUSR 0 0 $LIMIT 0 $DIR
+	$LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace $GRACE $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i $LIMIT -I 0 $DIR
 	$SHOW_QUOTA_USER
 
 	test_file_soft $TESTFILE $LIMIT $GRACE
-	$LFS setquota -u $TSTUSR 0 0 0 0 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
 
 	echo "  Group quota (soft limit: $LIMIT files  grace: $GRACE seconds)"
-	$LFS setquota -t -g $MAX_DQ_TIME $GRACE $DIR
-	$LFS setquota -g $TSTUSR 0 0 $LIMIT 0 $DIR
+	$LFS setquota -t -g --block-grace $MAX_DQ_TIME --inode-grace $GRACE $DIR
+	$LFS setquota -g $TSTUSR -b 0 -B 0 -i $LIMIT -I 0 $DIR
 	$SHOW_QUOTA_GROUP
 	TESTFILE=$DIR/$tdir/$tfile-1
 
 	test_file_soft $TESTFILE $LIMIT $GRACE
-	$LFS setquota -g $TSTUSR 0 0 0 0 $DIR
+	$LFS setquota -g $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
 
 	# cleanup
-	$LFS setquota -t -u $MAX_DQ_TIME $MAX_IQ_TIME $DIR
-	$LFS setquota -t -g $MAX_DQ_TIME $MAX_IQ_TIME $DIR
+	$LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace $MAX_IQ_TIME $DIR
+	$LFS setquota -t -g --block-grace $MAX_DQ_TIME --inode-grace $MAX_IQ_TIME $DIR
 }
 run_test 4a "File soft limit (start timer, timer goes off, stop timer) ==="
 
@@ -516,19 +517,19 @@ test_4b() {	# was test_4a
 
         # test of valid grace strings handling
         echo "  Valid grace strings test"
-        $LFS setquota -t -u $GR_STR1 $GR_STR2 $DIR
+        $LFS setquota -t -u --block-grace $GR_STR1 --inode-grace $GR_STR2 $DIR
         $LFS quota -u -t $DIR | grep "Block grace time: $GR_STR1"
-        $LFS setquota -t -g $GR_STR3 $GR_STR4 $DIR
+        $LFS setquota -t -g --block-grace $GR_STR3 --inode-grace $GR_STR4 $DIR
         $LFS quota -g -t $DIR | grep "Inode grace time: $GR_STR4"
 
         # test of invalid grace strings handling
         echo "  Invalid grace strings test"
-        ! $LFS setquota -t -u $GR_STR4 $GR_STR5 $DIR
-        ! $LFS setquota -t -g $GR_STR4 $GR_STR6 $DIR
+        ! $LFS setquota -t -u --block-grace $GR_STR4 --inode-grace $GR_STR5 $DIR
+        ! $LFS setquota -t -g --block-grace $GR_STR4 --inode-grace $GR_STR6 $DIR
 
         # cleanup
-        $LFS setquota -t -u $MAX_DQ_TIME $MAX_IQ_TIME $DIR
-        $LFS setquota -t -g $MAX_DQ_TIME $MAX_IQ_TIME $DIR
+        $LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace $MAX_IQ_TIME $DIR
+        $LFS setquota -t -g --block-grace $MAX_DQ_TIME --inode-grace $MAX_IQ_TIME $DIR
 }
 run_test 4b "Grace time strings handling ==="
 
@@ -541,8 +542,8 @@ test_5() {
 	wait_delete_completed
 
 	echo "  Set quota limit (0 $BLIMIT 0 $ILIMIT) for $TSTUSR.$TSTUSR"
-	$LFS setquota -u $TSTUSR 0 $BLIMIT 0 $ILIMIT $DIR
-	$LFS setquota -g $TSTUSR 0 $BLIMIT 0 $ILIMIT $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B $BLIMIT -i 0 -I $ILIMIT $DIR
+	$LFS setquota -g $TSTUSR -b 0 -B $BLIMIT -i 0 -I $ILIMIT $DIR
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
 
@@ -561,8 +562,8 @@ test_5() {
 	unlinkmany $DIR/$tdir/$tfile-0_ $((ILIMIT + 1))
 	sync; sleep 3; sync;
 
-	$LFS setquota -u $TSTUSR 0 0 0 0 $DIR
-	$LFS setquota -g $TSTUSR 0 0 0 0 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
+	$LFS setquota -g $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
 }
 run_test 5 "Chown & chgrp successfully even out of block/file quota ==="
 
@@ -583,8 +584,8 @@ test_6() {
 	FILEB="$DIR/$tdir/$tfile-0_b"
 
 	echo "  Set block limit $LIMIT kbytes to $TSTUSR.$TSTUSR"
-	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $DIR
-	$LFS setquota -g $TSTUSR 0 $LIMIT 0 0 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
+	$LFS setquota -g $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
 
@@ -628,8 +629,8 @@ test_6() {
 	rm -f $FILEA
 	sync; sleep 3; sync;
 
-	$LFS setquota -u $TSTUSR 0 0 0 0 $DIR
-	$LFS setquota -g $TSTUSR 0 0 0 0 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
+	$LFS setquota -g $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
 	return 0
 }
 run_test 6 "Block quota acquire & release ========="
@@ -646,7 +647,7 @@ test_7()
 	LIMIT=$(( $BUNIT_SZ * $(($OSTCOUNT + 1)) ))
 	TESTFILE="$DIR/$tdir/$tfile-0"
 
-	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
 
 	$LFS setstripe $TESTFILE -c 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
@@ -683,7 +684,7 @@ test_7()
 	echo "  limits on $OST0_UUID = $OST0_LIMIT"
 
 	# cleanup
-	$LFS setquota -u $TSTUSR 0 0 0 0 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
 }
 run_test 7 "Quota recovery (only block limit) ======"
 
@@ -699,9 +700,9 @@ test_8() {
 	wait_delete_completed
 
 	echo "  Set enough high limit for user: $TSTUSR"
-	$LFS setquota -u $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR
 	echo "  Set enough high limit for group: $TSTUSR"
-	$LFS setquota -g $USER 0 $BLK_LIMIT 0 $FILE_LIMIT $DIR
+	$LFS setquota -g $USER -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR
 
 	TGT=$DIR/$tdir/client.txt
 	SRC=${SRC:-$DBENCH_LIB/client.txt}
@@ -763,9 +764,9 @@ test_9() {
         echo "  Set block limit $BLK_LIMIT kbytes to $TSTUSR.$TSTUSR"
 
         log "  Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT) for user: $TSTUSR"
-        $LFS setquota -u $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $DIR
+        $LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR
         log "  Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT) for group: $TSTUSR"
-        $LFS setquota -g $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $DIR
+        $LFS setquota -g $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR
 
         echo "  Set stripe"
 	$LFS setstripe $TESTFILE -c 1
@@ -818,9 +819,9 @@ test_10() {
 	FILE_LIMIT=1000000
 
 	log "  Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT) for user: $TSTUSR"
-	$LFS setquota -u $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR
 	log "  Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT) for group: $TSTUSR"
-	$LFS setquota -g $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $DIR
+	$LFS setquota -g $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR
 
 	echo "  Set stripe"
 	$LFS setstripe $TESTFILE -c 1
@@ -946,7 +947,7 @@ test_12() {
 	wait_delete_completed
 
 	echo "   User quota (limit: $LIMIT kbytes)"
-	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
 
 	$LFS setstripe $TESTFILE -i 0 -c 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
@@ -993,7 +994,7 @@ test_12() {
 	rm -f $TESTFILE $TESTFILE2
         sync; sleep 3; sync;
 
-	$LFS setquota -u $TSTUSR 0 0 0 0 $DIR		# clear user limit
+        $LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
 }
 run_test 12 "test a deadlock between quota and journal ==="
 
@@ -1007,7 +1008,7 @@ test_13() {
 	TESTFILE="$DIR/$tdir/$tfile"
 
 	echo "   User quota (limit: $LIMIT kbytes)"
-	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
 	$SHOW_QUOTA_USER
 
 	$LFS setstripe $TESTFILE -i 0 -c 1
@@ -1057,7 +1058,7 @@ test_13() {
 	rm -f $TESTFILE $TESTFILE.2
 	sync; sleep 3; sync;
 
-	$LFS setquota -u $TSTUSR 0 0 0 0 $DIR		# clear user limit
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
 }
 run_test 13 "test multiple clients write block quota ==="
 
@@ -1093,7 +1094,7 @@ test_14a() {	# was test_14 b=12223 -- setting quota on root
 	mkdir -p $DIR/$tdir
 
 	# out of root's file and block quota
-        $LFS setquota -u root 10 10 10 10 $DIR
+	$LFS setquota -u root -b 10 -B 10 -i 10 -I 10 $DIR
 	createmany -m ${TESTFILE} 20 || \
 	    error "unexpected: user(root) create files failly!"
 	dd if=/dev/zero of=$TESTFILE bs=4k count=4096 || \
@@ -1109,7 +1110,7 @@ test_14a() {	# was test_14 b=12223 -- setting quota on root
 
 	# do the check
 	dmesg | tail | grep "\-122" |grep llog_obd_origin_add && error "err -122 not found in dmesg"
-	$LFS setquota -u root 0 0 0 0 $DIR
+	$LFS setquota -u root -b 0 -B 0 -i 0 -I 0 $DIR
 	#check_if_quota_zero u root
 
 	# clean
@@ -1150,7 +1151,7 @@ test_14b() {	# was test_14a
         $LFS quotacheck -ug $DIR
 
         for i in `seq 1 30`; do
-                $LFS setquota -u quota15_$i $i $i $i $i $DIR || error "lfs setquota failed"
+                $LFS setquota -u quota15_$i -b $i -B $i -i $i -I $i $DIR
         done
 
         $LFS quotaoff -ug $DIR
@@ -1162,7 +1163,7 @@ test_14b() {	# was test_14a
                 # the format is "mntpnt   curspace[*]   bsoftlimit   bhardlimit   [time]   curinodes[*]    isoftlimit  ihardlimit"
                 ($LFS quota -u quota15_$i $DIR | grep -E '^ *'$DIR' *[0-9]+\** *'$i' *'$i' *[0-9]+\** *'$i' *'$i) \
                  || error "lfs quota output is unexpected"
-                $LFS setquota -u quota15_$i 0 0 0 0 $DIR || error "ifs setquota clear failed"
+                $LFS setquota -u quota15_$i -b 0 -B 0 -i 0 -I 0 $DIR
         done
 }
 run_test 14b "setting 30 quota entries in quota v1 file before conversion ==="
@@ -1174,24 +1175,24 @@ test_15(){
 	wait_delete_completed
 
         # test for user
-        $LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $DIR || error "failed setting user quota limit $LIMIT"
+        $LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
         TOTAL_LIMIT="`$LFS quota -u $TSTUSR $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $4 }'`"
         [ $TOTAL_LIMIT -eq $LIMIT ] || error "  (user)total limits = $TOTAL_LIMIT; limit = $LIMIT, failed!"
         echo "  (user)total limits = $TOTAL_LIMIT; limit = $LIMIT, successful!"
-        $LFS setquota -u $TSTUSR 0 0 0 0 $DIR || error "failed removing user quota limit"
+        $LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
 
         # test for group
-        $LFS setquota -g $TSTUSR 0 $LIMIT 0 0 $DIR || error "failed setting group quota limit $LIMIT"
+        $LFS setquota -g $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
         TOTAL_LIMIT="`$LFS quota -g $TSTUSR $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $4 }'`"
         [ $TOTAL_LIMIT -eq $LIMIT ] || error "  (group)total limits = $TOTAL_LIMIT; limit = $LIMIT, failed!"
         echo "  (group)total limits = $TOTAL_LIMIT; limit = $LIMIT, successful!"
-        $LFS setquota -g $TSTUSR 0 0 0 0 $DIR || error "failed removing group quota limit"
+        $LFS setquota -g $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
         $LFS quotaoff -ug $DIR
         quota_set_version 1
         $LFS quotacheck -ug $DIR || error "quotacheck failed"
 
         echo "Testing that >4GB quota limits fail on volume with quota v1"
-        ! $LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $DIR
+        ! $LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
 }
 run_test 15 "set block quota more than 4T ==="
 
@@ -1205,10 +1206,10 @@ test_16_tub() {
 
 	echo "  User quota (limit: $LIMIT kbytes)"
 	if [ $1 == "u" ]; then
-	    $LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $DIR
+	    $LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
 	    $SHOW_QUOTA_USER
 	else
-	    $LFS setquota -g $TSTUSR 0 $LIMIT 0 0 $DIR
+	    $LFS setquota -g $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
 	    $SHOW_QUOTA_GROUP
 	fi
 
@@ -1234,7 +1235,7 @@ test_16_tub() {
 
 	rm -f $TESTFILE
 	sync; sleep 3; sync;
-	$LFS setquota -$1 $TSTUSR 0 0 0 0 $DIR
+	$LFS setquota -$1 $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
 }
 
 # test without adjusting qunit
@@ -1273,9 +1274,9 @@ test_17() {
 	BLK_LIMIT=$((100 * 1024)) # 100M
 
 	log "  Set enough high limit(block:$BLK_LIMIT) for user: $TSTUSR"
-	$LFS setquota -u $TSTUSR 0 $BLK_LIMIT 0 0 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I 0 $DIR
 	log "  Set enough high limit(block:$BLK_LIMIT) for group: $TSTUSR"
-	$LFS setquota -g $TSTUSR 0 $BLK_LIMIT 0 0 $DIR
+	$LFS setquota -g $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I 0 $DIR
 
 	touch $TESTFILE
 	chown $TSTUSR.$TSTUSR $TESTFILE
@@ -1326,7 +1327,7 @@ test_18() {
 	set_blk_unitsz 1024
 
 	log "   User quota (limit: $LIMIT kbytes)"
-	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $MOUNT
+	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $MOUNT
 	$SHOW_QUOTA_USER
 
 	$LFS setstripe $TESTFILE -i 0 -c 1
@@ -1363,7 +1364,7 @@ test_18() {
 	rm -f $TESTFILE
 	sync; sleep 3; sync;
 
-	$LFS setquota -u $TSTUSR 0 0 0 0 $MOUNT		# clear user limit
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $MOUNT
 
 	set_blk_unitsz $((128 * 1024))
 	set_blk_tunesz $((128 * 1024 / 2))
@@ -1382,7 +1383,7 @@ test_18a() {
 	set_blk_unitsz 1024
 
 	log "   User quota (limit: $LIMIT kbytes)"
-	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $MOUNT
+	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $MOUNT
 	$SHOW_QUOTA_USER
 
 	$LFS setstripe $TESTFILE -i 0 -c 1
@@ -1420,7 +1421,7 @@ test_18a() {
 	rm -f $TESTFILE
 	sync; sleep 3; sync;
 
-	$LFS setquota -u $TSTUSR 0 0 0 0 $MOUNT		# clear user limit
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $MOUNT
 
 	set_blk_unitsz $((128 * 1024))
 	set_blk_tunesz $((128 * 1024 / 2))
@@ -1444,10 +1445,10 @@ test_19() {
 	chown $TSTUSR.$TSTUSR $TESTFILE
 
 	echo "  User quota (limit: $LIMIT kbytes)"
-	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $MOUNT
+	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $MOUNT
 	$SHOW_QUOTA_USER
 	echo "  Updating quota limits"
-	$LFS setquota -u $TSTUSR 0 $LIMIT 0 0 $MOUNT
+	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $MOUNT
 	$SHOW_QUOTA_USER
 
 	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=1028 || true
@@ -1461,13 +1462,36 @@ test_19() {
 
 	# cleanup
 	rm -f $TESTFILE
-	$LFS setquota -u $TSTUSR 0 0 0 0 $MOUNT
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $MOUNT
 
 	set_blk_unitsz $((128 * 1024))
 	set_blk_tunesz $((128 * 1024 / 2))
 
 }
 run_test 19 "test if administrative limits updates do not zero operational limits (14790) ==="
+
+test_20()
+{
+        LSTR=(1t 2g 3m 4k) # limits strings
+        LVAL=($[1*1024*1024*1024] $[2*1024*1024] $[3*1024*1024] $[4*1024]) # limits values
+
+        $LFS setquota -u $TSTUSR --block-softlimit ${LSTR[0]} \
+                                 $MOUNT || error "could not set quota limits"
+
+        $LFS setquota -u $TSTUSR --block-hardlimit ${LSTR[1]} \
+                                 --inode-softlimit ${LSTR[2]} \
+                                 --inode-hardlimit ${LSTR[3]} \
+                                 $MOUNT || error "could not set quota limits"
+
+        ($LFS quota -u $TSTUSR $MOUNT  | \
+            grep -E '^ *'$MOUNT' *[0-9]+\** *'${LVAL[0]}' *'${LVAL[1]}' *[0-9]+\** *'${LVAL[2]}' *'${LVAL[3]}) \
+                 || error "lfs quota output is unexpected"
+
+        $LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 \
+                                 $MOUNT || error "could not reset quota limits"
+
+}
+run_test 20 "test if setquota specifiers work properly (15754)"
 
 # turn off quota
 test_99()
