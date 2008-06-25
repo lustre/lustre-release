@@ -927,8 +927,8 @@ void ldlm_lock_allow_match(struct ldlm_lock *lock)
 }
 
 int ldlm_lock_fast_match(struct ldlm_lock *lock, int rw,
-                                loff_t start, loff_t end,
-                                void **cookie)
+                         obd_off start, obd_off end,
+                         void **cookie)
 {
         LASSERT(rw == OBD_BRW_READ || rw == OBD_BRW_WRITE);
         /* should LCK_GROUP be handled in a special way? */

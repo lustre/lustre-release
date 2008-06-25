@@ -2774,16 +2774,16 @@ EXPORT_SYMBOL(lov_stripe_unlock);
 static int lov_reget_short_lock(struct obd_export *exp,
                                 struct lov_stripe_md *lsm,
                                 void **res, int rw,
-                                loff_t start, loff_t end,
+                                obd_off start, obd_off end,
                                 void **cookie)
 {
         struct lov_async_page *l = *res;
-        loff_t stripe_start, stripe_end = start;
+        obd_off stripe_start, stripe_end = start;
 
         ENTRY;
 
         /* ensure we don't cross stripe boundaries */
-        lov_extent_calc(exp, lsm, OBD_CALC_STRIPE_END, (obd_off *)&stripe_end);
+        lov_extent_calc(exp, lsm, OBD_CALC_STRIPE_END, &stripe_end);
         if (stripe_end <= end)
                 RETURN(0);
 
@@ -2798,7 +2798,7 @@ static int lov_reget_short_lock(struct obd_export *exp,
 }
 
 static int lov_release_short_lock(struct obd_export *exp,
-                                  struct lov_stripe_md *lsm, loff_t end,
+                                  struct lov_stripe_md *lsm, obd_off end,
                                   void *cookie, int rw)
 {
         int stripe;

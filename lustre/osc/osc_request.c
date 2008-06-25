@@ -2468,7 +2468,7 @@ static int osc_enter_cache(struct client_obd *cli, struct lov_oinfo *loi,
 static int osc_reget_short_lock(struct obd_export *exp,
                                 struct lov_stripe_md *lsm,
                                 void **res, int rw,
-                                loff_t start, loff_t end,
+                                obd_off start, obd_off end,
                                 void **cookie)
 {
         struct osc_async_page *oap = *res;
@@ -2485,7 +2485,7 @@ static int osc_reget_short_lock(struct obd_export *exp,
 }
 
 static int osc_release_short_lock(struct obd_export *exp,
-                                  struct lov_stripe_md *lsm, loff_t end,
+                                  struct lov_stripe_md *lsm, obd_off end,
                                   void *cookie, int rw)
 {
         ENTRY;
