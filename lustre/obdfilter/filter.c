@@ -2232,7 +2232,7 @@ static int filter_llog_finish(struct obd_device *obd, int count)
 
         if (obd->u.filter.fo_lcm) { 
                 llog_cleanup_commit_master((struct llog_commit_master *)
-                                           obd->u.filter.fo_lcm, 0);
+                                           obd->u.filter.fo_lcm, 1);
                 OBD_FREE(obd->u.filter.fo_lcm, 
                          sizeof(struct llog_commit_master));
                 obd->u.filter.fo_lcm = NULL;
