@@ -2429,6 +2429,8 @@ static int filter_cleanup(struct obd_device *obd)
 static int filter_connect_internal(struct obd_export *exp,
                                    struct obd_connect_data *data)
 {
+        struct filter_export_data *fed = &exp->exp_filter_data;
+
         if (!data)
                 RETURN(0);
 
@@ -2437,6 +2439,15 @@ static int filter_connect_internal(struct obd_export *exp,
                exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, exp,
                data->ocd_connect_flags, data->ocd_version,
                data->ocd_grant, data->ocd_index);
+
+        if (fed->fed_group != 0 && fed->fed_group != data->ocd_group) {
+                CWARN("!!! This export (nid %s) used object group %d "
+                       "earlier; now it's trying to use group %d!  This could "
+                       "be a bug in the MDS.  Tell CFS.\n",
+                       obd_export_nid2str(exp), fed->fed_group,data->ocd_group);
+                RETURN(-EPROTO);
+        }
+        fed->fed_group = data->ocd_group;
 
         data->ocd_connect_flags &= OST_CONNECT_SUPPORTED;
         exp->exp_connect_flags = data->ocd_connect_flags;
@@ -2451,7 +2462,6 @@ static int filter_connect_internal(struct obd_export *exp,
         }
 
         if (exp->exp_connect_flags & OBD_CONNECT_GRANT) {
-                struct filter_export_data *fed = &exp->exp_filter_data;
                 obd_size left, want;
 
                 spin_lock(&exp->exp_obd->obd_osfs_lock);
@@ -2576,7 +2586,6 @@ static int filter_connect(const struct lu_env *env,
                 GOTO(cleanup, rc);
 
         filter_export_stats_init(obd, exp, localdata);
-        group = data->ocd_group;
         if (obd->obd_replayable) {
                 OBD_ALLOC(lcd, sizeof(*lcd));
                 if (!lcd) {
@@ -2590,19 +2599,13 @@ static int filter_connect(const struct lu_env *env,
                 if (rc)
                         GOTO(cleanup, rc);
         }
-        CWARN("%s: Received MDS connection ("LPX64"); group %d\n",
-               obd->obd_name, exp->exp_handle.h_cookie, group);
+
+        group = data->ocd_group;
         if (group == 0)
                 GOTO(cleanup, rc);
 
-        if (fed->fed_group != 0 && fed->fed_group != group) {
-                CERROR("!!! This export (nid %s) used object group %d "
-                       "earlier; now it's trying to use group %d!  This could "
-                       "be a bug in the MDS.  Tell CFS.\n",
-                       obd_export_nid2str(exp), fed->fed_group, group);
-                GOTO(cleanup, rc = -EPROTO);
-        }
-        fed->fed_group = group;
+        CWARN("%s: Received MDS connection ("LPX64"); group %d\n",
+              obd->obd_name, exp->exp_handle.h_cookie, group);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         rc = filter_read_groups(obd, group, 1);
