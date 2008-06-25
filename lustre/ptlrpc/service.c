@@ -935,8 +935,11 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
                     MSGHDR_AT_SUPPORT) ? 
                    /* The max time the client expects us to take */
                    lustre_msg_get_timeout(req->rq_reqmsg) : obd_timeout;
-        LASSERT(deadline > 0);
         req->rq_deadline = req->rq_arrival_time.tv_sec + deadline;
+        if (unlikely(deadline == 0)) {
+                DEBUG_REQ(D_ERROR, req, "Dropping request with 0 timeout");
+                goto err_req;
+        }
         
         ptlrpc_at_add_timed(req);
 
