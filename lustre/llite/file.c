@@ -1261,7 +1261,7 @@ static int iov_copy_update(unsigned long *nr_segs, const struct iovec **iov_out,
 }
 
 static int ll_reget_short_lock(struct page *page, int rw,
-                               loff_t start, loff_t end,
+                               obd_off start, obd_off end,
                                void **cookie)
 {
         struct ll_async_page *llap;
@@ -1283,7 +1283,7 @@ static int ll_reget_short_lock(struct page *page, int rw,
                                     cookie));
 }
 
-static void ll_release_short_lock(struct inode *inode, loff_t end,
+static void ll_release_short_lock(struct inode *inode, obd_off end,
                                   void *cookie, int rw)
 {
         struct obd_export *exp;
@@ -1300,7 +1300,7 @@ static void ll_release_short_lock(struct inode *inode, loff_t end,
 }
 
 static inline int ll_file_get_fast_lock(struct file *file,
-                                        loff_t ppos, loff_t end,
+                                        obd_off ppos, obd_off end,
                                         const struct iovec *iov,
                                         unsigned long nr_segs,
                                         void **cookie, int rw)
@@ -1331,7 +1331,7 @@ out:
         RETURN(rc);
 }
 
-static inline void ll_file_put_fast_lock(struct inode *inode, loff_t end,
+static inline void ll_file_put_fast_lock(struct inode *inode, obd_off end,
                                          void *cookie, int rw)
 {
         ll_release_short_lock(inode, end, cookie, rw);
@@ -1343,10 +1343,10 @@ enum ll_lock_style {
         LL_LOCK_STYLE_TREELOCK = 2
 };
 
-static inline int ll_file_get_lock(struct file *file, loff_t ppos, loff_t end,
-                                   const struct iovec *iov, unsigned long nr_segs,
-                                   void **cookie, struct ll_lock_tree *tree,
-                                   int rw)
+static inline int ll_file_get_lock(struct file *file, obd_off ppos,
+                                   obd_off end, const struct iovec *iov,
+                                   unsigned long nr_segs, void **cookie,
+                                   struct ll_lock_tree *tree, int rw)
 {
         int rc;
 
@@ -1369,9 +1369,10 @@ static inline int ll_file_get_lock(struct file *file, loff_t ppos, loff_t end,
         RETURN(rc);
 }
 
-static inline void ll_file_put_lock(struct inode *inode, loff_t end,
+static inline void ll_file_put_lock(struct inode *inode, obd_off end,
                                     enum ll_lock_style lock_style,
-                                    void *cookie, struct ll_lock_tree *tree, int rw)
+                                    void *cookie, struct ll_lock_tree *tree,
+                                    int rw)
 
 {
         switch (lock_style) {
@@ -1501,8 +1502,9 @@ repeat:
                 nrsegs_copy = nr_segs;
         }
 
-        lock_style = ll_file_get_lock(file, *ppos, end, iov_copy, nrsegs_copy,
-                                      &cookie, &tree, OBD_BRW_READ);
+        lock_style = ll_file_get_lock(file, (obd_off)(*ppos), (obd_off)end,
+                                      iov_copy, nrsegs_copy, &cookie, &tree,
+                                      OBD_BRW_READ);
         if (lock_style < 0)
                 GOTO(out, retval = lock_style);
 
@@ -1536,7 +1538,7 @@ repeat:
                 retval = ll_glimpse_size(inode, LDLM_FL_BLOCK_GRANTED);
                 if (retval) {
                         if (lock_style != LL_LOCK_STYLE_NOLOCK)
-                                ll_file_put_lock(inode, end, lock_style,
+                                ll_file_put_lock(inode, (obd_off)end, lock_style,
                                                  cookie, &tree, OBD_BRW_READ);
                         goto out;
                 }
@@ -1579,7 +1581,8 @@ repeat:
                 retval = generic_file_aio_read(iocb, iov_copy, nrsegs_copy,
                                                *ppos);
 #endif
-                ll_file_put_lock(inode, end, lock_style, cookie, &tree, OBD_BRW_READ);
+                ll_file_put_lock(inode, (obd_off)end, lock_style, cookie,
+                                 &tree, OBD_BRW_READ);
         } else {
                 retval = ll_file_lockless_io(file, iov_copy, nrsegs_copy, ppos,
                                              READ, chunk);
@@ -1721,8 +1724,10 @@ repeat:
         }
 
         tree_locked = ll_file_get_tree_lock_iov(&tree, file, iov_copy,
-                                                nrsegs_copy, lock_start,
-                                                lock_end, OBD_BRW_WRITE);
+                                                nrsegs_copy,
+                                                (obd_off)lock_start,
+                                                (obd_off)lock_end,
+                                                OBD_BRW_WRITE);
         if (tree_locked < 0)
                 GOTO(out, retval = tree_locked);
 

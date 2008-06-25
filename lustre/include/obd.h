@@ -967,10 +967,10 @@ struct obd_ops {
         int (*o_reget_short_lock)(struct obd_export *exp,
                                  struct lov_stripe_md *lsm,
                                  void **res, int rw,
-                                 loff_t start, loff_t end,
+                                 obd_off start, obd_off end,
                                  void **cookie);
         int (*o_release_short_lock)(struct obd_export *exp,
-                                    struct lov_stripe_md *lsm, loff_t end,
+                                    struct lov_stripe_md *lsm, obd_off end,
                                     void *cookie, int rw);
         int (*o_queue_async_io)(struct obd_export *exp,
                                 struct lov_stripe_md *lsm,
