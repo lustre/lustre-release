@@ -38,3 +38,4 @@ INSTALL
 patches
 series
 lustre.spec
+acl.size
