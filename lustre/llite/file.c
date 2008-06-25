@@ -1406,7 +1406,7 @@ static ssize_t ll_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
         struct ost_lvb lvb;
         struct ll_ra_read bead;
         int ra = 0;
-        loff_t end;
+        obd_off end;
         ssize_t retval, chunk, sum = 0;
         int lock_style;
         struct iovec *iov_copy = NULL;
@@ -1502,7 +1502,7 @@ repeat:
                 nrsegs_copy = nr_segs;
         }
 
-        lock_style = ll_file_get_lock(file, (obd_off)(*ppos), (obd_off)end,
+        lock_style = ll_file_get_lock(file, (obd_off)(*ppos), end,
                                       iov_copy, nrsegs_copy, &cookie, &tree,
                                       OBD_BRW_READ);
         if (lock_style < 0)
@@ -1538,7 +1538,7 @@ repeat:
                 retval = ll_glimpse_size(inode, LDLM_FL_BLOCK_GRANTED);
                 if (retval) {
                         if (lock_style != LL_LOCK_STYLE_NOLOCK)
-                                ll_file_put_lock(inode, (obd_off)end, lock_style,
+                                ll_file_put_lock(inode, end, lock_style,
                                                  cookie, &tree, OBD_BRW_READ);
                         goto out;
                 }
@@ -1581,7 +1581,7 @@ repeat:
                 retval = generic_file_aio_read(iocb, iov_copy, nrsegs_copy,
                                                *ppos);
 #endif
-                ll_file_put_lock(inode, (obd_off)end, lock_style, cookie,
+                ll_file_put_lock(inode, end, lock_style, cookie,
                                  &tree, OBD_BRW_READ);
         } else {
                 retval = ll_file_lockless_io(file, iov_copy, nrsegs_copy, ppos,
