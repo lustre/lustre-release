@@ -24,6 +24,18 @@ assert_env() {
     [ $failed ] && exit 1 || true
 }
 
+assert_DIR () {
+    local failed=""
+    [ -z "`echo :$DIR: | grep :$MOUNT:`" ] && \
+        failed=1 && echo "DIR not in $MOUNT. Aborting."
+    [ -z "`echo :$DIR1: | grep :$MOUNT1:`" ] && \
+        failed=1 && echo "DIR1 not in $MOUNT1. Aborting."
+    [ -z "`echo :$DIR2: | grep :$MOUNT2:`" ] && \
+        failed=1 && echo "DIR2 not in $MOUNT2. Aborting"
+
+    [ -n "$failed" ] && exit 99 || true
+}
+
 usage() {
     echo "usage: $0 [-r] [-f cfgfile]"
     echo "       -r: reformat"
@@ -1227,7 +1239,7 @@ error_exit() {
 # (like ALWAYS_EXCEPT, but run the test and ignore the results.)
 # e.g. error_ignore 5494 "your message"
 error_ignore() {
-    TYPE="IGNORE (bz$1)"
+    local TYPE="IGNORE (bz$1)"
     shift
     error_noexit "$@"
 }
@@ -1266,6 +1278,8 @@ basetest() {
 }
 
 run_test() {
+    assert_DIR
+
     export base=`basetest $1`
     if [ ! -z "$ONLY" ]; then
         testname=ONLY_$1
@@ -1369,7 +1383,6 @@ run_one() {
     export tdir=d0.${TESTSUITE}/d${base}
     local SAVE_UMASK=`umask`
     umask 0022
-    mkdir -p $DIR/$tdir
 
     BEFORE=`date +%s`
     log "== test $testnum: $message ============ `date +%H:%M:%S` ($BEFORE)"
@@ -1384,7 +1397,6 @@ run_one() {
         error "LBUG/LASSERT detected"
     ps auxww | grep -v grep | grep -q multiop && error "multiop still running"
     pass "($((`date +%s` - $BEFORE))s)"
-    rmdir ${DIR}/$tdir >/dev/null 2>&1 || true
     unset TESTNAME
     unset tdir
     umask $SAVE_UMASK
