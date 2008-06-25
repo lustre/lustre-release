@@ -269,7 +269,7 @@ cvs_cmd snmp lustre-snmp "$snmptag"
 cvs_cmd lustre lustre-core "$lustretag"
 cvs_cmd ldiskfs ldiskfs "$ldiskfstag"
 cvs_cmd lustre-iokit lustre-iokit "$lustreiokittag"
-hg_cmd zfs-lustre "$hg_base_url" "$dmutag"
+hg_cmd lustre/zfs-lustre "$hg_base_url" "$dmutag"
 cvs_cmd libcfs libcfs "$libcfstag"
 
 [ -a ldiskfs/build ] || ln -sf ../build ldiskfs/build

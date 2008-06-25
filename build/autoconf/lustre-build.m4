@@ -357,26 +357,17 @@ AM_CONDITIONAL(POSIX_OSD_ENABLED, test x$posix_osd = xyes)
 
 #
 # LB_PATH_DMU
-# Support for --with-dmu
 #
 AC_DEFUN([LB_PATH_DMU],
 [AC_MSG_CHECKING([whether to enable DMU])
-AC_ARG_WITH([dmu],
-	AC_HELP_STRING([--with-dmu=path],
-		       [set path to a DMU tree (default is included zfs-lustre)]),
-	[
-		DMU_SRC=$with_dmu
-	],
-	[
-		DMU_SRC="$PWD/zfs-lustre"
-	])
 if test x$enable_uoss = xyes -a x$enable_posix_osd != xyes; then
+	DMU_SRC="$PWD/lustre/zfs-lustre"
 	AC_DEFINE(DMU_OSD, 1, Enable DMU OSD)
 	AC_MSG_RESULT([yes])
 	LB_CHECK_FILE([$DMU_SRC/src/.patched],[],[
 		AC_MSG_ERROR([A complete (patched) DMU tree was not found.])
 	])
-	AC_CONFIG_SUBDIRS(zfs-lustre)
+	AC_CONFIG_SUBDIRS(lustre/zfs-lustre)
 	dmu_osd='yes'
 else
 	AC_MSG_RESULT([no])

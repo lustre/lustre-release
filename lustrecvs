@@ -143,6 +143,16 @@ hg_cmd ()
         return
     fi
 
+    if ! which hg &> /dev/null; then
+    cat <<EOF
+
+Error: Mercurial is missing, try 'yum install mercurial', 'apt-get install
+mercurial' or try http://rpmfind.net/linux/rpm2html/search.php?query=mercurial
+EOF
+        error_modules="$dir $error_modules"
+        return
+    fi
+
     url="$base_url/$repository"
 
     # create a cvs date format that will survive shell expansion
