@@ -1239,7 +1239,7 @@ error_exit() {
 # (like ALWAYS_EXCEPT, but run the test and ignore the results.)
 # e.g. error_ignore 5494 "your message"
 error_ignore() {
-    TYPE="IGNORE (bz$1)"
+    local TYPE="IGNORE (bz$1)"
     shift
     error_noexit "$@"
 }
