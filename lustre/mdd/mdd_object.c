@@ -1348,7 +1348,7 @@ static int mdd_dir_page_build(const struct lu_env *env, int first,
                 if (result != 0)
                         break;
 
-                recsize = (sizeof(*ent) + len + 3) & ~3;
+                recsize = (sizeof(*ent) + len + 7) & ~7;
                 hash = iops->store(env, it);
                 *end = hash;
 
@@ -1465,7 +1465,7 @@ static int __mdd_readpage(const struct lu_env *env, struct mdd_object *obj,
                          * No pages were processed, mark this.
                          */
                         dp->ldp_flags |= LDF_EMPTY;
-                dp->ldp_flags = cpu_to_le16(dp->ldp_flags);
+                dp->ldp_flags = cpu_to_le32(dp->ldp_flags);
                 cfs_kunmap(rdpg->rp_pages[0]);
         }
         iops->put(env, it);
@@ -1509,7 +1509,7 @@ static int mdd_readpage(const struct lu_env *env, struct md_object *obj,
                 dp->ldp_hash_start = rdpg->rp_hash;
                 dp->ldp_hash_end   = DIR_END_OFF;
                 dp->ldp_flags |= LDF_EMPTY;
-                dp->ldp_flags = cpu_to_le16(dp->ldp_flags);
+                dp->ldp_flags = cpu_to_le32(dp->ldp_flags);
                 cfs_kunmap(pg);
                 GOTO(out_unlock, rc = 0);
         }

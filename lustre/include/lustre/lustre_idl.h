@@ -373,8 +373,7 @@ struct lu_dirent {
 struct lu_dirpage {
         __u64            ldp_hash_start;
         __u64            ldp_hash_end;
-        __u16            ldp_flags;
-        __u16            ldp_pad;
+        __u32            ldp_flags;
         __u32            ldp_pad0;
         struct lu_dirent ldp_entries[0];
 };
@@ -385,7 +384,7 @@ enum lu_dirpage_flags {
 
 static inline struct lu_dirent *lu_dirent_start(struct lu_dirpage *dp)
 {
-        if (le16_to_cpu(dp->ldp_flags) & LDF_EMPTY)
+        if (le32_to_cpu(dp->ldp_flags) & LDF_EMPTY)
                 return NULL;
         else
                 return dp->ldp_entries;
@@ -407,7 +406,7 @@ static inline int lu_dirent_size(struct lu_dirent *ent)
 {
         if (le16_to_cpu(ent->lde_reclen) == 0) {
                 return (sizeof(*ent) +
-                        le16_to_cpu(ent->lde_namelen) + 3) & ~3;
+                        le16_to_cpu(ent->lde_namelen) + 7) & ~7;
         }
         return le16_to_cpu(ent->lde_reclen);
 }

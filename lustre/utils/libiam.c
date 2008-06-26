@@ -101,6 +101,18 @@ enum {
         LVAR_ROUND = LVAR_PAD - 1
 };
 
+/**
+ * Stores \a val at \a dst, where the latter is possibly unaligned. Uses
+ * memcpy(). This macro is needed to avoid dependency of user level tools on
+ * the kernel headers.
+ */
+#define STORE_UNALIGNED(val, dst)               \
+({                                              \
+        typeof(*(dst)) __val = (val);           \
+                                                \
+        memcpy(dst, &__val, sizeof *(dst));     \
+})
+
 static int root_limit(int rootgap, int blocksize, int size)
 {
         int limit;
@@ -159,9 +171,9 @@ static void lfix_root(void *buf,
         entry += keysize;
         /* now @entry points to <ptr> */
         if (ptrsize == 4)
-                *(u_int32_t *)entry = cpu_to_le32(1);
+                STORE_UNALIGNED(cpu_to_le32(1), (u_int32_t *)entry);
         else
-                *(u_int64_t *)entry = cpu_to_le64(1);
+                STORE_UNALIGNED(cpu_to_le64(1), (u_int64_t *)entry);
 }
 
 static void lfix_leaf(void *buf,
@@ -228,9 +240,9 @@ static void lvar_root(void *buf,
         entry += sizeof(lvar_hash_t);
         /* now @entry points to <ptr> */
         if (ptrsize == 4)
-                *(u_int32_t *)entry = cpu_to_le32(1);
+                STORE_UNALIGNED(cpu_to_le32(1), (u_int32_t *)entry);
         else
-                *(u_int64_t *)entry = cpu_to_le64(1);
+                STORE_UNALIGNED(cpu_to_le64(1), (u_int64_t *)entry);
 }
 
 static int lvar_esize(int namelen, int recsize)

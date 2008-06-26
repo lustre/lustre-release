@@ -164,6 +164,9 @@ static unsigned char ext2_filetype_table[EXT2_FT_MAX] = {
         [EXT2_FT_SYMLINK]       DT_LNK,
 };
 
+
+void (*memmover)(void *, const void *, size_t) = memmove;
+
 #define NAME_OFFSET(de) ((int) ((de)->d_name - (char *) (de)))
 #define ROUND_UP64(x)   (((x)+sizeof(__u64)-1) & ~(sizeof(__u64)-1))
 static int filldir(char *buf, int buflen,
@@ -171,20 +174,30 @@ static int filldir(char *buf, int buflen,
                    ino_t ino, unsigned int d_type, int *filled)
 {
         cfs_dirent_t *dirent = (cfs_dirent_t *) (buf + *filled);
+        cfs_dirent_t  holder;
         int reclen = ROUND_UP64(NAME_OFFSET(dirent) + namelen + 1);
+
+        /*
+         * @buf is not guaranteed to be properly aligned. To work around,
+         * first fill stack-allocated @holder, then copy @holder into @buf by
+         * memmove().
+         */
 
         /* check overflow */
         if ((*filled + reclen) > buflen)
                 return 1;
 
-        dirent->d_ino = ino;
+        holder.d_ino = ino;
 #ifdef _DIRENT_HAVE_D_OFF
-        dirent->d_off = offset;
+        holder.d_off = offset;
 #endif
-        dirent->d_reclen = reclen;
+        holder.d_reclen = reclen;
 #ifdef _DIRENT_HAVE_D_TYPE
-        dirent->d_type = (unsigned short) d_type;
+        holder.d_type = (unsigned short) d_type;
 #endif
+        /* gcc unrolls memcpy() of structs into field-wise assignments,
+         * assuming proper alignment. Humor it. */
+        (*memmover)(dirent, &holder, NAME_OFFSET(dirent));
         memcpy(dirent->d_name, name, namelen);
         dirent->d_name[namelen] = 0;
 

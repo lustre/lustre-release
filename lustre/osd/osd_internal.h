@@ -121,7 +121,11 @@ struct osd_thread_info {
 
         struct lu_fid_pack     oti_pack;
 
+        /* union to guarantee that ->oti_ipd[] has proper alignment. */
+        union {
         char                   oti_ipd[DX_IPD_MAX_SIZE];
+                long long      oti_alignment_lieutenant;
+        };
 #if OSD_COUNTERS
         int                    oti_r_locks;
         int                    oti_w_locks;
