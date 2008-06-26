@@ -124,6 +124,7 @@ mkdir -p $RPM_BUILD_ROOT/usr/src
 rm -f lustre-source
 ln -s $RPM_BUILD_ROOT/usr/src lustre-source
 make distdir distdir=lustre-source/lustre-%{version}
+chmod -R go-w lustre-source/lustre-%{version}
 
 cat >lustre.files <<EOF
 %attr(-, root, root) /sbin/mount.lustre
