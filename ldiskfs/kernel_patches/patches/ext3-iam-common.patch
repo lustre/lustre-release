@@ -4321,7 +4321,7 @@ Index: linux-stage/include/linux/lustre_iam.h
 ===================================================================
 --- linux-stage.orig/include/linux/lustre_iam.h	2006-06-16 16:07:58.000000000 +0300
 +++ linux-stage/include/linux/lustre_iam.h	2007-10-21 17:42:58.000000000 +0300
-@@ -0,0 +1,1071 @@
+@@ -0,0 +1,1074 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -4355,6 +4355,7 @@ Index: linux-stage/include/linux/lustre_iam.h
 +#define __LINUX_LUSTRE_IAM_H__
 +
 +#include <linux/module.h>
++#include <asm/unaligned.h>
 +
 +/*
 + *  linux/include/linux/lustre_iam.h
@@ -5088,17 +5089,19 @@ Index: linux-stage/include/linux/lustre_iam.h
 +/*XXX These stuff put here, just because they are used by iam.c and namei.c*/
 +static inline unsigned dx_get_block(struct iam_path *p, struct iam_entry *entry)
 +{
-+	return le32_to_cpu(*(u32*)iam_entry_off(entry,
-+						iam_path_descr(p)->id_ikey_size))
-+		& 0x00ffffff;
++        u32 *addr;
++
++        addr = iam_entry_off(entry, iam_path_descr(p)->id_ikey_size);
++        return le32_to_cpu(get_unaligned(addr)) & 0x00ffffff;
 +}
 +
 +static inline void dx_set_block(struct iam_path *p,
 +				struct iam_entry *entry, unsigned value)
 +{
-+	*(u32*)iam_entry_off(entry,
-+			     iam_path_descr(p)->id_ikey_size) =
-+		cpu_to_le32(value);
++        u32 *addr;
++
++        addr = iam_entry_off(entry, iam_path_descr(p)->id_ikey_size);
++        put_unaligned(cpu_to_le32(value), addr);
 +}
 +
 +static inline void dx_set_ikey(struct iam_path *p, struct iam_entry *entry,
