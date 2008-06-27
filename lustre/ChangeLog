@@ -182,6 +182,15 @@ Description: ldiskfs error: XXX blocks in bitmap, YYY in gd
 Details    : If blocks per group is less than blocksize*8, set rest of the
 	     bitmap to 1.
 
+Severity   : major 
+Frequency  : Application do stride read on lustre 
+Bugzilla   : 16172
+Description: The read performance will drop a lot if the application does
+	     stride read.
+Details    : Because the stride_start_offset are missing in stride read-ahead,
+	     it will cause clients read a lot of unused pages in read-ahead,
+	     then the read-performance drops.
+
 -------------------------------------------------------------------------------
 
 
