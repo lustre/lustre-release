@@ -141,31 +141,7 @@ static struct page *llu_dir_read_page(struct inode *ino, __u32 hash,
         return page;
 }
 
-enum {
-        EXT2_FT_UNKNOWN,
-        EXT2_FT_REG_FILE,
-        EXT2_FT_DIR,
-        EXT2_FT_CHRDEV,
-        EXT2_FT_BLKDEV,
-        EXT2_FT_FIFO,
-        EXT2_FT_SOCK,
-        EXT2_FT_SYMLINK,
-        EXT2_FT_MAX
-};
-
-static unsigned char ext2_filetype_table[EXT2_FT_MAX] = {
-        [EXT2_FT_UNKNOWN]       DT_UNKNOWN,
-        [EXT2_FT_REG_FILE]      DT_REG,
-        [EXT2_FT_DIR]           DT_DIR,
-        [EXT2_FT_CHRDEV]        DT_CHR,
-        [EXT2_FT_BLKDEV]        DT_BLK,
-        [EXT2_FT_FIFO]          DT_FIFO,
-        [EXT2_FT_SOCK]          DT_SOCK,
-        [EXT2_FT_SYMLINK]       DT_LNK,
-};
-
-
-void (*memmover)(void *, const void *, size_t) = memmove;
+void *(*memmover)(void *, const void *, size_t) = memmove;
 
 #define NAME_OFFSET(de) ((int) ((de)->d_name - (char *) (de)))
 #define ROUND_UP64(x)   (((x)+sizeof(__u64)-1) & ~(sizeof(__u64)-1))
