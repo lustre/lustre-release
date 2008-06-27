@@ -172,9 +172,9 @@ static inline void lockmode_verify(ldlm_mode_t mode)
        LASSERT(mode > LCK_MINMODE && mode < LCK_MAXMODE);
 }
 
-static inline int lockmode_compat(ldlm_mode_t exist, ldlm_mode_t new)
+static inline int lockmode_compat(ldlm_mode_t exist_mode, ldlm_mode_t new_mode)
 {
-       return (lck_compat_array[exist] & new);
+       return (lck_compat_array[exist_mode] & new_mode);
 }
 
 /*
@@ -618,9 +618,9 @@ struct ldlm_ast_work {
 struct ldlm_enqueue_info {
         __u32 ei_type;   /* Type of the lock being enqueued. */
         __u32 ei_mode;   /* Mode of the lock being enqueued. */
-        void *ei_cb_bl;  /* Different callbacks for lock handling (blocking, */
-        void *ei_cb_cp;  /* completion, glimpse) */
-        void *ei_cb_gl;
+        void *ei_cb_bl;  /* blocking lock callback */
+        void *ei_cb_cp;  /* lock completion callback */
+        void *ei_cb_gl;  /* lock glimpse callback */
         void *ei_cbdata; /* Data to be passed into callbacks. */
 };
 
