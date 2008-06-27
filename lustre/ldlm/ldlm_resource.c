@@ -142,19 +142,19 @@ static int lprocfs_wr_lru_size(struct file *file, const char *buffer,
         if (copy_from_user(dummy, buffer, MAX_STRING_SIZE))
                 return -EFAULT;
 
-        if (count == 6 && memcmp(dummy, "clear", 5) == 0) {
+        if (strncmp(dummy, "clear", 5) == 0) {
                 CDEBUG(D_DLMTRACE,
                        "dropping all unused locks from namespace %s\n",
                        ns->ns_name);
                 if (ns_connect_lru_resize(ns)) {
                         int canceled, unused  = ns->ns_nr_unused;
-                        
+
                         /* Try to cancel all @ns_nr_unused locks. */
-                        canceled = ldlm_cancel_lru(ns, unused, LDLM_SYNC, 
+                        canceled = ldlm_cancel_lru(ns, unused, LDLM_SYNC,
                                                    LDLM_CANCEL_PASSED);
                         if (canceled < unused) {
                                 CERROR("not all requested locks are canceled, "
-                                       "requested: %d, canceled: %d\n", unused, 
+                                       "requested: %d, canceled: %d\n", unused,
                                        canceled);
                                 return -EINVAL;
                         }
@@ -173,35 +173,39 @@ static int lprocfs_wr_lru_size(struct file *file, const char *buffer,
                 return -EINVAL;
         }
         lru_resize = (tmp == 0);
-        
+
         if (ns_connect_lru_resize(ns)) {
                 if (!lru_resize)
                         ns->ns_max_unused = (unsigned int)tmp;
-                        
+
                 if (tmp > ns->ns_nr_unused)
                         tmp = ns->ns_nr_unused;
                 tmp = ns->ns_nr_unused - tmp;
-                
-                CDEBUG(D_DLMTRACE, "changing namespace %s unused locks from %u to %u\n", 
+
+                CDEBUG(D_DLMTRACE,
+                       "changing namespace %s unused locks from %u to %u\n",
                        ns->ns_name, ns->ns_nr_unused, (unsigned int)tmp);
-                ldlm_cancel_lru(ns, (unsigned int)tmp, LDLM_ASYNC, LDLM_CANCEL_PASSED);
-                
+                ldlm_cancel_lru(ns, tmp, LDLM_ASYNC, LDLM_CANCEL_PASSED);
+
                 if (!lru_resize) {
-                        CDEBUG(D_DLMTRACE, "disable lru_resize for namespace %s\n", 
+                        CDEBUG(D_DLMTRACE,
+                               "disable lru_resize for namespace %s\n",
                                ns->ns_name);
                         ns->ns_connect_flags &= ~OBD_CONNECT_LRU_RESIZE;
                 }
         } else {
-                CDEBUG(D_DLMTRACE, "changing namespace %s max_unused from %u to %u\n",
+                CDEBUG(D_DLMTRACE,
+                       "changing namespace %s max_unused from %u to %u\n",
                        ns->ns_name, ns->ns_max_unused, (unsigned int)tmp);
                 ns->ns_max_unused = (unsigned int)tmp;
                 ldlm_cancel_lru(ns, 0, LDLM_ASYNC, LDLM_CANCEL_PASSED);
-                
-                /* Make sure that originally lru resize was supported before 
+
+                /* Make sure that originally lru resize was supported before
                  * turning it on here. */
-                if (lru_resize && 
+                if (lru_resize &&
                     (ns->ns_orig_connect_flags & OBD_CONNECT_LRU_RESIZE)) {
-                        CDEBUG(D_DLMTRACE, "enable lru_resize for namespace %s\n", 
+                        CDEBUG(D_DLMTRACE,
+                               "enable lru_resize for namespace %s\n",
                                ns->ns_name);
                         ns->ns_connect_flags |= OBD_CONNECT_LRU_RESIZE;
                 }
@@ -295,7 +299,7 @@ void ldlm_proc_namespace(struct ldlm_namespace *ns)
 #define ldlm_proc_namespace(ns) do {} while (0)
 #endif /* LPROCFS */
 
-struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name, 
+struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
                                           ldlm_side_t client, ldlm_appetite_t apt)
 {
         struct ldlm_namespace *ns = NULL;
@@ -555,8 +559,8 @@ force_wait:
  * like pools thread and others;
  * (1) Clear all locks in \a ns.
  */
-void ldlm_namespace_free_prior(struct ldlm_namespace *ns, 
-                               struct obd_import *imp, 
+void ldlm_namespace_free_prior(struct ldlm_namespace *ns,
+                               struct obd_import *imp,
                                int force)
 {
         int rc;
@@ -566,12 +570,12 @@ void ldlm_namespace_free_prior(struct ldlm_namespace *ns,
                 return;
         }
 
-        /* 
-         * Make sure that nobody can find this ns in its list. 
+        /*
+         * Make sure that nobody can find this ns in its list.
          */
         ldlm_namespace_unregister(ns, ns->ns_client);
 
-        /* 
+        /*
          * Can fail with -EINTR when force == 0 in which case try harder.
          */
         rc = __ldlm_namespace_free(ns, force);
@@ -581,9 +585,9 @@ void ldlm_namespace_free_prior(struct ldlm_namespace *ns,
                         ptlrpc_invalidate_import(imp);
                 }
 
-                /* 
+                /*
                  * With all requests dropped and the import inactive
-                 * we are gaurenteed all reference will be dropped. 
+                 * we are gaurenteed all reference will be dropped.
                  */
                 rc = __ldlm_namespace_free(ns, 1);
                 LASSERT(rc == 0);
@@ -604,7 +608,7 @@ void ldlm_namespace_free_post(struct ldlm_namespace *ns)
                 return;
         }
 
-        /* 
+        /*
          * Fini pool _before_ parent proc dir is removed. This is important as
          * ldlm_pool_fini() removes own proc dir which is child to @dir. Removing
          * it after @dir may cause oops.
@@ -629,7 +633,7 @@ void ldlm_namespace_free_post(struct ldlm_namespace *ns)
 
         /*
          * Namespace \a ns should be not on list in this time, otherwise this
-         * will cause issues realted to using freed \a ns in pools thread. 
+         * will cause issues realted to using freed \a ns in pools thread.
          */
         LASSERT(list_empty(&ns->ns_list_chain));
         OBD_FREE_PTR(ns);
@@ -655,7 +659,7 @@ void ldlm_namespace_free_post(struct ldlm_namespace *ns)
  * lprocfs entries, and then free memory. It will be called w/o cli->cl_sem
  * held.
  */
-void ldlm_namespace_free(struct ldlm_namespace *ns, 
+void ldlm_namespace_free(struct ldlm_namespace *ns,
                          struct obd_import *imp,
                          int force)
 {
@@ -708,7 +712,7 @@ void ldlm_namespace_unregister(struct ldlm_namespace *ns, ldlm_side_t client)
         mutex_down(ldlm_namespace_lock(client));
         LASSERT(!list_empty(&ns->ns_list_chain));
         /*
-         * Some asserts and possibly other parts of code still using 
+         * Some asserts and possibly other parts of code still using
          * list_empty(&ns->ns_list_chain). This is why it is important
          * to use list_del_init() here.
          */
@@ -730,7 +734,7 @@ struct ldlm_namespace *ldlm_namespace_first_locked(ldlm_side_t client)
 {
         LASSERT_SEM_LOCKED(ldlm_namespace_lock(client));
         LASSERT(!list_empty(ldlm_namespace_list(client)));
-        return container_of(ldlm_namespace_list(client)->next, 
+        return container_of(ldlm_namespace_list(client)->next,
                 struct ldlm_namespace, ns_list_chain);
 }
 static __u32 ldlm_hash_fn(struct ldlm_resource *parent,
@@ -939,7 +943,7 @@ void __ldlm_resource_putref_final(struct ldlm_resource *res)
                 LBUG();
         }
 
-        /* Pass 0 here to not wake ->ns_waitq up yet, we will do it few 
+        /* Pass 0 here to not wake ->ns_waitq up yet, we will do it few
          * lines below when all children are freed. */
         ldlm_namespace_put_locked(ns, 0);
         list_del_init(&res->lr_hash);
@@ -1083,8 +1087,8 @@ void ldlm_namespace_dump(int level, struct ldlm_namespace *ns)
         if (!((libcfs_debug | D_ERROR) & level))
                 return;
 
-        CDEBUG(level, "--- Namespace: %s (rc: %d, side: %s)\n", 
-               ns->ns_name, ns->ns_refcount, 
+        CDEBUG(level, "--- Namespace: %s (rc: %d, side: %s)\n",
+               ns->ns_name, ns->ns_refcount,
                ns_is_client(ns) ? "client" : "server");
 
         if (cfs_time_before(cfs_time_current(), ns->ns_next_dump))
