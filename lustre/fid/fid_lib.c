@@ -49,9 +49,9 @@
  *
  * Fid namespace:
  * <pre>
- * Normal FID:        seq:64 [2^32,2^64-1]      oid:32          ver:32
- * IGIF      :        0:33, ino:31              gen:32          0:32
- * IDIF      :        0:32, 1:1, ost-index:15,  objd:48         0:32
+ * Normal FID:        seq:64 [2^33,2^64-1]      oid:32          ver:32
+ * IGIF      :        0:32, ino:32              gen:32          0:32
+ * IDIF      :        0:31, 1:1, ost-index:16,  objd:48         0:32
  * </pre>
  *
  * The first 0x400 sequences of normal FID are reserved for special purpose.

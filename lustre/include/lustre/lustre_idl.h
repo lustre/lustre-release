@@ -219,12 +219,16 @@ static inline __u32 fid_ver(const struct lu_fid *fid)
         return fid->f_ver;
 }
 
-#define FID_SEQ_START 0x100000000ULL
-
 static inline void fid_zero(struct lu_fid *fid)
 {
         memset(fid, 0, sizeof(*fid));
 }
+
+/* Normal FID sequence starts from this value, i.e. 1<<33 */
+#define FID_SEQ_START  0x200000000ULL
+
+/* IDIF sequence starts from this value, i.e. 1<<32 */
+#define IDIF_SEQ_START 0x100000000ULL
 
 /**
  * Check if a fid is igif or not.
@@ -233,7 +237,17 @@ static inline void fid_zero(struct lu_fid *fid)
  */
 static inline int fid_is_igif(const struct lu_fid *fid)
 {
-        return fid_seq(fid) > 0 && fid_seq(fid) < FID_SEQ_START;
+        return fid_seq(fid) > 0 && fid_seq(fid) < IDIF_SEQ_START;
+}
+
+/**
+ * Check if a fid is idif or not.
+ * \param fid the fid to be tested.
+ * \return true if the fid is a idif; otherwise false. 
+ */
+static inline int fid_is_idif(const struct lu_fid *fid)
+{
+        return fid_seq(fid) >= IDIF_SEQ_START  && fid_seq(fid) < FID_SEQ_START;
 }
 
 /**
