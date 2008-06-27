@@ -4978,41 +4978,39 @@ test_128() { # bug 15212
 run_test 128 "interactive lfs for 2 consecutive find's"
 
 test_129() {
-	[ "$FSTYPE" = "ldiskfs" ] || return 0
-	mkdir $DIR/$tdir
+        [ "$FSTYPE" != "ldiskfs" ] && skip "not needed for FSTYPE=$FSTYPE" && return 0
 
-	EFBIG=27
-	ldiskfs_prefix=/proc/fs/ldiskfs
-	proc_file=max_dir_size
-	max_bytes=16385
+        DEV=$(basename $(do_facet mds lctl get_param -n mds.*.mntdev))
+        [ -z "$DEV" ] && error "can't access mds mntdev" 
+        EFBIG=27
+        LDPROC=/proc/fs/ldiskfs/$DEV/max_dir_size
+        MAX=16384
 
-	echo $max_bytes >$ldiskfs_prefix/$proc_file
+        do_facet mds "echo $MAX > $LDPROC"
 
-	I=0
-	J=0
-	while [ $I -lt $max_bytes ]; do
-		touch $DIR/$tdir/$J
-		J=$((J+1))
-		I=$(stat -c%s "$DIR/$tdir")
-	done
+        mkdir -p $DIR/$tdir
 
-	# One more file and we should be over the limit
-	multiop $DIR/$tdir/$J Oc
-	rc=$?
-	if [ $rc -eq 0 ]; then
-		rm -rf $DIR/$tdir
-		error "exceeded dir size limit: $I bytes"
-	elif [ $rc -ne $EFBIG ]; then
-		rm -rf $DIR/$tdir
-		error "return code $rc received instead of expected $EFBIG"
-	else
-		echo "return code $rc received as expected"
-	fi
+        I=0
+        J=0
+        while [ ! $I -gt $MAX ]; do
+                multiop $DIR/$tdir/$J Oc
+                rc=$?
+                if [ $rc -eq $EFBIG ]; then
+                        do_facet mds "echo 0 >$LDPROC"
+                        echo "return code $rc received as expected"
+                        return 0
+                elif [ $rc -ne 0 ]; then
+                        do_facet mds "echo 0 >$LDPROC"
+                        error_exit "return code $rc received instead of expected $EFBIG"
+                fi
+                J=$((J+1))
+                I=$(stat -c%s "$DIR/$tdir")
+        done
 
-	echo 0 >$ldiskfs_prefix/$proc_file
-	rm -rf $DIR/$tdir
+        error "exceeded dir size limit: $I bytes"
+        do_facet mds "echo 0 >$LDPROC"
 }
-# run_test 129 "test directory size limit ========================"
+run_test 129 "test directory size limit ========================"
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
