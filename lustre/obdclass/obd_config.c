@@ -892,8 +892,7 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                 if (!matched) {
                         CERROR("%s: unknown param %s\n",
                                (char *)lustre_cfg_string(lcfg, 0), key);
-                        rc = -EINVAL;
-                        /* continue parsing other params */
+                        /* rc = -EINVAL;	continue parsing other params */
                 } else {
                         LCONSOLE_INFO("%s.%.*s: set parameter %.*s=%s\n", 
                                       (char *)lustre_cfg_string(lcfg, 0),
