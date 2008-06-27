@@ -766,3 +766,6 @@ module_init(lloop_init);
 module_exit(lloop_exit);
 
 CFS_MODULE_PARM(max_loop, "i", int, 0444, "maximum of lloop_device");
+MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
+MODULE_DESCRIPTION("Lustre virtual block device");
+MODULE_LICENSE("GPL");
