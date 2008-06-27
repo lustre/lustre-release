@@ -1158,7 +1158,7 @@ struct mds_body {
         __u32          eadatasize;
         __u32          aclsize;
         __u32          max_mdsize;
-        __u32          max_cookiesize; /* also fix lustre_swab_mds_body */
+        __u32          max_cookiesize;
         __u32          padding_4; /* also fix lustre_swab_mds_body */
 };
 
