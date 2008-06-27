@@ -1416,13 +1416,14 @@ static int ll_readahead(struct ll_readahead_state *ras,
                 ras->ras_next_readahead = max(end, end + 1);
                 RAS_CDEBUG(ras);
         }
-	ria.ria_start = start;
-	ria.ria_end = end;
-	/* If stride I/O mode is detected, get stride window*/
-	if (stride_io_mode(ras)) {
-		ria.ria_length = ras->ras_stride_length;
-		ria.ria_pages = ras->ras_stride_pages;
-	}
+        ria.ria_start = start;
+        ria.ria_end = end;
+        /* If stride I/O mode is detected, get stride window*/
+        if (stride_io_mode(ras)) {
+                ria.ria_stoff = ras->ras_stride_offset;
+                ria.ria_length = ras->ras_stride_length;
+                ria.ria_pages = ras->ras_stride_pages;
+        }
         spin_unlock(&ras->ras_lock);
 
         if (end == 0) {
