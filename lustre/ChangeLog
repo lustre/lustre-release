@@ -184,6 +184,14 @@ Details    : Because the stride_start_offset are missing in stride read-ahead,
 	     it will cause clients read a lot of unused pages in read-ahead,
 	     then the read-performance drops.
 
+Severity   : normal
+Bugzilla   : 15953
+Description: more ldlm soft lockups
+Details    : In ldlm_resource_add_lock(), call to ldlm_resource_dump()
+             starve other threads from the resource lock for a long time in
+             case of long waiting queue, so change the debug level from
+             D_OTHER to the less frequently used D_INFO.
+
 -------------------------------------------------------------------------------
 
 
