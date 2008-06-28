@@ -230,6 +230,20 @@ LB_LINUX_TRY_COMPILE([],[],[
 LB_LINUX_RELEASE
 ]) # end of LB_LINUX_PATH
 
+# LB_LINUX_SYMVERFILE
+# SLES 9 uses a different name for this file - unsure about vanilla kernels
+# around this version, but it matters for servers only.
+AC_DEFUN([LB_LINUX_SYMVERFILE],
+	[AC_MSG_CHECKING([name of module symbol version file])
+	if grep -q Modules.symvers $LINUX/scripts/Makefile.modpost ; then
+		SYMVERFILE=Modules.symvers
+	else
+		SYMVERFILE=Module.symvers
+	fi
+	AC_MSG_RESULT($SYMVERFILE)
+	AC_SUBST(SYMVERFILE)
+])
+
 #
 #
 # LB_LINUX_MODPOST
@@ -446,6 +460,7 @@ fi
 AC_DEFUN([LB_PROG_LINUX],
 [LB_LINUX_PATH
 LB_LINUX_ARCH
+LB_LINUX_SYMVERFILE
 
 if test $LINUX_ARCH == "powerpc64"; then
 	CFLAGS="$CFLAGS -m64"
@@ -499,7 +514,7 @@ AC_DEFUN([LB_LINUX_CONDITIONALS],
 # or check 
 AC_DEFUN([LB_CHECK_SYMBOL_EXPORT],
 [AC_MSG_CHECKING([if Linux was built with symbol $1 is exported])
-grep -q -E '[[[:space:]]]$1[[[:space:]]]' $LINUX/Module.symvers 2>/dev/null
+grep -q -E '[[[:space:]]]$1[[[:space:]]]' $LINUX/$SYMVERFILE 2>/dev/null
 rc=$?
 if test $rc -ne 0; then
     export=0

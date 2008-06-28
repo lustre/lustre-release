@@ -520,8 +520,11 @@ else
 		# we know at this point that the found OFED source is good
 		if test \( $ENABLEO2IB = 3 \); then
 			if test \( -f $O2IBPATH/Module.symvers \); then
-				AC_MSG_NOTICE([adding $O2IBPATH/Module.symvers to $PWD/Module.symvers])
-				cat $O2IBPATH/Module.symvers >> $PWD/Module.symvers
+				AC_MSG_NOTICE([adding $O2IBPATH/Module.symvers to $PWD/$SYMVERFILE])
+				# strip out the existing symbols versions first
+				touch $O2IBPATH/Module.symvers
+				egrep -v $(echo $(awk '{ print $2 }' $O2IBPATH/Module.symvers) | tr ' ' '|') $PWD/$SYMVERFILE > $PWD/$SYMVERFILE.old
+				cat $PWD/$SYMVERFILE.old $O2IBPATH/Module.symvers > $PWD/$SYMVERFILE
 			else
 				AC_MSG_ERROR([an external source tree was specified for o2iblnd however I could not find a $O2IBPATH/Module.symvers there])
 			fi
