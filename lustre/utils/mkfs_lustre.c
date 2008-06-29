@@ -526,11 +526,16 @@ static void enable_default_backfs_features(struct mkfs_opts *mop)
 
         strscat(mop->mo_mkfsopts, " -O dir_index", sizeof(mop->mo_mkfsopts));
 
+        /* Upstream e2fsprogs called our uninit_groups feature uninit_bg,
+         * check for both of them when testing e2fsprogs features. */
         if (is_e2fsprogs_feature_supp("uninit_groups") == 0)
                 strscat(mop->mo_mkfsopts, ",uninit_groups",
                         sizeof(mop->mo_mkfsopts));
+        else if (is_e2fsprogs_feature_supp("uninit_bg") == 0)
+                strscat(mop->mo_mkfsopts, ",uninit_bg",
+                        sizeof(mop->mo_mkfsopts));
         else
-                disp_old_e2fsprogs_msg("uninit_groups", 1);
+                disp_old_e2fsprogs_msg("uninit_bg", 1);
 
         ret = uname(&uts);
         if (ret)
