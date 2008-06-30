@@ -201,7 +201,8 @@ extern void __d_move(struct dentry *dentry, struct dentry *target);
 #endif
 
 #define CheckWriteback(page, cmd) \
-        (!(!PageWriteback(page) && cmd == OBD_BRW_WRITE))
+        ((!PageWriteback(page) && (cmd & OBD_BRW_READ)) || \
+         (PageWriteback(page) && (cmd & OBD_BRW_WRITE)))
 
 #ifdef HAVE_PAGE_LIST
 static inline int mapping_has_pages(struct address_space *mapping)
