@@ -53,6 +53,13 @@ Details    : ptlrpcd_check call obd_zombie_impexp_cull and wait request which
 	     -ETIMEOUT ptlrpc_invalidate_import and as result LASSERT.
 
 Severity   : normal
+Bugzilla   : 14742
+Frequency  : rare
+Description: ASSERTION(CheckWriteback(page,cmd)) failed
+Details    : badly clear PG_Writeback bit in ll_ap_completion can produce false
+             positive assertion.
+
+Severity   : normal
 Frequency  : only with broken builds/installations
 Bugzilla   : 15779
 Description: no LBUG if lquota.ko and fsfilt_ldiskfs.ko are different versions

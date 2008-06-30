@@ -2080,6 +2080,17 @@ out:
 
 /* the loi lock is held across this function but it's allowed to release
  * and reacquire it during its work */
+/**
+ * prepare pages for ASYNC io and put pages in send queue.
+ *
+ * \param cli -
+ * \param loi -
+ * \param cmd - OBD_BRW_* macroses
+ * \param lop - pending pages
+ *
+ * \return zero if pages successfully add to send queue.
+ * \return not zere if error occurring.
+ */
 static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                             int cmd, struct loi_oap_pages *lop)
 {
@@ -2153,12 +2164,14 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 /*
                  * Page submitted for IO has to be locked. Either by
                  * ->ap_make_ready() or by higher layers.
-                 *
-                 * XXX nikita: this assertion should be adjusted when lustre
-                 * starts using PG_writeback for pages being written out.
                  */
 #if defined(__KERNEL__) && defined(__linux__)
-                LASSERT(PageLocked(oap->oap_page));
+                 if(!(PageLocked(oap->oap_page) &&
+                     (CheckWriteback(oap->oap_page, cmd) || oap->oap_oig !=NULL))) {
+			CDEBUG(D_PAGE, "page %p lost wb %lx/%x\n",
+                               oap->oap_page, (long)oap->oap_page->flags, oap->oap_async_flags);
+                        LBUG();
+                }
 #endif
                 /* If there is a gap at the start of this page, it can't merge
                  * with any previous page, so we'll hand the network a
