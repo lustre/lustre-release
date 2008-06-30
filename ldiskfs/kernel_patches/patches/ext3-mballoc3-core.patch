@@ -576,7 +576,7 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/mballoc.c
 +#define EXT3_BB_MAX_BLOCKS	30
 +
 +struct ext3_free_metadata {
-+	unsigned short group;
++	unsigned group;
 +	unsigned short num;
 +	unsigned short blocks[EXT3_BB_MAX_BLOCKS];
 +	struct list_head list;
@@ -705,8 +705,8 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/mballoc.c
 +	void *bd_bitmap;
 +	struct ext3_group_info *bd_info;
 +	struct super_block *bd_sb;
-+	__u16 bd_blkbits;
-+	__u16 bd_group;
++	unsigned bd_group;
++	unsigned bd_blkbits;
 +};
 +#define EXT3_MB_BITMAP(e3b)	((e3b)->bd_bitmap)
 +#define EXT3_MB_BUDDY(e3b)	((e3b)->bd_buddy)
