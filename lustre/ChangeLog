@@ -24,6 +24,11 @@ tbd Sun Microsystems, Inc.
 	  	'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
 	  For more information, please refer to bugzilla 13904.
 
+Severity   : normal
+Bugzilla   : 16014
+Description: Kernel panic with find ost index.
+Details    : lov_obd have panic if some OST's have sparse indexes.
+
 Severity   : enhancement
 Bugzilla   : 15865
 Description: Update to RHEL5 kernel-2.6.18-53.1.21.el5.

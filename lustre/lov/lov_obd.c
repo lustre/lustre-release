@@ -2525,7 +2525,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
 
                 for(i = 0; i < lov->desc.ld_tgt_count; i++) {
                         tgt = lov->lov_tgts[i];
-                        if (obd_uuid_equals(val, &tgt->ltd_uuid))
+                        if (tgt && obd_uuid_equals(val, &tgt->ltd_uuid))
                                 GOTO(out, rc = i);
                 }
         }
