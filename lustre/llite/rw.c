@@ -1254,7 +1254,7 @@ stride_pg_count(pgoff_t st_off, unsigned long st_len, unsigned long st_pgs,
                 unsigned long off, unsigned length)
 {
         unsigned long cont_len = st_off > off ?  st_off - off : 0;
-        unsigned long stride_len = length + off > st_off ?
+        __u64 stride_len = length + off > st_off ?
                            length + off + 1 - st_off : 0;
         unsigned long left, pg_count;
 
@@ -1412,7 +1412,7 @@ static int ll_readahead(struct ll_readahead_state *ras,
                 RETURN(0);
 
         reserved = ll_ra_count_get(ll_i2sbi(inode), len);
-        if (reserved < end - start + 1)
+        if (reserved < len)
                 ll_ra_stats_inc(mapping, RA_STAT_MAX_IN_FLIGHT);
 
         CDEBUG(D_READA, "reserved page %lu \n", reserved);
