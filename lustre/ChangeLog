@@ -24,6 +24,13 @@ tbd Sun Microsystems, Inc.
 	  	'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
 	  For more information, please refer to bugzilla 13904.
 
+Severity   : normal
+Bugzilla   : 14742
+Frequency  : rare
+Description: ASSERTION(CheckWriteback(page,cmd)) failed
+Details    : badly clear PG_Writeback bit in ll_ap_completion can produce false
+             positive assertion.
+
 Severity   : enhancement
 Bugzilla   : 15865
 Description: Update to RHEL5 kernel-2.6.18-53.1.21.el5.
@@ -42,8 +49,8 @@ Details    : Need properly lock accesses the flock deadlock detection list.
 Severity   : minor
 Bugzilla   : 15837
 Description: oops in page fault handler
-Details    : kernel page fault handler can return two special 'pages' in error case, don't
-             try dereference NOPAGE_SIGBUS and NOPAGE_OMM.
+Details    : kernel page fault handler can return two special 'pages' in 
+             error case, don't try dereference NOPAGE_SIGBUS and NOPAGE_OMM.
 
 Severity   : minor
 Bugzilla   : 15716

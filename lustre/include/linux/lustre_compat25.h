@@ -220,7 +220,8 @@ extern void __d_move(struct dentry *dentry, struct dentry *target);
 #endif
 
 #define CheckWriteback(page, cmd) \
-        (!(!PageWriteback(page) && cmd == OBD_BRW_WRITE))
+        ((!PageWriteback(page) && (cmd & OBD_BRW_READ)) || \
+         (PageWriteback(page) && (cmd & OBD_BRW_WRITE)))
 
 #else /* 2.4.. */
 
