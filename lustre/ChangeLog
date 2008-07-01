@@ -221,6 +221,14 @@ Details	   : OST crashes and subsequent e2fsck can lead to objects being moved
 	     tool, these objects can be retrieved and data can be salvaged
 	     by using the object ID saved in the fid.
 
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 15758
+Description: this bug _only_ happens when inode quota limitation is very low
+	     (less than 12), so that inode quota unit is 1 at initialization.
+Details    : if remaining quota	equates 1, it is a sign to demonstate that quota
+	     is effective now. So least quota qunit should be 2.
+
 -------------------------------------------------------------------------------
 
 

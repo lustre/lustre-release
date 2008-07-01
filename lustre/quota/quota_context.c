@@ -760,6 +760,7 @@ schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                 int rc2;
                 QDATA_DEBUG(qdata, "local %s.\n",
                             opc == QUOTA_DQACQ ? "DQACQ" : "DQREL");
+                QDATA_SET_CHANGE_QS(qdata);
                 rc = qctxt->lqc_handler(obd, qdata, opc);
                 rc2 = dqacq_completion(obd, qctxt, qdata, rc, opc);
                 RETURN(rc ? rc : rc2);
@@ -939,7 +940,7 @@ qctxt_init(struct lustre_quota_ctxt *qctxt, struct super_block *sb,
         qctxt->lqc_switch_qs = 1; /* Change qunit size in default setting */
         qctxt->lqc_cqs_boundary_factor = 4;
         qctxt->lqc_cqs_least_bunit = PTLRPC_MAX_BRW_SIZE;
-        qctxt->lqc_cqs_least_iunit = 1;
+        qctxt->lqc_cqs_least_iunit = 2;
         qctxt->lqc_cqs_qs_factor = 2;
         qctxt->lqc_atype = 0;
         qctxt->lqc_status= 0;

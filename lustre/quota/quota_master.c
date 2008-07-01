@@ -368,7 +368,8 @@ int dqacq_handler(struct obd_device *obd, struct qunit_data *qdata, int opc)
                             QUSG(*usage, QDATA_IS_BLK(qdata)) < hlimit)
                                 qdata->qd_count = (hlimit -
                                         QUSG(*usage, QDATA_IS_BLK(qdata)))
-                                        * QUOTABLOCK_SIZE;
+                                        * (QDATA_IS_BLK(qdata) ?
+                                           QUOTABLOCK_SIZE : 1);
                         else
                                 GOTO(out, rc = -EDQUOT);
                 }

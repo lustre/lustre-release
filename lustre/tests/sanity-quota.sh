@@ -310,11 +310,18 @@ test_2_sub() {
 # file hard limit (normal use and out of quota)
 test_2() {
 	for i in `seq 1 $cycle`; do
-	    # define ino_qunit is between 10 and 100
-	    ino_qunit=$(( $RANDOM % 90 + 10 ))
-	    ino_qtune=$(( $RANDOM % $ino_qunit ))
-	    # RANDOM's maxium is 32767
-	    i_limit=$(( $RANDOM % 990 + 10 ))
+	    if [ $i -eq 1 ]; then
+		ino_qunit=52
+		ino_qtune=41
+		i_limit=11
+	    else
+		# define ino_qunit is between 10 and 100
+		ino_qunit=$(( $RANDOM % 90 + 10 ))
+		ino_qtune=$(( $RANDOM % $ino_qunit ))
+	        # RANDOM's maxium is 32767
+		i_limit=$(( $RANDOM % 990 + 10 ))
+	    fi
+
             set_file_tunesz $ino_qtune
 	    set_file_unitsz $ino_qunit
 	    echo "cycle: $i(total $cycle) iunit:$ino_qunit, itune:$ino_qtune, ilimit:$i_limit"
@@ -450,7 +457,11 @@ test_file_soft() {
 	$SHOW_QUOTA_INFO
 
 	echo "    Create file after timer goes off"
-	$RUNAS touch ${TESTFILE}_after ${TESTFILE}_after1 && \
+	# the least of inode qunit is 2, so there are at most 3(qunit:2+qtune:1)
+        # inode quota left here
+	$RUNAS touch ${TESTFILE}_after ${TESTFILE}_after1 ${TESTFILE}_after2 || true
+	sync; sleep 1; sync
+	$RUNAS touch ${TESTFILE}_after3 && \
 		error "create after timer expired, but expect EDQUOT"
 	sync; sleep 1; sync
 
