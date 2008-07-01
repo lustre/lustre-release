@@ -736,7 +736,6 @@ static int lfs_osts(int argc, char **argv)
 {
         FILE *fp;
         struct mntent *mnt = NULL;
-        struct obd_uuid *obduuid = NULL;
         struct find_param param;
         int rc=0;
 
@@ -750,9 +749,8 @@ static int lfs_osts(int argc, char **argv)
                         strerror (errno));
         } else {
                 mnt = getmntent(fp);
-                memset(&param, 0, sizeof(param));
-                param.obduuid = obduuid;
                 while (feof(fp) == 0 && ferror(fp) ==0) {
+                        memset(&param, 0, sizeof(param));
                         if (llapi_is_lustre_mnt(mnt)) {
                                 rc = llapi_getstripe(mnt->mnt_dir, &param);
                                 if (rc)
