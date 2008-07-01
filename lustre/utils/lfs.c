@@ -105,7 +105,9 @@ command_t cmdlist[] = {
          "usage: find <dir/file> ... \n"
          "     [[!] --atime|-A [+-]N] [[!] --mtime|-M [+-]N] [[!] --ctime|-C [+-]N]\n"
          "     [--maxdepth|-D N] [[!] --name|-n <pattern>] [--print0|-P]\n"
-         "     [--print|-p] [--obd|-O <uuid>] [[!] --type|-t <filetype>]\n"
+         "     [--print|-p] [--obd|-O <uuid[s]>] [[!] --size|-s [+-]N[bkMGTP]]\n"
+         "     [[!] --type|-t <filetype>] [[!] --gid|-g N] [[!] --group|-G <name>]\n"
+         "     [[!] --uid|-u N] [[!] --user|-U <name>]\n"
          "\t !: used before an option indicates 'NOT' the requested attribute\n"
          "\t -: used before an value indicates 'AT MOST' the requested value\n"
          "\t +: used before an option indicates 'AT LEAST' the requested value\n"},
@@ -326,6 +328,60 @@ static int set_time(time_t *time, time_t *set, char *str)
         return res;
 }
 
+static int name2id(unsigned int *id, char *name, int type)
+{
+        if (type == USRQUOTA) {
+                struct passwd *entry;
+
+                if (!(entry = getpwnam(name))) {
+                        if (!errno)
+                                errno = ENOENT;
+                        return -1;
+                }
+
+                *id = entry->pw_uid;
+        } else {
+                struct group *entry;
+
+                if (!(entry = getgrnam(name))) {
+                        if (!errno)
+                                errno = ENOENT;
+                        return -1;
+                }
+
+                *id = entry->gr_gid;
+        }
+
+        return 0;
+}
+
+static int id2name(char **name, unsigned int id, int type)
+{
+        if (type == USRQUOTA) {
+                struct passwd *entry;
+
+                if (!(entry = getpwuid(id))) {
+                        if (!errno)
+                                errno = ENOENT;
+                        return -1;
+                }
+
+                *name = entry->pw_name;
+        } else {
+                struct group *entry;
+
+                if (!(entry = getgrgid(id))) {
+                        if (!errno)
+                                errno = ENOENT;
+                        return -1;
+                }
+
+                *name = entry->gr_name;
+        }
+
+        return 0;
+}
+
 static int lfs_find(int argc, char **argv)
 {
         int new_fashion = 1;
@@ -339,6 +395,10 @@ static int lfs_find(int argc, char **argv)
                 {"ctime",     required_argument, 0, 'C'},
                 {"mtime",     required_argument, 0, 'M'},
                 {"maxdepth",  required_argument, 0, 'D'},
+                {"gid",       required_argument, 0, 'g'},
+                {"group",     required_argument, 0, 'G'},
+                {"uid",       required_argument, 0, 'u'},
+                {"user",      required_argument, 0, 'U'},
                 {"name",      required_argument, 0, 'n'},
                 /* --obd is considered as a new option. */
                 {"obd",       required_argument, 0, 'O'},
@@ -359,11 +419,12 @@ static int lfs_find(int argc, char **argv)
         time_t *xtime;
         int *xsign;
         int isoption;
+        char *endptr;
 
         time(&t);
 
         optind = 0;
-        while ((c = getopt_long_only(argc, argv, "-A:C:D:M:n:PpO:qrs:t:v",
+        while ((c = getopt_long_only(argc, argv, "-A:C:D:g:G:M:n:PpO:qrs:t:u:U:v",
                                      long_opts, NULL)) >= 0) {
                 xtime = NULL;
                 xsign = NULL;
@@ -429,6 +490,46 @@ static int lfs_find(int argc, char **argv)
                 case 'D':
                         new_fashion = 1;
                         param.maxdepth = strtol(optarg, 0, 0);
+                        break;
+                case 'g':
+                        new_fashion = 1;
+                        param.gid = strtol(optarg, &endptr, 10);
+                        if (optarg == endptr) {
+                                fprintf(stderr, "Bad gid: %s\n", optarg);
+                                return CMD_HELP;
+                        }
+                        param.exclude_gid = !!neg_opt;
+                        param.check_gid = 1;
+                        break;
+                case 'G':
+                        new_fashion = 1;
+                        ret = name2id(&param.gid, optarg, GRPQUOTA);
+                        if (ret != 0) {
+                                fprintf(stderr, "Group: %s cannot be found.\n", optarg);
+                                return -1;
+                        }
+                        param.exclude_gid = !!neg_opt;
+                        param.check_gid = 1;
+                        break;
+                case 'u':
+                        new_fashion = 1;
+                        param.uid = strtol(optarg, &endptr, 10);
+                        if (optarg == endptr) {
+                                fprintf(stderr, "Bad uid: %s\n", optarg);
+                                return CMD_HELP;
+                        }
+                        param.exclude_uid = !!neg_opt;
+                        param.check_uid = 1;
+                        break;
+                case 'U':
+                        new_fashion = 1;
+                        ret = name2id(&param.uid, optarg, USRQUOTA);
+                        if (ret != 0) {
+                                fprintf(stderr, "User: %s cannot be found.\n", optarg);
+                                return -1;
+                        }
+                        param.exclude_uid = !!neg_opt;
+                        param.check_uid = 1;
                         break;
                 case 'n':
                         new_fashion = 1;
@@ -1292,60 +1393,6 @@ static int lfs_quotaoff(int argc, char **argv)
                         fprintf(stderr, "%s %s ", obd_type, obd_uuid);
                 fprintf(stderr, "quotaoff failed: %s\n", strerror(errno));
                 return rc;
-        }
-
-        return 0;
-}
-
-static int name2id(unsigned int *id, char *name, int type)
-{
-        if (type == USRQUOTA) {
-                struct passwd *entry;
-
-                if (!(entry = getpwnam(name))) {
-                        if (!errno)
-                                errno = ENOENT;
-                        return -1;
-                }
-
-                *id = entry->pw_uid;
-        } else {
-                struct group *entry;
-
-                if (!(entry = getgrnam(name))) {
-                        if (!errno)
-                                errno = ENOENT;
-                        return -1;
-                }
-
-                *id = entry->gr_gid;
-        }
-
-        return 0;
-}
-
-static int id2name(char **name, unsigned int id, int type)
-{
-        if (type == USRQUOTA) {
-                struct passwd *entry;
-
-                if (!(entry = getpwuid(id))) {
-                        if (!errno)
-                                errno = ENOENT;
-                        return -1;
-                }
-
-                *name = entry->pw_name;
-        } else {
-                struct group *entry;
-
-                if (!(entry = getgrgid(id))) {
-                        if (!errno)
-                                errno = ENOENT;
-                        return -1;
-                }
-
-                *name = entry->gr_name;
         }
 
         return 0;

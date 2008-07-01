@@ -2564,6 +2564,52 @@ test_56o() {
 }
 run_test 56o "check lfs find -mtime for old files =========================="
 
+test_56p() {
+	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
+
+	TDIR=$DIR/${tdir}g
+	rm -rf $TDIR
+
+	setup_56 $NUMFILES $NUMDIRS
+
+	chown $RUNAS_ID $TDIR/file* || error "chown $DIR/${tdir}g/file$i failed"
+	EXPECTED=$NUMFILES
+	NUMS="`$LFIND -uid $RUNAS_ID $TDIR | wc -l`"
+	[ $NUMS -eq $EXPECTED ] || \
+		error "lfs find -uid $TDIR wrong: found $NUMS, expected $EXPECTED"
+
+	EXPECTED=$(( ($NUMFILES+1) * $NUMDIRS + 1))
+	NUMS="`$LFIND ! -uid $RUNAS_ID $TDIR | wc -l`"
+	[ $NUMS -eq $EXPECTED ] || \
+		error "lfs find ! -uid $TDIR wrong: found $NUMS, expected $EXPECTED"
+
+	echo "lfs find -uid and ! -uid passed."
+}
+run_test 56p "check lfs find -uid and ! -uid ==============================="
+
+test_56q() {
+	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
+
+	TDIR=$DIR/${tdir}g
+        rm -rf $TDIR
+
+	setup_56 $NUMFILES $NUMDIRS
+
+	chgrp $RUNAS_ID $TDIR/file* || error "chown $DIR/${tdir}g/file$i failed"
+	EXPECTED=$NUMFILES
+	NUMS="`$LFIND -gid $RUNAS_ID $TDIR | wc -l`"
+	[ $NUMS -eq $EXPECTED ] || \
+		error "lfs find -gid $TDIR wrong: found $NUMS, expected $EXPECTED"
+
+	EXPECTED=$(( ($NUMFILES+1) * $NUMDIRS + 1))
+	NUMS="`$LFIND ! -gid $RUNAS_ID $TDIR | wc -l`"
+	[ $NUMS -eq $EXPECTED ] || \
+		error "lfs find ! -gid $TDIR wrong: found $NUMS, expected $EXPECTED"
+
+	echo "lfs find -gid and ! -gid passed."
+}
+run_test 56q "check lfs find -gid and ! -gid ==============================="
+
 test_57a() {
 	# note test will not do anything if MDS is not local
 	remote_mds && skip "remote MDS" && return
