@@ -667,14 +667,6 @@ typedef enum {
 /* This FULL lock is useful to take on unlink sort of operations */
 #define MDS_INODELOCK_FULL ((1<<(MDS_INODELOCK_MAXSHIFT+1))-1)
 
-struct ll_fid {
-        __u64 id;         /* holds object id */
-        __u32 generation; /* holds object generation */
-
-        __u32 f_type;     /* holds object type or stripe idx when passing it to
-                           * OST for saving into EA. */
-};
-
 extern void lustre_swab_ll_fid (struct ll_fid *fid);
 
 #define MDS_STATUS_CONN 1

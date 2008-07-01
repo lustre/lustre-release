@@ -15,7 +15,8 @@ EXTRA_PROGRAMS = wirecheck
 # mount only finds helpers in /sbin
 rootsbin_PROGRAMS = mount.lustre
 sbin_PROGRAMS = mkfs.lustre tunefs.lustre lctl wiretest \
-	l_getgroups llverfs llverdev llog_reader lr_reader ltrack_stats
+	l_getgroups llverfs llverdev llog_reader ll_recover_lost_found_objs \
+	lr_reader ltrack_stats
 if LIBPTHREAD
 sbin_PROGRAMS += loadgen
 endif
@@ -69,6 +70,10 @@ obdbarrier_SOURCES = obdbarrier.c obdiolib.c obdiolib.h
 llog_reader_SOURCES = llog_reader.c
 llog_reader_LDADD := $(LIBPTLCTL)
 llog_reader_DEPENDENCIES := $(LIBPTLCTL)
+
+ll_recover_lost_found_objs_SOURCES = ll_recover_lost_found_objs.c
+ll_recover_lost_found_objs_LDADD := $(LIBPTLCTL)
+ll_recover_lost_found_objs_DEPENDENCIES := $(LIBPTLCTL)
 
 lr_reader_SOURCES = lr_reader.c
 
