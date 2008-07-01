@@ -37,12 +37,6 @@ extern struct file_operations filter_per_nid_stats_fops;
                             OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ|\
                             OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME)
 
-struct filter_fid {
-        struct ll_fid   ff_fid;         /* ff_fid.f_type == file stripe number */
-        __u64           ff_objid;
-        __u64           ff_group;
-};
-
 /* per-client-per-object persistent state (LRU) */
 struct filter_mod_data {
         struct list_head fmd_list;      /* linked to fed_mod_list */

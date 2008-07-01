@@ -129,6 +129,19 @@ struct ll_recreate_obj {
         __u32 lrc_ost_idx;
 };
 
+struct ll_fid {
+        __u64 id;         /* holds object id */
+        __u32 generation; /* holds object generation */
+        __u32 f_type;     /* holds object type or stripe idx when passing it to
+                           * OST for saving into EA. */
+};
+
+struct filter_fid {
+        struct ll_fid   ff_fid;  /* ff_fid.f_type == file stripe number */
+        __u64           ff_objid;
+        __u64           ff_group;
+};
+
 struct obd_uuid {
         char uuid[40];
 };
