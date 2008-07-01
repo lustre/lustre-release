@@ -553,14 +553,23 @@ dqacq_completion(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                 }
 
                 CDEBUG(D_QUOTA, "hardlimt: "LPU64"\n", *hardlimit);
+
+                if (*hardlimit == 0)
+                        goto out_mem;
+
                 switch (opc) {
                 case QUOTA_DQACQ:
                         INC_QLIMIT(*hardlimit, count);
                         break;
                 case QUOTA_DQREL:
                         LASSERTF(count < *hardlimit,
-                                 "count: "LPU64", hardlimit: "LPU64".\n",
-                                 count, *hardlimit);
+                                 "id(%u) flag(%u) type(%c) isblk(%c) "
+                                 "count("LPU64") qd_qunit("LPU64") "
+                                 "hardlimit("LPU64").\n",
+                                 qdata->qd_id, qdata->qd_flags,
+                                 QDATA_IS_GRP(qdata) ? 'g' : 'u',
+                                 QDATA_IS_BLK(qdata) ? 'b': 'i',
+                                 qdata->qd_count, qdata->qd_qunit, *hardlimit);
                         *hardlimit -= count;
                         break;
                 default:

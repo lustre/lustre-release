@@ -47,7 +47,7 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="9 10 11"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="9 10 11 21"
 
 QUOTALOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 
@@ -1503,6 +1503,84 @@ test_20()
 
 }
 run_test 20 "test if setquota specifiers work properly (15754)"
+
+test_21_sub() {
+	local testfile=$1
+	local blk_number=$2
+	local seconds=$3
+
+	time=$(($(date +%s) + seconds))
+	while [ $(date +%s) -lt $time ]; do
+	    $RUNAS dd if=/dev/zero of=$testfile  bs=$BLK_SZ count=$blk_number > /dev/null 2>&1
+	    rm -f $testfile
+	done
+}
+
+# run for fixing bug16053, setquota shouldn't fail when writing and
+# deleting are happening
+test_21() {
+	set_blk_tunesz 512
+	set_blk_unitsz 1024
+
+	wait_delete_completed
+
+	TESTFILE="$DIR/$tdir/$tfile"
+
+	BLK_LIMIT=$((10 * 1024 * 1024)) # 10G
+	FILE_LIMIT=1000000
+
+	log "  Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT) for user: $TSTUSR"
+	$LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $MOUNT
+	log "  Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT) for group: $TSTUSR"
+	$LFS setquota -g $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $MOUNT
+
+	# repeat writing on a 1M file
+	test_21_sub ${TESTFILE}_1 1024 30 &
+	DDPID1=$!
+	# repeat writing on a 128M file
+	test_21_sub ${TESTFILE}_2 $((1024 * 128)) 30 &
+	DDPID2=$!
+
+	time=$(($(date +%s) + 30))
+	i=1
+	while [ $(date +%s) -lt $time ]; do
+	    log "  Set quota for $i times"
+	    $LFS setquota -u $TSTUSR -b 0 -B $((BLK_LIMIT + 1024 * i)) -i 0 -I $((FILE_LIMIT + i)) $MOUNT
+	    $LFS setquota -g $TSTUSR -b 0 -B $((BLK_LIMIT + 1024 * i)) -i 0 -I $((FILE_LIMIT + i)) $MOUNT
+	    i=$((i+1))
+	    sleep 1
+	done
+
+	count=0
+	while [ true ]; do
+	    if [  $(ps -p ${DDPID1} | wc -l) -eq 1 ]; then break; fi
+	    count=$[count+1]
+	    if [ $count -gt 60 ]; then
+		error "dd should be finished!"
+	    fi
+	    sleep 1
+	done
+	echo "(dd_pid=$DDPID1, time=$count)successful"
+
+	count=0
+	while [ true ]; do
+	    if [ $(ps -p ${DDPID2} | wc -l) -eq 1 ]; then break; fi
+	    count=$[count+1]
+	    if [ $count -gt 60 ]; then
+		error "dd should be finished!"
+	    fi
+	    sleep 1
+	done
+	echo "(dd_pid=$DDPID2, time=$count)successful"
+
+	set_blk_unitsz $((128 * 1024))
+	set_blk_tunesz $((128 * 1024 / 2))
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $MOUNT
+	$LFS setquota -g $TSTUSR -b 0 -B 0 -i 0 -I 0 $MOUNT
+
+	return $RC
+}
+run_test 21 "run for fixing bug16053 ==========="
 
 # turn off quota
 test_99()
