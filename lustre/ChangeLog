@@ -216,6 +216,11 @@ Details    : In ldlm_resource_add_lock(), call to ldlm_resource_dump()
 	     case of long waiting queue, so change the debug level from
 	     D_OTHER to the less frequently used D_INFO.
 
+Severity   : enhancement
+Bugzilla   : 13128
+Description: add -gid, -group, -uid, -user options to lfs find
+
+
 -------------------------------------------------------------------------------
 
 
