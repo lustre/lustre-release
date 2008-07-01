@@ -186,10 +186,10 @@ struct md_object_operations {
 
         int (*moo_xattr_set)(const struct lu_env *env, struct md_object *obj,
                              const struct lu_buf *buf, const char *name,
-                             int fl);
+                             int fl, const struct lu_attr *la);
 
         int (*moo_xattr_del)(const struct lu_env *env, struct md_object *obj,
-                             const char *name);
+                             const char *name, const struct lu_attr *la);
 
         int (*moo_readpage)(const struct lu_env *env, struct md_object *obj,
                             const struct lu_rdpg *rdpg);
@@ -452,20 +452,22 @@ static inline int mo_xattr_get(const struct lu_env *env,
 
 static inline int mo_xattr_del(const struct lu_env *env,
                                struct md_object *m,
-                               const char *name)
+                               const char *name,
+                               const struct lu_attr *la)
 {
         LASSERT(m->mo_ops->moo_xattr_del);
-        return m->mo_ops->moo_xattr_del(env, m, name);
+        return m->mo_ops->moo_xattr_del(env, m, name, la);
 }
 
 static inline int mo_xattr_set(const struct lu_env *env,
                                struct md_object *m,
                                const struct lu_buf *buf,
                                const char *name,
-                               int flags)
+                               int flags,
+                               const struct lu_attr *la)
 {
         LASSERT(m->mo_ops->moo_xattr_set);
-        return m->mo_ops->moo_xattr_set(env, m, buf, name, flags);
+        return m->mo_ops->moo_xattr_set(env, m, buf, name, flags, la);
 }
 
 static inline int mo_xattr_list(const struct lu_env *env,

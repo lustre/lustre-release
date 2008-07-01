@@ -630,6 +630,8 @@ static inline unsigned int attr_unpack(__u64 sa_valid) {
                 ia_valid |= ATTR_FROM_OPEN;
         if (sa_valid & MDS_ATTR_BLOCKS)
                 ia_valid |= ATTR_BLOCKS;
+        if (sa_valid & MDS_ATTR_TRUNC)
+                ia_valid |= ATTR_TRUNC;
         if (sa_valid & MDS_OPEN_OWNEROVERRIDE)
                 ia_valid |= MDS_OPEN_OWNEROVERRIDE;
         return ia_valid;
@@ -667,6 +669,9 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
         if (in & ATTR_ATTR_FLAG)
                 out |= LA_FLAGS;
 
+        if (in & ATTR_TRUNC)
+                out |= LA_TRUNC;
+
         if (in & MDS_OPEN_OWNEROVERRIDE)
                 out |= MDS_OPEN_OWNEROVERRIDE;
 
@@ -674,7 +679,7 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
         in &= ~(ATTR_MODE|ATTR_UID|ATTR_GID|ATTR_SIZE|ATTR_BLOCKS|
                 ATTR_ATIME|ATTR_MTIME|ATTR_CTIME|ATTR_FROM_OPEN|
                 ATTR_ATIME_SET|ATTR_CTIME_SET|ATTR_MTIME_SET|
-                ATTR_ATTR_FLAG|ATTR_RAW|MDS_OPEN_OWNEROVERRIDE);
+                ATTR_ATTR_FLAG|ATTR_RAW|ATTR_TRUNC|MDS_OPEN_OWNEROVERRIDE);
         if (in != 0)
                 CERROR("Unknown attr bits: %#llx\n", in);
         return out;
@@ -1138,11 +1143,13 @@ static int mdt_setxattr_unpack(struct mdt_thread_info *info)
         uc->mu_fsuid  = rec->sx_fsuid;
         uc->mu_fsgid  = rec->sx_fsgid;
         uc->mu_cap    = rec->sx_cap;
-        uc->mu_suppgids[0] = uc->mu_suppgids[1] = -1;
+        uc->mu_suppgids[0] = rec->sx_suppgid1;
+        uc->mu_suppgids[1] = -1;
 
         rr->rr_opcode = rec->sx_opcode;
         rr->rr_fid1   = &rec->sx_fid;
         attr->la_valid = rec->sx_valid;
+        attr->la_ctime = rec->sx_time;
         attr->la_size = rec->sx_size;
         attr->la_flags = rec->sx_flags;
 

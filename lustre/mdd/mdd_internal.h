@@ -153,9 +153,16 @@ int mdd_get_md_locked(const struct lu_env *env, struct mdd_object *obj,
                       void *md, int *md_size, const char *name);
 int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
                struct lu_attr *la, struct lustre_capa *capa);
-int mdd_attr_set_internal(const struct lu_env *env, struct mdd_object *o,
-                          const struct lu_attr *attr, struct thandle *handle,
-                          const int needacl);
+int mdd_attr_set_internal(const struct lu_env *env,
+                          struct mdd_object *obj,
+                          struct lu_attr *attr,
+                          struct thandle *handle,
+                          int needacl);
+int mdd_attr_check_set_internal(const struct lu_env *env,
+                                struct mdd_object *obj,
+                                struct lu_attr *attr,
+                                struct thandle *handle,
+                                int needacl);
 int mdd_object_kill(const struct lu_env *env, struct mdd_object *obj,
                     struct md_attr *ma);
 int mdd_iattr_get(const struct lu_env *env, struct mdd_object *mdd_obj,
@@ -166,10 +173,11 @@ int mdd_attr_get_internal_locked(const struct lu_env *env,
 int mdd_object_create_internal(const struct lu_env *env, struct mdd_object *p,
                                struct mdd_object *c, struct md_attr *ma,
                                struct thandle *handle);
-int mdd_attr_set_internal_locked(const struct lu_env *env,
-                                 struct mdd_object *o,
-                                 const struct lu_attr *attr,
-                                 struct thandle *handle, const int needacl);
+int mdd_attr_check_set_internal_locked(const struct lu_env *env,
+                                       struct mdd_object *obj,
+                                       struct lu_attr *attr,
+                                       struct thandle *handle,
+                                       int needacl);
 int mdd_lmm_get_locked(const struct lu_env *env, struct mdd_object *mdd_obj,
                        struct md_attr *ma);
 /* mdd_lock.c */

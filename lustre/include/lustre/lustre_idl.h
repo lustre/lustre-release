@@ -1295,6 +1295,9 @@ extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
 #define MDS_ATTR_CTIME_SET  0x2000ULL /* = 8192 */
 #define MDS_ATTR_FROM_OPEN  0x4000ULL /* = 16384, called from open path, ie O_TRUNC */
 #define MDS_ATTR_BLOCKS     0x8000ULL /* = 32768 */
+#define MDS_ATTR_TRUNC     0x10000ULL /* = 65536 */
+
+#define ATTR_TRUNC MDS_ATTR_TRUNC
 
 #ifndef FMODE_READ
 #define FMODE_READ               00000001
@@ -1544,7 +1547,7 @@ struct mdt_rec_setxattr {
         __u32           sx_padding_2;
         __u32           sx_padding_3;
         __u64           sx_valid;
-        __u64           sx_padding_4;
+        __u64           sx_time;
         __u64           sx_padding_5;
         __u64           sx_padding_6;
         __u64           sx_padding_7;

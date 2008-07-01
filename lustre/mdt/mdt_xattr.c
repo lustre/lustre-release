@@ -59,7 +59,7 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
                 RETURN(-ENOMEM);
 
         /* Determine how many bytes we need */
-        if ((valid & OBD_MD_FLXATTR) == OBD_MD_FLXATTR) {
+        if (valid & OBD_MD_FLXATTR) {
                 xattr_name = req_capsule_client_get(pill, &RMF_NAME);
                 if (!xattr_name)
                         RETURN(-EFAULT);
@@ -71,7 +71,7 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
                 size = mo_xattr_get(info->mti_env,
                                     mdt_object_child(info->mti_object),
                                     &LU_BUF_NULL, xattr_name);
-        } else if ((valid & OBD_MD_FLXATTRLS) == OBD_MD_FLXATTRLS) {
+        } else if (valid & OBD_MD_FLXATTRLS) {
                 size = mo_xattr_list(info->mti_env,
                                      mdt_object_child(info->mti_object),
                                      &LU_BUF_NULL);
@@ -330,8 +330,15 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
         if (IS_ERR(obj))
                 GOTO(out, rc =  PTR_ERR(obj));
 
+        if (unlikely(!(valid & OBD_MD_FLCTIME))) {
+                CWARN("client miss to set OBD_MD_FLCTIME when "
+                      "setxattr: [object "DFID"] [valid %llu]\n",
+                      PFID(rr->rr_fid1), valid);
+                attr->la_ctime = cfs_time_current_sec();
+        }
+        attr->la_valid = LA_CTIME;
         child = mdt_object_child(obj);
-        if ((valid & OBD_MD_FLXATTR) == OBD_MD_FLXATTR) {
+        if (valid & OBD_MD_FLXATTR) {
                 char * xattr;
 
                 if (!req_capsule_field_present(pill, &RMF_EADATA, RCL_CLIENT)) {
@@ -368,10 +375,10 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 
                         buf->lb_buf = xattr;
                         buf->lb_len = xattr_len;
-                        rc = mo_xattr_set(env, child, buf, xattr_name, flags);
+                        rc = mo_xattr_set(env, child, buf, xattr_name, flags, attr);
                 }
-        } else if ((valid & OBD_MD_FLXATTRRM) == OBD_MD_FLXATTRRM) {
-                rc = mo_xattr_del(env, child, xattr_name);
+        } else if (valid & OBD_MD_FLXATTRRM) {
+                rc = mo_xattr_del(env, child, xattr_name, attr);
         } else {
                 CDEBUG(D_INFO, "valid bits: "LPX64"\n", valid);
                 rc = -EINVAL;

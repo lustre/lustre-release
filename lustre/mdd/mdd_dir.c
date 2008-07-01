@@ -558,12 +558,12 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
         la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
 
         la->la_valid = LA_CTIME | LA_MTIME;
-        rc = mdd_attr_set_internal_locked(env, mdd_tobj, la, handle, 0);
+        rc = mdd_attr_check_set_internal_locked(env, mdd_tobj, la, handle, 0);
         if (rc)
                 GOTO(out_unlock, rc);
 
         la->la_valid = LA_CTIME;
-        rc = mdd_attr_set_internal(env, mdd_sobj, la, handle, 0);
+        rc = mdd_attr_check_set_internal(env, mdd_sobj, la, handle, 0);
         EXIT;
 out_unlock:
         mdd_write_unlock(env, mdd_sobj);
@@ -666,12 +666,12 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
         la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
 
         la->la_valid = LA_CTIME | LA_MTIME;
-        rc = mdd_attr_set_internal_locked(env, mdd_pobj, la, handle, 0);
+        rc = mdd_attr_check_set_internal_locked(env, mdd_pobj, la, handle, 0);
         if (rc)
                 GOTO(cleanup, rc);
 
         la->la_valid = LA_CTIME;
-        rc = mdd_attr_set_internal(env, mdd_cobj, la, handle, 0);
+        rc = mdd_attr_check_set_internal(env, mdd_cobj, la, handle, 0);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -753,7 +753,8 @@ static int mdd_name_insert(const struct lu_env *env,
         if (ma->ma_attr.la_valid & LA_CTIME) {
                 la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
                 la->la_valid = LA_CTIME | LA_MTIME;
-                rc = mdd_attr_set_internal_locked(env, mdd_obj, la, handle, 0);
+                rc = mdd_attr_check_set_internal_locked(env, mdd_obj, la,
+                                                        handle, 0);
         }
         EXIT;
 out_unlock:
@@ -825,7 +826,8 @@ static int mdd_name_remove(const struct lu_env *env,
         if (ma->ma_attr.la_valid & LA_CTIME) {
                 la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
                 la->la_valid = LA_CTIME | LA_MTIME;
-                rc = mdd_attr_set_internal_locked(env, mdd_obj, la, handle, 0);
+                rc = mdd_attr_check_set_internal_locked(env, mdd_obj, la,
+                                                        handle, 0);
         }
         EXIT;
 out_unlock:
@@ -910,7 +912,7 @@ static int mdd_rename_tgt(const struct lu_env *env,
         la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
 
         la->la_valid = LA_CTIME | LA_MTIME;
-        rc = mdd_attr_set_internal_locked(env, mdd_tpobj, la, handle, 0);
+        rc = mdd_attr_check_set_internal_locked(env, mdd_tpobj, la, handle, 0);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -927,7 +929,7 @@ static int mdd_rename_tgt(const struct lu_env *env,
                         mdo_ref_del(env, mdd_tobj, handle);
 
                 la->la_valid = LA_CTIME;
-                rc = mdd_attr_set_internal(env, mdd_tobj, la, handle, 0);
+                rc = mdd_attr_check_set_internal(env, mdd_tobj, la, handle, 0);
                 if (rc)
                         GOTO(cleanup, rc);
 
@@ -1361,7 +1363,7 @@ static int mdd_create(const struct lu_env *env,
 
         *la = ma->ma_attr;
         la->la_valid = LA_CTIME | LA_MTIME;
-        rc = mdd_attr_set_internal_locked(env, mdd_pobj, la, handle, 0);
+        rc = mdd_attr_check_set_internal_locked(env, mdd_pobj, la, handle, 0);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -1568,7 +1570,8 @@ static int mdd_rename(const struct lu_env *env,
         /* XXX: mdd_sobj must be local one if it is NOT NULL. */
         if (mdd_sobj) {
                 la->la_valid = LA_CTIME;
-                rc = mdd_attr_set_internal_locked(env, mdd_sobj, la, handle, 0);
+                rc = mdd_attr_check_set_internal_locked(env, mdd_sobj, la,
+                                                        handle, 0);
                 if (rc)
                         GOTO(cleanup, rc);
         }
@@ -1587,7 +1590,7 @@ static int mdd_rename(const struct lu_env *env,
                         mdo_ref_del(env, mdd_tobj, handle);
 
                 la->la_valid = LA_CTIME;
-                rc = mdd_attr_set_internal(env, mdd_tobj, la, handle, 0);
+                rc = mdd_attr_check_set_internal(env, mdd_tobj, la, handle, 0);
                 if (rc)
                         GOTO(cleanup, rc);
 
@@ -1598,13 +1601,13 @@ static int mdd_rename(const struct lu_env *env,
         }
 
         la->la_valid = LA_CTIME | LA_MTIME;
-        rc = mdd_attr_set_internal_locked(env, mdd_spobj, la, handle, 0);
+        rc = mdd_attr_check_set_internal_locked(env, mdd_spobj, la, handle, 0);
         if (rc)
                 GOTO(cleanup, rc);
 
         if (mdd_spobj != mdd_tpobj) {
                 la->la_valid = LA_CTIME | LA_MTIME;
-                rc = mdd_attr_set_internal_locked(env, mdd_tpobj, la,
+                rc = mdd_attr_check_set_internal_locked(env, mdd_tpobj, la,
                                                   handle, 0);
         }
 

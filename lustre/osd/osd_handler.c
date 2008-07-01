@@ -1366,12 +1366,12 @@ static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
                          const struct lu_buf *buf, const char *name, int fl,
                          struct thandle *handle, struct lustre_capa *capa)
 {
-        int fs_flags;
-
         struct osd_object      *obj    = osd_dt_obj(dt);
         struct inode           *inode  = obj->oo_inode;
         struct osd_thread_info *info   = osd_oti_get(env);
         struct dentry          *dentry = &info->oti_dentry;
+        struct timespec        *t      = &info->oti_time;
+        int                     fs_flags = 0, rc;
 
         LASSERT(dt_object_exists(dt));
         LASSERT(inode->i_op != NULL && inode->i_op->setxattr != NULL);
@@ -1381,17 +1381,24 @@ static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
         if (osd_object_auth(env, dt, capa, CAPA_OPC_META_WRITE))
                 return -EACCES;
 
-        dentry->d_inode = inode;
-
-        fs_flags = 0;
         if (fl & LU_XATTR_REPLACE)
                 fs_flags |= XATTR_REPLACE;
 
         if (fl & LU_XATTR_CREATE)
                 fs_flags |= XATTR_CREATE;
 
-        return inode->i_op->setxattr(dentry, name,
-                                     buf->lb_buf, buf->lb_len, fs_flags);
+        dentry->d_inode = inode;
+        *t = inode->i_ctime;
+        rc = inode->i_op->setxattr(dentry, name,
+                                   buf->lb_buf, buf->lb_len, fs_flags);
+        if (likely(rc == 0)) {
+                /* ctime should not be updated with server-side time. */
+                spin_lock(&obj->oo_guard);
+                inode->i_ctime = *t;
+                spin_unlock(&obj->oo_guard);
+                mark_inode_dirty(inode);
+        }
+        return rc;
 }
 
 /*
@@ -1431,6 +1438,8 @@ static int osd_xattr_del(const struct lu_env *env,
         struct inode           *inode  = obj->oo_inode;
         struct osd_thread_info *info   = osd_oti_get(env);
         struct dentry          *dentry = &info->oti_dentry;
+        struct timespec        *t      = &info->oti_time;
+        int                     rc;
 
         LASSERT(dt_object_exists(dt));
         LASSERT(inode->i_op != NULL && inode->i_op->removexattr != NULL);
@@ -1441,7 +1450,16 @@ static int osd_xattr_del(const struct lu_env *env,
                 return -EACCES;
 
         dentry->d_inode = inode;
-        return inode->i_op->removexattr(dentry, name);
+        *t = inode->i_ctime;
+        rc = inode->i_op->removexattr(dentry, name);
+        if (likely(rc == 0)) {
+                /* ctime should not be updated with server-side time. */
+                spin_lock(&obj->oo_guard);
+                inode->i_ctime = *t;
+                spin_unlock(&obj->oo_guard);
+                mark_inode_dirty(inode);
+        }
+        return rc;
 }
 
 static struct obd_capa *osd_capa_get(const struct lu_env *env,

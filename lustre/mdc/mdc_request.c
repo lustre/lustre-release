@@ -364,9 +364,10 @@ static int mdc_xattr_common(struct obd_export *exp,const struct req_format *fmt,
                 rec->sx_fsgid  = current->fsgid;
                 rec->sx_cap    = current->cap_effective;
                 rec->sx_suppgid1 = suppgid;
-                rec->sx_suppgid1 = -1;
+                rec->sx_suppgid2 = -1;
                 rec->sx_fid    = *fid;
-                rec->sx_valid  = valid;
+                rec->sx_valid  = valid | OBD_MD_FLCTIME;
+                rec->sx_time   = cfs_time_current_sec();
                 rec->sx_size   = output_size;
                 rec->sx_flags  = flags;
 

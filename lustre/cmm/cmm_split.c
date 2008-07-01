@@ -707,7 +707,7 @@ int cmm_split_dir(const struct lu_env *env, struct md_object *mo)
         LASSERT(ma->ma_valid & MA_LMV);
         buf = cmm_buf_get(env, ma->ma_lmv, ma->ma_lmv_size);
         rc = mo_xattr_set(env, md_object_next(mo), buf,
-                          MDS_LMV_MD_NAME, 0);
+                          MDS_LMV_MD_NAME, 0, NULL);
         if (rc) {
                 CERROR("Can't set MEA to master dir, " "rc %d\n", rc);
                 GOTO(cleanup, rc);
