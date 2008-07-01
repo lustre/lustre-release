@@ -1063,7 +1063,7 @@ static int mds_init_slave_ilimits(struct obd_device *obd,
 
         /* if we are going to set zero limit, needn't init slaves */
         if (!oqctl->qc_dqblk.dqb_ihardlimit && !oqctl->qc_dqblk.dqb_isoftlimit &&
-            set)
+            !set)
                 RETURN(0);
 
         OBD_ALLOC_PTR(ioqc);
@@ -1071,7 +1071,7 @@ static int mds_init_slave_ilimits(struct obd_device *obd,
                 RETURN(-ENOMEM);
 
         flag = oqctl->qc_dqblk.dqb_ihardlimit ||
-               oqctl->qc_dqblk.dqb_isoftlimit || set;
+               oqctl->qc_dqblk.dqb_isoftlimit || !set;
         ioqc->qc_cmd = flag ? Q_INITQUOTA : Q_SETQUOTA;
         ioqc->qc_id = oqctl->qc_id;
         ioqc->qc_type = oqctl->qc_type;
@@ -1130,7 +1130,7 @@ static int mds_init_slave_blimits(struct obd_device *obd,
 
         /* if we are going to set zero limit, needn't init slaves */
         if (!oqctl->qc_dqblk.dqb_bhardlimit && !oqctl->qc_dqblk.dqb_bsoftlimit &&
-            set)
+            !set)
                 RETURN(0);
 
         OBD_ALLOC_PTR(ioqc);
@@ -1138,7 +1138,7 @@ static int mds_init_slave_blimits(struct obd_device *obd,
                 RETURN(-ENOMEM);
 
         flag = oqctl->qc_dqblk.dqb_bhardlimit ||
-               oqctl->qc_dqblk.dqb_bsoftlimit || set;
+               oqctl->qc_dqblk.dqb_bsoftlimit || !set;
         ioqc->qc_cmd = flag ? Q_INITQUOTA : Q_SETQUOTA;
         ioqc->qc_id = oqctl->qc_id;
         ioqc->qc_type = oqctl->qc_type;
@@ -1199,7 +1199,10 @@ int mds_set_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
         time_t btime, itime;
         struct lustre_dquot *dquot;
         struct obd_dqblk *dqblk = &oqctl->qc_dqblk;
-        int set, rc, rc2 = 0, flag = 0;
+        /* orig_set means if quota was set before; now_set means we are
+         * setting/cancelling quota */
+        int orig_set, now_set;
+        int rc, rc2 = 0, flag = 0;
         ENTRY;
 
         OBD_ALLOC_PTR(oqaq);
@@ -1293,24 +1296,26 @@ int mds_set_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
         }
 
         up(&mds->mds_qonoff_sem);
-        if (dqblk->dqb_valid & QIF_ILIMITS) {
-                set = !(ihardlimit || isoftlimit);
+        orig_set = ihardlimit || isoftlimit;
+        now_set  = dqblk->dqb_ihardlimit || dqblk->dqb_isoftlimit;
+        if (dqblk->dqb_valid & QIF_ILIMITS && orig_set != now_set) {
                 down(&dquot->dq_sem);
                 dquot->dq_dqb.dqb_curinodes = 0;
                 up(&dquot->dq_sem);
-                rc = mds_init_slave_ilimits(obd, oqctl, set, oqaq);
+                rc = mds_init_slave_ilimits(obd, oqctl, orig_set, oqaq);
                 if (rc) {
                         CERROR("init slave ilimits failed! (rc:%d)\n", rc);
                         goto revoke_out;
                 }
         }
 
-        if (dqblk->dqb_valid & QIF_BLIMITS) {
-                set = !(bhardlimit || bsoftlimit);
+        orig_set = bhardlimit || bsoftlimit;
+        now_set  = dqblk->dqb_bhardlimit || dqblk->dqb_bsoftlimit;
+        if (dqblk->dqb_valid & QIF_BLIMITS && orig_set != now_set) {
                 down(&dquot->dq_sem);
                 dquot->dq_dqb.dqb_curspace = 0;
                 up(&dquot->dq_sem);
-                rc = mds_init_slave_blimits(obd, oqctl, set, oqaq);
+                rc = mds_init_slave_blimits(obd, oqctl, orig_set, oqaq);
                 if (rc) {
                         CERROR("init slave blimits failed! (rc:%d)\n", rc);
                         goto revoke_out;
