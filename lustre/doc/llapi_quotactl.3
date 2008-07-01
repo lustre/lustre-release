@@ -1,0 +1,179 @@
+.TH LLAPI_QUOTACTL 3
+.SH NAME
+llapi_quotactl \- manipulate disk quotas on a Lustre filesystem
+.SH SYNOPSIS
+.nf
+.B #include <liblustre.h>
+.B #include <lustre/lustre_idl.h>
+.B #include <lustre/liblustreapi.h>
+.B #include <lustre/lustre_user.h>
+.sp
+.BI "int llapi_quotactl(char" " *mnt," " struct if_quotactl" " *qctl)
+.sp
+\fBstruct if_quotactl {
+        __u32                   qc_cmd;
+        __u32                   qc_type;
+        __u32                   qc_id;
+        __u32                   qc_stat;
+        struct obd_dqinfo       qc_dqinfo;
+        struct obd_dqblk        qc_dqblk;
+        char                    obd_type[16];
+        struct obd_uuid         obd_uuid;
+};
+.sp
+\fBstruct obd_dqblk {
+        __u64 dqb_bhardlimit;
+        __u64 dqb_bsoftlimit;
+        __u64 dqb_curspace;
+        __u64 dqb_ihardlimit;
+        __u64 dqb_isoftlimit;
+        __u64 dqb_curinodes;
+        __u64 dqb_btime;
+        __u64 dqb_itime;
+        __u32 dqb_valid;
+        __u32 padding;
+};
+.sp
+\fBstruct obd_dqinfo {
+        __u64 dqi_bgrace;
+        __u64 dqi_igrace;
+        __u32 dqi_flags;
+        __u32 dqi_valid;
+};
+.sp
+\fBstruct obd_uuid {
+        char uuid[40];
+};
+.fi
+.SH DESCRIPTION
+.LP
+.IX  "filesystem"  "quotactl() disk quotas"  ""  "\fLquotactl()\fP \(em disk quotas"
+.IX  "quotactl() disk quotas"  ""  "\fLquotactl()\fP \(em disk quotas"
+.IX  "disk quotas quotactl()"  ""  "disk quotas \(em \fLquotactl()\fP"
+.LP
+The
+.B llapi_quotactl(\|)
+function manipulates disk quotas on a Lustre filesystem
+.I mnt.
+.I qc_cmd
+indicates a command to be applied to 
+.SM UID
+.IR qc_id
+or 
+.SM GID
+.IR qc_id .
+.TP 15
+.SB LUSTRE_Q_QUOTAON
+Turn on quotas for a Lustre filesystem.
+.I qc_type
+is USRQUOTA, GRPQUOTA or UGQUOTA (both user and group quotas).
+The quota files must exist; they are normally created with the
+.BR llapi_quotacheck (3)
+call.  This call is restricted to the super-user.
+.TP
+.SB LUSTRE_Q_QUOTAOFF
+Turn off quotas for a Lustre filesystem.
+.I qc_type
+is USRQUOTA, GRPQUOTA or UGQUOTA (both user and group quotas).
+This call is restricted to the super-user.
+.TP
+.SB LUSTRE_Q_GETQUOTA
+Get disk quota limits and current usage for user or group
+.IR qc_id .
+.I qc_type
+is USRQUOTA or GRPQUOTA.
+.I uuid
+may be filled with OBD UUID string to query quota information from a specific node.
+.I dqb_valid
+may be set nonzero to query information only from MDS. If
+.I uuid
+is an empty string and
+.I dqb_valid
+is zero then clusterwide limits and usage are returned. On return
+.I obd_dqblk
+contains the requested information (block limits unit is kilobyte).
+Quotas must be turned on before using this command.
+.TP
+.SB LUSTRE_Q_SETQUOTA
+Set disk quota limits for user or group
+.IR qc_id .
+.I qc_type
+is USRQUOTA or GRPQUOTA.
+.I dqb_valid
+must be set to QIF_ILIMITS, QIF_BLIMITS or QIF_LIMITS (both inode limits and block limits) dependent on updating limits.
+.I obd_dqblk
+must be filled with limits values (as set in
+.I dqb_valid 
+, block limits unit is kilobyte).
+Quotas must be turned on before using this command.
+.TP
+.SB LUSTRE_Q_GETINFO
+Get information about quotas.
+.I qc_type
+is either USRQUOTA or GRPQUOTA. On return
+.I dqi_igrace
+is inode grace time (in seconds),
+.I dqi_bgrace
+is block grace time (in seconds),
+.I dqi_flags
+is not used by the current Lustre version.
+.TP
+.SB LUSTRE_Q_SETINFO
+Set quota information (like grace times).
+.I qc_type
+is either USRQUOTA or GRPQUOTA.
+.I dqi_igrace
+is inode grace time (in seconds),
+.I dqi_bgrace
+is block grace time (in seconds),
+.I dqi_flags
+is not used by the current Lustre version and must be zeroed.
+.SH RETURN VALUES
+.LP
+.B llapi_quotactl(\|)
+returns:
+.TP
+0
+on success.
+.TP
+\-1
+on failure and sets
+.B errno
+to indicate the error.
+.SH ERRORS
+.TP 15
+.SM EFAULT
+.I qctl
+is invalid.
+.TP
+.SM ENOSYS
+The kernel or Lustre modules have not been compiled with the
+.SB QUOTA
+option.
+.TP
+.SM ENOMEM
+Insufficient memory to complete operation.
+.TP
+.SM ENOTTY
+.I qc_cmd
+is invalid.
+.TP
+.SM EBUSY
+Cannot process during quotacheck.
+.TP
+.SM ENOENT
+.I uuid
+does not correspond to OBD or
+.I mnt
+does not exist
+.TP
+.SM EPERM
+The call is privileged and the caller was not the super-user.
+.TP
+.SM ESRCH
+No disc quota is found for the indicated user.
+.IP
+Quotas have not been turned on for this filesystem.
+.SH "SEE ALSO"
+.BR lfs (1),
+.BR lustre (7)
