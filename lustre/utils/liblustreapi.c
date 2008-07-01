@@ -1095,6 +1095,26 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
                 }
         }
 
+        if (param->check_uid) {
+                if (st->st_uid == param->uid) {
+                        if (param->exclude_uid)
+                                goto decided;
+                } else {
+                        if (!param->exclude_uid)
+                                goto decided;
+                }
+        }
+
+        if (param->check_gid) {
+                if (st->st_gid == param->gid) {
+                        if (param->exclude_gid)
+                                goto decided;
+                } else {
+                        if (!param->exclude_gid)
+                                goto decided;
+                }
+        }
+
         /* Check the time on mds. */
         if (!decision) {
                 int for_mds;
