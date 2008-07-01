@@ -35,7 +35,7 @@
 #include <errno.h>
 #include <dirent.h>
 #include <sys/types.h>
-#include <attr/xattr.h>
+#include <sys/xattr.h>
 #include <sys/stat.h>
 
 #include <liblustre.h>
