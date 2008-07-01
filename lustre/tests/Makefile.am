@@ -50,6 +50,9 @@ LIBLUSTREAPI := $(top_builddir)/lustre/utils/liblustreapi.a
 ll_getstripe_info_LDADD=$(LIBLUSTREAPI)
 multiop_LDADD=$(LIBLUSTREAPI)
 
+ll_dirstripe_verify_SOURCES= ll_dirstripe_verify.c
+ll_dirstripe_verify_LDADD= -L$(top_builddir)/lustre/utils -llustreapi
+
 if MPITESTS
 LAM_LD_FLAGS=-L/opt/lam/lib -lmpi -llam -lpthread
 write_append_truncate_SOURCES=write_append_truncate.c
