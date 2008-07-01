@@ -322,6 +322,34 @@ static void find_param_fini(struct find_param *param)
                 free(param->lmd);
 }
 
+int llapi_file_get_lov_fuuid(int fd, struct obd_uuid *lov_name)
+{
+        int rc = ioctl(fd, OBD_IOC_GETNAME, lov_name);
+        if (rc) {
+                rc = errno;
+                llapi_err(LLAPI_MSG_ERROR, "error: can't get lov name.");
+        }
+        return rc;
+}
+
+int llapi_file_get_lov_uuid(const char *path, struct obd_uuid *lov_uuid)
+{
+        int fd, rc;
+
+        fd = open(path, O_RDONLY);
+        if (fd < 0) {
+                rc = errno;
+                llapi_err(LLAPI_MSG_ERROR, "error opening %s\n", path);
+                return rc;
+        }
+
+        rc = llapi_file_get_lov_fuuid(fd, lov_uuid);
+
+        close(fd);
+
+        return rc;
+}
+
 /*
  * If uuidp is NULL, return the number of available obd uuids.
  * If uuidp is non-NULL, then it will return the uuids of the obds. If
@@ -330,22 +358,19 @@ static void find_param_fini(struct find_param *param)
  */
 int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
 {
-        char lov_name[sizeof(struct obd_uuid)];
+        struct obd_uuid lov_name;
         char buf[1024];
         FILE *fp;
         int rc = 0, index = 0;
 
         /* Get the lov name */
-        rc = ioctl(fd, OBD_IOC_GETNAME, (void *) lov_name);
-        if (rc) {
-                rc = errno;
-                llapi_err(LLAPI_MSG_ERROR, "error: can't get lov name");
+        rc = llapi_file_get_lov_fuuid(fd, &lov_name);
+        if (rc)
                 return rc;
-        }
 
         /* Now get the ost uuids from /proc */
         snprintf(buf, sizeof(buf), "/proc/fs/lustre/lov/%s/target_obd",
-                 lov_name);
+                 lov_name.uuid);
         fp = fopen(buf, "r");
         if (fp == NULL) {
                 rc = errno;
@@ -374,13 +399,14 @@ int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
  * returned in param->obdindex */
 static int setup_obd_uuid(DIR *dir, char *dname, struct find_param *param)
 {
+        struct obd_uuid lov_uuid;
         char uuid[sizeof(struct obd_uuid)];
         char buf[1024];
         FILE *fp;
         int rc = 0, index;
 
         /* Get the lov name */
-        rc = ioctl(dirfd(dir), OBD_IOC_GETNAME, (void *)uuid);
+        rc = llapi_file_get_lov_fuuid(dirfd(dir), &lov_uuid);
         if (rc) {
                 if (errno != ENOTTY) {
                         rc = errno;
@@ -396,7 +422,7 @@ static int setup_obd_uuid(DIR *dir, char *dname, struct find_param *param)
 
         /* Now get the ost uuids from /proc */
         snprintf(buf, sizeof(buf), "/proc/fs/lustre/lov/%s/target_obd",
-                 uuid);
+                 lov_uuid.uuid);
         fp = fopen(buf, "r");
         if (fp == NULL) {
                 rc = errno;
