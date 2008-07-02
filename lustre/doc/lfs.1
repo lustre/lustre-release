@@ -81,8 +81,27 @@ To list the striping info for a given filename or files in a directory, optional
 .B osts 
 List all the OSTs for the filesystem
 .TP
-.B setstripe 
-To create a new file with a specific striping pattern
+.B setstripe [--size stripe-size] [--count stripe-cnt] [--index start-ost]
+To create a new file, or set the directory default, with the specified striping parameters.  The
+.I stripe-count
+is the number of OSTs to stripe a file over. A
+.I stripe-count
+of 0 means to use the filesystem-wide default stripe count (default 1), and a
+.I stripe-count
+of -1 means to stripe over all available OSTs.  The
+.I stripe-size
+is the number of bytes to store on each OST before moving to the next OST.  A
+.I stripe-size
+of 0 means to use the filesystem-wide default stripe size (default 1MB).  The
+.I start-ost
+is the OST index (starting at 0) on which to start striping for this file.  A
+.I start-ost
+of -1 allows the MDS to specify the starting index and it is strongly
+recommended that the starting OST not be given, as this allows space and
+load balancing to be done by the MDS as needed.
+.TP
+.B lfs setstripe -d
+Delete the default striping on the specified directory.
 .TP
 .B quotachown
 To change files' owner and group on OSTs of the specified filesystem
