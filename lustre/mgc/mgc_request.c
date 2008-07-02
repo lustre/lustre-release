@@ -814,7 +814,7 @@ int mgc_set_info_async(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
         /* FIXME move this to mgc_process_config */
-        if (KEY_IS("register_target")) {
+        if (KEY_IS(KEY_REGISTER_TARGET)) {
                 struct mgs_target_info *mti;
                 if (vallen != sizeof(struct mgs_target_info))
                         RETURN(-EINVAL);
@@ -824,7 +824,7 @@ int mgc_set_info_async(struct obd_export *exp, obd_count keylen,
                 rc =  mgc_target_register(exp, mti);
                 RETURN(rc);
         }
-        if (KEY_IS("set_fs")) {
+        if (KEY_IS(KEY_SET_FS)) {
                 struct super_block *sb = (struct super_block *)val;
                 struct lustre_sb_info *lsi;
                 if (vallen != sizeof(struct super_block))
@@ -836,7 +836,7 @@ int mgc_set_info_async(struct obd_export *exp, obd_count keylen,
                 }
                 RETURN(rc);
         }
-        if (KEY_IS("clear_fs")) {
+        if (KEY_IS(KEY_CLEAR_FS)) {
                 if (vallen != 0)
                         RETURN(-EINVAL);
                 rc = mgc_fs_cleanup(exp->exp_obd);

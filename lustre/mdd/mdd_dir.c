@@ -679,7 +679,7 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 
         if (rc == 0)
                 obd_set_info_async(mdd2obd_dev(mdd)->u.mds.mds_osc_exp,
-                                   strlen("unlinked"), "unlinked", 0,
+                                   sizeof(KEY_UNLINKED), KEY_UNLINKED, 0,
                                    NULL, NULL);
         EXIT;
 cleanup:

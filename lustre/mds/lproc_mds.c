@@ -88,9 +88,10 @@ static int lprocfs_mds_wr_evict_client(struct file *file, const char *buffer,
                 return -ENOMEM;
 
         if (obd->u.mds.mds_evict_ost_nids) {
-                rc = obd_set_info_async(mds->mds_osc_exp,strlen("evict_by_nid"),
-                                        "evict_by_nid", strlen(tmpbuf + 4) + 1,
-                                         tmpbuf + 4, set);
+                rc = obd_set_info_async(mds->mds_osc_exp,
+                                        sizeof(KEY_EVICT_BY_NID),
+                                        KEY_EVICT_BY_NID, strlen(tmpbuf + 4) + 1,
+                                        tmpbuf + 4, set);
                 if (rc)
                         CERROR("Failed to evict nid %s from OSTs: rc %d\n",
                                tmpbuf + 4, rc);

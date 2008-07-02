@@ -2609,11 +2609,11 @@ static int lov_set_info_async(struct obd_export *exp, obd_count keylen,
                 incr = sizeof(struct obd_id_info);
                 do_inactive = 1;
                 next_id = 1;
-        } else if (KEY_IS("checksum")) {
+        } else if (KEY_IS(KEY_CHECKSUM)) {
                 do_inactive = 1;
-        } else if (KEY_IS("unlinked")) {
+        } else if (KEY_IS(KEY_UNLINKED)) {
                 check_uuid = val ? 1 : 0;
-        } else if (KEY_IS("evict_by_nid")) {
+        } else if (KEY_IS(KEY_EVICT_BY_NID)) {
                 /* use defaults:  do_inactive = incr = 0; */
         } else if (KEY_IS(KEY_MDS_CONN)) {
                 mds_con = 1;

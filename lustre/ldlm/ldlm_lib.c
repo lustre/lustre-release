@@ -922,7 +922,7 @@ dont_check_exports:
 
         if (export->exp_imp_reverse != NULL) {
                 /* destroyed import can be still referenced in ctxt */
-                obd_set_info_async(export, strlen(KEY_REVIMP_UPD),
+                obd_set_info_async(export, sizeof(KEY_REVIMP_UPD),
                                    KEY_REVIMP_UPD, 0, NULL, NULL);
 
                 /* in some recovery senarios, previous ctx init rpc handled

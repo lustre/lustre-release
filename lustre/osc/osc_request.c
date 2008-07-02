@@ -3621,7 +3621,7 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
 
-        if (KEY_IS("unlinked")) {
+        if (KEY_IS(KEY_UNLINKED)) {
                 struct osc_creator *oscc = &obd->u.cli.cl_oscc;
                 spin_lock(&oscc->oscc_lock);
                 oscc->oscc_flags &= ~OSCC_FLAG_NOSPC;
@@ -3641,7 +3641,7 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
 
-        if (KEY_IS("checksum")) {
+        if (KEY_IS(KEY_CHECKSUM)) {
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
                 exp->exp_obd->u.cli.cl_checksum = (*(int *)val) ? 1 : 0;

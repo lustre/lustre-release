@@ -291,7 +291,7 @@ static int mdd_update_capa_key(const struct lu_env *env,
         int rc;
         ENTRY;
 
-        rc = obd_set_info_async(lov_exp, strlen(KEY_CAPA_KEY), KEY_CAPA_KEY,
+        rc = obd_set_info_async(lov_exp, sizeof(KEY_CAPA_KEY), KEY_CAPA_KEY,
                                 sizeof(*key), key, NULL);
         RETURN(rc);
 }

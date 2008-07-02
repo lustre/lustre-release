@@ -297,8 +297,8 @@ static void lmv_set_timeouts(struct obd_device *obd)
                 if (tgts->ltd_exp == NULL)
                         continue;
 
-                obd_set_info_async(tgts->ltd_exp, strlen("inter_mds"),
-                                   "inter_mds", 0, NULL, NULL);
+                obd_set_info_async(tgts->ltd_exp, sizeof(KEY_INTERMDS),
+                                   KEY_INTERMDS, 0, NULL, NULL);
         }
 }
 

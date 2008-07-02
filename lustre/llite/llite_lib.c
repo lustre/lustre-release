@@ -146,7 +146,7 @@ static int ll_init_ea_size(struct obd_export *md_exp, struct obd_export *dt_exp)
         __u32 stripes;
         ENTRY;
 
-        rc = obd_get_info(dt_exp, strlen(KEY_LOVDESC) + 1, KEY_LOVDESC,
+        rc = obd_get_info(dt_exp, sizeof(KEY_LOVDESC), KEY_LOVDESC,
                           &valsize, &desc);
         if (rc)
                 RETURN(rc);
@@ -270,7 +270,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
                 GOTO(out_md_fid, err);
 
         size = sizeof(*data);
-        err = obd_get_info(sbi->ll_md_exp, strlen(KEY_CONN_DATA),
+        err = obd_get_info(sbi->ll_md_exp, sizeof(KEY_CONN_DATA),
                            KEY_CONN_DATA,  &size, data);
         if (err) {
                 CERROR("Get connect data failed: %d \n", err);
@@ -531,8 +531,9 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 #endif
 
         checksum = sbi->ll_flags & LL_SBI_CHECKSUM;
-        err = obd_set_info_async(sbi->ll_dt_exp, strlen("checksum"),"checksum",
-                                 sizeof(checksum), &checksum, NULL);
+        err = obd_set_info_async(sbi->ll_dt_exp, sizeof(KEY_CHECKSUM),
+                                 KEY_CHECKSUM, sizeof(checksum), &checksum,
+                                 NULL);
 
         sb->s_root = d_alloc_root(root);
         if (data != NULL)
@@ -570,8 +571,8 @@ int ll_get_max_mdsize(struct ll_sb_info *sbi, int *lmmsize)
 
         *lmmsize = obd_size_diskmd(sbi->ll_dt_exp, NULL);
         size = sizeof(int);
-        rc = obd_get_info(sbi->ll_md_exp, strlen("max_easize"), "max_easize",
-                          &size, lmmsize);
+        rc = obd_get_info(sbi->ll_md_exp, sizeof(KEY_MAX_EASIZE),
+                          KEY_MAX_EASIZE, &size, lmmsize);
         if (rc)
                 CERROR("Get max mdsize error rc %d \n", rc);
 
@@ -2021,10 +2022,10 @@ int ll_flush_ctx(struct inode *inode)
         CDEBUG(D_SEC, "flush context for user %d\n", current->uid);
 
         obd_set_info_async(sbi->ll_md_exp,
-                           sizeof(KEY_FLUSH_CTX) - 1, KEY_FLUSH_CTX,
+                           sizeof(KEY_FLUSH_CTX), KEY_FLUSH_CTX,
                            0, NULL, NULL);
         obd_set_info_async(sbi->ll_dt_exp,
-                           sizeof(KEY_FLUSH_CTX) - 1, KEY_FLUSH_CTX,
+                           sizeof(KEY_FLUSH_CTX), KEY_FLUSH_CTX,
                            0, NULL, NULL);
         return 0;
 }
@@ -2098,7 +2099,7 @@ int ll_remount_fs(struct super_block *sb, int *flags, char *data)
         if ((*flags & MS_RDONLY) != (sb->s_flags & MS_RDONLY)) {
                 read_only = *flags & MS_RDONLY;
                 err = obd_set_info_async(sbi->ll_md_exp,
-                                         sizeof(KEY_READ_ONLY) - 1,
+                                         sizeof(KEY_READ_ONLY),
                                          KEY_READ_ONLY, sizeof(read_only),
                                          &read_only, NULL);
                 if (err) {

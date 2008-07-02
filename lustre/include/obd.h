@@ -1020,9 +1020,19 @@ enum obd_cleanup_stage {
 #define KEY_REVIMP_UPD          "revimp_update"
 #define KEY_LOV_IDX             "lov_idx"
 #define KEY_LAST_ID             "last_id"
+#define KEY_READONLY            "read-only"
 #define KEY_LOCK_TO_STRIPE      "lock_to_stripe"
+#define KEY_CHECKSUM            "checksum"
+#define KEY_UNLINKED            "unlinked"
+#define KEY_EVICT_BY_NID        "evict_by_nid"
+#define KEY_REGISTER_TARGET     "register_target"
+#define KEY_SET_FS              "set_fs"
+#define KEY_CLEAR_FS            "clear_fs"
 #define KEY_BLOCKSIZE           "blocksize"
 #define KEY_BLOCKSIZE_BITS      "blocksize_bits"
+/* XXX unused ?*/
+#define KEY_INTERMDS            "inter_mds"
+#define KEY_ASYNC               "async"
 
 struct lu_context;
 

@@ -614,7 +614,7 @@ static int mds_propagate_capa_keys(struct mds_obd *mds)
                 key = &mds->mds_capa_keys[i];
                 DEBUG_CAPA_KEY(D_SEC, key, "propagate");
 
-                rc = obd_set_info_async(mds->mds_osc_exp, strlen(KEY_CAPA_KEY),
+                rc = obd_set_info_async(mds->mds_osc_exp, sizeof(KEY_CAPA_KEY),
                                         KEY_CAPA_KEY, sizeof(*key), key, NULL);
                 if (rc) {
                         DEBUG_CAPA_KEY(D_ERROR, key,
