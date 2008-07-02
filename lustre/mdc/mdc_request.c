@@ -918,7 +918,7 @@ int mdc_set_info_async(struct obd_export *exp, obd_count keylen,
                        exp->exp_obd->obd_name, imp->imp_initial_recov_bk);
                 RETURN(0);
         }
-        if (KEY_IS("read-only")) {
+        if (KEY_IS(KEY_READONLY)) {
                 struct ptlrpc_request *req;
                 int size[3] = { sizeof(struct ptlrpc_body), keylen, vallen };
                 char *bufs[3] = { NULL, key, val };
@@ -962,8 +962,7 @@ int mdc_get_info(struct obd_export *exp, __u32 keylen, void *key,
 {
         int rc = -EINVAL;
 
-        if (keylen == strlen("max_easize") &&
-            memcmp(key, "max_easize", strlen("max_easize")) == 0) {
+        if (KEY_IS(KEY_MAX_EASIZE)) {
                 int mdsize, *max_easize;
 
                 if (*vallen != sizeof(int))
@@ -1235,7 +1234,7 @@ int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp)
         int rc, size;
         ENTRY;
 
-        rc = obd_get_info(lov_exp, strlen(KEY_LOVDESC) + 1, KEY_LOVDESC,
+        rc = obd_get_info(lov_exp, sizeof(KEY_LOVDESC), KEY_LOVDESC,
                           &valsize, &desc);
         if (rc)
                 RETURN(rc);

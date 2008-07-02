@@ -1364,7 +1364,7 @@ static int mds_set_info_rpc(struct obd_export *exp, struct ptlrpc_request *req)
 
         lustre_msg_set_status(req->rq_repmsg, 0);
 
-        if (KEY_IS("read-only")) {
+        if (KEY_IS(KEY_READONLY)) {
                 if (val == NULL || vallen < sizeof(__u32)) {
                         DEBUG_REQ(D_HA, req, "no set_info val");
                         RETURN(-EFAULT);

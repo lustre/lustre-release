@@ -3458,7 +3458,7 @@ static int filter_get_info(struct obd_export *exp, __u32 keylen,
                 RETURN(-EINVAL);
         }
 
-        if (KEY_IS("blocksize")) {
+        if (KEY_IS(KEY_BLOCKSIZE)) {
                 __u32 *blocksize = val;
                 if (blocksize) {
                         if (*vallen < sizeof(*blocksize))
@@ -3469,7 +3469,7 @@ static int filter_get_info(struct obd_export *exp, __u32 keylen,
                 RETURN(0);
         }
 
-        if (KEY_IS("blocksize_bits")) {
+        if (KEY_IS(KEY_BLOCKSIZE_BITS)) {
                 __u32 *blocksize_bits = val;
                 if (blocksize_bits) {
                         if (*vallen < sizeof(*blocksize_bits))
@@ -3480,7 +3480,7 @@ static int filter_get_info(struct obd_export *exp, __u32 keylen,
                 RETURN(0);
         }
 
-        if (KEY_IS("last_id")) {
+        if (KEY_IS(KEY_LAST_ID)) {
                 obd_id *last_id = val;
                 /* FIXME: object groups */
                 if (last_id) {

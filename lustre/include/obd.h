@@ -883,13 +883,27 @@ enum obd_cleanup_stage {
 };
 
 /* get/set_info keys */
-#define KEY_MDS_CONN "mds_conn"
-#define KEY_NEXT_ID  "next_id"
-#define KEY_LOVDESC  "lovdesc"
-#define KEY_INIT_RECOV "initial_recov"
-#define KEY_INIT_RECOV_BACKUP "init_recov_bk"
+#define KEY_MDS_CONN            "mds_conn"
+#define KEY_NEXT_ID             "next_id"
+#define KEY_LOVDESC             "lovdesc"
+#define KEY_INIT_RECOV          "initial_recov"
+#define KEY_INIT_RECOV_BACKUP   "init_recov_bk"
 #define KEY_LOV_IDX             "lov_idx"
 #define KEY_LAST_ID             "last_id"
+#define KEY_LOCK_TO_STRIPE      "lock_to_stripe"
+#define KEY_CHECKSUM            "checksum"
+#define KEY_READONLY            "readonly"
+#define KEY_UNLINKED            "unlinked"
+#define KEY_EVICT_BY_NID        "evict_by_nid"
+#define KEY_REGISTER_TARGET     "register_target"
+#define KEY_SET_FS              "set_fs"
+#define KEY_CLEAR_FS            "clear_fs"
+#define KEY_SET_INFO            "set_info"
+#define KEY_BLOCKSIZE           "blocksize"
+#define KEY_BLOCKSIZE_BITS      "blocksize_bits"
+#define KEY_MAX_EASIZE          "max_ea_size"
+/* XXX unused */
+#define KEY_ASYNC               "async"
 
 struct obd_ops {
         struct module *o_owner;

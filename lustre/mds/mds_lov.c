@@ -353,7 +353,6 @@ static int mds_lov_set_one_nextid(struct obd_device * obd, __u32 idx, obd_id *id
 
         info.idx = idx;
         info.data = id;
-
         rc = obd_set_info_async(mds->mds_osc_exp, sizeof(KEY_NEXT_ID),
                                 KEY_NEXT_ID, sizeof(info), &info, NULL);
         if (rc)

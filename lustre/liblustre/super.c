@@ -1934,7 +1934,7 @@ llu_fsswop_mount(const char *source,
                 CERROR("MDC %s: not setup or attached\n", mdc);
                 GOTO(out_free, err = -EINVAL);
         }
-        obd_set_info_async(obd->obd_self_export, strlen("async"), "async",
+        obd_set_info_async(obd->obd_self_export, sizeof(KEY_ASYNC), KEY_ASYNC,
                            sizeof(async), &async, NULL);
 
         ocd.ocd_connect_flags = OBD_CONNECT_IBITS | OBD_CONNECT_VERSION |
@@ -1967,7 +1967,7 @@ llu_fsswop_mount(const char *source,
                 CERROR("OSC %s: not setup or attached\n", osc);
                 GOTO(out_mdc, err = -EINVAL);
         }
-        obd_set_info_async(obd->obd_self_export, strlen("async"), "async",
+        obd_set_info_async(obd->obd_self_export, sizeof(KEY_ASYNC), KEY_ASYNC,
                            sizeof(async), &async, NULL);
 
         obd->obd_upcall.onu_owner = &sbi->ll_lco;

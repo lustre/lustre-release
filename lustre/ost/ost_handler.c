@@ -1294,7 +1294,7 @@ static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
         if (vallen)
                 val = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 1, 0);
 
-        if (KEY_IS("evict_by_nid")) {
+        if (KEY_IS(KEY_EVICT_BY_NID)) {
                 if (val && vallen)
                         obd_export_evict_by_nid(exp->exp_obd, val);
 
