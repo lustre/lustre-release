@@ -408,8 +408,8 @@ static int client_common_fill_super(struct super_block *sb,
         }
 
         checksum = sbi->ll_flags & LL_SBI_DATA_CHECKSUM;
-        err = obd_set_info_async(sbi->ll_osc_exp, strlen("checksum"),
-                                 "checksum", sizeof(checksum),
+        err = obd_set_info_async(sbi->ll_osc_exp, sizeof(KEY_CHECKSUM),
+                                 KEY_CHECKSUM, sizeof(checksum),
                                  &checksum, NULL);
 
         /* making vm readahead 0 for 2.4.x. In the case of 2.6.x,
@@ -455,8 +455,8 @@ int ll_get_max_mdsize(struct ll_sb_info *sbi, int *lmmsize)
 
         *lmmsize = obd_size_diskmd(sbi->ll_osc_exp, NULL);
         size = sizeof(int);
-        rc = obd_get_info(sbi->ll_mdc_exp, strlen("max_easize"), "max_easize",
-                          &size, lmmsize);
+        rc = obd_get_info(sbi->ll_mdc_exp, sizeof(KEY_MAX_EASIZE),
+                          KEY_MAX_EASIZE, &size, lmmsize);
         if (rc)
                 CERROR("Get max mdsize error rc %d \n", rc);
 
@@ -912,7 +912,7 @@ static int old_lustre_process_log(struct super_block *sb, char *newprofile,
 
         /* Try all connections, but only once. */
         rc = obd_set_info_async(obd->obd_self_export,
-                                strlen("init_recov_bk"), "init_recov_bk",
+                                sizeof(KEY_INIT_RECOV_BACKUP), KEY_INIT_RECOV_BACKUP,
                                 sizeof(recov_bk), &recov_bk, NULL);
         if (rc)
                 GOTO(out_cleanup, rc);
@@ -2026,8 +2026,8 @@ int ll_remount_fs(struct super_block *sb, int *flags, char *data)
 
         if ((*flags & MS_RDONLY) != (sb->s_flags & MS_RDONLY)) {
                 read_only = *flags & MS_RDONLY;
-                err = obd_set_info_async(sbi->ll_mdc_exp, strlen("read-only"),
-                                         "read-only", sizeof(read_only),
+                err = obd_set_info_async(sbi->ll_mdc_exp, sizeof(KEY_READONLY),
+                                         KEY_READONLY, sizeof(read_only),
                                          &read_only, NULL);
                 if (err) {
                         CERROR("Failed to change the read-only flag during "

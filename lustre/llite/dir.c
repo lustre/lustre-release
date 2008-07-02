@@ -430,7 +430,7 @@ int ll_send_mgc_param(struct obd_export *mgc, char *string)
                 return -ENOMEM;
 
         strncpy(msp->mgs_param, string, MGS_PARAM_MAXLEN);
-        rc = obd_set_info_async(mgc, strlen(KEY_SET_INFO), KEY_SET_INFO,
+        rc = obd_set_info_async(mgc, sizeof(KEY_SET_INFO), KEY_SET_INFO,
                                 sizeof(struct mgs_send_param), msp, NULL);
         if (rc)
                 CERROR("Failed to set parameter: %d\n", rc);

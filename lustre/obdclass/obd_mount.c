@@ -593,7 +593,7 @@ static int lustre_start_mgc(struct super_block *sb)
                 recov_bk++;
                 CDEBUG(D_MOUNT, "%s: Set MGC reconnect %d\n", mgcname,recov_bk);
                 rc = obd_set_info_async(obd->obd_self_export,
-                                        strlen(KEY_INIT_RECOV_BACKUP),
+                                        sizeof(KEY_INIT_RECOV_BACKUP),
                                         KEY_INIT_RECOV_BACKUP,
                                         sizeof(recov_bk), &recov_bk, NULL);
                 GOTO(out, rc = 0);
@@ -694,7 +694,7 @@ static int lustre_start_mgc(struct super_block *sb)
         /* Try all connections, but only once. */
         recov_bk = 1;
         rc = obd_set_info_async(obd->obd_self_export,
-                                strlen(KEY_INIT_RECOV_BACKUP),
+                                sizeof(KEY_INIT_RECOV_BACKUP),
                                 KEY_INIT_RECOV_BACKUP,
                                 sizeof(recov_bk), &recov_bk, NULL);
         if (rc)
@@ -813,7 +813,7 @@ static int server_mgc_set_fs(struct obd_device *mgc, struct super_block *sb)
 
         /* cl_mgc_sem in mgc insures we sleep if the mgc_fs is busy */
         rc = obd_set_info_async(mgc->obd_self_export,
-                                strlen("set_fs"), "set_fs",
+                                sizeof(KEY_SET_FS), KEY_SET_FS,
                                 sizeof(*sb), sb, NULL);
         if (rc) {
                 CERROR("can't set_fs %d\n", rc);
@@ -830,7 +830,7 @@ static int server_mgc_clear_fs(struct obd_device *mgc)
         CDEBUG(D_MOUNT, "Unassign mgc disk\n");
 
         rc = obd_set_info_async(mgc->obd_self_export,
-                                strlen("clear_fs"), "clear_fs",
+                                sizeof(KEY_CLEAR_FS), KEY_CLEAR_FS,
                                 0, NULL, NULL);
         RETURN(rc);
 }
@@ -958,7 +958,7 @@ int server_register_target(struct super_block *sb)
         /* Register the target */
         /* FIXME use mgc_process_config instead */
         rc = obd_set_info_async(mgc->u.cli.cl_mgc_mgsexp,
-                                strlen("register_target"), "register_target",
+                                sizeof(KEY_REGISTER_TARGET), KEY_REGISTER_TARGET,
                                 sizeof(*mti), mti, NULL);
         if (rc)
                 GOTO(out, rc);

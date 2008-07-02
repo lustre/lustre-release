@@ -618,7 +618,8 @@ do {                                                                          \
 #define OBD_SLAB_FREE_PTR(ptr, slab)                                          \
         OBD_SLAB_FREE((ptr), (slab), sizeof *(ptr))
 
-#define KEY_IS(str) (keylen >= strlen(str) && strcmp(key, str) == 0)
+#define KEY_IS(str) \
+        (keylen >= (sizeof(str) - 1) && memcmp(key, str, sizeof(str) - 1) == 0)
 
 /* Wrapper for contiguous page frame allocation */
 #define OBD_PAGES_ALLOC(ptr, order, gfp_mask)                                 \

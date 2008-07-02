@@ -2467,7 +2467,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
 
         lov_getref(obddev);
 
-        if (KEY_IS("lock_to_stripe")) {
+        if (KEY_IS(KEY_LOCK_TO_STRIPE)) {
                 struct {
                         char name[16];
                         struct ldlm_lock *lock;
@@ -2565,11 +2565,11 @@ static int lov_set_info_async(struct obd_export *exp, obd_count keylen,
                 incr = sizeof(struct obd_id_info);
                 do_inactive = 1;
                 next_id = 1;
-        } else if (KEY_IS("checksum")) {
+        } else if (KEY_IS(KEY_CHECKSUM)) {
                 do_inactive = 1;
-        } else if (KEY_IS(KEY_MDS_CONN) || KEY_IS("unlinked")) {
+        } else if (KEY_IS(KEY_MDS_CONN) || KEY_IS(KEY_UNLINKED)) {
                 check_uuid = val ? 1 : 0;
-        } else if (KEY_IS("evict_by_nid")) {
+        } else if (KEY_IS(KEY_EVICT_BY_NID)) {
                 /* use defaults:
                 do_inactive = incr = 0;
                  */

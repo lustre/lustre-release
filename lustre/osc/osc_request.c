@@ -3458,12 +3458,12 @@ static int osc_get_info(struct obd_export *exp, obd_count keylen,
         if (!vallen || !val)
                 RETURN(-EFAULT);
 
-        if (KEY_IS("lock_to_stripe")) {
+        if (KEY_IS(KEY_LOCK_TO_STRIPE)) {
                 __u32 *stripe = val;
                 *vallen = sizeof(*stripe);
                 *stripe = 0;
                 RETURN(0);
-        } else if (KEY_IS("last_id")) {
+        } else if (KEY_IS(KEY_LAST_ID)) {
                 struct ptlrpc_request *req;
                 obd_id *reply;
                 char *bufs[2] = { NULL, key };
@@ -3547,7 +3547,7 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
 
-        if (KEY_IS("unlinked")) {
+        if (KEY_IS(KEY_UNLINKED)) {
                 struct osc_creator *oscc = &obd->u.cli.cl_oscc;
                 spin_lock(&oscc->oscc_lock);
                 oscc->oscc_flags &= ~OSCC_FLAG_NOSPC;
@@ -3567,7 +3567,7 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
 
-        if (KEY_IS("checksum")) {
+        if (KEY_IS(KEY_CHECKSUM)) {
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
                 exp->exp_obd->u.cli.cl_checksum = (*(int *)val) ? 1 : 0;

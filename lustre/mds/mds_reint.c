@@ -1790,8 +1790,8 @@ cleanup:
         rc = mds_finish_transno(mds, dparent ? dparent->d_inode : NULL,
                                 handle, req, rc, 0, 0);
         if (!rc)
-                (void)obd_set_info_async(mds->mds_osc_exp, strlen("unlinked"),
-                                         "unlinked", 0, NULL, NULL);
+                (void)obd_set_info_async(mds->mds_osc_exp, sizeof(KEY_UNLINKED),
+                                         KEY_UNLINKED, 0, NULL, NULL);
         switch(cleanup_phase) {
         case 5: /* pending_dir semaphore */
                 UNLOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode);
