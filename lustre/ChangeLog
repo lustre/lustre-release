@@ -2,7 +2,7 @@ tbd Sun Microsystems, Inc.
 	* version 1.8.0
 	* Support for kernels:
 	 2.6.5-7.311 (SLES 9),
-	 2.6.9-67.0.15.EL (RHEL 4),
+	 2.6.9-67.0.20.EL (RHEL 4),
 	 2.6.16.54-0.2.5 (SLES 10),
          2.6.18-53.1.21.el5 (RHEL 5),
 	 2.6.22.14 vanilla (kernel.org)
@@ -23,6 +23,10 @@ tbd Sun Microsystems, Inc.
 	  the following command on the MDS:
 	  	'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
 	  For more information, please refer to bugzilla 13904.
+
+Severity   : enhancement
+Bugzilla   : 16189
+Description: Update to RHEL4 kernel-2.6.9-67.0.20.
 
 Severity   : normal
 Bugzilla   : 12653
