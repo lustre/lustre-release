@@ -57,5 +57,6 @@ ino_t ll_fid_build_ino(struct ll_sb_info *sbi,
         if (unlikely(ino == 0))
                 /* the first result ino is 0xFFC001, so this is rarely used */
                 ino = 0xffbcde; 
+        ino = ino | 0x80000000;
         RETURN(ino);
 }

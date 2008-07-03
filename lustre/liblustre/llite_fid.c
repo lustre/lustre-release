@@ -57,6 +57,17 @@ unsigned long llu_fid_build_ino(struct llu_sb_info *sbi,
 {
         unsigned long ino;
         ENTRY;
+
+        if (fid_is_igif(fid)) {
+                ino = lu_igif_ino(fid);
+                RETURN(ino);
+        }
+
         ino = fid_flatten(fid);
-        RETURN(ino & 0x7fffffff);
+
+        if (unlikely(ino == 0))
+                /* the first result ino is 0xFFC001, so this is rarely used */
+                ino = 0xffbcde;
+        ino = ino | 0x80000000;
+        RETURN(ino);
 }
