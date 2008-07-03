@@ -1318,7 +1318,7 @@ static int ll_file_get_tree_lock(struct ll_lock_tree *tree, struct file *file,
         struct inode * inode = file->f_dentry->d_inode;
         ENTRY;
 
-        append = (rw == WRITE) && (file->f_flags & O_APPEND);
+        append = (rw == OBD_BRW_WRITE) && (file->f_flags & O_APPEND);
 
         if (append || !ll_is_file_contended(file)) {
                 struct ll_lock_tree_node *node;
@@ -1328,7 +1328,7 @@ static int ll_file_get_tree_lock(struct ll_lock_tree *tree, struct file *file,
                 if (file->f_flags & O_NONBLOCK)
                         ast_flags |= LDLM_FL_BLOCK_NOWAIT;
                 node = ll_node_from_inode(inode, start, end,
-                                          (rw == WRITE) ? LCK_PW : LCK_PR);
+                                          (rw == OBD_BRW_WRITE) ? LCK_PW : LCK_PR);
                 if (IS_ERR(node)) {
                         rc = PTR_ERR(node);
                         GOTO(out, rc);
@@ -1347,6 +1347,123 @@ out:
         return rc;
 }
 
+static int ll_reget_short_lock(struct page *page, int rw,
+                               obd_off start, obd_off end,
+                               void **cookie)
+{
+        struct ll_async_page *llap;
+        struct obd_export *exp;
+        struct inode *inode = page->mapping->host;
+
+        ENTRY;
+
+        exp = ll_i2dtexp(inode);
+        if (exp == NULL)
+                RETURN(0);
+
+        llap = llap_cast_private(page);
+        if (llap == NULL)
+                RETURN(0);
+
+        RETURN(obd_reget_short_lock(exp, ll_i2info(inode)->lli_smd,
+                                    &llap->llap_cookie, rw, start, end,
+                                    cookie));
+}
+
+static void ll_release_short_lock(struct inode *inode, obd_off end,
+                                  void *cookie, int rw)
+{
+        struct obd_export *exp;
+        int rc;
+
+        exp = ll_i2dtexp(inode);
+        if (exp == NULL)
+                return;
+
+        rc = obd_release_short_lock(exp, ll_i2info(inode)->lli_smd, end,
+                                    cookie, rw);
+        if (rc < 0)
+                CERROR("unlock failed (%d)\n", rc);
+}
+
+static inline int ll_file_get_fast_lock(struct file *file,
+                                        obd_off ppos, obd_off end,
+                                        char *buf, void **cookie, int rw)
+{
+        int rc = 0;
+        struct page *page;
+
+        ENTRY;
+
+        if (!ll_region_mapped((unsigned long)buf, end - ppos)) {
+                page = find_lock_page(file->f_dentry->d_inode->i_mapping,
+                                      ppos >> CFS_PAGE_SHIFT);
+                if (page) {
+                        if (ll_reget_short_lock(page, rw, ppos, end, cookie))
+                                rc = 1;
+
+                        unlock_page(page);
+                        page_cache_release(page);
+                }
+        }
+
+        RETURN(rc);
+}
+
+static inline void ll_file_put_fast_lock(struct inode *inode, obd_off end,
+                                         void *cookie, int rw)
+{
+        ll_release_short_lock(inode, end, cookie, rw);
+}
+
+enum ll_lock_style {
+        LL_LOCK_STYLE_NOLOCK   = 0,
+        LL_LOCK_STYLE_FASTLOCK = 1,
+        LL_LOCK_STYLE_TREELOCK = 2
+};
+
+static inline int ll_file_get_lock(struct file *file, obd_off ppos,
+                                   obd_off end, char *buf, void **cookie,
+                                   struct ll_lock_tree *tree, int rw)
+{
+        int rc;
+
+        ENTRY;
+
+        if (ll_file_get_fast_lock(file, ppos, end, buf, cookie, rw))
+                RETURN(LL_LOCK_STYLE_FASTLOCK);
+
+        rc = ll_file_get_tree_lock(tree, file, buf, ppos - end, ppos, end, rw);
+        /* rc: 1 for tree lock, 0 for no lock, <0 for error */
+        switch (rc) {
+        case 1:
+                RETURN(LL_LOCK_STYLE_TREELOCK);
+        case 0:
+                RETURN(LL_LOCK_STYLE_NOLOCK);
+        }
+
+        /* an error happened if we reached this point, rc = -errno here */
+        RETURN(rc);
+}
+
+static inline void ll_file_put_lock(struct inode *inode, obd_off end,
+                                    enum ll_lock_style lock_style,
+                                    void *cookie, struct ll_lock_tree *tree,
+                                    int rw)
+
+{
+        switch (lock_style) {
+        case LL_LOCK_STYLE_TREELOCK:
+                ll_tree_unlock(tree);
+                break;
+        case LL_LOCK_STYLE_FASTLOCK:
+                ll_file_put_fast_lock(inode, end, cookie, rw);
+                break;
+        default:
+                CERROR("invalid locking style (%d)\n", lock_style);
+        }
+}
+
 static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
                             loff_t *ppos)
 {
@@ -1358,9 +1475,10 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
         struct ost_lvb lvb;
         struct ll_ra_read bead;
         int ra = 0;
-        loff_t end;
+        obd_off end;
         ssize_t retval, chunk, sum = 0;
-        int tree_locked;
+        int lock_style;
+        void *cookie;
 
         __u64 kms;
         ENTRY;
@@ -1402,8 +1520,7 @@ repeat:
         if (sbi->ll_max_rw_chunk != 0) {
                 /* first, let's know the end of the current stripe */
                 end = *ppos;
-                obd_extent_calc(sbi->ll_dt_exp, lsm, OBD_CALC_STRIPE_END, 
-                                (obd_off *)&end);
+                obd_extent_calc(sbi->ll_dt_exp, lsm, OBD_CALC_STRIPE_END, &end);
 
                 /* correct, the end is beyond the request */
                 if (end > *ppos + count - 1)
@@ -1416,10 +1533,10 @@ repeat:
                 end = *ppos + count - 1;
         }
 
-        tree_locked = ll_file_get_tree_lock(&tree, file, buf,
-                                            count, *ppos, end, READ);
-        if (tree_locked < 0)
-                GOTO(out, retval = tree_locked);
+        lock_style = ll_file_get_lock(file, (obd_off)(*ppos), end,
+                                      buf, &cookie, &tree, OBD_BRW_READ);
+        if (lock_style < 0)
+                GOTO(out, retval = lock_style);
 
         ll_inode_size_lock(inode, 1);
         /*
@@ -1450,8 +1567,9 @@ repeat:
                 ll_inode_size_unlock(inode, 1);
                 retval = ll_glimpse_size(inode, LDLM_FL_BLOCK_GRANTED);
                 if (retval) {
-                        if (tree_locked)
-                                ll_tree_unlock(&tree);
+                        if (lock_style != LL_LOCK_STYLE_NOLOCK)
+                                ll_file_put_lock(inode, end, lock_style,
+                                                 cookie, &tree, OBD_BRW_READ);
                         goto out;
                 }
         } else {
@@ -1470,7 +1588,7 @@ repeat:
         CDEBUG(D_INODE, "Read ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
                inode->i_ino, chunk, *ppos, i_size_read(inode));
 
-        if (tree_locked) {
+        if (lock_style != LL_LOCK_STYLE_NOLOCK) {
                 /* turn off the kernel's read-ahead */
                 file->f_ra.ra_pages = 0;
 
@@ -1485,7 +1603,8 @@ repeat:
                 /* BUG: 5972 */
                 file_accessed(file);
                 retval = generic_file_read(file, buf, chunk, ppos);
-                ll_tree_unlock(&tree);
+                ll_file_put_lock(inode, end, lock_style, cookie, &tree, 
+                                 OBD_BRW_READ);
         } else {
                 retval = ll_file_lockless_io(file, buf, chunk, ppos, READ);
         }
@@ -1570,7 +1689,7 @@ repeat:
         }
 
         tree_locked = ll_file_get_tree_lock(&tree, file, buf, count,
-                                            lock_start, lock_end, WRITE);
+                                            lock_start, lock_end, OBD_BRW_WRITE);
         if (tree_locked < 0)
                 GOTO(out, retval = tree_locked);
 

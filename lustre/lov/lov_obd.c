@@ -2836,6 +2836,47 @@ void lov_stripe_unlock(struct lov_stripe_md *md)
 }
 EXPORT_SYMBOL(lov_stripe_unlock);
 
+static int lov_reget_short_lock(struct obd_export *exp,
+                                struct lov_stripe_md *lsm,
+                                void **res, int rw,
+                                obd_off start, obd_off end,
+                                void **cookie)
+{
+        struct lov_async_page *l = *res;
+        obd_off stripe_start, stripe_end = start;
+
+        ENTRY;
+
+        /* ensure we don't cross stripe boundaries */
+        lov_extent_calc(exp, lsm, OBD_CALC_STRIPE_END, &stripe_end);
+        if (stripe_end <= end)
+                RETURN(0);
+
+        /* map the region limits to the object limits */
+        lov_stripe_offset(lsm, start, l->lap_stripe, &stripe_start);
+        lov_stripe_offset(lsm, end, l->lap_stripe, &stripe_end);
+
+        RETURN(obd_reget_short_lock(exp->exp_obd->u.lov.lov_tgts[lsm->
+                                    lsm_oinfo[l->lap_stripe]->loi_ost_idx]->
+                                    ltd_exp, NULL, &l->lap_sub_cookie,
+                                    rw, stripe_start, stripe_end, cookie));
+}
+
+static int lov_release_short_lock(struct obd_export *exp,
+                                  struct lov_stripe_md *lsm, obd_off end,
+                                  void *cookie, int rw)
+{
+        int stripe;
+
+        ENTRY;
+
+        stripe = lov_stripe_number(lsm, end);
+
+        RETURN(obd_release_short_lock(exp->exp_obd->u.lov.lov_tgts[lsm->
+                                      lsm_oinfo[stripe]->loi_ost_idx]->
+                                      ltd_exp, NULL, end, cookie, rw));
+}
+
 struct obd_ops lov_obd_ops = {
         .o_owner               = THIS_MODULE,
         .o_setup               = lov_setup,
@@ -2858,6 +2899,8 @@ struct obd_ops lov_obd_ops = {
         .o_brw                 = lov_brw,
         .o_brw_async           = lov_brw_async,
         .o_prep_async_page     = lov_prep_async_page,
+        .o_reget_short_lock    = lov_reget_short_lock,
+        .o_release_short_lock  = lov_release_short_lock,
         .o_queue_async_io      = lov_queue_async_io,
         .o_set_async_flags     = lov_set_async_flags,
         .o_queue_group_io      = lov_queue_group_io,

@@ -290,6 +290,11 @@ static struct vm_area_struct * our_vma(unsigned long addr, size_t count)
         RETURN(ret);
 }
 
+int ll_region_mapped(unsigned long addr, size_t count)
+{
+        return !!our_vma(addr, count);
+}
+
 int lt_get_mmap_locks(struct ll_lock_tree *tree,
                       unsigned long addr, size_t count)
 {
