@@ -11,3 +11,7 @@ configure
 COPYING
 INSTALL
 lustre-iokit.spec
+install-sh
+missing
+mkinstalldirs
+lustre-iokit*.tar.gz
