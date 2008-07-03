@@ -1,6 +1,0 @@
-MODULES := kopeniblnd
-kopeniblnd-objs := openiblnd.o openiblnd_cb.o openiblnd_modparams.o
-
-EXTRA_POST_CFLAGS := @OPENIBCPPFLAGS@
-
-@INCLUDE_RULES@
