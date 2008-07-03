@@ -130,7 +130,7 @@ int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
 int llog_cancel(struct llog_ctxt *, struct lov_stripe_md *lsm,
                 int count, struct llog_cookie *cookies, int flags);
 
-int llog_obd_origin_setup(struct obd_device *obd, struct obd_llog_group *olg, 
+int llog_obd_origin_setup(struct obd_device *obd, struct obd_llog_group *olg,
                           int index, struct obd_device *disk_obd, int count,
                           struct llog_logid *logid);
 int llog_obd_origin_cleanup(struct llog_ctxt *ctxt);
@@ -140,8 +140,8 @@ int llog_obd_origin_add(struct llog_ctxt *ctxt,
 
 int llog_cat_initialize(struct obd_device *obd, struct obd_llog_group *olg,
                         int count, struct obd_uuid *uuid);
-int obd_llog_init(struct obd_device *obd, int group,
-                  struct obd_device *disk_obd, int count, 
+int obd_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
+                  struct obd_device *disk_obd, int count,
                   struct llog_catid *logid, struct obd_uuid *uuid);
 
 int obd_llog_finish(struct obd_device *obd, int count);

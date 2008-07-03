@@ -1143,6 +1143,12 @@ Details    : The direct IO path doesn't call check_rpcs to submit a new RPC once
 	     one is completed. As a result, some RPCs are stuck in the queue
 	     and are never sent.
 
+Severity   : normal
+Bugzilla   : 14629 
+Description: filter threads hungs on waiting journal commit  
+Details    : Cleanup filter group llog code, then only filter group llog will
+	     be only created in the MDS/OST syncing process.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

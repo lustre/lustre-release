@@ -102,7 +102,7 @@ static struct llog_operations mds_size_repl_logops = {
         lop_cancel:     mds_llog_repl_cancel,
 };
 
-int mds_llog_init(struct obd_device *obd, int group,
+int mds_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                   struct obd_device *tgt, int count, struct llog_catid *logid, 
                   struct obd_uuid *uuid)
 {
@@ -110,7 +110,7 @@ int mds_llog_init(struct obd_device *obd, int group,
         int rc;
         ENTRY;
 
-        LASSERT(group == OBD_LLOG_GROUP);
+        LASSERT(olg == &obd->obd_olg);
         rc = llog_setup(obd, &obd->obd_olg, LLOG_MDS_OST_ORIG_CTXT, tgt, 0, NULL,
                         &mds_ost_orig_logops);
         if (rc)
@@ -121,7 +121,7 @@ int mds_llog_init(struct obd_device *obd, int group,
         if (rc)
                 RETURN(rc);
 
-        rc = obd_llog_init(lov_obd, group, tgt, count, logid, uuid);
+        rc = obd_llog_init(lov_obd, &lov_obd->obd_olg, tgt, count, logid, uuid);
         if (rc)
                 CERROR("lov_llog_init err %d\n", rc);
 

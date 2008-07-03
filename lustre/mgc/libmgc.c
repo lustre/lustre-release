@@ -51,7 +51,7 @@ static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (rc)
                 GOTO(err_decref, rc);
 
-        rc = obd_llog_init(obd, OBD_LLOG_GROUP, obd, 0, NULL, NULL);
+        rc = obd_llog_init(obd, &obd->obd_olg, obd, 0, NULL, NULL);
         if (rc) {
                 CERROR("failed to setup llogging subsystems\n");
                 GOTO(err_cleanup, rc);
@@ -93,24 +93,22 @@ static int mgc_cleanup(struct obd_device *obd)
         ENTRY;
 
         LASSERT(cli->cl_mgc_vfsmnt == NULL);
-        
+
         ptlrpcd_decref();
 
         rc = client_obd_cleanup(obd);
         RETURN(rc);
 }
 
-static int mgc_llog_init(struct obd_device *obd, int group,
+static int mgc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                          struct obd_device *tgt, int count, 
                          struct llog_catid *logid, struct obd_uuid *uuid)
 {
         struct llog_ctxt *ctxt;
-        struct obd_llog_group *olg = &obd->obd_olg;
         int rc;
         ENTRY;
 
-        LASSERT(group == olg->olg_group);
-        LASSERT(group == OBD_LLOG_GROUP);
+        LASSERT(olg == &obd->obd_olg);
         rc = llog_setup(obd, olg, LLOG_CONFIG_REPL_CTXT, tgt, 0, NULL,
                         &llog_client_ops);
         if (rc == 0) {

@@ -3713,13 +3713,14 @@ static struct llog_operations osc_size_repl_logops = {
 };
 
 static struct llog_operations osc_mds_ost_orig_logops;
-static int osc_llog_init(struct obd_device *obd, int group,
+static int osc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                          struct obd_device *tgt, int count,
                          struct llog_catid *catid, struct obd_uuid *uuid)
 {
         int rc;
         ENTRY;
-        LASSERT(group == OBD_LLOG_GROUP);
+
+        LASSERT(olg == &obd->obd_olg);
         spin_lock(&obd->obd_dev_lock);
         if (osc_mds_ost_orig_logops.lop_setup != llog_obd_origin_setup) {
                 osc_mds_ost_orig_logops = llog_lvfs_ops;

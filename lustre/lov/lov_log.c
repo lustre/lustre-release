@@ -182,7 +182,7 @@ static struct llog_operations lov_size_repl_logops = {
         lop_cancel: lov_llog_repl_cancel
 };
 
-int lov_llog_init(struct obd_device *obd, int group, 
+int lov_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                   struct obd_device *tgt, int count, struct llog_catid *logid, 
                   struct obd_uuid *uuid)
 {
@@ -191,13 +191,13 @@ int lov_llog_init(struct obd_device *obd, int group,
         int i, rc = 0, err = 0;
         ENTRY;
 
-        LASSERT(group == OBD_LLOG_GROUP);
-        rc = llog_setup(obd, &obd->obd_olg, LLOG_MDS_OST_ORIG_CTXT, tgt, 0, NULL,
+        LASSERT(olg == &obd->obd_olg);
+        rc = llog_setup(obd, olg, LLOG_MDS_OST_ORIG_CTXT, tgt, 0, NULL,
                         &lov_mds_ost_orig_logops);
         if (rc)
                 RETURN(rc);
 
-        rc = llog_setup(obd, &obd->obd_olg, LLOG_SIZE_REPL_CTXT, tgt, 0, NULL,
+        rc = llog_setup(obd, olg, LLOG_SIZE_REPL_CTXT, tgt, 0, NULL,
                         &lov_size_repl_logops);
         if (rc)
                 RETURN(rc);
@@ -212,7 +212,7 @@ int lov_llog_init(struct obd_device *obd, int group,
                 CDEBUG(D_CONFIG, "init %d/%d\n", i, count);
                 LASSERT(lov->lov_tgts[i]->ltd_exp);
                 child = lov->lov_tgts[i]->ltd_exp->exp_obd;
-                rc = obd_llog_init(child, group, tgt, 1, logid + i, uuid);
+                rc = obd_llog_init(child, &child->obd_olg, tgt, 1, logid + i, uuid);
                 if (rc) {
                         CERROR("error osc_llog_init idx %d osc '%s' tgt '%s' "
                                "(rc=%d)\n", i, child->obd_name, tgt->obd_name,

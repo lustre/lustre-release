@@ -861,6 +861,7 @@ struct obd_llog_group {
         cfs_waitq_t        olg_waitq;
         spinlock_t         olg_lock;
         struct obd_export *olg_exp;
+        int                olg_initializing;
 };
 
 /* corresponds to one of the obd's */
@@ -1275,7 +1276,7 @@ struct obd_ops {
                              int cmd, obd_off *);
 
         /* llog related obd_methods */
-        int (*o_llog_init)(struct obd_device *obd, int group,
+        int (*o_llog_init)(struct obd_device *obd, struct obd_llog_group *grp,
                            struct obd_device *disk_obd, int count,
                            struct llog_catid *logid, struct obd_uuid *uuid);
         int (*o_llog_finish)(struct obd_device *obd, int count);

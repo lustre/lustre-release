@@ -295,7 +295,7 @@ int llog_obd_origin_setup(struct obd_device *obd, struct obd_llog_group *olg,
 
         LASSERT(olg != NULL);
         ctxt = llog_group_get_ctxt(olg, index);
-        
+
         LASSERT(ctxt);
         llog_gen_init(ctxt);
 
@@ -406,7 +406,7 @@ int llog_cat_initialize(struct obd_device *obd, struct obd_llog_group *olg,
                 GOTO(out, rc);
         }
 
-        rc = obd_llog_init(obd, olg->olg_group, obd, count, idarray, uuid);
+        rc = obd_llog_init(obd, olg, obd, count, idarray, uuid);
         if (rc) {
                 CERROR("rc: %d\n", rc);
                 GOTO(out, rc);
@@ -425,8 +425,8 @@ int llog_cat_initialize(struct obd_device *obd, struct obd_llog_group *olg,
 }
 EXPORT_SYMBOL(llog_cat_initialize);
 
-int obd_llog_init(struct obd_device *obd, int group, 
-                  struct obd_device *disk_obd, int count, 
+int obd_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
+                  struct obd_device *disk_obd, int count,
                   struct llog_catid *logid, struct obd_uuid *uuid)
 {
         int rc;
@@ -434,7 +434,7 @@ int obd_llog_init(struct obd_device *obd, int group,
         OBD_CHECK_DT_OP(obd, llog_init, 0);
         OBD_COUNTER_INCREMENT(obd, llog_init);
 
-        rc = OBP(obd, llog_init)(obd, group, disk_obd, count, logid, uuid);
+        rc = OBP(obd, llog_init)(obd, olg, disk_obd, count, logid, uuid);
         RETURN(rc);
 }
 EXPORT_SYMBOL(obd_llog_init);
