@@ -69,7 +69,7 @@ struct proc_dir_entry *lprocfs_srch(struct proc_dir_entry *head,
 
                 temp = temp->next;
         }
-        LPROCFS_ENTRY();
+        LPROCFS_EXIT();
         return NULL;
 }
 
