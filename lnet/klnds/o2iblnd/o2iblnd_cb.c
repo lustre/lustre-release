@@ -505,7 +505,7 @@ kiblnd_rx_complete (kib_rx_t *rx, int status, int nob)
         LASSERT (net != NULL);
         LASSERT (rx->rx_nob < 0);               /* was posted */
         rx->rx_nob = 0;                         /* isn't now */
-        
+
         if (conn->ibc_state > IBLND_CONN_ESTABLISHED)
                 goto ignore;
 
@@ -1258,7 +1258,7 @@ kiblnd_init_rdma (lnet_ni_t *ni, kib_tx_t *tx, int type,
                         dstfrag++;
                         dstidx++;
                 }
-                
+
                 tx->tx_nwrq++;
         }
 
@@ -1872,7 +1872,7 @@ kiblnd_peer_notify (kib_peer_t *peer)
         time_t        last_alive = 0;
         int           error = 0;
         unsigned long flags;
-        
+
         read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
         if (list_empty(&peer->ibp_conns) &&
@@ -1881,14 +1881,14 @@ kiblnd_peer_notify (kib_peer_t *peer)
             peer->ibp_error != 0) {
                 error = peer->ibp_error;
                 peer->ibp_error = 0;
-                
+
                 last_alive = cfs_time_current_sec() -
                              cfs_duration_sec(cfs_time_current() -
                                               peer->ibp_last_alive);
         }
-        
+
         read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
-        
+
         if (error != 0)
                 lnet_notify(peer->ibp_ni,
                             peer->ibp_nid, 0, last_alive);
@@ -2780,14 +2780,14 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
                 kiblnd_conn_decref(conn);
                 return 0;
 
-	case RDMA_CM_EVENT_DEVICE_REMOVAL:
-                LCONSOLE_ERROR_MSG(0x131, 
+        case RDMA_CM_EVENT_DEVICE_REMOVAL:
+                LCONSOLE_ERROR_MSG(0x131,
                                    "Received notification of device removal\n"
                                    "Please shutdown LNET to allow this to proceed\n");
                 /* Can't remove network from underneath LNET for now, so I have
                  * to ignore this */
-		return 0;
-	}
+                return 0;
+        }
 }
 
 int
@@ -2807,7 +2807,7 @@ kiblnd_check_txs (kib_conn_t *conn, struct list_head *txs)
                 } else {
                         LASSERT (!tx->tx_queued);
                         LASSERT (tx->tx_waiting || tx->tx_sending != 0);
-                }                        
+                }
 
                 if (time_after_eq (jiffies, tx->tx_deadline)) {
                         timed_out = 1;

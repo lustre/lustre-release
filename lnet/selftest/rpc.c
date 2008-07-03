@@ -402,11 +402,11 @@ srpc_post_active_rdma(int portal, __u64 matchbits, void *buf, int len,
         /* this is kind of an abuse of the LNET_MD_OP_{PUT,GET} options.
          * they're only meaningful for MDs attached to an ME (i.e. passive
          * buffers... */
-	if ((options & LNET_MD_OP_PUT) != 0) {
+        if ((options & LNET_MD_OP_PUT) != 0) {
                 rc = LNetPut(self, *mdh, LNET_NOACK_REQ, peer,
                              portal, matchbits, 0, 0);
         } else {
-	        LASSERT ((options & LNET_MD_OP_GET) != 0);
+                LASSERT ((options & LNET_MD_OP_GET) != 0);
 
                 rc = LNetGet(self, *mdh, peer, portal, matchbits, 0);
         }
