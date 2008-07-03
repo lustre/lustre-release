@@ -7,8 +7,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 2108 9789 3637 9789 3561 12622 12653 12653 5188 10764
-ALWAYS_EXCEPT="                42a  42b  42c  42d  45   51d   65a   65e   68   75   $SANITY_EXCEPT"
+# bug number for skipped test: 2108 9789 3637 9789 3561 12622 12653 12653 5188 10764 16260
+ALWAYS_EXCEPT="                42a  42b  42c  42d  45   51d   65a   65e   68   75    119d  $SANITY_EXCEPT"
 # bug number for skipped test: 2108 9789 3637 9789 3561 5188/5749 1443
 #ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27m 42a 42b 42c 42d 45 68 76"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
@@ -4666,8 +4666,8 @@ run_test 119c "Testing for direct read hitting hole"
 
 test_119d() # bug 15950
 {
-        MAX_RPCS_IN_FLIGHT=`$LCTL get_param -n osc.*OST0000-osc-*.max_rpcs_in_flight`
-        $LCTL set_param -n osc.*OST0000-osc-*.max_rpcs_in_flight 1
+        MAX_RPCS_IN_FLIGHT=`$LCTL get_param -n osc.*OST0000-osc-[^mM]*.max_rpcs_in_flight`
+        $LCTL set_param -n osc.*OST0000-osc-[^mM]*.max_rpcs_in_flight 1
         BSIZE=1048576
         $SETSTRIPE $DIR/$tfile -i 0 -c 1 || error "setstripe failed"
         $DIRECTIO write $DIR/$tfile 0 1 $BSIZE || error "first directio failed"
@@ -4685,7 +4685,7 @@ test_119d() # bug 15950
         [ -n "`ps h -p $pid_reads -o comm`" ] && \
         error "the read rpcs have not completed in 2s"
         rm -f $DIR/$tfile
-        $LCTL set_param -n osc.*OST0000-osc-*.max_rpcs_in_flight $MAX_RPCS_IN_FLIGHT
+        $LCTL set_param -n osc.*OST0000-osc-[^mM]*.max_rpcs_in_flight $MAX_RPCS_IN_FLIGHT
 }
 run_test 119d "The DIO path should try to send a new rpc once one is completed"
 
