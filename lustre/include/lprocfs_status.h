@@ -505,14 +505,14 @@ extern struct rw_semaphore _lprocfs_lock;
  * the import in a client obd_device for a lprocfs entry */
 #define LPROCFS_CLIMP_CHECK(obd) do {           \
         typecheck(struct obd_device *, obd);    \
-        mutex_down(&(obd)->u.cli.cl_sem);       \
+        down_read(&(obd)->u.cli.cl_sem);        \
         if ((obd)->u.cli.cl_import == NULL) {   \
-             mutex_up(&(obd)->u.cli.cl_sem);    \
+             up_read(&(obd)->u.cli.cl_sem);     \
              return -ENODEV;                    \
         }                                       \
 } while(0)
 #define LPROCFS_CLIMP_EXIT(obd)                 \
-        mutex_up(&(obd)->u.cli.cl_sem);
+        up_read(&(obd)->u.cli.cl_sem);
 
 
 /* write the name##_seq_show function, call LPROC_SEQ_FOPS_RO for read-only 

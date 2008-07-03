@@ -3347,16 +3347,29 @@ static int osc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
 {
         struct obd_statfs     *msfs;
         struct ptlrpc_request *req;
+        struct obd_import     *imp = NULL;
         int rc;
         ENTRY;
 
+        /*Since the request might also come from lprocfs, so we need 
+         *sync this with client_disconnect_export Bug15684*/
+        down_read(&obd->u.cli.cl_sem);
+        if (obd->u.cli.cl_import)
+                imp = class_import_get(obd->u.cli.cl_import);
+        up_read(&obd->u.cli.cl_sem);
+        if (!imp)
+                RETURN(-ENODEV);
+        
         /* We could possibly pass max_age in the request (as an absolute
          * timestamp or a "seconds.usec ago") so the target can avoid doing
          * extra calls into the filesystem if that isn't necessary (e.g.
          * during mount that would help a bit).  Having relative timestamps
          * is not so great if request processing is slow, while absolute
          * timestamps are not ideal because they need time synchronization. */
-        req = ptlrpc_request_alloc(obd->u.cli.cl_import, &RQF_OST_STATFS);
+        req = ptlrpc_request_alloc(imp, &RQF_OST_STATFS);
+        
+        class_import_put(imp);
+        
         if (req == NULL)
                 RETURN(-ENOMEM);
 
@@ -3966,12 +3979,12 @@ static int osc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                         class_destroy_import(imp);
                         obd->u.cli.cl_import = NULL;
                 }
-                break;
-        }
-        case OBD_CLEANUP_SELF_EXP:
                 rc = obd_llog_finish(obd, 0);
                 if (rc != 0)
                         CERROR("failed to cleanup llogging subsystems\n");
+                break;
+        }
+        case OBD_CLEANUP_SELF_EXP:
                 break;
         case OBD_CLEANUP_OBD:
                 break;

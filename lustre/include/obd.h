@@ -386,7 +386,7 @@ struct mdc_rpc_lock;
 struct obd_import;
 struct lustre_cache;
 struct client_obd {
-        struct semaphore         cl_sem;
+        struct rw_semaphore      cl_sem;
         struct obd_uuid          cl_target_uuid;
         struct obd_import       *cl_import; /* ptlrpc connection state */
         int                      cl_conn_count;

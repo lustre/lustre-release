@@ -1149,6 +1149,12 @@ Description: filter threads hungs on waiting journal commit
 Details    : Cleanup filter group llog code, then only filter group llog will
 	     be only created in the MDS/OST syncing process.
 
+Severity   : normal
+Bugzilla   : 15684 
+Description: Procfs and llog threads access destoryed import sometimes. 
+Details    : Sync the import destoryed process with procfs and llog threads by
+	     the import refcount and semaphore.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

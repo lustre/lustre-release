@@ -1212,13 +1212,24 @@ static int mdc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
 {
         struct ptlrpc_request *req;
         struct obd_statfs     *msfs;
+        struct obd_import     *imp = NULL;
         int                    rc;
         ENTRY;
 
-        req = ptlrpc_request_alloc_pack(obd->u.cli.cl_import, &RQF_MDS_STATFS,
+                        
+        /*Since the request might also come from lprocfs, so we need 
+         *sync this with client_disconnect_export Bug15684*/
+        down_read(&obd->u.cli.cl_sem);
+        if (obd->u.cli.cl_import)
+                imp = class_import_get(obd->u.cli.cl_import);
+        up_read(&obd->u.cli.cl_sem);
+        if (!imp)
+                RETURN(-ENODEV);
+        
+        req = ptlrpc_request_alloc_pack(imp, &RQF_MDS_STATFS,
                                         LUSTRE_MDS_VERSION, MDS_STATFS);
         if (req == NULL)
-                RETURN(-ENOMEM);
+                GOTO(output, rc = -ENOMEM);
 
         ptlrpc_request_set_replen(req);
 
@@ -1231,8 +1242,8 @@ static int mdc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         rc = ptlrpc_queue_wait(req);
         if (rc) {
                 /* check connection error first */
-                if (obd->u.cli.cl_import->imp_connect_error)
-                        rc = obd->u.cli.cl_import->imp_connect_error;
+                if (imp->imp_connect_error)
+                        rc = imp->imp_connect_error;
                 GOTO(out, rc);
         }
 
@@ -1244,6 +1255,8 @@ static int mdc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         EXIT;
 out:
         ptlrpc_req_finished(req);
+output:
+        class_import_put(imp);
         return rc;
 }
 
@@ -1584,11 +1597,12 @@ static int mdc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                         class_destroy_import(imp);
                         obd->u.cli.cl_import = NULL;
                 }
-                break;
-        case OBD_CLEANUP_SELF_EXP:
                 rc = obd_llog_finish(obd, 0);
                 if (rc != 0)
                         CERROR("failed to cleanup llogging subsystems\n");
+                break;
+        case OBD_CLEANUP_SELF_EXP:
+                break;
         case OBD_CLEANUP_OBD:
                 break;
         }
