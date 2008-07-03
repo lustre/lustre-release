@@ -35,7 +35,7 @@
 #include <linux/slab.h>
 #include <linux/highmem.h>
 #endif
-#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
 #include <linux/lustre_compat25.h>
 #include <lustre/lustre_idl.h>
 

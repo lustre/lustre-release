@@ -39,7 +39,7 @@
 #include <linux/version.h>
 #include <linux/init.h>
 #include <asm/statfs.h>
-#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
 #include <lustre_fsfilt.h>
 #include <obd.h>
 #include <linux/module.h>

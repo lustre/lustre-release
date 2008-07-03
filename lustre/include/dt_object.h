@@ -40,8 +40,7 @@
  */
 #include <lu_object.h>
 
-#include <libcfs/list.h>
-#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
 
 struct seq_file;
 struct proc_dir_entry;

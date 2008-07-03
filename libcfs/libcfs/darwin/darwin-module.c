@@ -6,7 +6,6 @@
 
 #define DEBUG_SUBSYSTEM S_LNET
 #include <libcfs/libcfs.h>
-#include <libcfs/kp30.h>
 
 int libcfs_ioctl_getdata(char *buf, char *end, void *arg)
 {

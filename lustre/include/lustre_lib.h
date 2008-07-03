@@ -25,7 +25,7 @@
 #ifndef _LUSTRE_LIB_H
 #define _LUSTRE_LIB_H
 
-#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
 #include <lustre/lustre_idl.h>
 #include <lustre_ver.h>
 #include <lustre_cfg.h>
@@ -500,7 +500,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define ECHO_IOC_CANCEL                _IOWR('f', 203, OBD_IOC_DATA_TYPE)
 
 /* XXX _IOWR('f', 250, long) has been defined in
- * lnet/include/libcfs/kp30.h for debug, don't use it
+ * libcfs/include/libcfs/libcfs_private.h for debug, don't use it
  */
 
 /* Until such time as we get_info the per-stripe maximum from the OST,

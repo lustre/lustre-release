@@ -9,7 +9,7 @@
 #ifndef __KERNEL__
 # include <liblustre.h>
 #else
-# include <libcfs/kp30.h>
+# include <libcfs/libcfs.h>
 #endif
 
 #include <obd_support.h>

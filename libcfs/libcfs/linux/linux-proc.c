@@ -54,7 +54,7 @@
 
 # define DEBUG_SUBSYSTEM S_LNET
 
-#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
 #include <asm/div64.h>
 #include "tracefile.h"
 

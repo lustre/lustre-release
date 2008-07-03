@@ -22,7 +22,6 @@
 #define DEBUG_SUBSYSTEM S_LIBCFS
 
 #include <libcfs/libcfs.h>
-#include <libcfs/kp30.h>
 #include <lnet/lnet.h>
 
 #define TDILND_MODULE_NAME L"Tdilnd"

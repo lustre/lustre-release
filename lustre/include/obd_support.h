@@ -23,7 +23,7 @@
 #ifndef _OBD_SUPPORT
 #define _OBD_SUPPORT
 
-#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
 #include <lvfs.h>
 #include <lprocfs_status.h>
 

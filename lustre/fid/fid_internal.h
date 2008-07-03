@@ -30,8 +30,7 @@
 #include <lustre/lustre_idl.h>
 #include <dt_object.h>
 
-#include <libcfs/list.h>
-#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
 
 #include <linux/types.h>
 

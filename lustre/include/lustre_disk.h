@@ -26,6 +26,7 @@
 #ifndef _LUSTRE_DISK_H
 #define _LUSTRE_DISK_H
 
+#include <libcfs/libcfs.h>
 #include <lnet/types.h>
 
 /****************** on-disk files *********************/

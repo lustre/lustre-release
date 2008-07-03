@@ -8,7 +8,7 @@
 #include <linux/module.h>
 #include <linux/kmod.h>
 #include <linux/slab.h>
-#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
 #include <lustre_fsfilt.h>
 
 CFS_LIST_HEAD(fsfilt_types);

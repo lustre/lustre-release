@@ -37,7 +37,6 @@
 
 #include <stdlib.h>
 #include <libcfs/libcfs.h>
-#include <libcfs/kp30.h>
 
 /*
  * Optional debugging (magic stamping and checking ownership) can be added.

@@ -35,7 +35,6 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/libcfs.h>
-#include <libcfs/kp30.h>
 
 /*
  * Kernel APIs for file system in xnu

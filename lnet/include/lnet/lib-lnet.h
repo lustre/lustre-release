@@ -19,8 +19,8 @@
 #error Unsupported Operating System
 #endif
 
+#include <libcfs/libcfs.h>
 #include <lnet/types.h>
-#include <libcfs/kp30.h>
 #include <lnet/lnet.h>
 #include <lnet/lib-types.h>
 

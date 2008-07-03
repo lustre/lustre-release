@@ -23,7 +23,6 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/libcfs.h>
-#include <libcfs/kp30.h>
 
 /*
  * Implementation of cfs_curproc API (see portals/include/libcfs/curproc.h)

@@ -41,7 +41,7 @@
 #include <linux/quotaio_v2.h>
 #include <ext3/xattr.h>
 
-#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
 #include <lustre_fsfilt.h>
 #include <obd.h>
 #include <lustre_quota.h>

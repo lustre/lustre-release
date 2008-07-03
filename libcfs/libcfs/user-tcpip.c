@@ -22,7 +22,6 @@
 #if !defined(__KERNEL__) || !defined(REDSTORM)
 
 #include <libcfs/libcfs.h>
-#include <libcfs/kp30.h>
 
 #include <sys/socket.h>
 #ifdef	HAVE_NETINET_IN_H

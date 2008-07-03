@@ -34,14 +34,13 @@
 #endif
 #define DEBUG_SUBSYSTEM S_OSC
 
-#ifdef __KERNEL__
-# include <libcfs/libcfs.h>
-#else /* __KERNEL__ */
+#include <libcfs/libcfs.h>
+
+#ifndef __KERNEL__
 # include <liblustre.h>
 #endif
 
 #include <lustre_dlm.h>
-#include <libcfs/kp30.h>
 #include <lustre_net.h>
 #include <lustre/lustre_user.h>
 #include <obd_cksum.h>

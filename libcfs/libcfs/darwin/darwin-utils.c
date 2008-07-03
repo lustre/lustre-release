@@ -31,7 +31,7 @@
 #include <sys/fcntl.h>
 #include <lnet/types.h>
 
-#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
 
 #ifndef isspace
 inline int

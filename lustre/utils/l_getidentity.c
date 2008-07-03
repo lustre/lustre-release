@@ -37,7 +37,6 @@
 #include <liblustre.h>
 #include <lustre/lustre_user.h>
 #include <lustre/lustre_idl.h>
-#include <libcfs/kp30.h>
 
 #define PERM_PATHNAME "/etc/lustre/perm.conf"
 

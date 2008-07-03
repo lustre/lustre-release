@@ -33,7 +33,6 @@
 # endif
 #else
 # include <liblustre.h>
-# include <libcfs/kp30.h>
 #endif
 
 #include <obd_class.h>

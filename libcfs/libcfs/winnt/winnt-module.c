@@ -21,7 +21,6 @@
 #define DEBUG_SUBSYSTEM S_LIBCFS
 
 #include <libcfs/libcfs.h>
-#include <libcfs/kp30.h>
 
 #define LIBCFS_MINOR 240
 

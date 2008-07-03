@@ -26,8 +26,8 @@
 
 #define DEBUG_SUBSYSTEM S_LNET
 
+#include <libcfs/libcfs.h>
 #include <lnet/lnet.h>
-#include <libcfs/kp30.h>
 #ifndef __KERNEL__
 #ifdef HAVE_GETHOSTBYNAME
 # include <netdb.h>

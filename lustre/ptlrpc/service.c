@@ -26,7 +26,6 @@
 #define DEBUG_SUBSYSTEM S_RPC
 #ifndef __KERNEL__
 #include <liblustre.h>
-#include <libcfs/kp30.h>
 #endif
 #include <obd_support.h>
 #include <obd_class.h>

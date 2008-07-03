@@ -29,7 +29,6 @@
 # include <liblustre.h>
 #else
 # include <libcfs/libcfs.h>
-# include <libcfs/kp30.h>
 #endif
 
 #include <lustre_dlm.h>

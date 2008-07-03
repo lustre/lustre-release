@@ -38,7 +38,6 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/libcfs.h>
-#include <libcfs/kp30.h>
 
 static __inline__ struct sockaddr_in
 blank_sin()

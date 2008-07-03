@@ -31,7 +31,7 @@
 #include <linux/autoconf.h>
 #endif
 
-#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
 
 /* Prefer the kernel's version, if it exports it, because it might be
  * optimized for this CPU. */

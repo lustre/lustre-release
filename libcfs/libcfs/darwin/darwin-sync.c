@@ -56,7 +56,6 @@
 #endif
 
 #include <libcfs/libcfs.h>
-#include <libcfs/kp30.h>
 
 #define SLASSERT(e) ON_SYNC_DEBUG(LASSERT(e))
 

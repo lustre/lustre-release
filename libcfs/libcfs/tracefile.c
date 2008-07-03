@@ -26,7 +26,6 @@
 #define LUSTRE_TRACEFILE_PRIVATE
 #include "tracefile.h"
 
-#include <libcfs/kp30.h>
 #include <libcfs/libcfs.h>
 
 /* XXX move things up to the top, comment */

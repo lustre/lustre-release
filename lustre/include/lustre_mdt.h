@@ -27,8 +27,7 @@
 #include <lustre_req_layout.h>
 #include <md_object.h>
 #include <dt_object.h>
-#include <libcfs/list.h>
-#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
 
 /*
  * Common thread info for mdt, seq and fld

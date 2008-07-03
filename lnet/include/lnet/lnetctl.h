@@ -21,9 +21,8 @@
 #ifndef _PTLCTL_H_
 #define _PTLCTL_H_
 
-#include <lnet/types.h>
-#include <libcfs/kp30.h>
 #include <libcfs/libcfs.h>
+#include <lnet/types.h>
 
 #define LNET_DEV_ID 0
 #define LNET_DEV_PATH "/dev/lnet"

@@ -27,7 +27,7 @@
 #error Do not #include this file directly. #include <obd_chsum.h> instead
 #endif
 
-#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
 
 #if !defined(__KERNEL__) && defined(HAVE_ADLER)
 #  include <zlib.h>

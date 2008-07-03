@@ -43,7 +43,7 @@
 
 #define DEBUG_SUBSYSTEM S_LNET
 
-#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
 
 #if LWT_SUPPORT
 

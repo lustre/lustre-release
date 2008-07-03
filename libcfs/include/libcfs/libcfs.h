@@ -644,6 +644,8 @@ int cfs_oflags2univ(int flags);
 /* convert universal open flags to local open flags */
 int cfs_univ2oflags(int flags);
 
+#include "libcfs_private.h"
+
 #define _LIBCFS_H
 
 #endif /* _LIBCFS_H */

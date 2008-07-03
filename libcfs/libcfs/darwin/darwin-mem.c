@@ -30,7 +30,6 @@
 #include <sys/malloc.h>
 
 #include <libcfs/libcfs.h>
-#include <libcfs/kp30.h>
 #include "darwin-internal.h"
 
 #if CFS_INDIVIDUAL_ZONE

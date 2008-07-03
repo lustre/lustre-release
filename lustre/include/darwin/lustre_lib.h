@@ -1,4 +1,4 @@
-/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  *  Copyright (C) 2001 Cluster File Systems, Inc. <braam@clusterfs.com>
@@ -31,7 +31,6 @@
 
 #include <string.h>
 #include <libcfs/libcfs.h>
-#include <libcfs/kp30.h> 
 
 #ifndef LP_POISON
 #define LI_POISON ((int)0x5a5a5a5a)

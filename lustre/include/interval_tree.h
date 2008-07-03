@@ -29,7 +29,7 @@
 #define _INTERVAL_H__
 
 #include <libcfs/types.h>  /* __u8, __u64 etc. */
-#include <libcfs/kp30.h>   /* LASSERT. */
+#include <libcfs/libcfs.h>   /* LASSERT. */
 
 struct interval_node {
         struct interval_node   *in_left;

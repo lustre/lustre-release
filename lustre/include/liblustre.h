@@ -34,9 +34,8 @@
 #define __LINUX_SPINLOCK_H
 #endif
 
-#include <libcfs/list.h>
+#include <libcfs/libcfs.h>
 #include <lnet/lnet.h>
-#include <libcfs/kp30.h>
 #include <libcfs/user-bitops.h>
 
 #include <sys/mman.h>
@@ -66,9 +65,9 @@
 #include <fcntl.h>
 #include <assert.h>
 
+#include <libcfs/libcfs.h>
 #include <libcfs/list.h>
 #include <lnet/lnet.h>
-#include <libcfs/kp30.h>
 #include <libcfs/user-bitops.h>
 
 #ifndef _IOWR

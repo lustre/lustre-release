@@ -24,7 +24,7 @@
 #define __LIBCFS_WINNT_KP30_H__
 
 #ifndef __LIBCFS_KP30_H__
-#error Do not #include this file directly. #include <libcfs/kp30.h> instead
+#error Do not #include this file directly. #include <libcfs/libcfs.h> instead
 #endif
 
 #include <libcfs/winnt/portals_compat25.h>

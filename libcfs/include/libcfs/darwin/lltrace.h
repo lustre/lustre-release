@@ -19,7 +19,7 @@
 #include <unistd.h>
 #include <sys/time.h>
 #include <lnet/types.h>
-#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
 #include <mach/vm_param.h>
 #include <lnet/lnetctl.h>
 

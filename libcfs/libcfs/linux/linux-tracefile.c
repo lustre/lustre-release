@@ -2,7 +2,6 @@
 #define LUSTRE_TRACEFILE_PRIVATE
 
 #include <libcfs/libcfs.h>
-#include <libcfs/kp30.h>
 #include "tracefile.h"
 
 #ifndef get_cpu

@@ -5,7 +5,7 @@
 #define __LIBCFS_LINUX_KP30_H__
 
 #ifndef __LIBCFS_KP30_H__
-#error Do not #include this file directly. #include <libcfs/kp30.h> instead
+#error Do not #include this file directly. #include <libcfs/libcfs.h> instead
 #endif
 
 #ifdef __KERNEL__
@@ -31,7 +31,6 @@
 # include <linux/highmem.h>
 # include <linux/module.h>
 # include <linux/version.h>
-# include <lnet/lnet.h>
 # include <linux/smp_lock.h>
 # include <asm/atomic.h>
 # include <asm/uaccess.h>

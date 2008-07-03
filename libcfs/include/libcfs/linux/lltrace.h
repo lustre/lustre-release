@@ -18,8 +18,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <libcfs/libcfs.h>
 #include <lnet/types.h>
-#include <libcfs/kp30.h>
 #include <lnet/lnetctl.h>
 #include <linux/limits.h>
 #include <asm/page.h>

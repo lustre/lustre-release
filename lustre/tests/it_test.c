@@ -7,7 +7,7 @@
 #include <time.h>
 #include <sys/time.h>
 
-#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
 #include <../ldlm/interval_tree.c>
 
 #define dprintf(fmt, args...) //printf(fmt, ##args)

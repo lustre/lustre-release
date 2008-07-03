@@ -22,7 +22,6 @@
 #ifndef __KERNEL__
 
 #include <libcfs/libcfs.h>
-#include <libcfs/kp30.h>
 #include <libcfs/user-bitops.h>
 
 #define OFF_BY_START(start)     ((start)/BITS_PER_LONG)

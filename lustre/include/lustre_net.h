@@ -33,7 +33,7 @@
 #error Unsupported operating system.
 #endif
 
-#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
 // #include <obd.h>
 #include <lnet/lnet.h>
 #include <lustre/lustre_idl.h>

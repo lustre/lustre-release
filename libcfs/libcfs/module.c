@@ -24,9 +24,9 @@
 #endif
 #define DEBUG_SUBSYSTEM S_LNET
 
+#include <libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
 #include <lnet/lnet.h>
-#include <libcfs/kp30.h>
 #include "tracefile.h"
 
 void

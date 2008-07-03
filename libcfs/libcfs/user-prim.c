@@ -32,7 +32,6 @@
 #ifndef __KERNEL__
 
 #include <libcfs/libcfs.h>
-#include <libcfs/kp30.h>
 
 #include <sys/mman.h>
 #ifndef  __CYGWIN__

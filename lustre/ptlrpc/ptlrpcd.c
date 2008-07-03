@@ -33,7 +33,6 @@
 # include <ctype.h>
 #endif
 
-#include <libcfs/kp30.h>
 #include <lustre_net.h>
 # include <lustre_lib.h>
 

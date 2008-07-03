@@ -52,7 +52,7 @@
 #ifndef _LUSTRE_IDL_H_
 #define _LUSTRE_IDL_H_
 
-#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
 
 #include <lustre/types.h>
 

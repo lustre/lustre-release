@@ -30,8 +30,7 @@
  */
 #include <lustre/lustre_idl.h>
 
-#include <libcfs/list.h>
-#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
 
 /*
  * Layered objects support for CMD3/C5.

@@ -36,7 +36,7 @@
 #include <linux/pagemap.h>
 #include <linux/quotaops.h>
 #include <linux/version.h>
-#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
 #include <lustre_fsfilt.h>
 #include <obd.h>
 #include <linux/module.h>

@@ -35,7 +35,6 @@
 #include <kern/thread.h>
 
 #include <libcfs/libcfs.h>
-#include <libcfs/kp30.h>
 
 /*
  * cfs pseudo device, actually pseudo char device in darwin
