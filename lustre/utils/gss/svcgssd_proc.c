@@ -333,8 +333,12 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 		cred->cr_mapped_uid = -1;
 
         realm = strchr(sname, '@');
-	if (realm)
+	if (realm) {
                 *realm++ = '\0';
+	} else {
+		printerr(0, "ERROR: %s has no realm name\n", sname);
+		goto out_free;
+	}
 
         host = strchr(sname, '/');
         if (host)
@@ -355,7 +359,7 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 		}
 
 		if (strcasecmp(host, namebuf)) {
-			printerr(0, "ERROR: %s/%s@s claimed hostname doesn't "
+			printerr(0, "ERROR: %s/%s@%s claimed hostname doesn't "
 				 "match %s, nid %016llx\n", sname, host, realm,
 				 namebuf, nid);
 			goto out_free;
@@ -363,29 +367,29 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 	} else {
 		if (!strcmp(sname, GSSD_SERVICE_MDS)) {
 			printerr(0, "ERROR: "GSSD_SERVICE_MDS"@%s from %016llx "
-				 "doesn't bind with hostname\n",
-				 realm ? realm : "", nid);
+				 "doesn't bind with hostname\n", realm, nid);
 			goto out_free;
 		}
 	}
 
 	/* 2. check realm */
-	if (!realm) {
-		/* just deny it
-                cred->cr_remote = (mds_local_realm != NULL);
-		*/
-                printerr(0, "ERROR: %s%s%s have no realm name\n",
-			 sname, host ? "/" : "", host ? "host" : "");
-		goto out_free;
-	}
-
 	if (!mds_local_realm || strcasecmp(mds_local_realm, realm)) {
 		cred->cr_remote = 1;
 
-		if (cred->cr_mapped_uid == -1)
-                        printerr(0, "ERROR: %s from %016llx is remote but "
-				 "without mapping\n", sname, nid);
-		/* mapped, skip user checking */
+		/* Allow mapped user from remote realm */
+		if (cred->cr_mapped_uid != -1)
+			res = 0;
+		/* Allow OSS auth using client machine credential */
+		else if (lustre_svc == LUSTRE_GSS_SVC_OSS &&
+			 !strcmp(sname, LUSTRE_ROOT_NAME))
+			res = 0;
+		/* Invalid remote user */
+		else
+			printerr(0, "ERROR: %s%s%s@%s from %016llx is remote "
+				 "but without mapping\n", sname,
+				 host ? "/" : "", host ? host : "", realm, nid);
+
+		/* skip local user check */
 		goto out_free;
 	}
 
@@ -415,11 +419,12 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
                 printerr(2, "%s resolve to uid %u\n", sname, cred->cr_uid);
         }
 
-	printerr(1, "%s: authenticated %s%s%s@%s from %016llx\n",
-		 lustre_svc_name[lustre_svc], sname,
-		 host ? "/" : "", host ? host : "", realm, nid);
         res = 0;
 out_free:
+	if (!res)
+		printerr(1, "%s: authenticated %s%s%s@%s from %016llx\n",
+			 lustre_svc_name[lustre_svc], sname,
+			 host ? "/" : "", host ? host : "", realm, nid);
         free(sname);
         return res;
 }
