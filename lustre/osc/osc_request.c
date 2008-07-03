@@ -64,6 +64,7 @@ static quota_interface_t *quota_interface = NULL;
 extern quota_interface_t osc_quota_interface;
 
 static void osc_release_ppga(struct brw_page **ppga, obd_count count);
+static int brw_interpret(struct ptlrpc_request *request, void *data, int rc);
 int osc_cleanup(struct obd_device *obd);
 
 /* Pack OSC object metadata for disk storage (LE byte order). */
@@ -880,7 +881,7 @@ static void osc_update_grant(struct client_obd *cli, struct ost_body *body)
         CDEBUG(D_CACHE, "got "LPU64" extra grant\n", body->oa.o_grant);
         if (body->oa.o_valid & OBD_MD_FLGRANT)
                 cli->cl_avail_grant += body->oa.o_grant;
-        /* waiters are woken in brw_interpret_oap */
+        /* waiters are woken in brw_interpret */
         client_obd_list_unlock(&cli->cl_loi_list_lock);
 }
 
@@ -1517,33 +1518,6 @@ int osc_brw_redo_request(struct ptlrpc_request *request,
         RETURN(0);
 }
 
-static int brw_interpret(struct ptlrpc_request *req, void *data, int rc)
-{
-        struct osc_brw_async_args *aa = data;
-        int                        i;
-        ENTRY;
-
-        rc = osc_brw_fini_request(req, rc);
-        if (osc_recoverable_error(rc)) {
-                rc = osc_brw_redo_request(req, aa);
-                if (rc == 0)
-                        RETURN(0);
-        }
-
-        client_obd_list_lock(&aa->aa_cli->cl_loi_list_lock);
-        if (lustre_msg_get_opc(req->rq_reqmsg) == OST_WRITE)
-                aa->aa_cli->cl_w_in_flight--;
-        else
-                aa->aa_cli->cl_r_in_flight--;
-        for (i = 0; i < aa->aa_page_count; i++)
-                osc_release_write_grant(aa->aa_cli, aa->aa_ppga[i], 1);
-        client_obd_list_unlock(&aa->aa_cli->cl_loi_list_lock);
-
-        osc_release_ppga(aa->aa_ppga, aa->aa_page_count);
-
-        RETURN(rc);
-}
-
 static int async_internal(int cmd, struct obd_export *exp, struct obdo *oa,
                           struct lov_stripe_md *lsm, obd_count page_count,
                           struct brw_page **pga, struct ptlrpc_request_set *set,
@@ -1581,6 +1555,7 @@ static int async_internal(int cmd, struct obd_export *exp, struct obdo *oa,
                 ptlrpc_lprocfs_brw(req, OST_WRITE, aa->aa_requested_nob);
         }
 
+        LASSERT(list_empty(&aa->aa_oaps));
         if (rc == 0) {
                 req->rq_interpret_reply = brw_interpret;
                 ptlrpc_set_add_req(set, req);
@@ -1590,10 +1565,12 @@ static int async_internal(int cmd, struct obd_export *exp, struct obdo *oa,
                 else
                         cli->cl_w_in_flight++;
                 client_obd_list_unlock(&cli->cl_loi_list_lock);
+                OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_DIO_PAUSE, 3);
         } else if (cmd == OBD_BRW_WRITE) {
                 client_obd_list_lock(&cli->cl_loi_list_lock);
                 for (i = 0; i < page_count; i++)
                         osc_release_write_grant(cli, pga[i], 0);
+                osc_wake_cache_waiters(cli);
                 client_obd_list_unlock(&cli->cl_loi_list_lock);
         }
         RETURN (rc);
@@ -2048,9 +2025,8 @@ static void osc_ap_completion(struct client_obd *cli, struct obdo *oa,
         EXIT;
 }
 
-static int brw_interpret_oap(struct ptlrpc_request *req, void *data, int rc)
+static int brw_interpret(struct ptlrpc_request *req, void *data, int rc)
 {
-        struct osc_async_page *oap, *tmp;
         struct osc_brw_async_args *aa = data;
         struct client_obd *cli;
         ENTRY;
@@ -2075,20 +2051,24 @@ static int brw_interpret_oap(struct ptlrpc_request *req, void *data, int rc)
         else
                 cli->cl_r_in_flight--;
 
-        /* the caller may re-use the oap after the completion call so
-         * we need to clean it up a little */
-        list_for_each_entry_safe(oap, tmp, &aa->aa_oaps, oap_rpc_item) {
-                list_del_init(&oap->oap_rpc_item);
-                osc_ap_completion(cli, aa->aa_oa, oap, 1, rc);
+        if (!list_empty(&aa->aa_oaps)) { /* from osc_send_oap_rpc() */
+                struct osc_async_page *oap, *tmp;
+                /* the caller may re-use the oap after the completion call so
+                 * we need to clean it up a little */
+                list_for_each_entry_safe(oap, tmp, &aa->aa_oaps, oap_rpc_item) {
+                        list_del_init(&oap->oap_rpc_item);
+                        osc_ap_completion(cli, aa->aa_oa, oap, 1, rc);
+                }
+                OBDO_FREE(aa->aa_oa);
+        } else { /* from async_internal() */
+                int i;
+                for (i = 0; i < aa->aa_page_count; i++)
+                        osc_release_write_grant(aa->aa_cli, aa->aa_ppga[i], 1);
         }
-
         osc_wake_cache_waiters(cli);
         osc_check_rpcs(cli);
-
         client_obd_list_unlock(&cli->cl_loi_list_lock);
 
-        OBDO_FREE(aa->aa_oa);
-        
         osc_release_ppga(aa->aa_ppga, aa->aa_page_count);
         RETURN(rc);
 }
@@ -2388,7 +2368,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
         DEBUG_REQ(D_INODE, req, "%d pages, aa %p. now %dr/%dw in flight",
                   page_count, aa, cli->cl_r_in_flight, cli->cl_w_in_flight);
 
-        req->rq_interpret_reply = brw_interpret_oap;
+        req->rq_interpret_reply = brw_interpret;
         ptlrpcd_add_req(req);
         RETURN(1);
 }
@@ -3938,7 +3918,7 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
                 oscc_init(obd);
                 /* We need to allocate a few requests more, because
-                   brw_interpret_oap tries to create new requests before freeing
+                   brw_interpret tries to create new requests before freeing
                    previous ones. Ideally we want to have 2x max_rpcs_in_flight
                    reserved, but I afraid that might be too much wasted RAM
                    in fact, so 2 is just my guess and still should work. */

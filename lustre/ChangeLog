@@ -22,7 +22,7 @@ Bugzilla   : 14742
 Frequency  : rare
 Description: ASSERTION(CheckWriteback(page,cmd)) failed
 Details    : badly clear PG_Writeback bit in ll_ap_completion can produce false
-             positive assertion.
+	     positive assertion.
 
 Severity   : enhancement
 Bugzilla   : 15865
@@ -32,7 +32,7 @@ Severity   : major
 Bugzilla   : 15924
 Description: do not process already freed flock
 Details    : flock can possibly be freed by another thread before it reaches
-             to ldlm_flock_completion_ast.
+	     to ldlm_flock_completion_ast.
 
 Severity   : normal
 Bugzilla   : 14480
@@ -43,14 +43,14 @@ Severity   : minor
 Bugzilla   : 15837
 Description: oops in page fault handler
 Details    : kernel page fault handler can return two special 'pages' in error case, don't
-             try dereference NOPAGE_SIGBUS and NOPAGE_OMM.
+	     try dereference NOPAGE_SIGBUS and NOPAGE_OMM.
 
 Severity   : minor
 Bugzilla   : 15716
 Description: timeout with invalidate import.
 Details    : ptlrpcd_check call obd_zombie_impexp_cull and wait request which should be
-             handled by ptlrpcd. This produce long age waiting and -ETIMEOUT
-             ptlrpc_invalidate_import and as result LASSERT.
+	     handled by ptlrpcd. This produce long age waiting and -ETIMEOUT
+	     ptlrpc_invalidate_import and as result LASSERT.
 
 Severity   : enhancement
 Bugzilla   : 15741
@@ -60,35 +60,35 @@ Severity   : major
 Bugzilla   : 14134
 Description: enable MGS and MDT services start separately
 Details    : add a 'nomgs' option in mount.lustre to enable start a MDT with
-             a co-located MGS without starting the MGS, which is a complement
-             to 'nosvc' mount option.
+	     a co-located MGS without starting the MGS, which is a complement
+	     to 'nosvc' mount option.
 
 Severity   : normal
 Bugzilla   : 14835
 Frequency  : after recovery
 Description: precreate to many object's after del orphan.
 Details    : del orphan st in oscc last_id == next_id and this triger growing
-             count of precreated objects. Set flag LOW to skip increase count
-             of precreated objects.
+	     count of precreated objects. Set flag LOW to skip increase count
+	     of precreated objects.
 
 Severity   : normal
 Bugzilla   : 15139
 Frequency  : rare, on clear nid stats
 Description: ASSERTION(client_stat->nid_exp_ref_count == 0)
 Details    : when clean nid stats sometimes try destroy live entry,
-             and this produce panic in free.
+	     and this produce panic in free.
 
 Severity   : major
 Bugzilla   : 15575
 Description: Stack overflow during MDS log replay
- ease stack pressure by using a thread dealing llog_process.
+	     ease stack pressure by using a thread dealing llog_process.
 
 Severity   : normal
 Bugzilla   : 15443
 Description: wait until IO finished before start new when do lock cancel.
 Details    : VM protocol want old IO finished before start new, in this case
-             need wait until PG_writeback is cleared until check dirty flag and
-             call writepages in lock cancel callback.
+	     need wait until PG_writeback is cleared until check dirty flag and
+	     call writepages in lock cancel callback.
 
 Severity   : enhancement
 Bugzilla   : 14929
@@ -96,9 +96,9 @@ Description: using special macro for print time and cleanup in includes.
 
 Severity   : normal
 Bugzilla   : 12888
-Description: mds_mfd_close() ASSERTION(rc == 0) 
-Details    : In mds_mfd_close(), we need protect inode's writecount change 
-             within its orphan write semaphore to prevent possible races.
+Description: mds_mfd_close() ASSERTION(rc == 0)
+Details    : In mds_mfd_close(), we need protect inode's writecount change
+	     within its orphan write semaphore to prevent possible races.
 
 Severity   : minor
 Bugzilla   : 14929
@@ -115,7 +115,7 @@ Severity   : minor
 Bugzilla   : 14949
 Description: don't panic with use echo client
 Details    : echo client pass NULL as client nid pointer and this produce null
-             pointer dereference.
+	     pointer dereference.
 
 Severity   : normal
 Bugzilla   : 15278
@@ -128,20 +128,20 @@ Description: add message levels for liblustreapi
 
 Severity   : normal
 Bugzilla   : 13380
-Description: fix for occasional failure case of -ENOSPC in recovery-small tests 
-Details    : Move the 'good_osts' check before the 'total_bavail' check.  This 
-	     will result in an -EAGAIN and in the exit call path we call 
-	     alloc_rr() which will with increasing aggressiveness attempt to 
+Description: fix for occasional failure case of -ENOSPC in recovery-small tests
+Details    : Move the 'good_osts' check before the 'total_bavail' check.  This
+	     will result in an -EAGAIN and in the exit call path we call
+	     alloc_rr() which will with increasing aggressiveness attempt to
 	     aquire precreated objects on the minimum number of required OSCs.
 
 Severity   : major
 Bugzilla   : 14326
 Description: Use old size assignment to avoid deadlock
 Details    : This reverts the changes in bugs 2369 and bug 14138 that introduced
-	     the scheduling while holding a spinlock.  We do not need locking 
-	     for size in ll_update_inode() because size is only updated from 
-	     the MDS for directories or files without objects, so there is no 
-	     other place to do the update, and concurrent access to such inodes 
+	     the scheduling while holding a spinlock.  We do not need locking
+	     for size in ll_update_inode() because size is only updated from
+	     the MDS for directories or files without objects, so there is no
+	     other place to do the update, and concurrent access to such inodes
 	     are protected by the inode lock.
 
 Severity   : normal
@@ -171,7 +171,7 @@ Severity   : normal
 Bugzilla   : 14803
 Description: Don't update lov_desc members until making sure they are valid
 Details    : When updating lov_desc members via proc fs, need fix their
-             validities before doing the real update.
+	     validities before doing the real update.
 
 Severity   : normal
 Bugzilla   : 15069
@@ -222,17 +222,17 @@ Details    : When MGC is disconnected from MGS long enough, MGS will evict the
 Severity   : major
 Bugzilla   : 15027
 Frequency  : on network error
-Description: panic with double free request if network error 
+Description: panic with double free request if network error
 Details    : mdc_finish_enqueue is finish request if any network error ocuring,
-             but it's true only for synchronus enqueue, for async enqueue 
-             (via ptlrpcd) this incorrect and ptlrpcd want finish request
-             himself.
+	     but it's true only for synchronus enqueue, for async enqueue
+	     (via ptlrpcd) this incorrect and ptlrpcd want finish request
+	     himself.
 
 Severity   : enhancement
 Bugzilla   : 11401
 Description: client-side metadata stat-ahead during readdir(directory readahead)
 Details    : perform client-side metadata stat-ahead when the client detects
-             readdir and sequential stat of dir entries therein
+	     readdir and sequential stat of dir entries therein
 
 Severity   : major
 Frequency  : on start mds
@@ -1107,34 +1107,41 @@ Severity   : normal
 Bugzilla   : 15346
 Description: skiplist implementation simplification
 Details    : skiplists are used to group compatible locks on granted list
-             that was implemented as tracking first and last lock of each lock group
-             the patch changes that to using doubly linked lists
+	     that was implemented as tracking first and last lock of each lock group
+	     the patch changes that to using doubly linked lists
 
 Severity   : normal
 Bugzilla   : 15574
 Description: MDS LBUG: ASSERTION(!IS_ERR(dchild))
 Details    : Change LASSERTs to client eviction (i.e. abort client's recovery)
-             because LASSERT on both the data supplied by a client, and the data 
+	     because LASSERT on both the data supplied by a client, and the data 
 	     on disk is dangerous and incorrect.
 
 Severity   : enhancement
 Bugzilla   : 10718
-Description: Slow trucate/writes to huge files at high offsets.
+Description: Slow truncate/writes to huge files at high offsets.
 Details    : Directly associate cached pages to lock that protect those pages,
-             this allows us to quickly find what pages to write and remove
+	     this allows us to quickly find what pages to write and remove
 	     once lock callback is received.
 
 Severity   : normal
 Bugzilla   : 15953
 Description: more ldlm soft lockups
 Details    : In ldlm_resource_add_lock(), call to ldlm_resource_dump()
-             starve other threads from the resource lock for a long time in
-             case of long waiting queue, so change the debug level from
-             D_OTHER to the less frequently used D_INFO.
+	     starve other threads from the resource lock for a long time in
+	     case of long waiting queue, so change the debug level from
+	     D_OTHER to the less frequently used D_INFO.
 
 Severity   : enhancement
 Bugzilla   : 13128
 Description: add -gid, -group, -uid, -user options to lfs find
+
+Severity   : normal
+Bugzilla   : 15950
+Description: Hung threads in invalidate_inode_pages2_range
+Details    : The direct IO path doesn't call check_rpcs to submit a new RPC once
+	     one is completed. As a result, some RPCs are stuck in the queue
+	     and are never sent.
 
 --------------------------------------------------------------------------------
 

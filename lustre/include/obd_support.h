@@ -221,6 +221,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_OSC_BRW_PREP_REQ2       0x40a
 #define OBD_FAIL_OSC_CONNECT_CKSUM       0x40b
 #define OBD_FAIL_OSC_CKSUM_ADLER_ONLY    0x40c
+#define OBD_FAIL_OSC_DIO_PAUSE           0x40d
 
 #define OBD_FAIL_PTLRPC                  0x500
 #define OBD_FAIL_PTLRPC_ACK              0x501
