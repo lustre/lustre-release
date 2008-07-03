@@ -191,14 +191,14 @@ kiblnd_unpack_msg(kib_msg_t *msg, int nob)
                         __swab32s(&msg->ibm_u.putack.ibpam_rd.rd_key);
                         __swab32s(&msg->ibm_u.putack.ibpam_rd.rd_nfrags);
                 }
-                
+
                 n = msg->ibm_u.putack.ibpam_rd.rd_nfrags;
                 if (n <= 0 || n > IBLND_MAX_RDMA_FRAGS) {
                         CERROR("Bad PUT_ACK nfrags: %d, should be 0 < n <= %d\n", 
                                n, IBLND_MAX_RDMA_FRAGS);
                         return -EPROTO;
                 }
-                
+
                 if (msg_nob < offsetof(kib_msg_t, ibm_u.putack.ibpam_rd.rd_frags[n])) {
                         CERROR("Short PUT_ACK: %d(%d)\n", msg_nob,
                                (int)offsetof(kib_msg_t, ibm_u.putack.ibpam_rd.rd_frags[n]));
@@ -314,7 +314,7 @@ kiblnd_create_peer (lnet_ni_t *ni, kib_peer_t **peerp, lnet_nid_t nid)
 
         /* always called with a ref on ni, which prevents ni being shutdown */
         LASSERT (net->ibn_shutdown == 0);
-        
+
         /* npeers only grows with the global lock held */
         atomic_inc(&net->ibn_npeers);
 
@@ -742,7 +742,7 @@ kiblnd_create_conn (kib_peer_t *peer, struct rdma_cm_id *cmid, int state)
                 CERROR("Can't request completion notificiation: %d\n", rc);
                 goto failed_2;
         }
-        
+
         memset(init_qp_attr, 0, sizeof(*init_qp_attr));
         init_qp_attr->event_handler = kiblnd_qp_event;
         init_qp_attr->qp_context = conn;

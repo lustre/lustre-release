@@ -497,13 +497,13 @@ static inline kib_conn_t *
 kiblnd_get_conn_locked (kib_peer_t *peer)
 {
         LASSERT (!list_empty(&peer->ibp_conns));
-        
+
         /* just return the first connection */
         return list_entry(peer->ibp_conns.next, kib_conn_t, ibc_list);
 }
 
 static inline int
-kiblnd_send_keepalive(kib_conn_t *conn) 
+kiblnd_send_keepalive(kib_conn_t *conn)
 {
         return (*kiblnd_tunables.kib_keepalive > 0) &&
                 time_after(jiffies, conn->ibc_last_send +

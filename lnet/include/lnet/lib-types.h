@@ -320,7 +320,7 @@ typedef struct lnet_lnd
          * for success and do NOT give back a receive credit; that has to wait
          * until lnd_recv() gets called.  On failure return < 0 and
          * release resources; lnd_recv() will not be called. */
-	int (*lnd_eager_recv)(struct lnet_ni *ni, void *private, lnet_msg_t *msg,
+        int (*lnd_eager_recv)(struct lnet_ni *ni, void *private, lnet_msg_t *msg,
                               void **new_privatep);
 
         /* notification of peer health */

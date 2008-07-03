@@ -26,14 +26,14 @@
 #include <lnet/lib-lnet.h>
 
 int
-LNetEQAlloc(unsigned int count, lnet_eq_handler_t callback, 
+LNetEQAlloc(unsigned int count, lnet_eq_handler_t callback,
             lnet_handle_eq_t *handle)
 {
         lnet_eq_t     *eq;
 
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
-        
+
         /* We need count to be a power of 2 so that when eq_{enq,deq}_seq
          * overflow, they don't skip entries, so the queue has the same
          * apparant capacity at all times */
@@ -48,7 +48,7 @@ LNetEQAlloc(unsigned int count, lnet_eq_handler_t callback,
 
         if (count == 0)        /* catch bad parameter / overflow on roundup */
                 return (-EINVAL);
-        
+
         eq = lnet_eq_alloc();
         if (eq == NULL)
                 return (-ENOMEM);
@@ -92,7 +92,7 @@ LNetEQFree(lnet_handle_eq_t eqh)
 
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
-        
+
         LNET_LOCK();
 
         eq = lnet_handle2eq(&eqh);
@@ -160,7 +160,7 @@ LNetEQGet (lnet_handle_eq_t eventq, lnet_event_t *event)
 {
         int which;
 
-        return LNetEQPoll(&eventq, 1, 0, 
+        return LNetEQPoll(&eventq, 1, 0,
                          event, &which);
 }
 
@@ -216,10 +216,10 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
                                 RETURN(rc);
                         }
                 }
-                
+
 #ifdef __KERNEL__
                 if (timeout_ms == 0) {
-                        LNET_UNLOCK ();
+                        LNET_UNLOCK();
                         RETURN (0);
                 }
 
@@ -231,19 +231,19 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
 
                 if (timeout_ms < 0) {
                         cfs_waitq_wait (&wl, CFS_TASK_INTERRUPTIBLE);
-                } else { 
+                } else {
                         struct timeval tv;
 
                         now = cfs_time_current();
                         cfs_waitq_timedwait(&wl, CFS_TASK_INTERRUPTIBLE,
                                             cfs_time_seconds(timeout_ms)/1000);
-                        cfs_duration_usec(cfs_time_sub(cfs_time_current(), now), 
-                                          &tv); 
+                        cfs_duration_usec(cfs_time_sub(cfs_time_current(), now),
+                                          &tv);
                         timeout_ms -= tv.tv_sec * 1000 + tv.tv_usec / 1000;
                         if (timeout_ms < 0)
                                 timeout_ms = 0;
                 }
-                
+
                 LNET_LOCK();
                 cfs_waitq_del(&the_lnet.ln_waitq, &wl);
 #else
@@ -259,7 +259,7 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
                                 gettimeofday(&then, NULL);
 
                                 (eqwaitni->ni_lnd->lnd_wait)(eqwaitni, timeout_ms);
-                                
+
                                 gettimeofday(&now, NULL);
                                 timeout_ms -= (now.tv_sec - then.tv_sec) * 1000 +
                                               (now.tv_usec - then.tv_usec) / 1000;
@@ -289,11 +289,11 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
                 LBUG();
 # else
                 if (timeout_ms < 0) {
-                        pthread_cond_wait(&the_lnet.ln_cond, 
+                        pthread_cond_wait(&the_lnet.ln_cond,
                                           &the_lnet.ln_lock);
                 } else {
                         gettimeofday(&then, NULL);
-                        
+
                         ts.tv_sec = then.tv_sec + timeout_ms/1000;
                         ts.tv_nsec = then.tv_usec * 1000 + 
                                      (timeout_ms%1000) * 1000000;
@@ -301,14 +301,14 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
                                 ts.tv_sec++;
                                 ts.tv_nsec -= 1000000000;
                         }
-                        
+
                         pthread_cond_timedwait(&the_lnet.ln_cond,
                                                &the_lnet.ln_lock, &ts);
-                        
+
                         gettimeofday(&now, NULL);
                         timeout_ms -= (now.tv_sec - then.tv_sec) * 1000 +
                                       (now.tv_usec - then.tv_usec) / 1000;
-                        
+
                         if (timeout_ms < 0)
                                 timeout_ms = 0;
                 }
