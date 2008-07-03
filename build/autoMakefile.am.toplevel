@@ -60,6 +60,7 @@ endif # MODULES
 
 dist-hook:
 	rm -f $(distdir)/ldiskfs/*.spec
+	rm -f $(distdir)/lustre-iokit/*.spec
 	find $(distdir) -name .deps -o \
 			-name CVS -o \
 			-name .svn -o \
