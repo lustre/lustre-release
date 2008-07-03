@@ -2,11 +2,13 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  */
 
-#ifndef __LIBCFS_H__
-#define __LIBCFS_H__
+#ifndef __LSUPPORT_H__
+#define __LSUPPORT_H__
 
 #include <unistd.h>
 #include <stdint.h>
+
+#include <libcfs/libcfs.h>
 
 #define GSSD_CLI        (0)
 #define GSSD_SVC        (1)
@@ -52,41 +54,8 @@ struct lgssd_ioctl_param {
 #define GSSD_DEFAULT_GETHOSTNAME_EX     "/etc/lustre/nid2hostname"
 #define MAPPING_DATABASE_FILE           "/etc/lustre/idmap.conf"
 
-typedef uint64_t lnet_nid_t;
-typedef uint32_t lnet_netid_t;
-
-#define LNET_NID_ANY      ((lnet_nid_t) -1)
-#define LNET_PID_ANY      ((lnet_pid_t) -1)
-
-enum {
-        /* Only add to these values (i.e. don't ever change or redefine them):
-         * network addresses depend on them... */
-        QSWLND    = 1,
-        SOCKLND   = 2,
-        GMLND     = 3,
-        PTLLND    = 4,
-        O2IBLND   = 5,
-        CIBLND    = 6,
-        OPENIBLND = 7,
-        IIBLND    = 8,
-        LOLND     = 9,
-        RALND     = 10,
-        VIBLND    = 11,
-        LND_ENUM_END_MARKER
-};
-
 int lnet_nid2hostname(lnet_nid_t nid, char *buf, int buflen);
 void cleanup_mapping(void);
 int lookup_mapping(char *princ, uint64_t nid, uid_t *uid);
-lnet_nid_t libcfs_str2nid(char *str);
 
-/* how an LNET NID encodes net:address */
-#define LNET_NIDADDR(nid)      ((uint32_t)((nid) & 0xffffffff))
-#define LNET_NIDNET(nid)       ((uint32_t)(((nid) >> 32)) & 0xffffffff)
-#define LNET_MKNID(net,addr)   ((((uint64_t)(net))<<32)|((uint64_t)(addr)))
-/* how net encodes type:number */
-#define LNET_NETNUM(net)       ((net) & 0xffff)
-#define LNET_NETTYP(net)       (((net) >> 16) & 0xffff)
-#define LNET_MKNET(typ,num)    ((((uint32_t)(typ))<<16)|((uint32_t)(num)))
-
-#endif /* __LIBCFS_H__ */
+#endif /* __LSUPPORT_H__ */

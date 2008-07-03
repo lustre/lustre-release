@@ -273,11 +273,13 @@ int external_nid2hostname(char *lnd, uint32_t net, uint32_t addr,
         return 0;
 }
 
-static struct {
+struct convert_struct {
         char                    *name;
         lnd_nid2hostname_t      *nid2name;
-} converter[LND_ENUM_END_MARKER] = {
-        {"UNUSED0",     NULL},
+};
+
+static struct convert_struct converter[] = {
+        [0]             = { "UNUSED0",  NULL},
         [QSWLND]        = { "QSWLND",   external_nid2hostname},
         [SOCKLND]       = { "SOCKLND",  ipv4_nid2hostname },
         [GMLND]         = { "GMLND",    external_nid2hostname},
@@ -289,7 +291,10 @@ static struct {
         [LOLND]         = { "LOLND",    lolnd_nid2hostname },
         [RALND]         = { "RALND",    external_nid2hostname },
         [VIBLND]        = { "VIBLND",   external_nid2hostname },
+        [MXLND]         = { "MXLND",    external_nid2hostname },
 };
+
+#define LND_MAX         (sizeof(converter) / sizeof(converter[0]))
 
 int lnet_nid2hostname(lnet_nid_t nid, char *buf, int buflen)
 {
@@ -299,7 +304,7 @@ int lnet_nid2hostname(lnet_nid_t nid, char *buf, int buflen)
         net = LNET_NIDNET(nid);
         lnd = LNET_NETTYP(net);
 
-        if (lnd >= LND_ENUM_END_MARKER) {
+        if (lnd >= LND_MAX) {
                 printerr(0, "ERROR: Unrecognized LND %u\n", lnd);
                 return -1;
         }
@@ -551,13 +556,17 @@ libcfs_str2net_internal(char *str, uint32_t *net)
         return nf;
 }
 
+/* FIXME
+ * this is duplication in libcfs, but somehow doesn't make into libcfs.a.
+ * remove it when libcfs get fixed.
+ */
 lnet_nid_t
-libcfs_str2nid(char *str)
+libcfs_str2nid(const char *str)
 {
-        char             *sep = strchr(str, '@');
+        const char       *sep = strchr(str, '@');
         struct netstrfns *nf;
-        uint32_t             net;
-        uint32_t             addr;
+        uint32_t          net;
+        uint32_t          addr;
 
         if (sep != NULL) {
                 nf = libcfs_str2net_internal(sep + 1, &net);

@@ -1,12 +1,12 @@
-# gss daemons Makefile
+# GSS daemons & tools Makefile
 
 SUBDIRS =
 
 AM_CFLAGS=$(LLCFLAGS)
 AM_CPPFLAGS=$(LLCPPFLAGS) -DLUSTRE_UTILS=1
-AM_LDFLAGS := -L$(top_builddir)/lnet/utils
+AM_LDFLAGS := -L$(top_builddir)/libcfs/libcfs
 
-LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a
+LIBCFS := $(top_builddir)/libcfs/libcfs/libcfs.a
 
 sbin_PROGRAMS := lsvcgssd l_idmap
 
@@ -46,9 +46,9 @@ lgssd_SOURCES = \
         krb5_util.h \
         write_bytes.h
 
-lgssd_LDADD = $(GSSAPI_LIBS) $(KRBLIBS)
-lgssd_LDFLAGS = $(KRBLDFLAGS)
 lgssd_CFLAGS = $(AM_CFLAGS) $(CFLAGS) $(KRBCFLAGS)
+lgssd_LDADD =  $(GSSAPI_LIBS) $(KRBLIBS)
+lgssd_LDFLAGS = $(KRBLDFLAGS)
 
 lsvcgssd_SOURCES = \
         $(COMMON_SRCS) \
@@ -61,9 +61,10 @@ lsvcgssd_SOURCES = \
         cacheio.h \
         svcgssd.h
 
-lsvcgssd_LDADD = $(GSSAPI_LIBS) $(KRBLIBS)
-lsvcgssd_LDFLAGS = $(KRBLDFLAGS)
 lsvcgssd_CFLAGS = $(AM_CFLAGS) $(CFLAGS) $(KRBCFLAGS)
+lsvcgssd_LDADD = $(LIBCFS) $(GSSAPI_LIBS) $(KRBLIBS)
+lsvcgssd_LDFLAGS = $(KRBLDFLAGS)
+lsvcgssd_DEPENDENCIES = $(LIBCFS)
 
 l_idmap_SOURCES = \
 	l_idmap.c \
@@ -87,7 +88,8 @@ lgss_keyring_SOURCES = \
 	lsupport.h
 
 lgss_keyring_CFLAGS = $(AM_CFLAGS) $(CFLAGS) $(KRBCFLAGS) -D _NEW_BUILD_
-lgss_keyring_LDADD = -lkeyutils $(GSSAPI_LIBS) $(KRBLIBS)
+lgss_keyring_LDADD = $(LIBCFS) -lkeyutils $(GSSAPI_LIBS) $(KRBLIBS)
 lgss_keyring_LDFLAGS = $(KRBLDFLAGS)
+lgss_keyring_DEPENDENCIES = $(LIBCFS)
 
 EXTRA_DIST =

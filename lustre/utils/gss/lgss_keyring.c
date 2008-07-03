@@ -36,8 +36,6 @@
 #include <keyutils.h>
 #include <gssapi/gssapi.h>
 
-#include <libcfs/libcfs.h>
-
 #include "lsupport.h"
 #include "lgss_utils.h"
 #include "write_bytes.h"

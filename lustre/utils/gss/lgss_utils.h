@@ -44,13 +44,7 @@
 #include <stdint.h>
 #include <gssapi/gssapi.h>
 
-#ifndef likely
-#define likely(exp)             (exp)
-#endif
-
-#ifndef unlikely
-#define unlikely(exp)           (exp)
-#endif
+#include <libcfs/libcfs.h>
 
 #define LGSS_SVC_MDS_STR        "lustre_mds"
 #define LGSS_SVC_OST_STR        "lustre_oss"
