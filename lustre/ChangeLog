@@ -18,10 +18,10 @@ tbd Sun Microsystems, Inc.
 	  removed cwd "./" (refer to Bugzilla 14399).
 	* A new quota file format has been introduced in 1.6.5.
 	  The format conversion from prior releases is handled transparently,
-	  but releases older than 1.4.12/1.6.5 will not understand this new
-	  format.  The automatic format conversion can be avoided by running
+	  but releases older than 1.4.12/1.6.5 don't understand this new
+	  format. The automatic format conversion can be avoided by running
 	  the following command on the MDS:
-	  	'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
+		'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
 	  For more information, please refer to bugzilla 13904.
 
 Severity   : enhancement
@@ -46,7 +46,7 @@ Severity   : major
 Bugzilla   : 15924
 Description: do not process already freed flock
 Details    : flock can possibly be freed by another thread before it reaches
-             to ldlm_flock_completion_ast.
+	     to ldlm_flock_completion_ast.
 
 Severity   : normal
 Bugzilla   : 14480
@@ -71,7 +71,7 @@ Bugzilla   : 14742
 Frequency  : rare
 Description: ASSERTION(CheckWriteback(page,cmd)) failed
 Details    : badly clear PG_Writeback bit in ll_ap_completion can produce false
-             positive assertion.
+	     positive assertion.
 
 Severity   : normal
 Frequency  : only with broken builds/installations
@@ -149,8 +149,8 @@ Details    : VM protocol want old IO finished before start new, in this case
 Severity   : normal
 Frequency  : rare
 Bugzilla   : 12888
-Description: mds_mfd_close() ASSERTION(rc == 0) 
-Details    : In mds_mfd_close(), we need protect inode's writecount change 
+Description: mds_mfd_close() ASSERTION(rc == 0)
+Details    : In mds_mfd_close(), we need protect inode's writecount change
 	     within its orphan write semaphore to prevent possible races.
 
 Severity   : minor
@@ -216,7 +216,7 @@ Severity   : normal
 Bugzilla   : 15953
 Description: more ldlm soft lockups
 Details    : In ldlm_resource_add_lock(), call to ldlm_resource_dump()
-             starve other threads from the resource lock for a long time in
+	     starve other threads from the resource lock for a long time in
 	     case of long waiting queue, so change the debug level from
 	     D_OTHER to the less frequently used D_INFO.
 
@@ -239,6 +239,13 @@ Description: this bug _only_ happens when inode quota limitation is very low
 	     (less than 12), so that inode quota unit is 1 at initialization.
 Details    : if remaining quota	equates 1, it is a sign to demonstate that quota
 	     is effective now. So least quota qunit should be 2.
+
+Severity   : normal
+Bugzilla   : 15950
+Description: Hung threads in invalidate_inode_pages2_range
+Details    : The direct IO path doesn't call check_rpcs to submit a new RPC once
+	     one is completed. As a result, some RPCs are stuck in the queue
+	     and are never sent.
 
 -------------------------------------------------------------------------------
 
