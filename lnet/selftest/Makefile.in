@@ -1,7 +1,0 @@
-MODULES := lnet_selftest
-
-lnet_selftest-objs := console.o conrpc.o conctl.o framework.o timer.o rpc.o workitem.o module.o ping_test.o brw_test.o
-
-default: all
-
-@INCLUDE_RULES@
