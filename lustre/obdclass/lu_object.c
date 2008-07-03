@@ -535,7 +535,7 @@ void lu_site_print(const struct lu_env *env, struct lu_site *s, void *cookie,
 EXPORT_SYMBOL(lu_site_print);
 
 enum {
-        LU_CACHE_PERCENT   = 30,
+        LU_CACHE_PERCENT   = 20,
 };
 
 /*
@@ -543,18 +543,26 @@ enum {
  */
 static int lu_htable_order(void)
 {
-        int bits;
         unsigned long cache_size;
+        int bits;
 
         /*
          * Calculate hash table size, assuming that we want reasonable
-         * performance when 30% of available memory is occupied by cache of
+         * performance when 20% of total memory is occupied by cache of
          * lu_objects.
          *
          * Size of lu_object is (arbitrary) taken as 1K (together with inode).
          */
-        cache_size = ll_nr_free_buffer_pages() / 100 *
-                LU_CACHE_PERCENT * (CFS_PAGE_SIZE / 1024);
+        cache_size = num_physpages;
+
+#if BITS_PER_LONG == 32
+        /* limit hashtable size for lowmem systems to low RAM */
+        if (cache_size > 1 << (30 - CFS_PAGE_SHIFT))
+                cache_size = 1 << (30 - CFS_PAGE_SHIFT) * 3 / 4;
+#endif
+
+        cache_size = cache_size / 100 * LU_CACHE_PERCENT *
+                (CFS_PAGE_SIZE / 1024);
 
         for (bits = 1; (1 << bits) < cache_size; ++bits) {
                 ;

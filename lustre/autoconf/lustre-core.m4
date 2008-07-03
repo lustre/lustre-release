@@ -599,22 +599,6 @@ AC_DEFUN([LC_EXPORT___IGET],
 ])
 ])
 
-#
-# LC_EXPORT_NR_FREE_BUFFER_PAGES
-# starting from 2.6.23 linux kernel exports nr_free_buffer_pages()
-#
-AC_DEFUN([LC_EXPORT_NR_FREE_BUFFER_PAGES],
-[LB_CHECK_SYMBOL_EXPORT([nr_free_buffer_pages],
-[mm/page_alloc.c],[
-        AC_DEFINE(HAVE_EXPORT_NR_FREE_BUFFER_PAGES, 1, [kernel exports nr_free_buffer_pages])
-],[
-	if test x$enable_server = xyes ; then
-        	AC_MSG_ERROR([lustre server needs this symbol to be exported.])
-	fi
-])
-])
-
-
 AC_DEFUN([LC_LUSTRE_VERSION_H],
 [LB_CHECK_FILE([$LINUX/include/linux/lustre_version.h],[
 	rm -f "$LUSTRE/include/linux/lustre_version.h"
@@ -1558,7 +1542,6 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_UNREGISTER_BLKDEV_RETURN_INT
          LC_KERNEL_SPLICE_READ
          LC_HAVE_EXPORTFS_H
-         LC_EXPORT_NR_FREE_BUFFER_PAGES
 ])
 
 #
