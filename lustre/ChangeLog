@@ -244,6 +244,12 @@ Details    : The direct IO path doesn't call check_rpcs to submit a new RPC once
 	     one is completed. As a result, some RPCs are stuck in the queue
 	     and are never sent.
 
+Severity   : normal
+Bugzilla   : 15684
+Description: Procfs and llog threads access destoryed import sometimes. 
+Details    : Sync the import destoryed process with procfs and llog threads by
+	     the import refcount and semaphore.
+
 -------------------------------------------------------------------------------
 
 

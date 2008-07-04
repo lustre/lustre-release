@@ -239,7 +239,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                 RETURN(-EINVAL);
         }
 
-        sema_init(&cli->cl_sem, 1);
+        init_rwsem(&cli->cl_sem);
         sema_init(&cli->cl_mgc_sem, 1);
         cli->cl_conn_count = 0;
         memcpy(server_uuid.uuid, lustre_cfg_buf(lcfg, 2),
@@ -371,7 +371,7 @@ int client_connect_import(struct lustre_handle *dlm_handle,
         int rc;
         ENTRY;
 
-        mutex_down(&cli->cl_sem);
+        down_write(&cli->cl_sem);
         rc = class_connect(dlm_handle, obd, cluuid);
         if (rc)
                 GOTO(out_sem, rc);
@@ -428,7 +428,7 @@ out_disco:
                 class_export_put(exp);
         }
 out_sem:
-        mutex_up(&cli->cl_sem);
+        up_write(&cli->cl_sem);
         if (to_be_freed)
                 ldlm_namespace_free_post(to_be_freed);
         return rc;
@@ -452,7 +452,7 @@ int client_disconnect_export(struct obd_export *exp)
         cli = &obd->u.cli;
         imp = cli->cl_import;
 
-        mutex_down(&cli->cl_sem);
+        down_write(&cli->cl_sem);
         if (!cli->cl_conn_count) {
                 CERROR("disconnecting disconnected device (%s)\n",
                        obd->obd_name);
@@ -503,7 +503,7 @@ int client_disconnect_export(struct obd_export *exp)
         if (!rc && err)
                 rc = err;
  out_sem:
-        mutex_up(&cli->cl_sem);
+        up_write(&cli->cl_sem);
         if (to_be_freed)
                 ldlm_namespace_free_post(to_be_freed);
         RETURN(rc);
