@@ -2163,6 +2163,9 @@ static struct llog_operations filter_size_orig_logops = {
         lop_add: llog_obd_origin_add
 };
 
+/**
+ * Init obd_llog_group of the filter
+ */
 static int filter_olg_init(struct obd_device *obd, struct obd_llog_group *olg,
                            struct obd_device *tgt)
 {
@@ -2183,6 +2186,9 @@ cleanup:
         RETURN(rc);
 }
 
+/**
+ * Init the default olg, which is embeded in the obd_device, for filter.
+ */
 static int 
 filter_default_olg_init(struct obd_device *obd, struct obd_llog_group *olg,
                         struct obd_device *tgt)
@@ -2276,6 +2282,9 @@ static int filter_llog_finish(struct obd_device *obd, int count)
         RETURN(rc);
 }
 
+/**
+ * Find the group llog according to group index in the llog group list.
+ */
 static struct obd_llog_group *
 filter_find_olg_internal(struct filter_obd *filter, int group)
 {
@@ -2289,6 +2298,9 @@ filter_find_olg_internal(struct filter_obd *filter, int group)
         RETURN(NULL);
 }
 
+/**
+ * Find the group llog according to group index on the filter
+ */
 struct obd_llog_group *filter_find_olg(struct obd_device *obd, int group)
 {
         struct obd_llog_group *olg = NULL;
@@ -2305,7 +2317,11 @@ struct obd_llog_group *filter_find_olg(struct obd_device *obd, int group)
 
         RETURN(olg); 
 }
-
+/**
+ * Find the llog_group of the filter according to the group. If it can not
+ * find, create the llog_group, which only happens when mds is being synced 
+ * with OST.
+ */
 struct obd_llog_group *filter_find_create_olg(struct obd_device *obd, int group)
 {
         struct obd_llog_group *olg = NULL;
