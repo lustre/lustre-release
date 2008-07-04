@@ -29,6 +29,10 @@ Bugzilla   : 16189
 Description: Update to RHEL4 kernel-2.6.9-67.0.20.
 
 Severity   : normal
+Bugzilla   : 15210
+Description: add recount protection for osc callbacks, so avoid panic on shutdown
+
+Severity   : normal
 Bugzilla   : 12653
 Description: sanity test 65a fails if stripecount of -1 is set
 Details    : handle -1 striping on filesystem in ll_dirstripe_verify
