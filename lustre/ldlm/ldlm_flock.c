@@ -41,7 +41,14 @@
 
 #define l_flock_waitq   l_lru
 
+/**
+ * Wait queue for Posix lock deadlock detection, added with
+ * ldlm_lock::l_flock_waitq.
+ */
 static CFS_LIST_HEAD(ldlm_flock_waitq);
+/**
+ * Lock protecting access to ldlm_flock_waitq.
+ */
 spinlock_t ldlm_flock_waitq_lock = SPIN_LOCK_UNLOCKED;
 
 int ldlm_flock_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
