@@ -41,7 +41,7 @@ LCTL=${LCTL:-lctl}
 MCREATE=${MCREATE:-mcreate}
 OPENFILE=${OPENFILE:-openfile}
 OPENUNLINK=${OPENUNLINK:-openunlink}
-RANDOM_READS=${RANDOM_READS:-"random-reads"}
+READS=${READS:-"reads"}
 TOEXCL=${TOEXCL:-toexcl}
 TRUNCATE=${TRUNCATE:-truncate}
 MUNLINK=${MUNLINK:-munlink}
@@ -3576,7 +3576,7 @@ test_101() {
 	# randomly read 10000 of 64K chunks from file 3x 32MB in size
 	#
 	echo "nreads: $nreads file size: $((cache_limit * 3))MB"
-	$RANDOM_READS -f $DIR/$tfile -s$((cache_limit * 3192 * 1024)) -b65536 -C -n$nreads -t 180
+	$READS -f $DIR/$tfile -s$((cache_limit * 3192 * 1024)) -b65536 -C -n$nreads -t 180
 
 	discard=0
 	for s in `lctl get_param -n llite.*.read_ahead_stats | get_named_value 'read but discarded'`; do
@@ -3592,6 +3592,79 @@ test_101() {
 	rm -f $DIR/$tfile || true
 }
 run_test 101 "check read-ahead for random reads ================"
+
+export SETUP_TEST101=no
+setup_test101() {
+	[ "$SETUP_TEST101" = "yes" ] && return
+	mkdir -p $DIR/$tdir
+	STRIPE_SIZE=1048576
+	STRIPE_COUNT=$OSTCOUNT
+	STRIPE_OFFSET=0
+
+	trap cleanup_test101 EXIT
+	# prepare the read-ahead file
+	$SETSTRIPE $DIR/$tfile -s $STRIPE_SIZE -i $STRIPE_OFFSET -c $OSTCOUNT
+
+	dd if=/dev/zero of=$DIR/$tfile bs=1024k count=100 2> /dev/null
+	SETUP_TEST102=yes
+}
+
+cleanup_test101() {
+	[ "$SETUP_TEST101" = "yes" ] || return
+	trap 0
+	rm -rf $DIR/$tdir
+	SETUP_TEST102=no
+}
+
+calc_total() {
+	awk 'BEGIN{total=0}; {total+=$1}; END{print total}'
+}
+
+ra_check_101() {
+	local READ_SIZE=$1
+	local STRIPE_SIZE=1048576
+	local RA_INC=1048576
+	local STRIDE_LENGTH=$((STRIPE_SIZE/READ_SIZE))
+	local FILE_LENGTH=$((64*100))
+	local discard_limit=$(((((((STRIDE_LENGTH - 1))*3)/(STRIDE_LENGTH*OSTCOUNT))* \
+			     (STRIDE_LENGTH*OSTCOUNT - STRIDE_LENGTH))))
+
+	DISCARD=`$LCTL get_param -n llite.*.read_ahead_stats |   \
+			 get_named_value 'read but discarded' | calc_total`
+
+	if [ $DISCARD -gt $discard_limit ]; then
+		lctl get_param llite.*.read_ahead_stats
+		error "Too many ($DISCARD) discarded pages with size (${READ_SIZE})"
+	else
+		echo "Read-ahead success for size ${READ_SIZE}"
+	fi
+}
+
+test_101b() {
+	[ "$OSTCOUNT" -lt "2" ] && skip "skipping stride IO stride-ahead test" && return
+	local STRIPE_SIZE=1048576
+	local STRIDE_SIZE=$((STRIPE_SIZE*OSTCOUNT))
+	local FILE_LENGTH=$((STRIPE_SIZE*100))
+	local ITERATION=$((FILE_LENGTH/STRIDE_SIZE))
+	# prepare the read-ahead file
+	setup_test101
+	cancel_lru_locks osc 
+	for BIDX in 2 4 8 16 32 64 128 256
+	do
+		local BSIZE=$((BIDX*4096))
+		local READ_COUNT=$((STRIPE_SIZE/BSIZE))
+		local STRIDE_LENGTH=$((STRIDE_SIZE/BSIZE))
+		local OFFSET=$((STRIPE_SIZE/BSIZE*(OSTCOUNT - 1)))
+		$LCTL set_param -n llite.*.read_ahead_stats 0
+		$READS -f $DIR/$tfile  -l $STRIDE_LENGTH -o $OFFSET \
+			      -s $FILE_LENGTH -b $STRIPE_SIZE -a $READ_COUNT -n $ITERATION
+		cancel_lru_locks osc
+		ra_check_101 $BSIZE
+	done
+	cleanup_test101
+	true
+}
+run_test 101b "check stride-io mode read-ahead ================="
 
 export SETUP_TEST102=no
 setup_test102() {
