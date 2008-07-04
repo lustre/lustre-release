@@ -857,8 +857,9 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         __u32                    create_flags = info->mti_spec.sp_cr_flags;
         struct mdt_reint_record *rr = &info->mti_rr;
         struct lu_name          *lname;
-        int                      result;
+        int                      result, rc;
         int                      created = 0;
+        __u32                    msg_flags;
         ENTRY;
 
         OBD_FAIL_TIMEOUT_ORSET(OBD_FAIL_MDS_PAUSE_OPEN, OBD_FAIL_ONCE,
@@ -880,14 +881,15 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                 CERROR("JOIN file will be supported soon\n");
                 GOTO(out, result = err_serious(-EOPNOTSUPP));
         }
+        msg_flags = lustre_msg_get_flags(req->rq_reqmsg);
 
         CDEBUG(D_INODE, "I am going to open "DFID"/(%s->"DFID") "
                "cr_flag=0%o mode=0%06o msg_flag=0x%x\n",
                PFID(rr->rr_fid1), rr->rr_name,
                PFID(rr->rr_fid2), create_flags,
-               ma->ma_attr.la_mode, lustre_msg_get_flags(req->rq_reqmsg));
+               ma->ma_attr.la_mode, msg_flags);
 
-        if ((lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) ||
+        if (msg_flags & MSG_REPLAY ||
             (req->rq_export->exp_libclient && create_flags&MDS_OPEN_HAS_EA)) {
                 /* This is a replay request or from liblustre with ea. */
                 result = mdt_open_by_fid(info, ldlm_rep);
@@ -1010,8 +1012,6 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                  * The object is on remote node, return its FID for remote open.
                  */
                 if (result == -EREMOTE) {
-                        int rc;
-
                         /*
                          * Check if this lock already was sent to client and
                          * this is resent case. For resent case do not take lock
@@ -1022,8 +1022,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                         if (lustre_handle_is_used(&lhc->mlh_reg_lh)) {
                                 struct ldlm_lock *lock;
 
-                                LASSERT(lustre_msg_get_flags(req->rq_reqmsg) &
-                                        MSG_RESENT);
+                                LASSERT(msg_flags & MSG_RESENT);
 
                                 lock = ldlm_handle2lock(&lhc->mlh_reg_lh);
                                 if (!lock) {
@@ -1051,23 +1050,55 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                 }
         }
 
-        /* Try to open it now. */
-        result = mdt_finish_open(info, parent, child, create_flags,
-                                 created, ldlm_rep);
+        LASSERT(!lustre_handle_is_used(&lhc->mlh_reg_lh));
 
-        if (result != 0 && created) {
-                int rc2;
-                ma->ma_need = 0;
-                ma->ma_valid = 0;
-                ma->ma_cookie_size = 0;
-                info->mti_no_need_trans = 1;
-                rc2 = mdo_unlink(info->mti_env,
-                                 mdt_object_child(parent),
-                                 mdt_object_child(child),
-                                 lname,
-                                 &info->mti_attr);
-                if (rc2 != 0)
-                        CERROR("Error in cleanup of open\n");
+        /* get openlock if this is not replay and if a client requested it */
+        if (!(msg_flags & MSG_REPLAY) && create_flags & MDS_OPEN_LOCK) {
+                ldlm_mode_t lm;
+
+                LASSERT(!created);
+                if (create_flags & FMODE_WRITE)
+                        lm = LCK_CW;
+                else if (create_flags & MDS_FMODE_EXEC)
+                        lm = LCK_PR;
+                else
+                        lm = LCK_CR;
+                mdt_lock_handle_init(lhc);
+                mdt_lock_reg_init(lhc, lm);
+                rc = mdt_object_lock(info, child, lhc,
+                                     MDS_INODELOCK_LOOKUP | MDS_INODELOCK_OPEN,
+                                     MDT_CROSS_LOCK);
+                if (rc) {
+                        result = rc;
+                        GOTO(out_child, result);
+                } else {
+                        result = -EREMOTE;
+                        mdt_set_disposition(info, ldlm_rep, DISP_OPEN_LOCK);
+                }
+        }
+
+        /* Try to open it now. */
+        rc = mdt_finish_open(info, parent, child, create_flags,
+                             created, ldlm_rep);
+        if (rc) {
+                result = rc;
+                if (lustre_handle_is_used(&lhc->mlh_reg_lh))
+                        /* openlock was acquired and mdt_finish_open failed -
+                           drop the openlock */
+                        mdt_object_unlock(info, child, lhc, 1);
+                if (created) {
+                        ma->ma_need = 0;
+                        ma->ma_valid = 0;
+                        ma->ma_cookie_size = 0;
+                        info->mti_no_need_trans = 1;
+                        rc = mdo_unlink(info->mti_env,
+                                        mdt_object_child(parent),
+                                        mdt_object_child(child),
+                                        lname,
+                                        &info->mti_attr);
+                        if (rc != 0)
+                                CERROR("Error in cleanup of open\n");
+                }
         }
         EXIT;
 out_child:
@@ -1075,7 +1106,7 @@ out_child:
 out_parent:
         mdt_object_unlock_put(info, parent, lh, result);
 out:
-        if (result)
+        if (result && result != -EREMOTE)
                 lustre_msg_set_transno(req->rq_repmsg, 0);
         return result;
 }

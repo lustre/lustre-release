@@ -1159,6 +1159,10 @@ Description: Procfs and llog threads access destoryed import sometimes.
 Details    : Sync the import destoryed process with procfs and llog threads by
 	     the import refcount and semaphore.
 
+Severity   : enhancement
+Bugzilla   : 14975
+Description: openlock cache of b1_6 port to HEAD
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
