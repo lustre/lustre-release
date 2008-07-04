@@ -56,6 +56,10 @@ static void llog_ctxt_destroy(struct llog_ctxt *ctxt)
 {
         if (ctxt->loc_exp)
                 class_export_put(ctxt->loc_exp);
+        if (ctxt->loc_imp) {
+                class_import_put(ctxt->loc_imp);
+                ctxt->loc_imp = NULL;
+        }
         OBD_FREE(ctxt, sizeof(*ctxt));
         return;
 }

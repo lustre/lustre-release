@@ -982,8 +982,19 @@ static int mdc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
 {
         struct ptlrpc_request *req;
         struct obd_statfs *msfs;
+        struct obd_import     *imp = NULL;
         int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*msfs) };
         ENTRY;
+
+        /*Since the request might also come from lprocfs, so we need 
+         *sync this with client_disconnect_export Bug15684*/
+        down_read(&obd->u.cli.cl_sem);
+        if (obd->u.cli.cl_import)
+                imp = class_import_get(obd->u.cli.cl_import);
+        up_read(&obd->u.cli.cl_sem);
+        if (!imp)
+                RETURN(-ENODEV);
+        
 
         /* We could possibly pass max_age in the request (as an absolute
          * timestamp or a "seconds.usec ago") so the target can avoid doing
@@ -991,10 +1002,10 @@ static int mdc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
          * during mount that would help a bit).  Having relative timestamps
          * is not so great if request processing is slow, while absolute
          * timestamps are not ideal because they need time synchronization. */
-        req = ptlrpc_prep_req(obd->u.cli.cl_import, LUSTRE_MDS_VERSION,
-                              MDS_STATFS, 1, NULL, NULL);
+        req = ptlrpc_prep_req(imp, LUSTRE_MDS_VERSION, MDS_STATFS, 1, NULL, 
+                              NULL);
         if (!req)
-                RETURN(-ENOMEM);
+                GOTO(output, rc = -ENOMEM);
 
         ptlrpc_req_set_repsize(req, 2, size);
 
@@ -1020,7 +1031,8 @@ static int mdc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         EXIT;
 out:
         ptlrpc_req_finished(req);
-
+output:
+        class_import_put(imp);
         return rc;
 }
 
@@ -1281,11 +1293,12 @@ static int mdc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                         class_destroy_import(imp);
                         obd->u.cli.cl_import = NULL;
                 }
-                break;
-        case OBD_CLEANUP_SELF_EXP:
                 rc = obd_llog_finish(obd, 0);
                 if (rc != 0)
                         CERROR("failed to cleanup llogging subsystems\n");
+                break;
+        case OBD_CLEANUP_SELF_EXP:
+                break;
         case OBD_CLEANUP_OBD:
                 break;
         }
@@ -1320,7 +1333,7 @@ static int mdc_llog_init(struct obd_device *obd, struct obd_device *tgt,
                         &llog_client_ops);
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
-                ctxt->loc_imp = obd->u.cli.cl_import;
+                llog_initiator_connect(ctxt);
                 llog_ctxt_put(ctxt);
         }
 
@@ -1328,7 +1341,7 @@ static int mdc_llog_init(struct obd_device *obd, struct obd_device *tgt,
                        &llog_client_ops);
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_LOVEA_REPL_CTXT);
-                ctxt->loc_imp = obd->u.cli.cl_import;
+                llog_initiator_connect(ctxt);
                 llog_ctxt_put(ctxt);
         }
 
