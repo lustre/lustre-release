@@ -740,10 +740,6 @@ void client_common_put_super(struct super_block *sb)
 
         list_del(&sbi->ll_conn_chain);
 
-        obd_unregister_page_removal_cb(sbi->ll_dt_exp,
-                                       ll_page_removal_cb);
-        obd_unregister_lock_cancel_cb(sbi->ll_dt_exp,ll_extent_lock_cancel_cb);
-
         obd_fid_fini(sbi->ll_dt_exp);
         obd_disconnect(sbi->ll_dt_exp);
         sbi->ll_dt_exp = NULL;
