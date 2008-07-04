@@ -45,9 +45,9 @@
 
 static int mgs_export_stats_init(struct obd_device *obd, struct obd_export *exp)
 {
-        int rc, num_stats, newnid;
+        int rc, num_stats, newnid = 0;
 
-        rc = lprocfs_exp_setup(exp, 0, &newnid);
+        rc = lprocfs_exp_setup(exp, NULL, &newnid);
         if (rc)
                 return rc;
 

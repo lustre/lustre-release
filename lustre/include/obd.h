@@ -793,7 +793,7 @@ struct obd_device {
         cfs_waitq_t             obd_llog_waitq;
         struct list_head        obd_exports;
         int                     obd_num_exports;
-        spinlock_t              nid_lock;
+        spinlock_t              obd_nid_lock;
         struct ldlm_namespace  *obd_namespace;
         struct ptlrpc_client    obd_ldlm_client; /* XXX OST/MDS only */
         /* a spinlock is OK for what we do now, may need a semaphore later */
@@ -959,6 +959,14 @@ struct obd_ops {
                                  struct obd_async_page_ops *ops, void *data,
                                  void **res, int nocache,
                                  struct lustre_handle *lockh);
+        int (*o_reget_short_lock)(struct obd_export *exp,
+                                 struct lov_stripe_md *lsm,
+                                 void **res, int rw,
+                                 loff_t start, loff_t end,
+                                 void **cookie);
+        int (*o_release_short_lock)(struct obd_export *exp,
+                                    struct lov_stripe_md *lsm, loff_t end,
+                                    void *cookie, int rw);
         int (*o_queue_async_io)(struct obd_export *exp,
                                 struct lov_stripe_md *lsm,
                                 struct lov_oinfo *loi, void *cookie,
@@ -1098,7 +1106,7 @@ static inline struct lsm_operations *lsm_op_find(int magic)
         case LOV_MAGIC_JOIN:
                return &lsm_join_ops;
         default:
-               CERROR("Cannot recognize lsm_magic %d", magic);
+               CERROR("Cannot recognize lsm_magic %x\n", magic);
                return NULL;
         }
 }
@@ -1113,11 +1121,11 @@ static inline void obd_transno_commit_cb(struct obd_device *obd, __u64 transno,
                                          int error)
 {
         if (error) {
-                CERROR("%s: transno "LPD64" commit error: %d\n",
+                CERROR("%s: transno "LPU64" commit error: %d\n",
                        obd->obd_name, transno, error);
                 return;
         }
-        CDEBUG(D_HA, "%s: transno "LPD64" committed\n",
+        CDEBUG(D_HA, "%s: transno "LPU64" committed\n",
                obd->obd_name, transno);
         if (transno > obd->obd_last_committed) {
                 obd->obd_last_committed = transno;

@@ -329,7 +329,7 @@ test_5e() {
 	start_mds
 
 #define OBD_FAIL_PTLRPC_DELAY_SEND       0x506
-	do_facet client "sysctl -w lustre.fail_loc=0x80000506"
+	do_facet client "lctl set_param fail_loc=0x80000506"
 	grep " $MOUNT " /etc/mtab && echo "test 5e: mtab before mount" && return 10
 	mount_client $MOUNT || echo "mount failed (not fatal)"
 	cleanup  || return $?
@@ -366,17 +366,17 @@ run_test 8 "double mount setup"
 test_9() {
         start_ost
 
-	do_facet ost1 sysctl lnet.debug=\'inode trace\' || return 1
-	do_facet ost1 sysctl lnet.subsystem_debug=\'mds ost\' || return 1
+	do_facet ost1 lctl set_param debug=\'inode trace\' || return 1
+	do_facet ost1 lctl set_param subsystem_debug=\'mds ost\' || return 1
 
-        CHECK_PTLDEBUG="`do_facet ost1 sysctl -n lnet.debug`"
+        CHECK_PTLDEBUG="`do_facet ost1 lctl get_param -n debug`"
         if [ "$CHECK_PTLDEBUG" ] && [ "$CHECK_PTLDEBUG" = "trace inode" ];then
            echo "lnet.debug success"
         else
            echo "lnet.debug: want 'trace inode', have '$CHECK_PTLDEBUG'"
            return 1
         fi
-        CHECK_SUBSYS="`do_facet ost1 sysctl -n lnet.subsystem_debug`"
+        CHECK_SUBSYS="`do_facet ost1 lctl get_param -n subsystem_debug`"
         if [ "$CHECK_SUBSYS" ] && [ "$CHECK_SUBSYS" = "mds ost" ]; then
            echo "lnet.subsystem_debug success"
         else
@@ -513,7 +513,7 @@ test_12() {
 }
 run_test 12 "lmc --batch, with single/double quote, backslash in batchfile"
 
-test_13() {
+test_13a() {	# was test_13
         OLDXMLCONFIG=$XMLCONFIG
         XMLCONFIG="conf13-1.xml"
 
@@ -546,7 +546,7 @@ test_13() {
         rm -f $XMLCONFIG
         XMLCONFIG=$OLDXMLCONFIG
 }
-run_test 13 "check new_uuid of lmc operating correctly"
+run_test 13a "check new_uuid of lmc operating correctly"
 
 test_13b() {
         OLDXMLCONFIG=$XMLCONFIG
@@ -876,7 +876,7 @@ test_23b() {    # was test_23
 	start_ost
 	start_mds
 	# Simulate -EINTR during mount OBD_FAIL_LDLM_CLOSE_THREAD
-	sysctl -w lustre.fail_loc=0x80000313
+	lctl set_param fail_loc=0x80000313
 	mount_client $MOUNT
 	cleanup
 }
@@ -970,7 +970,7 @@ test_26() {
     # we need modules before mount for sysctl, so make sure...
     do_facet mds "lsmod | grep -q lustre || modprobe lustre"
 #define OBD_FAIL_MDS_FS_SETUP            0x135
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000135"
+    do_facet mds "lctl set_param fail_loc=0x80000135"
     start_mds && echo MDS started && return 1
     lctl get_param -n devices
     DEVS=$(lctl get_param -n devices | wc -l)
@@ -1148,27 +1148,29 @@ test_32a() {
         #       there appears to be a lot of assumption here about loopback
         #       devices
         # or maybe this test is just totally useless on a client-only system
+	[ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
 	[ "$mds_HOST" = "`hostname`" ] || { skip "remote MDS" && return 0; }
 	[ "$ost_HOST" = "`hostname`" -o "$ost1_HOST" = "`hostname`" ] || \
 		{ skip "remote OST" && return 0; }
 
         [ -z "$TUNEFS" ] && skip "No tunefs" && return
 	local DISK1_4=$LUSTRE/tests/disk1_4.zip
-        [ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
-	mkdir -p $TMP/$tdir
-	unzip -o -j -d $TMP/$tdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
-	load_modules
-	sysctl lnet.debug=$PTLDEBUG
+	[ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
 
-	$TUNEFS $TMP/$tdir/mds || error "tunefs failed"
+	local tmpdir=$TMP/conf32a
+	unzip -o -j -d $tmpdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
+	load_modules
+	lctl set_param debug=$PTLDEBUG
+
+	$TUNEFS $tmpdir/mds || error "tunefs failed"
 	# nids are wrong, so client wont work, but server should start
-        start mds $TMP/$tdir/mds "-o loop,exclude=lustre-OST0000" || return 3
+	start mds $tmpdir/mds "-o loop,exclude=lustre-OST0000" || return 3
         local UUID=$(lctl get_param -n mds.lustre-MDT0000.uuid)
 	echo MDS uuid $UUID
 	[ "$UUID" == "mdsA_UUID" ] || error "UUID is wrong: $UUID" 
 
-	$TUNEFS --mgsnode=`hostname` $TMP/$tdir/ost1 || error "tunefs failed"
-	start ost1 $TMP/$tdir/ost1 "-o loop" || return 5
+	$TUNEFS --mgsnode=`hostname` $tmpdir/ost1 || error "tunefs failed"
+	start ost1 $tmpdir/ost1 "-o loop" || return 5
 	UUID=$(lctl get_param -n obdfilter.lustre-OST0000.uuid)
 	echo OST uuid $UUID
 	[ "$UUID" == "ost1_UUID" ] || error "UUID is wrong: $UUID" 
@@ -1199,12 +1201,12 @@ test_32a() {
 
         # mount a second time to make sure we didnt leave upgrade flag on
 	load_modules
-        $TUNEFS --dryrun $TMP/$tdir/mds || error "tunefs failed"
+	$TUNEFS --dryrun $tmpdir/mds || error "tunefs failed"
 	load_modules
-        start mds $TMP/$tdir/mds "-o loop,exclude=lustre-OST0000" || return 12
-        cleanup_nocli
+	start mds $tmpdir/mds "-o loop,exclude=lustre-OST0000" || return 12
+	cleanup_nocli
 
-	[ -d $TMP/$tdir ] && { rm -rf $TMP/$tdir || true; }	# true is only for TMP on NFS
+	[ -d $tmpdir ] && rm -rf $tmpdir
 }
 run_test 32a "Upgrade from 1.4 (not live)"
 
@@ -1214,29 +1216,31 @@ test_32b() {
         #       there appears to be a lot of assumption here about loopback
         #       devices
         # or maybe this test is just totally useless on a client-only system
+        [ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
         [ "$mds_HOST" = "`hostname`" ] || { skip "remote MDS" && return 0; }
         [ "$ost_HOST" = "`hostname`" -o "$ost1_HOST" = "`hostname`" ] || \
 		{ skip "remote OST" && return 0; }
 
         [ -z "$TUNEFS" ] && skip "No tunefs" && return
 	local DISK1_4=$LUSTRE/tests/disk1_4.zip
-        [ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
-	mkdir -p $TMP/$tdir
-	unzip -o -j -d $TMP/$tdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
+	[ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
+
+	local tmpdir=$TMP/conf32b
+	unzip -o -j -d $tmpdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
 	load_modules
-	sysctl lnet.debug=$PTLDEBUG
+	lctl set_param debug=$PTLDEBUG
 	NEWNAME=sofia
 
 	# writeconf will cause servers to register with their current nids
-	$TUNEFS --writeconf --fsname=$NEWNAME $TMP/$tdir/mds || error "tunefs failed"
-	start mds $TMP/$tdir/mds "-o loop" || return 3
-        local UUID=$(lctl get_param -n mds.${NEWNAME}-MDT0000.uuid)
+	$TUNEFS --writeconf --fsname=$NEWNAME $tmpdir/mds || error "tunefs failed"
+	start mds $tmpdir/mds "-o loop" || return 3
+	local UUID=$(lctl get_param -n mds.${NEWNAME}-MDT0000.uuid)
 	echo MDS uuid $UUID
 	[ "$UUID" == "mdsA_UUID" ] || error "UUID is wrong: $UUID" 
 
-	$TUNEFS --mgsnode=`hostname` --fsname=$NEWNAME --writeconf $TMP/$tdir/ost1 || error "tunefs failed"
-	start ost1 $TMP/$tdir/ost1 "-o loop" || return 5
-        UUID=$(lctl get_param -n obdfilter.${NEWNAME}-OST0000.uuid)
+	$TUNEFS --mgsnode=`hostname` --fsname=$NEWNAME --writeconf $tmpdir/ost1 || error "tunefs failed"
+	start ost1 $tmpdir/ost1 "-o loop" || return 5
+	UUID=$(lctl get_param -n obdfilter.${NEWNAME}-OST0000.uuid)
 	echo OST uuid $UUID
 	[ "$UUID" == "ost1_UUID" ] || error "UUID is wrong: $UUID"
 
@@ -1260,7 +1264,7 @@ test_32b() {
 	echo "ok."
 
 	cleanup
-	[ -d $TMP/$tdir ] && { rm -rf $TMP/$tdir || true; }	# true is only for TMP on NFS
+	[ -d $tmpdir ] && rm -rf $tmpdir
 }
 run_test 32b "Upgrade from 1.4 with writeconf"
 
@@ -1301,8 +1305,8 @@ test_33b() {	# was test_33a
         do_facet client dd if=/dev/zero of=$MOUNT/24 bs=1024k count=1
         # Drop lock cancelation reply during umount
 	#define OBD_FAIL_LDLM_CANCEL             0x304
-        do_facet client sysctl -w lustre.fail_loc=0x80000304
-        #sysctl -w lnet.debug=-1
+        do_facet client lctl set_param fail_loc=0x80000304
+        #lctl set_param debug=-1
         umount_client $MOUNT
         cleanup
 }
@@ -1359,7 +1363,7 @@ test_35() { # bug 12459
 	setup
 
 	debugsave
-	sysctl -w lnet.debug="ha"
+	lctl set_param debug="ha"
 
 	log "Set up a fake failnode for the MDS"
 	FAKENID="127.0.0.2"
@@ -1569,11 +1573,32 @@ run_test 39 "leak_finder recognizes both LUSTRE and LNET malloc messages"
 test_40() { # bug 15759
 	start_ost
 	#define OBD_FAIL_TGT_TOOMANY_THREADS     0x706
-	do_facet mds "sysctl -w lustre.fail_loc=0x80000706"
+	do_facet mds "lctl set_param fail_loc=0x80000706"
 	start_mds
 	cleanup
 }
 run_test 40 "race during service thread startup"
+
+test_41() { #bug 14134
+        local rc
+        start mds $MDSDEV $MDS_MOUNT_OPTS -o nosvc
+        start ost `ostdevname 1` $OST_MOUNT_OPTS
+        start mds $MDSDEV $MDS_MOUNT_OPTS -o nomgs
+        mkdir -p $MOUNT
+        mount_client $MOUNT || return 1
+        sleep 5
+
+        echo "blah blah" > $MOUNT/$tfile
+        cat $MOUNT/$tfile
+
+        umount_client $MOUNT
+        stop ost -f || return 201
+        stop mds -f || return 202
+        stop mds -f || return 203
+        unload_modules || return 204
+        return $rc
+}
+run_test 41 "mount mds with --nosvc and --nomgs"
 
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true

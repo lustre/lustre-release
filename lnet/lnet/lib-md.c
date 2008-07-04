@@ -284,7 +284,7 @@ LNetMDUnlink (lnet_handle_md_t mdh)
 
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
-        
+
         LNET_LOCK();
 
         md = lnet_handle2md(&mdh);
@@ -299,14 +299,7 @@ LNetMDUnlink (lnet_handle_md_t mdh)
 
         if (md->md_eq != NULL &&
             md->md_refcount == 0) {
-                memset(&ev, 0, sizeof(ev));
-
-                ev.type = LNET_EVENT_UNLINK;
-                ev.status = 0;
-                ev.unlinked = 1;
-                lnet_md_deconstruct(md, &ev.md);
-                lnet_md2handle(&ev.md_handle, md);
-
+                lnet_build_unlink_event(md, &ev);
                 lnet_enq_event_locked(md->md_eq, &ev);
         }
 

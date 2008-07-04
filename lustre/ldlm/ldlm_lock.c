@@ -39,13 +39,6 @@
 
 //struct lustre_lock ldlm_everything_lock;
 
-/* lock's skip list pointers fix mode */
-#define LDLM_JOIN_NONE          0
-#define LDLM_MODE_JOIN_RIGHT    1
-#define LDLM_MODE_JOIN_LEFT     (1 << 1)
-#define LDLM_POLICY_JOIN_RIGHT  (1 << 2)
-#define LDLM_POLICY_JOIN_LEFT   (1 << 3)
-
 /* lock types */
 char *ldlm_lockname[] = {
         [0] "--",
@@ -340,10 +333,8 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
         CFS_INIT_LIST_HEAD(&lock->l_cp_ast);
         cfs_waitq_init(&lock->l_waitq);
         lock->l_blocking_lock = NULL;
-        lock->l_sl_mode.prev = NULL;
-        lock->l_sl_mode.next = NULL;
-        lock->l_sl_policy.prev = NULL;
-        lock->l_sl_policy.next = NULL;
+        CFS_INIT_LIST_HEAD(&lock->l_sl_mode);
+        CFS_INIT_LIST_HEAD(&lock->l_sl_policy);
 
         atomic_inc(&resource->lr_namespace->ns_locks);
         CFS_INIT_LIST_HEAD(&lock->l_handle.h_link);
@@ -383,10 +374,8 @@ int ldlm_lock_change_resource(struct ldlm_namespace *ns, struct ldlm_lock *lock,
         unlock_res_and_lock(lock);
 
         newres = ldlm_resource_get(ns, NULL, new_resid, type, 1);
-        if (newres == NULL) {
-                LBUG();
+        if (newres == NULL)
                 RETURN(-ENOMEM);
-        }
 
         lock_res_and_lock(lock);
         LASSERT(memcmp(&new_resid, &lock->l_resource->lr_name,
@@ -683,6 +672,12 @@ void ldlm_lock_decref_and_cancel(struct lustre_handle *lockh, __u32 mode)
         LDLM_LOCK_PUT(lock);
 }
 
+struct sl_insert_point {
+        struct list_head *res_link;
+        struct list_head *mode_link;
+        struct list_head *policy_link;
+};
+
 /*
  * search_granted_lock
  *
@@ -691,108 +686,97 @@ void ldlm_lock_decref_and_cancel(struct lustre_handle *lockh, __u32 mode)
  * Parameters:
  *      queue [input]:  the granted list where search acts on;
  *      req [input]:    the lock whose position to be located;
- *      lockp [output]: the position where the lock should be inserted before, or
- *                      NULL indicating @req should be appended to @queue.
- * Return Values:
- *      Bit-masks combination of following values indicating in which way the 
- *      lock need to be inserted.
- *      - LDLM_JOIN_NONE:       noting about skip list needs to be fixed;
- *      - LDLM_MODE_JOIN_RIGHT: @req needs join right becoming the head of a 
- *                              mode group;
- *      - LDLM_POLICY_JOIN_RIGHT: @req needs join right becoming the head of
- *                                a policy group.
+ *      prev [output]:  positions within 3 lists to insert @req to
+ * Return Value:
+ *      filled @prev
  * NOTE: called by
  *  - ldlm_grant_lock_with_skiplist
  */
-static int search_granted_lock(struct list_head *queue, 
-                        struct ldlm_lock *req,
-                        struct ldlm_lock **lockp)
+static void search_granted_lock(struct list_head *queue,
+                                struct ldlm_lock *req,
+                                struct sl_insert_point *prev)
 {
-        struct list_head *tmp, *tmp_tail;
-        struct ldlm_lock *lock, *mode_head_lock;
-        int rc = LDLM_JOIN_NONE;
+        struct list_head *tmp;
+        struct ldlm_lock *lock, *mode_end, *policy_end;
         ENTRY;
 
         list_for_each(tmp, queue) {
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
 
+                mode_end = list_entry(lock->l_sl_mode.prev, struct ldlm_lock,
+                                      l_sl_mode);
+
                 if (lock->l_req_mode != req->l_req_mode) {
-                        if (LDLM_SL_HEAD(&lock->l_sl_mode))
-                                tmp = &list_entry(lock->l_sl_mode.next,
-                                                  struct ldlm_lock,
-                                                  l_sl_mode)->l_res_link;
+                        /* jump to last lock of mode group */
+                        tmp = &mode_end->l_res_link;
                         continue;
                 }
-                
-                /* found the same mode group */
+
+                /* suitable mode group is found */
                 if (lock->l_resource->lr_type == LDLM_PLAIN) {
-                        *lockp = lock;
-                        rc = LDLM_MODE_JOIN_RIGHT;
-                        GOTO(out, rc);
+                        /* insert point is last lock of the mode group */
+                        prev->res_link = &mode_end->l_res_link;
+                        prev->mode_link = &mode_end->l_sl_mode;
+                        prev->policy_link = &req->l_sl_policy;
+                        EXIT;
+                        return;
                 } else if (lock->l_resource->lr_type == LDLM_IBITS) {
-                        tmp_tail = tmp;
-                        if (LDLM_SL_HEAD(&lock->l_sl_mode))
-                                tmp_tail = &list_entry(lock->l_sl_mode.next,
-                                                       struct ldlm_lock,
-                                                       l_sl_mode)->l_res_link;
-                        mode_head_lock = lock;
                         for (;;) {
+                                policy_end = list_entry(lock->l_sl_policy.prev,
+                                                        struct ldlm_lock,
+                                                        l_sl_policy);
+
                                 if (lock->l_policy_data.l_inodebits.bits ==
                                     req->l_policy_data.l_inodebits.bits) {
-                                        /* matched policy lock is found */
-                                        *lockp = lock;
-                                        rc |= LDLM_POLICY_JOIN_RIGHT;
-
-                                        /* if the policy group head is also a 
-                                         * mode group head or a single mode
-                                         * group lock */
-                                        if (LDLM_SL_HEAD(&lock->l_sl_mode) ||
-                                            (tmp == tmp_tail &&
-                                             LDLM_SL_EMPTY(&lock->l_sl_mode)))
-                                                rc |= LDLM_MODE_JOIN_RIGHT;
-                                        GOTO(out, rc);
+                                        /* insert point is last lock of
+                                         * the policy group */
+                                        prev->res_link =
+                                                &policy_end->l_res_link;
+                                        prev->mode_link =
+                                                &policy_end->l_sl_mode;
+                                        prev->policy_link =
+                                                &policy_end->l_sl_policy;
+                                        EXIT;
+                                        return;
                                 }
 
-                                if (LDLM_SL_HEAD(&lock->l_sl_policy))
-                                        tmp = &list_entry(lock->l_sl_policy.next,
-                                                          struct ldlm_lock,
-                                                          l_sl_policy)->l_res_link;
-
-                                if (tmp == tmp_tail)
+                                if (policy_end == mode_end)
+                                        /* done with mode group */
                                         break;
-                                else
-                                        tmp = tmp->next;
+
+                                /* jump to next policy group within the mode group */
+                                tmp = policy_end->l_res_link.next;
                                 lock = list_entry(tmp, struct ldlm_lock, 
                                                   l_res_link);
-                        }  /* for all locks in the matched mode group */
+                        }  /* loop over policy groups within the mode group */
 
-                        /* no matched policy group is found, insert before
-                         * the mode group head lock */
-                        *lockp = mode_head_lock;
-                        rc = LDLM_MODE_JOIN_RIGHT;
-                        GOTO(out, rc);
+                        /* insert point is last lock of the mode group,
+                         * new policy group is started */
+                        prev->res_link = &mode_end->l_res_link;
+                        prev->mode_link = &mode_end->l_sl_mode;
+                        prev->policy_link = &req->l_sl_policy;
+                        EXIT;
+                        return;
                 } else {
                         LDLM_ERROR(lock, "is not LDLM_PLAIN or LDLM_IBITS lock");
                         LBUG();
                 }
         }
 
-        /* no matched mode group is found, append to the end */
-        *lockp = NULL;
-        rc = LDLM_JOIN_NONE;
+        /* insert point is last lock on the queue,
+         * new mode group and new policy group are started */
+        prev->res_link = queue->prev;
+        prev->mode_link = &req->l_sl_mode;
+        prev->policy_link = &req->l_sl_policy;
         EXIT;
-out:
-        return rc;
+        return;
 }
 
 static void ldlm_granted_list_add_lock(struct ldlm_lock *lock, 
-                                       struct ldlm_lock *lockp,
-                                       int join)
+                                       struct sl_insert_point *prev)
 {
         struct ldlm_resource *res = lock->l_resource;
         ENTRY;
-
-        LASSERT(lockp || join == LDLM_JOIN_NONE);
 
         check_res_locked(res);
 
@@ -806,72 +790,25 @@ static void ldlm_granted_list_add_lock(struct ldlm_lock *lock,
         }
 
         LASSERT(list_empty(&lock->l_res_link));
+        LASSERT(list_empty(&lock->l_sl_mode));
+        LASSERT(list_empty(&lock->l_sl_policy));
 
-        if (!lockp)
-                list_add_tail(&lock->l_res_link, &lock->l_resource->lr_granted);
-        else if ((join & LDLM_MODE_JOIN_LEFT) || (join & LDLM_POLICY_JOIN_LEFT))
-                list_add(&lock->l_res_link, &lockp->l_res_link);
-        else
-                list_add_tail(&lock->l_res_link, &lockp->l_res_link);
-
-        /* fix skip lists */
-        if (join & LDLM_MODE_JOIN_RIGHT) {
-                LASSERT(! LDLM_SL_TAIL(&lockp->l_sl_mode));
-                if (LDLM_SL_EMPTY(&lockp->l_sl_mode)) {
-                        lock->l_sl_mode.next = &lockp->l_sl_mode;
-                        lockp->l_sl_mode.prev = &lock->l_sl_mode;
-                } else if (LDLM_SL_HEAD(&lockp->l_sl_mode)) {
-                        lock->l_sl_mode.next = lockp->l_sl_mode.next;
-                        lockp->l_sl_mode.next = NULL;
-                        lock->l_sl_mode.next->prev = &lock->l_sl_mode;
-                }
-        } else if (join & LDLM_MODE_JOIN_LEFT) {
-                LASSERT(! LDLM_SL_HEAD(&lockp->l_sl_mode));
-                if (LDLM_SL_EMPTY(&lockp->l_sl_mode)) {
-                        lock->l_sl_mode.prev = &lockp->l_sl_mode;
-                        lockp->l_sl_mode.next = &lock->l_sl_mode;
-                } else if (LDLM_SL_TAIL(&lockp->l_sl_mode)) {
-                        lock->l_sl_mode.prev = lockp->l_sl_mode.prev;
-                        lockp->l_sl_mode.prev = NULL;
-                        lock->l_sl_mode.prev->next = &lock->l_sl_mode;
-                }
-        }
-        
-        if (join & LDLM_POLICY_JOIN_RIGHT) {
-                LASSERT(! LDLM_SL_TAIL(&lockp->l_sl_policy));
-                if (LDLM_SL_EMPTY(&lockp->l_sl_policy)) {
-                        lock->l_sl_policy.next = &lockp->l_sl_policy;
-                        lockp->l_sl_policy.prev = &lock->l_sl_policy;
-                } else if (LDLM_SL_HEAD(&lockp->l_sl_policy)) {
-                        lock->l_sl_policy.next = lockp->l_sl_policy.next;
-                        lockp->l_sl_policy.next = NULL;
-                        lock->l_sl_policy.next->prev = &lock->l_sl_policy;
-                }
-        } else if (join & LDLM_POLICY_JOIN_LEFT) {
-                LASSERT(! LDLM_SL_HEAD(&lockp->l_sl_policy));
-                if (LDLM_SL_EMPTY(&lockp->l_sl_policy)) {
-                        lock->l_sl_policy.prev = &lockp->l_sl_policy;
-                        lockp->l_sl_policy.next = &lock->l_sl_policy;
-                } else if (LDLM_SL_TAIL(&lockp->l_sl_policy)) {
-                        lock->l_sl_policy.prev = lockp->l_sl_policy.prev;
-                        lockp->l_sl_policy.prev = NULL;
-                        lock->l_sl_policy.prev->next = &lock->l_sl_policy;
-                }
-        }
+        list_add(&lock->l_res_link, prev->res_link);
+        list_add(&lock->l_sl_mode, prev->mode_link);
+        list_add(&lock->l_sl_policy, prev->policy_link);
 
         EXIT;
 }
 
 static void ldlm_grant_lock_with_skiplist(struct ldlm_lock *lock)
 {
-        int join = LDLM_JOIN_NONE;
-        struct ldlm_lock *lockp = NULL;
+        struct sl_insert_point prev;
         ENTRY;
 
         LASSERT(lock->l_req_mode == lock->l_granted_mode);
 
-        join = search_granted_lock(&lock->l_resource->lr_granted, lock, &lockp);
-        ldlm_granted_list_add_lock(lock, lockp, join);
+        search_granted_lock(&lock->l_resource->lr_granted, lock, &prev);
+        ldlm_granted_list_add_lock(lock, &prev);
         EXIT;
 }
 
@@ -923,7 +860,7 @@ static struct ldlm_lock *search_queue(struct list_head *queue,
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
 
                 if (lock == old_lock)
-                        continue;
+                        break;
 
                 /* llite sometimes wants to match locks that will be
                  * canceled when their users drop, but we allow it to match
@@ -987,6 +924,33 @@ void ldlm_lock_allow_match(struct ldlm_lock *lock)
         lock->l_flags |= LDLM_FL_LVB_READY;
         cfs_waitq_signal(&lock->l_waitq);
         unlock_res_and_lock(lock);
+}
+
+int ldlm_lock_fast_match(struct ldlm_lock *lock, int rw,
+                                loff_t start, loff_t end,
+                                void **cookie)
+{
+        LASSERT(rw == OBD_BRW_READ || rw == OBD_BRW_WRITE);
+        /* should LCK_GROUP be handled in a special way? */
+        if (lock && (rw == OBD_BRW_READ ||
+                     (lock->l_granted_mode & (LCK_PW|LCK_GROUP))) &&
+            (lock->l_policy_data.l_extent.start <= start) &&
+            (lock->l_policy_data.l_extent.end >= end)) {
+                ldlm_lock_addref_internal(lock, rw == OBD_BRW_WRITE ? LCK_PW : LCK_PR);
+                *cookie = (void *)lock;
+                return 1; /* avoid using rc for stack relief */
+        }
+        return 0;
+}
+
+void ldlm_lock_fast_release(void *cookie, int rw)
+{
+        struct ldlm_lock *lock = (struct ldlm_lock *)cookie;
+
+        LASSERT(lock != NULL);
+        LASSERT(rw == OBD_BRW_READ || rw == OBD_BRW_WRITE);
+        LASSERT(rw == OBD_BRW_READ || (lock->l_granted_mode & (LCK_PW | LCK_GROUP)));
+        ldlm_lock_decref_internal(lock, rw == OBD_BRW_WRITE ? LCK_PW : LCK_PR);
 }
 
 /* Can be called in two ways:
@@ -1528,55 +1492,12 @@ void ldlm_cancel_callback(struct ldlm_lock *lock)
 
 void ldlm_unlink_lock_skiplist(struct ldlm_lock *req)
 {
-        struct ldlm_lock *lock;
-
         if (req->l_resource->lr_type != LDLM_PLAIN &&
             req->l_resource->lr_type != LDLM_IBITS)
                 return;
-        
-        if (LDLM_SL_HEAD(&req->l_sl_mode)) {
-                lock = list_entry(req->l_res_link.next, struct ldlm_lock,
-                                  l_res_link);
-                if (req->l_sl_mode.next == &lock->l_sl_mode) {
-                        lock->l_sl_mode.prev = NULL;
-                } else {
-                        lock->l_sl_mode.next = req->l_sl_mode.next;
-                        lock->l_sl_mode.next->prev = &lock->l_sl_mode;
-                }
-                req->l_sl_mode.next = NULL;
-        } else if (LDLM_SL_TAIL(&req->l_sl_mode)) {
-                lock = list_entry(req->l_res_link.prev, struct ldlm_lock,
-                                  l_res_link);
-                if (req->l_sl_mode.prev == &lock->l_sl_mode) {
-                        lock->l_sl_mode.next = NULL;
-                } else {
-                        lock->l_sl_mode.prev = req->l_sl_mode.prev;
-                        lock->l_sl_mode.prev->next = &lock->l_sl_mode;
-                }
-                req->l_sl_mode.prev = NULL;
-        }
 
-        if (LDLM_SL_HEAD(&req->l_sl_policy)) {
-                lock = list_entry(req->l_res_link.next, struct ldlm_lock,
-                                  l_res_link);
-                if (req->l_sl_policy.next == &lock->l_sl_policy) {
-                        lock->l_sl_policy.prev = NULL;
-                } else {
-                        lock->l_sl_policy.next = req->l_sl_policy.next;
-                        lock->l_sl_policy.next->prev = &lock->l_sl_policy;
-                }
-                req->l_sl_policy.next = NULL;
-        } else if (LDLM_SL_TAIL(&req->l_sl_policy)) {
-                lock = list_entry(req->l_res_link.prev, struct ldlm_lock,
-                                  l_res_link);
-                if (req->l_sl_policy.prev == &lock->l_sl_policy) {
-                        lock->l_sl_policy.next = NULL;
-                } else {
-                        lock->l_sl_policy.prev = req->l_sl_policy.prev;
-                        lock->l_sl_policy.prev->next = &lock->l_sl_policy;
-                }
-                req->l_sl_policy.prev = NULL;
-        }
+        list_del_init(&req->l_sl_policy);
+        list_del_init(&req->l_sl_mode);
 }
 
 void ldlm_lock_cancel(struct ldlm_lock *lock)
@@ -1666,8 +1587,7 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
         struct ldlm_namespace *ns;
         int granted = 0;
         int old_mode, rc;
-        struct ldlm_lock *mark_lock = NULL;
-        int join= LDLM_JOIN_NONE;
+        struct sl_insert_point prev;
         ldlm_error_t err;
         struct ldlm_interval *node;
         ENTRY;
@@ -1697,27 +1617,10 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                 /* remember the lock position where the lock might be 
                  * added back to the granted list later and also 
                  * remember the join mode for skiplist fixing. */
-                if (LDLM_SL_HEAD(&lock->l_sl_mode))
-                        join = LDLM_MODE_JOIN_RIGHT;
-                else if (LDLM_SL_TAIL(&lock->l_sl_mode))
-                        join = LDLM_MODE_JOIN_LEFT;
-                if (LDLM_SL_HEAD(&lock->l_sl_policy))
-                        join |= LDLM_POLICY_JOIN_RIGHT;
-                else if (LDLM_SL_TAIL(&lock->l_sl_policy))
-                        join |= LDLM_POLICY_JOIN_LEFT;
-
-                LASSERT(!((join & LDLM_MODE_JOIN_RIGHT) &&
-                          (join & LDLM_POLICY_JOIN_LEFT)));
-                LASSERT(!((join & LDLM_MODE_JOIN_LEFT) &&
-                          (join & LDLM_POLICY_JOIN_RIGHT)));
-
-                if ((join & LDLM_MODE_JOIN_LEFT) ||
-                    (join & LDLM_POLICY_JOIN_LEFT))
-                        mark_lock = list_entry(lock->l_res_link.prev,
-                                               struct ldlm_lock, l_res_link);
-                else if (lock->l_res_link.next != &res->lr_granted)
-                        mark_lock = list_entry(lock->l_res_link.next,
-                                               struct ldlm_lock, l_res_link);
+                prev.res_link = lock->l_res_link.prev;
+                prev.mode_link = lock->l_sl_mode.prev;
+                prev.policy_link = lock->l_sl_policy.prev;
+                ldlm_resource_unlink_lock(lock);
         } else {
                 ldlm_resource_unlink_lock(lock);
                 if (res->lr_type == LDLM_EXTENT) {
@@ -1757,8 +1660,8 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                         if (res->lr_type == LDLM_EXTENT)
                                 ldlm_extent_add_lock(res, lock);
                         else
-                                ldlm_granted_list_add_lock(lock, mark_lock,
-                                                           join);
+                                ldlm_granted_list_add_lock(lock, &prev);
+
                         res = NULL;
                 } else {
                         *flags |= LDLM_FL_BLOCK_GRANTED;

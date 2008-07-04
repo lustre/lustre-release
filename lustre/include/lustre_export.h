@@ -88,6 +88,7 @@ struct obd_export {
         struct ldlm_export_data   exp_ldlm_data;
         struct list_head          exp_outstanding_replies;
         time_t                    exp_last_request_time;
+        struct list_head          exp_req_replay_queue;
         spinlock_t                exp_lock; /* protects flags int below */
         /* ^ protects exp_outstanding_replies too */
         __u64                     exp_connect_flags;

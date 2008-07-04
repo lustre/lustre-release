@@ -126,7 +126,7 @@ run_test 11 "wake up a thread waiting for completion after eviction (b=2460)"
 #b=2494
 test_12(){
     $LCTL mark multiop $MOUNT/$tfile OS_c 
-    do_facet mds "sysctl -w lustre.fail_loc=0x115"
+    do_facet mds "lctl set_param fail_loc=0x115"
     clear_failloc mds $((TIMEOUT * 2)) &
     multiop_bg_pause $MOUNT/$tfile OS_c || return 1
     PID=$!
@@ -143,9 +143,9 @@ test_13() {
     mkdir $MOUNT/readdir || return 1
     touch $MOUNT/readdir/newentry || return
 # OBD_FAIL_MDS_READPAGE_NET|OBD_FAIL_ONCE
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000104"
+    do_facet mds "lctl set_param fail_loc=0x80000104"
     ls $MOUNT/readdir || return 3
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds "lctl set_param fail_loc=0"
     rm -rf $MOUNT/readdir || return 4
 }
 run_test 13 "mdc_readpage restart test (bug 1138)"
@@ -155,14 +155,14 @@ test_14() {
     mkdir $MOUNT/readdir
     touch $MOUNT/readdir/newentry
 # OBD_FAIL_MDS_SENDPAGE|OBD_FAIL_ONCE
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000106"
+    do_facet mds "lctl set_param fail_loc=0x80000106"
     ls $MOUNT/readdir || return 1
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds "lctl set_param fail_loc=0"
 }
 run_test 14 "mdc_readpage resend test (bug 1138)"
 
 test_15() {
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000128"
+    do_facet mds "lctl set_param fail_loc=0x80000128"
     touch $DIR/$tfile && return 1
     return 0
 }
@@ -183,11 +183,11 @@ test_16() {
     stop_read_ahead
 
 #define OBD_FAIL_PTLRPC_BULK_PUT_NET 0x504 | OBD_FAIL_ONCE
-    do_facet ost1 sysctl -w lustre.fail_loc=0x80000504
+    do_facet ost1 lctl set_param fail_loc=0x80000504
     cancel_lru_locks osc
     # OST bulk will time out here, client resends
     do_facet client "cmp $SAMPLE_FILE $MOUNT/${SAMPLE_FILE##*/}" || return 1
-    do_facet ost1 sysctl -w lustre.fail_loc=0
+    do_facet ost1 lctl set_param fail_loc=0
     # give recovery a chance to finish (shouldn't take long)
     sleep $TIMEOUT
     do_facet client "cmp $SAMPLE_FILE $MOUNT/${SAMPLE_FILE##*/}" || return 2
@@ -206,7 +206,7 @@ test_17() {
 
     # OBD_FAIL_PTLRPC_BULK_GET_NET 0x0503 | OBD_FAIL_ONCE
     # OST bulk will time out here, client retries
-    do_facet ost1 sysctl -w lustre.fail_loc=0x80000503
+    do_facet ost1 lctl set_param fail_loc=0x80000503
     # need to ensure we send an RPC
     do_facet client cp $SAMPLE_FILE $DIR/$tfile
     sync
@@ -215,7 +215,7 @@ test_17() {
     # expiring the req, hopefully timeout*2 is enough
     sleep $(($TIMEOUT*2))
 
-    do_facet ost1 sysctl -w lustre.fail_loc=0
+    do_facet ost1 lctl set_param fail_loc=0
     do_facet client "df $DIR"
     # expect cmp to succeed, client resent bulk
     do_facet client "cmp $SAMPLE_FILE $DIR/$tfile" || return 3
@@ -297,7 +297,7 @@ test_18c() {
 
     # OBD_FAIL_OST_CONNECT_NET2
     # lost reply to connect request
-    do_facet ost1 sysctl -w lustre.fail_loc=0x80000225
+    do_facet ost1 lctl set_param fail_loc=0x80000225
     # force reconnect
     df $MOUNT > /dev/null 2>&1
     sleep 2
@@ -343,7 +343,7 @@ test_20a() {	# bug 2983 - ldlm_handle_enqueue cleanup
 	MULTI_PID=$!
 	cancel_lru_locks osc
 #define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
-	do_facet ost1 sysctl -w lustre.fail_loc=0x80000308
+	do_facet ost1 lctl set_param fail_loc=0x80000308
 	kill -USR1 $MULTI_PID
 	wait $MULTI_PID
 	rc=$?
@@ -356,7 +356,7 @@ test_20b() {	# bug 2986 - ldlm_handle_enqueue error during open
 	lfs setstripe $DIR/$tdir/${tfile} -i 0 -c 1
 	cancel_lru_locks osc
 #define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
-	do_facet ost1 sysctl -w lustre.fail_loc=0x80000308
+	do_facet ost1 lctl set_param fail_loc=0x80000308
 	dd if=/etc/hosts of=$DIR/$tdir/$tfile && \
 		error "didn't fail open enqueue" || true
 }
@@ -368,18 +368,18 @@ test_21a() {
        multiop_bg_pause $DIR/$tdir-1/f O_c || return 1
        close_pid=$!
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000129"
+       do_facet mds "lctl set_param fail_loc=0x80000129"
        multiop $DIR/$tdir-2/f Oc &
        open_pid=$!
        sleep 1
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet mds "lctl set_param fail_loc=0"
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
+       do_facet mds "lctl set_param fail_loc=0x80000115"
        kill -USR1 $close_pid
        cancel_lru_locks mdc
        wait $close_pid || return 1
        wait $open_pid || return 2
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet mds "lctl set_param fail_loc=0"
 
        $CHECKSTAT -t file $DIR/$tdir-1/f || return 3
        $CHECKSTAT -t file $DIR/$tdir-2/f || return 4
@@ -394,11 +394,11 @@ test_21b() {
        multiop_bg_pause $DIR/$tdir-1/f O_c || return 1
        close_pid=$!
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000107"
+       do_facet mds "lctl set_param fail_loc=0x80000107"
        mcreate $DIR/$tdir-2/f &
        open_pid=$!
        sleep 1
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet mds "lctl set_param fail_loc=0"
 
        kill -USR1 $close_pid
        cancel_lru_locks mdc
@@ -417,19 +417,19 @@ test_21c() {
        multiop_bg_pause $DIR/$tdir-1/f O_c || return 1
        close_pid=$!
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000107"
+       do_facet mds "lctl set_param fail_loc=0x80000107"
        mcreate $DIR/$tdir-2/f &
        open_pid=$!
        sleep 3
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet mds "lctl set_param fail_loc=0"
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
+       do_facet mds "lctl set_param fail_loc=0x80000115"
        kill -USR1 $close_pid
        cancel_lru_locks mdc
        wait $close_pid || return 1
        wait $open_pid || return 2
 
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet mds "lctl set_param fail_loc=0"
 
        $CHECKSTAT -t file $DIR/$tdir-1/f || return 2
        $CHECKSTAT -t file $DIR/$tdir-2/f || return 3
@@ -443,16 +443,16 @@ test_21d() {
        multiop_bg_pause $DIR/$tdir-1/f O_c || return 1
        pid=$!
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000129"
+       do_facet mds "lctl set_param fail_loc=0x80000129"
        multiop $DIR/$tdir-2/f Oc &
        sleep 1
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet mds "lctl set_param fail_loc=0"
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000122"
+       do_facet mds "lctl set_param fail_loc=0x80000122"
        kill -USR1 $pid
        cancel_lru_locks mdc
        wait $pid || return 1
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet mds "lctl set_param fail_loc=0"
 
        $CHECKSTAT -t file $DIR/$tdir-1/f || return 2
        $CHECKSTAT -t file $DIR/$tdir-2/f || return 3
@@ -467,10 +467,10 @@ test_21e() {
        multiop_bg_pause $DIR/$tdir-1/f O_c || return 1
        pid=$!
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+       do_facet mds "lctl set_param fail_loc=0x80000119"
        touch $DIR/$tdir-2/f &
        sleep 1
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet mds "lctl set_param fail_loc=0"
 
        kill -USR1 $pid
        cancel_lru_locks mdc
@@ -489,16 +489,16 @@ test_21f() {
        multiop_bg_pause $DIR/$tdir-1/f O_c || return 1
        pid=$!
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+       do_facet mds "lctl set_param fail_loc=0x80000119"
        touch $DIR/$tdir-2/f &
        sleep 1
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet mds "lctl set_param fail_loc=0"
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000122"
+       do_facet mds "lctl set_param fail_loc=0x80000122"
        kill -USR1 $pid
        cancel_lru_locks mdc
        wait $pid || return 1
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet mds "lctl set_param fail_loc=0"
 
        $CHECKSTAT -t file $DIR/$tdir-1/f || return 2
        $CHECKSTAT -t file $DIR/$tdir-2/f || return 3
@@ -512,16 +512,16 @@ test_21g() {
        multiop_bg_pause $DIR/$tdir-1/f O_c || return 1
        pid=$!
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+       do_facet mds "lctl set_param fail_loc=0x80000119"
        touch $DIR/$tdir-2/f &
        sleep 1
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet mds "lctl set_param fail_loc=0"
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
+       do_facet mds "lctl set_param fail_loc=0x80000115"
        kill -USR1 $pid
        cancel_lru_locks mdc
        wait $pid || return 1
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet mds "lctl set_param fail_loc=0"
 
        $CHECKSTAT -t file $DIR/$tdir-1/f || return 2
        $CHECKSTAT -t file $DIR/$tdir-2/f || return 3
@@ -535,17 +535,17 @@ test_21h() {
        multiop_bg_pause $DIR/$tdir-1/f O_c || return 1
        pid=$!
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000107"
+       do_facet mds "lctl set_param fail_loc=0x80000107"
        touch $DIR/$tdir-2/f &
        touch_pid=$!
        sleep 1
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet mds "lctl set_param fail_loc=0"
 
-       do_facet mds "sysctl -w lustre.fail_loc=0x80000122"
+       do_facet mds "lctl set_param fail_loc=0x80000122"
        cancel_lru_locks mdc
        kill -USR1 $pid
        wait $pid || return 1
-       do_facet mds "sysctl -w lustre.fail_loc=0"
+       do_facet mds "lctl set_param fail_loc=0"
 
        wait $touch_pid || return 2
 
@@ -560,7 +560,7 @@ test_22() {
     f1=$DIR/${tfile}-1
     f2=$DIR/${tfile}-2
     
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
+    do_facet mds "lctl set_param fail_loc=0x80000115"
     multiop $f2 Oc &
     close_pid=$!
 
@@ -568,7 +568,7 @@ test_22() {
     multiop $f1 msu || return 1
 
     cancel_lru_locks mdc
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds "lctl set_param fail_loc=0"
 
     wait $close_pid || return 2
     rm -rf $f2 || return 4
@@ -599,7 +599,7 @@ test_24() {	# bug 2248 - eviction fails writeback but app doesn't see it
 	kill -USR1 $MULTI_PID
 	wait $MULTI_PID
 	rc=$?
-	sysctl -w lustre.fail_loc=0x0
+	lctl set_param fail_loc=0x0
 	client_reconnect
 	[ $rc -eq 0 ] && error_ignore 5494 "multiop didn't fail fsync: rc $rc" || true
 }
@@ -614,7 +614,7 @@ test_26a() {      # was test_26 bug 5921 - evict dead exports by pinger
 	OST_NEXP1=`echo $OST_EXP | cut -d' ' -f2`
 	echo starting with $OST_NEXP1 OST exports
 # OBD_FAIL_PTLRPC_DROP_RPC 0x505
-	do_facet client sysctl -w lustre.fail_loc=0x505
+	do_facet client lctl set_param fail_loc=0x505
 	# evictor takes up to 2.25x to evict.  But if there's a 
 	# race to start the evictor from various obds, the loser
 	# might have to wait for the next ping.
@@ -623,7 +623,7 @@ test_26a() {      # was test_26 bug 5921 - evict dead exports by pinger
         OST_EXP="`do_facet ost1 lctl get_param -n $OST_FILE`"
 	OST_NEXP2=`echo $OST_EXP | cut -d' ' -f2`
 	echo ending with $OST_NEXP2 OST exports
-	do_facet client sysctl -w lustre.fail_loc=0x0
+	do_facet client lctl set_param fail_loc=0x0
         [ $OST_NEXP1 -le $OST_NEXP2 ] && error "client not evicted"
 	return 0
 }
@@ -662,10 +662,10 @@ test_27() {
 	FAILURE_MODE="SOFT"
 	facet_failover mds
 #define OBD_FAIL_OSC_SHUTDOWN            0x407
-	sysctl -w lustre.fail_loc=0x80000407
+	lctl set_param fail_loc=0x80000407
 	# need to wait for reconnect
 	echo -n waiting for fail_loc
-	while [ `sysctl -n lustre.fail_loc` -eq -2147482617 ]; do
+	while [ `lctl get_param -n fail_loc` -eq -2147482617 ]; do
 	    sleep 1
 	    echo -n .
 	done
@@ -681,7 +681,7 @@ test_28() {      # bug 6086 - error adding new clients
 	do_facet client mcreate $MOUNT/$tfile       || return 1
 	drop_bl_callback "chmod 0777 $MOUNT/$tfile" ||echo "evicted as expected"
 	#define OBD_FAIL_MDS_ADD_CLIENT 0x12f
-	do_facet mds sysctl -w lustre.fail_loc=0x8000012f
+	do_facet mds lctl set_param fail_loc=0x8000012f
 	# fail once (evicted), reconnect fail (fail_loc), ok
 	df || (sleep 1; df) || (sleep 1; df) || error "reconnect failed"
 	rm -f $MOUNT/$tfile
@@ -692,7 +692,7 @@ run_test 28 "handle error adding new clients (bug 6086)"
 test_50() {
 	mkdir -p $DIR/$tdir
 	debugsave
-	sysctl -w lnet.debug="-dlmtrace -ha"
+	lctl set_param debug="-dlmtrace -ha"
 	# put a load of file creates/writes/deletes
 	writemany -q $DIR/$tdir/$tfile 0 5 &
 	CLIENT_PID=$!
@@ -828,7 +828,7 @@ test_55() {
 	echo "(dd_pid=$DDPID, time=$count)successful"
 
         #define OBD_FAIL_OST_DROP_REQ            0x21d
-	do_facet ost sysctl -w lustre.fail_loc=0x0000021d
+	do_facet ost lctl set_param fail_loc=0x0000021d
 	# second dd will be never finished
 	dd if=/dev/zero of=$DIR/$tdir/$tfile-2 bs=32M count=4  &	
 	DDPID=$!
@@ -847,7 +847,7 @@ test_55() {
 	echo "(dd_pid=$DDPID, time=$count)successful"
 
 	#Recover fail_loc and dd will finish soon
-	do_facet ost sysctl -w lustre.fail_loc=0
+	do_facet ost lctl set_param fail_loc=0
 	count=0
 	echo  "step3: testing ......"
 	while [ true ]; do
@@ -867,9 +867,9 @@ run_test 55 "ost_brw_read/write drops timed-out read/write request"
 test_56() { # b=11277
 #define OBD_FAIL_MDS_RESEND      0x136
         touch $DIR/$tfile
-        do_facet mds sysctl -w lustre.fail_loc=0x80000136
+        do_facet mds lctl set_param fail_loc=0x80000136
         stat $DIR/$tfile
-        do_facet mds sysctl -w lustre.fail_loc=0
+        do_facet mds lctl set_param fail_loc=0
         rm -f $DIR/$tfile
 }
 run_test 56 "do not allow reconnect to busy exports"
@@ -886,12 +886,12 @@ test_57() { # bug 10866
         pid=$!
         sleep 1
 #define OBD_FAIL_LPROC_REMOVE            0xB00
-        sysctl -w lustre.fail_loc=0x80000B00
+        lctl set_param fail_loc=0x80000B00
         zconf_umount `hostname` $DIR
-        sysctl -w lustre.fail_loc=0x80000B00
+        lctl set_param fail_loc=0x80000B00
         fail_abort mds
         kill -9 $pid
-        sysctl -w lustre.fail_loc=0
+        lctl set_param fail_loc=0
         mount_client $DIR
         do_facet client "df $DIR"
 }
@@ -901,11 +901,11 @@ test_58() { # bug 11546
 #define OBD_FAIL_MDC_ENQUEUE_PAUSE        0x801
         touch $MOUNT/$tfile
         ls -la $MOUNT/$tfile
-        sysctl -w lustre.fail_loc=0x80000801
+        lctl set_param fail_loc=0x80000801
         cp $MOUNT/$tfile /dev/null &
         pid=$!
         sleep 1
-        sysctl -w lustre.fail_loc=0
+        lctl set_param fail_loc=0
         drop_bl_callback rm -f $MOUNT/$tfile
         wait $pid
         do_facet client "df $DIR"
@@ -915,11 +915,11 @@ run_test 58 "Eviction in the middle of open RPC reply processing"
 test_59() { # bug 10589
 	zconf_mount `hostname` $MOUNT2 || error "Failed to mount $MOUNT2"
 	echo $DIR2 | grep -q $MOUNT2 || error "DIR2 is not set properly: $DIR2"
-	sysctl -w lustre.fail_loc=0x311
+	lctl set_param fail_loc=0x311
 	writes=$(LANG=C dd if=/dev/zero of=$DIR2/$tfile count=1 2>&1)
 	[ $? = 0 ] || error "dd write failed"
 	writes=$(echo $writes | awk  -F '+' '/out/ {print $1}')
-	sysctl -w lustre.fail_loc=0
+	lctl set_param fail_loc=0
 	sync
 	zconf_umount `hostname` $MOUNT2 -f
 	reads=$(LANG=C dd if=$DIR/$tfile of=/dev/null 2>&1)

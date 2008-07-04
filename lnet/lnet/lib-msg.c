@@ -27,6 +27,18 @@
 #include <lnet/lib-lnet.h>
 
 void
+lnet_build_unlink_event (lnet_libmd_t *md, lnet_event_t *ev)
+{
+        memset(ev, 0, sizeof(*ev));
+
+        ev->status   = 0;
+        ev->unlinked = 1;
+        ev->type     = LNET_EVENT_UNLINK;
+        lnet_md_deconstruct(md, &ev->md);
+        lnet_md2handle(&ev->md_handle, md);
+}
+
+void
 lnet_enq_event_locked (lnet_eq_t *eq, lnet_event_t *ev)
 {
         lnet_event_t  *eq_slot;
@@ -167,12 +179,12 @@ lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
                 LASSERT (md->md_refcount >= 0);
 
                 unlink = lnet_md_unlinkable(md);
-                
+
                 msg->msg_ev.unlinked = unlink;
-                
+
                 if (md->md_eq != NULL)
                         lnet_enq_event_locked(md->md_eq, &msg->msg_ev);
-                
+
                 if (unlink)
                         lnet_md_unlink(md);
 

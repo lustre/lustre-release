@@ -307,7 +307,11 @@ static inline int cfs_time_beforeq_64(__u64 t1, __u64 t2)
 /*
  * Liblustre. time(2) based implementation.
  */
+
+#define CFS_TIME_T              "%lu"
+
 #include <libcfs/user-time.h>
+
 #endif /* __KERNEL__ */
 
 /* __LIBCFS_LINUX_LINUX_TIME_H__ */

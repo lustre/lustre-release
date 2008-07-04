@@ -715,7 +715,7 @@ if [ "%{buildbase}" -ne 0 ] ; then
         if [ "%{buildup}" -ne 0 ] ; then
 	    BuildObj up
         fi
-        perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = %{kextraverdelim}%{kextraver}custom/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
+        perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = %{kextraverdelim}%{kextraver}%{flavordelim}custom/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
 	# Remove $RPM_BUILD_ROOT prefix from symlinks.
 	for link in $(find $objdir -type l); do
 	    target=$(readlink $link)
@@ -723,7 +723,7 @@ if [ "%{buildbase}" -ne 0 ] ; then
 	    ln -s ${target/$RPM_BUILD_ROOT/} $link
 	done
     else # 2.4 rh-style
-        perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = %{kextraverdelim}%{kextraver}custom/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
+        perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = %{kextraverdelim}%{kextraver}%{flavordelim}custom/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
         # get the one from the build we just completed as it might have picked
         # up new options
         #cp ../lustre/kernel_patches/kernel_configs/kernel-%{kversion}-@LUSTRE_TARGET@-%{_target_cpu}%{dashtargetboard}.config $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/.config

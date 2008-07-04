@@ -212,7 +212,7 @@ err_fs:
         /* No extra cleanup needed for llog_init_commit_thread() */
         mgs_fs_cleanup(obd);
 err_ns:
-        ldlm_namespace_free(obd->obd_namespace, 0);
+        ldlm_namespace_free(obd->obd_namespace, NULL, 0);
         obd->obd_namespace = NULL;
 err_ops:
         fsfilt_put_ops(obd->obd_fsops);
@@ -244,12 +244,11 @@ static int mgs_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 static int mgs_ldlm_nsfree(void *data)
 {
         struct ldlm_namespace *ns = (struct ldlm_namespace *)data;
-        int rc;
         ENTRY;
 
         ptlrpc_daemonize("ll_mgs_nsfree");
-        rc = ldlm_namespace_free(ns, 1 /* obd_force should always be on */);
-        RETURN(rc);
+        ldlm_namespace_free(ns, NULL, 1 /* obd_force should always be on */);
+        RETURN(0);
 }
 
 static int mgs_cleanup(struct obd_device *obd)

@@ -510,7 +510,7 @@ static int echo_cleanup(struct obd_device *obd)
         set_current_state (TASK_UNINTERRUPTIBLE);
         cfs_schedule_timeout (CFS_TASK_UNINT, cfs_time_seconds(1));
 
-        ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
+        ldlm_namespace_free(obd->obd_namespace, NULL, obd->obd_force);
 
         leaked = atomic_read(&obd->u.echo.eo_prep);
         if (leaked != 0)

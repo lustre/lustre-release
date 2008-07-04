@@ -1,3 +1,19 @@
+tbd  Sun Microsystems, Inc.
+	* version 3.0.6
+
+Severity   : normal
+Bugzilla   : 15320
+Description: OSS crashes frequently, e2fsck does not fix
+Details    : Add an extra check to ldiskfs extents code for the condition, 
+	     eh_entries = 0 & eh_depth != 0
+
+Severity   : normal
+Bugzilla   : 15459
+Description: migrate ldiskfs - ldiskfs2 (extents on directories)
+Details    : disable preallocation for non-regular files.
+
+-------------------------------------------------------------------------------
+
 04-26-2008  Sun Microsystems, Inc.
        * version 3.0.5
 
@@ -19,6 +35,18 @@ Bugzilla   : 14594
 Description: soft lockups on 1.6.2 MDS (is_subdir)
 Details    : don't add dentries with ".." to dcache and ignore such dentries in
 	     iopen_lookup().
+
+Severity   : critical
+Frequency  : very rare, if additional xattrs are used on kernels >= 2.6.12
+Bugzilla   : 15777
+Description: files may lose file attributes in some cases
+Details    : If there are multiple extended attributes stored on the inode,
+	    in particular ACLs, SELinux, or user attributes (if user_xattr
+	    is specified for the client mount options) then there is a risk
+	    of attribute loss.  If an additional attribute is be stored
+	    initially in the inode and then increase in size enough to be
+	    moved to the external attribute block (e.g. ACL growing in size)
+	    for the attribute to be lost.
 
 --------------------------------------------------------------------------------
 

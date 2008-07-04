@@ -766,6 +766,7 @@ int mdc_intent_lock(struct obd_export *exp, struct mdc_op_data *op_data,
                op_data->namelen, op_data->name, op_data->fid1.id,
                ldlm_it2str(it->it_op), it->it_flags);
 
+        lockh.cookie = 0;
         if (op_data->fid2.id &&
             (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR)) {
                 rc = mdc_revalidate_lock(exp, it, &op_data->fid2);

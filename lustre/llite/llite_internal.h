@@ -5,7 +5,6 @@
 #ifndef LLITE_INTERNAL_H
 #define LLITE_INTERNAL_H
 
-#include <linux/ext2_fs.h>
 #ifdef CONFIG_FS_POSIX_ACL
 # include <linux/fs.h>
 #ifdef HAVE_XATTR_ACL
@@ -47,6 +46,26 @@ static inline struct lookup_intent *ll_nd2it(struct nameidata *nd)
 #endif
 }
 #endif
+
+/*
+ * Directory entries are currently in the same format as ext2/ext3, but will
+ * be changed in the future to accomodate FIDs
+ */
+#define LL_DIR_NAME_LEN (255)
+#define LL_DIR_PAD      (4)
+
+struct ll_dir_entry {
+        /* number of inode, referenced by this entry */
+	__le32	lde_inode;
+        /* total record length, multiple of LL_DIR_PAD */
+	__le16	lde_rec_len;
+        /* length of name */
+	__u8	lde_name_len;
+        /* file type: regular, directory, device, etc. */
+	__u8	lde_file_type;
+        /* name. NOT NUL-terminated */
+	char	lde_name[LL_DIR_NAME_LEN];
+};
 
 struct ll_dentry_data {
         int                      lld_cwd_count;
@@ -231,6 +250,8 @@ enum stats_track_type {
 
 /* default value for ll_sb_info->contention_time */
 #define SBI_DEFAULT_CONTENTION_SECONDS     60
+/* default value for lockless_truncate_enable */
+#define SBI_DEFAULT_LOCKLESS_TRUNCATE_ENABLE 1
 
 struct ll_sb_info {
         struct list_head          ll_list;
@@ -260,6 +281,7 @@ struct ll_sb_info {
         struct list_head          ll_pglist; /* all pages (llap_pglist_item) */
 
         unsigned                  ll_contention_time; /* seconds */
+        unsigned                  ll_lockless_truncate_enable; /* true/false */
 
         struct ll_ra_info         ll_ra_info;
         unsigned int              ll_namelen;
@@ -501,27 +523,26 @@ extern struct file_operations ll_dir_operations;
 extern struct inode_operations ll_dir_inode_operations;
 
 struct page *ll_get_dir_page(struct inode *dir, unsigned long n);
+
+static inline unsigned ll_dir_rec_len(unsigned name_len)
+{
+        return (name_len + 8 + LL_DIR_PAD - 1) & ~(LL_DIR_PAD - 1);
+}
+
+static inline struct ll_dir_entry *ll_entry_at(void *base, unsigned offset)
+{
+        return (struct ll_dir_entry *)((char *)base + offset);
+}
+
 /*
  * p is at least 6 bytes before the end of page
  */
-typedef struct ext2_dir_entry_2 ext2_dirent;
-
-static inline ext2_dirent *ext2_next_entry(ext2_dirent *p)
+static inline struct ll_dir_entry *ll_dir_next_entry(struct ll_dir_entry *p)
 {
-        return (ext2_dirent *)((char*)p + le16_to_cpu(p->rec_len));
+        return ll_entry_at(p, le16_to_cpu(p->lde_rec_len));
 }
 
-static inline unsigned
-ext2_validate_entry(char *base, unsigned offset, unsigned mask)
-{
-        ext2_dirent *de = (ext2_dirent*)(base + offset);
-        ext2_dirent *p = (ext2_dirent*)(base + (offset&mask));
-        while ((char*)p < (char*)de)
-                p = ext2_next_entry(p);
-        return (char *)p - base;
-}
-
-static inline void ext2_put_page(struct page *page)
+static inline void ll_put_page(struct page *page)
 {
         kunmap(page);
         page_cache_release(page);
@@ -582,6 +603,7 @@ extern struct file_operations ll_file_operations_noflock;
 extern struct inode_operations ll_file_inode_operations;
 extern int ll_inode_revalidate_it(struct dentry *, struct lookup_intent *);
 extern int ll_have_md_lock(struct inode *inode, __u64 bits);
+int ll_region_mapped(unsigned long addr, size_t count);
 int ll_extent_lock(struct ll_file_data *, struct inode *,
                    struct lov_stripe_md *, int mode, ldlm_policy_data_t *,
                    struct lustre_handle *, int ast_flags);

@@ -542,23 +542,6 @@ if test $ac_cv_sizeof_unsigned_long_long != 8 ; then
         AC_MSG_ERROR([** we assume that sizeof(long long) == 8.  Tell phil@clusterfs.com])
 fi
 
-# FIXME
-AC_CHECK_DECL([__i386__], [], [
-
-if test x$enable_bgl != xyes; then
-AC_MSG_CHECKING([if $CC accepts -m64])
-CC_save="$CC"
-CC="$CC -m64"
-AC_TRY_COMPILE([],[],[
-	AC_MSG_RESULT([yes])
-],[
-	AC_MSG_RESULT([no])
-	CC="$CC_save"
-])
-fi
-
-])
-
 CPPFLAGS="-I\$(top_builddir)/lnet/include -I\$(top_srcdir)/lnet/include -I\$(top_builddir)/lustre/include -I\$(top_srcdir)/lustre/include $CPPFLAGS"
 
 LLCPPFLAGS="-D__arch_lib__ -D_LARGEFILE64_SOURCE=1"

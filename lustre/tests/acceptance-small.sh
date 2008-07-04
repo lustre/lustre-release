@@ -22,8 +22,8 @@ fi
 [ "$TMP" ] || TMP=/tmp
 [ "$COUNT" ] || COUNT=1000
 [ "$DEBUG_LVL" ] || DEBUG_LVL=0
-[ "$DEBUG_OFF" ] || DEBUG_OFF="eval sysctl -w lnet.debug=\"$DEBUG_LVL\""
-[ "$DEBUG_ON" ] || DEBUG_ON="eval sysctl -w lnet.debug=0x33f0484"
+[ "$DEBUG_OFF" ] || DEBUG_OFF="eval lctl set_param debug=\"$DEBUG_LVL\""
+[ "$DEBUG_ON" ] || DEBUG_ON="eval lctl set_param debug=0x33f0484"
 
 export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL INSANITY SANITY_QUOTA"
 
@@ -244,20 +244,19 @@ for NAME in $CONFIGS; do
 		SANITYN="done"
 	fi
 
+	remote_mds && log "Remote MDS, skipping LFSCK test" && LFSCK=no
+	remote_ost && log "Remote OST, skipping LFSCK test" && LFSCK=no
+
 	if [ "$LFSCK" != "no" -a -x /usr/sbin/lfsck ]; then
 	        title lfsck
 		E2VER=`e2fsck -V 2>&1 | head -n 1 | cut -d' ' -f 2`
-		if grep -q obdfilter /proc/fs/lustre/devices; then
-			if [ `echo $E2VER | cut -d. -f2` -ge 39 ] && \
-			   [ "`echo $E2VER | grep cfs`" -o \
-				"`echo $E2VER | grep sun`" ]; then
-			   		bash lfscktest.sh
-			else
-				e2fsck -V
-				echo "e2fsck does not support lfsck, skipping"
-			fi
+		if [ `echo $E2VER | cut -d. -f2` -ge 39 ] && \
+		   [ "`echo $E2VER | grep cfs`" -o \
+			"`echo $E2VER | grep sun`" ]; then
+		   		bash lfscktest.sh
 		else
-			echo "remote OST, skipping test"
+			e2fsck -V
+			echo "e2fsck does not support lfsck, skipping"
 		fi
 		LFSCK="done"
 	fi

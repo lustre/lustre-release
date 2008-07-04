@@ -160,7 +160,6 @@ enum lprocfs_fields_flags {
 
 struct lprocfs_stats {
         unsigned int           ls_num;     /* # of counters */
-        unsigned int           ls_percpu_size;
         int                    ls_flags; /* See LPROCFS_STATS_FLAG_* */
         spinlock_t             ls_lock;  /* Lock used only when there are
                                           * no percpu stats areas */
@@ -345,7 +344,7 @@ struct obd_export;
 extern int lprocfs_add_clear_entry(struct obd_device * obd,
                                    cfs_proc_dir_entry_t *entry);
 extern int lprocfs_exp_setup(struct obd_export *exp,
-                             lnet_nid_t peer_nid, int *newnid);
+                             lnet_nid_t *peer_nid, int *newnid);
 extern int lprocfs_exp_cleanup(struct obd_export *exp);
 extern int lprocfs_add_simple(struct proc_dir_entry *root,
                               char *name, read_proc_t *read_proc,
@@ -586,7 +585,8 @@ static inline void lprocfs_free_obd_stats(struct obd_device *obddev)
 struct obd_export;
 static inline int lprocfs_add_clear_entry(struct obd_export *exp)
 { return 0; }
-static inline int lprocfs_exp_setup(struct obd_export *exp)
+static inline int lprocfs_exp_setup(struct obd_export *exp,
+                             	    lnet_nid_t *peer_nid, int *newnid)
 { return 0; }
 static inline int lprocfs_exp_cleanup(struct obd_export *exp)
 { return 0; }

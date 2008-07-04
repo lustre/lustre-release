@@ -107,7 +107,7 @@ out_dentry:
  *
  *   If 'increase_only' is true, don't allow values to move backwards.
  */
-static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
+static int filter_lvbo_update(struct ldlm_resource *res, struct ptlrpc_request *r,
                               int buf_idx, int increase_only)
 {
         int rc = 0;
@@ -131,11 +131,12 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
         }
 
         /* Update the LVB from the network message */
-        if (m != NULL) {
+        if (r != NULL) {
                 struct ost_lvb *new;
 
-                new = lustre_swab_buf(m, buf_idx, sizeof(*new),
-                                      lustre_swab_ost_lvb);
+                /* XXX update always from reply buffer */
+                new = lustre_swab_repbuf(r, buf_idx, sizeof(*new),
+                                         lustre_swab_ost_lvb);
                 if (new == NULL) {
                         CERROR("lustre_swab_buf failed\n");
                         goto disk_update;

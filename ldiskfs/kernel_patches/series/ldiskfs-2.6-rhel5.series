@@ -19,3 +19,5 @@ ext3-unlink-race.patch
 ext3-fiemap-2.6.18-vanilla.patch
 ext3-statfs-2.6-rhel5.patch
 ext3-lookup-dotdot-2.6.9.patch
+ext3-max-dir-size.patch
+ext3-print-inum-in-htree-warning.patch

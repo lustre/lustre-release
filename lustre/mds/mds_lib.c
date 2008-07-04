@@ -413,7 +413,7 @@ int mds_update_unpack(struct ptlrpc_request *req, int offset,
                 RETURN(-EFAULT);
 
         opcode = *opcodep;
-        if (lustre_msg_swabbed(req->rq_reqmsg))
+        if (lustre_req_need_swab(req))
                 __swab32s(&opcode);
 
         if (opcode >= REINT_MAX || mds_unpackers[opcode] == NULL) {

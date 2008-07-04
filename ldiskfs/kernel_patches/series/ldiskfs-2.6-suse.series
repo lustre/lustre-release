@@ -22,3 +22,4 @@ ext3-uninit-2.6-suse.patch
 ext3-nanosecond-2.6-suse.patch
 ext3-fiemap-stub-suse.patch
 ext3-external-journal-2.6.5.patch
+ext3-print-inum-in-htree-warning.patch

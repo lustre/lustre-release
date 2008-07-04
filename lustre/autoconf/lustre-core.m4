@@ -794,19 +794,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# LC_SYMVERFILE
-# SLES 9 uses a different name for this file - unsure about vanilla kernels
-# around this version, but it matters for servers only.
-AC_DEFUN([LC_SYMVERFILE],
-         [AC_MSG_CHECKING([name of symverfile])
-          if grep -q Modules.symvers $LINUX/scripts/Makefile.modpost ; then
-              SYMVERFILE=Modules.symvers
-          else
-              SYMVERFILE=Module.symvers
-          fi
-	  AC_MSG_RESULT($SYMVERFILE)
-          AC_SUBST(SYMVERFILE)])
-
 # LC_DQUOTOFF_MUTEX
 # after 2.6.17 dquote use mutex instead if semaphore
 AC_DEFUN([LC_DQUOTOFF_MUTEX],
@@ -1148,8 +1135,7 @@ AC_DEFINE(HAVE___D_MOVE, 1,
 # matter what symbol is exported, the kernel #defines node_to_cpumask
 # to the appropriate function and that's what we use.
 AC_DEFUN([LC_EXPORT_NODE_TO_CPUMASK],
-         [LB_LINUX_ARCH
-          LB_CHECK_SYMBOL_EXPORT([node_to_cpumask],
+         [LB_CHECK_SYMBOL_EXPORT([node_to_cpumask],
                                  [arch/$LINUX_ARCH/mm/numa.c],
                                  [AC_DEFINE(HAVE_NODE_TO_CPUMASK, 1,
                                             [node_to_cpumask is exported by
@@ -1311,9 +1297,6 @@ AC_DEFUN([LC_PROG_LINUX],
 
           # 2.6.15
           LC_INODE_I_MUTEX
-
-          # SLES 10 (at least)
-          LC_SYMVERFILE
 
           # 2.6.17
           LC_DQUOTOFF_MUTEX

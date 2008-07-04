@@ -3,8 +3,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test:  3192 12652  9977
-ALWAYS_EXCEPT="                 14b  14c    28   $SANITYN_EXCEPT"
+# bug number for skipped test:  3192 12652  15528/3811 9977  15528/11549
+ALWAYS_EXCEPT="                 14b  14c    19         28    29           $SANITYN_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # bug number for skipped test:                                                    12652 12652
@@ -333,7 +333,7 @@ test_17() { # bug 3513, 3667
 	cp /etc/termcap $DIR1/f17
 	cancel_lru_locks osc > /dev/null
 	#define OBD_FAIL_ONCE|OBD_FAIL_LDLM_CREATE_RESOURCE    0x30a
-	sysctl -w lustre.fail_loc=0x8000030a
+	lctl set_param fail_loc=0x8000030a
 	ls -ls $DIR1/f17 | awk '{ print $1,$6 }' > $DIR1/f17-1 & \
 	ls -ls $DIR2/f17 | awk '{ print $1,$6 }' > $DIR2/f17-2
 	wait
@@ -373,7 +373,7 @@ test_19() { # bug3811
 	done
 	rm $DIR1/f19b
 }
-#run_test 19 "test concurrent uncached read races ==============="
+run_test 19 "test concurrent uncached read races ==============="
 
 test_20() {
 	mkdir $DIR1/d20
@@ -557,14 +557,14 @@ run_test 28 "read/write/truncate file with lost stripes"
 test_29() { # bug 10999
 	touch $DIR1/$tfile
 	#define OBD_FAIL_LDLM_GLIMPSE  0x30f
-	sysctl -w lustre.fail_loc=0x8000030f
+	lctl set_param fail_loc=0x8000030f
 	ls -l $DIR2/$tfile &
 	sleep 0.500s
 	dd if=/dev/zero of=$DIR1/$tfile bs=4k count=1
 	wait
 }
 #bug 11549 - permanently turn test off in b1_5
-#run_test 29 "lock put race between glimpse and enqueue ========="
+run_test 29 "lock put race between glimpse and enqueue ========="
 
 test_30() { #bug #11110
     cp -f /bin/bash $DIR1/$tdir/bash
@@ -582,12 +582,91 @@ test_31() {
         writes=`LANG=C dd if=/dev/zero of=$DIR/$tdir/$tfile count=1 2>&1 |
                 awk 'BEGIN { FS="+" } /out/ {print $1}'`
         #define OBD_FAIL_LDLM_CANCEL_BL_CB_RACE   0x314
-        sysctl -w lustre.fail_loc=0x314
+        lctl set_param fail_loc=0x314
         reads=`LANG=C dd if=$DIR2/$tdir/$tfile of=/dev/null 2>&1 |
                awk 'BEGIN { FS="+" } /in/ {print $1}'`
         [ $reads -eq $writes ] || error "read" $reads "blocks, must be" $writes
 }
 run_test 31 "voluntary cancel / blocking ast race=============="
+
+# enable/disable lockless truncate feature, depending on the arg 0/1
+enable_lockless_truncate() {
+        lctl set_param -n llite.*.lockless_truncate $1
+}
+
+test_32a() { # bug 11270
+        local p="$TMP/sanityN-$TESTNAME.parameters"
+        save_lustre_params $HOSTNAME llite.*.lockless_truncate > $p
+        cancel_lru_locks osc
+        clear_llite_stats
+        enable_lockless_truncate 1
+        dd if=/dev/zero of=$DIR1/$tfile count=10 bs=1M > /dev/null 2>&1
+
+        log "checking cached lockless truncate"
+        $TRUNCATE $DIR1/$tfile 8000000
+        $CHECKSTAT -s 8000000 $DIR2/$tfile || error "wrong file size"
+        [ $(calc_llite_stats lockless_truncate) -eq 0 ] ||
+                error "lockless truncate doesn't use cached locks"
+
+        log "checking not cached lockless truncate"
+        $TRUNCATE $DIR2/$tfile 5000000
+        $CHECKSTAT -s 5000000 $DIR1/$tfile || error "wrong file size"
+        [ $(calc_llite_stats lockless_truncate) -ne 0 ] ||
+                error "not cached trancate isn't lockless"
+
+        log "disabled lockless truncate"
+        enable_lockless_truncate 0
+        clear_llite_stats
+        $TRUNCATE $DIR2/$tfile 3000000
+        $CHECKSTAT -s 3000000 $DIR1/$tfile || error "wrong file size"
+        [ $(calc_llite_stats lockless_truncate) -eq 0 ] ||
+                error "lockless truncate disabling failed"
+        rm $DIR1/$tfile
+        # restore lockless_truncate default values
+        restore_lustre_params < $p
+        rm -f $p
+}
+run_test 32a "lockless truncate"
+
+test_32b() { # bug 11270
+        local node
+        local p="$TMP/sanityN-$TESTNAME.parameters"
+        save_lustre_params $HOSTNAME "llite.*.contention_seconds" > $p
+        for node in $(osts_nodes); do
+                save_lustre_params $node "ldlm.namespaces.filter-*.max_nolock_bytes" >> $p
+                save_lustre_params $node "ldlm.namespaces.filter-*.contended_locks" >> $p
+                save_lustre_params $node "ldlm.namespaces.filter-*.contention_seconds" >> $p
+        done
+        clear_llite_stats
+        # agressive lockless i/o settings 
+        for node in $(osts_nodes); do
+                do_node $node 'lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes 2000000; lctl set_param -n ldlm.namespaces.filter-*.contended_locks 0; lctl set_param -n ldlm.namespaces.filter-*.contention_seconds 60'
+        done
+        lctl set_param -n llite.*.contention_seconds 60
+        for i in $(seq 5); do
+                dd if=/dev/zero of=$DIR1/$tfile bs=4k count=1 conv=notrunc > /dev/null 2>&1
+                dd if=/dev/zero of=$DIR2/$tfile bs=4k count=1 conv=notrunc > /dev/null 2>&1
+        done
+        [ $(calc_llite_stats lockless_write_bytes) -ne 0 ] || error "lockless i/o was not triggered" 
+        # disable lockless i/o (it is disabled by default)
+        for node in $(osts_nodes); do
+                do_node $node 'lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes 0; lctl set_param -n ldlm.namespaces.filter-*.contended_locks 32; lctl set_param -n ldlm.namespaces.filter-*.contention_seconds 0'
+        done
+        # set contention_seconds to 0 at client too, otherwise Lustre still
+        # remembers lock contention
+        lctl set_param -n llite.*.contention_seconds 0
+        clear_llite_stats
+        for i in $(seq 5); do
+                dd if=/dev/zero of=$DIR1/$tfile bs=4k count=1 conv=notrunc > /dev/null 2>&1
+                dd if=/dev/zero of=$DIR2/$tfile bs=4k count=1 conv=notrunc > /dev/null 2>&1
+        done
+        [ $(calc_llite_stats lockless_write_bytes) -eq 0 ] ||
+                error "lockless i/o works when disabled" 
+        rm -f $DIR1/$tfile
+        restore_lustre_params <$p
+        rm -f $p
+}
+run_test 32b "lockless i/o"
 
 log "cleanup: ======================================================"
 

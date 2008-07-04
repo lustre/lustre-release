@@ -979,6 +979,34 @@ static inline  int obd_prep_async_page(struct obd_export *exp,
         RETURN(ret);
 }
 
+static inline int obd_reget_short_lock(struct obd_export *exp,
+                                       struct lov_stripe_md *lsm,
+                                       void **res, int rw,
+                                       loff_t start, loff_t end,
+                                       void **cookie)
+{
+        ENTRY;
+
+        OBD_CHECK_OP(exp->exp_obd, reget_short_lock, -EOPNOTSUPP);
+        EXP_COUNTER_INCREMENT(exp, reget_short_lock);
+
+        RETURN(OBP(exp->exp_obd, reget_short_lock)(exp, lsm, res, rw,
+                                                   start, end, cookie));
+}
+
+static inline int obd_release_short_lock(struct obd_export *exp,
+                                         struct lov_stripe_md *lsm, loff_t end,
+                                         void *cookie, int rw)
+{
+        ENTRY;
+
+        OBD_CHECK_OP(exp->exp_obd, release_short_lock, -EOPNOTSUPP);
+        EXP_COUNTER_INCREMENT(exp, release_short_lock);
+
+        RETURN(OBP(exp->exp_obd, release_short_lock)(exp, lsm, end,
+                                                     cookie, rw));
+}
+
 static inline int obd_queue_async_io(struct obd_export *exp,
                                      struct lov_stripe_md *lsm,
                                      struct lov_oinfo *loi, void *cookie,

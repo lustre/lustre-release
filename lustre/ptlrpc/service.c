@@ -283,6 +283,7 @@ static void ptlrpc_at_timer(unsigned long castmeharder)
                svc->srv_name, cfs_time_current_sec(), 
                list_empty(&svc->srv_at_list) ? ", empty" : ""); 
         svc->srv_at_check = 1;
+        svc->srv_at_checktime = cfs_time_current();
         cfs_waitq_signal(&svc->srv_waitq);
 }
 
@@ -583,7 +584,7 @@ static int ptlrpc_check_req(struct ptlrpc_request *req)
 static void ptlrpc_at_set_timer(struct ptlrpc_service *svc)
 {
         struct ptlrpc_request *rq;
-        time_t next;
+        __s32 next;
 
         spin_lock(&svc->srv_at_lock);
         if (list_empty(&svc->srv_at_list)) {
@@ -595,7 +596,8 @@ static void ptlrpc_at_set_timer(struct ptlrpc_service *svc)
         /* Set timer for closest deadline */
         rq = list_entry(svc->srv_at_list.next, struct ptlrpc_request, 
                         rq_timed_list);
-        next = rq->rq_deadline - cfs_time_current_sec() - at_early_margin;
+        next = (__s32)(rq->rq_deadline - cfs_time_current_sec() -
+                       at_early_margin);
         if (next <= 0) 
                 ptlrpc_at_timer((unsigned long)svc);
         else
@@ -774,6 +776,7 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
         struct ptlrpc_request *rq, *n;
         struct list_head work_list;
         time_t now = cfs_time_current_sec();
+        cfs_duration_t delay;
         int first, counter = 0;
         ENTRY;
 
@@ -782,6 +785,7 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
                 spin_unlock(&svc->srv_at_lock);
                 RETURN(0);
         }
+        delay = cfs_time_sub(cfs_time_current(), svc->srv_at_checktime);
         svc->srv_at_check = 0;
         
         if (list_empty(&svc->srv_at_list)) {
@@ -819,11 +823,17 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
 
         CDEBUG(D_ADAPTTO, "timeout in %+ds, asking for %d secs on %d early "
                "replies\n", first, at_extra, counter);
-        if (first < 0)
+        
+        if (first < 0) {
                 /* We're already past request deadlines before we even get a 
                    chance to send early replies */
                 LCONSOLE_WARN("%s: This server is not able to keep up with "
-                              "request traffic (cpu-bound).\n", svc->srv_name);
+                              "request traffic (cpu-bound).\n",  svc->srv_name);
+                CWARN("earlyQ=%d reqQ=%d recA=%d, svcEst=%d, "
+                      "delay="CFS_DURATION_T"(jiff)\n",
+                      counter, svc->srv_n_queued_reqs, svc->srv_n_active_reqs,
+                      at_get(&svc->srv_at_estimate), delay);
+        }
 
         /* ptlrpc_server_free_request may delete an entry out of the work
            list */
@@ -845,7 +855,7 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
         }
         spin_unlock(&svc->srv_at_lock);
 
-        RETURN(0);      
+        RETURN(0);
 }
 
 /* Handle freshly incoming reqs, add to timed early reply list,
@@ -872,17 +882,20 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
         /* Consider this still a "queued" request as far as stats are
            concerned */
         spin_unlock(&svc->srv_lock);
-        
+
         /* Clear request swab mask; this is a new request */
         req->rq_req_swab_mask = 0;
 
         rc = lustre_unpack_msg(req->rq_reqmsg, req->rq_reqlen);
-        if (rc != 0) {
+        if (rc < 0) {
                 CERROR ("error unpacking request: ptl %d from %s"
                         " xid "LPU64"\n", svc->srv_req_portal,
                         libcfs_id2str(req->rq_peer), req->rq_xid);
                 goto err_req;
         }
+
+        if (rc > 0)
+                lustre_set_req_swabbed(req, MSG_PTLRPC_HEADER_OFF);
 
         rc = lustre_unpack_req_ptlrpc_body(req, MSG_PTLRPC_BODY_OFF);
         if (rc) {
@@ -901,7 +914,7 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
         }
 
         CDEBUG(D_NET, "got req "LPD64"\n", req->rq_xid);
-        
+
         req->rq_export = class_conn2export(
                 lustre_msg_get_handle(req->rq_reqmsg));
         if (req->rq_export) {

@@ -148,8 +148,8 @@ load_modules() {
 
     echo Loading modules from $LUSTRE
     load_module ../lnet/libcfs/libcfs
-    [ "$PTLDEBUG" ] && sysctl -w lnet.debug=$PTLDEBUG
-    [ "$SUBSYSTEM" ] && sysctl -w lnet.subsystem_debug=${SUBSYSTEM# }
+    [ "$PTLDEBUG" ] && lctl set_param debug=$PTLDEBUG
+    [ "$SUBSYSTEM" ] && lctl set_param subsystem_debug=${SUBSYSTEM# }
     [ -f /etc/modprobe.conf ] && MODPROBECONF=/etc/modprobe.conf
     [ -f /etc/modprobe.d/Lustre ] && MODPROBECONF=/etc/modprobe.d/Lustre
     [ -z "$LNETOPTS" -a -n "$MODPROBECONF" ] && \
@@ -269,9 +269,9 @@ mount_facet() {
         echo "mount -t lustre $@ ${device} ${MOUNT%/*}/${facet}" 
         echo "Start of ${device} on ${facet} failed ${RC}"
     else 
-        do_facet ${facet} "sysctl -w lnet.debug=$PTLDEBUG; \
-            sysctl -w lnet.subsystem_debug=${SUBSYSTEM# }; \
-            sysctl -w lnet.debug_mb=${DEBUG_SIZE}; \
+        do_facet ${facet} "lctl set_param debug=$PTLDEBUG; \
+            lctl set_param subsystem_debug=${SUBSYSTEM# }; \
+            lctl set_param debug_mb=${DEBUG_SIZE}; \
             sync"
     fi
     return $RC
@@ -330,27 +330,50 @@ zconf_mount() {
         exit 1
     fi
 
-    echo "Starting client: $OPTIONS $device $mnt" 
+    echo "Starting client: $client: $OPTIONS $device $mnt" 
     do_node $client mkdir -p $mnt
     do_node $client mount -t lustre $OPTIONS $device $mnt || return 1
 
-    do_node $client "sysctl -w lnet.debug=$PTLDEBUG;
-        sysctl -w lnet.subsystem_debug=${SUBSYSTEM# };
-        sysctl -w lnet.debug_mb=${DEBUG_SIZE}"
+    do_node $client "lctl set_param debug=$PTLDEBUG;
+        lctl set_param subsystem_debug=${SUBSYSTEM# };
+        lctl set_param debug_mb=${DEBUG_SIZE}"
     [ -d /r ] && $LCTL modules > /r/tmp/ogdb-$HOSTNAME
     return 0
 }
 
 zconf_umount() {
-    client=$1
-    mnt=$2
+    local client=$1
+    local mnt=$2
     [ "$3" ] && force=-f
     local running=$(do_node $client "grep -c $mnt' ' /proc/mounts") || true
     if [ $running -ne 0 ]; then
-        echo "Stopping client $mnt (opts:$force)"
+        echo "Stopping client $client $mnt (opts:$force)"
         lsof | grep "$mnt" || true
         do_node $client umount $force $mnt
     fi
+}
+
+zconf_mount_clients() {
+    local clients=$1
+    local mnt=$2
+
+    echo "Mounting clients: $clients"
+    local client
+    for client in ${clients//,/ }; do
+        zconf_mount $client $mnt  || true
+    done
+}
+
+zconf_umount_clients() {
+    local clients=$1
+    local mnt=$2
+    [ "$3" ] && force=-f
+
+    echo "Umounting clients: $clients"
+    local client
+    for client in ${clients//,/ }; do
+        zconf_umount $client $mnt $force || true
+    done
 }
 
 shutdown_facet() {
@@ -434,7 +457,7 @@ wait_for() {
 }
 
 wait_mds_recovery_done () {
-    local timeout=`do_facet mds sysctl -n lustre.timeout`
+    local timeout=`do_facet mds lctl get_param  -n timeout`
 #define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 / 2)
 # as we are in process of changing obd_timeout in different ways
 # let's set MAX longer than that
@@ -733,6 +756,12 @@ stopall() {
     # assume client mount is local 
     grep " $MOUNT " /proc/mounts && zconf_umount $HOSTNAME $MOUNT $*
     grep " $MOUNT2 " /proc/mounts && zconf_umount $HOSTNAME $MOUNT2 $*
+
+    if [ -n "$CLIENTS" ]; then
+            zconf_umount_clients $CLIENTS $MOUNT "$*" || true
+            zconf_umount_clients $CLIENTS $MOUNT2 "$*" || true
+    fi
+
     [ "$CLIENTONLY" ] && return
     stop mds -f
     for num in `seq $OSTCOUNT`; do
@@ -786,7 +815,7 @@ set_obd_timeout() {
     do_facet $facet lsmod | grep -q obdclass || \
         do_facet $facet "modprobe obdclass"
 
-    do_facet $facet "sysctl -w lustre.timeout=$timeout"
+    do_facet $facet "lctl set_param timeout=$timeout"
 }
 
 setupall() {
@@ -805,8 +834,11 @@ setupall() {
     fi
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     mount_client $MOUNT
+    [ -n "$CLIENTS" ] && zconf_mount_clients $CLIENTS $MOUNT
+
     if [ "$MOUNT_2" ]; then
         mount_client $MOUNT2
+        [ -n "$CLIENTS" ] && zconf_mount_clients $CLIENTS $MOUNT2
     fi
     sleep 5
 }
@@ -831,7 +863,7 @@ check_and_setup_lustre() {
 
 cleanup_and_setup_lustre() {
     if [ "$ONLY" == "cleanup" -o "`mount | grep $MOUNT`" ]; then
-        sysctl -w lnet.debug=0 || true
+        lctl set_param debug=0 || true
         cleanupall
         if [ "$ONLY" == "cleanup" ]; then 
     	    exit 0
@@ -945,64 +977,64 @@ at_max_set() {
 drop_request() {
 # OBD_FAIL_MDS_ALL_REQUEST_NET
     RC=0
-    do_facet mds sysctl -w lustre.fail_loc=0x123
+    do_facet mds lctl set_param fail_loc=0x123
     do_facet client "$1" || RC=$?
-    do_facet mds sysctl -w lustre.fail_loc=0
+    do_facet mds lctl set_param fail_loc=0
     return $RC
 }
 
 drop_reply() {
 # OBD_FAIL_MDS_ALL_REPLY_NET
     RC=0
-    do_facet mds sysctl -w lustre.fail_loc=0x122
+    do_facet mds lctl set_param fail_loc=0x122
     do_facet client "$@" || RC=$?
-    do_facet mds sysctl -w lustre.fail_loc=0
+    do_facet mds lctl set_param fail_loc=0
     return $RC
 }
 
 drop_reint_reply() {
 # OBD_FAIL_MDS_REINT_NET_REP
     RC=0
-    do_facet mds sysctl -w lustre.fail_loc=0x119
+    do_facet mds lctl set_param fail_loc=0x119
     do_facet client "$@" || RC=$?
-    do_facet mds sysctl -w lustre.fail_loc=0
+    do_facet mds lctl set_param fail_loc=0
     return $RC
 }
 
 pause_bulk() {
 #define OBD_FAIL_OST_BRW_PAUSE_BULK      0x214
     RC=0
-    do_facet ost1 sysctl -w lustre.fail_loc=0x214
+    do_facet ost1 lctl set_param fail_loc=0x214
     do_facet client "$1" || RC=$?
     do_facet client "sync"
-    do_facet ost1 sysctl -w lustre.fail_loc=0
+    do_facet ost1 lctl set_param fail_loc=0
     return $RC
 }
 
 drop_ldlm_cancel() {
 #define OBD_FAIL_LDLM_CANCEL             0x304
     RC=0
-    do_facet client sysctl -w lustre.fail_loc=0x304
+    do_facet client lctl set_param fail_loc=0x304
     do_facet client "$@" || RC=$?
-    do_facet client sysctl -w lustre.fail_loc=0
+    do_facet client lctl set_param fail_loc=0
     return $RC
 }
 
 drop_bl_callback() {
 #define OBD_FAIL_LDLM_BL_CALLBACK        0x305
     RC=0
-    do_facet client sysctl -w lustre.fail_loc=0x305
+    do_facet client lctl set_param fail_loc=0x305
     do_facet client "$@" || RC=$?
-    do_facet client sysctl -w lustre.fail_loc=0
+    do_facet client lctl set_param fail_loc=0
     return $RC
 }
 
 drop_ldlm_reply() {
 #define OBD_FAIL_LDLM_REPLY              0x30c
     RC=0
-    do_facet mds sysctl -w lustre.fail_loc=0x30c
+    do_facet mds lctl set_param fail_loc=0x30c
     do_facet client "$@" || RC=$?
-    do_facet mds sysctl -w lustre.fail_loc=0
+    do_facet mds lctl set_param fail_loc=0
     return $RC
 }
 
@@ -1011,7 +1043,16 @@ clear_failloc() {
     pause=$2
     sleep $pause
     echo "clearing fail_loc on $facet"
-    do_facet $facet "sysctl -e -w lustre.fail_loc=0"
+    do_facet $facet "lctl set_param fail_loc=0 2>/dev/null || true"
+}
+
+set_nodes_failloc () {
+    local nodes=$1
+    local node
+
+    for node in $nodes ; do
+        do_node $node lctl set_param fail_loc=$2
+    done
 }
 
 cancel_lru_locks() {
@@ -1065,11 +1106,11 @@ pgcache_empty() {
 }
 
 debugsave() {
-    DEBUGSAVE="$(sysctl -n lnet.debug)"
+    DEBUGSAVE="$(lctl get_param -n debug)"
 }
 
 debugrestore() {
-    [ -n "$DEBUGSAVE" ] && sysctl -w lnet.debug="${DEBUGSAVE}"
+    [ -n "$DEBUGSAVE" ] && lctl set_param debug="${DEBUGSAVE}"
     DEBUGSAVE=""
 }
 
@@ -1080,7 +1121,7 @@ debugrestore() {
 error_noexit() {
     local TYPE=${TYPE:-"FAIL"}
     local ERRLOG
-    sysctl -e -w lustre.fail_loc=0 || true
+    lctl set_param fail_loc=0 2>/dev/null || true
     log " ${TESTSUITE} ${TESTNAME}: @@@@@@ ${TYPE}: $@ "
     ERRLOG=$TMP/lustre_${TESTSUITE}_${TESTNAME}.$(date +%s)
     echo "Dumping lctl log to $ERRLOG"
@@ -1238,7 +1279,7 @@ reset_fail_loc () {
     local NODE
 
     for NODE in $myNODES; do
-        do_node $NODE sysctl -e -w lustre.fail_loc=0 || true
+        do_node $NODE "lctl set_param fail_loc=0 2>/dev/null || true"
     done
 }
 
@@ -1375,6 +1416,9 @@ nodes_list () {
     local myNODES=$HOSTNAME
     local myNODES_sort
 
+    # CLIENTS (if specified) contains the local client
+    [ -n "$CLIENTS" ] && myNODES=${CLIENTS//,/ }
+
     if [ "$PDSH" -a "$PDSH" != "no_dsh" ]; then
         myNODES="$myNODES $(osts_nodes) $mds_HOST"
     fi
@@ -1443,3 +1487,33 @@ multiop_bg_pause() {
 
     return 0
 }
+
+# reset llite stat counters
+clear_llite_stats(){
+        lctl set_param -n llite.*.stats 0
+}
+
+# sum llite stat items
+calc_llite_stats() {
+        local res=$(lctl get_param -n llite.*.stats |
+                    awk 'BEGIN {s = 0} END {print s} /^'"$1"'/ {s += $2}')
+        echo $res
+}
+
+# save_lustre_params(node, parameter_mask)
+# generate a stream of formatted strings (<node> <param name>=<param value>)
+save_lustre_params() {
+        local s
+        do_node $1 "lctl get_param $2" | while read s; do echo "$1 $s"; done
+}
+
+# restore lustre parameters from input stream, produces by save_lustre_params
+restore_lustre_params() {
+        local node
+        local name
+        local val
+        while IFS=" =" read node name val; do
+                do_node $node "lctl set_param -n $name $val"
+        done
+}
+

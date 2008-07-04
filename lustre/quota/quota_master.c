@@ -810,8 +810,8 @@ int mds_admin_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
         RETURN(rc);
 }
 
-static int mds_admin_quota_off(struct obd_device *obd,
-                               struct obd_quotactl *oqctl)
+int mds_admin_quota_off(struct obd_device *obd,
+                        struct obd_quotactl *oqctl)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lustre_quota_info *qinfo = &mds->mds_quota_info;

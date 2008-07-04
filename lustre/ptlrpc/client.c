@@ -258,9 +258,9 @@ static void ptlrpc_at_adj_net_latency(struct ptlrpc_request *req)
         time_t now = cfs_time_current_sec();
 
         LASSERT(req->rq_import);
-        
+
         st = lustre_msg_get_service_time(req->rq_repmsg);
-        
+
         /* Network latency is total time less server processing time */
         nl = max_t(int, now - req->rq_sent - st, 0) + 1/*st rounding*/;
         if (st > now - req->rq_sent + 2 /* rounding */)
@@ -281,14 +281,15 @@ static int unpack_reply(struct ptlrpc_request *req)
 {
         int rc;
 
-        /* Clear reply swab mask; we may have already swabbed an early reply */
         req->rq_rep_swab_mask = 0;
-
         rc = lustre_unpack_msg(req->rq_repmsg, req->rq_nob_received);
-        if (rc) {
+        if (rc < 0) {
                 DEBUG_REQ(D_ERROR, req, "unpack_rep failed: %d", rc);
                 return(-EPROTO);
         }
+
+        if (rc > 0)
+                lustre_set_rep_swabbed(req, MSG_PTLRPC_HEADER_OFF);
 
         rc = lustre_unpack_rep_ptlrpc_body(req, MSG_PTLRPC_BODY_OFF);
         if (rc) {

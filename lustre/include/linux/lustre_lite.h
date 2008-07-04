@@ -50,6 +50,7 @@ enum {
          LPROC_LL_FSYNC,
          LPROC_LL_SETATTR,
          LPROC_LL_TRUNC,
+         LPROC_LL_LOCKLESS_TRUNC,
          LPROC_LL_FLOCK,
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))

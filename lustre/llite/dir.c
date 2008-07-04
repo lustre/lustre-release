@@ -47,32 +47,6 @@
 #include <lustre_dlm.h>
 #include "llite_internal.h"
 
-/*
- * Directory entries are currently in the same format as ext2/ext3, but will
- * be changed in the future to accomodate FIDs
- */
-#define LL_DIR_NAME_LEN (255)
-
-static const int LL_DIR_PAD = 4;
-
-struct ll_dir_entry {
-        /* number of inode, referenced by this entry */
-	__le32	lde_inode;
-        /* total record length, multiple of LL_DIR_PAD */
-	__le16	lde_rec_len;
-        /* length of name */
-	__u8	lde_name_len;
-        /* file type: regular, directory, device, etc. */
-	__u8	lde_file_type;
-        /* name. NOT NUL-terminated */
-	char	lde_name[LL_DIR_NAME_LEN];
-};
-
-static inline unsigned ll_dir_rec_len(unsigned name_len)
-{
-        return (name_len + 8 + LL_DIR_PAD - 1) & ~(LL_DIR_PAD - 1);
-}
-
 #ifndef HAVE_PAGE_CHECKED
 #ifdef HAVE_PG_FS_MISC
 #define PageChecked(page)        test_bit(PG_fs_misc, &(page)->flags)
@@ -163,11 +137,6 @@ static int ll_dir_check_entry(struct inode *dir, struct ll_dir_entry *ent,
                offset, (unsigned long)le32_to_cpu(ent->lde_inode),
                rec_len, ent->lde_name_len);
         return -EIO;
-}
-
-static inline struct ll_dir_entry *ll_entry_at(void *base, unsigned offset)
-{
-        return (struct ll_dir_entry *)(base + offset);
 }
 
 static void ll_dir_check_page(struct inode *dir, struct page *page)
@@ -283,18 +252,9 @@ out_unlock:
         return page;
 
 fail:
-        kunmap(page);
-        page_cache_release(page);
+        ll_put_page(page);
         page = ERR_PTR(-EIO);
         goto out_unlock;
-}
-
-/*
- * p is at least 6 bytes before the end of page
- */
-static inline struct ll_dir_entry *ll_dir_next_entry(struct ll_dir_entry *p)
-{
-        return ll_entry_at(p, le16_to_cpu(p->lde_rec_len));
 }
 
 static inline unsigned ll_dir_validate_entry(char *base, unsigned offset,
@@ -429,8 +389,7 @@ int ll_readdir(struct file *filp, void *dirent, filldir_t filldir)
                 }
                 done = ll_readdir_page(kaddr, idx << CFS_PAGE_SHIFT,
                                        &offset, filldir, dirent);
-                kunmap(page);
-                page_cache_release(page);
+                ll_put_page(page);
                 if (done > 0)
                         /*
                          * Some entries were sent to the user space, return
@@ -615,9 +574,9 @@ int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmmp,
          * little endian.  We convert it to host endian before
          * passing it to userspace.
          */
-        if (lmm->lmm_magic == __swab32(LOV_MAGIC)) {
+        if ((LOV_MAGIC != cpu_to_le32(LOV_MAGIC)) &&
+            (cpu_to_le32(LOV_MAGIC) == lmm->lmm_magic))
                 lustre_swab_lov_user_md((struct lov_user_md *)lmm);
-        }
 out:
         *lmmp = lmm;
         *lmm_size = lmmsize;
@@ -816,6 +775,15 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 rc = copy_from_user(lmm, lum, lmmsize);
                 if (rc)
                         GOTO(free_lmm, rc = -EFAULT);
+
+                if (lmm->lmm_magic != LOV_USER_MAGIC)
+                        GOTO(free_lmm, rc = -EINVAL);
+
+                if (LOV_USER_MAGIC != cpu_to_le32(LOV_USER_MAGIC) &&
+                    cpu_to_le32(LOV_USER_MAGIC) == cpu_to_le32(lmm->lmm_magic)) {
+                        lustre_swab_lov_user_md_objects((struct lov_user_md *)lmm);
+                        lustre_swab_lov_user_md((struct lov_user_md *)lmm);
+                }
 
                 rc = obd_unpackmd(sbi->ll_osc_exp, &lsm, lmm, lmmsize);
                 if (rc < 0)

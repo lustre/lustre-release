@@ -439,8 +439,10 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 oinfo.oi_oa->o_fid = body->fid1.id;
                 oinfo.oi_oa->o_generation = body->fid1.generation;
                 oinfo.oi_oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
+                oinfo.oi_policy.l_extent.start = i_size_read(inode);
+                oinfo.oi_policy.l_extent.end = OBD_OBJECT_EOF;
 
-                rc = obd_setattr_rqset(mds->mds_osc_exp, &oinfo, &oti);
+                rc = obd_punch_rqset(mds->mds_osc_exp, &oinfo, &oti);
                 if (rc) {
                         CERROR("error setting attrs for inode %lu: rc %d\n",
                                inode->i_ino, rc);
@@ -499,7 +501,8 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         struct mds_client_data *mcd = med->med_mcd;
         struct mds_obd *mds = mds_req2mds(req);
         struct mds_file_data *mfd;
-        struct obd_device *obd = req->rq_export->exp_obd;
+        struct obd_export *exp = req->rq_export;
+        struct obd_device *obd = exp->exp_obd;
         struct dentry *parent, *dchild;
         struct ldlm_reply *rep;
         struct mds_body *body;
@@ -523,10 +526,30 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         }
 
         parent = mds_fid2dentry(mds, rec->ur_fid1, NULL);
-        LASSERT(!IS_ERR(parent));
+        if (IS_ERR(parent)) {
+                rc = PTR_ERR(parent);
+                LCONSOLE_WARN("Parent "LPU64"/%u lookup error %d." 
+                              " Evicting client %s with export %s.\n",
+                              rec->ur_fid1->id, rec->ur_fid1->generation, rc,
+                              obd_uuid2str(&exp->exp_client_uuid),
+                              obd_export_nid2str(exp));
+                mds_export_evict(exp);
+                EXIT;
+                return;
+        }
 
         dchild = ll_lookup_one_len(rec->ur_name, parent, rec->ur_namelen - 1);
-        LASSERT(!IS_ERR(dchild));
+        if (IS_ERR(dchild)) {
+                rc = PTR_ERR(dchild);
+                LCONSOLE_WARN("Child "LPU64"/%u lookup error %d." 
+                              " Evicting client %s with export %s.\n",
+                              rec->ur_fid1->id, rec->ur_fid1->generation, rc,
+                              obd_uuid2str(&exp->exp_client_uuid),
+                              obd_export_nid2str(exp));
+                mds_export_evict(exp);
+                EXIT;
+                return;
+        }
 
         if (!dchild->d_inode)
                 GOTO(out_dput, 0); /* child not present to open */
@@ -1282,8 +1305,7 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
                inode->i_nlink, mds_orphan_open_count(inode));
 
         last_orphan = mds_orphan_open_dec_test(inode) &&
-                mds_inode_is_orphan(inode);
-        MDS_UP_WRITE_ORPHAN_SEM(inode);
+                      mds_inode_is_orphan(inode);
 
         /* this is half of the actual "close" */
         if (mfd->mfd_mode & FMODE_WRITE) {
@@ -1292,10 +1314,15 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
         } else if (mfd->mfd_mode & MDS_FMODE_EXEC) {
                 mds_allow_write_access(inode);
         }
+        /* here writecount change also needs protection from orphan write sem. 
+         * so drop orphan write sem after mds_put_write_access, bz 12888. */
+        MDS_UP_WRITE_ORPHAN_SEM(inode);
 
         if (last_orphan && unlink_orphan) {
                 int stripe_count = 0;
-                LASSERT(rc == 0); /* mds_put_write_access must have succeeded */
+                /* mds_put_write_access must have succeeded */
+                LASSERTF(rc == 0, "inode %lu/%u: rc %d",
+                         inode->i_ino, inode->i_generation, rc);
 
                 CDEBUG(D_INODE, "destroying orphan object %s\n", fidname);
 

@@ -669,7 +669,7 @@ void nidstats_refcount_put(struct hlist_node * actual_hnode)
 
         data = hlist_entry(actual_hnode, struct nid_stat, nid_hash);
         data->nid_exp_ref_count--;
-
+        EXIT;
 }
 
 /*******************************************************************************/

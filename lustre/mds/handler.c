@@ -328,7 +328,6 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
         struct obd_export *exp;
         struct mds_export_data *med;
         struct mds_client_data *mcd = NULL;
-        lnet_nid_t *client_nid = (lnet_nid_t *)localdata;
         int rc, abort_recovery;
         ENTRY;
 
@@ -370,7 +369,7 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
         memcpy(mcd->mcd_uuid, cluuid, sizeof(mcd->mcd_uuid));
         med->med_mcd = mcd;
 
-        rc = mds_client_add(obd, exp, -1, *client_nid);
+        rc = mds_client_add(obd, exp, -1, localdata);
         GOTO(out, rc);
 
 out:
@@ -955,6 +954,8 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
         }
 #endif
 
+        /* child_lockh() is only set in fixup_handle_for_resent_req() 
+         * if MSG_RESENT is set */
         if (lustre_handle_is_used(child_lockh)) {
                 LASSERT(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT);
                 resent_req = 1;
@@ -988,6 +989,8 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                 struct ldlm_resource *res;
                 DEBUG_REQ(D_DLMTRACE, req, "resent, not enqueuing new locks");
                 granted_lock = ldlm_handle2lock(child_lockh);
+                /* lock was granted in fixup_handle_for_resent_req() if 
+                 * MSG_RESENT is set */
                 LASSERTF(granted_lock != NULL, LPU64"/%u lockh "LPX64"\n",
                          body->fid1.id, body->fid1.generation,
                          child_lockh->cookie);
@@ -997,7 +1000,12 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                 child_fid.id = res->lr_name.name[0];
                 child_fid.generation = res->lr_name.name[1];
                 dchild = mds_fid2dentry(&obd->u.mds, &child_fid, NULL);
-                LASSERT(!IS_ERR(dchild));
+                if (IS_ERR(dchild)) {
+                        rc = PTR_ERR(dchild);
+                        LCONSOLE_WARN("Child "LPU64"/%u lookup error %d.",
+                                      child_fid.id, child_fid.generation, rc);
+                        GOTO(cleanup, rc);
+                }
                 LDLM_LOCK_PUT(granted_lock);
         }
 
@@ -1650,7 +1658,7 @@ int mds_handle(struct ptlrpc_request *req)
                         break;
                 }
                 opc = *opcp;
-                if (lustre_msg_swabbed(req->rq_reqmsg))
+                if (lustre_req_need_swab(req))
                         __swab32s(&opc);
 
                 DEBUG_REQ(D_INODE, req, "reint %d (%s)", opc,
@@ -2095,7 +2103,7 @@ err_fs:
 err_ns:
         lprocfs_free_obd_stats(obd);
         lprocfs_obd_cleanup(obd);
-        ldlm_namespace_free(obd->obd_namespace, 0);
+        ldlm_namespace_free(obd->obd_namespace, NULL, 0);
         obd->obd_namespace = NULL;
 err_ops:
         fsfilt_put_ops(obd->obd_fsops);
@@ -2282,7 +2290,7 @@ static int mds_cleanup(struct obd_device *obd)
         server_put_mount(obd->obd_name, mds->mds_vfsmnt);
         obd->u.obt.obt_sb = NULL;
 
-        ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
+        ldlm_namespace_free(obd->obd_namespace, NULL, obd->obd_force);
 
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (obd->obd_recovering) {
