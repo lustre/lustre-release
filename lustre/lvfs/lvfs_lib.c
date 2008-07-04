@@ -55,13 +55,13 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
                 CERROR("%s%salloc of %s ("LPU64" bytes) failed at %s:%d\n",
                        ptr ? "force " :"", type, name, (__u64)size, file,
                        line);
-                CERROR(LPU64" total bytes and "LPU64" total pages "           
-                       "("LPU64" bytes) allocated by Lustre, "                
-                       "%d total bytes by LNET\n",                            
-                       obd_memory_sum(),                                     
-                       obd_pages_sum() << CFS_PAGE_SHIFT,                                      
-                       obd_pages_sum(),           
-                       atomic_read(&libcfs_kmemory));                         
+                CERROR(LPU64" total bytes and "LPU64" total pages "
+                       "("LPU64" bytes) allocated by Lustre, "
+                       "%d total bytes by LNET\n",
+                       obd_memory_sum(),
+                       obd_pages_sum() << CFS_PAGE_SHIFT,
+                       obd_pages_sum(),
+                       atomic_read(&libcfs_kmemory));
                return 1;
         }
         return 0;
@@ -82,7 +82,6 @@ void obd_update_maxusage()
         if (max2 > obd_max_alloc)
                 obd_max_alloc = max2;
         spin_unlock(&obd_updatemax_lock);
-        
 }
 
 __u64 obd_memory_max(void)
