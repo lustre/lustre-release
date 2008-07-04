@@ -204,7 +204,6 @@ int lprocfs_evict_client_release(struct inode *inode, struct file *f)
 
         atomic_dec(&obd->obd_evict_inprogress);
         wake_up(&obd->obd_evict_inprogress_waitq);
-        LPROCFS_EXIT();
 
         return 0;
 }
@@ -360,11 +359,13 @@ int lprocfs_wr_uint(struct file *file, const char *buffer,
                     unsigned long count, void *data)
 {
         unsigned *p = data;
-        char dummy[MAX_STRING_SIZE + 1], *end;
+        char dummy[MAX_STRING_SIZE + 1] = { '\0' }, *end;
         unsigned long tmp;
 
-        dummy[MAX_STRING_SIZE] = '\0';
-        if (copy_from_user(dummy, buffer, MAX_STRING_SIZE))
+        if (count >= sizeof(dummy) || count == 0)
+                return -EINVAL;
+
+        if (copy_from_user(dummy, buffer, count))
                 return -EFAULT;
 
         tmp = simple_strtoul(dummy, &end, 0);
