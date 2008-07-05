@@ -490,10 +490,14 @@ static int lfs_find(int argc, char **argv)
                         break;
                 case 'G':
                         new_fashion = 1;
-                        ret = name2id(&param.gid, optarg, GRPQUOTA);
-                        if (ret != 0) {
-                                fprintf(stderr, "Group: %s cannot be found.\n", optarg);
-                                return -1;
+                        param.gid = strtol(optarg, &endptr, 10);
+                        if (optarg == endptr) {
+	                        ret = name2id(&param.gid, optarg, GRPQUOTA);
+        	                if (ret != 0) {
+                                        fprintf(stderr, "Group/GID: %s cannot "
+                                                "be found.\n", optarg);
+                                        return -1;
+                                }
                         }
                         param.exclude_gid = !!neg_opt;
                         param.check_gid = 1;
@@ -510,10 +514,14 @@ static int lfs_find(int argc, char **argv)
                         break;
                 case 'U':
                         new_fashion = 1;
-                        ret = name2id(&param.uid, optarg, USRQUOTA);
-                        if (ret != 0) {
-                                fprintf(stderr, "User: %s cannot be found.\n", optarg);
-                                return -1;
+                        param.uid = strtol(optarg, &endptr, 10);
+                        if (optarg == endptr) {
+	                        ret = name2id(&param.uid, optarg, USRQUOTA);
+        	                if (ret != 0) {
+                                        fprintf(stderr, "User/UID: %s cannot "
+                                                "be found.\n", optarg);
+                                        return -1;
+                                }
                         }
                         param.exclude_uid = !!neg_opt;
                         param.check_uid = 1;
