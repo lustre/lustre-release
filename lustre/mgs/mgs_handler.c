@@ -76,11 +76,6 @@ static int mgs_connect(const struct lu_env *env,
                 data->ocd_version = LUSTRE_VERSION_CODE;
         }
 
-        if ((exp->exp_connect_flags & OBD_CONNECT_FID) == 0) {
-                CWARN("MGS requires FID support, but client not\n");
-                rc = -EBADE;
-        }
-
         if (rc) {
                 class_disconnect(exp);
         } else {

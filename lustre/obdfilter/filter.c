@@ -2544,14 +2544,6 @@ static int filter_connect_internal(struct obd_export *exp,
         exp->exp_connect_flags = data->ocd_connect_flags;
         data->ocd_version = LUSTRE_VERSION_CODE;
 
-        if ((exp->exp_connect_flags & OBD_CONNECT_FID) == 0) {
-                CWARN("%s: OST requires FID support (flag="LPX64
-                      "), but client not\n",
-                      exp->exp_obd->obd_name,
-                      exp->exp_connect_flags);
-                RETURN(-EBADF);
-        }
-
         if (exp->exp_connect_flags & OBD_CONNECT_GRANT) {
                 obd_size left, want;
 

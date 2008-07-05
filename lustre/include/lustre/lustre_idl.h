@@ -587,10 +587,10 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
                                 OBD_CONNECT_BRW_SIZE | OBD_CONNECT_QUOTA64 | \
                                 OBD_CONNECT_OSS_CAPA | OBD_CONNECT_CANCELSET | \
-                                OBD_CONNECT_FID | OBD_CONNECT_CKSUM | \
+                                OBD_CONNECT_CKSUM | \
                                 LRU_RESIZE_CONNECT_FLAG)
 #define ECHO_CONNECT_SUPPORTED (0)
-#define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_FID)
+#define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION)
 
 #define MAX_QUOTA_COUNT32 (0xffffffffULL)
 
