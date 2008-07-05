@@ -11,8 +11,10 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs find [[!] --atime|-A [-+]N] [[!] --mtime|-M [-+]N]
         \fB[[!] --ctime|-C [-+]N] [--maxdepth|-D N] [--name|-n pattern]
-        \fB[--print|-p] \fB[--print0|-P] [--obd|-O <uuid>]
+        \fB[--print|-p] \fB[--print0|-P] [--obd|-O <uuid[s]>]
         \fB[[!] --size|-S [-+]N[kMGTPE]] [--type |-t {bcdflpsD}]
+        \fB[[!] --gid|-g N] [[!] --group|-G <name>]
+        \fB[[!] --uid|-u N] [[!] --user|-U <name>]
         \fB<dirname|filename>\fR
 .br
 .B lfs getstripe [--obd|-O <uuid>] [--quiet|-q] [--verbose|-v] 
@@ -55,7 +57,7 @@ Display the status of MDS or OSTs (as specified in the command) or all the serve
 Report filesystem disk space usage or inodes usage of each MDT/OST.
 .TP
 .B find 
-To search the directory tree rooted at the given dir/file name for the files that match the given parameters: \fB--atime\fR (file was last accessed N*24 hours ago), \fB--ctime\fR (file's status was last changed N*24 hours ago), \fB--mtime\fR (file's data was last modified N*24 hours ago), \fB--obd\fR (file has an object on a specific OST), \fB--size\fR (file has size in bytes, or \fBk\fRilo-, \fBM\fRega-, \fBG\fRiga-, \fBT\fRera-, \fBP\fReta-, or \fBE\fRxabytes if a suffix is given), \fB--type\fR (file has the type: \fBb\fRlock, \fBc\fRharacter, \fBd\fRirectory, \fBp\fRipe, \fBf\fRile, sym\fBl\fRink, \fBs\fRocket, or \fBD\fRoor (Solaris)). The option \fB--maxdepth\fR allows find to decend at most N levels of directory tree. The options \fB--print\fR and \fB--print0\fR print full file name, followed by a newline or NUL character correspondingly.  Using \fB!\fR before an option negates its meaning (\fIfiles NOT matching the parameter\fR).  Using \fB+\fR before a numeric value means \fIfiles with the parameter OR MORE\fR, while \fB-\fR before a numeric value means \fIfiles with the parameter OR LESS\fR.
+To search the directory tree rooted at the given dir/file name for the files that match the given parameters: \fB--atime\fR (file was last accessed N*24 hours ago), \fB--ctime\fR (file's status was last changed N*24 hours ago), \fB--mtime\fR (file's data was last modified N*24 hours ago), \fB--obd\fR (file has an object on a specific OST or OSTs), \fB--size\fR (file has size in bytes, or \fBk\fRilo-, \fBM\fRega-, \fBG\fRiga-, \fBT\fRera-, \fBP\fReta-, or \fBE\fRxabytes if a suffix is given), \fB--type\fR (file has the type: \fBb\fRlock, \fBc\fRharacter, \fBd\fRirectory, \fBp\fRipe, \fBf\fRile, sym\fBl\fRink, \fBs\fRocket, or \fBD\fRoor (Solaris)), \fB--uid\fR (file has specific numeric user ID), \fB--user\fR (file owned by specific user, numeric user ID allowed), \fB--gid\fR (file has specific group ID), \fB--group\fR (file belongs to specific group, numeric group ID allowed). The option \fB--maxdepth\fR allows find to decend at most N levels of directory tree. The options \fB--print\fR and \fB--print0\fR print full file name, followed by a newline or NUL character correspondingly.  Using \fB!\fR before an option negates its meaning (\fIfiles NOT matching the parameter\fR).  Using \fB+\fR before a numeric value means \fIfiles with the parameter OR MORE\fR, while \fB-\fR before a numeric value means \fIfiles with the parameter OR LESS\fR.
 .TP
 .B getstripe
 To list the striping info for a given filename or files in a directory, optionally recursively, for all files in a directory tree: \fB--quiet\fR (don't print object IDs), \fB--verbose\fR (print striping parameters), \fB--recursive\fR (recurse into subdirectories).
