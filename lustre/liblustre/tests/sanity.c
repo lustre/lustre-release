@@ -94,6 +94,7 @@ int t1(char *name)
 {
         char path[MAX_PATH_LENGTH] = "";
 
+        ENTER("touch+unlink");
         snprintf(path, MAX_PATH_LENGTH, "%s/test_t1", lustre_path);
 
         if (opt_verbose)
@@ -1376,8 +1377,8 @@ extern void __liblustre_cleanup_(void);
 void usage(char *cmd)
 {
         printf("\n"
-               "usage: %s [--only {test}] --target mgsnid:/fsname\n",
-               cmd);
+             "usage: %s [-o test][-e test][-v] --target mgsnid:/fsname\n",
+             cmd);
         printf("       %s --dumpfile dumpfile\n", cmd);
         exit(-1);
 }
@@ -1423,20 +1424,27 @@ struct testlist {
 int main(int argc, char * const argv[])
 {
         struct testlist *test;
-        int opt_index, c, rc = 0, numonly = 0;
-        char *only[100];
+        int opt_index, c, rc = 0, numonly = 0, numexcept = 0;
+        char *only[100], *except[100];
         static struct option long_opts[] = {
                 {"dumpfile", 1, 0, 'd'},
                 {"only", 1, 0, 'o'},
+                {"except", 1, 0, 'e'},
                 {"target", 1, 0, 't'},
                 {"verbose", 1, 0, 'v'},
                 {0, 0, 0, 0}
         };
 
-        while ((c = getopt_long(argc, argv, "d:o:t:v", long_opts, &opt_index)) != -1) {
+        while ((c = getopt_long(argc, argv, "d:e:o:t:v", long_opts, &opt_index)) != -1) {
                 switch (c) {
                 case 'd':
                         setenv(ENV_LUSTRE_DUMPFILE, optarg, 1);
+                        break;
+                case 'e':
+                        if (numexcept == 0)
+                                printf("Not running test(s): ");
+                        printf("%s ", optarg);
+                        except[numexcept++] = optarg;
                         break;
                 case 'o':
                         if (numonly == 0)
@@ -1478,14 +1486,35 @@ int main(int argc, char * const argv[])
 
         for (test = testlist; test->test != NULL; test++) {
                 int run = 1, i;
+                int len, olen;
+
+                if (numexcept > 0) {
+                        len = strlen(test->name);
+                        for (i = 0; i < numexcept; i++) {
+                                olen = strlen(except[i]);
+
+                                if (len < olen)
+                                        continue;
+
+                                if (strncmp(except[i], test->name, olen) == 0) {
+                                        switch(test->name[olen]) {
+                                        case '0': case '1': case '2': case '3':
+                                        case '4': case '5': case '6': case '7':
+                                        case '8': case '9':
+                                                break;
+                                        default:
+                                                run = 0;
+                                                break;
+                                        }
+                                }
+                        }
+                }
 
                 if (numonly > 0) {
-                        int len;
-
                         run = 0;
                         len = strlen(test->name);
                         for (i = 0; i < numonly; i++) {
-                                int olen = strlen(only[i]);
+                                olen = strlen(only[i]);
 
                                 if (len < olen)
                                         continue;
