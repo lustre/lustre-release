@@ -53,43 +53,63 @@
 #define GROUP_QUOTA     2
 
 #define MAX_STYPE_SIZE  5
+
+/* The following information about CURRENT quotas is expected on the output:
+ * MDS: u for user quotas (administrative+operational) turned on,
+ *      g for group quotas (administrative+operational) turned on,
+ *      1 for 32-bit operational quotas and 32-bit administrative quotas,
+ *      2 for 32-bit operational quotas and 64-bit administrative quotas,
+ *      3 for 64-bit operational quotas and 64-bit administrative quotas
+ * OST: u for user quotas (operational) turned on,
+ *      g for group quotas (operational) turned on,
+ *      1 for 32-bit local operational quotas,
+ *      3 for 64-bit local operational quotas,
+ * Permanent parameters can be read with lctl (?)
+ */
 int lprocfs_quota_rd_type(char *page, char **start, off_t off, int count,
                           int *eof, void *data)
 {
         struct obd_device *obd = (struct obd_device *)data;
         char stype[MAX_STYPE_SIZE + 1] = "";
-        int type = obd->u.obt.obt_qctxt.lqc_atype;
+        int oq_type, rc, is_mds;
+        lustre_quota_version_t aq_version, oq_version;
+        struct obd_device_target *obt;
+
         LASSERT(obd != NULL);
 
-        if (type == 0) {
-                strcpy(stype, "off");
-        } else {
-                if (type & USER_QUOTA)
-                        strcat(stype, "u");
-                if (type & GROUP_QUOTA)
-                        strcat(stype, "g");
-        }
+        obt = &obd->u.obt;
+        is_mds = !strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME);
 
-        /* append with quota version on MDS */
-        if (!strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME)) {
-                int rc;
-                lustre_quota_version_t version;
-
-                rc = mds_quota_get_version(obd, &version);
+        /* Collect the needed information */
+        oq_type = obd->u.obt.obt_qctxt.lqc_flags;
+        oq_version = obt->obt_qfmt;
+        if (is_mds) {
+                rc = mds_quota_get_version(obd, &aq_version);
                 if (rc)
-                        return rc;
-
-                switch (version) {
-                        case LUSTRE_QUOTA_V1:
-                                strcat(stype, "1");
-                                break;
-                        case LUSTRE_QUOTA_V2:
-                                strcat(stype, "2");
-                                break;
-                        default:
-                                return -ENOSYS;
-                }
+                        return -EPROTO;
+                /* Here we can also assert that aq_type == oq_type
+                 * except for quota startup/shutdown states     */
         }
+
+        /* Transform the collected data into a user-readable string */
+        if (oq_type & LQC_USRQUOTA_FLAG)
+                strcat(stype, "u");
+        if (oq_type & LQC_GRPQUOTA_FLAG)
+                strcat(stype, "g");
+
+        if ((!is_mds || aq_version == LUSTRE_QUOTA_V1) &&
+            oq_version == LUSTRE_QUOTA_V1)
+                strcat(stype, "1");
+#ifdef HAVE_QUOTA64
+        else if ((!is_mds || aq_version == LUSTRE_QUOTA_V2) &&
+                 oq_version == LUSTRE_QUOTA_V2)
+                strcat(stype, "3");
+#endif
+        else if (is_mds && aq_version == LUSTRE_QUOTA_V2 &&
+                 oq_version == LUSTRE_QUOTA_V1)
+                strcat(stype, "2");
+        else
+                return -EPROTO;
 
         return snprintf(page, count, "%s\n", stype);
 }
@@ -100,62 +120,129 @@ static int auto_quota_on(struct obd_device *obd, int type,
 {
         struct obd_quotactl *oqctl;
         struct lvfs_run_ctxt saved;
-        int rc;
+        int rc = 0, id;
+        struct obd_device_target *obt;
         ENTRY;
 
         LASSERT(type == USRQUOTA || type == GRPQUOTA || type == UGQUOTA);
 
-        /* quota already turned on */
-        if (obd->u.obt.obt_qctxt.lqc_status)
-                RETURN(0);
+        obt = &obd->u.obt;
 
         OBD_ALLOC_PTR(oqctl);
         if (!oqctl)
                 RETURN(-ENOMEM);
 
+        if (!atomic_dec_and_test(&obt->obt_quotachecking)) {
+                CDEBUG(D_INFO, "other people are doing quotacheck\n");
+                atomic_inc(&obt->obt_quotachecking);
+                RETURN(-EBUSY);
+        }
+
+        id = UGQUOTA2LQC(type);
+        /* quota already turned on */
+        if ((obt->obt_qctxt.lqc_flags & id) == id) {
+                rc = 0;
+                goto out;
+        }
+
         oqctl->qc_type = type;
         oqctl->qc_cmd = Q_QUOTAON;
-        oqctl->qc_id = QFMT_LDISKFS;
+        oqctl->qc_id = obt->obt_qfmt;
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        if (is_master) {
+                struct mds_obd *mds = &obd->u.mds;
 
-        if (!is_master)
-                goto local_quota;
+                down(&mds->mds_qonoff_sem);
+                /* turn on cluster wide quota */
+                rc = mds_admin_quota_on(obd, oqctl);
+                if (rc)
+                        CDEBUG(rc == -ENOENT ? D_QUOTA : D_ERROR,
+                               "auto-enable admin quota failed. rc=%d\n", rc);
+                up(&mds->mds_qonoff_sem);
 
-        /* turn on cluster wide quota */
-        rc = mds_admin_quota_on(obd, oqctl);
-        if (rc) {
-                CDEBUG(rc == -ENOENT ? D_QUOTA : D_ERROR,
-                       "auto-enable admin quota failed. rc=%d\n", rc);
-                GOTO(out_pop, rc);
         }
-local_quota:
-        /* turn on local quota */
-        rc = fsfilt_quotactl(obd, sb, oqctl);
-        if (rc) {
-                CDEBUG(rc == -ENOENT ? D_QUOTA : D_ERROR,
-                       "auto-enable local quota failed. rc=%d\n", rc);
-                if (is_master)
-                        mds_quota_off(obd, oqctl);
-        } else {
-                obd->u.obt.obt_qctxt.lqc_status = 1;
+        if (!rc) {
+                /* turn on local quota */
+                rc = fsfilt_quotactl(obd, sb, oqctl);
+                if (rc)
+                        CDEBUG(rc == -ENOENT ? D_QUOTA : D_ERROR,
+                               "auto-enable local quota failed. rc=%d\n", rc);
+                else
+                        obt->obt_qctxt.lqc_flags |= UGQUOTA2LQC(type);
         }
-out_pop:
+
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+out:
+        atomic_inc(&obt->obt_quotachecking);
 
         OBD_FREE_PTR(oqctl);
         RETURN(rc);
 }
 
+static int filter_quota_set_version(struct obd_device *obd, 
+                                    lustre_quota_version_t version)
+{
+        struct obd_device_target *obt = &obd->u.obt;
+
+        if (version != LUSTRE_QUOTA_V1) {
+#ifdef HAVE_QUOTA64
+                if (version != LUSTRE_QUOTA_V2)
+#endif
+                        return -EINVAL;
+        }
+
+        if (!atomic_dec_and_test(&obt->obt_quotachecking)) {
+                CDEBUG(D_INFO, "other people are doing quotacheck\n");
+                atomic_inc(&obt->obt_quotachecking);
+                return -EBUSY;
+        }
+
+        if (obt->obt_qctxt.lqc_flags & (LQC_USRQUOTA_FLAG | LQC_GRPQUOTA_FLAG)) {
+                atomic_inc(&obt->obt_quotachecking);
+                return -EBUSY;
+        }
+
+        obt->obt_qfmt = version;
+
+        atomic_inc(&obt->obt_quotachecking);
+
+        return 0;
+}
+
+/* The following settings of CURRENT quotas is expected on the input:
+ * MDS: u for user quotas (administrative+operational) turned on,
+ *      g for group quotas (administrative+operational) turned on,
+ *      1 for 32-bit operational quotas and 32-bit administrative quotas,
+ *      2 for 32-bit operational quotas and 64-bit administrative quotas,
+ *      3 for 64-bit operational quotas and 64-bit administrative quotas
+ * OST: u for user quotas (operational) turned on,
+ *      g for group quotas (operational) turned on,
+ *      1 for 32-bit local operational quotas,
+ *      2 for 32-bit local operational quotas,
+ *      3 for 64-bit local operational quotas,
+ * Permanent parameters can be set with lctl/tunefs
+ */
 int lprocfs_quota_wr_type(struct file *file, const char *buffer,
                           unsigned long count, void *data)
 {
         struct obd_device *obd = (struct obd_device *)data;
-        struct obd_device_target *obt = &obd->u.obt;
-        int type = 0;
+        struct obd_device_target *obt;
+        int type = 0, is_mds, idx;
         unsigned long i;
         char stype[MAX_STYPE_SIZE + 1] = "";
+        static const lustre_quota_version_t s2av[3] = {LUSTRE_QUOTA_V1,
+                                                       LUSTRE_QUOTA_V2,
+                                                       LUSTRE_QUOTA_V2},
+                                            s2ov[3] = {LUSTRE_QUOTA_V1,
+                                                       LUSTRE_QUOTA_V1,
+                                                       LUSTRE_QUOTA_V2};
         LASSERT(obd != NULL);
+
+        obt = &obd->u.obt;
+
+        is_mds = !strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME);
 
         if (count > MAX_STYPE_SIZE)
                 return -EINVAL;
@@ -175,22 +262,26 @@ int lprocfs_quota_wr_type(struct file *file, const char *buffer,
                         break;
                 /* quota version specifiers */
                 case '1' :
-                        if (strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME))
-                                break;
-
-                        rc = mds_quota_set_version(obd, LUSTRE_QUOTA_V1);
-                        if (rc) {
-                                CDEBUG(D_QUOTA, "failed to set quota v1! %d\n", rc);
-                                return rc;
-                        }
-                        break;
                 case '2' :
-                        if (strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME))
-                                break;
-
-                        rc = mds_quota_set_version(obd, LUSTRE_QUOTA_V2);
+                case '3' :
+                        idx = stype[i] - '1';
+#ifndef HAVE_QUOTA64
+                        if (s2ov[idx] == LUSTRE_QUOTA_V2)
+                                return -EINVAL;
+#endif
+                        if (is_mds) {
+                                rc = mds_quota_set_version(obd, s2av[idx]);
+                                if (rc) {
+                                        CDEBUG(D_QUOTA, "failed to set admin "
+                                               "quota to spec %c! %d\n",
+                                               stype[i], rc);
+                                        return rc;
+                                }
+                        }
+                        rc = filter_quota_set_version(obd, s2ov[idx]);
                         if (rc) {
-                                CDEBUG(D_QUOTA, "could not set quota v2! %d\n", rc);
+                                CDEBUG(D_QUOTA, "failed to set operational quota"
+                                       " to spec %c! %d\n", stype[i], rc);
                                 return rc;
                         }
                         break;
@@ -199,17 +290,8 @@ int lprocfs_quota_wr_type(struct file *file, const char *buffer,
                 }
         }
 
-        obt->obt_qctxt.lqc_atype = type;
-
-        if (type == 0)
-                return count;
-
-        if (!strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME))
-                auto_quota_on(obd, type - 1, obt->obt_sb, 1);
-        else if (!strcmp(obd->obd_type->typ_name, LUSTRE_OST_NAME))
-                auto_quota_on(obd, type - 1, obt->obt_sb, 0);
-        else
-                return -EFAULT;
+        if (type != 0)
+                auto_quota_on(obd, type - 1, obt->obt_sb, is_mds);
 
         return count;
 }
@@ -223,12 +305,16 @@ static int filter_quota_setup(struct obd_device *obd)
         struct obd_device_target *obt = &obd->u.obt;
         ENTRY;
 
+#ifdef HAVE_QUOTA64
+        obt->obt_qfmt = LUSTRE_QUOTA_V2;
+#else
+        obt->obt_qfmt = LUSTRE_QUOTA_V1;
+#endif
         atomic_set(&obt->obt_quotachecking, 1);
         rc = qctxt_init(&obt->obt_qctxt, obt->obt_sb, NULL);
-        if (rc) {
+        if (rc)
                 CERROR("initialize quota context failed! (rc:%d)\n", rc);
-                RETURN(rc);
-        }
+
         RETURN(rc);
 }
 
@@ -582,6 +668,11 @@ static int mds_quota_setup(struct obd_device *obd)
         int rc;
         ENTRY;
 
+#ifdef HAVE_QUOTA64
+        obt->obt_qfmt = LUSTRE_QUOTA_V2;
+#else
+        obt->obt_qfmt = LUSTRE_QUOTA_V1;
+#endif
         mds->mds_quota_info.qi_version = LUSTRE_QUOTA_V2;
         atomic_set(&obt->obt_quotachecking, 1);
         /* initialize quota master and quota context */

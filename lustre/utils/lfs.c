@@ -1251,7 +1251,6 @@ static int lfs_quotacheck(int argc, char **argv)
 
         memset(&qctl, 0, sizeof(qctl));
         qctl.qc_cmd = LUSTRE_Q_QUOTAOFF;
-        qctl.qc_id = QFMT_LDISKFS;
         qctl.qc_type = check_type;
         rc = llapi_quotactl(mnt, &qctl);
         if (rc) {
@@ -1276,7 +1275,6 @@ static int lfs_quotacheck(int argc, char **argv)
 
         memset(&qctl, 0, sizeof(qctl));
         qctl.qc_cmd = LUSTRE_Q_QUOTAON;
-        qctl.qc_id = QFMT_LDISKFS;
         qctl.qc_type = check_type;
         rc = llapi_quotactl(mnt, &qctl);
         if (rc) {
@@ -1301,7 +1299,6 @@ static int lfs_quotaon(int argc, char **argv)
 
         memset(&qctl, 0, sizeof(qctl));
         qctl.qc_cmd = LUSTRE_Q_QUOTAON;
-        qctl.qc_id = QFMT_LDISKFS;
 
         optind = 0;
         while ((c = getopt(argc, argv, "ugf")) != -1) {
@@ -1409,13 +1406,16 @@ static int lfs_quotainv(int argc, char **argv)
         qctl.qc_cmd = LUSTRE_Q_INVALIDATE;
 
         optind = 0;
-        while ((c = getopt(argc, argv, "ug")) != -1) {
+        while ((c = getopt(argc, argv, "ugf")) != -1) {
                 switch (c) {
                 case 'u':
                         qctl.qc_type |= 0x01;
                         break;
                 case 'g':
                         qctl.qc_type |= 0x02;
+                        break;
+                case 'f':
+                        qctl.qc_cmd = LUSTRE_Q_FINVALIDATE;
                         break;
                 default:
                         fprintf(stderr, "error: %s: option '-%c' "

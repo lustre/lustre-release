@@ -951,8 +951,7 @@ qctxt_init(struct lustre_quota_ctxt *qctxt, struct super_block *sb,
         qctxt->lqc_cqs_least_bunit = PTLRPC_MAX_BRW_SIZE;
         qctxt->lqc_cqs_least_iunit = 2;
         qctxt->lqc_cqs_qs_factor = 2;
-        qctxt->lqc_atype = 0;
-        qctxt->lqc_status= 0;
+        qctxt->lqc_flags = 0;
         qctxt->lqc_bunit_sz = default_bunit_sz;
         qctxt->lqc_btune_sz = default_bunit_sz / 100 * default_btune_ratio;
         qctxt->lqc_iunit_sz = default_iunit_sz;

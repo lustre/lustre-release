@@ -759,9 +759,12 @@ extern void lustre_swab_mds_body (struct mds_body *b);
 #define Q_INITQUOTA     0x800101        /* init slave limits */
 #define Q_GETOINFO      0x800102        /* get obd quota info */
 #define Q_GETOQUOTA     0x800103        /* get obd quotas */
+#define Q_FINVALIDATE   0x800104        /* invalidate operational quotas */
 
-#define Q_TYPESET(oqc, type) \
-        ((oqc)->qc_type == type || (oqc)->qc_type == UGQUOTA)
+#define Q_TYPEMATCH(id, type) \
+        ((id) == (type) || (id) == UGQUOTA)
+
+#define Q_TYPESET(oqc, type) Q_TYPEMATCH((oqc)->qc_type, type)
 
 #define Q_GETOCMD(oqc) \
         ((oqc)->qc_cmd == Q_GETOINFO || (oqc)->qc_cmd == Q_GETOQUOTA)
