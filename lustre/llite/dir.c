@@ -938,6 +938,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 id = qctl->qc_id;
                 switch (cmd) {
                 case LUSTRE_Q_INVALIDATE:
+                case LUSTRE_Q_FINVALIDATE:
                 case Q_QUOTAON:
                 case Q_QUOTAOFF:
                 case Q_SETQUOTA:

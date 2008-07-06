@@ -244,6 +244,7 @@ struct obd_device_target {
         struct super_block       *obt_sb;
         atomic_t                  obt_quotachecking;
         struct lustre_quota_ctxt  obt_qctxt;
+        lustre_quota_version_t    obt_qfmt;
 };
 
 typedef void (*obd_pin_extent_cb)(void *data);

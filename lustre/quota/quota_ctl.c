@@ -77,6 +77,9 @@ int mds_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         case LUSTRE_Q_INVALIDATE:
                 rc = mds_quota_invalidate(obd, oqctl);
                 break;
+        case LUSTRE_Q_FINVALIDATE:
+                rc = mds_quota_finvalidate(obd, oqctl);
+                break;
         default:
                 CERROR("%s: unsupported mds_quotactl command: %d\n",
                        obd->obd_name, oqctl->qc_cmd);
@@ -100,6 +103,7 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         ENTRY;
 
         switch (oqctl->qc_cmd) {
+        case Q_FINVALIDATE:
         case Q_QUOTAON:
         case Q_QUOTAOFF:
                 if (!atomic_dec_and_test(&obt->obt_quotachecking)) {
@@ -108,6 +112,12 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                         rc = -EBUSY;
                         break;
                 }
+                if (oqctl->qc_cmd == Q_FINVALIDATE &&
+                    (obt->obt_qctxt.lqc_flags & UGQUOTA2LQC(oqctl->qc_type))) {
+                        rc = -EBUSY;
+                        break;
+                }
+                oqctl->qc_id = obt->obt_qfmt; /* override qfmt version */
         case Q_GETOINFO:
         case Q_GETOQUOTA:
         case Q_GETQUOTA:
@@ -121,13 +131,15 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                                                  1);
 
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                rc = fsfilt_quotactl(obd, obd->u.obt.obt_sb, oqctl);
+                rc = fsfilt_quotactl(obd, obt->obt_sb, oqctl);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
-                if (oqctl->qc_cmd == Q_QUOTAON || oqctl->qc_cmd == Q_QUOTAOFF) {
-                        if (!rc)
-                                obt->obt_qctxt.lqc_status = 
-                                        (oqctl->qc_cmd == Q_QUOTAON) ? 1 : 0;
+                if (oqctl->qc_cmd == Q_QUOTAON || oqctl->qc_cmd == Q_QUOTAOFF ||
+                    oqctl->qc_cmd == Q_FINVALIDATE) {
+                        if (!rc && oqctl->qc_cmd == Q_QUOTAON)
+                                obt->obt_qctxt.lqc_flags |= UGQUOTA2LQC(oqctl->qc_type);
+                        if (!rc && oqctl->qc_cmd == Q_QUOTAOFF)
+                                obt->obt_qctxt.lqc_flags &= ~UGQUOTA2LQC(oqctl->qc_type);
                         atomic_inc(&obt->obt_quotachecking);
                 }
                 break;
@@ -257,7 +269,7 @@ int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
 
         if (oqctl->qc_cmd != Q_QUOTAON && oqctl->qc_cmd != Q_QUOTAOFF &&
             oqctl->qc_cmd != Q_GETOQUOTA && oqctl->qc_cmd != Q_INITQUOTA &&
-            oqctl->qc_cmd != Q_SETQUOTA) {
+            oqctl->qc_cmd != Q_SETQUOTA && oqctl->qc_cmd != Q_FINVALIDATE) {
                 CERROR("bad quota opc %x for lov obd", oqctl->qc_cmd);
                 RETURN(-EFAULT);
         }

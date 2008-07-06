@@ -148,14 +148,21 @@ static inline int lustre_quota_convert(struct lustre_quota_info *lqi,
 
 typedef int (*dqacq_handler_t) (struct obd_device * obd, struct qunit_data * qd,
                                 int opc);
+
+/* user quota is turned on on filter */
+#define LQC_USRQUOTA_FLAG (1 << 0)
+/* group quota is turned on on filter */
+#define LQC_GRPQUOTA_FLAG (1 << 1)
+
+#define UGQUOTA2LQC(id) ((Q_TYPEMATCH(id, USRQUOTA) ? LQC_USRQUOTA_FLAG : 0) | \
+                         (Q_TYPEMATCH(id, GRPQUOTA) ? LQC_GRPQUOTA_FLAG : 0))
+
 struct lustre_quota_ctxt {
         struct super_block *lqc_sb;     /* superblock this applies to */
         struct obd_import *lqc_import;  /* import used to send dqacq/dqrel RPC */
         dqacq_handler_t lqc_handler;    /* dqacq/dqrel RPC handler, only for quota master */
+        unsigned long lqc_flags;        /* quota flags */
         unsigned long lqc_recovery:1,   /* Doing recovery */
-                      lqc_atype:2,      /* Turn on user/group quota at setup automatically, 
-                                         * 0: none, 1: user quota, 2: group quota, 3: both */
-                      lqc_status:1,     /* Quota status. 0:Off, 1:On */
                       lqc_switch_qs:1;  /* the function of change qunit size
                                          * 0:Off, 1:On */
         unsigned long lqc_iunit_sz;     /* original unit size of file quota and

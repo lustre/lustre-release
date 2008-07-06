@@ -1131,12 +1131,24 @@ test_14a() {	# was test_14 b=12223 -- setting quota on root
 }
 run_test 14a "test setting quota on root ==="
 
+# set quota version (both administrative and operational quotas)
 quota_set_version() {
-	local qver=$1
-	do_facet mds "lctl set_param mds.${FSNAME}-MDT*.quota_type=$qver"
+        do_facet mds "lctl set_param mds.${FSNAME}-MDT*.quota_type=$1"
+        for j in `seq $OSTCOUNT`; do
+                do_facet ost$j "lctl set_param obdfilter.*.quota_type=$1"
+        done
 }
 
-test_14b() {	# was test_14a
+# save quota version (both administrative and operational quotas)
+quota_save_version() {
+        do_facet mgs "lctl conf_param ${FSNAME}-MDT*.mdt.quota_type=$1"
+        do_facet mgs "lctl conf_param ${FSNAME}-OST*.ost.quota_type=$1"
+}
+
+test_14b(){
+        local l
+        local CURSPACE
+
         # 1. check that required users exist
         # 2. ensure that switch to new mode will start conversion
         # 3. start quota in old mode and put some entries
@@ -1158,23 +1170,48 @@ test_14b() {	# was test_14a
         fi
 
         $LFS quotaoff -ug $DIR
+        echo "setting quota version 1"
         quota_set_version 1
+        echo "running quotacheck"
         $LFS quotacheck -ug $DIR
-
+        chmod 0777 $DIR/$tdir
         for i in `seq 1 30`; do
-                $LFS setquota -u quota15_$i -b $i -B $i -i $i -I $i $DIR
+                l=$[$i*1024*128] # set limits in 128 Mb units
+                $LFS setquota -u quota15_$i $l $l $l $l $DIR || error "lfs setquota failed"
+                runas -u quota15_$i dd if=/dev/zero of="$DIR/$tdir/quota15_$i" \
+                      bs=1048576 count=$[($i+1)/2] || error "dd failed"
+        done
+
+        cancel_lru_locks osc
+        
+        echo "saving quota data"
+        for i in `seq 1 30`; do
+                CURSPACE[$i]=`$LFS quota -u quota15_$i $MOUNT | awk '{if(start) {start=0; sum += $1} if(($1 ~ /OST/) && (NF==1)) {start=1;} 
+                              if(($1 ~ /OST/) && (NF != 1)) {sum += $2}; } END { print sum }'`
         done
 
         $LFS quotaoff -ug $DIR
-        quota_set_version 2
+        echo "setting version 3 or 2 (dependent on the kernel support)"
+        quota_set_version 3 2>&1 | grep "Invalid argument" && quota_set_version 2
+
+        echo "invalidating quota files"
         $LFS quotainv -ug $DIR
+        $LFS quotainv -ugf $DIR
         $LFS quotacheck -ug $DIR
 
         for i in `seq 1 30`; do
+                l=$[$i*1024*128]
                 # the format is "mntpnt   curspace[*]   bsoftlimit   bhardlimit   [time]   curinodes[*]    isoftlimit  ihardlimit"
-                ($LFS quota -u quota15_$i $DIR | grep -E '^ *'$DIR' *[0-9]+\** *'$i' *'$i' *[0-9]+\** *'$i' *'$i) \
-                 || error "lfs quota output is unexpected"
-                $LFS setquota -u quota15_$i -b 0 -B 0 -i 0 -I 0 $DIR
+                echo "checking administrative quota migration results for user quota15_$i"
+                $LFS quota -u quota15_$i $DIR | grep -E '^ *'$MOUNT' *[0-9]+\** *'$l' *'$l' *[0-9]+\** *'$l' *'$l \
+                  || error "lfs quota output is unexpected"
+                echo "checking operational quota migration results for user quota15_$i, curspace should be ${CURSPACE[$i]}"
+                l=`$LFS quota -u quota15_$i $MOUNT | awk '{if(start) {start=0; sum += $1} if(($1 ~ /OST/) && (NF==1)) {start=1;} 
+                   if(($1 ~ /OST/) && (NF != 1)) {sum += $2}; } END { print sum }'`
+                echo "...real is $l"
+                [ "$l" -eq "${CURSPACE[$i]}" ] || error "curspace mismatch"
+                rm $DIR/$tdir/quota15_$i || error "could not remove quota15_$i"
+                $LFS setquota -u quota15_$i 0 0 0 0 $DIR || error "ifs setquota clear failed"
         done
 }
 run_test 14b "setting 30 quota entries in quota v1 file before conversion ==="
@@ -1581,6 +1618,31 @@ test_21() {
 	return $RC
 }
 run_test 21 "run for fixing bug16053 ==========="
+
+test_22() {
+        local SAVEREFORMAT
+
+        SAVEREFORMAT=$REFORMAT
+        $LFS quotaoff -ug $DIR || error "could not turn quotas off"
+        quota_set_version "1"
+        $LFS quotacheck -ug $DIR || error "quotacheck failed"
+
+        quota_save_version "ug1"
+
+        REFORMAT="reformat"
+        stopall
+        mount
+        setupall
+        REFORMAT=$SAVEREFORMAT
+
+        echo "checking parameters"
+
+        do_facet mds "lctl get_param mds.${FSNAME}-MDT*.quota_type" | grep "ug1" || error "admin failure"
+        do_facet ost1 "lctl get_param obdfilter.*.quota_type" | grep "ug1" || error "op failure"
+
+        run_test 0 "reboot lustre"
+}
+run_test 22 "test if quota_type saved as permanent parameter ===="
 
 # turn off quota
 test_99()

@@ -33,7 +33,7 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs quotaoff [-ug] <filesystem>
 .br
-.B lfs quotainv [-ug] <filesystem>
+.B lfs quotainv [-ug] [-f] <filesystem>
 .br
 .B lfs setquota [-u|--user|-g|--group] <username|groupname>
              \fB[--block-softlimit <block-softlimit>]
@@ -117,8 +117,8 @@ To turn filesystem quotas on. Options specify quota for users (-u) groups (-g) a
 .B quotaoff [-ugf] <filesystem>
 To turn filesystem quotas off.  Options specify quota for users (-u) groups (-g) and force (-f)
 .TP
-.B quotainv [-ug] <filesystem>
-Clear quota files, all of their quota entries, for (-u) users or (-g) groups; after quotainv one must use quotacheck before using quotas. USE THIS COMMAND WITH EXTREME CARE, ITS RESULTS CANNOT BE UNDONE.
+.B quotainv [-ug] [-f] <filesystem>
+Clear quota files (administrative quota files if used without -f, operational quota files otherwise), all of their quota entries, for (-u) users or (-g) groups; after quotainv one must use quotacheck before using quotas. DO NOT USE THIS COMMAND UNLESS YOU REALLY KNOW WHAT IT DOES. IT IS MAINLY FOR INTERNAL PURPOSES.
 .TP
 .B setquota  [-u|-g] <name> [--block-softlimit <block-softlimit>] [--block-hardlimit <block-hardlimit>] [--inode-softlimit <inode-softlimit>] [--inode-hardlimit <inode-hardlimit>] <filesystem>
 To set filesystem quotas for users or groups. Limits can be specified with -b, -k, -m, -g, -t, -p suffixes which specify units of 1, 2^10, 2^20, 2^30, 2^40 and 2^50 accordingly. Block limits unit is kilobyte (1024) by default and block limits are always kilobyte-grained (even if specified in bytes), see EXAMPLES

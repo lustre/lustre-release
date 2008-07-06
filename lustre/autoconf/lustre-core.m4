@@ -1307,6 +1307,7 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_QUOTA_READ
           LC_COOKIE_FOLLOW_LINK
           LC_FUNC_RCU
+          LC_QUOTA64
 
           # does the kernel have VFS intent patches?
           LC_VFS_INTENT_PATCHES
@@ -1528,6 +1529,30 @@ LB_LINUX_TRY_COMPILE([
                 AC_MSG_RESULT([no]) 
         ])
 ],[
+        AC_MSG_RESULT([no])
+])
+])
+
+#
+# LC_QUOTA64
+# linux kernel may have 64-bit limits support
+#
+AC_DEFUN([LC_QUOTA64],
+[AC_MSG_CHECKING([if kernel has 64-bit quota limits support])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/kernel.h>
+        #include <linux/fs.h>
+        #include <linux/quotaio_v2.h>
+        int versions[] = V2_INITQVERSIONS_R1;
+        struct v2_disk_dqblk_r1 dqblk_r1;
+],[],[
+        AC_DEFINE(HAVE_QUOTA64, 1, [have quota64])
+        AC_MSG_RESULT([yes])
+
+],[
+        AC_MSG_WARN([You have got no 64-bit kernel quota support.])
+        AC_MSG_WARN([Continuing with limited quota support.])
+        AC_MSG_WARN([quotacheck is needed for filesystems with recent quota versions.])
         AC_MSG_RESULT([no])
 ])
 ])

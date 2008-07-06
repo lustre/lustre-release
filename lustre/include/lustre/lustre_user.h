@@ -184,11 +184,10 @@ static inline char *obd_uuid2str(struct obd_uuid *uuid)
 #define LUSTRE_Q_GETQUOTA   0x800007     /* get user quota structure */
 #define LUSTRE_Q_SETQUOTA   0x800008     /* set user quota structure */
 /* lustre-specific control commands */
-#define LUSTRE_Q_INVALIDATE 0x80000b     /* invalidate quota data */
+#define LUSTRE_Q_INVALIDATE  0x80000b     /* invalidate quota data */
+#define LUSTRE_Q_FINVALIDATE 0x80000c     /* invalidate filter quota data */
 
 #define UGQUOTA 2       /* set both USRQUOTA and GRPQUOTA */
-
-#define QFMT_LDISKFS 2  /* QFMT_VFS_V0(2), quota format for ldiskfs */
 
 struct if_quotacheck {
         char                    obd_type[16];

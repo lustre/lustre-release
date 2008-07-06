@@ -118,6 +118,7 @@ int target_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl)
 
         qta->qta_exp = exp;
         qta->qta_oqctl = *oqctl;
+        qta->qta_oqctl.qc_id = obt->obt_qfmt; /* override qfmt version */
         qta->qta_sb = obt->obt_sb;
         qta->qta_sem = &obt->obt_quotachecking;
 

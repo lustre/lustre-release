@@ -732,8 +732,8 @@ int jt_lcfg_setparam(int argc, char **argv)
                         rc = write(fp, value, strlen(value));
                         if (rc < 0)
                                 fprintf(stderr,
-                                        "error writing to file %s\n",
-                                        glob_info.gl_pathv[i]);
+                                        "error writing to file %s (%s)\n",
+                                        glob_info.gl_pathv[i], strerror(errno));
                         else
                                 rc = 0;
                         close(fp);
