@@ -476,9 +476,10 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         OBD_ALLOC(data, sizeof(*data));
         if (data == NULL)
                 RETURN(-ENOMEM);
-        data->ocd_connect_flags = OBD_CONNECT_VERSION   | OBD_CONNECT_INDEX |
+        data->ocd_connect_flags = OBD_CONNECT_VERSION   | OBD_CONNECT_INDEX   |
                                   OBD_CONNECT_REQPORTAL | OBD_CONNECT_QUOTA64 |
-                                  OBD_CONNECT_OSS_CAPA  | OBD_CONNECT_FID;
+                                  OBD_CONNECT_OSS_CAPA  | OBD_CONNECT_FID     |
+                                  OBD_CONNECT_AT;
 #ifdef HAVE_LRU_RESIZE_SUPPORT
         data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
 #endif

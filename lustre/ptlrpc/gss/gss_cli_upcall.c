@@ -311,7 +311,8 @@ int gss_do_ctx_init_rpc(__user char *buffer, unsigned long count)
                 goto out_copy;
         }
 
-        lsize = ctx_init_parse_reply(req->rq_repbuf,
+        LASSERT(req->rq_repdata);
+        lsize = ctx_init_parse_reply(req->rq_repdata,
                                      param.reply_buf, param.reply_buf_size);
         if (lsize < 0) {
                 param.status = (int) lsize;

@@ -283,6 +283,23 @@ struct obd_device;
 struct file;
 struct obd_histogram;
 
+/* Days / hours / mins / seconds format */
+struct dhms {
+        int d,h,m,s;
+};
+static inline void s2dhms(struct dhms *ts, time_t secs)
+{
+        ts->d = secs / 86400;
+        secs = secs % 86400;
+        ts->h = secs / 3600;
+        secs = secs % 3600;
+        ts->m = secs / 60;
+        ts->s = secs % 60;
+}
+#define DHMS_FMT "%dd%dh%02dm%02ds"
+#define DHMS_VARS(x) (x)->d, (x)->h, (x)->m, (x)->s
+
+
 #ifdef LPROCFS
 
 static inline int lprocfs_stats_lock(struct lprocfs_stats *stats, int type)
@@ -436,6 +453,13 @@ extern int lprocfs_rd_num_exports(char *page, char **start, off_t off,
                                   int count, int *eof, void *data);
 extern int lprocfs_rd_numrefs(char *page, char **start, off_t off,
                               int count, int *eof, void *data);
+struct adaptive_timeout;
+extern int lprocfs_at_hist_helper(char *page, int count, int rc,
+                                  struct adaptive_timeout *at);
+extern int lprocfs_rd_timeouts(char *page, char **start, off_t off,
+                               int count, int *eof, void *data);
+extern int lprocfs_wr_timeouts(struct file *file, const char *buffer,
+                               unsigned long count, void *data);
 extern int lprocfs_wr_evict_client(struct file *file, const char *buffer,
                                    unsigned long count, void *data);
 extern int lprocfs_wr_ping(struct file *file, const char *buffer,
@@ -542,6 +566,10 @@ struct file_operations name##_fops = {                                     \
 
 #define LPROC_SEQ_FOPS_RO(name)         __LPROC_SEQ_FOPS(name, NULL)
 #define LPROC_SEQ_FOPS(name)            __LPROC_SEQ_FOPS(name, name##_seq_write)
+
+/* lproc_ptlrpc.c */
+struct ptlrpc_request;
+extern void target_print_req(void *seq_file, struct ptlrpc_request *req);
 
 /* lprocfs_status.c: read recovery max time bz13079 */
 int lprocfs_obd_rd_recovery_maxtime(char *page, char **start, off_t off,
@@ -650,6 +678,16 @@ static inline int lprocfs_rd_num_exports(char *page, char **start, off_t off,
 static inline int lprocfs_rd_numrefs(char *page, char **start, off_t off,
                                      int count, int *eof, void *data)
 { return 0; }
+struct adaptive_timeout;
+static inline int lprocfs_at_hist_helper(char *page, int count, int rc,
+                                         struct adaptive_timeout *at)
+{ return 0; }
+static inline int lprocfs_rd_timeouts(char *page, char **start, off_t off,
+                                      int count, int *eof, void *data)
+{ return 0; }
+static inline int lprocfs_wr_timeouts(struct file *file, const char *buffer,
+                                      unsigned long count, void *data)
+{ return 0; }
 static inline int lprocfs_wr_evict_client(struct file *file, const char *buffer,
                                           unsigned long count, void *data)
 { return 0; }
@@ -705,6 +743,9 @@ __u64 lprocfs_stats_collector(struct lprocfs_stats *stats, int idx,
 #define LPROCFS_ENTRY_AND_CHECK(dp)
 #define LPROC_SEQ_FOPS_RO(name)
 #define LPROC_SEQ_FOPS(name)
+
+/* lproc_ptlrpc.c */
+#define target_print_req NULL
 
 #endif /* LPROCFS */
 

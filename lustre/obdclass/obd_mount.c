@@ -543,7 +543,7 @@ DECLARE_MUTEX(mgc_start_lock);
 static int lustre_start_mgc(struct super_block *sb)
 {
         struct lustre_handle mgc_conn = {0, };
-        struct obd_connect_data ocd = { 0 };
+        struct obd_connect_data *data = NULL;
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device *obd;
         struct obd_export *exp;
@@ -723,11 +723,14 @@ static int lustre_start_mgc(struct super_block *sb)
                 /* nonfatal */
                 CWARN("can't set %s %d\n", KEY_INIT_RECOV_BACKUP, rc);
         /* We connect to the MGS at setup, and don't disconnect until cleanup */
-
-        ocd.ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_FID;
-        ocd.ocd_version = LUSTRE_VERSION_CODE;
-
-        rc = obd_connect(NULL, &mgc_conn, obd, &(obd->obd_uuid), &ocd, NULL);
+        OBD_ALLOC_PTR(data);
+        if (data == NULL)
+                GOTO(out, rc = -ENOMEM);
+        data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_FID |
+                                  OBD_CONNECT_AT;
+        data->ocd_version = LUSTRE_VERSION_CODE;
+        rc = obd_connect(NULL, &mgc_conn, obd, &(obd->obd_uuid), data, NULL);
+        OBD_FREE_PTR(data);
         if (rc) {
                 CERROR("connect failed %d\n", rc);
                 GOTO(out, rc);

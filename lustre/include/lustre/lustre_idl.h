@@ -449,6 +449,9 @@ static inline void lustre_handle_copy(struct lustre_handle *tgt,
         tgt->cookie = src->cookie;
 }
 
+/* flags for lm_flags */
+#define MSGHDR_AT_SUPPORT               0x1
+
 #define lustre_msg lustre_msg_v2
 /* we depend on this structure to be 8-byte aligned */
 /* this type is only endian-adjusted in lustre_unpack_msg() */
@@ -457,8 +460,8 @@ struct lustre_msg_v2 {
         __u32 lm_secflvr;
         __u32 lm_magic;
         __u32 lm_repsize;
-        __u32 lm_timeout;
-        __u32 lm_padding_1;
+        __u32 lm_cksum;
+        __u32 lm_flags;
         __u32 lm_padding_2;
         __u32 lm_padding_3;
         __u32 lm_buflens[0];
@@ -478,8 +481,8 @@ struct ptlrpc_body {
         __u32 pb_flags;
         __u32 pb_op_flags;
         __u32 pb_conn_cnt;
-        __u32 pb_padding_1;
-        __u32 pb_padding_2;
+        __u32 pb_timeout;  /* for req, the deadline, for rep, the service est */
+        __u32 pb_service_time; /* for rep, actual service time */
         __u32 pb_limit;
         __u64 pb_slv;
 };
@@ -511,12 +514,16 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define MSG_OP_FLAG_SHIFT  16
 
 /* Flags that apply to all requests are in the bottom 16 bits */
-#define MSG_GEN_FLAG_MASK      0x0000ffff
-#define MSG_LAST_REPLAY        1
-#define MSG_RESENT             2
-#define MSG_REPLAY             4
-#define MSG_REQ_REPLAY_DONE    8
-#define MSG_LOCK_REPLAY_DONE  16
+#define MSG_GEN_FLAG_MASK     0x0000ffff
+#define MSG_LAST_REPLAY           0x0001
+#define MSG_RESENT                0x0002
+#define MSG_REPLAY                0x0004
+/* #define MSG_AT_SUPPORT         0x0008
+ * This was used in early prototypes of adaptive timeouts, and while there
+ * shouldn't be any users of that code there also isn't a need for using this
+ * bits. Defer usage until at least 1.10 to avoid potential conflict. */
+#define MSG_REQ_REPLAY_DONE       0x0010
+#define MSG_LOCK_REPLAY_DONE      0x0020
 
 /*
  * Flags for all connect opcodes (MDS_CONNECT, OST_CONNECT)
@@ -581,16 +588,16 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_MDS_CAPA | OBD_CONNECT_OSS_CAPA | \
                                 OBD_CONNECT_MDS_MDS | OBD_CONNECT_CANCELSET | \
                                 OBD_CONNECT_FID | \
-                                LRU_RESIZE_CONNECT_FLAG)
+                                LRU_RESIZE_CONNECT_FLAG | OBD_CONNECT_AT)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
                                 OBD_CONNECT_BRW_SIZE | OBD_CONNECT_QUOTA64 | \
                                 OBD_CONNECT_OSS_CAPA | OBD_CONNECT_CANCELSET | \
-                                OBD_CONNECT_CKSUM | \
-                                LRU_RESIZE_CONNECT_FLAG)
+                                OBD_CONNECT_CKSUM | LRU_RESIZE_CONNECT_FLAG | \
+                                OBD_CONNECT_AT)
 #define ECHO_CONNECT_SUPPORTED (0)
-#define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION)
+#define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT)
 
 #define MAX_QUOTA_COUNT32 (0xffffffffULL)
 

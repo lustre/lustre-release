@@ -57,7 +57,6 @@ int ptlrpc_ping(struct obd_import *imp)
                   imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
         req->rq_no_resend = req->rq_no_delay = 1;
         ptlrpc_request_set_replen(req);
-        req->rq_timeout = PING_INTERVAL;
         ptlrpcd_add_req(req);
 
         RETURN(0);
@@ -66,9 +65,14 @@ int ptlrpc_ping(struct obd_import *imp)
 void ptlrpc_update_next_ping(struct obd_import *imp)
 {
 #ifdef ENABLE_PINGER
-        imp->imp_next_ping = cfs_time_shift(
-                                (imp->imp_state == LUSTRE_IMP_DISCON ?
-                                 RECONNECT_INTERVAL : PING_INTERVAL));
+        int time = PING_INTERVAL;
+        if (imp->imp_state == LUSTRE_IMP_DISCON) {
+                int dtime = max_t(int, CONNECTION_SWITCH_MIN,
+                                  AT_OFF ? 0 :
+                                  at_get(&imp->imp_at.iat_net_latency));
+                time = min(time, dtime);
+        }
+        imp->imp_next_ping = cfs_time_shift(time);
 #endif /* ENABLE_PINGER */
 }
 
@@ -436,7 +440,7 @@ static int ping_evictor_main(void *arg)
                 obd = pet_exp->exp_obd;
                 spin_unlock(&pet_lock);
 
-                expire_time = cfs_time_current_sec() - (3 * obd_timeout / 2);
+                expire_time = cfs_time_current_sec() - PING_EVICT_TIMEOUT;
 
                 CDEBUG(D_HA, "evicting all exports of obd %s older than %ld\n",
                        obd->obd_name, expire_time);

@@ -137,7 +137,8 @@ static int mdc_obd_add(const struct lu_env *env,
                                          OBD_CONNECT_OSS_CAPA | 
                                          OBD_CONNECT_IBITS |
                                          OBD_CONNECT_MDS_MDS |
-                                         OBD_CONNECT_FID;
+                                         OBD_CONNECT_FID |
+                                         OBD_CONNECT_AT;
                 rc = obd_connect(env, conn, mdc, &mdc->obd_uuid, ocd, NULL);
                 OBD_FREE_PTR(ocd);
                 if (rc) {

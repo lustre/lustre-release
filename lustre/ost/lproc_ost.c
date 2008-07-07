@@ -46,37 +46,4 @@ void lprocfs_ost_init_vars(struct lprocfs_static_vars *lvars)
     lvars->obd_vars     = lprocfs_ost_obd_vars;
 }
 
-void
-ost_print_req(void *seq_file, struct ptlrpc_request *req)
-{
-        /* Called holding srv_lock with irqs disabled.
-         * Print specific req contents and a newline.
-         * CAVEAT EMPTOR: check request message length before printing!!!
-         * You might have received any old crap so you must be just as
-         * careful here as the service's request parser!!! */
-        struct seq_file *sf = seq_file;
-
-        switch (req->rq_phase) {
-        case RQ_PHASE_NEW:
-                /* still awaiting a service thread's attention, or rejected
-                 * because the generic request message didn't unpack */
-                seq_printf(sf, "<not swabbed>\n");
-                break;
-                
-        case RQ_PHASE_INTERPRET:
-                /* being handled, so basic msg swabbed, and opc is valid
-                 * but racing with ost_handle() */
-                seq_printf(sf, "opc %d\n", lustre_msg_get_opc(req->rq_reqmsg));
-                break;
-                
-        case RQ_PHASE_COMPLETE:
-                /* been handled by ost_handle() reply state possibly still
-                 * volatile */
-                seq_printf(sf, "opc %d\n", lustre_msg_get_opc(req->rq_reqmsg));
-                break;
-
-        default:
-                LBUG();
-        }
-}
 #endif /* LPROCFS */

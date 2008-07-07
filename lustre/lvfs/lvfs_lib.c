@@ -124,6 +124,24 @@ int __obd_fail_check_set(__u32 id, __u32 value, int set)
 }
 EXPORT_SYMBOL(__obd_fail_check_set);
 
+int __obd_fail_timeout_set(__u32 id, __u32 value, int ms, int set)
+{
+        int ret = 0;
+
+        ret = __obd_fail_check_set(id, value, set);
+        if (ret) {
+                CERROR("obd_fail_timeout id %x sleeping for %dms\n",
+                       id, ms);
+                set_current_state(TASK_UNINTERRUPTIBLE);
+                cfs_schedule_timeout(CFS_TASK_UNINT,
+                                     cfs_time_seconds(ms) / 1000);
+                set_current_state(TASK_RUNNING);
+                CERROR("obd_fail_timeout id %x awake\n", id);
+        }
+        return ret;
+}
+EXPORT_SYMBOL(__obd_fail_timeout_set);
+
 #ifdef LPROCFS
 void lprocfs_counter_add(struct lprocfs_stats *stats, int idx,
                                        long amount)

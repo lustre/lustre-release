@@ -65,6 +65,7 @@
 #include <obd.h>
 #include <obd_class.h>
 #include <obd_support.h>
+#include <obd_cksum.h>
 #include <lustre/lustre_idl.h>
 #include <lustre_net.h>
 #include <lustre_import.h>
@@ -75,6 +76,13 @@
 #include "gss_api.h"
 
 #include <linux/crypto.h>
+
+/*
+ * early reply have fixed size, respectively in privacy and integrity mode.
+ * so we calculate them only once.
+ */
+static int gss_at_reply_off_integ;
+static int gss_at_reply_off_priv;
 
 
 static inline int msg_last_segidx(struct lustre_msg *msg)
@@ -144,21 +152,23 @@ netobj_t *gss_swab_netobj(struct lustre_msg *msg, int segment)
 /*
  * payload should be obtained from mechanism. but currently since we
  * only support kerberos, we could simply use fixed value.
- * krb5 header:         16
- * krb5 checksum:       20
+ * krb5 "meta" data:
+ *  - krb5 header:      16
+ *  - krb5 checksum:    20
+ *
+ * for privacy mode, payload also include the cipher text which has the same
+ * size as plain text, plus possible confounder, padding both at maximum cipher
+ * block size.
  */
 #define GSS_KRB5_INTEG_MAX_PAYLOAD      (40)
 
 static inline
-int gss_estimate_payload(struct gss_ctx *mechctx, int msgsize, int privacy)
+int gss_mech_payload(struct gss_ctx *mechctx, int msgsize, int privacy)
 {
-        if (privacy) {
-                /* we suppose max cipher block size is 16 bytes. here we
-                 * add 16 for confounder and 16 for padding. */
-                return GSS_KRB5_INTEG_MAX_PAYLOAD + msgsize + 16 + 16 + 16;
-        } else {
+        if (privacy)
+                return GSS_KRB5_INTEG_MAX_PAYLOAD + 16 + 16 + 16 + msgsize;
+        else
                 return GSS_KRB5_INTEG_MAX_PAYLOAD;
-        }
 }
 
 /*
@@ -575,11 +585,10 @@ exit:
  * cred APIs                           *
  ***************************************/
 
-static inline
-int gss_cli_payload(struct ptlrpc_cli_ctx *ctx,
-                    int msgsize, int privacy)
+static inline int gss_cli_payload(struct ptlrpc_cli_ctx *ctx,
+                                  int msgsize, int privacy)
 {
-        return gss_estimate_payload(NULL, msgsize, privacy);
+        return gss_mech_payload(NULL, msgsize, privacy);
 }
 
 int gss_cli_ctx_match(struct ptlrpc_cli_ctx *ctx, struct vfs_cred *vcred)
@@ -731,20 +740,23 @@ int gss_cli_ctx_verify(struct ptlrpc_cli_ctx *ctx,
 {
         struct gss_cli_ctx     *gctx;
         struct gss_header      *ghdr, *reqhdr;
-        struct lustre_msg      *msg = req->rq_repbuf;
+        struct lustre_msg      *msg = req->rq_repdata;
         __u32                   major;
-        int                     rc = 0;
+        int                     pack_bulk, early = 0, rc = 0;
         ENTRY;
 
         LASSERT(req->rq_cli_ctx == ctx);
         LASSERT(msg);
 
-        req->rq_repdata_len = req->rq_nob_received;
         gctx = container_of(ctx, struct gss_cli_ctx, gc_base);
 
+        if ((char *) msg < req->rq_repbuf ||
+            (char *) msg >= req->rq_repbuf + req->rq_repbuf_len)
+                early = 1;
+
         /* special case for context negotiation, rq_repmsg/rq_replen actually
-         * are not used currently. */
-        if (req->rq_ctx_init) {
+         * are not used currently. but early reply always be treated normally */
+        if (req->rq_ctx_init && !early) {
                 req->rq_repmsg = lustre_msg_buf(msg, 1, 0);
                 req->rq_replen = msg->lm_buflens[1];
                 RETURN(0);
@@ -773,8 +785,9 @@ int gss_cli_ctx_verify(struct ptlrpc_cli_ctx *ctx,
 
         switch (ghdr->gh_proc) {
         case PTLRPC_GSS_PROC_DATA:
-                if (!equi(req->rq_pack_bulk == 1,
-                          ghdr->gh_flags & LUSTRE_GSS_PACK_BULK)) {
+                pack_bulk = ghdr->gh_flags & LUSTRE_GSS_PACK_BULK;
+
+                if (!early && !equi(req->rq_pack_bulk == 1, pack_bulk)) {
                         CERROR("%s bulk flag in reply\n",
                                req->rq_pack_bulk ? "missing" : "unexpected");
                         RETURN(-EPROTO);
@@ -799,11 +812,20 @@ int gss_cli_ctx_verify(struct ptlrpc_cli_ctx *ctx,
                 if (major != GSS_S_COMPLETE)
                         RETURN(-EPERM);
 
-                req->rq_repmsg = lustre_msg_buf(msg, 1, 0);
-                req->rq_replen = msg->lm_buflens[1];
+                if (early && reqhdr->gh_svc == SPTLRPC_SVC_NULL) {
+                        __u32 cksum;
 
-                if (req->rq_pack_bulk) {
-                        /* FIXME */
+                        cksum = crc32_le(!(__u32) 0,
+                                         lustre_msg_buf(msg, 1, 0),
+                                         lustre_msg_buflen(msg, 1));
+                        if (cksum != msg->lm_cksum) {
+                                CWARN("early reply checksum mismatch: "
+                                      "%08x != %08x\n", cksum, msg->lm_cksum);
+                                RETURN(-EPROTO);
+                        }
+                }
+
+                if (pack_bulk) {
                         /* bulk checksum is right after the lustre msg */
                         if (msg->lm_bufcount < 3) {
                                 CERROR("Invalid reply bufcount %u\n",
@@ -812,10 +834,22 @@ int gss_cli_ctx_verify(struct ptlrpc_cli_ctx *ctx,
                         }
 
                         rc = bulk_sec_desc_unpack(msg, 2);
+                        if (rc) {
+                                CERROR("unpack bulk desc: %d\n", rc);
+                                RETURN(rc);
+                        }
                 }
+
+                req->rq_repmsg = lustre_msg_buf(msg, 1, 0);
+                req->rq_replen = msg->lm_buflens[1];
                 break;
         case PTLRPC_GSS_PROC_ERR:
-                rc = gss_cli_ctx_handle_err_notify(ctx, req, ghdr);
+                if (early) {
+                        CERROR("server return error with early reply\n");
+                        rc = -EPROTO;
+                } else {
+                        rc = gss_cli_ctx_handle_err_notify(ctx, req, ghdr);
+                }
                 break;
         default:
                 CERROR("unknown gss proc %d\n", ghdr->gh_proc);
@@ -947,16 +981,22 @@ int gss_cli_ctx_unseal(struct ptlrpc_cli_ctx *ctx,
 {
         struct gss_cli_ctx      *gctx;
         struct gss_header       *ghdr;
-        int                      msglen, rc;
+        struct lustre_msg       *msg = req->rq_repdata;
+        int                      msglen, pack_bulk, early = 0, rc;
         __u32                    major;
         ENTRY;
 
-        LASSERT(req->rq_repbuf);
         LASSERT(req->rq_cli_ctx == ctx);
+        LASSERT(req->rq_ctx_init == 0);
+        LASSERT(msg);
 
         gctx = container_of(ctx, struct gss_cli_ctx, gc_base);
 
-        ghdr = gss_swab_header(req->rq_repbuf, 0);
+        if ((char *) msg < req->rq_repbuf ||
+            (char *) msg >= req->rq_repbuf + req->rq_repbuf_len)
+                early = 1;
+
+        ghdr = gss_swab_header(msg, 0);
         if (ghdr == NULL) {
                 CERROR("can't decode gss header\n");
                 RETURN(-EPROTO);
@@ -971,49 +1011,52 @@ int gss_cli_ctx_unseal(struct ptlrpc_cli_ctx *ctx,
 
         switch (ghdr->gh_proc) {
         case PTLRPC_GSS_PROC_DATA:
-                if (!equi(req->rq_pack_bulk == 1,
-                          ghdr->gh_flags & LUSTRE_GSS_PACK_BULK)) {
+                pack_bulk = ghdr->gh_flags & LUSTRE_GSS_PACK_BULK;
+
+                if (!early && !equi(req->rq_pack_bulk == 1, pack_bulk)) {
                         CERROR("%s bulk flag in reply\n",
                                req->rq_pack_bulk ? "missing" : "unexpected");
                         RETURN(-EPROTO);
                 }
 
-                if (lustre_msg_swabbed(req->rq_repbuf))
+                if (lustre_msg_swabbed(msg))
                         gss_header_swabber(ghdr);
 
-                major = gss_unseal_msg(gctx->gc_mechctx, req->rq_repbuf,
-                                       &msglen, req->rq_repbuf_len);
+                /* use rq_repdata_len as buffer size, which assume unseal
+                 * doesn't need extra memory space. for precise control, we'd
+                 * better calculate out actual buffer size as
+                 * (repbuf_len - offset - repdata_len) */
+                major = gss_unseal_msg(gctx->gc_mechctx, msg,
+                                       &msglen, req->rq_repdata_len);
                 if (major != GSS_S_COMPLETE) {
                         rc = -EPERM;
                         break;
                 }
 
-                if (lustre_unpack_msg(req->rq_repbuf, msglen)) {
+                if (lustre_unpack_msg(msg, msglen)) {
                         CERROR("Failed to unpack after decryption\n");
                         RETURN(-EPROTO);
                 }
-                req->rq_repdata_len = msglen;
 
-                if (req->rq_repbuf->lm_bufcount < 1) {
+                if (msg->lm_bufcount < 1) {
                         CERROR("Invalid reply buffer: empty\n");
                         RETURN(-EPROTO);
                 }
 
-                if (req->rq_pack_bulk) {
-                        if (req->rq_repbuf->lm_bufcount < 2) {
-                                CERROR("Too few request buffer segments %d\n",
-                                       req->rq_repbuf->lm_bufcount);
+                if (pack_bulk) {
+                        if (msg->lm_bufcount < 2) {
+                                CERROR("bufcount %u: missing bulk sec desc\n",
+                                       msg->lm_bufcount);
                                 RETURN(-EPROTO);
                         }
 
                         /* bulk checksum is the last segment */
-                        if (bulk_sec_desc_unpack(req->rq_repbuf,
-                                                 req->rq_repbuf->lm_bufcount-1))
+                        if (bulk_sec_desc_unpack(msg, msg->lm_bufcount-1))
                                 RETURN(-EPROTO);
                 }
 
-                req->rq_repmsg = lustre_msg_buf(req->rq_repbuf, 0, 0);
-                req->rq_replen = req->rq_repbuf->lm_buflens[0];
+                req->rq_repmsg = lustre_msg_buf(msg, 0, 0);
+                req->rq_replen = msg->lm_buflens[0];
 
                 rc = 0;
                 break;
@@ -1438,8 +1481,9 @@ int gss_alloc_repbuf_intg(struct ptlrpc_sec *sec,
                           struct ptlrpc_request *req,
                           int svc, int msgsize)
 {
-        int                       txtsize;
-        int                       buflens[4], bufcnt = 2;
+        int             txtsize;
+        int             buflens[4], bufcnt = 2;
+        int             alloc_size;
 
         /*
          * on-wire data layout:
@@ -1476,7 +1520,12 @@ int gss_alloc_repbuf_intg(struct ptlrpc_sec *sec,
         else if (svc != SPTLRPC_SVC_NULL)
                 buflens[bufcnt++] = gss_cli_payload(req->rq_cli_ctx, txtsize,0);
 
-        return do_alloc_repbuf(req, lustre_msg_size_v2(bufcnt, buflens));
+        alloc_size = lustre_msg_size_v2(bufcnt, buflens);
+
+        /* add space for early reply */
+        alloc_size += gss_at_reply_off_integ;
+
+        return do_alloc_repbuf(req, alloc_size);
 }
 
 static
@@ -1484,8 +1533,9 @@ int gss_alloc_repbuf_priv(struct ptlrpc_sec *sec,
                           struct ptlrpc_request *req,
                           int msgsize)
 {
-        int                       txtsize;
-        int                       buflens[3], bufcnt;
+        int             txtsize;
+        int             buflens[3], bufcnt;
+        int             alloc_size;
 
         /* Inner (clear) buffers
          *  - lustre message
@@ -1514,7 +1564,12 @@ int gss_alloc_repbuf_priv(struct ptlrpc_sec *sec,
         buflens[1] = gss_cli_payload(req->rq_cli_ctx, buflens[0], 0);
         buflens[2] = gss_cli_payload(req->rq_cli_ctx, txtsize, 1);
 
-        return do_alloc_repbuf(req, lustre_msg_size_v2(bufcnt, buflens));
+        alloc_size = lustre_msg_size_v2(bufcnt, buflens);
+
+        /* add space for early reply */
+        alloc_size += gss_at_reply_off_priv;
+
+        return do_alloc_repbuf(req, alloc_size);
 }
 
 int gss_alloc_repbuf(struct ptlrpc_sec *sec,
@@ -1853,6 +1908,17 @@ int gss_svc_sign(struct ptlrpc_request *req,
                 RETURN(rc);
 
         rs->rs_repdata_len = rc;
+
+        if (likely(req->rq_packed_final)) {
+                req->rq_reply_off = gss_at_reply_off_integ;
+        } else {
+                if (svc == SPTLRPC_SVC_NULL)
+                        rs->rs_repbuf->lm_cksum = crc32_le(!(__u32) 0,
+                                        lustre_msg_buf(rs->rs_repbuf, 1, 0),
+                                        lustre_msg_buflen(rs->rs_repbuf, 1));
+                req->rq_reply_off = 0;
+        }
+
         RETURN(0);
 }
 
@@ -1871,7 +1937,7 @@ int gss_pack_err_notify(struct ptlrpc_request *req, __u32 major, __u32 minor)
         grctx->src_err_notify = 1;
         grctx->src_reserve_len = 0;
 
-        rc = lustre_pack_reply_v2(req, 1, &replen, NULL);
+        rc = lustre_pack_reply_v2(req, 1, &replen, NULL, 0);
         if (rc) {
                 CERROR("could not pack reply, err %d\n", rc);
                 RETURN(rc);
@@ -2366,19 +2432,23 @@ void gss_svc_invalidate_ctx(struct ptlrpc_svc_ctx *svc_ctx)
 }
 
 static inline
-int gss_svc_payload(struct gss_svc_reqctx *grctx, int msgsize, int privacy)
+int gss_svc_payload(struct gss_svc_reqctx *grctx, int early,
+                    int msgsize, int privacy)
 {
-        if (gss_svc_reqctx_is_special(grctx))
+        /* we should treat early reply normally, but which is actually sharing
+         * the same ctx with original request, so in this case we should
+         * ignore the special ctx's special flags */
+        if (early == 0 && gss_svc_reqctx_is_special(grctx))
                 return grctx->src_reserve_len;
 
-        return gss_estimate_payload(NULL, msgsize, privacy);
+        return gss_mech_payload(NULL, msgsize, privacy);
 }
 
 int gss_svc_alloc_rs(struct ptlrpc_request *req, int msglen)
 {
         struct gss_svc_reqctx       *grctx;
         struct ptlrpc_reply_state   *rs;
-        int                          privacy, svc, bsd_off = 0;
+        int                          early, privacy, svc, bsd_off = 0;
         int                          ibuflens[2], ibufcnt = 0;
         int                          buflens[4], bufcnt;
         int                          txtsize, wmsg_size, rs_size;
@@ -2392,9 +2462,10 @@ int gss_svc_alloc_rs(struct ptlrpc_request *req, int msglen)
         }
 
         svc = RPC_FLVR_SVC(req->rq_flvr.sf_rpc);
+        early = (req->rq_packed_final == 0);
 
         grctx = gss_svc_ctx2reqctx(req->rq_svc_ctx);
-        if (gss_svc_reqctx_is_special(grctx))
+        if (!early && gss_svc_reqctx_is_special(grctx))
                 privacy = 0;
         else
                 privacy = (svc == SPTLRPC_SVC_PRIV);
@@ -2419,8 +2490,8 @@ int gss_svc_alloc_rs(struct ptlrpc_request *req, int msglen)
                 /* wrapper buffer */
                 bufcnt = 3;
                 buflens[0] = PTLRPC_GSS_HEADER_SIZE;
-                buflens[1] = gss_svc_payload(grctx, buflens[0], 0);
-                buflens[2] = gss_svc_payload(grctx, txtsize, 1);
+                buflens[1] = gss_svc_payload(grctx, early, buflens[0], 0);
+                buflens[2] = gss_svc_payload(grctx, early, txtsize, 1);
         } else {
                 bufcnt = 2;
                 buflens[0] = PTLRPC_GSS_HEADER_SIZE;
@@ -2442,9 +2513,10 @@ int gss_svc_alloc_rs(struct ptlrpc_request *req, int msglen)
                         bufcnt++;
                 }
 
-                if (gss_svc_reqctx_is_special(grctx) ||
+                if ((!early && gss_svc_reqctx_is_special(grctx)) ||
                     svc != SPTLRPC_SVC_NULL)
-                        buflens[bufcnt++] = gss_svc_payload(grctx, txtsize, 0);
+                        buflens[bufcnt++] = gss_svc_payload(grctx, early,
+                                                            txtsize, 0);
         }
 
         wmsg_size = lustre_msg_size_v2(bufcnt, buflens);
@@ -2518,7 +2590,7 @@ int gss_svc_seal(struct ptlrpc_request *req,
         msgobj.data = (__u8 *) rs->rs_repbuf;
 
         /* allocate temporary cipher buffer */
-        cipher_buflen = gss_estimate_payload(gctx->gsc_mechctx, msglen, 1);
+        cipher_buflen = gss_mech_payload(gctx->gsc_mechctx, msglen, 1);
         OBD_ALLOC(cipher_buf, cipher_buflen);
         if (!cipher_buf)
                 RETURN(-ENOMEM);
@@ -2536,12 +2608,14 @@ int gss_svc_seal(struct ptlrpc_request *req,
 
         /* we are about to override data at rs->rs_repbuf, nullify pointers
          * to which to catch further illegal usage. */
-        grctx->src_repbsd = NULL;
-        grctx->src_repbsd_size = 0;
+        if (req->rq_pack_bulk) {
+                grctx->src_repbsd = NULL;
+                grctx->src_repbsd_size = 0;
+        }
 
         /* now the real wire data */
         buflens[0] = PTLRPC_GSS_HEADER_SIZE;
-        buflens[1] = gss_estimate_payload(gctx->gsc_mechctx, buflens[0], 0);
+        buflens[1] = gss_mech_payload(gctx->gsc_mechctx, buflens[0], 0);
         buflens[2] = cipher_obj.len;
 
         LASSERT(lustre_msg_size_v2(3, buflens) <= rs->rs_repbuf_len);
@@ -2579,6 +2653,12 @@ int gss_svc_seal(struct ptlrpc_request *req,
         rs->rs_repdata_len = lustre_shrink_msg(rs->rs_repbuf, 2,
                                                cipher_obj.len, 0);
 
+        /* reply offset */
+        if (likely(req->rq_packed_final))
+                req->rq_reply_off = gss_at_reply_off_priv;
+        else
+                req->rq_reply_off = 0;
+
         /* to catch upper layer's further access */
         rs->rs_msg = NULL;
         req->rq_repmsg = NULL;
@@ -2594,15 +2674,22 @@ int gss_svc_authorize(struct ptlrpc_request *req)
 {
         struct ptlrpc_reply_state *rs = req->rq_reply_state;
         struct gss_svc_reqctx     *grctx = gss_svc_ctx2reqctx(req->rq_svc_ctx);
-        struct gss_wire_ctx       *gw;
-        int                        rc;
+        struct gss_wire_ctx       *gw = &grctx->src_wirectx;
+        int                        early, rc;
         ENTRY;
 
-        if (gss_svc_reqctx_is_special(grctx))
-                RETURN(0);
+        early = (req->rq_packed_final == 0);
 
-        gw = &grctx->src_wirectx;
-        if (gw->gw_proc != PTLRPC_GSS_PROC_DATA &&
+        if (!early && gss_svc_reqctx_is_special(grctx)) {
+                LASSERT(rs->rs_repdata_len != 0);
+
+                req->rq_reply_off = gss_at_reply_off_integ;
+                RETURN(0);
+        }
+
+        /* early reply could happen in many cases */
+        if (!early &&
+            gw->gw_proc != PTLRPC_GSS_PROC_DATA &&
             gw->gw_proc != PTLRPC_GSS_PROC_DESTROY) {
                 CERROR("proc %d not support\n", gw->gw_proc);
                 RETURN(-EINVAL);
@@ -2635,10 +2722,6 @@ void gss_svc_free_rs(struct ptlrpc_reply_state *rs)
 
         LASSERT(rs->rs_svc_ctx);
         grctx = container_of(rs->rs_svc_ctx, struct gss_svc_reqctx, src_base);
-
-        /* paranoid, maybe not necessary */
-        grctx->src_reqbsd = NULL;
-        grctx->src_repbsd = NULL;
 
         gss_svc_reqctx_decref(grctx);
         rs->rs_svc_ctx = NULL;
@@ -2706,6 +2789,23 @@ err_out:
         return -ENOMEM;
 }
 
+static void gss_init_at_reply_offset(void)
+{
+        int buflens[3], clearsize;
+
+        buflens[0] = PTLRPC_GSS_HEADER_SIZE;
+        buflens[1] = lustre_msg_early_size();
+        buflens[2] = gss_cli_payload(NULL, buflens[1], 0);
+        gss_at_reply_off_integ = lustre_msg_size_v2(3, buflens);
+
+        buflens[0] = lustre_msg_early_size();
+        clearsize = lustre_msg_size_v2(1, buflens);
+        buflens[0] = PTLRPC_GSS_HEADER_SIZE;
+        buflens[1] = gss_cli_payload(NULL, clearsize, 0);
+        buflens[2] = gss_cli_payload(NULL, clearsize, 1);
+        gss_at_reply_off_priv = lustre_msg_size_v2(3, buflens);
+}
+
 int __init sptlrpc_gss_init(void)
 {
         int rc;
@@ -2738,6 +2838,8 @@ int __init sptlrpc_gss_init(void)
         if (rc)
                 goto out_keyring;
 #endif
+
+        gss_init_at_reply_offset();
 
         return 0;
 

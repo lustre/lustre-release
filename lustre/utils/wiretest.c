@@ -37,6 +37,8 @@ void lustre_assert_wire_constants(void)
                  (long long)LUSTRE_MSG_MAGIC_V2);
         LASSERTF(PTLRPC_MSG_VERSION == 0x00000003," found %lld\n",
                  (long long)PTLRPC_MSG_VERSION);
+        LASSERTF(MSGHDR_AT_SUPPORT == 1, " found %lld\n",
+                 (long long)MSGHDR_AT_SUPPORT);
         LASSERTF(PTL_RPC_MSG_REQUEST == 4711, " found %lld\n",
                  (long long)PTL_RPC_MSG_REQUEST);
         LASSERTF(PTL_RPC_MSG_ERR == 4712, " found %lld\n",
@@ -262,14 +264,14 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct lustre_msg_v2, lm_repsize));
         LASSERTF((int)sizeof(((struct lustre_msg_v2 *)0)->lm_repsize) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct lustre_msg_v2 *)0)->lm_repsize));
-        LASSERTF((int)offsetof(struct lustre_msg_v2, lm_timeout) == 16, " found %lld\n",
-                 (long long)(int)offsetof(struct lustre_msg_v2, lm_timeout));
-        LASSERTF((int)sizeof(((struct lustre_msg_v2 *)0)->lm_timeout) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct lustre_msg_v2 *)0)->lm_timeout));
-        LASSERTF((int)offsetof(struct lustre_msg_v2, lm_padding_1) == 20, " found %lld\n",
-                 (long long)(int)offsetof(struct lustre_msg_v2, lm_padding_1));
-        LASSERTF((int)sizeof(((struct lustre_msg_v2 *)0)->lm_padding_1) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct lustre_msg_v2 *)0)->lm_padding_1));
+        LASSERTF((int)offsetof(struct lustre_msg_v2, lm_cksum) == 16, " found %lld\n",
+                 (long long)(int)offsetof(struct lustre_msg_v2, lm_cksum));
+        LASSERTF((int)sizeof(((struct lustre_msg_v2 *)0)->lm_cksum) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct lustre_msg_v2 *)0)->lm_cksum));
+        LASSERTF((int)offsetof(struct lustre_msg_v2, lm_flags) == 20, " found %lld\n",
+                 (long long)(int)offsetof(struct lustre_msg_v2, lm_flags));
+        LASSERTF((int)sizeof(((struct lustre_msg_v2 *)0)->lm_flags) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct lustre_msg_v2 *)0)->lm_flags));
         LASSERTF((int)offsetof(struct lustre_msg_v2, lm_padding_2) == 24, " found %lld\n",
                  (long long)(int)offsetof(struct lustre_msg_v2, lm_padding_2));
         LASSERTF((int)sizeof(((struct lustre_msg_v2 *)0)->lm_padding_2) == 4, " found %lld\n",
@@ -334,14 +336,14 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct ptlrpc_body, pb_conn_cnt));
         LASSERTF((int)sizeof(((struct ptlrpc_body *)0)->pb_conn_cnt) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct ptlrpc_body *)0)->pb_conn_cnt));
-        LASSERTF((int)offsetof(struct ptlrpc_body, pb_padding_1) == 68, " found %lld\n",
-                 (long long)(int)offsetof(struct ptlrpc_body, pb_padding_1));
-        LASSERTF((int)sizeof(((struct ptlrpc_body *)0)->pb_padding_1) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct ptlrpc_body *)0)->pb_padding_1));
-        LASSERTF((int)offsetof(struct ptlrpc_body, pb_padding_2) == 72, " found %lld\n",
-                 (long long)(int)offsetof(struct ptlrpc_body, pb_padding_2));
-        LASSERTF((int)sizeof(((struct ptlrpc_body *)0)->pb_padding_2) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct ptlrpc_body *)0)->pb_padding_2));
+        LASSERTF((int)offsetof(struct ptlrpc_body, pb_timeout) == 68, " found %lld\n",
+                 (long long)(int)offsetof(struct ptlrpc_body, pb_timeout));
+        LASSERTF((int)sizeof(((struct ptlrpc_body *)0)->pb_timeout) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct ptlrpc_body *)0)->pb_timeout));
+        LASSERTF((int)offsetof(struct ptlrpc_body, pb_service_time) == 72, " found %lld\n",
+                 (long long)(int)offsetof(struct ptlrpc_body, pb_service_time));
+        LASSERTF((int)sizeof(((struct ptlrpc_body *)0)->pb_service_time) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct ptlrpc_body *)0)->pb_service_time));
         LASSERTF((int)offsetof(struct ptlrpc_body, pb_slv) == 80, " found %lld\n",
                  (long long)(int)offsetof(struct ptlrpc_body, pb_slv));
         LASSERTF((int)sizeof(((struct ptlrpc_body *)0)->pb_slv) == 8, " found %lld\n",

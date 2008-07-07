@@ -83,30 +83,74 @@ void reply_in_callback(lnet_event_t *ev)
         struct ptlrpc_request *req = cbid->cbid_arg;
         ENTRY;
 
-        LASSERT (ev->type == LNET_EVENT_PUT ||
-                 ev->type == LNET_EVENT_UNLINK);
-        LASSERT (ev->unlinked);
-        LASSERT (ev->md.start == req->rq_repbuf);
-        LASSERT (ev->offset == 0);
-        LASSERT (ev->mlength <= req->rq_repbuf_len);
-
         DEBUG_REQ((ev->status == 0) ? D_NET : D_ERROR, req,
                   "type %d, status %d", ev->type, ev->status);
 
+        LASSERT (ev->type == LNET_EVENT_PUT || ev->type == LNET_EVENT_UNLINK);
+        LASSERT (ev->md.start == req->rq_repbuf);
+        LASSERT (ev->mlength <= req->rq_repbuf_len);
+        /* We've set LNET_MD_MANAGE_REMOTE for all outgoing requests
+           for adaptive timeouts' early reply. */
+        LASSERT((ev->md.options & LNET_MD_MANAGE_REMOTE) != 0);
+
         spin_lock(&req->rq_lock);
 
-        LASSERT (req->rq_receiving_reply);
         req->rq_receiving_reply = 0;
+        req->rq_early = 0;
 
-        if (ev->type == LNET_EVENT_PUT && ev->status == 0) {
-                req->rq_replied = 1;
-                req->rq_nob_received = ev->mlength;
+        if (ev->status)
+                goto out_wake;
+        if (ev->type == LNET_EVENT_UNLINK) {
+                req->rq_must_unlink = 0;
+                DEBUG_REQ(D_RPCTRACE, req, "unlink");
+                goto out_wake;
         }
 
+        if ((ev->offset == 0) &&
+            ((lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT))) {
+                /* Early reply */
+                DEBUG_REQ(D_ADAPTTO, req,
+                          "Early reply received: mlen=%u offset=%d replen=%d "
+                          "replied=%d unlinked=%d", ev->mlength, ev->offset,
+                          req->rq_replen, req->rq_replied, ev->unlinked);
+
+                req->rq_early_count++; /* number received, client side */
+                if (req->rq_replied) {
+                        /* If we already got the real reply, then we need to
+                         * check if lnet_finalize() unlinked the md.  In that
+                         * case, there will be no further callback of type
+                         * LNET_EVENT_UNLINK.
+                         */
+                        if (ev->unlinked)
+                                req->rq_must_unlink = 0;
+                        else
+                                DEBUG_REQ(D_RPCTRACE, req, "unlinked in reply");
+                        goto out_wake;
+                }
+                req->rq_early = 1;
+                req->rq_reply_off = ev->offset;
+                req->rq_nob_received = ev->mlength;
+                /* And we're still receiving */
+                req->rq_receiving_reply = 1;
+        } else {
+                /* Real reply */
+                req->rq_replied = 1;
+                req->rq_reply_off = ev->offset;
+                req->rq_nob_received = ev->mlength;
+                /* LNetMDUnlink can't be called under the LNET_LOCK,
+                   so we must unlink in ptlrpc_unregister_reply */
+                DEBUG_REQ(D_INFO, req,
+                          "reply in flags=%x mlen=%u offset=%d replen=%d",
+                          lustre_msg_get_flags(req->rq_reqmsg),
+                          ev->mlength, ev->offset, req->rq_replen);
+        }
+
+        req->rq_import->imp_last_reply_time = cfs_time_current_sec();
+
+out_wake:
         /* NB don't unlock till after wakeup; req can disappear under us
          * since we don't have our own ref */
         ptlrpc_wake_client_req(req);
-
         spin_unlock(&req->rq_lock);
         EXIT;
 }
@@ -212,6 +256,11 @@ void request_in_callback(lnet_event_t *ev)
 #ifdef CRAY_XT3
         req->rq_uid = ev->uid;
 #endif
+        spin_lock_init(&req->rq_lock);
+        CFS_INIT_LIST_HEAD(&req->rq_timed_list);
+        atomic_set(&req->rq_refcount, 1);
+        if (ev->type == LNET_EVENT_PUT)
+                DEBUG_REQ(D_RPCTRACE, req, "incoming req");
 
         CDEBUG(D_RPCTRACE, "peer: %s\n", libcfs_id2str(req->rq_peer));
 
@@ -239,7 +288,7 @@ void request_in_callback(lnet_event_t *ev)
                 rqbd->rqbd_refcount++;
         }
 
-        list_add_tail(&req->rq_list, &service->srv_request_queue);
+        list_add_tail(&req->rq_list, &service->srv_req_in_queue);
         service->srv_n_queued_reqs++;
 
         /* NB everything can disappear under us once the request

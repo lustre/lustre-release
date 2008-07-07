@@ -85,6 +85,7 @@ static int seq_client_rpc(struct lu_client_seq *seq, struct lu_range *input,
                 req->rq_request_portal = (opc == SEQ_ALLOC_SUPER) ?
                         SEQ_CONTROLLER_PORTAL : SEQ_DATA_PORTAL;
         }
+        ptlrpc_at_set_req_timeout(req);
 
         mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
         rc = ptlrpc_queue_wait(req);

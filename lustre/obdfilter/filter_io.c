@@ -310,7 +310,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
         inode = dentry->d_inode;
 
         obdo_to_inode(inode, oa, OBD_MD_FLATIME);
-        fsfilt_check_slow(obd, now, obd_timeout, "preprw_read setup");
+        fsfilt_check_slow(obd, now, "preprw_read setup");
 
         for (i = 0, lnb = res, rnb = nb; i < obj->ioo_bufcnt;
              i++, rnb++, lnb++) {
@@ -343,7 +343,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                 filter_iobuf_add_page(obd, iobuf, inode, lnb->page);
         }
 
-        fsfilt_check_slow(obd, now, obd_timeout, "start_page_read");
+        fsfilt_check_slow(obd, now, "start_page_read");
 
         rc = filter_direct_io(OBD_BRW_READ, dentry, iobuf,
                               exp, NULL, NULL, NULL);
@@ -548,7 +548,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         fso.fso_dentry = dentry;
         fso.fso_bufcnt = obj->ioo_bufcnt;
 
-        fsfilt_check_slow(exp->exp_obd, now, obd_timeout, "preprw_write setup");
+        fsfilt_check_slow(exp->exp_obd, now, "preprw_write setup");
 
         /* Don't update inode timestamps if this write is older than a
          * setattr which modifies the timestamps. b=10150 */
@@ -648,7 +648,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         rc = filter_direct_io(OBD_BRW_READ, dentry, iobuf, exp,
                               NULL, NULL, NULL);
 
-        fsfilt_check_slow(exp->exp_obd, now, obd_timeout, "start_page_write");
+        fsfilt_check_slow(exp->exp_obd, now, "start_page_write");
 
         if (exp->exp_nid_stats && exp->exp_nid_stats->nid_stats)
                 lprocfs_counter_add(exp->exp_nid_stats->nid_stats,

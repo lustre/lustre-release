@@ -600,6 +600,70 @@ int lprocfs_rd_conn_uuid(char *page, char **start, off_t off, int count,
         return rc;
 }
 
+int lprocfs_at_hist_helper(char *page, int count, int rc,
+                           struct adaptive_timeout *at)
+{
+        int i;
+        for (i = 0; i < AT_BINS; i++)
+                rc += snprintf(page + rc, count - rc, "%3u ", at->at_hist[i]);
+        rc += snprintf(page + rc, count - rc, "\n");
+        return rc;
+}
+
+/* See also ptlrpc_lprocfs_rd_timeouts */
+int lprocfs_rd_timeouts(char *page, char **start, off_t off, int count,
+                        int *eof, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        struct obd_import *imp;
+        unsigned int cur, worst;
+        time_t now, worstt;
+        struct dhms ts;
+        int i, rc = 0;
+
+        LASSERT(obd != NULL);
+        LPROCFS_CLIMP_CHECK(obd);
+        imp = obd->u.cli.cl_import;
+        *eof = 1;
+
+        now = cfs_time_current_sec();
+
+        /* Some network health info for kicks */
+        s2dhms(&ts, now - imp->imp_last_reply_time);
+        rc += snprintf(page + rc, count - rc,
+                       "%-10s : %ld, "DHMS_FMT" ago\n",
+                       "last reply", imp->imp_last_reply_time, DHMS_VARS(&ts));
+
+
+        cur = at_get(&imp->imp_at.iat_net_latency);
+        worst = imp->imp_at.iat_net_latency.at_worst_ever;
+        worstt = imp->imp_at.iat_net_latency.at_worst_time;
+        s2dhms(&ts, now - worstt);
+        rc += snprintf(page + rc, count - rc,
+                       "%-10s : cur %3u  worst %3u (at %ld, "DHMS_FMT" ago) ",
+                       "network", cur, worst, worstt, DHMS_VARS(&ts));
+        rc = lprocfs_at_hist_helper(page, count, rc,
+                                    &imp->imp_at.iat_net_latency);
+
+        for(i = 0; i < IMP_AT_MAX_PORTALS; i++) {
+                if (imp->imp_at.iat_portal[i] == 0)
+                        break;
+                cur = at_get(&imp->imp_at.iat_service_estimate[i]);
+                worst = imp->imp_at.iat_service_estimate[i].at_worst_ever;
+                worstt = imp->imp_at.iat_service_estimate[i].at_worst_time;
+                s2dhms(&ts, now - worstt);
+                rc += snprintf(page + rc, count - rc,
+                               "portal %-2d  : cur %3u  worst %3u (at %ld, "
+                               DHMS_FMT" ago) ", imp->imp_at.iat_portal[i],
+                               cur, worst, worstt, DHMS_VARS(&ts));
+                rc = lprocfs_at_hist_helper(page, count, rc,
+                                          &imp->imp_at.iat_service_estimate[i]);
+        }
+
+        LPROCFS_CLIMP_EXIT(obd);
+        return rc;
+}
+
 static const char *obd_connect_names[] = {
         "read_only",
         "lov_index",
@@ -1692,7 +1756,6 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
 
         if (lprocfs_obd_snprintf(&page, size, &len, "status: ") <= 0)
                 goto out;
-
         if (obd->obd_max_recoverable_clients == 0) {
                 if (lprocfs_obd_snprintf(&page, size, &len, "INACTIVE\n") <= 0)
                         goto out;
@@ -1704,59 +1767,55 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
         if (obd->obd_recovering == 0) {
                 if (lprocfs_obd_snprintf(&page, size, &len, "COMPLETE\n") <= 0)
                         goto out;
-
-                if (lprocfs_obd_snprintf(&page, size, &len, "recovery_start: %lu\n",
-                    obd->obd_recovery_start) <= 0)
+                if (lprocfs_obd_snprintf(&page, size, &len,
+                                         "recovery_start: %lu\n",
+                                         obd->obd_recovery_start) <= 0)
                         goto out;
-
-                if (lprocfs_obd_snprintf(&page, size, &len, "recovery_end: %lu\n",
-                    obd->obd_recovery_end) <= 0)
+                if (lprocfs_obd_snprintf(&page, size, &len,
+                                         "recovery_duration: %lu\n",
+                                         obd->obd_recovery_end -
+                                         obd->obd_recovery_start) <= 0)
                         goto out;
-
-                /* Number of clients have have completed recovery */
-                if (lprocfs_obd_snprintf(&page, size, &len, "recovered_clients: %d\n",
-                    obd->obd_max_recoverable_clients - obd->obd_recoverable_clients) <= 0)
+                /* Number of clients that have completed recovery */
+                if (lprocfs_obd_snprintf(&page, size, &len,
+                                         "completed_clients: %d/%d\n",
+                                         obd->obd_max_recoverable_clients -
+                                         obd->obd_recoverable_clients,
+                                         obd->obd_max_recoverable_clients) <= 0)
                         goto out;
-
-                if (lprocfs_obd_snprintf(&page, size, &len, "unrecovered_clients: %d\n",
-                    obd->obd_recoverable_clients) <= 0)
+                if (lprocfs_obd_snprintf(&page, size, &len,
+                                         "replayed_requests: %d\n",
+                                         obd->obd_replayed_requests) <= 0)
                         goto out;
-
-                if (lprocfs_obd_snprintf(&page, size, &len, "last_transno: "LPD64"\n",
-                    obd->obd_next_recovery_transno - 1) <= 0)
+                if (lprocfs_obd_snprintf(&page, size, &len,
+                                         "last_transno: "LPD64"\n",
+                                         obd->obd_next_recovery_transno - 1)<=0)
                         goto out;
-
-                lprocfs_obd_snprintf(&page, size, &len, "replayed_requests: %d\n", obd->obd_replayed_requests);
                 goto fclose;
         }
 
         if (lprocfs_obd_snprintf(&page, size, &len, "RECOVERING\n") <= 0)
                 goto out;
-
         if (lprocfs_obd_snprintf(&page, size, &len, "recovery_start: %lu\n",
-            obd->obd_recovery_start) <= 0)
+                                 obd->obd_recovery_start) <= 0)
                 goto out;
-
-        if (lprocfs_obd_snprintf(&page, size, &len, "time remaining: %lu\n",
-                                 cfs_time_current_sec() >= obd->obd_recovery_end ? 0 :
-                                 obd->obd_recovery_end - cfs_time_current_sec()) <= 0)
+        if (lprocfs_obd_snprintf(&page, size, &len, "time_remaining: %lu\n",
+                           cfs_time_current_sec() >= obd->obd_recovery_end ? 0 :
+                           obd->obd_recovery_end - cfs_time_current_sec()) <= 0)
                 goto out;
-
-        if(lprocfs_obd_snprintf(&page, size, &len, "connected_clients: %d/%d\n",
-                                obd->obd_connected_clients,
-                                obd->obd_max_recoverable_clients) <= 0)
-                goto out;
-
-        /* Number of clients have have completed recovery */
-        if (lprocfs_obd_snprintf(&page, size, &len, "completed_clients: %d/%d\n",
-                                 obd->obd_max_recoverable_clients - obd->obd_recoverable_clients,
+        if (lprocfs_obd_snprintf(&page, size, &len,"connected_clients: %d/%d\n",
+                                 obd->obd_connected_clients,
                                  obd->obd_max_recoverable_clients) <= 0)
                 goto out;
-
-        if (lprocfs_obd_snprintf(&page, size, &len, "replayed_requests: %d/??\n",
+        /* Number of clients that have completed recovery */
+        if (lprocfs_obd_snprintf(&page, size, &len,"completed_clients: %d/%d\n",
+                                 obd->obd_max_recoverable_clients -
+                                 obd->obd_recoverable_clients,
+                                 obd->obd_max_recoverable_clients) <= 0)
+                goto out;
+        if (lprocfs_obd_snprintf(&page, size, &len,"replayed_requests: %d/??\n",
                                  obd->obd_replayed_requests) <= 0)
                 goto out;
-
         if (lprocfs_obd_snprintf(&page, size, &len, "queued_requests: %d\n",
                                  obd->obd_requests_queued_for_recovery) <= 0)
                 goto out;
@@ -1831,7 +1890,8 @@ EXPORT_SYMBOL(lprocfs_rd_server_uuid);
 EXPORT_SYMBOL(lprocfs_rd_conn_uuid);
 EXPORT_SYMBOL(lprocfs_rd_num_exports);
 EXPORT_SYMBOL(lprocfs_rd_numrefs);
-
+EXPORT_SYMBOL(lprocfs_at_hist_helper);
+EXPORT_SYMBOL(lprocfs_rd_timeouts);
 EXPORT_SYMBOL(lprocfs_rd_blksize);
 EXPORT_SYMBOL(lprocfs_rd_kbytestotal);
 EXPORT_SYMBOL(lprocfs_rd_kbytesfree);

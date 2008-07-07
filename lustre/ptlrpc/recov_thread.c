@@ -426,9 +426,10 @@ static int log_commit_thread(void *arg)
                                 break;
                         }
 
-                        /* XXX FIXME bug 249, 5515 */
+                        /* bug 5515 */
                         request->rq_request_portal = LDLM_CANCEL_REQUEST_PORTAL;
                         request->rq_reply_portal = LDLM_CANCEL_REPLY_PORTAL;
+                        ptlrpc_at_set_req_timeout(request);
 
                         ptlrpc_request_set_replen(request);
                         mutex_down(&llcd->llcd_ctxt->loc_sem);

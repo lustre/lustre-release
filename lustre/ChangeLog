@@ -599,10 +599,11 @@ Bugzilla   : 12836
 Description: lfs find on -1 stripe looping in lsm_lmm_verify_common()
 Details    : Avoid lov_verify_lmm_common() on directory with -1 stripe count.
 
-Severity   : major
-Bugzilla   : 12932
-Description: obd_health_check_timeout too short
-Details    : set obd_health_check_timeout as 1.5x of obd_timeout
+Severity   : enhancement
+Bugzilla   : 3055
+Description: Adaptive timeouts
+Details    : RPC timeouts adapt to changing server load and network
+	     conditions to reduce resend attempts and improve recovery time.
 
 Severity   : normal
 Bugzilla   : 12192

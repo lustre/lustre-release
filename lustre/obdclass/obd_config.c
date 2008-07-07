@@ -756,7 +756,6 @@ int class_process_config(struct lustre_cfg *lcfg)
                 CDEBUG(D_IOCTL, "changing lustre timeout from %d to %d\n",
                        obd_timeout, lcfg->lcfg_num);
                 obd_timeout = max(lcfg->lcfg_num, 1U);
-                obd_health_check_timeout = HEALTH_CHECK_TIMEOUT;
                 GOTO(out, err = 0);
         }
         case LCFG_SET_UPCALL: {

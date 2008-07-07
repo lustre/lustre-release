@@ -367,6 +367,8 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
                 GOTO(out_proc, rc);
         }
 
+        at_init(&ns->ns_at_estimate, ldlm_enqueue_min, 0);
+
         ldlm_namespace_register(ns, client);
         RETURN(ns);
 out_proc:

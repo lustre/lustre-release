@@ -332,7 +332,7 @@ set_flavor_all()
 start_dbench()
 {
     NPROC=`cat /proc/cpuinfo 2>/dev/null | grep ^processor | wc -l`
-    [ $NPROC -lt 2 ] && NPROC=2
+    [ $NPROC -gt 2 ] && NPROC=2
     sh rundbench $NPROC 1>/dev/null &
     DBENCH_PID=$!
     sleep 2
@@ -589,10 +589,15 @@ test_5() {
 run_test 5 "lsvcgssd dead, operations lead to recovery"
 
 test_6() {
+    local nfile=10
+
     mkdir $DIR/d6 || error "mkdir $DIR/d6 failed"
-    cp -a /etc/* $DIR/d6/ || error "cp failed"
+    for ((i=0; i<$nfile; i++)); do
+        dd if=/dev/zero of=$DIR/d6/file$i bs=8k count=1 || error "dd file$i failed"
+    done
     ls -l $DIR/d6/* > /dev/null || error "ls failed"
     rm -rf $DIR2/d6/* || error "rm failed"
+    rmdir $DIR2/d6/ || error "rmdir failed"
 }
 run_test 6 "test basic DLM callback works"
 
@@ -629,7 +634,37 @@ test_7() {
 }
 run_test 7 "exercise enlarge_reqbuf()"
 
-test_8() {
+test_8()
+{
+    debugsave
+    sysctl -w lnet.debug="other"
+    $LCTL dk > /dev/null
+
+    # sleep sometime in ctx handle
+    do_facet mds sysctl -w lustre.fail_val=60
+#define OBD_FAIL_SEC_CTX_HDL_PAUSE       0x1204
+    do_facet mds sysctl -w lustre.fail_loc=0x1204
+
+    $RUNAS $LFS flushctx || error "can't flush ctx"
+
+    $RUNAS df $DIR &
+    DFPID=$!
+    echo "waiting df (pid $TOUCHPID) to finish..."
+    sleep 2 # give df a chance to really trigger context init rpc
+    do_facet mds sysctl -w lustre.fail_loc=0
+    wait $DFPID || error "df should have succeeded"
+
+    $LCTL dk | grep "Early reply #" || error "No early reply"
+    debugrestore
+}
+run_test 8 "Early reply sent for slow gss context negotiation"
+
+#
+# following tests will manipulate flavors and may end with any flavor set,
+# so each test should not assume any start flavor.
+#
+
+test_50() {
     local sample=$TMP/sanity-gss-8
     local tdir=$MOUNT/dir8
     local iosize="256K"
@@ -657,9 +692,9 @@ test_8() {
     rm -rf $tdir
     rm -f $sample
 }
-run_test 8 "verify bulk hash algorithms works"
+run_test 50 "verify bulk hash algorithms works"
 
-test_9() {
+test_51() {
     local s1=$TMP/sanity-gss-9.1
     local s2=$TMP/sanity-gss-9.2
     local s3=$TMP/sanity-gss-9.3
@@ -719,7 +754,7 @@ test_9() {
     rm -rf $tdir
     rm -f $sample
 }
-run_test 9 "bulk data alignment test under encryption mode"
+run_test 51 "bulk data alignment test under encryption mode"
 
 test_90() {
     if [ "$SLOW" = "no" ]; then

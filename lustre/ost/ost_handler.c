@@ -769,13 +769,14 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
          * If getting the lock took more time than
          * client was willing to wait, drop it. b=11330
          */
-        if (cfs_time_current_sec() > req->rq_arrival_time.tv_sec + obd_timeout || 
+        if (cfs_time_current_sec() > req->rq_deadline ||
             OBD_FAIL_CHECK(OBD_FAIL_OST_DROP_REQ)) {
                 no_reply = 1;
                 CERROR("Dropping timed-out read from %s because locking"
-                       "object "LPX64" took %ld seconds.\n",
+                       "object "LPX64" took %ld seconds (limit was %ld).\n",
                        libcfs_id2str(req->rq_peer), ioo->ioo_id,
-                       cfs_time_current_sec() - req->rq_arrival_time.tv_sec);
+                       cfs_time_current_sec() - req->rq_arrival_time.tv_sec,
+                       req->rq_deadline - req->rq_arrival_time.tv_sec);
                 GOTO(out_lock, rc = -ETIMEDOUT);
         }
 
@@ -850,14 +851,30 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 }
 
                 if (rc == 0) {
-                        lwi = LWI_TIMEOUT_INTERVAL(obd_timeout * HZ / 4, HZ,
-                                                   ost_bulk_timeout, desc);
-                        rc = l_wait_event(desc->bd_waitq,
-                                          !ptlrpc_bulk_active(desc) ||
-                                          exp->exp_failed, &lwi);
-                        LASSERT(rc == 0 || rc == -ETIMEDOUT);
+                        time_t start = cfs_time_current_sec();
+                        do {
+                                long timeoutl = req->rq_deadline -
+                                        cfs_time_current_sec();
+                                cfs_duration_t timeout = (timeoutl <= 0 || rc) ?
+                                        CFS_TICK : cfs_time_seconds(timeoutl);
+                                lwi = LWI_TIMEOUT_INTERVAL(timeout,
+                                                           cfs_time_seconds(1),
+                                                           ost_bulk_timeout,
+                                                           desc);
+                                rc = l_wait_event(desc->bd_waitq,
+                                                  !ptlrpc_bulk_active(desc) ||
+                                                  exp->exp_failed, &lwi);
+                                LASSERT(rc == 0 || rc == -ETIMEDOUT);
+                                /* Wait again if we changed deadline */
+                        } while ((rc == -ETIMEDOUT) &&
+                                 (req->rq_deadline > cfs_time_current_sec()));
+
                         if (rc == -ETIMEDOUT) {
-                                DEBUG_REQ(D_ERROR, req, "timeout on bulk PUT");
+                                DEBUG_REQ(D_ERROR, req,
+                                          "timeout on bulk PUT after %ld%+lds",
+                                          req->rq_deadline - start,
+                                          cfs_time_current_sec() -
+                                          req->rq_deadline);
                                 ptlrpc_abort_bulk(desc);
                         } else if (exp->exp_failed) {
                                 DEBUG_REQ(D_ERROR, req, "Eviction on bulk PUT");
@@ -907,11 +924,8 @@ out:
                 req->rq_status = rc;
                 ptlrpc_error(req);
         } else {
-                if (req->rq_reply_state != NULL) {
-                        /* reply out callback would free */
-                        ptlrpc_rs_decref(req->rq_reply_state);
-                        req->rq_reply_state = NULL;
-                }
+                /* reply out callback would free */
+                ptlrpc_req_drop_rs(req);
                 CWARN("%s: ignoring bulk IO comm error with %s@%s id %s - "
                       "client will retry\n",
                       exp->exp_obd->obd_name,
@@ -1023,6 +1037,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         rc = lustre_pack_reply(req, 3, size, NULL);
         if (rc != 0)
                 GOTO(out, rc);
+        OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_PACK, obd_fail_val);
         rcs = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1,
                              niocount * sizeof(*rcs));
 
@@ -1056,13 +1071,14 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
          * If getting the lock took more time than
          * client was willing to wait, drop it. b=11330
          */
-        if (cfs_time_current_sec() > req->rq_arrival_time.tv_sec + obd_timeout || 
+        if (cfs_time_current_sec() > req->rq_deadline ||
             OBD_FAIL_CHECK(OBD_FAIL_OST_DROP_REQ)) {
                 no_reply = 1;
-                CERROR("Dropping timed-out write from %s because locking"
-                       "object "LPX64" took %ld seconds.\n",
+                CERROR("Dropping timed-out write from %s because locking "
+                       "object "LPX64" took %ld seconds (limit was %ld).\n",
                        libcfs_id2str(req->rq_peer), ioo->ioo_id,
-                       cfs_time_current_sec() - req->rq_arrival_time.tv_sec);
+                       cfs_time_current_sec() - req->rq_arrival_time.tv_sec,
+                       req->rq_deadline - req->rq_arrival_time.tv_sec);
                 GOTO(out_lock, rc = -ETIMEDOUT);
         }
 
@@ -1102,13 +1118,28 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         else
                 rc = ptlrpc_start_bulk_transfer (desc);
         if (rc == 0) {
-                lwi = LWI_TIMEOUT_INTERVAL(obd_timeout * HZ / 2, HZ,
-                                           ost_bulk_timeout, desc);
-                rc = l_wait_event(desc->bd_waitq, !ptlrpc_bulk_active(desc) ||
-                                  desc->bd_export->exp_failed, &lwi);
-                LASSERT(rc == 0 || rc == -ETIMEDOUT);
+                time_t start = cfs_time_current_sec();
+                do {
+                        long timeoutl = req->rq_deadline -
+                                cfs_time_current_sec();
+                        cfs_duration_t timeout = (timeoutl <= 0 || rc) ?
+                                CFS_TICK : cfs_time_seconds(timeoutl);
+                        lwi = LWI_TIMEOUT_INTERVAL(timeout, cfs_time_seconds(1),
+                                                   ost_bulk_timeout, desc);
+                        rc = l_wait_event(desc->bd_waitq,
+                                          !ptlrpc_bulk_active(desc) ||
+                                          desc->bd_export->exp_failed, &lwi);
+                        LASSERT(rc == 0 || rc == -ETIMEDOUT);
+                        /* Wait again if we changed deadline */
+                } while ((rc == -ETIMEDOUT) &&
+                         (req->rq_deadline > cfs_time_current_sec()));
+
                 if (rc == -ETIMEDOUT) {
-                        DEBUG_REQ(D_ERROR, req, "timeout on bulk GET");
+                        DEBUG_REQ(D_ERROR, req,
+                                  "timeout on bulk GET after %ld%+lds",
+                                  req->rq_deadline - start,
+                                  cfs_time_current_sec() -
+                                  req->rq_deadline);
                         ptlrpc_abort_bulk(desc);
                 } else if (desc->bd_export->exp_failed) {
                         DEBUG_REQ(D_ERROR, req, "Eviction on bulk GET");
@@ -1234,11 +1265,8 @@ out:
                 req->rq_status = rc;
                 ptlrpc_error(req);
         } else {
-                if (req->rq_reply_state != NULL) {
-                        /* reply out callback would free */
-                        ptlrpc_rs_decref(req->rq_reply_state);
-                        req->rq_reply_state = NULL;
-                }
+                /* reply out callback would free */
+                ptlrpc_req_drop_rs(req);
                 CWARN("%s: ignoring bulk IO comm error with %s@%s id %s - "
                       "client will retry\n",
                       exp->exp_obd->obd_name,
@@ -1890,12 +1918,11 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
         ost->ost_service =
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
                                 OST_MAXREPSIZE, OST_REQUEST_PORTAL,
-                                OSC_REPLY_PORTAL,
-                                OST_WATCHDOG_TIMEOUT, ost_handle,
-                                LUSTRE_OSS_NAME, obd->obd_proc_entry,
-                                ost_print_req, oss_min_threads,
-                                oss_max_threads, "ll_ost",
-                                LCT_DT_THREAD);
+                                OSC_REPLY_PORTAL, OSS_SERVICE_WATCHDOG_FACTOR,
+                                ost_handle, LUSTRE_OSS_NAME,
+                                obd->obd_proc_entry, target_print_req,
+                                oss_min_threads, oss_max_threads,
+                                "ll_ost", LCT_DT_THREAD);
         if (ost->ost_service == NULL) {
                 CERROR("failed to start service\n");
                 GOTO(out_lprocfs, rc = -ENOMEM);
@@ -1908,23 +1935,22 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
         if (oss_num_create_threads) {
                 if (oss_num_create_threads > OSS_MAX_CREATE_THREADS)
                         oss_num_create_threads = OSS_MAX_CREATE_THREADS;
-                if (oss_num_create_threads < OSS_DEF_CREATE_THREADS)
-                        oss_num_create_threads = OSS_DEF_CREATE_THREADS;
+                if (oss_num_create_threads < OSS_MIN_CREATE_THREADS)
+                        oss_num_create_threads = OSS_MIN_CREATE_THREADS;
                 oss_min_create_threads = oss_max_create_threads =
                         oss_num_create_threads;
         } else {
-                oss_min_create_threads = OSS_DEF_CREATE_THREADS;
+                oss_min_create_threads = OSS_MIN_CREATE_THREADS;
                 oss_max_create_threads = OSS_MAX_CREATE_THREADS;
         }
 
         ost->ost_create_service =
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
                                 OST_MAXREPSIZE, OST_CREATE_PORTAL,
-                                OSC_REPLY_PORTAL,
-                                OST_WATCHDOG_TIMEOUT, ost_handle, "ost_create",
-                                obd->obd_proc_entry, ost_print_req,
-                                oss_min_create_threads,
-                                oss_max_create_threads,
+                                OSC_REPLY_PORTAL, OSS_SERVICE_WATCHDOG_FACTOR,
+                                ost_handle, "ost_create",
+                                obd->obd_proc_entry, target_print_req,
+                                oss_min_create_threads, oss_max_create_threads,
                                 "ll_ost_creat", LCT_DT_THREAD);
         if (ost->ost_create_service == NULL) {
                 CERROR("failed to start OST create service\n");
@@ -1938,9 +1964,9 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
         ost->ost_io_service =
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
                                 OST_MAXREPSIZE, OST_IO_PORTAL,
-                                OSC_REPLY_PORTAL,
-                                OST_WATCHDOG_TIMEOUT, ost_handle, "ost_io",
-                                obd->obd_proc_entry, ost_print_req,
+                                OSC_REPLY_PORTAL, OSS_SERVICE_WATCHDOG_FACTOR,
+                                ost_handle, "ost_io",
+                                obd->obd_proc_entry, target_print_req,
                                 oss_min_threads, oss_max_threads,
                                 "ll_ost_io", LCT_DT_THREAD);
         if (ost->ost_io_service == NULL) {

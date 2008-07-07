@@ -206,7 +206,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
                                   OBD_CONNECT_JOIN     | OBD_CONNECT_ATTRFID  |
                                   OBD_CONNECT_VERSION  | OBD_CONNECT_MDS_CAPA |
                                   OBD_CONNECT_OSS_CAPA | OBD_CONNECT_CANCELSET|
-                                  OBD_CONNECT_FID;
+                                  OBD_CONNECT_FID      | OBD_CONNECT_AT;
 
 #ifdef HAVE_LRU_RESIZE_SUPPORT
         if (sbi->ll_flags & LL_SBI_LRU_RESIZE)
@@ -371,7 +371,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
         data->ocd_connect_flags = OBD_CONNECT_GRANT     | OBD_CONNECT_VERSION  |
                                   OBD_CONNECT_REQPORTAL | OBD_CONNECT_BRW_SIZE |
                                   OBD_CONNECT_CANCELSET | OBD_CONNECT_FID      |
-                                  OBD_CONNECT_SRVLOCK   | OBD_CONNECT_TRUNCLOCK;
+                                  OBD_CONNECT_SRVLOCK   | OBD_CONNECT_TRUNCLOCK|
+                                  OBD_CONNECT_AT;
         if (sbi->ll_flags & LL_SBI_OSS_CAPA)
                 data->ocd_connect_flags |= OBD_CONNECT_OSS_CAPA;
 

@@ -537,6 +537,7 @@ static int osc_punch(struct obd_export *exp, struct obd_info *oinfo,
                 RETURN(rc);
         }
         req->rq_request_portal = OST_IO_PORTAL; /* bug 7198 */
+        ptlrpc_at_set_req_timeout(req);
         osc_pack_req_body(req, oinfo);
 
         /* overload the size and blocks fields in the oa with start/end */
@@ -703,6 +704,7 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
 
         req->rq_request_portal = OST_IO_PORTAL; /* bug 7198 */
         req->rq_interpret_reply = osc_destroy_interpret;
+        ptlrpc_at_set_req_timeout(req);
 
         if (oti != NULL && oa->o_valid & OBD_MD_FLCOOKIE)
                 memcpy(obdo_logcookie(oa), oti->oti_logcookies,
@@ -1062,6 +1064,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                 RETURN(rc);
         }
         req->rq_request_portal = OST_IO_PORTAL; /* bug 7198 */
+        ptlrpc_at_set_req_timeout(req);
 
         if (opc == OST_WRITE)
                 desc = ptlrpc_prep_bulk_imp(req, page_count,
@@ -3326,7 +3329,9 @@ static int osc_statfs_async(struct obd_device *obd, struct obd_info *oinfo,
                 RETURN(rc);
         }
         ptlrpc_request_set_replen(req);
-        req->rq_request_portal = OST_CREATE_PORTAL; //XXX FIXME bug 249
+        req->rq_request_portal = OST_CREATE_PORTAL;
+        ptlrpc_at_set_req_timeout(req);
+
         if (oinfo->oi_flags & OBD_STATFS_NODELAY) {
                 /* procfs requests not want stat in wait for avoid deadlock */
                 req->rq_no_resend = 1;
@@ -3379,7 +3384,8 @@ static int osc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                 RETURN(rc);
         }
         ptlrpc_request_set_replen(req);
-        req->rq_request_portal = OST_CREATE_PORTAL; //XXX FIXME bug 249
+        req->rq_request_portal = OST_CREATE_PORTAL;
+        ptlrpc_at_set_req_timeout(req);
 
         if (flags & OBD_STATFS_NODELAY) {
                 /* procfs requests not want stat in wait for avoid deadlock */

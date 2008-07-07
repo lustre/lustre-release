@@ -680,6 +680,7 @@ void class_export_destroy(struct obd_export *exp)
                 ptlrpc_put_connection_superhack(exp->exp_connection);
 
         LASSERT(list_empty(&exp->exp_outstanding_replies));
+        LASSERT(list_empty(&exp->exp_req_replay_queue));
         obd_destroy_export(exp);
  
         OBD_FREE_RCU(exp, sizeof(*exp), &exp->exp_handle);
@@ -705,6 +706,7 @@ struct obd_export *class_new_export(struct obd_device *obd,
         atomic_set(&export->exp_rpc_count, 0);
         export->exp_obd = obd;
         CFS_INIT_LIST_HEAD(&export->exp_outstanding_replies);
+        CFS_INIT_LIST_HEAD(&export->exp_req_replay_queue);
         /* XXX this should be in LDLM init */
         CFS_INIT_LIST_HEAD(&export->exp_ldlm_data.led_held_locks);
         spin_lock_init(&export->exp_ldlm_data.led_lock);
@@ -837,6 +839,18 @@ void class_import_destroy(struct obd_import *import)
         EXIT;
 }
 
+static void init_imp_at(struct imp_at *at) {
+        int i;
+        at_init(&at->iat_net_latency, 0, 0);
+        for (i = 0; i < IMP_AT_MAX_PORTALS; i++) {
+                /* max service estimates are tracked on the server side, so
+                   don't use the AT history here, just use the last reported
+                   val. (But keep hist for proc histogram, worst_ever) */
+                at_init(&at->iat_service_estimate[i], INITIAL_CONNECT_TIMEOUT,
+                        AT_FLG_NOHIST);
+        }
+}
+
 struct obd_import *class_new_import(struct obd_device *obd)
 {
         struct obd_import *imp;
@@ -863,6 +877,7 @@ struct obd_import *class_new_import(struct obd_device *obd)
         CFS_INIT_LIST_HEAD(&imp->imp_conn_list);
         CFS_INIT_LIST_HEAD(&imp->imp_handle.h_link);
         class_handle_hash(&imp->imp_handle, import_handle_addref);
+        init_imp_at(&imp->imp_at);
 
         /* the default magic is V2, will be used in connect RPC, and
          * then adjusted according to the flags in request/reply. */
@@ -1023,10 +1038,12 @@ static void class_disconnect_export_list(struct list_head *list, int flags)
                 fake_exp->exp_flags = flags;
                 spin_unlock(&fake_exp->exp_lock);
 
+                CDEBUG(D_HA, "%s: disconnecting export at %s (%p), "
+                       "last request at %ld\n",
+                       exp->exp_obd->obd_name, obd_export_nid2str(exp),
+                       exp, exp->exp_last_request_time);
                 rc = obd_disconnect(fake_exp);
                 class_export_put(exp);
-                CDEBUG(D_HA, "disconnecting export %s (%p): rc %d\n",
-                       exp->exp_client_uuid.uuid, exp, rc);
         }
         EXIT;
 }

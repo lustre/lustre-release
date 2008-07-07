@@ -29,8 +29,6 @@
 #define FILTER_GRANT_CHUNK (2ULL * PTLRPC_MAX_BRW_SIZE)
 #define GRANT_FOR_LLOG(obd) 16
 
-#define FILTER_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
-
 extern struct file_operations filter_per_export_stats_fops;
 extern struct file_operations filter_per_nid_stats_fops;
 
@@ -60,6 +58,7 @@ struct filter_mod_data {
 #else
 #define FILTER_FMD_MAX_NUM_DEFAULT  32
 #endif
+/* Client cache seconds */
 #define FILTER_FMD_MAX_AGE_DEFAULT ((obd_timeout + 10) * HZ)
 
 struct filter_mod_data *filter_fmd_find(struct obd_export *exp,

@@ -65,9 +65,8 @@ __u64 obd_pages;
 unsigned int obd_debug_peer_on_timeout;
 unsigned int obd_dump_on_timeout;
 unsigned int obd_dump_on_eviction;
-unsigned int obd_timeout = OBD_TIMEOUT_DEFAULT; /* seconds */
+unsigned int obd_timeout = OBD_TIMEOUT_DEFAULT;   /* seconds */
 unsigned int ldlm_timeout = LDLM_TIMEOUT_DEFAULT; /* seconds */
-unsigned int obd_health_check_timeout = HEALTH_CHECK_TIMEOUT_DEFAULT; /* seconds */
 unsigned int obd_max_dirty_pages = 256;
 atomic_t obd_dirty_pages;
 
@@ -387,7 +386,6 @@ EXPORT_SYMBOL(obd_dump_on_timeout);
 EXPORT_SYMBOL(obd_dump_on_eviction);
 EXPORT_SYMBOL(obd_timeout);
 EXPORT_SYMBOL(ldlm_timeout);
-EXPORT_SYMBOL(obd_health_check_timeout);
 EXPORT_SYMBOL(obd_max_dirty_pages);
 EXPORT_SYMBOL(obd_dirty_pages);
 EXPORT_SYMBOL(ptlrpc_put_connection_superhack);

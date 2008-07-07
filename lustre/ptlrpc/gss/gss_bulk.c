@@ -509,7 +509,7 @@ int gss_cli_ctx_unwrap_bulk(struct ptlrpc_cli_ctx *ctx,
 
         switch (RPC_FLVR_SVC(req->rq_flvr.sf_rpc)) {
         case SPTLRPC_SVC_NULL:
-                vmsg = req->rq_repbuf;
+                vmsg = req->rq_repdata;
                 voff = vmsg->lm_bufcount - 1;
                 LASSERT(vmsg && vmsg->lm_bufcount >= 3);
 
@@ -519,7 +519,7 @@ int gss_cli_ctx_unwrap_bulk(struct ptlrpc_cli_ctx *ctx,
                 break;
         case SPTLRPC_SVC_AUTH:
         case SPTLRPC_SVC_INTG:
-                vmsg = req->rq_repbuf;
+                vmsg = req->rq_repdata;
                 voff = vmsg->lm_bufcount - 2;
                 LASSERT(vmsg && vmsg->lm_bufcount >= 4);
 
@@ -528,7 +528,7 @@ int gss_cli_ctx_unwrap_bulk(struct ptlrpc_cli_ctx *ctx,
                 LASSERT(rmsg && rmsg->lm_bufcount >= 4);
                 break;
         case SPTLRPC_SVC_PRIV:
-                vmsg = req->rq_repbuf;
+                vmsg = req->rq_repdata;
                 voff = vmsg->lm_bufcount - 1;
                 LASSERT(vmsg && vmsg->lm_bufcount >= 2);
 

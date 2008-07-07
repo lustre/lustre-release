@@ -65,8 +65,12 @@ static int sec_install_rctx_kr(struct ptlrpc_sec *sec,
 
 /*
  * the timeout is only for the case that upcall child process die abnormally.
- * in any other cases it should finally update kernel key. so we set this
- * timeout value excessive long.
+ * in any other cases it should finally update kernel key.
+ * 
+ * FIXME we'd better to incorporate the client & server side upcall timeouts
+ * into the framework of Adaptive Timeouts, but we need to figure out how to
+ * make sure that kernel knows the upcall processes is in-progress or died
+ * unexpectedly.
  */
 #define KEYRING_UPCALL_TIMEOUT  (obd_timeout + obd_timeout)
 
@@ -833,7 +837,7 @@ void flush_user_ctx_cache_kr(struct ptlrpc_sec *sec,
         for (;;) {
                 key = request_key(&gss_key_type, desc, NULL);
                 if (IS_ERR(key)) {
-                        CWARN("No more key found for current user\n");
+                        CDEBUG(D_SEC, "No more key found for current user\n");
                         break;
                 }
 

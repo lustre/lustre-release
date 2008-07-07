@@ -56,7 +56,7 @@
 #define IDLE_IDX_MAX            (100)
 #define IDLE_IDX_WEIGHT         (3)
 
-#define CACHE_QUIESCENCE_PERIOD (20)
+#define CACHE_QUIESCENT_PERIOD  (20)
 
 static struct ptlrpc_enc_page_pool {
         /*
@@ -96,13 +96,14 @@ static struct ptlrpc_enc_page_pool {
         /*
          * statistics
          */
+        unsigned long    epp_st_max_pages;      /* # of pages ever reached */
         unsigned int     epp_st_grows;          /* # of grows */
         unsigned int     epp_st_grow_fails;     /* # of add pages failures */
         unsigned int     epp_st_shrinks;        /* # of shrinks */
         unsigned long    epp_st_access;         /* # of access */
         unsigned long    epp_st_missings;       /* # of cache missing */
         unsigned long    epp_st_lowfree;        /* lowest free pages reached */
-        unsigned long    epp_st_max_wqlen;      /* highest waitqueue length */
+        unsigned int     epp_st_max_wqlen;      /* highest waitqueue length */
         cfs_time_t       epp_st_max_wait;       /* in jeffies */
         /*
          * pointers to pools
@@ -137,13 +138,14 @@ int sptlrpc_proc_read_enc_pool(char *page, char **start, off_t off, int count,
                       "idle index:              %lu/100\n"
                       "last shrink:             %lds\n"
                       "last access:             %lds\n"
+                      "max pages reached:       %lu\n"
                       "grows:                   %u\n"
                       "grows failure:           %u\n"
                       "shrinks:                 %u\n"
                       "cache access:            %lu\n"
                       "cache missing:           %lu\n"
                       "low free mark:           %lu\n"
-                      "max waitqueue depth:     %lu\n"
+                      "max waitqueue depth:     %u\n"
                       "max wait time:           "CFS_TIME_T"/%u\n"
                       ,
                       num_physpages,
@@ -155,6 +157,7 @@ int sptlrpc_proc_read_enc_pool(char *page, char **start, off_t off, int count,
                       page_pools.epp_idle_idx,
                       cfs_time_current_sec() - page_pools.epp_last_shrink,
                       cfs_time_current_sec() - page_pools.epp_last_access,
+                      page_pools.epp_st_max_pages,
                       page_pools.epp_st_grows,
                       page_pools.epp_st_grow_fails,
                       page_pools.epp_st_shrinks,
@@ -172,28 +175,45 @@ int sptlrpc_proc_read_enc_pool(char *page, char **start, off_t off, int count,
 static void enc_pools_release_free_pages(long npages)
 {
         int     p_idx, g_idx;
+        int     p_idx_max1, p_idx_max2;
 
+        LASSERT(npages > 0);
         LASSERT(npages <= page_pools.epp_free_pages);
+        LASSERT(page_pools.epp_free_pages <= page_pools.epp_total_pages);
 
-        p_idx = (page_pools.epp_free_pages - 1) / PAGES_PER_POOL;
-        g_idx = (page_pools.epp_free_pages - 1) % PAGES_PER_POOL;
-        LASSERT(page_pools.epp_pools[p_idx]);
+        /* max pool index before the release */
+        p_idx_max2 = (page_pools.epp_total_pages - 1) / PAGES_PER_POOL;
 
         page_pools.epp_free_pages -= npages;
         page_pools.epp_total_pages -= npages;
 
-        while (npages-- > 0) {
+        /* max pool index after the release */
+        p_idx_max1 = page_pools.epp_total_pages == 0 ? 0 :
+                     ((page_pools.epp_total_pages - 1) / PAGES_PER_POOL);
+
+        p_idx = page_pools.epp_free_pages / PAGES_PER_POOL;
+        g_idx = page_pools.epp_free_pages % PAGES_PER_POOL;
+        LASSERT(page_pools.epp_pools[p_idx]);
+
+        while (npages--) {
+                LASSERT(page_pools.epp_pools[p_idx]);
                 LASSERT(page_pools.epp_pools[p_idx][g_idx] != NULL);
 
                 cfs_free_page(page_pools.epp_pools[p_idx][g_idx]);
                 page_pools.epp_pools[p_idx][g_idx] = NULL;
 
-                if (g_idx-- == 0) {
-                        p_idx--;
-                        g_idx = PAGES_PER_POOL - 1;
-
-                        LASSERT(page_pools.epp_pools[p_idx]);
+                if (++g_idx == PAGES_PER_POOL) {
+                        p_idx++;
+                        g_idx = 0;
                 }
+        };
+
+        /* free unused pools */
+        while (p_idx_max1 < p_idx_max2) {
+                LASSERT(page_pools.epp_pools[p_idx_max2]);
+                OBD_FREE(page_pools.epp_pools[p_idx_max2], CFS_PAGE_SIZE);
+                page_pools.epp_pools[p_idx_max2] = NULL;
+                p_idx_max2--;
         }
 }
 
@@ -206,10 +226,10 @@ static int enc_pools_shrink(int nr_to_scan, unsigned int gfp_mask)
 
         spin_lock(&page_pools.epp_lock);
 
-        if (nr_to_scan) {
-                if (nr_to_scan > page_pools.epp_free_pages)
-                        nr_to_scan = page_pools.epp_free_pages;
+        if (nr_to_scan > page_pools.epp_free_pages)
+                nr_to_scan = page_pools.epp_free_pages;
 
+        if (nr_to_scan > 0) {
                 enc_pools_release_free_pages(nr_to_scan);
                 CDEBUG(D_SEC, "released %d pages, %ld left\n",
                        nr_to_scan, page_pools.epp_free_pages);
@@ -230,7 +250,7 @@ static int enc_pools_shrink(int nr_to_scan, unsigned int gfp_mask)
          * if no pool access for a long time, we consider it's fully idle
          */
         if (cfs_time_current_sec() - page_pools.epp_last_access >
-            CACHE_QUIESCENCE_PERIOD)
+            CACHE_QUIESCENT_PERIOD)
                 page_pools.epp_idle_idx = IDLE_IDX_MAX;
 
         LASSERT(page_pools.epp_idle_idx <= IDLE_IDX_MAX);
@@ -297,7 +317,7 @@ static void enc_pools_insert(cfs_page_t ***pools, int npools, int npages)
          * (1) fill all the free slots of current pools.
          */
         /* free slots are those left by rent pages, and the extra ones with
-         * index >= eep_total_pages, locate at the tail of last pool. */
+         * index >= total_pages, locate at the tail of last pool. */
         freeslot = page_pools.epp_total_pages % PAGES_PER_POOL;
         if (freeslot != 0)
                 freeslot = PAGES_PER_POOL - freeslot;
@@ -351,6 +371,9 @@ static void enc_pools_insert(cfs_page_t ***pools, int npools, int npages)
         page_pools.epp_total_pages += npages;
         page_pools.epp_free_pages += npages;
         page_pools.epp_st_lowfree = page_pools.epp_free_pages;
+
+        if (page_pools.epp_total_pages > page_pools.epp_st_max_pages)
+                page_pools.epp_st_max_pages = page_pools.epp_total_pages;
 
         CDEBUG(D_SEC, "add %d pages to total %lu\n", npages,
                page_pools.epp_total_pages);
@@ -687,6 +710,7 @@ int sptlrpc_enc_pool_init(void)
         page_pools.epp_total_pages = 0;
         page_pools.epp_free_pages = 0;
 
+        page_pools.epp_st_max_pages = 0;
         page_pools.epp_st_grows = 0;
         page_pools.epp_st_grow_fails = 0;
         page_pools.epp_st_shrinks = 0;
@@ -724,6 +748,17 @@ void sptlrpc_enc_pool_fini(void)
         LASSERT(cleaned == page_pools.epp_total_pages);
 
         enc_pools_free();
+
+        if (page_pools.epp_st_access > 0) {
+                CWARN("max pages %lu, grows %u, grow fails %u, shrinks %u, "
+                      "access %lu, missing %lu, max qlen %u, max wait "
+                      CFS_TIME_T"/%d\n",
+                      page_pools.epp_st_max_pages, page_pools.epp_st_grows,
+                      page_pools.epp_st_grow_fails,
+                      page_pools.epp_st_shrinks, page_pools.epp_st_access,
+                      page_pools.epp_st_missings, page_pools.epp_st_max_wqlen,
+                      page_pools.epp_st_max_wait, HZ);
+        }
 }
 
 #else /* !__KERNEL__ */

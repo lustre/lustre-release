@@ -163,8 +163,7 @@ struct mdt_device {
         struct lprocfs_stats      *mdt_stats;
 };
 
-/*XXX copied from mds_internal.h */
-#define MDT_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
+#define MDT_SERVICE_WATCHDOG_FACTOR     (2000)
 #define MDT_ROCOMPAT_SUPP       (OBD_ROCOMPAT_LOVOBJID)
 #define MDT_INCOMPAT_SUPP       (OBD_INCOMPAT_MDT | OBD_INCOMPAT_COMMON_LR)
 

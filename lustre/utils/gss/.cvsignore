@@ -7,5 +7,6 @@ TAGS
 lgssd
 lsvcgssd
 l_idmap
+lgss_keyring
 .*.cmd
 .*.d

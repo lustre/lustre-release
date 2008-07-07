@@ -194,6 +194,14 @@ test_16() {
 run_test 16 "timeout bulk put, don't evict client (2732)"
 
 test_17() {
+    local at_max_saved=0
+
+    # With adaptive timeouts, bulk_get won't expire until adaptive_timeout_max
+    if at_is_valid && at_is_enabled; then
+        at_max_saved=$(at_max_get ost1)
+        at_max_set $TIMEOUT ost1
+    fi
+
     # OBD_FAIL_PTLRPC_BULK_GET_NET 0x0503 | OBD_FAIL_ONCE
     # OST bulk will time out here, client retries
     do_facet ost1 lctl set_param fail_loc=0x80000503
@@ -201,12 +209,16 @@ test_17() {
     do_facet client cp /etc/termcap $DIR/$tfile
     sync
 
-    sleep $TIMEOUT
+    # with AT, client will wait adaptive_max*factor+net_latency before
+    # expiring the req, hopefully timeout*2 is enough
+    sleep $(($TIMEOUT*2))
+
     do_facet ost1 lctl set_param fail_loc=0
     do_facet client "df $DIR"
     # expect cmp to succeed, client resent bulk
     do_facet client "cmp /etc/termcap $DIR/$tfile" || return 3
     do_facet client "rm $DIR/$tfile" || return 4
+    [ $at_max_saved -ne 0 ] && $(at_max_set $at_max_saved ost1)
     return 0
 }
 run_test 17 "timeout bulk get, don't evict client (2732)"
@@ -599,11 +611,11 @@ test_26a() {      # was test_26 bug 5921 - evict dead exports by pinger
 	echo starting with $OST_NEXP1 OST exports
 # OBD_FAIL_PTLRPC_DROP_RPC 0x505
 	do_facet client lctl set_param fail_loc=0x505
-	# evictor takes up to 2.25x to evict.  But if there's a 
-	# race to start the evictor from various obds, the loser
-	# might have to wait for the next ping.
-	echo Waiting for $(($TIMEOUT * 4)) secs
-	sleep $(($TIMEOUT * 4))
+        # evictor takes PING_EVICT_TIMEOUT + 3 * PING_INTERVAL to evict.
+        # But if there's a race to start the evictor from various obds,
+        # the loser might have to wait for the next ping.
+	echo Waiting for $(($TIMEOUT * 8)) secs
+	sleep $(($TIMEOUT * 8))
         OST_EXP="`do_facet ost1 lctl get_param -n $OST_FILE`"
 	OST_NEXP2=`echo $OST_EXP | cut -d' ' -f2`
 	echo ending with $OST_NEXP2 OST exports
@@ -619,18 +631,18 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
         sleep 1 # wait connections being established
 	MDS_FILE=mdt.${mds1_svc}.num_exports
         MDS_NEXP1="`do_facet $SINGLEMDS lctl get_param -n $MDS_FILE | cut -d' ' -f2`"
-	OST_FILE=obdfilter.${ost1_svc}.num_exports
+        OST_FILE=obdfilter.${ost1_svc}.num_exports
         OST_NEXP1="`do_facet ost1 lctl get_param -n $OST_FILE | cut -d' ' -f2`"
-	echo starting with $OST_NEXP1 OST and $MDS_NEXP1 MDS exports
-	zconf_umount `hostname` $MOUNT2 -f
-	# evictor takes up to 2.25x to evict.  But if there's a 
-	# race to start the evictor from various obds, the loser
-	# might have to wait for the next ping.
-	echo Waiting for $(($TIMEOUT * 4)) secs
-	sleep $(($TIMEOUT * 4))
+        echo starting with $OST_NEXP1 OST and $MDS_NEXP1 MDS exports
+        zconf_umount `hostname` $MOUNT2 -f
+        # evictor takes PING_EVICT_TIMEOUT + 3 * PING_INTERVAL to evict.  
+        # But if there's a race to start the evictor from various obds, 
+        # the loser might have to wait for the next ping.
+        echo Waiting for $(($TIMEOUT * 3)) secs
+        sleep $(($TIMEOUT * 3))
         OST_NEXP2="`do_facet ost1 lctl get_param -n $OST_FILE | cut -d' ' -f2`"
         MDS_NEXP2="`do_facet $SINGLEMDS lctl get_param -n $MDS_FILE | cut -d' ' -f2`"
-	echo ending with $OST_NEXP2 OST and $MDS_NEXP2 MDS exports
+        echo ending with $OST_NEXP2 OST and $MDS_NEXP2 MDS exports
         [ $OST_NEXP1 -le $OST_NEXP2 ] && error "client not evicted from OST"
         [ $MDS_NEXP1 -le $MDS_NEXP2 ] && error "client not evicted from MDS"
 	return 0

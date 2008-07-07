@@ -38,6 +38,7 @@
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lustre_net.h>
+#include <obd_cksum.h>
 
 static inline int lustre_msg_hdr_size_v2(int count)
 {
@@ -83,6 +84,15 @@ int lustre_msg_check_version(struct lustre_msg *msg, __u32 version)
                 return 0;
         }
 }
+
+/* early reply size */
+int lustre_msg_early_size() {
+        static int size = 0;
+        if (!size)
+                size = lustre_msg_size(LUSTRE_MSG_MAGIC_V2, 1, NULL);
+        return size;
+}
+EXPORT_SYMBOL(lustre_msg_early_size);
 
 int lustre_msg_size_v2(int count, int *lengths)
 {
@@ -272,13 +282,16 @@ void lustre_put_emerg_rs(struct ptlrpc_reply_state *rs)
 }
 
 int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
-                         int *lens, char **bufs)
+                         int *lens, char **bufs, int flags)
 {
         struct ptlrpc_reply_state *rs;
         int                        msg_len, rc;
         ENTRY;
 
         LASSERT(req->rq_reply_state == NULL);
+
+        if ((flags & LPRFL_EARLY_REPLY) == 0)
+                req->rq_packed_final = 1;
 
         msg_len = lustre_msg_size_v2(count, lens);
         rc = sptlrpc_svc_alloc_rs(req, msg_len);
@@ -296,6 +309,7 @@ int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
         req->rq_replen = msg_len;
         req->rq_reply_state = rs;
         req->rq_repmsg = rs->rs_msg;
+
         lustre_init_msg_v2(rs->rs_msg, count, lens, bufs);
         lustre_msg_add_version(rs->rs_msg, PTLRPC_MSG_VERSION);
         lustre_set_rep_swabbed(req, MSG_PTLRPC_BODY_OFF);
@@ -306,8 +320,8 @@ int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
 }
 EXPORT_SYMBOL(lustre_pack_reply_v2);
 
-int lustre_pack_reply(struct ptlrpc_request *req, int count, int *lens,
-                      char **bufs)
+int lustre_pack_reply_flags(struct ptlrpc_request *req, int count, int *lens,
+                            char **bufs, int flags)
 {
         int rc = 0;
         int size[] = { sizeof(struct ptlrpc_body) };
@@ -323,7 +337,7 @@ int lustre_pack_reply(struct ptlrpc_request *req, int count, int *lens,
         switch (req->rq_reqmsg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED:
-                rc = lustre_pack_reply_v2(req, count, lens, bufs);
+                rc = lustre_pack_reply_v2(req, count, lens, bufs, flags);
                 break;
         default:
                 LASSERTF(0, "incorrect message magic: %08x\n",
@@ -334,6 +348,12 @@ int lustre_pack_reply(struct ptlrpc_request *req, int count, int *lens,
                 CERROR("lustre_pack_reply failed: rc=%d size=%d\n", rc,
                        lustre_msg_size(req->rq_reqmsg->lm_magic, count, lens));
         return rc;
+}
+
+int lustre_pack_reply(struct ptlrpc_request *req, int count, int *lens,
+                      char **bufs)
+{
+        return lustre_pack_reply_flags(req, count, lens, bufs, 0);
 }
 
 void *lustre_msg_buf_v2(struct lustre_msg_v2 *m, int n, int min_size)
@@ -468,8 +488,8 @@ static int lustre_unpack_msg_v2(struct lustre_msg_v2 *m, int len)
                 __swab32s(&m->lm_bufcount);
                 __swab32s(&m->lm_secflvr);
                 __swab32s(&m->lm_repsize);
-                __swab32s(&m->lm_timeout);
-                CLASSERT(offsetof(typeof(*m), lm_padding_1) != 0);
+                __swab32s(&m->lm_cksum);
+                __swab32s(&m->lm_flags);
                 CLASSERT(offsetof(typeof(*m), lm_padding_2) != 0);
                 CLASSERT(offsetof(typeof(*m), lm_padding_3) != 0);
         }
@@ -727,6 +747,35 @@ void *lustre_swab_repbuf(struct ptlrpc_request *req, int index, int min_size,
 {
         lustre_set_rep_swabbed(req, index);
         return lustre_swab_buf(req->rq_repmsg, index, min_size, swabber);
+}
+
+__u32 lustre_msghdr_get_flags(struct lustre_msg *msg)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+        case LUSTRE_MSG_MAGIC_V1_SWABBED:
+                return 0;
+        case LUSTRE_MSG_MAGIC_V2:
+        case LUSTRE_MSG_MAGIC_V2_SWABBED:
+                /* already in host endian */
+                return msg->lm_flags;
+        default:
+                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+                return 0;
+        }
+}
+
+void lustre_msghdr_set_flags(struct lustre_msg *msg, __u32 flags)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+                return;
+        case LUSTRE_MSG_MAGIC_V2:
+                msg->lm_flags = flags;
+                return;
+        default:
+                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+        }
 }
 
 __u32 lustre_msg_get_flags(struct lustre_msg *msg)
@@ -1132,12 +1181,105 @@ __u32 lustre_msg_get_conn_cnt(struct lustre_msg *msg)
         }
 }
 
+int lustre_msg_is_v1(struct lustre_msg *msg)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+        case LUSTRE_MSG_MAGIC_V1_SWABBED:
+                return 1;
+        default:
+                return 0;
+        }
+}
+
 __u32 lustre_msg_get_magic(struct lustre_msg *msg)
 {
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED:
                 return msg->lm_magic;
+        default:
+                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+                return 0;
+        }
+}
+
+__u32 lustre_msg_get_timeout(struct lustre_msg *msg)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+        case LUSTRE_MSG_MAGIC_V1_SWABBED:
+                return 0;
+        case LUSTRE_MSG_MAGIC_V2:
+        case LUSTRE_MSG_MAGIC_V2_SWABBED: {
+                struct ptlrpc_body *pb;
+
+                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                if (!pb) {
+                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+                        return 0;
+
+                }
+                return pb->pb_timeout;
+        }
+        default:
+                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+                return 0;
+        }
+}
+
+__u32 lustre_msg_get_service_time(struct lustre_msg *msg)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+        case LUSTRE_MSG_MAGIC_V1_SWABBED:
+                return 0;
+        case LUSTRE_MSG_MAGIC_V2:
+        case LUSTRE_MSG_MAGIC_V2_SWABBED: {
+                struct ptlrpc_body *pb;
+
+                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                if (!pb) {
+                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+                        return 0;
+
+                }
+                return pb->pb_service_time;
+        }
+        default:
+                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+                return 0;
+        }
+}
+
+__u32 lustre_msg_get_cksum(struct lustre_msg *msg)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+        case LUSTRE_MSG_MAGIC_V1_SWABBED:
+                return 0;
+        case LUSTRE_MSG_MAGIC_V2:
+        case LUSTRE_MSG_MAGIC_V2_SWABBED:
+                return msg->lm_cksum;
+        default:
+                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+                return 0;
+        }
+}
+
+__u32 lustre_msg_calc_cksum(struct lustre_msg *msg)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+        case LUSTRE_MSG_MAGIC_V1_SWABBED:
+                return 0;
+        case LUSTRE_MSG_MAGIC_V2:
+        case LUSTRE_MSG_MAGIC_V2_SWABBED: {
+                struct ptlrpc_body *pb;
+                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
+                return crc32_le(~(__u32)0, (char *)pb, sizeof(*pb));
+        }
         default:
                 CERROR("incorrect message magic: %08x\n", msg->lm_magic);
                 return 0;
@@ -1272,6 +1414,56 @@ void lustre_msg_set_conn_cnt(struct lustre_msg *msg, __u32 conn_cnt)
         }
 }
 
+void lustre_msg_set_timeout(struct lustre_msg *msg, __u32 timeout)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+                return;
+        case LUSTRE_MSG_MAGIC_V2: {
+                struct ptlrpc_body *pb;
+
+                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
+                pb->pb_timeout = timeout;
+                return;
+        }
+        default:
+                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+        }
+}
+
+void lustre_msg_set_service_time(struct lustre_msg *msg, __u32 service_time)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+                return;
+        case LUSTRE_MSG_MAGIC_V2: {
+                struct ptlrpc_body *pb;
+
+                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
+                pb->pb_service_time = service_time;
+                return;
+        }
+        default:
+                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+        }
+}
+
+void lustre_msg_set_cksum(struct lustre_msg *msg, __u32 cksum)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+                return;
+        case LUSTRE_MSG_MAGIC_V2:
+                msg->lm_cksum = cksum;
+                return;
+        default:
+                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+        }
+}
+
+
 void ptlrpc_request_set_replen(struct ptlrpc_request *req)
 {
         int count = req_capsule_filled_sizes(&req->rq_pill, RCL_SERVER);
@@ -1305,8 +1497,8 @@ void lustre_swab_ptlrpc_body(struct ptlrpc_body *b)
         __swab32s (&b->pb_flags);
         __swab32s (&b->pb_op_flags);
         __swab32s (&b->pb_conn_cnt);
-        CLASSERT(offsetof(typeof(*b), pb_padding_1) != 0);
-        CLASSERT(offsetof(typeof(*b), pb_padding_2) != 0);
+        __swab32s (&b->pb_timeout);
+        __swab32s (&b->pb_service_time);
         __swab32s (&b->pb_limit);
         __swab64s (&b->pb_slv);
 }
@@ -1978,8 +2170,9 @@ void _debug_req(struct ptlrpc_request *req, __u32 mask,
         va_start(args, fmt);
         libcfs_debug_vmsg2(data->msg_cdls, data->msg_subsys, mask, data->msg_file,
                            data->msg_fn, data->msg_line, fmt, args,
-                           " req@%p x"LPD64"/t"LPD64"("LPD64") o%d->%s@%s:%d lens"
-                           " %d/%d ref %d fl "REQ_FLAGS_FMT"/%x/%x rc %d/%d\n",
+                           " req@%p x"LPD64"/t"LPD64"("LPD64") o%d->%s@%s:%d/%d"
+                           " lens %d/%d e %d to %d dl %ld ref %d "
+                           "fl "REQ_FLAGS_FMT"/%x/%x rc %d/%d\n",
                            req, req->rq_xid, req->rq_transno,
                            req->rq_reqmsg ? lustre_msg_get_transno(req->rq_reqmsg) : 0,
                            req->rq_reqmsg ? lustre_msg_get_opc(req->rq_reqmsg) : -1,
@@ -1990,10 +2183,10 @@ void _debug_req(struct ptlrpc_request *req, __u32 mask,
                            (char *)req->rq_import->imp_connection->c_remote_uuid.uuid :
                            req->rq_export ?
                            (char *)req->rq_export->exp_connection->c_remote_uuid.uuid : "<?>",
-                           (req->rq_import && req->rq_import->imp_client) ?
-                           req->rq_import->imp_client->cli_request_portal : -1,
-                           req->rq_reqlen, req->rq_replen, atomic_read(&req->rq_refcount),
-                           DEBUG_REQ_FLAGS(req),
+                           req->rq_request_portal, req->rq_reply_portal,
+                           req->rq_reqlen, req->rq_replen,
+                           req->rq_early_count, req->rq_timeout, req->rq_deadline,
+                           atomic_read(&req->rq_refcount), DEBUG_REQ_FLAGS(req),
                            req->rq_reqmsg && req_ptlrpc_body_swabbed(req) ?
                            lustre_msg_get_flags(req->rq_reqmsg) : -1,
                            req->rq_repmsg && rep_ptlrpc_body_swabbed(req) ?

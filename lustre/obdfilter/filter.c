@@ -1417,7 +1417,7 @@ struct dentry *filter_parent_lock(struct obd_device *obd, obd_gr group,
                 return ERR_PTR(-ENOENT);
 
         rc = filter_lock_dentry(obd, dparent);
-        fsfilt_check_slow(obd, now, obd_timeout, "parent lock");
+        fsfilt_check_slow(obd, now, "parent lock");
         return rc ? ERR_PTR(rc) : dparent;
 }
 
@@ -2040,18 +2040,17 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
 
         if (obd->obd_recovering) {
                 LCONSOLE_WARN("OST %s now serving %s (%s%s%s), but will be in "
-                              "recovery until %d %s reconnect, or if no clients"
-                              " reconnect for %d:%.02d; during that time new "
-                              "clients will not be allowed to connect. "
+                              "recovery for at least %d:%.02d, or until %d "
+                              "client%s reconnect. During this time new clients"
+                              " will not be allowed to connect. "
                               "Recovery progress can be monitored by watching "
                               "/proc/fs/lustre/obdfilter/%s/recovery_status.\n",
                               obd->obd_name, lustre_cfg_string(lcfg, 1),
                               label ?: "", label ? "/" : "", str,
+                              obd->obd_recovery_timeout / 60,
+                              obd->obd_recovery_timeout % 60,
                               obd->obd_max_recoverable_clients,
-                              (obd->obd_max_recoverable_clients == 1)
-                              ? "client" : "clients",
-                              (int)(OBD_RECOVERY_TIMEOUT) / 60,
-                              (int)(OBD_RECOVERY_TIMEOUT) % 60,
+                              (obd->obd_max_recoverable_clients == 1) ? "":"s",
                               obd->obd_name);
         } else {
                 LCONSOLE_INFO("OST %s now serving %s (%s%s%s) with recovery "
@@ -3553,7 +3552,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
         struct filter_obd *filter;
         struct obd_statfs *osfs;
         int err = 0, rc = 0, recreate_obj = 0, i;
-        unsigned long enough_time = jiffies + min(obd_timeout * HZ / 4, 10U*HZ);
+        cfs_time_t enough_time = cfs_time_shift(DISK_TIMEOUT/2);
         obd_id next_id;
         void *handle = NULL;
         ENTRY;

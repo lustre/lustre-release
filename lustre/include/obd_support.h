@@ -56,11 +56,10 @@ extern unsigned int obd_fail_val;
 extern unsigned int obd_debug_peer_on_timeout;
 extern unsigned int obd_dump_on_timeout;
 extern unsigned int obd_dump_on_eviction;
+/* obd_timeout should only be used for recovery, not for
+   networking / disk / timings affected by load (use Adaptive Timeouts) */
 extern unsigned int obd_timeout;          /* seconds */
-#define PING_INTERVAL max(obd_timeout / 4, 1U)
-#define RECONNECT_INTERVAL max(obd_timeout / 10, 10U)
-extern unsigned int ldlm_timeout;
-extern unsigned int obd_health_check_timeout;
+extern unsigned int ldlm_timeout;         /* seconds */
 extern unsigned int obd_sync_filter;
 extern unsigned int obd_max_dirty_pages;
 extern atomic_t obd_dirty_pages;
@@ -69,17 +68,47 @@ extern int obd_race_state;
 extern unsigned int obd_alloc_fail_rate;
 
 int __obd_fail_check_set(__u32 id, __u32 value, int set);
+int __obd_fail_timeout_set(__u32 id, __u32 value, int ms, int set);
 
 /* lvfs.c */
 int obd_alloc_fail(const void *ptr, const char *name, const char *type,
                    size_t size, const char *file, int line);
 
 /* Timeout definitions */
-#define LDLM_TIMEOUT_DEFAULT 20
 #define OBD_TIMEOUT_DEFAULT 100
-#define HEALTH_CHECK_COEF 3 / 2
-#define HEALTH_CHECK_TIMEOUT_DEFAULT (OBD_TIMEOUT_DEFAULT * HEALTH_CHECK_COEF)
-#define HEALTH_CHECK_TIMEOUT (obd_timeout * HEALTH_CHECK_COEF)
+#define LDLM_TIMEOUT_DEFAULT 20
+/* Time to wait for all clients to reconnect during recovery */
+/* Should be very conservative; must catch the first reconnect after reboot */
+#define OBD_RECOVERY_FACTOR (3) /* times obd_timeout */
+/* Change recovery-small 26b time if you change this */
+#define PING_INTERVAL max(obd_timeout / 4, 1U)
+/* Client may skip 1 ping; we must wait at least 2.5. But for multiple
+ * failover targets the client only pings one server at a time, and pings
+ * can be lost on a loaded network. Since eviction has serious consequences,
+ * and there's no urgent need to evict a client just because it's idle, we
+ * should be very conservative here. */
+#define PING_EVICT_TIMEOUT (PING_INTERVAL * 6)
+#define DISK_TIMEOUT 50          /* Beyond this we warn about disk speed */
+#define CONNECTION_SWITCH_MIN 5U /* Connection switching rate limiter */
+ /* Max connect interval for nonresponsive servers; ~50s to avoid building up
+    connect requests in the LND queues, but within obd_timeout so we don't
+    miss the recovery window */
+#define CONNECTION_SWITCH_MAX min(50U, max(CONNECTION_SWITCH_MIN,obd_timeout))
+#define CONNECTION_SWITCH_INC 5  /* Connection timeout backoff */
+#ifndef CRAY_XT3
+/* In general this should be low to have quick detection of a system
+   running on a backup server. (If it's too low, import_select_connection
+   will increase the timeout anyhow.)  */
+#define INITIAL_CONNECT_TIMEOUT max(CONNECTION_SWITCH_MIN,obd_timeout/20)
+#else
+/* ...but for very large systems (e.g. CRAY) we need to keep the initial
+   connect t.o. high (bz 10803), because they will nearly ALWAYS be doing the
+   connects for the first time (clients "reboot" after every process, so no
+   chance to generate adaptive timeout data. */
+#define INITIAL_CONNECT_TIMEOUT max(CONNECTION_SWITCH_MIN,obd_timeout/2)
+#endif
+#define LONG_UNLINK 300          /* Unlink should happen before now */
+
 
 #define OBD_FAIL_MDS                     0x100
 #define OBD_FAIL_MDS_HANDLE_UNPACK       0x101
@@ -165,7 +194,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_OST_BRW_READ_BULK       0x20f
 #define OBD_FAIL_OST_SYNC_NET            0x210
 #define OBD_FAIL_OST_ALL_REPLY_NET       0x211
-#define OBD_FAIL_OST_ALL_REQUESTS_NET    0x212
+#define OBD_FAIL_OST_ALL_REQUEST_NET     0x212
 #define OBD_FAIL_OST_LDLM_REPLY_NET      0x213
 #define OBD_FAIL_OST_BRW_PAUSE_BULK      0x214
 #define OBD_FAIL_OST_ENOSPC              0x215
@@ -182,6 +211,8 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_OST_BRW_WRITE_BULK2     0x220
 #define OBD_FAIL_OST_LLOG_RECOVERY_TIMEOUT 0x221
 #define OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT 0x222
+#define OBD_FAIL_OST_PAUSE_CREATE        0x223
+#define OBD_FAIL_OST_BRW_PAUSE_PACK      0x224
 #define OBD_FAIL_OST_CONNECT_NET2        0x225
 
 #define OBD_FAIL_LDLM                    0x300
@@ -202,9 +233,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_LDLM_GLIMPSE            0x30f
 #define OBD_FAIL_LDLM_CANCEL_RACE        0x310
 #define OBD_FAIL_LDLM_CANCEL_EVICT_RACE  0x311
-/* 
 #define OBD_FAIL_LDLM_PAUSE_CANCEL       0x312
-*/
 #define OBD_FAIL_LDLM_CLOSE_THREAD       0x313
 #define OBD_FAIL_LDLM_CANCEL_BL_CB_RACE  0x314
 
@@ -231,6 +260,9 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_PTLRPC_DROP_RPC         0x505
 #define OBD_FAIL_PTLRPC_DELAY_SEND       0x506
 #define OBD_FAIL_PTLRPC_DELAY_RECOV      0x507
+#define OBD_FAIL_PTLRPC_CLIENT_BULK_CB   0x508
+#define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
+#define OBD_FAIL_PTLRPC_PAUSE_REP        0x50c
 
 #define OBD_FAIL_OBD_PING_NET            0x600
 #define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601
@@ -245,23 +277,25 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_TGT_DELAY_RECONNECT     0x704
 #define OBD_FAIL_TGT_DELAY_PRECREATE     0x705
 #define OBD_FAIL_TGT_TOOMANY_THREADS     0x706
+#define OBD_FAIL_TGT_REPLAY_DROP         0x707
 
 #define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
 #define OBD_FAIL_MDC_ENQUEUE_PAUSE       0x801
+#define OBD_FAIL_MDC_OLD_EXT_FLAGS       0x802
 #define OBD_FAIL_MDC_GETATTR_ENQUEUE     0x803
 
 #define OBD_FAIL_MGS                     0x900
 #define OBD_FAIL_MGS_ALL_REQUEST_NET     0x901
 #define OBD_FAIL_MGS_ALL_REPLY_NET       0x902
-#define OBD_FAIL_MGC_PROCESS_LOG         0x903
-#define OBD_FAIL_MGS_SLOW_REQUEST_NET    0x904
-#define OBD_FAIL_MGS_SLOW_TARGET_REG     0x905
+#define OBD_FAIL_MGC_PAUSE_PROCESS_LOG   0x903
+#define OBD_FAIL_MGS_PAUSE_REQ           0x904
+#define OBD_FAIL_MGS_PAUSE_TARGET_REG    0x905
 
-#define OBD_FAIL_QUOTA_QD_COUNT_32BIT    0xa00
+#define OBD_FAIL_QUOTA_QD_COUNT_32BIT    0xA00
 
-#define OBD_FAIL_LPROC_REMOVE            0xb00
+#define OBD_FAIL_LPROC_REMOVE            0xB00
 
-#define OBD_FAIL_GENERAL_ALLOC           0xc00
+#define OBD_FAIL_GENERAL_ALLOC           0xC00
 
 #define OBD_FAIL_SEQ                     0x1000
 #define OBD_FAIL_SEQ_QUERY_NET           0x1001
@@ -273,6 +307,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_SEC_CTX_INIT_NET        0x1201
 #define OBD_FAIL_SEC_CTX_INIT_CONT_NET   0x1202
 #define OBD_FAIL_SEC_CTX_FINI_NET        0x1203
+#define OBD_FAIL_SEC_CTX_HDL_PAUSE       0x1204
 
 /* Failure injection control */
 #define OBD_FAIL_MASK_SYS    0x0000FF00
@@ -321,28 +356,28 @@ static inline int obd_fail_check_set(__u32 id, __u32 value, int set)
         obd_fail_check_set(id, value, OBD_FAIL_LOC_RESET)
 
 
-static inline int obd_fail_timeout_set(__u32 id, __u32 value, int secs, int set)
+static inline int obd_fail_timeout_set(__u32 id, __u32 value, int ms, int set)
 {
-        int ret = 0;
-        if (unlikely(OBD_FAIL_PRECHECK(id) &&
-            (ret = __obd_fail_check_set(id, value, set)))) {
-                CERROR("obd_fail_timeout id %x sleeping for %d secs\n",
-                       id, secs);
-                set_current_state(TASK_UNINTERRUPTIBLE);
-                cfs_schedule_timeout(CFS_TASK_UNINT,  cfs_time_seconds(secs));
-                set_current_state(TASK_RUNNING);
-                CERROR("obd_fail_timeout id %x awake\n", id);
-        }
-        return ret;
+        if (unlikely(OBD_FAIL_PRECHECK(id)))
+                return __obd_fail_timeout_set(id, value, ms, set);
+        else
+                return 0;
 }
 
-/* If id hit obd_fail_loc, sleep secs */
+/* If id hit obd_fail_loc, sleep for seconds or milliseconds */
 #define OBD_FAIL_TIMEOUT(id, secs) \
-        obd_fail_timeout_set(id, 0, secs, OBD_FAIL_LOC_NOSET)
+        obd_fail_timeout_set(id, 0, secs * 1000, OBD_FAIL_LOC_NOSET)
 
-/* If id hit obd_fail_loc, obd_fail_loc |= value and sleep secs */
+#define OBD_FAIL_TIMEOUT_MS(id, ms) \
+        obd_fail_timeout_set(id, 0, ms, OBD_FAIL_LOC_NOSET)
+
+/* If id hit obd_fail_loc, obd_fail_loc |= value and
+ * sleep seconds or milliseconds */
 #define OBD_FAIL_TIMEOUT_ORSET(id, value, secs) \
-        obd_fail_timeout_set(id, value, secs, OBD_FAIL_LOC_ORSET)
+        obd_fail_timeout_set(id, value, secs * 1000, OBD_FAIL_LOC_ORSET)
+
+#define OBD_FAIL_TIMEOUT_MS_ORSET(id, value, ms) \
+        obd_fail_timeout_set(id, value, ms, OBD_FAIL_LOC_ORSET)
 
 #ifdef __KERNEL__
 static inline void obd_fail_write(int id, struct super_block *sb)

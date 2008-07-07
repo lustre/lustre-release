@@ -183,6 +183,8 @@ void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
                              svc_counter_config, "req_qdepth", "reqs");
         lprocfs_counter_init(svc_stats, PTLRPC_REQACTIVE_CNTR,
                              svc_counter_config, "req_active", "reqs");
+        lprocfs_counter_init(svc_stats, PTLRPC_TIMEOUT,
+                             svc_counter_config, "req_timeout", "sec");
         lprocfs_counter_init(svc_stats, PTLRPC_REQBUF_AVAIL_CNTR,
                              svc_counter_config, "reqbuf_avail", "bufs");
         for (i = 0; i < EXTRA_LAST_OPC; i++) {
@@ -359,6 +361,36 @@ ptlrpc_lprocfs_svc_req_history_next(struct seq_file *s,
         return srhi;
 }
 
+/* common ost/mdt srv_request_history_print_fn */
+void target_print_req(void *seq_file, struct ptlrpc_request *req)
+{
+        /* Called holding srv_lock with irqs disabled.
+         * Print specific req contents and a newline.
+         * CAVEAT EMPTOR: check request message length before printing!!!
+         * You might have received any old crap so you must be just as
+         * careful here as the service's request parser!!! */
+        struct seq_file *sf = seq_file;
+
+        switch (req->rq_phase) {
+        case RQ_PHASE_NEW:
+                /* still awaiting a service thread's attention, or rejected
+                 * because the generic request message didn't unpack */
+                seq_printf(sf, "<not swabbed>\n");
+                break;
+        case RQ_PHASE_INTERPRET:
+                /* being handled, so basic msg swabbed, and opc is valid
+                 * but racing with mds_handle() */
+        case RQ_PHASE_COMPLETE:
+                /* been handled by mds_handle() reply state possibly still
+                 * volatile */
+                seq_printf(sf, "opc %d\n", lustre_msg_get_opc(req->rq_reqmsg));
+                break;
+        default:
+                DEBUG_REQ(D_ERROR, req, "bad phase %d", req->rq_phase);
+        }
+}
+EXPORT_SYMBOL(target_print_req);
+
 static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
 {
         struct ptlrpc_service      *svc = s->private;
@@ -379,11 +411,13 @@ static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
                  * must be just as careful as the service's request
                  * parser. Currently I only print stuff here I know is OK
                  * to look at coz it was set up in request_in_callback()!!! */
-                seq_printf(s, LPD64":%s:%s:"LPD64":%d:%s ",
+                seq_printf(s, LPD64":%s:%s:x"LPD64":%d:%s:%ld:%lds(%+lds) ",
                            req->rq_history_seq, libcfs_nid2str(req->rq_self),
                            libcfs_id2str(req->rq_peer), req->rq_xid,
-                           req->rq_reqlen,ptlrpc_rqphase2str(req));
-
+                           req->rq_reqlen, ptlrpc_rqphase2str(req),
+                           req->rq_arrival_time.tv_sec,
+                           req->rq_sent - req->rq_arrival_time.tv_sec,
+                           req->rq_sent - req->rq_deadline);
                 if (svc->srv_request_history_print_fn == NULL)
                         seq_printf(s, "\n");
                 else
@@ -420,6 +454,34 @@ ptlrpc_lprocfs_svc_req_history_open(struct inode *inode, struct file *file)
         return 0;
 }
 
+/* See also lprocfs_rd_timeouts */
+static int ptlrpc_lprocfs_rd_timeouts(char *page, char **start, off_t off,
+                                      int count, int *eof, void *data)
+{
+        struct ptlrpc_service *svc = data;
+        unsigned int cur, worst;
+        time_t worstt;
+        struct dhms ts;
+        int rc = 0;
+
+        *eof = 1;
+        cur = at_get(&svc->srv_at_estimate);
+        worst = svc->srv_at_estimate.at_worst_ever;
+        worstt = svc->srv_at_estimate.at_worst_time;
+        s2dhms(&ts, cfs_time_current_sec() - worstt);
+        if (AT_OFF)
+                rc += snprintf(page + rc, count - rc,
+                              "adaptive timeouts off, using obd_timeout %u\n",
+                              obd_timeout);
+        rc += snprintf(page + rc, count - rc,
+                       "%10s : cur %3u  worst %3u (at %ld, "DHMS_FMT" ago) ",
+                       "service", cur, worst, worstt,
+                       DHMS_VARS(&ts));
+        rc = lprocfs_at_hist_helper(page, count, rc,
+                                    &svc->srv_at_estimate);
+        return rc;
+}
+
 void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
                                      struct ptlrpc_service *svc)
 {
@@ -431,6 +493,9 @@ void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
                 {.name       = "req_buffer_history_max",
                  .write_fptr = ptlrpc_lprocfs_write_req_history_max,
                  .read_fptr  = ptlrpc_lprocfs_read_req_history_max,
+                 .data       = svc},
+                {.name       = "timeouts",
+                 .read_fptr  = ptlrpc_lprocfs_rd_timeouts,
                  .data       = svc},
                 {NULL}
         };

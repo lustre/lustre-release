@@ -74,11 +74,12 @@ static struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
         { "kbytesavail",     lprocfs_rd_kbytesavail, 0, 0 },
         { "filestotal",      lprocfs_rd_filestotal,  0, 0 },
         { "filesfree",       lprocfs_rd_filesfree,   0, 0 },
-        //{ "filegroups",      lprocfs_rd_filegroups,  0, 0 },
+        /*{ "filegroups",      lprocfs_rd_filegroups,  0, 0 },*/
         { "mds_server_uuid", lprocfs_rd_server_uuid, 0, 0 },
         { "mds_conn_uuid",   lprocfs_rd_conn_uuid,   0, 0 },
         { "max_rpcs_in_flight", mdc_rd_max_rpcs_in_flight,
                                 mdc_wr_max_rpcs_in_flight, 0 },
+        { "timeouts",        lprocfs_rd_timeouts,    0, 0 },
         { 0 }
 };
 

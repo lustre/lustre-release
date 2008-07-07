@@ -429,6 +429,8 @@ struct ldlm_namespace {
          * Backward link to obd, required for ldlm pool to store new SLV. 
          */
         struct obd_device     *ns_obd;
+
+        struct adaptive_timeout ns_at_estimate;/* estimated lock callback time*/
 };
 
 static inline int ns_is_client(struct ldlm_namespace *ns)

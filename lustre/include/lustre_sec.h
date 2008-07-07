@@ -656,6 +656,9 @@ int sptlrpc_cli_alloc_repbuf(struct ptlrpc_request *req, int msgsize);
 void sptlrpc_cli_free_repbuf(struct ptlrpc_request *req);
 int sptlrpc_cli_enlarge_reqbuf(struct ptlrpc_request *req,
                                int segment, int newsize);
+int sptlrpc_cli_unwrap_early_reply(struct ptlrpc_request *req);
+int sptlrpc_cli_finish_early_reply(struct ptlrpc_request *req);
+
 void sptlrpc_request_out_callback(struct ptlrpc_request *req);
 
 /*

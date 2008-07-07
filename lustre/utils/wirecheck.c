@@ -110,8 +110,8 @@ check_lustre_msg_v2(void)
         CHECK_MEMBER(lustre_msg_v2, lm_secflvr);
         CHECK_MEMBER(lustre_msg_v2, lm_magic);
         CHECK_MEMBER(lustre_msg_v2, lm_repsize);
-        CHECK_MEMBER(lustre_msg_v2, lm_timeout);
-        CHECK_MEMBER(lustre_msg_v2, lm_padding_1);
+        CHECK_MEMBER(lustre_msg_v2, lm_cksum);
+        CHECK_MEMBER(lustre_msg_v2, lm_flags);
         CHECK_MEMBER(lustre_msg_v2, lm_padding_2);
         CHECK_MEMBER(lustre_msg_v2, lm_padding_3);
         CHECK_MEMBER(lustre_msg_v2, lm_buflens[0]);
@@ -134,8 +134,8 @@ check_ptlrpc_body(void)
         CHECK_MEMBER(ptlrpc_body, pb_flags);
         CHECK_MEMBER(ptlrpc_body, pb_op_flags);
         CHECK_MEMBER(ptlrpc_body, pb_conn_cnt);
-        CHECK_MEMBER(ptlrpc_body, pb_padding_1);
-        CHECK_MEMBER(ptlrpc_body, pb_padding_2);
+        CHECK_MEMBER(ptlrpc_body, pb_timeout);
+        CHECK_MEMBER(ptlrpc_body, pb_service_time);
         CHECK_MEMBER(ptlrpc_body, pb_slv);
         CHECK_MEMBER(ptlrpc_body, pb_limit);
 }
@@ -1102,6 +1102,7 @@ main(int argc, char **argv)
         COMMENT("Constants...");
         CHECK_DEFINE(LUSTRE_MSG_MAGIC_V2);
         CHECK_DEFINE(PTLRPC_MSG_VERSION);
+        CHECK_VALUE(MSGHDR_AT_SUPPORT);
 
         CHECK_VALUE(PTL_RPC_MSG_REQUEST);
         CHECK_VALUE(PTL_RPC_MSG_ERR);

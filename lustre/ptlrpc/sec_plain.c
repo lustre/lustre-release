@@ -30,6 +30,7 @@
 #endif
 
 #include <obd_support.h>
+#include <obd_cksum.h>
 #include <obd_class.h>
 #include <lustre_net.h>
 #include <lustre_sec.h>
@@ -48,6 +49,8 @@ static inline struct plain_sec *sec2plsec(struct ptlrpc_sec *sec)
 static struct ptlrpc_sec_policy plain_policy;
 static struct ptlrpc_ctx_ops    plain_ctx_ops;
 static struct ptlrpc_svc_ctx    plain_svc_ctx;
+
+static unsigned int plain_at_offset;
 
 /*
  * flavor flags (maximum 8 flags)
@@ -129,7 +132,9 @@ int plain_ctx_sign(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 static
 int plain_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 {
-        struct lustre_msg *msg = req->rq_repbuf;
+        struct lustre_msg *msg = req->rq_repdata;
+        int                early = 0;
+        __u32              cksum;
         ENTRY;
 
         if (msg->lm_bufcount != PLAIN_PACK_SEGMENTS) {
@@ -137,28 +142,46 @@ int plain_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
                 RETURN(-EPROTO);
         }
 
+        /* find out if it's an early reply */
+        if ((char *) msg < req->rq_repbuf ||
+            (char *) msg >= req->rq_repbuf + req->rq_repbuf_len)
+                early = 1;
+
         /* expect no user desc in reply */
         if (PLAIN_WFLVR_HAS_USER(msg->lm_secflvr)) {
                 CERROR("Unexpected udesc flag in reply\n");
                 RETURN(-EPROTO);
         }
 
-        /* whether we sent with bulk or not, we expect the same in reply */
-        if (!equi(req->rq_pack_bulk == 1,
-                  PLAIN_WFLVR_HAS_BULK(msg->lm_secflvr))) {
-                CERROR("%s bulk checksum in reply\n",
-                       req->rq_pack_bulk ? "Missing" : "Unexpected");
-                RETURN(-EPROTO);
-        }
+        if (unlikely(early)) {
+                cksum = crc32_le(!(__u32) 0,
+                                 lustre_msg_buf(msg, PLAIN_PACK_MSG_OFF, 0),
+                                 lustre_msg_buflen(msg, PLAIN_PACK_MSG_OFF));
+                if (cksum != msg->lm_cksum) {
+                        CWARN("early reply checksum mismatch: %08x != %08x\n",
+                              cpu_to_le32(cksum), msg->lm_cksum);
+                        RETURN(-EINVAL);
+                }
+        } else {
+                /* whether we sent with bulk or not, we expect the same
+                 * in reply, except for early reply */
+                if (!early &&
+                    !equi(req->rq_pack_bulk == 1,
+                          PLAIN_WFLVR_HAS_BULK(msg->lm_secflvr))) {
+                        CERROR("%s bulk checksum in reply\n",
+                               req->rq_pack_bulk ? "Missing" : "Unexpected");
+                        RETURN(-EPROTO);
+                }
 
-        if (req->rq_pack_bulk &&
-            bulk_sec_desc_unpack(msg, PLAIN_PACK_BULK_OFF)) {
-                CERROR("Mal-formed bulk checksum reply\n");
-                RETURN(-EINVAL);
+                if (PLAIN_WFLVR_HAS_BULK(msg->lm_secflvr) &&
+                    bulk_sec_desc_unpack(msg, PLAIN_PACK_BULK_OFF)) {
+                        CERROR("Mal-formed bulk checksum reply\n");
+                        RETURN(-EINVAL);
+                }
         }
 
         req->rq_repmsg = lustre_msg_buf(msg, PLAIN_PACK_MSG_OFF, 0);
-        req->rq_replen = msg->lm_buflens[PLAIN_PACK_MSG_OFF];
+        req->rq_replen = lustre_msg_buflen(msg, PLAIN_PACK_MSG_OFF);
         RETURN(0);
 }
 
@@ -183,11 +206,11 @@ int plain_cli_unwrap_bulk(struct ptlrpc_cli_ctx *ctx,
 {
         LASSERT(req->rq_pack_bulk);
         LASSERT(req->rq_reqbuf->lm_bufcount == PLAIN_PACK_SEGMENTS);
-        LASSERT(req->rq_repbuf->lm_bufcount == PLAIN_PACK_SEGMENTS);
+        LASSERT(req->rq_repdata->lm_bufcount == PLAIN_PACK_SEGMENTS);
 
         return bulk_csum_cli_reply(desc, req->rq_bulk_read,
                                    req->rq_reqbuf, PLAIN_PACK_BULK_OFF,
-                                   req->rq_repbuf, PLAIN_PACK_BULK_OFF);
+                                   req->rq_repdata, PLAIN_PACK_BULK_OFF);
 }
 
 /****************************************
@@ -445,13 +468,16 @@ int plain_alloc_repbuf(struct ptlrpc_sec *sec,
 
         if (req->rq_pack_bulk) {
                 LASSERT(req->rq_bulk_read || req->rq_bulk_write);
-
                 buflens[PLAIN_PACK_BULK_OFF] = bulk_sec_desc_size(
                                                 req->rq_flvr.sf_bulk_hash, 0,
                                                 req->rq_bulk_read);
         }
 
         alloc_len = lustre_msg_size_v2(PLAIN_PACK_SEGMENTS, buflens);
+
+        /* add space for early reply */
+        alloc_len += plain_at_offset;
+
         alloc_len = size_roundup_power2(alloc_len);
 
         OBD_ALLOC(req->rq_repbuf, alloc_len);
@@ -672,6 +698,16 @@ int plain_authorize(struct ptlrpc_request *req)
                 msg->lm_secflvr |= PLAIN_WFLVR_FLAG_BULK;
 
         rs->rs_repdata_len = len;
+
+        if (likely(req->rq_packed_final)) {
+                req->rq_reply_off = plain_at_offset;
+        } else {
+                msg->lm_cksum = crc32_le(!(__u32) 0,
+                                lustre_msg_buf(msg, PLAIN_PACK_MSG_OFF, 0),
+                                lustre_msg_buflen(msg, PLAIN_PACK_MSG_OFF));
+                req->rq_reply_off = 0;
+        }
+
         RETURN(0);
 }
 
@@ -761,7 +797,11 @@ static struct ptlrpc_sec_policy plain_policy = {
 
 int sptlrpc_plain_init(void)
 {
+        int buflens[PLAIN_PACK_SEGMENTS] = { 0, };
         int rc;
+
+        buflens[PLAIN_PACK_MSG_OFF] = lustre_msg_early_size();
+        plain_at_offset = lustre_msg_size_v2(PLAIN_PACK_SEGMENTS, buflens);
 
         rc = sptlrpc_register_policy(&plain_policy);
         if (rc)

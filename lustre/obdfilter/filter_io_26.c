@@ -708,7 +708,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         DQUOT_INIT(inode);
 
         LOCK_INODE_MUTEX(inode);
-        fsfilt_check_slow(obd, now, obd_timeout, "i_mutex");
+        fsfilt_check_slow(obd, now, "i_mutex");
         oti->oti_handle = fsfilt_brw_start(obd, objcount, &fso, niocount, res,
                                            oti);
         if (IS_ERR(oti->oti_handle)) {
@@ -721,7 +721,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         }
         /* have to call fsfilt_commit() from this point on */
 
-        fsfilt_check_slow(obd, now, obd_timeout, "brw_start");
+        fsfilt_check_slow(obd, now, "brw_start");
 
         i = OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME;
 
@@ -773,7 +773,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 
         lquota_getflag(filter_quota_interface_ref, obd, oa);
 
-        fsfilt_check_slow(obd, now, obd_timeout, "direct_io");
+        fsfilt_check_slow(obd, now, "direct_io");
 
         err = fsfilt_commit_wait(obd, inode, wait_handle);
         if (err) {
@@ -786,7 +786,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                          "oti_transno "LPU64" last_committed "LPU64"\n",
                          oti->oti_transno, obd->obd_last_committed);
 
-        fsfilt_check_slow(obd, now, obd_timeout, "commitrw commit");
+        fsfilt_check_slow(obd, now, "commitrw commit");
 
 cleanup:
         filter_grant_commit(exp, niocount, res);

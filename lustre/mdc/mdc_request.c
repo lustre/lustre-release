@@ -810,8 +810,8 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
         /* To avoid a livelock (bug 7034), we need to send CLOSE RPCs to a
          * portal whose threads are not taking any DLM locks and are therefore
          * always progressing */
-        /* XXX FIXME bug 249 */
         req->rq_request_portal = MDS_READPAGE_PORTAL;
+        ptlrpc_at_set_req_timeout(req);
 
         /* Ensure that this close's handle is fixed up during replay. */
         if (likely(mod != NULL))
@@ -942,6 +942,7 @@ int mdc_sendpage(struct obd_export *exp, const struct lu_fid *fid,
         }
 
         req->rq_request_portal = MDS_READPAGE_PORTAL;
+        ptlrpc_at_set_req_timeout(req);
 
         desc = ptlrpc_prep_bulk_imp(req, 1, BULK_GET_SOURCE, MDS_BULK_PORTAL);
         if (desc == NULL)
@@ -983,8 +984,9 @@ int mdc_readpage(struct obd_export *exp, const struct lu_fid *fid,
                 RETURN(rc);
         }
 
-        /* XXX FIXME bug 249 */
         req->rq_request_portal = MDS_READPAGE_PORTAL;
+        ptlrpc_at_set_req_timeout(req);
+
         desc = ptlrpc_prep_bulk_imp(req, 1, BULK_PUT_SINK, MDS_BULK_PORTAL);
         if (desc == NULL) {
                 ptlrpc_request_free(req);

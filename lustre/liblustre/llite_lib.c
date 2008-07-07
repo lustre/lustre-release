@@ -157,7 +157,8 @@ int liblustre_process_log(struct config_llog_instance *cfg,
         if (ocd == NULL)
                 GOTO(out_cleanup, rc = -ENOMEM);
 
-        ocd->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_FID;
+        ocd->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_FID |
+                                 OBD_CONNECT_AT;
 #ifdef LIBLUSTRE_POSIX_ACL
         ocd->ocd_connect_flags |= OBD_CONNECT_ACL;
 #endif
@@ -291,7 +292,7 @@ int _sysio_lustre_init(void)
                         obd_timeout);
         }
 
-	/* debug peer on timeout? */
+        /* debug peer on timeout? */
         envstr = getenv("LIBLUSTRE_DEBUG_PEER_ON_TIMEOUT");
         if (envstr != NULL) {
                 obd_debug_peer_on_timeout = 

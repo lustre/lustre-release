@@ -1081,7 +1081,7 @@ static int mgc_process_log(struct obd_device *mgc,
         if (cld->cld_stopping)
                 RETURN(0);
 
-        OBD_FAIL_TIMEOUT(OBD_FAIL_MGC_PROCESS_LOG, 20);
+        OBD_FAIL_TIMEOUT(OBD_FAIL_MGC_PAUSE_PROCESS_LOG, 20);
 
         lsi = s2lsi(cld->cld_cfg.cfg_sb);
 

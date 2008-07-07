@@ -124,6 +124,7 @@ init_test_env() {
     export KRB5DIR=${KRB5DIR:-"/usr/kerberos"}
     export DIR2
     export SAVE_PWD=${SAVE_PWD:-$LUSTRE/tests}
+    export AT_MAX_PATH
 
     if [ "$ACCEPTOR_PORT" ]; then
         export PORT_OPT="--port $ACCEPTOR_PORT"
@@ -1243,6 +1244,56 @@ comma_list() {
 
 absolute_path() {
     (cd `dirname $1`; echo $PWD/`basename $1`)
+}
+
+##################################
+# Adaptive Timeouts funcs
+
+at_is_valid() {
+    if [ -z "$AT_MAX_PATH" ]; then
+        AT_MAX_PATH=$(do_facet mds "find /sys/ -name at_max")
+        [ -z "$AT_MAX_PATH" ] && echo "missing /sys/.../at_max " && return 1
+    fi
+    return 0
+}
+
+at_is_enabled() {
+    at_is_valid || error "invalid call"
+
+    # only check mds, we assume at_max is the same on all nodes
+    local at_max=$(do_facet mds "cat $AT_MAX_PATH")
+    if [ $at_max -eq 0 ]; then
+        return 1
+    else
+        return 0
+    fi
+}
+
+at_max_get() {
+    at_is_valid || error "invalid call"
+
+    do_facet $1 "cat $AT_MAX_PATH"
+}
+
+at_max_set() {
+    local at_max=$1
+    shift
+
+    at_is_valid || error "invalid call"
+
+    for facet in $@; do
+        if [ $facet == "ost" ]; then
+            for i in `seq $OSTCOUNT`; do
+                do_facet ost$i "echo $at_max > $AT_MAX_PATH"
+            done
+        elif [ $facet == "mds" ]; then
+            for i in `seq $MDSCOUNT`; do
+                do_facet mds$i "echo $at_max > $AT_MAX_PATH"
+            done
+        else
+            do_facet $facet "echo $at_max > $AT_MAX_PATH"
+        fi
+    done
 }
 
 ##################################

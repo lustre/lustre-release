@@ -30,6 +30,7 @@
 #endif
 
 #include <obd_support.h>
+#include <obd_cksum.h>
 #include <obd_class.h>
 #include <lustre_net.h>
 #include <lustre_sec.h>
@@ -62,8 +63,7 @@ enum lustre_sec_part null_decode_sec_part(struct lustre_msg *msg)
         }
 }
 
-static
-int null_ctx_refresh(struct ptlrpc_cli_ctx *ctx)
+static int null_ctx_refresh(struct ptlrpc_cli_ctx *ctx)
 {
         /* should never reach here */
         LBUG();
@@ -87,21 +87,33 @@ int null_ctx_sign(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 static
 int null_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 {
-        req->rq_repmsg = req->rq_repbuf;
+        __u32   cksums, cksumc;
+
+        LASSERT(req->rq_repdata);
+
+        /* real reply rq_repdata point inside of rq_reqbuf; early reply
+         * rq_repdata point to a separate allocated space */
+        if ((char *) req->rq_repdata < req->rq_repbuf ||
+            (char *) req->rq_repdata >= req->rq_repbuf + req->rq_repbuf_len) {
+                cksums = req->rq_repdata->lm_cksum;
+                req->rq_repdata->lm_cksum = 0;
+
+                if (req->rq_repdata->lm_magic == LUSTRE_MSG_MAGIC_V2_SWABBED)
+                        __swab32s(&cksums);
+
+                cksumc = crc32_le(!(__u32) 0, (char *) req->rq_repdata,
+                                  req->rq_repdata_len);
+                if (cksumc != cksums) {
+                        CWARN("early reply checksum mismatch: %08x != %08x\n",
+                              cksumc, cksums);
+                        return -EINVAL;
+                }
+        }
+
+        req->rq_repmsg = req->rq_repdata;
         req->rq_replen = req->rq_repdata_len;
         return 0;
 }
-
-static struct ptlrpc_ctx_ops null_ctx_ops = {
-        .refresh        = null_ctx_refresh,
-        .sign           = null_ctx_sign,
-        .verify         = null_ctx_verify,
-};
-
-static struct ptlrpc_svc_ctx null_svc_ctx = {
-        .sc_refcount    = ATOMIC_INIT(1),
-        .sc_policy      = &null_policy,
-};
 
 static
 struct ptlrpc_sec *null_create_sec(struct obd_import *imp,
@@ -196,6 +208,9 @@ int null_alloc_repbuf(struct ptlrpc_sec *sec,
                       struct ptlrpc_request *req,
                       int msgsize)
 {
+        /* add space for early replied */
+        msgsize += lustre_msg_early_size();
+
         msgsize = size_roundup_power2(msgsize);
 
         OBD_ALLOC(req->rq_repbuf, msgsize);
@@ -210,6 +225,8 @@ static
 void null_free_repbuf(struct ptlrpc_sec *sec,
                       struct ptlrpc_request *req)
 {
+        LASSERT(req->rq_repbuf);
+
         OBD_FREE(req->rq_repbuf, req->rq_repbuf_len);
         req->rq_repbuf = NULL;
         req->rq_repbuf_len = 0;
@@ -259,6 +276,11 @@ int null_enlarge_reqbuf(struct ptlrpc_sec *sec,
 
         return 0;
 }
+
+static struct ptlrpc_svc_ctx null_svc_ctx = {
+        .sc_refcount    = ATOMIC_INIT(1),
+        .sc_policy      = &null_policy,
+};
 
 static
 int null_accept(struct ptlrpc_request *req)
@@ -329,10 +351,27 @@ int null_authorize(struct ptlrpc_request *req)
         struct ptlrpc_reply_state *rs = req->rq_reply_state;
 
         LASSERT(rs);
+
         rs->rs_repbuf->lm_secflvr = SPTLRPC_FLVR_NULL;
         rs->rs_repdata_len = req->rq_replen;
+
+        if (likely(req->rq_packed_final)) {
+                req->rq_reply_off = lustre_msg_early_size();
+        } else {
+                rs->rs_repbuf->lm_cksum =
+                                crc32_le(!(__u32) 0, (char *) rs->rs_repbuf,
+                                         rs->rs_repdata_len);
+                req->rq_reply_off = 0;
+        }
+
         return 0;
 }
+
+static struct ptlrpc_ctx_ops null_ctx_ops = {
+        .refresh                = null_ctx_refresh,
+        .sign                   = null_ctx_sign,
+        .verify                 = null_ctx_verify,
+};
 
 static struct ptlrpc_sec_cops null_sec_cops = {
         .create_sec             = null_create_sec,
@@ -361,8 +400,7 @@ static struct ptlrpc_sec_policy null_policy = {
         .sp_sops                = &null_sec_sops,
 };
 
-static
-void null_init_internal(void)
+static void null_init_internal(void)
 {
         static HLIST_HEAD(__list);
 

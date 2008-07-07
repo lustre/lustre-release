@@ -1330,7 +1330,7 @@ cache_check:
         grctx->src_init = 1;
         grctx->src_reserve_len = size_round4(rsip->out_token.len);
 
-        rc = lustre_pack_reply_v2(req, 1, &replen, NULL);
+        rc = lustre_pack_reply_v2(req, 1, &replen, NULL, 0);
         if (rc) {
                 CERROR("failed to pack reply: %d\n", rc);
                 GOTO(out, rc = SECSVC_DROP);

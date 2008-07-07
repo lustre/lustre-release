@@ -143,7 +143,8 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
         }
 
         if (op_data->op_attr.ia_valid & ATTR_FROM_OPEN) {
-                req->rq_request_portal = MDS_SETATTR_PORTAL; //XXX FIXME bug 249
+                req->rq_request_portal = MDS_SETATTR_PORTAL;
+                ptlrpc_at_set_req_timeout(req);
                 rpc_lock = obd->u.cli.cl_setattr_lock;
         } else {
                 rpc_lock = obd->u.cli.cl_rpc_lock;

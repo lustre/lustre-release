@@ -319,15 +319,19 @@ static int mdt_getstatus(struct mdt_thread_info *info)
 
 static int mdt_statfs(struct mdt_thread_info *info)
 {
-        struct md_device  *next  = info->mti_mdt->mdt_child;
-        struct obd_statfs *osfs;
-        int                rc;
+        struct md_device      *next  = info->mti_mdt->mdt_child;
+        struct ptlrpc_service *svc;
+        struct obd_statfs     *osfs;
+        int                    rc;
 
         ENTRY;
 
+        svc = info->mti_pill->rc_req->rq_rqbd->rqbd_service;
+
         /* This will trigger a watchdog timeout */
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_STATFS_LCW_SLEEP,
-                         (MDT_SERVICE_WATCHDOG_TIMEOUT / 1000) + 1);
+                         (MDT_SERVICE_WATCHDOG_FACTOR *
+                          at_get(&svc->srv_at_estimate) / 1000) + 1);
 
         rc = mdt_check_ucred(info);
         if (rc)
@@ -1123,6 +1127,7 @@ static int mdt_sendpage(struct mdt_thread_info *info,
         struct l_wait_info      *lwi = &info->mti_u.rdpg.mti_wait_info;
         int                      tmpcount;
         int                      tmpsize;
+        int                      timeout;
         int                      i;
         int                      rc;
         ENTRY;
@@ -1146,7 +1151,11 @@ static int mdt_sendpage(struct mdt_thread_info *info,
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE))
                 GOTO(abort_bulk, rc = 0);
 
-        *lwi = LWI_TIMEOUT(obd_timeout * HZ / 4, NULL, NULL);
+        timeout = (int) req->rq_deadline - cfs_time_current_sec();
+        if (timeout < 0)
+                CERROR("Req deadline already passed %lu (now: %lu)\n",
+                       req->rq_deadline, cfs_time_current_sec());
+        *lwi = LWI_TIMEOUT(max(timeout, 1) * HZ, NULL, NULL);
         rc = l_wait_event(desc->bd_waitq, !ptlrpc_bulk_active(desc), lwi);
         LASSERT (rc == 0 || rc == -ETIMEDOUT);
 
@@ -1706,6 +1715,8 @@ static int mdt_sec_ctx_handle(struct mdt_thread_info *info)
                 if (opc == SEC_CTX_INIT || opc == SEC_CTX_INIT_CONT)
                         sptlrpc_svc_ctx_invalidate(req);
         }
+
+        OBD_FAIL_TIMEOUT(OBD_FAIL_SEC_CTX_HDL_PAUSE, obd_fail_val);
 
         return rc;
 }
@@ -3337,21 +3348,21 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
         procfs_entry = m->mdt_md_dev.md_lu_dev.ld_obd->obd_proc_entry;
 
         conf = (typeof(conf)) {
-                .psc_nbufs            = MDS_NBUFS,
-                .psc_bufsize          = MDS_BUFSIZE,
-                .psc_max_req_size     = MDS_MAXREQSIZE,
-                .psc_max_reply_size   = MDS_MAXREPSIZE,
-                .psc_req_portal       = MDS_REQUEST_PORTAL,
-                .psc_rep_portal       = MDC_REPLY_PORTAL,
-                .psc_watchdog_timeout = MDT_SERVICE_WATCHDOG_TIMEOUT,
+                .psc_nbufs           = MDS_NBUFS,
+                .psc_bufsize         = MDS_BUFSIZE,
+                .psc_max_req_size    = MDS_MAXREQSIZE,
+                .psc_max_reply_size  = MDS_MAXREPSIZE,
+                .psc_req_portal      = MDS_REQUEST_PORTAL,
+                .psc_rep_portal      = MDC_REPLY_PORTAL,
+                .psc_watchdog_factor = MDT_SERVICE_WATCHDOG_FACTOR,
                 /*
                  * We'd like to have a mechanism to set this on a per-device
                  * basis, but alas...
                  */
-                .psc_min_threads   = min(max(mdt_num_threads, MDT_MIN_THREADS),
-                                       MDT_MAX_THREADS),
-                .psc_max_threads   = MDT_MAX_THREADS,
-                .psc_ctx_tags      = LCT_MD_THREAD
+                .psc_min_threads    = min(max(mdt_num_threads, MDT_MIN_THREADS),
+                                          MDT_MAX_THREADS),
+                .psc_max_threads     = MDT_MAX_THREADS,
+                .psc_ctx_tags        = LCT_MD_THREAD
         };
 
         m->mdt_ldlm_client = &m->mdt_md_dev.md_lu_dev.ld_obd->obd_ldlm_client;
@@ -3360,7 +3371,8 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
 
         m->mdt_regular_service =
                 ptlrpc_init_svc_conf(&conf, mdt_regular_handle, LUSTRE_MDT_NAME,
-                                     procfs_entry, NULL, LUSTRE_MDT_NAME);
+                                     procfs_entry, target_print_req,
+                                     LUSTRE_MDT_NAME);
         if (m->mdt_regular_service == NULL)
                 RETURN(-ENOMEM);
 
@@ -3373,22 +3385,22 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
          * ideally.
          */
         conf = (typeof(conf)) {
-                .psc_nbufs            = MDS_NBUFS,
-                .psc_bufsize          = MDS_BUFSIZE,
-                .psc_max_req_size     = MDS_MAXREQSIZE,
-                .psc_max_reply_size   = MDS_MAXREPSIZE,
-                .psc_req_portal       = MDS_READPAGE_PORTAL,
-                .psc_rep_portal       = MDC_REPLY_PORTAL,
-                .psc_watchdog_timeout = MDT_SERVICE_WATCHDOG_TIMEOUT,
-                .psc_min_threads   = min(max(mdt_num_threads, MDT_MIN_THREADS),
-                                       MDT_MAX_THREADS),
-                .psc_max_threads   = MDT_MAX_THREADS,
-                .psc_ctx_tags      = LCT_MD_THREAD
+                .psc_nbufs           = MDS_NBUFS,
+                .psc_bufsize         = MDS_BUFSIZE,
+                .psc_max_req_size    = MDS_MAXREQSIZE,
+                .psc_max_reply_size  = MDS_MAXREPSIZE,
+                .psc_req_portal      = MDS_READPAGE_PORTAL,
+                .psc_rep_portal      = MDC_REPLY_PORTAL,
+                .psc_watchdog_factor = MDT_SERVICE_WATCHDOG_FACTOR,
+                .psc_min_threads    = min(max(mdt_num_threads, MDT_MIN_THREADS),
+                                          MDT_MAX_THREADS),
+                .psc_max_threads     = MDT_MAX_THREADS,
+                .psc_ctx_tags        = LCT_MD_THREAD
         };
         m->mdt_readpage_service =
                 ptlrpc_init_svc_conf(&conf, mdt_readpage_handle,
                                      LUSTRE_MDT_NAME "_readpage",
-                                     procfs_entry, NULL, "mdt_rdpg");
+                                     procfs_entry, target_print_req,"mdt_rdpg");
 
         if (m->mdt_readpage_service == NULL) {
                 CERROR("failed to start readpage service\n");
@@ -3401,23 +3413,23 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
          * setattr service configuration.
          */
         conf = (typeof(conf)) {
-                .psc_nbufs            = MDS_NBUFS,
-                .psc_bufsize          = MDS_BUFSIZE,
-                .psc_max_req_size     = MDS_MAXREQSIZE,
-                .psc_max_reply_size   = MDS_MAXREPSIZE,
-                .psc_req_portal       = MDS_SETATTR_PORTAL,
-                .psc_rep_portal       = MDC_REPLY_PORTAL,
-                .psc_watchdog_timeout = MDT_SERVICE_WATCHDOG_TIMEOUT,
+                .psc_nbufs           = MDS_NBUFS,
+                .psc_bufsize         = MDS_BUFSIZE,
+                .psc_max_req_size    = MDS_MAXREQSIZE,
+                .psc_max_reply_size  = MDS_MAXREPSIZE,
+                .psc_req_portal      = MDS_SETATTR_PORTAL,
+                .psc_rep_portal      = MDC_REPLY_PORTAL,
+                .psc_watchdog_factor = MDT_SERVICE_WATCHDOG_FACTOR,
                 .psc_min_threads   = min(max(mdt_num_threads, MDT_MIN_THREADS),
-                                       MDT_MAX_THREADS),
-                .psc_max_threads   = MDT_MAX_THREADS,
-                .psc_ctx_tags      = LCT_MD_THREAD
+                                         MDT_MAX_THREADS),
+                .psc_max_threads     = MDT_MAX_THREADS,
+                .psc_ctx_tags        = LCT_MD_THREAD
         };
 
         m->mdt_setattr_service =
                 ptlrpc_init_svc_conf(&conf, mdt_regular_handle,
                                      LUSTRE_MDT_NAME "_setattr",
-                                     procfs_entry, NULL, "mdt_attr");
+                                     procfs_entry, target_print_req,"mdt_attr");
 
         if (!m->mdt_setattr_service) {
                 CERROR("failed to start setattr service\n");
@@ -3432,22 +3444,22 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
          * sequence controller service configuration
          */
         conf = (typeof(conf)) {
-                .psc_nbufs = MDS_NBUFS,
-                .psc_bufsize = MDS_BUFSIZE,
-                .psc_max_req_size = SEQ_MAXREQSIZE,
-                .psc_max_reply_size = SEQ_MAXREPSIZE,
-                .psc_req_portal = SEQ_CONTROLLER_PORTAL,
-                .psc_rep_portal = MDC_REPLY_PORTAL,
-                .psc_watchdog_timeout = MDT_SERVICE_WATCHDOG_TIMEOUT,
-                .psc_min_threads = SEQ_NUM_THREADS,
-                .psc_max_threads = SEQ_NUM_THREADS,
-                .psc_ctx_tags = LCT_MD_THREAD|LCT_DT_THREAD
+                .psc_nbufs           = MDS_NBUFS,
+                .psc_bufsize         = MDS_BUFSIZE,
+                .psc_max_req_size    = SEQ_MAXREQSIZE,
+                .psc_max_reply_size  = SEQ_MAXREPSIZE,
+                .psc_req_portal      = SEQ_CONTROLLER_PORTAL,
+                .psc_rep_portal      = MDC_REPLY_PORTAL,
+                .psc_watchdog_factor = MDT_SERVICE_WATCHDOG_FACTOR,
+                .psc_min_threads     = SEQ_NUM_THREADS,
+                .psc_max_threads     = SEQ_NUM_THREADS,
+                .psc_ctx_tags        = LCT_MD_THREAD|LCT_DT_THREAD
         };
 
         m->mdt_mdsc_service =
                 ptlrpc_init_svc_conf(&conf, mdt_mdsc_handle,
                                      LUSTRE_MDT_NAME"_mdsc",
-                                     procfs_entry, NULL, "mdt_mdsc");
+                                     procfs_entry, target_print_req,"mdt_mdsc");
         if (!m->mdt_mdsc_service) {
                 CERROR("failed to start seq controller service\n");
                 GOTO(err_mdt_svc, rc = -ENOMEM);
@@ -3461,22 +3473,22 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
          * metadata sequence server service configuration
          */
         conf = (typeof(conf)) {
-                .psc_nbufs = MDS_NBUFS,
-                .psc_bufsize = MDS_BUFSIZE,
-                .psc_max_req_size = SEQ_MAXREQSIZE,
-                .psc_max_reply_size = SEQ_MAXREPSIZE,
-                .psc_req_portal = SEQ_METADATA_PORTAL,
-                .psc_rep_portal = MDC_REPLY_PORTAL,
-                .psc_watchdog_timeout = MDT_SERVICE_WATCHDOG_TIMEOUT,
-                .psc_min_threads = SEQ_NUM_THREADS,
-                .psc_max_threads = SEQ_NUM_THREADS,
-                .psc_ctx_tags = LCT_MD_THREAD|LCT_DT_THREAD
+                .psc_nbufs           = MDS_NBUFS,
+                .psc_bufsize         = MDS_BUFSIZE,
+                .psc_max_req_size    = SEQ_MAXREQSIZE,
+                .psc_max_reply_size  = SEQ_MAXREPSIZE,
+                .psc_req_portal      = SEQ_METADATA_PORTAL,
+                .psc_rep_portal      = MDC_REPLY_PORTAL,
+                .psc_watchdog_factor = MDT_SERVICE_WATCHDOG_FACTOR,
+                .psc_min_threads     = SEQ_NUM_THREADS,
+                .psc_max_threads     = SEQ_NUM_THREADS,
+                .psc_ctx_tags        = LCT_MD_THREAD|LCT_DT_THREAD
         };
 
         m->mdt_mdss_service =
                 ptlrpc_init_svc_conf(&conf, mdt_mdss_handle,
                                      LUSTRE_MDT_NAME"_mdss",
-                                     procfs_entry, NULL, "mdt_mdss");
+                                     procfs_entry, target_print_req,"mdt_mdss");
         if (!m->mdt_mdss_service) {
                 CERROR("failed to start metadata seq server service\n");
                 GOTO(err_mdt_svc, rc = -ENOMEM);
@@ -3493,22 +3505,22 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
          * controller which manages space.
          */
         conf = (typeof(conf)) {
-                .psc_nbufs = MDS_NBUFS,
-                .psc_bufsize = MDS_BUFSIZE,
-                .psc_max_req_size = SEQ_MAXREQSIZE,
-                .psc_max_reply_size = SEQ_MAXREPSIZE,
-                .psc_req_portal = SEQ_DATA_PORTAL,
-                .psc_rep_portal = OSC_REPLY_PORTAL,
-                .psc_watchdog_timeout = MDT_SERVICE_WATCHDOG_TIMEOUT,
-                .psc_min_threads = SEQ_NUM_THREADS,
-                .psc_max_threads = SEQ_NUM_THREADS,
-                .psc_ctx_tags = LCT_MD_THREAD|LCT_DT_THREAD
+                .psc_nbufs           = MDS_NBUFS,
+                .psc_bufsize         = MDS_BUFSIZE,
+                .psc_max_req_size    = SEQ_MAXREQSIZE,
+                .psc_max_reply_size  = SEQ_MAXREPSIZE,
+                .psc_req_portal      = SEQ_DATA_PORTAL,
+                .psc_rep_portal      = OSC_REPLY_PORTAL,
+                .psc_watchdog_factor = MDT_SERVICE_WATCHDOG_FACTOR,
+                .psc_min_threads     = SEQ_NUM_THREADS,
+                .psc_max_threads     = SEQ_NUM_THREADS,
+                .psc_ctx_tags        = LCT_MD_THREAD|LCT_DT_THREAD
         };
 
         m->mdt_dtss_service =
                 ptlrpc_init_svc_conf(&conf, mdt_dtss_handle,
                                      LUSTRE_MDT_NAME"_dtss",
-                                     procfs_entry, NULL, "mdt_dtss");
+                                     procfs_entry, target_print_req,"mdt_dtss");
         if (!m->mdt_dtss_service) {
                 CERROR("failed to start data seq server service\n");
                 GOTO(err_mdt_svc, rc = -ENOMEM);
@@ -3520,22 +3532,22 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
 
         /* FLD service start */
         conf = (typeof(conf)) {
-                .psc_nbufs            = MDS_NBUFS,
-                .psc_bufsize          = MDS_BUFSIZE,
-                .psc_max_req_size     = FLD_MAXREQSIZE,
-                .psc_max_reply_size   = FLD_MAXREPSIZE,
-                .psc_req_portal       = FLD_REQUEST_PORTAL,
-                .psc_rep_portal       = MDC_REPLY_PORTAL,
-                .psc_watchdog_timeout = MDT_SERVICE_WATCHDOG_TIMEOUT,
-                .psc_min_threads      = FLD_NUM_THREADS,
-                .psc_max_threads      = FLD_NUM_THREADS,
-                .psc_ctx_tags         = LCT_DT_THREAD|LCT_MD_THREAD
+                .psc_nbufs           = MDS_NBUFS,
+                .psc_bufsize         = MDS_BUFSIZE,
+                .psc_max_req_size    = FLD_MAXREQSIZE,
+                .psc_max_reply_size  = FLD_MAXREPSIZE,
+                .psc_req_portal      = FLD_REQUEST_PORTAL,
+                .psc_rep_portal      = MDC_REPLY_PORTAL,
+                .psc_watchdog_factor = MDT_SERVICE_WATCHDOG_FACTOR,
+                .psc_min_threads     = FLD_NUM_THREADS,
+                .psc_max_threads     = FLD_NUM_THREADS,
+                .psc_ctx_tags        = LCT_DT_THREAD|LCT_MD_THREAD
         };
 
         m->mdt_fld_service =
                 ptlrpc_init_svc_conf(&conf, mdt_fld_handle,
                                      LUSTRE_MDT_NAME"_fld",
-                                     procfs_entry, NULL, "mdt_fld");
+                                     procfs_entry, target_print_req, "mdt_fld");
         if (!m->mdt_fld_service) {
                 CERROR("failed to start fld service\n");
                 GOTO(err_mdt_svc, rc = -ENOMEM);
@@ -3550,21 +3562,22 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
          * mds-mds requests be not blocked during recovery.
          */
         conf = (typeof(conf)) {
-                .psc_nbufs            = MDS_NBUFS,
-                .psc_bufsize          = MDS_BUFSIZE,
-                .psc_max_req_size     = MDS_MAXREQSIZE,
-                .psc_max_reply_size   = MDS_MAXREPSIZE,
-                .psc_req_portal       = MDS_MDS_PORTAL,
-                .psc_rep_portal       = MDC_REPLY_PORTAL,
-                .psc_watchdog_timeout = MDT_SERVICE_WATCHDOG_TIMEOUT,
-                .psc_min_threads      = min(max(mdt_num_threads, MDT_MIN_THREADS),
-                                            MDT_MAX_THREADS),
-                .psc_max_threads      = MDT_MAX_THREADS,
-                .psc_ctx_tags         = LCT_MD_THREAD
+                .psc_nbufs           = MDS_NBUFS,
+                .psc_bufsize         = MDS_BUFSIZE,
+                .psc_max_req_size    = MDS_MAXREQSIZE,
+                .psc_max_reply_size  = MDS_MAXREPSIZE,
+                .psc_req_portal      = MDS_MDS_PORTAL,
+                .psc_rep_portal      = MDC_REPLY_PORTAL,
+                .psc_watchdog_factor = MDT_SERVICE_WATCHDOG_FACTOR,
+                .psc_min_threads    = min(max(mdt_num_threads, MDT_MIN_THREADS),
+                                          MDT_MAX_THREADS),
+                .psc_max_threads     = MDT_MAX_THREADS,
+                .psc_ctx_tags        = LCT_MD_THREAD
         };
-        m->mdt_xmds_service = ptlrpc_init_svc_conf(&conf, mdt_xmds_handle,
-                                                  LUSTRE_MDT_NAME "_mds",
-                                                  procfs_entry, NULL, "mdt_xmds");
+        m->mdt_xmds_service =
+                ptlrpc_init_svc_conf(&conf, mdt_xmds_handle,
+                                     LUSTRE_MDT_NAME "_mds",
+                                     procfs_entry, target_print_req,"mdt_xmds");
 
         if (m->mdt_xmds_service == NULL) {
                 CERROR("failed to start readpage service\n");
