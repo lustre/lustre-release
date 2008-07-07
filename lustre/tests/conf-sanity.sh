@@ -1603,5 +1603,16 @@ test_41() { #bug 14134
 }
 run_test 41 "mount mds with --nosvc and --nomgs"
 
+test_42() { #bug 14693
+        setup
+        check_mount || return 2
+        do_facet client lctl conf_param lustre.llite.some_wrong_param=10
+        umount_client $MOUNT
+        mount_client $MOUNT || return 1
+        cleanup
+        return 0
+}
+run_test 42 "invalid config param should not prevent client from mounting"
+
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
