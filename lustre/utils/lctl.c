@@ -103,7 +103,7 @@ command_t cmdlist[] = {
         {"device_list", jt_obd_list, 0, "show all devices\n"
          "usage: device_list"},
         {"dl", jt_obd_list, 0, "show all devices\n"
-         "usage: dl"},
+         "usage: dl [-t]"},
 
         /* Device operations */
         {"==== obd device operations ===", jt_noop, 0, "device operations"},
