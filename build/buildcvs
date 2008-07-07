@@ -243,7 +243,7 @@ case "$lustretag" in
     # Branches that have been updated to include
     # the libcfs split should be added here
     # b_head_interop_disk: Interoperability server side changes
-    HEAD|b_HEAD_AT|b_head_interop_disk)
+    HEAD|b_head_interop_disk)
         lnettag="HEAD"
         ldiskfstag="$ldiskfstag_head"
         libcfstag="HEAD"
