@@ -881,6 +881,51 @@ int jt_get_version(int argc, char **argv)
         return rc;
 }
 
+/*
+ * Print an obd device line with the ost_conn_uuid inserted, if the obd
+ * is an osc.
+ */
+static void print_obd_line(char *s)
+{
+        char buf[MAX_STRING_SIZE];
+        char obd_name[MAX_OBD_NAME];
+        FILE *fp = NULL;
+        char *ptr;
+
+        if (sscanf(s, " %*d %*s osc %s %*s %*d ", obd_name) == 0)
+                goto try_mdc;
+        snprintf(buf, sizeof(buf),
+                 "/proc/fs/lustre/osc/%s/ost_conn_uuid", obd_name);
+        if ((fp = fopen(buf, "r")) == NULL)
+                goto try_mdc;
+        goto got_one;
+
+try_mdc:
+        if (sscanf(s, " %*d %*s mdc %s %*s %*d ", obd_name) == 0)
+                goto fail;
+        snprintf(buf, sizeof(buf),
+                 "/proc/fs/lustre/mdc/%s/mds_conn_uuid", obd_name);
+        if ((fp = fopen(buf, "r")) == NULL)
+                goto fail;
+
+got_one:
+        fgets(buf, sizeof(buf), fp);
+        fclose(fp);
+
+        /* trim trailing newlines */
+        ptr = strrchr(buf, '\n');
+        if (ptr) *ptr = '\0';
+        ptr = strrchr(s, '\n');
+        if (ptr) *ptr = '\0';
+
+        printf("%s %s\n", s, buf);
+        return;
+
+fail:
+        printf("%s", s);
+        return;
+}
+
 /* get device list by ioctl */
 int jt_obd_list_ioctl(int argc, char **argv)
 {
@@ -888,7 +933,10 @@ int jt_obd_list_ioctl(int argc, char **argv)
         char buf[8192];
         struct obd_ioctl_data *data = (struct obd_ioctl_data *)buf;
 
-        if (argc != 1)
+        if (argc > 2)
+                return CMD_HELP;
+        /* Just ignore a -t option.  Only supported with /proc. */
+        else if (argc == 2 && strcmp(argv[1], "-t") != 0)
                 return CMD_HELP;
 
         for (index = 0;; index++) {
@@ -921,9 +969,16 @@ int jt_obd_list(int argc, char **argv)
         int rc;
         char buf[MAX_STRING_SIZE];
         FILE *fp = NULL;
+        int print_obd = 0;
 
-        if (argc != 1)
+        if (argc > 2)
                 return CMD_HELP;
+        else if (argc == 2) {
+                if (strcmp(argv[1], "-t") == 0)
+                        print_obd = 1;
+                else
+                        return CMD_HELP;
+        }
 
         fp = fopen(DEVICES_LIST, "r");
         if (fp == NULL) {
@@ -933,7 +988,10 @@ int jt_obd_list(int argc, char **argv)
         }
 
         while (fgets(buf, sizeof(buf), fp) != NULL)
-                printf("%s", buf);
+                if (print_obd)
+                        print_obd_line(buf);
+                else
+                        printf("%s", buf);
 
         fclose(fp);
         return 0;
