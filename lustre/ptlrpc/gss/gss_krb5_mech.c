@@ -902,6 +902,7 @@ int krb5_encrypt_rawobjs(struct ll_crypto_cipher *tfm,
 
 static
 __u32 gss_wrap_kerberos(struct gss_ctx *gctx,
+                        rawobj_t *gsshdr,
                         rawobj_t *msg,
                         int msg_buflen,
                         rawobj_t *token)
@@ -912,7 +913,7 @@ __u32 gss_wrap_kerberos(struct gss_ctx *gctx,
         unsigned char        acceptor_flag;
         int                  blocksize;
         rawobj_t             cksum = RAWOBJ_EMPTY;
-        rawobj_t             data_desc[3], cipher;
+        rawobj_t             data_desc[4], cipher;
         __u8                 conf[GSS_MAX_CIPHER_BLOCK];
         int                  enc_rc = 0;
 
@@ -922,11 +923,17 @@ __u32 gss_wrap_kerberos(struct gss_ctx *gctx,
                 ke->ke_conf_size >=
                 ll_crypto_blkcipher_blocksize(kctx->kc_keye.kb_tfm));
 
-        acceptor_flag = kctx->kc_initiate ? 0 : FLAG_SENDER_IS_ACCEPTOR;
+        /*
+         * final token format:
+         * ---------------------------------------------------
+         * | krb5 header | cipher text | checksum (16 bytes) |
+         * ---------------------------------------------------
+         */
 
         /* fill krb5 header */
         LASSERT(token->len >= sizeof(*khdr));
         khdr = (struct krb5_header *) token->data;
+        acceptor_flag = kctx->kc_initiate ? 0 : FLAG_SENDER_IS_ACCEPTOR;
 
         khdr->kh_tok_id = cpu_to_be16(KG_TOK_WRAP_MSG);
         khdr->kh_flags = acceptor_flag | FLAG_WRAP_CONFIDENTIAL;
@@ -956,7 +963,28 @@ __u32 gss_wrap_kerberos(struct gss_ctx *gctx,
                 return GSS_S_FAILURE;
 
         /*
-         * clear text layout, same for both checksum & encryption:
+         * clear text layout for checksum:
+         * ------------------------------------------------------
+         * | confounder | gss header | clear msgs | krb5 header |
+         * ------------------------------------------------------
+         */
+        data_desc[0].data = conf;
+        data_desc[0].len = ke->ke_conf_size;
+        data_desc[1].data = gsshdr->data;
+        data_desc[1].len = gsshdr->len;
+        data_desc[2].data = msg->data;
+        data_desc[2].len = msg->len;
+        data_desc[3].data = (__u8 *) khdr;
+        data_desc[3].len = sizeof(*khdr);
+
+        /* compute checksum */
+        if (krb5_make_checksum(kctx->kc_enctype, &kctx->kc_keyi,
+                               khdr, 4, data_desc, &cksum))
+                return GSS_S_FAILURE;
+        LASSERT(cksum.len >= ke->ke_hash_size);
+
+        /*
+         * clear text layout for encryption:
          * -----------------------------------------
          * | confounder | clear msgs | krb5 header |
          * -----------------------------------------
@@ -968,13 +996,7 @@ __u32 gss_wrap_kerberos(struct gss_ctx *gctx,
         data_desc[2].data = (__u8 *) khdr;
         data_desc[2].len = sizeof(*khdr);
 
-        /* compute checksum */
-        if (krb5_make_checksum(kctx->kc_enctype, &kctx->kc_keyi,
-                               khdr, 3, data_desc, &cksum))
-                return GSS_S_FAILURE;
-        LASSERT(cksum.len >= ke->ke_hash_size);
-
-        /* encrypting, cipher text will be directly inplace */
+        /* cipher text will be directly inplace */
         cipher.data = (__u8 *) (khdr + 1);
         cipher.len = token->len - sizeof(*khdr);
         LASSERT(cipher.len >= ke->ke_conf_size + msg->len + sizeof(*khdr));
@@ -1034,6 +1056,7 @@ arc4_out:
 
 static
 __u32 gss_unwrap_kerberos(struct gss_ctx  *gctx,
+                          rawobj_t        *gsshdr,
                           rawobj_t        *token,
                           rawobj_t        *msg)
 {
@@ -1045,6 +1068,7 @@ __u32 gss_unwrap_kerberos(struct gss_ctx  *gctx,
         int                  blocksize, bodysize;
         rawobj_t             cksum = RAWOBJ_EMPTY;
         rawobj_t             cipher_in, plain_out;
+        rawobj_t             hash_objs[3];
         __u32                rc = GSS_S_FAILURE, enc_rc = 0;
 
         LASSERT(ke);
@@ -1174,16 +1198,26 @@ arc4_out:
          * -----------------------------------------
          */
 
-        /* last part must be identical to the krb5 header */
+        /* verify krb5 header in token is not modified */
         if (memcmp(khdr, plain_out.data + plain_out.len - sizeof(*khdr),
                    sizeof(*khdr))) {
-                CERROR("decrypted header mismatch\n");
+                CERROR("decrypted krb5 header mismatch\n");
                 goto out_free;
         }
 
-        /* verify checksum */
+        /* verify checksum, compose clear text as layout:
+         * ------------------------------------------------------
+         * | confounder | gss header | clear msgs | krb5 header |
+         * ------------------------------------------------------
+         */
+        hash_objs[0].len = ke->ke_conf_size;
+        hash_objs[0].data = plain_out.data;
+        hash_objs[1].len = gsshdr->len;
+        hash_objs[1].data = gsshdr->data;
+        hash_objs[2].len = plain_out.len - ke->ke_conf_size;
+        hash_objs[2].data = plain_out.data + ke->ke_conf_size;
         if (krb5_make_checksum(kctx->kc_enctype, &kctx->kc_keyi,
-                               khdr, 1, &plain_out, &cksum))
+                               khdr, 3, hash_objs, &cksum))
                 goto out_free;
 
         LASSERT(cksum.len >= ke->ke_hash_size);

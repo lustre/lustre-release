@@ -276,47 +276,39 @@ __u32 gss_unseal_msg(struct gss_ctx *mechctx,
                    struct lustre_msg *msgbuf,
                    int *msg_len, int msgbuf_len)
 {
-        rawobj_t                 clear_obj, micobj, msgobj, token;
+        rawobj_t                 clear_obj, hdrobj, token;
         __u8                    *clear_buf;
         int                      clear_buflen;
         __u32                    major;
         ENTRY;
 
-        if (msgbuf->lm_bufcount != 3) {
+        if (msgbuf->lm_bufcount != 2) {
                 CERROR("invalid bufcount %d\n", msgbuf->lm_bufcount);
                 RETURN(GSS_S_FAILURE);
         }
 
-        /* verify gss header */
-        msgobj.len = msgbuf->lm_buflens[0];
-        msgobj.data = lustre_msg_buf(msgbuf, 0, 0);
-        micobj.len = msgbuf->lm_buflens[1];
-        micobj.data = lustre_msg_buf(msgbuf, 1, 0);
-
-        major = lgss_verify_mic(mechctx, 1, &msgobj, &micobj);
-        if (major != GSS_S_COMPLETE) {
-                CERROR("priv: mic verify error: %08x\n", major);
-                RETURN(major);
-        }
-
-        /* temporary clear text buffer */
-        clear_buflen = msgbuf->lm_buflens[2];
+        /* allocate a temporary clear text buffer, same sized as token,
+         * we assume the final clear text size <= token size */
+        clear_buflen = lustre_msg_buflen(msgbuf, 1);
         OBD_ALLOC(clear_buf, clear_buflen);
         if (!clear_buf)
                 RETURN(GSS_S_FAILURE);
 
-        token.len = msgbuf->lm_buflens[2];
-        token.data = lustre_msg_buf(msgbuf, 2, 0);
-
+        /* buffer objects */
+        hdrobj.len = lustre_msg_buflen(msgbuf, 0);
+        hdrobj.data = lustre_msg_buf(msgbuf, 0, 0);
+        token.len = lustre_msg_buflen(msgbuf, 1);
+        token.data = lustre_msg_buf(msgbuf, 1, 0);
         clear_obj.len = clear_buflen;
         clear_obj.data = clear_buf;
 
-        major = lgss_unwrap(mechctx, &token, &clear_obj);
+        major = lgss_unwrap(mechctx, &hdrobj, &token, &clear_obj);
         if (major != GSS_S_COMPLETE) {
-                CERROR("priv: unwrap message error: %08x\n", major);
+                CERROR("unwrap message error: %08x\n", major);
                 GOTO(out_free, major = GSS_S_FAILURE);
         }
         LASSERT(clear_obj.len <= clear_buflen);
+        LASSERT(clear_obj.len <= msgbuf_len);
 
         /* now the decrypted message */
         memcpy(msgbuf, clear_obj.data, clear_obj.len);
@@ -863,9 +855,9 @@ int gss_cli_ctx_seal(struct ptlrpc_cli_ctx *ctx,
                      struct ptlrpc_request *req)
 {
         struct gss_cli_ctx      *gctx;
-        rawobj_t                 msgobj, cipher_obj, micobj;
+        rawobj_t                 hdrobj, msgobj, token;
         struct gss_header       *ghdr;
-        int                      buflens[3], wiresize, rc;
+        int                      buflens[2], wiresize, rc;
         __u32                    major;
         ENTRY;
 
@@ -875,15 +867,14 @@ int gss_cli_ctx_seal(struct ptlrpc_cli_ctx *ctx,
 
         gctx = container_of(ctx, struct gss_cli_ctx, gc_base);
 
-        /* close clear data length */
+        /* final clear data length */
         req->rq_clrdata_len = lustre_msg_size_v2(req->rq_clrbuf->lm_bufcount,
                                                  req->rq_clrbuf->lm_buflens);
 
         /* calculate wire data length */
         buflens[0] = PTLRPC_GSS_HEADER_SIZE;
-        buflens[1] = gss_cli_payload(&gctx->gc_base, buflens[0], 0);
-        buflens[2] = gss_cli_payload(&gctx->gc_base, req->rq_clrdata_len, 1);
-        wiresize = lustre_msg_size_v2(3, buflens);
+        buflens[1] = gss_cli_payload(&gctx->gc_base, req->rq_clrdata_len, 1);
+        wiresize = lustre_msg_size_v2(2, buflens);
 
         /* allocate wire buffer */
         if (req->rq_pool) {
@@ -898,7 +889,7 @@ int gss_cli_ctx_seal(struct ptlrpc_cli_ctx *ctx,
                 req->rq_reqbuf_len = wiresize;
         }
 
-        lustre_init_msg_v2(req->rq_reqbuf, 3, buflens, NULL);
+        lustre_init_msg_v2(req->rq_reqbuf, 2, buflens, NULL);
         req->rq_reqbuf->lm_secflvr = req->rq_flvr.sf_rpc;
 
         /* gss header */
@@ -907,7 +898,6 @@ int gss_cli_ctx_seal(struct ptlrpc_cli_ctx *ctx,
         ghdr->gh_sp = (__u8) ctx->cc_sec->ps_part;
         ghdr->gh_flags = 0;
         ghdr->gh_proc = gctx->gc_proc;
-        ghdr->gh_seq = atomic_inc_return(&gctx->gc_seq);
         ghdr->gh_svc = SPTLRPC_SVC_PRIV;
         ghdr->gh_handle.len = gctx->gc_handle.len;
         memcpy(ghdr->gh_handle.data, gctx->gc_handle.data, gctx->gc_handle.len);
@@ -917,41 +907,27 @@ int gss_cli_ctx_seal(struct ptlrpc_cli_ctx *ctx,
                 ghdr->gh_flags |= LUSTRE_GSS_PACK_USER;
 
 redo:
-        /* header signature */
-        msgobj.len = req->rq_reqbuf->lm_buflens[0];
-        msgobj.data = lustre_msg_buf(req->rq_reqbuf, 0, 0);
-        micobj.len = req->rq_reqbuf->lm_buflens[1];
-        micobj.data = lustre_msg_buf(req->rq_reqbuf, 1, 0);
+        ghdr->gh_seq = atomic_inc_return(&gctx->gc_seq);
 
-        major = lgss_get_mic(gctx->gc_mechctx, 1, &msgobj, &micobj);
-        if (major != GSS_S_COMPLETE) {
-                CERROR("priv: sign message error: %08x\n", major);
-                GOTO(err_free, rc = -EPERM);
-        }
-        /* perhaps shrink msg has potential problem in re-packing???
-         * ship a little bit more data is fine.
-        lustre_shrink_msg(req->rq_reqbuf, 1, micobj.len, 0);
-         */
-
-        /* clear text */
+        /* buffer objects */
+        hdrobj.len = PTLRPC_GSS_HEADER_SIZE;
+        hdrobj.data = (__u8 *) ghdr;
         msgobj.len = req->rq_clrdata_len;
         msgobj.data = (__u8 *) req->rq_clrbuf;
+        token.len = lustre_msg_buflen(req->rq_reqbuf, 1);
+        token.data = lustre_msg_buf(req->rq_reqbuf, 1, 0);
 
-        /* cipher text */
-        cipher_obj.len = req->rq_reqbuf->lm_buflens[2];
-        cipher_obj.data = lustre_msg_buf(req->rq_reqbuf, 2, 0);
-
-        major = lgss_wrap(gctx->gc_mechctx, &msgobj, req->rq_clrbuf_len,
-                          &cipher_obj);
+        major = lgss_wrap(gctx->gc_mechctx, &hdrobj, &msgobj,
+                          req->rq_clrbuf_len, &token);
         if (major != GSS_S_COMPLETE) {
                 CERROR("priv: wrap message error: %08x\n", major);
                 GOTO(err_free, rc = -EPERM);
         }
-        LASSERT(cipher_obj.len <= buflens[2]);
+        LASSERT(token.len <= buflens[1]);
 
         /* see explain in gss_cli_ctx_sign() */
-        if (atomic_read(&gctx->gc_seq) - ghdr->gh_seq >
-            GSS_SEQ_REPACK_THRESHOLD) {
+        if (unlikely(atomic_read(&gctx->gc_seq) - ghdr->gh_seq >
+                     GSS_SEQ_REPACK_THRESHOLD)) {
                 int behind = atomic_read(&gctx->gc_seq) - ghdr->gh_seq;
 
                 gss_stat_oos_record_cli(behind);
@@ -962,9 +938,7 @@ redo:
         }
 
         /* now set the final wire data length */
-        req->rq_reqdata_len = lustre_shrink_msg(req->rq_reqbuf, 2,
-                                                cipher_obj.len, 0);
-
+        req->rq_reqdata_len = lustre_shrink_msg(req->rq_reqbuf, 1, token.len,0);
         RETURN(0);
 
 err_free:
@@ -1322,7 +1296,7 @@ int gss_alloc_reqbuf_priv(struct ptlrpc_sec *sec,
                           int msgsize)
 {
         int                       ibuflens[3], ibufcnt;
-        int                       buflens[3];
+        int                       wbuflens[2];
         int                       clearsize, wiresize;
         ENTRY;
 
@@ -1334,7 +1308,6 @@ int gss_alloc_reqbuf_priv(struct ptlrpc_sec *sec,
          *  - user descriptor (optional)
          *  - bulk checksum (optional)
          */
-
         ibufcnt = 1;
         ibuflens[0] = msgsize;
 
@@ -1351,14 +1324,11 @@ int gss_alloc_reqbuf_priv(struct ptlrpc_sec *sec,
 
         /* Wrapper (wire) buffers
          *  - gss header
-         *  - signature of gss header
          *  - cipher text
          */
-
-        buflens[0] = PTLRPC_GSS_HEADER_SIZE;
-        buflens[1] = gss_cli_payload(req->rq_cli_ctx, buflens[0], 0);
-        buflens[2] = gss_cli_payload(req->rq_cli_ctx, clearsize, 1);
-        wiresize = lustre_msg_size_v2(3, buflens);
+        wbuflens[0] = PTLRPC_GSS_HEADER_SIZE;
+        wbuflens[1] = gss_cli_payload(req->rq_cli_ctx, clearsize, 1);
+        wiresize = lustre_msg_size_v2(2, wbuflens);
 
         if (req->rq_pool) {
                 /* rq_reqbuf is preallocated */
@@ -1534,38 +1504,26 @@ int gss_alloc_repbuf_priv(struct ptlrpc_sec *sec,
                           int msgsize)
 {
         int             txtsize;
-        int             buflens[3], bufcnt;
+        int             buflens[2], bufcnt;
         int             alloc_size;
 
-        /* Inner (clear) buffers
-         *  - lustre message
-         *  - bulk checksum (optional)
-         */
-
+        /* inner buffers */
         bufcnt = 1;
         buflens[0] = msgsize;
 
-        if (req->rq_pack_bulk) {
+        if (req->rq_pack_bulk)
                 buflens[bufcnt++] = bulk_sec_desc_size(
                                                 req->rq_flvr.sf_bulk_hash, 0,
                                                 req->rq_bulk_read);
-        }
         txtsize = lustre_msg_size_v2(bufcnt, buflens);
         txtsize += GSS_MAX_CIPHER_BLOCK;
 
-        /* Wrapper (wire) buffers
-         *  - gss header
-         *  - signature of gss header
-         *  - cipher text
-         */
-
-        bufcnt = 3;
+        /* wrapper buffers */
+        bufcnt = 2;
         buflens[0] = PTLRPC_GSS_HEADER_SIZE;
-        buflens[1] = gss_cli_payload(req->rq_cli_ctx, buflens[0], 0);
-        buflens[2] = gss_cli_payload(req->rq_cli_ctx, txtsize, 1);
+        buflens[1] = gss_cli_payload(req->rq_cli_ctx, txtsize, 1);
 
         alloc_size = lustre_msg_size_v2(bufcnt, buflens);
-
         /* add space for early reply */
         alloc_size += gss_at_reply_off_priv;
 
@@ -2353,10 +2311,9 @@ int gss_svc_accept(struct ptlrpc_sec_policy *policy, struct ptlrpc_request *req)
 
         /* alloc grctx data */
         OBD_ALLOC_PTR(grctx);
-        if (!grctx) {
-                CERROR("fail to alloc svc reqctx\n");
+        if (!grctx)
                 RETURN(SECSVC_DROP);
-        }
+
         grctx->src_base.sc_policy = sptlrpc_policy_get(policy);
         atomic_set(&grctx->src_base.sc_refcount, 1);
         req->rq_svc_ctx = &grctx->src_base;
@@ -2471,7 +2428,7 @@ int gss_svc_alloc_rs(struct ptlrpc_request *req, int msglen)
                 privacy = (svc == SPTLRPC_SVC_PRIV);
 
         if (privacy) {
-                /* Inner buffer */
+                /* inner clear buffers */
                 ibufcnt = 1;
                 ibuflens[0] = msglen;
 
@@ -2488,10 +2445,9 @@ int gss_svc_alloc_rs(struct ptlrpc_request *req, int msglen)
                 txtsize += GSS_MAX_CIPHER_BLOCK;
 
                 /* wrapper buffer */
-                bufcnt = 3;
+                bufcnt = 2;
                 buflens[0] = PTLRPC_GSS_HEADER_SIZE;
-                buflens[1] = gss_svc_payload(grctx, early, buflens[0], 0);
-                buflens[2] = gss_svc_payload(grctx, early, txtsize, 1);
+                buflens[1] = gss_svc_payload(grctx, early, txtsize, 1);
         } else {
                 bufcnt = 2;
                 buflens[0] = PTLRPC_GSS_HEADER_SIZE;
@@ -2563,68 +2519,33 @@ int gss_svc_alloc_rs(struct ptlrpc_request *req, int msglen)
         RETURN(0);
 }
 
-static
-int gss_svc_seal(struct ptlrpc_request *req,
-                 struct ptlrpc_reply_state *rs,
-                 struct gss_svc_reqctx *grctx)
+static int gss_svc_seal(struct ptlrpc_request *req,
+                        struct ptlrpc_reply_state *rs,
+                        struct gss_svc_reqctx *grctx)
 {
         struct gss_svc_ctx      *gctx = grctx->src_ctx;
-        rawobj_t                 msgobj, cipher_obj, micobj;
+        rawobj_t                 hdrobj, msgobj, token;
         struct gss_header       *ghdr;
-        __u8                    *cipher_buf;
-        int                      cipher_buflen, buflens[3];
+        __u8                    *token_buf;
+        int                      token_buflen, buflens[2];
         int                      msglen, rc;
         __u32                    major;
         ENTRY;
 
-        /* embedded lustre_msg might have been shrinked */
-        if (req->rq_replen != rs->rs_repbuf->lm_buflens[0])
-                lustre_shrink_msg(rs->rs_repbuf, 0, req->rq_replen, 1);
+        /* get clear data length. note embedded lustre_msg might
+         * have been shrinked */
+        if (req->rq_replen != lustre_msg_buflen(rs->rs_repbuf, 0))
+                msglen = lustre_shrink_msg(rs->rs_repbuf, 0, req->rq_replen, 1);
+        else 
+                msglen = lustre_msg_size_v2(rs->rs_repbuf->lm_bufcount,
+                                            rs->rs_repbuf->lm_buflens);
 
-        /* clear data length */
-        msglen = lustre_msg_size_v2(rs->rs_repbuf->lm_bufcount,
-                                    rs->rs_repbuf->lm_buflens);
-
-        /* clear text */
-        msgobj.len = msglen;
-        msgobj.data = (__u8 *) rs->rs_repbuf;
-
-        /* allocate temporary cipher buffer */
-        cipher_buflen = gss_mech_payload(gctx->gsc_mechctx, msglen, 1);
-        OBD_ALLOC(cipher_buf, cipher_buflen);
-        if (!cipher_buf)
-                RETURN(-ENOMEM);
-
-        cipher_obj.len = cipher_buflen;
-        cipher_obj.data = cipher_buf;
-
-        major = lgss_wrap(gctx->gsc_mechctx, &msgobj, rs->rs_repbuf_len,
-                          &cipher_obj);
-        if (major != GSS_S_COMPLETE) {
-                CERROR("priv: wrap message error: %08x\n", major);
-                GOTO(out_free, rc = -EPERM);
-        }
-        LASSERT(cipher_obj.len <= cipher_buflen);
-
-        /* we are about to override data at rs->rs_repbuf, nullify pointers
-         * to which to catch further illegal usage. */
-        if (req->rq_pack_bulk) {
-                grctx->src_repbsd = NULL;
-                grctx->src_repbsd_size = 0;
-        }
-
-        /* now the real wire data */
-        buflens[0] = PTLRPC_GSS_HEADER_SIZE;
-        buflens[1] = gss_mech_payload(gctx->gsc_mechctx, buflens[0], 0);
-        buflens[2] = cipher_obj.len;
-
-        LASSERT(lustre_msg_size_v2(3, buflens) <= rs->rs_repbuf_len);
-        lustre_init_msg_v2(rs->rs_repbuf, 3, buflens, NULL);
-        rs->rs_repbuf->lm_secflvr = req->rq_flvr.sf_rpc;
-
-        /* gss header */
-        ghdr = lustre_msg_buf(rs->rs_repbuf, 0, 0);
+        /* temporarily use tail of buffer to hold gss header data */
+        LASSERT(msglen + PTLRPC_GSS_HEADER_SIZE <= rs->rs_repbuf_len);
+        ghdr = (struct gss_header *) ((char *) rs->rs_repbuf +
+                                rs->rs_repbuf_len - PTLRPC_GSS_HEADER_SIZE);
         ghdr->gh_version = PTLRPC_GSS_VERSION;
+        ghdr->gh_sp = LUSTRE_SP_ANY;
         ghdr->gh_flags = 0;
         ghdr->gh_proc = PTLRPC_GSS_PROC_DATA;
         ghdr->gh_seq = grctx->src_wirectx.gw_seq;
@@ -2633,25 +2554,50 @@ int gss_svc_seal(struct ptlrpc_request *req,
         if (req->rq_pack_bulk)
                 ghdr->gh_flags |= LUSTRE_GSS_PACK_BULK;
 
-        /* header signature */
-        msgobj.len = rs->rs_repbuf->lm_buflens[0];
-        msgobj.data = lustre_msg_buf(rs->rs_repbuf, 0, 0);
-        micobj.len = rs->rs_repbuf->lm_buflens[1];
-        micobj.data = lustre_msg_buf(rs->rs_repbuf, 1, 0);
+        /* allocate temporary cipher buffer */
+        token_buflen = gss_mech_payload(gctx->gsc_mechctx, msglen, 1);
+        OBD_ALLOC(token_buf, token_buflen);
+        if (token_buf == NULL)
+                RETURN(-ENOMEM);
 
-        major = lgss_get_mic(gctx->gsc_mechctx, 1, &msgobj, &micobj);
+        hdrobj.len = PTLRPC_GSS_HEADER_SIZE;
+        hdrobj.data = (__u8 *) ghdr;
+        msgobj.len = msglen;
+        msgobj.data = (__u8 *) rs->rs_repbuf;
+        token.len = token_buflen;
+        token.data = token_buf;
+
+        major = lgss_wrap(gctx->gsc_mechctx, &hdrobj, &msgobj,
+                          rs->rs_repbuf_len - PTLRPC_GSS_HEADER_SIZE, &token);
         if (major != GSS_S_COMPLETE) {
-                CERROR("priv: sign message error: %08x\n", major);
+                CERROR("wrap message error: %08x\n", major);
                 GOTO(out_free, rc = -EPERM);
         }
-        lustre_shrink_msg(rs->rs_repbuf, 1, micobj.len, 0);
+        LASSERT(token.len <= token_buflen);
 
-        /* cipher token */
-        memcpy(lustre_msg_buf(rs->rs_repbuf, 2, 0),
-               cipher_obj.data, cipher_obj.len);
+        /* we are about to override data at rs->rs_repbuf, nullify pointers
+         * to which to catch further illegal usage. */
+        if (req->rq_pack_bulk) {
+                grctx->src_repbsd = NULL;
+                grctx->src_repbsd_size = 0;
+        }
 
-        rs->rs_repdata_len = lustre_shrink_msg(rs->rs_repbuf, 2,
-                                               cipher_obj.len, 0);
+        /* now fill the actual wire data
+         * - gss header
+         * - gss token
+         */
+        buflens[0] = PTLRPC_GSS_HEADER_SIZE;
+        buflens[1] = token.len;
+
+        rs->rs_repdata_len = lustre_msg_size_v2(2, buflens);
+        LASSERT(rs->rs_repdata_len <= rs->rs_repbuf_len);
+
+        lustre_init_msg_v2(rs->rs_repbuf, 2, buflens, NULL);
+        rs->rs_repbuf->lm_secflvr = req->rq_flvr.sf_rpc;
+
+        memcpy(lustre_msg_buf(rs->rs_repbuf, 0, 0), ghdr,
+               PTLRPC_GSS_HEADER_SIZE);
+        memcpy(lustre_msg_buf(rs->rs_repbuf, 1, 0), token.data, token.len);
 
         /* reply offset */
         if (likely(req->rq_packed_final))
@@ -2666,7 +2612,7 @@ int gss_svc_seal(struct ptlrpc_request *req,
 
         rc = 0;
 out_free:
-        OBD_FREE(cipher_buf, cipher_buflen);
+        OBD_FREE(token_buf, token_buflen);
         RETURN(rc);
 }
 

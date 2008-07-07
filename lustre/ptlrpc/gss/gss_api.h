@@ -58,11 +58,13 @@ __u32 lgss_verify_mic(
                 rawobj_t                *mic_token);
 __u32 lgss_wrap(
                 struct gss_ctx          *ctx,
+                rawobj_t                *gsshdr,
                 rawobj_t                *msg,
                 int                      msg_buflen,
                 rawobj_t                *out_token);
 __u32 lgss_unwrap(
                 struct gss_ctx          *ctx,
+                rawobj_t                *gsshdr,
                 rawobj_t                *token,
                 rawobj_t                *out_msg);
 __u32 lgss_plain_encrypt(
@@ -120,11 +122,13 @@ struct gss_api_ops {
                         rawobj_t               *mic_token);
         __u32 (*gss_wrap)(
                         struct gss_ctx         *ctx,
+                        rawobj_t               *gsshdr,
                         rawobj_t               *msg,
                         int                     msg_buflen,
                         rawobj_t               *out_token);
         __u32 (*gss_unwrap)(
                         struct gss_ctx         *ctx,
+                        rawobj_t               *gsshdr,
                         rawobj_t               *token,
                         rawobj_t               *out_msg);
         __u32 (*gss_plain_encrypt)(

@@ -245,23 +245,8 @@ __u32 lgss_verify_mic(struct gss_ctx *context_handle,
                                  mic_token);
 }
 
-#if 0
 __u32 lgss_wrap(struct gss_ctx *context_handle,
-                __u32 qop,
-                rawobj_buf_t *inbuf,
-                rawobj_t *outbuf)
-{
-        LASSERT(context_handle);
-        LASSERT(context_handle->mech_type);
-        LASSERT(context_handle->mech_type->gm_ops);
-        LASSERT(context_handle->mech_type->gm_ops->gss_wrap);
-
-        return context_handle->mech_type->gm_ops
-                ->gss_wrap(context_handle, qop, inbuf, outbuf);
-}
-#endif
-
-__u32 lgss_wrap(struct gss_ctx *context_handle,
+                rawobj_t *gsshdr,
                 rawobj_t *msg,
                 int msg_buflen,
                 rawobj_t *out_token)
@@ -272,10 +257,11 @@ __u32 lgss_wrap(struct gss_ctx *context_handle,
         LASSERT(context_handle->mech_type->gm_ops->gss_wrap);
 
         return context_handle->mech_type->gm_ops
-                ->gss_wrap(context_handle, msg, msg_buflen, out_token);
+                ->gss_wrap(context_handle, gsshdr, msg, msg_buflen, out_token);
 }
 
 __u32 lgss_unwrap(struct gss_ctx *context_handle,
+                  rawobj_t *gsshdr,
                   rawobj_t *token,
                   rawobj_t *out_msg)
 {
@@ -285,7 +271,7 @@ __u32 lgss_unwrap(struct gss_ctx *context_handle,
         LASSERT(context_handle->mech_type->gm_ops->gss_unwrap);
 
         return context_handle->mech_type->gm_ops
-                ->gss_unwrap(context_handle, token, out_msg);
+                ->gss_unwrap(context_handle, gsshdr, token, out_msg);
 }
 
 
