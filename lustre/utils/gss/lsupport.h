@@ -56,6 +56,6 @@ struct lgssd_ioctl_param {
 
 int lnet_nid2hostname(lnet_nid_t nid, char *buf, int buflen);
 void cleanup_mapping(void);
-int lookup_mapping(char *princ, uint64_t nid, uid_t *uid);
+int lookup_mapping(char *princ, lnet_nid_t nid, uid_t *uid);
 
 #endif /* __LSUPPORT_H__ */
