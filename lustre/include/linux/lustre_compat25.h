@@ -25,8 +25,8 @@
 
 #ifdef __KERNEL__
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,5)
-#error Sorry, Lustre requires at Linux kernel version 2.6.5 or later
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9)
+#error sorry, lustre requires at least linux kernel 2.6.9 or later
 #endif
 
 #include <libcfs/linux/portals_compat25.h>
