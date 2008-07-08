@@ -702,7 +702,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
                 len = req_capsule_get_size(&req->rq_pill, &RMF_DLM_REQ,
                                            RCL_CLIENT);
                 LASSERTF(len >= sizeof(*body), "buflen[%d] = %d, not %d\n",
-                         DLM_LOCKREQ_OFF, len, sizeof(*body));
+                         DLM_LOCKREQ_OFF, len, (int)sizeof(*body));
         }
 
         lock->l_conn_export = exp;
