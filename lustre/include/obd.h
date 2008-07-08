@@ -556,6 +556,7 @@ struct mds_obd {
 
         /* for capability keys update */
         struct lustre_capa_key          *mds_capa_keys;
+        struct rw_semaphore             mds_notify_lock;
 };
 
 /* lov objid */
@@ -997,15 +998,8 @@ struct obd_device {
 enum obd_cleanup_stage {
 /* Special case hack for MDS LOVs */
         OBD_CLEANUP_EARLY,
-/* Precleanup stage 1, we must make sure all exports (other than the
-   self-export) get destroyed. */
+/* can be directly mapped to .ldto_device_fini() */
         OBD_CLEANUP_EXPORTS,
-/* Precleanup stage 2,  do other type-specific cleanup requiring the
-   self-export. */
-        OBD_CLEANUP_SELF_EXP,
-/* FIXME we should eliminate the "precleanup" function and make them stages
-   of the "cleanup" function. */
-        OBD_CLEANUP_OBD,
 };
 
 /* get/set_info keys */

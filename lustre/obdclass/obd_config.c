@@ -455,8 +455,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
         /* destroy a nid-stats hash body */
         lustre_hash_exit(&obd->obd_nid_stats_hash_body);
 
-        /* Precleanup stage 1, we must make sure all exports (other than the
-           self-export) get destroyed. */
+        /* Precleanup, we must make sure all exports get destroyed. */
         err = obd_precleanup(obd, OBD_CLEANUP_EXPORTS);
         if (err)
                 CERROR("Precleanup %s returned %d\n",
@@ -489,17 +488,9 @@ void class_decref(struct obd_device *obd)
         CDEBUG(D_INFO, "Decref %s (%p) now %d\n", obd->obd_name, obd, refs);
 
         if ((refs == 1) && obd->obd_stopping) {
-                /* All exports (other than the self-export) have been
-                   destroyed; there should be no more in-progress ops
-                   by this point.*/
-                /* if we're not stopping, we didn't finish setup */
-                /* Precleanup stage 2,  do other type-specific
-                   cleanup requiring the self-export. */
-                err = obd_precleanup(obd, OBD_CLEANUP_SELF_EXP);
-                if (err)
-                        CERROR("Precleanup %s returned %d\n",
-                               obd->obd_name, err);
-                
+                /* All exports have been destroyed; there should
+                   be no more in-progress ops by this point.*/
+
                 spin_lock(&obd->obd_self_export->exp_lock);
                 obd->obd_self_export->exp_flags |=
                         (obd->obd_fail ? OBD_OPT_FAILOVER : 0) |

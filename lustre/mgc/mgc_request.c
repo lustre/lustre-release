@@ -471,10 +471,6 @@ static int mgc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                 if (rc != 0)
                         CERROR("failed to cleanup llogging subsystems\n");
                 break;
-        case OBD_CLEANUP_SELF_EXP:
-                break;
-        case OBD_CLEANUP_OBD:
-                break;
         }
         RETURN(rc);
 }

@@ -646,6 +646,9 @@ static int __mds_lov_synchronize(void *data)
         ENTRY;
 
         OBD_FREE(mlsi, sizeof(*mlsi));
+        down_read(&mds->mds_notify_lock);
+        if (obd->obd_stopping || obd->obd_fail)
+                GOTO(out, rc = -ENODEV);
 
         LASSERT(obd);
         LASSERT(watched);
@@ -653,13 +656,11 @@ static int __mds_lov_synchronize(void *data)
         LASSERT(uuid);
 
         OBD_RACE(OBD_FAIL_MDS_LOV_SYNC_RACE);
-
         rc = mds_lov_update_mds(obd, watched, idx);
         if (rc != 0) {
                 CERROR("%s failed at update_mds: %d\n", obd_uuid2str(uuid), rc);
                 GOTO(out, rc);
         }
-
         mgi.group = FILTER_GROUP_MDS0 + mds->mds_id;
         mgi.uuid = uuid;
 
@@ -674,10 +675,9 @@ static int __mds_lov_synchronize(void *data)
 
         ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
         if (!ctxt) 
-                RETURN(-ENODEV);
+                GOTO(out, rc = -ENODEV);
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT, 60);
-
         rc = llog_connect(ctxt, obd->u.mds.mds_lov_desc.ld_tgt_count, 
                           NULL, NULL, uuid); 
         llog_ctxt_put(ctxt);
@@ -689,13 +689,6 @@ static int __mds_lov_synchronize(void *data)
 
         LCONSOLE_INFO("MDS %s: %s now active, resetting orphans\n",
               obd->obd_name, obd_uuid2str(uuid));
-        /*
-         * FIXME: this obd_stopping was useless, 
-         * since obd in mdt layer was set
-         */
-        if (obd->obd_stopping)
-                GOTO(out, rc = -ENODEV);
-
         rc = mds_lov_clear_orphans(mds, uuid);
         if (rc != 0) {
                 CERROR("%s failed at mds_lov_clear_orphans: %d\n",
@@ -714,6 +707,7 @@ static int __mds_lov_synchronize(void *data)
         }
         EXIT;
 out:
+        up_read(&mds->mds_notify_lock);
         if (rc) {
                 /* Deactivate it for safety */
                 CERROR("%s sync failed %d, deactivating\n", obd_uuid2str(uuid),

@@ -166,7 +166,6 @@ static int mds_lov_clean(struct obd_device *obd)
         /* Cleanup the lov */
         obd_disconnect(mds->mds_osc_exp);
         class_manual_cleanup(osc);
-        mds->mds_osc_exp = NULL;
 
         RETURN(0);
 }
@@ -261,27 +260,22 @@ static int mds_lov_early_clean(struct obd_device *obd)
 static int mds_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 {
         int rc = 0;
+        struct mds_obd *mds = &obd->u.mds;
         ENTRY;
 
         switch (stage) {
         case OBD_CLEANUP_EARLY:
                 break;
         case OBD_CLEANUP_EXPORTS:
-                /*XXX Use this for mdd mds cleanup, so comment out
-                 *this target_cleanup_recovery for this tmp MDD MDS
-                 *Wangdi*/
-                if (strncmp(obd->obd_name, MDD_OBD_NAME, strlen(MDD_OBD_NAME)))
-                        target_cleanup_recovery(obd);
                 mds_lov_early_clean(obd);
-                break;
-        case OBD_CLEANUP_SELF_EXP:
+                down_write(&mds->mds_notify_lock);
                 mds_lov_disconnect(obd);
                 mds_lov_clean(obd);
                 llog_cleanup(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT));
                 llog_cleanup(llog_get_context(obd, LLOG_LOVEA_ORIG_CTXT));
                 rc = obd_llog_finish(obd, 0);
-                break;
-        case OBD_CLEANUP_OBD:
+                mds->mds_osc_exp = NULL;
+                up_write(&mds->mds_notify_lock);
                 break;
         }
         RETURN(rc);
@@ -356,6 +350,7 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
          */
         atomic_dec(&lsi->lsi_mounts);
         mntput(mnt);
+        init_rwsem(&mds->mds_notify_lock);
 
         obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
         mds_init_ctxt(obd, mnt);
@@ -425,6 +420,8 @@ static int mds_cmd_cleanup(struct obd_device *obd)
         struct lvfs_run_ctxt saved;
         int rc = 0;
         ENTRY;
+
+        mds->mds_osc_exp = NULL;
 
         if (obd->obd_fail)
                 LCONSOLE_WARN("%s: shutting down for failover; client state "
