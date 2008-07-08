@@ -169,7 +169,7 @@ static int ll_encode_fh(struct dentry *de, __u32 *fh, int *plen, int connectable
         ENTRY;
 
         CDEBUG(D_INFO, "encoding for (%lu,"DFID") maxlen=%d minlen=%d\n",
-                       inode->i_ino, PFID(fid), *plen, ONE_FH_LEN);
+                       inode->i_ino, PFID(fid), *plen, (int)ONE_FH_LEN);
 
         if (*plen < ONE_FH_LEN)
                 RETURN(255);
