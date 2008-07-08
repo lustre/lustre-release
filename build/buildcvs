@@ -73,12 +73,12 @@ case "$lustretag" in
 
     b_mpilnd)
         # lnet mpilnd development branch
-	lnettag="b_mpilnd"
-	lustretag="HEAD"
-	;;
+        lnettag="b_mpilnd"
+        lustretag="HEAD"
+        ;;
 
     b_new_cmd)
-	portalstag="b_new_portals"
+        portalstag="b_new_portals"
         # lnettag="b_lnet_tmp"
         ;;
 
@@ -147,15 +147,15 @@ case "$lustretag" in
 
     b_self_test)
         # lnet self test development branch
-	lnettag="b_self_test"
-	lustretag="HEAD"
-	;;
+        lnettag="b_self_test"
+        lustretag="HEAD"
+        ;;
 
     b_usocklnd)
         # lnet usocklnd development branch
-	lnettag="b_usocklnd"
-	lustretag="b1_6_usocklnd"
-	;;
+        lnettag="b_usocklnd"
+        lustretag="b1_6_usocklnd"
+        ;;
 
     b_uo2iblnd)
         # lnet u-o2iblnd development branch
@@ -165,10 +165,10 @@ case "$lustretag" in
 
     b_ula)
         # lnet "User Level Access" development branch
-	lnettag="b_ula"
-	lustretag="HEAD"
+        lnettag="b_ula"
+        lustretag="HEAD"
         ldiskfstag="$ldiskfstag_head"
-	;;
+        ;;
 
     # CMD3
     b_post_cmd3|b_new_cmd_sles10|b1_6_head_sync|b_mixed_layout_req|b_mount_perm|b1_8_gns|b1_8_quota|b1_8_interop_server|b_som)
@@ -179,7 +179,7 @@ case "$lustretag" in
     #umds cleanup
     b_hd_umds_cln2)
         ldiskfstag="b1_8_iam_dynlock"
-	;;
+        ;;
 
     # uOSS
     b_hd_dmu)
@@ -198,7 +198,7 @@ case "$lustretag" in
     # uOSS o2iblnd
     b_uoss_o2iblnd)
         lnettag="b_uoss_o2iblnd"
-	lustretag="b_hd_dmu"
+        lustretag="b_hd_dmu"
         ldiskfstag="$ldiskfstag_head"
         dmutag="zfs-lustre"
         ;;
@@ -238,6 +238,11 @@ case "$lustretag" in
         lnettag=""
         libsysiotag="$lustretag"
         snmptag="$lustretag"
+        ;;
+
+    b1_8_gate)
+        lnettag="b1_x_gate"
+        ldiskfstag="b_ldiskfs_gate"
         ;;
 
     # Branches that have been updated to include
