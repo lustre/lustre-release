@@ -159,6 +159,16 @@ int llog_receptor_accept(struct llog_ctxt *ctxt, struct obd_import *imp)
 }
 EXPORT_SYMBOL(llog_receptor_accept);
 
+#else /* !__KERNEL__ */
+
+int llog_origin_connect(struct llog_ctxt *ctxt, int count,
+                        struct llog_logid *logid, struct llog_gen *gen,
+                        struct obd_uuid *uuid)
+{
+        return 0;
+}
+#endif
+
 int llog_initiator_connect(struct llog_ctxt *ctxt)
 {
         struct obd_import *new_imp;
@@ -175,18 +185,3 @@ int llog_initiator_connect(struct llog_ctxt *ctxt)
         RETURN(0);
 }
 EXPORT_SYMBOL(llog_initiator_connect);
-
-#else /* !__KERNEL__ */
-
-int llog_origin_connect(struct llog_ctxt *ctxt, int count,
-                        struct llog_logid *logid, struct llog_gen *gen,
-                        struct obd_uuid *uuid)
-{
-        return 0;
-}
-
-int llog_initiator_connect(struct llog_ctxt *ctxt)
-{
-        return 0;
-}
-#endif
