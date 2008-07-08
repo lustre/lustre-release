@@ -848,8 +848,7 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                 sval = strchr(key, '=');
                 if (!sval || (*(sval + 1) == 0)) {
                         CERROR("Can't parse param %s\n", key);
-                        rc = -EINVAL;
-                        /* continue parsing other params */
+                        /* rc = -EINVAL; continue parsing other params */
                         continue;
                 }
                 keylen = sval - key;
