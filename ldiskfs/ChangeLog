@@ -12,10 +12,17 @@ Bugzilla   : 15459
 Description: migrate ldiskfs - ldiskfs2 (extents on directories)
 Details    : disable preallocation for non-regular files.
 
+Severity   : normal
+Frequency  : blocks per group < blocksize*8 and uninit_groups is enabled
+Bugzilla   : 15932
+Description: ldiskfs error: XXX blocks in bitmap, YYY in gd
+Details    : If blocks per group is less than blocksize*8, set rest of the
+	     bitmap to 1.
+
 -------------------------------------------------------------------------------
 
 04-26-2008  Sun Microsystems, Inc.
-       * version 3.0.5
+	* version 3.0.5
 
 Severity   : normal
 Bugzilla   : 14493
