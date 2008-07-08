@@ -542,7 +542,7 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
                         if (rc < sizeof(*md->mea)) {
                                 CDEBUG(D_INFO, "size too small:  "
                                        "rc < sizeof(*md->mea) (%d < %d)\n",
-                                        rc, sizeof(*md->mea));
+                                        rc, (int)sizeof(*md->mea));
                                 GOTO(out, rc = -EPROTO);
                         }
                 }
