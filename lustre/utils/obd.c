@@ -2281,7 +2281,7 @@ int jt_blockdev_info(int argc, char **argv)
         if (ino == 0ULL)
                 fprintf(stdout, "Not attached\n");
         else
-                fprintf(stdout, "attached to inode %llu\n", ino);
+                fprintf(stdout, "attached to inode "LPU64"\n", ino);
 out:
         close(fd);
         return -rc;
