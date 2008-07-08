@@ -4584,7 +4584,7 @@ static int mdt_obd_notify(struct obd_device *host,
 
         switch (ev) {
         case OBD_NOTIFY_CONFIG:
-                mdt_allow_cli(mdt_dev(host->obd_lu_dev), (unsigned int)data);
+                mdt_allow_cli(mdt_dev(host->obd_lu_dev), (unsigned long)data);
                 break;
         default:
                 CDEBUG(D_INFO, "Unhandled notification %#x\n", ev);
