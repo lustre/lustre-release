@@ -263,8 +263,11 @@ int mdd_get_flags(const struct lu_env *env, struct mdd_object *obj)
 
         ENTRY;
         rc = mdd_la_get(env, obj, la, BYPASS_CAPA);
-        if (rc == 0)
+        if (rc == 0) {
                 mdd_flags_xlate(obj, la->la_flags);
+                if (S_ISDIR(la->la_mode) && la->la_nlink == 1)
+                        obj->mod_flags |= MNLINK_OBJ;
+        }
         RETURN(rc);
 }
 
@@ -1054,11 +1057,11 @@ static int mdd_ref_del(const struct lu_env *env, struct md_object *obj,
         if (rc)
                 GOTO(cleanup, rc);
 
-        mdo_ref_del(env, mdd_obj, handle);
+        __mdd_ref_del(env, mdd_obj, handle, 0);
 
         if (S_ISDIR(lu_object_attr(&obj->mo_lu))) {
                 /* unlink dot */
-                mdo_ref_del(env, mdd_obj, handle);
+                __mdd_ref_del(env, mdd_obj, handle, 1);
         }
 
         LASSERT(ma->ma_attr.la_valid & LA_CTIME);
@@ -1197,7 +1200,7 @@ static int mdd_ref_add(const struct lu_env *env, struct md_object *obj,
         mdd_write_lock(env, mdd_obj);
         rc = mdd_link_sanity_check(env, NULL, NULL, mdd_obj);
         if (rc == 0)
-                mdo_ref_add(env, mdd_obj, handle);
+                __mdd_ref_add(env, mdd_obj, handle);
         mdd_write_unlock(env, mdd_obj);
         if (rc == 0) {
                 LASSERT(ma->ma_attr.la_valid & LA_CTIME);

@@ -1294,15 +1294,10 @@ static void osd_object_ref_add(const struct lu_env *env,
         LASSERT(th != NULL);
 
         spin_lock(&obj->oo_guard);
-        if (inode->i_nlink < LDISKFS_LINK_MAX) {
-                inode->i_nlink ++;
-                spin_unlock(&obj->oo_guard);
-                mark_inode_dirty(inode);
-        } else {
-                spin_unlock(&obj->oo_guard);
-                LU_OBJECT_DEBUG(D_ERROR, env, &dt->do_lu,
-                                "Overflowed nlink\n");
-        }
+        LASSERT(inode->i_nlink < LDISKFS_LINK_MAX);
+        inode->i_nlink++;
+        spin_unlock(&obj->oo_guard);
+        mark_inode_dirty(inode);
         LASSERT(osd_invariant(obj));
 }
 
@@ -1322,15 +1317,10 @@ static void osd_object_ref_del(const struct lu_env *env,
         LASSERT(th != NULL);
 
         spin_lock(&obj->oo_guard);
-        if (inode->i_nlink > 0) {
-                inode->i_nlink --;
-                spin_unlock(&obj->oo_guard);
-                mark_inode_dirty(inode);
-        } else {
-                spin_unlock(&obj->oo_guard);
-                LU_OBJECT_DEBUG(D_ERROR, env, &dt->do_lu,
-                                "Underflowed nlink\n");
-        }
+        LASSERT(inode->i_nlink > 0);
+        inode->i_nlink--;
+        spin_unlock(&obj->oo_guard);
+        mark_inode_dirty(inode);
         LASSERT(osd_invariant(obj));
 }
 

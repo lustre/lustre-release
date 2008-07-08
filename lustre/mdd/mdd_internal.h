@@ -78,7 +78,8 @@ enum mod_flags {
         DEAD_OBJ   = 1 << 0,
         APPEND_OBJ = 1 << 1,
         IMMUTE_OBJ = 1 << 2,
-        ORPHAN_OBJ = 1 << 3
+        ORPHAN_OBJ = 1 << 3,
+        MNLINK_OBJ = 1 << 4
 };
 
 #define LUSTRE_APPEND_FL LDISKFS_APPEND_FL
@@ -199,6 +200,10 @@ void mdd_pdo_write_unlock(const struct lu_env *env, struct mdd_object *obj,
 void mdd_pdo_read_unlock(const struct lu_env *env, struct mdd_object *obj,
                          struct dynlock_handle *dlh);
 /* mdd_dir.c */
+void __mdd_ref_add(const struct lu_env *env, struct mdd_object *obj,
+                   struct thandle *handle);
+void __mdd_ref_del(const struct lu_env *env, struct mdd_object *obj,
+                   struct thandle *handle, int is_dot);
 int mdd_may_create(const struct lu_env *env, struct mdd_object *pobj,
                    struct mdd_object *cobj, int check_perm, int check_nlink);
 int mdd_may_unlink(const struct lu_env *env, struct mdd_object *pobj,
@@ -425,6 +430,11 @@ static inline int mdd_is_dead_obj(struct mdd_object *obj)
 static inline int mdd_is_append(struct mdd_object *obj)
 {
         return obj->mod_flags & APPEND_OBJ;
+}
+
+static inline int mdd_is_mnlink(struct mdd_object *obj)
+{
+        return obj->mod_flags & MNLINK_OBJ;
 }
 
 static inline int mdd_object_exists(struct mdd_object *obj)
