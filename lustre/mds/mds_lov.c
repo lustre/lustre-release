@@ -150,7 +150,7 @@ static int mds_lov_read_objids(struct obd_device *obd)
         struct mds_obd *mds = &obd->u.mds;
         loff_t off = 0;
         int i, rc, count = 0, page = 0;
-        size_t size;
+        unsigned long size;
         ENTRY;
 
         /* Read everything in the file, even if our current lov desc
@@ -160,9 +160,10 @@ static int mds_lov_read_objids(struct obd_device *obd)
         if (size == 0)
                 RETURN(0);
 
-        page = (size/(OBJID_PER_PAGE()*sizeof(obd_id)))+1;
-        CDEBUG(D_INFO, "file size %d pages %d\n", (int)size, page);
-        for(i=0; i < page; i++) {
+        page = (size / (OBJID_PER_PAGE() * sizeof(obd_id))) + 1;
+        CDEBUG(D_INFO, "file size %lu pages %d\n", size, page);
+
+        for (i = 0; i < page; i++) {
                 obd_id *data =  mds->mds_lov_page_array[i];
                 loff_t off_old = off;
 
@@ -182,7 +183,7 @@ static int mds_lov_read_objids(struct obd_device *obd)
                 if (off == off_old)
                         break; // eof
 
-                count += (off-off_old)/sizeof(obd_id);
+                count += (off - off_old)/sizeof(obd_id);
         }
         mds->mds_lov_objid_count = count;
 	if (count) {
@@ -645,15 +646,16 @@ static int __mds_lov_synchronize(void *data)
         int rc = 0;
         ENTRY;
 
-        OBD_FREE(mlsi, sizeof(*mlsi));
-        down_read(&mds->mds_notify_lock);
-        if (obd->obd_stopping || obd->obd_fail)
-                GOTO(out, rc = -ENODEV);
+        OBD_FREE_PTR(mlsi);
 
         LASSERT(obd);
         LASSERT(watched);
         uuid = &watched->u.cli.cl_target_uuid;
         LASSERT(uuid);
+
+        down_read(&mds->mds_notify_lock);
+        if (obd->obd_stopping || obd->obd_fail)
+                GOTO(out, rc = -ENODEV);
 
         OBD_RACE(OBD_FAIL_MDS_LOV_SYNC_RACE);
         rc = mds_lov_update_mds(obd, watched, idx);
@@ -801,7 +803,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         case OBD_NOTIFY_SYNC_NONBLOCK:
                 break;
         case OBD_NOTIFY_CONFIG:
-                mds_allow_cli(obd, (unsigned int)data);
+                mds_allow_cli(obd, (unsigned long)data);
         default:
                 RETURN(0);
         }
