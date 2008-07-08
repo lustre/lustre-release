@@ -1522,7 +1522,9 @@ static void do_target_check(char *obd_type_name, char *obd_name,
         int rc;
 
         rc = llapi_ping(obd_type_name, obd_name);
-        if (rc) {
+        if (rc == ENOTCONN) {
+                llapi_printf(LLAPI_MSG_NORMAL, "%s inactive.\n", obd_name);
+        } else if (rc) {
                 llapi_err(LLAPI_MSG_ERROR, "error: check '%s'", obd_name);
         } else {
                 llapi_printf(LLAPI_MSG_NORMAL, "%s active.\n", obd_name);
