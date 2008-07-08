@@ -88,6 +88,8 @@ case "$lustretag" in
     # this is the branch table
     # keep this list sorted alphabetically!
 
+    *_gate) buildtag="b_build_gate" ;;
+
     *)
         buildtag="HEAD"
 	;;
