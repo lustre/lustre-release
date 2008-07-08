@@ -406,9 +406,8 @@ static int parse_buffer(FILE *in, FILE *out)
                 if (rc <= 0)
                         break;
 
-                if (hdr->ph_mask &&
-                    (!(subsystem_mask & hdr->ph_subsys) ||
-                     (!(debug_mask & hdr->ph_mask)))) {
+                if ((hdr->ph_subsys && !(subsystem_mask & hdr->ph_subsys)) ||
+                    (hdr->ph_mask   && !(debug_mask & hdr->ph_mask))) {
                         dropped++;
                         continue;
                 }
