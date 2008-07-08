@@ -1504,11 +1504,14 @@ static inline void obd_transno_commit_cb(struct obd_device *obd, __u64 transno,
                        obd->obd_name, transno, error);
                 return;
         }
-        CDEBUG(D_HA, "%s: transno "LPU64" committed\n",
-               obd->obd_name, transno);
         if (transno > obd->obd_last_committed) {
+                CDEBUG(D_HA, "%s: transno "LPD64" committed\n",
+                       obd->obd_name, transno);
                 obd->obd_last_committed = transno;
                 ptlrpc_commit_replies (obd);
+        } else {
+                CDEBUG(D_INFO, "%s: transno "LPD64" committed\n",
+                       obd->obd_name, transno);
         }
 }
 
