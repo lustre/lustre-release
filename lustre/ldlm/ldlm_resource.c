@@ -136,12 +136,14 @@ static int lprocfs_wr_lru_size(struct file *file, const char *buffer,
                                unsigned long count, void *data)
 {
         struct ldlm_namespace *ns = data;
-        char dummy[MAX_STRING_SIZE + 1], *end;
+        char dummy[MAX_STRING_SIZE + 1] = { '\0' }, *end;
         unsigned long tmp;
         int lru_resize;
 
-        dummy[MAX_STRING_SIZE] = '\0';
-        if (copy_from_user(dummy, buffer, MAX_STRING_SIZE))
+        if (count >= sizeof(dummy) || count == 0)
+                return -EINVAL;
+
+        if (copy_from_user(dummy, buffer, count))
                 return -EFAULT;
 
         if (strncmp(dummy, "clear", 5) == 0) {
