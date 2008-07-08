@@ -42,7 +42,7 @@ Description: Update to RHEL4 kernel-2.6.9-67.0.20.
 
 Severity   : normal
 Bugzilla   : 15210
-Description: add recount protection for osc callbacks, so avoid panic on shutdown
+Description: add refcount for osc callbacks, so avoid panic on shutdown
 
 Severity   : normal
 Bugzilla   : 12653
