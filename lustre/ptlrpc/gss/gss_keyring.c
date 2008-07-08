@@ -737,7 +737,7 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
                  co_flags, import_to_gss_svc(imp),
                  imp->imp_connection->c_peer.nid, imp->imp_obd->obd_name);
 
-        CDEBUG(D_SEC, "requesting key for %s", desc);
+        CDEBUG(D_SEC, "requesting key for %s\n", desc);
 
         keyring_upcall_lock(gsec_kr);
         key = request_key(&gss_key_type, desc, coinfo);
@@ -749,7 +749,7 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
                 CERROR("failed request key: %ld\n", PTR_ERR(key));
                 goto out;
         }
-        CDEBUG(D_SEC, "obtained key %08x for %s", key->serial, desc);
+        CDEBUG(D_SEC, "obtained key %08x for %s\n", key->serial, desc);
 
         /* once payload.data was pointed to a ctx, it never changes until
          * we de-associate them; but parallel request_key() may return
