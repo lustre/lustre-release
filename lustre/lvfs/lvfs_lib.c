@@ -49,7 +49,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
                        obd_memory_sum(),
                        obd_pages_sum() << CFS_PAGE_SHIFT,
                        obd_pages_sum(),
-                       atomic_read(&libcfs_kmemory));                
+                       atomic_read(&libcfs_kmemory));
                 return 1;
         }
         return 0;
@@ -82,7 +82,7 @@ int __obd_fail_check_set(__u32 id, __u32 value, int set)
 
         /* Fail obd_fail_val times, overridden by FAIL_ONCE */
         if (obd_fail_loc & OBD_FAIL_SOME &&
-            (!(obd_fail_loc & OBD_FAIL_ONCE) || obd_fail_val <= 1)) { 
+            (!(obd_fail_loc & OBD_FAIL_ONCE) || obd_fail_val <= 1)) {
                 int count = atomic_inc_return(&obd_fail_count);
 
                 if (count >= obd_fail_val) {
