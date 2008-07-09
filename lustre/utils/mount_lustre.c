@@ -33,12 +33,12 @@
 #include <sys/mount.h>
 #include <mntent.h>
 #include <getopt.h>
-#include <sys/utsname.h>
 #include "obdctl.h"
 #include <lustre_ver.h>
 #include <glob.h>
 #include <ctype.h>
 #include <limits.h>
+#include <mount_utils.h>
 
 #define MAX_HW_SECTORS_KB_PATH  "queue/max_hw_sectors_kb"
 #define MAX_SECTORS_KB_PATH     "queue/max_sectors_kb"
@@ -47,7 +47,7 @@ int          verbose = 0;
 int          nomtab = 0;
 int          fake = 0;
 int          force = 0;
-static char *progname = NULL;
+char         *progname = NULL;
 
 void usage(FILE *out)
 {
@@ -554,6 +554,8 @@ int main(int argc, char *const argv[])
                 fprintf(stderr, "%s: unable to set tunables for %s"
                                 " (may cause reduced IO performance)\n",
                                 argv[0], source);
+
+        register_service_tags(usource, source, target);
 
         if (!fake)
                 /* flags and target get to lustre_get_sb, but not
