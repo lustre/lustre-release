@@ -346,7 +346,7 @@ zconf_mount() {
         exit 1
     fi
 
-    echo "Starting client: $client: $OPTIONS $device $mnt" 
+    echo "Starting client: $client: $OPTIONS $device $mnt"
     do_node $client mkdir -p $mnt
     do_node $client mount -t lustre $OPTIONS $device $mnt || return 1
     do_node $client "lctl set_param debug=$PTLDEBUG;
@@ -1151,13 +1151,6 @@ set_nodes_failloc () {
     done
 }
 
-cancel_lru_locks() {
-    $LCTL mark "cancel_lru_locks $1 start"
-    lctl set_param ldlm.namespaces.*$1*.lru_size=0
-    lctl get_param ldlm.namespaces.*$1*.lock_unused_count | grep -v '=0'
-    $LCTL mark "cancel_lru_locks $1 stop"
-}
-
 set_nodes_failloc () {
     local nodes=$1
     local node
@@ -1165,6 +1158,13 @@ set_nodes_failloc () {
     for node in $nodes ; do
         do_node $node sysctl -w lustre.fail_loc=$2
     done
+}
+
+cancel_lru_locks() {
+    $LCTL mark "cancel_lru_locks $1 start"
+    lctl set_param ldlm.namespaces.*$1*.lru_size=0
+    lctl get_param ldlm.namespaces.*$1*.lock_unused_count | grep -v '=0'
+    $LCTL mark "cancel_lru_locks $1 stop"
 }
 
 default_lru_size()
