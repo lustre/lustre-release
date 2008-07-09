@@ -72,7 +72,7 @@ static void obd_device_free(struct obd_device *obd)
                  "%08x != %08x\n", obd, obd->obd_magic, OBD_DEVICE_MAGIC);
         if (obd->obd_namespace != NULL) {
                 CERROR("obd %p: namespace %p was not properly cleaned up "
-                       "(obd_force=%d)!\n", 
+                       "(obd_force=%d)!\n",
                        obd, obd->obd_namespace, obd->obd_force);
                 LBUG();
         }
@@ -104,7 +104,7 @@ struct obd_type *class_get_type(const char *name)
 #ifdef CONFIG_KMOD
         if (!type) {
                 const char *modname = name;
-                if (strcmp(modname, LUSTRE_MDT_NAME) == 0) 
+                if (strcmp(modname, LUSTRE_MDT_NAME) == 0)
                         modname = LUSTRE_MDS_NAME;
                 if (!request_module(modname)) {
                         CDEBUG(D_INFO, "Loaded module '%s'\n", modname);
@@ -204,7 +204,7 @@ int class_unregister_type(const char *name)
                 RETURN(-EBUSY);
         }
 
-        if (type->typ_procroot) 
+        if (type->typ_procroot)
                 lprocfs_remove(&type->typ_procroot);
 
         spin_lock(&obd_types_lock);
@@ -237,7 +237,7 @@ struct obd_device *class_newdev(const char *type_name, const char *name)
         }
 
         newdev = obd_device_alloc();
-        if (newdev == NULL) { 
+        if (newdev == NULL) {
                 class_put_type(type);
                 RETURN(ERR_PTR(-ENOMEM));
         }
@@ -272,13 +272,13 @@ struct obd_device *class_newdev(const char *type_name, const char *name)
                 }
         }
         spin_unlock(&obd_dev_lock);
-        
+
         if (result == NULL && i >= class_devno_max()) {
                 CERROR("all %u OBD devices used, increase MAX_OBD_DEVICES\n",
                        class_devno_max());
                 result = ERR_PTR(-EOVERFLOW);
         }
-        
+
         if (IS_ERR(result)) {
                 obd_device_free(newdev);
                 class_put_type(type);
@@ -523,7 +523,7 @@ int obd_init_caches(void)
 
         LASSERT(obd_device_cachep == NULL);
         obd_device_cachep = cfs_mem_cache_create("ll_obd_dev_cache",
-                                                 sizeof(struct obd_device), 
+                                                 sizeof(struct obd_device),
                                                  0, 0);
         if (!obd_device_cachep)
                 GOTO(out, -ENOMEM);
@@ -617,7 +617,7 @@ void __class_export_put(struct obd_export *exp)
 
                 CDEBUG(D_IOCTL, "final put %p/%s\n",
                        exp, exp->exp_client_uuid.uuid);
-        
+
                 spin_lock(&obd_zombie_impexp_lock);
                 list_add(&exp->exp_obd_chain, &obd_zombie_exports);
                 spin_unlock(&obd_zombie_impexp_lock);
@@ -684,7 +684,7 @@ struct obd_export *class_new_export(struct obd_device *obd,
         obd_init_export(export);
 
         if (!obd_uuid_equals(cluuid, &obd->obd_uuid)) {
-               rc = lustre_hash_additem_unique(obd->obd_uuid_hash_body, cluuid, 
+               rc = lustre_hash_additem_unique(obd->obd_uuid_hash_body, cluuid,
                                                &export->exp_uuid_hash);
                if (rc != 0) {
                        CWARN("%s: denying duplicate export for %s\n",
@@ -715,7 +715,7 @@ void class_unlink_export(struct obd_export *exp)
         spin_lock(&exp->exp_obd->obd_dev_lock);
         /* delete an uuid-export hashitem from hashtables */
         if (!hlist_unhashed(&exp->exp_uuid_hash)) {
-                lustre_hash_delitem(exp->exp_obd->obd_uuid_hash_body, 
+                lustre_hash_delitem(exp->exp_obd->obd_uuid_hash_body,
                                     &exp->exp_client_uuid, &exp->exp_uuid_hash);
         }
         list_del_init(&exp->exp_obd_chain);
@@ -758,7 +758,7 @@ void class_import_put(struct obd_import *import)
         if (atomic_dec_and_test(&import->imp_refcount)) {
 
                 CDEBUG(D_INFO, "final put import %p\n", import);
-                
+
                 spin_lock(&obd_zombie_impexp_lock);
                 list_add(&import->imp_zombie_chain, &obd_zombie_imports);
                 spin_unlock(&obd_zombie_impexp_lock);
@@ -768,11 +768,12 @@ void class_import_put(struct obd_import *import)
 
         EXIT;
 }
+EXPORT_SYMBOL(class_import_put);
 
 void class_import_destroy(struct obd_import *import)
 {
         ENTRY;
-        
+
         CDEBUG(D_IOCTL, "destroying import %p\n", import);
 
         LASSERT(atomic_read(&import->imp_refcount) == 0);
@@ -793,7 +794,6 @@ void class_import_destroy(struct obd_import *import)
         OBD_FREE_RCU(import, sizeof(*import), &import->imp_handle);
         EXIT;
 }
-EXPORT_SYMBOL(class_import_put);
 
 static void init_imp_at(struct imp_at *at) {
         int i;
@@ -1209,7 +1209,7 @@ char *obd_export_nid2str(struct obd_export *exp)
 {
         if (exp->exp_connection != NULL)
                 return libcfs_nid2str(exp->exp_connection->c_peer.nid);
-        
+
         return "(no nid)";
 }
 EXPORT_SYMBOL(obd_export_nid2str);
@@ -1232,7 +1232,7 @@ int obd_export_evict_by_nid(struct obd_device *obd, char *nid)
                          "nid %s found, wanted nid %s, requested nid %s\n",
                          obd_export_nid2str(doomed_exp),
                          libcfs_nid2str(nid_key), nid);
-        
+
                 exports_evicted++;
                 CDEBUG(D_HA, "%s: evict NID '%s' (%s) #%d at adminstrative request\n",
                        obd->obd_name, nid, doomed_exp->exp_client_uuid.uuid,
@@ -1260,7 +1260,7 @@ int obd_export_evict_by_uuid(struct obd_device *obd, char *uuid)
                 return exports_evicted;
         }
 
-        doomed_exp = lustre_hash_get_object_by_key(obd->obd_uuid_hash_body, 
+        doomed_exp = lustre_hash_get_object_by_key(obd->obd_uuid_hash_body,
                                                    &doomed);
 
         if (doomed_exp == NULL) {
