@@ -603,7 +603,7 @@ static void ptlrpc_at_set_timer(struct ptlrpc_service *svc)
         else
                 cfs_timer_arm(&svc->srv_at_timer, cfs_time_shift(next));
         spin_unlock(&svc->srv_at_lock);
-        CDEBUG(D_INFO, "armed %s at %+lds\n", svc->srv_name, next);
+        CDEBUG(D_INFO, "armed %s at %+ds\n", svc->srv_name, next);
 }
 
 /* Add rpc to early reply check list */
