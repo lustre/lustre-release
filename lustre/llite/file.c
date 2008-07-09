@@ -1162,14 +1162,14 @@ static int ll_is_file_contended(struct file *file)
 static int ll_file_get_tree_lock_iov(struct ll_lock_tree *tree,
                                      struct file *file, const struct iovec *iov,
                                      unsigned long nr_segs,
-                                     loff_t start, loff_t end, int rw)
+                                     obd_off start, obd_off end, int rw)
 {
         int append;
         int tree_locked = 0;
         int rc;
         struct inode * inode = file->f_dentry->d_inode;
 
-        append = (rw == WRITE) && (file->f_flags & O_APPEND);
+        append = (rw == OBD_BRW_WRITE) && (file->f_flags & O_APPEND);
 
         if (append || !ll_is_file_contended(file)) {
                 struct ll_lock_tree_node *node;
@@ -1467,7 +1467,7 @@ repeat:
         if (sbi->ll_max_rw_chunk != 0) {
                 /* first, let's know the end of the current stripe */
                 end = *ppos;
-                obd_extent_calc(sbi->ll_osc_exp, lsm, OBD_CALC_STRIPE_END, &end);
+                obd_extent_calc(sbi->ll_osc_exp, lsm, OBD_CALC_STRIPE_END,&end);
 
                 /* correct, the end is beyond the request */
                 if (end > *ppos + count - 1)
@@ -1657,7 +1657,7 @@ static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size="LPSZ",offset=%Ld\n",
                inode->i_ino, inode->i_generation, inode, count, *ppos);
-        
+
         SIGNAL_MASK_ASSERT(); /* XXX BUG 1511 */
 
         /* POSIX, but surprised the VFS doesn't check this already */
