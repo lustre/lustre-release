@@ -77,11 +77,11 @@ ll_recover_lost_found_objs_DEPENDENCIES := $(LIBPTLCTL)
 
 lr_reader_SOURCES = lr_reader.c
 
-mount_lustre_SOURCES = mount_lustre.c 
+mount_lustre_SOURCES = mount_lustre.c mount_utils.c
 mount_lustre_LDADD := $(LIBPTLCTL)
 mount_lustre_DEPENDENCIES := $(LIBPTLCTL)
 
-mkfs_lustre_SOURCES = mkfs_lustre.c
+mkfs_lustre_SOURCES = mkfs_lustre.c mount_utils.c
 mkfs_lustre_CPPFLAGS = -UTUNEFS $(AM_CPPFLAGS)
 mkfs_lustre_LDADD := $(LIBPTLCTL)
 mkfs_lustre_DEPENDENCIES := $(LIBPTLCTL)
