@@ -1,0 +1,64 @@
+#!/bin/bash
+# Put this script and cvs-modified-files.pl into your PATH (~bin is good) and 
+#
+# export CVSEDITOR=cvsdiffclient
+#
+# in your .bashrc and you will get a nice bunch of CVS commit reminders:
+# <merge/land tag information>
+# b=<bug_number>
+# i=<inspected_by>
+# i=<inspected_by>
+#
+# Remember to remove the leading "CVS: " part of the comment before saving
+# your commit comment if you want those entries to be saved.
+
+[ -f .mergeinfo ] && . ./.mergeinfo
+
+CVS_MODIFIED_FILES_PL=$(which cvs-modified-files.pl 2>/dev/null)
+if [ -z "$CVS_MODIFIED_FILES_PL" ]; then
+    CVS_MODIFIED_FILES_PL=$(dirname $0)/cvs-modified-files.pl
+fi
+FILES=$($CVS_MODIFIED_FILES_PL $1)
+TMP=`mktemp /tmp/cvslog-XXXXXXXX`
+if [ -f $TMP ]; then
+	cat - >> $TMP <<- EOH
+		CVS: did you test your fix properly (acc-sm.sh, or as needed)?
+		CVS: did you update the ChangeLog for a bug fix?
+		CVS: did you verify/update affected user documentation?
+		CVS: Remove "CVS:" from lines below to include in commit message
+	EOH
+	[ -f .mergeinfo ] && . .mergeinfo
+	[ -z "$PARENT" -a -f lustre/.mergeinfo ] && . lustre/.mergeinfo
+	if [ "$PARENT" ]; then
+		[ "$OPERATION" ] || OPERATION=Update
+		[ "$OPERWHERE" ] || OPERWHERE=from
+		echo "CVS: $OPERATION $child $OPERWHERE $parent ($date)" >> $TMP
+	else
+		[ -r CVS/Tag ] && TAG=CVS/Tag
+		[ -z "$TAG" -a -r lustre/CVS/Tag ] && TAG=lustre/CVS/Tag
+		[ "$TAG" ] && BRANCH="`sed 's/^T//' $TAG`" || BRANCH="HEAD"
+		echo "CVS: Branch $BRANCH" >> $TMP
+	fi
+	# We can't just put these into the commit template without the leading
+	# "CVS: ", otherwise exiting the commend edit would still leave a valid
+	# comment in the file and the commit will still be done.  We need to
+	# make a file without valid comments to allow the commit to be aborted.
+	cat - >> $TMP <<- EOB
+		CVS: b=<bug>
+		CVS: i=<inspected_by>
+		CVS: i=<inspected_by>
+	EOB
+
+	cat $1 >> $TMP
+	cp $TMP $1
+	rm $TMP
+fi
+
+if [ "${FILES:+have_files}"x = have_filesx ]; then
+  echo Diffing $1 : $FILES
+  cvs diff -wbBup $FILES 2>/dev/null | sed "s/^/CVS: /" >>$1
+fi
+#gnuclient $1 || vi $1
+[ "$EDITOR" ] || EDITOR=vi
+
+$EDITOR $1
