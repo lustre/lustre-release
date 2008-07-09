@@ -42,7 +42,7 @@ Description: *optional* service tags registration
 Details    : if the "service tags" package is installed on a Lustre node
              When the filesystem is mounted, a local-node service tag will
 	     be created.  See http://inventory.sun.com/ for more information
-	     on a free, web based IT asset management system.
+	     about the Service Tags asset management system.
 
 Severity   : enhancement
 Bugzilla   : 16189
