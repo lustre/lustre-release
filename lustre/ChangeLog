@@ -36,6 +36,14 @@ tbd Sun Microsystems, Inc.
 		'tunefs.lustre --param="ost.quota_type=ug2" $MDTDEV'		
 	  For more information, please refer to bugzilla 13904.
 
+Severity   : normal
+Bugzilla   : 15625
+Description: *optional* service tags registration
+Details    : if the "service tags" package is installed on a Lustre node
+             When the filesystem is mounted, a local-node service tag will
+	     be created.  See http://inventory.sun.com/ for more information
+	     on a free, web based IT asset management system.
+
 Severity   : enhancement
 Bugzilla   : 16189
 Description: Update to RHEL4 kernel-2.6.9-67.0.20.
