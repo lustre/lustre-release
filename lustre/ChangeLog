@@ -36,6 +36,13 @@ tbd Sun Microsystems, Inc.
 		'tunefs.lustre --param="ost.quota_type=ug2" $MDTDEV'		
 	  For more information, please refer to bugzilla 13904.
 
+Severity   : normal
+Bugzilla   : 15825
+Description: Kernel BUG tries to release flock
+Details    : Lustre does not destroy flock lock before last reference goes
+             away. So always drop flock locks when client is evicted and 
+             perform unlock regardless of successfulness of speaking to MDS.
+
 Severity   : enhancement
 Bugzilla   : 16189
 Description: Update to RHEL4 kernel-2.6.9-67.0.20.

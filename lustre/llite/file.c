@@ -2745,10 +2745,12 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
 
         rc = ldlm_cli_enqueue(sbi->ll_mdc_exp, NULL, &einfo, res_id,
                               &flock, &flags, NULL, 0, NULL, &lockh, 0);
-        if ((file_lock->fl_flags & FL_FLOCK) && (rc == 0))
+        if ((file_lock->fl_flags & FL_FLOCK) &&
+            (rc == 0 || file_lock->fl_type == F_UNLCK))
                 ll_flock_lock_file_wait(file, file_lock, (cmd == F_SETLKW));
 #ifdef HAVE_F_OP_FLOCK
-        if ((file_lock->fl_flags & FL_POSIX) && (rc == 0) &&
+        if ((file_lock->fl_flags & FL_POSIX) &&
+            (rc == 0 || file_lock->fl_type == F_UNLCK) &&
             !(flags & LDLM_FL_TEST_LOCK))
                 posix_lock_file_wait(file, file_lock);
 #endif
