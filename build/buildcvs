@@ -241,7 +241,7 @@ case "$lustretag" in
         ;;
 
     b1_8_gate)
-        lnettag="b1_x_gate"
+        lnettag="b1_x_lnet_gate"
         ldiskfstag="b_ldiskfs_gate"
         ;;
 
