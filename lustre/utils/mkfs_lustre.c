@@ -50,6 +50,7 @@
 #include <lustre_param.h>
 #include <lnet/lnetctl.h>
 #include <lustre_ver.h>
+#include <mount_utils.h>
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096
@@ -73,8 +74,8 @@ struct mkfs_opts {
         int   mo_mgs_failnodes;
 };
 
-static char *progname;
-static int verbose = 1;
+char *progname;
+int verbose = 1;
 static int print_only = 0;
 static int failover = 0;
 
@@ -124,12 +125,6 @@ void usage(FILE *out)
 
 #define vprint if (verbose > 0) printf
 #define verrprint if (verbose >= 0) printf
-
-static void fatal(void)
-{
-        verbose = 0;
-        fprintf(stderr, "\n%s FATAL: ", progname);
-}
 
 /*================ utility functions =====================*/
 
@@ -183,47 +178,6 @@ int get_os_version()
                         version = 26;
         }
         return version;
-}
-
-int run_command(char *cmd, int cmdsz)
-{
-        char log[] = "/tmp/mkfs_logXXXXXX";
-        int fd = -1, rc;
-
-        if ((cmdsz - strlen(cmd)) < 6) {
-                fatal();
-                fprintf(stderr, "Command buffer overflow: %.*s...\n",
-                        cmdsz, cmd);
-                return ENOMEM;
-        }
-
-        if (verbose > 1) {
-                printf("cmd: %s\n", cmd);
-        } else {
-                if ((fd = mkstemp(log)) >= 0) {
-                        close(fd);
-                        strcat(cmd, " >");
-                        strcat(cmd, log);
-                }
-        }
-        strcat(cmd, " 2>&1");
-
-        /* Can't use popen because we need the rv of the command */
-        rc = system(cmd);
-        if (rc && (fd >= 0)) {
-                char buf[128];
-                FILE *fp;
-                fp = fopen(log, "r");
-                if (fp) {
-                        while (fgets(buf, sizeof(buf), fp) != NULL) {
-                                printf("   %s", buf);
-                        }
-                        fclose(fp);
-                }
-        }
-        if (fd >= 0)
-                remove(log);
-        return rc;
 }
 
 static int check_mtab_entry(char *spec)
@@ -441,6 +395,7 @@ static int file_in_dev(char *file_name, char *dev_name)
                 if (strstr(debugfs_cmd, "unsupported feature")) {
                         disp_old_e2fsprogs_msg("an unknown", 0);
                 }
+                pclose(fp);
                 return -1;
         }
         pclose(fp);
@@ -890,6 +845,10 @@ int read_local_files(struct mkfs_opts *mop)
         }
 
         dev = mop->mo_device;
+
+        /* TODO: it's worth observing the get_mountdata() function that is
+                 in mount_utils.c for getting the mountdata out of the
+                 filesystem */
 
         /* Construct debugfs command line. */
         snprintf(cmd, cmdsz, "debugfs -c -R 'dump /%s %s/mountdata' %s",

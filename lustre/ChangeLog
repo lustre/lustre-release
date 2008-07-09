@@ -37,6 +37,14 @@ tbd Sun Microsystems, Inc.
 	  For more information, please refer to bugzilla 13904.
 
 Severity   : normal
+Bugzilla   : 15625
+Description: *optional* service tags registration
+Details    : if the "service tags" package is installed on a Lustre node
+             When the filesystem is mounted, a local-node service tag will
+	     be created.  See http://inventory.sun.com/ for more information
+	     about the Service Tags asset management system.
+
+Severity   : normal
 Bugzilla   : 15825
 Description: Kernel BUG tries to release flock
 Details    : Lustre does not destroy flock lock before last reference goes
