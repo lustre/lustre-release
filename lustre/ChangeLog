@@ -37,6 +37,11 @@ tbd Sun Microsystems, Inc.
 	  For more information, please refer to bugzilla 13904.
 
 Severity   : normal
+Bugzilla   : 16037
+Description: Client runs out of low memory
+Details    : Consider only lowmem when counting initial number of llap pages
+
+Severity   : normal
 Bugzilla   : 15625
 Description: *optional* service tags registration
 Details    : if the "service tags" package is installed on a Lustre node
