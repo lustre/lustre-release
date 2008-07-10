@@ -650,6 +650,7 @@ int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmm,
 extern struct dentry_operations ll_init_d_ops;
 extern struct dentry_operations ll_d_ops;
 extern struct dentry_operations ll_fini_d_ops;
+void ll_release(struct dentry *de);
 void ll_intent_drop_lock(struct lookup_intent *);
 void ll_intent_release(struct lookup_intent *);
 extern void ll_set_dd(struct dentry *de);
@@ -859,6 +860,7 @@ int ll_removexattr(struct dentry *dentry, const char *name);
 /* per inode struct, for dir only */
 struct ll_statahead_info {
         struct inode           *sai_inode;
+        struct dentry          *sai_first;      /* first dentry item */
         unsigned int            sai_generation; /* generation for statahead */
         atomic_t                sai_refcount;   /* when access this struct, hold
                                                  * refcount */
@@ -867,6 +869,8 @@ struct ll_statahead_info {
                                                  * reply */
         unsigned int            sai_max;        /* max ahead of lookup */
         unsigned int            sai_index;      /* index of statahead entry */
+        unsigned int            sai_index_next; /* index for the next statahead
+                                                 * entry to be stated */
         unsigned int            sai_hit;        /* hit count */
         unsigned int            sai_miss;       /* miss count:
                                                  * for "ls -al" case, it includes
@@ -884,11 +888,13 @@ struct ll_statahead_info {
                                                  * hidden entries */
         cfs_waitq_t             sai_waitq;      /* stat-ahead wait queue */
         struct ptlrpc_thread    sai_thread;     /* stat-ahead thread */
-        struct list_head        sai_entries;    /* stat-ahead entries */
+        struct list_head        sai_entries_sent;     /* entries sent out */
+        struct list_head        sai_entries_received; /* entries returned */
+        struct list_head        sai_entries_stated;   /* entries stated */
 };
 
 int do_statahead_enter(struct inode *dir, struct dentry **dentry, int lookup);
-void ll_statahead_exit(struct dentry *dentry, int result);
+int ll_statahead_exit(struct dentry *dentry, int result);
 void ll_stop_statahead(struct inode *inode, void *key);
 
 static inline
