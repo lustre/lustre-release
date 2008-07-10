@@ -10,8 +10,8 @@
 extern char *progname;
 extern int verbose;
 
-#define vprint if (verbose > 0) printf
-#define verrprint if (verbose >= 0) printf
+#define vprint(fmt, arg...) if (verbose > 0) printf(fmt, ##arg)
+#define verrprint(fmt, arg...) if (verbose >= 0) fprintf(stderr, fmt, ##arg)
 
 void fatal(void)
 {
@@ -73,8 +73,7 @@ int get_mountdata(char *dev, struct lustre_disk_data *mo_ldd)
 
         /* Make a temporary directory to hold Lustre data files. */
         if (!mkdtemp(tmpdir)) {
-                verrprint(stderr, "%s: Can't create temporary "
-                        "directory %s: %s\n",
+                verrprint("%s: Can't create temporary directory %s: %s\n",
                         progname, tmpdir, strerror(errno));
                 return errno;
         }
