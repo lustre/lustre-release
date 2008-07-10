@@ -6,6 +6,8 @@
 #ifndef _MOUNT_UTILS_H_
 #define _MOUNT_UTILS_H_
 
+#include <lustre_disk.h>
+
 void fatal(void);
 int run_command(char *, int);
 int get_mountdata(char *, struct lustre_disk_data *);
