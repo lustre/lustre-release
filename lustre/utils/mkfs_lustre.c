@@ -50,7 +50,7 @@
 #include <lustre_param.h>
 #include <lnet/lnetctl.h>
 #include <lustre_ver.h>
-#include <mount_utils.h>
+#include "mount_utils.h"
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096
