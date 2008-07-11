@@ -425,7 +425,6 @@ static void reconstruct_reint_setattr(struct mds_update_record *rec,
         }
 
         body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
-        mds_pack_inode2fid(&body->fid1, de->d_inode);
         mds_pack_inode2body(body, de->d_inode);
 
         /* Don't return OST-specific attributes if we didn't just set them */
@@ -668,7 +667,6 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         }
 
         body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
-        mds_pack_inode2fid(&body->fid1, inode);
         mds_pack_inode2body(body, inode);
 
         /* don't return OST-specific attributes if we didn't just set them. */
@@ -784,7 +782,6 @@ static void reconstruct_reint_create(struct mds_update_record *rec, int offset,
         }
 
         body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
-        mds_pack_inode2fid(&body->fid1, child->d_inode);
         mds_pack_inode2body(body, child->d_inode);
 
         l_dput(parent);
@@ -985,7 +982,6 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 }
 
                 body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
-                mds_pack_inode2fid(&body->fid1, inode);
                 mds_pack_inode2body(body, inode);
         }
         EXIT;
@@ -1697,7 +1693,6 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                         LOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode);
                         cleanup_phase = 5; /* UNLOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode); */
                 } else if (S_ISREG(child_inode->i_mode)) {
-                        mds_pack_inode2fid(&body->fid1, child_inode);
                         mds_pack_inode2body(body, child_inode);
                         mds_pack_md(obd, req->rq_repmsg, offset + 1, body,
                                     child_inode, MDS_PACK_MD_LOCK, 0);
@@ -2273,7 +2268,6 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                         LOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode);
                         cleanup_phase = 4; /* UNLOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode); */
                 } else if (S_ISREG(new_inode->i_mode)) {
-                        mds_pack_inode2fid(&body->fid1, new_inode);
                         mds_pack_inode2body(body, new_inode);
                         mds_pack_md(obd, req->rq_repmsg, offset + 1, body,
                                     new_inode, MDS_PACK_MD_LOCK, 0);
