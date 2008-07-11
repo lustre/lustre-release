@@ -104,6 +104,8 @@ struct ll_rpc_opcode {
         { LLOG_CATINFO,                  "llog_catinfo" },
         { LLOG_ORIGIN_HANDLE_PREV_BLOCK, "llog_origin_handle_prev_block" },
         { LLOG_ORIGIN_HANDLE_DESTROY,    "llog_origin_handle_destroy" },
+        { FLD_QUERY,        "fld_query" },
+        { SEQ_QUERY,        "seq_query" },
 };
 
 struct ll_eopcode {
