@@ -1444,8 +1444,10 @@ static int lov_setattr_async(struct obd_export *exp, struct obd_info *oinfo,
         if (rc)
                 RETURN(rc);
 
-        CDEBUG(D_INFO, "objid "LPX64": %ux%u byte stripes\n",
-               oinfo->oi_md->lsm_object_id, oinfo->oi_md->lsm_stripe_count,
+        CDEBUG(D_INFO, "objid "LPX64"@"LPX64": %ux%u byte stripes\n",
+               oinfo->oi_md->lsm_object_id,
+               oinfo->oi_md->lsm_object_gr,
+               oinfo->oi_md->lsm_stripe_count,
                oinfo->oi_md->lsm_stripe_size);
 
         list_for_each (pos, &set->set_list) {
@@ -1454,9 +1456,9 @@ static int lov_setattr_async(struct obd_export *exp, struct obd_info *oinfo,
                 if (oinfo->oi_oa->o_valid & OBD_MD_FLCOOKIE)
                         oti->oti_logcookies = set->set_cookies + req->rq_stripe;
 
-                CDEBUG(D_INFO, "objid "LPX64"[%d] has subobj "LPX64" at idx "
-                       "%u\n", oinfo->oi_oa->o_id, req->rq_stripe,
-                       req->rq_oi.oi_oa->o_id, req->rq_idx);
+                CDEBUG(D_INFO, "objid "LPX64"@"LPX64"[%d] has subobj "LPX64
+                       " at idx %u\n", oinfo->oi_oa->o_id, oinfo->oi_oa->o_gr,
+                       req->rq_stripe, req->rq_oi.oi_oa->o_id, req->rq_idx);
 
                 rc = obd_setattr_async(lov->lov_tgts[req->rq_idx]->ltd_exp,
                                        &req->rq_oi, oti, rqset);
@@ -2108,6 +2110,7 @@ static int lov_change_cbdata(struct obd_export *exp,
                         continue;
                 }
                 submd.lsm_object_id = loi->loi_id;
+                submd.lsm_object_gr = loi->loi_gr;
                 submd.lsm_stripe_count = 0;
                 rc = obd_change_cbdata(lov->lov_tgts[loi->loi_ost_idx]->ltd_exp,
                                        &submd, it, data);
@@ -2493,8 +2496,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                                 continue;
                         if (lov->lov_tgts[loi->loi_ost_idx]->ltd_exp ==
                             data->lock->l_conn_export &&
-                            loi->loi_id == res_id->name[0] &&
-                            loi->loi_gr == res_id->name[1]) {
+                            osc_res_name_eq(loi->loi_id, loi->loi_gr, res_id)) {
                                 *stripe = i;
                                 GOTO(out, rc = 0);
                         }
