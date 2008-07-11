@@ -337,6 +337,7 @@ int lov_prep_enqueue_set(struct obd_export *exp, struct obd_info *oinfo,
 
                 /* XXX LOV STACKING: submd should be from the subobj */
                 req->rq_oi.oi_md->lsm_object_id = loi->loi_id;
+                req->rq_oi.oi_md->lsm_object_gr = loi->loi_gr;
                 req->rq_oi.oi_md->lsm_stripe_count = 0;
                 req->rq_oi.oi_md->lsm_oinfo[0]->loi_kms_valid =
                         loi->loi_kms_valid;
@@ -447,6 +448,7 @@ int lov_prep_match_set(struct obd_export *exp, struct obd_info *oinfo,
 
                 /* XXX LOV STACKING: submd should be from the subobj */
                 req->rq_oi.oi_md->lsm_object_id = loi->loi_id;
+                req->rq_oi.oi_md->lsm_object_gr = loi->loi_gr;
                 req->rq_oi.oi_md->lsm_stripe_count = 0;
 
                 lov_set_add_req(req, set);
