@@ -320,12 +320,17 @@ static int osc_setattr_async(struct obd_export *exp, struct obd_info *oinfo,
 {
         struct ptlrpc_request *req;
         struct ost_body *body;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body), 0 };
+        int bufcount = 2;
         struct osc_async_args *aa;
         ENTRY;
 
+        if (osc_exp_is_2_0_server(exp)) {
+                bufcount = 3;
+        }
+
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
-                              OST_SETATTR, 2, size, NULL);
+                              OST_SETATTR, bufcount, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -549,16 +554,18 @@ static int osc_sync(struct obd_export *exp, struct obdo *oa,
 /* Find and cancel locally locks matched by @mode in the resource found by
  * @objid. Found locks are added into @cancel list. Returns the amount of
  * locks added to @cancels list. */
-static int osc_resource_get_unused(struct obd_export *exp, __u64 objid,
+static int osc_resource_get_unused(struct obd_export *exp, struct obdo *oa,
                                    struct list_head *cancels, ldlm_mode_t mode,
                                    int lock_flags)
 {
         struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
-        struct ldlm_res_id res_id = { .name = { objid } };
-        struct ldlm_resource *res = ldlm_resource_get(ns, NULL, res_id, 0, 0);
+        struct ldlm_res_id res_id;
+        struct ldlm_resource *res;
         int count;
         ENTRY;
 
+        osc_build_res_name(oa->o_id, oa->o_gr, &res_id);
+        res = ldlm_resource_get(ns, NULL, res_id, 0, 0);
         if (res == NULL)
                 RETURN(0);
 
@@ -626,7 +633,7 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
 
         LASSERT(oa->o_id != 0);
 
-        count = osc_resource_get_unused(exp, oa->o_id, &cancels, LCK_PW,
+        count = osc_resource_get_unused(exp, oa, &cancels, LCK_PW,
                                         LDLM_FL_DISCARD_DATA);
         if (exp_connect_cancelset(exp))
                 bufcount = 3;
@@ -2525,7 +2532,7 @@ int osc_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         /* If the page was marked as notcacheable - don't add to any locks */ 
         if (!nocache) {
-                oid.name[0] = loi->loi_id;
+                osc_build_res_name(loi->loi_id, loi->loi_gr, &oid);
                 /* This is the only place where we can call cache_add_extent
                    without oap_lock, because this page is locked now, and
                    the lock we are adding it to is referenced, so cannot lose
@@ -2904,9 +2911,10 @@ static void osc_set_data_with_check(struct lustre_handle *lockh, void *data,
 static int osc_change_cbdata(struct obd_export *exp, struct lov_stripe_md *lsm,
                              ldlm_iterator_t replace, void *data)
 {
-        struct ldlm_res_id res_id = { .name = {lsm->lsm_object_id} };
+        struct ldlm_res_id res_id;
         struct obd_device *obd = class_exp2obd(exp);
 
+        osc_build_res_name(lsm->lsm_object_id, lsm->lsm_object_gr, &res_id);
         ldlm_resource_iterate(obd->obd_namespace, &res_id, replace, data);
         return 0;
 }
@@ -2990,7 +2998,7 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                        struct ldlm_enqueue_info *einfo,
                        struct ptlrpc_request_set *rqset)
 {
-        struct ldlm_res_id res_id = { .name = {oinfo->oi_md->lsm_object_id} };
+        struct ldlm_res_id res_id;
         struct obd_device *obd = exp->exp_obd;
         struct ldlm_reply *rep;
         struct ptlrpc_request *req = NULL;
@@ -2999,6 +3007,8 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
         int rc;
         ENTRY;
 
+        osc_build_res_name(oinfo->oi_md->lsm_object_id,
+                           oinfo->oi_md->lsm_object_gr, &res_id);
         /* Filesystem lock extents are extended to page boundaries so that
          * dealing with the page cache is a little smoother.  */
         oinfo->oi_policy.l_extent.start -=
@@ -3106,11 +3116,13 @@ static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
                      __u32 type, ldlm_policy_data_t *policy, __u32 mode,
                      int *flags, void *data, struct lustre_handle *lockh)
 {
-        struct ldlm_res_id res_id = { .name = {lsm->lsm_object_id} };
+        struct ldlm_res_id res_id;
         struct obd_device *obd = exp->exp_obd;
         int lflags = *flags;
         ldlm_mode_t rc;
         ENTRY;
+
+        osc_build_res_name(lsm->lsm_object_id, lsm->lsm_object_gr, &res_id);
 
         OBD_FAIL_RETURN(OBD_FAIL_OSC_MATCH, -EIO);
 
@@ -3157,19 +3169,30 @@ static int osc_cancel_unused(struct obd_export *exp,
                              struct lov_stripe_md *lsm, int flags, void *opaque)
 {
         struct obd_device *obd = class_exp2obd(exp);
-        struct ldlm_res_id res_id = { .name = {lsm->lsm_object_id} };
+        struct ldlm_res_id res_id, *resp = NULL;
 
-        return ldlm_cli_cancel_unused(obd->obd_namespace, &res_id, flags,
-                                      opaque);
+        if (lsm != NULL) {
+                resp = osc_build_res_name(lsm->lsm_object_id,
+                                          lsm->lsm_object_gr, &res_id);
+        }
+
+        return ldlm_cli_cancel_unused(obd->obd_namespace, resp, flags, opaque);
+
 }
 
 static int osc_join_lru(struct obd_export *exp,
                         struct lov_stripe_md *lsm, int join)
 {
         struct obd_device *obd = class_exp2obd(exp);
-        struct ldlm_res_id res_id = { .name = {lsm->lsm_object_id} };
+        struct ldlm_res_id res_id, *resp = NULL;
 
-        return ldlm_cli_join_lru(obd->obd_namespace, &res_id, join);
+        if (lsm != NULL) {
+                resp = osc_build_res_name(lsm->lsm_object_id,
+                                          lsm->lsm_object_gr, &res_id);
+        }
+
+        return ldlm_cli_join_lru(obd->obd_namespace, resp, join);
+
 }
 
 static int osc_statfs_interpret(struct ptlrpc_request *req,
