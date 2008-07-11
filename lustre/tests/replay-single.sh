@@ -1430,6 +1430,7 @@ test_61c() {
 run_test 61c "test race mds llog sync vs llog cleanup"
 
 test_62() { # Bug 15756 - don't mis-drop resent replay
+    mkdir -p $DIR/$tdir
     replay_barrier $SINGLEMDS
     createmany -o $DIR/$tdir/$tfile- 25
 #define OBD_FAIL_TGT_REPLAY_DROP         0x706
