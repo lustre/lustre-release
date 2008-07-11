@@ -563,7 +563,6 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                 GOTO(out_dput, 0);
         }
 
-        mds_pack_inode2fid(&body->fid1, dchild->d_inode);
         mds_pack_inode2body(body, dchild->d_inode);
         if (S_ISREG(dchild->d_inode->i_mode)) {
                 rc = mds_pack_md(obd, req->rq_repmsg, DLM_REPLY_REC_OFF + 1,
@@ -810,7 +809,6 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
                         RETURN(PTR_ERR(dchild));
         }
 
-        mds_pack_inode2fid(&body->fid1, dchild->d_inode);
         mds_pack_inode2body(body, dchild->d_inode);
         intent_set_disposition(rep, DISP_LOOKUP_EXECD);
         intent_set_disposition(rep, DISP_LOOKUP_POS);
@@ -1120,7 +1118,6 @@ int mds_open(struct mds_update_record *rec, int offset,
                  dchild->d_inode->i_ino, dchild->d_inode->i_generation);
 
 found_child:
-        mds_pack_inode2fid(&body->fid1, dchild->d_inode);
         mds_pack_inode2body(body, dchild->d_inode);
 
         if (S_ISREG(dchild->d_inode->i_mode)) {
@@ -1523,7 +1520,6 @@ int mds_close(struct ptlrpc_request *req, int offset)
                                       sizeof(*body));
                 LASSERT(body != NULL);
 
-                mds_pack_inode2fid(&body->fid1, inode);
                 mds_pack_inode2body(body, inode);
                 mds_pack_md(obd, req->rq_repmsg, REPLY_REC_OFF + 1, body, inode,
                             MDS_PACK_MD_LOCK, 0);
