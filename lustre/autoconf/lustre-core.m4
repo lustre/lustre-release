@@ -1209,6 +1209,26 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# 2.6.12 merge patch from oracle to convert tree_lock from spinlock to rwlock
+AC_DEFUN([LC_RW_TREE_LOCK],
+[AC_MSG_CHECKING([if kernel has tree_lock as rwlock])
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        struct address_space a;
+
+        write_lock(&a.tree_lock);
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_RW_TREE_LOCK, 1, [kernel has tree_lock as rw_lock])
+],[
+        AC_MSG_RESULT([no])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+])
+
 # 2.6.23 have return type 'void' for unregister_blkdev
 AC_DEFUN([LC_UNREGISTER_BLKDEV_RETURN_INT],
 [AC_MSG_CHECKING([if unregister_blkdev return int])
@@ -1312,6 +1332,9 @@ AC_DEFUN([LC_PROG_LINUX],
           # does the kernel have VFS intent patches?
           LC_VFS_INTENT_PATCHES
 
+          # 2.6.12
+          LC_RW_TREE_LOCK
+        
           # 2.6.15
           LC_INODE_I_MUTEX
 
