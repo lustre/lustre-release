@@ -1056,51 +1056,44 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
 
         ret = 0;
         /* Request MDS for the stat info. */
-        if (!decision) {
+        if (param->have_fileinfo == 0) {
                 if (dir) {
                         /* retrieve needed file info */
                         ret = ioctl(dirfd(dir), LL_IOC_MDC_GETINFO,
                                     (void *)param->lmd);
-                } else /* if (parent) LASSERT() above */ {
+                } else {
                         char *fname = strrchr(path, '/');
                         fname = (fname == NULL ? path : fname + 1);
 
                         /* retrieve needed file info */
                         strncpy((char *)param->lmd, fname, param->lumlen);
                         ret = ioctl(dirfd(parent), IOC_MDC_GETFILEINFO,
-                                    (void *)param->lmd);
-                }
-
-                if (ret) {
-                        if (errno == ENOTTY) {
-                                /* ioctl is not supported, it is not a lustre
-                                 * fs. Do the regular lstat(2) instead. */
-                                lustre_fs = 0;
-                                ret = lstat_f(path, st);
-                                if (ret) {
-                                        llapi_err(LLAPI_MSG_ERROR,
-                                                "error: %s: stat failed for %s",
-                                                __FUNCTION__, path);
-                                        return ret;
-                                }
-                        } else {
-                                llapi_err(LLAPI_MSG_ERROR,
-                                          "error: %s: %s failed for %s",
-                                          __FUNCTION__,
-                                          dir ? "LL_IOC_MDC_GETINFO" :
-                                                "IOC_MDC_GETFILEINFO", path);
-                                return ret;
-                        }
+                                   (void *)param->lmd);
                 }
         }
 
-        if (param->type && !checked_type) {
-                if ((st->st_mode & S_IFMT) == param->type) {
-                        if (param->exclude_type)
-                                goto decided;
+        if (ret) {
+                if (errno == ENOTTY) {
+                        /* ioctl is not supported, it is not a lustre fs.
+                         * Do the regular lstat(2) instead. */
+                        lustre_fs = 0;
+                        ret = lstat_f(path, st);
+                        if (ret) {
+                                llapi_err(LLAPI_MSG_ERROR, 
+                                          "error: %s: lstat failed for %s",
+                                          __FUNCTION__, path);
+                                return ret;
+                        }
+                } else if (errno == ENOENT) {
+                        llapi_err(LLAPI_MSG_WARN, 
+                                  "warning: %s: %s does not exist",
+                                  __FUNCTION__, path);
+                        goto decided;
                 } else {
-                        if (!param->exclude_type)
-                                goto decided;
+                        llapi_err(LLAPI_MSG_ERROR, "error: %s: %s failed for %s",
+                                  __FUNCTION__, dir ? "LL_IOC_MDC_GETINFO" :
+                                  "IOC_MDC_GETFILEINFO", path);
+                        return ret;
                 }
         }
 
@@ -1129,7 +1122,8 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
                 int for_mds;
 
                 for_mds = lustre_fs ? (S_ISREG(st->st_mode) &&
-                                       param->lmd->lmd_lmm.lmm_stripe_count) :0;
+                                       param->lmd->lmd_lmm.lmm_stripe_count)
+                                    : 0;
                 decision = find_time_check(st, param, for_mds);
                 if (decision == -1)
                         goto decided;
@@ -1207,7 +1201,7 @@ obd_matches:
                 if (dir) {
                         ret = ioctl(dirfd(dir), IOC_LOV_GETINFO,
                                     (void *)param->lmd);
-                } else /* if (parent) LASSERT above */ {
+                } else if (parent) {
                         ret = ioctl(dirfd(parent), IOC_LOV_GETINFO,
                                     (void *)param->lmd);
                 }
@@ -1273,7 +1267,7 @@ int llapi_find(char *path, struct find_param *param)
                 return -EINVAL;
         }
 
-        buf = (char *)malloc(PATH_MAX);
+        buf = (char *)malloc(PATH_MAX + 1);
         if (!buf)
                 return -ENOMEM;
 
@@ -1285,8 +1279,8 @@ int llapi_find(char *path, struct find_param *param)
 
         param->depth = 0;
 
-        strncpy(buf, path, PATH_MAX);
-        ret = llapi_semantic_traverse(buf, PATH_MAX, NULL, cb_find_init,
+        strncpy(buf, path, PATH_MAX + 1);
+        ret = llapi_semantic_traverse(buf, PATH_MAX + 1, NULL, cb_find_init,
                                       cb_common_fini, param, NULL);
 
         find_param_fini(param);
@@ -1361,14 +1355,14 @@ int llapi_getstripe(char *path, struct find_param *param)
         char *buf;
         int ret = 0, len = strlen(path);
 
-        if (len >= PATH_MAX) {
-                llapi_err(LLAPI_MSG_ERROR,
-                          "%s: Path name '%s' is too long (%d bytes)",
-                          __FUNCTION__, path, len);
+        if (len > PATH_MAX) {
+                llapi_err(LLAPI_MSG_ERROR, 
+                          "%s: Path name '%s' is too long",
+                          __FUNCTION__, path);
                 return -EINVAL;
         }
 
-        buf = (char *)malloc(PATH_MAX);
+        buf = (char *)malloc(PATH_MAX + 1);
         if (!buf)
                 return -ENOMEM;
 
@@ -1380,8 +1374,8 @@ int llapi_getstripe(char *path, struct find_param *param)
 
         param->depth = 0;
 
-        strncpy(buf, path, PATH_MAX);
-        ret = llapi_semantic_traverse(buf, PATH_MAX, NULL, cb_getstripe,
+        strncpy(buf, path, PATH_MAX + 1);
+        ret = llapi_semantic_traverse(buf, PATH_MAX + 1, NULL, cb_getstripe,
                                       cb_common_fini, param, NULL);
         find_param_fini(param);
         free(buf);
@@ -1706,14 +1700,13 @@ int llapi_quotachown(char *path, int flag)
         char *buf;
         int ret = 0, len = strlen(path);
 
-        if (len >= PATH_MAX) {
-                llapi_err(LLAPI_MSG_ERROR,
-                          "%s: Path name '%s' is too long (%d bytes)",
-                          __FUNCTION__, path, len);
+        if (len > PATH_MAX) {
+                llapi_err(LLAPI_MSG_ERROR, "%s: Path name '%s' is too long",
+                          __FUNCTION__, path);
                 return -EINVAL;
         }
 
-        buf = (char *)malloc(PATH_MAX);
+        buf = (char *)malloc(PATH_MAX + 1);
         if (!buf)
                 return -ENOMEM;
 
@@ -1726,8 +1719,8 @@ int llapi_quotachown(char *path, int flag)
         if (ret)
                 goto out;
 
-        strncpy(buf, path, PATH_MAX);
-        ret = llapi_semantic_traverse(buf, PATH_MAX, NULL, cb_quotachown,
+        strncpy(buf, path, PATH_MAX + 1);
+        ret = llapi_semantic_traverse(buf, PATH_MAX + 1, NULL, cb_quotachown,
                                       NULL, &param, NULL);
 out:
         find_param_fini(&param);
