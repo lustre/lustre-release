@@ -36,11 +36,11 @@ tbd Sun Microsystems, Inc.
 		'tunefs.lustre --param="ost.quota_type=ug2" $MDTDEV'		
 	  For more information, please refer to bugzilla 13904.
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 15625
 Description: *optional* service tags registration
 Details    : if the "service tags" package is installed on a Lustre node
-             When the filesystem is mounted, a local-node service tag will
+	     When the filesystem is mounted, a local-node service tag will
 	     be created.  See http://inventory.sun.com/ for more information
 	     about the Service Tags asset management system.
 
@@ -49,15 +49,18 @@ Bugzilla   : 16189
 Description: Update to RHEL4 kernel-2.6.9-67.0.20.
 
 Severity   : normal
+Frequency  : occasional
 Bugzilla   : 15210
 Description: add refcount for osc callbacks, so avoid panic on shutdown
 
 Severity   : normal
+Frequency  : testing only
 Bugzilla   : 12653
 Description: sanity test 65a fails if stripecount of -1 is set
 Details    : handle -1 striping on filesystem in ll_dirstripe_verify
 
 Severity   : normal
+Frequency  : only in unusual configurations
 Bugzilla   : 16014
 Description: Kernel panic with find ost index.
 Details    : lov_obd have panic if some OST's have sparse indexes.
@@ -67,23 +70,27 @@ Bugzilla   : 15865
 Description: Update to RHEL5 kernel-2.6.18-53.1.21.el5.
 
 Severity   : major
+Frequency  : rarely, if filesystem is mounted with -o flock
 Bugzilla   : 15924
 Description: do not process already freed flock
 Details    : flock can possibly be freed by another thread before it reaches
 	     to ldlm_flock_completion_ast.
 
 Severity   : normal
+Frequency  : rarely, if filesystem is mounted with -o flock
 Bugzilla   : 14480
 Description: LBUG during stress test
 Details    : Need properly lock accesses the flock deadlock detection list.
 
 Severity   : minor
+Frequency  : rarely, if binaries are being run from Lustre
 Bugzilla   : 15837
 Description: oops in page fault handler
 Details    : kernel page fault handler can return two special 'pages' in
 	     error case, don't try dereference NOPAGE_SIGBUS and NOPAGE_OMM.
 
 Severity   : minor
+Frequency  : rarely, during shutdown
 Bugzilla   : 15716
 Description: timeout with invalidate import.
 Details    : ptlrpcd_check call obd_zombie_impexp_cull and wait request which
@@ -91,6 +98,7 @@ Details    : ptlrpcd_check call obd_zombie_impexp_cull and wait request which
 	     -ETIMEOUT ptlrpc_invalidate_import and as result LASSERT.
 
 Severity   : normal
+Frequency  : rarely
 Bugzilla   : 14742
 Frequency  : rare
 Description: ASSERTION(CheckWriteback(page,cmd)) failed
@@ -127,7 +135,7 @@ Details    : store magic in native order avoid panic's in recovery on PPC
 	     of twice swab data. Fix get lov striping to userpace.
 
 Severity   : normal
-Frequency  : rare, replay get lost on server
+Frequency  : rarely, if replay get lost on server
 Bugzilla   : 15756
 Description: server incorrectly drop resent replays lead to recovery failure.
 Details    : do not drop replay according to msg flags, instead we check the
