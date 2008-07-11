@@ -702,7 +702,6 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
         body = lustre_msg_buf(req->rq_repmsg, reply_off, sizeof(*body));
         LASSERT(body != NULL);                 /* caller prepped reply */
 
-        mds_pack_inode2fid(&body->fid1, inode);
         body->flags = reqbody->flags; /* copy MDS_BFLAG_EXT_FLAGS if present */
         mds_pack_inode2body(body, inode);
         reply_off++;
@@ -1187,7 +1186,6 @@ static int mds_sync(struct ptlrpc_request *req, int offset)
 
                 body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                       sizeof(*body));
-                mds_pack_inode2fid(&body->fid1, de->d_inode);
                 mds_pack_inode2body(body, de->d_inode);
 
                 l_dput(de);
