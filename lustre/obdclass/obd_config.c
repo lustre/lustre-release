@@ -34,6 +34,7 @@
 #include <obd_class.h>
 #include <obd.h>
 #endif
+#include <lustre_disk.h>
 #include <lustre_log.h>
 #include <lprocfs_status.h>
 #include <libcfs/list.h>
@@ -862,7 +863,7 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
         ENTRY;
 
         if (lcfg->lcfg_command != LCFG_PARAM) {
-                CERROR("Unknown command: %d\n", lcfg->lcfg_command);
+                CERROR("Unknown command: %x\n", lcfg->lcfg_command);
                 RETURN(-EINVAL);
         }
 
@@ -1002,6 +1003,26 @@ static int class_config_llog_handler(struct llog_handle * handle,
                         rc = 0;
                         /* No processing! */
                         break;
+                }
+
+                /**
+                 * For interop mode between 1.8 and 2.0:
+                 * skip "lmv" configuration which exists since 2.0.
+                 */
+                {
+                        char *devname = lustre_cfg_string(lcfg, 0);
+                        char *typename = lustre_cfg_string(lcfg, 1);
+
+                        if (devname)
+                                devname += strlen(devname) - strlen("clilmv");
+
+                        if ((lcfg->lcfg_command == LCFG_ATTACH && typename &&
+                             strcmp(typename, "lmv") == 0) ||
+                            (devname && strcmp(devname, "clilmv") == 0)) {
+                                CWARN("skipping 'lmv' config: cmd=%x,%s:%s\n",
+                                       lcfg->lcfg_command, devname, typename);
+                                GOTO(out, rc = 0);
+                        }
                 }
 
                 if ((clli->cfg_flags & CFG_F_EXCLUDE) && 
