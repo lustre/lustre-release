@@ -245,7 +245,6 @@ int mds_get_md(struct obd_device *, struct inode *, void *md, int *size,
                int lock, int flags);
 int mds_pack_md(struct obd_device *, struct lustre_msg *, int offset,
                 struct mds_body *, struct inode *, int lock, int flags);
-void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode);
 void mds_pack_inode2body(struct mds_body *body, struct inode *inode);
 #endif
 int mds_pack_acl(struct mds_export_data *med, struct inode *inode,
