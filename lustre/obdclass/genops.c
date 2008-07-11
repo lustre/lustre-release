@@ -834,6 +834,10 @@ struct obd_import *class_new_import(struct obd_device *obd)
         class_handle_hash(&imp->imp_handle, import_handle_addref);
         init_imp_at(&imp->imp_at);
 
+/* b1_8 supports both v1 & v2. but HEAD only supports v2.
+ * So let's use v2.
+ */
+#define HAVE_DEFAULT_V2_CONNECT 1
 #ifdef HAVE_DEFAULT_V2_CONNECT
         /* the default magic is V2, will be used in connect RPC, and
          * then adjusted according to the flags in request/reply. */
