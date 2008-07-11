@@ -129,9 +129,11 @@ struct ll_inode_info {
         struct obd_client_handle *lli_mds_exec_och;
         __u64                   lli_open_fd_exec_count;
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-        struct inode            lli_vfs_inode;
-#endif
+        /** fid of this object. */
+        union {
+                struct lu_fid f20;
+                struct ll_fid f16;
+        } lli_fid;
 
         /* metadata stat-ahead */
         /*
@@ -145,6 +147,10 @@ struct ll_inode_info {
          * before child -- it is me should cleanup the dir readahead. */
         void                   *lli_opendir_key;
         struct ll_statahead_info *lli_sai;
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+        struct inode            lli_vfs_inode;
+#endif
 };
 
 /*
@@ -826,10 +832,21 @@ static inline struct obd_export *ll_i2mdcexp(struct inode *inode)
         return ll_s2mdcexp(inode->i_sb);
 }
 
+/** get lu_fid from inode. */
+static inline struct lu_fid *ll_inode_lu_fid(struct inode *inode)
+{
+        return &ll_i2info(inode)->lli_fid.f20;
+}
+
+/** get ll_fid from inode. */
+static inline struct ll_fid *ll_inode_ll_fid(struct inode *inode)
+{
+        return &ll_i2info(inode)->lli_fid.f16;
+}
+
 static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
 {
-        mdc_pack_fid(fid, inode->i_ino, inode->i_generation,
-                     inode->i_mode & S_IFMT);
+        *fid = *ll_inode_ll_fid(inode);
 }
 
 static inline int ll_mds_max_easize(struct super_block *sb)
@@ -911,6 +928,10 @@ int ll_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
         if (sbi->ll_sa_max == 0)
                 return -ENOTSUPP;
 
+        /* temporarily disable dir stat ahead in interoperability mode */
+        if (sbi->ll_mdc_exp->exp_connect_flags & OBD_CONNECT_FID)
+                return -ENOTSUPP;
+
         /* not the same process, don't statahead */
         if (lli->lli_opendir_pid != cfs_curproc_pid())
                 return -EBADF;
@@ -981,6 +1002,9 @@ enum llioc_iter ll_iocontrol_call(struct inode *inode, struct file *file,
  * */
 void *ll_iocontrol_register(llioc_callback_t cb, int count, unsigned int *cmd);
 void ll_iocontrol_unregister(void *magic);
+
+ino_t ll_fid_build_ino(struct ll_sb_info *sbi,
+                       struct ll_fid *fid);
 
 #endif
 
