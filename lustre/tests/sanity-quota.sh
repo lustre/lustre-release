@@ -1091,17 +1091,14 @@ check_if_quota_zero(){
 	echo "pass check_if_quota_zero"
 }
 
-pre_test_14 () {
-        # reboot the lustre
-        sync; sleep 5; sync
-        cd $T_PWD; sh llmountcleanup.sh || error "llmountcleanup failed"
-        sh llmount.sh
-        run_test 0 "reboot lustre"
-}
-pre_test_14
-
 test_14a() {	# was test_14 b=12223 -- setting quota on root
 	TESTFILE="$DIR/$tdir/$tfile"
+
+        # reboot the lustre
+        sync; sleep 5; sync
+        cleanup_and_setup_lustre
+        test_0
+
 	mkdir -p $DIR/$tdir
 
 	# out of root's file and block quota
