@@ -259,6 +259,8 @@ case "$lustretag" in
         lnettag="HEAD"
         ldiskfstag="$ldiskfstag_head"
         libcfstag="b_head_procfs"
+	;;
+
     # all later v* tags
     v[1-9]*)
         lnettag="$lustretag"
