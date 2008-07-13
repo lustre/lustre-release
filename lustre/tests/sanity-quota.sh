@@ -1171,10 +1171,11 @@ test_14b(){
         quota_set_version 1
         echo "running quotacheck"
         $LFS quotacheck -ug $DIR
+        mkdir -p $DIR/$tdir
         chmod 0777 $DIR/$tdir
         for i in `seq 1 30`; do
                 l=$[$i*1024*128] # set limits in 128 Mb units
-                $LFS setquota -u quota15_$i $l $l $l $l $DIR || error "lfs setquota failed"
+                $LFS setquota -u quota15_$i -b $l -B $l -i $l -I $l $DIR || error "lfs setquota failed"
                 runas -u quota15_$i dd if=/dev/zero of="$DIR/$tdir/quota15_$i" \
                       bs=1048576 count=$[($i+1)/2] || error "dd failed"
         done
@@ -1208,7 +1209,7 @@ test_14b(){
                 echo "...real is $l"
                 [ "$l" -eq "${CURSPACE[$i]}" ] || error "curspace mismatch"
                 rm $DIR/$tdir/quota15_$i || error "could not remove quota15_$i"
-                $LFS setquota -u quota15_$i 0 0 0 0 $DIR || error "ifs setquota clear failed"
+                $LFS setquota -u quota15_$i -b 0 -B 0 -i 0 -I 0 $DIR || error "lfs setquota clear failed"
         done
 }
 run_test 14b "setting 30 quota entries in quota v1 file before conversion ==="
