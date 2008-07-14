@@ -209,7 +209,7 @@ command_t cmdlist[] = {
         {"add_peer", jt_ptl_add_peer, 0, "add an peer entry\n"
          "usage: add_peer <nid> <host> <port>"},
         {"del_peer", jt_ptl_del_peer, 0, "remove an peer entry\n"
-         "usage: del_autoconn [<nid>] [<host>] [ks]"},
+         "usage: del_peer [<nid>] [<ipaddr|pid>]"},
         {"add_conn ", jt_lcfg_add_conn, 0,
          "usage: add_conn <conn_uuid> [priority]\n"},
         {"del_conn ", jt_lcfg_del_conn, 0,
