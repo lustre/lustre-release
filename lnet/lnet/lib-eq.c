@@ -102,6 +102,8 @@ LNetEQFree(lnet_handle_eq_t eqh)
         }
 
         if (eq->eq_refcount != 0) {
+                CDEBUG(D_NET, "Event queue (%d) busy on destroy.\n",
+                       eq->eq_refcount);
                 LNET_UNLOCK();
                 return (-EBUSY);
         }
@@ -295,7 +297,7 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
                         gettimeofday(&then, NULL);
 
                         ts.tv_sec = then.tv_sec + timeout_ms/1000;
-                        ts.tv_nsec = then.tv_usec * 1000 + 
+                        ts.tv_nsec = then.tv_usec * 1000 +
                                      (timeout_ms%1000) * 1000000;
                         if (ts.tv_nsec >= 1000000000) {
                                 ts.tv_sec++;
