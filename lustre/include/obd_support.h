@@ -75,8 +75,9 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
                    size_t size, const char *file, int line);
 
 /* Timeout definitions */
-#define OBD_TIMEOUT_DEFAULT 100
-#define LDLM_TIMEOUT_DEFAULT 20
+#define OBD_TIMEOUT_DEFAULT             100
+#define LDLM_TIMEOUT_DEFAULT            20
+#define MDS_LDLM_TIMEOUT_DEFAULT        6
 /* Time to wait for all clients to reconnect during recovery */
 /* Should be very conservative; must catch the first reconnect after reboot */
 #define OBD_RECOVERY_FACTOR (3) /* times obd_timeout */
