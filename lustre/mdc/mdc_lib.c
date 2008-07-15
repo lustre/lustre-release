@@ -274,8 +274,6 @@ static inline __u64 attr_pack(unsigned int ia_valid) {
                 sa_valid |= MDS_ATTR_FROM_OPEN;
         if (ia_valid & ATTR_BLOCKS)
                 sa_valid |= MDS_ATTR_BLOCKS;
-        if (ia_valid & ATTR_TRUNC)
-                sa_valid |= MDS_ATTR_TRUNC;
         if (ia_valid & MDS_OPEN_OWNEROVERRIDE)
                 /* NFSD hack (see bug 5781) */
                 sa_valid |= MDS_OPEN_OWNEROVERRIDE;

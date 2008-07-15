@@ -270,6 +270,7 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
         const struct lu_env     *env  = info->mti_env;
         struct lu_buf           *buf  = &info->mti_buf;
         struct mdt_reint_record *rr   = &info->mti_rr;
+        struct md_attr          *ma = &info->mti_attr;
         struct lu_attr          *attr = &info->mti_attr.ma_attr;
         struct mdt_object       *obj; 
         struct md_object        *child;
@@ -375,10 +376,20 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 
                         buf->lb_buf = xattr;
                         buf->lb_len = xattr_len;
-                        rc = mo_xattr_set(env, child, buf, xattr_name, flags, attr);
+                        rc = mo_xattr_set(env, child, buf, xattr_name, flags);
+                        /* update ctime after xattr changed */
+                        if (rc == 0) {
+                                ma->ma_attr_flags |= MDS_PERM_BYPASS;
+                                mo_attr_set(env, child, ma);
+                        }
                 }
         } else if (valid & OBD_MD_FLXATTRRM) {
-                rc = mo_xattr_del(env, child, xattr_name, attr);
+                rc = mo_xattr_del(env, child, xattr_name);
+                /* update ctime after xattr changed */
+                if (rc == 0) {
+                        ma->ma_attr_flags |= MDS_PERM_BYPASS;
+                        mo_attr_set(env, child, ma);
+                }
         } else {
                 CDEBUG(D_INFO, "valid bits: "LPX64"\n", valid);
                 rc = -EINVAL;

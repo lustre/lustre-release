@@ -1408,7 +1408,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         RETURN(-EFBIG);
                 }
 
-                attr->ia_valid |= ATTR_MTIME | ATTR_CTIME | ATTR_TRUNC;
+                attr->ia_valid |= ATTR_MTIME | ATTR_CTIME;
         }
 
         /* POSIX: check before ATTR_*TIME_SET set (from inode_change_ok) */

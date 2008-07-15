@@ -194,7 +194,7 @@ static int mdt_sizeonmds_update(struct mdt_thread_info *info,
                  * and "close", maybe someone has changed the file mode
                  * or flags, or the file created mode do not permit wirte,
                  * and so on. Just set MDS_PERM_BYPASS for all the cases. */
-                info->mti_attr.ma_attr_flags |= MDS_PERM_BYPASS;
+                info->mti_attr.ma_attr_flags |= MDS_PERM_BYPASS | MDS_SOM;
                 info->mti_attr.ma_attr.la_valid &= LA_SIZE | LA_BLOCKS |
                                                 LA_ATIME | LA_MTIME | LA_CTIME;
                 RETURN(mdt_attr_set(info, o, 0));

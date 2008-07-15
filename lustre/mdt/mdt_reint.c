@@ -332,6 +332,9 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
                 repbody->handle.cookie = mfd->mfd_handle.h_cookie;
         }
 
+        if (info->mti_epoch && (info->mti_epoch->flags & MF_SOM_CHANGE))
+                ma->ma_attr_flags |= MDS_PERM_BYPASS | MDS_SOM;
+
         rc = mdt_attr_set(info, mo, rr->rr_flags);
         if (rc)
                 GOTO(out_put, rc);

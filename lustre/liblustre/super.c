@@ -730,7 +730,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                         RETURN(-EFBIG);
                 }
 
-                attr->ia_valid |= ATTR_MTIME | ATTR_CTIME | ATTR_TRUNC;
+                attr->ia_valid |= ATTR_MTIME | ATTR_CTIME;
         }
 
         /* We mark all of the fields "set" so MDS/OST does not re-set them */

@@ -1302,9 +1302,6 @@ extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
 #define MDS_ATTR_CTIME_SET  0x2000ULL /* = 8192 */
 #define MDS_ATTR_FROM_OPEN  0x4000ULL /* = 16384, called from open path, ie O_TRUNC */
 #define MDS_ATTR_BLOCKS     0x8000ULL /* = 32768 */
-#define MDS_ATTR_TRUNC     0x10000ULL /* = 65536 */
-
-#define ATTR_TRUNC MDS_ATTR_TRUNC
 
 #ifndef FMODE_READ
 #define FMODE_READ               00000001
@@ -1360,7 +1357,8 @@ enum {
         MDS_CHECK_SPLIT  = 1 << 0,
         MDS_CROSS_REF    = 1 << 1,
         MDS_VTX_BYPASS   = 1 << 2,
-        MDS_PERM_BYPASS  = 1 << 3
+        MDS_PERM_BYPASS  = 1 << 3,
+        MDS_SOM          = 1 << 4
 };
 
 struct mds_rec_join {

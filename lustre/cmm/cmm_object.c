@@ -259,20 +259,20 @@ static int cml_xattr_list(const struct lu_env *env, struct md_object *mo,
 
 static int cml_xattr_set(const struct lu_env *env, struct md_object *mo,
                          const struct lu_buf *buf, const char *name,
-                         int fl, const struct lu_attr *la)
+                         int fl)
 {
         int rc;
         ENTRY;
-        rc = mo_xattr_set(env, md_object_next(mo), buf, name, fl, la);
+        rc = mo_xattr_set(env, md_object_next(mo), buf, name, fl);
         RETURN(rc);
 }
 
 static int cml_xattr_del(const struct lu_env *env, struct md_object *mo,
-                         const char *name, const struct lu_attr *la)
+                         const char *name)
 {
         int rc;
         ENTRY;
-        rc = mo_xattr_del(env, md_object_next(mo), name, la);
+        rc = mo_xattr_del(env, md_object_next(mo), name);
         RETURN(rc);
 }
 
@@ -878,13 +878,13 @@ static int cmr_xattr_list(const struct lu_env *env, struct md_object *mo,
 
 static int cmr_xattr_set(const struct lu_env *env, struct md_object *mo,
                          const struct lu_buf *buf, const char *name,
-                         int fl, const struct lu_attr *la)
+                         int fl)
 {
         return -EFAULT;
 }
 
 static int cmr_xattr_del(const struct lu_env *env, struct md_object *mo,
-                         const char *name, const struct lu_attr *la)
+                         const char *name)
 {
         return -EFAULT;
 }

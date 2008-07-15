@@ -355,7 +355,6 @@ enum la_valid {
         LA_NLINK  = 1 << 10,
         LA_RDEV   = 1 << 11,
         LA_BLKSIZE = 1 << 12,
-        LA_TRUNC = 1 << 13,
 };
 
 struct lu_attr {
