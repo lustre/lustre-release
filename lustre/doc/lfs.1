@@ -59,6 +59,8 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 
 .B lfs quota [-o obd_uuid] [-u|-g] <username|groupname> <filesystem>
 .br
+.B lfs quota <filesystem>
+.br
 .B lfs quota -t [-u|-g] <filesystem>
 .br
 .B lfs help
@@ -127,7 +129,7 @@ To set filesystem quotas for users or groups. Limits can be specified with -b, -
 To set filesystem quota grace times for users or groups. Grace time is specified in "XXwXXdXXhXXmXXs" format or as an integer seconds value, see EXAMPLES
 .TP
 .B quota [-o obd_uuid] [-u|-g] <username|groupname> <filesystem>
-To display disk usage and limits, either for the full filesystem, or for objects on a specific obd. A user or group name must be specified.
+To display disk usage and limits, either for the full filesystem, or for objects on a specific obd. A user or group name can be specified. If both user and group are omitted, quotas for current uid/gid are shown.
 .TP
 .B quota -t [-u|-g] <filesystem>
 To display block and inode grace times for user (-u) or group (-g) quotas
