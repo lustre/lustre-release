@@ -232,18 +232,26 @@ wait_for_lnet() {
     done
 }
 
+unload_dep_module() {
+    #lsmod output
+    #libcfs                107852  17 llite_lloop,lustre,obdfilter,ost,...
+    local MODULE=$1
+    local DEPS=$(lsmod | awk '($1 == "'$MODULE'") { print $4 }' | tr ',' ' ')
+    for SUBMOD in $DEPS; do
+        unload_dep_module $SUBMOD
+    done
+    [ "$MODULE" = "libcfs" ] && $LCTL dk $TMP/debug || true
+    $RMMOD $MODULE || true
+}
+
 unload_modules() {
     wait_exit_ST client # bug 12845
 
     lsmod | grep libcfs > /dev/null && $LCTL dl
-    local MODULES=$($LCTL modules | awk '{ print $2 }' | grep -v libcfs) || true
-    $RMMOD $MODULES > /dev/null 2>&1 || true
-     # do it again, in case we tried to unload ksocklnd too early
-    MODULES=$($LCTL modules | awk '{ print $2 }' | grep -v libcfs) || true
-    [ -n "$MODULES" ] && $RMMOD $MODULES > /dev/null 2>&1 || true
-    lsmod | grep libcfs > /dev/null && $LCTL dk $TMP/debug
-    $RMMOD libcfs
-    MODULES=$($LCTL modules | awk '{ print $2 }')
+    unload_dep_module $FSTYPE
+    unload_dep_module libcfs
+
+    local MODULES=$($LCTL modules | awk '{ print $2 }')
     if [ -n "$MODULES" ]; then
         echo "Modules still loaded: "
         echo $MODULES 
