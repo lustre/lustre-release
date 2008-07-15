@@ -53,8 +53,9 @@ extern int obd_race_state;
 extern unsigned int obd_alloc_fail_rate;
 
 /* Timeout definitions */
-#define OBD_TIMEOUT_DEFAULT 100
-#define LDLM_TIMEOUT_DEFAULT 20
+#define OBD_TIMEOUT_DEFAULT             100
+#define LDLM_TIMEOUT_DEFAULT            20
+#define MDS_LDLM_TIMEOUT_DEFAULT        6
 #ifdef CRAY_XT3
  #define OBD_RECOVERY_MAX_TIME (obd_timeout * 18) /* b13079 */
 #endif

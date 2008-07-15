@@ -2087,8 +2087,11 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                               obd->obd_replayable ? "enabled" : "disabled");
         }
 
+        /* Reduce the initial timeout on an MDS because it doesn't need such
+         * a long timeout as an OST does. Adaptive timeouts will adjust this
+         * value appropriately. */
         if (ldlm_timeout == LDLM_TIMEOUT_DEFAULT)
-                ldlm_timeout = 6;
+                ldlm_timeout = MDS_LDLM_TIMEOUT_DEFAULT;
 
         RETURN(0);
 
