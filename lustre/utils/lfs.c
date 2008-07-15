@@ -2033,21 +2033,30 @@ out:
 static int lfs_quota(int argc, char **argv)
 {
         int c;
-        char *name = NULL, *mnt;
+        char *mnt, *name = NULL;
         struct if_quotactl qctl = { .qc_cmd = LUSTRE_Q_GETQUOTA,
-                                    .qc_type = 0x01 };
+                                    .qc_type = UGQUOTA };
         char *obd_type = (char *)qctl.obd_type;
         char *obd_uuid = (char *)qctl.obd_uuid.uuid;
         int rc, rc1 = 0, rc2 = 0, rc3 = 0;
+        int pass = 0;
 
         optind = 0;
         while ((c = getopt(argc, argv, "ugto:")) != -1) {
                 switch (c) {
                 case 'u':
-                        qctl.qc_type = 0x01;
+                        if (qctl.qc_type != UGQUOTA) {
+                                fprintf(stderr, "error: use either -u or -g\n");
+                                return CMD_HELP;
+                        }
+                        qctl.qc_type = USRQUOTA;
                         break;
                 case 'g':
-                        qctl.qc_type = 0x02;
+                        if (qctl.qc_type != UGQUOTA) {
+                                fprintf(stderr, "error: use either -u or -g\n");
+                                return CMD_HELP;
+                        }
+                        qctl.qc_type = GRPQUOTA;
                         break;
                 case 't':
                         qctl.qc_cmd = LUSTRE_Q_GETINFO;
@@ -2062,11 +2071,24 @@ static int lfs_quota(int argc, char **argv)
                 }
         }
 
-        if (qctl.qc_type)
-                qctl.qc_type--;
-
-
-        if (qctl.qc_cmd == LUSTRE_Q_GETQUOTA) {
+        /* current uid/gid info for "lfs quota /path/to/lustre/mount" */
+        if (qctl.qc_cmd == LUSTRE_Q_GETQUOTA && qctl.qc_type == UGQUOTA &&
+            optind == argc - 1) {
+ug_output:
+                memset(&qctl, 0, sizeof(qctl)); /* spoiled by print_*_quota */
+                qctl.qc_cmd = LUSTRE_Q_GETQUOTA;
+                if (pass++ == 0) {
+                        qctl.qc_type = USRQUOTA;
+                        qctl.qc_id = geteuid();
+                } else {
+                        qctl.qc_type = GRPQUOTA;
+                        qctl.qc_id = getegid();
+                }
+                rc = id2name(&name, qctl.qc_id, qctl.qc_type);
+                if (rc)
+                        name = "<unknown>";
+        } else if (qctl.qc_cmd == LUSTRE_Q_GETQUOTA) {
+                char *name;
                 if (optind + 2 != argc) {
                         fprintf(stderr, "error: missing quota argument(s)\n");
                         return CMD_HELP;
@@ -2079,30 +2101,27 @@ static int lfs_quota(int argc, char **argv)
                                 name, strerror(errno));
                         return CMD_HELP;
                 }
-                print_quota_title(name, &qctl);
         } else if (optind + 1 != argc) {
                 fprintf(stderr, "error: missing quota info argument(s)\n");
                 return CMD_HELP;
         }
+
+        if (qctl.qc_cmd == LUSTRE_Q_GETQUOTA)
+                print_quota_title(name, &qctl);
 
         mnt = argv[optind];
 
         rc1 = llapi_quotactl(mnt, &qctl);
         if (rc1 == -1 && errno == ESRCH) {
                 fprintf(stderr, "\n%s quotas are not enabled.\n", 
-                        qctl.qc_type == 0x00 ? "user" : "group");
-                return 0;
+                        qctl.qc_type == USRQUOTA ? "user" : "group");
+                goto out;
         }
         if (rc1 && *obd_type)
                 fprintf(stderr, "%s %s ", obd_type, obd_uuid);
 
-        if (!name)
-                rc = id2name(&name, getuid(), qctl.qc_type);
-
-        if (*obd_uuid) {
+        if (*obd_uuid)
                 mnt = "";
-                name = obd_uuid;
-        }
 
         print_quota(mnt, &qctl, GENERAL_QUOTA_INFO);
 
@@ -2115,6 +2134,11 @@ static int lfs_quota(int argc, char **argv)
                 printf("Some errors happened when getting quota info. "
                        "Some devices may be not working or deactivated. "
                        "The data in \"[]\" is inaccurate.\n");
+
+out:
+        if (pass == 1)
+                goto ug_output;
+
         return 0;
 }
 #endif /* HAVE_QUOTA_SUPPORT */
