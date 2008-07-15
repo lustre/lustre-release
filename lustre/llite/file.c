@@ -1347,6 +1347,27 @@ out:
         return rc;
 }
 
+/**
+ * Checks if requested extent lock is compatible with a lock under a page.
+ *
+ * Checks if the lock under \a page is compatible with a read or write lock
+ * (specified by \a rw) for an extent [\a start , \a end].
+ *
+ * \param page the page under which lock is considered
+ * \param rw OBD_BRW_READ if requested for reading,
+ *           OBD_BRW_WRITE if requested for writing
+ * \param start start of the requested extent
+ * \param end end of the requested extent
+ * \param cookie transparent parameter for passing locking context
+ *
+ * \post result == 1, *cookie == context, appropriate lock is referenced or
+ * \post result == 0
+ *
+ * \retval 1 owned lock is reused for the request
+ * \retval 0 no lock reused for the request
+ *
+ * \see ll_release_short_lock
+ */
 static int ll_reget_short_lock(struct page *page, int rw,
                                obd_off start, obd_off end,
                                void **cookie)
@@ -1370,6 +1391,22 @@ static int ll_reget_short_lock(struct page *page, int rw,
                                     cookie));
 }
 
+/**
+ * Releases a reference to a lock taken in a "fast" way.
+ *
+ * Releases a read or a write (specified by \a rw) lock
+ * referenced by \a cookie.
+ *
+ * \param inode inode to which data belong
+ * \param end end of the locked extent
+ * \param rw OBD_BRW_READ if requested for reading,
+ *           OBD_BRW_WRITE if requested for writing
+ * \param cookie transparent parameter for passing locking context
+ *
+ * \post appropriate lock is dereferenced
+ *
+ * \see ll_reget_short_lock
+ */
 static void ll_release_short_lock(struct inode *inode, obd_off end,
                                   void *cookie, int rw)
 {
@@ -1386,6 +1423,29 @@ static void ll_release_short_lock(struct inode *inode, obd_off end,
                 CERROR("unlock failed (%d)\n", rc);
 }
 
+/**
+ * Checks if requested extent lock is compatible
+ * with a lock under a page in page cache.
+ *
+ * Checks if a lock under some \a page is compatible with a read or write lock
+ * (specified by \a rw) for an extent [\a start , \a end].
+ *
+ * \param file the file under which lock is considered
+ * \param rw OBD_BRW_READ if requested for reading,
+ *           OBD_BRW_WRITE if requested for writing
+ * \param ppos start of the requested extent
+ * \param end end of the requested extent
+ * \param cookie transparent parameter for passing locking context
+ * \param buf userspace buffer for the data
+ *
+ * \post result == 1, *cookie == context, appropriate lock is referenced
+ * \post retuls == 0
+ *
+ * \retval 1 owned lock is reused for the request
+ * \retval 0 no lock reused for the request
+ *
+ * \see ll_file_put_fast_lock
+ */
 static inline int ll_file_get_fast_lock(struct file *file,
                                         obd_off ppos, obd_off end,
                                         char *buf, void **cookie, int rw)
@@ -1410,6 +1470,22 @@ static inline int ll_file_get_fast_lock(struct file *file,
         RETURN(rc);
 }
 
+/**
+ * Releases a reference to a lock taken in a "fast" way.
+ *
+ * Releases a read or a write (specified by \a rw) lock
+ * referenced by \a cookie.
+ *
+ * \param inode inode to which data belong
+ * \param end end of the locked extent
+ * \param rw OBD_BRW_READ if requested for reading,
+ *           OBD_BRW_WRITE if requested for writing
+ * \param cookie transparent parameter for passing locking context
+ *
+ * \post appropriate lock is dereferenced
+ *
+ * \see ll_file_get_fast_lock
+ */
 static inline void ll_file_put_fast_lock(struct inode *inode, obd_off end,
                                          void *cookie, int rw)
 {
@@ -1422,6 +1498,29 @@ enum ll_lock_style {
         LL_LOCK_STYLE_TREELOCK = 2
 };
 
+/**
+ * Checks if requested extent lock is compatible with a lock 
+ * under a page cache page.
+ *
+ * Checks if the lock under \a page is compatible with a read or write lock
+ * (specified by \a rw) for an extent [\a start , \a end].
+ *
+ * \param file file under which I/O is processed
+ * \param rw OBD_BRW_READ if requested for reading,
+ *           OBD_BRW_WRITE if requested for writing
+ * \param ppos start of the requested extent
+ * \param end end of the requested extent
+ * \param cookie transparent parameter for passing locking context
+ *           (only used with LL_LOCK_STYLE_FASTLOCK)
+ * \param tree lock tree (only used with LL_LOCK_STYLE_TREELOCK)
+ * \param buf userspace buffer for the data
+ *
+ * \retval LL_LOCK_STYLE_FASTLOCK owned lock is reused through fast lock
+ * \retval LL_LOCK_STYLE_TREELOCK got a lock through tree lock
+ * \retval LL_LOCK_STYLE_NOLOCK got no lock
+ *
+ * \see ll_file_put_lock
+ */
 static inline int ll_file_get_lock(struct file *file, obd_off ppos,
                                    obd_off end, char *buf, void **cookie,
                                    struct ll_lock_tree *tree, int rw)
@@ -1446,6 +1545,25 @@ static inline int ll_file_get_lock(struct file *file, obd_off ppos,
         RETURN(rc);
 }
 
+/**
+ * Drops the lock taken by ll_file_get_lock.
+ *
+ * Releases a read or a write (specified by \a rw) lock
+ * referenced by \a tree or \a cookie.
+ *
+ * \param inode inode to which data belong
+ * \param end end of the locked extent
+ * \param lockstyle facility through which the lock was taken
+ * \param rw OBD_BRW_READ if requested for reading,
+ *           OBD_BRW_WRITE if requested for writing
+ * \param cookie transparent parameter for passing locking context
+ *           (only used with LL_LOCK_STYLE_FASTLOCK)
+ * \param tree lock tree (only used with LL_LOCK_STYLE_TREELOCK)
+ *
+ * \post appropriate lock is dereferenced
+ *
+ * \see ll_file_get_lock
+ */
 static inline void ll_file_put_lock(struct inode *inode, obd_off end,
                                     enum ll_lock_style lock_style,
                                     void *cookie, struct ll_lock_tree *tree,

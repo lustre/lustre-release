@@ -1212,6 +1212,29 @@ static inline  int obd_prep_async_page(struct obd_export *exp,
         RETURN(ret);
 }
 
+/**
+ * Checks if requested extent lock is compatible with a lock under the page.
+ *
+ * Checks if the lock under \a page is compatible with a read or write lock
+ * (specified by \a rw) for an extent [\a start , \a end].
+ *
+ * \param exp obd export (lov or osc)
+ * \param lsm striping information for the file
+ * \param res async_page placeholder
+ * \param rw OBD_BRW_READ if requested for reading,
+ *           OBD_BRW_WRITE if requested for writing
+ * \param start start of the requested extent
+ * \param end end of the requested extent
+ * \param cookie transparent parameter for passing locking context
+ *
+ * \post result == 1, *cookie == context, appropriate lock is referenced or
+ *
+ * \retval 1 owned lock is reused for the request
+ * \retval 0 no lock reused for the request
+ * \retval -ENOTSUPP reget_short_lock is not exported at this layer
+ *
+ * \see obd_release_short_lock
+ */
 static inline int obd_reget_short_lock(struct obd_export *exp,
                                        struct lov_stripe_md *lsm,
                                        void **res, int rw,
@@ -1227,6 +1250,24 @@ static inline int obd_reget_short_lock(struct obd_export *exp,
                                                    start, end, cookie));
 }
 
+
+/**
+ * Releases a reference to a lock taken in a "fast" way.
+ *
+ * Releases a read or write (specified by \a rw) lock
+ * referenced by \a cookie.
+ *
+ * \param exp obd export (lov or osc)
+ * \param lsm striping information for the file
+ * \param end end of the locked extent
+ * \param rw OBD_BRW_READ if requested for reading,
+ *           OBD_BRW_WRITE if requested for writing
+ * \param cookie transparent parameter for passing locking context
+ *
+ * \post appropriate lock is dereferenced
+ *
+ * \see obd_reget_short_lock
+ */
 static inline int obd_release_short_lock(struct obd_export *exp,
                                          struct lov_stripe_md *lsm, obd_off end,
                                          void *cookie, int rw)

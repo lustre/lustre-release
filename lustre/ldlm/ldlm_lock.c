@@ -919,6 +919,26 @@ void ldlm_lock_allow_match(struct ldlm_lock *lock)
         unlock_res_and_lock(lock);
 }
 
+/**
+ * Checks if requested extent lock is compatible with another owned lock.
+ *
+ * Checks if \a lock is compatible with a read or write lock
+ * (specified by \a rw) for an extent [\a start , \a end].
+ *
+ * \param lock the already owned lock
+ * \param rw OBD_BRW_READ if requested for reading,
+ *           OBD_BRW_WRITE if requested for writing
+ * \param start start of the requested extent
+ * \param end end of the requested extent
+ * \param cookie transparent parameter for passing locking context
+ *
+ * \post result == 1, *cookie == context, appropriate lock is referenced
+ *
+ * \retval 1 owned lock is reused for the request
+ * \retval 0 no lock reused for the request
+ *
+ * \see ldlm_lock_fast_release
+ */
 int ldlm_lock_fast_match(struct ldlm_lock *lock, int rw,
                          obd_off start, obd_off end,
                          void **cookie)
@@ -936,6 +956,20 @@ int ldlm_lock_fast_match(struct ldlm_lock *lock, int rw,
         return 0;
 }
 
+/**
+ * Releases a reference to a lock taken in a "fast" way.
+ *
+ * Releases a read or write (specified by \a rw) lock
+ * referenced by \a cookie.
+ *
+ * \param rw OBD_BRW_READ if requested for reading,
+ *           OBD_BRW_WRITE if requested for writing
+ * \param cookie transparent parameter for passing locking context
+ *
+ * \post appropriate lock is dereferenced
+ *
+ * \see ldlm_lock_fast_lock
+ */
 void ldlm_lock_fast_release(void *cookie, int rw)
 {
         struct ldlm_lock *lock = (struct ldlm_lock *)cookie;
