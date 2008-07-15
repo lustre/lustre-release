@@ -4008,8 +4008,9 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 
         mdt_init_capa_ctxt(env, m);
 
-        /* we use a shorter ldlm_timeout on MDS for keep bumping on
-         * might-be slow processing OST */
+        /* Reduce the initial timeout on an MDS because it doesn't need such
+         * a long timeout as an OST does. Adaptive timeouts will adjust this
+         * value appropriately. */
         if (ldlm_timeout == LDLM_TIMEOUT_DEFAULT)
                 ldlm_timeout = MDS_LDLM_TIMEOUT_DEFAULT;
 
