@@ -2088,7 +2088,6 @@ ug_output:
                 if (rc)
                         name = "<unknown>";
         } else if (qctl.qc_cmd == LUSTRE_Q_GETQUOTA) {
-                char *name;
                 if (optind + 2 != argc) {
                         fprintf(stderr, "error: missing quota argument(s)\n");
                         return CMD_HELP;
