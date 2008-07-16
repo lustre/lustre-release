@@ -248,7 +248,7 @@ static int osc_getattr_async(struct obd_export *exp, struct obd_info *oinfo,
         req->rq_interpret_reply = osc_getattr_interpret;
 
         CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
-        aa = (struct osc_async_args *)&req->rq_async_args;
+        aa = ptlrpc_req_async_args(req);
         aa->aa_oi = oinfo;
 
         ptlrpc_set_add_req(set, req);
@@ -397,7 +397,7 @@ static int osc_setattr_async(struct obd_export *exp, struct obd_info *oinfo,
                 req->rq_interpret_reply = osc_setattr_interpret;
 
                 CLASSERT (sizeof(*aa) <= sizeof(req->rq_async_args));
-                aa = (struct osc_async_args *)&req->rq_async_args;
+                aa = ptlrpc_req_async_args(req);
                 aa->aa_oi = oinfo;
 
                 ptlrpc_set_add_req(rqset, req);
@@ -551,7 +551,7 @@ static int osc_punch(struct obd_export *exp, struct obd_info *oinfo,
 
         req->rq_interpret_reply = osc_punch_interpret;
         CLASSERT (sizeof(*aa) <= sizeof(req->rq_async_args));
-        aa = (struct osc_async_args *)&req->rq_async_args;
+        aa = ptlrpc_req_async_args(req);
         aa->aa_oi = oinfo;
         ptlrpc_set_add_req(rqset, req);
 
@@ -1180,7 +1180,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         ptlrpc_request_set_replen(req);
 
         CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
-        aa = (struct osc_brw_async_args *)&req->rq_async_args;
+        aa = ptlrpc_req_async_args(req);
         aa->aa_oa = oa;
         aa->aa_requested_nob = requested_nob;
         aa->aa_nio_count = niocount;
@@ -1501,7 +1501,7 @@ int osc_brw_redo_request(struct ptlrpc_request *request,
         new_req->rq_async_args = request->rq_async_args;
         new_req->rq_sent = cfs_time_current_sec() + aa->aa_resends;
 
-        new_aa = (struct osc_brw_async_args *)&new_req->rq_async_args;
+        new_aa = ptlrpc_req_async_args(new_req);
 
         CFS_INIT_LIST_HEAD(&new_aa->aa_oaps);
         list_splice(&aa->aa_oaps, &new_aa->aa_oaps);
@@ -1551,7 +1551,7 @@ static int async_internal(int cmd, struct obd_export *exp, struct obdo *oa,
         rc = osc_brw_prep_request(cmd, cli, oa, lsm, page_count, pga,
                                   &req, ocapa);
 
-        aa = (struct osc_brw_async_args *)&req->rq_async_args;
+        aa = ptlrpc_req_async_args(req);
         if (cmd == OBD_BRW_READ) {
                 lprocfs_oh_tally_log2(&cli->cl_read_page_hist, page_count);
                 lprocfs_oh_tally(&cli->cl_read_rpc_hist, cli->cl_r_in_flight);
@@ -2142,7 +2142,7 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
                             OBD_MD_FLMTIME | OBD_MD_FLCTIME | OBD_MD_FLATIME);
 
         CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
-        aa = (struct osc_brw_async_args *)&req->rq_async_args;
+        aa = ptlrpc_req_async_args(req);
         CFS_INIT_LIST_HEAD(&aa->aa_oaps);
         list_splice(rpc_list, &aa->aa_oaps);
         CFS_INIT_LIST_HEAD(rpc_list);
@@ -2333,7 +2333,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 RETURN(PTR_ERR(req));
         }
 
-        aa = (struct osc_brw_async_args *)&req->rq_async_args;
+        aa = ptlrpc_req_async_args(req);
 
         if (cmd == OBD_BRW_READ) {
                 lprocfs_oh_tally_log2(&cli->cl_read_page_hist, page_count);
@@ -3226,7 +3226,7 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                 if (!rc) {
                         struct osc_enqueue_args *aa;
                         CLASSERT (sizeof(*aa) <= sizeof(req->rq_async_args));
-                        aa = (struct osc_enqueue_args *)&req->rq_async_args;
+                        aa = ptlrpc_req_async_args(req);
                         aa->oa_oi = oinfo;
                         aa->oa_ei = einfo;
                         aa->oa_exp = exp;
@@ -3386,7 +3386,7 @@ static int osc_statfs_async(struct obd_device *obd, struct obd_info *oinfo,
 
         req->rq_interpret_reply = osc_statfs_interpret;
         CLASSERT (sizeof(*aa) <= sizeof(req->rq_async_args));
-        aa = (struct osc_async_args *)&req->rq_async_args;
+        aa = ptlrpc_req_async_args(req);
         aa->aa_oi = oinfo;
 
         ptlrpc_set_add_req(rqset, req);

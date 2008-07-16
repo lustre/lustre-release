@@ -101,7 +101,9 @@ char debug_file_path[1024] = "/r/tmp/lustre-log";
 #else
 char debug_file_path[1024] = "/tmp/lustre-log";
 #endif
-CFS_MODULE_PARM(debug_file_path, "s", charp, 0644,
+char *debug_file_path_p = &debug_file_path[0];
+
+CFS_MODULE_PARM(debug_file_path_p, "s", charp, 0644,
                 "Path for dumping debug logs, "
                 "set 'NONE' to prevent log dumping");
 

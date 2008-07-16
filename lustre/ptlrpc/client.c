@@ -2242,7 +2242,7 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
         LASSERT(req->rq_bulk == NULL);
 
         LASSERT (sizeof (*aa) <= sizeof (req->rq_async_args));
-        aa = (struct ptlrpc_replay_async_args *)&req->rq_async_args;
+        aa = ptlrpc_req_async_args(req);
         memset(aa, 0, sizeof *aa);
 
         /* Prepare request to be resent with ptlrpcd */

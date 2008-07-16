@@ -1352,7 +1352,8 @@ int lmv_handle_split(struct obd_export *exp, const struct lu_fid *fid)
         else
                 lmv_obj_put(obj);
 
-        obd_free_memmd(exp, (struct lov_stripe_md **)&md.mea);
+        /* XXX LOV STACKING */
+        obd_free_memmd(exp, (void *)&md.mea);
 
         EXIT;
 cleanup:
@@ -2819,8 +2820,10 @@ int lmv_free_lustre_md(struct obd_export *exp, struct lustre_md *md)
         struct lmv_obd *lmv = &obd->u.lmv;
 
         ENTRY;
+
+        /* XXX LOV STACKING */
         if (md->mea)
-                obd_free_memmd(exp, (struct lov_stripe_md**)&md->mea);
+                obd_free_memmd(exp, (void *)&md->mea);
         RETURN(md_free_lustre_md(lmv->tgts[0].ltd_exp, md));
 }
 

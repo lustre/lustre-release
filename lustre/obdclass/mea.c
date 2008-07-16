@@ -137,7 +137,6 @@ static int mea_hash_segment(int count, const char *name, int namelen)
 #else
 static int mea_hash_segment(int count, char *name, int namelen)
 {
-#warning "fix for liblustre"
         return 0;
 }
 #endif

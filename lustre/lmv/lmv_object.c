@@ -347,9 +347,10 @@ lmv_obj_create(struct obd_export *exp, const struct lu_fid *fid,
                        PFID(fid));
                 GOTO(cleanup, obj = ERR_PTR(-ENOMEM));
         }
-	
+
+        /* XXX LOV STACKING */
 	if (md.mea != NULL)
-		obd_free_memmd(exp, (struct lov_stripe_md **)&md.mea);
+		obd_free_memmd(exp, (void *)&md.mea);
 
 	EXIT;
 cleanup:

@@ -927,8 +927,10 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 LDLM_LOCK_PUT(lock);
                 rc = 0;
         } else {
-                struct md_attr *ma = &info->mti_attr;
+                struct md_attr *ma;
 relock:
+                ma = &info->mti_attr;
+
                 mdt_lock_handle_init(lhc);
                 mdt_lock_reg_init(lhc, LCK_PR);
 
@@ -970,7 +972,6 @@ relock:
                 lock = ldlm_handle2lock(&lhc->mlh_reg_lh);
                 if (lock) {
                         struct mdt_body *repbody;
-                        struct lu_attr *ma;
 
                         /* Debugging code. */
                         res_id = &lock->l_resource->lr_name;
@@ -988,7 +989,6 @@ relock:
                          */
                         repbody = req_capsule_server_get(info->mti_pill,
                                                          &RMF_MDT_BODY);
-                        ma = &info->mti_attr.ma_attr;
                         if (lock->l_policy_data.l_inodebits.bits &
                             MDS_INODELOCK_UPDATE)
                                 mdt_pack_size2body(info, child);
