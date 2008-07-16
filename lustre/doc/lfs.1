@@ -57,7 +57,7 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
              \fB<filesystem>\fR
 .br
 
-.B lfs quota [-o obd_uuid] [-u|-g] <username|groupname> <filesystem>
+.B lfs quota [-v] [-o obd_uuid] [-u|-g] <username|groupname> <filesystem>
 .br
 .B lfs quota <filesystem>
 .br
@@ -128,8 +128,8 @@ To set filesystem quotas for users or groups. Limits can be specified with -b, -
 .B setquota -t [-u|-g] [--block-grace <block-grace>] [--inode-grace <inode-grace>] <filesystem>
 To set filesystem quota grace times for users or groups. Grace time is specified in "XXwXXdXXhXXmXXs" format or as an integer seconds value, see EXAMPLES
 .TP
-.B quota [-o obd_uuid] [-u|-g] <username|groupname> <filesystem>
-To display disk usage and limits, either for the full filesystem, or for objects on a specific obd. A user or group name can be specified. If both user and group are omitted, quotas for current uid/gid are shown.
+.B quota [-v] [-o obd_uuid] [-u|-g] <username|groupname> <filesystem>
+To display disk usage and limits, either for the full filesystem, or for objects on a specific obd. A user or group name can be specified. If both user and group are omitted quotas for current uid/gid are shown. -v provides more verbose (with per-obd statistics) output.
 .TP
 .B quota -t [-u|-g] <filesystem>
 To display block and inode grace times for user (-u) or group (-g) quotas
