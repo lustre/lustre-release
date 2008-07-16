@@ -61,8 +61,8 @@ cleanup_and_setup_lustre
 LOVNAME=`lctl get_param -n llite.*.lov.common_name | tail -n 1`
 OSTCOUNT=`lctl get_param -n lov.$LOVNAME.numobd`
 
-SHOW_QUOTA_USER="$LFS quota -u $TSTUSR $DIR"
-SHOW_QUOTA_GROUP="$LFS quota -g $TSTUSR $DIR"
+SHOW_QUOTA_USER="$LFS quota -v -u $TSTUSR $DIR"
+SHOW_QUOTA_GROUP="$LFS quota -v -g $TSTUSR $DIR"
 SHOW_QUOTA_INFO="$LFS quota -t $DIR"
 
 # control the time of tests
@@ -684,7 +684,7 @@ test_7()
 
 	# check limits
 	PATTERN="`echo $DIR | sed 's/\//\\\\\//g'`"
-	TOTAL_LIMIT="`$LFS quota -u $TSTUSR $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $4 }'`"
+	TOTAL_LIMIT="`$LFS quota -v -u $TSTUSR $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $4 }'`"
 	[ $TOTAL_LIMIT -eq $LIMIT ] || error "total limits not recovery!"
 	echo "  total limits = $TOTAL_LIMIT"
 
@@ -1074,7 +1074,7 @@ test_13() {
 run_test 13 "test multiple clients write block quota ==="
 
 check_if_quota_zero(){
-        line=`$LFS quota -$1 $2 $DIR | wc -l`
+        line=`$LFS quota -v -$1 $2 $DIR | wc -l`
 	for i in `seq 3 $line`; do
 	    if [ $i -eq 3 ]; then
 		field="3 4 6 7"
@@ -1082,9 +1082,9 @@ check_if_quota_zero(){
 		field="3 5"
 	    fi
 	    for j in $field; do
-		tmp=`$LFS quota -$1 $2 $DIR | sed -n ${i}p |
+		tmp=`$LFS quota -v -$1 $2 $DIR | sed -n ${i}p |
                      awk  '{print $'"$j"'}'`
-		[ -n "$tmp" ] && [ $tmp -ne 0 ] && $LFS quota -$1 $2 $DIR && \
+		[ -n "$tmp" ] && [ $tmp -ne 0 ] && $LFS quota -v -$1 $2 $DIR && \
 		    error "quota on $2 isn't clean"
 	    done
 	done
@@ -1184,7 +1184,7 @@ test_14b(){
         
         echo "saving quota data"
         for i in `seq 1 30`; do
-                CURSPACE[$i]=`$LFS quota -u quota15_$i $MOUNT | awk '{if(start) {start=0; sum += $1} if(($1 ~ /OST/) && (NF==1)) {start=1;} 
+                CURSPACE[$i]=`$LFS quota -v -u quota15_$i $MOUNT | awk '{if(start) {start=0; sum += $1} if(($1 ~ /OST/) && (NF==1)) {start=1;} 
                               if(($1 ~ /OST/) && (NF != 1)) {sum += $2}; } END { print sum }'`
         done
 
@@ -1201,10 +1201,10 @@ test_14b(){
                 l=$[$i*1024*128]
                 # the format is "mntpnt   curspace[*]   bsoftlimit   bhardlimit   [time]   curinodes[*]    isoftlimit  ihardlimit"
                 echo "checking administrative quota migration results for user quota15_$i"
-                $LFS quota -u quota15_$i $DIR | grep -E '^ *'$MOUNT' *[0-9]+\** *'$l' *'$l' *[0-9]+\** *'$l' *'$l \
+                $LFS quota -v -u quota15_$i $DIR | grep -E '^ *'$MOUNT' *[0-9]+\** *'$l' *'$l' *[0-9]+\** *'$l' *'$l \
                   || error "lfs quota output is unexpected"
                 echo "checking operational quota migration results for user quota15_$i, curspace should be ${CURSPACE[$i]}"
-                l=`$LFS quota -u quota15_$i $MOUNT | awk '{if(start) {start=0; sum += $1} if(($1 ~ /OST/) && (NF==1)) {start=1;} 
+                l=`$LFS quota -v -u quota15_$i $MOUNT | awk '{if(start) {start=0; sum += $1} if(($1 ~ /OST/) && (NF==1)) {start=1;} 
                    if(($1 ~ /OST/) && (NF != 1)) {sum += $2}; } END { print sum }'`
                 echo "...real is $l"
                 [ "$l" -eq "${CURSPACE[$i]}" ] || error "curspace mismatch"
@@ -1222,14 +1222,14 @@ test_15(){
 
         # test for user
         $LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
-        TOTAL_LIMIT="`$LFS quota -u $TSTUSR $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $4 }'`"
+        TOTAL_LIMIT="`$LFS quota -v -u $TSTUSR $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $4 }'`"
         [ $TOTAL_LIMIT -eq $LIMIT ] || error "  (user)total limits = $TOTAL_LIMIT; limit = $LIMIT, failed!"
         echo "  (user)total limits = $TOTAL_LIMIT; limit = $LIMIT, successful!"
         $LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
 
         # test for group
         $LFS setquota -g $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
-        TOTAL_LIMIT="`$LFS quota -g $TSTUSR $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $4 }'`"
+        TOTAL_LIMIT="`$LFS quota -v -g $TSTUSR $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $4 }'`"
         [ $TOTAL_LIMIT -eq $LIMIT ] || error "  (group)total limits = $TOTAL_LIMIT; limit = $LIMIT, failed!"
         echo "  (group)total limits = $TOTAL_LIMIT; limit = $LIMIT, successful!"
         $LFS setquota -g $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
@@ -1529,7 +1529,7 @@ test_20()
                                  --inode-hardlimit ${LSTR[3]} \
                                  $MOUNT || error "could not set quota limits"
 
-        ($LFS quota -u $TSTUSR $MOUNT  | \
+        ($LFS quota -v -u $TSTUSR $MOUNT  | \
             grep -E '^ *'$MOUNT' *[0-9]+\** *'${LVAL[0]}' *'${LVAL[1]}' *[0-9]+\** *'${LVAL[2]}' *'${LVAL[3]}) \
                  || error "lfs quota output is unexpected"
 

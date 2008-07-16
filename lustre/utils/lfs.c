@@ -2038,11 +2038,11 @@ static int lfs_quota(int argc, char **argv)
                                     .qc_type = UGQUOTA };
         char *obd_type = (char *)qctl.obd_type;
         char *obd_uuid = (char *)qctl.obd_uuid.uuid;
-        int rc, rc1 = 0, rc2 = 0, rc3 = 0;
+        int rc, rc1 = 0, rc2 = 0, rc3 = 0, verbose = 0;
         int pass = 0;
 
         optind = 0;
-        while ((c = getopt(argc, argv, "ugto:")) != -1) {
+        while ((c = getopt(argc, argv, "ugto:v")) != -1) {
                 switch (c) {
                 case 'u':
                         if (qctl.qc_type != UGQUOTA) {
@@ -2063,6 +2063,9 @@ static int lfs_quota(int argc, char **argv)
                         break;
                 case 'o':
                         strncpy(obd_uuid, optarg, sizeof(qctl.obd_uuid));
+                        break;
+                case 'v':
+                        verbose = 1;
                         break;
                 default:
                         fprintf(stderr, "error: %s: option '-%c' "
@@ -2124,7 +2127,7 @@ ug_output:
 
         print_quota(mnt, &qctl, GENERAL_QUOTA_INFO);
 
-        if (!*obd_uuid && qctl.qc_cmd != LUSTRE_Q_GETINFO) {
+        if (!*obd_uuid && qctl.qc_cmd != LUSTRE_Q_GETINFO && verbose) {
                 rc2 = print_mds_quota(mnt, &qctl);
                 rc3 = print_lov_quota(mnt, &qctl);
         }
