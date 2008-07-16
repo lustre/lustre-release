@@ -1028,6 +1028,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         int niocount, i, requested_nob, opc, rc;
         struct osc_brw_async_args *aa;
         struct req_capsule      *pill;
+        struct brw_page *pg_prev;
 
         ENTRY;
         if (OBD_FAIL_CHECK(OBD_FAIL_OSC_BRW_PREP_REQ))
@@ -1088,9 +1089,9 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         ioobj->ioo_bufcnt = niocount;
         osc_pack_capa(req, body, ocapa);
         LASSERT (page_count > 0);
+        pg_prev = pga[0];
         for (requested_nob = i = 0; i < page_count; i++, niobuf++) {
                 struct brw_page *pg = pga[i];
-                struct brw_page *pg_prev = pga[i - 1];
 
                 LASSERT(pg->count > 0);
                 LASSERTF((pg->off & ~CFS_PAGE_MASK) + pg->count <= CFS_PAGE_SIZE,
@@ -1123,11 +1124,16 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                         niobuf->len    = pg->count;
                         niobuf->flags  = pg->flag;
                 }
+                pg_prev = pg;
         }
 
-        LASSERT((void *)(niobuf - niocount) ==
+        LASSERTF((void *)(niobuf - niocount) ==
                 lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 2,
-                               niocount * sizeof(*niobuf)));
+                               niocount * sizeof(*niobuf)),
+                "want %p - real %p\n", lustre_msg_buf(req->rq_reqmsg, 
+                REQ_REC_OFF + 2, niocount * sizeof(*niobuf)), 
+                (void *)(niobuf - niocount));
+
         osc_announce_cached(cli, &body->oa, opc == OST_WRITE ? requested_nob:0);
 
         /* size[REQ_REC_OFF] still sizeof (*body) */
