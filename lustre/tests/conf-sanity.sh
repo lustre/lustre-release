@@ -1198,7 +1198,7 @@ test_32a() {
 	start mds $tmpdir/mds "-o loop,exclude=lustre-OST0000" || return 12
 	cleanup_nocli
 
-	[ -d $tmpdir ] && rm -rf $tmpdir
+	rm -rf $tmpdir || true	# true is only for TMP on NFS
 }
 run_test 32a "Upgrade from 1.4 (not live)"
 
@@ -1256,7 +1256,7 @@ test_32b() {
 	echo "ok."
 
 	cleanup
-	[ -d $tmpdir ] && rm -rf $tmpdir
+	rm -rf $tmpdir || true  # true is only for TMP on NFS
 }
 run_test 32b "Upgrade from 1.4 with writeconf"
 
