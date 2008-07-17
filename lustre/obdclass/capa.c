@@ -117,7 +117,7 @@ void cleanup_capa_hash(struct hlist_head *hash)
         OBD_FREE(hash, CFS_PAGE_SIZE);
 }
 
-static inline int const capa_hashfn(struct lu_fid *fid)
+static inline int capa_hashfn(struct lu_fid *fid)
 {
         return (fid_oid(fid) ^ fid_ver(fid)) *
                (unsigned long)(fid_seq(fid) + 1) % NR_CAPAHASH;

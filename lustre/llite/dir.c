@@ -261,8 +261,8 @@ struct page *ll_get_dir_page(struct inode *dir, __u64 hash, int exact,
         struct page *page;
         ldlm_mode_t mode;
         int rc;
-        __u64 start;
-        __u64 end;
+        __u64 start = 0;
+        __u64 end = 0;
 
         mode = LCK_PR;
         rc = md_lock_match(ll_i2sbi(dir)->ll_md_exp, LDLM_FL_BLOCK_GRANTED,

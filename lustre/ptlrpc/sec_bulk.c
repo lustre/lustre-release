@@ -1005,7 +1005,7 @@ static int do_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u32 alg, void *buf)
                 csum32 = ~0;
 
         for (i = 0; i < desc->bd_iov_count; i++) {
-                char *ptr = desc->bd_iov[i].iov_base;
+                unsigned char *ptr = desc->bd_iov[i].iov_base;
                 int len = desc->bd_iov[i].iov_len;
 
                 switch (alg) {

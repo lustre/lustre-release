@@ -1455,12 +1455,12 @@ static int __mdd_readpage(const struct lu_env *env, struct mdd_object *obj,
         struct dt_object  *next = mdd_object_child(obj);
         struct dt_it_ops  *iops;
         struct page       *pg;
-        struct lu_dirent  *last;
+        struct lu_dirent  *last = NULL;
         int i;
         int rc;
         int nob;
         __u64 hash_start;
-        __u64 hash_end;
+        __u64 hash_end = 0;
 
         LASSERT(rdpg->rp_pages != NULL);
         LASSERT(next->do_index_ops != NULL);

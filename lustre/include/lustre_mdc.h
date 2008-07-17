@@ -73,7 +73,7 @@ static inline void mdc_put_rpc_lock(struct mdc_rpc_lock *lck,
 
 struct mdc_cache_waiter {       
         struct list_head        mcw_entry;
-        wait_queue_head_t       mcw_waitq;
+        cfs_waitq_t             mcw_waitq;
 };
 
 /* mdc/mdc_locks.c */

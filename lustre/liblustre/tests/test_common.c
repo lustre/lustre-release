@@ -24,6 +24,10 @@ int exit_on_err = 1;
  * util functions
  ******************************************************************/
 
+#ifdef EXIT
+#undef EXIT
+#endif
+
 #define EXIT(err)					\
 	do {						\
 		if (exit_on_err)			\

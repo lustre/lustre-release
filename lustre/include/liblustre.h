@@ -592,7 +592,7 @@ static inline int capable(int cap)
                 .sleepers = CFS_LIST_HEAD_INIT(HEAD.sleepers)   \
         }
 #define init_waitqueue_head(l) CFS_INIT_LIST_HEAD(&(l)->sleepers)
-#define wake_up(l) do { int a; a++; } while (0)
+#define wake_up(l) do { } while (0)
 #define TASK_INTERRUPTIBLE 0
 #define TASK_UNINTERRUPTIBLE 1
 #define TASK_RUNNING 2

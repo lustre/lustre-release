@@ -249,12 +249,12 @@ static int mdt_last_rcvd_read(const struct lu_env *env,
                        "uuid = %s\n"
                        "last_transno = "LPU64"\n"
                        "last_xid = "LPU64"\n"
-                       "last_result = %d\n"
-                       "last_data = %d\n"
+                       "last_result = %u\n"
+                       "last_data = %u\n"
                        "last_close_transno = "LPU64"\n"
                        "last_close_xid = "LPU64"\n"
-                       "last_close_result = %d\n",
-                        (int)*off - sizeof(*tmp),
+                       "last_close_result = %u\n",
+                        (int)(*off - sizeof(*tmp)),
                         rc,
                         lcd->lcd_uuid,
                         lcd->lcd_last_transno,
@@ -289,12 +289,12 @@ static int mdt_last_rcvd_write(const struct lu_env *env,
                        "uuid = %s\n"
                        "last_transno = "LPU64"\n"
                        "last_xid = "LPU64"\n"
-                       "last_result = %d\n"
-                       "last_data = %d\n"
+                       "last_result = %u\n"
+                       "last_data = %u\n"
                        "last_close_transno = "LPU64"\n"
                        "last_close_xid = "LPU64"\n"
-                       "last_close_result = %d\n",
-                        (int)*off - sizeof(*tmp),
+                       "last_close_result = %u\n",
+                        (int)(*off - sizeof(*tmp)),
                         rc,
                         lcd->lcd_uuid,
                         lcd->lcd_last_transno,
@@ -613,7 +613,7 @@ int mdt_client_new(const struct lu_env *env, struct mdt_device *mdt)
         spin_unlock(&mti->mti_exp->exp_lock);
 
         rc = mdt_last_rcvd_write(env, mdt, lcd, &off, th);
-        CDEBUG(D_INFO, "wrote client lcd at idx %u off %llu (len %u)\n",
+        CDEBUG(D_INFO, "wrote client lcd at idx %u off %llu (len "LPSZ")\n",
                cl_idx, med->med_lr_off, sizeof(*lcd));
         mdt_trans_stop(env, mdt, th);
 

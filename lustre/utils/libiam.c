@@ -307,7 +307,7 @@ static unsigned char *packdigit(unsigned char *number)
         unsigned char *area;
         unsigned char *scan;
 
-        area = calloc(strlen(number) / 2 + 2, sizeof(char));
+        area = calloc(strlen((char *)number) / 2 + 2, sizeof(char));
         if (area != NULL) {
                 for (scan = area; *number; number += 2, scan++)
                         *scan = (hex2dec(number[0]) << 4) | hex2dec(number[1]);
@@ -318,7 +318,7 @@ static unsigned char *packdigit(unsigned char *number)
 static char *iam_convert(int size, int need_convert, char *source)
 {
         char *ptr;
-        char *opt;
+        unsigned char *opt;
 
         if (source == NULL)
                 return NULL;
@@ -328,7 +328,7 @@ static char *iam_convert(int size, int need_convert, char *source)
                 return NULL;
 
         if (need_convert) {
-                opt = packdigit(source);
+                opt = packdigit((unsigned char*)source);
                 if (opt == NULL) {
                         free(ptr);
                         return NULL;
