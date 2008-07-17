@@ -272,7 +272,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .procname = "concurrent_sends",
                 .data     = &concurrent_sends,
                 .maxlen   = sizeof(int),
-                .mode     = 0644,
+                .mode     = 0444,
                 .proc_handler = &proc_dointvec
         },
 #if IBNAL_USE_FMR
