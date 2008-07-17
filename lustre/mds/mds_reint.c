@@ -2078,8 +2078,14 @@ int mds_get_parents_children_locked(struct obd_device *obd,
         cleanup_phase = 4; /* target dentry */
 
         inode = (*de_newp)->d_inode;
-        if (inode != NULL)
+        if (inode != NULL) {
+                if (is_bad_inode(inode)) {
+                        CERROR("bad inode returned %lu/%u\n",
+                               inode->i_ino, inode->i_generation);
+                        GOTO(cleanup, rc = -ENOENT);
+                }
                 inode = igrab(inode);
+        }
         if (inode == NULL)
                 goto retry_locks;
 
@@ -2093,8 +2099,6 @@ retry_locks:
         maxres_tgt = &p2_res_id;
         cleanup_phase = 4; /* target dentry */
 
-        if (c1_res_id.name[0] != 0 && res_gt(&c1_res_id, &p1_res_id,NULL,NULL))
-                maxres_src = &c1_res_id;
         if (c2_res_id.name[0] != 0 && res_gt(&c2_res_id, &p2_res_id,NULL,NULL))
                 maxres_tgt = &c2_res_id;
 
@@ -2131,6 +2135,11 @@ retry_locks:
 
         if (!new_name)
                 GOTO(cleanup, rc);
+
+        /* Safe to skip check for child res being all zero */
+        if (res_gt(&c1_res_id, maxres_src, NULL, NULL))
+                maxres_src = &c1_res_id;
+
         /* Step 6b: Re-lookup target child to verify it hasn't changed */
         rc = mds_verify_child(obd, &p2_res_id, &dlm_handles[1], *de_tgtdirp,
                               parent_mode, &c2_res_id, &dlm_handles[3], de_newp,
