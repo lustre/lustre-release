@@ -17,6 +17,12 @@ Bugzilla   :
 Description: 
 Details    : 
 
+Severity   : normal
+Bugzilla   : 16102
+Description: LNET Selftest results in Soft lockup on OSS CPU
+Details    : only hits when 8 or more o2ib clients involved and a session is
+             torn down with 'lst end_session' without preceeding 'lst stop'.
+
 Severity   : minor
 Bugzilla   : 16321
 Description: concurrent_sends in IB LNDs should not be changeable at run time
