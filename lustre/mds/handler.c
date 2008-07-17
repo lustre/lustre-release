@@ -206,6 +206,7 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
                               struct vfsmount **mnt)
 {
+        struct obd_device *obd = container_of(mds, struct obd_device, u.mds);
         char fid_name[32];
         unsigned long ino = fid->id;
         __u32 generation = fid->generation;
@@ -222,7 +223,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
 
         /* under ext3 this is neither supposed to return bad inodes
            nor NULL inodes. */
-        result = ll_lookup_one_len(fid_name, mds->mds_fid_de, strlen(fid_name));
+        result = mds_lookup(obd, fid_name, mds->mds_fid_de, strlen(fid_name));
         if (IS_ERR(result))
                 RETURN(result);
 
@@ -233,8 +234,6 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
        if (inode->i_nlink == 0) {
                 if (inode->i_mode == 0 &&
                     LTIME_S(inode->i_ctime) == 0 ) {
-                        struct obd_device *obd = container_of(mds, struct
-                                                              obd_device, u.mds);
                         LCONSOLE_WARN("Found inode with zero nlink, mode and "
                                       "ctime -- this may indicate disk"
                                       "corruption (device %s, inode %lu, link:"
