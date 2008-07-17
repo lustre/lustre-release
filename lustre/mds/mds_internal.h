@@ -9,7 +9,8 @@
 #include <lustre_mds.h>
 
 #define MDT_ROCOMPAT_SUPP       (OBD_ROCOMPAT_LOVOBJID)
-#define MDT_INCOMPAT_SUPP       (OBD_INCOMPAT_MDT | OBD_INCOMPAT_COMMON_LR)
+#define MDT_INCOMPAT_SUPP       (OBD_INCOMPAT_MDT | OBD_INCOMPAT_COMMON_LR | \
+                                 OBD_INCOMPAT_FID)
 
 #define MDS_SERVICE_WATCHDOG_FACTOR 2000
 
@@ -155,6 +156,11 @@ int mds_get_parents_children_locked(struct obd_device *obd,
                                     struct dentry **de_newp,
                                     struct lustre_handle *dlm_handles,
                                     int child_mode);
+
+struct dentry *mds_lookup(struct obd_device *obd,
+                          const char *fid_name,
+                          struct dentry *dparent,
+                          int fid_namelen);
 
 void mds_shrink_reply(struct obd_device *obd, struct ptlrpc_request *req,
                       struct mds_body *body, int md_off);
