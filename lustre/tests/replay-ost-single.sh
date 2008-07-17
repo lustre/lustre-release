@@ -22,7 +22,7 @@ CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
 ALWAYS_EXCEPT="$REPLAY_OST_SINGLE_EXCEPT"
 
 #					
-[ "$SLOW" = "no" ] && EXCEPT_SLOW=""
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="5"
 
 # It is replay-ost-single, after all
 OSTCOUNT=1
@@ -97,7 +97,7 @@ test_4() {
 run_test 4 "Fail OST during read, with verification"
 
 test_5() {
-    [ -z "`which iozone 2> /dev/null`" ] && log "iozone missing" && return
+    [ -z "`which iozone 2> /dev/null`" ] && skip "iozone missing" && return 0
     FREE=`df -P $DIR | tail -n 1 | awk '{ print $4/2 }'`
     GB=1048576  # 1048576KB == 1GB
     if (( FREE > GB )); then
