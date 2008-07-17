@@ -182,6 +182,8 @@ struct lustre_mount_data {
 #define OBD_INCOMPAT_OST        0x00000002 /* this is an OST */
 #define OBD_INCOMPAT_MDT        0x00000004 /* this is an MDT */
 #define OBD_INCOMPAT_COMMON_LR  0x00000008 /* common last_rvcd format */
+#define OBD_INCOMPAT_FID        0x00000010 /* FID is enabled */
+#define OBD_INCOMPAT_SOM        0x00000020 /* Size-On-MDS is enabled */
 
 
 /* Data stored per server at the head of the last_rcvd file.  In le32 order.
