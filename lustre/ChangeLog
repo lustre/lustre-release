@@ -302,6 +302,11 @@ Description: Procfs and llog threads access destoryed import sometimes.
 Details    : Sync the import destoryed process with procfs and llog threads by
 	     the import refcount and semaphore.
 
+Severity   : major
+Bugzilla   : 15674
+Description: mds fails to respond, threads stuck in ldlm_completion_ast
+Details    : Sort source/child resource pair after updating child resource.
+
 -------------------------------------------------------------------------------
 
 
