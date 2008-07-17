@@ -17,6 +17,11 @@ Bugzilla   :
 Description: 
 Details    : 
 
+Severity   : minor
+Bugzilla   : 16321
+Description: concurrent_sends in IB LNDs should not be changeable at run time
+Details    : concurrent_sends in IB LNDs should not be changeable at run time
+
 Severity   : normal
 Bugzilla   : 15272
 Description: ptl_send_rpc hits LASSERT when ptl_send_buf fails
