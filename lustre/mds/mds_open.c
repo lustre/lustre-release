@@ -538,7 +538,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                 return;
         }
 
-        dchild = ll_lookup_one_len(rec->ur_name, parent, rec->ur_namelen - 1);
+        dchild = mds_lookup(obd, rec->ur_name, parent, rec->ur_namelen - 1);
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
                 LCONSOLE_WARN("Child "LPU64"/%u lookup error %d." 
@@ -780,6 +780,7 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
                            struct mds_body *body, int flags,
                            struct mds_update_record *rec,struct ldlm_reply *rep)
 {
+        struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_obd *mds = mds_req2mds(req);
         struct dentry *dchild;
         char fidname[LL_FID_NAMELEN];
@@ -788,7 +789,7 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
         ENTRY;
 
         fidlen = ll_fid2str(fidname, fid->id, fid->generation);
-        dchild = ll_lookup_one_len(fidname, mds->mds_pending_dir, fidlen);
+        dchild = mds_lookup(obd, fidname, mds->mds_pending_dir, fidlen);
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
                 CERROR("error looking up %s in PENDING: rc = %d\n",fidname, rc);
@@ -1014,8 +1015,8 @@ int mds_open(struct mds_update_record *rec, int offset,
                  * refer to bug 13030. */
                 dchild = mds_fid2dentry(mds, rec->ur_fid1, NULL);
         } else {
-                dchild = ll_lookup_one_len(rec->ur_name, dparent,
-                                           rec->ur_namelen - 1);
+                dchild = mds_lookup(obd, rec->ur_name, dparent,
+                                    rec->ur_namelen - 1);
         }
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
