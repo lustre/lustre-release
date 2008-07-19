@@ -199,7 +199,7 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/super.c
  	sb->s_fs_info = NULL;
  	kfree(sbi);
  	lock_kernel();
-@@ -2748,9 +2762,47 @@ static struct file_system_type ext3_fs_t
+@@ -2748,9 +2762,46 @@ static struct file_system_type ext3_fs_t
  	.fs_flags	= FS_REQUIRES_DEV,
  };
  
@@ -208,7 +208,6 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/super.c
 +
 +int __init init_ext3_proc(void)
 +{
-+	struct proc_dir_entry *proc;
 +	int ret;
 +
 +	if ((ret = init_ext3_mb_proc()))
