@@ -609,7 +609,7 @@ static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
 
         lock_24kernel();
         rc = ext3_xattr_set_handle(handle, inode, EXT3_XATTR_INDEX_TRUSTED,
-                                   name, lmm, lmm_size, 0);
+                                   name, lmm, lmm_size, XATTR_NO_CTIME);
 
         unlock_24kernel();
 
