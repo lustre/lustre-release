@@ -1061,9 +1061,13 @@ static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
         nex.ee_len = count;
         err = ext3_ext_insert_extent(handle, base, path, &nex);
         if (err) {
-                CERROR("can't insert extent: %d\n", err);
-                /* XXX: export ext3_free_blocks() */
-                /*ext3_free_blocks(handle, inode, nex.ee_start, nex.ee_len, 0);*/
+                /* free data blocks we just allocated */
+                /* not a good idea to call discard here directly,
+                 * but otherwise we'd need to call it every free() */
+#ifdef EXT3_MB_HINT_GROUP_ALLOC
+                ext3_mb_discard_inode_preallocations(inode);
+#endif
+                ext3_free_blocks(handle, inode, nex.ee_start, nex.ee_len, 0);
                 goto out;
         }
 
