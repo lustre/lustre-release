@@ -304,6 +304,22 @@ Bugzilla   : 15674
 Description: mds fails to respond, threads stuck in ldlm_completion_ast
 Details    : Sort source/child resource pair after updating child resource.
 
+Severity   : major
+Frequncy   : rare
+Bugzilla   : 16226
+Description: kernel BUG at ldiskfs2_ext_new_extent_cb
+Details    : If insertion of an extent fails, then discard the inode
+             preallocation and free data blocks else it can lead to duplicate
+             blocks.
+
+Severity   : normal
+Bugzilla   : 16199
+Description: don't always update ctime in ext3_xattr_set_handle()
+Details    : Current xattr code updates the inode ctime in ext3_xattr_set_handle.
+             In some cases the ctime should not be updated, for example for
+             2.0->1.8 compatibility it is necessary to delete an xattr and it
+             should not update the ctime.
+
 -------------------------------------------------------------------------------
 
 
