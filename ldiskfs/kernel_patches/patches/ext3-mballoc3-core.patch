@@ -33,7 +33,7 @@ Index: linux-2.6.16.54-0.2.5/include/linux/ext3_fs.h
  /*
   * Special inodes numbers
   */
-@@ -405,6 +429,14 @@ struct ext3_inode {
+@@ -402,6 +426,14 @@ struct ext3_inode {
  #define ext3_find_first_zero_bit	ext2_find_first_zero_bit
  #define ext3_find_next_zero_bit		ext2_find_next_zero_bit
  
@@ -48,7 +48,7 @@ Index: linux-2.6.16.54-0.2.5/include/linux/ext3_fs.h
  /*
   * Maximal mount counts between two filesystem checks
   */
-@@ -791,6 +823,20 @@ extern unsigned long ext3_count_dirs (st
+@@ -788,6 +820,20 @@ extern unsigned long ext3_count_dirs (st
  extern void ext3_check_inodes_bitmap (struct super_block *);
  extern unsigned long ext3_count_free (struct buffer_head *, unsigned);
  
@@ -69,7 +69,7 @@ Index: linux-2.6.16.54-0.2.5/include/linux/ext3_fs.h
  
  /* inode.c */
  extern int ext3_block_truncate_page(handle_t *, struct page *, struct address_space *, loff_t);
-@@ -833,6 +879,10 @@ extern int ext3_group_extend(struct supe
+@@ -830,6 +876,10 @@ extern int ext3_group_extend(struct supe
  				unsigned long n_blocks_count);
  
  /* super.c */
@@ -247,7 +247,7 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/super.c
  	if (err)
  		return err;
  	err = init_inodecache();
-@@ -2772,6 +2824,7 @@ static void __exit exit_ext3_fs(void)
+@@ -2772,6 +2823,7 @@ static void __exit exit_ext3_fs(void)
  	unregister_filesystem(&ext3_fs_type);
  	destroy_inodecache();
  	exit_ext3_xattr();
@@ -259,7 +259,7 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/mballoc.c
 ===================================================================
 --- /dev/null
 +++ linux-2.6.16.54-0.2.5/fs/ext3/mballoc.c
-@@ -0,0 +1,4382 @@
+@@ -0,0 +1,4385 @@
 +/*
 + * Copyright (c) 2003-2006, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -4642,3 +4642,6 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/mballoc.c
 +	ext3_std_error(sb, err);
 +	return;
 +}
++
++EXPORT_SYMBOL(ext3_free_blocks);
++EXPORT_SYMBOL(ext3_mb_discard_inode_preallocations);
