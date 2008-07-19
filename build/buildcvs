@@ -171,7 +171,7 @@ case "$lustretag" in
 	;;
 
     # CMD3
-    b_post_cmd3|b_new_cmd_sles10|b1_6_head_sync|b_mixed_layout_req|b_mount_perm|b1_8_gns|b1_8_quota|b1_8_interop_server|b_som)
+    b_post_cmd3|b_new_cmd_sles10|b1_6_head_sync|b_mixed_layout_req|b_mount_perm|b1_8_gns|b_head_quota|b1_8_interop_server|b_som)
         # Update b1_8 above when changing this.
         ldiskfstag="$ldiskfstag_head"
         ;;
