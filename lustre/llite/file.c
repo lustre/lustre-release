@@ -2056,7 +2056,10 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
         if (LOV_MAGIC != cpu_to_le32(LOV_MAGIC)) {
                 if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC)) {
                         lustre_swab_lov_user_md((struct lov_user_md *)lmm);
-                        lustre_swab_lov_user_md_objects((struct lov_user_md *)lmm);
+                        /* if function called for directory - we should be
+                         * avoid swab not existent lsm objects */
+                        if (S_ISREG(body->mode))
+                                lustre_swab_lov_user_md_objects((struct lov_user_md *)lmm);
                 } else if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_JOIN)) {
                         lustre_swab_lov_user_md_join((struct lov_user_md_join *)lmm);
                 }
