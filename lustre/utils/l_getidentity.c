@@ -363,7 +363,7 @@ static void show_result(struct identity_downcall_data *data)
 
                 pdd = &data->idd_perms[i];
 
-                printf("  %#llx\t0x%x\n", pdd->pdd_nid, pdd->pdd_perm);
+                printf("  "LPX64"\t0x%x\n", pdd->pdd_nid, pdd->pdd_perm);
         }
         printf("\n");
 }

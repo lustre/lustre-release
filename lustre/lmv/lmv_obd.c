@@ -2202,7 +2202,7 @@ static __u32 lmv_node_rank(struct obd_export *exp, const struct lu_fid *fid)
         imp  = class_exp2cliimp(exp);
         id   = imp->imp_connection->c_self + fid_flatten(fid);
 
-        CDEBUG(D_INFO, "node rank: %llx "DFID" %llx %llx\n",
+        CDEBUG(D_INFO, "node rank: "LPX64" "DFID" "LPX64" "LPX64"\n",
                imp->imp_connection->c_self, PFID(fid), id, id ^ (id >> 32));
 
         return id ^ (id >> 32);
@@ -2234,7 +2234,7 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
         if (rc)
                 RETURN(rc);
 
-        CDEBUG(D_INFO, "READPAGE at %llx from "DFID"\n", offset, PFID(&rid));
+        CDEBUG(D_INFO, "READPAGE at "LPX64" from "DFID"\n", offset, PFID(&rid));
 
         obj = lmv_obj_grab(obd, fid);
         if (obj) {
@@ -2289,7 +2289,7 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
 
                 hash_adj += rank * seg_size;
 
-                CDEBUG(D_INFO, "hash_adj: %x %llx %llx/%x -> %llx/%x\n",
+                CDEBUG(D_INFO, "hash_adj: %x "LPX64" "LPX64"/%x -> "LPX64"/%x\n",
                        rank, hash_adj, offset, tgt0, offset + hash_adj, tgt);
 
                 offset = (offset + hash_adj) & MAX_HASH_SIZE;
@@ -2328,7 +2328,8 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
                         if (end == DIR_END_OFF) {
                                 dp->ldp_hash_end = cpu_to_le32(seg_size *
                                                                (tgt0 + 1));
-                                CDEBUG(D_INFO, ""DFID" reset end %llx tgt %d\n",
+                                CDEBUG(D_INFO,
+                                       ""DFID" reset end "LPX64" tgt %d\n",
                                        PFID(&rid),
                                        le64_to_cpu(dp->ldp_hash_end), tgt);
                         }

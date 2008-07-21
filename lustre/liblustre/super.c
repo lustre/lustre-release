@@ -691,7 +691,7 @@ static int llu_setattr_done_writing(struct inode *inode,
                                           op_data->op_ioepoch);
         } else if (rc) {
                 CERROR("inode %llu mdc truncate failed: rc = %d\n",
-                       st->st_ino, rc);
+                       (unsigned long long)st->st_ino, rc);
         }
         RETURN(rc);
 }
