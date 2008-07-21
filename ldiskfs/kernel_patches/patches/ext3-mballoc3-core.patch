@@ -3624,7 +3624,7 @@ Index: linux-2.6.5-7.311/fs/ext3/mballoc.c
 +
 +	/* in this short window concurrent discard can set pa_deleted */
 +	spin_lock(&pa->pa_lock);
-+	if (pa->pa_deleted == 0) {
++	if (pa->pa_deleted == 1) {
 +		spin_unlock(&pa->pa_lock);
 +		return;
 +	}
