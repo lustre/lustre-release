@@ -37,13 +37,6 @@ tbd Sun Microsystems, Inc.
 	  For more information, please refer to bugzilla 13904.
 
 Severity   : normal
-Bugzilla   : 16318
-Frequency  : rare, on PPC clients
-Description: not swab ost objects in response about directory, because
-             this not exist.
-Details    : bug similar bug 14856, but in different function.
-
-Severity   : normal
 Bugzilla   : 16037
 Description: Client runs out of low memory
 Details    : Consider only lowmem when counting initial number of llap pages
