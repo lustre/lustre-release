@@ -1911,6 +1911,7 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
         __u8 *uuid_ptr;
         char *str, *label;
         char ns_name[48];
+        request_queue_t *q;
         int rc, i;
         ENTRY;
 
@@ -2027,6 +2028,15 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
         rc = lquota_setup(filter_quota_interface_ref, obd);
         if (rc)
                 GOTO(err_post, rc);
+
+        q = bdev_get_queue(mnt->mnt_sb->s_bdev);
+        if (q->max_sectors < q->max_hw_sectors &&
+            q->max_sectors < PTLRPC_MAX_BRW_SIZE >> 9)
+                LCONSOLE_INFO("%s: underlying device %s should be tuned "
+                              "for larger I/O requests: max_sectors = %u "
+                              "could be up to max_hw_sectors=%u\n",
+                              obd->obd_name, mnt->mnt_sb->s_id,
+                              q->max_sectors, q->max_hw_sectors);
 
         uuid_ptr = fsfilt_uuid(obd, obd->u.obt.obt_sb);
         if (uuid_ptr != NULL) {
