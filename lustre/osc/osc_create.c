@@ -128,7 +128,7 @@ static int oscc_internal_create(struct osc_creator *oscc)
 {
         struct ptlrpc_request *request;
         struct ost_body *body;
-        int size[] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
         LASSERT_SPIN_LOCKED(&oscc->oscc_lock);

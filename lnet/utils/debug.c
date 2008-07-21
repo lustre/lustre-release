@@ -24,7 +24,9 @@
  */
 
 #define __USE_FILE_OFFSET64
+#ifndef _GNU_SOURCE
 #define  _GNU_SOURCE
+#endif
 
 #include <stdio.h>
 #ifdef HAVE_NETDB_H

@@ -1452,11 +1452,11 @@ int req_capsule_get_size(const struct req_capsule *pill,
 }
 EXPORT_SYMBOL(req_capsule_get_size);
 
-int req_capsule_msg_size(const struct req_capsule *pill, enum req_location loc)
+int req_capsule_msg_size(struct req_capsule *pill, enum req_location loc)
 {
         return lustre_msg_size(pill->rc_req->rq_import->imp_msg_magic,
                                pill->rc_fmt->rf_fields[loc].nr,
-                               (int *)pill->rc_area[loc]);
+                               pill->rc_area[loc]);
 }
 
 int req_capsule_fmt_size(__u32 magic, const struct req_format *fmt,

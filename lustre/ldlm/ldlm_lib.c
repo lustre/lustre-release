@@ -1231,22 +1231,6 @@ void target_cleanup_recovery(struct obd_device *obd)
         EXIT;
 }
 
-static void target_recovery_expired(unsigned long castmeharder)
-{
-        struct obd_device *obd = (struct obd_device *)castmeharder;
-        LCONSOLE_WARN("%s: recovery timed out; %d clients never reconnected "
-                      "after %lds (%d clients did)\n",
-                      obd->obd_name, obd->obd_recoverable_clients,
-                      cfs_time_current_sec()- obd->obd_recovery_start,
-                      obd->obd_connected_clients);
-        spin_lock_bh(&obd->obd_processing_task_lock);
-        if (obd->obd_recovering)
-                obd->obd_abort_recovery = 1;
-        cfs_waitq_signal(&obd->obd_next_transno_waitq);
-        spin_unlock_bh(&obd->obd_processing_task_lock);
-}
-
-
 /* obd_processing_task_lock should be held */
 void target_cancel_recovery_timer(struct obd_device *obd)
 {
@@ -1294,14 +1278,6 @@ static void reset_recovery_timer(struct obd_device *obd, int duration,
         spin_unlock_bh(&obd->obd_processing_task_lock);
         CDEBUG(D_HA, "%s: recovery timer will expire in %u seconds\n",
                obd->obd_name, (unsigned)left);
-}
-
-static void resume_recovery_timer(struct obd_device *obd)
-{
-        LASSERT(!cfs_timer_is_armed(&obd->obd_recovery_timer));
-
-        /* to be safe, make it at least OBD_RECOVERY_FACTOR * obd_timeout */
-        reset_recovery_timer(obd, OBD_RECOVERY_FACTOR * obd_timeout, 1);
 }
 
 static void check_and_start_recovery_timer(struct obd_device *obd)
@@ -1566,6 +1542,14 @@ static int handle_recovery_req(struct ptlrpc_thread *thread,
         RETURN(0);
 }
 
+static void resume_recovery_timer(struct obd_device *obd)
+{
+        LASSERT(!cfs_timer_is_armed(&obd->obd_recovery_timer));
+
+        /* to be safe, make it at least OBD_RECOVERY_FACTOR * obd_timeout */
+        reset_recovery_timer(obd, OBD_RECOVERY_FACTOR * obd_timeout, 1);
+}
+
 static int target_recovery_thread(void *arg)
 {
         struct obd_device *obd = arg;
@@ -1749,6 +1733,21 @@ void target_recovery_fini(struct obd_device *obd)
         target_cleanup_recovery(obd);
 }
 EXPORT_SYMBOL(target_recovery_fini);
+
+static void target_recovery_expired(unsigned long castmeharder)
+{
+        struct obd_device *obd = (struct obd_device *)castmeharder;
+        LCONSOLE_WARN("%s: recovery timed out; %d clients never reconnected "
+                      "after %lds (%d clients did)\n",
+                      obd->obd_name, obd->obd_recoverable_clients,
+                      cfs_time_current_sec()- obd->obd_recovery_start,
+                      obd->obd_connected_clients);
+        spin_lock_bh(&obd->obd_processing_task_lock);
+        if (obd->obd_recovering)
+                obd->obd_abort_recovery = 1;
+        cfs_waitq_signal(&obd->obd_next_transno_waitq);
+        spin_unlock_bh(&obd->obd_processing_task_lock);
+}
 
 void target_recovery_init(struct obd_device *obd, svc_handler_t handler)
 {

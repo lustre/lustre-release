@@ -101,7 +101,7 @@ int null_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
                 if (req->rq_repdata->lm_magic == LUSTRE_MSG_MAGIC_V2_SWABBED)
                         __swab32s(&cksums);
 
-                cksumc = crc32_le(!(__u32) 0, (char *) req->rq_repdata,
+                cksumc = crc32_le(!(__u32) 0, (unsigned char *)req->rq_repdata,
                                   req->rq_repdata_len);
                 if (cksumc != cksums) {
                         CWARN("early reply checksum mismatch: %08x != %08x\n",
@@ -359,7 +359,8 @@ int null_authorize(struct ptlrpc_request *req)
                 req->rq_reply_off = lustre_msg_early_size();
         } else {
                 rs->rs_repbuf->lm_cksum =
-                                crc32_le(!(__u32) 0, (char *) rs->rs_repbuf,
+                                crc32_le(!(__u32) 0,
+                                         (unsigned char *)rs->rs_repbuf,
                                          rs->rs_repdata_len);
                 req->rq_reply_off = 0;
         }

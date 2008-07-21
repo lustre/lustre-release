@@ -94,7 +94,7 @@ int lustre_msg_early_size() {
 }
 EXPORT_SYMBOL(lustre_msg_early_size);
 
-int lustre_msg_size_v2(int count, int *lengths)
+int lustre_msg_size_v2(int count, __u32 *lengths)
 {
         int size;
         int i;
@@ -113,9 +113,9 @@ EXPORT_SYMBOL(lustre_msg_size_v2);
  *       in the form of a v2 request.  If this is a connection to a v1
  *       target then the first buffer will be stripped because the ptlrpc
  *       data is part of the lustre_msg_v1 header. b=14043 */
-int lustre_msg_size(__u32 magic, int count, int *lens)
+int lustre_msg_size(__u32 magic, int count, __u32 *lens)
 {
-        int size[] = { sizeof(struct ptlrpc_body) };
+        __u32 size[] = { sizeof(struct ptlrpc_body) };
 
         if (!lens) {
                 LASSERT(count == 1);
@@ -147,7 +147,7 @@ int lustre_packed_msg_size(struct lustre_msg *msg)
         }
 }
 
-void lustre_init_msg_v2(struct lustre_msg_v2 *msg, int count, int *lens,
+void lustre_init_msg_v2(struct lustre_msg_v2 *msg, int count, __u32 *lens,
                         char **bufs)
 {
         char *ptr;
@@ -172,7 +172,7 @@ void lustre_init_msg_v2(struct lustre_msg_v2 *msg, int count, int *lens,
 EXPORT_SYMBOL(lustre_init_msg_v2);
 
 static int lustre_pack_request_v2(struct ptlrpc_request *req,
-                                  int count, int *lens, char **bufs)
+                                  int count, __u32 *lens, char **bufs)
 {
         int reqlen, rc;
 
@@ -191,9 +191,9 @@ static int lustre_pack_request_v2(struct ptlrpc_request *req,
 }
 
 int lustre_pack_request(struct ptlrpc_request *req, __u32 magic, int count,
-                        int *lens, char **bufs)
+                        __u32 *lens, char **bufs)
 {
-        int size[] = { sizeof(struct ptlrpc_body) };
+        __u32 size[] = { sizeof(struct ptlrpc_body) };
 
         if (!lens) {
                 LASSERT(count == 1);
@@ -282,7 +282,7 @@ void lustre_put_emerg_rs(struct ptlrpc_reply_state *rs)
 }
 
 int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
-                         int *lens, char **bufs, int flags)
+                         __u32 *lens, char **bufs, int flags)
 {
         struct ptlrpc_reply_state *rs;
         int                        msg_len, rc;
@@ -320,11 +320,11 @@ int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
 }
 EXPORT_SYMBOL(lustre_pack_reply_v2);
 
-int lustre_pack_reply_flags(struct ptlrpc_request *req, int count, int *lens,
+int lustre_pack_reply_flags(struct ptlrpc_request *req, int count, __u32 *lens,
                             char **bufs, int flags)
 {
         int rc = 0;
-        int size[] = { sizeof(struct ptlrpc_body) };
+        __u32 size[] = { sizeof(struct ptlrpc_body) };
 
         if (!lens) {
                 LASSERT(count == 1);
@@ -350,7 +350,7 @@ int lustre_pack_reply_flags(struct ptlrpc_request *req, int count, int *lens,
         return rc;
 }
 
-int lustre_pack_reply(struct ptlrpc_request *req, int count, int *lens,
+int lustre_pack_reply(struct ptlrpc_request *req, int count, __u32 *lens,
                       char **bufs)
 {
         return lustre_pack_reply_flags(req, count, lens, bufs, 0);
@@ -424,7 +424,7 @@ int lustre_shrink_msg_v2(struct lustre_msg_v2 *msg, int segment,
                         memcpy(newpos, tail, tail_len);
         }
 out:
-        return lustre_msg_size_v2(msg->lm_bufcount, (int *)msg->lm_buflens);
+        return lustre_msg_size_v2(msg->lm_bufcount, msg->lm_buflens);
 }
 
 /*
@@ -1278,7 +1278,7 @@ __u32 lustre_msg_calc_cksum(struct lustre_msg *msg)
                 struct ptlrpc_body *pb;
                 pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
                 LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
-                return crc32_le(~(__u32)0, (char *)pb, sizeof(*pb));
+                return crc32_le(~(__u32)0, (unsigned char *)pb, sizeof(*pb));
         }
         default:
                 CERROR("incorrect message magic: %08x\n", msg->lm_magic);
@@ -1474,7 +1474,7 @@ void ptlrpc_request_set_replen(struct ptlrpc_request *req)
                 req->rq_reqmsg->lm_repsize = req->rq_replen;
 }
 
-void ptlrpc_req_set_repsize(struct ptlrpc_request *req, int count, int *lens)
+void ptlrpc_req_set_repsize(struct ptlrpc_request *req, int count, __u32 *lens)
 {
         req->rq_replen = lustre_msg_size(req->rq_reqmsg->lm_magic, count, lens);
         if (req->rq_reqmsg->lm_magic == LUSTRE_MSG_MAGIC_V2)

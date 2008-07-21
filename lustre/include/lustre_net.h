@@ -815,11 +815,11 @@ int ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
                              __u32 version, int opcode, char **bufs,
                              struct ptlrpc_cli_ctx *ctx);
 struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, __u32 version,
-                                       int opcode, int count, int *lengths,
+                                       int opcode, int count, __u32 *lengths,
                                        char **bufs);
 struct ptlrpc_request *ptlrpc_prep_req_pool(struct obd_import *imp,
                                              __u32 version, int opcode,
-                                            int count, int *lengths, char **bufs,
+                                            int count, __u32 *lengths, char **bufs,
                                             struct ptlrpc_request_pool *pool);
 void ptlrpc_free_req(struct ptlrpc_request *request);
 void ptlrpc_req_finished(struct ptlrpc_request *request);
@@ -898,23 +898,23 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp);
 int ptlrpc_reconnect_import(struct obd_import *imp);
 int lustre_msg_swabbed(struct lustre_msg *msg);
 int lustre_msg_check_version(struct lustre_msg *msg, __u32 version);
-void lustre_init_msg_v2(struct lustre_msg_v2 *msg, int count, int *lens,
+void lustre_init_msg_v2(struct lustre_msg_v2 *msg, int count, __u32 *lens,
                         char **bufs);
 int lustre_pack_request(struct ptlrpc_request *, __u32 magic, int count,
-                        int *lens, char **bufs);
-int lustre_pack_reply(struct ptlrpc_request *, int count, int *lens,
+                        __u32 *lens, char **bufs);
+int lustre_pack_reply(struct ptlrpc_request *, int count, __u32 *lens,
                       char **bufs);
 int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
-                         int *lens, char **bufs, int flags);
+                         __u32 *lens, char **bufs, int flags);
 #define LPRFL_EARLY_REPLY 1
-int lustre_pack_reply_flags(struct ptlrpc_request *, int count, int *lens,
+int lustre_pack_reply_flags(struct ptlrpc_request *, int count, __u32 *lens,
                             char **bufs, int flags);
 int lustre_shrink_msg(struct lustre_msg *msg, int segment,
                       unsigned int newlen, int move_data);
 void lustre_free_reply_state(struct ptlrpc_reply_state *rs);
 int lustre_msg_hdr_size(__u32 magic, int count);
-int lustre_msg_size(__u32 magic, int count, int *lengths);
-int lustre_msg_size_v2(int count, int *lengths);
+int lustre_msg_size(__u32 magic, int count, __u32 *lengths);
+int lustre_msg_size_v2(int count, __u32 *lengths);
 int lustre_packed_msg_size(struct lustre_msg *msg);
 int lustre_msg_early_size(void);
 int lustre_unpack_msg(struct lustre_msg *m, int len);
@@ -966,7 +966,7 @@ void lustre_msg_set_last_committed(struct lustre_msg *msg,__u64 last_committed);
 void lustre_msg_set_transno(struct lustre_msg *msg, __u64 transno);
 void lustre_msg_set_status(struct lustre_msg *msg, __u32 status);
 void lustre_msg_set_conn_cnt(struct lustre_msg *msg, __u32 conn_cnt);
-void ptlrpc_req_set_repsize(struct ptlrpc_request *req, int count, int *sizes);
+void ptlrpc_req_set_repsize(struct ptlrpc_request *req, int count, __u32 *sizes);
 void ptlrpc_request_set_replen(struct ptlrpc_request *req);
 void lustre_msg_set_timeout(struct lustre_msg *msg, __u32 timeout);
 void lustre_msg_set_service_time(struct lustre_msg *msg, __u32 service_time);

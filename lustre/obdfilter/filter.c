@@ -1653,7 +1653,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         int idx, rc, tmpflags = 0, only_liblustre = 1;
         struct ldlm_interval_tree *tree;
         struct filter_intent_args arg;
-        int repsize[3] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
+        __u32 repsize[3] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                            [DLM_LOCKREPLY_OFF]   = sizeof(*rep),
                            [DLM_REPLY_REC_OFF]   = sizeof(*reply_lvb) };
         ENTRY;

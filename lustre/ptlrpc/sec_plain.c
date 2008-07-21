@@ -397,7 +397,7 @@ int plain_alloc_reqbuf(struct ptlrpc_sec *sec,
                        struct ptlrpc_request *req,
                        int msgsize)
 {
-        int buflens[PLAIN_PACK_SEGMENTS] = { 0, };
+        __u32 buflens[PLAIN_PACK_SEGMENTS] = { 0, };
         int alloc_len;
         ENTRY;
 
@@ -460,7 +460,7 @@ int plain_alloc_repbuf(struct ptlrpc_sec *sec,
                        struct ptlrpc_request *req,
                        int msgsize)
 {
-        int buflens[PLAIN_PACK_SEGMENTS] = { 0, };
+        __u32 buflens[PLAIN_PACK_SEGMENTS] = { 0, };
         int alloc_len;
         ENTRY;
 
@@ -619,7 +619,7 @@ int plain_alloc_rs(struct ptlrpc_request *req, int msgsize)
 {
         struct ptlrpc_reply_state   *rs;
         struct ptlrpc_bulk_sec_desc *bsd;
-        int                          buflens[PLAIN_PACK_SEGMENTS] = { 0, };
+        __u32                        buflens[PLAIN_PACK_SEGMENTS] = { 0, };
         int                          rs_size = sizeof(*rs);
         ENTRY;
 
@@ -797,7 +797,7 @@ static struct ptlrpc_sec_policy plain_policy = {
 
 int sptlrpc_plain_init(void)
 {
-        int buflens[PLAIN_PACK_SEGMENTS] = { 0, };
+        __u32 buflens[PLAIN_PACK_SEGMENTS] = { 0, };
         int rc;
 
         buflens[PLAIN_PACK_MSG_OFF] = lustre_msg_early_size();

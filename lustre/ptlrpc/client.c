@@ -477,7 +477,7 @@ static void __ptlrpc_free_req_to_pool(struct ptlrpc_request *request)
 
 static int __ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
                                       __u32 version, int opcode,
-                                      int count, int *lengths, char **bufs,
+                                      int count, __u32 *lengths, char **bufs,
                                       struct ptlrpc_cli_ctx *ctx)
 {
         struct obd_import  *imp = request->rq_import;
@@ -643,7 +643,7 @@ struct ptlrpc_request *ptlrpc_request_alloc_pack(struct obd_import *imp,
 struct ptlrpc_request *
 ptlrpc_prep_req_pool(struct obd_import *imp,
                      __u32 version, int opcode,
-                     int count, int *lengths, char **bufs,
+                     int count, __u32 *lengths, char **bufs,
                      struct ptlrpc_request_pool *pool)
 {
         struct ptlrpc_request *request;
@@ -664,7 +664,7 @@ ptlrpc_prep_req_pool(struct obd_import *imp,
 
 struct ptlrpc_request *
 ptlrpc_prep_req(struct obd_import *imp, __u32 version, int opcode, int count,
-                int *lengths, char **bufs)
+                __u32 *lengths, char **bufs)
 {
         return ptlrpc_prep_req_pool(imp, version, opcode, count, lengths, bufs,
                                     NULL);

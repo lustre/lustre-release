@@ -857,8 +857,8 @@ int gss_cli_ctx_seal(struct ptlrpc_cli_ctx *ctx,
         struct gss_cli_ctx      *gctx;
         rawobj_t                 hdrobj, msgobj, token;
         struct gss_header       *ghdr;
-        int                      buflens[2], wiresize, rc;
-        __u32                    major;
+        __u32                    buflens[2], major;
+        int                      wiresize, rc;
         ENTRY;
 
         LASSERT(req->rq_clrbuf);
@@ -1215,7 +1215,8 @@ int gss_alloc_reqbuf_intg(struct ptlrpc_sec *sec,
                           int svc, int msgsize)
 {
         int                       bufsize, txtsize;
-        int                       buflens[5], bufcnt = 2;
+        int                       bufcnt = 2;
+        __u32                     buflens[5];
         ENTRY;
 
         /*
@@ -1295,8 +1296,8 @@ int gss_alloc_reqbuf_priv(struct ptlrpc_sec *sec,
                           struct ptlrpc_request *req,
                           int msgsize)
 {
-        int                       ibuflens[3], ibufcnt;
-        int                       wbuflens[2];
+        __u32                     ibuflens[3], wbuflens[2];
+        int                       ibufcnt;
         int                       clearsize, wiresize;
         ENTRY;
 
@@ -1452,7 +1453,8 @@ int gss_alloc_repbuf_intg(struct ptlrpc_sec *sec,
                           int svc, int msgsize)
 {
         int             txtsize;
-        int             buflens[4], bufcnt = 2;
+        __u32           buflens[4];
+        int             bufcnt = 2;
         int             alloc_size;
 
         /*
@@ -1504,7 +1506,8 @@ int gss_alloc_repbuf_priv(struct ptlrpc_sec *sec,
                           int msgsize)
 {
         int             txtsize;
-        int             buflens[2], bufcnt;
+        __u32           buflens[2];
+        int             bufcnt;
         int             alloc_size;
 
         /* inner buffers */
@@ -1684,7 +1687,7 @@ int gss_enlarge_reqbuf_priv(struct ptlrpc_sec *sec,
 {
         struct lustre_msg      *newclrbuf;
         int                     newmsg_size, newclrbuf_size, newcipbuf_size;
-        int                     buflens[3];
+        __u32                   buflens[3];
 
         /*
          * embedded msg is at seg 0 of clear buffer;
@@ -2406,8 +2409,8 @@ int gss_svc_alloc_rs(struct ptlrpc_request *req, int msglen)
         struct gss_svc_reqctx       *grctx;
         struct ptlrpc_reply_state   *rs;
         int                          early, privacy, svc, bsd_off = 0;
-        int                          ibuflens[2], ibufcnt = 0;
-        int                          buflens[4], bufcnt;
+        __u32                        ibuflens[2], buflens[4];
+        int                          ibufcnt = 0, bufcnt;
         int                          txtsize, wmsg_size, rs_size;
         ENTRY;
 
@@ -2527,9 +2530,9 @@ static int gss_svc_seal(struct ptlrpc_request *req,
         rawobj_t                 hdrobj, msgobj, token;
         struct gss_header       *ghdr;
         __u8                    *token_buf;
-        int                      token_buflen, buflens[2];
+        int                      token_buflen; 
+        __u32                    buflens[2], major;
         int                      msglen, rc;
-        __u32                    major;
         ENTRY;
 
         /* get clear data length. note embedded lustre_msg might
@@ -2737,7 +2740,8 @@ err_out:
 
 static void gss_init_at_reply_offset(void)
 {
-        int buflens[3], clearsize;
+        __u32 buflens[3];
+        int clearsize;
 
         buflens[0] = PTLRPC_GSS_HEADER_SIZE;
         buflens[1] = lustre_msg_early_size();

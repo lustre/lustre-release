@@ -610,7 +610,7 @@ static int mgc_set_mgs_param(struct obd_export *exp,
         struct ptlrpc_request *req;
         struct mgs_send_param *req_msp, *rep_msp;
         int size[] = { sizeof(struct ptlrpc_body), sizeof(*req_msp) };
-        int rep_size[] = { sizeof(struct ptlrpc_body), sizeof(*msp) };
+        __u32 rep_size[] = { sizeof(struct ptlrpc_body), sizeof(*msp) };
         int rc;
         ENTRY;
 
