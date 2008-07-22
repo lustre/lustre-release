@@ -1585,7 +1585,7 @@ run_test 40 "race during service thread startup"
 test_41() { #bug 14134
         local rc
         start mds $MDSDEV $MDS_MOUNT_OPTS -o nosvc -n
-        start ost `ostdevname 1` $OST_MOUNT_OPTS
+        start ost1 `ostdevname 1` $OST_MOUNT_OPTS
         start mds $MDSDEV $MDS_MOUNT_OPTS -o nomgs
         mkdir -p $MOUNT
         mount_client $MOUNT || return 1
@@ -1595,7 +1595,7 @@ test_41() { #bug 14134
         cat $MOUNT/$tfile
 
         umount_client $MOUNT
-        stop ost -f || return 201
+        stop ost1 -f || return 201
         stop mds -f || return 202
         stop mds -f || return 203
         unload_modules || return 204
