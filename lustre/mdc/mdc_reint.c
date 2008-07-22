@@ -70,14 +70,11 @@ int mdc_resource_get_unused(struct obd_export *exp, struct ll_fid *fid,
                             __u64 bits)
 {
         struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
-        struct ldlm_res_id res_id;
-        struct ldlm_resource *res;
+        struct ldlm_res_id res_id = { .name = {fid->id, fid->generation} };
+        struct ldlm_resource *res = ldlm_resource_get(ns, NULL, res_id, 0, 0);
         ldlm_policy_data_t policy = {{0}};
         int count;
         ENTRY;
-
-        fid_build_reg_res_name((struct lu_fid*)fid, &res_id);
-        res = ldlm_resource_get(ns, NULL, res_id, 0, 0);
 
         if (res == NULL)
                 RETURN(0);
@@ -110,40 +107,22 @@ int mdc_setattr(struct obd_export *exp, struct mdc_op_data *op_data,
 {
         CFS_LIST_HEAD(cancels);
         struct ptlrpc_request *req;
+        struct mds_rec_setattr *rec;
         struct mdc_rpc_lock *rpc_lock;
         struct obd_device *obd = exp->exp_obd;
-        int size[7] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
-                        [REQ_REC_OFF] = sizeof(struct mds_rec_setattr),
-                        [REQ_REC_OFF + 1] = ealen,
-                        [REQ_REC_OFF + 2] = ea2len,
-                        [REQ_REC_OFF + 3] = sizeof(struct ldlm_request) };
-        int replysize[6] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
-                             [REPLY_REC_OFF] = sizeof(struct mds_body),
-                             [REPLY_REC_OFF+1] = obd->u.cli.cl_max_mds_easize,
-                             [REPLY_REC_OFF+2] = LUSTRE_POSIX_ACL_MAX_SIZE,
-                             [REPLY_REC_OFF+3] = sizeof(struct lustre_capa),
-                             [REPLY_REC_OFF+4] = sizeof(struct lustre_capa)};
-
-        int count, bufcount = 2, rc, replybufcount = 2;
-        int offset = REQ_REC_OFF + 3;
+        int size[5] = { sizeof(struct ptlrpc_body),
+                        sizeof(*rec), ealen, ea2len,
+                        sizeof(struct ldlm_request) };
+        int count, bufcount = 2, rc;
         __u64 bits;
         ENTRY;
 
         LASSERT(iattr != NULL);
 
-        if (mdc_exp_is_2_0_server(exp)) {
-                size[REQ_REC_OFF] = sizeof(struct mdt_rec_setattr);
-                size[REQ_REC_OFF + 1] = 0; /* capa */
-                size[REQ_REC_OFF + 2] = 0; //sizeof (struct mdt_epoch);
-                size[REQ_REC_OFF + 3] = ealen;
-                size[REQ_REC_OFF + 4] = ea2len;
-                size[REQ_REC_OFF + 5] = sizeof(struct ldlm_request);
-                offset = REQ_REC_OFF + 5;
-                bufcount = 6;
-                replysize[REPLY_REC_OFF] = sizeof(struct mdt_body);
-                replybufcount = 6;
-        } else {
-                bufcount = 4;
+        if (ealen > 0) {
+                bufcount++;
+                if (ea2len > 0)
+                        bufcount++;
         }
 
         bits = MDS_INODELOCK_UPDATE;
@@ -152,9 +131,9 @@ int mdc_setattr(struct obd_export *exp, struct mdc_op_data *op_data,
         count = mdc_resource_get_unused(exp, &op_data->fid1,
                                         &cancels, LCK_EX, bits);
         if (exp_connect_cancelset(exp))
-                bufcount ++ ;
+                bufcount = 5;
         req = mdc_prep_elc_req(exp, bufcount, size,
-                               offset, &cancels, count);
+                               REQ_REC_OFF + 3, &cancels, count);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
@@ -172,7 +151,8 @@ int mdc_setattr(struct obd_export *exp, struct mdc_op_data *op_data,
         mdc_setattr_pack(req, REQ_REC_OFF, op_data, iattr,
                          ea, ealen, ea2, ea2len);
 
-        ptlrpc_req_set_repsize(req, replybufcount, replysize);
+        size[REPLY_REC_OFF] = sizeof(struct mds_body);
+        ptlrpc_req_set_repsize(req, 2, size);
 
         rc = mdc_reint(req, rpc_lock, LUSTRE_IMP_FULL);
         *request = req;
@@ -190,21 +170,12 @@ int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
         struct obd_device *obd = exp->exp_obd;
         struct ptlrpc_request *req;
         int level, bufcount = 3, rc;
-        int size[6] = { sizeof(struct ptlrpc_body),
+        int size[5] = { sizeof(struct ptlrpc_body),
                         sizeof(struct mds_rec_create),
                         op_data->namelen + 1, 0, sizeof(struct ldlm_request) };
-        int offset = REQ_REC_OFF + 3;
         int count;
         ENTRY;
 
-        if (mdc_exp_is_2_0_server(exp)) {
-                size[REQ_REC_OFF] = sizeof(struct mdt_rec_create);
-                size[REQ_REC_OFF + 1] = 0; /* capa */
-                size[REQ_REC_OFF + 2] = op_data->namelen + 1;
-                size[REQ_REC_OFF + 4] = sizeof(struct ldlm_request);
-                bufcount++;
-                offset ++;
-        }
         if (data && datalen) {
                 size[bufcount] = datalen;
                 bufcount++;
@@ -212,25 +183,10 @@ int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
 
         count = mdc_resource_get_unused(exp, &op_data->fid1, &cancels,
                                         LCK_EX, MDS_INODELOCK_UPDATE);
-        if (exp_connect_cancelset(exp)) {
-                if (mdc_exp_is_2_0_server(exp)) {
-                        bufcount = 6;
-                } else {
-                        bufcount = 5;
-                }
-        }
-
-        if (mdc_exp_is_2_0_server(exp)) {
-                struct client_obd *cli = &obd->u.cli;
-                rc = mdc_fid_alloc(cli->cl_seq, (struct lu_fid*)&op_data->fid2);
-                if (rc) {
-                        CERROR("fid allocation result: %d\n", rc);
-                        RETURN(rc);
-                }
-        }
-
+        if (exp_connect_cancelset(exp))
+                bufcount = 5;
         req = mdc_prep_elc_req(exp, bufcount, size,
-                               offset, &cancels, count);
+                               REQ_REC_OFF + 3, &cancels, count);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
@@ -240,8 +196,7 @@ int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
                         gid, cap_effective, rdev);
 
         size[REPLY_REC_OFF] = sizeof(struct mds_body);
-        size[REPLY_REC_OFF+1] = sizeof(struct ost_lvb);
-        ptlrpc_req_set_repsize(req, 3, size);
+        ptlrpc_req_set_repsize(req, 2, size);
 
         level = LUSTRE_IMP_FULL;
  resend:
@@ -265,22 +220,11 @@ int mdc_unlink(struct obd_export *exp, struct mdc_op_data *op_data,
         CFS_LIST_HEAD(cancels);
         struct obd_device *obd = class_exp2obd(exp);
         struct ptlrpc_request *req = *request;
-        int size[5] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
-                        [REQ_REC_OFF] = sizeof(struct mds_rec_unlink),
-                        [REQ_REC_OFF + 1] = op_data->namelen + 1,
-                        [REQ_REC_OFF + 2] = sizeof(struct ldlm_request) };
+        int size[4] = { sizeof(struct ptlrpc_body),
+                        sizeof(struct mds_rec_unlink),
+                        op_data->namelen + 1, sizeof(struct ldlm_request) };
         int count, rc, bufcount = 3;
-        int offset = REQ_REC_OFF + 2;
         ENTRY;
-
-        if (mdc_exp_is_2_0_server(exp)) {
-                size[REQ_REC_OFF] = sizeof(struct mdt_rec_unlink);
-                size[REQ_REC_OFF + 1] = 0 /* capa */;
-                size[REQ_REC_OFF + 2] = op_data->namelen + 1;
-                size[REQ_REC_OFF + 3] = sizeof(struct ldlm_request);
-                bufcount ++;
-                offset ++;
-        }
 
         LASSERT(req == NULL);
         count = mdc_resource_get_unused(exp, &op_data->fid1, &cancels,
@@ -289,10 +233,9 @@ int mdc_unlink(struct obd_export *exp, struct mdc_op_data *op_data,
                 count += mdc_resource_get_unused(exp, &op_data->fid3, &cancels,
                                                  LCK_EX, MDS_INODELOCK_FULL);
         if (exp_connect_cancelset(exp))
-                bufcount ++;
-
+                bufcount = 4;
         req = mdc_prep_elc_req(exp, bufcount, size,
-                               offset, &cancels, count);
+                               REQ_REC_OFF + 2, &cancels, count);
         if (req == NULL)
                 RETURN(-ENOMEM);
         *request = req;
@@ -316,33 +259,20 @@ int mdc_link(struct obd_export *exp, struct mdc_op_data *op_data,
         CFS_LIST_HEAD(cancels);
         struct obd_device *obd = exp->exp_obd;
         struct ptlrpc_request *req;
-        int size[6] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
-                        [REQ_REC_OFF] = sizeof(struct mds_rec_link),
-                        [REQ_REC_OFF + 1] = op_data->namelen + 1,
-                        [REQ_REC_OFF + 2] = sizeof(struct ldlm_request)};
+        int size[4] = { sizeof(struct ptlrpc_body),
+                        sizeof(struct mds_rec_link),
+                        op_data->namelen + 1, sizeof(struct ldlm_request) };
         int count, rc, bufcount = 3;
-        int offset = REQ_REC_OFF + 2;
         ENTRY;
-
-        if (mdc_exp_is_2_0_server(exp)) {
-                size[REQ_REC_OFF] = sizeof(struct mdt_rec_link);
-                size[REQ_REC_OFF + 1] = 0; /* capa */
-                size[REQ_REC_OFF + 2] = 0; /* capa */
-                size[REQ_REC_OFF + 3] = op_data->namelen + 1;
-                size[REQ_REC_OFF + 4] = sizeof(struct ldlm_request);
-                bufcount = 5;
-                offset += 2;
-        }
 
         count = mdc_resource_get_unused(exp, &op_data->fid1, &cancels,
                                         LCK_EX, MDS_INODELOCK_UPDATE);
         count += mdc_resource_get_unused(exp, &op_data->fid2, &cancels,
                                          LCK_EX, MDS_INODELOCK_UPDATE);
         if (exp_connect_cancelset(exp))
-                bufcount++;
-
+                bufcount = 4;
         req = mdc_prep_elc_req(exp, bufcount, size,
-                               offset, &cancels, count);
+                               REQ_REC_OFF + 2, &cancels, count);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
@@ -366,25 +296,11 @@ int mdc_rename(struct obd_export *exp, struct mdc_op_data *op_data,
         CFS_LIST_HEAD(cancels);
         struct obd_device *obd = exp->exp_obd;
         struct ptlrpc_request *req;
-        int size[7] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
-                        [REQ_REC_OFF] = sizeof(struct mds_rec_rename),
-                        [REQ_REC_OFF + 1] = oldlen + 1,
-                        [REQ_REC_OFF + 2] = newlen + 1,
-                        [REQ_REC_OFF + 3] = sizeof(struct ldlm_request) };
+        int size[5] = { sizeof(struct ptlrpc_body),
+                        sizeof(struct mds_rec_rename),
+                        oldlen + 1, newlen + 1, sizeof(struct ldlm_request) };
         int count, rc, bufcount = 4;
-        int offset = REQ_REC_OFF + 3;
         ENTRY;
-
-        if (mdc_exp_is_2_0_server(exp)) {
-                size[REQ_REC_OFF] = sizeof(struct mdt_rec_rename);
-                size[REQ_REC_OFF + 1] = 0; /* capa */
-                size[REQ_REC_OFF + 2] = 0; /* capa */
-                size[REQ_REC_OFF + 3] = oldlen + 1;
-                size[REQ_REC_OFF + 4] = newlen + 1;
-                size[REQ_REC_OFF + 5] = sizeof(struct ldlm_request);
-                bufcount = 6;
-                offset += 2;
-        }
 
         count = mdc_resource_get_unused(exp, &op_data->fid1, &cancels,
                                         LCK_EX, MDS_INODELOCK_UPDATE);
@@ -397,10 +313,9 @@ int mdc_rename(struct obd_export *exp, struct mdc_op_data *op_data,
                 count += mdc_resource_get_unused(exp, &op_data->fid4, &cancels,
                                                  LCK_EX, MDS_INODELOCK_FULL);
         if (exp_connect_cancelset(exp))
-                bufcount ++;
-
+                bufcount = 5;
         req = mdc_prep_elc_req(exp, bufcount, size,
-                               offset, &cancels, count);
+                               REQ_REC_OFF + 3, &cancels, count);
         if (req == NULL)
                 RETURN(-ENOMEM);
 

@@ -174,7 +174,7 @@ kibnal_init_msg(kib_msg_t *msg, int type, int body_nob)
 }
 
 void
-kibnal_pack_msg(kib_msg_t *msg, __u32 version, int credits,
+kibnal_pack_msg(kib_msg_t *msg, __u32 version, int credits, 
                 lnet_nid_t dstnid, __u64 dststamp, __u64 seq)
 {
         /* CAVEAT EMPTOR! all message fields not set here should have been
@@ -243,7 +243,7 @@ kibnal_unpack_msg(kib_msg_t *msg, __u32 expected_version, int nob)
                     msg_version != IBNAL_MSG_VERSION)
                         return -EPROTO;
         } else if (msg_version != expected_version) {
-                CERROR("Bad version: %x(%x expected)\n",
+                CERROR("Bad version: %x(%x expected)\n", 
                        msg_version, expected_version);
                 return -EPROTO;
         }
@@ -269,7 +269,7 @@ kibnal_unpack_msg(kib_msg_t *msg, __u32 expected_version, int nob)
                 return -EPROTO;
         }
         msg->ibm_cksum = msg_cksum;
-
+        
         if (flip) {
                 /* leave magic unflipped as a clue to peer endianness */
                 msg->ibm_version = msg_version;
@@ -282,7 +282,7 @@ kibnal_unpack_msg(kib_msg_t *msg, __u32 expected_version, int nob)
                 __swab64s(&msg->ibm_dststamp);
                 __swab64s(&msg->ibm_seq);
         }
-
+        
         if (msg->ibm_srcnid == LNET_NID_ANY) {
                 CERROR("Bad src nid: %s\n", libcfs_nid2str(msg->ibm_srcnid));
                 return -EPROTO;
@@ -292,7 +292,7 @@ kibnal_unpack_msg(kib_msg_t *msg, __u32 expected_version, int nob)
         default:
                 CERROR("Unknown message type %x\n", msg->ibm_type);
                 return -EPROTO;
-
+                
         case IBNAL_MSG_NOOP:
                 break;
 
@@ -329,14 +329,14 @@ kibnal_unpack_msg(kib_msg_t *msg, __u32 expected_version, int nob)
                         __swab32s(&msg->ibm_u.putack.ibpam_rd.rd_key);
                         __swab32s(&msg->ibm_u.putack.ibpam_rd.rd_nfrag);
                 }
-
+                
                 n = msg->ibm_u.putack.ibpam_rd.rd_nfrag;
                 if (n <= 0 || n > IBNAL_MAX_RDMA_FRAGS) {
-                        CERROR("Bad PUT_ACK nfrags: %d, should be 0 < n <= %d\n",
+                        CERROR("Bad PUT_ACK nfrags: %d, should be 0 < n <= %d\n", 
                                n, IBNAL_MAX_RDMA_FRAGS);
                         return -EPROTO;
                 }
-
+                
                 if (msg_nob < offsetof(kib_msg_t, ibm_u.putack.ibpam_rd.rd_frags[n])) {
                         CERROR("Short PUT_ACK: %d(%d)\n", msg_nob,
                                (int)offsetof(kib_msg_t, ibm_u.putack.ibpam_rd.rd_frags[n]));
@@ -365,7 +365,7 @@ kibnal_unpack_msg(kib_msg_t *msg, __u32 expected_version, int nob)
                         __swab32s(&msg->ibm_u.get.ibgm_rd.rd_nob);
                         __swab32s(&msg->ibm_u.get.ibgm_rd.rd_key);
                 }
-#else
+#else                
                 if (flip) {
                         __swab32s(&msg->ibm_u.get.ibgm_rd.rd_key);
                         __swab32s(&msg->ibm_u.get.ibgm_rd.rd_nfrag);
@@ -373,17 +373,17 @@ kibnal_unpack_msg(kib_msg_t *msg, __u32 expected_version, int nob)
 
                 n = msg->ibm_u.get.ibgm_rd.rd_nfrag;
                 if (n <= 0 || n > IBNAL_MAX_RDMA_FRAGS) {
-                        CERROR("Bad GET_REQ nfrags: %d, should be 0 < n <= %d\n",
+                        CERROR("Bad GET_REQ nfrags: %d, should be 0 < n <= %d\n", 
                                n, IBNAL_MAX_RDMA_FRAGS);
                         return -EPROTO;
                 }
-
+                
                 if (msg_nob < offsetof(kib_msg_t, ibm_u.get.ibgm_rd.rd_frags[n])) {
                         CERROR("Short GET_REQ: %d(%d)\n", msg_nob,
                                (int)offsetof(kib_msg_t, ibm_u.get.ibgm_rd.rd_frags[n]));
                         return -EPROTO;
                 }
-
+                
                 if (flip)
                         for (i = 0; i < msg->ibm_u.get.ibgm_rd.rd_nfrag; i++) {
                                 __swab32s(&msg->ibm_u.get.ibgm_rd.rd_frags[i].rf_nob);
@@ -431,25 +431,25 @@ kibnal_start_listener (lnet_ni_t *ni)
 
         LASSERT (kibnal_data.kib_listen_handle == NULL);
 
-        kibnal_data.kib_listen_handle =
+        kibnal_data.kib_listen_handle = 
                 cm_create_cep(cm_cep_transp_rc);
         if (kibnal_data.kib_listen_handle == NULL) {
                 CERROR ("Can't create listen CEP\n");
                 return -ENOMEM;
         }
 
-        CDEBUG(D_NET, "Created CEP %p for listening\n",
+        CDEBUG(D_NET, "Created CEP %p for listening\n", 
                kibnal_data.kib_listen_handle);
 
         memset(&info, 0, sizeof(info));
-        info.listen_addr.end_pt.sid =
+        info.listen_addr.end_pt.sid = 
                 (__u64)(*kibnal_tunables.kib_service_number);
 
         cmrc = cm_listen(kibnal_data.kib_listen_handle, &info,
                          kibnal_listen_callback, NULL);
         if (cmrc == cm_stat_success)
                 return 0;
-
+        
         CERROR ("cm_listen error: %d\n", cmrc);
 
         cmrc = cm_destroy_cep(kibnal_data.kib_listen_handle);
@@ -465,13 +465,13 @@ kibnal_stop_listener(lnet_ni_t *ni)
         cm_return_t      cmrc;
 
         LASSERT (kibnal_data.kib_listen_handle != NULL);
-
+        
         cmrc = cm_cancel(kibnal_data.kib_listen_handle);
         if (cmrc != cm_stat_success)
                 CERROR ("Error %d stopping listener\n", cmrc);
 
         cfs_pause(cfs_time_seconds(1)/10);   /* ensure no more callbacks */
-
+        
         cmrc = cm_destroy_cep(kibnal_data.kib_listen_handle);
         if (cmrc != vv_return_ok)
                 CERROR ("Error %d destroying CEP\n", cmrc);
@@ -519,18 +519,18 @@ kibnal_create_peer (kib_peer_t **peerp, lnet_nid_t nid)
                 /* npeers only grows with the global lock held */
                 atomic_inc(&kibnal_data.kib_npeers);
         }
-
+        
         write_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
 
         if (rc != 0) {
                 CERROR("Can't create peer: %s\n", 
-                       (rc == -ESHUTDOWN) ? "shutting down" :
+                       (rc == -ESHUTDOWN) ? "shutting down" : 
                        "too many peers");
                 LIBCFS_FREE(peer, sizeof(*peer));
         } else {
                 *peerp = peer;
         }
-
+        
         return rc;
 }
 
@@ -544,7 +544,7 @@ kibnal_destroy_peer (kib_peer_t *peer)
         LASSERT (peer->ibp_accepting == 0);
         LASSERT (list_empty (&peer->ibp_conns));
         LASSERT (list_empty (&peer->ibp_tx_queue));
-
+        
         LIBCFS_FREE (peer, sizeof (*peer));
 
         /* NB a peer's connections keep a reference on their peer until
@@ -643,7 +643,7 @@ kibnal_add_persistent_peer (lnet_nid_t nid, __u32 ip)
 
         CDEBUG(D_NET, "%s at %u.%u.%u.%u\n",
                libcfs_nid2str(nid), HIPQUAD(ip));
-
+        
         if (nid == LNET_NID_ANY)
                 return (-EINVAL);
 
@@ -669,7 +669,7 @@ kibnal_add_persistent_peer (lnet_nid_t nid, __u32 ip)
 
         peer->ibp_ip = ip;
         peer->ibp_persistence++;
-
+        
         write_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
         return (0);
 }
@@ -814,16 +814,16 @@ kibnal_debug_conn (kib_conn_t *conn)
 {
         struct list_head *tmp;
         int               i;
-
+        
         spin_lock(&conn->ibc_lock);
-
-        CDEBUG(D_CONSOLE, "conn[%d] %p -> %s: \n",
-               atomic_read(&conn->ibc_refcount), conn,
+        
+        CDEBUG(D_CONSOLE, "conn[%d] %p -> %s: \n", 
+               atomic_read(&conn->ibc_refcount), conn, 
                libcfs_nid2str(conn->ibc_peer->ibp_nid));
         CDEBUG(D_CONSOLE, "   txseq "LPD64" rxseq "LPD64" state %d \n",
                conn->ibc_txseq, conn->ibc_rxseq, conn->ibc_state);
         CDEBUG(D_CONSOLE, "   nposted %d cred %d o_cred %d r_cred %d\n",
-               conn->ibc_nsends_posted, conn->ibc_credits,
+               conn->ibc_nsends_posted, conn->ibc_credits, 
                conn->ibc_outstanding_credits, conn->ibc_reserved_credits);
         CDEBUG(D_CONSOLE, "   disc %d comms_err %d\n",
                conn->ibc_disconnect, conn->ibc_comms_error);
@@ -831,7 +831,7 @@ kibnal_debug_conn (kib_conn_t *conn)
         CDEBUG(D_CONSOLE, "   early_rxs:\n");
         list_for_each(tmp, &conn->ibc_early_rxs)
                 kibnal_debug_rx(list_entry(tmp, kib_rx_t, rx_list));
-
+        
         CDEBUG(D_CONSOLE, "   tx_queue_nocred:\n");
         list_for_each(tmp, &conn->ibc_tx_queue_nocred)
                 kibnal_debug_tx(list_entry(tmp, kib_tx_t, tx_list));
@@ -843,11 +843,11 @@ kibnal_debug_conn (kib_conn_t *conn)
         CDEBUG(D_CONSOLE, "   tx_queue:\n");
         list_for_each(tmp, &conn->ibc_tx_queue)
                 kibnal_debug_tx(list_entry(tmp, kib_tx_t, tx_list));
-
+        
         CDEBUG(D_CONSOLE, "   active_txs:\n");
         list_for_each(tmp, &conn->ibc_active_txs)
                 kibnal_debug_tx(list_entry(tmp, kib_tx_t, tx_list));
-
+        
         CDEBUG(D_CONSOLE, "   rxs:\n");
         for (i = 0; i < IBNAL_RX_MSGS; i++)
                 kibnal_debug_rx(&conn->ibc_rxs[i]);
@@ -859,20 +859,20 @@ int
 kibnal_set_qp_state (kib_conn_t *conn, vv_qp_state_t new_state)
 {
         static vv_qp_attr_t attr;
-
+        
         kib_connvars_t   *cv = conn->ibc_connvars;
         vv_return_t       vvrc;
-
+        
         /* Only called by connd => static OK */
         LASSERT (!in_interrupt());
         LASSERT (current == kibnal_data.kib_connd);
 
         memset(&attr, 0, sizeof(attr));
-
+        
         switch (new_state) {
         default:
                 LBUG();
-
+                
         case vv_qp_state_init: {
                 struct vv_qp_modify_init_st *init = &attr.modify.params.init;
 
@@ -882,7 +882,7 @@ kibnal_set_qp_state (kib_conn_t *conn, vv_qp_state_t new_state)
                 init->access_control = vv_acc_r_mem_read |
                                        vv_acc_r_mem_write; /* XXX vv_acc_l_mem_write ? */
 
-                attr.modify.vv_qp_attr_mask = VV_QP_AT_P_KEY_IX |
+                attr.modify.vv_qp_attr_mask = VV_QP_AT_P_KEY_IX | 
                                               VV_QP_AT_PHY_PORT_NUM |
                                               VV_QP_AT_ACCESS_CON_F;
                 break;
@@ -911,9 +911,9 @@ kibnal_set_qp_state (kib_conn_t *conn, vv_qp_state_t new_state)
 
 
                 // XXX sdp sets VV_QP_AT_OP_F but no actual optional options
-                attr.modify.vv_qp_attr_mask = VV_QP_AT_ADD_VEC |
+                attr.modify.vv_qp_attr_mask = VV_QP_AT_ADD_VEC | 
                                               VV_QP_AT_DEST_QP |
-                                              VV_QP_AT_R_PSN |
+                                              VV_QP_AT_R_PSN | 
                                               VV_QP_AT_MIN_RNR_NAK_T |
                                               VV_QP_AT_RESP_RDMA_ATOM_OUT_NUM |
                                               VV_QP_AT_OP_F;
@@ -927,7 +927,7 @@ kibnal_set_qp_state (kib_conn_t *conn, vv_qp_state_t new_state)
                 rts->retry_num                = *kibnal_tunables.kib_retry_cnt;
                 rts->rnr_num                  = *kibnal_tunables.kib_rnr_cnt;
                 rts->dest_out_rdma_r_atom_num = IBNAL_OUS_DST_RD;
-
+                
                 attr.modify.vv_qp_attr_mask = VV_QP_AT_S_PSN |
                                               VV_QP_AT_L_ACK_T |
                                               VV_QP_AT_RETRY_NUM |
@@ -940,18 +940,18 @@ kibnal_set_qp_state (kib_conn_t *conn, vv_qp_state_t new_state)
                 attr.modify.vv_qp_attr_mask = 0;
                 break;
         }
-
+                
         attr.modify.qp_modify_into_state = new_state;
         attr.modify.vv_qp_attr_mask |= VV_QP_AT_STATE;
-
+        
         vvrc = vv_qp_modify(kibnal_data.kib_hca, conn->ibc_qp, &attr, NULL);
         if (vvrc != vv_return_ok) {
-                CERROR("Can't modify qp -> %s state to %d: %d\n",
+                CERROR("Can't modify qp -> %s state to %d: %d\n", 
                        libcfs_nid2str(conn->ibc_peer->ibp_nid),
                        new_state, vvrc);
                 return -EIO;
         }
-
+        
         return 0;
 }
 
@@ -971,7 +971,7 @@ kibnal_create_conn (cm_cep_handle_t cep)
         /* Only the connd creates conns => single threaded */
         LASSERT(!in_interrupt());
         LASSERT(current == kibnal_data.kib_connd);
-
+        
         LIBCFS_ALLOC(conn, sizeof (*conn));
         if (conn == NULL) {
                 CERROR ("Can't allocate connection\n");
@@ -989,7 +989,7 @@ kibnal_create_conn (cm_cep_handle_t cep)
         INIT_LIST_HEAD (&conn->ibc_tx_queue_rsrvd);
         INIT_LIST_HEAD (&conn->ibc_active_txs);
         spin_lock_init (&conn->ibc_lock);
-
+        
         atomic_inc (&kibnal_data.kib_nconns);
         /* well not really, but I call destroy() on failure, which decrements */
 
@@ -1023,7 +1023,7 @@ kibnal_create_conn (cm_cep_handle_t cep)
                 vv_r_key_t      r_key;
 
                 rx->rx_conn = conn;
-                rx->rx_msg = (kib_msg_t *)(((char *)page_address(page)) +
+                rx->rx_msg = (kib_msg_t *)(((char *)page_address(page)) + 
                              page_offset);
 
                 vvrc = vv_get_gen_mr_attrib(kibnal_data.kib_hca,
@@ -1052,7 +1052,7 @@ kibnal_create_conn (cm_cep_handle_t cep)
         reqattr.create.qp_type                    = vv_qp_type_r_conn;
         reqattr.create.cq_send_h                  = kibnal_data.kib_cq;
         reqattr.create.cq_receive_h               = kibnal_data.kib_cq;
-        reqattr.create.send_max_outstand_wr       = (1 + IBNAL_MAX_RDMA_FRAGS) *
+        reqattr.create.send_max_outstand_wr       = (1 + IBNAL_MAX_RDMA_FRAGS) * 
                                                     (*kibnal_tunables.kib_concurrent_sends);
         reqattr.create.receive_max_outstand_wr    = IBNAL_RX_MSGS;
         reqattr.create.max_scatgat_per_send_wr    = 1;
@@ -1072,13 +1072,13 @@ kibnal_create_conn (cm_cep_handle_t cep)
         conn->ibc_state = IBNAL_CONN_INIT_QP;
         conn->ibc_connvars->cv_local_qpn = rspattr.create_return.qp_num;
 
-        if (rspattr.create_return.receive_max_outstand_wr <
+        if (rspattr.create_return.receive_max_outstand_wr < 
             IBNAL_RX_MSGS ||
-            rspattr.create_return.send_max_outstand_wr <
+            rspattr.create_return.send_max_outstand_wr < 
             (1 + IBNAL_MAX_RDMA_FRAGS) * (*kibnal_tunables.kib_concurrent_sends)) {
                 CERROR("Insufficient rx/tx work items: wanted %d/%d got %d/%d\n",
-                       IBNAL_RX_MSGS,
-                       (1 + IBNAL_MAX_RDMA_FRAGS) *
+                       IBNAL_RX_MSGS, 
+                       (1 + IBNAL_MAX_RDMA_FRAGS) * 
                        (*kibnal_tunables.kib_concurrent_sends),
                        rspattr.create_return.receive_max_outstand_wr,
                        rspattr.create_return.send_max_outstand_wr);
@@ -1091,7 +1091,7 @@ kibnal_create_conn (cm_cep_handle_t cep)
         /* 1 ref for caller */
         atomic_set (&conn->ibc_refcount, 1);
         return (conn);
-
+        
  failed:
         kibnal_destroy_conn (conn);
         return (NULL);
@@ -1105,7 +1105,7 @@ kibnal_destroy_conn (kib_conn_t *conn)
         /* Only the connd does this (i.e. single threaded) */
         LASSERT (!in_interrupt());
         LASSERT (current == kibnal_data.kib_connd);
-
+        
         CDEBUG (D_NET, "connection %p\n", conn);
 
         LASSERT (atomic_read (&conn->ibc_refcount) == 0);
@@ -1137,16 +1137,16 @@ kibnal_destroy_conn (kib_conn_t *conn)
                 if (vvrc != vv_return_ok)
                         CERROR("Can't destroy QP: %d\n", vvrc);
                 /* fall through */
-
+                
         case IBNAL_CONN_INIT_NOTHING:
                 break;
         }
 
-        if (conn->ibc_rx_pages != NULL)
+        if (conn->ibc_rx_pages != NULL) 
                 kibnal_free_pages(conn->ibc_rx_pages);
 
         if (conn->ibc_rxs != NULL)
-                LIBCFS_FREE(conn->ibc_rxs,
+                LIBCFS_FREE(conn->ibc_rxs, 
                             IBNAL_RX_MSGS * sizeof(kib_rx_t));
 
         if (conn->ibc_connvars != NULL)
@@ -1195,7 +1195,7 @@ kibnal_close_stale_conns_locked (kib_peer_t *peer, __u64 incarnation)
                 CDEBUG(D_NET, "Closing stale conn -> %s incarnation:"LPX64"("LPX64")\n",
                        libcfs_nid2str(peer->ibp_nid),
                        conn->ibc_incarnation, incarnation);
-
+                
                 count++;
                 kibnal_close_conn_locked (conn, -ESTALE);
         }
@@ -1245,7 +1245,7 @@ kibnal_close_matching_conns (lnet_nid_t nid)
         /* wildcards always succeed */
         if (nid == LNET_NID_ANY)
                 return (0);
-
+        
         return (count == 0 ? -ENOENT : 0);
 }
 
@@ -1318,11 +1318,11 @@ kibnal_free_pages (kib_pages_t *p)
 {
         int         npages = p->ibp_npages;
         int         i;
-
+        
         for (i = 0; i < npages; i++)
                 if (p->ibp_pages[i] != NULL)
                         __free_page(p->ibp_pages[i]);
-
+        
         LIBCFS_FREE (p, offsetof(kib_pages_t, ibp_pages[npages]));
 }
 
@@ -1340,7 +1340,7 @@ kibnal_alloc_pages (kib_pages_t **pp, int npages, int allow_write)
 
         memset (p, 0, offsetof(kib_pages_t, ibp_pages[npages]));
         p->ibp_npages = npages;
-
+        
         for (i = 0; i < npages; i++) {
                 p->ibp_pages[i] = alloc_page (GFP_KERNEL);
                 if (p->ibp_pages[i] == NULL) {
@@ -1355,15 +1355,15 @@ kibnal_alloc_pages (kib_pages_t **pp, int npages, int allow_write)
 }
 
 int
-kibnal_alloc_tx_descs (void)
+kibnal_alloc_tx_descs (void) 
 {
         int    i;
-
+        
         LIBCFS_ALLOC (kibnal_data.kib_tx_descs,
                       IBNAL_TX_MSGS() * sizeof(kib_tx_t));
         if (kibnal_data.kib_tx_descs == NULL)
                 return -ENOMEM;
-
+        
         memset(kibnal_data.kib_tx_descs, 0,
                IBNAL_TX_MSGS() * sizeof(kib_tx_t));
 
@@ -1376,20 +1376,20 @@ kibnal_alloc_tx_descs (void)
                 if (tx->tx_pages == NULL)
                         return -ENOMEM;
 #else
-                LIBCFS_ALLOC(tx->tx_wrq,
-                             (1 + IBNAL_MAX_RDMA_FRAGS) *
+                LIBCFS_ALLOC(tx->tx_wrq, 
+                             (1 + IBNAL_MAX_RDMA_FRAGS) * 
                              sizeof(*tx->tx_wrq));
                 if (tx->tx_wrq == NULL)
                         return -ENOMEM;
-
-                LIBCFS_ALLOC(tx->tx_gl,
-                             (1 + IBNAL_MAX_RDMA_FRAGS) *
+                
+                LIBCFS_ALLOC(tx->tx_gl, 
+                             (1 + IBNAL_MAX_RDMA_FRAGS) * 
                              sizeof(*tx->tx_gl));
                 if (tx->tx_gl == NULL)
                         return -ENOMEM;
-
-                LIBCFS_ALLOC(tx->tx_rd,
-                             offsetof(kib_rdma_desc_t,
+                
+                LIBCFS_ALLOC(tx->tx_rd, 
+                             offsetof(kib_rdma_desc_t, 
                                       rd_frags[IBNAL_MAX_RDMA_FRAGS]));
                 if (tx->tx_rd == NULL)
                         return -ENOMEM;
@@ -1400,7 +1400,7 @@ kibnal_alloc_tx_descs (void)
 }
 
 void
-kibnal_free_tx_descs (void)
+kibnal_free_tx_descs (void) 
 {
         int    i;
 
@@ -1416,18 +1416,18 @@ kibnal_free_tx_descs (void)
                                     sizeof(*tx->tx_pages));
 #else
                 if (tx->tx_wrq != NULL)
-                        LIBCFS_FREE(tx->tx_wrq,
-                                    (1 + IBNAL_MAX_RDMA_FRAGS) *
+                        LIBCFS_FREE(tx->tx_wrq, 
+                                    (1 + IBNAL_MAX_RDMA_FRAGS) * 
                                     sizeof(*tx->tx_wrq));
 
                 if (tx->tx_gl != NULL)
-                        LIBCFS_FREE(tx->tx_gl,
-                                    (1 + IBNAL_MAX_RDMA_FRAGS) *
+                        LIBCFS_FREE(tx->tx_gl, 
+                                    (1 + IBNAL_MAX_RDMA_FRAGS) * 
                                     sizeof(*tx->tx_gl));
 
                 if (tx->tx_rd != NULL)
-                        LIBCFS_FREE(tx->tx_rd,
-                                    offsetof(kib_rdma_desc_t,
+                        LIBCFS_FREE(tx->tx_rd, 
+                                    offsetof(kib_rdma_desc_t, 
                                              rd_frags[IBNAL_MAX_RDMA_FRAGS]));
 #endif
         }
@@ -1438,7 +1438,7 @@ kibnal_free_tx_descs (void)
 
 #if IBNAL_USE_FMR
 void
-kibnal_free_fmrs (int n)
+kibnal_free_fmrs (int n) 
 {
         int             i;
         vv_return_t     vvrc;
@@ -1477,7 +1477,7 @@ kibnal_setup_tx_descs (void)
         /* No fancy arithmetic when we do the buffer calculations */
         CLASSERT (PAGE_SIZE % IBNAL_MSG_SIZE == 0);
 
-        rc = kibnal_alloc_pages(&kibnal_data.kib_tx_pages,
+        rc = kibnal_alloc_pages(&kibnal_data.kib_tx_pages, 
                                 IBNAL_TX_MSG_PAGES(), 0);
         if (rc != 0)
                 return (rc);
@@ -1533,7 +1533,7 @@ kibnal_setup_tx_descs (void)
                         LASSERT (ipage <= IBNAL_TX_MSG_PAGES());
                 }
         }
-
+        
         return (0);
 }
 
@@ -1545,7 +1545,7 @@ kibnal_shutdown (lnet_ni_t *ni)
 
         LASSERT (ni == kibnal_data.kib_ni);
         LASSERT (ni->ni_data == &kibnal_data);
-
+        
         CDEBUG(D_MALLOC, "before NAL cleanup: kmem %d\n",
                atomic_read (&libcfs_kmemory));
 
@@ -1597,7 +1597,7 @@ kibnal_shutdown (lnet_ni_t *ni)
                                               kibnal_async_callback);
                 if (vvrc != vv_return_ok)
                         CERROR("vv_dell_async_event_cb error: %d\n", vvrc);
-
+                        
                 /* fall through */
 
         case IBNAL_INIT_HCA:
@@ -1632,7 +1632,7 @@ kibnal_shutdown (lnet_ni_t *ni)
                         cfs_pause(cfs_time_seconds(1));
                 }
                 /* fall through */
-
+                
         case IBNAL_INIT_NOTHING:
                 break;
         }
@@ -1641,7 +1641,7 @@ kibnal_shutdown (lnet_ni_t *ni)
 
         if (kibnal_data.kib_peers != NULL)
                 LIBCFS_FREE (kibnal_data.kib_peers,
-                             sizeof (struct list_head) *
+                             sizeof (struct list_head) * 
                              kibnal_data.kib_peer_hash_size);
 
         CDEBUG(D_MALLOC, "after NAL cleanup: kmem %d\n",
@@ -1856,18 +1856,18 @@ kibnal_startup (lnet_ni_t *ni)
 
                         /* Found a suitable port. Get its GUID and PKEY. */
                         tbl_count = 1;
-                        vvrc = vv_get_port_gid_tbl(kibnal_data.kib_hca,
+                        vvrc = vv_get_port_gid_tbl(kibnal_data.kib_hca, 
                                                    port_num, &tbl_count,
                                                    &kibnal_data.kib_port_gid);
                         if (vvrc != vv_return_ok) {
                                 CERROR("vv_get_port_gid_tbl failed "
-                                       "for %s port %d: %d\n",
+                                       "for %s port %d: %d\n", 
                                        hca_name, port_num, vvrc);
                                 continue;
                         }
 
                         tbl_count = 1;
-                        vvrc = vv_get_port_partition_tbl(kibnal_data.kib_hca,
+                        vvrc = vv_get_port_partition_tbl(kibnal_data.kib_hca, 
                                                          port_num, &tbl_count,
                                                          &kibnal_data.kib_port_pkey);
                         if (vvrc != vv_return_ok) {
@@ -1895,8 +1895,8 @@ kibnal_startup (lnet_ni_t *ni)
         }
 
         CDEBUG(D_NET, "Using %s port %d - GID="LPX64":"LPX64"\n",
-               hca_name, kibnal_data.kib_port,
-               kibnal_data.kib_port_gid.scope.g.subnet,
+               hca_name, kibnal_data.kib_port, 
+               kibnal_data.kib_port_gid.scope.g.subnet, 
                kibnal_data.kib_port_gid.scope.g.eui64);
 
         /*****************************************************/
@@ -1930,7 +1930,7 @@ kibnal_startup (lnet_ni_t *ni)
                 __u32 nentries;
 
                 vvrc = vv_cq_create(kibnal_data.kib_hca, IBNAL_CQ_ENTRIES(),
-                                    kibnal_cq_callback,
+                                    kibnal_cq_callback, 
                                     NULL, /* context */
                                     &kibnal_data.kib_cq, &nentries);
                 if (vvrc != 0) {
@@ -1942,13 +1942,13 @@ kibnal_startup (lnet_ni_t *ni)
                 kibnal_data.kib_init = IBNAL_INIT_CQ;
 
                 if (nentries < IBNAL_CQ_ENTRIES()) {
-                        CERROR ("CQ only has %d entries, need %d\n",
+                        CERROR ("CQ only has %d entries, need %d\n", 
                                 nentries, IBNAL_CQ_ENTRIES());
                         goto failed;
                 }
 
-                vvrc = vv_request_completion_notification(kibnal_data.kib_hca,
-                                                          kibnal_data.kib_cq,
+                vvrc = vv_request_completion_notification(kibnal_data.kib_hca, 
+                                                          kibnal_data.kib_cq, 
                                                           vv_next_solicit_unsolicit_event);
                 if (vvrc != 0) {
                         CERROR ("Failed to re-arm completion queue: %d\n", rc);
@@ -1970,7 +1970,7 @@ kibnal_startup (lnet_ni_t *ni)
 
  failed:
         CDEBUG(D_NET, "kibnal_startup failed\n");
-        kibnal_shutdown (ni);
+        kibnal_shutdown (ni);    
         return (-ENETDOWN);
 }
 
@@ -1988,9 +1988,9 @@ kibnal_module_init (void)
 
         vibnal_assert_wire_constants();
 
-        CLASSERT (offsetof(kib_msg_t, ibm_u) + sizeof(kib_connparams_t)
+        CLASSERT (offsetof(kib_msg_t, ibm_u) + sizeof(kib_connparams_t) 
                   <= cm_REQ_priv_data_len);
-        CLASSERT (offsetof(kib_msg_t, ibm_u) + sizeof(kib_connparams_t)
+        CLASSERT (offsetof(kib_msg_t, ibm_u) + sizeof(kib_connparams_t) 
                   <= cm_REP_priv_data_len);
         CLASSERT (sizeof(kib_msg_t) <= IBNAL_MSG_SIZE);
 #if !IBNAL_USE_FMR

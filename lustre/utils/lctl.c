@@ -103,7 +103,7 @@ command_t cmdlist[] = {
         {"device_list", jt_obd_list, 0, "show all devices\n"
          "usage: device_list"},
         {"dl", jt_obd_list, 0, "show all devices\n"
-         "usage: dl [-t]"},
+         "usage: dl"},
 
         /* Device operations */
         {"==== obd device operations ===", jt_noop, 0, "device operations"},
@@ -209,7 +209,7 @@ command_t cmdlist[] = {
         {"add_peer", jt_ptl_add_peer, 0, "add an peer entry\n"
          "usage: add_peer <nid> <host> <port>"},
         {"del_peer", jt_ptl_del_peer, 0, "remove an peer entry\n"
-         "usage: del_peer [<nid>] [<ipaddr|pid>]"},
+         "usage: del_autoconn [<nid>] [<host>] [ks]"},
         {"add_conn ", jt_lcfg_add_conn, 0,
          "usage: add_conn <conn_uuid> [priority]\n"},
         {"del_conn ", jt_lcfg_del_conn, 0,

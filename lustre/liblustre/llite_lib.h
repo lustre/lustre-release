@@ -139,7 +139,7 @@ do {                                                                           \
 #define LL_LOOKUP_POSITIVE 1
 #define LL_LOOKUP_NEGATIVE 2
 
-static inline void llu_inode2fid(struct ll_fid *fid, struct inode *inode)
+static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
 {
         *fid = llu_i2info(inode)->lli_fid;
 }

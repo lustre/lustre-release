@@ -704,8 +704,7 @@ static int lustre_start_mgc(struct super_block *sb)
         OBD_ALLOC_PTR(data);
         if (data == NULL)
                 GOTO(out, rc = -ENOMEM);
-        data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_AT |
-                                  OBD_CONNECT_FID;
+        data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_AT;
         data->ocd_version = LUSTRE_VERSION_CODE;
         /* We connect to the MGS at setup, and don't disconnect until cleanup */
         rc = obd_connect(&mgc_conn, obd, &(obd->obd_uuid), data, NULL);
@@ -1839,10 +1838,7 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                            must be the last one. */
                         *s1 = '\0';
                         break;
-                } else if (strncmp(s1, "loop=", 5) == 0) {
-                        clear++;
                 }
-
 
                 /* Find next opt */
                 s2 = strchr(s1, ',');

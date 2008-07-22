@@ -542,7 +542,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                         /* ...but the MD attach didn't succeed... */
                         request->rq_receiving_reply = 0;
                         spin_unlock(&request->rq_lock);
-                        GOTO(cleanup_me, rc = -ENOMEM);
+                        GOTO(cleanup_me, rc -ENOMEM);
                 }
 
                 CDEBUG(D_NET, "Setup reply buffer: %u bytes, xid "LPU64

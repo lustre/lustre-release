@@ -37,6 +37,67 @@
 
 /* methods */
 
+/* called from iget{4,5_locked}->find_inode() under inode_lock spinlock */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+static int ll_test_inode(struct inode *inode, unsigned long ino, void *opaque)
+#else
+static int ll_test_inode(struct inode *inode, void *opaque)
+#endif
+{
+        static int last_ino, last_gen, last_count;
+        struct lustre_md *md = opaque;
+
+        if (!(md->body->valid & (OBD_MD_FLGENER | OBD_MD_FLID))) {
+                CERROR("MDS body missing inum or generation\n");
+                return 0;
+        }
+
+        if (last_ino == md->body->ino && last_gen == md->body->generation &&
+            last_count < 500) {
+                last_count++;
+        } else {
+                if (last_count > 1)
+                        CDEBUG(D_VFSTRACE, "compared %u/%u %u times\n",
+                               last_ino, last_gen, last_count);
+                last_count = 0;
+                last_ino = md->body->ino;
+                last_gen = md->body->generation;
+                CDEBUG(D_VFSTRACE,
+                       "comparing inode %p ino %lu/%u to body "LPU64"/%u\n",
+                       inode, inode->i_ino, inode->i_generation,
+                       md->body->ino, md->body->generation);
+        }
+
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+        if (inode->i_ino != md->body->ino)
+                return 0;
+#endif
+        if (inode->i_generation != md->body->generation) {
+#ifdef HAVE_EXPORT___IGET
+                if (inode->i_state & (I_FREEING | I_CLEAR))
+                        return 0;
+                if (inode->i_nlink == 0)
+                        return 0;
+
+                /* add "duplicate" inode into deathrow for destroy */
+                spin_lock(&ll_i2sbi(inode)->ll_deathrow_lock);
+                if (list_empty(&ll_i2info(inode)->lli_dead_list)) {
+                        __iget(inode);
+                        list_add(&ll_i2info(inode)->lli_dead_list,
+                                 &ll_i2sbi(inode)->ll_deathrow);
+                }
+                spin_unlock(&ll_i2sbi(inode)->ll_deathrow_lock);
+#endif
+
+                return 0;
+        }
+
+        /* Apply the attributes in 'opaque' to this inode */
+        if (!(inode->i_state & (I_FREEING | I_CLEAR)))
+                ll_update_inode(inode, md);
+        return 1;
+}
+
 int ll_unlock(__u32 mode, struct lustre_handle *lockh)
 {
         ENTRY;
@@ -49,85 +110,43 @@ int ll_unlock(__u32 mode, struct lustre_handle *lockh)
 /* Get an inode by inode number (already instantiated by the intent lookup).
  * Returns inode or NULL
  */
-
-static inline __u64 fid_flatten(const struct lu_fid *fid)
-{                      
-        return (fid_seq(fid) - 1) * LUSTRE_SEQ_MAX_WIDTH + fid_oid(fid);
-}
-/* Build inode number on passed @fid */
-ino_t ll_fid_build_ino(struct ll_sb_info *sbi,
-                       struct ll_fid *fid)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+int ll_set_inode(struct inode *inode, void *opaque)
 {
-        ino_t ino;
-        ENTRY;
-
-        if (fid_is_igif((struct lu_fid*)fid)) {
-                ino = lu_igif_ino((struct lu_fid*)fid);
-                RETURN(ino);
-        }
-
-        /*
-         * Very stupid and having many downsides inode allocation algorithm
-         * based on fid.
-         */
-        ino = fid_flatten((struct lu_fid*)fid);
-
-        if (unlikely(ino == 0))
-                /* the first result ino is 0xFFC001, so this is rarely used */
-                ino = 0xffbcde;
-        ino = ino | 0x80000000;
-        RETURN(ino);
-
-}
-
-/* called from iget5_locked->find_inode() under inode_lock spinlock */
-static int fid_test_inode(struct inode *inode, void *opaque)
-{
-        struct lustre_md     *md = opaque;
-
-        if (unlikely(!(md->body->valid & OBD_MD_FLID))) {
-                CERROR("MDS body missing FID\n");
-                return 0;
-        }
-
-        return lu_fid_eq(ll_inode_lu_fid(inode),
-                         (struct lu_fid*)&md->body->fid1);
-}
-
-static int fid_set_inode(struct inode *inode, void *opaque)
-{
-        struct lustre_md     *md  = opaque;
-
-        *ll_inode_lu_fid(inode) = *((struct lu_fid*)&md->body->fid1);
+        ll_read_inode2(inode, opaque);
         return 0;
 }
 
 struct inode *ll_iget(struct super_block *sb, ino_t hash,
-                          struct lustre_md *md)
+                      struct lustre_md *md)
 {
-        struct ll_inode_info *lli;
-        struct inode         *inode;
-        ENTRY;
+        struct inode *inode;
 
         LASSERT(hash != 0);
-        inode = iget5_locked(sb, hash, fid_test_inode, fid_set_inode, md);
+        inode = iget5_locked(sb, hash, ll_test_inode, ll_set_inode, md);
 
         if (inode) {
-                lli = ll_i2info(inode);
-                if (inode->i_state & I_NEW) {
-                        ll_read_inode2(inode, md);
+                if (inode->i_state & I_NEW)
                         unlock_new_inode(inode);
-                } else {
-                        if (!(inode->i_state & (I_FREEING | I_CLEAR)))
-                                ll_update_inode(inode, md);
-                }
-                CDEBUG(D_VFSTRACE, "got inode: %lu/%u(%p) for "DFID"\n",
-                       inode->i_ino, inode->i_generation, inode,
-                       PFID(ll_inode_lu_fid(inode)));
+                CDEBUG(D_VFSTRACE, "inode: %lu/%u(%p)\n", inode->i_ino,
+                       inode->i_generation, inode);
         }
 
-        RETURN(inode);
+        return inode;
 }
+#else
+struct inode *ll_iget(struct super_block *sb, ino_t hash,
+                      struct lustre_md *md)
+{
+        struct inode *inode;
+        LASSERT(hash != 0);
+        inode = iget4(sb, hash, ll_test_inode, md);
+        if (inode)
+                CDEBUG(D_VFSTRACE, "inode: %lu/%u(%p)\n", inode->i_ino,
+                       inode->i_generation, inode);
+        return inode;
+}
+#endif
 
 static void ll_drop_negative_dentry(struct inode *dir)
 { 
@@ -174,13 +193,10 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         case LDLM_CB_CANCELING: {
                 struct inode *inode = ll_inode_from_lock(lock);
                 __u64 bits = lock->l_policy_data.l_inodebits.bits;
-                struct lu_fid *fid;
 
                 /* Invalidate all dentries associated with this inode */
                 if (inode == NULL)
                         break;
-
-                fid = ll_inode_lu_fid(inode);;
 
                 LASSERT(lock->l_flags & LDLM_FL_CANCELING);
                 if ((bits & MDS_INODELOCK_LOOKUP) &&
@@ -192,8 +208,9 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 if ((bits & MDS_INODELOCK_OPEN) &&
                     ll_have_md_lock(inode, MDS_INODELOCK_OPEN))
                         bits &= ~MDS_INODELOCK_OPEN;
-
-                if (!fid_res_name_eq(fid, &lock->l_resource->lr_name)) {
+                
+                if (lock->l_resource->lr_name.name[0] != inode->i_ino ||
+                    lock->l_resource->lr_name.name[1] != inode->i_generation) {
                         LDLM_ERROR(lock, "data mismatch with ino %lu/%u (%p)",
                                    inode->i_ino, inode->i_generation, inode);
                 }
@@ -250,11 +267,11 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 int ll_mdc_cancel_unused(struct lustre_handle *conn, struct inode *inode,
                          int flags, void *opaque)
 {
-        struct ldlm_res_id res_id;
+        struct ldlm_res_id res_id =
+                { .name = {inode->i_ino, inode->i_generation} };
         struct obd_device *obddev = class_conn2obd(conn);
         ENTRY;
 
-        fid_build_reg_res_name(ll_inode_lu_fid(inode), &res_id);
         RETURN(ldlm_cli_cancel_unused(obddev->obd_namespace, &res_id, flags,
                                       opaque));
 }
@@ -527,7 +544,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                                    struct lookup_intent *it, int lookup_flags)
 {
         struct dentry *save = dentry, *retval;
-        struct mdc_op_data op_data = { { 0 } };
+        struct mdc_op_data op_data;
         struct it_cb_data icbd;
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
@@ -847,7 +864,7 @@ static int ll_new_node(struct inode *dir, struct qstr *name,
         struct ptlrpc_request *request = NULL;
         struct inode *inode = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
-        struct mdc_op_data op_data = { { 0 } };
+        struct mdc_op_data op_data;
         int tgt_len = 0;
         int err;
 
@@ -982,7 +999,7 @@ static int ll_link_generic(struct inode *src,  struct inode *dir,
                            struct qstr *name, struct dentry *dchild)
 {
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data = { { 0 } };
+        struct mdc_op_data op_data;
         int err;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
 
@@ -1047,7 +1064,7 @@ static int ll_rmdir_generic(struct inode *dir, struct dentry *dparent,
                             struct qstr *name)
 {
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data = { { 0 } };
+        struct mdc_op_data op_data = {{0}};
         struct dentry *dentry;
         int rc;
         ENTRY;
@@ -1132,9 +1149,8 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
                 GOTO(out_free_memmd, rc = -ENOMEM);
 
         oa->o_id = lsm->lsm_object_id;
-        oa->o_gr = lsm->lsm_object_gr;
         oa->o_mode = body->mode & S_IFMT;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP | OBD_MD_FLTYPE;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE;
 
         if (body->valid & OBD_MD_FLCOOKIE) {
                 oa->o_valid |= OBD_MD_FLCOOKIE;
@@ -1151,8 +1167,8 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         rc = obd_destroy(ll_i2obdexp(dir), oa, lsm, &oti, ll_i2mdcexp(dir));
         OBDO_FREE(oa);
         if (rc)
-                CERROR("obd destroy objid "LPX64"@"LPX64" error %d\n",
-                       lsm->lsm_object_id, lsm->lsm_object_gr, rc);
+                CERROR("obd destroy objid "LPX64" error %d\n",
+                       lsm->lsm_object_id, rc);
  out_free_memmd:
         obd_free_memmd(ll_i2obdexp(dir), &lsm);
  out:
@@ -1162,7 +1178,7 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
 static int ll_unlink_generic(struct inode * dir, struct qstr *name)
 {
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data = { { 0 } };
+        struct mdc_op_data op_data = {{0}};
         int rc;
         ENTRY;
 
@@ -1195,7 +1211,7 @@ static int ll_rename_generic(struct inode *src, struct qstr *src_name,
 {
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(src);
-        struct mdc_op_data op_data = { { 0 } };
+        struct mdc_op_data op_data = {{0}};
         int err;
 
         ENTRY;

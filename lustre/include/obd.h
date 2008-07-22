@@ -244,7 +244,6 @@ struct obd_device_target {
         struct super_block       *obt_sb;
         atomic_t                  obt_quotachecking;
         struct lustre_quota_ctxt  obt_qctxt;
-        lustre_quota_version_t    obt_qfmt;
 };
 
 typedef void (*obd_pin_extent_cb)(void *data);
@@ -422,10 +421,6 @@ struct client_obd {
 
         /* used by quotacheck */
         int                      cl_qchk_stat; /* quotacheck stat of the peer */
-
-        /* sequence manager */
-        struct lu_client_seq    *cl_seq;
-
         atomic_t                 cl_resends; /* resend count */
         /* Cache of triples */
         struct lustre_cache     *cl_cache;
@@ -943,10 +938,6 @@ struct obd_ops {
                            struct obd_connect_data *ocd);
         int (*o_disconnect)(struct obd_export *exp);
 
-        /* Initialize/finalize fids infrastructure. */
-        int (*o_fid_init)(struct obd_export *exp);
-        int (*o_fid_fini)(struct obd_export *exp);
-
         int (*o_statfs)(struct obd_device *obd, struct obd_statfs *osfs,
                         __u64 max_age, __u32 flags);
         int (*o_statfs_async)(struct obd_device *obd, struct obd_info *oinfo,
@@ -1069,7 +1060,7 @@ struct obd_ops {
         int (*o_llog_finish)(struct obd_device *obd, int count);
 
         /* metadata-only methods */
-        int (*o_pin)(struct obd_export *, struct ll_fid *,
+        int (*o_pin)(struct obd_export *, obd_id ino, __u32 gen, int type,
                      struct obd_client_handle *, int flag);
         int (*o_unpin)(struct obd_export *, struct obd_client_handle *, int);
 
@@ -1153,14 +1144,11 @@ static inline void obd_transno_commit_cb(struct obd_device *obd, __u64 transno,
                        obd->obd_name, transno, error);
                 return;
         }
+        CDEBUG(D_HA, "%s: transno "LPU64" committed\n",
+               obd->obd_name, transno);
         if (transno > obd->obd_last_committed) {
-                CDEBUG(D_HA, "%s: transno "LPU64" committed\n",
-                       obd->obd_name, transno);
                 obd->obd_last_committed = transno;
                 ptlrpc_commit_replies (obd);
-        } else {
-                CDEBUG(D_INFO, "%s: transno "LPU64" committed\n",
-                       obd->obd_name, transno);
         }
 }
 

@@ -53,9 +53,8 @@ extern int obd_race_state;
 extern unsigned int obd_alloc_fail_rate;
 
 /* Timeout definitions */
-#define OBD_TIMEOUT_DEFAULT             100
-#define LDLM_TIMEOUT_DEFAULT            20
-#define MDS_LDLM_TIMEOUT_DEFAULT        6
+#define OBD_TIMEOUT_DEFAULT 100
+#define LDLM_TIMEOUT_DEFAULT 20
 #ifdef CRAY_XT3
  #define OBD_RECOVERY_MAX_TIME (obd_timeout * 18) /* b13079 */
 #endif
@@ -154,7 +153,6 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_MDS_CLOSE_NET_REP       0x13b
 #define OBD_FAIL_MDS_BLOCK_QUOTA_REQ     0x13c
 #define OBD_FAIL_MDS_DROP_QUOTA_REQ      0x13d
-#define OBD_FAIL_MDS_REMOVE_COMMON_EA    0x13e
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
@@ -249,7 +247,6 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_OBD_LOGD_NET            0x602
 #define OBD_FAIL_OBD_QC_CALLBACK_NET     0x603
 #define OBD_FAIL_OBD_DQACQ               0x604
-#define OBD_FAIL_OBD_LLOG_SETUP          0x605
 
 #define OBD_FAIL_TGT_REPLY_NET           0x700
 #define OBD_FAIL_TGT_CONN_RACE           0x701

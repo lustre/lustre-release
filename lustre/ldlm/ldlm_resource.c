@@ -136,14 +136,12 @@ static int lprocfs_wr_lru_size(struct file *file, const char *buffer,
                                unsigned long count, void *data)
 {
         struct ldlm_namespace *ns = data;
-        char dummy[MAX_STRING_SIZE + 1] = { '\0' }, *end;
+        char dummy[MAX_STRING_SIZE + 1], *end;
         unsigned long tmp;
         int lru_resize;
 
-        if (count >= sizeof(dummy) || count == 0)
-                return -EINVAL;
-
-        if (copy_from_user(dummy, buffer, count))
+        dummy[MAX_STRING_SIZE] = '\0';
+        if (copy_from_user(dummy, buffer, MAX_STRING_SIZE))
                 return -EFAULT;
 
         if (strncmp(dummy, "clear", 5) == 0) {
@@ -367,6 +365,7 @@ ldlm_namespace_new(struct obd_device *obd, char *name,
         }
 
         at_init(&ns->ns_at_estimate, ldlm_enqueue_min, 0);
+
         ldlm_namespace_register(ns, client);
         RETURN(ns);
 out_proc:

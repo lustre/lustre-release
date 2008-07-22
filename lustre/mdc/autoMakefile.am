@@ -5,7 +5,7 @@
 
 if LIBLUSTRE
 noinst_LIBRARIES = libmdc.a
-libmdc_a_SOURCES = mdc_request.c mdc_reint.c mdc_lib.c mdc_internal.h mdc_locks.c mdc_fid.c
+libmdc_a_SOURCES = mdc_request.c mdc_reint.c mdc_lib.c mdc_internal.h mdc_locks.c
 libmdc_a_CPPFLAGS = $(LLCPPFLAGS)
 libmdc_a_CFLAGS = $(LLCFLAGS)
 endif

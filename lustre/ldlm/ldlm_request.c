@@ -433,18 +433,12 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
                         lock->l_req_mode = newmode;
                 }
 
-                if (memcmp(reply->lock_desc.l_resource.lr_name.name,
-                          lock->l_resource->lr_name.name,
-                          sizeof(struct ldlm_res_id))) {
-                        CDEBUG(D_INFO, "remote intent success, locking "
-                                        "("LPU64"/"LPU64"/"LPU64") instead of "
-                                        "("LPU64"/"LPU64"/"LPU64")\n",
-                               reply->lock_desc.l_resource.lr_name.name[0],
-                               reply->lock_desc.l_resource.lr_name.name[1],
-                               reply->lock_desc.l_resource.lr_name.name[2],
-                               lock->l_resource->lr_name.name[0],
-                               lock->l_resource->lr_name.name[1],
-                               lock->l_resource->lr_name.name[2]);
+                if (reply->lock_desc.l_resource.lr_name.name[0] !=
+                    lock->l_resource->lr_name.name[0]) {
+                        CDEBUG(D_INFO, "remote intent success, locking %ld "
+                               "instead of %ld\n",
+                              (long)reply->lock_desc.l_resource.lr_name.name[0],
+                               (long)lock->l_resource->lr_name.name[0]);
 
                         rc = ldlm_lock_change_resource(ns, lock,
                                            reply->lock_desc.l_resource.lr_name);
@@ -572,10 +566,8 @@ struct ptlrpc_request *ldlm_prep_elc_req(struct obd_export *exp, int version,
                         pack = avail;
                 size[bufoff] = ldlm_request_bufsize(pack, opc);
         }
-
         req = ptlrpc_prep_req(class_exp2cliimp(exp), version,
                               opc, bufcount, size, NULL);
-        req->rq_export = class_export_get(exp);
         if (exp_connect_cancelset(exp) && req) {
                 if (canceloff) {
                         dlm = lustre_msg_buf(req->rq_reqmsg, bufoff,
@@ -624,8 +616,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
         struct ldlm_reply *reply;
         int size[3] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                         [DLM_LOCKREQ_OFF]     = sizeof(*body),
-                        [DLM_REPLY_REC_OFF]   = lvb_len ? lvb_len :
-                                                sizeof(struct ost_lvb) };
+                        [DLM_REPLY_REC_OFF]   = lvb_len };
         int is_replay = *flags & LDLM_FL_REPLAY;
         int req_passed_in = 1, rc, err;
         struct ptlrpc_request *req;
@@ -705,7 +696,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
         /* Continue as normal. */
         if (!req_passed_in) {
                 size[DLM_LOCKREPLY_OFF] = sizeof(*reply);
-                ptlrpc_req_set_repsize(req, 3, size);
+                ptlrpc_req_set_repsize(req, 2 + (lvb_len > 0), size);
         }
 
         /*

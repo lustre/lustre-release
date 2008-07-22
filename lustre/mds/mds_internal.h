@@ -9,8 +9,7 @@
 #include <lustre_mds.h>
 
 #define MDT_ROCOMPAT_SUPP       (OBD_ROCOMPAT_LOVOBJID)
-#define MDT_INCOMPAT_SUPP       (OBD_INCOMPAT_MDT | OBD_INCOMPAT_COMMON_LR | \
-                                 OBD_INCOMPAT_FID)
+#define MDT_INCOMPAT_SUPP       (OBD_INCOMPAT_MDT | OBD_INCOMPAT_COMMON_LR)
 
 #define MDS_SERVICE_WATCHDOG_FACTOR 2000
 
@@ -157,11 +156,6 @@ int mds_get_parents_children_locked(struct obd_device *obd,
                                     struct lustre_handle *dlm_handles,
                                     int child_mode);
 
-struct dentry *mds_lookup(struct obd_device *obd,
-                          const char *fid_name,
-                          struct dentry *dparent,
-                          int fid_namelen);
-
 void mds_shrink_reply(struct obd_device *obd, struct ptlrpc_request *req,
                       struct mds_body *body, int md_off);
 int mds_get_cookie_size(struct obd_device *obd, struct lov_mds_md *lmm);
@@ -251,6 +245,7 @@ int mds_get_md(struct obd_device *, struct inode *, void *md, int *size,
                int lock, int flags);
 int mds_pack_md(struct obd_device *, struct lustre_msg *, int offset,
                 struct mds_body *, struct inode *, int lock, int flags);
+void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode);
 void mds_pack_inode2body(struct mds_body *body, struct inode *inode);
 #endif
 int mds_pack_acl(struct mds_export_data *med, struct inode *inode,

@@ -93,10 +93,5 @@ static inline int osc_should_resend(int resend, struct client_obd *cli)
                 atomic_read(&cli->cl_resends) > resend : 1; 
 }
 
-static inline int osc_exp_is_2_0_server(struct obd_export *exp) {
-       LASSERT(exp);
-       return !!(exp->exp_connect_flags & OBD_CONNECT_FID);
-}
-
 
 #endif /* OSC_INTERNAL_H */

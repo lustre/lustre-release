@@ -3634,7 +3634,7 @@ ra_check_101() {
 
 	if [ $DISCARD -gt $discard_limit ]; then
 		lctl get_param llite.*.read_ahead_stats
-		error "Too many ($DISCARD) discarded pages with size (${READ_SIZE})"
+		error "Too many ($DISCARD) discarded with size (${READ_SIZE})"
 	else
 		echo "Read-ahead success for size ${READ_SIZE}"
 	fi

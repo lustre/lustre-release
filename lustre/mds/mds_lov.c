@@ -252,9 +252,9 @@ int mds_lov_write_objids(struct obd_device *obd)
 
                 /* check for particaly filled last page */
                 if (i == mds->mds_lov_objid_lastpage)
-                        size = (mds->mds_lov_objid_lastidx + 1) *sizeof(obd_id);
+                        size = (mds->mds_lov_objid_lastidx + 1) * sizeof(obd_id);
 
-		CDEBUG(D_INFO,"write %lld - %u\n", off, size);
+		CDEBUG(D_INFO,"write %lld - %ld\n", off, size);
                 rc = fsfilt_write_record(obd, mds->mds_lov_objid_filp, data,
                                          size, &off, 0);
                 if (rc < 0)
@@ -897,7 +897,7 @@ out:
                 CERROR("%s sync failed %d, deactivating\n", obd_uuid2str(uuid),
                        rc);
                 if (!obd->obd_stopping && mds->mds_osc_obd &&
-                    !mds->mds_osc_obd->obd_stopping && !watched->obd_stopping)
+                    !mds->mds_osc_obd->obd_stopping && !watched->obd_stopping) 
                         obd_notify(mds->mds_osc_obd, watched,
                                    OBD_NOTIFY_INACTIVE, NULL);
         } else {

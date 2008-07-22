@@ -82,14 +82,14 @@ void llu_prepare_mdc_op_data(struct mdc_op_data *data,
 
         if (i1) {
                 ll_i2gids(data->suppgids, i1, i2);
-                llu_inode2fid(&data->fid1, i1);
+                ll_inode2fid(&data->fid1, i1);
         }else {
                 ll_i2gids(data->suppgids, i2, i1);
-                llu_inode2fid(&data->fid1, i2);
+                ll_inode2fid(&data->fid1, i2);
         }
 
         if (i2)
-                llu_inode2fid(&data->fid2, i2);
+                ll_inode2fid(&data->fid2, i2);
         else
                 memset(&data->fid2, 0, sizeof(data->fid2));
 
@@ -319,7 +319,6 @@ int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode)
         struct ptlrpc_request *req = NULL;
         struct obd_client_handle *och = &fd->fd_mds_och;
         struct obdo obdo;
-        struct mdc_op_data data = { { 0 } };
         int rc, valid;
         ENTRY;
 
@@ -344,8 +343,7 @@ int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode)
                 obdo.o_flags = MDS_BFLAG_UNCOMMITTED_WRITES;
                 obdo.o_valid |= OBD_MD_FLFLAGS;
         }
-        data.fid1 = lli->lli_fid;
-        rc = mdc_close(mdc_exp, &data, &obdo, och, &req);
+        rc = mdc_close(mdc_exp, &obdo, och, &req);
         if (rc == EAGAIN) {
                 /* We are the last writer, so the MDS has instructed us to get
                  * the file size and any write cookies, then close again. */

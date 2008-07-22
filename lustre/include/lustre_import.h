@@ -64,7 +64,7 @@ struct obd_import_conn {
         __u64                     oic_last_attempt; /* jiffies, 64-bit */
 };
 
-#define IMP_AT_MAX_PORTALS 8
+#define IMP_AT_MAX_PORTALS 4
 struct imp_at {
         int                     iat_portal[IMP_AT_MAX_PORTALS];
         struct adaptive_timeout iat_net_latency;

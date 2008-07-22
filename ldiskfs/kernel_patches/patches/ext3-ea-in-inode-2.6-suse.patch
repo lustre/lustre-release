@@ -1,10 +1,10 @@
 %patch
-Index: linux-2.6.5-7.311/fs/ext3/ialloc.c
+Index: linux-2.6.0/fs/ext3/ialloc.c
 ===================================================================
---- linux-2.6.5-7.311.orig/fs/ext3/ialloc.c
-+++ linux-2.6.5-7.311/fs/ext3/ialloc.c
-@@ -633,6 +633,9 @@ got:
- 	spin_unlock(&sbi->s_next_gen_lock);
+--- linux-2.6.0.orig/fs/ext3/ialloc.c	2004-01-14 18:54:11.000000000 +0300
++++ linux-2.6.0/fs/ext3/ialloc.c	2004-01-14 18:54:12.000000000 +0300
+@@ -627,6 +627,9 @@
+ 	inode->i_generation = EXT3_SB(sb)->s_next_generation++;
  
  	ei->i_state = EXT3_STATE_NEW;
 +	ei->i_extra_isize =
@@ -13,11 +13,11 @@ Index: linux-2.6.5-7.311/fs/ext3/ialloc.c
  
  	ret = inode;
  	if(DQUOT_ALLOC_INODE(inode)) {
-Index: linux-2.6.5-7.311/fs/ext3/inode.c
+Index: linux-2.6.0/fs/ext3/inode.c
 ===================================================================
---- linux-2.6.5-7.311.orig/fs/ext3/inode.c
-+++ linux-2.6.5-7.311/fs/ext3/inode.c
-@@ -2284,7 +2284,7 @@ static unsigned long ext3_get_inode_bloc
+--- linux-2.6.0.orig/fs/ext3/inode.c	2004-01-14 18:54:12.000000000 +0300
++++ linux-2.6.0/fs/ext3/inode.c	2004-01-14 19:09:46.000000000 +0300
+@@ -2339,7 +2339,7 @@
   * trying to determine the inode's location on-disk and no read need be
   * performed.
   */
@@ -26,7 +26,7 @@ Index: linux-2.6.5-7.311/fs/ext3/inode.c
  				struct ext3_iloc *iloc, int in_mem)
  {
  	unsigned long block;
-@@ -2495,6 +2495,11 @@ void ext3_read_inode(struct inode * inod
+@@ -2547,6 +2547,11 @@
  		ei->i_data[block] = raw_inode->i_block[block];
  	INIT_LIST_HEAD(&ei->i_orphan);
  
@@ -38,7 +38,7 @@ Index: linux-2.6.5-7.311/fs/ext3/inode.c
  	if (S_ISREG(inode->i_mode)) {
  		inode->i_op = &ext3_file_inode_operations;
  		inode->i_fop = &ext3_file_operations;
-@@ -2630,6 +2635,9 @@ static int ext3_do_update_inode(handle_t
+@@ -2682,6 +2687,9 @@
  	} else for (block = 0; block < EXT3_N_BLOCKS; block++)
  		raw_inode->i_block[block] = ei->i_data[block];
  
@@ -48,7 +48,7 @@ Index: linux-2.6.5-7.311/fs/ext3/inode.c
  	BUFFER_TRACE(bh, "call ext3_journal_dirty_metadata");
  	rc = ext3_journal_dirty_metadata(handle, bh);
  	if (!err)
-@@ -2839,7 +2847,8 @@ ext3_reserve_inode_write(handle_t *handl
+@@ -2849,7 +2857,8 @@ ext3_reserve_inode_write(handle_t *handl
  {
  	int err = 0;
  	if (handle) {
@@ -58,11 +58,11 @@ Index: linux-2.6.5-7.311/fs/ext3/inode.c
  		if (!err) {
  			BUFFER_TRACE(iloc->bh, "get_write_access");
  			err = ext3_journal_get_write_access(handle, iloc->bh);
-Index: linux-2.6.5-7.311/fs/ext3/xattr.c
+Index: linux-2.6.0/fs/ext3/xattr.c
 ===================================================================
---- linux-2.6.5-7.311.orig/fs/ext3/xattr.c
-+++ linux-2.6.5-7.311/fs/ext3/xattr.c
-@@ -245,17 +245,12 @@ ext3_removexattr(struct dentry *dentry, 
+--- linux-2.6.0.orig/fs/ext3/xattr.c	2003-12-30 08:33:13.000000000 +0300
++++ linux-2.6.0/fs/ext3/xattr.c	2004-01-14 18:54:12.000000000 +0300
+@@ -246,17 +246,12 @@
  }
  
  /*
@@ -83,7 +83,7 @@ Index: linux-2.6.5-7.311/fs/ext3/xattr.c
  	       void *buffer, size_t buffer_size)
  {
  	struct buffer_head *bh = NULL;
-@@ -269,7 +264,6 @@ ext3_xattr_get(struct inode *inode, int 
+@@ -270,7 +265,6 @@
  
  	if (name == NULL)
  		return -EINVAL;
@@ -91,7 +91,7 @@ Index: linux-2.6.5-7.311/fs/ext3/xattr.c
  	error = -ENODATA;
  	if (!EXT3_I(inode)->i_file_acl)
  		goto cleanup;
-@@ -342,15 +336,87 @@ found:
+@@ -343,15 +337,87 @@
  
  cleanup:
  	brelse(bh);
@@ -182,7 +182,7 @@ Index: linux-2.6.5-7.311/fs/ext3/xattr.c
   * provided, or compute the buffer size required.
   * Buffer is NULL to compute the size of the buffer required.
   *
-@@ -358,7 +424,31 @@ cleanup:
+@@ -359,7 +425,31 @@
   * used / required on success.
   */
  int
@@ -215,7 +215,7 @@ Index: linux-2.6.5-7.311/fs/ext3/xattr.c
  {
  	struct buffer_head *bh = NULL;
  	struct ext3_xattr_entry *entry;
-@@ -369,7 +459,6 @@ ext3_xattr_list(struct inode *inode, cha
+@@ -370,7 +460,6 @@
  	ea_idebug(inode, "buffer=%p, buffer_size=%ld",
  		  buffer, (long)buffer_size);
  
@@ -223,7 +223,7 @@ Index: linux-2.6.5-7.311/fs/ext3/xattr.c
  	error = 0;
  	if (!EXT3_I(inode)->i_file_acl)
  		goto cleanup;
-@@ -430,11 +519,138 @@ bad_block:	ext3_error(inode->i_sb, "ext3
+@@ -431,11 +520,138 @@
  
  cleanup:
  	brelse(bh);
@@ -363,7 +363,7 @@ Index: linux-2.6.5-7.311/fs/ext3/xattr.c
  /*
   * If the EXT3_FEATURE_COMPAT_EXT_ATTR feature of this file system is
   * not set, set it.
-@@ -456,6 +672,279 @@ static void ext3_xattr_update_super_bloc
+@@ -457,6 +673,279 @@
  }
  
  /*
@@ -643,7 +643,7 @@ Index: linux-2.6.5-7.311/fs/ext3/xattr.c
   * ext3_xattr_set_handle()
   *
   * Create, replace or remove an extended attribute for this inode. Buffer
-@@ -469,6 +958,110 @@ static void ext3_xattr_update_super_bloc
+@@ -470,6 +959,104 @@
   */
  int
  ext3_xattr_set_handle(handle_t *handle, struct inode *inode, int name_index,
@@ -700,9 +700,6 @@ Index: linux-2.6.5-7.311/fs/ext3/xattr.c
 +	} else if (!found && (flags & XATTR_REPLACE)) {
 +		err = -ENODATA;
 +		goto finish;
-+	} else if (!found && !value) {
-+		err = 0;
-+		goto finish;
 +	}
 +
 +	/* check if we have enough space to store attribute */
@@ -726,17 +723,14 @@ Index: linux-2.6.5-7.311/fs/ext3/xattr.c
 +		}
 +	}
 +
-+	/* Add entry if value is provided */
-+	if (value != NULL) {
-+		/* try to store EA in inode body */
-+		err = ext3_xattr_ibody_set(handle, inode, name_index, name,
-+					value, value_len, flags);
-+		if (err) {
-+			/* can't store EA in inode body */
-+			/* try to store in block */
-+			err = ext3_xattr_block_set(handle, inode, name_index,
-+						name, value, value_len, flags);
-+		}
++	/* try to store EA in inode body */
++	err = ext3_xattr_ibody_set(handle, inode, name_index, name,
++				value, value_len, flags);
++	if (err) {
++		/* can't store EA in inode body */
++		/* try to store in block */
++		err = ext3_xattr_block_set(handle, inode, name_index,
++					name, value, value_len, flags);	
 +	}
 +
 +finish:	
@@ -754,7 +748,7 @@ Index: linux-2.6.5-7.311/fs/ext3/xattr.c
  		      const char *name, const void *value, size_t value_len,
  		      int flags)
  {
-@@ -491,22 +1084,7 @@ ext3_xattr_set_handle(handle_t *handle, 
+@@ -492,22 +1078,7 @@
  	 *             towards the end of the block).
  	 * end -- Points right after the block pointed to by header.
  	 */
@@ -777,7 +771,7 @@ Index: linux-2.6.5-7.311/fs/ext3/xattr.c
  	if (EXT3_I(inode)->i_file_acl) {
  		/* The inode already has an extended attribute block. */
  		bh = sb_bread(sb, EXT3_I(inode)->i_file_acl);
-@@ -730,7 +1308,6 @@ cleanup:
+@@ -733,7 +1304,6 @@
  	brelse(bh);
  	if (!(bh && header == HDR(bh)))
  		kfree(header);
@@ -785,11 +779,11 @@ Index: linux-2.6.5-7.311/fs/ext3/xattr.c
  
  	return error;
  }
-Index: linux-2.6.5-7.311/fs/ext3/xattr.h
+Index: linux-2.6.0/fs/ext3/xattr.h
 ===================================================================
---- linux-2.6.5-7.311.orig/fs/ext3/xattr.h
-+++ linux-2.6.5-7.311/fs/ext3/xattr.h
-@@ -77,7 +77,8 @@ extern int ext3_removexattr(struct dentr
+--- linux-2.6.0.orig/fs/ext3/xattr.h	2003-06-24 18:04:43.000000000 +0400
++++ linux-2.6.0/fs/ext3/xattr.h	2004-01-14 18:54:12.000000000 +0300
+@@ -77,7 +77,8 @@
  extern int ext3_xattr_get(struct inode *, int, const char *, void *, size_t);
  extern int ext3_xattr_list(struct inode *, char *, size_t);
  extern int ext3_xattr_set(struct inode *, int, const char *, const void *, size_t, int);
@@ -799,11 +793,11 @@ Index: linux-2.6.5-7.311/fs/ext3/xattr.h
  
  extern void ext3_xattr_delete_inode(handle_t *, struct inode *);
  extern void ext3_xattr_put_super(struct super_block *);
-Index: linux-2.6.5-7.311/include/linux/ext3_fs.h
+Index: linux-2.6.0/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.5-7.311.orig/include/linux/ext3_fs.h
-+++ linux-2.6.5-7.311/include/linux/ext3_fs.h
-@@ -267,6 +267,8 @@ struct ext3_inode {
+--- linux-2.6.0.orig/include/linux/ext3_fs.h	2004-01-14 18:54:11.000000000 +0300
++++ linux-2.6.0/include/linux/ext3_fs.h	2004-01-14 18:54:12.000000000 +0300
+@@ -265,6 +265,8 @@
  			__u32	m_i_reserved2[2];
  		} masix2;
  	} osd2;				/* OS dependent 2 */
@@ -812,7 +806,7 @@ Index: linux-2.6.5-7.311/include/linux/ext3_fs.h
  };
  
  #define i_size_high	i_dir_acl
-@@ -729,6 +731,7 @@ extern unsigned long ext3_count_free (st
+@@ -721,6 +723,7 @@
  extern int ext3_forget(handle_t *, int, struct inode *, struct buffer_head *, int);
  extern struct buffer_head * ext3_getblk (handle_t *, struct inode *, long, int, int *);
  extern struct buffer_head * ext3_bread (handle_t *, struct inode *, int, int, int *);
@@ -820,11 +814,11 @@ Index: linux-2.6.5-7.311/include/linux/ext3_fs.h
  
  extern void ext3_read_inode (struct inode *);
  extern void ext3_write_inode (struct inode *, int);
-Index: linux-2.6.5-7.311/include/linux/ext3_fs_i.h
+Index: linux-2.6.0/include/linux/ext3_fs_i.h
 ===================================================================
---- linux-2.6.5-7.311.orig/include/linux/ext3_fs_i.h
-+++ linux-2.6.5-7.311/include/linux/ext3_fs_i.h
-@@ -113,6 +113,9 @@ struct ext3_inode_info {
+--- linux-2.6.0.orig/include/linux/ext3_fs_i.h	2003-12-30 08:32:44.000000000 +0300
++++ linux-2.6.0/include/linux/ext3_fs_i.h	2004-01-14 18:54:12.000000000 +0300
+@@ -96,6 +96,9 @@
  	 */
  	loff_t	i_disksize;
  
@@ -834,3 +828,13 @@ Index: linux-2.6.5-7.311/include/linux/ext3_fs_i.h
  	/*
  	 * truncate_sem is for serialising ext3_truncate() against
  	 * ext3_getblock().  In the 2.4 ext2 design, great chunks of inode's
+
+%diffstat
+ fs/ext3/ialloc.c          |    5 
+ fs/ext3/inode.c           |   10 
+ fs/ext3/xattr.c           |  634 +++++++++++++++++++++++++++++++++++++++++++---
+ fs/ext3/xattr.h           |    3 
+ include/linux/ext3_fs.h   |    2 
+ include/linux/ext3_fs_i.h |    3 
+ 6 files changed, 623 insertions(+), 34 deletions(-)
+

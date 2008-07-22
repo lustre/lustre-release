@@ -1693,7 +1693,7 @@ Index: linux-269-5502/include/linux/ptrack.h
 +	.ptrack_list = LIST_HEAD_INIT(tsk.ptrack_list)
 +
 +#else
-+#define ptrack_call_callbacks(phase, child) (0)
++#define ptrack_call_callbacks (phase, child) (0)
 +
 +#define INIT_TASK_PTRACK(tsk)
 +

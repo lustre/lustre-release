@@ -1094,8 +1094,6 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, connect);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, reconnect);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, disconnect);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, fid_init);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, fid_fini);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, statfs);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, statfs_async);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, packmd);
@@ -1509,7 +1507,7 @@ int lprocfs_write_frac_u64_helper(const char *buffer, unsigned long count,
         __u64 whole, frac = 0, units;
         unsigned frac_d = 1;
 
-        if (count > (sizeof(kernbuf) - 1))
+        if (count > (sizeof(kernbuf) - 1) )
                 return -EINVAL;
 
         if (copy_from_user(kernbuf, buffer, count))

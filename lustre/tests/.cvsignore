@@ -71,7 +71,7 @@ rmdirmany
 flock_test
 flocks_test
 writemany
-reads
+random-reads
 chownmany
 llverdev
 llverfs
