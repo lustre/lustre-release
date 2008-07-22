@@ -225,6 +225,16 @@ static int osc_rd_create_count(char *page, char **start, off_t off, int count,
                         obd->u.cli.cl_oscc.oscc_grow_count);
 }
 
+/**
+ * Set OSC creator's osc_creator::oscc_grow_count
+ *
+ * \param file   proc file
+ * \param buffer buffer containing the value
+ * \param count  buffer size
+ * \param data   obd device
+ *
+ * \retval \a count
+ */
 static int osc_wr_create_count(struct file *file, const char *buffer,
                                unsigned long count, void *data)
 {
@@ -260,6 +270,20 @@ static int osc_wr_create_count(struct file *file, const char *buffer,
         return count;
 }
 
+/**
+ * Read OSC creator's osc_creator::oscc_max_grow_count
+ *
+ * \param page       buffer to hold the returning string
+ * \param start
+ * \param off
+ * \param count
+ * \param eof
+ *              proc read function parameters, please refer to kernel
+ *              code fs/proc/generic.c proc_file_read()
+ * \param data   obd device
+ *
+ * \retval number of characters printed.
+ */
 static int osc_rd_max_create_count(char *page, char **start, off_t off,
                                    int count, int *eof, void *data)
 {
@@ -272,6 +296,16 @@ static int osc_rd_max_create_count(char *page, char **start, off_t off,
                         obd->u.cli.cl_oscc.oscc_max_grow_count);
 }
 
+/**
+ * Set OSC creator's osc_creator::oscc_max_grow_count
+ *
+ * \param file   proc file
+ * \param buffer buffer containing the value
+ * \param count  buffer size
+ * \param data   obd device
+ *
+ * \retval \a count
+ */
 static int osc_wr_max_create_count(struct file *file, const char *buffer,
                                    unsigned long count, void *data)
 {
