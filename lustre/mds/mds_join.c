@@ -236,6 +236,7 @@ static void mds_finish_join(struct mds_obd *mds, struct ptlrpc_request *req,
                 CDEBUG(D_INODE, "updating max_mdsize/max_cookiesize: %d/%d\n",
                        mds->mds_max_mdsize, mds->mds_max_cookiesize);
 
+        mds_pack_inode2fid(&body->fid1, inode);
         mds_pack_inode2body(body, inode);
 }
 
@@ -259,7 +260,7 @@ static int mds_join_unlink_tail_inode(struct mds_update_record *rec,
                 ldlm_lock_decref(lockh, LCK_EX);
 
         head_inode = dchild->d_inode;
-        ll_pack_fid(&head_fid, head_inode->i_ino, head_inode->i_generation,
+        mdc_pack_fid(&head_fid, head_inode->i_ino, head_inode->i_generation,
                       head_inode->i_mode & S_IFMT);
 
         rc = mds_get_parents_children_locked(obd, mds, &join_rec->jr_fid,

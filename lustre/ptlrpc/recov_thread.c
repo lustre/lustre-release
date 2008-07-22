@@ -168,10 +168,7 @@ static void ctxt_llcd_put(struct llog_ctxt *ctxt)
                 llcd_put(ctxt->loc_llcd);
                 ctxt->loc_llcd = NULL;
         }
-        if (ctxt->loc_imp) {
-                class_import_put(ctxt->loc_imp);
-                ctxt->loc_imp = NULL;
-        }
+        ctxt->loc_imp = NULL;
         mutex_up(&ctxt->loc_sem);
 }
 

@@ -206,7 +206,6 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
                               struct vfsmount **mnt)
 {
-        struct obd_device *obd = container_of(mds, struct obd_device, u.mds);
         char fid_name[32];
         unsigned long ino = fid->id;
         __u32 generation = fid->generation;
@@ -223,7 +222,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
 
         /* under ext3 this is neither supposed to return bad inodes
            nor NULL inodes. */
-        result = mds_lookup(obd, fid_name, mds->mds_fid_de, strlen(fid_name));
+        result = ll_lookup_one_len(fid_name, mds->mds_fid_de, strlen(fid_name));
         if (IS_ERR(result))
                 RETURN(result);
 
@@ -234,6 +233,8 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
        if (inode->i_nlink == 0) {
                 if (inode->i_mode == 0 &&
                     LTIME_S(inode->i_ctime) == 0 ) {
+                        struct obd_device *obd = container_of(mds, struct
+                                                              obd_device, u.mds);
                         LCONSOLE_WARN("Found inode with zero nlink, mode and "
                                       "ctime -- this may indicate disk"
                                       "corruption (device %s, inode %lu, link:"
@@ -701,6 +702,7 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
         body = lustre_msg_buf(req->rq_repmsg, reply_off, sizeof(*body));
         LASSERT(body != NULL);                 /* caller prepped reply */
 
+        mds_pack_inode2fid(&body->fid1, inode);
         body->flags = reqbody->flags; /* copy MDS_BFLAG_EXT_FLAGS if present */
         mds_pack_inode2body(body, inode);
         reply_off++;
@@ -1185,6 +1187,7 @@ static int mds_sync(struct ptlrpc_request *req, int offset)
 
                 body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                       sizeof(*body));
+                mds_pack_inode2fid(&body->fid1, de->d_inode);
                 mds_pack_inode2body(body, de->d_inode);
 
                 l_dput(de);
@@ -1827,7 +1830,7 @@ int mds_handle(struct ptlrpc_request *req)
         /* If we're DISCONNECTing, the mds_export_data is already freed */
         if (!rc && lustre_msg_get_opc(req->rq_reqmsg) != MDS_DISCONNECT) {
                 struct mds_export_data *med = &req->rq_export->exp_mds_data;
-
+                
                 /* I don't think last_xid is used for anyway, so I'm not sure
                    if we need to care about last_close_xid here.*/
                 lustre_msg_set_last_xid(req->rq_repmsg,
@@ -2084,11 +2087,8 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                               obd->obd_replayable ? "enabled" : "disabled");
         }
 
-        /* Reduce the initial timeout on an MDS because it doesn't need such
-         * a long timeout as an OST does. Adaptive timeouts will adjust this
-         * value appropriately. */
         if (ldlm_timeout == LDLM_TIMEOUT_DEFAULT)
-                ldlm_timeout = MDS_LDLM_TIMEOUT_DEFAULT;
+                ldlm_timeout = 6;
 
         RETURN(0);
 

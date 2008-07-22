@@ -1,8 +1,7 @@
 /*
- * Lustre Reads test
+ * Lustre Random Reads test
  *
  * Copyright (c) 2005 Cluster File Systems, Inc.
- * Copyright (c) 2008 SUN Microsystems.
  *
  * Author: Nikita Danilov <nikita@clusterfs.com>
  *
@@ -35,14 +34,13 @@
 #include <sys/types.h>
 #include <sys/time.h>
 
+long long atoll(const char *nptr);
+
 static void usage(void)
 {
-	printf("reads: read random or stride chunks of a file.\n");
+	printf("random-reads: read random chunks of a file.\n");
 	printf("Usage:\n\n");
-	printf("reads -f <filename> -s <filesize> -b <buffersize>"
-	       "-a <adjacent reads> [-v] [-h] [-C] [-l <stride_length> ] "
-	       "[ -o <stride_offset> ] [-S <seed>] [-n <iterations>]"
-	       "[-w <width>] [-t <timelimit>]\n");
+	printf("random-reads -f <filename> -s <filesize> -b <buffersize> -a <adjacent reads> [-v] [-h] [-C] [-S <seed>] [-n <iterations>] [-w <width>] [-t <timelimit>]\n");
 }
 
 enum {
@@ -84,8 +82,6 @@ int main(int argc, char **argv)
 	unsigned int seed = 0;
 	unsigned long iterations = 0;
 	unsigned long timelimit = 24 * 3600;
-	unsigned long stride_length = 0;
-	unsigned long stride_offset = 0;
 
 	int opt;
 	int fd;
@@ -99,10 +95,9 @@ int main(int argc, char **argv)
 	double usecs;
 
 	char *buf;
-	char *term;
 
 	do {
-		opt = getopt(argc, argv, "f:s:b:va:hCS:n:t:l:o:w:");
+		opt = getopt(argc, argv, "f:s:b:va:hCS:n:t:w:");
 		switch (opt) {
 		case -1:
 			break;
@@ -118,81 +113,28 @@ int main(int argc, char **argv)
 			fname = strdup(optarg);
 			break;
 		case 's':
-			size = strtol(optarg, &term, 0);
-			if (term == optarg) {
-				fprintf (stderr, "Can't parse size %s\n", optarg);
-				usage();
-				return RR_SET;
-			}
+			size = atoll(optarg);
 			break;
 		case 'b':
-			bsize = strtol(optarg, &term, 0);
-			if (term == optarg) {
-				fprintf (stderr, "Can't parse bsize %s\n", optarg);
-				usage();
-				return RR_SET;
-			}
+			bsize = atol(optarg);
 			break;
 		case 'a':
-			ad = (int)strtol(optarg, &term, 0);
-			if (term == optarg) {
-				fprintf (stderr, "Can't parse ad %s\n", optarg);
-				usage();
-				return RR_SET;
-			}
+			ad = atoi(optarg);
 			break;
 		case 'C':
 			preclean = 1;
 			break;
 		case 'S':
-			seed = strtol(optarg, &term, 0);
-			if (term == optarg) {
-				fprintf (stderr, "Can't parse seed %s\n", optarg);
-				usage();
-				return RR_SET;
-			}
+			seed = atol(optarg);
 			break;
 		case 'n':
-			iterations = strtol(optarg, &term, 0);
-			if (term == optarg) {
-				fprintf (stderr, "Can't parse seed %s\n", optarg);
-				usage();
-				return RR_SET;
-			}
-			break;
-
+			iterations = atoll(optarg);
 			break;
 		case 't':
-			timelimit = strtol(optarg, &term, 0);
-			if (term == optarg) {
-				fprintf (stderr, "Can't parse seed %s\n", optarg);
-				usage();
-				return RR_SET;
-			}
-			break;
-                case 'l':
-                        stride_length = strtol(optarg, &term, 0);
-			if (term == optarg) {
-				fprintf (stderr, "Can't parse seed %s\n", optarg);
-				usage();
-				return RR_SET;
-			}
-	       		break;
-		case 'o':
-			stride_offset = strtol(optarg, &term, 0);
-			if (term == optarg) {
-				fprintf (stderr, "Can't parse seed %s\n", optarg);
-				usage();
-				return RR_SET;
-			}
+			timelimit = atoll(optarg);
 			break;
 		case 'w':
-			width = (int)strtol(optarg, &term, 0);
-			if (term == optarg) {
-				fprintf (stderr, "Can't parse seed %s\n", optarg);
-				usage();
-				return RR_SET;
-			}
+			width = atoi(optarg);
 			break;
 		}
 	} while (opt != -1);
@@ -229,7 +171,6 @@ int main(int argc, char **argv)
 			if (ret < 0) {
 				LOG(LOG_CRIT, "write() failure: %s\n",
 				    strerror(errno));
-				close(fd);
 				return RR_PRECLEAN;
 			}
 		}
@@ -242,12 +183,7 @@ int main(int argc, char **argv)
 		unsigned long block_nr;
 		int j;
 
-		if (stride_length) 
-			block_nr = (unsigned long)(i*stride_length + 
-						   stride_offset) % nblocks;
-		else
-			block_nr = (unsigned long)((double)nblocks*rand()/
-						   (RAND_MAX+1.0));
+		block_nr = (int) ((double)nblocks*rand()/(RAND_MAX+1.0));
 		if (i % width == 0)
 			LOG(LOG_INFO, "\n%9lu: ", i);
 		LOG(LOG_INFO, "%7lu ", block_nr);
@@ -257,7 +193,6 @@ int main(int argc, char **argv)
 				LOG(LOG_CRIT,
 				    "pread(...%zi, %li) got: %zi, %s\n", bsize,
 				    block_nr * bsize, ret, strerror(errno));
-				close(fd);
 				return RR_READ;
 			}
 		}
@@ -265,7 +200,6 @@ int main(int argc, char **argv)
 		if (stop.tv_sec > timelimit)
 			break;
 	}
-	close(fd);
 	usecs = (stop.tv_sec - start.tv_sec) * 1000000. +
 		stop.tv_usec - start.tv_usec;
 	printf("\n%fs, %gMB/s\n", usecs / 1000000.,

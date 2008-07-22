@@ -692,30 +692,6 @@ static inline int obd_disconnect(struct obd_export *exp)
         RETURN(rc);
 }
 
-static inline int obd_fid_init(struct obd_export *exp)
-{
-        int rc;
-        ENTRY;
-
-        OBD_CHECK_OP(exp->exp_obd, fid_init, 0);
-        EXP_COUNTER_INCREMENT(exp, fid_init);
-
-        rc = OBP(exp->exp_obd, fid_init)(exp);
-        RETURN(rc);
-}
-
-static inline int obd_fid_fini(struct obd_export *exp)
-{
-        int rc;
-        ENTRY;
-
-        OBD_CHECK_OP(exp->exp_obd, fid_fini, 0);
-        EXP_COUNTER_INCREMENT(exp, fid_fini);
-
-        rc = OBP(exp->exp_obd, fid_fini)(exp);
-        RETURN(rc);
-}
-
 static inline int obd_ping(struct obd_export *exp)
 {
         int rc;
@@ -1299,8 +1275,8 @@ static inline int obd_join_lru(struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline int obd_pin(struct obd_export *exp, struct ll_fid *fid,
-                          struct obd_client_handle *handle, int flag)
+static inline int obd_pin(struct obd_export *exp, obd_id ino, __u32 gen,
+                          int type, struct obd_client_handle *handle, int flag)
 {
         int rc;
         ENTRY;
@@ -1308,7 +1284,7 @@ static inline int obd_pin(struct obd_export *exp, struct ll_fid *fid,
         EXP_CHECK_OP(exp, pin);
         EXP_COUNTER_INCREMENT(exp, pin);
 
-        rc = OBP(exp->exp_obd, pin)(exp, fid, handle, flag);
+        rc = OBP(exp->exp_obd, pin)(exp, ino, gen, type, handle, flag);
         RETURN(rc);
 }
 

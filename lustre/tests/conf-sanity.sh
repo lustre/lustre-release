@@ -1209,7 +1209,7 @@ test_32a() {
 	start mds $tmpdir/mds "-o loop,exclude=lustre-OST0000" || return 12
 	cleanup_nocli
 
-	rm -rf $tmpdir || true	# true is only for TMP on NFS
+	[ -d $tmpdir ] && rm -rf $tmpdir
 }
 run_test 32a "Upgrade from 1.4 (not live)"
 
@@ -1267,7 +1267,7 @@ test_32b() {
 	echo "ok."
 
 	cleanup
-	rm -rf $tmpdir || true  # true is only for TMP on NFS
+	[ -d $tmpdir ] && rm -rf $tmpdir
 }
 run_test 32b "Upgrade from 1.4 with writeconf"
 
@@ -1602,44 +1602,6 @@ test_41() { #bug 14134
         return $rc
 }
 run_test 41 "mount mds with --nosvc and --nomgs"
-
-test_42() { #bug 14693
-        setup
-        check_mount || return 2
-        do_facet client lctl conf_param lustre.llite.some_wrong_param=10
-        umount_client $MOUNT
-        mount_client $MOUNT || return 1
-        cleanup
-        return 0
-}
-run_test 42 "invalid config param should not prevent client from mounting"
-
-test_43() { #bug 15993
-        setup
-        check_mount || return 2
-        testfile=$DIR/$tfile
-        lma="this-should-be-removed-after-remount-and-accessed"
-        touch $testfile
-        echo "set/get trusted.lma"
-        setfattr -n trusted.lma -v $lma $testfile || error "create common EA"
-        ATTR=$(getfattr -n trusted.lma $testfile 2> /dev/null | grep trusted.lma)
-        [ "$ATTR" = "trusted.lma=\"$lma\"" ] || error "check common EA"
-        umount_client $MOUNT
-        stop_mds
-        sleep 5
-        start_mds
-        mount_client $MOUNT
-        check_mount || return 3
-#define OBD_FAIL_MDS_REMOVE_COMMON_EA    0x13e
-        do_facet mds "lctl set_param fail_loc=0x13e"
-        stat $testfile
-        do_facet mds "lctl set_param fail_loc=0"
-        getfattr -d -m trusted $testfile 2> /dev/null | \
-            grep "trusted.lma" && error "common EA not removed" || true
-        cleanup
-        return 0
-}
-run_test 43 "remove common EA if it exists"
 
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true

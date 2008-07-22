@@ -147,17 +147,19 @@ int llog_receptor_accept(struct llog_ctxt *ctxt, struct obd_import *imp)
 {
         ENTRY;
         LASSERT(ctxt);
-        mutex_down(&ctxt->loc_sem);
-        if (ctxt->loc_imp != imp) {
-                CWARN("changing the import %p - %p\n", ctxt->loc_imp, imp);
-                if (ctxt->loc_imp)
-                        class_import_put(ctxt->loc_imp);
-                ctxt->loc_imp = class_import_get(imp);
-        }
-        mutex_up(&ctxt->loc_sem);
+        ctxt->loc_imp = imp;
         RETURN(0);
 }
 EXPORT_SYMBOL(llog_receptor_accept);
+
+int llog_initiator_connect(struct llog_ctxt *ctxt)
+{
+        ENTRY;
+        LASSERT(ctxt);
+        ctxt->loc_imp = ctxt->loc_obd->u.cli.cl_import;
+        RETURN(0);
+}
+EXPORT_SYMBOL(llog_initiator_connect);
 
 #else /* !__KERNEL__ */
 
@@ -167,21 +169,9 @@ int llog_origin_connect(struct llog_ctxt *ctxt, int count,
 {
         return 0;
 }
-#endif
 
 int llog_initiator_connect(struct llog_ctxt *ctxt)
 {
-        struct obd_import *new_imp;
-        ENTRY;
-        LASSERT(ctxt);
-        new_imp = ctxt->loc_obd->u.cli.cl_import;
-        mutex_down(&ctxt->loc_sem);
-        if (ctxt->loc_imp != new_imp) {
-                if (ctxt->loc_imp)
-                        class_import_put(ctxt->loc_imp);
-                ctxt->loc_imp = class_import_get(new_imp);
-        }
-        mutex_up(&ctxt->loc_sem);
-        RETURN(0);
+        return 0;
 }
-EXPORT_SYMBOL(llog_initiator_connect);
+#endif

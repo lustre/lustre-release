@@ -204,6 +204,7 @@ int lprocfs_evict_client_release(struct inode *inode, struct file *f)
 
         atomic_dec(&obd->obd_evict_inprogress);
         wake_up(&obd->obd_evict_inprogress_waitq);
+        LPROCFS_EXIT();
 
         return 0;
 }
@@ -359,13 +360,11 @@ int lprocfs_wr_uint(struct file *file, const char *buffer,
                     unsigned long count, void *data)
 {
         unsigned *p = data;
-        char dummy[MAX_STRING_SIZE + 1] = { '\0' }, *end;
+        char dummy[MAX_STRING_SIZE + 1], *end;
         unsigned long tmp;
 
-        if (count >= sizeof(dummy) || count == 0)
-                return -EINVAL;
-
-        if (copy_from_user(dummy, buffer, count))
+        dummy[MAX_STRING_SIZE] = '\0';
+        if (copy_from_user(dummy, buffer, MAX_STRING_SIZE))
                 return -EFAULT;
 
         tmp = simple_strtoul(dummy, &end, 0);
@@ -1094,8 +1093,6 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, connect);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, reconnect);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, disconnect);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, fid_init);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, fid_fini);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, statfs);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, statfs_async);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, packmd);
@@ -1509,7 +1506,7 @@ int lprocfs_write_frac_u64_helper(const char *buffer, unsigned long count,
         __u64 whole, frac = 0, units;
         unsigned frac_d = 1;
 
-        if (count > (sizeof(kernbuf) - 1))
+        if (count > (sizeof(kernbuf) - 1) )
                 return -EINVAL;
 
         if (copy_from_user(kernbuf, buffer, count))

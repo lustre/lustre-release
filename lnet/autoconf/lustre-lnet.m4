@@ -576,21 +576,15 @@ else
 		        O2IBLND=""
 		        O2IBCPPFLAGS=""
 		])
+
 		# we know at this point that the found OFED source is good
-		O2IB_SYMVER=""
-		if test $ENABLEO2IB -eq 3 ; then
-			# OFED default rpm not handle sles10 Modules.symvers name
-			for name in Module.symvers Modules.symvers; do
-				if test -f $O2IBPATH/$name; then
-					O2IB_SYMVER=$name;
-					break;
-				fi
-			done
-			if test -n $O2IB_SYMVER ; then
+		if test \( $ENABLEO2IB = 3 \); then
+			if test \( -f $O2IBPATH/Module.symvers \); then
 				AC_MSG_NOTICE([adding $O2IBPATH/Module.symvers to $PWD/$SYMVERFILE])
 				# strip out the existing symbols versions first
-				egrep -v $(echo $(awk '{ print $2 }' $O2IBPATH/$O2IB_SYMVER) | tr ' ' '|') $PWD/$SYMVERFILE > $PWD/$SYMVERFILE.old
-				cat $PWD/$SYMVERFILE.old $O2IBPATH/$O2IB_SYMVER > $PWD/$SYMVERFILE
+				touch $O2IBPATH/Module.symvers
+				egrep -v $(echo $(awk '{ print $2 }' $O2IBPATH/Module.symvers) | tr ' ' '|') $PWD/$SYMVERFILE > $PWD/$SYMVERFILE.old
+				cat $PWD/$SYMVERFILE.old $O2IBPATH/Module.symvers > $PWD/$SYMVERFILE
 			else
 				AC_MSG_ERROR([an external source tree was specified for o2iblnd however I could not find a $O2IBPATH/Module.symvers there])
 			fi

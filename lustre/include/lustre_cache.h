@@ -13,7 +13,6 @@ struct osc_async_page;
 struct page_removal_cb_element {
         struct list_head        prce_list;
         obd_page_removal_cb_t   prce_callback;
-        atomic_t                prce_refcnt;
 };
 
 typedef int (*cache_iterate_extents_cb_t)(struct lustre_cache *,
@@ -28,7 +27,6 @@ struct lustre_cache {
         struct list_head         lc_locks_list;
         spinlock_t               lc_locks_list_lock;
         struct list_head         lc_page_removal_callback_list;
-        rwlock_t                 lc_page_removal_cb_lock; /* iterate vs modify list */
         struct obd_device       *lc_obd;
         obd_pin_extent_cb        lc_pin_extent_cb;
 };

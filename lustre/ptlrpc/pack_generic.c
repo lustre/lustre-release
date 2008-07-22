@@ -41,6 +41,8 @@
 
 #if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(1,8,0,0)
 #error "lustre_msg_v1 has been deprecated since 1.6.0, please remove it"
+#elif LUSTRE_VERSION_CODE > OBD_OCD_VERSION(1,6,50,0)
+#warning "lustre_msg_v1 has been deprecated since 1.6.0, consider removing it"
 #endif
 
 static inline int lustre_msg_hdr_size_v1(int count)

@@ -598,8 +598,7 @@ CPPFLAGS="-I\$(top_builddir)/$LIBCFS_INCLUDE_DIR -I\$(top_srcdir)/$LIBCFS_INCLUD
 LLCPPFLAGS="-D__arch_lib__ -D_LARGEFILE64_SOURCE=1"
 AC_SUBST(LLCPPFLAGS)
 
-# Add _GNU_SOURCE for strnlen on linux
-LLCFLAGS="-g -Wall -fPIC -D_GNU_SOURCE"
+LLCFLAGS="-g -Wall -fPIC"
 AC_SUBST(LLCFLAGS)
 
 # everyone builds against lnet and lustre

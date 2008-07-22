@@ -211,9 +211,7 @@ static int do_bio_filebacked(struct lloop_device *lo, struct bio *bio)
 
         oa->o_mode = inode->i_mode;
         oa->o_id = lsm->lsm_object_id;
-        oa->o_gr = lsm->lsm_object_gr;
-        oa->o_valid = OBD_MD_FLID   | OBD_MD_FLGROUP | 
-                      OBD_MD_FLMODE | OBD_MD_FLTYPE;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLTYPE;
         obdo_from_inode(oa, inode, OBD_MD_FLFID | OBD_MD_FLGENER);
 
         cmd = OBD_BRW_READ;

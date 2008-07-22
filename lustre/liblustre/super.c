@@ -135,8 +135,6 @@ void llu_update_inode(struct inode *inode, struct mds_body *body,
 
         if (body->valid & OBD_MD_FLID)
                 st->st_ino = body->ino;
-        if (body->valid & OBD_MD_FLGENER)
-                lli->lli_st_generation = body->generation;
         if (body->valid & OBD_MD_FLATIME &&
             body->atime > LTIME_S(st->st_atime))
                 LTIME_S(st->st_atime) = body->atime;
@@ -173,8 +171,16 @@ void llu_update_inode(struct inode *inode, struct mds_body *body,
                 st->st_blocks = body->blocks;
         if (body->valid & OBD_MD_FLFLAGS)
                 lli->lli_st_flags = body->flags;
+        if (body->valid & OBD_MD_FLGENER)
+                lli->lli_st_generation = body->generation;
 
-        lli->lli_fid = body->fid1;
+        /* fillin fid */
+        if (body->valid & OBD_MD_FLID)
+                lli->lli_fid.id = body->ino;
+        if (body->valid & OBD_MD_FLGENER)
+                lli->lli_fid.generation = body->generation;
+        if (body->valid & OBD_MD_FLTYPE)
+                lli->lli_fid.f_type = body->mode & S_IFMT;
 }
 
 void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
@@ -425,7 +431,7 @@ static int llu_inode_revalidate(struct inode *inode)
                         ealen = obd_size_diskmd(sbi->ll_osc_exp, NULL);
                         valid |= OBD_MD_FLEASIZE;
                 }
-                llu_inode2fid(&fid, inode);
+                ll_inode2fid(&fid, inode);
                 rc = mdc_getattr(sbi->ll_mdc_exp, &fid, valid, ealen, &req);
                 if (rc) {
                         CERROR("failure %d inode %llu\n", rc,
@@ -526,7 +532,7 @@ void llu_clear_inode(struct inode *inode)
                (long long)llu_i2stat(inode)->st_ino, lli->lli_st_generation,
                inode);
 
-        llu_inode2fid(&fid, inode);
+        ll_inode2fid(&fid, inode);
         clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &(lli->lli_flags));
         mdc_change_cbdata(sbi->ll_mdc_exp, &fid, null_if_equal, inode);
 
@@ -892,7 +898,7 @@ static int llu_readlink_internal(struct inode *inode,
                 RETURN(0);
         }
 
-        llu_inode2fid(&fid, inode);
+        ll_inode2fid(&fid, inode);
         rc = mdc_getattr(sbi->ll_mdc_exp, &fid,
                          OBD_MD_LINKNAME, symlen, request);
         if (rc) {
@@ -1808,7 +1814,9 @@ struct inode *llu_iget(struct filesys *fs, struct lustre_md *md)
         }
 
         /* try to find existing inode */
-        fid = md->body->fid1;
+        fid.id = md->body->ino;
+        fid.generation = md->body->generation;
+        fid.f_type = md->body->mode & S_IFMT;
 
         inode = _sysio_i_find(fs, &fileid);
         if (inode) {

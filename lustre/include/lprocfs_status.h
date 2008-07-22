@@ -200,25 +200,6 @@ static inline int opcode_offset(__u32 opc) {
                         (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
                         (MDS_LAST_OPC - MDS_FIRST_OPC) +
                         (OST_LAST_OPC - OST_FIRST_OPC));
-       } else if (opc < FLD_LAST_OPC) {
-                /* FLD opcode */
-                return (opc - FLD_FIRST_OPC +
-                        (LLOG_LAST_OPC - LLOG_FIRST_OPC) +
-                        (OBD_LAST_OPC - OBD_FIRST_OPC) +
-                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
-                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
-                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
-                        (OST_LAST_OPC - OST_FIRST_OPC));
-        } else if (opc < SEQ_LAST_OPC) {
-                /* SEQ opcode */
-                return (opc - SEQ_FIRST_OPC +
-                        (FLD_LAST_OPC - FLD_FIRST_OPC) +
-                        (LLOG_LAST_OPC - LLOG_FIRST_OPC) +
-                        (OBD_LAST_OPC - OBD_FIRST_OPC) +
-                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
-                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
-                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
-                        (OST_LAST_OPC - OST_FIRST_OPC));
         } else {
                 /* Unknown Opcode */
                 return -1;
@@ -230,9 +211,7 @@ static inline int opcode_offset(__u32 opc) {
                             (LDLM_LAST_OPC - LDLM_FIRST_OPC)   + \
                             (MGS_LAST_OPC - MGS_FIRST_OPC)     + \
                             (OBD_LAST_OPC - OBD_FIRST_OPC)     + \
-                            (LLOG_LAST_OPC - LLOG_FIRST_OPC)   + \
-                            (FLD_LAST_OPC - FLD_FIRST_OPC)     + \
-                            (SEQ_LAST_OPC - SEQ_FIRST_OPC))
+                            (LLOG_LAST_OPC - LLOG_FIRST_OPC))
 
 #define EXTRA_MAX_OPCODES ((PTLRPC_LAST_CNTR - PTLRPC_FIRST_CNTR)  + \
                            (EXTRA_LAST_OPC - EXTRA_FIRST_OPC))
@@ -514,14 +493,14 @@ extern struct rw_semaphore _lprocfs_lock;
  * the import in a client obd_device for a lprocfs entry */
 #define LPROCFS_CLIMP_CHECK(obd) do {           \
         typecheck(struct obd_device *, obd);    \
-        down_read(&(obd)->u.cli.cl_sem);        \
+        mutex_down(&(obd)->u.cli.cl_sem);       \
         if ((obd)->u.cli.cl_import == NULL) {   \
-             up_read(&(obd)->u.cli.cl_sem);     \
+             mutex_up(&(obd)->u.cli.cl_sem);    \
              return -ENODEV;                    \
         }                                       \
 } while(0)
 #define LPROCFS_CLIMP_EXIT(obd)                 \
-        up_read(&(obd)->u.cli.cl_sem);
+        mutex_up(&(obd)->u.cli.cl_sem);
 
 
 /* write the name##_seq_show function, call LPROC_SEQ_FOPS_RO for read-only 

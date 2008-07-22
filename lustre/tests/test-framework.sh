@@ -232,26 +232,18 @@ wait_for_lnet() {
     done
 }
 
-unload_dep_module() {
-    #lsmod output
-    #libcfs                107852  17 llite_lloop,lustre,obdfilter,ost,...
-    local MODULE=$1
-    local DEPS=$(lsmod | awk '($1 == "'$MODULE'") { print $4 }' | tr ',' ' ')
-    for SUBMOD in $DEPS; do
-        unload_dep_module $SUBMOD
-    done
-    [ "$MODULE" = "libcfs" ] && $LCTL dk $TMP/debug || true
-    $RMMOD $MODULE || true
-}
-
 unload_modules() {
     wait_exit_ST client # bug 12845
 
     lsmod | grep libcfs > /dev/null && $LCTL dl
-    unload_dep_module $FSTYPE
-    unload_dep_module libcfs
-
-    local MODULES=$($LCTL modules | awk '{ print $2 }')
+    local MODULES=$($LCTL modules | awk '{ print $2 }' | grep -v libcfs) || true
+    $RMMOD $MODULES > /dev/null 2>&1 || true
+     # do it again, in case we tried to unload ksocklnd too early
+    MODULES=$($LCTL modules | awk '{ print $2 }' | grep -v libcfs) || true
+    [ -n "$MODULES" ] && $RMMOD $MODULES > /dev/null 2>&1 || true
+    lsmod | grep libcfs > /dev/null && $LCTL dk $TMP/debug
+    $RMMOD libcfs
+    MODULES=$($LCTL modules | awk '{ print $2 }')
     if [ -n "$MODULES" ]; then
         echo "Modules still loaded: "
         echo $MODULES 
@@ -354,7 +346,7 @@ zconf_mount() {
         exit 1
     fi
 
-    echo "Starting client: $client: $OPTIONS $device $mnt"
+    echo "Starting client: $client: $OPTIONS $device $mnt" 
     do_node $client mkdir -p $mnt
     do_node $client mount -t lustre $OPTIONS $device $mnt || return 1
     do_node $client "lctl set_param debug=$PTLDEBUG;
@@ -1159,6 +1151,13 @@ set_nodes_failloc () {
     done
 }
 
+cancel_lru_locks() {
+    $LCTL mark "cancel_lru_locks $1 start"
+    lctl set_param ldlm.namespaces.*$1*.lru_size=0
+    lctl get_param ldlm.namespaces.*$1*.lock_unused_count | grep -v '=0'
+    $LCTL mark "cancel_lru_locks $1 stop"
+}
+
 set_nodes_failloc () {
     local nodes=$1
     local node
@@ -1166,13 +1165,6 @@ set_nodes_failloc () {
     for node in $nodes ; do
         do_node $node sysctl -w lustre.fail_loc=$2
     done
-}
-
-cancel_lru_locks() {
-    $LCTL mark "cancel_lru_locks $1 start"
-    lctl set_param ldlm.namespaces.*$1*.lru_size=0
-    lctl get_param ldlm.namespaces.*$1*.lock_unused_count | grep -v '=0'
-    $LCTL mark "cancel_lru_locks $1 stop"
 }
 
 default_lru_size()

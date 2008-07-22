@@ -19,7 +19,6 @@ lr_reader
 ltrack_stats
 obdio
 obdbarrier
-ll_recover_lost_found_objs
 lload
 llverfs
 llverdev

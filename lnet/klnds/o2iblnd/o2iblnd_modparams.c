@@ -199,7 +199,7 @@ static cfs_sysctl_table_t kiblnd_ctl_table[] = {
                 .procname = "concurrent_sends",
                 .data     = &concurrent_sends,
                 .maxlen   = sizeof(int),
-                .mode     = 0444,
+                .mode     = 0644,
                 .proc_handler = &proc_dointvec
         },
         {

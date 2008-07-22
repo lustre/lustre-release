@@ -1209,26 +1209,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# 2.6.12 merge patch from oracle to convert tree_lock from spinlock to rwlock
-AC_DEFUN([LC_RW_TREE_LOCK],
-[AC_MSG_CHECKING([if kernel has tree_lock as rwlock])
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-],[
-        struct address_space a;
-
-        write_lock(&a.tree_lock);
-],[
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_RW_TREE_LOCK, 1, [kernel has tree_lock as rw_lock])
-],[
-        AC_MSG_RESULT([no])
-])
-EXTRA_KCFLAGS="$tmp_flags"
-])
-
 # 2.6.23 have return type 'void' for unregister_blkdev
 AC_DEFUN([LC_UNREGISTER_BLKDEV_RETURN_INT],
 [AC_MSG_CHECKING([if unregister_blkdev return int])
@@ -1327,14 +1307,10 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_QUOTA_READ
           LC_COOKIE_FOLLOW_LINK
           LC_FUNC_RCU
-          LC_QUOTA64
 
           # does the kernel have VFS intent patches?
           LC_VFS_INTENT_PATCHES
 
-          # 2.6.12
-          LC_RW_TREE_LOCK
-        
           # 2.6.15
           LC_INODE_I_MUTEX
 
@@ -1557,30 +1533,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
-# LC_QUOTA64
-# linux kernel may have 64-bit limits support
-#
-AC_DEFUN([LC_QUOTA64],
-[AC_MSG_CHECKING([if kernel has 64-bit quota limits support])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/kernel.h>
-        #include <linux/fs.h>
-        #include <linux/quotaio_v2.h>
-        int versions[] = V2_INITQVERSIONS_R1;
-        struct v2_disk_dqblk_r1 dqblk_r1;
-],[],[
-        AC_DEFINE(HAVE_QUOTA64, 1, [have quota64])
-        AC_MSG_RESULT([yes])
-
-],[
-        AC_MSG_WARN([You have got no 64-bit kernel quota support.])
-        AC_MSG_WARN([Continuing with limited quota support.])
-        AC_MSG_WARN([quotacheck is needed for filesystems with recent quota versions.])
-        AC_MSG_RESULT([no])
-])
-])
-
-#
 # LC_CONFIGURE
 #
 # other configure checks
@@ -1590,6 +1542,10 @@ AC_DEFUN([LC_CONFIGURE],
 
 # include/liblustre.h
 AC_CHECK_HEADERS([asm/page.h sys/user.h sys/vfs.h stdint.h blkid/blkid.h])
+
+# include/lustre/lustre_user.h
+# See note there re: __ASM_X86_64_PROCESSOR_H
+AC_CHECK_HEADERS([linux/fs.h linux/quota.h])
 
 # liblustre/llite_lib.h
 AC_CHECK_HEADERS([xtio.h file.h])

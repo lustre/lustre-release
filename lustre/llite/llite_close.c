@@ -122,7 +122,6 @@ static void ll_close_done_writing(struct inode *inode)
         ldlm_policy_data_t policy = { .l_extent = {0, OBD_OBJECT_EOF } };
         struct lustre_handle lockh = { 0 };
         struct obdo obdo;
-        struct mdc_op_data data = { { 0 } };
         obd_flag valid;
         int rc, ast_flags = 0;
         ENTRY;
@@ -167,8 +166,7 @@ static void ll_close_done_writing(struct inode *inode)
         obdo.o_blocks = inode->i_blocks;
         obdo.o_valid = OBD_MD_FLID | OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
 
-        ll_inode2fid(&data.fid1, inode);
-        rc = mdc_done_writing(ll_i2sbi(inode)->ll_mdc_exp, &data, &obdo);
+        rc = mdc_done_writing(ll_i2sbi(inode)->ll_mdc_exp, &obdo);
  out:
 }
 

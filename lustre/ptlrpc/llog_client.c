@@ -43,31 +43,6 @@
 #include <lustre_net.h>
 #include <libcfs/list.h>
 
-#define  LLOG_CLIENT_ENTRY(ctxt, imp) do {                            \
-        mutex_down(&ctxt->loc_sem);                                   \
-        if (ctxt->loc_imp) {                                          \
-                imp = class_import_get(ctxt->loc_imp);                \
-        } else {                                                      \
-                CERROR("ctxt->loc_imp == NULL for context idx %d."    \
-                       "Unable to complete MDS/OSS recovery,"         \
-                       "but I'll try again next time.  Not fatal.\n", \
-                       ctxt->loc_idx);                                \
-                imp = NULL;                                           \
-                mutex_up(&ctxt->loc_sem);                             \
-                return (-EINVAL);                                     \
-        }                                                             \
-        mutex_up(&ctxt->loc_sem);                                     \
-} while(0)
-
-#define  LLOG_CLIENT_EXIT(ctxt, imp) do {                  \
-        mutex_down(&ctxt->loc_sem);                        \
-        if (ctxt->loc_imp != imp)                          \
-                CWARN("loc_imp has changed from %p to %p", \
-                       ctxt->loc_imp, imp);                \
-        class_import_put(imp);                             \
-        mutex_up(&ctxt->loc_sem);                          \
-} while(0)
-
 /* This is a callback from the llog_* functions.
  * Assumes caller has already pushed us into the kernel context. */
 static int llog_client_create(struct llog_ctxt *ctxt, struct llog_handle **res,
@@ -84,11 +59,18 @@ static int llog_client_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         int rc;
         ENTRY;
 
-        LLOG_CLIENT_ENTRY(ctxt, imp);
+        if (ctxt->loc_imp == NULL) {
+                /* This used to be an assert; bug 6200 */
+                CERROR("ctxt->loc_imp == NULL for context idx %d.  Unable to "
+                       "complete MDS/OSS recovery, but I'll try again next "
+                       "time.  Not fatal.\n", ctxt->loc_idx);
+                RETURN(-EINVAL);
+        }
+        imp = ctxt->loc_imp;
 
         handle = llog_alloc_handle();
         if (handle == NULL)
-                GOTO(out, rc = -ENOMEM);
+                RETURN(-ENOMEM);
         *res = handle;
 
         memset(&req_body, 0, sizeof(req_body));
@@ -125,7 +107,6 @@ static int llog_client_create(struct llog_ctxt *ctxt, struct llog_handle **res,
 out:
         if (req)
                 ptlrpc_req_finished(req);
-        LLOG_CLIENT_EXIT(ctxt, imp);
         RETURN(rc);
 
 err_free:
@@ -135,18 +116,17 @@ err_free:
 
 static int llog_client_destroy(struct llog_handle *loghandle)
 {
-        struct obd_import     *imp;
+        struct obd_import *imp = loghandle->lgh_ctxt->loc_imp;
         struct ptlrpc_request *req = NULL;
         struct llogd_body *body;
         int size[] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         int rc;
         ENTRY;
 
-        LLOG_CLIENT_ENTRY(loghandle->lgh_ctxt, imp);
         req = ptlrpc_prep_req(imp, LUSTRE_LOG_VERSION, 
                               LLOG_ORIGIN_HANDLE_DESTROY, 2, size, NULL);
         if (!req)
-                GOTO(out, rc = -ENOMEM);
+                RETURN(-ENOMEM);
 
         body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
         body->lgd_logid = loghandle->lgh_id;
@@ -156,8 +136,6 @@ static int llog_client_destroy(struct llog_handle *loghandle)
         rc = ptlrpc_queue_wait(req);
         
         ptlrpc_req_finished(req);
-out:
-        LLOG_CLIENT_EXIT(loghandle->lgh_ctxt, imp);
         RETURN(rc);
 }
 
@@ -166,7 +144,7 @@ static int llog_client_next_block(struct llog_handle *loghandle,
                                   int *cur_idx, int next_idx,
                                   __u64 *cur_offset, void *buf, int len)
 {
-        struct obd_import *imp;
+        struct obd_import *imp = loghandle->lgh_ctxt->loc_imp;
         struct ptlrpc_request *req = NULL;
         struct llogd_body *body;
         void * ptr;
@@ -174,11 +152,10 @@ static int llog_client_next_block(struct llog_handle *loghandle,
         int rc;
         ENTRY;
 
-        LLOG_CLIENT_ENTRY(loghandle->lgh_ctxt, imp);
         req = ptlrpc_prep_req(imp, LUSTRE_LOG_VERSION,
                               LLOG_ORIGIN_HANDLE_NEXT_BLOCK, 2, size, NULL);
         if (!req)
-                GOTO(out, rc =-ENOMEM);
+                GOTO(out, rc = -ENOMEM);
 
         body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
         body->lgd_logid = loghandle->lgh_id;
@@ -217,14 +194,13 @@ static int llog_client_next_block(struct llog_handle *loghandle,
 out:
         if (req)
                 ptlrpc_req_finished(req);
-        LLOG_CLIENT_EXIT(loghandle->lgh_ctxt, imp);
         RETURN(rc);
 }
 
 static int llog_client_prev_block(struct llog_handle *loghandle,
                                   int prev_idx, void *buf, int len)
 {
-        struct obd_import *imp;
+        struct obd_import *imp = loghandle->lgh_ctxt->loc_imp;
         struct ptlrpc_request *req = NULL;
         struct llogd_body *body;
         void * ptr;
@@ -232,7 +208,6 @@ static int llog_client_prev_block(struct llog_handle *loghandle,
         int rc;
         ENTRY;
 
-        LLOG_CLIENT_ENTRY(loghandle->lgh_ctxt, imp);
         req = ptlrpc_prep_req(imp, LUSTRE_LOG_VERSION,
                               LLOG_ORIGIN_HANDLE_PREV_BLOCK, 2, size, NULL);
         if (!req)
@@ -269,13 +244,12 @@ static int llog_client_prev_block(struct llog_handle *loghandle,
 out:
         if (req)
                 ptlrpc_req_finished(req);
-        LLOG_CLIENT_EXIT(loghandle->lgh_ctxt, imp);
         RETURN(rc);
 }
 
 static int llog_client_read_header(struct llog_handle *handle)
 {
-        struct obd_import *imp;
+        struct obd_import *imp = handle->lgh_ctxt->loc_imp;
         struct ptlrpc_request *req = NULL;
         struct llogd_body *body;
         struct llog_log_hdr *hdr;
@@ -285,7 +259,6 @@ static int llog_client_read_header(struct llog_handle *handle)
         int rc;
         ENTRY;
 
-        LLOG_CLIENT_ENTRY(handle->lgh_ctxt, imp);
         req = ptlrpc_prep_req(imp, LUSTRE_LOG_VERSION,
                               LLOG_ORIGIN_HANDLE_READ_HEADER, 2, size, NULL);
         if (!req)
@@ -328,7 +301,6 @@ static int llog_client_read_header(struct llog_handle *handle)
 out:
         if (req)
                 ptlrpc_req_finished(req);
-        LLOG_CLIENT_EXIT(handle->lgh_ctxt, imp);
         RETURN(rc);
 }
 

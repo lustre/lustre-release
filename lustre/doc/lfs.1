@@ -11,10 +11,8 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs find [[!] --atime|-A [-+]N] [[!] --mtime|-M [-+]N]
         \fB[[!] --ctime|-C [-+]N] [--maxdepth|-D N] [--name|-n pattern]
-        \fB[--print|-p] \fB[--print0|-P] [--obd|-O <uuid[s]>]
+        \fB[--print|-p] \fB[--print0|-P] [--obd|-O <uuid>]
         \fB[[!] --size|-S [-+]N[kMGTPE]] [--type |-t {bcdflpsD}]
-        \fB[[!] --gid|-g N] [[!] --group|-G <name>]
-        \fB[[!] --uid|-u N] [[!] --user|-U <name>]
         \fB<dirname|filename>\fR
 .br
 .B lfs getstripe [--obd|-O <uuid>] [--quiet|-q] [--verbose|-v] 
@@ -33,7 +31,7 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs quotaoff [-ug] <filesystem>
 .br
-.B lfs quotainv [-ug] [-f] <filesystem>
+.B lfs quotainv [-ug] <filesystem>
 .br
 .B lfs setquota [-u|--user|-g|--group] <username|groupname>
              \fB[--block-softlimit <block-softlimit>]
@@ -57,9 +55,7 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
              \fB<filesystem>\fR
 .br
 
-.B lfs quota [-v] [-o obd_uuid] [-u|-g] <username|groupname> <filesystem>
-.br
-.B lfs quota <filesystem>
+.B lfs quota [-o obd_uuid] [-u|-g] <username|groupname> <filesystem>
 .br
 .B lfs quota -t [-u|-g] <filesystem>
 .br
@@ -77,7 +73,7 @@ Display the status of MDS or OSTs (as specified in the command) or all the serve
 Report filesystem disk space usage or inodes usage of each MDT/OST.
 .TP
 .B find 
-To search the directory tree rooted at the given dir/file name for the files that match the given parameters: \fB--atime\fR (file was last accessed N*24 hours ago), \fB--ctime\fR (file's status was last changed N*24 hours ago), \fB--mtime\fR (file's data was last modified N*24 hours ago), \fB--obd\fR (file has an object on a specific OST or OSTs), \fB--size\fR (file has size in bytes, or \fBk\fRilo-, \fBM\fRega-, \fBG\fRiga-, \fBT\fRera-, \fBP\fReta-, or \fBE\fRxabytes if a suffix is given), \fB--type\fR (file has the type: \fBb\fRlock, \fBc\fRharacter, \fBd\fRirectory, \fBp\fRipe, \fBf\fRile, sym\fBl\fRink, \fBs\fRocket, or \fBD\fRoor (Solaris)), \fB--uid\fR (file has specific numeric user ID), \fB--user\fR (file owned by specific user, numeric user ID allowed), \fB--gid\fR (file has specific group ID), \fB--group\fR (file belongs to specific group, numeric group ID allowed). The option \fB--maxdepth\fR allows find to decend at most N levels of directory tree. The options \fB--print\fR and \fB--print0\fR print full file name, followed by a newline or NUL character correspondingly.  Using \fB!\fR before an option negates its meaning (\fIfiles NOT matching the parameter\fR).  Using \fB+\fR before a numeric value means \fIfiles with the parameter OR MORE\fR, while \fB-\fR before a numeric value means \fIfiles with the parameter OR LESS\fR.
+To search the directory tree rooted at the given dir/file name for the files that match the given parameters: \fB--atime\fR (file was last accessed N*24 hours ago), \fB--ctime\fR (file's status was last changed N*24 hours ago), \fB--mtime\fR (file's data was last modified N*24 hours ago), \fB--obd\fR (file has an object on a specific OST), \fB--size\fR (file has size in bytes, or \fBk\fRilo-, \fBM\fRega-, \fBG\fRiga-, \fBT\fRera-, \fBP\fReta-, or \fBE\fRxabytes if a suffix is given), \fB--type\fR (file has the type: \fBb\fRlock, \fBc\fRharacter, \fBd\fRirectory, \fBp\fRipe, \fBf\fRile, sym\fBl\fRink, \fBs\fRocket, or \fBD\fRoor (Solaris)). The option \fB--maxdepth\fR allows find to decend at most N levels of directory tree. The options \fB--print\fR and \fB--print0\fR print full file name, followed by a newline or NUL character correspondingly.  Using \fB!\fR before an option negates its meaning (\fIfiles NOT matching the parameter\fR).  Using \fB+\fR before a numeric value means \fIfiles with the parameter OR MORE\fR, while \fB-\fR before a numeric value means \fIfiles with the parameter OR LESS\fR.
 .TP
 .B getstripe
 To list the striping info for a given filename or files in a directory, optionally recursively, for all files in a directory tree: \fB--quiet\fR (don't print object IDs), \fB--verbose\fR (print striping parameters), \fB--recursive\fR (recurse into subdirectories).
@@ -119,8 +115,8 @@ To turn filesystem quotas on. Options specify quota for users (-u) groups (-g) a
 .B quotaoff [-ugf] <filesystem>
 To turn filesystem quotas off.  Options specify quota for users (-u) groups (-g) and force (-f)
 .TP
-.B quotainv [-ug] [-f] <filesystem>
-Clear quota files (administrative quota files if used without -f, operational quota files otherwise), all of their quota entries, for (-u) users or (-g) groups; after quotainv one must use quotacheck before using quotas. DO NOT USE THIS COMMAND UNLESS YOU REALLY KNOW WHAT IT DOES. IT IS MAINLY FOR INTERNAL PURPOSES.
+.B quotainv [-ug] <filesystem>
+Clear quota files, all of their quota entries, for (-u) users or (-g) groups; after quotainv one must use quotacheck before using quotas. USE THIS COMMAND WITH EXTREME CARE, ITS RESULTS CANNOT BE UNDONE.
 .TP
 .B setquota  [-u|-g] <name> [--block-softlimit <block-softlimit>] [--block-hardlimit <block-hardlimit>] [--inode-softlimit <inode-softlimit>] [--inode-hardlimit <inode-hardlimit>] <filesystem>
 To set filesystem quotas for users or groups. Limits can be specified with -b, -k, -m, -g, -t, -p suffixes which specify units of 1, 2^10, 2^20, 2^30, 2^40 and 2^50 accordingly. Block limits unit is kilobyte (1024) by default and block limits are always kilobyte-grained (even if specified in bytes), see EXAMPLES
@@ -128,8 +124,8 @@ To set filesystem quotas for users or groups. Limits can be specified with -b, -
 .B setquota -t [-u|-g] [--block-grace <block-grace>] [--inode-grace <inode-grace>] <filesystem>
 To set filesystem quota grace times for users or groups. Grace time is specified in "XXwXXdXXhXXmXXs" format or as an integer seconds value, see EXAMPLES
 .TP
-.B quota [-v] [-o obd_uuid] [-u|-g] <username|groupname> <filesystem>
-To display disk usage and limits, either for the full filesystem, or for objects on a specific obd. A user or group name can be specified. If both user and group are omitted quotas for current uid/gid are shown. -v provides more verbose (with per-obd statistics) output.
+.B quota [-o obd_uuid] [-u|-g] <username|groupname> <filesystem>
+To display disk usage and limits, either for the full filesystem, or for objects on a specific obd. A user or group name must be specified.
 .TP
 .B quota -t [-u|-g] <filesystem>
 To display block and inode grace times for user (-u) or group (-g) quotas

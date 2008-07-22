@@ -8,9 +8,7 @@
  *   Lustre is a trademark of Cluster File Systems, Inc.
  *
  */
-#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
-#endif
 #include <pthread.h>
 #include <poll.h>
 #include <lnet/lib-lnet.h>

@@ -119,8 +119,7 @@ int ll_file_punch(struct inode * inode, loff_t new_size, int srvlock)
         oinfo.oi_policy.l_extent.end = OBD_OBJECT_EOF;
         oinfo.oi_oa = &oa;
         oa.o_id = lli->lli_smd->lsm_object_id;
-        oa.o_gr = lli->lli_smd->lsm_object_gr;
-        oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+        oa.o_valid = OBD_MD_FLID;
         if (srvlock) {
                 /* set OBD_MD_FLFLAGS in o_valid, only if we 
                  * set OBD_FL_TRUNCLOCK, otherwise ost_punch
@@ -255,9 +254,7 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
 
         oa.o_mode = inode->i_mode;
         oa.o_id = lsm->lsm_object_id;
-        oa.o_gr = lsm->lsm_object_gr;
-        oa.o_valid = OBD_MD_FLID   | OBD_MD_FLMODE |
-                     OBD_MD_FLTYPE | OBD_MD_FLGROUP;
+        oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLTYPE;
         obdo_from_inode(&oa, inode, OBD_MD_FLFID | OBD_MD_FLGENER);
 
         oinfo.oi_oa = &oa;
@@ -327,6 +324,9 @@ static int ll_ap_make_ready(void *data, int cmd)
 
         llap = LLAP_FROM_COOKIE(data);
         page = llap->llap_page;
+
+        LASSERTF(!(cmd & OBD_BRW_READ), "cmd %x page %p ino %lu index %lu\n", cmd, page,
+                 page->mapping->host->i_ino, page->index);
 
         /* we're trying to write, but the page is locked.. come back later */
         if (TryLockPage(page))
@@ -417,8 +417,7 @@ void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa)
         lsm = ll_i2info(inode)->lli_smd;
 
         oa->o_id = lsm->lsm_object_id;
-        oa->o_gr = lsm->lsm_object_gr;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+        oa->o_valid = OBD_MD_FLID;
         valid_flags = OBD_MD_FLTYPE | OBD_MD_FLATIME;
         if (cmd & OBD_BRW_WRITE) {
                 oa->o_valid |= OBD_MD_FLEPOCH;

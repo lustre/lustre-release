@@ -60,38 +60,6 @@ struct mds_logcancel_data {
         struct llog_cookie      mlcd_cookies[0];
 };
 
-/** lookup child dentry in parent dentry according to the name.
- *  if dentry is found, delete "lustre_mdt_attrs" EA (with name "lma")
- *  if it exists by checking OBD_INCOMPAT_FID.
- */
-struct dentry *mds_lookup(struct obd_device *obd, const char *fid_name,
-                          struct dentry *dparent, int fid_namelen)
-{
-        struct dentry *dchild;
-        struct lr_server_data *lsd = obd->u.mds.mds_server_data;
-        EXIT;
-        
-        dchild = ll_lookup_one_len(fid_name, dparent, fid_namelen);
-        if (!IS_ERR(dchild) &&
-            unlikely((lsd->lsd_feature_incompat & OBD_INCOMPAT_FID) ||
-                      OBD_FAIL_CHECK(OBD_FAIL_MDS_REMOVE_COMMON_EA))) {
-                struct inode *inode = dchild->d_inode; 
-                void         *handle;
-                if (inode != NULL) {
-                        handle = fsfilt_start(obd, inode, FSFILT_OP_SETATTR,
-                                              NULL);
-                        if (!IS_ERR(handle)) {
-                                LOCK_INODE_MUTEX(inode);
-                                fsfilt_set_md(obd, inode, handle, NULL, 0,
-                                              "lma");
-                                /* result is ignored. */
-                                UNLOCK_INODE_MUTEX(inode);
-                                fsfilt_commit(obd, inode, handle, 0);
-                        }
-                }
-        }
-        RETURN(dchild);
-}
 
 static void mds_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
                                   void *cb_data, int error)
@@ -457,6 +425,7 @@ static void reconstruct_reint_setattr(struct mds_update_record *rec,
         }
 
         body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
+        mds_pack_inode2fid(&body->fid1, de->d_inode);
         mds_pack_inode2body(body, de->d_inode);
 
         /* Don't return OST-specific attributes if we didn't just set them */
@@ -699,6 +668,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         }
 
         body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
+        mds_pack_inode2fid(&body->fid1, inode);
         mds_pack_inode2body(body, inode);
 
         /* don't return OST-specific attributes if we didn't just set them. */
@@ -800,8 +770,7 @@ static void reconstruct_reint_create(struct mds_update_record *rec, int offset,
                 EXIT;
                 return;
         }
-        child = mds_lookup(exp->exp_obd, rec->ur_name, parent,
-                           rec->ur_namelen - 1);
+        child = ll_lookup_one_len(rec->ur_name, parent, rec->ur_namelen - 1);
         if (IS_ERR(child)) {
                 rc = PTR_ERR(child);
                 LCONSOLE_WARN("Child "LPU64"/%u lookup error %d." 
@@ -812,9 +781,10 @@ static void reconstruct_reint_create(struct mds_update_record *rec, int offset,
                 mds_export_evict(exp);
                 EXIT;
                 return;
-        }
+        }       
 
         body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
+        mds_pack_inode2fid(&body->fid1, child->d_inode);
         mds_pack_inode2body(body, child->d_inode);
 
         l_dput(parent);
@@ -874,7 +844,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
 
         ldlm_lock_dump_handle(D_OTHER, &lockh);
 
-        dchild = mds_lookup(obd, rec->ur_name, dparent, rec->ur_namelen - 1);
+        dchild = ll_lookup_one_len(rec->ur_name, dparent, rec->ur_namelen - 1);
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
                 CDEBUG(D_DENTRY, "child lookup error %d\n", rc);
@@ -1015,6 +985,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 }
 
                 body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
+                mds_pack_inode2fid(&body->fid1, inode);
                 mds_pack_inode2body(body, inode);
         }
         EXIT;
@@ -1428,7 +1399,7 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
         cleanup_phase = 1; /* parent dentry */
 
         /* Step 2: Lookup child (without DLM lock, to get resource name) */
-        *dchildp = mds_lookup(obd, name, *dparentp, namelen - 1);
+        *dchildp = ll_lookup_one_len(name, *dparentp, namelen - 1);
         if (IS_ERR(*dchildp)) {
                 rc = PTR_ERR(*dchildp);
                 CDEBUG(D_INODE, "child lookup error %d\n", rc);
@@ -1726,6 +1697,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                         LOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode);
                         cleanup_phase = 5; /* UNLOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode); */
                 } else if (S_ISREG(child_inode->i_mode)) {
+                        mds_pack_inode2fid(&body->fid1, child_inode);
                         mds_pack_inode2body(body, child_inode);
                         mds_pack_md(obd, req->rq_repmsg, offset + 1, body,
                                     child_inode, MDS_PACK_MD_LOCK, 0);
@@ -1937,7 +1909,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         }
 
         /* Step 3: Lookup the child */
-        dchild = mds_lookup(obd, rec->ur_name, de_tgt_dir, rec->ur_namelen-1);
+        dchild = ll_lookup_one_len(rec->ur_name, de_tgt_dir, rec->ur_namelen-1);
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
                 if (rc != -EPERM && rc != -EACCES && rc != -ENAMETOOLONG)
@@ -2076,7 +2048,7 @@ int mds_get_parents_children_locked(struct obd_device *obd,
         p2_res_id.name[1] = (*de_tgtdirp)->d_inode->i_generation;
 
         /* Step 3: Lookup the source child entry */
-        *de_oldp = mds_lookup(obd, old_name, *de_srcdirp, old_len - 1);
+        *de_oldp = ll_lookup_one_len(old_name, *de_srcdirp, old_len - 1);
         if (IS_ERR(*de_oldp)) {
                 rc = PTR_ERR(*de_oldp);
                 CDEBUG(D_INODE, "old child lookup error (%.*s): rc %d\n",
@@ -2100,7 +2072,7 @@ int mds_get_parents_children_locked(struct obd_device *obd,
         /* Step 4: Lookup the target child entry */
         if (!new_name)
                 GOTO(retry_locks, rc);
-        *de_newp = mds_lookup(obd, new_name, *de_tgtdirp, new_len - 1);
+        *de_newp = ll_lookup_one_len(new_name, *de_tgtdirp, new_len - 1);
         if (IS_ERR(*de_newp)) {
                 rc = PTR_ERR(*de_newp);
                 CDEBUG(D_DENTRY, "new child lookup error (%.*s): rc %d\n",
@@ -2111,14 +2083,8 @@ int mds_get_parents_children_locked(struct obd_device *obd,
         cleanup_phase = 4; /* target dentry */
 
         inode = (*de_newp)->d_inode;
-        if (inode != NULL) {
-                if (is_bad_inode(inode)) {
-                        CERROR("bad inode returned %lu/%u\n",
-                               inode->i_ino, inode->i_generation);
-                        GOTO(cleanup, rc = -ENOENT);
-                }
+        if (inode != NULL)
                 inode = igrab(inode);
-        }
         if (inode == NULL)
                 goto retry_locks;
 
@@ -2132,6 +2098,8 @@ retry_locks:
         maxres_tgt = &p2_res_id;
         cleanup_phase = 4; /* target dentry */
 
+        if (c1_res_id.name[0] != 0 && res_gt(&c1_res_id, &p1_res_id,NULL,NULL))
+                maxres_src = &c1_res_id;
         if (c2_res_id.name[0] != 0 && res_gt(&c2_res_id, &p2_res_id,NULL,NULL))
                 maxres_tgt = &c2_res_id;
 
@@ -2168,11 +2136,6 @@ retry_locks:
 
         if (!new_name)
                 GOTO(cleanup, rc);
-
-        /* Safe to skip check for child res being all zero */
-        if (res_gt(&c1_res_id, maxres_src, NULL, NULL))
-                maxres_src = &c1_res_id;
-
         /* Step 6b: Re-lookup target child to verify it hasn't changed */
         rc = mds_verify_child(obd, &p2_res_id, &dlm_handles[1], *de_tgtdirp,
                               parent_mode, &c2_res_id, &dlm_handles[3], de_newp,
@@ -2310,6 +2273,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                         LOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode);
                         cleanup_phase = 4; /* UNLOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode); */
                 } else if (S_ISREG(new_inode->i_mode)) {
+                        mds_pack_inode2fid(&body->fid1, new_inode);
                         mds_pack_inode2body(body, new_inode);
                         mds_pack_md(obd, req->rq_repmsg, offset + 1, body,
                                     new_inode, MDS_PACK_MD_LOCK, 0);

@@ -51,7 +51,7 @@ static int admin_convert_dqinfo(struct file *fp_v1, struct file *fp_v2,
         return rc;
 }
 
-static int quota_convert_v1_to_v2(struct file *fp_v1, struct file *fp_v2,
+static int admin_convert_v1_to_v2(struct file *fp_v1, struct file *fp_v2,
                                   struct lustre_quota_info *lqi, int type)
 {
         struct list_head blk_list;
@@ -158,7 +158,7 @@ int lustre_quota_convert(struct lustre_quota_info *lqi, int type)
         f_v1 = filp_open(name, O_RDONLY, 0);
         if (!IS_ERR(f_v1)) {
                 if (!check_quota_file(f_v1, NULL, type, LUSTRE_QUOTA_V1)) {
-                        rc = quota_convert_v1_to_v2(f_v1, f_v2, lqi, type);
+                        rc = admin_convert_v1_to_v2(f_v1, f_v2, lqi, type);
                         if (rc)
                                 CERROR("failed to convert v1 quota file"
                                        " to v2 quota file.\n");
@@ -181,91 +181,5 @@ int lustre_quota_convert(struct lustre_quota_info *lqi, int type)
 
         RETURN(rc);
 }
+
 EXPORT_SYMBOL(lustre_quota_convert);
-
-#ifdef HAVE_QUOTA64
-/*
- * convert operational quota files to the requested version 
- * returns: -ESTALE if upgrading to qfmt version is not supported
- *          -ENOMEM if memory was not allocated for conv. structures
- *
- *          other error codes can be returned by VFS and have the
- *          appropriate meaning
- */
-int lustre_slave_quota_convert(lustre_quota_version_t qfmt, int type)
-{
-        struct lustre_quota_info *lqi;
-        struct file *f_v1, *f_v2;
-        const char *name[][MAXQUOTAS] = LUSTRE_OPQFILES_NAMES;
-        int rc;
-
-        ENTRY;
-
-        /* we convert only to v2 version */
-        if (qfmt != LUSTRE_QUOTA_V2)
-                GOTO(out, rc = -ESTALE);
-
-        OBD_ALLOC_PTR(lqi);
-        if (lqi == NULL)
-                GOTO(out, rc = -ENOMEM);
-
-        /* now that we support only v1 and v2 formats,
-         * only upgrade from v1 is possible,
-         * let's check if v1 file exists so that we convert it to v2 */
-        f_v1 = filp_open(name[LUSTRE_QUOTA_V1][type], O_RDONLY, 0);
-        if (IS_ERR(f_v1))
-                GOTO(out_free, rc = PTR_ERR(f_v1));
-
-        /* make sure it is really a v1 file */
-        if (check_quota_file(f_v1, NULL, type, LUSTRE_QUOTA_V1))
-                GOTO(out_f_v1, rc = -EINVAL);
-
-        /* create new quota file for v2 version, follow the same rationale as
-         * mds_admin_quota_on: if the file already exists, then do not try to
-         * overwrite it, user has to fix the quotaon issue manually,
-         * e.g. through running quotacheck                                  */
-        f_v2 = filp_open(name[LUSTRE_QUOTA_V2][type],
-                         O_CREAT | O_EXCL | O_TRUNC | O_RDWR, 0644);
-        if (IS_ERR(f_v2))
-                GOTO(out_f_v1, rc = PTR_ERR(f_v2));
-
-        lqi->qi_version = LUSTRE_QUOTA_V2;
-        lqi->qi_files[type] = f_v2;
-
-        /* initialize quota file with defaults, marking it invalid,
-         * this will help us not to get confused with partially converted
-         * operational quota files if we crash during conversion   */
-        rc = lustre_init_quota_info_generic(lqi, type, 1);
-        if (rc)
-                GOTO(out_f_v2, rc);
-
-        rc = quota_convert_v1_to_v2(f_v1, f_v2, lqi, type);
-        if (!rc) {
-                /* we dont want good magic to store before the quota data,
-                 * just to be safe if ldiskfs is running in writeback mode */
-                LOCK_INODE_MUTEX(f_v2->f_dentry->d_inode);
-                rc = lustre_fsync(f_v2);
-                if (rc)
-                        CERROR("error from fsync, rc=%d\n", rc);
-                UNLOCK_INODE_MUTEX(f_v2->f_dentry->d_inode);
-
-                /* now that conversion successfully finished we mark
-                 * this operational quota file with the correct magic,
-                 * since this moment quotaon will treat it as a correct
-                 * quota file */
-                rc = lustre_init_quota_header(lqi, type, 0);
-        }
-
-        EXIT;
-
-out_f_v2:
-        filp_close(f_v2, 0);
-out_f_v1:
-        filp_close(f_v1, 0);
-out_free:
-        OBD_FREE_PTR(lqi);
-out:
-        return rc;
-}
-EXPORT_SYMBOL(lustre_slave_quota_convert);
-#endif

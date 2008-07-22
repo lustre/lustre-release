@@ -137,39 +137,16 @@ int cache_add_extent(struct lustre_cache *cache, struct ldlm_res_id *res,
         RETURN(0);
 }
 
-static void cache_extent_removal_get(struct page_removal_cb_element *element)
-{
-        atomic_inc(&element->prce_refcnt);
-}
-
-static void cache_extent_removal_put(struct page_removal_cb_element *element)
-{
-        if(atomic_dec_and_test(&element->prce_refcnt))
-                OBD_FREE_PTR(element);
-}
-
 static int cache_extent_removal_event(struct lustre_cache *cache,
                                       void *data, int discard)
 {
         struct page *page = data;
-        struct list_head *iter;
         struct page_removal_cb_element *element;
 
-        read_lock(&cache->lc_page_removal_cb_lock);
-        iter = cache->lc_page_removal_callback_list.next;
-        while(iter != &cache->lc_page_removal_callback_list) {
-                element = list_entry(iter, struct page_removal_cb_element, prce_list);
-                cache_extent_removal_get(element);
-                read_unlock(&cache->lc_page_removal_cb_lock);
-
+        list_for_each_entry(element, &cache->lc_page_removal_callback_list,
+                            prce_list) {
                 element->prce_callback(page, discard);
-
-                read_lock(&cache->lc_page_removal_cb_lock);
-                iter = iter->next;
-                cache_extent_removal_put(element);
         }
-        read_unlock(&cache->lc_page_removal_cb_lock);
-
         return 0;
 }
 
@@ -189,17 +166,12 @@ int cache_add_extent_removal_cb(struct lustre_cache *cache,
 
         if (!func_cb)
                 return 0;
-
-        OBD_ALLOC_PTR(element);
+        OBD_ALLOC(element, sizeof(*element));
         if (!element)
                 return -ENOMEM;
         element->prce_callback = func_cb;
-        atomic_set(&element->prce_refcnt, 1);
-
-        write_lock(&cache->lc_page_removal_cb_lock);
         list_add_tail(&element->prce_list,
                       &cache->lc_page_removal_callback_list);
-        write_unlock(&cache->lc_page_removal_cb_lock);
 
         cache->lc_pin_extent_cb = pin_cb;
         return 0;
@@ -215,21 +187,17 @@ int cache_del_extent_removal_cb(struct lustre_cache *cache,
         int found = 0;
         struct page_removal_cb_element *element, *t;
 
-        write_lock(&cache->lc_page_removal_cb_lock);
         list_for_each_entry_safe(element, t,
                                  &cache->lc_page_removal_callback_list,
                                  prce_list) {
                 if (element->prce_callback == func_cb) {
                         list_del(&element->prce_list);
-                        write_unlock(&cache->lc_page_removal_cb_lock);
+                        OBD_FREE(element, sizeof(*element));
                         found = 1;
-                        cache_extent_removal_put(element);
-                        write_lock(&cache->lc_page_removal_cb_lock);
                         /* We continue iterating the list in case this function
                            was registered more than once */
                 }
         }
-        write_unlock(&cache->lc_page_removal_cb_lock);
 
         if (list_empty(&cache->lc_page_removal_callback_list))
                 cache->lc_pin_extent_cb = NULL;
@@ -389,7 +357,6 @@ struct lustre_cache *cache_create(struct obd_device *obd)
         spin_lock_init(&cache->lc_locks_list_lock);
         CFS_INIT_LIST_HEAD(&cache->lc_locks_list);
         CFS_INIT_LIST_HEAD(&cache->lc_page_removal_callback_list);
-        rwlock_init(&cache->lc_page_removal_cb_lock);
         cache->lc_obd = obd;
 
       out:
