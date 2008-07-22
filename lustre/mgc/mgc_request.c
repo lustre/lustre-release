@@ -469,11 +469,11 @@ static int mgc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                         spin_unlock(&config_list_lock);
                         cfs_waitq_signal(&rq_waitq);
                 }
-                break;
-        case OBD_CLEANUP_SELF_EXP:
                 rc = obd_llog_finish(obd, 0);
                 if (rc != 0)
                         CERROR("failed to cleanup llogging subsystems\n");
+                break;
+        case OBD_CLEANUP_SELF_EXP:
                 break;
         case OBD_CLEANUP_OBD:
                 break;
@@ -828,7 +828,7 @@ int mgc_set_info_async(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
         /* FIXME move this to mgc_process_config */
-        if (KEY_IS("register_target")) {
+        if (KEY_IS(KEY_REGISTER_TARGET)) {
                 struct mgs_target_info *mti;
                 if (vallen != sizeof(struct mgs_target_info))
                         RETURN(-EINVAL);
@@ -838,7 +838,7 @@ int mgc_set_info_async(struct obd_export *exp, obd_count keylen,
                 rc =  mgc_target_register(exp, mti);
                 RETURN(rc);
         }
-        if (KEY_IS("set_fs")) {
+        if (KEY_IS(KEY_SET_FS)) {
                 struct super_block *sb = (struct super_block *)val;
                 struct lustre_sb_info *lsi;
                 if (vallen != sizeof(struct super_block))
@@ -850,7 +850,7 @@ int mgc_set_info_async(struct obd_export *exp, obd_count keylen,
                 }
                 RETURN(rc);
         }
-        if (KEY_IS("clear_fs")) {
+        if (KEY_IS(KEY_CLEAR_FS)) {
                 if (vallen != 0)
                         RETURN(-EINVAL);
                 rc = mgc_fs_cleanup(exp->exp_obd);
@@ -921,7 +921,7 @@ static int mgc_llog_init(struct obd_device *obd, struct obd_device *tgt,
                         &llog_client_ops);
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
-                ctxt->loc_imp = obd->u.cli.cl_import;
+                llog_initiator_connect(ctxt);
                 llog_ctxt_put(ctxt);
         }
 

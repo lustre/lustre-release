@@ -140,7 +140,7 @@ void mds_lov_destroy_objids(struct obd_device *obd)
         }
 
         if (mds->mds_lov_objid_filp) {
-                rc = filp_close((struct file *)mds->mds_lov_objid_filp, 0);
+                rc = filp_close((struct file *)mds->mds_lov_objid_filp, NULL);
                 mds->mds_lov_objid_filp = NULL;
                 if (rc)
                         CERROR("%s file won't close, rc=%d\n", LOV_OBJID, rc);
@@ -235,7 +235,7 @@ out:
 int mds_lov_write_objids(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
-        int i, rc = 0;
+        int i = 0, rc = 0;
         ENTRY;
 
         if (cfs_bitmap_check_empty(mds->mds_lov_page_dirty))
@@ -252,8 +252,9 @@ int mds_lov_write_objids(struct obd_device *obd)
 
                 /* check for particaly filled last page */
                 if (i == mds->mds_lov_objid_lastpage)
-                        size = (mds->mds_lov_objid_lastidx + 1) * sizeof(obd_id);
+                        size = (mds->mds_lov_objid_lastidx + 1) *sizeof(obd_id);
 
+		CDEBUG(D_INFO,"write %lld - %u\n", off, size);
                 rc = fsfilt_write_record(obd, mds->mds_lov_objid_filp, data,
                                          size, &off, 0);
                 if (rc < 0)
@@ -352,7 +353,6 @@ static int mds_lov_set_one_nextid(struct obd_device * obd, __u32 idx, obd_id *id
 
         info.idx = idx;
         info.data = id;
-
         rc = obd_set_info_async(mds->mds_osc_exp, sizeof(KEY_NEXT_ID),
                                 KEY_NEXT_ID, sizeof(info), &info, NULL);
         if (rc)
@@ -897,7 +897,7 @@ out:
                 CERROR("%s sync failed %d, deactivating\n", obd_uuid2str(uuid),
                        rc);
                 if (!obd->obd_stopping && mds->mds_osc_obd &&
-                    !mds->mds_osc_obd->obd_stopping && !watched->obd_stopping) 
+                    !mds->mds_osc_obd->obd_stopping && !watched->obd_stopping)
                         obd_notify(mds->mds_osc_obd, watched,
                                    OBD_NOTIFY_INACTIVE, NULL);
         } else {

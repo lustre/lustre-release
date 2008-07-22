@@ -4,8 +4,6 @@
 #set -vx
 set -e
 
-PATH=`dirname $0`/../utils:$PATH
-
 [ -z "$CONFIG" -a "$NAME" ] && CONFIGS=$NAME
 [ "$CONFIGS" ] || CONFIGS="local"  #"local lov"
 [ "$MAX_THREADS" ] || MAX_THREADS=20
@@ -22,8 +20,8 @@ fi
 [ "$TMP" ] || TMP=/tmp
 [ "$COUNT" ] || COUNT=1000
 [ "$DEBUG_LVL" ] || DEBUG_LVL=0
-[ "$DEBUG_OFF" ] || DEBUG_OFF="eval sysctl -w lnet.debug=\"$DEBUG_LVL\""
-[ "$DEBUG_ON" ] || DEBUG_ON="eval sysctl -w lnet.debug=0x33f0484"
+[ "$DEBUG_OFF" ] || DEBUG_OFF="eval lctl set_param debug=\"$DEBUG_LVL\""
+[ "$DEBUG_ON" ] || DEBUG_ON="eval lctl set_param debug=0x33f0484"
 
 export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL INSANITY SANITY_QUOTA"
 
@@ -42,7 +40,7 @@ LIBLUSTRETESTS=${LIBLUSTRETESTS:-../liblustre/tests}
 STARTTIME=`date +%s`
 RANTEST=""
 
-LUSTRE=${LUSTRE:-`dirname $0`/..}
+LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 
@@ -196,7 +194,7 @@ for NAME in $CONFIGS; do
 		[ $THREADS -lt $IOZ_THREADS ] && IOZ_THREADS=$THREADS
 		IOZVER=`iozone -v | awk '/Revision:/ {print $3}' | tr -d .`
 		if [ "$IOZ_THREADS" -gt 1 -a "$IOZVER" -ge 3145 ]; then
-			$LFS setstripe -c 1 $IOZDIR
+			$LFS setstripe -c -1 $IOZDIR
 			$DEBUG_OFF
 			THREAD=1
 			IOZFILE="-F "
@@ -244,24 +242,24 @@ for NAME in $CONFIGS; do
 		SANITYN="done"
 	fi
 
+	remote_mds && log "Remote MDS, skipping LFSCK test" && LFSCK=no
+	remote_ost && log "Remote OST, skipping LFSCK test" && LFSCK=no
+
 	if [ "$LFSCK" != "no" -a -x /usr/sbin/lfsck ]; then
 	        title lfsck
 		E2VER=`e2fsck -V 2>&1 | head -n 1 | cut -d' ' -f 2`
-		if grep -q obdfilter /proc/fs/lustre/devices; then
-			if [ `echo $E2VER | cut -d. -f2` -ge 39 ] && \
-			   [ "`echo $E2VER | grep cfs`" -o \
-				"`echo $E2VER | grep sun`" ]; then
-			   		bash lfscktest.sh
-			else
-				e2fsck -V
-				echo "e2fsck does not support lfsck, skipping"
-			fi
+		if [ `echo $E2VER | cut -d. -f2` -ge 39 ] && \
+		   [ "`echo $E2VER | grep cfs`" -o \
+			"`echo $E2VER | grep sun`" ]; then
+		   		bash lfscktest.sh
 		else
-			echo "remote OST, skipping test"
+			e2fsck -V
+			echo "e2fsck does not support lfsck, skipping"
 		fi
 		LFSCK="done"
 	fi
 
+	[ "$NETTYPE" = "tcp" -o "$NETTYPE" = "ptl" ] || LIBLUSTRE=no # bug 15660
 	if [ "$LIBLUSTRE" != "no" ]; then
 	        title liblustre
 		assert_env MGSNID MOUNT2
@@ -272,7 +270,7 @@ for NAME in $CONFIGS; do
 		[ -f /etc/modprobe.d/Lustre ] && MODPROBECONF=/etc/modprobe.d/Lustre
 
 		LNETOPTS="$(awk '/^options lnet/ { print $0}' $MODPROBECONF | \
-			sed 's/^options lnet //g') accept=all" \
+			sed 's/^options lnet //g; s/"//g') accept=all" \
 			MDS_MOUNT_OPTS=$(echo $MDS_MOUNT_OPTS | sed 's/^[ \t]*//;s/[ \t]*$//') \
 			MDS_MOUNT_OPTS="${MDS_MOUNT_OPTS},noacl" \
 			MDS_MOUNT_OPTS=${MDS_MOUNT_OPTS/#,/-o } \

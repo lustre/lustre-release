@@ -258,9 +258,9 @@ static void ptlrpc_at_adj_net_latency(struct ptlrpc_request *req)
         time_t now = cfs_time_current_sec();
 
         LASSERT(req->rq_import);
-        
+
         st = lustre_msg_get_service_time(req->rq_repmsg);
-        
+
         /* Network latency is total time less server processing time */
         nl = max_t(int, now - req->rq_sent - st, 0) + 1/*st rounding*/;
         if (st > now - req->rq_sent + 2 /* rounding */)
@@ -281,14 +281,15 @@ static int unpack_reply(struct ptlrpc_request *req)
 {
         int rc;
 
-        /* Clear reply swab mask; we may have already swabbed an early reply */
         req->rq_rep_swab_mask = 0;
-
         rc = lustre_unpack_msg(req->rq_repmsg, req->rq_nob_received);
-        if (rc) {
+        if (rc < 0) {
                 DEBUG_REQ(D_ERROR, req, "unpack_rep failed: %d", rc);
                 return(-EPROTO);
         }
+
+        if (rc > 0)
+                lustre_set_rep_swabbed(req, MSG_PTLRPC_HEADER_OFF);
 
         rc = lustre_unpack_rep_ptlrpc_body(req, MSG_PTLRPC_BODY_OFF);
         if (rc) {
@@ -547,7 +548,6 @@ ptlrpc_prep_req_pool(struct obd_import *imp, __u32 version, int opcode,
         atomic_set(&request->rq_refcount, 1);
 
         lustre_msg_set_opc(request->rq_reqmsg, opcode);
-        lustre_msghdr_set_flags(request->rq_reqmsg, imp->imp_msghdr_flags);
 
         RETURN(request);
 }
@@ -851,14 +851,9 @@ static int after_reply(struct ptlrpc_request *req)
                         RETURN(rc);
                 }
         } else {
-                /* Let's look if server send slv. Do it only for RPC with 
+                /* Let's look if server sent slv. Do it only for RPC with 
                  * rc == 0. */
-                if (imp->imp_obd->obd_namespace) {
-                        /* Disconnect rpc is sent when namespace is already 
-                         * destroyed. Let's check this and will not try update
-                         * pool. */
-                        ldlm_cli_update_pool(req);
-                }
+                ldlm_cli_update_pool(req);
         }
 
         /* Store transno in reqmsg for replay. */
@@ -939,7 +934,7 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 
         lustre_msg_set_status(req->rq_reqmsg, cfs_curproc_pid());
         CDEBUG(D_RPCTRACE, "Sending RPC pname:cluuid:pid:xid:nid:opc"
-               " %s:%s:%d:"LPU64":%s:%d\n", cfs_curproc_comm(),
+               " %s:%s:%d:x"LPU64":%s:%d\n", cfs_curproc_comm(),
                imp->imp_obd->obd_uuid.uuid,
                lustre_msg_get_status(req->rq_reqmsg), req->rq_xid,
                libcfs_nid2str(imp->imp_connection->c_peer.nid),
@@ -1171,7 +1166,7 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                 req->rq_phase = RQ_PHASE_COMPLETE;
 
                 CDEBUG(D_RPCTRACE, "Completed RPC pname:cluuid:pid:xid:nid:"
-                       "opc %s:%s:%d:"LPU64":%s:%d\n", cfs_curproc_comm(),
+                       "opc %s:%s:%d:x"LPU64":%s:%d\n", cfs_curproc_comm(),
                        imp->imp_obd->obd_uuid.uuid,
                        lustre_msg_get_status(req->rq_reqmsg), req->rq_xid,
                        libcfs_nid2str(imp->imp_connection->c_peer.nid),
@@ -1778,7 +1773,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         lustre_msg_set_status(req->rq_reqmsg, cfs_curproc_pid());
         LASSERT(imp->imp_obd != NULL);
         CDEBUG(D_RPCTRACE, "Sending RPC pname:cluuid:pid:xid:nid:opc "
-               "%s:%s:%d:"LPU64":%s:%d\n", cfs_curproc_comm(),
+               "%s:%s:%d:x"LPU64":%s:%d\n", cfs_curproc_comm(),
                imp->imp_obd->obd_uuid.uuid,
                lustre_msg_get_status(req->rq_reqmsg), req->rq_xid,
                libcfs_nid2str(imp->imp_connection->c_peer.nid),
@@ -1885,7 +1880,7 @@ restart:
         }
 
         CDEBUG(D_RPCTRACE, "Completed RPC pname:cluuid:pid:xid:nid:opc "
-               "%s:%s:%d:"LPU64":%s:%d\n", cfs_curproc_comm(),
+               "%s:%s:%d:x"LPU64":%s:%d\n", cfs_curproc_comm(),
                imp->imp_obd->obd_uuid.uuid,
                lustre_msg_get_status(req->rq_reqmsg), req->rq_xid,
                libcfs_nid2str(imp->imp_connection->c_peer.nid),

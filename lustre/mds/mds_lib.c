@@ -53,7 +53,7 @@
 #include <lustre_lib.h>
 #include "mds_internal.h"
 
-void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode)
+static void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode)
 {
         fid->id = inode->i_ino;
         fid->generation = inode->i_generation;
@@ -72,6 +72,7 @@ void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
                 b->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLATIME |
                             OBD_MD_FLMTIME | OBD_MD_FLRDEV;
 
+        mds_pack_inode2fid(&b->fid1, inode);
         b->ino = inode->i_ino;
         b->atime = LTIME_S(inode->i_atime);
         b->mtime = LTIME_S(inode->i_mtime);
@@ -413,7 +414,7 @@ int mds_update_unpack(struct ptlrpc_request *req, int offset,
                 RETURN(-EFAULT);
 
         opcode = *opcodep;
-        if (lustre_msg_swabbed(req->rq_reqmsg))
+        if (lustre_req_need_swab(req))
                 __swab32s(&opcode);
 
         if (opcode >= REINT_MAX || mds_unpackers[opcode] == NULL) {

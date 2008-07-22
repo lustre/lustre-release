@@ -259,7 +259,7 @@ swi_check_events (void)
                         q = &swi_data.wi_runq;
                 else
                         break;
-                               
+
                 wi = list_entry(q->next, swi_workitem_t, wi_list);
                 list_del_init(&wi->wi_list);
 

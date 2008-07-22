@@ -343,7 +343,7 @@ void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft)
 int ll_revalidate_it(struct dentry *de, int lookup_flags,
                      struct lookup_intent *it)
 {
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = { { 0 } };
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
         struct obd_export *exp;
@@ -440,9 +440,10 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
 
 do_lock:
         it->it_create_mode &= ~current->fs->umask;
-
+        it->it_flags |= O_CHECK_STALE;
         rc = mdc_intent_lock(exp, &op_data, NULL, 0, it, lookup_flags,
                              &req, ll_mdc_blocking_ast, 0);
+        it->it_flags &= ~O_CHECK_STALE;
         if (it->it_op == IT_GETATTR && !first)
                 ll_statahead_exit(de, rc);
         /* If req is NULL, then mdc_intent_lock only tried to do a lock match;
@@ -593,8 +594,8 @@ out_sa:
         unlock_kernel();
 
         handle = (flag) ? &ldd->lld_mnt_och : &ldd->lld_cwd_och;
-        rc = obd_pin(sbi->ll_mdc_exp, inode->i_ino, inode->i_generation,
-                     inode->i_mode & S_IFMT, handle, flag);
+        rc = obd_pin(sbi->ll_mdc_exp, ll_inode_ll_fid(inode),
+                     handle, flag);
 
         if (rc) {
                 lock_kernel();

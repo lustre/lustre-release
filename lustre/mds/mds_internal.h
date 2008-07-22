@@ -9,22 +9,8 @@
 #include <lustre_mds.h>
 
 #define MDT_ROCOMPAT_SUPP       (OBD_ROCOMPAT_LOVOBJID)
-#define MDT_INCOMPAT_SUPP       (OBD_INCOMPAT_MDT | OBD_INCOMPAT_COMMON_LR)
-
-/* Data stored per client in the last_rcvd file.  In le32 order. */
-struct mds_client_data {
-        __u8 mcd_uuid[40];      /* client UUID */
-        __u64 mcd_last_transno; /* last completed transaction ID */
-        __u64 mcd_last_xid;     /* xid for the last transaction */
-        __u32 mcd_last_result;  /* result from last RPC */
-        __u32 mcd_last_data;    /* per-op data (disposition for open &c.) */
-        /* for MDS_CLOSE requests */
-        __u64 mcd_last_close_transno; /* last completed transaction ID */
-        __u64 mcd_last_close_xid;     /* xid for the last transaction */
-        __u32 mcd_last_close_result;  /* result from last RPC */
-        __u32 mcd_last_close_data;  /* per-op data (disposition for open &c.) */
-        __u8 mcd_padding[LR_CLIENT_SIZE - 88];
-};
+#define MDT_INCOMPAT_SUPP       (OBD_INCOMPAT_MDT | OBD_INCOMPAT_COMMON_LR | \
+                                 OBD_INCOMPAT_FID)
 
 #define MDS_SERVICE_WATCHDOG_FACTOR 2000
 
@@ -39,6 +25,12 @@ struct mds_filter_data {
 static inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req)
 {
         return &req->rq_export->exp_obd->u.mds;
+}
+
+static inline void mds_export_evict(struct obd_export *exp)
+{
+        class_fail_export(exp);
+        class_export_put(exp);
 }
 
 #ifdef __KERNEL__
@@ -106,18 +98,18 @@ static inline void mds_inode_unset_orphan(struct inode *inode)
 #define MDS_CHECK_RESENT(req, reconstruct)                                    \
 {                                                                             \
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {              \
-                struct mds_client_data *mcd =                                 \
-                        req->rq_export->exp_mds_data.med_mcd;                 \
-                if (le64_to_cpu(mcd->mcd_last_xid) == req->rq_xid) {          \
+                struct lsd_client_data *lcd =                                 \
+                        req->rq_export->exp_mds_data.med_lcd;                 \
+                if (le64_to_cpu(lcd->lcd_last_xid) == req->rq_xid) {          \
                         reconstruct;                                          \
-                        RETURN(le32_to_cpu(mcd->mcd_last_result));            \
+                        RETURN(le32_to_cpu(lcd->lcd_last_result));            \
                 }                                                             \
-                if (le64_to_cpu(mcd->mcd_last_close_xid) == req->rq_xid) {    \
+                if (le64_to_cpu(lcd->lcd_last_close_xid) == req->rq_xid) {    \
                         reconstruct;                                          \
-                        RETURN(le32_to_cpu(mcd->mcd_last_close_result));      \
+                        RETURN(le32_to_cpu(lcd->lcd_last_close_result));      \
                 }                                                             \
                 DEBUG_REQ(D_HA, req, "no reply for RESENT req (have "LPD64")",\
-                          mcd->mcd_last_xid);                                 \
+                          lcd->lcd_last_xid);                                 \
         }                                                                     \
 }
 
@@ -135,7 +127,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                        struct ptlrpc_request *req, int rc, __u32 op_data, 
                        int force_sync);
 void mds_reconstruct_generic(struct ptlrpc_request *req);
-void mds_req_from_mcd(struct ptlrpc_request *req, struct mds_client_data *mcd);
+void mds_req_from_lcd(struct ptlrpc_request *req, struct lsd_client_data *cd);
 int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
                                 struct ll_fid *fid,
                                 struct lustre_handle *parent_lockh,
@@ -164,6 +156,11 @@ int mds_get_parents_children_locked(struct obd_device *obd,
                                     struct dentry **de_newp,
                                     struct lustre_handle *dlm_handles,
                                     int child_mode);
+
+struct dentry *mds_lookup(struct obd_device *obd,
+                          const char *fid_name,
+                          struct dentry *dparent,
+                          int fid_namelen);
 
 void mds_shrink_reply(struct obd_device *obd, struct ptlrpc_request *req,
                       struct mds_body *body, int md_off);
@@ -235,7 +232,7 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
 
 /* mds/mds_fs.c */
 int mds_client_add(struct obd_device *obd, struct obd_export *exp,
-                   int cl_off, lnet_nid_t client_nid);
+                   int cl_off, void *localdata);
 int mds_client_free(struct obd_export *exp);
 int mds_obd_create(struct obd_export *exp, struct obdo *oa,
                    struct lov_stripe_md **ea, struct obd_trans_info *oti);
@@ -254,7 +251,6 @@ int mds_get_md(struct obd_device *, struct inode *, void *md, int *size,
                int lock, int flags);
 int mds_pack_md(struct obd_device *, struct lustre_msg *, int offset,
                 struct mds_body *, struct inode *, int lock, int flags);
-void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode);
 void mds_pack_inode2body(struct mds_body *body, struct inode *inode);
 #endif
 int mds_pack_acl(struct mds_export_data *med, struct inode *inode,

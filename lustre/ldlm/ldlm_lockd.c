@@ -799,9 +799,12 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
         else if (rc != 0)
                 rc = ldlm_handle_ast_error(lock, req, rc, "glimpse");
         else
-                rc = ldlm_res_lvbo_update(res, req->rq_repmsg,
+                rc = ldlm_res_lvbo_update(res, req,
                                           REPLY_REC_OFF, 1);
         ptlrpc_req_finished(req);
+        if (rc == -ERESTART)
+                ldlm_reprocess_all(res);
+
         RETURN(rc);
 }
 
@@ -1353,8 +1356,13 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
                    &lock->l_resource->lr_name,
                    sizeof(lock->l_resource->lr_name)) != 0) {
                 unlock_res_and_lock(lock);
-                ldlm_lock_change_resource(ns, lock,
-                                         dlm_req->lock_desc.l_resource.lr_name);
+                if (ldlm_lock_change_resource(ns, lock, 
+                                dlm_req->lock_desc.l_resource.lr_name)) {
+                        LDLM_ERROR(lock, "Failed to allocate resource");
+                        LDLM_LOCK_PUT(lock);
+                        EXIT;
+                        return;
+                }
                 LDLM_DEBUG(lock, "completion AST, new resource");
                 CERROR("change resource!\n");
                 lock_res_and_lock(lock);
@@ -1858,7 +1866,7 @@ static int ldlm_bl_thread_main(void *arg)
 #endif
 
 static int ldlm_setup(void);
-static int ldlm_cleanup(int force);
+static int ldlm_cleanup(void);
 
 int ldlm_get_ref(void)
 {
@@ -1875,12 +1883,12 @@ int ldlm_get_ref(void)
         RETURN(rc);
 }
 
-void ldlm_put_ref(int force)
+void ldlm_put_ref(void)
 {
         ENTRY;
         mutex_down(&ldlm_ref_sem);
         if (ldlm_refcount == 1) {
-                int rc = ldlm_cleanup(force);
+                int rc = ldlm_cleanup();
                 if (rc)
                         CERROR("ldlm_cleanup failed: %d\n", rc);
                 else
@@ -2027,7 +2035,7 @@ static int ldlm_setup(void)
         return rc;
 }
 
-static int ldlm_cleanup(int force)
+static int ldlm_cleanup(void)
 {
 #ifdef __KERNEL__
         struct ldlm_bl_pool *blp = ldlm_state->ldlm_bl_pool;
@@ -2137,6 +2145,8 @@ EXPORT_SYMBOL(ldlm_lock2handle);
 EXPORT_SYMBOL(__ldlm_handle2lock);
 EXPORT_SYMBOL(ldlm_lock_get);
 EXPORT_SYMBOL(ldlm_lock_put);
+EXPORT_SYMBOL(ldlm_lock_fast_match);
+EXPORT_SYMBOL(ldlm_lock_fast_release);
 EXPORT_SYMBOL(ldlm_lock_match);
 EXPORT_SYMBOL(ldlm_lock_cancel);
 EXPORT_SYMBOL(ldlm_lock_addref);

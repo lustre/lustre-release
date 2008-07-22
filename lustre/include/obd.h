@@ -244,6 +244,7 @@ struct obd_device_target {
         struct super_block       *obt_sb;
         atomic_t                  obt_quotachecking;
         struct lustre_quota_ctxt  obt_qctxt;
+        lustre_quota_version_t    obt_qfmt;
 };
 
 typedef void (*obd_pin_extent_cb)(void *data);
@@ -337,7 +338,7 @@ struct mdc_rpc_lock;
 struct obd_import;
 struct lustre_cache;
 struct client_obd {
-        struct semaphore         cl_sem;
+        struct rw_semaphore      cl_sem;
         struct obd_uuid          cl_target_uuid;
         struct obd_import       *cl_import; /* ptlrpc connection state */
         int                      cl_conn_count;
@@ -421,6 +422,10 @@ struct client_obd {
 
         /* used by quotacheck */
         int                      cl_qchk_stat; /* quotacheck stat of the peer */
+
+        /* sequence manager */
+        struct lu_client_seq    *cl_seq;
+
         atomic_t                 cl_resends; /* resend count */
         /* Cache of triples */
         struct lustre_cache     *cl_cache;
@@ -793,7 +798,7 @@ struct obd_device {
         cfs_waitq_t             obd_llog_waitq;
         struct list_head        obd_exports;
         int                     obd_num_exports;
-        spinlock_t              nid_lock;
+        spinlock_t              obd_nid_lock;
         struct ldlm_namespace  *obd_namespace;
         struct ptlrpc_client    obd_ldlm_client; /* XXX OST/MDS only */
         /* a spinlock is OK for what we do now, may need a semaphore later */
@@ -856,6 +861,11 @@ struct obd_device {
         unsigned int           obd_cntr_base;
         atomic_t               obd_evict_inprogress;
         cfs_waitq_t            obd_evict_inprogress_waitq;
+
+        /* Ldlm pool part. Save last calculated SLV and Limit. */
+        rwlock_t               obd_pool_lock;
+        int                    obd_pool_limit;
+        __u64                  obd_pool_slv;
 };
 
 #define OBD_OPT_FORCE           0x0001
@@ -878,13 +888,27 @@ enum obd_cleanup_stage {
 };
 
 /* get/set_info keys */
-#define KEY_MDS_CONN "mds_conn"
-#define KEY_NEXT_ID  "next_id"
-#define KEY_LOVDESC  "lovdesc"
-#define KEY_INIT_RECOV "initial_recov"
-#define KEY_INIT_RECOV_BACKUP "init_recov_bk"
+#define KEY_MDS_CONN            "mds_conn"
+#define KEY_NEXT_ID             "next_id"
+#define KEY_LOVDESC             "lovdesc"
+#define KEY_INIT_RECOV          "initial_recov"
+#define KEY_INIT_RECOV_BACKUP   "init_recov_bk"
 #define KEY_LOV_IDX             "lov_idx"
 #define KEY_LAST_ID             "last_id"
+#define KEY_LOCK_TO_STRIPE      "lock_to_stripe"
+#define KEY_CHECKSUM            "checksum"
+#define KEY_READONLY            "readonly"
+#define KEY_UNLINKED            "unlinked"
+#define KEY_EVICT_BY_NID        "evict_by_nid"
+#define KEY_REGISTER_TARGET     "register_target"
+#define KEY_SET_FS              "set_fs"
+#define KEY_CLEAR_FS            "clear_fs"
+#define KEY_SET_INFO            "set_info"
+#define KEY_BLOCKSIZE           "blocksize"
+#define KEY_BLOCKSIZE_BITS      "blocksize_bits"
+#define KEY_MAX_EASIZE          "max_ea_size"
+/* XXX unused */
+#define KEY_ASYNC               "async"
 
 struct obd_ops {
         struct module *o_owner;
@@ -918,6 +942,10 @@ struct obd_ops {
                            struct obd_uuid *cluuid,
                            struct obd_connect_data *ocd);
         int (*o_disconnect)(struct obd_export *exp);
+
+        /* Initialize/finalize fids infrastructure. */
+        int (*o_fid_init)(struct obd_export *exp);
+        int (*o_fid_fini)(struct obd_export *exp);
 
         int (*o_statfs)(struct obd_device *obd, struct obd_statfs *osfs,
                         __u64 max_age, __u32 flags);
@@ -959,6 +987,14 @@ struct obd_ops {
                                  struct obd_async_page_ops *ops, void *data,
                                  void **res, int nocache,
                                  struct lustre_handle *lockh);
+        int (*o_reget_short_lock)(struct obd_export *exp,
+                                 struct lov_stripe_md *lsm,
+                                 void **res, int rw,
+                                 obd_off start, obd_off end,
+                                 void **cookie);
+        int (*o_release_short_lock)(struct obd_export *exp,
+                                    struct lov_stripe_md *lsm, obd_off end,
+                                    void *cookie, int rw);
         int (*o_queue_async_io)(struct obd_export *exp,
                                 struct lov_stripe_md *lsm,
                                 struct lov_oinfo *loi, void *cookie,
@@ -1033,7 +1069,7 @@ struct obd_ops {
         int (*o_llog_finish)(struct obd_device *obd, int count);
 
         /* metadata-only methods */
-        int (*o_pin)(struct obd_export *, obd_id ino, __u32 gen, int type,
+        int (*o_pin)(struct obd_export *, struct ll_fid *,
                      struct obd_client_handle *, int flag);
         int (*o_unpin)(struct obd_export *, struct obd_client_handle *, int);
 
@@ -1098,7 +1134,7 @@ static inline struct lsm_operations *lsm_op_find(int magic)
         case LOV_MAGIC_JOIN:
                return &lsm_join_ops;
         default:
-               CERROR("Cannot recognize lsm_magic %d", magic);
+               CERROR("Cannot recognize lsm_magic %x\n", magic);
                return NULL;
         }
 }
@@ -1113,15 +1149,18 @@ static inline void obd_transno_commit_cb(struct obd_device *obd, __u64 transno,
                                          int error)
 {
         if (error) {
-                CERROR("%s: transno "LPD64" commit error: %d\n",
+                CERROR("%s: transno "LPU64" commit error: %d\n",
                        obd->obd_name, transno, error);
                 return;
         }
-        CDEBUG(D_HA, "%s: transno "LPD64" committed\n",
-               obd->obd_name, transno);
         if (transno > obd->obd_last_committed) {
+                CDEBUG(D_HA, "%s: transno "LPU64" committed\n",
+                       obd->obd_name, transno);
                 obd->obd_last_committed = transno;
                 ptlrpc_commit_replies (obd);
+        } else {
+                CDEBUG(D_INFO, "%s: transno "LPU64" committed\n",
+                       obd->obd_name, transno);
         }
 }
 

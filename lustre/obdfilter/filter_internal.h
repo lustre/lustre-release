@@ -32,24 +32,10 @@
 extern struct file_operations filter_per_export_stats_fops;
 extern struct file_operations filter_per_nid_stats_fops;
 
-/* Data stored per client in the last_rcvd file.  In le32 order. */
-struct filter_client_data {
-        __u8  fcd_uuid[40];        /* client UUID */
-        __u64 fcd_last_rcvd;       /* last completed transaction ID */
-        __u64 fcd_last_xid;        /* client RPC xid for the last transaction */
-        __u8  fcd_padding[LR_CLIENT_SIZE - 56];
-};
-
 /* Limit the returned fields marked valid to those that we actually might set */
 #define FILTER_VALID_FLAGS (OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLGENER  |\
                             OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ|\
                             OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME)
-
-struct filter_fid {
-        struct ll_fid   ff_fid;         /* ff_fid.f_type == file stripe number */
-        __u64           ff_objid;
-        __u64           ff_group;
-};
 
 /* per-client-per-object persistent state (LRU) */
 struct filter_mod_data {

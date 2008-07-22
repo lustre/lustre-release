@@ -59,6 +59,8 @@ struct find_param {
         int     size_sign;
         unsigned long long size_units;
         int size_check;
+        uid_t uid;
+        gid_t gid;
 
         unsigned long   zeroend:1,
                         recursive:1,
@@ -66,7 +68,11 @@ struct find_param {
                         obds_printed:1,
                         exclude_pattern:1,
                         exclude_type:1,
-                        have_fileinfo:1;
+                        have_fileinfo:1,
+                        exclude_gid:1,
+                        exclude_uid:1,
+                        check_gid:1,
+                        check_uid:1;
 
         int     verbose;
         int     quiet;
@@ -99,10 +105,12 @@ extern int llapi_obd_statfs(char *path, __u32 type, __u32 index,
 extern int llapi_ping(char *obd_type, char *obd_name);
 extern int llapi_target_check(int num_types, char **obd_types, char *dir);
 extern int llapi_catinfo(char *dir, char *keyword, char *node_name);
+extern int llapi_file_get_lov_uuid(const char *path, struct obd_uuid *lov_uuid);
+extern int llapi_file_get_lov_fuuid(int fd, struct obd_uuid *lov_uuid);
 extern int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count);
 extern int llapi_is_lustre_mnttype(const char *type);
 extern int parse_size(char *optarg, unsigned long long *size,
-                      unsigned long long *size_units);
+                      unsigned long long *size_units, int bytes_spec);
 struct mntent;
 #define HAVE_LLAPI_IS_LUSTRE_MNT
 extern int llapi_is_lustre_mnt(struct mntent *mnt);

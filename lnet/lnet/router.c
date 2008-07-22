@@ -94,14 +94,14 @@ lnet_notify_locked(lnet_peer_t *lp, int notifylnd, int alive, time_t when)
 }
 
 void
-lnet_do_notify (lnet_peer_t *lp) 
+lnet_do_notify (lnet_peer_t *lp)
 {
         lnet_ni_t *ni = lp->lp_ni;
         int        alive;
         int        notifylnd;
-        
+
         LNET_LOCK();
-                
+
         /* Notify only in 1 thread at any time to ensure ordered notification.
          * NB individual events can be missed; the only guarantee is that you
          * always get the most recent news */
@@ -112,7 +112,7 @@ lnet_do_notify (lnet_peer_t *lp)
         }
 
         lp->lp_notifying = 1;
-        
+
         while (lp->lp_notify) {
                 alive     = lp->lp_alive;
                 notifylnd = lp->lp_notifylnd;
@@ -173,7 +173,7 @@ lnet_notify (lnet_ni_t *ni, lnet_nid_t nid, int alive, time_t when)
                 CDEBUG(D_NET, "Auto-down disabled\n");
                 return 0;
         }
-        
+
         LNET_LOCK();
 
         lp = lnet_find_peer_locked(nid);
@@ -187,9 +187,9 @@ lnet_notify (lnet_ni_t *ni, lnet_nid_t nid, int alive, time_t when)
         lnet_notify_locked(lp, ni == NULL, alive, when);
 
         LNET_UNLOCK();
-        
+
         lnet_do_notify(lp);
-        
+
         LNET_LOCK();
 
         lnet_peer_decref_locked(lp);
@@ -271,11 +271,11 @@ int
 lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
 {
         struct list_head     zombies;
-	struct list_head    *e;
-	lnet_remotenet_t    *rnet;
-	lnet_remotenet_t    *rnet2;
-	lnet_route_t        *route;
-	lnet_route_t        *route2;
+        struct list_head    *e;
+        lnet_remotenet_t    *rnet;
+        lnet_remotenet_t    *rnet2;
+        lnet_route_t        *route;
+        lnet_route_t        *route2;
         lnet_ni_t           *ni;
         int                  add_route;
         int                  rc;
@@ -363,11 +363,11 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
                         LASSERT (route2->lr_gateway->lp_nid != gateway);
                 }
         }
-        
+
         if (add_route) {
                 ni = route->lr_gateway->lp_ni;
                 lnet_ni_addref_locked(ni);
-                
+
                 LASSERT (rc == 0);
                 list_add_tail(&route->lr_list, &rnet2->lrn_routes);
                 the_lnet.ln_remote_nets_version++;
@@ -393,7 +393,7 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
         while (!list_empty(&zombies)) {
                 route = list_entry(zombies.next, lnet_route_t, lr_list);
                 list_del(&route->lr_list);
-                
+
                 LNET_LOCK();
                 lnet_rtr_decref_locked(route->lr_gateway);
                 lnet_peer_decref_locked(route->lr_gateway);
@@ -427,7 +427,7 @@ lnet_check_routes (void)
                         else if (route->lr_gateway->lp_ni !=
                                  route2->lr_gateway->lp_ni) {
                                 LNET_UNLOCK();
-                                
+
                                 CERROR("Routes to %s via %s and %s not supported\n",
                                        libcfs_net2str(rnet->lrn_net),
                                        libcfs_nid2str(route->lr_gateway->lp_nid),
@@ -436,7 +436,7 @@ lnet_check_routes (void)
                         }
                 }
         }
-        
+
         LNET_UNLOCK();
         return 0;
 }
@@ -509,8 +509,8 @@ int
 lnet_get_route (int idx, __u32 *net, __u32 *hops,
                lnet_nid_t *gateway, __u32 *alive)
 {
-	struct list_head    *e1;
-	struct list_head    *e2;
+        struct list_head    *e1;
+        struct list_head    *e2;
         lnet_remotenet_t    *rnet;
         lnet_route_t        *route;
 
@@ -551,14 +551,14 @@ lnet_router_checker_event (lnet_event_t *event)
                 /* The router checker thread has unlinked the rc_md
                  * and exited. */
                 LASSERT (the_lnet.ln_rc_state == LNET_RC_STATE_UNLINKING);
-                the_lnet.ln_rc_state = LNET_RC_STATE_UNLINKED; 
-                mutex_up(&the_lnet.ln_rc_signal); 
+                the_lnet.ln_rc_state = LNET_RC_STATE_UNLINKED;
+                mutex_up(&the_lnet.ln_rc_signal);
                 return;
         }
 
-        LASSERT (event->type == LNET_EVENT_SEND || 
+        LASSERT (event->type == LNET_EVENT_SEND ||
                  event->type == LNET_EVENT_REPLY);
-        
+
         nid = (event->type == LNET_EVENT_SEND) ?
               event->target.nid : event->initiator.nid;
 
@@ -575,7 +575,7 @@ lnet_router_checker_event (lnet_event_t *event)
         if (lnet_isrouter(lp) &&                /* ignore if no longer a router */
             (event->status != 0 ||
              event->type == LNET_EVENT_REPLY)) {
-                
+
                 /* A successful REPLY means the router is up.  If _any_ comms
                  * to the router fail I assume it's down (this will happen if
                  * we ping alive routers to try to detect router death before
@@ -611,8 +611,8 @@ lnet_router_checker(void *arg)
         lnet_process_id_t    rtr_id;
         int                  secs;
 
-	cfs_daemonize("router_checker");
-	cfs_block_allsigs();
+        cfs_daemonize("router_checker");
+        cfs_block_allsigs();
 
         rtr_id.pid = LUSTRE_SRV_LNET_PID;
 
@@ -638,7 +638,7 @@ lnet_router_checker(void *arg)
         the_lnet.ln_rc_state = LNET_RC_STATE_RUNNING;
         mutex_up(&the_lnet.ln_rc_signal);       /* let my parent go */
 
-	while (the_lnet.ln_rc_state == LNET_RC_STATE_RUNNING) {
+        while (the_lnet.ln_rc_state == LNET_RC_STATE_RUNNING) {
                 __u64 version;
 
                 LNET_LOCK();
@@ -668,7 +668,7 @@ rescan:
                         }
                         if (secs <= 0)
                                 secs = 0;
-                        
+
                         if (secs != 0 &&
                             !rtr->lp_ping_notsent &&
                             now > rtr->lp_ping_timestamp + secs) {
@@ -690,7 +690,7 @@ rescan:
                                         LNET_RESERVED_PORTAL,
                                         LNET_PROTO_PING_MATCHBITS, 0);
                         }
-                        
+
                         LNET_LOCK();
                         lnet_peer_decref_locked(rtr);
 
@@ -708,17 +708,16 @@ rescan:
                 set_current_state(CFS_TASK_INTERRUPTIBLE);
                 cfs_schedule_timeout(CFS_TASK_INTERRUPTIBLE,
                                      cfs_time_seconds(1));
-	}
+        }
 
         LASSERT (the_lnet.ln_rc_state == LNET_RC_STATE_STOPTHREAD);
         the_lnet.ln_rc_state = LNET_RC_STATE_UNLINKING;
-        
+
         rc = LNetMDUnlink(mdh);
         LASSERT (rc == 0);
 
         /* The unlink event callback will signal final completion */
-
-	return 0;
+        return 0;
 }
 
 
@@ -731,11 +730,11 @@ lnet_wait_known_routerstate(void)
 
         for (;;) {
                 LNET_LOCK();
-                
+
                 all_known = 1;
                 list_for_each (entry, &the_lnet.ln_routers) {
                         rtr = list_entry(entry, lnet_peer_t, lp_rtr_list);
-                
+
                         if (rtr->lp_alive_count == 0) {
                                 all_known = 0;
                                 break;
@@ -763,14 +762,14 @@ lnet_router_checker_stop(void)
                 return;
 
         the_lnet.ln_rc_state = LNET_RC_STATE_STOPTHREAD;
-	/* block until event callback signals exit */
-	mutex_down(&the_lnet.ln_rc_signal);
+        /* block until event callback signals exit */
+        mutex_down(&the_lnet.ln_rc_signal);
 
         LASSERT (the_lnet.ln_rc_state == LNET_RC_STATE_UNLINKED);
 
         rc = LNetEQFree(the_lnet.ln_rc_eqh);
         LASSERT (rc == 0);
-        
+
         the_lnet.ln_rc_state = LNET_RC_STATE_SHUTDOWN;
 }
 
@@ -788,12 +787,12 @@ lnet_router_checker_start(void)
                                    "\n");
                 return -EINVAL;
         }
-        
+
         if (live_router_check_interval <= 0 &&
             dead_router_check_interval <= 0)
                 return 0;
 
-	init_mutex_locked(&the_lnet.ln_rc_signal);
+        init_mutex_locked(&the_lnet.ln_rc_signal);
 
         /* EQ size doesn't matter; the callback is guaranteed to get every
          * event */
@@ -804,20 +803,20 @@ lnet_router_checker_start(void)
                 return -ENOMEM;
         }
 
-	rc = (int)cfs_kernel_thread(lnet_router_checker, NULL, 0);
-	if (rc < 0) {
-		CERROR("Can't start router checker thread: %d\n", rc);
+        rc = (int)cfs_kernel_thread(lnet_router_checker, NULL, 0);
+        if (rc < 0) {
+                CERROR("Can't start router checker thread: %d\n", rc);
                 goto failed;
-	}
+        }
 
-	mutex_down(&the_lnet.ln_rc_signal);     /* wait for checker to startup */
+        mutex_down(&the_lnet.ln_rc_signal);     /* wait for checker to startup */
 
         rc = the_lnet.ln_rc_state;
         if (rc < 0) {
                 the_lnet.ln_rc_state = LNET_RC_STATE_SHUTDOWN;
                 goto failed;
         }
-        
+
         LASSERT (the_lnet.ln_rc_state == LNET_RC_STATE_RUNNING);
 
         if (check_routers_before_use) {
@@ -826,9 +825,9 @@ lnet_router_checker_start(void)
                  * may have to a previous instance of me. */
                 lnet_wait_known_routerstate();
         }
-        
+
         return 0;
-        
+
  failed:
         rc = LNetEQFree(the_lnet.ln_rc_eqh);
         LASSERT (rc == 0);
@@ -915,7 +914,7 @@ lnet_rtrpool_alloc_bufs(lnet_rtrbufpool_t *rbp, int nbufs)
                 LASSERT (rbp->rbp_nbuffers == nbufs);
                 return 0;
         }
-        
+
         for (i = 0; i < nbufs; i++) {
                 rb = lnet_new_rtrbuf(rbp);
 
@@ -974,7 +973,7 @@ int
 lnet_alloc_rtrpools(int im_a_router)
 {
         int       rc;
-        
+
         if (!strcmp(forwarding, "")) {
                 /* not set either way */
                 if (!im_a_router)
@@ -989,7 +988,7 @@ lnet_alloc_rtrpools(int im_a_router)
                                    "'enabled' or 'disabled'\n");
                 return -EINVAL;
         }
-        
+
         if (tiny_router_buffers <= 0) {
                 LCONSOLE_ERROR_MSG(0x10c, "tiny_router_buffers=%d invalid when "
                                    "routing enabled\n", tiny_router_buffers);
@@ -1029,7 +1028,7 @@ lnet_alloc_rtrpools(int im_a_router)
         LNET_LOCK();
         the_lnet.ln_routing = 1;
         LNET_UNLOCK();
-        
+
         return 0;
 
  failed:

@@ -360,11 +360,17 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int flags)
         }
         /* Report actual service time for client latency calc */
         lustre_msg_set_service_time(req->rq_repmsg, service_time);
-        /* Report service time estimate for future client reqs */
-        lustre_msg_set_timeout(req->rq_repmsg, at_get(&svc->srv_at_estimate));
+        /* Report service time estimate for future client reqs, but report 0
+         * (to be ignored by client) if it's a error reply during recovery.
+         * (bz15815) */
+        if (req->rq_type == PTL_RPC_MSG_ERR &&
+            (req->rq_export == NULL || req->rq_export->exp_obd->obd_recovering))
+                lustre_msg_set_timeout(req->rq_repmsg, 0);
+        else
+                lustre_msg_set_timeout(req->rq_repmsg,
+                                       at_get(&svc->srv_at_estimate));
 
-        if (req->rq_export && req->rq_export->exp_obd)
-                target_pack_pool_reply(req);
+        target_pack_pool_reply(req);
 
         if (lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT) {
                 /* early replies go to offset 0, regular replies go after that*/
@@ -417,7 +423,7 @@ int ptlrpc_reply (struct ptlrpc_request *req)
         return (ptlrpc_send_reply (req, 0));
 }
 
-int ptlrpc_error(struct ptlrpc_request *req)
+int ptlrpc_send_error(struct ptlrpc_request *req, int may_be_difficult)
 {
         int rc;
         ENTRY;
@@ -430,8 +436,13 @@ int ptlrpc_error(struct ptlrpc_request *req)
 
         req->rq_type = PTL_RPC_MSG_ERR;
 
-        rc = ptlrpc_send_reply(req, 0);
+        rc = ptlrpc_send_reply(req, may_be_difficult);
         RETURN(rc);
+}
+
+int ptlrpc_error(struct ptlrpc_request *req)
+{
+        return ptlrpc_send_error(req, 0);
 }
 
 int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
@@ -474,6 +485,8 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
         lustre_msg_set_type(request->rq_reqmsg, PTL_RPC_MSG_REQUEST);
         lustre_msg_set_conn_cnt(request->rq_reqmsg,
                                 request->rq_import->imp_conn_cnt);
+        lustre_msghdr_set_flags(request->rq_reqmsg,
+                                request->rq_import->imp_msghdr_flags);
 
         if (!noreply) {
                 LASSERT (request->rq_replen != 0);
@@ -529,7 +542,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                         /* ...but the MD attach didn't succeed... */
                         request->rq_receiving_reply = 0;
                         spin_unlock(&request->rq_lock);
-                        GOTO(cleanup_me, rc -ENOMEM);
+                        GOTO(cleanup_me, rc = -ENOMEM);
                 }
 
                 CDEBUG(D_NET, "Setup reply buffer: %u bytes, xid "LPU64

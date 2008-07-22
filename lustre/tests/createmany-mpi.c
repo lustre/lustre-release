@@ -56,6 +56,7 @@ int main(int argc, char ** argv)
 
         if (strcmp(argv[1], "-o") == 0) {
                 do_open = 1;
+                tgt = NULL;
         } else if (strncmp(argv[1], "-l", 2) == 0 && argv[1][2]) {
                 tgt = argv[1] + 2;
                 do_link = 1;

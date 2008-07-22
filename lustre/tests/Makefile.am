@@ -12,8 +12,8 @@ noinst_SCRIPTS += conf-sanity.sh insanity.sh lfscktest.sh oos.sh oos2.sh
 noinst_SCRIPTS += llog-test.sh recovery-small.sh replay-dual.sh sanity-quota.sh
 noinst_SCRIPTS += replay-ost-single.sh replay-single.sh run-llog.sh sanityN.sh
 noinst_SCRIPTS += lockorder.sh socketclient socketserver runmultiop_bg_pause
-nobase_noinst_SCRIPTS = cfg/insanity-local.sh
-nobase_noinst_SCRIPTS += cfg/local.sh acl/make-tree acl/run
+nobase_noinst_SCRIPTS = cfg/local.sh
+nobase_noinst_SCRIPTS += acl/make-tree acl/run cfg/ncli.sh
 nobase_noinst_DATA = acl/cp.test acl/getfacl-noacl.test acl/inheritance.test
 nobase_noinst_DATA += acl/misc.test acl/permissions.test acl/setfacl.test
 
@@ -29,7 +29,7 @@ noinst_PROGRAMS += wantedi statone runas openfile getdents o_directory rmdirmany
 noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify cmknod
 noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify mkdirmany
 noinst_PROGRAMS += openfilleddirunlink rename_many memhog iopentest1 iopentest2
-noinst_PROGRAMS += mmap_sanity flock_test writemany random-reads flocks_test
+noinst_PROGRAMS += mmap_sanity flock_test writemany reads flocks_test
 noinst_PROGRAMS += ll_getstripe_info
 if MPITESTS
 noinst_PROGRAMS += parallel_grouplock write_append_truncate createmany_mpi
@@ -49,6 +49,9 @@ mmap_sanity_SOURCES= mmap_sanity.c
 LIBLUSTREAPI := $(top_builddir)/lustre/utils/liblustreapi.a
 ll_getstripe_info_LDADD=$(LIBLUSTREAPI)
 multiop_LDADD=$(LIBLUSTREAPI)
+
+ll_dirstripe_verify_SOURCES= ll_dirstripe_verify.c
+ll_dirstripe_verify_LDADD= -L$(top_builddir)/lustre/utils -llustreapi
 
 if MPITESTS
 LAM_LD_FLAGS=-L/opt/lam/lib -lmpi -llam -lpthread

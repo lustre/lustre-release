@@ -53,8 +53,9 @@ extern int obd_race_state;
 extern unsigned int obd_alloc_fail_rate;
 
 /* Timeout definitions */
-#define OBD_TIMEOUT_DEFAULT 100
-#define LDLM_TIMEOUT_DEFAULT 20
+#define OBD_TIMEOUT_DEFAULT             100
+#define LDLM_TIMEOUT_DEFAULT            20
+#define MDS_LDLM_TIMEOUT_DEFAULT        6
 #ifdef CRAY_XT3
  #define OBD_RECOVERY_MAX_TIME (obd_timeout * 18) /* b13079 */
 #endif
@@ -153,6 +154,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_MDS_CLOSE_NET_REP       0x13b
 #define OBD_FAIL_MDS_BLOCK_QUOTA_REQ     0x13c
 #define OBD_FAIL_MDS_DROP_QUOTA_REQ      0x13d
+#define OBD_FAIL_MDS_REMOVE_COMMON_EA    0x13e
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
@@ -228,6 +230,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_OSC_BRW_PREP_REQ2       0x40a
 #define OBD_FAIL_OSC_CONNECT_CKSUM       0x40b
 #define OBD_FAIL_OSC_CKSUM_ADLER_ONLY    0x40c
+#define OBD_FAIL_OSC_DIO_PAUSE           0x40d
 
 #define OBD_FAIL_PTLRPC                  0x500
 #define OBD_FAIL_PTLRPC_ACK              0x501
@@ -246,6 +249,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_OBD_LOGD_NET            0x602
 #define OBD_FAIL_OBD_QC_CALLBACK_NET     0x603
 #define OBD_FAIL_OBD_DQACQ               0x604
+#define OBD_FAIL_OBD_LLOG_SETUP          0x605
 
 #define OBD_FAIL_TGT_REPLY_NET           0x700
 #define OBD_FAIL_TGT_CONN_RACE           0x701
@@ -253,6 +257,8 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_TGT_DELAY_CONNECT       0x703
 #define OBD_FAIL_TGT_DELAY_RECONNECT     0x704
 #define OBD_FAIL_TGT_DELAY_PRECREATE     0x705
+#define OBD_FAIL_TGT_TOOMANY_THREADS     0x706
+#define OBD_FAIL_TGT_REPLAY_DROP         0x707
 
 #define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
 #define OBD_FAIL_MDC_ENQUEUE_PAUSE       0x801
@@ -266,11 +272,6 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_MGS_PAUSE_REQ           0x904
 #define OBD_FAIL_MGS_PAUSE_TARGET_REG    0x905
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 7, 0, 0)
-#define OBD_FAIL_QUOTA_QD_COUNT_32BIT    0xA00
-#else
-#warning "remove quota code above for format obsolete in new release"
-#endif
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 9, 0, 0)
 #define OBD_FAIL_QUOTA_WITHOUT_CHANGE_QS    0xA01
 #else
@@ -621,7 +622,8 @@ do {                                                                          \
 #define OBD_SLAB_FREE_PTR(ptr, slab)                                          \
         OBD_SLAB_FREE((ptr), (slab), sizeof *(ptr))
 
-#define KEY_IS(str) (keylen >= strlen(str) && strcmp(key, str) == 0)
+#define KEY_IS(str) \
+        (keylen >= (sizeof(str) - 1) && memcmp(key, str, sizeof(str) - 1) == 0)
 
 /* Wrapper for contiguous page frame allocation */
 #define OBD_PAGES_ALLOC(ptr, order, gfp_mask)                                 \

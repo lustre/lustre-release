@@ -69,14 +69,8 @@ struct ll_lock_tree_node {
 int lt_get_mmap_locks(struct ll_lock_tree *tree,
                       unsigned long addr, size_t count);
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
                        int *type);
-#else
-
-struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
-                       int unused);
-#endif
 
 struct ll_lock_tree_node * ll_node_from_inode(struct inode *inode, __u64 start,
                                               __u64 end, ldlm_mode_t mode)
@@ -312,6 +306,11 @@ static struct vm_area_struct * our_vma(unsigned long addr, size_t count)
         RETURN(ret);
 }
 
+int ll_region_mapped(unsigned long addr, size_t count)
+{
+        return !!our_vma(addr, count);
+}
+
 int lt_get_mmap_locks(struct ll_lock_tree *tree,
                       unsigned long addr, size_t count)
 {
@@ -349,29 +348,19 @@ int lt_get_mmap_locks(struct ll_lock_tree *tree,
         }
         RETURN(0);
 }
-
-/* FIXME: there is a pagefault race goes as follow (only 2.4):
- * 1. A user process on node A accesses a portion of a mapped file,
- *    resulting in a page fault.  The pagefault handler invokes the
- *    ll_nopage function, which reads the page into memory.
- * 2. A user process on node B writes to the same portion of the file
- *    (either via mmap or write()), that cause node A to cancel the
- *    lock and truncate the page.
- * 3. Node A then executes the rest of do_no_page(), entering the
- *    now-invalid page into the PTEs.
+/**
+ * Page fault handler.
  *
- * Make the whole do_no_page as a hook to cover both the page cache
- * and page mapping installing with dlm lock would eliminate this race.
+ * \param vma - is virtiual area struct related to page fault
+ * \param address - address when hit fault
+ * \param type - of fault
  *
- * In 2.6, the truncate_count of address_space can cover this race.
+ * \return allocated and filled page for address
+ * \retval NOPAGE_SIGBUS if page not exist on this address
+ * \retval NOPAGE_OOM not have memory for allocate new page
  */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
                        int *type)
-#else
-struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
-                       int type /* unused */)
-#endif
 {
         struct file *filp = vma->vm_file;
         struct ll_file_data *fd = LUSTRE_FPRIVATE(filp);
@@ -390,7 +379,7 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
 
         if (lli->lli_smd == NULL) {
                 CERROR("No lsm on fault?\n");
-                RETURN(NULL);
+                RETURN(NOPAGE_SIGBUS);
         }
 
         ll_clear_file_contended(inode);
@@ -408,7 +397,7 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
         rc = ll_extent_lock(fd, inode, lsm, mode, &policy,
                             &lockh, LDLM_FL_CBPENDING | LDLM_FL_NO_LRU);
         if (rc != 0)
-                RETURN(NULL);
+                RETURN(NOPAGE_SIGBUS);
 
         if (vma->vm_flags & VM_EXEC && LTIME_S(inode->i_mtime) != old_mtime)
                 CWARN("binary changed. inode %lu\n", inode->i_ino);
@@ -469,8 +458,13 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
         vma->vm_flags |= VM_RAND_READ;
 
         page = filemap_nopage(vma, address, type);
-        LL_CDEBUG_PAGE(D_PAGE, page, "got addr %lu type %lx\n", address,
-                       (long)type);
+        if (page != NOPAGE_SIGBUS && page != NOPAGE_OOM)
+                LL_CDEBUG_PAGE(D_PAGE, page, "got addr %lu type %lx\n", address,
+                               (long)type);
+        else
+                CDEBUG(D_PAGE, "got addr %lu type %lx - SIGBUS\n",  address,
+                               (long)type);
+
         vma->vm_flags &= ~VM_RAND_READ;
         vma->vm_flags |= (rand_read | seq_read);
 
@@ -542,7 +536,6 @@ static void ll_vm_close(struct vm_area_struct *vma)
         }
 }
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #ifndef HAVE_FILEMAP_POPULATE
 static int (*filemap_populate)(struct vm_area_struct * area, unsigned long address, unsigned long len, pgprot_t prot, unsigned long pgoff, int nonblock);
 #endif
@@ -557,7 +550,6 @@ static int ll_populate(struct vm_area_struct *area, unsigned long address,
         rc = filemap_populate(area, address, len, prot, pgoff, 1);
         RETURN(rc);
 }
-#endif
 
 /* return the user space pointer that maps to a file offset via a vma */
 static inline unsigned long file_to_user(struct vm_area_struct *vma, __u64 byte)
@@ -565,47 +557,6 @@ static inline unsigned long file_to_user(struct vm_area_struct *vma, __u64 byte)
         return vma->vm_start + (byte - ((__u64)vma->vm_pgoff << CFS_PAGE_SHIFT));
 
 }
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-/* [first, last] are the byte offsets affected.
- * vm_{start, end} are user addresses of the first byte of the mapping and
- *      the next byte beyond it
- * vm_pgoff is the page index of the first byte in the mapping */
-static void teardown_vmas(struct vm_area_struct *vma, __u64 first,
-                          __u64 last)
-{
-        unsigned long address, len;
-        for (; vma ; vma = vma->vm_next_share) {
-                if (last >> CFS_PAGE_SHIFT < vma->vm_pgoff)
-                        continue;
-                if (first >> CFS_PAGE_SHIFT >= (vma->vm_pgoff +
-                    ((vma->vm_end - vma->vm_start) >> CFS_PAGE_SHIFT)))
-                        continue;
-
-                /* XXX in case of unmap the cow pages of a running file,
-                 * don't unmap these private writeable mapping here!
-                 * though that will break private mappping a little.
-                 *
-                 * the clean way is to check the mapping of every page
-                 * and just unmap the non-cow pages, just like
-                 * unmap_mapping_range() with even_cow=0 in kernel 2.6.
-                 */
-                if (!(vma->vm_flags & VM_SHARED) &&
-                    (vma->vm_flags & VM_WRITE))
-                        continue;
-
-                address = max((unsigned long)vma->vm_start,
-                              file_to_user(vma, first));
-                len = min((unsigned long)vma->vm_end,
-                          file_to_user(vma, last) + 1) - address;
-
-                VMA_DEBUG(vma, "zapping vma [first="LPU64" last="LPU64" "
-                          "address=%ld len=%ld]\n", first, last, address, len);
-                LASSERT(len > 0);
-                ll_zap_page_range(vma, address, len);
-        }
-}
-#endif
 
 /* XXX put nice comment here.  talk about __free_pte -> dirty pages and
  * nopage's reference passing to the pte */
@@ -615,24 +566,12 @@ int ll_teardown_mmaps(struct address_space *mapping, __u64 first, __u64 last)
         ENTRY;
 
         LASSERTF(last > first, "last "LPU64" first "LPU64"\n", last, first);
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         if (mapping_mapped(mapping)) {
                 rc = 0;
                 unmap_mapping_range(mapping, first + CFS_PAGE_SIZE - 1,
                                     last - first + 1, 0);
         }
-#else
-        spin_lock(&mapping->i_shared_lock);
-        if (mapping->i_mmap != NULL) {
-                rc = 0;
-                teardown_vmas(mapping->i_mmap, first, last);
-        }
-        if (mapping->i_mmap_shared != NULL) {
-                rc = 0;
-                teardown_vmas(mapping->i_mmap_shared, first, last);
-        }
-        spin_unlock(&mapping->i_shared_lock);
-#endif
+
         RETURN(rc);
 }
 
@@ -640,9 +579,7 @@ static struct vm_operations_struct ll_file_vm_ops = {
         .nopage         = ll_nopage,
         .open           = ll_vm_open,
         .close          = ll_vm_close,
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         .populate       = ll_populate,
-#endif
 };
 
 int ll_file_mmap(struct file * file, struct vm_area_struct * vma)

@@ -621,6 +621,22 @@ AC_DEFUN([LC_FUNC_SET_FS_PWD],
 ])
 ])
 
+#
+# check for FS_RENAME_DOES_D_MOVE flag
+#
+AC_DEFUN([LC_FS_RENAME_DOES_D_MOVE],
+[AC_MSG_CHECKING([if kernel has FS_RENAME_DOES_D_MOVE flag])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        int v = FS_RENAME_DOES_D_MOVE;
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_FS_RENAME_DOES_D_MOVE, 1, [kernel has FS_RENAME_DOES_D_MOVE flag])
+],[
+        AC_MSG_RESULT([no])
+])
+])
 
 #
 # LC_FUNC_MS_FLOCK_LOCK
@@ -793,19 +809,6 @@ LB_LINUX_TRY_COMPILE([
         AC_MSG_RESULT(NO)
 ])
 ])
-
-# LC_SYMVERFILE
-# SLES 9 uses a different name for this file - unsure about vanilla kernels
-# around this version, but it matters for servers only.
-AC_DEFUN([LC_SYMVERFILE],
-         [AC_MSG_CHECKING([name of symverfile])
-          if grep -q Modules.symvers $LINUX/scripts/Makefile.modpost ; then
-              SYMVERFILE=Modules.symvers
-          else
-              SYMVERFILE=Module.symvers
-          fi
-	  AC_MSG_RESULT($SYMVERFILE)
-          AC_SUBST(SYMVERFILE)])
 
 # LC_DQUOTOFF_MUTEX
 # after 2.6.17 dquote use mutex instead if semaphore
@@ -1148,8 +1151,7 @@ AC_DEFINE(HAVE___D_MOVE, 1,
 # matter what symbol is exported, the kernel #defines node_to_cpumask
 # to the appropriate function and that's what we use.
 AC_DEFUN([LC_EXPORT_NODE_TO_CPUMASK],
-         [LB_LINUX_ARCH
-          LB_CHECK_SYMBOL_EXPORT([node_to_cpumask],
+         [LB_CHECK_SYMBOL_EXPORT([node_to_cpumask],
                                  [arch/$LINUX_ARCH/mm/numa.c],
                                  [AC_DEFINE(HAVE_NODE_TO_CPUMASK, 1,
                                             [node_to_cpumask is exported by
@@ -1205,6 +1207,26 @@ LB_LINUX_TRY_COMPILE([
 ],[
         AC_MSG_RESULT([no])
 ])
+])
+
+# 2.6.12 merge patch from oracle to convert tree_lock from spinlock to rwlock
+AC_DEFUN([LC_RW_TREE_LOCK],
+[AC_MSG_CHECKING([if kernel has tree_lock as rwlock])
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        struct address_space a;
+
+        write_lock(&a.tree_lock);
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_RW_TREE_LOCK, 1, [kernel has tree_lock as rw_lock])
+],[
+        AC_MSG_RESULT([no])
+])
+EXTRA_KCFLAGS="$tmp_flags"
 ])
 
 # 2.6.23 have return type 'void' for unregister_blkdev
@@ -1305,15 +1327,16 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_QUOTA_READ
           LC_COOKIE_FOLLOW_LINK
           LC_FUNC_RCU
+          LC_QUOTA64
 
           # does the kernel have VFS intent patches?
           LC_VFS_INTENT_PATCHES
 
+          # 2.6.12
+          LC_RW_TREE_LOCK
+        
           # 2.6.15
           LC_INODE_I_MUTEX
-
-          # SLES 10 (at least)
-          LC_SYMVERFILE
 
           # 2.6.17
           LC_DQUOTOFF_MUTEX
@@ -1343,6 +1366,7 @@ AC_DEFUN([LC_PROG_LINUX],
 	  
 	  # 2.6.22
           LC_INVALIDATE_BDEV_2ARG
+          LC_FS_RENAME_DOES_D_MOVE
           # 2.6.23
           LC_UNREGISTER_BLKDEV_RETURN_INT
           LC_KERNEL_SPLICE_READ
@@ -1399,11 +1423,8 @@ AC_ARG_ENABLE([liblustre-acl],
 	AC_HELP_STRING([--disable-liblustre-acl],
 			[disable ACL support for liblustre]),
 	[],[enable_liblustre_acl=yes])
-if test x$enable_liblustre != xyes ; then
-   enable_liblustre_acl='no'
-fi
 AC_MSG_RESULT([$enable_liblustre_acl])
-if test x$enable_liblustre_acl != xno ; then
+if test x$enable_liblustre_acl = xyes ; then
   AC_DEFINE(LIBLUSTRE_POSIX_ACL, 1, Liblustre Support ACL-enabled MDS)
 fi
 
@@ -1436,9 +1457,9 @@ fi
 AC_DEFUN([LC_CONFIG_ADAPTIVE_TIMEOUTS],
 [AC_MSG_CHECKING([whether to enable ptlrpc adaptive timeouts support])
 AC_ARG_ENABLE([adaptive_timeouts],
-	AC_HELP_STRING([--enable-adaptive-timeouts],
-			[enable ptlrpc adaptive timeouts support]),
-	[],[enable_adaptive_timeouts='no'])
+	AC_HELP_STRING([--disable-adaptive-timeouts],
+			[disable ptlrpc adaptive timeouts support]),
+	[],[enable_adaptive_timeouts='yes'])
 AC_MSG_RESULT([$enable_adaptive_timeouts])
 if test x$enable_adaptive_timeouts == xyes; then
    AC_DEFINE(HAVE_AT_SUPPORT, 1, [Enable adaptive timeouts support])
@@ -1536,6 +1557,30 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# LC_QUOTA64
+# linux kernel may have 64-bit limits support
+#
+AC_DEFUN([LC_QUOTA64],
+[AC_MSG_CHECKING([if kernel has 64-bit quota limits support])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/kernel.h>
+        #include <linux/fs.h>
+        #include <linux/quotaio_v2.h>
+        int versions[] = V2_INITQVERSIONS_R1;
+        struct v2_disk_dqblk_r1 dqblk_r1;
+],[],[
+        AC_DEFINE(HAVE_QUOTA64, 1, [have quota64])
+        AC_MSG_RESULT([yes])
+
+],[
+        AC_MSG_WARN([You have got no 64-bit kernel quota support.])
+        AC_MSG_WARN([Continuing with limited quota support.])
+        AC_MSG_WARN([quotacheck is needed for filesystems with recent quota versions.])
+        AC_MSG_RESULT([no])
+])
+])
+
+#
 # LC_CONFIGURE
 #
 # other configure checks
@@ -1545,10 +1590,6 @@ AC_DEFUN([LC_CONFIGURE],
 
 # include/liblustre.h
 AC_CHECK_HEADERS([asm/page.h sys/user.h sys/vfs.h stdint.h blkid/blkid.h])
-
-# include/lustre/lustre_user.h
-# See note there re: __ASM_X86_64_PROCESSOR_H
-AC_CHECK_HEADERS([linux/fs.h linux/quota.h])
 
 # liblustre/llite_lib.h
 AC_CHECK_HEADERS([xtio.h file.h])
@@ -1563,8 +1604,12 @@ AC_CHECK_FUNCS([inet_ntoa])
 # libsysio/src/readlink.c
 LC_READLINK_SSIZE_T
 
-# lvfs/prng.c
-AC_CHECK_HEADERS([linux/random.h])
+# lvfs/prng.c - depends on linux/types.h from liblustre/dir.c
+AC_CHECK_HEADERS([linux/random.h], [], [],
+                 [#ifdef HAVE_LINUX_TYPES_H
+                  # include <linux/types.h>
+                  #endif
+                 ])
 
 # utils/llverfs.c
 AC_CHECK_HEADERS([ext2fs/ext2fs.h])

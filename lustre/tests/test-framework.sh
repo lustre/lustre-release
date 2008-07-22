@@ -24,6 +24,18 @@ assert_env() {
     [ $failed ] && exit 1 || true
 }
 
+assert_DIR () {
+    local failed=""
+    [ -z "`echo :$DIR: | grep :$MOUNT:`" ] && \
+        failed=1 && echo "DIR not in $MOUNT. Aborting."
+    [ -z "`echo :$DIR1: | grep :$MOUNT1:`" ] && \
+        failed=1 && echo "DIR1 not in $MOUNT1. Aborting."
+    [ -z "`echo :$DIR2: | grep :$MOUNT2:`" ] && \
+        failed=1 && echo "DIR2 not in $MOUNT2. Aborting"
+
+    [ -n "$failed" ] && exit 99 || true
+}
+
 usage() {
     echo "usage: $0 [-r] [-f cfgfile]"
     echo "       -r: reformat"
@@ -66,14 +78,17 @@ print_summary () {
 init_test_env() {
     export LUSTRE=`absolute_path $LUSTRE`
     export TESTSUITE=`basename $0 .sh`
-    export LTESTDIR=${LTESTDIR:-$LUSTRE/../ltest}
 
     [ -d /r ] && export ROOT=${ROOT:-/r}
     export TMP=${TMP:-$ROOT/tmp}
     export TESTSUITELOG=${TMP}/${TESTSUITE}.log
     export HOSTNAME=${HOSTNAME:-`hostname`}
-
-    export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests
+    if ! echo $PATH | grep -q $LUSTRE/utils; then
+	export PATH=$PATH:$LUSTRE/utils
+    fi
+    if ! echo $PATH | grep -q $LUSTRE/test; then
+	export PATH=$PATH:$LUSTRE/tests
+    fi
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     export LFS=${LFS:-"$LUSTRE/utils/lfs"}
     [ ! -f "$LCTL" ] && export LCTL=$(which lctl) 
@@ -89,6 +104,7 @@ init_test_env() {
     export LPROC=/proc/fs/lustre
     export DIR2
     export AT_MAX_PATH
+    export SAVE_PWD=${SAVE_PWD:-$LUSTRE/tests}
 
     if [ "$ACCEPTOR_PORT" ]; then
         export PORT_OPT="--port $ACCEPTOR_PORT"
@@ -114,6 +130,7 @@ init_test_env() {
     ONLY=${ONLY:-$*}
 
     [ "$TESTSUITELOG" ] && rm -f $TESTSUITELOG || true
+    rm -f $TMP/*active
 
 }
 
@@ -148,8 +165,8 @@ load_modules() {
 
     echo Loading modules from $LUSTRE
     load_module ../lnet/libcfs/libcfs
-    [ "$PTLDEBUG" ] && sysctl -w lnet.debug=$PTLDEBUG
-    [ "$SUBSYSTEM" ] && sysctl -w lnet.subsystem_debug=${SUBSYSTEM# }
+    [ "$PTLDEBUG" ] && lctl set_param debug=$PTLDEBUG
+    [ "$SUBSYSTEM" ] && lctl set_param subsystem_debug=${SUBSYSTEM# }
     [ -f /etc/modprobe.conf ] && MODPROBECONF=/etc/modprobe.conf
     [ -f /etc/modprobe.d/Lustre ] && MODPROBECONF=/etc/modprobe.d/Lustre
     [ -z "$LNETOPTS" -a -n "$MODPROBECONF" ] && \
@@ -215,18 +232,26 @@ wait_for_lnet() {
     done
 }
 
+unload_dep_module() {
+    #lsmod output
+    #libcfs                107852  17 llite_lloop,lustre,obdfilter,ost,...
+    local MODULE=$1
+    local DEPS=$(lsmod | awk '($1 == "'$MODULE'") { print $4 }' | tr ',' ' ')
+    for SUBMOD in $DEPS; do
+        unload_dep_module $SUBMOD
+    done
+    [ "$MODULE" = "libcfs" ] && $LCTL dk $TMP/debug || true
+    $RMMOD $MODULE || true
+}
+
 unload_modules() {
     wait_exit_ST client # bug 12845
 
     lsmod | grep libcfs > /dev/null && $LCTL dl
-    local MODULES=$($LCTL modules | awk '{ print $2 }' | grep -v libcfs) || true
-    $RMMOD $MODULES > /dev/null 2>&1 || true
-     # do it again, in case we tried to unload ksocklnd too early
-    MODULES=$($LCTL modules | awk '{ print $2 }' | grep -v libcfs) || true
-    [ -n "$MODULES" ] && $RMMOD $MODULES > /dev/null 2>&1 || true
-    lsmod | grep libcfs > /dev/null && $LCTL dk $TMP/debug
-    $RMMOD libcfs
-    MODULES=$($LCTL modules | awk '{ print $2 }')
+    unload_dep_module $FSTYPE
+    unload_dep_module libcfs
+
+    local MODULES=$($LCTL modules | awk '{ print $2 }')
     if [ -n "$MODULES" ]; then
         echo "Modules still loaded: "
         echo $MODULES 
@@ -257,32 +282,42 @@ unload_modules() {
 }
 
 # Facet functions
+mount_facet() {
+    local facet=$1
+    shift
+    local dev=${facet}_dev
+    local opt=${facet}_opt
+    echo "Starting ${facet}: ${!opt} $@ ${!dev} ${MOUNT%/*}/${facet}"
+    do_facet ${facet} mount -t lustre ${!opt} $@ ${!dev} ${MOUNT%/*}/${facet}     
+    RC=${PIPESTATUS[0]}
+    if [ $RC -ne 0 ]; then
+        echo "mount -t lustre $@ ${!dev} ${MOUNT%/*}/${facet}"
+        echo "Start of ${!dev} on ${facet} failed ${RC}"
+    else
+        do_facet ${facet} "lctl set_param debug=$PTLDEBUG; \
+            lctl set_param subsystem_debug=${SUBSYSTEM# }; \
+            lctl set_param debug_mb=${DEBUG_SIZE}; \
+            sync"
+ 
+        label=$(do_facet ${facet} "e2label ${!dev}")
+        [ -z "$label" ] && echo no label for ${!dev} && exit 1
+        eval export ${facet}_svc=${label}
+        echo Started ${label}
+    fi
+    return $RC
+}
+
 # start facet device options 
 start() {
     facet=$1
     shift
     device=$1
     shift
-    echo "Starting ${facet}: $@ ${device} ${MOUNT%/*}/${facet}"
+    eval export ${facet}_dev=${device}
+    eval export ${facet}_opt=\"$@\"
     do_facet ${facet} mkdir -p ${MOUNT%/*}/${facet}
-    do_facet ${facet} mount -t lustre $@ ${device} ${MOUNT%/*}/${facet} 
-    RC=${PIPESTATUS[0]}
-    if [ $RC -ne 0 ]; then
-        echo "mount -t lustre $@ ${device} ${MOUNT%/*}/${facet}" 
-        echo "Start of ${device} on ${facet} failed ${RC}"
-    else 
-        do_facet ${facet} "sysctl -w lnet.debug=$PTLDEBUG; \
-        sysctl -w lnet.subsystem_debug=${SUBSYSTEM# }; \
-        sysctl -w lnet.debug_mb=${DEBUG_SIZE}"
-
-        do_facet ${facet} sync
-        label=$(do_facet ${facet} "e2label ${device}")
-        [ -z "$label" ] && echo no label for ${device} && exit 1
-        eval export ${facet}_svc=${label}
-        eval export ${facet}_dev=${device}
-        eval export ${facet}_opt=\"$@\"
-        echo Started ${label}
-    fi
+    mount_facet ${facet}
+    RC=$?
     return $RC
 }
 
@@ -319,27 +354,62 @@ zconf_mount() {
         exit 1
     fi
 
-    echo "Starting client: $OPTIONS $device $mnt" 
+    echo "Starting client: $client: $OPTIONS $device $mnt"
     do_node $client mkdir -p $mnt
     do_node $client mount -t lustre $OPTIONS $device $mnt || return 1
+    do_node $client "lctl set_param debug=$PTLDEBUG;
+        lctl set_param subsystem_debug=${SUBSYSTEM# };
+        lctl set_param debug_mb=${DEBUG_SIZE}"
 
-    do_node $client "sysctl -w lnet.debug=$PTLDEBUG;
-        sysctl -w lnet.subsystem_debug=${SUBSYSTEM# };
-        sysctl -w lnet.debug_mb=${DEBUG_SIZE}"
     [ -d /r ] && $LCTL modules > /r/tmp/ogdb-$HOSTNAME
     return 0
 }
 
 zconf_umount() {
-    client=$1
-    mnt=$2
+    local client=$1
+    local mnt=$2
     [ "$3" ] && force=-f
     local running=$(do_node $client "grep -c $mnt' ' /proc/mounts") || true
     if [ $running -ne 0 ]; then
-        echo "Stopping client $mnt (opts:$force)"
+        echo "Stopping client $client $mnt (opts:$force)"
         lsof | grep "$mnt" || true
         do_node $client umount $force $mnt
     fi
+}
+
+zconf_mount_clients() {
+    local OPTIONS
+    local clients=$1
+    local mnt=$2
+
+    # Only supply -o to mount if we have options
+    if [ -n "$MOUNTOPT" ]; then
+        OPTIONS="-o $MOUNTOPT"
+    fi
+    local device=$MGSNID:/$FSNAME
+    if [ -z "$mnt" -o -z "$FSNAME" ]; then
+        echo Bad zconf mount command: opt=$OPTIONS dev=$device mnt=$mnt
+        exit 1
+    fi
+
+    echo "Starting client $clients: $OPTIONS $device $mnt"
+    do_nodes $clients mkdir -p $mnt
+    do_nodes $clients mount -t lustre $OPTIONS $device $mnt || return 1
+
+    do_nodes $clients "sysctl -w lnet.debug=$PTLDEBUG;
+        sysctl -w lnet.subsystem_debug=${SUBSYSTEM# };
+        sysctl -w lnet.debug_mb=${DEBUG_SIZE};"
+
+    return 0
+}
+
+zconf_umount_clients() {
+    local clients=$1
+    local mnt=$2
+    [ "$3" ] && force=-f
+
+    echo "Stopping clients: $clients $mnt (opts:$force)"
+    do_nodes $clients umount $force $mnt
 }
 
 shutdown_facet() {
@@ -393,15 +463,15 @@ cleanup_check() {
 }
 
 wait_delete_completed () {
-    local TOTALPREV=`awk 'BEGIN{total=0}; {total+=$1}; END{print total}' \
-            $LPROC/osc/*/kbytesavail`
+    local TOTALPREV=`lctl get_param -n osc.*.kbytesavail | \
+                     awk 'BEGIN{total=0}; {total+=$1}; END{print total}'`
 
     local WAIT=0
     local MAX_WAIT=20
     while [ "$WAIT" -ne "$MAX_WAIT" ]; do
         sleep 1
-        TOTAL=`awk 'BEGIN{total=0}; {total+=$1}; END{print total}' \
-            $LPROC/osc/*/kbytesavail`
+        TOTAL=`lctl get_param -n osc.*.kbytesavail | \
+               awk 'BEGIN{total=0}; {total+=$1}; END{print total}'`
         [ "$TOTAL" -eq "$TOTALPREV" ] && break
         echo "Waiting delete completed ... prev: $TOTALPREV current: $TOTAL "
         TOTALPREV=$TOTAL
@@ -423,14 +493,14 @@ wait_for() {
 }
 
 wait_mds_recovery_done () {
-    local timeout=`do_facet mds sysctl -n lustre.timeout`
+    local timeout=`do_facet mds lctl get_param  -n timeout`
 #define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 / 2)
 # as we are in process of changing obd_timeout in different ways
 # let's set MAX longer than that
     MAX=$(( timeout * 4 ))
     WAIT=0
     while [ $WAIT -lt $MAX ]; do
-        STATUS=`do_facet mds grep status /proc/fs/lustre/mds/*-MDT*/recovery_status`
+        STATUS=`do_facet mds "lctl get_param -n mds.*-MDT*.recovery_status | grep status"`
         echo $STATUS | grep COMPLETE && return 0
         sleep 5
         WAIT=$((WAIT + 5))
@@ -491,9 +561,7 @@ facet_failover() {
     TO=`facet_active_host $facet`
     echo "Failover $facet to $TO"
     wait_for $facet
-    local dev=${facet}_dev
-    local opt=${facet}_opt
-    start $facet ${!dev} ${!opt} || error "Restart of $facet failed"
+    mount_facet $facet || error "Restart of $facet failed"
 }
 
 obd_name() {
@@ -523,13 +591,13 @@ replay_barrier_nodf() {
 }
 
 mds_evict_client() {
-    UUID=`cat /proc/fs/lustre/mdc/${mds_svc}-mdc-*/uuid`
-    do_facet mds "echo $UUID > /proc/fs/lustre/mds/${mds_svc}/evict_client"
+    UUID=`lctl get_param -n mdc.${mds_svc}-mdc-*.uuid`
+    do_facet mds "lctl set_param -n mds.${mds_svc}.evict_client $UUID"
 }
 
 ost_evict_client() {
-    UUID=`cat /proc/fs/lustre/osc/${ost1_svc}-osc-*/uuid`
-    do_facet ost1 "echo $UUID > /proc/fs/lustre/obdfilter/${ost1_svc}/evict_client"
+    UUID=`lctl get_param -n osc.${ost1_svc}-osc-*.uuid`
+    do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.evict_client $UUID"
 }
 
 fail() {
@@ -546,11 +614,7 @@ fail_abort() {
     local facet=$1
     stop $facet
     change_active $facet
-    local svc=${facet}_svc
-    local dev=${facet}_dev
-    local opt=${facet}_opt
-    start $facet ${!dev} ${!opt}
-    do_facet $facet lctl --device %${!svc} abort_recovery
+    mount_facet $facet -o abort_recovery
     df $MOUNT || echo "first df failed: $?"
     sleep 1
     df $MOUNT || error "post-failover df: $?"
@@ -565,6 +629,12 @@ h2gm () {
     if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
         ID=`$PDSH $1 $GMNALNID -l | cut -d\  -f2`
         echo $ID"@gm"
+    fi
+}
+
+h2name_or_ip() {
+    if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
+        echo $1"@$2"
     fi
 }
 
@@ -607,6 +677,11 @@ h2openib() {
 }
 declare -fx h2openib
 
+h2o2ib() {
+    h2name_or_ip "$1" "o2ib"
+}
+declare -fx h2o2ib
+
 facet_host() {
     local facet=$1
     varname=${facet}_HOST
@@ -622,8 +697,8 @@ facet_active() {
     local facet=$1
     local activevar=${facet}active
 
-    if [ -f ./${facet}active ] ; then
-        source ./${facet}active
+    if [ -f $TMP/${facet}active ] ; then
+        source $TMP/${facet}active
     fi
 
     active=${!activevar}
@@ -657,7 +732,7 @@ change_active() {
     fi
     # save the active host for this facet
     activevar=${facet}active
-    echo "$activevar=${!activevar}" > ./$activevar
+    echo "$activevar=${!activevar}" > $TMP/$activevar
 }
 
 do_node() {
@@ -689,6 +764,46 @@ do_node() {
     return ${PIPESTATUS[0]}
 }
 
+do_nodes() {
+    local nodes=$1
+    shift
+
+    nodes=${nodes//,/ }
+    # split list to local and remote
+    local rnodes=$(echo " $nodes " | sed -re "s/\s+$HOSTNAME\s+/ /g")
+ 
+    if [ "$(get_node_count $nodes)" != "$(get_node_count $rnodes)" ]; then
+        do_node $HOSTNAME $@
+    fi
+
+    [ -z "$(echo $rnodes)" ] && return 0
+
+    # This is part from do_node
+    local myPDSH=$PDSH
+
+    rnodes=$(comma_list $rnodes)
+    [ -z "$myPDSH" -o "$myPDSH" = "no_dsh" ] && \
+        echo "cannot run remote command on $rnodes with $myPDSH" && return 128
+
+    if $VERBOSE; then
+        echo "CMD: $rnodes $@" >&2
+        $myPDSH $rnodes $LCTL mark "$@" > /dev/null 2>&1 || :
+    fi
+
+    if [ "$myPDSH" = "rsh" ]; then
+# we need this because rsh does not return exit code of an executed command
+       local command_status="$TMP/cs"
+       rsh $rnodes ":> $command_status"
+       rsh $rnodes "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin;
+                   cd $RPWD; sh -c \"$@\") || 
+                   echo command failed >$command_status"
+       [ -n "$($myPDSH $rnodes cat $command_status)" ] && return 1 || true
+        return 0
+    fi
+    $myPDSH $rnodes "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")" | sed -re "s/\w+:\s//g"
+    return ${PIPESTATUS[0]}
+}
+
 do_facet() {
     facet=$1
     shift
@@ -702,7 +817,7 @@ add() {
     shift
     # make sure its not already running
     stop ${facet} -f
-    rm -f ${facet}active
+    rm -f $TMP/${facet}active
     do_facet ${facet} $MKFS $*
 }
 
@@ -728,10 +843,21 @@ stopall() {
     # assume client mount is local 
     grep " $MOUNT " /proc/mounts && zconf_umount $HOSTNAME $MOUNT $*
     grep " $MOUNT2 " /proc/mounts && zconf_umount $HOSTNAME $MOUNT2 $*
+
+    if [ -n "$CLIENTS" ]; then
+            zconf_umount_clients $CLIENTS $MOUNT "$*" || true
+            [ -n "$MOUNT2" ] && zconf_umount_clients $CLIENTS $MOUNT2 "$*" || true
+    fi
+
     [ "$CLIENTONLY" ] && return
+    # The add fn does rm ${facet}active file, this would be enough
+    # if we use do_facet <facet> only after the facet added, but
+    # currently we use do_facet mds in local.sh
     stop mds -f
+    rm -f ${TMP}/mdsactive
     for num in `seq $OSTCOUNT`; do
         stop ost$num -f
+        rm -f $TMP/ost${num}active
     done
     return 0
 }
@@ -781,7 +907,7 @@ set_obd_timeout() {
     do_facet $facet lsmod | grep -q obdclass || \
         do_facet $facet "modprobe obdclass"
 
-    do_facet $facet "sysctl -w lustre.timeout=$timeout"
+    do_facet $facet "lctl set_param timeout=$timeout"
 }
 
 setupall() {
@@ -792,16 +918,31 @@ setupall() {
 	    || do_facet mds "$TUNEFS --writeconf $MDSDEV"
         set_obd_timeout mds $TIMEOUT
         start mds $MDSDEV $MDS_MOUNT_OPTS
+        # We started mds, now we should set failover variable properly.
+        # Set mdsfailover_HOST if it is not set (the default failnode).
+        mdsfailover_HOST=$(facet_host mds)
+
         for num in `seq $OSTCOUNT`; do
             DEVNAME=`ostdevname $num`
             set_obd_timeout ost$num $TIMEOUT
             start ost$num $DEVNAME $OST_MOUNT_OPTS
+
+            # We started ost$num, now we should set ost${num}failover variable properly.
+            # Set ost${num}failover_HOST if it is not set (the default failnode).
+            varname=ost${num}failover_HOST
+            if [ -z "${!varname}" ]; then
+                eval ost${num}failover_HOST=$(facet_host ost${num})
+            fi
+
         done
     fi
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     mount_client $MOUNT
+    [ -n "$CLIENTS" ] && zconf_mount_clients $CLIENTS $MOUNT
+
     if [ "$MOUNT_2" ]; then
         mount_client $MOUNT2
+        [ -n "$CLIENTS" ] && zconf_mount_clients $CLIENTS $MOUNT2
     fi
     sleep 5
 }
@@ -826,7 +967,7 @@ check_and_setup_lustre() {
 
 cleanup_and_setup_lustre() {
     if [ "$ONLY" == "cleanup" -o "`mount | grep $MOUNT`" ]; then
-        sysctl -w lnet.debug=0 || true
+        lctl set_param debug=0 || true
         cleanupall
         if [ "$ONLY" == "cleanup" ]; then 
     	    exit 0
@@ -940,64 +1081,64 @@ at_max_set() {
 drop_request() {
 # OBD_FAIL_MDS_ALL_REQUEST_NET
     RC=0
-    do_facet mds sysctl -w lustre.fail_loc=0x123
+    do_facet mds lctl set_param fail_loc=0x123
     do_facet client "$1" || RC=$?
-    do_facet mds sysctl -w lustre.fail_loc=0
+    do_facet mds lctl set_param fail_loc=0
     return $RC
 }
 
 drop_reply() {
 # OBD_FAIL_MDS_ALL_REPLY_NET
     RC=0
-    do_facet mds sysctl -w lustre.fail_loc=0x122
+    do_facet mds lctl set_param fail_loc=0x122
     do_facet client "$@" || RC=$?
-    do_facet mds sysctl -w lustre.fail_loc=0
+    do_facet mds lctl set_param fail_loc=0
     return $RC
 }
 
 drop_reint_reply() {
 # OBD_FAIL_MDS_REINT_NET_REP
     RC=0
-    do_facet mds sysctl -w lustre.fail_loc=0x119
+    do_facet mds lctl set_param fail_loc=0x119
     do_facet client "$@" || RC=$?
-    do_facet mds sysctl -w lustre.fail_loc=0
+    do_facet mds lctl set_param fail_loc=0
     return $RC
 }
 
 pause_bulk() {
 #define OBD_FAIL_OST_BRW_PAUSE_BULK      0x214
     RC=0
-    do_facet ost1 sysctl -w lustre.fail_loc=0x214
+    do_facet ost1 lctl set_param fail_loc=0x214
     do_facet client "$1" || RC=$?
     do_facet client "sync"
-    do_facet ost1 sysctl -w lustre.fail_loc=0
+    do_facet ost1 lctl set_param fail_loc=0
     return $RC
 }
 
 drop_ldlm_cancel() {
 #define OBD_FAIL_LDLM_CANCEL             0x304
     RC=0
-    do_facet client sysctl -w lustre.fail_loc=0x304
+    do_facet client lctl set_param fail_loc=0x304
     do_facet client "$@" || RC=$?
-    do_facet client sysctl -w lustre.fail_loc=0
+    do_facet client lctl set_param fail_loc=0
     return $RC
 }
 
 drop_bl_callback() {
 #define OBD_FAIL_LDLM_BL_CALLBACK        0x305
     RC=0
-    do_facet client sysctl -w lustre.fail_loc=0x305
+    do_facet client lctl set_param fail_loc=0x305
     do_facet client "$@" || RC=$?
-    do_facet client sysctl -w lustre.fail_loc=0
+    do_facet client lctl set_param fail_loc=0
     return $RC
 }
 
 drop_ldlm_reply() {
 #define OBD_FAIL_LDLM_REPLY              0x30c
     RC=0
-    do_facet mds sysctl -w lustre.fail_loc=0x30c
+    do_facet mds lctl set_param fail_loc=0x30c
     do_facet client "$@" || RC=$?
-    do_facet mds sysctl -w lustre.fail_loc=0
+    do_facet mds lctl set_param fail_loc=0
     return $RC
 }
 
@@ -1006,15 +1147,31 @@ clear_failloc() {
     pause=$2
     sleep $pause
     echo "clearing fail_loc on $facet"
-    do_facet $facet "sysctl -e -w lustre.fail_loc=0"
+    do_facet $facet "lctl set_param fail_loc=0 2>/dev/null || true"
+}
+
+set_nodes_failloc () {
+    local nodes=$1
+    local node
+
+    for node in $nodes ; do
+        do_node $node lctl set_param fail_loc=$2
+    done
+}
+
+set_nodes_failloc () {
+    local nodes=$1
+    local node
+
+    for node in $nodes ; do
+        do_node $node sysctl -w lustre.fail_loc=$2
+    done
 }
 
 cancel_lru_locks() {
     $LCTL mark "cancel_lru_locks $1 start"
-    for d in `find $LPROC/ldlm/namespaces | egrep -i $1`; do
-        [ -f $d/lru_size ] && echo clear > $d/lru_size
-        [ -f $d/lock_unused_count ] && grep [1-9] $d/lock_unused_count /dev/null
-    done
+    lctl set_param ldlm.namespaces.*$1*.lru_size=0
+    lctl get_param ldlm.namespaces.*$1*.lock_unused_count | grep -v '=0'
     $LCTL mark "cancel_lru_locks $1 stop"
 }
 
@@ -1027,44 +1184,32 @@ default_lru_size()
 
 lru_resize_enable()
 {
-        NS=$1
-        test "x$NS" = "x" && NS="mdc"
-        for F in $LPROC/ldlm/namespaces/*$NS*/lru_size; do
-                D=$(dirname $F)
-                log "Enable lru resize for $(basename $D)"
-                echo "0" > $F
-        done
+    lctl set_param ldlm.namespaces.*$1*.lru_size=0
 }
 
 lru_resize_disable()
 {
-        NS=$1
-        test "x$NS" = "x" && NS="mdc"
-        for F in $LPROC/ldlm/namespaces/*$NS*/lru_size; do
-                D=$(dirname $F)
-                log "Disable lru resize for $(basename $D)"
-                DEFAULT_LRU_SIZE=$(default_lru_size)
-                echo "$DEFAULT_LRU_SIZE" > $F
-        done
+    lctl set_param ldlm.namespaces.*$1*.lru_size $(default_lru_size)
 }
 
 pgcache_empty() {
-    for a in /proc/fs/lustre/llite/*/dump_page_cache; do
-        if [ `wc -l $a | awk '{print $1}'` -gt 1 ]; then
-            echo there is still data in page cache $a ?
-            cat $a;
-            return 1;
+    local FILE
+    for FILE in `lctl get_param -N "llite.*.dump_page_cache"`; do
+        if [ `lctl get_param -n $FILE | wc -l` -gt 1 ]; then
+            echo there is still data in page cache $FILE ?
+            lctl get_param -n $FILE
+            return 1
         fi
     done
     return 0
 }
 
 debugsave() {
-    DEBUGSAVE="$(sysctl -n lnet.debug)"
+    DEBUGSAVE="$(lctl get_param -n debug)"
 }
 
 debugrestore() {
-    [ -n "$DEBUGSAVE" ] && sysctl -w lnet.debug="${DEBUGSAVE}"
+    [ -n "$DEBUGSAVE" ] && lctl set_param debug="${DEBUGSAVE}"
     DEBUGSAVE=""
 }
 
@@ -1075,7 +1220,7 @@ debugrestore() {
 error_noexit() {
     local TYPE=${TYPE:-"FAIL"}
     local ERRLOG
-    sysctl -e -w lustre.fail_loc=0 || true
+    lctl set_param fail_loc=0 2>/dev/null || true
     log " ${TESTSUITE} ${TESTNAME}: @@@@@@ ${TYPE}: $@ "
     ERRLOG=$TMP/lustre_${TESTSUITE}_${TESTNAME}.$(date +%s)
     echo "Dumping lctl log to $ERRLOG"
@@ -1102,7 +1247,7 @@ error_exit() {
 # (like ALWAYS_EXCEPT, but run the test and ignore the results.)
 # e.g. error_ignore 5494 "your message"
 error_ignore() {
-    TYPE="IGNORE (bz$1)"
+    local TYPE="IGNORE (bz$1)"
     shift
     error_noexit "$@"
 }
@@ -1118,7 +1263,7 @@ build_test_filter() {
         eval ONLY_${O}=true
     done
     [ "$EXCEPT$ALWAYS_EXCEPT" ] && \
-        log "skipping tests: `echo $EXCEPT $ALWAYS_EXCEPT`"
+        log "excepting tests: `echo $EXCEPT $ALWAYS_EXCEPT`"
     [ "$EXCEPT_SLOW" ] && \
         log "skipping tests SLOW=no: `echo $EXCEPT_SLOW`"
     for E in $EXCEPT $ALWAYS_EXCEPT; do
@@ -1141,6 +1286,8 @@ basetest() {
 }
 
 run_test() {
+    assert_DIR
+
     export base=`basetest $1`
     if [ ! -z "$ONLY" ]; then
         testname=ONLY_$1
@@ -1223,8 +1370,8 @@ pass() {
 }
 
 check_mds() {
-    FFREE=`cat /proc/fs/lustre/mds/*/filesfree`
-    FTOTAL=`cat /proc/fs/lustre/mds/*/filestotal`
+    FFREE=`lctl get_param -n mds.*.filesfree`
+    FTOTAL=`lctl get_param -n mds.*.filestotal`
     [ $FFREE -ge $FTOTAL ] && error "files free $FFREE > total $FTOTAL" || true
 }
 
@@ -1233,7 +1380,7 @@ reset_fail_loc () {
     local NODE
 
     for NODE in $myNODES; do
-        do_node $NODE sysctl -e -w lustre.fail_loc=0 || true
+        do_node $NODE "lctl set_param fail_loc=0 2>/dev/null || true"
     done
 }
 
@@ -1244,7 +1391,6 @@ run_one() {
     export tdir=d0.${TESTSUITE}/d${base}
     local SAVE_UMASK=`umask`
     umask 0022
-    mkdir -p $DIR/$tdir
 
     BEFORE=`date +%s`
     log "== test $testnum: $message ============ `date +%H:%M:%S` ($BEFORE)"
@@ -1252,17 +1398,16 @@ run_one() {
     export TESTNAME=test_$testnum
     test_${testnum} || error "test_$testnum failed with $?"
     #check_mds
+    cd $SAVE_PWD
     reset_fail_loc
     check_grant ${testnum} || error "check_grant $testnum failed with $?"
     [ -f $CATASTROPHE ] && [ `cat $CATASTROPHE` -ne 0 ] && \
         error "LBUG/LASSERT detected"
     ps auxww | grep -v grep | grep -q multiop && error "multiop still running"
     pass "($((`date +%s` - $BEFORE))s)"
-    rmdir ${DIR}/$tdir >/dev/null 2>&1 || true
     unset TESTNAME
     unset tdir
     umask $SAVE_UMASK
-    cd $SAVE_PWD
     $CLEANUP
 }
 
@@ -1281,9 +1426,9 @@ check_grant() {
     [ "$CHECK_GRANT" == "no" ] && return 0
 
 	testname=GCHECK_ONLY_${base}
-        [ ${!testname}x == x ] && return 0
+    [ ${!testname}x == x ] && return 0
 
-	echo -n "checking grant......"
+    echo -n "checking grant......"
 	cd $SAVE_PWD
 	# write some data to sync client lost_grant
 	rm -f $DIR1/${tfile}_check_grant_* 2>&1
@@ -1292,18 +1437,18 @@ check_grant() {
 		dd if=/dev/zero of=$DIR1/${tfile}_check_grant_$i bs=4k \
 					      count=1 > /dev/null 2>&1 
 	done
-	# sync all the data and make sure no pending data on server
-	sync_clients
-	
-	#get client grant and server grant 
-	client_grant=0
-    for d in ${LPROC}/osc/*/cur_grant_bytes; do 
-		client_grant=$((client_grant + `cat $d`))
-	done
-	server_grant=0
-	for d in ${LPROC}/obdfilter/*/tot_granted; do
-		server_grant=$((server_grant + `cat $d`))
-	done
+    # sync all the data and make sure no pending data on server
+    sync_clients
+
+    #get client grant and server grant
+    client_grant=0
+    for d in `lctl get_param -n osc.*.cur_grant_bytes`; do
+        client_grant=$((client_grant + $d))
+    done
+    server_grant=0
+    for d in `lctl get_param -n obdfilter.*.tot_granted`; do
+        server_grant=$((server_grant + $d))
+    done
 
 	# cleanup the check_grant file
 	for i in `seq $OSTCOUNT`; do
@@ -1370,6 +1515,9 @@ nodes_list () {
     local myNODES=$HOSTNAME
     local myNODES_sort
 
+    # CLIENTS (if specified) contains the local client
+    [ -n "$CLIENTS" ] && myNODES=${CLIENTS//,/ }
+
     if [ "$PDSH" -a "$PDSH" != "no_dsh" ]; then
         myNODES="$myNODES $(osts_nodes) $mds_HOST"
     fi
@@ -1382,6 +1530,17 @@ nodes_list () {
 is_patchless ()
 {
     lctl get_param version | grep -q patchless
+}
+
+get_node_count() {
+   local nodes="$@"
+   echo $nodes | wc -w || true
+}
+
+mixed_ost_devs () {
+    local nodes=$(osts_nodes)
+    local osscount=$(get_node_count "$nodes")
+    [ ! "$OSTCOUNT" = "$osscount" ]
 }
 
 check_runas_id_ret() {
@@ -1438,3 +1597,33 @@ multiop_bg_pause() {
 
     return 0
 }
+
+# reset llite stat counters
+clear_llite_stats(){
+        lctl set_param -n llite.*.stats 0
+}
+
+# sum llite stat items
+calc_llite_stats() {
+        local res=$(lctl get_param -n llite.*.stats |
+                    awk 'BEGIN {s = 0} END {print s} /^'"$1"'/ {s += $2}')
+        echo $res
+}
+
+# save_lustre_params(node, parameter_mask)
+# generate a stream of formatted strings (<node> <param name>=<param value>)
+save_lustre_params() {
+        local s
+        do_node $1 "lctl get_param $2" | while read s; do echo "$1 $s"; done
+}
+
+# restore lustre parameters from input stream, produces by save_lustre_params
+restore_lustre_params() {
+        local node
+        local name
+        local val
+        while IFS=" =" read node name val; do
+                do_node $node "lctl set_param -n $name $val"
+        done
+}
+

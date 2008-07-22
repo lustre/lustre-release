@@ -103,12 +103,7 @@ int should_translate_quota (struct obd_import *imp)
         ENTRY;
 
         LASSERT(imp);
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 7, 0, 0)
-        if (imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_QUOTA64 &&
-            !OBD_FAIL_CHECK(OBD_FAIL_QUOTA_QD_COUNT_32BIT))
-#else
         if (imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_QUOTA64)
-#endif
                 RETURN(0);
         else
                 RETURN(1);
@@ -473,40 +468,6 @@ static int
 schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                struct qunit_data *qdata, int opc, int wait);
 
-static int split_before_schedule_dqacq(struct obd_device *obd,
-                                       struct lustre_quota_ctxt *qctxt,
-                                       struct qunit_data *qdata, int opc, int wait)
-{
-        int rc = 0;
-        unsigned long factor;
-        struct qunit_data tmp_qdata;
-        ENTRY;
-
-        LASSERT(qdata && qdata->qd_count);
-        QDATA_DEBUG(qdata, "%s quota split.\n",
-                    QDATA_IS_BLK(qdata) ? "block" : "inode");
-        if (QDATA_IS_BLK(qdata))
-                factor = MAX_QUOTA_COUNT32 / qctxt->lqc_bunit_sz *
-                        qctxt->lqc_bunit_sz;
-        else
-                factor = MAX_QUOTA_COUNT32 / qctxt->lqc_iunit_sz *
-                        qctxt->lqc_iunit_sz;
-
-        if (qctxt->lqc_import && should_translate_quota(qctxt->lqc_import) &&
-            qdata->qd_count > factor) {
-                tmp_qdata = *qdata;
-                tmp_qdata.qd_count = factor;
-                qdata->qd_count -= tmp_qdata.qd_count;
-                QDATA_DEBUG((&tmp_qdata), "be split.\n");
-                rc = schedule_dqacq(obd, qctxt, &tmp_qdata, opc, wait);
-        } else{
-                QDATA_DEBUG(qdata, "don't be split.\n");
-                rc = schedule_dqacq(obd, qctxt, qdata, opc, wait);
-        }
-
-        RETURN(rc);
-}
-
 static int
 dqacq_completion(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                  struct qunit_data *qdata, int rc, int opc)
@@ -524,7 +485,7 @@ dqacq_completion(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
 
         /* update local operational quota file */
         if (rc == 0) {
-                __u32 count = QUSG(qdata->qd_count, QDATA_IS_BLK(qdata));
+                __u64 count = QUSG(qdata->qd_count, QDATA_IS_BLK(qdata));
                 struct obd_quotactl *qctl;
                 __u64 *hardlimit;
 
@@ -553,14 +514,23 @@ dqacq_completion(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                 }
 
                 CDEBUG(D_QUOTA, "hardlimt: "LPU64"\n", *hardlimit);
+
+                if (*hardlimit == 0)
+                        goto out_mem;
+
                 switch (opc) {
                 case QUOTA_DQACQ:
                         INC_QLIMIT(*hardlimit, count);
                         break;
                 case QUOTA_DQREL:
                         LASSERTF(count < *hardlimit,
-                                 "count: %d, hardlimit: "LPU64".\n",
-                                 count, *hardlimit);
+                                 "id(%u) flag(%u) type(%c) isblk(%c) "
+                                 "count("LPU64") qd_qunit("LPU64") "
+                                 "hardlimit("LPU64").\n",
+                                 qdata->qd_id, qdata->qd_flags,
+                                 QDATA_IS_GRP(qdata) ? 'g' : 'u',
+                                 QDATA_IS_BLK(qdata) ? 'b': 'i',
+                                 qdata->qd_count, qdata->qd_qunit, *hardlimit);
                         *hardlimit -= count;
                         break;
                 default:
@@ -644,7 +614,7 @@ out:
         if (rc1 > 0) {
                 int opc;
                 opc = rc1 == 1 ? QUOTA_DQACQ : QUOTA_DQREL;
-                rc1 = split_before_schedule_dqacq(obd, qctxt, qdata, opc, 0);
+                rc1 = schedule_dqacq(obd, qctxt, qdata, opc, 0);
                 QDATA_DEBUG(qdata, "reschedudle opc(%d) rc(%d)\n", opc, rc1);
         }
         RETURN(err);
@@ -756,7 +726,6 @@ schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
         struct dqacq_async_args *aa;
         int size[2] = { sizeof(struct ptlrpc_body), 0 };
         struct obd_import *imp = NULL;
-        unsigned long factor;
         struct lustre_qunit_size *lqs = NULL;
         int rc = 0;
         ENTRY;
@@ -800,6 +769,7 @@ schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                 int rc2;
                 QDATA_DEBUG(qdata, "local %s.\n",
                             opc == QUOTA_DQACQ ? "DQACQ" : "DQREL");
+                QDATA_SET_CHANGE_QS(qdata);
                 rc = qctxt->lqc_handler(obd, qdata, opc);
                 rc2 = dqacq_completion(obd, qctxt, qdata, rc, opc);
                 RETURN(rc ? rc : rc2);
@@ -838,16 +808,6 @@ schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                 RETURN(-ENOMEM);
         }
 
-        if (QDATA_IS_BLK(qdata))
-                factor = MAX_QUOTA_COUNT32 / qctxt->lqc_bunit_sz *
-                        qctxt->lqc_bunit_sz;
-        else
-                factor = MAX_QUOTA_COUNT32 / qctxt->lqc_iunit_sz *
-                        qctxt->lqc_iunit_sz;
-
-        LASSERTF(!should_translate_quota(imp) || qdata->qd_count <= factor,
-                 "qd_count: "LPU64"; should_translate_quota: %d.\n",
-                 qdata->qd_count, should_translate_quota(imp));
         rc = quota_copy_qdata(req, qdata, QUOTA_REQUEST, QUOTA_IMPORT);
         if (rc < 0) {
                 CDEBUG(D_ERROR, "Can't pack qunit_data\n");
@@ -856,7 +816,7 @@ schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
         ptlrpc_req_set_repsize(req, 2, size);
         class_import_put(imp);
 
-        if (wait && qunit) 
+        if (wait && qunit)
                 qunit_get(qunit);
 
         CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
@@ -918,8 +878,7 @@ qctxt_adjust_qunit(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                         int opc;
                         /* need acquire or release */
                         opc = ret == 1 ? QUOTA_DQACQ : QUOTA_DQREL;
-                        ret = split_before_schedule_dqacq(obd, qctxt, &qdata[i], 
-                                                          opc, wait);
+                        ret = schedule_dqacq(obd, qctxt, &qdata[i], opc, wait);
                         if (!rc)
                                 rc = ret;
                 } else if (wait == 1) {
@@ -990,10 +949,9 @@ qctxt_init(struct lustre_quota_ctxt *qctxt, struct super_block *sb,
         qctxt->lqc_switch_qs = 1; /* Change qunit size in default setting */
         qctxt->lqc_cqs_boundary_factor = 4;
         qctxt->lqc_cqs_least_bunit = PTLRPC_MAX_BRW_SIZE;
-        qctxt->lqc_cqs_least_iunit = 1;
+        qctxt->lqc_cqs_least_iunit = 2;
         qctxt->lqc_cqs_qs_factor = 2;
-        qctxt->lqc_atype = 0;
-        qctxt->lqc_status= 0;
+        qctxt->lqc_flags = 0;
         qctxt->lqc_bunit_sz = default_bunit_sz;
         qctxt->lqc_btune_sz = default_bunit_sz / 100 * default_btune_ratio;
         qctxt->lqc_iunit_sz = default_iunit_sz;
@@ -1112,9 +1070,7 @@ static int qslave_recovery_main(void *arg)
                         if (ret > 0) {
                                 int opc;
                                 opc = ret == 1 ? QUOTA_DQACQ : QUOTA_DQREL;
-                                rc = split_before_schedule_dqacq(obd, qctxt,
-                                                                 &qdata, opc,
-                                                                 0);
+                                rc = schedule_dqacq(obd, qctxt, &qdata, opc, 0);
                                 if (rc == -EDQUOT)
                                         rc = 0;
                         } else {

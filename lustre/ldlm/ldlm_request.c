@@ -433,19 +433,23 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
                         lock->l_req_mode = newmode;
                 }
 
-                if (reply->lock_desc.l_resource.lr_name.name[0] !=
-                    lock->l_resource->lr_name.name[0]) {
-                        CDEBUG(D_INFO, "remote intent success, locking %ld "
-                               "instead of %ld\n",
-                              (long)reply->lock_desc.l_resource.lr_name.name[0],
-                               (long)lock->l_resource->lr_name.name[0]);
+                if (memcmp(reply->lock_desc.l_resource.lr_name.name,
+                          lock->l_resource->lr_name.name,
+                          sizeof(struct ldlm_res_id))) {
+                        CDEBUG(D_INFO, "remote intent success, locking "
+                                        "("LPU64"/"LPU64"/"LPU64") instead of "
+                                        "("LPU64"/"LPU64"/"LPU64")\n",
+                               reply->lock_desc.l_resource.lr_name.name[0],
+                               reply->lock_desc.l_resource.lr_name.name[1],
+                               reply->lock_desc.l_resource.lr_name.name[2],
+                               lock->l_resource->lr_name.name[0],
+                               lock->l_resource->lr_name.name[1],
+                               lock->l_resource->lr_name.name[2]);
 
-                        ldlm_lock_change_resource(ns, lock,
+                        rc = ldlm_lock_change_resource(ns, lock,
                                            reply->lock_desc.l_resource.lr_name);
-                        if (lock->l_resource == NULL) {
-                                LBUG();
+                        if (rc || lock->l_resource == NULL)
                                 GOTO(cleanup, rc = -ENOMEM);
-                        }
                         LDLM_DEBUG(lock, "client-side enqueue, new resource");
                 }
                 if (with_policy)
@@ -513,7 +517,7 @@ cleanup:
 static inline int ldlm_req_handles_avail(struct obd_export *exp,
                                          int *size, int bufcount, int off)
 {
-        int avail = min_t(int, LDLM_MAXREQSIZE, PAGE_SIZE - 512);
+        int avail = min_t(int, LDLM_MAXREQSIZE, CFS_PAGE_SIZE - 512);
 
         avail -= lustre_msg_size(class_exp2cliimp(exp)->imp_msg_magic,
                                  bufcount, size);
@@ -568,8 +572,10 @@ struct ptlrpc_request *ldlm_prep_elc_req(struct obd_export *exp, int version,
                         pack = avail;
                 size[bufoff] = ldlm_request_bufsize(pack, opc);
         }
+
         req = ptlrpc_prep_req(class_exp2cliimp(exp), version,
                               opc, bufcount, size, NULL);
+        req->rq_export = class_export_get(exp);
         if (exp_connect_cancelset(exp) && req) {
                 if (canceloff) {
                         dlm = lustre_msg_buf(req->rq_reqmsg, bufoff,
@@ -618,7 +624,8 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
         struct ldlm_reply *reply;
         int size[3] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                         [DLM_LOCKREQ_OFF]     = sizeof(*body),
-                        [DLM_REPLY_REC_OFF]   = lvb_len };
+                        [DLM_REPLY_REC_OFF]   = lvb_len ? lvb_len :
+                                                sizeof(struct ost_lvb) };
         int is_replay = *flags & LDLM_FL_REPLAY;
         int req_passed_in = 1, rc, err;
         struct ptlrpc_request *req;
@@ -679,10 +686,10 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
         } else {
                 req = *reqp;
                 LASSERTF(lustre_msg_buflen(req->rq_reqmsg, DLM_LOCKREQ_OFF) >=
-                         sizeof(*body), "buflen[%d] = %d, not "LPSZ"\n",
+                         sizeof(*body), "buflen[%d] = %d, not %d\n",
                          DLM_LOCKREQ_OFF,
                          lustre_msg_buflen(req->rq_reqmsg, DLM_LOCKREQ_OFF),
-                         sizeof(*body));
+                         (int)sizeof(*body));
         }
 
         lock->l_conn_export = exp;
@@ -698,7 +705,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
         /* Continue as normal. */
         if (!req_passed_in) {
                 size[DLM_LOCKREPLY_OFF] = sizeof(*reply);
-                ptlrpc_req_set_repsize(req, 2 + (lvb_len > 0), size);
+                ptlrpc_req_set_repsize(req, 3, size);
         }
 
         /*
@@ -1004,22 +1011,30 @@ static inline struct ldlm_pool *ldlm_imp2pl(struct obd_import *imp)
 
 int ldlm_cli_update_pool(struct ptlrpc_request *req)
 {
+        struct obd_device *obd;
         __u64 old_slv, new_slv;
-        struct ldlm_pool *pl;
         __u32 new_limit;
         ENTRY;
     
-        if (!imp_connect_lru_resize(req->rq_import))
+        if (unlikely(!req->rq_import || !req->rq_import->imp_obd || 
+                     !imp_connect_lru_resize(req->rq_import)))
+        {
+                /* 
+                 * Do nothing for corner cases. 
+                 */
                 RETURN(0);
+        }
 
-        /* In some cases RPC may contain slv and limit zeroed out. This is 
+        /* 
+         * In some cases RPC may contain slv and limit zeroed out. This is 
          * the case when server does not support lru resize feature. This is
          * also possible in some recovery cases when server side reqs have no
          * ref to obd export and thus access to server side namespace is no 
-         * possible. */
+         * possible. 
+         */
         if (lustre_msg_get_slv(req->rq_repmsg) == 0 || 
             lustre_msg_get_limit(req->rq_repmsg) == 0) {
-                DEBUG_REQ(D_HA, req, "zero SLV or Limit found "
+                DEBUG_REQ(D_HA, req, "Zero SLV or Limit found "
                           "(SLV: "LPU64", Limit: %u)", 
                           lustre_msg_get_slv(req->rq_repmsg), 
                           lustre_msg_get_limit(req->rq_repmsg));
@@ -1028,30 +1043,41 @@ int ldlm_cli_update_pool(struct ptlrpc_request *req)
 
         new_limit = lustre_msg_get_limit(req->rq_repmsg);
         new_slv = lustre_msg_get_slv(req->rq_repmsg);
-        pl = ldlm_imp2pl(req->rq_import);
-        
-        spin_lock(&pl->pl_lock);
-        old_slv = ldlm_pool_get_slv(pl);
-        ldlm_pool_set_slv(pl, new_slv);
-        ldlm_pool_set_limit(pl, new_limit);
+        obd = req->rq_import->imp_obd;
 
-        /* Check if we need to wakeup pools thread for fast SLV change. 
+        /* 
+         * Set new SLV and Limit to obd fields to make accessible for pool 
+         * thread. We do not access obd_namespace and pool directly here
+         * as there is no reliable way to make sure that they are still
+         * alive in cleanup time. Evil races are possible which may cause
+         * oops in that time. 
+         */
+        write_lock(&obd->obd_pool_lock);
+        old_slv = obd->obd_pool_slv;
+        obd->obd_pool_slv = new_slv;
+        obd->obd_pool_limit = new_limit;
+        write_unlock(&obd->obd_pool_lock);
+
+        /* 
+         * Check if we need to wakeup pools thread for fast SLV change. 
          * This is only done when threads period is noticably long like 
-         * 10s or more. */
+         * 10s or more. 
+         */
 #if defined(__KERNEL__) && (LDLM_POOLS_THREAD_PERIOD >= 10)
-        {
+        if (old_slv > 0) {
                 __u64 fast_change = old_slv * LDLM_POOLS_FAST_SLV_CHANGE;
                 do_div(fast_change, 100);
 
-                /* Wake up pools thread only if SLV has changed more than 
+                /* 
+                 * Wake up pools thread only if SLV has changed more than 
                  * 50% since last update. In this case we want to react asap. 
                  * Otherwise it is no sense to wake up pools as they are 
-                 * re-calculated every LDLM_POOLS_THREAD_PERIOD anyways. */
+                 * re-calculated every LDLM_POOLS_THREAD_PERIOD anyways. 
+                 */
                 if (old_slv > new_slv && old_slv - new_slv > fast_change)
                         ldlm_pools_wakeup();
         }
 #endif
-        spin_unlock(&pl->pl_lock);
         RETURN(0);
 }
 EXPORT_SYMBOL(ldlm_cli_update_pool);
@@ -1203,10 +1229,8 @@ static ldlm_policy_res_t ldlm_cancel_lrur_policy(struct ldlm_namespace *ns,
         if (count && added >= count)
                 return LDLM_POLICY_KEEP_LOCK;
 
-        spin_lock(&pl->pl_lock);
         slv = ldlm_pool_get_slv(pl);
-        lvf = atomic_read(&pl->pl_lock_volume_factor);
-        spin_unlock(&pl->pl_lock);
+        lvf = ldlm_pool_get_lvf(pl);
 
         la = cfs_duration_sec(cfs_time_sub(cur, 
                               lock->l_last_used));
@@ -1214,6 +1238,9 @@ static ldlm_policy_res_t ldlm_cancel_lrur_policy(struct ldlm_namespace *ns,
         /* Stop when slv is not yet come from server or 
          * lv is smaller than it is. */
         lv = lvf * la * unused;
+
+        /* Inform pool about current CLV to see it via proc. */
+        ldlm_pool_set_clv(pl, lv);
         return (slv == 1 || lv < slv) ? 
                 LDLM_POLICY_KEEP_LOCK : LDLM_POLICY_CANCEL_LOCK;
 }

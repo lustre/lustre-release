@@ -19,9 +19,15 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef __KERNEL__
+#if !defined(__KERNEL__) || !defined(REDSTORM)
+
+#include <libcfs/libcfs.h>
+#include <libcfs/kp30.h>
 
 #include <sys/socket.h>
+#ifdef	HAVE_NETINET_IN_H
+#include <netinet/in.h>
+#endif
 #include <netinet/tcp.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
@@ -38,9 +44,6 @@
 #include <sys/syscall.h>
 #endif
 
-#include <libcfs/libcfs.h>
-#include <libcfs/kp30.h>
-
 /*
  * Functions to get network interfaces info
  */
@@ -49,8 +52,8 @@ int
 libcfs_sock_ioctl(int cmd, unsigned long arg)
 {
         int fd, rc;
-        
-        fd = socket(AF_INET, SOCK_STREAM, 0);        
+
+        fd = socket(AF_INET, SOCK_STREAM, 0);
 
         if (fd < 0) {
                 rc = -errno;
@@ -600,4 +603,4 @@ int libcfs_sock_readv(int fd, const struct iovec *vector, int count)
         return rc;
 }
 
-#endif /* !__KERNEL__ */
+#endif /* !__KERNEL__ || !defined(REDSTORM) */

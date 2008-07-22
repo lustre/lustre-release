@@ -183,7 +183,10 @@ int lustre_get_qids(struct file *fp, struct inode *inode, int type,
                     struct list_head *list);
 
 
-/* come from lustre_quota_fmt_conver.c */
+/* comes from lustre_quota_fmt_convert.c */
+int lustre_slave_quota_convert(lustre_quota_version_t qfmt, int type);
 int lustre_quota_convert(struct lustre_quota_info *lqi, int type);
 
+#define LUSTRE_OPQFILES_NAMES { { "lquota.user", "lquota.group" }, \
+                                { "lquota_v2.user", "lquota_v2.group" } }
 #endif                          /* lustre_quota_fmt.h */

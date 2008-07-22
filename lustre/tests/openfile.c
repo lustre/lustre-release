@@ -58,14 +58,14 @@ void Usage_and_abort(void)
 int main(int argc, char** argv)
 {
         int    fd;
-        int    flags=0;
-        mode_t mode=0644;
-        char*  fname=NULL;
-        int    mode_set=0;
-        int    flag_set=0;
-        int    file_set=0;
+        int    flags = 0;
+        mode_t mode = 0644;
+        char*  fname = NULL;
+        int    mode_set = 0;
+        int    flag_set = 0;
         int    c;
-        int    save_errno;
+        int    save_errno = 0;
+        int    print_usage = 0;
         char*  cloned_flags = NULL;
 
         if (argc == 1)
@@ -79,7 +79,8 @@ int main(int argc, char** argv)
                         cloned_flags = (char *)malloc(strlen(optarg)+1);
                         if (cloned_flags == NULL) {
                                 fprintf(stderr, "Insufficient memory.\n");
-                                exit(-1);
+                                save_errno = -1;
+                                goto out;
                         }
 
                         strncpy(cloned_flags, optarg, strlen(optarg)+1);
@@ -110,10 +111,10 @@ int main(int argc, char** argv)
                                 if (flag_table[i].flag == -1) {
                                         fprintf(stderr, "No such flag: %s\n",
                                                 tmp);
-                                        exit(-1);
+                                        save_errno = -1;
+                                        goto out;
                                 }
                         }
-                        free(cloned_flags);
 #ifdef DEBUG
                         printf("flags = %x\n", flags);
 #endif
@@ -131,21 +132,23 @@ int main(int argc, char** argv)
                         break;
                 default:
                         fprintf(stderr, "Bad parameters.\n");
-                        Usage_and_abort();
+                        print_usage = 1;
+                        goto out;
                 }
         }
 
         if (optind == argc) {
                 fprintf(stderr, "Bad parameters.\n");
-                Usage_and_abort();
+                print_usage = 1;
+                goto out;
         }
 
         fname = argv[optind];
-        file_set = 1;
 
-        if (!flag_set || !file_set) {
+        if (!flag_set) {
                 fprintf(stderr, "Missing flag or file-name\n");
-                exit(-1);
+                save_errno = -1;
+                goto out;
         }
 
 
@@ -164,14 +167,21 @@ int main(int argc, char** argv)
                         printf(", mode=%o", mode);
                 printf(")\n");
                 close(fd);
-                return 0;
+        } else {
+                fprintf(stderr, "Error in opening file \"%s\"(flags=%s",
+                        fname, cloned_flags);
         }
 
-        fprintf(stderr, "Error in opening file \"%s\"(flags=%s",
-                fname, cloned_flags);
         if (mode_set)
                 fprintf(stderr, ", mode=%o", mode);
         fprintf(stderr, ") %d: %s\n", save_errno, strerror(save_errno));
 
+out:
+        if (cloned_flags)
+                free(cloned_flags);
+        if (print_usage)
+                Usage_and_abort();
+
         return save_errno;
 }
+

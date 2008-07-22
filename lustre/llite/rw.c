@@ -119,8 +119,16 @@ int ll_file_punch(struct inode * inode, loff_t new_size, int srvlock)
         oinfo.oi_policy.l_extent.end = OBD_OBJECT_EOF;
         oinfo.oi_oa = &oa;
         oa.o_id = lli->lli_smd->lsm_object_id;
-        oa.o_valid = OBD_MD_FLID;
-        oa.o_flags = srvlock ? OBD_FL_TRUNCLOCK : 0;
+        oa.o_gr = lli->lli_smd->lsm_object_gr;
+        oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+        if (srvlock) {
+                /* set OBD_MD_FLFLAGS in o_valid, only if we 
+                 * set OBD_FL_TRUNCLOCK, otherwise ost_punch
+                 * and filter_setattr get confused, see the comment
+                 * in ost_punch */
+                oa.o_flags = OBD_FL_TRUNCLOCK;
+                oa.o_valid |= OBD_MD_FLFLAGS;
+        }
         obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLMODE |OBD_MD_FLFID|
                         OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME |
                         OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLGENER |
@@ -212,6 +220,8 @@ void ll_truncate(struct inode *inode)
         ll_inode_size_unlock(inode, 0);
         if (!srvlock)
                 ll_file_punch(inode, new_size, 0);
+        else
+                ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_LOCKLESS_TRUNC, 1);
 
         EXIT;
         return;
@@ -245,7 +255,9 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
 
         oa.o_mode = inode->i_mode;
         oa.o_id = lsm->lsm_object_id;
-        oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLTYPE;
+        oa.o_gr = lsm->lsm_object_gr;
+        oa.o_valid = OBD_MD_FLID   | OBD_MD_FLMODE |
+                     OBD_MD_FLTYPE | OBD_MD_FLGROUP;
         obdo_from_inode(&oa, inode, OBD_MD_FLFID | OBD_MD_FLGENER);
 
         oinfo.oi_oa = &oa;
@@ -299,6 +311,14 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         return rc;
 }
 
+/**
+ * make page ready for ASYNC write
+ * \param data - pointer to llap cookie
+ * \param cmd - is OBD_BRW_* macroses
+ *
+ * \retval 0 is page successfully prepared to send
+ * \retval -EAGAIN is page not need to send
+ */
 static int ll_ap_make_ready(void *data, int cmd)
 {
         struct ll_async_page *llap;
@@ -308,14 +328,13 @@ static int ll_ap_make_ready(void *data, int cmd)
         llap = LLAP_FROM_COOKIE(data);
         page = llap->llap_page;
 
-        LASSERTF(!(cmd & OBD_BRW_READ), "cmd %x page %p ino %lu index %lu\n", cmd, page,
-                 page->mapping->host->i_ino, page->index);
-
         /* we're trying to write, but the page is locked.. come back later */
         if (TryLockPage(page))
                 RETURN(-EAGAIN);
 
-        LASSERT(!PageWriteback(page));
+        LASSERTF(!(cmd & OBD_BRW_READ) || !PageWriteback(page),
+                "cmd %x page %p ino %lu index %lu fl %lx\n", cmd, page,
+                 page->mapping->host->i_ino, page->index, page->flags);
 
         /* if we left PageDirty we might get another writepage call
          * in the future.  list walkers are bright enough
@@ -324,16 +343,13 @@ static int ll_ap_make_ready(void *data, int cmd)
          * we got the page cache list we'd create a lock inversion
          * with the removepage path which gets the page lock then the
          * cli lock */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0)
-        clear_page_dirty(page);
-#else
-        LASSERTF(!PageWriteback(page),"cmd %x page %p ino %lu index %lu\n", cmd, page,
-                 page->mapping->host->i_ino, page->index);
-        clear_page_dirty_for_io(page);
+        if(!clear_page_dirty_for_io(page)) {
+		unlock_page(page);
+		RETURN(-EAGAIN);
+	}
 
         /* This actually clears the dirty bit in the radix tree.*/
         set_page_writeback(page);
-#endif
 
         LL_CDEBUG_PAGE(D_PAGE, page, "made ready\n");
         page_cache_get(page);
@@ -401,7 +417,8 @@ void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa)
         lsm = ll_i2info(inode)->lli_smd;
 
         oa->o_id = lsm->lsm_object_id;
-        oa->o_valid = OBD_MD_FLID;
+        oa->o_gr = lsm->lsm_object_gr;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
         valid_flags = OBD_MD_FLTYPE | OBD_MD_FLATIME;
         if (cmd & OBD_BRW_WRITE) {
                 oa->o_valid |= OBD_MD_FLEPOCH;
@@ -763,9 +780,8 @@ static int queue_or_sync_write(struct obd_export *exp, struct inode *inode,
 
         if (!rc && async_flags & ASYNC_READY) {
                 unlock_page(llap->llap_page);
-                if (PageWriteback(llap->llap_page)) {
+                if (PageWriteback(llap->llap_page))
                         end_page_writeback(llap->llap_page);
-                }
         }
 
         LL_CDEBUG_PAGE(D_PAGE, llap->llap_page, "sync write returned %d\n", rc);
@@ -918,6 +934,14 @@ int ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 #endif
         }
 
+        /* be carefull about clear WB.
+         * if WB will cleared after page lock is released - paralel IO can be
+         * started before ap_make_ready is finished - so we will be have page
+         * with PG_Writeback set from ->writepage() and completed READ which
+         * clear this flag */
+        if ((cmd & OBD_BRW_WRITE) && PageWriteback(page))
+                end_page_writeback(page);
+
         unlock_page(page);
 
         if (cmd & OBD_BRW_WRITE) {
@@ -925,9 +949,6 @@ int ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
                 ll_try_done_writing(page->mapping->host);
         }
 
-        if (PageWriteback(page)) {
-                end_page_writeback(page);
-        }
         page_cache_release(page);
 
         RETURN(ret);
@@ -1234,7 +1255,7 @@ stride_pg_count(pgoff_t st_off, unsigned long st_len, unsigned long st_pgs,
                 unsigned long off, unsigned length)
 {
         unsigned long cont_len = st_off > off ?  st_off - off : 0;
-        unsigned long stride_len = length + off > st_off ?
+        __u64 stride_len = length + off > st_off ?
                            length + off + 1 - st_off : 0;
         unsigned long left, pg_count;
 
@@ -1372,13 +1393,14 @@ static int ll_readahead(struct ll_readahead_state *ras,
                 ras->ras_next_readahead = max(end, end + 1);
                 RAS_CDEBUG(ras);
         }
-	ria.ria_start = start;
-	ria.ria_end = end;
-	/* If stride I/O mode is detected, get stride window*/
-	if (stride_io_mode(ras)) {
-		ria.ria_length = ras->ras_stride_length;
-		ria.ria_pages = ras->ras_stride_pages;
-	}
+        ria.ria_start = start;
+        ria.ria_end = end;
+        /* If stride I/O mode is detected, get stride window*/
+        if (stride_io_mode(ras)) {
+                ria.ria_stoff = ras->ras_stride_offset;
+                ria.ria_length = ras->ras_stride_length;
+                ria.ria_pages = ras->ras_stride_pages;
+        }
         spin_unlock(&ras->ras_lock);
 
         if (end == 0) {
@@ -1391,7 +1413,7 @@ static int ll_readahead(struct ll_readahead_state *ras,
                 RETURN(0);
 
         reserved = ll_ra_count_get(ll_i2sbi(inode), len);
-        if (reserved < end - start + 1)
+        if (reserved < len)
                 ll_ra_stats_inc(mapping, RA_STAT_MAX_IN_FLIGHT);
 
         CDEBUG(D_READA, "reserved page %lu \n", reserved);
@@ -1735,19 +1757,22 @@ int ll_writepage(struct page *page)
                 rc = queue_or_sync_write(exp, inode, llap, CFS_PAGE_SIZE,
                                          ASYNC_READY | ASYNC_URGENT);
         }
-        if (rc)
+        if (rc) {
+                /* re-dirty page on error so it retries write */
+                if (PageWriteback(page))
+                        end_page_writeback(page);
+
+                /* resend page only for not started IO*/
+                if (!PageError(page))
+                        ll_redirty_page(page);
+
                 page_cache_release(page);
+        }
 out:
         if (rc) {
                 if (!lli->lli_async_rc)
                         lli->lli_async_rc = rc;
-                /* re-dirty page on error so it retries write */
-                if (PageWriteback(page)) {
-                        end_page_writeback(page);
-                }
                 /* resend page only for not started IO*/
-                if (!PageError(page))
-                        ll_redirty_page(page);
                 unlock_page(page);
         }
         RETURN(rc);

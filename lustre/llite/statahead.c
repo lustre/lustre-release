@@ -457,7 +457,7 @@ static inline void ll_name2qstr(struct qstr *this, const char *name, int namelen
         this->hash = end_name_hash(hash);
 }
 
-static int ll_statahead_one(struct dentry *parent, ext2_dirent *de)
+static int ll_statahead_one(struct dentry *parent, struct ll_dir_entry *de)
 {
         struct inode           *dir = parent->d_inode;
         struct ll_inode_info   *lli = ll_i2info(dir);
@@ -483,7 +483,7 @@ static int ll_statahead_one(struct dentry *parent, ext2_dirent *de)
         if (IS_ERR(se))
                 RETURN(PTR_ERR(se));
 
-        ll_name2qstr(&name, de->name, de->name_len);
+        ll_name2qstr(&name, de->lde_name, de->lde_name_len);
         dentry = d_lookup(parent, &name);
         if (!dentry) {
                 dentry = d_alloc(parent, &name);
@@ -569,7 +569,7 @@ static int ll_statahead_thread(void *arg)
                 struct l_wait_info lwi = { 0 };
                 unsigned long npages;
                 char *kaddr, *limit;
-                ext2_dirent *de;
+                struct ll_dir_entry *de;
                 struct page *page;
 
                 npages = dir_pages(dir);
@@ -590,18 +590,18 @@ static int ll_statahead_thread(void *arg)
                 }
 
                 kaddr = page_address(page);
-                limit = kaddr + CFS_PAGE_SIZE - EXT2_DIR_REC_LEN(1);
-                de = (ext2_dirent *)kaddr;
+                limit = kaddr + CFS_PAGE_SIZE - ll_dir_rec_len(1);
+                de = (struct ll_dir_entry *)kaddr;
                 if (!index) {
-                        de = ext2_next_entry(de); /* skip "." */
-                        de = ext2_next_entry(de); /* skip ".." */
+                        de = ll_dir_next_entry(de); /* skip "." */
+                        de = ll_dir_next_entry(de); /* skip ".." */
                 }
 
-                for (; (char*)de <= limit; de = ext2_next_entry(de)) {
-                        if (!de->inode)
+                for (; (char*)de <= limit; de = ll_dir_next_entry(de)) {
+                        if (!de->lde_inode)
                                 continue;
 
-                        if (de->name[0] == '.' && !sai->sai_ls_all) {
+                        if (de->lde_name[0] == '.' && !sai->sai_ls_all) {
                                 /* skip hidden files */
                                 sai->sai_skip_hidden++;
                                 continue;
@@ -618,17 +618,17 @@ static int ll_statahead_thread(void *arg)
                                      &lwi);
 
                         if (unlikely(sa_check_stop(sai))) {
-                                ext2_put_page(page);
+                                ll_put_page(page);
                                 GOTO(out, rc);
                         }
 
                         rc = ll_statahead_one(parent, de);
                         if (rc < 0) {
-                                ext2_put_page(page);
+                                ll_put_page(page);
                                 GOTO(out, rc);
                         }
                 }
-                ext2_put_page(page);
+                ll_put_page(page);
                 index++;
         }
         EXIT;
@@ -698,12 +698,12 @@ enum {
 
 static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 {
-        struct qstr   *d_name = &dentry->d_name;
-        unsigned long  npages, index = 0;
-        struct page   *page;
-        ext2_dirent   *de;
-        char          *kaddr, *limit;
-        int            rc = LS_NONE_FIRST_DE, dot_de;
+        struct qstr         *d_name = &dentry->d_name;
+        unsigned long        npages, index = 0;
+        struct page         *page;
+        struct ll_dir_entry *de;
+        char                *kaddr, *limit;
+        int                  rc = LS_NONE_FIRST_DE, dot_de;
         ENTRY;
 
         while (1) {
@@ -724,18 +724,29 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
                 }
 
                 kaddr = page_address(page);
-                limit = kaddr + CFS_PAGE_SIZE - EXT2_DIR_REC_LEN(1);
-                de = (ext2_dirent *)kaddr;
+                limit = kaddr + CFS_PAGE_SIZE - ll_dir_rec_len(1);
+                de = (struct ll_dir_entry *)kaddr;
                 if (!index) {
-                        de = ext2_next_entry(de); /* skip "." */
-                        de = ext2_next_entry(de); /* skip ".." */
+                        if (unlikely(!(de->lde_name_len == 1 &&
+                                       strncmp(de->lde_name, ".", 1) == 0)))
+                                CWARN("Maybe got bad on-disk dir: %lu\n",
+                                      dir->i_ino);
+                        /* skip "." or ingore bad entry */
+                        de = ll_dir_next_entry(de);
+
+                        if (unlikely(!(de->lde_name_len == 2 &&
+                                       strncmp(de->lde_name, "..", 2) == 0)))
+                                CWARN("Maybe got bad on-disk dir: %lu\n",
+                                      dir->i_ino);
+                        /* skip ".." or ingore bad entry */
+                        de = ll_dir_next_entry(de);
                 }
 
-                for (; (char*)de <= limit; de = ext2_next_entry(de)) {
-                        if (!de->inode)
+                for (; (char*)de <= limit; de = ll_dir_next_entry(de)) {
+                        if (!de->lde_inode)
                                 continue;
 
-                        if (de->name[0] == '.')
+                        if (de->lde_name[0] == '.')
                                 dot_de = 1;
                         else
                                 dot_de = 0;
@@ -743,19 +754,19 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
                         if (dot_de && d_name->name[0] != '.') {
                                 CDEBUG(D_READA, "%.*s skip hidden file %.*s\n",
                                        d_name->len, d_name->name,
-                                       de->name_len, de->name);
+                                       de->lde_name_len, de->lde_name);
                                 continue;
                         }
 
-                        if (d_name->len == de->name_len &&
-                            !strncmp(d_name->name, de->name, d_name->len))
+                        if (d_name->len == de->lde_name_len &&
+                            !strncmp(d_name->name, de->lde_name, d_name->len))
                                 rc = LS_FIRST_DE + dot_de;
                         else
                                 rc = LS_NONE_FIRST_DE;
-                        ext2_put_page(page);
+                        ll_put_page(page);
                         RETURN(rc);
                 }
-                ext2_put_page(page);
+                ll_put_page(page);
                 index++;
         }
         RETURN(rc);
@@ -908,7 +919,8 @@ void ll_statahead_exit(struct dentry *dentry, int result)
                         sbi->ll_sa_miss++;
                         sai->sai_miss++;
                         sai->sai_consecutive_miss++;
-                        if (sa_low_hit(sai)) {
+                        if (sa_low_hit(sai) &&
+                            sai->sai_thread.t_flags & SVC_RUNNING) {
                                 sbi->ll_sa_wrong++;
                                 CDEBUG(D_READA, "statahead for dir %.*s hit "
                                        "ratio too low: hit/miss %u/%u, "

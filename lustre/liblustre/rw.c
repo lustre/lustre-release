@@ -94,7 +94,7 @@ static int llu_lock_to_stripe_offset(struct inode *inode, struct ldlm_lock *lock
                 char name[16];
                 struct ldlm_lock *lock;
                 struct lov_stripe_md *lsm;
-        } key = { .name = "lock_to_stripe", .lock = lock, .lsm = lsm };
+        } key = { .name = KEY_LOCK_TO_STRIPE, .lock = lock, .lsm = lsm };
         __u32 stripe, vallen = sizeof(stripe);
         int rc;
         ENTRY;

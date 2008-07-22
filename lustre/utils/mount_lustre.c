@@ -23,7 +23,9 @@
  */
 
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -33,12 +35,12 @@
 #include <sys/mount.h>
 #include <mntent.h>
 #include <getopt.h>
-#include <sys/utsname.h>
 #include "obdctl.h"
 #include <lustre_ver.h>
 #include <glob.h>
 #include <ctype.h>
 #include <limits.h>
+#include "mount_utils.h"
 
 #define MAX_HW_SECTORS_KB_PATH  "queue/max_hw_sectors_kb"
 #define MAX_SECTORS_KB_PATH     "queue/max_sectors_kb"
@@ -47,7 +49,7 @@ int          verbose = 0;
 int          nomtab = 0;
 int          fake = 0;
 int          force = 0;
-static char *progname = NULL;
+char         *progname = NULL;
 
 void usage(FILE *out)
 {
@@ -69,6 +71,7 @@ void usage(FILE *out)
                 "\t<mntopt>: one or more comma separated of:\n"
                 "\t\t(no)flock,(no)user_xattr,(no)acl\n"
                 "\t\tnosvc: only start MGC/MGS obds\n"
+                "\t\tnomgs: only start target obds, using existing MGS\n"
                 "\t\texclude=<ostname>[:<ostname>] : colon-separated list of "
                 "inactive OSTs (e.g. lustre-OST0001)\n"
                 );
@@ -551,6 +554,8 @@ int main(int argc, char *const argv[])
                 fprintf(stderr, "%s: unable to set tunables for %s"
                                 " (may cause reduced IO performance)",
                                 argv[0], source);
+
+        register_service_tags(usource, source, target);
 
         if (!fake)
                 /* flags and target get to lustre_get_sb, but not

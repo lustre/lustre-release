@@ -33,7 +33,7 @@ static int quotactl_test_1(struct obd_device *obd, struct super_block *sb)
         ENTRY;
 
         oqctl.qc_cmd = Q_QUOTAON;
-        oqctl.qc_id = QFMT_LDISKFS;
+        oqctl.qc_id = obd->u.obt.obt_qfmt;
         oqctl.qc_type = UGQUOTA;
         rc = fsfilt_quotactl(obd, sb, &oqctl);
         if (rc)

@@ -160,6 +160,46 @@ AC_CONFIG_SUBDIRS(libsysio)
 ])
 
 #
+# LB_PATH_LUSTREIOKIT
+#
+# Handle internal/external lustre-iokit
+#
+AC_DEFUN([LB_PATH_LUSTREIOKIT],
+[AC_ARG_WITH([],
+	AC_HELP_STRING([--with-lustre-iokit=path],
+			[set path to lustre-iokit source (default is included lustre-iokit)]),
+	[],[
+			with_lustre_iokit='yes'
+	])
+AC_MSG_CHECKING([location of lustre-iokit])
+enable_lustre_iokit="$with_lustre_iokit"
+case x$with_lustre_iokit in
+	xyes)
+		AC_MSG_RESULT([internal])
+		LB_CHECK_FILE([$srcdir/lustre-iokit/ior-survey/ior-survey],[],[
+			AC_MSG_ERROR([A complete internal lustre-iokit was not found.])
+		])
+		LUSTREIOKIT_SUBDIR="lustre-iokit"
+		LUSTREIOKIT="$PWD/lustre-iokit"
+		;;
+	xno)
+		AC_MSG_RESULT([disabled])
+		;;
+	*)
+		AC_MSG_RESULT([$with_lustre_iokit])
+		LB_CHECK_FILE([$with_lustre_iokit/ior-survey/ior_survey],[],[
+			AC_MSG_ERROR([A complete (built) external lustre-iokit was not found.])
+		])
+		LUSTREIOKIT="$with_lustre_iokit"
+		with_lustre_iokit="yes"
+		;;
+esac
+AC_SUBST(LUSTREIOKIT_SUBDIR)
+# We have to configure even if we don't build here for make dist to work
+AC_CONFIG_SUBDIRS(lustre-iokit)
+])
+
+#
 # LB_PATH_LDISKFS
 #
 # Handle internal/external ldiskfs
@@ -202,6 +242,23 @@ AM_CONDITIONAL(LDISKFS_ENABLED, test x$with_ldiskfs != xno)
 
 # We have to configure even if we don't build here for make dist to work
 AC_CONFIG_SUBDIRS(ldiskfs)
+])
+
+# Define no libcfs by default.
+AC_DEFUN([LB_LIBCFS_DIR],
+[
+case x$libcfs_is_module in
+	xyes)
+          LIBCFS_INCLUDE_DIR="libcfs/include"
+          LIBCFS_SUBDIR="libcfs"
+          ;;
+        x*)
+          LIBCFS_INCLUDE_DIR="lnet/include"
+          LIBCFS_SUBDIR=""
+          ;;
+esac
+AC_SUBST(LIBCFS_SUBDIR)
+AC_SUBST(LIBCFS_INCLUDE_DIR)
 ])
 
 #
@@ -300,26 +357,17 @@ AM_CONDITIONAL(POSIX_OSD_ENABLED, test x$posix_osd = xyes)
 
 #
 # LB_PATH_DMU
-# Support for --with-dmu
 #
 AC_DEFUN([LB_PATH_DMU],
 [AC_MSG_CHECKING([whether to enable DMU])
-AC_ARG_WITH([dmu],
-	AC_HELP_STRING([--with-dmu=path],
-		       [set path to a DMU tree (default is included zfs-lustre)]),
-	[
-		DMU_SRC=$with_dmu
-	],
-	[
-		DMU_SRC="$PWD/zfs-lustre"
-	])
 if test x$enable_uoss = xyes -a x$enable_posix_osd != xyes; then
+	DMU_SRC="$PWD/lustre/zfs-lustre"
 	AC_DEFINE(DMU_OSD, 1, Enable DMU OSD)
 	AC_MSG_RESULT([yes])
 	LB_CHECK_FILE([$DMU_SRC/src/.patched],[],[
 		AC_MSG_ERROR([A complete (patched) DMU tree was not found.])
 	])
-	AC_CONFIG_SUBDIRS(zfs-lustre)
+	AC_CONFIG_SUBDIRS(lustre/zfs-lustre)
 	dmu_osd='yes'
 else
 	AC_MSG_RESULT([no])
@@ -362,11 +410,13 @@ if test x$enable_modules = xyes ; then
 	case $target_os in
 		linux*)
 			LB_PROG_LINUX
+			LIBCFS_PROG_LINUX
 			LN_PROG_LINUX
 			LC_PROG_LINUX
 			;;
 		darwin*)
 			LB_PROG_DARWIN
+			LIBCFS_PROG_DARWIN
 			;;
 		*)
 			# This is strange - Lustre supports a target we don't
@@ -492,6 +542,7 @@ AC_SUBST(sysconfdir)
 docdir='${datadir}/doc/$(PACKAGE)'
 AC_SUBST(docdir)
 
+LIBCFS_PATH_DEFAULTS
 LN_PATH_DEFAULTS
 LC_PATH_DEFAULTS
 
@@ -542,33 +593,17 @@ if test $ac_cv_sizeof_unsigned_long_long != 8 ; then
         AC_MSG_ERROR([** we assume that sizeof(long long) == 8.  Tell phil@clusterfs.com])
 fi
 
-# FIXME
-AC_CHECK_DECL([__i386__], [], [
-
-if test x$enable_bgl != xyes; then
-AC_MSG_CHECKING([if $CC accepts -m64])
-CC_save="$CC"
-CC="$CC -m64"
-AC_TRY_COMPILE([],[],[
-	AC_MSG_RESULT([yes])
-],[
-	AC_MSG_RESULT([no])
-	CC="$CC_save"
-])
-fi
-
-])
-
-CPPFLAGS="-I\$(top_builddir)/lnet/include -I\$(top_srcdir)/lnet/include -I\$(top_builddir)/lustre/include -I\$(top_srcdir)/lustre/include $CPPFLAGS"
+CPPFLAGS="-I\$(top_builddir)/$LIBCFS_INCLUDE_DIR -I\$(top_srcdir)/$LIBCFS_INCLUDE_DIR-I\$(top_builddir)/lnet/include -I\$(top_srcdir)/lnet/include -I\$(top_builddir)/lustre/include -I\$(top_srcdir)/lustre/include $CPPFLAGS"
 
 LLCPPFLAGS="-D__arch_lib__ -D_LARGEFILE64_SOURCE=1"
 AC_SUBST(LLCPPFLAGS)
 
-LLCFLAGS="-g -Wall -fPIC"
+# Add _GNU_SOURCE for strnlen on linux
+LLCFLAGS="-g -Wall -fPIC -D_GNU_SOURCE"
 AC_SUBST(LLCFLAGS)
 
 # everyone builds against lnet and lustre
-EXTRA_KCFLAGS="$EXTRA_KCFLAGS -g -I$PWD/lnet/include -I$PWD/lustre/include"
+EXTRA_KCFLAGS="$EXTRA_KCFLAGS -g -I$PWD/$LIBCFS_INCLUDE_DIR -I$PWD/lnet/include -I$PWD/lustre/include"
 AC_SUBST(EXTRA_KCFLAGS)
 ])
 
@@ -602,6 +637,7 @@ AC_SUBST(SYSIO)
 LB_LINUX_CONDITIONALS
 LB_DARWIN_CONDITIONALS
 
+LIBCFS_CONDITIONALS
 LN_CONDITIONALS
 LC_CONDITIONALS
 ])
@@ -630,6 +666,8 @@ AC_PACKAGE_TARNAME[.spec]
 AC_DEFUN([LB_CONFIGURE],
 [LB_CANONICAL_SYSTEM
 
+LB_LIBCFS_DIR
+
 LB_INCLUDE_RULES
 
 LB_CONFIG_CRAY_XT3
@@ -657,8 +695,10 @@ LB_CONFIG_MODULES
 LB_PATH_LIBSYSIO
 LB_PATH_SNMP
 LB_PATH_LDISKFS
+LB_PATH_LUSTREIOKIT
 
 LC_CONFIG_LIBLUSTRE
+LIBCFS_CONFIGURE
 LN_CONFIGURE
 
 LC_CONFIGURE
@@ -667,9 +707,11 @@ if test "$SNMP_DIST_SUBDIR" ; then
 	LS_CONFIGURE
 fi
 
+
 LB_CONDITIONALS
 LB_CONFIG_HEADERS
 
+LIBCFS_CONFIG_FILES
 LB_CONFIG_FILES
 LN_CONFIG_FILES
 LC_CONFIG_FILES

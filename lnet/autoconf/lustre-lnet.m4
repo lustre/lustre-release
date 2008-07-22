@@ -576,6 +576,25 @@ else
 		        O2IBLND=""
 		        O2IBCPPFLAGS=""
 		])
+		# we know at this point that the found OFED source is good
+		O2IB_SYMVER=""
+		if test $ENABLEO2IB -eq 3 ; then
+			# OFED default rpm not handle sles10 Modules.symvers name
+			for name in Module.symvers Modules.symvers; do
+				if test -f $O2IBPATH/$name; then
+					O2IB_SYMVER=$name;
+					break;
+				fi
+			done
+			if test -n $O2IB_SYMVER ; then
+				AC_MSG_NOTICE([adding $O2IBPATH/Module.symvers to $PWD/$SYMVERFILE])
+				# strip out the existing symbols versions first
+				egrep -v $(echo $(awk '{ print $2 }' $O2IBPATH/$O2IB_SYMVER) | tr ' ' '|') $PWD/$SYMVERFILE > $PWD/$SYMVERFILE.old
+				cat $PWD/$SYMVERFILE.old $O2IBPATH/$O2IB_SYMVER > $PWD/$SYMVERFILE
+			else
+				AC_MSG_ERROR([an external source tree was specified for o2iblnd however I could not find a $O2IBPATH/Module.symvers there])
+			fi
+		fi
 
 		# version checking is a hack and isn't reliable,
 		# we need verify it with each new ofed release
@@ -631,7 +650,7 @@ AC_ARG_WITH([openib],
 if test $ENABLEOPENIB -eq 0; then
 	AC_MSG_RESULT([disabled])
 elif test ! \( -f ${OPENIBPATH}/include/ts_ib_core.h -a \
-               -f ${OPENIBPATH}/include/ts_ib_cm.h -a\
+               -f ${OPENIBPATH}/include/ts_ib_cm.h -a \
 	       -f ${OPENIBPATH}/include/ts_ib_sa_client.h \); then
 	AC_MSG_RESULT([no])
 	case $ENABLEOPENIB in
@@ -1058,11 +1077,11 @@ AC_DEFINE(HAVE_SHOW_TASK, 1, [show_task is exported])
 
 # check userland __u64 type
 AC_DEFUN([LN_U64_LONG_LONG],
-[AC_MSG_CHECKING([check u64 is long long type])
+[AC_MSG_CHECKING([u64 is long long type])
 tmp_flags="$CFLAGS"
 CFLAGS="$CFLAGS -Werror"
 AC_COMPILE_IFELSE([
-	#include <asm/types.h>
+	#include <linux/types.h>
 	int main(void) {
 		unsigned long long *data1;
 		__u64 *data2;
@@ -1075,9 +1094,58 @@ AC_COMPILE_IFELSE([
         AC_DEFINE(HAVE_U64_LONG_LONG, 1,
                   [__u64 is long long type])
 ],[
+	AC_MSG_RESULT([no])
 ])
 CFLAGS="$tmp_flags"
 ])
+
+# check userland size_t type
+AC_DEFUN([LN_SIZE_T_LONG],
+[AC_MSG_CHECKING([size_t is unsigned long type])
+tmp_flags="$CFLAGS"
+CFLAGS="$CFLAGS -Werror"
+AC_COMPILE_IFELSE([
+	#include <linux/types.h>
+	int main(void) {
+		unsigned long *data1;
+		size_t *data2;
+		
+		data1 = data2;
+		return 0;
+	}
+],[
+	AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_SIZE_T_LONG, 1,
+                  [size_t is long type])
+],[
+	AC_MSG_RESULT([no])
+])
+CFLAGS="$tmp_flags"
+])
+
+AC_DEFUN([LN_SSIZE_T_LONG],
+[AC_MSG_CHECKING([ssize_t is signed long type])
+tmp_flags="$CFLAGS"
+CFLAGS="$CFLAGS -Werror"
+AC_COMPILE_IFELSE([
+	#include <linux/types.h>
+	int main(void) {
+		long *data1;
+		ssize_t *data2;
+		
+		data1 = data2;
+		return 0;
+	}
+],[
+	AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_SSIZE_T_LONG, 1,
+                  [ssize_t is long type])
+],[
+	AC_MSG_RESULT([no])
+])
+CFLAGS="$tmp_flags"
+])
+
 
 # LN_TASKLIST_LOCK
 # 2.6.18 remove tasklist_lock export
@@ -1229,6 +1297,8 @@ LN_STRUCT_PAGE_LIST
 LN_STRUCT_SIGHAND
 LN_FUNC_SHOW_TASK
 LN_U64_LONG_LONG
+LN_SSIZE_T_LONG
+LN_SIZE_T_LONG
 # 2.6.18
 LN_TASKLIST_LOCK
 # 2.6.19

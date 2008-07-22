@@ -1,0 +1,424 @@
+#!/bin/bash
+#*  Copyright (C) 2002 Cluster File Systems, Inc.
+#*   Author: Jitendra Pawar <jitendra@clusterfs.com>
+#*
+#*   Lustre-iokit is free software; you can redistribute it and/or
+#*   modify it under the terms of version 2 of the GNU General Public
+#*   License as published by the Free Software Foundation.
+#*
+#*   Lustre-iokit is distributed in the hope that it will be useful,
+#*   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#*   GNU General Public License for more details.
+#*
+#*   You should have received a copy of the GNU General Public License
+#*   along with Lustre; if not, write to the Free Software
+#*   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+# binaries
+lsmod="/sbin/lsmod"
+modprobe="/sbin/modprobe"
+insmod="/sbin/insmod"
+rmmod="/sbin/rmmod"
+
+declare -a ost_names
+declare -a client_names
+declare -a host_list
+declare -a dev_list
+declare -a unique_hosts
+declare count
+declare -a vmstatpids
+declare -a do_unload_echo
+
+
+DSH=${DSH:-"ssh"}
+
+dsh () {
+    local node="$1"
+    local user="$2"
+    shift 2
+    local command="$@"
+
+    local here=$(pwd)
+
+    command="cd $here; export PATH=/sbin:/usr/sbin:\$PATH; $command"
+
+    case $DSH in
+	ssh)
+	    if [ -n "$user" ]; then
+		user="$user@"
+	    fi
+	    $DSH $user$node "$command"
+	    ;;
+	rsh)
+	    if [ -n "$user" ]; then
+		user="-l $user"
+	    fi
+	    $DSH $user $node "$command"
+	    ;;
+    esac
+}
+
+# how to run commands on other nodes
+# You need to make this work on your cluster if you have specified
+# non-local obd instances above
+remote_shell () {
+    host=$1
+    shift
+    cmds="$@"
+    if [ "$host" = "localhost" -o "$host" = `uname -n` ]; then
+	eval "$cmds"
+    else
+	# split $host into $host and $user
+	local user=""
+	if [[ $host == *@* ]]; then
+	    user=${host%@*}
+	    host=${host#*@}
+	fi
+	dsh $host "$user" "$cmds"
+    fi
+}
+
+# checks whether obdecho module is loded on given host.
+# parameter: 1. hostname
+obdecho_loaded() {
+    local host=$1
+    remote_shell $host $lsmod | grep obdecho > /dev/null 2>&1
+}
+
+# load obdecho.ko or obdecho.o module on host kernel.
+load_obdecho () {
+    local index=$1
+    local host=${unique_hosts[$index]}
+    do_unload_echo[$index]=0
+    if obdecho_loaded $host; then
+        return 0
+    fi
+    if [ -z "$lustre_root" ]; then
+        remote_shell $host $modprobe obdecho
+    elif [ -f ${lustre_root}/obdecho/obdecho.ko ]; then
+        remote_shell $host $insmod ${lustre_root}/obdecho/obdecho.ko
+    else
+        remote_shell $host $insmod ${lustre_root}/obdecho/obdecho.o
+    fi
+    if obdecho_loaded $host; then
+        do_unload_echo[$index]=1
+    else
+        echo Could not install obdecho on $host
+        return 1
+    fi
+    return 0
+}
+
+load_obdechos () {
+    for ((i = 0; i < ${#unique_hosts[@]}; i++)); do
+                load_obdecho $i || cleanup 1
+    done
+}
+
+# unload obdecho module from host kernel.
+unload_obdecho () {
+    local index=$1
+    local host=${unique_hosts[$index]}
+    if ((${do_unload_echo[$index]})); then
+        remote_shell $host $rmmod obdecho
+        do_unload_echo[$index]=0
+    fi
+}
+
+# returns the device number which is displayed in "lctl device_list"
+# 
+# parameter: 1. hostname
+#	     2. type of device ex: echo_client
+#	     3. name of device ex: ECHO_matrix.linsyssoft.com
+get_devno () {
+    local host=$1
+    local type=$2
+    local name=$3
+    remote_shell $host $lctl device_list | \
+	awk "{if (\$2 == \"UP\" && \$3 == \"$type\" && \$4 == \"$name\") {\
+	          print \$1; exit}}"
+}
+
+get_devnos () {
+    local i=0
+    local host
+    for ((i = 0; i < $count; i++)); do
+        ost=${ost_names[$i]}
+        host=${host_list[$i]}
+        dev=$(get_devno $host obdfilter $ost)
+        dev_list[$i]=$dev
+        if [ -z "$dev" ]; then
+            echo Cant find device for $ost on $host
+            return 1
+        fi
+    done
+    return 0
+}
+
+# do cleanup for netdisk case.
+cleanup_netdisk () {
+    for osc in $@; do
+        lctl <<EOF
+        cfg_device $osc 
+        cleanup
+        detach
+EOF
+    done
+}
+
+# do cleanup for network case.
+cleanup_network () {
+    local clean_srv_OSS=$1
+    lctl <<EOF
+    cfg_device echotmp 
+    cleanup
+    detach
+EOF
+    remote_shell "root@$server_nid" "lctl << EOF
+        cfg_device echo_srv
+        cleanup
+        detach
+EOF"
+    if [ $clean_srv_OSS ]; then
+        remote_shell "root@$server_nid" "lctl << EOF
+            cfg_device OSS
+            cleanup
+            detach
+EOF"
+    fi
+}
+
+# do cleanup and exit.
+cleanup () {
+    local exit_status=$1
+    shift
+    for ((i = 0; i < $ndevs; i++)); do
+    	host=${host_names[$i]}
+	    if [ -n ${do_teardown_ec[$i]} ]; then
+        	teardown_ec_devno $host ${client_names[$i]}
+	    fi
+    done
+    pidcount=0
+    for host in ${unique_hosts[@]}; do
+        remote_shell $host "killall -q vmstat >/dev/null 2>&1" &
+        pid=$!
+        kill -term ${vmstatpids[$pidcount]} 2>/dev/null
+        kill -kill ${vmstatpids[$pidcount]} 2>/dev/null
+        wait $pid
+        pidcount=$((pidcount+1))
+        if ((${do_unload_obdecho[$host]})); then
+            unload_obdecho $host
+        fi
+    done
+    if [ $case == "network" ]; then
+        cleanup_network $1 
+    fi
+    if [ $case == "netdisk" ]; then
+	shift
+        cleanup_netdisk $@
+    fi
+    if [ $exit_status ]; then
+        if [ $exit_status -ne 0 ]; then
+            echo "program exited with error "
+        else
+            echo "done!"
+        fi
+    else
+        echo "Terminated"
+    fi
+    exit $exit_status
+}
+trap cleanup SIGHUP SIGINT SIGTERM
+
+# gets echoclient device number and attch it to the client UUID
+# 
+# parameter: 1. hostname
+#	     2. client name, ex:- ns8:ECHO_ns8
+#	     3. name of ost instances, ex:- lustre-OST0001 
+get_ec_devno () {
+    local host=$1
+    local client_name="$2"
+    local ost_name="$3"
+    if [ -z "$client_name" ]; then
+	if [ -z "$ost_name" ]; then
+	    echo "client and ost name both null" 1>&2
+	    return
+	fi
+        client_name=${ost_name}_ecc
+    fi
+    ec=`get_devno $host echo_client $client_name`
+    if [ -n "$ec" ]; then
+	echo $ec $client_name $client_name
+	return
+    fi
+    if [ -z "$ost_name" ]; then
+	echo "no echo client and ost_name not set, client: $client_name, host: $host" 1>&2
+	return
+    fi
+    ost=`get_devno $host obdfilter $ost_name`
+    if [ -z "$ost" ]; then
+	echo "OST $ost_name not setup" 1>&2
+	return
+    fi
+    client_name=${ost_name}_ecc
+    remote_shell $host "$lctl <<EOF
+        attach echo_client $client_name ${client_name}_UUID
+	setup $ost_name
+EOF"
+    ec=`get_devno $host echo_client $client_name`
+    if [ -z "$ec" ]; then
+	echo "Can't setup echo-client" 1>&2
+	return
+    fi
+    echo $ec $client_name 1
+}
+
+# Create echo-clients using osc_names and osc_uuid
+# It creates echoclients for all osc listed using #lctl device_list command
+ec_using_osc () {
+    local osc_name=$1
+    $lctl <<EOF
+        attach echo_client ${osc_name}_ecc ${osc_name}_ecc_UUID
+        cfg_device ${osc_name}_ecc
+        setup $osc_name
+EOF
+
+}
+
+# create echo client using server nid.
+ec_using_srv_nid () {
+    local server_nid=$1
+    local ocsname=$2
+    local oscuuid=$3
+    $lctl add_uuid echo_UUID $server_nid@tcp >/dev/null 2>&1
+    $lctl <<EOF
+        attach osc $ocsname $oscuuid
+        cfg_device $ocsname
+        setup echo_srv_UUID echo_UUID
+EOF
+    $lctl <<EOF
+        attach echo_client ${ocsname}_ecc $oscuuid
+        setup $ocsname 
+EOF
+}
+
+setup_osc_for_remote_ost () {
+    local ost_nid=$1
+    local obdfilter_name=$2
+    local host_name=host_$3
+    $lctl add_uuid ${host_name}_UUID $ost_nid@tcp >/dev/null 2>&1
+    $lctl <<EOF
+        attach osc ${obdfilter_name}_osc ${obdfilter_name}_osc_UUID
+        cfg_device ${obdfilter_name}_osc 
+        setup ${obdfilter_name}_UUID ${host_name}_UUID
+EOF
+}
+
+# setup obdecho on server
+setup_srv_obd () {
+    local server_nid=$1
+    local test_ostfsnm=$2
+    remote_shell "root@$server_nid" "$lctl << EOF
+        attach obdecho $test_ostfsnm ${test_ostfsnm}_UUID
+        cfg_device $test_ostfsnm
+        setup
+EOF"
+}
+
+# setup OSS on server
+setup_OSS () {
+    local server_nid=$1
+    remote_shell "root@$server_nid" "$lctl << EOF
+        attach ost OSS OSS_UUID
+        cfg_device OSS
+        setup
+EOF"
+}
+
+# cleanup and detach the echo-clients that we have created during the test.
+# parameter: 1. hostname
+#	     2. client name, ex:- ns8:ECHO_ns8
+teardown_ec_devno () {
+    local host=$1
+    local client_name=$2
+    remote_shell $host "$lctl <<EOF
+	cfg $client_name
+	cleanup
+	detach
+EOF"
+}
+
+unique () {
+    echo "$@" | xargs -n1 echo | sort -u
+}
+
+split_hostname () {
+    local name=$1
+    case $name in
+    *:*) host=`echo $name | sed 's/:.*$//'`
+	 name=`echo $name | sed 's/[^:]*://'`
+	 ;;
+    *)   host=localhost
+	 ;;
+    esac
+    echo "$host $name"
+}
+
+check_cleanup () {
+    type_obj="$1"
+    osc_names_str=$(lctl dl | grep $type_obj)
+    count=0;
+    for name in $osc_names_str; do
+        count=$((count+1))
+    done
+    
+    if [ $count != 0 ]; then
+        echo "$type_obj could not be cleanup";
+        exit 0;
+    fi 
+
+}
+
+check_setup () {
+    type_obj="$1"
+    osc_names_str=$(lctl dl | grep $type_obj)
+    count=0;
+    for name in $osc_names_str; do
+        count=$((count+1))
+    done
+
+    if [ $count == 0 ]; then
+        echo "$type_obj could not be setup";
+        exit 0;
+    fi
+
+}
+
+# added from bugzill req.
+get_targets () {
+    if [ -z "$ost_names" ]; then
+        targets=$($lctl device_list | awk "{if (\$2 == \"UP\" && \
+            \$3 == \"obdfilter\") {print \$4} }")
+    fi
+    if [ -z "$targets" ]; then
+        echo "Can't find any OSTs to test.  Please set targets=..."
+        exit 1
+    fi
+    count=0
+    for name in $targets; do
+        ost_names[$count]=$name
+        str=(`split_hostname $name`)
+        host_names[$count]=${str[0]}
+        count=$((count+1))
+    done
+}
+
+get_hosts () {
+    # split out hostnames from ost names
+    for ((i = 0; i < count; i++)); do
+        str=(`split_hostname ${targets[$i]}`)
+        host_list[$i]=${str[0]}
+        ost_names[$i]=${str[1]}
+    done
+}

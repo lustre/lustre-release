@@ -858,6 +858,7 @@ lnet_count_acceptor_nis (lnet_ni_t **first_ni)
          * *first_ni so the acceptor can pass it connections "blind" to retain
          * binary compatibility. */
         int                count = 0;
+#if defined(__KERNEL__) || defined(HAVE_LIBPTHREAD)
         struct list_head  *tmp;
         lnet_ni_t         *ni;
 
@@ -876,6 +877,8 @@ lnet_count_acceptor_nis (lnet_ni_t **first_ni)
         }
         
         LNET_UNLOCK();
+
+#endif /* defined(__KERNEL__) || defined(HAVE_LIBPTHREAD) */
         return count;
 }
 

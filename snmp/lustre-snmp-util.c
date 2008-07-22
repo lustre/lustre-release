@@ -33,7 +33,9 @@
  */ 
 
 #include <sys/types.h>
+#if defined (__linux__)
 #include <sys/vfs.h>
+#endif
 #include <dirent.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -342,9 +344,9 @@ int read_counter64(const char *file_path, counter64 *c64,int factor)
 
     if ((ret_val = read_string(file_path, file_data,sizeof(file_data))) == SUCCESS) {
         tmp = atoll(file_data) * factor;
-        c64->low = (ulong) (0x0FFFFFFFF & tmp);
+        c64->low = (unsigned long) (0x0FFFFFFFF & tmp);
         tmp >>= 32; /* Shift right by 4 bytes */
-        c64->high = (ulong) (0x0FFFFFFFF & tmp);
+        c64->high = (unsigned long) (0x0FFFFFFFF & tmp);
     }
     return ret_val;
 }

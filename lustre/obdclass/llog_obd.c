@@ -56,6 +56,10 @@ static void llog_ctxt_destroy(struct llog_ctxt *ctxt)
 {
         if (ctxt->loc_exp)
                 class_export_put(ctxt->loc_exp);
+        if (ctxt->loc_imp) {
+                class_import_put(ctxt->loc_imp);
+                ctxt->loc_imp = NULL;
+        }
         OBD_FREE(ctxt, sizeof(*ctxt));
         return;
 }
@@ -147,8 +151,12 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
         ctxt->loc_logops = op;
         sema_init(&ctxt->loc_sem, 1);
 
-        if (op->lop_setup)
-                rc = op->lop_setup(obd, index, disk_obd, count, logid);
+        if (op->lop_setup) {
+                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LLOG_SETUP))
+                        rc = -EOPNOTSUPP;
+                else
+                        rc = op->lop_setup(obd, index, disk_obd, count, logid);
+        }
 
         if (rc) {
                 llog_ctxt_destroy(ctxt);

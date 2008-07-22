@@ -84,6 +84,10 @@ char *obd_export_nid2str(struct obd_export *exp);
 int obd_export_evict_by_nid(struct obd_device *obd, char *nid);
 int obd_export_evict_by_uuid(struct obd_device *obd, char *uuid);
 
+int obd_zombie_impexp_init(void);
+void obd_zombie_impexp_stop(void);
+void obd_zombie_impexp_cull(void);
+
 /* obd_config.c */
 int class_process_config(struct lustre_cfg *lcfg);
 int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars, 
@@ -688,6 +692,30 @@ static inline int obd_disconnect(struct obd_export *exp)
         RETURN(rc);
 }
 
+static inline int obd_fid_init(struct obd_export *exp)
+{
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_OP(exp->exp_obd, fid_init, 0);
+        EXP_COUNTER_INCREMENT(exp, fid_init);
+
+        rc = OBP(exp->exp_obd, fid_init)(exp);
+        RETURN(rc);
+}
+
+static inline int obd_fid_fini(struct obd_export *exp)
+{
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_OP(exp->exp_obd, fid_fini, 0);
+        EXP_COUNTER_INCREMENT(exp, fid_fini);
+
+        rc = OBP(exp->exp_obd, fid_fini)(exp);
+        RETURN(rc);
+}
+
 static inline int obd_ping(struct obd_export *exp)
 {
         int rc;
@@ -979,6 +1007,34 @@ static inline  int obd_prep_async_page(struct obd_export *exp,
         RETURN(ret);
 }
 
+static inline int obd_reget_short_lock(struct obd_export *exp,
+                                       struct lov_stripe_md *lsm,
+                                       void **res, int rw,
+                                       obd_off start, obd_off end,
+                                       void **cookie)
+{
+        ENTRY;
+
+        OBD_CHECK_OP(exp->exp_obd, reget_short_lock, -EOPNOTSUPP);
+        EXP_COUNTER_INCREMENT(exp, reget_short_lock);
+
+        RETURN(OBP(exp->exp_obd, reget_short_lock)(exp, lsm, res, rw,
+                                                   start, end, cookie));
+}
+
+static inline int obd_release_short_lock(struct obd_export *exp,
+                                         struct lov_stripe_md *lsm, obd_off end,
+                                         void *cookie, int rw)
+{
+        ENTRY;
+
+        OBD_CHECK_OP(exp->exp_obd, release_short_lock, -EOPNOTSUPP);
+        EXP_COUNTER_INCREMENT(exp, release_short_lock);
+
+        RETURN(OBP(exp->exp_obd, release_short_lock)(exp, lsm, end,
+                                                     cookie, rw));
+}
+
 static inline int obd_queue_async_io(struct obd_export *exp,
                                      struct lov_stripe_md *lsm,
                                      struct lov_oinfo *loi, void *cookie,
@@ -1243,8 +1299,8 @@ static inline int obd_join_lru(struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline int obd_pin(struct obd_export *exp, obd_id ino, __u32 gen,
-                          int type, struct obd_client_handle *handle, int flag)
+static inline int obd_pin(struct obd_export *exp, struct ll_fid *fid,
+                          struct obd_client_handle *handle, int flag)
 {
         int rc;
         ENTRY;
@@ -1252,7 +1308,7 @@ static inline int obd_pin(struct obd_export *exp, obd_id ino, __u32 gen,
         EXP_CHECK_OP(exp, pin);
         EXP_COUNTER_INCREMENT(exp, pin);
 
-        rc = OBP(exp->exp_obd, pin)(exp, ino, gen, type, handle, flag);
+        rc = OBP(exp->exp_obd, pin)(exp, fid, handle, flag);
         RETURN(rc);
 }
 

@@ -768,31 +768,48 @@ static void __lov_del_obd(struct obd_device *obd, __u32 index)
         }
 }
 
-void lov_fix_desc(struct lov_desc *desc)
+void lov_fix_desc_stripe_size(__u64 *val)
 {
-        if (desc->ld_default_stripe_size < PTLRPC_MAX_BRW_SIZE) {
+        if (*val < PTLRPC_MAX_BRW_SIZE) {
                 LCONSOLE_WARN("Increasing default stripe size to min %u\n",
                               PTLRPC_MAX_BRW_SIZE);
-                desc->ld_default_stripe_size = PTLRPC_MAX_BRW_SIZE;
-        } else if (desc->ld_default_stripe_size & (LOV_MIN_STRIPE_SIZE - 1)) {
-                desc->ld_default_stripe_size &= ~(LOV_MIN_STRIPE_SIZE - 1);
+                *val = PTLRPC_MAX_BRW_SIZE;
+        } else if (*val & (LOV_MIN_STRIPE_SIZE - 1)) {
+                *val &= ~(LOV_MIN_STRIPE_SIZE - 1);
                 LCONSOLE_WARN("Changing default stripe size to "LPU64" (a "
                               "multiple of %u)\n",
-                              desc->ld_default_stripe_size,LOV_MIN_STRIPE_SIZE);
+                              *val, LOV_MIN_STRIPE_SIZE);
         }
+}
 
-        if (desc->ld_default_stripe_count == 0)
-                desc->ld_default_stripe_count = 1;
+void lov_fix_desc_stripe_count(__u32 *val)
+{
+        if (*val == 0)
+                *val = 1;
+}
 
+void lov_fix_desc_pattern(__u32 *val)
+{
         /* from lov_setstripe */
-        if ((desc->ld_pattern != 0) && 
-            (desc->ld_pattern != LOV_PATTERN_RAID0)) {
-                LCONSOLE_WARN("Unknown stripe pattern: %#x\n",desc->ld_pattern);
-                desc->ld_pattern = 0;
+        if ((*val != 0) && (*val != LOV_PATTERN_RAID0)) {
+                LCONSOLE_WARN("Unknown stripe pattern: %#x\n", *val);
+                *val = 0;
         }
+}
+
+void lov_fix_desc_qos_maxage(__u32 *val)
+{
         /* fix qos_maxage */
-        if (desc->ld_qos_maxage == 0)
-                desc->ld_qos_maxage = QOS_DEFAULT_MAXAGE;
+        if (*val == 0)
+                *val = QOS_DEFAULT_MAXAGE;
+}
+
+void lov_fix_desc(struct lov_desc *desc)
+{
+        lov_fix_desc_stripe_size(&desc->ld_default_stripe_size);
+        lov_fix_desc_stripe_count(&desc->ld_default_stripe_count);
+        lov_fix_desc_pattern(&desc->ld_pattern);
+        lov_fix_desc_qos_maxage(&desc->ld_qos_maxage);
 }
 
 static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
@@ -1427,8 +1444,10 @@ static int lov_setattr_async(struct obd_export *exp, struct obd_info *oinfo,
         if (rc)
                 RETURN(rc);
 
-        CDEBUG(D_INFO, "objid "LPX64": %ux%u byte stripes\n",
-               oinfo->oi_md->lsm_object_id, oinfo->oi_md->lsm_stripe_count,
+        CDEBUG(D_INFO, "objid "LPX64"@"LPX64": %ux%u byte stripes\n",
+               oinfo->oi_md->lsm_object_id,
+               oinfo->oi_md->lsm_object_gr,
+               oinfo->oi_md->lsm_stripe_count,
                oinfo->oi_md->lsm_stripe_size);
 
         list_for_each (pos, &set->set_list) {
@@ -1437,9 +1456,9 @@ static int lov_setattr_async(struct obd_export *exp, struct obd_info *oinfo,
                 if (oinfo->oi_oa->o_valid & OBD_MD_FLCOOKIE)
                         oti->oti_logcookies = set->set_cookies + req->rq_stripe;
 
-                CDEBUG(D_INFO, "objid "LPX64"[%d] has subobj "LPX64" at idx "
-                       "%u\n", oinfo->oi_oa->o_id, req->rq_stripe,
-                       req->rq_oi.oi_oa->o_id, req->rq_idx);
+                CDEBUG(D_INFO, "objid "LPX64"@"LPX64"[%d] has subobj "LPX64
+                       " at idx %u\n", oinfo->oi_oa->o_id, oinfo->oi_oa->o_gr,
+                       req->rq_stripe, req->rq_oi.oi_oa->o_id, req->rq_idx);
 
                 rc = obd_setattr_async(lov->lov_tgts[req->rq_idx]->ltd_exp,
                                        &req->rq_oi, oti, rqset);
@@ -2091,6 +2110,7 @@ static int lov_change_cbdata(struct obd_export *exp,
                         continue;
                 }
                 submd.lsm_object_id = loi->loi_id;
+                submd.lsm_object_gr = loi->loi_gr;
                 submd.lsm_stripe_count = 0;
                 rc = obd_change_cbdata(lov->lov_tgts[loi->loi_ost_idx]->ltd_exp,
                                        &submd, it, data);
@@ -2450,7 +2470,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
 
         lov_getref(obddev);
 
-        if (KEY_IS("lock_to_stripe")) {
+        if (KEY_IS(KEY_LOCK_TO_STRIPE)) {
                 struct {
                         char name[16];
                         struct ldlm_lock *lock;
@@ -2476,8 +2496,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                                 continue;
                         if (lov->lov_tgts[loi->loi_ost_idx]->ltd_exp ==
                             data->lock->l_conn_export &&
-                            loi->loi_id == res_id->name[0] &&
-                            loi->loi_gr == res_id->name[1]) {
+                            osc_res_name_eq(loi->loi_id, loi->loi_gr, res_id)) {
                                 *stripe = i;
                                 GOTO(out, rc = 0);
                         }
@@ -2508,7 +2527,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
 
                 for(i = 0; i < lov->desc.ld_tgt_count; i++) {
                         tgt = lov->lov_tgts[i];
-                        if (obd_uuid_equals(val, &tgt->ltd_uuid))
+                        if (tgt && obd_uuid_equals(val, &tgt->ltd_uuid))
                                 GOTO(out, rc = i);
                 }
         }
@@ -2548,11 +2567,11 @@ static int lov_set_info_async(struct obd_export *exp, obd_count keylen,
                 incr = sizeof(struct obd_id_info);
                 do_inactive = 1;
                 next_id = 1;
-        } else if (KEY_IS("checksum")) {
+        } else if (KEY_IS(KEY_CHECKSUM)) {
                 do_inactive = 1;
-        } else if (KEY_IS(KEY_MDS_CONN) || KEY_IS("unlinked")) {
+        } else if (KEY_IS(KEY_MDS_CONN) || KEY_IS(KEY_UNLINKED)) {
                 check_uuid = val ? 1 : 0;
-        } else if (KEY_IS("evict_by_nid")) {
+        } else if (KEY_IS(KEY_EVICT_BY_NID)) {
                 /* use defaults:
                 do_inactive = incr = 0;
                  */
@@ -2754,6 +2773,47 @@ void lov_stripe_unlock(struct lov_stripe_md *md)
 }
 EXPORT_SYMBOL(lov_stripe_unlock);
 
+static int lov_reget_short_lock(struct obd_export *exp,
+                                struct lov_stripe_md *lsm,
+                                void **res, int rw,
+                                obd_off start, obd_off end,
+                                void **cookie)
+{
+        struct lov_async_page *l = *res;
+        obd_off stripe_start, stripe_end = start;
+
+        ENTRY;
+
+        /* ensure we don't cross stripe boundaries */
+        lov_extent_calc(exp, lsm, OBD_CALC_STRIPE_END, &stripe_end);
+        if (stripe_end <= end)
+                RETURN(0);
+
+        /* map the region limits to the object limits */
+        lov_stripe_offset(lsm, start, l->lap_stripe, &stripe_start);
+        lov_stripe_offset(lsm, end, l->lap_stripe, &stripe_end);
+
+        RETURN(obd_reget_short_lock(exp->exp_obd->u.lov.lov_tgts[lsm->
+                                    lsm_oinfo[l->lap_stripe]->loi_ost_idx]->
+                                    ltd_exp, NULL, &l->lap_sub_cookie,
+                                    rw, stripe_start, stripe_end, cookie));
+}
+
+static int lov_release_short_lock(struct obd_export *exp,
+                                  struct lov_stripe_md *lsm, obd_off end,
+                                  void *cookie, int rw)
+{
+        int stripe;
+
+        ENTRY;
+
+        stripe = lov_stripe_number(lsm, end);
+
+        RETURN(obd_release_short_lock(exp->exp_obd->u.lov.lov_tgts[lsm->
+                                      lsm_oinfo[stripe]->loi_ost_idx]->
+                                      ltd_exp, NULL, end, cookie, rw));
+}
+
 struct obd_ops lov_obd_ops = {
         .o_owner               = THIS_MODULE,
         .o_setup               = lov_setup,
@@ -2776,6 +2836,8 @@ struct obd_ops lov_obd_ops = {
         .o_brw                 = lov_brw,
         .o_brw_async           = lov_brw_async,
         .o_prep_async_page     = lov_prep_async_page,
+        .o_reget_short_lock    = lov_reget_short_lock,
+        .o_release_short_lock  = lov_release_short_lock,
         .o_queue_async_io      = lov_queue_async_io,
         .o_set_async_flags     = lov_set_async_flags,
         .o_queue_group_io      = lov_queue_group_io,

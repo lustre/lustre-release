@@ -152,12 +152,6 @@ typedef enum {
 #define LDLM_CB_BLOCKING    1
 #define LDLM_CB_CANCELING   2
 
-/* position flag of skip list pointers */
-#define LDLM_SL_HEAD(skip_list)   ((skip_list)->next != NULL)
-#define LDLM_SL_TAIL(skip_list)   ((skip_list)->prev != NULL)
-#define LDLM_SL_EMPTY(skip_list)  ((skip_list)->next == NULL && \
-                                   (skip_list)->prev == NULL)
-
 /* compatibility matrix */
 #define LCK_COMPAT_EX  LCK_NL
 #define LCK_COMPAT_PW  (LCK_COMPAT_EX | LCK_CR)
@@ -251,6 +245,7 @@ struct ldlm_pool {
         atomic_t               pl_grant_speed;   /* Grant speed (GR-CR) per T. */
         __u64                  pl_server_lock_volume; /* Server lock volume. 
                                                   * Protected by pl_lock */
+        __u64                  pl_client_lock_volume; /* Client lock volue. */
         atomic_t               pl_lock_volume_factor; /* Lock volume factor. */
 
         time_t                 pl_recalc_time;   /* Time when last slv from 
@@ -271,7 +266,7 @@ typedef int (*ldlm_res_policy)(struct ldlm_namespace *, struct ldlm_lock **,
 
 struct ldlm_valblock_ops {
         int (*lvbo_init)(struct ldlm_resource *res);
-        int (*lvbo_update)(struct ldlm_resource *res, struct lustre_msg *m,
+        int (*lvbo_update)(struct ldlm_resource *res, struct ptlrpc_request *r,
                            int buf_idx, int increase);
 };
 
@@ -336,6 +331,8 @@ struct ldlm_namespace {
         unsigned               ns_max_nolock_size;
 
         struct adaptive_timeout ns_at_estimate;/* estimated lock callback time*/
+        /* backward link to obd, required for ldlm pool to store new SLV. */
+        struct obd_device     *ns_obd;
 };
 
 static inline int ns_is_client(struct ldlm_namespace *ns)
@@ -414,11 +411,8 @@ struct ldlm_lock {
         /* protected by ns_hash_lock. FIXME */
         struct list_head      l_lru;
 
-        /* protected by lr_lock */
-        struct list_head      l_res_link; // position in one of three res lists
-
-        struct list_head      l_sl_mode;        // skip pointer for request mode
-        struct list_head      l_sl_policy;      // skip pointer for inodebits
+        /* protected by lr_lock, linkage to resource's lock queues */
+        struct list_head      l_res_link;
 
         struct ldlm_interval *l_tree_node;      /* tree node for ldlm_extent */
 
@@ -477,6 +471,10 @@ struct ldlm_lock {
         struct list_head      l_cp_ast;
         struct ldlm_lock     *l_blocking_lock; 
         int                   l_bl_ast_run;
+
+        /* protected by lr_lock, linkages to "skip lists" */
+        struct list_head      l_sl_mode;
+        struct list_head      l_sl_policy;
 };
 
 struct ldlm_resource {
@@ -617,7 +615,7 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
 int ldlm_del_waiting_lock(struct ldlm_lock *lock);
 int ldlm_refresh_waiting_lock(struct ldlm_lock *lock);
 int ldlm_get_ref(void);
-void ldlm_put_ref(int force);
+void ldlm_put_ref(void);
 
 /* ldlm_lock.c */
 ldlm_processing_policy ldlm_get_processing_policy(struct ldlm_resource *res);
@@ -636,12 +634,12 @@ static inline struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *h)
 }
 
 static inline int ldlm_res_lvbo_update(struct ldlm_resource *res,
-                                       struct lustre_msg *m, int buf_idx,
+                                       struct ptlrpc_request *r, int buf_idx,
                                        int increase)
 {
         if (res->lr_namespace->ns_lvbo &&
             res->lr_namespace->ns_lvbo->lvbo_update) {
-                return res->lr_namespace->ns_lvbo->lvbo_update(res, m, buf_idx,
+                return res->lr_namespace->ns_lvbo->lvbo_update(res, r, buf_idx,
                                                                increase);
         }
         return 0;
@@ -681,6 +679,8 @@ void ldlm_lock_addref(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_decref_and_cancel(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_allow_match(struct ldlm_lock *lock);
+int ldlm_lock_fast_match(struct ldlm_lock *, int, obd_off, obd_off, void **);
+void ldlm_lock_fast_release(void *, int);
 ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                             struct ldlm_res_id *, ldlm_type_t type,
                             ldlm_policy_data_t *, ldlm_mode_t mode,
@@ -696,16 +696,20 @@ void ldlm_lock_dump_handle(int level, struct lustre_handle *);
 void ldlm_unlink_lock_skiplist(struct ldlm_lock *req);
 
 /* resource.c */
-struct ldlm_namespace *ldlm_namespace_new(char *name, ldlm_side_t client, 
-                                          ldlm_appetite_t apt);
+struct ldlm_namespace *
+ldlm_namespace_new(struct obd_device *obd, char *name,
+                   ldlm_side_t client, ldlm_appetite_t apt);
 int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags);
-int ldlm_namespace_free(struct ldlm_namespace *ns, int force);
-void ldlm_namespace_move(struct ldlm_namespace *ns, ldlm_side_t client);
-struct ldlm_namespace *ldlm_namespace_first(ldlm_side_t client);
+void ldlm_namespace_free(struct ldlm_namespace *ns,
+                         struct obd_import *imp, int force);
+void ldlm_namespace_register(struct ldlm_namespace *ns, ldlm_side_t client);
+void ldlm_namespace_unregister(struct ldlm_namespace *ns, ldlm_side_t client);
+void ldlm_namespace_move_locked(struct ldlm_namespace *ns, ldlm_side_t client);
+struct ldlm_namespace *ldlm_namespace_first_locked(ldlm_side_t client);
+void ldlm_namespace_get_locked(struct ldlm_namespace *ns);
+void ldlm_namespace_put_locked(struct ldlm_namespace *ns, int wakeup);
 void ldlm_namespace_get(struct ldlm_namespace *ns);
 void ldlm_namespace_put(struct ldlm_namespace *ns, int wakeup);
-void ldlm_namespace_get_nolock(struct ldlm_namespace *ns);
-void ldlm_namespace_put_nolock(struct ldlm_namespace *ns, int wakeup);
 int ldlm_proc_setup(void);
 #ifdef LPROCFS
 void ldlm_proc_cleanup(void);
@@ -825,9 +829,12 @@ int ldlm_pool_shrink(struct ldlm_pool *pl, int nr,
 void ldlm_pool_fini(struct ldlm_pool *pl);
 int ldlm_pool_setup(struct ldlm_pool *pl, int limit);
 int ldlm_pool_recalc(struct ldlm_pool *pl);
+__u32 ldlm_pool_get_lvf(struct ldlm_pool *pl);
 __u64 ldlm_pool_get_slv(struct ldlm_pool *pl);
+__u64 ldlm_pool_get_clv(struct ldlm_pool *pl);
 __u32 ldlm_pool_get_limit(struct ldlm_pool *pl);
 void ldlm_pool_set_slv(struct ldlm_pool *pl, __u64 slv);
+void ldlm_pool_set_clv(struct ldlm_pool *pl, __u64 clv);
 void ldlm_pool_set_limit(struct ldlm_pool *pl, __u32 limit);
 void ldlm_pool_add(struct ldlm_pool *pl, struct ldlm_lock *lock);
 void ldlm_pool_del(struct ldlm_pool *pl, struct ldlm_lock *lock);

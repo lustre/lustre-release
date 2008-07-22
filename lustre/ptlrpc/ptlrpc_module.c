@@ -130,6 +130,7 @@ EXPORT_SYMBOL(ptlrpc_register_bulk);
 EXPORT_SYMBOL(ptlrpc_unregister_bulk);
 EXPORT_SYMBOL(ptlrpc_send_reply);
 EXPORT_SYMBOL(ptlrpc_reply);
+EXPORT_SYMBOL(ptlrpc_send_error);
 EXPORT_SYMBOL(ptlrpc_error);
 EXPORT_SYMBOL(ptlrpc_resend_req);
 EXPORT_SYMBOL(ptl_send_rpc);
@@ -185,7 +186,6 @@ EXPORT_SYMBOL(ptlrpc_daemonize);
 EXPORT_SYMBOL(ptlrpc_service_health_check);
 
 /* pack_generic.c */
-EXPORT_SYMBOL(lustre_msg_swabbed);
 EXPORT_SYMBOL(lustre_msg_check_version);
 EXPORT_SYMBOL(lustre_pack_request);
 EXPORT_SYMBOL(lustre_pack_reply);
@@ -197,7 +197,6 @@ EXPORT_SYMBOL(lustre_packed_msg_size);
 EXPORT_SYMBOL(lustre_unpack_msg);
 EXPORT_SYMBOL(lustre_msg_buf);
 EXPORT_SYMBOL(lustre_msg_string);
-EXPORT_SYMBOL(lustre_swab_buf);
 EXPORT_SYMBOL(lustre_swab_reqbuf);
 EXPORT_SYMBOL(lustre_swab_repbuf);
 EXPORT_SYMBOL(lustre_swab_obdo);
@@ -228,11 +227,6 @@ EXPORT_SYMBOL(lustre_swab_ldlm_lock_desc);
 EXPORT_SYMBOL(lustre_swab_ldlm_request);
 EXPORT_SYMBOL(lustre_swab_ldlm_reply);
 EXPORT_SYMBOL(lustre_swab_qdata);
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 7, 0, 0)
-EXPORT_SYMBOL(lustre_swab_qdata_old);
-#else
-#warning "remove quota code above for format absolete in new release"
-#endif
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 9, 0, 0)
 EXPORT_SYMBOL(lustre_swab_qdata_old2);
 #else

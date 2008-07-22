@@ -102,7 +102,7 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         }
         ldlm_lock_dump_handle(D_OTHER, &lockh);
 
-        mdc_pack_fid(&mdc_fid, st->st_ino, lli->lli_st_generation, S_IFDIR);
+        ll_pack_fid(&mdc_fid, st->st_ino, lli->lli_st_generation, S_IFDIR);
 
         offset = (__u64)page->index << CFS_PAGE_SHIFT;
         rc = mdc_readpage(sbi->ll_mdc_exp, &mdc_fid,

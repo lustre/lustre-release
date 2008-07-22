@@ -199,7 +199,14 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
 
         atomic_inc(&imp->imp_inval_count);
 
-        if (!imp->imp_invalid)
+        /* 
+         * If this is an invalid MGC connection, then don't bother
+         * waiting for imp_inflight to drop to 0.
+         */
+        if (imp->imp_invalid && imp->imp_recon_bk && !imp->imp_obd->obd_no_recov)
+                goto out;
+
+        if (!imp->imp_invalid || imp->imp_obd->obd_no_recov)
                 ptlrpc_deactivate_import(imp);
 
         LASSERT(imp->imp_invalid);
@@ -230,8 +237,9 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                 LASSERT(atomic_read(&imp->imp_inflight) == 0);
         }
 
+  out:
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
-
+        
         atomic_dec(&imp->imp_inval_count);
         cfs_waitq_signal(&imp->imp_recovery_waitq);
 }
@@ -488,7 +496,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
                         /* Don't retry if connect fails */
                         rc = 0;
                         obd_set_info_async(obd->obd_self_export,
-                                           strlen(KEY_INIT_RECOV),
+                                           sizeof(KEY_INIT_RECOV),
                                            KEY_INIT_RECOV,
                                            sizeof(rc), &rc, NULL);
                 }
@@ -655,7 +663,14 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                                 *lustre_msg_get_handle(request->rq_repmsg);
 
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
-                ptlrpc_activate_import(imp);
+                spin_lock(&imp->imp_lock);
+                if (imp->imp_invalid) {
+                        spin_unlock(&imp->imp_lock);
+                        ptlrpc_activate_import(imp);
+                } else {
+                        spin_unlock(&imp->imp_lock);
+                }
+
                 GOTO(finish, rc = 0);
         } else {
                 spin_unlock(&imp->imp_lock);

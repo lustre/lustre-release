@@ -220,7 +220,8 @@ extern void __d_move(struct dentry *dentry, struct dentry *target);
 #endif
 
 #define CheckWriteback(page, cmd) \
-        (!(!PageWriteback(page) && cmd == OBD_BRW_WRITE))
+        ((!PageWriteback(page) && (cmd & OBD_BRW_READ)) || \
+         (PageWriteback(page) && (cmd & OBD_BRW_WRITE)))
 
 #else /* 2.4.. */
 
@@ -536,6 +537,12 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 #define ll_invalidate_bdev(a,b)         invalidate_bdev((a),(b))
 #else
 #define ll_invalidate_bdev(a,b)         invalidate_bdev((a))
+#endif
+
+#ifdef HAVE_FS_RENAME_DOES_D_MOVE
+#define LL_RENAME_DOES_D_MOVE	FS_RENAME_DOES_D_MOVE
+#else
+#define LL_RENAME_DOES_D_MOVE	FS_ODD_RENAME
 #endif
 
 #endif /* __KERNEL__ */

@@ -96,6 +96,9 @@ options:
 .BI nosvc
 Only start the MGC (and MGS, if co-located) for a target service, and not the actual service.
 .TP
+.BI nomgs
+Start a MDT with a co-located MGS without starting the MGS.
+.TP
 .BI exclude= ostlist
 Start a client or MDT with a (colon-separated) list of known inactive OSTs.
 .TP
@@ -114,6 +117,18 @@ Start the Lustre metadata target service from /dev/sda1 on mountpoint /mnt/test/
 .B mount -t lustre -L testfs-MDT0000 -o abort_recov /mnt/test/mdt
 Start the testfs-MDT0000 service (by using the disk label), but abort the
 recovery process.
+.SH NOTES
+If the Service Tags tool (from the sun-servicetag package) can be found in
+/opt/sun/servicetag/bin/stclient an inventory service tag will be created
+reflecting the Lustre service being provided.  If this tool cannot be found
+.B mount.lustre
+will silently ignore it and no service tag is created.  The
+.BR stclient (1)
+tool only creates the local service tag.  No information is sent to the asset
+management system until you run the Registration Client to collect the tags
+and then upload them to the inventory system using your inventory system account.
+See https://inventory.sun.com/ for more details on a web-based, free, IT asset
+management system.
 .SH BUGS
 Not very many mount options can be changed with
 .BR "-o remount" .

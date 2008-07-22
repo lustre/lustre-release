@@ -725,7 +725,8 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 CERROR("Missing/short niobuf\n");
                 GOTO(out, rc = -EFAULT);
         }
-        if (lustre_msg_swabbed(req->rq_reqmsg)) { /* swab remaining niobufs */
+        if (lustre_req_need_swab(req)) {
+                /* swab remaining niobufs */
                 for (i = 1; i < niocount; i++)
                         lustre_swab_niobuf_remote (&remote_nb[i]);
         }
@@ -967,7 +968,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (exp->exp_failed)
                 GOTO(out, rc = -ENOTCONN);
 
-        swab = lustre_msg_swabbed(req->rq_reqmsg);
+        swab = lustre_req_need_swab(req);
         body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
                                   lustre_swab_ost_body);
         if (body == NULL) {
@@ -975,7 +976,6 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 GOTO(out, rc = -EFAULT);
         }
 
-        lustre_set_req_swabbed(req, REQ_REC_OFF + 1);
         objcount = lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF + 1) /
                    sizeof(*ioo);
         if (objcount == 0) {
@@ -987,6 +987,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 GOTO(out, rc = -EFAULT);
         }
 
+        lustre_set_req_swabbed(req, REQ_REC_OFF + 1);
         ioo = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 1,
                              objcount * sizeof(*ioo));
         LASSERT (ioo != NULL);
@@ -1293,7 +1294,7 @@ static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
         if (vallen)
                 val = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 1, 0);
 
-        if (KEY_IS("evict_by_nid")) {
+        if (KEY_IS(KEY_EVICT_BY_NID)) {
                 if (val && vallen)
                         obd_export_evict_by_nid(exp->exp_obd, val);
 

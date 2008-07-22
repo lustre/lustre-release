@@ -98,10 +98,12 @@ int init_admin_quotafiles(struct obd_device *obd, struct obd_quotactl *oqctl);
 int mds_quota_get_version(struct obd_device *obd, lustre_quota_version_t *ver);
 int mds_quota_set_version(struct obd_device *obd, lustre_quota_version_t ver);
 int mds_quota_invalidate(struct obd_device *obd, struct obd_quotactl *oqctl);
+int mds_quota_finvalidate(struct obd_device *obd, struct obd_quotactl *oqctl);
 
 int mds_admin_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl);
 int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl);
 int mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl);
+int mds_admin_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl);
 int mds_set_dqinfo(struct obd_device *obd, struct obd_quotactl *oqctl);
 int mds_get_dqinfo(struct obd_device *obd, struct obd_quotactl *oqctl);
 int mds_set_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl);

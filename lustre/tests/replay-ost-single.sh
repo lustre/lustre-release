@@ -3,7 +3,7 @@
 set -e
 
 PTLDEBUG=${PTLDEBUG:--1}
-LUSTRE=${LUSTRE:-`dirname $0`/..}
+LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 SETUP=${SETUP:-""}
 CLEANUP=${CLEANUP:-""}
 . $LUSTRE/tests/test-framework.sh
@@ -22,7 +22,7 @@ CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
 ALWAYS_EXCEPT="$REPLAY_OST_SINGLE_EXCEPT"
 
 #					
-[ "$SLOW" = "no" ] && EXCEPT_SLOW=""
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="5"
 
 # It is replay-ost-single, after all
 OSTCOUNT=1
@@ -30,13 +30,14 @@ OSTCOUNT=1
 build_test_filter
 
 REFORMAT=--reformat cleanup_and_setup_lustre
+assert_DIR
 rm -rf $DIR/[df][0-9]*
 
 test_0a() {
     zconf_umount `hostname` $MOUNT -f
     # needs to run during initial client->OST connection
     #define OBD_FAIL_OST_ALL_REPLY_NET       0x211
-    do_facet ost "sysctl -w lustre.fail_loc=0x80000211"
+    do_facet ost "lctl set_param fail_loc=0x80000211"
     zconf_mount `hostname` $MOUNT && df $MOUNT || error "0a mount fail"
 }
 run_test 0a "target handle mismatch (bug 5317) `date +%H:%M:%S`"
@@ -96,11 +97,12 @@ test_4() {
 run_test 4 "Fail OST during read, with verification"
 
 test_5() {
-    [ -z "`which iozone 2> /dev/null`" ] && log "iozone missing" && return
-    FREE=`df -P -h $DIR | tail -n 1 | awk '{ print $3 }'`
-    case $FREE in
-    *T|*G) FREE=1G;;
-    esac
+    [ -z "`which iozone 2> /dev/null`" ] && skip "iozone missing" && return 0
+    FREE=`df -P $DIR | tail -n 1 | awk '{ print $4/2 }'`
+    GB=1048576  # 1048576KB == 1GB
+    if (( FREE > GB )); then
+        FREE=$GB
+    fi
     IOZONE_OPTS="-i 0 -i 1 -i 2 -+d -r 4 -s $FREE"
     iozone $IOZONE_OPTS -f $DIR/$tfile &
     PID=$!
@@ -130,7 +132,7 @@ test_6() {
     sleep 2					# ensure we have a fresh statfs
     sync
 #define OBD_FAIL_MDS_REINT_NET_REP       0x119
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+    do_facet mds "lctl set_param fail_loc=0x80000119"
     after_dd=`kbytesfree`
     log "before: $before after_dd: $after_dd"
     (( $before > $after_dd )) || return 1

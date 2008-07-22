@@ -27,7 +27,14 @@ EOF
 
 if [ -z "$LUSTRECVS_UPDATED" ] ; then
     echo "$progname: updating lustrecvs"
-    cvs up -l || fatal 1 "Error updating lustrecvs"
+
+    # If checking out a specific tag, make sure all of the files here are also
+    # checked out with the same tag to avoid later changes breaking things.
+    case "$1" in
+    v*|b_release_*) TAG="-r $1" ;;
+    esac
+
+    cvs update -l $TAG
     export LUSTRECVS_UPDATED=yes
     exec "$0" "$@"
 fi
@@ -81,6 +88,8 @@ case "$lustretag" in
     # this is the branch table
     # keep this list sorted alphabetically!
 
+    *_gate) buildtag="b_build_gate" ;;
+
     *)
         buildtag="HEAD"
 	;;
@@ -133,6 +142,16 @@ hg_cmd ()
     repository="$3"
 
     if [ ! "$repository" ]; then
+        return
+    fi
+
+    if ! which hg &> /dev/null; then
+    cat <<EOF
+
+Error: Mercurial is missing, try 'yum install mercurial', 'apt-get install
+mercurial' or try http://rpmfind.net/linux/rpm2html/search.php?query=mercurial
+EOF
+        error_modules="$dir $error_modules"
         return
     fi
 

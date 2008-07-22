@@ -77,6 +77,10 @@ struct obd_statfs;
 #define LL_IOC_OBD_STATFS       IOC_OBD_STATFS
 #define IOC_MDC_GETSTRIPE       IOC_MDC_GETFILESTRIPE
 
+/* Do not define O_CHECK_STALE as 0200000000,
+ * which is conflict with MDS_OPEN_OWNEROVERRIDE */
+#define O_CHECK_STALE       020000000  /* hopefully this does not conflict */
+
 #define O_LOV_DELAY_CREATE 0100000000  /* hopefully this does not conflict */
 #define O_JOIN_FILE        0400000000  /* hopefully this does not conflict */
 
@@ -129,6 +133,19 @@ struct ll_recreate_obj {
         __u32 lrc_ost_idx;
 };
 
+struct ll_fid {
+        __u64 id;         /* holds object id */
+        __u32 generation; /* holds object generation */
+        __u32 f_type;     /* holds object type or stripe idx when passing it to
+                           * OST for saving into EA. */
+};
+
+struct filter_fid {
+        struct ll_fid   ff_fid;  /* ff_fid.f_type == file stripe number */
+        __u64           ff_objid;
+        __u64           ff_group;
+};
+
 struct obd_uuid {
         char uuid[40];
 };
@@ -171,11 +188,10 @@ static inline char *obd_uuid2str(struct obd_uuid *uuid)
 #define LUSTRE_Q_GETQUOTA   0x800007     /* get user quota structure */
 #define LUSTRE_Q_SETQUOTA   0x800008     /* set user quota structure */
 /* lustre-specific control commands */
-#define LUSTRE_Q_INVALIDATE 0x80000b     /* invalidate quota data */
+#define LUSTRE_Q_INVALIDATE  0x80000b     /* invalidate quota data */
+#define LUSTRE_Q_FINVALIDATE 0x80000c     /* invalidate filter quota data */
 
 #define UGQUOTA 2       /* set both USRQUOTA and GRPQUOTA */
-
-#define QFMT_LDISKFS 2  /* QFMT_VFS_V0(2), quota format for ldiskfs */
 
 struct if_quotacheck {
         char                    obd_type[16];

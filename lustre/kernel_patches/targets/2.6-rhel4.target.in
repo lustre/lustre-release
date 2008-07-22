@@ -1,5 +1,5 @@
 lnxmaj="2.6.9"
-lnxrel="67.0.7.EL"
+lnxrel="67.0.20.EL"
 
 KERNEL=linux-${lnxmaj}-${lnxrel}.tar.bz2
 SERIES=2.6-rhel4.series

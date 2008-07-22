@@ -34,6 +34,7 @@
 #include <obd_class.h>
 #include <obd.h>
 #endif
+#include <lustre_disk.h>
 #include <lustre_log.h>
 #include <lprocfs_status.h>
 #include <libcfs/list.h>
@@ -188,10 +189,14 @@ int class_attach(struct lustre_cfg *lcfg)
         LASSERTF(strncmp(obd->obd_name, name, strlen(name)) == 0, "%p obd_name %s != %s\n",
                  obd, obd->obd_name, name);
 
+        rwlock_init(&obd->obd_pool_lock);
+        obd->obd_pool_limit = 0;
+        obd->obd_pool_slv = 0;
+
         CFS_INIT_LIST_HEAD(&obd->obd_exports);
         CFS_INIT_LIST_HEAD(&obd->obd_exports_timed);
         CFS_INIT_LIST_HEAD(&obd->obd_nid_stats);
-        spin_lock_init(&obd->nid_lock);
+        spin_lock_init(&obd->obd_nid_lock);
         spin_lock_init(&obd->obd_dev_lock);
         sema_init(&obd->obd_dev_sem, 1);
         spin_lock_init(&obd->obd_osfs_lock);
@@ -214,8 +219,8 @@ int class_attach(struct lustre_cfg *lcfg)
 
         len = strlen(uuid);
         if (len >= sizeof(obd->obd_uuid)) {
-                CERROR("uuid must be < "LPSZ" bytes long\n",
-                       sizeof(obd->obd_uuid));
+                CERROR("uuid must be < %d bytes long\n",
+                       (int)sizeof(obd->obd_uuid));
                 GOTO(out, rc = -EINVAL);
         }
         memcpy(obd->obd_uuid.uuid, uuid, len);
@@ -355,10 +360,10 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
                obd->obd_name, obd->obd_uuid.uuid);
 
         class_decref(obd);
-        
+
         /* not strictly necessary, but cleans up eagerly */
         obd_zombie_impexp_cull();
-        
+
         RETURN(0);
 }
 
@@ -858,7 +863,7 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
         ENTRY;
 
         if (lcfg->lcfg_command != LCFG_PARAM) {
-                CERROR("Unknown command: %d\n", lcfg->lcfg_command);
+                CERROR("Unknown command: %x\n", lcfg->lcfg_command);
                 RETURN(-EINVAL);
         }
 
@@ -904,8 +909,7 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                 if (!matched) {
                         CERROR("%s: unknown param %s\n",
                                (char *)lustre_cfg_string(lcfg, 0), key);
-                        rc = -EINVAL;
-                        /* continue parsing other params */
+                        /* rc = -EINVAL;	continue parsing other params */
                 } else {
                         LCONSOLE_INFO("%s.%.*s: set parameter %.*s=%s\n", 
                                       (char *)lustre_cfg_string(lcfg, 0),
@@ -999,6 +1003,26 @@ static int class_config_llog_handler(struct llog_handle * handle,
                         rc = 0;
                         /* No processing! */
                         break;
+                }
+
+                /**
+                 * For interop mode between 1.8 and 2.0:
+                 * skip "lmv" configuration which exists since 2.0.
+                 */
+                {
+                        char *devname = lustre_cfg_string(lcfg, 0);
+                        char *typename = lustre_cfg_string(lcfg, 1);
+
+                        if (devname)
+                                devname += strlen(devname) - strlen("clilmv");
+
+                        if ((lcfg->lcfg_command == LCFG_ATTACH && typename &&
+                             strcmp(typename, "lmv") == 0) ||
+                            (devname && strcmp(devname, "clilmv") == 0)) {
+                                CWARN("skipping 'lmv' config: cmd=%x,%s:%s\n",
+                                       lcfg->lcfg_command, devname, typename);
+                                GOTO(out, rc = 0);
+                        }
                 }
 
                 if ((clli->cfg_flags & CFG_F_EXCLUDE) && 

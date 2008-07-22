@@ -295,6 +295,14 @@ static inline void spin_unlock_bh(spinlock_t *l) {}
 static inline void spin_lock_irqsave(spinlock_t *a, unsigned long b) {}
 static inline void spin_unlock_irqrestore(spinlock_t *a, unsigned long b) {}
 
+typedef spinlock_t rwlock_t;
+#define RW_LOCK_UNLOCKED        SPIN_LOCK_UNLOCKED
+#define read_lock(l)            spin_lock(l)
+#define read_unlock(l)          spin_unlock(l)
+#define write_lock(l)           spin_lock(l)
+#define write_unlock(l)         spin_unlock(l)
+#define rwlock_init(l)          spin_lock_init(l)
+
 #define min(x,y) ((x)<(y) ? (x) : (y))
 #define max(x,y) ((x)>(y) ? (x) : (y))
 

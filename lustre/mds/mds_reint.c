@@ -60,6 +60,38 @@ struct mds_logcancel_data {
         struct llog_cookie      mlcd_cookies[0];
 };
 
+/** lookup child dentry in parent dentry according to the name.
+ *  if dentry is found, delete "lustre_mdt_attrs" EA (with name "lma")
+ *  if it exists by checking OBD_INCOMPAT_FID.
+ */
+struct dentry *mds_lookup(struct obd_device *obd, const char *fid_name,
+                          struct dentry *dparent, int fid_namelen)
+{
+        struct dentry *dchild;
+        struct lr_server_data *lsd = obd->u.mds.mds_server_data;
+        EXIT;
+        
+        dchild = ll_lookup_one_len(fid_name, dparent, fid_namelen);
+        if (!IS_ERR(dchild) &&
+            unlikely((lsd->lsd_feature_incompat & OBD_INCOMPAT_FID) ||
+                      OBD_FAIL_CHECK(OBD_FAIL_MDS_REMOVE_COMMON_EA))) {
+                struct inode *inode = dchild->d_inode; 
+                void         *handle;
+                if (inode != NULL) {
+                        handle = fsfilt_start(obd, inode, FSFILT_OP_SETATTR,
+                                              NULL);
+                        if (!IS_ERR(handle)) {
+                                LOCK_INODE_MUTEX(inode);
+                                fsfilt_set_md(obd, inode, handle, NULL, 0,
+                                              "lma");
+                                /* result is ignored. */
+                                UNLOCK_INODE_MUTEX(inode);
+                                fsfilt_commit(obd, inode, handle, 0);
+                        }
+                }
+        }
+        RETURN(dchild);
+}
 
 static void mds_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
                                   void *cb_data, int error)
@@ -108,7 +140,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                        int force_sync)
 {
         struct mds_export_data *med = &req->rq_export->exp_mds_data;
-        struct mds_client_data *mcd = med->med_mcd;
+        struct lsd_client_data *lcd = med->med_lcd;
         struct obd_device *obd = req->rq_export->exp_obd;
         __u64 transno, prev_transno;
         int err;
@@ -167,20 +199,20 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
         req->rq_transno = transno;
         lustre_msg_set_transno(req->rq_repmsg, transno);
         if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE) {
-                prev_transno = le64_to_cpu(mcd->mcd_last_close_transno);
-                mcd->mcd_last_close_transno = cpu_to_le64(transno);
-                mcd->mcd_last_close_xid = cpu_to_le64(req->rq_xid);
-                mcd->mcd_last_close_result = cpu_to_le32(rc);
-                mcd->mcd_last_close_data = cpu_to_le32(op_data);
+                prev_transno = le64_to_cpu(lcd->lcd_last_close_transno);
+                lcd->lcd_last_close_transno = cpu_to_le64(transno);
+                lcd->lcd_last_close_xid = cpu_to_le64(req->rq_xid);
+                lcd->lcd_last_close_result = cpu_to_le32(rc);
+                lcd->lcd_last_close_data = cpu_to_le32(op_data);
         } else {
-                prev_transno = le64_to_cpu(mcd->mcd_last_transno);
+                prev_transno = le64_to_cpu(lcd->lcd_last_transno);
                 if (((lustre_msg_get_flags(req->rq_reqmsg) &
                       (MSG_RESENT | MSG_REPLAY)) == 0) ||
                     (transno > prev_transno)) {
-                        mcd->mcd_last_transno = cpu_to_le64(transno);
-                        mcd->mcd_last_xid     = cpu_to_le64(req->rq_xid);
-                        mcd->mcd_last_result  = cpu_to_le32(rc);
-                        mcd->mcd_last_data    = cpu_to_le32(op_data);
+                        lcd->lcd_last_transno = cpu_to_le64(transno);
+                        lcd->lcd_last_xid     = cpu_to_le64(req->rq_xid);
+                        lcd->lcd_last_result  = cpu_to_le32(rc);
+                        lcd->lcd_last_data    = cpu_to_le32(op_data);
                 }
         }
         /* update the server data to not lose the greatest transno. Bug 11125 */
@@ -198,8 +230,8 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                                                           handle, mds_commit_cb,
                                                           NULL);
 
-                err = fsfilt_write_record(obd, mds->mds_rcvd_filp, mcd,
-                                          sizeof(*mcd), &off, 
+                err = fsfilt_write_record(obd, mds->mds_rcvd_filp, lcd,
+                                          sizeof(*lcd), &off,
                                           force_sync | exp->exp_need_sync);
                 if (force_sync)
                         mds_commit_cb(obd, transno, NULL, err);
@@ -213,7 +245,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
 
         DEBUG_REQ(log_pri, req,
                   "wrote trans #"LPU64" rc %d client %s at idx %u: err = %d",
-                  transno, rc, mcd->mcd_uuid, med->med_lr_idx, err);
+                  transno, rc, lcd->lcd_uuid, med->med_lr_idx, err);
 
         err = mds_lov_write_objids(obd);
         if (err) {
@@ -380,17 +412,17 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
         spin_unlock(&exp->exp_lock);
 }
 
-void mds_req_from_mcd(struct ptlrpc_request *req, struct mds_client_data *mcd)
+void mds_req_from_lcd(struct ptlrpc_request *req, struct lsd_client_data *lcd)
 {
         if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE) {
-                req->rq_transno = le64_to_cpu(mcd->mcd_last_close_transno);
+                req->rq_transno = le64_to_cpu(lcd->lcd_last_close_transno);
                 lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
-                req->rq_status = le32_to_cpu(mcd->mcd_last_close_result);
+                req->rq_status = le32_to_cpu(lcd->lcd_last_close_result);
                 lustre_msg_set_status(req->rq_repmsg, req->rq_status);
         } else {
-                req->rq_transno = le64_to_cpu(mcd->mcd_last_transno);
+                req->rq_transno = le64_to_cpu(lcd->lcd_last_transno);
                 lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
-                req->rq_status = le32_to_cpu(mcd->mcd_last_result);
+                req->rq_status = le32_to_cpu(lcd->lcd_last_result);
                 lustre_msg_set_status(req->rq_repmsg, req->rq_status);
         }
         DEBUG_REQ(D_RPCTRACE, req, "restoring transno "LPD64"/status %d",
@@ -402,21 +434,29 @@ void mds_req_from_mcd(struct ptlrpc_request *req, struct mds_client_data *mcd)
 static void reconstruct_reint_setattr(struct mds_update_record *rec,
                                       int offset, struct ptlrpc_request *req)
 {
-        struct mds_export_data *med = &req->rq_export->exp_mds_data;
-        struct mds_obd *obd = &req->rq_export->exp_obd->u.mds;
+        struct obd_export *exp = req->rq_export;
+        struct mds_export_data *med = &exp->exp_mds_data;
+        struct mds_obd *obd = &exp->exp_obd->u.mds;
         struct dentry *de;
         struct mds_body *body;
 
-        mds_req_from_mcd(req, med->med_mcd);
+        mds_req_from_lcd(req, med->med_lcd);
 
         de = mds_fid2dentry(obd, rec->ur_fid1, NULL);
         if (IS_ERR(de)) {
-                LASSERT(PTR_ERR(de) == req->rq_status);
+                int rc;
+                rc = PTR_ERR(de);
+                LCONSOLE_WARN("FID "LPU64"/%u lookup error %d."
+                              " Evicting client %s with export %s.\n",
+                              rec->ur_fid1->id, rec->ur_fid1->generation, rc,
+                              obd_uuid2str(&exp->exp_client_uuid),
+                              obd_export_nid2str(exp));
+                mds_export_evict(exp);
+                EXIT;
                 return;
         }
 
         body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
-        mds_pack_inode2fid(&body->fid1, de->d_inode);
         mds_pack_inode2body(body, de->d_inode);
 
         /* Don't return OST-specific attributes if we didn't just set them */
@@ -659,7 +699,6 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         }
 
         body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
-        mds_pack_inode2fid(&body->fid1, inode);
         mds_pack_inode2body(body, inode);
 
         /* don't return OST-specific attributes if we didn't just set them. */
@@ -737,23 +776,45 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
 static void reconstruct_reint_create(struct mds_update_record *rec, int offset,
                                      struct ptlrpc_request *req)
 {
-        struct mds_export_data *med = &req->rq_export->exp_mds_data;
-        struct mds_obd *obd = &req->rq_export->exp_obd->u.mds;
+        struct obd_export *exp = req->rq_export;
+        struct mds_export_data *med = &exp->exp_mds_data;
+        struct mds_obd *obd = &exp->exp_obd->u.mds;
         struct dentry *parent, *child;
         struct mds_body *body;
+        int rc;
 
-        mds_req_from_mcd(req, med->med_mcd);
+        mds_req_from_lcd(req, med->med_lcd);
 
         if (req->rq_status)
                 return;
 
         parent = mds_fid2dentry(obd, rec->ur_fid1, NULL);
-        LASSERT(!IS_ERR(parent));
-        child = ll_lookup_one_len(rec->ur_name, parent, rec->ur_namelen - 1);
-        LASSERT(!IS_ERR(child));
+        if (IS_ERR(parent)) {
+                rc = PTR_ERR(parent);
+                LCONSOLE_WARN("Parent "LPU64"/%u lookup error %d." 
+                              " Evicting client %s with export %s.\n",
+                              rec->ur_fid1->id, rec->ur_fid1->generation, rc,
+                              obd_uuid2str(&exp->exp_client_uuid),
+                              obd_export_nid2str(exp));
+                mds_export_evict(exp);
+                EXIT;
+                return;
+        }
+        child = mds_lookup(exp->exp_obd, rec->ur_name, parent,
+                           rec->ur_namelen - 1);
+        if (IS_ERR(child)) {
+                rc = PTR_ERR(child);
+                LCONSOLE_WARN("Child "LPU64"/%u lookup error %d." 
+                              " Evicting client %s with export %s.\n",
+                              rec->ur_fid1->id, rec->ur_fid1->generation, rc,
+                              obd_uuid2str(&exp->exp_client_uuid),
+                              obd_export_nid2str(exp));
+                mds_export_evict(exp);
+                EXIT;
+                return;
+        }
 
         body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
-        mds_pack_inode2fid(&body->fid1, child->d_inode);
         mds_pack_inode2body(body, child->d_inode);
 
         l_dput(parent);
@@ -813,7 +874,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
 
         ldlm_lock_dump_handle(D_OTHER, &lockh);
 
-        dchild = ll_lookup_one_len(rec->ur_name, dparent, rec->ur_namelen - 1);
+        dchild = mds_lookup(obd, rec->ur_name, dparent, rec->ur_namelen - 1);
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
                 CDEBUG(D_DENTRY, "child lookup error %d\n", rc);
@@ -954,7 +1015,6 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 }
 
                 body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
-                mds_pack_inode2fid(&body->fid1, inode);
                 mds_pack_inode2body(body, inode);
         }
         EXIT;
@@ -1368,7 +1428,7 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
         cleanup_phase = 1; /* parent dentry */
 
         /* Step 2: Lookup child (without DLM lock, to get resource name) */
-        *dchildp = ll_lookup_one_len(name, *dparentp, namelen - 1);
+        *dchildp = mds_lookup(obd, name, *dparentp, namelen - 1);
         if (IS_ERR(*dchildp)) {
                 rc = PTR_ERR(*dchildp);
                 CDEBUG(D_INODE, "child lookup error %d\n", rc);
@@ -1451,7 +1511,7 @@ void mds_reconstruct_generic(struct ptlrpc_request *req)
 {
         struct mds_export_data *med = &req->rq_export->exp_mds_data;
 
-        mds_req_from_mcd(req, med->med_mcd);
+        mds_req_from_lcd(req, med->med_lcd);
 }
 
 /* If we are unlinking an open file/dir (i.e. creating an orphan) then
@@ -1666,7 +1726,6 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                         LOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode);
                         cleanup_phase = 5; /* UNLOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode); */
                 } else if (S_ISREG(child_inode->i_mode)) {
-                        mds_pack_inode2fid(&body->fid1, child_inode);
                         mds_pack_inode2body(body, child_inode);
                         mds_pack_md(obd, req->rq_repmsg, offset + 1, body,
                                     child_inode, MDS_PACK_MD_LOCK, 0);
@@ -1759,8 +1818,8 @@ cleanup:
         rc = mds_finish_transno(mds, dparent ? dparent->d_inode : NULL,
                                 handle, req, rc, 0, 0);
         if (!rc)
-                (void)obd_set_info_async(mds->mds_osc_exp, strlen("unlinked"),
-                                         "unlinked", 0, NULL, NULL);
+                (void)obd_set_info_async(mds->mds_osc_exp, sizeof(KEY_UNLINKED),
+                                         KEY_UNLINKED, 0, NULL, NULL);
         switch(cleanup_phase) {
         case 5: /* pending_dir semaphore */
                 UNLOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode);
@@ -1878,7 +1937,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         }
 
         /* Step 3: Lookup the child */
-        dchild = ll_lookup_one_len(rec->ur_name, de_tgt_dir, rec->ur_namelen-1);
+        dchild = mds_lookup(obd, rec->ur_name, de_tgt_dir, rec->ur_namelen-1);
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
                 if (rc != -EPERM && rc != -EACCES && rc != -ENAMETOOLONG)
@@ -2017,7 +2076,7 @@ int mds_get_parents_children_locked(struct obd_device *obd,
         p2_res_id.name[1] = (*de_tgtdirp)->d_inode->i_generation;
 
         /* Step 3: Lookup the source child entry */
-        *de_oldp = ll_lookup_one_len(old_name, *de_srcdirp, old_len - 1);
+        *de_oldp = mds_lookup(obd, old_name, *de_srcdirp, old_len - 1);
         if (IS_ERR(*de_oldp)) {
                 rc = PTR_ERR(*de_oldp);
                 CDEBUG(D_INODE, "old child lookup error (%.*s): rc %d\n",
@@ -2041,7 +2100,7 @@ int mds_get_parents_children_locked(struct obd_device *obd,
         /* Step 4: Lookup the target child entry */
         if (!new_name)
                 GOTO(retry_locks, rc);
-        *de_newp = ll_lookup_one_len(new_name, *de_tgtdirp, new_len - 1);
+        *de_newp = mds_lookup(obd, new_name, *de_tgtdirp, new_len - 1);
         if (IS_ERR(*de_newp)) {
                 rc = PTR_ERR(*de_newp);
                 CDEBUG(D_DENTRY, "new child lookup error (%.*s): rc %d\n",
@@ -2052,8 +2111,14 @@ int mds_get_parents_children_locked(struct obd_device *obd,
         cleanup_phase = 4; /* target dentry */
 
         inode = (*de_newp)->d_inode;
-        if (inode != NULL)
+        if (inode != NULL) {
+                if (is_bad_inode(inode)) {
+                        CERROR("bad inode returned %lu/%u\n",
+                               inode->i_ino, inode->i_generation);
+                        GOTO(cleanup, rc = -ENOENT);
+                }
                 inode = igrab(inode);
+        }
         if (inode == NULL)
                 goto retry_locks;
 
@@ -2067,8 +2132,6 @@ retry_locks:
         maxres_tgt = &p2_res_id;
         cleanup_phase = 4; /* target dentry */
 
-        if (c1_res_id.name[0] != 0 && res_gt(&c1_res_id, &p1_res_id,NULL,NULL))
-                maxres_src = &c1_res_id;
         if (c2_res_id.name[0] != 0 && res_gt(&c2_res_id, &p2_res_id,NULL,NULL))
                 maxres_tgt = &c2_res_id;
 
@@ -2105,6 +2168,11 @@ retry_locks:
 
         if (!new_name)
                 GOTO(cleanup, rc);
+
+        /* Safe to skip check for child res being all zero */
+        if (res_gt(&c1_res_id, maxres_src, NULL, NULL))
+                maxres_src = &c1_res_id;
+
         /* Step 6b: Re-lookup target child to verify it hasn't changed */
         rc = mds_verify_child(obd, &p2_res_id, &dlm_handles[1], *de_tgtdirp,
                               parent_mode, &c2_res_id, &dlm_handles[3], de_newp,
@@ -2242,7 +2310,6 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                         LOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode);
                         cleanup_phase = 4; /* UNLOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode); */
                 } else if (S_ISREG(new_inode->i_mode)) {
-                        mds_pack_inode2fid(&body->fid1, new_inode);
                         mds_pack_inode2body(body, new_inode);
                         mds_pack_md(obd, req->rq_repmsg, offset + 1, body,
                                     new_inode, MDS_PACK_MD_LOCK, 0);

@@ -160,7 +160,6 @@ enum lprocfs_fields_flags {
 
 struct lprocfs_stats {
         unsigned int           ls_num;     /* # of counters */
-        unsigned int           ls_percpu_size;
         int                    ls_flags; /* See LPROCFS_STATS_FLAG_* */
         spinlock_t             ls_lock;  /* Lock used only when there are
                                           * no percpu stats areas */
@@ -201,6 +200,25 @@ static inline int opcode_offset(__u32 opc) {
                         (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
                         (MDS_LAST_OPC - MDS_FIRST_OPC) +
                         (OST_LAST_OPC - OST_FIRST_OPC));
+       } else if (opc < FLD_LAST_OPC) {
+                /* FLD opcode */
+                return (opc - FLD_FIRST_OPC +
+                        (LLOG_LAST_OPC - LLOG_FIRST_OPC) +
+                        (OBD_LAST_OPC - OBD_FIRST_OPC) +
+                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
+                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
+        } else if (opc < SEQ_LAST_OPC) {
+                /* SEQ opcode */
+                return (opc - SEQ_FIRST_OPC +
+                        (FLD_LAST_OPC - FLD_FIRST_OPC) +
+                        (LLOG_LAST_OPC - LLOG_FIRST_OPC) +
+                        (OBD_LAST_OPC - OBD_FIRST_OPC) +
+                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
+                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
         } else {
                 /* Unknown Opcode */
                 return -1;
@@ -212,7 +230,9 @@ static inline int opcode_offset(__u32 opc) {
                             (LDLM_LAST_OPC - LDLM_FIRST_OPC)   + \
                             (MGS_LAST_OPC - MGS_FIRST_OPC)     + \
                             (OBD_LAST_OPC - OBD_FIRST_OPC)     + \
-                            (LLOG_LAST_OPC - LLOG_FIRST_OPC))
+                            (LLOG_LAST_OPC - LLOG_FIRST_OPC)   + \
+                            (FLD_LAST_OPC - FLD_FIRST_OPC)     + \
+                            (SEQ_LAST_OPC - SEQ_FIRST_OPC))
 
 #define EXTRA_MAX_OPCODES ((PTLRPC_LAST_CNTR - PTLRPC_FIRST_CNTR)  + \
                            (EXTRA_LAST_OPC - EXTRA_FIRST_OPC))
@@ -345,7 +365,7 @@ struct obd_export;
 extern int lprocfs_add_clear_entry(struct obd_device * obd,
                                    cfs_proc_dir_entry_t *entry);
 extern int lprocfs_exp_setup(struct obd_export *exp,
-                             lnet_nid_t peer_nid, int *newnid);
+                             lnet_nid_t *peer_nid, int *newnid);
 extern int lprocfs_exp_cleanup(struct obd_export *exp);
 extern int lprocfs_add_simple(struct proc_dir_entry *root,
                               char *name, read_proc_t *read_proc,
@@ -494,14 +514,14 @@ extern struct rw_semaphore _lprocfs_lock;
  * the import in a client obd_device for a lprocfs entry */
 #define LPROCFS_CLIMP_CHECK(obd) do {           \
         typecheck(struct obd_device *, obd);    \
-        mutex_down(&(obd)->u.cli.cl_sem);       \
+        down_read(&(obd)->u.cli.cl_sem);        \
         if ((obd)->u.cli.cl_import == NULL) {   \
-             mutex_up(&(obd)->u.cli.cl_sem);    \
+             up_read(&(obd)->u.cli.cl_sem);     \
              return -ENODEV;                    \
         }                                       \
 } while(0)
 #define LPROCFS_CLIMP_EXIT(obd)                 \
-        mutex_up(&(obd)->u.cli.cl_sem);
+        up_read(&(obd)->u.cli.cl_sem);
 
 
 /* write the name##_seq_show function, call LPROC_SEQ_FOPS_RO for read-only 
@@ -586,7 +606,8 @@ static inline void lprocfs_free_obd_stats(struct obd_device *obddev)
 struct obd_export;
 static inline int lprocfs_add_clear_entry(struct obd_export *exp)
 { return 0; }
-static inline int lprocfs_exp_setup(struct obd_export *exp)
+static inline int lprocfs_exp_setup(struct obd_export *exp,
+                             	    lnet_nid_t *peer_nid, int *newnid)
 { return 0; }
 static inline int lprocfs_exp_cleanup(struct obd_export *exp)
 { return 0; }

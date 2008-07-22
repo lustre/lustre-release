@@ -10,11 +10,13 @@ sbin_scripts = lrun
 bin_scripts = llstat llobdstat plot-llstat
 
 if UTILS
-noinst_PROGRAMS = wirecheck obdio obdbarrier
+noinst_PROGRAMS = obdio obdbarrier
+EXTRA_PROGRAMS = wirecheck
 # mount only finds helpers in /sbin
 rootsbin_PROGRAMS = mount.lustre
 sbin_PROGRAMS = mkfs.lustre tunefs.lustre lctl wiretest \
-	l_getgroups llverfs llverdev llog_reader lr_reader ltrack_stats
+	l_getgroups llverfs llverdev llog_reader ll_recover_lost_found_objs \
+	lr_reader ltrack_stats
 if LIBPTHREAD
 sbin_PROGRAMS += loadgen
 endif
@@ -69,13 +71,17 @@ llog_reader_SOURCES = llog_reader.c
 llog_reader_LDADD := $(LIBPTLCTL)
 llog_reader_DEPENDENCIES := $(LIBPTLCTL)
 
+ll_recover_lost_found_objs_SOURCES = ll_recover_lost_found_objs.c
+ll_recover_lost_found_objs_LDADD := $(LIBPTLCTL)
+ll_recover_lost_found_objs_DEPENDENCIES := $(LIBPTLCTL)
+
 lr_reader_SOURCES = lr_reader.c
 
-mount_lustre_SOURCES = mount_lustre.c 
+mount_lustre_SOURCES = mount_lustre.c mount_utils.c mount_utils.h
 mount_lustre_LDADD := $(LIBPTLCTL)
 mount_lustre_DEPENDENCIES := $(LIBPTLCTL)
 
-mkfs_lustre_SOURCES = mkfs_lustre.c
+mkfs_lustre_SOURCES = mkfs_lustre.c mount_utils.c mount_utils.h
 mkfs_lustre_CPPFLAGS = -UTUNEFS $(AM_CPPFLAGS)
 mkfs_lustre_LDADD := $(LIBPTLCTL)
 mkfs_lustre_DEPENDENCIES := $(LIBPTLCTL)

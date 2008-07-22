@@ -22,7 +22,9 @@
  */
  /* This source file is compiled into both mkfs.lustre and tunefs.lustre */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -50,6 +52,7 @@
 #include <lustre_param.h>
 #include <lnet/lnetctl.h>
 #include <lustre_ver.h>
+#include "mount_utils.h"
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096
@@ -73,8 +76,8 @@ struct mkfs_opts {
         int   mo_mgs_failnodes;
 };
 
-static char *progname;
-static int verbose = 1;
+char *progname;
+int verbose = 1;
 static int print_only = 0;
 static int failover = 0;
 
@@ -124,12 +127,6 @@ void usage(FILE *out)
 
 #define vprint if (verbose > 0) printf
 #define verrprint if (verbose >= 0) printf
-
-static void fatal(void)
-{
-        verbose = 0;
-        fprintf(stderr, "\n%s FATAL: ", progname);
-}
 
 /*================ utility functions =====================*/
 
@@ -183,47 +180,6 @@ int get_os_version()
                         version = 26;
         }
         return version;
-}
-
-int run_command(char *cmd, int cmdsz)
-{
-        char log[] = "/tmp/mkfs_logXXXXXX";
-        int fd = -1, rc;
-
-        if ((cmdsz - strlen(cmd)) < 6) {
-                fatal();
-                fprintf(stderr, "Command buffer overflow: %.*s...\n",
-                        cmdsz, cmd);
-                return ENOMEM;
-        }
-
-        if (verbose > 1) {
-                printf("cmd: %s\n", cmd);
-        } else {
-                if ((fd = mkstemp(log)) >= 0) {
-                        close(fd);
-                        strcat(cmd, " >");
-                        strcat(cmd, log);
-                }
-        }
-        strcat(cmd, " 2>&1");
-
-        /* Can't use popen because we need the rv of the command */
-        rc = system(cmd);
-        if (rc && (fd >= 0)) {
-                char buf[128];
-                FILE *fp;
-                fp = fopen(log, "r");
-                if (fp) {
-                        while (fgets(buf, sizeof(buf), fp) != NULL) {
-                                printf("   %s", buf);
-                        }
-                        fclose(fp);
-                }
-        }
-        if (fd >= 0)
-                remove(log);
-        return rc;
 }
 
 static int check_mtab_entry(char *spec)
@@ -441,6 +397,7 @@ static int file_in_dev(char *file_name, char *dev_name)
                 if (strstr(debugfs_cmd, "unsupported feature")) {
                         disp_old_e2fsprogs_msg("an unknown", 0);
                 }
+                pclose(fp);
                 return -1;
         }
         pclose(fp);
@@ -526,11 +483,16 @@ static void enable_default_backfs_features(struct mkfs_opts *mop)
 
         strscat(mop->mo_mkfsopts, " -O dir_index", sizeof(mop->mo_mkfsopts));
 
+        /* Upstream e2fsprogs called our uninit_groups feature uninit_bg,
+         * check for both of them when testing e2fsprogs features. */
         if (is_e2fsprogs_feature_supp("uninit_groups") == 0)
                 strscat(mop->mo_mkfsopts, ",uninit_groups",
                         sizeof(mop->mo_mkfsopts));
+        else if (is_e2fsprogs_feature_supp("uninit_bg") == 0)
+                strscat(mop->mo_mkfsopts, ",uninit_bg",
+                        sizeof(mop->mo_mkfsopts));
         else
-                disp_old_e2fsprogs_msg("uninit_groups", 1);
+                disp_old_e2fsprogs_msg("uninit_bg", 1);
 
         ret = uname(&uts);
         if (ret)
@@ -886,6 +848,10 @@ int read_local_files(struct mkfs_opts *mop)
 
         dev = mop->mo_device;
 
+        /* TODO: it's worth observing the get_mountdata() function that is
+                 in mount_utils.c for getting the mountdata out of the
+                 filesystem */
+
         /* Construct debugfs command line. */
         snprintf(cmd, cmdsz, "debugfs -c -R 'dump /%s %s/mountdata' %s",
                  MOUNT_DATA_FILE, tmpdir, dev);
@@ -1204,12 +1170,6 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                                 return 1;
                         rc = add_param(mop->mo_ldd.ldd_params, PARAM_FAILNODE,
                                        nids, 0);
-                        /* Combo needs to add MDT failnodes as MGS failnodes
-                           as well */
-                        if (!rc && IS_MGS(&mop->mo_ldd)) {
-                                rc = add_param(mop->mo_ldd.ldd_params,
-                                               PARAM_MGSNODE, nids, 0);
-                        }
                         free(nids);
                         if (rc)
                                 return rc;

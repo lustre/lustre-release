@@ -205,6 +205,7 @@ static void check_obd_connect_data(void)
         CHECK_CDEFINE(OBD_CONNECT_LRU_RESIZE);
         CHECK_CDEFINE(OBD_CONNECT_MDS_MDS);
         CHECK_CDEFINE(OBD_CONNECT_REAL);
+        CHECK_CDEFINE(OBD_CONNECT_FID);
         CHECK_CDEFINE(OBD_CONNECT_CKSUM);
 }
 
@@ -999,17 +1000,6 @@ check_qunit_data_old2(void)
 }
 
 static void
-check_qunit_data_old(void)
-{
-        BLANK_LINE();
-        CHECK_STRUCT(qunit_data_old);
-        CHECK_MEMBER(qunit_data_old, qd_id);
-        CHECK_MEMBER(qunit_data_old, qd_type);
-        CHECK_MEMBER(qunit_data_old, qd_count);
-        CHECK_MEMBER(qunit_data_old, qd_isblk);
-}
-
-static void
 check_mgs_target_info(void)
 {
         BLANK_LINE();
@@ -1047,7 +1037,6 @@ check_lustre_disk_data(void)
         CHECK_MEMBER(lustre_disk_data, ldd_params);
 }
 
-#ifdef LIBLUSTRE_POSIX_ACL
 static void
 check_posix_acl_xattr_entry(void)
 {
@@ -1066,7 +1055,6 @@ check_posix_acl_xattr_header(void)
         CHECK_MEMBER_TYPEDEF(posix_acl_xattr_header, a_version);
         CHECK_MEMBER_TYPEDEF(posix_acl_xattr_header, a_entries);
 }
-#endif
 
 static void
 check_quota_adjust_qunit(void)
@@ -1333,6 +1321,9 @@ main(int argc, char **argv)
         check_mgs_target_info();
         check_lustre_disk_data();
         printf("#ifdef LIBLUSTRE_POSIX_ACL\n");
+#ifndef LIBLUSTRE_POSIX_ACL
+#error build generator without LIBLUSTRE_POSIX_ACL defined - produce wrong check code.
+#endif
         check_posix_acl_xattr_entry();
         check_posix_acl_xattr_header();
         printf("#endif\n");

@@ -178,7 +178,7 @@ main(int argc, char **argv)
 
         if (server_mode_flag)
                 lnet_server_mode();
-        
+
         rc = lnet_selftest_init();
         if (rc != 0) {
                 fprintf(stderr, "Can't startup selftest\n");
@@ -187,7 +187,7 @@ main(int argc, char **argv)
 
                 return -1;
         }
-	
+
         rc = lstjn_join_session(ses, grp);
         if (rc != 0)
                 goto out;

@@ -206,6 +206,7 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
                               struct vfsmount **mnt)
 {
+        struct obd_device *obd = container_of(mds, struct obd_device, u.mds);
         char fid_name[32];
         unsigned long ino = fid->id;
         __u32 generation = fid->generation;
@@ -222,7 +223,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
 
         /* under ext3 this is neither supposed to return bad inodes
            nor NULL inodes. */
-        result = ll_lookup_one_len(fid_name, mds->mds_fid_de, strlen(fid_name));
+        result = mds_lookup(obd, fid_name, mds->mds_fid_de, strlen(fid_name));
         if (IS_ERR(result))
                 RETURN(result);
 
@@ -233,8 +234,6 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
        if (inode->i_nlink == 0) {
                 if (inode->i_mode == 0 &&
                     LTIME_S(inode->i_ctime) == 0 ) {
-                        struct obd_device *obd = container_of(mds, struct
-                                                              obd_device, u.mds);
                         LCONSOLE_WARN("Found inode with zero nlink, mode and "
                                       "ctime -- this may indicate disk"
                                       "corruption (device %s, inode %lu, link:"
@@ -327,8 +326,7 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
 {
         struct obd_export *exp;
         struct mds_export_data *med;
-        struct mds_client_data *mcd = NULL;
-        lnet_nid_t *client_nid = (lnet_nid_t *)localdata;
+        struct lsd_client_data *lcd = NULL;
         int rc, abort_recovery;
         ENTRY;
 
@@ -348,7 +346,7 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
          *
          * There is a second race between adding the export to the list,
          * and filling in the client data below.  Hence skipping the case
-         * of NULL mcd above.  We should already be controlling multiple
+         * of NULL lcd above.  We should already be controlling multiple
          * connects at the client, and we can't hold the spinlock over
          * memory allocations without risk of deadlocking.
          */
@@ -363,21 +361,21 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
         if (rc)
                 GOTO(out, rc);
 
-        OBD_ALLOC(mcd, sizeof(*mcd));
-        if (!mcd)
+        OBD_ALLOC_PTR(lcd);
+        if (!lcd)
                 GOTO(out, rc = -ENOMEM);
 
-        memcpy(mcd->mcd_uuid, cluuid, sizeof(mcd->mcd_uuid));
-        med->med_mcd = mcd;
+        memcpy(lcd->lcd_uuid, cluuid, sizeof(lcd->lcd_uuid));
+        med->med_lcd = lcd;
 
-        rc = mds_client_add(obd, exp, -1, *client_nid);
+        rc = mds_client_add(obd, exp, -1, localdata);
         GOTO(out, rc);
 
 out:
         if (rc) {
-                if (mcd) {
-                        OBD_FREE(mcd, sizeof(*mcd));
-                        med->med_mcd = NULL;
+                if (lcd) {
+                        OBD_FREE_PTR(lcd);
+                        med->med_lcd = NULL;
                 }
                 class_disconnect(exp);
         } else {
@@ -703,7 +701,6 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
         body = lustre_msg_buf(req->rq_repmsg, reply_off, sizeof(*body));
         LASSERT(body != NULL);                 /* caller prepped reply */
 
-        mds_pack_inode2fid(&body->fid1, inode);
         body->flags = reqbody->flags; /* copy MDS_BFLAG_EXT_FLAGS if present */
         mds_pack_inode2body(body, inode);
         reply_off++;
@@ -955,6 +952,8 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
         }
 #endif
 
+        /* child_lockh() is only set in fixup_handle_for_resent_req() 
+         * if MSG_RESENT is set */
         if (lustre_handle_is_used(child_lockh)) {
                 LASSERT(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT);
                 resent_req = 1;
@@ -988,6 +987,8 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                 struct ldlm_resource *res;
                 DEBUG_REQ(D_DLMTRACE, req, "resent, not enqueuing new locks");
                 granted_lock = ldlm_handle2lock(child_lockh);
+                /* lock was granted in fixup_handle_for_resent_req() if 
+                 * MSG_RESENT is set */
                 LASSERTF(granted_lock != NULL, LPU64"/%u lockh "LPX64"\n",
                          body->fid1.id, body->fid1.generation,
                          child_lockh->cookie);
@@ -997,7 +998,12 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                 child_fid.id = res->lr_name.name[0];
                 child_fid.generation = res->lr_name.name[1];
                 dchild = mds_fid2dentry(&obd->u.mds, &child_fid, NULL);
-                LASSERT(!IS_ERR(dchild));
+                if (IS_ERR(dchild)) {
+                        rc = PTR_ERR(dchild);
+                        LCONSOLE_WARN("Child "LPU64"/%u lookup error %d.",
+                                      child_fid.id, child_fid.generation, rc);
+                        GOTO(cleanup, rc);
+                }
                 LDLM_LOCK_PUT(granted_lock);
         }
 
@@ -1179,7 +1185,6 @@ static int mds_sync(struct ptlrpc_request *req, int offset)
 
                 body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                       sizeof(*body));
-                mds_pack_inode2fid(&body->fid1, de->d_inode);
                 mds_pack_inode2body(body, de->d_inode);
 
                 l_dput(de);
@@ -1356,7 +1361,7 @@ static int mds_set_info_rpc(struct obd_export *exp, struct ptlrpc_request *req)
 
         lustre_msg_set_status(req->rq_repmsg, 0);
 
-        if (KEY_IS("read-only")) {
+        if (KEY_IS(KEY_READONLY)) {
                 if (val == NULL || vallen < sizeof(__u32)) {
                         DEBUG_REQ(D_HA, req, "no set_info val");
                         RETURN(-EFAULT);
@@ -1523,8 +1528,8 @@ int mds_handle(struct ptlrpc_request *req)
 
                 /* sanity check: if the xid matches, the request must
                  * be marked as a resent or replayed */
-                if (req->rq_xid == le64_to_cpu(med->med_mcd->mcd_last_xid) ||
-                   req->rq_xid == le64_to_cpu(med->med_mcd->mcd_last_close_xid))
+                if (req->rq_xid == le64_to_cpu(med->med_lcd->lcd_last_xid) ||
+                    req->rq_xid == le64_to_cpu(med->med_lcd->lcd_last_close_xid))
                         if (!(lustre_msg_get_flags(req->rq_reqmsg) &
                                  (MSG_RESENT | MSG_REPLAY))) {
                                 CERROR("rq_xid "LPU64" matches last_xid, "
@@ -1650,7 +1655,7 @@ int mds_handle(struct ptlrpc_request *req)
                         break;
                 }
                 opc = *opcp;
-                if (lustre_msg_swabbed(req->rq_reqmsg))
+                if (lustre_req_need_swab(req))
                         __swab32s(&opc);
 
                 DEBUG_REQ(D_INODE, req, "reint %d (%s)", opc,
@@ -1822,12 +1827,11 @@ int mds_handle(struct ptlrpc_request *req)
         /* If we're DISCONNECTing, the mds_export_data is already freed */
         if (!rc && lustre_msg_get_opc(req->rq_reqmsg) != MDS_DISCONNECT) {
                 struct mds_export_data *med = &req->rq_export->exp_mds_data;
-                
+
                 /* I don't think last_xid is used for anyway, so I'm not sure
                    if we need to care about last_close_xid here.*/
                 lustre_msg_set_last_xid(req->rq_repmsg,
-                                       le64_to_cpu(med->med_mcd->mcd_last_xid));
-
+                                        le64_to_cpu(med->med_lcd->lcd_last_xid));
                 target_committed_to_req(req);
         }
 
@@ -1982,7 +1986,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         mds->mds_evict_ost_nids = 1;
 
         sprintf(ns_name, "mds-%s", obd->obd_uuid.uuid);
-        obd->obd_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER,
+        obd->obd_namespace = ldlm_namespace_new(obd, ns_name, LDLM_NAMESPACE_SERVER,
                                                 LDLM_NAMESPACE_GREEDY);
         if (obd->obd_namespace == NULL) {
                 mds_cleanup(obd);
@@ -2080,8 +2084,11 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                               obd->obd_replayable ? "enabled" : "disabled");
         }
 
+        /* Reduce the initial timeout on an MDS because it doesn't need such
+         * a long timeout as an OST does. Adaptive timeouts will adjust this
+         * value appropriately. */
         if (ldlm_timeout == LDLM_TIMEOUT_DEFAULT)
-                ldlm_timeout = 6;
+                ldlm_timeout = MDS_LDLM_TIMEOUT_DEFAULT;
 
         RETURN(0);
 
@@ -2095,7 +2102,7 @@ err_fs:
 err_ns:
         lprocfs_free_obd_stats(obd);
         lprocfs_obd_cleanup(obd);
-        ldlm_namespace_free(obd->obd_namespace, 0);
+        ldlm_namespace_free(obd->obd_namespace, NULL, 0);
         obd->obd_namespace = NULL;
 err_ops:
         fsfilt_put_ops(obd->obd_fsops);
@@ -2282,7 +2289,8 @@ static int mds_cleanup(struct obd_device *obd)
         server_put_mount(obd->obd_name, mds->mds_vfsmnt);
         obd->u.obt.obt_sb = NULL;
 
-        ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
+        ldlm_namespace_free(obd->obd_namespace, NULL, obd->obd_force);
+        obd->obd_namespace = NULL;
 
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (obd->obd_recovering) {
@@ -2335,11 +2343,11 @@ static void fixup_handle_for_resent_req(struct ptlrpc_request *req, int offset,
          * and allow it. (It's probably an OPEN, for which we don't
          * send a lock */
         if (req->rq_xid ==
-            le64_to_cpu(exp->exp_mds_data.med_mcd->mcd_last_xid))
+            le64_to_cpu(exp->exp_mds_data.med_lcd->lcd_last_xid))
                 return;
 
         if (req->rq_xid ==
-            le64_to_cpu(exp->exp_mds_data.med_mcd->mcd_last_close_xid))
+            le64_to_cpu(exp->exp_mds_data.med_lcd->lcd_last_close_xid))
                 return;
 
         /* This remote handle isn't enqueued, so we never received or

@@ -373,7 +373,7 @@ static inline void lustre_set_rep_swabbed(struct ptlrpc_request *req, int index)
 }
 
 static inline int lustre_req_swabbed(struct ptlrpc_request *req, int index)
-{ 
+{
         LASSERT(index < sizeof(req->rq_req_swab_mask) * 8);
         return req->rq_req_swab_mask & (1 << index);
 }
@@ -383,6 +383,17 @@ static inline int lustre_rep_swabbed(struct ptlrpc_request *req, int index)
         LASSERT(index < sizeof(req->rq_rep_swab_mask) * 8);
         return req->rq_rep_swab_mask & (1 << index);
 }
+
+static inline int lustre_req_need_swab(struct ptlrpc_request *req)
+{
+        return req->rq_req_swab_mask & (1 << MSG_PTLRPC_HEADER_OFF);
+}
+
+static inline int lustre_rep_need_swab(struct ptlrpc_request *req)
+{
+        return req->rq_rep_swab_mask & (1 << MSG_PTLRPC_HEADER_OFF);
+}
+
 
 static inline const char *
 ptlrpc_rqphase2str(struct ptlrpc_request *req)
@@ -530,6 +541,7 @@ struct ptlrpc_service {
         int              srv_watchdog_factor;   /* soft watchdog timeout mutiplier */
         unsigned         srv_cpu_affinity:1;    /* bind threads to CPUs */
         unsigned         srv_at_check:1;        /* check early replies */
+        cfs_time_t       srv_at_checktime;      /* debug */
 
         __u32            srv_req_portal;
         __u32            srv_rep_portal;
@@ -637,6 +649,7 @@ static inline int ptlrpc_bulk_active (struct ptlrpc_bulk_desc *desc)
 #define PTLRPC_REPLY_EARLY           0x02
 int ptlrpc_send_reply(struct ptlrpc_request *req, int flags);
 int ptlrpc_reply(struct ptlrpc_request *req);
+int ptlrpc_send_error(struct ptlrpc_request *req, int difficult);
 int ptlrpc_error(struct ptlrpc_request *req);
 void ptlrpc_resend_req(struct ptlrpc_request *request);
 int ptlrpc_at_get_net_latency(struct ptlrpc_request *req);
@@ -779,7 +792,6 @@ int lustre_msg_buflen(struct lustre_msg *m, int n);
 void lustre_msg_set_buflen(struct lustre_msg *m, int n, int len);
 int lustre_msg_bufcount(struct lustre_msg *m);
 char *lustre_msg_string (struct lustre_msg *m, int n, int max_len);
-void *lustre_swab_buf(struct lustre_msg *, int n, int minlen, void *swabber);
 void *lustre_swab_reqbuf(struct ptlrpc_request *req, int n, int minlen,
                          void *swabber);
 void *lustre_swab_repbuf(struct ptlrpc_request *req, int n, int minlen,

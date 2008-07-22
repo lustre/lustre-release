@@ -13,8 +13,13 @@ ext3-filterdata-sles10.patch
 ext3-uninit-2.6.18.patch
 ext3-nanosecond-2.6.18-vanilla.patch
 ext3-inode-version-2.6.18-vanilla.patch
+ext3-ea-expand-lose-block.patch
 ext3-mmp-2.6.18-vanilla.patch
 ext3-unlink-race.patch
 ext3-fiemap-2.6.18-vanilla.patch
 ext3-statfs-2.6-rhel5.patch
 ext3-lookup-dotdot-2.6.9.patch
+ext3-max-dir-size.patch
+ext3-print-inum-in-htree-warning.patch
+ext3-block-bitmap-validation-2.6-rhel5.patch
+ext3-xattr-no-update-ctime-2.6.22-vanilla.patch

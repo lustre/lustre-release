@@ -593,7 +593,7 @@ static int lustre_start_mgc(struct super_block *sb)
                 recov_bk++;
                 CDEBUG(D_MOUNT, "%s: Set MGC reconnect %d\n", mgcname,recov_bk);
                 rc = obd_set_info_async(obd->obd_self_export,
-                                        strlen(KEY_INIT_RECOV_BACKUP),
+                                        sizeof(KEY_INIT_RECOV_BACKUP),
                                         KEY_INIT_RECOV_BACKUP,
                                         sizeof(recov_bk), &recov_bk, NULL);
                 GOTO(out, rc = 0);
@@ -694,7 +694,7 @@ static int lustre_start_mgc(struct super_block *sb)
         /* Try all connections, but only once. */
         recov_bk = 1;
         rc = obd_set_info_async(obd->obd_self_export,
-                                strlen(KEY_INIT_RECOV_BACKUP),
+                                sizeof(KEY_INIT_RECOV_BACKUP),
                                 KEY_INIT_RECOV_BACKUP,
                                 sizeof(recov_bk), &recov_bk, NULL);
         if (rc)
@@ -704,7 +704,8 @@ static int lustre_start_mgc(struct super_block *sb)
         OBD_ALLOC_PTR(data);
         if (data == NULL)
                 GOTO(out, rc = -ENOMEM);
-        data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_AT;
+        data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_AT |
+                                  OBD_CONNECT_FID;
         data->ocd_version = LUSTRE_VERSION_CODE;
         /* We connect to the MGS at setup, and don't disconnect until cleanup */
         rc = obd_connect(&mgc_conn, obd, &(obd->obd_uuid), data, NULL);
@@ -744,8 +745,8 @@ static int lustre_stop_mgc(struct super_block *sb)
         obd = lsi->lsi_mgc;
         if (!obd)
                 RETURN(-ENOENT);
-
         lsi->lsi_mgc = NULL;
+
         mutex_down(&mgc_start_lock);
         if (!atomic_dec_and_test(&obd->u.cli.cl_mgc_refcount)) {
                 /* This is not fatal, every client that stops
@@ -813,7 +814,7 @@ static int server_mgc_set_fs(struct obd_device *mgc, struct super_block *sb)
 
         /* cl_mgc_sem in mgc insures we sleep if the mgc_fs is busy */
         rc = obd_set_info_async(mgc->obd_self_export,
-                                strlen("set_fs"), "set_fs",
+                                sizeof(KEY_SET_FS), KEY_SET_FS,
                                 sizeof(*sb), sb, NULL);
         if (rc) {
                 CERROR("can't set_fs %d\n", rc);
@@ -830,7 +831,7 @@ static int server_mgc_clear_fs(struct obd_device *mgc)
         CDEBUG(D_MOUNT, "Unassign mgc disk\n");
 
         rc = obd_set_info_async(mgc->obd_self_export,
-                                strlen("clear_fs"), "clear_fs",
+                                sizeof(KEY_CLEAR_FS), KEY_CLEAR_FS,
                                 0, NULL, NULL);
         RETURN(rc);
 }
@@ -958,7 +959,7 @@ int server_register_target(struct super_block *sb)
         /* Register the target */
         /* FIXME use mgc_process_config instead */
         rc = obd_set_info_async(mgc->u.cli.cl_mgc_mgsexp,
-                                strlen("register_target"), "register_target",
+                                sizeof(KEY_REGISTER_TARGET), KEY_REGISTER_TARGET,
                                 sizeof(*mti), mti, NULL);
         if (rc)
                 GOTO(out, rc);
@@ -1354,7 +1355,8 @@ static void server_put_super(struct super_block *sb)
         CDEBUG(D_MOUNT, "server put_super %s\n", tmpname);
 
         /* Stop the target */
-        if (IS_MDT(lsi->lsi_ldd) || IS_OST(lsi->lsi_ldd)) {
+        if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC) && 
+            (IS_MDT(lsi->lsi_ldd) || IS_OST(lsi->lsi_ldd))) {
                 struct lustre_profile *lprof = NULL;
 
                 /* tell the mgc to drop the config log */
@@ -1391,7 +1393,9 @@ static void server_put_super(struct super_block *sb)
                 /* stop the mgc before the mgs so the connection gets cleaned
                    up */
                 lustre_stop_mgc(sb);
-                server_stop_mgs(sb);
+                /* if MDS start with --nomgs, don't stop MGS then */
+                if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOMGS))
+                        server_stop_mgs(sb);
         }
 
         /* Clean the mgc and sb */
@@ -1579,7 +1583,7 @@ static int server_fill_super(struct super_block *sb)
         }
 
         /* start MGS before MGC */
-        if (IS_MGS(lsi->lsi_ldd)) {
+        if (IS_MGS(lsi->lsi_ldd) && !(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOMGS)) {
                 rc = server_start_mgs(sb);
                 if (rc)
                         GOTO(out_mnt, rc);
@@ -1816,6 +1820,9 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                 } else if (strncmp(s1, "nosvc", 5) == 0) {
                         lmd->lmd_flags |= LMD_FLG_NOSVC;
                         clear++;
+                } else if (strncmp(s1, "nomgs", 5) == 0) {
+                        lmd->lmd_flags |= LMD_FLG_NOMGS;
+                        clear++;
                 /* ost exclusion list */
                 } else if (strncmp(s1, "exclude=", 8) == 0) {
                         rc = lmd_make_exclusion(lmd, s1 + 7);
@@ -1832,7 +1839,10 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                            must be the last one. */
                         *s1 = '\0';
                         break;
+                } else if (strncmp(s1, "loop=", 5) == 0) {
+                        clear++;
                 }
+
 
                 /* Find next opt */
                 s2 = strchr(s1, ',');
@@ -2008,7 +2018,8 @@ struct file_system_type lustre_fs_type = {
         .name         = "lustre",
         .get_sb       = lustre_get_sb,
         .kill_sb      = lustre_kill_super,
-        .fs_flags     = FS_BINARY_MOUNTDATA | FS_REQUIRES_DEV,
+        .fs_flags     = FS_BINARY_MOUNTDATA | FS_REQUIRES_DEV |
+                        LL_RENAME_DOES_D_MOVE,
 };
 
 #else

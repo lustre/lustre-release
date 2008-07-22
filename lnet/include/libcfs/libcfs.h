@@ -514,7 +514,7 @@ static inline void cfs_slow_warning(cfs_time_t now, int seconds, char *msg)
 {
         if (cfs_time_after(cfs_time_current(),
                            cfs_time_add(now, cfs_time_seconds(15))))
-                CERROR("slow %s %lu sec\n", msg,
+                CERROR("slow %s "CFS_TIME_T" sec\n", msg,
                        cfs_duration_sec(cfs_time_sub(cfs_time_current(),now)));
 }
 

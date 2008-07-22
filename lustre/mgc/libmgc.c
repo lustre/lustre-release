@@ -73,11 +73,11 @@ static int mgc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
         switch (stage) {
         case OBD_CLEANUP_EARLY: 
         case OBD_CLEANUP_EXPORTS:
-                break;
-        case OBD_CLEANUP_SELF_EXP:
                 rc = obd_llog_finish(obd, 0);
                 if (rc != 0)
                         CERROR("failed to cleanup llogging subsystems\n");
+                break;
+        case OBD_CLEANUP_SELF_EXP:
                 break;
         case OBD_CLEANUP_OBD:
                 break;
@@ -111,7 +111,7 @@ static int mgc_llog_init(struct obd_device *obd, struct obd_device *tgt,
                         &llog_client_ops);
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
-                ctxt->loc_imp = obd->u.cli.cl_import;
+                llog_initiator_connect(ctxt);
                 llog_ctxt_put(ctxt);
         }
 
