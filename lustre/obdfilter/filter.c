@@ -1497,10 +1497,11 @@ static int filter_prepare_destroy(struct obd_device *obd, obd_id objid,
 {
         struct lustre_handle lockh;
         int flags = LDLM_AST_DISCARD_DATA, rc;
-        struct ldlm_res_id res_id = { .name = { objid, 0, group, 0} };
+        struct ldlm_res_id res_id;
         ldlm_policy_data_t policy = { .l_extent = { 0, OBD_OBJECT_EOF } };
-
         ENTRY;
+
+        osc_build_res_name(objid, group, &res_id);
         /* Tell the clients that the object is gone now and that they should
          * throw away any cached pages. */
         rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id, LDLM_EXTENT,
@@ -3209,8 +3210,7 @@ out_unlock:
 int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
                    struct obd_trans_info *oti)
 {
-        struct ldlm_res_id res_id = { .name = { oinfo->oi_oa->o_id, 0,
-                                                oinfo->oi_oa->o_gr, 0 } };
+        struct ldlm_res_id res_id;
         struct filter_mod_data *fmd;
         struct lvfs_run_ctxt saved;
         struct filter_obd *filter;
@@ -3219,6 +3219,7 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
         int rc;
         ENTRY;
 
+        osc_build_res_name(oinfo->oi_oa->o_id, oinfo->oi_oa->o_gr, &res_id);
         rc = filter_auth_capa(exp, NULL, oinfo_mdsno(oinfo),
                               oinfo_capa(oinfo), CAPA_OPC_META_WRITE);
         if (rc)

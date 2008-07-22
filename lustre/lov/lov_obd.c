@@ -2531,8 +2531,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                                 continue;
                         if (lov->lov_tgts[loi->loi_ost_idx]->ltd_exp ==
                             data->lock->l_conn_export &&
-                            loi->loi_id == res_id->name[0] &&
-                            loi->loi_gr == res_id->name[2]) {
+                            osc_res_name_eq(loi->loi_id, loi->loi_gr, res_id)) {
                                 *stripe = i;
                                 GOTO(out, rc = 0);
                         }

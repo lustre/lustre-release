@@ -209,13 +209,14 @@ static int ost_punch_lock_get(struct obd_export *exp, struct obdo *oa,
                               struct lustre_handle *lh)
 {
         int flags;
-        struct ldlm_res_id res_id = { .name = { oa->o_id, 0, oa->o_gr, 0} };
+        struct ldlm_res_id res_id;
         ldlm_policy_data_t policy;
         __u64 start;
         __u64 finis;
 
         ENTRY;
 
+        osc_build_res_name(oa->o_id, oa->o_gr, &res_id);
         LASSERT(!lustre_handle_is_used(lh));
 
         if (!(oa->o_valid & OBD_MD_FLFLAGS) ||
@@ -562,13 +563,12 @@ static int ost_brw_lock_get(int mode, struct obd_export *exp,
 {
         int flags                 = 0;
         int nrbufs                = obj->ioo_bufcnt;
-        struct ldlm_res_id res_id = { .name = { obj->ioo_id, 0,
-                                                obj->ioo_gr, 0} };
+        struct ldlm_res_id res_id;
         ldlm_policy_data_t policy;
         int i;
-
         ENTRY;
 
+        osc_build_res_name(obj->ioo_id, obj->ioo_gr, &res_id);
         LASSERT(mode == LCK_PR || mode == LCK_PW);
         LASSERT(!lustre_handle_is_used(lh));
 
@@ -651,12 +651,12 @@ static int ost_prolong_locks_iter(struct ldlm_lock *lock, void *data)
 static void ost_prolong_locks(struct obd_export *exp, struct obd_ioobj *obj,
                               struct niobuf_remote *nb, ldlm_mode_t mode)
 {
-        struct ldlm_res_id res_id = { .name = { obj->ioo_id, 0,
-                                                obj->ioo_gr, 0} };
+        struct ldlm_res_id res_id;
         int nrbufs = obj->ioo_bufcnt;
         struct ost_prolong_data opd;
-
         ENTRY;
+
+        osc_build_res_name(obj->ioo_id, obj->ioo_gr, &res_id);
 
         opd.opd_mode = mode;
         opd.opd_exp = exp;

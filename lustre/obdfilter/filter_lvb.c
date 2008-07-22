@@ -53,11 +53,6 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         LASSERT(res);
         LASSERT_SEM_LOCKED(&res->lr_lvb_sem);
 
-        /* we only want lvb's for object resources */
-        /* check for internal locks: these have name[1] != 0 */
-        if (res->lr_name.name[1])
-                RETURN(0);
-
         if (res->lr_lvb_data)
                 RETURN(0);
 
@@ -71,7 +66,7 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         obd = res->lr_namespace->ns_lvbp;
         LASSERT(obd != NULL);
 
-        dentry = filter_fid2dentry(obd, NULL, res->lr_name.name[2], 
+        dentry = filter_fid2dentry(obd, NULL, res->lr_name.name[1], 
                                               res->lr_name.name[0]);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
@@ -118,11 +113,6 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
         ENTRY;
 
         LASSERT(res);
-
-        /* we only want lvb's for object resources */
-        /* check for internal locks: these have name[1] != 0 */
-        if (res->lr_name.name[1])
-                RETURN(0);
 
         down(&res->lr_lvb_sem);
         lvb = res->lr_lvb_data;
@@ -172,7 +162,7 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
         obd = res->lr_namespace->ns_lvbp;
         LASSERT(obd);
         
-        dentry = filter_fid2dentry(obd, NULL, res->lr_name.name[2], 
+        dentry = filter_fid2dentry(obd, NULL, res->lr_name.name[1], 
                                               res->lr_name.name[0]);
         if (IS_ERR(dentry))
                 GOTO(out, rc = PTR_ERR(dentry));

@@ -618,11 +618,13 @@ static int osc_resource_get_unused(struct obd_export *exp, struct obdo *oa,
                                    int lock_flags)
 {
         struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
-        struct ldlm_res_id res_id = { .name = { oa->o_id, 0, oa->o_gr, 0 } };
-        struct ldlm_resource *res = ldlm_resource_get(ns, NULL, &res_id, 0, 0);
+        struct ldlm_res_id res_id;
+        struct ldlm_resource *res;
         int count;
         ENTRY;
 
+        osc_build_res_name(oa->o_id, oa->o_gr, &res_id);
+        res = ldlm_resource_get(ns, NULL, &res_id, 0, 0);
         if (res == NULL)
                 RETURN(0);
 
@@ -2636,7 +2638,7 @@ int osc_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
                         struct lustre_handle *lockh)
 {
         struct osc_async_page *oap;
-        struct ldlm_res_id oid = {{0}};
+        struct ldlm_res_id oid;
         int rc = 0;
         ENTRY;
 
@@ -2665,8 +2667,7 @@ int osc_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         /* If the page was marked as notcacheable - don't add to any locks */ 
         if (!nocache) {
-                oid.name[0] = loi->loi_id;
-                oid.name[2] = loi->loi_gr;
+                osc_build_res_name(loi->loi_id, loi->loi_gr, &oid);
                 /* This is the only place where we can call cache_add_extent
                    without oap_lock, because this page is locked now, and
                    the lock we are adding it to is referenced, so cannot lose
@@ -3045,12 +3046,10 @@ static void osc_set_data_with_check(struct lustre_handle *lockh, void *data,
 static int osc_change_cbdata(struct obd_export *exp, struct lov_stripe_md *lsm,
                              ldlm_iterator_t replace, void *data)
 {
-        struct ldlm_res_id res_id = { .name = {0} };
+        struct ldlm_res_id res_id; 
         struct obd_device *obd = class_exp2obd(exp);
 
-        res_id.name[0] = lsm->lsm_object_id;
-        res_id.name[2] = lsm->lsm_object_gr;
-
+        osc_build_res_name(lsm->lsm_object_id, lsm->lsm_object_gr, &res_id);
         ldlm_resource_iterate(obd->obd_namespace, &res_id, replace, data);
         return 0;
 }
@@ -3132,7 +3131,7 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                        struct ldlm_enqueue_info *einfo,
                        struct ptlrpc_request_set *rqset)
 {
-        struct ldlm_res_id res_id = { .name = {0} };
+        struct ldlm_res_id res_id;
         struct obd_device *obd = exp->exp_obd;
         struct ptlrpc_request *req = NULL;
         int intent = oinfo->oi_flags & LDLM_FL_HAS_INTENT;
@@ -3140,9 +3139,9 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
         int rc;
         ENTRY;
 
-        res_id.name[0] = oinfo->oi_md->lsm_object_id;
-        res_id.name[2] = oinfo->oi_md->lsm_object_gr;
 
+        osc_build_res_name(oinfo->oi_md->lsm_object_id,
+                           oinfo->oi_md->lsm_object_gr, &res_id);
         /* Filesystem lock extents are extended to page boundaries so that
          * dealing with the page cache is a little smoother.  */
         oinfo->oi_policy.l_extent.start -=
@@ -3250,15 +3249,14 @@ static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
                      __u32 type, ldlm_policy_data_t *policy, __u32 mode,
                      int *flags, void *data, struct lustre_handle *lockh)
 {
-        struct ldlm_res_id res_id = { .name = {0} };
+        struct ldlm_res_id res_id;
         struct obd_device *obd = exp->exp_obd;
         int lflags = *flags;
         ldlm_mode_t rc;
         ENTRY;
 
-        res_id.name[0] = lsm->lsm_object_id;
-        res_id.name[2] = lsm->lsm_object_gr;
-
+        osc_build_res_name(lsm->lsm_object_id, lsm->lsm_object_gr, &res_id);
+        
         if (OBD_FAIL_CHECK(OBD_FAIL_OSC_MATCH))
                 RETURN(-EIO);
 
@@ -3305,12 +3303,11 @@ static int osc_cancel_unused(struct obd_export *exp,
                              void *opaque)
 {
         struct obd_device *obd = class_exp2obd(exp);
-        struct ldlm_res_id res_id = { .name = {0} }, *resp = NULL;
+        struct ldlm_res_id res_id, *resp = NULL;
 
         if (lsm != NULL) {
-                res_id.name[0] = lsm->lsm_object_id;
-                res_id.name[2] = lsm->lsm_object_gr;
-                resp = &res_id;
+                resp = osc_build_res_name(lsm->lsm_object_id,
+                                          lsm->lsm_object_gr, &res_id);
         }
 
         return ldlm_cli_cancel_unused(obd->obd_namespace, resp, flags, opaque);
@@ -3320,12 +3317,11 @@ static int osc_join_lru(struct obd_export *exp,
                         struct lov_stripe_md *lsm, int join)
 {
         struct obd_device *obd = class_exp2obd(exp);
-        struct ldlm_res_id res_id = { .name = {0} }, *resp = NULL;
+        struct ldlm_res_id res_id, *resp = NULL;
 
         if (lsm != NULL) {
-                res_id.name[0] = lsm->lsm_object_id;
-                res_id.name[2] = lsm->lsm_object_gr;
-                resp = &res_id;
+                resp = osc_build_res_name(lsm->lsm_object_id,
+                                          lsm->lsm_object_gr, &res_id);
         }
 
         return ldlm_cli_join_lru(obd->obd_namespace, resp, join);

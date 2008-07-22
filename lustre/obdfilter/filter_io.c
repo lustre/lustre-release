@@ -37,6 +37,7 @@
 #include <linux/version.h>
 
 #include <obd_class.h>
+#include <obd_ost.h>
 #include <lustre_fsfilt.h>
 #include "filter_internal.h"
 
@@ -717,12 +718,12 @@ static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
                                 struct obd_trans_info *oti, int rc)
 {
         struct inode *inode = NULL;
-        struct ldlm_res_id res_id = { .name = { obj->ioo_id, 0,
-                                                obj->ioo_gr, 0} };
+        struct ldlm_res_id res_id;
         struct ldlm_resource *resource = NULL;
         struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
         ENTRY;
 
+        osc_build_res_name(obj->ioo_id, obj->ioo_gr, &res_id);
         /* If oa != NULL then filter_preprw_read updated the inode atime
          * and we should update the lvb so that other glimpses will also
          * get the updated value. bug 5972 */
