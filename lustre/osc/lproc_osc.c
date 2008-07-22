@@ -230,6 +230,53 @@ static int osc_wr_create_count(struct file *file, const char *buffer,
                                unsigned long count, void *data)
 {
         struct obd_device *obd = data;
+        int val, rc, i;
+
+        if (obd == NULL)
+                return 0;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        /* The MDT ALWAYS needs to limit the precreate count to
+         * OST_MAX_PRECREATE, and the constant cannot be changed
+         * because it is a value shared between the OSC and OST
+         * that is the maximum possible number of objects that will
+         * ever be handled by MDT->OST recovery processing.
+         *
+         * If the OST ever gets a request to delete more orphans,
+         * this implies that something has gone badly on the MDT
+         * and the OST will refuse to delete so much data from the
+         * filesystem as a safety measure. */
+        if (val < OST_MIN_PRECREATE || val > OST_MAX_PRECREATE)
+                return -ERANGE;
+        if (val > obd->u.cli.cl_oscc.oscc_max_grow_count)
+                return -ERANGE;
+
+        for (i = 1; (i << 1) <= val; i <<= 1)
+                ;
+        obd->u.cli.cl_oscc.oscc_grow_count = i;
+
+        return count;
+}
+
+static int osc_rd_max_create_count(char *page, char **start, off_t off,
+                                   int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+
+        if (obd == NULL)
+                return 0;
+
+        return snprintf(page, count, "%d\n",
+                        obd->u.cli.cl_oscc.oscc_max_grow_count);
+}
+
+static int osc_wr_max_create_count(struct file *file, const char *buffer,
+                                   unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
         int val, rc;
 
         if (obd == NULL)
@@ -244,7 +291,10 @@ static int osc_wr_create_count(struct file *file, const char *buffer,
         if (val > OST_MAX_PRECREATE)
                 return -ERANGE;
 
-        obd->u.cli.cl_oscc.oscc_grow_count = val;
+        if (obd->u.cli.cl_oscc.oscc_grow_count > val)
+                obd->u.cli.cl_oscc.oscc_grow_count = val;
+
+        obd->u.cli.cl_oscc.oscc_max_grow_count = val;
 
         return count;
 }
@@ -408,6 +458,8 @@ static struct lprocfs_vars lprocfs_osc_obd_vars[] = {
         { "cur_dirty_bytes", osc_rd_cur_dirty_bytes, 0, 0 },
         { "cur_grant_bytes", osc_rd_cur_grant_bytes, 0, 0 },
         { "create_count",    osc_rd_create_count, osc_wr_create_count, 0 },
+        { "max_create_count", osc_rd_max_create_count,
+                              osc_wr_max_create_count, 0},
         { "prealloc_next_id", osc_rd_prealloc_next_id, 0, 0 },
         { "prealloc_last_id", osc_rd_prealloc_last_id, 0, 0 },
         { "checksums",       osc_rd_checksum, osc_wr_checksum, 0 },
