@@ -43,13 +43,13 @@ static inline struct ldlm_res_id *osc_build_res_name(__u64 id, __u64 gr,
 {
         memset(name, 0, sizeof *name);
         name->name[0] = id;
-        name->name[2] = gr;
+        name->name[1] = gr;
         return name;
 }
 
 static inline int osc_res_name_eq(__u64 id, __u64 gr, struct ldlm_res_id *name)
 {
-        return name->name[0] == id && name->name[2] == gr;
+        return name->name[0] == id && name->name[1] == gr;
 }
 
 #endif
