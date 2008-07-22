@@ -3686,14 +3686,14 @@ setup_test101() {
 	$SETSTRIPE $DIR/$tfile -s $STRIPE_SIZE -i $STRIPE_OFFSET -c $OSTCOUNT
 
 	dd if=/dev/zero of=$DIR/$tfile bs=1024k count=100 2> /dev/null
-	SETUP_TEST102=yes
+	SETUP_TEST101=yes
 }
 
 cleanup_test101() {
 	[ "$SETUP_TEST101" = "yes" ] || return
 	trap 0
 	rm -rf $DIR/$tdir
-	SETUP_TEST102=no
+	SETUP_TEST101=no
 }
 
 calc_total() {
