@@ -1684,7 +1684,9 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         __u8 *uuid_ptr;
         char *str, *label;
         char ns_name[48];
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,9)
         request_queue_t *q;
+#endif
         int rc;
         ENTRY;
 
@@ -1787,6 +1789,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         if (rc)
                 GOTO(err_post, rc);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,9)
         q = bdev_get_queue(mnt->mnt_sb->s_bdev);
         if (q->max_sectors < q->max_hw_sectors &&
             q->max_sectors < PTLRPC_MAX_BRW_SIZE >> 9)
@@ -1795,6 +1798,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
                               "could be up to max_hw_sectors=%u\n",
                               obd->obd_name, mnt->mnt_sb->s_id,
                               q->max_sectors, q->max_hw_sectors);
+#endif
 
         uuid_ptr = fsfilt_uuid(obd, obd->u.obt.obt_sb);
         if (uuid_ptr != NULL) {
