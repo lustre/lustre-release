@@ -279,9 +279,6 @@ ptlrpc_server_post_idle_rqbds (struct ptlrpc_service *svc)
 static void ptlrpc_at_timer(unsigned long castmeharder)
 {
         struct ptlrpc_service *svc = (struct ptlrpc_service *)castmeharder;
-        CDEBUG(D_INFO, "at timer %s hit at %ld%s\n",
-               svc->srv_name, cfs_time_current_sec(), 
-               list_empty(&svc->srv_at_list) ? ", empty" : ""); 
         svc->srv_at_check = 1;
         svc->srv_at_checktime = cfs_time_current();
         cfs_waitq_signal(&svc->srv_waitq);
