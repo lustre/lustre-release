@@ -1405,17 +1405,28 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
 
         }
 #endif
-        if (request_body != NULL && request_body->valid & OBD_MD_FLATIME) {
-                /* Only start a transaction to write out only the atime if
-                 * it is more out-of-date than the specified limit.  If we
-                 * are already going to write out the atime then do it anyway.
-                 * */
-                LTIME_S(iattr.ia_atime) = request_body->atime;
-                if ((LTIME_S(iattr.ia_atime) >
-                     LTIME_S(inode->i_atime) + mds->mds_atime_diff) ||
-                    (iattr.ia_valid != 0 &&
-                     LTIME_S(iattr.ia_atime) > LTIME_S(inode->i_atime)))
-                        iattr.ia_valid |= ATTR_ATIME;
+        if (request_body != NULL) {
+               if (request_body->valid & OBD_MD_FLMTIME) {
+                      LTIME_S(iattr.ia_mtime) = request_body->mtime;
+                      if (LTIME_S(iattr.ia_mtime) > LTIME_S(inode->i_mtime) &&
+                          ((request_body->valid & OBD_MD_FLCTIME) == 0 ||
+                           request_body->ctime > LTIME_S(inode->i_ctime)))
+                              iattr.ia_valid |= ATTR_MTIME;
+               }
+
+               if (request_body->valid & OBD_MD_FLATIME) {
+                       /* Only start a transaction to write out only the atime
+                        * if it is more out-of-date than the specified limit.
+                        * If we are already going to write out the inode then
+                        * update the atime anyway.
+                        */
+                       LTIME_S(iattr.ia_atime) = request_body->atime;
+                       if ((LTIME_S(iattr.ia_atime) >
+                            LTIME_S(inode->i_atime) + mds->mds_atime_diff) ||
+                           (iattr.ia_valid != 0 &&
+                            LTIME_S(iattr.ia_atime) > LTIME_S(inode->i_atime)))
+                               iattr.ia_valid |= ATTR_ATIME;
+               }
         }
 
         if (iattr.ia_valid != 0) {
