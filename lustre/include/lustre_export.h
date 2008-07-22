@@ -35,6 +35,9 @@ struct osc_creator {
         obd_id                  oscc_last_id;//last available pre-created object
         obd_id                  oscc_next_id;// what object id to give out next
         int                     oscc_grow_count;
+        /**
+         * Limit oscc_grow_count value, can be changed via proc fs
+         */
         int                     oscc_max_grow_count;
         struct obdo             oscc_oa;
         int                     oscc_flags;
