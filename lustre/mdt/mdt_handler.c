@@ -1072,8 +1072,7 @@ static int mdt_set_info(struct mdt_thread_info *info)
                 RETURN(-EFAULT);
         }
 
-        if (keylen != (sizeof(KEY_READ_ONLY) - 1) ||
-            memcmp(key, KEY_READ_ONLY, keylen) != 0)
+        if (!KEY_IS(KEY_READ_ONLY))
                 RETURN(-EINVAL);
 
         req->rq_status = 0;
