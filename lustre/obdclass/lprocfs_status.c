@@ -58,7 +58,6 @@ struct proc_dir_entry *lprocfs_srch(struct proc_dir_entry *head,
 
         if (head == NULL)
                 return NULL;
-        LPROCFS_ENTRY();
 
         temp = head->subdir;
         while (temp != NULL) {
@@ -67,7 +66,6 @@ struct proc_dir_entry *lprocfs_srch(struct proc_dir_entry *head,
 
                 temp = temp->next;
         }
-        LPROCFS_EXIT();
         return NULL;
 }
 
@@ -311,7 +309,6 @@ void lprocfs_remove(struct proc_dir_entry **rooth)
 
         parent = root->parent;
         LASSERT(parent != NULL);
-        LPROCFS_ENTRY(); /* search vs remove race */
 
         while (1) {
                 while (temp->subdir != NULL)
@@ -335,7 +332,6 @@ void lprocfs_remove(struct proc_dir_entry **rooth)
                 if (temp == parent)
                         break;
         }
-        LPROCFS_EXIT();
 }
 
 void lprocfs_remove_proc_entry(const char *name, struct proc_dir_entry *parent)
