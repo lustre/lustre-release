@@ -24,9 +24,7 @@
  */
 
 #define __USE_FILE_OFFSET64
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
+#define  _GNU_SOURCE
 
 #include <stdio.h>
 #ifdef HAVE_NETDB_H
@@ -74,7 +72,7 @@ static const char *libcfs_debug_subsystems[] =
          "pinger", "filter", "", "echo",
          "ldlm", "lov", "", "",
          "", "", "", "lmv",
-         "", "sec", "gss", "",
+         "", "sec", "gss", "", 
          "mgc", "mgs", "fid", "fld", NULL};
 static const char *libcfs_debug_masks[] =
         {"trace", "inode", "super", "ext2",
@@ -374,7 +372,7 @@ static int add_rec(struct dbg_line *line, struct dbg_line ***linevp, int *lenp,
                 *linevp = linev;
                 *lenp = nlen;
         }
-        linev[used] = line;
+        linev[used] = line; 
         return 1;
 }
 
@@ -441,10 +439,10 @@ static int parse_buffer(FILE *in, FILE *out)
                 line->text = p;
 
                 if (!add_rec(line, &linev, &linev_len, kept)) {
-                        fprintf(stderr, "malloc failed; printing accumulated "
+                        fprintf(stderr, "malloc failed; printing accumulated " 
                                 "records and exiting.\n");
                         break;
-                }
+                }        
                 kept++;
         }
 
@@ -484,7 +482,7 @@ int jt_dbg_debug_kernel(int argc, char **argv)
                 strcpy(filename, argv[1]);
         else
                 sprintf(filename, "/tmp/lustre-log."CFS_TIME_T".%u",
-                        time(NULL),getpid());
+			time(NULL),getpid());
 
         if (stat(filename, &st) == 0 && S_ISREG(st.st_mode))
                 unlink(filename);

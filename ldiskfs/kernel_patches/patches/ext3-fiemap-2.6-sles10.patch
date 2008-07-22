@@ -1,8 +1,8 @@
-Index: linux-2.6.16.46-0.14/fs/ext3/ioctl.c
+Index: linux-2.6.9-67.0.15/fs/ext3/ioctl.c
 ===================================================================
---- linux-2.6.16.46-0.14.orig/fs/ext3/ioctl.c
-+++ linux-2.6.16.46-0.14/fs/ext3/ioctl.c
-@@ -15,7 +15,7 @@
+--- linux-2.6.9-67.0.15.orig/fs/ext3/ioctl.c
++++ linux-2.6.9-67.0.15/fs/ext3/ioctl.c
+@@ -14,7 +14,7 @@
  #include <linux/time.h>
  #include <asm/uaccess.h>
  #include <linux/namei.h>
@@ -11,7 +11,7 @@ Index: linux-2.6.16.46-0.14/fs/ext3/ioctl.c
  
  int ext3_ioctl (struct inode * inode, struct file * filp, unsigned int cmd,
  		unsigned long arg)
-@@ -266,6 +266,9 @@ flags_err:
+@@ -244,6 +244,9 @@ flags_err:
  
  		return err;
  	}
@@ -21,11 +21,11 @@ Index: linux-2.6.16.46-0.14/fs/ext3/ioctl.c
  
  
  	default:
-Index: linux-2.6.16.46-0.14/include/linux/ext3_fs.h
+Index: linux-2.6.9-67.0.15/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.16.46-0.14.orig/include/linux/ext3_fs.h
-+++ linux-2.6.16.46-0.14/include/linux/ext3_fs.h
-@@ -252,7 +252,6 @@ struct ext3_new_group_data {
+--- linux-2.6.9-67.0.15.orig/include/linux/ext3_fs.h
++++ linux-2.6.9-67.0.15/include/linux/ext3_fs.h
+@@ -251,7 +251,6 @@ struct ext3_new_group_data {
  	__u32 free_blocks_count;
  };
  
@@ -33,15 +33,16 @@ Index: linux-2.6.16.46-0.14/include/linux/ext3_fs.h
  /*
   * ioctl commands
   */
-@@ -272,6 +271,7 @@ struct ext3_new_group_data {
- #define EXT3_IOC_GET_EXTENTS		_IOR('f', 7, long)
- #define EXT3_IOC_GET_TREE_DEPTH		_IOR('f', 8, long)
- #define EXT3_IOC_GET_TREE_STATS		_IOR('f', 9, long)
+@@ -268,6 +267,8 @@ struct ext3_new_group_data {
+ #endif
+ #define EXT3_IOC_GETRSVSZ		_IOR('f', 5, long)
+ #define EXT3_IOC_SETRSVSZ		_IOW('f', 6, long)
 +#define	EXT3_IOC_FIEMAP			_IOWR('f', 10, struct fiemap)
++
  
  /*
-  *  Mount options
-@@ -853,6 +853,8 @@ static inline struct timespec ext3_curre
+  * Structure of an inode on the disk
+@@ -813,6 +814,8 @@ static inline struct timespec ext3_curre
  	return (inode->i_sb->s_time_gran < NSEC_PER_SEC) ?
  		current_fs_time(inode->i_sb) : CURRENT_TIME_SEC;
  }
@@ -50,10 +51,10 @@ Index: linux-2.6.16.46-0.14/include/linux/ext3_fs.h
  
  /*
   * This structure is stuffed into the struct file's private_data field
-Index: linux-2.6.16.46-0.14/include/linux/ext3_extents.h
+Index: linux-2.6.9-67.0.15/include/linux/ext3_extents.h
 ===================================================================
---- linux-2.6.16.46-0.14.orig/include/linux/ext3_extents.h
-+++ linux-2.6.16.46-0.14/include/linux/ext3_extents.h
+--- linux-2.6.9-67.0.15.orig/include/linux/ext3_extents.h
++++ linux-2.6.9-67.0.15/include/linux/ext3_extents.h
 @@ -170,7 +170,9 @@ struct ext3_extents_helpers {
   */
  typedef int (*ext_prepare_callback)(struct ext3_extents_tree *,
@@ -65,7 +66,7 @@ Index: linux-2.6.16.46-0.14/include/linux/ext3_extents.h
  
  #define EXT_CONTINUE	0
  #define EXT_BREAK	1
-@@ -179,6 +180,25 @@ typedef int (*ext_prepare_callback)(stru
+@@ -179,6 +181,25 @@ typedef int (*ext_prepare_callback)(stru
  
  #define EXT_MAX_BLOCK	0xffffffff
  
@@ -91,8 +92,8 @@ Index: linux-2.6.16.46-0.14/include/linux/ext3_extents.h
  
  #define EXT_FIRST_EXTENT(__hdr__) \
  	((struct ext3_extent *) (((char *) (__hdr__)) +		\
-@@ -260,5 +280,10 @@ ext3_ext_invalidate_cache(struct ext3_ex
- 		tree->cex->ec_type = EXT3_EXT_CACHE_NO;
+@@ -223,6 +244,11 @@ typedef int (*ext_prepare_callback)(stru
+ 	BUG_ON((path)[0].p_depth != depth);				\
  }
  
 +static inline int ext3_ext_is_uninitialized(struct ext3_extent *ext)
@@ -101,11 +102,12 @@ Index: linux-2.6.16.46-0.14/include/linux/ext3_extents.h
 +        return (le16_to_cpu(ext->ee_len) > EXT_INIT_MAX_LEN);
 +}
  
- #endif /* _LINUX_EXT3_EXTENTS */
-Index: linux-2.6.16.46-0.14/fs/ext3/extents.c
+ /*
+  * this structure is used to gather extents from the tree via ioctl
+Index: linux-2.6.9-67.0.15/fs/ext3/extents.c
 ===================================================================
---- linux-2.6.16.46-0.14.orig/fs/ext3/extents.c
-+++ linux-2.6.16.46-0.14/fs/ext3/extents.c
+--- linux-2.6.9-67.0.15.orig/fs/ext3/extents.c
++++ linux-2.6.9-67.0.15/fs/ext3/extents.c
 @@ -42,7 +42,7 @@
  #include <linux/slab.h>
  #include <linux/ext3_extents.h>
@@ -115,7 +117,7 @@ Index: linux-2.6.16.46-0.14/fs/ext3/extents.c
  
  static int __ext3_ext_check_header(const char *function, int line, struct inode *inode,
  				struct ext3_extent_header *eh, int depth,
-@@ -1484,7 +1484,7 @@ int ext3_ext_walk_space(struct ext3_exte
+@@ -1489,7 +1489,7 @@ int ext3_ext_walk_space(struct ext3_exte
  
  		EXT_ASSERT(cbex.ec_len > 0);
  		EXT_ASSERT(path[depth].p_hdr);
@@ -124,29 +126,12 @@ Index: linux-2.6.16.46-0.14/fs/ext3/extents.c
  		ext3_ext_drop_refs(path);
  
  		if (err < 0)
-@@ -2499,7 +2499,8 @@ int ext3_ext_calc_blockmap_metadata(stru
- static int
- ext3_ext_store_extent_cb(struct ext3_extents_tree *tree,
- 			 struct ext3_ext_path *path,
--			 struct ext3_ext_cache *newex)
-+			 struct ext3_ext_cache *newex,
-+			 struct ext3_extent *extent)
- {
- 	struct ext3_extent_buf *buf = (struct ext3_extent_buf *) tree->private;
- 
-@@ -2524,7 +2525,7 @@ ext3_ext_store_extent_cb(struct ext3_ext
- static int
- ext3_ext_collect_stats_cb(struct ext3_extents_tree *tree,
- 			  struct ext3_ext_path *path,
--			  struct ext3_ext_cache *ex)
-+			  struct ext3_ext_cache *ex, struct ext3_extent *extent)
- {
- 	struct ext3_extent_tree_stats *buf =
- 		(struct ext3_extent_tree_stats *) tree->private;
-@@ -2591,6 +2592,149 @@ int ext3_ext_ioctl(struct inode *inode, 
- 	return err;
+@@ -2503,7 +2503,148 @@ int ext3_ext_calc_blockmap_metadata(stru
+ 	ext3_init_tree_desc(&tree, inode);
+ 	return ext3_ext_calc_metadata_amount(&tree, blocks);
  }
- 
+-	
++
 +struct fiemap_internal {
 +	struct fiemap		*fiemap_s;
 +	struct fiemap_extent    fm_extent;
@@ -288,15 +273,13 @@ Index: linux-2.6.16.46-0.14/fs/ext3/extents.c
 +	return err;
 +}
 +
-+
-+
  EXPORT_SYMBOL(ext3_init_tree_desc);
  EXPORT_SYMBOL(ext3_mark_inode_dirty);
  EXPORT_SYMBOL(ext3_ext_invalidate_cache);
-Index: linux-2.6.16.46-0.14/fs/ext3/fiemap.h
+Index: linux-2.6.9-67.0.15/fs/ext3/fiemap.h
 ===================================================================
 --- /dev/null
-+++ linux-2.6.16.46-0.14/fs/ext3/fiemap.h
++++ linux-2.6.9-67.0.15/fs/ext3/fiemap.h
 @@ -0,0 +1,49 @@
 +/*
 + * linux/fs/ext3/fiemap.h

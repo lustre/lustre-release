@@ -86,7 +86,8 @@ WARN_LOGFILE           =
 # configuration options related to the input files
 #---------------------------------------------------------------------------
 INPUT                  = lustre/ \
-                         lnet
+                         lnet/   \
+                         libcfs/
 INPUT_ENCODING         = UTF-8
 FILE_PATTERNS          = *.h \
                          *.c
