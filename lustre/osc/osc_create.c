@@ -139,7 +139,7 @@ static int oscc_internal_create(struct osc_creator *oscc)
                 RETURN(0);
         }
 
-        if (oscc->oscc_grow_count < OST_MAX_PRECREATE &&
+        if (oscc->oscc_grow_count < oscc->oscc_max_grow_count &&
             ((oscc->oscc_flags & OSCC_FLAG_LOW) == 0) &&
             (__s64)(oscc->oscc_last_id - oscc->oscc_next_id) <=
                    (oscc->oscc_grow_count / 4 + 1)) {
@@ -147,8 +147,8 @@ static int oscc_internal_create(struct osc_creator *oscc)
                 oscc->oscc_grow_count *= 2;
         }
 
-        if (oscc->oscc_grow_count > OST_MAX_PRECREATE / 2)
-                oscc->oscc_grow_count = OST_MAX_PRECREATE / 2;
+        if (oscc->oscc_grow_count > oscc->oscc_max_grow_count / 2)
+                oscc->oscc_grow_count = oscc->oscc_max_grow_count / 2;
 
         oscc->oscc_flags |= OSCC_FLAG_CREATING;
         spin_unlock(&oscc->oscc_lock);
@@ -438,6 +438,7 @@ void oscc_init(struct obd_device *obd)
         spin_lock_init(&oscc->oscc_lock);
         oscc->oscc_obd = obd;
         oscc->oscc_grow_count = OST_MIN_PRECREATE;
+        oscc->oscc_max_grow_count = OST_MAX_PRECREATE;
 
         oscc->oscc_next_id = 2;
         oscc->oscc_last_id = 1;
