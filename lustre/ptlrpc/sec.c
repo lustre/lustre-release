@@ -2056,6 +2056,9 @@ void pga_to_bulk_desc(int nob, obd_count pg_count, struct brw_page **pga,
                                            nob : pga[i]->count;
                 desc->bd_iov[i].kiov_offset = pga[i]->off & ~CFS_PAGE_MASK;
 #else
+                /* FIXME currently liblustre doesn't support bulk encryption.
+                 * if we do, check again following may not be right. */
+                LASSERTF(0, "Bulk encryption not implemented for liblustre\n");
                 desc->bd_iov[i].iov_base = pga[i]->pg->addr;
                 desc->bd_iov[i].iov_len = pga[i]->count > nob ?
                                            nob : pga[i]->count;
