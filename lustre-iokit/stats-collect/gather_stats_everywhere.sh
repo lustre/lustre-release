@@ -5,7 +5,8 @@
 # script on a selection of nodes and collect all the results into a single
 # tar ball
 #
-# Copyright (c) 2007 - Cluster File Systems, Inc.
+# Copyright  2008 Sun Microsystems, Inc. All rights reserved
+# Use is subject to license terms.
 #########################################################################
 
 error() {

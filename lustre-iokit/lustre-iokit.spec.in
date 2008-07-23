@@ -10,7 +10,7 @@ Release: %{release}
 License: GPL
 Group: Applications/System
 Source: %{name}-%{version}.tar.gz
-URL: http://clusterfs.com/
+URL: http://www.sun.com/software/products/lustre/index.xml
 BuildRoot: /var/tmp/%{name}-%{version}-root
 Provides: %{name} = %{version}
 BuildArch: noarch
