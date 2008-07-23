@@ -1544,8 +1544,6 @@ static int handle_recovery_req(struct ptlrpc_thread *thread,
 
 static void resume_recovery_timer(struct obd_device *obd)
 {
-        LASSERT(!cfs_timer_is_armed(&obd->obd_recovery_timer));
-
         /* to be safe, make it at least OBD_RECOVERY_FACTOR * obd_timeout */
         reset_recovery_timer(obd, OBD_RECOVERY_FACTOR * obd_timeout, 1);
 }
