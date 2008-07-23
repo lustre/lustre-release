@@ -433,12 +433,12 @@ Displays all the debug messages from the occurence of the specified string till 
 
 =head1 REPORTING BUGS
 
-Please report all bugs to Cluster FileSystems, support@clusterfs.com
+Please report all bugs to Sun Microsystems, Inc. http://bugzilla.lustre.org/
 
 
 =head1 AVAILABILITY
 
-llanalyze is part of the Lustre(7) filesystem package and is available from CFS http://clusterfs.com
+llanalyze is part of the Lustre(7) filesystem package and is available from http://www.sun.com/software/products/lustre/index.xml
 
 =head1 SEE ALSO
 
