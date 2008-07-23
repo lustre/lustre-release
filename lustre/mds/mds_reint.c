@@ -352,7 +352,15 @@ int mds_fix_attr(struct inode *inode, struct mds_update_record *rec)
                         attr->ia_valid |= ATTR_MODE;
                 }
         } else if (ia_valid & ATTR_MODE) {
-                int mode = attr->ia_mode;
+                int mode;
+                if (!(attr->ia_valid & ATTR_FORCE)) {
+                        mode = inode->i_mode;
+                        if (((mode & S_ISUID) && (!(attr->ia_mode & S_ISUID))) ||
+                            ((mode & S_ISGID) && (mode & S_IXGRP) &&
+                            (!(attr->ia_mode & S_ISGID))))
+                                attr->ia_valid |= ATTR_FORCE;
+                }
+                mode = attr->ia_mode;
                 /* chmod */
                 if (attr->ia_mode == (umode_t)-1)
                         mode = inode->i_mode;
