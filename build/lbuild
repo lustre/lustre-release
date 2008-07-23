@@ -477,8 +477,10 @@ load_target()
 
     local lnxrelnew=${lnxrel//-/_}
 
-    [ -f "$CONFIG_FILE" ] || \
+    if ! $PATCHLESS && [ ! -f "$CONFIG_FILE" ]; then
         fatal 1 "Config file for target $TARGET missing from $TOPDIR/lustre/lustre/kernel_patches/kernel_configs/."
+    fi
+
     if [ "$EXTRA_VERSION_save" ] ; then
         EXTRA_VERSION="$EXTRA_VERSION_save"
     elif ! $RELEASE; then
