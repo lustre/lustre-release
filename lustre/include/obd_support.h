@@ -487,129 +487,16 @@ static inline void obd_pages_sub(int order)
 
 #endif
 
-#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
-
-#define OBD_MT_WRONG_SIZE    (1 << 0)
-#define OBD_MT_ALREADY_FREED (1 << 1)
-#define OBD_MT_LOC_LEN       128
-
-struct obd_mem_track {
-        struct hlist_node mt_hash;
-        char              mt_loc[OBD_MT_LOC_LEN];
-        int               mt_flags;
-        void             *mt_ptr;
-        int               mt_size;
-};
-
-void lvfs_memdbg_show(void);
-void lvfs_memdbg_insert(struct obd_mem_track *mt);
-void lvfs_memdbg_remove(struct obd_mem_track *mt);
-struct obd_mem_track *lvfs_memdbg_find(void *ptr);
-
-int lvfs_memdbg_check_insert(struct obd_mem_track *mt);
-struct obd_mem_track *lvfs_memdbg_check_remove(void *ptr);
-
-static inline struct obd_mem_track *
-__new_mem_track(void *ptr, int size,
-                char *file, int line)
-{
-        struct obd_mem_track *mt;
-
-        mt = kmalloc(sizeof(*mt), GFP_KERNEL);
-        if (unlikely(!mt))
-                return NULL;
-
-        snprintf(mt->mt_loc, sizeof(mt->mt_loc) - 1,
-                 "%s:%d", file, line);
-
-        mt->mt_size = size;
-        mt->mt_ptr = ptr;
-        mt->mt_flags = 0;
-        return mt;
-}
-
-static inline void
-__free_mem_track(struct obd_mem_track *mt)
-{
-        kfree(mt);
-}
-
-static inline int
-__get_mem_track(void *ptr, int size,
-                char *file, int line)
-{
-        struct obd_mem_track *mt;
-
-        mt = __new_mem_track(ptr, size, file, line);
-        if (unlikely(!mt)) {
-                CWARN("Can't allocate new memory track\n");
-                return 0;
-        }
-
-        if (!lvfs_memdbg_check_insert(mt))
-                __free_mem_track(mt);
-
-        return 1;
-}
-
-static inline int
-__put_mem_track(void *ptr, int size,
-                char *file, int line)
-{
-        struct obd_mem_track *mt;
-
-        if (unlikely(!(mt = lvfs_memdbg_check_remove(ptr)))) {
-                CWARN("Ptr 0x%p is not allocated. Attempt to free "
-                      "not allocated memory at %s:%d\n", ptr,
-                      file, line);
-                LBUG();
-                return 0;
-        } else {
-                if (unlikely(mt->mt_size != size)) {
-                        if (!(mt->mt_flags & OBD_MT_ALREADY_FREED)) {
-                                mt->mt_flags |= (OBD_MT_WRONG_SIZE |
-                                                 OBD_MT_ALREADY_FREED);
-
-                                CWARN("Freeing memory chunk (at 0x%p) of "
-                                      "different size than allocated "
-                                      "(%d != %d) at %s:%d, allocated at %s\n",
-                                      ptr, mt->mt_size, size, file, line,
-                                      mt->mt_loc);
-                        }
-                } else {
-                        __free_mem_track(mt);
-                }
-                return 1;
-        }
-}
-
-#define get_mem_track(ptr, size, file, line)                                         \
-        __get_mem_track((ptr), (size), (file), (line))
-
-#define put_mem_track(ptr, size, file, line)                                         \
-        __put_mem_track((ptr), (size), (file), (line))
-
-#else /* !CONFIG_DEBUG_MEMORY */
-
-#define get_mem_track(ptr, size, file, line)                                         \
-        do {} while (0)
-
-#define put_mem_track(ptr, size, file, line)                                         \
-        do {} while (0)
-#endif /* !CONFIG_DEBUG_MEMORY */
-
 #define OBD_DEBUG_MEMUSAGE (1)
 
 #if OBD_DEBUG_MEMUSAGE
 #define OBD_ALLOC_POST(ptr, size, name)                                 \
                 obd_memory_add(size);                                   \
-                get_mem_track((ptr), (size), __FILE__, __LINE__);       \
                 CDEBUG(D_MALLOC, name " '" #ptr "': %d at %p.\n",       \
                        (int)(size), ptr)
 
 #define OBD_FREE_PRE(ptr, size, name)                                   \
         LASSERT(ptr);                                                   \
-        put_mem_track((ptr), (size), __FILE__, __LINE__);               \
         obd_memory_sub(size);                                           \
         CDEBUG(D_MALLOC, name " '" #ptr "': %d at %p.\n",               \
                (int)(size), ptr);                                       \
