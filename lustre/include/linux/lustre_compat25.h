@@ -558,5 +558,23 @@ static inline int ll_crypto_hmac(struct crypto_tfm *tfm,
 #define ll_crypto_free_blkcipher(tfm)   crypto_free_tfm(tfm)
 #endif /* HAVE_ASYNC_BLOCK_CIPHER */
 
+#ifndef get_cpu
+#ifdef CONFIG_PREEMPT
+#define get_cpu()       ({ preempt_disable(); smp_processor_id(); })
+#define put_cpu()       preempt_enable()
+#else
+#define get_cpu()       smp_processor_id()
+#define put_cpu()
+#endif
+#endif /* get_cpu & put_cpu */
+
+#ifndef for_each_possible_cpu
+#define for_each_possible_cpu(i) for_each_cpu(i)
+#endif
+
+#ifndef cpu_to_node
+#define cpu_to_node(cpu)         0
+#endif
+
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */
