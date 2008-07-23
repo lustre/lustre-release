@@ -9,7 +9,7 @@ Release: @RELEASE@
 License: GPL
 Group: Utilities/System
 Source: lustre-%{version}.tar.gz
-URL: http://clusterfs.com/
+URL: http://www.sun.com/software/products/lustre/index.xml
 BuildRoot: %{_tmppath}/lustre-%{version}-root
 Obsoletes: lustre-lite, lustre-lite-utils, lustre-ldap nfs-utils-lustre
 Provides: lustre-lite = %{version}, lustre-lite-utils = %{version}
