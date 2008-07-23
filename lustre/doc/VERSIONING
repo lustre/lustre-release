@@ -65,7 +65,7 @@ New numbers are used as follows:
  - odd : when a new development cycle starts after a release
 3. patch:
  - when a development snapshot or release update becomes available
- - all these are announced on lustre-{announce,devel}@clusterfs.com
+ - all these are announced on lustre-{announce,devel}@lists.lustre.org
 4. test:
  - when developers feel it is time to exchange a named version
 
