@@ -31,3 +31,4 @@ ext3-lookup-dotdot-2.6.9.patch
 ext3-max-dir-size.patch
 ext3-block-bitmap-validation-2.6-sles10.patch
 ext3-xattr-no-update-ctime-2.6-sles10.patch
+ext3-check-bad-inode.patch
