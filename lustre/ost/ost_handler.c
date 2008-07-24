@@ -77,8 +77,12 @@ void oti_to_request(struct obd_trans_info *oti, struct ptlrpc_request *req)
         if (oti == NULL)
                 return;
 
-        if (req->rq_repmsg)
+        if (req->rq_repmsg) {
+                __u64 versions[PTLRPC_NUM_VERSIONS] = { 0 };
                 lustre_msg_set_transno(req->rq_repmsg, oti->oti_transno);
+                versions[0] = oti->oti_pre_version;
+                lustre_msg_set_versions(req->rq_repmsg, versions);
+        }
         req->rq_transno = oti->oti_transno;
 
         /* XXX 4 == entries in oti_ack_locks??? */
@@ -1545,10 +1549,6 @@ static int ost_handle(struct ptlrpc_request *req)
         if (rc)
                 RETURN(rc);
 
-        rc = ost_msg_check_version(req->rq_reqmsg);
-        if (rc)
-                RETURN(rc);
-
         switch (lustre_msg_get_opc(req->rq_reqmsg)) {
         case OST_CONNECT: {
                 CDEBUG(D_INODE, "connect\n");
@@ -1725,20 +1725,9 @@ static int ost_handle(struct ptlrpc_request *req)
                 target_committed_to_req(req);
 
 out:
-        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_LAST_REPLAY) {
-                if (obd && obd->obd_recovering) {
-                        DEBUG_REQ(D_HA, req, "LAST_REPLAY, queuing reply");
-                        return target_queue_last_replay_reply(req, rc);
-                }
-                /* Lost a race with recovery; let the error path DTRT. */
-                rc = req->rq_status = -ENOTCONN;
-        }
-
         if (!rc)
                 oti_to_request(oti, req);
-
-        target_send_reply(req, rc, fail);
-        return 0;
+        return target_handle_reply(req, rc, fail);
 }
 
 /*
