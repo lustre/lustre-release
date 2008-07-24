@@ -93,7 +93,7 @@ void reply_in_callback(lnet_event_t *ev)
 
         DEBUG_REQ((ev->status == 0) ? D_NET : D_ERROR, req,
                   "type %d, status %d", ev->type, ev->status);
-        
+
         LASSERT(ev->type == LNET_EVENT_PUT || ev->type == LNET_EVENT_UNLINK);
         LASSERT(ev->md.start == req->rq_repbuf);
         LASSERT(ev->mlength <= req->rq_replen);
@@ -105,7 +105,7 @@ void reply_in_callback(lnet_event_t *ev)
 
         req->rq_receiving_reply = 0;
         req->rq_early = 0;
-        
+
         if (ev->status)
                 goto out_wake;
         if (ev->type == LNET_EVENT_UNLINK) {
@@ -114,7 +114,7 @@ void reply_in_callback(lnet_event_t *ev)
                 goto out_wake;
         }
 
-        if ((ev->offset == 0) && 
+        if ((ev->offset == 0) &&
             (lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT)) {
                 /* Early reply */
                 DEBUG_REQ(D_ADAPTTO, req,
