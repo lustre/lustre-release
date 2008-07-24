@@ -353,6 +353,7 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
 {
         struct mds_obd *mds = mds_req2mds(req);
         struct obd_device *obd = req->rq_export->exp_obd;
+        struct inode *inodes[PTLRPC_NUM_VERSIONS] = { NULL };
         struct inode *head_inode = NULL;
         struct lvfs_run_ctxt saved;
         void *handle = NULL;
@@ -495,7 +496,8 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
                       sizeof(struct lov_mds_md_join), "lov");
         mds_finish_join(mds, req, head_inode, head_lmmj);
 cleanup:
-        rc = mds_finish_transno(mds, head_inode, handle, req, rc, 0, 0);
+        inodes[0] = head_inode;
+        rc = mds_finish_transno(mds, inodes, handle, req, rc, 0, 0);
         switch(cleanup_phase){
         case 3:
                 llog_close(llh_head);
