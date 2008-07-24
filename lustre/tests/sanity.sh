@@ -3447,7 +3447,7 @@ test_80() { # bug 10718
         dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=1M
         sync; sleep 1; sync
         BEFORE=`date +%s`
-        cancel_lru_locks OSC
+        cancel_lru_locks osc
         AFTER=`date +%s`
         DIFF=$((AFTER-BEFORE))
         if [ $DIFF -gt 1 ] ; then
@@ -3648,7 +3648,7 @@ test_101b() {
 	local ITERATION=$((FILE_LENGTH/STRIDE_SIZE))
 	# prepare the read-ahead file
 	setup_test101
-	cancel_lru_locks osc 
+	cancel_lru_locks osc
 	for BIDX in 2 4 8 16 32 64 128 256
 	do
 		local BSIZE=$((BIDX*4096))
@@ -4404,7 +4404,7 @@ test_118f() {
 	fi
 	
         lctl set_param fail_loc=0x0
-        
+
         LOCKED=$(lctl get_param -n "llite.*.dump_page_cache" | grep -c locked)
         DIRTY=$(lctl get_param -n "llite.*.dump_page_cache" | grep -c dirty)
         WRITEBACK=$(lctl get_param -n "llite.*.dump_page_cache" | grep -c writeback)
@@ -4926,7 +4926,7 @@ test_124a() {
         log "create $NR files at $DIR/$tdir"
         createmany -o $DIR/$tdir/f $NR || 
                 error "failed to create $NR files in $DIR/$tdir" 
-        
+
         cancel_lru_locks mdc
         ls -l $DIR/$tdir > /dev/null
 
