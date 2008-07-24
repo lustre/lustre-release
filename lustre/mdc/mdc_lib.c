@@ -61,7 +61,7 @@ static void mdc_readdir_pack_18(struct ptlrpc_request *req, int offset,
         CLASSERT((int)offsetof(struct mds_body, max_cookiesize) == 
                  (int)offsetof(struct mdt_body, max_cookiesize));
 
-        
+
         b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
         b->fsuid = current->fsuid;
         b->fsgid = current->fsgid;
@@ -194,7 +194,7 @@ static void mdc_create_pack_20(struct ptlrpc_request *req, int offset,
 {
         struct mdt_rec_create *rec;
         char *tmp;
-        ENTRY;        
+        ENTRY;
 
         rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));
 
@@ -294,7 +294,6 @@ void mdc_join_pack(struct ptlrpc_request *req, int offset,
                 mdc_join_pack_20(req, offset, op_data, head_size);
         else
                 mdc_join_pack_18(req, offset, op_data, head_size);
-                
 }
 
 static void mdc_open_pack_18(struct ptlrpc_request *req, int offset,
@@ -912,7 +911,7 @@ void mdc_close_pack(struct ptlrpc_request *req, int offset,
         else
                 mdc_close_pack_18(req, offset, data, oa, valid, och);
 }
-struct mdc_cache_waiter {       
+struct mdc_cache_waiter {
         struct list_head        mcw_entry;
         wait_queue_head_t       mcw_waitq;
 };
