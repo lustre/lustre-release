@@ -164,6 +164,8 @@ static char *fsfilt_ext3_uuid(struct super_block *sb)
  */
 static __u64 fsfilt_ext3_get_version(struct inode *inode)
 {
+        CDEBUG(D_INFO, "Get version "LPX64" for inode %lu\n",
+               EXT3_I(inode)->i_fs_version, inode->i_ino);
         return EXT3_I(inode)->i_fs_version;
 }
 
@@ -174,7 +176,12 @@ static __u64 fsfilt_ext3_set_version(struct inode *inode, __u64 new_version)
 {
         __u64 old_version = EXT3_I(inode)->i_fs_version;
 
+        CDEBUG(D_INFO, "Set version "LPX64" (old "LPX64") for inode %lu\n",
+               new_version, old_version, inode->i_ino);
         (EXT3_I(inode))->i_fs_version = new_version;
+        /* version is set after all inode operations are finished, so we should
+         * mark it dirty here */
+        inode->i_sb->s_op->dirty_inode(inode);
         return old_version;
 }
 
