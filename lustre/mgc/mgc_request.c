@@ -1064,7 +1064,8 @@ out_closel:
                 struct client_obd *cli = &obd->u.cli;
                 LASSERT(cli);
                 LASSERT(cli->cl_mgc_configs_dir);
-                rc = lustre_rename(cli->cl_mgc_configs_dir, temp_log, logname);
+                rc = lustre_rename(cli->cl_mgc_configs_dir, cli->cl_mgc_vfsmnt,
+                                   temp_log, logname);
         }
         CDEBUG(D_MGC, "Copied remote log %s (%d)\n", logname, rc);
 out:
