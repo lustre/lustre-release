@@ -2131,7 +2131,7 @@ ssize_t ll_file_lockless_io(struct file *file, const struct iovec *iov,
                 rc = generic_write_checks(file, ppos, &count, 0);
                 if (rc)
                         GOTO(out, rc);
-                rc = remove_suid(file->f_dentry);
+                rc = ll_remove_suid(file->f_dentry, file->f_vfsmnt);
                 if (rc)
                         GOTO(out, rc);
         }

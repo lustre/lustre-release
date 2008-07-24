@@ -1251,7 +1251,8 @@ found_child:
                         ldlm_lock_decref(child_lockh, child_mode);
         case 2:
                 if (rc && created) {
-                        int err = vfs_unlink(dparent->d_inode, dchild);
+                        int err = ll_vfs_unlink(dparent->d_inode, dchild,
+                                                mds->mds_vfsmnt);
                         if (err) {
                                 CERROR("unlink(%.*s) in error path: %d\n",
                                        dchild->d_name.len, dchild->d_name.name,
@@ -1360,7 +1361,8 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
 
                 cleanup_phase = 2; /* dput(pending_child) when finished */
                 if (S_ISDIR(pending_child->d_inode->i_mode)) {
-                        rc = vfs_rmdir(pending_dir, pending_child);
+                        rc = ll_vfs_rmdir(pending_dir, pending_child, 
+                                          mds->mds_vfsmnt);
                         if (rc)
                                 CERROR("error unlinking orphan dir %s: rc %d\n",
                                        fidname,rc);
@@ -1387,7 +1389,7 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
                 dp.ldp_inum = 0;
                 dp.ldp_ptr = req;
                 pending_child->d_fsdata = (void *) &dp;
-                rc = vfs_unlink(pending_dir, pending_child);
+                rc = ll_vfs_unlink(pending_dir, pending_child, mds->mds_vfsmnt);
                 if (rc)
                         CERROR("error unlinking orphan %s: rc %d\n",fidname,rc);
 

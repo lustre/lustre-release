@@ -937,7 +937,8 @@ static int filter_prep_groups(struct obd_device *obd)
         int i, rc = 0, cleanup_phase = 0;
         ENTRY;
 
-        O_dentry = simple_mkdir(current->fs->pwd, "O", 0700, 1);
+        O_dentry = simple_mkdir(current->fs->pwd, filter->fo_vfsmnt, 
+                                "O", 0700, 1);
         CDEBUG(D_INODE, "got/created O: %p\n", O_dentry);
         if (IS_ERR(O_dentry)) {
                 rc = PTR_ERR(O_dentry);
@@ -964,7 +965,8 @@ static int filter_prep_groups(struct obd_device *obd)
                 loff_t off = 0;
 
                 sprintf(name, "%d", i);
-                dentry = simple_mkdir(O_dentry, name, 0700, 1);
+                dentry = simple_mkdir(O_dentry, filter->fo_vfsmnt, 
+                                      name, 0700, 1);
                 CDEBUG(D_INODE, "got/created O/%s: %p\n", name, dentry);
                 if (IS_ERR(dentry)) {
                         rc = PTR_ERR(dentry);
@@ -1015,7 +1017,8 @@ static int filter_prep_groups(struct obd_device *obd)
                         char dir[20];
                         snprintf(dir, sizeof(dir), "d%u", i);
 
-                        dentry = simple_mkdir(O_dentry, dir, 0700, 1);
+                        dentry = simple_mkdir(O_dentry, filter->fo_vfsmnt,
+                                              dir, 0700, 1);
                         CDEBUG(D_INODE, "got/created O/0/%s: %p\n", dir,dentry);
                         if (IS_ERR(dentry)) {
                                 rc = PTR_ERR(dentry);
@@ -1308,7 +1311,8 @@ static int filter_prepare_destroy(struct obd_device *obd, obd_id objid)
  * i_sem before starting a handle, while filter_destroy() + vfs_unlink do the
  * reverse.  Caller must take i_sem before starting the transaction and we
  * drop it here before the inode is removed from the dentry.  bug 4180/6984 */
-int filter_vfs_unlink(struct inode *dir, struct dentry *dentry)
+int filter_vfs_unlink(struct inode *dir, struct dentry *dentry,
+                      struct vfsmount *mnt)
 {
         int rc;
         ENTRY;
@@ -1342,7 +1346,7 @@ int filter_vfs_unlink(struct inode *dir, struct dentry *dentry)
         DQUOT_INIT(dir);
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        rc = security_inode_unlink(dir, dentry);
+        rc = ll_security_inode_unlink(dir, dentry, mnt);
         if (rc)
                 GOTO(out, rc);
 #endif
@@ -1365,6 +1369,7 @@ static int filter_destroy_internal(struct obd_device *obd, obd_id objid,
                                    struct dentry *dchild)
 {
         struct inode *inode = dchild->d_inode;
+        struct filter_obd *filter = &obd->u.filter;
         int rc;
 
         if (inode->i_nlink != 1 || atomic_read(&inode->i_count) != 1) {
@@ -1374,7 +1379,7 @@ static int filter_destroy_internal(struct obd_device *obd, obd_id objid,
                        atomic_read(&inode->i_count));
         }
 
-        rc = filter_vfs_unlink(dparent->d_inode, dchild);
+        rc = filter_vfs_unlink(dparent->d_inode, dchild, filter->fo_vfsmnt);
         if (rc)
                 CERROR("error unlinking objid %.*s: rc %d\n",
                        dchild->d_name.len, dchild->d_name.name, rc);

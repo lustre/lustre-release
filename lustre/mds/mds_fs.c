@@ -532,7 +532,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
 
         /* setup the directory tree */
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        dentry = simple_mkdir(current->fs->pwd, "ROOT", 0755, 0);
+        dentry = simple_mkdir(current->fs->pwd, mnt, "ROOT", 0755, 0);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create ROOT directory: rc = %d\n", rc);
@@ -560,7 +560,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                 GOTO(err_fid, rc);
         }
 
-        dentry = simple_mkdir(current->fs->pwd, "PENDING", 0777, 1);
+        dentry = simple_mkdir(current->fs->pwd, mnt, "PENDING", 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create PENDING directory: rc = %d\n", rc);
@@ -569,7 +569,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         mds->mds_pending_dir = dentry;
 
         /* COMPAT_146 */
-        dentry = simple_mkdir(current->fs->pwd, MDT_LOGS_DIR, 0777, 1);
+        dentry = simple_mkdir(current->fs->pwd, mnt, MDT_LOGS_DIR, 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create %s directory: rc = %d\n",
@@ -579,7 +579,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         mds->mds_logs_dir = dentry;
         /* end COMPAT_146 */
 
-        dentry = simple_mkdir(current->fs->pwd, "OBJECTS", 0777, 1);
+        dentry = simple_mkdir(current->fs->pwd, mnt, "OBJECTS", 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create OBJECTS directory: rc = %d\n", rc);
@@ -769,8 +769,9 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
                 GOTO(out_dput, rc = PTR_ERR(handle));
 
         lock_kernel();
-        rc = vfs_rename(mds->mds_objects_dir->d_inode, filp->f_dentry,
-                        mds->mds_objects_dir->d_inode, new_child);
+        rc = ll_vfs_rename(mds->mds_objects_dir->d_inode, filp->f_dentry,
+                           filp->f_vfsmnt, mds->mds_objects_dir->d_inode, 
+                           new_child, filp->f_vfsmnt);
         unlock_kernel();
         if (rc)
                 CERROR("error renaming new object "LPU64":%u: rc %d\n",
@@ -845,7 +846,7 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
            vfs_unlink() context. bug 10409 */
         inode = de->d_inode;
         atomic_inc(&inode->i_count);
-        rc = vfs_unlink(mds->mds_objects_dir->d_inode, de);
+        rc = ll_vfs_unlink(mds->mds_objects_dir->d_inode, de, mds->mds_vfsmnt);
         if (rc)
                 CERROR("error destroying object "LPU64":%u: rc %d\n",
                        oa->o_id, oa->o_generation, rc);
