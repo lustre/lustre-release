@@ -166,9 +166,18 @@ struct lustre_mount_data {
 #if LR_CLIENT_START < LR_SERVER_SIZE
 #error "Can't have LR_CLIENT_START < LR_SERVER_SIZE"
 #endif
-/* This limit is arbitrary (32k clients on x86), but it is convenient to use
- * 2^n * CFS_PAGE_SIZE * 8 for the number of bits that fit an order-n allocation. */
+
+/*
+ * This limit is arbitrary (131072 clients on x86), but it is convenient to use
+ * 2^n * CFS_PAGE_SIZE * 8 for the number of bits that fit an order-n allocation.
+ * If we need more than 131072 clients (order-2 allocation on x86) then this
+ * should become an array of single-page pointers that are allocated on demand.
+ */
+#if (128 * 1024UL) > (CFS_PAGE_SIZE * 8)
+#define LR_MAX_CLIENTS (128 * 1024UL)
+#else
 #define LR_MAX_CLIENTS (CFS_PAGE_SIZE * 8)
+#endif
 
 /* COMPAT_146 */
 #define OBD_COMPAT_OST          0x00000002 /* this is an OST (temporary) */
