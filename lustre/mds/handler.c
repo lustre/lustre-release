@@ -403,7 +403,7 @@ int mds_init_export(struct obd_export *exp)
 
         INIT_LIST_HEAD(&med->med_open_head);
         spin_lock_init(&med->med_open_lock);
-        
+
         spin_lock(&exp->exp_lock);
         exp->exp_connecting = 1;
         spin_unlock(&exp->exp_lock);
@@ -1655,9 +1655,9 @@ int mds_handle(struct ptlrpc_request *req)
                 __u32  opc;
                 int op = 0;
                 int size[4] = { sizeof(struct ptlrpc_body),
-                                sizeof(struct mds_body),
-                                mds->mds_max_mdsize,
-                                mds->mds_max_cookiesize };
+                               sizeof(struct mds_body),
+                               mds->mds_max_mdsize,
+                               mds->mds_max_cookiesize };
                 int bufcount;
 
                 /* NB only peek inside req now; mds_reint() will swab it */
@@ -1766,6 +1766,8 @@ int mds_handle(struct ptlrpc_request *req)
         case OBD_PING:
                 DEBUG_REQ(D_INODE, req, "ping");
                 rc = target_handle_ping(req);
+                if (req->rq_export->exp_delayed)
+                        mds_update_client_epoch(req->rq_export);
                 break;
 
         case OBD_LOG_CANCEL:
@@ -1848,19 +1850,8 @@ int mds_handle(struct ptlrpc_request *req)
         }
 
         EXIT;
- out:
-
-        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_LAST_REPLAY) {
-                if (obd && obd->obd_recovering) {
-                        DEBUG_REQ(D_HA, req, "LAST_REPLAY, queuing reply");
-                        return target_queue_last_replay_reply(req, rc);
-                }
-                /* Lost a race with recovery; let the error path DTRT. */
-                rc = req->rq_status = -ENOTCONN;
-        }
-
-        target_send_reply(req, rc, fail);
-        return 0;
+out:
+        return target_handle_reply(req, rc, fail);
 }
 
 /* Update the server data on disk.  This stores the new mount_count and
@@ -1996,6 +1987,8 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         mds->mds_max_cookiesize = sizeof(struct llog_cookie);
         mds->mds_atime_diff = MAX_ATIME_DIFF;
         mds->mds_evict_ost_nids = 1;
+        /* sync permission changes */
+        mds->mds_sync_permission = 0;
 
         sprintf(ns_name, "mds-%s", obd->obd_uuid.uuid);
         obd->obd_namespace = ldlm_namespace_new(obd, ns_name, LDLM_NAMESPACE_SERVER,
@@ -2086,8 +2079,8 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                               label ?: "", label ? "/" : "", str,
                               obd->obd_recovery_timeout / 60,
                               obd->obd_recovery_timeout % 60,
-                              obd->obd_max_recoverable_clients,
-                              (obd->obd_max_recoverable_clients == 1) ? "":"s",
+                              obd->obd_recoverable_clients,
+                              (obd->obd_recoverable_clients == 1) ? "":"s",
                               obd->obd_name);
         } else {
                 LCONSOLE_INFO("MDT %s now serving %s (%s%s%s) with recovery "
@@ -2216,6 +2209,8 @@ int mds_postrecov(struct obd_device *obd)
         rc = mds_cleanup_pending(obd);
         if (rc < 0)
                 GOTO(out, rc);
+        /* VBR: update boot epoch after recovery */
+        mds_update_last_epoch(obd);
 
         /* FIXME Does target_finish_recovery really need this to block? */
         /* Notify the LOV, which will in turn call mds_notify for each tgt */
@@ -2471,7 +2466,9 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
                          * be replied by rq_stats, otherwise, return it by 
                          * intent here
                          */
-                        if (IS_CLIENT_DISCONNECT_ERROR(rep->lock_policy_res2))
+                         /* if VBR failure then return error in rq_stats too */
+                        if (IS_CLIENT_DISCONNECT_ERROR(rep->lock_policy_res2) ||
+                            rep->lock_policy_res2 == -EOVERFLOW)
                                 RETURN(rep->lock_policy_res2);
                         else
                                 RETURN(ELDLM_LOCK_ABORTED);
