@@ -235,6 +235,7 @@ struct lustre_msg_v2 {
 };
 
 /* without security, ptlrpc_body is put in the first buffer. */
+#define PTLRPC_NUM_VERSIONS     4
 struct ptlrpc_body {
         struct lustre_handle pb_handle;
         __u32 pb_type;
@@ -242,7 +243,7 @@ struct ptlrpc_body {
         __u32 pb_opc;
         __u32 pb_status;
         __u64 pb_last_xid;
-        __u64 pb_last_seen;
+        __u64 pb_last_seen; /* not used */
         __u64 pb_last_committed;
         __u64 pb_transno;
         __u32 pb_flags;
@@ -252,6 +253,10 @@ struct ptlrpc_body {
         __u32 pb_service_time; /* for rep, actual service time */
         __u32 pb_limit;
         __u64 pb_slv;
+        /* VBR: pre-versions */
+        __u64 pb_pre_versions[PTLRPC_NUM_VERSIONS];
+        /* padding for future needs */
+        __u64 pb_padding[4];
 };
 
 extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
@@ -289,19 +294,23 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define MSG_RESENT             2
 #define MSG_REPLAY             4
 /* #define MSG_AT_SUPPORT         8  avoid until 1.10+ */
+#define MSG_DELAY_REPLAY       0x10
+#define MSG_VERSION_REPLAY     0x20
 
 /*
  * Flags for all connect opcodes (MDS_CONNECT, OST_CONNECT)
  */
 
-#define MSG_CONNECT_RECOVERING  0x1
-#define MSG_CONNECT_RECONNECT   0x2
-#define MSG_CONNECT_REPLAYABLE  0x4
+#define MSG_CONNECT_RECOVERING  0x00000001
+#define MSG_CONNECT_RECONNECT   0x00000002
+#define MSG_CONNECT_REPLAYABLE  0x00000004
 //#define MSG_CONNECT_PEER        0x8
-#define MSG_CONNECT_LIBCLIENT   0x10
-#define MSG_CONNECT_INITIAL     0x20
-#define MSG_CONNECT_ASYNC       0x40
-#define MSG_CONNECT_NEXT_VER    0x80 /* use next version of lustre_msg */
+#define MSG_CONNECT_LIBCLIENT   0x00000010
+#define MSG_CONNECT_INITIAL     0x00000020
+#define MSG_CONNECT_ASYNC       0x00000040
+#define MSG_CONNECT_NEXT_VER    0x00000080 /* use next version of lustre_msg */
+#define MSG_CONNECT_TRANSNO     0x00000100
+#define MSG_CONNECT_DELAYED     0x00000200
 
 /* Connect flags */
 #define OBD_CONNECT_RDONLY            0x1ULL /*client allowed read-only access*/
@@ -335,6 +344,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                               *b=10600 */
 #define OBD_CONNECT_CKSUM      0x20000000ULL /*support several cksum algos */
 #define OBD_CONNECT_FID        0x40000000ULL /* FID is supported */
+#define OBD_CONNECT_VBR        0x80000000ULL /* version based recovery */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
 
@@ -349,14 +359,14 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_IBITS | OBD_CONNECT_JOIN | \
                                 OBD_CONNECT_NODEVOH | OBD_CONNECT_ATTRFID | \
                                 OBD_CONNECT_CANCELSET | OBD_CONNECT_AT | \
-                                LRU_RESIZE_CONNECT_FLAG)
+                                LRU_RESIZE_CONNECT_FLAG | OBD_CONNECT_VBR)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
                                 OBD_CONNECT_BRW_SIZE | OBD_CONNECT_QUOTA64 | \
                                 OBD_CONNECT_CANCELSET | OBD_CONNECT_AT | \
                                 LRU_RESIZE_CONNECT_FLAG | OBD_CONNECT_CKSUM | \
-                                OBD_CONNECT_CHANGE_QS)
+                                OBD_CONNECT_VBR | OBD_CONNECT_CHANGE_QS)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT)
 
@@ -388,6 +398,14 @@ struct obd_connect_data {
 };
 
 extern void lustre_swab_connect(struct obd_connect_data *ocd);
+
+/* b1_6 has smaller body. The defines below is for interoperability */
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2,0,0,0)
+#define PTLRPC_INTEROP_1_6      1
+#define PTLRPC_BODY_MIN_SIZE    offsetof(struct ptlrpc_body, pb_pre_versions)
+#else
+#define PTLRPC_BODY_MIN_SIZE    sizeof(struct ptlrpc_body)
+#endif
 
 /*
  * Supported checksum algorithms. Up to 32 checksum types are supported.
