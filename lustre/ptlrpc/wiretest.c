@@ -387,7 +387,7 @@ void lustre_assert_wire_constants(void)
         LASSERT(offsetof(struct lustre_msg_v1, lm_magic) == offsetof(struct lustre_msg_v2, lm_magic));
 
         /* Checks for struct ptlrpc_body */
-        LASSERTF((int)sizeof(struct ptlrpc_body) == 88, " found %lld\n",
+        LASSERTF((int)sizeof(struct ptlrpc_body) == 152, " found %lld\n",
                  (long long)(int)sizeof(struct ptlrpc_body));
         LASSERTF((int)offsetof(struct ptlrpc_body, pb_handle) == 0, " found %lld\n",
                  (long long)(int)offsetof(struct ptlrpc_body, pb_handle));
@@ -453,6 +453,14 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct ptlrpc_body, pb_limit));
         LASSERTF((int)sizeof(((struct ptlrpc_body *)0)->pb_limit) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct ptlrpc_body *)0)->pb_limit));
+        LASSERTF((int)offsetof(struct ptlrpc_body, pb_pre_versions) == 88, " found %lld\n",
+                 (long long)(int)offsetof(struct ptlrpc_body, pb_pre_versions));
+        LASSERTF((int)sizeof(((struct ptlrpc_body *)0)->pb_pre_versions) == 32, " found %lld\n",
+                 (long long)(int)sizeof(((struct ptlrpc_body *)0)->pb_pre_versions));
+        LASSERTF((int)offsetof(struct ptlrpc_body, pb_padding) == 120, " found %lld\n",
+                 (long long)(int)offsetof(struct ptlrpc_body, pb_padding));
+        LASSERTF((int)sizeof(((struct ptlrpc_body *)0)->pb_padding) == 32, " found %lld\n",
+                 (long long)(int)sizeof(((struct ptlrpc_body *)0)->pb_padding));
 
         /* Checks for struct obd_connect_data */
         LASSERTF((int)sizeof(struct obd_connect_data) == 72, " found %lld\n",
@@ -538,6 +546,7 @@ void lustre_assert_wire_constants(void)
         CLASSERT(OBD_CONNECT_REAL == 0x08000000ULL);
         CLASSERT(OBD_CONNECT_CKSUM == 0x20000000ULL);
         CLASSERT(OBD_CONNECT_FID == 0x40000000ULL);
+        CLASSERT(OBD_CONNECT_VBR == 0x80000000ULL);
 
         /* Checks for struct obdo */
         LASSERTF((int)sizeof(struct obdo) == 208, " found %lld\n",
