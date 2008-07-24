@@ -1,7 +1,8 @@
 #! /usr/bin/perl
 # kabi - Linux Kernel Application Binary Interface manager
-# Copyright (C) 2005  Cluster File Systems, Inc.
-# All rights reserved.
+#
+# Copyright  2008 Sun Microsystems, Inc. All rights reserved
+# Use is subject to license terms.
 #
 # Gordon Matzigkeit <gord@clusterfs.com>, 2005-10-21
 
@@ -50,7 +51,7 @@ MODE and ARGS can be one of the following:
 
     module KMOD       generate a KABI file for the specified kernel module
 
-Written by Gordon Matzigkeit <gord\@clusterfs.com> for Cluster File Systems.
+Written by Gordon Matzigkeit <gord\@clusterfs.com> for Sun Microsystems, Inc.
 EOF
     }
     exit $status;

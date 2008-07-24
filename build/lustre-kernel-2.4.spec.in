@@ -171,7 +171,7 @@ BuildPreReq: patch >= 2.5.4, bash >= 2.03, sh-utils, gnupg, tar
 BuildPreReq: bzip2, findutils, dev, gzip, m4
 %endif
 
-Vendor: Cluster File Systems, Inc.
+Vendor: Sun Microsystems, Inc.
 URL: http://www.kernel.org/
 Buildroot: %{_tmppath}/%{name}-%{version}-root
 
@@ -691,7 +691,7 @@ if [ "%{buildbase}" -ne 0 ] ; then
     mkdir -p $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/configs
     cp ../lustre/kernel_patches/kernel_configs/kernel-%{kversion}-@LUSTRE_TARGET@*.config $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/configs
     if [ "%{linux26}" -ne 0 ] ; then
-        # this only works because CFS only builds one kernel per target/arch per kernel-source rpm
+        # this only works because Sun only builds one kernel per target/arch per kernel-source rpm
 	objdir=$RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}-obj
 	mkdir -p $objdir
         if [ "%{buildbigmem}" -ne 0 ] ; then

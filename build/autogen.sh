@@ -31,7 +31,7 @@ error_msg() {
 		EOF
 	else
 		cat >&2 <<-EOF
-		CFS provides RPMs which can be installed alongside your
+		Sun provides RPMs which can be installed alongside your
 		existing autoconf/make RPMs, if you are nervous about
 		upgrading.  See
 
