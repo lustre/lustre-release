@@ -231,12 +231,13 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
         struct obd_device *obd = req->rq_export->exp_obd;
         struct dentry *de;
         struct inode *inode = NULL;
+        struct inode *inodes[PTLRPC_NUM_VERSIONS] = { NULL };
         struct lustre_handle lockh;
         void *handle = NULL;
         char *xattr_name;
         char *xattr = NULL;
         int xattrlen;
-        int rc = -EOPNOTSUPP, err = 0;
+        int rc = -EOPNOTSUPP, err = 0, sync = 0;
         __u64 lockpart;
         ENTRY;
 
@@ -283,6 +284,11 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
 
         OBD_FAIL_WRITE(obd, OBD_FAIL_MDS_SETXATTR_WRITE, inode->i_sb);
 
+        /* version recovery check */
+        rc = mds_version_get_check(req, inode, 0);
+        if (rc)
+                GOTO(out_dput, rc);
+
         /* filter_op simply use setattr one */
         handle = fsfilt_start(obd, inode, FSFILT_OP_SETATTR, NULL);
         if (IS_ERR(handle))
@@ -323,8 +329,11 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
 
         LASSERT(rc <= 0);
 out_trans:
-        err = mds_finish_transno(mds, inode, handle, req, rc, 0, 0);
-
+        /* security-replated changes may require sync */
+        if (!strcmp(xattr_name, XATTR_NAME_ACL_ACCESS))
+                sync = mds->mds_sync_permission;
+        inodes[0] = inode;
+        err = mds_finish_transno(mds, inodes, handle, req, rc, 0, sync);
 out_dput:
         l_dput(de);
         if (rc)
