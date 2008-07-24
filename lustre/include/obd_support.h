@@ -257,6 +257,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_PTLRPC_CLIENT_BULK_CB   0x508
 #define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
 #define OBD_FAIL_PTLRPC_PAUSE_REP        0x50c
+#define OBD_FAIL_PTLRPC_IMP_DEACTIVE     0x50d
 
 #define OBD_FAIL_OBD_PING_NET            0x600
 #define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601
