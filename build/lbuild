@@ -1274,10 +1274,15 @@ build_kernel_ib()
 	    configure_options="--with-ipath_inf-mod --with-ehca-mod"
 	    ;;
     esac
+    local K_SRC="K_SRC"
+    # ofed 1.3 had a bug in the rpm spec
+    if [ "$OFED_VERSION" = "1.3" ]; then
+        K_SRC="KSRC"
+    fi
     $RPMBUILD --rebuild --define 'build_kernel_ib 1' --define 'build_kernel_ib_devel 1' \
 	      --define "_topdir ${TOPDIR}" --target ${TARGET_ARCH} \
 	      --define "KVERSION ${LINUXRELEASE}" \
-	      --define "KSRC ${LINUXOBJ:-${LINUX}}" \
+	      --define "$K_SRC ${LINUXOBJ:-${LINUX}}" \
 	      --define "LIB_MOD_DIR /lib/modules/${LINUXRELEASE}/updates" \
 	      --define "configure_options --without-quilt --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-srp-target-mod --with-core-mod --with-mthca-mod --with-mlx4-mod --with-cxgb3-mod --with-nes-mod --with-ipoib-mod --with-sdp-mod --with-srp-mod --without-srp-target-mod --with-rds-mod --with-iser-mod --with-qlgc_vnic-mod --with-madeye-mod $configure_options" ${TOPDIR}/OFED/SRPMS/ofa_kernel-${OFED_VERSION}-ofed${OFED_VERSION}.src.rpm
 
