@@ -830,7 +830,7 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
         intent_set_disposition(rep, DISP_LOOKUP_POS);
 
         rc = mds_finish_open(req, dchild, body, flags, &handle, rec, rep, NULL);
-        rc = mds_finish_transno(mds, dchild->d_inode, handle,
+        rc = mds_finish_transno(mds, NULL, handle,
                                 req, rc, rep ? rep->lock_policy_res1 : 0, 0);
         /* XXX what do we do here if mds_finish_transno itself failed? */
 
@@ -899,6 +899,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         struct ldlm_reply *rep = NULL;
         struct mds_body *body = NULL;
         struct dentry *dchild = NULL, *dparent = NULL;
+        struct inode *inodes[PTLRPC_NUM_VERSIONS] = { NULL };
         struct mds_export_data *med;
         struct lustre_handle parent_lockh;
         int rc = 0, cleanup_phase = 0, acc_mode, created = 0;
@@ -1019,7 +1020,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         }
 
         /* Step 2: Lookup the child */
-      
+
         if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) &&
             (rec->ur_flags & MDS_OPEN_LOCK) && (rec->ur_namelen == 1)) {
                 /* hack for nfsd with no_subtree_check, it will use anon
@@ -1061,6 +1062,11 @@ int mds_open(struct mds_update_record *rec, int offset,
                 if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
                         GOTO(cleanup, rc = -EROFS);
 
+                /* version recovery check */
+                rc = mds_version_get_check(req, dparent->d_inode, 0);
+                if (rc)
+                        GOTO(cleanup_no_trans, rc);
+
                 if (dparent->d_inode->i_mode & S_ISGID)
                         gid = dparent->d_inode->i_gid;
                 else
@@ -1093,7 +1099,16 @@ int mds_open(struct mds_update_record *rec, int offset,
                 }
                 inode = dchild->d_inode;
                 if (ino) {
-                        LASSERT(ino == inode->i_ino);
+                        if (ino != inode->i_ino) {
+                                /* FID support is needed to replay this
+                                 * correctly. Now fail gracefully like there is
+                                 * version mismatch */
+                                if (req->rq_export->exp_delayed)
+                                        rc = -EOVERFLOW;
+                                else
+                                        rc = -EFAULT;
+                                GOTO(cleanup, rc);
+                        }
                         /* Written as part of setattr */
                         inode->i_generation = rec->ur_fid2->generation;
                         CDEBUG(D_HA, "recreated ino %lu with gen %u\n",
@@ -1200,7 +1215,7 @@ found_child:
         else
                 child_mode = LCK_CR;
 
-        if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) && 
+        if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) &&
              (rec->ur_flags & MDS_OPEN_LOCK)) {
                 /* In case of replay we do not get a lock assuming that the
                    caller has it already */
@@ -1208,8 +1223,8 @@ found_child:
                 child_res_id.name[1] = dchild->d_inode->i_generation;
 
                 rc = ldlm_cli_enqueue_local(obd->obd_namespace, &child_res_id,
-                                            LDLM_IBITS, &policy, child_mode, 
-                                            &lock_flags, ldlm_blocking_ast, 
+                                            LDLM_IBITS, &policy, child_mode,
+                                            &lock_flags, ldlm_blocking_ast,
                                             ldlm_completion_ast, NULL, NULL,
                                             0, NULL, child_lockh);
                 if (rc != ELDLM_OK)
@@ -1234,8 +1249,10 @@ found_child:
         GOTO(cleanup, rc);
 
  cleanup:
-        rc = mds_finish_transno(mds, dchild ? dchild->d_inode : NULL, handle,
-                                req, rc, rep ? rep->lock_policy_res1 : 0, 0);
+        inodes[0] = (!created || IS_ERR(dparent)) ? NULL : dparent->d_inode;
+        inodes[1] = (created && dchild) ? dchild->d_inode : NULL;
+        rc = mds_finish_transno(mds, inodes, handle, req, rc,
+                                rep ? rep->lock_policy_res1 : 0, 0);
 
  cleanup_no_trans:
         if (rec_pending)
@@ -1464,7 +1481,7 @@ out:
 
  cleanup:
         if (req != NULL && reply_body != NULL) {
-                rc = mds_finish_transno(mds, pending_dir, handle, req, rc, 0, 0);
+                rc = mds_finish_transno(mds, NULL, handle, req, rc, 0, 0);
         } else if (handle) {
                 int err = fsfilt_commit(obd, pending_dir, handle, 0);
                 if (err) {
