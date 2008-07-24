@@ -1947,7 +1947,7 @@ llu_fsswop_mount(const char *source,
                            sizeof(async), &async, NULL);
 
         ocd.ocd_connect_flags = OBD_CONNECT_IBITS | OBD_CONNECT_VERSION |
-                OBD_CONNECT_AT;
+                                OBD_CONNECT_AT | OBD_CONNECT_VBR;
 #ifdef LIBLUSTRE_POSIX_ACL
         ocd.ocd_connect_flags |= OBD_CONNECT_ACL;
 #endif
