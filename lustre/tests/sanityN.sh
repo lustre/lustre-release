@@ -515,7 +515,7 @@ test_26b() {
 run_test 26b "sync mtime between ost and mds"
 
 test_27() {
-	cancel_lru_locks OSC
+	cancel_lru_locks osc
 	lctl clear
 	dd if=/dev/zero of=$DIR2/$tfile bs=$((4096+4))k conv=notrunc count=4 seek=3 &
 	DD2_PID=$!
