@@ -473,7 +473,13 @@ static inline int mapping_has_pages(struct address_space *mapping)
                 dentry->d_flags |= flags; \
                 spin_unlock(&dentry->d_lock); \
         } while(0)
-#define ll_vfs_symlink(dir, dentry, path, mode) vfs_symlink(dir, dentry, path, mode)
+#ifdef HAVE_SECURITY_PLUG
+#define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
+                vfs_symlink(dir, dentry, mnt, path, mode)
+#else
+#define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
+                vfs_symlink(dir, dentry, path, mode)
+#endif
 #endif
 
 #ifndef container_of
@@ -557,6 +563,30 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 #define LL_RENAME_DOES_D_MOVE	FS_RENAME_DOES_D_MOVE
 #else
 #define LL_RENAME_DOES_D_MOVE	FS_ODD_RENAME
+#endif
+
+#ifdef HAVE_SECURITY_PLUG
+#define ll_remove_suid(inode,mnt)               remove_suid(inode,mnt)
+#define ll_vfs_rmdir(dir,entry,mnt)             vfs_rmdir(dir,entry,mnt)
+#define ll_vfs_mkdir(inode,dir,mnt,mode)        vfs_mkdir(inode,dir,mnt,mode)
+#define ll_vfs_link(old,mnt,dir,new,mnt1)       vfs_link(old,mnt,dir,new,mnt1)
+#define ll_vfs_unlink(inode,entry,mnt)          vfs_unlink(inode,entry,mnt)
+#define ll_vfs_mknod(dir,entry,mnt,mode,dev)            \
+                vfs_mknod(dir,entry,mnt,mode,dev)
+#define ll_security_inode_unlink(dir,entry,mnt)         \
+                security_inode_unlink(dir,entry,mnt)     
+#define ll_vfs_rename(old,old_dir,mnt,new,new_dir,mnt1) \
+                vfs_rename(old,old_dir,mnt,new,new_dir,mnt1)
+#else
+#define ll_remove_suid(inode,mnt)               remove_suid(inode)
+#define ll_vfs_rmdir(dir,entry,mnt)             vfs_rmdir(dir,entry)
+#define ll_vfs_mkdir(inode,dir,mnt,mode)        vfs_mkdir(inode,dir,mode)
+#define ll_vfs_link(old,mnt,dir,new,mnt1)       vfs_link(old,dir,new)
+#define ll_vfs_unlink(inode,entry,mnt)          vfs_unlink(inode,entry)
+#define ll_vfs_mknod(dir,entry,mnt,mode,dev)    vfs_mknod(dir,entry,mode,dev)
+#define ll_security_inode_unlink(dir,entry,mnt) security_inode_unlink(dir,entry)     
+#define ll_vfs_rename(old,old_dir,mnt,new,new_dir,mnt1) \
+                vfs_rename(old,old_dir,new,new_dir)
 #endif
 
 #endif /* __KERNEL__ */
