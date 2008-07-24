@@ -240,7 +240,7 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
         if (lustre_msg_buflen(req->rq_reqmsg, offset + 3)) {
                 r->ur_dlm = lustre_swab_reqbuf(req, offset + 3,
                                                sizeof(*r->ur_dlm),
-                                               lustre_swab_ldlm_request); 
+                                               lustre_swab_ldlm_request);
                 if (r->ur_dlm == NULL)
                         RETURN (-EFAULT);
         }
@@ -308,7 +308,6 @@ static int mds_unlink_unpack(struct ptlrpc_request *req, int offset,
         if (r->ur_name == NULL)
                 RETURN(-EFAULT);
         r->ur_namelen = lustre_msg_buflen(req->rq_reqmsg, offset + 1);
-        
         if (lustre_msg_buflen(req->rq_reqmsg, offset + 2)) {
                 r->ur_dlm = lustre_swab_reqbuf(req, offset + 2,
                                                sizeof(*r->ur_dlm),
