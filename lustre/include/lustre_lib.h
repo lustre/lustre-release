@@ -94,7 +94,7 @@ void target_abort_recovery(void *data);
 void target_cleanup_recovery(struct obd_device *obd);
 int target_queue_recovery_request(struct ptlrpc_request *req,
                                   struct obd_device *obd);
-int target_queue_last_replay_reply(struct ptlrpc_request *req, int rc);
+int target_handle_reply(struct ptlrpc_request *req, int rc, int fail);
 void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id);
 
 /* client.c */
