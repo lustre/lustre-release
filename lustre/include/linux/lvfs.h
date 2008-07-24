@@ -101,9 +101,11 @@ struct lvfs_run_ctxt {
 
 #ifdef __KERNEL__
 
-struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode, int fix);
+struct dentry *simple_mkdir(struct dentry *dir, struct vfsmount *mnt, 
+                            char *name, int mode, int fix);
 struct dentry *simple_mknod(struct dentry *dir, char *name, int mode, int fix);
-int lustre_rename(struct dentry *dir, char *oldname, char *newname);
+int lustre_rename(struct dentry *dir, struct vfsmount *mnt, char *oldname,
+                  char *newname);
 int lustre_fread(struct file *file, void *buf, int len, loff_t *off);
 int lustre_fwrite(struct file *file, const void *buf, int len, loff_t *off);
 int lustre_fsync(struct file *file);
