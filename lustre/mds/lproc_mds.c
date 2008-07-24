@@ -554,6 +554,31 @@ static int lprocfs_mds_wr_qs_factor(struct file *file, const char *buffer,
 }
 #endif
 
+static int lprocfs_mds_rd_sync_perm(char *page, char **start, off_t off,
+                                    int count, int *eof, void *data)
+{
+        struct obd_device* obd = (struct obd_device *)data;
+
+        LASSERT(obd != NULL);
+
+        return snprintf(page, count, "%d\n", obd->u.mds.mds_sync_permission);
+}
+
+static int lprocfs_mds_wr_sync_perm(struct file *file, const char *buffer,
+                                    unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        obd->u.mds.mds_sync_permission = !!val;
+
+        return count;
+}
+
 struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
         { "blocksize",       lprocfs_rd_blksize,     0, 0 },
@@ -601,6 +626,8 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
                              lprocfs_wr_rootsquash, 0 },
         { "nosquash_nid",    lprocfs_rd_nosquash_nid,
                              lprocfs_wr_nosquash_nid, 0 },
+        { "sync_permission", lprocfs_mds_rd_sync_perm,
+                             lprocfs_mds_wr_sync_perm, 0 },
         { 0 }
 };
 
