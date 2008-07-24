@@ -94,7 +94,7 @@ void ptlrpcd_add_req(struct ptlrpc_request *req)
                 pc = &ptlrpcd_pc;
         else
                 pc = &ptlrpcd_recovery_pc;
-
+        LASSERT(req->rq_set == NULL);
         ptlrpc_set_add_new_req(pc->pc_set, req);
         cfs_waitq_signal(&pc->pc_set->set_waitq);
 }
