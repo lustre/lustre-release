@@ -210,7 +210,7 @@ static int mds_lov_read_objids(struct obd_device *obd)
 
         page = (size/(OBJID_PER_PAGE()*sizeof(obd_id)))+1;
         CDEBUG(D_INFO, "file size %d pages %d\n", (int)size, page);
-        for(i=0; i < page; i++) {
+        for (i = 0; i < page; i++) {
                 obd_id *data =  mds->mds_lov_page_array[i];
                 loff_t off_old = off;
 
@@ -230,7 +230,7 @@ static int mds_lov_read_objids(struct obd_device *obd)
                 if (off == off_old)
                         break; /* eof */
 
-                count += (off-off_old)/sizeof(obd_id);
+                count += (off - off_old) / sizeof(obd_id);
         }
         mds->mds_lov_objid_count = count;
         if (count) {
@@ -266,9 +266,9 @@ int mds_lov_write_objids(struct obd_device *obd)
 
                 /* check for particaly filled last page */
                 if (i == mds->mds_lov_objid_lastpage)
-                        size = (mds->mds_lov_objid_lastidx + 1) *sizeof(obd_id);
+                        size = (mds->mds_lov_objid_lastidx + 1) * sizeof(obd_id);
 
-		CDEBUG(D_INFO,"write %lld - %u\n", off, size);
+                CDEBUG(D_INFO,"write %lld - %u\n", off, size);
                 rc = fsfilt_write_record(obd, mds->mds_lov_objid_filp, data,
                                          size, &off, 0);
                 if (rc < 0)
