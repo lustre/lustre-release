@@ -598,7 +598,7 @@ static void mdc_replay_open(struct ptlrpc_request *req)
                 EXIT;
                 return;
         }
-        DEBUG_REQ(D_ERROR, req, "mdc open data found");
+        DEBUG_REQ(D_INFO, req, "mdc open data found");
 
         och = mod->mod_och;
         if (och != NULL) {
@@ -1071,7 +1071,7 @@ static int mdc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         up_read(&obd->u.cli.cl_sem);
         if (!imp)
                 RETURN(-ENODEV);
-        
+
 
         /* We could possibly pass max_age in the request (as an absolute
          * timestamp or a "seconds.usec ago") so the target can avoid doing
