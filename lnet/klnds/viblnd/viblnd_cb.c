@@ -2631,6 +2631,7 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
         if (conn != NULL) {
                 LASSERT (rc != 0);
                 kibnal_connreq_done(conn, 0, rc);
+                kibnal_conn_decref(conn);
         } else {
                 cm_destroy_cep(cep);
         }
