@@ -166,7 +166,7 @@ struct lustre_mount_data {
 #define LMD_FLG_SERVER       0x0001  /* Mounting a server */
 #define LMD_FLG_CLIENT       0x0002  /* Mounting a client */
 #define LMD_FLG_ABORT_RECOV  0x0008  /* Abort recovery */
-#define LMD_FLG_NOSVC        0x0010  /* Only start MGS/MGC for servers, 
+#define LMD_FLG_NOSVC        0x0010  /* Only start MGS/MGC for servers,
                                         no other services */
 #define LMD_FLG_NOMGS        0x0020  /* Only start target for servers, reusing
                                         existing MGS services */
@@ -190,6 +190,9 @@ struct lustre_mount_data {
  * should become an array of single-page pointers that are allocated on demand.
  */
 #define LR_MAX_CLIENTS max(128 * 1024UL, CFS_PAGE_SIZE * 8)
+/* version recovery */
+#define LR_EPOCH_BITS   32
+#define lr_epoch(a) ((a) >> LR_EPOCH_BITS)
 
 /* COMPAT_146 */
 #define OBD_COMPAT_OST          0x00000002 /* this is an OST (temporary) */
@@ -226,7 +229,8 @@ struct lr_server_data {
         __u8  lsd_peeruuid[40];    /* UUID of MDS associated with this OST */
         __u32 lsd_ost_index;       /* index number of OST in LOV */
         __u32 lsd_mdt_index;       /* index number of MDT in LMV */
-        __u8  lsd_padding[LR_SERVER_SIZE - 148];
+        __u32 lsd_start_epoch;     /* VBR: start epoch from last boot */
+        __u8  lsd_padding[LR_SERVER_SIZE - 152];
 };
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
@@ -241,7 +245,10 @@ struct lsd_client_data {
         __u64 lcd_last_close_xid;     /* xid for the last transaction */
         __u32 lcd_last_close_result;  /* result from last RPC */
         __u32 lcd_last_close_data;    /* per-op data */
-        __u8  lcd_padding[LR_CLIENT_SIZE - 88];
+        /* VBR: last versions */
+        __u64 lcd_pre_versions[4];
+        __u32 lcd_last_epoch;
+        __u8  lcd_padding[LR_CLIENT_SIZE - 124];
 };
 
 
