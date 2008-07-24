@@ -1,13 +1,11 @@
 #!/bin/sh
 
-#########################################################################
 # gather_stats_everywhere:
 # script on a selection of nodes and collect all the results into a single
 # tar ball
 #
-# Copyright  2008 Sun Microsystems, Inc. All rights reserved
+# Copyright 2008 Sun Microsystems, Inc. All rights reserved
 # Use is subject to license terms.
-#########################################################################
 
 error() {
 	echo "ERROR: $0: $@"
