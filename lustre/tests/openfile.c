@@ -123,9 +123,9 @@ int main(int argc, char** argv)
                                 printf("flags = %d\n",flags);
 #endif
                                 break;
-                        } else 
+                        } else
                                 flags = 0;
-                        
+
                         for (tmp = strtok(cloned_flags, ":|"); tmp;
                              tmp = strtok(NULL, ":|")) {
                                 int i = 0;
@@ -216,4 +216,3 @@ out:
 
         return save_errno;
 }
-
