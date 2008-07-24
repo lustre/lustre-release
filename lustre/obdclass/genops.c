@@ -657,6 +657,7 @@ void class_export_destroy(struct obd_export *exp)
                 ptlrpc_put_connection_superhack(exp->exp_connection);
 
         LASSERT(list_empty(&exp->exp_outstanding_replies));
+        LASSERT(list_empty(&exp->exp_uncommitted_replies));
         LASSERT(list_empty(&exp->exp_req_replay_queue));
         obd_destroy_export(exp);
 
@@ -682,6 +683,8 @@ struct obd_export *class_new_export(struct obd_device *obd,
         atomic_set(&export->exp_rpc_count, 0);
         export->exp_obd = obd;
         CFS_INIT_LIST_HEAD(&export->exp_outstanding_replies);
+        spin_lock_init(&export->exp_uncommitted_replies_lock);
+        CFS_INIT_LIST_HEAD(&export->exp_uncommitted_replies);
         CFS_INIT_LIST_HEAD(&export->exp_req_replay_queue);
         /* XXX this should be in LDLM init */
         CFS_INIT_LIST_HEAD(&export->exp_ldlm_data.led_held_locks);
@@ -991,6 +994,8 @@ static void class_disconnect_export_list(struct list_head *list, int flags)
                        exp->exp_obd->obd_name, obd_export_nid2str(exp),
                        exp, exp->exp_last_request_time);
                 rc = obd_disconnect(fake_exp);
+                CDEBUG(D_HA, "disconnected export at %s (%p): rc %d\n",
+                       obd_export_nid2str(exp), exp, rc);
                 class_export_put(exp);
         }
         EXIT;
@@ -1008,9 +1013,9 @@ void class_disconnect_exports(struct obd_device *obd)
         ENTRY;
 
         /* Move all of the exports from obd_exports to a work list, en masse. */
+        CFS_INIT_LIST_HEAD(&work_list);
         spin_lock(&obd->obd_dev_lock);
-        list_add(&work_list, &obd->obd_exports);
-        list_del_init(&obd->obd_exports);
+        list_splice_init(&obd->obd_exports, &work_list);
         spin_unlock(&obd->obd_dev_lock);
 
         CDEBUG(D_HA, "OBD device %d (%p) has exports, "
@@ -1020,8 +1025,7 @@ void class_disconnect_exports(struct obd_device *obd)
 }
 EXPORT_SYMBOL(class_disconnect_exports);
 
-/* Remove exports that have not completed recovery.
- */
+/* Remove exports that have not completed recovery. */
 void class_disconnect_stale_exports(struct obd_device *obd)
 {
         struct list_head work_list;
@@ -1035,8 +1039,7 @@ void class_disconnect_stale_exports(struct obd_device *obd)
         list_for_each_safe(pos, n, &obd->obd_exports) {
                 exp = list_entry(pos, struct obd_export, exp_obd_chain);
                 if (exp->exp_replay_needed) {
-                        list_del(&exp->exp_obd_chain);
-                        list_add(&exp->exp_obd_chain, &work_list);
+                        list_move(&exp->exp_obd_chain, &work_list);
                         cnt++;
                 }
         }
@@ -1048,6 +1051,62 @@ void class_disconnect_stale_exports(struct obd_device *obd)
         EXIT;
 }
 EXPORT_SYMBOL(class_disconnect_stale_exports);
+
+void class_set_export_delayed(struct obd_export *exp)
+{
+        struct obd_device *obd = class_exp2obd(exp);
+
+        LASSERT(!exp->exp_delayed);
+        spin_lock(&exp->exp_lock);
+        exp->exp_delayed = 1;
+        spin_unlock(&exp->exp_lock);
+
+        /* no need to ping delayed exports */
+        spin_lock(&obd->obd_dev_lock);
+        list_del_init(&exp->exp_obd_chain_timed);
+        spin_unlock(&obd->obd_dev_lock);
+
+        LASSERT(obd->obd_recoverable_clients > 0);
+
+        spin_lock_bh(&obd->obd_processing_task_lock);
+        obd->obd_delayed_clients++;
+        obd->obd_recoverable_clients--;
+        spin_unlock_bh(&obd->obd_processing_task_lock);
+
+        CDEBUG(D_HA, "Set client %s as delayed\n", exp->exp_client_uuid.uuid);
+}
+EXPORT_SYMBOL(class_set_export_delayed);
+
+/*
+ * Manage exports that have not completed recovery.
+ */
+void class_handle_stale_exports(struct obd_device *obd)
+{
+        struct list_head delay_list;
+        struct obd_export *exp, *n;
+        ENTRY;
+
+        CFS_INIT_LIST_HEAD(&delay_list);
+        spin_lock(&obd->obd_dev_lock);
+        list_for_each_entry_safe(exp, n, &obd->obd_exports, exp_obd_chain) {
+                if (exp->exp_replay_needed && !exp->exp_delayed &&
+                    (obd->obd_version_recov || !exp->exp_in_recovery)) {
+                        list_move_tail(&exp->exp_obd_chain, &delay_list);
+                }
+        }
+        spin_unlock(&obd->obd_dev_lock);
+
+        list_for_each_entry(exp, &delay_list, exp_obd_chain)
+                class_set_export_delayed(exp);
+
+        /* put delayed list back to obd_exports */
+        spin_lock(&obd->obd_dev_lock);
+        list_splice(&delay_list, obd->obd_exports.prev);
+        spin_unlock(&obd->obd_dev_lock);
+
+        EXIT;
+}
+EXPORT_SYMBOL(class_handle_stale_exports);
 
 int oig_init(struct obd_io_group **oig_out)
 {
