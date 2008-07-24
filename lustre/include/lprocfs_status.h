@@ -625,7 +625,7 @@ struct obd_export;
 static inline int lprocfs_add_clear_entry(struct obd_export *exp)
 { return 0; }
 static inline int lprocfs_exp_setup(struct obd_export *exp,
-                             	    lnet_nid_t *peer_nid, int *newnid)
+                                    lnet_nid_t *peer_nid, int *newnid)
 { return 0; }
 static inline int lprocfs_exp_cleanup(struct obd_export *exp)
 { return 0; }
