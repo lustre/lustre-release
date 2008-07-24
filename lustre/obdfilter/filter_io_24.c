@@ -268,7 +268,7 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *buf,
                 up(&inode->i_sem);
                 cleanup_phase = 3;
 
-                rc = filter_finish_transno(exp, oti, 0, 0);
+                rc = filter_finish_transno(exp, inode, oti, 0, 0);
                 if (rc)
                         GOTO(cleanup, rc);
 
