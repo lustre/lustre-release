@@ -191,6 +191,8 @@ check_ptlrpc_body(void)
         CHECK_MEMBER(ptlrpc_body, pb_service_time);
         CHECK_MEMBER(ptlrpc_body, pb_slv);
         CHECK_MEMBER(ptlrpc_body, pb_limit);
+        CHECK_MEMBER(ptlrpc_body, pb_pre_versions);
+        CHECK_MEMBER(ptlrpc_body, pb_padding);
 }
 
 static void check_obd_connect_data(void)
@@ -240,6 +242,7 @@ static void check_obd_connect_data(void)
         CHECK_CDEFINE(OBD_CONNECT_REAL);
         CHECK_CDEFINE(OBD_CONNECT_FID);
         CHECK_CDEFINE(OBD_CONNECT_CKSUM);
+        CHECK_CDEFINE(OBD_CONNECT_VBR);
 }
 
 static void
@@ -1286,7 +1289,7 @@ main(int argc, char **argv)
 
         CHECK_VALUE(MGS_CONNECT);
         CHECK_VALUE(MGS_DISCONNECT);
-        CHECK_VALUE(MGS_EXCEPTION);   
+        CHECK_VALUE(MGS_EXCEPTION);
         CHECK_VALUE(MGS_TARGET_REG);
         CHECK_VALUE(MGS_TARGET_DEL);
         CHECK_VALUE(MGS_SET_INFO);
