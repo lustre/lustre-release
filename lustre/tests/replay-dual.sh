@@ -250,13 +250,13 @@ test_14() {
 
     facet_failover mds
     # expect recovery to fail due to missing client 2
-    df $MOUNT && return 1
+    df $MOUNT1 && return 1
     sleep 1
 
-    # first 25 files should have been replayed 
+    # first 25 files should have been replayed
     unlinkmany $MOUNT1/$tfile- 25 || return 2
 
-    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail" 
+    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
     return 0
 }
 run_test 14 "timeouts waiting for lost client during replay"
@@ -281,14 +281,14 @@ run_test 15a "timeout waiting for lost client during replay, 1 client completes"
 test_15c() {
     replay_barrier mds
     for ((i = 0; i < 2000; i++)); do
-	echo "data" > "$MOUNT2/${tfile}-$i" || error "create ${tfile}-$i failed"
+        echo "data" > "$MOUNT2/${tfile}-$i" || error "create ${tfile}-$i failed"
     done
-    
+
     umount $MOUNT2
     facet_failover mds
 
     df $MOUNT || return 1
-    
+
     zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
     return 0
 }
