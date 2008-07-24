@@ -57,13 +57,15 @@
 #include <lustre_dlm.h>
 #include <lustre_fsfilt.h>
 #include <lustre_ucache.h>
+#include <lustre_net.h>
 
 #include "mds_internal.h"
 
 void mds_commit_cb(struct obd_device *obd, __u64 transno, void *data,
                    int error)
 {
-        obd_transno_commit_cb(obd, transno, error);
+        struct obd_export *exp = data;
+        obd_transno_commit_cb(obd, transno, exp, error);
 }
 
 struct mds_logcancel_data {
@@ -84,7 +86,7 @@ struct dentry *mds_lookup(struct obd_device *obd, const char *fid_name,
         struct dentry *dchild;
         struct lr_server_data *lsd = obd->u.mds.mds_server_data;
         EXIT;
-        
+
         dchild = ll_lookup_one_len(fid_name, dparent, fid_namelen);
         if (!IS_ERR(dchild) &&
             unlikely((lsd->lsd_feature_incompat & OBD_INCOMPAT_FID) ||
@@ -115,7 +117,7 @@ static void mds_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
         struct llog_ctxt *ctxt;
         int rc;
 
-        obd_transno_commit_cb(obd, transno, error);
+        obd_transno_commit_cb(obd, transno, NULL, error);
 
         CDEBUG(D_RPCTRACE, "cancelling %d cookies\n",
                (int)(mlcd->mlcd_cookielen / sizeof(*mlcd->mlcd_cookies)));
@@ -127,13 +129,13 @@ static void mds_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
                        (int)(mlcd->mlcd_cookielen/sizeof(*mlcd->mlcd_cookies)),
                        rc);
         } else {
-                ///* XXX 0 normally, SENDNOW for debug */);
                 rc = obd_checkmd(obd->u.mds.mds_osc_exp, obd->obd_self_export,
                                  lsm);
                 if (rc)
                         CERROR("Can not revalidate lsm %p \n", lsm);
 
                 ctxt = llog_get_context(obd,mlcd->mlcd_cookies[0].lgc_subsys+1);
+                /* XXX 0 normally, SENDNOW for debug */
                 rc = llog_cancel(ctxt, lsm, mlcd->mlcd_cookielen /
                                                 sizeof(*mlcd->mlcd_cookies),
                                  mlcd->mlcd_cookies, OBD_LLOG_FL_SENDNOW);
@@ -148,9 +150,66 @@ static void mds_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
         OBD_FREE(mlcd, mlcd->mlcd_size);
 }
 
+/* fsfilt_set_version return old version. use that here */
+static void mds_versions_set(struct obd_device *obd,
+                             struct inode **inodes, __u64 version)
+{
+        int i;
+
+        if (inodes == NULL)
+                return;
+
+        for (i = 0; i < PTLRPC_NUM_VERSIONS; i++)
+                if (inodes[i] != NULL)
+                        fsfilt_set_version(obd, inodes[i], version);
+}
+
+int mds_version_get_check(struct ptlrpc_request *req, struct inode *inode,
+                          int index)
+{
+        /* version recovery */
+        struct obd_device *obd = req->rq_export->exp_obd;
+        __u64 curr_version, *pre_versions;
+
+        if (inode == NULL)
+                RETURN(0);
+
+        curr_version = fsfilt_get_version(obd, inode);
+        if ((__s64)curr_version == -EOPNOTSUPP)
+                RETURN(0);
+        /* VBR: version is checked always because costs nothing */
+#ifdef PTLRPC_INTEROP_1_6
+        /* if we have old clients then check versions only if gap is occured
+         * or we will have false mismatches due to old client don't supply
+         * versions */
+        if (lustre_msg_get_transno(req->rq_reqmsg) != 0 &&
+            obd->obd_version_recov) {
+#else
+        if (lustre_msg_get_transno(req->rq_reqmsg) != 0) {
+#endif
+                pre_versions = lustre_msg_get_versions(req->rq_reqmsg);
+                LASSERT(index < PTLRPC_NUM_VERSIONS);
+                if (pre_versions != NULL &&
+                    pre_versions[index] != curr_version) {
+                        CDEBUG(D_INODE, "Version mismatch "LPX64" != "LPX64"\n",
+                               pre_versions[index], curr_version);
+                        spin_lock(&req->rq_export->exp_lock);
+                        req->rq_export->exp_vbr_failed = 1;
+                        spin_unlock(&req->rq_export->exp_lock);
+                        RETURN (-EOVERFLOW);
+                }
+        }
+        /* save pre-versions in reply */
+        LASSERT(req->rq_repmsg != NULL);
+        pre_versions = lustre_msg_get_versions(req->rq_repmsg);
+        if (pre_versions)
+                pre_versions[index] = curr_version;
+        RETURN(0);
+}
+
 /* Assumes caller has already pushed us into the kernel context. */
-int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
-                       struct ptlrpc_request *req, int rc, __u32 op_data, 
+int mds_finish_transno(struct mds_obd *mds, struct inode **inodes, void *handle,
+                       struct ptlrpc_request *req, int rc, __u32 op_data,
                        int force_sync)
 {
         struct mds_export_data *med = &req->rq_export->exp_mds_data;
@@ -160,6 +219,8 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
         int err;
         loff_t off;
         int log_pri = D_RPCTRACE;
+        struct inode *inode = inodes ? inodes[0] : NULL;
+        int version_set = handle ? 1 : 0;
         ENTRY;
 
         if (IS_ERR(handle)) {
@@ -197,24 +258,33 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                                obd->obd_name,
                                libcfs_nid2str(req->rq_export->exp_connection->c_peer.nid),
                                transno, rc);
-                        transno = 0;
                 }
         } else if (transno == 0) {
                 spin_lock(&mds->mds_transno_lock);
                 transno = ++mds->mds_last_transno;
                 spin_unlock(&mds->mds_transno_lock);
+                /* VBR: set versions */
+                if (inodes && version_set)
+                        mds_versions_set(obd, inodes, transno);
         } else {
                 spin_lock(&mds->mds_transno_lock);
                 if (transno > mds->mds_last_transno)
                         mds->mds_last_transno = transno;
                 spin_unlock(&mds->mds_transno_lock);
+
+                /* VBR: replay case. Copy version from replay req and
+                 * set new versions */
+                mds_versions_set(obd, inodes, transno);
         }
 
         req->rq_transno = transno;
         lustre_msg_set_transno(req->rq_repmsg, transno);
+
+        if (transno == 0)
+                LASSERT(rc != 0);
         if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE) {
-                prev_transno = le64_to_cpu(lcd->lcd_last_close_transno);
-                lcd->lcd_last_close_transno = cpu_to_le64(transno);
+                if (transno != 0)
+                        lcd->lcd_last_close_transno = cpu_to_le64(transno);
                 lcd->lcd_last_close_xid = cpu_to_le64(req->rq_xid);
                 lcd->lcd_last_close_result = cpu_to_le32(rc);
                 lcd->lcd_last_close_data = cpu_to_le32(op_data);
@@ -223,15 +293,21 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                 if (((lustre_msg_get_flags(req->rq_reqmsg) &
                       (MSG_RESENT | MSG_REPLAY)) == 0) ||
                     (transno > prev_transno)) {
-                        lcd->lcd_last_transno = cpu_to_le64(transno);
+                        /* VBR: save versions in last_rcvd for reconstruct. */
+                        __u64 *pre_versions = lustre_msg_get_versions(req->rq_repmsg);
+                        if (pre_versions) {
+                                lcd->lcd_pre_versions[0] = cpu_to_le64(pre_versions[0]);
+                                lcd->lcd_pre_versions[1] = cpu_to_le64(pre_versions[1]);
+                                lcd->lcd_pre_versions[2] = cpu_to_le64(pre_versions[2]);
+                                lcd->lcd_pre_versions[3] = cpu_to_le64(pre_versions[3]);
+                        }
+                        if (transno != 0)
+                                lcd->lcd_last_transno = cpu_to_le64(transno);
                         lcd->lcd_last_xid     = cpu_to_le64(req->rq_xid);
                         lcd->lcd_last_result  = cpu_to_le32(rc);
                         lcd->lcd_last_data    = cpu_to_le32(op_data);
                 }
         }
-        /* update the server data to not lose the greatest transno. Bug 11125 */
-        if ((transno == 0) && (prev_transno == mds->mds_last_transno))
-                mds_update_server_data(obd, 0);
 
         if (off <= 0) {
                 CERROR("client idx %d has offset %lld\n", med->med_lr_idx, off);
@@ -240,15 +316,15 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                 struct obd_export *exp = req->rq_export;
 
                 if (!force_sync)
-                        force_sync = fsfilt_add_journal_cb(exp->exp_obd,transno, 
-                                                          handle, mds_commit_cb,
-                                                          NULL);
+                        force_sync = fsfilt_add_journal_cb(obd, transno,
+                                                           handle, mds_commit_cb,
+                                                           exp);
 
                 err = fsfilt_write_record(obd, mds->mds_rcvd_filp, lcd,
                                           sizeof(*lcd), &off,
                                           force_sync | exp->exp_need_sync);
                 if (force_sync)
-                        mds_commit_cb(obd, transno, NULL, err);
+                        mds_commit_cb(obd, transno, exp, err);
         }
 
         if (err) {
@@ -434,19 +510,34 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
         spin_unlock(&exp->exp_lock);
 }
 
+/**
+ * VBR: restore versions
+ */
+void mds_vbr_reconstruct(struct ptlrpc_request *req,
+                         struct lsd_client_data *lcd)
+{
+        __u64 pre_versions[4] = {0};
+        pre_versions[0] = le64_to_cpu(lcd->lcd_pre_versions[0]);
+        pre_versions[1] = le64_to_cpu(lcd->lcd_pre_versions[1]);
+        pre_versions[2] = le64_to_cpu(lcd->lcd_pre_versions[2]);
+        pre_versions[3] = le64_to_cpu(lcd->lcd_pre_versions[3]);
+        lustre_msg_set_versions(req->rq_repmsg, pre_versions);
+}
+
 void mds_req_from_lcd(struct ptlrpc_request *req, struct lsd_client_data *lcd)
 {
         if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE) {
                 req->rq_transno = le64_to_cpu(lcd->lcd_last_close_transno);
-                lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
                 req->rq_status = le32_to_cpu(lcd->lcd_last_close_result);
-                lustre_msg_set_status(req->rq_repmsg, req->rq_status);
         } else {
                 req->rq_transno = le64_to_cpu(lcd->lcd_last_transno);
-                lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
                 req->rq_status = le32_to_cpu(lcd->lcd_last_result);
-                lustre_msg_set_status(req->rq_repmsg, req->rq_status);
+                mds_vbr_reconstruct(req, lcd);
         }
+        if (req->rq_status != 0)
+                req->rq_transno = 0;
+        lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
+        lustre_msg_set_status(req->rq_repmsg, req->rq_status);
         DEBUG_REQ(D_RPCTRACE, req, "restoring transno "LPD64"/status %d",
                   req->rq_transno, req->rq_status);
 
@@ -564,6 +655,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_body *body;
         struct dentry *de;
+        struct inode *inodes[PTLRPC_NUM_VERSIONS] = { NULL };
         struct inode *inode = NULL;
         struct lustre_handle lockh;
         void *handle = NULL;
@@ -571,7 +663,10 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         struct lov_mds_md *lmm = NULL;
         struct llog_cookie *logcookies = NULL;
         int lmm_size = 0, need_lock = 1, cookie_size = 0;
-        int rc = 0, cleanup_phase = 0, err, locked = 0, sync = 0;
+        int rc = 0, cleanup_phase = 0, err = 0, locked = 0, sync = 0;
+        int do_vbr = rec->ur_iattr.ia_valid &
+                     (ATTR_MODE|ATTR_UID|ATTR_GID|
+                      ATTR_FROM_OPEN|ATTR_RAW|ATTR_ATTR_FLAG);
         unsigned int qcids[MAXQUOTAS] = { 0, 0 };
         unsigned int qpids[MAXQUOTAS] = { rec->ur_iattr.ia_uid, 
                                           rec->ur_iattr.ia_gid };
@@ -631,6 +726,12 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
 
         OBD_FAIL_WRITE(obd, OBD_FAIL_MDS_REINT_SETATTR_WRITE, inode->i_sb);
 
+        /* VBR: update version if attr changed are important for recovery */
+        if (do_vbr) {
+                rc = mds_version_get_check(req, inode, 0);
+                if (rc)
+                        GOTO(cleanup_no_trans, rc);
+        }
         /* start a log jounal handle if needed */
         if (S_ISREG(inode->i_mode) &&
             rec->ur_iattr.ia_valid & (ATTR_UID | ATTR_GID)) {
@@ -740,7 +841,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                         mlcd->mlcd_eadatalen = rec->ur_eadatalen;
                         mlcd->mlcd_cookielen = rec->ur_cookielen;
                         mlcd->mlcd_lmm = (void *)&mlcd->mlcd_cookies +
-                                mlcd->mlcd_cookielen;
+                                         mlcd->mlcd_cookielen;
                         memcpy(&mlcd->mlcd_cookies, rec->ur_logcookies,
                                mlcd->mlcd_cookielen);
                         memcpy(mlcd->mlcd_lmm, rec->ur_eadata,
@@ -754,7 +855,15 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         if (mlcd != NULL)
                 sync = fsfilt_add_journal_cb(req->rq_export->exp_obd, 0, handle,
                                              mds_cancel_cookies_cb, mlcd);
-        err = mds_finish_transno(mds, inode, handle, req, rc, 0, sync);
+
+        /* permission changes may require sync operation */
+        if (rc == 0 && ia_valid & (ATTR_MODE|ATTR_UID|ATTR_GID))
+                sync |= mds->mds_sync_permission;
+        inodes[0] = inode;
+        err = mds_finish_transno(mds, do_vbr ? inodes : NULL, handle, req,
+                                 rc, 0, sync);
+
+ cleanup_no_trans:
         /* do mds to ost setattr if needed */
         if (!rc && !err && lmm_size)
                 mds_osc_setattr_async(obd, inode, lmm, lmm_size,
@@ -851,10 +960,11 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         struct mds_obd *mds = mds_req2mds(req);
         struct obd_device *obd = req->rq_export->exp_obd;
         struct dentry *dchild = NULL;
+        struct inode *inodes[PTLRPC_NUM_VERSIONS] = { NULL };
         struct inode *dir = NULL;
         void *handle = NULL;
         struct lustre_handle lockh;
-        int rc = 0, err, type = rec->ur_mode & S_IFMT, cleanup_phase = 0;
+        int rc = 0, err = 0, type = rec->ur_mode & S_IFMT, cleanup_phase = 0;
         int created = 0;
         unsigned int qcids[MAXQUOTAS] = { current->fsuid, current->fsgid };
         unsigned int qpids[MAXQUOTAS] = { 0, 0 };
@@ -912,6 +1022,11 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         GOTO(cleanup, rc = -EEXIST);
                 GOTO(cleanup, rc = -EROFS);
         }
+
+        /* version recovery check */
+        rc = mds_version_get_check(req, dir, 0);
+        if (rc)
+                GOTO(cleanup_no_trans, rc);
 
         if (dir->i_mode & S_ISGID && S_ISDIR(rec->ur_mode))
                 rec->ur_mode |= S_ISGID;
@@ -1002,7 +1117,13 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         ATTR_MTIME | ATTR_CTIME;
 
                 if (rec->ur_fid2->id) {
-                        LASSERT(rec->ur_fid2->id == inode->i_ino);
+                        if (rec->ur_fid2->id != inode->i_ino) {
+                                if (req->rq_export->exp_delayed)
+                                        rc = -EOVERFLOW;
+                                else
+                                        rc = -EFAULT;
+                                GOTO(cleanup, rc);
+                        }
                         inode->i_generation = rec->ur_fid2->generation;
                         /* Dirtied and committed by the upcoming setattr. */
                         CDEBUG(D_INODE, "recreated ino %lu with gen %u\n",
@@ -1042,7 +1163,11 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         EXIT;
 
 cleanup:
-        err = mds_finish_transno(mds, dir, handle, req, rc, 0, 0);
+        inodes[0] = dir;
+        inodes[1] = dchild ? dchild->d_inode : NULL;
+        err = mds_finish_transno(mds, inodes, handle, req, rc, 0, 0);
+
+cleanup_no_trans:
         if (rec_pending)
                 lquota_pending_commit(mds_quota_interface_ref, obd,
                                       current->fsuid, gid, 1);
@@ -1639,10 +1764,10 @@ void mds_shrink_reply(struct obd_device *obd, struct ptlrpc_request *req,
 
         CDEBUG(D_INFO, "Shrink to md_size %d cookie_size %d \n", md_size,
                cookie_size);
- 
+
         lustre_shrink_reply(req, md_off, md_size, 1);
-        
-        lustre_shrink_reply(req, md_off + (md_size > 0), cookie_size, 0); 
+
+        lustre_shrink_reply(req, md_off + (md_size > 0), cookie_size, 1); 
 }
 
 static int mds_reint_unlink(struct mds_update_record *rec, int offset,
@@ -1653,6 +1778,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         struct mds_obd *mds = mds_req2mds(req);
         struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_body *body = NULL;
+        struct inode *inodes[PTLRPC_NUM_VERSIONS] = { NULL };
         struct inode *child_inode = NULL;
         struct lustre_handle parent_lockh, child_lockh, child_reuse_lockh;
         void *handle = NULL;
@@ -1686,6 +1812,11 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         cleanup_phase = 1; /* dchild, dparent, locks */
 
+        /* VBR: version recovery check for parent */
+        rc = mds_version_get_check(req, dparent->d_inode, 0);
+        if (rc)
+                GOTO(cleanup_no_trans, rc);
+
         dget(dchild);
         child_inode = dchild->d_inode;
         if (child_inode == NULL) {
@@ -1701,6 +1832,11 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         qpids[GRPQUOTA] = dparent->d_inode->i_gid;
 
         cleanup_phase = 2; /* dchild has a lock */
+
+        /* version recovery check */
+        rc = mds_version_get_check(req, child_inode, 1);
+        if (rc)
+                GOTO(cleanup_no_trans, rc);
 
         /* We have to do these checks ourselves, in case we are making an
          * orphan.  The client tells us whether rmdir() or unlink() was called,
@@ -1836,12 +1972,13 @@ cleanup:
                 if (err)
                         CERROR("error on parent setattr: rc = %d\n", err);
         }
-
-        rc = mds_finish_transno(mds, dparent ? dparent->d_inode : NULL,
-                                handle, req, rc, 0, 0);
+        inodes[0] = dparent ? dparent->d_inode : NULL;
+        inodes[1] = child_inode;
+        rc = mds_finish_transno(mds, inodes, handle, req, rc, 0, 0);
         if (!rc)
                 (void)obd_set_info_async(mds->mds_osc_exp, sizeof(KEY_UNLINKED),
                                          KEY_UNLINKED, 0, NULL, NULL);
+cleanup_no_trans:
         switch(cleanup_phase) {
         case 5: /* pending_dir semaphore */
                 UNLOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode);
@@ -1890,6 +2027,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         struct dentry *de_src = NULL;
         struct dentry *de_tgt_dir = NULL;
         struct dentry *dchild = NULL;
+        struct inode *inodes[PTLRPC_NUM_VERSIONS] = { NULL };
         struct mds_obd *mds = mds_req2mds(req);
         struct lustre_handle *handle = NULL, tgt_dir_lockh, src_lockh;
         struct ldlm_res_id src_res_id = { .name = {0} };
@@ -1915,7 +2053,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
 
         if (rec->ur_dlm)
                 ldlm_request_cancel(req, rec->ur_dlm, 0);
-        
+
         /* Step 1: Lookup the source inode and target directory by FID */
         de_src = mds_fid2dentry(mds, rec->ur_fid1, NULL);
         if (IS_ERR(de_src))
@@ -1950,6 +2088,16 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
                 GOTO(cleanup, rc);
 
         cleanup_phase = 3; /* locks */
+
+        /* version recovery check */
+        /* directory check */
+        rc = mds_version_get_check(req, de_tgt_dir->d_inode, 0);
+        if (rc)
+                GOTO(cleanup_no_trans, rc);
+        /* inode version check */
+        rc = mds_version_get_check(req, de_src->d_inode, 1);
+        if (rc)
+                GOTO(cleanup_no_trans, rc);
 
         if (mds_inode_is_orphan(de_src->d_inode)) {
                 CDEBUG(D_INODE, "an attempt to link an orphan inode %lu/%u\n",
@@ -1990,10 +2138,12 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         if (rc && rc != -EPERM && rc != -EACCES)
                 CERROR("vfs_link error %d\n", rc);
 cleanup:
-        rc = mds_finish_transno(mds, de_tgt_dir ? de_tgt_dir->d_inode : NULL,
-                                handle, req, rc, 0, 0);
+        inodes[0] = de_tgt_dir ? de_tgt_dir->d_inode : NULL;
+        inodes[1] = dchild->d_inode;
+        rc = mds_finish_transno(mds, inodes, handle, req, rc, 0, 0);
         EXIT;
 
+cleanup_no_trans:
         switch (cleanup_phase) {
         case 4: /* child dentry */
                 l_dput(dchild);
@@ -2063,7 +2213,8 @@ int mds_get_parents_children_locked(struct obd_device *obd,
         /* Only dentry should disappear, but the inode itself would be
            intact otherwise. */
         ldlm_policy_data_t c1_policy = {.l_inodebits = {MDS_INODELOCK_LOOKUP}};
-        /* If something is going to be replaced, both dentry and inode locks are           needed */
+        /* If something is going to be replaced, both dentry and inode locks are
+         * needed */
         ldlm_policy_data_t c2_policy = {.l_inodebits = {MDS_INODELOCK_FULL}};
         struct ldlm_res_id *maxres_src, *maxres_tgt;
         struct inode *inode;
@@ -2245,6 +2396,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         struct dentry *de_old = NULL;
         struct dentry *de_new = NULL;
         struct inode *old_inode = NULL, *new_inode = NULL;
+        struct inode *inodes[PTLRPC_NUM_VERSIONS] = { NULL };
         struct mds_obd *mds = mds_req2mds(req);
         struct lustre_handle dlm_handles[4];
         struct mds_body *body = NULL;
@@ -2263,7 +2415,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                   rec->ur_fid2->id, rec->ur_fid2->generation, rec->ur_tgt);
 
         mds_counter_incr(req->rq_export, LPROC_MDS_RENAME);
-        
+
         MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
 
         if (rec->ur_dlm)
@@ -2282,6 +2434,20 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
 
         old_inode = de_old->d_inode;
         new_inode = de_new->d_inode;
+
+        /* version recovery check */
+        rc = mds_version_get_check(req, de_srcdir->d_inode, 0);
+        if (rc)
+                GOTO(cleanup_no_trans, rc);
+        rc = mds_version_get_check(req, old_inode, 1);
+        if (rc)
+                GOTO(cleanup_no_trans, rc);
+        rc = mds_version_get_check(req, de_tgtdir->d_inode, 2);
+        if (rc)
+                GOTO(cleanup_no_trans, rc);
+        rc = mds_version_get_check(req, new_inode, 3);
+        if (rc)
+                GOTO(cleanup_no_trans, rc);
 
         if (new_inode != NULL)
                 lock_count = 4;
@@ -2392,9 +2558,13 @@ no_unlink:
 
         GOTO(cleanup, rc);
 cleanup:
-        rc = mds_finish_transno(mds, de_tgtdir ? de_tgtdir->d_inode : NULL,
-                                handle, req, rc, 0, 0);
+        inodes[0] = de_srcdir ? de_srcdir->d_inode : NULL;
+        inodes[1] = old_inode;
+        inodes[2] = de_tgtdir ? de_tgtdir->d_inode : NULL;
+        inodes[3] = new_inode;
+        rc = mds_finish_transno(mds, inodes, handle, req, rc, 0, 0);
 
+cleanup_no_trans:
         switch (cleanup_phase) {
         case 4:
                 UNLOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode);
