@@ -225,7 +225,7 @@ void ptlrpc_at_set_req_timeout(struct ptlrpc_request *req)
         req->rq_timeout = serv_est + (serv_est >> 2) + 5;
         /* We could get even fancier here, using history to predict increased
            loading... */
-             
+
         /* Let the server know what this RPC timeout is by putting it in the 
            reqmsg*/
         lustre_msg_set_timeout(req->rq_reqmsg, req->rq_timeout);
@@ -239,7 +239,7 @@ static void ptlrpc_at_adj_service(struct ptlrpc_request *req)
         struct imp_at *at = &req->rq_import->imp_at;
 
         LASSERT(req->rq_import);
-        
+
         /* service estimate is returned in the repmsg timeout field,
            may be 0 on err */
         serv_est = lustre_msg_get_timeout(req->rq_repmsg);
@@ -370,9 +370,9 @@ static int ptlrpc_at_recv_early_reply(struct ptlrpc_request *req) {
                   "Early reply #%d, new deadline in %lds (%+lds)", 
                   req->rq_early_count, req->rq_deadline -
                   cfs_time_current_sec(), req->rq_deadline - olddl);
-        
+
         req->rq_repmsg = oldmsg;
-        
+
 out:
         OBD_FREE(msgcpy, oldlen);
         RETURN(rc);
@@ -546,7 +546,7 @@ ptlrpc_prep_req_pool(struct obd_import *imp, __u32 version, int opcode,
 
         request->rq_request_portal = imp->imp_client->cli_request_portal;
         request->rq_reply_portal = imp->imp_client->cli_reply_portal;
-        
+
         ptlrpc_at_set_req_timeout(request);
 
         spin_lock_init(&request->rq_lock);
@@ -657,7 +657,7 @@ int ptlrpc_set_add_cb(struct ptlrpc_request_set *set,
         cbdata->psc_interpret = fn;
         cbdata->psc_data = data;
         list_add_tail(&cbdata->psc_item, &set->set_cblist);
-        
+
         RETURN(0);
 }
 
@@ -811,6 +811,24 @@ static int ptlrpc_check_status(struct ptlrpc_request *req)
         RETURN(err);
 }
 
+/* VBR: we should save pre-versions for replay*/
+static void ptlrpc_save_versions(struct ptlrpc_request *req)
+{
+        struct lustre_msg *repmsg = req->rq_repmsg;
+        struct lustre_msg *reqmsg = req->rq_reqmsg;
+        __u64 *versions = lustre_msg_get_versions(repmsg);
+        ENTRY;
+
+        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
+                return;
+
+        lustre_msg_set_versions(reqmsg, versions);
+        CDEBUG(D_INFO, "Client save versions ["LPX64"/"LPX64"]\n",
+               versions[0], versions[1]);
+
+        EXIT;
+}
+
 static int after_reply(struct ptlrpc_request *req)
 {
         struct obd_import *imp = req->rq_import;
@@ -868,19 +886,23 @@ static int after_reply(struct ptlrpc_request *req)
         }
 
         /* Store transno in reqmsg for replay. */
-        req->rq_transno = lustre_msg_get_transno(req->rq_repmsg);
-        lustre_msg_set_transno(req->rq_reqmsg, req->rq_transno);
+        if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)) {
+                req->rq_transno = lustre_msg_get_transno(req->rq_repmsg);
+                lustre_msg_set_transno(req->rq_reqmsg, req->rq_transno);
+        }
 
-        if (req->rq_import->imp_replayable) {
+        if (imp->imp_replayable) {
                 spin_lock(&imp->imp_lock);
                 /* no point in adding already-committed requests to the replay
                  * list, we will just remove them immediately. b=9829 */
-                if (req->rq_transno != 0 && 
-                    (req->rq_transno > 
+                if (req->rq_transno != 0 &&
+                    (req->rq_transno >
                      lustre_msg_get_last_committed(req->rq_repmsg) ||
-                     req->rq_replay))
+                     req->rq_replay)) {
+                        /* version recovery */
+                        ptlrpc_save_versions(req);
                         ptlrpc_retain_replayable_request(req, imp);
-                else if (req->rq_commit_cb != NULL) {
+                } else if (req->rq_commit_cb != NULL) {
                         spin_unlock(&imp->imp_lock);
                         req->rq_commit_cb(req);
                         spin_lock(&imp->imp_lock);
@@ -906,7 +928,7 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
         LASSERT(req->rq_phase == RQ_PHASE_NEW);
         if (req->rq_sent && (req->rq_sent > CURRENT_SECONDS))
                 RETURN (0);
-        
+
         req->rq_phase = RQ_PHASE_RPC;
 
         imp = req->rq_import;
@@ -1273,7 +1295,7 @@ int ptlrpc_expired_set(void *data)
         LASSERT(set != NULL);
 
         /* A timeout expired; see which reqs it applies to... */
-        list_for_each (tmp, &set->set_requests) {
+        list_for_each(tmp, &set->set_requests) {
                 struct ptlrpc_request *req =
                         list_entry(tmp, struct ptlrpc_request, rq_set_chain);
 
@@ -1356,7 +1378,7 @@ int ptlrpc_set_next_timeout(struct ptlrpc_request_set *set)
                 if (deadline <= now) {  /* actually expired already */
                         timeout = 1;    /* ASAP */
                         break;
-                } 
+                }
                 if ((timeout == 0) || (timeout > (deadline - now))) {
                         timeout = deadline - now;
                 }
@@ -1896,7 +1918,6 @@ restart:
                lustre_msg_get_status(req->rq_reqmsg), req->rq_xid,
                libcfs_nid2str(imp->imp_connection->c_peer.nid),
                lustre_msg_get_opc(req->rq_reqmsg));
-
         spin_lock(&imp->imp_lock);
         list_del_init(&req->rq_list);
         spin_unlock(&imp->imp_lock);
@@ -2006,9 +2027,28 @@ static int ptlrpc_replay_interpret(struct ptlrpc_request *req,
              lustre_msg_get_status(req->rq_repmsg) == -ENODEV))
                 GOTO(out, rc = lustre_msg_get_status(req->rq_repmsg));
 
-        /* The transno had better not change over replay. */
-        LASSERT(lustre_msg_get_transno(req->rq_reqmsg) ==
-                lustre_msg_get_transno(req->rq_repmsg));
+        /* VBR: check version failure */
+        if (lustre_msg_get_status(req->rq_repmsg) == -EOVERFLOW) {
+                /* replay was failed due to version mismatch */
+                DEBUG_REQ(D_WARNING, req, "Version mismatch during replay\n");
+                spin_lock(&imp->imp_lock);
+                imp->imp_vbr_failed = 1;
+                imp->imp_no_lock_replay = 1;
+                spin_unlock(&imp->imp_lock);
+        } else {
+                /* The transno had better not change over replay. */
+                LASSERT(lustre_msg_get_transno(req->rq_reqmsg) ==
+                        lustre_msg_get_transno(req->rq_repmsg) ||
+                        lustre_msg_get_transno(req->rq_repmsg) == 0);
+        }
+
+        spin_lock(&imp->imp_lock);
+        /* if replays by version then gap was occur on server, no trust to locks */
+        if (lustre_msg_get_flags(req->rq_repmsg) & MSG_VERSION_REPLAY)
+                imp->imp_no_lock_replay = 1;
+        imp->imp_last_replay_transno = lustre_msg_get_transno(req->rq_reqmsg);
+        spin_unlock(&imp->imp_lock);
+        LASSERT(imp->imp_last_replay_transno);
 
         DEBUG_REQ(D_HA, req, "got rep");
 
@@ -2025,10 +2065,6 @@ static int ptlrpc_replay_interpret(struct ptlrpc_request *req,
                 /* Put it back for re-replay. */
                 lustre_msg_set_status(req->rq_repmsg, aa->praa_old_status);
         }
-
-        spin_lock(&imp->imp_lock);
-        imp->imp_last_replay_transno = req->rq_transno;
-        spin_unlock(&imp->imp_lock);
 
         /* continue with recovery */
         rc = ptlrpc_import_recovery_state_machine(imp);
