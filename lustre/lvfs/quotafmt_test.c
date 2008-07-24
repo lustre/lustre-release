@@ -84,7 +84,8 @@ static int quotfmt_initialize(struct lustre_quota_info *lqi,
                 LOCK_INODE_MUTEX(parent_inode);
                 de = lookup_one_len(name, tgt->obd_lvfs_ctxt.pwd, namelen);
                 if (!IS_ERR(de) && de->d_inode)
-                        vfs_unlink(parent_inode, de);
+                        ll_vfs_unlink(parent_inode, de, 
+                                      tgt->obd_lvfs_ctxt.pwdmnt);
                 if (!IS_ERR(de))
                         dput(de);
                 UNLOCK_INODE_MUTEX(parent_inode);
@@ -145,7 +146,7 @@ static int quotfmt_finalize(struct lustre_quota_info *lqi,
                         goto dput;
                 }
 
-                rc = vfs_unlink(parent_inode, de);
+                rc = ll_vfs_unlink(parent_inode, de, tgt->obd_lvfs_ctxt.pwdmnt);
                 if (rc)
                         CERROR("error unlink quotafile %s (rc = %d)\n",
                                name, rc);
