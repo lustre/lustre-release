@@ -690,6 +690,7 @@ static const char *obd_connect_names[] = {
         "change_qunit_size",
         "alt_checksum_algorithm",
         "fid_is_enabled",
+        "version_recovery",
         NULL
 };
 
@@ -1276,17 +1277,16 @@ void lprocfs_nid_stats_clear_write_cb(void *obj, void *data)
 {
         struct nid_stat *stat = obj;
         int i;
-
+        ENTRY;
         /* object has only hash + iterate_all references.
          * add/delete blocked by hash bucket lock */
         CDEBUG(D_INFO,"refcnt %d\n", stat->nid_exp_ref_count);
-        if(stat->nid_exp_ref_count == 2) {
+        if (stat->nid_exp_ref_count == 2) {
                 hlist_del_init(&stat->nid_hash);
                 stat->nid_exp_ref_count--;
                 spin_lock(&stat->nid_obd->obd_nid_lock);
-                list_del_init(&stat->nid_list);
+                list_move(&stat->nid_list, data);
                 spin_unlock(&stat->nid_obd->obd_nid_lock);
-                list_add(&stat->nid_list, data);
                 EXIT;
                 return;
         }
@@ -1336,9 +1336,9 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
             !exp->exp_obd->obd_nid_stats_hash_body)
                 RETURN(-EINVAL);
 
-	/* not test against zero because eric say:
-	 * You may only test nid against another nid, or LNET_NID_ANY.  Anything else is
-	 * nonsense.*/
+        /* not test against zero because eric say:
+         * You may only test nid against another nid, or LNET_NID_ANY.  Anything else is
+         * nonsense.*/
         if (!nid || *nid == LNET_NID_ANY)
                 RETURN(0);
 
@@ -1346,7 +1346,7 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
 
         CDEBUG(D_CONFIG, "using hash %p\n", obd->obd_nid_stats_hash_body);
 
-        OBD_ALLOC(tmp, sizeof(struct nid_stat));
+        OBD_ALLOC_PTR(tmp);
         if (tmp == NULL)
                 RETURN(-ENOMEM);
 
@@ -1359,8 +1359,8 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
         list_add(&tmp->nid_list, &obd->obd_nid_stats);
         spin_unlock(&obd->obd_nid_lock);
 
-        tmp1= lustre_hash_findadd_unique(obd->obd_nid_stats_hash_body, nid,
-                                         &tmp->nid_hash);
+        tmp1 = lustre_hash_findadd_unique(obd->obd_nid_stats_hash_body, nid,
+                                          &tmp->nid_hash);
         CDEBUG(D_INFO, "Found stats %p for nid %s - ref %d\n",
                tmp1, libcfs_nid2str(*nid), tmp->nid_exp_ref_count);
 
@@ -1392,7 +1392,7 @@ destroy_new:
         spin_lock(&obd->obd_nid_lock);
         list_del(&tmp->nid_list);
         spin_unlock(&obd->obd_nid_lock);
-        OBD_FREE(tmp, sizeof(struct nid_stat));
+        OBD_FREE_PTR(tmp);
         RETURN(rc);
 }
 
@@ -1692,11 +1692,16 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
                                          obd->obd_recovery_end -
                                          obd->obd_recovery_start) <= 0)
                         goto out;
+                if (lprocfs_obd_snprintf(&page, size, &len,"delayed_clients: %d/%d\n",
+                                         obd->obd_delayed_clients,
+                                         obd->obd_max_recoverable_clients) <= 0)
+                        goto out;
                 /* Number of clients that have completed recovery */
                 if (lprocfs_obd_snprintf(&page, size, &len,
                                          "completed_clients: %d/%d\n",
                                          obd->obd_max_recoverable_clients -
-                                         obd->obd_recoverable_clients,
+                                         obd->obd_recoverable_clients -
+                                         obd->obd_delayed_clients,
                                          obd->obd_max_recoverable_clients) <= 0)
                         goto out;
                 if (lprocfs_obd_snprintf(&page, size, &len,
@@ -1723,10 +1728,15 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
                                  obd->obd_connected_clients,
                                  obd->obd_max_recoverable_clients) <= 0)
                 goto out;
+        if (lprocfs_obd_snprintf(&page, size, &len,"delayed_clients: %d/%d\n",
+                                 obd->obd_delayed_clients,
+                                 obd->obd_max_recoverable_clients) <= 0)
+                goto out;
         /* Number of clients that have completed recovery */
         if (lprocfs_obd_snprintf(&page, size, &len,"completed_clients: %d/%d\n",
                                  obd->obd_max_recoverable_clients -
-                                 obd->obd_recoverable_clients,
+                                 obd->obd_recoverable_clients -
+                                 obd->obd_delayed_clients,
                                  obd->obd_max_recoverable_clients) <= 0)
                 goto out;
         if (lprocfs_obd_snprintf(&page, size, &len,"replayed_requests: %d/??\n",
