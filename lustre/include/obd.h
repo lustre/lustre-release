@@ -534,6 +534,8 @@ struct mds_obd {
         uid_t                            mds_squash_uid;
         gid_t                            mds_squash_gid;
         lnet_nid_t                       mds_nosquash_nid;
+        /* do we need permission sync */
+        unsigned int                     mds_sync_permission;
 };
 
 /* lov objid */
@@ -690,6 +692,8 @@ struct obd_trans_info {
         /* initial thread handling transaction */
         int                      oti_thread_id;
         __u32                    oti_conn_cnt;
+        /* VBR: versions */
+        __u64                    oti_pre_version;
 
         struct obd_uuid         *oti_ost_uuid;
 };
@@ -705,7 +709,15 @@ static inline void oti_init(struct obd_trans_info *oti,
                 return;
 
         oti->oti_xid = req->rq_xid;
+        /* VBR: take versions from request */
+        if (req->rq_reqmsg != NULL &&
+            lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+                __u64 *pre_version = lustre_msg_get_versions(req->rq_reqmsg);
+                oti->oti_pre_version = pre_version[0];
+                oti->oti_transno = lustre_msg_get_transno(req->rq_reqmsg);
+        }
 
+        /* called from mds_create_objects */
         if (req->rq_repmsg != NULL)
                 oti->oti_transno = lustre_msg_get_transno(req->rq_repmsg);
         oti->oti_thread_id = req->rq_svc_thread ? req->rq_svc_thread->t_id : -1;
@@ -807,6 +819,7 @@ struct obd_device {
                       obd_set_up:1,        /* finished setup */
                       obd_recovering:1,    /* there are recoverable clients */
                       obd_abort_recovery:1,/* somebody ioctl'ed us to abort */ 
+                      obd_version_recov:1, /* obd uses version checking */
                       obd_replayable:1,    /* recovery is enabled; inform clients */
                       obd_no_transno:1,    /* no committed-transno notification */
                       obd_no_recov:1,      /* fail instead of retry messages */
@@ -817,7 +830,7 @@ struct obd_device {
                       obd_async_recov:1,   /* allow asyncronous orphan cleanup */
                       obd_no_conn:1,       /* deny new connections */
                       obd_inactive:1;      /* device active/inactive
-                                           * (for /proc/status only!!) */
+                                            * (for /proc/status only!!) */
         /* uuid-export hash body */
         struct lustre_class_hash_body *obd_uuid_hash_body;
         /* nid-export hash body */
@@ -840,7 +853,7 @@ struct obd_device {
         struct fsfilt_operations *obd_fsops;
         spinlock_t              obd_osfs_lock;
         struct obd_statfs       obd_osfs;       /* locked by obd_osfs_lock */
-        __u64                   obd_osfs_age;   
+        __u64                   obd_osfs_age;
         struct lvfs_run_ctxt    obd_lvfs_ctxt;
         struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
         struct obd_device       *obd_observer;
@@ -855,14 +868,13 @@ struct obd_device {
         int                              obd_max_recoverable_clients;
         int                              obd_connected_clients;
         int                              obd_recoverable_clients;
+        int                              obd_delayed_clients;
         spinlock_t                       obd_processing_task_lock; /* BH lock (timer) */
         pid_t                            obd_processing_task;
         __u64                            obd_next_recovery_transno;
         int                              obd_replayed_requests;
         int                              obd_requests_queued_for_recovery;
         cfs_waitq_t                      obd_next_transno_waitq;
-        struct list_head                 obd_uncommitted_replies;
-        spinlock_t                       obd_uncommitted_replies_lock;
         cfs_timer_t                      obd_recovery_timer;
         struct list_head                 obd_recovery_queue;
         struct list_head                 obd_delayed_reply_queue;
@@ -1131,7 +1143,7 @@ struct obd_ops {
                                        obd_lock_cancel_cb cb);
         int (*o_unregister_lock_cancel_cb)(struct obd_export *exp,
                                          obd_lock_cancel_cb cb);
-        
+
         /*
          * NOTE: If adding ops, add another LPROCFS_OBD_OP_INIT() line
          * to lprocfs_alloc_obd_stats() in obdclass/lprocfs_status.c.
@@ -1178,22 +1190,21 @@ int lvfs_check_io_health(struct obd_device *obd, struct file *file);
 #define OBD_CALC_STRIPE_END     2
 
 static inline void obd_transno_commit_cb(struct obd_device *obd, __u64 transno,
-                                         int error)
+                                         struct obd_export *exp, int error)
 {
         if (error) {
                 CERROR("%s: transno "LPU64" commit error: %d\n",
                        obd->obd_name, transno, error);
                 return;
         }
-        if (transno > obd->obd_last_committed) {
-                CDEBUG(D_HA, "%s: transno "LPU64" committed\n",
-                       obd->obd_name, transno);
-                obd->obd_last_committed = transno;
-                ptlrpc_commit_replies (obd);
-        } else {
-                CDEBUG(D_INFO, "%s: transno "LPU64" committed\n",
-                       obd->obd_name, transno);
+        CDEBUG(D_HA, "%s: transno "LPU64" committed\n",
+               obd->obd_name, transno);
+        if (exp && transno > exp->exp_last_committed) {
+                exp->exp_last_committed = transno;
+                ptlrpc_commit_replies(exp);
         }
+        if (transno > obd->obd_last_committed)
+                obd->obd_last_committed = transno;
 }
 
 static inline void init_obd_quota_ops(quota_interface_t *interface,
