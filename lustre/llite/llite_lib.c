@@ -188,7 +188,8 @@ static int client_common_fill_super(struct super_block *sb,
         data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_IBITS      |
                                   OBD_CONNECT_JOIN    | OBD_CONNECT_ATTRFID    |
                                   OBD_CONNECT_NODEVOH | OBD_CONNECT_CANCELSET  |
-                                  OBD_CONNECT_AT      | OBD_CONNECT_FID;
+                                  OBD_CONNECT_AT      | OBD_CONNECT_FID |
+                                  OBD_CONNECT_VBR;
 #ifdef HAVE_LRU_RESIZE_SUPPORT
         if (sbi->ll_flags & LL_SBI_LRU_RESIZE)
                 data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
@@ -297,7 +298,7 @@ static int client_common_fill_super(struct super_block *sb,
                                   OBD_CONNECT_REQPORTAL | OBD_CONNECT_BRW_SIZE |
                                   OBD_CONNECT_SRVLOCK   | OBD_CONNECT_CANCELSET|
                                   OBD_CONNECT_AT        | OBD_CONNECT_FID      |
-                                  OBD_CONNECT_TRUNCLOCK;
+                                  OBD_CONNECT_VBR       | OBD_CONNECT_TRUNCLOCK;
 
         if (!OBD_FAIL_CHECK(OBD_FAIL_OSC_CONNECT_CKSUM)) {
                 /* OBD_CONNECT_CKSUM should always be set, even if checksums are
@@ -1591,7 +1592,7 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
         if ((attr->ia_valid & (ATTR_CTIME|ATTR_SIZE|ATTR_MODE)) ==
             (ATTR_CTIME|ATTR_SIZE|ATTR_MODE))
                 attr->ia_valid |= MDS_OPEN_OWNEROVERRIDE;
-        if ((attr->ia_valid & (ATTR_MODE|ATTR_FORCE|ATTR_SIZE)) == 
+        if ((attr->ia_valid & (ATTR_MODE|ATTR_FORCE|ATTR_SIZE)) ==
             (ATTR_SIZE|ATTR_MODE)) {
                 mode = de->d_inode->i_mode;
                 if (((mode & S_ISUID) && (!(attr->ia_mode & S_ISUID))) ||
