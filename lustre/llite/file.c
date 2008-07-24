@@ -645,21 +645,6 @@ int ll_lsm_getattr(struct obd_export *exp, struct lov_stripe_md *lsm,
         RETURN(0);
 }
 
-static inline void ll_remove_suid(struct inode *inode)
-{
-        unsigned int mode;
-
-        /* set S_IGID if S_IXGRP is set, and always set S_ISUID */
-        mode = (inode->i_mode & S_IXGRP)*(S_ISGID/S_IXGRP) | S_ISUID;
-
-        /* was any of the uid bits set? */
-        mode &= inode->i_mode;
-        if (mode && !capable(CAP_FSETID)) {
-                inode->i_mode &= ~mode;
-                // XXX careful here - we cannot change the size
-        }
-}
-
 static int ll_lock_to_stripe_offset(struct inode *inode, struct ldlm_lock *lock)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
