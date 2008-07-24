@@ -1759,13 +1759,16 @@ lnet_parse_reply(lnet_ni_t *ni, lnet_msg_t *msg)
 
         /* NB handles only looked up by creator (no flips) */
         md = lnet_wire_handle2md(&hdr->msg.reply.dst_wmd);
-        if (md == NULL || md->md_threshold == 0) {
+        if (md == NULL || md->md_threshold == 0 || md->md_me != NULL) {
                 CDEBUG(D_NETERROR, "%s: Dropping REPLY from %s for %s "
                        "MD "LPX64"."LPX64"\n", 
                        libcfs_nid2str(ni->ni_nid), libcfs_id2str(src),
                        (md == NULL) ? "invalid" : "inactive",
                        hdr->msg.reply.dst_wmd.wh_interface_cookie,
                        hdr->msg.reply.dst_wmd.wh_object_cookie);
+                if (md != NULL && md->md_me != NULL)
+                        CERROR("REPLY MD also attached to portal %d\n",
+                               md->md_me->me_portal);
 
                 LNET_UNLOCK();
                 return ENOENT;                  /* +ve: OK but no match */
@@ -1832,7 +1835,7 @@ lnet_parse_ack(lnet_ni_t *ni, lnet_msg_t *msg)
 
         /* NB handles only looked up by creator (no flips) */
         md = lnet_wire_handle2md(&hdr->msg.ack.dst_wmd);
-        if (md == NULL || md->md_threshold == 0) {
+        if (md == NULL || md->md_threshold == 0 || md->md_me != NULL) {
                 /* Don't moan; this is expected */
                 CDEBUG(D_NET,
                        "%s: Dropping ACK from %s to %s MD "LPX64"."LPX64"\n",
@@ -1840,6 +1843,10 @@ lnet_parse_ack(lnet_ni_t *ni, lnet_msg_t *msg)
                        (md == NULL) ? "invalid" : "inactive",
                        hdr->msg.ack.dst_wmd.wh_interface_cookie,
                        hdr->msg.ack.dst_wmd.wh_object_cookie);
+                if (md != NULL && md->md_me != NULL)
+                        CERROR("Source MD also attached to portal %d\n",
+                               md->md_me->me_portal);
+
                 LNET_UNLOCK();
                 return ENOENT;                  /* +ve! */
         }
@@ -2206,12 +2213,17 @@ LNetPut(lnet_nid_t self, lnet_handle_md_t mdh, lnet_ack_req_t ack,
         LNET_LOCK();
 
         md = lnet_handle2md(&mdh);
-        if (md == NULL || md->md_threshold == 0) {
+        if (md == NULL || md->md_threshold == 0 || md->md_me != NULL) {
                 lnet_msg_free(msg);
-                LNET_UNLOCK();
 
-                CERROR("Dropping PUT to %s: MD invalid\n", 
-                       libcfs_id2str(target));
+                CERROR("Dropping PUT ("LPU64":%d:%s): MD (%d) invalid\n",
+                       match_bits, portal, libcfs_id2str(target),
+                       md == NULL ? -1 : md->md_threshold);
+                if (md != NULL && md->md_me != NULL)
+                        CERROR("Source MD also attached to portal %d\n",
+                               md->md_me->me_portal);
+
+                LNET_UNLOCK();
                 return -ENOENT;
         }
 
@@ -2383,12 +2395,17 @@ LNetGet(lnet_nid_t self, lnet_handle_md_t mdh,
         LNET_LOCK();
 
         md = lnet_handle2md(&mdh);
-        if (md == NULL || md->md_threshold == 0) {
+        if (md == NULL || md->md_threshold == 0 || md->md_me != NULL) {
                 lnet_msg_free(msg);
-                LNET_UNLOCK();
 
-                CERROR("Dropping GET to %s: MD invalid\n",
-                       libcfs_id2str(target));
+                CERROR("Dropping GET ("LPU64":%d:%s): MD (%d) invalid\n",
+                       match_bits, portal, libcfs_id2str(target),
+                       md == NULL ? -1 : md->md_threshold);
+                if (md != NULL && md->md_me != NULL)
+                        CERROR("REPLY MD also attached to portal %d\n",
+                               md->md_me->me_portal);
+
+                LNET_UNLOCK();
                 return -ENOENT;
         }
 
