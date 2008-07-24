@@ -155,9 +155,8 @@ int enqueue_ordered_locks(struct obd_device *obd, struct ldlm_res_id *p1_res_id,
                           struct lustre_handle *p2_lockh, int p2_lock_mode,
                           ldlm_policy_data_t *p2_policy);
 void mds_commit_cb(struct obd_device *, __u64 last_rcvd, void *data, int error);
-int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
-                       struct ptlrpc_request *req, int rc, __u32 op_data, 
-                       int force_sync);
+int mds_finish_transno(struct mds_obd *, struct inode **, void *,
+                       struct ptlrpc_request *, int, __u32, int force_sync);
 void mds_reconstruct_generic(struct ptlrpc_request *req);
 void mds_req_from_lcd(struct ptlrpc_request *req, struct lsd_client_data *cd);
 int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
@@ -197,6 +196,7 @@ struct dentry *mds_lookup(struct obd_device *obd,
 void mds_shrink_reply(struct obd_device *obd, struct ptlrpc_request *req,
                       struct mds_body *body, int md_off);
 int mds_get_cookie_size(struct obd_device *obd, struct lov_mds_md *lmm);
+int mds_version_get_check(struct ptlrpc_request *, struct inode *, int);
 /* mds/mds_lib.c */
 int mds_update_unpack(struct ptlrpc_request *, int offset,
                       struct mds_update_record *);
@@ -263,6 +263,8 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
                   struct dentry *dchild, struct lustre_handle *lockh);
 
 /* mds/mds_fs.c */
+int mds_update_client_epoch(struct obd_export *exp);
+void mds_update_last_epoch(struct obd_device *obd);
 int mds_client_add(struct obd_device *obd, struct obd_export *exp,
                    int cl_off, void *localdata);
 int mds_client_free(struct obd_export *exp);
