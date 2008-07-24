@@ -818,8 +818,8 @@ test_10() {
 
 	wait_delete_completed
 
- 	set_blk_tunesz 512
- 	set_blk_unitsz 1024
+	set_blk_tunesz 512
+	set_blk_unitsz 1024
 
 	# make qd_count 32 bit
 	lustre_fail mds_ost 0xA00
