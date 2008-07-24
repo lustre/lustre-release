@@ -1059,7 +1059,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 handle = fsfilt_start(obd, dir, FSFILT_OP_MKDIR, NULL);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
-                rc = vfs_mkdir(dir, dchild, rec->ur_mode);
+                rc = ll_vfs_mkdir(dir, dchild, mds->mds_vfsmnt, rec->ur_mode);
                 mds_counter_incr(req->rq_export, LPROC_MDS_MKDIR);
                 EXIT;
                 break;
@@ -1071,7 +1071,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 if (rec->ur_tgt == NULL)        /* no target supplied */
                         rc = -EINVAL;           /* -EPROTO? */
                 else
-                        rc = ll_vfs_symlink(dir, dchild, rec->ur_tgt, S_IALLUGO);
+                        rc = ll_vfs_symlink(dir, dchild, mds->mds_vfsmnt, 
+                                            rec->ur_tgt, S_IALLUGO);
                 mds_counter_incr(req->rq_export, LPROC_MDS_MKNOD);
                 EXIT;
                 break;
@@ -1084,7 +1085,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 handle = fsfilt_start(obd, dir, FSFILT_OP_MKNOD, NULL);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
-                rc = vfs_mknod(dir, dchild, rec->ur_mode, rdev);
+                rc = ll_vfs_mknod(dir, dchild, mds->mds_vfsmnt, rec->ur_mode, 
+                                  rdev);
                 mds_counter_incr(req->rq_export, LPROC_MDS_MKNOD);
                 EXIT;
                 break;
@@ -1180,12 +1182,12 @@ cleanup_no_trans:
                  */
                 switch (type) {
                 case S_IFDIR:
-                        err = vfs_rmdir(dir, dchild);
+                        err = ll_vfs_rmdir(dir, dchild, mds->mds_vfsmnt);
                         if (err)
                                 CERROR("rmdir in error path: %d\n", err);
                         break;
                 default:
-                        err = vfs_unlink(dir, dchild);
+                        err = ll_vfs_unlink(dir, dchild, mds->mds_vfsmnt);
                         if (err)
                                 CERROR("unlink in error path: %d\n", err);
                         break;
@@ -1716,7 +1718,8 @@ static int mds_orphan_add_link(struct mds_update_record *rec,
          * for linking and return real mode back then -bzzz */
         mode = inode->i_mode;
         inode->i_mode = S_IFREG;
-        rc = vfs_link(dentry, pending_dir, pending_child);
+        rc = ll_vfs_link(dentry, mds->mds_vfsmnt, pending_dir, pending_child,
+                         mds->mds_vfsmnt);
         if (rc)
                 CERROR("error linking orphan %s to PENDING: rc = %d\n",
                        rec->ur_name, rc);
@@ -1901,7 +1904,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                                       NULL);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
-                rc = vfs_rmdir(dparent->d_inode, dchild);
+                rc = ll_vfs_rmdir(dparent->d_inode, dchild, mds->mds_vfsmnt);
                 mds_counter_incr(req->rq_export, LPROC_MDS_RMDIR);
                 break;
         case S_IFREG: {
@@ -1912,7 +1915,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                                           le32_to_cpu(lmm->lmm_stripe_count));
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
-                rc = vfs_unlink(dparent->d_inode, dchild);
+                rc = ll_vfs_unlink(dparent->d_inode, dchild, mds->mds_vfsmnt);
                 mds_counter_incr(req->rq_export, LPROC_MDS_UNLINK);
                 break;
         }
@@ -1925,7 +1928,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                                       NULL);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
-                rc = vfs_unlink(dparent->d_inode, dchild);
+                rc = ll_vfs_unlink(dparent->d_inode, dchild, mds->mds_vfsmnt);
                 mds_counter_incr(req->rq_export, LPROC_MDS_UNLINK);
                 break;
         default:
@@ -2134,7 +2137,8 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         if (IS_ERR(handle))
                 GOTO(cleanup, rc = PTR_ERR(handle));
 
-        rc = vfs_link(de_src, de_tgt_dir->d_inode, dchild);
+        rc = ll_vfs_link(de_src, mds->mds_vfsmnt, de_tgt_dir->d_inode, dchild,
+                         mds->mds_vfsmnt);
         if (rc && rc != -EPERM && rc != -EACCES)
                 CERROR("vfs_link error %d\n", rc);
 cleanup:
@@ -2526,7 +2530,8 @@ no_unlink:
         de_old->d_fsdata = req;
         de_new->d_fsdata = req;
 
-        rc = vfs_rename(de_srcdir->d_inode, de_old, de_tgtdir->d_inode, de_new);
+        rc = ll_vfs_rename(de_srcdir->d_inode, de_old, mds->mds_vfsmnt, 
+                           de_tgtdir->d_inode, de_new, mds->mds_vfsmnt);
         unlock_kernel();
 
         if (rc == 0 && new_inode != NULL && new_inode->i_nlink == 0) {
