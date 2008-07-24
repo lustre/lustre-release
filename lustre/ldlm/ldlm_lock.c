@@ -208,6 +208,7 @@ void ldlm_lock_add_to_lru_nolock(struct ldlm_lock *lock)
         struct ldlm_namespace *ns = lock->l_resource->lr_namespace;
         lock->l_last_used = cfs_time_current();
         LASSERT(list_empty(&lock->l_lru));
+        LASSERT(lock->l_resource->lr_type != LDLM_FLOCK);
         list_add_tail(&lock->l_lru, &ns->ns_unused_list);
         LASSERT(ns->ns_nr_unused >= 0);
         ns->ns_nr_unused++;
@@ -1193,6 +1194,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
 
         ldlm_resource_unlink_lock(lock);
         if (res->lr_type == LDLM_EXTENT && lock->l_tree_node == NULL) {
+                LASSERT(!local && (*flags & LDLM_FL_REPLAY));
                 if (node == NULL) {
                         ldlm_lock_destroy_nolock(lock);
                         GOTO(out, rc = -ENOMEM);
@@ -1379,7 +1381,7 @@ int ldlm_run_cp_ast_work(struct list_head *rpc_list)
          * will never call the local blocking_ast until we drop our
          * reader/writer reference, which we won't do until we get the
          * reply and finish enqueueing. */
-        
+
         ast_count = 0;
         list_for_each_safe(tmp, pos, rpc_list) {
                 struct ldlm_lock *lock =
@@ -1762,13 +1764,13 @@ void ldlm_lock_dump_handle(int level, struct lustre_handle *lockh)
 }
 
 void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
-		      struct libcfs_debug_msg_data *data, const char *fmt,
+                      struct libcfs_debug_msg_data *data, const char *fmt,
                       ...)
 {
         va_list args;
         cfs_debug_limit_state_t *cdls = data->msg_cdls;
 
-	va_start(args, fmt);
+        va_start(args, fmt);
         if (lock->l_resource == NULL) {
                 libcfs_debug_vmsg2(cdls, data->msg_subsys, level, data->msg_file,
                                    data->msg_fn, data->msg_line, fmt, args,
@@ -1783,7 +1785,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
                                    lock->l_export ?
                                         atomic_read(&lock->l_export->exp_refcount) : -99,
                                    lock->l_pid);
-		va_end(args);
+                va_end(args);
                 return;
         }
 
