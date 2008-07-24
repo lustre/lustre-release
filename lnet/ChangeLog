@@ -17,6 +17,13 @@ Bugzilla   :
 Description: 
 Details    : 
 
+Severity   : major
+Bugzilla   : 16338
+Description: Continuous recovery on 33 of 413 nodes after lustre oss failure
+Details    : Lost reference on conn prevents peer from being destroyed, which
+             could prevent new peer creation if peer count has reached upper
+	     limit.
+
 Severity   : normal
 Bugzilla   : 16102
 Description: LNET Selftest results in Soft lockup on OSS CPU
