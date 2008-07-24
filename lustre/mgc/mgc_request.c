@@ -894,17 +894,16 @@ static int mgc_import_event(struct obd_device *obd,
         CDEBUG(D_MGC, "import event %#x\n", event);
 
         switch (event) {
-        case IMP_EVENT_DISCON: 
-                /* MGC imports should not wait for recovery */
+        case IMP_EVENT_DISCON:
                 break;
-        case IMP_EVENT_INACTIVE: 
+        case IMP_EVENT_INACTIVE:
                 break;
         case IMP_EVENT_INVALIDATE: {
                 struct ldlm_namespace *ns = obd->obd_namespace;
                 ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
                 break;
         }
-        case IMP_EVENT_ACTIVE: 
+        case IMP_EVENT_ACTIVE:
                 LCONSOLE_WARN("%s: Reactivating import\n", obd->obd_name);
                 /* Clearing obd_no_recov allows us to continue pinging */
                 obd->obd_no_recov = 0;
