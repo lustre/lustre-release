@@ -586,7 +586,7 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
 
                 UNLOCK_INODE_MUTEX(inode);
 
-                rc2 = filter_finish_transno(exp, oti, 0, 0);
+                rc2 = filter_finish_transno(exp, inode, oti, 0, 0);
                 if (rc2 != 0) {
                         CERROR("can't close transaction: %d\n", rc2);
                         if (rc == 0)
