@@ -227,9 +227,6 @@ int class_attach(struct lustre_cfg *lcfg)
         CFS_INIT_LIST_HEAD(&obd->obd_recovery_queue);
         CFS_INIT_LIST_HEAD(&obd->obd_delayed_reply_queue);
 
-        spin_lock_init(&obd->obd_uncommitted_replies_lock);
-        CFS_INIT_LIST_HEAD(&obd->obd_uncommitted_replies);
-
         len = strlen(uuid);
         if (len >= sizeof(obd->obd_uuid)) {
                 CERROR("uuid must be < %d bytes long\n",
