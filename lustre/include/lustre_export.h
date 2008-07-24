@@ -117,6 +117,8 @@ struct obd_export {
         __u32                     exp_conn_cnt;
         struct ldlm_export_data   exp_ldlm_data;
         struct list_head          exp_outstanding_replies;
+        struct list_head          exp_uncommitted_replies;
+        spinlock_t                exp_uncommitted_replies_lock;
         time_t                    exp_last_request_time;
         struct list_head          exp_req_replay_queue;
         spinlock_t                exp_lock; /* protects flags int below */
@@ -124,11 +126,18 @@ struct obd_export {
         __u64                     exp_connect_flags;
         int                       exp_flags;
         unsigned long             exp_failed:1,
+                                  exp_in_recovery:1,
                                   exp_disconnected:1,
                                   exp_connecting:1,
+                                  /* VBR: export missed recovery */
+                                  exp_delayed:1,
+                                  /* VBR: failed version checking */
+                                  exp_vbr_failed:1,
                                   exp_replay_needed:1,
                                   exp_need_sync:1, /* needs sync from connect */
                                   exp_libclient:1; /* liblustre client? */
+        /* VBR: per-export last committed */
+        __u64                     exp_last_committed;
         union {
                 struct mds_export_data    eu_mds_data;
                 struct filter_export_data eu_filter_data;
