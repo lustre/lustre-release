@@ -1,30 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Object Devices Class Driver
+ * GPL HEADER START
  *
- *  Copyright (C) 2001-2003 Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see [sun.com URL with a
+ * copy of GPLv2].
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
  *
- * These are the only exported functions, they provide some generic
- * infrastructure for managing object devices
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
@@ -514,11 +521,11 @@ int init_obdclass(void)
 #ifdef __KERNEL__
         int lustre_register_fs(void);
 
-        printk(KERN_INFO "Lustre: OBD class driver, info@clusterfs.com\n");
+        printk(KERN_INFO "Lustre: OBD class driver, http://www.lustre.org/\n");
         printk(KERN_INFO "        Lustre Version: "LUSTRE_VERSION_STRING"\n");
         printk(KERN_INFO "        Build Version: "BUILD_VERSION"\n");
 #else
-        CDEBUG(D_INFO, "Lustre: OBD class driver, info@clusterfs.com\n");
+        CDEBUG(D_INFO, "Lustre: OBD class driver, http://www.lustre.org/\n");
         CDEBUG(D_INFO, "        Lustre Version: "LUSTRE_VERSION_STRING"\n");
         CDEBUG(D_INFO, "        Build Version: "BUILD_VERSION"\n");
 #endif
@@ -628,7 +635,7 @@ static void cleanup_obdclass(void)
         EXIT;
 }
 
-MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
+MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre Class Driver Build Version: " BUILD_VERSION);
 MODULE_LICENSE("GPL");
 
