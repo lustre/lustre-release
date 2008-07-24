@@ -989,7 +989,7 @@ test_53a() {
     #define OBD_FAIL_MDS_CLOSE_NET 0x115
     do_facet mds "lctl set_param fail_loc=0x80000115"
     kill -USR1 $close_pid
-    cancel_lru_locks MDC # force the close
+    cancel_lru_locks mdc # force the close
     do_facet mds "lctl set_param fail_loc=0"
     mcreate $DIR/${tdir}-2/f || return 1
     
@@ -1019,7 +1019,7 @@ test_53b() {
 
     do_facet mds "lctl set_param fail_loc=0"
     kill -USR1 $close_pid
-    cancel_lru_locks MDC # force the close
+    cancel_lru_locks mdc # force the close
     wait $close_pid || return 1
     # open should still be here
     [ -d /proc/$open_pid ] || return 2
@@ -1047,7 +1047,7 @@ test_53c() {
 
     do_facet mds "lctl set_param fail_loc=0x80000115"
     kill -USR1 $close_pid
-    cancel_lru_locks MDC  # force the close
+    cancel_lru_locks mdc  # force the close
 
     replay_barrier_nodf mds
     fail_nodf mds
@@ -1074,10 +1074,10 @@ test_53d() {
     # define OBD_FAIL_MDS_CLOSE_NET_REP 0X138    
     do_facet mds "lctl set_param fail_loc=0x8000013b"
     kill -USR1 $close_pid
-    cancel_lru_locks MDC  # force the close
+    cancel_lru_locks mdc  # force the close
     do_facet mds "lctl set_param fail_loc=0"
     mcreate $DIR/${tdir}-2/f || return 1
-    
+
     # close should still be here
     [ -d /proc/$close_pid ] || return 2
     replay_barrier_nodf mds
@@ -1101,14 +1101,14 @@ test_53e() {
     mcreate $DIR/${tdir}-2/f &
     open_pid=$!
     sleep 1
-    
+
     do_facet mds "lctl set_param fail_loc=0"
     kill -USR1 $close_pid
-    cancel_lru_locks MDC  # force the close
+    cancel_lru_locks mdc  # force the close
     wait $close_pid || return 1
     # open should still be here
     [ -d /proc/$open_pid ] || return 2
-    
+
     replay_barrier_nodf mds
     fail mds
     wait $open_pid || return 3
@@ -1132,7 +1132,7 @@ test_53f() {
 
         do_facet mds "lctl set_param fail_loc=0x8000013b"
         kill -USR1 $close_pid
-        cancel_lru_locks MDC
+        cancel_lru_locks mdc
 
         replay_barrier_nodf mds
         fail_nodf mds
@@ -1161,7 +1161,7 @@ test_53g() {
 
         do_facet mds "lctl set_param fail_loc=0x80000115"
         kill -USR1 $close_pid
-        cancel_lru_locks MDC # force the close
+        cancel_lru_locks mdc # force the close
 
         do_facet mds "lctl set_param fail_loc=0"
         replay_barrier_nodf mds
@@ -1187,10 +1187,10 @@ test_53h() {
     mcreate $DIR/${tdir}-2/f &
     open_pid=$!
     sleep 1
-    
+
     do_facet mds "lctl set_param fail_loc=0x8000013b"
     kill -USR1 $close_pid
-    cancel_lru_locks MDC  # force the close
+    cancel_lru_locks mdc  # force the close
     sleep 1
 
     replay_barrier_nodf mds
