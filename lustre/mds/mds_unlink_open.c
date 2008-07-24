@@ -128,7 +128,7 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
          * especially not mds_get_md (may get a default LOV EA, bug 4554) */
         mode = inode->i_mode;
         if (S_ISDIR(mode)) {
-                rc = vfs_rmdir(pending_dir, dchild);
+                rc = ll_vfs_rmdir(pending_dir, dchild, mds->mds_vfsmnt);
                 if (rc)
                         CERROR("error %d unlinking dir %*s from PENDING\n",
                                rc, dchild->d_name.len, dchild->d_name.name);
@@ -153,7 +153,7 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                 GOTO(out_free_lmm, rc);
         }
 
-        rc = vfs_unlink(pending_dir, dchild);
+        rc = ll_vfs_unlink(pending_dir, dchild, mds->mds_vfsmnt);
         if (rc) {
                 CERROR("error %d unlinking orphan %.*s from PENDING\n",
                        rc, dchild->d_name.len, dchild->d_name.name);
