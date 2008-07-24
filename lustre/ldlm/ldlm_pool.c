@@ -192,7 +192,7 @@ static inline struct ldlm_namespace *ldlm_pl2ns(struct ldlm_pool *pl)
 static inline void ldlm_pool_recalc_grant_plan(struct ldlm_pool *pl)
 {
         int granted, grant_step, limit;
-        
+
         limit = ldlm_pool_get_limit(pl);
         granted = atomic_read(&pl->pl_granted);
 
@@ -332,7 +332,7 @@ static int ldlm_srv_pool_recalc(struct ldlm_pool *pl)
                 atomic_set(&pl->pl_cancel_rate, 0);
                 atomic_set(&pl->pl_grant_speed, 0);
                 pl->pl_recalc_time = cfs_time_current_sec();
-                lprocfs_counter_add(pl->pl_stats, LDLM_POOL_TIMING_STAT, 
+                lprocfs_counter_add(pl->pl_stats, LDLM_POOL_TIMING_STAT,
                                     recalc_interval_sec);
         }
         spin_unlock(&pl->pl_lock);
@@ -497,8 +497,8 @@ static int ldlm_cli_pool_shrink(struct ldlm_pool *pl,
                                 int nr, unsigned int gfp_mask)
 {
         ENTRY;
-        
-        /* 
+
+        /*
          * Do not cancel locks in case lru resize is disabled for this ns. 
          */
         if (!ns_connect_lru_resize(ldlm_pl2ns(pl)))
@@ -561,7 +561,7 @@ int ldlm_pool_shrink(struct ldlm_pool *pl, int nr,
                      unsigned int gfp_mask)
 {
         int cancel = 0;
-        
+
         if (pl->pl_ops->po_shrink != NULL) {
                 cancel = pl->pl_ops->po_shrink(pl, nr, gfp_mask);
                 if (nr > 0) {
@@ -836,7 +836,7 @@ void ldlm_pool_fini(struct ldlm_pool *pl)
 {
         ENTRY;
         ldlm_pool_proc_fini(pl);
-        
+
         /* 
          * Pool should not be used after this point. We can't free it here as
          * it lives in struct ldlm_namespace, but still interested in catching
@@ -862,14 +862,14 @@ void ldlm_pool_add(struct ldlm_pool *pl, struct ldlm_lock *lock)
                 return;
 
         ENTRY;
-                
+
         atomic_inc(&pl->pl_granted);
         atomic_inc(&pl->pl_grant_rate);
         atomic_inc(&pl->pl_grant_speed);
 
         lprocfs_counter_incr(pl->pl_stats, LDLM_POOL_GRANT_STAT);
- 
-        /* 
+
+        /*
          * Do not do pool recalc for client side as all locks which
          * potentially may be canceled has already been packed into 
          * enqueue/cancel rpc. Also we do not want to run out of stack
@@ -896,7 +896,7 @@ void ldlm_pool_del(struct ldlm_pool *pl, struct ldlm_lock *lock)
         atomic_dec(&pl->pl_granted);
         atomic_inc(&pl->pl_cancel_rate);
         atomic_dec(&pl->pl_grant_speed);
-        
+
         lprocfs_counter_incr(pl->pl_stats, LDLM_POOL_CANCEL_STAT);
 
         if (ns_is_server(ldlm_pl2ns(pl)))
@@ -1075,7 +1075,7 @@ static int ldlm_pools_shrink(ldlm_side_t client, int nr,
                 ldlm_namespace_get(ns);
                 ldlm_namespace_move_locked(ns, client);
                 mutex_up(ldlm_namespace_lock(client));
-                
+
                 nr_locks = ldlm_pool_granted(&ns->ns_pool);
                 cancel = 1 + nr_locks * nr / total;
                 ldlm_pool_shrink(&ns->ns_pool, cancel, gfp_mask);
@@ -1223,7 +1223,7 @@ static int ldlm_pools_thread_main(void *arg)
                  */
                 ldlm_pools_recalc(LDLM_NAMESPACE_SERVER);
                 ldlm_pools_recalc(LDLM_NAMESPACE_CLIENT);
-                
+
                 /*
                  * Wait until the next check time, or until we're
                  * stopped. 
