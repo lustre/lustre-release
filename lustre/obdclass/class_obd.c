@@ -272,16 +272,16 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 if (!data->ioc_inlbuf1) {
                         CERROR("No buffer passed in ioctl\n");
                         GOTO(out, err = -EINVAL);
-                } 
+                }
                 if (data->ioc_inllen1 < 128) {
                         CERROR("ioctl buffer too small to hold version\n");
                         GOTO(out, err = -EINVAL);
                 }
-                                
+
                 obd = class_num2obd(index);
                 if (!obd)
                         GOTO(out, err = -ENOENT);
-                
+
                 if (obd->obd_stopping)
                         status = "ST";
                 else if (obd->obd_set_up)
@@ -289,7 +289,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 else if (obd->obd_attached)
                         status = "AT";
                 else
-                        status = "--"; 
+                        status = "--";
                 str = (char *)data->ioc_bulk;
                 snprintf(str, len - sizeof(*data), "%3d %s %s %s %s %d",
                          (int)index, status, obd->obd_type->typ_name,
@@ -327,7 +327,9 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 }
                 CDEBUG(D_HA, "%s: disabling committed-transno notification\n",
                        obd->obd_name);
+                spin_lock_bh(&obd->obd_processing_task_lock);
                 obd->obd_no_transno = 1;
+                spin_unlock_bh(&obd->obd_processing_task_lock);
                 GOTO(out, err = 0);
         }
 
