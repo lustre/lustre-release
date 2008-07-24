@@ -62,7 +62,7 @@ static int osc_wr_active(struct file *file, const char *buffer,
 {
         struct obd_device *dev = data;
         int val, rc;
-        
+
         rc = lprocfs_write_helper(buffer, count, &val);
         if (rc)
                 return rc;
@@ -75,7 +75,7 @@ static int osc_wr_active(struct file *file, const char *buffer,
                 rc = ptlrpc_set_import_active(dev->u.cli.cl_import, val);
         else
                 CDEBUG(D_CONFIG, "activate %d: ignoring repeat request\n", val);
-        
+
         LPROCFS_CLIMP_EXIT(dev);
         return count;
 }
