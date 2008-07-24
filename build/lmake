@@ -519,7 +519,7 @@ build_kernel_ib()
     $RPMBUILD --rebuild --define 'build_kernel_ib 1' --define 'build_kernel_ib_devel 1' \
 	      --define "_topdir $(lbuild_topdir)" --target ${TARGET_ARCH} \
 	      --define "KVERSION ${FULL_VERSION}" \
-	      --define "$K_SRC ${LINUXOBJ:-${LINUX}}" \
+	      --define "$K_SRC ${PWD}/linux" \
 	      --define "LIB_MOD_DIR /lib/modules/${FULL_VERSION}" \
 	      --define "configure_options --without-quilt --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-srp-target-mod --with-core-mod --with-mthca-mod --with-mlx4-mod --with-cxgb3-mod --with-nes-mod --with-ipoib-mod --with-sdp-mod --with-srp-mod --without-srp-target-mod --with-rds-mod --with-iser-mod --with-qlgc_vnic-mod --with-madeye-mod $configure_options" $(lbuild_topdir)/OFED/SRPMS/ofa_kernel-${OFED_VERSION}-ofed${OFED_VERSION}.src.rpm
 
