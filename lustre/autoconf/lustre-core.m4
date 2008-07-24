@@ -1334,7 +1334,7 @@ AC_DEFUN([LC_PROG_LINUX],
 
           # 2.6.12
           LC_RW_TREE_LOCK
-        
+
           # 2.6.15
           LC_INODE_I_MUTEX
 
@@ -1363,8 +1363,8 @@ AC_DEFUN([LC_PROG_LINUX],
 
           # raid5-zerocopy patch
           LC_PAGE_CONSTANT
-	  
-	  # 2.6.22
+
+          # 2.6.22
           LC_INVALIDATE_BDEV_2ARG
           LC_FS_RENAME_DOES_D_MOVE
           # 2.6.23
