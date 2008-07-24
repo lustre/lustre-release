@@ -1027,7 +1027,7 @@ int ldlm_cli_update_pool(struct ptlrpc_request *req)
         __u64 old_slv, new_slv;
         __u32 new_limit;
         ENTRY;
-    
+
         if (unlikely(!req->rq_import || !req->rq_import->imp_obd || 
                      !imp_connect_lru_resize(req->rq_import)))
         {
@@ -1044,7 +1044,7 @@ int ldlm_cli_update_pool(struct ptlrpc_request *req)
          * ref to obd export and thus access to server side namespace is no 
          * possible. 
          */
-        if (lustre_msg_get_slv(req->rq_repmsg) == 0 || 
+        if (lustre_msg_get_slv(req->rq_repmsg) == 0 ||
             lustre_msg_get_limit(req->rq_repmsg) == 0) {
                 DEBUG_REQ(D_HA, req, "Zero SLV or Limit found "
                           "(SLV: "LPU64", Limit: %u)", 
@@ -1070,11 +1070,9 @@ int ldlm_cli_update_pool(struct ptlrpc_request *req)
         obd->obd_pool_limit = new_limit;
         write_unlock(&obd->obd_pool_lock);
 
-        /* 
-         * Check if we need to wakeup pools thread for fast SLV change. 
-         * This is only done when threads period is noticably long like 
-         * 10s or more. 
-         */
+        /* Check if we need to wakeup pools thread for fast SLV change.
+         * This is only done when threads period is noticably long like
+         * 10s or more. */
 #if defined(__KERNEL__) && (LDLM_POOLS_THREAD_PERIOD >= 10)
         if (old_slv > 0) {
                 __u64 fast_change = old_slv * LDLM_POOLS_FAST_SLV_CHANGE;
@@ -1108,7 +1106,7 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 LDLM_DEBUG_NOLOCK("lock is already being destroyed\n");
                 RETURN(0);
         }
-        
+
         rc = ldlm_cli_cancel_local(lock);
         if (rc < 0 || rc == LDLM_FL_LOCAL_ONLY) {
                 LDLM_LOCK_PUT(lock);
@@ -1363,7 +1361,7 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
 
         pf = ldlm_cancel_lru_policy(ns, flags);
         LASSERT(pf != NULL);
-        
+
         while (!list_empty(&ns->ns_unused_list)) {
                 /* For any flags, stop scanning if @max is reached. */
                 if (max && added >= max)
@@ -1955,6 +1953,7 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
                 ldlm_lock_cancel(lock);
                 RETURN(0);
         }
+
         /*
          * If granted mode matches the requested mode, this lock is granted.
          *
@@ -2026,15 +2025,22 @@ int ldlm_replay_locks(struct obd_import *imp)
         /* ensure this doesn't fall to 0 before all have been queued */
         atomic_inc(&imp->imp_replay_inflight);
 
-        (void)ldlm_namespace_foreach(ns, ldlm_chain_lock_for_replay, &list);
-
-        list_for_each_entry_safe(lock, next, &list, l_pending_chain) {
-                list_del_init(&lock->l_pending_chain);
-                if (rc)
-                        continue; /* or try to do the rest? */
-                rc = replay_one_lock(imp, lock);
+        if (imp->imp_no_lock_replay) {
+                /* VBR: locks should be cancelled here */
+                ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
+                spin_lock(&imp->imp_lock);
+                imp->imp_no_lock_replay = 0;
+                spin_unlock(&imp->imp_lock);
+        } else {
+                (void)ldlm_namespace_foreach(ns, ldlm_chain_lock_for_replay,
+                                             &list);
+                list_for_each_entry_safe(lock, next, &list, l_pending_chain) {
+                        list_del_init(&lock->l_pending_chain);
+                        if (rc)
+                                continue; /* or try to do the rest? */
+                        rc = replay_one_lock(imp, lock);
+                }
         }
-
         atomic_dec(&imp->imp_replay_inflight);
 
         RETURN(rc);
