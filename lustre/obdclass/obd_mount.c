@@ -1340,10 +1340,9 @@ static void server_wait_finished(struct vfsmount *mnt)
                 LCONSOLE_WARN("Mount still busy with %d refs, waiting for "
                               "%d secs...\n",
                               atomic_read(&mnt->mnt_count), retries);
-
                 /* Wait for a bit */
                 retries -= 5;
-                lwi = LWI_TIMEOUT(5 * HZ, NULL, NULL);
+                lwi = LWI_TIMEOUT(cfs_time_seconds(5), NULL, NULL);
                 l_wait_event(waitq, 0, &lwi);
         }
         if (atomic_read(&mnt->mnt_count) > 1) {
