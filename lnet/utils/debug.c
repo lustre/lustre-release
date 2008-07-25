@@ -85,7 +85,7 @@ static const char *libcfs_debug_subsystems[] =
          "ost", "class", "log", "llite",
          "rpc", "mgmt", "lnet", "lnd",
          "pinger", "filter", "", "echo",
-         "ldlm", "lov", "", "",
+         "ldlm", "lov", "lquota", "",
          "", "", "", "lmv",
          "", "sec", "gss", "", 
          "mgc", "mgs", "fid", "fld", NULL};
