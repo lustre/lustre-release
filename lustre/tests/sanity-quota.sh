@@ -76,38 +76,38 @@ eval ONLY_99=true
 
 # set_blk_tunables(btune_sz)
 set_blk_tunesz() {
-        local btune=$(($1 * BLK_SZ))
+	local btune=$(($1 * BLK_SZ))
 	# set btune size on all obdfilters
-	do_facet ost1 "lctl set_param obdfilter.*.quota_btune_sz=$btune"
+	do_facet ost1 "lctl set_param lquota.${FSNAME}-OST*.quota_btune_sz=$btune"
 	# set btune size on mds
-	do_facet mds "lctl set_param mds.${FSNAME}-MDT*.quota_btune_sz=$btune"
+	do_facet mds  "lctl set_param lquota.${FSNAME}-MDT*.quota_btune_sz=$btune"
 }
 
 # set_blk_unitsz(bunit_sz)
 set_blk_unitsz() {
 	local bunit=$(($1 * BLK_SZ))
 	# set bunit size on all obdfilters
-	do_facet ost1 "lctl set_param obdfilter.*.quota_bunit_sz=$bunit"
+	do_facet ost1 "lctl set_param lquota.${FSNAME}-OST*.quota_bunit_sz=$bunit"
 	# set bunit size on mds
-	do_facet mds "lctl set_param mds.${FSNAME}-MDT*.quota_bunit_sz=$bunit"
+	do_facet mds  "lctl set_param lquota.${FSNAME}-MDT*.quota_bunit_sz=$bunit"
 }
 
 # set_file_tunesz(itune_sz)
 set_file_tunesz() {
 	local itune=$1
 	# set itune size on all obdfilters
-	do_facet ost1 "lctl set_param obdfilter.*.quota_itune_sz=$itune"
+	do_facet ost1 "lctl set_param lquota.${FSNAME}-OST*.quota_itune_sz=$itune"
 	# set itune size on mds
-	do_facet mds "lctl set_param mds.${FSNAME}-MDT*.quota_itune_sz=$itune"
+	do_facet mds  "lctl set_param lquota.${FSNAME}-MDT*.quota_itune_sz=$itune"
 }
 
 # set_file_unitsz(iunit_sz)
 set_file_unitsz() {
 	local iunit=$1
 	# set iunit size on all obdfilters
-	do_facet ost1 "lctl set_param obdfilter.*.quota_iunit_sz=$iunit"
+	do_facet ost1 "lctl set_param lquota.${FSNAME}-OST*.quota_iunit_sz=$iunit"
 	# set iunit size on mds
-	do_facet mds "lctl set_param mds.${FSNAME}-MDT*.quota_iunit_sz=$iunit"
+	do_facet mds  "lctl set_param lquota.${FSNAME}-MDT*.quota_iunit_sz=$iunit"
 }
 
 lustre_fail() {
@@ -138,6 +138,24 @@ FAIL_ON_ERROR=true check_runas_id $TSTID2 $RUNAS2
 
 FAIL_ON_ERROR=false
 
+run_test_with_stat() {
+	(($# != 2)) && error "the number of arguments is wrong"
+
+	do_facet mds  "lctl set_param lquota.${FSNAME}-MDT*.stats=0" > /dev/null
+	for j in `seq $OSTCOUNT`; do
+	    do_facet ost$j "lctl set_param lquota.${FSNAME}-OST*.stats=0" > /dev/null
+	done
+	run_test "$@"
+	if [ ${STAT:-"yes"} != "no" ]; then
+	    echo "statistics info begin ***************************************"
+	    do_facet mds  "lctl get_param lquota.${FSNAME}-MDT*.stats"
+	    for j in `seq $OSTCOUNT`; do
+		do_facet ost$j "lctl get_param lquota.${FSNAME}-OST*.stats"
+	    done
+	    echo "statistics info end   ***************************************"
+	fi
+}
+
 # set quota
 test_0() {
 	$LFS quotaoff -ug $DIR
@@ -152,7 +170,7 @@ test_0() {
 	    do_facet ost$num "lctl set_param debug=+quota"
 	done
 }
-run_test 0 "Set quota ============================="
+run_test_with_stat 0 "Set quota ============================="
 
 # test for specific quota limitation, qunit, qtune $1=block_quota_limit
 test_1_sub() {
@@ -241,7 +259,7 @@ test_1() {
 	    set_blk_tunesz $((128 * 1024 / 2))
         done
 }
-run_test 1 "Block hard limit (normal use and out of quota) ==="
+run_test_with_stat 1 "Block hard limit (normal use and out of quota) ==="
 
 # test for specific quota limitation, qunit, qtune $1=block_quota_limit
 test_2_sub() {
@@ -331,7 +349,7 @@ test_2() {
 	    set_file_tunesz 2560
         done
 }
-run_test 2 "File hard limit (normal use and out of quota) ==="
+run_test_with_stat 2 "File hard limit (normal use and out of quota) ==="
 
 test_block_soft() {
 	TESTFILE=$1
@@ -428,7 +446,7 @@ test_3() {
 	test_block_soft $TESTFILE $GRACE
 	$LFS setquota -g $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
 }
-run_test 3 "Block soft limit (start timer, timer goes off, stop timer) ==="
+run_test_with_stat 3 "Block soft limit (start timer, timer goes off, stop timer) ==="
 
 test_file_soft() {
 	TESTFILE=$1
@@ -514,7 +532,7 @@ test_4a() {	# was test_4
 	$LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace $MAX_IQ_TIME $DIR
 	$LFS setquota -t -g --block-grace $MAX_DQ_TIME --inode-grace $MAX_IQ_TIME $DIR
 }
-run_test 4a "File soft limit (start timer, timer goes off, stop timer) ==="
+run_test_with_stat 4a "File soft limit (start timer, timer goes off, stop timer) ==="
 
 test_4b() {	# was test_4a
         GR_STR1="1w3d"
@@ -542,7 +560,7 @@ test_4b() {	# was test_4a
         $LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace $MAX_IQ_TIME $DIR
         $LFS setquota -t -g --block-grace $MAX_DQ_TIME --inode-grace $MAX_IQ_TIME $DIR
 }
-run_test 4b "Grace time strings handling ==="
+run_test_with_stat 4b "Grace time strings handling ==="
 
 # chown & chgrp (chown & chgrp successfully even out of block/file quota)
 test_5() {
@@ -576,7 +594,7 @@ test_5() {
 	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
 	$LFS setquota -g $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
 }
-run_test 5 "Chown & chgrp successfully even out of block/file quota ==="
+run_test_with_stat 5 "Chown & chgrp successfully even out of block/file quota ==="
 
 # block quota acquire & release
 test_6() {
@@ -644,7 +662,7 @@ test_6() {
 	$LFS setquota -g $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
 	return 0
 }
-run_test 6 "Block quota acquire & release ========="
+run_test_with_stat 6 "Block quota acquire & release ========="
 
 # quota recovery (block quota only by now)
 test_7()
@@ -697,7 +715,7 @@ test_7()
 	# cleanup
 	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
 }
-run_test 7 "Quota recovery (only block limit) ======"
+run_test_with_stat 7 "Quota recovery (only block limit) ======"
 
 # run dbench with quota enabled
 test_8() {
@@ -736,7 +754,7 @@ test_8() {
 	cd $SAVE_PWD
 	return $RC
 }
-run_test 8 "Run dbench with quota enabled ==========="
+run_test_with_stat 8 "Run dbench with quota enabled ==========="
 
 # run for fixing bug10707, it needs a big room. test for 64bit
 KB=1024
@@ -808,7 +826,7 @@ test_9() {
 
         return $RC
 }
-run_test 9 "run for fixing bug10707(64bit) ==========="
+run_test_with_stat 9 "run for fixing bug10707(64bit) ==========="
 
 # run for fixing bug10707, it need a big room. test for 32bit
 test_10() {
@@ -866,7 +884,7 @@ test_10() {
 
 	return $RC
 }
-run_test 10 "run for fixing bug10707(32bit) ==========="
+run_test_with_stat 10 "run for fixing bug10707(32bit) ==========="
 
 test_11() {
        wait_delete_completed
@@ -935,7 +953,7 @@ test_11() {
        fi
        return $RV
 }
-run_test 11 "run for fixing bug10912 ==========="
+run_test_with_stat 11 "run for fixing bug10912 ==========="
 
 
 # test a deadlock between quota and journal b=11693
@@ -1007,7 +1025,7 @@ test_12() {
 
         $LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
 }
-run_test 12 "test a deadlock between quota and journal ==="
+run_test_with_stat 12 "test a deadlock between quota and journal ==="
 
 # test multiple clients write block quota b=11693
 test_13() {
@@ -1071,7 +1089,7 @@ test_13() {
 
 	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
 }
-run_test 13 "test multiple clients write block quota ==="
+run_test_with_stat 13 "test multiple clients write block quota ==="
 
 check_if_quota_zero(){
         line=`$LFS quota -v -$1 $2 $DIR | wc -l`
@@ -1126,13 +1144,13 @@ test_14a() {	# was test_14 b=12223 -- setting quota on root
 	rm -f $TESTFILE
 	sync; sleep 3; sync;
 }
-run_test 14a "test setting quota on root ==="
+run_test_with_stat 14a "test setting quota on root ==="
 
 # set quota version (both administrative and operational quotas)
 quota_set_version() {
-        do_facet mds "lctl set_param mds.${FSNAME}-MDT*.quota_type=$1"
+        do_facet mds "lctl set_param lquota.${FSNAME}-MDT*.quota_type=$1"
         for j in `seq $OSTCOUNT`; do
-                do_facet ost$j "lctl set_param obdfilter.*.quota_type=$1"
+                do_facet ost$j "lctl set_param lquota.${FSNAME}-OST*.quota_type=$1"
         done
 }
 
@@ -1212,7 +1230,7 @@ test_14b(){
                 $LFS setquota -u quota15_$i -b 0 -B 0 -i 0 -I 0 $DIR || error "ifs setquota clear failed"
         done
 }
-run_test 14b "setting 30 quota entries in quota v1 file before conversion ==="
+run_test_with_stat 14b "setting 30 quota entries in quota v1 file before conversion ==="
 
 test_15(){
         LIMIT=$((24 * 1024 * 1024 * 1024 * 1024)) # 24 TB
@@ -1240,7 +1258,7 @@ test_15(){
         echo "Testing that >4GB quota limits fail on volume with quota v1"
         ! $LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
 }
-run_test 15 "set block quota more than 4T ==="
+run_test_with_stat 15 "set block quota more than 4T ==="
 
 # $1=u/g $2=with qunit adjust or not
 test_16_tub() {
@@ -1301,7 +1319,7 @@ test_16 () {
 	set_blk_unitsz $((128 * 1024))
 	set_blk_tunesz $((128 * 1024 / 2))
 }
-run_test 16 "test without adjusting qunit"
+run_test_with_stat 16 "test without adjusting qunit"
 
 # run for fixing bug14526, failed returned quota reqs shouldn't ruin lustre.
 test_17() {
@@ -1358,7 +1376,7 @@ test_17() {
 
 	return $RC
 }
-run_test 17 "run for fixing bug14526 ==========="
+run_test_with_stat 17 "run for fixing bug14526 ==========="
 
 # test when mds takes a long time to handle a quota req so that
 # the ost has dropped it, the ost still could work well b=14840
@@ -1415,7 +1433,7 @@ test_18() {
 	set_blk_unitsz $((128 * 1024))
 	set_blk_tunesz $((128 * 1024 / 2))
 }
-run_test 18 "run for fixing bug14840 ==========="
+run_test_with_stat 18 "run for fixing bug14840 ==========="
 
 # test when mds drops a quota req, the ost still could work well b=14840
 test_18a() {
@@ -1472,7 +1490,7 @@ test_18a() {
 	set_blk_unitsz $((128 * 1024))
 	set_blk_tunesz $((128 * 1024 / 2))
 }
-run_test 18a "run for fixing bug14840 ==========="
+run_test_with_stat 18a "run for fixing bug14840 ==========="
 
 test_19() {
 	# 1 Mb bunit per each MDS/OSS
@@ -1514,7 +1532,7 @@ test_19() {
 	set_blk_tunesz $((128 * 1024 / 2))
 
 }
-run_test 19 "test if administrative limits updates do not zero operational limits (14790) ==="
+run_test_with_stat 19 "test if administrative limits updates do not zero operational limits (14790) ==="
 
 test_20()
 {
@@ -1537,7 +1555,7 @@ test_20()
                                  $MOUNT || error "could not reset quota limits"
 
 }
-run_test 20 "test if setquota specifiers work properly (15754)"
+run_test_with_stat 20 "test if setquota specifiers work properly (15754)"
 
 test_21_sub() {
 	local testfile=$1
@@ -1615,7 +1633,7 @@ test_21() {
 
 	return $RC
 }
-run_test 21 "run for fixing bug16053 ==========="
+run_test_with_stat 21 "run for fixing bug16053 ==========="
 
 test_22() {
         local SAVEREFORMAT
@@ -1640,7 +1658,7 @@ test_22() {
 
         run_test 0 "reboot lustre"
 }
-run_test 22 "test if quota_type saved as permanent parameter ===="
+run_test_with_stat 22 "test if quota_type saved as permanent parameter ===="
 
 # turn off quota
 test_99()
@@ -1650,7 +1668,7 @@ test_99()
 
 	return 0
 }
-run_test 99 "Quota off ==============================="
+run_test_with_stat 99 "Quota off ==============================="
 
 
 log "cleanup: ======================================================"

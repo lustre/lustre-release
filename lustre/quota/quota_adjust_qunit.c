@@ -36,7 +36,7 @@
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
-#define DEBUG_SUBSYSTEM S_MDS
+#define DEBUG_SUBSYSTEM S_LQUOTA
 
 #ifdef __KERNEL__
 # include <linux/version.h>
@@ -321,10 +321,10 @@ search_lqs:
 }
 
 int filter_quota_adjust_qunit(struct obd_export *exp,
-                              struct quota_adjust_qunit *oqaq)
+                              struct quota_adjust_qunit *oqaq,
+                              struct lustre_quota_ctxt *qctxt)
 {
         struct obd_device *obd = exp->exp_obd;
-        struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
         unsigned int uid = 0, gid = 0;
         int rc = 0;
         ENTRY;
@@ -355,7 +355,8 @@ int filter_quota_adjust_qunit(struct obd_export *exp,
 #endif /* __KERNEL__ */
 
 int client_quota_adjust_qunit(struct obd_export *exp,
-                              struct quota_adjust_qunit *oqaq)
+                              struct quota_adjust_qunit *oqaq,
+                              struct lustre_quota_ctxt *qctxt)
 {
         struct ptlrpc_request *req;
         struct quota_adjust_qunit *oqa;
@@ -395,7 +396,8 @@ out:
 }
 
 int lov_quota_adjust_qunit(struct obd_export *exp,
-                           struct quota_adjust_qunit *oqaq)
+                           struct quota_adjust_qunit *oqaq,
+                           struct lustre_quota_ctxt *qctxt)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct lov_obd *lov = &obd->u.lov;
@@ -415,7 +417,8 @@ int lov_quota_adjust_qunit(struct obd_export *exp,
                         continue;
                 }
 
-                err = obd_quota_adjust_qunit(lov->lov_tgts[i]->ltd_exp, oqaq);
+                err = obd_quota_adjust_qunit(lov->lov_tgts[i]->ltd_exp, oqaq,
+                                             NULL);
                 if (err) {
                         if (lov->lov_tgts[i]->ltd_active && !rc)
                                 rc = err;

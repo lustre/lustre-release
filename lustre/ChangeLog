@@ -335,6 +335,12 @@ Details    : Current xattr code updates the inode ctime in ext3_xattr_set_handle
              2.0->1.8 compatibility it is necessary to delete an xattr and it
              should not update the ctime.
 
+Severity   : normal
+Bugzilla   : 15058
+Description: add quota statistics
+Details    : 1. sort out quota proc entries and proc code.
+             2. add quota statistics
+
 -------------------------------------------------------------------------------
 
 

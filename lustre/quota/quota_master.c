@@ -44,7 +44,7 @@
 # define EXPORT_SYMTAB
 #endif
 
-#define DEBUG_SUBSYSTEM S_MDS
+#define DEBUG_SUBSYSTEM S_LQUOTA
 
 #include <linux/version.h>
 #include <linux/fs.h>
@@ -322,7 +322,7 @@ int dqacq_adjust_qunit_sz(struct obd_device *obd, qid_t id, int type,
 
         /* only when block qunit is reduced, boardcast to osts */
         if ((adjust_res & LQS_BLK_DECREASE) && QAQ_IS_ADJBLK(oqaq))
-                rc = obd_quota_adjust_qunit(mds->mds_osc_exp, oqaq);
+                rc = obd_quota_adjust_qunit(mds->mds_osc_exp, oqaq, qctxt);
 
 out:
         lustre_dqput(dquot);
@@ -1227,7 +1227,7 @@ static int mds_init_slave_blimits(struct obd_device *obd,
          * this is will create a lqs for every ost, which will present
          * certain uid/gid is set quota or not */
         QAQ_SET_ADJBLK(oqaq);
-        rc = obd_quota_adjust_qunit(mds->mds_osc_exp, oqaq);
+        rc = obd_quota_adjust_qunit(mds->mds_osc_exp, oqaq, qctxt);
 
         EXIT;
 out:

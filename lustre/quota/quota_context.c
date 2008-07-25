@@ -44,7 +44,7 @@
 # define EXPORT_SYMTAB
 #endif
 
-#define DEBUG_SUBSYSTEM S_MDS
+#define DEBUG_SUBSYSTEM S_LQUOTA
 
 #include <linux/version.h>
 #include <linux/fs.h>
@@ -58,6 +58,7 @@
 #include <lustre_quota.h>
 #include <lustre_fsfilt.h>
 #include <class_hash.h>
+#include <lprocfs_status.h>
 #include "quota_internal.h"
 
 extern struct lustre_hash_operations lqs_hash_operations;
@@ -508,9 +509,14 @@ static int split_before_schedule_dqacq(struct obd_device *obd,
         int rc = 0;
         unsigned long factor;
         struct qunit_data tmp_qdata;
+        struct timeval    work_start;
+        struct timeval    work_end;
+        long              timediff;
         ENTRY;
 
         LASSERT(qdata && qdata->qd_count);
+        LASSERT(opc == QUOTA_DQACQ || opc == QUOTA_DQREL);
+        do_gettimeofday(&work_start);
         QDATA_DEBUG(qdata, "%s quota split.\n",
                     QDATA_IS_BLK(qdata) ? "block" : "inode");
         if (QDATA_IS_BLK(qdata))
@@ -531,6 +537,16 @@ static int split_before_schedule_dqacq(struct obd_device *obd,
                 QDATA_DEBUG(qdata, "don't be split.\n");
                 rc = schedule_dqacq(obd, qctxt, qdata, opc, wait);
         }
+        do_gettimeofday(&work_end);
+        timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
+        if (opc == QUOTA_DQACQ)
+                lprocfs_counter_add(qctxt->lqc_stats,
+                                    wait ? LQUOTA_SYNC_ACQ : LQUOTA_ASYNC_ACQ,
+                                    timediff);
+        else
+                lprocfs_counter_add(qctxt->lqc_stats,
+                                    wait ? LQUOTA_SYNC_REL : LQUOTA_ASYNC_REL,
+                                    timediff);
 
         RETURN(rc);
 }
@@ -976,9 +992,13 @@ qctxt_wait_pending_dqacq(struct lustre_quota_ctxt *qctxt, unsigned int id,
 {
         struct lustre_qunit *qunit = NULL;
         struct qunit_data qdata;
+        struct timeval work_start;
+        struct timeval work_end;
+        long timediff;
         struct l_wait_info lwi = { 0 };
         ENTRY;
 
+        do_gettimeofday(&work_start);
         qdata.qd_id = id;
         qdata.qd_flags = type;
         if (isblk)
@@ -1002,14 +1022,29 @@ qctxt_wait_pending_dqacq(struct lustre_quota_ctxt *qctxt, unsigned int id,
                 CDEBUG(D_QUOTA, "qunit(%p) finishes waiting. (rc:%d)\n",
                        qunit, qunit->lq_rc);
                 qunit_put(qunit);
+                do_gettimeofday(&work_end);
+                timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
+                lprocfs_counter_add(qctxt->lqc_stats,
+                                    isblk ? LQUOTA_WAIT_PENDING_BLK_QUOTA :
+                                            LQUOTA_WAIT_PENDING_INO_QUOTA,
+                                    timediff);
+        } else {
+                do_gettimeofday(&work_end);
+                timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
+                lprocfs_counter_add(qctxt->lqc_stats,
+                                    isblk ? LQUOTA_NOWAIT_PENDING_BLK_QUOTA :
+                                            LQUOTA_NOWAIT_PENDING_INO_QUOTA,
+                                    timediff);
         }
+
         RETURN(0);
 }
 
 int
-qctxt_init(struct lustre_quota_ctxt *qctxt, struct super_block *sb,
-           dqacq_handler_t handler)
+qctxt_init(struct obd_device *obd, dqacq_handler_t handler)
 {
+        struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
+        struct super_block *sb = obd->u.obt.obt_sb;
         int rc = 0;
         ENTRY;
 
@@ -1040,10 +1075,16 @@ qctxt_init(struct lustre_quota_ctxt *qctxt, struct super_block *sb,
         rc = lustre_hash_init(&LQC_HASH_BODY(qctxt), "LQS_HASH",128,
                               &lqs_hash_operations);
         if (rc) {
-                CDEBUG(D_ERROR, "initialize hash lqs on ost error!\n");
+                CDEBUG(D_ERROR, "initialize hash lqs for %s error!\n",
+                       obd->obd_name);
                 lustre_hash_exit(&LQC_HASH_BODY(qctxt));
         }
         spin_unlock(&qctxt->lqc_lock);
+
+#ifdef LPROCFS
+        if (lquota_proc_setup(obd, is_master(obd, qctxt, 0, 0)))
+                CERROR("initialize proc for %s error!\n", obd->obd_name);
+#endif
 
         RETURN(rc);
 }
@@ -1080,6 +1121,11 @@ void qctxt_cleanup(struct lustre_quota_ctxt *qctxt, int force)
 
         lustre_hash_exit(&LQC_HASH_BODY(qctxt));
         ptlrpcd_decref();
+
+#ifdef LPROCFS
+        if (lquota_proc_cleanup(qctxt))
+                CERROR("cleanup proc error!\n");
+#endif
 
         EXIT;
 }

@@ -36,7 +36,7 @@
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
-#define DEBUG_SUBSYSTEM S_MDS
+#define DEBUG_SUBSYSTEM S_LQUOTA
 
 #ifdef __KERNEL__
 # include <linux/version.h>
