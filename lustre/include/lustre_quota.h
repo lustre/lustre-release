@@ -63,6 +63,40 @@ struct client_obd;
 
 #ifdef __KERNEL__
 
+#ifdef LPROCFS
+enum {
+        LQUOTA_FIRST_STAT = 0,
+        /* these four are for measuring quota requests, for both of
+         * quota master and quota slaves */
+        LQUOTA_SYNC_ACQ = LQUOTA_FIRST_STAT,
+        LQUOTA_SYNC_REL,
+        LQUOTA_ASYNC_ACQ,
+        LQUOTA_ASYNC_REL,
+        /* these four measure how much time I/O threads spend on dealing
+         * with quota before and after writing data or creating files,
+         * only for quota slaves(lquota_chkquota and lquota_pending_commit) */
+        LQUOTA_WAIT_FOR_CHK_BLK,
+        LQUOTA_WAIT_FOR_CHK_INO,
+        LQUOTA_WAIT_FOR_COMMIT_BLK,
+        LQUOTA_WAIT_FOR_COMMIT_INO,
+        /* these two are for measuring time waiting return of quota reqs
+         * (qctxt_wait_pending_dqacq), only for quota salves */
+        LQUOTA_WAIT_PENDING_BLK_QUOTA,
+        LQUOTA_WAIT_PENDING_INO_QUOTA,
+        /* these two are for those when they are calling
+         * qctxt_wait_pending_dqacq, the quota req has returned already,
+         * only for quota salves */
+        LQUOTA_NOWAIT_PENDING_BLK_QUOTA,
+        LQUOTA_NOWAIT_PENDING_INO_QUOTA,
+        /* these are for quota ctl */
+        LQUOTA_QUOTA_CTL,
+        /* these are for adjust quota qunit, for both of
+         * quota master and quota slaves  */
+        LQUOTA_ADJUST_QUNIT,
+        LQUOTA_LAST_STAT
+};
+#endif  /* LPROCFS */
+
 /* structures to access admin quotafile */
 struct lustre_mem_dqinfo {
         unsigned int dqi_bgrace;
@@ -226,6 +260,8 @@ struct lustre_quota_ctxt {
                                              * seconds must be waited between
                                              * enlarging and shinking qunit */
         spinlock_t    lqc_lock;         /* guard lqc_imp_valid now */
+        struct proc_dir_entry *lqc_proc_dir;
+        struct lprocfs_stats  *lqc_stats; /* lquota statistics */
 };
 
 #define LQC_HASH_BODY(qctxt) (qctxt->lqc_lqs_hash_body)
@@ -369,8 +405,9 @@ typedef struct {
                             obd_flag, obd_flag);
 
         /* For adjusting qunit size b=10600 */
-        int (*quota_adjust_qunit) (struct obd_export *exp, struct
-                                   quota_adjust_qunit *oqaq);
+        int (*quota_adjust_qunit) (struct obd_export *exp,
+                                   struct quota_adjust_qunit *oqaq,
+                                   struct lustre_quota_ctxt *qctxt);
 
 } quota_interface_t;
 
@@ -589,31 +626,6 @@ static inline int lquota_pending_commit(quota_interface_t *interface,
         rc = QUOTA_OP(interface, pending_commit)(obd, uid, gid, npage);
         RETURN(rc);
 }
-
-int lprocfs_quota_rd_bunit(char *page, char **start, off_t off, int count,
-                           int *eof, void *data);
-int lprocfs_quota_wr_bunit(struct file *file, const char *buffer,
-                           unsigned long count, void *data);
-int lprocfs_quota_rd_btune(char *page, char **start, off_t off, int count,
-                           int *eof, void *data);
-int lprocfs_quota_wr_btune(struct file *file, const char *buffer,
-                           unsigned long count, void *data);
-int lprocfs_quota_rd_iunit(char *page, char **start, off_t off, int count,
-                           int *eof, void *data);
-int lprocfs_quota_wr_iunit(struct file *file, const char *buffer,
-                           unsigned long count, void *data);
-int lprocfs_quota_rd_itune(char *page, char **start, off_t off, int count,
-                           int *eof, void *data);
-int lprocfs_quota_wr_itune(struct file *file, const char *buffer,
-                           unsigned long count, void *data);
-int lprocfs_quota_rd_type(char *page, char **start, off_t off, int count,
-                          int *eof, void *data);
-int lprocfs_quota_wr_type(struct file *file, const char *buffer,
-                          unsigned long count, void *data);
-int lprocfs_quota_rd_switch_seconds(char *page, char **start, off_t off,
-                                    int count, int *eof, void *data);
-int lprocfs_quota_wr_switch_seconds(struct file *file, const char *buffer,
-                                    unsigned long count, void *data);
 
 #ifndef __KERNEL__
 extern quota_interface_t osc_quota_interface;
