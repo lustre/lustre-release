@@ -593,6 +593,12 @@ if test $ac_cv_sizeof_unsigned_long_long != 8 ; then
         AC_MSG_ERROR([** we assume that sizeof(long long) == 8.  Tell phil@clusterfs.com])
 fi
 
+if test $target_cpu == "powerpc64"; then
+	AC_MSG_WARN([set compiler with -m64])
+	CFLAGS="$CFLAGS -m64"
+	CC="$CC -m64"
+fi
+
 CPPFLAGS="-I\$(top_builddir)/$LIBCFS_INCLUDE_DIR -I\$(top_srcdir)/$LIBCFS_INCLUDE_DIR-I\$(top_builddir)/lnet/include -I\$(top_srcdir)/lnet/include -I\$(top_builddir)/lustre/include -I\$(top_srcdir)/lustre/include $CPPFLAGS"
 
 LLCPPFLAGS="-D__arch_lib__ -D_LARGEFILE64_SOURCE=1"

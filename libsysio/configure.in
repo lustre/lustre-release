@@ -1,6 +1,6 @@
 AC_INIT(libsysio, 1.2)
 
-AC_CANONICAL_HOST
+AC_CANONICAL_SYSTEM
 
 case "$host_os" in
   aix*)
@@ -21,6 +21,11 @@ AC_PROG_MAKE_SET
 AC_HEADER_STDC
 AC_HEADER_STAT
 AC_HEADER_TIME
+
+if test ${target_cpu} == "powerpc64"; then
+	AC_MSG_WARN([set compiler with -m64])
+	CC="$CC -m64"
+fi
 
 have_lib_dir=yes;
 AC_ARG_WITH(lib-dir,
