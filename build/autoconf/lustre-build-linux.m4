@@ -462,9 +462,6 @@ AC_DEFUN([LB_PROG_LINUX],
 LB_LINUX_ARCH
 LB_LINUX_SYMVERFILE
 
-if test $LINUX_ARCH == "powerpc64"; then
-	CFLAGS="$CFLAGS -m64"
-fi
 
 LB_LINUX_CONFIG([MODULES],[],[
 	AC_MSG_ERROR([module support is required to build Lustre kernel modules.])
