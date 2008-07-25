@@ -1393,10 +1393,12 @@ static int ost_handle_quotacheck(struct ptlrpc_request *req)
 static int ost_handle_quota_adjust_qunit(struct ptlrpc_request *req)
 {
         struct quota_adjust_qunit *oqaq, *repoqa;
+        struct lustre_quota_ctxt *qctxt;
         int size[2] = { sizeof(struct ptlrpc_body), sizeof(*repoqa) };
         int rc;
         ENTRY;
 
+        qctxt = &req->rq_export->exp_obd->u.obt.obt_qctxt;
         oqaq = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*oqaq),
                                   lustre_swab_quota_adjust_qunit);
 
@@ -1406,7 +1408,7 @@ static int ost_handle_quota_adjust_qunit(struct ptlrpc_request *req)
         if (rc)
                 GOTO(out, rc);
         repoqa = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*repoqa));
-        req->rq_status = obd_quota_adjust_qunit(req->rq_export, oqaq);
+        req->rq_status = obd_quota_adjust_qunit(req->rq_export, oqaq, qctxt);
         *repoqa = *oqaq;
  out:
         RETURN(rc);
