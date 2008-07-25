@@ -1,6 +1,8 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ *
  *   Author: Zach Brown <zab@zabbo.net>
  *   Author: Peter J. Braam <braam@clusterfs.com>
  *   Author: Phil Schwan <phil@clusterfs.com>
