@@ -45,6 +45,7 @@
 /* This flag is set in qc_stat to distinguish if the current getquota
  * operation is for quota recovery */
 #define QUOTA_RECOVERING    0x01
+#define OBD_LQUOTA_DEVICENAME  "lquota"
 
 #ifdef __KERNEL__
 
@@ -101,8 +102,7 @@ int qctxt_adjust_qunit(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                        uid_t uid, gid_t gid, __u32 isblk, int wait);
 int qctxt_wait_pending_dqacq(struct lustre_quota_ctxt *qctxt, unsigned int id,
                              unsigned short type, int isblk);
-int qctxt_init(struct lustre_quota_ctxt *qctxt, struct super_block *sb,
-               dqacq_handler_t handler);
+int qctxt_init(struct obd_device *obd, dqacq_handler_t handler);
 void qctxt_cleanup(struct lustre_quota_ctxt *qctxt, int force);
 void qslave_start_recovery(struct obd_device *obd,
                            struct lustre_quota_ctxt *qctxt);
@@ -167,10 +167,12 @@ static inline void lprocfs_quotacheck_test_init_vars
 #endif
 
 /* quota_adjust_qunit.c */
-int client_quota_adjust_qunit(struct obd_export *exp, struct
-                              quota_adjust_qunit *oqaq);
-int lov_quota_adjust_qunit(struct obd_export *exp, struct
-                           quota_adjust_qunit *oqaq);
+int client_quota_adjust_qunit(struct obd_export *exp,
+                              struct quota_adjust_qunit *oqaq,
+                              struct lustre_quota_ctxt *qctxt);
+int lov_quota_adjust_qunit(struct obd_export *exp,
+                           struct quota_adjust_qunit *oqaq,
+                           struct lustre_quota_ctxt *qctxt);
 int quota_adjust_slave_lqs(struct quota_adjust_qunit *oqaq, struct
                           lustre_quota_ctxt *qctxt);
 void qdata_to_oqaq(struct qunit_data *qdata,
@@ -192,8 +194,13 @@ extern int quote_get_qdata(struct ptlrpc_request *req, struct qunit_data *qdata,
                            int is_req, int is_exp);
 extern int quote_copy_qdata(struct ptlrpc_request *req, struct qunit_data *qdata,
                             int is_req, int is_exp);
-int filter_quota_adjust_qunit(struct obd_export *exp, struct
-                              quota_adjust_qunit *oqaq);
+int filter_quota_adjust_qunit(struct obd_export *exp,
+                              struct quota_adjust_qunit *oqaq,
+                              struct lustre_quota_ctxt *qctxt);
+int lquota_proc_setup(struct obd_device *obd, int is_master);
+int lquota_proc_cleanup(struct lustre_quota_ctxt *qctxt);
+
+extern cfs_proc_dir_entry_t *lquota_type_proc_dir;
 #endif
 
 #define LQS_BLK_DECREASE 1
