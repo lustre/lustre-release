@@ -225,8 +225,7 @@ static struct lprocfs_vars lprocfs_filter_obd_vars[] = {
         { "quota_type",     lprocfs_quota_rd_type,
                             lprocfs_quota_wr_type, 0},
         { "quota_switch_seconds",  lprocfs_quota_rd_switch_seconds,
-                            lprocfs_quota_wr_switch_seconds, 0 },
-
+                                   lprocfs_quota_wr_switch_seconds, 0 },
 #endif
         { "client_cache_count", lprocfs_filter_rd_fmd_max_num,
                           lprocfs_filter_wr_fmd_max_num, 0 },
