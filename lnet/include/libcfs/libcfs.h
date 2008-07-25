@@ -149,7 +149,7 @@ extern unsigned int libcfs_panic_on_lbug;
 #define S_ECHO        0x00008000
 #define S_LDLM        0x00010000
 #define S_LOV         0x00020000
-/* unused */
+#define S_LQUOTA      0x00040000
 /* unused */
 /* unused */
 /* unused */
