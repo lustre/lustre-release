@@ -1328,13 +1328,9 @@ static int ll_setattr_do_truncate(struct inode *inode, loff_t new_size)
                         local_lock = 1;
         }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        DOWN_WRITE_I_ALLOC_SEM(inode);
-        LOCK_INODE_MUTEX(inode);
-#else
         LOCK_INODE_MUTEX(inode);
         DOWN_WRITE_I_ALLOC_SEM(inode);
-#endif
+
         if (likely(rc == 0)) {
                 /* Only ll_inode_size_lock is taken at this level.
                  * lov_stripe_lock() is grabbed by ll_truncate() only over
