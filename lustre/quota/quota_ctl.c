@@ -36,7 +36,7 @@
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
-#define DEBUG_SUBSYSTEM S_MDS
+#define DEBUG_SUBSYSTEM S_LQUOTA
 
 #ifdef __KERNEL__
 # include <linux/version.h>
@@ -71,9 +71,14 @@
 int mds_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
 {
         struct obd_device *obd = exp->exp_obd;
+        struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
+        struct timeval work_start;
+        struct timeval work_end;
+        long timediff;
         int rc = 0;
         ENTRY;
 
+        do_gettimeofday(&work_start);
         switch (oqctl->qc_cmd) {
         case Q_QUOTAON:
                 rc = mds_quota_on(obd, oqctl);
@@ -113,6 +118,9 @@ int mds_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                 CDEBUG(D_INFO, "mds_quotactl admin quota command %d, id %u, "
                                "type %d, failed: rc = %d\n",
                        oqctl->qc_cmd, oqctl->qc_id, oqctl->qc_type, rc);
+        do_gettimeofday(&work_end);
+        timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
+        lprocfs_counter_add(qctxt->lqc_stats, LQUOTA_QUOTA_CTL, timediff);
 
         RETURN(rc);
 }
@@ -122,9 +130,14 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         struct obd_device *obd = exp->exp_obd;
         struct obd_device_target *obt = &obd->u.obt;
         struct lvfs_run_ctxt saved;
+        struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
+        struct timeval work_start;
+        struct timeval work_end;
+        long timediff;
         int rc = 0;
         ENTRY;
 
+        do_gettimeofday(&work_start);
         switch (oqctl->qc_cmd) {
         case Q_FINVALIDATE:
         case Q_QUOTAON:
@@ -234,6 +247,9 @@ adjust:
                        obd->obd_name, oqctl->qc_cmd);
                 RETURN(-EFAULT);
         }
+        do_gettimeofday(&work_end);
+        timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
+        lprocfs_counter_add(qctxt->lqc_stats, LQUOTA_QUOTA_CTL, timediff);
 
         RETURN(rc);
 }
