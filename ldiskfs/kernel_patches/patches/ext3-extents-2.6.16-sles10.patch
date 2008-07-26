@@ -4,7 +4,7 @@ Index: linux-2.6.16.27-0.9/fs/ext3/extents.c
 +++ linux-2.6.16.27-0.9/fs/ext3/extents.c
 @@ -0,0 +1,2359 @@
 +/*
-+ * Copyright(c) 2003, 2004, 2005, Cluster File Systems, Inc, info@clusterfs.com
++ * Copyright 2008 Sun Microsystems, Inc.
 + * Written by Alex Tomas <alex@clusterfs.com>
 + *
 + * This program is free software; you can redistribute it and/or modify
@@ -2671,7 +2671,7 @@ Index: linux-2.6.16.27-0.9/include/linux/ext3_extents.h
 +++ linux-2.6.16.27-0.9/include/linux/ext3_extents.h
 @@ -0,0 +1,262 @@
 +/*
-+ * Copyright (c) 2003, Cluster File Systems, Inc, info@clusterfs.com
++ * Copyright 2008 Sun Microsystems, Inc.
 + * Written by Alex Tomas <alex@clusterfs.com>
 + *
 + * This program is free software; you can redistribute it and/or modify
