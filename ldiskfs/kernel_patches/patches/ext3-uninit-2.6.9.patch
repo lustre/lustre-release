@@ -224,7 +224,7 @@ Index: linux-2.6.9-67.0.15/fs/ext3/group.h
 +/*
 + *  linux/fs/ext3/group.h
 + *
-+ * Copyright (C) 2007 Cluster File Systems, Inc
++ * Copyright 2007 Sun Microsystems, Inc.
 + *
 + * Author: Andreas Dilger <adilger@clusterfs.com>
 + */
