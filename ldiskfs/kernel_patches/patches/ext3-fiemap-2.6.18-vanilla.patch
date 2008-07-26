@@ -293,7 +293,7 @@ Index: linux-2.6.18/fs/ext3/fiemap.h
 +/*
 + * linux/fs/ext3/fiemap.h
 + *
-+ * Copyright (C) 2007 Cluster File Systems, Inc
++ * Copyright 2008 Sun Microsystems, Inc.
 + *
 + * Author: Kalpak Shah <kalpak@clusterfs.com>
 + */
