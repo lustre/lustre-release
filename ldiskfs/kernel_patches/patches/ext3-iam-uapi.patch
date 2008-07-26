@@ -22,11 +22,11 @@ Index: linux-stage/fs/ext3/iam-uapi.c
 + *  iam_uapi.c
 + *  User-level interface to iam (ioctl based)
 + *
-+ *  Copyright (c) 2006 Cluster File Systems, Inc.
++ *  Copyright 2008 Sun Microsystems, Inc.
 + *   Author: Nikita Danilov <nikita@clusterfs.com>
 + *
 + *   This file is part of the Lustre file system, http://www.lustre.org
-+ *   Lustre is a trademark of Cluster File Systems, Inc.
++ *   Lustre is a trademark of Sun Microsystems, Inc.
 + *
 + *   You may have signed or agreed to another license before downloading
 + *   this software.  If so, you are bound by the terms and conditions

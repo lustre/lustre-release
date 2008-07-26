@@ -9,11 +9,11 @@ Index: linux-stage/fs/ext3/iam_lvar.c
 + *  iam_lvar.c
 + *  implementation of iam format for fixed size records, variable sized keys.
 + *
-+ *  Copyright (c) 2006 Cluster File Systems, Inc.
++ *  Copyright 2008 Sun Microsystems, Inc.
 + *   Author: Nikita Danilov <nikita@clusterfs.com>
 + *
 + *   This file is part of the Lustre file system, http://www.lustre.org
-+ *   Lustre is a trademark of Cluster File Systems, Inc.
++ *   Lustre is a trademark of Sun Microsystems, Inc.
 + *
 + *   You may have signed or agreed to another license before downloading
 + *   this software.  If so, you are bound by the terms and conditions
@@ -1104,12 +1104,12 @@ Index: linux-stage/fs/ext3/iam_lfix.c
 + *  iam_lfix.c
 + *  implementation of iam format for fixed size records.
 + *
-+ *  Copyright (c) 2006 Cluster File Systems, Inc.
++ *  Copyright 2008 Sun Microsystems, Inc.
 + *   Author: Wang Di <wangdi@clusterfs.com>
 + *   Author: Nikita Danilov <nikita@clusterfs.com>
 + *
 + *   This file is part of the Lustre file system, http://www.lustre.org
-+ *   Lustre is a trademark of Cluster File Systems, Inc.
++ *   Lustre is a trademark of Sun Microsystems, Inc.
 + *
 + *   You may have signed or agreed to another license before downloading
 + *   this software.  If so, you are bound by the terms and conditions
@@ -1841,11 +1841,11 @@ Index: linux-stage/fs/ext3/iam_htree.c
 + *  iam_htree.c
 + *  implementation of iam format for ext3/htree.
 + *
-+ *  Copyright (c) 2006 Cluster File Systems, Inc.
++ *  Copyright 2008 Sun Microsystems, Inc.
 + *   Author: Nikita Danilov <nikita@clusterfs.com>
 + *
 + *   This file is part of the Lustre file system, http://www.lustre.org
-+ *   Lustre is a trademark of Cluster File Systems, Inc.
++ *   Lustre is a trademark of Sun Microsystems, Inc.
 + *
 + *   You may have signed or agreed to another license before downloading
 + *   this software.  If so, you are bound by the terms and conditions
@@ -4574,12 +4574,12 @@ Index: linux-stage/fs/ext3/iam.c
 + *  iam.c
 + *  Top-level entry points into iam module
 + *
-+ *  Copyright (c) 2006 Cluster File Systems, Inc.
++ *  Copyright 2008 Sun Microsystems, Inc.
 + *   Author: Wang Di <wangdi@clusterfs.com>
 + *   Author: Nikita Danilov <nikita@clusterfs.com>
 + *
 + *   This file is part of the Lustre file system, http://www.lustre.org
-+ *   Lustre is a trademark of Cluster File Systems, Inc.
++ *   Lustre is a trademark of Sun Microsystems, Inc.
 + *
 + *   You may have signed or agreed to another license before downloading
 + *   this software.  If so, you are bound by the terms and conditions
@@ -6012,12 +6012,12 @@ Index: linux-stage/include/linux/lustre_iam.h
 + *  lustre_iam.c
 + *  Top-level entry points into osd module
 + *
-+ *  Copyright (c) 2006 Cluster File Systems, Inc.
++ *  Copyright 2008 Sun Microsystems, Inc.
 + *   Author: Wang Di <wangdi@clusterfs.com>
 + *   Author: Nikita Danilov <nikita@clusterfs.com>
 + *
 + *   This file is part of the Lustre file system, http://www.lustre.org
-+ *   Lustre is a trademark of Cluster File Systems, Inc.
++ *   Lustre is a trademark of Sun Microsystems, Inc.
 + *
 + *   You may have signed or agreed to another license before downloading
 + *   this software.  If so, you are bound by the terms and conditions
