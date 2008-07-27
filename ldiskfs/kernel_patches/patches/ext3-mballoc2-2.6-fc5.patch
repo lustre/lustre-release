@@ -33,7 +33,7 @@ Index: linux-2.6.16.i686/include/linux/ext3_fs.h
 +#ifdef __LITTLE_ENDIAN
 +#define ext2_find_next_le_bit(addr, size, off) find_next_bit((addr), (size), (off))
 +#else
-+#error "mballoc needs a patch for big-endian systems - CFS bug 10634"
++#error "mballoc needs a patch for big-endian systems - Lustre bug 10634"
 +#endif	/* __LITTLE_ENDIAN */
 +#endif	/* !ext2_find_next_le_bit */
 +
