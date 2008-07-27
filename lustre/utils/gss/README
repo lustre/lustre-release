@@ -1,7 +1,7 @@
 lustre/utils/gss: client & server side gss daemons for Lustre.
 
 All files came from standard nfs-utils package, applied with patches
-created by Cluster File Systems Inc.
+created by Sun Microsystems, Inc.
 
 1. Stock nfs-utils-1.0.11.tgz
 2. Apply nfs-utils-1.0.11-CITI_NFS4_ALL-1.dif from Center for Information

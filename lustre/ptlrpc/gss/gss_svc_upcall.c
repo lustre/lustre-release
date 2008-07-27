@@ -3,11 +3,8 @@
  *
  * Modifications for Lustre
  *
- * Copyright 2008, Sun Microsystems, Inc.
- * Author: Eric Mei <eric.mei@sun.com>
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
  *
- * Copyright 2004 - 2006, Cluster File Systems, Inc.
- * All rights reserved
  * Author: Eric Mei <ericm@clusterfs.com>
  */
 

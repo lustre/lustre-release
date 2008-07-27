@@ -2,8 +2,9 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  * Modifications for Lustre
- * Copyright 2007, Cluster File Systems, Inc.
- * All rights reserved
+ *
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ *
  * Author: Eric Mei <ericm@clusterfs.com>
  */
 

@@ -1,26 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/lib/fsfilt_ext3.c
- *  Lustre filesystem abstraction routines
+ * GPL HEADER START
  *
- *  Copyright (C) 2002, 2003 Cluster File Systems, Inc.
- *   Author: Andreas Dilger <adilger@clusterfs.com>
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see [sun.com URL with a
+ * copy of GPLv2].
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/lvfs/fsfilt_ext3.c
+ *
+ * Author: Andreas Dilger <adilger@clusterfs.com>
  */
 
 #define DEBUG_SUBSYSTEM S_FILTER
@@ -191,7 +206,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                               cpu_to_le32(EXT3_EXTENTS_FL | EXT3_INDEX_FL)) ==
                               cpu_to_le32(EXT3_EXTENTS_FL | EXT3_INDEX_FL))) {
                                 CWARN("extent-mapped directory found - contact "
-                                      "CFS: support@clusterfs.com\n");
+                                      "http://bugzilla.lustre.org/\n");
                                 warned = 1;
                         }
                 }
@@ -2100,6 +2115,6 @@ static void __exit fsfilt_ext3_exit(void)
 module_init(fsfilt_ext3_init);
 module_exit(fsfilt_ext3_exit);
 
-MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
+MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre ext3 Filesystem Helper v0.1");
 MODULE_LICENSE("GPL");

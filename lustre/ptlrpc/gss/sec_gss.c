@@ -2,8 +2,9 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  * Modifications for Lustre
- * Copyright 2004 - 2007, Cluster File Systems, Inc.
- * All rights reserved
+ *
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ *
  * Author: Eric Mei <ericm@clusterfs.com>
  */
 
@@ -2821,7 +2822,7 @@ static void __exit sptlrpc_gss_exit(void)
         gss_exit_lproc();
 }
 
-MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
+MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("GSS security policy for Lustre");
 MODULE_LICENSE("GPL");
 

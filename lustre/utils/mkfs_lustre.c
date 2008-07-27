@@ -1,26 +1,44 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *   Copyright (C) 2006 Cluster File Systems, Inc.
- *   Author: Nathan Rutman <nathan@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see [sun.com URL with a
+ * copy of GPLv2].
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
  */
- /* This source file is compiled into both mkfs.lustre and tunefs.lustre */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/utils/mkfs_lustre.c
+ *
+ * Author: Nathan Rutman <nathan@clusterfs.com>
+*/
+
+/* This source file is compiled into both mkfs.lustre and tunefs.lustre */
 
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
@@ -365,9 +383,8 @@ static void disp_old_e2fsprogs_msg(const char *feature, int make_backfs)
 
         fprintf(stderr, "WARNING: The e2fsprogs package currently installed on "
                 "your system does not support \"%s\" feature.\nPlease install "
-                "the latest version of e2fsprogs from http://www.clusterfs.com/"
-                "downloads/public/Lustre/Tools/e2fsprogs/\nto enable this "
-                "feature.\n", feature);
+                "the latest version of e2fsprogs from http://downloads.lustre.org"
+                "/public/tools/e2fsprogs/\nto enable this feature.\n", feature);
 
         if (make_backfs)
                 fprintf(stderr, "Feature will not be enabled until e2fsprogs "
@@ -1632,7 +1649,7 @@ int main(int argc, char *const argv[])
                         strscat(always_mountopts, ",asyncdel",
                                 sizeof(always_mountopts));
                 /* NB: Files created while extents are enabled cannot be read
-                   if mounted with a kernel that doesn't include the CFS
+                   if mounted with a kernel that doesn't include the Lustre ldiskfs
                    patches! */
                 if (IS_OST(ldd) &&
                     (ldd->ldd_mount_type == LDD_MT_LDISKFS ||

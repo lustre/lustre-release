@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2001, 2002 Cluster File Systems, Inc.
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
  *
  *   This file is part of Portals, http://www.sf.net/projects/lustre/
  *
@@ -20,7 +20,6 @@
  *
  * Some day I'll split all of this functionality into a cfs_debug module
  * of its own.  That day is not today.
- *
  */
 
 #include <stdio.h>

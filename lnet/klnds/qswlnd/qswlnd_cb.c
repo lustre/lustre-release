@@ -1,8 +1,9 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002 Cluster File Systems, Inc.
- *   Author: Eric Barton <eric@bartonsoftware.com>
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ *
+ * Author: Eric Barton <eric@bartonsoftware.com>
  *
  * This file is part of Portals, http://www.lustre.org
  *
@@ -18,7 +19,6 @@
  * You should have received a copy of the GNU General Public License
  * along with Portals; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
  */
 
 #include "qswlnd.h"
