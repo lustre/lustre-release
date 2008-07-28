@@ -151,7 +151,7 @@ struct ptldebug_header {
 
 #define __CHECK_STACK(file, func, line)                                 \
 do {                                                                    \
-        unsigned long _stack = CDEBUG_STACK();                          \
+        unsigned int _stack = CDEBUG_STACK();                           \
                                                                         \
         if (_stack > 3*THREAD_SIZE/4 && _stack > libcfs_stack) {        \
                 libcfs_stack = _stack;                                  \
