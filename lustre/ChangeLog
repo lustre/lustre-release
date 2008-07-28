@@ -21,7 +21,7 @@ Bugzilla   : 12975
 Frequency  : rare
 Description: Using wrong pointer in osc_brw_prep_request
 Details    : Access to array[-1] can produce panic if kernel compiled with
-             CONFIG_PAGE_ALLOC enabled
+	     CONFIG_PAGE_ALLOC enabled
 
 Severity   : normal
 Bugzilla   : 16037
@@ -32,7 +32,7 @@ Severity   : normal
 Bugzilla   : 15625
 Description: *optional* service tags registration
 Details    : if the "service tags" package is installed on a Lustre node
-             When the filesystem is mounted, a local-node service tag will
+	     When the filesystem is mounted, a local-node service tag will
 	     be created.  See http://inventory.sun.com/ for more information
 	     about the Service Tags asset management system.
 
@@ -40,7 +40,7 @@ Severity   : normal
 Bugzilla   : 15825
 Description: Kernel BUG tries to release flock
 Details    : Lustre does not destroy flock lock before last reference goes
-             away. So always drop flock locks when client is evicted and 
+	     away. So always drop flock locks when client is evicted and 
 	     perform unlock regardless of successfulness of speaking to MDS.
 
 Severity   : normal
@@ -608,7 +608,7 @@ Frequency  : rare
 Description: Oops in read and write path when failing to allocate lock.
 Details    : Check if lock allocation failed and return error back.
 
-Severity   : normal 
+Severity   : normal
 Bugzilla   : 11679
 Description: lstripe command fails for valid OST index
 Details    : The stripe offset is compared to lov->desc.ld_tgt_count
@@ -901,11 +901,11 @@ Severity   : normal
 Bugzilla   : 13570
 Description: To avoid grant space > avaible space when the disk is almost
 	     full. Without this patch you might see the error "grant XXXX >
-	     available" or some LBUG about grant, when the disk is almost 
+	     available" or some LBUG about grant, when the disk is almost
 	     full.
 Details    : In filter_check_grant, for non_grant cache write, we should
 	     check the left space by  if (*left > ungranted + bytes), instead
-	     of (*left > ungranted), because only we are sure the left space 
+	     of (*left > ungranted), because only we are sure the left space
 	     is enough for another "bytes", then the ungrant space should be
 	     increase. In client, we should update cl_avail_grant only there
 	     is OBD_MD_FLGRANT in the reply.
@@ -1119,7 +1119,7 @@ Severity   : enhancement
 Bugzilla   : 11270
 Description: eliminate client locks in face of contention
 Details    : file contention detection and lockless i/o implementation
-             for contended files.
+	     for contended files.
 
 Severity   : normal
 Bugzilla   : 15212
@@ -1180,14 +1180,14 @@ Details    : The direct IO path doesn't call check_rpcs to submit a new RPC once
 	     and are never sent.
 
 Severity   : normal
-Bugzilla   : 14629 
-Description: filter threads hungs on waiting journal commit  
+Bugzilla   : 14629
+Description: filter threads hungs on waiting journal commit
 Details    : Cleanup filter group llog code, then only filter group llog will
 	     be only created in the MDS/OST syncing process.
 
 Severity   : normal
-Bugzilla   : 15684 
-Description: Procfs and llog threads access destoryed import sometimes. 
+Bugzilla   : 15684
+Description: Procfs and llog threads access destoryed import sometimes.
 Details    : Sync the import destoryed process with procfs and llog threads by
 	     the import refcount and semaphore.
 
@@ -1200,16 +1200,26 @@ Frequncy   : rare
 Bugzilla   : 16226
 Description: kernel BUG at ldiskfs2_ext_new_extent_cb
 Details    : If insertion of an extent fails, then discard the inode
-             preallocation and free data blocks else it can lead to duplicate
-             blocks.
+	     preallocation and free data blocks else it can lead to duplicate
+	     blocks.
 
 Severity   : normal
 Bugzilla   : 16199
 Description: don't always update ctime in ext3_xattr_set_handle()
 Details    : Current xattr code updates the inode ctime in ext3_xattr_set_handle.
-             In some cases the ctime should not be updated, for example for
-             2.0->1.8 compatibility it is necessary to delete an xattr and it
-             should not update the ctime.
+	     In some cases the ctime should not be updated, for example for
+	     2.0->1.8 compatibility it is necessary to delete an xattr and it
+	     should not update the ctime.
+
+Severity   : major
+Frequency  : rare
+Bugzilla   : 15713/16362
+Description: Assertion in iopen_connect_dentry in 1.6.3
+Details    : looking up an inode via iopen with the wrong generation number can
+	     populate the dcache with a disconneced dentry while the inode
+	     number is in the process of being reallocated. This causes an
+	     assertion failure in iopen since the inode's dentry list contains
+	     both a connected and disconnected dentry.
 
 --------------------------------------------------------------------------------
 
