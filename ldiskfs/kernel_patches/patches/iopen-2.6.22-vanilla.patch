@@ -1,8 +1,8 @@
-Index: linux-2.6.22.15/fs/ext3/iopen.c
+Index: linux-2.6.22.19/fs/ext3/iopen.c
 ===================================================================
 --- /dev/null
-+++ linux-2.6.22.15/fs/ext3/iopen.c
-@@ -0,0 +1,256 @@
++++ linux-2.6.22.19/fs/ext3/iopen.c
+@@ -0,0 +1,292 @@
 +/*
 + * linux/fs/ext3/iopen.c
 + *
@@ -184,6 +184,42 @@ Index: linux-2.6.22.15/fs/ext3/iopen.c
 +}
 +
 +/*
++ * Similar as d_instantiate() except that it drops the disconnected
++ * dentry if any.
++ */
++void iopen_d_instantiate(struct dentry *dentry, struct inode * inode)
++{
++	struct dentry *dis_dentry;
++
++	/* verify this dentry is really new */
++	assert(dentry->d_inode == NULL);
++	assert(list_empty(&dentry->d_alias));
++
++	spin_lock(&dcache_lock);
++	if (!inode || !test_opt(inode->i_sb, IOPEN) ||
++	    list_empty(&inode->i_dentry))
++		goto do_instantiate;
++
++	/* a disconnected dentry has been added in our back,
++	 * we have to drop this dentry, see bug 16362/15713*/
++	dis_dentry = list_entry(inode->i_dentry.next, struct dentry, d_alias);
++	spin_lock(&dis_dentry->d_lock);
++	assert(dis_dentry->d_alias.next == &inode->i_dentry);
++	assert(dis_dentry->d_alias.prev == &inode->i_dentry);
++	assert(dis_dentry->d_flags & DCACHE_DISCONNECTED);
++	__d_drop(dis_dentry);
++	list_del_init(&dis_dentry->d_alias);
++	spin_unlock(&dis_dentry->d_lock);
++
++do_instantiate:
++	if (inode)
++		list_add(&dentry->d_alias, &inode->i_dentry);
++	dentry->d_inode = inode;
++	spin_unlock(&dcache_lock);
++	security_d_instantiate(dentry, inode);
++}
++
++/*
 + * These are the special structures for the iopen pseudo directory.
 + */
 +
@@ -259,11 +295,11 @@ Index: linux-2.6.22.15/fs/ext3/iopen.c
 +
 +	return 1;
 +}
-Index: linux-2.6.22.15/fs/ext3/iopen.h
+Index: linux-2.6.22.19/fs/ext3/iopen.h
 ===================================================================
 --- /dev/null
-+++ linux-2.6.22.15/fs/ext3/iopen.h
-@@ -0,0 +1,19 @@
++++ linux-2.6.22.19/fs/ext3/iopen.h
+@@ -0,0 +1,20 @@
 +/*
 + * iopen.h
 + *
@@ -279,14 +315,15 @@ Index: linux-2.6.22.15/fs/ext3/iopen.h
 +extern int ext3_iopen_get_inode(struct inode *inode);
 +extern struct dentry *iopen_connect_dentry(struct dentry *dentry,
 +					   struct inode *inode, int rehash);
++extern void iopen_d_instantiate(struct dentry *dentry, struct inode * inode);
 +
 +#if !defined(HAVE_D_MOVE_LOCKED) && defined(HAVE___D_MOVE)
 +#define d_move_locked(dentry, target) __d_move(dentry, target)
 +#endif
-Index: linux-2.6.22.15/fs/ext3/inode.c
+Index: linux-2.6.22.19/fs/ext3/inode.c
 ===================================================================
---- linux-2.6.22.15.orig/fs/ext3/inode.c
-+++ linux-2.6.22.15/fs/ext3/inode.c
+--- linux-2.6.22.19.orig/fs/ext3/inode.c
++++ linux-2.6.22.19/fs/ext3/inode.c
 @@ -37,6 +37,7 @@
  #include <linux/uio.h>
  #include <linux/bio.h>
@@ -304,10 +341,10 @@ Index: linux-2.6.22.15/fs/ext3/inode.c
  
  	if (__ext3_get_inode_loc(inode, &iloc, 0))
  		goto bad_inode;
-Index: linux-2.6.22.15/fs/ext3/super.c
+Index: linux-2.6.22.19/fs/ext3/super.c
 ===================================================================
---- linux-2.6.22.15.orig/fs/ext3/super.c
-+++ linux-2.6.22.15/fs/ext3/super.c
+--- linux-2.6.22.19.orig/fs/ext3/super.c
++++ linux-2.6.22.19/fs/ext3/super.c
 @@ -674,6 +674,7 @@ enum {
  	Opt_usrjquota, Opt_grpjquota, Opt_offusrjquota, Opt_offgrpjquota,
  	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0, Opt_quota, Opt_noquota,
@@ -345,10 +382,10 @@ Index: linux-2.6.22.15/fs/ext3/super.c
  		case Opt_ignore:
  			break;
  		case Opt_resize:
-Index: linux-2.6.22.15/fs/ext3/namei.c
+Index: linux-2.6.22.19/fs/ext3/namei.c
 ===================================================================
---- linux-2.6.22.15.orig/fs/ext3/namei.c
-+++ linux-2.6.22.15/fs/ext3/namei.c
+--- linux-2.6.22.19.orig/fs/ext3/namei.c
++++ linux-2.6.22.19/fs/ext3/namei.c
 @@ -39,6 +39,7 @@
  
  #include "namei.h"
@@ -377,6 +414,24 @@ Index: linux-2.6.22.15/fs/ext3/namei.c
  }
  
  
+@@ -1693,7 +1698,7 @@ static int ext3_add_nondir(handle_t *han
+ 	int err = ext3_add_entry(handle, dentry, inode);
+ 	if (!err) {
+ 		ext3_mark_inode_dirty(handle, inode);
+-		d_instantiate(dentry, inode);
++		iopen_d_instantiate(dentry, inode);
+ 		return 0;
+ 	}
+ 	drop_nlink(inode);
+@@ -1855,7 +1860,7 @@ retry:
+ 	inc_nlink(dir);
+ 	ext3_update_dx_flag(dir);
+ 	ext3_mark_inode_dirty(handle, dir);
+-	d_instantiate(dentry, inode);
++	iopen_d_instantiate(dentry, inode);
+ out_stop:
+ 	ext3_journal_stop(handle);
+ 	if (err == -ENOSPC && ext3_should_retry_alloc(dir->i_sb, &retries))
 @@ -2123,10 +2128,6 @@ static int ext3_rmdir (struct inode * di
  			      inode->i_nlink);
  	inode->i_version++;
@@ -422,10 +477,10 @@ Index: linux-2.6.22.15/fs/ext3/namei.c
  	ext3_journal_stop(handle);
  	if (err == -ENOSPC && ext3_should_retry_alloc(dir->i_sb, &retries))
  		goto retry;
-Index: linux-2.6.22.15/fs/ext3/Makefile
+Index: linux-2.6.22.19/fs/ext3/Makefile
 ===================================================================
---- linux-2.6.22.15.orig/fs/ext3/Makefile
-+++ linux-2.6.22.15/fs/ext3/Makefile
+--- linux-2.6.22.19.orig/fs/ext3/Makefile
++++ linux-2.6.22.19/fs/ext3/Makefile
 @@ -4,7 +4,7 @@
  
  obj-$(CONFIG_EXT3_FS) += ext3.o
@@ -435,10 +490,10 @@ Index: linux-2.6.22.15/fs/ext3/Makefile
  	   ioctl.o namei.o super.o symlink.o hash.o resize.o ext3_jbd.o
  
  ext3-$(CONFIG_EXT3_FS_XATTR)	 += xattr.o xattr_user.o xattr_trusted.o
-Index: linux-2.6.22.15/include/linux/ext3_fs.h
+Index: linux-2.6.22.19/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.22.15.orig/include/linux/ext3_fs.h
-+++ linux-2.6.22.15/include/linux/ext3_fs.h
+--- linux-2.6.22.19.orig/include/linux/ext3_fs.h
++++ linux-2.6.22.19/include/linux/ext3_fs.h
 @@ -384,6 +384,8 @@ struct ext3_inode {
  #define EXT3_MOUNT_QUOTA		0x80000 /* Some quota option set */
  #define EXT3_MOUNT_USRQUOTA		0x100000 /* "old" user quota */
