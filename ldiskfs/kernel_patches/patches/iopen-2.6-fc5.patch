@@ -2,7 +2,7 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/iopen.c
 ===================================================================
 --- /dev/null
 +++ linux-2.6.16.54-0.2.5/fs/ext3/iopen.c
-@@ -0,0 +1,259 @@
+@@ -0,0 +1,295 @@
 +/*
 + * linux/fs/ext3/iopen.c
 + *
@@ -184,6 +184,42 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/iopen.c
 +}
 +
 +/*
++ * Similar as d_instantiate() except that it drops the disconnected
++ * dentry if any.
++ */
++void iopen_d_instantiate(struct dentry *dentry, struct inode * inode)
++{
++	struct dentry *dis_dentry;
++
++	/* verify this dentry is really new */
++	assert(dentry->d_inode == NULL);
++	assert(list_empty(&dentry->d_alias));
++
++	spin_lock(&dcache_lock);
++	if (!inode || !test_opt(inode->i_sb, IOPEN) ||
++	    list_empty(&inode->i_dentry))
++		goto do_instantiate;
++
++	/* a disconnected dentry has been added in our back,
++	 * we have to drop this dentry, see bug 16362/15713*/
++	dis_dentry = list_entry(inode->i_dentry.next, struct dentry, d_alias);
++	spin_lock(&dis_dentry->d_lock);
++	assert(dis_dentry->d_alias.next == &inode->i_dentry);
++	assert(dis_dentry->d_alias.prev == &inode->i_dentry);
++	assert(dis_dentry->d_flags & DCACHE_DISCONNECTED);
++	__d_drop(dis_dentry);
++	list_del_init(&dis_dentry->d_alias);
++	spin_unlock(&dis_dentry->d_lock);
++
++do_instantiate:
++	if (inode)
++		list_add(&dentry->d_alias, &inode->i_dentry);
++	dentry->d_inode = inode;
++	spin_unlock(&dcache_lock);
++	security_d_instantiate(dentry, inode);
++}
++
++/*
 + * These are the special structures for the iopen pseudo directory.
 + */
 +
@@ -266,7 +302,7 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/iopen.h
 ===================================================================
 --- /dev/null
 +++ linux-2.6.16.54-0.2.5/fs/ext3/iopen.h
-@@ -0,0 +1,23 @@
+@@ -0,0 +1,24 @@
 +/*
 + * iopen.h
 + *
@@ -282,6 +318,7 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/iopen.h
 +extern int ext3_iopen_get_inode(struct inode *inode);
 +extern struct dentry *iopen_connect_dentry(struct dentry *dentry,
 +					   struct inode *inode, int rehash);
++extern void iopen_d_instantiate(struct dentry *dentry, struct inode * inode);
 +
 +#if !defined(HAVE_D_REHASH_COND) && defined(HAVE___D_REHASH)
 +#define d_rehash_cond(dentry, lock) __d_rehash(dentry, lock)
@@ -384,6 +421,24 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/namei.c
  }
  
  
+@@ -1640,7 +1645,7 @@ static int ext3_add_nondir(handle_t *han
+ 	int err = ext3_add_entry(handle, dentry, inode);
+ 	if (!err) {
+ 		ext3_mark_inode_dirty(handle, inode);
+-		d_instantiate(dentry, inode);
++		iopen_d_instantiate(dentry, inode);
+ 		return 0;
+ 	}
+ 	ext3_dec_count(handle, inode);
+@@ -1810,7 +1815,7 @@ retry:
+ 	dir->i_nlink++;
+ 	ext3_update_dx_flag(dir);
+ 	ext3_mark_inode_dirty(handle, dir);
+-	d_instantiate(dentry, inode);
++	iopen_d_instantiate(dentry, inode);
+ out_stop:
+ 	ext3_journal_stop(handle);
+ 	if (err == -ENOSPC && ext3_should_retry_alloc(dir->i_sb, &retries))
 @@ -2078,10 +2083,6 @@ static int ext3_rmdir (struct inode * di
  			      inode->i_nlink);
  	inode->i_version++;
