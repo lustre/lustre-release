@@ -344,6 +344,13 @@ Description: add quota statistics
 Details    : 1. sort out quota proc entries and proc code.
              2. add quota statistics
 
+Severity   : normal
+Frequncy   : often
+Bugzilla   : 16125
+Description: quotas are not honored with O_DIRECT
+Details    : all writes with the flag O_DIRECT will use grants which leads to
+             this problem. Now using OBD_BRW_SYNC to guard this.
+
 -------------------------------------------------------------------------------
 
 
