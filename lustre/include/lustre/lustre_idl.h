@@ -701,19 +701,19 @@ typedef enum {
 } ost_cmd_t;
 #define OST_FIRST_OPC  OST_REPLY
 
-typedef uint64_t        obd_id;
-typedef uint64_t        obd_gr;
-typedef uint64_t        obd_time;
-typedef uint64_t        obd_size;
-typedef uint64_t        obd_off;
-typedef uint64_t        obd_blocks;
-typedef uint32_t        obd_blksize;
-typedef uint32_t        obd_mode;
-typedef uint32_t        obd_uid;
-typedef uint32_t        obd_gid;
-typedef uint32_t        obd_flag;
-typedef uint64_t        obd_valid;
-typedef uint32_t        obd_count;
+typedef __u64 obd_id;
+typedef __u64 obd_gr;
+typedef __u64 obd_time;
+typedef __u64 obd_size;
+typedef __u64 obd_off;
+typedef __u64 obd_blocks;
+typedef __u32 obd_blksize;
+typedef __u32 obd_mode;
+typedef __u32 obd_uid;
+typedef __u32 obd_gid;
+typedef __u32 obd_flag;
+typedef __u64 obd_valid;
+typedef __u32 obd_count;
 
 #define OBD_FL_INLINEDATA    (0x00000001)
 #define OBD_FL_OBDMDEXISTS   (0x00000002)
