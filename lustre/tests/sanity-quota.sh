@@ -46,6 +46,7 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+DIRECTIO=${DIRECTIO:-$LUSTRE/tests/directio}
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="9 10 11 21"
 
@@ -1659,6 +1660,58 @@ test_22() {
         run_test 0 "reboot lustre"
 }
 run_test_with_stat 22 "test if quota_type saved as permanent parameter ===="
+
+test_23_sub() {
+	mkdir -p $DIR/$tdir
+	chmod 0777 $DIR/$tdir
+	TESTFILE="$DIR/$tdir/$tfile-0"
+	local bs_unit=$((1024*1024))
+	LIMIT=$1
+
+	wait_delete_completed
+
+	# test for user
+	log "  User quota (limit: $LIMIT kbytes)"
+	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
+	sleep 3
+	$SHOW_QUOTA_USER
+
+	$LFS setstripe $TESTFILE -c 1
+	chown $TSTUSR.$TSTUSR $TESTFILE
+
+	log "    Step1: trigger quota with 0_DIRECT"
+	log "      Write half of file"
+	$RUNAS $DIRECTIO write $TESTFILE 0 $(($LIMIT/1024/2)) $bs_unit || error "(usr) write failure, but expect success"
+	log "      Write out of block quota ..."
+	$RUNAS $DIRECTIO write $TESTFILE $(($LIMIT/1024/2)) $(($LIMIT/1024/2)) $bs_unit && error "(usr) write success, but expect EDQUOT"
+	log "    Step1: done"
+
+	log "    Step2: rewrite should succeed"
+	$RUNAS $DIRECTIO write $TESTFILE $(($LIMIT/1024/2)) 1 $bs_unit 2>&1 || error "(usr) write failure, but expect success"
+	log "    Step2: done"
+
+	rm -f $TESTFILE
+	wait_delete_completed
+	OST0_UUID=`do_facet ost1 $LCTL dl | grep -m1 obdfilter | awk '{print $((NF-1))}'`
+	OST0_QUOTA_USED=`$LFS quota -o $OST0_UUID -u $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
+	echo $OST0_QUOTA_USED
+	[ $OST0_QUOTA_USED -ne 0 ] && \
+	    ($SHOW_QUOTA_USER; error "quota deleted isn't released")
+	$SHOW_QUOTA_USER
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
+
+}
+
+test_23() {
+	log "run for 10MB test file"
+	test_23_sub 10240  #10MB
+
+	OST0_MIN=120000
+	check_whether_skip && return 0
+	log "run for 100MB test file"
+	test_23_sub 102400 #100MB
+}
+run_test_with_stat 23 "run for fixing bug16125 ==========="
 
 # turn off quota
 test_99()
