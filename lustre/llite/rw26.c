@@ -177,7 +177,7 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct inode *inode,
                 /* To the end of the page, or the length, whatever is less */
                 pga[i].count = min_t(int, CFS_PAGE_SIZE -(file_offset & ~CFS_PAGE_MASK),
                                      length);
-                pga[i].flag = 0;
+                pga[i].flag = OBD_BRW_SYNC;
                 if (rw == READ)
                         POISON_PAGE(pages[i], 0x0d);
         }
