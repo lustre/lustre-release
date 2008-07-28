@@ -1,7 +1,7 @@
-Index: linux-stage/fs/ext3/Makefile
+Index: linux-2.6.9-67/fs/ext3/Makefile
 ===================================================================
---- linux-stage.orig/fs/ext3/Makefile	2005-02-25 14:31:53.151076368 +0200
-+++ linux-stage/fs/ext3/Makefile	2005-02-25 14:41:51.259150120 +0200
+--- linux-2.6.9-67.orig/fs/ext3/Makefile
++++ linux-2.6.9-67/fs/ext3/Makefile
 @@ -4,7 +4,7 @@
  
  obj-$(CONFIG_EXT3_FS) += ext3.o
@@ -11,10 +11,10 @@ Index: linux-stage/fs/ext3/Makefile
  	   ioctl.o namei.o super.o symlink.o hash.o resize.o
  
  ext3-$(CONFIG_EXT3_FS_XATTR)	 += xattr.o xattr_user.o xattr_trusted.o
-Index: linux-stage/fs/ext3/inode.c
+Index: linux-2.6.9-67/fs/ext3/inode.c
 ===================================================================
---- linux-stage.orig/fs/ext3/inode.c	2005-02-25 14:37:30.983718000 +0200
-+++ linux-stage/fs/ext3/inode.c	2005-02-25 14:47:42.069818792 +0200
+--- linux-2.6.9-67.orig/fs/ext3/inode.c
++++ linux-2.6.9-67/fs/ext3/inode.c
 @@ -37,6 +37,7 @@
  #include <linux/mpage.h>
  #include <linux/uio.h>
@@ -23,7 +23,7 @@ Index: linux-stage/fs/ext3/inode.c
  #include "acl.h"
  
  /*
-@@ -2408,6 +2409,8 @@
+@@ -2409,6 +2410,8 @@ void ext3_read_inode(struct inode * inod
  	ei->i_default_acl = EXT3_ACL_NOT_CACHED;
  #endif
  	ei->i_rsv_window.rsv_end = EXT3_RESERVE_WINDOW_NOT_ALLOCATED;
@@ -32,11 +32,11 @@ Index: linux-stage/fs/ext3/inode.c
  
  	if (ext3_get_inode_loc(inode, &iloc, 0))
  		goto bad_inode;
-Index: linux-stage/fs/ext3/iopen.c
+Index: linux-2.6.9-67/fs/ext3/iopen.c
 ===================================================================
---- linux-stage.orig/fs/ext3/iopen.c	2005-02-25 14:41:01.017787968 +0200
-+++ linux-stage/fs/ext3/iopen.c	2005-02-25 14:41:01.045783712 +0200
-@@ -0,0 +1,278 @@
+--- /dev/null
++++ linux-2.6.9-67/fs/ext3/iopen.c
+@@ -0,0 +1,314 @@
 +/*
 + * linux/fs/ext3/iopen.c
 + *
@@ -237,6 +237,42 @@ Index: linux-stage/fs/ext3/iopen.c
 +}
 +
 +/*
++ * Similar as d_instantiate() except that it drops the disconnected
++ * dentry if any.
++ */
++void iopen_d_instantiate(struct dentry *dentry, struct inode * inode)
++{
++	struct dentry *dis_dentry;
++
++	/* verify this dentry is really new */
++	assert(dentry->d_inode == NULL);
++	assert(list_empty(&dentry->d_alias));
++
++	spin_lock(&dcache_lock);
++	if (!inode || !test_opt(inode->i_sb, IOPEN) ||
++	    list_empty(&inode->i_dentry))
++		goto do_instantiate;
++
++	/* a disconnected dentry has been added in our back,
++	 * we have to drop this dentry, see bug 16362/15713*/
++	dis_dentry = list_entry(inode->i_dentry.next, struct dentry, d_alias);
++	spin_lock(&dis_dentry->d_lock);
++	assert(dis_dentry->d_alias.next == &inode->i_dentry);
++	assert(dis_dentry->d_alias.prev == &inode->i_dentry);
++	assert(dis_dentry->d_flags & DCACHE_DISCONNECTED);
++	__d_drop(dis_dentry);
++	list_del_init(&dis_dentry->d_alias);
++	spin_unlock(&dis_dentry->d_lock);
++
++do_instantiate:
++	if (inode)
++		list_add(&dentry->d_alias, &inode->i_dentry);
++	dentry->d_inode = inode;
++	spin_unlock(&dcache_lock);
++	security_d_instantiate(dentry, inode);
++}
++
++/*
 + * These are the special structures for the iopen pseudo directory.
 + */
 +
@@ -315,11 +351,11 @@ Index: linux-stage/fs/ext3/iopen.c
 +
 +	return 1;
 +}
-Index: linux-stage/fs/ext3/iopen.h
+Index: linux-2.6.9-67/fs/ext3/iopen.h
 ===================================================================
---- linux-stage.orig/fs/ext3/iopen.h	2005-02-25 14:41:01.017787968 +0200
-+++ linux-stage/fs/ext3/iopen.h	2005-02-25 14:41:01.045783712 +0200
-@@ -0,0 +1,23 @@
+--- /dev/null
++++ linux-2.6.9-67/fs/ext3/iopen.h
+@@ -0,0 +1,24 @@
 +/*
 + * iopen.h
 + *
@@ -335,6 +371,7 @@ Index: linux-stage/fs/ext3/iopen.h
 +extern int ext3_iopen_get_inode(struct inode *inode);
 +extern struct dentry *iopen_connect_dentry(struct dentry *dentry,
 +					   struct inode *inode, int rehash);
++extern void iopen_d_instantiate(struct dentry *dentry, struct inode * inode);
 +
 +#if !defined(HAVE_D_REHASH_COND) && defined(HAVE___D_REHASH)
 +#define d_rehash_cond(dentry, lock) __d_rehash(dentry, lock)
@@ -343,10 +380,10 @@ Index: linux-stage/fs/ext3/iopen.h
 +#if !defined(HAVE_D_MOVE_LOCKED) && defined(HAVE___D_MOVE)
 +#define d_move_locked(dentry, target) __d_move(dentry, target)
 +#endif
-Index: linux-stage/fs/ext3/namei.c
+Index: linux-2.6.9-67/fs/ext3/namei.c
 ===================================================================
---- linux-stage.orig/fs/ext3/namei.c	2005-02-25 14:37:28.975023368 +0200
-+++ linux-stage/fs/ext3/namei.c	2005-02-25 14:46:43.090784968 +0200
+--- linux-2.6.9-67.orig/fs/ext3/namei.c
++++ linux-2.6.9-67/fs/ext3/namei.c
 @@ -37,6 +37,7 @@
  #include <linux/buffer_head.h>
  #include <linux/smp_lock.h>
@@ -355,7 +392,7 @@ Index: linux-stage/fs/ext3/namei.c
  #include "acl.h"
  
  /*
-@@ -980,6 +981,9 @@
+@@ -1017,6 +1018,9 @@ static struct dentry *ext3_lookup(struct
  	if (dentry->d_name.len > EXT3_NAME_LEN)
  		return ERR_PTR(-ENAMETOOLONG);
  
@@ -365,7 +402,7 @@ Index: linux-stage/fs/ext3/namei.c
  	bh = ext3_find_entry(dentry, &de);
  	inode = NULL;
  	if (bh) {
-@@ -990,10 +994,8 @@
+@@ -1027,10 +1031,8 @@ static struct dentry *ext3_lookup(struct
  		if (!inode)
  			return ERR_PTR(-EACCES);
  	}
@@ -378,7 +415,25 @@ Index: linux-stage/fs/ext3/namei.c
  }
  
  
-@@ -2037,10 +2039,6 @@
+@@ -1669,7 +1671,7 @@ static int ext3_add_nondir(handle_t *han
+ 	int err = ext3_add_entry(handle, dentry, inode);
+ 	if (!err) {
+ 		ext3_mark_inode_dirty(handle, inode);
+-		d_instantiate(dentry, inode);
++		iopen_d_instantiate(dentry, inode);
+ 		return 0;
+ 	}
+ 	ext3_dec_count(handle, inode);
+@@ -1831,7 +1833,7 @@ retry:
+ 	dir->i_nlink++;
+ 	ext3_update_dx_flag(dir);
+ 	ext3_mark_inode_dirty(handle, dir);
+-	d_instantiate(dentry, inode);
++	iopen_d_instantiate(dentry, inode);
+ out_stop:
+ 	ext3_journal_stop(handle);
+ 	if (err == -ENOSPC && ext3_should_retry_alloc(dir->i_sb, &retries))
+@@ -2099,10 +2101,6 @@ static int ext3_rmdir (struct inode * di
  			      inode->i_nlink);
  	inode->i_version++;
  	inode->i_nlink = 0;
@@ -387,9 +442,9 @@ Index: linux-stage/fs/ext3/namei.c
 -	 * recovery. */
 -	inode->i_size = 0;
  	ext3_orphan_add(handle, inode);
- 	inode->i_ctime = dir->i_ctime = dir->i_mtime = CURRENT_TIME;
+ 	inode->i_ctime = dir->i_ctime = dir->i_mtime = CURRENT_TIME_SEC;
  	ext3_mark_inode_dirty(handle, inode);
-@@ -2163,6 +2161,23 @@
+@@ -2225,6 +2223,23 @@ out_stop:
  	return err;
  }
  
@@ -413,7 +468,7 @@ Index: linux-stage/fs/ext3/namei.c
  static int ext3_link (struct dentry * old_dentry,
  		struct inode * dir, struct dentry *dentry)
  {
-@@ -2186,7 +2201,8 @@
+@@ -2254,7 +2269,8 @@ retry:
  	ext3_inc_count(handle, inode);
  	atomic_inc(&inode->i_count);
  
@@ -423,11 +478,11 @@ Index: linux-stage/fs/ext3/namei.c
  	ext3_journal_stop(handle);
  	if (err == -ENOSPC && ext3_should_retry_alloc(dir->i_sb, &retries))
  		goto retry;
-Index: linux-stage/fs/ext3/super.c
+Index: linux-2.6.9-67/fs/ext3/super.c
 ===================================================================
---- linux-stage.orig/fs/ext3/super.c	2005-02-25 14:37:30.987717392 +0200
-+++ linux-stage/fs/ext3/super.c	2005-02-25 14:44:50.495901992 +0200
-@@ -586,6 +586,7 @@
+--- linux-2.6.9-67.orig/fs/ext3/super.c
++++ linux-2.6.9-67/fs/ext3/super.c
+@@ -632,6 +632,7 @@ enum {
  	Opt_usrjquota, Opt_grpjquota, Opt_offusrjquota, Opt_offgrpjquota,
  	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0,
  	Opt_ignore, Opt_barrier, Opt_err, Opt_resize,
@@ -435,7 +490,7 @@ Index: linux-stage/fs/ext3/super.c
  };
  
  static match_table_t tokens = {
-@@ -633,6 +634,9 @@
+@@ -678,6 +679,9 @@ static match_table_t tokens = {
  	{Opt_ignore, "noquota"},
  	{Opt_ignore, "quota"},
  	{Opt_ignore, "usrquota"},
@@ -445,7 +500,7 @@ Index: linux-stage/fs/ext3/super.c
  	{Opt_barrier, "barrier=%u"},
  	{Opt_err, NULL},
  	{Opt_resize, "resize"},
-@@ -914,6 +918,18 @@
+@@ -959,6 +963,18 @@ clear_qf_name:
  			else
  				clear_opt(sbi->s_mount_opt, BARRIER);
  			break;
@@ -464,11 +519,11 @@ Index: linux-stage/fs/ext3/super.c
  		case Opt_ignore:
  			break;
  		case Opt_resize:
-Index: linux-stage/include/linux/ext3_fs.h
+Index: linux-2.6.9-67/include/linux/ext3_fs.h
 ===================================================================
---- linux-stage.orig/include/linux/ext3_fs.h	2005-02-25 14:37:28.977023064 +0200
-+++ linux-stage/include/linux/ext3_fs.h	2005-02-25 14:49:00.569884968 +0200
-@@ -355,6 +355,8 @@
+--- linux-2.6.9-67.orig/include/linux/ext3_fs.h
++++ linux-2.6.9-67/include/linux/ext3_fs.h
+@@ -355,6 +355,8 @@ struct ext3_inode {
  #define EXT3_MOUNT_POSIX_ACL		0x08000	/* POSIX Access Control Lists */
  #define EXT3_MOUNT_BARRIER		0x10000 /* Use block barriers */
  #define EXT3_MOUNT_RESERVATION		0x20000	/* Preallocation */
