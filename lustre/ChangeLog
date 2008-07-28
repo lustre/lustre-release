@@ -33,7 +33,7 @@ tbd Sun Microsystems, Inc.
 		'tunefs.lustre --param="ost.quota_type=ug1" $MDTDEV'
 		or (for 1.4.12/1.6.5 quota files)
 		'tunefs.lustre --param="mdt.quota_type=ug2" $MDTDEV',
-		'tunefs.lustre --param="ost.quota_type=ug2" $MDTDEV'		
+		'tunefs.lustre --param="ost.quota_type=ug2" $MDTDEV'
 	  For more information, please refer to bugzilla 13904.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
@@ -50,17 +50,17 @@ Severity   : normal
 Bugzilla   : 16318
 Frequency  : rare, on PPC clients
 Description: don't swab ost objects in response about directory, because
-             this not exist.
+	     this not exist.
 Details    : bug similar bug 14856, but in different function.
 
 Severity   : enhancement
 Bugzilla   : 15754
 Description: lfs quota tool enhancement
 Details    : added units specifiers support for setquota, default to
-             current uid/gid for quota report, short quota stats by
-             default, nonpositional parameters for setquota, added
-             llapi_quotactl manual page.
-	  
+	     current uid/gid for quota report, short quota stats by
+	     default, nonpositional parameters for setquota, added
+	     llapi_quotactl manual page.
+
 Severity   : enhancement
 Bugzilla   : 15625
 Description: *optional* service tags registration
@@ -267,8 +267,8 @@ Description: ldiskfs error: XXX blocks in bitmap, YYY in gd
 Details    : If blocks per group is less than blocksize*8, set rest of the
 	     bitmap to 1.
 
-Severity   : major 
-Frequency  : Application do stride read on lustre 
+Severity   : major
+Frequency  : Application do stride read on lustre
 Bugzilla   : 16172
 Description: The read performance will drop a lot if the application does
 	     stride read.
@@ -342,14 +342,24 @@ Severity   : normal
 Bugzilla   : 15058
 Description: add quota statistics
 Details    : 1. sort out quota proc entries and proc code.
-             2. add quota statistics
+	     2. add quota statistics
 
 Severity   : normal
-Frequncy   : often
+Frequency  : often
 Bugzilla   : 16125
 Description: quotas are not honored with O_DIRECT
 Details    : all writes with the flag O_DIRECT will use grants which leads to
-             this problem. Now using OBD_BRW_SYNC to guard this.
+	     this problem. Now using OBD_BRW_SYNC to guard this.
+
+Severity   : major
+Frequency  : rare
+Bugzilla   : 15713/16362
+Description: Assertion in iopen_connect_dentry in 1.6.3
+Details    : looking up an inode via iopen with the wrong generation number can
+	     populate the dcache with a disconneced dentry while the inode
+	     number is in the process of being reallocated. This causes an
+	     assertion failure in iopen since the inode's dentry list contains
+	     both a connected and disconnected dentry.
 
 -------------------------------------------------------------------------------
 
