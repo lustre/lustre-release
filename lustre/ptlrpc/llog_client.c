@@ -92,7 +92,7 @@ static int llog_client_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         struct llogd_body *body;
         struct llog_handle *handle;
         struct ptlrpc_request *req = NULL;
-        int size[3] = { sizeof(struct ptlrpc_body), sizeof(req_body) };
+        __u32 size[3] = { sizeof(struct ptlrpc_body), sizeof(req_body) };
         char *bufs[3] = { NULL, (char*)&req_body };
         int bufcount = 2;
         int rc;
@@ -152,7 +152,7 @@ static int llog_client_destroy(struct llog_handle *loghandle)
         struct obd_import     *imp;
         struct ptlrpc_request *req = NULL;
         struct llogd_body *body;
-        int size[] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         int rc;
         ENTRY;
 
@@ -184,7 +184,7 @@ static int llog_client_next_block(struct llog_handle *loghandle,
         struct ptlrpc_request *req = NULL;
         struct llogd_body *body;
         void * ptr;
-        int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         int rc;
         ENTRY;
 
@@ -242,7 +242,7 @@ static int llog_client_prev_block(struct llog_handle *loghandle,
         struct ptlrpc_request *req = NULL;
         struct llogd_body *body;
         void * ptr;
-        int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         int rc;
         ENTRY;
 
@@ -294,8 +294,8 @@ static int llog_client_read_header(struct llog_handle *handle)
         struct llogd_body *body;
         struct llog_log_hdr *hdr;
         struct llog_rec_hdr *llh_hdr;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
-        int repsize[2] = { sizeof(struct ptlrpc_body), sizeof(*hdr) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 repsize[2] = { sizeof(struct ptlrpc_body), sizeof(*hdr) };
         int rc;
         ENTRY;
 
