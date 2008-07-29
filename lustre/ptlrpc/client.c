@@ -496,7 +496,7 @@ static struct ptlrpc_request *ptlrpc_prep_req_from_pool(struct ptlrpc_request_po
 
 struct ptlrpc_request *
 ptlrpc_prep_req_pool(struct obd_import *imp, __u32 version, int opcode,
-                     int count, int *lengths, char **bufs,
+                     int count, __u32 *lengths, char **bufs,
                      struct ptlrpc_request_pool *pool)
 {
         struct ptlrpc_request *request = NULL;
@@ -565,7 +565,7 @@ ptlrpc_prep_req_pool(struct obd_import *imp, __u32 version, int opcode,
 
 struct ptlrpc_request *
 ptlrpc_prep_req(struct obd_import *imp, __u32 version, int opcode, int count,
-                int *lengths, char **bufs)
+                __u32 *lengths, char **bufs)
 {
         return ptlrpc_prep_req_pool(imp, version, opcode, count, lengths, bufs,
                                     NULL);
