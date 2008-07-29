@@ -547,17 +547,18 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         RETURN(rc);
 
 granted:
+        LDLM_DEBUG(lock, "client-side enqueue granted");
+        ns = lock->l_resource->lr_namespace;
+        lock_res(lock->l_resource);
+
         /* before flock's complete ast gets here, the flock
          * can possibly be freed by another thread
          */
         if (lock->l_destroyed) {
                 LDLM_DEBUG(lock, "already destroyed by another thread");
+                unlock_res(lock->l_resource);
                 RETURN(0);
         }
-
-        LDLM_DEBUG(lock, "client-side enqueue granted");
-        ns = lock->l_resource->lr_namespace;
-        lock_res(lock->l_resource);
 
         /* take lock off the deadlock detection waitq. */
         spin_lock(&ldlm_flock_waitq_lock);
