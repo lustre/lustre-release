@@ -94,7 +94,8 @@ static int ost_destroy(struct obd_export *exp, struct ptlrpc_request *req,
                        struct obd_trans_info *oti)
 {
         struct ost_body *body, *repbody;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int rc;
         ENTRY;
 
         body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
@@ -131,7 +132,8 @@ static int ost_getattr(struct obd_export *exp, struct ptlrpc_request *req)
 {
         struct ost_body *body, *repbody;
         struct obd_info oinfo = { { { 0 } } };
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int rc;
         ENTRY;
 
         body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
@@ -155,7 +157,8 @@ static int ost_getattr(struct obd_export *exp, struct ptlrpc_request *req)
 static int ost_statfs(struct ptlrpc_request *req)
 {
         struct obd_statfs *osfs;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*osfs) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*osfs) };
+        int rc;
         ENTRY;
 
         rc = lustre_pack_reply(req, 2, size, NULL);
@@ -178,7 +181,8 @@ static int ost_create(struct obd_export *exp, struct ptlrpc_request *req,
                       struct obd_trans_info *oti)
 {
         struct ost_body *body, *repbody;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*repbody) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*repbody) };
+        int rc;
         ENTRY;
 
         body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
@@ -266,7 +270,8 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
 {
         struct obd_info oinfo = { { { 0 } } };
         struct ost_body *body, *repbody;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*repbody) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*repbody) };
+        int rc;
         struct lustre_handle lh = {0,};
         ENTRY;
 
@@ -313,7 +318,8 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
 static int ost_sync(struct obd_export *exp, struct ptlrpc_request *req)
 {
         struct ost_body *body, *repbody;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*repbody) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*repbody) };
+        int rc;
         ENTRY;
 
         body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
@@ -337,7 +343,8 @@ static int ost_setattr(struct obd_export *exp, struct ptlrpc_request *req,
                        struct obd_trans_info *oti)
 {
         struct ost_body *body, *repbody;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*repbody) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*repbody) };
+        int rc;
         struct obd_info oinfo = { { { 0 } } };
         ENTRY;
 
@@ -682,7 +689,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         struct ost_body *body, *repbody;
         struct l_wait_info lwi;
         struct lustre_handle lockh = { 0 };
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32  size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         int niocount, npages, nob = 0, rc, i;
         int no_reply = 0;
         ENTRY;
@@ -947,7 +954,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         struct l_wait_info       lwi;
         struct lustre_handle     lockh = {0};
         __u32                   *rcs;
-        int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         int objcount, niocount, npages;
         int rc, swab, i, j;
         obd_count                client_cksum = 0, server_cksum = 0;
@@ -1347,7 +1354,8 @@ static int ost_get_info(struct obd_export *exp, struct ptlrpc_request *req)
 static int ost_handle_quotactl(struct ptlrpc_request *req)
 {
         struct obd_quotactl *oqctl, *repoqc;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*repoqc) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*repoqc) };
+        int rc;
         ENTRY;
 
         oqctl = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*oqctl),

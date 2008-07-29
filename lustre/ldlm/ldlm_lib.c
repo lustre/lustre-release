@@ -593,7 +593,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         char *str, *tmp;
         int rc = 0, abort_recovery;
         struct obd_connect_data *data;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*data) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*data) };
         lnet_nid_t *client_nid = NULL;
         ENTRY;
 

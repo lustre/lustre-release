@@ -100,7 +100,7 @@ int mdc_resource_get_unused(struct obd_export *exp, struct ll_fid *fid,
 }
 
 struct ptlrpc_request *mdc_prep_elc_req(struct obd_export *exp,
-                                        int bufcount, int *size, int off,
+                                        int bufcount, __u32 *size, int off,
                                         struct list_head *cancels, int count)
 {
         return ldlm_prep_elc_req(exp, LUSTRE_MDS_VERSION, MDS_REINT,
@@ -122,9 +122,9 @@ int mdc_setattr(struct obd_export *exp, struct mdc_op_data *op_data,
         struct mds_rec_setattr *rec;
         struct mdc_rpc_lock *rpc_lock;
         struct obd_device *obd = exp->exp_obd;
-        int size[5] = { sizeof(struct ptlrpc_body),
-                        sizeof(*rec), ealen, ea2len,
-                        sizeof(struct ldlm_request) };
+        __u32 size[5] = { sizeof(struct ptlrpc_body),
+                          sizeof(*rec), ealen, ea2len,
+                          sizeof(struct ldlm_request) };
         int count, bufcount = 2, rc;
         __u64 bits;
         ENTRY;
@@ -182,9 +182,9 @@ int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
         struct obd_device *obd = exp->exp_obd;
         struct ptlrpc_request *req;
         int level, bufcount = 3, rc;
-        int size[5] = { sizeof(struct ptlrpc_body),
-                        sizeof(struct mds_rec_create),
-                        op_data->namelen + 1, 0, sizeof(struct ldlm_request) };
+        __u32 size[5] = { sizeof(struct ptlrpc_body),
+                          sizeof(struct mds_rec_create),
+                          op_data->namelen + 1, 0, sizeof(struct ldlm_request) };
         int count;
         ENTRY;
 
@@ -232,7 +232,7 @@ int mdc_unlink(struct obd_export *exp, struct mdc_op_data *op_data,
         CFS_LIST_HEAD(cancels);
         struct obd_device *obd = class_exp2obd(exp);
         struct ptlrpc_request *req = *request;
-        int size[4] = { sizeof(struct ptlrpc_body),
+        __u32 size[4] = { sizeof(struct ptlrpc_body),
                         sizeof(struct mds_rec_unlink),
                         op_data->namelen + 1, sizeof(struct ldlm_request) };
         int count, rc, bufcount = 3;
@@ -271,9 +271,9 @@ int mdc_link(struct obd_export *exp, struct mdc_op_data *op_data,
         CFS_LIST_HEAD(cancels);
         struct obd_device *obd = exp->exp_obd;
         struct ptlrpc_request *req;
-        int size[4] = { sizeof(struct ptlrpc_body),
-                        sizeof(struct mds_rec_link),
-                        op_data->namelen + 1, sizeof(struct ldlm_request) };
+        __u32 size[4] = { sizeof(struct ptlrpc_body),
+                          sizeof(struct mds_rec_link),
+                          op_data->namelen + 1, sizeof(struct ldlm_request) };
         int count, rc, bufcount = 3;
         ENTRY;
 
@@ -308,9 +308,9 @@ int mdc_rename(struct obd_export *exp, struct mdc_op_data *op_data,
         CFS_LIST_HEAD(cancels);
         struct obd_device *obd = exp->exp_obd;
         struct ptlrpc_request *req;
-        int size[5] = { sizeof(struct ptlrpc_body),
-                        sizeof(struct mds_rec_rename),
-                        oldlen + 1, newlen + 1, sizeof(struct ldlm_request) };
+        __u32 size[5] = { sizeof(struct ptlrpc_body),
+                          sizeof(struct mds_rec_rename),
+                          oldlen + 1, newlen + 1, sizeof(struct ldlm_request) };
         int count, rc, bufcount = 4;
         ENTRY;
 

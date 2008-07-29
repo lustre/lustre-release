@@ -521,7 +521,7 @@ cleanup:
  * a single page on the send/receive side. XXX: 512 should be changed
  * to more adequate value. */
 static inline int ldlm_req_handles_avail(struct obd_export *exp,
-                                         int *size, int bufcount, int off)
+                                         __u32 *size, int bufcount, int off)
 {
         int avail = min_t(int, LDLM_MAXREQSIZE, CFS_PAGE_SIZE - 512);
 
@@ -535,7 +535,7 @@ static inline int ldlm_req_handles_avail(struct obd_export *exp,
 
 static inline int ldlm_cancel_handles_avail(struct obd_export *exp)
 {
-        int size[2] = { sizeof(struct ptlrpc_body),
+        __u32 size[2] = { sizeof(struct ptlrpc_body),
                         sizeof(struct ldlm_request) };
         return ldlm_req_handles_avail(exp, size, 2, 0);
 }
@@ -543,7 +543,7 @@ static inline int ldlm_cancel_handles_avail(struct obd_export *exp)
 /* Cancel lru locks and pack them into the enqueue request. Pack there the given
  * @count locks in @cancels. */
 struct ptlrpc_request *ldlm_prep_elc_req(struct obd_export *exp, int version,
-                                         int opc, int bufcount, int *size,
+                                         int opc, int bufcount, __u32 *size,
                                          int bufoff, int canceloff,
                                          struct list_head *cancels, int count)
 {
@@ -601,7 +601,7 @@ struct ptlrpc_request *ldlm_prep_elc_req(struct obd_export *exp, int version,
 }
 
 struct ptlrpc_request *ldlm_prep_enqueue_req(struct obd_export *exp,
-                                             int bufcount, int *size,
+                                             int bufcount, __u32 *size,
                                              struct list_head *cancels,
                                              int count)
 {
@@ -626,7 +626,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
         struct ldlm_lock *lock;
         struct ldlm_request *body;
         struct ldlm_reply *reply;
-        int size[3] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
+        __u32 size[3] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                         [DLM_LOCKREQ_OFF]     = sizeof(*body),
                         [DLM_REPLY_REC_OFF]   = lvb_len };
         int is_replay = *flags & LDLM_FL_REPLAY;
@@ -781,7 +781,7 @@ int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, __u32 *flags)
         struct ldlm_lock *lock;
         struct ldlm_resource *res;
         struct ptlrpc_request *req;
-        int size[2] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
+        __u32 size[2] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                         [DLM_LOCKREQ_OFF]     = sizeof(*body) };
         int rc;
         ENTRY;
@@ -934,7 +934,7 @@ int ldlm_cli_cancel_req(struct obd_export *exp,
 {
         struct ptlrpc_request *req = NULL;
         struct ldlm_request *body;
-        int size[2] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
+        __u32 size[2] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                         [DLM_LOCKREQ_OFF]     = sizeof(*body) };
         struct obd_import *imp;
         int free, sent = 0;
@@ -1927,7 +1927,7 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
         struct ldlm_reply *reply;
         struct ldlm_async_args *aa;
         int buffers = 2;
-        int size[3] = { sizeof(struct ptlrpc_body) };
+        __u32 size[3] = { sizeof(struct ptlrpc_body) };
         int flags;
         ENTRY;
 

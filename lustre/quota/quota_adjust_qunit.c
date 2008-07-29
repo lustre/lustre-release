@@ -360,7 +360,7 @@ int client_quota_adjust_qunit(struct obd_export *exp,
 {
         struct ptlrpc_request *req;
         struct quota_adjust_qunit *oqa;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*oqaq) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*oqaq) };
         int rc = 0;
         ENTRY;
 

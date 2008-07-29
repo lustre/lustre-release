@@ -196,7 +196,7 @@ static int llu_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         struct inode *inode = llu_inode_from_lock(lock);
         struct llu_inode_info *lli;
         struct ost_lvb *lvb;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*lvb) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*lvb) };
         int rc, stripe = 0;
         ENTRY;
 

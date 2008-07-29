@@ -71,7 +71,8 @@ static int send_getstatus(struct obd_import *imp, struct ll_fid *rootfid,
 {
         struct ptlrpc_request *req;
         struct mds_body *body;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int rc;
         ENTRY;
 
         req = ptlrpc_prep_req(imp, LUSTRE_MDS_VERSION, MDS_GETSTATUS, 2, size,
@@ -123,7 +124,7 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
         struct obd_device *obddev = class_exp2obd(exp);
         struct mds_body *body;
         void *eadata;
-        int size[4] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[4] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         int bufcount = 2, rc;
         ENTRY;
 
@@ -185,7 +186,7 @@ int mdc_getattr(struct obd_export *exp, struct ll_fid *fid,
                 struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(struct mds_body) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(struct mds_body) };
         int acl_size = 0, rc;
         ENTRY;
 
@@ -220,7 +221,8 @@ int mdc_getattr_name(struct obd_export *exp, struct ll_fid *fid,
 {
         struct ptlrpc_request *req;
         struct mds_body *body;
-        int rc, size[3] = { sizeof(struct ptlrpc_body), sizeof(*body), namelen};
+        __u32 size[3] = { sizeof(struct ptlrpc_body), sizeof(*body), namelen};
+        int rc;
         ENTRY;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
@@ -253,7 +255,7 @@ int mdc_xattr_common(struct obd_export *exp, struct ll_fid *fid,
 {
         struct obd_device *obddev = class_exp2obd(exp);
         struct ptlrpc_request *req;
-        int size[4] = { sizeof(struct ptlrpc_body), sizeof(struct mds_body) };
+        __u32 size[4] = { sizeof(struct ptlrpc_body), sizeof(struct mds_body) };
         // int size[3] = {sizeof(struct mds_body)}, bufcnt = 1;
         int rc, xattr_namelen = 0, bufcnt = 2, offset;
         void *tmp;
@@ -671,12 +673,13 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
               struct obd_client_handle *och, struct ptlrpc_request **request)
 {
         struct obd_device *obd = class_exp2obd(exp);
-        int reqsize[2] = { sizeof(struct ptlrpc_body),
+        __u32 reqsize[2] = { sizeof(struct ptlrpc_body),
                            sizeof(struct mds_body) };
-        int rc, repsize[4] = { sizeof(struct ptlrpc_body),
+        __u32 repsize[4] = { sizeof(struct ptlrpc_body),
                                sizeof(struct mds_body),
                                obd->u.cli.cl_max_mds_easize,
                                obd->u.cli.cl_max_mds_cookiesize };
+        int rc;
         struct ptlrpc_request *req;
         struct mdc_open_data *mod;
         ENTRY;
@@ -758,7 +761,8 @@ int mdc_done_writing(struct obd_export *exp, struct obdo *obdo)
 {
         struct ptlrpc_request *req;
         struct mds_body *body;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int rc;
         ENTRY;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
@@ -788,7 +792,8 @@ int mdc_readpage(struct obd_export *exp, struct ll_fid *fid, __u64 offset,
         struct ptlrpc_request *req = NULL;
         struct ptlrpc_bulk_desc *desc = NULL;
         struct mds_body *body;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int rc;
         ENTRY;
 
         CDEBUG(D_INODE, "inode: "LPU64"\n", fid->id);
@@ -932,7 +937,7 @@ int mdc_set_info_async(struct obd_export *exp, obd_count keylen,
         }
         if (KEY_IS(KEY_READONLY)) {
                 struct ptlrpc_request *req;
-                int size[3] = { sizeof(struct ptlrpc_body), keylen, vallen };
+                __u32 size[3] = { sizeof(struct ptlrpc_body), keylen, vallen };
                 char *bufs[3] = { NULL, key, val };
 
                 if (vallen != sizeof(int))
@@ -995,7 +1000,8 @@ static int mdc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         struct ptlrpc_request *req;
         struct obd_statfs *msfs;
         struct obd_import     *imp = NULL;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*msfs) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*msfs) };
+        int rc;
         ENTRY;
 
         /*Since the request might also come from lprocfs, so we need 
@@ -1053,7 +1059,8 @@ static int mdc_pin(struct obd_export *exp, obd_id ino, __u32 gen, int type,
 {
         struct ptlrpc_request *req;
         struct mds_body *body;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int rc;
         ENTRY;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
@@ -1101,7 +1108,8 @@ static int mdc_unpin(struct obd_export *exp,
 {
         struct ptlrpc_request *req;
         struct mds_body *body;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int rc; 
         ENTRY;
 
         if (handle->och_magic != OBD_CLIENT_HANDLE_MAGIC)
@@ -1134,7 +1142,7 @@ int mdc_sync(struct obd_export *exp, struct ll_fid *fid,
              struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(struct mds_body) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(struct mds_body) };
         int rc;
         ENTRY;
 

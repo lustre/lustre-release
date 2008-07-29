@@ -234,7 +234,7 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
         struct ptlrpc_request *req;
         struct ldlm_intent *lit;
         struct obd_device *obddev = class_exp2obd(exp);
-        int size[7] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
+        __u32 size[7] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                         [DLM_LOCKREQ_OFF]     = sizeof(struct ldlm_request),
                         [DLM_INTENT_IT_OFF]   = sizeof(*lit),
                         [DLM_INTENT_REC_OFF]  = sizeof(struct mds_rec_create),
@@ -248,7 +248,7 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
                          * default-sized LOV EA for open replay. */
                         [DLM_INTENT_REC_OFF+2]= max(lmmsize,
                                          obddev->u.cli.cl_default_mds_easize) };
-        int repsize[5] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
+        __u32 repsize[5] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                            [DLM_LOCKREPLY_OFF]   = sizeof(struct ldlm_reply),
                            [DLM_REPLY_REC_OFF]   = sizeof(struct mds_body),
                            [DLM_REPLY_REC_OFF+1] = obddev->u.cli.
@@ -329,12 +329,12 @@ static struct ptlrpc_request *mdc_intent_unlink_pack(struct obd_export *exp,
         struct ptlrpc_request *req;
         struct ldlm_intent *lit;
         struct obd_device *obddev = class_exp2obd(exp);
-        int size[5] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
+        __u32 size[5] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                         [DLM_LOCKREQ_OFF]     = sizeof(struct ldlm_request),
                         [DLM_INTENT_IT_OFF]   = sizeof(*lit),
                         [DLM_INTENT_REC_OFF]  = sizeof(struct mds_rec_unlink),
                         [DLM_INTENT_REC_OFF+1]= data->namelen + 1 };
-        int repsize[5] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
+        __u32 repsize[5] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                            [DLM_LOCKREPLY_OFF]   = sizeof(struct ldlm_reply),
                            [DLM_REPLY_REC_OFF]   = sizeof(struct mds_body),
                            [DLM_REPLY_REC_OFF+1] = obddev->u.cli.
@@ -364,12 +364,12 @@ static struct ptlrpc_request *mdc_intent_lookup_pack(struct obd_export *exp,
         struct ptlrpc_request *req;
         struct ldlm_intent *lit;
         struct obd_device *obddev = class_exp2obd(exp);
-        int size[5] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
+        __u32 size[5] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                         [DLM_LOCKREQ_OFF]     = sizeof(struct ldlm_request),
                         [DLM_INTENT_IT_OFF]   = sizeof(*lit),
                         [DLM_INTENT_REC_OFF]  = sizeof(struct mds_body),
                         [DLM_INTENT_REC_OFF+1]= data->namelen + 1 };
-        int repsize[5] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
+        __u32 repsize[5] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                            [DLM_LOCKREPLY_OFF]   = sizeof(struct ldlm_reply),
                            [DLM_REPLY_REC_OFF]   = sizeof(struct mds_body),
                            [DLM_REPLY_REC_OFF+1] = obddev->u.cli.
@@ -396,9 +396,9 @@ static struct ptlrpc_request *mdc_intent_lookup_pack(struct obd_export *exp,
 static struct ptlrpc_request *mdc_intent_readdir_pack(struct obd_export *exp)
 {
         struct ptlrpc_request *req;
-        int size[2] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
+        __u32 size[2] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                         [DLM_LOCKREQ_OFF]     = sizeof(struct ldlm_request) };
-        int repsize[2] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
+        __u32 repsize[2] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                            [DLM_LOCKREPLY_OFF]   = sizeof(struct ldlm_reply) };
 
         req = ldlm_prep_enqueue_req(exp, 2, size, NULL, 0);
