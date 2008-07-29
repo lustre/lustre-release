@@ -37,7 +37,9 @@
  *
  * Author: Maxim Patlasov <maxim@clusterfs.com>
  */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <pthread.h>
 #include <poll.h>
 #include <lnet/lib-lnet.h>
