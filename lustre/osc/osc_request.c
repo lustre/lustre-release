@@ -196,7 +196,7 @@ static int osc_getattr_async(struct obd_export *exp, struct obd_info *oinfo,
 {
         struct ptlrpc_request *req;
         struct ost_body *body;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         struct osc_async_args *aa;
         ENTRY;
 
@@ -223,7 +223,8 @@ static int osc_getattr(struct obd_export *exp, struct obd_info *oinfo)
 {
         struct ptlrpc_request *req;
         struct ost_body *body;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int rc;
         ENTRY;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
@@ -267,7 +268,8 @@ static int osc_setattr(struct obd_export *exp, struct obd_info *oinfo,
 {
         struct ptlrpc_request *req;
         struct ost_body *body;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int rc;
         ENTRY;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
@@ -325,7 +327,7 @@ static int osc_setattr_async(struct obd_export *exp, struct obd_info *oinfo,
 {
         struct ptlrpc_request *req;
         struct ost_body *body;
-        int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body), 0 };
+        __u32 size[3] = { sizeof(struct ptlrpc_body), sizeof(*body), 0 };
         int bufcount = 2;
         struct osc_async_args *aa;
         ENTRY;
@@ -371,7 +373,8 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
         struct ptlrpc_request *req;
         struct ost_body *body;
         struct lov_stripe_md *lsm;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int rc;
         ENTRY;
 
         LASSERT(oa);
@@ -474,7 +477,7 @@ static int osc_punch(struct obd_export *exp, struct obd_info *oinfo,
         struct ptlrpc_request *req;
         struct osc_async_args *aa;
         struct ost_body *body;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
         if (!oinfo->oi_oa) {
@@ -514,7 +517,8 @@ static int osc_sync(struct obd_export *exp, struct obdo *oa,
 {
         struct ptlrpc_request *req;
         struct ost_body *body;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int rc;
         ENTRY;
 
         if (!oa) {
@@ -625,7 +629,7 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
         CFS_LIST_HEAD(cancels);
         struct ptlrpc_request *req;
         struct ost_body *body;
-        int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body),
+        __u32 size[3] = { sizeof(struct ptlrpc_body), sizeof(*body),
                         sizeof(struct ldlm_request) };
         int count, bufcount = 2;
         struct client_obd *cli = &exp->exp_obd->u.cli;
@@ -969,7 +973,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         struct ost_body         *body;
         struct obd_ioobj        *ioobj;
         struct niobuf_remote    *niobuf;
-        int size[4] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[4] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         int niocount, i, requested_nob, opc, rc;
         struct ptlrpc_request_pool *pool;
         struct osc_brw_async_args *aa;
@@ -3069,7 +3073,7 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
 
  no_match:
         if (intent) {
-                int size[3] = {
+                __u32 size[3] = {
                         [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                         [DLM_LOCKREQ_OFF]     = sizeof(struct ldlm_request),
                         [DLM_LOCKREQ_OFF + 1] = 0 };
@@ -3227,7 +3231,7 @@ static int osc_statfs_async(struct obd_device *obd, struct obd_info *oinfo,
 {
         struct ptlrpc_request *req;
         struct osc_async_args *aa;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*oinfo->oi_osfs) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*oinfo->oi_osfs) };
         ENTRY;
 
         /* We could possibly pass max_age in the request (as an absolute
@@ -3265,7 +3269,8 @@ static int osc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         struct obd_statfs *msfs;
         struct ptlrpc_request *req;
         struct obd_import     *imp = NULL;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*osfs) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*osfs) };
+        int rc;
         ENTRY;
 
         /*Since the request might also come from lprocfs, so we need 
@@ -3488,7 +3493,8 @@ static int osc_get_info(struct obd_export *exp, obd_count keylen,
                 struct ptlrpc_request *req;
                 obd_id *reply;
                 char *bufs[2] = { NULL, key };
-                int rc, size[2] = { sizeof(struct ptlrpc_body), keylen };
+                __u32 size[2] = { sizeof(struct ptlrpc_body), keylen };
+                int rc;
 
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
                                       OST_GET_INFO, 2, size, bufs);
@@ -3551,7 +3557,7 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
         struct ptlrpc_request *req;
         struct obd_device  *obd = exp->exp_obd;
         struct obd_import *imp = class_exp2cliimp(exp);
-        int size[3] = { sizeof(struct ptlrpc_body), keylen, vallen };
+        __u32 size[3] = { sizeof(struct ptlrpc_body), keylen, vallen };
         char *bufs[3] = { NULL, key, val };
         ENTRY;
 
