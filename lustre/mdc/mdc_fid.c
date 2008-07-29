@@ -74,7 +74,8 @@ static int seq_client_rpc(struct lu_client_seq *seq, struct lu_range *input,
                           struct lu_range *output, __u32 opc,
                           const char *opcname)
 {
-        int rc, size[3] = { sizeof(struct ptlrpc_body),
+        int rc;
+        __u32 size[3] = { sizeof(struct ptlrpc_body),
                             sizeof(__u32),
                             sizeof(struct lu_range) };
         struct obd_export *exp = seq->lcs_exp;
@@ -143,7 +144,7 @@ out_req:
 static int fld_client_rpc(struct lu_client_seq *seq,
                           struct md_fld *mf, __u32 fld_op)
 {
-        int size[3] = { sizeof(struct ptlrpc_body),
+        __u32 size[3] = { sizeof(struct ptlrpc_body),
                         sizeof(__u32),
                         sizeof(struct md_fld) };
         struct obd_export *exp = seq->lcs_exp;
