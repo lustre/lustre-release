@@ -177,7 +177,7 @@ int client_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl)
         struct client_obd *cli = &exp->exp_obd->u.cli;
         struct ptlrpc_request *req;
         struct obd_quotactl *body;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         int ver, opc, rc;
         ENTRY;
 
