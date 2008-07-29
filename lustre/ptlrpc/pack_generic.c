@@ -1675,7 +1675,7 @@ __u32 lustre_msg_calc_cksum(struct lustre_msg *msg)
                 struct ptlrpc_body *pb;
                 pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
                 LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
-                return crc32_le(~(__u32)0, (char *)pb, sizeof(*pb));
+                return crc32_le(~(__u32)0, (unsigned char *)pb, sizeof(*pb));
         }
         default:
                 CERROR("incorrect message magic: %08x\n", msg->lm_magic);
