@@ -450,7 +450,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
         int rc;
         __u64 committed_before_reconnect = 0;
         struct ptlrpc_request *request;
-        int size[] = { sizeof(struct ptlrpc_body),
+        __u32 size[] = { sizeof(struct ptlrpc_body),
                        sizeof(imp->imp_obd->u.cli.cl_target_uuid),
                        sizeof(obd->obd_uuid),
                        sizeof(imp->imp_dlm_handle),
