@@ -259,7 +259,7 @@ int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
 {
         struct ptlrpc_request *req;
         struct obd_quotactl *oqc;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*oqctl) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*oqctl) };
         int ver, opc, rc;
         ENTRY;
 
