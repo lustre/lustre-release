@@ -2274,7 +2274,8 @@ static int osd_mount(const struct lu_env *env,
         if (result == 0) {
                 struct dentry *d;
 
-                d = simple_mkdir(osd_sb(o)->s_root, "*OBJ-TEMP*", 0777, 1);
+                d = simple_mkdir(osd_sb(o)->s_root, lmi->lmi_mnt, "*OBJ-TEMP*",
+                                 0777, 1);
                 if (!IS_ERR(d)) {
                         o->od_obj_area = d;
                 } else

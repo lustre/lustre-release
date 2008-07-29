@@ -276,7 +276,8 @@ out_up:
 EXPORT_SYMBOL(simple_mknod);
 
 /* utility to make a directory */
-struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode, int fix)
+struct dentry *simple_mkdir(struct dentry *dir, struct vfsmount *mnt, 
+                            char *name, int mode, int fix)
 {
         struct dentry *dchild;
         int err = 0;
@@ -309,7 +310,7 @@ struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode, int fix)
                 GOTO(out_up, dchild);
         }
 
-        err = vfs_mkdir(dir->d_inode, dchild, mode);
+        err = ll_vfs_mkdir(dir->d_inode, dchild, mnt, mode);
         if (err)
                 GOTO(out_err, err);
 
@@ -324,7 +325,8 @@ out_up:
 EXPORT_SYMBOL(simple_mkdir);
 
 /* utility to rename a file */
-int lustre_rename(struct dentry *dir, char *oldname, char *newname)
+int lustre_rename(struct dentry *dir, struct vfsmount *mnt, 
+                  char *oldname, char *newname)
 {
         struct dentry *dchild_old, *dchild_new;
         int err = 0;
@@ -345,7 +347,8 @@ int lustre_rename(struct dentry *dir, char *oldname, char *newname)
         if (IS_ERR(dchild_new))
                 GOTO(put_old, err = PTR_ERR(dchild_new));
 
-        err = vfs_rename(dir->d_inode, dchild_old, dir->d_inode, dchild_new);
+        err = ll_vfs_rename(dir->d_inode, dchild_old, mnt, 
+                            dir->d_inode, dchild_new, mnt);
 
         dput(dchild_new);
 put_old:

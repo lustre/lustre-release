@@ -1508,6 +1508,9 @@ AC_DEFUN([LC_PROG_LINUX],
          # 2.6.15
          LC_INODE_I_MUTEX
 
+         # 2.6.16
+         LC_SECURITY_PLUG  # for SLES10 SP2
+
          # 2.6.17
          LC_DQUOTOFF_MUTEX
 
@@ -1729,6 +1732,27 @@ LB_LINUX_TRY_COMPILE([
         ])
 ],[
         AC_MSG_RESULT([no])
+])
+])
+
+# LC_SECURITY_PLUG  # for SLES10 SP2
+# check security plug in sles10 sp2 kernel 
+AC_DEFUN([LC_SECURITY_PLUG],
+[AC_MSG_CHECKING([If kernel has security plug support])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        struct dentry   *dentry;
+        struct vfsmount *mnt;
+        struct iattr    *iattr;
+
+        notify_change(dentry, mnt, iattr);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_SECURITY_PLUG, 1,
+                [SLES10 SP2 use extra parameter in vfs])
+],[
+        AC_MSG_RESULT(NO)
 ])
 ])
 

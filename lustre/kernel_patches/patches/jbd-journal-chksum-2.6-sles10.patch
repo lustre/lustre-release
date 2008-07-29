@@ -80,9 +80,9 @@ Index: linux-2.6.16.53-0.16/fs/jbd/commit.c
 -	ret = sync_dirty_buffer(bh);
 +	ret = submit_bh(WRITE, bh);
 +
+	if (barrier_done)
+		clear_buffer_ordered(bh);
  	/* is it possible for another commit to fail at roughly
- 	 * the same time as this one?  If so, we don't want to
- 	 * trust the barrier flag in the super, but instead want
 @@ -153,12 +172,84 @@ static int journal_write_commit_record(j
  		clear_buffer_ordered(bh);
  		set_buffer_uptodate(bh);
@@ -181,7 +181,7 @@ Index: linux-2.6.16.53-0.16/fs/jbd/commit.c
  
  	/*
  	 * First job: lock down the current transaction and wait for
-@@ -395,37 +488,14 @@ write_out_data:
+@@ -395,38 +488,15 @@ write_out_data:
  	}
  
  	/*
@@ -189,6 +189,7 @@ Index: linux-2.6.16.53-0.16/fs/jbd/commit.c
 +	 * Wait for all previously submitted IO to complete if commit
 +	 * record is to be written synchronously.
  	 */
+	spin_lock(&journal->j_list_lock);
 -	while (commit_transaction->t_locked_list) {
 -		struct buffer_head *bh;
 +	if (!JFS_HAS_INCOMPAT_FEATURE(journal,

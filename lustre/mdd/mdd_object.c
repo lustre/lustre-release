@@ -737,7 +737,10 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
                 if ((la->la_valid & ~LA_MODE) &&
                     (uc->mu_fsuid != tmp_la->la_uid) &&
                     !mdd_capable(uc, CAP_FOWNER))
+                    {
+                        printk("valid=%x, fsuid=%o, la_uid=%o\n", la->la_valid, uc->mu_fsuid, tmp_la->la_uid );
                         RETURN(-EPERM);
+                    }
 
                 if (la->la_mode == (umode_t) -1)
                         la->la_mode = tmp_la->la_mode;

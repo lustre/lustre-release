@@ -149,7 +149,7 @@ int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         /* Setup the configs dir */
-        dentry = simple_mkdir(current->fs->pwd, MOUNT_CONFIGS_DIR, 0777, 1);
+        dentry = simple_mkdir(current->fs->pwd, mnt, MOUNT_CONFIGS_DIR, 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create %s directory: rc = %d\n", 
