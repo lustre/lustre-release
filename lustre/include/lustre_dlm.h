@@ -777,10 +777,10 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **req,
                      void *lvb, __u32 lvb_len, void *lvb_swabber,
                      struct lustre_handle *lockh, int async);
 struct ptlrpc_request *ldlm_prep_enqueue_req(struct obd_export *exp,
-                                             int bufcount, int *size,
+                                             int bufcount, __u32 *size,
                                              struct list_head *head, int count);
 struct ptlrpc_request *ldlm_prep_elc_req(struct obd_export *exp, int version,
-                                         int opc, int bufcount, int *size,
+                                         int opc, int bufcount, __u32 *size,
                                          int bufoff, int canceloff,
                                          struct list_head *cancels, int count);
 int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
