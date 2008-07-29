@@ -40,7 +40,9 @@
 
 /* This source file is compiled into both mkfs.lustre and tunefs.lustre */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>

@@ -39,7 +39,9 @@
  */
  /* Safely read the last_rcvd file from a device */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
