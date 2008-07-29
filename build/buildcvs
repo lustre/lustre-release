@@ -240,10 +240,16 @@ case "$lustretag" in
         snmptag="$lustretag"
         ;;
 
+    # Interoperability server side changes
+    b_head_interop_disk)
+        lnettag="HEAD"
+        ldiskfstag="b_ldiskfs_interop_server"
+        libcfstag="HEAD"
+        ;;
+
     # Branches that have been updated to include
     # the libcfs split should be added here
-    # b_head_interop_disk: Interoperability server side changes
-    HEAD|b_head_interop_disk|b_head_quota)
+    HEAD|b_head_quota)
         lnettag="HEAD"
         ldiskfstag="$ldiskfstag_head"
         libcfstag="HEAD"
