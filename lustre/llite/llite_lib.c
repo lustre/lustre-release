@@ -1462,10 +1462,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         /* NB: ATTR_SIZE will only be set after this point if the size
          * resides on the MDS, ie, this file has no objects. */
         if (lsm)
-        {
-                printk("LSM mode, unset the ATTR_SIZE\n" );
                 attr->ia_valid &= ~ATTR_SIZE;
-        }
 
         /* We always do an MDS RPC, even if we're only changing the size;
          * only the MDS knows whether truncate() should fail with -ETXTBUSY */
@@ -1551,7 +1548,6 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
 {
         int mode;
 
-printk("ia_valid=%x\n", attr->ia_valid );
         if ((attr->ia_valid & (ATTR_CTIME|ATTR_SIZE|ATTR_MODE)) ==
             (ATTR_CTIME|ATTR_SIZE|ATTR_MODE))
                 attr->ia_valid |= MDS_OPEN_OWNEROVERRIDE;

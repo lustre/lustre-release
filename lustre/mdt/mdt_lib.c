@@ -683,7 +683,6 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
         if (in & MDS_OPEN_OWNEROVERRIDE)
                 ma->ma_attr_flags |= MDS_OPEN_OWNEROVERRIDE;
 
-                printk("in=%x,out=%x\n", in, out );
         /*XXX need ATTR_RAW?*/
         in &= ~(ATTR_MODE|ATTR_UID|ATTR_GID|ATTR_SIZE|ATTR_BLOCKS|
                 ATTR_ATIME|ATTR_MTIME|ATTR_CTIME|ATTR_FROM_OPEN|
