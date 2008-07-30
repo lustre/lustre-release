@@ -44,16 +44,16 @@
 
 int
 LNetMEAttach(unsigned int portal,
-             lnet_process_id_t match_id, 
+             lnet_process_id_t match_id,
              __u64 match_bits, __u64 ignore_bits,
-             lnet_unlink_t unlink, lnet_ins_pos_t pos, 
+             lnet_unlink_t unlink, lnet_ins_pos_t pos,
              lnet_handle_me_t *handle)
 {
         lnet_me_t     *me;
 
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
-        
+
         if (portal >= the_lnet.ln_nportals)
                 return -EINVAL;
 
@@ -84,9 +84,9 @@ LNetMEAttach(unsigned int portal,
         return 0;
 }
 
-int 
-LNetMEInsert(lnet_handle_me_t current_meh, 
-             lnet_process_id_t match_id, 
+int
+LNetMEInsert(lnet_handle_me_t current_meh,
+             lnet_process_id_t match_id,
              __u64 match_bits, __u64 ignore_bits,
              lnet_unlink_t unlink, lnet_ins_pos_t pos,
              lnet_handle_me_t *handle)
@@ -94,9 +94,9 @@ LNetMEInsert(lnet_handle_me_t current_meh,
         lnet_me_t     *current_me;
         lnet_me_t     *new_me;
 
-        LASSERT (the_lnet.ln_init);        
+        LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
-        
+
         new_me = lnet_me_alloc();
         if (new_me == NULL)
                 return -ENOMEM;
@@ -121,9 +121,9 @@ LNetMEInsert(lnet_handle_me_t current_meh,
         lnet_initialise_handle (&new_me->me_lh, LNET_COOKIE_TYPE_ME);
 
         if (pos == LNET_INS_AFTER)
-                list_add_tail(&new_me->me_list, &current_me->me_list);
-        else
                 list_add(&new_me->me_list, &current_me->me_list);
+        else
+                list_add_tail(&new_me->me_list, &current_me->me_list);
 
         lnet_me2handle(handle, new_me);
 
