@@ -358,6 +358,12 @@ Details    : looking up an inode via iopen with the wrong generation number can
 	     assertion failure in iopen since the inode's dentry list contains
 	     both a connected and disconnected dentry.
 
+Severity   : normal
+Bugzilla   : 16496
+Description: assertion failure in ldlm_handle2lock()
+Details    : fix a race between class_handle_unhash() and class_handle2object()
+	     introduced in lustre 1.6.5 by bug 13622.
+
 -------------------------------------------------------------------------------
 
 
