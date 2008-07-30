@@ -529,6 +529,38 @@ wait_exit_ST () {
     return 1
 }
 
+wait_remote_prog () {
+   local prog=$1
+   local WAIT=0
+   local INTERVAL=5
+   local rc=0
+
+   [ "$PDSH" = "no_dsh" ] && return 0
+   
+   while [ $WAIT -lt $2 ]; do
+        running=$(ps uax | grep "$PDSH.*$prog.*$MOUNT" | grep -v grep)
+        [ -z "${running}" ] && return 0
+        echo "waited $WAIT for: "
+        echo "$running"
+        [ $INTERVAL -lt 60 ] && INTERVAL=$((INTERVAL + INTERVAL))
+        sleep $INTERVAL
+        WAIT=$((WAIT + INTERVAL))
+    done
+    local pids=$(ps  uax | grep "$PDSH.*$prog.*$MOUNT" | grep -v grep | awk '{print $2}')
+    [ -z "$pids" ] && return 0
+    echo "$PDSH processes still exists after $WAIT seconds.  Still running: $pids"
+    for pid in $pids; do
+        cat /proc/${pid}/status || true
+        cat /proc/${pid}/wchan || true
+        echo "Killing $pid"
+        kill -9 $pid || true
+        sleep 1
+        ps -P $pid && rc=1 
+    done
+
+    return $rc
+}
+
 client_df() {
     # not every config has many clients
     if [ -n "$CLIENTS" ]; then
