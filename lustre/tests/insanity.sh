@@ -35,6 +35,8 @@ assert_env mds_HOST MDS_MKFS_OPTS
 assert_env ost_HOST OST_MKFS_OPTS OSTCOUNT
 assert_env LIVE_CLIENT FSNAME
 
+# FAIL_CLIENTS list should not contain the LIVE_CLIENT
+FAIL_CLIENTS=$(echo " $FAIL_CLIENTS " | sed -re "s/\s+$LIVE_CLIENT\s+/ /g")
 
 # This can be a regexp, to allow more clients
 CLIENTS=${CLIENTS:-"`comma_list $LIVE_CLIENT $FAIL_CLIENTS`"}
@@ -371,6 +373,7 @@ test_6() {
     echo "Test Lustre stability after OST failure"
     client_df &
     DFPIDA=$!
+    echo DFPIDA=$DFPIDA
     sleep 5
 
     #CLIENT Portion
@@ -381,17 +384,20 @@ test_6() {
     echo "Test Lustre stability after CLIENTs failure"
     client_df &
     DFPIDB=$!
+    echo DFPIDB=$DFPIDB
     sleep 5
     
     #Reintegration
     echo "Reintegrating OST/CLIENTs"
     wait_for ost1
     start_ost 1
-    reintegrate_clients
+    reintegrate_clients || return 1
     sleep 5 
 
+    wait_remote_prog df $((TIMEOUT * 3 + 10)) 
     wait $DFPIDA
     wait $DFPIDB
+
     echo "Verifying mount"
     [ -z "$(mounted_lustre_filesystems)" ] && return 3
     client_df
