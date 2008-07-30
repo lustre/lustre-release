@@ -1546,8 +1546,6 @@ out:
 
 int ll_setattr(struct dentry *de, struct iattr *attr)
 {
-        int mode;
-
         if ((attr->ia_valid & (ATTR_CTIME|ATTR_SIZE|ATTR_MODE)) ==
             (ATTR_CTIME|ATTR_SIZE|ATTR_MODE))
                 attr->ia_valid |= MDS_OPEN_OWNEROVERRIDE;
