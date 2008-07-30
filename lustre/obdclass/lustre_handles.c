@@ -179,7 +179,7 @@ void *class_handle2object(__u64 cookie)
                         continue;
 
                 spin_lock(&h->h_lock);
-                if (likely(h->h_cookie != 0)) {
+                if (likely(h->h_in != 0)) {
                         h->h_addref(h);
                         retval = h;
                 }
