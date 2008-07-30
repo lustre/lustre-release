@@ -188,6 +188,13 @@ case "$lustretag" in
         dmutag="zfs-lustre"
         ;;
 
+    # read-only cache for oss
+    b_hd_rocache_oss)
+        lnettag="HEAD"
+        ldiskfstag="b_hd_rocache_oss"
+        libcfstag="HEAD"
+        ;;
+    
     # uMDS
     b_dmu_umds)
         lnettag="b_uoss_umds"
