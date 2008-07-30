@@ -30,6 +30,7 @@ if [ "$ACC_SM_ONLY" ]; then
 	export ${O}="no"
     done
     for O in $ACC_SM_ONLY; do
+	O=`echo ${O%.sh} | tr "-" "_"`
 	O=`echo $O | tr "[:lower:]" "[:upper:]"`
 	export ${O}="yes"
     done
@@ -61,6 +62,16 @@ setup_if_needed() {
 }
 
 title() {
+    # update titlebar if stdin is attaached to an xterm
+    if ${UPDATE_TITLEBAR:-false}; then
+	if tty -s; then
+	    case $TERM in 
+		xterm*)
+		    echo -ne "\033]2; acceptance-small: $* \007" >&0
+		    ;;
+	    esac
+	fi
+    fi 
     log "-----============= acceptance-small: "$*" ============----- `date`"
     RANTEST=${RANTEST}$*", "
 }
