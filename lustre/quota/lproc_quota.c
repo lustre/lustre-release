@@ -724,6 +724,10 @@ int lquota_proc_cleanup(struct lustre_quota_ctxt *qctxt)
 {
         if (!qctxt || !qctxt->lqc_proc_dir)
                 return -EINVAL;
+
+        if (qctxt->lqc_stats != NULL)
+                lprocfs_free_stats(&qctxt->lqc_stats);
+
         lprocfs_remove(&qctxt->lqc_proc_dir);
         return 0;
 }
