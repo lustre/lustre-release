@@ -471,6 +471,7 @@ typedef __u32 obd_count;
 #define LOV_MAGIC_V1      0x0BD10BD0
 #define LOV_MAGIC         LOV_MAGIC_V1
 #define LOV_MAGIC_JOIN    0x0BD20BD0
+#define LOV_MAGIC_V3      0x0BD30BD0
 
 #define LOV_PATTERN_RAID0 0x001   /* stripes are used round-robin */
 #define LOV_PATTERN_RAID1 0x002   /* stripes are mirrors of each other */
@@ -479,6 +480,9 @@ typedef __u32 obd_count;
 
 #define LOV_OBJECT_GROUP_DEFAULT ~0ULL
 #define LOV_OBJECT_GROUP_CLEAR 0ULL
+
+#define MAXPOOLNAME 16
+#define POOLNAMEF "%.16s"
 
 #define lov_ost_data lov_ost_data_v1
 struct lov_ost_data_v1 {          /* per-stripe data structure (little-endian)*/
@@ -498,6 +502,18 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
         __u32 lmm_stripe_count;   /* num stripes in use for this object */
         struct lov_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 };
+
+struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */
+        __u32 lmm_magic;          /* magic number = LOV_MAGIC_V3 */
+        __u32 lmm_pattern;        /* LOV_PATTERN_RAID0, LOV_PATTERN_RAID1 */
+        __u64 lmm_object_id;      /* LOV object ID */
+        __u64 lmm_object_gr;      /* LOV object group */
+        __u32 lmm_stripe_size;    /* size of stripe in bytes */
+        __u32 lmm_stripe_count;   /* num stripes in use for this object */
+        char  lmm_pool_name[MAXPOOLNAME]; /* must be 32bit aligned */
+        struct lov_ost_data_v1 lmm_objects[0]; /* per-stripe data */
+};
+
 
 #define OBD_MD_FLID        (0x00000001ULL) /* object ID */
 #define OBD_MD_FLATIME     (0x00000002ULL) /* access time */

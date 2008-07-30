@@ -268,7 +268,7 @@ int mds_lov_write_objids(struct obd_device *obd)
                 if (i == mds->mds_lov_objid_lastpage)
                         size = (mds->mds_lov_objid_lastidx + 1) * sizeof(obd_id);
 
-		CDEBUG(D_INFO,"write %lld - %ld\n", off, size);
+                CDEBUG(D_INFO, "write %lld - %u\n", off, size);
                 rc = fsfilt_write_record(obd, mds->mds_lov_objid_filp, data,
                                          size, &off, 0);
                 if (rc < 0)
@@ -1080,6 +1080,31 @@ int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
         void *handle;
         int rc, err;
         ENTRY;
+
+        if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V3) {
+                /* LOV_MAGIC_V3 ea, we have to convert it to V1
+                 * we convert the lmm from v3 to v1
+                 * and return the new size (which is smaller)
+                 * the caller support this way to return the new size
+                 */
+                int new_lmm_size;
+
+                lmm->lmm_magic = cpu_to_le32(LOV_MAGIC_V1);
+                /* lmm_stripe_count for non reg files is not used or -1 */
+                if (!S_ISREG(inode->i_mode)) {
+                        new_lmm_size = lov_mds_md_size(0);
+                } else {
+                        int count = le32_to_cpu(
+                               ((struct lov_mds_md_v3 *)lmm)->lmm_stripe_count);
+                        new_lmm_size = lov_mds_md_size(count);
+                        memmove(lmm->lmm_objects,
+                                ((struct lov_mds_md_v3 *)lmm)->lmm_objects,
+                                count * sizeof(struct lov_ost_data_v1));
+                }
+                /* even if new size is smaller than old one,
+                 * this should not generate memory leak */
+                RETURN(new_lmm_size);
+        }
 
         if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC ||
             le32_to_cpu(lmm->lmm_magic == LOV_MAGIC_JOIN))

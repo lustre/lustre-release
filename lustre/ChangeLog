@@ -364,6 +364,13 @@ Description: assertion failure in ldlm_handle2lock()
 Details    : fix a race between class_handle_unhash() and class_handle2object()
 	     introduced in lustre 1.6.5 by bug 13622.
 
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 15899
+Description: Pools downgrade compatibility 
+Details    : Files striped across pools in future (1.8) releases will be
+	     properly understood if the server is downgraded to this version.
+
 -------------------------------------------------------------------------------
 
 
