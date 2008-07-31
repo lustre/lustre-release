@@ -411,7 +411,7 @@ int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
                 __u32 len = sizeof(last_id);
                 oexp = lov->lov_tgts[lump->lmm_objects[i].l_ost_idx]->ltd_exp;
                 rc = obd_get_info(oexp, sizeof(KEY_LAST_ID), KEY_LAST_ID,
-                                  &len, &last_id);
+                                  &len, &last_id, NULL);
                 if (rc)
                         RETURN(rc);
                 if (lump->lmm_objects[i].l_object_id > last_id) {

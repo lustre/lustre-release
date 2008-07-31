@@ -2561,7 +2561,7 @@ static int lmv_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 }
 
 static int lmv_get_info(struct obd_export *exp, __u32 keylen,
-                        void *key, __u32 *vallen, void *val)
+                        void *key, __u32 *vallen, void *val, struct lov_stripe_md *lsm)
 {
         struct obd_device *obd;
         struct lmv_obd *lmv;
@@ -2595,7 +2595,7 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
                         }
 
                         if (!obd_get_info(tgts->ltd_exp, keylen, key,
-                                          vallen, val))
+                                          vallen, val, NULL))
                                 RETURN(0);
                 }
                 RETURN(-EINVAL);
@@ -2607,7 +2607,7 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
                 /* forwarding this request to first MDS, it should know LOV
                  * desc. */
                 rc = obd_get_info(lmv->tgts[0].ltd_exp, keylen, key,
-                                  vallen, val);
+                                  vallen, val, NULL);
                 if (!rc && KEY_IS(KEY_CONN_DATA)) {
                         exp->exp_connect_flags =
                         ((struct obd_connect_data *)val)->ocd_connect_flags;

@@ -252,7 +252,7 @@ static int ll_init_ea_size(struct obd_export *md_exp, struct obd_export *dt_exp)
         ENTRY;
 
         rc = obd_get_info(dt_exp, sizeof(KEY_LOVDESC), KEY_LOVDESC,
-                          &valsize, &desc);
+                          &valsize, &desc, NULL);
         if (rc)
                 RETURN(rc);
 
@@ -376,7 +376,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 
         size = sizeof(*data);
         err = obd_get_info(sbi->ll_md_exp, sizeof(KEY_CONN_DATA),
-                           KEY_CONN_DATA,  &size, data);
+                           KEY_CONN_DATA,  &size, data, NULL);
         if (err) {
                 CERROR("Get connect data failed: %d \n", err);
                 GOTO(out_md, err);
@@ -678,7 +678,7 @@ int ll_get_max_mdsize(struct ll_sb_info *sbi, int *lmmsize)
         *lmmsize = obd_size_diskmd(sbi->ll_dt_exp, NULL);
         size = sizeof(int);
         rc = obd_get_info(sbi->ll_md_exp, sizeof(KEY_MAX_EASIZE),
-                          KEY_MAX_EASIZE, &size, lmmsize);
+                          KEY_MAX_EASIZE, &size, lmmsize, NULL);
         if (rc)
                 CERROR("Get max mdsize error rc %d \n", rc);
 

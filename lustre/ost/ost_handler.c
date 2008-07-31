@@ -1341,7 +1341,7 @@ static int ost_get_info(struct obd_export *exp, struct ptlrpc_request *req)
         }
         keylen = req_capsule_get_size(pill, &RMF_SETINFO_KEY, RCL_CLIENT);
 
-        rc = obd_get_info(exp, keylen, key, &replylen, NULL);
+        rc = obd_get_info(exp, keylen, key, &replylen, NULL, NULL);
         if (rc)
                 RETURN(rc);
 
@@ -1357,7 +1357,7 @@ static int ost_get_info(struct obd_export *exp, struct ptlrpc_request *req)
                 RETURN(-ENOMEM);
 
         /* call again to fill in the reply buffer */
-        rc = obd_get_info(exp, keylen, key, &replylen, reply);
+        rc = obd_get_info(exp, keylen, key, &replylen, reply, NULL);
 
         lustre_msg_set_status(req->rq_repmsg, 0);
         RETURN(rc);

@@ -1976,7 +1976,7 @@ llu_init_ea_size(struct obd_export *md_exp, struct obd_export *dt_exp)
         ENTRY;
 
         rc = obd_get_info(dt_exp, sizeof(KEY_LOVDESC), KEY_LOVDESC,
-                          &valsize, &desc);
+                          &valsize, &desc, NULL);
         if (rc)
                 RETURN(rc);
 

@@ -1192,7 +1192,7 @@ int mdc_set_info_async(struct obd_export *exp,
 }
 
 int mdc_get_info(struct obd_export *exp, __u32 keylen, void *key,
-                 __u32 *vallen, void *val)
+                 __u32 *vallen, void *val, struct lov_stripe_md *lsm)
 {
         int rc = -EINVAL;
 

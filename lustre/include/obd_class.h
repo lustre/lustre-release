@@ -399,7 +399,8 @@ static inline int class_devno_max(void)
 }
 
 static inline int obd_get_info(struct obd_export *exp, __u32 keylen,
-                               void *key, __u32 *vallen, void *val)
+                               void *key, __u32 *vallen, void *val,
+                               struct lov_stripe_md *lsm)
 {
         int rc;
         ENTRY;
@@ -407,7 +408,7 @@ static inline int obd_get_info(struct obd_export *exp, __u32 keylen,
         EXP_CHECK_DT_OP(exp, get_info);
         EXP_COUNTER_INCREMENT(exp, get_info);
 
-        rc = OBP(exp->exp_obd, get_info)(exp, keylen, key, vallen, val);
+        rc = OBP(exp->exp_obd, get_info)(exp, keylen, key, vallen, val, lsm);
         RETURN(rc);
 }
 
