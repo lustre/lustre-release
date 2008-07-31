@@ -231,11 +231,26 @@ enum ra_stat {
         _NR_RA_STAT,
 };
 
+#define LL_RA_STAT      _NR_RA_STAT
+#define LL_RA_STAT_STRINGS           {                                  \
+        [RA_STAT_HIT]               = "hits",                           \
+        [RA_STAT_MISS]              = "misses",                         \
+        [RA_STAT_DISTANT_READPAGE]  = "readpage not consecutive",       \
+        [RA_STAT_MISS_IN_WINDOW]    = "miss inside window",             \
+        [RA_STAT_FAILED_GRAB_PAGE]  = "failed grab_cache_page",         \
+        [RA_STAT_FAILED_MATCH]      = "failed lock match",              \
+        [RA_STAT_DISCARDED]         = "read but discarded",             \
+        [RA_STAT_ZERO_LEN]          = "zero length file",               \
+        [RA_STAT_ZERO_WINDOW]       = "zero size window",               \
+        [RA_STAT_EOF]               = "read-ahead to EOF",              \
+        [RA_STAT_MAX_IN_FLIGHT]     = "hit max r-a issue",              \
+        [RA_STAT_WRONG_GRAB_PAGE]   = "wrong page from grab_cache_page",\
+} 
+
 struct ll_ra_info {
-        unsigned long             ra_cur_pages;
+        atomic_t                  ra_cur_pages;
         unsigned long             ra_max_pages;
         unsigned long             ra_max_read_ahead_whole_pages;
-        unsigned long             ra_stats[_NR_RA_STAT];
 };
 
 /* LL_HIST_MAX=32 causes an overflow */
@@ -291,10 +306,30 @@ enum stats_track_type {
 /* default value for lockless_truncate_enable */
 #define SBI_DEFAULT_LOCKLESS_TRUNCATE_ENABLE 1
 
+/* percpu data structure for lustre lru page list */
+struct ll_pglist_data {
+        spinlock_t                llpd_lock; /* lock to protect llpg_list */
+        struct list_head          llpd_list; /* all pages (llap_pglist_item) */
+        unsigned long             llpd_gen;  /* generation # of this list */
+        unsigned long             llpd_count; /* How many pages in this list */
+        atomic_t                  llpd_sample_count;
+        unsigned long             llpd_reblnc_count;
+        /* the pages in this list shouldn't be over this number */
+        unsigned long             llpd_budget; 
+        int                       llpd_cpu;
+        /* which page the pglist data is in */
+        struct page              *llpd_page; 
+
+        /* stats */
+        unsigned long             llpd_hit;
+        unsigned long             llpd_miss;
+        unsigned long             llpd_cross;
+};
+
 struct ll_sb_info {
         struct list_head          ll_list;
-        /* this protects pglist and ra_info.  It isn't safe to
-         * grab from interrupt contexts */
+        /* this protects pglist(only ll_async_page_max) and ra_info.  
+         * It isn't safe to grab from interrupt contexts. */
         spinlock_t                ll_lock;
         spinlock_t                ll_pp_extent_lock; /* Lock for pp_extent entries */
         spinlock_t                ll_process_lock; /* Lock for ll_rw_process_info */
@@ -313,10 +348,19 @@ struct ll_sb_info {
 
         struct lprocfs_stats     *ll_stats; /* lprocfs stats counter */
 
+        /* reblnc lock protects llpd_budget */
+        spinlock_t                ll_async_page_reblnc_lock;
+        unsigned long             ll_async_page_reblnc_count;
+        unsigned long             ll_async_page_sample_max;
+        /* I defined this array here rather than in ll_pglist_data
+         * because it is always accessed by only one cpu. -jay */
+        unsigned long            *ll_async_page_sample;
         unsigned long             ll_async_page_max;
-        unsigned long             ll_async_page_count;
-        unsigned long             ll_pglist_gen;
-        struct list_head          ll_pglist; /* all pages (llap_pglist_item) */
+        unsigned long             ll_async_page_clock_hand;
+        lcounter_t                ll_async_page_count;
+        struct ll_pglist_data   **ll_pglist;
+
+        struct lprocfs_stats     *ll_ra_stats;
 
         unsigned                  ll_contention_time; /* seconds */
         unsigned                  ll_lockless_truncate_enable; /* true/false */
@@ -359,7 +403,69 @@ struct ll_sb_info {
         unsigned long long        ll_sa_miss;    /* miss count */
 };
 
-#define LL_DEFAULT_MAX_RW_CHUNK         (32 * 1024 * 1024)
+#define LL_DEFAULT_MAX_RW_CHUNK      (32 * 1024 * 1024)
+
+#define LL_PGLIST_DATA_CPU(sbi, cpu) ((sbi)->ll_pglist[cpu])
+#define LL_PGLIST_DATA(sbi)          LL_PGLIST_DATA_CPU(sbi, smp_processor_id())
+
+static inline struct ll_pglist_data *ll_pglist_cpu_lock(
+                struct ll_sb_info *sbi, 
+                int cpu)
+{
+        spin_lock(&sbi->ll_pglist[cpu]->llpd_lock);
+        return LL_PGLIST_DATA_CPU(sbi, cpu);
+}
+
+static inline void ll_pglist_cpu_unlock(struct ll_sb_info *sbi, int cpu)
+{
+        spin_unlock(&sbi->ll_pglist[cpu]->llpd_lock);
+}
+
+static inline struct ll_pglist_data *ll_pglist_double_lock(
+                struct ll_sb_info *sbi, 
+                int cpu, struct ll_pglist_data **pd_cpu)
+{
+        int current_cpu = get_cpu();
+
+        if (cpu == current_cpu) {
+                ll_pglist_cpu_lock(sbi, cpu);
+        } else if (current_cpu < cpu) {
+                ll_pglist_cpu_lock(sbi, current_cpu);
+                ll_pglist_cpu_lock(sbi, cpu);
+        } else {
+                ll_pglist_cpu_lock(sbi, cpu);
+                ll_pglist_cpu_lock(sbi, current_cpu);
+        }
+
+        if (pd_cpu)
+                *pd_cpu = LL_PGLIST_DATA_CPU(sbi, cpu);
+
+        return LL_PGLIST_DATA(sbi);
+}
+
+static inline void ll_pglist_double_unlock(struct ll_sb_info *sbi, int cpu)
+{
+        int current_cpu = smp_processor_id();
+        if (cpu == current_cpu) {
+                ll_pglist_cpu_unlock(sbi, cpu);
+        } else {
+                ll_pglist_cpu_unlock(sbi, cpu);
+                ll_pglist_cpu_unlock(sbi, current_cpu);
+        }
+        put_cpu();
+}
+
+static inline struct ll_pglist_data *ll_pglist_lock(struct ll_sb_info *sbi)
+{
+        ll_pglist_cpu_lock(sbi, get_cpu());
+        return LL_PGLIST_DATA(sbi);
+}
+
+static inline void ll_pglist_unlock(struct ll_sb_info *sbi)
+{
+        ll_pglist_cpu_unlock(sbi, smp_processor_id());
+        put_cpu();
+}
 
 struct ll_ra_read {
         pgoff_t             lrr_start;
@@ -500,7 +606,9 @@ struct ll_async_page {
                          llap_ra_used:1,
                          llap_ignore_quota:1,
                          llap_nocache:1,
-                         llap_lockless_io_page:1;
+                         llap_lockless_io_page:1,
+                         llap_reserved:7;
+        unsigned int     llap_pglist_cpu:16;
         void            *llap_cookie;
         struct page     *llap_page;
         struct list_head llap_pending_write;
@@ -526,8 +634,25 @@ enum {
 extern char *llap_origins[];
 
 #ifdef HAVE_REGISTER_CACHE
+#include <linux/cache_def.h>
 #define ll_register_cache(cache) register_cache(cache)
 #define ll_unregister_cache(cache) unregister_cache(cache)
+#elif defined(HAVE_SHRINKER_CACHE)
+struct cache_definition {
+        const char *name;
+        shrinker_t shrink;
+        struct shrinker *shrinker;
+};
+
+#define ll_register_cache(cache) do {                                   \
+        struct cache_definition *c = (cache);                           \
+        c->shrinker = set_shrinker(DEFAULT_SEEKS, c->shrink);           \
+} while(0)
+
+#define ll_unregister_cache(cache) do {                                 \
+        remove_shrinker((cache)->shrinker);                             \
+        (cache)->shrinker = NULL;                                       \
+} while(0)
 #else
 #define ll_register_cache(cache) do {} while (0)
 #define ll_unregister_cache(cache) do {} while (0)
@@ -732,7 +857,7 @@ int ll_prep_inode(struct obd_export *exp, struct inode **inode,
                   struct ptlrpc_request *req, int offset, struct super_block *);
 void lustre_dump_dentry(struct dentry *, int recur);
 void lustre_dump_inode(struct inode *);
-struct ll_async_page *llite_pglist_next_llap(struct ll_sb_info *sbi,
+struct ll_async_page *llite_pglist_next_llap(struct list_head *head,
                                              struct list_head *list);
 int ll_obd_statfs(struct inode *inode, void *arg);
 int ll_get_max_mdsize(struct ll_sb_info *sbi, int *max_mdsize);
