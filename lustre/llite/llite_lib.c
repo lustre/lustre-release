@@ -66,6 +66,64 @@ extern struct address_space_operations ll_dir_aops;
 #define log2(n) ffz(~(n))
 #endif
 
+static inline void ll_pglist_fini(struct ll_sb_info *sbi)
+{
+        struct page *page;
+        int i;
+        
+        if (sbi->ll_pglist == NULL)
+                return;
+
+        for_each_possible_cpu(i) {
+                page = sbi->ll_pglist[i]->llpd_page;
+                if (page) {
+                        sbi->ll_pglist[i] = NULL;
+                        __free_page(page);
+                }
+        }
+
+        OBD_FREE(sbi->ll_pglist, sizeof(void *)*num_possible_cpus());
+        sbi->ll_pglist = NULL;
+}
+
+static inline int ll_pglist_init(struct ll_sb_info *sbi)
+{
+        struct ll_pglist_data *pd;
+        unsigned long budget;
+        int i, color = 0;
+        ENTRY;
+
+        OBD_ALLOC(sbi->ll_pglist, sizeof(void *) * num_possible_cpus());
+        if (sbi->ll_pglist == NULL)
+                RETURN(-ENOMEM);
+
+        budget = sbi->ll_async_page_max / num_online_cpus();
+        for_each_possible_cpu(i) {
+                struct page *page = alloc_pages_node(cpu_to_node(i),
+                                                    GFP_KERNEL, 0);
+                if (page == NULL) {
+                        ll_pglist_fini(sbi);
+                        RETURN(-ENOMEM);
+                }
+
+                if (color + L1_CACHE_ALIGN(sizeof(*pd)) > PAGE_SIZE)
+                        color = 0;
+
+                pd = (struct ll_pglist_data *)(page_address(page) + color);
+                memset(pd, 0, sizeof(*pd));
+                spin_lock_init(&pd->llpd_lock);
+                INIT_LIST_HEAD(&pd->llpd_list);
+                if (cpu_online(i))
+                        pd->llpd_budget = budget;
+                pd->llpd_cpu = i;
+                pd->llpd_page = page;
+                atomic_set(&pd->llpd_sample_count, 0);
+                sbi->ll_pglist[i] = pd;
+                color += L1_CACHE_ALIGN(sizeof(*pd));
+        }
+
+        RETURN(0);
+}
 
 static struct ll_sb_info *ll_init_sbi(void)
 {
@@ -80,18 +138,31 @@ static struct ll_sb_info *ll_init_sbi(void)
         if (!sbi)
                 RETURN(NULL);
 
+        OBD_ALLOC(sbi->ll_async_page_sample, sizeof(long)*num_possible_cpus());
+        if (sbi->ll_async_page_sample == NULL)
+                GOTO(out, 0);
+
         spin_lock_init(&sbi->ll_lock);
         spin_lock_init(&sbi->ll_lco.lco_lock);
         spin_lock_init(&sbi->ll_pp_extent_lock);
         spin_lock_init(&sbi->ll_process_lock);
         sbi->ll_rw_stats_on = 0;
-        INIT_LIST_HEAD(&sbi->ll_pglist);
+
         si_meminfo(&si);
         pages = si.totalram - si.totalhigh;
         if (pages >> (20 - CFS_PAGE_SHIFT) < 512)
                 sbi->ll_async_page_max = pages / 2;
         else
                 sbi->ll_async_page_max = (pages / 4) * 3;
+
+        lcounter_init(&sbi->ll_async_page_count);
+        spin_lock_init(&sbi->ll_async_page_reblnc_lock);
+        sbi->ll_async_page_sample_max = 64 * num_online_cpus();
+        sbi->ll_async_page_reblnc_count = 0;
+        sbi->ll_async_page_clock_hand = 0;
+        if (ll_pglist_init(sbi))
+                GOTO(out, 0);
+
         sbi->ll_ra_info.ra_max_pages = min(pages / 32,
                                            SBI_DEFAULT_READAHEAD_MAX);
         sbi->ll_ra_info.ra_max_read_ahead_whole_pages =
@@ -133,6 +204,14 @@ static struct ll_sb_info *ll_init_sbi(void)
         sbi->ll_sa_max = LL_SA_RPC_DEF;
 
         RETURN(sbi);
+
+out:
+        if (sbi->ll_async_page_sample)
+                OBD_FREE(sbi->ll_async_page_sample, 
+                         sizeof(long) * num_possible_cpus());
+        ll_pglist_fini(sbi);
+        OBD_FREE(sbi, sizeof(*sbi));
+        RETURN(NULL);
 }
 
 void ll_free_sbi(struct super_block *sb)
@@ -141,9 +220,13 @@ void ll_free_sbi(struct super_block *sb)
         ENTRY;
 
         if (sbi != NULL) {
+                ll_pglist_fini(sbi);
                 spin_lock(&ll_sb_lock);
                 list_del(&sbi->ll_list);
                 spin_unlock(&ll_sb_lock);
+                lcounter_destroy(&sbi->ll_async_page_count);
+                OBD_FREE(sbi->ll_async_page_sample, 
+                         sizeof(long) * num_possible_cpus());
                 OBD_FREE(sbi, sizeof(*sbi));
         }
         EXIT;
@@ -1219,9 +1302,9 @@ void ll_put_super(struct super_block *sb)
         EXIT;
 } /* client_put_super */
 
-#ifdef HAVE_REGISTER_CACHE
-#include <linux/cache_def.h>
-#ifdef HAVE_CACHE_RETURN_INT
+#if defined(HAVE_REGISTER_CACHE) || defined(HAVE_SHRINKER_CACHE)
+
+#if defined(HAVE_CACHE_RETURN_INT)
 static int
 #else
 static void
@@ -1234,7 +1317,7 @@ ll_shrink_cache(int priority, unsigned int gfp_mask)
         list_for_each_entry(sbi, &ll_super_blocks, ll_list)
                 count += llap_shrink_cache(sbi, priority);
 
-#ifdef HAVE_CACHE_RETURN_INT
+#if defined(HAVE_CACHE_RETURN_INT)
         return count;
 #endif
 }
@@ -1243,7 +1326,7 @@ struct cache_definition ll_cache_definition = {
         .name = "llap_cache",
         .shrink = ll_shrink_cache
 };
-#endif /* HAVE_REGISTER_CACHE */
+#endif /* HAVE_REGISTER_CACHE || HAVE_SHRINKER_CACHE */
 
 struct inode *ll_inode_from_lock(struct ldlm_lock *lock)
 {
@@ -2157,14 +2240,14 @@ char *llap_origins[] = {
         [LLAP_ORIGIN_LOCKLESS_IO] = "ls"
 };
 
-struct ll_async_page *llite_pglist_next_llap(struct ll_sb_info *sbi,
+struct ll_async_page *llite_pglist_next_llap(struct list_head *head,
                                              struct list_head *list)
 {
         struct ll_async_page *llap;
         struct list_head *pos;
 
         list_for_each(pos, list) {
-                if (pos == &sbi->ll_pglist)
+                if (pos == head)
                         return NULL;
                 llap = list_entry(pos, struct ll_async_page, llap_pglist_item);
                 if (llap->llap_page == NULL)
