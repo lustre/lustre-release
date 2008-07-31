@@ -1572,7 +1572,7 @@ test_70a () {
 				error "dd failed on $CLIENT"
 	done
 
-	local prev_client=$(echo $clients | sed 's/^.* \(\w\+\)$/\1/') 
+	local prev_client=$(echo $clients | sed 's/^.* \(.\+\)$/\1/') 
 	for C in ${CLIENTS//,/ }; do
 		do_node $prev_client dd if=$DIR/${tfile}_${C} of=/dev/null 2>/dev/null || \
 			error "dd if=$DIR/${tfile}_${C} failed on $prev_client"
