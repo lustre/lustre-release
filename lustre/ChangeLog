@@ -38,6 +38,14 @@ tbd Sun Microsystems, Inc.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
 
+Severity   : normal
+Frequency  : only for filesystems larger than 8TB
+Bugzilla   : 16101
+Description: ldiskfs BUG ldiskfs_mb_use_best_found()
+Details    : The ldiskfs mballoc3 code was using a __u16 to store the group
+	     number, but with 8TB+ filesystems there are more than 65536
+	     groups, causing an oops.
+
 Severity   : enhancement
 Bugzilla   : 15308
 Description: Update to SLES10 SP2 kernel-2.6.16.60-0.23.
@@ -258,7 +266,7 @@ Details    : If administrator specified an incorrect configuration parameter
 	     client mounts.  Instead, ignore the bad configuration parameter.
 
 Severity   : normal
-Frequency  : blocks per group is less than blocksize*8 and uninit_groups is enabled
+Frequency  : blocks per group < blocksize*8 and uninit_groups is enabled
 Bugzilla   : 15932
 Description: ldiskfs error: XXX blocks in bitmap, YYY in gd
 Details    : If blocks per group is less than blocksize*8, set rest of the
