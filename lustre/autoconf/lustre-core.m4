@@ -238,27 +238,52 @@ LB_LINUX_TRY_COMPILE([
 # LC_FUNC_REGISTER_CACHE
 #
 # if register_cache() is defined by kernel
+# 
+# There are two ways to shrink one customized cache in linux kernels. For the
+# kernels are prior than 2.6.5(?), register_cache() is used, and for latest 
+# kernels, set_shrinker() is used instead.
 #
 AC_DEFUN([LC_FUNC_REGISTER_CACHE],
-[AC_MSG_CHECKING([if kernel defines register_cache()])
+[AC_MSG_CHECKING([if kernel defines cache pressure hook])
 LB_LINUX_TRY_COMPILE([
-	#include <linux/list.h>
-	#include <linux/cache_def.h>
+	#include <linux/mm.h>
 ],[
-	struct cache_definition cache;
+	shrinker_t shrinker;
+
+	set_shrinker(1, shrinker);
 ],[
-	AC_MSG_RESULT([yes])
-	AC_DEFINE(HAVE_REGISTER_CACHE, 1, [register_cache found])
-	AC_MSG_CHECKING([if kernel expects return from cache shrink function])
-	HAVE_CACHE_RETURN_INT="`grep -c 'int.*shrink' $LINUX/include/linux/cache_def.h`"
-	if test "$HAVE_CACHE_RETURN_INT" != 0 ; then
-		AC_DEFINE(HAVE_CACHE_RETURN_INT, 1, [kernel expects return from shrink_cache])
-		AC_MSG_RESULT(yes)
-	else
-		AC_MSG_RESULT(no)
-	fi
+	AC_MSG_RESULT([set_shrinker])
+	AC_DEFINE(HAVE_SHRINKER_CACHE, 1, [shrinker_cache found])
+	AC_DEFINE(HAVE_CACHE_RETURN_INT, 1, [shrinkers should return int])
 ],[
-	AC_MSG_RESULT([no])
+	LB_LINUX_TRY_COMPILE([
+		#include <linux/list.h>
+		#include <linux/cache_def.h>
+	],[
+		struct cache_definition cache;
+	],[
+		AC_MSG_RESULT([register_cache])
+		AC_DEFINE(HAVE_REGISTER_CACHE, 1, [register_cache found])
+		AC_MSG_CHECKING([if kernel expects return from cache shrink ])
+		tmp_flags="$EXTRA_KCFLAGS"
+		EXTRA_KCFLAGS="-Werror"
+		LB_LINUX_TRY_COMPILE([
+			#include <linux/list.h>
+			#include <linux/cache_def.h>
+		],[
+			struct cache_definition c;
+			c.shrinker = (int (*)(int, unsigned int))1;
+		],[
+			AC_DEFINE(HAVE_CACHE_RETURN_INT, 1,
+				  [kernel expects return from shrink_cache])
+			AC_MSG_RESULT(yes)
+		],[
+			AC_MSG_RESULT(no)
+		])
+		EXTRA_KCFLAGS="$tmp_flags"
+	],[
+		AC_MSG_RESULT([no])
+	])
 ])
 ])
 
@@ -1494,6 +1519,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_QUOTA_READ
          LC_COOKIE_FOLLOW_LINK
          LC_FUNC_RCU
+         LC_PERCPU_COUNTER
 
          # does the kernel have VFS intent patches?
          LC_VFS_INTENT_PATCHES
@@ -1753,6 +1779,32 @@ LB_LINUX_TRY_COMPILE([
                 [SLES10 SP2 use extra parameter in vfs])
 ],[
         AC_MSG_RESULT(NO)
+])
+])
+
+AC_DEFUN([LC_PERCPU_COUNTER],
+[AC_MSG_CHECKING([if have struct percpu_counter defined])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/percpu_counter.h>
+],[],[
+        AC_DEFINE(HAVE_PERCPU_COUNTER, 1, [percpu_counter found])
+        AC_MSG_RESULT([yes])
+
+        AC_MSG_CHECKING([if percpu_counter_inc takes the 2nd argument])
+        LB_LINUX_TRY_COMPILE([
+                #include <linux/percpu_counter.h>
+        ],[
+                struct percpu_counter c;
+                percpu_counter_init(&c, 0);
+        ],[
+                AC_DEFINE(HAVE_PERCPU_2ND_ARG, 1, [percpu_counter_init has two
+                                                   arguments])
+                AC_MSG_RESULT([yes])
+        ],[
+                AC_MSG_RESULT([no])
+        ])
+],[
+        AC_MSG_RESULT([no])
 ])
 ])
 
