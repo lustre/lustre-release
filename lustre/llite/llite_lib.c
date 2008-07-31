@@ -568,7 +568,7 @@ int ll_get_max_mdsize(struct ll_sb_info *sbi, int *lmmsize)
         *lmmsize = obd_size_diskmd(sbi->ll_osc_exp, NULL);
         size = sizeof(int);
         rc = obd_get_info(sbi->ll_mdc_exp, sizeof(KEY_MAX_EASIZE),
-                          KEY_MAX_EASIZE, &size, lmmsize);
+                          KEY_MAX_EASIZE, &size, lmmsize, NULL);
         if (rc)
                 CERROR("Get max mdsize error rc %d \n", rc);
 
