@@ -473,36 +473,50 @@ struct ll_async_page *llap_cast_private(struct page *page)
         return llap;
 }
 
-/* Try to reap @target pages in the specific @cpu's async page list.
+/* Try to shrink the page cache for the @sbi filesystem by 1/@shrink_fraction.
  *
  * There is an llap attached onto every page in lustre, linked off @sbi.
  * We add an llap to the list so we don't lose our place during list walking.
  * If llaps in the list are being moved they will only move to the end
  * of the LRU, and we aren't terribly interested in those pages here (we
- * start at the beginning of the list where the least-used llaps are. */
-static inline int llap_shrink_cache_internal(struct ll_sb_info *sbi, 
-        int cpu, int target)
+ * start at the beginning of the list where the least-used llaps are.
+ */
+int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction)
 {
         struct ll_async_page *llap, dummy_llap = { .llap_magic = 0xd11ad11a };
-        struct ll_pglist_data *pd;
-        struct list_head *head;
-        int count = 0;
+        unsigned long total, want, count = 0;
 
-        pd = ll_pglist_cpu_lock(sbi, cpu);
-        head = &pd->llpd_list;
-        list_add(&dummy_llap.llap_pglist_item, head);
-        while (count < target) {
+        total = sbi->ll_async_page_count;
+
+        /* There can be a large number of llaps (600k or more in a large
+         * memory machine) so the VM 1/6 shrink ratio is likely too much.
+         * Since we are freeing pages also, we don't necessarily want to
+         * shrink so much.  Limit to 40MB of pages + llaps per call. */
+        if (shrink_fraction == 0)
+                want = sbi->ll_async_page_count - sbi->ll_async_page_max + 32;
+        else
+                want = (total + shrink_fraction - 1) / shrink_fraction;
+
+        if (want > 40 << (20 - CFS_PAGE_SHIFT))
+                want = 40 << (20 - CFS_PAGE_SHIFT);
+
+        CDEBUG(D_CACHE, "shrinking %lu of %lu pages (1/%d)\n",
+               want, total, shrink_fraction);
+
+        spin_lock(&sbi->ll_lock);
+        list_add(&dummy_llap.llap_pglist_item, &sbi->ll_pglist);
+
+        while (--total >= 0 && count < want) {
                 struct page *page;
                 int keep;
 
                 if (unlikely(need_resched())) {
-                        ll_pglist_cpu_unlock(sbi, cpu);
+                        spin_unlock(&sbi->ll_lock);
                         cond_resched();
-                        ll_pglist_cpu_lock(sbi, cpu);
+                        spin_lock(&sbi->ll_lock);
                 }
 
-                llap = llite_pglist_next_llap(head, 
-                        &dummy_llap.llap_pglist_item);
+                llap = llite_pglist_next_llap(sbi,&dummy_llap.llap_pglist_item);
                 list_del_init(&dummy_llap.llap_pglist_item);
                 if (llap == NULL)
                         break;
@@ -538,7 +552,7 @@ static inline int llap_shrink_cache_internal(struct ll_sb_info *sbi,
                 }
 
                 page_cache_get(page);
-                ll_pglist_cpu_unlock(sbi, cpu);
+                spin_unlock(&sbi->ll_lock);
 
                 if (page->mapping != NULL) {
                         ll_teardown_mmaps(page->mapping,
@@ -560,146 +574,15 @@ static inline int llap_shrink_cache_internal(struct ll_sb_info *sbi,
                 unlock_page(page);
                 page_cache_release(page);
 
-                ll_pglist_cpu_lock(sbi, cpu);
+                spin_lock(&sbi->ll_lock);
         }
         list_del(&dummy_llap.llap_pglist_item);
-        ll_pglist_cpu_unlock(sbi, cpu);
-
-        CDEBUG(D_CACHE, "shrank %d, expected %d however. \n", count, target);
-        return count;
-}
-
-
-/* Try to shrink the page cache for the @sbi filesystem by 1/@shrink_fraction.
- *
- * At first, this code calculates total pages wanted by @shrink_fraction, then
- * it deduces how many pages should be reaped from each cpu in proportion as 
- * their own # of page count(llpd_count).
- */
-int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction)
-{
-        unsigned long total, want, percpu_want, count = 0;
-        int cpu, nr_cpus;
-
-        total = lcounter_read(&sbi->ll_async_page_count);
-        if (total == 0)
-                return 0;
-
-#ifdef HAVE_SHRINKER_CACHE
-        want = shrink_fraction;
-        if (want == 0)
-                return total;
-#else
-        /* There can be a large number of llaps (600k or more in a large
-         * memory machine) so the VM 1/6 shrink ratio is likely too much.
-         * Since we are freeing pages also, we don't necessarily want to
-         * shrink so much.  Limit to 40MB of pages + llaps per call. */
-        if (shrink_fraction <= 0)
-                want = total - sbi->ll_async_page_max + 32*num_online_cpus();
-        else
-                want = (total + shrink_fraction - 1) / shrink_fraction;
-#endif
-
-        if (want > 40 << (20 - CFS_PAGE_SHIFT))
-                want = 40 << (20 - CFS_PAGE_SHIFT);
-
-        CDEBUG(D_CACHE, "shrinking %lu of %lu pages (1/%d)\n",
-               want, total, shrink_fraction);
-
-        nr_cpus = num_possible_cpus();
-        cpu = sbi->ll_async_page_clock_hand;
-        /* we at most do one round */
-        do {
-                int c;
-
-                cpu = (cpu + 1) % nr_cpus;
-                c = LL_PGLIST_DATA_CPU(sbi, cpu)->llpd_count;
-                if (!cpu_online(cpu))
-                        percpu_want = c;
-                else
-                        percpu_want = want / ((total / (c + 1)) + 1);
-                if (percpu_want == 0)
-                        continue;
-
-                count += llap_shrink_cache_internal(sbi, cpu, percpu_want);
-                if (count >= want)
-                        sbi->ll_async_page_clock_hand = cpu;
-        } while (cpu != sbi->ll_async_page_clock_hand);
+        spin_unlock(&sbi->ll_lock);
 
         CDEBUG(D_CACHE, "shrank %lu/%lu and left %lu unscanned\n",
                count, want, total);
 
-#ifdef HAVE_SHRINKER_CACHE
-        return lcounter_read(&sbi->ll_async_page_count);
-#else
         return count;
-#endif
-}
-
-/* Rebalance the async page queue len for each cpu. We hope that the cpu
- * which do much IO job has a relative longer queue len.
- * This function should be called with preempt disabled.
- */
-static inline int llap_async_cache_rebalance(struct ll_sb_info *sbi)
-{
-        unsigned long sample = 0, *cpu_sample, bias, slice;
-        struct ll_pglist_data *pd;
-        cpumask_t mask;
-        int cpu, surplus;
-        int w1 = 7, w2 = 3, base = (w1 + w2); /* weight value */
-        atomic_t *pcnt;
-
-        if (!spin_trylock(&sbi->ll_async_page_reblnc_lock)) {
-                /* someone else is doing the job */
-                return 1;
-        }
-
-        pcnt = &LL_PGLIST_DATA(sbi)->llpd_sample_count;
-        if (!atomic_read(pcnt)) {
-                /* rare case, somebody else has gotten this job done */
-                spin_unlock(&sbi->ll_async_page_reblnc_lock);
-                return 1;
-        }
-
-        sbi->ll_async_page_reblnc_count++;
-        cpu_sample = sbi->ll_async_page_sample;
-        memset(cpu_sample, 0, num_possible_cpus() * sizeof(unsigned long));
-        for_each_online_cpu(cpu) {
-                pcnt = &LL_PGLIST_DATA_CPU(sbi, cpu)->llpd_sample_count;
-                cpu_sample[cpu] = atomic_read(pcnt);
-                atomic_set(pcnt, 0);
-                sample += cpu_sample[cpu];
-        }
-
-        cpus_clear(mask);
-        surplus = sbi->ll_async_page_max;
-        slice = surplus / sample + 1;
-        sample /= num_online_cpus();
-        bias = sample >> 4;
-        for_each_online_cpu(cpu) {
-                pd = LL_PGLIST_DATA_CPU(sbi, cpu);
-                if (labs((long int)sample - cpu_sample[cpu]) > bias) {
-                        unsigned long budget = pd->llpd_budget;
-                        /* weighted original queue length and expected queue
-                         * length to avoid thrashing. */
-                        pd->llpd_budget = (budget * w1) / base +
-                                        (slice * cpu_sample[cpu]) * w2 / base;
-                        cpu_set(cpu, mask);
-                }
-                surplus -= pd->llpd_budget;
-        }
-        surplus /= cpus_weight(mask) ?: 1;
-        for_each_cpu_mask(cpu, mask)
-                LL_PGLIST_DATA_CPU(sbi, cpu)->llpd_budget += surplus;
-        spin_unlock(&sbi->ll_async_page_reblnc_lock);
-
-        /* TODO: do we really need to call llap_shrink_cache_internal 
-         * for every cpus with its page_count greater than budget?
-         * for_each_cpu_mask(cpu, mask) 
-         *      ll_shrink_cache_internal(...) 
-         */
-
-        return 0;
 }
 
 static struct ll_async_page *llap_from_page_with_lockh(struct page *page,
@@ -710,8 +593,7 @@ static struct ll_async_page *llap_from_page_with_lockh(struct page *page,
         struct obd_export *exp;
         struct inode *inode = page->mapping->host;
         struct ll_sb_info *sbi;
-        struct ll_pglist_data *pd;
-        int rc, cpu, target;
+        int rc;
         ENTRY;
 
         if (!inode) {
@@ -734,30 +616,11 @@ static struct ll_async_page *llap_from_page_with_lockh(struct page *page,
                 /* move to end of LRU list, except when page is just about to
                  * die */
                 if (origin != LLAP_ORIGIN_REMOVEPAGE) {
-                        int old_cpu = llap->llap_pglist_cpu;
-                        struct ll_pglist_data *old_pd;
-
-                        pd = ll_pglist_double_lock(sbi, old_cpu, &old_pd);
-                        pd->llpd_hit++;
-                        while (old_cpu != llap->llap_pglist_cpu) {
-                                /* rarely case, someone else is touching this
-                                 * page too. */
-                                ll_pglist_double_unlock(sbi, old_cpu);
-                                old_cpu = llap->llap_pglist_cpu;
-                                pd=ll_pglist_double_lock(sbi, old_cpu, &old_pd);
-                        }
-
-                        list_move(&llap->llap_pglist_item,
-                                  &pd->llpd_list);
-                        old_pd->llpd_gen++;
-                        if (pd->llpd_cpu != old_cpu) {
-                                pd->llpd_count++;
-                                old_pd->llpd_count--;
-                                old_pd->llpd_gen++;
-                                llap->llap_pglist_cpu = pd->llpd_cpu;
-                                pd->llpd_cross++;
-                        }
-                        ll_pglist_double_unlock(sbi, old_cpu);
+                        spin_lock(&sbi->ll_lock);
+                        sbi->ll_pglist_gen++;
+                        list_del_init(&llap->llap_pglist_item);
+                        list_add_tail(&llap->llap_pglist_item, &sbi->ll_pglist);
+                        spin_unlock(&sbi->ll_lock);
                 }
                 GOTO(out, llap);
         }
@@ -767,28 +630,8 @@ static struct ll_async_page *llap_from_page_with_lockh(struct page *page,
                 RETURN(ERR_PTR(-EINVAL));
 
         /* limit the number of lustre-cached pages */
-        cpu = get_cpu();
-        pd = LL_PGLIST_DATA(sbi);
-        target = pd->llpd_count - pd->llpd_budget;
-        if (target > 0) {
-                rc = 0;
-                atomic_inc(&pd->llpd_sample_count);
-                if (atomic_read(&pd->llpd_sample_count) > 
-                    sbi->ll_async_page_sample_max) {
-                        pd->llpd_reblnc_count++;
-                        rc = llap_async_cache_rebalance(sbi);
-                        if (rc == 0)
-                                target = pd->llpd_count - pd->llpd_budget;
-                }
-                /* if rc equals 1, it means other cpu is doing the rebalance
-                 * job, and our budget # would be modified when we read it. 
-                 * Furthermore, it is much likely being increased because
-                 * we have already reached the rebalance threshold. In this
-                 * case, we skip to shrink cache here. */
-                if ((rc == 0) && target > 0)
-                        llap_shrink_cache_internal(sbi, cpu, target + 32);
-        }
-        put_cpu();
+        if (sbi->ll_async_page_count >= sbi->ll_async_page_max)
+                llap_shrink_cache(sbi, 0);
 
         OBD_SLAB_ALLOC(llap, ll_async_page_slab, CFS_ALLOC_STD,
                        ll_async_page_slab_size);
@@ -817,14 +660,11 @@ static struct ll_async_page *llap_from_page_with_lockh(struct page *page,
         __set_page_ll_data(page, llap);
         llap->llap_page = page;
 
-        lcounter_inc(&sbi->ll_async_page_count);
-        pd = ll_pglist_lock(sbi);
-        list_add_tail(&llap->llap_pglist_item, &pd->llpd_list);
-        pd->llpd_count++;
-        pd->llpd_gen++;
-        pd->llpd_miss++;
-        llap->llap_pglist_cpu = pd->llpd_cpu;
-        ll_pglist_unlock(sbi);
+        spin_lock(&sbi->ll_lock);
+        sbi->ll_pglist_gen++;
+        sbi->ll_async_page_count++;
+        list_add_tail(&llap->llap_pglist_item, &sbi->ll_pglist);
+        spin_unlock(&sbi->ll_lock);
 
  out:
         if (unlikely(sbi->ll_flags & LL_SBI_LLITE_CHECKSUM)) {
@@ -1028,40 +868,28 @@ out:
         RETURN(rc);
 }
 
-static void ll_ra_stats_inc_sbi(struct ll_sb_info *sbi, enum ra_stat which);
-
-/* WARNING: This algorithm is used to reduce the contention on 
- * sbi->ll_lock. It should work well if the ra_max_pages is much 
- * greater than the single file's read-ahead window.
- *
- * TODO: There may exist a `global sync problem' in this implementation. 
- * Considering the global ra window is 100M, and each file's ra window is 10M,
- * there are over 10 files trying to get its ra budget and reach 
- * ll_ra_count_get at the exactly same time. All of them will get a zero ra
- * window, although the global window is 100M. -jay
- */
 static unsigned long ll_ra_count_get(struct ll_sb_info *sbi, unsigned long len)
 {
         struct ll_ra_info *ra = &sbi->ll_ra_info;
         unsigned long ret;
         ENTRY;
 
-        ret = min(ra->ra_max_pages - atomic_read(&ra->ra_cur_pages), len);
-        if ((int)ret < 0)
-                GOTO(out, ret = 0);
+        spin_lock(&sbi->ll_lock);
+        ret = min(ra->ra_max_pages - ra->ra_cur_pages, len);
+        ra->ra_cur_pages += ret;
+        spin_unlock(&sbi->ll_lock);
 
-        if (atomic_add_return(ret, &ra->ra_cur_pages) > ra->ra_max_pages) {
-                atomic_sub(ret, &ra->ra_cur_pages);
-                ret = 0;
-        }
-out:
         RETURN(ret);
 }
 
 static void ll_ra_count_put(struct ll_sb_info *sbi, unsigned long len)
 {
         struct ll_ra_info *ra = &sbi->ll_ra_info;
-        atomic_sub(len, &ra->ra_cur_pages);
+        spin_lock(&sbi->ll_lock);
+        LASSERTF(ra->ra_cur_pages >= len, "r_c_p %lu len %lu\n",
+                 ra->ra_cur_pages, len);
+        ra->ra_cur_pages -= len;
+        spin_unlock(&sbi->ll_lock);
 }
 
 /* called for each page in a completed rpc.*/
@@ -1131,8 +959,7 @@ static void __ll_put_llap(struct page *page)
         struct obd_export *exp;
         struct ll_async_page *llap;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct ll_pglist_data *pd;
-        int rc, cpu;
+        int rc;
         ENTRY;
 
         exp = ll_i2obdexp(inode);
@@ -1160,14 +987,12 @@ static void __ll_put_llap(struct page *page)
          * is providing exclusivity to memory pressure/truncate/writeback..*/
         __clear_page_ll_data(page);
 
-        lcounter_dec(&sbi->ll_async_page_count);
-        cpu = llap->llap_pglist_cpu;
-        pd = ll_pglist_cpu_lock(sbi, cpu);
-        pd->llpd_gen++;
-        pd->llpd_count--;
+        spin_lock(&sbi->ll_lock);
         if (!list_empty(&llap->llap_pglist_item))
                 list_del_init(&llap->llap_pglist_item);
-        ll_pglist_cpu_unlock(sbi, cpu);
+        sbi->ll_pglist_gen++;
+        sbi->ll_async_page_count--;
+        spin_unlock(&sbi->ll_lock);
         OBD_SLAB_FREE(llap, ll_async_page_slab, ll_async_page_slab_size);
 
         EXIT;
@@ -1221,16 +1046,20 @@ static int ll_issue_page_read(struct obd_export *exp,
         RETURN(rc);
 }
 
-static void ll_ra_stats_inc_sbi(struct ll_sb_info *sbi, enum ra_stat which)
+static void ll_ra_stats_inc_unlocked(struct ll_ra_info *ra, enum ra_stat which)
 {
         LASSERTF(which >= 0 && which < _NR_RA_STAT, "which: %u\n", which);
-        lprocfs_counter_incr(sbi->ll_ra_stats, which);
+        ra->ra_stats[which]++;
 }
 
 static void ll_ra_stats_inc(struct address_space *mapping, enum ra_stat which)
 {
         struct ll_sb_info *sbi = ll_i2sbi(mapping->host);
-        ll_ra_stats_inc_sbi(sbi, which);
+        struct ll_ra_info *ra = &ll_i2sbi(mapping->host)->ll_ra_info;
+
+        spin_lock(&sbi->ll_lock);
+        ll_ra_stats_inc_unlocked(ra, which);
+        spin_unlock(&sbi->ll_lock);
 }
 
 void ll_ra_accounting(struct ll_async_page *llap, struct address_space *mapping)
@@ -1766,9 +1595,10 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
         int zero = 0, stride_zero = 0, stride_detect = 0, ra_miss = 0;
         ENTRY;
 
+        spin_lock(&sbi->ll_lock);
         spin_lock(&ras->ras_lock);
 
-        ll_ra_stats_inc_sbi(sbi, hit ? RA_STAT_HIT : RA_STAT_MISS);
+        ll_ra_stats_inc_unlocked(ra, hit ? RA_STAT_HIT : RA_STAT_MISS);
 
         /* reset the read-ahead window in two cases.  First when the app seeks
          * or reads to some other part of the file.  Secondly if we get a
@@ -1777,7 +1607,7 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
          * reclaiming it before we get to it. */
         if (!index_in_window(index, ras->ras_last_readpage, 8, 8)) {
                 zero = 1;
-                ll_ra_stats_inc_sbi(sbi, RA_STAT_DISTANT_READPAGE);
+                ll_ra_stats_inc_unlocked(ra, RA_STAT_DISTANT_READPAGE);
 		/* check whether it is in stride I/O mode*/
                 if (!index_in_stride_window(index, ras, inode))
                         stride_zero = 1;
@@ -1792,7 +1622,7 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
                  * stride I/O mode to avoid complication */
                 if (!stride_io_mode(ras))
                         stride_zero = 1;
-                ll_ra_stats_inc_sbi(sbi, RA_STAT_MISS_IN_WINDOW);
+                ll_ra_stats_inc_unlocked(ra, RA_STAT_MISS_IN_WINDOW);
         }
 
         /* On the second access to a file smaller than the tunable
@@ -1889,6 +1719,7 @@ out_unlock:
         RAS_CDEBUG(ras);
         ras->ras_request_index++;
         spin_unlock(&ras->ras_lock);
+        spin_unlock(&sbi->ll_lock);
         return;
 }
 
