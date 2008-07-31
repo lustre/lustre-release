@@ -959,7 +959,7 @@ struct obd_ops {
         int (*o_iocontrol)(unsigned int cmd, struct obd_export *exp, int len,
                            void *karg, void *uarg);
         int (*o_get_info)(struct obd_export *, __u32 keylen, void *key,
-                          __u32 *vallen, void *val);
+                          __u32 *vallen, void *val, struct lov_stripe_md *lsm);
         int (*o_set_info_async)(struct obd_export *, __u32 keylen, void *key,
                                 __u32 vallen, void *val,
                                 struct ptlrpc_request_set *set);
