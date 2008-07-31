@@ -48,7 +48,6 @@ CFS_MODULE_PARM(local_nid_dist_zero, "i", int, 0444,
 
 /* forward ref */
 static void lnet_commit_md (lnet_libmd_t *md, lnet_msg_t *msg);
-static void lnet_drop_delayed_put(lnet_msg_t *msg, char *reason);
 
 #define LNET_MATCHMD_NONE     0   /* Didn't match */
 #define LNET_MATCHMD_OK       1   /* Matched OK */
