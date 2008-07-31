@@ -2473,7 +2473,8 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 }
 
 static int lov_get_info(struct obd_export *exp, __u32 keylen,
-                        void *key, __u32 *vallen, void *val)
+                        void *key, __u32 *vallen, void *val,
+                        struct lov_stripe_md *lsm)
 {
         struct obd_device *obddev = class_exp2obd(exp);
         struct lov_obd *lov = &obddev->u.lov;
@@ -2489,7 +2490,6 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                 struct {
                         char name[16];
                         struct ldlm_lock *lock;
-                        struct lov_stripe_md *lsm;
                 } *data = key;
                 struct ldlm_res_id *res_id = &data->lock->l_resource->lr_name;
                 struct lov_oinfo *loi;
@@ -2505,8 +2505,8 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                 /* XXX - it's assumed all the locks for deleted OSTs have
                  * been cancelled. Also, the export for deleted OSTs will
                  * be NULL and won't match the lock's export. */
-                for (i = 0; i < data->lsm->lsm_stripe_count; i++) {
-                        loi = data->lsm->lsm_oinfo[i];
+                for (i = 0; i < lsm->lsm_stripe_count; i++) {
+                        loi = lsm->lsm_oinfo[i];
                         if (!lov->lov_tgts[loi->loi_ost_idx])
                                 continue;
                         if (lov->lov_tgts[loi->loi_ost_idx]->ltd_exp ==
@@ -2517,7 +2517,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                         }
                 }
                 LDLM_ERROR(data->lock, "lock on inode without such object");
-                dump_lsm(D_ERROR, data->lsm);
+                dump_lsm(D_ERROR, lsm);
                 GOTO(out, rc = -ENXIO);
         } else if (KEY_IS(KEY_LAST_ID)) {
                 struct obd_id_info *info = val;
@@ -2530,7 +2530,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                 if (!tgt || !tgt->ltd_active)
                         GOTO(out, rc = -ESRCH);
 
-                rc = obd_get_info(tgt->ltd_exp, keylen, key, &size, info->data);
+                rc = obd_get_info(tgt->ltd_exp, keylen, key, &size, info->data, NULL);
                 GOTO(out, rc = 0);
         } else if (KEY_IS(KEY_LOVDESC)) {
                 struct lov_desc *desc_ret = val;
