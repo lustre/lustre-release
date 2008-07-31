@@ -375,9 +375,29 @@ Details    : fix a race between class_handle_unhash() and class_handle2object()
 Severity   : minor
 Frequency  : rare
 Bugzilla   : 15899
-Description: Pools downgrade compatibility 
+Description: Pools downgrade compatibility
 Details    : Files striped across pools in future (1.8) releases will be
 	     properly understood if the server is downgraded to this version.
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 12755
+Description: Kernel BUG: sd_iostats_bump: unexpected disk index
+Details    : remove the limit of 256 scsi disks in the sd_iostat patch
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 16494
+Description: oops in sd_iostats_seq_show()
+Details    : unloading/reloading the scsi low level driver triggers a kernel
+	     bug when trying to access the sd iostat file.
+
+Severity   : major
+Frequency  : rare
+Bugzilla   : 16404
+Description: Kernel panics during QLogic driver reload
+Details    : REQ_BLOCK_PC requests are not handled properly in the sd iostat
+	     patch, causing memory corruption.
 
 -------------------------------------------------------------------------------
 

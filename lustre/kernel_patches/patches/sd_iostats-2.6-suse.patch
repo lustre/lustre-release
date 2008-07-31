@@ -1,10 +1,10 @@
-Index: linux-2.6.9-67.0.20/drivers/scsi/Kconfig
+Index: linux-2.6.5-7.311/drivers/scsi/Kconfig
 ===================================================================
---- linux-2.6.9-67.0.20.orig/drivers/scsi/Kconfig
-+++ linux-2.6.9-67.0.20/drivers/scsi/Kconfig
-@@ -61,6 +61,14 @@ config SCSI_DUMP
- 	help
- 	   SCSI dump support
+--- linux-2.6.5-7.311.orig/drivers/scsi/Kconfig
++++ linux-2.6.5-7.311/drivers/scsi/Kconfig
+@@ -67,6 +67,14 @@ config SCSI_DUMP
+ 	   polling I/O.  If it doesn't, LKCD will fall back to ordinary
+ 	   interrupt-driven I/O.
  
 +config SD_IOSTATS
 +   bool "Enable SCSI disk I/O stats"
@@ -17,10 +17,10 @@ Index: linux-2.6.9-67.0.20/drivers/scsi/Kconfig
  config CHR_DEV_ST
  	tristate "SCSI tape support"
  	depends on SCSI
-Index: linux-2.6.9-67.0.20/drivers/scsi/scsi_proc.c
+Index: linux-2.6.5-7.311/drivers/scsi/scsi_proc.c
 ===================================================================
---- linux-2.6.9-67.0.20.orig/drivers/scsi/scsi_proc.c
-+++ linux-2.6.9-67.0.20/drivers/scsi/scsi_proc.c
+--- linux-2.6.5-7.311.orig/drivers/scsi/scsi_proc.c
++++ linux-2.6.5-7.311/drivers/scsi/scsi_proc.c
 @@ -38,7 +38,8 @@
  /* 4K page size, but our output routines, use some slack for overruns */
  #define PROC_BLOCK_SIZE (3*1024)
@@ -31,13 +31,13 @@ Index: linux-2.6.9-67.0.20/drivers/scsi/scsi_proc.c
  
  /* Protect sht->present and sht->proc_dir */
  static DECLARE_MUTEX(global_host_template_sem);
-Index: linux-2.6.9-67.0.20/drivers/scsi/sd.c
+Index: linux-2.6.5-7.311/drivers/scsi/sd.c
 ===================================================================
---- linux-2.6.9-67.0.20.orig/drivers/scsi/sd.c
-+++ linux-2.6.9-67.0.20/drivers/scsi/sd.c
-@@ -63,6 +63,63 @@
- 
- #include "scsi_logging.h"
+--- linux-2.6.5-7.311.orig/drivers/scsi/sd.c
++++ linux-2.6.5-7.311/drivers/scsi/sd.c
+@@ -66,6 +66,63 @@
+ #define SD_MAJORS	16
+ #define SD_DISKS	32768	/* anything between 256 and 262144 */
  
 +#if (defined(CONFIG_SD_IOSTATS) && defined(CONFIG_PROC_FS))
 +# include <linux/proc_fs.h>
@@ -97,10 +97,10 @@ Index: linux-2.6.9-67.0.20/drivers/scsi/sd.c
 +#endif
 +
  /*
-  * More than enough for everybody ;)  The huge number of majors
-  * is a leftover from 16bit dev_t days, we don't really need that
-@@ -101,6 +158,9 @@ struct scsi_disk {
- 	u8		write_prot;
+  * Time out in seconds for disks and Magneto-opticals (which are slower).
+  */
+@@ -96,6 +153,9 @@ struct scsi_disk {
+ 	u8		device_ready;
  	unsigned	WCE : 1;	/* state of disk WCE bit */
  	unsigned	RCD : 1;	/* state of disk RCD bit, unused */
 +#if (defined(CONFIG_SD_IOSTATS) && defined(CONFIG_PROC_FS))
@@ -108,8 +108,8 @@ Index: linux-2.6.9-67.0.20/drivers/scsi/sd.c
 +#endif
  };
  
- static DEFINE_IDR(sd_index_idr);
-@@ -391,6 +451,8 @@ queue:
+ 
+@@ -384,6 +444,8 @@ queue:
  	SCpnt->allowed = SD_MAX_RETRIES;
  	SCpnt->timeout_per_command = timeout;
  
@@ -118,7 +118,7 @@ Index: linux-2.6.9-67.0.20/drivers/scsi/sd.c
  	/*
  	 * This is the completion routine we use.  This is matched in terms
  	 * of capability to this function.
-@@ -849,6 +911,9 @@ static void sd_rw_intr(struct scsi_cmnd 
+@@ -884,6 +946,9 @@ static void sd_rw_intr(struct scsi_cmnd 
  			break;
  		}
  	}
@@ -128,9 +128,9 @@ Index: linux-2.6.9-67.0.20/drivers/scsi/sd.c
  	/*
  	 * This calls the generic completion function, now that we know
  	 * how many actual sectors finished, and how many sectors we need
-@@ -1487,6 +1552,36 @@ static int sd_probe(struct device *dev)
- 		gd->flags |= GENHD_FL_REMOVABLE;
- 	gd->queue = sdkp->device->request_queue;
+@@ -1527,6 +1592,36 @@ static int sd_probe(struct device *dev)
+ 	if (!sdkp->device_ready || sdp->host->no_partition_check)
+ 		gd->flags |= GENHD_FL_NO_PARTITION_CHECK;
  
 +#if (defined(CONFIG_SD_IOSTATS) && defined(CONFIG_PROC_FS))
 +	sdkp->stats = kzalloc(sizeof(iostat_stats_t), GFP_KERNEL);
@@ -165,23 +165,23 @@ Index: linux-2.6.9-67.0.20/drivers/scsi/sd.c
  	dev_set_drvdata(dev, sdkp);
  	add_disk(gd);
  
-@@ -1549,8 +1644,14 @@ static void scsi_disk_release(struct kre
- 
- 	disk->private_data = NULL;
- 
+@@ -1574,7 +1669,14 @@ static int sd_remove(struct device *dev)
+ static void scsi_disk_release(struct kobject *kobj)
+ {
+ 	struct scsi_disk *sdkp = to_scsi_disk(kobj);
+-	
++
 +#if (defined(CONFIG_SD_IOSTATS) && defined(CONFIG_PROC_FS))
 +	if (sdkp->stats) {
-+		remove_proc_entry(disk->disk_name, sd_iostats_procdir);
++		remove_proc_entry(sdkp->disk->disk_name, sd_iostats_procdir);
 +		kfree(sdkp->stats);
 +		sdkp->stats = NULL;
 +	}
 +#endif
- 	put_disk(disk);
--
- 	kfree(sdkp);
- }
+ 	put_disk(sdkp->disk);
  
-@@ -1575,6 +1676,366 @@ static void sd_shutdown(struct device *d
+ 	spin_lock(&sd_index_lock);
+@@ -1605,6 +1707,366 @@ static void sd_shutdown(struct device *d
  	sd_sync_cache(sdp);
  }	
  
@@ -548,7 +548,7 @@ Index: linux-2.6.9-67.0.20/drivers/scsi/sd.c
  /**
   *	init_sd - entry point for this driver (both when built in or when
   *	a module).
-@@ -1584,6 +2045,7 @@ static void sd_shutdown(struct device *d
+@@ -1614,6 +2076,7 @@ static void sd_shutdown(struct device *d
  static int __init init_sd(void)
  {
  	int majors = 0, i;
@@ -556,7 +556,7 @@ Index: linux-2.6.9-67.0.20/drivers/scsi/sd.c
  
  	SCSI_LOG_HLQUEUE(3, printk("init_sd: sd driver entry point\n"));
  
-@@ -1594,7 +2056,11 @@ static int __init init_sd(void)
+@@ -1624,7 +2087,11 @@ static int __init init_sd(void)
  	if (!majors)
  		return -ENODEV;
  
@@ -569,7 +569,7 @@ Index: linux-2.6.9-67.0.20/drivers/scsi/sd.c
  }
  
  /**
-@@ -1611,6 +2077,7 @@ static void __exit exit_sd(void)
+@@ -1641,6 +2108,7 @@ static void __exit exit_sd(void)
  	scsi_unregister_driver(&sd_template.gendrv);
  	for (i = 0; i < SD_MAJORS; i++)
  		unregister_blkdev(sd_major(i), "sd");

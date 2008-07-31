@@ -1,7 +1,7 @@
 lustre-version-revert_suse.patch
 lustre_version.patch
 dev_read_only-2.6-lnxi.patch
-sd_iostats-2.6-rhel4.patch 
+sd_iostats-2.6-suse.patch 
 blkdev_tunables-2.6-suse.patch
 uml-exprt-clearuser.patch
 qsnet-suse-2.6.patch 
