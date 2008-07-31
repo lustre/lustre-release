@@ -30,6 +30,34 @@
 #include <linux/lustre_compat25.h>
 #include <linux/pagemap.h>
 
+#ifdef HAVE_PERCPU_COUNTER
+#include <linux/percpu_counter.h>
+
+typedef struct percpu_counter lcounter_t;
+
+#define lcounter_read(counter)          (int)percpu_counter_read(counter)
+#define lcounter_inc(counter)           percpu_counter_inc(counter)
+#define lcounter_dec(counter)           percpu_counter_dec(counter)
+
+#ifdef HAVE_PERCPU_2ND_ARG
+# define lcounter_init(counter)          percpu_counter_init(counter, 0)
+#else
+# define lcounter_init(counter)          percpu_counter_init(counter)
+#endif
+
+#define lcounter_destroy(counter)       percpu_counter_destroy(counter)
+
+#else
+typedef struct { atomic_t count; } lcounter_t;
+
+#define lcounter_read(counter)          atomic_read(&counter->count)
+#define lcounter_inc(counter)           atomic_inc(&counter->count)
+#define lcounter_dec(counter)           atomic_dec(&counter->count)
+#define lcounter_init(counter)          atomic_set(&counter->count, 0)
+#define lcounter_destroy(counter)       
+
+#endif /* if defined HAVE_PERCPU_COUNTER */
+
 /* lprocfs.c */
 enum {
          LPROC_LL_DIRTY_HITS = 0,
