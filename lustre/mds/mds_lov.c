@@ -311,7 +311,7 @@ static int mds_lov_get_objid(struct obd_device * obd,
                 lastid.idx = idx;
                 lastid.data = &data[off];
                 rc = obd_get_info(mds->mds_osc_exp, sizeof(KEY_LAST_ID),
-                                  KEY_LAST_ID, &size, &lastid);
+                                  KEY_LAST_ID, &size, &lastid, NULL);
                 if (rc)
                         GOTO(out, rc);
 
@@ -383,7 +383,7 @@ static __u32 mds_lov_get_idx(struct obd_export *lov,
         int valsize = sizeof(ost_uuid);
 
         rc = obd_get_info(lov, sizeof(KEY_LOV_IDX), KEY_LOV_IDX,
-                          &valsize, ost_uuid);
+                          &valsize, ost_uuid, NULL);
         LASSERT(rc >= 0);
 
         RETURN(rc);
@@ -403,7 +403,7 @@ static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
                 RETURN(-ENOMEM);
 
         rc = obd_get_info(lov, sizeof(KEY_LOVDESC), KEY_LOVDESC,
-                          &valsize, ld);
+                          &valsize, ld, NULL);
         if (rc)
                 GOTO(out, rc);
 

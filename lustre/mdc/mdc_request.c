@@ -975,7 +975,7 @@ int mdc_set_info_async(struct obd_export *exp, obd_count keylen,
 }
 
 int mdc_get_info(struct obd_export *exp, __u32 keylen, void *key,
-                 __u32 *vallen, void *val)
+                 __u32 *vallen, void *val, struct lov_stripe_md *lsm)
 {
         int rc = -EINVAL;
 
@@ -1267,7 +1267,7 @@ int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp)
         ENTRY;
 
         rc = obd_get_info(lov_exp, sizeof(KEY_LOVDESC), KEY_LOVDESC,
-                          &valsize, &desc);
+                          &valsize, &desc, NULL);
         if (rc)
                 RETURN(rc);
 

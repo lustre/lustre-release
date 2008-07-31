@@ -3483,7 +3483,8 @@ static int filter_sync(struct obd_export *exp, struct obdo *oa,
 }
 
 static int filter_get_info(struct obd_export *exp, __u32 keylen,
-                           void *key, __u32 *vallen, void *val)
+                           void *key, __u32 *vallen, void *val,
+                           struct lov_stripe_md *lsm)
 {
         struct obd_device *obd;
         ENTRY;

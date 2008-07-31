@@ -1335,7 +1335,7 @@ static int ost_get_info(struct obd_export *exp, struct ptlrpc_request *req)
         keylen = lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF);
 
         /* call once to get the size to allocate the reply buffer */
-        rc = obd_get_info(exp, keylen, key, &size[1], NULL);
+        rc = obd_get_info(exp, keylen, key, &size[1], NULL, NULL);
         if (rc)
                 RETURN(rc);
 
@@ -1345,7 +1345,7 @@ static int ost_get_info(struct obd_export *exp, struct ptlrpc_request *req)
 
         reply = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*reply));
         /* call again to fill in the reply buffer */
-        rc = obd_get_info(exp, keylen, key, size, reply);
+        rc = obd_get_info(exp, keylen, key, size, reply, NULL);
         lustre_msg_set_status(req->rq_repmsg, 0);
 
         RETURN(rc);
