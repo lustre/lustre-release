@@ -218,6 +218,15 @@ static inline int opcode_offset(__u32 opc) {
                         (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
                         (MDS_LAST_OPC - MDS_FIRST_OPC) +
                         (OST_LAST_OPC - OST_FIRST_OPC));
+        } else if (opc < QUOTA_LAST_OPC) {
+                /* LQUOTA Opcode */
+                return (opc - QUOTA_FIRST_OPC +
+                        (LLOG_LAST_OPC - LLOG_FIRST_OPC) +
+                        (OBD_LAST_OPC - OBD_FIRST_OPC) +
+                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
+                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
         } else {
                 /* Unknown Opcode */
                 return -1;
@@ -229,7 +238,8 @@ static inline int opcode_offset(__u32 opc) {
                             (LDLM_LAST_OPC - LDLM_FIRST_OPC)   + \
                             (MGS_LAST_OPC - MGS_FIRST_OPC)     + \
                             (OBD_LAST_OPC - OBD_FIRST_OPC)     + \
-                            (LLOG_LAST_OPC - LLOG_FIRST_OPC))
+                            (LLOG_LAST_OPC - LLOG_FIRST_OPC)   + \
+                            (QUOTA_LAST_OPC - QUOTA_FIRST_OPC))
 
 #define EXTRA_MAX_OPCODES ((PTLRPC_LAST_CNTR - PTLRPC_FIRST_CNTR)  + \
                            (EXTRA_LAST_OPC - EXTRA_FIRST_OPC))
@@ -251,12 +261,12 @@ enum {
         LDLM_EXTENT_ENQUEUE,
         LDLM_FLOCK_ENQUEUE,
         LDLM_IBITS_ENQUEUE,
+        MDS_REINT_SETATTR,
         MDS_REINT_CREATE,
         MDS_REINT_LINK,
-        MDS_REINT_OPEN,
-        MDS_REINT_SETATTR,
-        MDS_REINT_RENAME,
         MDS_REINT_UNLINK,
+        MDS_REINT_RENAME,
+        MDS_REINT_OPEN,
         EXTRA_LAST_OPC
 };
 

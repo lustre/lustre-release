@@ -1628,7 +1628,9 @@ extern int quota_copy_qdata(void *request, struct qunit_data *qdata,
 typedef enum {
         QUOTA_DQACQ     = 601,
         QUOTA_DQREL     = 602,
+        QUOTA_LAST_OPC
 } quota_cmd_t;
+#define QUOTA_FIRST_OPC QUOTA_DQACQ
 
 #define JOIN_FILE_ALIGN 4096
 
