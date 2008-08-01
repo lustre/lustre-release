@@ -22,6 +22,7 @@ obdbarrier
 lload
 llverfs
 llverdev
+ll_recover_lost_found_objs
 l_getgroups
 .*.cmd
 .*.d
