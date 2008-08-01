@@ -89,6 +89,7 @@ rpms:
 	for subdir in $(RPM_SUBDIRS) ; do				\
 		echo "Making rpms in $$subdir";				\
 		(cd $$subdir && $(MAKE) $(AM_MAKEFLAGS) rpms);		\
+		echo "Finished rpms in $$subdir";			\
 	done;								\
 	$(MAKE) $(AM_MAKEFLAGS) rpms-real
 
@@ -96,6 +97,7 @@ srpm:
 	for subdir in $(RPM_SUBDIRS) ; do				\
 		echo "Making srpm in $$subdir";				\
 		(cd $$subdir && $(MAKE) $(AM_MAKEFLAGS) srpm);		\
+		echo "Finished rpms in $$subdir";			\
 	done;								\
 	$(MAKE) $(AM_MAKEFLAGS) srpm-real
 
