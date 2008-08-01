@@ -99,7 +99,7 @@ int obd_ioctl_getdata(char **buf, int *len, void *arg)
         ENTRY;
 
         err = copy_from_user(&hdr, (void *)arg, sizeof(hdr));
-        if ( err ) 
+        if ( err )
                 RETURN(err);
 
         if (hdr.ioc_version != OBD_IOCTL_VERSION) {
@@ -167,8 +167,8 @@ int obd_ioctl_getdata(char **buf, int *len, void *arg)
 
 int obd_ioctl_popdata(void *arg, void *data, int len)
 {
-        int err; 
-        
+        int err;
+
         err = copy_to_user(arg, data, len);
         if (err)
                 err = -EFAULT;
@@ -345,7 +345,7 @@ static void obd_device_list_seq_stop(struct seq_file *p, void *v)
 }
 
 static void *obd_device_list_seq_next(struct seq_file *p, void *v, loff_t *pos)
-{      
+{ 
         ++*pos;
         if (*pos >= class_devno_max())
                 return NULL;

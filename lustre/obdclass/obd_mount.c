@@ -416,7 +416,7 @@ int lustre_process_log(struct super_block *sb, char *logname,
                                    "communication errors between this node and "
                                    "the MGS, a bad configuration, or other "
                                    "errors. See the syslog for more "
-                                   "information.\n", mgc->obd_name, logname, 
+                                   "information.\n", mgc->obd_name, logname,
                                    rc);
 
         /* class_obd_list(); */
@@ -799,7 +799,7 @@ static int lustre_stop_mgc(struct super_block *sb)
                 GOTO(out, rc = -EBUSY);
         }
 
-        /* The MGC has no recoverable data in any case. 
+        /* The MGC has no recoverable data in any case.
          * force shotdown set in umount_begin */
         obd->obd_no_recov = 1;
 
@@ -1382,7 +1382,7 @@ static void server_put_super(struct super_block *sb)
         CDEBUG(D_MOUNT, "server put_super %s\n", tmpname);
 
         /* Stop the target */
-        if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC) && 
+        if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC) &&
             (IS_MDT(lsi->lsi_ldd) || IS_OST(lsi->lsi_ldd))) {
                 struct lustre_profile *lprof = NULL;
 
