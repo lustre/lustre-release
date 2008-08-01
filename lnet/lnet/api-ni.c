@@ -439,7 +439,7 @@ lnet_freelist_fini (lnet_freelist_t *fl)
         LASSERT (count == fl->fl_nobjs);
 
         LIBCFS_FREE(fl->fl_objs, fl->fl_nobjs * fl->fl_objsize);
-        memset (fl, 0, sizeof (fl));
+        memset (fl, 0, sizeof (*fl));
 }
 
 int
