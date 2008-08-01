@@ -556,7 +556,12 @@ static int server_stop_mgs(struct super_block *sb)
 
 DECLARE_MUTEX(mgc_start_lock);
 
-/* Set up a mgcobd to process startup logs */
+/** Set up a mgc obd to process startup logs
+ *
+ * \param sb [in] super block of the mgc obd
+ *
+ * \retval 0 success, otherwise error code
+ */
 static int lustre_start_mgc(struct super_block *sb)
 {
         struct lustre_handle mgc_conn = {0, };
@@ -613,7 +618,7 @@ static int lustre_start_mgc(struct super_block *sb)
         mutex_down(&mgc_start_lock);
 
         obd = class_name2obd(mgcname);
-        if (obd) {
+        if (obd && !obd->obd_stopping) {
                 /* Re-using an existing MGC */
                 atomic_inc(&obd->u.cli.cl_mgc_refcount);
 

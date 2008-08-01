@@ -12,6 +12,12 @@ tbd  Sun Microsystems, Inc.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
         removed cwd "./" (refer to Bugzilla 14399).
 
+Severity   : normal
+Bugzilla   : 15576
+Description: Resolve device initialization race
+Details    : Prevent proc handler from accessing devices added to the
+             obd_devs array but yet be intialized.
+
 Severity   : enhancement
 Bugzilla   : 15308
 Description: Update to SLES10 SP2 kernel-2.6.16.60-0.23.

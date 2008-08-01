@@ -262,6 +262,21 @@ int obd_proc_read_pinger(char *page, char **start, off_t off, int count,
                        );
 }
 
+/**
+ * Check all obd devices health
+ *
+ * \param page
+ * \param start
+ * \param off
+ * \param count
+ * \param eof
+ * \param data
+ *                  proc read function parameters, please refer to kernel
+ *                  code fs/proc/generic.c proc_file_read()
+ * \param data [in] unused
+ *
+ * \retval number of characters printed
+ */
 static int obd_proc_read_health(char *page, char **start, off_t off,
                                 int count, int *eof, void *data)
 {
@@ -276,7 +291,7 @@ static int obd_proc_read_health(char *page, char **start, off_t off,
                 struct obd_device *obd;
 
                 obd = class_num2obd(i);
-                if (obd == NULL)
+                if (obd == NULL || !obd->obd_attached || !obd->obd_set_up)
                         continue;
 
                 LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
