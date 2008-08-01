@@ -739,7 +739,7 @@ kiblnd_create_conn (kib_peer_t *peer, struct rdma_cm_id *cmid, int state)
                 }
         }
 
-#if (IBLND_OFED_VERSION == 1025)
+#ifdef HAVE_OFED_IB_COMP_VECTOR
         cq = ib_create_cq(cmid->device,
                           kiblnd_cq_completion, kiblnd_cq_event, conn,
                           IBLND_CQ_ENTRIES(), 0);

@@ -613,7 +613,7 @@ kiblnd_rd_size (kib_rdma_desc_t *rd)
 }
 #endif
 
-#if (IBLND_OFED_VERSION == 1020) || (IBLND_OFED_VERSION == 1025)
+#ifdef HAVE_OFED_IB_DMA_MAP
 
 static inline __u64 kiblnd_dma_map_single(struct ib_device *dev,
                                           void *msg, size_t size,
@@ -665,7 +665,7 @@ static inline unsigned int kiblnd_sg_dma_len(struct ib_device *dev,
 #define KIBLND_CONN_PARAM(e)            ((e)->param.conn.private_data)
 #define KIBLND_CONN_PARAM_LEN(e)        ((e)->param.conn.private_data_len)
 
-#elif (IBLND_OFED_VERSION == 1010)
+#else
 
 static inline dma_addr_t kiblnd_dma_map_single(struct ib_device *dev,
                                                void *msg, size_t size,

@@ -460,6 +460,7 @@ if test $ENABLEO2IB -eq 0; then
 	AC_MSG_RESULT([disabled])
 else
 	o2ib_found=false
+
 	for O2IBPATH in $O2IBPATHS; do
 		if test \( -f ${O2IBPATH}/include/rdma/rdma_cm.h -a \
 			   -f ${O2IBPATH}/include/rdma/ib_cm.h -a \
@@ -469,6 +470,7 @@ else
 			break
  		fi
 	done
+
 	if ! $o2ib_found; then
 		AC_MSG_RESULT([no])
 		case $ENABLEO2IB in
@@ -536,23 +538,41 @@ else
 			fi
 		fi
 
-		# version checking is a hack and isn't reliable,
-		# we need verify it with each new ofed release
+                LB_LINUX_TRY_COMPILE([
+		        #include <linux/version.h>
+		        #include <linux/pci.h>
+		        #if !HAVE_GFP_T
+		        typedef int gfp_t;
+		        #endif
+		        #include <rdma/ib_verbs.h>
+                ],[
+                        ib_dma_map_single(NULL, NULL, 0, 0);
+                        return 0;
+                ],[
+                        AC_MSG_RESULT(yes)
+                        AC_DEFINE(HAVE_OFED_IB_DMA_MAP, 1,
+                                  [ib_dma_map_single defined])
+                ],[
+                        AC_MSG_RESULT(NO)
+                ])
 
-		if grep -q ib_dma_map_single \
-			${O2IBPATH}/include/rdma/ib_verbs.h; then
-			if grep -q comp_vector \
-				${O2IBPATH}/include/rdma/ib_verbs.h; then
-				IBLND_OFED_VERSION="1025"
-			else
-				IBLND_OFED_VERSION="1020"
-			fi
-		else
-			IBLND_OFED_VERSION="1010"
-		fi
-
-		AC_DEFINE_UNQUOTED(IBLND_OFED_VERSION, $IBLND_OFED_VERSION,
-				   [OFED version])
+                LB_LINUX_TRY_COMPILE([
+		        #include <linux/version.h>
+		        #include <linux/pci.h>
+		        #if !HAVE_GFP_T
+		        typedef int gfp_t;
+		        #endif
+		        #include <rdma/ib_verbs.h>
+                ],[
+                        ib_create_cq(NULL, NULL, NULL, NULL, 0, 0);
+                        return 0;
+                ],[
+                        AC_MSG_RESULT(yes)
+                        AC_DEFINE(HAVE_OFED_IB_COMP_VECTOR, 1,
+                                  [has completion vector])
+                ],[
+                        AC_MSG_RESULT(NO)
+                ])
 
 		EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 	fi
