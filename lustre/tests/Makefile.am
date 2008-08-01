@@ -35,7 +35,7 @@ noinst_PROGRAMS += openfilleddirunlink rename_many memhog iopentest1 iopentest2
 noinst_PROGRAMS += mmap_sanity flock_test writemany reads flocks_test
 noinst_PROGRAMS += ll_getstripe_info
 if MPITESTS
-noinst_PROGRAMS += parallel_grouplock write_append_truncate createmany_mpi
+noinst_PROGRAMS += parallel_grouplock write_append_truncate createmany_mpi mdsrate
 endif
 # noinst_PROGRAMS += ldaptest copy_attr mkdirdeep 
 bin_PROGRAMS = mcreate munlink
@@ -57,13 +57,16 @@ ll_dirstripe_verify_SOURCES= ll_dirstripe_verify.c
 ll_dirstripe_verify_LDADD= -L$(top_builddir)/lustre/utils -llustreapi
 
 if MPITESTS
-LAM_LD_FLAGS=-L/opt/lam/lib -lmpi -llam -lpthread
+#LAM_LD_FLAGS=-L/opt/lam/lib -lmpi -llam -lpthread
+LAM_LD_FLAGS=-lmpich -lpthread
 write_append_truncate_SOURCES=write_append_truncate.c
 write_append_truncate_LDADD=$(LAM_LD_FLAGS)
 createmany_mpi_SOURCES=createmany-mpi.c
 createmany_mpi_LDADD=$(LAM_LD_FLAGS)
-parallel_grouplock_SOURCES=parallel_grouplock.c lp_utils.c
+parallel_grouplock_SOURCES=parallel_grouplock.c lp_utils.c lp_utils.h
 parallel_grouplock_LDADD=$(LAM_LD_FLAGS)
+mdsrate_SOURCES=mdsrate.c
+mdsrate_LDADD=$(LAM_LD_FLAGS) -L$(top_builddir)/lustre/utils -llustreapi
 endif
 
 #copy_attr_LDADD= -lattr
