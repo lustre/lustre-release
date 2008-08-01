@@ -1457,11 +1457,39 @@ if test x$enable_liblustre_acl = xyes ; then
   AC_DEFINE(LIBLUSTRE_POSIX_ACL, 1, Liblustre Support ACL-enabled MDS)
 fi
 
+#
+# check --with-mpi option
+#
+AC_ARG_WITH([mpi],
+            AC_HELP_STRING([--with-mpi=path],
+                           [set path to mpi install (default=/opt/mpich)]),
+            [
+             case $with_mpi in
+             [[\\/$]]* | ?:[[\\/]]* )
+                 ;;
+             *)
+                 AC_MSG_ERROR([expected absolute directory name for --with-mpi])
+                 ;;
+             esac
+
+             MPI_ROOT=$with_mpi
+             LDFLAGS="$LDFLAGS -L$with_mpi/lib"
+             CFLAGS="$CFLAGS -I$with_mpi/include"
+            ],
+            [
+             MPI_ROOT=/opt/mpich
+             LDFLAGS="$LDFLAGS -L$MPI_ROOT/ch-p4/lib -L$MPI_ROOT/ch-p4/lib64"
+             CFLAGS="$CFLAGS -I$MPI_ROOT/include"
+            ])
+AC_SUBST(MPI_ROOT)
+
+#
+# check mpi's includes and library
+#
 AC_MSG_CHECKING([whether to build mpitests])
-AC_ARG_ENABLE([mpitests],
-	AC_HELP_STRING([--enable-mpitests],
-			[build liblustre mpi tests]),
-	[],[enable_mpitests=no])
+AC_CHECK_FILE([$MPI_ROOT/include/mpi.h],
+              [AC_CHECK_LIB([mpich],[MPI_Start],[enable_mpitests=yes],[enable_mpitests=no])],
+              [enable_mpitests=no])
 AC_MSG_RESULT([$enable_mpitests])
 
 AC_MSG_NOTICE([Enabling Lustre configure options for libsysio])
