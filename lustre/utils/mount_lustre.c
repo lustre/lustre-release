@@ -513,7 +513,8 @@ int main(int argc, char *const argv[])
         if (verbose) {
                 for (i = 0; i < argc; i++)
                         printf("arg[%d] = %s\n", i, argv[i]);
-                printf("source = %s (%s), target = %s\n", usource, source, target);
+                printf("source = %s (%s), target = %s\n",
+                       usource, source, target);
                 printf("options = %s\n", orig_options);
         }
 
@@ -568,7 +569,7 @@ int main(int argc, char *const argv[])
 
         if (set_tunables(source, strlen(source)) && verbose)
                 fprintf(stderr, "%s: unable to set tunables for %s"
-                                " (may cause reduced IO performance)",
+                                " (may cause reduced IO performance)\n",
                                 argv[0], source);
 
         register_service_tags(usource, source, target);
