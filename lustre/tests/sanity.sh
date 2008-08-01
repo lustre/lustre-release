@@ -2851,7 +2851,9 @@ test_67a() { # was test_67 bug 3285 - supplementary group fails on MDS, passes o
 	chgrp $RUNAS_ID $DIR/$tdir
 	$RUNAS -u $RUNAS_ID -g $(($RUNAS_ID + 1)) -G1,2,$RUNAS_ID ls $DIR/$tdir
 	RC=$?
-	GROUP_UPCALL=`lctl get_param -n mds.*.group_upcall`
+	GROUP_UPCALL=$(do_facet mds lctl get_param -n mds.*.group_upcall)
+	[ -z "$GROUP_UPCALL" ] && \
+		skip "lctl get_param failed! Useless to continue the test!" && return
 	[ "$GROUP_UPCALL" = "NONE" -a $RC -eq 0 ] && \
 		error "no-upcall passed" || true
 	[ "$GROUP_UPCALL" != "NONE" -a $RC -ne 0 ] && \
@@ -2862,23 +2864,32 @@ run_test 67a "supplementary group failure (should return error) ="
 cleanup_67b() {
 	set +vx
 	trap 0
-	lctl set_param -n mds.$MDS.group_upcall NONE
+	do_facet mds lctl set_param -n mds.*.group_upcall NONE
 }
 
 test_67b() { # bug 3285 - supplementary group fails on MDS, passes on client
-	T67_UID=${T67_UID:-1}	# needs to be in /etc/groups on MDS, gid == uid
+	# needs to be in /etc/groups on MDS, gid == uid
+	# Let's use RUNAS_ID
+	T67_UID=${T67_UID:-$RUNAS_ID}
+	
 	[ "$UID" = "$T67_UID" ] && skip "UID = T67_UID = $UID -- skipping" && return
 	check_kernel_version 35 || return 0
-	remote_mds && skip "remote MDS" && return
-	GROUP_UPCALL=`lctl get_param -n mds.$MDS.group_upcall`
-	[ "$GROUP_UPCALL" != "NONE" ] && skip "skip test - upcall" &&return
+	do_facet mds grep -q ":$T67_UID:$T67_UID" /etc/passwd || \
+		{ skip "Need gid=$T67_UID group and gid == uid on mds !" && return; }
+
+	GROUP_UPCALL=$(do_facet mds lctl get_param -n mds.*.group_upcall)
+	[ -z "$GROUP_UPCALL" ] && \
+		skip "lctl get_param failed! Useless to continue the test!" && return
+	[ "$GROUP_UPCALL" != "NONE" ] && \
+		skip "skip test - upcall=$GROUP_UPCALL" && return
 	set -vx
 	trap cleanup_67b EXIT
 	mkdir -p $DIR/$tdir
 	chmod 771 $DIR/$tdir
 	chgrp $T67_UID $DIR/$tdir
-	lctl set_param -n mds.$MDS.group_upcall `which l_getgroups`
-	l_getgroups -d $T67_UID
+	local l_getgroups=$(do_facet mds which l_getgroups)
+	do_facet mds lctl set_param -n mds.*.group_upcall $l_getgroups
+	do_facet mds $l_getgroups -d $T67_UID
 	$RUNAS -u $T67_UID -g 999 -G8,9,$T67_UID touch $DIR/$tdir/$tfile || \
 		error "'touch $DIR/$tdir/$tfile' failed"
 	[ -f $DIR/$tdir/$tfile ] || error "$DIR/$tdir/$tfile create error"
