@@ -14,6 +14,9 @@ noinst_SCRIPTS += replay-ost-single.sh replay-single.sh run-llog.sh sanityN.sh
 noinst_SCRIPTS += lockorder.sh socketclient socketserver runmultiop_bg_pause
 nobase_noinst_SCRIPTS = cfg/local.sh
 nobase_noinst_SCRIPTS += acl/make-tree acl/run cfg/ncli.sh
+nobase_noinst_SCRIPTS += racer/dir_create.sh racer/file_create.sh racer/file_list.sh
+nobase_noinst_SCRIPTS += racer/file_rm.sh racer/racer.sh racer/file_concat.sh
+nobase_noinst_SCRIPTS += racer/file_link.sh racer/file_rename.sh racer/file_symlink.sh
 nobase_noinst_DATA = acl/cp.test acl/getfacl-noacl.test acl/inheritance.test
 nobase_noinst_DATA += acl/misc.test acl/permissions.test acl/setfacl.test
 
