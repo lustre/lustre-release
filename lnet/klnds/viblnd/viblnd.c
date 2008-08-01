@@ -203,8 +203,7 @@ kibnal_pack_msg(kib_msg_t *msg, __u32 version, int credits,
         msg->ibm_credits  = credits;
         /*   ibm_nob */
         msg->ibm_cksum    = 0;
-        msg->ibm_srcnid   = lnet_ptlcompat_srcnid(kibnal_data.kib_ni->ni_nid,
-                                                  dstnid);
+        msg->ibm_srcnid   = kibnal_data.kib_ni->ni_nid;
         msg->ibm_srcstamp = kibnal_data.kib_incarnation;
         msg->ibm_dstnid   = dstnid;
         msg->ibm_dststamp = dststamp;

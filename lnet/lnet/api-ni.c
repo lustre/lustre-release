@@ -59,10 +59,6 @@ static char *routes = "";
 CFS_MODULE_PARM(routes, "s", charp, 0444,
                 "routes to non-local networks");
 
-static char *portals_compatibility = "none";
-CFS_MODULE_PARM(portals_compatibility, "s", charp, 0444,
-                "wire protocol compatibility: 'strong'|'weak'|'none'");
-
 char *
 lnet_get_routes(void)
 {
@@ -90,28 +86,6 @@ lnet_get_networks(void)
                 return networks;
 
         return "tcp";
-}
-
-int
-lnet_get_portals_compatibility(void)
-{
-        if (!strcmp(portals_compatibility, "none")) {
-                return 0;
-        }
-
-        if (!strcmp(portals_compatibility, "weak")) {
-                return 1;
-                LCONSOLE_WARN("Starting in weak portals-compatible mode\n");
-        }
-
-        if (!strcmp(portals_compatibility, "strong")) {
-                return 2;
-                LCONSOLE_WARN("Starting in strong portals-compatible mode\n");
-        }
-
-        LCONSOLE_ERROR_MSG(0x102, "portals_compatibility=\"%s\" not supported\n",
-                           portals_compatibility);
-        return -EINVAL;
 }
 
 void
@@ -193,12 +167,6 @@ lnet_get_networks (void)
         }
 
         return default_networks;
-}
-
-int
-lnet_get_portals_compatibility(void)
-{
-        return 0;
 }
 
 # ifndef HAVE_LIBPTHREAD
@@ -811,7 +779,7 @@ lnet_net2ni_locked (__u32 net)
         list_for_each (tmp, &the_lnet.ln_nis) {
                 ni = list_entry(tmp, lnet_ni_t, ni_list);
 
-                if (lnet_ptlcompat_matchnet(LNET_NIDNET(ni->ni_nid), net)) {
+                if (LNET_NIDNET(ni->ni_nid) == net) {
                         lnet_ni_addref_locked(ni);
                         return ni;
                 }
@@ -843,7 +811,7 @@ lnet_nid2ni_locked (lnet_nid_t nid)
         list_for_each (tmp, &the_lnet.ln_nis) {
                 ni = list_entry(tmp, lnet_ni_t, ni_list);
 
-                if (lnet_ptlcompat_matchnid(ni->ni_nid, nid)) {
+                if (ni->ni_nid == nid) {
                         lnet_ni_addref_locked(ni);
                         return ni;
                 }
@@ -867,11 +835,9 @@ lnet_islocalnid (lnet_nid_t nid)
 }
 
 int
-lnet_count_acceptor_nis (lnet_ni_t **first_ni)
+lnet_count_acceptor_nis (void)
 {
-        /* Return the # of NIs that need the acceptor.  Return the first one in
-         * *first_ni so the acceptor can pass it connections "blind" to retain
-         * binary compatibility. */
+        /* Return the # of NIs that need the acceptor. */
         int                count = 0;
 #if defined(__KERNEL__) || defined(HAVE_LIBPTHREAD)
         struct list_head  *tmp;
@@ -881,14 +847,8 @@ lnet_count_acceptor_nis (lnet_ni_t **first_ni)
         list_for_each (tmp, &the_lnet.ln_nis) {
                 ni = list_entry(tmp, lnet_ni_t, ni_list);
 
-                if (ni->ni_lnd->lnd_accept != NULL) {
-                        /* This LND uses the acceptor */
-                        if (count == 0 && first_ni != NULL) {
-                                lnet_ni_addref_locked(ni);
-                                *first_ni = ni;
-                        }
+                if (ni->ni_lnd->lnd_accept != NULL)
                         count++;
-                }
         }
 
         LNET_UNLOCK();
@@ -1123,17 +1083,6 @@ lnet_startup_lndnis (void)
                        libcfs_nid2str(ni->ni_nid),
                        ni->ni_peertxcredits, ni->ni_txcredits);
 
-                /* Handle nidstrings for network 0 just like this one */
-                if (the_lnet.ln_ptlcompat > 0) {
-                        if (nicount > 0) {
-                                LCONSOLE_ERROR_MSG(0x108, "Can't run > 1 "
-                                       "network when portals_compatibility is "
-                                       "set\n");
-                                goto failed;
-                        }
-                        libcfs_setnet0alias(lnd->lnd_type);
-                }
-
                 nicount++;
         }
 
@@ -1162,20 +1111,13 @@ lnet_startup_lndnis (void)
 int
 LNetInit(void)
 {
-        int    rc;
-
         lnet_assert_wire_constants ();
         LASSERT (!the_lnet.ln_init);
 
         memset(&the_lnet, 0, sizeof(the_lnet));
 
-        rc = lnet_get_portals_compatibility();
-        if (rc < 0)
-                return rc;
-
         lnet_init_locks();
         CFS_INIT_LIST_HEAD(&the_lnet.ln_lnds);
-        the_lnet.ln_ptlcompat = rc;
         the_lnet.ln_refcount = 0;
         the_lnet.ln_init = 1;
 
@@ -1355,7 +1297,8 @@ LNetCtl(unsigned int cmd, void *arg)
                                    (time_t)data->ioc_u64[0]);
 
         case IOC_LIBCFS_PORTALS_COMPATIBILITY:
-                return the_lnet.ln_ptlcompat;
+                /* This can be removed once lustre stops calling it */
+                return 0;
 
         case IOC_LIBCFS_LNET_DIST:
                 rc = LNetDist(data->ioc_nid, &data->ioc_nid, &data->ioc_u32[1]);

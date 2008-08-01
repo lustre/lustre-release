@@ -17,6 +17,12 @@ Bugzilla   :
 Description: 
 Details    : 
 
+Severity   : normal
+Bugzilla   : 13139
+Description: Remove portals compatibility
+Details    : Remove portals compatibility, not interoperable with releases
+             before 1.4.6
+
 Severity   : major
 Bugzilla   : 16338
 Description: Continuous recovery on 33 of 413 nodes after lustre oss failure

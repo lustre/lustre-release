@@ -346,7 +346,7 @@ typedef struct
 
 #define IBNAL_MSG_MAGIC LNET_PROTO_OPENIB_MAGIC /* unique magic */
 #define IBNAL_MSG_VERSION_RDMAREPLYNOTRSRVD 2   /* previous protocol version */
-#define IBNAL_MSG_VERSION              3        /* current protocol version */
+#define IBNAL_MSG_VERSION                   3   /* current protocol version */
 
 #define IBNAL_MSG_SVCQRY            0xb0        /* service query */
 #define IBNAL_MSG_SVCRSP            0xb1        /* service response */

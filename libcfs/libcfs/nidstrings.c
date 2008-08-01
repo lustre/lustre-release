@@ -515,26 +515,6 @@ libcfs_str2anynid(lnet_nid_t *nidp, const char *str)
 }
 
 #ifdef __KERNEL__
-void
-libcfs_setnet0alias(int lnd)
-{
-        struct netstrfns *nf = libcfs_lnd2netstrfns(lnd);
-        struct netstrfns *nf0 = &libcfs_netstrfns[libcfs_nnetstrfns - 1];
-
-        /* Ghastly hack to allow LNET to inter-operate with portals.
-         * NET type 0 becomes an alias for whatever local network we have, and
-         * this assignment here means we can parse and print its NIDs */
-
-        LASSERT (nf != NULL);
-        LASSERT (nf0->nf_type < 0);
-
-        nf0->nf_name = "zero";//nf->nf_name;
-        nf0->nf_modname = nf->nf_modname;
-        nf0->nf_addr2str = nf->nf_addr2str;
-        nf0->nf_str2addr = nf->nf_str2addr;
-        mb();
-        nf0->nf_type = 0;
-}
 
 EXPORT_SYMBOL(libcfs_isknown_lnd);
 EXPORT_SYMBOL(libcfs_lnd2modname);
@@ -546,13 +526,5 @@ EXPORT_SYMBOL(libcfs_str2net);
 EXPORT_SYMBOL(libcfs_str2nid);
 EXPORT_SYMBOL(libcfs_id2str);
 EXPORT_SYMBOL(libcfs_str2anynid);
-EXPORT_SYMBOL(libcfs_setnet0alias);
-#else  /* __KERNEL__ */
-void
-libcfs_setnet0alias(int lnd)
-{
-        LCONSOLE_ERROR_MSG(0x125, "Liblustre cannot interoperate with old "
-                           "Portals.\nportals_compatibility must be set to "
-                           "'none'.\n");
-}
+
 #endif

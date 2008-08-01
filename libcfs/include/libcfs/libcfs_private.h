@@ -303,7 +303,6 @@ __u32       libcfs_str2net(const char *str);
 lnet_nid_t  libcfs_str2nid(const char *str);
 int         libcfs_str2anynid(lnet_nid_t *nid, const char *str);
 char       *libcfs_id2str(lnet_process_id_t id);
-void        libcfs_setnet0alias(int type);
 
 /* how an LNET NID encodes net:address */
 #define LNET_NIDADDR(nid)      ((__u32)((nid) & 0xffffffff))

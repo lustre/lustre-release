@@ -1232,10 +1232,8 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
 
                 LASSERT (src_nid != LNET_NID_ANY);
 
-                if (!msg->msg_routing) {
-                        src_nid = lnet_ptlcompat_srcnid(src_nid, dst_nid);
+                if (!msg->msg_routing)
                         msg->msg_hdr.src_nid = cpu_to_le64(src_nid);
-                }
 
                 if (src_ni == the_lnet.ln_loni) {
                         /* No send credit hassles with LOLND */
@@ -1309,7 +1307,6 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
 
                 if (!msg->msg_routing) {
                         /* I'm the source and now I know which NI to send on */
-                        src_nid = lnet_ptlcompat_srcnid(src_nid, dst_nid);
                         msg->msg_hdr.src_nid = cpu_to_le64(src_nid);
                 }
 
@@ -1971,7 +1968,7 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
         dest_nid = le64_to_cpu(hdr->dest_nid);
         payload_length = le32_to_cpu(hdr->payload_length);
 
-        for_me = lnet_ptlcompat_matchnid(ni->ni_nid, dest_nid);
+        for_me = (ni->ni_nid == dest_nid);
 
         switch (type) {
         case LNET_MSG_ACK:
@@ -2011,18 +2008,7 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
          * or malicious so we chop them off at the knees :) */
 
         if (!for_me) {
-                if (the_lnet.ln_ptlcompat > 0) {
-                        /* portals compatibility is single-network */
-                        CERROR ("%s, src %s: Bad dest nid %s "
-                                "(routing not supported)\n",
-                                libcfs_nid2str(from_nid),
-                                libcfs_nid2str(src_nid),
-                                libcfs_nid2str(dest_nid));
-                        return -EPROTO;
-                }
-
-                if (the_lnet.ln_ptlcompat == 0 &&
-                    LNET_NIDNET(dest_nid) == LNET_NIDNET(ni->ni_nid)) {
+                if (LNET_NIDNET(dest_nid) == LNET_NIDNET(ni->ni_nid)) {
                         /* should have gone direct */
                         CERROR ("%s, src %s: Bad dest nid %s "
                                 "(should have been sent direct)\n",
@@ -2032,8 +2018,7 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
                         return -EPROTO;
                 }
 
-                if (the_lnet.ln_ptlcompat == 0 &&
-                    lnet_islocalnid(dest_nid)) {
+                if (lnet_islocalnid(dest_nid)) {
                         /* dest is another local NI; sender should have used
                          * this node's NID on its own network */
                         CERROR ("%s, src %s: Bad dest nid %s "
@@ -2479,11 +2464,7 @@ LNetDist (lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
         list_for_each (e, &the_lnet.ln_nis) {
                 ni = list_entry(e, lnet_ni_t, ni_list);
 
-                if (ni->ni_nid == dstnid ||
-                    (the_lnet.ln_ptlcompat > 0 &&
-                     LNET_NIDNET(dstnid) == 0 &&
-                     LNET_NIDADDR(dstnid) == LNET_NIDADDR(ni->ni_nid) &&
-                     LNET_NETTYP(LNET_NIDNET(ni->ni_nid)) != LOLND)) {
+                if (ni->ni_nid == dstnid) {
                         if (srcnidp != NULL)
                                 *srcnidp = dstnid;
                         if (orderp != NULL) {
@@ -2497,10 +2478,7 @@ LNetDist (lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
                         return local_nid_dist_zero ? 0 : 1;
                 }
 
-                if (LNET_NIDNET(ni->ni_nid) == dstnet ||
-                    (the_lnet.ln_ptlcompat > 0 &&
-                     dstnet == 0 &&
-                     LNET_NETTYP(LNET_NIDNET(ni->ni_nid)) != LOLND)) {
+                if (LNET_NIDNET(ni->ni_nid) == dstnet) {
                         if (srcnidp != NULL)
                                 *srcnidp = ni->ni_nid;
                         if (orderp != NULL)

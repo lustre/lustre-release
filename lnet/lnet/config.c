@@ -239,13 +239,6 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
                         goto failed;
                 } 
 
-                if (nnets > 0 &&
-                    the_lnet.ln_ptlcompat > 0) {
-                        LCONSOLE_ERROR_MSG(0x114, "Only 1 network supported when"
-                                           " 'portals_compatible' is set\n");
-                        goto failed;
-                }
-
                 nnets++;
                 ni = lnet_new_ni(net, nilist);
                 if (ni == NULL)
@@ -728,14 +721,6 @@ lnet_parse_routes (char *routes, int *im_a_router)
 
         *im_a_router = 0;
 
-        if (the_lnet.ln_ptlcompat > 0 && 
-            routes[0] != 0) {
-                /* Can't route when running in compatibility mode */
-                LCONSOLE_ERROR_MSG(0x116, "Route tables are not supported when "
-                                   "'portals_compatible' is set\n");
-                return -EINVAL;
-        }
-        
 	CFS_INIT_LIST_HEAD(&tbs);
 
 	if (lnet_str2tbs_sep(&tbs, routes) < 0) {
