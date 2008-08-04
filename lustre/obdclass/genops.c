@@ -231,6 +231,17 @@ int class_unregister_type(const char *name)
         RETURN(0);
 } /* class_unregister_type */
 
+/**
+ * Create a new obd device.
+ *
+ * Find an empty slot in ::obd_devs[], create a new obd device in it.
+ *
+ * \param typename [in] obd device type string.
+ * \param name     [in] obd device name.
+ *
+ * \retval NULL if create fails, otherwise return the obd device
+ *         pointer created.
+ */
 struct obd_device *class_newdev(const char *type_name, const char *name)
 {
         struct obd_device *result = NULL;
@@ -239,7 +250,7 @@ struct obd_device *class_newdev(const char *type_name, const char *name)
         int i;
         int new_obd_minor = 0;
 
-        if (strlen(name) > MAX_OBD_NAME) {
+        if (strlen(name) >= MAX_OBD_NAME) {
                 CERROR("name/uuid must be < %u bytes long\n", MAX_OBD_NAME);
                 RETURN(ERR_PTR(-EINVAL));
         }
@@ -281,7 +292,8 @@ struct obd_device *class_newdev(const char *type_name, const char *name)
                         result->obd_minor = i;
                         new_obd_minor = i;
                         result->obd_type = type;
-                        memcpy(result->obd_name, name, strlen(name));
+                        strncpy(result->obd_name, name,
+                                sizeof(result->obd_name) - 1);
                         obd_devs[i] = result;
                 }
         }
@@ -385,15 +397,22 @@ struct obd_device *class_uuid2obd(struct obd_uuid *uuid)
         return class_num2obd(dev);
 }
 
+/**
+ * Get obd device from ::obd_devs[]
+ *
+ * \param num [in] array index
+ *
+ * \retval NULL if ::obd_devs[\a num] does not contains an obd device
+ *         otherwise return the obd device there.
+ */
 struct obd_device *class_num2obd(int num)
 {
         struct obd_device *obd = NULL;
 
         if (num < class_devno_max()) {
                 obd = obd_devs[num];
-                if (obd == NULL) {
+                if (obd == NULL)
                         return NULL;
-                }
 
                 LASSERTF(obd->obd_magic == OBD_DEVICE_MAGIC,
                          "%p obd_magic %08x != %08x\n",
