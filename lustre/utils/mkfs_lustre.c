@@ -1057,7 +1057,7 @@ static int add_param(char *buf, char *key, char *val)
 #define MAXNIDSTR 1024
 static char *convert_hostnames(char *s1)
 {
-        char *converted, *s2 = 0, *c;
+        char *converted, *s2 = 0, *c, *end, sep;
         int left = MAXNIDSTR;
         lnet_nid_t nid;
 
@@ -1066,33 +1066,35 @@ static char *convert_hostnames(char *s1)
                 return NULL;
         }
 
+        end = s1 + strlen(s1);
         c = converted;
-        while ((left > 0) && ((s2 = strsep(&s1, ",: \0")))) {
-                nid = libcfs_str2nid(s2);
+        while ((left > 0) && (s1 < end)) {
+                s2 = strpbrk(s1, ",:");
+                if (!s2)
+                        s2 = end;
+                sep = *s2;
+                *s2 = '\0';
+                nid = libcfs_str2nid(s1);
+                
                 if (nid == LNET_NID_ANY) {
-                        if (*s2 == '/')
-                                /* end of nids */
-                                break;
-                        fprintf(stderr, "%s: Can't parse NID '%s'\n",
-                                progname, s2);
+                        fprintf(stderr, "%s: Can't parse NID '%s'\n", progname, s1);
                         free(converted);
                         return NULL;
                 }
-
                 if (strncmp(libcfs_nid2str(nid), "127.0.0.1",
                             strlen("127.0.0.1")) == 0) {
                         fprintf(stderr, "%s: The NID '%s' resolves to the "
                                 "loopback address '%s'.  Lustre requires a "
                                 "non-loopback address.\n",
-                                progname, s2, libcfs_nid2str(nid));
+                                progname, s1, libcfs_nid2str(nid));
                         free(converted);
                         return NULL;
                 }
-
-                c += snprintf(c, left, "%s,", libcfs_nid2str(nid));
+                                        
+                c += snprintf(c, left, "%s%c", libcfs_nid2str(nid), sep);
                 left = converted + MAXNIDSTR - c;
+                s1 = s2 + 1;
         }
-        *(c - 1) = '\0';
         return converted;
 }
 
