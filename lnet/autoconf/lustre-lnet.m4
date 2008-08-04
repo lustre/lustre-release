@@ -169,6 +169,9 @@ else
        if test "$BOCD" != 0 ; then
                AC_DEFINE(SOCKNAL_BACKOFF, 1, [use tunable backoff TCP])
                AC_MSG_RESULT(yes)
+               if grep rto_max $LINUX/include/linux/tcp.h|grep -q __u16; then
+                   AC_DEFINE(SOCKNAL_BACKOFF_MS, 1, [tunable backoff TCP in ms])
+               fi
        else
                AC_MSG_RESULT([no (no kernel support)])
        fi
