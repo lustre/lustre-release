@@ -38,6 +38,12 @@ tbd Sun Microsystems, Inc.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
 
+Severity   : normal
+Bugzilla   : 15576
+Description: Resolve device initialization race
+Details    : Prevent proc handler from accessing devices added to the
+             obd_devs array but yet be intialized.
+
 Severity   : enhancement
 Bugzilla   : 15308
 Description: Update to SLES10 SP2 kernel-2.6.16.60-0.23.
