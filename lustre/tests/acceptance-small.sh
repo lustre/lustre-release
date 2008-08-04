@@ -117,14 +117,14 @@ for NAME in $CONFIGS; do
 		duration=""
 		[ "$SLOW" = "no" ] && duration=" -t 120"
 		if [ "$SLOW" != "no" -o $DB_THREADS -eq 1 ]; then
-			DIR=$DBENCHDIR $myRUNAS bash rundbench 1 $duration
+			$myRUNAS bash rundbench -D $DBENCHDIR 1 $duration || error "dbench failed!"
 			$DEBUG_ON
 			$CLEANUP
 			$SETUP
 		fi
 		if [ $DB_THREADS -gt 1 ]; then
 			$DEBUG_OFF
-			DIR=$DBENCHDIR $myRUNAS bash rundbench $DB_THREADS $duration
+			$myRUNAS bash rundbench -D $DBENCHDIR $DB_THREADS $duration
 			$DEBUG_ON
 			$CLEANUP
 			$SETUP

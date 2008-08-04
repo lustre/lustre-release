@@ -2988,27 +2988,7 @@ test_69() {
 run_test 69 "verify oa2dentry return -ENOENT doesn't LBUG ======"
 
 test_71() {
-	which dbench > /dev/null 2>&1 || { skip "dbench not installed, skip this test" && return 0; }
-	DBENCH_LIB=${DBENCH_LIB:-/usr/lib/dbench}
-	PATH=${DBENCH_LIB}:${PATH}
-	cp `which dbench` $DIR
-
-	TGT=$DIR/client.txt
-	SRC=${SRC:-$DBENCH_LIB/client.txt}
-	[ ! -e $TGT -a -e $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
-	SRC=$DBENCH_LIB/client_plain.txt
-	[ ! -e $TGT -a -e $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
-	echo "copying necessary libs to $DIR"
-	LIBS71=$(ldd $DIR/dbench|sed -e 's/\t*//' -e 's/.*=> //' -e 's/ .*//' -e 's/^\///')
-	(cd / && tar chf - $LIBS71) | (cd $DIR && tar xvf -)
-	[ $? = 0 ] || error "can't copy libs $LIBS71 to $DIR"
-	echo "chroot $DIR /dbench -c client.txt 2"
-	chroot $DIR /dbench -c client.txt 2
-	RC=$?
-
-	rm -rf $DIR/dbench $DIR/lib $DIR/lib64
-
-	return $RC
+    sh rundbench -C -D $DIR 2 || error "dbench failed!"
 }
 run_test 71 "Running dbench on lustre (don't segment fault) ===="
 
