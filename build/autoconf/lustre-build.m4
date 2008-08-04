@@ -599,6 +599,11 @@ if test $target_cpu == "powerpc64"; then
 	CC="$CC -m64"
 fi
 
+/* Enable -Werror */
+if test $target_cpu == "i686" -o $target_cpu == "x86_64"; then
+	CFLAGS="$CFLAGS -Werror"
+fi
+
 CPPFLAGS="-I\$(top_builddir)/$LIBCFS_INCLUDE_DIR -I\$(top_srcdir)/$LIBCFS_INCLUDE_DIR-I\$(top_builddir)/lnet/include -I\$(top_srcdir)/lnet/include -I\$(top_builddir)/lustre/include -I\$(top_srcdir)/lustre/include $CPPFLAGS"
 
 LLCPPFLAGS="-D__arch_lib__ -D_LARGEFILE64_SOURCE=1"
