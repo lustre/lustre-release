@@ -198,7 +198,7 @@ int server_put_mount(char *name, struct vfsmount *mnt)
 
         /* This might be the last one, can't deref after this */
         unlock_mntput(mnt);
-        
+
         down(&lustre_mount_info_lock);
         lmi = server_find_mount(name);
         up(&lustre_mount_info_lock);
@@ -394,7 +394,7 @@ int lustre_process_log(struct super_block *sb, char *logname,
                                    "communication errors between this node and "
                                    "the MGS, a bad configuration, or other "
                                    "errors. See the syslog for more "
-                                   "information.\n", mgc->obd_name, logname, 
+                                   "information.\n", mgc->obd_name, logname,
                                    rc);
 
         /* class_obd_list(); */
@@ -505,7 +505,7 @@ static int server_start_mgs(struct super_block *sb)
 
         if (rc)
                 LCONSOLE_ERROR_MSG(0x15e, "Failed to start MGS '%s' (%d).  Is "
-                                   "the 'mgs' module loaded?\n", 
+                                   "the 'mgs' module loaded?\n",
                                    LUSTRE_MGS_OBDNAME, rc);
 
         RETURN(rc);
@@ -534,7 +534,12 @@ static int server_stop_mgs(struct super_block *sb)
 
 DECLARE_MUTEX(mgc_start_lock);
 
-/* Set up a mgcobd to process startup logs */
+/** Set up a mgc obd to process startup logs
+ *
+ * \param sb [in] super block of the mgc obd
+ *
+ * \retval 0 success, otherwise error code
+ */
 static int lustre_start_mgc(struct super_block *sb)
 {
         struct lustre_handle mgc_conn = {0, };
@@ -591,7 +596,7 @@ static int lustre_start_mgc(struct super_block *sb)
         mutex_down(&mgc_start_lock);
 
         obd = class_name2obd(mgcname);
-        if (obd) {
+        if (obd && !obd->obd_stopping) {
                 /* Re-using an existing MGC */
                 atomic_inc(&obd->u.cli.cl_mgc_refcount);
 
@@ -772,7 +777,7 @@ static int lustre_stop_mgc(struct super_block *sb)
                 GOTO(out, rc = -EBUSY);
         }
 
-        /* The MGC has no recoverable data in any case. 
+        /* The MGC has no recoverable data in any case.
          * force shotdown set in umount_begin */
         obd->obd_no_recov = 1;
 
@@ -1086,7 +1091,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
         if (rc == -EINVAL) {
                 LCONSOLE_ERROR_MSG(0x160, "The MGS is refusing to allow this "
                                    "server (%s) to start.  Please see messages "
-                                   "on the MGS node.\n", 
+                                   "on the MGS node.\n",
                                    lsi->lsi_ldd->ldd_svname);
                 GOTO(out_mgc, rc);
         }
@@ -1371,7 +1376,7 @@ static void server_put_super(struct super_block *sb)
         CDEBUG(D_MOUNT, "server put_super %s\n", tmpname);
 
         /* Stop the target */
-        if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC) && 
+        if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC) &&
             (IS_MDT(lsi->lsi_ldd) || IS_OST(lsi->lsi_ldd))) {
                 struct lustre_profile *lprof = NULL;
 
@@ -1591,7 +1596,7 @@ static int server_fill_super(struct super_block *sb)
         if (class_name2obd(lsi->lsi_ldd->ldd_svname)) {
                 LCONSOLE_ERROR_MSG(0x161, "The target named %s is already "
                                    "running. Double-mount may have compromised "
-                                   "the disk journal.\n", 
+                                   "the disk journal.\n",
                                    lsi->lsi_ldd->ldd_svname);
                 unlock_mntput(mnt);
                 lustre_put_lsi(sb);
