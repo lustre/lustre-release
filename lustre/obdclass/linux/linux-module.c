@@ -99,7 +99,7 @@ int obd_ioctl_getdata(char **buf, int *len, void *arg)
         ENTRY;
 
         err = copy_from_user(&hdr, (void *)arg, sizeof(hdr));
-        if ( err ) 
+        if ( err )
                 RETURN(err);
 
         if (hdr.ioc_version != OBD_IOCTL_VERSION) {
@@ -167,8 +167,8 @@ int obd_ioctl_getdata(char **buf, int *len, void *arg)
 
 int obd_ioctl_popdata(void *arg, void *data, int len)
 {
-        int err; 
-        
+        int err;
+
         err = copy_to_user(arg, data, len);
         if (err)
                 err = -EFAULT;
@@ -262,6 +262,21 @@ int obd_proc_read_pinger(char *page, char **start, off_t off, int count,
                        );
 }
 
+/**
+ * Check all obd devices health
+ *
+ * \param page
+ * \param start
+ * \param off
+ * \param count
+ * \param eof
+ * \param data
+ *                  proc read function parameters, please refer to kernel
+ *                  code fs/proc/generic.c proc_file_read()
+ * \param data [in] unused
+ *
+ * \retval number of characters printed
+ */
 static int obd_proc_read_health(char *page, char **start, off_t off,
                                 int count, int *eof, void *data)
 {
@@ -276,7 +291,7 @@ static int obd_proc_read_health(char *page, char **start, off_t off,
                 struct obd_device *obd;
 
                 obd = class_num2obd(i);
-                if (obd == NULL)
+                if (obd == NULL || !obd->obd_attached || !obd->obd_set_up)
                         continue;
 
                 LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
@@ -330,7 +345,7 @@ static void obd_device_list_seq_stop(struct seq_file *p, void *v)
 }
 
 static void *obd_device_list_seq_next(struct seq_file *p, void *v, loff_t *pos)
-{      
+{
         ++*pos;
         if (*pos >= class_devno_max())
                 return NULL;
@@ -427,7 +442,7 @@ int class_procfs_init(void)
 int class_procfs_clean(void)
 {
         ENTRY;
-        if (proc_lustre_root) 
+        if (proc_lustre_root)
                 lprocfs_remove(&proc_lustre_root);
         RETURN(0);
 }
