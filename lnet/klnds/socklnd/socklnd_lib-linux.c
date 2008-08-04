@@ -790,6 +790,9 @@ ksocknal_lib_setup_sock (struct socket *sock)
 #ifdef SOCKNAL_BACKOFF
         if (*ksocknal_tunables.ksnd_backoff_init > 0) {
                 option = *ksocknal_tunables.ksnd_backoff_init;
+#ifdef SOCKNAL_BACKOFF_MS
+                option *= 1000;
+#endif
 
                 set_fs (KERNEL_DS);
                 rc = sock->ops->setsockopt (sock, SOL_TCP, TCP_BACKOFF_INIT,
@@ -804,6 +807,9 @@ ksocknal_lib_setup_sock (struct socket *sock)
 
         if (*ksocknal_tunables.ksnd_backoff_max > 0) {
                 option = *ksocknal_tunables.ksnd_backoff_max;
+#ifdef SOCKNAL_BACKOFF_MS
+                option *= 1000;
+#endif
 
                 set_fs (KERNEL_DS);
                 rc = sock->ops->setsockopt (sock, SOL_TCP, TCP_BACKOFF_MAX,
