@@ -317,7 +317,7 @@ struct obd_device *class_newdev(const char *type_name, const char *name)
                         new_obd_minor = i;
                         result->obd_type = type;
                         strncpy(result->obd_name, name,
-                                sizeof(result->obd_name));
+                                sizeof(result->obd_name) - 1);
                         obd_devs[i] = result;
                 }
         }
