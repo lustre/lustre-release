@@ -575,11 +575,26 @@ void target_client_add_cb(struct obd_device *obd, __u64 transno, void *cb_data,
 }
 EXPORT_SYMBOL(target_client_add_cb);
 
-static void 
+static void
 target_start_and_reset_recovery_timer(struct obd_device *obd,
                                       svc_handler_t handler,
                                       struct ptlrpc_request *req,
                                       int new_client);
+void target_stop_recovery(void *, int);
+int target_recovery_check_and_stop(struct obd_device *obd)
+{
+        int abort_recovery = 0;
+
+        spin_lock_bh(&obd->obd_processing_task_lock);
+        abort_recovery = obd->obd_abort_recovery;
+        spin_unlock_bh(&obd->obd_processing_task_lock);
+        if (abort_recovery) {
+                target_stop_recovery(obd, 0);
+                return 1;
+        }
+        return 0;
+}
+EXPORT_SYMBOL(target_recovery_check_and_stop);
 
 int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 {
@@ -591,7 +606,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         struct obd_uuid cluuid;
         struct obd_uuid remote_uuid;
         char *str, *tmp;
-        int rc = 0, abort_recovery;
+        int rc = 0;
         struct obd_connect_data *data;
         __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*data) };
         lnet_nid_t *client_nid = NULL;
@@ -665,11 +680,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 LBUG();
         }
 
-        spin_lock_bh(&target->obd_processing_task_lock);
-        abort_recovery = target->obd_abort_recovery;
-        spin_unlock_bh(&target->obd_processing_task_lock);
-        if (abort_recovery)
-                target_abort_recovery(target);
+        target_recovery_check_and_stop(target);
 
         tmp = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 2, sizeof conn);
         if (tmp == NULL)
@@ -1075,13 +1086,14 @@ static void target_send_delayed_replies(struct obd_device *obd)
 static void target_finish_recovery(struct obd_device *obd)
 {
         ldlm_reprocess_all_ns(obd->obd_namespace);
-
+        LASSERT(obd->obd_processing_task == 0);
         /* when recovery finished, cleanup orphans on mds and ost */
         if (OBT(obd) && OBP(obd, postrecov)) {
                 int rc = OBP(obd, postrecov)(obd);
                 LCONSOLE_WARN("%s: recovery %s: rc %d\n", obd->obd_name,
                               rc < 0 ? "failed" : "complete", rc);
         }
+        LASSERT(list_empty(&obd->obd_recovery_queue));
         target_send_delayed_replies(obd);
 }
 
@@ -1150,15 +1162,10 @@ void target_cleanup_recovery(struct obd_device *obd)
         EXIT;
 }
 
-void target_abort_recovery(void *data)
+void target_stop_recovery(void *data, int abort)
 {
         struct obd_device *obd = data;
         ENTRY;
-
-        LCONSOLE_WARN("%s: recovery is aborted by administrative request;"
-                      "%d clients are not recovered (%d clients did)\n",
-                      obd->obd_name, obd->obd_recoverable_clients,
-                      obd->obd_connected_clients);
 
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (!obd->obd_recovering) {
@@ -1166,18 +1173,31 @@ void target_abort_recovery(void *data)
                 EXIT;
                 return;
         }
-        obd->obd_recovering = obd->obd_abort_recovery = 0;
-        obd->obd_version_recov = 0;
-        obd->obd_recoverable_clients = 0;
+        obd->obd_recovering = 0;
+        obd->obd_abort_recovery = 0;
+        if (abort == 0)
+                LASSERT(obd->obd_recoverable_clients == 0);
+
         target_cancel_recovery_timer(obd);
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
+        if (abort) {
+                LCONSOLE_WARN("%s: recovery is aborted by administrative "
+                              "request; %d clients are not recovered "
+                              "(%d clients did)\n", obd->obd_name,
+                              obd->obd_recoverable_clients,
+                              obd->obd_connected_clients);
         class_disconnect_stale_exports(obd);
+        }
         abort_recovery_queue(obd);
-
         target_finish_recovery(obd);
         CDEBUG(D_HA, "%s: recovery complete\n", obd_uuid2str(&obd->obd_uuid));
         EXIT;
+}
+
+void target_abort_recovery(void *data)
+{
+        target_stop_recovery(data, 1);
 }
 
 static void reset_recovery_timer(struct obd_device *, int, int);
@@ -1196,17 +1216,18 @@ static void target_recovery_expired(unsigned long castmeharder)
         class_handle_stale_exports(obd);
 
         spin_lock_bh(&obd->obd_processing_task_lock);
-        /* VBR: not all clients are connected, so there can be gap */
-        if (obd->obd_recovering && !version_recov) {
+        /* VBR: no clients are remained to replay, stop recovery */
+        if (obd->obd_recovering &&
+            obd->obd_recoverable_clients == 0)
+                obd->obd_abort_recovery = 1;
+        /* always check versions now */
                 obd->obd_version_recov = 1;
-        }
         cfs_waitq_signal(&obd->obd_next_transno_waitq);
         spin_unlock_bh(&obd->obd_processing_task_lock);
         /* reset timer if recovery will proceed with versions now */
         reset_recovery_timer(obd, OBD_RECOVERY_FACTOR * obd_timeout,
                              !version_recov);
 }
-
 
 /* obd_processing_task_lock should be held */
 void target_cancel_recovery_timer(struct obd_device *obd)
@@ -1347,7 +1368,6 @@ static int check_for_next_transno(struct obd_device *obd)
 static void process_recovery_queue(struct obd_device *obd)
 {
         struct ptlrpc_request *req;
-        int abort_recovery = 0;
         struct l_wait_info lwi = { 0 };
         ENTRY;
 
@@ -1367,13 +1387,8 @@ static void process_recovery_queue(struct obd_device *obd)
                                req->rq_xid);
                         l_wait_event(obd->obd_next_transno_waitq,
                                      check_for_next_transno(obd), &lwi);
-                        spin_lock_bh(&obd->obd_processing_task_lock);
-                        abort_recovery = obd->obd_abort_recovery;
-                        spin_unlock_bh(&obd->obd_processing_task_lock);
-                        if (abort_recovery) {
-                                target_abort_recovery(obd);
+                        if (target_recovery_check_and_stop(obd))
                                 return;
-                        }
                         continue;
                 }
                 target_exp_dequeue_req_replay(req);
