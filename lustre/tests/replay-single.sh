@@ -47,6 +47,15 @@ test_0b() {
 }
 run_test 0b "ensure object created after recover exists. (3284)"
 
+test_0c() {
+    replay_barrier mds
+    umount $DIR
+    facet_failover mds
+    zconf_mount `hostname` $DIR || error "mount fails"
+    df $DIR || error "post-failover df failed"
+}
+run_test 0c "expired recovery with no clients"
+
 test_1() {
     replay_barrier mds
     mcreate $DIR/$tfile
