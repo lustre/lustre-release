@@ -39,6 +39,13 @@ tbd Sun Microsystems, Inc.
 	  old (verbose) output can be obtained by using -v option.
 
 Severity   : normal
+Bugzilla   : 16080
+Description: don't fail open with -ERANGE
+Details    : if client connected until mds will be know about real ost count
+             get LOV EA can be fail because mds not allocate enougth buffer 
+             for LOV EA.
+
+Severity   : normal
 Bugzilla   : 15576
 Description: Resolve device initialization race
 Details    : Prevent proc handler from accessing devices added to the
