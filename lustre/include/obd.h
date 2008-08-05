@@ -821,7 +821,7 @@ struct obd_device {
         unsigned long obd_attached:1,      /* finished attach */
                       obd_set_up:1,        /* finished setup */
                       obd_recovering:1,    /* there are recoverable clients */
-                      obd_abort_recovery:1,/* somebody ioctl'ed us to abort */ 
+                      obd_abort_recovery:1,/* recovery expired */
                       obd_version_recov:1, /* obd uses version checking */
                       obd_replayable:1,    /* recovery is enabled; inform clients */
                       obd_no_transno:1,    /* no committed-transno notification */
