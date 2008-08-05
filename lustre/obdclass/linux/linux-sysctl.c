@@ -72,6 +72,7 @@ enum {
         OBD_DUMP_ON_EVICTION,   /* dump kernel debug log upon eviction */
         OBD_DEBUG_PEER_ON_TIMEOUT, /* dump peer debug when RPC times out */
         OBD_ALLOC_FAIL_RATE,    /* memory allocation random failure rate */
+        OBD_MAX_DIRTY_PAGES,    /* maximum dirty pages */
 };
 
 int LL_PROC_PROTO(proc_fail_loc)
@@ -189,6 +190,46 @@ int LL_PROC_PROTO(proc_pages_max)
         *lenp = len;
         *ppos += *lenp;
         return 0;
+}
+
+int LL_PROC_PROTO(proc_max_dirty_pages_in_mb)
+{
+        int rc = 0;
+
+        if (!table->data || !table->maxlen || !*lenp || (*ppos && !write)) {
+                *lenp = 0;
+                return 0;
+        }
+        if (write) {
+                rc = lprocfs_write_frac_helper(buffer, *lenp,
+                                               (unsigned int*)table->data,
+                                               1 << (20 - CFS_PAGE_SHIFT));
+                /* Don't allow them to let dirty pages exceed 90% of system memory,
+                 * and set a hard minimum of 4MB. */
+                if (obd_max_dirty_pages > ((num_physpages / 10) * 9)) {
+                        CERROR("Refusing to set max dirty pages to %u, which "
+                               "is more than 90%% of available RAM; setting to %lu\n",
+                               obd_max_dirty_pages, ((num_physpages / 10) * 9));
+                        obd_max_dirty_pages = ((num_physpages / 10) * 9);
+                } else if (obd_max_dirty_pages < 4 << (20 - CFS_PAGE_SHIFT)) {
+                        obd_max_dirty_pages = 4 << (20 - CFS_PAGE_SHIFT);
+                }
+        } else {
+                char buf[21];
+                int len;
+
+                len = lprocfs_read_frac_helper(buf, sizeof(buf),
+                                               *(unsigned int*)table->data,
+                                               1 << (20 - CFS_PAGE_SHIFT));
+                if (len > *lenp) 
+                        len = *lenp;
+                buf[len] = '\0';
+                if (copy_to_user(buffer, buf, len))
+                        return -EFAULT;
+                *lenp = len;
+        }
+        *ppos += *lenp;
+        return rc;
 }
 
 #ifdef RANDOM_FAIL_ALLOC
@@ -323,6 +364,14 @@ static cfs_sysctl_table_t obd_table[] = {
                 .proc_handler = &proc_alloc_fail_rate
         },
 #endif
+        {
+                .ctl_name = OBD_MAX_DIRTY_PAGES,
+                .procname = "max_dirty_mb",
+                .data     = &obd_max_dirty_pages,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_max_dirty_pages_in_mb
+        },
         { 0 }
 };
 
