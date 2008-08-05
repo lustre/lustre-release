@@ -339,18 +339,14 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
         struct obd_export *exp;
         struct mds_export_data *med;
         struct lsd_client_data *lcd = NULL;
-        int rc, abort_recovery;
+        int rc;
         ENTRY;
 
         if (!conn || !obd || !cluuid)
                 RETURN(-EINVAL);
 
         /* Check for aborted recovery. */
-        spin_lock_bh(&obd->obd_processing_task_lock);
-        abort_recovery = obd->obd_abort_recovery;
-        spin_unlock_bh(&obd->obd_processing_task_lock);
-        if (abort_recovery)
-                target_abort_recovery(obd);
+        target_recovery_check_and_stop(obd);
 
         /* XXX There is a small race between checking the list and adding a
          * new connection for the same UUID, but the real threat (list
@@ -1524,7 +1520,7 @@ int mds_handle(struct ptlrpc_request *req)
         /* XXX identical to OST */
         if (lustre_msg_get_opc(req->rq_reqmsg) != MDS_CONNECT) {
                 struct mds_export_data *med;
-                int recovering, abort_recovery;
+                int recovering;
 
                 if (req->rq_export == NULL) {
                         CERROR("operation %d on unconnected MDS from %s\n",
@@ -1559,12 +1555,10 @@ int mds_handle(struct ptlrpc_request *req)
 
                 /* Check for aborted recovery. */
                 spin_lock_bh(&obd->obd_processing_task_lock);
-                abort_recovery = obd->obd_abort_recovery;
                 recovering = obd->obd_recovering;
                 spin_unlock_bh(&obd->obd_processing_task_lock);
-                if (abort_recovery) {
-                        target_abort_recovery(obd);
-                } else if (recovering) {
+                if (recovering &&
+                    target_recovery_check_and_stop(obd) == 0) {
                         rc = mds_filter_recovery_request(req, obd,
                                                          &should_process);
                         if (rc || !should_process)
@@ -2812,7 +2806,7 @@ static int __init mds_init(void)
                 return rc;
         }
         init_obd_quota_ops(mds_quota_interface_ref, &mds_obd_ops);
-        
+
         lprocfs_mds_init_vars(&lvars);
         class_register_type(&mds_obd_ops, lvars.module_vars, LUSTRE_MDS_NAME);
         lprocfs_mdt_init_vars(&lvars);
