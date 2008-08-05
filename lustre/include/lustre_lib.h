@@ -91,6 +91,7 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req);
 
 void target_cancel_recovery_timer(struct obd_device *obd);
 void target_abort_recovery(void *data);
+int target_recovery_check_and_stop(struct obd_device *obd);
 void target_cleanup_recovery(struct obd_device *obd);
 int target_queue_recovery_request(struct ptlrpc_request *req,
                                   struct obd_device *obd);
