@@ -43,53 +43,10 @@
 
 #ifdef __KERNEL__
 #error Kernel files should not #include <liblustre.h>
-#else
-/*
- * The userspace implementations of linux/spinlock.h vary; we just
- * include our own for all of them
- */
-#define __LINUX_SPINLOCK_H
 #endif
 
 #include <libcfs/libcfs.h>
 #include <lnet/lnet.h>
-#include <libcfs/user-bitops.h>
-
-#include <sys/mman.h>
-#ifdef HAVE_STDINT_H
-# include <stdint.h>
-#endif
-#ifdef HAVE_ASM_PAGE_H
-# include <asm/page.h>
-#endif
-#ifdef HAVE_SYS_USER_H
-# include <sys/user.h>
-#endif
-#ifdef HAVE_SYS_IOCTL_H
-# include <sys/ioctl.h>
-#endif
-
-#include <stdio.h>
-#include <sys/ioctl.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
-#include <sys/stat.h>
-#ifdef HAVE_SYS_VFS_H
-# include <sys/vfs.h>
-#endif
-#include <unistd.h>
-#include <fcntl.h>
-#include <assert.h>
-
-#include <libcfs/libcfs.h>
-#include <libcfs/list.h>
-#include <lnet/lnet.h>
-#include <libcfs/user-bitops.h>
-
-#ifndef _IOWR
-# include "ioctl.h"
-#endif
 
 /* definitions for liblustre */
 
@@ -99,25 +56,6 @@
 #define ERESTART 2001
 typedef unsigned short umode_t;
 
-#endif
-
-
-#ifndef ARRAY_SIZE
-#define ARRAY_SIZE(a) ((sizeof (a))/(sizeof ((a)[0])))
-#endif
-
-/* This is because lprocfs_status.h gets included here indirectly.  It would
- * be much better to just avoid lprocfs being included into liblustre entirely
- * but that requires more header surgery than I can handle right now.
- */
-#ifndef smp_processor_id
-#define smp_processor_id() 0
-#endif
-#ifndef num_online_cpus
-#define num_online_cpus() 1
-#endif
-#ifndef num_possible_cpus
-#define num_possible_cpus() 1
 #endif
 
 /* always adopt 2.5 definitions */
@@ -130,56 +68,15 @@ typedef unsigned short umode_t;
 #endif
 
 
+/*
+ * The inter_module_get implementation is specific to liblustre, so this needs
+ * to stay here for now.
+ */ 
 static inline void inter_module_put(void *a)
 {
         return;
 }
-
 void *inter_module_get(char *arg);
-
-/* cheats for now */
-
-struct work_struct {
-        void (*ws_task)(void *arg);
-        void *ws_arg;
-};
-
-static inline void prepare_work(struct work_struct *q, void (*t)(void *),
-                                void *arg)
-{
-        q->ws_task = t;
-        q->ws_arg = arg;
-        return;
-}
-
-static inline void schedule_work(struct work_struct *q)
-{
-        q->ws_task(q->ws_arg);
-}
-
-
-#define strnlen(a,b) strlen(a)
-static inline void *kmalloc(int size, int prot)
-{
-        return malloc(size);
-}
-#define vmalloc malloc
-#define vfree free
-#define kfree(a) free(a)
-#define GFP_KERNEL 1
-#define GFP_HIGHUSER 1
-#define GFP_ATOMIC 1
-#define GFP_NOFS 1
-#define IS_ERR(a) ((unsigned long)(a) > (unsigned long)-1000L)
-#define PTR_ERR(a) ((long)(a))
-#define ERR_PTR(a) ((void*)((long)(a)))
-
-typedef int (read_proc_t)(char *page, char **start, off_t off,
-                          int count, int *eof, void *data);
-
-struct file; /* forward ref */
-typedef int (write_proc_t)(struct file *file, const char *buffer,
-                           unsigned long count, void *data);
 
 /* bits ops */
 
@@ -202,56 +99,6 @@ static __inline__ int ext2_test_bit(int nr, void *addr)
         return test_bit(nr, addr);
 }
 
-/* modules */
-
-struct module {
-        int count;
-};
-
-static inline void MODULE_AUTHOR(char *name)
-{
-        printf("%s\n", name);
-}
-#define MODULE_DESCRIPTION(name) MODULE_AUTHOR(name)
-#define MODULE_LICENSE(name) MODULE_AUTHOR(name)
-
-#define THIS_MODULE NULL
-#define __init
-#define __exit
-
-/* devices */
-
-static inline int misc_register(void *foo)
-{
-        return 0;
-}
-
-static inline int misc_deregister(void *foo)
-{
-        return 0;
-}
-
-static inline int request_module(char *name)
-{
-        return (-EINVAL);
-}
-
-#define __MOD_INC_USE_COUNT(m)  do {} while (0)
-#define __MOD_DEC_USE_COUNT(m)  do {} while (0)
-#define MOD_INC_USE_COUNT       do {} while (0)
-#define MOD_DEC_USE_COUNT       do {} while (0)
-static inline void __module_get(struct module *module)
-{
-}
-
-static inline int try_module_get(struct module *module)
-{
-        return 1;
-}
-
-static inline void module_put(struct module *module)
-{
-}
 
 /* module initialization */
 extern int init_obdclass(void);
@@ -272,32 +119,7 @@ extern int echo_client_init(void);
 
 struct rcu_head { };
 
-typedef struct { } spinlock_t;
 typedef __u64 kdev_t;
-
-#define SPIN_LOCK_UNLOCKED (spinlock_t) { }
-#define LASSERT_SPIN_LOCKED(lock) do {} while(0)
-#define LASSERT_SEM_LOCKED(sem) do {} while(0)
-
-static inline void spin_lock(spinlock_t *l) {return;}
-static inline void spin_unlock(spinlock_t *l) {return;}
-static inline void spin_lock_init(spinlock_t *l) {return;}
-static inline void local_irq_save(unsigned long flag) {return;}
-static inline void local_irq_restore(unsigned long flag) {return;}
-static inline int spin_is_locked(spinlock_t *l) {return 1;}
-
-static inline void spin_lock_bh(spinlock_t *l) {}
-static inline void spin_unlock_bh(spinlock_t *l) {}
-static inline void spin_lock_irqsave(spinlock_t *a, unsigned long b) {}
-static inline void spin_unlock_irqrestore(spinlock_t *a, unsigned long b) {}
-
-typedef spinlock_t rwlock_t;
-#define RW_LOCK_UNLOCKED        SPIN_LOCK_UNLOCKED
-#define read_lock(l)            spin_lock(l)
-#define read_unlock(l)          spin_unlock(l)
-#define write_lock(l)           spin_lock(l)
-#define write_unlock(l)         spin_unlock(l)
-#define rwlock_init(l)          spin_lock_init(l)
 
 #define min(x,y) ((x)<(y) ? (x) : (y))
 #define max(x,y) ((x)>(y) ? (x) : (y))
@@ -328,114 +150,6 @@ void get_random_bytes(void *ptr, int size);
 /* memory size: used for some client tunables */
 #define num_physpages (256 * 1024) /* 1GB */
 
-static inline int copy_from_user(void *a,void *b, int c)
-{
-        memcpy(a,b,c);
-        return 0;
-}
-
-static inline int copy_to_user(void *a,void *b, int c)
-{
-        memcpy(a,b,c);
-        return 0;
-}
-
-
-/* slabs */
-typedef struct {
-         int size;
-} kmem_cache_t;
-#define SLAB_HWCACHE_ALIGN 0
-static inline kmem_cache_t *
-kmem_cache_create(const char *name, size_t objsize, size_t cdum,
-                  unsigned long d,
-                  void (*e)(void *, kmem_cache_t *, unsigned long),
-                  void (*f)(void *, kmem_cache_t *, unsigned long))
-{
-        kmem_cache_t *c;
-        c = malloc(sizeof(*c));
-        if (!c)
-                return NULL;
-        c->size = objsize;
-        CDEBUG(D_MALLOC, "alloc slab cache %s at %p, objsize %d\n",
-               name, c, (int)objsize);
-        return c;
-};
-
-static inline int kmem_cache_destroy(kmem_cache_t *a)
-{
-        CDEBUG(D_MALLOC, "destroy slab cache %p, objsize %u\n", a, a->size);
-        free(a);
-        return 0;
-}
-
-/* struct page decl moved out from here into portals/include/libcfs/user-prim.h */
-
-/* 2.4 defines */
-#define PAGE_LIST_ENTRY list
-#define PAGE_LIST(page) ((page)->list)
-
-#define kmap(page) (page)->addr
-#define kunmap(a) do {} while (0)
-
-static inline cfs_page_t *alloc_pages(int mask, unsigned long order)
-{
-        cfs_page_t *pg = malloc(sizeof(*pg));
-
-        if (!pg)
-                return NULL;
-#if 0 //#ifdef MAP_ANONYMOUS
-        pg->addr = mmap(0, PAGE_SIZE << order, PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
-#else
-        pg->addr = malloc(CFS_PAGE_SIZE << order);
-#endif
-
-        if (!pg->addr) {
-                free(pg);
-                return NULL;
-        }
-        return pg;
-}
-#define cfs_alloc_pages(mask, order)  alloc_pages((mask), (order))
-
-#define alloc_page(mask)      alloc_pages((mask), 0)
-#define cfs_alloc_page(mask)  alloc_page(mask)
-
-static inline void __free_pages(cfs_page_t *pg, int what)
-{
-#if 0 //#ifdef MAP_ANONYMOUS
-        munmap(pg->addr, PAGE_SIZE);
-#else
-        free(pg->addr);
-#endif
-        free(pg);
-}
-#define __cfs_free_pages(pg, order)  __free_pages((pg), (order))
-
-#define __free_page(page) __free_pages((page), 0)
-#define free_page(page) __free_page(page)
-#define __cfs_free_page(page)  __cfs_free_pages((page), 0)
-
-static inline cfs_page_t* __grab_cache_page(unsigned long index)
-{
-        cfs_page_t *pg = alloc_pages(0, 0);
-
-        if (pg)
-                pg->index = index;
-        return pg;
-}
-
-#define grab_cache_page(index) __grab_cache_page(index)
-#define page_cache_release(page) __free_pages(page, 0)
-
-/* arithmetic */
-#define do_div(a,b)                     \
-        ({                              \
-                unsigned long remainder;\
-                remainder = (a) % (b);  \
-                (a) = (a) / (b);        \
-                (remainder);            \
-        })
 
 /* VFS stuff */
 #define ATTR_MODE       0x0001
@@ -520,49 +234,6 @@ struct vfsmount {
         void *pwd;
 };
 
-/* semaphores */
-struct rw_semaphore {
-        int count;
-};
-
-/* semaphores */
-struct semaphore {
-        int count;
-};
-
-/* use the macro's argument to avoid unused warnings */
-#define down(a) do { (void)a; } while (0)
-#define mutex_down(a)   down(a)
-#define up(a) do { (void)a; } while (0)
-#define mutex_up(a)     up(a)
-#define down_read(a) do { (void)a; } while (0)
-#define up_read(a) do { (void)a; } while (0)
-#define down_write(a) do { (void)a; } while (0)
-#define up_write(a) do { (void)a; } while (0)
-#define sema_init(a,b) do { (void)a; } while (0)
-#define init_rwsem(a) do { (void)a; } while (0)
-#define DECLARE_MUTEX(name)     \
-        struct semaphore name = { 1 }
-static inline void init_MUTEX (struct semaphore *sem)
-{
-        sema_init(sem, 1);
-}
-static inline void init_MUTEX_LOCKED (struct semaphore *sem)
-{
-        sema_init(sem, 0);
-}
-
-#define init_mutex(s)   init_MUTEX(s)
-
-typedef struct  {
-        struct list_head sleepers;
-} wait_queue_head_t;
-
-typedef struct  {
-        struct list_head sleeping;
-        void *process;
-} wait_queue_t;
-
 struct signal {
         int signal;
 };
@@ -582,6 +253,7 @@ struct task_struct {
         __u32 cap_effective;
 };
 
+
 typedef struct task_struct cfs_task_t;
 #define cfs_current()           current
 #define cfs_curproc_pid()       (current->pid)
@@ -599,21 +271,6 @@ static inline int capable(int cap)
 
 #define set_current_state(foo) do { current->state = foo; } while (0)
 
-#define init_waitqueue_entry(q,p) do { (q)->process = p; } while (0)
-#define add_wait_queue(q,p) do {  list_add(&(q)->sleepers, &(p)->sleeping); } while (0)
-#define del_wait_queue(p) do { list_del(&(p)->sleeping); } while (0)
-#define remove_wait_queue(q,p) do { list_del(&(p)->sleeping); } while (0)
-
-#define DECLARE_WAIT_QUEUE_HEAD(HEAD)                           \
-        wait_queue_head_t HEAD = {                              \
-                .sleepers = CFS_LIST_HEAD_INIT(HEAD.sleepers)   \
-        }
-#define init_waitqueue_head(l) CFS_INIT_LIST_HEAD(&(l)->sleepers)
-#define wake_up(l) do { } while (0)
-#define TASK_INTERRUPTIBLE 0
-#define TASK_UNINTERRUPTIBLE 1
-#define TASK_RUNNING 2
-
 #define wait_event_interruptible(wq, condition)                         \
 ({                                                                      \
         struct l_wait_info lwi;                                         \
@@ -626,14 +283,6 @@ static inline int capable(int cap)
         ret;                                                            \
 })
 
-#define in_interrupt() (0)
-
-#define schedule() do {} while (0)
-static inline int schedule_timeout(signed long t)
-{
-        return 0;
-}
-
 #define lock_kernel() do {} while (0)
 #define unlock_kernel() do {} while (0)
 #define daemonize(l) do {} while (0)
@@ -645,7 +294,6 @@ static inline int schedule_timeout(signed long t)
 #define SIGNAL_MASK_ASSERT()
 #define KERN_INFO
 
-#include <sys/time.h>
 #if HZ != 1
 #error "liblustre's jiffies currently expects HZ to be 1"
 #endif
@@ -658,57 +306,6 @@ static inline int schedule_timeout(signed long t)
         _ret;                                   \
 })
 #define get_jiffies_64()  (__u64)jiffies
-#define time_after(a, b) ((long)(b) - (long)(a) < 0)
-#define time_before(a, b) time_after(b,a)
-#define time_after_eq(a,b)      ((long)(a) - (long)(b) >= 0)
-
-struct timer_list {
-        struct list_head tl_list;
-        void (*function)(unsigned long unused);
-        unsigned long data;
-        long expires;
-};
-
-static inline int timer_pending(struct timer_list *l)
-{
-        if (time_after(l->expires, jiffies))
-                return 1;
-        else
-                return 0;
-}
-
-static inline int init_timer(struct timer_list *l)
-{
-        CFS_INIT_LIST_HEAD(&l->tl_list);
-        return 0;
-}
-
-static inline void mod_timer(struct timer_list *l, int thetime)
-{
-        l->expires = thetime;
-}
-
-static inline void del_timer(struct timer_list *l)
-{
-        free(l);
-}
-
-typedef struct { volatile int counter; } atomic_t;
-
-#define ATOMIC_INIT(i) { (i) }
-
-#define atomic_read(a) ((a)->counter)
-#define atomic_set(a,b) do {(a)->counter = b; } while (0)
-#define atomic_dec_and_test(a) ((--((a)->counter)) == 0)
-#define atomic_dec_and_lock(a,b) ((--((a)->counter)) == 0)
-#define atomic_inc(a)  (((a)->counter)++)
-#define atomic_dec(a)  do { (a)->counter--; } while (0)
-#define atomic_add(b,a)  do {(a)->counter += b;} while (0)
-#define atomic_add_return(n,a) ((a)->counter += n)
-#define atomic_inc_return(a) atomic_add_return(1,a)
-#define atomic_sub(b,a)  do {(a)->counter -= b;} while (0)
-#define atomic_sub_return(n,a) ((a)->counter -= n)
-#define atomic_dec_return(a)  atomic_sub_return(1,a)
 
 #ifndef likely
 #define likely(exp) (exp)
@@ -781,25 +378,6 @@ int     cap_get_flag(cap_t, cap_value_t, cap_flag_t, cap_flag_value_t *);
 static inline void libcfs_run_lbug_upcall(char *file, const char *fn,
                                            const int l){}
 
-/* completion */
-struct completion {
-        unsigned int done;
-        cfs_waitq_t wait;
-};
-
-#define COMPLETION_INITIALIZER(work) \
-        { 0, __WAIT_QUEUE_HEAD_INITIALIZER((work).wait) }
-
-#define DECLARE_COMPLETION(work) \
-        struct completion work = COMPLETION_INITIALIZER(work)
-
-#define INIT_COMPLETION(x)      ((x).done = 0)
-
-static inline void init_completion(struct completion *x)
-{
-        x->done = 0;
-        init_waitqueue_head(&x->wait);
-}
 
 struct liblustre_wait_callback {
         struct list_head    llwc_list;
@@ -957,61 +535,5 @@ static inline void set_fs(mm_segment_t seg)
 #include <lustre_import.h>
 #include <lustre_export.h>
 #include <lustre_net.h>
-
-/* Fast hashing routine for a long.
-   (C) 2002 William Lee Irwin III, IBM */
-
-/*
- * Knuth recommends primes in approximately golden ratio to the maximum
- * integer representable by a machine word for multiplicative hashing.
- * Chuck Lever verified the effectiveness of this technique:
- * http://www.citi.umich.edu/techreports/reports/citi-tr-00-1.pdf
- *
- * These primes are chosen to be bit-sparse, that is operations on
- * them can use shifts and additions instead of multiplications for
- * machines where multiplications are slow.
- */
-#if BITS_PER_LONG == 32
-/* 2^31 + 2^29 - 2^25 + 2^22 - 2^19 - 2^16 + 1 */
-#define GOLDEN_RATIO_PRIME 0x9e370001UL
-#elif BITS_PER_LONG == 64
-/*  2^63 + 2^61 - 2^57 + 2^54 - 2^51 - 2^18 + 1 */
-#define GOLDEN_RATIO_PRIME 0x9e37fffffffc0001UL
-#else
-#error Define GOLDEN_RATIO_PRIME for your wordsize.
-#endif
-
-static inline unsigned long hash_long(unsigned long val, unsigned int bits)
-{
-	unsigned long hash = val;
-
-#if BITS_PER_LONG == 64
-	/*  Sigh, gcc can't optimise this alone like it does for 32 bits. */
-	unsigned long n = hash;
-	n <<= 18;
-	hash -= n;
-	n <<= 33;
-	hash -= n;
-	n <<= 3;
-	hash += n;
-	n <<= 3;
-	hash -= n;
-	n <<= 4;
-	hash += n;
-	n <<= 2;
-	hash += n;
-#else
-	/* On some cpus multiply is faster, on others gcc will do shifts */
-	hash *= GOLDEN_RATIO_PRIME;
-#endif
-
-	/* High bits are more random, so use them. */
-	return hash >> (BITS_PER_LONG - bits);
-}
-	
-static inline unsigned long hash_ptr(void *ptr, unsigned int bits)
-{
-	return hash_long((unsigned long)ptr, bits);
-}
 
 #endif

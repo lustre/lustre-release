@@ -8,7 +8,7 @@ AM_CFLAGS=$(LLCFLAGS)
 AM_CPPFLAGS=$(LLCPPFLAGS) -DLUSTRE_UTILS=1
 AM_LDFLAGS := -L$(top_builddir)/lnet/utils
 
-LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a
+LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a $(top_builddir)/libcfs/libcfs/libcfsutil.a
 
 sbin_scripts = lrun
 bin_scripts = llstat llobdstat plot-llstat llbackup
@@ -32,11 +32,11 @@ endif # UTILS
 
 lib_LIBRARIES = liblustreapi.a libiam.a
 
-lctl_SOURCES = parser.c obd.c lustre_cfg.c lctl.c parser.h obdctl.h platform.h
+lctl_SOURCES = obd.c lustre_cfg.c lctl.c obdctl.h
 lctl_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
 lctl_DEPENDENCIES := $(LIBPTLCTL)
 
-lfs_SOURCES = lfs.c parser.c obd.c lustre_cfg.c
+lfs_SOURCES = lfs.c obd.c lustre_cfg.c
 lfs_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
 lfs_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a 
 

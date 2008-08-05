@@ -44,7 +44,7 @@
 #include <stdio.h>
 #include <lnet/lnetctl.h>
 #include "obdctl.h"
-#include "parser.h"
+#include <libcfs/libcfsutil.h>
 
 static int jt_quit(int argc, char **argv) {
         Parser_quit(argc, argv);

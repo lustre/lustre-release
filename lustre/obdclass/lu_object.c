@@ -52,7 +52,7 @@
 /* nr_free_pages() */
 #include <linux/swap.h>
 /* hash_long() */
-#include <linux/hash.h>
+#include <libcfs/libcfs_hash.h>
 #include <obd_support.h>
 #include <lustre_disk.h>
 #include <lustre_fid.h>

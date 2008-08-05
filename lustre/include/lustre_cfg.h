@@ -97,6 +97,11 @@ struct lustre_cfg {
         __u32 lcfg_buflens[0];
 };
 
+enum cfg_record_type {
+        PORTALS_CFG_TYPE = 1,
+        LUSTRE_CFG_TYPE = 123,
+};
+
 #define LUSTRE_CFG_BUFLEN(lcfg, idx)            \
         ((lcfg)->lcfg_bufcount <= (idx)         \
          ? 0                                    \

@@ -47,6 +47,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <libcfs/libcfs.h>
 #include <lustre/liblustreapi.h>
 
 #define T1 "write data before unlink\n"

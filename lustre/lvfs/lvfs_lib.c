@@ -149,10 +149,9 @@ int __obd_fail_timeout_set(__u32 id, __u32 value, int ms, int set)
         if (ret) {
                 CERROR("obd_fail_timeout id %x sleeping for %dms\n",
                        id, ms);
-                set_current_state(TASK_UNINTERRUPTIBLE);
                 cfs_schedule_timeout(CFS_TASK_UNINT,
                                      cfs_time_seconds(ms) / 1000);
-                set_current_state(TASK_RUNNING);
+                set_current_state(CFS_TASK_RUNNING);
                 CERROR("obd_fail_timeout id %x awake\n", id);
         }
         return ret;

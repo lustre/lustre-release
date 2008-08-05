@@ -46,7 +46,6 @@
 
 #include <libcfs/libcfs.h>
 
-#include <linux/types.h>
 #include <lustre_req_layout.h>
 #include <lustre_fld.h>
 

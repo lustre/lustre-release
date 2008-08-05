@@ -42,7 +42,6 @@
 #ifndef _INTERVAL_H__
 #define _INTERVAL_H__
 
-#include <libcfs/types.h>  /* __u8, __u64 etc. */
 #include <libcfs/libcfs.h>   /* LASSERT. */
 
 struct interval_node {

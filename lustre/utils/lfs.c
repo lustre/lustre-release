@@ -65,7 +65,7 @@
 #include <lustre/liblustreapi.h>
 #include <lustre/lustre_user.h>
 
-#include "parser.h"
+#include <libcfs/libcfsutil.h>
 #include "obdctl.h"
 
 unsigned int libcfs_subsystem_debug = 0;

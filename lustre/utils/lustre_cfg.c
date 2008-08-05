@@ -69,7 +69,7 @@
 
 #include "obdctl.h"
 #include <lnet/lnetctl.h>
-#include "parser.h"
+#include <libcfs/libcfsutil.h>
 #include <stdio.h>
 
 static char * lcfg_devname;

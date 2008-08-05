@@ -6,7 +6,7 @@ AM_CFLAGS=$(LLCFLAGS)
 AM_CPPFLAGS=$(LLCPPFLAGS) -DLUSTRE_UTILS=1
 AM_LDFLAGS := -L$(top_builddir)/libcfs/libcfs
 
-LIBCFS := $(top_builddir)/libcfs/libcfs/libcfs.a
+LIBCFS := $(top_builddir)/libcfs/libcfs/libcfs.a $(top_builddir)/libcfs/libcfs/libcfsutil.a
 
 sbin_PROGRAMS := lsvcgssd l_idmap
 
@@ -72,6 +72,8 @@ l_idmap_SOURCES = \
 	err_util.c \
 	\
 	lsupport.h
+
+l_idmap_LDADD = $(LIBCFS)
 
 lgss_keyring_SOURCES = \
 	lgss_keyring.c \

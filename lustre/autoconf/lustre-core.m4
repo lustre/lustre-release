@@ -1817,7 +1817,7 @@ AC_DEFUN([LC_CONFIGURE],
 [LC_CONFIG_OBD_BUFFER_SIZE
 
 # include/liblustre.h
-AC_CHECK_HEADERS([asm/page.h sys/user.h sys/vfs.h stdint.h blkid/blkid.h])
+AC_CHECK_HEADERS([sys/user.h sys/vfs.h stdint.h blkid/blkid.h])
 
 # liblustre/llite_lib.h
 AC_CHECK_HEADERS([xtio.h file.h])

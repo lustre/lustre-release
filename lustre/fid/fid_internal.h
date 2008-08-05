@@ -45,8 +45,6 @@
 
 #include <libcfs/libcfs.h>
 
-#include <linux/types.h>
-
 #ifdef __KERNEL__
 struct seq_thread_info {
         struct req_capsule     *sti_pill;

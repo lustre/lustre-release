@@ -65,14 +65,9 @@
 #include <errno.h>
 #include <string.h>
 
-#ifdef HAVE_ASM_PAGE_H
-#include <asm/page.h>           /* needed for PAGE_SIZE - rread */
-#endif
-
 #include <obd_class.h>
 #include <lnet/lnetctl.h>
-#include "parser.h"
-#include "platform.h"
+#include <libcfs/libcfsutil.h>
 #include <stdio.h>
 
 #define MAX_STRING_SIZE 128

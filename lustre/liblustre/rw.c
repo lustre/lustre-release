@@ -74,14 +74,14 @@ struct llu_io_group
         int                     lig_npages;
         __u64                   lig_rwcount;
         struct ll_async_page   *lig_llaps;
-        struct page            *lig_pages;
+        cfs_page_t             *lig_pages;
         void                   *lig_llap_cookies;
 };
 
 #define LLU_IO_GROUP_SIZE(x) \
         (sizeof(struct llu_io_group) + \
          (sizeof(struct ll_async_page) + \
-          sizeof(struct page) + \
+          sizeof(cfs_page_t) + \
           llap_cookie_size) * (x))
 
 struct llu_io_session
@@ -417,7 +417,7 @@ struct ll_async_page {
         int             llap_magic;
         void           *llap_cookie;
         int             llap_queued;
-        struct page    *llap_page;
+        cfs_page_t     *llap_page;
         struct inode   *llap_inode;
 };
 
@@ -461,7 +461,7 @@ static void llu_ap_update_obdo(void *data, int cmd, struct obdo *oa,
 static int llu_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 {
         struct ll_async_page *llap;
-        struct page *page;
+        cfs_page_t *page;
         ENTRY;
 
         llap = LLAP_FROM_COOKIE(data);
@@ -497,7 +497,7 @@ static int llu_queue_pio(int cmd, struct llu_io_group *group,
         struct intnl_stat *st = llu_i2stat(group->lig_inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct obd_export *exp = llu_i2obdexp(group->lig_inode);
-        struct page *pages = &group->lig_pages[group->lig_npages],*page = pages;
+        cfs_page_t *pages = &group->lig_pages[group->lig_npages],*page = pages;
         struct ll_async_page *llap = &group->lig_llaps[group->lig_npages];
         void *llap_cookie = group->lig_llap_cookies +
                 llap_cookie_size * group->lig_npages;
@@ -639,7 +639,7 @@ struct llu_io_group * get_io_group(struct inode *inode, int maxpages,
         group->lig_maxpages = maxpages;
         group->lig_params = params;
         group->lig_llaps = (struct ll_async_page *)(group + 1);
-        group->lig_pages = (struct page *)(&group->lig_llaps[maxpages]);
+        group->lig_pages = (cfs_page_t *)(&group->lig_llaps[maxpages]);
         group->lig_llap_cookies = (void *)(&group->lig_pages[maxpages]);
 
         rc = oig_init(&group->lig_oig);

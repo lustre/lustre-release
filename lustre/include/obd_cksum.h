@@ -47,7 +47,6 @@
 #error Unsupported operating system.
 #endif
 
-#include <lustre/types.h>
 #include <lustre/lustre_idl.h>
 
 /*

@@ -63,12 +63,6 @@
 
 #undef LIST_HEAD
 
-#ifdef HAVE_ASM_TYPES_H
-#include <asm/types.h>
-#elif defined(HAVE_SYS_TYPES_H)
-#include <sys/types.h>
-#endif
-
 #ifdef HAVE_LINUX_UNISTD_H
 #include <linux/unistd.h>
 #elif defined(HAVE_UNISTD_H)
@@ -137,10 +131,10 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         return rc;
 }
 
-static struct page *llu_dir_read_page(struct inode *ino, __u32 hash,
+static cfs_page_t *llu_dir_read_page(struct inode *ino, __u32 hash,
                                       int exact, struct ll_dir_chain *chain)
 {
-        struct page *page;
+        cfs_page_t *page;
         int rc;
         ENTRY;
 
@@ -211,7 +205,7 @@ ssize_t llu_iop_filldirentries(struct inode *dir, _SYSIO_OFF_T *basep,
         struct intnl_stat     *st = llu_i2stat(dir);
         loff_t                 pos = *basep;
         struct ll_dir_chain    chain;
-        struct page           *page;
+        cfs_page_t            *page;
         int filled = 0;
         int rc;
         int done;

@@ -41,13 +41,6 @@
 #ifndef _LINUX_LUSTRE_USER_H
 #define _LINUX_LUSTRE_USER_H
 
-#ifdef HAVE_ASM_TYPES_H
-#include <asm/types.h>
-#else
-#include <lustre/types.h>
-#endif
-
-
 #ifndef __KERNEL__
 # define NEED_QUOTA_DEFS
 # ifdef HAVE_QUOTA_SUPPORT

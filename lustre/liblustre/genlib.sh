@@ -76,6 +76,7 @@ build_obj_list ../lvfs liblvfs.a
 # lnet components libs
 build_obj_list ../../lnet/utils libuptlctl.a
 build_obj_list ../../libcfs/libcfs libcfs.a
+build_obj_list ../../libcfs/libcfs libcfsutil.a
 if $(echo "$LND_LIBS" | grep "socklnd" >/dev/null) ; then
 	build_obj_list ../../lnet/ulnds/socklnd libsocklnd.a
 fi

@@ -43,7 +43,7 @@
 #include <stdio.h>
 
 #include "obdctl.h"
-#include "parser.h"
+#include <libcfs/libcfsutil.h>
 
 /* the functions that were in here are now in obd.c */
 

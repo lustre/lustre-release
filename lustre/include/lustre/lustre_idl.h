@@ -86,8 +86,6 @@
 
 #include <libcfs/libcfs.h>
 
-#include <lustre/types.h>
-
 /* Defn's shared with user-space. */
 #include <lustre/lustre_user.h>
 

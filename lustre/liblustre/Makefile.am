@@ -35,7 +35,8 @@ LND_LIBS +=   $(top_builddir)/lnet/ulnds/ptllnd/libptllnd.a
 endif
 
 LNET_LIBS =   $(top_builddir)/lnet/utils/libuptlctl.a \
-              $(top_builddir)/lnet/lnet/liblnet.a
+              $(top_builddir)/lnet/lnet/liblnet.a \
+              $(top_builddir)/libcfs/libcfs/libcfsutil.a
 
 SYSIO_LIBS =  $(SYSIO)/lib/libsysio.a
 

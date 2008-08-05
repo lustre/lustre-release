@@ -59,9 +59,6 @@
 #include <sys/types.h>
 #include <sys/syscall.h>
 #include <fnmatch.h>
-#ifdef HAVE_ASM_TYPES_H
-#include <asm/types.h>
-#endif
 #ifdef HAVE_LINUX_UNISTD_H
 #include <linux/unistd.h>
 #else
