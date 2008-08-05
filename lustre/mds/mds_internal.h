@@ -223,6 +223,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name);
 int mds_lov_disconnect(struct obd_device *obd);
 
 int mds_lov_write_objids(struct obd_device *obd);
+int mds_lov_prepare_objids(struct obd_device *obd, struct lov_mds_md *lmm);
 void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm);
 int mds_lov_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid);
 

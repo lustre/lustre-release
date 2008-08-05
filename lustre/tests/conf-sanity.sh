@@ -799,11 +799,6 @@ test_22() {
         #reformat to remove all logs
         reformat
 	start_mds
-	echo Client mount before any osts are in the logs
-	mount_client $MOUNT
-	check_mount && return 41
-	umount_client $MOUNT
-	pass
 
 	echo Client mount with ost in logs, but none running
 	start_ost

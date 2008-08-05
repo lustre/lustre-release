@@ -775,6 +775,9 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                         RETURN(rc);
         }
 
+        if ((rc = mds_lov_prepare_objids(obd,lmm)) != 0)
+                RETURN(rc);
+
         intent_set_disposition(rep, DISP_OPEN_OPEN);
         mfd = mds_dentry_open(dchild, mds->mds_vfsmnt, flags, req);
         if (IS_ERR(mfd))
@@ -785,7 +788,7 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
 
         mds_lov_update_objids(obd, lmm);
 
-        if (rc) /* coverity[deadcode] */
+        if (rc)
                 mds_mfd_unlink(mfd, 1);
 
         mds_mfd_put(mfd);

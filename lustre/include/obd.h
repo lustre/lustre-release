@@ -525,6 +525,8 @@ struct mds_obd {
                                          mds_fl_acl:1,
                                          mds_fl_cfglog:1,
                                          mds_fl_synced:1,
+                                         mds_fl_target:1, /* mds have one or
+                                                           * more targets */
                                          mds_evict_ost_nids:1;
 
         uid_t                            mds_squash_uid;
@@ -773,8 +775,9 @@ enum obd_notify_event {
         OBD_NOTIFY_CONFIG
 };
 
-#define CONFIG_LOG  0x1  /* finished processing config log */
-#define CONFIG_SYNC 0x2  /* mdt synced 1 ost */
+#define CONFIG_LOG      0x1  /* finished processing config log */
+#define CONFIG_SYNC     0x2  /* mdt synced 1 ost */
+#define CONFIG_TARGET   0x4  /* one target is added */
 
 /*
  * Data structure used to pass obd_notify()-event to non-obd listeners (llite
