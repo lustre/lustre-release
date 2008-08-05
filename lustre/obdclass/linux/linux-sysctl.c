@@ -106,9 +106,9 @@ int LL_PROC_PROTO(proc_memory_alloc)
                 *lenp = 0;
                 return 0;
         }
-        if (write) 
+        if (write)
                 return -EINVAL;
-        
+
         len = snprintf(buf, sizeof(buf), LPU64"\n", obd_memory_sum());
         if (len > *lenp)
                 len = *lenp;
@@ -221,7 +221,7 @@ int LL_PROC_PROTO(proc_max_dirty_pages_in_mb)
                 len = lprocfs_read_frac_helper(buf, sizeof(buf),
                                                *(unsigned int*)table->data,
                                                1 << (20 - CFS_PAGE_SHIFT));
-                if (len > *lenp) 
+                if (len > *lenp)
                         len = *lenp;
                 buf[len] = '\0';
                 if (copy_to_user(buffer, buf, len))
@@ -243,7 +243,7 @@ int LL_PROC_PROTO(proc_alloc_fail_rate)
                 return 0;
         }
         if (write) {
-                rc = lprocfs_write_frac_helper(buffer, *lenp, 
+                rc = lprocfs_write_frac_helper(buffer, *lenp,
                                                (unsigned int*)table->data,
                                                OBD_ALLOC_FAIL_MULT);
         } else {
