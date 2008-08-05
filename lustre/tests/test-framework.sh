@@ -520,6 +520,7 @@ zconf_umount() {
     fi
 }
 
+# mount clients if not mouted
 zconf_mount_clients() {
     local OPTIONS
     local clients=$1
@@ -537,8 +538,10 @@ zconf_mount_clients() {
     fi
 
     echo "Starting client $clients: $OPTIONS $device $mnt"
-    do_nodes $clients mkdir -p $mnt
-    do_nodes $clients mount -t lustre $OPTIONS $device $mnt || return 1
+    do_nodes $clients "mount | grep $mnt || { mkdir -p $mnt && mount -t lustre $OPTIONS $device $mnt || false; }"
+
+    echo "Started clients $clients: "
+    do_nodes $clients "mount | grep $mnt"
 
     do_nodes $clients "lctl set_param debug=$PTLDEBUG;
         lctl set_param subsystem_debug=${SUBSYSTEM# };
@@ -553,8 +556,8 @@ zconf_umount_clients() {
     [ "$3" ] && force=-f
 
     echo "Umounting clients: $clients"
-    echo "Stopping client $client $mnt (opts:$force)"
-    do_nodes $clients umount $force $mnt 
+    echo "Stopping clients: $clients $mnt (opts:$force)"
+    do_nodes $clients umount $force $mnt
 }
 
 shutdown_facet() {
@@ -937,24 +940,13 @@ do_node() {
 }
 
 do_nodes() {
-    local nodes=$1
+    local rnodes=$1
     shift
-
-    nodes=${nodes//,/ }
-    # split list to local and remote
-    local rnodes=$(echo " $nodes " | sed -re "s/\s+$HOSTNAME\s+/ /g")
- 
-    if [ "$(get_node_count $nodes)" != "$(get_node_count $rnodes)" ]; then
-        do_node $HOSTNAME $@
-    fi
-
-    [ -z "$(echo $rnodes)" ] && return 0
 
     # This is part from do_node
     local myPDSH=$PDSH
 
-    rnodes=$(comma_list $rnodes)
-    [ -z "$myPDSH" -o "$myPDSH" = "no_dsh" ] && \
+    [ -z "$myPDSH" -o "$myPDSH" = "no_dsh" -o "$myPDSH" = "rsh" ] && \
         echo "cannot run remote command on $rnodes with $myPDSH" && return 128
 
     if $VERBOSE; then
@@ -962,20 +954,9 @@ do_nodes() {
         $myPDSH $rnodes $LCTL mark "$@" > /dev/null 2>&1 || :
     fi
 
-    if [ "$myPDSH" = "rsh" ]; then
-# we need this because rsh does not return exit code of an executed command
-	local command_status="$TMP/cs"
-	rsh $rnodes ":> $command_status"
-	rsh $rnodes "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin;
-		    cd $RPWD; sh -c \"$@\") || 
-		    echo command failed >$command_status"
-	[ -n "$($myPDSH $rnodes cat $command_status)" ] && return 1 || true
-        return 0
-    fi
     $myPDSH $rnodes "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")" | sed -re "s/\w+:\s//g"
     return ${PIPESTATUS[0]}
 }
-
 
 do_facet() {
     facet=$1
