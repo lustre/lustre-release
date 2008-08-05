@@ -73,14 +73,18 @@ struct proc_dir_entry *lprocfs_srch(struct proc_dir_entry *head,
 
         if (head == NULL)
                 return NULL;
+        LPROCFS_ENTRY();
 
         temp = head->subdir;
         while (temp != NULL) {
-                if (strcmp(temp->name, name) == 0)
+                if (strcmp(temp->name, name) == 0) {
+                        LPROCFS_EXIT();
                         return temp;
+                }
 
                 temp = temp->next;
         }
+        LPROCFS_EXIT();
         return NULL;
 }
 
@@ -324,6 +328,7 @@ void lprocfs_remove(struct proc_dir_entry **rooth)
 
         parent = root->parent;
         LASSERT(parent != NULL);
+        LPROCFS_WRITE_ENTRY(); /* search vs remove race */
 
         while (1) {
                 while (temp->subdir != NULL)
@@ -340,13 +345,12 @@ void lprocfs_remove(struct proc_dir_entry **rooth)
 
                 /* Now, the rm_entry->deleted flags is protected 
                  * by _lprocfs_lock. */
-                down_write(&_lprocfs_lock);
                 rm_entry->data = NULL;
                 remove_proc_entry(rm_entry->name, temp);
-                up_write(&_lprocfs_lock);
                 if (temp == parent)
                         break;
         }
+        LPROCFS_WRITE_EXIT();
 }
 
 void lprocfs_remove_proc_entry(const char *name, struct proc_dir_entry *parent)
