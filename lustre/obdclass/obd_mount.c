@@ -1248,14 +1248,28 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
            Note ext3/ldiskfs can't be mounted ro. */
         s_flags = sb->s_flags;
 
+        /* allocate memory for options */
+        OBD_PAGE_ALLOC(__page, CFS_ALLOC_STD);
+        if (!__page)
+                GOTO(out_free, rc = -ENOMEM);
+        page = (unsigned long)cfs_page_address(__page);
+        options = (char *)page;
+        memset(options, 0, CFS_PAGE_SIZE);
+
+        /* mount-line options must be added for pre-mount because it may
+         * contain mount options such as journal_dev which are required
+         * to mount successfuly the underlying filesystem */
+        if (lmd->lmd_opts && (*(lmd->lmd_opts) != 0))
+                strncat(options, lmd->lmd_opts, CFS_PAGE_SIZE - 1);
+
         /* Pre-mount ldiskfs to read the MOUNT_DATA_FILE */
         CDEBUG(D_MOUNT, "Pre-mount ldiskfs %s\n", lmd->lmd_dev);
-        mnt = ll_kern_mount("ldiskfs", s_flags, lmd->lmd_dev, 0);
+        mnt = ll_kern_mount("ldiskfs", s_flags, lmd->lmd_dev, (void *)options);
         if (IS_ERR(mnt)) {
                 rc = PTR_ERR(mnt);
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
                 /* 2.6 kernels: if ldiskfs fails, try ldiskfs2 */
-                mnt = ll_kern_mount("ldiskfs2", s_flags, lmd->lmd_dev, 0);
+                mnt = ll_kern_mount("ldiskfs2", s_flags, lmd->lmd_dev,
+                                    (void *)options);
                 if (IS_ERR(mnt)) {
                         int rc2 = PTR_ERR(mnt);
                         CERROR("premount %s:%#lx ldiskfs failed: %d, ldiskfs2 "
@@ -1263,15 +1277,6 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
                                lmd->lmd_dev, s_flags, rc, rc2);
                         GOTO(out_free, rc);
                 }
-#else
-                /* 2.4 kernels: if ldiskfs fails, try ext3 */
-                mnt = ll_kern_mount("ext3", s_flags, lmd->lmd_dev, 0);
-                if (IS_ERR(mnt)) {
-                        rc = PTR_ERR(mnt);
-                        CERROR("premount ext3 failed: rc = %d\n", rc);
-                        GOTO(out_free, rc);
-                }
-#endif
         }
 
         OBD_SET_CTXT_MAGIC(&mount_ctxt);
@@ -1290,12 +1295,6 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
         /* Done with our pre-mount, now do the real mount. */
 
         /* Glom up mount options */
-        OBD_PAGE_ALLOC(__page, CFS_ALLOC_STD);
-        if (!__page)
-                GOTO(out_free, rc = -ENOMEM);
-        page = (unsigned long)cfs_page_address(__page);
-
-        options = (char *)page;
         memset(options, 0, CFS_PAGE_SIZE);
         strncpy(options, ldd->ldd_mount_opts, CFS_PAGE_SIZE - 2);
 
@@ -1315,18 +1314,20 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
                MT_STR(ldd), lmd->lmd_dev, options);
         mnt = ll_kern_mount(MT_STR(ldd), s_flags, lmd->lmd_dev,
                             (void *)options);
-        OBD_PAGE_FREE(__page);
         if (IS_ERR(mnt)) {
                 rc = PTR_ERR(mnt);
                 CERROR("ll_kern_mount failed: rc = %d\n", rc);
                 GOTO(out_free, rc);
         }
 
+        OBD_PAGE_FREE(__page);
         lsi->lsi_ldd = ldd;   /* freed at lsi cleanup */
         CDEBUG(D_SUPER, "%s: mnt = %p\n", lmd->lmd_dev, mnt);
         RETURN(mnt);
 
 out_free:
+        if (__page)
+                OBD_PAGE_FREE(__page);
         OBD_FREE(ldd, sizeof(*ldd));
         lsi->lsi_ldd = NULL;
         RETURN(ERR_PTR(rc));
