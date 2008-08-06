@@ -57,6 +57,13 @@ Details    : Prevent proc handler from accessing devices added to the
 	     obd_devs array but yet be intialized.
 
 Severity   : enhancement
+Bugzilla   : 16091
+Description: configure's --enable-quota should check the 
+           : kernel .config for CONFIG_QUOTA
+Details    : configure is terminated if --enable-quota is passed but
+           : no quota support is in kernel
+
+Severity   : enhancement
 Bugzilla   : 15308
 Description: Update to SLES10 SP2 kernel-2.6.16.60-0.23.
 
