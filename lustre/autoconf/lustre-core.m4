@@ -1660,20 +1660,32 @@ fi
 # whether to enable quota support
 #
 AC_DEFUN([LC_CONFIG_QUOTA],
-[AC_MSG_CHECKING([whether to disable quota support])
-AC_ARG_ENABLE([quota], 
-	AC_HELP_STRING([--disable-quota],
-			[disable quota support]),
-	[],[enable_quota='yes'])
-AC_MSG_RESULT([$enable_quota])
+[AC_ARG_ENABLE([quota], 
+	AC_HELP_STRING([--enable-quota],
+			[enable quota support]),
+	[],[enable_quota='default'])
 if test x$linux25 != xyes; then
-   enable_quota='no'
+	enable_quota='no'
 fi
+LB_LINUX_CONFIG([QUOTA],[
+	if test x$enable_quota = xdefault; then
+		enable_quota='yes'
+	fi
+],[
+	if test x$enable_quota = xdefault; then
+		enable_quota='no'
+		AC_MSG_WARN([quota is not enabled because the kernel lacks quota support])
+	else
+		if test x$enable_quota = xyes; then
+			AC_MSG_ERROR([cannot enable quota because the kernel lacks quota support])
+		fi
+	fi
+])
 if test x$enable_quota != xno; then
-   AC_DEFINE(HAVE_QUOTA_SUPPORT, 1, [Enable quota support])
+	AC_DEFINE(HAVE_QUOTA_SUPPORT, 1, [Enable quota support])
 fi
 ])
- 
+
 #
 # LC_CONFIG_SPLIT
 #
