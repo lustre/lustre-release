@@ -37,49 +37,45 @@
 #ifndef __LIBCFS_LINUX_KP30_H__
 #define __LIBCFS_LINUX_KP30_H__
 
-#ifndef __LIBCFS_KP30_H__
-#error Do not #include this file directly. #include <libcfs/libcfs.h> instead
-#endif
 
-#ifdef __KERNEL__
 #ifndef AUTOCONF_INCLUDED
 # include <linux/config.h>
 #endif
-# include <linux/kernel.h>
-# include <linux/mm.h>
-# include <linux/string.h>
-# include <linux/stat.h>
-# include <linux/init.h>
-# include <linux/errno.h>
-# include <linux/unistd.h>
-# include <asm/system.h>
-# include <linux/kmod.h>
-# include <linux/notifier.h>
-# include <linux/fs.h>
-# include <linux/miscdevice.h>
-# include <linux/vmalloc.h>
-# include <linux/time.h>
-# include <linux/slab.h>
-# include <linux/interrupt.h>
-# include <linux/highmem.h>
-# include <linux/module.h>
-# include <linux/version.h>
-# include <linux/smp_lock.h>
-# include <asm/atomic.h>
-# include <asm/uaccess.h>
-# include <linux/rwsem.h>
-# include <linux/proc_fs.h>
-# include <linux/file.h>
-# include <linux/smp.h>
-# include <linux/ctype.h>
-# include <linux/compiler.h>
-# ifdef HAVE_MM_INLINE
-#  include <linux/mm_inline.h>
-# endif
-# if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-#  include <linux/kallsyms.h>
-#  include <linux/moduleparam.h>
-# endif
+#include <linux/kernel.h>
+#include <linux/mm.h>
+#include <linux/string.h>
+#include <linux/stat.h>
+#include <linux/init.h>
+#include <linux/errno.h>
+#include <linux/unistd.h>
+#include <asm/system.h>
+#include <linux/kmod.h>
+#include <linux/notifier.h>
+#include <linux/fs.h>
+#include <linux/miscdevice.h>
+#include <linux/vmalloc.h>
+#include <linux/time.h>
+#include <linux/slab.h>
+#include <linux/interrupt.h>
+#include <linux/highmem.h>
+#include <linux/module.h>
+#include <linux/version.h>
+#include <linux/smp_lock.h>
+#include <asm/atomic.h>
+#include <asm/uaccess.h>
+#include <linux/rwsem.h>
+#include <linux/proc_fs.h>
+#include <linux/file.h>
+#include <linux/smp.h>
+#include <linux/ctype.h>
+#include <linux/compiler.h>
+#ifdef HAVE_MM_INLINE
+# include <linux/mm_inline.h>
+#endif
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+# include <linux/kallsyms.h>
+# include <linux/moduleparam.h>
+#endif
 
 #include <libcfs/linux/portals_compat25.h>
 
@@ -211,28 +207,6 @@ static inline void our_cond_resched(void)
 #define i_size_read(a) ((a)->i_size)
 #endif
 
-#else  /* !__KERNEL__ */
-# include <stdio.h>
-# include <stdlib.h>
-#if defined(__CYGWIN__)
-# include <cygwin-ioctl.h>
-#else
-# include <stdint.h>
-#endif
-# include <unistd.h>
-# include <time.h>
-# include <limits.h>
-# include <errno.h>
-# include <sys/ioctl.h>                         /* for _IOWR */
-#ifndef _IOWR
-#include "ioctl.h"
-#endif
-
-# define CFS_MODULE_PARM(name, t, type, perm, desc)
-#define PORTAL_SYMBOL_GET(x) inter_module_get(#x)
-#define PORTAL_SYMBOL_PUT(x) inter_module_put(#x)
-
-#endif /* End of !__KERNEL__ */
 
 /******************************************************************************/
 /* Light-weight trace
@@ -366,11 +340,7 @@ extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
 
 /* this is a bit chunky */
 
-#if defined(__KERNEL__)
- #define _LWORDSIZE BITS_PER_LONG
-#else
- #define _LWORDSIZE __WORDSIZE
-#endif
+#define _LWORDSIZE BITS_PER_LONG
 
 #if defined(HAVE_U64_LONG_LONG)
 # define LPU64 "%Lu"

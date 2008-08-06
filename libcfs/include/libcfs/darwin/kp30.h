@@ -37,10 +37,6 @@
 #ifndef __LIBCFS_DARWIN_KP30__
 #define __LIBCFS_DARWIN_KP30__
 
-#ifndef __LIBCFS_KP30_H__
-#error Do not #include this file directly. #include <libcfs/libcfs.h> instead
-#endif
-
 #ifdef __KERNEL__
 
 #include <sys/types.h>

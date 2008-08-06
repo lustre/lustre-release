@@ -319,7 +319,7 @@ typedef int cfs_task_state_t;
 
 #define CFS_TASK_INTERRUPTIBLE	0x00000001
 #define CFS_TASK_UNINT	        0x00000002
-
+#define CFS_TASK_RUNNING        0x00000003
 
 
 #define CFS_WAITQ_MAGIC     'CWQM'
@@ -374,7 +374,6 @@ void cfs_waitlink_init(struct cfs_waitlink *link);
 void cfs_waitq_add(struct cfs_waitq *waitq, struct cfs_waitlink *link);
 void cfs_waitq_add_exclusive(struct cfs_waitq *waitq, 
 			     struct cfs_waitlink *link);
-void cfs_waitq_forward(struct cfs_waitlink *link, struct cfs_waitq *waitq);
 void cfs_waitq_del(struct cfs_waitq *waitq, struct cfs_waitlink *link);
 int  cfs_waitq_active(struct cfs_waitq *waitq);
 

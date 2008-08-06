@@ -54,6 +54,7 @@
 #include <libcfs/winnt/winnt-prim.h>
 #include <libcfs/winnt/winnt-fs.h>
 #include <libcfs/winnt/winnt-tcpip.h>
+#include <libcfs/winnt/kp30.h>
 
 struct ptldebug_header {
         __u32 ph_len;

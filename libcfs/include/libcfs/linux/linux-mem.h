@@ -45,14 +45,17 @@
 #error Do not #include this file directly. #include <libcfs/libcfs.h> instead
 #endif
 
-#ifdef __KERNEL__
-# include <linux/mm.h>
-# include <linux/vmalloc.h>
-# include <linux/pagemap.h>
-# include <linux/slab.h>
-# ifdef HAVE_MM_INLINE
-#  include <linux/mm_inline.h>
-# endif
+#ifndef __KERNEL__
+#error This include is only for kernel use.
+#endif 
+
+#include <linux/mm.h>
+#include <linux/vmalloc.h>
+#include <linux/pagemap.h>
+#include <linux/slab.h>
+#ifdef HAVE_MM_INLINE
+# include <linux/mm_inline.h>
+#endif
 
 typedef struct page                     cfs_page_t;
 #define CFS_PAGE_SIZE                   PAGE_CACHE_SIZE
@@ -132,14 +135,5 @@ extern void cfs_mem_cache_free ( cfs_mem_cache_t *, void *);
 #define CFS_DECL_MMSPACE                mm_segment_t __oldfs
 #define CFS_MMSPACE_OPEN                do { __oldfs = get_fs(); set_fs(get_ds());} while(0)
 #define CFS_MMSPACE_CLOSE               set_fs(__oldfs)
-
-#else   /* !__KERNEL__ */
-#ifdef HAVE_ASM_PAGE_H
-#include <asm/page.h>           /* needed for PAGE_SIZE - rread */
-#endif
-
-#include <libcfs/user-prim.h>
-/* __KERNEL__ */
-#endif
 
 #endif /* __LINUX_CFS_MEM_H__ */

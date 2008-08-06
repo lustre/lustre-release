@@ -45,7 +45,10 @@
 #error Do not #include this file directly. #include <libcfs/libcfs.h> instead
 #endif
 
-#ifdef __KERNEL__
+#ifndef __KERNEL__
+#error This include is only for kernel use.
+#endif
+
 #include <linux/smp_lock.h>
 
 /*
@@ -111,11 +114,4 @@
  * - wait_for_completion(c)
  */
 
-/* __KERNEL__ */
-#else
-
-#include "../user-lock.h"
-
-/* __KERNEL__ */
-#endif
 #endif

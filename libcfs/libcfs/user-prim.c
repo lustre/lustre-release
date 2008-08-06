@@ -48,29 +48,8 @@
 
 #include <libcfs/libcfs.h>
 
-#include <sys/mman.h>
-#ifndef  __CYGWIN__
-#include <stdint.h>
-#ifdef HAVE_ASM_PAGE_H
-#include <asm/page.h>
-#endif
-#ifdef HAVE_SYS_USER_H
-#include <sys/user.h>
-#endif
-#else
-#include <sys/types.h>
-#endif
-#include <stdlib.h>
-#include <string.h>
-#include <signal.h>
-#include <errno.h>
-#include <sys/stat.h>
-#ifdef	HAVE_SYS_VFS_H
-#include <sys/vfs.h>
-#endif
-
 /*
- * Sleep channel. No-op implementation.
+ * Wait queue. No-op implementation.
  */
 
 void cfs_waitq_init(struct cfs_waitq *waitq)
@@ -94,14 +73,6 @@ void cfs_waitq_add(struct cfs_waitq *waitq, struct cfs_waitlink *link)
 }
 
 void cfs_waitq_add_exclusive(struct cfs_waitq *waitq, struct cfs_waitlink *link)
-{
-        LASSERT(waitq != NULL);
-        LASSERT(link != NULL);
-        (void)waitq;
-        (void)link;
-}
-
-void cfs_waitq_forward(struct cfs_waitlink *link, struct cfs_waitq *waitq)
 {
         LASSERT(waitq != NULL);
         LASSERT(link != NULL);
@@ -142,18 +113,84 @@ void cfs_waitq_broadcast(struct cfs_waitq *waitq)
         (void)waitq;
 }
 
-void cfs_waitq_wait(struct cfs_waitlink *link, int state)
+void cfs_waitq_wait(struct cfs_waitlink *link, cfs_task_state_t state)
 {
         LASSERT(link != NULL);
         (void)link;
 }
 
-int64_t cfs_waitq_timedwait(struct cfs_waitlink *link, int state, int64_t timeout)
+int64_t cfs_waitq_timedwait(struct cfs_waitlink *link, cfs_task_state_t state, 
+                            int64_t timeout)
 {
         LASSERT(link != NULL);
         (void)link;
         return 0;
 }
+
+void cfs_schedule_timeout(cfs_task_state_t state, int64_t timeout)
+{
+        cfs_waitlink_t    l;  
+        /* sleep(timeout) here instead? */
+        cfs_waitq_timedwait(&l, state, timeout);
+}
+
+void 
+cfs_pause(cfs_duration_t d)
+{
+        struct timespec s;
+        
+        cfs_duration_nsec(d, &s);
+        nanosleep(&s, NULL);
+}
+
+/*
+ * Timer
+ */
+
+void cfs_init_timer(cfs_timer_t *t)
+{
+        CFS_INIT_LIST_HEAD(&t->tl_list);
+}
+
+void cfs_timer_init(cfs_timer_t *l, cfs_timer_func_t *func, void *arg)
+{
+        CFS_INIT_LIST_HEAD(&l->tl_list);
+        l->function = func;
+        l->data = (unsigned long)arg;
+        return;
+}
+
+#define cfs_jiffies                             \
+({                                              \
+        unsigned long _ret = 0;                 \
+        struct timeval tv;                      \
+        if (gettimeofday(&tv, NULL) == 0)       \
+                _ret = tv.tv_sec;               \
+        _ret;                                   \
+})
+
+int cfs_timer_is_armed(cfs_timer_t *l)
+{
+        if (cfs_time_before(cfs_jiffies, l->expires))
+                return 1;
+        else
+                return 0;
+}
+
+void cfs_timer_arm(cfs_timer_t *l, cfs_time_t deadline)
+{
+        l->expires = deadline;
+}
+
+void cfs_timer_disarm(cfs_timer_t *l)
+{
+}
+
+long cfs_timer_deadline(cfs_timer_t *l)
+{
+        return l->expires;
+}
+
 
 #ifdef HAVE_LIBPTHREAD
 
@@ -218,79 +255,6 @@ int cfs_parse_int_tunable(int *value, char *name)
         return -EINVAL;
 }
 
-/*
- * Allocator
- */
-
-cfs_page_t *cfs_alloc_page(unsigned int flags)
-{
-        cfs_page_t *pg = malloc(sizeof(*pg));
-
-        if (!pg)
-                return NULL;
-        pg->addr = malloc(CFS_PAGE_SIZE);
-
-        if (!pg->addr) {
-                free(pg);
-                return NULL;
-        }
-        return pg;
-}
-
-void cfs_free_page(cfs_page_t *pg)
-{
-        free(pg->addr);
-        free(pg);
-}
-
-void *cfs_page_address(cfs_page_t *pg)
-{
-        return pg->addr;
-}
-
-void *cfs_kmap(cfs_page_t *pg)
-{
-        return pg->addr;
-}
-
-void cfs_kunmap(cfs_page_t *pg)
-{
-}
-
-/*
- * SLAB allocator
- */
-
-cfs_mem_cache_t *
-cfs_mem_cache_create(const char *name, size_t objsize, size_t off, unsigned long flags)
-{
-        cfs_mem_cache_t *c;
-
-        c = malloc(sizeof(*c));
-        if (!c)
-                return NULL;
-        c->size = objsize;
-        CDEBUG(D_MALLOC, "alloc slab cache %s at %p, objsize %d\n",
-               name, c, (int)objsize);
-        return c;
-}
-
-int cfs_mem_cache_destroy(cfs_mem_cache_t *c)
-{
-        CDEBUG(D_MALLOC, "destroy slab cache %p, objsize %u\n", c, c->size);
-        free(c);
-        return 0;
-}
-
-void *cfs_mem_cache_alloc(cfs_mem_cache_t *c, int gfp)
-{
-        return cfs_alloc(c->size, gfp);
-}
-
-void cfs_mem_cache_free(cfs_mem_cache_t *c, void *addr)
-{
-        cfs_free(addr);
-}
 
 void cfs_enter_debugger(void)
 {
@@ -369,12 +333,12 @@ void cfs_clear_sigpending(void)
 
 void cfs_stack_trace_fill(struct cfs_stack_trace *trace)
 {
-        backtrace(trace->frame, sizeof_array(trace->frame));
+        backtrace(trace->frame, ARRAY_SIZE(trace->frame));
 }
 
 void *cfs_stack_trace_frame(struct cfs_stack_trace *trace, int frame_no)
 {
-        if (0 <= frame_no && frame_no < sizeof_array(trace->frame))
+        if (0 <= frame_no && frame_no < ARRAY_SIZE(trace->frame))
                 return trace->frame[frame_no];
         else
                 return NULL;

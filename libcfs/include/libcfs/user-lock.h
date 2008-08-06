@@ -56,10 +56,13 @@
  */
 
 #ifndef __KERNEL__
-#include <stdio.h>
-#include <stdlib.h>
 
-#if 0
+/*
+ * The userspace implementations of linux/spinlock.h vary; we just
+ * include our own for all of them
+ */
+#define __LINUX_SPINLOCK_H
+
 /*
  * Optional debugging (magic stamping and checking ownership) can be added.
  */
@@ -83,6 +86,7 @@ typedef struct spin_lock spinlock_t;
 
 #define SPIN_LOCK_UNLOCKED (spinlock_t) { }
 #define LASSERT_SPIN_LOCKED(lock) do {} while(0)
+#define LASSERT_SEM_LOCKED(sem) do {} while(0)
 
 void spin_lock_init(spinlock_t *lock);
 void spin_lock(spinlock_t *lock);
@@ -91,8 +95,8 @@ int spin_trylock(spinlock_t *lock);
 void spin_lock_bh_init(spinlock_t *lock);
 void spin_lock_bh(spinlock_t *lock);
 void spin_unlock_bh(spinlock_t *lock);
-static inline int spin_is_locked(spinlock_t *l) {return 1;}
 
+static inline int spin_is_locked(spinlock_t *l) {return 1;}
 static inline void spin_lock_irqsave(spinlock_t *l, unsigned long f){}
 static inline void spin_unlock_irqrestore(spinlock_t *l, unsigned long f){}
 
@@ -119,11 +123,17 @@ void __up(struct semaphore *s);
  * - mutex_up(x)
  * - mutex_down(x)
  */
-#define mutex_up(s)			__up(s)
-#define mutex_down(s)			__down(s)
+#define DECLARE_MUTEX(name)     \
+        struct semaphore name = { 1 }
 
-#define init_mutex(x)			sema_init(x, 1)
-#define init_mutex_locked(x)		sema_init(x, 0)
+#define mutex_up(s)                     __up(s)
+#define up(s)                           mutex_up(s)
+#define mutex_down(s)                   __down(s)
+#define down(s)                         mutex_down(s)
+
+#define init_MUTEX(x)                   sema_init(x, 1)
+#define init_MUTEX_LOCKED(x)            sema_init(x, 0)
+#define init_mutex(s)                   init_MUTEX(s)
 
 /*
  * Completion:
@@ -132,13 +142,23 @@ void __up(struct semaphore *s);
  * - complete(c)
  * - wait_for_completion(c)
  */
-#if 0
-struct completion {};
+struct completion {
+        unsigned int done;
+        cfs_waitq_t wait;
+};
 
 void init_completion(struct completion *c);
 void complete(struct completion *c);
 void wait_for_completion(struct completion *c);
-#endif
+
+#define COMPLETION_INITIALIZER(work) \
+        { 0, __WAIT_QUEUE_HEAD_INITIALIZER((work).wait) }
+
+#define DECLARE_COMPLETION(work) \
+        struct completion work = COMPLETION_INITIALIZER(work)
+
+#define INIT_COMPLETION(x)      ((x).done = 0)
+
 
 /*
  * rw_semaphore:
@@ -149,7 +169,9 @@ void wait_for_completion(struct completion *c);
  * - down_write(x)
  * - up_write(x)
  */
-struct rw_semaphore {};
+struct rw_semaphore {
+        int foo;
+};
 
 void init_rwsem(struct rw_semaphore *s);
 void down_read(struct rw_semaphore *s);
@@ -171,13 +193,14 @@ void up_write(struct rw_semaphore *s);
  * - write_unlock(x)
  */
 typedef struct rw_semaphore rwlock_t;
+#define RW_LOCK_UNLOCKED        (rwlock_t) { }
 
-#define rwlock_init(pl)		init_rwsem(pl)
+#define rwlock_init(pl)         init_rwsem(pl)
 
-#define read_lock(l)		down_read(l)
-#define read_unlock(l)		up_read(l)
-#define write_lock(l)		down_write(l)
-#define write_unlock(l)		up_write(l)
+#define read_lock(l)            down_read(l)
+#define read_unlock(l)          up_read(l)
+#define write_lock(l)           down_write(l)
+#define write_unlock(l)         up_write(l)
 
 static inline void
 write_lock_irqsave(rwlock_t *l, unsigned long f) { write_lock(l); }
@@ -196,17 +219,20 @@ read_unlock_irqrestore(rwlock_t *l, unsigned long f) { read_unlock(l); }
 typedef struct { volatile int counter; } atomic_t;
 
 #define ATOMIC_INIT(i) { (i) }
+
 #define atomic_read(a) ((a)->counter)
 #define atomic_set(a,b) do {(a)->counter = b; } while (0)
 #define atomic_dec_and_test(a) ((--((a)->counter)) == 0)
+#define atomic_dec_and_lock(a,b) ((--((a)->counter)) == 0)
 #define atomic_inc(a)  (((a)->counter)++)
 #define atomic_dec(a)  do { (a)->counter--; } while (0)
 #define atomic_add(b,a)  do {(a)->counter += b;} while (0)
-#define atomic_add_return(n,a) ((a)->counter = n)
+#define atomic_add_return(n,a) ((a)->counter += n)
 #define atomic_inc_return(a) atomic_add_return(1,a)
 #define atomic_sub(b,a)  do {(a)->counter -= b;} while (0)
+#define atomic_sub_return(n,a) ((a)->counter -= n)
+#define atomic_dec_return(a)  atomic_sub_return(1,a)
 
-#endif
 
 #ifdef HAVE_LIBPTHREAD
 #include <pthread.h>

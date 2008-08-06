@@ -41,10 +41,12 @@
 #error Do not #include this file directly. #include <libcfs/libcfs.h> instead
 #endif
 
+#ifndef __KERNEL__
+#error This include is only for kernel use.
+#endif 
+
 #ifdef HAVE_ASM_TYPES_H
 #include <asm/types.h>
-#else
-#include <libcfs/types.h>
 #endif
 
 #include <stdarg.h>
@@ -54,91 +56,15 @@
 #include <libcfs/linux/linux-lock.h>
 #include <libcfs/linux/linux-fs.h>
 #include <libcfs/linux/linux-tcpip.h>
+#include <libcfs/linux/kp30.h>
 
-
-#ifdef __KERNEL__
-# include <linux/types.h>
-# include <linux/time.h>
-# include <asm/timex.h>
-#else
-# include <sys/types.h>
-# include <sys/time.h>
-# define do_gettimeofday(tv) gettimeofday(tv, NULL);
-typedef unsigned long long cycles_t;
-#endif
-
-#ifndef __KERNEL__
-/* Userpace byte flipping */
-# include <endian.h>
-# include <byteswap.h>
-# define __swab16(x) bswap_16(x)
-# define __swab32(x) bswap_32(x)
-# define __swab64(x) bswap_64(x)
-# define __swab16s(x) do {*(x) = bswap_16(*(x));} while (0)
-# define __swab32s(x) do {*(x) = bswap_32(*(x));} while (0)
-# define __swab64s(x) do {*(x) = bswap_64(*(x));} while (0)
-# if __BYTE_ORDER == __LITTLE_ENDIAN
-#  define le16_to_cpu(x) (x)
-#  define cpu_to_le16(x) (x)
-#  define le32_to_cpu(x) (x)
-#  define cpu_to_le32(x) (x)
-#  define le64_to_cpu(x) (x)
-#  define cpu_to_le64(x) (x)
-
-#  define be16_to_cpu(x) bswap_16(x)
-#  define cpu_to_be16(x) bswap_16(x)
-#  define be32_to_cpu(x) bswap_32(x)
-#  define cpu_to_be32(x) bswap_32(x)
-#  define be64_to_cpu(x) bswap_64(x)
-#  define cpu_to_be64(x) bswap_64(x)
-
-# else
-#  if __BYTE_ORDER == __BIG_ENDIAN
-#   define le16_to_cpu(x) bswap_16(x)
-#   define cpu_to_le16(x) bswap_16(x)
-#   define le32_to_cpu(x) bswap_32(x)
-#   define cpu_to_le32(x) bswap_32(x)
-#   define le64_to_cpu(x) bswap_64(x)
-#   define cpu_to_le64(x) bswap_64(x)
-
-#   define be16_to_cpu(x) (x)
-#   define cpu_to_be16(x) (x)
-#   define be32_to_cpu(x) (x)
-#   define cpu_to_be32(x) (x)
-#   define be64_to_cpu(x) (x)
-#   define cpu_to_be64(x) (x)
-
-#  else
-#   error "Unknown byte order"
-#  endif /* __BIG_ENDIAN */
-# endif /* __LITTLE_ENDIAN */
-#endif /* ! __KERNEL__ */
-
-struct ptldebug_header {
-        __u32 ph_len;
-        __u32 ph_flags;
-        __u32 ph_subsys;
-        __u32 ph_mask;
-        __u32 ph_cpu_id;
-        __u32 ph_sec;
-        __u64 ph_usec;
-        __u32 ph_stack;
-        __u32 ph_pid;
-        __u32 ph_extern_pid;
-        __u32 ph_line_num;
-} __attribute__((packed));
-
-#ifdef __KERNEL__
-# include <linux/sched.h> /* THREAD_SIZE */
-#else
-# ifndef THREAD_SIZE /* x86_64 has THREAD_SIZE in userspace */
-#  define THREAD_SIZE 8192
-# endif
-#endif
+#include <linux/types.h>
+#include <asm/timex.h>
+#include <linux/sched.h> /* THREAD_SIZE */
 
 #define LUSTRE_TRACE_SIZE (THREAD_SIZE >> 5)
 
-#if defined(__KERNEL__) && !defined(__x86_64__)
+#if !defined(__x86_64__)
 # ifdef  __ia64__
 #  define CDEBUG_STACK() (THREAD_SIZE -                                 \
                           ((unsigned long)__builtin_dwarf_cfa() &       \
@@ -162,11 +88,10 @@ do {                                                                    \
         }                                                               \
 } while (0)
 #define CHECK_STACK()     __CHECK_STACK(__FILE__, __func__, __LINE__)
-#else /* !__KERNEL__ */
-#define __CHECK_STACK(X, Y, Z) do { } while(0)
+#else /* __x86_64__ */
 #define CHECK_STACK() do { } while(0)
 #define CDEBUG_STACK() (0L)
-#endif /* __KERNEL__ */
+#endif /* __x86_64__ */
 
 /* initial pid  */
 #define LUSTRE_LNET_PID          12345
@@ -176,21 +101,16 @@ do {                                                                    \
 #define EXIT_NESTING   do {;} while (0)
 #define __current_nesting_level() (0)
 
-/*
+/**
  * Platform specific declarations for cfs_curproc API (libcfs/curproc.h)
  *
  * Implementation is in linux-curproc.c
  */
 #define CFS_CURPROC_COMM_MAX (sizeof ((struct task_struct *)0)->comm)
 
-#if defined(__KERNEL__)
 #include <linux/capability.h>
 typedef kernel_cap_t cfs_kernel_cap_t;
-#else
-typedef __u32 cfs_kernel_cap_t;
-#endif
 
-#if defined(__KERNEL__)
 /*
  * No stack-back-tracing in Linux for now.
  */
@@ -199,8 +119,6 @@ struct cfs_stack_trace {
 
 #ifndef WITH_WATCHDOG
 #define WITH_WATCHDOG
-#endif
-
 #endif
 
 #endif /* _LINUX_LIBCFS_H */

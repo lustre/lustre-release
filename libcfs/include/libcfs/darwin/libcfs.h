@@ -51,6 +51,7 @@
 #include <libcfs/darwin/darwin-lock.h>
 #include <libcfs/darwin/darwin-fs.h>
 #include <libcfs/darwin/darwin-tcpip.h>
+#include <libcfs/darwin/kp30.h>
 
 #ifdef __KERNEL__
 # include <sys/types.h>
@@ -84,20 +85,6 @@ typedef unsigned long long cycles_t;
 #define __swab16s(x)                            do { *(x) = __swab16(*(x)); } while (0)
 #define __swab32s(x)                            do { *(x) = __swab32(*(x)); } while (0)
 #define __swab64s(x)                            do { *(x) = __swab64(*(x)); } while (0)
-
-struct ptldebug_header {
-        __u32 ph_len;
-        __u32 ph_flags;
-        __u32 ph_subsys;
-        __u32 ph_mask;
-        __u32 ph_cpu_id;
-        __u32 ph_sec;
-        __u64 ph_usec;
-        __u32 ph_stack;
-        __u32 ph_pid;
-        __u32 ph_extern_pid;
-        __u32 ph_line_num;
-} __attribute__((packed));
 
 
 #ifdef __KERNEL__

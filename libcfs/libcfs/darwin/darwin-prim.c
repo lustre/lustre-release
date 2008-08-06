@@ -475,12 +475,6 @@ void cfs_waitq_add_exclusive(struct cfs_waitq *waitq,
 	ksleep_add(&waitq->wq_ksleep_chan, &link->wl_ksleep_link);
 }
 
-void cfs_waitq_forward(struct cfs_waitlink *link,
-                       struct cfs_waitq *waitq)
-{
-	link->wl_ksleep_link.forward = &waitq->wq_ksleep_chan;
-}
-
 void cfs_waitq_del(struct cfs_waitq *waitq,
                    struct cfs_waitlink *link)
 {

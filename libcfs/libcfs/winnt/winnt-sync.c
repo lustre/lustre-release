@@ -231,27 +231,6 @@ void cfs_waitq_add_exclusive( cfs_waitq_t *waitq,
 }
 
 /*
- * cfs_waitq_forward
- *   To be determinated.
- *
- * Arguments:
- *   waitq:  pointer to the cfs_waitq_t structure
- *   link:  pointer to the cfs_waitlink_t structure
- *
- * Return Value:
- *   N/A
- *
- * Notes: 
- *   N/A
- */
-
-void cfs_waitq_forward( cfs_waitlink_t *link,
-                        cfs_waitq_t *waitq)
-{
-    cfs_waitq_add_internal(waitq, link, CFS_WAITQ_CHAN_FORWARD);
-}
-
-/*
  * cfs_waitq_del
  *   To remove the wait link node from the waitq
  *

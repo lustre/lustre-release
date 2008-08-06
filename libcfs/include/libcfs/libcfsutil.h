@@ -33,47 +33,24 @@
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
- * libcfs/include/libcfs/linux/linux-tcpip.h
+ * libcfs/include/libcfs/libcfsutil.h
  *
- * Basic library routines.
+ * A library used for userspace utilities.
+ *
  */
 
-#ifndef __LIBCFS_LINUX_CFS_TCP_H__
-#define __LIBCFS_LINUX_CFS_TCP_H__
+#ifndef __LIBCFSUTIL_H__
+#define __LIBCFSUTIL_H__
 
-#ifndef __LIBCFS_LIBCFS_H__
-#error Do not #include this file directly. #include <libcfs/libcfs.h> instead
+#ifndef LUSTRE_UTILS
+#define LUSTRE_UTILS 1
 #endif
 
-#ifndef __KERNEL__
-#error This include is only for kernel use.
-#endif
+#include <libcfs/libcfs.h>
 
-#include <net/sock.h>
+#include <libcfs/util/platform.h>
+#include <libcfs/util/parser.h>
+#include <libcfs/util/libcfsutil_ioctl.h>
 
-typedef struct socket   cfs_socket_t;
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,72))
-# define sk_allocation  allocation
-# define sk_data_ready  data_ready
-# define sk_write_space write_space
-# define sk_user_data   user_data
-# define sk_prot        prot
-# define sk_sndbuf      sndbuf
-# define sk_rcvbuf      rcvbuf
-# define sk_socket      socket
-# define sk_sleep       sleep
-#endif
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
-# define sk_wmem_queued wmem_queued
-# define sk_err         err
-# define sk_route_caps  route_caps
-#endif
-
-#define SOCK_SNDBUF(so)         ((so)->sk->sk_sndbuf)
-#define SOCK_WMEM_QUEUED(so)    ((so)->sk->sk_wmem_queued)
-#define SOCK_ERROR(so)          ((so)->sk->sk_err)
-#define SOCK_TEST_NOSPACE(so)   test_bit(SOCK_NOSPACE, &(so)->flags)
-
-#endif
+#endif	/* __LIBCFSUTIL_H__ */

@@ -50,14 +50,12 @@
 
 #ifndef __KERNEL__
 
-#include <stdlib.h>
 #include <libcfs/libcfs.h>
 
 /*
  * Optional debugging (magic stamping and checking ownership) can be added.
  */
 
-#if 0
 /*
  * spin_lock
  *
@@ -119,7 +117,6 @@ void spin_unlock_bh(spinlock_t *lock)
  * - __down(x)
  * - __up(x)
  */
-struct semaphore {};
 
 void sema_init(struct semaphore *s, int val)
 {
@@ -140,20 +137,6 @@ void __up(struct semaphore *s)
         (void)s;
 }
 
-/*
- * Mutex:
- *
- * - init_mutex(x)
- * - init_mutex_locked(x)
- * - mutex_up(x)
- * - mutex_down(x)
- */
-
-#define mutex_up(s)			__up(s)
-#define mutex_down(s)			__down(s)
-
-#define init_mutex(x)			sema_init(x, 1)
-#define init_mutex_locked(x)		sema_init(x, 0)
 
 /*
  * Completion:
@@ -162,24 +145,24 @@ void __up(struct semaphore *s)
  * - complete(c)
  * - wait_for_completion(c)
  */
-struct completion {};
 
 void init_completion(struct completion *c)
 {
         LASSERT(c != NULL);
-        (void)c;
+        c->done = 0;
+        cfs_waitq_init(&c->wait);
 }
 
 void complete(struct completion *c)
 {
         LASSERT(c != NULL);
-        (void)c;
+        c->done  = 1;
+        cfs_waitq_signal(&c->wait);
 }
 
 void wait_for_completion(struct completion *c)
 {
         LASSERT(c != NULL);
-        (void)c;
 }
 
 /*
@@ -192,7 +175,6 @@ void wait_for_completion(struct completion *c)
  * - down_write(x)
  * - up_write(x)
  */
-struct rw_semaphore {};
 
 void init_rwsem(struct rw_semaphore *s)
 {
@@ -237,7 +219,6 @@ void up_write(struct rw_semaphore *s)
         LASSERT(s != NULL);
         (void)s;
 }
-#endif
 
 #ifdef HAVE_LIBPTHREAD
 

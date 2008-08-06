@@ -47,6 +47,10 @@
 #error Do not #include this file directly. #include <libcfs/libcfs.h> instead
 #endif
 
+#ifndef __KERNEL__
+#error This include is only for kernel use.
+#endif
+
 /* Portable time API */
 
 /*
@@ -89,7 +93,10 @@
 #define ONE_BILLION ((u_int64_t)1000000000)
 #define ONE_MILLION 1000000
 
-#ifdef __KERNEL__
+#ifndef __KERNEL__
+#error This include is only for kernel use.
+#endif
+
 #ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
@@ -180,26 +187,6 @@ static inline cfs_time_t cfs_time_current(void)
 static inline time_t cfs_time_current_sec(void)
 {
         return CURRENT_SECONDS;
-}
-
-static inline cfs_time_t cfs_time_add(cfs_time_t t, cfs_duration_t d)
-{
-        return t + d;
-}
-
-static inline cfs_duration_t cfs_time_sub(cfs_time_t t1, cfs_time_t t2)
-{
-        return t1 - t2;
-}
-
-static inline int cfs_time_before(cfs_time_t t1, cfs_time_t t2)
-{
-        return time_before(t1, t2);
-}
-
-static inline int cfs_time_beforeq(cfs_time_t t1, cfs_time_t t2)
-{
-        return time_before_eq(t1, t2);
 }
 
 static inline void cfs_fs_time_current(cfs_fs_time_t *t)
@@ -319,20 +306,7 @@ static inline int cfs_time_beforeq_64(__u64 t1, __u64 t2)
 #define CFS_TIME_T              "%lu"
 #define CFS_DURATION_T          "%ld"
 
-#else   /* !__KERNEL__ */
-
-/*
- * Liblustre. time(2) based implementation.
- */
-
-#define CFS_TIME_T              "%lu"
-
-#include <libcfs/user-time.h>
-
-#endif /* __KERNEL__ */
-
-/* __LIBCFS_LINUX_LINUX_TIME_H__ */
-#endif
+#endif /* __LIBCFS_LINUX_LINUX_TIME_H__ */
 /*
  * Local variables:
  * c-indentation-style: "K&R"

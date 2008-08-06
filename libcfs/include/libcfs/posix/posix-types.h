@@ -32,22 +32,33 @@
 /*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * libcfs/include/libcfs/posix/posix-types.h
+ *
+ * Define the linux types we use for posix userspace.
+ *
+ * Author: Robert Read <rread@sun.com>
  */
+#ifndef _LUSTRE_POSIX_TYPES_H
+#define _LUSTRE_POSIX_TYPES_H
 
-#ifndef _LIBCFS_TYPES_H
-#define _LIBCFS_TYPES_H
+typedef unsigned short umode_t;
 
 /*
- * This file was inttroduced to resolve XT3 (Catamount) build issues.
- * The orignal idea was to move <lustre/types.h> here however at
- * the time of this writing
- * it's unclear what external dependencies are tied
- * to that file (It's not just some source file #including it)
- * there is some build/packaging infrastructure that includes it.
- * Hopefully that will be resolved shortly, that file will
- * be removed, its contents copied here and this comment can be deleted.
+ * __xx is ok: it doesn't pollute the POSIX namespace. Use these in the
+ * header files exported to user space
  */
 
-#include <lustre/types.h>
+typedef __signed__ char __s8;
+typedef unsigned char __u8;
+
+typedef __signed__ short __s16;
+typedef unsigned short __u16;
+
+typedef __signed__ int __s32;
+typedef unsigned int __u32;
+
+typedef __signed__ long long __s64;
+typedef unsigned long long __u64;
 
 #endif

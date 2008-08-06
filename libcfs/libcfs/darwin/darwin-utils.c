@@ -577,7 +577,7 @@ void cfs_stack_trace_fill(struct cfs_stack_trace *trace)
 	int i;
 
 	memset(trace, 0, sizeof *trace);
-	for (i = 0; i < sizeof_array(trace->frame); ++ i) {
+	for (i = 0; i < ARRAY_SIZE(trace->frame); ++ i) {
 		void *addr;
 
 		addr = get_frame(i);
@@ -589,7 +589,7 @@ void cfs_stack_trace_fill(struct cfs_stack_trace *trace)
 
 void *cfs_stack_trace_frame(struct cfs_stack_trace *trace, int frame_no)
 {
-        if (0 <= frame_no && frame_no < sizeof_array(trace->frame))
+        if (0 <= frame_no && frame_no < ARRAY_SIZE(trace->frame))
                 return trace->frame[frame_no];
         else
                 return NULL;

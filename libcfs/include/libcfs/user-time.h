@@ -95,13 +95,15 @@
  * Liblustre. time(2) based implementation.
  */
 
-#include <sys/types.h>
-#include <sys/time.h>
-#include <time.h>
-
 typedef time_t cfs_fs_time_t;
 typedef time_t cfs_time_t;
 typedef long cfs_duration_t;
+
+/* looks like linux */
+#define time_after(a, b) ((long)(b) - (long)(a) < 0)
+#define time_before(a, b) time_after(b,a)
+#define time_after_eq(a,b)      ((long)(a) - (long)(b) >= 0)
+#define time_before_eq(a,b) time_after_eq(b,a)
 
 static inline cfs_time_t cfs_time_current(void)
 {
@@ -116,16 +118,6 @@ static inline cfs_duration_t cfs_time_seconds(int seconds)
 static inline time_t cfs_time_current_sec(void)
 {
         return cfs_time_seconds(cfs_time_current());
-}
-
-static inline int cfs_time_before(cfs_time_t t1, cfs_time_t t2)
-{
-        return t1 < t2;
-}
-
-static inline int cfs_time_beforeq(cfs_time_t t1, cfs_time_t t2)
-{
-        return t1 <= t2;
 }
 
 static inline cfs_duration_t cfs_duration_build(int64_t nano)
@@ -184,24 +176,15 @@ static inline int cfs_fs_time_beforeq(cfs_fs_time_t *t1, cfs_fs_time_t *t2)
 
 #define CFS_TICK                (1)
 
-static inline cfs_time_t cfs_time_add(cfs_time_t t, cfs_duration_t d)
-{
-        return t + d;
-}
-
-static inline cfs_duration_t cfs_time_sub(cfs_time_t t1, cfs_time_t t2)
-{
-        return t1 - t2;
-}
-
 #define cfs_time_current_64 cfs_time_current
 #define cfs_time_add_64     cfs_time_add
 #define cfs_time_shift_64   cfs_time_shift
 #define cfs_time_before_64  cfs_time_before
 #define cfs_time_beforeq_64 cfs_time_beforeq
 
+/* XXX needs to move to arch specific header or configured */
 #ifndef CFS_TIME_T
-#define CFS_TIME_T              "%u"
+#define CFS_TIME_T              "%lu"
 #endif
 
 #define CFS_DURATION_T          "%ld"

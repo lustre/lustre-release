@@ -40,11 +40,162 @@
 #endif
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/sched.h>
+
 #include <libcfs/libcfs.h>
 
 #if defined(CONFIG_KGDB)
 #include <asm/kgdb.h>
 #endif
+
+#define LINUX_WAITQ(w) ((wait_queue_t *) w)
+#define LINUX_WAITQ_HEAD(w) ((wait_queue_head_t *) w)
+
+void
+cfs_waitq_init(cfs_waitq_t *waitq)
+{
+        init_waitqueue_head(LINUX_WAITQ_HEAD(waitq));
+}
+EXPORT_SYMBOL(cfs_waitq_init);
+
+void 
+cfs_waitlink_init(cfs_waitlink_t *link)
+{
+        init_waitqueue_entry(LINUX_WAITQ(link), current);
+}
+EXPORT_SYMBOL(cfs_waitlink_init);
+
+void 
+cfs_waitq_add(cfs_waitq_t *waitq, cfs_waitlink_t *link)
+{
+        add_wait_queue(LINUX_WAITQ_HEAD(waitq), LINUX_WAITQ(link));
+}
+EXPORT_SYMBOL(cfs_waitq_add);
+
+void 
+cfs_waitq_add_exclusive(cfs_waitq_t *waitq, 
+                             cfs_waitlink_t *link)
+{
+        add_wait_queue_exclusive(LINUX_WAITQ_HEAD(waitq), LINUX_WAITQ(link));
+}
+EXPORT_SYMBOL(cfs_waitq_add_exclusive);
+
+void 
+cfs_waitq_del(cfs_waitq_t *waitq, cfs_waitlink_t *link)
+{
+        remove_wait_queue(LINUX_WAITQ_HEAD(waitq), LINUX_WAITQ(link));
+}
+EXPORT_SYMBOL(cfs_waitq_del);
+
+int  
+cfs_waitq_active(cfs_waitq_t *waitq)
+{
+        return waitqueue_active(LINUX_WAITQ_HEAD(waitq));
+}
+EXPORT_SYMBOL(cfs_waitq_active);
+
+void 
+cfs_waitq_signal(cfs_waitq_t *waitq)
+{
+        wake_up(LINUX_WAITQ_HEAD(waitq));
+}
+EXPORT_SYMBOL(cfs_waitq_signal);
+
+void 
+cfs_waitq_signal_nr(cfs_waitq_t *waitq, int nr)
+{
+        wake_up_nr(LINUX_WAITQ_HEAD(waitq), nr);
+}
+EXPORT_SYMBOL(cfs_waitq_signal_nr);
+
+void 
+cfs_waitq_broadcast(cfs_waitq_t *waitq)
+{
+        wake_up_all(LINUX_WAITQ_HEAD(waitq));
+}
+EXPORT_SYMBOL(cfs_waitq_broadcast);
+
+void 
+cfs_waitq_wait(cfs_waitlink_t *link, cfs_task_state_t state)
+{
+        schedule();
+}
+EXPORT_SYMBOL(cfs_waitq_wait);
+
+int64_t 
+cfs_waitq_timedwait(cfs_waitlink_t *link, cfs_task_state_t state, int64_t timeout)
+{
+        return schedule_timeout(timeout);
+}
+EXPORT_SYMBOL(cfs_waitq_timedwait);
+
+void
+cfs_schedule_timeout(cfs_task_state_t state, int64_t timeout)
+{
+        set_current_state(state);
+        schedule_timeout(timeout);
+}
+EXPORT_SYMBOL(cfs_schedule_timeout);
+
+void
+cfs_schedule(void)
+{
+        schedule();
+}
+EXPORT_SYMBOL(cfs_schedule);
+
+/* deschedule for a bit... */
+void 
+cfs_pause(cfs_duration_t ticks)
+{
+        set_current_state(TASK_UNINTERRUPTIBLE);
+        schedule_timeout(ticks);
+}
+EXPORT_SYMBOL(cfs_pause);
+
+void cfs_init_timer(cfs_timer_t *t)
+{
+        init_timer(t);
+}
+EXPORT_SYMBOL(cfs_init_timer);
+
+void cfs_timer_init(cfs_timer_t *t, cfs_timer_func_t *func, void *arg)
+{
+        init_timer(t);
+        t->function = func;
+        t->data = (unsigned long)arg;
+}
+EXPORT_SYMBOL(cfs_timer_init);
+
+void cfs_timer_done(cfs_timer_t *t)
+{
+        return;
+}
+EXPORT_SYMBOL(cfs_timer_done);
+
+void cfs_timer_arm(cfs_timer_t *t, cfs_time_t deadline)
+{
+        mod_timer(t, deadline);
+}
+EXPORT_SYMBOL(cfs_timer_arm);
+
+void cfs_timer_disarm(cfs_timer_t *t)
+{
+        del_timer(t);
+}
+EXPORT_SYMBOL(cfs_timer_disarm);
+
+int  cfs_timer_is_armed(cfs_timer_t *t)
+{
+        return timer_pending(t);
+}
+EXPORT_SYMBOL(cfs_timer_is_armed);
+
+cfs_time_t cfs_timer_deadline(cfs_timer_t *t)
+{
+        return t->expires;
+}
+EXPORT_SYMBOL(cfs_timer_deadline);
 
 void cfs_enter_debugger(void)
 {

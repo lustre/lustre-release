@@ -232,7 +232,6 @@ void cfs_waitlink_init(struct cfs_waitlink *link);
 void cfs_waitq_add(struct cfs_waitq *waitq, struct cfs_waitlink *link);
 void cfs_waitq_add_exclusive(struct cfs_waitq *waitq,
 			     struct cfs_waitlink *link);
-void cfs_waitq_forward(struct cfs_waitlink *link, struct cfs_waitq *waitq);
 void cfs_waitq_del(struct cfs_waitq *waitq, struct cfs_waitlink *link);
 int  cfs_waitq_active(struct cfs_waitq *waitq);
 

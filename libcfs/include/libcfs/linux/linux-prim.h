@@ -45,7 +45,10 @@
 #error Do not #include this file directly. #include <libcfs/libcfs.h> instead
 #endif
 
-#ifdef __KERNEL__
+#ifndef __KERNEL__
+#error This include is only for kernel use.
+#endif
+
 #ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
@@ -118,26 +121,11 @@ typedef struct proc_dir_entry           cfs_proc_dir_entry_t;
  */
 #define CFS_TASK_INTERRUPTIBLE          TASK_INTERRUPTIBLE
 #define CFS_TASK_UNINT                  TASK_UNINTERRUPTIBLE
+#define CFS_TASK_RUNNING                TASK_RUNNING
 
 typedef wait_queue_t			cfs_waitlink_t;
 typedef wait_queue_head_t		cfs_waitq_t;
-
 typedef long                            cfs_task_state_t;
-
-#define cfs_waitq_init(w)               init_waitqueue_head(w)
-#define cfs_waitlink_init(l)            init_waitqueue_entry(l, current)
-#define cfs_waitq_add(w, l)             add_wait_queue(w, l)
-#define cfs_waitq_add_exclusive(w, l)   add_wait_queue_exclusive(w, l)
-#define cfs_waitq_forward(l, w)         do {} while(0)
-#define cfs_waitq_del(w, l)             remove_wait_queue(w, l)
-#define cfs_waitq_active(w)             waitqueue_active(w)
-#define cfs_waitq_signal(w)             wake_up(w)
-#define cfs_waitq_signal_nr(w,n)        wake_up_nr(w, n)
-#define cfs_waitq_broadcast(w)          wake_up_all(w)
-#define cfs_waitq_wait(l, s)            schedule()
-#define cfs_waitq_timedwait(l, s, t)    schedule_timeout(t)
-#define cfs_schedule_timeout(s, t)      schedule_timeout(t)
-#define cfs_schedule()                  schedule()
 
 /* Kernel thread */
 typedef int (*cfs_thread_t)(void *);
@@ -185,49 +173,7 @@ typedef sigset_t                        cfs_sigset_t;
  * Timer
  */
 typedef struct timer_list cfs_timer_t;
-typedef  void (*timer_func_t)(unsigned long);
 
-#define cfs_init_timer(t)       init_timer(t)
-
-static inline void cfs_timer_init(cfs_timer_t *t, void (*func)(unsigned long), void *arg)
-{
-        init_timer(t);
-        t->function = (timer_func_t)func;
-        t->data = (unsigned long)arg;
-}
-
-static inline void cfs_timer_done(cfs_timer_t *t)
-{
-        return;
-}
-
-static inline void cfs_timer_arm(cfs_timer_t *t, cfs_time_t deadline)
-{
-        mod_timer(t, deadline);
-}
-
-static inline void cfs_timer_disarm(cfs_timer_t *t)
-{
-        del_timer(t);
-}
-
-static inline int  cfs_timer_is_armed(cfs_timer_t *t)
-{
-        return timer_pending(t);
-}
-
-static inline cfs_time_t cfs_timer_deadline(cfs_timer_t *t)
-{
-        return t->expires;
-}
-
-
-/* deschedule for a bit... */
-static inline void cfs_pause(cfs_duration_t ticks)
-{
-        set_current_state(TASK_UNINTERRUPTIBLE);
-        schedule_timeout(ticks);
-}
 
 #ifndef wait_event_timeout /* Only for RHEL3 2.4.21 kernel */
 #define __wait_event_timeout(wq, condition, timeout, ret)        \
@@ -316,12 +262,5 @@ do {                                                           \
 #else
 #define cfs_waitq_wait_event_interruptible_timeout wait_event_interruptible_timeout
 #endif
-
-#else   /* !__KERNEL__ */
-
-typedef struct proc_dir_entry           cfs_proc_dir_entry_t;
-#include "../user-prim.h"
-
-#endif /* __KERNEL__ */
 
 #endif

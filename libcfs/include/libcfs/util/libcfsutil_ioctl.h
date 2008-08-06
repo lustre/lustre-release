@@ -33,47 +33,22 @@
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
- * libcfs/include/libcfs/linux/linux-tcpip.h
+ * libcfs/include/libcfs/util/libcfsutil_ioctl.h
  *
- * Basic library routines.
+ * Utility functions for calling ioctls.
+ *
  */
 
-#ifndef __LIBCFS_LINUX_CFS_TCP_H__
-#define __LIBCFS_LINUX_CFS_TCP_H__
+/* FIXME - rename these to libcfs_ */
 
-#ifndef __LIBCFS_LIBCFS_H__
-#error Do not #include this file directly. #include <libcfs/libcfs.h> instead
-#endif
-
-#ifndef __KERNEL__
-#error This include is only for kernel use.
-#endif
-
-#include <net/sock.h>
-
-typedef struct socket   cfs_socket_t;
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,72))
-# define sk_allocation  allocation
-# define sk_data_ready  data_ready
-# define sk_write_space write_space
-# define sk_user_data   user_data
-# define sk_prot        prot
-# define sk_sndbuf      sndbuf
-# define sk_rcvbuf      rcvbuf
-# define sk_socket      socket
-# define sk_sleep       sleep
-#endif
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
-# define sk_wmem_queued wmem_queued
-# define sk_err         err
-# define sk_route_caps  route_caps
-#endif
-
-#define SOCK_SNDBUF(so)         ((so)->sk->sk_sndbuf)
-#define SOCK_WMEM_QUEUED(so)    ((so)->sk->sk_wmem_queued)
-#define SOCK_ERROR(so)          ((so)->sk->sk_err)
-#define SOCK_TEST_NOSPACE(so)   test_bit(SOCK_NOSPACE, &(so)->flags)
-
-#endif
+int libcfs_ioctl_pack(struct libcfs_ioctl_data *data, char **pbuf, int max);
+typedef int (ioc_handler_t)(int dev_id, unsigned int opc, void *buf);
+void set_ioc_handler(ioc_handler_t *handler);
+int register_ioc_dev(int dev_id, const char * dev_name, int major, int minor);
+void unregister_ioc_dev(int dev_id);
+int set_ioctl_dump(char * file);
+int l_ioctl(int dev_id, unsigned int opc, void *buf);
+int parse_dump(char * dump_file, ioc_handler_t ioc_func);
+int jt_ioc_dump(int argc, char **argv);
+extern char *dump_filename;
+int dump(int dev_id, unsigned int opc, void *buf);
