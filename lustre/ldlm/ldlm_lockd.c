@@ -316,7 +316,7 @@ static int __ldlm_add_waiting_lock(struct ldlm_lock *lock)
 
         timeout_rounded = round_timeout(lock->l_callback_timeout);
 
-        if (cfs_time_before(timeout_rounded, 
+        if (cfs_time_before(timeout_rounded,
                             cfs_timer_deadline(&waiting_locks_timer)) ||
             !cfs_timer_is_armed(&waiting_locks_timer)) {
                 cfs_timer_arm(&waiting_locks_timer, timeout_rounded);
@@ -657,9 +657,11 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         if (AT_OFF)
                 req->rq_timeout = ldlm_get_rq_timeout();
 
-        if (lock->l_export && lock->l_export->exp_ldlm_stats)
-                lprocfs_counter_incr(lock->l_export->exp_ldlm_stats,
+        if (lock->l_export && lock->l_export->exp_nid_stats &&
+            lock->l_export->exp_nid_stats->nid_ldlm_stats) {
+                lprocfs_counter_incr(lock->l_export->exp_nid_stats->nid_ldlm_stats,
                                      LDLM_BL_CALLBACK - LDLM_FIRST_OPC);
+        }
 
         rc = ldlm_bl_and_cp_ast_fini(req, arg, lock, instant_cancel);
 
@@ -762,9 +764,11 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         }
         unlock_res_and_lock(lock);
 
-        if (lock->l_export && lock->l_export->exp_ldlm_stats)
-                lprocfs_counter_incr(lock->l_export->exp_ldlm_stats,
+        if (lock->l_export && lock->l_export->exp_nid_stats &&
+            lock->l_export->exp_nid_stats->nid_ldlm_stats) {
+                lprocfs_counter_incr(lock->l_export->exp_nid_stats->nid_ldlm_stats,
                                      LDLM_CP_CALLBACK - LDLM_FIRST_OPC);
+        }
 
         rc = ldlm_bl_and_cp_ast_fini(req, arg, lock, instant_cancel);
 
@@ -804,9 +808,11 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
         if (AT_OFF)
                 req->rq_timeout = ldlm_get_rq_timeout();
 
-        if (lock->l_export && lock->l_export->exp_ldlm_stats)
-                lprocfs_counter_incr(lock->l_export->exp_ldlm_stats,
+        if (lock->l_export && lock->l_export->exp_nid_stats &&
+            lock->l_export->exp_nid_stats->nid_ldlm_stats) {
+                lprocfs_counter_incr(lock->l_export->exp_nid_stats->nid_ldlm_stats,
                                      LDLM_GL_CALLBACK - LDLM_FIRST_OPC);
+        }
 
         rc = ptlrpc_queue_wait(req);
         if (rc == -ELDLM_NO_LOCK_DATA)
@@ -915,9 +921,11 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                 ldlm_svc_get_eopc(dlm_req,
                                   req->rq_rqbd->rqbd_service->srv_stats);
 
-        if (req->rq_export->exp_ldlm_stats)
-                lprocfs_counter_incr(req->rq_export->exp_ldlm_stats,
+        if (req->rq_export && req->rq_export->exp_nid_stats &&
+            req->rq_export->exp_nid_stats->nid_ldlm_stats) {
+                lprocfs_counter_incr(req->rq_export->exp_nid_stats->nid_ldlm_stats,
                                      LDLM_ENQUEUE - LDLM_FIRST_OPC);
+        }
 
         if (dlm_req->lock_desc.l_resource.lr_type < LDLM_MIN_TYPE ||
             dlm_req->lock_desc.l_resource.lr_type >= LDLM_MAX_TYPE) {
@@ -1164,9 +1172,11 @@ int ldlm_handle_convert(struct ptlrpc_request *req)
                 RETURN (-EFAULT);
         }
 
-        if (req->rq_export && req->rq_export->exp_ldlm_stats)
-                lprocfs_counter_incr(req->rq_export->exp_ldlm_stats,
+        if (req->rq_export && req->rq_export->exp_nid_stats &&
+            req->rq_export->exp_nid_stats->nid_ldlm_stats) {
+                lprocfs_counter_incr(req->rq_export->exp_nid_stats->nid_ldlm_stats,
                                      LDLM_CONVERT - LDLM_FIRST_OPC);
+        }
 
         rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
@@ -1273,9 +1283,11 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
                 RETURN(-EFAULT);
         }
 
-        if (req->rq_export && req->rq_export->exp_ldlm_stats)
-                lprocfs_counter_incr(req->rq_export->exp_ldlm_stats,
+        if (req->rq_export && req->rq_export->exp_nid_stats &&
+            req->rq_export->exp_nid_stats->nid_ldlm_stats) {
+                lprocfs_counter_incr(req->rq_export->exp_nid_stats->nid_ldlm_stats,
                                      LDLM_CANCEL - LDLM_FIRST_OPC);
+        }
 
         rc = lustre_pack_reply(req, 1, NULL, NULL);
         if (rc)
@@ -1371,7 +1383,7 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
                    &lock->l_resource->lr_name,
                    sizeof(lock->l_resource->lr_name)) != 0) {
                 unlock_res_and_lock(lock);
-                if (ldlm_lock_change_resource(ns, lock, 
+                if (ldlm_lock_change_resource(ns, lock,
                                 dlm_req->lock_desc.l_resource.lr_name)) {
                         LDLM_ERROR(lock, "Failed to allocate resource");
                         LDLM_LOCK_PUT(lock);
@@ -1440,7 +1452,7 @@ static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
         if (lock->l_granted_mode == LCK_PW &&
             !lock->l_readers && !lock->l_writers &&
             cfs_time_after(cfs_time_current(),
-                           cfs_time_add(lock->l_last_used, 
+                           cfs_time_add(lock->l_last_used,
                                         cfs_time_seconds(10)))) {
                 unlock_res_and_lock(lock);
                 if (ldlm_bl_to_thread_lock(ns, NULL, lock))
@@ -2057,7 +2069,7 @@ static int ldlm_cleanup(void)
 #endif
         ENTRY;
 
-        if (!list_empty(ldlm_namespace_list(LDLM_NAMESPACE_SERVER)) || 
+        if (!list_empty(ldlm_namespace_list(LDLM_NAMESPACE_SERVER)) ||
             !list_empty(ldlm_namespace_list(LDLM_NAMESPACE_CLIENT))) {
                 CERROR("ldlm still has namespaces; clean these up first.\n");
                 ldlm_dump_all_namespaces(LDLM_NAMESPACE_SERVER, D_DLMTRACE);
