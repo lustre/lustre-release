@@ -448,7 +448,7 @@ struct client_obd {
         __u32                    cl_supp_cksum_types;
         /* checksum algorithm to be used */
         cksum_type_t             cl_cksum_type;
- 
+
         /* also protected by the poorly named _loi_list_lock lock above */
         struct osc_async_rc      cl_ar;
 
@@ -987,7 +987,8 @@ struct obd_ops {
                          void *localdata);
         int (*o_reconnect)(struct obd_export *exp, struct obd_device *src,
                            struct obd_uuid *cluuid,
-                           struct obd_connect_data *ocd);
+                           struct obd_connect_data *ocd,
+                           void *localdata);
         int (*o_disconnect)(struct obd_export *exp);
 
         /* Initialize/finalize fids infrastructure. */
@@ -1030,7 +1031,7 @@ struct obd_ops {
         int (*o_prep_async_page)(struct obd_export *exp,
                                  struct lov_stripe_md *lsm,
                                  struct lov_oinfo *loi,
-                                 cfs_page_t *page, obd_off offset, 
+                                 cfs_page_t *page, obd_off offset,
                                  struct obd_async_page_ops *ops, void *data,
                                  void **res, int nocache,
                                  struct lustre_handle *lockh);
@@ -1111,7 +1112,7 @@ struct obd_ops {
 
         /* llog related obd_methods */
         int (*o_llog_init)(struct obd_device *obd, struct obd_device *disk_obd,
-                           int count, struct llog_catid *logid, 
+                           int count, struct llog_catid *logid,
                            struct obd_uuid *uuid);
         int (*o_llog_finish)(struct obd_device *obd, int count);
 
