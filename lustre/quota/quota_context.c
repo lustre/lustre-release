@@ -205,8 +205,10 @@ static inline struct lustre_qunit *find_qunit(unsigned int hashent,
                 if (qunit->lq_ctxt == qctxt &&
                     qdata->qd_id == tmp->qd_id &&
                     (qdata->qd_flags & LQUOTA_QUNIT_FLAGS) ==
-                    (tmp->qd_flags & LQUOTA_QUNIT_FLAGS))
+                    (tmp->qd_flags & LQUOTA_QUNIT_FLAGS)) {
+                        qunit_get(qunit);
                         return qunit;
+                }
         }
         return NULL;
 }
@@ -770,8 +772,8 @@ schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
         spin_lock(&qunit_hash_lock);
         qunit = dqacq_in_flight(qctxt, qdata);
         if (qunit) {
-                if (wait)
-                        qunit_get(qunit);
+                if (!wait)
+                        qunit_put(qunit);
                 spin_unlock(&qunit_hash_lock);
                 free_qunit(empty);
 
