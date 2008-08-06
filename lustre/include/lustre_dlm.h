@@ -59,7 +59,12 @@ struct obd_device;
 
 #define OBD_LDLM_DEVICENAME  "ldlm"
 
+#ifdef HAVE_BGL_SUPPORT
+/* 1.5 times the maximum 128 tasks available in VN mode */
+#define LDLM_DEFAULT_LRU_SIZE 196
+#else
 #define LDLM_DEFAULT_LRU_SIZE (100 * num_online_cpus())
+#endif
 #define LDLM_DEFAULT_MAX_ALIVE (cfs_time_seconds(36000))
 
 typedef enum {
@@ -167,7 +172,7 @@ typedef enum {
  * the 1st operation, whereas the 2nd operation has canceled this lock and
  * is waiting for rpc_lock which is taken by the 1st operation.
  * LDLM_FL_BL_AST is to be set by ldlm_callback_handler() to the lock not allow
- * ELC code to cancel it. 
+ * ELC code to cancel it.
  * LDLM_FL_BL_DONE is to be set by ldlm_cancel_callback() when lock cache is
  * droped to let ldlm_callback_handler() return EINVAL to the server. It is
  * used when ELC rpc is already prepared and is waiting for rpc_lock, too late
@@ -245,7 +250,7 @@ struct ldlm_namespace;
 
 struct ldlm_pool_ops {
         int (*po_recalc)(struct ldlm_pool *pl);
-        int (*po_shrink)(struct ldlm_pool *pl, int nr, 
+        int (*po_shrink)(struct ldlm_pool *pl, int nr,
                          unsigned int gfp_mask);
         int (*po_setup)(struct ldlm_pool *pl, int limit);
 };
@@ -262,30 +267,30 @@ struct ldlm_pool_ops {
 struct ldlm_pool {
         /* Common pool fields */
         cfs_proc_dir_entry_t  *pl_proc_dir;      /* Pool proc directory. */
-        char                   pl_name[100];     /* Pool name, should be long 
+        char                   pl_name[100];     /* Pool name, should be long
                                                   * enough to contain complex
                                                   * proc entry name. */
-        spinlock_t             pl_lock;          /* Lock for protecting slv/clv 
+        spinlock_t             pl_lock;          /* Lock for protecting slv/clv
                                                   * updates. */
         atomic_t               pl_limit;         /* Number of allowed locks in
-                                                  * in pool, both, client and 
+                                                  * in pool, both, client and
                                                   * server side. */
         atomic_t               pl_granted;       /* Number of granted locks. */
         atomic_t               pl_grant_rate;    /* Grant rate per T. */
         atomic_t               pl_cancel_rate;   /* Cancel rate per T. */
         atomic_t               pl_grant_speed;   /* Grant speed (GR-CR) per T. */
-        __u64                  pl_server_lock_volume; /* Server lock volume. 
+        __u64                  pl_server_lock_volume; /* Server lock volume.
                                                   * Protected by pl_lock */
         __u64                  pl_client_lock_volume; /* Client lock volue. */
         atomic_t               pl_lock_volume_factor; /* Lock volume factor. */
 
-        time_t                 pl_recalc_time;   /* Time when last slv from 
+        time_t                 pl_recalc_time;   /* Time when last slv from
                                                   * server was obtained. */
-        struct ldlm_pool_ops  *pl_ops;           /* Recalc and shrink ops. */ 
+        struct ldlm_pool_ops  *pl_ops;           /* Recalc and shrink ops. */
 
-        int                    pl_grant_plan;    /* Planned number of granted 
+        int                    pl_grant_plan;    /* Planned number of granted
                                                   * locks for next T. */
-        int                    pl_grant_step;    /* Grant plan step for next 
+        int                    pl_grant_step;    /* Grant plan step for next
                                                   * T. */
 
         struct lprocfs_stats  *pl_stats;         /* Pool statistics. */
@@ -312,7 +317,7 @@ typedef enum {
 #define NS_DEFAULT_CONTENTION_SECONDS 2
 #define NS_DEFAULT_CONTENDED_LOCKS 32
 
-/* Default value for ->ns_shrink_thumb. If lock is not extent one its cost 
+/* Default value for ->ns_shrink_thumb. If lock is not extent one its cost
  * is one page. Here we have 256 pages which is 1M on i386. Thus by default
  * all extent locks which have more than 1M long extent will be kept in lru,
  * others (including ibits locks) will be canceled on memory pressure event. */
@@ -338,7 +343,7 @@ struct ldlm_namespace {
 
         unsigned int           ns_max_unused;
         unsigned int           ns_max_age;
-        
+
         /* Lower limit to number of pages in lock to keep it in cache */
         unsigned int           ns_shrink_thumb;
         cfs_time_t             ns_next_dump;   /* next debug dump, jiffies */
@@ -369,7 +374,7 @@ struct ldlm_namespace {
 static inline int ns_is_client(struct ldlm_namespace *ns)
 {
         LASSERT(ns != NULL);
-        LASSERT(!(ns->ns_client & ~(LDLM_NAMESPACE_CLIENT | 
+        LASSERT(!(ns->ns_client & ~(LDLM_NAMESPACE_CLIENT |
                                     LDLM_NAMESPACE_SERVER)));
         LASSERT(ns->ns_client == LDLM_NAMESPACE_CLIENT ||
                 ns->ns_client == LDLM_NAMESPACE_SERVER);
@@ -379,7 +384,7 @@ static inline int ns_is_client(struct ldlm_namespace *ns)
 static inline int ns_is_server(struct ldlm_namespace *ns)
 {
         LASSERT(ns != NULL);
-        LASSERT(!(ns->ns_client & ~(LDLM_NAMESPACE_CLIENT | 
+        LASSERT(!(ns->ns_client & ~(LDLM_NAMESPACE_CLIENT |
                                     LDLM_NAMESPACE_SERVER)));
         LASSERT(ns->ns_client == LDLM_NAMESPACE_CLIENT ||
                 ns->ns_client == LDLM_NAMESPACE_SERVER);
@@ -414,7 +419,7 @@ typedef int (*ldlm_glimpse_callback)(struct ldlm_lock *lock, void *data);
 /* Interval node data for each LDLM_EXTENT lock */
 struct ldlm_interval {
         struct interval_node li_node;   /* node for tree mgmt */
-        struct list_head     li_group;  /* the locks which have the same 
+        struct list_head     li_group;  /* the locks which have the same
                                          * policy - group of the policy */
 };
 #define to_ldlm_interval(n) container_of(n, struct ldlm_interval, li_node)
@@ -432,7 +437,7 @@ struct ldlm_lock {
         struct portals_handle l_handle; // must be first in the structure
         atomic_t              l_refc;
 
-        /* internal spinlock protects l_resource.  we should hold this lock 
+        /* internal spinlock protects l_resource.  we should hold this lock
          * first before grabbing res_lock.*/
         spinlock_t            l_lock;
 
@@ -500,7 +505,7 @@ struct ldlm_lock {
         /* for ldlm_add_ast_work_item() */
         struct list_head      l_bl_ast;
         struct list_head      l_cp_ast;
-        struct ldlm_lock     *l_blocking_lock; 
+        struct ldlm_lock     *l_blocking_lock;
         int                   l_bl_ast_run;
 
         /* protected by lr_lock, linkages to "skip lists" */
@@ -853,9 +858,9 @@ int ldlm_pools_init(void);
 void ldlm_pools_fini(void);
 void ldlm_pools_wakeup(void);
 
-int ldlm_pool_init(struct ldlm_pool *pl, struct ldlm_namespace *ns, 
+int ldlm_pool_init(struct ldlm_pool *pl, struct ldlm_namespace *ns,
                    int idx, ldlm_side_t client);
-int ldlm_pool_shrink(struct ldlm_pool *pl, int nr, 
+int ldlm_pool_shrink(struct ldlm_pool *pl, int nr,
                      unsigned int gfp_mask);
 void ldlm_pool_fini(struct ldlm_pool *pl);
 int ldlm_pool_setup(struct ldlm_pool *pl, int limit);
