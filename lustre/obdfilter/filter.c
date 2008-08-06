@@ -242,9 +242,15 @@ static int filter_export_stats_init(struct obd_device *obd,
         if (obd_uuid_equals(&exp->exp_client_uuid, &obd->obd_uuid))
                 /* Self-export gets no proc entry */
                 RETURN(0);
-        rc = lprocfs_exp_setup(exp, client_nid, &newnid);
-        if (rc)
+        rc = lprocfs_exp_setup(exp, (lnet_nid_t *)client_nid, &newnid);
+        if (rc) {
+                /* Mask error for already created
+                 * /proc entries */
+                if (rc == -EALREADY)
+                        rc = 0;
+
                 RETURN(rc);
+        }
 
         if (newnid) {
                 struct nid_stat *tmp = exp->exp_nid_stats;
@@ -272,6 +278,17 @@ static int filter_export_stats_init(struct obd_device *obd,
                                             tmp->nid_stats);
                 if (rc)
                         RETURN(rc);
+
+                /* Always add in ldlm_stats */
+                tmp->nid_ldlm_stats = lprocfs_alloc_stats(LDLM_LAST_OPC -
+                                                          LDLM_FIRST_OPC, 0);
+                if (tmp->nid_ldlm_stats == NULL)
+                        return -ENOMEM;
+
+                lprocfs_init_ldlm_stats(tmp->nid_ldlm_stats);
+
+                rc = lprocfs_register_stats(tmp->nid_proc, "ldlm_stats",
+                                            tmp->nid_ldlm_stats);
         }
 
         RETURN(0);
@@ -1053,7 +1070,7 @@ static int filter_prep_groups(struct obd_device *obd)
         int i, rc = 0, cleanup_phase = 0;
         ENTRY;
 
-        O_dentry = simple_mkdir(current->fs->pwd, filter->fo_vfsmnt, 
+        O_dentry = simple_mkdir(current->fs->pwd, filter->fo_vfsmnt,
                                 "O", 0700, 1);
         CDEBUG(D_INODE, "got/created O: %p\n", O_dentry);
         if (IS_ERR(O_dentry)) {
@@ -1081,7 +1098,7 @@ static int filter_prep_groups(struct obd_device *obd)
                 loff_t off = 0;
 
                 sprintf(name, "%d", i);
-                dentry = simple_mkdir(O_dentry, filter->fo_vfsmnt, 
+                dentry = simple_mkdir(O_dentry, filter->fo_vfsmnt,
                                       name, 0700, 1);
                 CDEBUG(D_INODE, "got/created O/%s: %p\n", name, dentry);
                 if (IS_ERR(dentry)) {
@@ -1588,7 +1605,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
 
         /* If we grant any lock at all, it will be a whole-file read lock.
          * Call the extent policy function to see if our request can be
-         * granted, or is blocked. 
+         * granted, or is blocked.
          * If the OST lock has LDLM_FL_HAS_INTENT set, it means a glimpse lock
          */
         lock->l_policy_data.l_extent.start = 0;
@@ -1653,7 +1670,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
                 if (tree->lit_mode == LCK_PR)
                         continue;
 
-                interval_iterate_reverse(tree->lit_root, 
+                interval_iterate_reverse(tree->lit_root,
                                          filter_intent_cb, &arg);
         }
         unlock_res(res);
@@ -2104,7 +2121,7 @@ static int filter_llog_finish(struct obd_device *obd, int count)
         if (obd->u.filter.fo_lcm) {
                 llog_cleanup_commit_master((struct llog_commit_master *)
                                            obd->u.filter.fo_lcm, 1);
-                OBD_FREE(obd->u.filter.fo_lcm, 
+                OBD_FREE(obd->u.filter.fo_lcm,
                          sizeof(struct llog_commit_master));
                 obd->u.filter.fo_lcm = NULL;
         }
@@ -2290,7 +2307,8 @@ static int filter_connect_internal(struct obd_export *exp,
 
 static int filter_reconnect(struct obd_export *exp, struct obd_device *obd,
                             struct obd_uuid *cluuid,
-                            struct obd_connect_data *data)
+                            struct obd_connect_data *data,
+                            void *localdata)
 {
         int rc;
         ENTRY;
@@ -2299,6 +2317,8 @@ static int filter_reconnect(struct obd_export *exp, struct obd_device *obd,
                 RETURN(-EINVAL);
 
         rc = filter_connect_internal(exp, data);
+        if (rc == 0)
+                filter_export_stats_init(obd, exp, localdata);
 
         RETURN(rc);
 }
@@ -3494,13 +3514,13 @@ cleanup:
                                                      filter_cancel_cookies_cb,
                                                      fcc);
                 /* If add_journal_cb failed, then filter_finish_transno
-                 * will commit the handle and we will do a sync 
-                 * on commit. then we call callback directly to free 
-                 * the fcc. 
+                 * will commit the handle and we will do a sync
+                 * on commit. then we call callback directly to free
+                 * the fcc.
                  */
                 rc = filter_finish_transno(exp, NULL, oti, rc, sync);
                 if (sync) {
-                        filter_cancel_cookies_cb(obd, 0, fcc, rc); 
+                        filter_cancel_cookies_cb(obd, 0, fcc, rc);
                         fcc = NULL;
                 }
                 rc2 = fsfilt_commit(obd, dparent->d_inode, handle, 0);
