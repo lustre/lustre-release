@@ -22,7 +22,7 @@ Severity   : normal
 Bugzilla   : 15576
 Description: Resolve device initialization race
 Details    : Prevent proc handler from accessing devices added to the
-             obd_devs array but yet be intialized.
+	     obd_devs array but yet be intialized.
 
 Severity   : enhancement
 Bugzilla   : 15308
@@ -1262,6 +1262,12 @@ Bugzilla   : 16404
 Description: Kernel panics during QLogic driver reload
 Details    : REQ_BLOCK_PC requests are not handled properly in the sd iostat
 	     patch, causing memory corruption.
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 16140
+Description: journal_dev option does not work in b1_6
+Details    : pass mount option during pre-mount.
 
 --------------------------------------------------------------------------------
 
