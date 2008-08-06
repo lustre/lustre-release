@@ -80,7 +80,7 @@ test_2() {
     do_node $CLIENT2 mcreate $DIR/$tdir/$tfile
     do_node $CLIENT1 createmany -o $DIR/$tfile- 25
     #do_node $CLIENT2 createmany -o $DIR/$tdir/$tfile-2- 1
-    do_node $CLIENT1 stat $DIR/$tdir/$tfile
+    do_node $CLIENT1 $CHECKSTAT $DIR/$tdir/$tfile
     do_node $CLIENT1 createmany -o $DIR/$tfile-3- 25
     zconf_umount $CLIENT2 $DIR
 
@@ -92,7 +92,7 @@ test_2() {
     do_node $CLIENT1 unlinkmany $DIR/$tfile- 25 || return 2
     do_node $CLIENT1 unlinkmany $DIR/$tfile-3- 25 || return 3
 
-    do_node $CLIENT1 stat $DIR/$tdir/$tfile && return 4
+    do_node $CLIENT1 $CHECKSTAT $DIR/$tdir/$tfile && return 4
 
     zconf_mount $CLIENT2 $DIR || error "mount $CLIENT2 $DIR fail"
 
@@ -113,12 +113,12 @@ test_3a() {
     #make sure the time will change
     do_facet mds "echo 0 > /proc/fs/lustre/mds/${mds_svc}/atime_diff" || return
     do_node $CLIENT1 touch $DIR/$tfile
-    do_node $CLIENT2 stat $DIR/$tfile
+    do_node $CLIENT2 $CHECKSTAT $DIR/$tfile
     sleep 1
     replay_barrier mds
     #change time
     do_node $CLIENT2 touch $DIR/$tfile
-    do_node $CLIENT2 stat $DIR/$tfile
+    do_node $CLIENT2 $CHECKSTAT $DIR/$tfile
     #another change
     do_node $CLIENT1 touch $DIR/$tfile
     #remove file
@@ -151,12 +151,12 @@ test_3b() {
     do_facet mds "echo 0 > /proc/fs/lustre/mds/${mds_svc}/atime_diff" || return
     do_facet mds "echo 0 > /proc/fs/lustre/mds/${mds_svc}/sync_permission" || return
     do_node $CLIENT1 touch $DIR/$tfile
-    do_node $CLIENT2 stat $DIR/$tfile
+    do_node $CLIENT2 $CHECKSTAT $DIR/$tfile
     sleep 1
     replay_barrier mds
     #change mode
     do_node $CLIENT2 chmod +x $DIR/$tfile
-    do_node $CLIENT2 stat $DIR/$tfile
+    do_node $CLIENT2 $CHECKSTAT $DIR/$tfile
     #abother chmod
     do_node $CLIENT1 chmod -x $DIR/$tfile
     zconf_umount $CLIENT2 $DIR
