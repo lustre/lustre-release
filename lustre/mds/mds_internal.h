@@ -233,7 +233,7 @@ int mds_lov_prepare_objids(struct obd_device *obd, struct lov_mds_md *lmm);
 void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm);
 int mds_lov_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid);
 
-int mds_lov_start_synchronize(struct obd_device *obd, 
+int mds_lov_start_synchronize(struct obd_device *obd,
                               struct obd_device *watched,
                               void *data, int nonblock);
 int mds_post_mds_lovconf(struct obd_device *obd);
@@ -260,12 +260,15 @@ int mds_close(struct ptlrpc_request *req, int offset);
 int mds_done_writing(struct ptlrpc_request *req, int offset);
 
 /*mds/mds_join.c*/
-int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req, 
+int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
                   struct dentry *dchild, struct lustre_handle *lockh);
 
 /* mds/mds_fs.c */
 int mds_update_client_epoch(struct obd_export *exp);
 void mds_update_last_epoch(struct obd_device *obd);
+int mds_export_stats_init(struct obd_device *obd,
+                          struct obd_export *exp,
+                          void *client_nid);
 int mds_client_add(struct obd_device *obd, struct obd_export *exp,
                    int cl_off, void *localdata);
 int mds_client_free(struct obd_export *exp);
