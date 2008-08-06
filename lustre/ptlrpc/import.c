@@ -530,7 +530,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
         imp->imp_msghdr_flags &= ~MSGHDR_AT_SUPPORT;
 
         rc = obd_reconnect(imp->imp_obd->obd_self_export, obd,
-                           &obd->obd_uuid, &imp->imp_connect_data);
+                           &obd->obd_uuid, &imp->imp_connect_data, NULL);
         if (rc)
                 GOTO(out, rc);
 
@@ -821,9 +821,9 @@ finish:
                          imp->imp_connect_flags_orig, ocd->ocd_connect_flags);
 
                 if (!exp) {
-                        /* This could happen if export is cleaned during the 
+                        /* This could happen if export is cleaned during the
                            connect attempt */
-                        CERROR("Missing export for %s\n", 
+                        CERROR("Missing export for %s\n",
                                imp->imp_obd->obd_name);
                         GOTO(out, rc = -ENODEV);
                 }
@@ -1188,12 +1188,12 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
                 if (AT_OFF) {
                         timeout = cfs_time_seconds(obd_timeout);
                 } else {
-                        int idx = import_at_get_index(imp, 
+                        int idx = import_at_get_index(imp,
                                 imp->imp_client->cli_request_portal);
                         timeout = cfs_time_seconds(
                                 at_get(&imp->imp_at.iat_service_estimate[idx]));
                 }
-                lwi = LWI_TIMEOUT_INTR(cfs_timeout_cap(timeout), 
+                lwi = LWI_TIMEOUT_INTR(cfs_timeout_cap(timeout),
                                        back_to_sleep, LWI_ON_SIGNAL_NOOP, NULL);
                 rc = l_wait_event(imp->imp_recovery_waitq,
                                   !ptlrpc_import_in_recovery(imp), &lwi);
@@ -1213,12 +1213,12 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
                 req->rq_no_resend = 1;
 
 #ifndef CRAY_XT3
-                /* We want client umounts to happen quickly, no matter the 
+                /* We want client umounts to happen quickly, no matter the
                    server state... */
                 req->rq_timeout = min_t(int, req->rq_timeout,
                                         INITIAL_CONNECT_TIMEOUT);
 #else
-                /* ... but we always want liblustre clients to nicely 
+                /* ... but we always want liblustre clients to nicely
                    disconnect, so only use the adaptive value. */
                 if (AT_OFF)
                         req->rq_timeout = obd_timeout / 3;
@@ -1262,7 +1262,7 @@ extern unsigned int at_min, at_max, at_history;
    This gives us a max of the last binlimit*AT_BINS secs without the storage,
    but still smoothing out a return to normalcy from a slow response.
    (E.g. remember the maximum latency in each minute of the last 4 minutes.) */
-int at_add(struct adaptive_timeout *at, unsigned int val) 
+int at_add(struct adaptive_timeout *at, unsigned int val)
 {
         unsigned int old = at->at_current;
         time_t now = cfs_time_current_sec();
@@ -1270,12 +1270,12 @@ int at_add(struct adaptive_timeout *at, unsigned int val)
 
         LASSERT(at);
 #if 0
-        CDEBUG(D_INFO, "add %u to %p time=%lu v=%u (%u %u %u %u)\n", 
+        CDEBUG(D_INFO, "add %u to %p time=%lu v=%u (%u %u %u %u)\n",
                val, at, now - at->at_binstart, at->at_current,
                at->at_hist[0], at->at_hist[1], at->at_hist[2], at->at_hist[3]);
 #endif
-        if (val == 0) 
-                /* 0's don't count, because we never want our timeout to 
+        if (val == 0)
+                /* 0's don't count, because we never want our timeout to
                    drop to 0, and because 0 could mean an error */
                 return 0;
 
@@ -1342,13 +1342,13 @@ int at_add(struct adaptive_timeout *at, unsigned int val)
 }
 
 /* Find the imp_at index for a given portal; assign if space available */
-int import_at_get_index(struct obd_import *imp, int portal) 
+int import_at_get_index(struct obd_import *imp, int portal)
 {
         struct imp_at *at = &imp->imp_at;
         int i;
 
         for (i = 0; i < IMP_AT_MAX_PORTALS; i++) {
-                if (at->iat_portal[i] == portal) 
+                if (at->iat_portal[i] == portal)
                         return i;
                 if (at->iat_portal[i] == 0)
                         /* unused */
@@ -1360,7 +1360,7 @@ int import_at_get_index(struct obd_import *imp, int portal)
 
         /* Check unused under lock */
         for (; i < IMP_AT_MAX_PORTALS; i++) {
-                if (at->iat_portal[i] == portal) 
+                if (at->iat_portal[i] == portal)
                         goto out;
                 if (at->iat_portal[i] == 0)
                         /* unused */
