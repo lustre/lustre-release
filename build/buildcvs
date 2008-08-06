@@ -200,7 +200,14 @@ case "$lustretag" in
         ldiskfstag="b_hd_rocache_oss"
         libcfstag="HEAD"
         ;;
-    
+ 
+    # vector read/write 
+    b_hd_readx)
+        lnettag="HEAD"
+        ldiskfstag="$ldiskfstag_head"
+        libcfstag="HEAD"
+        ;;
+   
     # uMDS
     b_dmu_umds)
         lnettag="b_uoss_umds"
