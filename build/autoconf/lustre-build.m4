@@ -305,7 +305,7 @@ AC_ARG_ENABLE([bgl],
 	[enable_bgl='yes'],[enable_bgl='no'])
 AC_MSG_RESULT([$enable_bgl])
 if test x$enable_bgl != xno; then
-        AC_DEFINE(BGL_SUPPORT, 1, Enable BGL Features)
+        AC_DEFINE(HAVE_BGL_SUPPORT, 1, Enable BGL Features)
         enable_doc='no'
         enable_tests='no'
         enable_server='no'
