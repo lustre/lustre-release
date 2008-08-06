@@ -115,7 +115,9 @@ EXPORT_SYMBOL(libcfs_kmemory);
 
 static cfs_waitq_t debug_ctlwq;
 
-#ifdef __arch_um__
+#ifdef HAVE_BGL_SUPPORT
+char debug_file_path[1024] = "/bgl/ion/tmp/lustre-log";
+#elif defined(__arch_um__)
 char debug_file_path[1024] = "/r/tmp/lustre-log";
 #else
 char debug_file_path[1024] = "/tmp/lustre-log";
