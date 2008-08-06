@@ -1192,7 +1192,6 @@ void lprocfs_init_ldlm_stats(struct lprocfs_stats *ldlm_stats)
                              0, "ldlm_gl_callback", "reqs");
 }
 
-
 int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
 {
         struct lprocfs_stats *stats;
