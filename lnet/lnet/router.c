@@ -705,7 +705,6 @@ rescan:
                 /* Call cfs_pause() here always adds 1 to load average 
                  * because kernel counts # active tasks as nr_running 
                  * + nr_uninterruptible. */
-                set_current_state(CFS_TASK_INTERRUPTIBLE);
                 cfs_schedule_timeout(CFS_TASK_INTERRUPTIBLE,
                                      cfs_time_seconds(1));
         }

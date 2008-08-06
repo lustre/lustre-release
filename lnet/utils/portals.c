@@ -46,11 +46,10 @@
 #include <endian.h>
 #endif
 
-#include <libcfs/portals_utils.h>
+#include <libcfs/libcfsutil.h>
 #include <lnet/api-support.h>
 #include <lnet/lnetctl.h>
 #include <lnet/socklnd.h>
-#include "parser.h"
 
 unsigned int libcfs_debug;
 unsigned int libcfs_printk = D_CANTMASK;

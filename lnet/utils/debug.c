@@ -66,10 +66,9 @@
 #include <sys/mman.h>
 #include <sys/utsname.h>
 
-#include <lnet/api-support.h>
+#include <libcfs/libcfsutil.h>
 #include <lnet/lnetctl.h>
 #include <libcfs/portals_utils.h>
-#include "parser.h"
 
 #include <time.h>
 
@@ -99,17 +98,6 @@ static const char *libcfs_debug_masks[] =
          "dlmtrace", "error", "emerg", "ha",
          "rpctrace", "vfstrace", "reada", "mmap",
          "config", "console", "quota", "sec", NULL};
-
-struct debug_daemon_cmd {
-        char *cmd;
-        unsigned int cmdv;
-};
-
-static const struct debug_daemon_cmd libcfs_debug_daemon_cmd[] = {
-        {"start", DEBUG_DAEMON_START},
-        {"stop", DEBUG_DAEMON_STOP},
-        {0, 0}
-};
 
 #ifdef __linux__
 

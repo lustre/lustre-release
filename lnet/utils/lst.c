@@ -49,7 +49,7 @@
 #include <pwd.h>
 #include <lnet/lnetctl.h>
 #include <lnet/lnetst.h>
-#include "parser.h"
+#include <libcfs/libcfsutil.h>
 
 static command_t           lst_cmdlist[];
 static lst_sid_t           session_id;

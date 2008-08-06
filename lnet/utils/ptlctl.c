@@ -22,10 +22,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <lnet/api-support.h>
 #include <lnet/lnetctl.h>
-
-#include "parser.h"
+#include <libcfs/libcfsutil.h>
 
 
 command_t list[] = {
