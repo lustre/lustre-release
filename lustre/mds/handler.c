@@ -192,7 +192,7 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
         struct dentry *de = mds_fid2dentry(mds, fid, mnt), *retval = de;
         struct ldlm_res_id res_id = { .name = {0} };
         int flags = LDLM_FL_ATOMIC_CB, rc;
-        ldlm_policy_data_t policy = { .l_inodebits = { lockpart} }; 
+        ldlm_policy_data_t policy = { .l_inodebits = { lockpart} };
         ENTRY;
 
         if (IS_ERR(de))
@@ -200,8 +200,8 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
 
         res_id.name[0] = de->d_inode->i_ino;
         res_id.name[1] = de->d_inode->i_generation;
-        rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id, 
-                                    LDLM_IBITS, &policy, lock_mode, &flags, 
+        rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id,
+                                    LDLM_IBITS, &policy, lock_mode, &flags,
                                     ldlm_blocking_ast, ldlm_completion_ast,
                                     NULL, NULL, 0, NULL, lockh);
         if (rc != ELDLM_OK) {
@@ -276,7 +276,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
         RETURN(result);
 }
 
-static int mds_connect_internal(struct obd_export *exp, 
+static int mds_connect_internal(struct obd_export *exp,
                                 struct obd_connect_data *data)
 {
         struct obd_device *obd = exp->exp_obd;
@@ -313,7 +313,8 @@ static int mds_connect_internal(struct obd_export *exp,
 
 static int mds_reconnect(struct obd_export *exp, struct obd_device *obd,
                          struct obd_uuid *cluuid,
-                         struct obd_connect_data *data)
+                         struct obd_connect_data *data,
+                         void *localdata)
 {
         int rc;
         ENTRY;
@@ -322,6 +323,8 @@ static int mds_reconnect(struct obd_export *exp, struct obd_device *obd,
                 RETURN(-EINVAL);
 
         rc = mds_connect_internal(exp, data);
+        if (rc == 0)
+                mds_export_stats_init(obd, exp, localdata);
 
         RETURN(rc);
 }
@@ -564,7 +567,7 @@ static int mds_getstatus(struct ptlrpc_request *req)
 
 /* get the LOV EA from @inode and store it into @md.  It can be at most
  * @size bytes, and @size is updated with the actual EA size.
- * The EA size is also returned on success, and -ve errno on failure. 
+ * The EA size is also returned on success, and -ve errno on failure.
  * If there is no EA then 0 is returned. */
 int mds_get_md(struct obd_device *obd, struct inode *inode, void *md,
                int *size, int lock, int flags)
@@ -960,7 +963,7 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
         }
 #endif
 
-        /* child_lockh() is only set in fixup_handle_for_resent_req() 
+        /* child_lockh() is only set in fixup_handle_for_resent_req()
          * if MSG_RESENT is set */
         if (lustre_handle_is_used(child_lockh)) {
                 LASSERT(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT);
@@ -970,9 +973,9 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
         if (resent_req == 0) {
                 if (name) {
                         OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RESEND, obd_timeout*2);
-                        rc = mds_get_parent_child_locked(obd, &obd->u.mds, 
+                        rc = mds_get_parent_child_locked(obd, &obd->u.mds,
                                                          &body->fid1,
-                                                         &parent_lockh, 
+                                                         &parent_lockh,
                                                          &dparent, LCK_CR,
                                                          MDS_INODELOCK_UPDATE,
                                                          name, namesize,
@@ -986,7 +989,7 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                         LASSERT(dchild);
                         if (IS_ERR(dchild))
                                 rc = PTR_ERR(dchild);
-                } 
+                }
                 if (rc)
                         GOTO(cleanup, rc);
         } else {
@@ -995,7 +998,7 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                 struct ldlm_resource *res;
                 DEBUG_REQ(D_DLMTRACE, req, "resent, not enqueuing new locks");
                 granted_lock = ldlm_handle2lock(child_lockh);
-                /* lock was granted in fixup_handle_for_resent_req() if 
+                /* lock was granted in fixup_handle_for_resent_req() if
                  * MSG_RESENT is set */
                 LASSERTF(granted_lock != NULL, LPU64"/%u lockh "LPX64"\n",
                          body->fid1.id, body->fid1.generation,
@@ -1139,7 +1142,7 @@ static int mds_statfs(struct ptlrpc_request *req)
 
         /* This will trigger a watchdog timeout */
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_STATFS_LCW_SLEEP,
-                         (MDS_SERVICE_WATCHDOG_FACTOR * 
+                         (MDS_SERVICE_WATCHDOG_FACTOR *
                           at_get(&svc->srv_at_estimate) / 1000) + 1);
         OBD_COUNTER_INCREMENT(obd, statfs);
 
@@ -2161,10 +2164,10 @@ static int mds_postsetup(struct obd_device *obd)
 
         if (mds->mds_profile) {
                 struct lustre_profile *lprof;
-                /* The profile defines which osc and mdc to connect to, for a 
+                /* The profile defines which osc and mdc to connect to, for a
                    client.  We reuse that here to figure out the name of the
                    lov to use (and ignore lprof->lp_mdc).
-                   The profile was set in the config log with 
+                   The profile was set in the config log with
                    LCFG_MOUNTOPT profilenm oscnm mdcnm */
                 lprof = class_get_profile(mds->mds_profile);
                 if (lprof == NULL) {
@@ -2195,7 +2198,7 @@ int mds_postrecov(struct obd_device *obd)
                 RETURN(0);
 
         LASSERT(!obd->obd_recovering);
-        ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT); 
+        ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
         LASSERT(ctxt != NULL);
         llog_ctxt_put(ctxt);
 
@@ -2210,7 +2213,7 @@ int mds_postrecov(struct obd_device *obd)
         /* Notify the LOV, which will in turn call mds_notify for each tgt */
         /* This means that we have to hack obd_notify to think we're obd_set_up
            during mds_lov_connect. */
-        obd_notify(obd->u.mds.mds_osc_obd, NULL, 
+        obd_notify(obd->u.mds.mds_osc_obd, NULL,
                    obd->obd_async_recov ? OBD_NOTIFY_SYNC_NONBLOCK :
                    OBD_NOTIFY_SYNC, NULL);
 
@@ -2457,7 +2460,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
                      !intent_disposition(rep, DISP_OPEN_LOCK)) {
                         /* If it is the disconnect error (ENODEV & ENOCONN)
                          * ptlrpc layer should know this imediately, it should
-                         * be replied by rq_stats, otherwise, return it by 
+                         * be replied by rq_stats, otherwise, return it by
                          * intent here
                          */
                          /* if VBR failure then return error in rq_stats too */
@@ -2591,12 +2594,12 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
                 mds_max_threads = mds_min_threads = mds_num_threads;
         } else {
                 /* Base min threads on memory and cpus */
-                mds_min_threads = num_possible_cpus() * num_physpages >> 
+                mds_min_threads = num_possible_cpus() * num_physpages >>
                         (27 - CFS_PAGE_SHIFT);
                 if (mds_min_threads < MDS_THREADS_MIN)
                         mds_min_threads = MDS_THREADS_MIN;
                 /* Largest auto threads start value */
-                if (mds_min_threads > 32) 
+                if (mds_min_threads > 32)
                         mds_min_threads = 32;
                 mds_max_threads = min(MDS_THREADS_MAX, mds_min_threads * 4);
         }
@@ -2749,9 +2752,9 @@ static int mds_process_config(struct obd_device *obd, obd_count len, void *buf)
         int rc;
 
         lprocfs_mds_init_vars(&lvars);
-        
+
         rc = class_process_proc_param(PARAM_MDT, lvars.obd_vars, lcfg, obd);
-        
+
         return(rc);
 }
 
