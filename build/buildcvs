@@ -163,6 +163,12 @@ case "$lustretag" in
         lustretag="HEAD"
         ;;
 
+    b_hd_lnet_smp)
+        # LNet grained locking and SMP improvement branch
+        lnettag="b_hd_lnet_smp"
+        lustretag="HEAD"
+        ;;
+
     b_ula)
         # lnet "User Level Access" development branch
 	lnettag="b_ula"
