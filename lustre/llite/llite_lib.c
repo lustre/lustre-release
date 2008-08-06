@@ -73,7 +73,7 @@ static inline void ll_pglist_fini(struct ll_sb_info *sbi)
 {
         struct page *page;
         int i;
-        
+
         if (sbi->ll_pglist == NULL)
                 return;
 
@@ -153,11 +153,15 @@ static struct ll_sb_info *ll_init_sbi(void)
 
         si_meminfo(&si);
         pages = si.totalram - si.totalhigh;
-        if (pages >> (20 - CFS_PAGE_SHIFT) < 512)
+        if (pages >> (20 - CFS_PAGE_SHIFT) < 512) {
+#ifdef HAVE_BGL_SUPPORT
+                sbi->ll_async_page_max = pages / 4;
+#else
                 sbi->ll_async_page_max = pages / 2;
-        else
+#endif
+        } else {
                 sbi->ll_async_page_max = (pages / 4) * 3;
-
+        }
         lcounter_init(&sbi->ll_async_page_count);
         spin_lock_init(&sbi->ll_async_page_reblnc_lock);
         sbi->ll_async_page_sample_max = 64 * num_online_cpus();
@@ -207,7 +211,7 @@ static struct ll_sb_info *ll_init_sbi(void)
 
 out:
         if (sbi->ll_async_page_sample)
-                OBD_FREE(sbi->ll_async_page_sample, 
+                OBD_FREE(sbi->ll_async_page_sample,
                          sizeof(long) * num_possible_cpus());
         ll_pglist_fini(sbi);
         OBD_FREE(sbi, sizeof(*sbi));
@@ -225,7 +229,7 @@ void ll_free_sbi(struct super_block *sb)
                 list_del(&sbi->ll_list);
                 spin_unlock(&ll_sb_lock);
                 lcounter_destroy(&sbi->ll_async_page_count);
-                OBD_FREE(sbi->ll_async_page_sample, 
+                OBD_FREE(sbi->ll_async_page_sample,
                          sizeof(long) * num_possible_cpus());
                 OBD_FREE(sbi, sizeof(*sbi));
         }
@@ -332,7 +336,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
         /* force vfs to use lustre handler for flock() calls - bug 10743 */
         sb->s_flags |= MS_FLOCK_LOCK;
 #endif
-        
+
         if (sbi->ll_flags & LL_SBI_FLOCK)
                 sbi->ll_fop = &ll_file_operations_flock;
         else if (sbi->ll_flags & LL_SBI_LOCALFLOCK)
@@ -526,13 +530,13 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
                        "rc %d\n", err);
                 GOTO(out_dt, err);
         }
-        
+
         spin_lock(&sbi->ll_lco.lco_lock);
         sbi->ll_lco.lco_flags = data->ocd_connect_flags;
         spin_unlock(&sbi->ll_lco.lco_lock);
 
         err = obd_register_page_removal_cb(sbi->ll_dt_exp,
-                                           ll_page_removal_cb, 
+                                           ll_page_removal_cb,
                                            ll_pin_extent_cb);
         if (err) {
                 CERROR("cannot register page removal callback: rc = %d\n",err);
@@ -917,7 +921,7 @@ static int ll_options(char *options, int *flags)
         char *s1 = options, *s2;
         ENTRY;
 
-        if (!options) 
+        if (!options)
                 RETURN(0);
 
         CDEBUG(D_CONFIG, "Parsing opts %s\n", options);
@@ -1053,7 +1057,7 @@ int ll_fill_super(struct super_block *sb)
         }
 
         err = ll_options(lsi->lsi_lmd->lmd_opts, &sbi->ll_flags);
-        if (err) 
+        if (err)
                 GOTO(out_free, err);
 
         /* Generate a string unique to this super, in case some joker tries
@@ -1100,10 +1104,10 @@ out_free:
                 OBD_FREE(md, strlen(md) + 1);
         if (dt)
                 OBD_FREE(dt, strlen(dt) + 1);
-        if (err) 
+        if (err)
                 ll_put_super(sb);
         else
-                LCONSOLE_WARN("Client %s has started\n", profilenm);        
+                LCONSOLE_WARN("Client %s has started\n", profilenm);
 
         RETURN(err);
 } /* ll_fill_super */
@@ -1127,14 +1131,14 @@ void ll_put_super(struct super_block *sb)
         sprintf(ll_instance, "%p", sb);
         cfg.cfg_instance = ll_instance;
         lustre_end_log(sb, NULL, &cfg);
-        
+
         if (sbi->ll_md_exp) {
                 obd = class_exp2obd(sbi->ll_md_exp);
-                if (obd) 
+                if (obd)
                         force = obd->obd_force;
         }
-        
-        /* We need to set force before the lov_disconnect in 
+
+        /* We need to set force before the lov_disconnect in
            lustre_common_put_super, since l_d cleans up osc's as well. */
         if (force) {
                 next = 0;
@@ -1142,7 +1146,7 @@ void ll_put_super(struct super_block *sb)
                                                      &next)) != NULL) {
                         obd->obd_force = force;
                 }
-        }                       
+        }
 
         if (sbi->ll_lcq) {
                 /* Only if client_common_fill_super succeeded */
@@ -1162,7 +1166,7 @@ void ll_put_super(struct super_block *sb)
         lustre_common_put_super(sb);
 
         LCONSOLE_WARN("client %s umount complete\n", ll_instance);
-        
+
         cfs_module_put();
 
         EXIT;
@@ -1309,13 +1313,13 @@ int ll_md_setattr(struct inode *inode, struct md_op_data *op_data,
         struct ptlrpc_request *request = NULL;
         int rc;
         ENTRY;
-        
-        op_data = ll_prep_md_op_data(op_data, inode, NULL, NULL, 0, 0, 
+
+        op_data = ll_prep_md_op_data(op_data, inode, NULL, NULL, 0, 0,
                                      LUSTRE_OPC_ANY, NULL);
         if (IS_ERR(op_data))
                 RETURN(PTR_ERR(op_data));
 
-        rc = md_setattr(sbi->ll_md_exp, op_data, NULL, 0, NULL, 0, 
+        rc = md_setattr(sbi->ll_md_exp, op_data, NULL, 0, NULL, 0,
                         &request, mod);
         if (rc) {
                 ptlrpc_req_finished(request);
@@ -1364,7 +1368,7 @@ static int ll_setattr_done_writing(struct inode *inode,
         struct ll_inode_info *lli = ll_i2info(inode);
         int rc = 0;
         ENTRY;
-        
+
         LASSERT(op_data != NULL);
         if (!S_ISREG(inode->i_mode))
                 RETURN(0);
@@ -1526,12 +1530,12 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 attr->ia_valid |= ATTR_MTIME_SET;
         }
         if ((attr->ia_valid & ATTR_CTIME) && !(attr->ia_valid & ATTR_MTIME)) {
-                /* To avoid stale mtime on mds, obtain it from ost and send 
+                /* To avoid stale mtime on mds, obtain it from ost and send
                    to mds. */
                 rc = ll_glimpse_size(inode, 0);
-                if (rc) 
+                if (rc)
                         RETURN(rc);
-                
+
                 attr->ia_valid |= ATTR_MTIME_SET | ATTR_MTIME;
                 attr->ia_mtime = inode->i_mtime;
         }
@@ -1597,7 +1601,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
                         flags = OBD_MD_FLTYPE | OBD_MD_FLATIME |
                                 OBD_MD_FLMTIME | OBD_MD_FLCTIME |
-                                OBD_MD_FLFID | OBD_MD_FLGENER | 
+                                OBD_MD_FLFID | OBD_MD_FLGENER |
                                 OBD_MD_FLGROUP;
 
                         obdo_from_inode(oa, inode, flags);
@@ -1838,17 +1842,17 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         if (body->valid & OBD_MD_FLATIME &&
             body->atime > LTIME_S(inode->i_atime))
                 LTIME_S(inode->i_atime) = body->atime;
-        
+
         /* mtime is always updated with ctime, but can be set in past.
            As write and utime(2) may happen within 1 second, and utime's
-           mtime has a priority over write's one, so take mtime from mds 
+           mtime has a priority over write's one, so take mtime from mds
            for the same ctimes. */
         if (body->valid & OBD_MD_FLCTIME &&
             body->ctime >= LTIME_S(inode->i_ctime)) {
                 LTIME_S(inode->i_ctime) = body->ctime;
                 if (body->valid & OBD_MD_FLMTIME) {
                         CDEBUG(D_INODE, "setting ino %lu mtime "
-                               "from %lu to "LPU64"\n", inode->i_ino, 
+                               "from %lu to "LPU64"\n", inode->i_ino,
                                LTIME_S(inode->i_mtime), body->mtime);
                         LTIME_S(inode->i_mtime) = body->mtime;
                 }
@@ -1884,7 +1888,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                                  " to the "DFID", inode %lu/%u(%p)\n",
                                  PFID(&lli->lli_fid), PFID(&body->fid1),
                                  inode->i_ino, inode->i_generation, inode);
-                } else 
+                } else
                         lli->lli_fid = body->fid1;
         }
 
@@ -1895,9 +1899,9 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                     S_ISREG(inode->i_mode) && lli->lli_smd) {
                         struct lustre_handle lockh;
                         ldlm_mode_t mode;
-                        
+
                         /* As it is possible a blocking ast has been processed
-                         * by this time, we need to check there is an UPDATE 
+                         * by this time, we need to check there is an UPDATE
                          * lock on the client and set LLIF_MDS_SIZE_LOCK holding
                          * it. */
                         mode = ll_take_md_lock(inode, MDS_INODELOCK_UPDATE,
@@ -2077,7 +2081,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 oinfo.oi_oa->o_id = lsm->lsm_object_id;
                 oinfo.oi_oa->o_gr = lsm->lsm_object_gr;
                 oinfo.oi_oa->o_flags = flags;
-                oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS | 
+                oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS |
                                        OBD_MD_FLGROUP;
                 oinfo.oi_capa = ll_mdscapa_get(inode);
 
@@ -2310,7 +2314,7 @@ int ll_obd_statfs(struct inode *inode, void *arg)
                 exp = sbi->ll_md_exp;
         else if (type == LL_STATFS_LOV)
                 exp = sbi->ll_dt_exp;
-        else 
+        else
                 GOTO(out_statfs, rc = -ENODEV);
 
         rc = obd_iocontrol(IOC_OBD_STATFS, exp, len, buf, NULL);
@@ -2327,14 +2331,14 @@ int ll_process_config(struct lustre_cfg *lcfg)
         char *ptr;
         void *sb;
         struct lprocfs_static_vars lvars;
-        unsigned long x; 
+        unsigned long x;
         int rc = 0;
 
         lprocfs_llite_init_vars(&lvars);
 
         /* The instance name contains the sb: lustre-client-aacfe000 */
         ptr = strrchr(lustre_cfg_string(lcfg, 0), '-');
-        if (!ptr || !*(++ptr)) 
+        if (!ptr || !*(++ptr))
                 return -EINVAL;
         if (sscanf(ptr, "%lx", &x) != 1)
                 return -EINVAL;
@@ -2342,7 +2346,7 @@ int ll_process_config(struct lustre_cfg *lcfg)
         /* This better be a real Lustre superblock! */
         LASSERT(s2lsi((struct super_block *)sb)->lsi_lmd->lmd_magic == LMD_MAGIC);
 
-        /* Note we have not called client_common_fill_super yet, so 
+        /* Note we have not called client_common_fill_super yet, so
            proc fns must be able to handle that! */
         rc = class_process_proc_param(PARAM_LLITE, lvars.obd_vars,
                                       lcfg, sb);
@@ -2359,10 +2363,10 @@ struct md_op_data * ll_prep_md_op_data(struct md_op_data *op_data,
 
         if (namelen > ll_i2sbi(i1)->ll_namelen)
                 return ERR_PTR(-ENAMETOOLONG);
-        
+
         if (op_data == NULL)
                 OBD_ALLOC_PTR(op_data);
-        
+
         if (op_data == NULL)
                 return ERR_PTR(-ENOMEM);
 
