@@ -70,7 +70,7 @@ static inline void ll_pglist_fini(struct ll_sb_info *sbi)
 {
         struct page *page;
         int i;
-        
+
         if (sbi->ll_pglist == NULL)
                 return;
 
@@ -150,10 +150,15 @@ static struct ll_sb_info *ll_init_sbi(void)
 
         si_meminfo(&si);
         pages = si.totalram - si.totalhigh;
-        if (pages >> (20 - CFS_PAGE_SHIFT) < 512)
+        if (pages >> (20 - CFS_PAGE_SHIFT) < 512) {
+#ifdef HAVE_BGL_SUPPORT
+                sbi->ll_async_page_max = pages / 4;
+#else
                 sbi->ll_async_page_max = pages / 2;
-        else
+#endif
+        } else {
                 sbi->ll_async_page_max = (pages / 4) * 3;
+        }
 
         lcounter_init(&sbi->ll_async_page_count);
         spin_lock_init(&sbi->ll_async_page_reblnc_lock);
@@ -207,7 +212,7 @@ static struct ll_sb_info *ll_init_sbi(void)
 
 out:
         if (sbi->ll_async_page_sample)
-                OBD_FREE(sbi->ll_async_page_sample, 
+                OBD_FREE(sbi->ll_async_page_sample,
                          sizeof(long) * num_possible_cpus());
         ll_pglist_fini(sbi);
         OBD_FREE(sbi, sizeof(*sbi));
@@ -225,7 +230,7 @@ void ll_free_sbi(struct super_block *sb)
                 list_del(&sbi->ll_list);
                 spin_unlock(&ll_sb_lock);
                 lcounter_destroy(&sbi->ll_async_page_count);
-                OBD_FREE(sbi->ll_async_page_sample, 
+                OBD_FREE(sbi->ll_async_page_sample,
                          sizeof(long) * num_possible_cpus());
                 OBD_FREE(sbi, sizeof(*sbi));
         }
@@ -431,7 +436,7 @@ static int client_common_fill_super(struct super_block *sb,
         spin_unlock(&sbi->ll_lco.lco_lock);
 
         err = obd_register_page_removal_cb(sbi->ll_osc_exp,
-                                           ll_page_removal_cb, 
+                                           ll_page_removal_cb,
                                            ll_pin_extent_cb);
         if (err) {
                 CERROR("cannot register page removal callback: rc = %d\n",err);
@@ -773,7 +778,7 @@ void ll_kill_super(struct super_block *sb)
 
         sbi = ll_s2sbi(sb);
         /* we need restore s_dev from changed for clustred NFS before put_super
-         * because new kernels have cached s_dev and change sb->s_dev in 
+         * because new kernels have cached s_dev and change sb->s_dev in
          * put_super not affected real removing devices */
         if (sbi)
                 sb->s_dev = sbi->ll_sdev_orig;
@@ -1263,7 +1268,7 @@ void ll_put_super(struct super_block *sb)
 
         if (sbi->ll_mdc_exp) {
                 obd = class_exp2obd(sbi->ll_mdc_exp);
-                if (obd) 
+                if (obd)
                         force = obd->obd_force;
         }
 
@@ -1451,7 +1456,7 @@ static int ll_setattr_do_truncate(struct inode *inode, loff_t new_size)
         UNLOCK_INODE_MUTEX(inode);
         UP_WRITE_I_ALLOC_SEM(inode);
 
-        if (sbi->ll_lockless_truncate_enable && 
+        if (sbi->ll_lockless_truncate_enable &&
             (sbi->ll_lco.lco_flags & OBD_CONNECT_TRUNCLOCK)) {
                 ast_flags = LDLM_FL_BLOCK_GRANTED;
                 rc = obd_match(sbi->ll_osc_exp, lsm, LDLM_EXTENT,
@@ -2213,7 +2218,7 @@ int ll_prep_inode(struct obd_export *exp, struct inode **inode,
                 ll_update_inode(*inode, &md);
         } else {
                 LASSERT(sb);
-                /** hashing VFS inode by FIDs. 
+                /** hashing VFS inode by FIDs.
                  * IGIF will be used for for compatibility if needed.
                  */
                 *inode =ll_iget(sb, ll_fid_build_ino(sbi, &md.body->fid1), &md);
