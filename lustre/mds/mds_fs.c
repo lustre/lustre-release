@@ -64,15 +64,21 @@
 #include "mds_internal.h"
 
 
-static int mds_export_stats_init(struct obd_device *obd,
+int mds_export_stats_init(struct obd_device *obd,
                                  struct obd_export *exp,
-                                 void *client_nid)
-  {
+                                 void *localdata)
+{
+        lnet_nid_t *client_nid = localdata;
         int rc, num_stats, newnid = 0;
 
         rc = lprocfs_exp_setup(exp, client_nid, &newnid);
-        if (rc)
+        if (rc) {
+                /* Mask error for already created
+                 * /proc entries */
+                if (rc == -EALREADY)
+                        rc = 0;
                 return rc;
+        }
 
         if (newnid) {
                 struct nid_stat *tmp = exp->exp_nid_stats;
@@ -92,6 +98,20 @@ static int mds_export_stats_init(struct obd_device *obd,
                         return rc;
 
                 mds_stats_counter_init(tmp->nid_stats);
+
+                /* Always add in ldlm_stats */
+                tmp->nid_ldlm_stats = lprocfs_alloc_stats(LDLM_LAST_OPC -
+                                                          LDLM_FIRST_OPC,
+                                                          0);
+                if (tmp->nid_ldlm_stats == NULL)
+                        return -ENOMEM;
+
+                lprocfs_init_ldlm_stats(tmp->nid_ldlm_stats);
+
+                rc = lprocfs_register_stats(tmp->nid_proc, "ldlm_stats",
+                                            tmp->nid_ldlm_stats);
+                if (rc)
+                        return rc;
         }
 
         return 0;
@@ -770,7 +790,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
 
         lock_kernel();
         rc = ll_vfs_rename(mds->mds_objects_dir->d_inode, filp->f_dentry,
-                           filp->f_vfsmnt, mds->mds_objects_dir->d_inode, 
+                           filp->f_vfsmnt, mds->mds_objects_dir->d_inode,
                            new_child, filp->f_vfsmnt);
         unlock_kernel();
         if (rc)

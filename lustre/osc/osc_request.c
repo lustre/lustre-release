@@ -75,7 +75,7 @@ static quota_interface_t *quota_interface;
 extern quota_interface_t osc_quota_interface;
 
 /* by default 10s */
-atomic_t osc_resend_time; 
+atomic_t osc_resend_time;
 
 /* Pack OSC object metadata for disk storage (LE byte order). */
 static int osc_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
@@ -844,7 +844,7 @@ static void handle_short_read(int nob_read, obd_count page_count,
 
                 if (pga[i]->count > nob_read) {
                         /* EOF inside this page */
-                        ptr = cfs_kmap(pga[i]->pg) + 
+                        ptr = cfs_kmap(pga[i]->pg) +
                                 (pga[i]->off & ~CFS_PAGE_MASK);
                         memset(ptr + nob_read, 0, pga[i]->count - nob_read);
                         cfs_kunmap(pga[i]->pg);
@@ -1057,8 +1057,8 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         LASSERTF((void *)(niobuf - niocount) ==
                 lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 2,
                                niocount * sizeof(*niobuf)),
-                "want %p - real %p\n", lustre_msg_buf(req->rq_reqmsg, 
-                REQ_REC_OFF + 2, niocount * sizeof(*niobuf)), 
+                "want %p - real %p\n", lustre_msg_buf(req->rq_reqmsg,
+                REQ_REC_OFF + 2, niocount * sizeof(*niobuf)),
                 (void *)(niobuf - niocount));
 
         osc_announce_cached(cli, &body->oa, opc == OST_WRITE ? requested_nob:0);
@@ -1161,7 +1161,7 @@ static int check_write_checksum(struct obdo *oa, const lnet_process_id_t *peer,
                            "["LPU64"-"LPU64"]\n",
                            msg, libcfs_nid2str(peer->nid),
                            oa->o_valid & OBD_MD_FLFID ? oa->o_fid : (__u64)0,
-                           oa->o_valid & OBD_MD_FLFID ? oa->o_generation : 
+                           oa->o_valid & OBD_MD_FLFID ? oa->o_generation :
                                                         (__u64)0,
                            oa->o_id,
                            oa->o_valid & OBD_MD_FLGROUP ? oa->o_gr : (__u64)0,
@@ -1423,9 +1423,9 @@ int osc_brw_redo_request(struct ptlrpc_request *request,
                 }
         }
 
-        /* use ptlrpc_set_add_req is safe because interpret functions work 
-         * in check_set context. only one way exist with access to request 
-         * from different thread got -EINTR - this way protected with 
+        /* use ptlrpc_set_add_req is safe because interpret functions work
+         * in check_set context. only one way exist with access to request
+         * from different thread got -EINTR - this way protected with
          * cl_loi_list_lock */
         ptlrpc_set_add_req(set, new_req);
 
@@ -2532,7 +2532,7 @@ int osc_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         spin_lock_init(&oap->oap_lock);
 
-        /* If the page was marked as notcacheable - don't add to any locks */ 
+        /* If the page was marked as notcacheable - don't add to any locks */
         if (!nocache) {
                 oid.name[0] = loi->loi_id;
                 /* This is the only place where we can call cache_add_extent
@@ -2842,12 +2842,12 @@ int osc_extent_blocking_cb(struct ldlm_lock *lock,
 {
         struct lustre_handle lockh = { 0 };
         int rc;
-        ENTRY;  
-                
+        ENTRY;
+
         if ((unsigned long)data > 0 && (unsigned long)data < 0x1000) {
                 LDLM_ERROR(lock, "cancelling lock with bad data %p", data);
-                LBUG(); 
-        }       
+                LBUG();
+        }
 
         switch (flag) {
         case LDLM_CB_BLOCKING:
@@ -3073,7 +3073,7 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                         RETURN(-ENOMEM);
 
                 size[DLM_LOCKREPLY_OFF] = sizeof(*rep);
-                size[DLM_REPLY_REC_OFF] = 
+                size[DLM_REPLY_REC_OFF] =
                         sizeof(oinfo->oi_md->lsm_oinfo[0]->loi_lvb);
                 ptlrpc_req_set_repsize(req, 3, size);
         }
@@ -3250,7 +3250,7 @@ static int osc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         int rc;
         ENTRY;
 
-        /*Since the request might also come from lprocfs, so we need 
+        /*Since the request might also come from lprocfs, so we need
          *sync this with client_disconnect_export Bug15684*/
         down_read(&obd->u.cli.cl_sem);
         if (obd->u.cli.cl_import)
@@ -3258,7 +3258,7 @@ static int osc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         up_read(&obd->u.cli.cl_sem);
         if (!imp)
                 RETURN(-ENODEV);
-  
+
         /* We could possibly pass max_age in the request (as an absolute
          * timestamp or a "seconds.usec ago") so the target can avoid doing
          * extra calls into the filesystem if that isn't necessary (e.g.
@@ -3610,7 +3610,7 @@ static struct llog_operations osc_size_repl_logops = {
 
 static struct llog_operations osc_mds_ost_orig_logops;
 static int osc_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                         int count, struct llog_catid *catid, 
+                         int count, struct llog_catid *catid,
                          struct obd_uuid *uuid)
 {
         int rc;
@@ -3635,11 +3635,11 @@ static int osc_llog_init(struct obd_device *obd, struct obd_device *tgt,
 
         rc = llog_setup(obd, LLOG_SIZE_REPL_CTXT, tgt, count, NULL,
                         &osc_size_repl_logops);
-        if (rc) 
+        if (rc)
                 CERROR("failed LLOG_SIZE_REPL_CTXT\n");
 out:
         if (rc) {
-                CERROR("osc '%s' tgt '%s' cnt %d catid %p rc=%d\n", 
+                CERROR("osc '%s' tgt '%s' cnt %d catid %p rc=%d\n",
                        obd->obd_name, tgt->obd_name, count, catid, rc);
                 CERROR("logid "LPX64":0x%x\n",
                        catid->lci_logid.lgl_oid, catid->lci_logid.lgl_ogen);
@@ -3668,7 +3668,8 @@ static int osc_llog_finish(struct obd_device *obd, int count)
 
 static int osc_reconnect(struct obd_export *exp, struct obd_device *obd,
                          struct obd_uuid *cluuid,
-                         struct obd_connect_data *data)
+                         struct obd_connect_data *data,
+                         void *localdata)
 {
         struct client_obd *cli = &obd->u.cli;
 
@@ -3702,7 +3703,7 @@ static int osc_disconnect(struct obd_export *exp)
         if (obd->u.cli.cl_conn_count == 1)
                 /* flush any remaining cancel messages out to the target */
                 llog_sync(ctxt, exp);
-        
+
         llog_ctxt_put(ctxt);
 
         rc = client_disconnect_export(exp);

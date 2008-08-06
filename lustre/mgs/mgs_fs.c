@@ -61,13 +61,21 @@
 #include "mgs_internal.h"
 
 
-static int mgs_export_stats_init(struct obd_device *obd, struct obd_export *exp)
+static int mgs_export_stats_init(struct obd_device *obd,
+                                 struct obd_export *exp,
+                                 void *localdata)
 {
+        lnet_nid_t *client_nid = localdata;
         int rc, num_stats, newnid = 0;
 
-        rc = lprocfs_exp_setup(exp, NULL, &newnid);
-        if (rc)
+        rc = lprocfs_exp_setup(exp, client_nid, &newnid);
+        if (rc) {
+                /* Mask error for already created
+                 * /proc entries */
+                if (rc == -EALREADY)
+                        rc = 0;
                 return rc;
+        }
 
         if (newnid) {
                 num_stats = (sizeof(*obd->obd_type->typ_ops) / sizeof(void *)) +
@@ -79,7 +87,19 @@ static int mgs_export_stats_init(struct obd_device *obd, struct obd_export *exp)
                 lprocfs_init_ops_stats(LPROC_MGS_LAST, exp->exp_ops_stats);
                 mgs_stats_counter_init(exp->exp_ops_stats);
                 lprocfs_register_stats(exp->exp_nid_stats->nid_proc, "stats", exp->exp_ops_stats);
+
+                /* Always add in ldlm_stats */
+                exp->exp_nid_stats->nid_ldlm_stats = lprocfs_alloc_stats(LDLM_LAST_OPC -
+                                                                         LDLM_FIRST_OPC, 0);
+                if (exp->exp_nid_stats->nid_ldlm_stats == NULL)
+                        return -ENOMEM;
+
+                lprocfs_init_ldlm_stats(exp->exp_nid_stats->nid_ldlm_stats);
+
+                rc = lprocfs_register_stats(exp->exp_nid_stats->nid_proc, "ldlm_stats",
+                                            exp->exp_nid_stats->nid_ldlm_stats);
         }
+
         return 0;
 }
 
@@ -87,9 +107,11 @@ static int mgs_export_stats_init(struct obd_device *obd, struct obd_export *exp)
  * disk in the last_rcvd file or anywhere else.  In the event of a MGS
  * crash all connections are treated as new connections.
  */
-int mgs_client_add(struct obd_device *obd, struct obd_export *exp)
+int mgs_client_add(struct obd_device *obd,
+                   struct obd_export *exp,
+                   void *localdata)
 {
-        return mgs_export_stats_init(obd, exp);
+        return mgs_export_stats_init(obd, exp, localdata);
 }
 
 /* Remove client export data from the MGS */
@@ -115,9 +137,9 @@ static struct dentry *mgs_fid2dentry(struct mgs_obd *mgs, struct ll_fid *fid)
 
         if (ino == 0)
                 RETURN(ERR_PTR(-ESTALE));
-        
+
         snprintf(fid_name, sizeof(fid_name), "0x%lx", ino);
-        
+
         /* under ext3 this is neither supposed to return bad inodes
            nor NULL inodes. */
         result = ll_lookup_one_len(fid_name, mgs->mgs_fid_de, strlen(fid_name));
@@ -198,7 +220,7 @@ int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         dentry = simple_mkdir(current->fs->pwd, mnt, MOUNT_CONFIGS_DIR, 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
-                CERROR("cannot create %s directory: rc = %d\n", 
+                CERROR("cannot create %s directory: rc = %d\n",
                        MOUNT_CONFIGS_DIR, rc);
                 GOTO(err_pop, rc);
         }

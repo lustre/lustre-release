@@ -87,22 +87,30 @@ struct filter_export_data {
         struct brw_stats           fed_brw_stats;
 };
 
+typedef struct nid_stat_uuid {
+        struct list_head ns_uuid_list;
+        struct obd_uuid  ns_uuid;
+} nid_stat_uuid_t;
+
 typedef struct nid_stat {
         lnet_nid_t               nid;
         struct hlist_node        nid_hash;
         struct list_head         nid_list;
+        struct list_head         nid_uuid_list;
         struct obd_device       *nid_obd;
         struct proc_dir_entry   *nid_proc;
         struct lprocfs_stats    *nid_stats;
         struct brw_stats        *nid_brw_stats;
+        struct lprocfs_stats    *nid_ldlm_stats;
         int                      nid_exp_ref_count;
-}nid_stat_t;
+} nid_stat_t;
 
 struct obd_export {
         struct portals_handle     exp_handle;
         atomic_t                  exp_refcount;
         atomic_t                  exp_rpc_count;
         struct obd_uuid           exp_client_uuid;
+        lnet_nid_t                exp_client_nid;
         struct list_head          exp_obd_chain;
         struct hlist_node         exp_uuid_hash; /* uuid-export hash*/
         struct hlist_node         exp_nid_hash; /* nid-export hash */
@@ -111,7 +119,6 @@ struct obd_export {
         struct obd_device        *exp_obd;
         struct obd_import        *exp_imp_reverse; /* to make RPCs backwards */
         struct nid_stat          *exp_nid_stats;
-        struct lprocfs_stats     *exp_ldlm_stats;
         struct lprocfs_stats     *exp_ops_stats;
         struct ptlrpc_connection *exp_connection;
         __u32                     exp_conn_cnt;

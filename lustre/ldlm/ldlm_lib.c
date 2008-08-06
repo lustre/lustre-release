@@ -492,7 +492,7 @@ int client_disconnect_export(struct obd_export *exp)
                 ldlm_cli_cancel_unused(obd->obd_namespace, NULL,
                                        obd->obd_force ? LDLM_FL_LOCAL_ONLY:0,
                                        NULL);
-                ldlm_namespace_free_prior(obd->obd_namespace, imp, 
+                ldlm_namespace_free_prior(obd->obd_namespace, imp,
                                           obd->obd_force);
                 to_be_freed = obd->obd_namespace;
         }
@@ -575,7 +575,7 @@ void target_client_add_cb(struct obd_device *obd, __u64 transno, void *cb_data,
 }
 EXPORT_SYMBOL(target_client_add_cb);
 
-static void 
+static void
 target_start_and_reset_recovery_timer(struct obd_device *obd,
                                       svc_handler_t handler,
                                       struct ptlrpc_request *req,
@@ -630,13 +630,13 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         if (target->obd_no_conn) {
                 LCONSOLE_WARN("%s: temporarily refusing client connection "
-                              "from %s\n", target->obd_name, 
+                              "from %s\n", target->obd_name,
                               libcfs_nid2str(req->rq_peer.nid));
                 GOTO(out, rc = -EAGAIN);
         }
 
-        /* Make sure the target isn't cleaned up while we're here. Yes, 
-           there's still a race between the above check and our incref here. 
+        /* Make sure the target isn't cleaned up while we're here. Yes,
+           there's still a race between the above check and our incref here.
            Really, class_uuid2obd should take the ref. */
         targref = class_incref(target);
 
@@ -824,7 +824,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                                          client_nid);
                 }
         } else {
-                rc = obd_reconnect(export, target, &cluuid, data);
+                rc = obd_reconnect(export, target, &cluuid, data, client_nid);
         }
 
         if (rc)
@@ -1196,15 +1196,15 @@ static void reset_recovery_timer(struct obd_device *obd, int duration,
                 /* Track the client's largest expected replay time */
                 obd->obd_recovery_timeout = duration;
 #ifdef CRAY_XT3
-        /* 
-         * If total recovery time already exceed the 
-         * obd_recovery_max_time, then CRAY XT3 will 
+        /*
+         * If total recovery time already exceed the
+         * obd_recovery_max_time, then CRAY XT3 will
          * abort the recovery
          */
         if(obd->obd_recovery_timeout > obd->obd_recovery_max_time)
                 obd->obd_recovery_timeout = obd->obd_recovery_max_time;
 #endif
-        obd->obd_recovery_end = obd->obd_recovery_start + 
+        obd->obd_recovery_end = obd->obd_recovery_start +
                                 obd->obd_recovery_timeout;
         if (cfs_time_before(now, obd->obd_recovery_end)) {
                 left = cfs_time_sub(obd->obd_recovery_end, now);
@@ -1219,7 +1219,7 @@ static void check_and_start_recovery_timer(struct obd_device *obd,
                                            svc_handler_t handler)
 {
         spin_lock_bh(&obd->obd_processing_task_lock);
-        if (obd->obd_recovery_handler) { 
+        if (obd->obd_recovery_handler) {
                 spin_unlock_bh(&obd->obd_processing_task_lock);
                 return;
         }
@@ -1236,12 +1236,12 @@ static void check_and_start_recovery_timer(struct obd_device *obd,
 
 /* Reset the timer with each new client connection */
 /*
- * This timer is actually reconnect_timer, which is for making sure 
- * the total recovery window is at least as big as my reconnect 
+ * This timer is actually reconnect_timer, which is for making sure
+ * the total recovery window is at least as big as my reconnect
  * attempt timing. So the initial recovery time_out will be set to
  * OBD_RECOVERY_FACTOR * obd_timeout. If the timeout coming
  * from client is bigger than this, then the recovery time_out will
- * be extend to make sure the client could be reconnected, in the 
+ * be extend to make sure the client could be reconnected, in the
  * process, the timeout from the new client should be ignored.
  */
 
@@ -1251,7 +1251,7 @@ target_start_and_reset_recovery_timer(struct obd_device *obd,
                                       struct ptlrpc_request *req,
                                       int new_client)
 {
-        int req_timeout = OBD_RECOVERY_FACTOR * 
+        int req_timeout = OBD_RECOVERY_FACTOR *
                           lustre_msg_get_timeout(req->rq_reqmsg);
 
         check_and_start_recovery_timer(obd, handler);
@@ -1539,7 +1539,7 @@ int target_queue_last_replay_reply(struct ptlrpc_request *req, int rc)
            export */
         if (req->rq_export->exp_replay_needed) {
                 --obd->obd_recoverable_clients;
-                
+
                 spin_lock(&req->rq_export->exp_lock);
                 req->rq_export->exp_replay_needed = 0;
                 spin_unlock(&req->rq_export->exp_lock);
@@ -1576,9 +1576,9 @@ int target_pack_pool_reply(struct ptlrpc_request *req)
 {
         struct obd_device *obd;
         ENTRY;
-   
-        /* 
-         * Check that we still have all structures alive as this may 
+
+        /*
+         * Check that we still have all structures alive as this may
          * be some late rpc in shutdown time.
          */
         if (unlikely(!req->rq_export || !req->rq_export->exp_obd ||
@@ -1588,8 +1588,8 @@ int target_pack_pool_reply(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
-        /* 
-         * OBD is alive here as export is alive, which we checked above. 
+        /*
+         * OBD is alive here as export is alive, which we checked above.
          */
         obd = req->rq_export->exp_obd;
 

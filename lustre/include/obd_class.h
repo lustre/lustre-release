@@ -104,7 +104,7 @@ void obd_zombie_impexp_cull(void);
 
 /* obd_config.c */
 int class_process_config(struct lustre_cfg *lcfg);
-int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars, 
+int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                              struct lustre_cfg *lcfg, void *data);
 int class_attach(struct lustre_cfg *lcfg);
 int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg);
@@ -135,7 +135,7 @@ struct config_llog_instance {
         struct super_block *cfg_sb;
         struct obd_uuid     cfg_uuid;
         int                 cfg_last_idx; /* for partial llog processing */
-        int                 cfg_flags; 
+        int                 cfg_flags;
 };
 int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
                             struct config_llog_instance *cfg);
@@ -353,7 +353,7 @@ static inline int obd_set_info_async(struct obd_export *exp, obd_count keylen,
         EXP_CHECK_OP(exp, set_info_async);
         EXP_COUNTER_INCREMENT(exp, set_info_async);
 
-        rc = OBP(exp->exp_obd, set_info_async)(exp, keylen, key, vallen, val, 
+        rc = OBP(exp->exp_obd, set_info_async)(exp, keylen, key, vallen, val,
                                                set);
         RETURN(rc);
 }
@@ -370,7 +370,7 @@ static inline int obd_setup(struct obd_device *obd, int datalen, void *data)
         RETURN(rc);
 }
 
-static inline int obd_precleanup(struct obd_device *obd, 
+static inline int obd_precleanup(struct obd_device *obd,
                                  enum obd_cleanup_stage cleanup_stage)
 {
         int rc;
@@ -678,7 +678,8 @@ static inline int obd_connect(struct lustre_handle *conn,struct obd_device *obd,
 static inline int obd_reconnect(struct obd_export *exp,
                                 struct obd_device *obd,
                                 struct obd_uuid *cluuid,
-                                struct obd_connect_data *d)
+                                struct obd_connect_data *d,
+                                void *localdata)
 {
         int rc;
         __u64 ocf = d ? d->ocd_connect_flags : 0; /* for post-condition check */
@@ -688,7 +689,7 @@ static inline int obd_reconnect(struct obd_export *exp,
         OBD_CHECK_OP(obd, reconnect, 0);
         OBD_COUNTER_INCREMENT(obd, reconnect);
 
-        rc = OBP(obd, reconnect)(exp, obd, cluuid, d);
+        rc = OBP(obd, reconnect)(exp, obd, cluuid, d, localdata);
         /* check that only subset is granted */
         LASSERT(ergo(d != NULL,
                      (d->ocd_connect_flags & ocf) == d->ocd_connect_flags));
@@ -1344,13 +1345,13 @@ static inline int obd_notify(struct obd_device *obd,
         /* the check for async_recov is a complete hack - I'm hereby
            overloading the meaning to also mean "this was called from
            mds_postsetup".  I know that my mds is able to handle notifies
-           by this point, and it needs to get them to execute mds_postrecov. */                                                                                
+           by this point, and it needs to get them to execute mds_postrecov. */
         if (!obd->obd_set_up && !obd->obd_async_recov) {
                 CDEBUG(D_HA, "obd %s not set up\n", obd->obd_name);
                 RETURN(-EINVAL);
         }
 
-        if (!OBP(obd, notify)) 
+        if (!OBP(obd, notify))
                 RETURN(-ENOSYS);
 
         OBD_COUNTER_INCREMENT(obd, notify);

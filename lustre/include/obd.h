@@ -448,7 +448,7 @@ struct client_obd {
         __u32                    cl_supp_cksum_types;
         /* checksum algorithm to be used */
         cksum_type_t             cl_cksum_type;
- 
+
         /* also protected by the poorly named _loi_list_lock lock above */
         struct osc_async_rc      cl_ar;
 
@@ -805,7 +805,7 @@ struct obd_device {
         unsigned long obd_attached:1,      /* finished attach */
                       obd_set_up:1,        /* finished setup */
                       obd_recovering:1,    /* there are recoverable clients */
-                      obd_abort_recovery:1,/* somebody ioctl'ed us to abort */ 
+                      obd_abort_recovery:1,/* somebody ioctl'ed us to abort */
                       obd_replayable:1,    /* recovery is enabled; inform clients */
                       obd_no_transno:1,    /* no committed-transno notification */
                       obd_no_recov:1,      /* fail instead of retry messages */
@@ -839,7 +839,7 @@ struct obd_device {
         struct fsfilt_operations *obd_fsops;
         spinlock_t              obd_osfs_lock;
         struct obd_statfs       obd_osfs;       /* locked by obd_osfs_lock */
-        __u64                   obd_osfs_age;   
+        __u64                   obd_osfs_age;
         struct lvfs_run_ctxt    obd_lvfs_ctxt;
         struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
         struct obd_device       *obd_observer;
@@ -971,7 +971,8 @@ struct obd_ops {
                          void *localdata);
         int (*o_reconnect)(struct obd_export *exp, struct obd_device *src,
                            struct obd_uuid *cluuid,
-                           struct obd_connect_data *ocd);
+                           struct obd_connect_data *ocd,
+                           void *localdata);
         int (*o_disconnect)(struct obd_export *exp);
 
         int (*o_statfs)(struct obd_device *obd, struct obd_statfs *osfs,
@@ -1010,7 +1011,7 @@ struct obd_ops {
         int (*o_prep_async_page)(struct obd_export *exp,
                                  struct lov_stripe_md *lsm,
                                  struct lov_oinfo *loi,
-                                 cfs_page_t *page, obd_off offset, 
+                                 cfs_page_t *page, obd_off offset,
                                  struct obd_async_page_ops *ops, void *data,
                                  void **res, int nocache,
                                  struct lustre_handle *lockh);
@@ -1091,7 +1092,7 @@ struct obd_ops {
 
         /* llog related obd_methods */
         int (*o_llog_init)(struct obd_device *obd, struct obd_device *disk_obd,
-                           int count, struct llog_catid *logid, 
+                           int count, struct llog_catid *logid,
                            struct obd_uuid *uuid);
         int (*o_llog_finish)(struct obd_device *obd, int count);
 
@@ -1127,7 +1128,7 @@ struct obd_ops {
                                        obd_lock_cancel_cb cb);
         int (*o_unregister_lock_cancel_cb)(struct obd_export *exp,
                                          obd_lock_cancel_cb cb);
-        
+
         /*
          * NOTE: If adding ops, add another LPROCFS_OBD_OP_INIT() line
          * to lprocfs_alloc_obd_stats() in obdclass/lprocfs_status.c.
