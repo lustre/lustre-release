@@ -59,7 +59,12 @@ struct obd_device;
 
 #define OBD_LDLM_DEVICENAME  "ldlm"
 
+#ifdef HAVE_BGL_SUPPORT
+/* 1.5 times the maximum 128 tasks available in VN mode */
+#define LDLM_DEFAULT_LRU_SIZE 196
+#else
 #define LDLM_DEFAULT_LRU_SIZE (100 * num_online_cpus())
+#endif
 #define LDLM_DEFAULT_MAX_ALIVE (cfs_time_seconds(36000))
 
 typedef enum {

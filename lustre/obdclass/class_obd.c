@@ -570,8 +570,13 @@ int init_obdclass(void)
         for (i = 0; i < class_devno_max(); i++)
                 obd_devs[i] = NULL;
 
-        /* Default the dirty page cache cap to 1/2 of system memory */
-        obd_max_dirty_pages = num_physpages / 2;
+        /* Default the dirty page cache cap to 1/2 of system memory.
+         * For clients with less memory, a larger fraction is needed
+         * for other purposes (mostly for BGL). */
+        if (num_physpages <= 512 << (20 - CFS_PAGE_SHIFT))
+                obd_max_dirty_pages = num_physpages / 4;
+        else
+                obd_max_dirty_pages = num_physpages / 2;
 
         err = obd_init_caches();
         if (err)

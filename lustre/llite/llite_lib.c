@@ -90,10 +90,15 @@ static struct ll_sb_info *ll_init_sbi(void)
 
         si_meminfo(&si);
         pages = si.totalram - si.totalhigh;
-        if (pages >> (20 - CFS_PAGE_SHIFT) < 512)
+        if (pages >> (20 - CFS_PAGE_SHIFT) < 512) {
+#ifdef HAVE_BGL_SUPPORT
+                sbi->ll_async_page_max = pages / 4;
+#else
                 sbi->ll_async_page_max = pages / 2;
-        else
+#endif
+        } else {
                 sbi->ll_async_page_max = (pages / 4) * 3;
+        }
         sbi->ll_ra_info.ra_max_pages = min(pages / 32,
                                            SBI_DEFAULT_READAHEAD_MAX);
         sbi->ll_ra_info.ra_max_read_ahead_whole_pages =
