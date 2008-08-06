@@ -38,6 +38,13 @@ tbd Sun Microsystems, Inc.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
 
+Severity   : enhancement
+Bugzilla   : 16091
+Description: configure's --enable-quota should check the 
+           : kernel .config for CONFIG_QUOTA
+Details    : configure is terminated if --enable-quota is passed but
+           : no quota support is in kernel
+
 Severity   : normal
 Bugzilla   : 16317
 Description: exports in /proc are broken
