@@ -498,7 +498,7 @@ int obd_init_checks(void)
                 ret = -EINVAL;
         }
         if ((u64val & ~CFS_PAGE_MASK) >= CFS_PAGE_SIZE) {
-                CWARN("mask failed: u64val "LPU64" >= %lu\n", u64val, 
+                CWARN("mask failed: u64val "LPU64" >= %lu\n", u64val,
                       (unsigned long)CFS_PAGE_SIZE);
                 ret = -EINVAL;
         }
@@ -536,7 +536,7 @@ int init_obdclass(void)
         cfs_waitq_init(&obd_race_waitq);
         obd_zombie_impexp_init();
 #ifdef LPROCFS
-        obd_memory = lprocfs_alloc_stats(OBD_STATS_NUM, 
+        obd_memory = lprocfs_alloc_stats(OBD_STATS_NUM,
                                          LPROCFS_STATS_FLAG_PERCPU);
         if (obd_memory == NULL) {
                 CERROR("kmalloc of 'obd_memory' failed\n");
@@ -544,10 +544,10 @@ int init_obdclass(void)
         }
 
         lprocfs_counter_init(obd_memory, OBD_MEMORY_STAT,
-                             LPROCFS_CNTR_AVGMINMAX, 
+                             LPROCFS_CNTR_AVGMINMAX,
                              "memused", "bytes");
         lprocfs_counter_init(obd_memory, OBD_MEMORY_PAGES_STAT,
-                             LPROCFS_CNTR_AVGMINMAX, 
+                             LPROCFS_CNTR_AVGMINMAX,
                              "pagesused", "pages");
 #endif
         err = obd_init_checks();
@@ -572,8 +572,13 @@ int init_obdclass(void)
         for (i = 0; i < class_devno_max(); i++)
                 obd_devs[i] = NULL;
 
-        /* Default the dirty page cache cap to 1/2 of system memory */
-        obd_max_dirty_pages = num_physpages / 2;
+        /* Default the dirty page cache cap to 1/2 of system memory.
+         * For clients with less memory, a larger fraction is needed
+         * for other purposes (mostly for BGL). */
+        if (num_physpages <= 512 << (20 - CFS_PAGE_SHIFT))
+                obd_max_dirty_pages = num_physpages / 4;
+        else
+                obd_max_dirty_pages = num_physpages / 2;
 
         err = obd_init_caches();
         if (err)
@@ -631,7 +636,7 @@ static void cleanup_obdclass(void)
         CDEBUG((memory_leaked | pages_leaked) ? D_ERROR : D_INFO,
                "obd_memory max: "LPU64", leaked: "LPU64" "
                "obd_memory_pages max: "LPU64", leaked: "LPU64"\n",
-               memory_max, memory_leaked, 
+               memory_max, memory_leaked,
                pages_max, pages_leaked);
 
         EXIT;
