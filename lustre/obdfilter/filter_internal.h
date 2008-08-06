@@ -79,7 +79,7 @@ struct filter_mod_data {
         int              fmd_refcount;  /* reference counter - list holds 1 */
 };
 
-#ifdef BGL_SUPPORT
+#ifdef HAVE_BGL_SUPPORT
 #define FILTER_FMD_MAX_NUM_DEFAULT 128 /* many active files per client on BGL */
 #else
 #define FILTER_FMD_MAX_NUM_DEFAULT  32
