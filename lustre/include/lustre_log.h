@@ -112,16 +112,44 @@ extern int llog_cancel_rec(struct llog_handle *loghandle, int index);
 extern int llog_close(struct llog_handle *cathandle);
 extern int llog_get_size(struct llog_handle *loghandle);
 
-/* llog_cat.c   -  catalog api */
+/* llog_cat.c - catalog api */
 struct llog_process_data {
-        void *lpd_data;
-        llog_cb_t lpd_cb;
+        /**
+         * Any useful data needed while processing catalog. This is
+         * passed later to process callback.
+         */
+        void                *lpd_data;
+        /**
+         * Catalog process callback function, called for each record
+         * in catalog.
+         */
+        llog_cb_t            lpd_cb;
 };
 
 struct llog_process_cat_data {
-        int     first_idx;
-        int     last_idx;
-        /* to process catalog across zero record */
+        /**
+         * Temporary stored first_idx while scanning log.
+         */
+        int                  lpcd_first_idx;
+        /**
+         * Temporary stored last_idx while scanning log.
+         */
+        int                  lpcd_last_idx;
+};
+
+struct llog_process_cat_args {
+        /**
+         * Llog context used in recovery thread on OST (recov_thread.c)
+         */
+        struct llog_ctxt    *lpca_ctxt;
+        /**
+         * Llog callback used in recovery thread on OST (recov_thread.c)
+         */
+        void                *lpca_cb;
+        /**
+         * Data pointer for llog callback.
+         */
+        void                *lpca_arg;
 };
 
 int llog_cat_put(struct llog_handle *cathandle);
@@ -130,6 +158,7 @@ int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
 int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
                             struct llog_cookie *cookies);
 int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data);
+int llog_cat_process_thread(void *data);
 int llog_cat_reverse_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data);
 int llog_cat_set_first_idx(struct llog_handle *cathandle, int index);
 
@@ -180,9 +209,9 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
                          struct lov_stripe_md *lsm, int count,
                          struct llog_cookie *cookies, int flags);
 int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp);
-int llog_repl_connect(struct llog_ctxt *ctxt, int count,
-                      struct llog_logid *logid, struct llog_gen *gen,
-                      struct obd_uuid *uuid);
+int llog_obd_repl_connect(struct llog_ctxt *ctxt, int count,
+                          struct llog_logid *logid, struct llog_gen *gen,
+                          struct obd_uuid *uuid);
 
 struct llog_operations {
         int (*lop_write_rec)(struct llog_handle *loghandle,
@@ -224,18 +253,81 @@ struct llog_ctxt {
         int                      loc_idx; /* my index the obd array of ctxt's */
         struct llog_gen          loc_gen;
         struct obd_device       *loc_obd; /* points back to the containing obd*/
-        struct obd_llog_group     *loc_olg; /* group containing that ctxt */
+        struct obd_llog_group   *loc_olg; /* group containing that ctxt */
         struct obd_export       *loc_exp; /* parent "disk" export (e.g. MDS) */
         struct obd_import       *loc_imp; /* to use in RPC's: can be backward
                                              pointing import */
         struct llog_operations  *loc_logops;
         struct llog_handle      *loc_handle;
+        struct llog_commit_master *loc_lcm;
         struct llog_canceld_ctxt *loc_llcd;
         struct semaphore         loc_sem; /* protects loc_llcd and loc_imp */
-        atomic_t                   loc_refcount;
-        struct llog_commit_master *loc_lcm;
+        atomic_t                 loc_refcount;
         void                    *llog_proc_cb;
 };
+
+#define LCM_NAME_SIZE 64
+
+struct llog_commit_master {
+        /**
+         * Thread control flags (start, stop, etc.)
+         */
+        long                       lcm_flags;
+        /**
+         * Number of llcds onthis lcm.
+         */
+        atomic_t                   lcm_count;
+        /**
+         * Ptlrpc requests set. All cancel rpcs go via this request set.
+         */
+        struct ptlrpc_request_set *lcm_set;
+        /**
+         * Thread control structure. Used for control commit thread.
+         */
+        struct ptlrpcd_ctl         lcm_pc;
+        /**
+         * Commit thread name buffer. Only used for thread start.
+         */
+        char                       lcm_name[LCM_NAME_SIZE];
+};
+
+struct llog_canceld_ctxt {
+        /**
+         * Llog context this llcd is attached to. Used for accessing
+         * ->loc_import and others in process of canceling cookies
+         * gathered in this llcd.
+         */
+        struct llog_ctxt          *llcd_ctxt;
+        /**
+         * Cancel thread control stucture pointer. Used for accessing
+         * it to see if should stop processing and other needs.
+         */
+        struct llog_commit_master *llcd_lcm;
+        /**
+         * Maximal llcd size. Used in calculations on how much of room
+         * left in llcd to cookie comming cookies.
+         */
+        int                        llcd_size;
+        /**
+         * Current llcd size while gathering cookies. This should not be
+         * more than ->llcd_size. Used for determining if we need to
+         * send this llcd (if full) and allocate new one. This is also
+         * used for copying new cookie at the end of buffer.
+         */
+        int                        llcd_cookiebytes;
+        /**
+         * Pointer to the start of cookies buffer.
+         */
+        struct llog_cookie         llcd_cookies[0];
+};
+
+/* ptlrpc/recov_thread.c */
+extern struct llog_commit_master *llog_recov_thread_init(char *name);
+extern void llog_recov_thread_fini(struct llog_commit_master *lcm, 
+                                   int force);
+extern int llog_recov_thread_start(struct llog_commit_master *lcm);
+extern void llog_recov_thread_stop(struct llog_commit_master *lcm, 
+                                    int force);
 
 #ifndef __KERNEL__
 
@@ -310,10 +402,10 @@ static inline void llog_ctxt_put(struct llog_ctxt *ctxt)
 {
         if (ctxt == NULL)
                 return;
-        CDEBUG(D_INFO, "PUTting ctxt %p : new refcount %d\n", ctxt,
-               atomic_read(&ctxt->loc_refcount) - 1);
         LASSERT(atomic_read(&ctxt->loc_refcount) > 0);
         LASSERT(atomic_read(&ctxt->loc_refcount) < 0x5a5a5a);
+        CDEBUG(D_INFO, "PUTting ctxt %p : new refcount %d\n", ctxt,
+               atomic_read(&ctxt->loc_refcount) - 1);
         __llog_ctxt_put(ctxt);
 }
 

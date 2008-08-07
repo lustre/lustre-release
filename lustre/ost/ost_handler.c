@@ -53,7 +53,6 @@
 #include <lustre_debug.h>
 #include <linux/init.h>
 #include <lprocfs_status.h>
-#include <lustre_commit_confd.h>
 #include <libcfs/list.h>
 #include <lustre_quota.h>
 #include "ost_internal.h"

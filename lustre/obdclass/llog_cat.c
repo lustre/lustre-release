@@ -395,14 +395,14 @@ int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data)
                 CWARN("catlog "LPX64" crosses index zero\n",
                       cat_llh->lgh_id.lgl_oid);
 
-                cd.first_idx = llh->llh_cat_idx;
-                cd.last_idx = 0;
+                cd.lpcd_first_idx = llh->llh_cat_idx;
+                cd.lpcd_last_idx = 0;
                 rc = llog_process(cat_llh, llog_cat_process_cb, &d, &cd);
                 if (rc != 0)
                         RETURN(rc);
 
-                cd.first_idx = 0;
-                cd.last_idx = cat_llh->lgh_last_idx;
+                cd.lpcd_first_idx = 0;
+                cd.lpcd_last_idx = cat_llh->lgh_last_idx;
                 rc = llog_process(cat_llh, llog_cat_process_cb, &d, &cd);
         } else {
                 rc = llog_process(cat_llh, llog_cat_process_cb, &d, NULL);
@@ -411,6 +411,56 @@ int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data)
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cat_process);
+
+#ifdef __KERNEL__
+int llog_cat_process_thread(void *data)
+{
+        struct llog_process_cat_args *args = data;
+        struct llog_ctxt *ctxt = args->lpca_ctxt;
+        struct llog_handle *llh = NULL;
+        void  *cb = args->lpca_cb;
+        struct llog_logid logid;
+        int rc;
+        ENTRY;
+
+        cfs_daemonize_ctxt("ll_log_process");
+
+        logid = *(struct llog_logid *)(args->lpca_arg);
+        rc = llog_create(ctxt, &llh, &logid, NULL);
+        if (rc) {
+                CERROR("llog_create() failed %d\n", rc);
+                GOTO(out, rc);
+        }
+        rc = llog_init_handle(llh, LLOG_F_IS_CAT, NULL);
+        if (rc) {
+                CERROR("llog_init_handle failed %d\n", rc);
+                GOTO(release_llh, rc);
+        }
+
+        if (cb) {
+                rc = llog_cat_process(llh, (llog_cb_t)cb, NULL);
+                if (rc != LLOG_PROC_BREAK)
+                        CERROR("llog_cat_process() failed %d\n", rc);
+        } else {
+                CWARN("No callback function for recovery\n");
+        }
+
+        /* 
+         * Make sure that all cached data is sent. 
+         */
+        llog_sync(ctxt, NULL);
+        EXIT;
+release_llh:
+        rc = llog_cat_put(llh);
+        if (rc)
+                CERROR("llog_cat_put() failed %d\n", rc);
+out:
+        llog_ctxt_put(ctxt);
+        OBD_FREE(args, sizeof(*args));
+        return rc;
+}
+EXPORT_SYMBOL(llog_cat_process_thread);
+#endif
 
 static int llog_cat_reverse_process_cb(struct llog_handle *cat_llh,
                                        struct llog_rec_hdr *rec, void *data)
@@ -456,15 +506,15 @@ int llog_cat_reverse_process(struct llog_handle *cat_llh,
                 CWARN("catalog "LPX64" crosses index zero\n",
                       cat_llh->lgh_id.lgl_oid);
 
-                cd.first_idx = 0;
-                cd.last_idx = cat_llh->lgh_last_idx;
+                cd.lpcd_first_idx = 0;
+                cd.lpcd_last_idx = cat_llh->lgh_last_idx;
                 rc = llog_reverse_process(cat_llh, llog_cat_reverse_process_cb,
                                           &d, &cd);
                 if (rc != 0)
                         RETURN(rc);
 
-                cd.first_idx = le32_to_cpu(llh->llh_cat_idx);
-                cd.last_idx = 0;
+                cd.lpcd_first_idx = le32_to_cpu(llh->llh_cat_idx);
+                cd.lpcd_last_idx = 0;
                 rc = llog_reverse_process(cat_llh, llog_cat_reverse_process_cb,
                                           &d, &cd);
         } else {

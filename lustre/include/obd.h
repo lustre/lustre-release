@@ -401,8 +401,7 @@ struct filter_obd {
         unsigned int             fo_fl_oss_capa;
         struct list_head         fo_capa_keys;
         struct hlist_head       *fo_capa_hash;
-
-        void                    *fo_lcm;
+        struct llog_commit_master *fo_lcm;
 };
 
 #define OSC_MAX_RIF_DEFAULT       8

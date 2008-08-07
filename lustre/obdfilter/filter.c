@@ -71,7 +71,6 @@
 #include <lustre_fsfilt.h>
 #include <lprocfs_status.h>
 #include <lustre_log.h>
-#include <lustre_commit_confd.h>
 #include <libcfs/list.h>
 #include <lustre_disk.h>
 #include <lustre_quota.h>
@@ -2171,7 +2170,15 @@ static int filter_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
         return rc;
 }
 
-static int filter_group_llog_finish(struct obd_llog_group *olg)
+static struct llog_operations filter_mds_ost_repl_logops;
+
+static struct llog_operations filter_size_orig_logops = {
+        .lop_setup   = llog_obd_origin_setup,
+        .lop_cleanup = llog_obd_origin_cleanup,
+        .lop_add     = llog_obd_origin_add
+};
+
+static int filter_olg_fini(struct obd_llog_group *olg)
 {
         struct llog_ctxt *ctxt;
         int rc = 0, rc2 = 0;
@@ -2190,20 +2197,12 @@ static int filter_group_llog_finish(struct obd_llog_group *olg)
         RETURN(rc);
 }
 
-static struct llog_operations filter_mds_ost_repl_logops /* initialized below*/;
-static struct llog_operations filter_size_orig_logops = {
-        lop_setup: llog_obd_origin_setup,
-        lop_cleanup: llog_obd_origin_cleanup,
-        lop_add: llog_obd_origin_add
-};
-
-/**
- * Init obd_llog_group of the filter
- */
-static int filter_olg_init(struct obd_device *obd, struct obd_llog_group *olg,
-                           struct obd_device *tgt)
+static int 
+filter_olg_init(struct obd_device *obd, struct obd_llog_group *olg,
+                struct obd_device *tgt)
 {
         int rc;
+        ENTRY;
 
         rc = llog_setup(obd, olg, LLOG_MDS_OST_REPL_CTXT, tgt, 0, NULL,
                         &filter_mds_ost_repl_logops);
@@ -2214,10 +2213,11 @@ static int filter_olg_init(struct obd_device *obd, struct obd_llog_group *olg,
                         &filter_size_orig_logops);
         if (rc)
                 GOTO(cleanup, rc);
+        EXIT;
 cleanup:
         if (rc)
-              filter_group_llog_finish(olg);
-        RETURN(rc);
+                filter_olg_fini(olg);
+        return rc;
 }
 
 /**
@@ -2230,48 +2230,44 @@ filter_default_olg_init(struct obd_device *obd, struct obd_llog_group *olg,
         struct filter_obd *filter = &obd->u.filter;
         struct llog_ctxt *ctxt;
         int rc;
+        ENTRY;
 
-        LASSERT(filter->fo_lcm == NULL);
-        OBD_ALLOC(filter->fo_lcm, sizeof(struct llog_commit_master));
+        filter->fo_lcm = llog_recov_thread_init(obd->obd_name);
         if (!filter->fo_lcm)
                 RETURN(-ENOMEM);
 
-        rc = llog_init_commit_master((struct llog_commit_master *)
-                                     filter->fo_lcm);
-        if (rc)
-                GOTO(cleanup, rc);
-
         filter_mds_ost_repl_logops = llog_client_ops;
         filter_mds_ost_repl_logops.lop_cancel = llog_obd_repl_cancel;
-        filter_mds_ost_repl_logops.lop_connect = llog_repl_connect;
+        filter_mds_ost_repl_logops.lop_connect = llog_obd_repl_connect;
         filter_mds_ost_repl_logops.lop_sync = llog_obd_repl_sync;
 
         rc = filter_olg_init(obd, olg, tgt);
         if (rc)
-                GOTO(cleanup, rc);
+                GOTO(cleanup_lcm, rc);
 
         ctxt = llog_group_get_ctxt(olg, LLOG_MDS_OST_REPL_CTXT);
-        LASSERT(ctxt != NULL);
-        ctxt->llog_proc_cb = filter_recov_log_mds_ost_cb;
-        ctxt->loc_lcm = obd->u.filter.fo_lcm;
-        /* Only start log commit thread for default llog ctxt*/
-        rc = llog_start_commit_thread(ctxt->loc_lcm);
-        llog_ctxt_put(ctxt);
-        if (rc)
-                GOTO(cleanup, rc);
-cleanup:
-        if (rc) {
-                llog_cleanup_commit_master(filter->fo_lcm, 0);
-                OBD_FREE(filter->fo_lcm, sizeof(struct llog_commit_master));
-                filter->fo_lcm = NULL;
+        if (!ctxt) {
+                CERROR("Can't get ctxt for %p:%x\n", olg, 
+                       LLOG_MDS_OST_REPL_CTXT);
+                GOTO(cleanup_olg, rc = -ENODEV);
         }
-        RETURN(rc);
+        ctxt->loc_lcm = filter->fo_lcm;
+        ctxt->llog_proc_cb = filter_recov_log_mds_ost_cb;
+        llog_ctxt_put(ctxt);
+
+        RETURN(0);
+cleanup_olg:
+        filter_olg_fini(olg);
+cleanup_lcm:
+        llog_recov_thread_fini(filter->fo_lcm, 1);
+        filter->fo_lcm = NULL;
+        return rc;
 }
                      
-static int filter_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                            struct obd_device *tgt, int count,
-                            struct llog_catid *catid,
-                            struct obd_uuid *uuid)
+static int 
+filter_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
+                 struct obd_device *tgt, int count, struct llog_catid *catid,
+                 struct obd_uuid *uuid)
 {
         struct filter_obd *filter = &obd->u.filter;
         struct llog_ctxt *ctxt;
@@ -2282,38 +2278,49 @@ static int filter_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
         if (olg == &obd->obd_olg)
                 return filter_default_olg_init(obd, olg, tgt);
 
-        /* For other group llog, which will be initialized in
-         * llog_connect(after default_olg_init, so fo_lcm must
-         * already be initialized */ 
         LASSERT(filter->fo_lcm != NULL);
         rc = filter_olg_init(obd, olg, tgt);
         if (rc)
                 RETURN(rc);
         ctxt = llog_group_get_ctxt(olg, LLOG_MDS_OST_REPL_CTXT);
-        LASSERT(ctxt != NULL);
+        if (!ctxt) {
+                CERROR("Can't get ctxt for %p:%x\n", olg, 
+                       LLOG_MDS_OST_REPL_CTXT);
+                filter_olg_fini(olg);
+                RETURN(-ENODEV);
+        }
         ctxt->llog_proc_cb = filter_recov_log_mds_ost_cb;
-        ctxt->loc_lcm = obd->u.filter.fo_lcm;
+        ctxt->loc_lcm = filter->fo_lcm;
         llog_ctxt_put(ctxt);
-
         RETURN(rc);
 }
 
 static int filter_llog_finish(struct obd_device *obd, int count)
 {
-        int rc;
+        struct filter_obd *filter = &obd->u.filter;
+        struct llog_ctxt *ctxt;
         ENTRY;
-
-        if (obd->u.filter.fo_lcm) { 
-                llog_cleanup_commit_master((struct llog_commit_master *)
-                                           obd->u.filter.fo_lcm, 1);
-                OBD_FREE(obd->u.filter.fo_lcm, 
-                         sizeof(struct llog_commit_master));
-                obd->u.filter.fo_lcm = NULL;
+        
+        ctxt = llog_group_get_ctxt(&obd->obd_olg, LLOG_MDS_OST_REPL_CTXT);
+        LASSERT(ctxt != NULL);
+        mutex_down(&ctxt->loc_sem);
+        if (ctxt->loc_imp) {
+                /*
+                 * Balance class_import_get() in llog_receptor_accept(). This
+                 * is safe to do here, as llog is already synchronized and its
+                 * import may go.
+                 */
+                class_import_put(ctxt->loc_imp);
+                ctxt->loc_imp = NULL;
         }
-        /* finish obd llog group */
-        rc = filter_group_llog_finish(&obd->obd_olg);
+        mutex_up(&ctxt->loc_sem);
+        llog_ctxt_put(ctxt);
 
-        RETURN(rc);
+        if (filter->fo_lcm) {
+                llog_recov_thread_fini(filter->fo_lcm, obd->obd_force);
+                filter->fo_lcm = NULL;
+        }
+        RETURN(filter_olg_fini(&obd->obd_olg));
 }
 
 /**
@@ -2441,7 +2448,7 @@ static int filter_llog_connect(struct obd_export *exp,
         RETURN(rc);
 }
 
-static int filter_llog_preclean (struct obd_device *obd)
+static int filter_llog_preclean(struct obd_device *obd)
 {
         struct obd_llog_group *olg, *tmp;
         struct filter_obd *filter;
@@ -2467,7 +2474,7 @@ static int filter_llog_preclean (struct obd_device *obd)
         
         list_for_each_entry_safe(olg, tmp, &remove_list, olg_list) {  
                 list_del_init(&olg->olg_list);
-                rc = filter_group_llog_finish(olg);
+                rc = filter_olg_fini(olg);
                 if (rc)
                         CERROR("failed to cleanup llogging subsystem for %u\n",
                                olg->olg_group);

@@ -245,11 +245,11 @@ static int llog_process_thread(void *arg)
         cfs_daemonize_ctxt("llog_process_thread");
 
         if (cd != NULL) {
-                last_called_index = cd->first_idx;
-                index = cd->first_idx + 1;
+                last_called_index = cd->lpcd_first_idx;
+                index = cd->lpcd_first_idx + 1;
         }
-        if (cd != NULL && cd->last_idx)
-                last_index = cd->last_idx;
+        if (cd != NULL && cd->lpcd_last_idx)
+                last_index = cd->lpcd_last_idx;
         else
                 last_index = LLOG_BITMAP_BYTES * 8 - 1;
 
@@ -348,7 +348,7 @@ static int llog_process_thread(void *arg)
 
  out:
         if (cd != NULL)
-                cd->last_idx = last_called_index;
+                cd->lpcd_last_idx = last_called_index;
         if (buf)
                 OBD_FREE(buf, LLOG_CHUNK_SIZE);
         lpi->lpi_rc = rc;
@@ -415,9 +415,9 @@ int llog_reverse_process(struct llog_handle *loghandle, llog_cb_t cb,
                 RETURN(-ENOMEM);
 
         if (cd != NULL)
-                first_index = cd->first_idx + 1;
-        if (cd != NULL && cd->last_idx)
-                index = cd->last_idx;
+                first_index = cd->lpcd_first_idx + 1;
+        if (cd != NULL && cd->lpcd_last_idx)
+                index = cd->lpcd_last_idx;
         else
                 index = LLOG_BITMAP_BYTES * 8 - 1;
 

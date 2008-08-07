@@ -101,10 +101,17 @@ __init int ptlrpc_init(void)
         if (rc)
                 GOTO(cleanup, rc);
 
+        cleanup_phase = 6;
+        rc = llog_recov_init();
+        if (rc)
+                GOTO(cleanup, rc);
+
         RETURN(0);
 
 cleanup:
         switch(cleanup_phase) {
+        case 6:
+                sptlrpc_fini();
         case 5:
                 ldlm_exit();
         case 4:
@@ -124,6 +131,7 @@ cleanup:
 #ifdef __KERNEL__
 static void __exit ptlrpc_exit(void)
 {
+        llog_recov_fini();
         sptlrpc_fini();
         ldlm_exit();
         ptlrpc_stop_pinger();

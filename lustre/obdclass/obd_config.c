@@ -473,7 +473,6 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (err)
                 CERROR("Precleanup %s returned %d\n",
                        obd->obd_name, err);
-
         class_decref(obd);
         obd->obd_set_up = 0;
         RETURN(0);
@@ -1083,16 +1082,16 @@ int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
 
         /* continue processing from where we last stopped to end-of-log */
         if (cfg)
-                cd.first_idx = cfg->cfg_last_idx;
-        cd.last_idx = 0;
+                cd.lpcd_first_idx = cfg->cfg_last_idx;
+        cd.lpcd_last_idx = 0;
 
         rc = llog_process(llh, class_config_llog_handler, cfg, &cd);
 
         CDEBUG(D_CONFIG, "Processed log %s gen %d-%d (rc=%d)\n", name, 
-               cd.first_idx + 1, cd.last_idx, rc);
+               cd.lpcd_first_idx + 1, cd.lpcd_last_idx, rc);
 
         if (cfg)
-                cfg->cfg_last_idx = cd.last_idx;
+                cfg->cfg_last_idx = cd.lpcd_last_idx;
 
 parse_out:
         rc2 = llog_close(llh);

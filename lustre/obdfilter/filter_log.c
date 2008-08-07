@@ -50,9 +50,8 @@
 
 #include <libcfs/list.h>
 #include <obd_class.h>
+#include <lustre_log.h>
 #include <lustre_fsfilt.h>
-#include <lustre_commit_confd.h>
-
 #include "filter_internal.h"
 
 int filter_log_sz_change(struct llog_handle *cathandle,

@@ -126,6 +126,9 @@ int llog_cleanup(struct llog_ctxt *ctxt)
 
         /* try to free the ctxt */
         rc = __llog_ctxt_put(ctxt);
+        if (rc)
+                CERROR("Error %d while cleaning up ctxt %p\n", 
+                       rc, ctxt);
 
         l_wait_event(olg->olg_waitq,
                      llog_group_ctxt_null(olg, idx), &lwi);
