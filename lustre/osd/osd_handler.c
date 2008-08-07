@@ -2329,10 +2329,15 @@ static struct lu_device *osd_device_alloc(const struct lu_env *env,
                         spin_lock_init(&o->od_osfs_lock);
                         o->od_osfs_age = cfs_time_shift_64(-1000);
                         o->od_capa_hash = init_capa_hash();
-                        if (o->od_capa_hash == NULL)
+                        if (o->od_capa_hash == NULL) {
+                                dt_device_fini(&o->od_dt_dev);
                                 l = ERR_PTR(-ENOMEM);
+                        }
                 } else
                         l = ERR_PTR(result);
+
+                if (IS_ERR(l))
+                        OBD_FREE_PTR(o);
         } else
                 l = ERR_PTR(-ENOMEM);
         return l;
