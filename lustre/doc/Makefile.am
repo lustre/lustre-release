@@ -47,7 +47,8 @@ TEXEXPAND = texexpand
 SUFFIXES = .lin .lyx .pdf .ps .sgml .html .txt .tex .fig .eps .dvi
 
 MANFILES = lustre.7 lfs.1 mount.lustre.8 mkfs.lustre.8 tunefs.lustre.8 lctl.8 \
-	llverdev.8 llbackup.8 llapi_quotactl.3
+	llverdev.8 llbackup.8 llapi_quotactl.3 llobdstat.8 llstat.8 plot-llstat.8 \
+	l_getgroups.8 lst.8 routerstat.8
 if UTILS
 man_MANS = $(MANFILES)
 endif
