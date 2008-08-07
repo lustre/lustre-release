@@ -2403,3 +2403,28 @@ void ll_finish_md_op_data(struct md_op_data *op_data)
         capa_put(op_data->op_capa2);
         OBD_FREE_PTR(op_data);
 }
+
+int ll_show_options(struct seq_file *seq, struct vfsmount *vfs)
+{
+        struct ll_sb_info *sbi;
+
+        LASSERT((seq != NULL) && (vfs != NULL));
+        sbi = ll_s2sbi(vfs->mnt_sb);
+
+        if (sbi->ll_flags & LL_SBI_NOLCK)
+                seq_puts(seq, ",nolock");
+
+        if (sbi->ll_flags & LL_SBI_FLOCK)
+                seq_puts(seq, ",flock");
+
+        if (sbi->ll_flags & LL_SBI_LOCALFLOCK)
+                seq_puts(seq, ",localflock");
+
+        if (sbi->ll_flags & LL_SBI_USER_XATTR)
+                seq_puts(seq, ",user_xattr");
+
+        if (sbi->ll_flags & LL_SBI_ACL)
+                seq_puts(seq, ",acl");
+
+        RETURN(0);
+}
