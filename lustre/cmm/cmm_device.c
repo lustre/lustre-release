@@ -190,17 +190,23 @@ static int cmm_add_mdc(const struct lu_env *env,
         }
         spin_unlock(&cm->cmm_tgt_guard);
         ld = ldt->ldt_ops->ldto_device_alloc(env, ldt, cfg);
+        if (IS_ERR(ld))
+                RETURN(PTR_ERR(ld));
+
         ld->ld_site = cmm2lu_dev(cm)->ld_site;
 
         rc = ldt->ldt_ops->ldto_device_init(env, ld, NULL, NULL);
         if (rc) {
                 ldt->ldt_ops->ldto_device_free(env, ld);
-                RETURN (rc);
+                RETURN(rc);
         }
         /* pass config to the just created MDC */
         rc = ld->ld_ops->ldo_process_config(env, ld, cfg);
-        if (rc)
+        if (rc) {
+                ldt->ldt_ops->ldto_device_fini(env, ld);
+                ldt->ldt_ops->ldto_device_free(env, ld);
                 RETURN(rc);
+        }
 
         spin_lock(&cm->cmm_tgt_guard);
         list_for_each_entry_safe(mc, tmp, &cm->cmm_targets,
