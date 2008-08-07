@@ -1,5 +1,5 @@
 lnxmaj="2.6.5"
-lnxrel="7.311"
+lnxrel="7.312"
 
 KERNEL=linux-$lnxmaj-$lnxrel.tar.bz2
 # they include our patches
