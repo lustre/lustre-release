@@ -3182,6 +3182,9 @@ num_inodes() {
 }
 
 test_76() { # bug 1443
+	do_facet mds $LCTL get_param version | grep -q ^lustre.*1.7 && \
+		skip "skipping test for 1.8" && return 0
+ 
 	DETH=$(grep deathrow /proc/kallsyms /proc/ksyms 2> /dev/null | wc -l)
 	[ $DETH -eq 0 ] && skip "No _iget." && return 0
 	BEFORE_INODES=`num_inodes`
