@@ -39,6 +39,13 @@ tbd Sun Microsystems, Inc.
 	  old (verbose) output can be obtained by using -v option.
 
 Severity   : enhancement
+Bugzilla   : 16581
+Description: Add man pages for llobdstat(8), llstat(8), plot-llstat(8),
+           : l_getgroups(8), lst(8), routerstat(8)
+Details    : included man pages for llobdstat(8), llstat(8),
+           : plot-llstat(8), l_getgroups(8), lst(8), routerstat(8)
+
+Severity   : enhancement
 Bugzilla   : 16208
 Description: Implement lustre ll_show_options method.
 
