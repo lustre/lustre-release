@@ -39,6 +39,10 @@ tbd Sun Microsystems, Inc.
 	  old (verbose) output can be obtained by using -v option.
 
 Severity   : enhancement
+Bugzilla   : 16208
+Description: Implement lustre ll_show_options method.
+
+Severity   : enhancement
 Bugzilla   : 16188
 Description: Update to SLES9 kernel-2.6.5-7.312.
 

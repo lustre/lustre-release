@@ -66,6 +66,7 @@ struct super_operations lustre_super_operations =
         .fh_to_dentry   = ll_fh_to_dentry,
         .dentry_to_fh   = ll_dentry_to_fh,
         .remount_fs     = ll_remount_fs,
+        .show_options   = ll_show_options,
 };
 
 
