@@ -1,11 +1,11 @@
 A large part of this code is from the generic VFS code in fs/ioctl.c in the
 upstream kernel.
 
-Index: linux-2.6.16.60-0.23/fs/ext3/ioctl.c
+Index: linux-2.6.9-67.0.22/fs/ext3/ioctl.c
 ===================================================================
---- linux-2.6.16.60-0.23.orig/fs/ext3/ioctl.c
-+++ linux-2.6.16.60-0.23/fs/ext3/ioctl.c
-@@ -15,7 +15,159 @@
+--- linux-2.6.9-67.0.22.orig/fs/ext3/ioctl.c
++++ linux-2.6.9-67.0.22/fs/ext3/ioctl.c
+@@ -14,7 +14,159 @@
  #include <linux/time.h>
  #include <asm/uaccess.h>
  #include <linux/namei.h>
@@ -165,7 +165,7 @@ Index: linux-2.6.16.60-0.23/fs/ext3/ioctl.c
  
  int ext3_ioctl (struct inode * inode, struct file * filp, unsigned int cmd,
  		unsigned long arg)
-@@ -262,7 +414,9 @@ flags_err:
+@@ -244,7 +396,9 @@ flags_err:
  
  		return err;
  	}
@@ -176,11 +176,11 @@ Index: linux-2.6.16.60-0.23/fs/ext3/ioctl.c
  
  	default:
  		return -ENOTTY;
-Index: linux-2.6.16.60-0.23/include/linux/ext3_fs.h
+Index: linux-2.6.9-67.0.22/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.16.60-0.23.orig/include/linux/ext3_fs.h
-+++ linux-2.6.16.60-0.23/include/linux/ext3_fs.h
-@@ -260,15 +260,19 @@ struct ext3_new_group_data {
+--- linux-2.6.9-67.0.22.orig/include/linux/ext3_fs.h
++++ linux-2.6.9-67.0.22/include/linux/ext3_fs.h
+@@ -259,15 +259,19 @@ struct ext3_new_group_data {
  #define	EXT3_IOC_SETFLAGS		_IOW('f', 2, long)
  #define	EXT3_IOC_GETVERSION		_IOR('f', 3, long)
  #define	EXT3_IOC_SETVERSION		_IOW('f', 4, long)
@@ -201,8 +201,8 @@ Index: linux-2.6.16.60-0.23/include/linux/ext3_fs.h
 +#define EXT3_FIEMAP_FLAGS_COMPAT (FIEMAP_FLAG_SYNC)
  
  /*
-  *  Mount options
-@@ -996,6 +1000,9 @@ extern int ext3_writepage_trans_blocks(s
+  * Structure of an inode on the disk
+@@ -969,6 +973,9 @@ extern void ext3_set_aops(struct inode *
  /* ioctl.c */
  extern int ext3_ioctl (struct inode *, struct file *, unsigned int,
  		       unsigned long);
@@ -212,10 +212,10 @@ Index: linux-2.6.16.60-0.23/include/linux/ext3_fs.h
  
  /* namei.c */
  extern int ext3_orphan_add(handle_t *, struct inode *);
-Index: linux-2.6.16.60-0.23/include/linux/ext3_extents.h
+Index: linux-2.6.9-67.0.22/include/linux/ext3_extents.h
 ===================================================================
---- linux-2.6.16.60-0.23.orig/include/linux/ext3_extents.h
-+++ linux-2.6.16.60-0.23/include/linux/ext3_extents.h
+--- linux-2.6.9-67.0.22.orig/include/linux/ext3_extents.h
++++ linux-2.6.9-67.0.22/include/linux/ext3_extents.h
 @@ -170,7 +170,10 @@ struct ext3_extents_helpers {
   */
  typedef int (*ext_prepare_callback)(struct ext3_extents_tree *,
@@ -254,7 +254,7 @@ Index: linux-2.6.16.60-0.23/include/linux/ext3_extents.h
  
  #define EXT_FIRST_EXTENT(__hdr__) \
  	((struct ext3_extent *) (((char *) (__hdr__)) +		\
-@@ -242,6 +264,12 @@ struct ext3_extent_tree_stats {
+@@ -244,6 +266,12 @@ struct ext3_extent_tree_stats {
  	int leaf_num;
  };
  
@@ -267,10 +267,10 @@ Index: linux-2.6.16.60-0.23/include/linux/ext3_extents.h
  extern int ext3_ext_search_left(struct ext3_extents_tree *, struct ext3_ext_path *, unsigned long *, unsigned long *);
  extern int ext3_ext_search_right(struct ext3_extents_tree *, struct ext3_ext_path *, unsigned long *, unsigned long *);
  extern void ext3_init_tree_desc(struct ext3_extents_tree *, struct inode *);
-Index: linux-2.6.16.60-0.23/fs/ext3/extents.c
+Index: linux-2.6.9-67.0.22/fs/ext3/extents.c
 ===================================================================
---- linux-2.6.16.60-0.23.orig/fs/ext3/extents.c
-+++ linux-2.6.16.60-0.23/fs/ext3/extents.c
+--- linux-2.6.9-67.0.22.orig/fs/ext3/extents.c
++++ linux-2.6.9-67.0.22/fs/ext3/extents.c
 @@ -41,6 +41,7 @@
  #include <linux/string.h>
  #include <linux/slab.h>
@@ -279,7 +279,7 @@ Index: linux-2.6.16.60-0.23/fs/ext3/extents.c
  #include <asm/uaccess.h>
  
  
-@@ -1488,7 +1489,7 @@ int ext3_ext_walk_space(struct ext3_exte
+@@ -1489,7 +1490,7 @@ int ext3_ext_walk_space(struct ext3_exte
  
  		EXT_ASSERT(cbex.ec_len > 0);
  		EXT_ASSERT(path[depth].p_hdr);
@@ -288,12 +288,10 @@ Index: linux-2.6.16.60-0.23/fs/ext3/extents.c
  		ext3_ext_drop_refs(path);
  
  		if (err < 0)
-@@ -2502,7 +2503,109 @@ int ext3_ext_calc_blockmap_metadata(stru
- 	ext3_init_tree_desc(&tree, inode);
+@@ -2504,6 +2505,108 @@ int ext3_ext_calc_blockmap_metadata(stru
  	return ext3_ext_calc_metadata_amount(&tree, blocks);
  }
--	
-+
+ 
 +/*
 + * Callback function called for each extent to gather FIEMAP information.
 + */
@@ -399,10 +397,10 @@ Index: linux-2.6.16.60-0.23/fs/ext3/extents.c
  EXPORT_SYMBOL(ext3_init_tree_desc);
  EXPORT_SYMBOL(ext3_mark_inode_dirty);
  EXPORT_SYMBOL(ext3_ext_invalidate_cache);
-Index: linux-2.6.16.60-0.23/fs/ext3/fiemap.h
+Index: linux-2.6.9-67.0.22/fs/ext3/fiemap.h
 ===================================================================
 --- /dev/null
-+++ linux-2.6.16.60-0.23/fs/ext3/fiemap.h
++++ linux-2.6.9-67.0.22/fs/ext3/fiemap.h
 @@ -0,0 +1,84 @@
 +/*
 + * FIEMAP ioctl infrastructure.
