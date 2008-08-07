@@ -13,6 +13,13 @@ tbd  Sun Microsystems, Inc.
         removed cwd "./" (refer to Bugzilla 14399).
 
 Severity   : enhancement
+Bugzilla   : 16581
+Description: Add man pages for llobdstat(8), llstat(8), plot-llstat(8),
+           : l_getgroups(8), lst(8), routerstat(8)
+Details    : included man pages for llobdstat(8), llstat(8),
+           : plot-llstat(8), l_getgroups(8), lst(8), routerstat(8)
+
+Severity   : enhancement
 Bugzilla   : 16091
 Description: configure's --enable-quota should check the 
            : kernel .config for CONFIG_QUOTA
