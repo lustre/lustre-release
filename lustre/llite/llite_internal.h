@@ -853,6 +853,7 @@ void ll_umount_begin(struct vfsmount *vfsmnt, int flags);
 void ll_umount_begin(struct super_block *sb);
 #endif
 int ll_remount_fs(struct super_block *sb, int *flags, char *data);
+int ll_show_options(struct seq_file *seq, struct vfsmount *vfs);
 int ll_prep_inode(struct obd_export *exp, struct inode **inode,
                   struct ptlrpc_request *req, int offset, struct super_block *);
 void lustre_dump_dentry(struct dentry *, int recur);
