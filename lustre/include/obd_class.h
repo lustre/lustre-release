@@ -1020,6 +1020,7 @@ static inline int obd_statfs_async(struct obd_device *obd,
                 spin_lock(&obd->obd_osfs_lock);
                 memcpy(oinfo->oi_osfs, &obd->obd_osfs, sizeof(*oinfo->oi_osfs));
                 spin_unlock(&obd->obd_osfs_lock);
+                oinfo->oi_flags |= OBD_STATFS_FROM_CACHE;
                 if (oinfo->oi_cb_up)
                         oinfo->oi_cb_up(oinfo, 0);
         }
