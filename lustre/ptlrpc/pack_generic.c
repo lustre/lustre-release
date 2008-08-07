@@ -1515,6 +1515,11 @@ void lustre_swab_ptlrpc_body(struct ptlrpc_body *b)
         __swab32s (&b->pb_service_time);
         __swab32s (&b->pb_limit);
         __swab64s (&b->pb_slv);
+        __swab64s (&b->pb_pre_versions[0]);
+        __swab64s (&b->pb_pre_versions[1]);
+        __swab64s (&b->pb_pre_versions[2]);
+        __swab64s (&b->pb_pre_versions[3]);
+        CLASSERT(offsetof(typeof(*b), pb_padding) != 0);
 }
 
 void lustre_swab_connect(struct obd_connect_data *ocd)

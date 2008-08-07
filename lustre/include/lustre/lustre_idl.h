@@ -498,6 +498,7 @@ struct lustre_msg_v2 {
 };
 
 /* without gss, ptlrpc_body is put at the first buffer. */
+#define PTLRPC_NUM_VERSIONS     4
 struct ptlrpc_body {
         struct lustre_handle pb_handle;
         __u32 pb_type;
@@ -515,6 +516,10 @@ struct ptlrpc_body {
         __u32 pb_service_time; /* for rep, actual service time */
         __u32 pb_limit;
         __u64 pb_slv;
+        /* VBR: pre-versions */
+        __u64 pb_pre_versions[PTLRPC_NUM_VERSIONS];
+        /* padding for future needs */
+        __u64 pb_padding[4];
 };
 
 extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
@@ -552,8 +557,10 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
  * This was used in early prototypes of adaptive timeouts, and while there
  * shouldn't be any users of that code there also isn't a need for using this
  * bits. Defer usage until at least 1.10 to avoid potential conflict. */
-#define MSG_REQ_REPLAY_DONE       0x0010
-#define MSG_LOCK_REPLAY_DONE      0x0020
+#define MSG_DELAY_REPLAY          0x0010
+#define MSG_VERSION_REPLAY        0x0020
+#define MSG_REQ_REPLAY_DONE       0x0040
+#define MSG_LOCK_REPLAY_DONE      0x0080
 
 /*
  * Flags for all connect opcodes (MDS_CONNECT, OST_CONNECT)
