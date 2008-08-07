@@ -243,8 +243,8 @@ int lov_prep_cancel_set(struct obd_export *exp, struct obd_info *oinfo,
 int lov_fini_cancel_set(struct lov_request_set *set);
 int lov_prep_statfs_set(struct obd_device *obd, struct obd_info *oinfo,
                         struct lov_request_set **reqset);
-void lov_update_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                       struct obd_statfs *lov_sfs, int success);
+void lov_update_statfs(struct obd_statfs *osfs, struct obd_statfs *lov_sfs,
+                       int success);
 int lov_fini_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                     int success);
 int lov_fini_statfs_set(struct lov_request_set *set);
