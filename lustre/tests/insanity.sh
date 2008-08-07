@@ -38,9 +38,6 @@ assert_env LIVE_CLIENT FSNAME
 # FAIL_CLIENTS list should not contain the LIVE_CLIENT
 FAIL_CLIENTS=$(echo " $FAIL_CLIENTS " | sed -re "s/\s+$LIVE_CLIENT\s+/ /g")
 
-# This can be a regexp, to allow more clients
-CLIENTS=${CLIENTS:-"`comma_list $LIVE_CLIENT $FAIL_CLIENTS`"}
-
 DIR=${DIR:-$MOUNT}
 
 #####
