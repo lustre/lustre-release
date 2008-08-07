@@ -2,7 +2,7 @@ tbd Sun Microsystems, Inc.
 	* version 1.8.0
 	* Support for kernels:
 	 2.6.5-7.311 (SLES 9),
-	 2.6.9-67.0.20.EL (RHEL 4),
+	 2.6.9-67.0.22.EL (RHEL 4),
 	 2.6.16.60-0.23 (SLES 10),
 	 2.6.18-92.1.6.el5 (RHEL 5),
 	 2.6.22.14 vanilla (kernel.org)
@@ -37,6 +37,10 @@ tbd Sun Microsystems, Inc.
 	  For more information, please refer to bugzilla 13904.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
+
+Severity   : enhancement
+Bugzilla   : 16503
+Description: Update to RHEL4 kernel-2.6.9-67.0.22.EL.
 
 Severity   : normal
 Bugzilla   : 16317
