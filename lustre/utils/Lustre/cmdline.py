@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 # GPL HEADER START
 #
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -15,7 +14,8 @@
 # in the LICENSE file that accompanied this code).
 #
 # You should have received a copy of the GNU General Public License
-# version 2 along with this program; If not, see [sun.com URL with a
+# version 2 along with this program; If not, see
+# http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
 # copy of GPLv2].
 #
 # Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
