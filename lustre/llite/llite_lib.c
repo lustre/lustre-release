@@ -866,10 +866,14 @@ static int ll_options(char *options, int *flags)
                         /* Ignore deprecated mount option.  The client will
                          * always try to mount with ACL support, whether this
                          * is used depends on whether server supports it. */
+                        LCONSOLE_ERROR_MSG(0x152, "Ignoring deprecated "
+                                                  "mount option 'acl'.\n");
                         goto next;
                 }
                 tmp = ll_set_opt("noacl", s1, LL_SBI_ACL);
                 if (tmp) {
+                        LCONSOLE_ERROR_MSG(0x152, "Ignoring deprecated "
+                                                  "mount option 'noacl'.\n");
                         goto next;
                 }
 
@@ -2355,4 +2359,29 @@ int ll_process_config(struct lustre_cfg *lcfg)
         rc = class_process_proc_param(PARAM_LLITE, lvars.obd_vars,
                                       lcfg, sb);
         return(rc);
+}
+
+int ll_show_options(struct seq_file *seq, struct vfsmount *vfs)
+{
+        struct ll_sb_info *sbi;
+
+        LASSERT((seq != NULL) && (vfs != NULL));
+        sbi = ll_s2sbi(vfs->mnt_sb);
+
+        if (sbi->ll_flags & LL_SBI_NOLCK)
+                seq_puts(seq, ",nolock");
+
+        if (sbi->ll_flags & LL_SBI_FLOCK)
+                seq_puts(seq, ",flock");
+
+        if (sbi->ll_flags & LL_SBI_LOCALFLOCK)
+                seq_puts(seq, ",localflock");
+
+        if (sbi->ll_flags & LL_SBI_USER_XATTR)
+                seq_puts(seq, ",user_xattr");
+
+        if (sbi->ll_flags & LL_SBI_ACL)
+                seq_puts(seq, ",acl");
+
+        RETURN(0);
 }
