@@ -54,7 +54,7 @@
 #include <linux/workqueue.h>
 #include <linux/mount.h>
 
-#include <linux/lustre_acl.h>
+#include <lustre_acl.h>
 #include <obd_class.h>
 #include <lustre_dlm.h>
 #include <obd_lov.h>

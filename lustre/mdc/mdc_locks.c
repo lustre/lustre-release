@@ -48,7 +48,7 @@
 # include <liblustre.h>
 #endif
 
-#include <linux/lustre_acl.h>
+#include <lustre_acl.h>
 #include <obd_class.h>
 #include <lustre_dlm.h>
 /* fid_res_name_eq() */

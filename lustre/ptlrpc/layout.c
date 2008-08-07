@@ -66,7 +66,7 @@
 #endif
 /* struct ptlrpc_request, lustre_msg* */
 #include <lustre_req_layout.h>
-#include <linux/lustre_acl.h>
+#include <lustre_acl.h>
 
 /*
  * empty set of fields... for suitable definition of emptiness.

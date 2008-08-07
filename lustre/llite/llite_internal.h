@@ -37,17 +37,7 @@
 #ifndef LLITE_INTERNAL_H
 #define LLITE_INTERNAL_H
 
-#include <linux/lustre_acl.h>
-
-#ifdef CONFIG_FS_POSIX_ACL
-# include <linux/fs.h>
-#ifdef HAVE_XATTR_ACL
-# include <linux/xattr_acl.h>
-#endif /* HAVE_XATTR_ACL */
-#ifdef HAVE_LINUX_POSIX_ACL_XATTR_H
-# include <linux/posix_acl_xattr.h>
-#endif /* HAVE_LINUX_POSIX_ACL_XATTR_H */
-#endif /* CONFIG_FS_POSIX_ACL */
+#include <lustre_acl.h>
 
 #include <lustre_debug.h>
 #include <lustre_ver.h>

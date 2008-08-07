@@ -1401,7 +1401,7 @@ AC_TRY_RUN([
 #  endif
 # endif
 
-#include <linux/lustre_acl.h>
+#include <lustre_acl.h>
 
 #include <stdio.h>
 

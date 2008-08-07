@@ -48,7 +48,7 @@
 #include <obd.h>
 #include <lustre_fld.h>
 #include <md_object.h>
-#include <linux/lustre_acl.h>
+#include <lustre_acl.h>
 
 
 struct cmm_device {

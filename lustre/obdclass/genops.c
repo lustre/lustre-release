@@ -1072,7 +1072,7 @@ static void class_disconnect_export_list(struct list_head *list, int flags)
                 spin_unlock(&fake_exp->exp_lock);
 
                 CDEBUG(D_HA, "%s: disconnecting export at %s (%p), "
-                       "last request at %ld\n",
+                       "last request at "CFS_TIME_T"\n",
                        exp->exp_obd->obd_name, obd_export_nid2str(exp),
                        exp, exp->exp_last_request_time);
                 rc = obd_disconnect(fake_exp);

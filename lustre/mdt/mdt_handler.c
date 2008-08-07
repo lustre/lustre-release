@@ -67,7 +67,7 @@
 #include <lustre_mds.h>
 #include <lustre_mdt.h>
 #include "mdt_internal.h"
-#include <linux/lustre_acl.h>
+#include <lustre_acl.h>
 #include <lustre_param.h>
 
 mdl_mode_t mdt_mdl_lock_modes[] = {

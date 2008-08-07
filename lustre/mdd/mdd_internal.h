@@ -43,7 +43,7 @@
 
 #include <asm/semaphore.h>
 
-#include <linux/lustre_acl.h>
+#include <lustre_acl.h>
 #include <lustre_eacl.h>
 #include <obd.h>
 #include <md_object.h>

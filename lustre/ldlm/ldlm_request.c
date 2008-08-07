@@ -81,8 +81,8 @@ int ldlm_expired_completion_wait(void *data)
 			   CFS_DURATION_T"s ago); not entering recovery in "
                            "server code, just going back to sleep",
 			   lock->l_enqueued_time.tv_sec,
-                           cfs_time_current_sec() -
-                           lock->l_enqueued_time.tv_sec);
+                           cfs_time_sub(cfs_time_current_sec(),
+                           lock->l_enqueued_time.tv_sec));
                 if (cfs_time_after(cfs_time_current(), next_dump)) {
                         last_dump = next_dump;
                         next_dump = cfs_time_shift(300);
@@ -100,7 +100,8 @@ int ldlm_expired_completion_wait(void *data)
         LDLM_ERROR(lock, "lock timed out (enqueued at "CFS_TIME_T", "
                   CFS_DURATION_T"s ago), entering recovery for %s@%s",
                   lock->l_enqueued_time.tv_sec,
-                  cfs_time_current_sec() - lock->l_enqueued_time.tv_sec,
+                  cfs_time_sub(cfs_time_current_sec(),
+                  lock->l_enqueued_time.tv_sec),
                   obd2cli_tgt(obd), imp->imp_connection->c_remote_uuid.uuid);
 
         RETURN(0);
@@ -206,8 +207,10 @@ noreproc:
                 RETURN(rc);
         }
 
-        LDLM_DEBUG(lock, "client-side enqueue waking up: granted after %lds",
-                   cfs_time_current_sec() - lock->l_enqueued_time.tv_sec);
+        LDLM_DEBUG(lock, "client-side enqueue waking up: granted after "
+                   CFS_DURATION_T"s",
+                   cfs_time_sub(cfs_time_current_sec(),
+                   lock->l_enqueued_time.tv_sec));
 
         /* Update our time estimate */
         at_add(&lock->l_resource->lr_namespace->ns_at_estimate,

@@ -670,8 +670,8 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
         if ((lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT) == 0)
                 return(-ENOSYS);
 
-        DEBUG_REQ(D_ADAPTTO, req, "add timed %lds",
-                  req->rq_deadline - cfs_time_current_sec());
+        DEBUG_REQ(D_ADAPTTO, req, "add timed "CFS_DURATION_T"s",
+                  cfs_time_sub(req->rq_deadline, cfs_time_current_sec()));
 
         spin_lock(&svc->srv_at_lock);
 
@@ -711,7 +711,7 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
         struct ptlrpc_service *svc = req->rq_rqbd->rqbd_service;
         struct ptlrpc_request *reqcopy;
         struct lustre_msg *reqmsg;
-        long olddl = req->rq_deadline - cfs_time_current_sec();
+        cfs_duration_t olddl = req->rq_deadline - cfs_time_current_sec();
         time_t newdl;
         int rc;
         ENTRY;
@@ -753,9 +753,10 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
         if (req->rq_deadline >= newdl) {
                 /* We're not adding any time, no need to send an early reply
                    (e.g. maybe at adaptive_max) */
-                CDEBUG(D_ADAPTTO, "x"LPU64": Couldn't add any time (%ld/%ld), "
+                CDEBUG(D_ADAPTTO, "x"LPU64": Couldn't add any time ("
+                       CFS_DURATION_T"/"CFS_DURATION_T"), "
                        "not sending early reply\n", req->rq_xid, olddl,
-                       newdl - cfs_time_current_sec());
+                       cfs_time_sub(newdl, cfs_time_current_sec()));
                 RETURN(-ETIMEDOUT);
         }
 
@@ -1000,8 +1001,9 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
 
         /* req_in handling should/must be fast */
         if (cfs_time_current_sec() - req->rq_arrival_time.tv_sec > 5)
-                DEBUG_REQ(D_WARNING, req, "Slow req_in handling %lus",
-                          cfs_time_current_sec() - req->rq_arrival_time.tv_sec);
+                DEBUG_REQ(D_WARNING, req, "Slow req_in handling "CFS_DURATION_T"s",
+                          cfs_time_sub(cfs_time_current_sec(),
+                                       req->rq_arrival_time.tv_sec));
 
         /* Set rpc server deadline and add it to the timed list */
         deadline = (lustre_msghdr_get_flags(req->rq_reqmsg) &
@@ -1112,11 +1114,12 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
            The deadline is increased if we send an early reply. */
         if (cfs_time_current_sec() > request->rq_deadline) {
                 DEBUG_REQ(D_ERROR, request, "Dropping timed-out request from %s"
-                          ": deadline %ld%+lds ago\n",
+                          ": deadline "CFS_DURATION_T":"CFS_DURATION_T"s ago\n",
                           libcfs_id2str(request->rq_peer),
-                          request->rq_deadline -
-                          request->rq_arrival_time.tv_sec,
-                          cfs_time_current_sec() - request->rq_deadline);
+                          cfs_time_sub(request->rq_deadline,
+                          request->rq_arrival_time.tv_sec),
+                          cfs_time_sub(cfs_time_current_sec(),
+                          request->rq_deadline));
                 goto put_rpc_export;
         }
 
@@ -1160,10 +1163,12 @@ put_conn:
 
         if (unlikely(cfs_time_current_sec() > request->rq_deadline)) {
                 DEBUG_REQ(D_WARNING, request, "Request x"LPU64" took longer "
-                          "than estimated (%ld%+lds); client may timeout.",
-                          request->rq_xid, request->rq_deadline -
-                          request->rq_arrival_time.tv_sec,
-                          cfs_time_current_sec() - request->rq_deadline);
+                          "than estimated ("CFS_DURATION_T":"CFS_DURATION_T"s);"
+                          " client may timeout.",
+                          request->rq_xid, cfs_time_sub(request->rq_deadline,
+                          request->rq_arrival_time.tv_sec),
+                          cfs_time_sub(cfs_time_current_sec(),
+                          request->rq_deadline));
         }
 
         do_gettimeofday(&work_end);
@@ -1189,9 +1194,11 @@ put_conn:
         }
         if (unlikely(request->rq_early_count)) {
                 DEBUG_REQ(D_ADAPTTO, request,
-                          "sent %d early replies before finishing in %lds",
+                          "sent %d early replies before finishing in "
+                          CFS_DURATION_T"s",
                           request->rq_early_count,
-                          work_end.tv_sec - request->rq_arrival_time.tv_sec);
+                          cfs_time_sub(work_end.tv_sec,
+                          request->rq_arrival_time.tv_sec));
         }
 
 out_req:

@@ -63,11 +63,6 @@
 #include <lustre_fid.h>
 #include "lmv_internal.h"
 
-/* not defined for liblustre building */
-#if !defined(ATOMIC_INIT)
-#define ATOMIC_INIT(val) { (val) }
-#endif
-
 /* object cache. */
 cfs_mem_cache_t *obj_cache;
 atomic_t obj_cache_count = ATOMIC_INIT(0);

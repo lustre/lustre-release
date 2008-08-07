@@ -279,8 +279,9 @@ static void ptlrpc_at_adj_net_latency(struct ptlrpc_request *req)
         /* Network latency is total time less server processing time */
         nl = max_t(int, now - req->rq_sent - st, 0) + 1/*st rounding*/;
         if (st > now - req->rq_sent + 2 /* rounding */)
-                CERROR("Reported service time %u > total measured time %ld\n",
-                       st, now - req->rq_sent);
+                CERROR("Reported service time %u > total measured time "
+                       CFS_DURATION_T"\n",
+                       st, cfs_time_sub(now, req->rq_sent));
 
         oldnl = at_add(&at->iat_net_latency, nl);
         if (oldnl != 0)
@@ -347,9 +348,10 @@ static int ptlrpc_at_recv_early_reply(struct ptlrpc_request *req) {
                     ptlrpc_at_get_net_latency(req);
 
         DEBUG_REQ(D_ADAPTTO, req,
-                  "Early reply #%d, new deadline in %lds (%+lds)",
-                  req->rq_early_count, req->rq_deadline -
-                  cfs_time_current_sec(), req->rq_deadline - olddl);
+                  "Early reply #%d, new deadline in "CFS_DURATION_T"s ("
+                  CFS_DURATION_T"s)", req->rq_early_count,
+                  cfs_time_sub(req->rq_deadline, cfs_time_current_sec()),
+                  cfs_time_sub(req->rq_deadline, olddl));
 
 out_cleanup:
         sptlrpc_cli_finish_early_reply(req);
@@ -1399,17 +1401,19 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
         ENTRY;
 
         DEBUG_REQ(D_ERROR|D_NETERROR, req,
-                  "%s (sent at %lu, "CFS_DURATION_T"s ago)",
+                  "%s (sent at "CFS_TIME_T", "CFS_DURATION_T"s ago)",
                   req->rq_net_err ? "network error" : "timeout",
-                  (long)req->rq_sent, cfs_time_current_sec() - req->rq_sent);
+                  req->rq_sent, cfs_time_sub(cfs_time_current_sec(),
+                  req->rq_sent));
 
         if (imp) {
-                LCONSOLE_WARN("Request x"LPU64" sent from %s to NID %s %lus ago"
-                              " has timed out (limit %lus).\n", req->rq_xid,
+                LCONSOLE_WARN("Request x"LPU64" sent from %s to NID %s "
+                              CFS_DURATION_T"s ago has timed out "
+                              "(limit "CFS_DURATION_T"s).\n", req->rq_xid,
                               req->rq_import->imp_obd->obd_name,
                               libcfs_nid2str(imp->imp_connection->c_peer.nid),
-                              cfs_time_current_sec() - req->rq_sent,
-                              req->rq_deadline - req->rq_sent);
+                              cfs_time_sub(cfs_time_current_sec(), req->rq_sent),
+                              cfs_time_sub(req->rq_deadline, req->rq_sent));
         }
 
         if (imp != NULL && obd_debug_peer_on_timeout)

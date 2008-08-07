@@ -46,7 +46,7 @@
 
 #define DEBUG_SUBSYSTEM S_SEC
 
-#include <linux/lustre_acl.h>
+#include <lustre_acl.h>
 #include <lustre_eacl.h>
 #include <obd_support.h>
 
