@@ -592,6 +592,9 @@ extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OBD_STATFS_NODELAY      0x0001  /* requests should be send without delay
                                          * and resends for avoid deadlocks */
 
+#define OBD_STATFS_FROM_CACHE   0x0002  /* the statfs callback should not update
+                                         * obd_osfs_age */
+
 /* ost_body.data values for OST_BRW */
 
 #define OBD_BRW_READ            0x01
