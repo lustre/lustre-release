@@ -14,8 +14,8 @@
 # in the LICENSE file that accompanied this code).
 #
 # You should have received a copy of the GNU General Public License
-# version 2 along with this program; If not, see [sun.com URL with a
-# copy of GPLv2].
+# version 2 along with this program; If not, see
+# http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
 #
 # Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
 # CA 95054 USA or visit www.sun.com if you need additional information or
@@ -45,4 +45,3 @@ EXTRA_DIST = lprocfs_status.h lustre_debug.h lustre_lib.h \
   lustre_log.h lustre_compat25.h lustre_fsfilt.h lustre_mds.h obd.h \
   lvfs.h lvfs_linux.h lustre_lite.h  lustre_quota.h \
   lustre_user.h lustre_types.h lustre_patchless_compat.h lustre_intent.h
-
