@@ -1,0 +1,20 @@
+.TH l_getgroups 1 "Jul 7, 2008" Lustre "utilities"
+.SH NAME
+l_getgroups \- Handle Lustre user/group cache upcall
+.SH SYNOPSIS
+.B "l_getgroups [-v] [-d | mdsname] uid"
+.br
+.B "l_getgroups [-v] -s"
+.SH DESCRIPTION
+The group upcall file contains the path to an executable that, when
+properly installed, is invoked to resolve a numeric UID to a group
+membership list. This utility should complete the mds_grp_downcall_data
+data structure (see Data structures) and write it to the
+/proc/fs/lustre/mds/mds-service/group_info pseudo-file.
+.LP
+.B l_getgroups
+is the reference implementation of the user/group cache upcall
+.SH FILES
+/proc/fs/lustre/mds/mds-service/group_upcall
+.SH SEE ALSO
+Lustre Programming Interfaces section of Lustre Operations Manual.
