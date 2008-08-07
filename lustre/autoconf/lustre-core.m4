@@ -551,6 +551,28 @@ AC_DEFUN([LC_XATTR_ACL],
 [])
 ])
 
+#
+# LC_LINUX_FIEMAP_H
+#
+# If we have fiemap.h
+# after 2.6.27 use fiemap.h in include/linux
+#
+AC_DEFUN([LC_LINUX_FIEMAP_H],
+[LB_CHECK_FILE([$LINUX/include/linux/fiemap.h],[
+        AC_MSG_CHECKING([if fiemap.h can be compiled])
+        LB_LINUX_TRY_COMPILE([
+                #include <linux/fiemap.h>
+        ],[],[
+                AC_MSG_RESULT([yes])
+                AC_DEFINE(HAVE_LINUX_FIEMAP_H, 1, [Kernel has fiemap.h])
+        ],[
+                AC_MSG_RESULT([no])
+        ])
+],
+[])
+])
+
+
 AC_DEFUN([LC_STRUCT_INTENT_FILE],
 [AC_MSG_CHECKING([if struct open_intent has a file field])
 LB_LINUX_TRY_COMPILE([

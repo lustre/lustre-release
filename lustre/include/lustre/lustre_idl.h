@@ -96,6 +96,7 @@
 /* Defn's shared with user-space. */
 #include <lustre/lustre_user.h>
 #include <lustre_ver.h>
+#include <lustre/ll_fiemap.h>
 
 /*
  * this file contains all data structures used in Lustre interfaces:
@@ -1546,9 +1547,16 @@ struct ost_body {
         struct  obdo oa;
 };
 
+/* Key for FIEMAP to be used in get_info calls */
+struct ll_fiemap_info_key {
+        char    name[8];
+        struct  obdo oa;
+        struct  ll_user_fiemap fiemap;
+};
 
 extern void lustre_swab_ost_body (struct ost_body *b);
 extern void lustre_swab_ost_last_id(obd_id *id);
+extern void lustre_swab_fiemap(struct ll_user_fiemap *fiemap);
 
 extern void lustre_swab_lov_user_md(struct lov_user_md *lum);
 extern void lustre_swab_lov_user_md_objects(struct lov_user_md *lum);

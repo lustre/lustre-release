@@ -1111,6 +1111,50 @@ check_quota_adjust_qunit(void)
 }
 
 static void
+check_ll_user_fiemap(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT_TYPEDEF(ll_user_fiemap);
+        CHECK_MEMBER_TYPEDEF(ll_user_fiemap, fm_start);
+        CHECK_MEMBER_TYPEDEF(ll_user_fiemap, fm_length);
+        CHECK_MEMBER_TYPEDEF(ll_user_fiemap, fm_flags);
+        CHECK_MEMBER_TYPEDEF(ll_user_fiemap, fm_mapped_extents);
+        CHECK_MEMBER_TYPEDEF(ll_user_fiemap, fm_extent_count);
+        CHECK_MEMBER_TYPEDEF(ll_user_fiemap, fm_reserved);
+        CHECK_MEMBER_TYPEDEF(ll_user_fiemap, fm_extents);
+
+        CHECK_CDEFINE(FIEMAP_FLAG_SYNC);
+        CHECK_CDEFINE(FIEMAP_FLAG_XATTR);
+        CHECK_CDEFINE(FIEMAP_FLAG_DEVICE_ORDER);
+}
+
+static void
+check_ll_fiemap_extent(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT_TYPEDEF(ll_fiemap_extent);
+        CHECK_MEMBER_TYPEDEF(ll_fiemap_extent, fe_logical);
+        CHECK_MEMBER_TYPEDEF(ll_fiemap_extent, fe_physical);
+        CHECK_MEMBER_TYPEDEF(ll_fiemap_extent, fe_length);
+        CHECK_MEMBER_TYPEDEF(ll_fiemap_extent, fe_flags);
+        CHECK_MEMBER_TYPEDEF(ll_fiemap_extent, fe_device);
+
+        CHECK_CDEFINE(FIEMAP_EXTENT_LAST);
+        CHECK_CDEFINE(FIEMAP_EXTENT_UNKNOWN);
+        CHECK_CDEFINE(FIEMAP_EXTENT_DELALLOC);
+        CHECK_CDEFINE(FIEMAP_EXTENT_NO_DIRECT);
+        CHECK_CDEFINE(FIEMAP_EXTENT_SECONDARY);
+        CHECK_CDEFINE(FIEMAP_EXTENT_NET);
+        CHECK_CDEFINE(FIEMAP_EXTENT_DATA_COMPRESSED);
+        CHECK_CDEFINE(FIEMAP_EXTENT_DATA_ENCRYPTED);
+        CHECK_CDEFINE(FIEMAP_EXTENT_NOT_ALIGNED);
+        CHECK_CDEFINE(FIEMAP_EXTENT_DATA_INLINE);
+        CHECK_CDEFINE(FIEMAP_EXTENT_DATA_TAIL);
+        CHECK_CDEFINE(FIEMAP_EXTENT_UNWRITTEN);
+        CHECK_CDEFINE(FIEMAP_EXTENT_MERGED);
+}
+
+static void
 system_string (char *cmdline, char *str, int len)
 {
         int   fds[2];
@@ -1369,6 +1413,8 @@ main(int argc, char **argv)
 #endif
         check_posix_acl_xattr_entry();
         check_posix_acl_xattr_header();
+        check_ll_user_fiemap();
+        check_ll_fiemap_extent();
         printf("#endif\n");
 
 

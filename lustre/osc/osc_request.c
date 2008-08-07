@@ -3494,7 +3494,39 @@ static int osc_get_info(struct obd_export *exp, obd_count keylen,
         out:
                 ptlrpc_req_finished(req);
                 RETURN(rc);
+        } else if (KEY_IS(KEY_FIEMAP)) {
+                struct ptlrpc_request *req;
+                struct ll_user_fiemap *reply;
+                char *bufs[2] = { NULL, key };
+                int size[2] = { sizeof(struct ptlrpc_body), keylen };
+                int rc;
+
+                req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
+                                      OST_GET_INFO, 2, size, bufs);
+                if (req == NULL)
+                        RETURN(-ENOMEM);
+
+                size[REPLY_REC_OFF] = *vallen;
+                ptlrpc_req_set_repsize(req, 2, size);
+
+                rc = ptlrpc_queue_wait(req);
+                if (rc)
+                        GOTO(out1, rc);
+                reply = lustre_swab_repbuf(req, REPLY_REC_OFF, *vallen,
+                                           lustre_swab_fiemap);
+                if (reply == NULL) {
+                        CERROR("Can't unpack FIEMAP reply.\n");
+                        GOTO(out1, rc = -EPROTO);
+                }
+
+                memcpy(val, reply, *vallen);
+
+        out1:
+                ptlrpc_req_finished(req);
+
+                RETURN(rc);
         }
+
         RETURN(-EINVAL);
 }
 

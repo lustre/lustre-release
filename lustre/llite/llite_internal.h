@@ -677,6 +677,9 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
                      int set_default);
 int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmm, 
                      int *lmm_size, struct ptlrpc_request **request);
+int ll_fsync(struct file *file, struct dentry *dentry, int data);
+int ll_fiemap(struct inode *inode, struct ll_user_fiemap *fiemap,
+              int num_bytes);
 
 /* llite/dcache.c */
 extern struct dentry_operations ll_init_d_ops;

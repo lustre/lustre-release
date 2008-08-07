@@ -41,6 +41,7 @@
 #ifndef _LUSTRE_USER_H
 #define _LUSTRE_USER_H
 
+#include <lustre/ll_fiemap.h>
 #if defined(__linux__)
 #include <linux/lustre_user.h>
 #elif defined(__APPLE__)
@@ -61,7 +62,11 @@
 #define EXT3_IOC_SETVERSION             _IOW('f', 4, long)
 #define EXT3_IOC_GETVERSION_OLD         _IOR('v', 1, long)
 #define EXT3_IOC_SETVERSION_OLD         _IOW('v', 2, long)
+#define EXT3_IOC_FIEMAP                 _IOWR('f', 10, struct ll_user_fiemap)
 #endif
+
+/* FIEMAP flags supported by Lustre */
+#define LUSTRE_FIEMAP_FLAGS_COMPAT (FIEMAP_FLAG_SYNC | FIEMAP_FLAG_DEVICE_ORDER)
 
 struct obd_statfs;
 
