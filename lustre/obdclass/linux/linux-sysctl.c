@@ -195,6 +195,7 @@ int LL_PROC_PROTO(proc_pages_max)
 int LL_PROC_PROTO(proc_max_dirty_pages_in_mb)
 {
         int rc = 0;
+        DECLARE_LL_PROC_PPOS_DECL;
 
         if (!table->data || !table->maxlen || !*lenp || (*ppos && !write)) {
                 *lenp = 0;
