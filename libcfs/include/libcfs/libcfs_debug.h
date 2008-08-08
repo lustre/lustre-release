@@ -169,13 +169,21 @@ typedef struct {
 #if defined(__KERNEL__) || (defined(__arch_lib__) && !defined(LUSTRE_UTILS))
 
 #ifdef CDEBUG_ENABLED
+
+/**
+ * Filters out logging messages based on mask and subsystem.
+ */
+static inline int cdebug_show(unsigned int mask, unsigned int subsystem)
+{
+        return mask & D_CANTMASK ||
+                ((libcfs_debug & mask) && (libcfs_subsystem_debug & subsystem));
+}
+
 #define __CDEBUG(cdls, mask, format, a...)                              \
 do {                                                                    \
         CHECK_STACK();                                                  \
                                                                         \
-        if (((mask) & D_CANTMASK) != 0 ||                               \
-            ((libcfs_debug & (mask)) != 0 &&                            \
-             (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))          \
+        if (cdebug_show(mask, DEBUG_SUBSYSTEM))                         \
                 libcfs_debug_msg(cdls, DEBUG_SUBSYSTEM, mask,           \
                                  __FILE__, __FUNCTION__, __LINE__,      \
                                  format, ## a);                         \
@@ -191,10 +199,14 @@ do {                                            \
 } while (0)
 
 #else /* !CDEBUG_ENABLED */
+static inline int cdebug_show(unsigned int mask, unsigned int subsystem)
+{
+        return 0;
+}
 #define CDEBUG(mask, format, a...) (void)(0)
 #define CDEBUG_LIMIT(mask, format, a...) (void)(0)
 #warning "CDEBUG IS DISABLED. THIS SHOULD NEVER BE DONE FOR PRODUCTION!"
-#endif 
+#endif
 
 #else /* !__KERNEL__ && (!__arch_lib__ || LUSTRE_UTILS) */
 
@@ -305,9 +317,7 @@ extern int libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls,
 #define cdebug_va(cdls, mask, file, func, line, fmt, args)      do {          \
         CHECK_STACK();                                                        \
                                                                               \
-        if (((mask) & D_CANTMASK) != 0 ||                                     \
-            ((libcfs_debug & (mask)) != 0 &&                                  \
-             (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))                \
+        if (cdebug_show(mask, DEBUG_SUBSYSTEM))                               \
                 libcfs_debug_vmsg(cdls, DEBUG_SUBSYSTEM, (mask),              \
                                   (file), (func), (line), fmt, args);         \
 } while(0);
@@ -315,9 +325,7 @@ extern int libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls,
 #define cdebug(cdls, mask, file, func, line, fmt, a...) do {                  \
         CHECK_STACK();                                                        \
                                                                               \
-        if (((mask) & D_CANTMASK) != 0 ||                                     \
-            ((libcfs_debug & (mask)) != 0 &&                                  \
-             (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))                \
+        if (cdebug_show(mask, DEBUG_SUBSYSTEM))                               \
                 libcfs_debug_msg(cdls, DEBUG_SUBSYSTEM, (mask),               \
                                  (file), (func), (line), fmt, ## a);          \
 } while(0);
