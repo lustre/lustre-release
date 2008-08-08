@@ -86,6 +86,7 @@ cfs_mem_cache_create(const char *, size_t, size_t, unsigned long);
 int cfs_mem_cache_destroy(cfs_mem_cache_t *c);
 void *cfs_mem_cache_alloc(cfs_mem_cache_t *c, int gfp);
 void cfs_mem_cache_free(cfs_mem_cache_t *c, void *addr);
+int cfs_mem_is_in_cache(const void *addr, const cfs_mem_cache_t *kmem);
 
 /*
  * Copy to/from user

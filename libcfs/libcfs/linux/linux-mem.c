@@ -148,6 +148,28 @@ cfs_mem_cache_free(cfs_mem_cache_t *cachep, void *objp)
         return kmem_cache_free(cachep, objp);
 }
 
+/**
+ * Returns true if \a addr is an address of an allocated object in a slab \a
+ * kmem. Used in assertions. This check is optimistically imprecise, i.e., it
+ * occasionally returns true for the incorrect addresses, but if it returns
+ * false, then the addresses is guaranteed to be incorrect.
+ */
+int cfs_mem_is_in_cache(const void *addr, const cfs_mem_cache_t *kmem)
+{
+        struct page *page;
+
+        /*
+         * XXX Copy of mm/slab.c:virt_to_cache(). It won't work with other
+         * allocators, like slub and slob.
+         */
+        page = virt_to_page(addr);
+        if (unlikely(PageCompound(page)))
+                page = (struct page *)page_private(page);
+        return PageSlab(page) && ((void *)page->lru.next) == kmem;
+}
+EXPORT_SYMBOL(cfs_mem_is_in_cache);
+
+
 EXPORT_SYMBOL(cfs_alloc);
 EXPORT_SYMBOL(cfs_free);
 EXPORT_SYMBOL(cfs_alloc_large);

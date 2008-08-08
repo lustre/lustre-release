@@ -47,7 +47,7 @@
 
 #ifndef __KERNEL__
 #error This include is only for kernel use.
-#endif 
+#endif
 
 #include <linux/mm.h>
 #include <linux/vmalloc.h>
@@ -129,6 +129,7 @@ extern cfs_mem_cache_t * cfs_mem_cache_create (const char *, size_t, size_t, uns
 extern int cfs_mem_cache_destroy ( cfs_mem_cache_t * );
 extern void *cfs_mem_cache_alloc ( cfs_mem_cache_t *, int);
 extern void cfs_mem_cache_free ( cfs_mem_cache_t *, void *);
+extern int cfs_mem_is_in_cache(const void *addr, const cfs_mem_cache_t *kmem);
 
 /*
  */

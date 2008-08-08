@@ -153,3 +153,14 @@ void cfs_mem_cache_free(cfs_mem_cache_t *c, void *addr)
 {
         cfs_free(addr);
 }
+
+/**
+ * Returns true if \a addr is an address of an allocated object in a slab \a
+ * kmem. Used in assertions. This check is optimistically imprecise, i.e., it
+ * occasionally returns true for the incorrect addresses, but if it returns
+ * false, then the addresses is guaranteed to be incorrect.
+ */
+int cfs_mem_is_in_cache(const void *addr, const cfs_mem_cache_t *kmem)
+{
+        return 1;
+}
