@@ -127,7 +127,9 @@ struct page {
 
 typedef struct page cfs_page_t;
 
-#ifndef PAGE_SIZE
+/* ppc64 defined PAGE_SIZE but without PAGE_SHIFT
+ */
+#if !defined(PAGE_SHIFT) || !defined(PAGE_SIZE)
 
 /* 4K */
 #define CFS_PAGE_SHIFT 12
