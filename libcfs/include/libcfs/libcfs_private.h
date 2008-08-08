@@ -116,12 +116,22 @@
 
 
 #endif /* !LASSERT_CHECKED */
-
-
 #else /* !LIBCFS_DEBUG */
-#define LASSERT(e) ((void)(0))
-#define LASSERTF(cond, fmt...) ((void)(0))
+/* sizeof is to use expression without evaluating it. */
+# define LASSERT(e) ((void)sizeof!!(e))
+# define LASSERTF(cond, fmt...) ((void)sizeof!!(cond))
 #endif /* !LIBCFS_DEBUG */
+
+#ifdef INVARIANT_CHECK
+/**
+ * This is for more expensive checks that one doesn't want to be enabled all
+ * the time. LINVRNT() has to be explicitly enabled by --enable-invariants
+ * configure option.
+ */
+# define LINVRNT(exp) LASSERT(exp)
+#else
+# define LINVRNT(exp) ((void)sizeof!!(exp))
+#endif
 
 #define KLASSERT(e) LASSERT(e)
 
@@ -234,12 +244,18 @@ do {                                                                           \
           assert(cond);                                                        \
 } while (0)
 #  define LBUG()   assert(0)
+#  ifdef INVARIANT_CHECK
+#   define LINVRNT(exp) LASSERT(exp)
+#  else
+#   define LINVRNT(exp) ((void)sizeof!!(exp))
+#  endif
 # else
-#  define LASSERT(e) ((void)(0))
-#  define LASSERTF(cond, args...) do { } while (0)
+#  define LASSERT(e) ((void)sizeof!!(e))
+#  define LASSERTF(cond, args...) ((void)sizeof!!(cond))
 #  define LBUG()   ((void)(0))
+#  define LINVRNT(exp) ((void)sizeof!!(exp))
 # endif /* LIBCFS_DEBUG */
-# define KLASSERT(e) do { } while (0)
+# define KLASSERT(e) ((void)0)
 # define printk(format, args...) printf (format, ## args)
 # ifdef CRAY_XT3                                /* buggy calloc! */
 #  define LIBCFS_ALLOC(ptr, size)               \
