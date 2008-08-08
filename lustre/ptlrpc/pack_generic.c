@@ -52,6 +52,7 @@
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lustre_net.h>
+#include <lustre/ll_fiemap.h>
 
 #if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(1,8,0,0)
 #error "lustre_msg_v1 has been deprecated since 1.6.0, please remove it"
@@ -2179,6 +2180,30 @@ void lustre_swab_mds_rec_unlink (struct mds_rec_unlink *ul)
         CLASSERT(offsetof(typeof(*ul), ul_padding_2) != 0);
         CLASSERT(offsetof(typeof(*ul), ul_padding_3) != 0);
         CLASSERT(offsetof(typeof(*ul), ul_padding_4) != 0);
+}
+
+void lustre_swab_fiemap_extent(struct ll_fiemap_extent *fm_extent)
+{
+        __swab64s(&fm_extent->fe_logical);
+        __swab64s(&fm_extent->fe_physical);
+        __swab64s(&fm_extent->fe_length);
+        __swab32s(&fm_extent->fe_flags);
+        __swab32s(&fm_extent->fe_device);
+}
+
+void lustre_swab_fiemap(struct ll_user_fiemap *fiemap)
+{
+        int i;
+
+        __swab64s(&fiemap->fm_start);
+        __swab64s(&fiemap->fm_length);
+        __swab32s(&fiemap->fm_flags);
+        __swab32s(&fiemap->fm_mapped_extents);
+        __swab32s(&fiemap->fm_extent_count);
+        __swab32s(&fiemap->fm_reserved);
+
+        for (i = 0; i < fiemap->fm_mapped_extents; i++)
+                lustre_swab_fiemap_extent(&fiemap->fm_extents[i]);
 }
 
 void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn)
