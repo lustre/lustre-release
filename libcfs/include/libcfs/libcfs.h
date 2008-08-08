@@ -96,7 +96,6 @@
 
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
 
-
 /*
  * Lustre Error Checksum: calculates checksum
  * of Hex number by XORing each bit.
@@ -172,7 +171,7 @@ void lc_watchdog_dumplog(pid_t pid, void *data);
  * struct cfs_psdev_t and
  * cfs_psdev_register() and
  * cfs_psdev_deregister() are declared in
- * libcfs/<os>/cfs_prim.h
+ * libcfs/<os>/<os>-prim.h
  *
  * It's just draft now.
  */
