@@ -44,6 +44,13 @@ Description: ldiskfs error: XXX blocks in bitmap, YYY in gd
 Details    : If blocks per group is less than blocksize*8, set rest of the
              bitmap to 1.
 
+Severity   : enhancement
+Bugzilla   : 10555
+Description: Add a FIEMAP(FIle Extent MAP) ioctl for ldiskfs
+Details    : FIEMAP ioctl will allow an application to efficiently fetch the
+             extent information of a file. It can be used to map logical blocks
+             in a file to physical blocks in the block device.
+
 --------------------------------------------------------------------------------
 
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>

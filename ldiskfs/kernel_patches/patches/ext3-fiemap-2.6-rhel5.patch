@@ -1,16 +1,16 @@
 A large part of this code is from the generic VFS code in fs/ioctl.c in the
 upstream kernel.
 
-Index: linux-2.6.22.14/fs/ext3/ioctl.c
+Index: linux-2.6.18-53.1.21/fs/ext3/ioctl.c
 ===================================================================
---- linux-2.6.22.14.orig/fs/ext3/ioctl.c
-+++ linux-2.6.22.14/fs/ext3/ioctl.c
-@@ -18,6 +18,159 @@
- #include <asm/uaccess.h>
+--- linux-2.6.18-53.1.21.orig/fs/ext3/ioctl.c
++++ linux-2.6.18-53.1.21/fs/ext3/ioctl.c
+@@ -17,6 +17,159 @@
  #include <linux/namei.h>
+ 
  #include <linux/lustre_iam.h>
 +#include "fiemap.h"
-+
++  
 +/* So that the fiemap access checks can't overflow on 32 bit machines. */
 +#define FIEMAP_MAX_EXTENTS     (UINT_MAX / sizeof(struct fiemap_extent))
 +
@@ -165,7 +165,7 @@ Index: linux-2.6.22.14/fs/ext3/ioctl.c
  
  int ext3_ioctl (struct inode * inode, struct file * filp, unsigned int cmd,
  		unsigned long arg)
-@@ -275,7 +428,9 @@ flags_err:
+@@ -273,7 +426,9 @@ flags_err:
  
  		return err;
  	}
@@ -176,49 +176,43 @@ Index: linux-2.6.22.14/fs/ext3/ioctl.c
  
  	default:
  		return iam_uapi_ioctl(inode, filp, cmd, arg);
-Index: linux-2.6.22.14/include/linux/ext3_fs.h
+Index: linux-2.6.18-53.1.21/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.22.14.orig/include/linux/ext3_fs.h
-+++ linux-2.6.22.14/include/linux/ext3_fs.h
-@@ -254,15 +254,16 @@ struct ext3_new_group_data {
- #define	EXT3_IOC_SETFLAGS		FS_IOC_SETFLAGS
+--- linux-2.6.18-53.1.21.orig/include/linux/ext3_fs.h
++++ linux-2.6.18-53.1.21/include/linux/ext3_fs.h
+@@ -257,15 +257,19 @@ struct ext3_new_group_data {
+ #define	EXT3_IOC_SETFLAGS		_IOW('f', 2, long)
  #define	EXT3_IOC_GETVERSION		_IOR('f', 3, long)
  #define	EXT3_IOC_SETVERSION		_IOW('f', 4, long)
 +#define EXT3_IOC_GETRSVSZ		_IOR('f', 5, long)
 +#define EXT3_IOC_SETRSVSZ		_IOW('f', 6, long)
  #define EXT3_IOC_GROUP_EXTEND		_IOW('f', 7, unsigned long)
  #define EXT3_IOC_GROUP_ADD		_IOW('f', 8,struct ext3_new_group_input)
-+#define	EXT3_IOC_FIEMAP			_IOWR('f', 10, struct fiemap)
- #define	EXT3_IOC_GETVERSION_OLD		FS_IOC_GETVERSION
- #define	EXT3_IOC_SETVERSION_OLD		FS_IOC_SETVERSION
++#define EXT3_IOC_FIEMAP			_IOWR('f', 10, struct fiemap)
+ #define	EXT3_IOC_GETVERSION_OLD		_IOR('v', 1, long)
+ #define	EXT3_IOC_SETVERSION_OLD		_IOW('v', 2, long)
  #ifdef CONFIG_JBD_DEBUG
  #define EXT3_IOC_WAIT_FOR_READONLY	_IOR('f', 99, long)
  #endif
 -#define EXT3_IOC_GETRSVSZ		_IOR('f', 5, long)
 -#define EXT3_IOC_SETRSVSZ		_IOW('f', 6, long)
- 
- /*
-  * ioctl commands in 32 bit emulation
-@@ -280,6 +281,8 @@ struct ext3_new_group_data {
- #define EXT3_IOC32_GETVERSION_OLD	FS_IOC32_GETVERSION
- #define EXT3_IOC32_SETVERSION_OLD	FS_IOC32_SETVERSION
- 
++
 +/* FIEMAP flags supported by ext3 */
-+#define	EXT3_FIEMAP_FLAGS_COMPAT (FIEMAP_FLAG_SYNC)
++#define EXT3_FIEMAP_FLAGS_COMPAT (FIEMAP_FLAG_SYNC)
  
  /*
   *  Mount options
-@@ -1063,6 +1066,9 @@ extern int ext3_block_truncate_page(hand
+@@ -1040,6 +1044,9 @@ extern int ext3_block_truncate_page(hand
+ /* ioctl.c */
  extern int ext3_ioctl (struct inode *, struct file *, unsigned int,
  		       unsigned long);
- extern long ext3_compat_ioctl (struct file *, unsigned int, unsigned long);
 +struct fiemap_extent_info;
 +extern int ext3_fiemap(struct inode *, struct fiemap_extent_info *, __u64,
 +		       __u64);
  
  /* namei.c */
  extern int ext3_orphan_add(handle_t *, struct inode *);
-@@ -1140,7 +1146,6 @@ ext3_get_blocks_wrap(handle_t *handle, s
+@@ -1117,7 +1124,6 @@ ext3_get_blocks_wrap(handle_t *handle, s
  	return ret;
  }
  
@@ -226,10 +220,10 @@ Index: linux-2.6.22.14/include/linux/ext3_fs.h
  #endif	/* __KERNEL__ */
  
  /* EXT3_IOC_CREATE_INUM at bottom of file (visible to kernel and user). */
-Index: linux-2.6.22.14/include/linux/ext3_extents.h
+Index: linux-2.6.18-53.1.21/include/linux/ext3_extents.h
 ===================================================================
---- linux-2.6.22.14.orig/include/linux/ext3_extents.h
-+++ linux-2.6.22.14/include/linux/ext3_extents.h
+--- linux-2.6.18-53.1.21.orig/include/linux/ext3_extents.h
++++ linux-2.6.18-53.1.21/include/linux/ext3_extents.h
 @@ -142,8 +142,10 @@ struct ext3_ext_path {
   * callback must return valid extent (passed or newly created)
   */
@@ -283,10 +277,10 @@ Index: linux-2.6.22.14/include/linux/ext3_extents.h
  extern int ext3_ext_search_left(struct inode *, struct ext3_ext_path *, unsigned long *, unsigned long *);
  extern int ext3_ext_search_right(struct inode *, struct ext3_ext_path *, unsigned long *, unsigned long *);
  extern int ext3_extent_tree_init(handle_t *, struct inode *);
-Index: linux-2.6.22.14/fs/ext3/extents.c
+Index: linux-2.6.18-53.1.21/fs/ext3/extents.c
 ===================================================================
---- linux-2.6.22.14.orig/fs/ext3/extents.c
-+++ linux-2.6.22.14/fs/ext3/extents.c
+--- linux-2.6.18-53.1.21.orig/fs/ext3/extents.c
++++ linux-2.6.18-53.1.21/fs/ext3/extents.c
 @@ -41,6 +41,7 @@
  #include <linux/string.h>
  #include <linux/slab.h>
@@ -408,10 +402,10 @@ Index: linux-2.6.22.14/fs/ext3/extents.c
  EXPORT_SYMBOL(ext3_mark_inode_dirty);
  EXPORT_SYMBOL(ext3_ext_invalidate_cache);
  EXPORT_SYMBOL(ext3_ext_insert_extent);
-Index: linux-2.6.22.14/fs/ext3/fiemap.h
+Index: linux-2.6.18-53.1.21/fs/ext3/fiemap.h
 ===================================================================
 --- /dev/null
-+++ linux-2.6.22.14/fs/ext3/fiemap.h
++++ linux-2.6.18-53.1.21/fs/ext3/fiemap.h
 @@ -0,0 +1,84 @@
 +/*
 + * FIEMAP ioctl infrastructure.

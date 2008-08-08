@@ -1,13 +1,13 @@
 A large part of this code is from the generic VFS code in fs/ioctl.c in the
 upstream kernel.
 
-Index: linux-2.6.22.14/fs/ext3/ioctl.c
+Index: linux-2.6.16.60-0.23/fs/ext3/ioctl.c
 ===================================================================
---- linux-2.6.22.14.orig/fs/ext3/ioctl.c
-+++ linux-2.6.22.14/fs/ext3/ioctl.c
-@@ -18,6 +18,159 @@
- #include <asm/uaccess.h>
+--- linux-2.6.16.60-0.23.orig/fs/ext3/ioctl.c
++++ linux-2.6.16.60-0.23/fs/ext3/ioctl.c
+@@ -17,6 +17,159 @@
  #include <linux/namei.h>
+ 
  #include <linux/lustre_iam.h>
 +#include "fiemap.h"
 +
@@ -108,7 +108,7 @@ Index: linux-2.6.22.14/fs/ext3/ioctl.c
 + * userspace. For this reason, a return code of -EBADR should be preserved.
 + *
 + * Returns 0 on success, -EBADR on bad flags.
-+ */
++*/
 +int fiemap_check_flags(struct fiemap_extent_info *fieinfo, u32 fs_flags)
 +{
 +	u32 incompat_flags;
@@ -165,7 +165,7 @@ Index: linux-2.6.22.14/fs/ext3/ioctl.c
  
  int ext3_ioctl (struct inode * inode, struct file * filp, unsigned int cmd,
  		unsigned long arg)
-@@ -275,7 +428,9 @@ flags_err:
+@@ -263,7 +416,9 @@ flags_err:
  
  		return err;
  	}
@@ -176,74 +176,59 @@ Index: linux-2.6.22.14/fs/ext3/ioctl.c
  
  	default:
  		return iam_uapi_ioctl(inode, filp, cmd, arg);
-Index: linux-2.6.22.14/include/linux/ext3_fs.h
+Index: linux-2.6.16.60-0.23/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.22.14.orig/include/linux/ext3_fs.h
-+++ linux-2.6.22.14/include/linux/ext3_fs.h
-@@ -254,15 +254,16 @@ struct ext3_new_group_data {
- #define	EXT3_IOC_SETFLAGS		FS_IOC_SETFLAGS
+--- linux-2.6.16.60-0.23.orig/include/linux/ext3_fs.h
++++ linux-2.6.16.60-0.23/include/linux/ext3_fs.h
+@@ -260,15 +260,19 @@ struct ext3_new_group_data {
+ #define	EXT3_IOC_SETFLAGS		_IOW('f', 2, long)
  #define	EXT3_IOC_GETVERSION		_IOR('f', 3, long)
  #define	EXT3_IOC_SETVERSION		_IOW('f', 4, long)
 +#define EXT3_IOC_GETRSVSZ		_IOR('f', 5, long)
 +#define EXT3_IOC_SETRSVSZ		_IOW('f', 6, long)
  #define EXT3_IOC_GROUP_EXTEND		_IOW('f', 7, unsigned long)
  #define EXT3_IOC_GROUP_ADD		_IOW('f', 8,struct ext3_new_group_input)
-+#define	EXT3_IOC_FIEMAP			_IOWR('f', 10, struct fiemap)
- #define	EXT3_IOC_GETVERSION_OLD		FS_IOC_GETVERSION
- #define	EXT3_IOC_SETVERSION_OLD		FS_IOC_SETVERSION
++#define EXT3_IOC_FIEMAP			_IOWR('f', 10, struct fiemap)
+ #define	EXT3_IOC_GETVERSION_OLD		_IOR('v', 1, long)
+ #define	EXT3_IOC_SETVERSION_OLD		_IOW('v', 2, long)
  #ifdef CONFIG_JBD_DEBUG
  #define EXT3_IOC_WAIT_FOR_READONLY	_IOR('f', 99, long)
  #endif
 -#define EXT3_IOC_GETRSVSZ		_IOR('f', 5, long)
 -#define EXT3_IOC_SETRSVSZ		_IOW('f', 6, long)
- 
- /*
-  * ioctl commands in 32 bit emulation
-@@ -280,6 +281,8 @@ struct ext3_new_group_data {
- #define EXT3_IOC32_GETVERSION_OLD	FS_IOC32_GETVERSION
- #define EXT3_IOC32_SETVERSION_OLD	FS_IOC32_SETVERSION
- 
++
 +/* FIEMAP flags supported by ext3 */
-+#define	EXT3_FIEMAP_FLAGS_COMPAT (FIEMAP_FLAG_SYNC)
++#define EXT3_FIEMAP_FLAGS_COMPAT (FIEMAP_FLAG_SYNC)
  
  /*
   *  Mount options
-@@ -1063,6 +1066,9 @@ extern int ext3_block_truncate_page(hand
+@@ -1017,6 +1021,9 @@ extern int ext3_writepage_trans_blocks(s
+ /* ioctl.c */
  extern int ext3_ioctl (struct inode *, struct file *, unsigned int,
  		       unsigned long);
- extern long ext3_compat_ioctl (struct file *, unsigned int, unsigned long);
 +struct fiemap_extent_info;
 +extern int ext3_fiemap(struct inode *, struct fiemap_extent_info *, __u64,
 +		       __u64);
  
  /* namei.c */
  extern int ext3_orphan_add(handle_t *, struct inode *);
-@@ -1140,7 +1146,6 @@ ext3_get_blocks_wrap(handle_t *handle, s
- 	return ret;
- }
- 
--
- #endif	/* __KERNEL__ */
- 
- /* EXT3_IOC_CREATE_INUM at bottom of file (visible to kernel and user). */
-Index: linux-2.6.22.14/include/linux/ext3_extents.h
+Index: linux-2.6.16.60-0.23/include/linux/ext3_extents.h
 ===================================================================
---- linux-2.6.22.14.orig/include/linux/ext3_extents.h
-+++ linux-2.6.22.14/include/linux/ext3_extents.h
-@@ -142,8 +142,10 @@ struct ext3_ext_path {
-  * callback must return valid extent (passed or newly created)
+--- linux-2.6.16.60-0.23.orig/include/linux/ext3_extents.h
++++ linux-2.6.16.60-0.23/include/linux/ext3_extents.h
+@@ -170,7 +170,10 @@ struct ext3_extents_helpers {
   */
- typedef int (*ext_prepare_callback)(struct inode *, struct ext3_ext_path *,
--					struct ext3_ext_cache *,
--					void *);
+ typedef int (*ext_prepare_callback)(struct ext3_extents_tree *,
+ 				    struct ext3_ext_path *,
+-				    struct ext3_ext_cache *);
 +				    struct ext3_ext_cache *,
-+				    struct ext3_extent *, void *);
++				    struct ext3_extent *);
 +
 +#define HAVE_EXT_PREPARE_CB_EXTENT
  
  #define EXT_CONTINUE	0
  #define EXT_BREAK	1
-@@ -152,6 +154,26 @@ typedef int (*ext_prepare_callback)(stru
+@@ -179,6 +182,25 @@ typedef int (*ext_prepare_callback)(stru
  
  #define EXT_MAX_BLOCK	0xffffffff
  
@@ -264,15 +249,14 @@ Index: linux-2.6.22.14/include/linux/ext3_extents.h
 + * Hence, the maximum number of blocks we can have in an *initialized*
 + * extent is 2^15 (32768) and in an *uninitialized* extent is 2^15-1 (32767).
 + */
-+#define EXT_INIT_MAX_LEN	(1UL << 15)
-+#define EXT_UNINIT_MAX_LEN	(EXT_INIT_MAX_LEN - 1)
-+
- #define EXT_FLAGS_CLR_UNKNOWN	0x7  /* Flags cleared on modification */
- #define EXT_HDR_GEN_BITS	24
- #define EXT_HDR_GEN_MASK	((1 << EXT_HDR_GEN_BITS) - 1)
-@@ -219,6 +241,12 @@ ext3_ext_invalidate_cache(struct inode *
- 	EXT3_I(inode)->i_cached_extent.ec_type = EXT3_EXT_CACHE_NO;
- }
++#define	EXT_INIT_MAX_LEN	(1UL << 15)
++#define	EXT_UNINIT_MAX_LEN	(EXT_INIT_MAX_LEN - 1)
+ 
+ #define EXT_FIRST_EXTENT(__hdr__) \
+ 	((struct ext3_extent *) (((char *) (__hdr__)) +		\
+@@ -242,6 +264,12 @@ struct ext3_extent_tree_stats {
+ 	int leaf_num;
+ };
  
 +static inline int ext3_ext_is_uninitialized(struct ext3_extent *ext)
 +{
@@ -280,13 +264,13 @@ Index: linux-2.6.22.14/include/linux/ext3_extents.h
 +	return (le16_to_cpu(ext->ee_len) > EXT_INIT_MAX_LEN);
 +}
 +
- extern int ext3_ext_search_left(struct inode *, struct ext3_ext_path *, unsigned long *, unsigned long *);
- extern int ext3_ext_search_right(struct inode *, struct ext3_ext_path *, unsigned long *, unsigned long *);
- extern int ext3_extent_tree_init(handle_t *, struct inode *);
-Index: linux-2.6.22.14/fs/ext3/extents.c
+ extern int ext3_ext_search_left(struct ext3_extents_tree *, struct ext3_ext_path *, unsigned long *, unsigned long *);
+ extern int ext3_ext_search_right(struct ext3_extents_tree *, struct ext3_ext_path *, unsigned long *, unsigned long *);
+ extern void ext3_init_tree_desc(struct ext3_extents_tree *, struct inode *);
+Index: linux-2.6.16.60-0.23/fs/ext3/extents.c
 ===================================================================
---- linux-2.6.22.14.orig/fs/ext3/extents.c
-+++ linux-2.6.22.14/fs/ext3/extents.c
+--- linux-2.6.16.60-0.23.orig/fs/ext3/extents.c
++++ linux-2.6.16.60-0.23/fs/ext3/extents.c
 @@ -41,6 +41,7 @@
  #include <linux/string.h>
  #include <linux/slab.h>
@@ -295,27 +279,30 @@ Index: linux-2.6.22.14/fs/ext3/extents.c
  #include <asm/uaccess.h>
  
  
-@@ -1481,7 +1482,7 @@ int ext3_ext_walk_space(struct inode *in
- 		}
+@@ -1488,7 +1489,7 @@ int ext3_ext_walk_space(struct ext3_exte
  
- 		BUG_ON(cbex.ec_len == 0);
--		err = func(inode, path, &cbex, cbdata);
-+		err = func(inode, path, &cbex, ex, cbdata);
+ 		EXT_ASSERT(cbex.ec_len > 0);
+ 		EXT_ASSERT(path[depth].p_hdr);
+-		err = func(tree, path, &cbex);
++		err = func(tree, path, &cbex, ex);
  		ext3_ext_drop_refs(path);
  
  		if (err < 0)
-@@ -2296,6 +2297,103 @@ int ext3_ext_writepage_trans_blocks(stru
- 	return needed;
+@@ -2502,7 +2503,109 @@ int ext3_ext_calc_blockmap_metadata(stru
+ 	ext3_init_tree_desc(&tree, inode);
+ 	return ext3_ext_calc_metadata_amount(&tree, blocks);
  }
- 
+-	
++
 +/*
 + * Callback function called for each extent to gather FIEMAP information.
 + */
-+int ext3_ext_fiemap_cb(struct inode *inode, struct ext3_ext_path *path,
-+		       struct ext3_ext_cache *newex, struct ext3_extent *ex,
-+		       void *data)
++int ext3_ext_fiemap_cb(struct ext3_extents_tree *tree,
++		       struct ext3_ext_path *path, struct ext3_ext_cache *newex,
++		       struct ext3_extent *ex)
 +{
-+	struct fiemap_extent_info *fieinfo = data;
++	struct fiemap_extent_info *fieinfo = (struct fiemap_extent_info *)tree->private;
++	struct inode *inode = tree->inode;
 +	unsigned long blksize_bits = inode->i_sb->s_blocksize_bits;
 +	__u64   logical;
 +	__u64   physical;
@@ -380,8 +367,9 @@ Index: linux-2.6.22.14/fs/ext3/extents.c
 +int ext3_fiemap(struct inode *inode, struct fiemap_extent_info *fieinfo,
 +		__u64 start, __u64 len)
 +{
-+	ext3_fsblk_t start_blk;
-+	ext3_fsblk_t len_blks;
++	struct ext3_extents_tree tree;
++	unsigned long start_blk;
++	unsigned long len_blks;
 +	int error = 0;
 +
 +	if (!(EXT3_I(inode)->i_flags & EXT3_EXTENTS_FL))
@@ -393,33 +381,36 @@ Index: linux-2.6.22.14/fs/ext3/extents.c
 +	start_blk = start >> inode->i_sb->s_blocksize_bits;
 +	len_blks = (len + inode->i_sb->s_blocksize - 1) >> inode->i_sb->s_blocksize_bits;
 +
++	ext3_init_tree_desc(&tree, inode);
++	tree.private = fieinfo;
++
 +	/*
 +	  * Walk the extent tree gathering extent information.
 +	  * ext3_ext_fiemap_cb will push extents back to user.
 +	  */
-+	mutex_lock(&EXT3_I(inode)->truncate_mutex);
-+	error = ext3_ext_walk_space(inode, start_blk, len_blks,
-+				  ext3_ext_fiemap_cb, fieinfo);
-+	mutex_unlock(&EXT3_I(inode)->truncate_mutex);
++	down(&EXT3_I(inode)->truncate_sem);
++	error = ext3_ext_walk_space(&tree, start_blk, len_blks,
++				    ext3_ext_fiemap_cb);
++	up(&EXT3_I(inode)->truncate_sem);
 +
 +	return error;
 +}
 +
+ EXPORT_SYMBOL(ext3_init_tree_desc);
  EXPORT_SYMBOL(ext3_mark_inode_dirty);
  EXPORT_SYMBOL(ext3_ext_invalidate_cache);
- EXPORT_SYMBOL(ext3_ext_insert_extent);
-Index: linux-2.6.22.14/fs/ext3/fiemap.h
+Index: linux-2.6.16.60-0.23/fs/ext3/fiemap.h
 ===================================================================
 --- /dev/null
-+++ linux-2.6.22.14/fs/ext3/fiemap.h
++++ linux-2.6.16.60-0.23/fs/ext3/fiemap.h
 @@ -0,0 +1,84 @@
 +/*
 + * FIEMAP ioctl infrastructure.
 + *
-+ * Copyright 2008 Sun Microsystems, Inc
++ * Copyright 2008 Sun Microsystems, Inc.
 + *
 + * Author: Kalpak Shah <kalpak.shah@sun.com>
-+ *	    Andreas Dilger <adilger@sun.com>
++ *	   Andreas Dilger <adilger@sun.com>
 + */
 +
 +#ifndef _LINUX_EXT3_FIEMAP_H
