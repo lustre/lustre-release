@@ -75,6 +75,7 @@
 #include <lustre_quota.h>
 #include <linux/slab.h>
 #include <lustre_param.h>
+#include <lustre/ll_fiemap.h>
 
 #include "filter_internal.h"
 
@@ -4117,6 +4118,38 @@ static int filter_get_info(struct obd_export *exp, __u32 keylen,
                                                   exp->exp_filter_data.fed_group);
                 }
                 *vallen = sizeof(*last_id);
+                RETURN(0);
+        }
+
+        if (KEY_IS(KEY_FIEMAP)) {
+                struct ll_fiemap_info_key *fm_key = key;
+                struct dentry *dentry;
+                struct ll_user_fiemap *fiemap = val;
+                struct lvfs_run_ctxt saved;
+                int rc;
+
+                if (fiemap == NULL) {
+                        *vallen = fiemap_count_to_size(
+                                                fm_key->fiemap.fm_extent_count);
+                        RETURN(0);
+                }
+
+                dentry = __filter_oa2dentry(exp->exp_obd, &fm_key->oa,
+                                            __FUNCTION__, 1);
+                if (IS_ERR(dentry))
+                        RETURN(PTR_ERR(dentry));
+
+                memcpy(fiemap, &fm_key->fiemap, sizeof(*fiemap));
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                rc = fsfilt_iocontrol(obd, dentry->d_inode, NULL,
+                                      EXT3_IOC_FIEMAP, (long)fiemap);
+                if (rc) {
+                        f_dput(dentry);
+                        RETURN(rc);
+                }
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+                f_dput(dentry);
                 RETURN(0);
         }
 

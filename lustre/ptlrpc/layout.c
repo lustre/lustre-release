@@ -504,6 +504,17 @@ static const struct req_msg_field *ost_get_last_id_server[] = {
         &RMF_OBD_ID
 };
 
+static const struct req_msg_field *ost_get_fiemap_client[] = {
+        &RMF_PTLRPC_BODY,
+        &RMF_FIEMAP_KEY,
+        &RMF_FIEMAP_VAL
+};
+
+static const struct req_msg_field *ost_get_fiemap_server[] = {
+        &RMF_PTLRPC_BODY,
+        &RMF_FIEMAP_VAL
+};
+
 static const struct req_format *req_formats[] = {
         &RQF_OBD_PING,
         &RQF_SEC_CTX,
@@ -556,6 +567,7 @@ static const struct req_format *req_formats[] = {
         &RQF_OST_SET_INFO,
         &RQF_OST_GET_INFO_GENERIC,
         &RQF_OST_GET_INFO_LAST_ID,
+        &RQF_OST_GET_INFO_FIEMAP,
         &RQF_LDLM_ENQUEUE,
         &RQF_LDLM_ENQUEUE_LVB,
         &RQF_LDLM_CONVERT,
@@ -809,6 +821,14 @@ const struct req_msg_field RMF_OBD_ID =
                     sizeof(obd_id), lustre_swab_ost_last_id);
 EXPORT_SYMBOL(RMF_OBD_ID);
 
+const struct req_msg_field RMF_FIEMAP_KEY =
+        DEFINE_MSGF("FIEMAP", 0, sizeof(struct ll_fiemap_info_key),
+                    lustre_swab_fiemap);
+EXPORT_SYMBOL(RMF_FIEMAP_KEY);
+
+const struct req_msg_field RMF_FIEMAP_VAL =
+        DEFINE_MSGF("FIEMAP", 0, -1, lustre_swab_fiemap);
+EXPORT_SYMBOL(RMF_FIEMAP_VAL);
 
 /*
  * Request formats.
@@ -1171,6 +1191,11 @@ const struct req_format RQF_OST_GET_INFO_LAST_ID =
         DEFINE_REQ_FMT0("OST_GET_INFO_LAST_ID", ost_get_info_generic_client,
                                                 ost_get_last_id_server);
 EXPORT_SYMBOL(RQF_OST_GET_INFO_LAST_ID);
+
+const struct req_format RQF_OST_GET_INFO_FIEMAP =
+        DEFINE_REQ_FMT0("OST_GET_INFO_FIEMAP", ost_get_fiemap_client,
+                                               ost_get_fiemap_server);
+EXPORT_SYMBOL(RQF_OST_GET_INFO_FIEMAP);
 
 
 #if !defined(__REQ_LAYOUT_USER__)

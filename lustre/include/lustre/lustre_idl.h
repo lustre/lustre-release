@@ -88,6 +88,7 @@
 
 /* Defn's shared with user-space. */
 #include <lustre/lustre_user.h>
+#include <lustre/ll_fiemap.h>
 
 /*
  *  GENERAL STUFF
@@ -972,8 +973,16 @@ struct ost_body {
         struct  obdo oa;
 };
 
+/* Key for FIEMAP to be used in get_info calls */
+struct ll_fiemap_info_key {
+        char    name[8];
+        struct  obdo oa;
+        struct  ll_user_fiemap fiemap;
+};
+
 extern void lustre_swab_ost_body (struct ost_body *b);
 extern void lustre_swab_ost_last_id(obd_id *id);
+extern void lustre_swab_fiemap(struct ll_user_fiemap *fiemap);
 
 /* lock value block communicated between the filter and llite */
 

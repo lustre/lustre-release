@@ -74,6 +74,7 @@
 #define lustre_swab_obd_ioobj NULL
 #define lustre_swab_ost_body NULL
 #define lustre_swab_ost_last_id NULL
+#define lustre_swab_fiemap NULL
 
 /*
  * Yes, include .c file.

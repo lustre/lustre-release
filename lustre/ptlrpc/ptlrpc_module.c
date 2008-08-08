@@ -306,6 +306,7 @@ EXPORT_SYMBOL(lustre_swab_md_fld);
 EXPORT_SYMBOL(lustre_swab_generic_32s);
 EXPORT_SYMBOL(lustre_swab_lustre_capa);
 EXPORT_SYMBOL(lustre_swab_lustre_capa_key);
+EXPORT_SYMBOL(lustre_swab_fiemap);
 
 /* recover.c */
 EXPORT_SYMBOL(ptlrpc_disconnect_import);

@@ -47,6 +47,7 @@
 #include <linux/pagemap.h>
 #include <linux/file.h>
 #include "llite_internal.h"
+#include <lustre/ll_fiemap.h>
 
 /* also used by llite/special.c:ll_special_open() */
 struct ll_file_data *ll_file_data_get(void)
@@ -2489,6 +2490,49 @@ int ll_release_openhandle(struct dentry *dentry, struct lookup_intent *it)
         RETURN(rc);
 }
 
+/**
+ * Get size for inode for which FIEMAP mapping is requested.
+ * Make the FIEMAP get_info call and returns the result.
+ */
+int ll_fiemap(struct inode *inode, struct ll_user_fiemap *fiemap,
+              int num_bytes)
+{
+        struct obd_export *exp = ll_i2dtexp(inode);
+        struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
+        struct ll_fiemap_info_key fm_key = { .name = KEY_FIEMAP, };
+        int vallen = num_bytes;
+        int rc;
+        ENTRY;
+
+        /* If the stripe_count > 1 and the application does not understand
+         * DEVICE_ORDER flag, then it cannot interpret the extents correctly.
+         */
+        if (lsm->lsm_stripe_count > 1 &&
+            !(fiemap->fm_flags & FIEMAP_FLAG_DEVICE_ORDER))
+                return -EOPNOTSUPP;
+
+        fm_key.oa.o_id = lsm->lsm_object_id;
+        fm_key.oa.o_gr = lsm->lsm_object_gr;
+        fm_key.oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+
+        obdo_from_inode(&fm_key.oa, inode, OBD_MD_FLFID | OBD_MD_FLGROUP |
+                        OBD_MD_FLSIZE);
+
+        /* If filesize is 0, then there would be no objects for mapping */
+        if (fm_key.oa.o_size == 0) {
+                fiemap->fm_mapped_extents = 0;
+                RETURN(0);
+        }
+
+        memcpy(&fm_key.fiemap, fiemap, sizeof(*fiemap));
+
+        rc = obd_get_info(exp, sizeof(fm_key), &fm_key, &vallen, fiemap, lsm);
+        if (rc)
+                CERROR("obd_get_info failed: rc = %d\n", rc);
+
+        RETURN(rc);
+}
+
 int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                   unsigned long arg)
 {
@@ -2538,6 +2582,72 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                 RETURN(ll_lov_getstripe(inode, arg));
         case LL_IOC_RECREATE_OBJ:
                 RETURN(ll_lov_recreate_obj(inode, file, arg));
+        case EXT3_IOC_FIEMAP: {
+                struct ll_user_fiemap *fiemap_s;
+                size_t num_bytes, ret_bytes;
+                unsigned int extent_count;
+                int rc = 0;
+
+                /* Get the extent count so we can calculate the size of
+                 * required fiemap buffer */
+                if (get_user(extent_count,
+                    &((struct ll_user_fiemap __user *)arg)->fm_extent_count))
+                        RETURN(-EFAULT);
+                num_bytes = sizeof(*fiemap_s) + (extent_count *
+                                                 sizeof(struct ll_fiemap_extent));
+                OBD_VMALLOC(fiemap_s, num_bytes);
+                if (fiemap_s == NULL)
+                        RETURN(-ENOMEM);
+
+                if (copy_from_user(fiemap_s,(struct ll_user_fiemap __user *)arg,
+                                   sizeof(*fiemap_s)))
+                        GOTO(error, rc = -EFAULT);
+
+                if (fiemap_s->fm_flags & ~LUSTRE_FIEMAP_FLAGS_COMPAT) {
+                        fiemap_s->fm_flags = fiemap_s->fm_flags &
+                                                    ~LUSTRE_FIEMAP_FLAGS_COMPAT;
+                        if (copy_to_user((char *)arg, fiemap_s,
+                                         sizeof(*fiemap_s)))
+                                GOTO(error, rc = -EFAULT);
+
+                        GOTO(error, rc = -EBADR);
+                }
+
+                /* If fm_extent_count is non-zero, read the first extent since
+                 * it is used to calculate end_offset and device from previous
+                 * fiemap call. */
+                if (extent_count) {
+                        if (copy_from_user(&fiemap_s->fm_extents[0],
+                            (char __user *)arg + sizeof(*fiemap_s),
+                            sizeof(struct ll_fiemap_extent)))
+                                GOTO(error, rc = -EFAULT);
+                }
+
+                if (fiemap_s->fm_flags & FIEMAP_FLAG_SYNC) {
+                        int rc;
+
+                        rc = filemap_fdatawrite(inode->i_mapping);
+                        if (rc)
+                                GOTO(error, rc);
+                }
+
+                rc = ll_fiemap(inode, fiemap_s, num_bytes);
+                if (rc)
+                        GOTO(error, rc);
+
+                ret_bytes = sizeof(struct ll_user_fiemap);
+
+                if (extent_count != 0)
+                        ret_bytes += (fiemap_s->fm_mapped_extents *
+                                         sizeof(struct ll_fiemap_extent));
+
+                if (copy_to_user((void *)arg, fiemap_s, ret_bytes))
+                        rc = -EFAULT;
+
+error:
+                OBD_VFREE(fiemap_s, num_bytes);
+                RETURN(rc);
+        }
         case EXT3_IOC_GETFLAGS:
         case EXT3_IOC_SETFLAGS:
                 RETURN(ll_iocontrol(inode, file, cmd, arg));

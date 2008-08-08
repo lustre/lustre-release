@@ -188,6 +188,7 @@ extern const struct req_format RQF_OST_STATFS;
 extern const struct req_format RQF_OST_SET_INFO;
 extern const struct req_format RQF_OST_GET_INFO_GENERIC;
 extern const struct req_format RQF_OST_GET_INFO_LAST_ID;
+extern const struct req_format RQF_OST_GET_INFO_FIEMAP;
 
 /* LDLM req_format */
 extern const struct req_format RQF_LDLM_ENQUEUE;
@@ -265,5 +266,7 @@ extern const struct req_msg_field RMF_OST_BODY;
 extern const struct req_msg_field RMF_OBD_IOOBJ;
 extern const struct req_msg_field RMF_OBD_ID;
 extern const struct req_msg_field RMF_NIOBUF_REMOTE;
+extern const struct req_msg_field RMF_FIEMAP_KEY;
+extern const struct req_msg_field RMF_FIEMAP_VAL;
 
 #endif /* _LUSTRE_REQ_LAYOUT_H__ */

@@ -890,13 +890,20 @@ static unsigned long new_blocks(handle_t *handle, struct ext3_ext_base *base,
 static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
                                   struct ext3_ext_path *path,
                                   struct ext3_ext_cache *cex,
+#ifdef HAVE_EXT_PREPARE_CB_EXTENT
+                                   struct ext3_extent *ex,
+#endif
                                   void *cbdata)
 {
         struct bpointers *bp = cbdata;
 #else
 static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
                                   struct ext3_ext_path *path,
-                                  struct ext3_ext_cache *cex)
+                                  struct ext3_ext_cache *cex
+#ifdef HAVE_EXT_PREPARE_CB_EXTENT
+                                  , struct ext3_extent *ex
+#endif
+                                 )
 {
         struct bpointers *bp = base->private;
 #endif
