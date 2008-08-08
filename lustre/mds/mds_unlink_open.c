@@ -1,37 +1,50 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/mds/mds_orphan.c
+ * GPL HEADER START
  *
- *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
- *   Author: Peter Braam <braam@clusterfs.com>
- *   Author: Andreas Dilger <adilger@clusterfs.com>
- *   Author: Phil Schwan <phil@clusterfs.com>
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/mds/mds_unlink_open.c
+ *
+ * Author: Peter Braam <braam@clusterfs.com>
+ * Author: Andreas Dilger <adilger@clusterfs.com>
+ * Author: Phil Schwan <phil@clusterfs.com>
  */
 
 /* code for handling open unlinked files */
 
 #define DEBUG_SUBSYSTEM S_MDS
 
-#ifdef HAVE_KERNEL_CONFIG_H
+#ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
 #include <linux/module.h>
@@ -76,7 +89,7 @@ int mds_osc_destroy_orphan(struct obd_device *obd,
         if (rc)
                 GOTO(out_free_memmd, rc);
 
-        oa = obdo_alloc();
+        OBDO_ALLOC(oa);
         if (oa == NULL)
                 GOTO(out_free_memmd, rc = -ENOMEM);
         oa->o_id = lsm->lsm_object_id;
@@ -88,7 +101,7 @@ int mds_osc_destroy_orphan(struct obd_device *obd,
                 oti.oti_logcookies = logcookies;
         }
         rc = obd_destroy(mds->mds_osc_exp, oa, lsm, &oti, obd->obd_self_export);
-        obdo_free(oa);
+        OBDO_FREE(oa);
         if (rc)
                 CDEBUG(D_INODE, "destroy orphan objid 0x"LPX64" on ost error "
                        "%d\n", lsm->lsm_object_id, rc);
@@ -115,7 +128,7 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
          * especially not mds_get_md (may get a default LOV EA, bug 4554) */
         mode = inode->i_mode;
         if (S_ISDIR(mode)) {
-                rc = vfs_rmdir(pending_dir, dchild);
+                rc = ll_vfs_rmdir(pending_dir, dchild, mds->mds_vfsmnt);
                 if (rc)
                         CERROR("error %d unlinking dir %*s from PENDING\n",
                                rc, dchild->d_name.len, dchild->d_name.name);
@@ -127,7 +140,7 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
         if (lmm == NULL)
                 RETURN(-ENOMEM);
 
-        rc = mds_get_md(obd, inode, lmm, &lmm_size, 1);
+        rc = mds_get_md(obd, inode, lmm, &lmm_size, 1, 0);
         if (rc < 0)
                 GOTO(out_free_lmm, rc);
 
@@ -140,7 +153,7 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                 GOTO(out_free_lmm, rc);
         }
 
-        rc = vfs_unlink(pending_dir, dchild);
+        rc = ll_vfs_unlink(pending_dir, dchild, mds->mds_vfsmnt);
         if (rc) {
                 CERROR("error %d unlinking orphan %.*s from PENDING\n",
                        rc, dchild->d_name.len, dchild->d_name.name);
@@ -257,15 +270,12 @@ int mds_cleanup_pending(struct obd_device *obd)
                 MDS_UP_READ_ORPHAN_SEM(child_inode);
 
                 rc = mds_unlink_orphan(obd, dchild, child_inode, pending_dir);
-                if (rc == 0) {
-                        item ++;
-                        CDEBUG(D_HA, "%s: removed orphan %s\n",
-                               obd->obd_name, d_name);
-                } else {
-                        CDEBUG(D_INODE, "%s: removed orphan %s failed,"
-                               " rc = %d\n", obd->obd_name, d_name, rc);
+                CDEBUG(D_INODE, "%s: removed orphan %s: rc %d\n",
+                       obd->obd_name, d_name, rc);
+                if (rc == 0)
+                        item++;
+                else
                         rc = 0;
-                }
 next:
                 l_dput(dchild);
                 UNLOCK_INODE_MUTEX(pending_dir);

@@ -1,26 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/lib/fsfilt_reiserfs.c
- *  Lustre filesystem abstraction routines
+ * GPL HEADER START
  *
- *  Copyright (C) 2002 Cluster File Systems, Inc.
- *   Author: Andreas Dilger <adilger@clusterfs.com>
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/lvfs/fsfilt_reiserfs.c
+ *
+ * Author: Andreas Dilger <adilger@clusterfs.com>
  */
 
 /*
@@ -44,7 +59,6 @@
 #include <libcfs/kp30.h>
 #include <lustre_fsfilt.h>
 #include <obd.h>
-#include <obd_class.h>
 #include <linux/module.h>
 #include <linux/init.h>
 
@@ -96,7 +110,7 @@ static int fsfilt_reiserfs_setattr(struct dentry *dentry, void *handle,
         if (iattr->ia_valid & ATTR_SIZE && !do_trunc) {
                 /* ATTR_SIZE would invoke truncate: clear it */
                 iattr->ia_valid &= ~ATTR_SIZE;
-                inode->i_size = iattr->ia_size;
+                i_size_write(inode, iattr->ia_size);
 
                 /* make sure _something_ gets set - so new inode
                  * goes to disk (probably won't work over XFS
@@ -137,7 +151,7 @@ static int fsfilt_reiserfs_get_md(struct inode *inode, void *lmm, int lmm_size,
                                   const char *name)
 {
         if (lmm == NULL)
-                return inode->i_size;
+                return i_size_read(inode);
 
         CERROR("not implemented yet\n");
         return -ENOSYS;
@@ -237,7 +251,7 @@ static void __exit fsfilt_reiserfs_exit(void)
         fsfilt_unregister_ops(&fsfilt_reiserfs_ops);
 }
 
-MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
+MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre reiserfs Filesystem Helper v0.1");
 MODULE_LICENSE("GPL");
 

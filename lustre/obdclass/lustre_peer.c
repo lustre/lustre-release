@@ -1,26 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
@@ -137,42 +148,45 @@ int class_add_uuid(char *uuid, __u64 nid)
 int class_del_uuid (char *uuid)
 {
         struct list_head  deathrow;
-        struct uuid_nid_data *data, *n;
+        struct uuid_nid_data *data;
+        int found = 0;
 
         CFS_INIT_LIST_HEAD (&deathrow);
 
         spin_lock (&g_uuid_lock);
-        list_for_each_entry_safe(data, n, &g_uuid_list, un_list) {
-                if (uuid == NULL) {
-                        list_del (&data->un_list);
-                        list_add (&data->un_list, &deathrow);
-                } else if (strcmp(data->un_uuid, uuid) == 0) {
+        if (uuid == NULL) {
+                list_splice_init(&g_uuid_list, &deathrow);
+                found = 1;
+        } else {
+                list_for_each_entry(data, &g_uuid_list, un_list) {
+                        if (strcmp(data->un_uuid, uuid))
+                                continue;
                         --data->un_count;
-                        if (data->un_count <= 0) {
-                                list_del (&data->un_list);
-                                list_add (&data->un_list, &deathrow);
-                        }
+                        LASSERT(data->un_count >= 0);
+                        if (data->un_count == 0)
+                                list_move(&data->un_list, &deathrow);
+                        found = 1;
                         break;
                 }
         }
         spin_unlock (&g_uuid_lock);
 
-        if (list_empty (&deathrow)) {
+        if (!found) {
                 if (uuid)
-                        CERROR("delete non-existent uuid %s\n", uuid);
+                        CERROR("Try to delete a non-existent uuid %s\n", uuid);
                 return -EINVAL;
         }
 
-        do {
+        while (!list_empty(&deathrow)) {
                 data = list_entry(deathrow.next, struct uuid_nid_data, un_list);
+                list_del(&data->un_list);
 
-                list_del (&data->un_list);
                 CDEBUG(D_INFO, "del uuid %s %s\n", data->un_uuid,
                        libcfs_nid2str(data->un_nid));
 
                 OBD_FREE(data->un_uuid, strlen(data->un_uuid) + 1);
                 OBD_FREE(data, sizeof(*data));
-        } while (!list_empty (&deathrow));
+        }
 
         return 0;
 }

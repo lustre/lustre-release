@@ -1,7 +1,7 @@
 Index: linux-2.6.9/include/linux/jbd.h
 ===================================================================
---- linux-2.6.9.orig/include/linux/jbd.h	2006-03-10 18:20:03.000000000 +0300
-+++ linux-2.6.9/include/linux/jbd.h	2006-07-28 02:32:18.000000000 +0400
+--- linux-2.6.9.orig/include/linux/jbd.h
++++ linux-2.6.9/include/linux/jbd.h
 @@ -422,6 +422,16 @@ struct handle_s 
  };
  
@@ -20,9 +20,9 @@ Index: linux-2.6.9/include/linux/jbd.h
   * tracks a compound transaction through its various states:
   *
 @@ -553,6 +563,21 @@ struct transaction_s 
- 	spinlock_t		t_handle_lock;
- 
- 	/*
+	spinlock_t		t_handle_lock;
+
+	/*
 +	 * Longest time some handle had to wait for running transaction
 +	 */
 +	unsigned long		t_max_wait;
@@ -42,9 +42,9 @@ Index: linux-2.6.9/include/linux/jbd.h
  	 * [t_handle_lock]
  	 */
 @@ -592,6 +617,57 @@ struct transaction_s 
- 	struct list_head	t_jcb;
+ #endif
  };
- 
+
 +struct transaction_run_stats_s {
 +	unsigned long		rs_wait;
 +	unsigned long		rs_running;
@@ -118,14 +118,14 @@ Index: linux-2.6.9/include/linux/jbd.h
  	 */
 Index: linux-2.6.9/fs/jbd/commit.c
 ===================================================================
---- linux-2.6.9.orig/fs/jbd/commit.c	2006-03-10 18:20:39.000000000 +0300
-+++ linux-2.6.9/fs/jbd/commit.c	2006-07-28 02:32:18.000000000 +0400
+--- linux-2.6.9.orig/fs/jbd/commit.c
++++ linux-2.6.9/fs/jbd/commit.c
 @@ -21,6 +21,7 @@
  #include <linux/mm.h>
  #include <linux/pagemap.h>
  #include <linux/smp_lock.h>
 +#include <linux/jiffies.h>
- 
+
  /*
   * Default IO end handler for temporary BJ_IO buffer_heads.
 @@ -101,6 +102,7 @@ static int inverted_lock(journal_t *jour
@@ -133,66 +133,67 @@ Index: linux-2.6.9/fs/jbd/commit.c
  void journal_commit_transaction(journal_t *journal)
  {
 +	struct transaction_stats_s stats;
- 	transaction_t *commit_transaction;
- 	struct journal_head *jh, *new_jh, *descriptor;
- 	struct buffer_head *wbuf[64];
+	transaction_t *commit_transaction;
+	struct journal_head *jh, *new_jh, *descriptor;
+	struct buffer_head *wbuf[64];
 @@ -147,6 +149,11 @@ void journal_commit_transaction(journal_
- 	spin_lock(&journal->j_state_lock);
- 	commit_transaction->t_state = T_LOCKED;
- 
+	spin_lock(&journal->j_state_lock);
+	commit_transaction->t_state = T_LOCKED;
+
 +	stats.ts_wait = commit_transaction->t_max_wait;
 +	stats.ts_locked = CURRENT_MSECS;
 +	stats.ts_running = jbd_time_diff(commit_transaction->t_start,
 +						stats.ts_locked);
 +	
- 	spin_lock(&commit_transaction->t_handle_lock);
- 	while (commit_transaction->t_updates) {
- 		DEFINE_WAIT(wait);
+	spin_lock(&commit_transaction->t_handle_lock);
+	while (commit_transaction->t_updates) {
+		DEFINE_WAIT(wait);
 @@ -219,6 +226,9 @@ void journal_commit_transaction(journal_
- 	 */
- 	journal_switch_revoke_table(journal);
- 
+	 */
+	journal_switch_revoke_table(journal);
+
 +	stats.ts_flushing = CURRENT_MSECS;
 +	stats.ts_locked = jbd_time_diff(stats.ts_locked, stats.ts_flushing);
 +
- 	commit_transaction->t_state = T_FLUSH;
- 	journal->j_committing_transaction = commit_transaction;
- 	journal->j_running_transaction = NULL;
+	commit_transaction->t_state = T_FLUSH;
+	journal->j_committing_transaction = commit_transaction;
+	journal->j_running_transaction = NULL;
 @@ -365,6 +375,11 @@ write_out_data:
- 	 */
- 	commit_transaction->t_state = T_COMMIT;
- 
+	 */
+	commit_transaction->t_state = T_COMMIT;
+
 +	stats.ts_logging = CURRENT_MSECS;
 +	stats.ts_flushing = jbd_time_diff(stats.ts_flushing, stats.ts_logging);
 +	stats.ts_blocks = commit_transaction->t_outstanding_credits;
 +	stats.ts_blocks_logged = 0;
 +
- 	descriptor = NULL;
- 	bufs = 0;
- 	while (commit_transaction->t_buffers) {
+	descriptor = NULL;
+	bufs = 0;
+	while (commit_transaction->t_buffers) {
 @@ -513,6 +528,7 @@ start_journal_io:
- 				submit_bh(WRITE, bh);
- 			}
- 			cond_resched();
+				submit_bh(WRITE, bh);
+			}
+			cond_resched();
 +			stats.ts_blocks_logged += bufs;
- 
- 			/* Force a new descriptor to be generated next
+
+			/* Force a new descriptor to be generated next
                             time round the loop. */
-@@ -760,6 +776,7 @@ skip_commit: /* The journal should be un
- 		cp_transaction = jh->b_cp_transaction;
- 		if (cp_transaction) {
- 			JBUFFER_TRACE(jh, "remove from old cp transaction");
+@@ -767,6 +783,7 @@ restart_loop:
+		cp_transaction = jh->b_cp_transaction;
+		if (cp_transaction) {
+			JBUFFER_TRACE(jh, "remove from old cp transaction");
 +			cp_transaction->t_chp_stats.cs_dropped++;
- 			__journal_remove_checkpoint(jh);
- 		}
- 
-@@ -806,6 +823,36 @@ skip_commit: /* The journal should be un
- 
- 	J_ASSERT(commit_transaction->t_state == T_COMMIT);
- 
+			__journal_remove_checkpoint(jh);
+		}
+
+@@ -816,6 +833,37 @@ restart_loop:
+		}
+		cond_resched_lock(&journal->j_list_lock);
+	}
++
 +	commit_transaction->t_start = CURRENT_MSECS;
 +	stats.ts_logging = jbd_time_diff(stats.ts_logging,
-+						commit_transaction->t_start);
++					commit_transaction->t_start);
 +
 +	/*
 +	 * File the transaction for history
@@ -202,7 +203,7 @@ Index: linux-2.6.9/fs/jbd/commit.c
 +	stats.ts_handle_count = commit_transaction->t_handle_count;
 +	spin_lock(&journal->j_history_lock);
 +	memcpy(journal->j_history + journal->j_history_cur, &stats,
-+			sizeof(stats));
++		sizeof(stats));
 +	if (++journal->j_history_cur == journal->j_history_max)
 +		journal->j_history_cur = 0;
 +
@@ -220,70 +221,71 @@ Index: linux-2.6.9/fs/jbd/commit.c
 +	journal->j_stats.ts_blocks_logged += stats.ts_blocks_logged;
 +	spin_unlock(&journal->j_history_lock);
 +
- 	/*
- 	 * This is a bit sleazy.  We borrow j_list_lock to protect
- 	 * journal->j_committing_transaction in __journal_remove_checkpoint.
+	spin_unlock(&journal->j_list_lock);
+	/*
+	 * This is a bit sleazy.  We borrow j_list_lock to protect
 Index: linux-2.6.9/fs/jbd/checkpoint.c
 ===================================================================
---- linux-2.6.9.orig/fs/jbd/checkpoint.c	2006-03-10 18:20:03.000000000 +0300
-+++ linux-2.6.9/fs/jbd/checkpoint.c	2006-07-28 02:35:21.000000000 +0400
-@@ -166,6 +166,7 @@ static int __cleanup_transaction(journal
- 			transaction_t *t = jh->b_transaction;
- 			tid_t tid = t->t_tid;
- 
-+			transaction->t_chp_stats.cs_forced_to_close++;
- 			spin_unlock(&journal->j_list_lock);
- 			jbd_unlock_bh_state(bh);
- 			log_start_commit(journal, tid);
-@@ -227,7 +228,7 @@ __flush_batch(journal_t *journal, struct
+--- linux-2.6.9.orig/fs/jbd/checkpoint.c
++++ linux-2.6.9/fs/jbd/checkpoint.c
+@@ -126,7 +127,8 @@
+  * Called under jbd_lock_bh_state(jh2bh(jh)), and drops it
   */
- static int __flush_buffer(journal_t *journal, struct journal_head *jh,
- 			struct buffer_head **bhs, int *batch_count,
--			int *drop_count)
-+			int *drop_count, transaction_t *transaction)
+ static int __process_buffer(journal_t *journal, struct journal_head *jh,
+-			struct buffer_head **bhs, int *batch_count)
++			struct buffer_head **bhs, int *batch_count,
++			transaction_t *transaction)
  {
- 	struct buffer_head *bh = jh2bh(jh);
- 	int ret = 0;
-@@ -248,6 +249,7 @@ static int __flush_buffer(journal_t *jou
- 		set_buffer_jwrite(bh);
- 		bhs[*batch_count] = bh;
- 		jbd_unlock_bh_state(bh);
+	struct buffer_head *bh = jh2bh(jh);
+	int ret = 0;
+@@ -166,6 +166,7 @@
+		transaction_t *t = jh->b_transaction;
+		tid_t tid = t->t_tid;
+
++		transaction->t_chp_stats.cs_forced_to_close++;
+		spin_unlock(&journal->j_list_lock);
+		jbd_unlock_bh_state(bh);
+		log_start_commit(journal, tid);
+@@ -247,6 +248,7 @@
+		bhs[*batch_count] = bh;
+		__buffer_relink_io(jh);
+		jbd_unlock_bh_state(bh);
 +		transaction->t_chp_stats.cs_written++;
- 		(*batch_count)++;
- 		if (*batch_count == NR_BATCH) {
- 			__flush_batch(journal, bhs, batch_count);
-@@ -316,6 +318,8 @@ int log_do_checkpoint(journal_t *journal
- 		tid_t this_tid;
- 
- 		transaction = journal->j_checkpoint_transactions;
-+		if (transaction->t_chp_stats.cs_chp_time == 0)
-+			transaction->t_chp_stats.cs_chp_time = CURRENT_MSECS;
- 		this_tid = transaction->t_tid;
- 		jh = transaction->t_checkpoint_list;
- 		last_jh = jh->b_cpprev;
-@@ -332,7 +336,8 @@ int log_do_checkpoint(journal_t *journal
- 				retry = 1;
- 				break;
- 			}
--			retry = __flush_buffer(journal, jh, bhs, &batch_count, &drop_count);
-+			retry = __flush_buffer(journal, jh, bhs, &batch_count,
-+						&drop_count, transaction);
- 		} while (jh != last_jh && !retry);
- 
- 		if (batch_count) {
-@@ -598,6 +603,8 @@ void __journal_insert_checkpoint(struct 
- 
+		(*batch_count)++;
+		if (*batch_count == NR_BATCH) {
+			spin_unlock(&journal->j_list_lock);
+@@ -315,6 +317,8 @@ int log_do_checkpoint(journal_t *journal
+	if (!journal->j_checkpoint_transactions)
+		goto out;
+	transaction = journal->j_checkpoint_transactions;
++	if (transaction->t_chp_stats.cs_chp_time == 0)
++		transaction->t_chp_stats.cs_chp_time = CURRENT_MSECS;
+	this_tid = transaction->t_tid;
+ restart:
+	/*
+@@ -331,7 +335,8 @@ int log_do_checkpoint(journal_t *journal
+				retry = 1;
+				break;
+			}
+-			retry = __process_buffer(journal, jh, bhs,&batch_count);
++			retry = __process_buffer(journal, jh, bhs,&batch_count,
++					transaction);
+		}
+
+		if (batch_count) {
+@@ -597,6 +602,8 @@ void __journal_insert_checkpoint(struct 
+
  void __journal_drop_transaction(journal_t *journal, transaction_t *transaction)
  {
 +	struct transaction_stats_s stats;
 +
- 	assert_spin_locked(&journal->j_list_lock);
- 	if (transaction->t_cpnext) {
- 		transaction->t_cpnext->t_cpprev = transaction->t_cpprev;
-@@ -623,5 +630,25 @@ void __journal_drop_transaction(journal_
- 	J_ASSERT(journal->j_running_transaction != transaction);
- 
- 	jbd_debug(1, "Dropping transaction %d, all done\n", transaction->t_tid);
+	assert_spin_locked(&journal->j_list_lock);
+	if (transaction->t_cpnext) {
+		transaction->t_cpnext->t_cpprev = transaction->t_cpprev;
+@@ -622,5 +629,25 @@ void __journal_drop_transaction(journal_
+	J_ASSERT(journal->j_running_transaction != transaction);
+
+	jbd_debug(1, "Dropping transaction %d, all done\n", transaction->t_tid);
 +
 +	/*
 +	 * File the transaction for history
@@ -304,12 +306,12 @@ Index: linux-2.6.9/fs/jbd/checkpoint.c
 +		spin_unlock(&journal->j_history_lock);
 +	}
 +
- 	kfree(transaction);
+	kfree(transaction);
  }
 Index: linux-2.6.9/fs/jbd/transaction.c
 ===================================================================
---- linux-2.6.9.orig/fs/jbd/transaction.c	2006-03-10 18:20:03.000000000 +0300
-+++ linux-2.6.9/fs/jbd/transaction.c	2006-07-28 02:32:18.000000000 +0400
+--- linux-2.6.9.orig/fs/jbd/transaction.c
++++ linux-2.6.9/fs/jbd/transaction.c
 @@ -60,6 +60,8 @@ get_transaction(journal_t *journal, tran
  
  	J_ASSERT(journal->j_running_transaction == NULL);
@@ -342,8 +344,8 @@ Index: linux-2.6.9/fs/jbd/transaction.c
  	transaction->t_updates++;
 Index: linux-2.6.9/fs/jbd/journal.c
 ===================================================================
---- linux-2.6.9.orig/fs/jbd/journal.c	2006-06-19 21:31:57.000000000 +0400
-+++ linux-2.6.9/fs/jbd/journal.c	2006-07-28 02:32:18.000000000 +0400
+--- linux-2.6.9.orig/fs/jbd/journal.c
++++ linux-2.6.9/fs/jbd/journal.c
 @@ -36,6 +36,7 @@
  #include <asm/uaccess.h>
  #include <asm/page.h>
@@ -459,7 +461,7 @@ Index: linux-2.6.9/fs/jbd/journal.c
 +		return -EIO;
 +	size = sizeof(struct transaction_stats_s) * journal->j_history_max;
 +	s->stats = kmalloc(size, GFP_KERNEL);
-+	if (s == NULL) {
++	if (s->stats == NULL) {
 +		kfree(s);
 +		return -EIO;
 +	}
@@ -559,7 +561,7 @@ Index: linux-2.6.9/fs/jbd/journal.c
 +		return -EIO;
 +	size = sizeof(struct transaction_stats_s);
 +	s->stats = kmalloc(size, GFP_KERNEL);
-+	if (s == NULL) {
++	if (s->stats == NULL) {
 +		kfree(s);
 +		return -EIO;
 +	}
@@ -688,7 +690,7 @@ Index: linux-2.6.9/fs/jbd/journal.c
  	if (journal->j_inode)
  		iput(journal->j_inode);
  	if (journal->j_revoke)
-@@ -1895,6 +2197,28 @@ static void __exit remove_jbd_proc_entry
+@@ -1896,6 +2198,28 @@ static void __exit remove_jbd_proc_entry
  
  #endif
  
@@ -717,7 +719,7 @@ Index: linux-2.6.9/fs/jbd/journal.c
  kmem_cache_t *jbd_handle_cache;
  
  static int __init journal_init_handle_cache(void)
-@@ -1949,6 +2273,7 @@ static int __init journal_init(void)
+@@ -1950,6 +2274,7 @@ static int __init journal_init(void)
  	if (ret != 0)
  		journal_destroy_caches();
  	create_jbd_proc_entry();
@@ -725,7 +727,7 @@ Index: linux-2.6.9/fs/jbd/journal.c
  	return ret;
  }
  
-@@ -1960,6 +2285,7 @@ static void __exit journal_exit(void)
+@@ -1961,6 +2286,7 @@ static void __exit journal_exit(void)
  		printk(KERN_EMERG "JBD: leaked %d journal_heads!\n", n);
  #endif
  	remove_jbd_proc_entry();

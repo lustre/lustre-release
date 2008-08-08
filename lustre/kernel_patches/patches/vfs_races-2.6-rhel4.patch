@@ -1,8 +1,7 @@
-Index: linux-2.6.7-vanilla/fs/dcache.c
-===================================================================
---- linux-2.6.7-vanilla.orig/fs/dcache.c	2004-07-01 12:09:19.000000000 +0300
-+++ linux-2.6.7-vanilla/fs/dcache.c	2004-07-01 12:29:12.510193264 +0300
-@@ -219,7 +219,14 @@
+diff -urp RH_2_6_9_42_0_3.orig/fs/dcache.c RH_2_6_9_42_0_3/fs/dcache.c
+--- RH_2_6_9_42_0_3.orig/fs/dcache.c
++++ RH_2_6_9_42_0_3/fs/dcache.c
+@@ -229,7 +229,14 @@ int d_invalidate(struct dentry * dentry)
  		spin_unlock(&dcache_lock);
  		return 0;
  	}
@@ -18,12 +17,12 @@ Index: linux-2.6.7-vanilla/fs/dcache.c
  	 * Check whether to do a partial shrink_dcache
  	 * to get rid of unused child entries.
  	 */
-@@ -1114,19 +1121,28 @@
+@@ -1187,19 +1194,28 @@ void d_delete(struct dentry * dentry)
   * Adds a dentry to the hash according to its name.
   */
   
 -void d_rehash(struct dentry * entry)
-+void __d_rehash(struct dentry * entry, int lock)
++void d_rehash_cond(struct dentry * entry, int lock)
  {
  	struct hlist_head *list = d_hash(entry->d_parent, entry->d_name.hash);
  
@@ -40,21 +39,20 @@ Index: linux-2.6.7-vanilla/fs/dcache.c
 +		spin_unlock(&dcache_lock);
  }
  
-+EXPORT_SYMBOL(__d_rehash);
++EXPORT_SYMBOL(d_rehash_cond);
 +
 +void d_rehash(struct dentry * entry)
 +{
-+	__d_rehash(entry, 1);
-+ }
++	d_rehash_cond(entry, 1);
++}
 +
  #define do_switch(x,y) do { \
  	__typeof__ (x) __tmp = x; \
  	x = y; y = __tmp; } while (0)
-Index: linux-2.6.7-vanilla/include/linux/dcache.h
-===================================================================
---- linux-2.6.7-vanilla.orig/include/linux/dcache.h	2004-07-01 12:24:53.602553208 +0300
-+++ linux-2.6.7-vanilla/include/linux/dcache.h	2004-07-01 12:27:29.757814000 +0300
-@@ -159,6 +159,8 @@
+diff -urp RH_2_6_9_42_0_3.orig/include/linux/dcache.h RH_2_6_9_42_0_3/include/linux/dcache.h
+--- RH_2_6_9_42_0_3.orig/include/linux/dcache.h
++++ RH_2_6_9_42_0_3/include/linux/dcache.h
+@@ -157,6 +157,8 @@ d_iput:		no		no		no       yes
  
  #define DCACHE_REFERENCED	0x0008  /* Recently used, don't discard. */
  #define DCACHE_UNHASHED		0x0010	

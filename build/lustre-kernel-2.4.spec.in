@@ -10,6 +10,8 @@ Summary: The Linux kernel (the core of the Linux operating system)
 #
 %define kversion @KERNEL_VERSION@
 %define kextraver @KERNEL_EXTRA_VERSION@
+%define kextraverdelim @KERNEL_EXTRA_VERSION_DELIMITER@
+%define flavordelim "@KERNEL_TARGET_DELIMITER@"
 %define release @KERNEL_RELEASE@
 # /usr/src/%{kslnk} -> /usr/src/linux-%{KVERREL}
 %define kslnk linux-2.4
@@ -149,7 +151,7 @@ Second, per-architecture exclusions (ifarch)
 Name: kernel-lustre
 Version: %{kversion}
 Release: %{release}%{?targetboard:%{targetboard}}%{?debuglevel_1:.dbg}
-%define KVERREL %{PACKAGE_VERSION}-%{kextraver}%{?targetboard:%{targetboard}}%{?debuglevel_1:.dbg}
+%define KVERREL %{PACKAGE_VERSION}%{kextraverdelim}%{kextraver}%{?targetboard:%{targetboard}}%{?debuglevel_1:.dbg}
 License: GPL
 Group: System Environment/Kernel
 ExclusiveArch: %{all_x86} x86_64 ia64 ppc
@@ -169,7 +171,7 @@ BuildPreReq: patch >= 2.5.4, bash >= 2.03, sh-utils, gnupg, tar
 BuildPreReq: bzip2, findutils, dev, gzip, m4
 %endif
 
-Vendor: Cluster File Systems, Inc.
+Vendor: Sun Microsystems, Inc.
 URL: http://www.kernel.org/
 Buildroot: %{_tmppath}/%{name}-%{version}-root
 
@@ -364,6 +366,11 @@ is necessary if you want to access a Lustre filesystem.
 #The Lustre book, sample configurations, and other documentation for
 #Lustre.
 
+# This is required in rpm >= 4.4.? and _should_ be set by the %setup macro
+# but isn't, at least for 4.4.2.  Yay RPM.
+%define buildsubdir lustre-kernel-%{version}
+%define _buildsubdir lustre-kernel-%{version}
+
 %prep
 %setup -n lustre-kernel-%{version} -q -c
 if [ ! -d lustre ] ; then
@@ -382,11 +389,12 @@ popd >/dev/null
 
 # handle both SuSE and Red Hat's new-kernel-pkg bits
 for flavor in "" smp bigmem bigsmp pseries64 BOOT jensen ; do
+	[ -n "$flavor" ] && delim_flavor="%{flavordelim}$flavor"
 	for when in pre preun post postun ; do
 		script="${when}${flavor}.sh"
 		cat %{SOURCE25} %{SOURCE32} %{SOURCE33} > ${script}
 		echo "if [ -d /etc/susehelp.d ] ; then" >> ${script}
-		sed -e "s/@when@/$when/g" -e "s^%ver_str^%{KVERREL}${flavor}^g" %{SOURCE28} >> ${script}
+		sed -e "s/@when@/$when/g" -e "s^%ver_str^%{KVERREL}${delim_flavor}^g" %{SOURCE28} >> ${script}
 		case $when in
 			pre)
 				echo "if [ ! -f /etc/modprobe.conf ] ; then" >> ${script}
@@ -396,20 +404,20 @@ for flavor in "" smp bigmem bigsmp pseries64 BOOT jensen ; do
 			post)
 				# /sbin/update-modules.dep compares when the modules were built, rather
 				# than installed, so force modules.dep to be recreated
-				echo "rm -f /lib/modules/%{KVERREL}${flavor}/modules.dep" >> ${script}
+				echo "rm -f /lib/modules/%{KVERREL}${delim_flavor}/modules.dep" >> ${script}
 				echo "if [ -f /etc/modprobe.conf ] ; then" >> ${script}			
-				sed -e "s^%ver_str^%{KVERREL}${flavor}^g" %{SOURCE26} >> ${script}
+				sed -e "s^%ver_str^%{KVERREL}${delim_flavor}^g" %{SOURCE26} >> ${script}
 
 				echo "else" >> ${script}
-				sed -e "s^%ver_str^%{KVERREL}${flavor}^g" -e "s^%%{cfg_name}^${flavor}^g" %{SOURCE29} >> ${script}
+				sed -e "s^%ver_str^%{KVERREL}${delim_flavor}^g" -e "s^%%{cfg_name}^${delim_flavor}^g" %{SOURCE29} >> ${script}
 				echo "fi" >> ${script}
 				;;
 			postun)
 				echo "if [ -f /etc/modprobe.conf ] ; then" >> ${script}			
-				sed -e "s^%ver_str^%{KVERREL}${flavor}^g" %{SOURCE27} >> ${script}
+				sed -e "s^%ver_str^%{KVERREL}${delim_flavor}^g" %{SOURCE27} >> ${script}
 
 				echo "else" >> ${script}			
-				sed -e "s^%ver_str^%{KVERREL}${flavor}^g" %{SOURCE30} >> ${script}
+				sed -e "s^%ver_str^%{KVERREL}${delim_flavor}^g" %{SOURCE30} >> ${script}
 				echo "fi" >> ${script}
 				;;
 		esac
@@ -434,7 +442,7 @@ if [ -x /sbin/new-kernel-pkg ] ; then
 		PACKAGE_ARG="--package kernel-${flavor}"
 	fi
         /sbin/new-kernel-pkg $PACKAGE_ARG --mkinitrd --depmod \
-		--install %{KVERREL}${flavor}
+		--install %{KVERREL}${delim_flavor}
 fi
 EOF
 				;;
@@ -449,9 +457,9 @@ EOF
 			preun)
 				cat >> ${script} <<EOF
 /sbin/modprobe loop 2> /dev/null > /dev/null  || :
-rm -f /lib/modules/%{KVERREL}${flavor}/modules.*
+rm -f /lib/modules/%{KVERREL}${delim_flavor}/modules.*
 if [ -x /sbin/new-kernel-pkg ] ; then
- /sbin/new-kernel-pkg --rminitrd --rmmoddep --remove %{KVERREL}${flavor}
+ /sbin/new-kernel-pkg --rminitrd --rmmoddep --remove %{KVERREL}${delim_flavor}
 fi
 EOF
 				;;
@@ -460,20 +468,20 @@ EOF
 
 	cat > "kernel$flavor.files" <<EOF
 %%defattr(-, root, root)
-/boot/%{kernel_glob}${flavor}
-/boot/System.map-%{KVERREL}${flavor}
-/boot/config-%{KVERREL}${flavor}
+/boot/%{kernel_glob}${delim_flavor}
+/boot/System.map-%{KVERREL}${delim_flavor}
+/boot/config-%{KVERREL}${delim_flavor}
 %%dir /lib/modules
 %%dir /dev/shm
-/lib/modules/%{KVERREL}${flavor}
+/lib/modules/%{KVERREL}${delim_flavor}
 %ifarch ia64
-/boot/efi/redhat/%{kernel_glob}${flavor}
+/boot/efi/redhat/%{kernel_glob}${delim_flavor}
 %endif
 %if %{linux26}
 %if %{susebuild}
-/boot/Kerntypes-%{KVERREL}${flavor}
+/boot/Kerntypes-%{KVERREL}${delim_flavor}
 %endif
-/boot/symvers-%{KVERREL}-%{_target_cpu}${flavor}.gz
+/boot/symvers-%{KVERREL}-%{_target_cpu}${delim_flavor}.gz
 %endif
 EOF
 
@@ -623,10 +631,10 @@ BuildObj ()
 		flavext=""
 		flavtgt=""
 	else
-		flavext="-$flavor"
+		flavext="%{flavordelim}$flavor"
 		flavtgt="$flavor"
 	fi
-        perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = -%{kextraver}${flavtgt}/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
+        perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = %{kextraverdelim}%{kextraver}${flavext}/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
 	c="$RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}"
 	o="${c}-obj/%{_target_cpu}/$flavor"
 	mkdir -p $o
@@ -644,21 +652,25 @@ BuildObj ()
 	    MAKE_CC="CC=$CC"
 	fi
 	$MAKE "$MAKE_CC" $OLDCONFIG
-	$MAKE "$MAKE_CC" prepare-all
 	$MAKE clean
 	rm -rf $o/.config.old $o/include/config
         # Replace the Makefile in the object directory with a version
-        # that has relative path names.
+        # that has relative path names.  This is done by fixing the Makefile
+        # after the fact to work with 2.6.17 and newer mkmakefile.
         read VERSION PATCHLEVEL SUBLEVEL <<-EOF
 $(set -- 2.6.5 ; echo ${*//./ })
 EOF
-        source scripts/mkmakefile \
-	    ../../../linux-%{KVERREL} \
-            ../linux-%{KVERREL}-obj/%{_target_cpu}/$flavor \
-	    $VERSION \
-	    $PATCHLEVEL \
-	    > $o/Makefile
-	zcat "$RPM_BUILD_ROOT/boot/symvers-%{KVERREL}-%{_target_cpu}${flavtgt}.gz" \
+	rm -f $o/Makefile
+	ARCH=%{_target_cpu} /bin/sh scripts/mkmakefile ../../../linux-%{KVERREL} $o \
+		$VERSION $PATCHLEVEL > $o/Makefile.in
+	if [ -f $o/Makefile ] ; then
+		# will exist only for 2.6.17 and newer because mkmakefile
+		# now writes the makefile to $o instead of stdout
+		mv -f $o/Makefile $o/Makefile.in
+	fi
+	sed -e "s^$o^../linux-%{KVERREL}-obj/%{_target_cpu}/$flavor^" \
+		$o/Makefile.in > $o/Makefile
+	zcat "$RPM_BUILD_ROOT/boot/symvers-%{KVERREL}-%{_target_cpu}${flavext}.gz" \
 	    > $o/Module.symvers
 }
 
@@ -679,7 +691,7 @@ if [ "%{buildbase}" -ne 0 ] ; then
     mkdir -p $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/configs
     cp ../lustre/kernel_patches/kernel_configs/kernel-%{kversion}-@LUSTRE_TARGET@*.config $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/configs
     if [ "%{linux26}" -ne 0 ] ; then
-        # this only works because CFS only builds one kernel per target/arch per kernel-source rpm
+        # this only works because Sun only builds one kernel per target/arch per kernel-source rpm
 	objdir=$RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}-obj
 	mkdir -p $objdir
         if [ "%{buildbigmem}" -ne 0 ] ; then
@@ -703,7 +715,7 @@ if [ "%{buildbase}" -ne 0 ] ; then
         if [ "%{buildup}" -ne 0 ] ; then
 	    BuildObj up
         fi
-        perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = -%{kextraver}custom/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
+        perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = %{kextraverdelim}%{kextraver}%{flavordelim}custom/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
 	# Remove $RPM_BUILD_ROOT prefix from symlinks.
 	for link in $(find $objdir -type l); do
 	    target=$(readlink $link)
@@ -711,7 +723,7 @@ if [ "%{buildbase}" -ne 0 ] ; then
 	    ln -s ${target/$RPM_BUILD_ROOT/} $link
 	done
     else # 2.4 rh-style
-        perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = -%{kextraver}custom/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
+        perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = %{kextraverdelim}%{kextraver}%{flavordelim}custom/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
         # get the one from the build we just completed as it might have picked
         # up new options
         #cp ../lustre/kernel_patches/kernel_configs/kernel-%{kversion}-@LUSTRE_TARGET@-%{_target_cpu}%{dashtargetboard}.config $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/.config

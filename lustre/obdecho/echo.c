@@ -1,27 +1,42 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
- *   Author: Peter Braam <braam@clusterfs.com>
- *   Author: Andreas Dilger <adilger@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/obdecho/echo.c
+ *
+ * Author: Peter Braam <braam@clusterfs.com>
+ * Author: Andreas Dilger <adilger@clusterfs.com>
  */
 
 #ifndef EXPORT_SYMTAB
@@ -50,7 +65,8 @@ enum {
 };
 
 static int echo_connect(struct lustre_handle *conn, struct obd_device *obd,
-                        struct obd_uuid *cluuid, struct obd_connect_data *data)
+                        struct obd_uuid *cluuid, struct obd_connect_data *data,
+                        void *localdata)
 {
         data->ocd_connect_flags &= ECHO_CONNECT_SUPPORTED;
         return class_connect(conn, obd, cluuid);
@@ -310,7 +326,7 @@ int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
                                 /* Take extra ref so __free_pages() can be called OK */
                                 cfs_get_page (r->page);
                         } else {
-                                r->page = cfs_alloc_page(gfp_mask);
+                                OBD_PAGE_ALLOC(r->page, gfp_mask);
                                 if (r->page == NULL) {
                                         CERROR("can't get page %u/%u for id "
                                                LPU64"\n",
@@ -361,7 +377,7 @@ preprw_cleanup:
                 cfs_kunmap(r->page);
                 /* NB if this is a persistent page, __free_pages will just
                  * lose the extra ref gained above */
-                cfs_free_page(r->page);
+                OBD_PAGE_FREE(r->page);
                 atomic_dec(&obd->u.echo.eo_prep);
         }
         memset(res, 0, sizeof(*res) * niocount);
@@ -432,7 +448,7 @@ int echo_commitrw(int cmd, struct obd_export *export, struct obdo *oa,
 
                         cfs_kunmap(page);
                         /* NB see comment above regarding persistent pages */
-                        cfs_free_page(page);
+                        OBD_PAGE_FREE(page);
                         atomic_dec(&obd->u.echo.eo_prep);
                 }
         }
@@ -447,7 +463,7 @@ commitrw_cleanup:
                 cfs_page_t *page = r->page;
 
                 /* NB see comment above regarding persistent pages */
-                cfs_free_page(page);
+                OBD_PAGE_FREE(page);
                 atomic_dec(&obd->u.echo.eo_prep);
         }
         return rc;
@@ -464,20 +480,21 @@ static int echo_setup(struct obd_device *obd, obd_count len, void *buf)
         spin_lock_init(&obd->u.echo.eo_lock);
         obd->u.echo.eo_lastino = ECHO_INIT_OBJID;
 
-        obd->obd_namespace = ldlm_namespace_new("echo-tgt",
-                                                LDLM_NAMESPACE_SERVER);
+        obd->obd_namespace = ldlm_namespace_new(obd, "echo-tgt",
+                                                LDLM_NAMESPACE_SERVER,
+                                                LDLM_NAMESPACE_GREEDY);
         if (obd->obd_namespace == NULL) {
                 LBUG();
                 RETURN(-ENOMEM);
         }
 
-        rc = ldlm_cli_enqueue_local(obd->obd_namespace, res_id, LDLM_PLAIN, 
+        rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id, LDLM_PLAIN, 
                                     NULL, LCK_NL, &lock_flags, NULL, 
                                     ldlm_completion_ast, NULL, NULL, 
                                     0, NULL, &obd->u.echo.eo_nl_lock);
         LASSERT (rc == ELDLM_OK);
 
-        lprocfs_init_vars(echo, &lvars);
+        lprocfs_echo_init_vars(&lvars);
         if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0 &&
             lprocfs_alloc_obd_stats(obd, LPROC_ECHO_LAST) == 0) {
                 lprocfs_counter_init(obd->obd_stats, LPROC_ECHO_READ_BYTES,
@@ -508,7 +525,8 @@ static int echo_cleanup(struct obd_device *obd)
         set_current_state (TASK_UNINTERRUPTIBLE);
         cfs_schedule_timeout (CFS_TASK_UNINT, cfs_time_seconds(1));
 
-        ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
+        ldlm_namespace_free(obd->obd_namespace, NULL, obd->obd_force);
+        obd->obd_namespace = NULL;
 
         leaked = atomic_read(&obd->u.echo.eo_prep);
         if (leaked != 0)
@@ -542,7 +560,7 @@ echo_persistent_pages_fini (void)
 
         for (i = 0; i < ECHO_PERSISTENT_PAGES; i++)
                 if (echo_persistent_pages[i] != NULL) {
-                        cfs_free_page (echo_persistent_pages[i]);
+                        OBD_PAGE_FREE(echo_persistent_pages[i]);
                         echo_persistent_pages[i] = NULL;
                 }
 }
@@ -557,7 +575,7 @@ echo_persistent_pages_init (void)
                 int gfp_mask = (i < ECHO_PERSISTENT_PAGES/2) ?
                         CFS_ALLOC_STD : CFS_ALLOC_HIGHUSER;
 
-                pg = cfs_alloc_page (gfp_mask);
+                OBD_PAGE_ALLOC(pg, gfp_mask);
                 if (pg == NULL) {
                         echo_persistent_pages_fini ();
                         return (-ENOMEM);
@@ -578,11 +596,11 @@ static int __init obdecho_init(void)
         int rc;
 
         ENTRY;
-        printk(KERN_INFO "Lustre: Echo OBD driver; info@clusterfs.com\n");
+        printk(KERN_INFO "Lustre: Echo OBD driver; http://www.lustre.org/\n");
 
         LASSERT(CFS_PAGE_SIZE % OBD_ECHO_BLOCK_SIZE == 0);
 
-        lprocfs_init_vars(echo, &lvars);
+        lprocfs_echo_init_vars(&lvars);
 
         rc = echo_persistent_pages_init ();
         if (rc != 0)
@@ -611,7 +629,7 @@ static void /*__exit*/ obdecho_exit(void)
         echo_persistent_pages_fini ();
 }
 
-MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
+MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre Testing Echo OBD driver");
 MODULE_LICENSE("GPL");
 

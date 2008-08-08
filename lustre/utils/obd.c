@@ -1,29 +1,45 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2002 Cluster File Systems, Inc.
- *   Author: Peter J. Braam <braam@clusterfs.com>
- *   Author: Phil Schwan <phil@clusterfs.com>
- *   Author: Andreas Dilger <adilger@clusterfs.com>
- *   Author: Robert Read <rread@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
  */
-
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/utils/obd.c
+ *
+ * Author: Peter J. Braam <braam@clusterfs.com>
+ * Author: Phil Schwan <phil@clusterfs.com>
+ * Author: Andreas Dilger <adilger@clusterfs.com>
+ * Author: Robert Read <rread@clusterfs.com>
+ */
 
 #include <stdlib.h>
 #include <sys/ioctl.h>
@@ -39,7 +55,7 @@
 #include "obdctl.h"
 
 #include <obd.h>          /* for struct lov_stripe_md */
-#include <linux/lustre_build_version.h>
+#include <lustre/lustre_build_version.h>
 
 #include <unistd.h>
 #include <sys/un.h>
@@ -182,11 +198,11 @@ int lcfg_mgs_ioctl(char *func, int dev_id, struct lustre_cfg *lcfg)
 
         rc =  l_ioctl(dev_id, OBD_IOC_PARAM, buf);
 
-        if (rc == ENODEV) 
+        if (rc == ENODEV)
                 fprintf(stderr, "Is the MGS running on this node?\n");
-        if (rc == ENOSYS) 
+        if (rc == ENOSYS)
                 fprintf(stderr, "Make sure cfg_device is set first.\n");
-        if (rc == EINVAL) 
+        if (rc == EINVAL)
                 fprintf(stderr, "cfg_device should be of the form "
                         "'lustre-MDT0000'\n");
 
@@ -246,7 +262,7 @@ int parse_devname(char *func, char *name)
         if (isdigit(name[0])) {
                 ret = strtoul(name, NULL, 0);
         } else {
-                if (name[0] == '$' || name[0] == '%') 
+                if (name[0] == '$' || name[0] == '%')
                         name++;
                 rc = do_name2dev(func, name);
                 if (rc >= N2D_OFF) {
@@ -444,12 +460,12 @@ static void shmem_setup(void)
 }
 
 static inline void shmem_lock(void)
-{ 
+{
         l_mutex_lock(&shared_data->mutex);
 }
 
 static inline void shmem_unlock(void)
-{ 
+{
         l_mutex_unlock(&shared_data->mutex);
 }
 
@@ -514,7 +530,7 @@ static void shmem_snap(int total_threads, int live_threads)
         secs = (this_time.tv_sec + this_time.tv_usec / 1000000.0) -
                (prev_time.tv_sec + prev_time.tv_usec / 1000000.0);
 
-        if (prev_valid && 
+        if (prev_valid &&
             live_threads == total_threads &&
             secs > 0.0)                    /* someone screwed with the time? */
                 printf("%d/%d Total: %f/second\n", non_zero, total_threads, total / secs);
@@ -522,16 +538,16 @@ static void shmem_snap(int total_threads, int live_threads)
         memcpy(counter_snapshot[1], counter_snapshot[0],
                total_threads * sizeof(counter_snapshot[0][0]));
         prev_time = this_time;
-        if (!prev_valid && 
+        if (!prev_valid &&
             running == total_threads)
                 prev_valid = 1;
 }
 
-static void shmem_stop(void) 
+static void shmem_stop(void)
 {
         if (shared_data == NULL)
                 return;
-        
+
         shared_data->stop = 1;
 }
 
@@ -578,7 +594,7 @@ static int do_device(char *func, char *devname)
         int dev;
 
         dev = parse_devname(func, devname);
-        if (dev < 0) 
+        if (dev < 0)
                 return -1;
 
         lcfg_set_devname(devname);
@@ -597,7 +613,7 @@ int jt_obd_device(int argc, char **argv)
 
         if (argc > 2)
                 return CMD_HELP;
-        
+
         if (argc == 1) {
                 printf("current device is %d - %s\n",
                        cur_device, lcfg_get_devname() ? : "not set");
@@ -605,7 +621,7 @@ int jt_obd_device(int argc, char **argv)
         }
         rc = do_device("device", argv[1]);
         return rc;
-}                     
+}
 
 int jt_opt_device(int argc, char **argv)
 {
@@ -672,11 +688,11 @@ int jt_opt_threads(int argc, char **argv)
                 for (i = 5; i < argc; i++)
                         snprintf(cmdstr + strlen(cmdstr), sizeof(cmdstr),
                                  " %s", argv[i]);
-                
+
                 printf("%s: starting %ld threads on device %s running %s\n",
                        argv[0], threads, argv[3], cmdstr);
         }
-        
+
         shmem_reset(threads);
 
         sigemptyset(&sigset);
@@ -685,7 +701,7 @@ int jt_opt_threads(int argc, char **argv)
         sigprocmask(SIG_BLOCK, &sigset, &saveset);
 
         nthreads = threads;
-             
+
         for (i = 1, next_thread = verbose; i <= threads; i++) {
                 rc = fork();
                 if (rc < 0) {
@@ -711,7 +727,7 @@ int jt_opt_threads(int argc, char **argv)
                 sigemptyset(&sigact.sa_mask);
                 sigact.sa_handler = parent_sighandler;
                 sigact.sa_flags = 0;
-                
+
                 sigaction(SIGALRM, &sigact, &saveact1);
                 sigaction(SIGCHLD, &sigact, &saveact2);
 
@@ -729,7 +745,7 @@ int jt_opt_threads(int argc, char **argv)
                                 ret = waitpid(0, &status, WNOHANG);
                                 if (ret == 0)
                                         break;
-                                
+
                                 if (ret < 0) {
                                         fprintf(stderr, "error: %s: wait - %s\n",
                                                 argv[0], strerror(errno));
@@ -883,6 +899,51 @@ int jt_get_version(int argc, char **argv)
         return rc;
 }
 
+/*
+ * Print an obd device line with the ost_conn_uuid inserted, if the obd
+ * is an osc.
+ */
+static void print_obd_line(char *s)
+{
+        char buf[MAX_STRING_SIZE];
+        char obd_name[MAX_OBD_NAME];
+        FILE *fp = NULL;
+        char *ptr;
+
+        if (sscanf(s, " %*d %*s osc %s %*s %*d ", obd_name) == 0)
+                goto try_mdc;
+        snprintf(buf, sizeof(buf),
+                 "/proc/fs/lustre/osc/%s/ost_conn_uuid", obd_name);
+        if ((fp = fopen(buf, "r")) == NULL)
+                goto try_mdc;
+        goto got_one;
+
+try_mdc:
+        if (sscanf(s, " %*d %*s mdc %s %*s %*d ", obd_name) == 0)
+                goto fail;
+        snprintf(buf, sizeof(buf),
+                 "/proc/fs/lustre/mdc/%s/mds_conn_uuid", obd_name);
+        if ((fp = fopen(buf, "r")) == NULL)
+                goto fail;
+
+got_one:
+        fgets(buf, sizeof(buf), fp);
+        fclose(fp);
+
+        /* trim trailing newlines */
+        ptr = strrchr(buf, '\n');
+        if (ptr) *ptr = '\0';
+        ptr = strrchr(s, '\n');
+        if (ptr) *ptr = '\0';
+
+        printf("%s %s\n", s, buf);
+        return;
+
+fail:
+        printf("%s", s);
+        return;
+}
+
 /* get device list by ioctl */
 int jt_obd_list_ioctl(int argc, char **argv)
 {
@@ -890,7 +951,10 @@ int jt_obd_list_ioctl(int argc, char **argv)
         char buf[8192];
         struct obd_ioctl_data *data = (struct obd_ioctl_data *)buf;
 
-        if (argc != 1)
+        if (argc > 2)
+                return CMD_HELP;
+        /* Just ignore a -t option.  Only supported with /proc. */
+        else if (argc == 2 && strcmp(argv[1], "-t") != 0)
                 return CMD_HELP;
 
         for (index = 0;; index++) {
@@ -907,10 +971,10 @@ int jt_obd_list_ioctl(int argc, char **argv)
                 printf("%s\n", (char *)data->ioc_bulk);
         }
         if (rc != 0) {
-                if (errno == ENOENT) 
+                if (errno == ENOENT)
                         /* no device or the last device */
                         rc = 0;
-                else 
+                else
                         fprintf(stderr, "Error getting device list: %s: "
                                         "check dmesg.\n",
                                         strerror(errno));
@@ -923,9 +987,16 @@ int jt_obd_list(int argc, char **argv)
         int rc;
         char buf[MAX_STRING_SIZE];
         FILE *fp = NULL;
+        int print_obd = 0;
 
-        if (argc != 1)
+        if (argc > 2)
                 return CMD_HELP;
+        else if (argc == 2) {
+                if (strcmp(argv[1], "-t") == 0)
+                        print_obd = 1;
+                else
+                        return CMD_HELP;
+        }
 
         fp = fopen(DEVICES_LIST, "r");
         if (fp == NULL) {
@@ -935,7 +1006,10 @@ int jt_obd_list(int argc, char **argv)
         }
 
         while (fgets(buf, sizeof(buf), fp) != NULL)
-                printf("%s", buf);
+                if (print_obd)
+                        print_obd_line(buf);
+                else
+                        printf("%s", buf);
 
         fclose(fp);
         return 0;
@@ -949,7 +1023,7 @@ int jt_obd_list(int argc, char **argv)
  * object ids.  Use get_stripe on this node to print full lsm and
  * set_stripe on another node to cut/paste between nodes.
  */
-/* create <count> [<file_create_mode>] [q|v|# verbosity] [striping] */ 
+/* create <count> [<file_create_mode>] [q|v|# verbosity] [striping] */
 int jt_obd_create(int argc, char **argv)
 {
         struct obd_ioctl_data data;
@@ -1171,7 +1245,7 @@ int jt_obd_destroy(int argc, char **argv)
                 return CMD_HELP;
 
         id = strtoull(argv[1], &end, 0);
-        if (*end) {
+        if (*end || id == 0 || errno != 0) {
                 fprintf(stderr, "error: %s: invalid objid '%s'\n",
                         jt_cmdname(argv[0]), argv[1]);
                 return CMD_HELP;
@@ -1341,7 +1415,7 @@ int jt_obd_test_getattr(int argc, char **argv)
         <r|w[r(repeat)x(noverify)]>                             mode
         <q|v|#(print interval)>                                 verbosity
         <npages[+offset]>                                       blocksize
-        <[[<interleave_threads>]t(inc obj by thread#)]obj>      object 
+        <[[<interleave_threads>]t(inc obj by thread#)]obj>      object
         [p|g<args>]                                             batch */
 int jt_obd_test_brw(int argc, char **argv)
 {
@@ -1538,7 +1612,7 @@ int jt_obd_test_brw(int argc, char **argv)
                                (int)(pages * getpagesize()));
                         shmem_unlock ();
                 }
-                
+
                 if (!repeat_offset) {
 #ifdef MAX_THREADS
                         if (stride == len) {
@@ -1653,8 +1727,11 @@ repeat:
                         rc = -EINVAL;
                         goto out;
                 }
-                printf("default_stripe_count: %u\n",
-                       desc.ld_default_stripe_count);
+                if (desc.ld_default_stripe_count == (__u16)-1)
+                        printf("default_stripe_count: %d\n", -1);
+                else
+                        printf("default_stripe_count: %u\n",
+                               desc.ld_default_stripe_count);
                 printf("default_stripe_size: "LPU64"\n",
                        desc.ld_default_stripe_size);
                 printf("default_stripe_offset: "LPU64"\n",
@@ -1882,7 +1959,7 @@ int jt_llog_info(int argc, char **argv)
         IOC_INIT(data);
         data.ioc_inllen1 = strlen(argv[1]) + 1;
         data.ioc_inlbuf1 = argv[1];
-        data.ioc_inllen2 = max - size_round(sizeof(data)) - 
+        data.ioc_inllen2 = max - size_round(sizeof(data)) -
                 size_round(data.ioc_inllen1);
         IOC_PACK(argv[0], data);
 
@@ -2028,6 +2105,204 @@ int jt_llog_remove(int argc, char **argv)
                         strerror(errno));
 
         return rc;
+}
+
+/* attach a regular file to virtual block device.
+ * return vaule:
+ *  -1: fatal error
+ *  1: error, it always means the command run failed
+ *  0: success
+ */
+static int jt_blockdev_run_process(const char *file, char *argv[])
+{
+        pid_t pid;
+        int rc;
+
+        pid = vfork();
+        if (pid == 0) { /* child process */
+                /* don't print error messages */
+                close(1), close(2);
+                (void)execvp(file, argv);
+                exit(-1);
+        } else if (pid > 0) {
+                int status;
+
+                rc = waitpid(pid, &status, 0);
+                if (rc < 0 || !WIFEXITED(status))
+                        return -1;
+
+                return WEXITSTATUS(status);
+        }
+
+        return -1;
+}
+
+static int jt_blockdev_find_module(const char *module)
+{
+        FILE *fp;
+        int found = 0;
+        char modname[256];
+
+        fp = fopen("/proc/modules", "r");
+        if (fp == NULL)
+                return -1;
+
+        while (fscanf(fp, "%s %*s %*s %*s %*s %*s", modname) == 1) {
+                if (strcmp(module, modname) == 0) {
+                        found = 1;
+                        break;
+                }
+        }
+        fclose(fp);
+
+        return found;
+}
+
+static int jt_blockdev_probe_module(const char *module)
+{
+        char buf[1024];
+        char *argv[10];
+        int c, rc;
+
+        if (jt_blockdev_find_module(module) == 1)
+                return 0;
+
+        /* run modprobe first */
+        c = 0;
+        argv[c++] = "/sbin/modprobe";
+        argv[c++] = "-q";
+        argv[c++] = (char *)module;
+        argv[c++] = NULL;
+        rc = jt_blockdev_run_process("modprobe", argv);
+        if (rc != 1)
+                return rc;
+
+        /* cannot find the module in default directory ... */
+        sprintf(buf, "../llite/%s.ko", module);
+        c = 0;
+        argv[c++] = "/sbin/insmod";
+        argv[c++] = buf;
+        argv[c++] = NULL;
+        rc = jt_blockdev_run_process("insmod", argv);
+        return rc ? -1 : 0;
+}
+
+int jt_blockdev_attach(int argc, char **argv)
+{
+        int rc, fd;
+        struct stat st;
+        char *filename, *devname;
+        unsigned long dev;
+
+        if (argc != 3)
+                return CMD_HELP;
+
+        if (jt_blockdev_probe_module("llite_lloop") < 0) {
+                fprintf(stderr, "error: cannot find module llite_lloop.(k)o\n");
+                return ENOENT;
+        }
+
+        filename = argv[1];
+        devname = argv[2];
+
+        fd = open(filename, O_RDWR);
+        if (fd < 0) {
+                fprintf(stderr, "file %s can't be opened(%s)\n\n",
+                        filename, strerror(errno));
+                return CMD_HELP;
+        }
+
+        rc = ioctl(fd, LL_IOC_LLOOP_ATTACH, &dev);
+        if (rc < 0) {
+                rc = errno;
+                fprintf(stderr, "attach error(%s)\n", strerror(rc));
+                goto out;
+        }
+
+        rc = stat(devname, &st);
+        if (rc == 0 && (!S_ISBLK(st.st_mode) || st.st_rdev != dev)) {
+                rc = EEXIST;
+        } else if (rc < 0) {
+                if (errno == ENOENT &&
+                    !mknod(devname, S_IFBLK|S_IRUSR|S_IWUSR, dev))
+                        rc = 0;
+                else
+                        rc = errno;
+        }
+
+        if (rc) {
+                fprintf(stderr, "error: the file %s could be attached to block "
+                                "device %X but creating %s failed: %s\n"
+                                "now detaching the block device..",
+                        filename, (int)dev, devname, strerror(rc));
+
+                (void)ioctl(fd, LL_IOC_LLOOP_DETACH_BYDEV, dev);
+                fprintf(stderr, "%s\n", strerror(errno));
+        }
+out:
+        close(fd);
+        return -rc;
+}
+
+int jt_blockdev_detach(int argc, char **argv)
+{
+        char *filename;
+        int rc, fd;
+
+        if (argc != 2)
+                return CMD_HELP;
+
+        filename = argv[1];
+        fd = open(filename, O_RDONLY);
+        if (fd < 0) {
+                fprintf(stderr, "cannot open file %s error %s\n",
+                        filename, strerror(errno));
+                return CMD_HELP;
+        }
+
+        rc = ioctl(fd, LL_IOC_LLOOP_DETACH, 0);
+        if (rc < 0) {
+                rc = errno;
+                fprintf(stderr, "detach error(%s)\n", strerror(rc));
+        } else {
+                (void)unlink(filename);
+        }
+
+        close(fd);
+        return -rc;
+}
+
+int jt_blockdev_info(int argc, char **argv)
+{
+        char *filename;
+        int rc, fd;
+        __u64  ino;
+
+        if (argc != 2)
+                return CMD_HELP;
+
+        filename = argv[1];
+        fd = open(filename, O_RDONLY);
+        if (fd < 0) {
+                fprintf(stderr, "cannot open file %s error: %s\n",
+                        filename, strerror(errno));
+                return CMD_HELP;
+        }
+
+        rc = ioctl(fd, LL_IOC_LLOOP_INFO, &ino);
+        if (rc < 0) {
+                rc = errno;
+                fprintf(stderr, "error: %s\n", strerror(errno));
+                goto out;
+        }
+        fprintf(stdout, "lloop device info: ");
+        if (ino == 0ULL)
+                fprintf(stdout, "Not attached\n");
+        else
+                fprintf(stdout, "attached to inode "LPU64"\n", ino);
+out:
+        close(fd);
+        return -rc;
 }
 
 static void signal_server(int sig)

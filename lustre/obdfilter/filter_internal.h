@@ -1,5 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #ifndef _FILTER_INTERNAL_H
@@ -29,28 +61,13 @@
 #define FILTER_GRANT_CHUNK (2ULL * PTLRPC_MAX_BRW_SIZE)
 #define GRANT_FOR_LLOG(obd) 16
 
-#define FILTER_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
-
 extern struct file_operations filter_per_export_stats_fops;
-
-/* Data stored per client in the last_rcvd file.  In le32 order. */
-struct filter_client_data {
-        __u8  fcd_uuid[40];        /* client UUID */
-        __u64 fcd_last_rcvd;       /* last completed transaction ID */
-        __u64 fcd_last_xid;        /* client RPC xid for the last transaction */
-        __u8  fcd_padding[LR_CLIENT_SIZE - 56];
-};
+extern struct file_operations filter_per_nid_stats_fops;
 
 /* Limit the returned fields marked valid to those that we actually might set */
 #define FILTER_VALID_FLAGS (OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLGENER  |\
                             OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ|\
                             OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME)
-
-struct filter_fid {
-        struct ll_fid   ff_fid;         /* ff_fid.f_type == file stripe number */
-        __u64           ff_objid;
-        __u64           ff_group;
-};
 
 /* per-client-per-object persistent state (LRU) */
 struct filter_mod_data {
@@ -62,11 +79,12 @@ struct filter_mod_data {
         int              fmd_refcount;  /* reference counter - list holds 1 */
 };
 
-#ifdef BGL_SUPPORT
+#ifdef HAVE_BGL_SUPPORT
 #define FILTER_FMD_MAX_NUM_DEFAULT 128 /* many active files per client on BGL */
 #else
 #define FILTER_FMD_MAX_NUM_DEFAULT  32
 #endif
+/* Client cache seconds */
 #define FILTER_FMD_MAX_AGE_DEFAULT ((obd_timeout + 10) * HZ)
 
 struct filter_mod_data *filter_fmd_find(struct obd_export *exp,
@@ -98,7 +116,8 @@ struct dentry *__filter_oa2dentry(struct obd_device *obd, struct obdo *oa,
                                   const char *what, int quiet);
 #define filter_oa2dentry(obd, oa) __filter_oa2dentry(obd, oa, __FUNCTION__, 0)
 
-int filter_finish_transno(struct obd_export *, struct obd_trans_info *, int rc);
+int filter_finish_transno(struct obd_export *, struct inode *,
+                          struct obd_trans_info *, int rc, int force_sync);
 __u64 filter_next_id(struct filter_obd *, struct obdo *);
 __u64 filter_last_id(struct filter_obd *, obd_gr group);
 int filter_update_fidea(struct obd_export *exp, struct inode *inode,
@@ -115,6 +134,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                             struct obdo *oa, struct obd_trans_info *oti);
 int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
                    struct obd_trans_info *oti);
+int filter_recreate(struct obd_device *obd, struct obdo *oa);
 
 struct dentry *filter_create_object(struct obd_device *obd, struct obdo *oa);
 
@@ -173,24 +193,19 @@ int filter_recov_log_mds_ost_cb(struct llog_handle *llh,
                                struct llog_rec_hdr *rec, void *data);
 
 #ifdef LPROCFS
-void filter_tally_write(struct obd_export *exp, struct page **pages,
-                        int nr_pages, unsigned long *blocks,
-                        int blocks_per_page);
-void filter_tally_read(struct obd_export *exp, struct page **pages,
-                       int nr_pages, unsigned long *blocks,
-                       int blocks_per_page);
+void filter_tally(struct obd_export *exp, struct page **pages, int nr_pages,
+                  unsigned long *blocks, int blocks_per_page, int wr);
 int lproc_filter_attach_seqstat(struct obd_device *dev);
+void lprocfs_filter_init_vars(struct lprocfs_static_vars *lvars);
 #else
-static inline void filter_tally_write(struct obd_export *exp,
-                                      struct page **pages, int nr_pages,
-                                 unsigned long *blocks, int blocks_per_page) {}
-static inline void filter_tally_read(struct obd_export *exp,
-                                 struct page **pages, int nr_pages,
-                                 unsigned long *blocks, int blocks_per_page) {}
-static inline void filter_tally_read(struct filter_obd *filter,
-                                 struct page **pages, int nr_pages,
-                                 unsigned long *blocks, int blocks_per_page) {}
+static inline void filter_tally(struct obd_export *exp, struct page **pages,
+                                int nr_pages, unsigned long *blocks,
+                                int blocks_per_page, int wr) {}
 static inline int lproc_filter_attach_seqstat(struct obd_device *dev) {}
+static void lprocfs_filter_init_vars(struct lprocfs_static_vars *lvars)
+{
+        memset(lvars, 0, sizeof(*lvars));
+}
 #endif
 
 /* Quota stuff */

@@ -1,29 +1,43 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001-2003 Cluster File Systems, Inc.
- *   Author: Andreas Dilger <adilger@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- *  remote api for llog - server side
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
  *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/ptlrpc/llog_server.c
+ *
+ * remote api for llog - server side
+ *
+ * Author: Andreas Dilger <adilger@clusterfs.com>
  */
 
 #define DEBUG_SUBSYSTEM S_LOG
@@ -63,7 +77,7 @@ int llog_origin_handle_create(struct ptlrpc_request *req)
                                  lustre_swab_llogd_body);
         if (body == NULL) {
                 CERROR ("Can't unpack llogd_body\n");
-                GOTO(out, rc =-EFAULT);
+                RETURN(-EFAULT);
         }
 
         if (body->lgd_logid.lgl_oid > 0)
@@ -73,14 +87,14 @@ int llog_origin_handle_create(struct ptlrpc_request *req)
                 name = lustre_msg_string(req->rq_reqmsg, REQ_REC_OFF + 1, 0);
                 if (name == NULL) {
                         CERROR("Can't unpack name\n");
-                        GOTO(out, rc = -EFAULT);
+                        RETURN(-EFAULT);
                 }
                 CDEBUG(D_INFO, "opening log %s\n", name);
         }
 
         ctxt = llog_get_context(obd, body->lgd_ctxt_idx);
         if (ctxt == NULL)
-                GOTO(out, rc = -EINVAL);
+                RETURN(-EINVAL);
         disk_obd = ctxt->loc_exp->exp_obd;
         push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
 
@@ -101,7 +115,7 @@ out_close:
                 rc = rc2;
 out_pop:
         pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
-out:
+        llog_ctxt_put(ctxt);
         RETURN(rc);
 }
 
@@ -124,7 +138,7 @@ int llog_origin_handle_destroy(struct ptlrpc_request *req)
                                  lustre_swab_llogd_body);
         if (body == NULL) {
                 CERROR ("Can't unpack llogd_body\n");
-                GOTO(out, rc =-EFAULT);
+                RETURN(-EFAULT);
         }
 
         if (body->lgd_logid.lgl_oid > 0)
@@ -132,7 +146,8 @@ int llog_origin_handle_destroy(struct ptlrpc_request *req)
 
         ctxt = llog_get_context(obd, body->lgd_ctxt_idx);
         if (ctxt == NULL)
-                GOTO(out, rc = -EINVAL);
+                RETURN(-EINVAL);
+
         disk_obd = ctxt->loc_exp->exp_obd;
         push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
 
@@ -160,7 +175,7 @@ out_close:
                 llog_close(loghandle);
 out_pop:
         pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
-out:
+        llog_ctxt_put(ctxt);
         RETURN(rc);
 }
 
@@ -186,12 +201,12 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req)
                                   lustre_swab_llogd_body);
         if (body == NULL) {
                 CERROR ("Can't unpack llogd_body\n");
-                GOTO(out, rc =-EFAULT);
+                RETURN(-EFAULT);
         }
 
         OBD_ALLOC(buf, LLOG_CHUNK_SIZE);
         if (!buf)
-                GOTO(out, rc = -ENOMEM);
+                RETURN(-ENOMEM);
 
         ctxt = llog_get_context(obd, body->lgd_ctxt_idx);
         if (ctxt == NULL)
@@ -233,9 +248,9 @@ out_close:
 
 out_pop:
         pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
+        llog_ctxt_put(ctxt);
 out_free:
         OBD_FREE(buf, LLOG_CHUNK_SIZE);
-out:
         RETURN(rc);
 }
 
@@ -261,12 +276,12 @@ int llog_origin_handle_prev_block(struct ptlrpc_request *req)
                                   lustre_swab_llogd_body);
         if (body == NULL) {
                 CERROR ("Can't unpack llogd_body\n");
-                GOTO(out, rc =-EFAULT);
+                RETURN(-EFAULT);
         }
 
         OBD_ALLOC(buf, LLOG_CHUNK_SIZE);
         if (!buf)
-                GOTO(out, rc = -ENOMEM);
+                RETURN(-ENOMEM);
 
         ctxt = llog_get_context(obd, body->lgd_ctxt_idx);
         LASSERT(ctxt != NULL);
@@ -288,7 +303,6 @@ int llog_origin_handle_prev_block(struct ptlrpc_request *req)
         if (rc)
                 GOTO(out_close, rc);
 
-
         rc = lustre_pack_reply(req, 3, size, NULL);
         if (rc)
                 GOTO(out_close, rc = -ENOMEM);
@@ -306,8 +320,8 @@ out_close:
 
 out_pop:
         pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
+        llog_ctxt_put(ctxt);
         OBD_FREE(buf, LLOG_CHUNK_SIZE);
-out:
         RETURN(rc);
 }
 
@@ -330,12 +344,12 @@ int llog_origin_handle_read_header(struct ptlrpc_request *req)
                                   lustre_swab_llogd_body);
         if (body == NULL) {
                 CERROR ("Can't unpack llogd_body\n");
-                GOTO(out, rc =-EFAULT);
+                RETURN(-EFAULT);
         }
 
         ctxt = llog_get_context(obd, body->lgd_ctxt_idx);
         if (ctxt == NULL)
-                GOTO(out, rc = -EINVAL);
+                RETURN(-EINVAL);
         disk_obd = ctxt->loc_exp->exp_obd;
         push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
 
@@ -360,11 +374,9 @@ out_close:
         rc2 = llog_close(loghandle);
         if (!rc)
                 rc = rc2;
-
 out_pop:
         pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
-
-out:
+        llog_ctxt_put(ctxt);
         RETURN(rc);
 }
 
@@ -382,7 +394,7 @@ int llog_origin_handle_cancel(struct ptlrpc_request *req)
         struct obd_device *obd = req->rq_export->exp_obd;
         struct obd_device *disk_obd;
         struct llog_cookie *logcookies;
-        struct llog_ctxt *ctxt;
+        struct llog_ctxt *ctxt = NULL;
         int num_cookies, rc = 0, err, i;
         struct lvfs_run_ctxt saved;
         struct llog_handle *cathandle;
@@ -434,8 +446,9 @@ pop_ctxt:
         if (rc)
                 CERROR("cancel %d llog-records failed: %d\n", num_cookies, rc);
         else
-                CDEBUG(D_HA, "cancel %d llog-records\n", num_cookies);
+                CDEBUG(D_RPCTRACE, "cancel %d llog-records\n", num_cookies);
 
+        llog_ctxt_put(ctxt);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_origin_handle_cancel);
@@ -452,7 +465,7 @@ static int llog_catinfo_config(struct obd_device *obd, char *buf, int buf_len,
         char *out = buf;
 
         if (ctxt == NULL || mds == NULL)
-                RETURN(-EOPNOTSUPP);
+                GOTO(release_ctxt, rc = -EOPNOTSUPP);
 
         push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
 
@@ -480,7 +493,7 @@ static int llog_catinfo_config(struct obd_device *obd, char *buf, int buf_len,
                 l = snprintf(out, remains, "[Log Name]: %s\nLog Size: %llu\n"
                              "Last Index: %d\nUncanceled Records: %d\n\n",
                              name[i],
-                             handle->lgh_file->f_dentry->d_inode->i_size,
+                             i_size_read(handle->lgh_file->f_dentry->d_inode),
                              handle->lgh_last_idx, uncanceled);
                 out += l;
                 remains -= l;
@@ -491,6 +504,8 @@ static int llog_catinfo_config(struct obd_device *obd, char *buf, int buf_len,
         }
 out_pop:
         pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
+release_ctxt:
+        llog_ctxt_put(ctxt);
         RETURN(rc);
 }
 
@@ -506,7 +521,7 @@ static int llog_catinfo_cb(struct llog_handle *cat,
 {
         static char *out = NULL;
         static int remains = 0;
-        struct llog_ctxt *ctxt;
+        struct llog_ctxt *ctxt = NULL;
         struct llog_handle *handle;
         struct llog_logid *logid;
         struct llog_logid_rec *lir;
@@ -518,11 +533,13 @@ static int llog_catinfo_cb(struct llog_handle *cat,
                 remains = cbd->remains;
                 cbd->init = 0;
         }
-        ctxt = cbd->ctxt;
 
-        if (!(cat->lgh_hdr->llh_flags & LLOG_F_IS_CAT))
+        if (!(cat->lgh_hdr->llh_flags & LLOG_F_IS_CAT)) 
                 RETURN(-EINVAL);
 
+        if (!cbd->ctxt)
+                RETURN(-EINVAL);
+        
         lir = (struct llog_logid_rec *)rec;
         logid = &lir->lid_id;
         rc = llog_create(ctxt, &handle, logid, NULL);
@@ -541,7 +558,7 @@ static int llog_catinfo_cb(struct llog_handle *cat,
                      "\tLog Size: %llu\n\tLast Index: %d\n"
                      "\tUncanceled Records: %d\n",
                      logid->lgl_oid, logid->lgl_ogr, logid->lgl_ogen,
-                     handle->lgh_file->f_dentry->d_inode->i_size,
+                     i_size_read(handle->lgh_file->f_dentry->d_inode),
                      handle->lgh_last_idx, count);
         out += l;
         remains -= l;
@@ -572,14 +589,14 @@ static int llog_catinfo_deletions(struct obd_device *obd, char *buf,
         struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
 
         if (ctxt == NULL || mds == NULL)
-                RETURN(-EOPNOTSUPP);
-
+                GOTO(release_ctxt, rc = -EOPNOTSUPP);
+       
         count = mds->mds_lov_desc.ld_tgt_count;
         size = sizeof(*idarray) * count;
 
         OBD_ALLOC(idarray, size);
         if (!idarray)
-                RETURN(-ENOMEM);
+                GOTO(release_ctxt, rc = -ENOMEM);
 
         rc = llog_get_cat_list(obd, obd, name, count, idarray);
         if (rc)
@@ -626,6 +643,9 @@ out_pop:
         pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
 out_free:
         OBD_FREE(idarray, size);
+release_ctxt:
+        llog_ctxt_put(ctxt);
+
         RETURN(rc);
 }
 

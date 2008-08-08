@@ -21,6 +21,12 @@ fi
 FILES=$($CVS_MODIFIED_FILES_PL $1)
 TMP=`mktemp /tmp/cvslog-XXXXXXXX`
 if [ -f $TMP ]; then
+	cat - >> $TMP <<- EOH
+		CVS: did you test your fix properly (acc-sm.sh, or as needed)?
+		CVS: did you update the ChangeLog for a bug fix?
+		CVS: did you verify/update affected user documentation?
+		CVS: Remove "CVS:" from lines below to include in commit message
+	EOH
 	[ -f .mergeinfo ] && . .mergeinfo
 	[ -z "$PARENT" -a -f lustre/.mergeinfo ] && . lustre/.mergeinfo
 	if [ "$PARENT" ]; then
@@ -33,15 +39,15 @@ if [ -f $TMP ]; then
 		[ "$TAG" ] && BRANCH="`sed 's/^T//' $TAG`" || BRANCH="HEAD"
 		echo "CVS: Branch $BRANCH" >> $TMP
 	fi
-cat - >> $TMP <<- EOF
-	CVS: Remove "CVS:" from start of lines that should be in commit message
-	CVS: did you update the ChangeLog for a bug fix?
-	CVS: did you update the hours spent in Bugzilla?
-	CVS: did you verify/update the HLD/DLD in CVS?
-	CVS: b=<bug>
-	CVS: i=<inspected_by>
-	CVS: i=<inspected_by>
-EOF
+	# We can't just put these into the commit template without the leading
+	# "CVS: ", otherwise exiting the commend edit would still leave a valid
+	# comment in the file and the commit will still be done.  We need to
+	# make a file without valid comments to allow the commit to be aborted.
+	cat - >> $TMP <<- EOB
+		CVS: b=<bug>
+		CVS: i=<inspected_by>
+		CVS: i=<inspected_by>
+	EOB
 
 	cat $1 >> $TMP
 	cp $TMP $1

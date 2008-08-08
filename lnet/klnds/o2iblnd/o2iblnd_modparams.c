@@ -1,24 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2006 Cluster File Systems, Inc.
- *   Author: Eric Barton <eric@bartonsoftware.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/klnds/o2iblnd/o2iblnd_modparams.c
+ *
+ * Author: Eric Barton <eric@bartonsoftware.com>
  */
 
 #include "o2iblnd.h"
@@ -29,23 +46,23 @@ CFS_MODULE_PARM(service, "i", int, 0444,
 
 static int cksum = 0;
 CFS_MODULE_PARM(cksum, "i", int, 0644,
-		"set non-zero to enable message (not RDMA) checksums");
+                "set non-zero to enable message (not RDMA) checksums");
 
 static int timeout = 50;
 CFS_MODULE_PARM(timeout, "i", int, 0644,
-		"timeout (seconds)");
+                "timeout (seconds)");
 
 static int ntx = 256;
 CFS_MODULE_PARM(ntx, "i", int, 0444,
-		"# of message descriptors");
+                "# of message descriptors");
 
 static int credits = 64;
 CFS_MODULE_PARM(credits, "i", int, 0444,
-		"# concurrent sends");
+                "# concurrent sends");
 
 static int peer_credits = 8;
 CFS_MODULE_PARM(peer_credits, "i", int, 0444,
-		"# concurrent sends to 1 peer");
+                "# concurrent sends to 1 peer");
 
 static char *ipif_name = "ib0";
 CFS_MODULE_PARM(ipif_name, "s", charp, 0444,
@@ -109,49 +126,146 @@ kib_tunables_t kiblnd_tunables = {
 #endif
 };
 
-#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
 
 static char ipif_basename_space[32];
 
-static ctl_table kiblnd_ctl_table[] = {
-	{1, "service", &service, 
-	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{2, "cksum", &cksum, 
-	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{3, "timeout", &timeout, 
-	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{4, "ntx", &ntx, 
-	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{5, "credits", &credits, 
-	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{6, "peer_credits", &peer_credits, 
-	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{7, "ipif_name", ipif_basename_space, 
-	 sizeof(ipif_basename_space), 0444, NULL, &proc_dostring},
-	{8, "retry_count", &retry_count, 
-	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{9, "rnr_retry_count", &rnr_retry_count, 
-	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{10, "keepalive", &keepalive, 
-	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{11, "concurrent_sends", &concurrent_sends, 
-	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{12, "ib_mtu", &ib_mtu, 
-	 sizeof(int), 0444, NULL, &proc_dointvec},
+static cfs_sysctl_table_t kiblnd_ctl_table[] = {
+        {
+                .ctl_name = 1,
+                .procname = "service",
+                .data     = &service,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 2,
+                .procname = "cksum",
+                .data     = &cksum,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 3,
+                .procname = "timeout",
+                .data     = &timeout,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 4,
+                .procname = "ntx",
+                .data     = &ntx,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 5,
+                .procname = "credits",
+                .data     = &credits,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 6,
+                .procname = "peer_credits",
+                .data     = &peer_credits,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 7,
+                .procname = "ipif_name",
+                .data     = ipif_basename_space,
+                .maxlen   = sizeof(ipif_basename_space),
+                .mode     = 0444,
+                .proc_handler = &proc_dostring
+        },
+        {
+                .ctl_name = 8,
+                .procname = "retry_count",
+                .data     = &retry_count,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 9,
+                .procname = "rnr_retry_count",
+                .data     = &rnr_retry_count,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 10,
+                .procname = "keepalive",
+                .data     = &keepalive,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 11,
+                .procname = "concurrent_sends",
+                .data     = &concurrent_sends,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 12,
+                .procname = "ib_mtu",
+                .data     = &ib_mtu,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
 #if IBLND_MAP_ON_DEMAND
-	{12, "fmr_pool_size", &fmr_pool_size, 
-	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{13, "fmr_flush_trigger", &fmr_flush_trigger, 
-	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{14, "fmr_cache", &fmr_cache, 
-	 sizeof(int), 0444, NULL, &proc_dointvec},
+        {
+                .ctl_name = 13,
+                .procname = "fmr_pool_size",
+                .data     = &fmr_pool_size,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 14,
+                .procname = "fmr_flush_trigger",
+                .data     = &fmr_flush_trigger,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 15,
+                .procname = "fmr_cache",
+                .data     = &fmr_cache,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
 #endif
-	{0}
+        {0}
 };
 
-static ctl_table kiblnd_top_ctl_table[] = {
-	{203, "o2iblnd", NULL, 0, 0555, kiblnd_ctl_table},
-	{0}
+static cfs_sysctl_table_t kiblnd_top_ctl_table[] = {
+        {
+                .ctl_name = 203,
+                .procname = "o2iblnd",
+                .data     = NULL,
+                .maxlen   = 0,
+                .mode     = 0555,
+                .child    = kiblnd_ctl_table
+        },
+        {0}
 };
 
 void
@@ -167,18 +281,18 @@ kiblnd_sysctl_init (void)
         kiblnd_initstrtunable(ipif_basename_space, ipif_name,
                               sizeof(ipif_basename_space));
 
-	kiblnd_tunables.kib_sysctl =
-		cfs_register_sysctl_table(kiblnd_top_ctl_table, 0);
+        kiblnd_tunables.kib_sysctl =
+                cfs_register_sysctl_table(kiblnd_top_ctl_table, 0);
 
-	if (kiblnd_tunables.kib_sysctl == NULL)
-		CWARN("Can't setup /proc tunables\n");
+        if (kiblnd_tunables.kib_sysctl == NULL)
+                CWARN("Can't setup /proc tunables\n");
 }
 
 void
 kiblnd_sysctl_fini (void)
 {
-	if (kiblnd_tunables.kib_sysctl != NULL)
-		cfs_unregister_sysctl_table(kiblnd_tunables.kib_sysctl);
+        if (kiblnd_tunables.kib_sysctl != NULL)
+                cfs_unregister_sysctl_table(kiblnd_tunables.kib_sysctl);
 }
 
 #else
@@ -205,7 +319,7 @@ kiblnd_tunables_init (void)
         if (*kiblnd_tunables.kib_concurrent_sends < IBLND_MSG_QUEUE_SIZE)
                 *kiblnd_tunables.kib_concurrent_sends = IBLND_MSG_QUEUE_SIZE;
 
-	return 0;
+        return 0;
 }
 
 void
@@ -213,6 +327,3 @@ kiblnd_tunables_fini (void)
 {
         kiblnd_sysctl_fini();
 }
-
-
-

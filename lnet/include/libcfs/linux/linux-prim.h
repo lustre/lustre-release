@@ -1,25 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001 Cluster File Systems, Inc. <braam@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/include/libcfs/linux/linux-prim.h
  *
  * Basic library routines.
- *
  */
 
 #ifndef __LIBCFS_LINUX_CFS_PRIM_H__
@@ -30,7 +46,7 @@
 #endif
 
 #ifdef __KERNEL__
-#ifdef HAVE_KERNEL_CONFIG_H
+#ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
 #include <linux/module.h>
@@ -39,6 +55,8 @@
 #include <linux/proc_fs.h>
 #include <linux/mm.h>
 #include <linux/timer.h>
+#include <linux/signal.h>
+#include <linux/sched.h>
 
 #include <linux/miscdevice.h>
 #include <libcfs/linux/portals_compat25.h>
@@ -123,7 +141,19 @@ typedef long                            cfs_task_state_t;
 
 /* Kernel thread */
 typedef int (*cfs_thread_t)(void *);
-#define cfs_kernel_thread(func, a, f)   kernel_thread(func, a, f)
+
+static inline int cfs_kernel_thread(int (*fn)(void *),
+                                    void *arg, unsigned long flags)
+{
+        void *orig_info = current->journal_info;
+        int rc;
+
+        current->journal_info = NULL;
+        rc = kernel_thread(fn, arg, flags);
+        current->journal_info = orig_info;
+        return rc;
+}
+
 
 /*
  * Task struct
@@ -198,6 +228,94 @@ static inline void cfs_pause(cfs_duration_t ticks)
         set_current_state(TASK_UNINTERRUPTIBLE);
         schedule_timeout(ticks);
 }
+
+#ifndef wait_event_timeout /* Only for RHEL3 2.4.21 kernel */
+#define __wait_event_timeout(wq, condition, timeout, ret)        \
+do {                                                             \
+	int __ret = 0;                                           \
+	if (!(condition)) {                                      \
+		wait_queue_t __wait;                             \
+		unsigned long expire;                            \
+                                                                 \
+		init_waitqueue_entry(&__wait, current);          \
+		expire = timeout + jiffies;                      \
+		add_wait_queue(&wq, &__wait);                    \
+		for (;;) {                                       \
+			set_current_state(TASK_UNINTERRUPTIBLE); \
+			if (condition)                           \
+				break;                           \
+			if (jiffies > expire) {                  \
+				ret = jiffies - expire;          \
+				break;                           \
+			}                                        \
+			schedule_timeout(timeout);               \
+		}                                                \
+		current->state = TASK_RUNNING;                   \
+		remove_wait_queue(&wq, &__wait);                 \
+	}                                                        \
+} while (0)
+/*
+   retval == 0; condition met; we're good.
+   retval > 0; timed out.
+*/
+#define cfs_waitq_wait_event_timeout(wq, condition, timeout)         \
+({                                                                   \
+	int __ret = 0;                                               \
+	if (!(condition))                                            \
+		__wait_event_timeout(wq, condition, timeout, __ret); \
+	__ret;                                                       \
+})
+#else
+#define cfs_waitq_wait_event_timeout  wait_event_timeout
+#endif
+
+#ifndef wait_event_interruptible_timeout /* Only for RHEL3 2.4.21 kernel */
+#define __wait_event_interruptible_timeout(wq, condition, timeout, ret)   \
+do {                                                           \
+	int __ret = 0;                                         \
+	if (!(condition)) {                                    \
+		wait_queue_t __wait;                           \
+		unsigned long expire;                          \
+                                                               \
+		init_waitqueue_entry(&__wait, current);        \
+		expire = timeout + jiffies;                    \
+		add_wait_queue(&wq, &__wait);                  \
+		for (;;) {                                     \
+			set_current_state(TASK_INTERRUPTIBLE); \
+			if (condition)                         \
+				break;                         \
+			if (jiffies > expire) {                \
+				ret = jiffies - expire;        \
+				break;                         \
+			}                                      \
+			if (!signal_pending(current)) {        \
+				schedule_timeout(timeout);     \
+				continue;                      \
+			}                                      \
+			ret = -ERESTARTSYS;                    \
+			break;                                 \
+		}                                              \
+		current->state = TASK_RUNNING;                 \
+		remove_wait_queue(&wq, &__wait);               \
+	}                                                      \
+} while (0)
+
+/*
+   retval == 0; condition met; we're good.
+   retval < 0; interrupted by signal.
+   retval > 0; timed out.
+*/
+#define cfs_waitq_wait_event_interruptible_timeout(wq, condition, timeout) \
+({                                                                \
+	int __ret = 0;                                            \
+	if (!(condition))                                         \
+		__wait_event_interruptible_timeout(wq, condition, \
+						timeout, __ret);  \
+	__ret;                                                    \
+})
+#else
+#define cfs_waitq_wait_event_interruptible_timeout wait_event_interruptible_timeout
+#endif
 
 #else   /* !__KERNEL__ */
 

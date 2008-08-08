@@ -1,22 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #include <linux/fs.h>
@@ -45,7 +60,7 @@ static void ll_release(struct dentry *de)
                 EXIT;
                 return;
         }
-#ifndef LUSTRE_KERNEL_VERSION
+#ifndef HAVE_VFS_INTENT_PATCHES
         if (lld->lld_it) {
                 ll_intent_release(lld->lld_it);
                 OBD_FREE(lld->lld_it, sizeof(*lld->lld_it));
@@ -58,7 +73,7 @@ static void ll_release(struct dentry *de)
         EXIT;
 }
 
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef DCACHE_LUSTRE_INVALID
 /* Compare if two dentries are the same.  Don't match if the existing dentry
  * is marked DCACHE_LUSTRE_INVALID.  Returns 1 if different, 0 if the same.
  *
@@ -118,11 +133,21 @@ void ll_set_dd(struct dentry *de)
         CDEBUG(D_DENTRY, "ldd on dentry %.*s (%p) parent %p inode %p refc %d\n",
                de->d_name.len, de->d_name.name, de, de->d_parent, de->d_inode,
                atomic_read(&de->d_count));
-        lock_kernel();
+
         if (de->d_fsdata == NULL) {
-                OBD_ALLOC(de->d_fsdata, sizeof(struct ll_dentry_data));
+                struct ll_dentry_data *lld;
+
+                OBD_ALLOC(lld, sizeof(struct ll_dentry_data));
+                if (likely(lld != NULL)) {
+                        cfs_waitq_init(&lld->lld_waitq);
+                        lock_dentry(de);
+                        if (likely(de->d_fsdata == NULL))
+                                de->d_fsdata = lld;
+                        else
+                                OBD_FREE(lld, sizeof(struct ll_dentry_data));
+                        unlock_dentry(de);
+                }
         }
-        unlock_kernel();
 
         EXIT;
 }
@@ -148,7 +173,7 @@ void ll_intent_release(struct lookup_intent *it)
         ENTRY;
 
         ll_intent_drop_lock(it);
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         it->it_magic = 0;
         it->it_op_release = 0;
 #endif
@@ -192,7 +217,7 @@ int ll_drop_dentry(struct dentry *dentry)
 		RETURN (0);
 	}
 
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef DCACHE_LUSTRE_INVALID
         if (!(dentry->d_flags & DCACHE_LUSTRE_INVALID)) {
 #else
         if (!d_unhashed(dentry)) {
@@ -204,7 +229,7 @@ int ll_drop_dentry(struct dentry *dentry)
                 /* actually we don't unhash the dentry, rather just
                  * mark it inaccessible for to __d_lookup(). otherwise
                  * sys_getcwd() could return -ENOENT -bzzz */
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef DCACHE_LUSTRE_INVALID
                 dentry->d_flags |= DCACHE_LUSTRE_INVALID;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 __d_drop(dentry);
@@ -261,7 +286,7 @@ restart:
 
                         continue;
                 }
-                
+
                 if (ll_drop_dentry(dentry))
                           goto restart;
         }
@@ -315,7 +340,7 @@ void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry)
 void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft)
 {
         struct lookup_intent *it = *itp;
-#if defined(LUSTRE_KERNEL_VERSION)&&(LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+#if defined(HAVE_VFS_INTENT_PATCHES)&&(LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         if (it) {
                 LASSERTF(it->it_magic == INTENT_MAGIC, "bad intent magic: %x\n",
                          it->it_magic);
@@ -325,7 +350,7 @@ void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft)
         if (!it || it->it_op == IT_GETXATTR)
                 it = *itp = deft;
 
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         it->it_op_release = ll_intent_release;
 #endif
 }
@@ -333,11 +358,11 @@ void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft)
 int ll_revalidate_it(struct dentry *de, int lookup_flags,
                      struct lookup_intent *it)
 {
-        int rc;
-        struct mdc_op_data op_data;
+        struct mdc_op_data op_data = { { 0 } };
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
         struct obd_export *exp;
+        int first = 0, rc;
 
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s,intent=%s\n", de->d_name.name,
@@ -352,15 +377,14 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 if (it && (it->it_op & IT_CREAT))
                         RETURN(0);
 
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef DCACHE_LUSTRE_INVALID
                 if (de->d_flags & DCACHE_LUSTRE_INVALID)
                         RETURN(0);
 #endif
 
-                rc = ll_have_md_lock(de->d_parent->d_inode, 
+                rc = ll_have_md_lock(de->d_parent->d_inode,
                                      MDS_INODELOCK_UPDATE);
-        
-                RETURN(rc);
+                GOTO(out_sa, rc);
         }
 
         exp = ll_i2mdcexp(de->d_inode);
@@ -368,19 +392,19 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         /* Never execute intents for mount points.
          * Attributes will be fixed up in ll_inode_revalidate_it */
         if (d_mountpoint(de))
-                RETURN(1);
+                GOTO(out_sa, rc = 1);
 
         /* Root of the lustre tree. Always valid.
          * Attributes will be fixed up in ll_inode_revalidate_it */
-        if (de->d_name.name[0] == '/' && de->d_name.len == 1)
-                RETURN(1);
+        if (de == de->d_sb->s_root)
+                GOTO(out_sa, rc = 1);
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDC_REVALIDATE_PAUSE, 5);
         ll_frob_intent(&it, &lookup_it);
         LASSERT(it);
 
         ll_prepare_mdc_op_data(&op_data, de->d_parent->d_inode, de->d_inode,
-                               de->d_name.name, de->d_name.len, 0);
+                               de->d_name.name, de->d_name.len, 0, NULL);
 
         if ((it->it_op == IT_OPEN) && de->d_inode) {
                 struct inode *inode = de->d_inode;
@@ -401,7 +425,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 } else if (it->it_flags & FMODE_EXEC) {
                         och_p = &lli->lli_mds_exec_och;
                         och_usecount = &lli->lli_open_fd_exec_count;
-                 } else {
+                } else {
                         och_p = &lli->lli_mds_read_och;
                         och_usecount = &lli->lli_open_fd_read_count;
                 }
@@ -426,11 +450,17 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 }
         }
 
+        if (it->it_op == IT_GETATTR)
+                first = ll_statahead_enter(de->d_parent->d_inode, &de, 0);
+
 do_lock:
         it->it_create_mode &= ~current->fs->umask;
-
+        it->it_flags |= O_CHECK_STALE;
         rc = mdc_intent_lock(exp, &op_data, NULL, 0, it, lookup_flags,
                              &req, ll_mdc_blocking_ast, 0);
+        it->it_flags &= ~O_CHECK_STALE;
+        if (it->it_op == IT_GETATTR && !first)
+                ll_statahead_exit(de, rc);
         /* If req is NULL, then mdc_intent_lock only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
         if (req == NULL && rc >= 0) {
@@ -466,7 +496,7 @@ revalidate_finish:
         lock_dentry(de);
         __d_drop(de);
         unlock_dentry(de);
-        __d_rehash(de, 0);
+        d_rehash_cond(de, 0);
         spin_unlock(&dcache_lock);
 
  out:
@@ -477,7 +507,7 @@ revalidate_finish:
         if (req != NULL && !it_disposition(it, DISP_ENQ_COMPLETE))
                 ptlrpc_req_finished(req);
         if (rc == 0) {
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef DCACHE_LUSTRE_INVALID
                 ll_unhash_aliases(de->d_inode);
                 /* done in ll_unhash_aliases()
                 dentry->d_flags |= DCACHE_LUSTRE_INVALID; */
@@ -491,7 +521,7 @@ revalidate_finish:
                                de->d_name.name, de, de->d_parent, de->d_inode,
                                atomic_read(&de->d_count));
                 ll_lookup_finish_locks(it, de);
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef DCACHE_LUSTRE_INVALID
                 lock_dentry(de);
                 de->d_flags &= ~DCACHE_LUSTRE_INVALID;
                 unlock_dentry(de);
@@ -517,20 +547,37 @@ do_lookup:
         }
         /*do real lookup here */
         ll_prepare_mdc_op_data(&op_data, de->d_parent->d_inode, NULL,
-                               de->d_name.name, de->d_name.len, 0);
+                               de->d_name.name, de->d_name.len, 0, NULL);
         rc = mdc_intent_lock(exp, &op_data, NULL, 0,  it, 0, &req,
                              ll_mdc_blocking_ast, 0);
         if (rc >= 0) {
                 struct mds_body *mds_body = lustre_msg_buf(req->rq_repmsg,
                                                            DLM_REPLY_REC_OFF,
                                                            sizeof(*mds_body));
+                struct ll_fid fid = { 0 };
+
+                if (de->d_inode)
+                         ll_inode2fid(&fid, de->d_inode);
+
                 /* see if we got same inode, if not - return error */
-                if(!memcmp(&op_data.fid2, &mds_body->fid1,
-                           sizeof(op_data.fid2)))
+                if(!memcmp(&fid, &mds_body->fid1, sizeof(struct ll_fid)))
                         goto revalidate_finish;
                 ll_intent_release(it);
         }
         GOTO(out, rc = 0);
+
+out_sa:
+        /*
+         * For rc == 1 case, should not return directly to prevent losing
+         * statahead windows; for rc == 0 case, the "lookup" will be done later.
+         */
+        if (it && it->it_op == IT_GETATTR && rc == 1) {
+                first = ll_statahead_enter(de->d_parent->d_inode, &de, 0);
+                if (!first)
+                        ll_statahead_exit(de, rc);
+        }
+
+        return rc;
 }
 
 /*static*/ void ll_pin(struct dentry *de, struct vfsmount *mnt, int flag)
@@ -562,8 +609,8 @@ do_lookup:
         unlock_kernel();
 
         handle = (flag) ? &ldd->lld_mnt_och : &ldd->lld_cwd_och;
-        rc = obd_pin(sbi->ll_mdc_exp, inode->i_ino, inode->i_generation,
-                     inode->i_mode & S_IFMT, handle, flag);
+        rc = obd_pin(sbi->ll_mdc_exp, ll_inode_ll_fid(inode),
+                     handle, flag);
 
         if (rc) {
                 lock_kernel();
@@ -618,7 +665,7 @@ do_lookup:
 }
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
 static int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
 {
         int rc;
@@ -711,11 +758,53 @@ struct dentry_operations ll_d_ops = {
 #endif
         .d_release = ll_release,
         .d_delete = ll_ddelete,
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef DCACHE_LUSTRE_INVALID
         .d_compare = ll_dcompare,
 #endif
 #if 0
         .d_pin = ll_pin,
         .d_unpin = ll_unpin,
 #endif
+};
+
+static int ll_fini_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
+{
+        ENTRY;
+        /* need lookup */
+        RETURN(0);
+}
+
+struct dentry_operations ll_fini_d_ops = {
+        .d_revalidate = ll_fini_revalidate_nd,
+        .d_release = ll_release,
+};
+
+/*
+ * It is for the following race condition:
+ * When someone (maybe statahead thread) adds the dentry to the dentry hash
+ * table, the dentry's "d_op" maybe NULL, at the same time, another (maybe
+ * "ls -l") process finds such dentry by "do_lookup()" without "do_revalidate()"
+ * called. It causes statahead window lost, and maybe other issues. --Fan Yong
+ */
+static int ll_init_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
+{
+        struct l_wait_info lwi = { 0 };
+        struct ll_dentry_data *lld;
+        ENTRY;
+
+        ll_set_dd(dentry);
+        lld = ll_d2d(dentry);
+        if (unlikely(lld == NULL))
+                RETURN(-ENOMEM);
+
+        l_wait_event(lld->lld_waitq, dentry->d_op != &ll_init_d_ops, &lwi);
+        if (likely(dentry->d_op == &ll_d_ops))
+                RETURN(ll_revalidate_nd(dentry, nd));
+        else
+                RETURN(dentry->d_op == &ll_fini_d_ops ? 0 : -EINVAL);
+}
+
+struct dentry_operations ll_init_d_ops = {
+        .d_revalidate = ll_init_revalidate_nd,
+        .d_release = ll_release,
 };

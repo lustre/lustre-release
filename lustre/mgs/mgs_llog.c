@@ -1,26 +1,43 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/mgs/mgs_llog.c
- *  Lustre Management Server (mgs) config llog creation
+ * GPL HEADER START
  *
- *  Copyright (C) 2006 Cluster File Systems, Inc.
- *   Author: Nathan Rutman <nathan@clusterfs.com>
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/mgs/mgs_llog.c
+ *
+ * Lustre Management Server (mgs) config llog creation
+ *
+ * Author: Nathan Rutman <nathan@clusterfs.com>
  */
 
 #ifndef EXPORT_SYMTAB
@@ -224,15 +241,16 @@ static int mgs_get_fsdb_from_llog(struct obd_device *obd, struct fs_db *fsdb)
         char *logname;
         struct llog_handle *loghandle;
         struct lvfs_run_ctxt saved;
+        struct llog_ctxt *ctxt;
         int rc, rc2;
         ENTRY;
 
+        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+        LASSERT(ctxt != NULL);
         name_create(&logname, fsdb->fsdb_name, "-client");
         down(&fsdb->fsdb_sem);
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        
-        rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                         &loghandle, NULL, logname);
+        rc = llog_create(ctxt, &loghandle, NULL, logname);
         if (rc)
                 GOTO(out_pop, rc);
 
@@ -249,8 +267,8 @@ out_close:
         rc2 = llog_close(loghandle);
         if (!rc)
                 rc = rc2;
-
 out_pop:
+        llog_ctxt_put(ctxt);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         up(&fsdb->fsdb_sem);
         name_destroy(&logname);
@@ -463,24 +481,27 @@ int mgs_set_index(struct obd_device *obd, struct mgs_target_info *mti)
         /* Remove after CMD */
         if ((mti->mti_flags & LDD_F_SV_TYPE_MDT) && 
             (mti->mti_stripe_index > 0)) {
-                LCONSOLE_ERROR("MDT index must = 0 (until Clustered MetaData "
-                               "feature is ready.)\n");
+                LCONSOLE_ERROR_MSG(0x13e, "MDT index must = 0 (until Clustered "
+                                   "MetaData feature is ready.)\n");
                 mti->mti_stripe_index = 0;
         }
 
         if (mti->mti_stripe_index >= INDEX_MAP_SIZE * 8) {
-                LCONSOLE_ERROR("Server %s requested index %d, but the"
-                               "max index is %d.\n", 
-                               mti->mti_svname, mti->mti_stripe_index,
-                               INDEX_MAP_SIZE * 8);
+                LCONSOLE_ERROR_MSG(0x13f, "Server %s requested index %d, but the"
+                                   "max index is %d.\n", 
+                                   mti->mti_svname, mti->mti_stripe_index,
+                                   INDEX_MAP_SIZE * 8);
                 RETURN(-ERANGE);
         }
-         
+
         if (test_bit(mti->mti_stripe_index, imap)) {
-                if (mti->mti_flags & LDD_F_VIRGIN) {
-                        LCONSOLE_ERROR("Server %s requested index %d, but that "
-                                       "index is already in use\n",
-                                       mti->mti_svname, mti->mti_stripe_index);
+                if ((mti->mti_flags & LDD_F_VIRGIN) &&
+                    !(mti->mti_flags & LDD_F_WRITECONF)) {
+                        LCONSOLE_ERROR_MSG(0x140, "Server %s requested index "
+                                           "%d, but that index is already in "
+                                           "use. Use --writeconf to force\n",
+                                           mti->mti_svname,
+                                           mti->mti_stripe_index);
                         RETURN(-EADDRINUSE);
                 } else {
                         CDEBUG(D_MGS, "Server %s updating index %d\n",
@@ -563,6 +584,7 @@ static int mgs_modify(struct obd_device *obd, struct fs_db *fsdb,
 {
         struct llog_handle *loghandle;
         struct lvfs_run_ctxt saved;
+        struct llog_ctxt *ctxt;
         struct mgs_modify_lookup *mml;
         int rc, rc2;
         ENTRY;
@@ -570,9 +592,10 @@ static int mgs_modify(struct obd_device *obd, struct fs_db *fsdb,
         CDEBUG(D_MGS, "modify %s/%s/%s\n", logname, devname, comment);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        
-        rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                         &loghandle, NULL, logname);
+       
+        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+        LASSERT(ctxt != NULL);
+        rc = llog_create(ctxt, &loghandle, NULL, logname);
         if (rc)
                 GOTO(out_pop, rc);
 
@@ -601,8 +624,8 @@ out_close:
         rc2 = llog_close(loghandle);
         if (!rc)
                 rc = rc2;
-
 out_pop:
+        llog_ctxt_put(ctxt);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         if (rc && rc != -ENODEV) 
                 CERROR("modify %s/%s failed %d\n",
@@ -679,7 +702,7 @@ static int record_base(struct obd_device *obd, struct llog_handle *llh,
 
 static inline int record_add_uuid(struct obd_device *obd, 
                                   struct llog_handle *llh, 
-                                  uint64_t nid, char *uuid)
+                                  __u64 nid, char *uuid)
 {
         return record_base(obd,llh,NULL,nid,LCFG_ADD_UUID,uuid,0,0,0);
 
@@ -776,22 +799,25 @@ static int record_start_log(struct obd_device *obd,
 {
         static struct obd_uuid cfg_uuid = { .uuid = "config_uuid" };
         struct lvfs_run_ctxt saved;
+        struct llog_ctxt *ctxt;
         int rc = 0;
         
-        if (*llh) {
+        if (*llh) 
                 GOTO(out, rc = -EBUSY);
-        }
 
+        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+        if (!ctxt)
+                GOTO(out, rc = -ENODEV);
+        
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
-        rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                         llh, NULL, name);
+        rc = llog_create(ctxt, llh, NULL, name);
         if (rc == 0)
                 llog_init_handle(*llh, LLOG_F_IS_PLAIN, &cfg_uuid);
         else
                 *llh = NULL;
 
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        llog_ctxt_put(ctxt);
 
 out:
         if (rc) {
@@ -818,17 +844,20 @@ static int mgs_log_is_empty(struct obd_device *obd, char *name)
 {
         struct lvfs_run_ctxt saved;
         struct llog_handle *llh;
+        struct llog_ctxt *ctxt;
         int rc = 0;
 
+        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+        LASSERT(ctxt != NULL);
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                         &llh, NULL, name);
+        rc = llog_create(ctxt, &llh, NULL, name);
         if (rc == 0) {
                 llog_init_handle(llh, LLOG_F_IS_PLAIN, NULL);
                 rc = llog_get_size(llh);
                 llog_close(llh);
         }
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        llog_ctxt_put(ctxt);
         /* header is record 1 */
         return(rc <= 1);
 }
@@ -1203,11 +1232,11 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
         /* If the ost log already exists, that means that someone reformatted
            the ost and it called target_add again. */
         if (!mgs_log_is_empty(obd, mti->mti_svname)) {
-                LCONSOLE_ERROR("The config log for %s already exists, yet the "
-                               "server claims it never registered.  It may have"
-                               " been reformatted, or the index changed. "
-                               "writeconf the MDT to regenerate all logs.\n", 
-                               mti->mti_svname);
+                LCONSOLE_ERROR_MSG(0x141, "The config log for %s already "
+                                   "exists, yet the server claims it never "
+                                   "registered. It may have been reformatted, "
+                                   "or the index changed. writeconf the MDT to "
+                                   "regenerate all logs.\n", mti->mti_svname);
                 RETURN(-EALREADY);
         }
         /*
@@ -1287,9 +1316,9 @@ static int mgs_write_log_add_failnid(struct obd_device *obd, struct fs_db *fsdb,
 
         /* Verify that we know about this target */
         if (mgs_log_is_empty(obd, mti->mti_svname)) {
-                LCONSOLE_ERROR("The target %s has not registered yet. "
-                               "It must be started before failnids can "
-                               "be added.\n", mti->mti_svname);
+                LCONSOLE_ERROR_MSG(0x142, "The target %s has not registered "
+                                   "yet. It must be started before failnids can"
+                                   " be added.\n", mti->mti_svname);
                 RETURN(-ENOENT);
         }
 
@@ -1303,11 +1332,11 @@ static int mgs_write_log_add_failnid(struct obd_device *obd, struct fs_db *fsdb,
         } else if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
                 /* COMPAT_146 */
                 if (fsdb->fsdb_flags & FSDB_OLDLOG14) {
-                        LCONSOLE_ERROR("Failover NIDs cannot be added to "
-                                       "upgraded client logs for %s. Consider "
-                                       "updating the configuration with "
-                                       "--writeconf.\n", 
-                                       mti->mti_svname);
+                        LCONSOLE_ERROR_MSG(0x143, "Failover NIDs cannot be "
+                                           "added to upgraded client logs for "
+                                           "%s. Consider updating the "
+                                           "configuration with --writeconf.\n", 
+                                           mti->mti_svname);
                         RETURN(-EINVAL);
                 }
                 name_create(&cliname, mti->mti_svname, "-osc");
@@ -1415,9 +1444,9 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
                 /* Processed in mgs_write_log_ost */
                 if (class_match_param(ptr, PARAM_FAILMODE, NULL) == 0) {
                         if (mti->mti_flags & LDD_F_PARAM) {
-                                LCONSOLE_ERROR("%s can only be changed with "
-                                              "tunefs.lustre and --writeconf\n",
-                                              ptr);
+                                LCONSOLE_ERROR_MSG(0x169, "%s can only be "
+                                                   "changed with tunefs.lustre "
+                                                   "and --writeconf\n", ptr);
                                 rc = -EPERM;
                         }
                         goto end_while;
@@ -1457,8 +1486,9 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
                         /* active=0 means off, anything else means on */
                         int flag = (*tmp == '0') ? CM_EXCLUDE : 0;
                         if (!(mti->mti_flags & LDD_F_SV_TYPE_OST)) {
-                                LCONSOLE_ERROR("%s: Only OSCs can be (de)activ"
-                                               "ated.\n", mti->mti_svname);
+                                LCONSOLE_ERROR_MSG(0x144, "%s: Only OSCs can be"
+                                                   " (de)activated.\n", 
+                                                   mti->mti_svname);
                                 rc = -EINVAL;
                                 goto end_while;
                         }
@@ -1479,13 +1509,16 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
                         name_destroy(&logname);
 active_err:
                         if (rc) {
-                                LCONSOLE_ERROR("Couldn't find %s in log (%d). "
-                                   "No permanent changes were made to the "
-                                   "config log.\n", mti->mti_svname, rc);
+                                LCONSOLE_ERROR_MSG(0x145, "Couldn't find %s in "
+                                                  "log (%d). No permanent "
+                                                  "changes were made to the "
+                                                  "config log.\n", 
+                                                  mti->mti_svname, rc);
                                 if (fsdb->fsdb_flags & FSDB_OLDLOG14) 
-                                        LCONSOLE_ERROR("This may be because the"
-                                        " log is in the old 1.4 style. Consider"
-                                        " --writeconf to update the logs.\n");
+                                        LCONSOLE_ERROR_MSG(0x146, "This may be "
+                                        "because the log is in the old 1.4 "
+                                        "style. Consider --writeconf to "
+                                        "update the logs.\n");
                                 goto end_while;
                         }
                         /* Fall through to osc proc for deactivating 
@@ -1498,9 +1531,10 @@ active_err:
                 if (class_match_param(ptr, PARAM_LOV, NULL) == 0) {
                         CDEBUG(D_MGS, "lov param %s\n", ptr);
                         if (!(mti->mti_flags & LDD_F_SV_TYPE_MDT)) {
-                                LCONSOLE_ERROR("LOV params must be set on the "
-                                               "MDT, not %s. Ignoring.\n",
-                                               mti->mti_svname);
+                                LCONSOLE_ERROR_MSG(0x147, "LOV params must be "
+                                                   "set on the MDT, not %s. "
+                                                   "Ignoring.\n", 
+                                                   mti->mti_svname);
                                 rc = 0;
                                 goto end_while;
                         }
@@ -1542,8 +1576,8 @@ active_err:
                         } else if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
                                 /* COMPAT_146 */
                                 if (fsdb->fsdb_flags & FSDB_OLDLOG14) {
-                                      LCONSOLE_ERROR("Upgraded client logs "
-                                           "for %s cannot be modified. "
+                                      LCONSOLE_ERROR_MSG(0x148, "Upgraded client"
+                                           " logs for %s cannot be modified. "
                                            "Consider updating the "
                                            "configuration with --writeconf\n",
                                            mti->mti_svname);
@@ -1664,11 +1698,12 @@ int mgs_write_log_target(struct obd_device *obd,
                                       "upgrading\n", mti->mti_stripe_index, 
                                       mti->mti_svname);
                 } else {
-                        LCONSOLE_ERROR("Failed to find %s in the old client "
-                                       "log. Apparently it is not part of this "
-                                       "filesystem, or the old log is wrong.\n"
-                                       "Use 'writeconf' on the MDT to force log"
-                                       " regeneration.\n", mti->mti_svname);
+                        LCONSOLE_ERROR_MSG(0x149, "Failed to find %s in the old"
+                                           " client log. Apparently it is not "
+                                           "part of this filesystem, or the old"
+                                           " log is wrong.\nUse 'writeconf' on "
+                                           "the MDT to force log regeneration."
+                                           "\n", mti->mti_svname);
                         /* Not in client log?  Upgrade anyhow...*/
                         /* Argument against upgrading: reformat MDT,
                            upgrade OST, then OST will start but will be SKIPped
@@ -1758,9 +1793,9 @@ int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti)
                 RETURN(rc);
         
         if (fsdb->fsdb_flags & FSDB_LOG_EMPTY) {
-                LCONSOLE_ERROR("The old client log %s-client is missing.  Was "
-                               "tunefs.lustre successful?\n",
-                               mti->mti_fsname);
+                LCONSOLE_ERROR_MSG(0x14a, "The old client log %s-client is "
+                                   "missing.  Was tunefs.lustre successful?\n",
+                                   mti->mti_fsname);
                 RETURN(-ENOENT);
         }
 
@@ -1772,9 +1807,10 @@ int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti)
 
         if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
                 if (mgs_log_is_empty(obd, mti->mti_svname)) {
-                        LCONSOLE_ERROR("The old MDT log %s is missing.  Was "
-                                       "tunefs.lustre successful?\n",
-                                       mti->mti_svname);
+                        LCONSOLE_ERROR_MSG(0x14b, "The old MDT log %s is "
+                                           "missing. Was tunefs.lustre "
+                                           "successful?\n",
+                                           mti->mti_svname);
                         RETURN(-ENOENT);
                 }
 
@@ -1791,10 +1827,10 @@ int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti)
         }
 
         if (!(fsdb->fsdb_flags & FSDB_OLDLOG14)) {
-                LCONSOLE_ERROR("%s-client is supposedly an old log, but no old "
-                               "LOV or MDT was found. Consider updating the "
-                               "configuration with --writeconf.\n",
-                               mti->mti_fsname);
+                LCONSOLE_ERROR_MSG(0x14c, "%s-client is supposedly an old log, "
+                                   "but no old LOV or MDT was found. Consider "
+                                   "updating the configuration with "
+                                   "--writeconf.\n", mti->mti_fsname);
         }
 
         RETURN(rc);
@@ -1804,18 +1840,22 @@ int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti)
 int mgs_erase_log(struct obd_device *obd, char *name)
 {
         struct lvfs_run_ctxt saved;
+        struct llog_ctxt *ctxt;
         struct llog_handle *llh;
         int rc = 0;
 
+        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+        LASSERT(ctxt != NULL);
+
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                         &llh, NULL, name);
+        rc = llog_create(ctxt, &llh, NULL, name);
         if (rc == 0) {
                 llog_init_handle(llh, LLOG_F_IS_PLAIN, NULL);
                 rc = llog_destroy(llh);
                 llog_free_handle(llh);
         }
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        llog_ctxt_put(ctxt);
 
         if (rc)
                 CERROR("failed to clear log %s: %d\n", name, rc);
@@ -1893,6 +1933,7 @@ int mgs_setparam(struct obd_device *obd, struct lustre_cfg *lcfg, char *fsname)
         struct mgs_target_info *mti;
         char *devname, *param;
         char *ptr, *tmp;
+        __u32 index;
         int rc = 0;
         ENTRY;
 
@@ -1912,18 +1953,18 @@ int mgs_setparam(struct obd_device *obd, struct lustre_cfg *lcfg, char *fsname)
                 }
         }
         if (!devname) {
-                LCONSOLE_ERROR("No target specified: %s\n", param);
+                LCONSOLE_ERROR_MSG(0x14d, "No target specified: %s\n", param);
                 RETURN(-ENOSYS);
         }
 
         /* Extract fsname */
-        ptr = strchr(devname, '-');
+        ptr = strrchr(devname, '-');
         memset(fsname, 0, MTI_NAME_MAXLEN);
-        if (!ptr) {
+        if (ptr && (server_name2index(ptr, &index, NULL) >= 0)) {
+                strncpy(fsname, devname, ptr - devname);
+        } else {
                 /* assume devname is the fsname */
                 strncpy(fsname, devname, MTI_NAME_MAXLEN);
-        } else {  
-                strncpy(fsname, devname, ptr - devname);
         }
         fsname[MTI_NAME_MAXLEN - 1] = 0;
         CDEBUG(D_MGS, "setparam on fs %s device %s\n", fsname, devname);

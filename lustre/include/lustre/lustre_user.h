@@ -1,7 +1,39 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *   This file is part of Lustre, http://www.lustre.org
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/include/lustre/lustre_user.h
  *
  * Lustre public user-space interface definitions.
  */
@@ -59,6 +91,11 @@ struct obd_statfs;
 #define IOC_OBD_STATFS                  _IOWR('f', 164, struct obd_statfs *)
 #define IOC_LOV_GETINFO                 _IOWR('f', 165, struct lov_user_mds_data *)
 
+#define LL_IOC_LLOOP_ATTACH             _IOWR('f', 166, OBD_IOC_DATA_TYPE)
+#define LL_IOC_LLOOP_DETACH             _IOWR('f', 167, OBD_IOC_DATA_TYPE)
+#define LL_IOC_LLOOP_INFO               _IOWR('f', 168, OBD_IOC_DATA_TYPE)
+#define LL_IOC_LLOOP_DETACH_BYDEV       _IOWR('f', 169, OBD_IOC_DATA_TYPE)
+
 #define LL_STATFS_MDC           1
 #define LL_STATFS_LOV           2
 
@@ -71,6 +108,10 @@ struct obd_statfs;
 /* Keep these for backward compartability. */
 #define LL_IOC_OBD_STATFS       IOC_OBD_STATFS
 #define IOC_MDC_GETSTRIPE       IOC_MDC_GETFILESTRIPE
+
+/* Do not define O_CHECK_STALE as 0200000000,
+ * which is conflict with MDS_OPEN_OWNEROVERRIDE */
+#define O_CHECK_STALE       020000000  /* hopefully this does not conflict */
 
 #define O_LOV_DELAY_CREATE 0100000000  /* hopefully this does not conflict */
 #define O_JOIN_FILE        0400000000  /* hopefully this does not conflict */
@@ -124,8 +165,21 @@ struct ll_recreate_obj {
         __u32 lrc_ost_idx;
 };
 
+struct ll_fid {
+        __u64 id;         /* holds object id */
+        __u32 generation; /* holds object generation */
+        __u32 f_type;     /* holds object type or stripe idx when passing it to
+                           * OST for saving into EA. */
+};
+
+struct filter_fid {
+        struct ll_fid   ff_fid;  /* ff_fid.f_type == file stripe number */
+        __u64           ff_objid;
+        __u64           ff_group;
+};
+
 struct obd_uuid {
-        __u8 uuid[40];
+        char uuid[40];
 };
 
 static inline int obd_uuid_equals(struct obd_uuid *u1, struct obd_uuid *u2)
@@ -158,19 +212,21 @@ static inline char *obd_uuid2str(struct obd_uuid *uuid)
         return (char *)(uuid->uuid);
 }
 
-#define LUSTRE_Q_QUOTAON  0x800002     /* turn quotas on */
-#define LUSTRE_Q_QUOTAOFF 0x800003     /* turn quotas off */
-#define LUSTRE_Q_GETINFO  0x800005     /* get information about quota files */
-#define LUSTRE_Q_SETINFO  0x800006     /* set information about quota files */
-#define LUSTRE_Q_GETQUOTA 0x800007     /* get user quota structure */
-#define LUSTRE_Q_SETQUOTA 0x800008     /* set user quota structure */
+/* these must be explicitly translated into linux Q_* in ll_dir_ioctl */
+#define LUSTRE_Q_QUOTAON    0x800002     /* turn quotas on */
+#define LUSTRE_Q_QUOTAOFF   0x800003     /* turn quotas off */
+#define LUSTRE_Q_GETINFO    0x800005     /* get information about quota files */
+#define LUSTRE_Q_SETINFO    0x800006     /* set information about quota files */
+#define LUSTRE_Q_GETQUOTA   0x800007     /* get user quota structure */
+#define LUSTRE_Q_SETQUOTA   0x800008     /* set user quota structure */
+/* lustre-specific control commands */
+#define LUSTRE_Q_INVALIDATE  0x80000b     /* invalidate quota data */
+#define LUSTRE_Q_FINVALIDATE 0x80000c     /* invalidate filter quota data */
 
 #define UGQUOTA 2       /* set both USRQUOTA and GRPQUOTA */
 
-#define QFMT_LDISKFS 2  /* QFMT_VFS_V0(2), quota format for ldiskfs */
-
 struct if_quotacheck {
-        __u8                    obd_type[16];
+        char                    obd_type[16];
         struct obd_uuid         obd_uuid;
 };
 
@@ -213,6 +269,11 @@ struct mds_grp_downcall_data {
 
 #endif /* !__KERNEL__ */
 
+typedef enum lustre_quota_version {
+        LUSTRE_QUOTA_V1 = 0,
+        LUSTRE_QUOTA_V2 = 1
+} lustre_quota_version_t;
+
 /* XXX: same as if_dqinfo struct in kernel */
 struct obd_dqinfo {
         __u64 dqi_bgrace;
@@ -242,7 +303,7 @@ struct if_quotactl {
         __u32                   qc_stat;
         struct obd_dqinfo       qc_dqinfo;
         struct obd_dqblk        qc_dqblk;
-        __u8                    obd_type[16];
+        char                    obd_type[16];
         struct obd_uuid         obd_uuid;
 };
 

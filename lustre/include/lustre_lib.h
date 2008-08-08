@@ -1,25 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001 Cluster File Systems, Inc. <braam@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/include/lustre_lib.h
  *
  * Basic Lustre library routines.
- *
  */
 
 #ifndef _LUSTRE_LIB_H
@@ -61,6 +77,7 @@ void target_destroy_export(struct obd_export *exp);
 int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
                             struct obd_uuid *cluuid);
 int target_handle_ping(struct ptlrpc_request *req);
+int target_pack_pool_reply(struct ptlrpc_request *req);
 void target_committed_to_req(struct ptlrpc_request *req);
 
 #ifdef HAVE_QUOTA_SUPPORT
@@ -73,14 +90,12 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req);
 #endif
 
 void target_cancel_recovery_timer(struct obd_device *obd);
-
-#define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 / 2) /* *waves hands* */
-void target_start_recovery_timer(struct obd_device *obd, svc_handler_t handler);
 void target_abort_recovery(void *data);
+int target_recovery_check_and_stop(struct obd_device *obd);
 void target_cleanup_recovery(struct obd_device *obd);
 int target_queue_recovery_request(struct ptlrpc_request *req,
                                   struct obd_device *obd);
-int target_queue_final_reply(struct ptlrpc_request *req, int rc);
+int target_handle_reply(struct ptlrpc_request *req, int rc, int fail);
 void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id);
 
 /* client.c */
@@ -247,12 +262,12 @@ static inline int obd_ioctl_pack(struct obd_ioctl_data *data, char **pbuf,
         data->ioc_version = OBD_IOCTL_VERSION;
 
         if (*pbuf && data->ioc_len > max)
-                return 1;
+                return -EINVAL;
         if (*pbuf == NULL) {
                 *pbuf = malloc(data->ioc_len);
         }
         if (!*pbuf)
-                return 1;
+                return -ENOMEM;
         overlay = (struct obd_ioctl_data *)*pbuf;
         memcpy(*pbuf, data, sizeof(*data));
 
@@ -266,7 +281,7 @@ static inline int obd_ioctl_pack(struct obd_ioctl_data *data, char **pbuf,
         if (data->ioc_inlbuf4)
                 LOGL(data->ioc_inlbuf4, data->ioc_inllen4, ptr);
         if (obd_ioctl_is_invalid(overlay))
-                return 1;
+                return -EINVAL;
 
         return 0;
 }
@@ -442,6 +457,8 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_BRW_WRITE              _IOWR('f', 126, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_NAME2DEV               _IOWR('f', 127, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_UUID2DEV               _IOWR('f', 130, OBD_IOC_DATA_TYPE)
+/* OBD_IOC_GETNAME_OLD is for compatibility with 1.4.x */
+#define OBD_IOC_GETNAME_OLD            _IOR ('f', 131, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_GETNAME                _IOWR('f', 131, OBD_IOC_DATA_TYPE)
 
 #define OBD_IOC_LOV_GET_CONFIG         _IOWR('f', 132, OBD_IOC_DATA_TYPE)
@@ -759,4 +776,3 @@ do {                                                                    \
 #endif
 
 #endif /* _LUSTRE_LIB_H */
-

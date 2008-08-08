@@ -1,5 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #ifndef _MGS_INTERNAL_H
@@ -16,12 +48,9 @@
 #include <lustre_export.h>
 
 
-/* in ms */
-#define MGS_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
-
 /* mgs_llog.c */
 int class_dentry_readdir(struct obd_device *obd, struct dentry *dir,
-                         struct vfsmount *inmnt, 
+                         struct vfsmount *inmnt,
                          struct list_head *dentry_list);
 
 #define INDEX_MAP_SIZE 8192     /* covers indicies to FFFF */
@@ -54,6 +83,10 @@ int mgs_erase_logs(struct obd_device *obd, char *fsname);
 int mgs_setparam(struct obd_device *obd, struct lustre_cfg *lcfg, char *fsname);
 
 /* mgs_fs.c */
+int mgs_client_add(struct obd_device *obd,
+                   struct obd_export *exp,
+                   void *localdata);
+int mgs_client_free(struct obd_export *exp);
 int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt);
 int mgs_fs_cleanup(struct obd_device *obddev);
 
@@ -61,17 +94,35 @@ int mgs_fs_cleanup(struct obd_device *obddev);
 
 #ifdef LPROCFS
 int lproc_mgs_setup(struct obd_device *dev);
+int lproc_mgs_cleanup(struct obd_device *obd);
 int lproc_mgs_add_live(struct obd_device *obd, struct fs_db *fsdb);
 int lproc_mgs_del_live(struct obd_device *obd, struct fs_db *fsdb);
+void lprocfs_mgs_init_vars(struct lprocfs_static_vars *lvars);
 #else
-static inline int lproc_mgs_setup(struct obd_device *dev) 
+static inline int lproc_mgs_setup(struct obd_device *dev)
 {return 0;}
-static int lproc_mgs_add_live(struct obd_device *obd, struct fs_db *fsdb)
+static inline int lproc_mgs_cleanup(struct obd_device *obd)
 {return 0;}
-static int lproc_mgs_del_live(struct obd_device *obd, struct fs_db *fsdb)
+static inline int lproc_mgs_add_live(struct obd_device *obd, struct fs_db *fsdb)
 {return 0;}
+static inline int lproc_mgs_del_live(struct obd_device *obd, struct fs_db *fsdb)
+{return 0;}
+static void lprocfs_mgs_init_vars(struct lprocfs_static_vars *lvars)
+{
+        memset(lvars, 0, sizeof(*lvars));
+}
 #endif
 
+/* mgs/lproc_mgs.c */
+enum {
+        LPROC_MGS_CONNECT = 0,
+        LPROC_MGS_DISCONNECT,
+        LPROC_MGS_EXCEPTION,
+        LPROC_MGS_TARGET_REG,
+        LPROC_MGS_TARGET_DEL,
+        LPROC_MGS_LAST
+};
+void mgs_counter_incr(struct obd_export *exp, int opcode);
+void mgs_stats_counter_init(struct lprocfs_stats *stats);
 
 #endif /* _MGS_INTERNAL_H */
-

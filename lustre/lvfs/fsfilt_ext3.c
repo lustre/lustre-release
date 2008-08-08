@@ -1,26 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/lib/fsfilt_ext3.c
- *  Lustre filesystem abstraction routines
+ * GPL HEADER START
  *
- *  Copyright (C) 2002, 2003 Cluster File Systems, Inc.
- *   Author: Andreas Dilger <adilger@clusterfs.com>
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/lvfs/fsfilt_ext3.c
+ *
+ * Author: Andreas Dilger <adilger@clusterfs.com>
  */
 
 #define DEBUG_SUBSYSTEM S_FILTER
@@ -39,6 +54,7 @@
 #include <linux/quota.h>
 #include <linux/quotaio_v1.h>
 #include <linux/quotaio_v2.h>
+#include <linux/parser.h>
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #include <linux/ext3_xattr.h>
 #else
@@ -48,7 +64,6 @@
 #include <libcfs/kp30.h>
 #include <lustre_fsfilt.h>
 #include <obd.h>
-#include <obd_class.h>
 #include <lustre_quota.h>
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #include <linux/iobuf.h>
@@ -60,6 +75,8 @@
 #include <linux/ext3_extents.h>
 #endif
 
+#include "lustre_quota_fmt.h"
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,15)
 #define FSFILT_DATA_TRANS_BLOCKS(sb)      EXT3_DATA_TRANS_BLOCKS
 #define FSFILT_DELETE_TRANS_BLOCKS(sb)    EXT3_DELETE_TRANS_BLOCKS
@@ -68,7 +85,23 @@
 #define FSFILT_DELETE_TRANS_BLOCKS(sb)    EXT3_DELETE_TRANS_BLOCKS(sb)
 #endif
 
-static kmem_cache_t *fcb_cache;
+#ifdef EXT3_SINGLEDATA_TRANS_BLOCKS_HAS_SB
+/* for kernels 2.6.18 and later */
+#define FSFILT_SINGLEDATA_TRANS_BLOCKS(sb) EXT3_SINGLEDATA_TRANS_BLOCKS(sb)
+#else
+#define FSFILT_SINGLEDATA_TRANS_BLOCKS(sb) EXT3_SINGLEDATA_TRANS_BLOCKS
+#endif
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#define fsfilt_ext3_journal_start(inode, nblocks) \
+                                journal_start(EXT3_JOURNAL(inode),nblocks)
+#define fsfilt_ext3_journal_stop(handle)          journal_stop(handle)
+#else
+#define fsfilt_ext3_journal_start(inode, nblocks) ext3_journal_start(inode, nblocks)
+#define fsfilt_ext3_journal_stop(handle)          ext3_journal_stop(handle)
+#endif
+
+static cfs_mem_cache_t *fcb_cache;
 
 struct fsfilt_cb_data {
         struct journal_callback cb_jcb; /* jbd private data - MUST BE FIRST */
@@ -125,6 +158,35 @@ static char *fsfilt_ext3_uuid(struct super_block *sb)
         return EXT3_SB(sb)->s_es->s_uuid;
 }
 
+#ifdef HAVE_DISK_INODE_VERSION
+/*
+ * Get the 64-bit version for an inode.
+ */
+static __u64 fsfilt_ext3_get_version(struct inode *inode)
+{
+        CDEBUG(D_INFO, "Get version "LPX64" for inode %lu\n",
+               EXT3_I(inode)->i_fs_version, inode->i_ino);
+        return EXT3_I(inode)->i_fs_version;
+}
+
+/*
+ * Set the 64-bit version and return the old version.
+ */
+static __u64 fsfilt_ext3_set_version(struct inode *inode, __u64 new_version)
+{
+        __u64 old_version = EXT3_I(inode)->i_fs_version;
+
+        CDEBUG(D_INFO, "Set version "LPX64" (old "LPX64") for inode %lu\n",
+               new_version, old_version, inode->i_ino);
+        (EXT3_I(inode))->i_fs_version = new_version;
+        /* version is set after all inode operations are finished, so we should
+         * mark it dirty here */
+        inode->i_sb->s_op->dirty_inode(inode);
+        return old_version;
+}
+
+#endif
+
 /*
  * We don't currently need any additional blocks for rmdir and
  * unlink transactions because we are storing the OST oa_id inside
@@ -135,7 +197,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                                int logs)
 {
         /* For updates to the last received file */
-        int nblocks = EXT3_SINGLEDATA_TRANS_BLOCKS;
+        int nblocks = FSFILT_SINGLEDATA_TRANS_BLOCKS(inode->i_sb);
         journal_t *journal;
         void *handle;
 
@@ -151,11 +213,11 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                 /* delete one file + create/update logs for each stripe */
                 nblocks += FSFILT_DELETE_TRANS_BLOCKS(inode->i_sb);
                 nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-                            EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
+                            FSFILT_SINGLEDATA_TRANS_BLOCKS(inode->i_sb)) * logs;
                 break;
         case FSFILT_OP_RENAME:
                 /* modify additional directory */
-                nblocks += EXT3_SINGLEDATA_TRANS_BLOCKS;
+                nblocks += FSFILT_SINGLEDATA_TRANS_BLOCKS(inode->i_sb);
                 /* no break */
         case FSFILT_OP_SYMLINK:
                 /* additional block + block bitmap + GDT for long symlink */
@@ -171,7 +233,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                               cpu_to_le32(EXT3_EXTENTS_FL | EXT3_INDEX_FL)) ==
                               cpu_to_le32(EXT3_EXTENTS_FL | EXT3_INDEX_FL))) {
                                 CWARN("extent-mapped directory found - contact "
-                                      "CFS: support@clusterfs.com\n");
+                                      "http://bugzilla.lustre.org/\n");
                                 warned = 1;
                         }
                 }
@@ -189,7 +251,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                          FSFILT_DATA_TRANS_BLOCKS(inode->i_sb);
                 /* create/update logs for each stripe */
                 nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-                            EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
+                            FSFILT_SINGLEDATA_TRANS_BLOCKS(inode->i_sb)) * logs;
                 break;
         case FSFILT_OP_SETATTR:
                 /* Setattr on inode */
@@ -198,7 +260,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                          FSFILT_DATA_TRANS_BLOCKS(inode->i_sb);
                 /* quota chown log for each stripe */
                 nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-                            EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
+                            FSFILT_SINGLEDATA_TRANS_BLOCKS(inode->i_sb)) * logs;
                 break;
         case FSFILT_OP_CANCEL_UNLINK:
                 /* blocks for log header bitmap update OR
@@ -214,7 +276,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                 /*create array log for head file*/ 
                 nblocks += 3;
                 nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-                            EXT3_SINGLEDATA_TRANS_BLOCKS);
+                            FSFILT_SINGLEDATA_TRANS_BLOCKS(inode->i_sb));
                 /*update head file array */
                 nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS +
                          FSFILT_DATA_TRANS_BLOCKS(inode->i_sb);
@@ -234,7 +296,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
  journal_start:
         LASSERTF(nblocks > 0, "can't start %d credit transaction\n", nblocks);
         lock_24kernel();
-        handle = journal_start(EXT3_JOURNAL(inode), nblocks);
+        handle = fsfilt_ext3_journal_start(inode, nblocks);
         unlock_24kernel();
 
         if (!IS_ERR(handle))
@@ -322,7 +384,7 @@ static int fsfilt_ext3_credits_needed(int objcount, struct fsfilt_objinfo *fso,
          * quota file that is active.  This is at least true for now.
          */
         needed += hweight32(sb_any_quota_enabled(sb)) *
-                EXT3_SINGLEDATA_TRANS_BLOCKS;
+                FSFILT_SINGLEDATA_TRANS_BLOCKS(sb);
 #endif
 
         return needed;
@@ -373,7 +435,7 @@ static void *fsfilt_ext3_brw_start(int objcount, struct fsfilt_objinfo *fso,
 
         LASSERTF(needed > 0, "can't start %d credit transaction\n", needed);
         lock_24kernel();
-        handle = journal_start(journal, needed);
+        handle = fsfilt_ext3_journal_start(fso->fso_dentry->d_inode, needed);
         unlock_24kernel();
         if (IS_ERR(handle)) {
                 CERROR("can't get handle for %d credits: rc = %ld\n", needed,
@@ -415,7 +477,7 @@ static int fsfilt_ext3_commit(struct inode *inode, void *h, int force_sync)
                 handle->h_sync = 1; /* recovery likes this */
 
         lock_24kernel();
-        rc = journal_stop(handle);
+        rc = fsfilt_ext3_journal_stop(handle);
         unlock_24kernel();
 
         return rc;
@@ -441,7 +503,7 @@ static int fsfilt_ext3_commit_async(struct inode *inode, void *h,
         tid = transaction->t_tid;
         /* we don't want to be blocked */
         handle->h_sync = 0;
-        rc = journal_stop(handle);
+        rc = fsfilt_ext3_journal_stop(handle);
         if (rc) {
                 CERROR("error while stopping transaction: %d\n", rc);
                 unlock_24kernel();
@@ -484,7 +546,7 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
         struct inode *inode = dentry->d_inode;
         int rc = 0;
 
-        lock_kernel();
+        lock_24kernel();
 
         /* Avoid marking the inode dirty on the superblock list unnecessarily.
          * We are already writing the inode to disk as part of this
@@ -493,7 +555,8 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
         if (iattr->ia_valid & ATTR_SIZE && !do_trunc) {
                 /* ATTR_SIZE would invoke truncate: clear it */
                 iattr->ia_valid &= ~ATTR_SIZE;
-                EXT3_I(inode)->i_disksize = inode->i_size = iattr->ia_size;
+                EXT3_I(inode)->i_disksize = iattr->ia_size;
+                i_size_write(inode, iattr->ia_size);
 
                 if (iattr->ia_valid & ATTR_UID)
                         inode->i_uid = iattr->ia_uid;
@@ -535,7 +598,7 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
         }
 
  out:
-        unlock_kernel();
+        unlock_24kernel();
         RETURN(rc);
 }
 
@@ -568,11 +631,11 @@ static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
 
         lock_24kernel();
         rc = ext3_xattr_set_handle(handle, inode, EXT3_XATTR_INDEX_TRUSTED,
-                                   name, lmm, lmm_size, 0);
+                                   name, lmm, lmm_size, XATTR_NO_CTIME);
 
         unlock_24kernel();
 
-        if (rc)
+        if (rc && rc != -EROFS)
                 CERROR("error adding MD data to inode %lu: rc = %d\n",
                        inode->i_ino, rc);
         return rc;
@@ -662,7 +725,7 @@ static ssize_t fsfilt_ext3_readpage(struct file *file, char *buf, size_t count,
                         struct buffer_head *bh;
 
                         bh = NULL;
-                        if (*off < inode->i_size) {
+                        if (*off < i_size_read(inode)) {
                                 int err = 0;
 
                                 bh = ext3_bread(NULL, inode, *off >> blkbits,
@@ -715,7 +778,7 @@ static int fsfilt_ext3_add_journal_cb(struct obd_device *obd, __u64 last_rcvd,
 {
         struct fsfilt_cb_data *fcb;
 
-        OBD_SLAB_ALLOC(fcb, fcb_cache, GFP_NOFS, sizeof *fcb);
+        OBD_SLAB_ALLOC(fcb, fcb_cache, CFS_ALLOC_IO, sizeof *fcb);
         if (fcb == NULL)
                 RETURN(-ENOMEM);
 
@@ -780,6 +843,25 @@ static int fsfilt_ext3_sync(struct super_block *sb)
 #else
 #define ext3_up_truncate_sem(inode)  mutex_unlock(&EXT3_I(inode)->truncate_mutex);
 #define ext3_down_truncate_sem(inode)  mutex_lock(&EXT3_I(inode)->truncate_mutex);
+#endif
+
+#ifndef EXT_ASSERT
+#define EXT_ASSERT(cond)  BUG_ON(!(cond))
+#endif
+
+#ifdef EXT3_EXT_HAS_NO_TREE
+/* for kernels 2.6.18 and later */
+#define ext3_ext_base                   inode
+#define ext3_ext_base2inode(inode)      (inode)
+#define EXT_DEPTH(inode)                ext_depth(inode)
+#define EXT_GENERATION(inode)           ext_generation(inode)
+#define fsfilt_ext3_ext_walk_space(inode, block, num, cb, cbdata) \
+                        ext3_ext_walk_space(inode, block, num, cb, cbdata);
+#else
+#define ext3_ext_base                   ext3_extents_tree
+#define ext3_ext_base2inode(tree)       (tree->inode)
+#define fsfilt_ext3_ext_walk_space(tree, block, num, cb, cbdata) \
+                        ext3_ext_walk_space(tree, block, num, cb);
 #endif
 
 #include <linux/lustre_version.h>
@@ -862,20 +944,85 @@ static void ll_unmap_underlying_metadata(struct super_block *sb,
         unmap_underlying_metadata((sb)->s_bdev, blocknr)
 #endif
 
-static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
-                                  struct ext3_ext_path *path,
-                                  struct ext3_ext_cache *cex)
+#ifndef EXT3_MB_HINT_GROUP_ALLOC
+static unsigned long new_blocks(handle_t *handle, struct ext3_ext_base *base,
+                                struct ext3_ext_path *path, unsigned long block,
+                                unsigned long *count, int *err)
 {
-        struct inode *inode = tree->inode;
-        struct bpointers *bp = tree->private;
+        unsigned long pblock, goal;
+        int aflags = 0;
+        struct inode *inode = ext3_ext_base2inode(base);
+
+        goal = ext3_ext_find_goal(inode, path, block, &aflags);
+        aflags |= 2; /* block have been already reserved */
+        lock_24kernel();
+        pblock = ext3_mb_new_blocks(handle, inode, goal, count, aflags, err);
+        unlock_24kernel();
+        return pblock;
+
+}
+#else
+static unsigned long new_blocks(handle_t *handle, struct ext3_ext_base *base,
+                                struct ext3_ext_path *path, unsigned long block,
+                                unsigned long *count, int *err)
+{
+        struct inode *inode = ext3_ext_base2inode(base);
+        struct ext3_allocation_request ar;
+        unsigned long pblock;
+        int aflags;
+
+        /* find neighbour allocated blocks */
+        ar.lleft = block;
+        *err = ext3_ext_search_left(base, path, &ar.lleft, &ar.pleft);
+        if (*err)
+                return 0;
+        ar.lright = block;
+        *err = ext3_ext_search_right(base, path, &ar.lright, &ar.pright);
+        if (*err)
+                return 0;
+
+        /* allocate new block */
+        ar.goal = ext3_ext_find_goal(inode, path, block, &aflags);
+        ar.inode = inode;
+        ar.logical = block;
+        ar.len = *count;
+        ar.flags = EXT3_MB_HINT_DATA;
+        pblock = ext3_mb_new_blocks(handle, &ar, err);
+        *count = ar.len;
+        return pblock;
+}
+#endif
+
+#ifdef EXT3_EXT_HAS_NO_TREE
+static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
+                                  struct ext3_ext_path *path,
+                                  struct ext3_ext_cache *cex,
+#ifdef HAVE_EXT_PREPARE_CB_EXTENT
+                                  struct ext3_extent *ex,
+#endif
+                                  void *cbdata)
+{
+        struct bpointers *bp = cbdata;
+#else
+static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
+                                  struct ext3_ext_path *path,
+                                  struct ext3_ext_cache *cex
+#ifdef HAVE_EXT_PREPARE_CB_EXTENT
+                                  , struct ext3_extent *ex
+#endif
+                                 )
+{
+        struct bpointers *bp = base->private;
+#endif
+        struct inode *inode = ext3_ext_base2inode(base);
         struct ext3_extent nex;
-        int count, err, goal;
         unsigned long pblock;
         unsigned long tgen;
+        int err, i;
+        unsigned long count;
         handle_t *handle;
-        int i, aflags = 0;
 
-        i = EXT_DEPTH(tree);
+        i = EXT_DEPTH(base);
         EXT_ASSERT(i == path->p_depth);
         EXT_ASSERT(path[i].p_hdr);
 
@@ -903,12 +1050,12 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
                 return EXT_CONTINUE;
         }
 
-        tgen = EXT_GENERATION(tree);
-        count = ext3_ext_calc_credits_for_insert(tree, path);
+        tgen = EXT_GENERATION(base);
+        count = ext3_ext_calc_credits_for_insert(base, path);
         ext3_up_truncate_sem(inode);
 
         lock_24kernel();
-        handle = journal_start(EXT3_JOURNAL(inode), count+EXT3_ALLOC_NEEDED+1);
+        handle = fsfilt_ext3_journal_start(inode, count+EXT3_ALLOC_NEEDED+1);
         unlock_24kernel();
         if (IS_ERR(handle)) {
                 ext3_down_truncate_sem(inode);
@@ -916,20 +1063,16 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         }
 
         ext3_down_truncate_sem(inode);
-        if (tgen != EXT_GENERATION(tree)) {
+        if (tgen != EXT_GENERATION(base)) {
                 /* the tree has changed. so path can be invalid at moment */
                 lock_24kernel();
-                journal_stop(handle);
+                fsfilt_ext3_journal_stop(handle);
                 unlock_24kernel();
                 return EXT_REPEAT;
         }
 
         count = cex->ec_len;
-        goal = ext3_ext_find_goal(inode, path, cex->ec_block, &aflags);
-        aflags |= 2; /* block have been already reserved */
-        lock_24kernel();
-        pblock = ext3_mb_new_blocks(handle, inode, goal, &count, aflags, &err);
-        unlock_24kernel();
+        pblock = new_blocks(handle, base, path, cex->ec_block, &count, &err);
         if (!pblock)
                 goto out;
         EXT_ASSERT(count <= cex->ec_len);
@@ -938,9 +1081,17 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         nex.ee_block = cex->ec_block;
         nex.ee_start = pblock;
         nex.ee_len = count;
-        err = ext3_ext_insert_extent(handle, tree, path, &nex);
-        if (err)
+        err = ext3_ext_insert_extent(handle, base, path, &nex);
+        if (err) {
+                /* free data blocks we just allocated */
+                /* not a good idea to call discard here directly,
+                 * but otherwise we'd need to call it every free() */
+#ifdef EXT3_MB_HINT_GROUP_ALLOC
+                ext3_mb_discard_inode_preallocations(inode);
+#endif
+                ext3_free_blocks(handle, inode, nex.ee_start, nex.ee_len, 0);
                 goto out;
+        }
 
         /*
          * Putting len of the actual extent we just inserted,
@@ -954,7 +1105,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
 
 out:
         lock_24kernel();
-        journal_stop(handle);
+        fsfilt_ext3_journal_stop(handle);
         unlock_24kernel();
 map:
         if (err >= 0) {
@@ -997,15 +1148,22 @@ int fsfilt_map_nblocks(struct inode *inode, unsigned long block,
                        unsigned long num, unsigned long *blocks,
                        int *created, int create)
 {
+#ifdef EXT3_EXT_HAS_NO_TREE
+        struct ext3_ext_base *base = inode;
+#else
         struct ext3_extents_tree tree;
+        struct ext3_ext_base *base = &tree;
+#endif
         struct bpointers bp;
         int err;
 
         CDEBUG(D_OTHER, "blocks %lu-%lu requested for inode %u\n",
                block, block + num - 1, (unsigned) inode->i_ino);
 
-        ext3_init_tree_desc(&tree, inode);
+#ifndef EXT3_EXT_HAS_NO_TREE
+        ext3_init_tree_desc(base, inode);
         tree.private = &bp;
+#endif
         bp.blocks = blocks;
         bp.created = created;
         bp.start = block;
@@ -1013,8 +1171,8 @@ int fsfilt_map_nblocks(struct inode *inode, unsigned long block,
         bp.create = create;
 
         ext3_down_truncate_sem(inode);
-        err = ext3_ext_walk_space(&tree, block, num, ext3_ext_new_extent_cb);
-        ext3_ext_invalidate_cache(&tree);
+        err = fsfilt_ext3_ext_walk_space(base, block, num, ext3_ext_new_extent_cb, &bp);
+        ext3_ext_invalidate_cache(base);
         ext3_up_truncate_sem(inode);
 
         return err;
@@ -1118,14 +1276,6 @@ int fsfilt_ext3_map_inode_pages(struct inode *inode, struct page **page,
         return rc;
 }
 
-extern int ext3_prep_san_write(struct inode *inode, long *blocks,
-                               int nblocks, loff_t newsize);
-static int fsfilt_ext3_prep_san_write(struct inode *inode, long *blocks,
-                                      int nblocks, loff_t newsize)
-{
-        return ext3_prep_san_write(inode, blocks, nblocks, newsize);
-}
-
 static int fsfilt_ext3_read_record(struct file * file, void *buf,
                                    int size, loff_t *offs)
 {
@@ -1136,12 +1286,12 @@ static int fsfilt_ext3_read_record(struct file * file, void *buf,
 
         /* prevent reading after eof */
         lock_kernel();
-        if (inode->i_size < *offs + size) {
-                size = inode->i_size - *offs;
+        if (i_size_read(inode) < *offs + size) {
+                size = i_size_read(inode) - *offs;
                 unlock_kernel();
                 if (size < 0) {
                         CERROR("size %llu is too short for read %u@%llu\n",
-                               inode->i_size, size, *offs);
+                               i_size_read(inode), size, *offs);
                         return -EIO;
                 } else if (size == 0) {
                         return 0;
@@ -1178,9 +1328,8 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
         struct buffer_head *bh = NULL;
         unsigned long block;
         struct inode *inode = file->f_dentry->d_inode;
-        loff_t old_size = inode->i_size, offset = *offs;
-        loff_t new_size = inode->i_size;
-        journal_t *journal;
+        loff_t old_size = i_size_read(inode), offset = *offs;
+        loff_t new_size = i_size_read(inode);
         handle_t *handle;
         int err = 0, block_count = 0, blocksize, size, boffs;
 
@@ -1189,9 +1338,8 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
         block_count = (*offs & (blocksize - 1)) + bufsize;
         block_count = (block_count + blocksize - 1) >> inode->i_blkbits;
 
-        journal = EXT3_SB(inode->i_sb)->s_journal;
         lock_24kernel();
-        handle = journal_start(journal,
+        handle = fsfilt_ext3_journal_start(inode,
                                block_count * FSFILT_DATA_TRANS_BLOCKS(inode->i_sb) + 2);
         unlock_24kernel();
         if (IS_ERR(handle)) {
@@ -1241,19 +1389,19 @@ out:
                 brelse(bh);
 
         /* correct in-core and on-disk sizes */
-        if (new_size > inode->i_size) {
+        if (new_size > i_size_read(inode)) {
                 lock_kernel();
-                if (new_size > inode->i_size)
-                        inode->i_size = new_size;
-                if (inode->i_size > EXT3_I(inode)->i_disksize)
-                        EXT3_I(inode)->i_disksize = inode->i_size;
-                if (inode->i_size > old_size)
+                if (new_size > i_size_read(inode))
+                        i_size_write(inode, new_size);
+                if (i_size_read(inode) > EXT3_I(inode)->i_disksize)
+                        EXT3_I(inode)->i_disksize = i_size_read(inode);
+                if (i_size_read(inode) > old_size)
                         mark_inode_dirty(inode);
                 unlock_kernel();
         }
 
         lock_24kernel();
-        journal_stop(handle);
+        fsfilt_ext3_journal_stop(handle);
         unlock_24kernel();
 
         if (err == 0)
@@ -1263,17 +1411,35 @@ out:
 
 static int fsfilt_ext3_setup(struct super_block *sb)
 {
+        struct ext3_sb_info *sbi = EXT3_SB(sb);
 #if 0
-        EXT3_SB(sb)->dx_lock = fsfilt_ext3_dx_lock;
-        EXT3_SB(sb)->dx_unlock = fsfilt_ext3_dx_unlock;
+        sbi->dx_lock = fsfilt_ext3_dx_lock;
+        sbi->dx_unlock = fsfilt_ext3_dx_unlock;
 #endif
 #ifdef S_PDIROPS
         CWARN("Enabling PDIROPS\n");
-        set_opt(EXT3_SB(sb)->s_mount_opt, PDIROPS);
+        set_opt(sbi->s_mount_opt, PDIROPS);
         sb->s_flags |= S_PDIROPS;
 #endif
         if (!EXT3_HAS_COMPAT_FEATURE(sb, EXT3_FEATURE_COMPAT_DIR_INDEX))
                 CWARN("filesystem doesn't have dir_index feature enabled\n");
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,6)) && HAVE_QUOTA_SUPPORT
+        /* enable journaled quota support */
+        /* kfreed in ext3_put_super() */
+        sbi->s_qf_names[USRQUOTA] = kstrdup("lquota.user.reserved", GFP_KERNEL);
+        if (!sbi->s_qf_names[USRQUOTA])
+                return -ENOMEM;
+        sbi->s_qf_names[GRPQUOTA] = kstrdup("lquota.group.reserved", GFP_KERNEL);
+        if (!sbi->s_qf_names[GRPQUOTA]) {
+                kfree(sbi->s_qf_names[USRQUOTA]);
+                sbi->s_qf_names[USRQUOTA] = NULL;
+                return -ENOMEM;
+        }
+        sbi->s_jquota_fmt = QFMT_VFS_V0;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,13))
+        set_opt(sbi->s_mount_opt, QUOTA);
+#endif
+#endif
         return 0;
 }
 
@@ -1307,8 +1473,6 @@ static int fsfilt_ext3_get_op_len(int op, struct fsfilt_objinfo *fso, int logs)
 
         return 0;
 }
-
-static const char *op_quotafile[] = { "lquota.user", "lquota.group" };
 
 #define DQINFO_COPY(out, in)                    \
 do {                                            \
@@ -1364,10 +1528,26 @@ static int fsfilt_ext3_quotactl(struct super_block *sb,
                                 continue;
 
                         if (oqc->qc_cmd == Q_QUOTAON) {
+                                lustre_quota_version_t qfmt = oqc->qc_id;
+                                char *name[][MAXQUOTAS] = LUSTRE_OPQFILES_NAMES;
+
                                 if (!qcop->quota_on)
                                         GOTO(out, rc = -ENOSYS);
-                                rc = qcop->quota_on(sb, i, oqc->qc_id,
-                                                    (char *)op_quotafile[i]);
+
+                                rc = qcop->quota_on(sb, i, QFMT_VFS_V0,
+                                                    name[qfmt][i]);
+#ifdef HAVE_QUOTA64
+                                if (rc == -ENOENT || rc == -EINVAL) {
+                                        /* see bug 13904 */
+                                        rc = lustre_slave_quota_convert(qfmt, i);
+                                        if (!rc)
+                                                rc = qcop->quota_on(sb, i,
+                                                                QFMT_VFS_V0,
+                                                                name[qfmt][i]);
+                                        else if (rc == -ESTALE)
+                                                rc = -ENOENT;
+                                }
+#endif
                         } else if (oqc->qc_cmd == Q_QUOTAOFF) {
                                 if (!qcop->quota_off)
                                         GOTO(out, rc = -ENOSYS);
@@ -1400,14 +1580,37 @@ static int fsfilt_ext3_quotactl(struct super_block *sb,
                 if (!qcop->get_dqblk)
                         GOTO(out, rc = -ENOSYS);
                 rc = qcop->get_dqblk(sb, oqc->qc_type, oqc->qc_id, dqblk);
+                if (!rc)
+                        dqblk->dqb_valid = QIF_LIMITS | QIF_USAGE;
                 break;
         case Q_SYNC:
                 if (!sb->s_qcop->quota_sync)
                         GOTO(out, rc = -ENOSYS);
                 qcop->quota_sync(sb, oqc->qc_type);
                 break;
+        case Q_FINVALIDATE:
+                CDEBUG(D_WARNING, "invalidating operational quota files\n");
+                for (i = 0; i < MAXQUOTAS; i++) {
+                        struct file *fp;
+                        lustre_quota_version_t qfmt = oqc->qc_id;
+                        char *name[][MAXQUOTAS] = LUSTRE_OPQFILES_NAMES;
+
+                        if (!Q_TYPESET(oqc, i))
+                                continue;
+
+                        fp = filp_open(name[qfmt][i], O_CREAT | O_TRUNC | O_RDWR, 0644);
+                        if (IS_ERR(fp)) {
+                                rc = PTR_ERR(fp);
+                                CERROR("error invalidating operational quota file"
+                                       " %s (rc:%d)\n", name[qfmt][i], rc);
+                        } else {
+                                filp_close(fp, 0);
+                        }
+
+                }
+                break;
         default:
-                CERROR("unsupported quotactl command: %d", oqc->qc_cmd);
+                CERROR("unsupported quotactl command: %d\n", oqc->qc_cmd);
                 LBUG();
         }
 out:
@@ -1429,12 +1632,12 @@ struct chk_dqblk{
         struct list_head        dqb_list;        /* in list also */
         qid_t                   dqb_id;          /* uid/gid */
         short                   dqb_type;        /* USRQUOTA/GRPQUOTA */
-        __u32                   dqb_bhardlimit;  /* block hard limit */
-        __u32                   dqb_bsoftlimit;  /* block soft limit */
+        qsize_t                 dqb_bhardlimit;  /* block hard limit */
+        qsize_t                 dqb_bsoftlimit;  /* block soft limit */
         qsize_t                 dqb_curspace;    /* current space */
-        __u32                   dqb_ihardlimit;  /* inode hard limit */
-        __u32                   dqb_isoftlimit;  /* inode soft limit */
-        __u32                   dqb_curinodes;   /* current inodes */
+        qsize_t                 dqb_ihardlimit;  /* inode hard limit */
+        qsize_t                 dqb_isoftlimit;  /* inode soft limit */
+        qsize_t                 dqb_curinodes;   /* current inodes */
         __u64                   dqb_btime;       /* block grace time */
         __u64                   dqb_itime;       /* inode grace time */
         __u32                   dqb_valid;       /* flag for above fields */
@@ -1513,7 +1716,7 @@ cqget(struct super_block *sb, struct hlist_head *hash, struct list_head *list,
         return cdqb;
 }
 
-static inline int quota_onoff(struct super_block *sb, int cmd, int type)
+static inline int quota_onoff(struct super_block *sb, int cmd, int type, int qfmt)
 {
         struct obd_quotactl *oqctl;
         int rc;
@@ -1523,7 +1726,7 @@ static inline int quota_onoff(struct super_block *sb, int cmd, int type)
                 RETURN(-ENOMEM);
 
         oqctl->qc_cmd = cmd;
-        oqctl->qc_id = QFMT_LDISKFS;
+        oqctl->qc_id = qfmt;
         oqctl->qc_type = type;
         rc = fsfilt_ext3_quotactl(sb, oqctl);
 
@@ -1648,7 +1851,11 @@ static int add_inode_quota(struct inode *inode, struct qchk_ctxt *qctxt,
 static int v2_write_dqheader(struct file *f, int type)
 {
         static const __u32 quota_magics[] = V2_INITQMAGICS;
+#ifdef HAVE_QUOTA64
+        static const __u32 quota_versions[] = V2_INITQVERSIONS_R0;
+#else
         static const __u32 quota_versions[] = V2_INITQVERSIONS;
+#endif
         struct v2_disk_dqheader dqhead;
         loff_t offset = 0;
 
@@ -1686,6 +1893,30 @@ static int v2_write_dqinfo(struct file *f, int type, struct if_dqinfo *info)
         return cfs_user_write(f, (char *)&dqinfo, sizeof(dqinfo), &offset);
 }
 
+#ifdef HAVE_QUOTA64
+static int v3_write_dqheader(struct file *f, int type)
+{
+        static const __u32 quota_magics[] = V2_INITQMAGICS;
+        static const __u32 quota_versions[] = V2_INITQVERSIONS_R1;
+        struct v2_disk_dqheader dqhead;
+        loff_t offset = 0;
+
+        CLASSERT(ARRAY_SIZE(quota_magics) == ARRAY_SIZE(quota_versions));
+        LASSERT(0 <= type && type < ARRAY_SIZE(quota_magics));
+
+        dqhead.dqh_magic = cpu_to_le32(quota_magics[type]);
+        dqhead.dqh_version = cpu_to_le32(quota_versions[type]);
+
+        return cfs_user_write(f, (char *)&dqhead, sizeof(dqhead), &offset);
+}
+
+/* write dqinfo struct in a new quota file */
+static int v3_write_dqinfo(struct file *f, int type, struct if_dqinfo *info)
+{
+        return v2_write_dqinfo(f, type, info);
+}
+#endif
+
 static int create_new_quota_files(struct qchk_ctxt *qctxt,
                                   struct obd_quotactl *oqc)
 {
@@ -1696,32 +1927,50 @@ static int create_new_quota_files(struct qchk_ctxt *qctxt,
                 struct if_dqinfo *info = qctxt->qckt_first_check[i]?
                                          NULL : &qctxt->qckt_dqinfo[i];
                 struct file *file;
+                const char *name[][MAXQUOTAS] = LUSTRE_OPQFILES_NAMES;
+                int (*write_dqheader)(struct file *, int);
+                int (*write_dqinfo)(struct file *, int, struct if_dqinfo *);
 
                 if (!Q_TYPESET(oqc, i))
                         continue;
 
-                file = filp_open(op_quotafile[i], O_RDWR | O_CREAT | O_TRUNC,
-                                 0644);
+                file = filp_open(name[oqc->qc_id][i],
+                                 O_RDWR | O_CREAT | O_TRUNC, 0644);
                 if (IS_ERR(file)) {
                         rc = PTR_ERR(file);
                         CERROR("can't create %s file: rc = %d\n",
-                               op_quotafile[i], rc);
+                               name[oqc->qc_id][i], rc);
                         GOTO(out, rc);
                 }
 
                 if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
-                        CERROR("file %s is not regular", op_quotafile[i]);
+                        CERROR("file %s is not regular", name[oqc->qc_id][i]);
                         filp_close(file, 0);
                         GOTO(out, rc = -EINVAL);
                 }
 
-                rc = v2_write_dqheader(file, i);
+                DQUOT_DROP(file->f_dentry->d_inode);
+
+                switch (oqc->qc_id) {
+                case LUSTRE_QUOTA_V1 : write_dqheader = v2_write_dqheader;
+                                       write_dqinfo   = v2_write_dqinfo;
+                                       break;
+#ifdef HAVE_QUOTA64
+                case LUSTRE_QUOTA_V2 : write_dqheader = v3_write_dqheader;
+                                       write_dqinfo   = v3_write_dqinfo;
+                                       break;
+#endif
+                default              : CERROR("unknown quota format!\n");
+                                       LBUG();
+                }
+
+                rc = (*write_dqheader)(file, i);
                 if (rc) {
                         filp_close(file, 0);
                         GOTO(out, rc);
                 }
 
-                rc = v2_write_dqinfo(file, i, info);
+                rc = (*write_dqinfo)(file, i, info);
                 filp_close(file, 0);
                 if (rc)
                         GOTO(out, rc);
@@ -1817,12 +2066,12 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
                 if (!Q_TYPESET(oqc, i))
                         continue;
 
-                rc = quota_onoff(sb, Q_QUOTAON, i);
+                rc = quota_onoff(sb, Q_QUOTAON, i, oqc->qc_id);
                 if (!rc || rc == -EBUSY) {
                         rc = read_old_dqinfo(sb, i, qctxt->qckt_dqinfo);
                         if (rc)
                                 GOTO(out, rc);
-                } else if (rc == -ENOENT) {
+                } else if (rc == -ENOENT || rc == -EINVAL || rc == -EEXIST) {
                         qctxt->qckt_first_check[i] = 1;
                 } else if (rc) {
                         GOTO(out, rc);
@@ -1890,14 +2139,14 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
         }
 #endif
         /* turn off quota cause we are to dump chk_dqblk to files */
-        quota_onoff(sb, Q_QUOTAOFF, oqc->qc_type);
+        quota_onoff(sb, Q_QUOTAOFF, oqc->qc_type, oqc->qc_id);
 
         rc = create_new_quota_files(qctxt, oqc);
         if (rc)
                 GOTO(out, rc);
 
         /* we use vfs functions to set dqblk, so turn quota on */
-        rc = quota_onoff(sb, Q_QUOTAON, oqc->qc_type);
+        rc = quota_onoff(sb, Q_QUOTAON, oqc->qc_type, oqc->qc_id);
 out:
         /* dump and free chk_dqblk */
         rc = prune_chkquots(sb, qctxt, rc);
@@ -1905,7 +2154,7 @@ out:
 
         /* turn off quota, `lfs quotacheck` will turn on when all
          * nodes quotacheck finish. */
-        quota_onoff(sb, Q_QUOTAOFF, oqc->qc_type);
+        quota_onoff(sb, Q_QUOTAOFF, oqc->qc_type, oqc->qc_id);
 
         oqc->qc_stat = rc;
         if (rc)
@@ -1939,9 +2188,14 @@ static int fsfilt_ext3_quotainfo(struct lustre_quota_info *lqi, int type,
         case QFILE_INIT_INFO:
                 rc = lustre_init_quota_info(lqi, type);
                 break;
+        case QFILE_CONVERT:
+                rc = lustre_quota_convert(lqi, type);
+                break;
         default:
-                CERROR("Unsupported admin quota file cmd %d\n", cmd);
-                LBUG();
+                rc = -ENOTSUPP;
+                CERROR("Unsupported admin quota file cmd %d\n"
+                       "Are lquota.ko and fsfilt_ldiskfs.ko modules in sync?\n",
+                       cmd);
                 break;
         }
         RETURN(rc);
@@ -2019,7 +2273,6 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         .fs_statfs              = fsfilt_ext3_statfs,
         .fs_sync                = fsfilt_ext3_sync,
         .fs_map_inode_pages     = fsfilt_ext3_map_inode_pages,
-        .fs_prep_san_write      = fsfilt_ext3_prep_san_write,
         .fs_write_record        = fsfilt_ext3_write_record,
         .fs_read_record         = fsfilt_ext3_read_record,
         .fs_setup               = fsfilt_ext3_setup,
@@ -2027,6 +2280,10 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         .fs_get_op_len          = fsfilt_ext3_get_op_len,
         .fs_quotactl            = fsfilt_ext3_quotactl,
         .fs_quotacheck          = fsfilt_ext3_quotacheck,
+#ifdef HAVE_DISK_INODE_VERSION
+        .fs_get_version         = fsfilt_ext3_get_version,
+        .fs_set_version         = fsfilt_ext3_set_version,
+#endif
 #ifdef HAVE_QUOTA_SUPPORT
         .fs_quotainfo           = fsfilt_ext3_quotainfo,
         .fs_qids                = fsfilt_ext3_qids,
@@ -2039,9 +2296,8 @@ static int __init fsfilt_ext3_init(void)
 {
         int rc;
 
-        fcb_cache = kmem_cache_create("fsfilt_ext3_fcb",
-                                      sizeof(struct fsfilt_cb_data), 0,
-                                      0, NULL, NULL);
+        fcb_cache = cfs_mem_cache_create("fsfilt_ext3_fcb",
+                                         sizeof(struct fsfilt_cb_data), 0, 0);
         if (!fcb_cache) {
                 CERROR("error allocating fsfilt journal callback cache\n");
                 GOTO(out, rc = -ENOMEM);
@@ -2050,7 +2306,7 @@ static int __init fsfilt_ext3_init(void)
         rc = fsfilt_register_ops(&fsfilt_ext3_ops);
 
         if (rc) {
-                int err = kmem_cache_destroy(fcb_cache);
+                int err = cfs_mem_cache_destroy(fcb_cache);
                 LASSERTF(err == 0, "error destroying new cache: rc %d\n", err);
         }
 out:
@@ -2062,13 +2318,13 @@ static void __exit fsfilt_ext3_exit(void)
         int rc;
 
         fsfilt_unregister_ops(&fsfilt_ext3_ops);
-        rc = kmem_cache_destroy(fcb_cache);
+        rc = cfs_mem_cache_destroy(fcb_cache);
         LASSERTF(rc == 0, "couldn't destroy fcb_cache slab\n");
 }
 
 module_init(fsfilt_ext3_init);
 module_exit(fsfilt_ext3_exit);
 
-MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
+MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre ext3 Filesystem Helper v0.1");
 MODULE_LICENSE("GPL");

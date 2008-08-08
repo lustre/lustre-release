@@ -47,6 +47,7 @@ Usage:  `basename $0` [options] <csv file>
                 If using this option, then the value of "mount options"
                 item in the csv file will be passed to mkfs.lustre, else
                 the value will be added into the /etc/fstab.
+    -u          upgrade Lustre targets from 1.4 to 1.6
     -v          verbose mode
     csv file    a spreadsheet that contains configuration parameters
                 (separated by commas) for each target in a Lustre cluster
@@ -64,6 +65,7 @@ execute remote commands to format (mkfs.lustre) every Lustre target
 that will be part of the Lustre cluster.
 
 It can also optionally: 
+ * upgrade Lustre targets from 1.4 to 1.6
  * verify the network connectivity and hostnames in the cluster
  * configure Linux MD/LVM devices
  * modify /etc/modprobe.conf to add Lustre networking info
@@ -243,16 +245,19 @@ declare -a TARGET_OPTS              # target services in one failover group
 declare -a HOST_NAME MODULE_OPTS DEVICE_NAME MOUNT_POINT DEVICE_TYPE FS_NAME
 declare -a MGS_NIDS INDEX FORMAT_OPTIONS MKFS_OPTIONS MOUNT_OPTIONS FAILOVERS
 
-# Corresponding to MGS_NIDS and FAILOVERS arrays,
-# IP addresses in which were converted to hostnames
-declare -a MGS_NIDS_NAMES FAILOVERS_NAMES
+# Heartbeat software requires that node names in the configuration directive
+# must (normally) match the "uname -n" of that machine. Since the value of the
+# "failover nids" field in the csv file is the NID(s) of failover partner node,
+# we have to figure out the corresponding hostname of that node.
+declare -a FAILOVERS_NAMES
 
 VERIFY_CONNECT=true
 CONFIG_MD_LVM=false
 MODIFY_FSTAB=true
+UPGRADE_TARGET=false
 VERBOSE_OUTPUT=false
 # Get and check the positional parameters
-while getopts "aw:x:t:ndfmhv" OPTION; do
+while getopts "aw:x:t:ndfmuhv" OPTION; do
     case $OPTION in
     a)
         [ -z "${SPECIFIED_NODELIST}" ] && [ -z "${EXCLUDED_NODELIST}" ] \
@@ -290,6 +295,9 @@ while getopts "aw:x:t:ndfmhv" OPTION; do
         ;;
     m)
         MODIFY_FSTAB=false
+        ;;
+    u)
+        UPGRADE_TARGET=true 
         ;;
     h)
         sample
@@ -520,21 +528,24 @@ construct_mkfs_cmdline() {
     local mgsnids mgsnids_str
     local failnids failnids_str
 
-    MKFS_CMD=${MKFS}$" "
-    MKFS_CMD=${MKFS_CMD}${REFORMAT_OPTION}
+    if $UPGRADE_TARGET; then
+        MKFS_CMD="$TUNEFS --writeconf"
+    else
+        MKFS_CMD="$MKFS $REFORMAT_OPTION"
+    fi
 
     case "${DEVICE_TYPE[i]}" in
     "ost")
-        MKFS_CMD=${MKFS_CMD}$"--ost "
+        MKFS_CMD="$MKFS_CMD --ost"
         ;;
     "mdt")
-        MKFS_CMD=${MKFS_CMD}$"--mdt "
+        MKFS_CMD="$MKFS_CMD --mdt"
         ;;
     "mgs")
-        MKFS_CMD=${MKFS_CMD}$"--mgs "
+        MKFS_CMD="$MKFS_CMD --mgs"
         ;;
     "mdt|mgs" | "mgs|mdt")
-        MKFS_CMD=${MKFS_CMD}$"--mdt --mgs "
+        MKFS_CMD="$MKFS_CMD --mgs --mdt"
         ;;
     *)
         echo >&2 $"`basename $0`: construct_mkfs_cmdline() error:"\
@@ -544,42 +555,40 @@ construct_mkfs_cmdline() {
     esac
 
     if [ -n "${FS_NAME[i]}" ]; then
-        MKFS_CMD=${MKFS_CMD}$"--fsname="${FS_NAME[i]}$" "
+        MKFS_CMD="$MKFS_CMD --fsname=${FS_NAME[i]}"
     fi
 
     if [ -n "${MGS_NIDS[i]}" ]; then
         mgsnids_str=${MGS_NIDS[i]}
         for mgsnids in ${mgsnids_str//:/ }; do
-            MKFS_CMD=${MKFS_CMD}$"--mgsnode="${mgsnids}$" "
+            MKFS_CMD="$MKFS_CMD --mgsnode=$mgsnids"
         done
     fi
 
     if [ -n "${INDEX[i]}" ]; then
-        MKFS_CMD=${MKFS_CMD}$"--index="${INDEX[i]}$" "
+        MKFS_CMD="$MKFS_CMD --index=${INDEX[i]}"
     fi
 
     if [ -n "${FORMAT_OPTIONS[i]}" ]; then
-        MKFS_CMD=${MKFS_CMD}${FORMAT_OPTIONS[i]}$" "
+        MKFS_CMD="$MKFS_CMD ${FORMAT_OPTIONS[i]}"
     fi
 
-    if [ -n "${MKFS_OPTIONS[i]}" ]; then
-        MKFS_CMD=${MKFS_CMD}$"--mkfsoptions="$"\""${MKFS_OPTIONS[i]}$"\""$" "
+    if ! $UPGRADE_TARGET && [ -n "${MKFS_OPTIONS[i]}" ]; then
+        MKFS_CMD="$MKFS_CMD --mkfsoptions=\"${MKFS_OPTIONS[i]}\""
     fi
 
-    if [ -n "${MOUNT_OPTIONS[i]}" ]; then
-        if ! ${MODIFY_FSTAB}; then
-            MKFS_CMD=${MKFS_CMD}$"--mountfsoptions="$"\""${MOUNT_OPTIONS[i]}$"\""$" "
-        fi
+    if [ -n "${MOUNT_OPTIONS[i]}" ] && ! $MODIFY_FSTAB; then
+        MKFS_CMD="$MKFS_CMD --mountfsoptions=\"${MOUNT_OPTIONS[i]}\""
     fi
 
     if [ -n "${FAILOVERS[i]}" ]; then
         failnids_str=${FAILOVERS[i]}
         for failnids in ${failnids_str//:/ }; do
-            MKFS_CMD=${MKFS_CMD}$"--failnode="${failnids}$" "
+            MKFS_CMD="$MKFS_CMD --failnode=$failnids"
         done
     fi
 
-    MKFS_CMD=${MKFS_CMD}${DEVICE_NAME[i]}
+    MKFS_CMD="$MKFS_CMD ${DEVICE_NAME[i]}"
     return 0
 } 
 
@@ -680,7 +689,7 @@ gen_ha_config() {
 
 # Configure HA software
 config_ha() {
-    if [ -z "${HATYPE_OPT}" ]; then
+    if $UPGRADE_TARGET || [ -z "${HATYPE_OPT}" ]; then
         return 0
     fi
 
@@ -753,7 +762,8 @@ get_items() {
     declare -i line_num=0
     declare -i idx=0
 
-    while read -r LINE; do
+    exec 9< ${CSV_FILE}
+    while read -u 9 -r LINE; do
         line_num=${line_num}+1
         # verbose_output "Parsing line ${line_num}: $LINE"
 
@@ -804,12 +814,6 @@ get_items() {
         MODULE_OPTS[idx]=`echo "${MODULE_OPTS[idx]}" | sed 's/"/\\\"/g'`
 
         # Convert IP addresses in NIDs to hostnames
-        MGS_NIDS_NAMES[idx]=$(ip2hostname_multi_node ${MGS_NIDS[idx]})
-        if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo >&2 "${MGS_NIDS_NAMES[idx]}"
-            return 1
-        fi
-
         FAILOVERS_NAMES[idx]=$(ip2hostname_multi_node ${FAILOVERS[idx]})
         if [ ${PIPESTATUS[0]} -ne 0 ]; then
             echo >&2 "${FAILOVERS_NAMES[idx]}"
@@ -824,7 +828,7 @@ get_items() {
         fi
 
         idx=${idx}+1
-    done < ${CSV_FILE}
+    done
 
     return 0
 }
@@ -838,7 +842,6 @@ check_lnet_connect() {
 
     local COMMAND RET_STR
     local mgs_prim_nids
-    local nids nids_names
     local nids_str=
     local mgs_nid 
     local ping_mgs
@@ -849,7 +852,7 @@ check_lnet_connect() {
     "${HOST_NAME[i]} and the MGS node ${mgs_node}"
     mgs_prim_nids=`echo ${MGS_NIDS[i]} | awk -F: '{print $1}'`
 
-    if [ -z "${mgs_node}" ]; then
+    if [ -z "${mgs_node}" -o $MGS_NUM -eq 1 ]; then
         nids_str=${mgs_prim_nids}    # nids of primary MGS node
         if [ -z "${nids_str}" ]; then
             echo >&2 $"`basename $0`: check_lnet_connect() error:"\
@@ -858,21 +861,11 @@ check_lnet_connect() {
             return 1
         fi
     else
-        for nids in ${MGS_NIDS[i]//:/ }; do
-            nids_names=$(ip2hostname_single_node ${nids})
-            if [ ${PIPESTATUS[0]} -ne 0 ]; then
-                echo >&2 "${nids_names}"
-                return 1
-            fi
-
-            [ "${nids_names}" != "${nids_names#*$mgs_node*}" ]\
-            && nids_str=${nids} # nids of backup MGS node
-        done
-        if [ -z "${nids_str}" ]; then
-            echo >&2 $"`basename $0`: check_lnet_connect() error:"\
-            "Check the mgs nids item of host ${HOST_NAME[i]}!"\
-            "Can not figure out which nids corresponding to the MGS"\
-            "node ${mgs_node} from \"${MGS_NIDS[i]}\"!"
+        # Get the corresponding NID(s) of the MGS node ${mgs_node}
+        # from the "mgs nids" field
+        nids_str=$(get_mgs_nids ${mgs_node} ${MGS_NIDS[i]})
+        if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo >&2 "${nids_str}"
             return 1
         fi
     fi
@@ -995,13 +988,13 @@ mass_config() {
     declare -i i=0
 
     if [ ${#HOST_NAME[@]} -eq 0 ]; then
-        verbose_output "There are no Lustre targets to be formatted."
+        verbose_output "There are no lustre targets specified."
         return 0
     fi
 
-    # Start lnet network in the MGS node
-    if ! start_mgs_lnet; then
-        return 1    
+    if ! $UPGRADE_TARGET; then
+        # Start lnet network in the MGS node
+        start_mgs_lnet || return 1    
     fi
 
     for ((i = 0; i < ${#HOST_NAME[@]}; i++)); do
@@ -1022,7 +1015,7 @@ mass_config() {
             return 1
         fi
 
-        if ! is_mgs_node ${HOST_NAME[i]}; then
+        if ! $UPGRADE_TARGET && ! is_mgs_node ${HOST_NAME[i]}; then
             # Execute remote command to add lnet options lines to 
             # modprobe.conf/modules.conf
             COMMAND=$"echo \"${MODULE_OPTS[i]}\"|${MODULE_CONFIG}"
@@ -1042,13 +1035,18 @@ mass_config() {
             fi
         fi
 
-        # Execute remote command to format Lustre target
-        verbose_output "Formatting Lustre target ${DEVICE_NAME[i]} on ${HOST_NAME[i]}..."
-        REMOTE_CMD[${pid_num}]="${REMOTE} ${HOST_NAME[i]} \"(${EXPORT_PATH} ${MKFS_CMD})\""
-        verbose_output "Format command line is: ${REMOTE_CMD[${pid_num}]}"
-        ${REMOTE} ${HOST_NAME[i]} "(${EXPORT_PATH} ${MKFS_CMD})" >&2 &  
-        REMOTE_PID[${pid_num}]=$!
-        pid_num=${pid_num}+1
+        # Execute remote command to format or upgrade Lustre target
+        local OP
+        $UPGRADE_TARGET && OP="Upgrading" || OP="Formatting"
+        verbose_output "$OP Lustre target ${DEVICE_NAME[i]} on ${HOST_NAME[i]}..."
+
+        COMMAND="$EXPORT_PATH $MKFS_CMD"
+        REMOTE_CMD[$pid_num]="$REMOTE ${HOST_NAME[i]} \"$COMMAND\""
+        verbose_output "$OP command line is: ${REMOTE_CMD[$pid_num]}"
+
+        $REMOTE ${HOST_NAME[i]} "$COMMAND" &
+        REMOTE_PID[$pid_num]=$!
+        let pid_num=$pid_num+1
         sleep 1
     done
 
@@ -1068,7 +1066,7 @@ mass_config() {
         return 1
     fi    
 
-    verbose_output "All the Lustre targets are formatted successfully!"
+    verbose_output "Success on all Lustre targets!"
     return 0
 }
 
@@ -1179,7 +1177,7 @@ if ${VERIFY_CONNECT}; then
     echo
 fi
 
-if ${CONFIG_MD_LVM}; then
+if $CONFIG_MD_LVM && ! $UPGRADE_TARGET; then
 # Configure Linux MD/LVM devices
     echo "`basename $0`: Configuring Linux MD/LVM devices..."
     if ! ${SCRIPT_CONFIG_MD} ${NODELIST_OPT} ${VERBOSE_OPT} ${CSV_FILE}; then

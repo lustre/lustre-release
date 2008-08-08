@@ -1355,7 +1355,8 @@ get_ldds(){
 				params=`echo ${params#Parameters:}`
 				break
 			fi
-        	done < <(${REMOTE} ${host_name} "${TUNEFS} --print --verbose ${TARGET_DEVNAMES[i]} 2>/dev/null")
+		done < <(${REMOTE} ${host_name} "PATH=\$PATH:/sbin:/usr/sbin
+		${TUNEFS} --print --verbose ${TARGET_DEVNAMES[i]} 2>/dev/null")
 
 		if [ -z "${flags}" ]; then
 			echo >&2 "`basename $0`: get_ldds() error: Invalid" \

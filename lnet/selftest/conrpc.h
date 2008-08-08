@@ -1,11 +1,43 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
- * 
- * Author: Liang Zhen <liangzhen@clusterfs.com>
- * 
- * This file is part of Lustre, http://www.lustre.org
+ *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * /lnet/selftest/conrpc.h
  *
  * Console rpc
+ *
+ * Author: Liang Zhen <liangzhen@clusterfs.com>
  */
 
 #ifndef __LST_CONRPC_H__
@@ -71,31 +103,34 @@ typedef struct lstcon_rpc_trans {
 typedef int (* lstcon_rpc_cond_func_t)(int, struct lstcon_node *, void *);
 typedef int (* lstcon_rpc_readent_func_t)(int, srpc_msg_t *, lstcon_rpc_ent_t *);
 
-int lstcon_sesrpc_prep(struct lstcon_node *nd, 
-                       int transop, lstcon_rpc_t **crpc);
-int lstcon_dbgrpc_prep(struct lstcon_node *nd, lstcon_rpc_t **crpc);
-int lstcon_batrpc_prep(struct lstcon_node *nd,
-                       int transop, struct lstcon_tsb_hdr *tsb, lstcon_rpc_t **crpc);
-int lstcon_testrpc_prep(struct lstcon_node *nd,
-                        int transop, struct lstcon_test *test, lstcon_rpc_t **crpc);
-int lstcon_statrpc_prep(struct lstcon_node *nd, lstcon_rpc_t **crpc);
+int  lstcon_sesrpc_prep(struct lstcon_node *nd, 
+                        int transop, lstcon_rpc_t **crpc);
+int  lstcon_dbgrpc_prep(struct lstcon_node *nd, lstcon_rpc_t **crpc);
+int  lstcon_batrpc_prep(struct lstcon_node *nd, int transop,
+                        struct lstcon_tsb_hdr *tsb, lstcon_rpc_t **crpc);
+int  lstcon_testrpc_prep(struct lstcon_node *nd, int transop,
+                         struct lstcon_test *test, lstcon_rpc_t **crpc);
+int  lstcon_statrpc_prep(struct lstcon_node *nd, lstcon_rpc_t **crpc);
 void lstcon_rpc_put(lstcon_rpc_t *crpc);
-int lstcon_rpc_trans_prep(struct list_head *translist,
-                          int transop, lstcon_rpc_trans_t **transpp);
-int lstcon_rpc_trans_ndlist(struct list_head *ndlist, struct list_head *translist,
-                            int transop, void *arg, lstcon_rpc_cond_func_t condition,
-                            lstcon_rpc_trans_t **transpp);
-void lstcon_rpc_trans_stat(lstcon_rpc_trans_t *trans, lstcon_trans_stat_t *stat);
-int lstcon_rpc_trans_interpreter(lstcon_rpc_trans_t *trans, struct list_head *head_up,
-                                 lstcon_rpc_readent_func_t readent);
+int  lstcon_rpc_trans_prep(struct list_head *translist,
+                           int transop, lstcon_rpc_trans_t **transpp);
+int  lstcon_rpc_trans_ndlist(struct list_head *ndlist,
+                             struct list_head *translist, int transop,
+                             void *arg, lstcon_rpc_cond_func_t condition,
+                             lstcon_rpc_trans_t **transpp);
+void lstcon_rpc_trans_stat(lstcon_rpc_trans_t *trans,
+                           lstcon_trans_stat_t *stat);
+int  lstcon_rpc_trans_interpreter(lstcon_rpc_trans_t *trans,
+                                  struct list_head *head_up,
+                                  lstcon_rpc_readent_func_t readent);
 void lstcon_rpc_trans_abort(lstcon_rpc_trans_t *trans, int error);
 void lstcon_rpc_trans_destroy(lstcon_rpc_trans_t *trans);
 void lstcon_rpc_trans_addreq(lstcon_rpc_trans_t *trans, lstcon_rpc_t *req);
-int lstcon_rpc_trans_postwait(lstcon_rpc_trans_t *trans, int timeout);
-int lstcon_rpc_pinger_start(void);
+int  lstcon_rpc_trans_postwait(lstcon_rpc_trans_t *trans, int timeout);
+int  lstcon_rpc_pinger_start(void);
 void lstcon_rpc_pinger_stop(void);
 void lstcon_rpc_cleanup_wait(void);
-int lstcon_rpc_module_init(void);
+int  lstcon_rpc_module_init(void);
 void lstcon_rpc_module_fini(void);
 
 #endif

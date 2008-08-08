@@ -149,9 +149,9 @@ send email to help@myri.com.
 
 2. Multi-homing
 
-At this time, the MXLND cannot drive more than one interface at a time.  Thus,
-a single Lustre router cannot route between two MX-10G, between two MX-2G, or
-between MX-10G and MX-2G fabrics.
+At this time, the MXLND does not support more than one interface at a time.
+Thus, a single Lustre router cannot route between two MX-10G, between two
+MX-2G, or between MX-10G and MX-2G fabrics.
 
 3. MX endpoint collision
 

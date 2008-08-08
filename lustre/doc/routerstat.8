@@ -1,0 +1,27 @@
+.TH routerstat 1 "Jul 7, 2008" Lustre "utilities"
+.SH NAME
+routerstat \- print Lustre router statistics
+.SH SYNOPSIS
+.B "routerstat [interval]
+.br
+.SH DESCRIPTION
+.B routerstat
+watches LNET router statistics.  If no
+.I interval
+is specified, stats are sampled and printed only once;
+otherwise, stats are sampled and printed every
+.I interval
+seconds.
+.LP
+Output includes the following fields:
+.LP
+.nf
+M - msgs_alloc(msgs_max)
+E - errors
+S - send_count/send_length
+R - recv_count/recv_length
+F - route_count/route_length
+D - drop_count/drop_length
+.fi
+.SH FILES
+/proc/sys/lnet/stats

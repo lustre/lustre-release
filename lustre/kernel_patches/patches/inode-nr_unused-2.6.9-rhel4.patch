@@ -1,7 +1,8 @@
-diff -urp b1_4.RH_2_6_9_42_0_3.old/fs/fs-writeback.c b1_4.RH_2_6_9_42_0_3/fs/fs-writeback.c
---- b1_4.RH_2_6_9_42_0_3.old/fs/fs-writeback.c	2006-10-23 13:33:05.000000000 +0300
-+++ b1_4.RH_2_6_9_42_0_3/fs/fs-writeback.c	2007-04-15 00:31:43.000000000 +0300
-@@ -230,7 +230,6 @@ __sync_single_inode(struct inode *inode,
+Index: RH_2_6_9_55/fs/fs-writeback.c
+===================================================================
+--- RH_2_6_9_55.orig/fs/fs-writeback.c
++++ RH_2_6_9_55/fs/fs-writeback.c
+@@ -230,7 +230,6 @@
  			 * The inode is clean, unused
  			 */
  			list_move(&inode->i_list, &inode_unused);
@@ -9,19 +10,19 @@ diff -urp b1_4.RH_2_6_9_42_0_3.old/fs/fs-writeback.c b1_4.RH_2_6_9_42_0_3/fs/fs-
  		}
  	}
  	wake_up_inode(inode);
-@@ -244,6 +243,11 @@ static int
+@@ -244,6 +243,11 @@
  __writeback_single_inode(struct inode *inode,
  			struct writeback_control *wbc)
  {
-+        if (!atomic_read(&inode->i_count))
-+        	WARN_ON(!(inode->i_state & I_WILL_FREE));
++	if (!atomic_read(&inode->i_count))
++		WARN_ON(!(inode->i_state & I_WILL_FREE));
 +	else
 +		WARN_ON(inode->i_state & I_WILL_FREE);
 +
  	if ((wbc->sync_mode != WB_SYNC_ALL) && (inode->i_state & I_LOCK)) {
  		list_move(&inode->i_list, &inode->i_sb->s_dirty);
  		return 0;
-@@ -253,10 +257,8 @@ __writeback_single_inode(struct inode *i
+@@ -253,10 +257,8 @@
  	 * It's a data-integrity sync.  We must wait.
  	 */
  	while (inode->i_state & I_LOCK) {
@@ -32,15 +33,15 @@ diff -urp b1_4.RH_2_6_9_42_0_3.old/fs/fs-writeback.c b1_4.RH_2_6_9_42_0_3/fs/fs-
  		spin_lock(&inode_lock);
  	}
  	return __sync_single_inode(inode, wbc);
-Двоичные файлы b1_4.RH_2_6_9_42_0_3.old/fs/fs-writeback.o и b1_4.RH_2_6_9_42_0_3/fs/fs-writeback.o различаются
-diff -urp b1_4.RH_2_6_9_42_0_3.old/fs/inode.c b1_4.RH_2_6_9_42_0_3/fs/inode.c
---- b1_4.RH_2_6_9_42_0_3.old/fs/inode.c	2006-12-14 15:20:40.000000000 +0200
-+++ b1_4.RH_2_6_9_42_0_3/fs/inode.c	2007-04-15 00:31:28.000000000 +0300
-@@ -1054,6 +1054,7 @@ static void generic_forget_inode(struct 
+Index: RH_2_6_9_55/fs/inode.c
+===================================================================
+--- RH_2_6_9_55.orig/fs/inode.c
++++ RH_2_6_9_55/fs/inode.c
+@@ -1056,6 +1056,7 @@
  	if (inode->i_data.nrpages)
  		truncate_inode_pages(&inode->i_data, 0);
  	clear_inode(inode);
-+        wake_up_inode(inode);	
++	wake_up_inode(inode);	
  	destroy_inode(inode);
  }
  

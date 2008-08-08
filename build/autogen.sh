@@ -31,11 +31,11 @@ error_msg() {
 		EOF
 	else
 		cat >&2 <<-EOF
-		CFS provides RPMs which can be installed alongside your
+		Sun provides RPMs which can be installed alongside your
 		existing autoconf/make RPMs, if you are nervous about
 		upgrading.  See
 
-		ftp://ftp.lustre.org/pub/other/autolustre/README.autolustre
+		http://downloads.lustre.org/public/tools/autolustre/README.autolustre
 
 		You may be able to download newer version from:
 
@@ -83,9 +83,9 @@ if [ -d kernel_patches ] ; then
     REQUIRED_DIRS="build"
     CONFIGURE_DIRS=""
 else
-    REQUIRED_DIRS="build lnet lustre"
+    REQUIRED_DIRS="build libcfs lnet lustre"
     OPTIONAL_DIRS="snmp portals"
-    CONFIGURE_DIRS="libsysio ldiskfs"
+    CONFIGURE_DIRS="libsysio lustre-iokit ldiskfs"
 fi
 
 for dir in $REQUIRED_DIRS ; do
@@ -109,20 +109,20 @@ check_version automake automake-1.7 "1.7.8"
 check_version autoconf autoconf "2.57"
 
 echo "Running aclocal-1.7 $ACLOCAL_FLAGS..."
-aclocal-1.7 $ACLOCAL_FLAGS
+aclocal-1.7 $ACLOCAL_FLAGS || exit 1
 echo "Running autoheader..."
-autoheader
+autoheader || exit 1
 echo "Running automake-1.7..."
-automake-1.7 -a -c
+automake-1.7 -a -c || exit 1
 echo "Running autoconf..."
-autoconf
+autoconf || exit 1
 
 # Run autogen.sh in these directories
 for dir in $CONFIGURE_DIRS; do
     if [ -d $dir ] ; then
         pushd $dir >/dev/null
         echo "Running autogen for $dir..."
-        sh autogen.sh
+        sh autogen.sh || exit $?
         popd >/dev/null
     fi
 done

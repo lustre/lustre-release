@@ -1,19 +1,42 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/quota/quota_check.c
+ * GPL HEADER START
  *
- *  Copyright (c) 2005 Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   No redistribution or use is permitted outside of Cluster File Systems, Inc.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
-#define DEBUG_SUBSYSTEM S_MDS
+#define DEBUG_SUBSYSTEM S_LQUOTA
 
 #ifdef __KERNEL__
 # include <linux/version.h>
@@ -118,6 +141,7 @@ int target_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl)
 
         qta->qta_exp = exp;
         qta->qta_oqctl = *oqctl;
+        qta->qta_oqctl.qc_id = obt->obt_qfmt; /* override qfmt version */
         qta->qta_sb = obt->obt_sb;
         qta->qta_sem = &obt->obt_quotachecking;
 
@@ -153,7 +177,7 @@ int client_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl)
         struct client_obd *cli = &exp->exp_obd->u.cli;
         struct ptlrpc_request *req;
         struct obd_quotactl *body;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         int ver, opc, rc;
         ENTRY;
 
@@ -202,11 +226,11 @@ int client_quota_poll_check(struct obd_export *exp, struct if_quotacheck *qchk)
         qchk->obd_uuid = cli->cl_target_uuid;
         /* FIXME change strncmp to strcmp and save the strlen op */
         if (strncmp(exp->exp_obd->obd_type->typ_name, LUSTRE_OSC_NAME,
-            strlen(LUSTRE_OSC_NAME)))
+                    strlen(LUSTRE_OSC_NAME)) == 0)
                 memcpy(qchk->obd_type, LUSTRE_OST_NAME,
                        strlen(LUSTRE_OST_NAME));
         else if (strncmp(exp->exp_obd->obd_type->typ_name, LUSTRE_MDC_NAME,
-                 strlen(LUSTRE_MDC_NAME)))
+                         strlen(LUSTRE_MDC_NAME)) == 0)
                 memcpy(qchk->obd_type, LUSTRE_MDS_NAME,
                        strlen(LUSTRE_MDS_NAME));
 

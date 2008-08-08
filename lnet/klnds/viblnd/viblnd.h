@@ -1,31 +1,48 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2004 Cluster File Systems, Inc.
- *   Author: Eric Barton <eric@bartonsoftware.com>
- *   Author: Frank Zago <fzago@systemfabricworks.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/klnds/viblnd/viblnd.h
+ *
+ * Author: Eric Barton <eric@bartonsoftware.com>
+ * Author: Frank Zago <fzago@systemfabricworks.com>
  */
 
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
-#ifdef HAVE_KERNEL_CONFIG_H
+#ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
 #include <linux/module.h>
@@ -170,8 +187,8 @@ typedef struct
 #if IBNAL_USE_FMR
         int              *kib_fmr_remaps;       /* # FMR maps before unmap required */
 #endif
-#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
-        struct ctl_table_header *kib_sysctl;    /* sysctl interface */
+#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
+        cfs_sysctl_table_header_t *kib_sysctl;  /* sysctl interface */
 #endif
 } kib_tunables_t;
 
@@ -565,11 +582,11 @@ kibnal_send_keepalive(kib_conn_t *conn)
 #endif
 
 #if IBNAL_VOIDSTAR_SGADDR
-# if CONFIG_HIGHMEM
-#  if CONFIG_X86 && CONFIG_HIGHMEM4G
+# if defined(CONFIG_HIGHMEM)
+#  if defined(CONFIG_X86) && defined(CONFIG_HIGHMEM4G)
    /* truncation to void* doesn't matter if 0 <= physmem < 4G
     * so allow x86 with 32 bit phys addrs */
-#  elif CONFIG_IA64
+#  elif defined(CONFIG_IA64)
    /* OK anyway on 64-bit arch */
 #  else
 #   error "Can't support HIGHMEM when vv_scatgat_t::v_address is void *"

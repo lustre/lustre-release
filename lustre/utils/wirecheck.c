@@ -1,6 +1,39 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
  */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ */
+
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -54,9 +87,19 @@ do {                                                            \
         CHECK_VALUE((int)offsetof(struct s, m));                \
 } while(0)
 
+#define CHECK_MEMBER_OFFSET_TYPEDEF(s,m)                        \
+do {                                                            \
+        CHECK_VALUE((int)offsetof(s, m));                       \
+} while(0)
+
 #define CHECK_MEMBER_SIZEOF(s,m)                                \
 do {                                                            \
         CHECK_VALUE((int)sizeof(((struct s *)0)->m));           \
+} while(0)
+
+#define CHECK_MEMBER_SIZEOF_TYPEDEF(s,m)                        \
+do {                                                            \
+        CHECK_VALUE((int)sizeof(((s *)0)->m));                  \
 } while(0)
 
 #define CHECK_MEMBER(s,m)                                       \
@@ -65,12 +108,23 @@ do {                                                            \
         CHECK_MEMBER_SIZEOF(s, m);                              \
 } while(0)
 
+#define CHECK_MEMBER_TYPEDEF(s,m)                               \
+do {                                                            \
+        CHECK_MEMBER_OFFSET_TYPEDEF(s, m);                      \
+        CHECK_MEMBER_SIZEOF_TYPEDEF(s, m);                      \
+} while(0)
+
 #define CHECK_STRUCT(s)                                         \
 do {                                                            \
         COMMENT("Checks for struct "#s);                        \
                 CHECK_VALUE((int)sizeof(struct s));             \
 } while(0)
 
+#define CHECK_STRUCT_TYPEDEF(s)                                 \
+do {                                                            \
+        COMMENT("Checks for type "#s);                          \
+                CHECK_VALUE((int)sizeof(s));                    \
+} while(0)
 
 static void
 check_lustre_handle(void)
@@ -109,8 +163,8 @@ check_lustre_msg_v2(void)
         CHECK_MEMBER(lustre_msg_v2, lm_secflvr);
         CHECK_MEMBER(lustre_msg_v2, lm_magic);
         CHECK_MEMBER(lustre_msg_v2, lm_repsize);
-        CHECK_MEMBER(lustre_msg_v2, lm_timeout);
-        CHECK_MEMBER(lustre_msg_v2, lm_padding_1);
+        CHECK_MEMBER(lustre_msg_v2, lm_cksum);
+        CHECK_MEMBER(lustre_msg_v2, lm_flags);
         CHECK_MEMBER(lustre_msg_v2, lm_padding_2);
         CHECK_MEMBER(lustre_msg_v2, lm_padding_3);
         CHECK_MEMBER(lustre_msg_v2, lm_buflens[0]);
@@ -133,11 +187,12 @@ check_ptlrpc_body(void)
         CHECK_MEMBER(ptlrpc_body, pb_flags);
         CHECK_MEMBER(ptlrpc_body, pb_op_flags);
         CHECK_MEMBER(ptlrpc_body, pb_conn_cnt);
-        CHECK_MEMBER(ptlrpc_body, pb_padding_1);
-        CHECK_MEMBER(ptlrpc_body, pb_padding_2);
-        CHECK_MEMBER(ptlrpc_body, pb_padding_3);
-        CHECK_MEMBER(ptlrpc_body, pb_padding_4);
-        CHECK_MEMBER(ptlrpc_body, pb_padding_5);
+        CHECK_MEMBER(ptlrpc_body, pb_timeout);
+        CHECK_MEMBER(ptlrpc_body, pb_service_time);
+        CHECK_MEMBER(ptlrpc_body, pb_slv);
+        CHECK_MEMBER(ptlrpc_body, pb_limit);
+        CHECK_MEMBER(ptlrpc_body, pb_pre_versions);
+        CHECK_MEMBER(ptlrpc_body, pb_padding);
 }
 
 static void check_obd_connect_data(void)
@@ -152,10 +207,11 @@ static void check_obd_connect_data(void)
         CHECK_MEMBER(obd_connect_data, ocd_ibits_known);
         CHECK_MEMBER(obd_connect_data, ocd_nllu);
         CHECK_MEMBER(obd_connect_data, ocd_nllg);
+        CHECK_MEMBER(obd_connect_data, ocd_transno);
+        CHECK_MEMBER(obd_connect_data, ocd_group);
+        CHECK_MEMBER(obd_connect_data, ocd_cksum_types);
         CHECK_MEMBER(obd_connect_data, padding1);
         CHECK_MEMBER(obd_connect_data, padding2);
-        CHECK_MEMBER(obd_connect_data, padding3);
-        CHECK_MEMBER(obd_connect_data, padding4);
 
         CHECK_CDEFINE(OBD_CONNECT_RDONLY);
         CHECK_CDEFINE(OBD_CONNECT_INDEX);
@@ -176,6 +232,17 @@ static void check_obd_connect_data(void)
         CHECK_CDEFINE(OBD_CONNECT_RMT_CLIENT);
         CHECK_CDEFINE(OBD_CONNECT_BRW_SIZE);
         CHECK_CDEFINE(OBD_CONNECT_QUOTA64);
+        CHECK_CDEFINE(OBD_CONNECT_MDS_CAPA);
+        CHECK_CDEFINE(OBD_CONNECT_OSS_CAPA);
+        CHECK_CDEFINE(OBD_CONNECT_CANCELSET);
+        CHECK_CDEFINE(OBD_CONNECT_SOM);
+        CHECK_CDEFINE(OBD_CONNECT_AT);
+        CHECK_CDEFINE(OBD_CONNECT_LRU_RESIZE);
+        CHECK_CDEFINE(OBD_CONNECT_MDS_MDS);
+        CHECK_CDEFINE(OBD_CONNECT_REAL);
+        CHECK_CDEFINE(OBD_CONNECT_FID);
+        CHECK_CDEFINE(OBD_CONNECT_CKSUM);
+        CHECK_CDEFINE(OBD_CONNECT_VBR);
 }
 
 static void
@@ -205,9 +272,13 @@ check_obdo(void)
         CHECK_MEMBER(obdo, o_mds);
         CHECK_MEMBER(obdo, o_stripe_idx);
         CHECK_MEMBER(obdo, o_padding_1);
-        CHECK_MEMBER(obdo, o_inline);
-
-        CHECK_VALUE(OBD_INLINESZ);
+        CHECK_MEMBER(obdo, o_handle);
+        CHECK_MEMBER(obdo, o_lcookie);
+        CHECK_MEMBER(obdo, o_padding_2);
+        CHECK_MEMBER(obdo, o_padding_3);
+        CHECK_MEMBER(obdo, o_padding_4);
+        CHECK_MEMBER(obdo, o_padding_5);
+        CHECK_MEMBER(obdo, o_padding_6);
 
         CHECK_CDEFINE(OBD_MD_FLID);
         CHECK_CDEFINE(OBD_MD_FLATIME);
@@ -223,7 +294,6 @@ check_obdo(void)
         CHECK_CDEFINE(OBD_MD_FLFLAGS);
         CHECK_CDEFINE(OBD_MD_FLNLINK);
         CHECK_CDEFINE(OBD_MD_FLGENER);
-        CHECK_CDEFINE(OBD_MD_FLINLINE);
         CHECK_CDEFINE(OBD_MD_FLRDEV);
         CHECK_CDEFINE(OBD_MD_FLEASIZE);
         CHECK_CDEFINE(OBD_MD_LINKNAME);
@@ -256,6 +326,11 @@ check_obdo(void)
         CHECK_CDEFINE(OBD_FL_NO_USRQUOTA);
         CHECK_CDEFINE(OBD_FL_NO_GRPQUOTA);
         CHECK_CDEFINE(OBD_FL_CREATE_CROW);
+        CHECK_CDEFINE(OBD_FL_TRUNCLOCK);
+        CHECK_CDEFINE(OBD_FL_CKSUM_CRC32);
+        CHECK_CDEFINE(OBD_FL_CKSUM_ADLER);
+        CHECK_CVALUE(OBD_CKSUM_CRC32);
+        CHECK_CVALUE(OBD_CKSUM_ADLER);
 }
 
 static void
@@ -495,6 +570,21 @@ check_mds_rec_setattr(void)
         CHECK_MEMBER(mds_rec_setattr, sa_uid);
         CHECK_MEMBER(mds_rec_setattr, sa_gid);
         CHECK_MEMBER(mds_rec_setattr, sa_attr_flags);
+        CHECK_CDEFINE(MDS_ATTR_MODE);
+        CHECK_CDEFINE(MDS_ATTR_UID);
+        CHECK_CDEFINE(MDS_ATTR_GID);
+        CHECK_CDEFINE(MDS_ATTR_SIZE);
+        CHECK_CDEFINE(MDS_ATTR_ATIME);
+        CHECK_CDEFINE(MDS_ATTR_MTIME);
+        CHECK_CDEFINE(MDS_ATTR_CTIME);
+        CHECK_CDEFINE(MDS_ATTR_ATIME_SET);
+        CHECK_CDEFINE(MDS_ATTR_MTIME_SET);
+        CHECK_CDEFINE(MDS_ATTR_FORCE);
+        CHECK_CDEFINE(MDS_ATTR_ATTR_FLAG);
+        CHECK_CDEFINE(MDS_ATTR_KILL_SUID);
+        CHECK_CDEFINE(MDS_ATTR_KILL_SGID);
+        CHECK_CDEFINE(MDS_ATTR_CTIME_SET);
+        CHECK_CDEFINE(MDS_ATTR_FROM_OPEN);
 }
 
 static void
@@ -661,10 +751,9 @@ check_ldlm_request(void)
         BLANK_LINE();
         CHECK_STRUCT(ldlm_request);
         CHECK_MEMBER(ldlm_request, lock_flags);
-        CHECK_MEMBER(ldlm_request, lock_padding);
+        CHECK_MEMBER(ldlm_request, lock_count);
         CHECK_MEMBER(ldlm_request, lock_desc);
-        CHECK_MEMBER(ldlm_request, lock_handle1);
-        CHECK_MEMBER(ldlm_request, lock_handle2);
+        CHECK_MEMBER(ldlm_request, lock_handle);
 }
 
 static void
@@ -673,8 +762,8 @@ check_ldlm_reply(void)
         BLANK_LINE();
         CHECK_STRUCT(ldlm_reply);
         CHECK_MEMBER(ldlm_reply, lock_flags);
-        CHECK_MEMBER(ldlm_request, lock_padding);
-        CHECK_MEMBER(ldlm_request, lock_desc);
+        CHECK_MEMBER(ldlm_reply, lock_padding);
+        CHECK_MEMBER(ldlm_reply, lock_desc);
         CHECK_MEMBER(ldlm_reply, lock_handle);
         CHECK_MEMBER(ldlm_reply, lock_policy_res1);
         CHECK_MEMBER(ldlm_reply, lock_policy_res2);
@@ -932,17 +1021,18 @@ check_qunit_data(void)
         CHECK_MEMBER(qunit_data, qd_id);
         CHECK_MEMBER(qunit_data, qd_flags);
         CHECK_MEMBER(qunit_data, qd_count);
+        CHECK_MEMBER(qunit_data, qd_qunit);
+        CHECK_MEMBER(qunit_data, padding );
 }
 
 static void
-check_qunit_data_old(void)
+check_qunit_data_old2(void)
 {
         BLANK_LINE();
-        CHECK_STRUCT(qunit_data_old);
-        CHECK_MEMBER(qunit_data_old, qd_id);
-        CHECK_MEMBER(qunit_data_old, qd_type);
-        CHECK_MEMBER(qunit_data_old, qd_count);
-        CHECK_MEMBER(qunit_data_old, qd_isblk);
+        CHECK_STRUCT(qunit_data_old2);
+        CHECK_MEMBER(qunit_data_old2, qd_id);
+        CHECK_MEMBER(qunit_data_old2, qd_flags);
+        CHECK_MEMBER(qunit_data_old2, qd_count);
 }
 
 static void
@@ -981,6 +1071,36 @@ check_lustre_disk_data(void)
         CHECK_MEMBER(lustre_disk_data, ldd_userdata);
         CHECK_MEMBER(lustre_disk_data, ldd_mount_opts);
         CHECK_MEMBER(lustre_disk_data, ldd_params);
+}
+
+static void
+check_posix_acl_xattr_entry(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT_TYPEDEF(posix_acl_xattr_entry);
+        CHECK_MEMBER_TYPEDEF(posix_acl_xattr_entry, e_tag);
+        CHECK_MEMBER_TYPEDEF(posix_acl_xattr_entry, e_perm);
+        CHECK_MEMBER_TYPEDEF(posix_acl_xattr_entry, e_id);
+}
+
+static void
+check_posix_acl_xattr_header(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT_TYPEDEF(posix_acl_xattr_header);
+        CHECK_MEMBER_TYPEDEF(posix_acl_xattr_header, a_version);
+        CHECK_MEMBER_TYPEDEF(posix_acl_xattr_header, a_entries);
+}
+
+static void
+check_quota_adjust_qunit(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(quota_adjust_qunit);
+        CHECK_MEMBER(quota_adjust_qunit, qaq_flags);
+        CHECK_MEMBER(quota_adjust_qunit, qaq_id);
+        CHECK_MEMBER(quota_adjust_qunit, qaq_bunit_sz);
+        CHECK_MEMBER(quota_adjust_qunit, qaq_iunit_sz);
 }
 
 static void
@@ -1046,7 +1166,7 @@ main(int argc, char **argv)
         printf ("void lustre_assert_wire_constants(void)\n"
                 "{\n"
                 "        /* Wire protocol assertions generated by 'wirecheck'\n"
-                "         * (make -C lustre/utils newwirecheck)\n"
+                "         * (make -C lustre/utils newwiretest)\n"
                 "         * running on %s\n"
                 "         * with %s */\n"
                 "\n", unameinfo, gccinfo);
@@ -1057,6 +1177,7 @@ main(int argc, char **argv)
         CHECK_DEFINE(LUSTRE_MSG_MAGIC_V1);
         CHECK_DEFINE(LUSTRE_MSG_MAGIC_V2);
         CHECK_DEFINE(PTLRPC_MSG_VERSION);
+        CHECK_VALUE(MSGHDR_AT_SUPPORT);
 
         CHECK_VALUE(PTL_RPC_MSG_REQUEST);
         CHECK_VALUE(PTL_RPC_MSG_ERR);
@@ -1087,6 +1208,7 @@ main(int argc, char **argv)
         CHECK_VALUE(OST_SYNC);
         CHECK_VALUE(OST_QUOTACHECK);
         CHECK_VALUE(OST_QUOTACTL);
+        CHECK_VALUE(OST_QUOTA_ADJUST_QUNIT);
         CHECK_VALUE(OST_LAST_OPC);
 
         CHECK_DEFINE(OBD_OBJECT_EOF);
@@ -1122,6 +1244,7 @@ main(int argc, char **argv)
         CHECK_VALUE(MGS_EXCEPTION);
         CHECK_VALUE(MGS_TARGET_REG);
         CHECK_VALUE(MGS_TARGET_DEL);
+        CHECK_VALUE(MGS_SET_INFO);
 
         CHECK_VALUE(DISP_IT_EXECD);
         CHECK_VALUE(DISP_LOOKUP_EXECD);
@@ -1149,6 +1272,7 @@ main(int argc, char **argv)
         CHECK_VALUE(LCK_NL);
         CHECK_VALUE(LCK_GROUP);
         CHECK_VALUE(LCK_MAXMODE);
+        CHECK_VALUE(LCK_MODE_NUM);
 
         CHECK_CVALUE(LDLM_PLAIN);
         CHECK_CVALUE(LDLM_EXTENT);
@@ -1165,9 +1289,10 @@ main(int argc, char **argv)
 
         CHECK_VALUE(MGS_CONNECT);
         CHECK_VALUE(MGS_DISCONNECT);
-        CHECK_VALUE(MGS_EXCEPTION);   
+        CHECK_VALUE(MGS_EXCEPTION);
         CHECK_VALUE(MGS_TARGET_REG);
         CHECK_VALUE(MGS_TARGET_DEL);
+        CHECK_VALUE(MGS_SET_INFO);
 
         COMMENT("Sizes and Offsets");
         BLANK_LINE();
@@ -1226,9 +1351,18 @@ main(int argc, char **argv)
         check_llog_array_rec();
         check_mds_extent_desc();
         check_qunit_data();
+        check_qunit_data_old2();
         check_qunit_data_old();
+        check_quota_adjust_qunit();
         check_mgs_target_info();
         check_lustre_disk_data();
+        printf("#ifdef LIBLUSTRE_POSIX_ACL\n");
+#ifndef LIBLUSTRE_POSIX_ACL
+#error build generator without LIBLUSTRE_POSIX_ACL defined - produce wrong check code.
+#endif
+        check_posix_acl_xattr_entry();
+        check_posix_acl_xattr_header();
+        printf("#endif\n");
 
 
         printf("}\n\n");

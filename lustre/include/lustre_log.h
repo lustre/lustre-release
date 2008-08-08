@@ -1,25 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001 Cluster File Systems, Inc. <info@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/include/lustre_log.h
  *
  * Generic infrastructure for managing a collection of logs.
- *
  * These logs are used for:
  *
  * - orphan recovery: OST adds record on create
@@ -120,6 +136,7 @@ int llog_cat_set_first_idx(struct llog_handle *cathandle, int index);
 /* llog_obd.c */
 int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
                int count,  struct llog_logid *logid,struct llog_operations *op);
+int __llog_ctxt_put(struct llog_ctxt *ctxt);
 int llog_cleanup(struct llog_ctxt *);
 int llog_sync(struct llog_ctxt *ctxt, struct obd_export *exp);
 int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
@@ -212,8 +229,18 @@ struct llog_ctxt {
         struct llog_handle      *loc_handle;
         struct llog_canceld_ctxt *loc_llcd;
         struct semaphore         loc_sem; /* protects loc_llcd and loc_imp */
+        atomic_t                 loc_refcount;
+        struct llog_commit_master *loc_lcm;
         void                    *llog_proc_cb;
 };
+
+#ifndef __KERNEL__
+
+#define cap_raise(c, flag) do {} while(0)
+
+#define CAP_SYS_RESOURCE 24
+
+#endif   /* !__KERNEL__ */
 
 static inline void llog_gen_init(struct llog_ctxt *ctxt)
 {
@@ -267,13 +294,49 @@ static inline int llog_data_len(int len)
         return size_round(len);
 }
 
-static inline struct llog_ctxt *llog_get_context(struct obd_device *obd,
-                                                 int index)
-{
-        if (index < 0 || index >= LLOG_MAX_CTXTS)
-                return NULL;
+#define llog_ctxt_get(ctxt)                                                 \
+({                                                                          \
+         struct llog_ctxt *ctxt_ = ctxt;                                    \
+         LASSERT(atomic_read(&ctxt_->loc_refcount) > 0);                    \
+         atomic_inc(&ctxt_->loc_refcount);                                  \
+         CDEBUG(D_INFO, "GETting ctxt %p : new refcount %d\n", ctxt_,       \
+                atomic_read(&ctxt_->loc_refcount));                         \
+         ctxt_;                                                             \
+})
+ 
+#define llog_ctxt_put(ctxt)                                                 \
+do {                                                                        \
+         if ((ctxt) == NULL)                                                \
+                 break;                                                     \
+         CDEBUG(D_INFO, "PUTting ctxt %p : new refcount %d\n", (ctxt),      \
+                atomic_read(&(ctxt)->loc_refcount) - 1);                    \
+         LASSERT(atomic_read(&(ctxt)->loc_refcount) > 0);                   \
+         LASSERT(atomic_read(&(ctxt)->loc_refcount) < 0x5a5a5a);            \
+         __llog_ctxt_put(ctxt);                                             \
+} while (0)
 
-        return obd->obd_llog_ctxt[index];
+static inline struct llog_ctxt *llog_get_context(struct obd_device *obd,
+                                                   int index)
+{
+         struct llog_ctxt *ctxt;
+ 
+         if (index < 0 || index >= LLOG_MAX_CTXTS)
+                 return NULL;
+        
+         spin_lock(&obd->obd_dev_lock);  
+         if (obd->obd_llog_ctxt[index] == NULL) {
+                 spin_unlock(&obd->obd_dev_lock);
+                 CDEBUG(D_INFO, "obd %p and ctxt index %d is NULL \n", obd, index);
+                 return NULL;
+         }
+         ctxt = llog_ctxt_get(obd->obd_llog_ctxt[index]);
+         spin_unlock(&obd->obd_dev_lock);
+         return ctxt;
+}
+
+static inline int llog_ctxt_null(struct obd_device *obd, int index)
+{
+        return (obd->obd_llog_ctxt[index] == NULL);
 }
 
 static inline int llog_write_rec(struct llog_handle *handle,
@@ -282,6 +345,7 @@ static inline int llog_write_rec(struct llog_handle *handle,
                                  int numcookies, void *buf, int idx)
 {
         struct llog_operations *lop;
+        __u32 cap;
         int rc, buflen;
         ENTRY;
 
@@ -298,7 +362,10 @@ static inline int llog_write_rec(struct llog_handle *handle,
                 buflen = rec->lrh_len;
         LASSERT(size_round(buflen) == buflen);
 
+        cap = current->cap_effective;             
+        cap_raise(current->cap_effective, CAP_SYS_RESOURCE); 
         rc = lop->lop_write_rec(handle, rec, logcookies, numcookies, buf, idx);
+        current->cap_effective = cap; 
         RETURN(rc);
 }
 
@@ -394,6 +461,7 @@ static inline int llog_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                               struct llog_logid *logid, char *name)
 {
         struct llog_operations *lop;
+        __u32 cap;
         int rc;
         ENTRY;
 
@@ -403,7 +471,10 @@ static inline int llog_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         if (lop->lop_create == NULL)
                 RETURN(-EOPNOTSUPP);
 
+        cap = current->cap_effective;             
+        cap_raise(current->cap_effective, CAP_SYS_RESOURCE);
         rc = lop->lop_create(ctxt, res, logid, name);
+        current->cap_effective = cap; 
         RETURN(rc);
 }
 

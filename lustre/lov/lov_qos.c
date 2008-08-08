@@ -1,25 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002, 2003 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #ifndef EXPORT_SYMTAB
@@ -311,8 +323,8 @@ static int qos_used(struct lov_obd *lov, __u32 index, __u64 *total_wt)
                        lov->lov_tgts[i]->ltd_qos.ltq_penalty_per_obj >> 10,
                        lov->lov_tgts[i]->ltd_qos.ltq_penalty >> 10,
                        lov->lov_tgts[i]->ltd_qos.ltq_oss->lqo_penalty_per_obj>>10,
-                       lov->lov_tgts[i]->ltd_qos.ltq_oss->lqo_penalty>>10,
-                       lov->lov_tgts[i]->ltd_qos.ltq_weight>>10);
+                       lov->lov_tgts[i]->ltd_qos.ltq_oss->lqo_penalty >> 10,
+                       lov->lov_tgts[i]->ltd_qos.ltq_weight >> 10);
 #endif
         }
 
@@ -333,6 +345,7 @@ static int qos_calc_rr(struct lov_obd *lov)
                 RETURN(0);
         }
 
+        /* Do actual allocation. */
         down_write(&lov->lov_qos.lq_rw_sem);
         ost_count = lov->desc.ld_tgt_count;
 
@@ -360,7 +373,7 @@ static int qos_calc_rr(struct lov_obd *lov)
                 int j = 0;
                 for (i = 0; i < ost_count; i++) {
                         if (lov->lov_tgts[i] &&
-                            (lov->lov_tgts[i]->ltd_qos.ltq_oss == oss)) {
+                            lov->lov_tgts[i]->ltd_qos.ltq_oss == oss) {
                               /* Evenly space these OSTs across arrayspace */
                               int next = j * ost_count / oss->lqo_ost_count;
                               while (lov->lov_qos.lq_rr_array[next] !=
@@ -369,7 +382,7 @@ static int qos_calc_rr(struct lov_obd *lov)
                               lov->lov_qos.lq_rr_array[next] = i;
                               j++;
                               placed++;
-                      }
+                        }
                 }
                 LASSERT(j == oss->lqo_ost_count);
         }
@@ -379,8 +392,9 @@ static int qos_calc_rr(struct lov_obd *lov)
 
         if (placed != real_count) {
                 /* This should never happen */
-                LCONSOLE_ERROR("Failed to place all OSTs in the round-robin "
-                               "list (%d of %d).\n", placed, real_count);
+                LCONSOLE_ERROR_MSG(0x14e, "Failed to place all OSTs in the "
+                                   "round-robin list (%d of %d).\n",
+                                   placed, real_count);
                 for (i = 0; i < ost_count; i++) {
                         LCONSOLE(D_WARNING, "rr #%d ost idx=%d\n", i,
                                  lov->lov_qos.lq_rr_array[i]);
@@ -481,15 +495,25 @@ int qos_remedy_create(struct lov_request_set *set, struct lov_request *req)
         RETURN(rc);
 }
 
+static int min_stripe_count(int stripe_cnt, int flags)
+{
+        return (flags & LOV_USES_DEFAULT_STRIPE ?
+                stripe_cnt - (stripe_cnt / 4) : stripe_cnt);
+}
+
 #define LOV_CREATE_RESEED_MULT 4
 #define LOV_CREATE_RESEED_MIN  1000
 /* Allocate objects on osts with round-robin algorithm */
-static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt)
+static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt,
+                    int flags)
 {
         unsigned array_idx, ost_count = lov->desc.ld_tgt_count;
         unsigned ost_active_count = lov->desc.ld_active_tgt_count;
-        int i, *idx_pos = idx_arr;
+        int i, *idx_pos;
         __u32 ost_idx;
+        int ost_start_idx_temp;
+        int speed = 0;
+        int stripe_cnt_min = min_stripe_count(*stripe_cnt, flags);
         ENTRY;
 
         i = qos_calc_rr(lov);
@@ -501,21 +525,28 @@ static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt)
                 lov->lov_start_count =
                         (LOV_CREATE_RESEED_MIN / max(ost_active_count, 1U) +
                          LOV_CREATE_RESEED_MULT) * max(ost_active_count, 1U);
-        } else if (*stripe_cnt >= ost_active_count ||
+        } else if (stripe_cnt_min >= ost_active_count ||
                    lov->lov_start_idx > ost_count) {
                 /* If we have allocated from all of the OSTs, slowly
-                   precess the next start */
+                 * precess the next start if the OST/stripe count isn't
+                 * already doing this for us. */
                 lov->lov_start_idx %= ost_count;
-                ++lov->lov_offset_idx;
+                if (*stripe_cnt > 1 && (ost_active_count % (*stripe_cnt)) != 1)
+                        ++lov->lov_offset_idx;
         }
+        down_read(&lov->lov_qos.lq_rw_sem);
+        ost_start_idx_temp = lov->lov_start_idx;
+
+repeat_find:
         array_idx = (lov->lov_start_idx + lov->lov_offset_idx) % ost_count;
+        idx_pos = idx_arr;
 #ifdef QOS_DEBUG
-        CDEBUG(D_QOS, "want %d startidx %d startcnt %d offset %d arrayidx %d\n",
-               *stripe_cnt, lov->lov_start_idx, lov->lov_start_count,
-               lov->lov_offset_idx, array_idx);
+        CDEBUG(D_QOS, "want %d startidx %d startcnt %d offset %d active %d "
+               "count %d arrayidx %d\n",
+               stripe_cnt, lov->lov_start_idx, lov->lov_start_count,
+               lov->lov_offset_idx, ost_active_count, ost_count, array_idx);
 #endif
 
-        down_read(&lov->lov_qos.lq_rw_sem);
         for (i = 0; i < ost_count; i++, array_idx=(array_idx + 1) % ost_count) {
                 ++lov->lov_start_idx;
                 ost_idx = lov->lov_qos.lq_rr_array[array_idx];
@@ -526,15 +557,32 @@ static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt)
                        lov->lov_tgts[ost_idx]->ltd_active : 0,
                        idx_pos - idx_arr, array_idx, ost_idx);
 #endif
-                if ((ost_idx == LOV_QOS_EMPTY) || !lov->lov_tgts[ost_idx] || 
+                if ((ost_idx == LOV_QOS_EMPTY) || !lov->lov_tgts[ost_idx] ||
                     !lov->lov_tgts[ost_idx]->ltd_active)
                         continue;
+
+                /* Fail Check before osc_precreate() is called
+                   so we can only 'fail' single OSC. */
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_PRECREATE) && ost_idx == 0)
+                        continue;
+
+                /* Drop slow OSCs if we can */
+                if (obd_precreate(lov->lov_tgts[ost_idx]->ltd_exp) > speed)
+                        continue;
+
                 *idx_pos = ost_idx;
                 idx_pos++;
                 /* We have enough stripes */
                 if (idx_pos - idx_arr == *stripe_cnt)
                         break;
         }
+        if ((speed < 2) && (idx_pos - idx_arr < stripe_cnt_min)) {
+                /* Try again, allowing slower OSCs */
+                speed++;
+                lov->lov_start_idx = ost_start_idx_temp;
+                goto repeat_find;
+        }
+
         up_read(&lov->lov_qos.lq_rw_sem);
 
         *stripe_cnt = idx_pos - idx_arr;
@@ -546,29 +594,50 @@ static int alloc_specific(struct lov_obd *lov, struct lov_stripe_md *lsm,
                           int *idx_arr)
 {
         unsigned ost_idx, ost_count = lov->desc.ld_tgt_count;
-        int i, *idx_pos = idx_arr;
+        int i, *idx_pos;
+        int speed = 0;
         ENTRY;
 
+repeat_find:
         ost_idx = lsm->lsm_oinfo[0]->loi_ost_idx;
+        idx_pos = idx_arr;
         for (i = 0; i < ost_count; i++, ost_idx = (ost_idx + 1) % ost_count) {
                 if (!lov->lov_tgts[ost_idx] ||
                     !lov->lov_tgts[ost_idx]->ltd_active) {
                         continue;
                 }
+
+                /* Fail Check before osc_precreate() is called
+                   so we can only 'fail' single OSC. */
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_PRECREATE) && ost_idx == 0)
+                        continue;
+
+                /* Drop slow OSCs if we can, but not for requested start idx */
+                if ((obd_precreate(lov->lov_tgts[ost_idx]->ltd_exp) > speed) &&
+                    (i != 0 || speed < 2))
+                        continue;
+
                 *idx_pos = ost_idx;
                 idx_pos++;
-                /* got enough ost */
+                /* We have enough stripes */
                 if (idx_pos - idx_arr == lsm->lsm_stripe_count)
                         RETURN(0);
         }
+        if (speed < 2) {
+                /* Try again, allowing slower OSCs */
+                speed++;
+                goto repeat_find;
+        }
+
         /* If we were passed specific striping params, then a failure to
          * meet those requirements is an error, since we can't reallocate
          * that memory (it might be part of a larger array or something).
          *
          * We can only get here if lsm_stripe_count was originally > 1.
          */
-        CERROR("can't lstripe objid "LPX64": have "LPSZ" want %u\n",
-               lsm->lsm_object_id, idx_pos - idx_arr, lsm->lsm_stripe_count);
+        CERROR("can't lstripe objid "LPX64": have %d want %u\n",
+               lsm->lsm_object_id, (int)(idx_pos - idx_arr),
+               lsm->lsm_stripe_count);
         RETURN(-EFBIG);
 }
 
@@ -576,7 +645,8 @@ static int alloc_specific(struct lov_obd *lov, struct lov_stripe_md *lsm,
    - free space
    - network resources (shared OSS's)
 */
-static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt)
+static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
+                     int flags)
 {
         struct lov_obd *lov = &exp->exp_obd->u.lov;
         static time_t last_warn = 0;
@@ -584,7 +654,11 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt)
         __u64 total_bavail, total_weight = 0;
         __u32 ost_count;
         int nfound, good_osts, i, warn = 0, rc = 0;
+        int stripe_cnt_min = min_stripe_count(*stripe_cnt, flags);
         ENTRY;
+
+        if (stripe_cnt_min < 1)
+                GOTO(out, rc = -EINVAL);
 
         lov_getref(exp->exp_obd);
         down_write(&lov->lov_qos.lq_rw_sem);
@@ -627,6 +701,14 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt)
                         continue;
                 }
 
+                /* Fail Check before osc_precreate() is called
+                   so we can only 'fail' single OSC. */
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_PRECREATE) && i == 0)
+                        continue;
+
+                if (obd_precreate(lov->lov_tgts[i]->ltd_exp) > 2)
+                        continue;
+
                 lov->lov_tgts[i]->ltd_qos.ltq_usable = 1;
                 qos_calc_weight(lov, i);
                 total_bavail += bavail;
@@ -635,15 +717,15 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt)
                 good_osts++;
         }
 
+        if (good_osts < stripe_cnt_min)
+                GOTO(out, rc = -EAGAIN);
+
         if (!total_bavail)
                 GOTO(out, rc = -ENOSPC);
 
-        /* if we don't have enough good OSTs, we reduce the stripe count. */
+        /* We have enough osts */
         if (good_osts < *stripe_cnt)
                 *stripe_cnt = good_osts;
-
-        if (!*stripe_cnt)
-                GOTO(out, rc = -EAGAIN);
 
         /* Find enough OSTs with weighted random allocation. */
         nfound = 0;
@@ -684,6 +766,7 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt)
                         if (!lov->lov_tgts[i] ||
                             !lov->lov_tgts[i]->ltd_qos.ltq_usable)
                                 continue;
+
                         cur_weight += lov->lov_tgts[i]->ltd_qos.ltq_weight;
                         if (cur_weight >= rand) {
 #ifdef QOS_DEBUG
@@ -708,7 +791,7 @@ out:
         up_write(&lov->lov_qos.lq_rw_sem);
 
         if (rc == -EAGAIN)
-                rc = alloc_rr(lov, idx_arr, stripe_cnt);
+                rc = alloc_rr(lov, idx_arr, stripe_cnt, flags);
 
         lov_putref(exp->exp_obd);
         RETURN(rc);
@@ -716,7 +799,7 @@ out:
 
 /* return new alloced stripe count on success */
 static int alloc_idx_array(struct obd_export *exp, struct lov_stripe_md *lsm,
-                           int newea, int **idx_arr, int *arr_cnt)
+                           int newea, int **idx_arr, int *arr_cnt, int flags)
 {
         struct lov_obd *lov = &exp->exp_obd->u.lov;
         int stripe_cnt = lsm->lsm_stripe_count;
@@ -733,7 +816,7 @@ static int alloc_idx_array(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         if (newea ||
             lsm->lsm_oinfo[0]->loi_ost_idx >= lov->desc.ld_tgt_count)
-                rc = alloc_qos(exp, tmp_arr, &stripe_cnt);
+                rc = alloc_qos(exp, tmp_arr, &stripe_cnt, flags);
         else
                 rc = alloc_specific(lov, lsm, tmp_arr);
 
@@ -761,13 +844,14 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
         struct obdo *src_oa = set->set_oi->oi_oa;
         struct obd_trans_info *oti = set->set_oti;
         int i, stripes, rc = 0, newea = 0;
-        int *idx_arr, idx_cnt = 0;
+        int flag = LOV_USES_ASSIGNED_STRIPE;
+        int *idx_arr = NULL, idx_cnt = 0;
         ENTRY;
 
         LASSERT(src_oa->o_valid & OBD_MD_FLID);
 
         if (set->set_oi->oi_md == NULL) {
-                int stripe_cnt = lov_get_stripecnt(lov, 0);
+                int stripes_def = lov_get_stripecnt(lov, 0);
 
                 /* If the MDS file was truncated up to some size, stripe over
                  * enough OSTs to allow the file to be created at that size.
@@ -790,10 +874,11 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                         }
                         lov_putref(exp->exp_obd);
 
-                        if (stripes < stripe_cnt)
-                                stripes = stripe_cnt;
+                        if (stripes < stripes_def)
+                                stripes = stripes_def;
                 } else {
-                        stripes = stripe_cnt;
+                         flag = LOV_USES_DEFAULT_STRIPE;
+                         stripes = stripes_def;
                 }
 
                 rc = lov_alloc_memmd(&set->set_oi->oi_md, stripes,
@@ -802,8 +887,8 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                                      LOV_MAGIC);
                 if (rc < 0)
                         GOTO(out_err, rc);
-                rc = 0;
                 newea = 1;
+                rc = 0;
         }
 
         lsm = set->set_oi->oi_md;
@@ -815,7 +900,7 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                 lsm->lsm_pattern = lov->desc.ld_pattern;
         }
 
-        stripes = alloc_idx_array(exp, lsm, newea, &idx_arr, &idx_cnt);
+        stripes = alloc_idx_array(exp, lsm, newea, &idx_arr, &idx_cnt, flag);
         if (stripes <= 0)
                 GOTO(out_err, rc = stripes ? stripes : -EIO);
         LASSERTF(stripes <= lsm->lsm_stripe_count,"requested %d allocated %d\n",
@@ -836,7 +921,7 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                 if (req->rq_oi.oi_md == NULL)
                         GOTO(out_err, rc = -ENOMEM);
 
-                req->rq_oi.oi_oa = obdo_alloc();
+                OBDO_ALLOC(req->rq_oi.oi_oa);
                 if (req->rq_oi.oi_oa == NULL)
                         GOTO(out_err, rc = -ENOMEM);
 
@@ -856,7 +941,6 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                         CDEBUG(D_INODE, "stripe %d has size "LPU64"/"LPU64"\n",
                                i, req->rq_oi.oi_oa->o_size, src_oa->o_size);
                 }
-
         }
         LASSERT(set->set_count == stripes);
 
@@ -872,7 +956,8 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
 out_err:
         if (newea && rc)
                 obd_free_memmd(exp, &set->set_oi->oi_md);
-        free_idx_array(idx_arr, idx_cnt);
+        if (idx_arr)
+                free_idx_array(idx_arr, idx_cnt);
         EXIT;
         return rc;
 }
@@ -882,4 +967,3 @@ void qos_update(struct lov_obd *lov)
         ENTRY;
         lov->lov_qos.lq_dirty = 1;
 }
-

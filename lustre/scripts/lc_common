@@ -292,7 +292,7 @@ nid2hostname() {
         fi
 
         # Execute remote command to get the host name
-        ret_str=$(${REMOTE} ${ip_addr} "hostname" 2>&1)
+        ret_str=$(${REMOTE} ${ip_addr} "hostname" 2>&1 </dev/null)
         if [ ${PIPESTATUS[0]} -ne 0 -a -n "${ret_str}" ]; then
             echo "`basename $0`: nid2hostname() error:" \
             "remote command to ${ip_addr} error: ${ret_str}"
@@ -521,4 +521,71 @@ check_nodelist() {
     fi
 
     return 0
+}
+
+# nid_in_nidlist nid nidlist
+# Given a nid, and a list of nids in one node (delimited by comma ','),
+# return true if the nid appears in the list of nids, or false otherwise.
+nid_in_nidlist() {
+    local nid="$1"
+    local nidlist="$2"
+    local my_nid
+
+    [ -z "${nid}" -o -z "${nidlist}" ] && false && return
+
+    if [[ "${nid}" != *@* || "${nid#*@}" == tcp* ]]; then
+        # network type is tcp
+        for my_nid in ${nidlist//,/ }; do
+            [ "${nid%@*}" = "${my_nid%@*}" ] && true && return
+        done
+    else
+        # network type is not tcp
+        [[ ,${nidlist}, == *,${nid},* ]] && true && return
+    fi
+
+    false && return
+}
+
+# get_mgs_nids mgs_hostname mgs_nids
+# Get the corresponding NID(s) of the MGS node ${mgs_hostname} from the
+# "mgs nids" field of one lustre target in the csv file
+get_mgs_nids() {
+    local mgs_node="$1"
+    local all_mgs_nids="$2"
+    local mgs_nids
+    local ret_str
+
+    # Check whether the hostname of the mgs node is in 
+    # the mgs nids string
+    for mgs_nids in ${all_mgs_nids//:/ }; do
+        if nid_in_nidlist ${mgs_node} ${mgs_nids}; then
+            echo ${mgs_nids}
+            return 0
+        fi
+    done
+
+    # Let's use lctl to get the real nids from the mgs node
+    ret_str=$(${REMOTE} ${mgs_node} "${LCTL} list_nids" 2>&1 </dev/null)
+    if [ ${PIPESTATUS[0]} -ne 0 -a -n "${ret_str}" ]; then
+        echo "$(basename $0): get_mgs_nids() error:" \
+        "remote command to ${mgs_node} error: ${ret_str}"
+        return 1
+    fi
+    remote_error "get_mgs_nids" ${mgs_node} "${ret_str}" && return 1
+
+    local real_mgs_nids=${ret_str//${mgs_node}:/}
+    for real_mgs_nid in ${real_mgs_nids}; do
+        for mgs_nids in ${all_mgs_nids//:/ }; do
+            if nid_in_nidlist ${real_mgs_nid} ${mgs_nids}; then
+                echo ${mgs_nids}
+                return 0
+            fi
+        done
+    done
+
+    echo "$(basename $0): get_mgs_nids() error:" \
+    "Can not figure out which nids corresponding to the MGS"\
+    "node ${mgs_node} from \"${all_mgs_nids}\"!"
+
+    return 1
 }

@@ -1,26 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2001-2005 Cluster File Systems, Inc.
- *   Author: Wang Di <wangdi@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/lov/lov_ea.c
+ *
+ * Author: Wang Di <wangdi@clusterfs.com>
  */
 
 #ifndef EXPORT_SYMTAB
@@ -51,7 +66,7 @@ static int lsm_lmm_verify_common(struct lov_mds_md *lmm, int lmm_bytes,
                                  int stripe_count)
 {
 
-        if (stripe_count == 0) {
+        if (stripe_count == 0 || stripe_count > LOV_V1_INSANE_STRIPE_COUNT) {
                 CERROR("bad stripe count %d\n", stripe_count);
                 lov_dump_lmm_v1(D_WARNING, lmm);
                 return -EINVAL;
@@ -70,7 +85,9 @@ static int lsm_lmm_verify_common(struct lov_mds_md *lmm, int lmm_bytes,
         }
 
         if (lmm->lmm_stripe_size == 0 ||
-            (__u64)le32_to_cpu(lmm->lmm_stripe_size)*stripe_count > 0xffffffff){
+            (stripe_count != -1 &&
+             (__u64)le32_to_cpu(lmm->lmm_stripe_size)*stripe_count >
+             0xffffffff)) {
                 CERROR("bad stripe size %u\n",
                        le32_to_cpu(lmm->lmm_stripe_size));
                 lov_dump_lmm_v1(D_WARNING, lmm);
@@ -95,7 +112,7 @@ struct lov_stripe_md *lsm_alloc_plain(int stripe_count, int *size)
                 return NULL;;
 
         for (i = 0; i < stripe_count; i++) {
-                OBD_SLAB_ALLOC(loi, lov_oinfo_slab, SLAB_NOFS, sizeof(*loi));
+                OBD_SLAB_ALLOC(loi, lov_oinfo_slab, CFS_ALLOC_IO, sizeof(*loi));
                 if (loi == NULL)
                         goto err;
                 lsm->lsm_oinfo[i] = loi;
@@ -468,7 +485,7 @@ static int lsm_revalidate_join(struct lov_stripe_md *lsm,
         LASSERT(ctxt);
 
         if (lsm->lsm_array && lsm->lsm_array->lai_ext_array)
-                RETURN(0);
+                GOTO(release_ctxt, rc = 0);
 
         CDEBUG(D_INFO, "get lsm logid: "LPU64":"LPU64"\n",
                lsm->lsm_array->lai_array_id.lgl_oid,
@@ -476,7 +493,7 @@ static int lsm_revalidate_join(struct lov_stripe_md *lsm,
         OBD_ALLOC(lsm->lsm_array->lai_ext_array,lsm->lsm_array->lai_ext_count *
                                                 sizeof (struct lov_extent));
         if (!lsm->lsm_array->lai_ext_array)
-                RETURN(-ENOMEM);
+                GOTO(release_ctxt, rc = -ENOMEM);        
 
         CDEBUG(D_INFO, "get lsm logid: "LPU64":"LPU64"\n",
                lsm->lsm_array->lai_array_id.lgl_oid,
@@ -497,6 +514,8 @@ static int lsm_revalidate_join(struct lov_stripe_md *lsm,
 out:
         if (rc)
                 lovea_free_array_info(lsm);
+release_ctxt:
+        llog_ctxt_put(ctxt);
         RETURN(rc);
 }
 
@@ -509,16 +528,15 @@ int lsm_destroy_join(struct lov_stripe_md *lsm, struct obdo *oa,
         ENTRY;
 
         LASSERT(md_exp != NULL);
-        ctxt = llog_get_context(md_exp->exp_obd, LLOG_LOVEA_REPL_CTXT);
-        if (!ctxt)
-                GOTO(out, rc = -EINVAL);
-
-        LASSERT(lsm->lsm_array != NULL);
         /*for those orphan inode, we should keep array id*/
         if (!(oa->o_valid & OBD_MD_FLCOOKIE))
-                RETURN(0);
+                RETURN(rc);
 
-        LASSERT(ctxt != NULL);
+        ctxt = llog_get_context(md_exp->exp_obd, LLOG_LOVEA_REPL_CTXT);
+        if (!ctxt)
+                RETURN(-EINVAL);
+
+        LASSERT(lsm->lsm_array != NULL);
         rc = llog_create(ctxt, &llh, &lsm->lsm_array->lai_array_id,
                          NULL);
         if (rc)
@@ -530,6 +548,7 @@ int lsm_destroy_join(struct lov_stripe_md *lsm, struct obdo *oa,
         }
         llog_free_handle(llh);
 out:
+        llog_ctxt_put(ctxt);
         RETURN(rc);
 }
 
@@ -603,5 +622,3 @@ struct lsm_operations lsm_join_ops = {
         .lsm_lmm_verify         = lsm_lmm_verify_join,
         .lsm_unpackmd           = lsm_unpackmd_join,
 };
-
-

@@ -1,26 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/lib/lvfs_linux.c
- *  Lustre filesystem abstraction routines
+ * GPL HEADER START
  *
- *  Copyright (C) 2002, 2003 Cluster File Systems, Inc.
- *   Author: Andreas Dilger <adilger@clusterfs.com>
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/lvfs/lvfs_linux.c
+ *
+ * Author: Andreas Dilger <adilger@clusterfs.com>
  */
 
 #ifndef EXPORT_SYMTAB
@@ -39,7 +54,6 @@
 #include <libcfs/kp30.h>
 #include <lustre_fsfilt.h>
 #include <obd.h>
-#include <obd_class.h>
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/lustre_compat25.h>
@@ -49,9 +63,6 @@
 #include <obd.h>
 #include <lustre_lib.h>
 #include <lustre_quota.h>
-
-atomic_t obd_memory;
-int obd_memmax;
 
 /* Debugging check only needed during development */
 #ifdef OBD_CTXT_DEBUG
@@ -271,7 +282,8 @@ out_up:
 EXPORT_SYMBOL(simple_mknod);
 
 /* utility to make a directory */
-struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode, int fix)
+struct dentry *simple_mkdir(struct dentry *dir, struct vfsmount *mnt, 
+                            char *name, int mode, int fix)
 {
         struct dentry *dchild;
         int err = 0;
@@ -304,7 +316,7 @@ struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode, int fix)
                 GOTO(out_up, dchild);
         }
 
-        err = vfs_mkdir(dir->d_inode, dchild, mode);
+        err = ll_vfs_mkdir(dir->d_inode, dchild, mnt, mode);
         if (err)
                 GOTO(out_err, err);
 
@@ -319,7 +331,8 @@ out_up:
 EXPORT_SYMBOL(simple_mkdir);
 
 /* utility to rename a file */
-int lustre_rename(struct dentry *dir, char *oldname, char *newname)
+int lustre_rename(struct dentry *dir, struct vfsmount *mnt, 
+                  char *oldname, char *newname)
 {
         struct dentry *dchild_old, *dchild_new;
         int err = 0;
@@ -340,7 +353,8 @@ int lustre_rename(struct dentry *dir, char *oldname, char *newname)
         if (IS_ERR(dchild_new))
                 GOTO(put_old, err = PTR_ERR(dchild_new));
 
-        err = vfs_rename(dir->d_inode, dchild_old, dir->d_inode, dchild_new);
+        err = ll_vfs_rename(dir->d_inode, dchild_old, mnt, 
+                            dir->d_inode, dchild_new, mnt);
 
         dput(dchild_new);
 put_old:
@@ -458,8 +472,7 @@ long l_readdir(struct file *file, struct list_head *dentry_list)
         return 0; 
 }
 EXPORT_SYMBOL(l_readdir);
-EXPORT_SYMBOL(obd_memory);
-EXPORT_SYMBOL(obd_memmax);
+
 
 #ifdef LUSTRE_KERNEL_VERSION
 #ifndef HAVE_CLEAR_RDONLY_ON_PUT
@@ -510,27 +523,6 @@ int lvfs_check_io_health(struct obd_device *obd, struct file *file)
 }
 EXPORT_SYMBOL(lvfs_check_io_health);
 
-static int __init lvfs_linux_init(void)
-{
-        RETURN(0);
-}
-
-static void __exit lvfs_linux_exit(void)
-{
-        int leaked;
-        ENTRY;
-
-        leaked = atomic_read(&obd_memory);
-        CDEBUG(leaked ? D_ERROR : D_INFO,
-               "obd mem max: %d leaked: %d\n", obd_memmax, leaked);
-
-        EXIT;
-        return;
-}
-
-MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
+MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre VFS Filesystem Helper v0.1");
 MODULE_LICENSE("GPL");
-
-module_init(lvfs_linux_init);
-module_exit(lvfs_linux_exit);

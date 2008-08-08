@@ -1,24 +1,42 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2004 Cluster File Systems, Inc.
- *   Author: Zach Brown <zab@clusterfs.com>
- *   Author: Phil Schwan <phil@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/libcfs/tracefile.c
+ *
+ * Author: Zach Brown <zab@clusterfs.com>
+ * Author: Phil Schwan <phil@clusterfs.com>
  */
 
 
@@ -30,10 +48,10 @@
 #include <libcfs/libcfs.h>
 
 /* XXX move things up to the top, comment */
-union trace_data_union trace_data[NR_CPUS] __cacheline_aligned;
+union trace_data_union (*trace_data[TCD_MAX_TYPES])[NR_CPUS] __cacheline_aligned;
 
-char *tracefile = NULL;
-int64_t tracefile_size = TRACEFILE_SIZE;
+char tracefile[TRACEFILE_NAME_SIZE];
+long long tracefile_size = TRACEFILE_SIZE;
 static struct tracefiled_ctl trace_tctl;
 struct semaphore trace_thread_sem;
 static int thread_running = 0;
@@ -142,6 +160,7 @@ static struct trace_page *trace_get_tage_try(struct trace_cpu_data *tcd,
 
                 tage->used = 0;
                 tage->cpu = smp_processor_id();
+                tage->type = tcd->tcd_type;
                 list_add_tail(&tage->linkage, &tcd->tcd_pages);
                 tcd->tcd_cur_pages++;
 
@@ -342,7 +361,7 @@ int libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls, int subsys, int mask,
         __LASSERT (tage->used <= CFS_PAGE_SIZE);
 
 console:
-        if (!((mask & D_CANTMASK) != 0 || (mask & libcfs_printk) != 0)) {
+        if ((mask & libcfs_printk) == 0) {
                 /* no console output requested */
                 if (tcd != NULL)
                         trace_put_tcd(tcd);
@@ -350,10 +369,6 @@ console:
         }
 
         if (cdls != NULL) {
-                cfs_time_t      t = cdls->cdls_next +
-                                    cfs_time_seconds(CDEBUG_MAX_LIMIT + 10);
-                cfs_duration_t  dmax = cfs_time_seconds(CDEBUG_MAX_LIMIT);
-
                 if (libcfs_console_ratelimit &&
                     cdls->cdls_next != 0 &&     /* not first time ever */
                     !cfs_time_after(cfs_time_current(), cdls->cdls_next)) {
@@ -364,16 +379,18 @@ console:
                         return 1;
                 }
 
-                if (cfs_time_after(cfs_time_current(), t)) {
+                if (cfs_time_after(cfs_time_current(), cdls->cdls_next +
+                                                       libcfs_console_max_delay
+                                                       + cfs_time_seconds(10))) {
                         /* last timeout was a long time ago */
-                        cdls->cdls_delay /= 8;
+                        cdls->cdls_delay /= libcfs_console_backoff * 4;
                 } else {
-                        cdls->cdls_delay *= 2;
+                        cdls->cdls_delay *= libcfs_console_backoff;
 
-                        if (cdls->cdls_delay < CFS_TICK)
-                                cdls->cdls_delay = CFS_TICK;
-                        else if (cdls->cdls_delay > dmax)
-                                cdls->cdls_delay = dmax;
+                        if (cdls->cdls_delay < libcfs_console_min_delay)
+                                cdls->cdls_delay = libcfs_console_min_delay;
+                        else if (cdls->cdls_delay > libcfs_console_max_delay)
+                                cdls->cdls_delay = libcfs_console_max_delay;
                 }
 
                 /* ensure cdls_next is never zero after it's been seen */
@@ -461,20 +478,17 @@ panic_collect_pages(struct page_collection *pc)
          * CPUs have been stopped during a panic.  If this isn't true for some
          * arch, this will have to be implemented separately in each arch.  */
         int                    i;
+        int                    j;
         struct trace_cpu_data *tcd;
 
         CFS_INIT_LIST_HEAD(&pc->pc_pages);
 
-        for (i = 0; i < NR_CPUS; i++) {
-                tcd = &trace_data[i].tcd;
-
-                list_splice(&tcd->tcd_pages, &pc->pc_pages);
-                CFS_INIT_LIST_HEAD(&tcd->tcd_pages);
+        tcd_for_each(tcd, i, j) {
+                list_splice_init(&tcd->tcd_pages, &pc->pc_pages);
                 tcd->tcd_cur_pages = 0;
 
                 if (pc->pc_want_daemon_pages) {
-                        list_splice(&tcd->tcd_daemon_pages, &pc->pc_pages);
-                        CFS_INIT_LIST_HEAD(&tcd->tcd_daemon_pages);
+                        list_splice_init(&tcd->tcd_daemon_pages, &pc->pc_pages);
                         tcd->tcd_cur_daemon_pages = 0;
                 }
         }
@@ -484,22 +498,18 @@ static void collect_pages_on_cpu(void *info)
 {
         struct trace_cpu_data *tcd;
         struct page_collection *pc = info;
-
-        tcd = trace_get_tcd();
-        __LASSERT (tcd != NULL);
+        int i;
 
         spin_lock(&pc->pc_lock);
-        list_splice(&tcd->tcd_pages, &pc->pc_pages);
-        CFS_INIT_LIST_HEAD(&tcd->tcd_pages);
-        tcd->tcd_cur_pages = 0;
-        if (pc->pc_want_daemon_pages) {
-                list_splice(&tcd->tcd_daemon_pages, &pc->pc_pages);
-                CFS_INIT_LIST_HEAD(&tcd->tcd_daemon_pages);
-                tcd->tcd_cur_daemon_pages = 0;
+        tcd_for_each_type_lock(tcd, i) {
+                list_splice_init(&tcd->tcd_pages, &pc->pc_pages);
+                tcd->tcd_cur_pages = 0;
+                if (pc->pc_want_daemon_pages) {
+                        list_splice_init(&tcd->tcd_daemon_pages, &pc->pc_pages);
+                        tcd->tcd_cur_daemon_pages = 0;
+                }
         }
         spin_unlock(&pc->pc_lock);
-
-        trace_put_tcd(tcd);
 }
 
 static void collect_pages(struct page_collection *pc)
@@ -519,26 +529,24 @@ static void put_pages_back_on_cpu(void *info)
         struct list_head *cur_head;
         struct trace_page *tage;
         struct trace_page *tmp;
-
-        tcd = trace_get_tcd();
-        __LASSERT (tcd != NULL);
-
-        cur_head = tcd->tcd_pages.next;
+        int i;
 
         spin_lock(&pc->pc_lock);
-        list_for_each_entry_safe(tage, tmp, &pc->pc_pages, linkage) {
+        tcd_for_each_type_lock(tcd, i) {
+                cur_head = tcd->tcd_pages.next;
 
-                __LASSERT_TAGE_INVARIANT(tage);
+                list_for_each_entry_safe(tage, tmp, &pc->pc_pages, linkage) {
 
-                if (tage->cpu != smp_processor_id())
-                        continue;
+                        __LASSERT_TAGE_INVARIANT(tage);
 
-                tage_to_tail(tage, cur_head);
-                tcd->tcd_cur_pages++;
+                        if (tage->cpu != smp_processor_id() || tage->type != i)
+                                continue;
+
+                        tage_to_tail(tage, cur_head);
+                        tcd->tcd_cur_pages++;
+                }
         }
         spin_unlock(&pc->pc_lock);
-
-        trace_put_tcd(tcd);
 }
 
 static void put_pages_back(struct page_collection *pc)
@@ -562,7 +570,8 @@ static void put_pages_on_tcd_daemon_list(struct page_collection *pc,
 
                 __LASSERT_TAGE_INVARIANT(tage);
 
-                if (tage->cpu != smp_processor_id())
+                if (tage->cpu != smp_processor_id() ||
+                    tage->type != tcd->tcd_type)
                         continue;
 
                 tage_to_tail(tage, &tcd->tcd_daemon_pages);
@@ -587,13 +596,10 @@ static void put_pages_on_tcd_daemon_list(struct page_collection *pc,
 static void put_pages_on_daemon_list_on_cpu(void *info)
 {
         struct trace_cpu_data *tcd;
+        int i;
 
-        tcd = trace_get_tcd();
-        __LASSERT (tcd != NULL);
-
-        put_pages_on_tcd_daemon_list(info, tcd);
-
-        trace_put_tcd(tcd);
+        tcd_for_each_type_lock(tcd, i)
+                put_pages_on_tcd_daemon_list(info, tcd);
 }
 
 static void put_pages_on_daemon_list(struct page_collection *pc)
@@ -718,41 +724,213 @@ void trace_flush_pages(void)
         }
 }
 
-int trace_dk(struct file *file, const char *buffer, unsigned long count,
-             void *data)
+int trace_copyin_string(char *knl_buffer, int knl_buffer_nob,
+                        const char *usr_buffer, int usr_buffer_nob)
 {
-        char *name;
-        unsigned long off;
-        int rc;
+        int    nob;
+        
+        if (usr_buffer_nob > knl_buffer_nob)
+                return -EOVERFLOW;
+        
+        if (copy_from_user((void *)knl_buffer, 
+                           (void *)usr_buffer, usr_buffer_nob))
+                return -EFAULT;
 
-        name = cfs_alloc(count + 1, CFS_ALLOC_STD);
-        if (name == NULL)
-                return -ENOMEM;
+        nob = strnlen(knl_buffer, usr_buffer_nob);
+        while (nob-- >= 0)                      /* strip trailing whitespace */
+                if (!isspace(knl_buffer[nob]))
+                        break;
 
-        if (copy_from_user((void *)name, (void *)buffer, count)) {
-                rc = -EFAULT;
-                goto out;
+        if (nob < 0)                            /* empty string */
+                return -EINVAL;
+
+        if (nob == knl_buffer_nob)              /* no space to terminate */
+                return -EOVERFLOW;
+
+        knl_buffer[nob + 1] = 0;                /* terminate */
+        return 0;
+}
+
+int trace_copyout_string(char *usr_buffer, int usr_buffer_nob,
+                         const char *knl_buffer, char *append)
+{
+        /* NB if 'append' != NULL, it's a single character to append to the
+         * copied out string - usually "\n", for /proc entries and "" (i.e. a
+         * terminating zero byte) for sysctl entries */
+        int   nob = strlen(knl_buffer);
+        
+        if (nob > usr_buffer_nob)
+                nob = usr_buffer_nob;
+        
+        if (copy_to_user(usr_buffer, knl_buffer, nob))
+                return -EFAULT;
+        
+        if (append != NULL && nob < usr_buffer_nob) {
+                if (copy_to_user(usr_buffer + nob, append, 1))
+                        return -EFAULT;
+                
+                nob++;
         }
 
+        return nob;
+}
+
+int trace_allocate_string_buffer(char **str, int nob)
+{
+        if (nob > 2 * CFS_PAGE_SIZE)            /* string must be "sensible" */
+                return -EINVAL;
+        
+        *str = cfs_alloc(nob, CFS_ALLOC_STD | CFS_ALLOC_ZERO);
+        if (*str == NULL)
+                return -ENOMEM;
+
+        return 0;
+}
+
+void trace_free_string_buffer(char *str, int nob)
+{
+        cfs_free(str);
+}
+
+int trace_dump_debug_buffer_usrstr(void *usr_str, int usr_str_nob)
+{
+        char         *str;
+        int           rc;
+
+        rc = trace_allocate_string_buffer(&str, usr_str_nob + 1);
+        if (rc != 0)
+                return rc;
+
+        rc = trace_copyin_string(str, usr_str_nob + 1,
+                                 usr_str, usr_str_nob);
+        if (rc != 0)
+                goto out;
+
 #if !defined(__WINNT__)
-        if (name[0] != '/') {
+        if (str[0] != '/') {
                 rc = -EINVAL;
                 goto out;
         }
 #endif
-
-        /* be nice and strip out trailing '\n' */
-        for (off = count ; off > 2 && isspace(name[off - 1]); off--)
-                ;
-
-        name[off] = '\0';
-        rc = tracefile_dump_all_pages(name);
+        rc = tracefile_dump_all_pages(str);
 out:
-        if (name)
-                cfs_free(name);
-        return count;
+        trace_free_string_buffer(str, usr_str_nob + 1);
+        return rc;
 }
-EXPORT_SYMBOL(trace_dk);
+
+int trace_daemon_command(char *str)
+{
+        int       rc = 0;
+        
+	tracefile_write_lock();
+
+	if (strcmp(str, "stop") == 0) {
+		trace_stop_thread();
+                memset(tracefile, 0, sizeof(tracefile));
+
+	} else if (strncmp(str, "size=", 5) == 0) {
+		tracefile_size = simple_strtoul(str + 5, NULL, 0);
+		if (tracefile_size < 10 || tracefile_size > 20480)
+			tracefile_size = TRACEFILE_SIZE;
+		else
+			tracefile_size <<= 20;
+
+	} else if (strlen(str) >= sizeof(tracefile)) {
+                rc = -ENAMETOOLONG;
+#ifndef __WINNT__
+        } else if (str[0] != '/') {
+                rc = -EINVAL;
+#endif
+        } else {
+                strcpy(tracefile, str);
+
+                printk(KERN_INFO "Lustre: debug daemon will attempt to start writing "
+                       "to %s (%lukB max)\n", tracefile,
+                       (long)(tracefile_size >> 10));
+
+                trace_start_thread();
+        }
+
+	tracefile_write_unlock();
+	return rc;
+}
+
+int trace_daemon_command_usrstr(void *usr_str, int usr_str_nob)
+{
+	char *str;
+	int   rc;
+
+        rc = trace_allocate_string_buffer(&str, usr_str_nob + 1);
+        if (rc != 0)
+                return rc;
+
+        rc = trace_copyin_string(str, usr_str_nob + 1,
+                                 usr_str, usr_str_nob);
+        if (rc == 0)
+                rc = trace_daemon_command(str);
+
+        trace_free_string_buffer(str, usr_str_nob + 1);
+	return rc;
+}
+
+int trace_set_debug_mb(int mb)
+{
+	int i;
+        int j;
+        int pages;
+        int limit = trace_max_debug_mb();
+        struct trace_cpu_data *tcd;
+        
+	if (mb < num_possible_cpus())
+		return -EINVAL;
+
+	if (mb > limit) {
+		printk(KERN_ERR "Lustre: Refusing to set debug buffer size to "
+		       "%dMB - limit is %d\n", mb, limit);
+		return -EINVAL;
+	}
+
+	mb /= num_possible_cpus();
+        pages = mb << (20 - CFS_PAGE_SHIFT);
+
+        tracefile_write_lock();
+
+        tcd_for_each(tcd, i, j)
+		tcd->tcd_max_pages = (pages * tcd->tcd_pages_factor) / 100;
+
+        tracefile_write_unlock();
+
+	return 0;
+}
+
+int trace_set_debug_mb_usrstr(void *usr_str, int usr_str_nob)
+{
+	char     str[32];
+        int      rc;
+
+        rc = trace_copyin_string(str, sizeof(str), usr_str, usr_str_nob);
+        if (rc < 0)
+                return rc;
+
+	return trace_set_debug_mb(simple_strtoul(str, NULL, 0));
+}
+
+int trace_get_debug_mb(void)
+{
+	int i;
+        int j;
+        struct trace_cpu_data *tcd;
+        int total_pages = 0;
+        
+        tracefile_read_lock();
+
+        tcd_for_each(tcd, i, j)
+                total_pages += tcd->tcd_max_pages;
+
+        tracefile_read_unlock();
+
+        return (total_pages >> (20 - CFS_PAGE_SHIFT)) + 1;
+}
 
 static int tracefiled(void *arg)
 {
@@ -793,12 +971,13 @@ static int tracefiled(void *arg)
 
                 filp = NULL;
                 tracefile_read_lock();
-                if (tracefile != NULL) {
+                if (tracefile[0] != 0) {
                         filp = cfs_filp_open(tracefile,
                                              O_CREAT | O_RDWR | O_LARGEFILE,
                                              0600, &rc);
                         if (!(filp))
-                                printk("couldn't open %s: %d\n", tracefile, rc);
+                                printk(KERN_WARNING "couldn't open %s: %d\n",
+                                       tracefile, rc);
                 }
                 tracefile_read_unlock();
                 if (filp == NULL) {
@@ -877,7 +1056,7 @@ void trace_stop_thread(void)
 
         mutex_down(&trace_thread_sem);
         if (thread_running) {
-                printk(KERN_INFO "Shutting down debug daemon thread...\n");
+                printk(KERN_INFO "Lustre: shutting down debug daemon thread...\n");
                 atomic_set(&tctl->tctl_shutdown, 1);
                 wait_for_completion(&tctl->tctl_stop);
                 thread_running = 0;
@@ -885,27 +1064,30 @@ void trace_stop_thread(void)
         mutex_up(&trace_thread_sem);
 }
 
-int tracefile_init(void)
+int tracefile_init(int max_pages)
 {
         struct trace_cpu_data *tcd;
         int                    i;
+        int                    j;
         int                    rc;
+        int                    factor;
 
         rc = tracefile_init_arch();
         if (rc != 0)
                 return rc;
 
-        for (i = 0; i < NR_CPUS; i++) {
-                tcd = &trace_data[i].tcd;
+        tcd_for_each(tcd, i, j) {
+                /* tcd_pages_factor is initialized int tracefile_init_arch. */
+                factor = tcd->tcd_pages_factor;
                 CFS_INIT_LIST_HEAD(&tcd->tcd_pages);
                 CFS_INIT_LIST_HEAD(&tcd->tcd_stock_pages);
                 CFS_INIT_LIST_HEAD(&tcd->tcd_daemon_pages);
                 tcd->tcd_cur_pages = 0;
                 tcd->tcd_cur_stock_pages = 0;
                 tcd->tcd_cur_daemon_pages = 0;
-                tcd->tcd_max_pages = TCD_MAX_PAGES;
+                tcd->tcd_max_pages = (max_pages * factor) / 100;
+                LASSERT(tcd->tcd_max_pages > 0);
                 tcd->tcd_shutting_down = 0;
-                tcd->tcd_cpu = i;
         }
 
         return 0;
@@ -916,21 +1098,19 @@ static void trace_cleanup_on_cpu(void *info)
         struct trace_cpu_data *tcd;
         struct trace_page *tage;
         struct trace_page *tmp;
+        int i;
 
-        tcd = trace_get_tcd();
-        __LASSERT (tcd != NULL);
+        tcd_for_each_type_lock(tcd, i) {
+                tcd->tcd_shutting_down = 1;
 
-        tcd->tcd_shutting_down = 1;
+                list_for_each_entry_safe(tage, tmp, &tcd->tcd_pages, linkage) {
+                        __LASSERT_TAGE_INVARIANT(tage);
 
-        list_for_each_entry_safe(tage, tmp, &tcd->tcd_pages, linkage) {
-                __LASSERT_TAGE_INVARIANT(tage);
-
-                list_del(&tage->linkage);
-                tage_free(tage);
+                        list_del(&tage->linkage);
+                        tage_free(tage);
+                }
+                tcd->tcd_cur_pages = 0;
         }
-        tcd->tcd_cur_pages = 0;
-
-        trace_put_tcd(tcd);
 }
 
 static void trace_cleanup(void)

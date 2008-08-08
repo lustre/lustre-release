@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002 Cluster File Systems, Inc.
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
  *
  *   This file is part of Portals
  *   http://sourceforge.net/projects/sandiaportals/
@@ -281,7 +281,7 @@ static struct file_operations lnet_routes_fops = {
 
 typedef struct {
         __u64                lrtrsi_version;
-        lnet_peer_t          *lrtrsi_router;
+        lnet_peer_t         *lrtrsi_router;
         loff_t               lrtrsi_off;
 } lnet_router_seq_iterator_t;
 
@@ -321,7 +321,7 @@ lnet_router_seq_seek (lnet_router_seq_iterator_t *lrtrsi, loff_t off)
         }
 
         lrtrsi->lrtrsi_version = the_lnet.ln_routers_version;
-        lrtrsi->lrtrsi_off        = off;
+        lrtrsi->lrtrsi_off     = off;
 
         while (r != &the_lnet.ln_routers) {
                 lnet_peer_t *rtr = list_entry(r, 
@@ -339,7 +339,7 @@ lnet_router_seq_seek (lnet_router_seq_iterator_t *lrtrsi, loff_t off)
         }
 
         lrtrsi->lrtrsi_router = NULL;
-        rc             = -ENOENT;
+        rc = -ENOENT;
  out:
         LNET_UNLOCK();
         return rc;
@@ -395,10 +395,12 @@ lnet_router_seq_show (struct seq_file *s, void *iter)
 {
         lnet_router_seq_iterator_t *lrtrsi = iter;
         lnet_peer_t *lp;
-        lnet_nid_t  nid;
-        int         alive;
-        int         nrefs;
-        int         nrtrrefs;
+        lnet_nid_t   nid;
+        int          alive;
+        int          alive_cnt;
+        int          nrefs;
+        int          nrtrrefs;
+        time_t       last_ping;
 
         if (lrtrsi->lrtrsi_off == 0) {
                 seq_printf(s, "%-4s %7s %9s %6s %12s %s\n",
@@ -416,20 +418,19 @@ lnet_router_seq_show (struct seq_file *s, void *iter)
                 return -ESTALE;
         }
 
-        nrefs = lp->lp_refcount;
-        nrtrrefs = lp->lp_rtr_refcount;
-        nid   = lp->lp_nid;
-        alive = lp->lp_alive;
+        nid       = lp->lp_nid;
+        alive     = lp->lp_alive;
+        alive_cnt = lp->lp_alive_count;
+        nrefs     = lp->lp_refcount;
+        nrtrrefs  = lp->lp_rtr_refcount;
+        last_ping = lp->lp_ping_timestamp;
 
         LNET_UNLOCK();
 
         seq_printf(s, 
-                   "%-4d %7d %9d %6s %12lu %s\n", 
-                   nrefs, nrtrrefs,
-                   lp->lp_alive_count,
-                   alive ? "up" : "down", 
-                   lp->lp_ping_timestamp,
-                   libcfs_nid2str(nid));
+                   "%-4d %7d %9d %6s %12lu %s\n", nrefs, nrtrrefs,
+                   alive_cnt, alive ? "up" : "down",
+                   last_ping, libcfs_nid2str(nid));
         return 0;
 }
 
@@ -637,7 +638,7 @@ lnet_peer_seq_show (struct seq_file *s, void *iter)
 
         seq_printf(s, "%-24s %4d %5s %5d %5d %5d %5d %5d %d\n",
                    libcfs_nid2str(nid), nrefs, 
-                   !rtr ? "~rtr" : (lp->lp_alive ? "up" : "down"),
+                   !rtr ? "~rtr" : (alive ? "up" : "down"),
                    maxcr, rtrcr, minrtrcr, txcr, mintxcr, txqnob);
         return 0;
 }

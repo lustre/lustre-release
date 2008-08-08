@@ -1,19 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2005 Cluster File Systems, Inc. All rights reserved.
- *   Author: PJ Kirner <pjkirner@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is confidential source code owned by Cluster File Systems.
- *   No viewing, modification, compilation, redistribution, or any other
- *   form of use is permitted except through a signed license agreement.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you have not signed such an agreement, then you have no rights to
- *   this file.  Please destroy it immediately and contact CFS.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/klnds/ptllnd/ptllnd_rx_buf.c
+ *
+ * Author: PJ Kirner <pjkirner@clusterfs.com>
  */
 
  #include "ptllnd.h"
@@ -331,11 +353,14 @@ kptllnd_rx_alloc(void)
 }
 
 void
-kptllnd_rx_done(kptl_rx_t *rx)
+kptllnd_rx_done(kptl_rx_t *rx, int post_credit)
 {
         kptl_rx_buffer_t *rxb = rx->rx_rxb;
         kptl_peer_t      *peer = rx->rx_peer;
         unsigned long     flags;
+
+        LASSERT (post_credit == PTLLND_POSTRX_NO_CREDIT ||
+                 post_credit == PTLLND_POSTRX_PEER_CREDIT);
 
         CDEBUG(D_NET, "rx=%p rxb %p peer %p\n", rx, rxb, peer);
 
@@ -346,7 +371,9 @@ kptllnd_rx_done(kptl_rx_t *rx)
                 /* Update credits (after I've decref-ed the buffer) */
                 spin_lock_irqsave(&peer->peer_lock, flags);
 
-                peer->peer_outstanding_credits++;
+                if (post_credit == PTLLND_POSTRX_PEER_CREDIT)
+                        peer->peer_outstanding_credits++;
+
                 LASSERT (peer->peer_outstanding_credits +
                          peer->peer_sent_credits <=
                          *kptllnd_tunables.kptl_peercredits);
@@ -515,6 +542,7 @@ void
 kptllnd_rx_parse(kptl_rx_t *rx)
 {
         kptl_msg_t             *msg = rx->rx_msg;
+        int                     post_credit = PTLLND_POSTRX_PEER_CREDIT;
         kptl_peer_t            *peer;
         int                     rc;
         unsigned long           flags;
@@ -642,7 +670,7 @@ kptllnd_rx_parse(kptl_rx_t *rx)
                 int  c = peer->peer_credits;
                 int oc = peer->peer_outstanding_credits;
                 int sc = peer->peer_sent_credits;
-                
+
                 spin_unlock_irqrestore(&peer->peer_lock, flags);
 
                 CERROR("%s: buffer overrun [%d/%d+%d]\n",
@@ -654,6 +682,12 @@ kptllnd_rx_parse(kptl_rx_t *rx)
         /* No check for credit overflow - the peer may post new
          * buffers after the startup handshake. */
         peer->peer_credits += msg->ptlm_credits;
+
+        /* This ensures the credit taken by NOOP can be returned */
+        if (msg->ptlm_type == PTLLND_MSG_TYPE_NOOP) {
+                peer->peer_outstanding_credits++;
+                post_credit = PTLLND_POSTRX_NO_CREDIT;
+        }
 
         spin_unlock_irqrestore(&peer->peer_lock, flags);
 
@@ -723,5 +757,5 @@ kptllnd_rx_parse(kptl_rx_t *rx)
         if (rx->rx_peer == NULL)                /* drop ref on peer */
                 kptllnd_peer_decref(peer);      /* unless rx_done will */
  rx_done:
-        kptllnd_rx_done(rx);
+        kptllnd_rx_done(rx, post_credit);
 }

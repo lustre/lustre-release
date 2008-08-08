@@ -3,11 +3,11 @@ Index: linux+rhel4+chaos/include/linux/sysctl.h
 --- linux+rhel4+chaos.orig/include/linux/sysctl.h
 +++ linux+rhel4+chaos/include/linux/sysctl.h
 @@ -348,6 +348,8 @@ enum
- 	NET_TCP_TSO_WIN_DIVISOR=107,
- 	NET_TCP_BIC_BETA=108,
  	NET_IPV4_ICMP_ERRORS_USE_INBOUND_IFADDR=109,
-+	NET_TCP_RTO_MAX=110,
-+	NET_TCP_RTO_INIT=111,
+ 	NET_IPV4_TCP_WORKAROUND_SIGNED_WINDOWS=110,
+ 	NET_TCP_SLOW_START_AFTER_IDLE=111,
++	NET_TCP_RTO_MAX=112,
++	NET_TCP_RTO_INIT=113,
  };
  
  enum {

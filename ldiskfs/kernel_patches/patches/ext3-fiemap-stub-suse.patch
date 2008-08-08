@@ -1,0 +1,7 @@
+Index: linux-2.6.5-7.286/fs/ext3/fiemap.h
+===================================================================
+--- /dev/null
++++ linux-2.6.5-7.286/fs/ext3/fiemap.h
+@@ -0,0 +1,2 @@
++Compilation of lustre is failing with 2.6.5-suse kernel due to absence of
++fiemap.h file which is being added by the fiemap patches in other kernels.

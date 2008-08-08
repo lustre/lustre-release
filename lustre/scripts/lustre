@@ -28,8 +28,8 @@ SERVICE=${0##*/}
 [ -f /etc/sysconfig/lustre ] && . /etc/sysconfig/lustre
 
 : ${LUSTRE_CONFIG_XML:=/etc/lustre/config.xml}
-: ${LCONF:=/usr/sbin/lconf}
-: ${LCTL:=/usr/sbin/lctl}
+: ${LCONF:=lconf}
+: ${LCTL:=lctl}
 # Some distros use modprobe.conf.local
 if [ -f /etc/modprobe.conf.local ]; then
    : ${MODPROBE_CONF:=/etc/modprobe.conf.local}
@@ -214,7 +214,7 @@ status() {
 	# If Lustre is up , check if the service really exists
         # Skip this is we are not checking a specific service
 	if [ $RETVAL -eq 0 ] && [ $SERVICE != 'lustre' ]; then
-		DUMMY=`lctl dl | grep $SERVICE`
+		DUMMY=$( $LCTL dl | grep "$SERVICE")
 		[ $? -ne 0 ] && STATE="not_found" && RETVAL=3
 	fi
 

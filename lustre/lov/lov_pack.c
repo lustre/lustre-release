@@ -1,26 +1,43 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2002, 2003 Cluster File Systems, Inc.
- *   Author: Andreas Dilger <adilger@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/lov/lov_pack.c
  *
  * (Un)packing of OST/MDS requests
  *
+ * Author: Andreas Dilger <adilger@clusterfs.com>
  */
 
 #define DEBUG_SUBSYSTEM S_LOV
@@ -48,12 +65,20 @@ void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm)
         CDEBUG(level,"stripe_size %u, stripe_count %u\n",
                le32_to_cpu(lmm->lmm_stripe_size),
                le32_to_cpu(lmm->lmm_stripe_count));
-        for (i = 0, lod = lmm->lmm_objects;
-             i < le32_to_cpu(lmm->lmm_stripe_count); i++, lod++)
-                CDEBUG(level, "stripe %u idx %u subobj "LPX64"/"LPX64"\n",
-                       i, le32_to_cpu(lod->l_ost_idx),
-                       le64_to_cpu(lod->l_object_gr),
-                       le64_to_cpu(lod->l_object_id));
+
+        if (le32_to_cpu(lmm->lmm_stripe_count) <= LOV_V1_INSANE_STRIPE_COUNT) {
+                for (i = 0, lod = lmm->lmm_objects;
+                     i < (int)le32_to_cpu(lmm->lmm_stripe_count); i++, lod++)
+                         CDEBUG(level,
+                                "stripe %u idx %u subobj "LPX64"/"LPX64"\n",
+                                i, le32_to_cpu(lod->l_ost_idx),
+                                le64_to_cpu(lod->l_object_gr),
+                                le64_to_cpu(lod->l_object_id));
+        } else {
+                CDEBUG(level, "bad stripe_count %u > max_stripe_count %u\n",
+                       le32_to_cpu(lmm->lmm_stripe_count),
+                       LOV_V1_INSANE_STRIPE_COUNT);
+        }
 }
 
 void lov_dump_lmm_join(int level, struct lov_mds_md_join *lmmj)
@@ -101,7 +126,12 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
                                lsm->lsm_magic, LOV_MAGIC);
                         RETURN(-EINVAL);
                 }
-                stripe_count = lsm->lsm_stripe_count;
+                if (!lmmp) {
+                        stripe_count = lov_get_stripecnt(lov, lsm->lsm_stripe_count);
+                        lsm->lsm_stripe_count = stripe_count;
+                } else {
+                        stripe_count = lsm->lsm_stripe_count;
+                }
         }
 
         /* XXX LOV STACKING call into osc for sizes */
@@ -150,7 +180,7 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
 }
 
 /* Find the max stripecount we should use */
-int lov_get_stripecnt(struct lov_obd *lov, int stripe_count)
+int lov_get_stripecnt(struct lov_obd *lov, __u32 stripe_count)
 {
         if (!stripe_count)
                 stripe_count = lov->desc.ld_default_stripe_count;
@@ -327,10 +357,10 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
                 lum.lmm_stripe_size = LOV_MIN_STRIPE_SIZE;
         }
 
-        if ((lum.lmm_stripe_offset >= lov->desc.ld_active_tgt_count) &&
+        if ((lum.lmm_stripe_offset >= lov->desc.ld_tgt_count) &&
             (lum.lmm_stripe_offset != (typeof(lum.lmm_stripe_offset))(-1))) {
-                CDEBUG(D_IOCTL, "stripe offset %u > number of active OSTs %u\n",
-                       lum.lmm_stripe_offset, lov->desc.ld_active_tgt_count);
+                CDEBUG(D_IOCTL, "stripe offset %u > number of OSTs %u\n",
+                       lum.lmm_stripe_offset, lov->desc.ld_tgt_count);
                 RETURN(-EINVAL);
         }
         stripe_count = lov_get_stripecnt(lov, lum.lmm_stripe_count);
@@ -365,8 +395,8 @@ int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
         for (i = 0; i < lump->lmm_stripe_count; i++) {
                 __u32 len = sizeof(last_id);
                 oexp = lov->lov_tgts[lump->lmm_objects[i].l_ost_idx]->ltd_exp;
-                rc = obd_get_info(oexp, strlen("last_id"), "last_id",
-                                  &len, &last_id);
+                rc = obd_get_info(oexp, sizeof(KEY_LAST_ID), KEY_LAST_ID,
+                                  &len, &last_id, NULL);
                 if (rc)
                         RETURN(rc);
                 if (lump->lmm_objects[i].l_object_id > last_id) {

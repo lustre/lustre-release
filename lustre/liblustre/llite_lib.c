@@ -1,24 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/liblustre/llite_lib.c
+ *
  * Lustre Light common routines
- *
- *  Copyright (c) 2002-2004 Cluster File Systems, Inc.
- *
- *   This file is part of Lustre, http://www.lustre.org.
- *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
- *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #include <stdlib.h>
@@ -29,10 +46,10 @@
 #include <sys/stat.h>
 #include <sys/queue.h>
 
+#include <sysio.h>
 #ifdef HAVE_XTIO_H
 #include <xtio.h>
 #endif
-#include <sysio.h>
 #include <fs.h>
 #include <mount.h>
 #include <inode.h>
@@ -44,6 +61,7 @@
  * of 'LIST_HEAD'. undef it to suppress warnings
  */
 #undef LIST_HEAD
+#include <liblustre.h>
 #include <lnet/lnetctl.h>     /* needed for parse_dump */
 
 #include "lutil.h"
@@ -155,10 +173,14 @@ int liblustre_process_log(struct config_llog_instance *cfg,
         if (ocd == NULL)
                 GOTO(out_cleanup, rc = -ENOMEM);
 
-        ocd->ocd_connect_flags = OBD_CONNECT_VERSION;
+        ocd->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_AT |
+                                 OBD_CONNECT_VBR;
+#ifdef LIBLUSTRE_POSIX_ACL
+        ocd->ocd_connect_flags |= OBD_CONNECT_ACL;
+#endif
         ocd->ocd_version = LUSTRE_VERSION_CODE;
 
-        rc = obd_connect(&mgc_conn, obd, &mgc_uuid, ocd);
+        rc = obd_connect(&mgc_conn, obd, &mgc_uuid, ocd, NULL);
         if (rc) {
                 CERROR("cannot connect to %s at %s: rc = %d\n",
                        LUSTRE_MGS_OBDNAME, mgsnid, rc);
@@ -167,9 +189,10 @@ int liblustre_process_log(struct config_llog_instance *cfg,
 
         exp = class_conn2export(&mgc_conn);
 
-        ctxt = exp->exp_obd->obd_llog_ctxt[LLOG_CONFIG_REPL_CTXT];
+        ctxt = llog_get_context(exp->exp_obd, LLOG_CONFIG_REPL_CTXT);
         cfg->cfg_flags |= CFG_F_COMPAT146;
         rc = class_config_parse_llog(ctxt, profile, cfg);
+        llog_ctxt_put(ctxt);
         if (rc) {
                 CERROR("class_config_parse_llog failed: rc = %d\n", rc);
         }
@@ -285,7 +308,7 @@ int _sysio_lustre_init(void)
                         obd_timeout);
         }
 
-	/* debug peer on timeout? */
+        /* debug peer on timeout? */
         envstr = getenv("LIBLUSTRE_DEBUG_PEER_ON_TIMEOUT");
         if (envstr != NULL) {
                 obd_debug_peer_on_timeout = 

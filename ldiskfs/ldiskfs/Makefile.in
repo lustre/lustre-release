@@ -9,7 +9,7 @@ ext3_headers := $(wildcard @LINUX@/fs/ext3/*.h)
 linux_headers := $(wildcard @LINUX@/include/linux/ext3*.h)
 
 ext3_sources := $(filter-out %.mod.c,$(wildcard @LINUX@/fs/ext3/*.c))
-new_sources := iopen.c iopen.h extents.c mballoc.c group.h
+new_sources := iopen.c iopen.h extents.c mballoc.c group.h fiemap.h
 new_headers := ext3_extents.h 
 ldiskfs_patched_sources := $(notdir $(ext3_sources) $(ext3_headers)) $(new_sources) $(new_headers)
 ldiskfs_sources := $(ldiskfs_patched_sources)

@@ -1,22 +1,39 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2003 Los Alamos National Laboratory (LANL)
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org/
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ *
+ * Copyright (c) 2003 Los Alamos National Laboratory (LANL)
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #include "gmlnd.h"
@@ -39,7 +56,6 @@ gmnal_alloc_netbuf_pages (gmnal_ni_t *gmni, gmnal_netbuf_t *nb, int npages)
         LASSERT (npages > 0);
 
         for (i = 0; i < npages; i++) {
-                
                 nb->nb_kiov[i].kiov_page = alloc_page(GFP_KERNEL);
                 nb->nb_kiov[i].kiov_offset = 0;
                 nb->nb_kiov[i].kiov_len = PAGE_SIZE;
@@ -69,13 +85,13 @@ gmnal_alloc_netbuf_pages (gmnal_ni_t *gmni, gmnal_netbuf_t *nb, int npages)
                         gmnal_free_netbuf_pages(nb, i+1);
                         return -ENOMEM;
                 }
-                
+
                 if (i == 0) 
                         nb->nb_netaddr = gmni->gmni_netaddr_base;
-                
+
                 gmni->gmni_netaddr_base += PAGE_SIZE;
         }
-        
+
         return 0;
 }
 
@@ -98,7 +114,7 @@ gmnal_alloc_ltxbuf (gmnal_ni_t *gmni)
         int            sz = offsetof(gmnal_txbuf_t, txb_buf.nb_kiov[npages]);
         gmnal_txbuf_t *txb;
         int            rc;
-        
+
         LIBCFS_ALLOC(txb, sz);
         if (txb == NULL) {
                 CERROR("Can't allocate large txbuffer\n");
@@ -226,7 +242,7 @@ gmnal_alloc_ltxbufs (gmnal_ni_t *gmni)
 
         for (i = 0; i < nlarge_tx_bufs; i++) {
                 rc = gmnal_alloc_ltxbuf(gmni);
-                
+
                 if (rc != 0)
                         return rc;
         }

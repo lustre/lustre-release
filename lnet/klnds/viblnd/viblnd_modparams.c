@@ -1,24 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2004 Cluster File Systems, Inc.
- *   Author: Eric Barton <eric@bartonsoftware.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/klnds/viblnd/viblnd_modparams.c
+ *
+ * Author: Eric Barton <eric@bartonsoftware.com>
  */
 
 #include "viblnd.h"
@@ -29,39 +46,39 @@ CFS_MODULE_PARM(service_number, "i", int, 0444,
 
 static int min_reconnect_interval = 1;
 CFS_MODULE_PARM(min_reconnect_interval, "i", int, 0644,
-		"minimum connection retry interval (seconds)");
+                "minimum connection retry interval (seconds)");
 
 static int max_reconnect_interval = 60;
 CFS_MODULE_PARM(max_reconnect_interval, "i", int, 0644,
-		"maximum connection retry interval (seconds)");
+                "maximum connection retry interval (seconds)");
 
 static int concurrent_peers = 1152;
 CFS_MODULE_PARM(concurrent_peers, "i", int, 0444,
-		"maximum number of peers that may connect");
+                "maximum number of peers that may connect");
 
 static int cksum = 0;
 CFS_MODULE_PARM(cksum, "i", int, 0644,
-		"set non-zero to enable message (not RDMA) checksums");
+                "set non-zero to enable message (not RDMA) checksums");
 
 static int timeout = 50;
 CFS_MODULE_PARM(timeout, "i", int, 0644,
-		"timeout (seconds)");
+                "timeout (seconds)");
 
 static int ntx = 256;
 CFS_MODULE_PARM(ntx, "i", int, 0444,
-		"# of message descriptors");
+                "# of message descriptors");
 
 static int credits = 128;
 CFS_MODULE_PARM(credits, "i", int, 0444,
-		"# concurrent sends");
+                "# concurrent sends");
 
 static int peer_credits = 8;
 CFS_MODULE_PARM(peer_credits, "i", int, 0444,
-		"# concurrent sends to 1 peer");
+                "# concurrent sends to 1 peer");
 
 static int arp_retries = 3;
 CFS_MODULE_PARM(arp_retries, "i", int, 0644,
-		"# of times to retry ARP");
+                "# of times to retry ARP");
 
 static char *hca_basename = "InfiniHost";
 CFS_MODULE_PARM(hca_basename, "s", charp, 0444,
@@ -125,58 +142,179 @@ kib_tunables_t kibnal_tunables = {
 #endif
 };
 
-#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
 
 static char hca_basename_space[32];
 static char ipif_basename_space[32];
 
-static ctl_table kibnal_ctl_table[] = {
-	{1, "service_number", &service_number, 
-	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{2, "min_reconnect_interval", &min_reconnect_interval, 
-	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{3, "max_reconnect_interval", &max_reconnect_interval, 
-	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{4, "concurrent_peers", &concurrent_peers, 
-	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{5, "cksum", &cksum, 
-	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{6, "timeout", &timeout, 
-	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{7, "ntx", &ntx, 
-	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{8, "credits", &credits, 
-	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{9, "peer_credits", &peer_credits, 
-	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{10, "arp_retries", &arp_retries, 
-	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{11, "hca_basename", hca_basename_space, 
-	 sizeof(hca_basename_space), 0444, NULL, &proc_dostring},
-	{12, "ipif_basename", ipif_basename_space, 
-	 sizeof(ipif_basename_space), 0444, NULL, &proc_dostring},
-	{13, "local_ack_timeout", &local_ack_timeout, 
-	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{14, "retry_cnt", &retry_cnt, 
-	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{15, "rnr_cnt", &rnr_cnt, 
-	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{16, "rnr_nak_timer", &rnr_nak_timer, 
-	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{17, "keepalive", &keepalive, 
-	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{18, "concurrent_sends", &concurrent_sends, 
-	 sizeof(int), 0644, NULL, &proc_dointvec},
+static cfs_sysctl_table_t kibnal_ctl_table[] = {
+        {
+                .ctl_name = 1,
+                .procname = "service_number",
+                .data     = &service_number,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 2,
+                .procname = "min_reconnect_interval",
+                .data     = &min_reconnect_interval,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 3,
+                .procname = "max_reconnect_interval",
+                .data     = &max_reconnect_interval,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 4,
+                .procname = "concurrent_peers",
+                .data     = &concurrent_peers,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 5,
+                .procname = "cksum",
+                .data     = &cksum,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 6,
+                .procname = "timeout",
+                .data     = &timeout,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 7,
+                .procname = "ntx",
+                .data     = &ntx,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 8,
+                .procname = "credits",
+                .data     = &credits,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 9,
+                .procname = "peer_credits",
+                .data     = &peer_credits,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 10,
+                .procname = "arp_retries",
+                .data     = &arp_retries,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 11,
+                .procname = "hca_basename",
+                .data     = hca_basename_space,
+                .maxlen   = sizeof(hca_basename_space),
+                .mode     = 0444,
+                .proc_handler = &proc_dostring
+        },
+        {
+                .ctl_name = 12,
+                .procname = "ipif_basename",
+                .data     = ipif_basename_space,
+                .maxlen   = sizeof(ipif_basename_space),
+                .mode     = 0444,
+                .proc_handler = &proc_dostring
+        },
+        {
+                .ctl_name = 13,
+                .procname = "local_ack_timeout",
+                .data     = &local_ack_timeout,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 14,
+                .procname = "retry_cnt",
+                .data     = &retry_cnt,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 15,
+                .procname = "rnr_cnt",
+                .data     = &rnr_cnt,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 16,
+                .procname = "rnr_nak_timer",
+                .data     = &rnr_nak_timer,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 17,
+                .procname = "keepalive",
+                .data     = &keepalive,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 18,
+                .procname = "concurrent_sends",
+                .data     = &concurrent_sends,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
 #if IBNAL_USE_FMR
-	{19, "fmr_remaps", &fmr_remaps, 
-	 sizeof(int), 0444, NULL, &proc_dointvec},
-#endif        
-	{0}
+        {
+                .ctl_name = 19,
+                .procname = "fmr_remaps",
+                .data     = &fmr_remaps,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+#endif
+        {0}
 };
 
-static ctl_table kibnal_top_ctl_table[] = {
-	{203, "vibnal", NULL, 0, 0555, kibnal_ctl_table},
-	{0}
+static cfs_sysctl_table_t kibnal_top_ctl_table[] = {
+        {
+                .ctl_name = 203,
+                .procname = "vibnal",
+                .data     = NULL,
+                .maxlen   = 0,
+                .mode     = 0555,
+                .child    = kibnal_ctl_table
+        },
+        {0}
 };
 
 void
@@ -194,25 +332,25 @@ kibnal_tunables_init ()
         kibnal_initstrtunable(ipif_basename_space, ipif_basename,
                               sizeof(ipif_basename_space));
 
-	kibnal_tunables.kib_sysctl =
-		cfs_register_sysctl_table(kibnal_top_ctl_table, 0);
+        kibnal_tunables.kib_sysctl =
+                cfs_register_sysctl_table(kibnal_top_ctl_table, 0);
 
-	if (kibnal_tunables.kib_sysctl == NULL)
-		CWARN("Can't setup /proc tunables\n");
+        if (kibnal_tunables.kib_sysctl == NULL)
+                CWARN("Can't setup /proc tunables\n");
 
         if (*kibnal_tunables.kib_concurrent_sends > IBNAL_RX_MSGS)
                 *kibnal_tunables.kib_concurrent_sends = IBNAL_RX_MSGS;
         if (*kibnal_tunables.kib_concurrent_sends < IBNAL_MSG_QUEUE_SIZE)
                 *kibnal_tunables.kib_concurrent_sends = IBNAL_MSG_QUEUE_SIZE;
 
-	return 0;
+        return 0;
 }
 
 void
 kibnal_tunables_fini ()
 {
-	if (kibnal_tunables.kib_sysctl != NULL)
-		cfs_unregister_sysctl_table(kibnal_tunables.kib_sysctl);
+        if (kibnal_tunables.kib_sysctl != NULL)
+                cfs_unregister_sysctl_table(kibnal_tunables.kib_sysctl);
 }
 
 #else
@@ -220,7 +358,7 @@ kibnal_tunables_fini ()
 int
 kibnal_tunables_init ()
 {
-	return 0;
+        return 0;
 }
 
 void

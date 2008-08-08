@@ -1,24 +1,42 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2002, 2003, 2004 Cluster File Systems, Inc.
- *   Author: Peter Braam <braam@clusterfs.com>
- *   Author: Phil Schwan <phil@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/ldlm/ldlm_inodebits.c
+ *
+ * Author: Peter Braam <braam@clusterfs.com>
+ * Author: Phil Schwan <phil@clusterfs.com>
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
@@ -37,7 +55,7 @@ static int
 ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                             struct list_head *work_list)
 {
-        struct list_head *tmp, *tmp_tail;
+        struct list_head *tmp;
         struct ldlm_lock *lock;
         ldlm_mode_t req_mode = req->l_req_mode;
         __u64 req_bits = req->l_policy_data.l_inodebits.bits;
@@ -47,28 +65,36 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
         LASSERT(req_bits); /* There is no sense in lock with no bits set,
                               I think. Also such a lock would be compatible
                                with any other bit lock */
+
         list_for_each(tmp, queue) {
+                struct list_head *mode_tail;
+
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
 
                 if (req == lock)
                         RETURN(compat);
 
+                /* last lock in mode group */
+                LASSERT(lock->l_sl_mode.prev != NULL);
+                mode_tail = &list_entry(lock->l_sl_mode.prev,
+                                        struct ldlm_lock,
+                                        l_sl_mode)->l_res_link;
+
                 /* locks are compatible, bits don't matter */
                 if (lockmode_compat(lock->l_req_mode, req_mode)) {
-                        /* jump to next mode group */
-                        if (LDLM_SL_HEAD(&lock->l_sl_mode))
-                                tmp = &list_entry(lock->l_sl_mode.next, 
-                                                  struct ldlm_lock,
-                                                  l_sl_mode)->l_res_link;
+                        /* jump to last lock in mode group */
+                        tmp = mode_tail;
                         continue;
                 }
 
-                tmp_tail = tmp;
-                if (LDLM_SL_HEAD(&lock->l_sl_mode))
-                        tmp_tail = &list_entry(lock->l_sl_mode.next,
-                                               struct ldlm_lock,
-                                               l_sl_mode)->l_res_link;
                 for (;;) {
+                        struct list_head *head;
+
+                        /* last lock in policy group */
+                        tmp = &list_entry(lock->l_sl_policy.prev,
+                                          struct ldlm_lock,
+                                          l_sl_policy)->l_res_link;
+
                         /* locks with bits overlapped are conflicting locks */
                         if (lock->l_policy_data.l_inodebits.bits & req_bits) {
                                 /* conflicting policy */
@@ -76,48 +102,36 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                                         RETURN(0);
                                
                                 compat = 0;
+
+                                /* add locks of the policy group to
+                                 * @work_list as blocking locks for
+                                 * @req */
                                 if (lock->l_blocking_ast)
-                                        ldlm_add_ast_work_item(lock, req, 
+                                        ldlm_add_ast_work_item(lock, req,
                                                                work_list);
-                                /* add all members of the policy group */
-                                if (LDLM_SL_HEAD(&lock->l_sl_policy)) {
-                                        do {
-                                                tmp = lock->l_res_link.next;
-                                                lock = list_entry(tmp,
-                                                            struct ldlm_lock,
-                                                            l_res_link);
-                                                if (lock->l_blocking_ast)
-                                                        ldlm_add_ast_work_item(
-                                                                     lock,
-                                                                     req,
-                                                                     work_list);
-                                        } while (!LDLM_SL_TAIL(&lock->l_sl_policy));
-                                }
-                        } else if (LDLM_SL_HEAD(&lock->l_sl_policy)) {
-                                /* jump to next policy group */
-                                tmp = &list_entry(lock->l_sl_policy.next,
-                                                  struct ldlm_lock,
-                                                  l_sl_policy)->l_res_link;
+                                head = &lock->l_sl_policy;
+                                list_for_each_entry(lock, head, l_sl_policy)
+                                        if (lock->l_blocking_ast)
+                                                ldlm_add_ast_work_item(lock, req,
+                                                                       work_list);
                         }
-                        if (tmp == tmp_tail)
+                        if (tmp == mode_tail)
                                 break;
-                        else
-                                tmp = tmp->next;
+
+                        tmp = tmp->next;
                         lock = list_entry(tmp, struct ldlm_lock, l_res_link);
-                }       /* for locks in a mode group */
-        }       /* for each lock in the queue */
+                } /* loop over policy groups within one mode group */
+        } /* loop over mode groups within @queue */
 
         RETURN(compat);
 }
 
 /* If first_enq is 0 (ie, called from ldlm_reprocess_queue):
   *   - blocking ASTs have already been sent
-  *   - the caller has already initialized req->lr_tmp
   *   - must call this function with the ns lock held
   *
   * If first_enq is 1 (ie, called from ldlm_lock_enqueue):
   *   - blocking ASTs have not been sent
-  *   - the caller has NOT initialized req->lr_tmp, so we must
   *   - must call this function with the ns lock held once */
 int ldlm_process_inodebits_lock(struct ldlm_lock *lock, int *flags,
                                 int first_enq, ldlm_error_t *err,

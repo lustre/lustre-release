@@ -1,32 +1,45 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001-2003 Cluster File Systems, Inc.
- *   Author Peter Braam <braam@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- *  For testing and management it is treated as an obd_device,
- *  although * it does not export a full OBD method table (the
- *  requests are coming * in over the wire, so object target modules
- *  do not have a full * method table.)
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
  *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/osc/osc_create.c
+ * For testing and management it is treated as an obd_device,
+ * although * it does not export a full OBD method table (the
+ * requests are coming * in over the wire, so object target modules
+ * do not have a full * method table.)
+ *
+ * Author: Peter Braam <braam@clusterfs.com>
  */
 
 #ifndef EXPORT_SYMTAB
@@ -66,7 +79,29 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
         
         spin_lock(&oscc->oscc_lock);
         oscc->oscc_flags &= ~OSCC_FLAG_CREATING;
-        if (rc == -ENOSPC || rc == -EROFS) {
+        switch (rc) {
+        case 0: {
+                if (body) {
+                        int diff = body->oa.o_id - oscc->oscc_last_id;
+
+                        if (diff < oscc->oscc_grow_count)
+                                oscc->oscc_grow_count =
+                                        max(diff/3, OST_MIN_PRECREATE);
+                        else
+                                oscc->oscc_flags &= ~OSCC_FLAG_LOW;
+                        oscc->oscc_last_id = body->oa.o_id;
+                }
+                spin_unlock(&oscc->oscc_lock);
+                break;
+        }
+        case -EAGAIN:
+                /* valid race delorphan vs create, or somthing after resend */
+                spin_unlock(&oscc->oscc_lock);
+                DEBUG_REQ(D_INODE, req, "Got EGAIN - resend \n");
+                break;
+        case -ENOSPC:
+        case -EROFS: 
+        case -EFBIG: {
                 oscc->oscc_flags |= OSCC_FLAG_NOSPC;
                 if (body && rc == -ENOSPC) {
                         oscc->oscc_grow_count = OST_MIN_PRECREATE;
@@ -74,7 +109,17 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
                 }
                 spin_unlock(&oscc->oscc_lock);
                 DEBUG_REQ(D_INODE, req, "OST out of space, flagging");
-        } else if (rc != 0 && rc != -EIO) {
+                break;
+        }
+        case -EIO: {
+                /* filter always set body->oa.o_id as the last_id 
+                 * of filter (see filter_handle_precreate for detail)*/
+                if (body && body->oa.o_id > oscc->oscc_last_id)
+                        oscc->oscc_last_id = body->oa.o_id;
+                spin_unlock(&oscc->oscc_lock);
+                break;
+        }
+        default: {
                 oscc->oscc_flags |= OSCC_FLAG_RECOVERING;
                 oscc->oscc_grow_count = OST_MIN_PRECREATE;
                 spin_unlock(&oscc->oscc_lock);
@@ -82,29 +127,10 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
                           "unknown rc %d from async create: failing oscc", rc);
                 ptlrpc_fail_import(req->rq_import,
                                    lustre_msg_get_conn_cnt(req->rq_reqmsg));
-        } else {
-                if (rc == 0) {
-                        if (body) {
-                                int diff = body->oa.o_id - oscc->oscc_last_id;
-
-                                if (diff < oscc->oscc_grow_count)
-                                        oscc->oscc_grow_count =
-                                                max(diff/3, OST_MIN_PRECREATE);
-                                else
-                                        oscc->oscc_flags &= ~OSCC_FLAG_LOW;
-                                oscc->oscc_last_id = body->oa.o_id;
-                        }
-                } else {
-                        /* filter always set body->oa.o_id as the last_id 
-                         * of filter (see filter_handle_precreate for detail)*/
-                        if (body && body->oa.o_id > oscc->oscc_last_id)
-                                oscc->oscc_last_id = body->oa.o_id;
-                }
-                spin_unlock(&oscc->oscc_lock);
-
+        }
         }
 
-        CDEBUG(D_HA, "preallocated through id "LPU64" (next to use "LPU64")\n",
+        CDEBUG(D_RPCTRACE, "prealloc through id "LPU64", next to use "LPU64"\n",
                oscc->oscc_last_id, oscc->oscc_next_id);
 
         cfs_waitq_signal(&oscc->oscc_waitq);
@@ -115,26 +141,28 @@ static int oscc_internal_create(struct osc_creator *oscc)
 {
         struct ptlrpc_request *request;
         struct ost_body *body;
-        int size[] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
-        spin_lock(&oscc->oscc_lock);
-        if (oscc->oscc_grow_count < OST_MAX_PRECREATE &&
-            !(oscc->oscc_flags & (OSCC_FLAG_LOW | OSCC_FLAG_RECOVERING)) &&
-            (__s64)(oscc->oscc_last_id - oscc->oscc_next_id) <=
-                   (oscc->oscc_grow_count / 4 + 1)) {
-                oscc->oscc_flags |= OSCC_FLAG_LOW;
-                oscc->oscc_grow_count *= 2;
-        }
-
-        if (oscc->oscc_grow_count > OST_MAX_PRECREATE / 2)
-                oscc->oscc_grow_count = OST_MAX_PRECREATE / 2;
+        LASSERT_SPIN_LOCKED(&oscc->oscc_lock);
 
         if (oscc->oscc_flags & OSCC_FLAG_CREATING ||
             oscc->oscc_flags & OSCC_FLAG_RECOVERING) {
                 spin_unlock(&oscc->oscc_lock);
                 RETURN(0);
         }
+
+        if (oscc->oscc_grow_count < oscc->oscc_max_grow_count &&
+            ((oscc->oscc_flags & OSCC_FLAG_LOW) == 0) &&
+            (__s64)(oscc->oscc_last_id - oscc->oscc_next_id) <=
+                   (oscc->oscc_grow_count / 4 + 1)) {
+                oscc->oscc_flags |= OSCC_FLAG_LOW;
+                oscc->oscc_grow_count *= 2;
+        }
+
+        if (oscc->oscc_grow_count > oscc->oscc_max_grow_count / 2)
+                oscc->oscc_grow_count = oscc->oscc_max_grow_count / 2;
+
         oscc->oscc_flags |= OSCC_FLAG_CREATING;
         spin_unlock(&oscc->oscc_lock);
 
@@ -148,14 +176,15 @@ static int oscc_internal_create(struct osc_creator *oscc)
                 RETURN(-ENOMEM);
         }
 
-        request->rq_request_portal = OST_CREATE_PORTAL; //XXX FIXME bug 249
+        request->rq_request_portal = OST_CREATE_PORTAL;
+        ptlrpc_at_set_req_timeout(request);
         body = lustre_msg_buf(request->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
 
         spin_lock(&oscc->oscc_lock);
         body->oa.o_id = oscc->oscc_last_id + oscc->oscc_grow_count;
         body->oa.o_valid |= OBD_MD_FLID;
         spin_unlock(&oscc->oscc_lock);
-        CDEBUG(D_HA, "preallocating through id "LPU64" (last seen "LPU64")\n",
+        CDEBUG(D_RPCTRACE, "prealloc through id "LPU64" (last seen "LPU64")\n",
                body->oa.o_id, oscc->oscc_last_id);
 
         ptlrpc_req_set_repsize(request, 2, size);
@@ -172,10 +201,12 @@ static int oscc_has_objects(struct osc_creator *oscc, int count)
         int have_objs;
         spin_lock(&oscc->oscc_lock);
         have_objs = ((__s64)(oscc->oscc_last_id - oscc->oscc_next_id) >= count);
-        spin_unlock(&oscc->oscc_lock);
 
-        if (!have_objs)
+        if (!have_objs) {
                 oscc_internal_create(oscc);
+        } else {
+                spin_unlock(&oscc->oscc_lock);
+        }
 
         return have_objs;
 }
@@ -232,6 +263,49 @@ int oscc_recovering(struct osc_creator *oscc)
         return recov;
 }
 
+/* decide if the OST has remaining object, return value :
+        0 : the OST has remaining object, and don't need to do precreate.
+        1 : the OST has no remaining object, and will send a RPC for precreate.
+        2 : the OST has no remaining object, and will not get any for
+            a potentially very long time
+     1000 : unusable
+ */
+int osc_precreate(struct obd_export *exp)
+{
+        struct osc_creator *oscc = &exp->exp_obd->u.cli.cl_oscc;
+        struct obd_import *imp = exp->exp_imp_reverse;
+        ENTRY;
+
+        LASSERT(oscc != NULL);
+        if (imp != NULL && imp->imp_deactive)
+                RETURN(1000);
+
+        if (oscc->oscc_last_id < oscc->oscc_next_id) {
+                spin_lock(&oscc->oscc_lock);
+                if (oscc->oscc_flags & OSCC_FLAG_NOSPC) {
+                        spin_unlock(&oscc->oscc_lock);
+                        RETURN(1000);
+                }
+                if (oscc->oscc_flags & OSCC_FLAG_SYNC_IN_PROGRESS) {
+                        spin_unlock(&oscc->oscc_lock);
+                        RETURN(1);
+                }
+                if (oscc->oscc_flags & OSCC_FLAG_RECOVERING) {
+                        spin_unlock(&oscc->oscc_lock);
+                        RETURN(2);
+                }
+
+                if (oscc->oscc_flags & OSCC_FLAG_CREATING) {
+                        spin_unlock(&oscc->oscc_lock);
+                        RETURN(1);
+                }
+
+                oscc_internal_create(oscc);
+                RETURN(1);
+        }
+        RETURN(0);
+}
+
 int osc_create(struct obd_export *exp, struct obdo *oa,
                struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
@@ -263,16 +337,16 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                         RETURN(0);
                 }
                 oscc->oscc_flags |= OSCC_FLAG_SYNC_IN_PROGRESS;
+                /* seting flag LOW we prevent extra grow precreate size
+                 * and enforce use last assigned size */
+                oscc->oscc_flags |= OSCC_FLAG_LOW;
                 spin_unlock(&oscc->oscc_lock);
-                CDEBUG(D_HA, "%s: oscc recovery started\n",
-                       oscc->oscc_obd->obd_name);
+                CDEBUG(D_HA, "%s: oscc recovery started - delete to "LPU64"\n",
+                       oscc->oscc_obd->obd_name, oscc->oscc_next_id - 1);
 
                 /* delete from next_id on up */
                 oa->o_valid |= OBD_MD_FLID;
                 oa->o_id = oscc->oscc_next_id - 1;
-
-                CDEBUG(D_HA, "%s: deleting to next_id: "LPU64"\n",
-                       oscc->oscc_obd->obd_name, oa->o_id);
 
                 rc = osc_real_create(exp, oa, ea, NULL);
 
@@ -310,21 +384,21 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 if (oscc_recovering(oscc)) {
                         struct l_wait_info lwi;
 
-                        CDEBUG(D_HA,"%p: oscc recovery in progress, waiting\n",
-                               oscc);
+                        CDEBUG(D_HA,"%s: oscc recovery in progress, waiting\n",
+                               oscc->oscc_obd->obd_name);
 
-                        lwi = LWI_TIMEOUT(cfs_timeout_cap(cfs_time_seconds(obd_timeout/4)),
-                                          NULL, NULL);
+                        lwi = LWI_TIMEOUT(cfs_timeout_cap(cfs_time_seconds(
+                                obd_timeout / 4)), NULL, NULL);
                         rc = l_wait_event(oscc->oscc_waitq,
                                           !oscc_recovering(oscc), &lwi);
                         LASSERT(rc == 0 || rc == -ETIMEDOUT);
                         if (rc == -ETIMEDOUT) {
-                                CDEBUG(D_HA,"%p: timeout waiting on recovery\n",
-                                       oscc);
+                                CDEBUG(D_HA,"%s: timeout waiting on recovery\n",
+                                       oscc->oscc_obd->obd_name);
                                 RETURN(rc);
                         }
-                        CDEBUG(D_HA, "%p: oscc recovery over, waking up\n",
-                               oscc);
+                        CDEBUG(D_HA, "%s: oscc recovery over, waking up\n",
+                               oscc->oscc_obd->obd_name);
                 }
 
                 spin_lock(&oscc->oscc_lock);
@@ -341,7 +415,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                         oscc->oscc_next_id++;
                         try_again = 0;
 
-                        CDEBUG(D_HA, "%s: set oscc_next_id = "LPU64"\n",
+                        CDEBUG(D_RPCTRACE, "%s: set oscc_next_id = "LPU64"\n",
                                exp->exp_obd->obd_name, oscc->oscc_next_id);
                 } else if (oscc->oscc_flags & OSCC_FLAG_NOSPC) {
                         rc = -ENOSPC;
@@ -355,7 +429,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
         }
 
         if (rc == 0)
-                CDEBUG(D_HA, "%s: returning objid "LPU64"\n",
+                CDEBUG(D_INFO, "%s: returning objid "LPU64"\n",
                        obd2cli_tgt(oscc->oscc_obd), lsm->lsm_object_id);
         else if (*ea == NULL)
                 obd_free_memmd(exp, &lsm);
@@ -377,6 +451,7 @@ void oscc_init(struct obd_device *obd)
         spin_lock_init(&oscc->oscc_lock);
         oscc->oscc_obd = obd;
         oscc->oscc_grow_count = OST_MIN_PRECREATE;
+        oscc->oscc_max_grow_count = OST_MAX_PRECREATE;
 
         oscc->oscc_next_id = 2;
         oscc->oscc_last_id = 1;

@@ -1,22 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2001, 2002 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #include <sys/param.h>
@@ -49,9 +64,86 @@ extern unsigned int libcfs_console_ratelimit;
 extern unsigned int libcfs_catastrophe;
 extern atomic_t libcfs_kmemory;
 
-extern long max_debug_mb;
-extern int cfs_trace_daemon SYSCTL_HANDLER_ARGS;
-extern int cfs_debug_mb SYSCTL_HANDLER_ARGS;
+static int sysctl_debug_kernel SYSCTL_HANDLER_ARGS
+{
+#error "Check me"
+        const int  maxstr = 1024;
+        char      *str;
+        int        error;
+
+        if (req->newptr == USER_ADDR_NULL) {
+                /* read request */
+                return -EINVAL;
+        }
+
+        /* write request */
+        error = trace_allocate_string_buffer(&str, maxstr + 1);
+        if (error != 0)
+                return error;
+
+	error = SYSCTL_IN(req, str, maxstr);
+
+        /* NB str guaranteed terminted */
+        if (error == 0)
+                error = tracefile_dump_all_pages(str);
+
+        trace_free_string_buffer(str, maxstr + 1);
+        return error;
+}
+
+static int sysctl_daemon_file SYSCTL_HANDLER_ARGS
+{
+#error "Check me"
+	int   error;
+	char *str;
+
+        if (req->newptr == USER_ADDR_NULL) {
+                /* a read */
+		tracefile_read_lock();
+
+                /* include terminating '\0' */
+		error = SYSCTL_OUT(req, tracefile, strlen(tracefile) + 1);
+
+		tracefile_read_unlock();
+                return error;
+        }
+        
+        /* write request */
+        error = trace_allocate_string_buffer(&str, TRACEFILE_NAME_SIZE);
+        if (error != 0)
+                return error;
+
+	error = SYSCTL_IN(req, str, TRACEFILE_NAME_SIZE - 1);
+
+        /* NB str guaranteed terminted */
+	if (error == 0)
+		error = trace_daemon_command(str);
+
+        trace_free_string_buffer(str, TRACEFILE_NAME_SIZE);
+	return error;
+}
+
+
+static int sysctl_debug_mb SYSCTL_HANDLER_ARGS
+{
+#error "Check me"
+	long mb;
+	int  error;
+	
+	if (req->newptr == USER_ADDR_NULL) {
+		/* read */
+		mb = trace_get_debug_mb();
+		error = SYSCTL_OUT(req, &mb, sizeof(mb));
+	} else {
+		/* write */
+		error = SYSCTL_IN(req, &mb, sizeof(mb));
+		if (error == 0)
+			error = trace_set_debug_mb(mb);
+	}
+	
+	return error;
+}
+
 /*
  * sysctl table for lnet
  */
@@ -80,12 +172,17 @@ SYSCTL_INT(_lnet,		        OID_AUTO,	memused,
 SYSCTL_INT(_lnet,		        OID_AUTO,	catastrophe,
 	     CTLTYPE_INT | CTLFLAG_RW,			(int *)&libcfs_catastrophe,
 	     0,		"catastrophe");
-SYSCTL_PROC(_lnet,		        OID_AUTO,	trace_daemon,
+
+#error "check me"
+SYSCTL_PROC(_lnet,		        OID_AUTO,	debug_kernel,
+	     CTLTYPE_STRING | CTLFLAG_W,		0,
+	     0,		&sysctl_debug_kernel,		"A",	"debug_kernel");
+SYSCTL_PROC(_lnet,		        OID_AUTO,	daemon_file,
 	     CTLTYPE_STRING | CTLFLAG_RW,		0,
-	     0,		&cfs_trace_daemon,		"A",	"trace daemon");
+	     0,		&sysctl_daemon_file,		"A",	"daemon_file");
 SYSCTL_PROC(_lnet,		        OID_AUTO,	debug_mb,
-	     CTLTYPE_INT | CTLFLAG_RW,		        &max_debug_mb,
-	     0,		&cfs_debug_mb,		        "L",	"max debug size");
+	     CTLTYPE_INT | CTLFLAG_RW,		        0,
+	     0,		&sysctl_debug_mb,	        "L",	"debug_mb");
 
 
 static cfs_sysctl_table_t	top_table[] = {
@@ -97,7 +194,8 @@ static cfs_sysctl_table_t	top_table[] = {
 	&sysctl__lnet_debug_path,
 	&sysctl__lnet_memused,
 	&sysctl__lnet_catastrophe,
-	&sysctl__lnet_trace_daemon,
+	&sysctl__lnet_debug_kernel,
+	&sysctl__lnet_daemon_file,
 	&sysctl__lnet_debug_mb,
 	NULL
 };
@@ -381,4 +479,3 @@ cfs_sysctl_fini(void)
         libcfs_sysctl_sprite.ss_magic = 0;
         libcfs_sysctl_sprite.ss_link = NULL;
 }
-

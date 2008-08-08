@@ -1,28 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2001-2006 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/obdclass/obd_config.c
  *
  * Config API
- *
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
@@ -34,10 +47,15 @@
 #include <obd_class.h>
 #include <obd.h>
 #endif
+#include <lustre_disk.h>
 #include <lustre_log.h>
 #include <lprocfs_status.h>
 #include <libcfs/list.h>
 #include <lustre_param.h>
+#include <class_hash.h>
+
+extern struct lustre_hash_operations uuid_hash_operations;
+extern struct lustre_hash_operations nid_hash_operations;
 
 /*********** string parsing utils *********/
 
@@ -98,7 +116,7 @@ int class_parse_nid(char *buf, lnet_nid_t *nid, char **endh)
         *endp = '\0';
         *nid = libcfs_str2nid(buf);
         if (*nid == LNET_NID_ANY) {
-                LCONSOLE_ERROR("Can't parse NID '%s'\n", buf);
+                LCONSOLE_ERROR_MSG(0x159, "Can't parse NID '%s'\n", buf);
                 *endp = tmp;
                 return -EINVAL;
         }
@@ -184,11 +202,16 @@ int class_attach(struct lustre_cfg *lcfg)
         LASSERTF(strncmp(obd->obd_name, name, strlen(name)) == 0, "%p obd_name %s != %s\n",
                  obd, obd->obd_name, name);
 
+        rwlock_init(&obd->obd_pool_lock);
+        obd->obd_pool_limit = 0;
+        obd->obd_pool_slv = 0;
+
         CFS_INIT_LIST_HEAD(&obd->obd_exports);
         CFS_INIT_LIST_HEAD(&obd->obd_exports_timed);
+        CFS_INIT_LIST_HEAD(&obd->obd_nid_stats);
+        spin_lock_init(&obd->obd_nid_lock);
         spin_lock_init(&obd->obd_dev_lock);
         sema_init(&obd->obd_dev_sem, 1);
-        sema_init(&obd->obd_proc_exp_sem, 1);
         spin_lock_init(&obd->obd_osfs_lock);
         /* obd->obd_osfs_age must be set to a value in the distant
          * past to guarantee a fresh statfs is fetched on mount. */
@@ -199,16 +222,15 @@ int class_attach(struct lustre_cfg *lcfg)
         cfs_init_timer(&obd->obd_recovery_timer);
         spin_lock_init(&obd->obd_processing_task_lock);
         cfs_waitq_init(&obd->obd_next_transno_waitq);
+        cfs_waitq_init(&obd->obd_evict_inprogress_waitq);
+        cfs_waitq_init(&obd->obd_llog_waitq);
         CFS_INIT_LIST_HEAD(&obd->obd_recovery_queue);
         CFS_INIT_LIST_HEAD(&obd->obd_delayed_reply_queue);
 
-        spin_lock_init(&obd->obd_uncommitted_replies_lock);
-        CFS_INIT_LIST_HEAD(&obd->obd_uncommitted_replies);
-
         len = strlen(uuid);
         if (len >= sizeof(obd->obd_uuid)) {
-                CERROR("uuid must be < "LPSZ" bytes long\n",
-                       sizeof(obd->obd_uuid));
+                CERROR("uuid must be < %d bytes long\n",
+                       (int)sizeof(obd->obd_uuid));
                 GOTO(out, rc = -EINVAL);
         }
         memcpy(obd->obd_uuid.uuid, uuid, len);
@@ -273,6 +295,25 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         obd->obd_starting = 1;
         spin_unlock(&obd->obd_dev_lock);
 
+        /* create an uuid-export hash body */
+        err = lustre_hash_init(&obd->obd_uuid_hash_body, "UUID_HASH",
+                               128, &uuid_hash_operations);
+        if (err)
+                GOTO(err_hash, err);
+
+        /* create a nid-export hash body */
+        err = lustre_hash_init(&obd->obd_nid_hash_body, "NID_HASH",
+                               128, &nid_hash_operations);
+        if (err)
+                GOTO(err_hash, err);
+
+        /* create a nid-stats hash body */
+        err = lustre_hash_init(&obd->obd_nid_stats_hash_body, "NID_STATS",
+                               128, &nid_stat_hash_operations);
+        if (err)
+                GOTO(err_hash, err);
+
+
         exp = class_new_export(obd, &obd->obd_uuid);
         if (IS_ERR(exp))
                 RETURN(PTR_ERR(exp));
@@ -296,10 +337,14 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         RETURN(0);
 
 err_exp:
-        CERROR("setup %s failed (%d)\n", obd->obd_name, err);
         class_unlink_export(obd->obd_self_export);
         obd->obd_self_export = NULL;
+err_hash:
+        lustre_hash_exit(&obd->obd_uuid_hash_body);
+        lustre_hash_exit(&obd->obd_nid_hash_body);
+        lustre_hash_exit(&obd->obd_nid_stats_hash_body);
         obd->obd_starting = 0;
+        CERROR("setup %s failed (%d)\n", obd->obd_name, err);
         RETURN(err);
 }
 
@@ -325,10 +370,10 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
                obd->obd_name, obd->obd_uuid.uuid);
 
         class_decref(obd);
-        
+
         /* not strictly necessary, but cleans up eagerly */
         obd_zombie_impexp_cull();
-        
+
         RETURN(0);
 }
 
@@ -429,6 +474,15 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
         }
 
         LASSERT(obd->obd_self_export);
+
+        /* destroy an uuid-export hash body */
+        lustre_hash_exit(&obd->obd_uuid_hash_body);
+
+        /* destroy a nid-export hash body */
+        lustre_hash_exit(&obd->obd_nid_hash_body);
+
+        /* destroy a nid-stats hash body */
+        lustre_hash_exit(&obd->obd_nid_stats_hash_body);
 
         /* Precleanup stage 1, we must make sure all exports (other than the
            self-export) get destroyed. */
@@ -735,7 +789,7 @@ int class_process_config(struct lustre_cfg *lcfg)
                 GOTO(out, err = 0);
         }
         case LCFG_SET_UPCALL: {
-                LCONSOLE_ERROR("recovery upcall is deprecated\n");
+                LCONSOLE_ERROR_MSG(0x15a, "recovery upcall is deprecated\n");
                 /* COMPAT_146 Don't fail on old configs */
                 GOTO(out, err = 0);
         }
@@ -819,7 +873,7 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
         ENTRY;
 
         if (lcfg->lcfg_command != LCFG_PARAM) {
-                CERROR("Unknown command: %d\n", lcfg->lcfg_command);
+                CERROR("Unknown command: %x\n", lcfg->lcfg_command);
                 RETURN(-EINVAL);
         }
 
@@ -865,8 +919,7 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                 if (!matched) {
                         CERROR("%s: unknown param %s\n",
                                (char *)lustre_cfg_string(lcfg, 0), key);
-                        rc = -EINVAL;
-                        /* continue parsing other params */
+                        /* rc = -EINVAL;	continue parsing other params */
                 } else {
                         LCONSOLE_INFO("%s.%.*s: set parameter %.*s=%s\n", 
                                       (char *)lustre_cfg_string(lcfg, 0),
@@ -960,6 +1013,26 @@ static int class_config_llog_handler(struct llog_handle * handle,
                         rc = 0;
                         /* No processing! */
                         break;
+                }
+
+                /**
+                 * For interop mode between 1.8 and 2.0:
+                 * skip "lmv" configuration which exists since 2.0.
+                 */
+                {
+                        char *devname = lustre_cfg_string(lcfg, 0);
+                        char *typename = lustre_cfg_string(lcfg, 1);
+
+                        if (devname)
+                                devname += strlen(devname) - strlen("clilmv");
+
+                        if ((lcfg->lcfg_command == LCFG_ATTACH && typename &&
+                             strcmp(typename, "lmv") == 0) ||
+                            (devname && strcmp(devname, "clilmv") == 0)) {
+                                CWARN("skipping 'lmv' config: cmd=%x,%s:%s\n",
+                                       lcfg->lcfg_command, devname, typename);
+                                GOTO(out, rc = 0);
+                        }
                 }
 
                 if ((clli->cfg_flags & CFG_F_EXCLUDE) && 
@@ -1201,4 +1274,3 @@ out:
         lustre_cfg_free(lcfg);
         RETURN(rc);
 }
-

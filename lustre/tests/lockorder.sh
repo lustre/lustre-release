@@ -33,7 +33,7 @@ MAXRES=0
 mkdir -p $MINDIR
 while [ $MINRES -gt $MAXRES ]; do
 	FILETMP=$MINDIR/f$$${NUM}
-	DIRTMP=$MAXDIR/d$$${NUM}
+	DIRTMP=$DIR/d$$/d${NUM}
 	touch $FILETMP
 	mkdir -p $DIRTMP
 	FILERES=`ls -id $FILETMP | awk '{ print $1 }'`
@@ -54,7 +54,7 @@ done
 
 mv $MAXDIR $LOCKDIR
 mv $MINFILE $LOCKFILE
-rm -rf $DIR/d$$*
+rm -rf $DIR/d$$
 
 $LCTL mark "start dir: $LOCKDIR=$MAXRES file: $LOCKFILE=$MINRES"
 # link will lock $LOCKFILE and $DIR as it creates ${LOCKFILE}{0,1,...}

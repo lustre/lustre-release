@@ -1,29 +1,44 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2002 Cluster File Systems, Inc.
- *   Author: Peter J. Braam <braam@clusterfs.com>
- *   Author: Phil Schwan <phil@clusterfs.com>
- *   Author: Robert Read <rread@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
  */
-
-
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/utils/lctl.c
+ *
+ * Author: Peter J. Braam <braam@clusterfs.com>
+ * Author: Phil Schwan <phil@clusterfs.com>
+ * Author: Robert Read <rread@clusterfs.com>
+ */
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -66,10 +81,10 @@ command_t cmdlist[] = {
          "usage: lustre_build_version"},
         {"exit", jt_quit, 0, "quit"},
         {"quit", jt_quit, 0, "quit"},
-        
+
         /* Network configuration commands */
         {"===== network config =====", jt_noop, 0, "network config"},
-        {"--net", jt_opt_net, 0, "run <command> after setting network to <net>\n"
+        {"--net", jt_opt_net, 0,"run <command> after setting network to <net>\n"
          "usage: --net <tcp/elan/gm/...> <command>"},
         {"network", jt_ptl_network, 0, "configure LNET"
          "usage: network up|down"},
@@ -83,7 +98,8 @@ command_t cmdlist[] = {
          "usage: interface_list"},
         {"peer_list", jt_ptl_print_peers, 0, "print peer entries\n"
          "usage: peer_list"},
-        {"conn_list", jt_ptl_print_connections, 0, "print all the connected remote nid\n"
+        {"conn_list", jt_ptl_print_connections, 0,
+         "print all the connected remote nid\n"
          "usage: conn_list"},
         {"active_tx", jt_ptl_print_active_txs, 0, "print active transmits\n"
          "usage: active_tx"},
@@ -97,17 +113,17 @@ command_t cmdlist[] = {
          "usage: ping nid [timeout] [pid]"},
 
         /* Device selection commands */
-        {"==== device selection ====", jt_noop, 0, "device selection"},
+        {"==== obd device selection ====", jt_noop, 0, "device selection"},
         {"device", jt_obd_device, 0,
          "set current device to <name|devno>\n"
          "usage: device <%name|$name|devno>"},
         {"device_list", jt_obd_list, 0, "show all devices\n"
          "usage: device_list"},
         {"dl", jt_obd_list, 0, "show all devices\n"
-         "usage: dl"},
+         "usage: dl [-t]"},
 
         /* Device operations */
-        {"==== device operations ===", jt_noop, 0, "device operations"},
+        {"==== obd device operations ===", jt_noop, 0, "device operations"},
         {"activate", jt_obd_activate, 0, "activate an import\n"},
         {"deactivate", jt_obd_deactivate, 0, "deactivate an import. "
          "This command should be used on failed OSC devices in an MDT LOV.\n"},
@@ -120,7 +136,16 @@ command_t cmdlist[] = {
          "usage: conf_param <target.keyword=val> ...\n"},
         {"local_param", jt_lcfg_param, 0, "set a temporary, local param\n"
          "usage: local_param <target.keyword=val> ...\n"},
-       
+        {"get_param", jt_lcfg_getparam, 0, "get the Lustre or LNET parameter\n"
+         "usage: get_param [-n | -N] path/to/param/file \n"
+         "Get the value of Lustre or LNET parameter from the specified path\n"
+         "Use '-n' to disable printing of the key name when printing values.\n"
+         "Use '-N' to print only path names and not the values."},
+        {"set_param", jt_lcfg_setparam, 0, "set the Lustre or LNET parameter\n"
+         "usage: set_param [-n] path/to/param/file value\n"
+         "Set the value of the Lustre or LNET parameter at the specified path\n"
+         "Use '-n' to disable printing of the key name when printing values."},
+
         /* Debug commands */
         {"==== debugging control ===", jt_noop, 0, "debug"},
         {"debug_daemon", jt_dbg_debug_daemon, 0,
@@ -140,7 +165,8 @@ command_t cmdlist[] = {
          "usage: df <input> [output]"},
         {"clear", jt_dbg_clear_debug_buf, 0, "clear kernel debug buffer\n"
          "usage: clear"},
-        {"mark", jt_dbg_mark_debug_buf, 0,"insert marker text in kernel debug buffer\n"
+        {"mark", jt_dbg_mark_debug_buf, 0,
+         "insert marker text in kernel debug buffer\n"
          "usage: mark <text>"},
         {"filter", jt_dbg_filter, 0, "filter message type\n"
          "usage: filter <subsystem id/debug mask>"},
@@ -153,7 +179,7 @@ command_t cmdlist[] = {
          "usage: modules <path>"},
 
         /* Device configuration commands */
-        {"== device setup (these are not normally used post 1.4) ==",
+        {"== obd device setup (these are not normally used post 1.4) ==",
                 jt_noop, 0, "device config"},
         {"attach", jt_lcfg_attach, 0,
          "set the type, name, and uuid of the current device\n"
@@ -166,11 +192,24 @@ command_t cmdlist[] = {
          "usage: setup <args...>"},
         {"cleanup", jt_obd_cleanup, 0, "cleanup previously setup device\n"
          "usage: cleanup [force | failover]"},
-        {"dump_cfg", jt_cfg_dump_log, 0, "print log of recorded commands for this config to kernel debug log\n"
+        {"dump_cfg", jt_cfg_dump_log, 0,
+         "print log of recorded commands for this config to kernel debug log\n"
          "usage: dump_cfg config-uuid-name"},
-        
+
+        /* virtual block operations */
+        {"==== virtual block device ====", jt_noop, 0, "virtual block device"},
+        {"blockdev_attach", jt_blockdev_attach, 0,
+         "attach a lustre regular file to a virtual block device\n"
+         "usage: blockdev_attach <file_name> <device_name>"},
+        {"blockdev_detach", jt_blockdev_detach, 0,
+         "detach a lustre regular file from a virtual block device\n"
+         "usage: blockdev_detach <device_name>"},
+        {"blockdev_info", jt_blockdev_info, 0,
+         "get the device info of a attached file\n"
+         "usage: blockdev_info <device_name>"},
+
         /* Test only commands */
-        {"=== testing (DANGEROUS) ==", jt_noop, 0, "testing (DANGEROUS)"},
+        {"==== testing (DANGEROUS) ====", jt_noop, 0, "testing (DANGEROUS)"},
         {"--threads", jt_opt_threads, 0,
          "run <threads> separate instances of <command> on device <devno>\n"
          "--threads <threads> <verbose> <devno> <command [args ...]>"},
@@ -187,7 +226,7 @@ command_t cmdlist[] = {
         {"add_peer", jt_ptl_add_peer, 0, "add an peer entry\n"
          "usage: add_peer <nid> <host> <port>"},
         {"del_peer", jt_ptl_del_peer, 0, "remove an peer entry\n"
-         "usage: del_autoconn [<nid>] [<host>] [ks]"},
+         "usage: del_peer [<nid>] [<ipaddr|pid>]"},
         {"add_conn ", jt_lcfg_add_conn, 0,
          "usage: add_conn <conn_uuid> [priority]\n"},
         {"del_conn ", jt_lcfg_del_conn, 0,
@@ -231,20 +270,20 @@ command_t cmdlist[] = {
          "memory pressure testing\n"
          "usage: memhog <page count> [<gfp flags>]"},
 
-        {"== obsolete (DANGEROUS) ==", jt_noop, 0, "obsolete (DANGEROUS)"},
+        {"==== obsolete (DANGEROUS) ====", jt_noop, 0, "obsolete (DANGEROUS)"},
         /* some test scripts still use these */
         {"cfg_device", jt_obd_device, 0,
          "set current device to <name>\n"
          "usage: device <name>"},
-        {"recover", jt_obd_recover, 0, 
+        {"recover", jt_obd_recover, 0,
          "try to restore a lost connection immediately\n"
          "usage: recover [MDC/OSC device]"},
         /* saving for sanity 44a */
         {"lov_getconfig", jt_obd_lov_getconfig, 0,
          "read lov configuration from an mds device\n"
          "usage: lov_getconfig <mountpoint>"},
-        /* Llog operations */ 
-        {"llog_catlist", jt_llog_catlist, 0, 
+        /* Llog operations */
+        {"llog_catlist", jt_llog_catlist, 0,
          "list all catalog logs on current device.\n"
          "usage: llog_catlist"},
         {"llog_info", jt_llog_info, 0,

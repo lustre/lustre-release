@@ -1,26 +1,44 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Lustre Lite I/O page cache routines for the 2.5/2.6 kernel version
+ * GPL HEADER START
  *
- *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
  */
-#ifdef HAVE_KERNEL_CONFIG_H
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/llite/rw26.c
+ *
+ * Lustre Lite I/O page cache routines for the 2.5/2.6 kernel version
+ */
+
+#ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
 #include <linux/kernel.h>
@@ -40,7 +58,9 @@
 #include <linux/writeback.h>
 #include <linux/stat.h>
 #include <asm/uaccess.h>
-#include <asm/segment.h>
+#ifdef HAVE_SEGMENT_H
+# include <asm/segment.h>
+#endif
 #include <linux/mm.h>
 #include <linux/pagemap.h>
 #include <linux/smp_lock.h>
@@ -102,7 +122,7 @@ static inline int ll_get_user_pages(int rw, unsigned long user_addr,
         page_count = ((user_addr + size + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT)-
                       (user_addr >> CFS_PAGE_SHIFT);
 
-        OBD_ALLOC_GFP(*pages, page_count * sizeof(**pages), GFP_KERNEL);
+        OBD_ALLOC_WAIT(*pages, page_count * sizeof(**pages));
         if (*pages) {
                 down_read(&current->mm->mmap_sem);
                 result = get_user_pages(current, current->mm, user_addr,
@@ -133,12 +153,12 @@ static void ll_free_user_pages(struct page **pages, int npages, int do_dirty)
 
 static ssize_t ll_direct_IO_26_seg(int rw, struct inode *inode,
                                    struct address_space *mapping,
-                                   struct lov_stripe_md *lsm,
+                                   struct obd_info *oinfo,
+                                   struct ptlrpc_request_set *set,
                                    size_t size, loff_t file_offset,
                                    struct page **pages, int page_count)
 {
         struct brw_page *pga;
-        struct obdo oa;
         int i, rc = 0;
         size_t length;
         ENTRY;
@@ -157,23 +177,16 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct inode *inode,
                 /* To the end of the page, or the length, whatever is less */
                 pga[i].count = min_t(int, CFS_PAGE_SIZE -(file_offset & ~CFS_PAGE_MASK),
                                      length);
-                pga[i].flag = 0;
+                pga[i].flag = OBD_BRW_SYNC;
                 if (rw == READ)
                         POISON_PAGE(pages[i], 0x0d);
         }
 
-        ll_inode_fill_obdo(inode, rw, &oa);
-
-        rc = obd_brw_rqset(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
-                           ll_i2obdexp(inode), &oa, lsm, page_count, pga, NULL);
-        if (rc == 0) {
+        rc = obd_brw_async(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
+                           ll_i2obdexp(inode), oinfo, page_count,
+                           pga, NULL, set);
+        if (rc == 0)
                 rc = size;
-                if (rw == WRITE) {
-                        lov_stripe_lock(lsm);
-                        obd_adjust_kms(ll_i2obdexp(inode), lsm, file_offset, 0);
-                        lov_stripe_unlock(lsm);
-                }
-        }
 
         OBD_FREE(pga, sizeof(*pga) * page_count);
         RETURN(rc);
@@ -193,6 +206,10 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
         struct inode *inode = file->f_mapping->host;
         ssize_t count = iov_length(iov, nr_segs), tot_bytes = 0;
         struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *lsm = lli->lli_smd;
+        struct ptlrpc_request_set *set;
+        struct obd_info oinfo;
+        struct obdo oa;
         unsigned long seg;
         size_t size = MAX_DIO_SIZE;
         ENTRY;
@@ -211,11 +228,9 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                MAX_DIO_SIZE >> CFS_PAGE_SHIFT);
 
         if (rw == WRITE)
-                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
-                                    LPROC_LL_DIRECT_WRITE, count);
+                ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_DIRECT_WRITE, count);
         else
-                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
-                                    LPROC_LL_DIRECT_READ, count);
+                ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_DIRECT_READ, count);
 
         /* Check that all user buffers are aligned as well */
         for (seg = 0; seg < nr_segs; seg++) {
@@ -224,9 +239,29 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                         RETURN(-EINVAL);
         }
 
+        set = ptlrpc_prep_set();
+        if (set == NULL)
+                RETURN(-ENOMEM);
+
+        ll_inode_fill_obdo(inode, rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ, &oa);
+        oinfo.oi_oa = &oa;
+        oinfo.oi_md = lsm;
+
+        /* need locking between buffered and direct access. and race with 
+         *size changing by concurrent truncates and writes. */
+        if (rw == READ)
+                LOCK_INODE_MUTEX(inode);
+
         for (seg = 0; seg < nr_segs; seg++) {
                 size_t iov_left = iov[seg].iov_len;
                 unsigned long user_addr = (unsigned long)iov[seg].iov_base;
+
+                if (rw == READ) {
+                        if (file_offset >= inode->i_size)
+                                break;
+                        if (file_offset + iov_left > inode->i_size)
+                                iov_left = inode->i_size - file_offset;
+                }
 
                 while (iov_left > 0) {
                         struct page **pages;
@@ -240,7 +275,7 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                         if (page_count > 0) {
                                 result = ll_direct_IO_26_seg(rw, inode,
                                                              file->f_mapping,
-                                                             lli->lli_smd,
+                                                             &oinfo, set,
                                                              min(size,iov_left),
                                                              file_offset, pages,
                                                              page_count);
@@ -265,8 +300,8 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                                         continue;
                                 }
                                 if (tot_bytes > 0)
-                                        RETURN(tot_bytes);
-                                RETURN(page_count < 0 ? page_count : result);
+                                        GOTO(wait_io, tot_bytes);
+                                GOTO(out, tot_bytes = page_count < 0 ? page_count : result);
                         }
 
                         tot_bytes += result;
@@ -275,6 +310,24 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                         user_addr += result;
                 }
         }
+
+        if (tot_bytes > 0) {
+                int rc;
+        wait_io:
+                rc = ptlrpc_set_wait(set);
+                if (rc)
+                        GOTO(out, tot_bytes = rc);
+                if (rw == WRITE) {
+                        lov_stripe_lock(lsm);
+                        obd_adjust_kms(ll_i2obdexp(inode), lsm, file_offset, 0);
+                        lov_stripe_unlock(lsm);
+                }
+        }
+out:
+        if (rw == READ)
+                UNLOCK_INODE_MUTEX(inode);
+
+        ptlrpc_set_destroy(set);
         RETURN(tot_bytes);
 }
 

@@ -1,20 +1,42 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2005 Cluster File Systems, Inc. All rights reserved.
- *   Author: PJ Kirner <pjkirner@clusterfs.com>
- *           E Barton <eeb@bartonsoftware.com>
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is confidential source code owned by Cluster File Systems.
- *   No viewing, modification, compilation, redistribution, or any other
- *   form of use is permitted except through a signed license agreement.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you have not signed such an agreement, then you have no rights to
- *   this file.  Please destroy it immediately and contact CFS.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/klnds/ptllnd/ptllnd_peer.c
+ *
+ * Author: PJ Kirner <pjkirner@clusterfs.com>
+ * Author: E Barton <eeb@bartonsoftware.com>
  */
 
 #include "ptllnd.h"
@@ -90,6 +112,7 @@ kptllnd_get_peer_info(int index,
 void
 kptllnd_peer_add_peertable_locked (kptl_peer_t *peer)
 {
+        LASSERT (!kptllnd_data.kptl_shutdown);
         LASSERT (kptllnd_data.kptl_n_active_peers <
                  kptllnd_data.kptl_expected_peers);
 
@@ -157,6 +180,7 @@ kptllnd_peer_allocate (lnet_process_id_t lpid, ptl_process_id_t ppid)
 
         memset(peer, 0, sizeof(*peer));         /* zero flags etc */
 
+        INIT_LIST_HEAD (&peer->peer_noops);
         INIT_LIST_HEAD (&peer->peer_sendq);
         INIT_LIST_HEAD (&peer->peer_activeq);
         spin_lock_init (&peer->peer_lock);
@@ -204,6 +228,7 @@ kptllnd_peer_destroy (kptl_peer_t *peer)
         LASSERT (atomic_read(&peer->peer_refcount) == 0);
         LASSERT (peer->peer_state == PEER_STATE_ALLOCATED ||
                  peer->peer_state == PEER_STATE_ZOMBIE);
+        LASSERT (list_empty(&peer->peer_noops));
         LASSERT (list_empty(&peer->peer_sendq));
         LASSERT (list_empty(&peer->peer_activeq));
 
@@ -244,6 +269,7 @@ kptllnd_peer_cancel_txs(kptl_peer_t *peer, struct list_head *txs)
 
         spin_lock_irqsave(&peer->peer_lock, flags);
 
+        kptllnd_cancel_txlist(&peer->peer_noops, txs);
         kptllnd_cancel_txlist(&peer->peer_sendq, txs);
         kptllnd_cancel_txlist(&peer->peer_activeq, txs);
                 
@@ -510,7 +536,7 @@ kptllnd_post_tx(kptl_peer_t *peer, kptl_tx_t *tx, int nfrag)
                 kptllnd_tx_decref(tx);
                 return;
         }
-        
+
         spin_lock_irqsave(&peer->peer_lock, flags);
 
         tx->tx_deadline = jiffies + (*kptllnd_tunables.kptl_timeout * HZ);
@@ -518,12 +544,27 @@ kptllnd_post_tx(kptl_peer_t *peer, kptl_tx_t *tx, int nfrag)
         tx->tx_msg_mdh = msg_mdh;
 
 	/* Ensure HELLO is sent first */
-	if (tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_HELLO)
+        if (tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_NOOP)
+		list_add(&tx->tx_list, &peer->peer_noops);
+	else if (tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_HELLO)
 		list_add(&tx->tx_list, &peer->peer_sendq);
 	else
 		list_add_tail(&tx->tx_list, &peer->peer_sendq);
 
         spin_unlock_irqrestore(&peer->peer_lock, flags);
+}
+
+static inline int
+kptllnd_peer_send_noop (kptl_peer_t *peer)
+{
+        if (!peer->peer_sent_hello ||
+            peer->peer_credits == 0 ||
+            !list_empty(&peer->peer_noops) ||
+            peer->peer_outstanding_credits < PTLLND_CREDIT_HIGHWATER)
+                return 0;
+
+        /* No tx to piggyback NOOP onto or no credit to send a tx */
+        return (list_empty(&peer->peer_sendq) || peer->peer_credits == 1);
 }
 
 void
@@ -532,6 +573,7 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
         ptl_handle_me_t  meh;
         kptl_tx_t       *tx;
         int              rc;
+        int              msg_type;
         unsigned long    flags;
 
         LASSERT(!in_interrupt());
@@ -540,10 +582,7 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
 
         peer->peer_retry_noop = 0;
 
-        if (list_empty(&peer->peer_sendq) &&
-            peer->peer_outstanding_credits >= PTLLND_CREDIT_HIGHWATER &&
-            peer->peer_credits != 0) {
-
+        if (kptllnd_peer_send_noop(peer)) {
                 /* post a NOOP to return credits */
                 spin_unlock_irqrestore(&peer->peer_lock, flags);
 
@@ -560,8 +599,18 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
                 peer->peer_retry_noop = (tx == NULL);
         }
 
-        while (!list_empty(&peer->peer_sendq)) {
-                tx = list_entry (peer->peer_sendq.next, kptl_tx_t, tx_list);
+        for (;;) {
+                if (!list_empty(&peer->peer_noops)) {
+                        LASSERT (peer->peer_sent_hello);
+                        tx = list_entry(peer->peer_noops.next,
+                                        kptl_tx_t, tx_list);
+                } else if (!list_empty(&peer->peer_sendq)) {
+                        tx = list_entry(peer->peer_sendq.next,
+                                        kptl_tx_t, tx_list);
+                } else {
+                        /* nothing to send right now */
+                        break;
+                }
 
                 LASSERT (tx->tx_active);
                 LASSERT (!PtlHandleIsEqual(tx->tx_msg_mdh, PTL_INVALID_HANDLE));
@@ -574,32 +623,37 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
                          *kptllnd_tunables.kptl_peercredits);
                 LASSERT (peer->peer_credits >= 0);
 
-		/* Ensure HELLO is sent first */
-		if (!peer->peer_sent_hello) {
-			if (tx->tx_msg->ptlm_type != PTLLND_MSG_TYPE_HELLO)
-				break;
-			peer->peer_sent_hello = 1;
-		}
+                msg_type = tx->tx_msg->ptlm_type;
+
+                /* Ensure HELLO is sent first */
+                if (!peer->peer_sent_hello) {
+                        LASSERT (list_empty(&peer->peer_noops));
+                        if (msg_type != PTLLND_MSG_TYPE_HELLO)
+                                break;
+                        peer->peer_sent_hello = 1;
+                }
 
                 if (peer->peer_credits == 0) {
-                        CDEBUG(D_NETTRACE, "%s[%d/%d+%d]: no credits for %p\n",
+                        CDEBUG(D_NETTRACE, "%s[%d/%d+%d]: no credits for %s[%p]\n",
                                libcfs_id2str(peer->peer_id), 
                                peer->peer_credits,
                                peer->peer_outstanding_credits, 
-                               peer->peer_sent_credits, tx);
+                               peer->peer_sent_credits, 
+                               kptllnd_msgtype2str(msg_type), tx);
                         break;
                 }
 
-                /* Don't use the last credit unless I've got credits to
-                 * return */
+                /* Last/Initial credit reserved for NOOP/HELLO */
                 if (peer->peer_credits == 1 &&
-                    peer->peer_outstanding_credits == 0) {
+                    msg_type != PTLLND_MSG_TYPE_HELLO &&
+                    msg_type != PTLLND_MSG_TYPE_NOOP) {
                         CDEBUG(D_NETTRACE, "%s[%d/%d+%d]: "
-                               "not using last credit for %p\n",
+                               "not using last credit for %s[%p]\n",
                                libcfs_id2str(peer->peer_id), 
                                peer->peer_credits,
                                peer->peer_outstanding_credits,
-                               peer->peer_sent_credits, tx);
+                               peer->peer_sent_credits,
+                               kptllnd_msgtype2str(msg_type), tx);
                         break;
                 }
 
@@ -607,10 +661,8 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
 
                 /* Discard any NOOP I queued if I'm not at the high-water mark
                  * any more or more messages have been queued */
-                if (tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_NOOP &&
-                    (!list_empty(&peer->peer_sendq) ||
-                     peer->peer_outstanding_credits < PTLLND_CREDIT_HIGHWATER)) {
-
+                if (msg_type == PTLLND_MSG_TYPE_NOOP &&
+                    !kptllnd_peer_send_noop(peer)) {
                         tx->tx_active = 0;
 
                         spin_unlock_irqrestore(&peer->peer_lock, flags);
@@ -635,7 +687,7 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
                         tx->tx_msg->ptlm_u.rdma.kptlrm_matchbits =
                                 peer->peer_next_matchbits++;
                 }
-                
+
                 peer->peer_sent_credits += peer->peer_outstanding_credits;
                 peer->peer_outstanding_credits = 0;
                 peer->peer_credits--;
@@ -643,8 +695,7 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
                 CDEBUG(D_NETTRACE, "%s[%d/%d+%d]: %s tx=%p nob=%d cred=%d\n",
                        libcfs_id2str(peer->peer_id), peer->peer_credits,
                        peer->peer_outstanding_credits, peer->peer_sent_credits,
-                       kptllnd_msgtype2str(tx->tx_msg->ptlm_type),
-                       tx, tx->tx_msg->ptlm_nob,
+                       kptllnd_msgtype2str(msg_type), tx, tx->tx_msg->ptlm_nob,
                        tx->tx_msg->ptlm_credits);
 
                 list_add_tail(&tx->tx_list, &peer->peer_activeq);
@@ -723,10 +774,10 @@ kptl_tx_t *
 kptllnd_find_timed_out_tx(kptl_peer_t *peer)
 {
         kptl_tx_t         *tx;
-        struct list_head  *tmp;
+        struct list_head  *ele;
 
-        list_for_each(tmp, &peer->peer_sendq) {
-                tx = list_entry(peer->peer_sendq.next, kptl_tx_t, tx_list);
+        list_for_each(ele, &peer->peer_sendq) {
+                tx = list_entry(ele, kptl_tx_t, tx_list);
 
                 if (time_after_eq(jiffies, tx->tx_deadline)) {
                         kptllnd_tx_addref(tx);
@@ -734,8 +785,8 @@ kptllnd_find_timed_out_tx(kptl_peer_t *peer)
                 }
         }
 
-        list_for_each(tmp, &peer->peer_activeq) {
-                tx = list_entry(peer->peer_activeq.next, kptl_tx_t, tx_list);
+        list_for_each(ele, &peer->peer_activeq) {
+                tx = list_entry(ele, kptl_tx_t, tx_list);
 
                 if (time_after_eq(jiffies, tx->tx_deadline)) {
                         kptllnd_tx_addref(tx);
@@ -811,6 +862,19 @@ kptllnd_peer_check_bucket (int idx, int stamp)
                                    (tx->tx_tposted == 0) ? 
                                    "no free peer buffers" : 
                                    "please check Portals");
+
+		if (tx->tx_tposted) {
+			CERROR("Could not send to %s after %ds (sent %lds ago); "
+				"check Portals for possible issues\n",
+				libcfs_id2str(peer->peer_id),
+				*kptllnd_tunables.kptl_timeout,
+				cfs_duration_sec(jiffies - tx->tx_tposted));
+		} else {
+			CERROR("Could not get credits for %s after %ds; "
+				"possible Lustre networking issues\n",
+			libcfs_id2str(peer->peer_id),
+			*kptllnd_tunables.kptl_timeout);
+		}
 
                 CERROR("%s timed out: cred %d outstanding %d, sent %d, "
                        "sendq %d, activeq %d Tx %p %s (%s%s%s) status %d "
@@ -1065,7 +1129,19 @@ kptllnd_peer_handle_hello (ptl_process_id_t  initiator,
         }
 
         write_lock_irqsave(g_lock, flags);
+
  again:
+        if (kptllnd_data.kptl_shutdown) {
+                write_unlock_irqrestore(g_lock, flags);
+
+                CERROR ("Shutdown started, refusing connection from %s\n",
+                        libcfs_id2str(lpid));
+                kptllnd_peer_unreserve_buffers();
+                kptllnd_peer_decref(new_peer);
+                kptllnd_tx_decref(hello_tx);
+                return NULL;
+        }
+
         peer = kptllnd_id2peer_locked(lpid);
         if (peer != NULL) {
                 if (peer->peer_state == PEER_STATE_WAITING_HELLO) {
@@ -1211,6 +1287,12 @@ kptllnd_find_target(kptl_peer_t **peerp, lnet_process_id_t target)
 
         write_lock_irqsave(g_lock, flags);
  again:
+        if (kptllnd_data.kptl_shutdown) {
+                write_unlock_irqrestore(g_lock, flags);
+                rc = -ESHUTDOWN;
+                goto unwind_2;
+        }
+
         *peerp = kptllnd_id2peer_locked(target);
         if (*peerp != NULL) {
                 write_unlock_irqrestore(g_lock, flags);

@@ -1,139 +1,87 @@
-/*
- * Public include file for the UUID library
- * 
- * Copyright (C) 1996, 1997, 1998 Theodore Ts'o.
- * Copyright (C) 2002 Cluster File System
- * - changed for use in lustre
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * %Begin-Header%
- * This file may be redistributed under the terms of the GNU 
- * Library General Public License.
- * %End-Header%
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
  */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/obdclass/uuid.c
+ *
+ * Public include file for the UUID library
+ */
+
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #ifndef __KERNEL__
 # include <liblustre.h>
+#else
+# include <libcfs/kp30.h>
 #endif
 
 #include <obd_support.h>
 #include <obd_class.h>
 
-struct uuid {
-        __u32   time_low;
-        __u16   time_mid;
-        __u16   time_hi_and_version;
-        __u16   clock_seq;
-        __u8    node[6];
-};
 
-static void uuid_unpack(class_uuid_t in, struct uuid *uu)
+static inline __u32 consume(int nob, __u8 **ptr)
 {
-        __u8    *ptr = in;
-        __u32   tmp;
+	__u32 value;
 
-        tmp = *ptr++;
-        tmp = (tmp << 8) | *ptr++;
-        tmp = (tmp << 8) | *ptr++;
-        tmp = (tmp << 8) | *ptr++;
-        uu->time_low = tmp;
+	LASSERT(nob <= sizeof value);
 
-        tmp = *ptr++;
-        tmp = (tmp << 8) | *ptr++;
-        uu->time_mid = tmp;
-
-        tmp = *ptr++;
-        tmp = (tmp << 8) | *ptr++;
-        uu->time_hi_and_version = tmp;
-
-        tmp = *ptr++;
-        tmp = (tmp << 8) | *ptr++;
-        uu->clock_seq = tmp;
-
-        memcpy(uu->node, ptr, 6);
+	for (value = 0; nob > 0; --nob)
+		value = (value << 8) | *((*ptr)++);
+	return value;
 }
 
-#if 0
-static void uuid_pack(struct uuid *uu, class_uuid_t ptr)
+#define CONSUME(val, ptr) (val) = consume(sizeof(val), (ptr))
+
+static void uuid_unpack(class_uuid_t in, __u16 *uu, int nr)
 {
-        __u32   tmp;
-        unsigned char   *out = ptr;
+        __u8 *ptr = in;
 
-        tmp = uu->time_low;
-        out[3] = (unsigned char) tmp;
-        tmp >>= 8;
-        out[2] = (unsigned char) tmp;
-        tmp >>= 8;
-        out[1] = (unsigned char) tmp;
-        tmp >>= 8;
-        out[0] = (unsigned char) tmp;
+	LASSERT(nr * sizeof *uu == sizeof(class_uuid_t));
 
-        tmp = uu->time_mid;
-        out[5] = (unsigned char) tmp;
-        tmp >>= 8;
-        out[4] = (unsigned char) tmp;
-
-        tmp = uu->time_hi_and_version;
-        out[7] = (unsigned char) tmp;
-        tmp >>= 8;
-        out[6] = (unsigned char) tmp;
-
-        tmp = uu->clock_seq;
-        out[9] = (unsigned char) tmp;
-        tmp >>= 8;
-        out[8] = (unsigned char) tmp;
-
-        memcpy(out+10, uu->node, 6);
+	while (nr-- > 0)
+		CONSUME(uu[nr], &ptr);
 }
-
-int class_uuid_parse(struct obd_uuid in, class_uuid_t uu)
-{
-        struct uuid uuid;
-        int i;
-        char *cp, buf[3];
-
-        if (strlen(in) != 36)
-                return -1;
-        for (i=0, cp = in; i <= 36; i++,cp++) {
-                if ((i == 8) || (i == 13) || (i == 18) ||
-                    (i == 23))
-                        if (*cp == '-')
-                                continue;
-                if (i== 36)
-                        if (*cp == 0)
-                                continue;
-                if (!isxdigit(*cp))
-                        return -1;
-        }
-        uuid.time_low = simple_strtoul(in, NULL, 16);
-        uuid.time_mid = simple_strtoul(in+9, NULL, 16);
-        uuid.time_hi_and_version = simple_strtoul(in+14, NULL, 16);
-        uuid.clock_seq = simple_strtoul(in+19, NULL, 16);
-        cp = in+24;
-        buf[2] = 0;
-        for (i=0; i < 6; i++) {
-                buf[0] = *cp++;
-                buf[1] = *cp++;
-                uuid.node[i] = simple_strtoul(buf, NULL, 16);
-        }
-
-        uuid_pack(&uuid, uu);
-        return 0;
-}
-#endif
-
-
-void generate_random_uuid(unsigned char uuid_out[16]);
 
 void class_uuid_unparse(class_uuid_t uu, struct obd_uuid *out)
 {
-        struct uuid uuid;
+	/* uu as an array of __u16's */
+        __u16 uuid[sizeof(class_uuid_t) / sizeof(__u16)];
 
-        uuid_unpack(uu, &uuid);
-        sprintf(out->uuid,
-                "%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
-                uuid.time_low, uuid.time_mid, uuid.time_hi_and_version,
-                uuid.clock_seq >> 8, uuid.clock_seq & 0xFF,
-                uuid.node[0], uuid.node[1], uuid.node[2],
-                uuid.node[3], uuid.node[4], uuid.node[5]);
+	CLASSERT(ARRAY_SIZE(uuid) == 8);
+
+        uuid_unpack(uu, uuid, ARRAY_SIZE(uuid));
+        sprintf(out->uuid, "%04x%04x-%04x-%04x-%04x-%04x%04x%04x",
+		uuid[0], uuid[1], uuid[2], uuid[3],
+		uuid[4], uuid[5], uuid[6], uuid[7]);
 }

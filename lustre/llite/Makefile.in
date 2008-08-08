@@ -1,5 +1,7 @@
-MODULES := lustre
-lustre-objs := dcache.o dir.o file.o llite_close.o llite_lib.o llite_nfs.o rw.o lproc_llite.o namei.o symlink.o llite_mmap.o xattr.o
+MODULES := lustre llite_lloop
+lustre-objs := dcache.o dir.o file.o llite_close.o llite_lib.o llite_nfs.o rw.o lproc_llite.o namei.o symlink.o llite_mmap.o xattr.o statahead.o
+
+llite_lloop-objs := lloop.o
 
 ifeq ($(PATCHLEVEL),4)
 lustre-objs += rw24.o super.o

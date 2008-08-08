@@ -1,21 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Lustre Light Super operations
+ * GPL HEADER START
  *
- *  Copyright (c) 2004 Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is free software; you can redistribute it and/or modify it under
- *   the terms of version 2 of the GNU General Public License as published by
- *   the Free Software Foundation. Lustre is distributed in the hope that it
- *   will be useful, but WITHOUT ANY WARRANTY; without even the implied
- *   warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details. You should have received a
- *   copy of the GNU General Public License along with Lustre; if not, write
- *   to the Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139,
- *   USA.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 /*
@@ -773,7 +789,7 @@ void ksleep_wait(struct ksleep_chan *chan, cfs_task_state_t state)
  */
 int64_t ksleep_timedwait(struct ksleep_chan *chan, 
                          cfs_task_state_t state,
-                         uint64_t timeout)
+                         __u64 timeout)
 {
 	event_t event;
 
@@ -787,7 +803,7 @@ int64_t ksleep_timedwait(struct ksleep_chan *chan,
 	kspin_lock(&chan->guard);
 	if (!has_hits(chan, event)) {
                 int      result;
-                uint64_t expire;
+                __u64 expire;
 		result = assert_wait(event, state);
 		if (timeout > 0) {
 			/*
@@ -807,7 +823,7 @@ int64_t ksleep_timedwait(struct ksleep_chan *chan,
 		if (result == THREAD_TIMED_OUT)
                         timeout = 0;
 		else {
-                        uint64_t now;
+                        __u64 now;
                         clock_get_uptime(&now);
                         if (expire > now)
 			        absolutetime_to_nanoseconds(expire - now, &timeout);
@@ -928,7 +944,7 @@ static void ktimer_actor(void *arg0, void *arg1)
 }
 
 extern boolean_t thread_call_func_cancel(thread_call_func_t, thread_call_param_t, boolean_t);
-extern void thread_call_func_delayed(thread_call_func_t, thread_call_param_t, uint64_t);
+extern void thread_call_func_delayed(thread_call_func_t, thread_call_param_t, __u64);
 
 static void ktimer_disarm_locked(struct ktimer *t)
 {

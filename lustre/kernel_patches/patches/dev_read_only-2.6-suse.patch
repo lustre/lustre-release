@@ -1,16 +1,17 @@
-diff -ur linux-2.6.5-lnxi.orig/drivers/block/ll_rw_blk.c linux-2.6.5-lnxi/drivers/block/ll_rw_blk.c
---- linux-2.6.5-lnxi.orig/drivers/block/ll_rw_blk.c	2005-04-11 10:16:14.278505679 -0700
-+++ linux-2.6.5-lnxi/drivers/block/ll_rw_blk.c	2005-04-11 09:42:22.750936924 -0700
-@@ -2458,6 +2458,8 @@ static inline void blk_partition_remap(s
- 	}
+Index: linux-2.6.9/drivers/block/ll_rw_blk.c
+===================================================================
+--- linux-2.6.9.orig/drivers/block/ll_rw_blk.c
++++ linux-2.6.9/drivers/block/ll_rw_blk.c
+@@ -2326,6 +2326,8 @@ static inline int attempt_front_merge(re
+ 	return 0;
  }
  
 +int dev_check_rdonly(struct block_device *bdev);
 +
  /**
-  * generic_make_request: hand a buffer to its device driver for I/O
-  * @bio:  The bio describing the location in memory and on the device.
-@@ -2546,6 +2548,13 @@ end_io:
+  * blk_attempt_remerge  - attempt to remerge active head with next request
+  * @q:    The &request_queue_t belonging to the device
+@@ -2631,6 +2633,13 @@ end_io:
  		if (test_bit(QUEUE_FLAG_DEAD, &q->queue_flags))
  			goto end_io;
  
@@ -24,8 +25,8 @@ diff -ur linux-2.6.5-lnxi.orig/drivers/block/ll_rw_blk.c linux-2.6.5-lnxi/driver
  		/*
  		 * If this device has partitions, remap block n
  		 * of partition p to block n+start(p) of the disk.
-@@ -3078,6 +3087,92 @@ void swap_io_context(struct io_context *
- }
+@@ -3180,6 +3189,92 @@ void swap_io_context(struct io_context *
+ 
  
  /*
 + * Debug code for turning block devices "read-only" (will discard writes
@@ -117,23 +118,25 @@ diff -ur linux-2.6.5-lnxi.orig/drivers/block/ll_rw_blk.c linux-2.6.5-lnxi/driver
   * sysfs parts below
   */
  struct queue_sysfs_entry {
-diff -ur linux-2.6.5-lnxi.orig/fs/block_dev.c linux-2.6.5-lnxi/fs/block_dev.c
---- linux-2.6.5-lnxi.orig/fs/block_dev.c	2004-11-11 07:28:30.000000000 -0800
-+++ linux-2.6.5-lnxi/fs/block_dev.c	2005-04-11 09:49:01.891407856 -0700
-@@ -739,6 +739,7 @@ int blkdev_put(struct block_device *bdev
- 	}
- 	unlock_kernel();
- 	up(&bdev->bd_sem);
+Index: linux-2.6.9/fs/block_dev.c
+===================================================================
+--- linux-2.6.9.orig/fs/block_dev.c
++++ linux-2.6.9/fs/block_dev.c
+@@ -60,6 +60,7 @@ static void kill_bdev(struct block_devic
+ {
+ 	invalidate_bdev(bdev, 1);
+ 	truncate_inode_pages(bdev->bd_inode->i_mapping, 0);
 +	dev_clear_rdonly(bdev);
- 	bdput(bdev);
- 	return ret;
- }
-diff -ur linux-2.6.5-lnxi.orig/include/linux/fs.h linux-2.6.5-lnxi/include/linux/fs.h
---- linux-2.6.5-lnxi.orig/include/linux/fs.h	2004-11-11 07:28:45.000000000 -0800
-+++ linux-2.6.5-lnxi/include/linux/fs.h	2005-04-11 09:43:27.423116140 -0700
-@@ -1385,6 +1385,10 @@ extern void file_kill(struct file *f);
+ }	
+ 
+ int set_blocksize(struct block_device *bdev, int size)
+Index: linux-2.6.9/include/linux/fs.h
+===================================================================
+--- linux-2.6.9.orig/include/linux/fs.h
++++ linux-2.6.9/include/linux/fs.h
+@@ -1492,6 +1492,10 @@ extern void file_kill(struct file *f);
  struct bio;
- extern int submit_bio(int, struct bio *);
+ extern void submit_bio(int, struct bio *);
  extern int bdev_read_only(struct block_device *);
 +#define HAVE_CLEAR_RDONLY_ON_PUT
 +void dev_set_rdonly(struct block_device *bdev);

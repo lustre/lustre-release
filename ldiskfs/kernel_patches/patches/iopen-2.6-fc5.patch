@@ -1,8 +1,8 @@
-Index: linux-2.6.16.i686/fs/ext3/iopen.c
+Index: linux-2.6.16.54-0.2.5/fs/ext3/iopen.c
 ===================================================================
---- linux-2.6.16.i686.orig/fs/ext3/iopen.c	2006-05-31 04:14:15.752410384 +0800
-+++ linux-2.6.16.i686/fs/ext3/iopen.c	2006-05-30 22:52:38.000000000 +0800
-@@ -0,0 +1,259 @@
+--- /dev/null
++++ linux-2.6.16.54-0.2.5/fs/ext3/iopen.c
+@@ -0,0 +1,295 @@
 +/*
 + * linux/fs/ext3/iopen.c
 + *
@@ -115,9 +115,9 @@ Index: linux-2.6.16.i686/fs/ext3/iopen.c
 +	/* d_add(), but don't drop dcache_lock before adding dentry to inode */
 +	list_add(&dentry->d_alias, &inode->i_dentry);	/* d_instantiate */
 +	dentry->d_inode = inode;
-+	spin_unlock(&dcache_lock);
 +
-+	d_rehash(dentry);
++	d_rehash_cond(dentry, 0);	/* d_rehash */
++	spin_unlock(&dcache_lock);
 +
 +	return NULL;
 +}
@@ -164,9 +164,9 @@ Index: linux-2.6.16.i686/fs/ext3/iopen.c
 +	goal->d_flags &= ~DCACHE_DISCONNECTED;
 +	security_d_instantiate(goal, inode);
 +	__d_drop(dentry);
++	d_rehash_cond(dentry, 0);
++	d_move_locked(goal, dentry);
 +	spin_unlock(&dcache_lock);
-+	d_rehash(dentry);
-+	d_move(goal, dentry);
 +	iput(inode);
 +
 +	return goal;
@@ -176,11 +176,47 @@ Index: linux-2.6.16.i686/fs/ext3/iopen.c
 +	list_add(&dentry->d_alias, &inode->i_dentry);	/* d_instantiate */
 +	dentry->d_inode = inode;
 +do_rehash:
-+	spin_unlock(&dcache_lock);
 +	if (rehash)
-+		d_rehash(dentry);
++		d_rehash_cond(dentry, 0);	/* d_rehash */
++	spin_unlock(&dcache_lock);
 +
 +	return NULL;
++}
++
++/*
++ * Similar as d_instantiate() except that it drops the disconnected
++ * dentry if any.
++ */
++void iopen_d_instantiate(struct dentry *dentry, struct inode * inode)
++{
++	struct dentry *dis_dentry;
++
++	/* verify this dentry is really new */
++	assert(dentry->d_inode == NULL);
++	assert(list_empty(&dentry->d_alias));
++
++	spin_lock(&dcache_lock);
++	if (!inode || !test_opt(inode->i_sb, IOPEN) ||
++	    list_empty(&inode->i_dentry))
++		goto do_instantiate;
++
++	/* a disconnected dentry has been added in our back,
++	 * we have to drop this dentry, see bug 16362/15713*/
++	dis_dentry = list_entry(inode->i_dentry.next, struct dentry, d_alias);
++	spin_lock(&dis_dentry->d_lock);
++	assert(dis_dentry->d_alias.next == &inode->i_dentry);
++	assert(dis_dentry->d_alias.prev == &inode->i_dentry);
++	assert(dis_dentry->d_flags & DCACHE_DISCONNECTED);
++	__d_drop(dis_dentry);
++	list_del_init(&dis_dentry->d_alias);
++	spin_unlock(&dis_dentry->d_lock);
++
++do_instantiate:
++	if (inode)
++		list_add(&dentry->d_alias, &inode->i_dentry);
++	dentry->d_inode = inode;
++	spin_unlock(&dcache_lock);
++	security_d_instantiate(dentry, inode);
 +}
 +
 +/*
@@ -262,11 +298,11 @@ Index: linux-2.6.16.i686/fs/ext3/iopen.c
 +
 +	return 1;
 +}
-Index: linux-2.6.16.i686/fs/ext3/iopen.h
+Index: linux-2.6.16.54-0.2.5/fs/ext3/iopen.h
 ===================================================================
---- linux-2.6.16.i686.orig/fs/ext3/iopen.h	2006-05-31 04:14:15.752410384 +0800
-+++ linux-2.6.16.i686/fs/ext3/iopen.h	2006-05-30 22:52:38.000000000 +0800
-@@ -0,0 +1,15 @@
+--- /dev/null
++++ linux-2.6.16.54-0.2.5/fs/ext3/iopen.h
+@@ -0,0 +1,20 @@
 +/*
 + * iopen.h
 + *
@@ -282,10 +318,15 @@ Index: linux-2.6.16.i686/fs/ext3/iopen.h
 +extern int ext3_iopen_get_inode(struct inode *inode);
 +extern struct dentry *iopen_connect_dentry(struct dentry *dentry,
 +					   struct inode *inode, int rehash);
-Index: linux-2.6.16.i686/fs/ext3/inode.c
++extern void iopen_d_instantiate(struct dentry *dentry, struct inode * inode);
++
++#if !defined(HAVE_D_MOVE_LOCKED) && defined(HAVE___D_MOVE)
++#define d_move_locked(dentry, target) __d_move(dentry, target)
++#endif
+Index: linux-2.6.16.54-0.2.5/fs/ext3/inode.c
 ===================================================================
---- linux-2.6.16.i686.orig/fs/ext3/inode.c	2006-05-30 22:52:03.000000000 +0800
-+++ linux-2.6.16.i686/fs/ext3/inode.c	2006-05-30 22:52:38.000000000 +0800
+--- linux-2.6.16.54-0.2.5.orig/fs/ext3/inode.c
++++ linux-2.6.16.54-0.2.5/fs/ext3/inode.c
 @@ -37,6 +37,7 @@
  #include <linux/mpage.h>
  #include <linux/uio.h>
@@ -294,7 +335,7 @@ Index: linux-2.6.16.i686/fs/ext3/inode.c
  #include "acl.h"
  
  static int ext3_writepage_trans_blocks(struct inode *inode);
-@@ -2448,6 +2449,8 @@
+@@ -2448,6 +2449,8 @@ void ext3_read_inode(struct inode * inod
  	ei->i_default_acl = EXT3_ACL_NOT_CACHED;
  #endif
  	ei->i_block_alloc_info = NULL;
@@ -303,11 +344,11 @@ Index: linux-2.6.16.i686/fs/ext3/inode.c
  
  	if (__ext3_get_inode_loc(inode, &iloc, 0))
  		goto bad_inode;
-Index: linux-2.6.16.i686/fs/ext3/super.c
+Index: linux-2.6.16.54-0.2.5/fs/ext3/super.c
 ===================================================================
---- linux-2.6.16.i686.orig/fs/ext3/super.c	2006-05-30 22:52:03.000000000 +0800
-+++ linux-2.6.16.i686/fs/ext3/super.c	2006-05-30 22:52:38.000000000 +0800
-@@ -634,6 +634,7 @@
+--- linux-2.6.16.54-0.2.5.orig/fs/ext3/super.c
++++ linux-2.6.16.54-0.2.5/fs/ext3/super.c
+@@ -675,6 +675,7 @@ enum {
  	Opt_usrjquota, Opt_grpjquota, Opt_offusrjquota, Opt_offgrpjquota,
  	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0, Opt_quota, Opt_noquota,
  	Opt_ignore, Opt_barrier, Opt_err, Opt_resize, Opt_usrquota,
@@ -315,7 +356,7 @@ Index: linux-2.6.16.i686/fs/ext3/super.c
  	Opt_grpquota
  };
  
-@@ -682,6 +683,9 @@
+@@ -723,6 +724,9 @@ static match_table_t tokens = {
  	{Opt_noquota, "noquota"},
  	{Opt_quota, "quota"},
  	{Opt_usrquota, "usrquota"},
@@ -325,7 +366,7 @@ Index: linux-2.6.16.i686/fs/ext3/super.c
  	{Opt_barrier, "barrier=%u"},
  	{Opt_err, NULL},
  	{Opt_resize, "resize"},
-@@ -996,6 +1000,18 @@
+@@ -1037,6 +1041,18 @@ clear_qf_name:
  			else
  				clear_opt(sbi->s_mount_opt, BARRIER);
  			break;
@@ -344,10 +385,10 @@ Index: linux-2.6.16.i686/fs/ext3/super.c
  		case Opt_ignore:
  			break;
  		case Opt_resize:
-Index: linux-2.6.16.i686/fs/ext3/namei.c
+Index: linux-2.6.16.54-0.2.5/fs/ext3/namei.c
 ===================================================================
---- linux-2.6.16.i686.orig/fs/ext3/namei.c	2006-05-30 22:52:00.000000000 +0800
-+++ linux-2.6.16.i686/fs/ext3/namei.c	2006-05-30 22:55:19.000000000 +0800
+--- linux-2.6.16.54-0.2.5.orig/fs/ext3/namei.c
++++ linux-2.6.16.54-0.2.5/fs/ext3/namei.c
 @@ -39,6 +39,7 @@
  
  #include "namei.h"
@@ -356,7 +397,7 @@ Index: linux-2.6.16.i686/fs/ext3/namei.c
  #include "acl.h"
  
  /*
-@@ -995,6 +996,9 @@
+@@ -1013,6 +1014,9 @@ static struct dentry *ext3_lookup(struct
  	if (dentry->d_name.len > EXT3_NAME_LEN)
  		return ERR_PTR(-ENAMETOOLONG);
  
@@ -366,16 +407,35 @@ Index: linux-2.6.16.i686/fs/ext3/namei.c
  	bh = ext3_find_entry(dentry, &de);
  	inode = NULL;
  	if (bh) {
-@@ -1005,7 +1009,7 @@
+@@ -1028,7 +1032,8 @@ static struct dentry *ext3_lookup(struct
  		if (!inode)
  			return ERR_PTR(-EACCES);
  	}
 -	return d_splice_alias(inode, dentry);
-+ 	return iopen_connect_dentry(dentry, inode, 1);
++
++	return iopen_connect_dentry(dentry, inode, 1);
  }
  
  
-@@ -2046,10 +2050,6 @@
+@@ -1649,7 +1654,7 @@ static int ext3_add_nondir(handle_t *han
+ 	int err = ext3_add_entry(handle, dentry, inode);
+ 	if (!err) {
+ 		ext3_mark_inode_dirty(handle, inode);
+-		d_instantiate(dentry, inode);
++		iopen_d_instantiate(dentry, inode);
+ 		return 0;
+ 	}
+ 	ext3_dec_count(handle, inode);
+@@ -1811,7 +1816,7 @@ retry:
+ 	dir->i_nlink++;
+ 	ext3_update_dx_flag(dir);
+ 	ext3_mark_inode_dirty(handle, dir);
+-	d_instantiate(dentry, inode);
++	iopen_d_instantiate(dentry, inode);
+ out_stop:
+ 	ext3_journal_stop(handle);
+ 	if (err == -ENOSPC && ext3_should_retry_alloc(dir->i_sb, &retries))
+@@ -2079,10 +2084,6 @@ static int ext3_rmdir (struct inode * di
  			      inode->i_nlink);
  	inode->i_version++;
  	inode->i_nlink = 0;
@@ -386,7 +446,7 @@ Index: linux-2.6.16.i686/fs/ext3/namei.c
  	ext3_orphan_add(handle, inode);
  	inode->i_ctime = dir->i_ctime = dir->i_mtime = CURRENT_TIME_SEC;
  	ext3_mark_inode_dirty(handle, inode);
-@@ -2173,6 +2173,23 @@
+@@ -2206,6 +2207,23 @@ out_stop:
  	return err;
  }
  
@@ -410,7 +470,7 @@ Index: linux-2.6.16.i686/fs/ext3/namei.c
  static int ext3_link (struct dentry * old_dentry,
  		struct inode * dir, struct dentry *dentry)
  {
-@@ -2196,7 +2213,8 @@
+@@ -2229,7 +2247,8 @@ retry:
  	ext3_inc_count(handle, inode);
  	atomic_inc(&inode->i_count);
  
@@ -420,10 +480,10 @@ Index: linux-2.6.16.i686/fs/ext3/namei.c
  	ext3_journal_stop(handle);
  	if (err == -ENOSPC && ext3_should_retry_alloc(dir->i_sb, &retries))
  		goto retry;
-Index: linux-2.6.16.i686/fs/ext3/Makefile
+Index: linux-2.6.16.54-0.2.5/fs/ext3/Makefile
 ===================================================================
---- linux-2.6.16.i686.orig/fs/ext3/Makefile	2006-03-20 13:53:29.000000000 +0800
-+++ linux-2.6.16.i686/fs/ext3/Makefile	2006-05-30 22:52:38.000000000 +0800
+--- linux-2.6.16.54-0.2.5.orig/fs/ext3/Makefile
++++ linux-2.6.16.54-0.2.5/fs/ext3/Makefile
 @@ -4,7 +4,7 @@
  
  obj-$(CONFIG_EXT3_FS) += ext3.o
@@ -433,11 +493,11 @@ Index: linux-2.6.16.i686/fs/ext3/Makefile
  	   ioctl.o namei.o super.o symlink.o hash.o resize.o
  
  ext3-$(CONFIG_EXT3_FS_XATTR)	 += xattr.o xattr_user.o xattr_trusted.o
-Index: linux-2.6.16.i686/include/linux/ext3_fs.h
+Index: linux-2.6.16.54-0.2.5/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.16.i686.orig/include/linux/ext3_fs.h	2006-05-30 22:52:00.000000000 +0800
-+++ linux-2.6.16.i686/include/linux/ext3_fs.h	2006-05-30 22:52:38.000000000 +0800
-@@ -375,6 +375,8 @@
+--- linux-2.6.16.54-0.2.5.orig/include/linux/ext3_fs.h
++++ linux-2.6.16.54-0.2.5/include/linux/ext3_fs.h
+@@ -375,6 +375,8 @@ struct ext3_inode {
  #define EXT3_MOUNT_QUOTA		0x80000 /* Some quota option set */
  #define EXT3_MOUNT_USRQUOTA		0x100000 /* "old" user quota */
  #define EXT3_MOUNT_GRPQUOTA		0x200000 /* "old" group quota */

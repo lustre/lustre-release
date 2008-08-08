@@ -1,25 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * lib/lib-md.c
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/lnet/lib-md.c
+ *
  * Memory Descriptor management routines
- *
- *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
- *
- *   This file is part of Lustre, http://www.lustre.org
- *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
- *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #define DEBUG_SUBSYSTEM S_LNET
@@ -39,6 +55,7 @@ lnet_md_unlink(lnet_libmd_t *md)
                 /* Disassociate from ME (if any), and unlink it if it was created
                  * with LNET_UNLINK */
                 if (me != NULL) {
+                        md->md_me = NULL;
                         me->me_md = NULL;
                         if (me->me_unlink == LNET_UNLINK)
                                 lnet_me_unlink(me);
@@ -203,9 +220,12 @@ LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
 
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
-        
+
         if ((umd.options & (LNET_MD_KIOV | LNET_MD_IOVEC)) != 0 &&
             umd.length > LNET_MAX_IOV) /* too many fragments */
+                return -EINVAL;
+
+        if ((umd.options & (LNET_MD_OP_GET | LNET_MD_OP_PUT)) == 0)
                 return -EINVAL;
 
         md = lnet_md_alloc(&umd);
@@ -249,9 +269,12 @@ LNetMDBind(lnet_md_t umd, lnet_unlink_t unlink, lnet_handle_md_t *handle)
 
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
-        
+
         if ((umd.options & (LNET_MD_KIOV | LNET_MD_IOVEC)) != 0 &&
             umd.length > LNET_MAX_IOV) /* too many fragments */
+                return -EINVAL;
+
+        if ((umd.options & (LNET_MD_OP_GET | LNET_MD_OP_PUT)) != 0)
                 return -EINVAL;
 
         md = lnet_md_alloc(&umd);
@@ -283,7 +306,7 @@ LNetMDUnlink (lnet_handle_md_t mdh)
 
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
-        
+
         LNET_LOCK();
 
         md = lnet_handle2md(&mdh);
@@ -298,14 +321,7 @@ LNetMDUnlink (lnet_handle_md_t mdh)
 
         if (md->md_eq != NULL &&
             md->md_refcount == 0) {
-                memset(&ev, 0, sizeof(ev));
-
-                ev.type = LNET_EVENT_UNLINK;
-                ev.status = 0;
-                ev.unlinked = 1;
-                lnet_md_deconstruct(md, &ev.md);
-                lnet_md2handle(&ev.md_handle, md);
-
+                lnet_build_unlink_event(md, &ev);
                 lnet_enq_event_locked(md->md_eq, &ev);
         }
 
@@ -314,4 +330,3 @@ LNetMDUnlink (lnet_handle_md_t mdh)
         LNET_UNLOCK();
         return 0;
 }
-
