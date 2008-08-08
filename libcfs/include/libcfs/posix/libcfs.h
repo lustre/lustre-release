@@ -46,6 +46,7 @@
 #include <sys/errno.h>
 #include <string.h>
 #include <stdarg.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
@@ -210,6 +211,7 @@ typedef __u32 cfs_kernel_cap_t;
  */
 struct module {
         int count;
+        char *name;
 };
 
 static inline void MODULE_AUTHOR(char *name)
@@ -241,5 +243,132 @@ static inline void module_put(struct module *module)
 {
 }
 
+
+static inline int module_refcount(struct module *m)
+{
+        return 1;
+}
+
+/***************************************************************************
+ *
+ * Linux kernel slab shrinker emulation. Currently used only in lu_object.c
+ *
+ ***************************************************************************/
+
+struct shrinker {
+        ;
+};
+
+#define DEFAULT_SEEKS (0)
+
+typedef int (*shrinker_t)(int, unsigned int);
+
+static inline struct shrinker *set_shrinker(int seeks, shrinker_t shrinkert)
+{
+        return NULL;
+}
+
+static inline void remove_shrinker(struct shrinker *shrinker)
+{
+}
+
+/***************************************************************************
+ *
+ * Linux kernel radix tree emulation.
+ *
+ * XXX this stub-implementation assumes that elements stored in a radix tree
+ *     are struct page's and nothing else. Proper implementation will be
+ *     committed soon.
+ *
+ ***************************************************************************/
+
+struct radix_tree_root {
+        struct list_head        *rnode;
+};
+
+#define RADIX_TREE_INIT(mask)	{               \
+	.rnode = NULL,                          \
+}
+
+#define RADIX_TREE(name, mask) \
+	struct radix_tree_root name = RADIX_TREE_INIT(mask)
+
+#define INIT_RADIX_TREE(root, mask)             \
+do {                                            \
+	(root)->rnode = NULL;                   \
+} while (0)
+
+static inline int radix_tree_insert(struct radix_tree_root *root,
+                                    unsigned long idx, struct page *page)
+{
+        if (root->rnode == NULL)
+                root->rnode = &page->_node;
+        else
+                list_add_tail(&page->_node, root->rnode);
+        return 0;
+}
+
+static inline void *radix_tree_lookup(struct radix_tree_root *root,
+                                      unsigned long idx)
+{
+        struct page *p;
+
+        if (root->rnode == NULL)
+                return NULL;
+
+        p = list_entry(root->rnode, struct page, _node);
+        if (p->index == idx)
+                return p;
+
+        list_for_each_entry(p, root->rnode, _node)
+                if (p->index == idx)
+                        return p;
+
+        return NULL;
+}
+
+static inline void *radix_tree_delete(struct radix_tree_root *root,
+                                      unsigned long idx)
+{
+        struct page *p = radix_tree_lookup(root, idx);
+
+        if (p == NULL)
+                return NULL;
+        if (list_empty(root->rnode))
+                root->rnode = NULL;
+        else if (root->rnode == &p->_node)
+                root->rnode = p->_node.next;
+        list_del_init(&p->_node);
+        return p;
+}
+
+static inline unsigned int
+radix_tree_gang_lookup(struct radix_tree_root *root, void **results,
+                       unsigned long first_index, unsigned int max_items)
+{
+        int i;
+        int j = 0;
+
+        for (i = 0; i < max_items; i++, first_index++) {
+                results[j++] = radix_tree_lookup(root, first_index);
+                if (results[j - 1] == NULL)
+                        --j;
+        }
+
+        return j;
+}
+
+static inline int radix_tree_preload(int gfp_mask)
+{
+        return 0;
+}
+
+void radix_tree_init(void);
+
+static inline void radix_tree_preload_end(void)
+{
+}
+
+typedef ssize_t (*read_actor_t)();
 
 #endif
