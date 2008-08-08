@@ -385,7 +385,7 @@ Index: linux-2.6.18-53.1.14/fs/ext3/extents.c
 +		return -EBADR;
 +
 +	start_blk = start >> inode->i_sb->s_blocksize_bits;
-+	len_blks = (len + inode->i_sb->s_blocksize) >> inode->i_sb->s_blocksize_bits;
++	len_blks = (len + inode->i_sb->s_blocksize - 1) >> inode->i_sb->s_blocksize_bits;
 +
 +	/*
 +	  * Walk the extent tree gathering extent information.
@@ -410,7 +410,7 @@ Index: linux-2.6.18-53.1.14/fs/ext3/fiemap.h
 +/*
 + * FIEMAP ioctl infrastructure.
 + *
-+ * Copyright (C) 2007 Cluster File Systems, Inc
++ * Copyright 2008 Sun Microsystems, Inc.
 + *
 + * Author: Kalpak Shah <kalpak.shah@sun.com>
 + *	 Andreas Dilger <adilger@sun.com>
