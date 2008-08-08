@@ -278,6 +278,7 @@ EXPORT_SYMBOL(lustre_msg_set_transno);
 EXPORT_SYMBOL(lustre_msg_set_status);
 EXPORT_SYMBOL(lustre_msg_set_conn_cnt);
 EXPORT_SYMBOL(lustre_swab_mgs_target_info);
+EXPORT_SYMBOL(lustre_swab_fiemap);
 
 /* recover.c */
 EXPORT_SYMBOL(ptlrpc_disconnect_import);
