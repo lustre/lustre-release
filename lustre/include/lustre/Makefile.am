@@ -35,7 +35,7 @@
 #
 
 if UTILS
-pkginclude_HEADERS = lustre_idl.h lustre_user.h liblustreapi.h types.h
+pkginclude_HEADERS = lustre_idl.h lustre_user.h liblustreapi.h types.h ll_fiemap.h
 endif
 
-EXTRA_DIST = lustre_idl.h lustre_user.h liblustreapi.h types.h
+EXTRA_DIST = lustre_idl.h lustre_user.h liblustreapi.h types.h ll_fiemap.h
