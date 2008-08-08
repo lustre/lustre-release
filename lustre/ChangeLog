@@ -82,6 +82,11 @@ tbd Sun Microsystems, Inc.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
 
+Severity   : normal
+Bugzilla   : 16006
+Description: Properly propagate oinfo flags from lov to osc for statfs   
+Details    : restore missing copy oi_flags to lov requests.
+
 Severity   : enhancement
 Bugzilla   : 16581
 Description: Add man pages for llobdstat(8), llstat(8), plot-llstat(8),

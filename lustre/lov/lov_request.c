@@ -1639,6 +1639,7 @@ int lov_prep_statfs_set(struct obd_device *obd, struct obd_info *oinfo,
 
                 req->rq_idx = i;
                 req->rq_oi.oi_cb_up = cb_statfs_update;
+                req->rq_oi.oi_flags = oinfo->oi_flags;
                 req->rq_rqset = set;
 
                 lov_set_add_req(req, set);
