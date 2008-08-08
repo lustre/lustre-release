@@ -165,6 +165,12 @@ void wait_for_completion(struct completion *c)
         LASSERT(c != NULL);
 }
 
+int wait_for_completion_interruptible(struct completion *c)
+{
+        LASSERT(c != NULL);
+        return 0;
+}
+
 /*
  * rw_semaphore:
  *

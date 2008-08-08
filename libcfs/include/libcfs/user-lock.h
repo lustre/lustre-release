@@ -150,6 +150,7 @@ struct completion {
 void init_completion(struct completion *c);
 void complete(struct completion *c);
 void wait_for_completion(struct completion *c);
+int wait_for_completion_interruptible(struct completion *c);
 
 #define COMPLETION_INITIALIZER(work) \
         { 0, __WAIT_QUEUE_HEAD_INITIALIZER((work).wait) }
@@ -207,7 +208,7 @@ write_lock_irqsave(rwlock_t *l, unsigned long f) { write_lock(l); }
 static inline void
 write_unlock_irqrestore(rwlock_t *l, unsigned long f) { write_unlock(l); }
 
-static inline void 
+static inline void
 read_lock_irqsave(rwlock_t *l, unsigned long f) { read_lock(l); }
 static inline void
 read_unlock_irqrestore(rwlock_t *l, unsigned long f) { read_unlock(l); }
@@ -267,6 +268,80 @@ void cfs_atomic_add(int b, cfs_atomic_t *a);
 void cfs_atomic_sub(int b, cfs_atomic_t *a);
 
 #endif /* HAVE_LIBPTHREAD */
+
+/**************************************************************************
+ *
+ * Mutex interface.
+ *
+ **************************************************************************/
+
+struct mutex {
+        struct semaphore m_sem;
+};
+
+static inline void mutex_init(struct mutex *mutex)
+{
+        init_mutex(&mutex->m_sem);
+}
+
+static inline void mutex_lock(struct mutex *mutex)
+{
+        mutex_down(&mutex->m_sem);
+}
+
+static inline void mutex_unlock(struct mutex *mutex)
+{
+        mutex_up(&mutex->m_sem);
+}
+
+/**
+ * Try-lock this mutex.
+ *
+ * \retval 1 try-lock succeeded.
+ *
+ * \retval 0 try-lock failed.
+ */
+static inline int mutex_trylock(struct mutex *mutex)
+{
+        return 1;
+}
+
+static inline void mutex_lock_nested(struct mutex *mutex, unsigned int subclass)
+{
+        return mutex_lock(mutex);
+}
+
+static inline void mutex_destroy(struct mutex *lock)
+{
+}
+
+/*
+ * This is for use in assertions _only_, i.e., this function should always
+ * return 1.
+ *
+ * \retval 1 mutex is locked.
+ *
+ * \retval 0 mutex is not locked. This should never happen.
+ */
+static inline int mutex_is_locked(struct mutex *lock)
+{
+        return 1;
+}
+
+
+/**************************************************************************
+ *
+ * Lockdep "implementation". Also see lustre_compat25.h
+ *
+ **************************************************************************/
+
+struct lock_class_key {
+        ;
+};
+
+static inline void lockdep_set_class(void *lock, struct lock_class_key *key)
+{
+}
 
 /* !__KERNEL__ */
 #endif
