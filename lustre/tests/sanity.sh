@@ -5261,7 +5261,7 @@ run_test 129 "test directory size limit ========================"
 
 test_130a() {
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
-	[ -n "$filefrag_op" ] && skip '"filefrag does not support FIEMAP" && return'
+	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
 
 	local fm_file=$DIR/$tfile
 	lfs setstripe -s 65536 -c 1 $fm_file || error "setstripe failed on $fm_file"
@@ -5298,7 +5298,7 @@ test_130b() {
 	[ "$OSTCOUNT" -lt "2" ] && skip "skipping FIEMAP on 2-stripe file test" && return
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
-	[ -n "$filefrag_op" ] && skip '"filefrag does not support FIEMAP" && return'
+	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
 
 	local fm_file=$DIR/$tfile
 	lfs setstripe -s 65536 -c 2 $fm_file || error "setstripe failed on $fm_file"
@@ -5341,7 +5341,7 @@ test_130c() {
 	[ "$OSTCOUNT" -lt "2" ] && skip "skipping FIEMAP on 2-stripe file with hole test" && return
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
-	[ -n "$filefrag_op" ] && skip '"filefrag does not support FIEMAP" && return'
+	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
 
 	local fm_file=$DIR/$tfile
 	lfs setstripe -s 65536 -c 2 $fm_file || error "setstripe failed on $fm_file"
@@ -5389,7 +5389,7 @@ test_130d() {
 	[ "$OSTCOUNT" -lt "3" ] && skip "skipping FIEMAP on N-stripe file test" && return
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
-	[ -n "$filefrag_op" ] && skip '"filefrag does not support FIEMAP" && return'
+	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
 
 	local fm_file=$DIR/$tfile
 	lfs setstripe -s 65536 -c $OSTCOUNT $fm_file || error "setstripe failed on $fm_file"
@@ -5432,7 +5432,7 @@ test_130e() {
 	[ "$OSTCOUNT" -lt "2" ] && skip "skipping continuation FIEMAP test" && return
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
-	[ -n "$filefrag_op" ] && skip '"filefrag does not support FIEMAP" && return'
+	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
 
 	local fm_file=$DIR/$tfile
 	lfs setstripe -s 65536 -c 2 $fm_file || error "setstripe failed on $fm_file"
