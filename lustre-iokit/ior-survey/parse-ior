@@ -1,0 +1,56 @@
+#!/usr/bin/perl -w
+
+# arg 0 is filename 
+
+sub usages_msg(){
+	print "Usage: $0 <results_filename>\n";
+	print "  parses and plots IOR results using gnuplot, and generates a .dat file for\n";
+	print "  simple graphing in spreadhseets\n";
+	print "e.g.> perl parse-ior.pl ior-log\n";
+        exit 1;
+}
+ 
+if ( !$ARGV[0] ) {
+	usages_msg(); 	
+}
+$file = $ARGV[0];
+
+# Open log file for reading
+open ( PFILE, "$file") or die "Can't open results log file";
+# Open .csv file for writting required columns from log file.
+open ( DATAFILE, "> $file.dat" ) or die "Can't open csv file for writting";
+$count = 0;
+while ( <PFILE> ) {
+	chomp;
+	@line = split( /\s+/ ); # splits line into tokens
+	if ( $line[0] ) {
+		# This comparison will be changed if there will be changes log file.
+		if( $line[0] eq "access" && $line[1] eq "bw(MiB/s)" ) { 
+			print DATAFILE "$count $line[1] $line[4] $line[5] $line[6] br(MiB/s) ropen(s) rd(s) rclose(s)\n";
+			$count = $count + 1;			
+		}		
+		# Two columns from output file are skiped since 
+		# they are constant and may not be so useful while graphing results.
+		if( $line[0] eq "write" ) {
+			print DATAFILE "$count $line[1] $line[4] $line[5] $line[6] ";
+		}		
+		if( $line[0] eq "read" ) {
+			print DATAFILE "$line[1] $line[4] $line[5] $line[6]\n";
+			$count = $count + 1;
+		}		
+	}
+}
+close PFILE;
+close DATAFILE;
+
+# Open .scr file for writting instructions for gnuplot.
+open ( SCRFILE, "> $file.scr" ) or die "Can't open scr file for writting";
+# Only two columns bw(MiB/s) and br(MiB/s) are considered for graphing results.
+print SCRFILE "plot \"$file.dat\" using 1:2 axes x1y1 title \"bw(MiB/s)\" with line\n";
+print SCRFILE "replot \"$file.dat\" using 1:6 axes x1y1 title \"br(MiB/s)\" with line\n";
+print SCRFILE "pause -1\n";
+close SCRFILE;
+# check whether gnuplot exists?
+system ("which gnuplot > /dev/null") == 0 or die "gnuplot does not exists, Please install it and try again.\n";
+# invoke gnuplot to display graph.
+system ("gnuplot $file.scr");
