@@ -72,6 +72,7 @@
  *
  * - spin_lock_init(x)
  * - spin_lock(x)
+ * - spin_lock_nested(x, subclass)
  * - spin_unlock(x)
  * - spin_trylock(x)
  *
@@ -90,6 +91,7 @@ typedef struct spin_lock spinlock_t;
 
 void spin_lock_init(spinlock_t *lock);
 void spin_lock(spinlock_t *lock);
+void spin_lock_nested(spinlock_t *lock, unsigned int subclass);
 void spin_unlock(spinlock_t *lock);
 int spin_trylock(spinlock_t *lock);
 void spin_lock_bh_init(spinlock_t *lock);

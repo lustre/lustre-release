@@ -72,6 +72,13 @@
  * - spin_unlock_irqrestore(x, f)
  */
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18)
+static inline void spin_lock_nested(spinlock_t *lock, unsigned subclass)
+{
+        spin_lock(lock);
+}
+#endif
+
 /*
  * rw_semaphore (use Linux kernel's primitives)
  *

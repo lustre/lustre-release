@@ -61,6 +61,7 @@
  *
  * - spin_lock_init(x)
  * - spin_lock(x)
+ * - spin_lock_nested(x, subclass)
  * - spin_unlock(x)
  * - spin_trylock(x)
  *
@@ -79,6 +80,12 @@ void spin_lock_init(spinlock_t *lock)
 void spin_lock(spinlock_t *lock)
 {
         (void)lock;
+}
+
+void spin_lock_nested(spinlock_t *lock, unsigned int subclass)
+{
+        (void)lock;
+        (void)subclass;
 }
 
 void spin_unlock(spinlock_t *lock)
