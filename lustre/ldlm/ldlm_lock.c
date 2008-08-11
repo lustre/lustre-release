@@ -947,15 +947,34 @@ int ldlm_lock_fast_match(struct ldlm_lock *lock, int rw,
                          void **cookie)
 {
         LASSERT(rw == OBD_BRW_READ || rw == OBD_BRW_WRITE);
-        /* should LCK_GROUP be handled in a special way? */
-        if (lock && (rw == OBD_BRW_READ ||
-                     (lock->l_granted_mode & (LCK_PW|LCK_GROUP))) &&
-            (lock->l_policy_data.l_extent.start <= start) &&
-            (lock->l_policy_data.l_extent.end >= end)) {
-                ldlm_lock_addref_internal(lock, rw == OBD_BRW_WRITE ? LCK_PW : LCK_PR);
-                *cookie = (void *)lock;
-                return 1; /* avoid using rc for stack relief */
-        }
+
+        if (!lock)
+                return 0;
+
+        lock_res_and_lock(lock);
+        /* check if granted mode is compatible */
+        if (rw == OBD_BRW_WRITE &&
+            !(lock->l_granted_mode & (LCK_PW|LCK_GROUP)))
+                goto no_match;
+
+        /* does the lock cover the region we would like to access? */
+        if ((lock->l_policy_data.l_extent.start > start) ||
+            (lock->l_policy_data.l_extent.end < end))
+                goto no_match;
+
+        /* if we received a blocking callback and the lock is no longer
+         * referenced, don't use it */
+        if ((lock->l_flags & LDLM_FL_CBPENDING) &&
+            !lock->l_writers && !lock->l_readers)
+                goto no_match;
+
+        ldlm_lock_addref_internal_nolock(lock, rw == OBD_BRW_WRITE ? LCK_PW : LCK_PR);
+        unlock_res_and_lock(lock);
+        *cookie = (void *)lock;
+        return 1; /* avoid using rc for stack relief */
+
+no_match:
+        unlock_res_and_lock(lock);
         return 0;
 }
 
