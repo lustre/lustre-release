@@ -99,6 +99,26 @@ static int mgs_connect(struct lustre_handle *conn, struct obd_device *obd,
         RETURN(rc);
 }
 
+static int mgs_reconnect(struct obd_export *exp, struct obd_device *obd,
+                         struct obd_uuid *cluuid, struct obd_connect_data *data,
+                         void *localdata)
+{
+        ENTRY;
+
+        if (exp == NULL || obd == NULL || cluuid == NULL)
+                RETURN(-EINVAL);
+
+        mgs_counter_incr(exp, LPROC_MGS_CONNECT);
+
+        if (data != NULL) {
+                data->ocd_connect_flags &= MGS_CONNECT_SUPPORTED;
+                exp->exp_connect_flags = data->ocd_connect_flags;
+                data->ocd_version = LUSTRE_VERSION_CODE;
+        }
+
+        RETURN(0);
+}
+
 static int mgs_disconnect(struct obd_export *exp)
 {
         int rc;
@@ -741,6 +761,7 @@ out_free:
 static struct obd_ops mgs_obd_ops = {
         .o_owner           = THIS_MODULE,
         .o_connect         = mgs_connect,
+        .o_reconnect       = mgs_reconnect,
         .o_disconnect      = mgs_disconnect,
         .o_setup           = mgs_setup,
         .o_precleanup      = mgs_precleanup,
