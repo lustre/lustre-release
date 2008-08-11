@@ -1611,6 +1611,66 @@ test_39() {
 }
 run_test 39 "mtime changed on create ==========================="
 
+function get_times() {
+        FILE=$1
+        TIME=$2
+        
+        i=0
+        for time in `stat -c "%X %Y %Z" $FILE`; do
+                eval "$TIME[$i]=$time"
+                i=$(($i + 1))
+        done
+}
+
+test_39b() {
+        ATIME=0
+        MTIME=1
+        CTIME=2
+        mkdir -p $DIR/$tdir
+        cp -p /etc/passwd $DIR/$tdir/fopen
+        cp -p /etc/passwd $DIR/$tdir/flink
+        cp -p /etc/passwd $DIR/$tdir/funlink
+        cp -p /etc/passwd $DIR/$tdir/frename
+        ln $DIR/$tdir/funlink $DIR/$tdir/funlink2
+
+        get_times $DIR/$tdir/fopen OPEN_OLD
+        get_times $DIR/$tdir/flink LINK_OLD
+        get_times $DIR/$tdir/funlink UNLINK_OLD
+        get_times $DIR/$tdir/frename RENAME_OLD
+
+        sleep 1
+        echo "aaaaaa" >> $DIR/$tdir/fopen
+        echo "aaaaaa" >> $DIR/$tdir/flink
+        echo "aaaaaa" >> $DIR/$tdir/funlink
+        echo "aaaaaa" >> $DIR/$tdir/frename
+
+        get_times $DIR/$tdir/fopen OPEN_NEW
+        get_times $DIR/$tdir/flink LINK_NEW
+        get_times $DIR/$tdir/funlink UNLINK_NEW
+        get_times $DIR/$tdir/frename RENAME_NEW
+        
+        cat $DIR/$tdir/fopen > /dev/null
+        ln $DIR/$tdir/flink $DIR/$tdir/flink2
+        rm -f $DIR/$tdir/funlink2
+        mv -f $DIR/$tdir/frename $DIR/$tdir/frename2
+
+        get_times $DIR/$tdir/fopen OPEN_NEW2
+        get_times $DIR/$tdir/flink LINK_NEW2
+        get_times $DIR/$tdir/funlink UNLINK_NEW2
+        get_times $DIR/$tdir/frename2 RENAME_NEW2
+        echo ${OPEN_OLD[1]},${OPEN_NEW[$MTIME]},${OPEN_NEW2[$MTIME]}
+        echo ${LINK_OLD[1]},${LINK_NEW[$MTIME]},${LINK_NEW2[$MTIME]}
+        echo ${UNLINK_OLD[1]},${UNLINK_NEW[$MTIME]},${UNLINK_NEW2[$MTIME]}
+        echo ${RENAME_OLD[1]},${RENAME_NEW[$MTIME]},${RENAME_NEW2[$MTIME]}
+
+        
+        [ ${OPEN_NEW2[$MTIME]} -eq ${OPEN_NEW[$MTIME]} ] || error "open file reverses mtime"
+        [ ${LINK_NEW2[$MTIME]} -eq ${LINK_NEW[$MTIME]} ] || error "link file reverses mtime"
+        [ ${UNLINK_NEW2[$MTIME]} -eq ${UNLINK_NEW[$MTIME]} ] || error "unlink file reverses mtime"
+        [ ${RENAME_NEW2[$MTIME]} -eq ${RENAME_NEW[$MTIME]} ] || error "rename file reverses mtime"
+}
+run_test 39b "mtime change on close ============================"
+
 test_40() {
 	dd if=/dev/zero of=$DIR/f40 bs=4096 count=1
 	$RUNAS $OPENFILE -f O_WRONLY:O_TRUNC $DIR/f40 && error
