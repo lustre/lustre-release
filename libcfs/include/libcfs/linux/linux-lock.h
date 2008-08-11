@@ -50,6 +50,7 @@
 #endif
 
 #include <linux/smp_lock.h>
+#include <linux/mutex.h>
 
 /*
  * IMPORTANT !!!!!!!!
@@ -121,6 +122,36 @@ static inline void spin_lock_nested(spinlock_t *lock, unsigned subclass)
  * - wait_for_completion(c)
  */
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16)
+
+/**************************************************************************
+ *
+ * Mutex interface from newer Linux kernels.
+ *
+ * this augments compatibility interface from include/linux/mutex.h
+ *
+ **************************************************************************/
+
+struct mutex;
+
+static inline void mutex_destroy(struct mutex *lock)
+{
+}
+
+/*
+ * This is for use in assertions _only_, i.e., this function should always
+ * return 1.
+ *
+ * \retval 1 mutex is locked.
+ *
+ * \retval 0 mutex is not locked. This should never happen.
+ */
+static inline int mutex_is_locked(struct mutex *lock)
+{
+        return 1;
+}
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16) */
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18)
 
 /**************************************************************************
@@ -137,39 +168,10 @@ static inline void lockdep_set_class(void *lock, struct lock_class_key *key)
 {
 }
 
-/**************************************************************************
- *
- * Mutex interface from newer Linux kernels.
- *
- * this augments compatibility interface from include/linux/mutex.h
- *
- **************************************************************************/
+/* This has to be a macro, so that can be undefined in kernels that do not
+ * support lockdep. */
+#define mutex_lock_nested(mutex, subclass) mutex_lock(mutex)
 
-#ifndef mutex
-# define mutex semaphore
-#endif
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18) */
 
-static inline void mutex_lock_nested(struct mutex *mutex, unsigned int subclass)
-{
-        return down(mutex);
-}
-
-static inline void mutex_destroy(struct mutex *lock)
-{
-}
-
-/*
- * This is for use in assertions _only_, i.e., this function should always
- * return 1.
- *
- * \retval 1 mutex is locked.
- *
- * \retval 0 mutex is not locked. This should never happen.
- */
-static inline int mutex_is_locked(struct mutex *lock)
-{
-        return !!down_trylock(lock);
-}
-#endif
-
-#endif
+#endif /* __LIBCFS_LINUX_CFS_LOCK_H__ */
