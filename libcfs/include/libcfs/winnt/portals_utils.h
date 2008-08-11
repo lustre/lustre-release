@@ -41,10 +41,6 @@
 #ifndef __LIBCFS_WINNT_PORTALS_UTILS_H__
 #define __LIBCFS_WINNT_PORTALS_UTILS_H__
 
-#ifndef __LIBCFS_PORTALS_UTILS_H__
-#error Do not #include this file directly. #include <libcfs/portals_utils.h> instead
-#endif
-
 #ifndef cfs_is_flag_set
 #define cfs_is_flag_set(x,f) (((x)&(f))==(f))
 #endif

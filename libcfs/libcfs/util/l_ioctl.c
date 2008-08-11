@@ -22,24 +22,10 @@
 
 #define __USE_FILE_OFFSET64
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <sys/ioctl.h>
-#include <errno.h>
-#include <unistd.h>
-
-
 #include <libcfs/libcfsutil.h>
 
 #include <lnet/api-support.h>
 #include <lnet/lnetctl.h>
-#include <libcfs/portals_utils.h>
-
 
 static ioc_handler_t  do_ioctl;                 /* forward ref */
 static ioc_handler_t *current_ioc_handler = &do_ioctl;
@@ -261,7 +247,7 @@ parse_dump(char * dump_file, ioc_handler_t ioc_func)
 #endif
         
 #ifndef __CYGWIN__
-        fd = syscall(SYS_open, dump_file, O_RDONLY);
+        fd = open(dump_file, O_RDONLY);
         if (fd < 0) {
                 fprintf(stderr, "couldn't open %s: %s\n", dump_file, 
                         strerror(errno));
