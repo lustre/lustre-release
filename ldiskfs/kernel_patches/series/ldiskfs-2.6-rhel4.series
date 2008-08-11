@@ -28,3 +28,4 @@ ext3-orphans-delay.patch
 ext3-external-journal-2.6.9.patch
 ext3-max-dir-size.patch
 ext3-xattr-no-update-ctime-rhel4.patch
+ext3-fiemap-stub.patch
