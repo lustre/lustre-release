@@ -164,7 +164,7 @@ int cfs_mem_is_in_cache(const void *addr, const cfs_mem_cache_t *kmem)
          */
         page = virt_to_page(addr);
         if (unlikely(PageCompound(page)))
-                page = (struct page *)page_private(page);
+                page = (struct page *)page->private;
         return PageSlab(page) && ((void *)page->lru.next) == kmem;
 }
 EXPORT_SYMBOL(cfs_mem_is_in_cache);
