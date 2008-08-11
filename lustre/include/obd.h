@@ -274,6 +274,20 @@ struct ost_server_data;
 /* hold common fields for "target" device */
 struct obd_device_target {
         struct super_block       *obt_sb;
+        /** last_rcvd file */
+        struct file              *obt_rcvd_filp;
+        /** server data in last_rcvd file */
+        struct lr_server_data    *obt_lsd;
+        /** Lock protecting client bitmap */
+        spinlock_t                obt_client_bitmap_lock;
+        /** Bitmap of known clients */
+        unsigned long            *obt_client_bitmap;
+        /** Server last transaction number */
+        __u64                     obt_last_transno;
+        /** Lock protecting last transaction number */
+        spinlock_t                obt_translock;
+        /** Number of mounts */
+        __u64                     obt_mount_count;
         atomic_t                  obt_quotachecking;
         struct lustre_quota_ctxt  obt_qctxt;
         lustre_quota_version_t    obt_qfmt;
@@ -301,12 +315,7 @@ struct filter_obd {
         cfs_dentry_t       **fo_dentry_O_groups;
         cfs_dentry_t       **fo_dentry_O_sub;
         spinlock_t           fo_objidlock;      /* protect fo_lastobjid */
-        spinlock_t           fo_translock;      /* protect fsd_last_transno */
-        struct file         *fo_rcvd_filp;
         struct file         *fo_health_check_filp;
-        struct lr_server_data *fo_fsd;
-        unsigned long       *fo_last_rcvd_slots;
-        __u64                fo_mount_count;
 
         int                  fo_destroy_in_progress;
         struct semaphore     fo_create_lock;
@@ -356,6 +365,12 @@ struct filter_obd {
         int                      fo_fmd_max_age; /* jiffies to fmd expiry */
         void                     *fo_lcm;
 };
+
+#define fo_translock            fo_obt.obt_translock
+#define fo_rcvd_filp            fo_obt.obt_rcvd_filp
+#define fo_fsd                  fo_obt.obt_lsd
+#define fo_last_rcvd_slots      fo_obt.obt_client_bitmap
+#define fo_mount_count          fo_obt.obt_mount_count
 
 #define OSC_MAX_RIF_DEFAULT       8
 #define OSC_MAX_RIF_MAX         256
@@ -488,15 +503,10 @@ struct mds_obd {
         cfs_dentry_t                    *mds_fid_de;
         int                              mds_max_mdsize;
         int                              mds_max_cookiesize;
-        struct file                     *mds_rcvd_filp;
-        spinlock_t                       mds_transno_lock;
-        __u64                            mds_last_transno;
-        __u64                            mds_mount_count;
         __u64                            mds_io_epoch;
         unsigned long                    mds_atime_diff;
         struct semaphore                 mds_epoch_sem;
         struct ll_fid                    mds_rootfid;
-        struct lr_server_data           *mds_server_data;
         cfs_dentry_t                    *mds_pending_dir;
         cfs_dentry_t                    *mds_logs_dir;
         cfs_dentry_t                    *mds_objects_dir;
@@ -519,7 +529,6 @@ struct mds_obd {
         __u32                            mds_lov_objid_lastidx;
 
         struct file                     *mds_health_check_filp;
-        unsigned long                   *mds_client_bitmap;
         struct upcall_cache             *mds_group_hash;
 
         struct lustre_quota_info         mds_quota_info;
@@ -539,6 +548,13 @@ struct mds_obd {
         /* do we need permission sync */
         unsigned int                     mds_sync_permission;
 };
+
+#define mds_transno_lock         mds_obt.obt_translock
+#define mds_rcvd_filp            mds_obt.obt_rcvd_filp
+#define mds_server_data          mds_obt.obt_lsd
+#define mds_client_bitmap        mds_obt.obt_client_bitmap
+#define mds_mount_count          mds_obt.obt_mount_count
+#define mds_last_transno         mds_obt.obt_last_transno
 
 /* lov objid */
 #define mds_max_ost_index  (0xFFFF)
