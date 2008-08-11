@@ -167,6 +167,7 @@ case "$lustretag" in
         # LNet grained locking and SMP improvement branch
         lnettag="b_hd_lnet_smp"
         lustretag="HEAD"
+        libcfstag="HEAD"
         ;;
 
     b_ula)
