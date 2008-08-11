@@ -38,7 +38,11 @@ tbd Sun Microsystems, Inc.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
 
-
+Severity   : normal
+Bugzila    : 16237
+Description: Early reply size mismatch, MGC loses connection
+Details    : Apply the MGS_CONNECT_SUPPORTED mask at reconnect time so
+             the connect flags are properly negotiated.
 
 --------------------------------------------------------------------------
 
