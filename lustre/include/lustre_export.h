@@ -41,15 +41,24 @@
 #include <lustre_dlm.h>
 #include <lprocfs_status.h>
 
-/* Data stored per client in the last_rcvd file.  In le32 order. */
+struct lu_export_data {
+        struct semaphore        led_lcd_lock; /**< protect led_lcd */
+        struct lsd_client_data *led_lcd;      /**< client data */
+        loff_t                  led_lr_off;   /**< offset in last_rcvd */
+        int                     led_lr_idx;   /**< client index */
+};
+
 struct mds_export_data {
+        struct lu_export_data   med_led;
         struct list_head        med_open_head;
         spinlock_t              med_open_lock; /* lock med_open_head, mfd_list*/
-        struct lsd_client_data *med_lcd;
         __u64                   med_ibits_known;
-        loff_t                  med_lr_off;
-        int                     med_lr_idx;
 };
+
+#define med_lcd_lock    med_led.led_lcd_lock
+#define med_lcd         med_led.led_lcd
+#define med_lr_off      med_led.led_lr_off
+#define med_lr_idx      med_led.led_lr_idx
 
 struct osc_creator {
         spinlock_t              oscc_lock;
@@ -75,10 +84,8 @@ struct ec_export_data { /* echo client */
 
 /* In-memory access to client data from OST struct */
 struct filter_export_data {
-        spinlock_t                 fed_lock;      /* protects fed_open_head */
-        struct lsd_client_data    *fed_lcd;
-        loff_t                     fed_lr_off;
-        int                        fed_lr_idx;
+        struct lu_export_data      fed_led;
+        spinlock_t                 fed_lock;      /**< protects fed_mod_list */
         long                       fed_dirty;    /* in bytes */
         long                       fed_grant;    /* in bytes */
         struct list_head           fed_mod_list; /* files being modified */
@@ -86,6 +93,11 @@ struct filter_export_data {
         long                       fed_pending;  /* bytes just being written */
         struct brw_stats           fed_brw_stats;
 };
+
+#define fed_lcd_lock    fed_led.led_lcd_lock
+#define fed_lcd         fed_led.led_lcd
+#define fed_lr_off      fed_led.led_lr_off
+#define fed_lr_idx      fed_led.led_lr_idx
 
 typedef struct nid_stat_uuid {
         struct list_head ns_uuid_list;
@@ -146,14 +158,15 @@ struct obd_export {
         /* VBR: per-export last committed */
         __u64                     exp_last_committed;
         union {
+                struct lu_export_data     eu_target_data;
                 struct mds_export_data    eu_mds_data;
                 struct filter_export_data eu_filter_data;
                 struct ec_export_data     eu_ec_data;
         } u;
 };
 
+#define exp_target_data u.eu_target_data
 #define exp_mds_data    u.eu_mds_data
-#define exp_lov_data    u.eu_lov_data
 #define exp_filter_data u.eu_filter_data
 #define exp_ec_data     u.eu_ec_data
 
