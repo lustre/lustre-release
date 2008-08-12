@@ -670,7 +670,6 @@ test_7()
 {
 	mkdir -p $DIR/$tdir
 	chmod 0777 $DIR/$tdir
-	remote_mds && skip "remote mds" && return 0
 
 	wait_delete_completed
 
