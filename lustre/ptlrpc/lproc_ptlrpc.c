@@ -583,10 +583,10 @@ void ptlrpc_lprocfs_brw(struct ptlrpc_request *req, int bytes)
         idx = lustre_msg_get_opc(req->rq_reqmsg);
         switch (idx) {
         case OST_READ:
-                idx = BRW_READ_BYTES;
+                idx = BRW_READ_BYTES + PTLRPC_LAST_CNTR;
                 break;
         case OST_WRITE:
-                idx = BRW_WRITE_BYTES;
+                idx = BRW_WRITE_BYTES + PTLRPC_LAST_CNTR;
                 break;
         default:
                 LASSERTF(0, "unsupported opcode %u\n", idx);
