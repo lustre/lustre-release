@@ -4148,14 +4148,19 @@ run_test 106 "attempt exec of dir followed by chown of that dir"
 test_107() {
         CDIR=`pwd`
         cd $DIR
+
+        local file=core
+        rm -f $file
+
+        local save_pattern=$(sysctl -n kernel.core_pattern)
+        local save_uses_pid=$(sysctl -n kernel.core_uses_pid)
+        sysctl -w kernel.core_pattern=$file
+        sysctl -w kernel.core_uses_pid=0
+
         ulimit -c unlimited
         sleep 60 &
         SLEEPPID=$!
 
-        file=`sysctl -n kernel.core_pattern`
-        core_pid=`sysctl -n kernel.core_uses_pid`
-        [ $core_pid -eq 1 ] && file=$file.$SLEEPPID
-        rm -f $file
         sleep 1
 
         kill -s 11 $SLEEPPID
@@ -4167,6 +4172,8 @@ test_107() {
                 error "Fail to create core file $file"
         fi
         rm -f $file
+        sysctl -w kernel.core_pattern=$save_pattern
+        sysctl -w kernel.core_uses_pid=$save_uses_pid
         cd $CDIR
 }
 run_test 107 "Coredump on SIG"
