@@ -133,6 +133,8 @@ init_test_env() {
     case "x$SEC" in
         xkrb5*)
             echo "Using GSS/krb5 ptlrpc security flavor"
+            which lgss_keyring > /dev/null 2>&1 || \
+                error "built with gss disabled! SEC=$SEC"
             GSS=true
             GSS_KRB5=true
             ;;
