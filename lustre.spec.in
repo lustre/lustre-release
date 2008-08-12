@@ -202,6 +202,9 @@ if [ -f /boot/System.map-%{kversion} ]; then
 else
 	depmod -ae %{kversion} || exit 0
 fi
+cat <<EOF
+Lustre package installation complete.
+EOF
 
 # for update from < v1.4.6
 
