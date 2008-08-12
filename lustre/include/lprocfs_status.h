@@ -290,6 +290,8 @@ enum {
         MDS_REINT_UNLINK,
         MDS_REINT_RENAME,
         MDS_REINT_OPEN,
+        BRW_READ_BYTES,
+        BRW_WRITE_BYTES,
         EXTRA_LAST_OPC
 };
 
