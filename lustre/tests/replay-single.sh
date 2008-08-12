@@ -1356,6 +1356,19 @@ test_58() {
 }
 run_test 58 "test recovery from llog for setattr op (test llog_gen_rec)"
 
+test_58a() {
+    mkdir -p $DIR/$tdir
+    touch $DIR/$tdir/$tfile
+    replay_barrier $SINGLEMDS
+    setfattr -n trusted.foo -v bar $DIR/$tdir/$tfile
+    fail $SINGLEMDS
+    VAL=`getfattr --absolute-names --only-value -n trusted.foo $DIR/$tdir/$tfile`
+    [ x$VAL = x"bar" ] || return 1
+    rm -f $DIR/$tdir/$tfile
+    rmdir $DIR/$tdir
+}
+run_test 58a "test replay of setxattr op"
+
 # log_commit_thread vs filter_destroy race used to lead to import use after free
 # bug 11658
 test_59() {
