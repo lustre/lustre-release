@@ -171,7 +171,7 @@ static int ost_statfs(struct ptlrpc_request *req)
 
         osfs = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*osfs));
 
-        req->rq_status = obd_statfs(req->rq_export->exp_obd, osfs, 
+        req->rq_status = obd_statfs(req->rq_export->exp_obd, osfs,
                                     cfs_time_current_64() - HZ, 0);
         if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_ENOSPC))
                 osfs->os_bfree = osfs->os_bavail = 64;
@@ -250,7 +250,7 @@ static int ost_punch_lock_get(struct obd_export *exp, struct obdo *oa,
         else
                 policy.l_extent.end = finis | ~CFS_PAGE_MASK;
 
-        RETURN(ldlm_cli_enqueue_local(exp->exp_obd->obd_namespace, &res_id, 
+        RETURN(ldlm_cli_enqueue_local(exp->exp_obd->obd_namespace, &res_id,
                                       LDLM_EXTENT, &policy, LCK_PW, &flags,
                                       ldlm_blocking_ast, ldlm_completion_ast,
                                       ldlm_glimpse_ast, NULL, 0, NULL, lh));
@@ -578,7 +578,7 @@ static int ost_brw_lock_get(int mode, struct obd_export *exp,
         policy.l_extent.end   = (nb[nrbufs - 1].offset +
                                  nb[nrbufs - 1].len - 1) | ~CFS_PAGE_MASK;
 
-        RETURN(ldlm_cli_enqueue_local(exp->exp_obd->obd_namespace, &res_id, 
+        RETURN(ldlm_cli_enqueue_local(exp->exp_obd->obd_namespace, &res_id,
                                       LDLM_EXTENT, &policy, mode, &flags,
                                       ldlm_blocking_ast, ldlm_completion_ast,
                                       ldlm_glimpse_ast, NULL, 0, NULL, lh));
@@ -778,11 +778,11 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (rc != 0)
                 GOTO(out_bulk, rc);
 
-        /* 
+        /*
          * If getting the lock took more time than
          * client was willing to wait, drop it. b=11330
          */
-        if (cfs_time_current_sec() > req->rq_deadline || 
+        if (cfs_time_current_sec() > req->rq_deadline ||
             OBD_FAIL_CHECK(OBD_FAIL_OST_DROP_REQ)) {
                 no_reply = 1;
                 CERROR("Dropping timed-out read from %s because locking"
@@ -862,20 +862,20 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 if (rc == 0) {
                         time_t start = cfs_time_current_sec();
                         do {
-                                long timeoutl = req->rq_deadline - 
+                                long timeoutl = req->rq_deadline -
                                         cfs_time_current_sec();
-                                cfs_duration_t timeout = (timeoutl <= 0 || rc) ? 
+                                cfs_duration_t timeout = (timeoutl <= 0 || rc) ?
                                         CFS_TICK : cfs_time_seconds(timeoutl);
-                                lwi = LWI_TIMEOUT_INTERVAL(timeout, 
+                                lwi = LWI_TIMEOUT_INTERVAL(timeout,
                                                            cfs_time_seconds(1),
-                                                           ost_bulk_timeout, 
+                                                           ost_bulk_timeout,
                                                            desc);
-                                rc = l_wait_event(desc->bd_waitq, 
+                                rc = l_wait_event(desc->bd_waitq,
                                                   !ptlrpc_bulk_active(desc) ||
                                                   exp->exp_failed, &lwi);
                                 LASSERT(rc == 0 || rc == -ETIMEDOUT);
                                 /* Wait again if we changed deadline */
-                        } while ((rc == -ETIMEDOUT) && 
+                        } while ((rc == -ETIMEDOUT) &&
                                  (req->rq_deadline > cfs_time_current_sec()));
 
                         if (rc == -ETIMEDOUT) {
@@ -925,6 +925,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         LASSERT(rc <= 0);
         if (rc == 0) {
                 req->rq_status = nob;
+                ptlrpc_lprocfs_brw(req, nob);
                 target_committed_to_req(req);
                 ptlrpc_reply(req);
         } else if (!no_reply) {
@@ -963,7 +964,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         int rc, swab, i, j;
         obd_count                client_cksum = 0, server_cksum = 0;
         cksum_type_t             cksum_type = OBD_CKSUM_CRC32;
-        int                      no_reply = 0; 
+        int                      no_reply = 0;
         ENTRY;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_WRITE_BULK))
@@ -1071,11 +1072,11 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (rc != 0)
                 GOTO(out_bulk, rc);
 
-        /* 
+        /*
          * If getting the lock took more time than
          * client was willing to wait, drop it. b=11330
          */
-        if (cfs_time_current_sec() > req->rq_deadline || 
+        if (cfs_time_current_sec() > req->rq_deadline ||
             OBD_FAIL_CHECK(OBD_FAIL_OST_DROP_REQ)) {
                 no_reply = 1;
                 CERROR("Dropping timed-out write from %s because locking "
@@ -1096,8 +1097,8 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         }
 
         /* Because we already sync grant info with client when reconnect,
-         * grant info will be cleared for resent req, then fed_grant and 
-         * total_grant will not be modified in following preprw_write*/ 
+         * grant info will be cleared for resent req, then fed_grant and
+         * total_grant will not be modified in following preprw_write*/
         if (lustre_msg_get_flags(req->rq_reqmsg) & (MSG_RESENT | MSG_REPLAY)) {
                 DEBUG_REQ(D_CACHE, req, "clear resent/replay req grant info");
                 body->oa.o_valid &= ~OBD_MD_FLGRANT;
@@ -1124,18 +1125,18 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (rc == 0) {
                 time_t start = cfs_time_current_sec();
                 do {
-                        long timeoutl = req->rq_deadline - 
+                        long timeoutl = req->rq_deadline -
                                 cfs_time_current_sec();
-                        cfs_duration_t timeout = (timeoutl <= 0 || rc) ? 
+                        cfs_duration_t timeout = (timeoutl <= 0 || rc) ?
                                 CFS_TICK : cfs_time_seconds(timeoutl);
                         lwi = LWI_TIMEOUT_INTERVAL(timeout, cfs_time_seconds(1),
                                                    ost_bulk_timeout, desc);
-                        rc = l_wait_event(desc->bd_waitq, 
+                        rc = l_wait_event(desc->bd_waitq,
                                           !ptlrpc_bulk_active(desc) ||
                                           desc->bd_export->exp_failed, &lwi);
                         LASSERT(rc == 0 || rc == -ETIMEDOUT);
                         /* Wait again if we changed deadline */
-                } while ((rc == -ETIMEDOUT) && 
+                } while ((rc == -ETIMEDOUT) &&
                          (req->rq_deadline > cfs_time_current_sec()));
 
                 if (rc == -ETIMEDOUT) {
@@ -1246,21 +1247,25 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         ost_nio_pages_put(req, local_nb, npages);
 
         if (rc == 0) {
+                int nob = 0;
+
                 /* set per-requested niobuf return codes */
                 for (i = j = 0; i < niocount; i++) {
-                        int nob = remote_nb[i].len;
+                        int len = remote_nb[i].len;
 
+                        nob += len;
                         rcs[i] = 0;
                         do {
                                 LASSERT(j < npages);
                                 if (local_nb[j].rc < 0)
                                         rcs[i] = local_nb[j].rc;
-                                nob -= pp_rnb[j].len;
+                                len -= pp_rnb[j].len;
                                 j++;
-                        } while (nob > 0);
-                        LASSERT(nob == 0);
+                        } while (len > 0);
+                        LASSERT(len == 0);
                 }
                 LASSERT(j == npages);
+                ptlrpc_lprocfs_brw(req, nob);
         }
 
  out_lock:
@@ -1387,7 +1392,7 @@ static int ost_handle_quotacheck(struct ptlrpc_request *req)
 
         oqctl = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*oqctl),
                                    lustre_swab_obd_quotactl);
-        if (oqctl == NULL) 
+        if (oqctl == NULL)
                 RETURN(-EPROTO);
 
         rc = lustre_pack_reply(req, 1, NULL, NULL);
@@ -1824,19 +1829,19 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
 
         if (oss_num_threads) {
                 /* If oss_num_threads is set, it is the min and the max. */
-                if (oss_num_threads > OSS_THREADS_MAX) 
+                if (oss_num_threads > OSS_THREADS_MAX)
                         oss_num_threads = OSS_THREADS_MAX;
                 if (oss_num_threads < OSS_THREADS_MIN)
                         oss_num_threads = OSS_THREADS_MIN;
                 oss_max_threads = oss_min_threads = oss_num_threads;
         } else {
                 /* Base min threads on memory and cpus */
-                oss_min_threads = num_possible_cpus() * num_physpages >> 
+                oss_min_threads = num_possible_cpus() * num_physpages >>
                         (27 - CFS_PAGE_SHIFT);
                 if (oss_min_threads < OSS_THREADS_MIN)
                         oss_min_threads = OSS_THREADS_MIN;
                 /* Insure a 4x range for dynamic threads */
-                if (oss_min_threads > OSS_THREADS_MAX / 4) 
+                if (oss_min_threads > OSS_THREADS_MAX / 4)
                         oss_min_threads = OSS_THREADS_MAX / 4;
                 oss_max_threads = min(OSS_THREADS_MAX, oss_min_threads * 4);
         }
@@ -1844,7 +1849,7 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
         ost->ost_service =
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
                                 OST_MAXREPSIZE, OST_REQUEST_PORTAL,
-                                OSC_REPLY_PORTAL, OSS_SERVICE_WATCHDOG_FACTOR, 
+                                OSC_REPLY_PORTAL, OSS_SERVICE_WATCHDOG_FACTOR,
                                 ost_handle, LUSTRE_OSS_NAME,
                                 obd->obd_proc_entry, target_print_req,
                                 oss_min_threads, oss_max_threads, "ll_ost");
@@ -1862,7 +1867,7 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
                         oss_num_create_threads = OSS_MAX_CREATE_THREADS;
                 if (oss_num_create_threads < OSS_DEF_CREATE_THREADS)
                         oss_num_create_threads = OSS_DEF_CREATE_THREADS;
-                oss_min_create_threads = oss_max_create_threads = 
+                oss_min_create_threads = oss_max_create_threads =
                         oss_num_create_threads;
         } else {
                 oss_min_create_threads = OSS_DEF_CREATE_THREADS;
@@ -1890,7 +1895,7 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
         ost->ost_io_service =
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
                                 OST_MAXREPSIZE, OST_IO_PORTAL,
-                                OSC_REPLY_PORTAL, OSS_SERVICE_WATCHDOG_FACTOR, 
+                                OSC_REPLY_PORTAL, OSS_SERVICE_WATCHDOG_FACTOR,
                                 ost_handle, "ost_io",
                                 obd->obd_proc_entry, target_print_req,
                                 oss_min_threads, oss_max_threads, "ll_ost_io");
