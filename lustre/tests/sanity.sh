@@ -549,7 +549,7 @@ test_24d() {
 run_test 24d "mkdir .../R4/{f,g}; rename .../R4/f .../R4/g ====="
 
 test_24e() {
-	echo '-- cross directory renames --' 
+	echo '-- cross directory renames --'
 	mkdir $DIR/R5{a,b}
 	touch $DIR/R5a/f
 	mv $DIR/R5a/f $DIR/R5b/g
@@ -604,7 +604,7 @@ test_24j() {
 	$CHECKSTAT -a $DIR/R10/f || error
 	$CHECKSTAT -a $DIR/R10/g || error
 }
-run_test 24j "source does not exist ============================" 
+run_test 24j "source does not exist ============================"
 
 test_24k() {
 	mkdir $DIR/R11a $DIR/R11a/d
@@ -1202,27 +1202,27 @@ run_test 31f "remove of open directory with open-unlink file ==="
 test_32a() {
 	echo "== more mountpoints and symlinks ================="
 	[ -e $DIR/d32a ] && rm -fr $DIR/d32a
-	mkdir -p $DIR/d32a/ext2-mountpoint 
+	mkdir -p $DIR/d32a/ext2-mountpoint
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32a/ext2-mountpoint || error
-	$CHECKSTAT -t dir $DIR/d32a/ext2-mountpoint/.. || error  
+	$CHECKSTAT -t dir $DIR/d32a/ext2-mountpoint/.. || error
 	$UMOUNT $DIR/d32a/ext2-mountpoint || error
 }
 run_test 32a "stat d32a/ext2-mountpoint/.. ====================="
 
 test_32b() {
 	[ -e $DIR/d32b ] && rm -fr $DIR/d32b
-	mkdir -p $DIR/d32b/ext2-mountpoint 
+	mkdir -p $DIR/d32b/ext2-mountpoint
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32b/ext2-mountpoint || error
 	ls -al $DIR/d32b/ext2-mountpoint/.. || error
 	$UMOUNT $DIR/d32b/ext2-mountpoint || error
 }
 run_test 32b "open d32b/ext2-mountpoint/.. ====================="
- 
+
 test_32c() {
 	[ -e $DIR/d32c ] && rm -fr $DIR/d32c
-	mkdir -p $DIR/d32c/ext2-mountpoint 
+	mkdir -p $DIR/d32c/ext2-mountpoint
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32c/ext2-mountpoint || error
-	mkdir -p $DIR/d32c/d2/test_dir    
+	mkdir -p $DIR/d32c/d2/test_dir
 	$CHECKSTAT -t dir $DIR/d32c/ext2-mountpoint/../d2/test_dir || error
 	$UMOUNT $DIR/d32c/ext2-mountpoint || error
 }
@@ -1230,9 +1230,9 @@ run_test 32c "stat d32c/ext2-mountpoint/../d2/test_dir ========="
 
 test_32d() {
 	[ -e $DIR/d32d ] && rm -fr $DIR/d32d
-	mkdir -p $DIR/d32d/ext2-mountpoint 
+	mkdir -p $DIR/d32d/ext2-mountpoint
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32d/ext2-mountpoint || error
-	mkdir -p $DIR/d32d/d2/test_dir    
+	mkdir -p $DIR/d32d/d2/test_dir
 	ls -al $DIR/d32d/ext2-mountpoint/../d2/test_dir || error
 	$UMOUNT $DIR/d32d/ext2-mountpoint || error
 }
@@ -1240,10 +1240,10 @@ run_test 32d "open d32d/ext2-mountpoint/../d2/test_dir ========="
 
 test_32e() {
 	[ -e $DIR/d32e ] && rm -fr $DIR/d32e
-	mkdir -p $DIR/d32e/tmp    
-	TMP_DIR=$DIR/d32e/tmp       
-	ln -s $DIR/d32e $TMP_DIR/symlink11 
-	ln -s $TMP_DIR/symlink11 $TMP_DIR/../symlink01 
+	mkdir -p $DIR/d32e/tmp
+	TMP_DIR=$DIR/d32e/tmp
+	ln -s $DIR/d32e $TMP_DIR/symlink11
+	ln -s $TMP_DIR/symlink11 $TMP_DIR/../symlink01
 	$CHECKSTAT -t link $DIR/d32e/tmp/symlink11 || error
 	$CHECKSTAT -t link $DIR/d32e/symlink01 || error
 }
@@ -1251,20 +1251,20 @@ run_test 32e "stat d32e/symlink->tmp/symlink->lustre-subdir ===="
 
 test_32f() {
 	[ -e $DIR/d32f ] && rm -fr $DIR/d32f
-	mkdir -p $DIR/d32f/tmp    
-	TMP_DIR=$DIR/d32f/tmp       
-	ln -s $DIR/d32f $TMP_DIR/symlink11 
-	ln -s $TMP_DIR/symlink11 $TMP_DIR/../symlink01 
+	mkdir -p $DIR/d32f/tmp
+	TMP_DIR=$DIR/d32f/tmp
+	ln -s $DIR/d32f $TMP_DIR/symlink11
+	ln -s $TMP_DIR/symlink11 $TMP_DIR/../symlink01
 	ls $DIR/d32f/tmp/symlink11  || error
 	ls $DIR/d32f/symlink01 || error
 }
 run_test 32f "open d32f/symlink->tmp/symlink->lustre-subdir ===="
 
 test_32g() {
-	TMP_DIR=$DIR/$tdir/tmp       
+	TMP_DIR=$DIR/$tdir/tmp
 	mkdir -p $TMP_DIR $DIR/${tdir}2
-	ln -s $DIR/${tdir}2 $TMP_DIR/symlink12 
-	ln -s $TMP_DIR/symlink12 $TMP_DIR/../symlink02 
+	ln -s $DIR/${tdir}2 $TMP_DIR/symlink12
+	ln -s $TMP_DIR/symlink12 $TMP_DIR/../symlink02
 	$CHECKSTAT -t link $TMP_DIR/symlink12 || error
 	$CHECKSTAT -t link $DIR/$tdir/symlink02 || error
 	$CHECKSTAT -t dir -f $TMP_DIR/symlink12 || error
@@ -1274,10 +1274,10 @@ run_test 32g "stat d32g/symlink->tmp/symlink->lustre-subdir/${tdir}2"
 
 test_32h() {
 	rm -fr $DIR/$tdir $DIR/${tdir}2
-	TMP_DIR=$DIR/$tdir/tmp       
-	mkdir -p $TMP_DIR $DIR/${tdir}2 
-	ln -s $DIR/${tdir}2 $TMP_DIR/symlink12 
-	ln -s $TMP_DIR/symlink12 $TMP_DIR/../symlink02 
+	TMP_DIR=$DIR/$tdir/tmp
+	mkdir -p $TMP_DIR $DIR/${tdir}2
+	ln -s $DIR/${tdir}2 $TMP_DIR/symlink12
+	ln -s $TMP_DIR/symlink12 $TMP_DIR/../symlink02
 	ls $TMP_DIR/symlink12 || error
 	ls $DIR/$tdir/symlink02  || error
 }
@@ -1285,17 +1285,17 @@ run_test 32h "open d32h/symlink->tmp/symlink->lustre-subdir/${tdir}2"
 
 test_32i() {
 	[ -e $DIR/d32i ] && rm -fr $DIR/d32i
-	mkdir -p $DIR/d32i/ext2-mountpoint 
+	mkdir -p $DIR/d32i/ext2-mountpoint
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32i/ext2-mountpoint || error
 	touch $DIR/d32i/test_file
-	$CHECKSTAT -t file $DIR/d32i/ext2-mountpoint/../test_file || error  
+	$CHECKSTAT -t file $DIR/d32i/ext2-mountpoint/../test_file || error
 	$UMOUNT $DIR/d32i/ext2-mountpoint || error
 }
 run_test 32i "stat d32i/ext2-mountpoint/../test_file ==========="
 
 test_32j() {
 	[ -e $DIR/d32j ] && rm -fr $DIR/d32j
-	mkdir -p $DIR/d32j/ext2-mountpoint 
+	mkdir -p $DIR/d32j/ext2-mountpoint
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32j/ext2-mountpoint || error
 	touch $DIR/d32j/test_file
 	cat $DIR/d32j/ext2-mountpoint/../test_file || error
@@ -1305,8 +1305,8 @@ run_test 32j "open d32j/ext2-mountpoint/../test_file ==========="
 
 test_32k() {
 	rm -fr $DIR/d32k
-	mkdir -p $DIR/d32k/ext2-mountpoint 
-	mount -t ext2 -o loop $EXT2_DEV $DIR/d32k/ext2-mountpoint  
+	mkdir -p $DIR/d32k/ext2-mountpoint
+	mount -t ext2 -o loop $EXT2_DEV $DIR/d32k/ext2-mountpoint
 	mkdir -p $DIR/d32k/d2
 	touch $DIR/d32k/d2/test_file || error
 	$CHECKSTAT -t file $DIR/d32k/ext2-mountpoint/../d2/test_file || error
@@ -1316,7 +1316,7 @@ run_test 32k "stat d32k/ext2-mountpoint/../d2/test_file ========"
 
 test_32l() {
 	rm -fr $DIR/d32l
-	mkdir -p $DIR/d32l/ext2-mountpoint 
+	mkdir -p $DIR/d32l/ext2-mountpoint
 	mount -t ext2 -o loop $EXT2_DEV $DIR/d32l/ext2-mountpoint || error
 	mkdir -p $DIR/d32l/d2
 	touch $DIR/d32l/d2/test_file
@@ -1327,10 +1327,10 @@ run_test 32l "open d32l/ext2-mountpoint/../d2/test_file ========"
 
 test_32m() {
 	rm -fr $DIR/d32m
-	mkdir -p $DIR/d32m/tmp    
-	TMP_DIR=$DIR/d32m/tmp       
-	ln -s $DIR $TMP_DIR/symlink11 
-	ln -s $TMP_DIR/symlink11 $TMP_DIR/../symlink01 
+	mkdir -p $DIR/d32m/tmp
+	TMP_DIR=$DIR/d32m/tmp
+	ln -s $DIR $TMP_DIR/symlink11
+	ln -s $TMP_DIR/symlink11 $TMP_DIR/../symlink01
 	$CHECKSTAT -t link $DIR/d32m/tmp/symlink11 || error
 	$CHECKSTAT -t link $DIR/d32m/symlink01 || error
 }
@@ -1338,10 +1338,10 @@ run_test 32m "stat d32m/symlink->tmp/symlink->lustre-root ======"
 
 test_32n() {
 	rm -fr $DIR/d32n
-	mkdir -p $DIR/d32n/tmp    
-	TMP_DIR=$DIR/d32n/tmp       
-	ln -s $DIR $TMP_DIR/symlink11 
-	ln -s $TMP_DIR/symlink11 $TMP_DIR/../symlink01 
+	mkdir -p $DIR/d32n/tmp
+	TMP_DIR=$DIR/d32n/tmp
+	ln -s $DIR $TMP_DIR/symlink11
+	ln -s $TMP_DIR/symlink11 $TMP_DIR/../symlink01
 	ls -l $DIR/d32n/tmp/symlink11  || error
 	ls -l $DIR/d32n/symlink01 || error
 }
@@ -1349,11 +1349,11 @@ run_test 32n "open d32n/symlink->tmp/symlink->lustre-root ======"
 
 test_32o() {
 	rm -fr $DIR/d32o $DIR/$tfile
-	touch $DIR/$tfile 
-	mkdir -p $DIR/d32o/tmp    
-	TMP_DIR=$DIR/d32o/tmp       
-	ln -s $DIR/$tfile $TMP_DIR/symlink12 
-	ln -s $TMP_DIR/symlink12 $TMP_DIR/../symlink02 
+	touch $DIR/$tfile
+	mkdir -p $DIR/d32o/tmp
+	TMP_DIR=$DIR/d32o/tmp
+	ln -s $DIR/$tfile $TMP_DIR/symlink12
+	ln -s $TMP_DIR/symlink12 $TMP_DIR/../symlink02
 	$CHECKSTAT -t link $DIR/d32o/tmp/symlink12 || error
 	$CHECKSTAT -t link $DIR/d32o/symlink02 || error
 	$CHECKSTAT -t file -f $DIR/d32o/tmp/symlink12 || error
@@ -1367,15 +1367,15 @@ test_32p() {
     log 32p_2
 	rm -f $DIR/$tfile
     log 32p_3
-	touch $DIR/$tfile 
+	touch $DIR/$tfile
     log 32p_4
-	mkdir -p $DIR/d32p/tmp    
+	mkdir -p $DIR/d32p/tmp
     log 32p_5
-	TMP_DIR=$DIR/d32p/tmp       
+	TMP_DIR=$DIR/d32p/tmp
     log 32p_6
-	ln -s $DIR/$tfile $TMP_DIR/symlink12 
+	ln -s $DIR/$tfile $TMP_DIR/symlink12
     log 32p_7
-	ln -s $TMP_DIR/symlink12 $TMP_DIR/../symlink02 
+	ln -s $TMP_DIR/symlink12 $TMP_DIR/../symlink02
     log 32p_8
 	cat $DIR/d32p/tmp/symlink12 || error
     log 32p_9
@@ -1454,7 +1454,7 @@ test_34b() {
 run_test 34b "O_RDONLY opening file doesn't create objects ====="
 
 test_34c() {
-	[ ! -f $DIR/f34 ] && test_34a 
+	[ ! -f $DIR/f34 ] && test_34a
 	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 || error
 	$OPENFILE -f O_RDWR $DIR/f34
 	$GETSTRIPE $DIR/f34 2>&1 | grep -q "no stripe info" && error
@@ -1463,7 +1463,7 @@ test_34c() {
 run_test 34c "O_RDWR opening file-with-size works =============="
 
 test_34d() {
-	[ ! -f $DIR/f34 ] && test_34a 
+	[ ! -f $DIR/f34 ] && test_34a
 	dd if=/dev/zero of=$DIR/f34 conv=notrunc bs=4k count=1 || error
 	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 || error
 	rm $DIR/f34
@@ -1614,7 +1614,7 @@ run_test 39 "mtime changed on create ==========================="
 function get_times() {
         FILE=$1
         TIME=$2
-        
+
         i=0
         for time in `stat -c "%X %Y %Z" $FILE`; do
                 eval "$TIME[$i]=$time"
@@ -1648,7 +1648,7 @@ test_39b() {
         get_times $DIR/$tdir/flink LINK_NEW
         get_times $DIR/$tdir/funlink UNLINK_NEW
         get_times $DIR/$tdir/frename RENAME_NEW
-        
+
         cat $DIR/$tdir/fopen > /dev/null
         ln $DIR/$tdir/flink $DIR/$tdir/flink2
         rm -f $DIR/$tdir/funlink2
@@ -1663,7 +1663,7 @@ test_39b() {
         echo ${UNLINK_OLD[1]},${UNLINK_NEW[$MTIME]},${UNLINK_NEW2[$MTIME]}
         echo ${RENAME_OLD[1]},${RENAME_NEW[$MTIME]},${RENAME_NEW2[$MTIME]}
 
-        
+
         [ ${OPEN_NEW2[$MTIME]} -eq ${OPEN_NEW[$MTIME]} ] || \
                 error "open file reverses mtime"
         [ ${LINK_NEW2[$MTIME]} -eq ${LINK_NEW[$MTIME]} ] || \
@@ -1962,7 +1962,7 @@ page_size() {
 
 # in a 2 stripe file (lov.sh), page 1023 maps to page 511 in its object.  this
 # test tickles a bug where re-dirtying a page was failing to be mapped to the
-# objects offset and an assert hit when an rpc was built with 1023's mapped 
+# objects offset and an assert hit when an rpc was built with 1023's mapped
 # offset 511 and 511's raw 511 offset. it also found general redirtying bugs.
 test_46() {
 	f="$DIR/f46"
@@ -2158,7 +2158,7 @@ test_51d() {
 		error "OST $N has less objects vs OST $NLAST (${OBJS[$N]} < ${OBJS[$NLAST]}"
 	    [ ${OBJS[$N]} -gt $((${OBJS[$NLAST]} + 20)) ] && \
 		error "OST $N has less objects vs OST $NLAST (${OBJS[$N]} < ${OBJS[$NLAST]}"
-	    
+
 	    [ ${OBJS0[$N]} -lt $((${OBJS0[$NLAST]} - 20)) ] && \
 		error "OST $N has less #0 objects vs OST $NLAST (${OBJS0[$N]} < ${OBJS0[$NLAST]}"
 	    [ ${OBJS0[$N]} -gt $((${OBJS0[$NLAST]} + 20)) ] && \
@@ -2251,7 +2251,7 @@ test_54b() {
 	f="$DIR/f54b"
 	mknod $f c 1 3
 	chmod 0666 $f
-	dd if=/dev/zero of=$f bs=`page_size` count=1 
+	dd if=/dev/zero of=$f bs=`page_size` count=1
 }
 run_test 54b "char device works in lustre ======================"
 
@@ -2273,7 +2273,7 @@ test_54c() {
 	tdir="$DIR/d54c"
 	loopdev="$DIR/loop54c"
 
-	find_loop_dev 
+	find_loop_dev
 	[ -z "$LOOPNUM" ] && echo "couldn't find empty loop device" && return
 	mknod $loopdev b 7 $LOOPNUM
 	echo "make a loop file system with $tfile on $loopdev ($LOOPNUM)..."
@@ -2581,7 +2581,7 @@ test_57a() {
 	remote_mds && skip "remote MDS" && return
 	local MNTDEV="mds.*.mntdev"
 	DEV=$(lctl get_param -n $MNTDEV)
-	[ -z "$DEV" ] && error "can't access $MNTDEV" 
+	[ -z "$DEV" ] && error "can't access $MNTDEV"
 	for DEV in `lctl get_param -n $MNTDEV`; do
 		dumpe2fs -h $DEV > $TMP/t57a.dump || error "can't access $DEV"
 		DEVISIZE=`awk '/Inode size:/ { print $3 }' $TMP/t57a.dump`
@@ -2675,7 +2675,7 @@ test_60b() { # bug 6411
 run_test 60b "limit repeated messages from CERROR/CWARN ========"
 
 test_60c() {
-	echo "create 5000 files" 
+	echo "create 5000 files"
 	createmany -o $DIR/f60c- 5000
 	#define OBD_FAIL_MDS_LLOG_CREATE_FAILED  0x137
 	lctl set_param fail_loc=0x80000137
@@ -2843,9 +2843,9 @@ test_65h() {
           "`$GETSTRIPE -v $DIR/d65/dd1 | grep "^count"`" ] || error "stripe info inherit failed"
 }
 run_test 65h "directory stripe info inherit ===================="
- 
+
 test_65i() { # bug6367
-        $SETSTRIPE $MOUNT -s 65536 -c -1 
+        $SETSTRIPE $MOUNT -s 65536 -c -1
 }
 run_test 65i "set non-default striping on root directory (bug 6367)="
 
@@ -3080,7 +3080,7 @@ run_test 72 "Test that remove suid works properly (bug5695) ===="
 
 # bug 3462 - multiple simultaneous MDC requests
 test_73() {
-	mkdir $DIR/d73-1 
+	mkdir $DIR/d73-1
 	mkdir $DIR/d73-2
 	multiop_bg_pause $DIR/d73-1/f73-1 O_c || return 1
 	pid1=$!
@@ -3100,8 +3100,8 @@ test_73() {
 	sleep 25
 
 	$CHECKSTAT -t file $DIR/d73-1/f73-1 || return 4
-	$CHECKSTAT -t file $DIR/d73-1/f73-2 || return 5 
-	$CHECKSTAT -t file $DIR/d73-2/f73-3 || return 6 
+	$CHECKSTAT -t file $DIR/d73-1/f73-2 || return 5
+	$CHECKSTAT -t file $DIR/d73-2/f73-3 || return 6
 
 	rm -rf $DIR/d73-*
 }
@@ -3143,22 +3143,22 @@ export T75_PREP=no
 test75_prep() {
         [ $T75_PREP = "yes" ] && return
         echo "using F75=$F75, F128k=$F128k, FHEAD=$FHEAD, FTAIL=$FTAIL"
- 
+
         dd if=/dev/urandom of=${F75}_128k bs=128k count=1 || error "dd failed"
         log "finished dd"
         chmod 777 ${F128k}
         T75_PREP=yes
 }
- 
+
 test_75a() {
         test75_prep
- 
+
         cp -p ${F128k} ${FHEAD}
         log "finished cp to $FHEAD"
         cp -p ${F128k} ${FTAIL}
         log "finished cp to $FTAIL"
         cat ${F128k} ${F128k} > ${F75}_sim_sim
- 
+
         $JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
         log "finished join $FHEAD to ${F75}_sim_sim"
         cmp ${FHEAD} ${F75}_sim_sim || error "${FHEAD} ${F75}_sim_sim differ"
@@ -3166,10 +3166,10 @@ test_75a() {
         $CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} still exist after join"
 }
 run_test 75a "TEST join file ===================================="
- 
+
 test_75b() {
         test75_prep
- 
+
         cp -p ${F128k} ${FTAIL}
         cat ${F75}_sim_sim >> ${F75}_join_sim
         cat ${F128k} >> ${F75}_join_sim
@@ -3179,10 +3179,10 @@ test_75b() {
         $CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} exist after join"
 }
 run_test 75b "TEST join file 2 =================================="
- 
+
 test_75c() {
         test75_prep
- 
+
         cp -p ${F128k} ${FTAIL}
         cat ${F128k} >> ${F75}_sim_join
         cat ${F75}_join_sim >> ${F75}_sim_join
@@ -3192,10 +3192,10 @@ test_75c() {
         $CHECKSTAT -a ${FHEAD} || error "tail ${FHEAD} exist after join"
 }
 run_test 75c "TEST join file 3 =================================="
- 
+
 test_75d() {
         test75_prep
- 
+
         cp -p ${F128k} ${FHEAD}
         cp -p ${F128k} ${FHEAD}_tmp
         cat ${F75}_sim_sim >> ${F75}_join_join
@@ -3206,17 +3206,17 @@ test_75d() {
         $CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} exist after join (2)"
 }
 run_test 75d "TEST join file 4 =================================="
- 
+
 test_75e() {
         test75_prep
- 
+
         rm -rf ${FHEAD} || "delete join file error"
 }
 run_test 75e "TEST join file 5 (remove joined file) ============="
- 
+
 test_75f() {
         test75_prep
- 
+
         cp -p ${F128k} ${F75}_join_10_compare
         cp -p ${F128k} ${F75}_join_10
         for ((i = 0; i < 10; i++)); do
@@ -3230,13 +3230,13 @@ test_75f() {
                 error "files ${F75}_join_10 ${F75}_join_10_compare differ"
 }
 run_test 75f "TEST join file 6 (join 10 files) =================="
- 
+
 test_75g() {
         [ ! -f ${F75}_join_10 ] && echo "${F75}_join_10 missing" && return
         $LFS getstripe ${F75}_join_10
- 
+
         $OPENUNLINK ${F75}_join_10 ${F75}_join_10 || error "files unlink open"
- 
+
         ls -l $F75*
 }
 run_test 75g "TEST join file 7 (open unlink) ===================="
@@ -3314,7 +3314,7 @@ test_77b() { # bug 10889
 run_test 77b "checksum error on client write ===================="
 
 test_77c() { # bug 10889
-	[ ! -f $DIR/f77b ] && skip "requires 77b - skipping" && return  
+	[ ! -f $DIR/f77b ] && skip "requires 77b - skipping" && return
 	set_checksums 1
 	for algo in $CKSUM_TYPES; do
 		cancel_lru_locks osc
@@ -3341,7 +3341,7 @@ test_77d() { # bug 10889
 run_test 77d "checksum error on OST direct write ==============="
 
 test_77e() { # bug 10889
-	[ ! -f $DIR/f77 ] && skip "requires 77d - skipping" && return  
+	[ ! -f $DIR/f77 ] && skip "requires 77d - skipping" && return
 	#define OBD_FAIL_OSC_CHECKSUM_RECEIVE    0x408
 	lctl set_param fail_loc=0x80000408
 	set_checksums 1
@@ -3386,7 +3386,7 @@ run_test 77g "checksum error on OST write ======================"
 test_77h() { # bug 10889
 	[ $(lctl get_param -n devices | grep -c obdfilter) -eq 0 ] && \
 		skip "remote OST" && return
-	[ ! -f $DIR/f77g ] && skip "requires 77g - skipping" && return  
+	[ ! -f $DIR/f77g ] && skip "requires 77g - skipping" && return
 	cancel_lru_locks osc
 	#define OBD_FAIL_OST_CHECKSUM_SEND          0x21b
 	lctl set_param fail_loc=0x8000021b
@@ -3483,15 +3483,15 @@ test_79() { # bug 12743
 
         ALLOWANCE=$((64 * $OSTCOUNT))
 
-        if [ $DFTOTAL -lt $(($BKTOTAL - $ALLOWANCE)) ] ||  
+        if [ $DFTOTAL -lt $(($BKTOTAL - $ALLOWANCE)) ] ||
            [ $DFTOTAL -gt $(($BKTOTAL + $ALLOWANCE)) ] ; then
                 error "df total($DFTOTAL) mismatch OST total($BKTOTAL)"
         fi
-        if [ $DFFREE -lt $(($BKFREE - $ALLOWANCE)) ] || 
+        if [ $DFFREE -lt $(($BKFREE - $ALLOWANCE)) ] ||
            [ $DFFREE -gt $(($BKFREE + $ALLOWANCE)) ] ; then
                 error "df free($DFFREE) mismatch OST free($BKFREE)"
         fi
-        if [ $DFAVAIL -lt $(($BKAVAIL - $ALLOWANCE)) ] || 
+        if [ $DFAVAIL -lt $(($BKAVAIL - $ALLOWANCE)) ] ||
            [ $DFAVAIL -gt $(($BKAVAIL + $ALLOWANCE)) ] ; then
                 error "df avail($DFAVAIL) mismatch OST avail($BKAVAIL)"
         fi
@@ -3642,7 +3642,7 @@ test_101() {
 	if [ $(($discard * 10)) -gt $nreads ] ;then
 		lctl get_param osc.*.rpc_stats
 		lctl get_param llite.*.read_ahead_stats
-		error "too many ($discard) discarded pages" 
+		error "too many ($discard) discarded pages"
 	fi
 	rm -f $DIR/$tfile || true
 }
@@ -3703,7 +3703,7 @@ test_101b() {
 	local ITERATION=$((FILE_LENGTH/STRIDE_SIZE))
 	# prepare the read-ahead file
 	setup_test101
-	cancel_lru_locks osc 
+	cancel_lru_locks osc
 	for BIDX in 2 4 8 16 32 64 128 256
 	do
 		local BSIZE=$((BIDX*4096))
@@ -3726,18 +3726,18 @@ setup_test102() {
 	[ "$SETUP_TEST102" = "yes" ] && return
 	mkdir -p $DIR/$tdir
 	STRIPE_SIZE=65536
-	STRIPE_COUNT=4 
+	STRIPE_COUNT=4
 	STRIPE_OFFSET=2
 
 	trap cleanup_test102 EXIT
 	cd $DIR
 	$SETSTRIPE $tdir -s $STRIPE_SIZE -i $STRIPE_OFFSET -c $STRIPE_COUNT
-	cd $DIR/$tdir 
+	cd $DIR/$tdir
 	for num in 1 2 3 4
 	do
 		for count in 1 2 3 4
 		do
-			for offset in 0 1 2 3 
+			for offset in 0 1 2 3
 			do
 				local stripe_size=`expr $STRIPE_SIZE \* $num`
 				local file=file"$num-$offset-$count"
@@ -3747,7 +3747,7 @@ setup_test102() {
 	done
 
 	cd $DIR
-	star -c  f=$TMP/f102.tar $tdir 
+	star -c  f=$TMP/f102.tar $tdir
 	SETUP_TEST102=yes
 }
 
@@ -3774,7 +3774,7 @@ test_102a() {
         setfattr -n trusted.name1 -v value1 $testfile || error
         [ "`getfattr -n trusted.name1 $testfile 2> /dev/null | \
         grep "trusted.name1"`" == "trusted.name1=\"value1\"" ] || error
- 
+
         setfattr -n user.author1 -v author1 $testfile || error
         [ "`getfattr -n user.author1 $testfile 2> /dev/null | \
         grep "user.author1"`" == "user.author1=\"author1\"" ] || error
@@ -3785,7 +3785,7 @@ test_102a() {
         [ `getfattr -d -m "^trusted" $testfile 2> /dev/null | \
         grep "trusted.name" | wc -l` -eq 3 ] || error
 
- 
+
         setfattr -n user.author2 -v author2 $testfile || error
         setfattr -n user.author3 -v author3 $testfile || error
         [ `getfattr -d -m "^user" $testfile 2> /dev/null | \
@@ -3874,12 +3874,12 @@ compare_stripe_info1() {
 	do
 		for count in 1 2 3 4
 		do
-			for offset in 0 1 2 3 
+			for offset in 0 1 2 3
 			do
 				local size=`expr $STRIPE_SIZE \* $num`
 				local file=file"$num-$offset-$count"
 				local tmp_file=out
-				$GETSTRIPE -v $file > $tmp_file 
+				$GETSTRIPE -v $file > $tmp_file
 				get_stripe_info  $tmp_file
 				if test $stripe_size -ne $size
 				then
@@ -3904,7 +3904,7 @@ compare_stripe_info2() {
 	do
 		for count in 1 2 3 4
 		do
-			for offset in 0 1 2 3 
+			for offset in 0 1 2 3
 			do
 				local size=`expr $STRIPE_SIZE \* $num`
 				local file=file"$num-$offset-$count"
@@ -3931,7 +3931,7 @@ compare_stripe_info2() {
 
 test_102d() {
 	# b10930: star test for trusted.lov xattr
-	star --xhelp 2>&1 | grep -q nolustre  
+	star --xhelp 2>&1 | grep -q nolustre
 	if [ $? -ne 0 ]
 	then
 		skip "being skipped because a lustre-aware star is not installed." && return
@@ -3948,7 +3948,7 @@ run_test 102d "star restore stripe info from tarfile,not keep osts ==========="
 
 test_102e() {
 	# b10930: star test for trusted.lov xattr
-	star --xhelp 2>&1 | grep -q nolustre  
+	star --xhelp 2>&1 | grep -q nolustre
 	[ $? -ne 0 ] && skip "lustre-aware star is not installed" && return
 	[ "$OSTCOUNT" -lt "4" ] && skip "skipping 4-stripe test" && return
 	setup_test102
@@ -3961,7 +3961,7 @@ run_test 102e "star restore stripe info from tarfile, keep osts ==========="
 
 test_102f() {
 	# b10930: star test for trusted.lov xattr
-	star --xhelp 2>&1 | grep -q nolustre  
+	star --xhelp 2>&1 | grep -q nolustre
 	[ $? -ne 0 ] && skip "lustre-aware star is not installed" && return
 	[ "$OSTCOUNT" -lt "4" ] && skip "skipping 4-stripe test" && return
 	setup_test102
@@ -3975,7 +3975,7 @@ run_test 102f "star copy files, not keep osts ==========="
 
 test_102g() {
 	# b10930: star test for trusted.lov xattr
-	star --xhelp 2>&1 | grep -q nolustre  
+	star --xhelp 2>&1 | grep -q nolustre
 	[ $? -ne 0 ] && skip "lustre-aware star is not installed" && return
 	[ "$OSTCOUNT" -lt "4" ] && skip "skipping 4-stripe test" && return
 	setup_test102
@@ -4198,8 +4198,8 @@ free_min_max () {
 		MINV=${AVAIL[i]}; MINI=$i
 	    fi
 	done
-	echo Min free space: OST $MINI: $MINV 
-	echo Max free space: OST $MAXI: $MAXV 
+	echo Min free space: OST $MINI: $MINV
+	echo Max free space: OST $MAXI: $MAXV
 }
 
 test_116() {
@@ -4264,14 +4264,14 @@ test_116() {
 	free_min_max
 	DIFF2=$(($MAXV - $MINV))
 	echo "free space delta: orig $DIFF final $DIFF2"
-	[ $DIFF2 -gt $DIFF ] && echo "delta got worse!" 
+	[ $DIFF2 -gt $DIFF ] && echo "delta got worse!"
 	DIFF=$(($MINV1 - ${AVAIL[$MINI1]}))
 	echo "Wrote $DIFF to smaller OST $MINI1"
 	DIFF2=$(($MAXV1 - ${AVAIL[$MAXI1]}))
 	echo "Wrote $DIFF2 to larger OST $MAXI1"
 	[ $DIFF -gt 0 ] && echo "Wrote $(($DIFF2 * 100 / $DIFF - 100))% more data to larger OST $MAXI1"
 
-	# Figure out which files were written where 
+	# Figure out which files were written where
 	UUID=$(lctl get_param -n lov.${FSNAME}-clilov-*.target_obd | awk '/'$MINI1': / {print $2; exit}')
 	echo $UUID
         MINC=$($GETSTRIPE --obd $UUID $DIR/$tdir | wc -l)
@@ -4459,7 +4459,7 @@ test_118f() {
 	fi
 	
         lctl set_param fail_loc=0x0
-        
+
         LOCKED=$(lctl get_param -n "llite.*.dump_page_cache" | grep -c locked)
         DIRTY=$(lctl get_param -n "llite.*.dump_page_cache" | grep -c dirty)
         WRITEBACK=$(lctl get_param -n "llite.*.dump_page_cache" | grep -c writeback)
@@ -4847,7 +4847,7 @@ test_120g() {
         cancel_lru_locks mdc
         cancel_lru_locks osc
         t0=`date +%s`
-        
+
         can0=`lctl get_param -n ldlm.services.ldlm_canceld.stats | awk '/ldlm_cancel/ {print $2}'`
         blk0=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
         createmany -o $DIR/$tdir/f $count
@@ -4979,9 +4979,9 @@ test_124a() {
 
         # use touch to produce $NR new locks
         log "create $NR files at $DIR/$tdir"
-        createmany -o $DIR/$tdir/f $NR || 
-                error "failed to create $NR files in $DIR/$tdir" 
-        
+        createmany -o $DIR/$tdir/f $NR ||
+                error "failed to create $NR files in $DIR/$tdir"
+
         cancel_lru_locks mdc
         ls -l $DIR/$tdir > /dev/null
 
@@ -5044,7 +5044,7 @@ test_124b() {
 	[ -z "`lctl get_param -n mdc.*.connect_flags | grep lru_resize`" ] && \
                skip "no lru resize on server" && return 0
 
-        # even for cmd no matter what metadata namespace to use for getting 
+        # even for cmd no matter what metadata namespace to use for getting
         # the limit, we use appropriate.
         LIMIT=`lctl get_param -n ldlm.namespaces.*mdc*.pool.limit`
 
@@ -5053,7 +5053,7 @@ test_124b() {
                 NR=$LIMIT
         fi
         lru_resize_disable mdc
-        mkdir -p $DIR/$tdir/disable_lru_resize || 
+        mkdir -p $DIR/$tdir/disable_lru_resize ||
 		error "failed to create $DIR/$tdir/disable_lru_resize"
 
         createmany -o $DIR/$tdir/disable_lru_resize/f $NR
@@ -5077,7 +5077,7 @@ test_124b() {
         unlinkmany $DIR/$tdir/disable_lru_resize/f $NR
 
         lru_resize_enable mdc
-        mkdir -p $DIR/$tdir/enable_lru_resize || 
+        mkdir -p $DIR/$tdir/enable_lru_resize ||
 		error "failed to create $DIR/$tdir/enable_lru_resize"
 
         createmany -o $DIR/$tdir/enable_lru_resize/f $NR
@@ -5142,15 +5142,15 @@ test_127() { # bug 15521
                 echo "got $COUNT $NAME"
 
                 case $NAME in
-                        ost_read|ost_write)
+                        read_bytes|write_bytes)
                         [ $MIN -lt 4096 ] && error "min is too small: $MIN"
                         [ $MIN -gt $FSIZE ] && error "min is too big: $MIN"
                         [ $MAX -lt 4096 ] && error "max is too small: $MAX"
                         [ $MAX -gt $FSIZE ] && error "max is too big: $MAX"
                         [ $SUM -ne $FSIZE ] && error "sum is wrong: $SUM"
-                        [ $SUMSQ -lt $(((FSIZE /4096) * (4096 * 4096))) ] && 
+                        [ $SUMSQ -lt $(((FSIZE /4096) * (4096 * 4096))) ] &&
                                 error "sumsquare is too small: $SUMSQ"
-                        [ $SUMSQ -gt $((FSIZE * FSIZE)) ] && 
+                        [ $SUMSQ -gt $((FSIZE * FSIZE)) ] &&
                                 error "sumsquare is too big: $SUMSQ"
                         ;;
                         *) ;;
@@ -5158,8 +5158,8 @@ test_127() { # bug 15521
         done < $DIR/${tfile}.tmp
 
         #check that we actually got some stats
-        [ "$ost_read" ] || error "no read done"
-        [ "$ost_write" ] || error "no write done"
+        [ "$read_bytes" ] || error "no read done"
+        [ "$write_bytes" ] || error "no write done"
 }
 run_test 127 "verify the client stats are sane"
 
@@ -5180,7 +5180,7 @@ test_129() {
         [ "$FSTYPE" != "ldiskfs" ] && skip "not needed for FSTYPE=$FSTYPE" && return 0
 
         DEV=$(basename $(do_facet mds lctl get_param -n mds.*.mntdev))
-        [ -z "$DEV" ] && error "can't access mds mntdev" 
+        [ -z "$DEV" ] && error "can't access mds mntdev"
         EFBIG=27
         LDPROC=/proc/fs/ldiskfs/$DEV/max_dir_size
         MAX=16384

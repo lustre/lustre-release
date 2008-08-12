@@ -38,8 +38,12 @@ tbd Sun Microsystems, Inc.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
 
+Severity   : enhancement
+Bugzilla   : 16573
+Description: Export bytes_read/bytes_write count on OSC/OST.
+
 Severity   : normal
-Bugzila    : 16237
+Bugzilla   : 16237
 Description: Early reply size mismatch, MGC loses connection
 Details    : Apply the MGS_CONNECT_SUPPORTED mask at reconnect time so
              the connect flags are properly negotiated.
@@ -88,7 +92,7 @@ Details    : Apply the MGS_CONNECT_SUPPORTED mask at reconnect time so
 
 Severity   : normal
 Bugzilla   : 16006
-Description: Properly propagate oinfo flags from lov to osc for statfs   
+Description: Properly propagate oinfo flags from lov to osc for statfs
 Details    : restore missing copy oi_flags to lov requests.
 
 Severity   : enhancement
@@ -112,7 +116,7 @@ Description: Update to RHEL4 kernel-2.6.9-67.0.22.EL.
 
 Severity   : enhancement
 Bugzilla   : 16091
-Description: configure's --enable-quota should check the 
+Description: configure's --enable-quota should check the
            : kernel .config for CONFIG_QUOTA
 Details    : configure is terminated if --enable-quota is passed but
            : no quota support is in kernel
@@ -126,7 +130,7 @@ Severity   : normal
 Bugzilla   : 16080
 Description: don't fail open with -ERANGE
 Details    : if client connected until mds will be know about real ost count
-             get LOV EA can be fail because mds not allocate enougth buffer 
+             get LOV EA can be fail because mds not allocate enougth buffer
              for LOV EA.
 
 Severity   : normal
@@ -183,7 +187,7 @@ Severity   : normal
 Bugzilla   : 15825
 Description: Kernel BUG tries to release flock
 Details    : Lustre does not destroy flock lock before last reference goes
-	     away. So always drop flock locks when client is evicted and 
+	     away. So always drop flock locks when client is evicted and
 	     perform unlock regardless of successfulness of speaking to MDS.
 
 Severity   : enhancement
@@ -415,7 +419,7 @@ Details    : The direct IO path doesn't call check_rpcs to submit a new RPC once
 
 Severity   : normal
 Bugzilla   : 15684
-Description: Procfs and llog threads access destoryed import sometimes. 
+Description: Procfs and llog threads access destoryed import sometimes.
 Details    : Sync the import destoryed process with procfs and llog threads by
 	     the import refcount and semaphore.
 
@@ -586,20 +590,20 @@ Details	   : Mountpoint references were being leaked during open reply
 Severity   : minor
 Frequency  : rare
 Bugzilla   : 13380
-Description: fix for occasional failure case of -ENOSPC in recovery-small tests 
-Details    : Move the 'good_osts' check before the 'total_bavail' check.  This 
-	     will result in an -EAGAIN and in the exit call path we call 
-	     alloc_rr() which will with increasing aggressiveness attempt to 
+Description: fix for occasional failure case of -ENOSPC in recovery-small tests
+Details    : Move the 'good_osts' check before the 'total_bavail' check.  This
+	     will result in an -EAGAIN and in the exit call path we call
+	     alloc_rr() which will with increasing aggressiveness attempt to
 	     aquire precreated objects on the minimum number of required OSCs.
 
 Severity   : major
 Bugzilla   : 14326
 Description: Use old size assignment to avoid deadlock
 Details    : This reverts the changes in bugs 2369 and bug 14138 that introduced
-	     the scheduling while holding a spinlock.  We do not need locking 
-	     for size in ll_update_inode() because size is only updated from 
-	     the MDS for directories or files without objects, so there is no 
-	     other place to do the update, and concurrent access to such inodes 
+	     the scheduling while holding a spinlock.  We do not need locking
+	     for size in ll_update_inode() because size is only updated from
+	     the MDS for directories or files without objects, so there is no
+	     other place to do the update, and concurrent access to such inodes
 	     are protected by the inode lock.
 
 Severity   : normal
@@ -619,8 +623,8 @@ Severity   : normal
 Bugzilla   : 14872
 Description: the recovery timer never expires
 Details    : for new client connect request, the recovery timer should not be
-	     reset, otherwise recovery timer will never expired, if the old 
-	     client never come. Only old client connect and first connection 
+	     reset, otherwise recovery timer will never expired, if the old
+	     client never come. Only old client connect and first connection
 	     req should trigger recovery timer reset.
 
 Severity   : normal
@@ -732,9 +736,9 @@ Description: Disable adaptive timeouts by default
 Severity   : major
 Frequency  : on network error
 Bugzilla   : 15027
-Description: panic with double free request if network error 
+Description: panic with double free request if network error
 Details    : mdc_finish_enqueue is finish request if any network error occuring,
-	     but it's true only for synchronus enqueue, for async enqueue 
+	     but it's true only for synchronus enqueue, for async enqueue
 	     (via ptlrpcd) this incorrect and ptlrpcd want finish request
 	     himself.
 
@@ -801,14 +805,14 @@ Severity   : normal
 Frequency  : rare
 Bugzilla   : 14421
 Description: ASSERTION(!PageDirty(page)) failed
-Details    : Wrong check could lead to an assertion failure under specific 
+Details    : Wrong check could lead to an assertion failure under specific
 	     load patterns.
 
 Severity   : normal
 Frequency  : rare
 Bugzilla   : 12228
 Description: LBUG in ptlrpc_check_set() bad phase ebc0de00
-Details    : access to bitfield in structure is always rounded to long 
+Details    : access to bitfield in structure is always rounded to long
 	     and this produce problem with not atomic change any bit.
 
 Severity   : normal
@@ -1160,9 +1164,9 @@ Details    : Client gets evicted from server.  Now client also thinks it is
 
 Severity   : normal
 Bugzilla   : 14483
-Description: Detect stride IO mode in read-ahead 
+Description: Detect stride IO mode in read-ahead
 Details    : When a client does stride read, read-ahead should detect that and
-	     read-ahead pages according to the detected stride pattern. 
+	     read-ahead pages according to the detected stride pattern.
 
 Severity   : normal
 Bugzilla   : 15033
@@ -1217,8 +1221,8 @@ Details    : Force q->max_phys_segments to MAX_PHYS_SEGMENTS on SLES10 to be
 Severity   : normal
 Bugzilla   : 15198
 Description: LDLM soft lockups - improvement
-Details    : It is be possible to send the lock handle along with each read 
-	     or write request because the client is already doing a lock match 
+Details    : It is be possible to send the lock handle along with each read
+	     or write request because the client is already doing a lock match
 	     itself so there isn't any reason the OST should have to re-do that
 	     search.
 
@@ -1246,10 +1250,10 @@ Description: during mds failovers with quota on, OSTs got into deadlock state
 	     and causing dumpstack.
 Details	   : for every quota slave, at any time, there is only one quota req
 	     is sent to quota master for every uid/gid. Before that quota req
-	     returns, all the thread relative to the same uid/gid will wait. 
+	     returns, all the thread relative to the same uid/gid will wait.
 	     So if the quota req is lost because mds failovers or any other
 	     reasons, this bug will be hit. Now, dqacq_interpret() will handle
-	     quota reqs who time out. 
+	     quota reqs who time out.
 
 Severity   : enhancement
 Frequency  : always
@@ -1288,9 +1292,9 @@ Severity   : normal
 Frequency  : occasional
 Bugzilla   : 13730
 Description: Do not fail import if osc_interpret_create gets -EAGAIN
-Details    : If osc_interpret_create got -EAGAIN it immediately exits and 
-	     wakeup oscc_waitq.  After wakeup oscc_wait_for_objects call 
-	     oscc_has_objects and see OSC has no objests and call 
+Details    : If osc_interpret_create got -EAGAIN it immediately exits and
+	     wakeup oscc_waitq.  After wakeup oscc_wait_for_objects call
+	     oscc_has_objects and see OSC has no objests and call
 	     oscc_internal_create to resend create request.
 
 Severity   : enhancement
@@ -1317,7 +1321,7 @@ Details    : This causes SLES 10 clients to behave as patchless clients
 	     even on a Lustre-patched (server) kernel.
 
 Severity   : enhancement
-Bugzilla   : 2369 
+Bugzilla   : 2369
 Description: use i_size_read and i_size_write in 2.6 port
 Details    : replace inode->i_size access with i_size_read/write()
 
@@ -1341,7 +1345,7 @@ Frequency  : only on ppc
 Bugzilla   : 12234
 Description: /proc/fs/lustre/devices broken on ppc
 Details    : The patch as applied to 1.6.2 doesn't look correct for all arches.
-	     We should make sure the type of 'index' is loff_t and then cast 
+	     We should make sure the type of 'index' is loff_t and then cast
 	     explicitly as needed below. Do not assign an explicitly cast
 	     loff_t to an int.
 
@@ -1408,15 +1412,15 @@ Frequency  : always
 Bugzilla   : 13751
 Description: Kernel patches update for RHEL5 2.6.18-8.1.14.el5.
 Details    : Modify target file & which_patch.
-	     A flaw was found in the IA32 system call emulation provided 
-	     on AMD64 and Intel 64 platforms. An improperly validated 64-bit 
-	     value could be stored in the %RAX register, which could trigger an 
-	     out-of-bounds system call table access. An untrusted local user 
-	     could exploit this flaw to run code in the kernel 
-	     (ie a root privilege escalation). (CVE-2007-4573). 
+	     A flaw was found in the IA32 system call emulation provided
+	     on AMD64 and Intel 64 platforms. An improperly validated 64-bit
+	     value could be stored in the %RAX register, which could trigger an
+	     out-of-bounds system call table access. An untrusted local user
+	     could exploit this flaw to run code in the kernel
+	     (ie a root privilege escalation). (CVE-2007-4573).
 
 Severity   : minor
-Bugzilla   : 13732 
+Bugzilla   : 13732
 Description: change order of libsysio includes
 Details    : '#include sysio.h' should always come before '#include xtio.h'
 
@@ -1431,12 +1435,12 @@ Frequency  : rarely
 Bugzilla   : 13570
 Description: To avoid grant space > avaible space when the disk is almost
 	     full. Without this patch you might see the error "grant XXXX >
-	     available" or some LBUG about grant, when the disk is almost 
+	     available" or some LBUG about grant, when the disk is almost
 	     full.
 Details    : In filter_check_grant, for non_grant cache write, we should
-	     check the left space by  if (*left > ungranted + bytes), instead 
-	     of (*left > ungranted), because only we are sure the left space 
-	     is enough for another "bytes", then the ungrant space should be 
+	     check the left space by  if (*left > ungranted + bytes), instead
+	     of (*left > ungranted), because only we are sure the left space
+	     is enough for another "bytes", then the ungrant space should be
 	     increase. In client, we should update cl_avail_grant only there is
 	     OBD_MD_FLGRANT in the reply.
 
@@ -1599,10 +1603,10 @@ Details    : change the condition to increase offset_idx
 Severity   : enhancement
 Bugzilla   : 2262
 Description: self-adjustable client's lru lists
-Details    : use adaptive algorithm for managing client cached locks lru 
+Details    : use adaptive algorithm for managing client cached locks lru
 	     lists according to current server load, other client's work
-	     pattern, memory activities, etc. Both, server and client 
-	     side namespaces provide number of proc tunables for controlling 
+	     pattern, memory activities, etc. Both, server and client
+	     side namespaces provide number of proc tunables for controlling
 	     things
 
 Severity   : cleanup
@@ -1611,17 +1615,17 @@ Description: rewrite ext2-derived code in llite/dir.c and obdclass/uuid.c
 Details    : rewrite inherited code (uuid parsing code from ext2 utils and
 	     readdir code from ext3) from scratch preserving functionality.
 
-Severity   : normal 
+Severity   : normal
 Bugzilla   : 13436
 Description: Only those disconnect error should be returned by rq_status.
-Details    : In open/enqueue processs, Some errors, which will cause client 
-	     disconnected, should be returned by rq_status, while other 
+Details    : In open/enqueue processs, Some errors, which will cause client
+	     disconnected, should be returned by rq_status, while other
 	     errors should still be returned by intent, then mdc or llite will
 	     detect them.
 
 Severity   : enhancement
 Bugzilla   : 11230
-Description: Tune the kernel for good SCSI performance. 
+Description: Tune the kernel for good SCSI performance.
 Details    : Set the value of /sys/block/{dev}/queue/max_sectors_kb
 	     to the value of /sys/block/{dev}/queue/max_hw_sectors_kb
 	     in mount_lustre.
@@ -1653,7 +1657,7 @@ Severity   : normal
 Bugzilla   : 13304
 Frequency  : Always, for kernels after 2.6.16
 Description: Fix warning idr_remove called for id=.. which is not allocated.
-Details    : Last kernels save old s_dev before kill super and not allow 
+Details    : Last kernels save old s_dev before kill super and not allow
 	     to restore from callback - restore it before call kill_anon_super.
 
 Severity   : normal
