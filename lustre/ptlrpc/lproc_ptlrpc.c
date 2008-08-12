@@ -137,7 +137,9 @@ struct ll_eopcode {
         { MDS_REINT_OPEN,       "mds_reint_open" },
         { MDS_REINT_SETATTR,    "mds_reint_setattr" },
         { MDS_REINT_RENAME,     "mds_reint_rename" },
-        { MDS_REINT_UNLINK,     "mds_reint_unlink" }
+        { MDS_REINT_UNLINK,     "mds_reint_unlink" },
+        { BRW_READ_BYTES,       "read_bytes" },
+        { BRW_WRITE_BYTES,      "write_bytes" },
 };
 
 const char *ll_opcode2str(__u32 opcode)
@@ -199,9 +201,20 @@ void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
         lprocfs_counter_init(svc_stats, PTLRPC_REQBUF_AVAIL_CNTR,
                              svc_counter_config, "reqbuf_avail", "bufs");
         for (i = 0; i < EXTRA_LAST_OPC; i++) {
+                char *units;
+
+                switch(i) {
+                case BRW_WRITE_BYTES:
+                case BRW_READ_BYTES:
+                        units = "bytes";
+                        break;
+                default:
+                        units = "reqs";
+                        break;
+                }
                 lprocfs_counter_init(svc_stats, PTLRPC_LAST_CNTR + i,
                                      svc_counter_config,
-                                     ll_eopcode2str(i), "reqs");
+                                     ll_eopcode2str(i), units);
         }
         for (i = 0; i < LUSTRE_MAX_OPCODES; i++) {
                 __u32 opcode = ll_rpc_opcode_table[i].opcode;
@@ -553,20 +566,36 @@ void ptlrpc_lprocfs_rpc_sent(struct ptlrpc_request *req)
         if (svc_stats == NULL || opc <= 0)
                 return;
         LASSERT(opc < LUSTRE_MAX_OPCODES);
-        /* These two use the ptlrpc_lprocfs_brw below */
-        if (!(opc == OST_WRITE || opc == OST_READ || op == LDLM_ENQUEUE
-              || op == MDS_REINT))
+        if (!(op == LDLM_ENQUEUE || op == MDS_REINT))
                 lprocfs_counter_add(svc_stats, opc + EXTRA_MAX_OPCODES, 0);
 }
 
-void ptlrpc_lprocfs_brw(struct ptlrpc_request *req, int opc, int bytes)
+void ptlrpc_lprocfs_brw(struct ptlrpc_request *req, int bytes)
 {
         struct lprocfs_stats *svc_stats;
-        svc_stats = req->rq_import->imp_obd->obd_svc_stats;
-        if (!svc_stats) 
+        int idx;
+
+        if (!req->rq_import)
                 return;
-        lprocfs_counter_add(svc_stats, opc + EXTRA_MAX_OPCODES, bytes);
+        svc_stats = req->rq_import->imp_obd->obd_svc_stats;
+        if (!svc_stats)
+                return;
+        idx = lustre_msg_get_opc(req->rq_reqmsg);
+        switch (idx) {
+        case OST_READ:
+                idx = BRW_READ_BYTES;
+                break;
+        case OST_WRITE:
+                idx = BRW_WRITE_BYTES;
+                break;
+        default:
+                LASSERTF(0, "unsupported opcode %u\n", idx);
+                break;
+        }
+
+        lprocfs_counter_add(svc_stats, idx, bytes);
 }
+
 EXPORT_SYMBOL(ptlrpc_lprocfs_brw);
 
 void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc)
@@ -595,16 +624,16 @@ int lprocfs_wr_evict_client(struct file *file, const char *buffer,
         struct obd_device *obd = data;
         char tmpbuf[sizeof(struct obd_uuid)];
 
-        /* Kludge code(deadlock situation): the lprocfs lock has been held 
+        /* Kludge code(deadlock situation): the lprocfs lock has been held
          * since the client is evicted by writting client's
-         * uuid/nid to procfs "evict_client" entry. However, 
+         * uuid/nid to procfs "evict_client" entry. However,
          * obd_export_evict_by_uuid() will call lprocfs_remove() to destroy
          * the proc entries under the being destroyed export{}, so I have
-         * to drop the lock at first here. 
+         * to drop the lock at first here.
          * - jay, jxiong@clusterfs.com */
         class_incref(obd);
         LPROCFS_EXIT();
- 
+
         sscanf(buffer, "%40s", tmpbuf);
         if (strncmp(tmpbuf, "nid:", 4) == 0)
                 obd_export_evict_by_nid(obd, tmpbuf + 4);

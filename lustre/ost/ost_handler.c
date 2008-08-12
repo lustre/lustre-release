@@ -114,7 +114,7 @@ static int ost_destroy(struct obd_export *exp, struct ptlrpc_request *req,
                         RETURN (-EFAULT);
                 ldlm_request_cancel(req, dlm, 0);
         }
-        
+
         rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
                 RETURN(rc);
@@ -777,7 +777,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (rc != 0)
                 GOTO(out_bulk, rc);
 
-        /* 
+        /*
          * If getting the lock took more time than
          * client was willing to wait, drop it. b=11330
          */
@@ -928,6 +928,7 @@ out:
         LASSERT(rc <= 0);
         if (rc == 0) {
                 req->rq_status = nob;
+                ptlrpc_lprocfs_brw(req, nob);
                 target_committed_to_req(req);
                 ptlrpc_reply(req);
         } else if (!no_reply) {
@@ -967,7 +968,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         int rc, swab, i, j;
         obd_count                client_cksum = 0, server_cksum = 0;
         cksum_type_t             cksum_type = OBD_CKSUM_CRC32;
-        int                      no_reply = 0; 
+        int                      no_reply = 0;
         ENTRY;
 
         req->rq_bulk_write = 1;
@@ -1079,7 +1080,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (rc != 0)
                 GOTO(out_bulk, rc);
 
-        /* 
+        /*
          * If getting the lock took more time than
          * client was willing to wait, drop it. b=11330
          */
@@ -1102,10 +1103,10 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 if (body->oa.o_valid & OBD_MD_FLFLAGS)
                         cksum_type = cksum_type_unpack(body->oa.o_flags);
         }
-        
+
         /* Because we already sync grant info with client when reconnect,
-         * grant info will be cleared for resent req, then fed_grant and 
-         * total_grant will not be modified in following preprw_write */ 
+         * grant info will be cleared for resent req, then fed_grant and
+         * total_grant will not be modified in following preprw_write */
         if (lustre_msg_get_flags(req->rq_reqmsg) & (MSG_RESENT | MSG_REPLAY)) {
                 DEBUG_REQ(D_CACHE, req, "clear resent/replay req grant info");
                 body->oa.o_valid &= ~OBD_MD_FLGRANT;
@@ -1220,7 +1221,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         via = " via ";
                         router = libcfs_nid2str(desc->bd_sender);
                 }
-                
+
                 LCONSOLE_ERROR_MSG(0x168, "%s: BAD WRITE CHECKSUM: %s from "
                                    "%s%s%s inum "LPU64"/"LPU64" object "
                                    LPU64"/"LPU64" extent ["LPU64"-"LPU64"]\n",
@@ -1245,21 +1246,25 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         ost_nio_pages_put(req, local_nb, npages);
 
         if (rc == 0) {
+                int nob = 0;
+
                 /* set per-requested niobuf return codes */
                 for (i = j = 0; i < niocount; i++) {
-                        int nob = remote_nb[i].len;
+                        int len = remote_nb[i].len;
 
+                        nob += len;
                         rcs[i] = 0;
                         do {
                                 LASSERT(j < npages);
                                 if (local_nb[j].rc < 0)
                                         rcs[i] = local_nb[j].rc;
-                                nob -= pp_rnb[j].len;
+                                len -= pp_rnb[j].len;
                                 j++;
-                        } while (nob > 0);
-                        LASSERT(nob == 0);
+                        } while (len > 0);
+                        LASSERT(len == 0);
                 }
                 LASSERT(j == npages);
+                ptlrpc_lprocfs_brw(req, nob);
         }
 
 out_lock:
@@ -1604,7 +1609,7 @@ int ost_handle(struct ptlrpc_request *req)
         }
 
         oti_init(oti, req);
-        
+
         rc = ost_msg_check_version(req->rq_reqmsg);
         if (rc)
                 RETURN(rc);
@@ -1911,19 +1916,19 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 
         if (oss_num_threads) {
                 /* If oss_num_threads is set, it is the min and the max. */
-                if (oss_num_threads > OSS_THREADS_MAX) 
+                if (oss_num_threads > OSS_THREADS_MAX)
                         oss_num_threads = OSS_THREADS_MAX;
                 if (oss_num_threads < OSS_THREADS_MIN)
                         oss_num_threads = OSS_THREADS_MIN;
                 oss_max_threads = oss_min_threads = oss_num_threads;
         } else {
                 /* Base min threads on memory and cpus */
-                oss_min_threads = num_possible_cpus() * num_physpages >> 
+                oss_min_threads = num_possible_cpus() * num_physpages >>
                         (27 - CFS_PAGE_SHIFT);
                 if (oss_min_threads < OSS_THREADS_MIN)
                         oss_min_threads = OSS_THREADS_MIN;
                 /* Insure a 4x range for dynamic threads */
-                if (oss_min_threads > OSS_THREADS_MAX / 4) 
+                if (oss_min_threads > OSS_THREADS_MAX / 4)
                         oss_min_threads = OSS_THREADS_MAX / 4;
                 oss_max_threads = min(OSS_THREADS_MAX, oss_min_threads * 4);
         }

@@ -290,6 +290,8 @@ enum {
         MDS_REINT_SETATTR,
         MDS_REINT_RENAME,
         MDS_REINT_UNLINK,
+        BRW_READ_BYTES,
+        BRW_WRITE_BYTES,
         EXTRA_LAST_OPC
 };
 
@@ -362,10 +364,10 @@ extern void lprocfs_counter_sub(struct lprocfs_stats *stats, int idx,
 #define lprocfs_counter_decr(stats, idx) \
         lprocfs_counter_sub(stats, idx, 1)
 
-extern __s64 lprocfs_read_helper(struct lprocfs_counter *lc, 
+extern __s64 lprocfs_read_helper(struct lprocfs_counter *lc,
                                  enum lprocfs_fields_flags field);
-static inline __u64 lprocfs_stats_collector(struct lprocfs_stats *stats, 
-                                            int idx, 
+static inline __u64 lprocfs_stats_collector(struct lprocfs_stats *stats,
+                                            int idx,
                                             enum lprocfs_fields_flags field)
 {
         __u64 ret = 0;
@@ -382,7 +384,7 @@ extern struct lprocfs_stats *lprocfs_alloc_stats(unsigned int num,
                                                  enum lprocfs_stats_flags flags);
 extern void lprocfs_clear_stats(struct lprocfs_stats *stats);
 extern void lprocfs_free_stats(struct lprocfs_stats **stats);
-extern void lprocfs_init_ops_stats(int num_private_stats, 
+extern void lprocfs_init_ops_stats(int num_private_stats,
                                    struct lprocfs_stats *stats);
 extern int lprocfs_alloc_obd_stats(struct obd_device *obddev,
                                    unsigned int num_private_stats);
@@ -431,13 +433,13 @@ extern cfs_proc_dir_entry_t *lprocfs_srch(cfs_proc_dir_entry_t *root,
 extern int lprocfs_obd_setup(struct obd_device *obd, struct lprocfs_vars *list);
 extern int lprocfs_obd_cleanup(struct obd_device *obd);
 extern int lprocfs_add_simple(struct proc_dir_entry *root, char *name,
-                              cfs_read_proc_t *read_proc, 
+                              cfs_read_proc_t *read_proc,
                               cfs_write_proc_t *write_proc,
                               void *data);
 extern void lprocfs_free_per_client_stats(struct obd_device *obd);
 extern struct file_operations lprocfs_evict_client_fops;
 
-extern int lprocfs_seq_create(cfs_proc_dir_entry_t *parent, char *name, 
+extern int lprocfs_seq_create(cfs_proc_dir_entry_t *parent, char *name,
                               mode_t mode, struct file_operations *seq_fops,
                               void *data);
 extern int lprocfs_obd_seq_create(struct obd_device *dev, char *name,
@@ -504,7 +506,7 @@ extern int lprocfs_write_helper(const char *buffer, unsigned long count,
                                 int *val);
 extern int lprocfs_write_frac_helper(const char *buffer, unsigned long count,
                                      int *val, int mult);
-extern int lprocfs_read_frac_helper(char *buffer, unsigned long count, 
+extern int lprocfs_read_frac_helper(char *buffer, unsigned long count,
                                     long val, int mult);
 extern int lprocfs_write_u64_helper(const char *buffer, unsigned long count,
                                     __u64 *val);
@@ -550,7 +552,7 @@ extern struct rw_semaphore _lprocfs_lock;
         up_write(&_lprocfs_lock);       \
 } while(0)
 
-/* You must use these macros when you want to refer to 
+/* You must use these macros when you want to refer to
  * the import in a client obd_device for a lprocfs entry */
 #define LPROCFS_CLIMP_CHECK(obd) do {           \
         typecheck(struct obd_device *, obd);    \
@@ -564,8 +566,8 @@ extern struct rw_semaphore _lprocfs_lock;
         up_read(&(obd)->u.cli.cl_sem);
 
 
-/* write the name##_seq_show function, call LPROC_SEQ_FOPS_RO for read-only 
-  proc entries; otherwise, you will define name##_seq_write function also for 
+/* write the name##_seq_show function, call LPROC_SEQ_FOPS_RO for read-only
+  proc entries; otherwise, you will define name##_seq_write function also for
   a read-write proc entry, and then call LPROC_SEQ_SEQ instead. Finally,
   call lprocfs_obd_seq_create(obd, filename, 0444, &name#_fops, data); */
 #define __LPROC_SEQ_FOPS(name, custom_seq_write)                           \
@@ -616,8 +618,8 @@ static inline void lprocfs_counter_init(struct lprocfs_stats *stats,
                                         const char *name, const char *units)
 { return; }
 
-static inline __u64 lc_read_helper(struct lprocfs_counter *lc, 
-                                   enum lprocfs_fields_flags field) 
+static inline __u64 lc_read_helper(struct lprocfs_counter *lc,
+                                   enum lprocfs_fields_flags field)
 { return 0; }
 
 static inline struct lprocfs_stats* lprocfs_alloc_stats(unsigned int num,
@@ -631,7 +633,7 @@ static inline int lprocfs_register_stats(cfs_proc_dir_entry_t *root,
                                             const char *name,
                                             struct lprocfs_stats *stats)
 { return 0; }
-static inline void lprocfs_init_ops_stats(int num_private_stats, 
+static inline void lprocfs_init_ops_stats(int num_private_stats,
                                           struct lprocfs_stats *stats)
 { return; }
 static inline int lprocfs_alloc_obd_stats(struct obd_device *obddev,
@@ -759,7 +761,7 @@ int lprocfs_counter_write(struct file *file, const char *buffer,
                           unsigned long count, void *data) { return 0; }
 
 static inline
-__u64 lprocfs_stats_collector(struct lprocfs_stats *stats, int idx, 
+__u64 lprocfs_stats_collector(struct lprocfs_stats *stats, int idx,
                                enum lprocfs_fields_flags field)
 { return (__u64)0; }
 

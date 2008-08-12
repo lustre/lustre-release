@@ -483,7 +483,7 @@ static inline void lustre_set_rep_swabbed(struct ptlrpc_request *req, int index)
 }
 
 static inline int lustre_req_swabbed(struct ptlrpc_request *req, int index)
-{ 
+{
         LASSERT(index < sizeof(req->rq_req_swab_mask) * 8);
         return req->rq_req_swab_mask & (1 << index);
 }
@@ -602,7 +602,7 @@ struct ptlrpc_bulk_desc {
 
 struct ptlrpc_thread {
 
-        struct list_head t_link; /* active threads for service, from svc->srv_threads */
+        struct list_head t_link; /* active threads in svc->srv_threads */
 
         void *t_data;            /* thread-private data (preallocated memory) */
         __u32 t_flags;
@@ -741,7 +741,7 @@ struct ptlrpcd_ctl {
         char                        pc_name[16];
 #ifndef __KERNEL__
         /**
-         * Async rpcs flag to make sure that ptlrpcd_check() is called only 
+         * Async rpcs flag to make sure that ptlrpcd_check() is called only
          * once.
          */
         int                         pc_recurred;
@@ -771,7 +771,7 @@ enum ptlrpcd_ctl_flags {
          */
         LIOD_STOP        = 1 << 1,
         /**
-         * Ptlrpc thread stop force flag. This will cause also 
+         * Ptlrpc thread stop force flag. This will cause also
          * aborting any inflight rpcs handled by thread.
          */
         LIOD_STOP_FORCE  = 1 << 2
@@ -1144,12 +1144,11 @@ const char* ll_opcode2str(__u32 opcode);
 #ifdef LPROCFS
 void ptlrpc_lprocfs_register_obd(struct obd_device *obd);
 void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd);
-void ptlrpc_lprocfs_brw(struct ptlrpc_request *req, int opc, int bytes);
+void ptlrpc_lprocfs_brw(struct ptlrpc_request *req, int bytes);
 #else
 static inline void ptlrpc_lprocfs_register_obd(struct obd_device *obd) {}
 static inline void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd) {}
-static inline void ptlrpc_lprocfs_brw(struct ptlrpc_request *req, int opc,
-                                      int bytes) {}
+static inline void ptlrpc_lprocfs_brw(struct ptlrpc_request *req, int bytes) {}
 #endif
 
 /* ptlrpc/llog_server.c */

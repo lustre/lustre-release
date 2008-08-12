@@ -12,15 +12,19 @@ tbd  Sun Microsystems, Inc.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
         removed cwd "./" (refer to Bugzilla 14399).
 
+Severity   : enhancement
+Bugzilla   : 16573
+Description: Export bytes_read/bytes_write count on OSC/OST.
+
 Severity   : normal
-Bugzila    : 16237
+Bugzilla   : 16237
 Description: Early reply size mismatch, MGC loses connection
 Details    : Apply the MGS_CONNECT_SUPPORTED mask at reconnect time so
              the connect flags are properly negotiated.
 
 Severity   : normal
 Bugzilla   : 16006
-Description: Properly propagate oinfo flags from lov to osc for statfs   
+Description: Properly propagate oinfo flags from lov to osc for statfs
 Details    : restore missing copy oi_flags to lov requests.
 
 Severity   : enhancement
@@ -32,7 +36,7 @@ Details    : included man pages for llobdstat(8), llstat(8),
 
 Severity   : enhancement
 Bugzilla   : 16091
-Description: configure's --enable-quota should check the 
+Description: configure's --enable-quota should check the
            : kernel .config for CONFIG_QUOTA
 Details    : configure is terminated if --enable-quota is passed but
            : no quota support is in kernel
@@ -81,7 +85,7 @@ Severity   : normal
 Bugzilla   : 15825
 Description: Kernel BUG tries to release flock
 Details    : Lustre does not destroy flock lock before last reference goes
-	     away. So always drop flock locks when client is evicted and 
+	     away. So always drop flock locks when client is evicted and
 	     perform unlock regardless of successfulness of speaking to MDS.
 
 Severity   : normal
@@ -995,7 +999,7 @@ Details    : Console messages can now be disabled via lnet.printk.
 
 Severity   : normal
 Bugzilla   : 14614
-Description: User code with malformed file open parameter crashes client node 
+Description: User code with malformed file open parameter crashes client node
 Details    : Before packing join_file req, all the related reference should be
 	     checked carefully in case some malformed flags cause fake
 	     join_file req on client.
@@ -1126,7 +1130,7 @@ Severity   : normal
 Bugzilla   : 14257
 Description: LASSERT on MDS when client holding flock lock dies
 Details    : ldlm pool logic depends on number of granted locks equal to
-	     number of released locks which is not true for flock locks, so 
+	     number of released locks which is not true for flock locks, so
 	     just exclude such locks from consideration.
 
 Severity   : normal
@@ -1191,7 +1195,7 @@ Severity   : normal
 Bugzilla   : 15574
 Description: MDS LBUG: ASSERTION(!IS_ERR(dchild))
 Details    : Change LASSERTs to client eviction (i.e. abort client's recovery)
-	     because LASSERT on both the data supplied by a client, and the data 
+	     because LASSERT on both the data supplied by a client, and the data
 	     on disk is dangerous and incorrect.
 
 Severity   : enhancement
@@ -1331,7 +1335,7 @@ Severity   : minor
 Frequency  : at statup only
 Bugzilla   : 12860
 Description: mds_lov_synchronize race leads to various problems
-Details    : simultaneous MDT->OST connections at startup can cause the 
+Details    : simultaneous MDT->OST connections at startup can cause the
 	     sync to abort, leaving the OSC in a bad state.
 
 Severity   : enhancement
@@ -1500,7 +1504,7 @@ Details    : When osc reconnect ost, OST(filter) should check whether it
 	     to update the client grant space info.
 
 Severity   : normal
-Frequency  : when client reconnect to OST 
+Frequency  : when client reconnect to OST
 Bugzilla   : 11662
 Description: Grant Leak when osc do resend and replay bulk write
 Details	   : When osc reconnect to OST, OST(filter)should clear grant info of
@@ -1509,33 +1513,33 @@ Details	   : When osc reconnect to OST, OST(filter)should clear grant info of
 	     these of resend/replay write req.
 
 Severity   : normal
-Frequency  : rare 
+Frequency  : rare
 Bugzilla   : 11662
 Description: Grant space more than avaiable left space sometimes.
 Details	   : When then OST is about to be full, if two bulk writing from
 	     different clients came to OST. Accord the avaliable space of the
 	     OST, the first req should be permitted, and the second one
-	     should be denied by ENOSPC. But if the seconde arrived before 
+	     should be denied by ENOSPC. But if the seconde arrived before
 	     the first one is commited. The OST might wrongly permit second
 	     writing, which will cause grant space > avaiable space.
 
 Severity   : normal
-Frequency  : when client is evicted 
+Frequency  : when client is evicted
 Bugzilla   : 12371
 Description: Grant might be wrongly erased when osc is evicted by OST
-Details    : when the import is evicted by server, it will fork another 
-	     thread ptlrpc_invalidate_import_thread to invalidate the 
-	     import, where the grant will be set to 0.  While the original 
-	     thread will update the grant it got when connecting. So if 
-	     the former happened latter, the grant will be wrongly errased 
+Details    : when the import is evicted by server, it will fork another
+	     thread ptlrpc_invalidate_import_thread to invalidate the
+	     import, where the grant will be set to 0.  While the original
+	     thread will update the grant it got when connecting. So if
+	     the former happened latter, the grant will be wrongly errased
 	     because of this race.
 
 Severity   : normal
-Frequency  : rare 
+Frequency  : rare
 Bugzilla   : 12401
-Description: Checking Stale with correct fid 
-Details    : ll_revalidate_it should uses de_inode instead of op_data.fid2 
-	     to check whether it is stale, because sometimes, we want the 
+Description: Checking Stale with correct fid
+Details    : ll_revalidate_it should uses de_inode instead of op_data.fid2
+	     to check whether it is stale, because sometimes, we want the
 	     enqueue happened anyway, and op_data.fid2 will not be initialized.
 
 Severity   : enhancement
@@ -1551,29 +1555,29 @@ Details    : size of struct ll_inode_info is to big for union inode.u and this
 	     can be cause of random memory corruption.
 
 Severity   : normal
-Frequency  : rare 
+Frequency  : rare
 Bugzilla   : 10818
 Description: Memory leak in recovery
 Details    : Lov_mds_md was not free in an error handler in mds_create_object.
-	     It should also check obd_fail before fsfilt_start, otherwise if 
+	     It should also check obd_fail before fsfilt_start, otherwise if
 	     fsfilt_start return -EROFS,(failover mds during mds recovery).
-	     then the req will return with repmsg->transno = 0 and rc = EROFS. 
+	     then the req will return with repmsg->transno = 0 and rc = EROFS.
 	     and we met hit the assert LASSERT(req->rq_reqmsg->transno ==
-	     req->rq_repmsg->transno) in ptlrpc_replay_interpret.  Fcc should 
+	     req->rq_repmsg->transno) in ptlrpc_replay_interpret.  Fcc should
 	     be freed no matter whether fsfilt_commit success or not.
 
 Severity   : minor
 Frequency  : only with huge count clients
 Bugzilla   : 11817
-Description: Prevents from taking the superblock lock in llap_from_page for 
+Description: Prevents from taking the superblock lock in llap_from_page for
 	     a soon died page.
-Details    : using LL_ORIGIN_REMOVEPAGE origin flag instead of LL_ORIGIN_UNKNOW 
-	     for llap_from_page call in ll_removepage prevents from taking the 
+Details    : using LL_ORIGIN_REMOVEPAGE origin flag instead of LL_ORIGIN_UNKNOW
+	     for llap_from_page call in ll_removepage prevents from taking the
 	     superblock lock for a soon died page.
 
 Severity   : normal
 Frequency  : rare
-Bugzilla   : 11935 
+Bugzilla   : 11935
 Description: Not check open intent error before release open handle
 Details    : in some rare cases, the open intent error is not checked before
 	     release open handle, which may cause
@@ -1582,9 +1586,9 @@ Details    : in some rare cases, the open intent error is not checked before
 
 Severity   : normal
 Frequency  : rare
-Bugzilla   : 12556 
-Description: Set cat log bitmap only after create log success. 
-Details    : in some rare cases, the cat log bitmap is set too early. and it 
+Bugzilla   : 12556
+Description: Set cat log bitmap only after create log success.
+Details    : in some rare cases, the cat log bitmap is set too early. and it
 	     should be set only after create log success.
 
 Severity   : major
@@ -1601,11 +1605,11 @@ Details    : Insert cond_resched to give other threads a chance to use some CPU
 
 Severity   : normal
 Frequency  : rare
-Bugzilla   : 12086 
-Description: the cat log was not initialized in recovery 
+Bugzilla   : 12086
+Description: the cat log was not initialized in recovery
 Details    : When mds(mgs) do recovery, the tgt_count might be zero, so the
 	     unlink log on mds will not be initialized until mds post
-	     recovery. And also in mds post recovery, the unlink log will 
+	     recovery. And also in mds post recovery, the unlink log will
 	     initialization will be done asynchronausly, so there will be race
 	     between add unlink log and unlink log initialization.
 
@@ -1626,7 +1630,7 @@ Details    : imp_lock should be held while iterating over imp_sending_list for
 Severity   : normal
 Bugzilla   : 12689
 Description: replay-single.sh test 52 fails
-Details    : A lock's skiplist need to be cleanup when it being unlinked 
+Details    : A lock's skiplist need to be cleanup when it being unlinked
 	     from its resource list.
 
 Severity   : normal
@@ -1655,7 +1659,7 @@ Details    : If a OST has no remain object, system will block on the creating
 Severity   : enhancement
 Bugzilla   : 12702
 Description: refine locking for avoid write wrong info into lov_objid file
-Details    : fix possible races with add new target and write/update data in 
+Details    : fix possible races with add new target and write/update data in
 	     lov_objid file.
 
 --------------------------------------------------------------------------------
@@ -1689,7 +1693,7 @@ Details    : The __iget() symbol export is missing.  To avoid the need for
 	 special upgrade step is needed. Please read the
 	 user documentation before upgrading any part of a live system.
        * WIRE PROTOCOL CHANGE from previous 1.6 beta versions.  This
-         version will not interoperate with 1.6 betas before beta5 (1.5.95).  
+         version will not interoperate with 1.6 betas before beta5 (1.5.95).
        * WARNING: Lustre configuration and startup changes are required with
 	 this release.  See https://mail.clusterfs.com/wikis/lustre/MountConf
 	 for details.
@@ -1728,7 +1732,7 @@ Bugzilla   : 9862
 Description: optimized stripe assignment
 Details    : stripe assignments are now made based on ost space available,
 	     ost previous usage, and OSS previous usage, in order to try
-	     to optimize storage space and networking resources. 
+	     to optimize storage space and networking resources.
 	
 Severity   : enhancement
 Bugzilla   : 4226
@@ -1765,16 +1769,16 @@ Severity   : enhancement
 Bugzilla   : 22484
 Description: client read/write statistics
 Details    : Add client read/write call usage stats for performance
-	     analysis of user processes. 
+	     analysis of user processes.
 	     /proc/fs/lustre/llite/*/offset_stats shows non-sequential
 	     file access. extents_stats shows chunk size distribution.
 	     extents_stats_per_process show chunk size distribution per
-	     user process. 
+	     user process.
 
 Severity   : enhancement
 Bugzilla   : 22486
 Description: mds statistics
-Details    : Add detailed mds operations statistics in  
+Details    : Add detailed mds operations statistics in
 	     /proc/fs/lustre/mds/*/stats.
 
 Severity   : minor
@@ -4014,7 +4018,7 @@ Severity   : Minor
 Frequency  : Rare
 Bugzilla   : 11248
 Description: merge and cleanup kernel patches.
-Details    : 
+Details    :
 
 -----------------------------------------------------------------------------
 
