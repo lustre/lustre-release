@@ -1412,8 +1412,10 @@ set_nodes_failloc () {
 
 cancel_lru_locks() {
     $LCTL mark "cancel_lru_locks $1 start"
-    lctl set_param ldlm.namespaces.*$1*.lru_size=0
-    lctl get_param ldlm.namespaces.*$1*.lock_unused_count | grep -v '=0'
+    for d in `lctl get_param -N ldlm.namespaces.*.lru_size | egrep -i $1`; do
+        $LCTL set_param -n $d=clear
+    done
+    $LCTL get_param ldlm.namespaces.*.lock_unused_count | egrep -i $1 | grep -v '=0'
     $LCTL mark "cancel_lru_locks $1 stop"
 }
 
