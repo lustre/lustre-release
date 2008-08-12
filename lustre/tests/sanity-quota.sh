@@ -565,7 +565,6 @@ test_7()
 {
 	mkdir -p $DIR/$tdir
 	chmod 0777 $DIR/$tdir
-	remote_mds && skip "remote mds" && return 0
 
 	LIMIT=$(( $BUNIT_SZ * $(($OSTCOUNT + 1)) * 10)) # 10 bunits each sever
 	TESTFILE="$DIR/$tdir/$tfile-0"
