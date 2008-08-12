@@ -121,7 +121,7 @@ struct lsm_buffer {
         struct lov_oinfo *ptrs[MAX_STRIPES];
 } lsm_buffer;
 
-static int l2_ioctl(int dev_id, int opc, void *buf)
+static int l2_ioctl(int dev_id, unsigned int opc, void *buf)
 {
         return l_ioctl(dev_id, opc, buf);
 }
