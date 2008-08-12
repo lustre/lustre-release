@@ -259,14 +259,25 @@ struct ldlm_pool_ops {
         int (*po_setup)(struct ldlm_pool *pl, int limit);
 };
 
-/* One second for pools thread check interval. */
+/** 
+ * One second for pools thread check interval. Each pool has own period. 
+ */
 #define LDLM_POOLS_THREAD_PERIOD (1)
 
-/* 5% margin for modest pools. See ldlm_pool.c for details. */
+/** 
+ * 5% margin for modest pools. See ldlm_pool.c for details. 
+ */
 #define LDLM_POOLS_MODEST_MARGIN (5)
 
-/* A change to SLV in % after which we want to wake up pools thread asap. */
-#define LDLM_POOLS_FAST_SLV_CHANGE (50)
+/**
+ * Default recalc period for server side pools in sec.
+ */
+#define LDLM_POOL_SRV_DEF_RECALC_PERIOD (1)
+
+/**
+ * Default recalc period for client side pools in sec.
+ */
+#define LDLM_POOL_CLI_DEF_RECALC_PERIOD (10)
 
 struct ldlm_pool {
         /**
@@ -319,17 +330,17 @@ struct ldlm_pool {
          */
         time_t                 pl_recalc_time;
         /**
+          * Recalc period for pool.
+          */
+        time_t                 pl_recalc_period;
+        /**
          * Recalc and shrink ops.
          */
         struct ldlm_pool_ops  *pl_ops;
         /**
-         * Planned number of granted locks for next T.
+         * Number of planned locks for next period.
          */
         int                    pl_grant_plan;
-        /**
-         * Grant plan step for next T.
-         */
-        int                    pl_grant_step;
         /**
          * Pool statistics.
          */
@@ -980,7 +991,6 @@ void unlock_res_and_lock(struct ldlm_lock *lock);
 void ldlm_pools_recalc(ldlm_side_t client);
 int ldlm_pools_init(void);
 void ldlm_pools_fini(void);
-void ldlm_pools_wakeup(void);
 
 int ldlm_pool_init(struct ldlm_pool *pl, struct ldlm_namespace *ns,
                    int idx, ldlm_side_t client);
