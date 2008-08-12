@@ -13,6 +13,12 @@ tbd  Sun Microsystems, Inc.
         removed cwd "./" (refer to Bugzilla 14399).
 
 Severity   : normal
+Bugzila    : 16237
+Description: Early reply size mismatch, MGC loses connection
+Details    : Apply the MGS_CONNECT_SUPPORTED mask at reconnect time so
+             the connect flags are properly negotiated.
+
+Severity   : normal
 Bugzilla   : 16006
 Description: Properly propagate oinfo flags from lov to osc for statfs   
 Details    : restore missing copy oi_flags to lov requests.
