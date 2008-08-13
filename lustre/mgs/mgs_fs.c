@@ -117,7 +117,7 @@ int mgs_client_add(struct obd_device *obd,
 /* Remove client export data from the MGS */
 int mgs_client_free(struct obd_export *exp)
 {
-        return lprocfs_exp_cleanup(exp);
+        return 0; 
 }
 
 /* Same as mds_fid2dentry */
