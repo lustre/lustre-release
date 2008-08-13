@@ -615,38 +615,22 @@ test_8() {
 	mkdir -p $DIR/$tdir
 	BLK_LIMIT=$((100 * 1024 * 1024)) # 100G
 	FILE_LIMIT=1000000
-	DBENCH_LIB=${DBENCH_LIB:-/usr/lib/dbench}
-	
-	[ ! -d $DBENCH_LIB ] && skip "dbench not installed" && return 0
 
 	wait_delete_completed
-	
+
 	echo "  Set enough high limit for user: $TSTUSR"
 	$LFS setquota -u $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $DIR
 	echo "  Set enough high limit for group: $TSTUSR"
 	$LFS setquota -g $USER 0 $BLK_LIMIT 0 $FILE_LIMIT $DIR
 
-	TGT=$DIR/$tdir/client.txt
-	SRC=${SRC:-$DBENCH_LIB/client.txt}
-	[ ! -e $TGT -a -e $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
-	SRC=$DBENCH_LIB/client_plain.txt
-	[ ! -e $TGT -a -e $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
-
-	mkdir -p $DIR/$tdir
 	chmod 0777 $DIR/$tdir
-	SAVE_PWD=$PWD
-	cd $DIR/$tdir
 	local duration=""
 	[ "$SLOW" = "no" ] && duration=" -t 120"
-	$RUNAS dbench -c client.txt 3 $duration
-	RC=$?
-	[ $RC -ne 0 ] && killall -9 dbench
-	
-	rm -f client.txt
+	$RUNAS bash rundbench -D $DIR/$tdir 3 $duration || error "dbench failed!"
+
 	sync; sleep 3; sync;
 
-	cd $SAVE_PWD
-	return $RC
+	return 0 
 }
 run_test 8 "Run dbench with quota enabled ==========="
 
