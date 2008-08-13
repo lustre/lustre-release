@@ -23,7 +23,7 @@ fi
 [ "$DEBUG_OFF" ] || DEBUG_OFF="eval lctl set_param debug=\"$DEBUG_LVL\""
 [ "$DEBUG_ON" ] || DEBUG_ON="eval lctl set_param debug=0x33f0484"
 
-export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL INSANITY SANITY_QUOTA SANITY_SEC"
+export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL INSANITY SANITY_QUOTA SANITY_SEC SANITY_GSS"
 
 if [ "$ACC_SM_ONLY" ]; then
     for O in $TESTSUITE_LIST; do
@@ -47,7 +47,9 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 
+export SANITY_GSS="no"
 if $GSS; then
+    export SANITY_GSS="yes"
     # liblustre doesn't support GSS
     export LIBLUSTRE=no
 fi
@@ -366,6 +368,12 @@ if [ "$SANITY_SEC" != "no" ]; then
         title sanity-sec
         bash sanity-sec.sh
         SANITY_SEC="done"
+fi
+
+if [ "$SANITY_GSS" != "no" ]; then
+        title sanity-gss
+        bash sanity-gss.sh
+        SANITY_GSS="done"
 fi
 
 RC=$?
