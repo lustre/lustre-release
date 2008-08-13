@@ -38,6 +38,14 @@ tbd Sun Microsystems, Inc.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
 
+Severity   : normal
+Bugzilla   : 16679
+Description: more cleanup in mds_lov
+Details    : add workaround for get valid ost count for avoid warnings about 
+             drop too big messages, not init llog cat under semphore which
+             can be blocked on reconnect and break normal replay, fix access
+             to wrong pointer.
+
 Severity   : enhancement
 Bugzilla   : 16573
 Description: Export bytes_read/bytes_write count on OSC/OST.

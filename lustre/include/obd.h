@@ -511,6 +511,7 @@ struct mds_obd {
         /* file for store objid */
         struct file                     *mds_lov_objid_filp;
         __u32                            mds_lov_objid_count;
+        __u32                            mds_lov_objid_max_index;
         __u32                            mds_lov_objid_lastpage;
         __u32                            mds_lov_objid_lastidx;
 
