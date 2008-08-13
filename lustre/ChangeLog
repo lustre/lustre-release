@@ -39,6 +39,14 @@ tbd Sun Microsystems, Inc.
 	  old (verbose) output can be obtained by using -v option.
 
 Severity   : normal
+Bugzilla   : 15139
+Frequency  : rare
+Description: avoid ASSERTION(client_stat->nid_exp_ref_count == 0) failed
+Details    : release reference to stats when client disconnected, not
+             when export destroyed for avoid races when client destroyed
+             after main ost export.
+
+Severity   : normal
 Bugzilla   : 16679
 Description: more cleanup in mds_lov
 Details    : add workaround for get valid ost count for avoid warnings about 
