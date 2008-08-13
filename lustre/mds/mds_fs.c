@@ -236,7 +236,6 @@ int mds_client_free(struct obd_export *exp)
 
         LASSERT(mds->mds_client_bitmap != NULL);
 
-        lprocfs_exp_cleanup(exp);
 
         off = med->med_lr_off;
 

@@ -530,6 +530,9 @@ static int mds_disconnect(struct obd_export *exp)
         if (exp->exp_obd->obd_namespace != NULL)
                 ldlm_cancel_locks_for_export(exp);
 
+        /* release nid stat refererence */
+        lprocfs_exp_cleanup(exp);
+
         /* complete all outstanding replies */
         spin_lock(&exp->exp_lock);
         while (!list_empty(&exp->exp_outstanding_replies)) {

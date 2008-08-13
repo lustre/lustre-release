@@ -133,6 +133,8 @@ static int mgs_disconnect(struct obd_export *exp)
         rc = class_disconnect(exp);
         ldlm_cancel_locks_for_export(exp);
 
+        lprocfs_exp_cleanup(exp);
+
         /* complete all outstanding replies */
         spin_lock(&exp->exp_lock);
         while (!list_empty(&exp->exp_outstanding_replies)) {
