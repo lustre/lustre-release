@@ -40,38 +40,118 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
+#include <pthread.h>
 #include <sys/file.h>
+#include <stdarg.h>
 
-void usage(void)
+#define MAX_PATH_LENGTH 4096
+/**
+ * helper functions
+ */
+int t_fcntl(int fd, int cmd, ...)
 {
-        fprintf(stderr, "usage: ./flocks_test on|off -c|-f|-l /path/to/file\n");
-        exit(EXIT_FAILURE);
+        va_list ap;
+        long arg;
+        struct flock *lock;
+        int rc = -1;
+
+        va_start(ap, cmd);
+        switch (cmd) {
+        case F_GETFL:
+                va_end(ap);
+                rc = fcntl(fd, cmd);
+                if (rc == -1) {
+                        fprintf(stderr, "fcntl GETFL failed: %s\n",
+                                strerror(errno));
+                        return(1);
+                }
+                break;
+        case F_SETFL:
+                arg = va_arg(ap, long);
+                va_end(ap);
+                rc = fcntl(fd, cmd, arg);
+                if (rc == -1) {
+                        fprintf(stderr, "fcntl SETFL %ld failed: %s\n",
+                                arg, strerror(errno));
+                        return(1);
+                }
+                break;
+        case F_GETLK:
+        case F_SETLK:
+        case F_SETLKW:
+                lock = va_arg(ap, struct flock *);
+                va_end(ap);
+                rc = fcntl(fd, cmd, lock);
+                if (rc == -1) {
+                        fprintf(stderr, "fcntl cmd %d failed: %s\n",
+                                cmd, strerror(errno));
+                        return(1);
+                }
+                break;
+        case F_DUPFD:
+                arg = va_arg(ap, long);
+                va_end(ap);
+                rc = fcntl(fd, cmd, arg);
+                if (rc == -1) {
+                        fprintf(stderr, "fcntl F_DUPFD %d failed: %s\n",
+                                (int)arg, strerror(errno));
+                        return(1);
+                }
+                break;
+        default:
+                va_end(ap);
+                fprintf(stderr, "fcntl cmd %d not supported\n", cmd);
+                return(1);
+        }
+        return rc;
 }
 
-int main(int argc, char *argv[])
+int t_unlink(const char *path)
+{
+        int rc;
+
+        rc = unlink(path);
+        if (rc)
+                fprintf(stderr, "unlink(%s) error: %s\n", path, strerror(errno));
+        return rc;
+}
+
+/** =================================================================
+ * test number 1
+ * 
+ * normal flock test
+ */
+void t1_usage(void)
+{
+        fprintf(stderr, "usage: ./flocks_test 1 on|off -c|-f|-l /path/to/file\n");
+}
+
+int t1(int argc, char *argv[])
 {
         int fd;
         int mount_with_flock = 0;
         int error = 0;
 
-        if (argc != 4)
-                usage();
-        
-        if (!strncmp(argv[1], "on", 3)) {
+        if (argc != 5) {
+                t1_usage();
+                return EXIT_FAILURE;
+        }
+
+        if (!strncmp(argv[2], "on", 3)) {
                 mount_with_flock = 1;
-        } else if (!strncmp(argv[1], "off", 4)) {
+        } else if (!strncmp(argv[2], "off", 4)) {
                 mount_with_flock = 0;
         } else {
-                usage();
+                t1_usage();
+                return EXIT_FAILURE;
         }
 
-        if ((fd = open(argv[3], O_RDWR)) < 0) {
-                fprintf(stderr, "Couldn't open file: %s\n", argv[2]);
-                exit(EXIT_FAILURE);
+        if ((fd = open(argv[4], O_RDWR)) < 0) {
+                fprintf(stderr, "Couldn't open file: %s\n", argv[3]);
+                return EXIT_FAILURE;
         }
 
-        if (!strncmp(argv[2], "-c", 3)) {
+        if (!strncmp(argv[3], "-c", 3)) {
                 struct flock fl;
 
                 fl.l_type = F_RDLCK;
@@ -80,16 +160,142 @@ int main(int argc, char *argv[])
                 fl.l_len = 1;
 
                 error = fcntl(fd, F_SETLK, &fl);
-        } else if (!strncmp(argv[2], "-l", 3)) {
+        } else if (!strncmp(argv[3], "-l", 3)) {
                 error = lockf(fd, F_LOCK, 1);
-        } else if (!strncmp(argv[2], "-f", 3)) {
+        } else if (!strncmp(argv[3], "-f", 3)) {
                 error = flock(fd, LOCK_EX);
         } else {
-                usage();
+                t1_usage();
+                return EXIT_FAILURE;
         }
 
         if (mount_with_flock)
                 return((error == 0) ? EXIT_SUCCESS : EXIT_FAILURE);
         else
                 return((error == 0) ? EXIT_FAILURE : EXIT_SUCCESS);
+}
+
+/** ===============================================================
+ * test number 2
+ * 
+ * 2 threads flock ops interweave
+ */
+typedef struct {
+        struct flock* lock;
+        int fd;
+} th_data;
+
+void* t2_thread1(void *arg)
+{
+        struct flock *lock = ((th_data *)arg)->lock;
+        int fd             = ((th_data *)arg)->fd;
+
+        printf("thread 1: set write lock (blocking)\n");
+        lock->l_type = F_WRLCK;
+        t_fcntl(fd, F_SETLKW, lock);
+        printf("thread 1: set write lock done\n");
+        t_fcntl(fd, F_GETLK, lock);
+        printf("thread 1: unlock\n");
+        lock->l_type = F_UNLCK;
+        t_fcntl(fd, F_SETLK, lock);
+        printf("thread 1: unlock done\n");
+        return 0;
+}
+
+void* t2_thread2(void *arg)
+{
+        struct flock *lock = ((th_data *)arg)->lock;
+        int fd             = ((th_data *)arg)->fd;
+
+        sleep(2);
+        printf("thread 2: unlock\n");
+        lock->l_type = F_UNLCK;
+        t_fcntl(fd, F_SETLK, lock);
+        printf("thread 2: unlock done\n");
+        printf("thread 2: set write lock (non-blocking)\n");
+        lock->l_type = F_WRLCK;
+        t_fcntl(fd, F_SETLK, lock);
+        printf("thread 2: set write lock done\n");
+        t_fcntl(fd, F_GETLK, lock);
+        return 0;
+}
+
+int t2(int argc, char* argv[])
+{
+        struct flock lock = {
+                .l_type = F_RDLCK,
+                .l_whence = SEEK_SET,
+        };
+        char file[MAX_PATH_LENGTH] = "";
+        int  fd, rc;
+        pthread_t th1, th2;
+        th_data   ta;
+
+        snprintf(file, MAX_PATH_LENGTH, "%s/test_t2_file", argv[2]);
+
+        fd = open(file, O_RDWR|O_CREAT, (mode_t)0666);
+        if (fd < 0) {
+                fprintf(stderr, "error open file: %s\n", file);
+                return EXIT_FAILURE;
+        }
+
+        t_fcntl(fd, F_SETFL, O_APPEND);
+        if (!(rc = t_fcntl(fd, F_GETFL)) & O_APPEND) {
+                fprintf(stderr, "error get flag: ret %x\n", rc);
+                return EXIT_FAILURE;
+        }
+
+        ta.lock = &lock;
+        ta.fd   = fd;
+        rc = pthread_create(&th1, NULL, t2_thread1, &ta);
+        if (rc) {
+                fprintf(stderr, "error create thread 1\n");
+                rc = EXIT_FAILURE;
+                goto out;
+        }
+        rc = pthread_create(&th2, NULL, t2_thread2, &ta);
+        if (rc) {
+                fprintf(stderr, "error create thread 2\n");
+                rc = EXIT_FAILURE;
+                goto out;
+        }
+        (void)pthread_join(th1, NULL);
+        (void)pthread_join(th2, NULL);
+out:
+        t_unlink(file);
+        close(fd);
+        return rc;
+}
+
+/** ==============================================================
+ * program entry
+ */
+void usage(void)
+{
+        fprintf(stderr, "usage: ./flocks_test test# [corresponding arguments]\n");
+}
+
+int main(int argc, char* argv[])
+{
+        int test_no;
+        int rc = EXIT_SUCCESS;
+
+        if (argc < 1) {
+                usage();
+                exit(EXIT_FAILURE);
+        }
+        test_no = atoi(argv[1]);
+
+        switch(test_no) {
+        case 1:
+                rc = t1(argc, argv);
+                break;
+        case 2:
+                rc = t2(argc, argv);
+                break;
+        default:
+                fprintf(stderr, "unknow test number %s\n", argv[1]);
+                break;
+        }
+        return rc;
 }
