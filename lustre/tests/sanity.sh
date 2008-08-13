@@ -4091,9 +4091,9 @@ test_105a() {
         touch $DIR/$tfile
         if [ -n "`mount | grep \"$DIR.*flock\" | grep -v noflock`" ];
         then
-                flocks_test on -f $DIR/$tfile || error "fail flock on"
+                flocks_test 1 on -f $DIR/$tfile || error "fail flock on"
         else
-                flocks_test off -f $DIR/$tfile || error "fail flock off"
+                flocks_test 1 off -f $DIR/$tfile || error "fail flock off"
         fi
 }
 run_test 105a "flock when mounted without -o flock test ========"
@@ -4102,9 +4102,9 @@ test_105b() {
         touch $DIR/$tfile
         if [ -n "`mount | grep \"$DIR.*flock\" | grep -v noflock`" ];
         then
-                flocks_test on -c $DIR/$tfile || error "fail flock on"
+                flocks_test 1 on -c $DIR/$tfile || error "fail flock on"
         else
-                flocks_test off -c $DIR/$tfile || error "fail flock off"
+                flocks_test 1 off -c $DIR/$tfile || error "fail flock off"
         fi
 }
 run_test 105b "fcntl when mounted without -o flock test ========"
@@ -4113,12 +4113,22 @@ test_105c() {
         touch $DIR/$tfile
         if [ -n "`mount | grep \"$DIR.*flock\" | grep -v noflock`" ];
         then
-                flocks_test on -l $DIR/$tfile || error "fail flock on"
+                flocks_test 1 on -l $DIR/$tfile || error "fail flock on"
         else
-                flocks_test off -l $DIR/$tfile || error "fail flock off"
+                flocks_test 1 off -l $DIR/$tfile || error "fail flock off"
         fi
 }
 run_test 105c "lockf when mounted without -o flock test ========"
+
+test_105d() { # bug 15924
+        mkdir -p $DIR/$tdir
+        [ -z "`mount | grep \"$DIR.*flock\" | grep -v noflock`" ] && \
+                skip "mount w/o flock enabled" && return
+        #define OBD_FAIL_LDLM_CP_CB_WAIT  0x315
+        $LCTL set_param fail_loc=0x80000315
+        flocks_test 2 $DIR/$tdir
+}
+run_test 105d "flock race (should not freeze) ========"
 
 test_106() { #bug 10921
 	mkdir -p $DIR/$tdir
