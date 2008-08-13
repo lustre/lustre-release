@@ -558,6 +558,7 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         RETURN(rc);
  
 granted:
+        OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_CP_CB_WAIT, 10);
         LDLM_DEBUG(lock, "client-side enqueue granted");
         ns = lock->l_resource->lr_namespace;
         lock_res_and_lock(lock);
