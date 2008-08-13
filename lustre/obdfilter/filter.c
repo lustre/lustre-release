@@ -2510,7 +2510,6 @@ static int filter_destroy_export(struct obd_export *exp)
         if (obd_uuid_equals(&exp->exp_client_uuid, &exp->exp_obd->obd_uuid))
                 RETURN(0);
 
-        lprocfs_exp_cleanup(exp);
 
         if (exp->exp_obd->obd_replayable)
                 filter_client_free(exp);
@@ -2545,6 +2544,8 @@ static int filter_disconnect(struct obd_export *exp)
         rc = class_disconnect(exp);
         if (exp->exp_obd->obd_namespace != NULL)
                 ldlm_cancel_locks_for_export(exp);
+
+        lprocfs_exp_cleanup(exp);
 
         /* flush any remaining cancel messages out to the target */
         ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
