@@ -788,7 +788,7 @@ static void ldlm_granted_list_add_lock(struct ldlm_lock *lock,
 
         check_res_locked(res);
 
-        ldlm_resource_dump(D_OTHER, res);
+        ldlm_resource_dump(D_INFO, res);
         CDEBUG(D_OTHER, "About to add this lock:\n");
         ldlm_lock_dump(D_OTHER, lock, 0);
 
