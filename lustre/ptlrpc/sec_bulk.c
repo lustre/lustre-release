@@ -542,12 +542,13 @@ again:
                                 page_pools.epp_st_max_wqlen =
                                                 page_pools.epp_waitqlen;
 
-                        set_current_state(TASK_UNINTERRUPTIBLE);
+                        set_current_state(CFS_TASK_UNINT);
                         cfs_waitlink_init(&waitlink);
                         cfs_waitq_add(&page_pools.epp_waitq, &waitlink);
 
                         spin_unlock(&page_pools.epp_lock);
-                        cfs_schedule();
+                        cfs_waitq_wait(&waitlink, CFS_TASK_UNINT);
+                        cfs_waitq_del(&page_pools.epp_waitq, &waitlink);
                         spin_lock(&page_pools.epp_lock);
 
                         LASSERT(page_pools.epp_waitqlen > 0);
