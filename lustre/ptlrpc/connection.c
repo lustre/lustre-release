@@ -177,7 +177,7 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c)
                 lustre_hash_delitem(conn_hash_body, &c->c_peer, &c->c_hash);
                 rc = lustre_hash_additem_unique(conn_unused_hash_body, &c->c_peer, 
                                                 &c->c_hash);
-                spin_lock(&conn_lock);
+                spin_unlock(&conn_lock);
                 if (rc != 0) {
                         CERROR("Cannot hash connection to conn_hash_body\n");
                         GOTO(ret, rc);
