@@ -309,10 +309,8 @@ int mds_lov_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
         oa.o_flags = OBD_FL_DELORPHAN;
         oa.o_gr = FILTER_GROUP_MDS0 + mds->mds_id;
         oa.o_valid = OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
-        if (ost_uuid != NULL) {
-                memcpy(&oa.o_inline, ost_uuid, sizeof(*ost_uuid));
-                oa.o_valid |= OBD_MD_FLINLINE;
-        }
+        if (ost_uuid != NULL)
+                oti.oti_ost_uuid = ost_uuid;       
         rc = obd_create(mds->mds_osc_exp, &oa, &empty_ea, &oti);
 
         RETURN(rc);

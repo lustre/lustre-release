@@ -786,6 +786,8 @@ struct obd_trans_info {
         /* initial thread handling transaction */
         int                      oti_thread_id;
         __u32                    oti_conn_cnt;
+
+        struct obd_uuid         *oti_ost_uuid;
 };
 
 static inline void oti_init(struct obd_trans_info *oti,

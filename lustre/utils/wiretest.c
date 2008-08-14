@@ -570,12 +570,34 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct obdo, o_padding_1));
         LASSERTF((int)sizeof(((struct obdo *)0)->o_padding_1) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct obdo *)0)->o_padding_1));
-        LASSERTF((int)offsetof(struct obdo, o_inline) == 128, " found %lld\n",
-                 (long long)(int)offsetof(struct obdo, o_inline));
-        LASSERTF((int)sizeof(((struct obdo *)0)->o_inline) == 80, " found %lld\n",
-                 (long long)(int)sizeof(((struct obdo *)0)->o_inline));
-        LASSERTF(OBD_INLINESZ == 80, " found %lld\n",
-                 (long long)OBD_INLINESZ);
+        LASSERTF((int)offsetof(struct obdo, o_handle) == 128, " found %lld\n",
+                 (long long)(int)offsetof(struct obdo, o_handle));
+        LASSERTF((int)sizeof(((struct obdo *)0)->o_handle) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct obdo *)0)->o_handle));
+        LASSERTF((int)offsetof(struct obdo, o_lcookie) == 136, " found %lld\n",
+                 (long long)(int)offsetof(struct obdo, o_lcookie));
+        LASSERTF((int)sizeof(((struct obdo *)0)->o_lcookie) == 32, " found %lld\n",
+                 (long long)(int)sizeof(((struct obdo *)0)->o_lcookie));
+        LASSERTF((int)offsetof(struct obdo, o_padding_2) == 168, " found %lld\n",
+                 (long long)(int)offsetof(struct obdo, o_padding_2));
+        LASSERTF((int)sizeof(((struct obdo *)0)->o_padding_2) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct obdo *)0)->o_padding_2));
+        LASSERTF((int)offsetof(struct obdo, o_padding_3) == 176, " found %lld\n",
+                 (long long)(int)offsetof(struct obdo, o_padding_3));
+        LASSERTF((int)sizeof(((struct obdo *)0)->o_padding_3) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct obdo *)0)->o_padding_3));
+        LASSERTF((int)offsetof(struct obdo, o_padding_4) == 184, " found %lld\n",
+                 (long long)(int)offsetof(struct obdo, o_padding_4));
+        LASSERTF((int)sizeof(((struct obdo *)0)->o_padding_4) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct obdo *)0)->o_padding_4));
+        LASSERTF((int)offsetof(struct obdo, o_padding_5) == 192, " found %lld\n",
+                 (long long)(int)offsetof(struct obdo, o_padding_5));
+        LASSERTF((int)sizeof(((struct obdo *)0)->o_padding_5) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct obdo *)0)->o_padding_5));
+        LASSERTF((int)offsetof(struct obdo, o_padding_6) == 200, " found %lld\n",
+                 (long long)(int)offsetof(struct obdo, o_padding_6));
+        LASSERTF((int)sizeof(((struct obdo *)0)->o_padding_6) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct obdo *)0)->o_padding_6));
         CLASSERT(OBD_MD_FLID == (0x00000001ULL));
         CLASSERT(OBD_MD_FLATIME == (0x00000002ULL));
         CLASSERT(OBD_MD_FLMTIME == (0x00000004ULL));
@@ -590,7 +612,6 @@ void lustre_assert_wire_constants(void)
         CLASSERT(OBD_MD_FLFLAGS == (0x00000800ULL));
         CLASSERT(OBD_MD_FLNLINK == (0x00002000ULL));
         CLASSERT(OBD_MD_FLGENER == (0x00004000ULL));
-        CLASSERT(OBD_MD_FLINLINE == (0x00008000ULL));
         CLASSERT(OBD_MD_FLRDEV == (0x00010000ULL));
         CLASSERT(OBD_MD_FLEASIZE == (0x00020000ULL));
         CLASSERT(OBD_MD_LINKNAME == (0x00040000ULL));

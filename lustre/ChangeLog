@@ -1313,6 +1313,14 @@ Details    : FIEMAP ioctl will allow an application to efficiently fetch the
              extent information of a file. It can be used to map logical blocks
              in a file to physical blocks in the block device.
 
+Severity   : normal
+Bugzilla   : 15198
+Description: LDLM soft lockups - improvement
+Details    : It is be possible to send the lock handle along with each read
+             or write request because the client is already doing a lock match
+             itself so there isn't any reason the OST should have to re-do that
+             search.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

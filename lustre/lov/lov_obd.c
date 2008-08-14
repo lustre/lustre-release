@@ -1042,8 +1042,8 @@ static int lov_clear_orphans(struct obd_export *export, struct obdo *src_oa,
         if (tmp_oa == NULL)
                 RETURN(-ENOMEM);
 
-        if (src_oa->o_valid & OBD_MD_FLINLINE) {
-                ost_uuid = (struct obd_uuid *)src_oa->o_inline;
+        if (oti->oti_ost_uuid) {
+                ost_uuid = oti->oti_ost_uuid;
                 CDEBUG(D_HA, "clearing orphans only for %s\n",
                        ost_uuid->uuid);
         }
@@ -1386,8 +1386,8 @@ static int lov_setattr(struct obd_export *exp, struct obd_info *oinfo,
                                             OBD_MD_FLMTIME | OBD_MD_FLCTIME |
                                             OBD_MD_FLFLAGS | OBD_MD_FLSIZE |
                                             OBD_MD_FLGROUP | OBD_MD_FLUID |
-                                            OBD_MD_FLGID | OBD_MD_FLINLINE |
-                                            OBD_MD_FLFID | OBD_MD_FLGENER)));
+                                            OBD_MD_FLGID | OBD_MD_FLFID |
+                                            OBD_MD_FLGENER)));
         lov = &exp->exp_obd->u.lov;
         rc = lov_prep_setattr_set(exp, oinfo, oti, &set);
         if (rc)

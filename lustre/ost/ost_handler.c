@@ -120,7 +120,7 @@ static int ost_destroy(struct obd_export *exp, struct ptlrpc_request *req,
                 RETURN(rc);
 
         if (body->oa.o_valid & OBD_MD_FLCOOKIE)
-                oti->oti_logcookies = obdo_logcookie(&body->oa);
+                oti->oti_logcookies = &body->oa.o_lcookie;
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
@@ -200,7 +200,7 @@ static int ost_create(struct obd_export *exp, struct ptlrpc_request *req,
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
-        oti->oti_logcookies = obdo_logcookie(&repbody->oa);
+        oti->oti_logcookies = &repbody->oa.o_lcookie;
         req->rq_status = obd_create(exp, &repbody->oa, NULL, oti);
         //obd_log_cancel(conn, NULL, 1, oti->oti_logcookies, 0);
         RETURN(0);
@@ -654,7 +654,8 @@ static int ost_prolong_locks_iter(struct ldlm_lock *lock, void *data)
 }
 
 static void ost_prolong_locks(struct obd_export *exp, struct obd_ioobj *obj,
-                              struct niobuf_remote *nb, ldlm_mode_t mode)
+                              struct niobuf_remote *nb, struct obdo *oa,
+                              ldlm_mode_t mode)
 {
         struct ldlm_res_id res_id;
         int nrbufs = obj->ioo_bufcnt;
@@ -672,8 +673,23 @@ static void ost_prolong_locks(struct obd_export *exp, struct obd_ioobj *obj,
         CDEBUG(D_DLMTRACE,"refresh locks: "LPU64"/"LPU64" ("LPU64"->"LPU64")\n",
                res_id.name[0], res_id.name[1], opd.opd_policy.l_extent.start,
                opd.opd_policy.l_extent.end);
+
+        if (oa->o_valid & OBD_MD_FLHANDLE) {
+                struct ldlm_lock *lock;
+
+                lock = ldlm_handle2lock(&oa->o_handle);
+                if (lock != NULL) {
+                        ost_prolong_locks_iter(lock, &opd);
+                        LDLM_LOCK_PUT(lock);
+                        EXIT;
+                        return;
+                }
+        }
+
         ldlm_resource_iterate(exp->exp_obd->obd_namespace, &res_id,
                               ost_prolong_locks_iter, &opd);
+
+        EXIT;
 }
 
 static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
@@ -797,7 +813,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (rc != 0)
                 GOTO(out_lock, rc);
 
-        ost_prolong_locks(exp, ioo, pp_rnb, LCK_PW | LCK_PR);
+        ost_prolong_locks(exp, ioo, pp_rnb, &body->oa, LCK_PW | LCK_PR);
 
         nob = 0;
         for (i = 0; i < npages; i++) {
@@ -1095,7 +1111,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 GOTO(out_lock, rc = -ETIMEDOUT);
         }
 
-        ost_prolong_locks(exp, ioo, pp_rnb, LCK_PW);
+        ost_prolong_locks(exp, ioo, pp_rnb, &body->oa, LCK_PW);
 
         /* obd_preprw clobbers oa->valid, so save what we need */
         if (body->oa.o_valid & OBD_MD_FLCKSUM) {

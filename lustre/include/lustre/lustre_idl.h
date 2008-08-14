@@ -745,51 +745,6 @@ typedef __u32 obd_count;
 #define OBD_FL_CKSUM_ADLER    (0x00002000)
 #define OBD_FL_CKSUM_ALL      (OBD_FL_CKSUM_CRC32 | OBD_FL_CKSUM_ADLER)
 
-/*
- * This should not be smaller than sizeof(struct lustre_handle) + sizeof(struct
- * llog_cookie) + sizeof(struct ll_fid). Nevertheless struct ll_fid is not
- * longer stored in o_inline, we keep this just for case.
- */
-#define OBD_INLINESZ    80
-
-/* Note: 64-bit types are 64-bit aligned in structure */
-struct obdo {
-        obd_valid               o_valid;        /* hot fields in this obdo */
-        obd_id                  o_id;
-        obd_gr                  o_gr;
-        obd_id                  o_fid;
-        obd_size                o_size;         /* o_size-o_blocks == ost_lvb */
-        obd_time                o_mtime;
-        obd_time                o_atime;
-        obd_time                o_ctime;
-        obd_blocks              o_blocks;       /* brw: cli sent cached bytes */
-        obd_size                o_grant;
-
-        /* 32-bit fields start here: keep an even number of them via padding */
-        obd_blksize             o_blksize;      /* optimal IO blocksize */
-        obd_mode                o_mode;         /* brw: cli sent cache remain */
-        obd_uid                 o_uid;
-        obd_gid                 o_gid;
-        obd_flag                o_flags;
-        obd_count               o_nlink;        /* brw: checksum */
-        obd_count               o_generation;
-        obd_count               o_misc;         /* brw: o_dropped */
-        __u32                   o_easize;       /* epoch in ost writes */
-        __u32                   o_mds;
-        __u32                   o_stripe_idx;   /* holds stripe idx */
-        __u32                   o_padding_1;
-        char                    o_inline[OBD_INLINESZ];
-                                /* lustre_handle + llog_cookie */
-};
-
-#define o_dirty   o_blocks
-#define o_undirty o_mode
-#define o_dropped o_misc
-#define o_cksum   o_nlink
-
-extern void lustre_swab_obdo (struct obdo *o);
-
-
 #define LOV_MAGIC_V1      0x0BD10BD0
 #define LOV_MAGIC         LOV_MAGIC_V1
 #define LOV_MAGIC_JOIN    0x0BD20BD0
@@ -844,11 +799,11 @@ extern void lustre_swab_lov_mds_md(struct lov_mds_md *llm);
 #define OBD_MD_FLFLAGS     (0x00000800ULL) /* flags word */
 #define OBD_MD_FLNLINK     (0x00002000ULL) /* link count */
 #define OBD_MD_FLGENER     (0x00004000ULL) /* generation number */
-#define OBD_MD_FLINLINE    (0x00008000ULL) /* inline data */
+/*#define OBD_MD_FLINLINE    (0x00008000ULL)  inline data. used until 1.6.5 */
 #define OBD_MD_FLRDEV      (0x00010000ULL) /* device number */
 #define OBD_MD_FLEASIZE    (0x00020000ULL) /* extended attribute data */
 #define OBD_MD_LINKNAME    (0x00040000ULL) /* symbolic link target */
-#define OBD_MD_FLHANDLE    (0x00080000ULL) /* file handle */
+#define OBD_MD_FLHANDLE    (0x00080000ULL) /* file/lock handle */
 #define OBD_MD_FLCKSUM     (0x00100000ULL) /* bulk data checksum */
 #define OBD_MD_FLQOS       (0x00200000ULL) /* quality of service stats */
 #define OBD_MD_FLOSCOPQ    (0x00400000ULL) /* osc opaque data */
@@ -888,16 +843,6 @@ extern void lustre_swab_lov_mds_md(struct lov_mds_md *llm);
                           OBD_MD_FLGID   | OBD_MD_FLFLAGS | OBD_MD_FLNLINK | \
                           OBD_MD_FLGENER | OBD_MD_FLRDEV  | OBD_MD_FLGROUP)
 
-static inline struct lustre_handle *obdo_handle(struct obdo *oa)
-{
-        return (struct lustre_handle *)oa->o_inline;
-}
-
-static inline struct llog_cookie *obdo_logcookie(struct obdo *oa)
-{
-        return (struct llog_cookie *)(oa->o_inline +
-                                      sizeof(struct lustre_handle));
-}
 /* don't forget obdo_fid which is way down at the bottom so it can
  * come after the definition of llog_cookie */
 
@@ -966,23 +911,6 @@ struct niobuf_remote {
 };
 
 extern void lustre_swab_niobuf_remote (struct niobuf_remote *nbr);
-
-/* request structure for OST's */
-
-struct ost_body {
-        struct  obdo oa;
-};
-
-/* Key for FIEMAP to be used in get_info calls */
-struct ll_fiemap_info_key {
-        char    name[8];
-        struct  obdo oa;
-        struct  ll_user_fiemap fiemap;
-};
-
-extern void lustre_swab_ost_body (struct ost_body *b);
-extern void lustre_swab_ost_last_id(obd_id *id);
-extern void lustre_swab_fiemap(struct ll_user_fiemap *fiemap);
 
 /* lock value block communicated between the filter and llite */
 
@@ -2160,6 +2088,66 @@ struct lov_user_md_join {         /* LOV EA user data (host-endian) */
         struct llog_logid lmm_array_id; /* mds extent desc llog object id */
         struct lov_user_ost_data_join lmm_objects[0]; /* per-stripe data */
 } __attribute__((packed));
+
+/* Note: 64-bit types are 64-bit aligned in structure */
+struct obdo {
+        obd_valid               o_valid;        /* hot fields in this obdo */
+        obd_id                  o_id;
+        obd_gr                  o_gr;
+        obd_id                  o_fid;
+        obd_size                o_size;         /* o_size-o_blocks == ost_lvb */
+        obd_time                o_mtime;
+        obd_time                o_atime;
+        obd_time                o_ctime;
+        obd_blocks              o_blocks;       /* brw: cli sent cached bytes */
+        obd_size                o_grant;
+
+        /* 32-bit fields start here: keep an even number of them via padding */
+        obd_blksize             o_blksize;      /* optimal IO blocksize */
+        obd_mode                o_mode;         /* brw: cli sent cache remain */
+        obd_uid                 o_uid;
+        obd_gid                 o_gid;
+        obd_flag                o_flags;
+        obd_count               o_nlink;        /* brw: checksum */
+        obd_count               o_generation;
+        obd_count               o_misc;         /* brw: o_dropped */
+        __u32                   o_easize;       /* epoch in ost writes */
+        __u32                   o_mds;
+        __u32                   o_stripe_idx;   /* holds stripe idx */
+        __u32                   o_padding_1;
+        struct lustre_handle    o_handle;       /* brw: lock handle to prolong locks */
+        struct llog_cookie      o_lcookie;      /* destroy: unlink cookie from MDS */
+
+        __u64                   o_padding_2;
+        __u64                   o_padding_3;
+        __u64                   o_padding_4;
+        __u64                   o_padding_5;
+        __u64                   o_padding_6;
+};
+
+#define o_dirty   o_blocks
+#define o_undirty o_mode
+#define o_dropped o_misc
+#define o_cksum   o_nlink
+
+extern void lustre_swab_obdo (struct obdo *o);
+
+/* request structure for OST's */
+
+struct ost_body {
+        struct  obdo oa;
+};
+
+/* Key for FIEMAP to be used in get_info calls */
+struct ll_fiemap_info_key {
+        char    name[8];
+        struct  obdo oa;
+        struct  ll_user_fiemap fiemap;
+};
+
+extern void lustre_swab_ost_body (struct ost_body *b);
+extern void lustre_swab_ost_last_id(obd_id *id);
+extern void lustre_swab_fiemap(struct ll_user_fiemap *fiemap);
 
 extern void lustre_swab_lov_user_md(struct lov_user_md *lum);
 extern void lustre_swab_lov_user_md_objects(struct lov_user_md *lum);

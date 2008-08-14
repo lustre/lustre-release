@@ -170,7 +170,7 @@ static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
         oa->o_id = lur->lur_oid;
         oa->o_gr = lur->lur_ogen;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
-        memcpy(obdo_logcookie(oa), cookie, sizeof(*cookie));
+        oa->o_lcookie = *cookie;
         oid = oa->o_id;
 
         rc = filter_destroy(exp, oa, NULL, NULL, NULL);
@@ -213,7 +213,7 @@ static int filter_recov_log_setattr_cb(struct llog_ctxt *ctxt,
         oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
         oinfo.oi_oa->o_uid = lsr->lsr_uid;
         oinfo.oi_oa->o_gid = lsr->lsr_gid;
-        memcpy(obdo_logcookie(oinfo.oi_oa), cookie, sizeof(*cookie));
+        oinfo.oi_oa->o_lcookie = *cookie;
         oid = oinfo.oi_oa->o_id;
 
         rc = filter_setattr(exp, &oinfo, NULL);

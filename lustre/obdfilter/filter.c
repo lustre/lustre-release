@@ -3120,7 +3120,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         if (oa->o_valid & OBD_MD_FLCOOKIE) {
                 OBD_ALLOC(fcc, sizeof(*fcc));
                 if (fcc != NULL)
-                        memcpy(fcc, obdo_logcookie(oa), sizeof(*fcc));
+                        *fcc = oa->o_lcookie;
         }
 
         if (ia_valid & ATTR_SIZE || ia_valid & (ATTR_UID | ATTR_GID)) {
@@ -3860,7 +3860,7 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
                 if (oa->o_valid & OBD_MD_FLCOOKIE) {
                         struct llog_ctxt *ctxt;
                         struct obd_llog_group *olg;
-                        fcc = obdo_logcookie(oa);
+                        fcc = &oa->o_lcookie;
                         olg = filter_find_olg(obd, oa->o_gr);
                         if (!olg) {
                                CERROR(" %s: can not find olg of group %d\n",
@@ -3883,7 +3883,7 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
         if (oa->o_valid & OBD_MD_FLCOOKIE) {
                 OBD_ALLOC(fcc, sizeof(*fcc));
                 if (fcc != NULL)
-                        memcpy(fcc, obdo_logcookie(oa), sizeof(*fcc));
+                        *fcc = oa->o_lcookie;
         }
         DQUOT_INIT(dchild->d_inode);
 

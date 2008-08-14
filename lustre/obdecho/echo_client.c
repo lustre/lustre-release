@@ -1021,7 +1021,7 @@ echo_client_enqueue(struct obd_export *exp, struct obdo *oa,
 {
         struct obd_device      *obd = exp->exp_obd;
         struct echo_client_obd *ec = &obd->u.echo_client;
-        struct lustre_handle   *ulh = obdo_handle (oa);
+        struct lustre_handle   *ulh = &oa->o_handle;
         struct ldlm_enqueue_info einfo = { 0 };
         struct obd_info oinfo = { { { 0 } } };
         struct ec_object       *eco;
@@ -1089,7 +1089,7 @@ echo_client_cancel(struct obd_export *exp, struct obdo *oa)
 {
         struct obd_device      *obd = exp->exp_obd;
         struct echo_client_obd *ec = &obd->u.echo_client;
-        struct lustre_handle   *ulh = obdo_handle (oa);
+        struct lustre_handle   *ulh = &oa->o_handle;
         struct ec_lock         *ecl = NULL;
         int                     found = 0;
         struct list_head       *el;

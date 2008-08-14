@@ -180,7 +180,7 @@ obdio_enqueue (struct obdio_conn *conn, __u64 oid,
         rc = obdio_ioctl (conn, ECHO_IOC_ENQUEUE);
 
         if (rc == 0)
-                memcpy (lh, obdo_handle (&conn->oc_data.ioc_obdo1), sizeof (*lh));
+                *lh = conn->oc_data.ioc_obdo1.o_handle;
 
         return (rc);
 }
@@ -190,7 +190,7 @@ obdio_cancel (struct obdio_conn *conn, struct lustre_handle *lh)
 {
         obdio_iocinit (conn);
 
-        memcpy (obdo_handle (&conn->oc_data.ioc_obdo1), lh, sizeof (*lh));
+        conn->oc_data.ioc_obdo1.o_handle = *lh;
         conn->oc_data.ioc_obdo1.o_valid = OBD_MD_FLHANDLE;
 
         return (obdio_ioctl (conn, ECHO_IOC_CANCEL));

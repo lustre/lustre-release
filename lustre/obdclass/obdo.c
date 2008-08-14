@@ -56,9 +56,6 @@
 void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_flag valid)
 {
 #ifdef __KERNEL__
-        CLASSERT(sizeof(struct lustre_handle) +
-                 sizeof(struct llog_cookie) <= sizeof(src->o_inline));
-        
         CDEBUG(D_INODE, "src obdo "LPX64" valid "LPX64", dst obdo "LPX64"\n",
                src->o_id, src->o_valid, dst->o_id);
 #endif
@@ -86,8 +83,10 @@ void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_flag valid)
                 dst->o_flags = src->o_flags;
         if (valid & OBD_MD_FLGENER)
                 dst->o_generation = src->o_generation;
-        if (valid & OBD_MD_FLINLINE)
-                memcpy(dst->o_inline, src->o_inline, sizeof(src->o_inline));
+        if (valid & OBD_MD_FLHANDLE)
+                dst->o_handle = src->o_handle;
+        if (valid & OBD_MD_FLCOOKIE)
+                dst->o_lcookie = src->o_lcookie;
 
         dst->o_valid |= valid;
 }

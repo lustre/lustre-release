@@ -246,9 +246,13 @@ check_obdo(void)
         CHECK_MEMBER(obdo, o_mds);
         CHECK_MEMBER(obdo, o_stripe_idx);
         CHECK_MEMBER(obdo, o_padding_1);
-        CHECK_MEMBER(obdo, o_inline);
-
-        CHECK_VALUE(OBD_INLINESZ);
+        CHECK_MEMBER(obdo, o_handle);
+        CHECK_MEMBER(obdo, o_lcookie);
+        CHECK_MEMBER(obdo, o_padding_2);
+        CHECK_MEMBER(obdo, o_padding_3);
+        CHECK_MEMBER(obdo, o_padding_4);
+        CHECK_MEMBER(obdo, o_padding_5);
+        CHECK_MEMBER(obdo, o_padding_6);       
 
         CHECK_CDEFINE(OBD_MD_FLID);
         CHECK_CDEFINE(OBD_MD_FLATIME);
@@ -264,7 +268,6 @@ check_obdo(void)
         CHECK_CDEFINE(OBD_MD_FLFLAGS);
         CHECK_CDEFINE(OBD_MD_FLNLINK);
         CHECK_CDEFINE(OBD_MD_FLGENER);
-        CHECK_CDEFINE(OBD_MD_FLINLINE);
         CHECK_CDEFINE(OBD_MD_FLRDEV);
         CHECK_CDEFINE(OBD_MD_FLEASIZE);
         CHECK_CDEFINE(OBD_MD_LINKNAME);
