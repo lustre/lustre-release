@@ -458,7 +458,7 @@ restart:
         if (added)
                 ldlm_flock_destroy(req, mode, *flags);
 
-        ldlm_resource_dump(D_OTHER, res);
+        ldlm_resource_dump(D_INFO, res);
         RETURN(LDLM_ITER_CONTINUE);
 }
 
