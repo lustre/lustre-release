@@ -38,6 +38,13 @@ tbd Sun Microsystems, Inc.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
 
+Severity   : minor
+Bugzilla   : 16109
+Frequency  : rare
+Description: avoid Already found the key in hash [CONN_UNUSED_HASH] messages
+Details    : When connection is reused this not moved from CONN_UNUSED_HASH into
+             CONN_USED_HASH and this prodice warning when put connection again
+             in unused hash.
 
 Severity   : enhancement
 Bugzilla   : 16573
