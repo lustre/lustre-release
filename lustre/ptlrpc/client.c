@@ -569,7 +569,7 @@ int ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
 EXPORT_SYMBOL(ptlrpc_request_bufs_pack);
 
 int ptlrpc_request_pack(struct ptlrpc_request *request,
-                        __u32 version, int opcode) 
+                        __u32 version, int opcode)
 {
         return ptlrpc_request_bufs_pack(request, version, opcode, NULL, NULL);
 }
@@ -698,7 +698,7 @@ struct ptlrpc_request_set *ptlrpc_prep_set(void)
         spin_lock_init(&set->set_new_req_lock);
         CFS_INIT_LIST_HEAD(&set->set_new_requests);
         CFS_INIT_LIST_HEAD(&set->set_cblist);
-        
+
         RETURN(set);
 }
 
@@ -784,16 +784,16 @@ void ptlrpc_set_add_req(struct ptlrpc_request_set *set,
         atomic_inc(&req->rq_import->imp_inflight);
 }
 
-/** 
+/**
  * Lock so many callers can add things, the context that owns the set
- * is supposed to notice these and move them into the set proper. 
+ * is supposed to notice these and move them into the set proper.
  */
 int ptlrpc_set_add_new_req(struct ptlrpcd_ctl *pc,
                            struct ptlrpc_request *req)
 {
         struct ptlrpc_request_set *set = pc->pc_set;
 
-        /* 
+        /*
          * Let caller know that we stopped and will not handle this request.
          * It needs to take care itself of request.
          */
@@ -801,15 +801,15 @@ int ptlrpc_set_add_new_req(struct ptlrpcd_ctl *pc,
                 return -EALREADY;
 
         spin_lock(&set->set_new_req_lock);
-        /* 
-         * The set takes over the caller's request reference. 
+        /*
+         * The set takes over the caller's request reference.
          */
         list_add_tail(&req->rq_set_chain, &set->set_new_requests);
         req->rq_set = set;
         spin_unlock(&set->set_new_req_lock);
 
         /*
-         * Let thead know that we added something and better it to wake up 
+         * Let thead know that we added something and better it to wake up
          * and process.
          */
         cfs_waitq_signal(&set->set_waitq);
@@ -962,7 +962,7 @@ static int after_reply(struct ptlrpc_request *req)
 
         /*
          * NB Until this point, the whole of the incoming message,
-         * including buflens, status etc is in the sender's byte order. 
+         * including buflens, status etc is in the sender's byte order.
          */
 
         rc = sptlrpc_cli_unwrap_reply(req);
@@ -972,7 +972,7 @@ static int after_reply(struct ptlrpc_request *req)
         }
 
         /*
-         * Security layer unwrap might ask resend this request. 
+         * Security layer unwrap might ask resend this request.
          */
         if (req->rq_resend)
                 RETURN(0);
@@ -1005,7 +1005,7 @@ static int after_reply(struct ptlrpc_request *req)
                 /*
                  * Either we've been evicted, or the server has failed for
                  * some reason. Try to reconnect, and if that fails, punt to
-                 * the upcall. 
+                 * the upcall.
                  */
                 if (ll_rpc_recoverable_error(rc)) {
                         if (req->rq_send_state != LUSTRE_IMP_FULL ||
@@ -1017,14 +1017,14 @@ static int after_reply(struct ptlrpc_request *req)
                 }
         } else {
                 /*
-                 * Let's look if server sent slv. Do it only for RPC with 
-                 * rc == 0. 
+                 * Let's look if server sent slv. Do it only for RPC with
+                 * rc == 0.
                  */
                 ldlm_cli_update_pool(req);
         }
 
         /*
-         * Store transno in reqmsg for replay. 
+         * Store transno in reqmsg for replay.
          */
         req->rq_transno = lustre_msg_get_transno(req->rq_repmsg);
         lustre_msg_set_transno(req->rq_reqmsg, req->rq_transno);
@@ -1033,10 +1033,10 @@ static int after_reply(struct ptlrpc_request *req)
                 spin_lock(&imp->imp_lock);
                 /*
                  * No point in adding already-committed requests to the replay
-                 * list, we will just remove them immediately. b=9829 
+                 * list, we will just remove them immediately. b=9829
                  */
-                if (req->rq_transno != 0 && 
-                    (req->rq_transno > 
+                if (req->rq_transno != 0 &&
+                    (req->rq_transno >
                      lustre_msg_get_last_committed(req->rq_repmsg) ||
                      req->rq_replay))
                         ptlrpc_retain_replayable_request(req, imp);
@@ -1047,7 +1047,7 @@ static int after_reply(struct ptlrpc_request *req)
                 }
 
                 /*
-                 * Replay-enabled imports return commit-status information. 
+                 * Replay-enabled imports return commit-status information.
                  */
                 if (lustre_msg_get_last_committed(req->rq_repmsg)) {
                         imp->imp_peer_committed_transno =
@@ -1069,7 +1069,7 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
         LASSERT(req->rq_phase == RQ_PHASE_NEW);
         if (req->rq_sent && (req->rq_sent > cfs_time_current_sec()))
                 RETURN (0);
-        
+
         req->rq_phase = RQ_PHASE_RPC;
 
         imp = req->rq_import;
@@ -1455,7 +1455,7 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
                 spin_unlock(&req->rq_lock);
                 RETURN(1);
         }
-        
+
         /* if a request can't be resent we can't wait for an answer after
            the timeout */
         if (req->rq_no_resend) {
