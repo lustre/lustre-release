@@ -1609,5 +1609,22 @@ test_42() { #bug 14693
 }
 run_test 42 "invalid config param should not prevent client from mounting"
 
+test_44() { # 16317
+        setup
+        check_mount || return 2
+        UUID=$($LCTL get_param llite.${FSNAME}*.uuid | cut -d= -f2)
+        STATS_FOUND=no
+        UUIDS=$(do_facet mds "$LCTL get_param mds.${FSNAME}*.exports.*.uuid")
+        for VAL in $UUIDS; do
+                NID=$(echo $VAL | cut -d= -f1)
+                CLUUID=$(echo $VAL | cut -d= -f2)
+                [ "$UUID" = "$CLUUID" ] && STATS_FOUND=yes && break
+        done
+        [ "$STATS_FOUND" = "no" ] && error "stats not found for client"
+        cleanup
+        return 0
+}
+run_test 44 "mounted client proc entry exists"
+
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
