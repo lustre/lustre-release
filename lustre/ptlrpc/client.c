@@ -1650,6 +1650,7 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
         LASSERTF(request->rq_rqbd == NULL, "req %p\n",request);/* client-side */
         LASSERTF(list_empty(&request->rq_list), "req %p\n", request);
         LASSERTF(list_empty(&request->rq_set_chain), "req %p\n", request);
+        LASSERTF(!request->rq_replay, "req %p\n", request);
         LASSERT(request->rq_cli_ctx);
 
         req_capsule_fini(&request->rq_pill);
