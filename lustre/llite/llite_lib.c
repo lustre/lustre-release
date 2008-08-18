@@ -459,6 +459,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
         }
 
         sbi->ll_sdev_orig = sb->s_dev;
+#if 0
         /* We set sb->s_dev equal on all lustre clients in order to support
          * NFS export clustering.  NFSD requires that the FSID be the same
          * on all clients. */
@@ -468,7 +469,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
         /* XXX: this will not work with LMV */
         sb->s_dev = get_uuid2int(sbi2mdc(sbi)->cl_target_uuid.uuid,
                                  strlen(sbi2mdc(sbi)->cl_target_uuid.uuid));
-
+#endif
         obd = class_name2obd(dt);
         if (!obd) {
                 CERROR("DT %s: not setup or attached\n", dt);
