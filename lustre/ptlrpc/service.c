@@ -627,9 +627,6 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
         if ((lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT) == 0)
                 return(-ENOSYS);
         
-        DEBUG_REQ(D_ADAPTTO, req, "add timed %lds", 
-                  req->rq_deadline - cfs_time_current_sec());
-        
         spin_lock(&svc->srv_at_lock);
 
         if (unlikely(req->rq_sent_final)) {
@@ -685,16 +682,17 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
                 RETURN(0);
         
         if (olddl < 0) {
-                CDEBUG(D_WARNING, "x"LPU64": Already past deadline (%+lds), not"
-                       " sending early reply. Increase at_early_margin (%d)?\n",
-                       req->rq_xid, olddl, at_early_margin);
+                DEBUG_REQ(D_WARNING, req, "Already past deadline (%+lds), "
+                          "not sending early reply. Consider increasing "
+                          "at_early_margin (%d)?", olddl, at_early_margin);
+
                 /* Return an error so we're not re-added to the timed list. */
                 RETURN(-ETIMEDOUT);
         }
 
         if ((lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT) == 0){
-                CDEBUG(D_INFO, "Wanted to ask client for more time, but no AT "
-                      "support\n");
+                DEBUG_REQ(D_INFO, req, "Wanted to ask client for more time, "
+                          "but no AT support");
                 RETURN(-ENOSYS);
         }
 
@@ -710,9 +708,9 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
         if (req->rq_deadline >= newdl) {
                 /* We're not adding any time, no need to send an early reply
                    (e.g. maybe at adaptive_max) */
-                CDEBUG(D_ADAPTTO, "x"LPU64": Couldn't add any time (%ld/%ld), "
-                       "not sending early reply\n", req->rq_xid, olddl,
-                       newdl - cfs_time_current_sec());
+                DEBUG_REQ(D_WARNING, req, "Couldn't add any time "
+                          "(%ld/%ld), not sending early reply\n",
+                          olddl, newdl - cfs_time_current_sec());
                 RETURN(-ETIMEDOUT);
         }
 
@@ -733,8 +731,8 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
         memcpy(reqmsg, req->rq_reqmsg, req->rq_reqlen);
 
         if (req->rq_sent_final) {
-                CDEBUG(D_ADAPTTO, "x"LPU64": normal reply already sent out, "
-                       "abort sending early reply\n", req->rq_xid);
+                DEBUG_REQ(D_ADAPTTO, reqcopy, "Normal reply already sent out, "
+                          "abort sending early reply\n");
                 GOTO(out, rc = 0);
         }
 
