@@ -39,6 +39,13 @@ tbd Sun Microsystems, Inc.
 	  old (verbose) output can be obtained by using -v option.
 
 Severity   : minor
+Bugzilla   : 16583
+Frequency  : rare
+Description: avoid messages about idr_remove called for id  which is not allocated. 
+Details    : Move assigment s_dev for clustered nfs to end of initialization, for avoid
+             problem with error handling.
+
+Severity   : minor
 Bugzilla   : 16109
 Frequency  : rare
 Description: avoid Already found the key in hash [CONN_UNUSED_HASH] messages
