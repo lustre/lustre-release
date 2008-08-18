@@ -372,14 +372,6 @@ static int client_common_fill_super(struct super_block *sb,
         if (data->ocd_connect_flags & OBD_CONNECT_JOIN)
                 sbi->ll_flags |= LL_SBI_JOIN;
 
-        sbi->ll_sdev_orig = sb->s_dev;
-        /* We set sb->s_dev equal on all lustre clients in order to support
-         * NFS export clustering.  NFSD requires that the FSID be the same
-         * on all clients. */
-        /* s_dev is also used in lt_compare() to compare two fs, but that is
-         * only a node-local comparison. */
-        sb->s_dev = get_uuid2int(sbi2mdc(sbi)->cl_target_uuid.uuid,
-                                 strlen(sbi2mdc(sbi)->cl_target_uuid.uuid));
         obd = class_name2obd(osc);
         if (!obd) {
                 CERROR("OSC %s: not setup or attached\n", osc);
@@ -541,6 +533,16 @@ static int client_common_fill_super(struct super_block *sb,
         if (data != NULL)
                 OBD_FREE(data, sizeof(*data));
         sb->s_root->d_op = &ll_d_root_ops;
+
+        sbi->ll_sdev_orig = sb->s_dev;
+        /* We set sb->s_dev equal on all lustre clients in order to support
+         * NFS export clustering.  NFSD requires that the FSID be the same
+         * on all clients. */
+        /* s_dev is also used in lt_compare() to compare two fs, but that is
+         * only a node-local comparison. */
+        sb->s_dev = get_uuid2int(sbi2mdc(sbi)->cl_target_uuid.uuid,
+                                 strlen(sbi2mdc(sbi)->cl_target_uuid.uuid));
+
         RETURN(err);
 
 out_root:
