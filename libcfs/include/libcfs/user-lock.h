@@ -72,7 +72,6 @@
  *
  * - spin_lock_init(x)
  * - spin_lock(x)
- * - spin_lock_nested(x, subclass)
  * - spin_unlock(x)
  * - spin_trylock(x)
  *
@@ -91,7 +90,6 @@ typedef struct spin_lock spinlock_t;
 
 void spin_lock_init(spinlock_t *lock);
 void spin_lock(spinlock_t *lock);
-void spin_lock_nested(spinlock_t *lock, unsigned int subclass);
 void spin_unlock(spinlock_t *lock);
 int spin_trylock(spinlock_t *lock);
 void spin_lock_bh_init(spinlock_t *lock);
@@ -308,11 +306,6 @@ static inline int mutex_trylock(struct mutex *mutex)
         return 1;
 }
 
-static inline void mutex_lock_nested(struct mutex *mutex, unsigned int subclass)
-{
-        return mutex_lock(mutex);
-}
-
 static inline void mutex_destroy(struct mutex *lock)
 {
 }
@@ -344,6 +337,13 @@ struct lock_class_key {
 static inline void lockdep_set_class(void *lock, struct lock_class_key *key)
 {
 }
+
+/* This has to be a macro, so that can be undefined in kernels that do not
+ * support lockdep. */
+#define mutex_lock_nested(mutex, subclass) mutex_lock(mutex)
+#define spin_lock_nested(lock, subclass) spin_lock(lock)
+#define down_read_nested(lock, subclass) down_read(lock)
+#define down_write_nested(lock, subclass) down_write(lock)
 
 /* !__KERNEL__ */
 #endif
