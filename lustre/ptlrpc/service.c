@@ -644,7 +644,7 @@ static void ptlrpc_at_set_timer(struct ptlrpc_service *svc)
         /* Set timer for closest deadline */
         rq = list_entry(svc->srv_at_list.next, struct ptlrpc_request,
                         rq_timed_list);
-        next = (__s32)(rq->rq_deadline - cfs_time_current_sec() - 
+        next = (__s32)(rq->rq_deadline - cfs_time_current_sec() -
                        at_early_margin);
         if (next <= 0)
                 ptlrpc_at_timer((unsigned long)svc);
@@ -1070,6 +1070,9 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
         svc->srv_n_active_reqs++;
 
         spin_unlock(&svc->srv_lock);
+
+        if(OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_DUMP_LOG))
+                libcfs_debug_dumplog();
 
         do_gettimeofday(&work_start);
         timediff = cfs_timeval_sub(&work_start, &request->rq_arrival_time,NULL);
@@ -1619,7 +1622,7 @@ int ptlrpc_start_threads(struct obd_device *dev, struct ptlrpc_service *svc)
                 if (rc == -EMFILE)
                         break;
                 if (rc) {
-                        CERROR("cannot start %s thread #%d: rc %d\n", 
+                        CERROR("cannot start %s thread #%d: rc %d\n",
                                svc->srv_thread_name, i, rc);
                         ptlrpc_stop_all_threads(svc);
                 }
@@ -1667,7 +1670,7 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc)
         d.thread = thread;
 
         CDEBUG(D_RPCTRACE, "starting thread '%s'\n", name);
-        
+
           /* CLONE_VM and CLONE_FILES just avoid a needless copy, because we
          * just drop the VM and FILES in ptlrpc_daemonize() right away.
          */
