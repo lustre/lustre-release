@@ -302,7 +302,7 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
                 int req_portal, int rep_portal, int watchdog_factor,
                 svc_handler_t handler, char *name,
                 cfs_proc_dir_entry_t *proc_entry,
-                svcreq_printfn_t svcreq_printfn, 
+                svcreq_printfn_t svcreq_printfn,
                 int min_threads, int max_threads, char *threadname)
 {
         int                    rc;
@@ -311,7 +311,7 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
 
         LASSERT (nbufs > 0);
         LASSERT (bufsize >= max_req_size);
-        
+
         OBD_ALLOC(service, sizeof(*service));
         if (service == NULL)
                 RETURN(NULL);
@@ -354,14 +354,14 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
         CFS_INIT_LIST_HEAD(&service->srv_req_in_queue);
         CFS_INIT_LIST_HEAD(&service->srv_at_list);
         cfs_timer_init(&service->srv_at_timer, ptlrpc_at_timer, service);
-        /* At SOW, service time should be quick; 10s seems generous. If client 
+        /* At SOW, service time should be quick; 10s seems generous. If client
            timeout is less than this, we'll be sending an early reply. */
         at_init(&service->srv_at_estimate, 10, 0);
 
         spin_lock (&ptlrpc_all_services_lock);
         list_add (&service->srv_list, &ptlrpc_all_services);
         spin_unlock (&ptlrpc_all_services_lock);
-        
+
         /* Now allocate the request buffers */
         rc = ptlrpc_grow_req_bufs(service);
         /* We shouldn't be under memory pressure at startup, so
@@ -660,7 +660,7 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
         return 0;
 }
 
-static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req, 
+static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
                                       int extra_time)
 {
         struct ptlrpc_service *svc = req->rq_rqbd->rqbd_service;
@@ -750,7 +750,7 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
                 GOTO(out_put, rc = -ENODEV);
 
         rc = lustre_pack_reply_flags(reqcopy, 1, NULL, NULL, LPRFL_EARLY_REPLY);
-        if (rc) 
+        if (rc)
                 GOTO(out_put, rc);
 
         rc = ptlrpc_send_reply(reqcopy, PTLRPC_REPLY_EARLY);
@@ -811,7 +811,7 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
                 RETURN(0);
         }
 
-        /* We're close to a timeout, and we don't know how much longer the 
+        /* We're close to a timeout, and we don't know how much longer the
            server will take. Send early replies to everyone expiring soon. */
         CFS_INIT_LIST_HEAD(&work_list);
         list_for_each_entry_safe(rq, n, &svc->srv_at_list, rq_timed_list) {
@@ -832,7 +832,7 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
                "replies\n", first, at_extra, counter);
 
         if (first < 0) {
-                /* We're already past request deadlines before we even get a 
+                /* We're already past request deadlines before we even get a
                    chance to send early replies */
                 LCONSOLE_WARN("%s: This server is not able to keep up with "
                               "request traffic (cpu-bound).\n",  svc->srv_name);
@@ -991,7 +991,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
              svc->srv_n_active_reqs >= (svc->srv_threads_running - 1))) {
                 /* Don't handle regular requests in the last thread, in order
                  * to handle difficult replies (which might block other threads)
-                 * as well as handle any incoming reqs, early replies, etc. 
+                 * as well as handle any incoming reqs, early replies, etc.
                  * That means we always need at least 2 service threads. */
                 spin_unlock(&svc->srv_lock);
                 RETURN(0);
@@ -1004,6 +1004,9 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
         svc->srv_n_active_reqs++;
 
         spin_unlock(&svc->srv_lock);
+
+        if(OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_DUMP_LOG))
+                libcfs_debug_dumplog();
 
         do_gettimeofday(&work_start);
         timediff = cfs_timeval_sub(&work_start, &request->rq_arrival_time,NULL);
@@ -1364,8 +1367,8 @@ static int ptlrpc_main(void *arg)
          */
         cfs_waitq_signal(&thread->t_ctl_waitq);
 
-        watchdog = lc_watchdog_add(max_t(int, obd_timeout, AT_OFF ? 0 : 
-                                   at_get(&svc->srv_at_estimate)) * 
+        watchdog = lc_watchdog_add(max_t(int, obd_timeout, AT_OFF ? 0 :
+                                   at_get(&svc->srv_at_estimate)) *
                                    svc->srv_watchdog_factor, NULL, NULL);
 
         spin_lock(&svc->srv_lock);
@@ -1759,7 +1762,7 @@ int ptlrpc_service_health_check(struct ptlrpc_service *svc)
         timediff = cfs_timeval_sub(&right_now, &request->rq_arrival_time, NULL);
         spin_unlock(&svc->srv_lock);
 
-        if ((timediff / ONE_MILLION) > (AT_OFF ? obd_timeout * 3/2 : 
+        if ((timediff / ONE_MILLION) > (AT_OFF ? obd_timeout * 3/2 :
                                         at_max)) {
                 CERROR("%s: unhealthy - request has been waiting %lds\n",
                        svc->srv_name, timediff / ONE_MILLION);
