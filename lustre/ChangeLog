@@ -38,17 +38,25 @@ tbd Sun Microsystems, Inc.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
 
-Severity   : minor
-Bugzilla   : 16583
-Frequency  : rare
-Description: avoid messages about idr_remove called for id  which is not allocated. 
-Details    : Move assigment s_dev for clustered nfs to end of initialization, for avoid
-             problem with error handling.
+Severity   : enhancement
+Bugzilla   : 16566
+Description: Upcall on Lustre log has been dumped
+Details    : Allow for a user mode script to be called once a Lustre log has
+             been dumped. It passes the filename of the dumped log to the
+	     script, the location of the script can be specified via
+	     /proc/sys/lnet/debug_log_upcall.
 
 Severity   : minor
 Bugzilla   : 16583
 Frequency  : rare
-Description: avoid messages about idr_remove called for id  which is not allocated. 
+Description: avoid messages about idr_remove called for id  which is not allocated.
+Details    : Move assigment s_dev for clustered nfs to end of initialization, for
+             avoid problem with error handling.
+
+Severity   : minor
+Bugzilla   : 16583
+Frequency  : rare
+Description: avoid messages about idr_remove called for id  which is not allocated.
 Details    : Move assigment s_dev for clustered nfs to end of initialization, for avoid
              problem with error handling.
 
@@ -123,7 +131,7 @@ Details    : release reference to stats when client disconnected, not
 Severity   : normal
 Bugzilla   : 16679
 Description: more cleanup in mds_lov
-Details    : add workaround for get valid ost count for avoid warnings about 
+Details    : add workaround for get valid ost count for avoid warnings about
              drop too big messages, not init llog cat under semphore which
              can be blocked on reconnect and break normal replay, fix access
              to wrong pointer.
