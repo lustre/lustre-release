@@ -543,6 +543,37 @@ else
 			*) AC_MSG_ERROR([internal error]);;
 		esac
 	else
+		# figure out whether the kernel has an infiniband stack
+		# configured
+		LB_LINUX_CONFIG_IM([INFINIBAND],[
+			CONFIG_INFINIBAND_MODULE_defined=true
+		],[
+			CONFIG_INFINIBAND_MODULE_defined=false
+		])
+		# at this point we know that the user either explicitly
+		# requested o2ib support or didn't explicitly disable it so
+		# make sure the kernel's CONFIG_INFINIBAND variable is set
+		# appropriately.
+		#
+		# possible error conditions are:
+		# 1) --with-o2ib[=yes] (implies in kernel since no path was
+		#    given) and kernel not configured for IB
+		# 2) --with-o2ib=/path and kernel is configured for IB
+		#
+		if test "$O2IBPATH" = "$LINUX" -o "$O2IBPATH" = "$LINUX/drivers/infiniband"; then
+			# infiniband stack is in the kernel
+			if test $ENABLEO2IB -eq 1 -o $ENABLEO2IB -eq 2 && ! $CONFIG_INFINIBAND_MODULE_defined; then
+				# case #1
+				AC_MSG_ERROR([Kernel supplied OFED drivers are being requested however the kernel is NOT configured to build OFED modules.  Please specify --with-o2ib=<path_to_ofed> or rebuild the kernel with Infiniband enabled.])
+			fi
+		else
+			# had to be a specified path with --with-o2ib=/path
+			if $CONFIG_INFINIBAND_MODULE_defined; then
+				# case #2
+				AC_MSG_ERROR([External OFED source has been specified but the kernel is configured to build OFED modules as well.  Remove --with-o2ib from the configuration or rebuild the kernel without Infiniband.])
+			fi
+		fi
+		if $o2ib_found; then
 		O2IBCPPFLAGS="-I$O2IBPATH/include"
 		EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
 		EXTRA_KCFLAGS="$EXTRA_KCFLAGS $O2IBCPPFLAGS"
@@ -638,6 +669,7 @@ else
                 ])
 
 		EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
+	fi
 	fi
 fi
 
