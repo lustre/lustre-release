@@ -404,18 +404,6 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 #define ll_inode_blksize(a)     (1<<(a)->i_blkbits)
 #endif
 
-#ifndef HAVE_EXPORT_NR_FREE_BUFFER_PAGES
-static inline unsigned int ll_nr_free_buffer_pages(void)
-{
-        struct sysinfo si;
-
-        si_meminfo(&si);
-        return (unsigned int)(si.freeram - si.freehigh);
-}
-#else
-#define ll_nr_free_buffer_pages()	nr_free_buffer_pages()
-#endif
-
 #ifdef HAVE_FS_RENAME_DOES_D_MOVE
 #define LL_RENAME_DOES_D_MOVE	FS_RENAME_DOES_D_MOVE
 #else
