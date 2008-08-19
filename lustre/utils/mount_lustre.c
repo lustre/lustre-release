@@ -584,7 +584,7 @@ int main(int argc, char *const argv[])
 
         if (set_tunables(source, strlen(source)) && verbose)
                 fprintf(stderr, "%s: unable to set tunables for %s"
-                                " (may cause reduced IO performance)",
+                                " (may cause reduced IO performance)\n",
                                 argv[0], source);
 
         register_service_tags(usource, source, target);
