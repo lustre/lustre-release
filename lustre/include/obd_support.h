@@ -55,7 +55,7 @@ extern unsigned int obd_fail_val;
 extern unsigned int obd_debug_peer_on_timeout;
 extern unsigned int obd_dump_on_timeout;
 extern unsigned int obd_dump_on_eviction;
-/* obd_timeout should only be used for recovery, not for 
+/* obd_timeout should only be used for recovery, not for
    networking / disk / timings affected by load (use Adaptive Timeouts) */
 extern unsigned int obd_timeout;          /* seconds */
 extern unsigned int ldlm_timeout;         /* seconds */
@@ -92,12 +92,12 @@ extern unsigned int obd_alloc_fail_rate;
 #define CONNECTION_SWITCH_MAX min(50U, max(CONNECTION_SWITCH_MIN,obd_timeout))
 #define CONNECTION_SWITCH_INC 5  /* Connection timeout backoff */
 #ifndef CRAY_XT3
-/* In general this should be low to have quick detection of a system 
+/* In general this should be low to have quick detection of a system
    running on a backup server. (If it's too low, import_select_connection
    will increase the timeout anyhow.)  */
 #define INITIAL_CONNECT_TIMEOUT max(CONNECTION_SWITCH_MIN,obd_timeout/20)
 #else
-/* ...but for very large systems (e.g. CRAY) we need to keep the initial 
+/* ...but for very large systems (e.g. CRAY) we need to keep the initial
    connect t.o. high (bz 10803), because they will nearly ALWAYS be doing the
    connects for the first time (clients "reboot" after every process, so no
    chance to generate adaptive timeout data. */
@@ -260,6 +260,8 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_PTLRPC_PAUSE_REP        0x50c
 #define OBD_FAIL_PTLRPC_IMP_DEACTIVE     0x50d
 
+#define OBD_FAIL_PTLRPC_DUMP_LOG         0x50e
+
 #define OBD_FAIL_OBD_PING_NET            0x600
 #define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601
 #define OBD_FAIL_OBD_LOGD_NET            0x602
@@ -401,7 +403,7 @@ extern atomic_t libcfs_kmemory;
 #define OBD_ALLOC_FAIL_MASK ((1 << OBD_ALLOC_FAIL_BITS) - 1)
 #define OBD_ALLOC_FAIL_MULT (OBD_ALLOC_FAIL_MASK / 100)
 
-#ifdef LPROCFS 
+#ifdef LPROCFS
 #define obd_memory_add(size)                                                  \
         lprocfs_counter_add(obd_memory, OBD_MEMORY_STAT, (long)(size))
 #define obd_memory_sub(size)                                                  \
@@ -443,7 +445,7 @@ static inline void obd_memory_sub(long size)
         obd_alloc -= size;
 }
 
-static inline void obd_pages_add(int order) 
+static inline void obd_pages_add(int order)
 {
         obd_pages += 1<< order;
         if (obd_pages > obd_max_pages)
@@ -603,7 +605,7 @@ do {                                                                          \
         cfs_mem_cache_free((slab), (ptr));                                    \
         (ptr) = NULL;                                                         \
         0;                                                                    \
-}) 
+})
 #define OBD_SLAB_ALLOC(ptr, slab, type, size)                                 \
 do {                                                                          \
         LASSERT(!in_interrupt());                                             \
