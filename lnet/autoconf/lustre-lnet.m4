@@ -530,7 +530,7 @@ else
 			   -f ${O2IBPATH}/include/rdma/ib_fmr_pool.h \); then
 			o2ib_found=true
 			break
- 		fi
+		fi
 	done
 	if ! $o2ib_found; then
 		AC_MSG_RESULT([no])
@@ -650,6 +650,7 @@ else
 
 		EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 		fi
+	fi
 	fi
 fi
 
