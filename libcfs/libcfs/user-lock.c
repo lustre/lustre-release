@@ -82,12 +82,6 @@ void spin_lock(spinlock_t *lock)
         (void)lock;
 }
 
-void spin_lock_nested(spinlock_t *lock, unsigned int subclass)
-{
-        (void)lock;
-        (void)subclass;
-}
-
 void spin_unlock(spinlock_t *lock)
 {
         (void)lock;
