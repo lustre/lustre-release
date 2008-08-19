@@ -187,8 +187,10 @@ static void tcd_shrink(struct trace_cpu_data *tcd)
 	 * from here: this will lead to infinite recursion.
 	 */
 
-        printk(KERN_WARNING "debug daemon buffer overflowed; discarding"
-               " 10%% of pages (%d of %ld)\n", pgcount + 1, tcd->tcd_cur_pages);
+        if (printk_ratelimit())
+                printk(KERN_WARNING "debug daemon buffer overflowed; "
+                       "discarding 10%% of pages (%d of %ld)\n", 
+                       pgcount + 1, tcd->tcd_cur_pages);
 
         CFS_INIT_LIST_HEAD(&pc.pc_pages);
         spin_lock_init(&pc.pc_lock);
