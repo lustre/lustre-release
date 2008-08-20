@@ -69,7 +69,7 @@ ino_t ll_fid_build_ino(struct ll_sb_info *sbi,
          * Very stupid and having many downsides inode allocation algorithm
          * based on fid.
          */
-        ino = fid_flatten(fid);
+        ino = fid_flatten(fid) & 0xFFFFFFFF;
 
         if (unlikely(ino == 0))
                 /* the first result ino is 0xFFC001, so this is rarely used */
