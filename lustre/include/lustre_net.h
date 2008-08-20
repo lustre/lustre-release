@@ -799,7 +799,7 @@ void lustre_shrink_reply(struct ptlrpc_request *req, int segment,
 void lustre_free_reply_state(struct ptlrpc_reply_state *rs);
 int lustre_msg_size(__u32 magic, int count, __u32 *lengths);
 int lustre_packed_msg_size(struct lustre_msg *msg);
-int lustre_msg_early_size(void);
+int lustre_msg_early_size(struct ptlrpc_request *req);
 int lustre_unpack_msg(struct lustre_msg *m, int len);
 void *lustre_msg_buf(struct lustre_msg *m, int n, int minlen);
 int lustre_msg_buflen(struct lustre_msg *m, int n);
@@ -903,7 +903,7 @@ ptlrpc_req_set_repsize(struct ptlrpc_request *req, int count, __u32 *lens)
 {
         int size = lustre_msg_size(req->rq_reqmsg->lm_magic, count, lens);
 
-        req->rq_replen = size + lustre_msg_early_size();
+        req->rq_replen = size + lustre_msg_early_size(req);
         if (req->rq_reqmsg->lm_magic == LUSTRE_MSG_MAGIC_V2)
                 req->rq_reqmsg->lm_repsize = size;
 }
