@@ -274,9 +274,9 @@ static void ptlrpc_at_adj_net_latency(struct ptlrpc_request *req)
 
         /* Network latency is total time less server processing time */
         nl = max_t(int, now - req->rq_sent - st, 0) + 1/*st rounding*/;
-        if (st > now - req->rq_sent + 2 /* rounding */)
-                CERROR("Reported service time %u > total measured time %ld\n",
-                       st, now - req->rq_sent);
+        if (st > now - req->rq_sent + 3 /* bz16408 */)
+                CWARN("Reported service time %u > total measured time %ld\n",
+                      st, now - req->rq_sent);
 
         oldnl = at_add(&at->iat_net_latency, nl);
         if (oldnl != 0)
