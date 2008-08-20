@@ -70,6 +70,7 @@ enum lcfg_command_type {
         LCFG_LOG_START      = 0x00ce011,
         LCFG_LOG_END        = 0x00ce012,
         LCFG_LOV_ADD_INA    = 0x00ce013,
+        LCFG_SPTLRPC_CONF   = 0x00ce016,
 };
 
 struct lustre_cfg_bufs {
