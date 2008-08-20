@@ -46,8 +46,8 @@ Severity   : normal
 Bugzilla   : 15825
 Description: Kernel BUG tries to release flock
 Details    : Lustre does not destroy flock lock before last reference goes
-             away. So always drop flock locks when client is evicted and
-             perform unlock regardless of successfulness of speaking to MDS.
+	     away. So always drop flock locks when client is evicted and
+	     perform unlock regardless of successfulness of speaking to MDS.
 
 Severity   : enhancement
 Bugzilla   : 16547
@@ -57,40 +57,40 @@ Severity   : enhancement
 Bugzilla   : 16566
 Description: Upcall on Lustre log has been dumped
 Details    : Allow for a user mode script to be called once a Lustre log has
-             been dumped. It passes the filename of the dumped log to the
-             script, the location of the script can be specified via
-             /proc/sys/lnet/debug_log_upcall.
+	     been dumped. It passes the filename of the dumped log to the
+	     script, the location of the script can be specified via
+	     /proc/sys/lnet/debug_log_upcall.
 
 Severity   : minor
 Bugzilla   : 16583
 Frequency  : rare
-Description: avoid messages about idr_remove called for id  which is not allocated.
-Details    : Move assigment s_dev for clustered nfs to end of initialization, for
-             avoid problem with error handling.
+Description: avoid messages about idr_remove called for id that is not allocated
+Details    : Move assigment s_dev for clustered nfs to end of initialization,
+	     for avoid problem with error handling.
 
 Severity   : minor
 Bugzilla   : 16109
 Frequency  : rare
 Description: avoid Already found the key in hash [CONN_UNUSED_HASH] messages
 Details    : When connection is reused this not moved from CONN_UNUSED_HASH into
-             CONN_USED_HASH and this prodice warning when put connection again
-             in unused hash.
+	     CONN_USED_HASH and this prodice warning when put connection again
+	     in unused hash.
 
 Severity   : normal
 Bugzilla   : 15139
 Frequency  : rare
 Description: avoid ASSERTION(client_stat->nid_exp_ref_count == 0) failed
 Details    : release reference to stats when client disconnected, not
-             when export destroyed for avoid races when client destroyed
-             after main ost export.
+	     when export destroyed for avoid races when client destroyed
+	     after main ost export.
 
 Severity   : normal
 Bugzilla   : 16679
 Description: more cleanup in mds_lov
 Details    : add workaround for get valid ost count for avoid warnings about
-             drop too big messages, not init llog cat under semphore which
-             can be blocked on reconnect and break normal replay, fix access
-             to wrong pointer.
+	     drop too big messages, not init llog cat under semphore which
+	     can be blocked on reconnect and break normal replay, fix access
+	     to wrong pointer.
 
 Severity   : enhancement
 Bugzilla   : 16573
@@ -100,7 +100,7 @@ Severity   : normal
 Bugzilla   : 16237
 Description: Early reply size mismatch, MGC loses connection
 Details    : Apply the MGS_CONNECT_SUPPORTED mask at reconnect time so
-             the connect flags are properly negotiated.
+	     the connect flags are properly negotiated.
 
 Severity   : normal
 Bugzilla   : 16006
@@ -115,9 +115,9 @@ Details    : recreate /proc entries for clients when they reconnect.
 Severity   : enhancement
 Bugzilla   : 16581
 Description: Add man pages for llobdstat(8), llstat(8), plot-llstat(8),
-           : l_getgroups(8), lst(8), routerstat(8)
+	   : l_getgroups(8), lst(8), routerstat(8)
 Details    : included man pages for llobdstat(8), llstat(8),
-           : plot-llstat(8), l_getgroups(8), lst(8), routerstat(8)
+	   : plot-llstat(8), l_getgroups(8), lst(8), routerstat(8)
 
 Severity   : enhancement
 Bugzilla   : 16208
@@ -152,9 +152,9 @@ Details    : Prevent proc handler from accessing devices added to the
 Severity   : enhancement
 Bugzilla   : 16091
 Description: configure's --enable-quota should check the
-           : kernel .config for CONFIG_QUOTA
+	   : kernel .config for CONFIG_QUOTA
 Details    : configure is terminated if --enable-quota is passed but
-           : no quota support is in kernel
+	   : no quota support is in kernel
 
 Severity   : enhancement
 Bugzilla   : 15308
@@ -187,14 +187,25 @@ Details    : if the "service tags" package is installed on a Lustre node
 	     be created.  See http://inventory.sun.com/ for more information
 	     about the Service Tags asset management system.
 
-Severity   : enhancement
-Bugzilla   : 16189
-Description: Update to RHEL4 kernel-2.6.9-67.0.20.
+Severity   : normal
+Bugzilla   : 16037
+Description: Client runs out of low memory
+Details    : Consider only lowmem when counting initial number of llap pages
+
+Bugzilla   : 15825
+Description: Kernel BUG tries to release flock
+Details    : Lustre does not destroy flock lock before last reference goes
+	     away. So always drop flock locks when client is evicted and 
+	     perform unlock regardless of successfulness of speaking to MDS.
 
 Severity   : normal
 Frequency  : occasional
 Bugzilla   : 15210
 Description: add refcount for osc callbacks, so avoid panic on shutdown
+
+Severity   : enhancement
+Bugzilla   : 16189
+Description: Update to RHEL4 kernel-2.6.9-67.0.20.
 
 Severity   : normal
 Frequency  : testing only
@@ -515,8 +526,8 @@ Severity   : enhancement
 Bugzilla   : 10555
 Description: Add a FIEMAP(FIle Extent MAP) ioctl for ldiskfs
 Details    : FIEMAP ioctl will allow an application to efficiently fetch the
-             extent information of a file. It can be used to map logical blocks
-             in a file to physical blocks in the block device.
+	     extent information of a file. It can be used to map logical blocks
+	     in a file to physical blocks in the block device.
 
 -------------------------------------------------------------------------------
 
