@@ -193,7 +193,6 @@ void ldlm_lock_add_to_lru_nolock(struct ldlm_lock *lock)
         struct ldlm_namespace *ns = lock->l_resource->lr_namespace;
         lock->l_last_used = cfs_time_current();
         LASSERT(list_empty(&lock->l_lru));
-        LASSERT(lock->l_resource->lr_type != LDLM_FLOCK);
         list_add_tail(&lock->l_lru, &ns->ns_unused_list);
         LASSERT(ns->ns_nr_unused >= 0);
         ns->ns_nr_unused++;
