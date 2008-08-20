@@ -572,85 +572,84 @@ else
 			fi
 		fi
 		if $o2ib_found; then
-		O2IBCPPFLAGS="-I$O2IBPATH/include"
-		EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
-		EXTRA_KCFLAGS="$EXTRA_KCFLAGS $O2IBCPPFLAGS"
-		EXTRA_LNET_INCLUDE="$O2IBCPPFLAGS $EXTRA_LNET_INCLUDE"
-		LB_LINUX_TRY_COMPILE([
-		        #include <linux/version.h>
-		        #include <linux/pci.h>
-		        #if !HAVE_GFP_T
-		        typedef int gfp_t;
-		        #endif
-		        #include <rdma/rdma_cm.h>
-		        #include <rdma/ib_cm.h>
-		        #include <rdma/ib_verbs.h>
-		        #include <rdma/ib_fmr_pool.h>
-		],[
-		        struct rdma_cm_id          *cm_id;
-		        struct rdma_conn_param      conn_param;
-		        struct ib_device_attr       device_attr;
-		        struct ib_qp_attr           qp_attr;
-		        struct ib_pool_fmr          pool_fmr;
-		        enum   ib_cm_rej_reason     rej_reason;
-
-		        cm_id = rdma_create_id(NULL, NULL, RDMA_PS_TCP);
-		        return PTR_ERR(cm_id);
-		],[
-		        AC_MSG_RESULT([yes])
-		        O2IBLND="o2iblnd"
-		],[
-		        AC_MSG_RESULT([no])
-		        case $ENABLEO2IB in
-		        1) ;;
-		        2) AC_MSG_ERROR([can't compile with kernel OpenIB gen2 headers]);;
-		        3) AC_MSG_ERROR([can't compile with OpenIB gen2 headers under $O2IBPATH]);;
-		        *) AC_MSG_ERROR([internal error]);;
-		        esac
-		        O2IBLND=""
-		        O2IBCPPFLAGS=""
-		])
-		# we know at this point that the found OFED source is good
-		O2IB_SYMVER=""
-		if test $ENABLEO2IB -eq 3 ; then
-			# OFED default rpm not handle sles10 Modules.symvers name
-			for name in Module.symvers Modules.symvers; do
-				if test -f $O2IBPATH/$name; then
-					O2IB_SYMVER=$name;
-					break;
+			O2IBCPPFLAGS="-I$O2IBPATH/include"
+			EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
+			EXTRA_KCFLAGS="$EXTRA_KCFLAGS $O2IBCPPFLAGS"
+			EXTRA_LNET_INCLUDE="$O2IBCPPFLAGS $EXTRA_LNET_INCLUDE"
+			LB_LINUX_TRY_COMPILE([
+			        #include <linux/version.h>
+			        #include <linux/pci.h>
+			        #if !HAVE_GFP_T
+			        typedef int gfp_t;
+			        #endif
+			        #include <rdma/rdma_cm.h>
+			        #include <rdma/ib_cm.h>
+			        #include <rdma/ib_verbs.h>
+			        #include <rdma/ib_fmr_pool.h>
+			],[
+			        struct rdma_cm_id          *cm_id;
+			        struct rdma_conn_param      conn_param;
+			        struct ib_device_attr       device_attr;
+			        struct ib_qp_attr           qp_attr;
+			        struct ib_pool_fmr          pool_fmr;
+			        enum   ib_cm_rej_reason     rej_reason;
+	
+			        cm_id = rdma_create_id(NULL, NULL, RDMA_PS_TCP);
+			        return PTR_ERR(cm_id);
+			],[
+			        AC_MSG_RESULT([yes])
+			        O2IBLND="o2iblnd"
+			],[
+			        AC_MSG_RESULT([no])
+			        case $ENABLEO2IB in
+				        1) ;;
+				        2) AC_MSG_ERROR([can't compile with kernel OpenIB gen2 headers]);;
+				        3) AC_MSG_ERROR([can't compile with OpenIB gen2 headers under $O2IBPATH]);;
+				        *) AC_MSG_ERROR([internal error]);;
+			        esac
+			        O2IBLND=""
+			        O2IBCPPFLAGS=""
+			])
+			# we know at this point that the found OFED source is good
+			O2IB_SYMVER=""
+			if test $ENABLEO2IB -eq 3 ; then
+				# OFED default rpm not handle sles10 Modules.symvers name
+				for name in Module.symvers Modules.symvers; do
+					if test -f $O2IBPATH/$name; then
+						O2IB_SYMVER=$name;
+						break;
+					fi
+				done
+				if test -n $O2IB_SYMVER ; then
+					AC_MSG_NOTICE([adding $O2IBPATH/Module.symvers to $PWD/$SYMVERFILE])
+					# strip out the existing symbols versions first
+					egrep -v $(echo $(awk '{ print $2 }' $O2IBPATH/$O2IB_SYMVER) | tr ' ' '|') $PWD/$SYMVERFILE > $PWD/$SYMVERFILE.old
+					cat $PWD/$SYMVERFILE.old $O2IBPATH/$O2IB_SYMVER > $PWD/$SYMVERFILE
+				else
+					AC_MSG_ERROR([an external source tree was specified for o2iblnd however I could not find a $O2IBPATH/Module.symvers there])
 				fi
-			done
-			if test -n $O2IB_SYMVER ; then
-				AC_MSG_NOTICE([adding $O2IBPATH/Module.symvers to $PWD/$SYMVERFILE])
-				# strip out the existing symbols versions first
-				egrep -v $(echo $(awk '{ print $2 }' $O2IBPATH/$O2IB_SYMVER) | tr ' ' '|') $PWD/$SYMVERFILE > $PWD/$SYMVERFILE.old
-				cat $PWD/$SYMVERFILE.old $O2IBPATH/$O2IB_SYMVER > $PWD/$SYMVERFILE
-			else
-				AC_MSG_ERROR([an external source tree was specified for o2iblnd however I could not find a $O2IBPATH/Module.symvers there])
 			fi
-		fi
 
-		# version checking is a hack and isn't reliable,
-		# we need verify it with each new ofed release
+			# version checking is a hack and isn't reliable,
+			# we need verify it with each new ofed release
 
-		if grep -q ib_dma_map_single \
-			${O2IBPATH}/include/rdma/ib_verbs.h; then
-			if grep -q comp_vector \
+			if grep -q ib_dma_map_single \
 				${O2IBPATH}/include/rdma/ib_verbs.h; then
-				IBLND_OFED_VERSION="1025"
+				if grep -q comp_vector \
+					${O2IBPATH}/include/rdma/ib_verbs.h; then
+					IBLND_OFED_VERSION="1025"
+				else
+					IBLND_OFED_VERSION="1020"
+				fi
 			else
-				IBLND_OFED_VERSION="1020"
+				IBLND_OFED_VERSION="1010"
 			fi
-		else
-			IBLND_OFED_VERSION="1010"
-		fi
 
-		AC_DEFINE_UNQUOTED(IBLND_OFED_VERSION, $IBLND_OFED_VERSION,
-				   [OFED version])
+			AC_DEFINE_UNQUOTED(IBLND_OFED_VERSION, $IBLND_OFED_VERSION,
+					   [OFED version])
 
-		EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
+			EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 		fi
-	fi
 	fi
 fi
 
