@@ -1846,6 +1846,23 @@ out:
         RETURN(rc);
 }
 
+static inline
+void mdt_save_lock(struct ptlrpc_request *req, struct lustre_handle *h,
+                   ldlm_mode_t mode, int decref)
+{
+        ENTRY;
+
+        if (lustre_handle_is_used(h)) {
+                if (decref)
+                        mdt_fid_unlock(h, mode);
+                else
+                        ptlrpc_save_lock(req, h, mode);
+                h->cookie = 0ull;
+        }
+
+        EXIT;
+}
+
 /*
  * Just call ldlm_lock_decref() if decref, else we only call ptlrpc_save_lock()
  * to save this lock in req.  when transaction committed, req will be released,
@@ -1857,23 +1874,8 @@ void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *o,
         struct ptlrpc_request *req = mdt_info_req(info);
         ENTRY;
 
-        if (lustre_handle_is_used(&lh->mlh_pdo_lh)) {
-                /* Do not save PDO locks to request, just decref. */
-                mdt_fid_unlock(&lh->mlh_pdo_lh,
-                               lh->mlh_pdo_mode);
-                lh->mlh_pdo_lh.cookie = 0ull;
-        }
-
-        if (lustre_handle_is_used(&lh->mlh_reg_lh)) {
-                if (decref) {
-                        mdt_fid_unlock(&lh->mlh_reg_lh,
-                                       lh->mlh_reg_mode);
-                } else {
-                        ptlrpc_save_lock(req, &lh->mlh_reg_lh,
-                                         lh->mlh_reg_mode);
-                }
-                lh->mlh_reg_lh.cookie = 0ull;
-        }
+        mdt_save_lock(req, &lh->mlh_pdo_lh, lh->mlh_pdo_mode, decref);
+        mdt_save_lock(req, &lh->mlh_reg_lh, lh->mlh_reg_mode, decref);
 
         EXIT;
 }

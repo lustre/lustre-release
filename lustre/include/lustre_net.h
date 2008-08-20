@@ -248,7 +248,7 @@ struct ptlrpc_cb_id {
         void    *cbid_arg;                      /* additional arg */
 };
 
-#define RS_MAX_LOCKS 4
+#define RS_MAX_LOCKS 8
 #define RS_DEBUG     1
 
 struct ptlrpc_reply_state {
