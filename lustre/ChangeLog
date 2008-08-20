@@ -38,6 +38,13 @@ tbd Sun Microsystems, Inc.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
 
+Severity   : normal
+Bugzilla   : 15825
+Description: Kernel BUG tries to release flock
+Details    : Lustre does not destroy flock lock before last reference goes
+             away. So always drop flock locks when client is evicted and
+             perform unlock regardless of successfulness of speaking to MDS.
+
 Severity   : enhancement
 Bugzilla   : 16547
 Description: Update to SLES10 SP2 kernel-2.6.16.60-0.27.
