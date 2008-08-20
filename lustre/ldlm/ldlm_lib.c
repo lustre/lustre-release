@@ -1175,6 +1175,7 @@ void target_stop_recovery(void *data, int abort)
         }
         obd->obd_recovering = 0;
         obd->obd_abort_recovery = 0;
+        obd->obd_processing_task = 0;
         if (abort == 0)
                 LASSERT(obd->obd_recoverable_clients == 0);
 
@@ -1221,7 +1222,7 @@ static void target_recovery_expired(unsigned long castmeharder)
             obd->obd_recoverable_clients == 0)
                 obd->obd_abort_recovery = 1;
         /* always check versions now */
-                obd->obd_version_recov = 1;
+        obd->obd_version_recov = 1;
         cfs_waitq_signal(&obd->obd_next_transno_waitq);
         spin_unlock_bh(&obd->obd_processing_task_lock);
         /* reset timer if recovery will proceed with versions now */
