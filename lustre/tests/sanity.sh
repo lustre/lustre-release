@@ -4190,7 +4190,7 @@ test_115() {
 
 	# don't return an error
         [ $OSTIO_post -eq $OSTIO_pre ] && echo \
-	    "FAIL: No addition ll_ost_io threads were created ($OSTIO_pre)" &&\
+	    "WARNING: No new ll_ost_io threads were created ($OSTIO_pre)" &&\
 	    echo "This may be fine, depending on what ran before this test" &&\
 	    echo "and how fast this system is." && return
 
