@@ -606,12 +606,6 @@ void mdc_set_open_replay_data(struct obd_client_handle *och,
                 }
 
                 spin_lock(&open_req->rq_lock);
-                if (!open_req->rq_replay) {
-                        OBD_FREE(mod, sizeof(*mod));
-                        spin_unlock(&open_req->rq_lock);
-                        return;
-                }
-
                 och->och_mod = mod;
                 mod->mod_och = och;
                 mod->mod_open_req = open_req;
