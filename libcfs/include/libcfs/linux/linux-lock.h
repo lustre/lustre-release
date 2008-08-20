@@ -73,13 +73,6 @@
  * - spin_unlock_irqrestore(x, f)
  */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18)
-static inline void spin_lock_nested(spinlock_t *lock, unsigned subclass)
-{
-        spin_lock(lock);
-}
-#endif
-
 /*
  * rw_semaphore (use Linux kernel's primitives)
  *
@@ -164,13 +157,27 @@ struct lock_class_key {
         ;
 };
 
-static inline void lockdep_set_class(void *lock, struct lock_class_key *key)
-{
-}
+#ifndef lockdep_set_class
+# define lockdep_set_class(lock, key) do {;} while (0)
+#endif
 
-/* This has to be a macro, so that can be undefined in kernels that do not
- * support lockdep. */
-#define mutex_lock_nested(mutex, subclass) mutex_lock(mutex)
+/* This has to be a macro, so that `subclass' can be undefined in kernels that
+ * do not support lockdep. */
+#ifndef mutex_lock_nested
+# define mutex_lock_nested(mutex, subclass) mutex_lock(mutex)
+#endif
+
+#ifndef spin_lock_nested
+# define spin_lock_nested(lock, subclass) spin_lock(lock)
+#endif
+
+#ifndef down_read_nested
+# define down_read_nested(lock, subclass) down_read(lock)
+#endif
+
+#ifndef down_write_nested
+# define down_write_nested(lock, subclass) down_write(lock)
+#endif
 
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18) */
 
