@@ -115,8 +115,16 @@ static int ptlrpc_repbuf_need_swab(struct ptlrpc_request *req, int index)
 
 
 /* early reply size */
-int lustre_msg_early_size() {
+int lustre_msg_early_size(struct ptlrpc_request *req) {
         static int size = 0;
+        /* For b1_6 interoperability */
+        if (req->rq_reqmsg &&
+            req->rq_reqmsg->lm_magic == LUSTRE_MSG_MAGIC_V2) {
+                int pb_len = lustre_msg_buflen(req->rq_reqmsg,
+                                               MSG_PTLRPC_BODY_OFF);
+                return lustre_msg_size(LUSTRE_MSG_MAGIC_V2, 1, &pb_len);
+        }
+
         if (!size)
                 size = lustre_msg_size(LUSTRE_MSG_MAGIC_V2, 1, NULL);
         return size;
@@ -450,6 +458,12 @@ static int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
         if ((flags & LPRFL_EARLY_REPLY) == 0)
                 req->rq_packed_final = 1;
 
+        /* use the same size of ptlrpc_body as client requested for
+         * interoperability cases */
+        LASSERT(req->rq_reqmsg);
+        lens[MSG_PTLRPC_BODY_OFF] = lustre_msg_buflen(req->rq_reqmsg,
+                                                      MSG_PTLRPC_BODY_OFF);
+
         msg_len = lustre_msg_size_v2(count, lens);
         size = sizeof(struct ptlrpc_reply_state) + msg_len;
         OBD_ALLOC(rs, size);
@@ -471,12 +485,6 @@ static int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
         req->rq_reply_state = rs;
         req->rq_repmsg = rs->rs_msg;
         /* server side, no rq_repbuf */
-        /* use the same size of ptlrpc_body as client requested for
-         * interoperability cases */
-        LASSERT(req->rq_reqmsg);
-        lens[MSG_PTLRPC_BODY_OFF] = lustre_msg_buflen(req->rq_reqmsg,
-                                                      MSG_PTLRPC_BODY_OFF);
-
         lustre_init_msg_v2(rs->rs_msg, count, lens, bufs);
         lustre_msg_add_version(rs->rs_msg, PTLRPC_MSG_VERSION);
         lustre_set_rep_swabbed(req, MSG_PTLRPC_BODY_OFF);
@@ -1673,8 +1681,7 @@ __u32 lustre_msg_calc_cksum(struct lustre_msg *msg)
         case LUSTRE_MSG_MAGIC_V1:
                 return 0;
         case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb;
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
                 return crc32_le(~(__u32)0, (unsigned char *)pb, sizeof(*pb));
         }
