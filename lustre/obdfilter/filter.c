@@ -954,8 +954,10 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                         obd->obd_max_recoverable_clients++;
                         spin_unlock_bh(&obd->obd_processing_task_lock);
 
-                        /* VBR: if epoch too old mark export as delayed */
-                        if (start_epoch > le32_to_cpu(lcd->lcd_last_epoch))
+                        /* VBR: if epoch too old mark export as delayed,
+                         * if epoch is zero then client is pre-vbr one */
+                        if (start_epoch > le32_to_cpu(lcd->lcd_last_epoch) &&
+                            le32_to_cpu(lcd->lcd_last_epoch) != 0)
                                 class_set_export_delayed(exp);
 
                         lcd = NULL;
