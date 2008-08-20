@@ -732,7 +732,8 @@ static inline void oti_init(struct obd_trans_info *oti,
         if (req->rq_reqmsg != NULL &&
             lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
                 __u64 *pre_version = lustre_msg_get_versions(req->rq_reqmsg);
-                oti->oti_pre_version = pre_version[0];
+                /* b1.6 interoperability check. pre_versions may be NULL */
+                oti->oti_pre_version = pre_version ? pre_version[0] : 0;
                 oti->oti_transno = lustre_msg_get_transno(req->rq_reqmsg);
         }
 
