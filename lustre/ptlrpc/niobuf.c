@@ -392,7 +392,7 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int flags)
                         lustre_msg_set_cksum(req->rq_repmsg, 
                                          lustre_msg_calc_cksum(req->rq_repmsg));
                 } else {
-                        offset = lustre_msg_early_size();
+                        offset = lustre_msg_early_size(req);
                 }
         } else {
                 CDEBUG(D_ADAPTTO, "No early reply support: flags=%#x "
