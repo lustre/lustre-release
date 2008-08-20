@@ -170,33 +170,32 @@ int mds_version_get_check(struct ptlrpc_request *req, struct inode *inode,
         /* version recovery */
         struct obd_device *obd = req->rq_export->exp_obd;
         __u64 curr_version, *pre_versions;
+        ENTRY;
 
-        if (inode == NULL)
+        if (inode == NULL || !exp_connect_vbr(req->rq_export))
                 RETURN(0);
 
         curr_version = fsfilt_get_version(obd, inode);
         if ((__s64)curr_version == -EOPNOTSUPP)
                 RETURN(0);
         /* VBR: version is checked always because costs nothing */
-#ifdef PTLRPC_INTEROP_1_6
-        /* if we have old clients then check versions only if gap is occured
-         * or we will have false mismatches due to old client don't supply
-         * versions */
-        if (lustre_msg_get_transno(req->rq_reqmsg) != 0 &&
-            obd->obd_version_recov) {
-#else
         if (lustre_msg_get_transno(req->rq_reqmsg) != 0) {
-#endif
                 pre_versions = lustre_msg_get_versions(req->rq_reqmsg);
                 LASSERT(index < PTLRPC_NUM_VERSIONS);
-                if (pre_versions != NULL &&
-                    pre_versions[index] != curr_version) {
+                /* Sanity check for malformed buffers */
+                if (pre_versions == NULL) {
+                        CERROR("No versions in request buffer\n");
+                        spin_lock(&req->rq_export->exp_lock);
+                        req->rq_export->exp_vbr_failed = 1;
+                        spin_unlock(&req->rq_export->exp_lock);
+                        RETURN(-EOVERFLOW);
+                } else if (pre_versions[index] != curr_version) {
                         CDEBUG(D_INODE, "Version mismatch "LPX64" != "LPX64"\n",
                                pre_versions[index], curr_version);
                         spin_lock(&req->rq_export->exp_lock);
                         req->rq_export->exp_vbr_failed = 1;
                         spin_unlock(&req->rq_export->exp_lock);
-                        RETURN (-EOVERFLOW);
+                        RETURN(-EOVERFLOW);
                 }
         }
         /* save pre-versions in reply */
