@@ -818,6 +818,9 @@ static void ptlrpc_save_versions(struct ptlrpc_request *req)
         struct lustre_msg *reqmsg = req->rq_reqmsg;
         __u64 *versions = lustre_msg_get_versions(repmsg);
         ENTRY;
+        /* Interoperability with 1.6. This should be changed to LASSERT in HEAD */
+        if (versions == NULL)
+                return;
 
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
                 return;
