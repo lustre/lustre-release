@@ -754,6 +754,12 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 class_export_put(export);
                 export = NULL;
                 rc = -ENODEV;
+        } else if (export != NULL && export->exp_delayed &&
+                   !(data && data->ocd_connect_flags & OBD_CONNECT_VBR)) {
+                class_fail_export(export);
+                class_export_put(export);
+                export = NULL;
+                rc = -ENODEV;
         } else if (export != NULL) {
                 spin_lock(&export->exp_lock);
                 export->exp_connecting = 1;
@@ -828,6 +834,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         /* VBR: for delayed connections we start recovery */
         if (export && export->exp_delayed && !export->exp_in_recovery) {
                 LASSERT(!target->obd_recovering);
+                LASSERT(data && data->ocd_connect_flags & OBD_CONNECT_VBR);
                 lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_DELAYED |
                                         MSG_CONNECT_RECOVERING);
                 spin_lock_bh(&target->obd_processing_task_lock);
