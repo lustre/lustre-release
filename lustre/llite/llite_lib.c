@@ -27,7 +27,6 @@
 #include <linux/types.h>
 #include <linux/random.h>
 #include <linux/version.h>
-#include <linux/mm.h>
 
 #include <lustre_lite.h>
 #include <lustre_ha.h>
@@ -54,8 +53,6 @@ extern struct address_space_operations ll_dir_aops;
 static struct ll_sb_info *ll_init_sbi(void)
 {
         struct ll_sb_info *sbi = NULL;
-        unsigned long pages;
-        struct sysinfo si;
         class_uuid_t uuid;
         int i;
         ENTRY;
@@ -70,13 +67,10 @@ static struct ll_sb_info *ll_init_sbi(void)
         spin_lock_init(&sbi->ll_process_lock);
         sbi->ll_rw_stats_on = 0;
         INIT_LIST_HEAD(&sbi->ll_pglist);
-
-        si_meminfo(&si);
-        pages = si.totalram - si.totalhigh;
-        if (pages >> (20 - CFS_PAGE_SHIFT) < 512)
-                sbi->ll_async_page_max = pages / 2;
+        if (num_physpages >> (20 - CFS_PAGE_SHIFT) < 512)
+                sbi->ll_async_page_max = num_physpages / 2;
         else
-                sbi->ll_async_page_max = (pages / 4) * 3;
+                sbi->ll_async_page_max = (num_physpages / 4) * 3;
         sbi->ll_ra_info.ra_max_pages = min(num_physpages / 8,
                                            SBI_DEFAULT_READAHEAD_MAX);
         sbi->ll_ra_info.ra_max_read_ahead_whole_pages =

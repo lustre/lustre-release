@@ -768,6 +768,7 @@ void class_import_put(struct obd_import *import)
 
         EXIT;
 }
+EXPORT_SYMBOL(class_import_put);
 
 void class_import_destroy(struct obd_import *import)
 {
@@ -793,7 +794,6 @@ void class_import_destroy(struct obd_import *import)
         OBD_FREE_RCU(import, sizeof(*import), &import->imp_handle);
         EXIT;
 }
-EXPORT_SYMBOL(class_import_put);
 
 static void init_imp_at(struct imp_at *at) {
         int i;

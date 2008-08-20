@@ -136,12 +136,14 @@ static int lprocfs_wr_lru_size(struct file *file, const char *buffer,
                                unsigned long count, void *data)
 {
         struct ldlm_namespace *ns = data;
-        char dummy[MAX_STRING_SIZE + 1], *end;
+        char dummy[MAX_STRING_SIZE + 1] = { '\0' }, *end;
         unsigned long tmp;
         int lru_resize;
 
-        dummy[MAX_STRING_SIZE] = '\0';
-        if (copy_from_user(dummy, buffer, MAX_STRING_SIZE))
+        if (count >= sizeof(dummy) || count == 0)
+                return -EINVAL;
+
+        if (copy_from_user(dummy, buffer, count))
                 return -EFAULT;
 
         if (strncmp(dummy, "clear", 5) == 0) {
@@ -346,7 +348,6 @@ ldlm_namespace_new(struct obd_device *obd, char *name,
                 CFS_INIT_LIST_HEAD(bucket);
 
         CFS_INIT_LIST_HEAD(&ns->ns_unused_list);
-        CFS_INIT_LIST_HEAD(&ns->ns_list_chain);
         ns->ns_nr_unused = 0;
         ns->ns_max_unused = LDLM_DEFAULT_LRU_SIZE;
         ns->ns_max_age = LDLM_DEFAULT_MAX_ALIVE;
@@ -365,7 +366,6 @@ ldlm_namespace_new(struct obd_device *obd, char *name,
         }
 
         at_init(&ns->ns_at_estimate, ldlm_enqueue_min, 0);
-
         ldlm_namespace_register(ns, client);
         RETURN(ns);
 out_proc:
@@ -394,6 +394,7 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
         int rc = 0, client = ns_is_client(res->lr_namespace);
         int local_only = (flags & LDLM_FL_LOCAL_ONLY);
         ENTRY;
+
 
         do {
                 struct ldlm_lock *lock = NULL;

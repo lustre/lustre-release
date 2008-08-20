@@ -781,7 +781,7 @@ static void reconstruct_reint_create(struct mds_update_record *rec, int offset,
                 mds_export_evict(exp);
                 EXIT;
                 return;
-        }       
+        }
 
         body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
         mds_pack_inode2fid(&body->fid1, child->d_inode);

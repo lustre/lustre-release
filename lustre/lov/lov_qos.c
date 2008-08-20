@@ -311,8 +311,8 @@ static int qos_used(struct lov_obd *lov, __u32 index, __u64 *total_wt)
                        lov->lov_tgts[i]->ltd_qos.ltq_penalty_per_obj >> 10,
                        lov->lov_tgts[i]->ltd_qos.ltq_penalty >> 10,
                        lov->lov_tgts[i]->ltd_qos.ltq_oss->lqo_penalty_per_obj>>10,
-                       lov->lov_tgts[i]->ltd_qos.ltq_oss->lqo_penalty>>10,
-                       lov->lov_tgts[i]->ltd_qos.ltq_weight>>10);
+                       lov->lov_tgts[i]->ltd_qos.ltq_oss->lqo_penalty >> 10,
+                       lov->lov_tgts[i]->ltd_qos.ltq_weight >> 10);
 #endif
         }
 
@@ -333,6 +333,7 @@ static int qos_calc_rr(struct lov_obd *lov)
                 RETURN(0);
         }
 
+        /* Do actual allocation. */
         down_write(&lov->lov_qos.lq_rw_sem);
         ost_count = lov->desc.ld_tgt_count;
 
@@ -360,7 +361,7 @@ static int qos_calc_rr(struct lov_obd *lov)
                 int j = 0;
                 for (i = 0; i < ost_count; i++) {
                         if (lov->lov_tgts[i] &&
-                            (lov->lov_tgts[i]->ltd_qos.ltq_oss == oss)) {
+                            lov->lov_tgts[i]->ltd_qos.ltq_oss == oss) {
                               /* Evenly space these OSTs across arrayspace */
                               int next = j * ost_count / oss->lqo_ost_count;
                               while (lov->lov_qos.lq_rr_array[next] !=
@@ -380,7 +381,7 @@ static int qos_calc_rr(struct lov_obd *lov)
         if (placed != real_count) {
                 /* This should never happen */
                 LCONSOLE_ERROR_MSG(0x14e, "Failed to place all OSTs in the "
-                                   "round-robin list (%d of %d).\n", 
+                                   "round-robin list (%d of %d).\n",
                                    placed, real_count);
                 for (i = 0; i < ost_count; i++) {
                         LCONSOLE(D_WARNING, "rr #%d ost idx=%d\n", i,
@@ -524,7 +525,7 @@ static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt,
         down_read(&lov->lov_qos.lq_rw_sem);
         ost_start_idx_temp = lov->lov_start_idx;
 
-repeat_find :
+repeat_find:
         array_idx = (lov->lov_start_idx + lov->lov_offset_idx) % ost_count;
         idx_pos = idx_arr;
 #ifdef QOS_DEBUG
@@ -600,7 +601,7 @@ repeat_find:
                         continue;
 
                 /* Drop slow OSCs if we can, but not for requested start idx */
-                if (obd_precreate(lov->lov_tgts[ost_idx]->ltd_exp) > speed &&
+                if ((obd_precreate(lov->lov_tgts[ost_idx]->ltd_exp) > speed) &&
                     (i != 0 || speed < 2))
                         continue;
 
@@ -928,7 +929,6 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                         CDEBUG(D_INODE, "stripe %d has size "LPU64"/"LPU64"\n",
                                i, req->rq_oi.oi_oa->o_size, src_oa->o_size);
                 }
-
         }
         LASSERT(set->set_count == stripes);
 

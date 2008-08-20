@@ -1830,7 +1830,7 @@ int mds_handle(struct ptlrpc_request *req)
         /* If we're DISCONNECTing, the mds_export_data is already freed */
         if (!rc && lustre_msg_get_opc(req->rq_reqmsg) != MDS_DISCONNECT) {
                 struct mds_export_data *med = &req->rq_export->exp_mds_data;
-                
+
                 /* I don't think last_xid is used for anyway, so I'm not sure
                    if we need to care about last_close_xid here.*/
                 lustre_msg_set_last_xid(req->rq_repmsg,

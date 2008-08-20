@@ -237,6 +237,7 @@ typedef int (* md_enqueue_cb_t)(struct obd_export *exp,
                                 int rc);
 
 struct md_enqueue_info {
+        struct obd_export      *mi_exp;
         struct mdc_op_data      mi_data;
         struct lookup_intent    mi_it;
         struct lustre_handle    mi_lockh;
@@ -244,6 +245,11 @@ struct md_enqueue_info {
         md_enqueue_cb_t         mi_cb;
         unsigned int            mi_generation;
         void                   *mi_cbdata;
+};
+
+struct mdc_enqueue_args {
+        struct md_enqueue_info   *ma_mi;
+        struct ldlm_enqueue_info *ma_ei;
 };
 
 #endif

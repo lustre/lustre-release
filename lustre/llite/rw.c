@@ -325,9 +325,6 @@ static int ll_ap_make_ready(void *data, int cmd)
         llap = LLAP_FROM_COOKIE(data);
         page = llap->llap_page;
 
-        LASSERTF(!(cmd & OBD_BRW_READ), "cmd %x page %p ino %lu index %lu\n", cmd, page,
-                 page->mapping->host->i_ino, page->index);
-
         /* we're trying to write, but the page is locked.. come back later */
         if (TryLockPage(page))
                 RETURN(-EAGAIN);

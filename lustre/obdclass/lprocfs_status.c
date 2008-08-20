@@ -1507,7 +1507,7 @@ int lprocfs_write_frac_u64_helper(const char *buffer, unsigned long count,
         __u64 whole, frac = 0, units;
         unsigned frac_d = 1;
 
-        if (count > (sizeof(kernbuf) - 1) )
+        if (count > (sizeof(kernbuf) - 1))
                 return -EINVAL;
 
         if (copy_from_user(kernbuf, buffer, count))

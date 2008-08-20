@@ -53,14 +53,14 @@
 #define LDD_F_PARAM         0x0400 /* process as lctl conf_param */
 
 enum ldd_mount_type {
-        LDD_MT_EXT3 = 0, 
+        LDD_MT_EXT3 = 0,
         LDD_MT_LDISKFS,
-        LDD_MT_SMFS,   
+        LDD_MT_SMFS,
         LDD_MT_REISERFS,
         LDD_MT_LDISKFS2,
         LDD_MT_LAST
 };
-       
+
 static inline char *mt_str(enum ldd_mount_type mt)
 {
         static char *mount_type_string[] = {
@@ -84,7 +84,7 @@ struct lustre_disk_data {
         __u32      ldd_feature_compat;  /* compatible feature flags */
         __u32      ldd_feature_rocompat;/* read-only compatible feature flags */
         __u32      ldd_feature_incompat;/* incompatible feature flags */
-        
+
         __u32      ldd_config_ver;      /* config rewrite count - not used */
         __u32      ldd_flags;           /* LDD_SV_TYPE */
         __u32      ldd_svindex;         /* server index (0001), must match 
@@ -93,7 +93,7 @@ struct lustre_disk_data {
         char       ldd_fsname[64];      /* filesystem this server is part of */
         char       ldd_svname[64];      /* this server's name (lustre-mdt0001)*/
         __u8       ldd_uuid[40];        /* server UUID (COMPAT_146) */
-   
+
 /*200*/ char       ldd_userdata[1024 - 200]; /* arbitrary user string */
 /*1024*/__u8       ldd_padding[4096 - 1024];
 /*4096*/char       ldd_mount_opts[4096]; /* target fs mount opts */
@@ -169,7 +169,7 @@ struct lustre_mount_data {
  * 2^n * CFS_PAGE_SIZE * 8 for the number of bits that fit an order-n allocation. */
 #define LR_MAX_CLIENTS (CFS_PAGE_SIZE * 8)
 
-                                                                                
+
 /* COMPAT_146 */
 #define OBD_COMPAT_OST          0x00000002 /* this is an OST (temporary) */
 #define OBD_COMPAT_MDT          0x00000004 /* this is an MDT (temporary) */
