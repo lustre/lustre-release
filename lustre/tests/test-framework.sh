@@ -722,8 +722,10 @@ client_df() {
 
 client_reconnect() {
     uname -n >> $MOUNT/recon
-    if [ ! -z "$CLIENTS" ]; then
-        $PDSH $CLIENTS "df $MOUNT; uname -n >> $MOUNT/recon" > /dev/null
+    if [ -z "$CLIENTS" ]; then
+        df $MOUNT; uname -n >> $MOUNT/recon
+    else
+        do_nodes $CLIENTS "df $MOUNT; uname -n >> $MOUNT/recon" > /dev/null
     fi
     echo Connected clients:
     cat $MOUNT/recon
