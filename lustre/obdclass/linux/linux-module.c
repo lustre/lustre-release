@@ -245,7 +245,8 @@ int obd_proc_read_version(char *page, char **start, off_t off, int count,
                         BUILD_VERSION);
 #else
         return snprintf(page, count, "lustre: %s\nkernel: %s\nbuild:  %s\n",
-                        LUSTRE_VERSION_STRING, "patchless", BUILD_VERSION);
+                        LUSTRE_VERSION_STRING, "patchless_client",
+                        BUILD_VERSION);
 #endif
 }
 
