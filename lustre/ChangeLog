@@ -12,6 +12,14 @@ tbd  Sun Microsystems, Inc.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
         removed cwd "./" (refer to Bugzilla 14399).
 
+Severity   : normal
+Bugzilla   : 16611
+Frequency  : on recovery
+Description: I/O failures after umount during fail back 
+Details    : if client reconnected to restarted server we need join to recovery
+             instead of find server handler is changed and process self eviction
+             with cancel all locks.
+
 Severity   : enhancement
 Bugzilla   : 16633
 Description: Update to RHEL5 kernel-2.6.18-92.1.10.el5.
