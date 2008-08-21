@@ -652,6 +652,7 @@ test_34() {
     replay_barrier mds
     fail_abort mds
     kill -USR1 $pid
+    wait $pid || return 3
     [ -e $DIR/$tfile ] && return 1
     sync
     return 0
