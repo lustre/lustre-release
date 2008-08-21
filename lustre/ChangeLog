@@ -39,6 +39,12 @@ tbd Sun Microsystems, Inc.
 	  old (verbose) output can be obtained by using -v option.
 
 Severity   : normal
+Bugzilla   : 15927
+Frequency  : rare
+Description: replace ptlrpcd with the statahead thread to interpret the async
+             statahead RPC callback
+
+Severity   : normal
 Bugzilla   : 16611
 Frequency  : on recovery
 Description: I/O failures after umount during fail back 
