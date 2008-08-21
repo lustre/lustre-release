@@ -470,7 +470,7 @@ else
 			   -f ${O2IBPATH}/include/rdma/ib_fmr_pool.h \); then
 			o2ib_found=true
 			break
-		fi
+ 		fi
 	done
 	if ! $o2ib_found; then
 		AC_MSG_RESULT([no])
@@ -481,133 +481,101 @@ else
 			*) AC_MSG_ERROR([internal error]);;
 		esac
 	else
-		# figure out whether the kernel has an infiniband stack
-		# configured
-		LB_LINUX_CONFIG_IM([INFINIBAND],[
-			CONFIG_INFINIBAND_MODULE_defined=true
+		O2IBCPPFLAGS="-I$O2IBPATH/include"
+		EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
+		EXTRA_KCFLAGS="$EXTRA_KCFLAGS $O2IBCPPFLAGS"
+		EXTRA_LNET_INCLUDE="$O2IBCPPFLAGS $EXTRA_LNET_INCLUDE"
+		LB_LINUX_TRY_COMPILE([
+		        #include <linux/version.h>
+		        #include <linux/pci.h>
+		        #if !HAVE_GFP_T
+		        typedef int gfp_t;
+		        #endif
+		        #include <rdma/rdma_cm.h>
+		        #include <rdma/ib_cm.h>
+		        #include <rdma/ib_verbs.h>
+		        #include <rdma/ib_fmr_pool.h>
 		],[
-			CONFIG_INFINIBAND_MODULE_defined=false
+		        struct rdma_cm_id          *cm_id;
+		        struct rdma_conn_param      conn_param;
+		        struct ib_device_attr       device_attr;
+		        struct ib_qp_attr           qp_attr;
+		        struct ib_pool_fmr          pool_fmr;
+		        enum   ib_cm_rej_reason     rej_reason;
+
+		        cm_id = rdma_create_id(NULL, NULL, RDMA_PS_TCP);
+		        return PTR_ERR(cm_id);
+		],[
+		        AC_MSG_RESULT([yes])
+		        O2IBLND="o2iblnd"
+		],[
+		        AC_MSG_RESULT([no])
+		        case $ENABLEO2IB in
+		        1) ;;
+		        2) AC_MSG_ERROR([can't compile with kernel OpenIB gen2 headers]);;
+		        3) AC_MSG_ERROR([can't compile with OpenIB gen2 headers under $O2IBPATH]);;
+		        *) AC_MSG_ERROR([internal error]);;
+		        esac
+		        O2IBLND=""
+		        O2IBCPPFLAGS=""
 		])
-		# at this point we know that the user either explicitly
-		# requested o2ib support or didn't explicitly disable it so
-		# make sure the kernel's CONFIG_INFINIBAND variable is set
-		# appropriately.
-		#
-		# possible error conditions are:
-		# 1) --with-o2ib[=yes] (implies in kernel since no path was
-		#    given) and kernel not configured for IB
-		# 2) --with-o2ib=/path and kernel is configured for IB
-		#
-		if test "$O2IBPATH" = "$LINUX" -o "$O2IBPATH" = "$LINUX/drivers/infiniband"; then
-			# infiniband stack is in the kernel
-			if test $ENABLEO2IB -eq 1 -o $ENABLEO2IB -eq 2 && ! $CONFIG_INFINIBAND_MODULE_defined; then
-				# case #1
-				AC_MSG_ERROR([Kernel supplied OFED drivers are being requested however the kernel is NOT configured to build OFED modules.  Please specify --with-o2ib=<path_to_ofed> or rebuild the kernel with Infiniband enabled.])
-			fi
-		else
-			# had to be a specified path with --with-o2ib=/path
-			if $CONFIG_INFINIBAND_MODULE_defined; then
-				# case #2
-				AC_MSG_ERROR([External OFED source has been specified but the kernel is configured to build OFED modules as well.  Remove --with-o2ib from the configuration or rebuild the kernel without Infiniband.])
-			fi
-		fi
-		if $o2ib_found; then
-			O2IBCPPFLAGS="-I$O2IBPATH/include"
-			EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
-			EXTRA_KCFLAGS="$EXTRA_KCFLAGS $O2IBCPPFLAGS"
-			EXTRA_LNET_INCLUDE="$O2IBCPPFLAGS $EXTRA_LNET_INCLUDE"
-			LB_LINUX_TRY_COMPILE([
-			        #include <linux/version.h>
-			        #include <linux/pci.h>
-			        #if !HAVE_GFP_T
-			        typedef int gfp_t;
-			        #endif
-			        #include <rdma/rdma_cm.h>
-			        #include <rdma/ib_cm.h>
-			        #include <rdma/ib_verbs.h>
-			        #include <rdma/ib_fmr_pool.h>
-			],[
-			        struct rdma_cm_id          *cm_id;
-			        struct rdma_conn_param      conn_param;
-			        struct ib_device_attr       device_attr;
-			        struct ib_qp_attr           qp_attr;
-			        struct ib_pool_fmr          pool_fmr;
-			        enum   ib_cm_rej_reason     rej_reason;
-
-			        cm_id = rdma_create_id(NULL, NULL, RDMA_PS_TCP);
-			        return PTR_ERR(cm_id);
-			],[
-			        AC_MSG_RESULT([yes])
-			        O2IBLND="o2iblnd"
-			],[
-			        AC_MSG_RESULT([no])
-			        case $ENABLEO2IB in
-				        1) ;;
-				        2) AC_MSG_ERROR([can't compile with kernel OpenIB gen2 headers]);;
-				        3) AC_MSG_ERROR([can't compile with OpenIB gen2 headers under $O2IBPATH]);;
-				        *) AC_MSG_ERROR([internal error]);;
-			        esac
-			        O2IBLND=""
-			        O2IBCPPFLAGS=""
-			])
-			# we know at this point that the found OFED source is good
-			O2IB_SYMVER=""
-			if test $ENABLEO2IB -eq 3 ; then
-				# OFED default rpm not handle sles10 Modules.symvers name
-				for name in Module.symvers Modules.symvers; do
-					if test -f $O2IBPATH/$name; then
-						O2IB_SYMVER=$name;
-						break;
-					fi
-				done
-				if test -n $O2IB_SYMVER ; then
-					AC_MSG_NOTICE([adding $O2IBPATH/$O2IB_SYMVER to $PWD/$SYMVERFILE])
-					# strip out the existing symbols versions first
-					egrep -v $(echo $(awk '{ print $2 }' $O2IBPATH/$O2IB_SYMVER) | tr ' ' '|') $PWD/$SYMVERFILE > $PWD/$SYMVERFILE.old
-					cat $PWD/$SYMVERFILE.old $O2IBPATH/$O2IB_SYMVER > $PWD/$SYMVERFILE
-				else
-					AC_MSG_ERROR([an external source tree was specified for o2iblnd however I could not find a $O2IBPATH/Module.symvers there])
+		# we know at this point that the found OFED source is good
+		O2IB_SYMVER=""
+		if test $ENABLEO2IB -eq 3 ; then
+			# OFED default rpm not handle sles10 Modules.symvers name
+			for name in Module.symvers Modules.symvers; do
+				if test -f $O2IBPATH/$name; then
+					O2IB_SYMVER=$name;
+					break;
 				fi
+			done
+			if test -n $O2IB_SYMVER ; then
+				AC_MSG_NOTICE([adding $O2IBPATH/$O2IB_SYMVER to $PWD/$SYMVERFILE])
+				# strip out the existing symbols versions first
+				egrep -v $(echo $(awk '{ print $2 }' $O2IBPATH/$O2IB_SYMVER) | tr ' ' '|') $PWD/$SYMVERFILE > $PWD/$SYMVERFILE.old
+				cat $PWD/$SYMVERFILE.old $O2IBPATH/$O2IB_SYMVER > $PWD/$SYMVERFILE
+			else
+				AC_MSG_ERROR([an external source tree was specified for o2iblnd however I could not find a $O2IBPATH/Module.symvers there])
 			fi
-
-	                LB_LINUX_TRY_COMPILE([
-			        #include <linux/version.h>
-			        #include <linux/pci.h>
-			        #if !HAVE_GFP_T
-			        typedef int gfp_t;
-			        #endif
-			        #include <rdma/ib_verbs.h>
-			],[
-				ib_dma_map_single(NULL, NULL, 0, 0);
-				return 0;
-			],[
-				AC_MSG_RESULT(yes)
-				AC_DEFINE(HAVE_OFED_IB_DMA_MAP, 1,
-					  [ib_dma_map_single defined])
-			],[
-				AC_MSG_RESULT(NO)
-			])
-
-			LB_LINUX_TRY_COMPILE([
-				#include <linux/version.h>
-				#include <linux/pci.h>
-				#if !HAVE_GFP_T
-				typedef int gfp_t;
-				#endif
-				#include <rdma/ib_verbs.h>
-			],[
-				ib_create_cq(NULL, NULL, NULL, NULL, 0, 0);
-				return 0;
-			],[
-				AC_MSG_RESULT(yes)
-				AC_DEFINE(HAVE_OFED_IB_COMP_VECTOR, 1,
-					  [has completion vector])
-			],[
-				AC_MSG_RESULT(NO)
-			])
-
-			EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 		fi
+
+		LB_LINUX_TRY_COMPILE([
+			#include <linux/version.h>
+			#include <linux/pci.h>
+			#if !HAVE_GFP_T
+			typedef int gfp_t;
+			#endif
+			#include <rdma/ib_verbs.h>
+		],[
+			ib_dma_map_single(NULL, NULL, 0, 0);
+			return 0;
+		],[
+			AC_MSG_RESULT(yes)
+			AC_DEFINE(HAVE_OFED_IB_DMA_MAP, 1,
+				  [ib_dma_map_single defined])
+		],[
+			AC_MSG_RESULT(NO)
+		])
+
+		LB_LINUX_TRY_COMPILE([
+			#include <linux/version.h>
+			#include <linux/pci.h>
+			#if !HAVE_GFP_T
+			typedef int gfp_t;
+			#endif
+			#include <rdma/ib_verbs.h>
+		],[
+			ib_create_cq(NULL, NULL, NULL, NULL, 0, 0);
+			return 0;
+		],[
+			AC_MSG_RESULT(yes)
+			AC_DEFINE(HAVE_OFED_IB_COMP_VECTOR, 1,
+				  [has completion vector])
+		],[
+			AC_MSG_RESULT(NO)
+		])
+
+		EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 	fi
 fi
 
