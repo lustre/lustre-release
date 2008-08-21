@@ -739,6 +739,7 @@ test_34() {
     replay_barrier $SINGLEMDS
     fail_abort $SINGLEMDS
     kill -USR1 $pid
+    wait $pid || return 3
     [ -e $DIR/$tfile ] && return 1
     sync
     return 0
