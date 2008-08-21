@@ -38,6 +38,14 @@ tbd Sun Microsystems, Inc.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
 
+Severity   : normal
+Bugzilla   : 16611
+Frequency  : on recovery
+Description: I/O failures after umount during fail back 
+Details    : if client reconnected to restarted server we need join to recovery
+             instead of find server handler is changed and process self eviction
+             with cancel all locks.
+
 Severity   : enhancement
 Bugzilla   : 16633
 Description: Update to RHEL5 kernel-2.6.18-92.1.10.el5.
