@@ -412,7 +412,7 @@ static int lustre_pack_reply_v1(struct ptlrpc_request *req, int count,
         OBD_ALLOC(rs, size);
         if (unlikely(rs == NULL)) {
                 rs = lustre_get_emerg_rs(req->rq_rqbd->rqbd_service, size);
-                if (!rs) 
+                if (!rs)
                         RETURN (-ENOMEM);
         }
         atomic_set(&rs->rs_refcount, 1);        /* 1 ref for rq_reply_state */
@@ -453,7 +453,7 @@ static int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
         OBD_ALLOC(rs, size);
         if (unlikely(rs == NULL)) {
                 rs = lustre_get_emerg_rs(req->rq_rqbd->rqbd_service, size);
-                if (!rs) 
+                if (!rs)
                         RETURN (-ENOMEM);
         }
         atomic_set(&rs->rs_refcount, 1);        /* 1 ref for rq_reply_state */
@@ -669,7 +669,7 @@ void lustre_shrink_reply_v2(struct ptlrpc_request *req, int segment,
 /*
  * shrink @segment to size @newlen. if @move_data is non-zero, we also move
  * data forward from @segment + 1.
- * 
+ *
  * if @newlen == 0, we remove the segment completely, but we still keep the
  * totally bufcount the same to save possible data moving. this will leave a
  * unused segment with size 0 at the tail, but that's ok.
@@ -2058,7 +2058,7 @@ void lustre_swab_mgs_target_info(struct mgs_target_info *mti)
         __swab32s(&mti->mti_flags);
         __swab32s(&mti->mti_nid_count);
         CLASSERT(sizeof(lnet_nid_t) == sizeof(__u64));
-        for (i = 0; i < MTI_NIDS_MAX; i++) 
+        for (i = 0; i < MTI_NIDS_MAX; i++)
                 __swab64s(&mti->mti_nids[i]);
 }
 
@@ -2685,14 +2685,16 @@ void _debug_req(struct ptlrpc_request *req, __u32 mask,
 
         if (req->rq_reqmsg &&
             (!lustre_msg_need_swab(req->rq_reqmsg) ||
-            lustre_req_need_swab(req))) {
+             (lustre_req_need_swab(req) &&
+              lustre_req_swabbed(req, MSG_PTLRPC_BODY_OFF)))) {
                 opc = lustre_msg_get_opc(req->rq_reqmsg);
                 req_fl = lustre_msg_get_flags(req->rq_reqmsg);
         }
 
         if (req->rq_repmsg &&
-           (!lustre_msg_need_swab(req->rq_repmsg) ||
-            lustre_rep_need_swab(req))) {
+            (!lustre_msg_need_swab(req->rq_repmsg) ||
+             (lustre_rep_need_swab(req) &&
+              lustre_rep_swabbed(req, MSG_PTLRPC_BODY_OFF)))) {
                 rep_fl = lustre_msg_get_flags(req->rq_repmsg);
                 rep_status = lustre_msg_get_status(req->rq_repmsg);
         }
