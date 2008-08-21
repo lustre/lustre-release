@@ -874,21 +874,15 @@ EXPORT_SYMBOL(mdc_intent_lock);
 static int mdc_intent_getattr_async_interpret(struct ptlrpc_request *req,
                                               void *unused, int rc)
 {
-        struct mdc_enqueue_args  *ma;
-        struct md_enqueue_info   *minfo;
-        struct ldlm_enqueue_info *einfo;
-        struct obd_export        *exp;
+        struct obd_export        *exp = req->rq_async_args.pointer_arg[0];
+        struct md_enqueue_info   *minfo = req->rq_async_args.pointer_arg[1];
+        struct ldlm_enqueue_info *einfo = req->rq_async_args.pointer_arg[2];
         struct lookup_intent     *it;
         struct lustre_handle     *lockh;
         struct obd_device        *obddev;
         int                       flags = LDLM_FL_HAS_INTENT;
         ENTRY;
 
-        ma = (struct mdc_enqueue_args *)&req->rq_async_args;
-        minfo = ma->ma_mi;
-        einfo = ma->ma_ei;
-
-        exp   = minfo->mi_exp;
         it    = &minfo->mi_it;
         lockh = &minfo->mi_lockh;
 
@@ -933,7 +927,6 @@ int mdc_intent_getattr_async(struct obd_export *exp,
         ldlm_policy_data_t       policy = {
                                         .l_inodebits = { MDS_INODELOCK_LOOKUP }
                                  };
-        struct mdc_enqueue_args *aa;
         int                      rc;
         int                      flags = LDLM_FL_HAS_INTENT;
         ENTRY;
@@ -955,10 +948,9 @@ int mdc_intent_getattr_async(struct obd_export *exp,
                 RETURN(rc);
         }
 
-        CLASSERT(sizeof(*aa) < sizeof(req->rq_async_args));
-        aa = (struct mdc_enqueue_args *)&req->rq_async_args;
-        aa->ma_mi = minfo;
-        aa->ma_ei = einfo;
+        req->rq_async_args.pointer_arg[0] = exp;
+        req->rq_async_args.pointer_arg[1] = minfo;
+        req->rq_async_args.pointer_arg[2] = einfo;
         req->rq_interpret_reply = mdc_intent_getattr_async_interpret;
         ptlrpcd_add_req(req);
 
