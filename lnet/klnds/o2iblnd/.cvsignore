@@ -1,11 +1,12 @@
 .deps
-Makefile
-.*.cmd
+.depend
+.tmp_versions
+.*.flags
+.*.o.cmd
+.*.d
 autoMakefile.in
 autoMakefile
+Makefile
 *.ko
 *.mod.c
-.*.flags
-.tmp_versions
-.depend
 wirecheck

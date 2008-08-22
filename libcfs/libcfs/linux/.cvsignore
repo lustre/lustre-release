@@ -1,3 +1,4 @@
 Makefile
 Makefile.in
-*.o.cmd
+.*.o.cmd
+.*.o.d
