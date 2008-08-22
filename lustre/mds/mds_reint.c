@@ -740,7 +740,8 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                         GOTO(cleanup, rc = -ENOMEM);
 
                 cleanup_phase = 2;
-                rc = mds_get_md(obd, inode, lmm, &lmm_size, need_lock, 0);
+                rc = mds_get_md(obd, inode, lmm, &lmm_size, need_lock, 0,
+                                req->rq_export->exp_connect_flags);
                 if (rc < 0)
                         GOTO(cleanup, rc);
                 rc = 0;
@@ -791,16 +792,15 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                         GOTO(cleanup, rc);
 
                 lum = rec->ur_eadata;
-                /* if { size, offset, count } = { 0, -1, 0 } (i.e. all default
-                 * values specified) then delete default striping from dir. */
+                /* if { size, offset, count } = { 0, -1, 0 } and no pool
+                 * (i.e. all default values specified) then delete default
+                 * striping from dir. */
                 if (S_ISDIR(inode->i_mode) &&
-                    ((lum->lmm_stripe_size == 0 &&
+                    (lum->lmm_stripe_size == 0 &&
                       lum->lmm_stripe_offset ==
                       (typeof(lum->lmm_stripe_offset))(-1) &&
-                      lum->lmm_stripe_count == 0) ||
-                    /* lmm_stripe_size == -1 is deprecated in 1.4.6 */
-                    lum->lmm_stripe_size ==
-                    (typeof(lum->lmm_stripe_size))(-1))){
+                      lum->lmm_stripe_count == 0 &&
+                      lum->lmm_magic != LOV_USER_MAGIC_V3)){
                         rc = fsfilt_set_md(obd, inode, handle, NULL, 0, "lov");
                         if (rc)
                                 GOTO(cleanup, rc);
@@ -1144,9 +1144,10 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         CERROR("error on parent setattr: rc = %d\n", rc);
 
                 if (S_ISDIR(inode->i_mode)) {
-                        struct lov_mds_md lmm;
+                        struct lov_mds_md_v3 lmm;
                         int lmm_size = sizeof(lmm);
-                        rc = mds_get_md(obd, dir, &lmm, &lmm_size, 1, 0);
+                        rc = mds_get_md(obd, dir, &lmm, &lmm_size, 1, 0,
+                                        req->rq_export->exp_connect_flags);
                         if (rc > 0) {
                                 LOCK_INODE_MUTEX(inode);
                                 rc = fsfilt_set_md(obd, inode, handle,
@@ -1888,7 +1889,8 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 } else if (S_ISREG(child_inode->i_mode)) {
                         mds_pack_inode2body(body, child_inode);
                         mds_pack_md(obd, req->rq_repmsg, offset + 1, body,
-                                    child_inode, MDS_PACK_MD_LOCK, 0);
+                                    child_inode, MDS_PACK_MD_LOCK, 0,
+                                    req->rq_export->exp_connect_flags);
                 }
         }
 
@@ -2503,7 +2505,8 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                 } else if (S_ISREG(new_inode->i_mode)) {
                         mds_pack_inode2body(body, new_inode);
                         mds_pack_md(obd, req->rq_repmsg, offset + 1, body,
-                                    new_inode, MDS_PACK_MD_LOCK, 0);
+                                    new_inode, MDS_PACK_MD_LOCK, 0,
+                                    req->rq_export->exp_connect_flags);
                 }
         }
 
