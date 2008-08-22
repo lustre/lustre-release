@@ -281,7 +281,7 @@ static int client_common_fill_super(struct super_block *sb,
                                   OBD_CONNECT_JOIN    | OBD_CONNECT_ATTRFID    |
                                   OBD_CONNECT_NODEVOH | OBD_CONNECT_CANCELSET  |
                                   OBD_CONNECT_AT      | OBD_CONNECT_FID |
-                                  OBD_CONNECT_VBR;
+                                  OBD_CONNECT_VBR     | OBD_CONNECT_LOV_V3;
 #ifdef HAVE_LRU_RESIZE_SUPPORT
         if (sbi->ll_flags & LL_SBI_LRU_RESIZE)
                 data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
@@ -1856,7 +1856,8 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         LASSERT ((lsm != NULL) == ((body->valid & OBD_MD_FLEASIZE) != 0));
         if (lsm != NULL) {
                 if (lli->lli_smd == NULL) {
-                        if (lsm->lsm_magic != LOV_MAGIC &&
+                        if (lsm->lsm_magic != LOV_MAGIC_V1 &&
+                            lsm->lsm_magic != LOV_MAGIC_V3 &&
                             lsm->lsm_magic != LOV_MAGIC_JOIN) {
                                 dump_lsm(D_ERROR, lsm);
                                 LBUG();
