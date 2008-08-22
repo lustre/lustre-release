@@ -82,6 +82,9 @@ int mgs_erase_log(struct obd_device *obd, char *name);
 int mgs_erase_logs(struct obd_device *obd, char *fsname);
 int mgs_setparam(struct obd_device *obd, struct lustre_cfg *lcfg, char *fsname);
 
+int mgs_pool_cmd(struct obd_device *obd, enum lcfg_command_type cmd,
+                 char *poolname, char *fsname, char *ostname);
+
 /* mgs_fs.c */
 int mgs_client_add(struct obd_device *obd,
                    struct obd_export *exp,
