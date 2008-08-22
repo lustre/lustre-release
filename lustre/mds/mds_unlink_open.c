@@ -140,7 +140,7 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
         if (lmm == NULL)
                 RETURN(-ENOMEM);
 
-        rc = mds_get_md(obd, inode, lmm, &lmm_size, 1, 0);
+        rc = mds_get_md(obd, inode, lmm, &lmm_size, 1, 0, 0);
         if (rc < 0)
                 GOTO(out_free_lmm, rc);
 
