@@ -117,9 +117,10 @@ int dump_obdo(struct obdo *oa)
 void dump_lsm(int level, struct lov_stripe_md *lsm)
 {
         CDEBUG(level, "lsm %p, objid "LPX64", maxbytes "LPX64", magic 0x%08X, "
-               "stripe_size %u, stripe_count %u\n", lsm,
+               "stripe_size %u, stripe_count %u pool "POOLNAMEF"\n", lsm,
                lsm->lsm_object_id, lsm->lsm_maxbytes, lsm->lsm_magic,
-               lsm->lsm_stripe_size, lsm->lsm_stripe_count);
+               lsm->lsm_stripe_size, lsm->lsm_stripe_count,
+               lsm->lsm_pool_name);
 }
 
 /* XXX assumes only a single page in request */
