@@ -2041,7 +2041,7 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
         if (obd->obd_proc_exports_entry)
                 lprocfs_add_simple(obd->obd_proc_exports_entry, "clear",
                                    lprocfs_nid_stats_clear_read,
-                                   lprocfs_nid_stats_clear_write, obd);
+                                   lprocfs_nid_stats_clear_write, obd, NULL);
 
         memcpy((void *)addr, lustre_cfg_buf(lcfg, 4),
                LUSTRE_CFG_BUFLEN(lcfg, 4));
