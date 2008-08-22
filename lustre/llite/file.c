@@ -2054,8 +2054,9 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
         LASSERT(lmm != NULL);
         LASSERT(lustre_rep_swabbed(req, REPLY_REC_OFF + 1));
 
-        if ((lmm->lmm_magic != cpu_to_le32(LOV_MAGIC)) &&
-             (lmm->lmm_magic != cpu_to_le32(LOV_MAGIC_JOIN))) {
+        if ((lmm->lmm_magic != cpu_to_le32(LOV_MAGIC_V1)) &&
+            (lmm->lmm_magic != cpu_to_le32(LOV_MAGIC_V3)) &&
+            (lmm->lmm_magic != cpu_to_le32(LOV_MAGIC_JOIN))) {
                 GOTO(out, rc = -EPROTO);
         }
         /*
@@ -2064,12 +2065,20 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
          * passing it to userspace.
          */
         if (LOV_MAGIC != cpu_to_le32(LOV_MAGIC)) {
-                if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC)) {
-                        lustre_swab_lov_user_md((struct lov_user_md *)lmm);
-                        /* if function called for directory - we should be
-                         * avoid swab not existent lsm objects */
+                /* if function called for directory - we should
+                 * avoid swab not existent lsm objects */
+                if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V1)) {
+                        lustre_swab_lov_user_md_v1((struct lov_user_md_v1 *)lmm);
                         if (S_ISREG(body->mode))
-                                lustre_swab_lov_user_md_objects((struct lov_user_md *)lmm);
+                                lustre_swab_lov_user_md_objects(
+                                 ((struct lov_user_md_v1 *)lmm)->lmm_objects,
+                                 ((struct lov_user_md_v1 *)lmm)->lmm_stripe_count);
+                } else if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V3)) {
+                        lustre_swab_lov_user_md_v3((struct lov_user_md_v3 *)lmm);
+                        if (S_ISREG(body->mode))
+                                lustre_swab_lov_user_md_objects(
+                                 ((struct lov_user_md_v3 *)lmm)->lmm_objects,
+                                 ((struct lov_user_md_v3 *)lmm)->lmm_stripe_count);
                 } else if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_JOIN)) {
                         lustre_swab_lov_user_md_join((struct lov_user_md_join *)lmm);
                 }
@@ -2164,23 +2173,34 @@ static int ll_lov_setea(struct inode *inode, struct file *file,
 static int ll_lov_setstripe(struct inode *inode, struct file *file,
                             unsigned long arg)
 {
-        struct lov_user_md lum, *lump = (struct lov_user_md *)arg;
+        struct lov_user_md_v3 lumv3;
+        struct lov_user_md_v1 *lumv1 = (struct lov_user_md_v1 *)&lumv3;
+        struct lov_user_md_v1 *lumv1p = (struct lov_user_md_v1 *)arg;
+        struct lov_user_md_v3 *lumv3p = (struct lov_user_md_v3 *)arg;
+        int lum_size;
         int rc;
         int flags = FMODE_WRITE;
         ENTRY;
 
-        /* Bug 1152: copy properly when this is no longer true */
-        LASSERT(sizeof(lum) == sizeof(*lump));
-        LASSERT(sizeof(lum.lmm_objects[0]) == sizeof(lump->lmm_objects[0]));
-        rc = copy_from_user(&lum, lump, sizeof(lum));
+        /* first try with v1 which is smaller than v3 */
+        lum_size = sizeof(struct lov_user_md_v1);
+        rc = copy_from_user(lumv1, lumv1p, lum_size);
         if (rc)
                 RETURN(-EFAULT);
 
-        rc = ll_lov_setstripe_ea_info(inode, file, flags, &lum, sizeof(lum));
+        if (lumv1->lmm_magic == LOV_USER_MAGIC_V3) {
+                lum_size = sizeof(struct lov_user_md_v3);
+                rc = copy_from_user(&lumv3, lumv3p, lum_size);
+                if (rc)
+                        RETURN(-EFAULT);
+        }
+
+        rc = ll_lov_setstripe_ea_info(inode, file, flags, lumv1, lum_size);
         if (rc == 0) {
-                 put_user(0, &lump->lmm_stripe_count);
+                 put_user(0, &lumv1p->lmm_stripe_count);
                  rc = obd_iocontrol(LL_IOC_LOV_GETSTRIPE, ll_i2obdexp(inode),
-                                    0, ll_i2info(inode)->lli_smd, lump);
+                                    0, ll_i2info(inode)->lli_smd,
+                                    (void *)arg);
         }
         RETURN(rc);
 }
