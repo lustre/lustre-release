@@ -417,6 +417,7 @@ static int mds_destroy_export(struct obd_export *export)
         struct mds_obd *mds = &obd->u.mds;
         struct lvfs_run_ctxt saved;
         struct lov_mds_md *lmm;
+        __u32 lmm_sz, cookie_sz;
         struct llog_cookie *logcookies;
         int rc = 0;
         ENTRY;
@@ -430,18 +431,20 @@ static int mds_destroy_export(struct obd_export *export)
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         /* Close any open files (which may also cause orphan unlinking). */
 
-        OBD_ALLOC(lmm, mds->mds_max_mdsize);
+        lmm_sz = mds->mds_max_mdsize;
+        OBD_ALLOC(lmm, lmm_sz);
         if (lmm == NULL) {
                 CWARN("%s: allocation failure during cleanup; can not force "
                       "close file handles on this service.\n", obd->obd_name);
                 GOTO(out, rc = -ENOMEM);
         }
 
-        OBD_ALLOC(logcookies, mds->mds_max_cookiesize);
+        cookie_sz = mds->mds_max_cookiesize;
+        OBD_ALLOC(logcookies, cookie_sz);
         if (logcookies == NULL) {
                 CWARN("%s: allocation failure during cleanup; can not force "
                       "close file handles on this service.\n", obd->obd_name);
-                OBD_FREE(lmm, mds->mds_max_mdsize);
+                OBD_FREE(lmm, lmm_sz);
                 GOTO(out, rc = -ENOMEM);
         }
 
@@ -450,7 +453,7 @@ static int mds_destroy_export(struct obd_export *export)
                 struct list_head *tmp = med->med_open_head.next;
                 struct mds_file_data *mfd =
                         list_entry(tmp, struct mds_file_data, mfd_list);
-                int lmm_size = mds->mds_max_mdsize;
+                int lmm_size = lmm_sz;
                 umode_t mode = mfd->mfd_dentry->d_inode->i_mode;
                 __u64 valid = 0;
 
@@ -500,8 +503,8 @@ static int mds_destroy_export(struct obd_export *export)
                 spin_lock(&med->med_open_lock);
         }
 
-        OBD_FREE(logcookies, mds->mds_max_cookiesize);
-        OBD_FREE(lmm, mds->mds_max_mdsize);
+        OBD_FREE(logcookies, cookie_sz);
+        OBD_FREE(lmm, lmm_sz);
 
         spin_unlock(&med->med_open_lock);
 
@@ -627,7 +630,10 @@ int mds_pack_md(struct obd_device *obd, struct lustre_msg *msg, int offset,
                        inode->i_ino);
                 RETURN(0);
         }
+        /* if this replay request we should be silencely exist without fill md*/
         lmm_size = lustre_msg_buflen(msg, offset);
+        if (lmm_size == 0)
+                RETURN(0);
 
         /* I don't really like this, but it is a sanity check on the client
          * MD request.  However, if the client doesn't know how much space
@@ -2193,7 +2199,6 @@ err_cleanup:
 
 int mds_postrecov(struct obd_device *obd)
 {
-        struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
 
@@ -2201,9 +2206,6 @@ int mds_postrecov(struct obd_device *obd)
                 RETURN(0);
 
         LASSERT(!obd->obd_recovering);
-        ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
-        LASSERT(ctxt != NULL);
-        llog_ctxt_put(ctxt);
 
         /* clean PENDING dir */
         rc = mds_cleanup_pending(obd);
@@ -2429,13 +2431,19 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         else if (it->opc & IT_UNLINK)
                 repsize[repbufcnt++] = mds->mds_max_cookiesize;
 
+        /* if we do recovery we isn't send reply mds state is restored */
+        if(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+                repsize[DLM_REPLY_REC_OFF+1] = 0;
+                if (it->opc & IT_UNLINK)
+                        repsize[DLM_REPLY_REC_OFF+2] = 0;
+        }
+
         rc = lustre_pack_reply(req, repbufcnt, repsize, NULL);
         if (rc)
                 RETURN(req->rq_status = rc);
 
         rep = lustre_msg_buf(req->rq_repmsg, DLM_LOCKREPLY_OFF, sizeof(*rep));
         intent_set_disposition(rep, DISP_IT_EXECD);
-
 
         /* execute policy */
         switch ((long)it->opc) {
