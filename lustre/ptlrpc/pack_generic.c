@@ -2243,10 +2243,9 @@ void lustre_swab_lov_desc (struct lov_desc *ld)
 }
 
 
-void lustre_swab_lov_user_md(struct lov_user_md *lum)
+static void lustre_swab_lov_user_md_common(struct lov_user_md_v1 *lum)
 {
         ENTRY;
-        CDEBUG(D_IOCTL, "swabbing lov_user_md\n");
         __swab32s(&lum->lmm_magic);
         __swab32s(&lum->lmm_pattern);
         __swab64s(&lum->lmm_object_id);
@@ -2254,6 +2253,23 @@ void lustre_swab_lov_user_md(struct lov_user_md *lum)
         __swab32s(&lum->lmm_stripe_size);
         __swab16s(&lum->lmm_stripe_count);
         __swab16s(&lum->lmm_stripe_offset);
+        EXIT;
+}
+
+void lustre_swab_lov_user_md_v1(struct lov_user_md_v1 *lum)
+{
+        ENTRY;
+        CDEBUG(D_IOCTL, "swabbing lov_user_md v1\n");
+        lustre_swab_lov_user_md_common(lum);
+        EXIT;
+}
+
+void lustre_swab_lov_user_md_v3(struct lov_user_md_v3 *lum)
+{
+        ENTRY;
+        CDEBUG(D_IOCTL, "swabbing lov_user_md v3\n");
+        lustre_swab_lov_user_md_common((struct lov_user_md_v1 *)lum);
+        /* lmm_pool_name nothing to do with char */
         EXIT;
 }
 
@@ -2271,17 +2287,16 @@ void lustre_swab_lov_user_md_join(struct lov_user_md_join *lumj)
         EXIT;
 }
 
-void lustre_swab_lov_user_md_objects(struct lov_user_md *lum)
+void lustre_swab_lov_user_md_objects(struct lov_user_ost_data *lod,
+                                     int stripe_count)
 {
-        struct lov_user_ost_data *lod;
         int i;
         ENTRY;
-        for (i = 0; i < lum->lmm_stripe_count; i++) {
-                lod = &lum->lmm_objects[i];
-                __swab64s(&lod->l_object_id);
-                __swab64s(&lod->l_object_gr);
-                __swab32s(&lod->l_ost_gen);
-                __swab32s(&lod->l_ost_idx);
+        for (i = 0; i < stripe_count; i++) {
+                __swab64s(&(lod[i].l_object_id));
+                __swab64s(&(lod[i].l_object_gr));
+                __swab32s(&(lod[i].l_ost_gen));
+                __swab32s(&(lod[i].l_ost_idx));
         }
         EXIT;
 }
