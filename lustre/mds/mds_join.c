@@ -86,7 +86,8 @@ static int mds_insert_join_lmm(struct llog_handle *llh,
         ENTRY;
 
 
-        sz_med = lov_mds_md_size(le32_to_cpu(lmm->lmm_stripe_count));
+        sz_med = lov_mds_md_size(le32_to_cpu(lmm->lmm_stripe_count),
+                                 LOV_MAGIC);
         sz_med += 2 * sizeof(__u64);
         sz_med = size_round(sz_med);
 
@@ -102,7 +103,8 @@ static int mds_insert_join_lmm(struct llog_handle *llh,
         med->med_start = start;
         med->med_len = len;
         memcpy(&med->med_lmm, lmm,
-                lov_mds_md_size(le32_to_cpu(lmm->lmm_stripe_count)));
+                lov_mds_md_size(le32_to_cpu(lmm->lmm_stripe_count),
+                                LOV_MAGIC));
 
         rc = llog_write_rec(llh, &rec, NULL, 0, med, -1);
         OBD_FREE(med, sz_med);
@@ -173,11 +175,12 @@ static int mdsea_cancel_last_extent(struct llog_handle *llh_tail,
                        med->med_start, cbdata->mc_headfile_sz);
                 if (!cbdata->mc_lmm) {
                         int stripe = le32_to_cpu(med->med_lmm.lmm_stripe_count);
-                        OBD_ALLOC(cbdata->mc_lmm, lov_mds_md_size(stripe));
+                        OBD_ALLOC(cbdata->mc_lmm,
+                                  lov_mds_md_size(stripe, LOV_MAGIC));
                         if (!cbdata->mc_lmm)
                                 RETURN(-ENOMEM);
                         memcpy(cbdata->mc_lmm, &med->med_lmm,
-                               lov_mds_md_size(stripe));
+                               lov_mds_md_size(stripe, LOV_MAGIC));
                 }
                 RETURN(LLOG_DEL_RECORD);
         }
@@ -220,7 +223,8 @@ static int  mds_adjust_last_extent(struct llog_handle *llh_head,
 exit:
         if (cbdata && cbdata->mc_lmm)
                 OBD_FREE(cbdata->mc_lmm,
-                         lov_mds_md_size(cbdata->mc_lmm->lmm_stripe_count));
+                         lov_mds_md_size(cbdata->mc_lmm->lmm_stripe_count,
+                                         LOV_MAGIC));
         if (cbdata)
                 OBD_FREE_PTR(cbdata);
 
@@ -312,7 +316,8 @@ static int mds_join_unlink_tail_inode(struct mds_update_record *rec,
                 GOTO(cleanup, rc);
         }
 
-        rc = mds_get_md(obd, tail_inode, tail_lmm, &lmm_size, 1, 0);
+        rc = mds_get_md(obd, tail_inode, tail_lmm, &lmm_size, 1, 0,
+                        req->rq_export->exp_connect_flags);
         if (rc < 0) /* get md fails */
                 GOTO(cleanup, rc);
 
@@ -401,7 +406,8 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
 
         LOCK_INODE_MUTEX(head_inode);
         cleanup_phase = 1;
-        rc = mds_get_md(obd, head_inode, head_lmm, &size, 0, 0);
+        rc = mds_get_md(obd, head_inode, head_lmm, &size, 0, 0,
+                        req->rq_export->exp_connect_flags);
         if (rc < 0)
                 GOTO(cleanup, rc);
 
