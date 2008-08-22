@@ -371,11 +371,11 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 rc = fsfilt_set_md(obd, inode, *handle, lmm, lmm_size, "lov");
                 if (rc)
                         CERROR("open replay failed to set md:%d\n", rc);
-                lmm_buf = lustre_msg_buf(req->rq_repmsg, offset, lmm_size);
-                LASSERT(lmm_buf);
-                memcpy(lmm_buf, lmm, lmm_size);
 
-                *objid = lmm_buf;
+                /* for replay we not need send lmm to client, this not used now */
+                lustre_shrink_reply(req, offset, 0, 1);
+                *objid = lmm;
+
                 RETURN(rc);
         }
 
@@ -395,7 +395,6 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
 
         obdo_from_inode(oinfo.oi_oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
                         OBD_MD_FLMTIME | OBD_MD_FLCTIME);
-
         if (!(rec->ur_flags & MDS_OPEN_HAS_OBJS)) {
                 /* check if things like lfs setstripe are sending us the ea */
                 if (rec->ur_flags & MDS_OPEN_HAS_EA) {
@@ -405,18 +404,19 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                         if (rc)
                                 GOTO(out_oa, rc);
                 } else {
-                        OBD_ALLOC(lmm, mds->mds_max_mdsize);
+                        __u32 lmm_sz = mds->mds_max_mdsize;
+                        OBD_ALLOC(lmm, lmm_sz);
                         if (lmm == NULL)
                                 GOTO(out_oa, rc = -ENOMEM);
 
-                        lmm_size = mds->mds_max_mdsize;
+                        lmm_size = lmm_sz;
                         rc = mds_get_md(obd, dchild->d_parent->d_inode,
                                         lmm, &lmm_size, 1, 0);
                         if (rc > 0)
                                 rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
                                                    mds->mds_osc_exp,
                                                    0, &oinfo.oi_md, lmm);
-                        OBD_FREE(lmm, mds->mds_max_mdsize);
+                        OBD_FREE(lmm, lmm_sz);
                         if (rc)
                                 GOTO(out_oa, rc);
                 }
