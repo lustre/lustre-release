@@ -42,12 +42,16 @@ static inline int lov_stripe_md_size(int stripes)
         return sizeof(struct lov_stripe_md) + stripes*sizeof(struct lov_oinfo*);
 }
 
-#define lov_mds_md_size(stripes) lov_mds_md_v1_size(stripes)
-static inline int lov_mds_md_v1_size(int stripes)
+static inline int lov_mds_md_size(int stripes, int lmm_magic)
 {
-        return sizeof(struct lov_mds_md_v1) +
-                stripes * sizeof(struct lov_ost_data_v1);
+        if (lmm_magic == LOV_MAGIC_V3)
+                return sizeof(struct lov_mds_md_v3) +
+                        stripes * sizeof(struct lov_ost_data_v1);
+        else
+                return sizeof(struct lov_mds_md_v1) +
+                        stripes * sizeof(struct lov_ost_data_v1);
 }
+
 
 #define IOC_LOV_TYPE                   'g'
 #define IOC_LOV_MIN_NR                 50
