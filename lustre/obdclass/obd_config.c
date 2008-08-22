@@ -873,6 +873,28 @@ int class_process_config(struct lustre_cfg *lcfg)
                 err = class_sptlrpc_conf(obd, lcfg);
                 GOTO(out, err = 0);
         }
+        case LCFG_POOL_NEW: {
+                err = obd_pool_new(obd, lustre_cfg_string(lcfg, 2));
+                GOTO(out, err = 0);
+                break;
+        }
+        case LCFG_POOL_ADD: {
+                err = obd_pool_add(obd, lustre_cfg_string(lcfg, 2),
+                                   lustre_cfg_string(lcfg, 3));
+                GOTO(out, err = 0);
+                break;
+        }
+        case LCFG_POOL_REM: {
+                err = obd_pool_rem(obd, lustre_cfg_string(lcfg, 2),
+                                   lustre_cfg_string(lcfg, 3));
+                GOTO(out, err = 0);
+                break;
+        }
+        case LCFG_POOL_DEL: {
+                err = obd_pool_del(obd, lustre_cfg_string(lcfg, 2));
+                GOTO(out, err = 0);
+                break;
+        }
         default: {
                 err = obd_process_config(obd, sizeof(*lcfg), lcfg);
                 GOTO(out, err);
