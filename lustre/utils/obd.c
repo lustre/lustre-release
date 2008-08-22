@@ -48,9 +48,11 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <sys/param.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <signal.h>
+#include <glob.h>
 
 #include "obdctl.h"
 
@@ -64,6 +66,7 @@
 #include <errno.h>
 #include <string.h>
 #include <ctype.h>
+#include <lustre/liblustreapi.h>
 
 #ifdef HAVE_ASM_PAGE_H
 #include <asm/page.h>           /* needed for PAGE_SIZE - rread */
@@ -170,42 +173,51 @@ int lcfg_ioctl(char * func, int dev_id, struct lustre_cfg *lcfg)
 
 static int do_device(char *func, char *devname);
 
-int lcfg_mgs_ioctl(char *func, int dev_id, struct lustre_cfg *lcfg)
+static int get_mgs_device()
 {
-        struct obd_ioctl_data data;
-        static int mgs_device = -1;
         char mgs[] = "$MGS";
-        int rc;
+        static int mgs_device = -1;
 
-        /* Always operates on MGS dev */
         if (mgs_device == -1) {
+                int rc;
                 do_disconnect(NULL, 1);
                 rc = do_device("mgsioc", mgs);
                 if (rc) {
+                        fprintf(stderr, 
+                                "This command must be run on the MGS.\n");
                         errno = ENODEV;
                         return -1;
                 }
                 mgs_device = cur_device;
         }
+        return mgs_device;
+}
 
+/* Returns -1 on error with errno set */
+int lcfg_mgs_ioctl(char *func, int dev_id, struct lustre_cfg *lcfg)
+{
+        struct obd_ioctl_data data;
+        int rc;
+        
         IOC_INIT(data);
-        data.ioc_dev = mgs_device;
+        rc = data.ioc_dev = get_mgs_device();
+        if (rc)
+                goto out;
         data.ioc_type = LUSTRE_CFG_TYPE;
         data.ioc_plen1 = lustre_cfg_len(lcfg->lcfg_bufcount,
                                         lcfg->lcfg_buflens);
         data.ioc_pbuf1 = (void *)lcfg;
         IOC_PACK(func, data);
 
-        rc =  l_ioctl(dev_id, OBD_IOC_PARAM, buf);
-
-        if (rc == ENODEV)
-                fprintf(stderr, "Is the MGS running on this node?\n");
-        if (rc == ENOSYS)
-                fprintf(stderr, "Make sure cfg_device is set first.\n");
-        if (rc == EINVAL)
-                fprintf(stderr, "cfg_device should be of the form "
-                        "'lustre-MDT0000'\n");
-
+        rc = l_ioctl(dev_id, OBD_IOC_PARAM, buf);
+out:
+        if (rc) {
+                if (errno == ENOSYS)
+                        fprintf(stderr, "Make sure cfg_device is set first.\n");
+                if (errno == EINVAL)
+                        fprintf(stderr, "cfg_device should be of the form "
+                                "'lustre-MDT0000'\n");
+        }
         return rc;
 }
 
@@ -2339,4 +2351,592 @@ void obd_finalize(int argc, char **argv)
 
         shmem_stop();
         do_disconnect(argv[0], 1);
+}
+
+static int find_target_obdpath(char *fsname, char *path)
+{
+        glob_t glob_info;
+        char pattern[MAXPATHLEN + 1];
+        int rc;
+
+        snprintf(pattern, MAXPATHLEN,
+                 "/proc/fs/lustre/lov/%s-*/target_obd",
+                 fsname);
+        rc = glob(pattern, GLOB_BRACE, NULL, &glob_info);
+        if (rc)
+                return -EINVAL;
+
+        if (glob_info.gl_pathc == 0) {
+                globfree(&glob_info);
+                return -EINVAL;
+        }
+
+        strcpy(path, glob_info.gl_pathv[0]);
+        return 0;
+}
+
+static int find_poolpath(char *fsname, char *poolname, char *poolpath)
+{
+        glob_t glob_info;
+        char pattern[MAXPATHLEN + 1];
+        int rc;
+
+        snprintf(pattern, MAXPATHLEN,
+                 "/proc/fs/lustre/lov/%s-*/pools/%s",
+                 fsname, poolname);
+        rc = glob(pattern, GLOB_BRACE, NULL, &glob_info);
+        if (rc)
+                return -EINVAL;
+
+        if (glob_info.gl_pathc == 0) {
+                globfree(&glob_info);
+                return -EINVAL;
+        }
+
+        strcpy(poolpath, glob_info.gl_pathv[0]);
+        return 0;
+}
+
+/*
+ * if pool is NULL, search ostname in target_obd
+ * if pool is no NULL
+ *  if pool not found returns < 0
+ *  if ostname is NULL, returns 1 if pool is not empty and 0 if pool empty
+ *  if ostname is not NULL, returns 1 if OST is in pool and 0 if not
+ */
+static int search_ost(char *fsname, char *poolname, char *ostname)
+{
+        FILE *fd;
+        char buffer[MAXPATHLEN + 1];
+        int len = 0, rc;
+
+        if (ostname != NULL)
+                len = strlen(ostname);
+
+        if (poolname == NULL)
+                rc = find_target_obdpath(fsname, buffer);
+        else
+                rc = find_poolpath(fsname, poolname, buffer);
+        if (rc)
+                return rc;
+
+        if ((fd = fopen(buffer, "r")) == NULL)
+                return -EINVAL;
+
+        while (fgets(buffer, sizeof(buffer), fd) != NULL) {
+                if (poolname == NULL) {
+                        /* we search ostname in target_obd */
+                        if (strncmp(buffer + 3, ostname, len) == 0) {
+                                fclose(fd);
+                                return 1;
+                        }
+                } else {
+                        /* we search a non empty pool or
+                           an ostname in a pool */
+                        if ((ostname == NULL) ||
+                            (strncmp(buffer, ostname, len) == 0)) {
+                                fclose(fd);
+                                return 1;
+                        }
+                }
+        }
+        fclose(fd);
+        return 0;
+}
+
+static int check_pool_cmd(enum lcfg_command_type cmd,
+                          char *fsname, char *poolname,
+                          char *ostname)
+{
+        int rc = 0;
+
+        switch (cmd) {
+        case LCFG_POOL_NEW: {
+                if (search_ost(fsname, poolname, NULL) >= 0) {
+                        fprintf(stderr, "Pool %s.%s already exists\n",
+                                fsname, poolname);
+                        return -EEXIST;
+                }
+                return 0;
+        }
+        case LCFG_POOL_DEL: {
+                rc = search_ost(fsname, poolname, NULL);
+                if (rc < 0) {
+                        fprintf(stderr, "Pool %s.%s not found\n",
+                                fsname, poolname);
+                        return -ENOENT;
+                }
+                if (rc == 1) {
+                        fprintf(stderr, "Pool %s.%s not empty, "
+                                "please remove all members\n",
+                                fsname, poolname);
+                        return -ENOTEMPTY;
+                }
+                return 0;
+        }
+        case LCFG_POOL_ADD: {
+                rc = search_ost(fsname, NULL, ostname);
+                if (rc == 0) {
+                        fprintf(stderr, "OST %s not found in lov of %s\n",
+                                ostname, fsname);
+                        return -ENOENT;
+                }
+                rc = search_ost(fsname, poolname, ostname);
+                if (rc < 0) {
+                        fprintf(stderr, "Pool %s.%s not found\n",
+                                fsname, poolname);
+                        return -ENOENT;
+                }
+                if (rc == 1) {
+                        fprintf(stderr, "OST %s already in pool %s.%s\n",
+                                ostname, fsname, poolname);
+                        return -EEXIST;
+                }
+                return 0;
+        }
+        case LCFG_POOL_REM: {
+                rc = search_ost(fsname, poolname, ostname);
+                if (rc < 0) {
+                        fprintf(stderr, "Pool %s.%s not found\n",
+                                fsname, poolname);
+                        return -ENOENT;
+                }
+                if (rc == 0) {
+                        fprintf(stderr, "OST %s not found in pool %s.%s\n",
+                                ostname, fsname, poolname);
+                        return -ENOENT;
+                }
+                return 0;
+        }
+        default: {
+        }
+        }
+        return 0;
+}
+
+static void check_pool_cmd_result(enum lcfg_command_type cmd,
+                                  char *fsname, char *poolname,
+                                  char *ostname)
+{
+        int cpt, rc = 0;
+
+        cpt = 10;
+        switch (cmd) {
+        case LCFG_POOL_NEW: {
+                do {
+                        rc = search_ost(fsname, poolname, NULL);
+                        if (rc < 0)
+                                sleep(2);
+                        cpt--;
+                } while ((rc < 0) && (cpt > 0));
+                if (rc >= 0)
+                        fprintf(stderr, "Pool %s.%s created\n",
+                                fsname, poolname);
+                else
+                        fprintf(stderr, "Warning, pool %s.%s not found\n",
+                                fsname, poolname);
+                return;
+        }
+        case LCFG_POOL_DEL: {
+                do {
+                         rc = search_ost(fsname, poolname, NULL);
+                         if (rc >= 0)
+                                sleep(2);
+                         cpt--;
+                } while ((rc >= 0) && (cpt > 0));
+                if (rc < 0)
+                        fprintf(stderr, "Pool %s.%s destroyed\n",
+                                fsname, poolname);
+                else
+                        fprintf(stderr, "Warning, pool %s.%s still found\n",
+                                fsname, poolname);
+                return;
+        }
+        case LCFG_POOL_ADD: {
+                do {
+                        rc = search_ost(fsname, poolname, ostname);
+                        if (rc != 1)
+                                sleep(2);
+                        cpt--;
+                } while ((rc != 1) && (cpt > 0));
+                if (rc == 1)
+                        fprintf(stderr, "OST %s added to pool %s.%s\n",
+                                ostname, fsname, poolname);
+                else
+                        fprintf(stderr, "Warning, OST %s not found in pool %s.%s\n",
+                                ostname, fsname, poolname);
+                return;
+        }
+        case LCFG_POOL_REM: {
+                do {
+                        rc = search_ost(fsname, poolname, ostname);
+                        if (rc == 1)
+                                sleep(2);
+                        cpt--;
+                } while ((rc == 1) && (cpt > 0));
+                if (rc != 1)
+                        fprintf(stderr, "OST %s removed from pool %s.%s\n",
+                                ostname, fsname, poolname);
+                else
+                        fprintf(stderr, "Warning, OST %s still found in pool %s.%s\n",
+                                ostname, fsname, poolname);
+                return;
+        }
+        default: {
+        }
+        }
+}
+
+static int check_and_complete_ostname(char *fsname, char *ostname)
+{
+        char *ptr;
+        char real_ostname[MAX_OBD_NAME + 1];
+        char i;
+
+        /* if OST name does not start with fsname, we add it */
+        /* if not check if the fsname is the right one */
+        ptr = strchr(ostname, '-');
+        if (ptr == NULL) {
+                sprintf(real_ostname, "%s-%s", fsname, ostname);
+        } else if (strncmp(ostname, fsname, strlen(fsname)) != 0) {
+                fprintf(stderr, "%s does not start with fsname %s\n",
+                        ostname, fsname);
+                return -EINVAL;
+        } else {
+             strcpy(real_ostname, ostname);
+        }
+        /* real_ostname is fsname-????? */
+        ptr = real_ostname + strlen(fsname) + 1;
+        if (strncmp(ptr, "OST", 3) != 0) {
+                fprintf(stderr, "%s does not start by %s-OST nor OST\n",
+                        ostname, fsname);
+                return -EINVAL;
+        }
+        /* real_ostname is fsname-OST????? */
+        ptr += 3;
+        for (i = 0; i < 4; i++) {
+                if (!isxdigit(*ptr)) {
+                        fprintf(stderr,
+                                "ost's index in %s is not an hexa number\n",
+                                ostname);
+                        return -EINVAL;
+                }
+                ptr++;
+        }
+        /* real_ostname is fsname-OSTXXXX????? */
+        /* if OST name does not end with _UUID, we add it */
+        if (*ptr == '\0') {
+                strcat(real_ostname, "_UUID");
+        } else if (strcmp(ptr, "_UUID") != 0) {
+                fprintf(stderr,
+                        "ostname %s does not end with _UUID\n", ostname);
+                return -EINVAL;
+        }
+        /* real_ostname is fsname-OSTXXXX_UUID */
+        strcpy(ostname, real_ostname);
+        return 0;
+}
+
+/* returns 0 or -errno */
+static int pool_cmd(enum lcfg_command_type cmd,
+                    char *cmdname, char *fullpoolname,
+                    char *fsname, char *poolname, char *ostname)
+{
+        int rc = 0;
+        struct obd_ioctl_data data;
+        struct lustre_cfg_bufs bufs;
+        struct lustre_cfg *lcfg;
+
+        rc = check_pool_cmd(cmd, fsname, poolname, ostname);
+        if (rc)
+                return rc;
+
+        lustre_cfg_bufs_reset(&bufs, NULL);
+        lustre_cfg_bufs_set_string(&bufs, 0, cmdname);
+        lustre_cfg_bufs_set_string(&bufs, 1, fullpoolname);
+        if (ostname != NULL)
+                lustre_cfg_bufs_set_string(&bufs, 2, ostname);
+
+        lcfg = lustre_cfg_new(cmd, &bufs);
+        if (IS_ERR(lcfg)) {
+                rc = PTR_ERR(lcfg);
+                return rc;
+        }
+
+        IOC_INIT(data);
+        rc = data.ioc_dev = get_mgs_device();
+        if (rc)
+                goto out;
+
+        data.ioc_type = LUSTRE_CFG_TYPE;
+        data.ioc_plen1 = lustre_cfg_len(lcfg->lcfg_bufcount,
+                                        lcfg->lcfg_buflens);
+        data.ioc_pbuf1 = (void *)lcfg;
+        IOC_PACK(cmdname, data);
+
+        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_POOL, buf);
+out:
+        if (rc)
+                rc = -errno;
+        lustre_cfg_free(lcfg);
+        return rc;
+}
+
+/*
+ * this function tranforms a rule [start-end/step] into an array
+ * of matching numbers
+ * supported forms are:
+ * [start]                : just this number
+ * [start-end]            : all numbers from start to end
+ * [start-end/step]       : numbers from start to end with increment of step
+ * on return, format contains a printf format string which can be used
+ * to generate all the strings
+ */
+static int get_array_idx(char *rule, char *format, int **array)
+{
+        char *start, *end, *ptr;
+        unsigned int lo, hi, step;
+        int array_sz = 0;
+        int i, array_idx;
+        int rc;
+
+        start = strchr(rule, '[');
+        end = strchr(rule, ']');
+        if ((start == NULL) || (end == NULL)) {
+                *array = malloc(sizeof(int));
+                if (*array == NULL)
+                        return 0;
+                strcpy(format, rule);
+                array_sz = 1;
+                return array_sz;
+        }
+        *start = '\0';
+        *end = '\0';
+        end++;
+        start++;
+        /* put in format the printf format (the rule without the range) */
+        sprintf(format, "%s%%.4d%s", rule, end);
+
+        array_idx = 0;
+        array_sz = 0;
+        *array = NULL;
+        /* loop on , separator */
+        do {
+                /* extract the 3 fields */
+                rc = sscanf(start, "%u-%u/%u", &lo, &hi, &step);
+                switch (rc) {
+                case 0: {
+                        return 0;
+                }
+                case 1: {
+                        array_sz++;
+                        *array = realloc(*array, array_sz * sizeof(int));
+                        if (*array == NULL)
+                                return 0;
+                        (*array)[array_idx] = lo;
+                        array_idx++;
+                        break;
+                }
+                case 2: {
+                        step = 1;
+                        /* do not break to share code with case 3: */
+                }
+                case 3: {
+                        if ((hi < lo) || (step == 0))
+                                return 0;
+                        array_sz += (hi - lo) / step + 1;
+                        *array = realloc(*array, sizeof(int) * array_sz);
+                        if (*array == NULL)
+                                return 0;
+                        for (i = lo; i <= hi; i+=step, array_idx++)
+                                (*array)[array_idx] = i;
+                        break;
+                }
+                }
+                ptr = strchr(start, ',');
+                if (ptr != NULL)
+                        start = ptr + 1;
+
+        } while (ptr != NULL);
+        return array_sz;
+}
+
+static int extract_fsname_poolname(char *arg, char *fsname, char *poolname)
+{
+        char *ptr;
+        int len;
+        int rc;
+
+        strcpy(fsname, arg);
+        ptr = strchr(fsname, '.');
+        if (ptr == NULL) {
+                fprintf(stderr, ". is missing in %s\n", fsname);
+                rc = -EINVAL;
+                goto err;
+        }
+
+        len = ptr - fsname;
+        if (len == 0) {
+                fprintf(stderr, "fsname is empty\n");
+                rc = -EINVAL;
+                goto err;
+        }
+
+        len = strlen(ptr + 1);
+        if (len == 0) {
+                fprintf(stderr, "poolname is empty\n");
+                rc = -EINVAL;
+                goto err;
+        }
+        if (len > MAXPOOLNAME) {
+                fprintf(stderr,
+                        "poolname %s is too long (length is %d max is %d)\n",
+                        ptr + 1, len, MAXPOOLNAME);
+                rc = -ENAMETOOLONG;
+                goto err;
+        }
+        strncpy(poolname, ptr + 1, MAXPOOLNAME);
+        poolname[MAXPOOLNAME] = '\0';
+        *ptr = '\0';
+        return 0;
+
+err:
+        fprintf(stderr, "argument %s must be <fsname>.<poolname>\n", arg);
+        return rc;
+}
+
+int jt_pool_cmd(int argc, char **argv)
+{
+        enum lcfg_command_type cmd;
+        char fsname[MAXPATHLEN + 1];
+        char poolname[MAXPOOLNAME + 1];
+        char *ostnames_buf = NULL;
+        int i, rc;
+        int *array = NULL, array_sz;
+        struct {
+                int     rc;
+                char   *ostname;
+        } *cmds = NULL;
+
+        switch (argc) {
+        case 0:
+        case 1: return CMD_HELP;
+        case 2: {
+                if (strcmp("pool_new", argv[0]) == 0)
+                        cmd = LCFG_POOL_NEW;
+                else if (strcmp("pool_destroy", argv[0]) == 0)
+                        cmd = LCFG_POOL_DEL;
+                else if (strcmp("pool_list", argv[0]) == 0)
+                         return llapi_poollist(argv[1]);
+                else return CMD_HELP;
+
+                rc = extract_fsname_poolname(argv[1], fsname, poolname);
+                if (rc)
+                        break;
+
+                rc = pool_cmd(cmd, argv[0], argv[1],
+                              fsname, poolname, NULL);
+                if (rc)
+                        break;
+
+                check_pool_cmd_result(cmd, fsname, poolname, NULL);
+                break;
+        }
+        default: {
+                char format[2*MAX_OBD_NAME];
+
+                if (strcmp("pool_remove", argv[0]) == 0) {
+                        cmd = LCFG_POOL_REM;
+                } else if (strcmp("pool_add", argv[0]) == 0) {
+                        cmd = LCFG_POOL_ADD;
+                } else {
+                        return CMD_HELP;
+                }
+
+                rc = extract_fsname_poolname(argv[1], fsname, poolname);
+                if (rc)
+                        break;
+
+                for (i = 2; i < argc; i++) {
+                        int j;
+
+                        array_sz = get_array_idx(argv[i], format, &array);
+                        if (array_sz == 0)
+                                return CMD_HELP;
+
+                        cmds = malloc(array_sz * sizeof(cmds[0]));
+                        if (cmds != NULL) {
+                                ostnames_buf = malloc(array_sz *
+                                                      (MAX_OBD_NAME + 1));
+                        } else {
+                                free(array);
+                                rc = -ENOMEM;
+                                goto out;
+                        }
+
+                        for (j = 0; j < array_sz; j++) {
+                                char ostname[MAX_OBD_NAME + 1];
+
+                                snprintf(ostname, MAX_OBD_NAME, format,
+                                         array[j]);
+                                ostname[MAX_OBD_NAME] = '\0';
+
+                                rc = check_and_complete_ostname(fsname,ostname);
+                                if (rc) {
+                                        free(array);
+                                        free(cmds);
+                                        if (ostnames_buf)
+                                                free(ostnames_buf);
+                                        goto out;
+                                }
+                                if (ostnames_buf != NULL) {
+                                        cmds[j].ostname =
+                                          &ostnames_buf[(MAX_OBD_NAME + 1) * j];
+                                        strcpy(cmds[j].ostname, ostname);
+                                } else {
+                                        cmds[j].ostname = NULL;
+                                }
+                                cmds[j].rc = pool_cmd(cmd, argv[0], argv[1],
+                                                      fsname, poolname,
+                                                      ostname);
+                        }
+                        for (j = 0; j < array_sz; j++) {
+                                if (!cmds[j].rc) {
+                                        char ostname[MAX_OBD_NAME + 1];
+
+                                        if (!cmds[j].ostname) {
+                                                snprintf(ostname, MAX_OBD_NAME,
+                                                         format, array[j]);
+                                                ostname[MAX_OBD_NAME] = '\0';
+                                                check_and_complete_ostname(
+                                                        fsname, ostname);
+                                        } else {
+                                                strcpy(ostname,
+                                                       cmds[j].ostname);
+                                        }
+                                        check_pool_cmd_result(cmd, fsname,
+                                                              poolname,ostname);
+                                }
+                        }
+                        if (array_sz > 0)
+                                free(array);
+                        if (cmds)
+                                free(cmds);
+                        if (ostnames_buf);
+                                free(ostnames_buf);
+                }
+                return 0;
+        }
+        }
+
+
+out:
+        if ((rc == -EINVAL) || (rc == -ENOENT))
+                fprintf(stderr, "Does the fs, pool or ost exist?\n");
+        if (rc != 0) {
+                errno = -rc;
+                perror(argv[0]);
+        }
+
+        return rc;
 }
