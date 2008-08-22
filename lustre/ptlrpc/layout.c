@@ -822,12 +822,12 @@ const struct req_msg_field RMF_OBD_ID =
 EXPORT_SYMBOL(RMF_OBD_ID);
 
 const struct req_msg_field RMF_FIEMAP_KEY =
-        DEFINE_MSGF("FIEMAP", 0, sizeof(struct ll_fiemap_info_key),
+        DEFINE_MSGF("fiemap", 0, sizeof(struct ll_fiemap_info_key),
                     lustre_swab_fiemap);
 EXPORT_SYMBOL(RMF_FIEMAP_KEY);
 
 const struct req_msg_field RMF_FIEMAP_VAL =
-        DEFINE_MSGF("FIEMAP", 0, -1, lustre_swab_fiemap);
+        DEFINE_MSGF("fiemap", 0, -1, lustre_swab_fiemap);
 EXPORT_SYMBOL(RMF_FIEMAP_VAL);
 
 /*
