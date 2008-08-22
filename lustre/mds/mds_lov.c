@@ -207,11 +207,11 @@ static int mds_lov_update_max_ost(struct mds_obd *mds, obd_id index)
                 stripes = min_t(__u32, LOV_MAX_STRIPE_COUNT,
                                 mds->mds_lov_objid_count);
 
-                mds->mds_max_mdsize = lov_mds_md_size(stripes);
+                mds->mds_max_mdsize = lov_mds_md_size(stripes, LOV_MAGIC_V3);
                 mds->mds_max_cookiesize = stripes * sizeof(struct llog_cookie);
-                CDEBUG(D_CONFIG, "updated max_mdsize/max_cookiesize for %d stripes: "
-                       "%d/%d\n", mds->mds_max_mdsize, mds->mds_max_cookiesize,
-                       stripes);
+                CDEBUG(D_CONFIG, "updated max_mdsize/max_cookiesize for %d "
+                       "stripes: %d/%d\n", mds->mds_max_mdsize,
+                       mds->mds_max_cookiesize, stripes);
         }
 
         EXIT;
@@ -222,14 +222,20 @@ int mds_lov_prepare_objids(struct obd_device *obd, struct lov_mds_md *lmm)
 {
         int rc = 0;
         __u32 j;
+        struct lov_ost_data_v1 *lmm_objects;
 
         /* if we create file without objects - lmm is NULL */
         if (lmm == NULL)
                 return 0;
 
         mutex_down(&obd->obd_dev_sem);
+        if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V3)
+                lmm_objects = ((struct lov_mds_md_v3 *)lmm)->lmm_objects;
+        else
+                lmm_objects = lmm->lmm_objects;
+
         for (j = 0; j < le32_to_cpu(lmm->lmm_stripe_count); j++) {
-                __u32 i = le32_to_cpu(lmm->lmm_objects[j].l_ost_idx);
+                __u32 i = le32_to_cpu(lmm_objects[j].l_ost_idx);
                 if (mds_lov_update_max_ost(&obd->u.mds, i)) {
                         rc = -ENOMEM;
                         break;
@@ -245,15 +251,21 @@ void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm)
 {
         struct mds_obd *mds = &obd->u.mds;
         int j;
+        struct lov_ost_data_v1 *lmm_objects;
         ENTRY;
 
         /* if we create file without objects - lmm is NULL */
         if (lmm == NULL)
                 return;
 
+        if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V3)
+                lmm_objects = ((struct lov_mds_md_v3 *)lmm)->lmm_objects;
+        else
+                lmm_objects = lmm->lmm_objects;
+
         for (j = 0; j < le32_to_cpu(lmm->lmm_stripe_count); j++) {
-                __u32 i = le32_to_cpu(lmm->lmm_objects[j].l_ost_idx);
-                obd_id id = le64_to_cpu(lmm->lmm_objects[j].l_object_id);
+                __u32 i = le32_to_cpu(lmm_objects[j].l_ost_idx);
+                obd_id id = le64_to_cpu(lmm_objects[j].l_object_id);
                 __u32 page = i / OBJID_PER_PAGE();
                 __u32 idx = i % OBJID_PER_PAGE();
                 obd_id *data;
@@ -286,7 +298,7 @@ static int mds_lov_update_from_read(struct mds_obd *mds, obd_id *data,
                 stripes = min_t(__u32, LOV_MAX_STRIPE_COUNT,
                                 mds->mds_lov_objid_count);
 
-                mds->mds_max_mdsize = lov_mds_md_size(stripes);
+                mds->mds_max_mdsize = lov_mds_md_size(stripes, LOV_MAGIC_V3);
                 mds->mds_max_cookiesize = stripes * sizeof(struct llog_cookie);
                 CDEBUG(D_CONFIG, "updated max_mdsize/max_cookiesize for %d stripes: "
                        "%d/%d\n", mds->mds_max_mdsize, mds->mds_max_cookiesize,
@@ -1133,15 +1145,46 @@ int mds_get_default_md(struct obd_device *obd, struct lov_mds_md *lmm,
  * reason.  We will not delete the old lmm data until we have written the
  * new format lmm data in fsfilt_set_md(). */
 int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
-                       struct lov_mds_md *lmm, int lmm_size)
+                       struct lov_mds_md *lmm, int lmm_size,
+                       __u64 connect_flags)
 {
         struct lov_stripe_md *lsm = NULL;
         void *handle;
         int rc, err;
         ENTRY;
 
-        if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC ||
-            le32_to_cpu(lmm->lmm_magic == LOV_MAGIC_JOIN))
+        if (((connect_flags & OBD_CONNECT_LOV_V3) == 0) &&
+            (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V3)) {
+                /* client does not support LOV_MAGIC_V3, so we have to convert
+                 * it to V1
+                 * we convert the lmm from v3 to v1
+                 * and return the new size (which is smaller)
+                 * the caller supports this way to return the new size */
+                int new_lmm_size;
+
+                lmm->lmm_magic = cpu_to_le32(LOV_MAGIC_V1);
+                /* lmm_stripe_count for non reg files is not used or -1 */
+                if (!S_ISREG(inode->i_mode)) {
+                        new_lmm_size = lov_mds_md_size(0, LOV_MAGIC_V1);
+                } else {
+                        __u32 lmm_stripe_count;
+
+                        lmm_stripe_count = le32_to_cpu(lmm->lmm_stripe_count);
+                        new_lmm_size = lov_mds_md_size(lmm_stripe_count,
+                                                       LOV_MAGIC_V1);
+                        /* move the objects to the new place */
+                        memmove(lmm->lmm_objects,
+                                ((struct lov_mds_md_v3 *)lmm)->lmm_objects,
+                                lmm_stripe_count * sizeof(struct lov_ost_data_v1));
+                }
+                /* even if new size is smaller than old one,
+                 * this should not generate memory leak */
+                RETURN(new_lmm_size);
+        }
+
+        if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V1 ||
+            le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V3 ||
+            le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_JOIN)
                 RETURN(0);
 
         CDEBUG(D_INODE, "converting LOV EA on %lu/%u from %#08x to %#08x\n",
