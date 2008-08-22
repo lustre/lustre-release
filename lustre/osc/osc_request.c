@@ -3327,32 +3327,48 @@ static int osc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
  *
  * @lmmu is a pointer to an in-core struct with lmm_ost_count indicating
  * the maximum number of OST indices which will fit in the user buffer.
- * lmm_magic must be LOV_MAGIC (we only use 1 slot here).
+ * lmm_magic must be LOV_MAGIC_V1 or LOV_MAGIC_V3 (we only use 1 slot here).
  */
 static int osc_getstripe(struct lov_stripe_md *lsm, struct lov_user_md *lump)
 {
-        struct lov_user_md lum, *lumk;
+        /* we use lov_user_md_v3 because it is larger than lov_user_md_v1 */
+        struct lov_user_md_v3 lum, *lumk;
         int rc = 0, lum_size;
+        struct lov_user_ost_data_v1 *lmm_objects;
         ENTRY;
 
         if (!lsm)
                 RETURN(-ENODATA);
 
-        if (copy_from_user(&lum, lump, sizeof(lum)))
+        /* we only need the header part from user space to get lmm_magic and
+         * lmm_stripe_count, (the header part is common to v1 and v3) */
+        lum_size = sizeof(struct lov_user_md_v1);
+        if (copy_from_user(&lum, lump, lum_size))
                 RETURN(-EFAULT);
 
-        if (lum.lmm_magic != LOV_USER_MAGIC)
+        if ((lum.lmm_magic != LOV_USER_MAGIC_V1) &&
+            (lum.lmm_magic != LOV_USER_MAGIC_V3))
                 RETURN(-EINVAL);
 
+        /* lov_user_md_vX and lov_mds_md_vX must have the same size */
+        LASSERT(sizeof(struct lov_user_md_v1) == sizeof(struct lov_mds_md_v1));
+        LASSERT(sizeof(struct lov_user_md_v3) == sizeof(struct lov_mds_md_v3));
+        LASSERT(sizeof(lum.lmm_objects[0]) == sizeof(lumk->lmm_objects[0]));
+
+        /* we can use lov_mds_md_size() to compute lum_size
+         * because lov_user_md_vX and lov_mds_md_vX have the same size */
         if (lum.lmm_stripe_count > 0) {
-                lum_size = sizeof(lum) + sizeof(lum.lmm_objects[0]);
+                lum_size = lov_mds_md_size(lum.lmm_stripe_count, lum.lmm_magic);
                 OBD_ALLOC(lumk, lum_size);
                 if (!lumk)
                         RETURN(-ENOMEM);
-
-                lumk->lmm_objects[0].l_object_id = lsm->lsm_object_id;
+                if (lum.lmm_magic == LOV_USER_MAGIC_V1)
+                        lmm_objects = &(((struct lov_user_md_v1 *)lumk)->lmm_objects[0]);
+                else
+                        lmm_objects = &(lumk->lmm_objects[0]);
+                lmm_objects->l_object_id = lsm->lsm_object_id;
         } else {
-                lum_size = sizeof(lum);
+                lum_size = lov_mds_md_size(0, lum.lmm_magic);
                 lumk = &lum;
         }
 
