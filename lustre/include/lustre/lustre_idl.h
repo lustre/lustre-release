@@ -346,6 +346,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_CKSUM      0x20000000ULL /*support several cksum algos */
 #define OBD_CONNECT_FID        0x40000000ULL /* FID is supported */
 #define OBD_CONNECT_VBR        0x80000000ULL /* version based recovery */
+#define OBD_CONNECT_LOV_V3    0x100000000ULL /* client supports lov v3 ea */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
 
@@ -360,7 +361,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_IBITS | OBD_CONNECT_JOIN | \
                                 OBD_CONNECT_NODEVOH | OBD_CONNECT_ATTRFID | \
                                 OBD_CONNECT_CANCELSET | OBD_CONNECT_AT | \
-                                LRU_RESIZE_CONNECT_FLAG | OBD_CONNECT_VBR)
+                                LRU_RESIZE_CONNECT_FLAG | OBD_CONNECT_VBR |\
+                                OBD_CONNECT_LOV_V3)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
@@ -492,6 +494,7 @@ typedef __u32 obd_count;
 #define LOV_MAGIC_V1      0x0BD10BD0
 #define LOV_MAGIC         LOV_MAGIC_V1
 #define LOV_MAGIC_JOIN    0x0BD20BD0
+#define LOV_MAGIC_V3      0x0BD30BD0
 
 #define LOV_PATTERN_RAID0 0x001   /* stripes are used round-robin */
 #define LOV_PATTERN_RAID1 0x002   /* stripes are mirrors of each other */
@@ -500,6 +503,9 @@ typedef __u32 obd_count;
 
 #define LOV_OBJECT_GROUP_DEFAULT ~0ULL
 #define LOV_OBJECT_GROUP_CLEAR 0ULL
+
+#define MAXPOOLNAME 16
+#define POOLNAMEF "%.16s"
 
 #define lov_ost_data lov_ost_data_v1
 struct lov_ost_data_v1 {          /* per-stripe data structure (little-endian)*/
@@ -519,6 +525,18 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
         __u32 lmm_stripe_count;   /* num stripes in use for this object */
         struct lov_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 };
+
+struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */
+        __u32 lmm_magic;          /* magic number = LOV_MAGIC_V3 */
+        __u32 lmm_pattern;        /* LOV_PATTERN_RAID0, LOV_PATTERN_RAID1 */
+        __u64 lmm_object_id;      /* LOV object ID */
+        __u64 lmm_object_gr;      /* LOV object group */
+        __u32 lmm_stripe_size;    /* size of stripe in bytes */
+        __u32 lmm_stripe_count;   /* num stripes in use for this object */
+        char  lmm_pool_name[MAXPOOLNAME]; /* must be 32bit aligned */
+        struct lov_ost_data_v1 lmm_objects[0]; /* per-stripe data */
+};
+
 
 #define OBD_MD_FLID        (0x00000001ULL) /* object ID */
 #define OBD_MD_FLATIME     (0x00000002ULL) /* access time */
@@ -2008,8 +2026,10 @@ extern void lustre_swab_ost_body (struct ost_body *b);
 extern void lustre_swab_ost_last_id(obd_id *id);
 extern void lustre_swab_fiemap(struct ll_user_fiemap *fiemap);
 
-extern void lustre_swab_lov_user_md(struct lov_user_md *lum);
-extern void lustre_swab_lov_user_md_objects(struct lov_user_md *lum);
+extern void lustre_swab_lov_user_md_v1(struct lov_user_md_v1 *lum);
+extern void lustre_swab_lov_user_md_v3(struct lov_user_md_v3 *lum);
+extern void lustre_swab_lov_user_md_objects(struct lov_user_ost_data *lod,
+                                            int stripe_count);
 extern void lustre_swab_lov_user_md_join(struct lov_user_md_join *lumj);
 
 /* llog_swab.c */
