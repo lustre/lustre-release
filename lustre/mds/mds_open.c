@@ -411,7 +411,8 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
 
                         lmm_size = lmm_sz;
                         rc = mds_get_md(obd, dchild->d_parent->d_inode,
-                                        lmm, &lmm_size, 1, 0);
+                                        lmm, &lmm_size, 1, 0,
+                                        req->rq_export->exp_connect_flags);
                         if (rc > 0)
                                 rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
                                                    mds->mds_osc_exp,
@@ -581,7 +582,8 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         mds_pack_inode2body(body, dchild->d_inode);
         if (S_ISREG(dchild->d_inode->i_mode)) {
                 rc = mds_pack_md(obd, req->rq_repmsg, DLM_REPLY_REC_OFF + 1,
-                                 body, dchild->d_inode, 1, 0);
+                                 body, dchild->d_inode, 1, 0,
+                                 req->rq_export->exp_connect_flags);
 
                 if (rc)
                         LASSERT(rc == req->rq_status);
@@ -719,7 +721,8 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
         if (S_ISREG(dchild->d_inode->i_mode) &&
             !(body->valid & OBD_MD_FLEASIZE)) {
                 rc = mds_pack_md(obd, req->rq_repmsg, DLM_REPLY_REC_OFF + 1,
-                                 body, dchild->d_inode, 0, 0);
+                                 body, dchild->d_inode, 0, 0,
+                                 req->rq_export->exp_connect_flags);
                 if (rc) {
                         UNLOCK_INODE_MUTEX(dchild->d_inode);
                         RETURN(rc);
@@ -1559,7 +1562,8 @@ int mds_close(struct ptlrpc_request *req, int offset)
 
                 mds_pack_inode2body(body, inode);
                 mds_pack_md(obd, req->rq_repmsg, REPLY_REC_OFF + 1, body, inode,
-                            MDS_PACK_MD_LOCK, 0);
+                            MDS_PACK_MD_LOCK, 0,
+                            req->rq_export->exp_connect_flags);
         }
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
