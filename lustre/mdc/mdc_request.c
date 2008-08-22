@@ -1334,7 +1334,7 @@ int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp)
 {
         struct obd_device *obd = mdc_exp->exp_obd;
         struct client_obd *cli = &obd->u.cli;
-        struct lov_stripe_md lsm = { .lsm_magic = LOV_MAGIC };
+        struct lov_stripe_md lsm = { .lsm_magic = LOV_MAGIC_V3 };
         struct lov_desc desc;
         __u32 valsize = sizeof(desc);
         __u32 stripes;
