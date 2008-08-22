@@ -107,6 +107,10 @@ Details    : add workaround for get valid ost count for avoid warnings about
 	     to wrong pointer.
 
 Severity   : enhancement
+Bugzilla   : 15899
+Description: File striping can now be set to use an arbitrary pool of OSTs.
+	
+Severity   : enhancement
 Bugzilla   : 16573
 Description: Export bytes_read/bytes_write count on OSC/OST.
 
