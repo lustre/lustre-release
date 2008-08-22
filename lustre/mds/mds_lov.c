@@ -202,6 +202,7 @@ static int mds_lov_update_max_ost(struct mds_obd *mds, obd_id index)
         if (data[off] == 0) {
                 __u32 stripes;
 
+                data[off] = 1;
                 mds->mds_lov_objid_count++;
                 stripes = min_t(__u32, LOV_MAX_STRIPE_COUNT,
                                 mds->mds_lov_objid_count);
@@ -503,7 +504,10 @@ static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov,
         CDEBUG(D_CONFIG, "updated lov_desc, tgt_count: %d\n",
                mds->mds_lov_desc.ld_tgt_count);
 
-        if (mds_lov_update_max_ost(mds, index))
+        mutex_down(&obd->obd_dev_sem);
+        rc = mds_lov_update_max_ost(mds, index);
+        mutex_up(&obd->obd_dev_sem);
+        if (rc)
                 GOTO(out, rc = -ENOMEM);
 
         /* If we added a target we have to reconnect the llogs */
@@ -532,11 +536,8 @@ static int mds_lov_update_mds(struct obd_device *obd,
         ENTRY;
 
         /* Don't let anyone else mess with mds_lov_objids now */
-        mutex_down(&obd->obd_dev_sem);
-
         old_count = mds->mds_lov_desc.ld_tgt_count;
         rc = mds_lov_update_desc(obd, mds->mds_osc_exp, idx);
-        mutex_up(&obd->obd_dev_sem);
         if (rc)
                 GOTO(out, rc);
 
@@ -1084,10 +1085,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
                    mds_lov_connect. */
                 idx = mds_lov_get_idx(obd->u.mds.mds_osc_exp,
                                       &watched->u.cli.cl_target_uuid);
-                mutex_down(&obd->obd_dev_sem);
                 rc = mds_lov_update_desc(obd, obd->u.mds.mds_osc_exp, idx);
-                mutex_up(&obd->obd_dev_sem);
-
                 mds_allow_cli(obd, CONFIG_SYNC);
                 RETURN(rc);
         }
