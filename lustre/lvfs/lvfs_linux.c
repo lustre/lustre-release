@@ -116,17 +116,6 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
         ASSERT_CTXT_MAGIC(new_ctx->magic);
         OBD_SET_CTXT_MAGIC(save);
 
-        /*
-        CDEBUG(D_INFO,
-               "= push %p->%p = cur fs %p pwd %p:d%d:i%d (%.*s), pwdmnt %p:%d\n",
-               save, current, current->fs, current->fs->pwd,
-               atomic_read(&current->fs->pwd->d_count),
-               atomic_read(&current->fs->pwd->d_inode->i_count),
-               current->fs->pwd->d_name.len, current->fs->pwd->d_name.name,
-               current->fs->pwdmnt,
-               atomic_read(&current->fs->pwdmnt->mnt_count));
-        */
-
         save->fs = get_fs();
         LASSERT(atomic_read(&current->fs->pwd->d_count));
         LASSERT(atomic_read(&new_ctx->pwd->d_count));
@@ -161,38 +150,14 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
         current->fs->umask = 0; /* umask already applied on client */
         set_fs(new_ctx->fs);
         ll_set_fs_pwd(current->fs, new_ctx->pwdmnt, new_ctx->pwd);
-
-        /*
-        CDEBUG(D_INFO,
-               "= push %p->%p = cur fs %p pwd %p:d%d:i%d (%.*s), pwdmnt %p:%d\n",
-               new_ctx, current, current->fs, current->fs->pwd,
-               atomic_read(&current->fs->pwd->d_count),
-               atomic_read(&current->fs->pwd->d_inode->i_count),
-               current->fs->pwd->d_name.len, current->fs->pwd->d_name.name,
-               current->fs->pwdmnt,
-               atomic_read(&current->fs->pwdmnt->mnt_count));
-        */
 }
 EXPORT_SYMBOL(push_ctxt);
 
 void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
               struct lvfs_ucred *uc)
 {
-        //printk("pc0");
         ASSERT_CTXT_MAGIC(saved->magic);
-        //printk("pc1");
         ASSERT_KERNEL_CTXT("popping non-kernel context!\n");
-
-        /*
-        CDEBUG(D_INFO,
-               " = pop  %p==%p = cur %p pwd %p:d%d:i%d (%.*s), pwdmnt %p:%d\n",
-               new_ctx, current, current->fs, current->fs->pwd,
-               atomic_read(&current->fs->pwd->d_count),
-               atomic_read(&current->fs->pwd->d_inode->i_count),
-               current->fs->pwd->d_name.len, current->fs->pwd->d_name.name,
-               current->fs->pwdmnt,
-               atomic_read(&current->fs->pwdmnt->mnt_count));
-        */
 
         LASSERTF(current->fs->pwd == new_ctx->pwd, "%p != %p\n",
                  current->fs->pwd, new_ctx->pwd);
@@ -216,17 +181,6 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
                                uc->luc_identity ? uc->luc_identity->mi_ginfo :
                                                   NULL);
         }
-
-        /*
-        CDEBUG(D_INFO,
-               "= pop  %p->%p = cur fs %p pwd %p:d%d:i%d (%.*s), pwdmnt %p:%d\n",
-               saved, current, current->fs, current->fs->pwd,
-               atomic_read(&current->fs->pwd->d_count),
-               atomic_read(&current->fs->pwd->d_inode->i_count),
-               current->fs->pwd->d_name.len, current->fs->pwd->d_name.name,
-               current->fs->pwdmnt,
-               atomic_read(&current->fs->pwdmnt->mnt_count));
-        */
 }
 EXPORT_SYMBOL(pop_ctxt);
 

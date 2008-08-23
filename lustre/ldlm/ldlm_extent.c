@@ -134,7 +134,9 @@ static void ldlm_extent_internal_policy_granted(struct ldlm_lock *req,
                         limiter.start = req_start;
 
                 if (interval_is_overlapped(tree->lit_root, &ext))
-                        printk("req_mode = %d, tree->lit_mode = %d, tree->lit_size = %d\n",
+                        CDEBUG(D_INFO, 
+                               "req_mode = %d, tree->lit_mode = %d, "
+                               "tree->lit_size = %d\n",
                                req_mode, tree->lit_mode, tree->lit_size);
                 interval_expand(tree->lit_root, &ext, &limiter);
                 limiter.start = max(limiter.start, ext.start);

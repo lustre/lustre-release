@@ -504,14 +504,14 @@ void __dbg_memdump(char *name, void *ptr, int size)
 
         OBD_ALLOC(buf, bufsize);
         if (!buf) {
-                printk("DUMP ERROR: can't alloc %d bytes\n", bufsize);
+                CDEBUG(D_ERROR, "DUMP ERROR: can't alloc %d bytes\n", bufsize);
                 return;
         }
 
         for (i = 0; i < size; i++)
                 sprintf(&buf[i+i], "%02x", (__u8) p[i]);
         buf[size + size] = '\0';
-        printk("DUMP %s@%p(%d): %s\n", name, ptr, size, buf);
+        LCONSOLE_INFO("DUMP %s@%p(%d): %s\n", name, ptr, size, buf);
         OBD_FREE(buf, bufsize);
 }
 

@@ -120,7 +120,7 @@ int lustre_read_quota_info(struct lustre_quota_info *lqi, int type)
                              sizeof(struct lustre_disk_dqinfo), &offset);
         set_fs(fs);
         if (size != sizeof(struct lustre_disk_dqinfo)) {
-                printk(KERN_WARNING "Can't read info structure on device %s.\n",
+                CDEBUG(D_WARNING, "Can't read info structure on device %s.\n",
                        f->f_vfsmnt->mnt_sb->s_id);
                 return -1;
         }
@@ -156,7 +156,7 @@ int lustre_write_quota_info(struct lustre_quota_info *lqi, int type)
                               sizeof(struct lustre_disk_dqinfo), &offset);
         set_fs(fs);
         if (size != sizeof(struct lustre_disk_dqinfo)) {
-                printk(KERN_WARNING
+                CDEBUG(D_WARNING, 
                        "Can't write info structure on device %s.\n",
                        f->f_vfsmnt->mnt_sb->s_id);
                 return -1;
@@ -194,7 +194,7 @@ static dqbuf_t getdqbuf(void)
 {
         dqbuf_t buf = kmalloc(LUSTRE_DQBLKSIZE, GFP_NOFS);
         if (!buf)
-                printk(KERN_WARNING
+                CDEBUG(D_WARNING, 
                        "VFS: Not enough memory for quota buffers.\n");
         return buf;
 }
@@ -322,7 +322,7 @@ static int remove_free_dqentry(struct file *filp,
         freedqbuf(tmpbuf);
         dh->dqdh_next_free = dh->dqdh_prev_free = cpu_to_le32(0);
         if (write_blk(filp, blk, buf) < 0)      /* No matter whether write succeeds block is out of list */
-                printk(KERN_ERR
+                CDEBUG(D_ERROR, 
                        "VFS: Can't write block (%u) with free entries.\n", blk);
         return 0;
 out_buf:
@@ -399,7 +399,7 @@ static uint find_free_dqentry(struct lustre_dquot *dquot, int *err)
         }
         if (le16_to_cpu(dh->dqdh_entries) + 1 >= LUSTRE_DQSTRINBLK)     /* Block will be full? */
                 if ((*err = remove_free_dqentry(filp, info, buf, blk)) < 0) {
-                        printk(KERN_ERR
+                        CDEBUG(D_ERROR, 
                                "VFS: find_free_dqentry(): Can't remove block (%u) from entry free list.\n",
                                blk);
                         goto out_buf;
@@ -411,14 +411,14 @@ static uint find_free_dqentry(struct lustre_dquot *dquot, int *err)
              memcmp(&fakedquot, ddquot + i, sizeof(fakedquot)); i++) ;
 
         if (i == LUSTRE_DQSTRINBLK) {
-                printk(KERN_ERR
+                CDEBUG(D_ERROR, 
                        "VFS: find_free_dqentry(): Data block full but it shouldn't.\n");
                 *err = -EIO;
                 goto out_buf;
         }
 
         if ((*err = write_blk(filp, blk, buf)) < 0) {
-                printk(KERN_ERR
+                CDEBUG(D_ERROR,
                        "VFS: find_free_dqentry(): Can't write quota data block %u.\n",
                        blk);
                 goto out_buf;
@@ -456,7 +456,7 @@ static int do_insert_tree(struct lustre_dquot *dquot, uint * treeblk, int depth)
                 newact = 1;
         } else {
                 if ((ret = read_blk(filp, *treeblk, buf)) < 0) {
-                        printk(KERN_ERR
+                        CDEBUG(D_ERROR,
                                "VFS: Can't read tree quota block %u.\n",
                                *treeblk);
                         goto out_buf;
@@ -469,7 +469,7 @@ static int do_insert_tree(struct lustre_dquot *dquot, uint * treeblk, int depth)
         if (depth == LUSTRE_DQTREEDEPTH - 1) {
 
                 if (newblk) {
-                        printk(KERN_ERR
+                        CDEBUG(D_ERROR, 
                                "VFS: Inserting already present quota entry (block %u).\n",
                                ref[GETIDINDEX(dquot->dq_id, depth)]);
                         ret = -EIO;
@@ -510,7 +510,7 @@ static int lustre_write_dquot(struct lustre_dquot *dquot)
 
         if (!dquot->dq_off)
                 if ((ret = dq_insert_tree(dquot)) < 0) {
-                        printk(KERN_ERR
+                        CDEBUG(D_ERROR,
                                "VFS: Error %Zd occurred while creating quota.\n",
                                ret);
                         return ret;
@@ -530,7 +530,7 @@ static int lustre_write_dquot(struct lustre_dquot *dquot)
                                 sizeof(struct lustre_disk_dqblk), &offset);
         set_fs(fs);
         if (ret != sizeof(struct lustre_disk_dqblk)) {
-                printk(KERN_WARNING "VFS: dquota write failed on dev %s\n",
+                CDEBUG(D_WARNING, "VFS: dquota write failed on dev %s\n",
                        filp->f_dentry->d_sb->s_id);
                 if (ret >= 0)
                         ret = -ENOSPC;
@@ -553,13 +553,13 @@ static int free_dqentry(struct lustre_dquot *dquot, uint blk)
         if (!buf)
                 return -ENOMEM;
         if (dquot->dq_off >> LUSTRE_DQBLKSIZE_BITS != blk) {
-                printk(KERN_ERR
+                CDEBUG(D_ERROR,
                        "VFS: Quota structure has offset to other block (%u) than it should (%u).\n",
                        blk, (uint) (dquot->dq_off >> LUSTRE_DQBLKSIZE_BITS));
                 goto out_buf;
         }
         if ((ret = read_blk(filp, blk, buf)) < 0) {
-                printk(KERN_ERR "VFS: Can't read quota data block %u\n", blk);
+                CDEBUG(D_ERROR, "VFS: Can't read quota data block %u\n", blk);
                 goto out_buf;
         }
         dh = (struct lustre_disk_dqdbheader *)buf;
@@ -567,7 +567,7 @@ static int free_dqentry(struct lustre_dquot *dquot, uint blk)
         if (!le16_to_cpu(dh->dqdh_entries)) {   /* Block got free? */
                 if ((ret = remove_free_dqentry(filp, info, buf, blk)) < 0 ||
                     (ret = put_free_dqblk(filp, info, buf, blk)) < 0) {
-                        printk(KERN_ERR
+                        CDEBUG(D_ERROR,
                                "VFS: Can't move quota data block (%u) to free list.\n",
                                blk);
                         goto out_buf;
@@ -580,13 +580,13 @@ static int free_dqentry(struct lustre_dquot *dquot, uint blk)
                         /* Insert will write block itself */
                         if ((ret =
                              insert_free_dqentry(filp, info, buf, blk)) < 0) {
-                                printk(KERN_ERR
+                                CDEBUG(D_ERROR,
                                        "VFS: Can't insert quota data block (%u) to free entry list.\n",
                                        blk);
                                 goto out_buf;
                         }
                 } else if ((ret = write_blk(filp, blk, buf)) < 0) {
-                        printk(KERN_ERR
+                        CDEBUG(D_ERROR,
                                "VFS: Can't write quota data block %u\n", blk);
                         goto out_buf;
                 }
@@ -611,7 +611,7 @@ static int remove_tree(struct lustre_dquot *dquot, uint * blk, int depth)
         if (!buf)
                 return -ENOMEM;
         if ((ret = read_blk(filp, *blk, buf)) < 0) {
-                printk(KERN_ERR "VFS: Can't read quota data block %u\n", *blk);
+                CDEBUG(D_ERROR, "VFS: Can't read quota data block %u\n", *blk);
                 goto out_buf;
         }
         newblk = le32_to_cpu(ref[GETIDINDEX(dquot->dq_id, depth)]);
@@ -629,7 +629,7 @@ static int remove_tree(struct lustre_dquot *dquot, uint * blk, int depth)
                         put_free_dqblk(filp, info, buf, *blk);
                         *blk = 0;
                 } else if ((ret = write_blk(filp, *blk, buf)) < 0)
-                        printk(KERN_ERR
+                        CDEBUG(D_ERROR,
                                "VFS: Can't write quota tree block %u.\n", *blk);
         }
 out_buf:
@@ -659,7 +659,7 @@ static loff_t find_block_dqentry(struct lustre_dquot *dquot, uint blk)
         if (!buf)
                 return -ENOMEM;
         if ((ret = read_blk(filp, blk, buf)) < 0) {
-                printk(KERN_ERR "VFS: Can't read quota tree block %u.\n", blk);
+                CDEBUG(D_ERROR, "VFS: Can't read quota tree block %u.\n", blk);
                 goto out_buf;
         }
         if (dquot->dq_id)
@@ -677,7 +677,7 @@ static loff_t find_block_dqentry(struct lustre_dquot *dquot, uint blk)
                                 break;
         }
         if (i == LUSTRE_DQSTRINBLK) {
-                printk(KERN_ERR
+                CDEBUG(D_ERROR,
                        "VFS: Quota for id %u referenced but not present.\n",
                        dquot->dq_id);
                 ret = -EIO;
@@ -703,7 +703,7 @@ static loff_t find_tree_dqentry(struct lustre_dquot *dquot, uint blk, int depth)
         if (!buf)
                 return -ENOMEM;
         if ((ret = read_blk(filp, blk, buf)) < 0) {
-                printk(KERN_ERR "VFS: Can't read quota tree block %u.\n", blk);
+                CDEBUG(D_ERROR, "VFS: Can't read quota tree block %u.\n", blk);
                 goto out_buf;
         }
         ret = 0;
@@ -736,14 +736,14 @@ int lustre_read_dquot(struct lustre_dquot *dquot)
 
         /* Invalidated quota? */
         if (!dquot->dq_info || !(filp = dquot->dq_info->qi_files[type])) {
-                printk(KERN_ERR "VFS: Quota invalidated while reading!\n");
+                CDEBUG(D_ERROR, "VFS: Quota invalidated while reading!\n");
                 return -EIO;
         }
 
         offset = find_dqentry(dquot);
         if (offset <= 0) {      /* Entry not present? */
                 if (offset < 0)
-                        printk(KERN_ERR
+                        CDEBUG(D_ERROR,
                                "VFS: Can't read quota structure for id %u.\n",
                                dquot->dq_id);
                 dquot->dq_off = 0;
@@ -760,7 +760,7 @@ int lustre_read_dquot(struct lustre_dquot *dquot)
                     sizeof(struct lustre_disk_dqblk)) {
                         if (ret >= 0)
                                 ret = -EIO;
-                        printk(KERN_ERR
+                        CDEBUG(D_ERROR,
                                "VFS: Error while reading quota structure for id %u.\n",
                                dquot->dq_id);
                         memset(&ddquot, 0, sizeof(struct lustre_disk_dqblk));
@@ -824,7 +824,7 @@ int lustre_init_quota_info(struct lustre_quota_info *lqi, int type)
                                sizeof(struct lustre_disk_dqheader), &offset);
 
         if (size != sizeof(struct lustre_disk_dqheader)) {
-                printk(KERN_ERR "error writing quoafile header (rc:%d)\n", rc);
+                CDEBUG(D_ERROR, "error writing quoafile header (rc:%d)\n", rc);
                 rc = size;
         }
         if (rc)
@@ -876,7 +876,7 @@ static int walk_block_dqentry(struct file *filp, struct inode *inode, int type,
         if (!buf)
                 return -ENOMEM;
         if ((ret = quota_read(filp, inode, type, blk, buf)) < 0) {
-                printk(KERN_ERR "VFS: Can't read quota tree block %u.\n", blk);
+                CDEBUG(D_ERROR, "VFS: Can't read quota tree block %u.\n", blk);
                 goto out_buf;
         }
         ret = 0;
@@ -924,7 +924,7 @@ static int walk_tree_dqentry(struct file *filp, struct inode *inode, int type,
         if (!buf)
                 return -ENOMEM;
         if ((ret = quota_read(filp, inode, type, blk, buf)) < 0) {
-                printk(KERN_ERR "VFS: Can't read quota tree block %u.\n", blk);
+                CDEBUG(D_ERROR, "VFS: Can't read quota tree block %u.\n", blk);
                 goto out_buf;
         }
         ret = 0;
@@ -956,18 +956,18 @@ int lustre_get_qids(struct file *fp, struct inode *inode, int type,
         int rc;
 
         if (!check_quota_file(fp, inode, type)) {
-                printk(KERN_ERR "unknown quota file format!\n");
+                CDEBUG(D_ERROR, "unknown quota file format!\n");
                 return -EINVAL;
         }
         if (!list_empty(list)) {
-                printk(KERN_ERR "not empty list\n");
+                CDEBUG(D_ERROR, "not empty list\n");
                 return -EINVAL;
         }
 
         INIT_LIST_HEAD(&blk_list);
         rc = walk_tree_dqentry(fp, inode, type, LUSTRE_DQTREEOFF, 0, &blk_list);
         if (rc) {
-                printk(KERN_ERR "walk through quota file failed!(%d)\n", rc);
+                CDEBUG(D_ERROR, "walk through quota file failed!(%d)\n", rc);
                 goto out_free;
         }
         if (list_empty(&blk_list))
@@ -985,7 +985,7 @@ int lustre_get_qids(struct file *fp, struct inode *inode, int type,
 
                 memset(buf, 0, LUSTRE_DQBLKSIZE);
                 if ((ret = quota_read(fp, inode, type, blk_item->blk, buf))<0) {
-                        printk(KERN_ERR
+                        CDEBUG(D_ERROR,
                                "VFS: Can't read quota tree block %u.\n",
                                blk_item->blk);
                         rc = ret;

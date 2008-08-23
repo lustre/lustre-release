@@ -596,7 +596,7 @@ static int __init obdecho_init(void)
         int rc;
 
         ENTRY;
-        printk(KERN_INFO "Lustre: Echo OBD driver; http://www.lustre.org/\n");
+        LCONSOLE_INFO("Lustre: Echo OBD driver; http://www.lustre.org/\n");
 
         LASSERT(CFS_PAGE_SIZE % OBD_ECHO_BLOCK_SIZE == 0);
 

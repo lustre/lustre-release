@@ -536,17 +536,13 @@ int init_obdclass(void)
 #ifdef __KERNEL__
         int lustre_register_fs(void);
 
-        printk(KERN_INFO "Lustre: OBD class driver, info@clusterfs.com\n");
-        printk(KERN_INFO "        Lustre Version: "LUSTRE_VERSION_STRING"\n");
-        printk(KERN_INFO "        Build Version: "BUILD_VERSION"\n");
-
         for (i = CAPA_SITE_CLIENT; i < CAPA_SITE_MAX; i++)
                 CFS_INIT_LIST_HEAD(&capa_list[i]);
-#else
-        CDEBUG(D_INFO, "Lustre: OBD class driver, info@clusterfs.com\n");
-        CDEBUG(D_INFO, "        Lustre Version: "LUSTRE_VERSION_STRING"\n");
-        CDEBUG(D_INFO, "        Build Version: "BUILD_VERSION"\n");
 #endif
+
+        LCONSOLE_INFO("Lustre: OBD class driver, info@clusterfs.com\n");
+        LCONSOLE_INFO("        Lustre Version: "LUSTRE_VERSION_STRING"\n");
+        LCONSOLE_INFO("        Build Version: "BUILD_VERSION"\n");
 
         spin_lock_init(&obd_types_lock);
         cfs_waitq_init(&obd_race_waitq);

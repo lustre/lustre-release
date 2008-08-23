@@ -180,13 +180,12 @@ static void print_quota_info(struct lustre_quota_info *lqi)
 
         for (i = 0; i < MAXQUOTAS; i++) {
                 dqinfo = &lqi->qi_info[i];
-                printk("%s quota info:\n", i == USRQUOTA ? "user " : "group");
-                printk
-                    ("dqi_bgrace(%u) dqi_igrace(%u) dqi_flags(%lu) dqi_blocks(%u) "
-                     "dqi_free_blk(%u) dqi_free_entry(%u)\n",
-                     dqinfo->dqi_bgrace, dqinfo->dqi_igrace, dqinfo->dqi_flags,
-                     dqinfo->dqi_blocks, dqinfo->dqi_free_blk,
-                     dqinfo->dqi_free_entry);
+                CDEBUG(D_INFO, "%s quota info:\n", i == USRQUOTA ? "user " : "group");
+                CDEBUG(D_INFO, "dqi_bgrace(%u) dqi_igrace(%u) dqi_flags(%lu) dqi_blocks(%u) "
+                       "dqi_free_blk(%u) dqi_free_entry(%u)\n",
+                       dqinfo->dqi_bgrace, dqinfo->dqi_igrace, dqinfo->dqi_flags,
+                       dqinfo->dqi_blocks, dqinfo->dqi_free_blk,
+                       dqinfo->dqi_free_entry);
         }
 #endif
 }
@@ -398,10 +397,10 @@ static int quotfmt_test_5(struct lustre_quota_info *lqi)
                 list_for_each_entry_safe(dqid, tmp, &list, di_link) {
                         list_del_init(&dqid->di_link);
                         if (rc == 0)
-                                printk("%d ", dqid->di_id);
+                                CDEBUG(D_INFO, "%d ", dqid->di_id);
                         kfree(dqid);
                 }
-                printk("\n");
+                CDEBUG(D_INFO, "\n");
         }
         return rc;
 #else
