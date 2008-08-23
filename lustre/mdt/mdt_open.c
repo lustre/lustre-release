@@ -1247,8 +1247,9 @@ int mdt_close(struct mdt_thread_info *info)
                 ma->ma_need = MA_INODE | MA_LOV | MA_COOKIE;
                 repbody->eadatasize = 0;
                 repbody->aclsize = 0;
-        } else
+        } else {
                 rc = err_serious(rc);
+        }
 
         med = &req->rq_export->exp_mdt_data;
         spin_lock(&med->med_open_lock);
