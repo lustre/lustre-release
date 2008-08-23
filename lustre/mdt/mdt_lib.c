@@ -107,7 +107,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
         LASSERT(req->rq_auth_gss);
         LASSERT(!req->rq_auth_usr_mdt);
         LASSERT(req->rq_user_desc);
-        
+
         ucred->mu_valid = UCRED_INVALID;
 
         ucred->mu_o_uid   = pud->pud_uid;
@@ -525,7 +525,7 @@ void mdt_shrink_reply(struct mdt_thread_info *info)
 
         acl_size = body->aclsize;
 
-        CDEBUG(D_INFO, "Shrink to md_size = %d cookie/acl_size = %d" 
+        CDEBUG(D_INFO, "Shrink to md_size = %d cookie/acl_size = %d"
                         " MDSCAPA = "LPX64", OSSCAPA = "LPX64"\n",
                         md_size, acl_size,
                         body->valid & OBD_MD_FLMDSCAPA,
@@ -546,14 +546,14 @@ void mdt_shrink_reply(struct mdt_thread_info *info)
                 req_capsule_shrink(pill, &RMF_ACL, acl_size, RCL_SERVER);
         else if (req_capsule_has_field(pill, &RMF_LOGCOOKIES, RCL_SERVER))
                 req_capsule_shrink(pill, &RMF_LOGCOOKIES,
-                                            acl_size, RCL_SERVER);
+                                   acl_size, RCL_SERVER);
 
         if (req_capsule_has_field(pill, &RMF_CAPA1, RCL_SERVER) &&
-                    !(body->valid & OBD_MD_FLMDSCAPA))
+            !(body->valid & OBD_MD_FLMDSCAPA))
                 req_capsule_shrink(pill, &RMF_CAPA1, 0, RCL_SERVER);
 
         if (req_capsule_has_field(pill, &RMF_CAPA2, RCL_SERVER) &&
-                !(body->valid & OBD_MD_FLOSSCAPA))
+            !(body->valid & OBD_MD_FLOSSCAPA))
                 req_capsule_shrink(pill, &RMF_CAPA2, 0, RCL_SERVER);
 
         /*
@@ -755,7 +755,7 @@ static inline int mdt_dlmreq_unpack(struct mdt_thread_info *info) {
                 if (info->mti_dlm_req == NULL)
                         RETURN(-EFAULT);
         }
-        
+
         RETURN(0);
 }
 
@@ -848,7 +848,7 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
         rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
         rr->rr_namelen = req_capsule_get_size(pill, &RMF_NAME, RCL_CLIENT) - 1;
         LASSERT(rr->rr_name && rr->rr_namelen > 0);
-        
+
 #ifdef CONFIG_FS_POSIX_ACL
         if (sp->sp_cr_flags & MDS_CREATE_RMT_ACL) {
                 if (S_ISDIR(attr->la_mode))
