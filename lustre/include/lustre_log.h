@@ -286,6 +286,10 @@ struct llog_commit_master {
          */
         struct ptlrpcd_ctl         lcm_pc;
         /**
+         * Busy resources waitq
+         */
+        cfs_waitq_t                lcm_waitq;
+        /**
          * Commit thread name buffer. Only used for thread start.
          */
         char                       lcm_name[LCM_NAME_SIZE];
