@@ -1984,7 +1984,7 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
 
         atomic_inc(&req->rq_import->imp_replay_inflight);
         CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
-        aa = (struct ldlm_async_args *)&req->rq_async_args;
+        aa = ptlrpc_req_async_args(req);
         aa->lock_handle = body->lock_handle[0];
         req->rq_interpret_reply = replay_lock_interpret;
         ptlrpcd_add_req(req);
