@@ -3536,7 +3536,7 @@ static int osc_get_info(struct obd_export *exp, obd_count keylen,
                 struct ptlrpc_request *req;
                 struct ll_user_fiemap *reply;
                 char *bufs[2] = { NULL, key };
-                int size[2] = { sizeof(struct ptlrpc_body), keylen };
+                __u32 size[2] = { sizeof(struct ptlrpc_body), keylen };
                 int rc;
 
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
