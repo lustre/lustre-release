@@ -120,7 +120,7 @@ int lustre_msg_early_size(struct ptlrpc_request *req) {
         /* For b1_6 interoperability */
         if (req->rq_reqmsg &&
             req->rq_reqmsg->lm_magic == LUSTRE_MSG_MAGIC_V2) {
-                int pb_len = lustre_msg_buflen(req->rq_reqmsg,
+                __u32 pb_len = lustre_msg_buflen(req->rq_reqmsg,
                                                MSG_PTLRPC_BODY_OFF);
                 return lustre_msg_size(LUSTRE_MSG_MAGIC_V2, 1, &pb_len);
         }
