@@ -97,10 +97,17 @@ __init int ptlrpc_init(void)
         if (ptlrpc_cbdata_slab == NULL)
                 GOTO(cleanup, rc);
 
+        cleanup_phase = 5;
+        rc = llog_recov_init();
+        if (rc)
+                GOTO(cleanup, rc);
+
         RETURN(0);
 
 cleanup:
         switch(cleanup_phase) {
+        case 5:
+                cfs_mem_cache_destroy(ptlrpc_cbdata_slab);
         case 4:
                 ldlm_exit();
         case 3:
@@ -118,6 +125,7 @@ cleanup:
 #ifdef __KERNEL__
 static void __exit ptlrpc_exit(void)
 {
+        llog_recov_fini();
         ldlm_exit();
         ptlrpc_stop_pinger();
         ptlrpc_exit_portals();
