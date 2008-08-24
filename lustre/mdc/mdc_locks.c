@@ -227,7 +227,7 @@ static void mdc_realloc_openmsg(struct ptlrpc_request *req,
 static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
                                                    struct lookup_intent *it,
                                                    struct mdc_op_data *data,
-                                                   void *lmm, int lmmsize)
+                                                   void *lmm, __u32 lmmsize)
 {
         struct ptlrpc_request *req;
         struct ldlm_intent *lit;
@@ -591,7 +591,7 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
         int rc;
         ENTRY;
 
-        fid_build_reg_res_name((struct lu_fid*)&data->fid1, &res_id);
+        fid_build_reg_res_name((void *)&data->fid1, &res_id);
         LASSERTF(einfo->ei_type == LDLM_IBITS,"lock type %d\n", einfo->ei_type);
         if (it->it_op & (IT_UNLINK | IT_GETATTR | IT_READDIR))
                 policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
@@ -600,8 +600,7 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                 if ((it->it_op & IT_CREAT) && mdc_exp_is_2_0_server(exp)) {
                         struct client_obd *cli = &obddev->u.cli;
                         data->fid3 = data->fid2;
-                        rc = mdc_fid_alloc(cli->cl_seq,
-                                           (struct lu_fid*)&data->fid2);
+                        rc = mdc_fid_alloc(cli->cl_seq, (void *)&data->fid2);
                         if (rc) {
                                 CERROR("fid allocation result: %d\n", rc);
                                 RETURN(rc);
@@ -823,9 +822,9 @@ int mdc_intent_lock(struct obd_export *exp, struct mdc_op_data *op_data,
 
         CDEBUG(D_DLMTRACE,"name: %.*s("DFID") in inode ("DFID"), "
                "intent: %s flags %#o\n",
-               op_data->namelen, op_data->name, 
-               PFID(((struct lu_fid*)&op_data->fid2)),
-               PFID(((struct lu_fid*)&op_data->fid1)),
+               op_data->namelen, op_data->name,
+               PFID(((void *)&op_data->fid2)),
+               PFID(((void *)&op_data->fid1)),
                ldlm_it2str(it->it_op), it->it_flags);
 
         lockh.cookie = 0;
@@ -935,7 +934,7 @@ int mdc_intent_getattr_async(struct obd_export *exp,
                op_data->namelen, op_data->name, op_data->fid1.id,
                ldlm_it2str(it->it_op), it->it_flags);
 
-        fid_build_reg_res_name((struct lu_fid*)&op_data->fid1, &res_id);
+        fid_build_reg_res_name((void *)&op_data->fid1, &res_id);
         req = mdc_intent_lookup_pack(exp, it, op_data);
         if (!req)
                 RETURN(-ENOMEM);
