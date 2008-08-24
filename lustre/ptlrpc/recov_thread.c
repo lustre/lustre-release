@@ -234,9 +234,10 @@ static int llcd_send(struct llog_canceld_ctxt *llcd)
         req->rq_interpret_reply = llcd_interpret;
         req->rq_async_args.pointer_arg[0] = llcd;
         rc = ptlrpc_set_add_new_req(&lcm->lcm_pc, req);
-        if (rc)
+        if (rc) {
+                ptlrpc_request_free(req);
                 GOTO(exit, rc);
-
+        }
         RETURN(0);
 exit:
         CDEBUG(D_RPCTRACE, "Refused llcd %p\n", llcd);
