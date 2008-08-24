@@ -354,7 +354,7 @@ struct filter_obd {
 
         int                      fo_fmd_max_num; /* per exp filter_mod_data */
         int                      fo_fmd_max_age; /* jiffies to fmd expiry */
-        void                     *fo_lcm;
+        struct llog_commit_master *fo_lcm;
 };
 
 #define OSC_MAX_RIF_DEFAULT       8

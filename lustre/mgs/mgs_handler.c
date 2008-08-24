@@ -57,7 +57,6 @@
 #include <lustre_dlm.h>
 #include <lprocfs_status.h>
 #include <lustre_fsfilt.h>
-#include <lustre_commit_confd.h>
 #include <lustre_disk.h>
 #include "mgs_internal.h"
 

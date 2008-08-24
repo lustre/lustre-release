@@ -54,7 +54,6 @@
 #include <obd_class.h>
 #include <lustre_fsfilt.h>
 #include <lustre_mds.h>
-#include <lustre_commit_confd.h>
 #include <lvfs.h>
 
 #include "mds_internal.h"

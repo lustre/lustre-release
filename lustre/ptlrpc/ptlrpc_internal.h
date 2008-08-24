@@ -94,6 +94,10 @@ int ping_evictor_wake(struct obd_export *exp);
 #define ping_evictor_wake(exp)     1
 #endif
 
+/* recov_thread.c */
+int llog_recov_init(void);
+void llog_recov_fini(void);
+
 static inline int ll_rpc_recoverable_error(int rc)
 { 
         return (rc == -ENOTCONN || rc == -ENODEV);

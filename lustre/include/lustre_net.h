@@ -620,6 +620,69 @@ struct ptlrpc_service {
         //struct ptlrpc_srv_ni srv_interfaces[0];
 };
 
+struct ptlrpcd_ctl {
+        /**
+         * Ptlrpc thread control flags (LIOD_START, LIOD_STOP, LIOD_STOP_FORCE)
+         */
+        unsigned long               pc_flags;
+        /**
+         * Thread lock protecting structure fields.
+         */
+        spinlock_t                  pc_lock;
+        /**
+         * Start completion.
+         */
+        struct completion           pc_starting;
+        /**
+         * Stop completion.
+         */
+        struct completion           pc_finishing;
+        /**
+         * Thread requests set.
+         */
+        struct ptlrpc_request_set  *pc_set;
+        /**
+         * Thread name used in cfs_daemonize()
+         */
+        char                        pc_name[16];
+#ifndef __KERNEL__
+        /**
+         * Async rpcs flag to make sure that ptlrpcd_check() is called only 
+         * once.
+         */
+        int                         pc_recurred;
+        /**
+         * Currently not used.
+         */
+        void                       *pc_callback;
+        /**
+         * User-space async rpcs callback.
+         */
+        void                       *pc_wait_callback;
+        /**
+         * User-space check idle rpcs callback.
+         */
+        void                       *pc_idle_callback;
+#endif
+};
+
+/* Bits for pc_flags */
+enum ptlrpcd_ctl_flags {
+        /**
+         * Ptlrpc thread start flag.
+         */
+        LIOD_START       = 1 << 0,
+        /**
+         * Ptlrpc thread stop flag.
+         */
+        LIOD_STOP        = 1 << 1,
+        /**
+         * Ptlrpc thread stop force flag. This will cause also 
+         * aborting any inflight rpcs handled by thread.
+         */
+        LIOD_STOP_FORCE  = 1 << 2
+};
+
 /* ptlrpc/events.c */
 extern lnet_handle_eq_t ptlrpc_eq_h;
 extern int ptlrpc_uuid_to_peer(struct obd_uuid *uuid,
@@ -700,6 +763,7 @@ int ptlrpc_replay_req(struct ptlrpc_request *req);
 void ptlrpc_unregister_reply(struct ptlrpc_request *req);
 void ptlrpc_restart_req(struct ptlrpc_request *req);
 void ptlrpc_abort_inflight(struct obd_import *imp);
+void ptlrpc_abort_set(struct ptlrpc_request_set *set);
 
 struct ptlrpc_request_set *ptlrpc_prep_set(void);
 int ptlrpc_set_add_cb(struct ptlrpc_request_set *set,
@@ -712,13 +776,16 @@ void ptlrpc_interrupted_set(void *data);
 void ptlrpc_mark_interrupted(struct ptlrpc_request *req);
 void ptlrpc_set_destroy(struct ptlrpc_request_set *);
 void ptlrpc_set_add_req(struct ptlrpc_request_set *, struct ptlrpc_request *);
-void ptlrpc_set_add_new_req(struct ptlrpc_request_set *,
-                            struct ptlrpc_request *);
+int ptlrpc_set_add_new_req(struct ptlrpcd_ctl *pc,
+                           struct ptlrpc_request *req);
 
 void ptlrpc_free_rq_pool(struct ptlrpc_request_pool *pool);
 void ptlrpc_add_rqs_to_pool(struct ptlrpc_request_pool *pool, int num_rq);
-struct ptlrpc_request_pool *ptlrpc_init_rq_pool(int, int,
-                                                void (*populate_pool)(struct ptlrpc_request_pool *, int));
+
+struct ptlrpc_request_pool *
+ptlrpc_init_rq_pool(int, int,
+                    void (*populate_pool)(struct ptlrpc_request_pool *, int));
+
 void ptlrpc_at_set_req_timeout(struct ptlrpc_request *req);
 struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, __u32 version,
                                        int opcode, int count, __u32 *lengths,
@@ -928,6 +995,8 @@ void ping_evictor_stop(void);
 #endif
 
 /* ptlrpc/ptlrpcd.c */
+int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc);
+void ptlrpcd_stop(struct ptlrpcd_ctl *pc, int force);
 void ptlrpcd_wake(struct ptlrpc_request *req);
 void ptlrpcd_add_req(struct ptlrpc_request *req);
 int ptlrpcd_addref(void);
