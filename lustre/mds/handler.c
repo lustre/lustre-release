@@ -66,7 +66,6 @@
 #include <obd_lov.h>
 #include <lustre_fsfilt.h>
 #include <lprocfs_status.h>
-#include <lustre_commit_confd.h>
 #include <lustre_quota.h>
 #include <lustre_disk.h>
 #include <lustre_param.h>
