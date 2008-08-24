@@ -672,16 +672,36 @@ void ptlrpc_set_add_req(struct ptlrpc_request_set *set,
         atomic_inc(&req->rq_import->imp_inflight);
 }
 
-/* lock so many callers can add things, the context that owns the set
- * is supposed to notice these and move them into the set proper. */
-void ptlrpc_set_add_new_req(struct ptlrpc_request_set *set,
-                            struct ptlrpc_request *req)
+/** 
+ * Lock so many callers can add things, the context that owns the set
+ * is supposed to notice these and move them into the set proper. 
+ */
+int ptlrpc_set_add_new_req(struct ptlrpcd_ctl *pc,
+                           struct ptlrpc_request *req)
 {
+        struct ptlrpc_request_set *set = pc->pc_set;
+
+        /* 
+         * Let caller know that we stopped and will not handle this request.
+         * It needs to take care itself of request.
+         */
+        if (test_bit(LIOD_STOP, &pc->pc_flags))
+                return -EALREADY;
+
         spin_lock(&set->set_new_req_lock);
-        /* The set takes over the caller's request reference */
+        /* 
+         * The set takes over the caller's request reference. 
+         */
         list_add_tail(&req->rq_set_chain, &set->set_new_requests);
         req->rq_set = set;
         spin_unlock(&set->set_new_req_lock);
+
+        /*
+         * Let thead know that we added something and better it to wake up 
+         * and process.
+         */
+        cfs_waitq_signal(&set->set_waitq);
+        return 0;
 }
 
 /*
@@ -2169,6 +2189,29 @@ void ptlrpc_abort_inflight(struct obd_import *imp)
         spin_unlock(&imp->imp_lock);
 
         EXIT;
+}
+
+void ptlrpc_abort_set(struct ptlrpc_request_set *set)
+{
+        struct list_head *tmp, *n;
+
+        LASSERT(set != NULL);
+
+        list_for_each_safe(tmp, n, &set->set_requests) {
+                struct ptlrpc_request *req =
+                        list_entry(tmp, struct ptlrpc_request, rq_set_chain);
+
+                spin_lock (&req->rq_lock);
+                if (req->rq_phase != RQ_PHASE_RPC) {
+                        spin_unlock (&req->rq_lock);
+                        continue;
+                }
+
+                req->rq_err = 1;
+                req->rq_status = -EINTR;
+                ptlrpc_wake_client_req(req);
+                spin_unlock (&req->rq_lock);
+        }
 }
 
 static __u64 ptlrpc_last_xid = 0;
