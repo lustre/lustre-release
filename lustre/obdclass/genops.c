@@ -790,12 +790,12 @@ void class_import_put(struct obd_import *import)
 {
         ENTRY;
 
-        CDEBUG(D_INFO, "import %p refcount=%d\n", import,
-               atomic_read(&import->imp_refcount) - 1);
-
         LASSERT(atomic_read(&import->imp_refcount) > 0);
         LASSERT(atomic_read(&import->imp_refcount) < 0x5a5a5a);
         LASSERT(list_empty(&import->imp_zombie_chain));
+
+        CDEBUG(D_INFO, "import %p refcount=%d\n", import,
+               atomic_read(&import->imp_refcount) - 1);
 
         if (atomic_dec_and_test(&import->imp_refcount)) {
 
