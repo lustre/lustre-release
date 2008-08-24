@@ -23,7 +23,7 @@ tbd Sun Microsystems, Inc.
 	  the following command on the MDS:
 		'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
 	  For more information, please refer to bugzilla 13904.
-	* A new quota file format was introduced in 1.8.0.
+	* A new quota file format was introduced in 1.6.6/1.8.0.
 	  The format conversion from prior releases is handled transparently,
 	  but releases older than 1.6.6/1.8.0 don't understand this new
 	  format. The automatic format conversion can be avoided by running
