@@ -42,15 +42,15 @@ Severity   : normal
 Bugzilla   : 15927
 Frequency  : rare
 Description: replace ptlrpcd with the statahead thread to interpret the async
-             statahead RPC callback
+	     statahead RPC callback
 
 Severity   : normal
 Bugzilla   : 16611
 Frequency  : on recovery
 Description: I/O failures after umount during fail back 
 Details    : if client reconnected to restarted server we need join to recovery
-             instead of find server handler is changed and process self eviction
-             with cancel all locks.
+	     instead of find server handler is changed and process self eviction
+	     with cancel all locks.
 
 Severity   : enhancement
 Bugzilla   : 16633
