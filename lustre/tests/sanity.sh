@@ -3702,7 +3702,7 @@ test_101b() {
 	local FILE_LENGTH=$((STRIPE_SIZE*100))
 	local ITERATION=$((FILE_LENGTH/STRIDE_SIZE))
 	# prepare the read-ahead file
-	setup_test101b
+	setup_101b
 	cancel_lru_locks osc 
 	for BIDX in 2 4 8 16 32 64 128 256; do
 		local BSIZE=$((BIDX*4096))
@@ -3715,7 +3715,7 @@ test_101b() {
 		cancel_lru_locks osc
 		ra_check_101b $BSIZE
 	done
-	cleanup_test101b
+	cleanup_101b
 	true
 }
 run_test 101b "check stride-io mode read-ahead ================="
