@@ -7,8 +7,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test:  13297 2108 9789 3637 9789 3561 12622 15528/2330 5188 10764
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27u   42a  42b  42c  42d  45   51d   62         68   75 $SANITY_EXCEPT" }
+# bug number for skipped test:  13297 2108 9789 3637 9789 3561 12622 15528/2330 5188 10764 16410
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27u   42a  42b  42c  42d  45   51d   62         68   75    76 $SANITY_EXCEPT"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # Tests that fail on uml, maybe elsewhere, FIXME
@@ -71,7 +71,7 @@ init_test_env $@
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 27m 36f 36g 51b 51c 60c 63 64b 68 71 73 77f 78 101 103 115 120g 124b"
 
 SANITYLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
-FAIL_ON_ERROR=false
+FAIL_ON_ERROR=${FAIL_ON_ERROR:-false}
 
 cleanup() {
 	echo -n "cln.."
@@ -1103,7 +1103,7 @@ test_29() {
 	ls -l $DIR/d29
 	LOCKCOUNTORIG=`lctl get_param -n ldlm.namespaces.*mdc*.lock_count`
 	LOCKUNUSEDCOUNTORIG=`lctl get_param -n ldlm.namespaces.*mdc*.lock_unused_count`
-	[ -z $"LOCKCOUNTORIG" ] && echo "No mdc lock count" && return 1
+	[ -z $"LOCKCOUNTORIG" ] && error "No mdc lock count" && return 1
 	log 'second d29'
 	ls -l $DIR/d29
 	log 'done'
@@ -3094,9 +3094,9 @@ test_73() {
 
 	sleep 25
 
-	$CHECKSTAT -t file $DIR/d73-1/f73-1 || return 4
-	$CHECKSTAT -t file $DIR/d73-1/f73-2 || return 5
-	$CHECKSTAT -t file $DIR/d73-2/f73-3 || return 6
+	$CHECKSTAT -t file $DIR/d73-1/f73-1 || error "$DIR/d73-1/f73-1 not file"
+	$CHECKSTAT -t file $DIR/d73-1/f73-2 || error "$DIR/d73-1/f73-2 not file"
+	$CHECKSTAT -t file $DIR/d73-2/f73-3 || error "$DIR/d73-2/f73-3 not file"
 
 	rm -rf $DIR/d73-*
 }
@@ -3241,9 +3241,6 @@ num_inodes() {
 }
 
 test_76() { # bug 1443
-	do_facet mds $LCTL get_param version | grep -q ^lustre.*1.7 && \
-		skip "skipping test for 1.8" && return 0
-
 	DETH=$(grep deathrow /proc/kallsyms /proc/ksyms 2> /dev/null | wc -l)
 	[ $DETH -eq 0 ] && skip "No _iget." && return 0
 	BEFORE_INODES=`num_inodes`
@@ -3652,75 +3649,73 @@ test_101() {
 }
 run_test 101 "check read-ahead for random reads ================"
 
-export SETUP_TEST101=no
-setup_test101() {
-	[ "$SETUP_TEST101" = "yes" ] && return
+export SETUP_TEST101b=no
+setup_101b() {
+	[ "$SETUP_TEST101b" = "yes" ] && return
 	mkdir -p $DIR/$tdir
 	STRIPE_SIZE=1048576
 	STRIPE_COUNT=$OSTCOUNT
 	STRIPE_OFFSET=0
 
-	trap cleanup_test101 EXIT
+	trap cleanup_test101b EXIT
 	# prepare the read-ahead file
 	$SETSTRIPE $DIR/$tfile -s $STRIPE_SIZE -i $STRIPE_OFFSET -c $OSTCOUNT
 
 	dd if=/dev/zero of=$DIR/$tfile bs=1024k count=100 2> /dev/null
-	SETUP_TEST101=yes
+	SETUP_TEST101b=yes
 }
 
-cleanup_test101() {
-	[ "$SETUP_TEST101" = "yes" ] || return
+cleanup_101b() {
 	trap 0
-	rm -rf $DIR/$tdir
-	SETUP_TEST101=no
+	rm -rf $DIR/$tdir $DIR/$tfile
+	SETUP_TEST101b=no
 }
 
 calc_total() {
 	awk 'BEGIN{total=0}; {total+=$1}; END{print total}'
 }
 
-ra_check_101() {
+ra_check_101b() {
 	local READ_SIZE=$1
 	local STRIPE_SIZE=1048576
 	local RA_INC=1048576
 	local STRIDE_LENGTH=$((STRIPE_SIZE/READ_SIZE))
 	local FILE_LENGTH=$((64*100))
-	local discard_limit=$(((((((STRIDE_LENGTH - 1))*3)/(STRIDE_LENGTH*OSTCOUNT))* \
-			     (STRIDE_LENGTH*OSTCOUNT - STRIDE_LENGTH))))
+	local discard_limit=$((((STRIDE_LENGTH-1)*3/(STRIDE_LENGTH*OSTCOUNT))* \
+			       (STRIDE_LENGTH*OSTCOUNT - STRIDE_LENGTH)))
 
-	DISCARD=`$LCTL get_param -n llite.*.read_ahead_stats |   \
-			 get_named_value 'read but discarded' | calc_total`
+	DISCARD=`$LCTL get_param -n llite.*.read_ahead_stats |
+		 get_named_value 'read but discarded' | calc_total`
 
 	if [ $DISCARD -gt $discard_limit ]; then
 		lctl get_param llite.*.read_ahead_stats
-		error "Too many ($DISCARD) discarded pages with size (${READ_SIZE})"
+		error "Too many ($DISCARD) discarded pages (size ${READ_SIZE})"
 	else
 		echo "Read-ahead success for size ${READ_SIZE}"
 	fi
 }
 
 test_101b() {
-	[ "$OSTCOUNT" -lt "2" ] && skip "skipping stride IO stride-ahead test" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs for stride-read" && return
 	local STRIPE_SIZE=1048576
 	local STRIDE_SIZE=$((STRIPE_SIZE*OSTCOUNT))
 	local FILE_LENGTH=$((STRIPE_SIZE*100))
 	local ITERATION=$((FILE_LENGTH/STRIDE_SIZE))
 	# prepare the read-ahead file
-	setup_test101
-	cancel_lru_locks osc
-	for BIDX in 2 4 8 16 32 64 128 256
-	do
+	setup_test101b
+	cancel_lru_locks osc 
+	for BIDX in 2 4 8 16 32 64 128 256; do
 		local BSIZE=$((BIDX*4096))
 		local READ_COUNT=$((STRIPE_SIZE/BSIZE))
 		local STRIDE_LENGTH=$((STRIDE_SIZE/BSIZE))
 		local OFFSET=$((STRIPE_SIZE/BSIZE*(OSTCOUNT - 1)))
 		$LCTL set_param -n llite.*.read_ahead_stats 0
 		$READS -f $DIR/$tfile  -l $STRIDE_LENGTH -o $OFFSET \
-			      -s $FILE_LENGTH -b $STRIPE_SIZE -a $READ_COUNT -n $ITERATION
+			-s $FILE_LENGTH -b $STRIPE_SIZE -a $READ_COUNT -n $ITERATION
 		cancel_lru_locks osc
-		ra_check_101 $BSIZE
+		ra_check_101b $BSIZE
 	done
-	cleanup_test101
+	cleanup_test101b
 	true
 }
 run_test 101b "check stride-io mode read-ahead ================="
