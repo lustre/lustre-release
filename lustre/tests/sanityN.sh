@@ -45,7 +45,7 @@ init_test_env $@
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="12 16"
 
 SANITYLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
-FAIL_ON_ERROR=false
+FAIL_ON_ERROR=${FAIL_ON_ERROR:-false}
 
 SETUP=${SETUP:-:}
 TRACE=${TRACE:-""}
