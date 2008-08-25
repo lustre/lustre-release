@@ -2851,9 +2851,6 @@ out_shrink:
         return rc;
 }
 
-#define IS_CLIENT_DISCONNECT_ERROR(error)  \
-        (error == -ENOTCONN || error == -ENODEV)
-
 static int mdt_intent_reint(enum mdt_it_code opcode,
                             struct mdt_thread_info *info,
                             struct ldlm_lock **lockp,
@@ -2906,13 +2903,12 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
         rep->lock_policy_res2 = clear_serious(rc);
 
         lhc->mlh_reg_lh.cookie = 0ull;
-        if (IS_CLIENT_DISCONNECT_ERROR(rc)){
+        if (rc == -ENOTCONN || rc == -ENODEV) {
                 /* 
-                 * If it is the disconnect error (ENODEV & ENOCONN),
-                 * the error will be returned by rq_stats, and client 
-                 * ptlrpc layer will detect this, then disconnect,
-                 * reconnect the import immediately, instead of impacting 
-                 * the following the rpc.
+                 * If it is the disconnect error (ENODEV & ENOCONN), the error
+                 * will be returned by rq_status, and client at ptlrpc layer
+                 * will detect this, then disconnect, reconnect the import
+                 * immediately, instead of impacting the following the rpc.
                  */
                 RETURN(rc);
         } else {
