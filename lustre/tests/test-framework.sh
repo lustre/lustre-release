@@ -137,7 +137,6 @@ init_test_env() {
 }
 
 case `uname -r` in
-2.4.*) EXT=".o"; USE_QUOTA=no; [ ! "$CLIENTONLY" ] && FSTYPE=ext3;;
     *) EXT=".ko"; USE_QUOTA=yes;;
 esac
 
