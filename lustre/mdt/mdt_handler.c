@@ -2851,6 +2851,9 @@ out_shrink:
         return rc;
 }
 
+#define IS_CLIENT_DISCONNECT_ERROR(error)  \
+        (error == -ENOTCONN || error == -ENODEV)
+
 static int mdt_intent_reint(enum mdt_it_code opcode,
                             struct mdt_thread_info *info,
                             struct ldlm_lock **lockp,
@@ -2903,8 +2906,26 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
         rep->lock_policy_res2 = clear_serious(rc);
 
         lhc->mlh_reg_lh.cookie = 0ull;
-        rc = ELDLM_LOCK_ABORTED;
-        RETURN(rc);
+        if (IS_CLIENT_DISCONNECT_ERROR(rc)){
+                /* 
+                 * If it is the disconnect error (ENODEV & ENOCONN),
+                 * the error will be returned by rq_stats, and client 
+                 * ptlrpc layer will detect this, then disconnect,
+                 * reconnect the import immediately, instead of impacting 
+                 * the following the rpc.
+                 */
+                RETURN(rc);
+        } else {
+                /* 
+                 * For other cases, the error will be returned by intent.
+                 * and client will retrieve the result from intent.
+                 */ 
+                 /* 
+                  * FIXME: when open lock is finished, that should be
+                  * checked here.
+                  */
+                RETURN(ELDLM_LOCK_ABORTED); 
+        }
 }
 
 static int mdt_intent_code(long itcode)
