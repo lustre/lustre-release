@@ -1070,24 +1070,6 @@ int ldlm_cli_update_pool(struct ptlrpc_request *req)
         obd->obd_pool_limit = new_limit;
         write_unlock(&obd->obd_pool_lock);
 
-        /* Check if we need to wakeup pools thread for fast SLV change.
-         * This is only done when threads period is noticably long like
-         * 10s or more. */
-#if defined(__KERNEL__) && (LDLM_POOLS_THREAD_PERIOD >= 10)
-        if (old_slv > 0) {
-                __u64 fast_change = old_slv * LDLM_POOLS_FAST_SLV_CHANGE;
-                do_div(fast_change, 100);
-
-                /* 
-                 * Wake up pools thread only if SLV has changed more than 
-                 * 50% since last update. In this case we want to react asap. 
-                 * Otherwise it is no sense to wake up pools as they are 
-                 * re-calculated every LDLM_POOLS_THREAD_PERIOD anyways. 
-                 */
-                if (old_slv > new_slv && old_slv - new_slv > fast_change)
-                        ldlm_pools_wakeup();
-        }
-#endif
         RETURN(0);
 }
 EXPORT_SYMBOL(ldlm_cli_update_pool);
@@ -2002,7 +1984,7 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
 
         atomic_inc(&req->rq_import->imp_replay_inflight);
         CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
-        aa = (struct ldlm_async_args *)&req->rq_async_args;
+        aa = ptlrpc_req_async_args(req);
         aa->lock_handle = body->lock_handle[0];
         req->rq_interpret_reply = replay_lock_interpret;
         ptlrpcd_add_req(req);

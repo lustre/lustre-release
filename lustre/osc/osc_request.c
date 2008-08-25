@@ -212,7 +212,7 @@ static int osc_getattr_async(struct obd_export *exp, struct obd_info *oinfo,
         req->rq_interpret_reply = osc_getattr_interpret;
 
         CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
-        aa = (struct osc_async_args *)&req->rq_async_args;
+        aa = ptlrpc_req_async_args(req);
         aa->aa_oi = oinfo;
 
         ptlrpc_set_add_req(set, req);
@@ -358,7 +358,7 @@ static int osc_setattr_async(struct obd_export *exp, struct obd_info *oinfo,
                 req->rq_interpret_reply = osc_setattr_interpret;
 
                 CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
-                aa = (struct osc_async_args *)&req->rq_async_args;
+                aa = ptlrpc_req_async_args(req);
                 aa->aa_oi = oinfo;
 
                 ptlrpc_set_add_req(rqset, req);
@@ -505,7 +505,7 @@ static int osc_punch(struct obd_export *exp, struct obd_info *oinfo,
 
         req->rq_interpret_reply = osc_punch_interpret;
         CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
-        aa = (struct osc_async_args *)&req->rq_async_args;
+        aa = ptlrpc_req_async_args(req);
         aa->aa_oi = oinfo;
         ptlrpc_set_add_req(rqset, req);
 
@@ -1111,7 +1111,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         }
 
         CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
-        aa = (struct osc_brw_async_args *)&req->rq_async_args;
+        aa = ptlrpc_req_async_args(req);
         aa->aa_oa = oa;
         aa->aa_requested_nob = requested_nob;
         aa->aa_nio_count = niocount;
@@ -1184,7 +1184,7 @@ static int check_write_checksum(struct obdo *oa, const lnet_process_id_t *peer,
 /* Note rc enters this function as number of bytes transferred */
 static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 {
-        struct osc_brw_async_args *aa = (void *)&req->rq_async_args;
+        struct osc_brw_async_args *aa = ptlrpc_req_async_args(req);
         const lnet_process_id_t *peer =
                         &req->rq_import->imp_connection->c_peer;
         struct client_obd *cli = aa->aa_cli;
@@ -1417,7 +1417,7 @@ int osc_brw_redo_request(struct ptlrpc_request *request,
         new_req->rq_async_args = request->rq_async_args;
         new_req->rq_sent = CURRENT_SECONDS + aa->aa_resends;
 
-        new_aa = (struct osc_brw_async_args *)&new_req->rq_async_args;
+        new_aa = ptlrpc_req_async_args(new_req);
 
         CFS_INIT_LIST_HEAD(&new_aa->aa_oaps);
         list_splice(&aa->aa_oaps, &new_aa->aa_oaps);
@@ -1466,17 +1466,18 @@ static int async_internal(int cmd, struct obd_export *exp, struct obdo *oa,
         rc = osc_brw_prep_request(cmd, &exp->exp_obd->u.cli, oa, lsm,
                                   page_count, pga, &request);
 
-        aa = (struct osc_brw_async_args *)&request->rq_async_args;
+        CLASSERT(sizeof(*aa) <= sizeof(request->rq_async_args));
+        aa = ptlrpc_req_async_args(request);
         if (cmd == OBD_BRW_READ) {
                 lprocfs_oh_tally_log2(&cli->cl_read_page_hist, page_count);
                 lprocfs_oh_tally(&cli->cl_read_rpc_hist, cli->cl_r_in_flight);
-                ptlrpc_lprocfs_brw(request, OST_READ, aa->aa_requested_nob);
         } else {
                 lprocfs_oh_tally_log2(&cli->cl_write_page_hist, page_count);
                 lprocfs_oh_tally(&cli->cl_write_rpc_hist,
                                  cli->cl_w_in_flight);
-                ptlrpc_lprocfs_brw(request, OST_WRITE, aa->aa_requested_nob);
         }
+        ptlrpc_lprocfs_brw(request, aa->aa_requested_nob);
+
         LASSERT(list_empty(&aa->aa_oaps));
 
         if (rc == 0) {
@@ -2060,7 +2061,7 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
                             OBD_MD_FLMTIME | OBD_MD_FLCTIME | OBD_MD_FLATIME);
 
         CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
-        aa = (struct osc_brw_async_args *)&req->rq_async_args;
+        aa = ptlrpc_req_async_args(req);
         CFS_INIT_LIST_HEAD(&aa->aa_oaps);
         list_splice(rpc_list, &aa->aa_oaps);
         CFS_INIT_LIST_HEAD(rpc_list);
@@ -2250,21 +2251,20 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 RETURN(PTR_ERR(req));
         }
 
-        aa = (struct osc_brw_async_args *)&req->rq_async_args;
+        aa = ptlrpc_req_async_args(req);
         if (cmd == OBD_BRW_READ) {
                 lprocfs_oh_tally_log2(&cli->cl_read_page_hist, page_count);
                 lprocfs_oh_tally(&cli->cl_read_rpc_hist, cli->cl_r_in_flight);
                 lprocfs_oh_tally_log2(&cli->cl_read_offset_hist,
                                       (starting_offset >> CFS_PAGE_SHIFT) + 1);
-                ptlrpc_lprocfs_brw(req, OST_READ, aa->aa_requested_nob);
         } else {
                 lprocfs_oh_tally_log2(&cli->cl_write_page_hist, page_count);
                 lprocfs_oh_tally(&cli->cl_write_rpc_hist,
                                  cli->cl_w_in_flight);
                 lprocfs_oh_tally_log2(&cli->cl_write_offset_hist,
                                       (starting_offset >> CFS_PAGE_SHIFT) + 1);
-                ptlrpc_lprocfs_brw(req, OST_WRITE, aa->aa_requested_nob);
         }
+        ptlrpc_lprocfs_brw(req, aa->aa_requested_nob);
 
         client_obd_list_lock(&cli->cl_loi_list_lock);
 
@@ -3101,7 +3101,7 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                 if (!rc) {
                         struct osc_enqueue_args *aa;
                         CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
-                        aa = (struct osc_enqueue_args *)&req->rq_async_args;
+                        aa = ptlrpc_req_async_args(req);
                         aa->oa_oi = oinfo;
                         aa->oa_ei = einfo;
                         aa->oa_exp = exp;
@@ -3256,7 +3256,7 @@ static int osc_statfs_async(struct obd_device *obd, struct obd_info *oinfo,
 
         req->rq_interpret_reply = osc_statfs_interpret;
         CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
-        aa = (struct osc_async_args *)&req->rq_async_args;
+        aa = ptlrpc_req_async_args(req);
         aa->aa_oi = oinfo;
 
         ptlrpc_set_add_req(rqset, req);
@@ -3328,32 +3328,48 @@ static int osc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
  *
  * @lmmu is a pointer to an in-core struct with lmm_ost_count indicating
  * the maximum number of OST indices which will fit in the user buffer.
- * lmm_magic must be LOV_MAGIC (we only use 1 slot here).
+ * lmm_magic must be LOV_MAGIC_V1 or LOV_MAGIC_V3 (we only use 1 slot here).
  */
 static int osc_getstripe(struct lov_stripe_md *lsm, struct lov_user_md *lump)
 {
-        struct lov_user_md lum, *lumk;
+        /* we use lov_user_md_v3 because it is larger than lov_user_md_v1 */
+        struct lov_user_md_v3 lum, *lumk;
         int rc = 0, lum_size;
+        struct lov_user_ost_data_v1 *lmm_objects;
         ENTRY;
 
         if (!lsm)
                 RETURN(-ENODATA);
 
-        if (copy_from_user(&lum, lump, sizeof(lum)))
+        /* we only need the header part from user space to get lmm_magic and
+         * lmm_stripe_count, (the header part is common to v1 and v3) */
+        lum_size = sizeof(struct lov_user_md_v1);
+        if (copy_from_user(&lum, lump, lum_size))
                 RETURN(-EFAULT);
 
-        if (lum.lmm_magic != LOV_USER_MAGIC)
+        if ((lum.lmm_magic != LOV_USER_MAGIC_V1) &&
+            (lum.lmm_magic != LOV_USER_MAGIC_V3))
                 RETURN(-EINVAL);
 
+        /* lov_user_md_vX and lov_mds_md_vX must have the same size */
+        LASSERT(sizeof(struct lov_user_md_v1) == sizeof(struct lov_mds_md_v1));
+        LASSERT(sizeof(struct lov_user_md_v3) == sizeof(struct lov_mds_md_v3));
+        LASSERT(sizeof(lum.lmm_objects[0]) == sizeof(lumk->lmm_objects[0]));
+
+        /* we can use lov_mds_md_size() to compute lum_size
+         * because lov_user_md_vX and lov_mds_md_vX have the same size */
         if (lum.lmm_stripe_count > 0) {
-                lum_size = sizeof(lum) + sizeof(lum.lmm_objects[0]);
+                lum_size = lov_mds_md_size(lum.lmm_stripe_count, lum.lmm_magic);
                 OBD_ALLOC(lumk, lum_size);
                 if (!lumk)
                         RETURN(-ENOMEM);
-
-                lumk->lmm_objects[0].l_object_id = lsm->lsm_object_id;
+                if (lum.lmm_magic == LOV_USER_MAGIC_V1)
+                        lmm_objects = &(((struct lov_user_md_v1 *)lumk)->lmm_objects[0]);
+                else
+                        lmm_objects = &(lumk->lmm_objects[0]);
+                lmm_objects->l_object_id = lsm->lsm_object_id;
         } else {
-                lum_size = sizeof(lum);
+                lum_size = lov_mds_md_size(0, lum.lmm_magic);
                 lumk = &lum;
         }
 
@@ -3517,7 +3533,39 @@ static int osc_get_info(struct obd_export *exp, obd_count keylen,
         out:
                 ptlrpc_req_finished(req);
                 RETURN(rc);
+        } else if (KEY_IS(KEY_FIEMAP)) {
+                struct ptlrpc_request *req;
+                struct ll_user_fiemap *reply;
+                char *bufs[2] = { NULL, key };
+                __u32 size[2] = { sizeof(struct ptlrpc_body), keylen };
+                int rc;
+
+                req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
+                                      OST_GET_INFO, 2, size, bufs);
+                if (req == NULL)
+                        RETURN(-ENOMEM);
+
+                size[REPLY_REC_OFF] = *vallen;
+                ptlrpc_req_set_repsize(req, 2, size);
+
+                rc = ptlrpc_queue_wait(req);
+                if (rc)
+                        GOTO(out1, rc);
+                reply = lustre_swab_repbuf(req, REPLY_REC_OFF, *vallen,
+                                           lustre_swab_fiemap);
+                if (reply == NULL) {
+                        CERROR("Can't unpack FIEMAP reply.\n");
+                        GOTO(out1, rc = -EPROTO);
+                }
+
+                memcpy(val, reply, *vallen);
+
+        out1:
+                ptlrpc_req_finished(req);
+
+                RETURN(rc);
         }
+
         RETURN(-EINVAL);
 }
 

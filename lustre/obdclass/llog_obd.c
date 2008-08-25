@@ -124,6 +124,9 @@ int llog_cleanup(struct llog_ctxt *ctxt)
         idx = ctxt->loc_idx;
         /*try to free the ctxt */
         rc = __llog_ctxt_put(ctxt);
+        if (rc)
+                CERROR("Error %d while cleaning up ctxt %p\n", 
+                       rc, ctxt);
 
         l_wait_event(obd->obd_llog_waitq, llog_ctxt_null(obd, idx), &lwi);
 

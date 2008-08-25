@@ -490,7 +490,6 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (err)
                 CERROR("Precleanup %s returned %d\n",
                        obd->obd_name, err);
-
         class_decref(obd);
         obd->obd_set_up = 0;
 
@@ -620,6 +619,29 @@ int class_del_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
         rc = obd_del_conn(imp, &uuid);
 
         RETURN(rc);
+}
+
+struct sptlrpc_conf_log_hdr {
+        __u32   scl_max;
+        __u32   scl_nrule;
+};
+
+static int class_sptlrpc_conf(struct obd_device *obd, struct lustre_cfg *lcfg)
+{
+        struct sptlrpc_conf_log_hdr *log;
+
+        log = lustre_cfg_buf(lcfg, 1);
+        if (log == NULL || lcfg->lcfg_buflens[1] < sizeof(*log)) {
+                CERROR("missing data in sptlrpc config record\n");
+                return 0;
+        }
+
+        /* don't care endian */
+        if (log->scl_nrule != 0)
+                CWARN("Please notify your sysadmin to remove all "
+                      "sptlrpc rules on MGS\n");
+
+        return 0;
 }
 
 CFS_LIST_HEAD(lustre_profile_list);
@@ -845,6 +867,32 @@ int class_process_config(struct lustre_cfg *lcfg)
         case LCFG_DEL_CONN: {
                 err = class_del_conn(obd, lcfg);
                 GOTO(out, err = 0);
+        }
+        case LCFG_SPTLRPC_CONF: {
+                err = class_sptlrpc_conf(obd, lcfg);
+                GOTO(out, err = 0);
+        }
+        case LCFG_POOL_NEW: {
+                err = obd_pool_new(obd, lustre_cfg_string(lcfg, 2));
+                GOTO(out, err = 0);
+                break;
+        }
+        case LCFG_POOL_ADD: {
+                err = obd_pool_add(obd, lustre_cfg_string(lcfg, 2),
+                                   lustre_cfg_string(lcfg, 3));
+                GOTO(out, err = 0);
+                break;
+        }
+        case LCFG_POOL_REM: {
+                err = obd_pool_rem(obd, lustre_cfg_string(lcfg, 2),
+                                   lustre_cfg_string(lcfg, 3));
+                GOTO(out, err = 0);
+                break;
+        }
+        case LCFG_POOL_DEL: {
+                err = obd_pool_del(obd, lustre_cfg_string(lcfg, 2));
+                GOTO(out, err = 0);
+                break;
         }
         default: {
                 err = obd_process_config(obd, sizeof(*lcfg), lcfg);
@@ -1127,15 +1175,15 @@ int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
 
         /* continue processing from where we last stopped to end-of-log */
         if (cfg)
-                cd.first_idx = cfg->cfg_last_idx;
-        cd.last_idx = 0;
+                cd.lpcd_first_idx = cfg->cfg_last_idx;
+        cd.lpcd_last_idx = 0;
 
         rc = llog_process(llh, class_config_llog_handler, cfg, &cd);
 
         CDEBUG(D_CONFIG, "Processed log %s gen %d-%d (rc=%d)\n", name, 
-               cd.first_idx + 1, cd.last_idx, rc);
+               cd.lpcd_first_idx + 1, cd.lpcd_last_idx, rc);
         if (cfg)
-                cfg->cfg_last_idx = cd.last_idx;
+                cfg->cfg_last_idx = cd.lpcd_last_idx;
 
 parse_out:
         rc2 = llog_close(llh);

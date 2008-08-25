@@ -242,7 +242,8 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
 int mds_get_default_md(struct obd_device *obd, struct lov_mds_md *lmm,
                        int *lmmsize);
 int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
-                       struct lov_mds_md *lmm, int lmm_size);
+                       struct lov_mds_md *lmm, int lmm_size,
+                       __u64 connect_flags);
 int mds_init_lov_desc(struct obd_device *obd, struct obd_export *osc_exp);
 
 /* mds/mds_open.c */
@@ -286,9 +287,10 @@ int mds_postrecov(struct obd_device *obd);
 int mds_init_export(struct obd_export *exp);
 #ifdef __KERNEL__
 int mds_get_md(struct obd_device *, struct inode *, void *md, int *size,
-               int lock, int flags);
+               int lock, int flags, __u64 connect_flags);
 int mds_pack_md(struct obd_device *, struct lustre_msg *, int offset,
-                struct mds_body *, struct inode *, int lock, int flags);
+                struct mds_body *, struct inode *, int lock, int flags,
+                __u64 connect_flags);
 void mds_pack_inode2body(struct mds_body *body, struct inode *inode);
 #endif
 int mds_pack_acl(struct mds_export_data *med, struct inode *inode,

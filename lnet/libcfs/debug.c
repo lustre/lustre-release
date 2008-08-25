@@ -423,6 +423,9 @@ libcfs_debug_str2mask(int *mask, const char *str, int is_subsys)
         return 0;
 }
 
+/**
+ * Dump Lustre log to ::debug_file_path by calling tracefile_dump_all_pages()
+ */
 void libcfs_debug_dumplog_internal(void *arg)
 {
         CFS_DECL_JOURNAL_DATA;
@@ -435,7 +438,9 @@ void libcfs_debug_dumplog_internal(void *arg)
                          (long)arg);
                 printk(KERN_ALERT "LustreError: dumping log to %s\n",
                        debug_file_name);
+
                 tracefile_dump_all_pages(debug_file_name);
+                libcfs_run_debug_log_upcall(debug_file_name);
         }
         CFS_POP_JOURNAL;
 }

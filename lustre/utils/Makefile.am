@@ -28,16 +28,16 @@ endif # UTILS
 lib_LIBRARIES = liblustreapi.a
 
 lctl_SOURCES = parser.c obd.c lustre_cfg.c lctl.c parser.h obdctl.h platform.h
-lctl_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
-lctl_DEPENDENCIES := $(LIBPTLCTL)
+lctl_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
+lctl_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 
 lfs_SOURCES = lfs.c parser.c lustre_cfg.c obd.c
 lfs_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
 lfs_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a 
 
 loadgen_SOURCES = loadgen.c lustre_cfg.c obd.c
-loadgen_LDADD := $(LIBREADLINE) $(LIBPTLCTL) $(PTHREAD_LIBS)
-loadgen_DEPENDENCIES := $(LIBPTLCTL)
+loadgen_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL) $(PTHREAD_LIBS)
+loadgen_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 
 if EXT2FS_DEVEL
 EXT2FSLIB = -lext2fs

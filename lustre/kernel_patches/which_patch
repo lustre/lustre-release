@@ -4,8 +4,8 @@ SUPPORTED KERNELS:
 2.6-suse              SLES9 before SP1         already in SLES9 SP1 kernel
 2.6-suse-newer        SLES9: 2.6.5-7.312       extra patches for SLES9 after SP1
 2.6-rhel4             RHEL4: 2.6.9-67.0.22.EL
-2.6-sles10            SLES10: 2.6.16.60-0.23
-2.6-rhel5             RHEL5: 2.6.18-92.1.6.el5
+2.6-sles10            SLES10: 2.6.16.60-0.27
+2.6-rhel5             RHEL5: 2.6.18-92.1.10.el5
 2.6.18-vanilla        kernel.org: 2.6.18.8
 2.6.22-vanilla        kernel.org: 2.6.22.14
 

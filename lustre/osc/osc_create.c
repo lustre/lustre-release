@@ -76,7 +76,7 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
 
         oscc = req->rq_async_args.pointer_arg[0];
         LASSERT(oscc && (oscc->oscc_obd != LP_POISON));
-        
+
         spin_lock(&oscc->oscc_lock);
         oscc->oscc_flags &= ~OSCC_FLAG_CREATING;
         switch (rc) {

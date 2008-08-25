@@ -1,0 +1,80 @@
+#!/usr/bin/perl -w
+# Report generation for ost-survey.pl
+# ===================================
+#        The plot-ost.pl script is used to generate csv file and
+# instructions files for gnuplot from the output of ost-survey.pl script.
+#
+#        The plot-ost.pl also creates .scr file that contains instructions
+# for gnuplot to plot the graph. After generating .dat and .scr files this
+# script invokes gnuplot to display graph.
+#
+# Syntax:
+# $ plot-ost.pl <log_filename>
+# Note:  1. This script may need modifications whenever there will be 
+#	    modifications in output format of ost-survey.pl script.
+#	 2. Gnuplot version 4.0 or above is required.
+
+# arg 0 is filename 
+sub usages_msg(){
+	print "Usage: $0 <log_filename> \n";
+	print "       $0 produces graphs from the output of ost-survey.pl\n";
+	print "       using gnuplot.\n";
+	print "e.g.# perl ost-survey /mnt/lustre > ost-log; perl $0 ost-log\n";
+        exit 1;
+}
+
+my $count = 0; 		# count for number of rows in csv(.dat) file.
+my @line;		# To store recently read line from log file
+my $flag = 0;
+my @GraphTitle;
+if ( !$ARGV[0] ) {
+	usages_msg(); 	
+}
+
+$file = $ARGV[0];
+# Open log file for reading
+open ( PFILE, "$file") or die "Can't open results log file";
+# Open .csv file for writting required columns from log file.
+open ( DATAFILE, "> $file.dat" ) or die "Can't open csv file for writting";
+LABLE:while ( <PFILE> ) {
+	chomp;
+	@line = split( /\s+/ ); # splits line into tokens
+	# This comparison may be changed if there will be changes log file.
+	if ( $line[0] eq "Ost#" ) { 
+		print DATAFILE "$line[0] $line[1] $line[2]\n";
+		$flag = 1;
+		<PFILE>; # skip the "---------" line from result file.
+		last LABLE;
+	}
+	if ($line[2] eq "OST" && $line[3] eq "speed") {
+		@GraphTitle = @line;
+		@GraphTitle = split( /:/ );
+	}
+}
+if ( !$flag) {
+	print "Invalid logfile format\n";
+	exit 1;
+}
+while ( <PFILE> )  {
+	chomp;
+	@line = split( /\s+/ ); # splits line into tokens
+	if ( $line[1] ne "Inactive" ) {
+                print DATAFILE "$count $line[1] $line[2]\n";
+        }
+	$count = $count + 1;
+}
+close PFILE;
+close DATAFILE;
+# Open .scr file for writting instructions for gnuplot.
+open ( SCRFILE, "> $file.scr" ) or die "Can't open scr file for writting";
+# generate instructions for gnuplot. decide axes depends on ranges in @columnvalues
+print SCRFILE "set title \"$GraphTitle[1]\"\n";
+print SCRFILE "set xlabel \"OST index\"\n";
+print SCRFILE "set ylabel \"MB/s\"\n";
+print SCRFILE "set boxwidth 0.2\n";
+print SCRFILE "plot \"$file.dat\" using 1:2 axes x1y1 title \"Read(MB/s)\" with boxes fs solid 0.7\n";
+print SCRFILE "replot \"$file.dat\" using (\$1 + 0.2):3 axes x1y1 title \"Write(MB/s)\" with boxes fs solid 0.7\n";
+print SCRFILE "pause -1\n";
+close SCRFILE;
+# invoke gnuplot to display graph.
+system ("gnuplot $file.scr") == 0 or die "ERROR: while ploting graph.\nMake sure that gnuplot is working properly";

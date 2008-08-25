@@ -758,7 +758,13 @@ void class_unlink_export(struct obd_export *exp)
         list_del_init(&exp->exp_obd_chain_timed);
         exp->exp_obd->obd_num_exports--;
         spin_unlock(&exp->exp_obd->obd_dev_lock);
-
+        /* Keep these counter valid always */
+        spin_lock_bh(&exp->exp_obd->obd_processing_task_lock);
+        if (exp->exp_delayed)
+                exp->exp_obd->obd_delayed_clients--;
+        else
+                exp->exp_obd->obd_recoverable_clients--;
+        spin_unlock_bh(&exp->exp_obd->obd_processing_task_lock);
         class_export_put(exp);
 }
 EXPORT_SYMBOL(class_unlink_export);
@@ -784,12 +790,12 @@ void class_import_put(struct obd_import *import)
 {
         ENTRY;
 
-        CDEBUG(D_INFO, "import %p refcount=%d\n", import,
-               atomic_read(&import->imp_refcount) - 1);
-
         LASSERT(atomic_read(&import->imp_refcount) > 0);
         LASSERT(atomic_read(&import->imp_refcount) < 0x5a5a5a);
         LASSERT(list_empty(&import->imp_zombie_chain));
+
+        CDEBUG(D_INFO, "import %p refcount=%d\n", import,
+               atomic_read(&import->imp_refcount) - 1);
 
         if (atomic_dec_and_test(&import->imp_refcount)) {
 
@@ -1101,17 +1107,24 @@ EXPORT_SYMBOL(class_set_export_delayed);
  */
 void class_handle_stale_exports(struct obd_device *obd)
 {
-        struct list_head delay_list;
+        struct list_head delay_list, evict_list;
         struct obd_export *exp, *n;
         ENTRY;
 
         CFS_INIT_LIST_HEAD(&delay_list);
+        CFS_INIT_LIST_HEAD(&evict_list);
         spin_lock(&obd->obd_dev_lock);
         list_for_each_entry_safe(exp, n, &obd->obd_exports, exp_obd_chain) {
-                if (exp->exp_replay_needed && !exp->exp_delayed &&
-                    (obd->obd_version_recov || !exp->exp_in_recovery)) {
-                        list_move_tail(&exp->exp_obd_chain, &delay_list);
+                /* clients finished recovery or delayed */
+                if (!exp->exp_replay_needed || exp->exp_delayed)
+                        continue;
+                /* connected non-vbr clients are evicted */
+                if (exp->exp_in_recovery && !exp_connect_vbr(exp)) {
+                        list_move_tail(&exp->exp_obd_chain, &evict_list);
+                        continue;
                 }
+                if (obd->obd_version_recov || !exp->exp_in_recovery)
+                        list_move_tail(&exp->exp_obd_chain, &delay_list);
         }
         spin_unlock(&obd->obd_dev_lock);
 
@@ -1122,6 +1135,9 @@ void class_handle_stale_exports(struct obd_device *obd)
         spin_lock(&obd->obd_dev_lock);
         list_splice(&delay_list, obd->obd_exports.prev);
         spin_unlock(&obd->obd_dev_lock);
+
+        /* evict clients without VBR support */
+        class_disconnect_export_list(&evict_list, get_exp_flags_from_obd(obd));
 
         EXIT;
 }

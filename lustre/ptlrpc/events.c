@@ -122,9 +122,9 @@ void reply_in_callback(lnet_event_t *ev)
                           "replied=%d unlinked=%d", ev->mlength, ev->offset,
                           req->rq_replen, req->rq_replied, ev->unlinked);
 
-                if (unlikely(ev->mlength != lustre_msg_early_size()))
+                if (unlikely(ev->mlength != lustre_msg_early_size(req)))
                         CERROR("early reply sized %u, expect %u\n",
-                               ev->mlength, lustre_msg_early_size());
+                               ev->mlength, lustre_msg_early_size(req));
 
                 req->rq_early_count++; /* number received, client side */
                 if (req->rq_replied) {

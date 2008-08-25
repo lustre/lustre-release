@@ -1,0 +1,26 @@
+ost-survey (OST performance survey)
+===================================
+	This script is designed to test the client-to-disk performance 
+of the individual OSTs in a Lustre filesystem.  The network transfer 
+time from the client is included; to get a better idea of the isolated
+disk perfomance, run this script on a client running on the OST.
+	
+Syntax:
+	$ ost-survey [-h] [-s <size>] <lustre_path>
+	where		   -s : size in MB
+			   -h : help
+	        <lustre_path> : mount point of lustre client
+
+Assumptions
+	- Lustre filesystem is up and running
+	- Script is being run on a client
+
+
+plot-ost (OST survey graph)
+===========================
+	The plot-ost script can be used to plot the results from the
+ost-survey script using gnuplot.
+
+Syntax: $ ost-survey /mnt/lustre > ost_log
+	$ plot-ost ost_log
+

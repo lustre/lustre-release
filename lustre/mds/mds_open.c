@@ -371,11 +371,11 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 rc = fsfilt_set_md(obd, inode, *handle, lmm, lmm_size, "lov");
                 if (rc)
                         CERROR("open replay failed to set md:%d\n", rc);
-                lmm_buf = lustre_msg_buf(req->rq_repmsg, offset, lmm_size);
-                LASSERT(lmm_buf);
-                memcpy(lmm_buf, lmm, lmm_size);
 
-                *objid = lmm_buf;
+                /* for replay we not need send lmm to client, this not used now */
+                lustre_shrink_reply(req, offset, 0, 1);
+                *objid = lmm;
+
                 RETURN(rc);
         }
 
@@ -395,7 +395,6 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
 
         obdo_from_inode(oinfo.oi_oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
                         OBD_MD_FLMTIME | OBD_MD_FLCTIME);
-
         if (!(rec->ur_flags & MDS_OPEN_HAS_OBJS)) {
                 /* check if things like lfs setstripe are sending us the ea */
                 if (rec->ur_flags & MDS_OPEN_HAS_EA) {
@@ -405,18 +404,20 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                         if (rc)
                                 GOTO(out_oa, rc);
                 } else {
-                        OBD_ALLOC(lmm, mds->mds_max_mdsize);
+                        __u32 lmm_sz = mds->mds_max_mdsize;
+                        OBD_ALLOC(lmm, lmm_sz);
                         if (lmm == NULL)
                                 GOTO(out_oa, rc = -ENOMEM);
 
-                        lmm_size = mds->mds_max_mdsize;
+                        lmm_size = lmm_sz;
                         rc = mds_get_md(obd, dchild->d_parent->d_inode,
-                                        lmm, &lmm_size, 1, 0);
+                                        lmm, &lmm_size, 1, 0,
+                                        req->rq_export->exp_connect_flags);
                         if (rc > 0)
                                 rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
                                                    mds->mds_osc_exp,
                                                    0, &oinfo.oi_md, lmm);
-                        OBD_FREE(lmm, mds->mds_max_mdsize);
+                        OBD_FREE(lmm, lmm_sz);
                         if (rc)
                                 GOTO(out_oa, rc);
                 }
@@ -581,7 +582,8 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         mds_pack_inode2body(body, dchild->d_inode);
         if (S_ISREG(dchild->d_inode->i_mode)) {
                 rc = mds_pack_md(obd, req->rq_repmsg, DLM_REPLY_REC_OFF + 1,
-                                 body, dchild->d_inode, 1, 0);
+                                 body, dchild->d_inode, 1, 0,
+                                 req->rq_export->exp_connect_flags);
 
                 if (rc)
                         LASSERT(rc == req->rq_status);
@@ -719,7 +721,8 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
         if (S_ISREG(dchild->d_inode->i_mode) &&
             !(body->valid & OBD_MD_FLEASIZE)) {
                 rc = mds_pack_md(obd, req->rq_repmsg, DLM_REPLY_REC_OFF + 1,
-                                 body, dchild->d_inode, 0, 0);
+                                 body, dchild->d_inode, 0, 0,
+                                 req->rq_export->exp_connect_flags);
                 if (rc) {
                         UNLOCK_INODE_MUTEX(dchild->d_inode);
                         RETURN(rc);
@@ -1414,55 +1417,43 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
                 goto out; /* Don't bother updating attrs on unlinked inode */
         }
 
-#if 0
-        if (request_body != NULL && mfd->mfd_mode & FMODE_WRITE && rc == 0) {
-                /* Update the on-disk attributes if this was the last write
-                 * close, and all information was provided (i.e., rc == 0)
-                 *
-                 * XXX this should probably be abstracted with mds_reint_setattr
-                 */
-
-                if (request_body->valid & OBD_MD_FLMTIME &&
-                    LTIME_S(iattr.ia_mtime) > LTIME_S(inode->i_mtime)) {
-                        LTIME_S(iattr.ia_mtime) = request_body->mtime;
-                        iattr.ia_valid |= ATTR_MTIME;
-                }
-                if (request_body->valid & OBD_MD_FLCTIME &&
-                    LTIME_S(iattr.ia_ctime) > LTIME_S(inode->i_ctime)) {
-                        LTIME_S(iattr.ia_ctime) = request_body->ctime;
-                        iattr.ia_valid |= ATTR_CTIME;
-                }
-
-                /* XXX can't set block count with fsfilt_setattr (!) */
-                if (request_body->valid & OBD_MD_FLSIZE) {
-                        iattr.ia_valid |= ATTR_SIZE;
-                        iattr.ia_size = request_body->size;
-                }
-                /* iattr.ia_blocks = request_body->blocks */
-
-        }
-#endif
         if (request_body != NULL) {
-               if (request_body->valid & OBD_MD_FLMTIME) {
-                      LTIME_S(iattr.ia_mtime) = request_body->mtime;
-                      if (LTIME_S(iattr.ia_mtime) > LTIME_S(inode->i_mtime) &&
-                          ((request_body->valid & OBD_MD_FLCTIME) == 0 ||
-                           request_body->ctime > LTIME_S(inode->i_ctime)))
-                              iattr.ia_valid |= ATTR_MTIME;
+               if ((request_body->valid & OBD_MD_FLCTIME) &&
+                   (request_body->ctime > LTIME_S(inode->i_ctime))) {
+                       LTIME_S(iattr.ia_ctime) = request_body->ctime;
+                       iattr.ia_valid |= ATTR_CTIME;
                }
 
-               if (request_body->valid & OBD_MD_FLATIME) {
-                       /* Only start a transaction to write out only the atime
-                        * if it is more out-of-date than the specified limit.
-                        * If we are already going to write out the inode then
-                        * update the atime anyway.
-                        */
+               if ((request_body->valid & OBD_MD_FLMTIME) &&
+                   (request_body->mtime > LTIME_S(inode->i_mtime)) &&
+                   (iattr.ia_valid & ATTR_CTIME)) {
+                       LTIME_S(iattr.ia_mtime) = request_body->mtime;
+                       iattr.ia_valid |= ATTR_MTIME;
+               }
+
+               /* Only start a transaction to write out only the atime
+                * if it is more out-of-date than the specified limit.
+                * If we are already going to write out the inode then
+                * update the atime anyway.
+                */
+               if ((request_body->valid & OBD_MD_FLATIME) &&
+                   ((request_body->atime >
+                     LTIME_S(inode->i_atime) + mds->mds_atime_diff) ||
+                    (iattr.ia_valid != 0 &&
+                     request_body->atime > LTIME_S(inode->i_atime)))) {
                        LTIME_S(iattr.ia_atime) = request_body->atime;
-                       if ((LTIME_S(iattr.ia_atime) >
-                            LTIME_S(inode->i_atime) + mds->mds_atime_diff) ||
-                           (iattr.ia_valid != 0 &&
-                            LTIME_S(iattr.ia_atime) > LTIME_S(inode->i_atime)))
-                               iattr.ia_valid |= ATTR_ATIME;
+                       iattr.ia_valid |= ATTR_ATIME;
+               }
+
+               /* Store a rough estimate of the file size on the MDS for
+                * tools like e2scan and HSM that are just using this for
+                * rough decision making and will get the proper size later.
+                * This is NOT guaranteed to be correct with multiple
+                * writers, but is only needed until SOM is done. b=11063 */
+               if ((request_body->valid & OBD_MD_FLSIZE) &&
+                   (iattr.ia_valid != 0)) {
+                       iattr.ia_size = request_body->size;
+                       iattr.ia_valid |= ATTR_SIZE;
                }
         }
 
@@ -1571,7 +1562,8 @@ int mds_close(struct ptlrpc_request *req, int offset)
 
                 mds_pack_inode2body(body, inode);
                 mds_pack_md(obd, req->rq_repmsg, REPLY_REC_OFF + 1, body, inode,
-                            MDS_PACK_MD_LOCK, 0);
+                            MDS_PACK_MD_LOCK, 0,
+                            req->rq_export->exp_connect_flags);
         }
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);

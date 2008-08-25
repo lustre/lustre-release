@@ -290,6 +290,8 @@ enum {
         MDS_REINT_UNLINK,
         MDS_REINT_RENAME,
         MDS_REINT_OPEN,
+        BRW_READ_BYTES,
+        BRW_WRITE_BYTES,
         EXTRA_LAST_OPC
 };
 
@@ -398,9 +400,12 @@ extern int lprocfs_add_clear_entry(struct obd_device * obd,
 extern int lprocfs_exp_setup(struct obd_export *exp,
                              lnet_nid_t *peer_nid, int *newnid);
 extern int lprocfs_exp_cleanup(struct obd_export *exp);
-extern int lprocfs_add_simple(struct proc_dir_entry *root,
-                              char *name, read_proc_t *read_proc,
-                              write_proc_t *write_proc, void *data);
+extern cfs_proc_dir_entry_t *lprocfs_add_simple(struct proc_dir_entry *root,
+                                                char *name,
+                                                read_proc_t *read_proc,
+                                                write_proc_t *write_proc,
+                                                void *data,
+                                                struct file_operations *fops);
 extern int lprocfs_register_stats(cfs_proc_dir_entry_t *root, const char *name,
                                   struct lprocfs_stats *stats);
 
@@ -421,9 +426,6 @@ extern cfs_proc_dir_entry_t *lprocfs_srch(cfs_proc_dir_entry_t *root,
 
 extern int lprocfs_obd_setup(struct obd_device *obd, struct lprocfs_vars *list);
 extern int lprocfs_obd_cleanup(struct obd_device *obd);
-extern int lprocfs_add_simple(struct proc_dir_entry *root, char *name,
-                              read_proc_t *read_proc, write_proc_t *write_proc,
-                              void *data);
 struct nid_stat;
 extern void lprocfs_free_per_client_stats(struct obd_device *obd);
 extern int lprocfs_nid_stats_clear_write(struct file *file, const char *buffer,
@@ -690,11 +692,12 @@ static inline int lprocfs_exp_setup(struct obd_export *exp,
 { return 0; }
 static inline int lprocfs_exp_cleanup(struct obd_export *exp)
 { return 0; }
-static inline int lprocfs_add_simple(struct proc_dir_entry *root,
-                                     char *name,
-                                     read_proc_t *read_proc,
-                                     write_proc_t *write_proc,
-                                     void *data)
+static inline cfs_proc_dir_entry_t *lprocfs_add_simple(struct proc_dir_entry *root,
+                                                char *name,
+                                                read_proc_t *read_proc,
+                                                write_proc_t *write_proc,
+                                                void *data,
+                                                struct file_operations *fops)
 {return 0; }
 struct nid_stat;
 static inline void lprocfs_free_per_client_stats(struct obd_device *obd)

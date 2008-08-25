@@ -45,6 +45,8 @@
 extern char      tracefile[TRACEFILE_NAME_SIZE];
 extern long long tracefile_size;
 
+extern void libcfs_run_debug_log_upcall(char *file);
+
 int  tracefile_init_arch(void);
 void tracefile_fini_arch(void);
 
@@ -96,7 +98,7 @@ extern int  trace_max_debug_mb(void);
 
 #define TRACEFILE_SIZE (500 << 20)
 
-/* Size of a buffer for sprinting console messages if we can't get a page 
+/* Size of a buffer for sprinting console messages if we can't get a page
  * from system */
 #define TRACE_CONSOLE_BUFFER_SIZE   1024
 
@@ -125,7 +127,7 @@ union trace_data_union {
 
 		/*
 		 * Maximal number of pages allowed on ->tcd_pages and
-		 * ->tcd_daemon_pages each. 
+		 * ->tcd_daemon_pages each.
 		 * Always TCD_MAX_PAGES * tcd_pages_factor / 100 in current
 		 * implementation.
 		 */
@@ -233,7 +235,7 @@ struct trace_page {
 	 */
 	unsigned short   cpu;
 	/*
-	 * type(context) of this page 
+	 * type(context) of this page
 	 */
 	unsigned short   type;
 };

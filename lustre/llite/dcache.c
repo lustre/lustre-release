@@ -50,7 +50,7 @@
 #include "llite_internal.h"
 
 /* should NOT be called with the dcache lock, see fs/dcache.c */
-static void ll_release(struct dentry *de)
+void ll_release(struct dentry *de)
 {
         struct ll_dentry_data *lld;
         ENTRY;

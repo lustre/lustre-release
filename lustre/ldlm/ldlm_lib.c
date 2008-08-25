@@ -336,7 +336,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         cli->cl_import = imp;
         /* cli->cl_max_mds_{easize,cookiesize} updated by mdc_init_ea_size() */
-        cli->cl_max_mds_easize = sizeof(struct lov_mds_md);
+        cli->cl_max_mds_easize = sizeof(struct lov_mds_md_v3);
         cli->cl_max_mds_cookiesize = sizeof(struct llog_cookie);
 
         if (LUSTRE_CFG_BUFLEN(lcfg, 3) > 0) {
@@ -754,6 +754,12 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 class_export_put(export);
                 export = NULL;
                 rc = -ENODEV;
+        } else if (export != NULL && export->exp_delayed &&
+                   !(data && data->ocd_connect_flags & OBD_CONNECT_VBR)) {
+                class_fail_export(export);
+                class_export_put(export);
+                export = NULL;
+                rc = -ENODEV;
         } else if (export != NULL) {
                 spin_lock(&export->exp_lock);
                 export->exp_connecting = 1;
@@ -828,6 +834,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         /* VBR: for delayed connections we start recovery */
         if (export && export->exp_delayed && !export->exp_in_recovery) {
                 LASSERT(!target->obd_recovering);
+                LASSERT(data && data->ocd_connect_flags & OBD_CONNECT_VBR);
                 lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_DELAYED |
                                         MSG_CONNECT_RECOVERING);
                 spin_lock_bh(&target->obd_processing_task_lock);
@@ -1175,6 +1182,7 @@ void target_stop_recovery(void *data, int abort)
         }
         obd->obd_recovering = 0;
         obd->obd_abort_recovery = 0;
+        obd->obd_processing_task = 0;
         if (abort == 0)
                 LASSERT(obd->obd_recoverable_clients == 0);
 
@@ -1221,7 +1229,7 @@ static void target_recovery_expired(unsigned long castmeharder)
             obd->obd_recoverable_clients == 0)
                 obd->obd_abort_recovery = 1;
         /* always check versions now */
-                obd->obd_version_recov = 1;
+        obd->obd_version_recov = 1;
         cfs_waitq_signal(&obd->obd_next_transno_waitq);
         spin_unlock_bh(&obd->obd_processing_task_lock);
         /* reset timer if recovery will proceed with versions now */

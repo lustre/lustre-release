@@ -97,10 +97,17 @@ __init int ptlrpc_init(void)
         if (ptlrpc_cbdata_slab == NULL)
                 GOTO(cleanup, rc);
 
+        cleanup_phase = 5;
+        rc = llog_recov_init();
+        if (rc)
+                GOTO(cleanup, rc);
+
         RETURN(0);
 
 cleanup:
         switch(cleanup_phase) {
+        case 5:
+                cfs_mem_cache_destroy(ptlrpc_cbdata_slab);
         case 4:
                 ldlm_exit();
         case 3:
@@ -118,6 +125,7 @@ cleanup:
 #ifdef __KERNEL__
 static void __exit ptlrpc_exit(void)
 {
+        llog_recov_fini();
         ldlm_exit();
         ptlrpc_stop_pinger();
         ptlrpc_exit_portals();
@@ -227,7 +235,8 @@ EXPORT_SYMBOL(lustre_swab_mds_rec_link);
 EXPORT_SYMBOL(lustre_swab_mds_rec_unlink);
 EXPORT_SYMBOL(lustre_swab_mds_rec_rename);
 EXPORT_SYMBOL(lustre_swab_lov_desc);
-EXPORT_SYMBOL(lustre_swab_lov_user_md);
+EXPORT_SYMBOL(lustre_swab_lov_user_md_v1);
+EXPORT_SYMBOL(lustre_swab_lov_user_md_v3);
 EXPORT_SYMBOL(lustre_swab_lov_user_md_objects);
 EXPORT_SYMBOL(lustre_swab_lov_user_md_join);
 EXPORT_SYMBOL(lustre_swab_ldlm_res_id);
@@ -278,6 +287,7 @@ EXPORT_SYMBOL(lustre_msg_set_transno);
 EXPORT_SYMBOL(lustre_msg_set_status);
 EXPORT_SYMBOL(lustre_msg_set_conn_cnt);
 EXPORT_SYMBOL(lustre_swab_mgs_target_info);
+EXPORT_SYMBOL(lustre_swab_fiemap);
 
 /* recover.c */
 EXPORT_SYMBOL(ptlrpc_disconnect_import);

@@ -531,7 +531,7 @@ else
 			   -f ${O2IBPATH}/include/rdma/ib_fmr_pool.h \); then
 			o2ib_found=true
 			break
- 		fi
+		fi
 	done
 
 	if ! $o2ib_found; then
@@ -601,41 +601,41 @@ else
 			fi
 		fi
 
-                LB_LINUX_TRY_COMPILE([
-		        #include <linux/version.h>
-		        #include <linux/pci.h>
-		        #if !HAVE_GFP_T
-		        typedef int gfp_t;
-		        #endif
-		        #include <rdma/ib_verbs.h>
-                ],[
-                        ib_dma_map_single(NULL, NULL, 0, 0);
-                        return 0;
-                ],[
-                        AC_MSG_RESULT(yes)
-                        AC_DEFINE(HAVE_OFED_IB_DMA_MAP, 1,
-                                  [ib_dma_map_single defined])
-                ],[
-                        AC_MSG_RESULT(NO)
-                ])
+			LB_LINUX_TRY_COMPILE([
+				#include <linux/version.h>
+				#include <linux/pci.h>
+				#if !HAVE_GFP_T
+				typedef int gfp_t;
+				#endif
+				#include <rdma/ib_verbs.h>
+			],[
+				ib_dma_map_single(NULL, NULL, 0, 0);
+				return 0;
+			],[
+				AC_MSG_RESULT(yes)
+				AC_DEFINE(HAVE_OFED_IB_DMA_MAP, 1,
+					  [ib_dma_map_single defined])
+			],[
+				AC_MSG_RESULT(NO)
+			])
 
-                LB_LINUX_TRY_COMPILE([
-		        #include <linux/version.h>
-		        #include <linux/pci.h>
-		        #if !HAVE_GFP_T
-		        typedef int gfp_t;
-		        #endif
-		        #include <rdma/ib_verbs.h>
-                ],[
-                        ib_create_cq(NULL, NULL, NULL, NULL, 0, 0);
-                        return 0;
-                ],[
-                        AC_MSG_RESULT(yes)
-                        AC_DEFINE(HAVE_OFED_IB_COMP_VECTOR, 1,
-                                  [has completion vector])
-                ],[
-                        AC_MSG_RESULT(NO)
-                ])
+			LB_LINUX_TRY_COMPILE([
+				#include <linux/version.h>
+				#include <linux/pci.h>
+				#if !HAVE_GFP_T
+				typedef int gfp_t;
+				#endif
+				#include <rdma/ib_verbs.h>
+			],[
+				ib_create_cq(NULL, NULL, NULL, NULL, 0, 0);
+				return 0;
+			],[
+				AC_MSG_RESULT(yes)
+				AC_DEFINE(HAVE_OFED_IB_COMP_VECTOR, 1,
+					  [has completion vector])
+			],[
+				AC_MSG_RESULT(NO)
+			])
 
 		EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 	fi

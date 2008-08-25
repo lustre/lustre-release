@@ -78,6 +78,10 @@
 
 static cfs_sysctl_table_header_t *lnet_table_header = NULL;
 extern char lnet_upcall[1024];
+/**
+ * The path of debug log dump upcall script.
+ */
+extern char lnet_debug_log_upcall[1024];
 
 #define PSDEV_LNET  (0x100)
 enum {
@@ -97,11 +101,12 @@ enum {
         PSDEV_LNET_DUMP_KERNEL,   /* snapshot kernel debug buffer to file */
         PSDEV_LNET_DAEMON_FILE,   /* spool kernel debug buffer to file */
         PSDEV_LNET_DEBUG_MB,      /* size of debug buffer */
+        PSDEV_LNET_DEBUG_LOG_UPCALL, /* debug log upcall script */
 };
 
-static int 
-proc_call_handler(void *data, int write, 
-                  loff_t *ppos, void *buffer, size_t *lenp, 
+static int
+proc_call_handler(void *data, int write,
+                  loff_t *ppos, void *buffer, size_t *lenp,
                   int (*handler)(void *data, int write,
                                  loff_t pos, void *buffer, int len))
 {
@@ -130,7 +135,7 @@ LL_PROC_PROTO(name)                                     \
                                  __##name);             \
 }
 
-static int __proc_dobitmasks(void *data, int write, 
+static int __proc_dobitmasks(void *data, int write,
                              loff_t pos, void *buffer, int nob)
 {
         const int     tmpstrlen = 512;
@@ -176,7 +181,7 @@ static int __proc_dump_kernel(void *data, int write,
 {
         if (!write)
                 return 0;
-        
+
         return trace_dump_debug_buffer_usrstr(buffer, nob);
 }
 
@@ -187,14 +192,14 @@ static int __proc_daemon_file(void *data, int write,
 {
         if (!write) {
                 int len = strlen(tracefile);
-                
+
                 if (pos >= len)
                         return 0;
-                
-                return trace_copyout_string(buffer, nob, 
+
+                return trace_copyout_string(buffer, nob,
                                             tracefile + pos, "\n");
         }
-        
+
         return trace_daemon_command_usrstr(buffer, nob);
 }
 
@@ -210,10 +215,10 @@ static int __proc_debug_mb(void *data, int write,
 
                 if (pos >= len)
                         return 0;
-                
+
                 return trace_copyout_string(buffer, nob, tmpstr + pos, "\n");
         }
-        
+
         return trace_set_debug_mb_usrstr(buffer, nob);
 }
 
@@ -375,12 +380,19 @@ static cfs_sysctl_table_t lnet_table[] = {
                 .mode     = 0644,
                 .proc_handler = &proc_dostring,
         },
-
         {
                 .ctl_name = PSDEV_LNET_UPCALL,
                 .procname = "upcall",
                 .data     = lnet_upcall,
                 .maxlen   = sizeof(lnet_upcall),
+                .mode     = 0644,
+                .proc_handler = &proc_dostring,
+        },
+        {
+                .ctl_name = PSDEV_LNET_DEBUG_LOG_UPCALL,
+                .procname = "debug_log_upcall",
+                .data     = lnet_debug_log_upcall,
+                .maxlen   = sizeof(lnet_debug_log_upcall),
                 .mode     = 0644,
                 .proc_handler = &proc_dostring,
         },

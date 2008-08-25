@@ -79,6 +79,42 @@
 #endif
 
 char lnet_upcall[1024] = "/usr/lib/lustre/lnet_upcall";
+char lnet_debug_log_upcall[1024] = "/usr/lib/lustre/lnet_debug_log_upcall";
+
+/**
+ * Upcall function once a Lustre log has been dumped.
+ *
+ * \param file  path of the dumped log
+ */
+void libcfs_run_debug_log_upcall(char *file)
+{
+        char *argv[3];
+        int   rc;
+        char *envp[] = {
+                "HOME=/",
+                "PATH=/sbin:/bin:/usr/sbin:/usr/bin",
+                NULL};
+        ENTRY;
+
+        argv[0] = lnet_debug_log_upcall;
+
+        LASSERTF(file != NULL, "called on a null filename\n");
+        argv[1] = file; //only need to pass the path of the file
+
+        argv[2] = NULL;
+
+        rc = USERMODEHELPER(argv[0], argv, envp);
+        if (rc < 0 && rc != -ENOENT) {
+                CERROR("Error %d invoking LNET debug log upcall %s %s; "
+                       "check /proc/sys/lnet/debug_log_upcall\n",
+                       rc, argv[0], argv[1]);
+        } else {
+                CDEBUG(D_HA, "Invoked LNET debug log upcall %s %s\n",
+                       argv[0], argv[1]);
+        }
+
+        EXIT;
+}
 
 void libcfs_run_upcall(char **argv)
 {
