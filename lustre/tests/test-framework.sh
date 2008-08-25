@@ -249,7 +249,7 @@ unload_modules() {
     wait_exit_ST client # bug 12845
 
     lsmod | grep libcfs > /dev/null && $LCTL dl
-    unload_dep_module $FSTYPE
+    [ -z "$CLIENTONLY" ] && unload_dep_module $FSTYPE
     unload_dep_module libcfs
 
     local MODULES=$($LCTL modules | awk '{ print $2 }')
