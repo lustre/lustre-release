@@ -3635,8 +3635,9 @@ test_101() {
 	$READS -f $DIR/$tfile -s$((cache_limit * 3192 * 1024)) -b65536 -C -n$nreads -t 180
 
 	discard=0
-	for s in `lctl get_param -n llite.*.read_ahead_stats | get_named_value 'read but discarded'`; do
-		discard=$(($discard + $s))
+        for s in `lctl get_param -n llite.*.read_ahead_stats | \
+		get_named_value 'read but discarded' | cut -d" " -f1`; do
+			discard=$(($discard + $s))
 	done
 	cleanup_101
 
@@ -3681,11 +3682,11 @@ ra_check_101b() {
 	local RA_INC=1048576
 	local STRIDE_LENGTH=$((STRIPE_SIZE/READ_SIZE))
 	local FILE_LENGTH=$((64*100))
-	local discard_limit=$((((STRIDE_LENGTH-1)*3/(STRIDE_LENGTH*OSTCOUNT))* \
-			       (STRIDE_LENGTH*OSTCOUNT - STRIDE_LENGTH)))
-
-	DISCARD=`$LCTL get_param -n llite.*.read_ahead_stats |
-		 get_named_value 'read but discarded' | calc_total`
+	local discard_limit=$((((STRIDE_LENGTH - 1)*3/(STRIDE_LENGTH*OSTCOUNT))* \
+			     (STRIDE_LENGTH*OSTCOUNT - STRIDE_LENGTH)))
+	DISCARD=`$LCTL get_param -n llite.*.read_ahead_stats | \
+			get_named_value 'read but discarded' | \
+			cut -d" " -f1 | calc_total`
 
 	if [ $DISCARD -gt $discard_limit ]; then
 		lctl get_param llite.*.read_ahead_stats
