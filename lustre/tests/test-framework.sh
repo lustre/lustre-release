@@ -1419,8 +1419,7 @@ run_one() {
     cd $SAVE_PWD
     reset_fail_loc
     check_grant ${testnum} || error "check_grant $testnum failed with $?"
-    [ -f $CATASTROPHE ] && [ `cat $CATASTROPHE` -ne 0 ] && \
-        error "LBUG/LASSERT detected"
+    check_catastrophe || error "LBUG/LASSERT detected"
     ps auxww | grep -v grep | grep -q multiop && error "multiop still running"
     pass "($((`date +%s` - $BEFORE))s)"
     unset TESTNAME
@@ -1543,6 +1542,12 @@ nodes_list () {
     myNODES_sort=$(for i in $myNODES; do echo $i; done | sort -u)
 
     echo $myNODES_sort
+}
+
+remote_nodes_list () {
+    local rnodes=$(nodes_list)
+    rnodes=$(echo " $rnodes " | sed -re "s/\s+$HOSTNAME\s+/ /g")
+    echo $rnodes 
 }
 
 init_clients_lists () {
@@ -1703,5 +1708,14 @@ restore_lustre_params() {
         while IFS=" =" read node name val; do
                 do_node $node "lctl set_param -n $name $val"
         done
+}
+
+check_catastrophe () {
+    local rnodes=$(comma_list $(remote_nodes_list))
+
+    [ -f $CATASTROPHE ] && [ `cat $CATASTROPHE` -ne 0 ] && return 1
+    if [ $rnodes ]; then
+        do_nodes $rnodes "[ -f $CATASTROPHE ] && { [ `cat $CATASTROPHE` -eq 0 ] || false; } || true"
+    fi 
 }
 
