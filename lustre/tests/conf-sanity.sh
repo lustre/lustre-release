@@ -1643,6 +1643,13 @@ run_test 42 "invalid config param should not prevent client from mounting"
 
 test_43() { #bug 15993
         setup
+        VERSION_1_8=$(do_facet mds $LCTL get_param version | grep ^lustre.*1\.[78])
+        if [ -z "$VERSION_1_8" ]; then
+                skip "skipping test for non 1.8 MDS"
+                cleanup
+                return 0
+        fi
+
         check_mount || return 2
         testfile=$DIR/$tfile
         lma="this-should-be-removed-after-remount-and-accessed"
