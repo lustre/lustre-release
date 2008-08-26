@@ -1717,7 +1717,7 @@ check_catastrophe () {
 
     [ -f $CATASTROPHE ] && [ `cat $CATASTROPHE` -ne 0 ] && return 1
     if [ $rnodes ]; then
-        do_nodes $rnodes "[ -f $CATASTROPHE ] && { [ `cat $CATASTROPHE` -eq 0 ] || false; } || true"
+        do_nodes $rnodes "[ -f $CATASTROPHE ] && { [ \`cat $CATASTROPHE\` -eq 0 ] || false; } || true"
     fi 
 }
 
