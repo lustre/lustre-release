@@ -840,7 +840,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 spin_lock_bh(&target->obd_processing_task_lock);
                 target->obd_version_recov = 1;
                 spin_unlock_bh(&target->obd_processing_task_lock);
-                target_start_and_reset_recovery_timer(target, handler, req, 0);
+                target_start_and_reset_recovery_timer(target, handler, req, 1);
         }
 
         if (export == NULL) {
@@ -1321,13 +1321,12 @@ target_start_and_reset_recovery_timer(struct obd_device *obd,
                                       struct ptlrpc_request *req,
                                       int new_client)
 {
-        int req_timeout = OBD_RECOVERY_FACTOR *
-                          lustre_msg_get_timeout(req->rq_reqmsg);
+        /* teach server about old server's estimates */
+        if (!new_client)
+                at_add(&req->rq_rqbd->rqbd_service->srv_at_estimate,
+                       lustre_msg_get_timeout(req->rq_reqmsg));
 
         check_and_start_recovery_timer(obd, handler);
-
-        if (req_timeout > obd->obd_recovery_timeout && !new_client)
-                reset_recovery_timer(obd, req_timeout, 0);
 }
 
 static int check_for_next_transno(struct obd_device *obd)
@@ -1661,7 +1660,10 @@ int target_queue_last_replay_reply(struct ptlrpc_request *req, int rc)
                 CWARN("%s: disconnect export %s\n", obd->obd_name,
                       exp->exp_client_uuid.uuid);
                 class_fail_export(exp);
-                goto out_noconn;
+                OBD_FREE(reqmsg, req->rq_reqlen);
+                OBD_FREE(saved_req, sizeof *req);
+                req->rq_status = 0;
+                ptlrpc_send_reply(req, 0);
         }
 
         return 1;
