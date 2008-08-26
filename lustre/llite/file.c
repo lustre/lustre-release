@@ -579,8 +579,9 @@ restart:
                            let's close it somehow. This will decref request. */
                         rc = it_open_error(DISP_OPEN_OPEN, it);
                         if (rc) {
+                                up(&lli->lli_och_sem);
                                 ll_file_data_put(fd);
-                                GOTO(out_och_free, rc);
+                                GOTO(out_openerr, rc);
                         }       
                         ll_release_openhandle(file->f_dentry, it);
                         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, 
@@ -590,9 +591,10 @@ restart:
 
                 rc = ll_local_open(file, it, fd, NULL);
                 if (rc) {
+                        (*och_usecount)--;
                         up(&lli->lli_och_sem);
                         ll_file_data_put(fd);
-                        RETURN(rc);
+                        GOTO(out_openerr, rc);
                 }
         } else {
                 LASSERT(*och_usecount == 0);
@@ -643,7 +645,6 @@ restart:
                 ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_OPEN, 1);
                 rc = ll_local_open(file, it, fd, *och_p);
                 if (rc) {
-                        up(&lli->lli_och_sem);
                         ll_file_data_put(fd);
                         GOTO(out_och_free, rc);
                 }
