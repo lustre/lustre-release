@@ -490,6 +490,7 @@ test_20c() { # bug 10480
     kill -USR1 $pid
     test -s $DIR/$tfile || error "File was truncated"
 
+    wait $pid || return 1
     return 0
 }
 run_test 20c "check that client eviction does not affect file content"
@@ -701,7 +702,8 @@ test_32() {
     df $MOUNT || sleep 1 && df $MOUNT || return 1
     kill -USR1 $pid1
     kill -USR1 $pid2
-    sleep 1
+    wait $pid1 || return 4
+    wait $pid2 || return 5
     return 0
 }
 run_test 32 "close() notices client eviction; close() after client eviction"
@@ -791,6 +793,7 @@ test_37() {
     fail_abort $SINGLEMDS
     kill -USR1 $pid
     dmesg | grep  "mds_unlink_orphan.*error .* unlinking orphan" && return 1
+    wait $pid || return 3
     sync
     return 0
 }
