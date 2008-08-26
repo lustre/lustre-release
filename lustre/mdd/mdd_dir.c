@@ -1266,24 +1266,27 @@ static int mdd_create(const struct lu_env *env,
                       struct md_op_spec *spec,
                       struct md_attr* ma)
 {
-        char *name = lname->ln_name;
-        struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
-        struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
-        struct mdd_object *son = md2mdd_obj(child);
-        struct mdd_device *mdd = mdo2mdd(pobj);
-        struct lu_attr    *attr = &ma->ma_attr;
-        struct lov_mds_md *lmm = NULL;
-        struct thandle    *handle;
+        struct mdd_thread_info *info = mdd_env_info(env);
+        struct lu_attr         *la = &info->mti_la_for_fix;
+        struct md_attr         *ma_acl = &info->mti_ma;
+        struct mdd_object      *mdd_pobj = md2mdd_obj(pobj);
+        struct mdd_object      *son = md2mdd_obj(child);
+        struct mdd_device      *mdd = mdo2mdd(pobj);
+        struct lu_attr         *attr = &ma->ma_attr;
+        struct lov_mds_md      *lmm = NULL;
+        struct thandle         *handle;
+        struct dynlock_handle  *dlh;
+        char                   *name = lname->ln_name;
         int rc, created = 0, initialized = 0, inserted = 0, lmm_size = 0;
-        struct dynlock_handle *dlh;
+        int got_def_acl = 0;
         ENTRY;
 
         /*
          * Two operations have to be performed:
          *
-         *  - allocation of new object (->do_create()), and
+         *  - an allocation of a new object (->do_create()), and
          *
-         *  - insertion into parent index (->dio_insert()).
+         *  - an insertion into a parent index (->dio_insert()).
          *
          * Due to locking, operation order is not important, when both are
          * successful, *but* error handling cases are quite different:
@@ -1330,6 +1333,21 @@ static int mdd_create(const struct lu_env *env,
                         RETURN(rc);
         }
 
+        if (!S_ISLNK(attr->la_mode)) {
+                ma_acl->ma_acl_size = sizeof info->mti_xattr_buf;
+                ma_acl->ma_acl = info->mti_xattr_buf;
+                ma_acl->ma_need = MA_ACL_DEF;
+                ma_acl->ma_valid = 0;
+
+                mdd_read_lock(env, mdd_pobj);
+                rc = mdd_def_acl_get(env, mdd_pobj, ma_acl);
+                mdd_read_unlock(env, mdd_pobj);
+                if (rc)
+                        GOTO(out_free, rc);
+                else if (ma_acl->ma_valid & MA_ACL_DEF)
+                        got_def_acl = 1;
+        }
+
         mdd_txn_param_build(env, mdd, MDD_TXN_MKDIR_OP);
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
@@ -1338,10 +1356,6 @@ static int mdd_create(const struct lu_env *env,
         dlh = mdd_pdo_write_lock(env, mdd_pobj, name);
         if (dlh == NULL)
                 GOTO(out_trans, rc = -ENOMEM);
-
-        /*
-         * XXX: Check that link can be added to the parent in mkdir case.
-         */
 
         mdd_write_lock(env, son);
         rc = mdd_object_create_internal(env, mdd_pobj, son, ma, handle);
@@ -1353,14 +1367,18 @@ static int mdd_create(const struct lu_env *env,
         created = 1;
 
 #ifdef CONFIG_FS_POSIX_ACL
-        mdd_read_lock(env, mdd_pobj);
-        rc = mdd_acl_init(env, mdd_pobj, son, &ma->ma_attr.la_mode, handle);
-        mdd_read_unlock(env, mdd_pobj);
-        if (rc) {
-                mdd_write_unlock(env, son);
-                GOTO(cleanup, rc);
-        } else {
-                ma->ma_attr.la_valid |= LA_MODE;
+        if (got_def_acl) {
+                struct lu_buf *acl_buf = &info->mti_buf;
+                acl_buf->lb_buf = ma_acl->ma_acl;
+                acl_buf->lb_len = ma_acl->ma_acl_size;
+
+                rc = __mdd_acl_init(env, son, acl_buf, &attr->la_mode, handle);
+                if (rc) {
+                        mdd_write_unlock(env, son);
+                        GOTO(cleanup, rc);
+                } else {
+                        ma->ma_attr.la_valid |= LA_MODE;
+                }
         }
 #endif
 

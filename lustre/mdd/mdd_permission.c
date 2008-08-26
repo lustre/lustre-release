@@ -65,7 +65,7 @@
  * Get default acl EA only.
  * Hold read_lock for mdd_obj.
  */
-int mdd_acl_def_get(const struct lu_env *env, struct mdd_object *mdd_obj, 
+int mdd_def_acl_get(const struct lu_env *env, struct mdd_object *mdd_obj, 
                     struct md_attr *ma)
 {
         struct lu_buf *buf;
@@ -161,33 +161,6 @@ int __mdd_acl_init(const struct lu_env *env, struct mdd_object *obj,
 
         rc = mdo_xattr_set(env, obj, buf, XATTR_NAME_ACL_ACCESS, 0, handle,
                            BYPASS_CAPA);
-        RETURN(rc);
-}
-
-/*
- * Hold read_lock for pobj.
- * Hold write_lock for cobj.
- */
-int mdd_acl_init(const struct lu_env *env, struct mdd_object *pobj,
-                 struct mdd_object *cobj, __u32 *mode, struct thandle *handle)
-{
-        struct lu_buf   *buf;
-        int             rc;
-        ENTRY;
-
-	if (S_ISLNK(*mode))
-                RETURN(0);
-
-        buf = mdd_buf_get(env, mdd_env_info(env)->mti_xattr_buf, 
-                          sizeof(mdd_env_info(env)->mti_xattr_buf));
-        rc = mdo_xattr_get(env, pobj, buf, XATTR_NAME_ACL_DEFAULT, BYPASS_CAPA);
-        if ((rc == -EOPNOTSUPP) || (rc == -ENODATA))
-                RETURN(0);
-        else if (rc <= 0)
-                RETURN(rc);
-
-        buf->lb_len = rc;
-        rc = __mdd_acl_init(env, cobj, buf, mode, handle);
         RETURN(rc);
 }
 #endif

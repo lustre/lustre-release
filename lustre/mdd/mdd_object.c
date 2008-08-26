@@ -404,7 +404,7 @@ static int mdd_attr_get_internal(const struct lu_env *env,
 #ifdef CONFIG_FS_POSIX_ACL
         if (rc == 0 && ma->ma_need & MA_ACL_DEF) {
                 if (S_ISDIR(mdd_object_type(mdd_obj)))
-                        rc = mdd_acl_def_get(env, mdd_obj, ma);
+                        rc = mdd_def_acl_get(env, mdd_obj, ma);
         }
 #endif
         CDEBUG(D_INODE, "after getattr rc = %d, ma_valid = "LPX64"\n",
