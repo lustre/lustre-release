@@ -359,9 +359,11 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int flags)
         service_time = max_t(int, cfs_time_current_sec() -
                              req->rq_arrival_time.tv_sec, 1);
         if (!(flags & PTLRPC_REPLY_EARLY) && 
-            (req->rq_type != PTL_RPC_MSG_ERR)) {
-                /* early replies and errors don't count toward our service
-                   time estimate */
+            (req->rq_type != PTL_RPC_MSG_ERR) &&
+            !(lustre_msg_get_flags(req->rq_reqmsg) &
+              (MSG_RESENT | MSG_REPLAY | MSG_LAST_REPLAY))) {
+                /* early replies, errors and recovery requests don't count
+                 * toward our service time estimate */
                 int oldse = at_add(&svc->srv_at_estimate, service_time);
                 if (oldse != 0)
                         DEBUG_REQ(D_ADAPTTO, req,
