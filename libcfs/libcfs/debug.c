@@ -113,15 +113,15 @@ EXPORT_SYMBOL(libcfs_kmemory);
 static cfs_waitq_t debug_ctlwq;
 
 #ifdef HAVE_BGL_SUPPORT
-char debug_file_path[1024] = "/bgl/ion/tmp/lustre-log";
+char debug_file_path_arr[1024] = "/bgl/ion/tmp/lustre-log";
 #elif defined(__arch_um__)
-char debug_file_path[1024] = "/r/tmp/lustre-log";
+char debug_file_path_arr[1024] = "/r/tmp/lustre-log";
 #else
-char debug_file_path[1024] = "/tmp/lustre-log";
+char debug_file_path_arr[1024] = "/tmp/lustre-log";
 #endif
-char *debug_file_path_p = &debug_file_path[0];
-
-CFS_MODULE_PARM(debug_file_path_p, "s", charp, 0644,
+/* We need to pass a pointer here, but elsewhere this must be a const */
+static char *debug_file_path = &debug_file_path_arr[0];
+CFS_MODULE_PARM(debug_file_path, "s", charp, 0644,
                 "Path for dumping debug logs, "
                 "set 'NONE' to prevent log dumping");
 
@@ -427,10 +427,10 @@ void libcfs_debug_dumplog_internal(void *arg)
 
         CFS_PUSH_JOURNAL;
 
-        if (strncmp(debug_file_path, "NONE", 4) != 0) {
+        if (strncmp(debug_file_path_arr, "NONE", 4) != 0) {
                 snprintf(debug_file_name, sizeof(debug_file_name) - 1,
-                         "%s.%ld.%ld", debug_file_path, cfs_time_current_sec(),
-                         (long)arg);
+                         "%s.%ld.%ld", debug_file_path_arr,
+                         cfs_time_current_sec(), (long)arg);
                 printk(KERN_ALERT "LustreError: dumping log to %s\n",
                        debug_file_name);
                 tracefile_dump_all_pages(debug_file_name);
@@ -515,7 +515,7 @@ int libcfs_debug_clear_buffer(void)
  * should not be be marked as such. */
 #undef DEBUG_SUBSYSTEM
 #define DEBUG_SUBSYSTEM S_UNDEFINED
-int libcfs_debug_mark_buffer(char *text)
+int libcfs_debug_mark_buffer(const char *text)
 {
         CDEBUG(D_TRACE,"***************************************************\n");
         CDEBUG(D_WARNING, "DEBUG MARKER: %s\n", text);

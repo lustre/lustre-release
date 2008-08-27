@@ -448,7 +448,7 @@ libcfs_assertion_failed(const char *expr, const char *file,
 {
         libcfs_debug_msg(NULL, 0, D_EMERG, file, func, line,
                          "ASSERTION(%s) failed\n", expr);
-        LBUG();
+        lbug_with_loc(file, func, line);
 }
 EXPORT_SYMBOL(libcfs_assertion_failed);
 

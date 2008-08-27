@@ -216,7 +216,7 @@ int libcfs_debug_clear_buffer(void)
         return 0;
 }
 
-int libcfs_debug_mark_buffer(char *text)
+int libcfs_debug_mark_buffer(const char *text)
 {
 
         fprintf(debug_file_fd, "*******************************************************************************\n");
