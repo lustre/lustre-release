@@ -1069,14 +1069,14 @@ static void
 check_ll_user_fiemap(void)
 {
         BLANK_LINE();
-        CHECK_STRUCT_TYPEDEF(ll_user_fiemap);
-        CHECK_MEMBER_TYPEDEF(ll_user_fiemap, fm_start);
-        CHECK_MEMBER_TYPEDEF(ll_user_fiemap, fm_length);
-        CHECK_MEMBER_TYPEDEF(ll_user_fiemap, fm_flags);
-        CHECK_MEMBER_TYPEDEF(ll_user_fiemap, fm_mapped_extents);
-        CHECK_MEMBER_TYPEDEF(ll_user_fiemap, fm_extent_count);
-        CHECK_MEMBER_TYPEDEF(ll_user_fiemap, fm_reserved);
-        CHECK_MEMBER_TYPEDEF(ll_user_fiemap, fm_extents);
+        CHECK_STRUCT(ll_user_fiemap);
+        CHECK_MEMBER(ll_user_fiemap, fm_start);
+        CHECK_MEMBER(ll_user_fiemap, fm_length);
+        CHECK_MEMBER(ll_user_fiemap, fm_flags);
+        CHECK_MEMBER(ll_user_fiemap, fm_mapped_extents);
+        CHECK_MEMBER(ll_user_fiemap, fm_extent_count);
+        CHECK_MEMBER(ll_user_fiemap, fm_reserved);
+        CHECK_MEMBER(ll_user_fiemap, fm_extents);
 
         CHECK_CDEFINE(FIEMAP_FLAG_SYNC);
         CHECK_CDEFINE(FIEMAP_FLAG_XATTR);
@@ -1087,12 +1087,12 @@ static void
 check_ll_fiemap_extent(void)
 {
         BLANK_LINE();
-        CHECK_STRUCT_TYPEDEF(ll_fiemap_extent);
-        CHECK_MEMBER_TYPEDEF(ll_fiemap_extent, fe_logical);
-        CHECK_MEMBER_TYPEDEF(ll_fiemap_extent, fe_physical);
-        CHECK_MEMBER_TYPEDEF(ll_fiemap_extent, fe_length);
-        CHECK_MEMBER_TYPEDEF(ll_fiemap_extent, fe_flags);
-        CHECK_MEMBER_TYPEDEF(ll_fiemap_extent, fe_device);
+        CHECK_STRUCT(ll_fiemap_extent);
+        CHECK_MEMBER(ll_fiemap_extent, fe_logical);
+        CHECK_MEMBER(ll_fiemap_extent, fe_physical);
+        CHECK_MEMBER(ll_fiemap_extent, fe_length);
+        CHECK_MEMBER(ll_fiemap_extent, fe_flags);
+        CHECK_MEMBER(ll_fiemap_extent, fe_device);
 
         CHECK_CDEFINE(FIEMAP_EXTENT_LAST);
         CHECK_CDEFINE(FIEMAP_EXTENT_UNKNOWN);
@@ -1355,14 +1355,14 @@ main(int argc, char **argv)
         check_qunit_data_old();
         check_mgs_target_info();
         check_lustre_disk_data();
+        check_ll_user_fiemap();
+        check_ll_fiemap_extent();
         printf("#ifdef LIBLUSTRE_POSIX_ACL\n");
 #ifndef LIBLUSTRE_POSIX_ACL
 #error build generator without LIBLUSTRE_POSIX_ACL defined - produce wrong check code.
 #endif
         check_posix_acl_xattr_entry();
         check_posix_acl_xattr_header();
-        check_ll_user_fiemap();
-        check_ll_fiemap_extent();
         printf("#endif\n");
 
 
