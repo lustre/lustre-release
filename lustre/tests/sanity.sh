@@ -5490,7 +5490,7 @@ check_file_in_pool()
 
 test_200() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
-		skip "missing pools support" && return
+		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
 	grep *pools
 	do_facet mgs $LCTL pool_new $FSNAME.$POOL
@@ -5501,7 +5501,7 @@ run_test 200 "Create new pool =========================================="
 
 test_201() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
-		skip "missing pools support" && return
+		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
 	TGT=$(seq -f $FSNAME-OST%04g_UUID $TGTPOOL_FIRST $TGTPOOL_STEP \
 		$TGTPOOL_MAX | tr '\n' ' ')
@@ -5515,7 +5515,7 @@ run_test 201 "Add targets to a pool ===================================="
 
 test_202a() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
-		skip "missing pools support" && return
+		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
 	mkdir -p $POOL_DIR
 	$SETSTRIPE -c 2 -p $POOL $POOL_DIR
@@ -5525,7 +5525,7 @@ run_test 202a "Set pool on a directory ================================="
 
 test_202b() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
-		skip "missing pools support" && return
+		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
 	res=$($GETSTRIPE $POOL_DIR | grep pool: | cut -f8 -d " ")
 	[ "$res" = $POOL ] || error "Pool on $POOL_DIR is not $POOL"
@@ -5534,7 +5534,7 @@ run_test 202b "Check pool on a directory ==============================="
 
 test_202c() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
-		skip "missing pools support" && return
+		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
 	failed=0
 	for i in $(seq -w 1 $(($TGT_COUNT * 3))); do
@@ -5551,7 +5551,7 @@ run_test 202c "Check files allocation from directory pool =============="
 
 test_203() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
-		skip "missing pools support" && return
+		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
 	mkdir -p $POOL_FILE
 	failed=0
@@ -5569,7 +5569,7 @@ run_test 203 "Create files in a pool ==================================="
 
 test_210a() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
-		skip "missing pools support" && return
+		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
 	TGT=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL |
 		head -1)
@@ -5582,7 +5582,7 @@ run_test 210a "Remove a target from a pool ============================="
 
 test_210b() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
-		skip "missing pools support" && return
+		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
 	for TGT in $(do_facet mgs $LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL); do
 		do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
@@ -5594,7 +5594,7 @@ run_test 210b "Remove all targets from a pool =========================="
 
 test_211() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
-		skip "missing pools support" && return
+		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
 	do_facet mgs $LCTL pool_destroy $FSNAME.$POOL
 	res=$(do_facet mgs "$LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL 2>/dev/null")
