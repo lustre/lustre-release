@@ -3518,6 +3518,7 @@ static int osc_get_info(struct obd_export *exp, obd_count keylen,
                         RETURN(-ENOMEM);
 
                 size[REPLY_REC_OFF] = *vallen;
+                req->rq_no_delay = req->rq_no_resend = 1;
                 ptlrpc_req_set_repsize(req, 2, size);
                 rc = ptlrpc_queue_wait(req);
                 if (rc)
@@ -3664,8 +3665,10 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        if (KEY_IS(KEY_MDS_CONN))
+        if (KEY_IS(KEY_MDS_CONN)) {
                 req->rq_interpret_reply = osc_setinfo_mds_conn_interpret;
+                req->rq_no_delay = req->rq_no_resend = 1;
+        }
 
         ptlrpc_req_set_repsize(req, 1, NULL);
         ptlrpc_set_add_req(set, req);
