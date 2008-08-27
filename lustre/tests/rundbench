@@ -1,5 +1,8 @@
 #!/bin/sh
 
+LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+. $LUSTRE/tests/test-framework.sh
+
 usage() {
     echo "-C use chroot instead of cd"
     echo "-D DIR - use 'DIR' as work directory"
@@ -7,6 +10,7 @@ usage() {
     exit;
 }
 
+PATH=${DBENCH_LIB}:${PATH}
 MOUNT=${MOUNT:-/mnt/lustre}
 DIR=${DIR:-$MOUNT/`hostname`}
 
@@ -23,7 +27,7 @@ mkdir -p $DIR
 TGT=$DIR/client.txt
 CLIENT_PREFIX="${DBENCH_LIB} /usr/share/dbench /usr/local/share /usr/lib/dbench"
 CLIENT_FILE="client.txt client_plain.txt dbench_client"
-which dbench > /dev/null 2>&1 || { echo "dbench not installed, skip this test" && return 0; }
+which dbench > /dev/null 2>&1 || { skip "$0: dbench not installed" && exit 0; }
 CLIENT=""
 
 for prefix in $CLIENT_PREFIX; do
@@ -40,15 +44,20 @@ if [ -n "$SRC" -a -s "$SRC" ]; then
 	CLIENT=${SRC}
 fi
 
-[ ! -s "$TGT" -a -n "$CLIENT" -a -s "$CLIENT" ] && echo "copying $CLIENT to $TGT" && cp $CLIENT $TGT
-[ ! -s "$TGT" ] && echo "$0: $TGT doesn't exist (SRC=$CLIENT)" && exit 1
+[ ! -s "$CLIENT" ] && \
+    skip "$0: no client file found for dbench DBENCH_LIB=$DBENCH_LIB SRC=$SRC" && \
+        exit 0 
+
+[ ! -s "$TGT" ] && echo "copying $CLIENT to $TGT" && cp $CLIENT $TGT
+[ ! -s "$TGT" ] && \
+    echo "$0: $TGT file doesn't exist after cp $CLIENT $TGT" && exit 1
 
 if [ "x$CHROOT" == "xyes" ]; then
 	echo "copying necessary libs to $DIR"
 	cp `which dbench` $DIR
 	LIBS71=$(ldd $DIR/dbench|sed -e 's/\t*//' -e 's/.*=> //' -e 's/ .*//' -e 's/^\///')
 	(cd / && tar chf - $LIBS71) | (cd $DIR && tar xvf -)
-	[ $? = 0 ] && ( echo "can't copy libs $LIBS71 to $DIR" && exit 1 )
+	[ $? != 0 ] && echo "can't copy libs $LIBS71 to $DIR" && exit 1
 	RUN="chroot $DIR"
 	PREFIX="in"
 	PATH=.:/:$PATH
