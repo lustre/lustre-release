@@ -1272,7 +1272,8 @@ error_ignore() {
 
 skip () {
 	log " SKIP: ${TESTSUITE} ${TESTNAME} $@"
-	[ "$TESTSUITELOG" ] && echo "${TESTSUITE}: SKIP: $TESTNAME $@" >> $TESTSUITELOG
+	[ "$TESTSUITELOG" ] && \
+		echo "${TESTSUITE}: SKIP: $TESTNAME $@" >> $TESTSUITELOG || true
 }
 
 build_test_filter() {
@@ -1369,6 +1370,7 @@ log() {
     MSG=${MSG//\|/\\\|}
     MSG=${MSG//\>/\\\>}
     MSG=${MSG//\</\\\<}
+    MSG=${MSG//\//\\\/}
     local NODES=$(nodes_list)
     for NODE in $NODES; do
         do_node $NODE $LCTL mark "$MSG" 2> /dev/null || true
