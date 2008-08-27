@@ -3621,6 +3621,7 @@ static int osc_get_info(struct obd_export *exp, obd_count keylen,
                         ptlrpc_request_free(req);
                         RETURN(rc);
                 }
+                req->rq_no_delay = req->rq_no_resend = 1;
 
                 tmp = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_KEY);
                 memcpy(tmp, key, keylen);
@@ -3810,6 +3811,7 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
                 oscc->oscc_oa.o_valid |= OBD_MD_FLGROUP;
                 LASSERT(oscc->oscc_oa.o_gr > 0);
                 req->rq_interpret_reply = osc_setinfo_mds_conn_interpret;
+                req->rq_no_delay = req->rq_no_resend = 1;
         }
 
         ptlrpc_request_set_replen(req);
