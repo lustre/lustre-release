@@ -1056,6 +1056,7 @@ test_27b() {
 	facet_failover mds
 	set_and_check mds "lctl get_param -n mds.$FSNAME-MDT0000.group_acquire_expire" "$FSNAME-MDT0000.mdt.group_acquire_expire" || return 3
 	set_and_check client "lctl get_param -n mdc.$FSNAME-MDT0000-mdc-*.max_rpcs_in_flight" "$FSNAME-MDT0000.mdc.max_rpcs_in_flight" || return 4
+	check_mount
 	cleanup
 }
 run_test 27b "Reacquire MGS lock after failover"
