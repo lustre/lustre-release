@@ -41,15 +41,15 @@
 #include "tracefile.h"
 
 void libcfs_debug_dumpstack(cfs_task_t *tsk)
-{ 
+{
 	return;
 }
 
-void libcfs_run_lbug_upcall(char *file, const char *fn, const int line)
+void libcfs_run_lbug_upcall(const char *file, const char *fn, const int line)
 {
 }
 
-void lbug_with_loc(char *file, const char *func, const int line)
+void lbug_with_loc(const char *file, const char *func, const int line)
 {
         libcfs_catastrophe = 1;
         CEMERG("LBUG: pid: %u thread: %#x\n",
