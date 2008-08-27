@@ -924,8 +924,11 @@ srpc_handle_rpc (swi_workitem_t *wi)
                 msg = &rpc->srpc_reqstbuf->buf_msg;
                 reply = &rpc->srpc_replymsg.msg_body.reply;
 
-                if (msg->msg_version != SRPC_MSG_VERSION &&
-                    msg->msg_version != __swab32(SRPC_MSG_VERSION)) {
+                if (msg->msg_magic == 0) {
+                        /* moaned already in srpc_lnet_ev_handler */
+                        rc = EBADMSG;
+                } else if (msg->msg_version != SRPC_MSG_VERSION &&
+                           msg->msg_version != __swab32(SRPC_MSG_VERSION)) {
                         CWARN ("Version mismatch: %u, %u expected, from %s\n",
                                msg->msg_version, SRPC_MSG_VERSION,
                                libcfs_id2str(rpc->srpc_peer));
@@ -1512,20 +1515,10 @@ srpc_lnet_ev_handler (lnet_event_t *ev)
                                 ev->status, ev->mlength,
                                 msg->msg_type, msg->msg_magic);
 
-                        /* NB might drop sv_lock in srpc_service_recycle_buffer,
-                         * sv_nposted_msg++ as an implicit reference to prevent
-                         * sv from disappearing under me */
-                        sv->sv_nposted_msg++;
-                        srpc_service_recycle_buffer(sv, buffer);
-                        sv->sv_nposted_msg--;
-                        spin_unlock(&sv->sv_lock);
-
-                        if (ev->status == 0) { /* status!=0 counted already */
-                                spin_lock(&srpc_data.rpc_glock);
-                                srpc_data.rpc_counters.errors++;
-                                spin_unlock(&srpc_data.rpc_glock);
-                        }
-                        break;
+                        /* NB can't call srpc_service_recycle_buffer here since
+                         * it may call LNetM[DE]Attach. The invalid magic tells
+                         * srpc_handle_rpc to drop this RPC */
+                        msg->msg_magic = 0;
                 }
 
                 if (!list_empty(&sv->sv_free_rpcq)) {
