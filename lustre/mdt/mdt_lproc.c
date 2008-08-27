@@ -192,8 +192,8 @@ static int lprocfs_wr_identity_upcall(struct file *file, const char *buffer,
                 return -EINVAL;
         }
 
-        if (copy_from_user(kernbuf, buffer,
-                           min(count, UC_CACHE_UPCALL_MAXPATH - 1)))
+        if (copy_from_user(kernbuf, buffer, min_t(unsigned long, count,
+                                                  UC_CACHE_UPCALL_MAXPATH - 1)))
                 return -EFAULT;
 
         /* Remove any extraneous bits from the upcall (e.g. linefeeds) */
