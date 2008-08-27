@@ -39,6 +39,14 @@ tbd Sun Microsystems, Inc.
 	  old (verbose) output can be obtained by using -v option.
 
 Severity   : normal
+Bugzilla   : 16839
+Frequency  : rare, on restart ost
+Description: llog_receptor_accept() ASSERTION(ctxt)
+Details    : if ost is restarted before set_info(KEY_MDS_CONN) finished, this
+             request will resend before finished ost llog init and this produce
+             access to non init llog context.
+
+Severity   : normal
 Bugzilla   : 15927
 Frequency  : rare
 Description: replace ptlrpcd with the statahead thread to interpret the async
