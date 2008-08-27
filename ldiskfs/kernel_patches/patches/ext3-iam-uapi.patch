@@ -1,0 +1,1415 @@
+Index: linux-stage/fs/ext3/Makefile
+===================================================================
+--- linux-stage.orig/fs/ext3/Makefile	2007-06-15 12:04:18.000000000 +0800
++++ linux-stage/fs/ext3/Makefile	2007-06-15 12:04:18.000000000 +0800
+@@ -6,7 +6,7 @@
+ 
+ ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
+ 	   ioctl.o namei.o super.o symlink.o hash.o resize.o \
+-	   extents.o mballoc.o iam.o iam_lfix.o
++	   extents.o mballoc.o iam.o iam_lfix.o iam_lvar.o iam_htree.o iam_uapi.o
+ 
+ ext3-$(CONFIG_EXT3_FS_XATTR)	 += xattr.o xattr_user.o xattr_trusted.o
+ ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o
+Index: linux-stage/fs/ext3/iam-uapi.c
+===================================================================
+--- linux-stage.orig/fs/ext3/iam-uapi.c	2007-06-13 20:25:58.766104256 +0800
++++ linux-stage/fs/ext3/iam-uapi.c	2007-06-15 12:10:35.000000000 +0800
+@@ -0,0 +1,367 @@
++/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
++ * vim:expandtab:shiftwidth=8:tabstop=8:
++ *
++ *  iam_uapi.c
++ *  User-level interface to iam (ioctl based)
++ *
++ *  Copyright (c) 2006 Cluster File Systems, Inc.
++ *   Author: Nikita Danilov <nikita@clusterfs.com>
++ *
++ *   This file is part of the Lustre file system, http://www.lustre.org
++ *   Lustre is a trademark of Cluster File Systems, Inc.
++ *
++ *   You may have signed or agreed to another license before downloading
++ *   this software.  If so, you are bound by the terms and conditions
++ *   of that agreement, and the following does not apply to you.  See the
++ *   LICENSE file included with this distribution for more information.
++ *
++ *   If you did not agree to a different license, then this copy of Lustre
++ *   is open source software; you can redistribute it and/or modify it
++ *   under the terms of version 2 of the GNU General Public License as
++ *   published by the Free Software Foundation.
++ *
++ *   In either case, Lustre is distributed in the hope that it will be
++ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
++ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *   license text for more details.
++ */
++
++#include <linux/types.h>
++#include <linux/jbd.h>
++/* ext3_error() */
++#include <linux/ext3_fs.h>
++#include <linux/ext3_jbd.h>
++
++#include <asm/uaccess.h>
++#include <linux/lustre_iam.h>
++
++
++struct iam_private_info {
++        struct dir_private_info ipi_dir; /* has to be first */
++        struct iam_container   ipi_bag;
++        struct iam_descr       ipi_descr;
++        struct iam_iterator    ipi_it;
++        struct iam_path_descr *ipi_ipd;
++        char                   ipi_ipd_area[DX_IPD_MAX_SIZE];
++};
++
++enum {
++        IAM_INSERT_CREDITS = 20
++};
++
++static struct iam_private_info *get_ipi(struct file *filp)
++{
++        return filp->private_data;
++}
++
++static int iam_uapi_it(int cmd, struct inode *inode,
++                       struct file *filp, struct iam_uapi_it *itop)
++{
++        struct iam_private_info *ipi;
++        struct iam_iterator     *it;
++        enum iam_it_state        st;
++        int result = 0;
++
++        ipi = get_ipi(filp);
++        it = &ipi->ipi_it;
++        st = it->ii_state;
++        switch (cmd) {
++        case IAM_IOC_IT_START:
++                result = iam_it_init(it, &ipi->ipi_bag,
++                                     IAM_IT_MOVE, ipi->ipi_ipd);
++                if (result == 0)
++                        result = iam_it_get(it, itop->iui_op.iul_key);
++                break;
++        case IAM_IOC_IT_NEXT:
++                if (st == IAM_IT_ATTACHED || st == IAM_IT_SKEWED)
++                        result = iam_it_next(it);
++                else
++                        result = -EBUSY;
++                break;
++        case IAM_IOC_IT_STOP:
++                iam_it_put(it);
++                iam_it_fini(it);
++                result = 0;
++                break;
++        }
++        st = it->ii_state;
++        if (st == IAM_IT_ATTACHED || st == IAM_IT_SKEWED)
++                memcpy(itop->iui_op.iul_key, iam_it_key_get(it),
++                       iam_it_key_size(it));
++        if (st == IAM_IT_ATTACHED)
++                iam_reccpy(&it->ii_path.ip_leaf, itop->iui_op.iul_rec);
++        itop->iui_state = st;
++        return result;
++}
++
++static int iam_uapi_op(int cmd, struct inode *inode,
++                       struct file *filp, struct iam_uapi_op *op)
++{
++        int result;
++        struct iam_private_info *ipi;
++
++        ipi = get_ipi(filp);
++        if (cmd == IAM_IOC_INSERT || cmd == IAM_IOC_DELETE) {
++                handle_t *h;
++
++                h = ext3_journal_start(inode, IAM_INSERT_CREDITS);
++                if (!IS_ERR(h)) {
++                        if (cmd == IAM_IOC_INSERT)
++                                result = iam_insert(h, &ipi->ipi_bag,
++                                                    op->iul_key,
++                                                    op->iul_rec, ipi->ipi_ipd);
++                        else
++                                result = iam_delete(h, &ipi->ipi_bag,
++                                                    op->iul_key, ipi->ipi_ipd);
++                        ext3_journal_stop(h);
++                } else {
++                        result = PTR_ERR(h);
++                        ext3_std_error(inode->i_sb, result);
++                }
++        } else
++                result = iam_lookup(&ipi->ipi_bag, op->iul_key,
++                                    op->iul_rec, ipi->ipi_ipd);
++        return result;
++}
++
++struct iam_private_info *ext3_iam_alloc_info(int flags)
++{
++        struct iam_private_info *info;
++
++        info = kmalloc(sizeof *info, flags);
++        if (info != NULL)
++                memset(info, 0, sizeof *info);
++        return info;
++}
++
++void ext3_iam_release_info(struct iam_private_info *info)
++{
++        iam_it_put(&info->ipi_it);
++        iam_it_fini(&info->ipi_it);
++        if (info->ipi_ipd != NULL)
++                info->ipi_bag.ic_descr->id_ops->id_ipd_free(info->ipi_ipd);
++        iam_container_fini(&info->ipi_bag);
++}
++
++void ext3_iam_release(struct file *filp, struct inode *inode)
++{
++        struct iam_private_info *info;
++
++        info = filp->private_data;
++        ext3_iam_release_info(info);
++
++        kfree(info);
++        EXT3_I(inode)->i_flags &= ~EXT3_INDEX_FL;
++}
++
++static int iam_uapi_init(struct inode *inode,
++                         struct file *filp, struct iam_uapi_info *ua)
++{
++        int result;
++        struct iam_private_info *info;
++
++        info = ext3_iam_alloc_info(GFP_KERNEL);
++        if (info != NULL) {
++                struct iam_container *bag;
++                struct iam_descr     *des;
++
++                bag = &info->ipi_bag;
++                des = &info->ipi_descr;
++                result = iam_container_init(bag, des, inode);
++                if (result == 0) {
++                        result = iam_container_setup(bag);
++                        if (result == 0) {
++                                /*
++                                 * Container setup might change ->ic_descr
++                                 */
++                                des = bag->ic_descr;
++                                info->ipi_ipd = des->id_ops->
++                                        id_ipd_alloc(bag, info->ipi_ipd_area);
++                                if (info->ipi_ipd != NULL) {
++                                        filp->private_data = info;
++                                        EXT3_I(inode)->i_flags |= EXT3_INDEX_FL;
++                                } else
++                                        result = -ENOMEM;
++                        }
++                }
++        } else
++                result = -ENOMEM;
++        return result;
++}
++
++
++static int getua(struct iam_uapi_info *ua, unsigned long arg)
++{
++        if (copy_from_user(ua, (struct iam_uapi_info __user *)arg, sizeof *ua))
++                return -EFAULT;
++        else
++                return 0;
++}
++
++static int putua(struct iam_uapi_info *ua, unsigned long arg)
++{
++        if (copy_to_user((struct iam_uapi_info __user *)arg, ua, sizeof *ua))
++                return -EFAULT;
++        else
++                return 0;
++}
++
++enum outop_t {
++        KEY   = 1 << 0,
++        REC   = 1 << 1,
++        STATE = 1 << 2
++};
++
++static int outop(struct iam_uapi_op *op, struct iam_uapi_op *uop,
++                 struct iam_descr *des, enum outop_t opt)
++{
++        int result;
++
++        if (((opt & REC) && copy_to_user((void __user *)uop->iul_rec,
++                                         op->iul_rec, des->id_rec_size)) ||
++            ((opt & KEY) && copy_to_user((void __user *)uop->iul_key,
++                                         op->iul_key, des->id_key_size)))
++                result = -EFAULT;
++        else
++                result = 0;
++        return result;
++}
++
++static void putop(struct iam_uapi_op *op)
++{
++        kfree(op->iul_key);
++        kfree(op->iul_rec);
++}
++
++static int getop(struct iam_uapi_op *op, struct iam_uapi_op *uop,
++                 struct iam_descr *des, unsigned long arg)
++{
++        int result;
++        int ks;
++        int rs;
++
++        ks = des->id_key_size;
++        rs = des->id_rec_size;
++        op->iul_key = kmalloc(ks, GFP_KERNEL);
++        op->iul_rec = kmalloc(rs, GFP_KERNEL);
++        if (!copy_from_user(uop,
++                            (struct iam_uapi_op __user *)arg, sizeof *uop) &&
++            op->iul_key != NULL && op->iul_rec != NULL &&
++            !copy_from_user(op->iul_key, (void __user *)uop->iul_key, ks) &&
++            !copy_from_user(op->iul_rec, (void __user *)uop->iul_rec, rs))
++                result = 0;
++        else {
++                result = -EFAULT;
++                putop(op);
++        }
++        return result;
++}
++
++static int outit(struct iam_uapi_it *it, struct iam_uapi_it *uit,
++                 struct iam_descr *des, enum outop_t opt, unsigned long arg)
++{
++        int result;
++
++        result = outop(&it->iui_op, &uit->iui_op, des, opt);
++        if (result == 0 && (opt&STATE))
++                result = put_user(it->iui_state, (int __user *) arg);
++        return result;
++}
++
++static void putit(struct iam_uapi_it *it)
++{
++        putop(&it->iui_op);
++}
++
++static int getit(struct iam_uapi_it *it, struct iam_uapi_it *uit,
++                 struct iam_descr *des, unsigned long arg)
++{
++        return getop(&it->iui_op, &uit->iui_op, des,
++                     (unsigned long)&((struct iam_uapi_it *)arg)->iui_op);
++}
++
++int iam_uapi_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
++                   unsigned long arg)
++{
++        int result;
++        struct iam_uapi_info ua;
++        struct iam_uapi_op   uop;
++        struct iam_uapi_op   op;
++        struct iam_uapi_it   uit;
++        struct iam_uapi_it   it;
++        enum outop_t opt;
++
++        if ((current->fsuid != inode->i_uid) && !capable(CAP_FOWNER)) {
++                result = -EACCES;
++        } else if (cmd == IAM_IOC_POLYMORPH) {
++                /*
++                 * If polymorphing into directory, increase hard-link count.
++                 */
++                if (S_ISDIR((umode_t)arg) && !S_ISDIR(inode->i_mode))
++                        inode->i_nlink++;
++                else if (!S_ISDIR((umode_t)arg) && S_ISDIR(inode->i_mode))
++                        inode->i_nlink--;
++                inode->i_mode = (umode_t)arg;
++                mark_inode_dirty(inode);
++                result = 0;
++        } else if (cmd == IAM_IOC_INIT) {
++                if (filp->private_data == NULL) {
++                        result = getua(&ua, arg);
++                        if (result == 0)
++                                result = iam_uapi_init(inode, filp, &ua);
++                } else
++                        result = -EBUSY;
++        } else if (is_dx(inode) && filp->private_data != NULL) {
++                struct iam_descr *des;
++
++                switch (cmd) {
++                case IAM_IOC_IT_START:
++                case IAM_IOC_IT_NEXT:
++                        opt = KEY|REC|STATE;
++                        break;
++                case IAM_IOC_LOOKUP:
++                        opt = REC;
++                        break;
++                default:
++                        opt = 0;
++                        break;
++                }
++
++                des = get_ipi(filp)->ipi_bag.ic_descr;
++                if (cmd == IAM_IOC_GETINFO) {
++                        ua.iui_keysize = des->id_key_size;
++                        ua.iui_recsize = des->id_rec_size;
++                        ua.iui_ptrsize = des->id_ptr_size;
++                        ua.iui_height  = 0; /* not yet */
++                        memcpy(ua.iui_fmt_name, des->id_ops->id_name,
++                               ARRAY_SIZE(ua.iui_fmt_name));
++                        result = putua(&ua, arg);
++                } else if (cmd == IAM_IOC_INSERT || cmd == IAM_IOC_LOOKUP ||
++                           cmd == IAM_IOC_DELETE) {
++                        result = getop(&op, &uop, des, arg);
++                        if (result == 0) {
++                                int res2;
++                                result = iam_uapi_op(cmd, inode, filp, &op);
++
++                                res2 = outop(&op, &uop, des, opt);
++                                result = result ? : res2;
++                                putop(&op);
++                        }
++                } else if (cmd == IAM_IOC_IT_START || cmd == IAM_IOC_IT_NEXT ||
++                           cmd == IAM_IOC_IT_STOP) {
++                        result = getit(&it, &uit, des, arg);
++                        if (result == 0) {
++                                int res2;
++
++                                result = iam_uapi_it(cmd, inode, filp, &it);
++
++                                res2 = outit(&it, &uit, des, opt, arg);
++                                result = result ? : res2;
++                                putit(&it);
++                        }
++                } else
++                        result = -EINVAL;
++        } else
++                result = -ENOENT;
++        return result;
++}
+Index: linux-stage/fs/ext3/dir.c
+===================================================================
+--- linux-stage.orig/fs/ext3/dir.c	2007-06-15 12:04:01.000000000 +0800
++++ linux-stage/fs/ext3/dir.c	2007-06-15 12:04:18.000000000 +0800
+@@ -28,6 +28,7 @@
+ #include <linux/smp_lock.h>
+ #include <linux/slab.h>
+ #include <linux/rbtree.h>
++#include <linux/lustre_iam.h>
+ 
+ static unsigned char ext3_filetype_table[] = {
+ 	DT_UNKNOWN, DT_REG, DT_DIR, DT_CHR, DT_BLK, DT_FIFO, DT_SOCK, DT_LNK
+@@ -61,6 +62,7 @@
+ }
+ 			       
+ 
++#if EXT3_INVARIANT_ON
+ int ext3_check_dir_entry (const char * function, struct inode * dir,
+ 			  struct ext3_dir_entry_2 * de,
+ 			  struct buffer_head * bh,
+@@ -90,6 +92,7 @@
+ 			rlen, de->name_len);
+ 	return error_msg == NULL ? 1 : 0;
+ }
++#endif
+ 
+ static int ext3_readdir(struct file * filp,
+ 			 void * dirent, filldir_t filldir)
+@@ -305,12 +308,14 @@
+ 	root->rb_node = NULL;
+ }
+ 
++extern struct iam_private_info *ext3_iam_alloc_info(int flags);
++extern void ext3_iam_release_info(struct iam_private_info *info);
+ 
+ struct dir_private_info *create_dir_info(loff_t pos)
+ {
+ 	struct dir_private_info *p;
+ 
+-	p = kmalloc(sizeof(struct dir_private_info), GFP_KERNEL);
++	p = (void *)ext3_iam_alloc_info(GFP_KERNEL);
+ 	if (!p)
+ 		return NULL;
+ 	p->root.rb_node = NULL;
+@@ -326,6 +331,7 @@
+ void ext3_htree_free_dir_info(struct dir_private_info *p)
+ {
+ 	free_rb_tree_fname(&p->root);
++	ext3_iam_release_info((void *)p);
+ 	kfree(p);
+ }
+ 
+Index: linux-stage/fs/ext3/ioctl.c
+===================================================================
+--- linux-stage.orig/fs/ext3/ioctl.c	2007-06-15 12:04:17.000000000 +0800
++++ linux-stage/fs/ext3/ioctl.c	2007-06-15 12:04:18.000000000 +0800
+@@ -14,6 +14,7 @@
+ #include <linux/time.h>
+ #include <asm/uaccess.h>
+ 
++#include <linux/lustre_iam.h>
+ 
+ int ext3_ioctl (struct inode * inode, struct file * filp, unsigned int cmd,
+ 		unsigned long arg)
+@@ -250,6 +251,6 @@
+ 
+ 
+ 	default:
+-		return -ENOTTY;
++		return iam_uapi_ioctl(inode, filp, cmd, arg);
+ 	}
+ }
+Index: linux-stage/fs/ext3/file.c
+===================================================================
+--- linux-stage.orig/fs/ext3/file.c	2007-06-15 12:04:01.000000000 +0800
++++ linux-stage/fs/ext3/file.c	2007-06-15 12:04:18.000000000 +0800
+@@ -23,6 +23,7 @@
+ #include <linux/jbd.h>
+ #include <linux/ext3_fs.h>
+ #include <linux/ext3_jbd.h>
++#include <linux/lustre_iam.h>
+ #include "xattr.h"
+ #include "acl.h"
+ 
+@@ -31,14 +32,18 @@
+  * from ext3_file_open: open gets called at every open, but release
+  * gets called only when /all/ the files are closed.
+  */
+-static int ext3_release_file (struct inode * inode, struct file * filp)
++static int ext3_release_file(struct inode * inode, struct file * filp)
+ {
+ 	/* if we are the last writer on the inode, drop the block reservation */
+ 	if ((filp->f_mode & FMODE_WRITE) &&
+ 			(atomic_read(&inode->i_writecount) == 1))
+ 		ext3_discard_reservation(inode);
+-	if (is_dx(inode) && filp->private_data)
++	if (is_dx(inode) && filp->private_data) {
++		if (S_ISDIR(inode->i_mode))
+ 		ext3_htree_free_dir_info(filp->private_data);
++		else
++			ext3_iam_release(filp, inode);
++	}
+ 
+ 	return 0;
+ }
+Index: linux-stage/include/linux/lustre_iam.h
+===================================================================
+--- linux-stage.orig/include/linux/lustre_iam.h	2007-06-15 12:04:18.000000000 +0800
++++ linux-stage/include/linux/lustre_iam.h	2007-06-15 12:04:18.000000000 +0800
+@@ -30,9 +30,6 @@
+ #ifndef __LINUX_LUSTRE_IAM_H__
+ #define __LINUX_LUSTRE_IAM_H__
+ 
+-/* handle_t, journal_start(), journal_stop() */
+-#include <linux/jbd.h>
+-
+ /*
+  *  linux/include/linux/lustre_iam.h
+  */
+@@ -62,14 +59,95 @@
+          *         [2] reserved for leaf node operations.
+          *
+          *         [3] reserved for index operations.
++         *
++         *         [4] reserved for path->ip_ikey_target
++         *
+          */
+-	DX_SCRATCH_KEYS    = 4,
++	DX_SCRATCH_KEYS    = 5,
+         /*
+          * Maximal format name length.
+          */
+         DX_FMT_NAME_LEN    = 16
+ };
+ 
++#ifdef __KERNEL__
++/* handle_t, journal_start(), journal_stop() */
++#include <linux/jbd.h>
++
++/*
++ * Debugging.
++ *
++ * Various debugging levels.
++ */
++
++#if 0
++/*
++ * Following macros are defined in config.h and are tunable through
++ * appropriate configure switches (indicated below).
++ */
++
++/*
++ * Compile basic assertions in. You want this most of the time.
++ *
++ * --{enable,disable}-ldiskfs-assert (on by default).
++ */
++#define EXT3_ASSERT (1)
++
++/*
++ * Compile heavier correctness checks in. You want this during development
++ * cycle.
++ *
++ * --{enable,disable}-ldiskfs-correctness (off by default).
++ */
++#define EXT3_CORRECTNESS (1)
++
++/*
++ * Compile heavy invariant checking in. You want this early during development
++ * or when chasing a bug.
++ *
++ * --{enable,disable}-ldiskfs-invariant (off by default).
++ */
++#define EXT3_INVARIANT (1)
++#endif
++
++#if defined(EXT3_ASSERT)
++#define EXT3_ASSERT_ON (1)
++#else
++#define EXT3_ASSERT_ON (0)
++#endif
++
++#if defined(EXT3_CORRECTNESS)
++#define EXT3_CORRECTNESS_ON (1)
++#else
++#define EXT3_CORRECTNESS_ON (0)
++#endif
++
++#if defined(EXT3_INVARIANT)
++#define EXT3_INVARIANT_ON (1)
++#else
++#define EXT3_INVARIANT_ON (0)
++#endif
++
++#ifndef assert
++#if EXT3_ASSERT_ON
++#define assert(test) J_ASSERT(test)
++#else
++#define assert(test) ((void)(test))
++#endif
++#endif
++
++#if EXT3_CORRECTNESS_ON
++#define assert_corr(test) J_ASSERT(test)
++#else
++#define assert_corr(test) do {;} while (0)
++#endif
++
++#if EXT3_INVARIANT_ON
++#define assert_inv(test) J_ASSERT(test)
++#else
++#define assert_inv(test) do {;} while (0)
++#endif
++
+ /*
+  * Entry within index tree node. Consists of a key immediately followed
+  * (without padding) by a pointer to the child node.
+@@ -91,14 +169,21 @@
+  */
+ struct iam_key;
+ 
+-/* Incomplete type use to refer to the records stored in iam containers. */
++/*
++ * Incomplete type use to refer to the records stored in iam containers.
++ */
+ struct iam_rec;
+ 
+-struct iam_cookie {
+-	struct iam_key *ic_key;
+-	struct iam_rec *ic_rec;
+-};
++/*
++ * Key in index node. Possibly compressed. Fixed size.
++ */
++struct iam_ikey;
+ 
++/*
++ * Scalar type into which certain iam_key's can be uniquely mapped. Used to
++ * support interfaces like readdir(), where iteration over index has to be
++ * re-startable.
++ */
+ typedef __u64 iam_ptr_t;
+ 
+ /*
+@@ -128,6 +213,31 @@
+ 	void               *il_descr_data;
+ };
+ 
++/*
++ * Return values of ->lookup() operation from struct iam_leaf_operations.
++ */
++enum iam_lookup_t {
++        /*
++         * lookup found a record with the key requested
++         */
++        IAM_LOOKUP_EXACT,
++        /*
++         * lookup positioned leaf on some record
++         */
++        IAM_LOOKUP_OK,
++        /*
++         * leaf was empty
++         */
++        IAM_LOOKUP_EMPTY,
++        /*
++         * lookup positioned leaf before first record
++         */
++        IAM_LOOKUP_BEFORE
++};
++
++/*
++ * Format-specific container operations. These are called by generic iam code.
++ */
+ struct iam_operations {
+ 	/*
+ 	 * Returns pointer (in the same sense as pointer in index entry) to
+@@ -136,11 +246,15 @@
+ 	__u32 (*id_root_ptr)(struct iam_container *c);
+ 
+ 	/*
+-	 * Check validity and consistency of index node. This is called when
+-	 * iam just loaded new node into frame.
++	 * Check validity and consistency of index node.
+ 	 */
+ 	int (*id_node_check)(struct iam_path *path, struct iam_frame *frame);
+ 	/*
++	 * Copy some data from node header into frame. This is called when
++	 * new node is loaded into frame.
++	 */
++	int (*id_node_load)(struct iam_path *path, struct iam_frame *frame);
++	/*
+ 	 * Initialize new node (stored in @bh) that is going to be added into
+ 	 * tree.
+ 	 */
+@@ -149,23 +263,33 @@
+ 	int (*id_node_read)(struct iam_container *c, iam_ptr_t ptr,
+ 			    handle_t *h, struct buffer_head **bh);
+ 	/*
+-	 * Key comparison function. Returns -1, 0, +1.
++	 * Key comparison functions. Returns -1, 0, +1.
+ 	 */
+-	int (*id_keycmp)(const struct iam_container *c,
+-			 const struct iam_key *k1, const struct iam_key *k2);
++	int (*id_ikeycmp)(const struct iam_container *c,
++                          const struct iam_ikey *k1,
++                          const struct iam_ikey *k2);
+ 	/*
+-	 * Create new container.
+-	 *
+-	 * Newly created container has a root node and a single leaf. Leaf
+-	 * contains single record with the smallest possible key.
++         * Modify root node when tree height increases.
+ 	 */
+-	int (*id_create)(struct iam_container *c);
++	struct iam_entry *(*id_root_inc)(struct iam_container *c,
++                                         struct iam_path *path,
++                                         struct iam_frame *frame);
++
++        struct iam_path_descr *(*id_ipd_alloc)(const struct iam_container *c);
++        void (*id_ipd_free)(const struct iam_container *c,
++                            struct iam_path_descr *ipd);
+         /*
+          * Format name.
+          */
+         char id_name[DX_FMT_NAME_LEN];
+ };
+ 
++/*
++ * Another format-specific operation vector, consisting of methods to access
++ * leaf nodes. This is separated from struct iam_operations, because it is
++ * assumed that there will be many formats with different format of leaf
++ * nodes, yes the same struct iam_operations.
++ */
+ struct iam_leaf_operations {
+ 		/*
+ 		 * leaf operations.
+@@ -191,7 +315,8 @@
+         void (*start)(struct iam_leaf *l);
+ 		/* more leaf to the next entry. */
+         void (*next)(struct iam_leaf *l);
+-        /* return key of current leaf record. This method may return
++        /*
++         * return key of current leaf record. This method may return
+          * either pointer to the key stored in node, or copy key into
+          * @k buffer supplied by caller and return pointer to this
+          * buffer. The latter approach is used when keys in nodes are
+@@ -199,8 +324,10 @@
+          * all).
+          *
+          * Caller should assume that returned pointer is only valid
+-         * while leaf node is pinned and locked.*/
+-        struct iam_key *(*key)(const struct iam_leaf *l, struct iam_key *k);
++         * while leaf node is pinned and locked.
++         */
++        struct iam_ikey *(*ikey)(const struct iam_leaf *l, struct iam_ikey *k);
++        struct iam_key *(*key)(const struct iam_leaf *l);
+         /* return pointer to entry body. Pointer is valid while
+            corresponding leaf node is locked and pinned. */
+         struct iam_rec *(*rec)(const struct iam_leaf *l);
+@@ -208,6 +335,9 @@
+         void (*key_set)(struct iam_leaf *l, const struct iam_key *k);
+         void (*rec_set)(struct iam_leaf *l, const struct iam_rec *r);
+ 
++	int (*key_cmp)(const struct iam_leaf *l, const struct iam_key *k);
++
++        int (*key_size)(const struct iam_leaf *l);
+         /*
+          * Search leaf @l for a record with key @k or for a place
+          * where such record is to be inserted.
+@@ -215,6 +345,7 @@
+          * Scratch keys from @path can be used.
+          */
+         int (*lookup)(struct iam_leaf *l, const struct iam_key *k);
++        int (*ilookup)(struct iam_leaf *l, const struct iam_ikey *ik);
+ 
+         int (*can_add)(const struct iam_leaf *l,
+                        const struct iam_key *k, const struct iam_rec *r);
+@@ -226,17 +357,15 @@
+         /*
+          * remove rec for a leaf
+          */
+-        void (*rec_del)(struct iam_leaf *l);
++        void (*rec_del)(struct iam_leaf *l, int shift);
+         /*
+          * split leaf node, moving some entries into @bh (the latter currently
+          * is assumed to be empty).
+          */
+-        void (*split)(struct iam_leaf *l, struct buffer_head *bh);
++        void (*split)(struct iam_leaf *l, struct buffer_head **bh,
++                      iam_ptr_t newblknr);
+ };
+ 
+-struct iam_path *iam_leaf_path(const struct iam_leaf *leaf);
+-struct iam_container *iam_leaf_container(const struct iam_leaf *leaf);
+-
+ /*
+  * Parameters, describing a flavor of iam container.
+  */
+@@ -246,6 +375,10 @@
+ 	 */
+  	size_t       id_key_size;
+ 	/*
++	 * Size of a key in index nodes, in bytes.
++	 */
++ 	size_t       id_ikey_size;
++	/*
+ 	 * Size of a pointer to the next level (stored in index nodes), in
+ 	 * bytes.
+ 	 */
+@@ -269,6 +402,9 @@
+         struct iam_leaf_operations      *id_leaf_ops;
+ };
+ 
++/*
++ * An instance of iam container.
++ */
+ struct iam_container {
+ 	/*
+ 	 * Underlying flat file. IO against this object is issued to
+@@ -279,6 +415,10 @@
+ 	 * container flavor.
+ 	 */
+ 	struct iam_descr *ic_descr;
++        /*
++         * read-write lock protecting index consistency.
++         */
++        struct rw_semaphore ic_sem;
+ };
+ 
+ /*
+@@ -289,7 +429,7 @@
+ 	/*
+ 	 * Scratch-pad area for temporary keys.
+ 	 */
+-	struct iam_key        *ipd_key_scratch[DX_SCRATCH_KEYS];
++	struct iam_ikey *ipd_key_scratch[DX_SCRATCH_KEYS];
+ };
+ 
+ /*
+@@ -321,6 +461,7 @@
+ 	 * Key searched for.
+ 	 */
+ 	const struct iam_key  *ip_key_target;
++	const struct iam_ikey *ip_ikey_target;
+ 	/*
+ 	 * Description-specific data.
+ 	 */
+@@ -339,6 +480,7 @@
+ 	struct dx_hash_info  *ipc_hinfo;
+ 	struct dentry        *ipc_dentry;
+ 	struct iam_path_descr ipc_descr;
++        struct dx_hash_info   ipc_hinfo_area;
+ };
+ 
+ /*
+@@ -352,7 +494,9 @@
+ 	/* initial state */
+ 	IAM_IT_DETACHED,
+ 	/* iterator is above particular record in the container */
+-	IAM_IT_ATTACHED
++	IAM_IT_ATTACHED,
++        /* iterator is positioned before record  */
++        IAM_IT_SKEWED
+ };
+ 
+ /*
+@@ -360,7 +504,7 @@
+  */
+ enum iam_it_flags {
+ 	/*
+-	 * this iterator will move (iam_it_{prev,next}() will be called on it)
++	 * this iterator will move (iam_it_next() will be called on it)
+ 	 */
+ 	IAM_IT_MOVE  = (1 << 0),
+ 	/*
+@@ -377,15 +521,26 @@
+  * doesn't point to any particular record in this container.
+  *
+  * After successful call to iam_it_get() and until corresponding call to
+- * iam_it_put() iterator is in "attached" state (IAM_IT_ATTACHED).
++ * iam_it_put() iterator is in one of "active" states: IAM_IT_ATTACHED or
++ * IAM_IT_SKEWED.
+  *
+- * Attached iterator can move through records in a container (provided
++ * Active iterator can move through records in a container (provided
+  * IAM_IT_MOVE permission) in a key order, can get record and key values as it
+  * passes over them, and can modify container (provided IAM_IT_WRITE
+  * permission).
+  *
++ * Iteration may reach the end of container, at which point iterator switches
++ * into IAM_IT_DETACHED state.
++ *
+  * Concurrency: iterators are supposed to be local to thread. Interfaces below
+- * do no internal serialization.
++ * do no internal serialization of access to the iterator fields.
++ *
++ * When in non-detached state, iterator keeps some container nodes pinned in
++ * memory and locked (that locking may be implemented at the container
++ * granularity though). In particular, clients may assume that pointers to
++ * records and keys obtained through iterator interface as valid until
++ * iterator is detached (except that they may be invalidated by sub-sequent
++ * operations done through the same iterator).
+  *
+  */
+ struct iam_iterator {
+@@ -395,7 +550,8 @@
+ 	__u32                 ii_flags;
+ 	enum iam_it_state     ii_state;
+ 	/*
+-	 * path to the record. Valid in IAM_IT_ATTACHED state.
++	 * path to the record. Valid in IAM_IT_ATTACHED, and IAM_IT_SKEWED
++	 * states.
+ 	 */
+ 	struct iam_path       ii_path;
+ };
+@@ -410,133 +566,26 @@
+ struct iam_path_descr *iam_ipd_alloc(void *area, int keysize);
+ void iam_ipd_free(struct iam_path_descr *ipd);
+ 
+-/*
+- * Initialize iterator to IAM_IT_DETACHED state.
+- *
+- * postcondition: it_state(it) == IAM_IT_DETACHED
+- */
+ int  iam_it_init(struct iam_iterator *it, struct iam_container *c, __u32 flags,
+ 		 struct iam_path_descr *pd);
+-/*
+- * Finalize iterator and release all resources.
+- *
+- * precondition: it_state(it) == IAM_IT_DETACHED
+- */
+ void iam_it_fini(struct iam_iterator *it);
+-
+-/*
+- * Attach iterator. After successful completion, @it points to record with the
+- * largest key not larger than @k. Semantics of ->id_create() method guarantee
+- * that such record will always be found.
+- *
+- * Return value: 0: positioned on existing record,
+- *             -ve: error.
+- *
+- * precondition:  it_state(it) == IAM_IT_DETACHED
+- * postcondition: ergo(result == 0,
+- *                     (it_state(it) == IAM_IT_ATTACHED &&
+- *                      it_keycmp(it, iam_it_key_get(it, *), k) < 0))
+- */
+ int iam_it_get(struct iam_iterator *it, const struct iam_key *k);
+-
+-/*
+- * Duplicates iterator.
+- *
+- * postcondition: it_state(dst) == it_state(src) &&
+- *                iam_it_container(dst) == iam_it_container(src) &&
+- *                dst->ii_flags = src->ii_flags &&
+- *                ergo(it_state(it) == IAM_IT_ATTACHED,
+- *                     iam_it_rec_get(dst) == iam_it_rec_get(src) &&
+- *                     iam_it_key_get(dst, *1) == iam_it_key_get(src, *2))
+- */
++int iam_it_get_at(struct iam_iterator *it, const struct iam_key *k);
+ void iam_it_dup(struct iam_iterator *dst, const struct iam_iterator *src);
+-
+-/*
+- * Detach iterator. Does nothing it detached state.
+- *
+- * postcondition: it_state(it) == IAM_IT_DETACHED
+- */
+ void iam_it_put(struct iam_iterator *it);
+-
+-/*
+- * Move iterator one record right.
+- *
+- * Return value: 0: success,
+- *              +1: end of container reached
+- *             -ve: error
+- *
+- * precondition:  it_state(it) == IAM_IT_ATTACHED && it->ii_flags&IAM_IT_MOVE
+- * postcondition: ergo(result >= 0, it_state(it) == IAM_IT_ATTACHED)
+- */
+ int iam_it_next(struct iam_iterator *it);
+-
+-/*
+- * Return pointer to the record under iterator.
+- *
+- * precondition:  it_state(it) == IAM_IT_ATTACHED
+- * postcondition: it_state(it) == IAM_IT_ATTACHED
+- */
+ struct iam_rec *iam_it_rec_get(const struct iam_iterator *it);
+-
+-/*
+- * Replace contents of record under iterator.
+- *
+- * precondition:  it_state(it) == IAM_IT_ATTACHED && it->ii_flags&IAM_IT_WRITE
+- * postcondition: it_state(it) == IAM_IT_ATTACHED &&
+- *                ergo(result == 0, !memcmp(iam_it_rec_get(it), r, ...))
+- */
+-int iam_it_rec_set(handle_t *h, struct iam_iterator *it, struct iam_rec *r);
+-
+-/*
+- * Place key under iterator in @k, return @k
+- *
+- * precondition:  it_state(it) == IAM_IT_ATTACHED
+- * postcondition: it_state(it) == IAM_IT_ATTACHED
+- */
+-struct iam_key *iam_it_key_get(const struct iam_iterator *it,
+-                               struct iam_key *k);
+-
+-/*
+- * Insert new record with key @k and contents from @r, shifting records to the
+- * right.
+- *
+- * precondition:  it_state(it) == IAM_IT_ATTACHED &&
+- *                it->ii_flags&IAM_IT_WRITE &&
+- *                it_keycmp(it, iam_it_key_get(it, *), k) < 0
+- * postcondition: it_state(it) == IAM_IT_ATTACHED &&
+- *                ergo(result == 0,
+- *                     it_keycmp(it, iam_it_key_get(it, *), k) == 0 &&
+- *                     !memcmp(iam_it_rec_get(it), r, ...))
+- */
++int iam_it_rec_set(handle_t *h,
++                   struct iam_iterator *it, const struct iam_rec *r);
++struct iam_key *iam_it_key_get(const struct iam_iterator *it);
++int iam_it_key_size(const struct iam_iterator *it);
+ int iam_it_rec_insert(handle_t *h, struct iam_iterator *it,
+ 		      const struct iam_key *k, const struct iam_rec *r);
+-/*
+- * Delete record under iterator.
+- *
+- * precondition:  it_state(it) == IAM_IT_ATTACHED && it->ii_flags&IAM_IT_WRITE
+- * postcondition: it_state(it) == IAM_IT_ATTACHED
+- */
+ int iam_it_rec_delete(handle_t *h, struct iam_iterator *it);
+ 
+ typedef __u64 iam_pos_t;
+ 
+-/*
+- * Convert iterator to cookie.
+- *
+- * precondition:  it_state(it) == IAM_IT_ATTACHED &&
+- *                path_descr(it->ii_path)->id_key_size <= sizeof(iam_pos_t)
+- * postcondition: it_state(it) == IAM_IT_ATTACHED
+- */
+ iam_pos_t iam_it_store(const struct iam_iterator *it);
+-
+-/*
+- * Restore iterator from cookie.
+- *
+- * precondition:  it_state(it) == IAM_IT_DETACHED && it->ii_flags&IAM_IT_MOVE &&
+- *                path_descr(it->ii_path)->id_key_size <= sizeof(iam_pos_t)
+- * postcondition: ergo(result == 0, it_state(it) == IAM_IT_ATTACHED &&
+- *                                  iam_it_store(it) == pos)
+- */
+ int iam_it_load(struct iam_iterator *it, iam_pos_t pos);
+ 
+ int iam_lookup(struct iam_container *c, const struct iam_key *k,
+@@ -544,10 +593,10 @@
+ int iam_delete(handle_t *h, struct iam_container *c, const struct iam_key *k,
+ 	       struct iam_path_descr *pd);
+ int iam_update(handle_t *h, struct iam_container *c, const struct iam_key *k,
+-	       struct iam_rec *r, struct iam_path_descr *pd);
++	       const struct iam_rec *r, struct iam_path_descr *pd);
+ int iam_insert(handle_t *handle, struct iam_container *c,
+                const struct iam_key *k,
+-	       struct iam_rec *r, struct iam_path_descr *pd);
++	       const struct iam_rec *r, struct iam_path_descr *pd);
+ /*
+  * Initialize container @c.
+  */
+@@ -563,10 +612,6 @@
+  */
+ int iam_container_setup(struct iam_container *c);
+ 
+-#ifndef assert
+-#define assert(test) J_ASSERT(test)
+-#endif
+-
+ static inline struct iam_descr *iam_container_descr(struct iam_container *c)
+ {
+         return c->ic_descr;
+@@ -582,16 +627,65 @@
+ 	return p->ip_container->ic_object;
+ }
+ 
+-static inline void iam_keycpy(const struct iam_container *c,
+-                              struct iam_key *k1, const struct iam_key *k2)
++static inline void iam_ikeycpy(const struct iam_container *c,
++                               struct iam_ikey *k1, const struct iam_ikey *k2)
++{
++	memcpy(k1, k2, c->ic_descr->id_ikey_size);
++}
++
++static inline size_t iam_entry_size(struct iam_path *p)
+ {
+-	memcpy(k1, k2, c->ic_descr->id_key_size);
++	return iam_path_descr(p)->id_ikey_size + iam_path_descr(p)->id_ptr_size;
+ }
+ 
+-static inline int iam_keycmp(const struct iam_container *c,
+-			     const struct iam_key *k1, const struct iam_key *k2)
++static inline struct iam_entry *iam_entry_shift(struct iam_path *p,
++						struct iam_entry *entry,
++						int shift)
+ {
+-	return c->ic_descr->id_ops->id_keycmp(c, k1, k2);
++	void *e = entry;
++	return e + shift * iam_entry_size(p);
++}
++
++static inline struct iam_ikey *iam_get_ikey(struct iam_path *p,
++                                            struct iam_entry *entry,
++                                            struct iam_ikey *key)
++{
++	return memcpy(key, entry, iam_path_descr(p)->id_ikey_size);
++}
++
++static inline struct iam_ikey *iam_ikey_at(struct iam_path *p,
++                                           struct iam_entry *entry)
++{
++	return (struct iam_ikey *)entry;
++}
++
++static inline ptrdiff_t iam_entry_diff(struct iam_path *p,
++				       struct iam_entry *e1,
++				       struct iam_entry *e2)
++{
++	ptrdiff_t diff;
++
++	diff = (void *)e1 - (void *)e2;
++	assert_corr(diff / iam_entry_size(p) * iam_entry_size(p) == diff);
++	return diff / iam_entry_size(p);
++}
++
++/*
++ * Helper for the frequent case, where key was already placed into @k1 by
++ * callback.
++ */
++static inline void iam_ikeycpy0(const struct iam_container *c,
++                                struct iam_ikey *k1, const struct iam_ikey *k2)
++{
++        if (k1 != k2)
++                iam_ikeycpy(c, k1, k2);
++}
++
++static inline int iam_ikeycmp(const struct iam_container *c,
++                              const struct iam_ikey *k1,
++                              const struct iam_ikey *k2)
++{
++	return c->ic_descr->id_ops->id_ikeycmp(c, k1, k2);
+ }
+ 
+ static inline void iam_reccpy(const struct iam_path *p, struct iam_rec *rec_dst,
+@@ -605,11 +699,38 @@
+ 	return (void *)((char *)entry + off);
+ }
+ 
++/*
++ * Leaf helpers.
++ */
++
++static inline struct iam_path *iam_leaf_path(const struct iam_leaf *leaf)
++{
++        return leaf->il_path;
++}
++
++static inline struct iam_container *
++iam_leaf_container(const struct iam_leaf *leaf)
++{
++        return iam_leaf_path(leaf)->ip_container;
++}
++
++static inline struct iam_descr *iam_leaf_descr(const struct iam_leaf *leaf)
++{
++        return iam_leaf_container(leaf)->ic_descr;
++}
++
++static inline struct iam_leaf_operations *
++iam_leaf_ops(const struct iam_leaf *leaf)
++{
++        return iam_leaf_descr(leaf)->id_leaf_ops;
++}
++
++
+ /*XXX These stuff put here, just because they are used by iam.c and namei.c*/
+ static inline unsigned dx_get_block(struct iam_path *p, struct iam_entry *entry)
+ {
+ 	return le32_to_cpu(*(u32*)iam_entry_off(entry,
+-						iam_path_descr(p)->id_key_size))
++						iam_path_descr(p)->id_ikey_size))
+ 		& 0x00ffffff;
+ }
+ 
+@@ -617,21 +738,64 @@
+ 				struct iam_entry *entry, unsigned value)
+ {
+ 	*(u32*)iam_entry_off(entry,
+-			     iam_path_descr(p)->id_key_size) =
++			     iam_path_descr(p)->id_ikey_size) =
+ 		cpu_to_le32(value);
+ }
+ 
+-static inline void dx_set_key(struct iam_path *p, struct iam_entry *entry,
+-                              const struct iam_key *key)
++static inline void dx_set_ikey(struct iam_path *p, struct iam_entry *entry,
++                               const struct iam_ikey *key)
+ {
+-        iam_keycpy(p->ip_container, iam_entry_off(entry, 0), key);
++        iam_ikeycpy(p->ip_container, iam_entry_off(entry, 0), key);
+ }
+ 
++struct dx_map_entry
++{
++	u32 hash;
++	u32 offs;
++};
++
++struct fake_dirent {
++	__le32 inode;
++	__le16 rec_len;
++	u8 name_len;
++	u8 file_type;
++};
++
+ struct dx_countlimit {
+ 	__le16 limit;
+ 	__le16 count;
+ };
+ 
++/*
++ * dx_root_info is laid out so that if it should somehow get overlaid by a
++ * dirent the two low bits of the hash version will be zero.  Therefore, the
++ * hash version mod 4 should never be 0.  Sincerely, the paranoia department.
++ */
++
++struct dx_root {
++	struct fake_dirent dot;
++	char dot_name[4];
++	struct fake_dirent dotdot;
++	char dotdot_name[4];
++	struct dx_root_info
++	{
++		__le32 reserved_zero;
++		u8 hash_version;
++		u8 info_length; /* 8 */
++		u8 indirect_levels;
++		u8 unused_flags;
++	}
++	info;
++	struct {} entries[0];
++};
++
++struct dx_node
++{
++	struct fake_dirent fake;
++	struct {} entries[0];
++};
++
++
+ static inline unsigned dx_get_count(struct iam_entry *entries)
+ {
+ 	return le16_to_cpu(((struct dx_countlimit *) entries)->count);
+@@ -652,9 +816,21 @@
+ 	struct iam_descr *param = iam_path_descr(p);
+ 	unsigned entry_space   = iam_path_obj(p)->i_sb->s_blocksize -
+ 		param->id_node_gap;
+-	return entry_space / (param->id_key_size + param->id_ptr_size);
++	return entry_space / (param->id_ikey_size + param->id_ptr_size);
+ }
+ 
++static inline unsigned dx_root_limit(struct iam_path *p)
++{
++	struct iam_descr *param = iam_path_descr(p);
++	unsigned limit = iam_path_obj(p)->i_sb->s_blocksize -
++                param->id_root_gap;
++        limit /= (param->id_ikey_size + param->id_ptr_size);
++        if (limit == dx_node_limit(p))
++                limit--;
++	return limit;
++}
++
++
+ static inline struct iam_entry *dx_get_entries(struct iam_path *path,
+ 					       void *data, int root)
+ {
+@@ -670,7 +846,8 @@
+ 			      frame->bh->b_data, frame == path->ip_frames);
+ }
+ 
+-static inline struct iam_key *iam_path_key(const struct iam_path *path, int nr)
++static inline struct iam_ikey *iam_path_ikey(const struct iam_path *path,
++                                             int nr)
+ {
+ 	assert(0 <= nr && nr < ARRAY_SIZE(path->ip_data->ipd_key_scratch));
+ 	return path->ip_data->ipd_key_scratch[nr];
+@@ -679,6 +856,7 @@
+ int dx_lookup(struct iam_path *path);
+ void dx_insert_block(struct iam_path *path, struct iam_frame *frame,
+ 		     u32 hash, u32 block);
++int dx_index_is_compat(struct iam_path *path);
+ 
+ int ext3_htree_next_block(struct inode *dir, __u32 hash,
+ 			  struct iam_path *path, __u32 *start_hash);
+@@ -686,6 +864,20 @@
+ struct buffer_head *ext3_append(handle_t *handle, struct inode *inode,
+ 				u32 *block, int *err);
+ int split_index_node(handle_t *handle, struct iam_path *path);
++struct ext3_dir_entry_2 *split_entry(struct inode *dir,
++				     struct ext3_dir_entry_2 *de,
++				     unsigned long ino, mode_t mode,
++				     const char *name, int namelen);
++struct ext3_dir_entry_2 *find_insertion_point(struct inode *dir,
++					      struct buffer_head *bh,
++					      const char *name, int namelen);
++struct ext3_dir_entry_2 *move_entries(struct inode *dir,
++				      struct dx_hash_info *hinfo,
++				      struct buffer_head **bh1,
++				      struct buffer_head **bh2,
++				      __u32 *delim_hash);
++
++extern struct iam_descr iam_htree_compat_param;
+ 
+ /*
+  * external
+@@ -703,10 +895,12 @@
+ 		  handle_t *handle, struct buffer_head **bh);
+ 
+ void iam_insert_key(struct iam_path *path, struct iam_frame *frame,
+-		    const struct iam_key *key, iam_ptr_t ptr);
++		    const struct iam_ikey *key, iam_ptr_t ptr);
+ 
+ int  iam_leaf_at_end(const struct iam_leaf *l);
+ void iam_leaf_next(struct iam_leaf *folio);
++int iam_leaf_can_add(const struct iam_leaf *l,
++                     const struct iam_key *k, const struct iam_rec *r);
+ 
+ struct iam_path *iam_leaf_path(const struct iam_leaf *leaf);
+ struct iam_container *iam_leaf_container(const struct iam_leaf *leaf);
+@@ -714,14 +908,95 @@
+ struct iam_leaf_operations *iam_leaf_ops(const struct iam_leaf *leaf);
+ 
+ 
++int iam_node_read(struct iam_container *c, iam_ptr_t ptr,
++                  handle_t *h, struct buffer_head **bh);
++
++/*
++ * Container format.
++ */
+ struct iam_format {
++        /*
++         * Method called to recognize container format. Should return true iff
++         * container @c conforms to this format. This method may do IO to read
++         * container pages.
++         *
++         * If container is recognized, this method sets operation vectors
++         * ->id_ops and ->id_leaf_ops in container description (c->ic_descr),
++         * and fills other description fields.
++         */
+         int (*if_guess)(struct iam_container *c);
++        /*
++         * Linkage into global list of container formats.
++         */
+         struct list_head if_linkage;
+ };
+ 
+ void iam_format_register(struct iam_format *fmt);
+ 
+ void iam_lfix_format_init(void);
++void iam_lvar_format_init(void);
++void iam_htree_format_init(void);
++
++struct iam_private_info;
++
++void ext3_iam_release(struct file *filp, struct inode *inode);
++
++int iam_uapi_ioctl(struct inode * inode, struct file * filp, unsigned int cmd,
++                   unsigned long arg);
++
++/* dir.c */
++#if EXT3_INVARIANT_ON
++extern int ext3_check_dir_entry(const char *, struct inode *,
++				struct ext3_dir_entry_2 *,
++				struct buffer_head *, unsigned long);
++#else
++static inline int ext3_check_dir_entry(const char * function,
++				       struct inode * dir,
++				       struct ext3_dir_entry_2 * de,
++				       struct buffer_head * bh,
++				       unsigned long offset)
++{
++	return 1;
++}
++#endif
++
++/* __KERNEL__ */
++#endif
++
++/*
++ * User level API. Copy exists in lustre/lustre/tests/iam_ut.c
++ */
++
++struct iam_uapi_info {
++        __u16 iui_keysize;
++        __u16 iui_recsize;
++        __u16 iui_ptrsize;
++        __u16 iui_height;
++        char  iui_fmt_name[DX_FMT_NAME_LEN];
++};
++
++struct iam_uapi_op {
++        void *iul_key;
++        void *iul_rec;
++};
++
++struct iam_uapi_it {
++        struct iam_uapi_op iui_op;
++        __u16              iui_state;
++};
++
++enum iam_ioctl_cmd {
++        IAM_IOC_INIT     = _IOW('i', 1, struct iam_uapi_info),
++        IAM_IOC_GETINFO  = _IOR('i', 2, struct iam_uapi_info),
++        IAM_IOC_INSERT   = _IOR('i', 3, struct iam_uapi_op),
++        IAM_IOC_LOOKUP   = _IOWR('i', 4, struct iam_uapi_op),
++        IAM_IOC_DELETE   = _IOR('i', 5, struct iam_uapi_op),
++        IAM_IOC_IT_START = _IOR('i', 6, struct iam_uapi_it),
++        IAM_IOC_IT_NEXT  = _IOW('i', 7, struct iam_uapi_it),
++        IAM_IOC_IT_STOP  = _IOR('i', 8, struct iam_uapi_it),
++
++        IAM_IOC_POLYMORPH = _IOR('i', 9, unsigned long)
++};
+ 
+ /* __LINUX_LUSTRE_IAM_H__ */
+ #endif

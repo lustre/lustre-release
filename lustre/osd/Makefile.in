@@ -1,6 +1,0 @@
-MODULES := osd
-osd-objs := osd_handler.o osd_oi.o osd_igif.o
-
-EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LDISKFS_DIR@ -I@LDISKFS_DIR@/ldiskfs
-
-@INCLUDE_RULES@

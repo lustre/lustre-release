@@ -1,4 +1,0 @@
-MODULES := lmv
-lmv-objs := lmv_obd.o lmv_intent.o lmv_fld.o lmv_object.o lproc_lmv.o
-
-@INCLUDE_RULES@

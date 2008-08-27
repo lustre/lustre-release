@@ -16,35 +16,13 @@ LB_CANONICAL_SYSTEM
 LB_INCLUDE_RULES
 LB_PROG_CC
 
-
-#
-# LC_TARGET_SUPPORTED
-#
-# is the target os supported?
-#
-AC_DEFUN([LC_TARGET_SUPPORTED],
-[case $target_os in
-	linux* | darwin*)
-$1
-		;;
-	*)
-$2
-		;;
-esac
-])
-
-
 AC_MSG_CHECKING([whether to build kernel modules])
 AC_ARG_ENABLE([modules],
-	AC_HELP_STRING([--disable-modules],
-			[disable building of Lustre kernel modules]),
-	[],[
-		LC_TARGET_SUPPORTED([
-			enable_modules='yes'
-		],[
-			enable_modules='no'
-		])
-	])
+        AC_HELP_STRING([--disable-modules],
+                        [disable building of Lustre kernel modules]),
+        [],[
+                enable_modules='yes'
+        ])
 AC_MSG_RESULT([$enable_modules])
 
 if test x$enable_modules = xyes ; then
@@ -94,7 +72,6 @@ case $LINUXRELEASE in
 2.6.12*) LDISKFS_SERIES="2.6.12-vanilla.series" ;;
 2.6.15*) LDISKFS_SERIES="2.6-fc5.series";;
 2.6.16*) LDISKFS_SERIES="2.6-sles10.series";;
-2.6.18-*el5*) LDISKFS_SERIES="2.6-rhel5.series";;
 2.6.18*) LDISKFS_SERIES="2.6.18-vanilla.series";;
 *) AC_MSG_WARN([Unknown kernel version $LINUXRELEASE, fix ldiskfs/configure.ac])
 esac
