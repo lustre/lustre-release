@@ -3768,7 +3768,7 @@ test_102a() {
         touch $testfile
 
 	[ "$UID" != 0 ] && skip "must run as root" && return
-	[ -z "`lctl get_param -n mdc.*[mM][dD][cC]*.connect_flags | grep xattr`" ] &&
+	[ -z "`lctl get_param -n mdc.*.connect_flags | grep xattr`" ] &&
 	skip "must have user_xattr" && return
 	[ -z "$(which setfattr 2>/dev/null)" ] && skip "could not find setfattr" && return
 
@@ -4042,7 +4042,7 @@ run_acl_subtest()
 
 test_103 () {
     [ "$UID" != 0 ] && skip "must run as root" && return
-    [ -z "$(lctl get_param mdc.*[mM][dD][cC]*.connect_flags | grep acl)" ] && skip "must have acl enabled" && return
+    [ -z "$(lctl get_param mdc.*.connect_flags | grep acl)" ] && skip "must have acl enabled" && return
     [ -z "$(which setfacl 2>/dev/null)" ] && skip "could not find setfacl" && return
 
     SAVE_UMASK=`umask`
@@ -5195,12 +5195,13 @@ test_128() { # bug 15212
 
 	result=$(grep error $TMP/$tfile.log)
 	rm -f $DIR/$tfile
-	[ -z "$result" ] || error "consecutive find's under interactive lfs failed"
+	[ -z "$result" ] || error "consecutive find with interactive lfs failed"
 }
-run_test 128 "interactive lfs for 2 consecutive find's"
+run_test 128 "interactive lfs for 2 consecutive finds"
 
 test_129() {
         [ "$FSTYPE" != "ldiskfs" ] && skip "not needed for FSTYPE=$FSTYPE" && return 0
+        remote_mds_nodsh && skip "remote MDS" && return
 
         DEV=$(basename $(do_facet mds lctl get_param -n mds.*.mntdev))
         [ -z "$DEV" ] && error "can't access mds mntdev"
@@ -5223,7 +5224,7 @@ test_129() {
                         return 0
                 elif [ $rc -ne 0 ]; then
                         do_facet mds "echo 0 >$LDPROC"
-                        error_exit "return code $rc received instead of expected $EFBIG"
+                        error_exit "error $rc instead of expected $EFBIG"
                 fi
                 J=$((J+1))
                 I=$(stat -c%s "$DIR/$tdir")
@@ -5236,11 +5237,13 @@ run_test 129 "test directory size limit ========================"
 
 test_130a() {
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
-	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
+	[ -n "$filefrag_op" ] && skip "filefrag has no FIEMAP support" && return
 
 	local fm_file=$DIR/$tfile
-	lfs setstripe -s 65536 -c 1 $fm_file || error "setstripe failed on $fm_file"
-	dd if=/dev/zero of=$fm_file bs=65536 count=1 || error "dd failed for $fm_file"
+	lfs setstripe -s 65536 -c 1 $fm_file ||
+		error "setstripe failed on $fm_file"
+	dd if=/dev/zero of=$fm_file bs=65536 count=1 ||
+		error "dd failed for $fm_file"
 
 	filefrag -ves $fm_file || error "filefrag $fm_file failed"
 	filefrag_op=`filefrag -ve $fm_file | grep -A 100 "ext:" | grep -v "ext:" | grep -v "found"`
@@ -5270,14 +5273,16 @@ test_130a() {
 run_test 130a "FIEMAP (1-stripe file)"
 
 test_130b() {
-	[ "$OSTCOUNT" -lt "2" ] && skip "skipping FIEMAP on 2-stripe file test" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "FIEMAP on 2-stripe file test" && return
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
-	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
+	[ -n "$filefrag_op" ] && skip "filefrag has no FIEMAP support" && return
 
 	local fm_file=$DIR/$tfile
-	lfs setstripe -s 65536 -c 2 $fm_file || error "setstripe failed on $fm_file"
-	dd if=/dev/zero of=$fm_file bs=1M count=2 || error "dd failed on $fm_file"
+	lfs setstripe -s 65536 -c 2 $fm_file ||
+		error "setstripe failed on $fm_file"
+	dd if=/dev/zero of=$fm_file bs=1M count=2 ||
+		error "dd failed on $fm_file"
 
 	filefrag -ves $fm_file || error "filefrag $fm_file failed"
 	filefrag_op=`filefrag -ve $fm_file | grep -A 100 "ext:" | grep -v "ext:" | grep -v "found"`
@@ -5287,13 +5292,12 @@ test_130b() {
 	IFS=$'\n'
 	tot_len=0
 	num_luns=1
-	for line in $filefrag_op
-	do
+	for line in $filefrag_op; do
 		frag_lun=`echo $line | cut -d: -f5`
 		ext_len=`echo $line | cut -d: -f4`
 		if (( $frag_lun != $last_lun )); then
 			if (( tot_len != 1024 )); then
-				error "FIEMAP on $fm_file failed; returned len $tot_len for OST $last_lun instead of 256"
+				error "FIEMAP $fm_file: len $tot_len for OST $last_lun instead of 256"
 				return
 			else
 				(( num_luns += 1 ))
@@ -5304,7 +5308,7 @@ test_130b() {
 		last_lun=$frag_lun
 	done
 	if (( num_luns != 2 || tot_len != 1024 )); then
-		error "FIEMAP on $fm_file failed; returned wrong number of luns or wrong len for OST $last_lun"
+		error "FIEMAP $fm_file: wrong number of LUNs or wrong len for OST $last_lun"
 		return
 	fi
 
@@ -5313,14 +5317,16 @@ test_130b() {
 run_test 130b "FIEMAP (2-stripe file)"
 
 test_130c() {
-	[ "$OSTCOUNT" -lt "2" ] && skip "skipping FIEMAP on 2-stripe file with hole test" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "FIEMAP on 2-stripe hole test" && return
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
-	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
+	[ -n "$filefrag_op" ] && skip "filefrag has no FIEMAP support" && return
 
 	local fm_file=$DIR/$tfile
-	lfs setstripe -s 65536 -c 2 $fm_file || error "setstripe failed on $fm_file"
-	dd if=/dev/zero of=$fm_file seek=1 bs=1M count=1 || error "dd failed on $fm_file"
+	lfs setstripe -s 65536 -c 2 $fm_file ||
+		error "setstripe failed on $fm_file"
+	dd if=/dev/zero of=$fm_file seek=1 bs=1M count=1 ||
+		error "dd failed on $fm_file"
 
 	filefrag -ves $fm_file || error "filefrag $fm_file failed"
 	filefrag_op=`filefrag -ve $fm_file | grep -A 100 "ext:" | grep -v "ext:" | grep -v "found"`
@@ -5337,11 +5343,11 @@ test_130c() {
 		if (( $frag_lun != $last_lun )); then
 			logical=`echo $line | cut -d: -f2 | cut -d. -f1`
 			if (( logical != 512 )); then
-				error "FIEMAP on $fm_file failed; returned logical start for lun $logical instead of 512"
+				error "FIEMAP $fm_file: logical start for LUN $logical instead of 512"
 				return
 			fi
 			if (( tot_len != 512 )); then
-				error "FIEMAP on $fm_file failed; returned len $tot_len for OST $last_lun instead of 1024"
+				error "FIEMAP $fm_file: len $tot_len for OST $last_lun instead of 1024"
 				return
 			else
 				(( num_luns += 1 ))
@@ -5352,7 +5358,7 @@ test_130c() {
 		last_lun=$frag_lun
 	done
 	if (( num_luns != 2 || tot_len != 512 )); then
-		error "FIEMAP on $fm_file failed; returned wrong number of luns or wrong len for OST $last_lun"
+		error "FIEMAP $fm_file: wrong number of LUNs or wrong len for OST $last_lun"
 		return
 	fi
 
@@ -5361,14 +5367,16 @@ test_130c() {
 run_test 130c "FIEMAP (2-stripe file with hole)"
 
 test_130d() {
-	[ "$OSTCOUNT" -lt "3" ] && skip "skipping FIEMAP on N-stripe file test" && return
+	[ "$OSTCOUNT" -lt "3" ] && skip "FIEMAP on N-stripe file test" && return
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
-	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
+	[ -n "$filefrag_op" ] && skip "filefrag has no FIEMAP support" && return
 
 	local fm_file=$DIR/$tfile
-	lfs setstripe -s 65536 -c $OSTCOUNT $fm_file || error "setstripe failed on $fm_file"
-	dd if=/dev/zero of=$fm_file bs=1M count=$OSTCOUNT || error "dd failed on $fm_file"
+	lfs setstripe -s 65536 -c $OSTCOUNT $fm_file ||
+		error "setstripe failed on $fm_file"
+	dd if=/dev/zero of=$fm_file bs=1M count=$OSTCOUNT ||
+		error "dd failed on $fm_file"
 
 	filefrag -ves $fm_file || error "filefrag $fm_file failed"
 	filefrag_op=`filefrag -ve $fm_file | grep -A 100 "ext:" | grep -v "ext:" | grep -v "found"`
@@ -5384,7 +5392,7 @@ test_130d() {
 		ext_len=`echo $line | cut -d: -f4`
 		if (( $frag_lun != $last_lun )); then
 			if (( tot_len != 1024 )); then
-				error "FIEMAP on $fm_file failed; returned len $tot_len for OST $last_lun instead of 1024"
+				error "FIEMAP $fm_file: len $tot_len for OST $last_lun instead of 1024"
 				return
 			else
 				(( num_luns += 1 ))
@@ -5395,7 +5403,7 @@ test_130d() {
 		last_lun=$frag_lun
 	done
 	if (( num_luns != OSTCOUNT || tot_len != 1024 )); then
-		error "FIEMAP on $fm_file failed; returned wrong number of luns or wrong len for OST $last_lun"
+		error "FIEMAP $fm_file: wrong number of LUNs or wrong len for OST $last_lun"
 		return
 	fi
 
@@ -5404,17 +5412,17 @@ test_130d() {
 run_test 130d "FIEMAP (N-stripe file)"
 
 test_130e() {
-	[ "$OSTCOUNT" -lt "2" ] && skip "skipping continuation FIEMAP test" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "continuation FIEMAP test" && return
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
-	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
+	[ -n "$filefrag_op" ] && skip "filefrag has no FIEMAP support" && return
 
 	local fm_file=$DIR/$tfile
-	lfs setstripe -s 65536 -c 2 $fm_file || error "setstripe failed on $fm_file"
+	lfs setstripe -s 65536 -c 2 $fm_file ||
+		error "setstripe failed on $fm_file"
 	NUM_BLKS=512
 	EXPECTED_LEN=$(( (NUM_BLKS / 2) * 4 ))
-	for ((i = 0; i < $NUM_BLKS; i++))
-	do
+	for ((i = 0; i < $NUM_BLKS; i++)); do
 		dd if=/dev/zero of=$fm_file count=1 bs=4096 seek=$((2*$i)) conv=notrunc > /dev/null 2>&1
 	done
 
@@ -5432,7 +5440,7 @@ test_130e() {
 		ext_len=`echo $line | cut -d: -f4`
 		if (( $frag_lun != $last_lun )); then
 			if (( tot_len != $EXPECTED_LEN )); then
-				error "FIEMAP on $fm_file failed; returned len $tot_len for OST $last_lun instead of $EXPECTED_LEN"
+				error "FIEMAP $fm_file: len $tot_len for OST $last_lun instead of $EXPECTED_LEN"
 				return
 			else
 				(( num_luns += 1 ))
@@ -5444,7 +5452,7 @@ test_130e() {
 	done
 	if (( num_luns != 2 || tot_len != $EXPECTED_LEN )); then
 		echo "$num_luns $tot_len"
-		error "FIEMAP on $fm_file failed; returned wrong number of luns or wrong len for OST $last_lun"
+		error "FIEMAP $fm_file: wrong number of LUNs or wrong len for OST $last_lun"
 		return
 	fi
 
@@ -5481,6 +5489,10 @@ check_file_in_pool()
 }
 
 test_200() {
+	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
+		skip "missing pools support" && return
+	remote_mds_nodsh && skip "remote MDS" && return
+	grep *pools
 	do_facet mgs $LCTL pool_new $FSNAME.$POOL
 	do_facet mgs $LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL
 	[ $? == 0 ] || error "Pool creation of $POOL failed"
@@ -5488,17 +5500,23 @@ test_200() {
 run_test 200 "Create new pool =========================================="
 
 test_201() {
+	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
+		skip "missing pools support" && return
+	remote_mds_nodsh && skip "remote MDS" && return
 	TGT=$(seq -f $FSNAME-OST%04g_UUID $TGTPOOL_FIRST $TGTPOOL_STEP \
 		$TGTPOOL_MAX | tr '\n' ' ')
 	do_facet mgs $LCTL pool_add $FSNAME.$POOL \
 		$FSNAME-OST[$TGTPOOL_FIRST-$TGTPOOL_MAX/$TGTPOOL_STEP]_UUID
-	res=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL | sort \
-			| tr '\n' ' ')
-	[ "$res" = "$TGT" ] || error "Pool content ($res) do not match requested ($TGT)"
+	res=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL |
+		sort | tr '\n' ' ')
+	[ "$res" = "$TGT" ] || error "Pool ($res) do not match requested ($TGT)"
 }
 run_test 201 "Add targets to a pool ===================================="
 
 test_202a() {
+	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
+		skip "missing pools support" && return
+	remote_mds_nodsh && skip "remote MDS" && return
 	mkdir -p $POOL_DIR
 	$SETSTRIPE -c 2 -p $POOL $POOL_DIR
 	[ $? = 0 ] || error "Cannot set pool $POOL to $POOL_DIR"
@@ -5506,20 +5524,24 @@ test_202a() {
 run_test 202a "Set pool on a directory ================================="
 
 test_202b() {
+	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
+		skip "missing pools support" && return
+	remote_mds_nodsh && skip "remote MDS" && return
 	res=$($GETSTRIPE $POOL_DIR | grep pool: | cut -f8 -d " ")
 	[ "$res" = $POOL ] || error "Pool on $POOL_DIR is not $POOL"
 }
 run_test 202b "Check pool on a directory ==============================="
 
 test_202c() {
+	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
+		skip "missing pools support" && return
+	remote_mds_nodsh && skip "remote MDS" && return
 	failed=0
-	for i in $(seq -w 1 $(($TGT_COUNT * 3)))
-	do
+	for i in $(seq -w 1 $(($TGT_COUNT * 3))); do
 		file=$POOL_DIR/file-$i
 		touch $file
 		check_file_in_pool $file
-		if [[ $? != 0 ]]
-		then
+		if [[ $? != 0 ]]; then
 			failed=$(($failed + 1))
 		fi
 	done
@@ -5528,15 +5550,16 @@ test_202c() {
 run_test 202c "Check files allocation from directory pool =============="
 
 test_203() {
+	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
+		skip "missing pools support" && return
+	remote_mds_nodsh && skip "remote MDS" && return
 	mkdir -p $POOL_FILE
 	failed=0
-	for i in $(seq -w 1 $(($TGT_COUNT * 3)))
-	do
+	for i in $(seq -w 1 $(($TGT_COUNT * 3))); do
 		file=$POOL_FILE/spoo-$i
 		$SETSTRIPE -p $POOL $file
 		check_file_in_pool $file
-		if [[ $? != 0 ]]
-		then
+		if [[ $? != 0 ]]; then
 			failed=$(($failed + 1))
 		fi
 	done
@@ -5545,16 +5568,23 @@ test_203() {
 run_test 203 "Create files in a pool ==================================="
 
 test_210a() {
-	TGT=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL | head -1)
+	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
+		skip "missing pools support" && return
+	remote_mds_nodsh && skip "remote MDS" && return
+	TGT=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL |
+		head -1)
 	do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
-	res=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL | grep $TGT)
+	res=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL |
+		grep $TGT)
 	[ "$res" = "" ] || error "$TGT not removed from $FSNAME.$POOL"
 }
 run_test 210a "Remove a target from a pool ============================="
 
 test_210b() {
-	for TGT in $(do_facet mgs $LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL)
-	do
+	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
+		skip "missing pools support" && return
+	remote_mds_nodsh && skip "remote MDS" && return
+	for TGT in $(do_facet mgs $LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL); do
 		do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
  	done
 	res=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL)
@@ -5563,6 +5593,9 @@ test_210b() {
 run_test 210b "Remove all targets from a pool =========================="
 
 test_211() {
+	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
+		skip "missing pools support" && return
+	remote_mds_nodsh && skip "remote MDS" && return
 	do_facet mgs $LCTL pool_destroy $FSNAME.$POOL
 	res=$(do_facet mgs "$LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL 2>/dev/null")
 	[ "$res" = "" ] || error "Pool $FSNAME.$POOL is not destroyed"
