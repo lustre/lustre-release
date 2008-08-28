@@ -177,7 +177,7 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
                 __swab32s(&lid->lid_id.lgl_ogen);
                 break;
         }
-
+        case LLOG_JOIN_REC:
         case LLOG_PAD_MAGIC:
         /* ignore old pad records of type 0 */
         case 0:
