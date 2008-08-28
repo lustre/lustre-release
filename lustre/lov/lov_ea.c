@@ -444,7 +444,8 @@ static int lovea_unpack_array(struct llog_handle *handle,
         /* insert extent desc into lsm extent array  */
         lai->lai_ext_array[cursor].le_start = le64_to_cpu(med->med_start);
         lai->lai_ext_array[cursor].le_len   = le64_to_cpu(med->med_len);
-        lai->lai_ext_array[cursor].le_stripe_count = lmm->lmm_stripe_count;
+        lai->lai_ext_array[cursor].le_stripe_count =
+                                   le32_to_cpu(lmm->lmm_stripe_count);
 
         /* unpack extent's lmm to lov_oinfo array */
         loi_index = lai->lai_ext_array[cursor].le_loi_idx;
@@ -584,8 +585,10 @@ static int lovea_init_array_info(struct lov_stripe_md *lsm,
         if (!lai)
                 RETURN(-ENOMEM);
 
-        lai->lai_array_id = *logid;
-        lai->lai_ext_count = extent_count;
+        lai->lai_array_id.lgl_oid = le64_to_cpu(logid->lgl_oid);
+        lai->lai_array_id.lgl_ogr = le64_to_cpu(logid->lgl_ogr);
+        lai->lai_array_id.lgl_ogen = le32_to_cpu(logid->lgl_ogen);
+        lai->lai_ext_count = le32_to_cpu(extent_count);
         lsm->lsm_array = lai;
         RETURN(0);
 }
