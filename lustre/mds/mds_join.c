@@ -321,7 +321,9 @@ static int mds_join_unlink_tail_inode(struct mds_update_record *rec,
                 le32_to_cpu(tail_lmm->lmm_magic) == LOV_MAGIC);
 
         LASSERT(de_tailparent);
+        LOCK_INODE_MUTEX(de_tailparent->d_inode);
         rc = ll_vfs_unlink(de_tailparent->d_inode, de_tail, mds->mds_vfsmnt);
+        UNLOCK_INODE_MUTEX(de_tailparent->d_inode);
 
         if (rc == 0) {
                 CDEBUG(D_INODE, "delete the tail inode %lu/%u \n",

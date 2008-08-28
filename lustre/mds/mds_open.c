@@ -1087,7 +1087,9 @@ int mds_open(struct mds_update_record *rec, int offset,
                 dp.ldp_ptr = req;
                 dp.ldp_inum = ino;
 
+                LOCK_INODE_MUTEX(dparent->d_inode);
                 rc = ll_vfs_create(dparent->d_inode, dchild, rec->ur_mode,NULL);
+                UNLOCK_INODE_MUTEX(dparent->d_inode);
                 if (dchild->d_fsdata == (void *)(unsigned long)ino)
                         dchild->d_fsdata = NULL;
 
@@ -1254,8 +1256,11 @@ found_child:
                         ldlm_lock_decref(child_lockh, child_mode);
         case 2:
                 if (rc && created) {
-                        int err = ll_vfs_unlink(dparent->d_inode, dchild,
-                                                mds->mds_vfsmnt);
+                        int err;
+                        LOCK_INODE_MUTEX(dparent->d_inode);
+                        err = ll_vfs_unlink(dparent->d_inode, dchild,
+                                            mds->mds_vfsmnt);
+                        UNLOCK_INODE_MUTEX(dparent->d_inode);
                         if (err) {
                                 CERROR("unlink(%.*s) in error path: %d\n",
                                        dchild->d_name.len, dchild->d_name.name,
