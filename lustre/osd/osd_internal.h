@@ -128,6 +128,10 @@ struct osd_thread_info {
         struct dentry          oti_dentry;
         struct timespec        oti_time;
         /*
+         * XXX temporary: fake struct file for osd_object_sync
+         */
+        struct file            oti_file;
+        /*
          * XXX temporary: for capa operations.
          */
         struct lustre_capa_key oti_capa_key;

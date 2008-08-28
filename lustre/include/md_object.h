@@ -235,6 +235,7 @@ struct md_object_operations {
         
         int (*moo_capa_get)(const struct lu_env *, struct md_object *,
                             struct lustre_capa *, int renewal);
+        int (*moo_object_sync)(const struct lu_env *, struct md_object *);
 };
 
 /*
@@ -548,6 +549,12 @@ static inline int mo_capa_get(const struct lu_env *env,
 {
         LASSERT(m->mo_ops->moo_capa_get);
         return m->mo_ops->moo_capa_get(env, m, c, renewal);
+}
+
+static inline int mo_object_sync(const struct lu_env *env, struct md_object *m)
+{
+        LASSERT(m->mo_ops->moo_object_sync);
+        return m->mo_ops->moo_object_sync(env, m);
 }
 
 static inline int mdo_lookup(const struct lu_env *env,

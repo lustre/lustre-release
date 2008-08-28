@@ -1521,6 +1521,26 @@ static struct obd_capa *osd_capa_get(const struct lu_env *env,
         RETURN(oc);
 }
 
+static int osd_object_sync(const struct lu_env *env, struct dt_object *dt)
+{
+        int rc;
+        struct osd_object      *obj    = osd_dt_obj(dt);
+        struct inode           *inode  = obj->oo_inode;
+        struct osd_thread_info *info   = osd_oti_get(env);
+        struct dentry          *dentry = &info->oti_dentry;
+        struct file            *file   = &info->oti_file;
+        ENTRY;
+
+        dentry->d_inode = inode;
+        file->f_dentry = dentry;
+        file->f_mapping = inode->i_mapping;
+        file->f_op = inode->i_fop;
+        mutex_lock(&inode->i_mutex);
+        rc = file->f_op->fsync(file, dentry, 0);
+        mutex_unlock(&inode->i_mutex);
+        RETURN(rc);
+}
+
 static struct dt_object_operations osd_obj_ops = {
         .do_read_lock    = osd_object_read_lock,
         .do_write_lock   = osd_object_write_lock,
@@ -1538,6 +1558,7 @@ static struct dt_object_operations osd_obj_ops = {
         .do_xattr_del    = osd_xattr_del,
         .do_xattr_list   = osd_xattr_list,
         .do_capa_get     = osd_capa_get,
+        .do_object_sync  = osd_object_sync,
 };
 
 /*

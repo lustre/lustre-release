@@ -344,6 +344,14 @@ static int cml_capa_get(const struct lu_env *env, struct md_object *mo,
         RETURN(rc);
 }
 
+static int cml_object_sync(const struct lu_env *env, struct md_object *mo)
+{
+        int rc;
+        ENTRY;
+        rc = mo_object_sync(env, md_object_next(mo));
+        RETURN(rc);
+}
+
 static struct md_object_operations cml_mo_ops = {
         .moo_permission    = cml_permission,
         .moo_attr_get      = cml_attr_get,
@@ -359,7 +367,8 @@ static struct md_object_operations cml_mo_ops = {
         .moo_close         = cml_close,
         .moo_readpage      = cml_readpage,
         .moo_readlink      = cml_readlink,
-        .moo_capa_get      = cml_capa_get
+        .moo_capa_get      = cml_capa_get,
+        .moo_object_sync   = cml_object_sync,
 };
 
 /* md_dir operations */
@@ -939,6 +948,11 @@ static int cmr_capa_get(const struct lu_env *env, struct md_object *mo,
         return -EFAULT;
 }
 
+static int cmr_object_sync(const struct lu_env *env, struct md_object *mo)
+{
+        return -EFAULT;
+}
+
 static struct md_object_operations cmr_mo_ops = {
         .moo_permission    = cmr_permission,
         .moo_attr_get      = cmr_attr_get,
@@ -954,7 +968,8 @@ static struct md_object_operations cmr_mo_ops = {
         .moo_close         = cmr_close,
         .moo_readpage      = cmr_readpage,
         .moo_readlink      = cmr_readlink,
-        .moo_capa_get      = cmr_capa_get
+        .moo_capa_get      = cmr_capa_get,
+        .moo_object_sync   = cmr_object_sync,
 };
 
 /* remote part of md_dir operations */

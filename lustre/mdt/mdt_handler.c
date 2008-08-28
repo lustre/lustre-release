@@ -1545,18 +1545,33 @@ static int mdt_reint(struct mdt_thread_info *info)
         RETURN(rc);
 }
 
-/* TODO these two methods not available now. */
-
 /* this should sync the whole device */
-static int mdt_device_sync(struct mdt_thread_info *info)
+static int mdt_device_sync(const struct lu_env *env, struct mdt_device *mdt)
 {
-        return 0;
+        struct dt_device *dt = mdt->mdt_bottom;
+        int rc;
+        ENTRY;
+
+        rc = dt->dd_ops->dt_sync(env, dt);
+        RETURN(rc);
 }
 
 /* this should sync this object */
 static int mdt_object_sync(struct mdt_thread_info *info)
 {
-        return 0;
+        struct md_object *next;
+        int rc;
+        ENTRY;
+
+        if (!mdt_object_exists(info->mti_object)) {
+                CWARN("Non existing object  "DFID"!\n",
+                      PFID(mdt_object_fid(info->mti_object)));
+                RETURN(-ESTALE);
+        }
+        next = mdt_object_child(info->mti_object);
+        rc = mo_object_sync(info->mti_env, next);
+
+        RETURN(rc);
 }
 
 static int mdt_sync(struct mdt_thread_info *info)
@@ -1580,7 +1595,7 @@ static int mdt_sync(struct mdt_thread_info *info)
                 /* sync the whole device */
                 rc = req_capsule_server_pack(pill);
                 if (rc == 0)
-                        rc = mdt_device_sync(info);
+                        rc = mdt_device_sync(info->mti_env, info->mti_mdt);
                 else
                         rc = err_serious(rc);
         } else {
@@ -4646,7 +4661,7 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
         switch (cmd) {
         case OBD_IOC_SYNC:
-                rc = dt->dd_ops->dt_sync(&env, dt);
+                rc = mdt_device_sync(&env, mdt);
                 break;
         case OBD_IOC_SET_READONLY:
                 rc = dt->dd_ops->dt_sync(&env, dt);

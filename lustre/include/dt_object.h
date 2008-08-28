@@ -308,6 +308,7 @@ struct dt_object_operations {
                                         struct dt_object *dt,
                                         struct lustre_capa *old,
                                         __u64 opc);
+        int (*do_object_sync)(const struct lu_env *, struct dt_object *);
 };
 
 /*

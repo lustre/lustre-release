@@ -1602,6 +1602,16 @@ out_unlock:
         return rc;
 }
 
+static int mdd_object_sync(const struct lu_env *env, struct md_object *obj)
+{
+        struct mdd_object *mdd_obj = md2mdd_obj(obj);
+        struct dt_object *next;
+
+        LASSERT(mdd_object_exists(mdd_obj));
+        next = mdd_object_child(mdd_obj);
+        return next->do_ops->do_object_sync(env, next);
+}
+
 struct md_object_operations mdd_obj_ops = {
         .moo_permission    = mdd_permission,
         .moo_attr_get      = mdd_attr_get,
@@ -1617,5 +1627,6 @@ struct md_object_operations mdd_obj_ops = {
         .moo_close         = mdd_close,
         .moo_readpage      = mdd_readpage,
         .moo_readlink      = mdd_readlink,
-        .moo_capa_get      = mdd_capa_get
+        .moo_capa_get      = mdd_capa_get,
+        .moo_object_sync   = mdd_object_sync,
 };
