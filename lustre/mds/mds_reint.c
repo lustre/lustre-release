@@ -1049,7 +1049,9 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 handle = fsfilt_start(obd, dir, FSFILT_OP_CREATE, NULL);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
+                LOCK_INODE_MUTEX(dir);
                 rc = ll_vfs_create(dir, dchild, rec->ur_mode, NULL);
+                UNLOCK_INODE_MUTEX(dir);
                 mds_counter_incr(req->rq_export, LPROC_MDS_MKNOD);
                 EXIT;
                 break;
@@ -1058,7 +1060,9 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 handle = fsfilt_start(obd, dir, FSFILT_OP_MKDIR, NULL);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
+                LOCK_INODE_MUTEX(dir);
                 rc = ll_vfs_mkdir(dir, dchild, mds->mds_vfsmnt, rec->ur_mode);
+                UNLOCK_INODE_MUTEX(dir);
                 mds_counter_incr(req->rq_export, LPROC_MDS_MKDIR);
                 EXIT;
                 break;
@@ -1067,11 +1071,13 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 handle = fsfilt_start(obd, dir, FSFILT_OP_SYMLINK, NULL);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
+                LOCK_INODE_MUTEX(dir);
                 if (rec->ur_tgt == NULL)        /* no target supplied */
                         rc = -EINVAL;           /* -EPROTO? */
                 else
                         rc = ll_vfs_symlink(dir, dchild, mds->mds_vfsmnt, 
                                             rec->ur_tgt, S_IALLUGO);
+                UNLOCK_INODE_MUTEX(dir);
                 mds_counter_incr(req->rq_export, LPROC_MDS_MKNOD);
                 EXIT;
                 break;
@@ -1084,8 +1090,10 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 handle = fsfilt_start(obd, dir, FSFILT_OP_MKNOD, NULL);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
+                LOCK_INODE_MUTEX(dir);
                 rc = ll_vfs_mknod(dir, dchild, mds->mds_vfsmnt, rec->ur_mode, 
                                   rdev);
+                UNLOCK_INODE_MUTEX(dir);
                 mds_counter_incr(req->rq_export, LPROC_MDS_MKNOD);
                 EXIT;
                 break;
@@ -1182,12 +1190,16 @@ cleanup_no_trans:
                  */
                 switch (type) {
                 case S_IFDIR:
+                        LOCK_INODE_MUTEX(dir);
                         err = ll_vfs_rmdir(dir, dchild, mds->mds_vfsmnt);
+                        UNLOCK_INODE_MUTEX(dir);
                         if (err)
                                 CERROR("rmdir in error path: %d\n", err);
                         break;
                 default:
+                        LOCK_INODE_MUTEX(dir);
                         err = ll_vfs_unlink(dir, dchild, mds->mds_vfsmnt);
+                        UNLOCK_INODE_MUTEX(dir);
                         if (err)
                                 CERROR("unlink in error path: %d\n", err);
                         break;
@@ -1905,7 +1917,9 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                                       NULL);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
+                LOCK_INODE_MUTEX(dparent->d_inode);
                 rc = ll_vfs_rmdir(dparent->d_inode, dchild, mds->mds_vfsmnt);
+                UNLOCK_INODE_MUTEX(dparent->d_inode);
                 mds_counter_incr(req->rq_export, LPROC_MDS_RMDIR);
                 break;
         case S_IFREG: {
@@ -1916,7 +1930,9 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                                           le32_to_cpu(lmm->lmm_stripe_count));
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
+                LOCK_INODE_MUTEX(dparent->d_inode);
                 rc = ll_vfs_unlink(dparent->d_inode, dchild, mds->mds_vfsmnt);
+                UNLOCK_INODE_MUTEX(dparent->d_inode);
                 mds_counter_incr(req->rq_export, LPROC_MDS_UNLINK);
                 break;
         }
@@ -1929,7 +1945,9 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                                       NULL);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
+                LOCK_INODE_MUTEX(dparent->d_inode);
                 rc = ll_vfs_unlink(dparent->d_inode, dchild, mds->mds_vfsmnt);
+                UNLOCK_INODE_MUTEX(dparent->d_inode);
                 mds_counter_incr(req->rq_export, LPROC_MDS_UNLINK);
                 break;
         default:
@@ -2138,8 +2156,10 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         if (IS_ERR(handle))
                 GOTO(cleanup, rc = PTR_ERR(handle));
 
+        LOCK_INODE_MUTEX(de_tgt_dir->d_inode);
         rc = ll_vfs_link(de_src, mds->mds_vfsmnt, de_tgt_dir->d_inode, dchild,
                          mds->mds_vfsmnt);
+        UNLOCK_INODE_MUTEX(de_tgt_dir->d_inode);
         if (rc && rc != -EPERM && rc != -EACCES)
                 CERROR("vfs_link error %d\n", rc);
 cleanup:
