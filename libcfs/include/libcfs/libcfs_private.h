@@ -87,7 +87,7 @@
          else {                                                         \
                  libcfs_debug_msg(NULL, DEBUG_SUBSYSTEM, D_EMERG,       \
                                   __FILE__, __FUNCTION__,__LINE__,      \
-                                  "ASSERTION(" #cond ") failed:" fmt,   \
+                                  "ASSERTION(" #cond ") failed: " fmt,  \
                                   ## a);                                \
                  LBUG();                                                \
          }                                                              \
@@ -108,7 +108,7 @@
         if (unlikely(!(cond))) {                                        \
                 libcfs_debug_msg(NULL, DEBUG_SUBSYSTEM, D_EMERG,        \
                                  __FILE__, __FUNCTION__,__LINE__,       \
-                                 "ASSERTION(" #cond ") failed:" fmt,    \
+                                 "ASSERTION(" #cond ") failed: " fmt,   \
                                  ## a);                                 \
                 LBUG();                                                 \
         }                                                               \
@@ -278,8 +278,8 @@ int libcfs_debug_cleanup(void);
  * specific implementations come from the above header files
  */
 
-#define likely(x)	__builtin_expect(!!(x), 1)
-#define unlikely(x)	__builtin_expect(!!(x), 0)
+#define likely(x)      __builtin_expect(!!(x), 1)
+#define unlikely(x)    __builtin_expect(!!(x), 0)
 
 /* !__KERNEL__ */
 #endif
