@@ -5492,7 +5492,6 @@ test_200() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
 		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
-	grep *pools
 	do_facet mgs $LCTL pool_new $FSNAME.$POOL
 	do_facet mgs $LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL
 	[ $? == 0 ] || error "Pool creation of $POOL failed"
