@@ -1889,10 +1889,10 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type)
                 struct obd_dqblk *dqb = &qctl->qc_dqblk;
 
                 if (dqb->dqb_bhardlimit &&
-                    toqb(dqb->dqb_curspace) > dqb->dqb_bhardlimit) {
+                    toqb(dqb->dqb_curspace) >= dqb->dqb_bhardlimit) {
                         bover = 1;
                 } else if (dqb->dqb_bsoftlimit &&
-                           toqb(dqb->dqb_curspace) > dqb->dqb_bsoftlimit) {
+                           toqb(dqb->dqb_curspace) >= dqb->dqb_bsoftlimit) {
                         if (dqb->dqb_btime > now) {
                                 bover = 2;
                         } else {
@@ -1901,10 +1901,10 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type)
                 }
 
                 if (dqb->dqb_ihardlimit &&
-                    dqb->dqb_curinodes > dqb->dqb_ihardlimit) {
+                    dqb->dqb_curinodes >= dqb->dqb_ihardlimit) {
                         iover = 1;
                 } else if (dqb->dqb_isoftlimit &&
-                           dqb->dqb_curinodes > dqb->dqb_isoftlimit) {
+                           dqb->dqb_curinodes >= dqb->dqb_isoftlimit) {
                         if (dqb->dqb_btime > now) {
                                 iover = 2;
                         } else {

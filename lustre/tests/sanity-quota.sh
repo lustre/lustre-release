@@ -1477,12 +1477,9 @@ test_18a() {
 }
 run_test_with_stat 18a "run for fixing bug14840 ==========="
 
-test_19() {
-	# 1 Mb bunit per each MDS/OSS
-	LIMIT=$((($OSTCOUNT + 1) * 1024))
-	TESTFILE="$DIR/$tdir/$tfile"
-	mkdir -p $DIR/$tdir
-
+run_to_block_limit() {
+	local LIMIT=$((($OSTCOUNT + 1) * 1024))
+	local TESTFILE=$1
 	wait_delete_completed
 
 	# set 1 Mb quota unit size
@@ -1507,6 +1504,14 @@ test_19() {
 	cancel_lru_locks osc
 	$RUNAS dd if=/dev/zero of=$TESTFILE seek=1028 bs=$BLK_SZ count=1 && \
 		error "(usr) write success, should be EDQUOT"
+}
+
+test_19() {
+	# 1 Mb bunit per each MDS/OSS
+	local TESTFILE="$DIR/$tdir/$tfile"
+	mkdir -p $DIR/$tdir
+
+	run_to_block_limit $TESTFILE
 	$SHOW_QUOTA_USER
 
 	# cleanup
@@ -1696,6 +1701,23 @@ test_23() {
 	test_23_sub 102400 #100MB
 }
 run_test_with_stat 23 "run for fixing bug16125 ==========="
+
+test_24() {
+	local TESTFILE="$DIR/$tdir/$tfile"
+	mkdir -p $DIR/$tdir
+
+	run_to_block_limit $TESTFILE
+	$SHOW_QUOTA_USER | grep '*' || error "no matching *"
+
+	# cleanup
+	rm -f $TESTFILE
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $MOUNT
+
+	set_blk_unitsz $((128 * 1024))
+	set_blk_tunesz $((128 * 1024 / 2))
+        
+}
+run_test_with_stat 24 "test if lfs draws an asterix when limit is reached (16646) ==========="
 
 # turn off quota
 test_99()
