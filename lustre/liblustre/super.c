@@ -1000,6 +1000,7 @@ static int llu_readlink_internal(struct inode *inode,
         ENTRY;
 
         *request = NULL;
+        *symname = NULL;
 
         if (lli->lli_symlink_name) {
                 *symname = lli->lli_symlink_name;

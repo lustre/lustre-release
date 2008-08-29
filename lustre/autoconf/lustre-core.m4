@@ -1850,6 +1850,10 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_CONFIGURE],
 [LC_CONFIG_OBD_BUFFER_SIZE
 
+if test $target_cpu == "i686" -o $target_cpu == "x86_64"; then
+        CFLAGS="$CFLAGS -Werror"
+fi
+
 # include/liblustre.h
 AC_CHECK_HEADERS([sys/user.h sys/vfs.h stdint.h blkid/blkid.h])
 
