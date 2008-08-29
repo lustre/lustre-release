@@ -1462,19 +1462,29 @@ run_test 62 "don't mis-drop resent replay"
 
 #Adaptive Timeouts (bug 3055)
 AT_MAX_SET=0
+# Suppose that all osts have the same at_max
+for facet in mds client ost; do
+    eval AT_MAX_SAVE_${facet}=$(at_max_get $facet)
+done
 
 at_start()
 {
+    local at_max_new=600
     if ! at_is_valid; then
         skip "AT env is invalid"
         return 1
     fi
 
-    if ! at_is_enabled; then
-        echo "AT is disabled, enable it by force temporarily"
-        at_max_set 600 mds ost client
-        AT_MAX_SET=1
-    fi
+    local at_max
+
+    for facet in mds client ost; do
+        at_max=$(at_max_get $facet)
+        if [ $at_max -ne $at_max_new ]; then
+            echo "AT value on $facet is $at_max, set it by force temporarily to $at_max_new"
+            at_max_set $at_max_new $facet
+            AT_MAX_SET=1
+        fi
+    done
 
     if [ -z "$ATOLDBASE" ]; then
 	local at_history=$(do_facet mds "find /sys/ -name at_history")
@@ -1654,8 +1664,15 @@ if [ -n "$ATOLDBASE" ]; then
 fi
 
 if [ $AT_MAX_SET -ne 0 ]; then
-    echo "restore AT status to be disabled"
-    at_max_set 0 mds ost client
+    for facet in mds client ost; do
+        var=AT_MAX_SAVE_${facet}
+        echo restore AT on $facet to saved value ${!var}
+        at_max_set ${!var} $facet
+        AT_NEW=$(at_max_get $facet)
+        echo Restored AT value on $facet $AT_NEW 
+        [ $AT_NEW -ne ${!var} ] && \
+            error "$facet : AT value was not restored SAVED ${!var} NEW $AT_NEW"
+    done
 fi
 
 # end of AT tests includes above lines
