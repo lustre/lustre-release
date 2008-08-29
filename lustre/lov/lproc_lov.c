@@ -143,8 +143,8 @@ static int lov_rd_stripecount(char *page, char **start, off_t off, int count,
         LASSERT(dev != NULL);
         desc = &dev->u.lov.desc;
         *eof = 1;
-        return snprintf(page, count, "%ld\n",
-                        (long)(desc->ld_default_stripe_count + 1) - 1);
+        return snprintf(page, count, "%d\n",
+                        (__s16)(desc->ld_default_stripe_count + 1) - 1);
 }
 
 static int lov_wr_stripecount(struct file *file, const char *buffer,
