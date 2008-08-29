@@ -540,7 +540,7 @@ int init_obdclass(void)
                 CFS_INIT_LIST_HEAD(&capa_list[i]);
 #endif
 
-        LCONSOLE_INFO("Lustre: OBD class driver, http://www.lustre.org/\n");
+        LCONSOLE_INFO("OBD class driver, http://www.lustre.org/\n");
         LCONSOLE_INFO("        Lustre Version: "LUSTRE_VERSION_STRING"\n");
         LCONSOLE_INFO("        Build Version: "BUILD_VERSION"\n");
 
