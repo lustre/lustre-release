@@ -1319,6 +1319,7 @@ test_33a() { # bug 12333, was test_33
         do_facet mds "$LCTL conf_param $FSNAME2.sys.timeout=200" || rc=1
         mkdir -p $MOUNT2
         mount -t lustre $MGSNID:/${FSNAME2} $MOUNT2 || rc=2
+        cp /etc/hosts $MOUNT2/. || rc=3
         echo "ok."
 
         umount -d $MOUNT2
