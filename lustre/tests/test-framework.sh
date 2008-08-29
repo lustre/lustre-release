@@ -1071,9 +1071,16 @@ at_is_enabled() {
 }
 
 at_max_get() {
+    local facet=$1
+
     at_is_valid || error "invalid call"
 
-    do_facet $1 "cat $AT_MAX_PATH"
+    # suppose that all ost-s has the same at_max set
+    if [ $facet == "ost" ]; then
+        do_facet ost1 "cat $AT_MAX_PATH"
+    else
+        do_facet $facet "cat $AT_MAX_PATH"
+    fi
 }
 
 at_max_set() {
@@ -1082,6 +1089,7 @@ at_max_set() {
 
     at_is_valid || error "invalid call"
 
+    local facet
     for facet in $@; do
         if [ $facet == "ost" ]; then
             for i in `seq $OSTCOUNT`; do
