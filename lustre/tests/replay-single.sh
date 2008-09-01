@@ -1345,7 +1345,7 @@ test_57() {
 run_test 57 "test recovery from llog for setattr op"
 
 #recovery many mds-ost setattr from llog
-test_58() {
+test_58a() {
     mkdir -p $DIR/$tdir
 #define OBD_FAIL_MDS_OST_SETATTR       0x12c
     do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000012c"
@@ -1358,20 +1358,40 @@ test_58() {
     unlinkmany $DIR/$tdir/$tfile-%d 2500
     rmdir $DIR/$tdir
 }
-run_test 58 "test recovery from llog for setattr op (test llog_gen_rec)"
+run_test 58a "test recovery from llog for setattr op (test llog_gen_rec)"
 
-test_58a() {
+test_58b() {
+    mount_client $MOUNT2
     mkdir -p $DIR/$tdir
     touch $DIR/$tdir/$tfile
     replay_barrier $SINGLEMDS
     setfattr -n trusted.foo -v bar $DIR/$tdir/$tfile
     fail $SINGLEMDS
-    VAL=`getfattr --absolute-names --only-value -n trusted.foo $DIR/$tdir/$tfile`
+    VAL=`getfattr --absolute-names --only-value -n trusted.foo $MOUNT2/$tdir/$tfile`
     [ x$VAL = x"bar" ] || return 1
     rm -f $DIR/$tdir/$tfile
     rmdir $DIR/$tdir
+    zconf_umount `hostname` $MOUNT2
 }
-run_test 58a "test replay of setxattr op"
+run_test 58b "test replay of setxattr op"
+
+test_58c() { # bug 16570
+        mount_client $MOUNT2
+        mkdir -p $DIR/$tdir
+        touch $DIR/$tdir/$tfile
+        drop_request "setfattr -n trusted.foo -v bar $DIR/$tdir/$tfile" || \
+                return 1
+        VAL=`getfattr --absolute-names --only-value -n trusted.foo $MOUNT2/$tdir/$tfile`
+        [ x$VAL = x"bar" ] || return 2
+        drop_reint_reply "setfattr -n trusted.foo1 -v bar1 $DIR/$tdir/$tfile" || \
+                return 3
+        VAL=`getfattr --absolute-names --only-value -n trusted.foo1 $MOUNT2/$tdir/$tfile`
+        [ x$VAL = x"bar1" ] || return 4
+        rm -f $DIR/$tdir/$tfile
+        rmdir $DIR/$tdir
+        zconf_umount `hostname` $MOUNT2
+}
+run_test 58c "resend/reconstruct setxattr op"
 
 # log_commit_thread vs filter_destroy race used to lead to import use after free
 # bug 11658

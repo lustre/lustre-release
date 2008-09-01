@@ -229,7 +229,7 @@ static inline int mdt_last_rcvd_header_write(const struct lu_env *env,
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
 
-        mti->mti_off = 0;        
+        mti->mti_off = 0;
         lsd_cpu_to_le(&mdt->mdt_lsd, &mti->mti_lsd);
 
         rc = mdt_record_write(env, mdt->mdt_last_rcvd,
@@ -241,7 +241,7 @@ static inline int mdt_last_rcvd_header_write(const struct lu_env *env,
         CDEBUG(D_INFO, "write last_rcvd header rc = %d:\n"
                "uuid = %s\nlast_transno = "LPU64"\n",
                rc, mdt->mdt_lsd.lsd_uuid, mdt->mdt_lsd.lsd_last_transno);
-        
+
         RETURN(rc);
 }
 
@@ -382,18 +382,18 @@ static int mdt_clients_data_init(const struct lu_env *env,
                 if (IS_ERR(exp)) {
                         if (PTR_ERR(exp) == -EALREADY) {
                                 /* export already exists, zero out this one */
-                                lcd->lcd_uuid[0] = '\0'; 
+                                lcd->lcd_uuid[0] = '\0';
                         } else
                                 GOTO(err_client, rc = PTR_ERR(exp));
                 } else {
-                        struct mdt_thread_info *mti;                        
+                        struct mdt_thread_info *mti;
                         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
                         LASSERT(mti != NULL);
                         mti->mti_exp = exp;
                         exp->exp_mdt_data.med_lcd = lcd;
                         rc = mdt_client_add(env, mdt, cl_idx);
                         /* can't fail existing */
-                        LASSERTF(rc == 0, "rc = %d\n", rc); 
+                        LASSERTF(rc == 0, "rc = %d\n", rc);
                         lcd = NULL;
                         spin_lock(&exp->exp_lock);
                         exp->exp_connecting = 0;
@@ -559,7 +559,7 @@ static int mdt_server_data_update(const struct lu_env *env,
 }
 
 void mdt_cb_new_client(const struct mdt_device *mdt, __u64 transno,
-                                  void *data, int err) 
+                                  void *data, int err)
 {
         struct obd_device *obd = mdt->mdt_md_dev.md_lu_dev.ld_obd;
 
@@ -822,10 +822,10 @@ static int mdt_last_rcvd_update(struct mdt_thread_info *mti,
         /*
          * When we store zero transno in lcd we can lost last transno value
          * because lcd contains 0, but lsd is not yet written
-         * The server data should be updated also if the latest 
+         * The server data should be updated also if the latest
          * transno is rewritten by zero. See the bug 11125 for details.
          */
-        if (mti->mti_transno == 0 && 
+        if (mti->mti_transno == 0 &&
             *transno_p == mdt->mdt_last_transno)
                 mdt_server_data_update(mti->mti_env, mdt);
 
@@ -997,7 +997,6 @@ put_last_rcvd:
         mdt->mdt_last_rcvd = NULL;
         return rc;
 }
-
 
 void mdt_fs_cleanup(const struct lu_env *env, struct mdt_device *mdt)
 {
@@ -1184,13 +1183,6 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
         mdt_object_put(mti->mti_env, obj);
 }
 
-static void mdt_reconstruct_setxattr(struct mdt_thread_info *mti,
-                                     struct mdt_lock_handle *lhc)
-{
-        /* reply nothing */
-        req_capsule_shrink(mti->mti_pill, &RMF_EADATA, 0, RCL_SERVER);
-}
-
 typedef void (*mdt_reconstructor)(struct mdt_thread_info *mti,
                                   struct mdt_lock_handle *lhc);
 
@@ -1201,7 +1193,7 @@ static mdt_reconstructor reconstructors[REINT_MAX] = {
         [REINT_UNLINK]   = mdt_reconstruct_generic,
         [REINT_RENAME]   = mdt_reconstruct_generic,
         [REINT_OPEN]     = mdt_reconstruct_open,
-        [REINT_SETXATTR] = mdt_reconstruct_setxattr
+        [REINT_SETXATTR] = mdt_reconstruct_generic
 };
 
 void mdt_reconstruct(struct mdt_thread_info *mti,
