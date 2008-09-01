@@ -245,6 +245,11 @@ case "$lustretag" in
         ldiskfstag="b_ldiskfs_gate"
         ;;
 
+    b1_8_rocache_oss)
+        lnettag="b1_x_lnet_gate"
+        ldiskfstag="b_ldiskfs_gate"
+        ;;
+
     # Branches that have been updated to include
     # the libcfs split should be added here
     # b_head_interop_disk: Interoperability server side changes
