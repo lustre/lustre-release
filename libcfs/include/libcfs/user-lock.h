@@ -146,8 +146,7 @@ struct completion {
         unsigned int done;
         cfs_waitq_t wait;
 };
-typedef int (cfs_wait_handler) (int timeout);
-void set_completion_wait_handler(cfs_wait_handler *handler);
+
 void init_completion(struct completion *c);
 void complete(struct completion *c);
 void wait_for_completion(struct completion *c);
@@ -280,8 +279,6 @@ struct mutex {
         struct semaphore m_sem;
 };
 
-#define DEFINE_MUTEX(m) struct mutex m
-
 static inline void mutex_init(struct mutex *mutex)
 {
         init_mutex(&mutex->m_sem);
@@ -300,27 +297,13 @@ static inline void mutex_unlock(struct mutex *mutex)
 /**
  * Try-lock this mutex.
  *
+ * \retval 1 try-lock succeeded.
  *
- * \retval 0 try-lock succeeded (lock acquired).
- * \retval errno indicates lock contention.
- */
-static inline int mutex_down_trylock(struct mutex *mutex)
-{
-        return 0;
-}
-
-/**
- * Try-lock this mutex.
- *
- * Note, return values are negation of what is expected from down_trylock() or
- * pthread_mutex_trylock().
- *
- * \retval 1 try-lock succeeded (lock acquired).
- * \retval 0 indicates lock contention.
+ * \retval 0 try-lock failed.
  */
 static inline int mutex_trylock(struct mutex *mutex)
 {
-        return !mutex_down_trylock(mutex);
+        return 1;
 }
 
 static inline void mutex_destroy(struct mutex *lock)

@@ -193,7 +193,7 @@ system_string (char *cmdline, char *str, int len)
                     WEXITSTATUS(rc) != 0)
                         abort();
 
-                if (strlen(str) == len)
+                if (strnlen(str, len) == len)
                         str[len - 1] = 0;
 
                 if (str[strlen(str) - 1] == '\n')

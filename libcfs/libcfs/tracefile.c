@@ -150,10 +150,9 @@ static struct trace_page *trace_get_tage_try(struct trace_cpu_data *tcd,
                 } else {
                         tage = tage_alloc(CFS_ALLOC_ATOMIC);
                         if (tage == NULL) {
-                                if (printk_ratelimit())
-                                        printk(KERN_WARNING
-                                               "cannot allocate a tage (%ld)\n",
-                                               tcd->tcd_cur_pages);
+                                printk(KERN_WARNING
+                                       "failure to allocate a tage (%ld)\n",
+                                       tcd->tcd_cur_pages);
                                 return NULL;
                         }
                 }
@@ -449,7 +448,6 @@ libcfs_assertion_failed(const char *expr, const char *file,
 {
         libcfs_debug_msg(NULL, 0, D_EMERG, file, func, line,
                          "ASSERTION(%s) failed\n", expr);
-        cfs_enter_debugger();
         lbug_with_loc(file, func, line);
 }
 EXPORT_SYMBOL(libcfs_assertion_failed);

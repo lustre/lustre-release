@@ -147,13 +147,6 @@ void __up(struct semaphore *s)
  * - wait_for_completion(c)
  */
 
-static cfs_wait_handler *wait_handler;
-
-void init_completion_module(cfs_wait_handler *handler)
-{
-        wait_handler = handler;
-}
-
 void init_completion(struct completion *c)
 {
         LASSERT(c != NULL);
@@ -171,23 +164,11 @@ void complete(struct completion *c)
 void wait_for_completion(struct completion *c)
 {
         LASSERT(c != NULL);
-        do {
-                if (wait_handler) 
-                        wait_handler(1000);
-                else
-                        break;
-        } while (c->done == 0);
 }
 
 int wait_for_completion_interruptible(struct completion *c)
 {
         LASSERT(c != NULL);
-        do {
-                if (wait_handler) 
-                        wait_handler(1000);
-                else
-                        break;
-        } while (c->done == 0);
         return 0;
 }
 

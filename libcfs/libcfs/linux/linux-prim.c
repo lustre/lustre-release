@@ -58,71 +58,71 @@ cfs_waitq_init(cfs_waitq_t *waitq)
 }
 EXPORT_SYMBOL(cfs_waitq_init);
 
-void 
+void
 cfs_waitlink_init(cfs_waitlink_t *link)
 {
         init_waitqueue_entry(LINUX_WAITQ(link), current);
 }
 EXPORT_SYMBOL(cfs_waitlink_init);
 
-void 
+void
 cfs_waitq_add(cfs_waitq_t *waitq, cfs_waitlink_t *link)
 {
         add_wait_queue(LINUX_WAITQ_HEAD(waitq), LINUX_WAITQ(link));
 }
 EXPORT_SYMBOL(cfs_waitq_add);
 
-void 
-cfs_waitq_add_exclusive(cfs_waitq_t *waitq, 
+void
+cfs_waitq_add_exclusive(cfs_waitq_t *waitq,
                              cfs_waitlink_t *link)
 {
         add_wait_queue_exclusive(LINUX_WAITQ_HEAD(waitq), LINUX_WAITQ(link));
 }
 EXPORT_SYMBOL(cfs_waitq_add_exclusive);
 
-void 
+void
 cfs_waitq_del(cfs_waitq_t *waitq, cfs_waitlink_t *link)
 {
         remove_wait_queue(LINUX_WAITQ_HEAD(waitq), LINUX_WAITQ(link));
 }
 EXPORT_SYMBOL(cfs_waitq_del);
 
-int  
+int
 cfs_waitq_active(cfs_waitq_t *waitq)
 {
         return waitqueue_active(LINUX_WAITQ_HEAD(waitq));
 }
 EXPORT_SYMBOL(cfs_waitq_active);
 
-void 
+void
 cfs_waitq_signal(cfs_waitq_t *waitq)
 {
         wake_up(LINUX_WAITQ_HEAD(waitq));
 }
 EXPORT_SYMBOL(cfs_waitq_signal);
 
-void 
+void
 cfs_waitq_signal_nr(cfs_waitq_t *waitq, int nr)
 {
         wake_up_nr(LINUX_WAITQ_HEAD(waitq), nr);
 }
 EXPORT_SYMBOL(cfs_waitq_signal_nr);
 
-void 
+void
 cfs_waitq_broadcast(cfs_waitq_t *waitq)
 {
         wake_up_all(LINUX_WAITQ_HEAD(waitq));
 }
 EXPORT_SYMBOL(cfs_waitq_broadcast);
 
-void 
+void
 cfs_waitq_wait(cfs_waitlink_t *link, cfs_task_state_t state)
 {
         schedule();
 }
 EXPORT_SYMBOL(cfs_waitq_wait);
 
-int64_t 
+int64_t
 cfs_waitq_timedwait(cfs_waitlink_t *link, cfs_task_state_t state, int64_t timeout)
 {
         return schedule_timeout(timeout);
@@ -145,7 +145,7 @@ cfs_schedule(void)
 EXPORT_SYMBOL(cfs_schedule);
 
 /* deschedule for a bit... */
-void 
+void
 cfs_pause(cfs_duration_t ticks)
 {
         set_current_state(TASK_UNINTERRUPTIBLE);
@@ -323,7 +323,6 @@ libcfs_arch_cleanup(void)
 
 EXPORT_SYMBOL(libcfs_arch_init);
 EXPORT_SYMBOL(libcfs_arch_cleanup);
-EXPORT_SYMBOL(cfs_enter_debugger);
 EXPORT_SYMBOL(cfs_daemonize);
 EXPORT_SYMBOL(cfs_daemonize_ctxt);
 EXPORT_SYMBOL(cfs_block_allsigs);
