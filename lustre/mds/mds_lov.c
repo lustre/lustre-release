@@ -340,19 +340,6 @@ static int mds_lov_set_one_nextid(struct obd_device *obd, __u32 idx, obd_id *id)
         RETURN(rc);
 }
 
-static __u32 mds_lov_get_idx(struct obd_export *lov,
-                             struct obd_uuid *ost_uuid)
-{
-        int rc;
-        int valsize = sizeof(ost_uuid);
-
-        rc = obd_get_info(lov, sizeof(KEY_LOV_IDX), KEY_LOV_IDX,
-                          &valsize, ost_uuid, NULL);
-        LASSERT(rc >= 0);
-
-        RETURN(rc);
-}
-
 /* Update the lov desc for a new size lov. */
 static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
 {
@@ -402,9 +389,6 @@ out:
         OBD_FREE(ld, sizeof(*ld));
         RETURN(rc);
 }
-
-
-#define MDSLOV_NO_INDEX -1
 
 /* Inform MDS about new/updated target */
 static int mds_lov_update_mds(struct obd_device *obd,
@@ -753,7 +737,6 @@ int mds_lov_start_synchronize(struct obd_device *obd,
 {
         struct mds_lov_sync_info *mlsi;
         int rc;
-        struct mds_obd *mds = &obd->u.mds;
         struct obd_uuid *uuid;
         ENTRY;
 
@@ -766,10 +749,7 @@ int mds_lov_start_synchronize(struct obd_device *obd,
 
         mlsi->mlsi_obd = obd;
         mlsi->mlsi_watched = watched;
-        if (data)
-                mlsi->mlsi_index = *(__u32 *)data;
-        else
-                mlsi->mlsi_index = mds_lov_get_idx(mds->mds_osc_exp, uuid);
+        mlsi->mlsi_index = *(__u32 *)data;
 
         /* Although class_export_get(obd->obd_self_export) would lock
            the MDS in place, since it's only a self-export
