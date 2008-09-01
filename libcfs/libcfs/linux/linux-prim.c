@@ -323,6 +323,7 @@ libcfs_arch_cleanup(void)
 
 EXPORT_SYMBOL(libcfs_arch_init);
 EXPORT_SYMBOL(libcfs_arch_cleanup);
+EXPORT_SYMBOL(cfs_enter_debugger);
 EXPORT_SYMBOL(cfs_daemonize);
 EXPORT_SYMBOL(cfs_daemonize_ctxt);
 EXPORT_SYMBOL(cfs_block_allsigs);
