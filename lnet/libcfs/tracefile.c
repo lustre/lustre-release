@@ -239,7 +239,7 @@ static struct trace_page *trace_get_tage(struct trace_cpu_data *tcd,
 int libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls, int subsys, int mask,
                        const char *file, const char *fn, const int line,
                        const char *format1, va_list args,
-                       const char *format2, ...)		       
+                       const char *format2, ...)		
 {
         struct trace_cpu_data   *tcd = NULL;
         struct ptldebug_header   header;
@@ -730,11 +730,11 @@ int trace_copyin_string(char *knl_buffer, int knl_buffer_nob,
                         const char *usr_buffer, int usr_buffer_nob)
 {
         int    nob;
-        
+
         if (usr_buffer_nob > knl_buffer_nob)
                 return -EOVERFLOW;
-        
-        if (copy_from_user((void *)knl_buffer, 
+
+        if (copy_from_user((void *)knl_buffer,
                            (void *)usr_buffer, usr_buffer_nob))
                 return -EFAULT;
 
@@ -760,17 +760,17 @@ int trace_copyout_string(char *usr_buffer, int usr_buffer_nob,
          * copied out string - usually "\n", for /proc entries and "" (i.e. a
          * terminating zero byte) for sysctl entries */
         int   nob = strlen(knl_buffer);
-        
+
         if (nob > usr_buffer_nob)
                 nob = usr_buffer_nob;
-        
+
         if (copy_to_user(usr_buffer, knl_buffer, nob))
                 return -EFAULT;
-        
+
         if (append != NULL && nob < usr_buffer_nob) {
                 if (copy_to_user(usr_buffer + nob, append, 1))
                         return -EFAULT;
-                
+
                 nob++;
         }
 
@@ -781,7 +781,7 @@ int trace_allocate_string_buffer(char **str, int nob)
 {
         if (nob > 2 * CFS_PAGE_SIZE)            /* string must be "sensible" */
                 return -EINVAL;
-        
+
         *str = cfs_alloc(nob, CFS_ALLOC_STD | CFS_ALLOC_ZERO);
         if (*str == NULL)
                 return -ENOMEM;
@@ -823,7 +823,7 @@ out:
 int trace_daemon_command(char *str)
 {
         int       rc = 0;
-        
+
 	tracefile_write_lock();
 
 	if (strcmp(str, "stop") == 0) {
@@ -882,7 +882,7 @@ int trace_set_debug_mb(int mb)
         int pages;
         int limit = trace_max_debug_mb();
         struct trace_cpu_data *tcd;
-        
+
 	if (mb < num_possible_cpus())
 		return -EINVAL;
 
@@ -923,7 +923,7 @@ int trace_get_debug_mb(void)
         int j;
         struct trace_cpu_data *tcd;
         int total_pages = 0;
-        
+
         tracefile_read_lock();
 
         tcd_for_each(tcd, i, j)
