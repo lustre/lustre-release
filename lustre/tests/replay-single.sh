@@ -1288,7 +1288,7 @@ test_58b() {
 run_test 58b "test replay of setxattr op"
 
 test_58c() { # bug 16570
-	mount_client $MOUNT2
+        mount_client $MOUNT2
         mkdir -p $DIR/$tdir
         touch $DIR/$tdir/$tfile
         drop_request "setfattr -n trusted.foo -v bar $DIR/$tdir/$tfile" || \
@@ -1301,7 +1301,7 @@ test_58c() { # bug 16570
         [ x$VAL = x"bar1" ] || return 4
         rm -f $DIR/$tdir/$tfile
         rmdir $DIR/$tdir
-	zconf_umount `hostname` $MOUNT2
+       	zconf_umount `hostname` $MOUNT2
 }
 run_test 58c "resend/reconstruct setxattr op"
 
