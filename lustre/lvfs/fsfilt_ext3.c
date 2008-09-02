@@ -1325,7 +1325,7 @@ static int fsfilt_ext3_setup(struct super_block *sb)
 #endif
         if (!EXT3_HAS_COMPAT_FEATURE(sb, EXT3_FEATURE_COMPAT_DIR_INDEX))
                 CWARN("filesystem doesn't have dir_index feature enabled\n");
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,13)) && HAVE_QUOTA_SUPPORT
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,13)) && defined(HAVE_QUOTA_SUPPORT)
         set_opt(EXT3_SB(sb)->s_mount_opt, QUOTA);
 #endif
         return 0;
