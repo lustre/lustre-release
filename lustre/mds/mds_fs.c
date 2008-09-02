@@ -177,12 +177,18 @@ int mds_client_add(struct obd_device *obd, struct obd_export *exp,
         mds_export_stats_init(obd, exp, localdata);
 
         if (new_client) {
-                struct lvfs_run_ctxt saved;
+                struct lvfs_run_ctxt *saved = NULL;
                 loff_t off = med->med_lr_off;
                 struct file *file = mds->mds_rcvd_filp;
                 void *handle;
 
-                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                OBD_SLAB_ALLOC_PTR(saved, obd_lvfs_ctxt_cache);
+                if (saved == NULL) {
+                        CERROR("cannot allocate memory for run ctxt\n");
+                        RETURN(-ENOMEM);
+                }
+
+                push_ctxt(saved, &obd->obd_lvfs_ctxt, NULL);
                 handle = fsfilt_start(obd, file->f_dentry->d_inode,
                                       FSFILT_OP_SETATTR, NULL);
                 if (IS_ERR(handle)) {
@@ -202,7 +208,8 @@ int mds_client_add(struct obd_device *obd, struct obd_export *exp,
                         fsfilt_commit(obd, file->f_dentry->d_inode, handle, 0);
                 }
 
-                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                pop_ctxt(saved, &obd->obd_lvfs_ctxt, NULL);
+                OBD_SLAB_FREE_PTR(saved, obd_lvfs_ctxt_cache);
 
                 if (rc)
                         return rc;
@@ -219,7 +226,7 @@ int mds_client_free(struct obd_export *exp)
         struct mds_obd *mds = &exp->exp_obd->u.mds;
         struct obd_device *obd = exp->exp_obd;
         struct lsd_client_data zero_lcd;
-        struct lvfs_run_ctxt saved;
+        struct lvfs_run_ctxt *saved = NULL;
         int rc;
         loff_t off;
         ENTRY;
@@ -256,13 +263,18 @@ int mds_client_free(struct obd_export *exp)
         }
 
         if (!(exp->exp_flags & OBD_OPT_FAILOVER)) {
+                OBD_SLAB_ALLOC_PTR(saved, obd_lvfs_ctxt_cache);
+                if (saved == NULL) {
+                        CERROR("cannot allocate memory for run ctxt\n");
+                        GOTO(free, rc = -ENOMEM);
+                }
                 memset(&zero_lcd, 0, sizeof(zero_lcd));
-                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                push_ctxt(saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = fsfilt_write_record(obd, mds->mds_rcvd_filp, &zero_lcd,
                                          sizeof(zero_lcd), &off,
                                          (!exp->exp_libclient ||
                                           exp->exp_need_sync));
-                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                pop_ctxt(saved, &obd->obd_lvfs_ctxt, NULL);
 
                 CDEBUG(rc == 0 ? D_INFO : D_ERROR,
                        "zeroing out client %s idx %u in %s rc %d\n",
@@ -282,7 +294,10 @@ int mds_client_free(struct obd_export *exp)
         mds_update_server_data(exp->exp_obd, 0);
 
         EXIT;
- free:
+free:
+        if (saved)
+                OBD_SLAB_FREE_PTR(saved, obd_lvfs_ctxt_cache);
+
         OBD_FREE_PTR(med->med_lcd);
         med->med_lcd = NULL;
 
@@ -523,7 +538,7 @@ err_msd:
 int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct lvfs_run_ctxt saved;
+        struct lvfs_run_ctxt *saved = NULL;
         struct dentry *dentry;
         struct file *file;
         int rc;
@@ -534,6 +549,12 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         rc = cleanup_group_info();
         if (rc)
                 RETURN(rc);
+
+        OBD_SLAB_ALLOC_PTR(saved, obd_lvfs_ctxt_cache);
+        if (saved == NULL) {
+                CERROR("cannot allocate memory for run ctxt\n");
+                RETURN(-ENOMEM);
+        }
 
         mds->mds_vfsmnt = mnt;
         /* why not mnt->mnt_sb instead of mnt->mnt_root->d_inode->i_sb? */
@@ -550,7 +571,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         obd->obd_lvfs_ctxt.cb_ops = mds_lvfs_ops;
 
         /* setup the directory tree */
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        push_ctxt(saved, &obd->obd_lvfs_ctxt, NULL);
         dentry = simple_mkdir(current->fs->pwd, mnt, "ROOT", 0755, 0);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
@@ -649,8 +670,8 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         if (rc)
                 GOTO(err_health_check, rc);
 err_pop:
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
+        pop_ctxt(saved, &obd->obd_lvfs_ctxt, NULL);
+        OBD_SLAB_FREE_PTR(saved, obd_lvfs_ctxt_cache);
         return rc;
 
 err_health_check:
@@ -678,8 +699,14 @@ err_fid:
 int mds_fs_cleanup(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct lvfs_run_ctxt saved;
+        struct lvfs_run_ctxt *saved = NULL;
         int rc = 0;
+
+        OBD_SLAB_ALLOC_PTR(saved, obd_lvfs_ctxt_cache);
+        if (saved == NULL) {
+                CERROR("cannot allocate memory for run ctxt\n");
+                RETURN(-ENOMEM);
+        }
 
         if (obd->obd_fail)
                 LCONSOLE_WARN("%s: shutting down for failover; client state "
@@ -688,7 +715,7 @@ int mds_fs_cleanup(struct obd_device *obd)
         class_disconnect_exports(obd); /* cleans up client info too */
         mds_server_free_data(mds);
 
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        push_ctxt(saved, &obd->obd_lvfs_ctxt, NULL);
         if (mds->mds_rcvd_filp) {
                 rc = filp_close(mds->mds_rcvd_filp, 0);
                 mds->mds_rcvd_filp = NULL;
@@ -719,7 +746,8 @@ int mds_fs_cleanup(struct obd_device *obd)
 
         lquota_fs_cleanup(mds_quota_interface_ref, obd);
 
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        pop_ctxt(saved, &obd->obd_lvfs_ctxt, NULL);
+        OBD_SLAB_FREE_PTR(saved, obd_lvfs_ctxt_cache);
         shrink_dcache_parent(mds->mds_fid_de);
         dput(mds->mds_fid_de);
         LL_DQUOT_OFF(obd->u.obt.obt_sb);
@@ -738,17 +766,23 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         unsigned int tmpname = ll_rand();
         struct file *filp;
         struct dentry *new_child;
-        struct lvfs_run_ctxt saved;
+        struct lvfs_run_ctxt *saved = NULL;
         char fidname[LL_FID_NAMELEN];
         void *handle;
         struct lvfs_ucred ucred = { 0 };
         int rc = 0, err, namelen;
         ENTRY;
 
+        OBD_SLAB_ALLOC_PTR(saved, obd_lvfs_ctxt_cache);
+        if (saved == NULL) {
+                CERROR("cannot allocate memory for run ctxt\n");
+                RETURN(-ENOMEM);
+        }
+
         /* the owner of object file should always be root */
         cap_raise(ucred.luc_cap, CAP_SYS_RESOURCE);
 
-        push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, &ucred);
+        push_ctxt(saved, &exp->exp_obd->obd_lvfs_ctxt, &ucred);
 
         sprintf(fidname, "OBJECTS/%u.%u", tmpname, current->pid);
         filp = filp_open(fidname, O_CREAT | O_EXCL, 0666);
@@ -813,7 +847,8 @@ out_close:
                         rc = err;
         }
 out_pop:
-        pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, &ucred);
+        pop_ctxt(saved, &exp->exp_obd->obd_lvfs_ctxt, &ucred);
+        OBD_SLAB_FREE_PTR(saved, obd_lvfs_ctxt_cache);
         RETURN(rc);
 }
 
@@ -824,7 +859,7 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         struct mds_obd *mds = &exp->exp_obd->u.mds;
         struct inode *parent_inode = mds->mds_objects_dir->d_inode;
         struct obd_device *obd = exp->exp_obd;
-        struct lvfs_run_ctxt saved;
+        struct lvfs_run_ctxt *saved = NULL;
         struct lvfs_ucred ucred = { 0 };
         char fidname[LL_FID_NAMELEN];
         struct inode *inode = NULL;
@@ -833,8 +868,14 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         int err, namelen, rc = 0;
         ENTRY;
 
+        OBD_SLAB_ALLOC_PTR(saved, obd_lvfs_ctxt_cache);
+        if (saved == NULL) {
+                CERROR("cannot allocate memory for run ctxt\n");
+                RETURN(-ENOMEM);
+        }
+
         cap_raise(ucred.luc_cap, CAP_SYS_RESOURCE);
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, &ucred);
+        push_ctxt(saved, &obd->obd_lvfs_ctxt, &ucred);
 
         namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);
 
@@ -881,6 +922,7 @@ out_dput:
         if (inode)
                 iput(inode);
 
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &ucred);
+        pop_ctxt(saved, &obd->obd_lvfs_ctxt, &ucred);
+        OBD_SLAB_FREE_PTR(saved, obd_lvfs_ctxt_cache);
         RETURN(rc);
 }

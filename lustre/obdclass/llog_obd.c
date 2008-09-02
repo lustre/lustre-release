@@ -292,12 +292,16 @@ int llog_obd_origin_setup(struct obd_device *obd, int index,
 {
         struct llog_ctxt *ctxt;
         struct llog_handle *handle;
-        struct lvfs_run_ctxt saved;
+        struct lvfs_run_ctxt *saved = NULL;
         int rc;
         ENTRY;
 
         if (count == 0)
                 RETURN(0);
+
+        OBD_SLAB_ALLOC_PTR(saved, obd_lvfs_ctxt_cache);
+        if (saved == NULL)
+                RETURN(-ENOMEM);
 
         LASSERT(count == 1);
 
@@ -316,9 +320,9 @@ int llog_obd_origin_setup(struct obd_device *obd, int index,
                 GOTO(out, rc);
 
         ctxt->loc_handle = handle;
-        push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
+        push_ctxt(saved, &disk_obd->obd_lvfs_ctxt, NULL);
         rc = llog_init_handle(handle, LLOG_F_IS_CAT, NULL);
-        pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
+        pop_ctxt(saved, &disk_obd->obd_lvfs_ctxt, NULL);
         if (rc)
                 GOTO(out, rc);
 
@@ -327,6 +331,7 @@ int llog_obd_origin_setup(struct obd_device *obd, int index,
                 CERROR("llog_process with cat_cancel_cb failed: %d\n", rc);
 out:
         llog_ctxt_put(ctxt);
+        OBD_SLAB_FREE_PTR(saved, obd_lvfs_ctxt_cache);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_obd_origin_setup);
