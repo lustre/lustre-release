@@ -58,6 +58,7 @@
 /* OBD Device Declarations */
 extern struct obd_device *obd_devs[MAX_OBD_DEVICES];
 extern spinlock_t obd_dev_lock;
+extern cfs_mem_cache_t *obd_lvfs_ctxt_cache;
 
 /* OBD Operations Declarations */
 extern struct obd_device *class_conn2obd(struct lustre_handle *);
