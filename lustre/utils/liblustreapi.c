@@ -346,7 +346,7 @@ static void find_param_fini(struct find_param *param)
                 free(param->lmd);
 }
 
-int llapi_file_get_lov_fuuid(int fd, struct obd_uuid *lov_name)
+int llapi_file_fget_lov_uuid(int fd, struct obd_uuid *lov_name)
 {
         int rc = ioctl(fd, OBD_IOC_GETNAME, lov_name);
         if (rc) {
@@ -354,6 +354,12 @@ int llapi_file_get_lov_fuuid(int fd, struct obd_uuid *lov_name)
                 llapi_err(LLAPI_MSG_ERROR, "error: can't get lov name.");
         }
         return rc;
+}
+
+/* deprecated in favour of llapi_file_fget_lov_uuid() in 1.8 and 2.0 */
+int llapi_file_get_lov_fuuid(int fd, struct obd_uuid *lov_name)
+{
+        return llapi_file_fget_lov_uuid(fd, lov_name);
 }
 
 int llapi_file_get_lov_uuid(const char *path, struct obd_uuid *lov_uuid)
@@ -367,7 +373,7 @@ int llapi_file_get_lov_uuid(const char *path, struct obd_uuid *lov_uuid)
                 return rc;
         }
 
-        rc = llapi_file_get_lov_fuuid(fd, lov_uuid);
+        rc = llapi_file_fget_lov_uuid(fd, lov_uuid);
 
         close(fd);
 
@@ -388,7 +394,7 @@ int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
         int rc = 0, index = 0;
 
         /* Get the lov name */
-        rc = llapi_file_get_lov_fuuid(fd, &lov_name);
+        rc = llapi_file_fget_lov_uuid(fd, &lov_name);
         if (rc)
                 return rc;
 
@@ -430,7 +436,7 @@ static int setup_obd_uuid(DIR *dir, char *dname, struct find_param *param)
         int rc = 0, index;
 
         /* Get the lov name */
-        rc = llapi_file_get_lov_fuuid(dirfd(dir), &lov_uuid);
+        rc = llapi_file_fget_lov_uuid(dirfd(dir), &lov_uuid);
         if (rc) {
                 if (errno != ENOTTY) {
                         rc = errno;
