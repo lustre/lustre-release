@@ -376,9 +376,9 @@ struct client_obd {
         int                      cl_conn_count;
         /* max_mds_easize is purely a performance thing so we don't have to
          * call obd_size_diskmd() all the time. */
-        int                      cl_default_mds_easize;
-        int                      cl_max_mds_easize;
-        int                      cl_max_mds_cookiesize;
+        unsigned                 cl_default_mds_easize;
+        unsigned                 cl_max_mds_easize;
+        unsigned                 cl_max_mds_cookiesize;
 
         //struct llog_canceld_ctxt *cl_llcd; /* it's included by obd_llog_ctxt */
         void                    *cl_llcd_offset;

@@ -229,7 +229,7 @@ static void mdc_realloc_openmsg(struct ptlrpc_request *req,
 static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
                                                    struct lookup_intent *it,
                                                    struct mdc_op_data *data,
-                                                   void *lmm, int lmmsize)
+                                                   void *lmm, unsigned lmmsize)
 {
         struct ptlrpc_request *req;
         struct ldlm_intent *lit;
