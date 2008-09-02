@@ -140,7 +140,7 @@ for NAME in $CONFIGS; do
 		mkdir -p $BONDIR
 		$LFS setstripe -c -1 $BONDIR
 		sync
-		MIN=`cat /proc/fs/lustre/osc/*/kbytesavail | sort -n | head -n1`
+		MIN=`lctl get_param -n osc.*.kbytesavail | sort -n | head -n1`
 		SPACE=$(( OSTCOUNT * MIN ))
 		[ $SPACE -lt $SIZE ] && SIZE=$((SPACE * 3 / 4))
 		log "min OST has ${MIN}kB available, using ${SIZE}kB file size"
@@ -166,7 +166,7 @@ for NAME in $CONFIGS; do
 		mkdir -p $IOZDIR
 		$LFS setstripe -c -1 $IOZDIR
 		sync
-		MIN=`cat /proc/fs/lustre/osc/*/kbytesavail | sort -n | head -n1`
+		MIN=`lctl get_param -n osc.*.kbytesavail | sort -n | head -n1`
 		SPACE=$(( OSTCOUNT * MIN ))
 		[ $SPACE -lt $SIZE ] && SIZE=$((SPACE * 3 / 4))
 		log "min OST has ${MIN}kB available, using ${SIZE}kB file size"
@@ -298,8 +298,8 @@ for NAME in $CONFIGS; do
 			$SETUP
 		export LIBLUSTRE_MOUNT_POINT=$MOUNT2
 		export LIBLUSTRE_MOUNT_TARGET=$MGSNID:/$FSNAME
-		export LIBLUSTRE_TIMEOUT=`cat /proc/sys/lustre/timeout`
-		#export LIBLUSTRE_DEBUG_MASK=`cat /proc/sys/lnet/debug`
+		export LIBLUSTRE_TIMEOUT=`lctl get_param -n timeout`
+		#export LIBLUSTRE_DEBUG_MASK=`lctl get_param -n debug`
 		if [ -x $LIBLUSTRETESTS/sanity ]; then
 			mkdir -p $MOUNT2
 			echo $LIBLUSTRETESTS/sanity --target=$LIBLUSTRE_MOUNT_TARGET
