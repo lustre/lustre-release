@@ -1686,6 +1686,116 @@ test_70b () {
 run_test 70b "mds recovery; $CLIENTCOUNT clients"
 # end multi-client tests
 
+# vbr export handling
+create_fake_exports ()
+{
+    local facet=$1
+    local num=$2
+#obd_fail_val = num;
+#define OBD_FAIL_TGT_FAKE_EXP 0x708
+    do_facet $facet "lctl set_param fail_val=$num"
+    do_facet $facet "lctl set_param fail_loc=0x80000708"
+    fail $facet
+}
+
+test_71a() {
+    do_facet mds $LCTL get_param version | grep -q ^lustre.*1.6 && \
+        skip "skipping test for old 1.6 servers" && return 0
+    UUID=$(lctl dl | awk '/mdc.*-mdc-/ { print $5 }')
+    echo "Client UUID is $UUID"
+    replay_barrier mds
+    umount $DIR
+    facet_failover mds
+    zconf_mount `hostname` $DIR || error "mount fails"
+    df $DIR || error "post-failover df failed"
+    do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep $UUID" || \
+        error "no delayed exports"
+    OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
+    NEW_AGE=10
+    do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$NEW_AGE"
+    sleep $NEW_AGE
+    do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep \"$UUID.*EXPIRED\"" || \
+        error "exports didn't expire"
+    do_facet mds "lctl set_param mds.${mds_svc}.evict_client=$UUID"
+    do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep $UUID" && \
+        error "Export wasn't removed manually"
+    do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$OLD_AGE"
+    return 0;
+}
+run_test 71a "lost client export is kept"
+
+test_71b() {
+    do_facet mds $LCTL get_param version | grep -q ^lustre.*1.6 && \
+        skip "skipping test for old 1.6 servers" && return 0
+    FAKE_NUM=10
+    create_fake_exports mds $FAKE_NUM
+    NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|wc -l")
+    [ $NUM -eq 0 ] && error "no fake exports $NUM - $FAKE_NUM"
+    OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
+    NEW_AGE=10
+    do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$NEW_AGE"
+    sleep $NEW_AGE
+    EX_NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep -c EXPIRED")
+    [ "$EX_NUM" -eq "$NUM" ] || error "not all exports are expired $EX_NUM != $NUM"
+    do_facet mds "lctl set_param mds.${mds_svc}.flush_stale_exports=1"
+    do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep EXPIRED" && \
+        error "Exports weren't flushed"
+    do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$OLD_AGE"
+    return 0;
+}
+run_test 71b "stale exports are expired, lctl flushes them"
+
+test_71c() {
+    do_facet mds $LCTL get_param version | grep -q ^lustre.*1.6 && \
+        skip "skipping test for old 1.6 servers" && return 0
+    FAKE_NUM=10
+    create_fake_exports mds $FAKE_NUM
+    NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|wc -l")
+    [ "$NUM" -eq "$FAKE_NUM" ] || error "no fake exports $NUM - $FAKE_NUM"
+    OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
+    NEW_AGE=10
+    do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$NEW_AGE"
+    sleep $NEW_AGE
+    EX_NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep -c EXPIRED")
+    [ "$EX_NUM" -eq "$NUM" ] || error "not all exports are expired $EX_NUM != $NUM"
+
+    umount $DIR
+    zconf_mount `hostname` $DIR || error "mount fails"
+
+    NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|wc -l")
+    [ $NUM -eq 0 ] || error "$NUM fake exports are still exists"
+    do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$OLD_AGE"
+    return 0;
+}
+run_test 71c "stale exports are expired, new client connection flush them"
+
+test_71d() {
+    do_facet mds $LCTL get_param version | grep -q ^lustre.*1.6 && \
+        skip "skipping test for old 1.6 servers" && return 0
+    FAKE_NUM=10
+    create_fake_exports mds $FAKE_NUM
+    NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|wc -l")
+    [ "$NUM" -eq "$FAKE_NUM" ] || error "no fake exports $NUM - $FAKE_NUM"
+    OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
+    NEW_AGE=10
+    do_facet mds "lctl conf_param ${mds_svc}.mdt.stale_export_age=$NEW_AGE"
+    sleep $NEW_AGE
+    EX_NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep -c EXPIRED")
+    [ "$EX_NUM" -eq "$NUM" ] || error "not all exports are expired $EX_NUM != $NUM"
+
+    fail mds
+
+    FAIL_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
+    [ $FAIL_AGE -eq $NEW_AGE ] || error "new age wasn't set after recovery"
+    NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|wc -l")
+    [ $NUM -eq 0 ] || error "$NUM fake exports are still exists"
+    do_facet mds "lctl conf_param ${mds_svc}.mdt.stale_export_age=$OLD_AGE"
+    return 0;
+}
+run_test 71d "expired exports, server init removes them, conf_param works"
+
+# end vbr exports tests
+
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
