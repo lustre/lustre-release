@@ -209,7 +209,6 @@ struct lustre_mount_data {
 #define OBD_INCOMPAT_FID        0x00000010 /* FID is enabled */
 #define OBD_INCOMPAT_SOM        0x00000020 /* Size-On-MDS is enabled */
 
-
 /* Data stored per server at the head of the last_rcvd file.  In le32 order.
    This should be common to filter_internal.h, lustre_mds.h */
 struct lr_server_data {
@@ -248,9 +247,17 @@ struct lsd_client_data {
         /* VBR: last versions */
         __u64 lcd_pre_versions[4];
         __u32 lcd_last_epoch;
-        __u8  lcd_padding[LR_CLIENT_SIZE - 124];
+        __u32 lcd_last_time;
+        __u8  lcd_padding[LR_CLIENT_SIZE - 128];
 };
 
+static inline __u64 lsd_last_transno(struct lsd_client_data *lcd)
+{
+        return le64_to_cpu(lcd->lcd_last_transno) >
+               le64_to_cpu(lcd->lcd_last_close_transno) ?
+               le64_to_cpu(lcd->lcd_last_transno) :
+               le64_to_cpu(lcd->lcd_last_close_transno);
+}
 
 #ifdef __KERNEL__
 /****************** superblock additional info *********************/
