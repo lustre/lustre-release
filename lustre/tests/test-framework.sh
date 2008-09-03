@@ -90,7 +90,7 @@ init_test_env() {
 	export PATH=$PATH:$LUSTRE/tests
     fi
     export MDSRATE=${MDSRATE:-"$LUSTRE/tests/mdsrate"}
-    [ ! -f "$MDSRATE" ] && export MDSRATE=$(which mdsrate)
+    [ ! -f "$MDSRATE" ] && export MDSRATE=$(which mdsrate 2> /dev/null)
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     export LFS=${LFS:-"$LUSTRE/utils/lfs"}
     [ ! -f "$LCTL" ] && export LCTL=$(which lctl) 
