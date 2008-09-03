@@ -1170,6 +1170,24 @@ CFLAGS="$tmp_flags"
 ])
 
 
+# check kernel __le16, __le32 types
+AC_DEFUN([LN_LE_TYPES],
+[AC_MSG_CHECKING([__le16 and __le32 types are defined])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/types.h>
+],[
+	__le16 a;
+	__le32 b;
+],[
+	AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_LE_TYPES, 1,
+                  [__le16 and __le32 types are defined])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+
 # LN_TASKLIST_LOCK
 # 2.6.18 remove tasklist_lock export
 AC_DEFUN([LN_TASKLIST_LOCK],
@@ -1322,6 +1340,7 @@ LN_FUNC_SHOW_TASK
 LN_U64_LONG_LONG
 LN_SSIZE_T_LONG
 LN_SIZE_T_LONG
+LN_LE_TYPES
 # 2.6.18
 LN_TASKLIST_LOCK
 # 2.6.19
