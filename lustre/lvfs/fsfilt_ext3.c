@@ -114,6 +114,9 @@ struct fsfilt_cb_data {
 #ifndef EXT3_XATTR_INDEX_TRUSTED        /* temporary until we hit l28 kernel */
 #define EXT3_XATTR_INDEX_TRUSTED        4
 #endif
+#ifndef XATTR_NO_CTIME
+#define XATTR_NO_CTIME 0x80
+#endif
 
 static char *fsfilt_ext3_get_label(struct super_block *sb)
 {
