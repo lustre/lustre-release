@@ -477,7 +477,8 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
         if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_DROP_RPC))
                 RETURN(0);
 
-        LASSERT (request->rq_type == PTL_RPC_MSG_REQUEST);
+        LASSERT(request->rq_type == PTL_RPC_MSG_REQUEST);
+        LASSERT(request->rq_wait_ctx == 0);
 
         /* If this is a re-transmit, we're required to have disengaged
          * cleanly from the previous attempt */

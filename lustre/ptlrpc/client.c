@@ -1095,8 +1095,6 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
                         req->rq_status = rc;
                         RETURN(1);
                 } else {
-                        /* here begins timeout counting */
-                        req->rq_sent = cfs_time_current_sec();
                         req->rq_wait_ctx = 1;
                         RETURN(0);
                 }
@@ -1197,12 +1195,6 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                             req->rq_waiting || req->rq_wait_ctx) {
                                 int status;
 
-                                /* rq_wait_ctx is only touched in ptlrpcd,
-                                 * no lock needed here.
-                                 */
-                                if (req->rq_wait_ctx)
-                                        goto check_ctx;
-
                                 ptlrpc_unregister_reply(req);
 
                                 spin_lock(&imp->imp_lock);
@@ -1247,21 +1239,21 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                                                        old_xid, req->rq_xid);
                                         }
                                 }
-check_ctx:
+                                /*
+                                 * rq_wait_ctx is only touched by ptlrpcd,
+                                 * so no lock is needed here.
+                                 */
                                 status = sptlrpc_req_refresh_ctx(req, -1);
                                 if (status) {
                                         if (req->rq_err) {
                                                 req->rq_status = status;
                                                 force_timer_recalc = 1;
-                                        }
-                                        if (!req->rq_wait_ctx) {
-                                                /* begins timeout counting */
-                                                req->rq_sent = cfs_time_current_sec();
+                                        } else {
                                                 req->rq_wait_ctx = 1;
                                         }
+
                                         continue;
                                 } else {
-                                        req->rq_sent = 0;
                                         req->rq_wait_ctx = 0;
                                 }
 
@@ -1402,7 +1394,6 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
 
         spin_lock(&req->rq_lock);
         req->rq_timedout = 1;
-        req->rq_wait_ctx = 0;
         spin_unlock(&req->rq_lock);
 
         ptlrpc_unregister_reply (req);
@@ -1532,6 +1523,9 @@ int ptlrpc_set_next_timeout(struct ptlrpc_request_set *set)
                         continue;
 
                 if (req->rq_timedout)   /* already timed out */
+                        continue;
+
+                if (req->rq_wait_ctx)   /* waiting for ctx */
                         continue;
 
                 if (req->rq_phase == RQ_PHASE_NEW)
