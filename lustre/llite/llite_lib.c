@@ -1638,6 +1638,16 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
             (ATTR_CTIME|ATTR_SIZE|ATTR_MODE))
                 attr->ia_valid |= MDS_OPEN_OWNEROVERRIDE;
 
+        if ((de->d_inode->i_mode & S_ISUID) &&
+            !(attr->ia_mode & S_ISUID) &&
+            !(attr->ia_valid & ATTR_KILL_SUID))
+                attr->ia_valid |= ATTR_KILL_SUID;
+
+        if (((de->d_inode->i_mode & (S_ISGID|S_IXGRP)) == (S_ISGID|S_IXGRP)) &&
+            !(attr->ia_mode & S_ISGID) &&
+            !(attr->ia_valid & ATTR_KILL_SGID))
+                attr->ia_valid |= ATTR_KILL_SGID;
+
         return ll_setattr_raw(de->d_inode, attr);
 }
 

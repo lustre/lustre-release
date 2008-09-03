@@ -735,6 +735,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
                 /* Bypass la_vaild == LA_MODE,
                  * this is for changing file with SUID or SGID. */
                 if ((la->la_valid & ~LA_MODE) &&
+                    !(ma->ma_attr_flags & MDS_PERM_BYPASS) &&
                     (uc->mu_fsuid != tmp_la->la_uid) &&
                     !mdd_capable(uc, CAP_FOWNER))
                         RETURN(-EPERM);
