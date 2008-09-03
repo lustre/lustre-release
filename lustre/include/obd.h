@@ -293,6 +293,7 @@ struct obd_device_target {
         atomic_t                  obt_quotachecking;
         struct lustre_quota_ctxt  obt_qctxt;
         lustre_quota_version_t    obt_qfmt;
+        __u32                     obt_stale_export_age;
 };
 
 typedef void (*obd_pin_extent_cb)(void *data);
@@ -903,6 +904,7 @@ struct obd_device {
         cfs_waitq_t             obd_refcount_waitq;
         cfs_waitq_t             obd_llog_waitq;
         struct list_head        obd_exports;
+        struct list_head        obd_delayed_exports;
         int                     obd_num_exports;
         spinlock_t              obd_nid_lock;
         struct ldlm_namespace  *obd_namespace;
