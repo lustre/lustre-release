@@ -119,7 +119,7 @@ out_free:
         if (imp_conn)
                 OBD_FREE(imp_conn, sizeof(*imp_conn));
 out_put:
-        ptlrpc_put_connection(ptlrpc_conn);
+        ptlrpc_connection_put(ptlrpc_conn);
         RETURN(rc);
 }
 
@@ -162,20 +162,20 @@ int client_import_del_conn(struct obd_import *imp, struct obd_uuid *uuid)
                                 GOTO(out, rc = -EBUSY);
                         }
 
-                        ptlrpc_put_connection(imp->imp_connection);
+                        ptlrpc_connection_put(imp->imp_connection);
                         imp->imp_connection = NULL;
 
                         dlmexp = class_conn2export(&imp->imp_dlm_handle);
                         if (dlmexp && dlmexp->exp_connection) {
                                 LASSERT(dlmexp->exp_connection ==
                                         imp_conn->oic_conn);
-                                ptlrpc_put_connection(dlmexp->exp_connection);
+                                ptlrpc_connection_put(dlmexp->exp_connection);
                                 dlmexp->exp_connection = NULL;
                         }
                 }
 
                 list_del(&imp_conn->oic_item);
-                ptlrpc_put_connection(imp_conn->oic_conn);
+                ptlrpc_connection_put(imp_conn->oic_conn);
                 OBD_FREE(imp_conn, sizeof(*imp_conn));
                 CDEBUG(D_HA, "imp %p@%s: remove connection %s\n",
                        imp, imp->imp_obd->obd_name, uuid->uuid);
@@ -719,7 +719,7 @@ int target_handle_connect(struct ptlrpc_request *req)
                 goto dont_check_exports;
 
         spin_lock(&target->obd_dev_lock);
-        export = lustre_hash_get_object_by_key(target->obd_uuid_hash_body, &cluuid);
+        export = lustre_hash_lookup(target->obd_uuid_hash, &cluuid);
 
         if (export != NULL && export->exp_connecting) { /* bug 9635, et. al. */
                 CWARN("%s: exp %p already connecting\n",
@@ -903,17 +903,18 @@ dont_check_exports:
         }
 
         if (export->exp_connection != NULL)
-                ptlrpc_put_connection(export->exp_connection);
-        export->exp_connection = ptlrpc_get_connection(req->rq_peer,
+                ptlrpc_connection_put(export->exp_connection);
+        export->exp_connection = ptlrpc_connection_get(req->rq_peer,
                                                        req->rq_self,
                                                        &remote_uuid);
 
         spin_lock(&target->obd_dev_lock);
         /* Export might be hashed already, e.g. if this is reconnect */
         if (hlist_unhashed(&export->exp_nid_hash))
-                lustre_hash_additem(export->exp_obd->obd_nid_hash_body,
-                                    &export->exp_connection->c_peer.nid,
-                                    &export->exp_nid_hash);
+                lustre_hash_add(export->exp_obd->obd_nid_hash,
+                                &export->exp_connection->c_peer.nid,
+                                &export->exp_nid_hash);
+
         spin_unlock(&target->obd_dev_lock);
 
         spin_lock_bh(&target->obd_processing_task_lock);

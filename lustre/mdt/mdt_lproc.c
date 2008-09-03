@@ -466,6 +466,7 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
         { "capa_count",                 lprocfs_rd_capa_count,           0, 0 },
         { "site_stats",                 lprocfs_rd_site_stats,           0, 0 },
         { "evict_client",               0, lprocfs_mdt_wr_evict_client,     0 },
+        { "hash_stats",                 lprocfs_obd_rd_hash,    0, 0 },
         { 0 }
 };
 
