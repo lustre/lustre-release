@@ -598,6 +598,13 @@ int lprocfs_obd_rd_recovery_maxtime(char *page, char **start, off_t off,
 int lprocfs_obd_wr_recovery_maxtime(struct file *file, const char *buffer,
                                     unsigned long count, void *data);
 #endif
+int lprocfs_obd_rd_stale_export_age(char *page, char **start, off_t off,
+                                    int count, int *eof, void *data);
+int lprocfs_obd_wr_stale_export_age(struct file *file, const char *buffer,
+                                    unsigned long count, void *data);
+int lprocfs_obd_attach_stale_exports(struct obd_device *dev);
+int lprocfs_obd_wr_flush_stale_exports(struct file *file, const char *buffer,
+                                       unsigned long count, void *data);
 
 /* all quota proc functions */
 extern int lprocfs_quota_rd_bunit(char *page, char **start, off_t off, int count,
@@ -761,7 +768,21 @@ static inline int lprocfs_wr_evict_client(struct file *file, const char *buffer,
 static inline int lprocfs_wr_ping(struct file *file, const char *buffer,
                                   unsigned long count, void *data)
 { return 0; }
-
+static inline
+int lprocfs_obd_rd_stale_export_age(char *page, char **start, off_t off,
+                                    int count, int *eof, void *data)
+{ return 0; }
+static inline
+int lprocfs_obd_wr_stale_export_age(struct file *file, const char *buffer,
+                                    unsigned long count, void *data)
+{ return 0; }
+static inline
+int lprocfs_obd_attach_stale_exports(struct obd_device *dev)
+{ return 0; }
+static inline
+int lprocfs_obd_wr_flush_stale_exports(struct file *file, const char *buffer,
+                                       unsigned long count, void *data)
+{ return 0; }
 
 /* Statfs helpers */
 static inline
