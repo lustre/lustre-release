@@ -265,3 +265,17 @@ void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg)
         return;
 }
 EXPORT_SYMBOL(lustre_swab_lustre_cfg);
+
+void lustre_swab_cfg_marker(struct cfg_marker *marker)
+{
+        int i;
+        ENTRY;
+
+        __swab32s(&marker->cm_step);
+        __swab32s(&marker->cm_flags);
+        __swab32s(&marker->cm_vers);
+
+        EXIT;
+        return;
+}
+EXPORT_SYMBOL(lustre_swab_cfg_marker);
