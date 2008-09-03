@@ -1430,7 +1430,7 @@ main(int argc, char **argv)
         check_lustre_disk_data();
         check_ll_user_fiemap();
         check_ll_fiemap_extent();
-        printf("#ifdef LIBLUSTRE_POSIX_ACL\n");
+        printf("#if defined(LIBLUSTRE_POSIX_ACL) && defined(CONFIG_FS_POSIX_ACL)\n");
 #ifndef LIBLUSTRE_POSIX_ACL
 #error build generator without LIBLUSTRE_POSIX_ACL defined - produce wrong check code.
 #endif
