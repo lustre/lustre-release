@@ -90,8 +90,10 @@ check_kernel_version() {
 	VERSION_FILE=version
 	WANT_VER=$1
 	GOT_VER=$(lctl get_param -n $VERSION_FILE | awk '/kernel:/ {print $2}')
-	[ $GOT_VER == "patchless" ] && return 0
-	[ $GOT_VER -ge $WANT_VER ] && return 0
+	case $GOT_VER in
+	patchless|patchless_client) return 0 ;;
+	*) [ $GOT_VER -ge $WANT_VER ] && return 0 ;;
+	esac
 	log "test needs at least kernel version $WANT_VER, running $GOT_VER"
 	return 1
 }
