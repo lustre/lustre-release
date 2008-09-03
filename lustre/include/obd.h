@@ -1323,6 +1323,7 @@ struct obd_ops {
                         enum obd_notify_event ev, void *data);
 
         int (*o_health_check)(struct obd_device *);
+        struct obd_uuid *(*o_get_uuid) (struct obd_export *exp);
 
         /* quota methods */
         int (*o_quotacheck)(struct obd_export *, struct obd_quotactl *);

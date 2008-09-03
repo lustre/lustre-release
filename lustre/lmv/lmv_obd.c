@@ -160,6 +160,12 @@ static int lmv_set_mdc_data(struct lmv_obd *lmv, struct obd_uuid *uuid,
         RETURN(0);
 }
 
+struct obd_uuid *lmv_get_uuid(struct obd_export *exp) {
+        struct obd_device *obd = exp->exp_obd;
+        struct lmv_obd *lmv = &obd->u.lmv;
+        return obd_get_uuid(lmv->tgts[0].ltd_exp);
+}
+
 static int lmv_notify(struct obd_device *obd, struct obd_device *watched,
                       enum obd_notify_event ev, void *data)
 {
@@ -2978,6 +2984,7 @@ struct obd_ops lmv_obd_ops = {
         .o_packmd               = lmv_packmd,
         .o_unpackmd             = lmv_unpackmd,
         .o_notify               = lmv_notify,
+        .o_get_uuid             = lmv_get_uuid,
         .o_iocontrol            = lmv_iocontrol,
         .o_fid_delete           = lmv_fid_delete
 };

@@ -1520,6 +1520,11 @@ static int mdc_fid_delete(struct obd_export *exp, const struct lu_fid *fid)
         return 0;
 }
 
+struct obd_uuid *mdc_get_uuid(struct obd_export *exp) {
+        struct client_obd *cli = &exp->exp_obd->u.cli;
+        return &cli->cl_target_uuid;
+}
+
 static int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 {
         struct client_obd *cli = &obd->u.cli;
@@ -1825,7 +1830,8 @@ struct obd_ops mdc_obd_ops = {
         .o_llog_init        = mdc_llog_init,
         .o_llog_finish      = mdc_llog_finish,
         .o_get_info         = mdc_get_info,
-        .o_process_config  = mdc_process_config,
+        .o_process_config   = mdc_process_config,
+        .o_get_uuid         = mdc_get_uuid,
 };
 
 struct md_ops mdc_md_ops = {

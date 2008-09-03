@@ -810,6 +810,18 @@ static inline int obd_del_conn(struct obd_import *imp, struct obd_uuid *uuid)
         RETURN(rc);
 }
 
+static inline struct obd_uuid *obd_get_uuid(struct obd_export *exp)
+{
+        struct obd_uuid *uuid;
+        ENTRY;
+
+        OBD_CHECK_DT_OP(exp->exp_obd, get_uuid, NULL);
+        EXP_COUNTER_INCREMENT(exp, get_uuid);
+
+        uuid = OBP(exp->exp_obd, get_uuid)(exp);
+        RETURN(uuid);
+}
+
 static inline int obd_connect(const struct lu_env *env,
                               struct lustre_handle *conn,struct obd_device *obd,
                               struct obd_uuid *cluuid,

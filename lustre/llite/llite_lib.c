@@ -288,6 +288,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
         struct lustre_handle dt_conn = {0, };
         struct lustre_handle md_conn = {0, };
         struct obd_connect_data *data = NULL;
+        struct obd_uuid *uuid;
         struct lustre_md lmd;
         obd_valid valid;
         int size, err, checksum;
@@ -639,17 +640,15 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
         sb->s_root->d_op = &ll_d_root_ops;
 
         sbi->ll_sdev_orig = sb->s_dev;
-#if 0
+
         /* We set sb->s_dev equal on all lustre clients in order to support
          * NFS export clustering.  NFSD requires that the FSID be the same
          * on all clients. */
         /* s_dev is also used in lt_compare() to compare two fs, but that is
          * only a node-local comparison. */
-
-        /* XXX: this will not work with LMV */
-        sb->s_dev = get_uuid2int(sbi2mdc(sbi)->cl_target_uuid.uuid,
-                                 strlen(sbi2mdc(sbi)->cl_target_uuid.uuid));
-#endif
+        uuid = obd_get_uuid(sbi->ll_md_exp);
+        if (uuid != NULL)
+                sb->s_dev = get_uuid2int(uuid->uuid, strlen(uuid->uuid));
 
         RETURN(err);
 out_root:
