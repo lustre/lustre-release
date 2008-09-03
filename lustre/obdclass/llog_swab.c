@@ -276,7 +276,6 @@ EXPORT_SYMBOL(lustre_swab_lustre_cfg);
 
 void lustre_swab_cfg_marker(struct cfg_marker *marker)
 {
-        int i;
         ENTRY;
 
         __swab32s(&marker->cm_step);
