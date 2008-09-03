@@ -1385,6 +1385,7 @@ static inline int obd_notify_observer(struct obd_device *observer,
         return rc1 ?: rc2;
  }
 
+#ifdef HAVE_QUOTA_SUPPORT
 static inline int obd_quotacheck(struct obd_export *exp,
                                  struct obd_quotactl *oqctl)
 {
@@ -1442,6 +1443,7 @@ static inline int obd_quota_adjust_qunit(struct obd_export *exp,
 #endif
         RETURN(rc);
 }
+#endif
 
 static inline int obd_health_check(struct obd_device *obd)
 {
