@@ -307,7 +307,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode **inodes, void *handle,
                         lcd->lcd_last_data    = cpu_to_le32(op_data);
                 }
         }
-
+        lcd->lcd_last_time = cpu_to_le32(cfs_time_current_sec());
         if (off <= 0) {
                 CERROR("client idx %d has offset %lld\n", med->med_lr_idx, off);
                 err = -EINVAL;
