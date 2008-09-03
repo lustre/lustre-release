@@ -231,6 +231,9 @@ static struct lprocfs_vars lprocfs_filter_obd_vars[] = {
                           lprocfs_filter_wr_fmd_max_num, 0 },
         { "client_cache_seconds", lprocfs_filter_rd_fmd_max_age,
                           lprocfs_filter_wr_fmd_max_age, 0 },
+        { "stale_export_age", lprocfs_obd_rd_stale_export_age,
+                              lprocfs_obd_wr_stale_export_age, 0},
+        { "flush_stale_exports", 0, lprocfs_obd_wr_flush_stale_exports, 0 },
         { 0 }
 };
 
