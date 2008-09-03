@@ -1013,11 +1013,13 @@ static int class_config_llog_handler(struct llog_handle * handle,
                 struct lustre_cfg_bufs bufs;
                 char *inst_name = NULL;
                 int inst_len = 0;
-                int inst = 0;
+                int inst = 0, swab = 0;
 
                 lcfg = (struct lustre_cfg *)cfg_buf;
-                if (lcfg->lcfg_version == __swab32(LUSTRE_CFG_VERSION))
+                if (lcfg->lcfg_version == __swab32(LUSTRE_CFG_VERSION)) {
                         lustre_swab_lustre_cfg(lcfg);
+                        swab = 1;
+                }
 
                 rc = lustre_cfg_sanity_check(cfg_buf, cfg_len);
                 if (rc)
@@ -1026,6 +1028,8 @@ static int class_config_llog_handler(struct llog_handle * handle,
                 /* Figure out config state info */
                 if (lcfg->lcfg_command == LCFG_MARKER) {
                         struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
+                        if (swab)
+                                lustre_swab_cfg_marker(marker);
                         CDEBUG(D_CONFIG, "Marker, inst_flg=%#x mark_flg=%#x\n",
                                clli->cfg_flags, marker->cm_flags);
                         if (marker->cm_flags & CM_START) {
