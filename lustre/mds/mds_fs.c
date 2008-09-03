@@ -133,6 +133,7 @@ int mds_update_client_epoch(struct obd_export *exp)
                 return rc;
 
         med->med_lcd->lcd_last_epoch = mds->mds_server_data->lsd_start_epoch;
+        med->med_lcd->lcd_last_time = cpu_to_le32(cfs_time_current_sec());
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
         rc = fsfilt_write_record(exp->exp_obd, mds->mds_rcvd_filp,
                                  med->med_lcd, sizeof(*med->med_lcd), &off,
@@ -194,6 +195,10 @@ int mds_client_add(struct obd_device *obd, struct obd_export *exp,
         if (!strcmp(med->med_lcd->lcd_uuid, obd->obd_uuid.uuid))
                 RETURN(0);
 
+        /* VBR: remove expired exports before searching for free slot */
+        if (new_client)
+                class_disconnect_expired_exports(obd);
+
         /* the bitmap operations can handle cl_idx > sizeof(long) * 8, so
          * there's no need for extra complication here
          */
@@ -251,6 +256,9 @@ int mds_client_add(struct obd_device *obd, struct obd_export *exp,
                          * remember last epoch for this client */
                         med->med_lcd->lcd_last_epoch =
                                         mds->mds_server_data->lsd_start_epoch;
+                        exp->exp_last_request_time = cfs_time_current_sec();
+                        med->med_lcd->lcd_last_time =
+                                      cpu_to_le32(exp->exp_last_request_time);
                         rc = fsfilt_add_journal_cb(obd, 0, handle,
                                                    target_client_add_cb, exp);
                         if (rc == 0) {
@@ -367,6 +375,86 @@ static int mds_server_free_data(struct mds_obd *mds)
         mds->mds_server_data = NULL;
 
         return 0;
+}
+
+static void mds_add_fake_export(struct obd_device *obd, int num,
+                                struct file *file)
+{
+        struct obd_export *exp;
+        struct lvfs_run_ctxt saved;
+        struct obd_device_target *obt = &obd->u.obt;
+        struct lu_export_data *led;
+        unsigned long *bitmap = obt->obt_client_bitmap;
+        struct lsd_client_data *lcd = NULL;
+        unsigned int idx = 0;
+        loff_t off = 0;
+        int rc = 0;
+
+        while (num > 0) {
+                num--;
+                if (!lcd) {
+                        OBD_ALLOC_PTR(lcd);
+                        if (!lcd)
+                                return;
+                }
+                idx = find_next_zero_bit(bitmap, LR_MAX_CLIENTS, idx);
+                if (idx >= LR_MAX_CLIENTS) {
+                        CERROR("no room for %u clients - fix LR_MAX_CLIENTS\n", idx);
+                        OBD_FREE_PTR(lcd);
+                        break;
+                }
+                if (test_and_set_bit(idx, bitmap)) {
+                        CERROR("Bit %u is set already\n", idx);
+                        continue;
+                }
+                off = le32_to_cpu(obt->obt_lsd->lsd_client_start) +
+                      idx * le16_to_cpu(obt->obt_lsd->lsd_client_size);
+
+                sprintf(lcd->lcd_uuid, "dead-%.16u", idx);
+                CERROR("Create fake export %s, index %u, offset %lu\n",
+                       lcd->lcd_uuid, idx, (unsigned long)off);
+
+                exp = class_new_export(obd, (struct obd_uuid *)lcd->lcd_uuid);
+                if (IS_ERR(exp)) {
+                        if (PTR_ERR(exp) == -EALREADY) {
+                                CERROR("Export %s already exists\n",
+                                       lcd->lcd_uuid);
+                        }
+                        CERROR("Failed to create export %lu\n", PTR_ERR(exp));
+                        OBD_FREE_PTR(lcd);
+                        break;
+                }
+                LASSERT(exp);
+                led = &exp->exp_target_data;
+                led->led_lr_idx = idx;
+                led->led_lr_off = off;
+                led->led_lcd = lcd;
+
+                exp->exp_last_request_time = cfs_time_current_sec();
+                exp->exp_replay_needed = 1;
+                exp->exp_connecting = 0;
+                exp->exp_in_recovery = 0;
+
+                spin_lock_bh(&obd->obd_processing_task_lock);
+                obd->obd_recoverable_clients++;
+                obd->obd_max_recoverable_clients++;
+                spin_unlock_bh(&obd->obd_processing_task_lock);
+
+                class_set_export_delayed(exp);
+                class_export_put(exp);
+
+                lcd->lcd_last_epoch = cpu_to_le32(1);
+                lcd->lcd_last_time = cpu_to_le32(exp->exp_last_request_time);
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                rc = fsfilt_write_record(obd, file, lcd, sizeof(*lcd), &off, 0);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                if (rc) {
+                        CERROR("Failed to create fake client record\n");
+                        OBD_FREE_PTR(lcd);
+                        break;
+                }
+                lcd = NULL;
+        }
 }
 
 static int mds_init_server_data(struct obd_device *obd, struct file *file)
@@ -510,11 +598,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                         continue;
                 }
 
-                last_transno = le64_to_cpu(lcd->lcd_last_transno) >
-                               le64_to_cpu(lcd->lcd_last_close_transno) ?
-                               le64_to_cpu(lcd->lcd_last_transno) :
-                               le64_to_cpu(lcd->lcd_last_close_transno);
-
+                last_transno = lsd_last_transno(lcd);
                 last_epoch = le32_to_cpu(lcd->lcd_last_epoch);
 
                 /* These exports are cleaned up by mds_disconnect(), so they
@@ -542,7 +626,8 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
 
                         /* VBR: set export last committed version */
                         exp->exp_last_committed = last_transno;
-
+                        /* read last time from disk */
+                        exp->exp_last_request_time = le32_to_cpu(lcd->lcd_last_time);
                         lcd = NULL;
 
                         spin_lock(&exp->exp_lock);
@@ -569,6 +654,10 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
 
                 if (last_transno > mds->mds_last_transno)
                         mds->mds_last_transno = last_transno;
+        }
+
+        if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_TGT_FAKE_EXP))) {
+                mds_add_fake_export(obd, obd_fail_val, file);
         }
 
         if (lcd)
@@ -634,6 +723,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         mds->mds_vfsmnt = mnt;
         /* why not mnt->mnt_sb instead of mnt->mnt_root->d_inode->i_sb? */
         obd->u.obt.obt_sb = mnt->mnt_root->d_inode->i_sb;
+        obd->u.obt.obt_stale_export_age = STALE_EXPORT_MAXTIME_DEFAULT;
 
         rc = fsfilt_setup(obd, obd->u.obt.obt_sb);
         if (rc)
