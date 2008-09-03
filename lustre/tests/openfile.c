@@ -202,11 +202,10 @@ int main(int argc, char** argv)
         } else {
                 fprintf(stderr, "Error in opening file \"%s\"(flags=%s",
                         fname, cloned_flags);
+                if (mode_set)
+                        fprintf(stderr, ", mode=%o", mode);
+                fprintf(stderr, ") %d: %s\n", save_errno, strerror(save_errno));
         }
-
-        if (mode_set)
-                fprintf(stderr, ", mode=%o", mode);
-        fprintf(stderr, ") %d: %s\n", save_errno, strerror(save_errno));
 
 out:
         if (cloned_flags)
@@ -216,4 +215,3 @@ out:
 
         return save_errno;
 }
-
