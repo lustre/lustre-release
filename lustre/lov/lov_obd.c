@@ -814,8 +814,8 @@ static void __lov_del_obd(struct obd_device *obd, __u32 index)
 void lov_fix_desc_stripe_size(__u64 *val)
 {
         if (*val < PTLRPC_MAX_BRW_SIZE) {
-                LCONSOLE_WARN("Increasing default stripe size to min %u\n",
-                              PTLRPC_MAX_BRW_SIZE);
+                LCONSOLE_WARN("Increasing default stripe size from "LPU64
+                              " to %u\n", *val, PTLRPC_MAX_BRW_SIZE);
                 *val = PTLRPC_MAX_BRW_SIZE;
         } else if (*val & (LOV_MIN_STRIPE_SIZE - 1)) {
                 *val &= ~(LOV_MIN_STRIPE_SIZE - 1);
