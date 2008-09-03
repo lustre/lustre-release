@@ -222,7 +222,9 @@ void class_fail_export(struct obd_export *exp);
 void class_disconnect_exports(struct obd_device *obddev);
 void class_set_export_delayed(struct obd_export *exp);
 void class_handle_stale_exports(struct obd_device *obddev);
+void class_disconnect_expired_exports(struct obd_device *obd);
 void class_disconnect_stale_exports(struct obd_device *obd);
+int class_stale_export_list(struct obd_device *obd, struct obd_ioctl_data *data);
 int class_manual_cleanup(struct obd_device *obd);
 
 /* obdo.c */
