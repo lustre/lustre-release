@@ -60,6 +60,7 @@
 #include <dirent.h>
 #include <time.h>
 #include <ctype.h>
+#include <sys/quota.h>
 
 #include <lnet/api-support.h>
 #include <lnet/lnetctl.h>
