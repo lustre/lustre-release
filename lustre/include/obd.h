@@ -1405,7 +1405,8 @@ struct md_ops {
                               struct md_open_data *);
         int (*m_enqueue)(struct obd_export *, struct ldlm_enqueue_info *,
                          struct lookup_intent *, struct md_op_data *,
-                         struct lustre_handle *, void *, int, int);
+                         struct lustre_handle *, void *, int,
+                         struct ptlrpc_request **, int);
         int (*m_getattr)(struct obd_export *, const struct lu_fid *,
                          struct obd_capa *, obd_valid, int,
                          struct ptlrpc_request **);

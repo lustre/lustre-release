@@ -100,7 +100,7 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
                                     LUSTRE_OPC_ANY);
 
                 rc = md_enqueue(sbi->ll_md_exp, &einfo, &it,
-                                &op_data, &lockh, NULL, 0,
+                                &op_data, &lockh, NULL, 0, NULL,
                                 LDLM_FL_CANCEL_ON_BLOCK);
                 request = (struct ptlrpc_request *)it.d.lustre.it_data;
                 if (request)

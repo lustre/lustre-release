@@ -615,25 +615,39 @@ static int mdc_finish_enqueue(struct obd_export *exp,
 int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                 struct lookup_intent *it, struct md_op_data *op_data,
                 struct lustre_handle *lockh, void *lmm, int lmmsize,
-                int extra_lock_flags)
+                struct ptlrpc_request **reqp, int extra_lock_flags)
 {
         struct obd_device     *obddev = class_exp2obd(exp);
-        struct ptlrpc_request *req;
+        struct ptlrpc_request *req = NULL;
         struct req_capsule    *pill;
-        int                    flags = extra_lock_flags | LDLM_FL_HAS_INTENT;
+        int                    flags = extra_lock_flags;
         int                    rc;
         struct ldlm_res_id res_id;
         ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_LOOKUP } };
         ENTRY;
 
-        LASSERTF(einfo->ei_type == LDLM_IBITS, "lock type %d\n", einfo->ei_type);
+        LASSERTF(!it || einfo->ei_type == LDLM_IBITS, "lock type %d\n",
+                 einfo->ei_type);
 
         fid_build_reg_res_name(&op_data->op_fid1, &res_id);
 
-        if (it->it_op & (IT_UNLINK | IT_GETATTR | IT_READDIR))
+        if (it)
+                flags |= LDLM_FL_HAS_INTENT;
+        if (it && it->it_op & (IT_UNLINK | IT_GETATTR | IT_READDIR))
                 policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
 
-        if (it->it_op & IT_OPEN) {
+        if (reqp)
+                req = *reqp;
+
+        if (!it) {
+                /* The only way right now is FLOCK, in this case we hide flock
+                   policy as lmm, but lmmsize is 0 */
+                LASSERT(lmm && lmmsize == 0);
+                LASSERTF(einfo->ei_type == LDLM_FLOCK, "lock type %d\n",
+                         einfo->ei_type);
+                policy = *(ldlm_policy_data_t *)lmm;
+                res_id.name[3] = LDLM_FLOCK;
+        } else if (it->it_op & IT_OPEN) {
                 int joinfile = !!((it->it_flags & O_JOIN_FILE) &&
                                               op_data->op_data);
 
@@ -662,13 +676,28 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
 
         /* It is important to obtain rpc_lock first (if applicable), so that
          * threads that are serialised with rpc_lock are not polluting our
-         * rpcs in flight counter */
-        mdc_get_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
-        mdc_enter_request(&obddev->u.cli);
+         * rpcs in flight counter. We do not do flock request limiting, though*/
+        if (it) {
+                mdc_get_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
+                mdc_enter_request(&obddev->u.cli);
+        }
         rc = ldlm_cli_enqueue(exp, &req, einfo, &res_id, &policy, &flags, NULL,
                               0, NULL, lockh, 0);
-        mdc_exit_request(&obddev->u.cli);
-        mdc_put_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
+        if (reqp)
+                *reqp = req;
+
+        if (it) {
+                mdc_exit_request(&obddev->u.cli);
+                mdc_put_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
+        }
+        if (!it) {
+                /* For flock requests we immediatelly return without further
+                   delay and let caller deal with the rest, since rest of
+                   this function metadata processing makes no sense for flock
+                   requests anyway */
+                RETURN(rc);
+        }
+
         if (rc < 0) {
                 CERROR("ldlm_cli_enqueue: %d\n", rc);
                 mdc_clear_replay_flag(req, rc);
@@ -896,7 +925,7 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                         }
                 }
                 rc = mdc_enqueue(exp, &einfo, it, op_data, &lockh,
-                                 lmm, lmmsize, extra_lock_flags);
+                                 lmm, lmmsize, NULL, extra_lock_flags);
                 if (rc < 0)
                         RETURN(rc);
                 it->d.lustre.it_lock_handle = lockh.cookie;

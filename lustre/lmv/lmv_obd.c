@@ -1506,7 +1506,7 @@ lmv_enqueue_slaves(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                         continue;
 
                 rc = md_enqueue(tgt_exp, einfo, it, op_data2,
-                                lockh + i, lmm, lmmsize, 0);
+                                lockh + i, lmm, lmmsize, NULL, 0);
 
                 CDEBUG(D_OTHER, "take lock on slave "DFID" -> %d/%d\n",
                        PFID(&mea->mea_ids[i]), rc, it->d.lustre.it_status);
@@ -1588,7 +1588,7 @@ lmv_enqueue_remote(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
         rdata->op_bias = MDS_CROSS_REF;
 
         rc = md_enqueue(tgt_exp, einfo, it, rdata, lockh,
-                        lmm, lmmsize, extra_lock_flags);
+                        lmm, lmmsize, NULL, extra_lock_flags);
         OBD_FREE_PTR(rdata);
         EXIT;
 out:
@@ -1600,7 +1600,7 @@ static int
 lmv_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
             struct lookup_intent *it, struct md_op_data *op_data,
             struct lustre_handle *lockh, void *lmm, int lmmsize,
-            int extra_lock_flags)
+            struct ptlrpc_request **req, int extra_lock_flags)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -1613,7 +1613,7 @@ lmv_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
         if (rc)
                 RETURN(rc);
 
-        if (op_data->op_mea1 && it->it_op == IT_UNLINK) {
+        if (op_data->op_mea1 && it && it->it_op == IT_UNLINK) {
                 rc = lmv_enqueue_slaves(exp, einfo, it, op_data,
                                         lockh, lmm, lmmsize);
                 RETURN(rc);
@@ -1645,9 +1645,9 @@ lmv_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                PFID(&op_data->op_fid1));
 
         rc = md_enqueue(tgt_exp, einfo, it, op_data, lockh,
-                        lmm, lmmsize, extra_lock_flags);
+                        lmm, lmmsize, req, extra_lock_flags);
 
-        if (rc == 0 && it->it_op == IT_OPEN)
+        if (rc == 0 && it && it->it_op == IT_OPEN)
                 rc = lmv_enqueue_remote(exp, einfo, it, op_data, lockh,
                                         lmm, lmmsize, extra_lock_flags);
         RETURN(rc);

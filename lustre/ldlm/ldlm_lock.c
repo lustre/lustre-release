@@ -589,15 +589,12 @@ void ldlm_lock_addref_internal(struct ldlm_lock *lock, __u32 mode)
         unlock_res_and_lock(lock);
 }
 
-void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
+/* only called in ldlm_flock_destroy and for local locks.
+ *  * for LDLM_FLOCK type locks, l_blocking_ast is null, and
+ *   * ldlm_lock_remove_from_lru() does nothing, it is safe 
+ *    * for ldlm_flock_destroy usage by dropping some code */
+void ldlm_lock_decref_internal_nolock(struct ldlm_lock *lock, __u32 mode)
 {
-        struct ldlm_namespace *ns;
-        ENTRY;
-
-        lock_res_and_lock(lock);
-
-        ns = lock->l_resource->lr_namespace;
-
         LDLM_DEBUG(lock, "ldlm_lock_decref(%s)", ldlm_lockname[mode]);
         if (mode & (LCK_NL | LCK_CR | LCK_PR)) {
                 LASSERT(lock->l_readers > 0);
@@ -607,6 +604,20 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                 LASSERT(lock->l_writers > 0);
                 lock->l_writers--;
         }
+
+        LDLM_LOCK_PUT(lock);    /* matches the ldlm_lock_get in addref */
+}
+
+void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
+{
+        struct ldlm_namespace *ns;
+        ENTRY;
+
+        lock_res_and_lock(lock);
+
+        ns = lock->l_resource->lr_namespace;
+
+        ldlm_lock_decref_internal_nolock(lock, mode);
 
         if (lock->l_flags & LDLM_FL_LOCAL &&
             !lock->l_readers && !lock->l_writers) {
@@ -649,8 +660,6 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
         } else {
                 unlock_res_and_lock(lock);
         }
-
-        LDLM_LOCK_PUT(lock);    /* matches the ldlm_lock_get in addref */
 
         EXIT;
 }

@@ -1873,6 +1873,7 @@ static inline int md_enqueue(struct obd_export *exp,
                              struct md_op_data *op_data,
                              struct lustre_handle *lockh,
                              void *lmm, int lmmsize,
+                             struct ptlrpc_request **req,
                              int extra_lock_flags)
 {
         int rc;
@@ -1880,7 +1881,7 @@ static inline int md_enqueue(struct obd_export *exp,
         EXP_CHECK_MD_OP(exp, enqueue);
         EXP_MD_COUNTER_INCREMENT(exp, enqueue);
         rc = MDP(exp->exp_obd, enqueue)(exp, einfo, it, op_data, lockh,
-                                        lmm, lmmsize, extra_lock_flags);
+                                        lmm, lmmsize, req, extra_lock_flags);
         RETURN(rc);
 }
 

@@ -111,7 +111,10 @@ ldlm_flock_destroy(struct ldlm_lock *lock, ldlm_mode_t mode, int flags)
         if (flags == LDLM_FL_WAIT_NOREPROC) {
                 /* client side - set a flag to prevent sending a CANCEL */
                 lock->l_flags |= LDLM_FL_LOCAL_ONLY | LDLM_FL_CBPENDING;
-                ldlm_lock_decref_internal(lock, mode);
+
+                /* when reaching here, it is under lock_res_and_lock(). Thus, 
+                   need call the nolock version of ldlm_lock_decref_internal*/
+                ldlm_lock_decref_internal_nolock(lock, mode);
         }
 
         ldlm_lock_destroy_nolock(lock);
@@ -164,6 +167,7 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
         int local = ns_is_client(ns);
         int added = (mode == LCK_NL);
         int overlaps = 0;
+        int splitted = 0;
         ENTRY;
 
         CDEBUG(D_DLMTRACE, "flags %#x pid %u mode %u start "LPU64" end "LPU64
@@ -182,6 +186,7 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
                 req->l_blocking_ast = ldlm_flock_blocking_ast;
         }
 
+reprocess:
         if ((*flags == LDLM_FL_WAIT_NOREPROC) || (mode == LCK_NL)) {
                 /* This loop determines where this processes locks start
                  * in the resource lr_granted list. */
@@ -365,14 +370,21 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
                 /* XXX - if ldlm_lock_new() can sleep we should
                  * release the ns_lock, allocate the new lock,
                  * and restart processing this lock. */
-                new2 = ldlm_lock_create(ns, &res->lr_name, LDLM_FLOCK,
+                if (!new2) {
+                        unlock_res_and_lock(req);
+                         new2 = ldlm_lock_create(ns, &res->lr_name, LDLM_FLOCK,
                                         lock->l_granted_mode, NULL, NULL, NULL,
                                         NULL, 0);
-                if (!new2) {
-                        ldlm_flock_destroy(req, lock->l_granted_mode, *flags);
-                        *err = -ENOLCK;
-                        RETURN(LDLM_ITER_STOP);
+                        lock_res_and_lock(req);
+                        if (!new2) {
+                                ldlm_flock_destroy(req, lock->l_granted_mode, *flags);
+                                *err = -ENOLCK;
+                                RETURN(LDLM_ITER_STOP);
+                        }
+                        goto reprocess;
                 }
+
+                splitted = 1;
 
                 new2->l_granted_mode = lock->l_granted_mode;
                 new2->l_policy_data.l_flock.pid =
@@ -391,14 +403,19 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
                                  &new2->l_export->exp_ldlm_data.led_held_locks);
                         spin_unlock(&new2->l_export->exp_ldlm_data.led_lock);
                 }
-                if (*flags == LDLM_FL_WAIT_NOREPROC)
-                        ldlm_lock_addref_internal(new2, lock->l_granted_mode);
+                if (*flags == LDLM_FL_WAIT_NOREPROC) {
+                        ldlm_lock_addref_internal_nolock(new2, lock->l_granted_mode);
+                }
 
                 /* insert new2 at lock */
                 ldlm_resource_add_lock(res, ownlocks, new2);
                 LDLM_LOCK_PUT(new2);
                 break;
         }
+
+        /* if new2 is created but never used, destroy it*/
+        if (splitted == 0 && new2 != NULL)
+                ldlm_lock_destroy_nolock(new2);
 
         /* At this point we're granting the lock request. */
         req->l_granted_mode = req->l_req_mode;
@@ -428,9 +445,10 @@ restart:
                                 ldlm_reprocess_queue(res, &res->lr_waiting,
                                                      &rpc_list);
 
-                                unlock_res(res);
-                                rc = ldlm_run_ast_work(&rpc_list, LDLM_WORK_BL_AST);
-                                lock_res(res);
+                                unlock_res_and_lock(req);
+                                rc = ldlm_run_ast_work(&rpc_list,
+                                                       LDLM_WORK_BL_AST);
+                                lock_res_and_lock(req);
                                 if (rc == -ERESTART)
                                         GOTO(restart, -ERESTART);
                        }
@@ -550,7 +568,7 @@ granted:
         OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_CP_CB_WAIT, 10);
         LDLM_DEBUG(lock, "client-side enqueue granted");
         ns = lock->l_resource->lr_namespace;
-        lock_res(lock->l_resource);
+        lock_res_and_lock(lock);
 
         /* before flock's complete ast gets here, the flock
          * can possibly be freed by another thread
@@ -596,7 +614,7 @@ granted:
                 if (flags == 0)
                         cfs_waitq_signal(&lock->l_waitq);
         }
-        unlock_res(lock->l_resource);
+        unlock_res_and_lock(lock);
         RETURN(0);
 }
 EXPORT_SYMBOL(ldlm_flock_completion_ast);

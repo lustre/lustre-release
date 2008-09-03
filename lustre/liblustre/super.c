@@ -1792,7 +1792,7 @@ static int llu_lov_setstripe_ea_info(struct inode *ino, int flags,
                             LUSTRE_OPC_ANY);
 
         rc = md_enqueue(sbi->ll_md_exp, &einfo, &oit, &data,
-                        &lockh, lum, lum_size, LDLM_FL_INTENT_ONLY);
+                        &lockh, lum, lum_size, NULL, LDLM_FL_INTENT_ONLY);
         if (rc)
                 GOTO(out, rc);
 

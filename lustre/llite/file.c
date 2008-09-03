@@ -2337,7 +2337,7 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
                 RETURN(PTR_ERR(op_data));
 
         rc = md_enqueue(ll_i2mdexp(head_inode), &einfo, &oit, 
-                         op_data, &lockh, NULL, 0, 0);
+                         op_data, &lockh, NULL, 0, NULL, 0);
 
         ll_finish_md_op_data(op_data);
         if (rc < 0)
@@ -2810,13 +2810,10 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
 {
         struct inode *inode = file->f_dentry->d_inode;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct ldlm_res_id res_id =
-                { .name = { fid_seq(ll_inode2fid(inode)),
-                            fid_oid(ll_inode2fid(inode)),
-                            fid_ver(ll_inode2fid(inode)),
-                            LDLM_FLOCK} };
-        struct ldlm_enqueue_info einfo = { LDLM_FLOCK, 0, NULL,
-                ldlm_flock_completion_ast, NULL, file_lock };
+        struct ldlm_enqueue_info einfo = { .ei_type = LDLM_FLOCK,
+                                           .ei_cb_cp =ldlm_flock_completion_ast,
+                                           .ei_cbdata = file_lock };
+        struct md_op_data *op_data;
         struct lustre_handle lockh = {0};
         ldlm_policy_data_t flock;
         int flags = 0;
@@ -2888,12 +2885,20 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
                 LBUG();
         }
 
+        op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
+                                     LUSTRE_OPC_ANY, NULL);
+        if (IS_ERR(op_data))
+                RETURN(PTR_ERR(op_data));
+ 
         CDEBUG(D_DLMTRACE, "inode=%lu, pid=%u, flags=%#x, mode=%u, "
                "start="LPU64", end="LPU64"\n", inode->i_ino, flock.l_flock.pid,
                flags, einfo.ei_mode, flock.l_flock.start, flock.l_flock.end);
 
-        rc = ldlm_cli_enqueue(sbi->ll_md_exp, NULL, &einfo, &res_id,
-                              &flock, &flags, NULL, 0, NULL, &lockh, 0);
+        rc = md_enqueue(sbi->ll_md_exp, &einfo, NULL,
+                        op_data, &lockh, &flock, 0, NULL /* req */, flags);
+
+        ll_finish_md_op_data(op_data);
+
         if ((file_lock->fl_flags & FL_FLOCK) &&
             (rc == 0 || file_lock->fl_type == F_UNLCK))
                 ll_flock_lock_file_wait(file, file_lock, (cmd == F_SETLKW));
