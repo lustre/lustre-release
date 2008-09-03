@@ -2142,18 +2142,21 @@ static int filter_llog_finish(struct obd_device *obd, int count)
                         ctxt->loc_imp = NULL;
                 }
                 mutex_up(&ctxt->loc_sem);
-                rc = llog_cleanup(ctxt);
         }
-        ctxt = llog_get_context(obd, LLOG_SIZE_ORIG_CTXT);
-        if (ctxt)
-                rc2 = llog_cleanup(ctxt);
-        if (!rc)
-                rc = rc2;
 
         if (filter->fo_lcm) {
                 llog_recov_thread_fini(filter->fo_lcm, obd->obd_force);
                 filter->fo_lcm = NULL;
         }
+
+        if (ctxt)
+                rc = llog_cleanup(ctxt);
+
+        ctxt = llog_get_context(obd, LLOG_SIZE_ORIG_CTXT);
+        if (ctxt)
+                rc2 = llog_cleanup(ctxt);
+        if (!rc)
+                rc = rc2;
 
         RETURN(rc);
 }
