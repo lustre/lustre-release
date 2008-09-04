@@ -1692,13 +1692,13 @@ test_23_sub() {
 }
 
 test_23() {
-	log "run for 10MB test file"
-	test_23_sub 10240  #10MB
+	log "run for $((OSTCOUNT * 3))MB test file"
+	test_23_sub $((OSTCOUNT * 3 * 1024))
 
 	OST0_MIN=120000
 	check_whether_skip && return 0
-	log "run for 100MB test file"
-	test_23_sub 102400 #100MB
+	log "run for $((OSTCOUNT * 30))MB test file"
+	test_23_sub $((OSTCOUNT * 30 * 1024))
 }
 run_test_with_stat 23 "run for fixing bug16125 ==========="
 
