@@ -38,6 +38,10 @@ tbd Sun Microsystems, Inc.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
 
+Severity   : normal
+Bugzilla   : 16907
+Description: Prevent import from entering FULL state when server in recovery
+
 Severity   : major
 Bugzilla   : 16750
 Description: service mount cannot take device name with ":"
@@ -59,7 +63,7 @@ Description: replace ptlrpcd with the statahead thread to interpret the async
 Severity   : normal
 Bugzilla   : 16611
 Frequency  : on recovery
-Description: I/O failures after umount during fail back 
+Description: I/O failures after umount during fail back
 Details    : if client reconnected to restarted server we need join to recovery
 	     instead of find server handler is changed and process self eviction
 	     with cancel all locks.
@@ -225,7 +229,7 @@ Details    : Consider only lowmem when counting initial number of llap pages
 Bugzilla   : 15825
 Description: Kernel BUG tries to release flock
 Details    : Lustre does not destroy flock lock before last reference goes
-	     away. So always drop flock locks when client is evicted and 
+	     away. So always drop flock locks when client is evicted and
 	     perform unlock regardless of successfulness of speaking to MDS.
 
 Severity   : normal
