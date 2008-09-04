@@ -38,6 +38,12 @@ tbd Sun Microsystems, Inc.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
 
+Severity   : major
+Bugzilla   : 16561
+Description: Hitting mdc_commit_close() ASSERTION
+Details    : Properly handle request reference release in
+             ll_release_openhandle().
+
 Severity   : normal
 Bugzilla   : 15927
 Frequency  : rare
@@ -47,7 +53,7 @@ Description: replace ptlrpcd with the statahead thread to interpret the async
 Severity   : normal
 Bugzilla   : 16611
 Frequency  : on recovery
-Description: I/O failures after umount during fail back 
+Description: I/O failures after umount during fail back
 Details    : if client reconnected to restarted server we need join to recovery
              instead of find server handler is changed and process self eviction
              with cancel all locks.
