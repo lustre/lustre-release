@@ -2495,10 +2495,8 @@ int ll_release_openhandle(struct dentry *dentry, struct lookup_intent *it)
                                        inode, och);
  out:
         /* this one is in place of ll_file_open */
-        if (it_disposition(it, DISP_ENQ_OPEN_REF)) {
-                ptlrpc_req_finished(it->d.lustre.it_data);
-                it_clear_disposition(it, DISP_ENQ_OPEN_REF);
-        }
+        ptlrpc_req_finished(it->d.lustre.it_data);
+        it_clear_disposition(it, DISP_ENQ_OPEN_REF);
         RETURN(rc);
 }
 
