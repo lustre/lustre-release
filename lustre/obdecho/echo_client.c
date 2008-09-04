@@ -57,14 +57,14 @@ echo_printk_object (char *msg, struct ec_object *eco)
         struct lov_stripe_md *lsm = eco->eco_lsm;
         int                   i;
 
-        CDEBUG(D_INFO, "Lustre: %s: object %p: "LPX64", refs %d%s: "LPX64
-                "=%u!%u\n", msg, eco, eco->eco_id, eco->eco_refcount,
-                eco->eco_deleted ? "(deleted) " : "",
-                lsm->lsm_object_id, lsm->lsm_stripe_size,
-                lsm->lsm_stripe_count);
+        CDEBUG(D_INFO, "%s: object %p: "LPX64", refs %d%s: "LPX64"=%u!%u\n",
+               msg, eco, eco->eco_id, eco->eco_refcount,
+               eco->eco_deleted ? "(deleted) " : "",
+               lsm->lsm_object_id, lsm->lsm_stripe_size,
+               lsm->lsm_stripe_count);
 
         for (i = 0; i < lsm->lsm_stripe_count; i++)
-                CDEBUG(D_INFO, "Lustre:   @%2u:"LPX64"\n",
+                CDEBUG(D_INFO, "@%2u:"LPX64"\n",
                        lsm->lsm_oinfo[i].loi_ost_idx,
                        lsm->lsm_oinfo[i].loi_id);
 }
