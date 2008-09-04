@@ -160,7 +160,7 @@ int ptlrpc_set_import_discon(struct obd_import *imp, __u32 conn_cnt)
                 ptlrpc_deactivate_timeouts(imp);
                 IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_DISCON);
                 spin_unlock(&imp->imp_lock);
-    
+
                 if (obd_dump_on_timeout)
                         libcfs_debug_dumplog();
 
@@ -309,8 +309,7 @@ void ptlrpc_fail_import(struct obd_import *imp, __u32 conn_cnt)
 
 int ptlrpc_reconnect_import(struct obd_import *imp)
 {
-        
-        ptlrpc_set_import_discon(imp, 0); 
+        ptlrpc_set_import_discon(imp, 0);
         /* Force a new connect attempt */
         ptlrpc_invalidate_import(imp);
         /* Do a fresh connect next time by zeroing the handle */
@@ -323,7 +322,7 @@ int ptlrpc_reconnect_import(struct obd_import *imp)
                                   (atomic_read(&imp->imp_inval_count) == 0),
                                   &lwi);
                 if (rc)
-                        CERROR("Interrupted, inval=%d\n", 
+                        CERROR("Interrupted, inval=%d\n",
                                atomic_read(&imp->imp_inval_count));
         }
 
@@ -592,7 +591,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
                 spin_lock(&imp->imp_lock);
                 imp->imp_replayable = 1;
                 spin_unlock(&imp->imp_lock);
-                lustre_msg_add_op_flags(request->rq_reqmsg, 
+                lustre_msg_add_op_flags(request->rq_reqmsg,
                                         MSG_CONNECT_INITIAL);
                 if (AT_OFF)
                         /* AT will use INITIAL_CONNECT_TIMEOUT the first
@@ -601,7 +600,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
         }
 
         if (set_transno)
-                lustre_msg_add_op_flags(request->rq_reqmsg, 
+                lustre_msg_add_op_flags(request->rq_reqmsg,
                                         MSG_CONNECT_TRANSNO);
 
         DEBUG_REQ(D_RPCTRACE, request, "(re)connect request");
@@ -635,10 +634,10 @@ static void ptlrpc_maybe_ping_import_soon(struct obd_import *imp)
                               oic_item);
 
         /* XXX: When the failover node is the primary node, it is possible
-         * to have two identical connections in imp_conn_list. We must 
+         * to have two identical connections in imp_conn_list. We must
          * compare not conn's pointers but NIDs, otherwise we can defeat
          * connection throttling. (See bug 14774.) */
-        if (imp->imp_conn_current->oic_conn->c_self != 
+        if (imp->imp_conn_current->oic_conn->c_self !=
                                 imp_conn->oic_conn->c_self) {
                 ptlrpc_ping_import_soon(imp);
                 wake_pinger = 1;
@@ -646,7 +645,7 @@ static void ptlrpc_maybe_ping_import_soon(struct obd_import *imp)
 #else
         /* liblustre has no pinger thead, so we wakup pinger anyway */
         wake_pinger = 1;
-#endif 
+#endif
 
  unlock:
         spin_unlock(&imp->imp_lock);
@@ -702,7 +701,17 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 imp->imp_remote_handle =
                                 *lustre_msg_get_handle(request->rq_repmsg);
 
-                IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
+                /* Initial connects are allowed for clients with non-random
+                 * uuids when servers are in recovery.  Simply signal the
+                 * servers replay is complete and wait in REPLAY_WAIT. */
+                if (msg_flags & MSG_CONNECT_RECOVERING) {
+                        CDEBUG(D_HA, "connect to %s during recovery\n",
+                               obd2cli_tgt(imp->imp_obd));
+                        IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY_LOCKS);
+                } else {
+                        IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
+                }
+
                 spin_lock(&imp->imp_lock);
                 if (imp->imp_invalid) {
                         spin_unlock(&imp->imp_lock);
@@ -858,14 +867,14 @@ finish:
                          imp->imp_connect_flags_orig, ocd->ocd_connect_flags);
 
                 if (!exp) {
-                        /* This could happen if export is cleaned during the 
+                        /* This could happen if export is cleaned during the
                            connect attempt */
-                        CERROR("Missing export for %s\n", 
+                        CERROR("Missing export for %s\n",
                                imp->imp_obd->obd_name);
                         GOTO(out, rc = -ENODEV);
                 }
                 exp->exp_connect_flags = ocd->ocd_connect_flags;
-                imp->imp_obd->obd_self_export->exp_connect_flags = 
+                imp->imp_obd->obd_self_export->exp_connect_flags =
                                                         ocd->ocd_connect_flags;
                 class_export_put(exp);
 
@@ -936,13 +945,13 @@ finish:
                 }
 
                 if (ocd->ocd_connect_flags & OBD_CONNECT_BRW_SIZE) {
-                        cli->cl_max_pages_per_rpc = 
+                        cli->cl_max_pages_per_rpc =
                                 ocd->ocd_brw_size >> CFS_PAGE_SHIFT;
                 }
 
-                imp->imp_obd->obd_namespace->ns_connect_flags = 
+                imp->imp_obd->obd_namespace->ns_connect_flags =
                                                         ocd->ocd_connect_flags;
-                imp->imp_obd->obd_namespace->ns_orig_connect_flags = 
+                imp->imp_obd->obd_namespace->ns_orig_connect_flags =
                                                         ocd->ocd_connect_flags;
 
                 if ((ocd->ocd_connect_flags & OBD_CONNECT_AT) &&
@@ -1021,7 +1030,7 @@ out:
                        obd2cli_tgt(imp->imp_obd),
                        (char *)imp->imp_connection->c_remote_uuid.uuid, rc);
         }
-        
+
         spin_lock(&imp->imp_lock);
         imp->imp_last_recon = 0;
         spin_unlock(&imp->imp_lock);
@@ -1064,7 +1073,7 @@ static int signal_completed_replay(struct obd_import *imp)
 
         ptlrpc_request_set_replen(req);
         req->rq_send_state = LUSTRE_IMP_REPLAY_WAIT;
-        lustre_msg_add_flags(req->rq_reqmsg, 
+        lustre_msg_add_flags(req->rq_reqmsg,
                              MSG_LOCK_REPLAY_DONE | MSG_REQ_REPLAY_DONE);
         req->rq_timeout *= 3;
         req->rq_interpret_reply = completed_replay_interpret;
@@ -1081,7 +1090,7 @@ static int ptlrpc_invalidate_import_thread(void *data)
         ENTRY;
 
         ptlrpc_daemonize("ll_imp_inval");
-        
+
         CDEBUG(D_HA, "thread invalidate import %s to %s@%s\n",
                imp->imp_obd->obd_name, obd2cli_tgt(imp->imp_obd),
                imp->imp_connection->c_remote_uuid.uuid);
@@ -1237,8 +1246,8 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
                         timeout = cfs_time_seconds(
                                 at_get(&imp->imp_at.iat_service_estimate[idx]));
                 }
-                
-                lwi = LWI_TIMEOUT_INTR(cfs_timeout_cap(timeout), 
+
+                lwi = LWI_TIMEOUT_INTR(cfs_timeout_cap(timeout),
                                        back_to_sleep, LWI_ON_SIGNAL_NOOP, NULL);
                 rc = l_wait_event(imp->imp_recovery_waitq,
                                   !ptlrpc_import_in_recovery(imp), &lwi);
@@ -1281,7 +1290,7 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
 set_state:
         spin_lock(&imp->imp_lock);
 out:
-        if (noclose) 
+        if (noclose)
                 IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_DISCON);
         else
                 IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_CLOSED);
