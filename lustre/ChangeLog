@@ -48,12 +48,6 @@ Description: service mount cannot take device name with ":"
 Details    : Only when device name contains ":/" will mount treat it as
              client mount.
 
-Severity   : major
-Bugzilla   : 16561
-Description: Hitting mdc_commit_close() ASSERTION
-Details    : Properly handle request reference release in
-             ll_release_openhandle().
-
 Severity   : normal
 Bugzilla   : 15927
 Frequency  : rare
