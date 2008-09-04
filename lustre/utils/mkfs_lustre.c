@@ -402,7 +402,7 @@ static int file_in_dev(char *file_name, char *dev_name)
 
         /* Construct debugfs command line. */
         snprintf(debugfs_cmd, sizeof(debugfs_cmd),
-                "debugfs -c -R 'stat %s' %s 2>&1 | egrep '(Inode|unsupported)'",
+                "debugfs -c -R 'stat %s' '%s' 2>&1 | egrep '(Inode|unsupported)'",
                 file_name, dev_name);
 
         fp = popen(debugfs_cmd, "r");
@@ -891,7 +891,7 @@ int read_local_files(struct mkfs_opts *mop)
                  filesystem */
 
         /* Construct debugfs command line. */
-        snprintf(cmd, cmdsz, "debugfs -c -R 'dump /%s %s/mountdata' %s",
+        snprintf(cmd, cmdsz, "debugfs -c -R 'dump /%s %s/mountdata' '%s'",
                  MOUNT_DATA_FILE, tmpdir, dev);
 
         ret = run_command(cmd, cmdsz);
