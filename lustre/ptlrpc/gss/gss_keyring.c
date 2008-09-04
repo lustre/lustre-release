@@ -1215,7 +1215,7 @@ int gss_kt_instantiate(struct key *key, const void *data, size_t datalen)
         ENTRY;
 
         if (data != NULL || datalen != 0) {
-                CERROR("invalid: data %p, len %d\n", data, datalen);
+                CERROR("invalid: data %p, len "LPSZ"\n", data, datalen);
                 RETURN(-EINVAL);
         }
 
@@ -1258,11 +1258,12 @@ int gss_kt_update(struct key *key, const void *data, size_t datalen)
         struct ptlrpc_cli_ctx   *ctx = key->payload.data;
         struct gss_cli_ctx      *gctx;
         rawobj_t                 tmpobj = RAWOBJ_EMPTY;
+        __u32                    datalen32 = (__u32) datalen;
         int                      rc;
         ENTRY;
 
         if (data == NULL || datalen == 0) {
-                CWARN("invalid: data %p, len %d\n", data, datalen);
+                CWARN("invalid: data %p, len "LPSZ"\n", data, datalen);
                 RETURN(-EINVAL);
         }
 
@@ -1297,7 +1298,7 @@ int gss_kt_update(struct key *key, const void *data, size_t datalen)
         sptlrpc_cli_ctx_get(ctx);
         gctx = ctx2gctx(ctx);
 
-        rc = buffer_extract_bytes(&data, &datalen, &gctx->gc_win,
+        rc = buffer_extract_bytes(&data, &datalen32, &gctx->gc_win,
                                   sizeof(gctx->gc_win));
         if (rc) {
                 CERROR("failed extract seq_win\n");
@@ -1307,14 +1308,14 @@ int gss_kt_update(struct key *key, const void *data, size_t datalen)
         if (gctx->gc_win == 0) {
                 __u32   nego_rpc_err, nego_gss_err;
 
-                rc = buffer_extract_bytes(&data, &datalen, &nego_rpc_err,
+                rc = buffer_extract_bytes(&data, &datalen32, &nego_rpc_err,
                                           sizeof(nego_rpc_err));
                 if (rc) {
                         CERROR("failed to extrace rpc rc\n");
                         goto out;
                 }
 
-                rc = buffer_extract_bytes(&data, &datalen, &nego_gss_err,
+                rc = buffer_extract_bytes(&data, &datalen32, &nego_gss_err,
                                           sizeof(nego_gss_err));
                 if (rc) {
                         CERROR("failed to extrace gss rc\n");
@@ -1327,13 +1328,13 @@ int gss_kt_update(struct key *key, const void *data, size_t datalen)
                 rc = nego_rpc_err ? nego_rpc_err : -EACCES;
         } else {
                 rc = rawobj_extract_local_alloc(&gctx->gc_handle,
-                                                (__u32 **) &data, &datalen);
+                                                (__u32 **) &data, &datalen32);
                 if (rc) {
                         CERROR("failed extract handle\n");
                         goto out;
                 }
 
-                rc = rawobj_extract_local(&tmpobj, (__u32 **) &data, &datalen);
+                rc = rawobj_extract_local(&tmpobj, (__u32 **) &data,&datalen32);
                 if (rc) {
                         CERROR("failed extract mech\n");
                         goto out;

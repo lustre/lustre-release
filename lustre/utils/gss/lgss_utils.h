@@ -115,7 +115,7 @@ do {                                                                    \
 
 #define lassert(exp)                                                    \
 do {                                                                    \
-        if ((int)(exp) == 0) {                                          \
+        if (!(exp)) {                                                   \
                 logmsg(LL_ERR, "ASSERTION FAILED: %s", #exp);           \
                 exit(-1);                                               \
         }                                                               \

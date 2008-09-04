@@ -59,6 +59,14 @@ typedef uint64_t OM_uint64;
 #include "write_bytes.h"
 #include "context.h"
 
+extern OM_uint32 gss_export_lucid_sec_context(OM_uint32 *min_stat,
+					      gss_ctx_id_t *ctx,
+					      OM_uint32 version,
+					      void **kctx);
+extern OM_uint32 gss_free_lucid_sec_context(OM_uint32 *min_stat,
+					    gss_ctx_id_t ctx,
+					    void *kctx);
+
 static int
 write_lucid_keyblock(char **p, char *end, gss_krb5_lucid_key_t *key)
 {
