@@ -1815,7 +1815,8 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         if (body->valid & OBD_MD_FLGID)
                 inode->i_gid = body->gid;
         if (body->valid & OBD_MD_FLFLAGS)
-                inode->i_flags = ll_ext_to_inode_flags(body->flags);
+                inode->i_flags = ll_ext_to_inode_flags(body->flags |
+                                                       MDS_BFLAG_EXT_FLAGS);
         if (body->valid & OBD_MD_FLNLINK)
                 inode->i_nlink = body->nlink;
         if (body->valid & OBD_MD_FLGENER)
