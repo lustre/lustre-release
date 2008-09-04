@@ -238,7 +238,7 @@ static struct trace_page *trace_get_tage(struct trace_cpu_data *tcd,
 int libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls, int subsys, int mask,
                        const char *file, const char *fn, const int line,
                        const char *format1, va_list args,
-                       const char *format2, ...)		
+                       const char *format2, ...)
 {
         struct trace_cpu_data   *tcd = NULL;
         struct ptldebug_header   header;
@@ -283,7 +283,7 @@ int libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls, int subsys, int mask,
          * _without_ terminating NULL.
          * if needed is to small for this format.
          */
-        for (i=0;i<2;i++) {
+        for (i = 0; i < 2; i++) {
                 tage = trace_get_tage(tcd, needed + known_size + 1);
                 if (tage == NULL) {
                         if (needed + known_size > CFS_PAGE_SIZE)
@@ -294,7 +294,8 @@ int libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls, int subsys, int mask,
                         goto console;
                 }
 
-                string_buf = (char *)cfs_page_address(tage->page)+tage->used+known_size;
+                string_buf = (char *)cfs_page_address(tage->page) +
+                                        tage->used + known_size;
 
                 max_nob = CFS_PAGE_SIZE - tage->used - known_size;
                 if (max_nob <= 0) {
@@ -311,26 +312,26 @@ int libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls, int subsys, int mask,
                         needed = vsnprintf(string_buf, max_nob, format1, ap);
                         va_end(ap);
                 }
-		
 
                 if (format2) {
 		        remain = max_nob - needed;
                         if (remain < 0)
                                 remain = 0;
-		
+
                         va_start(ap, format2);
-                        needed += vsnprintf(string_buf+needed, remain, format2, ap);
+                        needed += vsnprintf(string_buf + needed, remain,
+                                            format2, ap);
                         va_end(ap);
                 }
 
                 if (needed < max_nob) /* well. printing ok.. */
                         break;
         }
-	
+
         if (*(string_buf+needed-1) != '\n')
                 printk(KERN_INFO "format at %s:%d:%s doesn't end in newline\n",
                        file, line, fn);
-	
+
         header.ph_len = known_size + needed;
         debug_buf = (char *)cfs_page_address(tage->page) + tage->used;
 
