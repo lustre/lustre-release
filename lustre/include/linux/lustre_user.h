@@ -78,7 +78,7 @@
 #endif
 
 #if defined(__x86_64__) || defined(__ia64__) || defined(__ppc64__) || \
-    defined(__craynv) || defined (__mips64__) || defined(__powerpc_64__)
+    defined(__craynv) || defined (__mips64__) || defined(__powerpc64__)
 typedef struct stat     lstat_t;
 #define lstat_f         lstat
 #define HAVE_LOV_USER_MDS_DATA
