@@ -145,7 +145,7 @@ static inline int mutex_is_locked(struct mutex *lock)
 }
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16) */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18)
+#ifndef lockdep_set_class
 
 /**************************************************************************
  *
