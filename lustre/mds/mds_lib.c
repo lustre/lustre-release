@@ -94,9 +94,7 @@ void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
         b->blocks = inode->i_blocks;
         b->uid = inode->i_uid;
         b->gid = inode->i_gid;
-        b->flags = (b->flags & MDS_BFLAG_EXT_FLAGS) |
-                   ll_inode_to_ext_flags(inode->i_flags,
-                                         !(b->flags & MDS_BFLAG_EXT_FLAGS));
+        b->flags = ll_inode_to_ext_flags(inode->i_flags, MDS_BFLAG_EXT_FLAGS);
         b->rdev = inode->i_rdev;
         /* Return the correct link count for orphan inodes */
         b->nlink = mds_inode_is_orphan(inode) ? 0 : inode->i_nlink;
