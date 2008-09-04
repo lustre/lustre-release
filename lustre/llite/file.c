@@ -170,7 +170,7 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
 
         EXIT;
 out:
-      
+
         if ((exp->exp_connect_flags & OBD_CONNECT_SOM) && !epoch_close &&
             S_ISREG(inode->i_mode) && (och->och_flags & FMODE_WRITE)) {
                 ll_queue_done_writing(inode, LLIF_DONE_WRITING);
@@ -335,7 +335,7 @@ int ll_file_release(struct inode *inode, struct file *file)
                 ll_file_data_put(fd);
                 RETURN(0);
         }
-        
+
         if (lsm)
                 lov_test_and_clear_async_rc(lsm);
         lli->lli_async_rc = 0;
@@ -384,7 +384,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
                 /* reason for keep own exit path - don`t flood log
                 * with messages with -ESTALE errors.
                 */
-                if (!it_disposition(itp, DISP_OPEN_OPEN) || 
+                if (!it_disposition(itp, DISP_OPEN_OPEN) ||
                      it_open_error(DISP_OPEN_OPEN, itp))
                         GOTO(out, rc);
                 ll_release_openhandle(file->f_dentry, itp);
@@ -399,7 +399,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
 
         if (itp->d.lustre.it_lock_mode)
                 md_set_lock_data(sbi->ll_md_exp,
-                                 &itp->d.lustre.it_lock_handle, 
+                                 &itp->d.lustre.it_lock_handle,
                                  file->f_dentry->d_inode);
 
         rc = ll_prep_inode(&file->f_dentry->d_inode, req, NULL);
@@ -512,7 +512,7 @@ int ll_file_open(struct inode *inode, struct file *file)
                 spin_lock(&lli->lli_lock);
                 /* "lli->lli_opendir_pid != 0" means someone has set it.
                  * "lli->lli_sai != NULL" means the previous statahead has not
-                 *                        been cleanup. */ 
+                 *                        been cleanup. */
                 if (lli->lli_opendir_pid == 0 && lli->lli_sai == NULL) {
                         opendir_set = 1;
                         lli->lli_opendir_pid = cfs_curproc_pid();
@@ -571,7 +571,7 @@ restart:
                 och_p = &lli->lli_mds_read_och;
                 och_usecount = &lli->lli_open_fd_read_count;
         }
-        
+
         down(&lli->lli_och_sem);
         if (*och_p) { /* Open handle is present */
                 if (it_disposition(it, DISP_OPEN_OPEN)) {
@@ -582,9 +582,9 @@ restart:
                                 up(&lli->lli_och_sem);
                                 ll_file_data_put(fd);
                                 GOTO(out_openerr, rc);
-                        }       
+                        }
                         ll_release_openhandle(file->f_dentry, it);
-                        lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, 
+                        lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats,
                                              LPROC_LL_OPEN);
                 }
                 (*och_usecount)++;
@@ -785,7 +785,7 @@ check:
 void ll_pin_extent_cb(void *data)
 {
         struct page *page = data;
-        
+
         page_cache_get(page);
 
         return;
@@ -806,7 +806,7 @@ int ll_page_removal_cb(void *data, int discard)
         int rc;
         struct page *page = data;
         struct address_space *mapping;
- 
+
         ENTRY;
 
         /* We have page reference already from ll_pin_page */
@@ -820,7 +820,7 @@ int ll_page_removal_cb(void *data, int discard)
         ll_teardown_mmaps(mapping,
                           (__u64)page->index << PAGE_CACHE_SHIFT,
                           ((__u64)page->index<<PAGE_CACHE_SHIFT)|
-                                                              ~PAGE_CACHE_MASK);        
+                                                              ~PAGE_CACHE_MASK);
         LL_CDEBUG_PAGE(D_PAGE, page, "removing page\n");
 
         if (!discard && clear_page_dirty_for_io(page)) {
@@ -1504,7 +1504,7 @@ enum ll_lock_style {
 };
 
 /**
- * Checks if requested extent lock is compatible with a lock 
+ * Checks if requested extent lock is compatible with a lock
  * under a page cache page.
  *
  * Checks if the lock under \a page is compatible with a read or write lock
@@ -1726,7 +1726,7 @@ repeat:
                 /* BUG: 5972 */
                 file_accessed(file);
                 retval = generic_file_read(file, buf, chunk, ppos);
-                ll_file_put_lock(inode, end, lock_style, cookie, &tree, 
+                ll_file_put_lock(inode, end, lock_style, cookie, &tree,
                                  OBD_BRW_READ);
         } else {
                 retval = ll_file_lockless_io(file, buf, chunk, ppos, READ);
@@ -2053,8 +2053,8 @@ out_req_free:
         goto out;
 }
 
-int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename, 
-                             struct lov_mds_md **lmmp, int *lmm_size, 
+int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
+                             struct lov_mds_md **lmmp, int *lmm_size,
                              struct ptlrpc_request **request)
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
@@ -2336,7 +2336,7 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
         if (IS_ERR(op_data))
                 RETURN(PTR_ERR(op_data));
 
-        rc = md_enqueue(ll_i2mdexp(head_inode), &einfo, &oit, 
+        rc = md_enqueue(ll_i2mdexp(head_inode), &einfo, &oit,
                          op_data, &lockh, NULL, 0, NULL, 0);
 
         ll_finish_md_op_data(op_data);
@@ -2486,8 +2486,10 @@ int ll_release_openhandle(struct dentry *dentry, struct lookup_intent *it)
                                        inode, och);
  out:
         /* this one is in place of ll_file_open */
-        ptlrpc_req_finished(it->d.lustre.it_data);
-        it_clear_disposition(it, DISP_ENQ_OPEN_REF);
+        if (it_disposition(it, DISP_ENQ_OPEN_REF)) {
+                ptlrpc_req_finished(it->d.lustre.it_data);
+                it_clear_disposition(it, DISP_ENQ_OPEN_REF);
+        }
         RETURN(rc);
 }
 
@@ -2684,7 +2686,7 @@ error:
         default: {
                 int err;
 
-                if (LLIOC_STOP == 
+                if (LLIOC_STOP ==
                     ll_iocontrol_call(inode, file, cmd, arg, &err))
                         RETURN(err);
 
@@ -2738,7 +2740,7 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
                 }
                 retval = offset;
         }
-        
+
         RETURN(retval);
 }
 
@@ -2782,7 +2784,7 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
 
         if (data && lsm) {
                 struct obdo *oa;
-                
+
                 OBDO_ALLOC(oa);
                 if (!oa)
                         RETURN(rc ? rc : -ENOMEM);
@@ -2824,7 +2826,7 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
                inode->i_ino, file_lock);
 
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_FLOCK, 1);
- 
+
         if (file_lock->fl_flags & FL_FLOCK) {
                 LASSERT((cmd == F_SETLKW) || (cmd == F_SETLK));
                 /* set missing params for flock() calls */
@@ -2889,7 +2891,7 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
                                      LUSTRE_OPC_ANY, NULL);
         if (IS_ERR(op_data))
                 RETURN(PTR_ERR(op_data));
- 
+
         CDEBUG(D_DLMTRACE, "inode=%lu, pid=%u, flags=%#x, mode=%u, "
                "start="LPU64", end="LPU64"\n", inode->i_ino, flock.l_flock.pid,
                flags, einfo.ei_mode, flock.l_flock.start, flock.l_flock.end);
@@ -3158,7 +3160,7 @@ int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
                inode->i_ino, inode->i_generation, inode, mask);
         if (ll_i2sbi(inode)->ll_flags & LL_SBI_RMT_CLIENT)
                 return lustre_check_remote_perm(inode, mask);
-        
+
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_INODE_PERM, 1);
         return generic_permission(inode, mask, lustre_check_acl);
 }
@@ -3209,7 +3211,7 @@ check_capabilities:
         if (capable(CAP_DAC_READ_SEARCH) && ((mask == MAY_READ) ||
             (S_ISDIR(inode->i_mode) && !(mask & MAY_WRITE))))
                 return 0;
-        
+
         return -EACCES;
 }
 #endif
@@ -3278,8 +3280,8 @@ struct inode_operations ll_file_inode_operations = {
 static struct llioc_ctl_data {
         struct rw_semaphore ioc_sem;
         struct list_head    ioc_head;
-} llioc = { 
-        __RWSEM_INITIALIZER(llioc.ioc_sem), 
+} llioc = {
+        __RWSEM_INITIALIZER(llioc.ioc_sem),
         CFS_LIST_HEAD_INIT(llioc.ioc_head)
 };
 
@@ -3347,7 +3349,7 @@ void ll_iocontrol_unregister(void *magic)
 EXPORT_SYMBOL(ll_iocontrol_register);
 EXPORT_SYMBOL(ll_iocontrol_unregister);
 
-enum llioc_iter ll_iocontrol_call(struct inode *inode, struct file *file, 
+enum llioc_iter ll_iocontrol_call(struct inode *inode, struct file *file,
                         unsigned int cmd, unsigned long arg, int *rcp)
 {
         enum llioc_iter ret = LLIOC_CONT;
@@ -3357,7 +3359,7 @@ enum llioc_iter ll_iocontrol_call(struct inode *inode, struct file *file,
         down_read(&llioc.ioc_sem);
         list_for_each_entry(data, &llioc.ioc_head, iocd_list) {
                 for (i = 0; i < data->iocd_count; i++) {
-                        if (cmd != data->iocd_cmd[i]) 
+                        if (cmd != data->iocd_cmd[i])
                                 continue;
 
                         ret = data->iocd_cb(inode, file, cmd, arg, data, &rc);
