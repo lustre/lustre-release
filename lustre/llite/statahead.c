@@ -773,7 +773,7 @@ static int ll_statahead_thread(void *arg)
 
                 if (IS_ERR(page)) {
                         rc = PTR_ERR(page);
-                        CERROR("error reading dir "DFID" at %llu/%u: rc %d\n",
+                        CERROR("error reading dir "DFID" at "LPU64"/%u: rc %d\n",
                                PFID(ll_inode2fid(dir)), pos,
                                sai->sai_index, rc);
                         break;
@@ -972,7 +972,7 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 
                 if (IS_ERR(page)) {
                         rc = PTR_ERR(page);
-                        CERROR("error reading dir "DFID" at %llu: rc %d\n",
+                        CERROR("error reading dir "DFID" at "LPU64": rc %d\n",
                                PFID(ll_inode2fid(dir)), pos, rc);
                         break;
                 }

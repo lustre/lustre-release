@@ -77,7 +77,8 @@ seq_proc_write_common(struct file *file, const char *buffer,
 
 	LASSERT(range != NULL);
 
-        rc = sscanf(buffer, "[%Lx - %Lx]\n", &tmp.lr_start, &tmp.lr_end);
+        rc = sscanf(buffer, "[%Lx - %Lx]\n",(long long unsigned *)&tmp.lr_start,
+                    (long long unsigned *)&tmp.lr_end);
 	if (rc != 2 || !range_is_sane(&tmp) || range_is_zero(&tmp))
 		RETURN(-EINVAL);
 	*range = tmp;
@@ -93,7 +94,7 @@ seq_proc_read_common(char *page, char **start, off_t off,
 	ENTRY;
 
         *eof = 1;
-        rc = snprintf(page, count, "[%Lx - %Lx]\n",
+        rc = snprintf(page, count, "["LPX64" - "LPX64"]\n",
                       PRANGE(range));
 	RETURN(rc);
 }

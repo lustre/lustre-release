@@ -2246,7 +2246,7 @@ static int ll_file_oig_pages(struct inode * inode, struct page **pages,
 
                 LL_CDEBUG_PAGE(D_PAGE, pages[i], "offset "LPU64","
                                " from %u, bytes = %u\n",
-                               pos, from, bytes);
+                               (__u64)pos, from, bytes);
                 LASSERTF(pos >> CFS_PAGE_SHIFT == pages[i]->index,
                          "wrong page index %lu (%lu)\n",
                          pages[i]->index,

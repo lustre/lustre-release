@@ -203,7 +203,7 @@ static void ll_release_page(struct page *page, __u64 hash,
         } else {
                 unlock_page(page);
                 CWARN("NULL mapping page %p, truncated by others: "
-                      "hash(%#llx) | start(%#llx) | end(%#llx)\n",
+                      "hash("LPX64") | start("LPX64") | end("LPX64")\n",
                       page, hash, start, end);
         }
         page_cache_release(page);
@@ -336,7 +336,7 @@ struct page *ll_get_dir_page(struct inode *dir, __u64 hash, int exact,
                          * entries with smaller hash values. Stale page should
                          * be invalidated, and new one fetched.
                          */
-                        CWARN("Stale readpage page %p: %#llx != %#llx\n",
+                        CWARN("Stale readpage page %p: "LPX64" != "LPX64"\n",
                               page, hash, start);
                         ll_release_page(page, hash, start, end);
                 } else {
