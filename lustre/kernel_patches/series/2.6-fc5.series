@@ -16,4 +16,3 @@ export-show_task-2.6-fc5.patch
 sd_iostats-2.6-rhel4.patch 
 export_symbol_numa-2.6-fc5.patch 
 vfs_intent-2.6-fc5-fix.patch
-dynamic-locks-2.6.9.patch 

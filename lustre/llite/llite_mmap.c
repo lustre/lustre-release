@@ -33,7 +33,6 @@
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
-
 #ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
@@ -54,10 +53,12 @@
 #include <linux/mm.h>
 #include <linux/pagemap.h>
 #include <linux/smp_lock.h>
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#include <linux/iobuf.h>
+#endif
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
-//#include <lustre_mdc.h>
 #include <lustre_lite.h>
 #include "llite_internal.h"
 #include <linux/lustre_compat25.h>
@@ -224,12 +225,13 @@ int ll_tree_unlock(struct ll_lock_tree *tree)
         RETURN(rc);
 }
 
-int ll_tree_lock(struct ll_lock_tree *tree,
+int ll_tree_lock_iov(struct ll_lock_tree *tree,
                  struct ll_lock_tree_node *first_node,
-                 const char *buf, size_t count, int ast_flags)
+                 const struct iovec *iov, unsigned long nr_segs, int ast_flags)
 {
         struct ll_lock_tree_node *node;
         int rc = 0;
+        unsigned long seg;
         ENTRY;
 
         tree->lt_root.rb_node = NULL;
@@ -240,9 +242,13 @@ int ll_tree_lock(struct ll_lock_tree *tree,
         /* To avoid such subtle deadlock case: client1 try to read file1 to
          * mmapped file2, on the same time, client2 try to read file2 to
          * mmapped file1.*/
-        rc = lt_get_mmap_locks(tree, (unsigned long)buf, count);
-        if (rc)
-                GOTO(out, rc);
+        for (seg = 0; seg < nr_segs; seg++) {
+                const struct iovec *iv = &iov[seg];
+                rc = lt_get_mmap_locks(tree, (unsigned long)iv->iov_base,
+                                       iv->iov_len);
+                if (rc)
+                        GOTO(out, rc);
+        }
 
         while ((node = lt_least_node(tree))) {
                 struct inode *inode = node->lt_inode;
@@ -262,6 +268,16 @@ out:
         RETURN(rc);
 }
 
+int ll_tree_lock(struct ll_lock_tree *tree,
+                 struct ll_lock_tree_node *first_node,
+                 const char *buf, size_t count, int ast_flags)
+{
+        struct iovec local_iov = { .iov_base = (void __user *)buf,
+                                   .iov_len = count };
+
+        return ll_tree_lock_iov(tree, first_node, &local_iov, 1, ast_flags);
+}
+
 static ldlm_mode_t mode_from_vma(struct vm_area_struct *vma)
 {
         /* we only want to hold PW locks if the mmap() can generate
@@ -277,7 +293,7 @@ static void policy_from_vma(ldlm_policy_data_t *policy,
                             size_t count)
 {
         policy->l_extent.start = ((addr - vma->vm_start) & CFS_PAGE_MASK) +
-                                 (vma->vm_pgoff << CFS_PAGE_SHIFT);
+                                 ((__u64)vma->vm_pgoff << CFS_PAGE_SHIFT);
         policy->l_extent.end = (policy->l_extent.start + count - 1) |
                                ~CFS_PAGE_MASK;
 }
@@ -347,7 +363,6 @@ int lt_get_mmap_locks(struct ll_lock_tree *tree,
         }
         RETURN(0);
 }
-
 /**
  * Page fault handler.
  *
@@ -379,7 +394,7 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
 
         if (lli->lli_smd == NULL) {
                 CERROR("No lsm on fault?\n");
-                RETURN(NULL);
+                RETURN(NOPAGE_SIGBUS);
         }
 
         ll_clear_file_contended(inode);
@@ -397,14 +412,14 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
         rc = ll_extent_lock(fd, inode, lsm, mode, &policy,
                             &lockh, LDLM_FL_CBPENDING | LDLM_FL_NO_LRU);
         if (rc != 0)
-                RETURN(NULL);
+                RETURN(NOPAGE_SIGBUS);
 
         if (vma->vm_flags & VM_EXEC && LTIME_S(inode->i_mtime) != old_mtime)
                 CWARN("binary changed. inode %lu\n", inode->i_ino);
 
         lov_stripe_lock(lsm);
         inode_init_lvb(inode, &lvb);
-        obd_merge_lvb(ll_i2dtexp(inode), lsm, &lvb, 1);
+        obd_merge_lvb(ll_i2obdexp(inode), lsm, &lvb, 1);
         kms = lvb.lvb_size;
 
         pgoff = ((address - vma->vm_start) >> CFS_PAGE_SHIFT) + vma->vm_pgoff;
@@ -423,7 +438,7 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
                  *     i_size_write() without a covering mutex we do the
                  *     assignment directly.  It is not critical that the
                  *     size be correct. */
-                /* region is within kms and, hence, within real file size (A).
+                /* NOTE: region is within kms and, hence, within real file size (A).
                  * We need to increase i_size to cover the read region so that
                  * generic_file_read() will do its job, but that doesn't mean
                  * the kms size is _correct_, it is only the _minimum_ size.
@@ -443,7 +458,7 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
          * bug 10919 */
         lov_stripe_lock(lsm);
         if (mode == LCK_PW)
-                obd_adjust_kms(ll_i2dtexp(inode), lsm,
+                obd_adjust_kms(ll_i2obdexp(inode), lsm,
                                min_t(loff_t, policy.l_extent.end + 1,
                                i_size_read(inode)), 0);
         lov_stripe_unlock(lsm);
@@ -500,7 +515,7 @@ static void ll_vm_open(struct vm_area_struct * vma)
 
                 if (!lsm)
                         return;
-                count = obd_join_lru(sbi->ll_dt_exp, lsm, 0);
+                count = obd_join_lru(sbi->ll_osc_exp, lsm, 0);
                 VMA_DEBUG(vma, "split %d unused locks from lru\n", count);
         } else {
                 spin_unlock(&lli->lli_lock);
@@ -529,7 +544,7 @@ static void ll_vm_close(struct vm_area_struct *vma)
 
                 if (!lsm)
                         return;
-                count = obd_join_lru(sbi->ll_dt_exp, lsm, 1);
+                count = obd_join_lru(sbi->ll_osc_exp, lsm, 1);
                 VMA_DEBUG(vma, "join %d unused locks to lru\n", count);
         } else {
                 spin_unlock(&lli->lli_lock);
@@ -590,7 +605,8 @@ int ll_file_mmap(struct file * file, struct vm_area_struct * vma)
         ll_stats_ops_tally(ll_i2sbi(file->f_dentry->d_inode), LPROC_LL_MAP, 1);
         rc = generic_file_mmap(file, vma);
         if (rc == 0) {
-#if !defined(HAVE_FILEMAP_POPULATE)
+#if !defined(HAVE_FILEMAP_POPULATE) && \
+    (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
                 if (!filemap_populate)
                         filemap_populate = vma->vm_ops->populate;
 #endif

@@ -1,0 +1,169 @@
+diff -pur linux-2.6.9-55.0.9.orig/drivers/md/raid6main.c linux-2.6.9-55.0.9/drivers/md/raid6main.c
+--- linux-2.6.9-55.0.9.orig/drivers/md/raid6main.c	2007-09-28 17:53:55.000000000 +0800
++++ linux-2.6.9-55.0.9/drivers/md/raid6main.c	2007-12-13 20:19:11.000000000 +0800
+@@ -96,9 +96,10 @@ static inline void __release_stripe(raid
+ 		if (atomic_read(&conf->active_stripes)==0)
+ 			BUG();
+ 		if (test_bit(STRIPE_HANDLE, &sh->state)) {
+-			if (test_bit(STRIPE_DELAYED, &sh->state))
++			if (test_bit(STRIPE_DELAYED, &sh->state)) {
+ 				list_add_tail(&sh->lru, &conf->delayed_list);
+-			else
++				atomic_inc(&conf->delayed);
++			} else
+ 				list_add_tail(&sh->lru, &conf->handle_list);
+ 			md_wakeup_thread(conf->mddev->thread);
+ 		} else {
+@@ -269,6 +270,7 @@ static struct stripe_head *get_active_st
+ 			if (noblock && sh == NULL)
+ 				break;
+ 			if (!sh) {
++				atomic_inc(&conf->out_of_stripes);
+ 				conf->inactive_blocked = 1;
+ 				wait_event_lock_irq(conf->wait_for_stripe,
+ 						    !list_empty(&conf->inactive_list) &&
+@@ -290,6 +292,9 @@ static struct stripe_head *get_active_st
+ 				if (list_empty(&sh->lru))
+ 					BUG();
+ 				list_del_init(&sh->lru);
++				if (test_bit(STRIPE_DELAYED, &sh->state))
++					atomic_dec(&conf->delayed);
++
+ 			}
+ 		}
+ 	} while (sh == NULL);
+@@ -368,6 +373,8 @@ static int raid6_end_read_request (struc
+ 	if (bi->bi_size)
+ 		return 1;
+ 
++	atomic_dec(&conf->out_reqs_in_queue);
++
+ 	for (i=0 ; i<disks; i++)
+ 		if (bi == &sh->dev[i].req)
+ 			break;
+@@ -445,6 +452,8 @@ static int raid6_end_write_request (stru
+ 		if (bi == &sh->dev[i].req)
+ 			break;
+ 
++	atomic_dec(&conf->out_reqs_in_queue);
++
+ 	PRINTK("end_write_request %llu/%d, count %d, uptodate: %d.\n",
+ 		(unsigned long long)sh->sector, i, atomic_read(&sh->count),
+ 		uptodate);
+@@ -989,6 +998,7 @@ static void handle_stripe(struct stripe_
+ 	spin_lock(&sh->lock);
+ 	clear_bit(STRIPE_HANDLE, &sh->state);
+ 	clear_bit(STRIPE_DELAYED, &sh->state);
++	atomic_inc(&conf->handle_called);
+ 
+ 	syncing = test_bit(STRIPE_SYNCING, &sh->state);
+ 	/* Now to look around and see what can be done */
+@@ -1257,6 +1267,7 @@ static void handle_stripe(struct stripe_
+ 						set_bit(R5_LOCKED, &dev->flags);
+ 						set_bit(R5_Wantread, &dev->flags);
+ 						locked++;
++						atomic_inc(&conf->reads_for_rcw);
+ 					} else {
+ 						PRINTK("Request delayed stripe %llu block %d for Reconstruct\n",
+ 						       (unsigned long long)sh->sector, i);
+@@ -1390,6 +1401,7 @@ static void handle_stripe(struct stripe_
+ 		bi->bi_next = NULL;
+ 		bi->bi_size = 0;
+ 		bi->bi_end_io(bi, bytes, 0);
++		atomic_dec(&conf->in_reqs_in_queue);
+ 	}
+ 	for (i=disks; i-- ;) {
+ 		int rw;
+@@ -1405,10 +1417,13 @@ static void handle_stripe(struct stripe_
+ 		bi = &sh->dev[i].req;
+ 
+ 		bi->bi_rw = rw;
+-		if (rw)
++		if (rw) {
++			atomic_inc(&conf->writes_out);
+ 			bi->bi_end_io = raid6_end_write_request;
+-		else
++		} else {
++			atomic_inc(&conf->reads_out);
+ 			bi->bi_end_io = raid6_end_read_request;
++		}
+ 
+ 		spin_lock_irq(&conf->device_lock);
+ 		rdev = conf->disks[i].rdev;
+@@ -1436,12 +1451,14 @@ static void handle_stripe(struct stripe_
+ 			bi->bi_io_vec[0].bv_offset = 0;
+ 			bi->bi_size = STRIPE_SIZE;
+ 			bi->bi_next = NULL;
++			atomic_inc(&conf->out_reqs_in_queue);
+ 			generic_make_request(bi);
+ 		} else {
+ 			PRINTK("skip op %ld on disc %d for sector %llu\n",
+ 				bi->bi_rw, i, (unsigned long long)sh->sector);
+ 			clear_bit(R5_LOCKED, &sh->dev[i].flags);
+ 			set_bit(STRIPE_HANDLE, &sh->state);
++			atomic_dec(&conf->delayed);
+ 		}
+ 	}
+ }
+@@ -1555,6 +1572,8 @@ static int make_request (request_queue_t
+ 	sector_t logical_sector, last_sector;
+ 	struct stripe_head *sh;
+ 
++	atomic_inc(&conf->in_reqs_in_queue);
++
+ 	if (unlikely(bio_barrier(bi))) {
+ 		bio_endio(bi, bi->bi_size, -EOPNOTSUPP);
+ 		return 0;
+@@ -1563,9 +1582,11 @@ static int make_request (request_queue_t
+ 	if (bio_data_dir(bi)==WRITE) {
+ 		disk_stat_inc(mddev->gendisk, writes);
+ 		disk_stat_add(mddev->gendisk, write_sectors, bio_sectors(bi));
++		atomic_inc(&conf->writes_in);
+ 	} else {
+ 		disk_stat_inc(mddev->gendisk, reads);
+ 		disk_stat_add(mddev->gendisk, read_sectors, bio_sectors(bi));
++		atomic_inc(&conf->reads_in);
+ 	}
+ 
+ 	logical_sector = bi->bi_sector & ~((sector_t)STRIPE_SECTORS-1);
+@@ -1605,6 +1626,7 @@ static int make_request (request_queue_t
+ 
+ 		if ( bio_data_dir(bi) == WRITE )
+ 			md_write_end(mddev);
++		atomic_dec(&conf->in_reqs_in_queue);
+ 		bi->bi_size = 0;
+ 		bi->bi_end_io(bi, bytes, 0);
+ 	}
+@@ -1701,6 +1723,8 @@ static void raid6d (mddev_t *mddev)
+ 		spin_unlock_irq(&conf->device_lock);
+ 
+ 		handled++;
++
++		atomic_inc(&conf->handled_in_raid5d);
+ 		handle_stripe(sh);
+ 		release_stripe(sh);
+ 
+@@ -1940,6 +1964,23 @@ static void status (struct seq_file *seq
+ 			    conf->disks[i].rdev &&
+ 			    conf->disks[i].rdev->in_sync ? "U" : "_");
+ 	seq_printf (seq, "]");
++ 
++	seq_printf (seq, "\n\t\tin: %u reads, %u writes; out: %u reads, %u writes",
++		atomic_read(&conf->reads_in), atomic_read(&conf->writes_in),
++		atomic_read(&conf->reads_out), atomic_read(&conf->writes_out));
++	seq_printf (seq, "\n\t\t%u in raid5d, %u out of stripes, %u handle called",
++		atomic_read(&conf->handled_in_raid5d),
++		atomic_read(&conf->out_of_stripes),
++		atomic_read(&conf->handle_called));
++	seq_printf (seq, "\n\t\treads: %u for rmw, %u for rcw",
++		atomic_read(&conf->reads_for_rmw),
++		atomic_read(&conf->reads_for_rcw));
++	seq_printf (seq, "\n\t\t%u delayed, %u active, queues: %u in, %u out\n",
++		atomic_read(&conf->delayed),
++		atomic_read(&conf->active_stripes),
++		atomic_read(&conf->in_reqs_in_queue),
++		atomic_read(&conf->out_reqs_in_queue));
++
+ #if RAID6_DUMPSTATE
+ 	seq_printf (seq, "\n");
+ 	printall(seq, conf);

@@ -47,6 +47,8 @@
 
 #ifndef HAVE_LINUX_FIEMAP_H
 
+#include <linux/lustre_types.h>
+
 struct ll_fiemap_extent {
         __u64   fe_logical;  /* logical offset in bytes for the start of
                               * the extent from the beginning of the file */

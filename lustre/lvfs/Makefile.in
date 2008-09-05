@@ -3,7 +3,7 @@ MODULES := lvfs
 @QUOTA_TRUE@MODULES += quotafmt_test
 
 lvfs-objs := lvfs_common.o lvfs_linux.o fsfilt.o upcall_cache.o prng.o lvfs_lib.o
-@QUOTA_TRUE@lvfs-objs += lustre_quota_fmt.o
+@QUOTA_TRUE@lvfs-objs += lustre_quota_fmt.o lustre_quota_fmt_convert.o
 
 @QUOTA_TRUE@quotafmt-objs := quotafmt_test.o
 

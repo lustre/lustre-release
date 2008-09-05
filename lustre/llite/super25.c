@@ -94,7 +94,6 @@ struct super_operations lustre_super_operations =
         .alloc_inode   = ll_alloc_inode,
         .destroy_inode = ll_destroy_inode,
         .clear_inode   = ll_clear_inode,
-        .delete_inode  = ll_delete_inode,
         .put_super     = ll_put_super,
         .statfs        = ll_statfs,
         .umount_begin  = ll_umount_begin,
@@ -110,7 +109,9 @@ static int __init init_lustre_lite(void)
         int i, rc, seed[2];
         struct timeval tv;
         lnet_process_id_t lnet_id;
- 
+
+        printk(KERN_INFO "Lustre: Lustre Client File System; "
+               "http://www.lustre.org/\n");
         rc = ll_init_inodecache();
         if (rc)
                 return -ENOMEM;
@@ -122,31 +123,8 @@ static int __init init_lustre_lite(void)
                 return -ENOMEM;
         }
 
-        ll_remote_perm_cachep = cfs_mem_cache_create("ll_remote_perm_cache",
-                                                  sizeof(struct ll_remote_perm),
-                                                      0, 0);
-        if (ll_remote_perm_cachep == NULL) {
-                cfs_mem_cache_destroy(ll_file_data_slab);
-                ll_file_data_slab = NULL;
-                ll_destroy_inodecache();
-                return -ENOMEM;
-        }
-
-        ll_rmtperm_hash_cachep = cfs_mem_cache_create("ll_rmtperm_hash_cache",
-                                                   REMOTE_PERM_HASHSIZE *
-                                                   sizeof(struct list_head),
-                                                   0, 0);
-        if (ll_rmtperm_hash_cachep == NULL) {
-                cfs_mem_cache_destroy(ll_remote_perm_cachep);
-                ll_remote_perm_cachep = NULL;
-                cfs_mem_cache_destroy(ll_file_data_slab);
-                ll_file_data_slab = NULL;
-                ll_destroy_inodecache();
-                return -ENOMEM;
-        }
-
         proc_lustre_fs_root = proc_lustre_root ?
-                              lprocfs_register("llite", proc_lustre_root, NULL, NULL) : NULL;
+                              proc_mkdir("llite", proc_lustre_root) : NULL;
 
         ll_register_cache(&ll_cache_definition);
 
@@ -171,21 +149,12 @@ static int __init init_lustre_lite(void)
         do_gettimeofday(&tv);
         ll_srand(tv.tv_sec ^ seed[0], tv.tv_usec ^ seed[1]);
 
-        init_timer(&ll_capa_timer);
-        ll_capa_timer.function = ll_capa_timer_callback;
-        rc = ll_capa_thread_start();
         return rc;
 }
 
 static void __exit exit_lustre_lite(void)
 {
         int rc;
-        
-        del_timer(&ll_capa_timer);
-        ll_capa_thread_stop();
-        LASSERTF(capa_count[CAPA_SITE_CLIENT] == 0,
-                 "client remaining capa count %d\n",
-                 capa_count[CAPA_SITE_CLIENT]);
 
         lustre_register_client_fill_super(NULL);
         lustre_register_kill_super_cb(NULL);
@@ -195,17 +164,9 @@ static void __exit exit_lustre_lite(void)
         ll_unregister_cache(&ll_cache_definition);
 
         ll_destroy_inodecache();
-
-        rc = cfs_mem_cache_destroy(ll_rmtperm_hash_cachep);
-        LASSERTF(rc == 0, "couldn't destroy ll_rmtperm_hash_cachep\n");
-        ll_rmtperm_hash_cachep = NULL;
-
-        rc = cfs_mem_cache_destroy(ll_remote_perm_cachep);
-        LASSERTF(rc == 0, "couldn't destroy ll_remote_perm_cachep\n");
-        ll_remote_perm_cachep = NULL;
-
         rc = cfs_mem_cache_destroy(ll_file_data_slab);
         LASSERTF(rc == 0, "couldn't destroy ll_file_data slab\n");
+        
         if (ll_async_page_slab) {
                 rc = cfs_mem_cache_destroy(ll_async_page_slab);
                 LASSERTF(rc == 0, "couldn't destroy ll_async_page slab\n");

@@ -56,5 +56,4 @@ void lprocfs_ost_init_vars(struct lprocfs_static_vars *lvars)
     lvars->module_vars  = lprocfs_ost_module_vars;
     lvars->obd_vars     = lprocfs_ost_obd_vars;
 }
-
 #endif /* LPROCFS */

@@ -60,7 +60,7 @@ static int quotactl_test_1(struct obd_device *obd, struct super_block *sb)
         ENTRY;
 
         oqctl.qc_cmd = Q_QUOTAON;
-        oqctl.qc_id = QFMT_LDISKFS;
+        oqctl.qc_id = obd->u.obt.obt_qfmt;
         oqctl.qc_type = UGQUOTA;
         rc = fsfilt_quotactl(obd, sb, &oqctl);
         if (rc)
@@ -107,7 +107,7 @@ static int quotactl_test_2(struct obd_device *obd, struct super_block *sb)
         RETURN(0);
 }
 #endif
-
+       
 /* Test set/getquota */
 static int quotactl_test_3(struct obd_device *obd, struct super_block *sb)
 {
@@ -332,9 +332,10 @@ static int quotactl_test_cleanup(struct obd_device *obd)
         return 0;
 }
 
-static int quotactl_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
+static int quotactl_test_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lprocfs_static_vars lvars = { 0 };
+        struct lustre_cfg *lcfg = buf;
         struct obd_device *tgt;
         int rc;
         ENTRY;
@@ -372,8 +373,8 @@ static int __init quotactl_test_init(void)
         struct lprocfs_static_vars lvars = { 0 };
 
         lprocfs_quotactl_test_init_vars(&lvars);
-        return class_register_type(&quotactl_obd_ops, NULL, lvars.module_vars,
-                                   "quotactl_test", NULL);
+        return class_register_type(&quotactl_obd_ops, lvars.module_vars,
+                                   "quotactl_test");
 }
 
 static void __exit quotactl_test_exit(void)

@@ -52,42 +52,16 @@
 #include <linux/timer.h>
 #endif
 
-#ifdef __KERNEL__
-# ifndef HAVE_SERVER_SUPPORT
-
-/* hash info structure used by the directory hash */
-#  define LDISKFS_DX_HASH_LEGACY        0
-#  define LDISKFS_DX_HASH_HALF_MD4      1
-#  define LDISKFS_DX_HASH_TEA           2
-#  define LDISKFS_DX_HASH_R5            3
-#  define LDISKFS_DX_HASH_SAME          4
-#  define LDISKFS_DX_HASH_MAX           4
-
-/* hash info structure used by the directory hash */
-struct ldiskfs_dx_hash_info
-{
-        u32     hash;
-        u32     minor_hash;
-        int     hash_version;
-        u32     *seed;
-};
-
-#  define LDISKFS_HTREE_EOF     0x7fffffff
-
-int ldiskfsfs_dirhash(const char *name, int len, struct ldiskfs_dx_hash_info *hinfo);
-
-# endif /* HAVE_SERVER_SUPPORT */
-#endif /* __KERNEL__ */
-
 /* obdo.c */
 #ifdef __KERNEL__
+void obdo_from_iattr(struct obdo *oa, struct iattr *attr, unsigned ia_valid);
+void iattr_from_obdo(struct iattr *attr, struct obdo *oa, obd_flag valid);
 void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid);
-void obdo_from_la(struct obdo *dst, struct lu_attr *la, obd_flag valid);
 void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid);
 void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid);
 #endif
 
-#if !defined(__KERNEL__)
+#if !defined(__KERNEL__) || (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #define to_kdev_t(dev) dev
 #define kdev_t_to_nr(dev) dev
 #endif

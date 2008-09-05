@@ -854,7 +854,7 @@ mxlnd_pack_msg(struct kmx_ctx *tx)
         }
         /*   mxm_nob */
         msg->mxm_cksum    = 0;
-        msg->mxm_srcnid   = kmxlnd_data.kmx_ni->ni_nid;
+        msg->mxm_srcnid   = lnet_ptlcompat_srcnid(kmxlnd_data.kmx_ni->ni_nid, tx->mxc_nid);
         msg->mxm_srcstamp = kmxlnd_data.kmx_incarnation;
         msg->mxm_dstnid   = tx->mxc_nid;
         /* if it is a new peer, the dststamp will be 0 */
@@ -2923,8 +2923,8 @@ mxlnd_handle_rx_completion(struct kmx_ctx *rx)
         seq = msg->mxm_seq;
 
         if (type != MXLND_MSG_CONN_REQ &&
-            (rx->mxc_nid != msg->mxm_srcnid ||
-             kmxlnd_data.kmx_ni->ni_nid != msg->mxm_dstnid)) {
+            (!lnet_ptlcompat_matchnid(rx->mxc_nid, msg->mxm_srcnid) ||
+             !lnet_ptlcompat_matchnid(kmxlnd_data.kmx_ni->ni_nid, msg->mxm_dstnid))) {
                 CDEBUG(D_NETERROR, "rx with mismatched NID (type %s) (my nid is "
                        "0x%llx and rx msg dst is 0x%llx)\n",
                        mxlnd_msgtype_to_str(type), kmxlnd_data.kmx_ni->ni_nid,
@@ -3015,7 +3015,7 @@ mxlnd_handle_rx_completion(struct kmx_ctx *rx)
                 break;
 
         case MXLND_MSG_CONN_REQ:
-                if (kmxlnd_data.kmx_ni->ni_nid != msg->mxm_dstnid) {
+                if (!lnet_ptlcompat_matchnid(kmxlnd_data.kmx_ni->ni_nid, msg->mxm_dstnid)) {
                         CDEBUG(D_NETERROR, "Can't accept %s: bad dst nid %s\n",
                                         libcfs_nid2str(msg->mxm_srcnid),
                                         libcfs_nid2str(msg->mxm_dstnid));
@@ -3113,7 +3113,7 @@ mxlnd_handle_rx_completion(struct kmx_ctx *rx)
                 break;
 
         case MXLND_MSG_CONN_ACK:
-                if (kmxlnd_data.kmx_ni->ni_nid != msg->mxm_dstnid) {
+                if (!lnet_ptlcompat_matchnid(kmxlnd_data.kmx_ni->ni_nid, msg->mxm_dstnid)) {
                         CDEBUG(D_NETERROR, "Can't accept CONN_ACK from %s: "
                                "bad dst nid %s\n", libcfs_nid2str(msg->mxm_srcnid),
                                 libcfs_nid2str(msg->mxm_dstnid));

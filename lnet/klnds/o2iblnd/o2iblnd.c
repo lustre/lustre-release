@@ -85,7 +85,7 @@ kiblnd_pack_msg (lnet_ni_t *ni, kib_msg_t *msg,
         msg->ibm_credits  = credits;
         /*   ibm_nob */
         msg->ibm_cksum    = 0;
-        msg->ibm_srcnid   = ni->ni_nid;
+        msg->ibm_srcnid   = lnet_ptlcompat_srcnid(ni->ni_nid, dstnid);
         msg->ibm_srcstamp = net->ibn_incarnation;
         msg->ibm_dstnid   = dstnid;
         msg->ibm_dststamp = dststamp;
@@ -738,7 +738,7 @@ kiblnd_create_conn (kib_peer_t *peer, struct rdma_cm_id *cmid, int state)
                 }
         }
 
-#ifdef HAVE_OFED_IB_COMP_VECTOR
+#if (IBLND_OFED_VERSION == 1025)
         cq = ib_create_cq(cmid->device,
                           kiblnd_cq_completion, kiblnd_cq_event, conn,
                           IBLND_CQ_ENTRIES(), 0);

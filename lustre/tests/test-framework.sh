@@ -10,10 +10,6 @@ export REFORMAT=${REFORMAT:-""}
 export VERBOSE=false
 export GMNALNID=${GMNALNID:-/usr/sbin/gmlndnid}
 export CATASTROPHE=${CATASTROPHE:-/proc/sys/lnet/catastrophe}
-export GSS=false
-export GSS_KRB5=false
-export GSS_PIPEFS=false
-export IDENTITY_UPCALL=default
 #export PDSH="pdsh -S -Rssh -w"
 
 # eg, assert_env LUSTRE MDSNODES OSTNODES CLIENTS
@@ -59,7 +55,7 @@ print_summary () {
         local o=$(echo $O | tr "[:upper:]" "[:lower:]")
         o=${o//_/-}
         o=${o//tyn/tyN}
-        local log=${TMP}/${o}.log
+        local log=${TMP}/${o}.log 
         [ -f $log ] && skipped=$(grep excluded $log | awk '{ printf " %s", $3 }' | sed 's/test_//g')
         [ -f $log ] && slow=$(grep SLOW $log | awk '{ printf " %s", $3 }' | sed 's/test_//g')
         [ "${!O}" = "done" ] && \
@@ -83,80 +79,47 @@ init_test_env() {
     export LUSTRE=`absolute_path $LUSTRE`
     export TESTSUITE=`basename $0 .sh`
 
-    [ -d /r ] && export ROOT=${ROOT:-/r}
+    #[ -d /r ] && export ROOT=${ROOT:-/r}
     export TMP=${TMP:-$ROOT/tmp}
     export TESTSUITELOG=${TMP}/${TESTSUITE}.log
     export HOSTNAME=${HOSTNAME:-`hostname`}
     if ! echo $PATH | grep -q $LUSTRE/utils; then
-        export PATH=$PATH:$LUSTRE/utils
+	export PATH=$PATH:$LUSTRE/utils
     fi
-    if ! echo $PATH | grep -q $LUSTRE/utils/gss; then
-        export PATH=$PATH:$LUSTRE/utils/gss
-    fi
-    if ! echo $PATH | grep -q $LUSTRE/tests; then
+    if ! echo $PATH | grep -q $LUSTRE/test; then
 	export PATH=$PATH:$LUSTRE/tests
     fi
+    export MDSRATE=${MDSRATE:-"$LUSTRE/tests/mdsrate"}
+    [ ! -f "$MDSRATE" ] && export MDSRATE=$(which mdsrate 2> /dev/null)
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
-    [ ! -f "$LCTL" ] && export LCTL=$(which lctl)
     export LFS=${LFS:-"$LUSTRE/utils/lfs"}
-    [ ! -f "$LFS" ] && export LFS=$(which lfs)
-    export L_GETIDENTITY=${L_GETIDENTITY:-"$LUSTRE/utils/l_getidentity"}
-    if [ ! -f "$L_GETIDENTITY" ]; then
-        if `which l_getidentity > /dev/null 2>&1`; then
-            export L_GETIDENTITY=$(which l_getidentity)
-        else
-            export L_GETIDENTITY=NONE
-        fi
-    fi
+    [ ! -f "$LCTL" ] && export LCTL=$(which lctl) 
+    export LFS=${LFS:-"$LUSTRE/utils/lfs"}
+    [ ! -f "$LFS" ] && export LFS=$(which lfs) 
     export MKFS=${MKFS:-"$LUSTRE/utils/mkfs.lustre"}
-    [ ! -f "$MKFS" ] && export MKFS=$(which mkfs.lustre)
+    [ ! -f "$MKFS" ] && export MKFS=$(which mkfs.lustre) 
     export TUNEFS=${TUNEFS:-"$LUSTRE/utils/tunefs.lustre"}
-    [ ! -f "$TUNEFS" ] && export TUNEFS=$(which tunefs.lustre)
+    [ ! -f "$TUNEFS" ] && export TUNEFS=$(which tunefs.lustre) 
     export CHECKSTAT="${CHECKSTAT:-"checkstat -v"} "
     export FSYTPE=${FSTYPE:-"ldiskfs"}
     export NAME=${NAME:-local}
     export LPROC=/proc/fs/lustre
-    export LGSSD=${LGSSD:-"$LUSTRE/utils/gss/lgssd"}
-    [ "$GSS_PIPEFS" = "true" ] && [ ! -f "$LGSSD" ] && \
-        export LGSSD=$(which lgssd)
-    export LSVCGSSD=${LSVCGSSD:-"$LUSTRE/utils/gss/lsvcgssd"}
-    [ ! -f "$LSVCGSSD" ] && export LSVCGSSD=$(which lsvcgssd)
-    export KRB5DIR=${KRB5DIR:-"/usr/kerberos"}
     export DIR2
-    export SAVE_PWD=${SAVE_PWD:-$LUSTRE/tests}
     export AT_MAX_PATH
+    export SAVE_PWD=${SAVE_PWD:-$LUSTRE/tests}
 
     if [ "$ACCEPTOR_PORT" ]; then
         export PORT_OPT="--port $ACCEPTOR_PORT"
     fi
 
-    case "x$SEC" in
-        xkrb5*)
-            echo "Using GSS/krb5 ptlrpc security flavor"
-            which lgss_keyring > /dev/null 2>&1 || \
-                error "built with gss disabled! SEC=$SEC"
-            GSS=true
-            GSS_KRB5=true
-            ;;
-    esac
-
-    case "x$IDUP" in
-        xtrue)
-            IDENTITY_UPCALL=true
-            ;;
-        xfalse)
-            IDENTITY_UPCALL=false
-            ;;
-    esac
-
-    # Paths on remote nodes, if different
+    # Paths on remote nodes, if different 
     export RLUSTRE=${RLUSTRE:-$LUSTRE}
     export RPWD=${RPWD:-$PWD}
     export I_MOUNTED=${I_MOUNTED:-"no"}
 
     # command line
-
-    while getopts "rvf:" opt $*; do
+    
+    while getopts "rvf:" opt $*; do 
         case $opt in
             f) CONFIG=$OPTARG;;
             r) REFORMAT=--reformat;;
@@ -173,8 +136,11 @@ init_test_env() {
 
 }
 
+case `uname -r` in
+    *) EXT=".ko"; USE_QUOTA=yes;;
+esac
+
 load_module() {
-    EXT=".ko"
     module=$1
     shift
     BASE=`basename $module $EXT`
@@ -183,12 +149,7 @@ load_module() {
         insmod ${LUSTRE}/${module}${EXT} $@
     else
         # must be testing a "make install" or "rpm" installation
-        # note failed to load ptlrpc_gss is considered not fatal
-        if [ "$BASE" == "ptlrpc_gss" ]; then
-            modprobe $BASE $@ 2>/dev/null || echo "gss/krb5 is not supported"
-        else
-            modprobe $BASE $@
-        fi
+        modprobe $BASE $@
     fi
 }
 
@@ -204,7 +165,7 @@ load_modules() {
     HAVE_MODULES=true
 
     echo Loading modules from $LUSTRE
-    load_module ../libcfs/libcfs/libcfs
+    load_module ../lnet/libcfs/libcfs
     [ "$PTLDEBUG" ] && lctl set_param debug=$PTLDEBUG
     [ "$SUBSYSTEM" ] && lctl set_param subsystem_debug=${SUBSYSTEM# }
     [ -f /etc/modprobe.conf ] && MODPROBECONF=/etc/modprobe.conf
@@ -219,28 +180,17 @@ load_modules() {
     load_module lvfs/lvfs
     load_module obdclass/obdclass
     load_module ptlrpc/ptlrpc
-    load_module ptlrpc/gss/ptlrpc_gss
-    # Now, some modules depend on lquota without USE_QUOTA check,
-    # will fix later. Disable check "$USE_QUOTA" = "yes" temporary.
-    #[ "$USE_QUOTA" = "yes" ] && load_module quota/lquota
-    load_module quota/lquota
-    load_module fid/fid
-    load_module fld/fld
-    load_module lmv/lmv
+    [ "$USE_QUOTA" = "yes" ] && load_module quota/lquota
     load_module mdc/mdc
     load_module osc/osc
     load_module lov/lov
     load_module mgc/mgc
     if [ -z "$CLIENTONLY" ] && [ -z "$CLIENTMODSONLY" ]; then
-        grep -q crc16 /proc/kallsyms || { modprobe crc16 2>/dev/null || true; }
-        [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
         load_module mgs/mgs
         load_module mds/mds
-        load_module mdd/mdd
-        load_module mdt/mdt
+        grep -q crc16 /proc/kallsyms || { modprobe crc16 2>/dev/null || true; }
+        [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
         load_module lvfs/fsfilt_$FSTYPE
-        load_module cmm/cmm
-        load_module osd/osd
         load_module ost/ost
         load_module obdfilter/obdfilter
     fi
@@ -251,7 +201,6 @@ load_modules() {
     OGDB=$TMP
     [ -d /r ] && OGDB="/r/tmp"
     $LCTL modules > $OGDB/ogdb-$HOSTNAME
-
     # 'mount' doesn't look in $PATH, just sbin
     [ -f $LUSTRE/utils/mount.lustre ] && cp $LUSTRE/utils/mount.lustre /sbin/. || true
 }
@@ -268,7 +217,7 @@ wait_for_lnet() {
     MODULES=$($LCTL modules | awk '{ print $2 }')
     while [ -n "$MODULES" ]; do
     sleep 5
-    $RMMOD $MODULES > /dev/null 2>&1 || true
+    $RMMOD $MODULES >/dev/null 2>&1 || true
     MODULES=$($LCTL modules | awk '{ print $2 }')
         if [ -z "$MODULES" ]; then
         return 0
@@ -300,7 +249,7 @@ unload_modules() {
     wait_exit_ST client # bug 12845
 
     lsmod | grep libcfs > /dev/null && $LCTL dl
-    unload_dep_module $FSTYPE
+    [ -z "$CLIENTONLY" ] && unload_dep_module $FSTYPE
     unload_dep_module libcfs
 
     local MODULES=$($LCTL modules | awk '{ print $2 }')
@@ -316,7 +265,6 @@ unload_modules() {
             echo "Lustre stopped but LNET is still loaded, waiting..."
             wait_for_lnet || return 3
         fi
-
     fi
     HAVE_MODULES=false
 
@@ -332,99 +280,6 @@ unload_modules() {
     fi
     echo "modules unloaded."
     return 0
-}
-
-check_gss_daemon_facet() {
-    facet=$1
-    dname=$2
-
-    num=`do_facet $facet ps -o cmd -C $dname | grep $dname | wc -l`
-    if [ $num -ne 1 ]; then
-        echo "$num instance of $dname on $facet"
-        return 1
-    fi
-    return 0
-}
-
-send_sigint() {
-    local facet=$1
-    shift
-    do_facet $facet "killall -2 $@ 2>/dev/null || true"
-}
-
-start_gss_daemons() {
-    # starting on MDT
-    for num in `seq $MDSCOUNT`; do
-        do_facet mds$num "$LSVCGSSD -v"
-        if $GSS_PIPEFS; then
-            do_facet mds$num "$LGSSD -v"
-        fi
-    done
-    # starting on OSTs
-    for num in `seq $OSTCOUNT`; do
-        do_facet ost$num "$LSVCGSSD -v"
-    done
-    # starting on client
-    # FIXME: is "client" the right facet name?
-    if $GSS_PIPEFS; then
-        do_facet client "$LGSSD -v"
-    fi
-
-    # wait daemons entering "stable" status
-    sleep 5
-
-    #
-    # check daemons are running
-    #
-    for num in `seq $MDSCOUNT`; do
-        check_gss_daemon_facet mds$num lsvcgssd
-        if $GSS_PIPEFS; then
-            check_gss_daemon_facet mds$num lgssd
-        fi
-    done
-    for num in `seq $OSTCOUNT`; do
-        check_gss_daemon_facet ost$num lsvcgssd
-    done
-    if $GSS_PIPEFS; then
-        check_gss_daemon_facet client lgssd
-    fi
-}
-
-stop_gss_daemons() {
-    for num in `seq $MDSCOUNT`; do
-        send_sigint mds$num lsvcgssd lgssd
-    done
-    for num in `seq $OSTCOUNT`; do
-        send_sigint ost$num lsvcgssd
-    done
-    send_sigint client lgssd
-}
-
-init_gss() {
-    if $GSS; then
-        start_gss_daemons
-    fi
-}
-
-cleanup_gss() {
-    if $GSS; then
-        stop_gss_daemons
-        # maybe cleanup credential cache?
-    fi
-}
-
-mdsdevlabel() {
-    local num=$1
-    local device=`mdsdevname $num`
-    local label=`do_facet mds$num "e2label ${device}" | grep -v "CMD: "`
-    echo -n $label
-}
-
-ostdevlabel() {
-    local num=$1
-    local device=`ostdevname $num`
-    local label=`do_facet ost$num "e2label ${device}" | grep -v "CMD: "`
-    echo -n $label
 }
 
 # Facet functions
@@ -453,7 +308,7 @@ mount_facet() {
     return $RC
 }
 
-# start facet device options
+# start facet device options 
 start() {
     facet=$1
     shift
@@ -482,6 +337,7 @@ stop() {
 
     # umount should block, but we should wait for unrelated obd's
     # like the MGS or MGC to also stop.
+
     wait_exit_ST ${facet}
 }
 
@@ -502,11 +358,10 @@ zconf_mount() {
     echo "Starting client: $client: $OPTIONS $device $mnt"
     do_node $client mkdir -p $mnt
     do_node $client mount -t lustre $OPTIONS $device $mnt || return 1
-
     do_node $client "lctl set_param debug=$PTLDEBUG;
         lctl set_param subsystem_debug=${SUBSYSTEM# };
         lctl set_param debug_mb=${DEBUG_SIZE}"
-    [ -d /r ] && $LCTL modules > /r/tmp/ogdb-$HOSTNAME
+
     return 0
 }
 
@@ -528,7 +383,6 @@ zconf_mount_clients() {
     local clients=$1
     local mnt=$2
 
-
     # Only supply -o to mount if we have options
     if [ -n "$MOUNTOPT" ]; then
         OPTIONS="-o $MOUNTOPT"
@@ -545,9 +399,9 @@ zconf_mount_clients() {
     echo "Started clients $clients: "
     do_nodes $clients "mount | grep $mnt"
 
-    do_nodes $clients "lctl set_param debug=$PTLDEBUG;
-        lctl set_param subsystem_debug=${SUBSYSTEM# };
-        lctl set_param debug_mb=${DEBUG_SIZE};"
+    do_nodes $clients "sysctl -w lnet.debug=$PTLDEBUG;
+        sysctl -w lnet.subsystem_debug=${SUBSYSTEM# };
+        sysctl -w lnet.debug_mb=${DEBUG_SIZE};"
 
     return 0
 }
@@ -557,7 +411,6 @@ zconf_umount_clients() {
     local mnt=$2
     [ "$3" ] && force=-f
 
-    echo "Umounting clients: $clients"
     echo "Stopping clients: $clients $mnt (opts:$force)"
     do_nodes $clients umount $force $mnt
 }
@@ -566,7 +419,7 @@ shutdown_facet() {
     facet=$1
     if [ "$FAILURE_MODE" = HARD ]; then
         $POWER_DOWN `facet_active_host $facet`
-        sleep 2
+        sleep 2 
     elif [ "$FAILURE_MODE" = SOFT ]; then
         stop $facet
     fi
@@ -650,14 +503,14 @@ wait_mds_recovery_done () {
     MAX=$(( timeout * 4 ))
     WAIT=0
     while [ $WAIT -lt $MAX ]; do
-        STATUS=`do_facet $SINGLEMDS "lctl get_param -n mdt.*-MDT*.recovery_status | grep status"`
+        STATUS=`do_facet mds "lctl get_param -n mds.*-MDT*.recovery_status | grep status"`
         echo $STATUS | grep COMPLETE && return 0
         sleep 5
         WAIT=$((WAIT + 5))
         echo "Waiting $(($MAX - $WAIT)) secs for MDS recovery done"
     done
     echo "MDS recovery not done in $MAX sec"
-    return 1
+    return 1            
 }
 
 wait_exit_ST () {
@@ -713,7 +566,7 @@ wait_remote_prog () {
 
 client_df() {
     # not every config has many clients
-    if [ ! -z "$CLIENTS" ]; then
+    if [ -n "$CLIENTS" ]; then
         $PDSH $CLIENTS "df $MOUNT" > /dev/null
     else
 	df $MOUNT > /dev/null
@@ -775,12 +628,12 @@ replay_barrier_nodf() {
 }
 
 mds_evict_client() {
-    UUID=`lctl get_param -n mdc.${mds1_svc}-mdc-*.uuid`
-    do_facet mds1 "lctl set_param -n mdt.${mds1_svc}.evict_client $UUID"
+    UUID=`lctl get_param -n mdc.${mds_svc}-mdc-*.uuid`
+    do_facet mds "lctl set_param -n mds.${mds_svc}.evict_client $UUID"
 }
 
 ost_evict_client() {
-    UUID=`lctl get_param -n devices| grep ${ost1_svc}-osc- | egrep -v 'MDT' | awk '{print $5}'`
+    UUID=`lctl get_param -n osc.${ost1_svc}-osc-*.uuid`
     do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.evict_client $UUID"
 }
 
@@ -790,8 +643,8 @@ fail() {
 }
 
 fail_nodf() {
-        local facet=$1
-        facet_failover $facet
+    local facet=$1
+    facet_failover $facet
 }
 
 fail_abort() {
@@ -835,7 +688,9 @@ h2ptl() {
 declare -fx h2ptl
 
 h2tcp() {
-    h2name_or_ip "$1" "tcp"
+    if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
+        echo $1"@tcp" 
+    fi
 }
 declare -fx h2tcp
 
@@ -852,7 +707,10 @@ h2elan() {
 declare -fx h2elan
 
 h2openib() {
-    h2name_or_ip "$1" "openib"
+    if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
+        ID=`echo $1 | sed 's/[^0-9]*//g'`
+        echo $ID"@openib"
+    fi
 }
 declare -fx h2openib
 
@@ -881,7 +739,7 @@ facet_active() {
     fi
 
     active=${!activevar}
-    if [ -z "$active" ] ; then
+    if [ -z "$active" ] ; then 
         echo -n ${facet}
     else
         echo -n ${active}
@@ -900,7 +758,7 @@ facet_active_host() {
 
 change_active() {
     local facet=$1
-    failover=${facet}failover
+    failover=${facet}failover 
     host=`facet_host $failover`
     [ -z "$host" ] && return
     curactive=`facet_active $facet`
@@ -987,26 +845,18 @@ ostdevname() {
     echo -n $DEVPTR
 }
 
-mdsdevname() {
-    num=$1
-    DEVNAME=MDSDEV$num
-    #if $MDSDEVn isn't defined, default is $MDSDEVBASE + num
-    eval DEVPTR=${!DEVNAME:=${MDSDEVBASE}${num}}
-    echo -n $DEVPTR
-}
-
 ########
 ## MountConf setup
 
 stopall() {
     # make sure we are using the primary server, so test-framework will
     # be able to clean up properly.
-    activemds=`facet_active mds1`
-    if [ $activemds != "mds1" ]; then
-        fail mds1
+    activemds=`facet_active mds`
+    if [ $activemds != "mds" ]; then
+        fail mds
     fi
-
-    # assume client mount is local
+    
+    # assume client mount is local 
     grep " $MOUNT " /proc/mounts && zconf_umount $HOSTNAME $MOUNT $*
     grep " $MOUNT2 " /proc/mounts && zconf_umount $HOSTNAME $MOUNT2 $*
 
@@ -1019,100 +869,45 @@ stopall() {
     # The add fn does rm ${facet}active file, this would be enough
     # if we use do_facet <facet> only after the facet added, but
     # currently we use do_facet mds in local.sh
-    for num in `seq $MDSCOUNT`; do
-        stop mds$num -f
-        rm -f ${TMP}/mds${num}active
-    done
-
+    stop mds -f
+    rm -f ${TMP}/mdsactive
     for num in `seq $OSTCOUNT`; do
         stop ost$num -f
         rm -f $TMP/ost${num}active
     done
-
     return 0
 }
 
 cleanupall() {
     stopall $*
     unload_modules
-    cleanup_gss
-}
-
-mdsmkfsopts()
-{
-    local nr=$1
-    test $nr = 1 && echo -n $MDS_MKFS_OPTS || echo -n $MDSn_MKFS_OPTS
 }
 
 formatall() {
     [ "$FSTYPE" ] && FSTYPE_OPT="--backfstype $FSTYPE"
 
-    if [ ! -z $SEC ]; then
-        MDS_MKFS_OPTS="$MDS_MKFS_OPTS --param srpc.flavor.default=$SEC"
-        OST_MKFS_OPTS="$OST_MKFS_OPTS --param srpc.flavor.default=$SEC"
-    fi
-
     stopall
     # We need ldiskfs here, may as well load them all
     load_modules
     [ "$CLIENTONLY" ] && return
-    echo "Formatting mdts, osts"
-    for num in `seq $MDSCOUNT`; do
-        echo "Format mds$num: $(mdsdevname $num)"
-        if $VERBOSE; then
-            add mds$num `mdsmkfsopts $num` $FSTYPE_OPT --reformat `mdsdevname $num` || exit 9
-        else
-            add mds$num `mdsmkfsopts $num` $FSTYPE_OPT --reformat `mdsdevname $num` > /dev/null || exit 9
-        fi
-    done
+    echo Formatting mds, osts
+    if $VERBOSE; then
+        add mds $MDS_MKFS_OPTS $FSTYPE_OPT --reformat $MDSDEV || exit 10
+    else
+        add mds $MDS_MKFS_OPTS $FSTYPE_OPT --reformat $MDSDEV > /dev/null || exit 10
+    fi
 
     for num in `seq $OSTCOUNT`; do
-        echo "Format ost$num: $(ostdevname $num)"
         if $VERBOSE; then
-            add ost$num $OST_MKFS_OPTS --reformat `ostdevname $num` || exit 10
+            add ost$num $OST_MKFS_OPTS $FSTYPE_OPT --reformat `ostdevname $num` || exit 10
         else
-            add ost$num $OST_MKFS_OPTS --reformat `ostdevname $num` > /dev/null || exit 10
+            add ost$num $OST_MKFS_OPTS $FSTYPE_OPT --reformat `ostdevname $num` > /dev/null || exit 10
         fi
     done
 }
 
 mount_client() {
     grep " $1 " /proc/mounts || zconf_mount $HOSTNAME $*
-}
-
-umount_client() {
-    grep " $1 " /proc/mounts && zconf_umount `hostname` $*
-}
-
-# return value:
-# 0: success, the old identity set already.
-# 1: success, the old identity does not set.
-# 2: fail.
-switch_identity() {
-    local num=$1
-    local switch=$2
-    local j=`expr $num - 1`
-    local MDT="`do_facet mds$num lctl get_param -N mdt.*MDT*$j | cut -d"." -f2 2>/dev/null || true`"
-
-    if [ -z "$MDT" ]; then
-        return 2
-    fi
-
-    local old="`do_facet mds$num "lctl get_param -n mdt.$MDT.identity_upcall"`"
-
-    if $switch; then
-        do_facet mds$num "lctl set_param -n mdt.$MDT.identity_upcall \"$L_GETIDENTITY\""
-    else
-        do_facet mds$num "lctl set_param -n mdt.$MDT.identity_upcall \"NONE\""
-    fi
-
-    do_facet mds$num "lctl set_param -n mdt/$MDT/identity_flush \"-1\""
-
-    if [ $old = "NONE" ]; then
-        return 1
-    else
-        return 0
-    fi
 }
 
 remount_client()
@@ -1133,29 +928,18 @@ set_obd_timeout() {
 
 setupall() {
     load_modules
-    init_gss
     if [ -z "$CLIENTONLY" ]; then
-        echo "Setup mdts, osts"
-        for num in `seq $MDSCOUNT`; do
-            DEVNAME=$(mdsdevname $num)
-            echo $REFORMAT | grep -q "reformat" \
-            || do_facet mds$num "$TUNEFS --writeconf $DEVNAME"
-            set_obd_timeout mds$num $TIMEOUT
-            start mds$num $DEVNAME $MDS_MOUNT_OPTS
+        echo Setup mdt, osts
+        echo $REFORMAT | grep -q "reformat" \
+	    || do_facet mds "$TUNEFS --writeconf $MDSDEV"
+        set_obd_timeout mds $TIMEOUT
+        start mds $MDSDEV $MDS_MOUNT_OPTS
+        # We started mds, now we should set failover variable properly.
+        # Set mdsfailover_HOST if it is not set (the default failnode).
+        mdsfailover_HOST=$(facet_host mds)
 
-            # We started mds, now we should set failover variables properly.
-            # Set mds${num}failover_HOST if it is not set (the default failnode).
-            local varname=mds${num}failover_HOST
-            if [ -z "${!varname}" ]; then
-                eval mds${num}failover_HOST=$(facet_host mds$num)
-            fi
-
-	    if [ $IDENTITY_UPCALL != "default" ]; then
-                switch_identity $num $IDENTITY_UPCALL
-	    fi
-        done
         for num in `seq $OSTCOUNT`; do
-            DEVNAME=$(ostdevname $num)
+            DEVNAME=`ostdevname $num`
             set_obd_timeout ost$num $TIMEOUT
             start ost$num $DEVNAME $OST_MOUNT_OPTS
 
@@ -1173,20 +957,10 @@ setupall() {
     [ -n "$CLIENTS" ] && zconf_mount_clients $CLIENTS $MOUNT
 
     if [ "$MOUNT_2" ]; then
-	mount_client $MOUNT2
+        mount_client $MOUNT2
         [ -n "$CLIENTS" ] && zconf_mount_clients $CLIENTS $MOUNT2
     fi
-
-    # by remounting mdt before ost, initial connect from mdt to ost might
-    # timeout because ost is not ready yet. wait some time to its fully
-    # recovery. initial obd_connect timeout is 5s; in GSS case it's preceeded
-    # by a context negotiation rpc with $TIMEOUT.
-    # FIXME better by monitoring import status.
-    if $GSS; then
-        sleep $((TIMEOUT + 5))
-    else
-        sleep 5
-    fi
+    sleep 5
 }
 
 mounted_lustre_filesystems() {
@@ -1211,7 +985,7 @@ cleanup_and_setup_lustre() {
     if [ "$ONLY" == "cleanup" -o "`mount | grep $MOUNT`" ]; then
         lctl set_param debug=0 || true
         cleanupall
-        if [ "$ONLY" == "cleanup" ]; then
+        if [ "$ONLY" == "cleanup" ]; then 
     	    exit 0
         fi
     fi
@@ -1228,7 +1002,7 @@ check_and_cleanup_lustre() {
     unset I_MOUNTED
 }
 
-#######
+####### 
 # General functions
 
 check_network() {
@@ -1318,10 +1092,6 @@ at_max_set() {
         if [ $facet == "ost" ]; then
             for i in `seq $OSTCOUNT`; do
                 do_facet ost$i "echo $at_max > $AT_MAX_PATH"
-            done
-        elif [ $facet == "mds" ]; then
-            for i in `seq $MDSCOUNT`; do
-                do_facet mds$i "echo $at_max > $AT_MAX_PATH"
             done
         else
             do_facet $facet "echo $at_max > $AT_MAX_PATH"
@@ -1418,7 +1188,7 @@ set_nodes_failloc () {
     local node
 
     for node in $nodes ; do
-        do_node $node lctl set_param fail_loc=$2
+        do_node $node sysctl -w lustre.fail_loc=$2
     done
 }
 
@@ -1470,7 +1240,7 @@ debugrestore() {
 }
 
 ##################################
-# Test interface
+# Test interface 
 ##################################
 
 error_noexit() {
@@ -1582,7 +1352,7 @@ run_test() {
     fi
 
     run_one $1 "$2"
-
+    
     return $?
 }
 
@@ -1628,8 +1398,8 @@ pass() {
 }
 
 check_mds() {
-    FFREE=`lctl get_param -n osd.*MDT*.filesfree`
-    FTOTAL=`lctl get_param -n osd.*MDT*.filestotal`
+    FFREE=`lctl get_param -n mds.*.filesfree`
+    FTOTAL=`lctl get_param -n mds.*.filestotal`
     [ $FFREE -ge $FTOTAL ] && error "files free $FFREE > total $FTOTAL" || true
 }
 
@@ -1673,8 +1443,8 @@ canonical_path() {
 }
 
 sync_clients() {
-    [ -d $DIR1 ] && cd $DIR1 && sync; sleep 1; sync
-    [ -d $DIR2 ] && cd $DIR2 && sync; sleep 1; sync
+    [ -d $DIR1 ] && cd $DIR1 && sync; sleep 1; sync 
+    [ -d $DIR2 ] && cd $DIR2 && sync; sleep 1; sync 
 	cd $SAVE_PWD
 }
 
@@ -1683,7 +1453,7 @@ check_grant() {
     [ "$CHECK_GRANT" == "no" ] && return 0
 
 	testname=GCHECK_ONLY_${base}
-        [ ${!testname}x == x ] && return 0
+    [ ${!testname}x == x ] && return 0
 
     echo -n "checking grant......"
 	cd $SAVE_PWD
@@ -1692,27 +1462,27 @@ check_grant() {
 	for i in `seq $OSTCOUNT`; do
 		$LFS setstripe $DIR1/${tfile}_check_grant_$i -i $(($i -1)) -c 1
 		dd if=/dev/zero of=$DIR1/${tfile}_check_grant_$i bs=4k \
-					      count=1 > /dev/null 2>&1
+					      count=1 > /dev/null 2>&1 
 	done
-	# sync all the data and make sure no pending data on server
-	sync_clients
-	
-	#get client grant and server grant
-	client_grant=0
+    # sync all the data and make sure no pending data on server
+    sync_clients
+
+    #get client grant and server grant
+    client_grant=0
     for d in `lctl get_param -n osc.*.cur_grant_bytes`; do
-		client_grant=$((client_grant + $d))
-	done
-	server_grant=0
-	for d in `lctl get_param -n obdfilter.*.tot_granted`; do
-		server_grant=$((server_grant + $d))
-	done
+        client_grant=$((client_grant + $d))
+    done
+    server_grant=0
+    for d in `lctl get_param -n obdfilter.*.tot_granted`; do
+        server_grant=$((server_grant + $d))
+    done
 
 	# cleanup the check_grant file
 	for i in `seq $OSTCOUNT`; do
 	        rm $DIR1/${tfile}_check_grant_$i
 	done
 
-	#check whether client grant == server grant
+	#check whether client grant == server grant 
 	if [ $client_grant != $server_grant ]; then
 		echo "failed: client:${client_grant} server: ${server_grant}"
 		return 1
@@ -1754,24 +1524,6 @@ remote_ost_nodsh()
     remote_ost && [ "$PDSH" = "no_dsh" -o -z "$PDSH" -o -z "$ost_HOST" ]
 }
 
-mdts_nodes () {
-    local MDSNODES=$(facet_host $SINGLEMDS)
-    local NODES_sort
-
-    # FIXME: Currenly we use only $SINGLEMDS,
-    # should be fixed when we will start to test cmd.
-    echo $MDSNODES
-    return
-
-    for num in `seq $MDSCOUNT`; do
-        local myMDS=$(facet_host mds$num)
-        MDSNODES="$MDSNODES $myMDS"
-    done
-    NODES_sort=$(for i in $MDSNODES; do echo $i; done | sort -u)
-
-    echo $NODES_sort
-}
-
 osts_nodes () {
     local OSTNODES=$(facet_host ost1)
     local NODES_sort
@@ -1794,7 +1546,7 @@ nodes_list () {
     [ -n "$CLIENTS" ] && myNODES=${CLIENTS//,/ }
 
     if [ "$PDSH" -a "$PDSH" != "no_dsh" ]; then
-        myNODES="$myNODES $(osts_nodes) $(mdts_nodes)"
+        myNODES="$myNODES $(osts_nodes) $mds_HOST"
     fi
 
     myNODES_sort=$(for i in $myNODES; do echo $i; done | sort -u)
@@ -1847,6 +1599,22 @@ mixed_ost_devs () {
     [ ! "$OSTCOUNT" = "$osscount" ]
 }
 
+generate_machine_file() {
+    local nodes=${1//,/ }
+    local machinefile=$2
+    rm -f $machinefile || error "can't rm $machinefile"
+    for node in $nodes; do
+        echo $node >>$machinefile
+    done
+}
+
+get_stripe () {
+    local file=$1/stripe
+    touch $file
+    $LFS getstripe -v $file || error
+    rm -f $file
+}
+
 check_runas_id_ret() {
     local myRC=0
     local myRUNAS_ID=$1
@@ -1855,14 +1623,10 @@ check_runas_id_ret() {
     if [ -z "$myRUNAS" ]; then
         error_exit "myRUNAS command must be specified for check_runas_id"
     fi
-    if $GSS_KRB5; then
-        $myRUNAS krb5_login.sh || \
-            error "Failed to refresh Kerberos V5 TGT for UID $myRUNAS_ID."
-    fi
     mkdir $DIR/d0_runas_test
     chmod 0755 $DIR
     chown $myRUNAS_ID:$myRUNAS_ID $DIR/d0_runas_test
-    $myRUNAS touch $DIR/d0_runas_test/f$$ || myRC=$?
+    $myRUNAS touch $DIR/d0_runas_test/f$$ || myRC=1
     rm -rf $DIR/d0_runas_test
     return $myRC
 }
@@ -1904,6 +1668,27 @@ multiop_bg_pause() {
     fi
 
     return 0
+}
+
+check_rate() {
+    local OP=$1
+    local TARGET_RATE=$2
+    local NUM_CLIENTS=$3
+    local LOG=$4
+
+    local RATE=$(awk '/^Rate: [0-9\.]+ '"${OP}"'s\/sec/ { print $2}' ${LOG})
+
+    # We need to use bc since the rate is a floating point number
+    local RES=$(echo "${RATE} < ${TARGET_RATE}" | bc -l )
+    if [ ${RES} -eq 0 ]; then
+        echo "Success: ${RATE} ${OP}s/sec met target rate" \
+             "${TARGET_RATE} ${OP}s/sec for ${NUM_CLIENTS} client(s)."
+        return 0
+    else
+        echo "Failure: ${RATE} ${OP}s/sec did not meet target rate" \
+             "${TARGET_RATE} ${OP}s/sec for ${NUM_CLIENTS} client(s)."
+        return 1
+    fi
 }
 
 # reset llite stat counters

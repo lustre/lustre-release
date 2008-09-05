@@ -150,7 +150,7 @@ int
 brw_check_page (cfs_page_t *pg, int pattern, __u64 magic)
 {
         char  *addr = cfs_page_address(pg);
-        __u64  data = 0; /* make compiler happy */
+        __u64  data;
         int    i;
 
         LASSERT (addr != NULL);
@@ -253,7 +253,7 @@ brw_client_prep_rpc (sfw_test_unit_t *tsu,
 
         req = &rpc->crpc_reqstmsg.msg_body.brw_reqst;
         req->brw_flags = flags;
-        req->brw_rw    = breq->blk_opc;
+        req->brw_rw    = breq->blk_opc; 
         req->brw_len   = npg * CFS_PAGE_SIZE;
 
         *rpcpp = rpc;
@@ -401,7 +401,7 @@ brw_server_handle (srpc_server_rpc_t *rpc)
                 reply->brw_status = EINVAL;
                 return 0;
         }
-
+        
         reply->brw_status = 0;
         rc = sfw_alloc_pages(rpc, reqst->brw_len / CFS_PAGE_SIZE,
                              reqst->brw_rw == LST_BRW_WRITE);

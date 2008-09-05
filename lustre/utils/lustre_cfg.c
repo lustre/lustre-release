@@ -69,7 +69,7 @@
 
 #include "obdctl.h"
 #include <lnet/lnetctl.h>
-#include <libcfs/libcfsutil.h>
+#include "parser.h"
 #include <stdio.h>
 
 static char * lcfg_devname;
@@ -506,6 +506,7 @@ int jt_lcfg_mgsparam(int argc, char **argv)
                 return CMD_HELP;
 
         lustre_cfg_bufs_reset(&bufs, NULL);
+
         for (i = 1; i < argc; i++) {
                 lustre_cfg_bufs_set_string(&bufs, i, argv[i]);
         }
@@ -568,7 +569,8 @@ int jt_lcfg_getparam(int argc, char **argv)
         char *path, *tmp, *buf;
         glob_t glob_info;
 
-        if (argc == 3 && (strcmp(argv[1], "-n") == 0 || strcmp(argv[1], "-N") == 0)) {
+        if (argc == 3 && (strcmp(argv[1], "-n") == 0 ||
+                          strcmp(argv[1], "-N") == 0)) {
                 path = argv[2];
                 if (strcmp(argv[1], "-N") == 0) {
                         only_path = 1;
@@ -747,8 +749,8 @@ int jt_lcfg_setparam(int argc, char **argv)
                         rc = write(fp, value, strlen(value));
                         if (rc < 0)
                                 fprintf(stderr,
-                                        "error writing to file %s\n",
-                                        glob_info.gl_pathv[i]);
+                                        "error writing to file %s (%s)\n",
+                                        glob_info.gl_pathv[i], strerror(errno));
                         else
                                 rc = 0;
                         close(fp);

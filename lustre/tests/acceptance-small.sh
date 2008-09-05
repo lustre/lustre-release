@@ -23,7 +23,7 @@ fi
 [ "$DEBUG_OFF" ] || DEBUG_OFF="eval lctl set_param debug=\"$DEBUG_LVL\""
 [ "$DEBUG_ON" ] || DEBUG_ON="eval lctl set_param debug=0x33f0484"
 
-export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL INSANITY SANITY_QUOTA SANITY_SEC SANITY_GSS"
+export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL REPLAY_VBR INSANITY SANITY_QUOTA PERFORMANCE_SANITY"
 
 if [ "$ACC_SM_ONLY" ]; then
     for O in $TESTSUITE_LIST; do
@@ -35,8 +35,6 @@ if [ "$ACC_SM_ONLY" ]; then
 	export ${O}="yes"
     done
 fi
-LFSCK="no" # bug 13698
-SANITY_QUOTA="no" # bug 13058
 
 LIBLUSTRETESTS=${LIBLUSTRETESTS:-../liblustre/tests}
 
@@ -46,13 +44,6 @@ RANTEST=""
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-
-export SANITY_GSS="no"
-if $GSS; then
-    export SANITY_GSS="yes"
-    # liblustre doesn't support GSS
-    export LIBLUSTRE=no
-fi
 
 SETUP=${SETUP:-setupall}
 FORMAT=${FORMAT:-formatall}
@@ -352,6 +343,13 @@ if [ "$REPLAY_DUAL" != "no" ]; then
         REPLAY_DUAL="done"
 fi
 
+if [ "$REPLAY_VBR" != "no" ]; then
+        title replay-vbr
+        bash replay-vbr.sh
+        REPLAY_VBR="done"
+fi
+
+
 if [ "$INSANITY" != "no" ]; then
         title insanity
         bash insanity.sh -r
@@ -364,16 +362,14 @@ if [ "$SANITY_QUOTA" != "no" ]; then
         SANITY_QUOTA="done"
 fi
 
-if [ "$SANITY_SEC" != "no" ]; then
-        title sanity-sec
-        bash sanity-sec.sh
-        SANITY_SEC="done"
-fi
 
-if [ "$SANITY_GSS" != "no" ]; then
-        title sanity-gss
-        bash sanity-gss.sh
-        SANITY_GSS="done"
+[ "$SLOW" = no ] && PERFORMANCE_SANITY="no"
+[ -x "$MDSRATE" ] || PERFORMANCE_SANITY="no"
+which mpirun > /dev/null 2>&1 || PERFORMANCE_SANITY="no"
+if [ "$PERFORMANCE_SANITY" != "no" ]; then
+        title performance-sanity
+        bash performance-sanity.sh
+        PERFORMANCE_SANITY="done"
 fi
 
 RC=$?

@@ -56,7 +56,7 @@
 
 int filter_log_sz_change(struct llog_handle *cathandle,
                          struct ll_fid *mds_fid,
-                         __u32 ioepoch,
+                         __u32 io_epoch,
                          struct llog_cookie *logcookie,
                          struct inode *inode)
 {
@@ -68,23 +68,23 @@ int filter_log_sz_change(struct llog_handle *cathandle,
         LOCK_INODE_MUTEX(inode);
         ofd = inode->i_filterdata;
 
-        if (ofd && ofd->ofd_epoch >= ioepoch) {
-                if (ofd->ofd_epoch > ioepoch)
+        if (ofd && ofd->ofd_epoch >= io_epoch) {
+                if (ofd->ofd_epoch > io_epoch)
                         CERROR("client sent old epoch %d for obj ino %ld\n",
-                               ioepoch, inode->i_ino);
+                               io_epoch, inode->i_ino);
                 UNLOCK_INODE_MUTEX(inode);
                 RETURN(0);
         }
 
-        if (ofd && ofd->ofd_epoch < ioepoch) {
-                ofd->ofd_epoch = ioepoch;
+        if (ofd && ofd->ofd_epoch < io_epoch) {
+                ofd->ofd_epoch = io_epoch;
         } else if (!ofd) {
                 OBD_ALLOC(ofd, sizeof(*ofd));
                 if (!ofd)
                         GOTO(out, rc = -ENOMEM);
                 igrab(inode);
                 inode->i_filterdata = ofd;
-                ofd->ofd_epoch = ioepoch;
+                ofd->ofd_epoch = io_epoch;
         }
         /* the decision to write a record is now made, unlock */
         UNLOCK_INODE_MUTEX(inode);
@@ -95,7 +95,7 @@ int filter_log_sz_change(struct llog_handle *cathandle,
         lsc->lsc_hdr.lrh_len = lsc->lsc_tail.lrt_len = sizeof(*lsc);
         lsc->lsc_hdr.lrh_type =  OST_SZ_REC;
         lsc->lsc_fid = *mds_fid;
-        lsc->lsc_ioepoch = ioepoch;
+        lsc->lsc_io_epoch = io_epoch;
 
         rc = llog_cat_add_rec(cathandle, &lsc->lsc_hdr, logcookie, NULL);
         OBD_FREE(lsc, sizeof(*lsc));
@@ -114,37 +114,27 @@ void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
                               void *cb_data, int error)
 {
         struct llog_cookie *cookie = cb_data;
-        struct obd_llog_group *olg;
         struct llog_ctxt *ctxt;
         int rc;
-        
-        /* we have to find context for right group */
+
         if (error != 0 || obd->obd_stopping) {
                 CDEBUG(D_INODE, "not cancel logcookie err %d stopping %d \n",
                        error, obd->obd_stopping);
-                GOTO (out, rc = 0);
+                OBD_FREE(cookie, sizeof(*cookie));
+                return;
         }
 
-        olg = filter_find_olg(obd, cookie->lgc_lgl.lgl_ogr);
-        if (!olg) { 
-                CDEBUG(D_HA, "unknown group "LPU64"!\n", cookie->lgc_lgl.lgl_ogr);
+        ctxt = llog_get_context(obd, cookie->lgc_subsys + 1);
+        if (!ctxt)
                 GOTO(out, rc = 0);
-        }
-        
-        ctxt = llog_group_get_ctxt(olg, cookie->lgc_subsys + 1);
-        if (!ctxt) {
-                CERROR("no valid context for group "LPU64"\n",
-                        cookie->lgc_lgl.lgl_ogr);
-                GOTO(out, rc = 0);
-        }
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT, 30);
 
         rc = llog_cancel(ctxt, NULL, 1, cookie, 0);
         if (rc)
                 CERROR("error cancelling log cookies: rc = %d\n", rc);
-        llog_ctxt_put(ctxt);
 out:
+        llog_ctxt_put(ctxt);
         OBD_FREE(cookie, sizeof(*cookie));
 }
 
@@ -164,12 +154,11 @@ static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
 
         lur = (struct llog_unlink_rec *)rec;
         OBDO_ALLOC(oa);
-        if (oa == NULL) 
+        if (oa == NULL)
                 RETURN(-ENOMEM);
         oa->o_valid |= OBD_MD_FLCOOKIE;
         oa->o_id = lur->lur_oid;
         oa->o_gr = lur->lur_ogen;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
         oa->o_lcookie = *cookie;
         oid = oa->o_id;
 
@@ -203,14 +192,11 @@ static int filter_recov_log_setattr_cb(struct llog_ctxt *ctxt,
 
         lsr = (struct llog_setattr_rec *)rec;
         OBDO_ALLOC(oinfo.oi_oa);
-        if (oinfo.oi_oa == NULL)
-                RETURN(-ENOMEM);
 
         oinfo.oi_oa->o_valid |= (OBD_MD_FLID | OBD_MD_FLUID | OBD_MD_FLGID |
                                  OBD_MD_FLCOOKIE);
         oinfo.oi_oa->o_id = lsr->lsr_oid;
         oinfo.oi_oa->o_gr = lsr->lsr_ogen;
-        oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
         oinfo.oi_oa->o_uid = lsr->lsr_uid;
         oinfo.oi_oa->o_gid = lsr->lsr_gid;
         oinfo.oi_oa->o_lcookie = *cookie;

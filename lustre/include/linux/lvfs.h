@@ -50,22 +50,24 @@
 #include <linux/lvfs_linux.h>
 #else
 struct group_info { /* unused */ };
-#include <liblustre.h>
 #endif
 
 #define LLOG_LVFS
 
+/* lvfs.c */
+int obd_alloc_fail(const void *ptr, const char *name, const char *type,
+                   size_t size, const char *file, int line);
+
 /* simple.c */
 
 struct lvfs_ucred {
-        __u32                   luc_uid;
-        __u32                   luc_gid;
-        __u32                   luc_fsuid;
-        __u32                   luc_fsgid;
-        __u32                   luc_cap;
-        __u32                   luc_umask;
-	struct group_info      *luc_ginfo;
-	struct md_identity     *luc_identity;
+        struct upcall_cache_entry *luc_uce;
+        __u32 luc_fsuid;
+        __u32 luc_fsgid;
+        __u32 luc_cap;
+        __u32 luc_suppgid1;
+        __u32 luc_suppgid2;
+        __u32 luc_umask;
 };
 
 struct lvfs_callback_ops {
@@ -81,7 +83,11 @@ struct lvfs_run_ctxt {
         struct lvfs_ucred        luc;
         int                      ngroups;
         struct lvfs_callback_ops cb_ops;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
         struct group_info       *group_info;
+#else
+        struct group_info        group_info;
+#endif
 #ifdef OBD_CTXT_DEBUG
         __u32                    magic;
 #endif

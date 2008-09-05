@@ -164,10 +164,12 @@ llcd_interpret(struct ptlrpc_request *req, void *noused, int rc)
  */
 static int llcd_send(struct llog_canceld_ctxt *llcd)
 {
+        int size[2] = { sizeof(struct ptlrpc_body),
+                        llcd->llcd_cookiebytes };
         char *bufs[2] = { NULL, (char *)llcd->llcd_cookies };
         struct obd_import *import = NULL;
         struct llog_commit_master *lcm;
-        struct ptlrpc_request *req;
+        struct ptlrpc_request *request;
         struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
@@ -209,33 +211,24 @@ static int llcd_send(struct llog_canceld_ctxt *llcd)
          * No need to get import here as it is already done in 
          * llog_receptor_accept().
          */
-        req = ptlrpc_request_alloc(import, &RQF_LOG_CANCEL);
-        if (req == NULL) {
+        request = ptlrpc_prep_req(import, LUSTRE_LOG_VERSION,
+                                  OBD_LOG_CANCEL, 2, size,bufs);
+        if (request == NULL) {
                 CERROR("Can't allocate request for sending llcd %p\n", 
                        llcd);
                 GOTO(exit, rc = -ENOMEM);
         }
-        req_capsule_set_size(&req->rq_pill, &RMF_LOGCOOKIES,
-                             RCL_CLIENT, llcd->llcd_cookiebytes);
-
-        rc = ptlrpc_request_bufs_pack(req, LUSTRE_LOG_VERSION,
-                                      OBD_LOG_CANCEL, bufs, NULL);
-        if (rc) {
-                ptlrpc_request_free(req);
-                GOTO(exit, rc);
-        }
-
-        ptlrpc_at_set_req_timeout(req);
-        ptlrpc_request_set_replen(req);
 
         /* bug 5515 */
-        req->rq_request_portal = LDLM_CANCEL_REQUEST_PORTAL;
-        req->rq_reply_portal = LDLM_CANCEL_REPLY_PORTAL;
-        req->rq_interpret_reply = llcd_interpret;
-        req->rq_async_args.pointer_arg[0] = llcd;
-        rc = ptlrpc_set_add_new_req(&lcm->lcm_pc, req);
+        request->rq_request_portal = LDLM_CANCEL_REQUEST_PORTAL;
+        request->rq_reply_portal = LDLM_CANCEL_REPLY_PORTAL;
+        ptlrpc_req_set_repsize(request, 1, NULL);
+        ptlrpc_at_set_req_timeout(request);
+        request->rq_interpret_reply = llcd_interpret;
+        request->rq_async_args.pointer_arg[0] = llcd;
+        rc = ptlrpc_set_add_new_req(&lcm->lcm_pc, request);
         if (rc) {
-                ptlrpc_request_free(req);
+                ptlrpc_req_finished(request);
                 GOTO(exit, rc);
         }
         RETURN(0);

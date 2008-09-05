@@ -43,7 +43,7 @@
 
 #define LL_FID_NAMELEN (16 + 1 + 8 + 1)
 
-#include <libcfs/libcfs.h>
+#include <libcfs/kp30.h>
 #if defined(__linux__)
 #include <linux/lvfs.h>
 #elif defined(__APPLE__)

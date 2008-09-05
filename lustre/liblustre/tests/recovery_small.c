@@ -149,7 +149,7 @@ void cleanup_dir(const char *path)
             sprintf(cmd,                                                   \
                     "%s %s \"echo %lu > /proc/sys/lustre/fail_loc\"",      \
                     ssh_cmd, mds_server, drop_arr[drop_index].code);       \
-            if ((rc = system(cmd))) {                                      \
+            if (system(cmd)) {                                             \
                 printf("error excuting remote command: %d\n", rc);         \
                 exit(rc);                                                  \
             }                                                              \

@@ -18,7 +18,6 @@
  * You should have received a copy of the GNU General Public License
  * version 2 along with this program; If not, see
  * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
- * copy of GPLv2].
  *
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
@@ -50,7 +49,26 @@
 #include <sys/types.h>
 #endif
 
+/* TODO: remove these when libcfs provides proper primitives for userspace
+ *
+ * Dummy implementations of spinlock_t and atomic_t work since userspace
+ * selftest is completely single-threaded, even using multi-threaded usocklnd.
+ */
+typedef struct { } spinlock_t;
+static inline void spin_lock(spinlock_t *l) {return;}
+static inline void spin_unlock(spinlock_t *l) {return;}
+static inline void spin_lock_init(spinlock_t *l) {return;}
+
+typedef struct { volatile int counter; } atomic_t;
+#define atomic_read(a) ((a)->counter)
+#define atomic_set(a,b) do {(a)->counter = b; } while (0)
+#define atomic_dec_and_test(a) ((--((a)->counter)) == 0)
+#define atomic_inc(a)  (((a)->counter)++)
+#define atomic_dec(a)  do { (a)->counter--; } while (0)
+
 #endif
+
+#include <libcfs/kp30.h>
 #include <libcfs/libcfs.h>
 #include <lnet/lnet.h>
 #include <lnet/lib-lnet.h>
@@ -72,7 +90,6 @@
 #define SWI_STATE_REQUEST_SENT             4
 #define SWI_STATE_REPLY_RECEIVED           5
 #define SWI_STATE_BULK_STARTED             6
-#define SWI_STATE_BULK_ERRORED             7
 #define SWI_STATE_DONE                     10
 
 /* forward refs */
@@ -88,11 +105,11 @@ struct sfw_test_instance;
  *   serialized with respect to itself.
  * - no CPU affinity, a workitem does not necessarily run on the same CPU
  *   that schedules it. However, this might change in the future.
- * - if a workitem is scheduled again before it has a chance to run, it
+ * - if a workitem is scheduled again before it has a chance to run, it 
  *   runs only once.
- * - if a workitem is scheduled while it runs, it runs again after it
- *   completes; this ensures that events occurring while other events are
- *   being processed receive due attention. This behavior also allows a
+ * - if a workitem is scheduled while it runs, it runs again after it 
+ *   completes; this ensures that events occurring while other events are 
+ *   being processed receive due attention. This behavior also allows a 
  *   workitem to reschedule itself.
  *
  * Usage notes:
@@ -372,7 +389,7 @@ typedef struct {
 typedef struct {
         int  (*tso_init)(struct sfw_test_instance *tsi); /* intialize test client */
         void (*tso_fini)(struct sfw_test_instance *tsi); /* finalize test client */
-        int  (*tso_prep_rpc)(struct sfw_test_unit *tsu,
+        int  (*tso_prep_rpc)(struct sfw_test_unit *tsu,     
                              lnet_process_id_t dest,
                              srpc_client_rpc_t **rpc);   /* prep a tests rpc */
         void (*tso_done_rpc)(struct sfw_test_unit *tsu,
@@ -405,7 +422,7 @@ typedef struct sfw_test_instance {
         } tsi_u;
 } sfw_test_instance_t;
 
-/* XXX: trailing (CFS_PAGE_SIZE % sizeof(lnet_process_id_t)) bytes at
+/* XXX: trailing (CFS_PAGE_SIZE % sizeof(lnet_process_id_t)) bytes at 
  * the end of pages are not used */
 #define SFW_MAX_CONCUR     LST_MAX_CONCUR
 #define SFW_ID_PER_PAGE    (CFS_PAGE_SIZE / sizeof(lnet_process_id_t))
@@ -442,7 +459,7 @@ void sfw_add_bulk_page(srpc_bulk_t *bk, cfs_page_t *pg, int i);
 int sfw_alloc_pages(srpc_server_rpc_t *rpc, int npages, int sink);
 
 srpc_client_rpc_t *
-srpc_create_client_rpc(lnet_process_id_t peer, int service,
+srpc_create_client_rpc(lnet_process_id_t peer, int service, 
                        int nbulkiov, int bulklen,
                        void (*rpc_done)(srpc_client_rpc_t *),
                        void (*rpc_fini)(srpc_client_rpc_t *), void *priv);
@@ -530,12 +547,12 @@ srpc_init_client_rpc (srpc_client_rpc_t *rpc, lnet_process_id_t peer,
         return;
 }
 
-static inline const char *
+static inline const char * 
 swi_state2str (int state)
 {
 #define STATE2STR(x) case x: return #x
         switch(state) {
-                default:
+                default: 
                         LBUG();
                 STATE2STR(SWI_STATE_NEWBORN);
                 STATE2STR(SWI_STATE_REPLY_SUBMITTED);
@@ -544,7 +561,6 @@ swi_state2str (int state)
                 STATE2STR(SWI_STATE_REQUEST_SENT);
                 STATE2STR(SWI_STATE_REPLY_RECEIVED);
                 STATE2STR(SWI_STATE_BULK_STARTED);
-                STATE2STR(SWI_STATE_BULK_ERRORED);
                 STATE2STR(SWI_STATE_DONE);
         }
 #undef STATE2STR

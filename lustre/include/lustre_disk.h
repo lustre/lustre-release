@@ -43,7 +43,6 @@
 #ifndef _LUSTRE_DISK_H
 #define _LUSTRE_DISK_H
 
-#include <libcfs/libcfs.h>
 #include <lnet/types.h>
 
 /****************** on-disk files *********************/
@@ -52,10 +51,10 @@
 #define MOUNT_CONFIGS_DIR "CONFIGS"
 /* Persistent mount data are stored on the disk in this file. */
 #define MOUNT_DATA_FILE    MOUNT_CONFIGS_DIR"/mountdata"
-#define LAST_RCVD         "last_received"
+#define LAST_RCVD         "last_rcvd"
 #define LOV_OBJID         "lov_objid"
 #define HEALTH_CHECK      "health_check"
-#define CAPA_KEYS         "capa_keys"
+
 
 /****************** persistent mount data *********************/
 
@@ -64,7 +63,7 @@
 #define LDD_F_SV_TYPE_MGS   0x0004
 #define LDD_F_NEED_INDEX    0x0010 /* need an index assignment */
 #define LDD_F_VIRGIN        0x0020 /* never registered */
-#define LDD_F_UPDATE        0x0040 /* update the config logs for this server*/
+#define LDD_F_UPDATE        0x0040 /* update all related config logs */
 #define LDD_F_REWRITE_LDD   0x0080 /* rewrite the LDD */
 #define LDD_F_WRITECONF     0x0100 /* regenerate all logs for this fs */
 #define LDD_F_UPGRADE14     0x0200 /* COMPAT_14 */
@@ -86,7 +85,7 @@ static inline char *mt_str(enum ldd_mount_type mt)
                 "ldiskfs",
                 "smfs",
                 "reiserfs",
-                "ldiskfs2"
+                "ldiskfs2",
         };
         return mount_type_string[mt];
 }
@@ -129,7 +128,7 @@ static inline int server_make_name(__u32 flags, __u16 index, char *fs,
 {
         if (flags & (LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_OST)) {
                 sprintf(name, "%.8s-%s%04x", fs,
-                        (flags & LDD_F_SV_TYPE_MDT) ? "MDT" : "OST",
+                        (flags & LDD_F_SV_TYPE_MDT) ? "MDT" : "OST",  
                         index);
         } else if (flags & LDD_F_SV_TYPE_MGS) {
                 sprintf(name, "MGS");
@@ -167,7 +166,7 @@ struct lustre_mount_data {
 #define LMD_FLG_SERVER       0x0001  /* Mounting a server */
 #define LMD_FLG_CLIENT       0x0002  /* Mounting a client */
 #define LMD_FLG_ABORT_RECOV  0x0008  /* Abort recovery */
-#define LMD_FLG_NOSVC        0x0010  /* Only start MGS/MGC for servers, 
+#define LMD_FLG_NOSVC        0x0010  /* Only start MGS/MGC for servers,
                                         no other services */
 #define LMD_FLG_NOMGS        0x0020  /* Only start target for servers, reusing
                                         existing MGS services */
@@ -190,11 +189,10 @@ struct lustre_mount_data {
  * If we need more than 131072 clients (order-2 allocation on x86) then this
  * should become an array of single-page pointers that are allocated on demand.
  */
-#if (128 * 1024UL) > (CFS_PAGE_SIZE * 8)
-#define LR_MAX_CLIENTS (128 * 1024UL)
-#else
-#define LR_MAX_CLIENTS (CFS_PAGE_SIZE * 8)
-#endif
+#define LR_MAX_CLIENTS max(128 * 1024UL, CFS_PAGE_SIZE * 8)
+/* version recovery */
+#define LR_EPOCH_BITS   32
+#define lr_epoch(a) ((a) >> LR_EPOCH_BITS)
 
 /* COMPAT_146 */
 #define OBD_COMPAT_OST          0x00000002 /* this is an OST (temporary) */
@@ -202,12 +200,14 @@ struct lustre_mount_data {
 /* end COMPAT_146 */
 
 #define OBD_ROCOMPAT_LOVOBJID   0x00000001 /* MDS handles LOV_OBJID file */
+#define OBD_ROCOMPAT_CROW       0x00000002 /* OST will CROW create objects */
 
 #define OBD_INCOMPAT_GROUPS     0x00000001 /* OST handles group subdirs */
 #define OBD_INCOMPAT_OST        0x00000002 /* this is an OST */
 #define OBD_INCOMPAT_MDT        0x00000004 /* this is an MDT */
 #define OBD_INCOMPAT_COMMON_LR  0x00000008 /* common last_rvcd format */
-
+#define OBD_INCOMPAT_FID        0x00000010 /* FID is enabled */
+#define OBD_INCOMPAT_SOM        0x00000020 /* Size-On-MDS is enabled */
 
 /* Data stored per server at the head of the last_rcvd file.  In le32 order.
    This should be common to filter_internal.h, lustre_mds.h */
@@ -228,7 +228,8 @@ struct lr_server_data {
         __u8  lsd_peeruuid[40];    /* UUID of MDS associated with this OST */
         __u32 lsd_ost_index;       /* index number of OST in LOV */
         __u32 lsd_mdt_index;       /* index number of MDT in LMV */
-        __u8  lsd_padding[LR_SERVER_SIZE - 148];
+        __u32 lsd_start_epoch;     /* VBR: start epoch from last boot */
+        __u8  lsd_padding[LR_SERVER_SIZE - 152];
 };
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
@@ -243,9 +244,20 @@ struct lsd_client_data {
         __u64 lcd_last_close_xid;     /* xid for the last transaction */
         __u32 lcd_last_close_result;  /* result from last RPC */
         __u32 lcd_last_close_data;    /* per-op data */
-        __u8  lcd_padding[LR_CLIENT_SIZE - 88];
+        /* VBR: last versions */
+        __u64 lcd_pre_versions[4];
+        __u32 lcd_last_epoch;
+        __u32 lcd_last_time;
+        __u8  lcd_padding[LR_CLIENT_SIZE - 128];
 };
 
+static inline __u64 lsd_last_transno(struct lsd_client_data *lcd)
+{
+        return le64_to_cpu(lcd->lcd_last_transno) >
+               le64_to_cpu(lcd->lcd_last_close_transno) ?
+               le64_to_cpu(lcd->lcd_last_transno) :
+               le64_to_cpu(lcd->lcd_last_close_transno);
+}
 
 #ifdef __KERNEL__
 /****************** superblock additional info *********************/
@@ -265,8 +277,13 @@ struct lustre_sb_info {
 #define LSI_UMOUNT_FORCE                 0x00000010
 #define LSI_UMOUNT_FAILOVER              0x00000020
 
-#define     s2lsi(sb)        ((struct lustre_sb_info *)((sb)->s_fs_info))
-#define     s2lsi_nocast(sb) ((sb)->s_fs_info)
+#if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+# define    s2lsi(sb)        ((struct lustre_sb_info *)((sb)->s_fs_info))
+# define    s2lsi_nocast(sb) ((sb)->s_fs_info)
+#else  /* 2.4 here */
+# define    s2lsi(sb)        ((struct lustre_sb_info *)((sb)->u.generic_sbp))
+# define    s2lsi_nocast(sb) ((sb)->u.generic_sbp)
+#endif
 
 #define     get_profile_name(sb)   (s2lsi(sb)->lsi_lmd->lmd_profile)
 
@@ -296,10 +313,8 @@ int lustre_process_log(struct super_block *sb, char *logname,
                      struct config_llog_instance *cfg);
 int lustre_end_log(struct super_block *sb, char *logname, 
                        struct config_llog_instance *cfg);
-struct lustre_mount_info *server_get_mount(const char *name);
-struct lustre_mount_info *server_get_mount_2(const char *name);
-int server_put_mount(const char *name, struct vfsmount *mnt);
-int server_put_mount_2(const char *name, struct vfsmount *mnt);
+struct lustre_mount_info *server_get_mount(char *name);
+int server_put_mount(char *name, struct vfsmount *mnt);
 int server_register_target(struct super_block *sb);
 struct mgs_target_info;
 int server_mti_print(char *title, struct mgs_target_info *mti);

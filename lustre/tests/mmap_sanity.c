@@ -436,7 +436,7 @@ static int cancel_lru_locks(char *prefix)
         }
 
         if (prefix)
-                sprintf(cmd, "ls /proc/fs/lustre/ldlm/namespaces/*-%s-*/lru_size", prefix);
+                sprintf(cmd, "ls /proc/fs/lustre/ldlm/namespaces/*/lru_size | grep -i %s", prefix);
         else
                 sprintf(cmd, "ls /proc/fs/lustre/ldlm/namespaces/*/lru_size");
 

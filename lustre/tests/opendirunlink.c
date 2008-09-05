@@ -82,7 +82,7 @@ int main(int argc, char **argv)
         if (fddir1 == -1) {
                 fprintf(stderr, "open %s fails: %s\n",
                         dname1, strerror(errno));
-                exit(2);
+                exit(1);
         }
         
         // doesn't matter if the two dirs are the same??
@@ -90,7 +90,7 @@ int main(int argc, char **argv)
         if (fddir2 == -1) {
                 fprintf(stderr, "open %s fails: %s\n",
                         dname2, strerror(errno));
-                exit(3);
+                exit(1);
         }
         
         // another method
@@ -108,17 +108,17 @@ int main(int argc, char **argv)
         if (rc) {
                 fprintf(stderr, "unlink %s error: %s\n", 
                         dname1, strerror(errno));
-                exit(4);
+                exit(1);
         }
 
         if (access(dname2, F_OK) == 0){
                 fprintf(stderr, "%s still exists\n", dname2);
-                exit(5);
+                exit(1);
         }
 
         if (access(dname1, F_OK) == 0){
                 fprintf(stderr, "%s still exists\n", dname1);
-                exit(6);
+                exit(1);
         }
 
         // fchmod the dir
@@ -127,7 +127,7 @@ int main(int argc, char **argv)
         {
                 fprintf(stderr, "fchmod unlinked dir fails %s\n", 
                         strerror(errno));
-                exit(7);
+                exit(1);
         }
                 
         // fstat two dirs to check if they are the same
@@ -136,19 +136,19 @@ int main(int argc, char **argv)
         {
                 fprintf(stderr, "fstat unlinked dir %s fails %s\n", 
                         dname1, strerror(errno));
-                exit(8);
+                exit(1);
         }
 
         rc = fstat(fddir2, &st2);
         if (rc == -1) {
                 fprintf(stderr, "fstat dir %s fails %s\n",
                         dname2, strerror(errno));
-                exit(9);
+                exit(1);
         }
 
         if (st1.st_mode != st2.st_mode) {  // can we do this?
                 fprintf(stderr, "fstat different value on %s and %s\n",                                 dname1, dname2);
-                exit(10);
+                exit(1);
         }        
 
         fprintf(stderr, "Ok, everything goes well.\n");

@@ -1,3 +1,5 @@
 Makefile
 Makefile.in
-.*.cmd
+.linux-module.o.cmd
+.linux-obdo.o.cmd
+.linux-sysctl.o.cmd

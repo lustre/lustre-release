@@ -50,7 +50,6 @@
 #include <sys/wait.h>
 #include <sys/ioctl.h>
 
-#include <libcfs/libcfs.h>
 #include <lustre/lustre_user.h>
 #ifndef O_DIRECT
 #define O_DIRECT 0

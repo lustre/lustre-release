@@ -39,11 +39,7 @@ filesystem with or without ACL support.
 	$ touch d/y
 various version of getfacl handle symlink differently
 #	$ ln -s d l
-The result of "getfacl -dR . | grep file | sort" is related with
-the dentry item order in parent directory. Such order depends on
-FS implementation. Fix with -P (--physical) option.
-#	$ getfacl -dR . | grep file | sort
-	$ getfacl -dRP . | grep file | sort
+	$ getfacl -dR . | grep file | sort
 	> # file: .
 	> # file: d
 	> # file: d/y

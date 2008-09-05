@@ -51,7 +51,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <libcfs/libcfs.h>
 #include <lustre/lustre_user.h>
 
 typedef struct flag_mapping {
@@ -124,9 +123,9 @@ int main(int argc, char** argv)
                                 printf("flags = %d\n",flags);
 #endif
                                 break;
-                        } else 
+                        } else
                                 flags = 0;
-                        
+
                         for (tmp = strtok(cloned_flags, ":|"); tmp;
                              tmp = strtok(NULL, ":|")) {
                                 int i = 0;
@@ -203,11 +202,11 @@ int main(int argc, char** argv)
         } else {
                 fprintf(stderr, "Error in opening file \"%s\"(flags=%s",
                         fname, cloned_flags);
+                if (mode_set)
+                        fprintf(stderr, ", mode=%o", mode);
+                fprintf(stderr, ") %d: %s\n", save_errno, strerror(save_errno));
         }
 
-        if (mode_set)
-                fprintf(stderr, ", mode=%o", mode);
-        fprintf(stderr, ") %d: %s\n", save_errno, strerror(save_errno));
 
 out:
         if (cloned_flags)

@@ -620,7 +620,8 @@ kqswnal_launch (kqswnal_tx_t *ktx)
         switch (ktx->ktx_state) {
         case KTX_GETTING:
         case KTX_PUTTING:
-                if (the_lnet.ln_testprotocompat != 0) {
+                if (the_lnet.ln_testprotocompat != 0 &&
+                    the_lnet.ln_ptlcompat == 0) {
                         kqswnal_msg_t *msg = (kqswnal_msg_t *)ktx->ktx_buffer;
 
                         /* single-shot proto test:
@@ -1055,13 +1056,20 @@ kqswnal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                  * ktx_frags[1] and onward with the network addresses
                  * of the buffer frags. */
 
-                /* Send an RDMA message */
-                msg->kqm_magic = LNET_PROTO_QSW_MAGIC;
-                msg->kqm_version = QSWLND_PROTO_VERSION;
-                msg->kqm_type = QSWLND_MSG_RDMA;
+                if (the_lnet.ln_ptlcompat == 2) {
+                        /* Strong portals compatibility: send "raw" LNET
+                         * header + rdma descriptor */
+                        mhdr = (lnet_hdr_t *)ktx->ktx_buffer;
+                        rmd  = (kqswnal_remotemd_t *)(mhdr + 1);
+                } else {
+                        /* Send an RDMA message */
+                        msg->kqm_magic = LNET_PROTO_QSW_MAGIC;
+                        msg->kqm_version = QSWLND_PROTO_VERSION;
+                        msg->kqm_type = QSWLND_MSG_RDMA;
 
-                mhdr = &msg->kqm_u.rdma.kqrm_hdr;
-                rmd  = &msg->kqm_u.rdma.kqrm_rmd;
+                        mhdr = &msg->kqm_u.rdma.kqrm_hdr;
+                        rmd  = &msg->kqm_u.rdma.kqrm_rmd;
+                }
 
                 *mhdr = *hdr;
                 nob = (((char *)rmd) - ktx->ktx_buffer);
@@ -1097,6 +1105,7 @@ kqswnal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
                 ep_nmd_subset(&ktx->ktx_frags[0], &ktx->ktx_ebuffer, 0, nob);
 #if KQSW_CKSUM
+                LASSERT (the_lnet.ln_ptlcompat != 2);
                 msg->kqm_nob   = nob + payload_nob;
                 msg->kqm_cksum = 0;
                 msg->kqm_cksum = kqswnal_csum(~0, (char *)msg, nob);
@@ -1143,13 +1152,21 @@ kqswnal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 char          *payload;
                 kqswnal_msg_t *msg = (kqswnal_msg_t *)ktx->ktx_buffer;
 
-                /* single frag copied into the pre-mapped buffer */
-                msg->kqm_magic = LNET_PROTO_QSW_MAGIC;
-                msg->kqm_version = QSWLND_PROTO_VERSION;
-                msg->kqm_type = QSWLND_MSG_IMMEDIATE;
+                /* small message: single frag copied into the pre-mapped buffer */
+                if (the_lnet.ln_ptlcompat == 2) {
+                        /* Strong portals compatibility: send "raw" LNET header
+                         * + payload */
+                        mhdr = (lnet_hdr_t *)ktx->ktx_buffer;
+                        payload = (char *)(mhdr + 1);
+                } else {
+                        /* Send an IMMEDIATE message */
+                        msg->kqm_magic = LNET_PROTO_QSW_MAGIC;
+                        msg->kqm_version = QSWLND_PROTO_VERSION;
+                        msg->kqm_type = QSWLND_MSG_IMMEDIATE;
 
-                mhdr = &msg->kqm_u.immediate.kqim_hdr;
-                payload = msg->kqm_u.immediate.kqim_payload;
+                        mhdr = &msg->kqm_u.immediate.kqim_hdr;
+                        payload = msg->kqm_u.immediate.kqim_payload;
+                }
 
                 *mhdr = *hdr;
                 nob = (payload - ktx->ktx_buffer) + payload_nob;
@@ -1165,6 +1182,7 @@ kqswnal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                                            payload_niov, payload_iov, 
                                            payload_offset, payload_nob);
 #if KQSW_CKSUM
+                LASSERT (the_lnet.ln_ptlcompat != 2);
                 msg->kqm_nob   = nob;
                 msg->kqm_cksum = 0;
                 msg->kqm_cksum = kqswnal_csum(~0, (char *)msg, nob);
@@ -1177,13 +1195,22 @@ kqswnal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 lnet_hdr_t    *mhdr;
                 kqswnal_msg_t *msg = (kqswnal_msg_t *)ktx->ktx_buffer;
 
-                /* multiple frags: first is hdr in pre-mapped buffer */
-                msg->kqm_magic = LNET_PROTO_QSW_MAGIC;
-                msg->kqm_version = QSWLND_PROTO_VERSION;
-                msg->kqm_type = QSWLND_MSG_IMMEDIATE;
+                /* large message: multiple frags: first is hdr in pre-mapped buffer */
+                if (the_lnet.ln_ptlcompat == 2) {
+                        /* Strong portals compatibility: send "raw" LNET header
+                         * + payload */
+                        mhdr = (lnet_hdr_t *)ktx->ktx_buffer;
+                        nob = sizeof(lnet_hdr_t);
+                } else {
+                        /* Send an IMMEDIATE message */
+                        msg->kqm_magic = LNET_PROTO_QSW_MAGIC;
+                        msg->kqm_version = QSWLND_PROTO_VERSION;
+                        msg->kqm_type = QSWLND_MSG_IMMEDIATE;
 
-                mhdr = &msg->kqm_u.immediate.kqim_hdr;
-                nob = offsetof(kqswnal_msg_t, kqm_u.immediate.kqim_payload);
+                        mhdr = &msg->kqm_u.immediate.kqim_hdr;
+                        nob = offsetof(kqswnal_msg_t,
+                                       kqm_u.immediate.kqim_payload);
+                }
 
                 *mhdr = *hdr;
 
@@ -1331,6 +1358,10 @@ kqswnal_parse (kqswnal_rx_t *krx)
 
         LASSERT (atomic_read(&krx->krx_refcount) == 1);
 
+        /* If ln_ptlcompat is set, peers may send me an "old" unencapsulated
+         * lnet hdr */
+        LASSERT (offsetof(kqswnal_msg_t, kqm_u) <= sizeof(lnet_hdr_t));
+        
         if (krx->krx_nob < offsetof(kqswnal_msg_t, kqm_u)) {
                 CERROR("Short message %d received from %s\n",
                        krx->krx_nob, libcfs_nid2str(fromnid));
@@ -1486,6 +1517,25 @@ kqswnal_parse (kqswnal_rx_t *krx)
                 goto done;
         }
 
+        if (the_lnet.ln_ptlcompat != 0) {
+                /* Portals compatibility (strong or weak)
+                 * This could be an unencapsulated LNET header.  If it's big
+                 * enough, let LNET's parser sort it out */
+
+                if (krx->krx_nob < sizeof(lnet_hdr_t)) {
+                        CERROR("Short portals-compatible message from %s\n",
+                               libcfs_nid2str(fromnid));
+                        goto done;
+                }
+
+                krx->krx_raw_lnet_hdr = 1;
+                rc = lnet_parse(ni, (lnet_hdr_t *)msg,
+                                fromnid, krx, krx->krx_rpc_reply_needed);
+                if (rc < 0)
+                        goto done;
+                return;
+        }
+
         CERROR("Unrecognised magic %08x from %s\n",
                msg->kqm_magic, libcfs_nid2str(fromnid));
  done:
@@ -1509,6 +1559,7 @@ kqswnal_rxhandler(EP_RXD *rxd)
         krx->krx_state = KRX_PARSE;
         krx->krx_rxd = rxd;
         krx->krx_nob = nob;
+        krx->krx_raw_lnet_hdr = 0;
 
         /* RPC reply iff rpc request received without error */
         krx->krx_rpc_reply_needed = ep_rxd_isrpc(rxd) &&
@@ -1573,9 +1624,17 @@ kqswnal_recv (lnet_ni_t     *ni,
         if (krx->krx_rpc_reply_needed) {
                 /* optimized (rdma) request sent as RPC */
 
-                LASSERT (msg->kqm_type == QSWLND_MSG_RDMA);
-                hdr = &msg->kqm_u.rdma.kqrm_hdr;
-                rmd = &msg->kqm_u.rdma.kqrm_rmd;
+                if (krx->krx_raw_lnet_hdr) {
+                        LASSERT (the_lnet.ln_ptlcompat != 0);
+                        hdr = (lnet_hdr_t *)msg;
+                        rmd = kqswnal_get_portalscompat_rmd(krx);
+                        if (rmd == NULL)
+                                return (-EPROTO);
+                } else {
+                        LASSERT (msg->kqm_type == QSWLND_MSG_RDMA);
+                        hdr = &msg->kqm_u.rdma.kqrm_hdr;
+                        rmd = &msg->kqm_u.rdma.kqrm_rmd;
+                }
 
                 /* NB header is still in wire byte order */
 
@@ -1625,8 +1684,13 @@ kqswnal_recv (lnet_ni_t     *ni,
                 return rc;
         }
 
-        LASSERT (msg->kqm_type == QSWLND_MSG_IMMEDIATE);
-        msg_offset = offsetof(kqswnal_msg_t, kqm_u.immediate.kqim_payload);
+        if (krx->krx_raw_lnet_hdr) {
+                LASSERT (the_lnet.ln_ptlcompat != 0);
+                msg_offset = sizeof(lnet_hdr_t);
+        } else {
+                LASSERT (msg->kqm_type == QSWLND_MSG_IMMEDIATE);
+                msg_offset = offsetof(kqswnal_msg_t, kqm_u.immediate.kqim_payload);
+        }
         
         if (krx->krx_nob < msg_offset + rlen) {
                 CERROR("Bad message size from %s: have %d, need %d + %d\n",

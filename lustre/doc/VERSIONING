@@ -16,24 +16,29 @@ package version.  So let's plan on releasing
 
 So you'd build 2 sets of test rpms this week:
 
-0.0.9.1
-0.0.9.2
+1.6.8.91
+1.6.8.92
 
-we decide it's fine then and we release
+we decide it's fine then and we release:
 
-0.1.0
+1.6.9
+
+If there are critical hotfixes that need to be released to customers
+(e.g. data corruption fixes) then point releases would be created:
+
+1.6.9.{1,2,3,...}
 
 We go on developing with
 
-0.1.0.{1,2,3,4,...}
+1.6.9.{91,92,93,94,...}
 
 as test releases and then we release:
 
-0.1.1
+1.6.10
 
-The 0.1 sequence is an unstable sequence, like 2.5 for the kernel is.
-So we expect lots of 0.1.X releases leading up to a stable 0.2 (or
-1.0) at the time of deployment.
+The 1.7 sequence would be an unstable sequence, like 2.5 for the kernel
+is.  So we expect lots of 1.7.X releases leading up to a stable 1.8 (or
+2.0) at the time of deployment.
 
 CVS
 ===
@@ -42,11 +47,11 @@ Versions will have 4 digits:
                      major.minor.patch.test
 
 Such versions will be tagged in CVS as:
-                     v1_2_11_7
+                     v1_6_9_97
 and referred to as:
-                     1.2.11.7
+                     1.6.9.97
 encoded as:
-                     0x01021107
+                     0x01060961
 
 Usage:
 ------
@@ -60,7 +65,7 @@ New numbers are used as follows:
  - odd : when a new development cycle starts after a release
 3. patch:
  - when a development snapshot or release update becomes available
- - all these are announced on lustre-devel@lists.sf.net
+ - all these are announced on lustre-{announce,devel}@lists.lustre.org
 4. test:
  - when developers feel it is time to exchange a named version
 
@@ -72,12 +77,6 @@ What will run, what won't ?
 
 2. For three digit releases/tags the code should perform
    according to the announcement.
-
-Moving tags
------------
-
-The last stable release will be tagged:            CVS tag "t_last_stable"
-The last operational development snapshot will be  CVS tag "dstable"
 
 Branches
 --------

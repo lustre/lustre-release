@@ -73,10 +73,18 @@ extern int llapi_file_create(const char *name, unsigned long stripe_size,
 extern int llapi_file_open(const char *name, int flags, int mode,
                            unsigned long stripe_size, int stripe_offset,
                            int stripe_count, int stripe_pattern);
+extern int llapi_file_create_pool(const char *name, unsigned long stripe_size,
+                                  int stripe_offset, int stripe_count,
+                                  int stripe_pattern, char *pool_name);
+extern int llapi_file_open_pool(const char *name, int flags, int mode,
+                                unsigned long stripe_size, int stripe_offset,
+                                int stripe_count, int stripe_pattern,
+                                char *pool_name);
+extern int llapi_poollist(char *name);
 extern int llapi_file_get_stripe(const char *path, struct lov_user_md *lum);
 #define HAVE_LLAPI_FILE_LOOKUP
 extern int llapi_file_lookup(int dirfd, const char *name);
- 
+
 struct find_param {
         unsigned int maxdepth;
         time_t  atime;
@@ -89,6 +97,7 @@ struct find_param {
         unsigned long long size;
         int     size_sign;
         unsigned long long size_units;
+        int size_check;
         uid_t uid;
         gid_t gid;
 
@@ -102,7 +111,9 @@ struct find_param {
                         exclude_gid:1,
                         exclude_uid:1,
                         check_gid:1,
-                        check_uid:1;
+                        check_uid:1,
+                        check_pool:1,
+                        exclude_pool:1;
 
         int     verbose;
         int     quiet;
@@ -124,6 +135,8 @@ struct find_param {
         /* In-precess parameters. */
         unsigned int depth;
         dev_t   st_dev;
+
+        char poolname[MAXPOOLNAME+1];
 };
 
 extern int llapi_getstripe(char *path, struct find_param *param);
@@ -136,11 +149,11 @@ extern int llapi_ping(char *obd_type, char *obd_name);
 extern int llapi_target_check(int num_types, char **obd_types, char *dir);
 extern int llapi_catinfo(char *dir, char *keyword, char *node_name);
 extern int llapi_file_get_lov_uuid(const char *path, struct obd_uuid *lov_uuid);
-extern int llapi_file_get_lov_fuuid(int fd, struct obd_uuid *lov_uuid);
+extern int llapi_file_fget_lov_uuid(int fd, struct obd_uuid *lov_uuid);
 extern int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count);
 extern int llapi_is_lustre_mnttype(const char *type);
 extern int parse_size(char *optarg, unsigned long long *size,
-                      unsigned long long *size_units);
+                      unsigned long long *size_units, int bytes_spec);
 struct mntent;
 #define HAVE_LLAPI_IS_LUSTRE_MNT
 extern int llapi_is_lustre_mnt(struct mntent *mnt);
@@ -149,10 +162,4 @@ extern int llapi_quotacheck(char *mnt, int check_type);
 extern int llapi_poll_quotacheck(char *mnt, struct if_quotacheck *qchk);
 extern int llapi_quotactl(char *mnt, struct if_quotactl *qctl);
 extern int llapi_target_iterate(int type_num, char **obd_type, void *args, llapi_cb_t cb);
-extern int llapi_lsetfacl(int argc, char *argv[]);
-extern int llapi_lgetfacl(int argc, char *argv[]);
-extern int llapi_rsetfacl(int argc, char *argv[]);
-extern int llapi_rgetfacl(int argc, char *argv[]);
-extern int llapi_cp(int argc, char *argv[]);
-extern int llapi_ls(int argc, char *argv[]);
 #endif

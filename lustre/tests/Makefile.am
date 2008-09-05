@@ -11,19 +11,17 @@ noinst_SCRIPTS += sanity.sh rundbench acceptance-small.sh compile.sh
 noinst_SCRIPTS += conf-sanity.sh insanity.sh lfscktest.sh oos.sh oos2.sh
 noinst_SCRIPTS += llog-test.sh recovery-small.sh replay-dual.sh sanity-quota.sh
 noinst_SCRIPTS += replay-ost-single.sh replay-single.sh run-llog.sh sanityN.sh
+noinst_SCRIPTS += performance-sanity.sh mdsrate-create-small.sh
+noinst_SCRIPTS += mdsrate-create-large.sh mdsrate-lookup-1dir.sh
+noinst_SCRIPTS += mdsrate-stat-small.sh mdsrate-stat-large.sh replay-vbr.sh
 noinst_SCRIPTS += lockorder.sh socketclient socketserver runmultiop_bg_pause
-noinst_SCRIPTS += sanity-sec.sh sanity-gss.sh krb5_login.sh setup_kerberos.sh
 nobase_noinst_SCRIPTS = cfg/local.sh
 nobase_noinst_SCRIPTS += acl/make-tree acl/run cfg/ncli.sh
 nobase_noinst_SCRIPTS += racer/dir_create.sh racer/file_create.sh racer/file_list.sh
 nobase_noinst_SCRIPTS += racer/file_rm.sh racer/racer.sh racer/file_concat.sh
 nobase_noinst_SCRIPTS += racer/file_link.sh racer/file_rename.sh racer/file_symlink.sh
-nobase_noinst_SCRIPTS += rmtacl/make-tree rmtacl/run
 nobase_noinst_DATA = acl/cp.test acl/getfacl-noacl.test acl/inheritance.test
 nobase_noinst_DATA += acl/misc.test acl/permissions.test acl/setfacl.test
-nobase_noinst_DATA += rmtacl/misc.test rmtacl/permissions.test
-nobase_noinst_DATA += rmtacl/setfacl.test rmtacl/cp.test
-nobase_noinst_DATA += rmtacl/getfacl-noacl.test rmtacl/inheritance.test
 
 EXTRA_DIST = $(noinst_SCRIPTS) $(noinst_DATA) \
              $(nobase_noinst_SCRIPTS) $(nobase_noinst_DATA)
@@ -38,10 +36,9 @@ noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify cmknod
 noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify mkdirmany
 noinst_PROGRAMS += openfilleddirunlink rename_many memhog iopentest1 iopentest2
 noinst_PROGRAMS += mmap_sanity flock_test writemany reads flocks_test
-noinst_PROGRAMS += ll_getstripe_info write_time_limit
+noinst_PROGRAMS += ll_getstripe_info
 if MPITESTS
-noinst_PROGRAMS += parallel_grouplock write_append_truncate createmany_mpi
-noinst_PROGRAMS += iam_ut
+noinst_PROGRAMS += parallel_grouplock write_append_truncate createmany_mpi mdsrate
 endif
 # noinst_PROGRAMS += ldaptest copy_attr mkdirdeep 
 bin_PROGRAMS = mcreate munlink
@@ -66,13 +63,16 @@ flocks_test_SOURCES=flocks_test.c
 flocks_test_LDADD=-lpthread
 
 if MPITESTS
-LAM_LD_FLAGS=-L/opt/lam/lib -lmpi -llam -lpthread
+#LAM_LD_FLAGS=-L/opt/lam/lib -lmpi -llam -lpthread
+LAM_LD_FLAGS=-lmpich -lpthread
 write_append_truncate_SOURCES=write_append_truncate.c
 write_append_truncate_LDADD=$(LAM_LD_FLAGS)
 createmany_mpi_SOURCES=createmany-mpi.c
 createmany_mpi_LDADD=$(LAM_LD_FLAGS)
-parallel_grouplock_SOURCES=parallel_grouplock.c lp_utils.c
+parallel_grouplock_SOURCES=parallel_grouplock.c lp_utils.c lp_utils.h
 parallel_grouplock_LDADD=$(LAM_LD_FLAGS)
+mdsrate_SOURCES=mdsrate.c
+mdsrate_LDADD=$(LAM_LD_FLAGS) -L$(top_builddir)/lustre/utils -llustreapi
 endif
 
 #copy_attr_LDADD= -lattr

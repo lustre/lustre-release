@@ -82,11 +82,11 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
                 RETURN(ERR_PTR(-ENOSPC));
         }
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_LLOG_CREATE_FAILED))
+        if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_LLOG_CREATE_FAILED))
                 RETURN(ERR_PTR(-ENOSPC));
- 
+        
         rc = llog_create(cathandle->lgh_ctxt, &loghandle, NULL, NULL);
-        if (rc) 
+        if (rc)
                 RETURN(ERR_PTR(rc));
         
         rc = llog_init_handle(loghandle,
@@ -94,7 +94,6 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
                               &cathandle->lgh_hdr->llh_tgtuuid);
         if (rc)
                 GOTO(out_destroy, rc);
-
         if (index == 0)
                 index = 1;
         if (ext2_set_bit(index, llh->llh_bitmap)) {

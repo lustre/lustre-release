@@ -55,14 +55,7 @@
 
 #define l_flock_waitq   l_lru
 
-/**
- * Wait queue for Posix lock deadlock detection, added with
- * ldlm_lock::l_flock_waitq.
- */
-static CFS_LIST_HEAD(ldlm_flock_waitq);
-/**
- * Lock protecting access to ldlm_flock_waitq.
- */
+static struct list_head ldlm_flock_waitq = CFS_LIST_HEAD_INIT(ldlm_flock_waitq);
 spinlock_t ldlm_flock_waitq_lock = SPIN_LOCK_UNLOCKED;
 
 int ldlm_flock_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
@@ -112,7 +105,7 @@ ldlm_flock_destroy(struct ldlm_lock *lock, ldlm_mode_t mode, int flags)
                 /* client side - set a flag to prevent sending a CANCEL */
                 lock->l_flags |= LDLM_FL_LOCAL_ONLY | LDLM_FL_CBPENDING;
 
-                /* when reaching here, it is under lock_res_and_lock(). Thus, 
+                /* when reaching here, it is under lock_res_and_lock(). Thus,
                    need call the nolock version of ldlm_lock_decref_internal*/
                 ldlm_lock_decref_internal_nolock(lock, mode);
         }
@@ -372,7 +365,7 @@ reprocess:
                  * and restart processing this lock. */
                 if (!new2) {
                         unlock_res_and_lock(req);
-                         new2 = ldlm_lock_create(ns, &res->lr_name, LDLM_FLOCK,
+                        new2 = ldlm_lock_create(ns, res->lr_name, LDLM_FLOCK,
                                         lock->l_granted_mode, NULL, NULL, NULL,
                                         NULL, 0);
                         lock_res_and_lock(req);
@@ -439,15 +432,15 @@ reprocess:
                          * but only once because first_enq will be false from
                          * ldlm_reprocess_queue. */
                         if ((mode == LCK_NL) && overlaps) {
-                                CFS_LIST_HEAD(rpc_list);
+                                struct list_head rpc_list
+                                                    = CFS_LIST_HEAD_INIT(rpc_list);
                                 int rc;
 restart:
                                 ldlm_reprocess_queue(res, &res->lr_waiting,
                                                      &rpc_list);
 
                                 unlock_res_and_lock(req);
-                                rc = ldlm_run_ast_work(&rpc_list,
-                                                       LDLM_WORK_BL_AST);
+                                rc = ldlm_run_cp_ast_work(&rpc_list);
                                 lock_res_and_lock(req);
                                 if (rc == -ERESTART)
                                         GOTO(restart, -ERESTART);
@@ -522,7 +515,7 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
          * holding the lock even if app still believes it has it, since
          * server already dropped it anyway. Only for granted locks too. */
         lock_res_and_lock(lock);
-        if ((lock->l_flags & (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) == 
+        if ((lock->l_flags & (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) ==
             (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) {
                 unlock_res_and_lock(lock);
                 if (lock->l_req_mode == lock->l_granted_mode &&
@@ -575,7 +568,7 @@ granted:
          */
         if (lock->l_destroyed) {
                 LDLM_DEBUG(lock, "already destroyed by another thread");
-                unlock_res(lock->l_resource);
+                unlock_res_and_lock(lock);
                 RETURN(0);
         }
 

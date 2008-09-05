@@ -42,7 +42,7 @@
 #error Unsupported Operating System
 #endif
 
-#include <libcfs/libcfs.h>
+#include <libcfs/kp30.h>
 #include <lnet/lnet.h>
 #include <lnet/lib-lnet.h>
 #include <lnet/socklnd.h>

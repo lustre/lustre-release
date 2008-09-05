@@ -61,11 +61,10 @@ static inline void ll_remove_from_page_cache(struct page *page)
         page->mapping = NULL;
         mapping->nrpages--;
 #ifdef HAVE_NR_PAGECACHE
-        atomic_add(-1, &nr_pagecache); // XXX pagecache_acct(-1);
+	atomic_add(-1, &nr_pagecache); // XXX pagecache_acct(-1);
 #else
-        __dec_zone_page_state(page, NR_FILE_PAGES);
+	__dec_zone_page_state(page, NR_FILE_PAGES);
 #endif
-
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15))
         write_unlock_irq(&mapping->tree_lock);
 #else

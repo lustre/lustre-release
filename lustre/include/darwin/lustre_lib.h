@@ -1,3 +1,4 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  * GPL HEADER START
@@ -17,7 +18,6 @@
  * You should have received a copy of the GNU General Public License
  * version 2 along with this program; If not, see
  * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
- * copy of GPLv2].
  *
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
@@ -47,6 +47,7 @@
 
 #include <string.h>
 #include <libcfs/libcfs.h>
+#include <libcfs/kp30.h> 
 
 #ifndef LP_POISON
 #define LI_POISON ((int)0x5a5a5a5a)

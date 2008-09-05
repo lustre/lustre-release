@@ -89,7 +89,6 @@ struct lov_async_page {
         int                             lap_stripe;
         obd_off                         lap_sub_offset;
         obd_id                          lap_loi_id;
-        obd_gr                          lap_loi_gr;
         void                            *lap_sub_cookie;
         struct obd_async_page_ops       *lap_caller_ops;
         void                            *lap_caller_data;
@@ -139,14 +138,12 @@ static inline void lov_llh_put(struct lov_lock_handles *llh)
                 atomic_read(&llh->llh_refcount) < 0x5a5a);
         if (atomic_dec_and_test(&llh->llh_refcount)) {
                 class_handle_unhash(&llh->llh_handle);
-                /* The structure may be held by other threads because RCU. 
-                 *   -jxiong */
+                /* The structure may be held by other threads because RCU. -jxiong */
                 if (atomic_read(&llh->llh_refcount))
                         return;
 
                 OBD_FREE_RCU(llh, sizeof *llh +
-                             sizeof(*llh->llh_handles) * llh->llh_stripe_count,
-                             &llh->llh_handle);
+                         sizeof(*llh->llh_handles) * llh->llh_stripe_count, &llh->llh_handle);
         }
 }
 
@@ -263,9 +260,8 @@ void lov_getref(struct obd_device *obd);
 void lov_putref(struct obd_device *obd);
 
 /* lov_log.c */
-int lov_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                  struct obd_device *tgt, int count, struct llog_catid *logid, 
-                  struct obd_uuid *uuid);
+int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
+                  int count, struct llog_catid *logid, struct obd_uuid *uuid);
 int lov_llog_finish(struct obd_device *obd, int count);
 
 /* lov_pack.c */
@@ -285,6 +281,9 @@ void lov_free_memmd(struct lov_stripe_md **lsmp);
 
 void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm);
 void lov_dump_lmm_join(int level, struct lov_mds_md_join *lmmj);
+void lov_dump_lmm_v3(int level, struct lov_mds_md_v3 *lmm);
+void lov_dump_lmm(int level, void *lmm);
+
 /* lov_ea.c */
 int lov_unpackmd_join(struct lov_obd *lov, struct lov_stripe_md *lsm,
                       struct lov_mds_md *lmm);
@@ -305,5 +304,24 @@ static inline void lprocfs_lov_init_vars(struct lprocfs_static_vars *lvars)
         memset(lvars, 0, sizeof(*lvars));
 }
 #endif
+
+/* pools */
+extern struct lustre_hash_operations pool_hash_operations;
+/* ost_pool methods */
+int lov_ost_pool_init(struct ost_pool *op, unsigned int count);
+int lov_ost_pool_extend(struct ost_pool *op, unsigned int max_count);
+int lov_ost_pool_add(struct ost_pool *op, __u32 idx, unsigned int max_count);
+int lov_ost_pool_remove(struct ost_pool *op, __u32 idx);
+int lov_ost_pool_free(struct ost_pool *op);
+
+/* high level pool methods */
+int lov_pool_new(struct obd_device *obd, char *poolname);
+int lov_pool_del(struct obd_device *obd, char *poolname);
+int lov_pool_add(struct obd_device *obd, char *poolname, char *ostname);
+int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname);
+void lov_dump_pool(int level, struct pool_desc *pool);
+struct pool_desc *lov_find_pool(struct lov_obd *lov, char *poolname);
+int lov_check_index_in_pool(__u32 idx, struct pool_desc *pool);
+
 
 #endif

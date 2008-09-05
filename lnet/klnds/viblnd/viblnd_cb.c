@@ -177,7 +177,7 @@ kibnal_post_rx (kib_rx_t *rx, int credit, int rsrvd_credit)
         LASSERT (conn->ibc_state >= IBNAL_CONN_INIT);
         LASSERT (rx->rx_nob >= 0);              /* not posted */
 
-        CDEBUG(D_NET, "posting rx [%d %x "LPX64"]\n",
+        CDEBUG(D_NET, "posting rx [%d %x "LPX64"]\n", 
                rx->rx_wrq.scatgat_list->length,
                rx->rx_wrq.scatgat_list->l_key,
                KIBNAL_SG2ADDR(rx->rx_wrq.scatgat_list->v_address));
@@ -211,10 +211,10 @@ kibnal_post_rx (kib_rx_t *rx, int credit, int rsrvd_credit)
 
         spin_unlock(&conn->ibc_lock);
 
-        CERROR ("post rx -> %s failed %d\n",
+        CERROR ("post rx -> %s failed %d\n", 
                 libcfs_nid2str(conn->ibc_peer->ibp_nid), vvrc);
         rc = -EIO;
-        kibnal_close_conn(conn, rc);
+        kibnal_close_conn(rx->rx_conn, rc);
         /* No more posts for this rx; so lose its ref */
         kibnal_conn_decref(conn);
         return rc;
@@ -485,8 +485,10 @@ kibnal_rx_complete (kib_rx_t *rx, vv_comp_status_t vvrc, int nob, __u64 rxseq)
 
         rx->rx_nob = nob;                       /* Can trust 'nob' now */
 
-        if (conn->ibc_peer->ibp_nid != msg->ibm_srcnid ||
-            kibnal_data.kib_ni->ni_nid != msg->ibm_dstnid ||
+        if (!lnet_ptlcompat_matchnid(conn->ibc_peer->ibp_nid,
+                                     msg->ibm_srcnid) ||
+            !lnet_ptlcompat_matchnid(kibnal_data.kib_ni->ni_nid,
+                                     msg->ibm_dstnid) ||
             msg->ibm_srcstamp != conn->ibc_incarnation ||
             msg->ibm_dststamp != kibnal_data.kib_incarnation) {
                 CERROR ("Stale rx from %s\n",
@@ -1754,7 +1756,7 @@ kibnal_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
         case IBNAL_MSG_PUT_REQ:
                 if (mlen == 0) {
                         lnet_finalize(ni, lntmsg, 0);
-                        kibnal_send_completion(conn, IBNAL_MSG_PUT_NAK, 0,
+                        kibnal_send_completion(rx->rx_conn, IBNAL_MSG_PUT_NAK, 0,
                                                rxmsg->ibm_u.putreq.ibprm_cookie);
                         break;
                 }
@@ -1784,7 +1786,7 @@ kibnal_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
                                libcfs_nid2str(conn->ibc_peer->ibp_nid), rc);
                         kibnal_tx_done(tx);
                         /* tell peer it's over */
-                        kibnal_send_completion(conn, IBNAL_MSG_PUT_NAK, rc,
+                        kibnal_send_completion(rx->rx_conn, IBNAL_MSG_PUT_NAK, rc,
                                                rxmsg->ibm_u.putreq.ibprm_cookie);
                         break;
                 }
@@ -1816,7 +1818,8 @@ kibnal_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
                         kibnal_reply(ni, rx, lntmsg);
                 } else {
                         /* GET didn't match anything */
-                        kibnal_send_completion(conn, IBNAL_MSG_GET_DONE, -ENODATA,
+                        kibnal_send_completion(rx->rx_conn, IBNAL_MSG_GET_DONE,
+                                               -ENODATA,
                                                rxmsg->ibm_u.get.ibgm_cookie);
                 }
                 break;
@@ -2426,7 +2429,8 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
                 goto reject;
         }
 
-        if (kibnal_data.kib_ni->ni_nid != rxmsg.ibm_dstnid) {
+        if (!lnet_ptlcompat_matchnid(kibnal_data.kib_ni->ni_nid,
+                                     rxmsg.ibm_dstnid)) {
                 CERROR("Can't accept %s: bad dst nid %s\n",
                        libcfs_nid2str(rxmsg.ibm_srcnid),
                        libcfs_nid2str(rxmsg.ibm_dstnid));
@@ -2490,7 +2494,7 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
                         write_unlock_irqrestore(g_lock, flags);
 
                         CWARN("Conn race %s\n",
-                              libcfs_nid2str(rxmsg.ibm_srcnid));
+                              libcfs_nid2str(peer2->ibp_nid));
 
                         kibnal_peer_decref(peer);
                         reason = IBNAL_REJECT_CONN_RACE;
@@ -2628,7 +2632,6 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
         if (conn != NULL) {
                 LASSERT (rc != 0);
                 kibnal_connreq_done(conn, 0, rc);
-                kibnal_conn_decref(conn);
         } else {
                 cm_destroy_cep(cep);
         }
@@ -2885,7 +2888,8 @@ kibnal_check_connreply (kib_conn_t *conn)
                 }
 
                 read_lock_irqsave(&kibnal_data.kib_global_lock, flags);
-                if (kibnal_data.kib_ni->ni_nid == msg.ibm_dstnid &&
+                if (lnet_ptlcompat_matchnid(kibnal_data.kib_ni->ni_nid,
+                                            msg.ibm_dstnid) &&
                     msg.ibm_dststamp == kibnal_data.kib_incarnation)
                         rc = 0;
                 else
@@ -3068,7 +3072,7 @@ kibnal_arp_done (kib_conn_t *conn)
                                        path->pkey, &cv->cv_pkey_index);
                 if (vvrc != vv_return_ok) {
                         CWARN("pkey2pkey_index failed for %s @ %u.%u.%u.%u: %d\n",
-                              libcfs_nid2str(peer->ibp_nid),
+                              libcfs_nid2str(peer->ibp_nid), 
                               HIPQUAD(peer->ibp_ip), vvrc);
                         goto failed;
                 }
@@ -3098,7 +3102,7 @@ kibnal_arp_done (kib_conn_t *conn)
                                          &path->slid);
                 if (vvrc != vv_return_ok) {
                         CWARN("port_num2base_lid failed for %s @ %u.%u.%u.%u: %d\n",
-                              libcfs_nid2str(peer->ibp_ip),
+                              libcfs_nid2str(peer->ibp_ip), 
                               HIPQUAD(peer->ibp_ip), vvrc);
                         goto failed;
                 }

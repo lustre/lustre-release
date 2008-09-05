@@ -44,14 +44,11 @@
 #ifdef __KERNEL__
 # include <linux/fs.h>
 # include <linux/list.h>
-# include <linux/sched.h>  /* for struct task_struct, for current.h */
-# include <asm/current.h>  /* for smp_lock.h */
+# include <linux/sched.h> /* for struct task_struct, for current.h */
+# include <asm/current.h> /* for smp_lock.h */
 # include <linux/smp_lock.h>
 # include <linux/proc_fs.h>
 # include <linux/mount.h>
-# ifndef HAVE_VFS_INTENT_PATCHES
-#  include <linux/lustre_intent.h>
-# endif
 #endif
 
 typedef spinlock_t client_obd_lock_t;

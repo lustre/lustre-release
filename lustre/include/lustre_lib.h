@@ -41,7 +41,7 @@
 #ifndef _LUSTRE_LIB_H
 #define _LUSTRE_LIB_H
 
-#include <libcfs/libcfs.h>
+#include <libcfs/kp30.h>
 #include <lustre/lustre_idl.h>
 #include <lustre_ver.h>
 #include <lustre_cfg.h>
@@ -71,13 +71,13 @@ struct obd_export;
 
 void target_client_add_cb(struct obd_device *obd, __u64 transno, void *cb_data,
                           int error);
-int target_handle_connect(struct ptlrpc_request *req);
+int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler);
 int target_handle_disconnect(struct ptlrpc_request *req);
 void target_destroy_export(struct obd_export *exp);
 int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
-                            struct obd_uuid *cluuid, int);
-int target_pack_pool_reply(struct ptlrpc_request *req);
+                            struct obd_uuid *cluuid);
 int target_handle_ping(struct ptlrpc_request *req);
+int target_pack_pool_reply(struct ptlrpc_request *req);
 void target_committed_to_req(struct ptlrpc_request *req);
 
 #ifdef HAVE_QUOTA_SUPPORT
@@ -89,29 +89,26 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req);
 #define target_handle_qc_callback(req) (0)
 #endif
 
-#define OBD_RECOVERY_MAX_TIME (obd_timeout * 18) /* b13079 */
-
 void target_cancel_recovery_timer(struct obd_device *obd);
-int target_start_recovery_thread(struct obd_device *obd, 
-                                 svc_handler_t handler);
-void target_stop_recovery_thread(struct obd_device *obd);
+void target_abort_recovery(void *data);
+int target_recovery_check_and_stop(struct obd_device *obd);
 void target_cleanup_recovery(struct obd_device *obd);
 int target_queue_recovery_request(struct ptlrpc_request *req,
                                   struct obd_device *obd);
+int target_handle_reply(struct ptlrpc_request *req, int rc, int fail);
 void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id);
 
 /* client.c */
 
-int client_sanobd_setup(struct obd_device *obddev, struct lustre_cfg* lcfg);
+int client_sanobd_setup(struct obd_device *obddev, obd_count len, void *buf);
 struct client_obd *client_conn2cli(struct lustre_handle *conn);
 
-struct md_open_data;
+struct mdc_open_data;
 struct obd_client_handle {
-        struct lustre_handle  och_fh;
-        struct lu_fid         och_fid;
-        struct md_open_data *och_mod;
+        struct lustre_handle och_fh;
+        struct llog_cookie och_cookie;
+        struct mdc_open_data *och_mod;
         __u32 och_magic;
-        int och_flags;
 };
 #define OBD_CLIENT_HANDLE_MAGIC 0xd15ea5ed
 
@@ -149,37 +146,37 @@ struct obd_ioctl_data {
         struct obdo ioc_obdo1;
         struct obdo ioc_obdo2;
 
-        obd_size ioc_count;
-        obd_off  ioc_offset;
-        __u32    ioc_dev;
-        __u32    ioc_command;
+        obd_size         ioc_count;
+        obd_off          ioc_offset;
+        __u32            ioc_dev;
+        __u32            ioc_command;
 
         __u64 ioc_nid;
         __u32 ioc_nal;
         __u32 ioc_type;
 
         /* buffers the kernel will treat as user pointers */
-        __u32  ioc_plen1;
-        char  *ioc_pbuf1;
-        __u32  ioc_plen2;
-        char  *ioc_pbuf2;
+        __u32    ioc_plen1;
+        char    *ioc_pbuf1;
+        __u32    ioc_plen2;
+        char    *ioc_pbuf2;
 
         /* inline buffers for various arguments */
-        __u32  ioc_inllen1;
-        char  *ioc_inlbuf1;
-        __u32  ioc_inllen2;
-        char  *ioc_inlbuf2;
-        __u32  ioc_inllen3;
-        char  *ioc_inlbuf3;
-        __u32  ioc_inllen4;
-        char  *ioc_inlbuf4;
+        __u32    ioc_inllen1;
+        char    *ioc_inlbuf1;
+        __u32    ioc_inllen2;
+        char    *ioc_inlbuf2;
+        __u32    ioc_inllen3;
+        char    *ioc_inlbuf3;
+        __u32    ioc_inllen4;
+        char    *ioc_inlbuf4;
 
         char    ioc_bulk[0];
 };
 
 struct obd_ioctl_hdr {
-        __u32 ioc_len;
-        __u32 ioc_version;
+        __u32    ioc_len;
+        __u32    ioc_version;
 };
 
 static inline int obd_ioctl_packlen(struct obd_ioctl_data *data)
@@ -460,6 +457,8 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_BRW_WRITE              _IOWR('f', 126, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_NAME2DEV               _IOWR('f', 127, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_UUID2DEV               _IOWR('f', 130, OBD_IOC_DATA_TYPE)
+/* OBD_IOC_GETNAME_OLD is for compatibility with 1.4.x */
+#define OBD_IOC_GETNAME_OLD            _IOR ('f', 131, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_GETNAME                _IOWR('f', 131, OBD_IOC_DATA_TYPE)
 
 #define OBD_IOC_LOV_GET_CONFIG         _IOWR('f', 132, OBD_IOC_DATA_TYPE)
@@ -470,11 +469,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_SET_READONLY           _IOW ('f', 141, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_ABORT_RECOVERY         _IOR ('f', 142, OBD_IOC_DATA_TYPE)
 
-#define OBD_IOC_ROOT_SQUASH            _IOWR('f', 143, OBD_IOC_DATA_TYPE)
-
 #define OBD_GET_VERSION                _IOWR ('f', 144, OBD_IOC_DATA_TYPE)
-
-#define OBD_IOC_GSS_SUPPORT            _IOWR('f', 145, OBD_IOC_DATA_TYPE)
 
 #define OBD_IOC_CLOSE_UUID             _IOWR ('f', 147, OBD_IOC_DATA_TYPE)
 
@@ -498,6 +493,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_DUMP_LOG               _IOWR('f', 185, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_CLEAR_LOG              _IOWR('f', 186, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_PARAM                  _IOW ('f', 187, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_POOL                   _IOWR('f', 188, OBD_IOC_DATA_TYPE)
 
 #define OBD_IOC_CATLOGLIST             _IOWR('f', 190, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_LLOG_INFO              _IOWR('f', 191, OBD_IOC_DATA_TYPE)
@@ -513,7 +509,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define ECHO_IOC_CANCEL                _IOWR('f', 203, OBD_IOC_DATA_TYPE)
 
 /* XXX _IOWR('f', 250, long) has been defined in
- * libcfs/include/libcfs/libcfs_private.h for debug, don't use it
+ * lnet/include/libcfs/kp30.h for debug, don't use it
  */
 
 /* Until such time as we get_info the per-stripe maximum from the OST,
@@ -710,7 +706,7 @@ do {                                                                           \
 } while (0)
 
 #else /* !__KERNEL__ */
-#define __l_wait_event(wq, condition, info, ret, excl)                  \
+#define __l_wait_event(wq, condition, info, ret, excl)                         \
 do {                                                                    \
         long __timeout = info->lwi_timeout;                             \
         long __now;                                                     \
@@ -756,7 +752,6 @@ do {                                                                    \
 
 #endif /* __KERNEL__ */
 
-
 #define l_wait_event(wq, condition, info)                       \
 ({                                                              \
         int                 __ret;                              \
@@ -773,12 +768,6 @@ do {                                                                    \
                                                                 \
         __l_wait_event(wq, condition, __info, __ret, 1);        \
         __ret;                                                  \
-})
-
-#define cfs_wait_event(wq, condition)                          \
-({                                                              \
-        struct l_wait_info lwi = { 0 };                         \
-        l_wait_event(wq, condition, &lwi);                      \
 })
 
 #ifdef __KERNEL__

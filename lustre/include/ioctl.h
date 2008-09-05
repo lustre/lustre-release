@@ -42,7 +42,7 @@
  * We can avoid any problems with the kernel header being included again by
  * defining _ASM_I386_IOCTL_H here so that a later occurence of <asm/ioctl.h>
  * does not include the kernel's ioctl.h after this one. b=14746 */
-#define _ASM_I386_IOCTL_H
+#define _ASMI386_IOCTL_H
 #define _ASM_GENERIC_IOCTL_H
 
 /* ioctl command encoding: 32 bits total, command in lower 16 bits,
@@ -105,4 +105,4 @@
 #define IOCSIZE_MASK    (_IOC_SIZEMASK << _IOC_SIZESHIFT)
 #define IOCSIZE_SHIFT   (_IOC_SIZESHIFT)
 
-#endif /* _IOWR */
+#endif /* _ASMI386_IOCTL_H */

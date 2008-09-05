@@ -43,7 +43,7 @@
 #ifndef __KERNEL__
 # include <liblustre.h>
 #else
-# include <libcfs/libcfs.h>
+# include <libcfs/kp30.h>
 #endif
 
 #include <obd_support.h>

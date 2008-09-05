@@ -60,7 +60,10 @@ sources: fsfilt_$(BACKINGFS).c
 else #SERVER
 sources:
 
-endif
+endif #SERVER
+
+fsfilt_extN.c: fsfilt_ext3.c
+	sed -e "s/EXT3/EXTN/g" -e "s/ext3/extN/g" $< > $@
 
 ldiskfs_sed_flags = \
 	-e "s/dx_hash_info/ext3_dx_hash_info/g" \
@@ -103,8 +106,9 @@ install-data-hook: $(install_data_hook)
 
 DIST_SOURCES = fsfilt.c fsfilt_ext3.c fsfilt_reiserfs.c lvfs_common.c \
 	lvfs_internal.h lvfs_linux.c lvfs_userfs.c \
-	upcall_cache.c prng.c lvfs_lib.c \
+	upcall_cache.c prng.c lvfs_lib.c\
 	lustre_quota_fmt.c lustre_quota_fmt.h quotafmt_test.c \
+	lustre_quota_fmt_convert.c \
         # quotacheck_test.c quotactl_test.c fsfilt_ext3_quota.h
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 

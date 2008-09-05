@@ -52,17 +52,21 @@
 # ifdef CONFIG_FS_POSIX_ACL
 #  ifdef HAVE_XATTR_ACL
 #   include <linux/xattr_acl.h>
-#  endif /* HAVE_XATTR_ACL */ 
+#  endif 
 #  ifdef HAVE_LINUX_POSIX_ACL_XATTR_H
 #   include <linux/posix_acl_xattr.h>
-#  endif /* HAVE_LINUX_POSIX_ACL_XATTR_H */
-# endif /* CONFIG_FS_POSIX_ACL */
+#  endif
+# endif
 # ifndef HAVE_VFS_INTENT_PATCHES
 #  include <linux/lustre_intent.h>
 # endif
-#endif /* __KERNEL__ */
+#endif
 
+struct ldlm_lock_desc;
 struct mds_obd;
+struct ptlrpc_connection;
+struct ptlrpc_client;
+struct obd_export;
 struct ptlrpc_request;
 struct obd_device;
 struct ll_file_data;
@@ -72,7 +76,7 @@ struct ll_file_data;
 struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
                                      struct vfsmount **mnt, int lock_mode,
                                      struct lustre_handle *lockh,
-                                     __u64 lockpart);
+                                     char *name, int namelen, __u64 lockpart);
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
                               struct vfsmount **mnt);
 int mds_update_server_data(struct obd_device *, int force_sync);

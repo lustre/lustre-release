@@ -47,6 +47,9 @@
 #include <limits.h>
 #include <sys/ioctl.h>
 
+#if 0
+#include <linux/ldiskfs_fs.h>
+#endif
 #include <liblustre.h>
 #include <lustre_lib.h>
 #include <obd.h>

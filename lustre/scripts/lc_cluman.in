@@ -181,7 +181,7 @@ cluman_running() {
 	local host_name=$1
 	local ret_str
 
-	ret_str=`${REMOTE} ${host_name} "/sbin/service clumanager status" 2>&1`
+	ret_str=`${REMOTE} ${host_name} "service clumanager status" 2>&1`
 	if [ $? -ne 0 ]; then
 		if [ "${ret_str}" != "${ret_str#*unrecognized*}" ]; then
 			echo >&2 "`basename $0`: cluman_running() error:"\

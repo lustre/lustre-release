@@ -1,11 +1,10 @@
 .deps
-.depend
-.tmp_versions
-.*.o.cmd
-.*.o.d
-.*.flags
+Makefile
+.*.cmd
 autoMakefile.in
 autoMakefile
-Makefile
 *.ko
 *.mod.c
+.*.flags
+.tmp_versions
+.depend

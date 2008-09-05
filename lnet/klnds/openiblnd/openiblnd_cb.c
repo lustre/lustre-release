@@ -320,8 +320,10 @@ kibnal_rx_callback (struct ib_cq_entry *e)
                 goto failed;
         }
 
-        if (conn->ibc_peer->ibp_nid != msg->ibm_srcnid ||
-            kibnal_data.kib_ni->ni_nid != msg->ibm_dstnid ||
+        if (!lnet_ptlcompat_matchnid(conn->ibc_peer->ibp_nid,
+                                     msg->ibm_srcnid) ||
+            !lnet_ptlcompat_matchnid(kibnal_data.kib_ni->ni_nid,
+                                     msg->ibm_dstnid) ||
             msg->ibm_srcstamp != conn->ibc_incarnation ||
             msg->ibm_dststamp != kibnal_data.kib_incarnation) {
                 CERROR ("Stale rx from %s\n",
@@ -1815,7 +1817,8 @@ kibnal_accept_connreq (kib_conn_t **connp, tTS_IB_CM_COMM_ID cid,
          * NB If my incarnation changes after this, the peer will get nuked and
          * we'll spot that when the connection is finally added into the peer's
          * connlist */
-        if (kibnal_data.kib_ni->ni_nid != msg->ibm_dstnid ||
+        if (!lnet_ptlcompat_matchnid(kibnal_data.kib_ni->ni_nid,
+                                     msg->ibm_dstnid) ||
             msg->ibm_dststamp != kibnal_data.kib_incarnation) {
                 write_unlock_irqrestore (&kibnal_data.kib_global_lock, flags);
                 
@@ -2078,8 +2081,10 @@ kibnal_active_conn_callback (tTS_IB_CM_EVENT event,
                         return TS_IB_CM_CALLBACK_ABORT;
                 }
 
-                if (conn->ibc_peer->ibp_nid != msg->ibm_srcnid ||
-                    kibnal_data.kib_ni->ni_nid != msg->ibm_dstnid ||
+                if (!lnet_ptlcompat_matchnid(conn->ibc_peer->ibp_nid,
+                                             msg->ibm_srcnid) ||
+                    !lnet_ptlcompat_matchnid(kibnal_data.kib_ni->ni_nid,
+                                             msg->ibm_dstnid) ||
                     msg->ibm_srcstamp != conn->ibc_incarnation ||
                     msg->ibm_dststamp != kibnal_data.kib_incarnation) {
                         CERROR("Stale conn ack from %s\n",

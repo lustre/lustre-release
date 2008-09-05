@@ -9,8 +9,8 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
-#              
-ALWAYS_EXCEPT="10  $INSANITY_EXCEPT"
+
+ALWAYS_EXCEPT="10 $INSANITY_EXCEPT"
 
 if [ "$FAILURE_MODE" = "HARD" ]; then
     mixed_ost_devs && CONFIG_EXCEPTIONS="0 2 4 5 6 8" && \
@@ -31,7 +31,7 @@ SINGLECLIENT=${SINGLECLIENT:-$HOSTNAME}
 LIVE_CLIENT=${LIVE_CLIENT:-$SINGLECLIENT}
 FAIL_CLIENTS=${FAIL_CLIENTS:-$RCLIENTS}
 
-assert_env mds_HOST MDS_MKFS_OPTS
+assert_env mds_HOST MDS_MKFS_OPTS MDSDEV
 assert_env ost_HOST OST_MKFS_OPTS OSTCOUNT
 assert_env LIVE_CLIENT FSNAME
 
@@ -165,7 +165,7 @@ cleanup_and_setup_lustre
 echo "Starting Test 17 at `date`"
 
 test_0() {
-    facet_failover $SINGLEMDS
+    facet_failover mds
     echo "Waiting for df pid: $DFPID"
     wait $DFPID || { echo "df returned $?" && return 1; }
 
@@ -193,12 +193,12 @@ test_2() {
 
     client_df
 
-    shutdown_facet $SINGLEMDS
-    reboot_facet $SINGLEMDS
+    shutdown_facet mds
+    reboot_facet mds
 
     # prepare for MDS failover
-    change_active $SINGLEMDS
-    reboot_facet $SINGLEMDS
+    change_active mds
+    reboot_facet mds
 
     client_df &
     DFPID=$!
@@ -211,8 +211,8 @@ test_2() {
     wait_for ost1
     start_ost 1 || return 2
 
-    wait_for $SINGLEMDS
-    start $SINGLEMDS `mdsdevname 1` $MDS_MOUNT_OPTS || return $?
+    wait_for mds
+    start mds $MDSDEV $MDS_MOUNT_OPTS || return $?
 
     #Check FS
     wait $DFPID
@@ -232,7 +232,7 @@ test_3() {
     [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
     
     #MDS Portion
-    facet_failover $SINGLEMDS
+    facet_failover mds
     wait $DFPID || echo df failed: $?
     #Check FS
 
@@ -252,7 +252,6 @@ test_3() {
     reintegrate_clients || return 1
 
     client_df || return 3
-    sleep 2 # give it a little time for fully recovered before next test
 }
 run_test 3  "Thirdb Failure Mode: MDS/CLIENT `date`"
 ###################################################
@@ -271,12 +270,12 @@ test_4() {
     sleep 5
 
     #MDS Portion
-    shutdown_facet $SINGLEMDS
-    reboot_facet $SINGLEMDS
+    shutdown_facet mds
+    reboot_facet mds
 
     # prepare for MDS failover
-    change_active $SINGLEMDS
-    reboot_facet $SINGLEMDS
+    change_active mds
+    reboot_facet mds
 
     client_df &
     DFPIDB=$!
@@ -288,8 +287,8 @@ test_4() {
     wait_for ost1
     start_ost 1
     
-    wait_for $SINGLEMDS
-    start $SINGLEMDS `mdsdevname 1` $MDS_MOUNT_OPTS
+    wait_for mds
+    start mds $MDSDEV $MDS_MOUNT_OPTS
     #Check FS
     
     wait $DFPIDA
@@ -436,7 +435,7 @@ test_7() {
     client_rm testfile
 
     #MDS Portion
-    facet_failover $SINGLEMDS
+    facet_failover mds
 
     #Check FS
     echo "Test Lustre stability after MDS failover"
@@ -547,7 +546,8 @@ test_9() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
-    $PDSH $LIVE_CLIENT df $MOUNT || return 3
+    $PDSH $LIVE_CLIENT "grep -e $DIR /proc/mounts" || return 3
+    $PDSH $LIVE_CLIENT df $MOUNT
     client_touch testfile || return 4
 
     #CLIENT Portion

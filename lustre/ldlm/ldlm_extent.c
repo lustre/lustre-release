@@ -42,8 +42,6 @@
 #define DEBUG_SUBSYSTEM S_LDLM
 #ifndef __KERNEL__
 # include <liblustre.h>
-#else
-# include <libcfs/libcfs.h>
 #endif
 
 #include <lustre_dlm.h>
@@ -134,9 +132,7 @@ static void ldlm_extent_internal_policy_granted(struct ldlm_lock *req,
                         limiter.start = req_start;
 
                 if (interval_is_overlapped(tree->lit_root, &ext))
-                        CDEBUG(D_INFO, 
-                               "req_mode = %d, tree->lit_mode = %d, "
-                               "tree->lit_size = %d\n",
+                        printk("req_mode = %d, tree->lit_mode = %d, tree->lit_size = %d\n",
                                req_mode, tree->lit_mode, tree->lit_size);
                 interval_expand(tree->lit_root, &ext, &limiter);
                 limiter.start = max(limiter.start, ext.start);
@@ -319,10 +315,12 @@ static enum interval_iter ldlm_extent_compat_cb(struct interval_node *n,
                          "mode = %s, lock->l_granted_mode = %s\n",
                          ldlm_lockname[mode],
                          ldlm_lockname[lock->l_granted_mode]);
+
                 count++;
                 if (lock->l_blocking_ast)
                         ldlm_add_ast_work_item(lock, enq, work_list);
         }
+        LASSERT(count > 0);
 
         /* don't count conflicting glimpse locks */
         extent = ldlm_interval_extent(node);
@@ -425,7 +423,8 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                                         compat = 0;
                         }
                 }
-        } else { /* for waiting queue */
+        } else {
+                /* for waiting queue */
                 list_for_each(tmp, queue) {
                         check_contention = 1;
 
@@ -441,9 +440,9 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                                    lock in the waiting queue or if there is not any,
                                    then in front of first non-GROUP lock */
                                 if (lock->l_req_mode != LCK_GROUP) {
-                                        /* Ok, we hit non-GROUP lock, there should
-                                         * be no more GROUP locks later on, queue in
-                                         * front of first non-GROUP lock */
+                                        /* Ok, we hit non-GROUP lock, there should be no
+                                           more GROUP locks later on, queue in front of
+                                           first non-GROUP lock */
 
                                         ldlm_resource_insert_lock_after(lock, req);
                                         list_del_init(&lock->l_res_link);
@@ -535,9 +534,9 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                                 scan = 1;
                                 compat = 0;
                                 if (lock->l_req_mode != LCK_GROUP) {
-                                        /* Ok, we hit non-GROUP lock, there should be no
-                                           more GROUP locks later on, queue in front of
-                                           first non-GROUP lock */
+                                        /* Ok, we hit non-GROUP lock, there should
+                                         * be no more GROUP locks later on, queue in
+                                         * front of first non-GROUP lock */
 
                                         ldlm_resource_insert_lock_after(lock, req);
                                         list_del_init(&lock->l_res_link);
@@ -568,10 +567,9 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                                 /* if a non group lock doesn't overlap skip it */
                                 continue;
                         } else if (lock->l_req_extent.end < req_start ||
-                                   lock->l_req_extent.start > req_end) {
+                                   lock->l_req_extent.start > req_end)
                                 /* false contention, the requests doesn't really overlap */
                                 check_contention = 0;
-                        }
 
                         if (!work_list)
                                 RETURN(0);
@@ -638,7 +636,7 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                              ldlm_error_t *err, struct list_head *work_list)
 {
         struct ldlm_resource *res = lock->l_resource;
-        CFS_LIST_HEAD(rpc_list);
+        struct list_head rpc_list = CFS_LIST_HEAD_INIT(rpc_list);
         int rc, rc2;
         int contended_locks = 0;
         ENTRY;
@@ -703,7 +701,7 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                 if (list_empty(&lock->l_res_link))
                         ldlm_resource_add_lock(res, &res->lr_waiting, lock);
                 unlock_res(res);
-                rc = ldlm_run_ast_work(&rpc_list, LDLM_WORK_BL_AST);
+                rc = ldlm_run_bl_ast_work(&rpc_list);
                 lock_res(res);
 
                 if (rc == -ERESTART) {

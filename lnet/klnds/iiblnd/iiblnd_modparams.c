@@ -229,7 +229,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .procname = "concurrent_sends",
                 .data     = &concurrent_sends,
                 .maxlen   = sizeof(int),
-                .mode     = 0444,
+                .mode     = 0644,
                 .proc_handler = &proc_dointvec
         },
         {0}
@@ -238,7 +238,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
 static cfs_sysctl_table_t kibnal_top_ctl_table[] = {
         {
                 .ctl_name = 203,
-                .procname = "iibnal",
+                .procname = "openibnal",
                 .data     = NULL,
                 .maxlen   = 0,
                 .mode     = 0555,

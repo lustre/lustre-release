@@ -215,7 +215,7 @@ void print_llog_header(struct llog_log_hdr *llog_buf)
         time_t t;
 
         printf("Header size : %u\n",
-               le32_to_cpu(llog_buf->llh_hdr.lrh_len));
+                le32_to_cpu(llog_buf->llh_hdr.lrh_len));
 
         t = le64_to_cpu(llog_buf->llh_timestamp);
         printf("Time : %s", ctime(&t));
@@ -267,7 +267,6 @@ static void print_setup_cfg(struct lustre_cfg *lcfg)
                 printf("setup     ");
                 print_1_cfg(lcfg);
         }
-        
         return;
 }
 
@@ -328,16 +327,6 @@ void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
                 print_1_cfg(lcfg);
                 break;
         }
-        case(LCFG_ADD_MDC):{
-                printf("modify_mdc_tgts add ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_DEL_MDC):{
-                printf("modify_mdc_tgts del ");
-                print_1_cfg(lcfg);
-                break;
-        }
         case(LCFG_MOUNTOPT):{
                 printf("mount_option ");
                 print_1_cfg(lcfg);
@@ -366,7 +355,6 @@ void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
         case(LCFG_MARKER):{
                 struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
                 char createtime[26], canceltime[26] = "";
-
                 if (marker->cm_flags & CM_SKIP) {
                         if (marker->cm_flags & CM_START) {
                                 printf("SKIP START ");
@@ -396,6 +384,26 @@ void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
                        OBD_OCD_VERSION_FIX(marker->cm_vers),
                        marker->cm_tgtname, marker->cm_comment,
                        createtime, canceltime);
+                break;
+        }
+        case(LCFG_POOL_NEW):{
+                printf("pool new ");
+                print_1_cfg(lcfg);
+                break;
+        }
+        case(LCFG_POOL_ADD):{
+                printf("pool add ");
+                print_1_cfg(lcfg);
+                break;
+        }
+        case(LCFG_POOL_REM):{
+                printf("pool remove ");
+                print_1_cfg(lcfg);
+                break;
+        }
+        case(LCFG_POOL_DEL):{
+                printf("pool destroy ");
+                print_1_cfg(lcfg);
                 break;
         }
         default:
@@ -428,5 +436,6 @@ void print_records(struct llog_rec_hdr **recs, int rec_number)
                         printf("padding\n");
                 } else
                         printf("unknown type %x\n", lopt);
+
         }
 }

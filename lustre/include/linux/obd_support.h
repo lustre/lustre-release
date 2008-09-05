@@ -49,16 +49,142 @@
 #include <linux/slab.h>
 #include <linux/highmem.h>
 #endif
-#include <libcfs/libcfs.h>
+#include <libcfs/kp30.h>
 #include <linux/lustre_compat25.h>
 #include <lustre/lustre_idl.h>
 
+/* Prefer the kernel's version, if it exports it, because it might be
+ * optimized for this CPU. */
+#if defined(__KERNEL__) && (defined(CONFIG_CRC32) || defined(CONFIG_CRC32_MODULE))
+# include <linux/crc32.h>
+#else
+/* crc32_le lifted from the Linux kernel, which had the following to say:
+ *
+ * This code is in the public domain; copyright abandoned.
+ * Liability for non-performance of this code is limited to the amount
+ * you paid for it.  Since it is distributed for free, your refund will
+ * be very very small.  If it breaks, you get to keep both pieces.
+ */
+#define CRCPOLY_LE 0xedb88320
+/**
+ * crc32_le() - Calculate bitwise little-endian Ethernet AUTODIN II CRC32
+ * @crc - seed value for computation.  ~0 for Ethernet, sometimes 0 for
+ *        other uses, or the previous crc32 value if computing incrementally.
+ * @p   - pointer to buffer over which CRC is run
+ * @len - length of buffer @p
+ */
+static inline __u32 crc32_le(__u32 crc, unsigned char const *p, size_t len)
+{
+        int i;
+        while (len--) {
+                crc ^= *p++;
+                for (i = 0; i < 8; i++)
+                        crc = (crc >> 1) ^ ((crc & 1) ? CRCPOLY_LE : 0);
+        }
+        return crc;
+}
+#endif
+
+#ifdef __KERNEL__
+# include <linux/zutil.h>
+# ifndef HAVE_ADLER
+#  define HAVE_ADLER
+# endif
+#else /* ! __KERNEL__ */
+# ifdef HAVE_ADLER
+#  include <zlib.h>
+
+static inline __u32 zlib_adler32(__u32 adler, unsigned char const *p,
+                                 size_t len)
+{
+        return adler32(adler, p, len);
+}
+# endif
+#endif /* __KERNEL__ */
+
+static inline __u32 init_checksum(cksum_type_t cksum_type)
+{
+        switch(cksum_type) {
+        case OBD_CKSUM_CRC32:
+                return ~0U;
+#ifdef HAVE_ADLER
+        case OBD_CKSUM_ADLER:
+                return 1U;
+#endif
+        default:
+                CERROR("Unknown checksum type (%x)!!!\n", cksum_type);
+                LBUG();
+        }
+        return 0;
+}
+
+static inline __u32 compute_checksum(__u32 cksum, unsigned char const *p,
+                                     size_t len, cksum_type_t cksum_type)
+{
+        switch(cksum_type) {
+        case OBD_CKSUM_CRC32:
+                return crc32_le(cksum, p, len);
+#ifdef HAVE_ADLER
+        case OBD_CKSUM_ADLER:
+                return zlib_adler32(cksum, p, len);
+#endif
+        default:
+                CERROR("Unknown checksum type (%x)!!!\n", cksum_type);
+                LBUG();
+        }
+        return 0;
+}
+
+static inline obd_flag cksum_type_pack(cksum_type_t cksum_type)
+{
+        switch(cksum_type) {
+        case OBD_CKSUM_CRC32:
+                return OBD_FL_CKSUM_CRC32;
+#ifdef HAVE_ADLER
+        case OBD_CKSUM_ADLER:
+                return OBD_FL_CKSUM_ADLER;
+#endif
+        default:
+                CWARN("unknown cksum type %x\n", cksum_type);
+        }
+        return OBD_FL_CKSUM_CRC32;
+}
+
+static inline cksum_type_t cksum_type_unpack(obd_flag o_flags)
+{
+        o_flags &= OBD_FL_CKSUM_ALL;
+        if ((o_flags - 1) & o_flags)
+                CWARN("several checksum types are set: %x\n", o_flags);
+        if (o_flags & OBD_FL_CKSUM_ADLER)
+#ifdef HAVE_ADLER
+                return OBD_CKSUM_ADLER;
+#else
+                CWARN("checksum type is set to adler32, but adler32 is not "
+                      "supported (%x)\n", o_flags);
+#endif
+        return OBD_CKSUM_CRC32;
+}
 
 #ifdef __KERNEL__
 # include <linux/types.h>
 # include <linux/blkdev.h>
 # include <lvfs.h>
-# define OBD_SLEEP_ON(wq, state)  wait_event_interruptible(wq, state)
+
+#define OBD_FAIL_WRITE(obd, id, sb)                                          \
+{                                                                            \
+        if (OBD_FAIL_CHECK(id)) {                                            \
+                BDEVNAME_DECLARE_STORAGE(tmp);                               \
+                CERROR("obd_fail_loc=%x, fail write operation on %s\n",      \
+                       id, ll_bdevname(sb, tmp));                            \
+                lvfs_set_rdonly(obd, sb);                                    \
+                /* We set FAIL_ONCE because we never "un-fail" a device */   \
+                obd_fail_loc |= OBD_FAILED | OBD_FAIL_ONCE;                  \
+        }                                                                    \
+}
+
+#define OBD_SLEEP_ON(wq, state)  wait_event_interruptible(wq, state)
+
+
 #else /* !__KERNEL__ */
 # define LTIME_S(time) (time)
 /* for obd_class.h */

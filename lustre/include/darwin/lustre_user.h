@@ -41,6 +41,8 @@
 #ifndef _DARWIN_LUSTRE_USER_H
 #define _DARWIN_LUSTRE_USER_H
 
+#include <lustre/types.h>
+
 #ifndef __KERNEL__
 /* for llmount */
 # define _GNU_SOURCE

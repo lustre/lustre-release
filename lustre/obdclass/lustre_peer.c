@@ -70,7 +70,7 @@ void class_exit_uuidlist(void)
         class_del_uuid(NULL);
 }
 
-int lustre_uuid_to_peer(const char *uuid, lnet_nid_t *peer_nid, int index)
+int lustre_uuid_to_peer(char *uuid, lnet_nid_t *peer_nid, int index)
 {
         struct list_head *tmp;
 
@@ -93,9 +93,9 @@ int lustre_uuid_to_peer(const char *uuid, lnet_nid_t *peer_nid, int index)
         return -ENOENT;
 }
 
-/* Add a nid to a niduuid.  Multiple nids can be added to a single uuid;
+/* Add a nid to a niduuid.  Multiple nids can be added to a single uuid; 
    LNET will choose the best one. */
-int class_add_uuid(const char *uuid, __u64 nid)
+int class_add_uuid(char *uuid, __u64 nid)
 {
         struct uuid_nid_data *data, *entry;
         int nob = strnlen (uuid, CFS_PAGE_SIZE) + 1;
@@ -121,7 +121,6 @@ int class_add_uuid(const char *uuid, __u64 nid)
         data->un_count = 1;
 
         spin_lock (&g_uuid_lock);
-
         list_for_each_entry(entry, &g_uuid_list, un_list) {
                 if (entry->un_nid == nid && 
                     (strcmp(entry->un_uuid, uuid) == 0)) {
@@ -146,11 +145,13 @@ int class_add_uuid(const char *uuid, __u64 nid)
 }
 
 /* Delete the nids for one uuid if specified, otherwise delete all */
-int class_del_uuid(const char *uuid)
+int class_del_uuid (char *uuid)
 {
-        CFS_LIST_HEAD(deathrow);
+        struct list_head  deathrow;
         struct uuid_nid_data *data;
         int found = 0;
+
+        CFS_INIT_LIST_HEAD (&deathrow);
 
         spin_lock (&g_uuid_lock);
         if (uuid == NULL) {

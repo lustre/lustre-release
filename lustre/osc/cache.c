@@ -120,7 +120,6 @@ int cache_add_extent(struct lustre_cache *cache, struct ldlm_res_id *res,
                  * there could be only one PW lock. If the page is clean,
                  * any PR lock is good
                  */
-
                 mode = ldlm_lock_match(cache->lc_obd->obd_namespace,
                                        LDLM_FL_BLOCK_GRANTED |
                                        LDLM_FL_CBPENDING, res, LDLM_EXTENT,
@@ -289,9 +288,9 @@ void cache_remove_extent(struct lustre_cache *cache,
         spin_unlock(&lock->l_extents_list_lock);
 }
 
-/* iterate through list of extents in given lock identified by @lockh,
-   calling @cb_func for every such extent. also passed @data to every call.
-   stops iterating prematurely if @cb_func returns nonzero. */
+/* Iterate through list of extents in given lock identified by @lockh,
+   calling @cb_func for every such extent. Also passed @data to every call.
+   Stops iterating prematurely if @cb_func returns nonzero. */
 int cache_iterate_extents(struct lustre_cache *cache,
                           struct lustre_handle *lockh,
                           cache_iterate_extents_cb_t cb_func, void *data)

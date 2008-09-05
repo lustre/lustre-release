@@ -44,7 +44,7 @@
 #include <stdio.h>
 #include <lnet/lnetctl.h>
 #include "obdctl.h"
-#include <libcfs/libcfsutil.h>
+#include "parser.h"
 
 static int jt_quit(int argc, char **argv) {
         Parser_quit(argc, argv);
@@ -123,7 +123,7 @@ command_t cmdlist[] = {
          "usage: dl [-t]"},
 
         /* Device operations */
-        {"==== obd device operations ====", jt_noop, 0, "device operations"},
+        {"==== obd device operations ===", jt_noop, 0, "device operations"},
         {"activate", jt_obd_activate, 0, "activate an import\n"},
         {"deactivate", jt_obd_deactivate, 0, "deactivate an import. "
          "This command should be used on failed OSC devices in an MDT LOV.\n"},
@@ -137,17 +137,17 @@ command_t cmdlist[] = {
         {"local_param", jt_lcfg_param, 0, "set a temporary, local param\n"
          "usage: local_param <target.keyword=val> ...\n"},
         {"get_param", jt_lcfg_getparam, 0, "get the Lustre or LNET parameter\n"
-         "usage: get_param [-n|-N] name.of.param\n"
+         "usage: get_param [-n | -N] path/to/param/file \n"
          "Get the value of Lustre or LNET parameter from the specified path\n"
-         "Use '-n' to disable printing of parameter name when printing value\n"
-         "Use '-N' to print only parameter names and not the values."},
+         "Use '-n' to disable printing of the key name when printing values.\n"
+         "Use '-N' to print only path names and not the values."},
         {"set_param", jt_lcfg_setparam, 0, "set the Lustre or LNET parameter\n"
-         "usage: set_param [-n] name.of.param=value\n"
+         "usage: set_param [-n] path/to/param/file value\n"
          "Set the value of the Lustre or LNET parameter at the specified path\n"
-         "Use '-n' to disable printing of parameter name when setting value\n"},
+         "Use '-n' to disable printing of the key name when printing values."},
 
         /* Debug commands */
-        {"==== debugging control ====", jt_noop, 0, "debug"},
+        {"==== debugging control ===", jt_noop, 0, "debug"},
         {"debug_daemon", jt_dbg_debug_daemon, 0,
          "debug daemon control and dump to a file\n"
          "usage: debug_daemon {start file [#MB]|stop}"},
@@ -179,7 +179,7 @@ command_t cmdlist[] = {
          "usage: modules <path>"},
 
         /* Device configuration commands */
-        {"== device setup (these are not normally used post 1.4) ==",
+        {"== obd device setup (these are not normally used post 1.4) ==",
                 jt_noop, 0, "device config"},
         {"attach", jt_lcfg_attach, 0,
          "set the type, name, and uuid of the current device\n"
@@ -207,6 +207,24 @@ command_t cmdlist[] = {
         {"blockdev_info", jt_blockdev_info, 0,
          "get the device info of a attached file\n"
          "usage: blockdev_info <device_name>"},
+
+        /* Pool commands */
+        {"===  Pools ==", jt_noop, 0, "pool management"},
+        {"pool_new", jt_pool_cmd, 0,
+         "add a new pool\n"
+         "usage pool_new <fsname>.<poolname>"},
+        {"pool_add", jt_pool_cmd, 0,
+         "add the named OSTs to the pool\n"
+         "usage pool_add <fsname>.<poolname> <ostname indexed list>"},
+        {"pool_remove", jt_pool_cmd, 0,
+         "remove the named OST from the pool\n"
+         "usage pool_remove <fsname>.<poolname> <ostname indexed list>"},
+        {"pool_destroy", jt_pool_cmd, 0,
+         "destroy a pool\n"
+         "usage pool_destroy <fsname>.<poolname>"},
+        {"pool_list", jt_pool_cmd, 0,
+         "list pools and pools members\n"
+         "usage pool_list  <fsname>[.<poolname>] | <pathname>"},
 
         /* Test only commands */
         {"==== testing (DANGEROUS) ====", jt_noop, 0, "testing (DANGEROUS)"},

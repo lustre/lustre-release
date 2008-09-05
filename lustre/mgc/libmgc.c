@@ -55,19 +55,18 @@
 #include <lustre_fsfilt.h>
 #include <lustre_disk.h>
 
-
-static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
+static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         int rc;
         ENTRY;
 
         ptlrpcd_addref();
 
-        rc = client_obd_setup(obd, lcfg);
+        rc = client_obd_setup(obd, len, buf);
         if (rc)
                 GOTO(err_decref, rc);
 
-        rc = obd_llog_init(obd, &obd->obd_olg, obd, 0, NULL, NULL);
+        rc = obd_llog_init(obd, obd, 0, NULL, NULL);
         if (rc) {
                 CERROR("failed to setup llogging subsystems\n");
                 GOTO(err_cleanup, rc);
@@ -94,6 +93,10 @@ static int mgc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                 if (rc != 0)
                         CERROR("failed to cleanup llogging subsystems\n");
                 break;
+        case OBD_CLEANUP_SELF_EXP:
+                break;
+        case OBD_CLEANUP_OBD:
+                break;
         }
         RETURN(rc);
 }
@@ -105,26 +108,25 @@ static int mgc_cleanup(struct obd_device *obd)
         ENTRY;
 
         LASSERT(cli->cl_mgc_vfsmnt == NULL);
-
+        
         ptlrpcd_decref();
 
         rc = client_obd_cleanup(obd);
         RETURN(rc);
 }
 
-static int mgc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                         struct obd_device *tgt, int count, 
-                         struct llog_catid *logid, struct obd_uuid *uuid)
+static int mgc_llog_init(struct obd_device *obd, struct obd_device *tgt,
+                         int count, struct llog_catid *logid, 
+                         struct obd_uuid *uuid)
 {
         struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
 
-        LASSERT(olg == &obd->obd_olg);
-        rc = llog_setup(obd, olg, LLOG_CONFIG_REPL_CTXT, tgt, 0, NULL,
+        rc = llog_setup(obd, LLOG_CONFIG_REPL_CTXT, tgt, 0, NULL,
                         &llog_client_ops);
         if (rc == 0) {
-                ctxt = llog_group_get_ctxt(olg, LLOG_CONFIG_REPL_CTXT);
+                ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
                 llog_initiator_connect(ctxt);
                 llog_ctxt_put(ctxt);
         }
@@ -157,6 +159,5 @@ struct obd_ops mgc_obd_ops = {
 
 int __init mgc_init(void)
 {
-        return class_register_type(&mgc_obd_ops, NULL, 
-                                   NULL, LUSTRE_MGC_NAME, NULL);
+        return class_register_type(&mgc_obd_ops, NULL, LUSTRE_MGC_NAME);
 }

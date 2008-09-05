@@ -64,8 +64,7 @@ enum {
         LPROC_ECHO_LAST = LPROC_ECHO_WRITE_BYTES +1
 };
 
-static int echo_connect(const struct lu_env *env,
-                        struct lustre_handle *conn, struct obd_device *obd,
+static int echo_connect(struct lustre_handle *conn, struct obd_device *obd,
                         struct obd_uuid *cluuid, struct obd_connect_data *data,
                         void *localdata)
 {
@@ -145,7 +144,7 @@ int echo_create(struct obd_export *exp, struct obdo *oa,
 }
 
 int echo_destroy(struct obd_export *exp, struct obdo *oa,
-                 struct lov_stripe_md *ea, struct obd_trans_info *oti,
+                 struct lov_stripe_md *ea, struct obd_trans_info *oti, 
                  struct obd_export *md_exp)
 {
         struct obd_device *obd = class_exp2obd(exp);
@@ -183,7 +182,7 @@ static int echo_getattr(struct obd_export *exp, struct obd_info *oinfo)
         }
 
         if (!(oinfo->oi_oa->o_valid & OBD_MD_FLID)) {
-                CERROR("obdo missing FLID valid flag: "LPX64"\n",
+                CERROR("obdo missing FLID valid flag: "LPX64"\n", 
                        oinfo->oi_oa->o_valid);
                 RETURN(-EINVAL);
         }
@@ -207,7 +206,7 @@ static int echo_setattr(struct obd_export *exp, struct obd_info *oinfo,
         }
 
         if (!(oinfo->oi_oa->o_valid & OBD_MD_FLID)) {
-                CERROR("obdo missing FLID valid flag: "LPX64"\n",
+                CERROR("obdo missing FLID valid flag: "LPX64"\n", 
                        oinfo->oi_oa->o_valid);
                 RETURN(-EINVAL);
         }
@@ -286,7 +285,7 @@ echo_page_debug_check(cfs_page_t *page, obd_id id,
 int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
                 int objcount, struct obd_ioobj *obj, int niocount,
                 struct niobuf_remote *nb, struct niobuf_local *res,
-                struct obd_trans_info *oti, struct lustre_capa *unused)
+                struct obd_trans_info *oti)
 {
         struct obd_device *obd;
         struct niobuf_local *r = res;
@@ -470,7 +469,7 @@ commitrw_cleanup:
         return rc;
 }
 
-static int echo_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
+static int echo_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lprocfs_static_vars lvars;
         int                        rc;
@@ -483,15 +482,15 @@ static int echo_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         obd->obd_namespace = ldlm_namespace_new(obd, "echo-tgt",
                                                 LDLM_NAMESPACE_SERVER,
-                                                LDLM_NAMESPACE_MODEST);
+                                                LDLM_NAMESPACE_GREEDY);
         if (obd->obd_namespace == NULL) {
                 LBUG();
                 RETURN(-ENOMEM);
         }
 
-        rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id, LDLM_PLAIN,
-                                    NULL, LCK_NL, &lock_flags, NULL,
-                                    ldlm_completion_ast, NULL, NULL,
+        rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id, LDLM_PLAIN, 
+                                    NULL, LCK_NL, &lock_flags, NULL, 
+                                    ldlm_completion_ast, NULL, NULL, 
                                     0, NULL, &obd->u.echo.eo_nl_lock);
         LASSERT (rc == ELDLM_OK);
 
@@ -523,6 +522,7 @@ static int echo_cleanup(struct obd_device *obd)
 
         /* XXX Bug 3413; wait for a bit to ensure the BL callback has
          * happened before calling ldlm_namespace_free() */
+        set_current_state (TASK_UNINTERRUPTIBLE);
         cfs_schedule_timeout (CFS_TASK_UNINT, cfs_time_seconds(1));
 
         ldlm_namespace_free(obd->obd_namespace, NULL, obd->obd_force);
@@ -596,7 +596,7 @@ static int __init obdecho_init(void)
         int rc;
 
         ENTRY;
-        LCONSOLE_INFO("Echo OBD driver; http://www.lustre.org/\n");
+        printk(KERN_INFO "Lustre: Echo OBD driver; http://www.lustre.org/\n");
 
         LASSERT(CFS_PAGE_SIZE % OBD_ECHO_BLOCK_SIZE == 0);
 
@@ -606,8 +606,8 @@ static int __init obdecho_init(void)
         if (rc != 0)
                 goto failed_0;
 
-        rc = class_register_type(&echo_obd_ops, NULL, lvars.module_vars,
-                                 LUSTRE_ECHO_NAME, NULL);
+        rc = class_register_type(&echo_obd_ops, lvars.module_vars,
+                                 LUSTRE_ECHO_NAME);
         if (rc != 0)
                 goto failed_1;
 

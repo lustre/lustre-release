@@ -175,7 +175,7 @@ int llog_init_handle(struct llog_handle *handle, int flags,
         llh->llh_hdr.lrh_type = LLOG_HDR_MAGIC;
         llh->llh_hdr.lrh_len = llh->llh_tail.lrt_len = LLOG_CHUNK_SIZE;
         llh->llh_hdr.lrh_index = llh->llh_tail.lrt_index = 0;
-        llh->llh_timestamp = cfs_time_current_sec();
+        llh->llh_timestamp = CURRENT_SECONDS;
         if (uuid)
                 memcpy(&llh->llh_tgtuuid, uuid, sizeof(llh->llh_tgtuuid));
         llh->llh_bitmap_offset = offsetof(typeof(*llh),llh_bitmap);
@@ -269,7 +269,6 @@ static int llog_process_thread(void *arg)
                        index, last_index);
 
                 /* get the buf with our target record; avoid old garbage */
-                memset(buf, 0, LLOG_CHUNK_SIZE);
                 last_offset = cur_offset;
                 rc = llog_next_block(loghandle, &saved_index, index,
                                      &cur_offset, buf, LLOG_CHUNK_SIZE);
@@ -313,7 +312,7 @@ static int llog_process_thread(void *arg)
                                rec->lrh_index, rec->lrh_len,
                                (int)(buf + LLOG_CHUNK_SIZE - (char *)rec));
 
-                        loghandle->lgh_cur_idx = rec->lrh_index;
+                        loghandle->lgh_cur_idx    = rec->lrh_index;
                         loghandle->lgh_cur_offset = (char *)rec - (char *)buf +
                                                     last_offset;
 

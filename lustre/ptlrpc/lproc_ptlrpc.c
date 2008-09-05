@@ -72,6 +72,7 @@ struct ll_rpc_opcode {
         { OST_SET_INFO,     "ost_set_info" },
         { OST_QUOTACHECK,   "ost_quotacheck" },
         { OST_QUOTACTL,     "ost_quotactl" },
+        { OST_QUOTA_ADJUST_QUNIT, "ost_quota_adjust_qunit" },
         { MDS_GETATTR,      "mds_getattr" },
         { MDS_GETATTR_NAME, "mds_getattr_lock" },
         { MDS_CLOSE,        "mds_close" },
@@ -90,8 +91,6 @@ struct ll_rpc_opcode {
         { MDS_QUOTACTL,     "mds_quotactl" },
         { MDS_GETXATTR,     "mds_getxattr" },
         { MDS_SETXATTR,     "mds_setxattr" },
-        { MDS_WRITEPAGE,    "mds_writepage" },
-        { MDS_IS_SUBDIR,    "mds_is_subdir" },
         { LDLM_ENQUEUE,     "ldlm_enqueue" },
         { LDLM_CONVERT,     "ldlm_convert" },
         { LDLM_CANCEL,      "ldlm_cancel" },
@@ -106,9 +105,9 @@ struct ll_rpc_opcode {
         { MGS_SET_INFO,     "mgs_set_info" },
         { OBD_PING,         "obd_ping" },
         { OBD_LOG_CANCEL,   "llog_origin_handle_cancel" },
-        { OBD_QC_CALLBACK,  "obd_qc_callback" },
+        { OBD_QC_CALLBACK,  "obd_quota_callback" },
         { LLOG_ORIGIN_HANDLE_CREATE,     "llog_origin_handle_create" },
-        { LLOG_ORIGIN_HANDLE_NEXT_BLOCK, "llog_origin_handle_next_block" },
+        { LLOG_ORIGIN_HANDLE_NEXT_BLOCK, "llog_origin_handle_next_block"},
         { LLOG_ORIGIN_HANDLE_READ_HEADER,"llog_origin_handle_read_header" },
         { LLOG_ORIGIN_HANDLE_WRITE_REC,  "llog_origin_handle_write_rec" },
         { LLOG_ORIGIN_HANDLE_CLOSE,      "llog_origin_handle_close" },
@@ -117,10 +116,9 @@ struct ll_rpc_opcode {
         { LLOG_ORIGIN_HANDLE_PREV_BLOCK, "llog_origin_handle_prev_block" },
         { LLOG_ORIGIN_HANDLE_DESTROY,    "llog_origin_handle_destroy" },
         { FLD_QUERY,        "fld_query" },
+        { QUOTA_DQACQ,      "quota_acquire" },
+        { QUOTA_DQREL,      "quota_release" },
         { SEQ_QUERY,        "seq_query" },
-        { SEC_CTX_INIT,     "sec_ctx_init" },
-        { SEC_CTX_INIT_CONT,"sec_ctx_init_cont" },
-        { SEC_CTX_FINI,     "sec_ctx_fini" }
 };
 
 struct ll_eopcode {
@@ -132,12 +130,12 @@ struct ll_eopcode {
         { LDLM_EXTENT_ENQUEUE,  "ldlm_extent_enqueue" },
         { LDLM_FLOCK_ENQUEUE,   "ldlm_flock_enqueue" },
         { LDLM_IBITS_ENQUEUE,   "ldlm_ibits_enqueue" },
+        { MDS_REINT_SETATTR,    "mds_reint_setattr" },
         { MDS_REINT_CREATE,     "mds_reint_create" },
         { MDS_REINT_LINK,       "mds_reint_link" },
-        { MDS_REINT_OPEN,       "mds_reint_open" },
-        { MDS_REINT_SETATTR,    "mds_reint_setattr" },
-        { MDS_REINT_RENAME,     "mds_reint_rename" },
         { MDS_REINT_UNLINK,     "mds_reint_unlink" },
+        { MDS_REINT_RENAME,     "mds_reint_rename" },
+        { MDS_REINT_OPEN,       "mds_reint_open" },
         { BRW_READ_BYTES,       "read_bytes" },
         { BRW_WRITE_BYTES,      "write_bytes" },
 };
@@ -145,15 +143,19 @@ struct ll_eopcode {
 const char *ll_opcode2str(__u32 opcode)
 {
         /* When one of the assertions below fail, chances are that:
-         *     1) A new opcode was added in lustre_idl.h, but was
-         *        is missing from the table above.
+         *     1) A new opcode was added in include/lustre/lustre_idl.h,
+         *        but is missing from the table above.
          * or  2) The opcode space was renumbered or rearranged,
          *        and the opcode_offset() function in
          *        ptlrpc_internal.h needs to be modified.
          */
         __u32 offset = opcode_offset(opcode);
-        LASSERT(offset < LUSTRE_MAX_OPCODES);
-        LASSERT(ll_rpc_opcode_table[offset].opcode == opcode);
+        LASSERTF(offset < LUSTRE_MAX_OPCODES,
+                 "offset %u >= LUSTRE_MAX_OPCODES %u\n",
+                 offset, LUSTRE_MAX_OPCODES);
+        LASSERTF(ll_rpc_opcode_table[offset].opcode == opcode,
+                 "ll_rpc_opcode_table[%u].opcode %u != opcode %u\n",
+                 offset, ll_rpc_opcode_table[offset].opcode, opcode);
         return ll_rpc_opcode_table[offset].opname;
 }
 
@@ -162,6 +164,7 @@ const char* ll_eopcode2str(__u32 opcode)
         LASSERT(ll_eopcode_table[opcode].opcode == opcode);
         return ll_eopcode_table[opcode].opname;
 }
+
 #ifdef LPROCFS
 void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
                              char *name, struct proc_dir_entry **procroot_ret,
@@ -274,7 +277,7 @@ ptlrpc_lprocfs_write_req_history_max(struct file *file, const char *buffer,
          * hose a kernel by allowing the request history to grow too
          * far. */
         bufpages = (svc->srv_buf_size + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
-        if (val > num_physpages/(2 * bufpages))
+        if (val > num_physpages/(2*bufpages))
                 return -ERANGE;
 
         spin_lock(&svc->srv_lock);
@@ -530,8 +533,7 @@ void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
                 .llseek      = seq_lseek,
                 .release     = lprocfs_seq_release,
         };
-
-        int rc;
+        struct proc_dir_entry *req_history;
 
         ptlrpc_lprocfs_register(entry, svc->srv_name,
                                 "stats", &svc->srv_procroot,
@@ -542,10 +544,12 @@ void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
 
         lprocfs_add_vars(svc->srv_procroot, lproc_vars, NULL);
 
-        rc = lprocfs_seq_create(svc->srv_procroot, "req_history",
-                                0400, &req_history_fops, svc);
-        if (rc)
-                CWARN("Error adding the req_history file\n");
+        req_history = create_proc_entry("req_history", 0400,
+                                        svc->srv_procroot);
+        if (req_history != NULL) {
+                req_history->data = svc;
+                req_history->proc_fops = &req_history_fops;
+        }
 }
 
 void ptlrpc_lprocfs_register_obd(struct obd_device *obddev)
@@ -602,7 +606,6 @@ void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc)
 {
         if (svc->srv_procroot != NULL)
                 lprocfs_remove(&svc->srv_procroot);
-
         if (svc->srv_stats)
                 lprocfs_free_stats(&svc->srv_stats);
 }
@@ -611,7 +614,6 @@ void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd)
 {
         if (obd->obd_svc_procroot)
                 lprocfs_remove(&obd->obd_svc_procroot);
-
         if (obd->obd_svc_stats)
                 lprocfs_free_stats(&obd->obd_svc_stats);
 }
@@ -652,20 +654,19 @@ EXPORT_SYMBOL(lprocfs_wr_evict_client);
 int lprocfs_wr_ping(struct file *file, const char *buffer,
                     unsigned long count, void *data)
 {
-        struct obd_device     *obd = data;
+        struct obd_device *obd = data;
         struct ptlrpc_request *req;
-        int                    rc;
+        int rc;
         ENTRY;
 
         LPROCFS_CLIMP_CHECK(obd);
-        req = ptlrpc_request_alloc_pack(obd->u.cli.cl_import, &RQF_OBD_PING,
-                                        LUSTRE_OBD_VERSION, OBD_PING);
-
+        req = ptlrpc_prep_req(obd->u.cli.cl_import, LUSTRE_OBD_VERSION,
+                              OBD_PING, 1, NULL, NULL);
         LPROCFS_CLIMP_EXIT(obd);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        ptlrpc_request_set_replen(req);
+        ptlrpc_req_set_repsize(req, 1, NULL);
         req->rq_send_state = LUSTRE_IMP_FULL;
         req->rq_no_resend = 1;
         req->rq_no_delay = 1;

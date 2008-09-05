@@ -19,7 +19,7 @@ load_llog_test() {
 PATH=`dirname $0`:`dirname $0`/../utils:$PATH
 TMP=${TMP:-/tmp}
 
-MDS=`ls /proc/fs/lustre/mdt | grep -v num_refs | head -n 1`
+MDS=`ls $LPROC/mds | grep -v num_refs | head -n 1`
 [ -z "$MDS" ] && echo "no MDS available, skipping llog test" && exit 0
 
 load_llog_test || exit 0

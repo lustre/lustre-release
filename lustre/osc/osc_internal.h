@@ -60,7 +60,7 @@ struct osc_async_page {
         struct client_obd       *oap_cli;
         struct lov_oinfo        *oap_loi;
 
-	struct obd_async_page_ops *oap_caller_ops;
+        struct obd_async_page_ops *oap_caller_ops;
         void                    *oap_caller_data;
         struct list_head         oap_page_list;
         struct ldlm_lock        *oap_ldlm_lock;
@@ -108,6 +108,11 @@ static inline void lprocfs_osc_init_vars(struct lprocfs_static_vars *lvars)
 }
 #endif
 
+#ifndef min_t
+#define min_t(type,x,y) \
+        ({ type __x = (x); type __y = (y); __x < __y ? __x: __y; })
+#endif
+
 static inline int osc_recoverable_error(int rc)
 {
         return (rc == -EIO || rc == -EROFS || rc == -ENOMEM || rc == -EAGAIN);
@@ -117,12 +122,13 @@ static inline int osc_recoverable_error(int rc)
 static inline int osc_should_resend(int resend, struct client_obd *cli)
 {
         return atomic_read(&cli->cl_resends) ? 
-               atomic_read(&cli->cl_resends) > resend : 1; 
+                atomic_read(&cli->cl_resends) > resend : 1; 
 }
 
-#ifndef min_t
-#define min_t(type,x,y) \
-        ({ type __x = (x); type __y = (y); __x < __y ? __x: __y; })
-#endif
+static inline int osc_exp_is_2_0_server(struct obd_export *exp) {
+       LASSERT(exp);
+       return !!(exp->exp_connect_flags & OBD_CONNECT_FID);
+}
+
 
 #endif /* OSC_INTERNAL_H */

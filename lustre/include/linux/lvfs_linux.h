@@ -40,7 +40,9 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/fs.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <linux/namei.h>
+#endif
 #include <linux/sched.h>
 
 #include <lvfs.h>
@@ -75,21 +77,26 @@ struct lvfs_dentry_params
 };
 #define LVFS_DENTRY_PARAMS_INIT         { .ldp_magic = LVFS_DENTRY_PARAM_MAGIC }
 
-#define BDEVNAME_DECLARE_STORAGE(foo) char foo[BDEVNAME_SIZE]
-#define ll_bdevname(SB, STORAGE) __bdevname(kdev_t_to_nr(SB->s_dev), STORAGE)
-#define lvfs_sbdev(SB)       ((SB)->s_bdev)
-#define lvfs_sbdev_type      struct block_device *
-#define lvfs_sbdev_sync      fsync_bdev
-
-int fsync_bdev(struct block_device *);
+# if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+#  define BDEVNAME_DECLARE_STORAGE(foo) char foo[BDEVNAME_SIZE]
+#  define ll_bdevname(SB, STORAGE) __bdevname(kdev_t_to_nr(SB->s_dev), STORAGE)
+#  define lvfs_sbdev(SB)       ((SB)->s_bdev)
+#  define lvfs_sbdev_type      struct block_device *
+   int fsync_bdev(struct block_device *);
+#  define lvfs_sbdev_sync      fsync_bdev
+# else
+#  define BDEVNAME_DECLARE_STORAGE(foo) char __unused_##foo
+#  define ll_bdevname(SB,STORAGE) ((void)__unused_##STORAGE,bdevname(lvfs_sbdev(SB)))
+#  define lvfs_sbdev(SB)       (kdev_t_to_nr((SB)->s_dev))
+#  define lvfs_sbdev_type      kdev_t
+#  define lvfs_sbdev_sync      fsync_dev
+# endif
 
 /* Instead of calling within lvfs (a layering violation) */
 #define lvfs_set_rdonly(obd, sb) \
         __lvfs_set_rdonly(lvfs_sbdev(sb), fsfilt_journal_sbdev(obd, sb))
 
 void __lvfs_set_rdonly(lvfs_sbdev_type dev, lvfs_sbdev_type jdev);
-
 int lvfs_check_rdonly(lvfs_sbdev_type dev);
-void lvfs_clear_rdonly(lvfs_sbdev_type dev);
 
 #endif /*  __LVFS_LINUX_H__ */

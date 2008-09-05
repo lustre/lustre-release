@@ -60,9 +60,9 @@
 #include <limits.h>
 
 #ifdef __linux__
-/* libcfs.h is not really needed here, but on SLES10/PPC, fs.h includes idr.h which
+/* kp30.h is not really needed here, but on SLES10/PPC, fs.h includes idr.h which
  * requires BITS_PER_LONG to be defined */
-#include <libcfs/libcfs.h>
+#include <libcfs/kp30.h>
 #include <linux/fs.h> /* for BLKGETSIZE64 */
 #include <linux/version.h>
 #endif
@@ -230,14 +230,14 @@ int loop_setup(struct mkfs_opts *mop)
 {
         char loop_base[20];
         char l_device[64];
-        int i, ret = 0;
+        int i,ret = 0;
 
         /* Figure out the loop device names */
-        if (!access("/dev/loop0", F_OK | R_OK)) {
+        if (!access("/dev/loop0", F_OK | R_OK))
                 strcpy(loop_base, "/dev/loop\0");
-        } else if (!access("/dev/loop/0", F_OK | R_OK)) {
+        else if (!access("/dev/loop/0", F_OK | R_OK))
                 strcpy(loop_base, "/dev/loop/\0");
-        } else {
+        else {
                 fprintf(stderr, "%s: can't access loop devices\n", progname);
                 return EACCES;
         }
@@ -349,18 +349,10 @@ int loop_format(struct mkfs_opts *mop)
         }
 
         ret = creat(mop->mo_device, S_IRUSR|S_IWUSR);
-        if (ret < 0) {
-                ret = errno;
-                fprintf(stderr, "%s: Unable to create backing store: %d\n",
-                        progname, ret);
-        } else {
-                close(ret);
-        }
-
         ret = truncate(mop->mo_device, mop->mo_device_sz * 1024);
         if (ret != 0) {
                 ret = errno;
-                fprintf(stderr, "%s: Unable to truncate backing store: %d\n",
+                fprintf(stderr, "%s: Unable to create backing store: %d\n",
                         progname, ret);
         }
 
@@ -402,7 +394,7 @@ static int file_in_dev(char *file_name, char *dev_name)
 
         /* Construct debugfs command line. */
         snprintf(debugfs_cmd, sizeof(debugfs_cmd),
-                "debugfs -c -R 'stat %s' %s 2>&1 | egrep '(Inode|unsupported)'",
+                "debugfs -c -R 'stat %s' '%s' 2>&1 | egrep '(Inode|unsupported)'",
                 file_name, dev_name);
 
         fp = popen(debugfs_cmd, "r");
@@ -420,7 +412,7 @@ static int file_in_dev(char *file_name, char *dev_name)
                 debugfs_cmd[i] = 0;
                 fprintf(stderr, "%s", debugfs_cmd);
                 if (strstr(debugfs_cmd, "unsupported feature")) {
-                          disp_old_e2fsprogs_msg("an unknown", 0);
+                        disp_old_e2fsprogs_msg("an unknown", 0);
                 }
                 pclose(fp);
                 return -1;
@@ -433,7 +425,6 @@ static int file_in_dev(char *file_name, char *dev_name)
 static int is_lustre_target(struct mkfs_opts *mop)
 {
         int rc;
-
         vprint("checking for existing Lustre data: ");
 
         if ((rc = file_in_dev(MOUNT_DATA_FILE, mop->mo_device))) {
@@ -554,7 +545,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
         if (mop->mo_device_sz != 0) {
                 if (mop->mo_device_sz < 8096){
                         fprintf(stderr, "%s: size of filesystem must be larger "
-                                "than 8MB, but is set to %lldKB\n",
+                                "than 8MB, but is set to %lluKB\n",
                                 progname, (long long)mop->mo_device_sz);
                         return EINVAL;
                 }
@@ -579,11 +570,8 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                         long journal_sz = 0, max_sz;
                         if (device_sz > 1024 * 1024) /* 1GB */
                                 journal_sz = (device_sz / 102400) * 4;
-                        /* cap journal size at 1GB */
-                        if (journal_sz > 1024L)
-                                journal_sz = 1024L;
                         /* man mkfs.ext3 */
-                        max_sz = (256000 * L_BLOCK_SIZE) >> 20; /* 1GB */
+                        max_sz = (102400 * L_BLOCK_SIZE) >> 20; /* 400MB */
                         if (journal_sz > max_sz)
                                 journal_sz = max_sz;
                         if (journal_sz) {
@@ -593,7 +581,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                         }
                 }
 
-                /* Bytes_per_inode: disk size / num inodes */
+                /* bytes_per_inode: disk size / num inodes */
                 if (strstr(mop->mo_mkfsopts, "-i") == NULL) {
                         long bytes_per_inode = 0;
 
@@ -603,9 +591,8 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                         /* Allocate fewer inodes on large OST devices.  Most
                            filesystems can be much more aggressive than even
                            this. */
-                        if ((IS_OST(&mop->mo_ldd) && (device_sz > 100000000)))
-                                bytes_per_inode = 16384;  /* > 100 Gb device */
-
+                        if ((IS_OST(&mop->mo_ldd) && (device_sz > 1000000)))
+                                bytes_per_inode = 16384;
 
                         if (bytes_per_inode > 0) {
                                 sprintf(buf, " -i %ld", bytes_per_inode);
@@ -657,6 +644,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                 snprintf(mkfs_cmd, sizeof(mkfs_cmd),
                          "mkfs.ext2 -j -b %d -L %s ", L_BLOCK_SIZE,
                          mop->mo_ldd.ldd_svname);
+
         } else if (mop->mo_ldd.ldd_mount_type == LDD_MT_REISERFS) {
                 long journal_sz = 0; /* FIXME default journal size */
                 if (journal_sz > 0) {
@@ -665,6 +653,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                                 sizeof(mop->mo_mkfsopts));
                 }
                 snprintf(mkfs_cmd, sizeof(mkfs_cmd), "mkreiserfs -ff ");
+
         } else {
                 fprintf(stderr,"%s: unsupported fs type: %d (%s)\n",
                         progname, mop->mo_ldd.ldd_mount_type,
@@ -768,17 +757,7 @@ int write_local_files(struct mkfs_opts *mop)
         sprintf(filepnm, "%s/%s", mntpt, MOUNT_CONFIGS_DIR);
         ret = mkdir(filepnm, 0777);
         if ((ret != 0) && (errno != EEXIST)) {
-                fprintf(stderr, "%s: Can't make configs dir %s (%s)\n",
-                        progname, filepnm, strerror(errno));
-                goto out_umnt;
-        } else if (errno == EEXIST) {
-                ret = 0;
-        }
-
-        sprintf(filepnm, "%s/%s", mntpt, "ROOT");
-        ret = mkdir(filepnm, 0777);
-        if ((ret != 0) && (errno != EEXIST)) {
-                fprintf(stderr, "%s: Can't make ROOT dir %s (%s)\n",
+                fprintf(stderr, "%s: Can't make configs dir %s: %s\n",
                         progname, filepnm, strerror(errno));
                 goto out_umnt;
         } else if (errno == EEXIST) {
@@ -891,7 +870,7 @@ int read_local_files(struct mkfs_opts *mop)
                  filesystem */
 
         /* Construct debugfs command line. */
-        snprintf(cmd, cmdsz, "debugfs -c -R 'dump /%s %s/mountdata' %s",
+        snprintf(cmd, cmdsz, "debugfs -c -R 'dump /%s %s/mountdata' '%s'",
                  MOUNT_DATA_FILE, tmpdir, dev);
 
         ret = run_command(cmd, cmdsz);
@@ -1034,14 +1013,45 @@ static inline void badopt(const char *opt, char *type)
         usage(stderr);
 }
 
-static int add_param(char *buf, char *key, char *val)
+static int clean_param(char *buf, char *key)
+{
+        char *sub, *next;
+
+        if (!buf)
+                return 1;
+        if ((sub = strstr(buf, key)) != NULL) {
+                if ((next = strchr(sub, ' ')) != NULL) {
+                        next++;
+                        memmove(sub, next, strlen(next) + 1);
+                } else {
+                        *sub = '\0';
+                }
+        }
+        return 0;
+}
+
+static int add_param(char *buf, char *key, char *val, int unique)
 {
         int end = sizeof(((struct lustre_disk_data *)0)->ldd_params);
-        int start = strlen(buf);
+        int start;
         int keylen = 0;
+        char *ptr;
 
         if (key)
                 keylen = strlen(key);
+        if (unique) {
+                if (key) {
+                        clean_param(buf, key);
+                } else {
+                        if ((ptr = strchr(val, '=')) == NULL)
+                                return 1;
+                        *ptr = '\0';
+                        clean_param(buf, val);
+                        *ptr = '=';
+                }
+        }
+
+        start = strlen(buf);
         if (start + 1 + keylen + strlen(val) >= end) {
                 fprintf(stderr, "%s: params are too long-\n%s %s%s\n",
                         progname, buf, key ? key : "", val);
@@ -1062,10 +1072,6 @@ static char *convert_hostnames(char *s1)
         lnet_nid_t nid;
 
         converted = malloc(left);
-        if (converted == NULL) {
-                return NULL;
-        }
-
         end = s1 + strlen(s1);
         c = converted;
         while ((left > 0) && (s1 < end)) {
@@ -1134,6 +1140,8 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
         char *optstring = "b:c:C:d:ef:Ghi:k:L:m:MnNo:Op:Pqru:vw";
         int opt;
         int rc, longidx;
+        int upcall = 0;
+        const size_t prefix_len = sizeof(PARAM_MDT_UPCALL) - 1;
 
         while ((opt = getopt_long(argc, argv, optstring, long_opt, &longidx)) !=
                EOF) {
@@ -1180,7 +1188,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         if (!nids)
                                 return 1;
                         rc = add_param(mop->mo_ldd.ldd_params, PARAM_FAILNODE,
-                                       nids);
+                                       nids, 0);
                         free(nids);
                         if (rc)
                                 return rc;
@@ -1244,7 +1252,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         if (!nids)
                                 return 1;
                         rc = add_param(mop->mo_ldd.ldd_params, PARAM_MGSNODE,
-                                       nids);
+                                       nids, 0);
                         free(nids);
                         if (rc)
                                 return rc;
@@ -1267,7 +1275,19 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         mop->mo_ldd.ldd_flags |= LDD_F_SV_TYPE_OST;
                         break;
                 case 'p':
-                        rc = add_param(mop->mo_ldd.ldd_params, NULL, optarg);
+                        /* Test if the param is valid for mdt.group_upcall */
+                        if (!strncmp(optarg, PARAM_MDT_UPCALL, prefix_len)) {
+                                upcall++;
+                                if (strcmp(optarg + prefix_len, "NONE") &&
+                                    access(optarg + prefix_len, R_OK | X_OK))
+                                        fprintf(stderr, "WARNING: group upcall "
+                                                "parameter not executable: %s\n"
+                                                "NOTE: you can change the path "
+                                                "to the group upcall through "
+                                                "tunefs.lustre(8)\n", optarg +
+                                                prefix_len);
+                        }
+                        rc = add_param(mop->mo_ldd.ldd_params, NULL, optarg, 0);
                         if (rc)
                                 return rc;
                         /* Must update the mgs logs */
@@ -1305,229 +1325,24 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 return EINVAL;
         }
 
+#ifndef TUNEFS
+        if (mop->mo_ldd.ldd_flags & LDD_F_SV_TYPE_MDT && 0 == upcall) {
+                if (access("/usr/sbin/l_getgroups", R_OK | X_OK)) {
+                        fprintf(stderr, "WARNING: MDS group upcall is not set, "
+                                "using 'NONE'\n");
+                } else {
+                        rc = add_param(mop->mo_ldd.ldd_params, PARAM_MDT_UPCALL,
+                                       "/usr/sbin/l_getgroups", 1);
+                        if (rc)
+                                return rc;
+                        /* Must update the mgs logs */
+                        mop->mo_ldd.ldd_flags |= LDD_F_UPDATE;
+                }
+        }
+#endif
+
         return 0;
 }
-
-#include <lustre/libiam.h>
-
-#define LDISKFS_IOC_GETVERSION _IOR('f', 3, long)
-
-#ifndef TUNEFS /* mkfs.lustre */
-static int mkfs_iam_insert(int key_need_convert, char *keybuf,
-                           int rec_need_convert, char *recbuf, char *filename)
-{
-        int fd;
-        int ret;
-        struct iam_uapi_info ua;
-
-        fd = iam_open(filename, &ua);
-        if (fd < 0) {
-                fprintf(stderr, "failed to iam_open %s\n", filename);
-                return 1;
-        }
-
-        ret = iam_insert(fd, &ua,
-                         key_need_convert, keybuf,
-                         rec_need_convert, recbuf);
-        iam_close(fd);
-        if (ret) {
-                fprintf(stderr, "failed to iam_insert %s\n", filename);
-                return 1;
-        } else {
-                return 0;
-        }
-}
-
-static int touch_file(char *filename)
-{
-        int fd;
-
-        if (filename == NULL) {
-                return 1;
-        }
-
-        fd = open(filename, O_CREAT | O_TRUNC, 0600);
-        if (fd < 0) {
-                return 1;
-        } else {
-                close(fd);
-                return 0;
-        }
-}
-
-static int get_generation(char *filename, unsigned long *result)
-{
-        int fd;
-        int ret;
-
-        if (filename == NULL) {
-                return 1;
-        }
-
-        fd = open(filename, O_RDONLY);
-        if (fd < 0) {
-                fprintf(stderr, "%s: failed to open %s\n",
-                        __FUNCTION__, filename);
-                return 1;
-        }
-
-        ret = ioctl(fd, LDISKFS_IOC_GETVERSION, result);
-        close(fd);
-
-        return ((ret < 0) ? ret : 0);
-}
-
-static int mkfs_mdt(struct mkfs_opts *mop)
-{
-        char mntpt[] = "/tmp/mntXXXXXX";
-        char fstype[] = "ldiskfs";
-        char filepnm[128];
-        char recbuf[64];
-        char *source;
-        int ret;
-        unsigned long generation;
-        struct stat st;
-
-        source = mop->mo_device;
-        if (mop->mo_flags & MO_IS_LOOP) {
-                source = mop->mo_loopdev;
-        }
-
-        if ((source == NULL) || (*source == 0)) {
-                return 1;
-        }
-
-        if (!mkdtemp(mntpt)) {
-                fprintf(stderr, "%s: failed to mkdtemp %s\n",
-                        __FUNCTION__, mntpt);
-                return errno;
-        }
-
-        ret = mount(source, mntpt, fstype, 0, NULL);
-        if (ret) {
-                goto out_rmdir;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "seq_ctl");
-        ret = touch_file(filepnm);
-        if (ret) {
-                goto out_umount;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "seq_srv");
-        ret = touch_file(filepnm);
-        if (ret) {
-                goto out_umount;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "last_received");
-        ret = touch_file(filepnm);
-        if (ret) {
-                goto out_umount;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "lov_objid");
-        ret = touch_file(filepnm);
-        if (ret) {
-                goto out_umount;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "root");
-        ret = iam_creat(filepnm, FMT_LVAR, L_BLOCK_SIZE, 4, 17, 4);
-        if (ret) {
-                goto out_umount;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "fld");
-        ret = iam_creat(filepnm, FMT_LFIX, L_BLOCK_SIZE, 8, 8, 4);
-        if (ret) {
-                goto out_umount;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "orphans");
-        ret = iam_creat(filepnm, FMT_LFIX, L_BLOCK_SIZE, 20, 8, 4);
-        if (ret) {
-                goto out_umount;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "oi.16");
-        ret = iam_creat(filepnm, FMT_LFIX, L_BLOCK_SIZE, 16, 8, 4);
-        if (ret) {
-                goto out_umount;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "oi.5");
-        ret = iam_creat(filepnm, FMT_LFIX, L_BLOCK_SIZE, 5, 8, 4);
-        if (ret) {
-                goto out_umount;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, CAPA_KEYS);
-        ret = touch_file(filepnm);
-        if (ret) {
-                goto out_umount;
-        }
-
-        umount(mntpt);
-        ret = mount(source, mntpt, fstype, 0, NULL);
-        if (ret) {
-                goto out_rmdir;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "root");
-        ret = iam_polymorph(filepnm, 040755);
-        if (ret) {
-                perror("IAM_IOC_POLYMORPH");
-                goto out_umount;
-        }
-
-        umount(mntpt);
-        ret = mount(source, mntpt, fstype, 0, NULL);
-        if (ret) {
-                goto out_rmdir;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "fld");
-        ret = mkfs_iam_insert(1, "0000000000000002", 1, "0000000000000000", filepnm);
-        if (ret) {
-                goto out_umount;
-        }
-
-        ret = mkfs_iam_insert(1, "0000000000000001", 1, "0000000000000000", filepnm);
-        if (ret) {
-                goto out_umount;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "root");
-        ret = stat(filepnm, &st);
-        if (ret) {
-                goto out_umount;
-        }
-
-        ret = get_generation(filepnm, &generation);
-        if (ret) {
-                goto out_umount;
-        }
-
-        snprintf(recbuf, sizeof(recbuf) - 1, "110000000000000001%8.8x%8.8x",
-                 (unsigned int)st.st_ino, (unsigned int)generation);
-        ret = mkfs_iam_insert(0, ".", 1, recbuf, filepnm);
-        if (ret) {
-                goto out_umount;
-        }
-
-        ret = mkfs_iam_insert(0, "..", 1, recbuf, filepnm);
-        if (ret) {
-                goto out_umount;
-        }
-
-out_umount:
-        umount(mntpt);
-out_rmdir:
-        rmdir(mntpt);
-        return ret;
-}
-#endif
 
 int main(int argc, char *const argv[])
 {
@@ -1536,7 +1351,7 @@ int main(int argc, char *const argv[])
         char *mountopts = NULL;
         char always_mountopts[512] = "";
         char default_mountopts[512] = "";
-        int ret = 0;
+        int  ret = 0;
 
         if ((progname = strrchr(argv[0], '/')) != NULL)
                 progname++;
@@ -1617,16 +1432,7 @@ int main(int argc, char *const argv[])
                 ret = EINVAL;
                 goto out;
         }
-#if 0
-        /*
-         * Comment out these 2 checks temporarily, since for multi-MDSes
-         * in single node only 1 mds node could have mgs service
-         */
-        if (IS_MDT(ldd) && !IS_MGS(ldd) && (mop.mo_mgs_failnodes == 0)) {
-                verrprint("No management node specified, adding MGS to this "
-                          "MDT\n");
-                ldd->ldd_flags |= LDD_F_SV_TYPE_MGS;
-        }
+
         if (!IS_MGS(ldd) && (mop.mo_mgs_failnodes == 0)) {
                 fatal();
                 if (IS_MDT(ldd))
@@ -1636,7 +1442,6 @@ int main(int argc, char *const argv[])
                 ret = EINVAL;
                 goto out;
         }
-#endif
 
         /* These are the permanent mount options (always included) */
         switch (ldd->ldd_mount_type) {
@@ -1757,16 +1562,6 @@ int main(int argc, char *const argv[])
                 fprintf(stderr, "failed to write local files\n");
                 goto out;
         }
-
-#ifndef TUNEFS /* mkfs.lustre */
-        if (IS_MDT(ldd)) {
-                ret = mkfs_mdt(&mop);
-                if (ret != 0) {
-                        fprintf(stderr, "failed to mkfs_mdt\n");
-                        goto out;
-                }
-        }
-#endif
 
 out:
         loop_cleanup(&mop);

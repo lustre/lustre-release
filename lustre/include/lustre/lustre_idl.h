@@ -37,11 +37,6 @@
  *
  * Lustre wire protocol definitions.
  *
- *
- * We assume all nodes are either little-endian or big-endian, and we
- * always send messages in the sender's native format.  The receiver
- * detects the message format by checking the 'magic' field of the message
- * (see lustre_msg_swabbed() below).
  * ALL structs passing over the wire should be declared here.  Structs
  * that are used in interfaces with userspace should go in lustre_user.h.
  *
@@ -68,6 +63,10 @@
  * in the code to ensure that new/old clients that see this larger struct
  * do not fail, otherwise you need to implement protocol compatibility).
  *
+ * We assume all nodes are either little-endian or big-endian, and we
+ * always send messages in the sender's native format.  The receiver
+ * detects the message format by checking the 'magic' field of the message.
+ *
  * Each wire type has corresponding 'lustre_swab_xxxtypexxx()' routines,
  * implemented either here, inline (trivial implementations) or in
  * ptlrpc/pack_generic.c.  These 'swabbers' convert the type from "other"
@@ -84,11 +83,30 @@
 #ifndef _LUSTRE_IDL_H_
 #define _LUSTRE_IDL_H_
 
-#include <libcfs/libcfs.h>
+#if defined(__linux__)
+#include <linux/lustre_types.h>
+#elif defined(__APPLE__)
+#include <darwin/lustre_types.h>
+#elif defined(__WINNT__)
+#include <winnt/lustre_types.h>
+#else
+#error Unsupported operating system.
+#endif
 
 /* Defn's shared with user-space. */
 #include <lustre/lustre_user.h>
+#include <lustre_ver.h>
 #include <lustre/ll_fiemap.h>
+
+#include <libcfs/kp30.h>
+
+/*
+ * this file contains all data structures used in Lustre interfaces:
+ * - obdo and obd_request records
+ * - mds_request records
+ * - ldlm data
+ * - ioctl's
+ */
 
 /*
  *  GENERAL STUFF
@@ -121,7 +139,6 @@
 //#define PTLBD_BULK_PORTAL              21
 #define MDS_SETATTR_PORTAL             22
 #define MDS_READPAGE_PORTAL            23
-#define MDS_MDS_PORTAL                 24
 
 #define MGC_REPLY_PORTAL               25
 #define MGS_REQUEST_PORTAL             26
@@ -129,8 +146,6 @@
 #define OST_REQUEST_PORTAL             28
 #define FLD_REQUEST_PORTAL             29
 #define SEQ_METADATA_PORTAL            30
-#define SEQ_DATA_PORTAL                31
-#define SEQ_CONTROLLER_PORTAL          32
 
 #define SVC_KILLED               1
 #define SVC_EVENT                2
@@ -162,302 +177,6 @@
 #define LUSTRE_LOG_VERSION  0x00050000
 #define LUSTRE_MGS_VERSION  0x00060000
 
-typedef __u64 mdsno_t;
-typedef __u64 seqno_t;
-
-struct lu_range {
-        __u64 lr_start;
-        __u64 lr_end;
-};
-
-static inline __u64 range_space(struct lu_range *r)
-{
-        return r->lr_end - r->lr_start;
-}
-
-static inline void range_zero(struct lu_range *r)
-{
-        r->lr_start = r->lr_end = 0;
-}
-
-static inline int range_within(struct lu_range *r,
-                               __u64 s)
-{
-        return s >= r->lr_start && s < r->lr_end;
-}
-
-static inline void range_alloc(struct lu_range *r,
-                               struct lu_range *s,
-                               __u64 w)
-{
-        r->lr_start = s->lr_start;
-        r->lr_end = s->lr_start + w;
-        s->lr_start += w;
-}
-
-static inline int range_is_sane(struct lu_range *r)
-{
-        return (r->lr_end >= r->lr_start);
-}
-
-static inline int range_is_zero(struct lu_range *r)
-{
-        return (r->lr_start == 0 && r->lr_end == 0);
-}
-
-static inline int range_is_exhausted(struct lu_range *r)
-{
-        return range_space(r) == 0;
-}
-
-#define DRANGE "[%#16.16"LPF64"x-%#16.16"LPF64"x]"
-
-#define PRANGE(range)      \
-        (range)->lr_start, \
-        (range)->lr_end
-
-struct lu_fid {
-        __u64 f_seq;  /* holds fid sequence. Lustre should support 2 ^ 64
-                       * objects, thus even if one sequence has one object we
-                       * will never reach this value. */
-        __u32 f_oid;  /* fid number within its sequence. */
-        __u32 f_ver;  /* holds fid version. */
-};
-
-/*
- * fid constants
- */
-enum {
-        /* initial fid id value */
-        LUSTRE_FID_INIT_OID  = 1UL
-};
-
-/* get object sequence */
-static inline __u64 fid_seq(const struct lu_fid *fid)
-{
-        return fid->f_seq;
-}
-
-/* get object id */
-static inline __u32 fid_oid(const struct lu_fid *fid)
-{
-        return fid->f_oid;
-}
-
-/* get object version */
-static inline __u32 fid_ver(const struct lu_fid *fid)
-{
-        return fid->f_ver;
-}
-
-static inline void fid_zero(struct lu_fid *fid)
-{
-        memset(fid, 0, sizeof(*fid));
-}
-
-/* Normal FID sequence starts from this value, i.e. 1<<33 */
-#define FID_SEQ_START  0x200000000ULL
-
-/* IDIF sequence starts from this value, i.e. 1<<32 */
-#define IDIF_SEQ_START 0x100000000ULL
-
-/**
- * Check if a fid is igif or not.
- * \param fid the fid to be tested.
- * \return true if the fid is a igif; otherwise false. 
- */
-static inline int fid_is_igif(const struct lu_fid *fid)
-{
-        return fid_seq(fid) > 0 && fid_seq(fid) < IDIF_SEQ_START;
-}
-
-/**
- * Check if a fid is idif or not.
- * \param fid the fid to be tested.
- * \return true if the fid is a idif; otherwise false. 
- */
-static inline int fid_is_idif(const struct lu_fid *fid)
-{
-        return fid_seq(fid) >= IDIF_SEQ_START  && fid_seq(fid) < FID_SEQ_START;
-}
-
-/**
- * Get inode number from a igif.
- * \param fid a igif to get inode number from.
- * \return inode number for the igif.
- */
-static inline ino_t lu_igif_ino(const struct lu_fid *fid)
-{
-        return fid_seq(fid);
-}
-
-/**
- * Get inode generation from a igif.
- * \param fid a igif to get inode generation from.
- * \return inode generation for the igif.
- */ 
-static inline __u32 lu_igif_gen(const struct lu_fid *fid)
-{
-        return fid_oid(fid);
-}
-
-#define DFID "[0x%16.16"LPF64"x/0x%8.8x:0x%8.8x]"
-
-#define PFID(fid)     \
-        fid_seq(fid), \
-        fid_oid(fid), \
-        fid_ver(fid)
-
-static inline void fid_cpu_to_le(struct lu_fid *dst, const struct lu_fid *src)
-{
-        /* check that all fields are converted */
-        CLASSERT(sizeof *src ==
-                 sizeof fid_seq(src) +
-                 sizeof fid_oid(src) + sizeof fid_ver(src));
-        LASSERTF(fid_is_igif(src) || fid_ver(src) == 0, DFID"\n", PFID(src));
-        dst->f_seq = cpu_to_le64(fid_seq(src));
-        dst->f_oid = cpu_to_le32(fid_oid(src));
-        dst->f_ver = cpu_to_le32(fid_ver(src));
-}
-
-static inline void fid_le_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
-{
-        /* check that all fields are converted */
-        CLASSERT(sizeof *src ==
-                 sizeof fid_seq(src) +
-                 sizeof fid_oid(src) + sizeof fid_ver(src));
-        dst->f_seq = le64_to_cpu(fid_seq(src));
-        dst->f_oid = le32_to_cpu(fid_oid(src));
-        dst->f_ver = le32_to_cpu(fid_ver(src));
-        LASSERTF(fid_is_igif(dst) || fid_ver(dst) == 0, DFID"\n", PFID(dst));
-}
-
-static inline void fid_cpu_to_be(struct lu_fid *dst, const struct lu_fid *src)
-{
-        /* check that all fields are converted */
-        CLASSERT(sizeof *src ==
-                 sizeof fid_seq(src) +
-                 sizeof fid_oid(src) + sizeof fid_ver(src));
-        LASSERTF(fid_is_igif(src) || fid_ver(src) == 0, DFID"\n", PFID(src));
-        dst->f_seq = cpu_to_be64(fid_seq(src));
-        dst->f_oid = cpu_to_be32(fid_oid(src));
-        dst->f_ver = cpu_to_be32(fid_ver(src));
-}
-
-static inline void fid_be_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
-{
-        /* check that all fields are converted */
-        CLASSERT(sizeof *src ==
-                 sizeof fid_seq(src) +
-                 sizeof fid_oid(src) + sizeof fid_ver(src));
-        dst->f_seq = be64_to_cpu(fid_seq(src));
-        dst->f_oid = be32_to_cpu(fid_oid(src));
-        dst->f_ver = be32_to_cpu(fid_ver(src));
-        LASSERTF(fid_is_igif(dst) || fid_ver(dst) == 0, DFID"\n", PFID(dst));
-}
-
-#ifdef __KERNEL__
-/*
- * Storage representation for fids.
- *
- * Variable size, first byte contains the length of the whole record.
- */
-
-struct lu_fid_pack {
-        char fp_len;
-        char fp_area[sizeof(struct lu_fid)];
-};
-
-void fid_pack(struct lu_fid_pack *pack, const struct lu_fid *fid,
-              struct lu_fid *befider);
-int  fid_unpack(const struct lu_fid_pack *pack, struct lu_fid *fid);
-
-/* __KERNEL__ */
-#endif
-
-static inline int fid_is_sane(const struct lu_fid *fid)
-{
-        return
-                fid != NULL &&
-                ((fid_seq(fid) >= FID_SEQ_START && fid_oid(fid) != 0
-                                                && fid_ver(fid) == 0) ||
-                fid_is_igif(fid));
-}
-
-static inline int fid_is_zero(const struct lu_fid *fid)
-{
-        return fid_seq(fid) == 0 && fid_oid(fid) == 0;
-}
-
-extern void lustre_swab_lu_fid(struct lu_fid *fid);
-extern void lustre_swab_lu_range(struct lu_range *range);
-
-static inline int lu_fid_eq(const struct lu_fid *f0,
-                            const struct lu_fid *f1)
-{
-	/* Check that there is no alignment padding. */
-	CLASSERT(sizeof *f0 ==
-                 sizeof f0->f_seq + sizeof f0->f_oid + sizeof f0->f_ver);
-        LASSERTF(fid_is_igif(f0) || fid_ver(f0) == 0, DFID, PFID(f0));
-        LASSERTF(fid_is_igif(f1) || fid_ver(f1) == 0, DFID, PFID(f1));
-	return memcmp(f0, f1, sizeof *f0) == 0;
-}
-
-/*
- * Layout of readdir pages, as transmitted on wire.
- */
-struct lu_dirent {
-        struct lu_fid lde_fid;
-        __u64         lde_hash;
-        __u16         lde_reclen;
-        __u16         lde_namelen;
-        __u32         lde_pad0;
-        char          lde_name[0];
-};
-
-struct lu_dirpage {
-        __u64            ldp_hash_start;
-        __u64            ldp_hash_end;
-        __u32            ldp_flags;
-        __u32            ldp_pad0;
-        struct lu_dirent ldp_entries[0];
-};
-
-enum lu_dirpage_flags {
-        LDF_EMPTY = 1 << 0
-};
-
-static inline struct lu_dirent *lu_dirent_start(struct lu_dirpage *dp)
-{
-        if (le32_to_cpu(dp->ldp_flags) & LDF_EMPTY)
-                return NULL;
-        else
-                return dp->ldp_entries;
-}
-
-static inline struct lu_dirent *lu_dirent_next(struct lu_dirent *ent)
-{
-        struct lu_dirent *next;
-
-        if (le16_to_cpu(ent->lde_reclen) != 0)
-                next = ((void *)ent) + le16_to_cpu(ent->lde_reclen);
-        else
-                next = NULL;
-
-        return next;
-}
-
-static inline int lu_dirent_size(struct lu_dirent *ent)
-{
-        if (le16_to_cpu(ent->lde_reclen) == 0) {
-                return (sizeof(*ent) +
-                        le16_to_cpu(ent->lde_namelen) + 7) & ~7;
-        }
-        return le16_to_cpu(ent->lde_reclen);
-}
-
-#define DIR_END_OFF              0xfffffffffffffffeULL
-
 struct lustre_handle {
         __u64 cookie;
 };
@@ -480,6 +199,24 @@ static inline void lustre_handle_copy(struct lustre_handle *tgt,
         tgt->cookie = src->cookie;
 }
 
+/* we depend on this structure to be 8-byte aligned */
+/* this type is only endian-adjusted in lustre_unpack_msg() */
+struct lustre_msg_v1 {
+        struct lustre_handle lm_handle;
+        __u32 lm_magic;
+        __u32 lm_type;
+        __u32 lm_version;
+        __u32 lm_opc;
+        __u64 lm_last_xid;
+        __u64 lm_last_committed;
+        __u64 lm_transno;
+        __u32 lm_status;
+        __u32 lm_flags;
+        __u32 lm_conn_cnt;
+        __u32 lm_bufcount;
+        __u32 lm_buflens[0];
+};
+
 /* flags for lm_flags */
 #define MSGHDR_AT_SUPPORT               0x1
 
@@ -498,7 +235,7 @@ struct lustre_msg_v2 {
         __u32 lm_buflens[0];
 };
 
-/* without gss, ptlrpc_body is put at the first buffer. */
+/* without security, ptlrpc_body is put in the first buffer. */
 #define PTLRPC_NUM_VERSIONS     4
 struct ptlrpc_body {
         struct lustre_handle pb_handle;
@@ -507,7 +244,7 @@ struct ptlrpc_body {
         __u32 pb_opc;
         __u32 pb_status;
         __u64 pb_last_xid;
-        __u64 pb_last_seen;
+        __u64 pb_last_seen; /* not used */
         __u64 pb_last_committed;
         __u64 pb_transno;
         __u32 pb_flags;
@@ -545,69 +282,71 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define DLM_LOCKREPLY_OFF               1 /* lockrep offset */
 #define DLM_REPLY_REC_OFF               2 /* reply record offset */
 
+/* only use in req->rq_{req,rep}_swab_mask */
+#define MSG_PTLRPC_HEADER_OFF           31
+
 /* Flags that are operation-specific go in the top 16 bits. */
 #define MSG_OP_FLAG_MASK   0xffff0000
 #define MSG_OP_FLAG_SHIFT  16
 
 /* Flags that apply to all requests are in the bottom 16 bits */
-#define MSG_GEN_FLAG_MASK     0x0000ffff
-#define MSG_LAST_REPLAY           0x0001
-#define MSG_RESENT                0x0002
-#define MSG_REPLAY                0x0004
-/* #define MSG_AT_SUPPORT         0x0008
- * This was used in early prototypes of adaptive timeouts, and while there
- * shouldn't be any users of that code there also isn't a need for using this
- * bits. Defer usage until at least 1.10 to avoid potential conflict. */
-#define MSG_DELAY_REPLAY          0x0010
-#define MSG_VERSION_REPLAY        0x0020
-#define MSG_REQ_REPLAY_DONE       0x0040
-#define MSG_LOCK_REPLAY_DONE      0x0080
+#define MSG_GEN_FLAG_MASK      0x0000ffff
+#define MSG_LAST_REPLAY        1
+#define MSG_RESENT             2
+#define MSG_REPLAY             4
+/* #define MSG_AT_SUPPORT         8  avoid until 1.10+ */
+#define MSG_DELAY_REPLAY       0x10
+#define MSG_VERSION_REPLAY     0x20
 
 /*
  * Flags for all connect opcodes (MDS_CONNECT, OST_CONNECT)
  */
 
-#define MSG_CONNECT_RECOVERING  0x1
-#define MSG_CONNECT_RECONNECT   0x2
-#define MSG_CONNECT_REPLAYABLE  0x4
+#define MSG_CONNECT_RECOVERING  0x00000001
+#define MSG_CONNECT_RECONNECT   0x00000002
+#define MSG_CONNECT_REPLAYABLE  0x00000004
 //#define MSG_CONNECT_PEER        0x8
-#define MSG_CONNECT_LIBCLIENT   0x10
-#define MSG_CONNECT_INITIAL     0x20
-#define MSG_CONNECT_ASYNC       0x40
-#define MSG_CONNECT_NEXT_VER    0x80  /* use next version of lustre_msg */
-#define MSG_CONNECT_TRANSNO     0x100 /* report transno */
+#define MSG_CONNECT_LIBCLIENT   0x00000010
+#define MSG_CONNECT_INITIAL     0x00000020
+#define MSG_CONNECT_ASYNC       0x00000040
+#define MSG_CONNECT_NEXT_VER    0x00000080 /* use next version of lustre_msg */
+#define MSG_CONNECT_TRANSNO     0x00000100
+#define MSG_CONNECT_DELAYED     0x00000200
 
 /* Connect flags */
-#define OBD_CONNECT_RDONLY     0x00000001ULL /* client allowed read-only access */
-#define OBD_CONNECT_INDEX      0x00000002ULL /* connect to specific LOV idx */
-#define OBD_CONNECT_GRANT      0x00000008ULL /* OSC acquires grant at connect */
-#define OBD_CONNECT_SRVLOCK    0x00000010ULL /* server takes locks for client */
-#define OBD_CONNECT_VERSION    0x00000020ULL /* Server supports versions in ocd */
-#define OBD_CONNECT_REQPORTAL  0x00000040ULL /* Separate portal for non-IO reqs */
-#define OBD_CONNECT_ACL        0x00000080ULL /* client uses access control lists */
-#define OBD_CONNECT_XATTR      0x00000100ULL /* client using extended attributes*/
-#define OBD_CONNECT_TRUNCLOCK  0x00000400ULL /* locks on server for punch b=9528 */
-#define OBD_CONNECT_IBITS      0x00001000ULL /* support for inodebits locks */
-#define OBD_CONNECT_JOIN       0x00002000ULL /* files can be concatenated */
-#define OBD_CONNECT_ATTRFID    0x00004000ULL /* Server supports GetAttr By Fid */
-#define OBD_CONNECT_NODEVOH    0x00008000ULL /* No open handle for special nodes */
-#define OBD_CONNECT_LCL_CLIENT 0x00010000ULL /* local 1.8 client */
-#define OBD_CONNECT_RMT_CLIENT 0x00020000ULL /* Remote 1.8 client */
-#define OBD_CONNECT_BRW_SIZE   0x00040000ULL /* Max bytes per rpc */
-#define OBD_CONNECT_QUOTA64    0x00080000ULL /* 64bit qunit_data.qd_count b=10707*/
-#define OBD_CONNECT_MDS_CAPA   0x00100000ULL /* MDS capability */
-#define OBD_CONNECT_OSS_CAPA   0x00200000ULL /* OSS capability */
-#define OBD_CONNECT_CANCELSET  0x00400000ULL /* Early batched cancels. */
-#define OBD_CONNECT_SOM        0x00800000ULL /* SOM feature */
-#define OBD_CONNECT_AT         0x01000000ULL /* client uses adaptive timeouts */
-#define OBD_CONNECT_LRU_RESIZE 0x02000000ULL /* Lru resize feature. */
-#define OBD_CONNECT_MDS_MDS    0x04000000ULL /* MDS-MDS connection*/
-#define OBD_CONNECT_REAL       0x08000000ULL /* real connection */
+#define OBD_CONNECT_RDONLY            0x1ULL /*client allowed read-only access*/
+#define OBD_CONNECT_INDEX             0x2ULL /*connect to specific LOV idx */
+#define OBD_CONNECT_GRANT             0x8ULL /*OSC acquires grant at connect */
+#define OBD_CONNECT_SRVLOCK          0x10ULL /*server takes locks for client */
+#define OBD_CONNECT_VERSION          0x20ULL /*Lustre versions in ocd */
+#define OBD_CONNECT_REQPORTAL        0x40ULL /*Separate non-IO request portal */
+#define OBD_CONNECT_ACL              0x80ULL /*access control lists */
+#define OBD_CONNECT_XATTR           0x100ULL /*client use extended attributes */
+#define OBD_CONNECT_CROW            0x200ULL /*MDS+OST create objects on write*/
+#define OBD_CONNECT_TRUNCLOCK       0x400ULL /*locks on server for punch */
+#define OBD_CONNECT_TRANSNO         0x800ULL /*replay sends initial transno */
+#define OBD_CONNECT_IBITS          0x1000ULL /*support for inodebits locks */
+#define OBD_CONNECT_JOIN           0x2000ULL /*files can be concatenated */
+#define OBD_CONNECT_ATTRFID        0x4000ULL /*Server supports GetAttr By Fid */
+#define OBD_CONNECT_NODEVOH        0x8000ULL /*No open handle on special nodes*/
+#define OBD_CONNECT_LCL_CLIENT    0x10000ULL /*local 1.8 client */
+#define OBD_CONNECT_RMT_CLIENT    0x20000ULL /*Remote 1.8 client */
+#define OBD_CONNECT_BRW_SIZE      0x40000ULL /*Max bytes per rpc */
+#define OBD_CONNECT_QUOTA64       0x80000ULL /*64bit qunit_data.qd_count */
+#define OBD_CONNECT_MDS_CAPA     0x100000ULL /*MDS capability */
+#define OBD_CONNECT_OSS_CAPA     0x200000ULL /*OSS capability */
+#define OBD_CONNECT_CANCELSET    0x400000ULL /*Early batched cancels. */
+#define OBD_CONNECT_SOM        0x00800000ULL /*Size on MDS */
+#define OBD_CONNECT_AT         0x01000000ULL /*client uses adaptive timeouts */
+#define OBD_CONNECT_LRU_RESIZE 0x02000000ULL /*Lru resize feature. */
+#define OBD_CONNECT_MDS_MDS    0x04000000ULL /*MDS-MDS connection */
+#define OBD_CONNECT_REAL       0x08000000ULL /*real connection */
 #define OBD_CONNECT_CHANGE_QS  0x10000000ULL /*shrink/enlarge qunit size
                                               *b=10600 */
-#define OBD_CONNECT_CKSUM      0x20000000ULL /* support several cksum algos */
-#define OBD_CONNECT_FID        0x40000000ULL /* FID is supported by server */
-
+#define OBD_CONNECT_CKSUM      0x20000000ULL /*support several cksum algos */
+#define OBD_CONNECT_FID        0x40000000ULL /* FID is supported */
+#define OBD_CONNECT_VBR        0x80000000ULL /* version based recovery */
+#define OBD_CONNECT_LOV_V3    0x100000000ULL /* client supports lov v3 ea */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
 
@@ -617,27 +356,22 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define LRU_RESIZE_CONNECT_FLAG 0
 #endif
 
-#define MDT_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY | OBD_CONNECT_VERSION | \
+#define MDS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_ACL | OBD_CONNECT_XATTR | \
                                 OBD_CONNECT_IBITS | OBD_CONNECT_JOIN | \
-                                OBD_CONNECT_NODEVOH |/* OBD_CONNECT_ATTRFID |*/\
-                                OBD_CONNECT_LCL_CLIENT | \
-                                OBD_CONNECT_RMT_CLIENT | \
-                                OBD_CONNECT_MDS_CAPA | OBD_CONNECT_OSS_CAPA | \
-                                OBD_CONNECT_MDS_MDS | OBD_CONNECT_CANCELSET | \
-                                OBD_CONNECT_FID | \
-                                LRU_RESIZE_CONNECT_FLAG | OBD_CONNECT_AT)
+                                OBD_CONNECT_NODEVOH | OBD_CONNECT_ATTRFID | \
+                                OBD_CONNECT_CANCELSET | OBD_CONNECT_AT | \
+                                LRU_RESIZE_CONNECT_FLAG | OBD_CONNECT_VBR |\
+                                OBD_CONNECT_LOV_V3)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
                                 OBD_CONNECT_BRW_SIZE | OBD_CONNECT_QUOTA64 | \
-                                OBD_CONNECT_OSS_CAPA | OBD_CONNECT_CANCELSET | \
-                                OBD_CONNECT_CKSUM | LRU_RESIZE_CONNECT_FLAG | \
-                                OBD_CONNECT_AT)
+                                OBD_CONNECT_CANCELSET | OBD_CONNECT_AT | \
+                                LRU_RESIZE_CONNECT_FLAG | OBD_CONNECT_CKSUM | \
+                                OBD_CONNECT_VBR | OBD_CONNECT_CHANGE_QS)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT)
-
-#define MAX_QUOTA_COUNT32 (0xffffffffULL)
 
 #define OBD_OCD_VERSION(major,minor,patch,fix) (((major)<<24) + ((minor)<<16) +\
                                                 ((patch)<<8) + (fix))
@@ -651,22 +385,30 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
  * If we eventually have separate connect data for different types, which we
  * almost certainly will, then perhaps we stick a union in here. */
 struct obd_connect_data {
-        __u64 ocd_connect_flags; /* OBD_CONNECT_* per above */
-        __u32 ocd_version;       /* lustre release version number */
-        __u32 ocd_grant;         /* initial cache grant amount (bytes) */
-        __u32 ocd_index;         /* LOV index to connect to */
-        __u32 ocd_brw_size;      /* Maximum BRW size in bytes */
-        __u64 ocd_ibits_known;   /* inode bits this client understands */
-        __u32 ocd_nllu;          /* non-local-lustre-user */
-        __u32 ocd_nllg;          /* non-local-lustre-group */
-        __u64 ocd_transno;       /* first transno from client to be replayed */
-        __u32 ocd_group;         /* MDS group on OST */
-        __u32 ocd_cksum_types;   /* supported checksum algorithms */
-        __u64 padding1;          /* also fix lustre_swab_connect */
-        __u64 padding2;          /* also fix lustre_swab_connect */
+        __u64 ocd_connect_flags;        /* OBD_CONNECT_* per above */
+        __u32 ocd_version;              /* lustre release version number */
+        __u32 ocd_grant;                /* initial cache grant amount (bytes) */
+        __u32 ocd_index;                /* LOV index to connect to */
+        __u32 ocd_brw_size;             /* Maximum BRW size in bytes */
+        __u64 ocd_ibits_known;          /* inode bits this client understands */
+        __u32 ocd_nllu;                 /* non-local-lustre-user */
+        __u32 ocd_nllg;                 /* non-local-lustre-group */
+        __u64 ocd_transno;              /* Used in lustre 1.8 */
+        __u32 ocd_group;                /* Used in lustre 1.8 */
+        __u32 ocd_cksum_types;          /* supported checksum algorithms */
+        __u64 padding1;                 /* also fix lustre_swab_connect */
+        __u64 padding2;                 /* also fix lustre_swab_connect */
 };
 
 extern void lustre_swab_connect(struct obd_connect_data *ocd);
+
+/* b1_6 has smaller body. The defines below is for interoperability */
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2,0,0,0)
+#define PTLRPC_INTEROP_1_6      1
+#define PTLRPC_BODY_MIN_SIZE    offsetof(struct ptlrpc_body, pb_pre_versions)
+#else
+#define PTLRPC_BODY_MIN_SIZE    sizeof(struct ptlrpc_body)
+#endif
 
 /*
  * Supported checksum algorithms. Up to 32 checksum types are supported.
@@ -699,10 +441,13 @@ typedef enum {
         OST_OPEN       = 11,
         OST_CLOSE      = 12,
         OST_STATFS     = 13,
+/*      OST_SAN_READ   = 14,    deprecated */
+/*      OST_SAN_WRITE  = 15,    deprecated */
         OST_SYNC       = 16,
         OST_SET_INFO   = 17,
         OST_QUOTACHECK = 18,
         OST_QUOTACTL   = 19,
+        OST_QUOTA_ADJUST_QUNIT = 20,
         OST_LAST_OPC
 } ost_cmd_t;
 #define OST_FIRST_OPC  OST_REPLY
@@ -713,12 +458,12 @@ typedef __u64 obd_time;
 typedef __u64 obd_size;
 typedef __u64 obd_off;
 typedef __u64 obd_blocks;
+typedef __u64 obd_valid;
 typedef __u32 obd_blksize;
 typedef __u32 obd_mode;
 typedef __u32 obd_uid;
 typedef __u32 obd_gid;
 typedef __u32 obd_flag;
-typedef __u64 obd_valid;
 typedef __u32 obd_count;
 
 #define OBD_FL_INLINEDATA    (0x00000001)
@@ -730,9 +475,10 @@ typedef __u32 obd_count;
 #define OBD_FL_DEBUG_CHECK   (0x00000040) /* echo client/server debug check */
 #define OBD_FL_NO_USRQUOTA   (0x00000100) /* the object's owner is over quota */
 #define OBD_FL_NO_GRPQUOTA   (0x00000200) /* the object's group is over quota */
+#define OBD_FL_CREATE_CROW   (0x00000400) /* object should be create on write */
 
 /*
- * Set this to delegate DLM locking during obd_punch() to the OSTs. Only OSTs
+ * set this to delegate DLM locking during obd_punch() to the OSTs. Only OSTs
  * that declared OBD_CONNECT_TRUNCLOCK in their connect flags support this
  * functionality.
  */
@@ -748,6 +494,7 @@ typedef __u32 obd_count;
 #define LOV_MAGIC_V1      0x0BD10BD0
 #define LOV_MAGIC         LOV_MAGIC_V1
 #define LOV_MAGIC_JOIN    0x0BD20BD0
+#define LOV_MAGIC_V3      0x0BD30BD0
 
 #define LOV_PATTERN_RAID0 0x001   /* stripes are used round-robin */
 #define LOV_PATTERN_RAID1 0x002   /* stripes are mirrors of each other */
@@ -756,6 +503,9 @@ typedef __u32 obd_count;
 
 #define LOV_OBJECT_GROUP_DEFAULT ~0ULL
 #define LOV_OBJECT_GROUP_CLEAR 0ULL
+
+#define MAXPOOLNAME 16
+#define POOLNAMEF "%.16s"
 
 #define lov_ost_data lov_ost_data_v1
 struct lov_ost_data_v1 {          /* per-stripe data structure (little-endian)*/
@@ -776,14 +526,17 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
         struct lov_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 };
 
-extern void lustre_swab_lov_mds_md(struct lov_mds_md *llm);
+struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */
+        __u32 lmm_magic;          /* magic number = LOV_MAGIC_V3 */
+        __u32 lmm_pattern;        /* LOV_PATTERN_RAID0, LOV_PATTERN_RAID1 */
+        __u64 lmm_object_id;      /* LOV object ID */
+        __u64 lmm_object_gr;      /* LOV object group */
+        __u32 lmm_stripe_size;    /* size of stripe in bytes */
+        __u32 lmm_stripe_count;   /* num stripes in use for this object */
+        char  lmm_pool_name[MAXPOOLNAME]; /* must be 32bit aligned */
+        struct lov_ost_data_v1 lmm_objects[0]; /* per-stripe data */
+};
 
-#define MAX_MD_SIZE (sizeof(struct lov_mds_md) + 4 * sizeof(struct lov_ost_data))
-#define MIN_MD_SIZE (sizeof(struct lov_mds_md) + 1 * sizeof(struct lov_ost_data))
-
-#define XATTR_NAME_ACL_ACCESS   "system.posix_acl_access"
-#define XATTR_NAME_ACL_DEFAULT  "system.posix_acl_default"
-#define XATTR_NAME_LOV          "trusted.lov"
 
 #define OBD_MD_FLID        (0x00000001ULL) /* object ID */
 #define OBD_MD_FLATIME     (0x00000002ULL) /* access time */
@@ -799,7 +552,7 @@ extern void lustre_swab_lov_mds_md(struct lov_mds_md *llm);
 #define OBD_MD_FLFLAGS     (0x00000800ULL) /* flags word */
 #define OBD_MD_FLNLINK     (0x00002000ULL) /* link count */
 #define OBD_MD_FLGENER     (0x00004000ULL) /* generation number */
-/*#define OBD_MD_FLINLINE    (0x00008000ULL)  inline data. used until 1.6.5 */
+/*#define OBD_MD_FLINLINE      (0x00008000ULL) inline data. used until 1.6.5 */
 #define OBD_MD_FLRDEV      (0x00010000ULL) /* device number */
 #define OBD_MD_FLEASIZE    (0x00020000ULL) /* extended attribute data */
 #define OBD_MD_LINKNAME    (0x00040000ULL) /* symbolic link target */
@@ -811,7 +564,6 @@ extern void lustre_swab_lov_mds_md(struct lov_mds_md *llm);
 #define OBD_MD_FLGROUP     (0x01000000ULL) /* group */
 #define OBD_MD_FLFID       (0x02000000ULL) /* ->ost write inline fid */
 #define OBD_MD_FLEPOCH     (0x04000000ULL) /* ->ost write easize is epoch */
-                                           /* ->mds if epoch opens or closes */
 #define OBD_MD_FLGRANT     (0x08000000ULL) /* ost preallocation space grant */
 #define OBD_MD_FLDIREA     (0x10000000ULL) /* dir's extended attribute data */
 #define OBD_MD_FLUSRQUOTA  (0x20000000ULL) /* over quota flags sent from ost */
@@ -832,16 +584,13 @@ extern void lustre_swab_lov_mds_md(struct lov_mds_md *llm);
 #define OBD_MD_FLCKSPLIT   (0x0000080000000000ULL) /* Check split on server */
 #define OBD_MD_FLCROSSREF  (0x0000100000000000ULL) /* Cross-ref case */
 
-#define OBD_MD_FLRMTLSETFACL    (0x0001000000000000ULL) /* lfs lsetfacl case */
-#define OBD_MD_FLRMTLGETFACL    (0x0002000000000000ULL) /* lfs lgetfacl case */
-#define OBD_MD_FLRMTRSETFACL    (0x0004000000000000ULL) /* lfs rsetfacl case */
-#define OBD_MD_FLRMTRGETFACL    (0x0008000000000000ULL) /* lfs rgetfacl case */
 
 #define OBD_MD_FLGETATTR (OBD_MD_FLID    | OBD_MD_FLATIME | OBD_MD_FLMTIME | \
                           OBD_MD_FLCTIME | OBD_MD_FLSIZE  | OBD_MD_FLBLKSZ | \
                           OBD_MD_FLMODE  | OBD_MD_FLTYPE  | OBD_MD_FLUID   | \
                           OBD_MD_FLGID   | OBD_MD_FLFLAGS | OBD_MD_FLNLINK | \
                           OBD_MD_FLGENER | OBD_MD_FLRDEV  | OBD_MD_FLGROUP)
+
 
 /* don't forget obdo_fid which is way down at the bottom so it can
  * come after the definition of llog_cookie */
@@ -957,9 +706,7 @@ typedef enum {
         MDS_QUOTACHECK   = 47,
         MDS_QUOTACTL     = 48,
         MDS_GETXATTR     = 49,
-        MDS_SETXATTR     = 50, /* obsolete, now it's MDS_REINT op */
-        MDS_WRITEPAGE    = 51,
-        MDS_IS_SUBDIR    = 52,
+        MDS_SETXATTR     = 50,
         MDS_LAST_OPC
 } mds_cmd_t;
 
@@ -980,9 +727,7 @@ typedef enum {
 //      REINT_CLOSE    = 8,
 //      REINT_WRITE    = 9,
         REINT_MAX
-} mds_reint_t, mdt_reint_t;
-
-extern void lustre_swab_generic_32s (__u32 *val);
+} mds_reint_t;
 
 /* the disposition of the intent outlines what was executed */
 #define DISP_IT_EXECD        0x00000001
@@ -1006,15 +751,241 @@ extern void lustre_swab_generic_32s (__u32 *val);
 /* This FULL lock is useful to take on unlink sort of operations */
 #define MDS_INODELOCK_FULL ((1<<(MDS_INODELOCK_MAXSHIFT+1))-1)
 
-struct ll_fid {
-        __u64 id;         /* holds object id */
-        __u32 generation; /* holds object generation */
+extern void lustre_swab_ll_fid (struct ll_fid *fid);
 
-        __u32 f_type;     /* holds object type or stripe idx when passing it to
-                           * OST for saving into EA. */
+struct lu_fid {
+        __u64 f_seq;  /* holds fid sequence. Lustre should support 2^64
+                       * objects, thus even if one sequence has one object we
+                       * reach this value. */
+        __u32 f_oid;  /* fid number within its sequence. */
+        __u32 f_ver;  /* holds fid version. */
 };
 
-extern void lustre_swab_ll_fid (struct ll_fid *fid);
+#define DFID "[0x%16.16"LPF64"x/0x%8.8x:0x%8.8x]"
+
+#define PFID(fid)     \
+        fid_seq(fid), \
+        fid_oid(fid), \
+        fid_ver(fid)
+
+enum { 
+        /** put FID sequence at this offset in ldlm_res_id. */
+        LUSTRE_RES_ID_SEQ_OFF = 0,
+        /** put FID oid at this offset in ldlm_res_id. */
+        LUSTRE_RES_ID_OID_OFF = 1,
+        /** put FID version at this offset in ldlm_res_id. */
+        LUSTRE_RES_ID_VER_OFF = 2,
+        /** put pdo hash at this offset in ldlm_res_id. */
+        LUSTRE_RES_ID_HSH_OFF = 3
+};
+
+typedef __u64 seqno_t;
+
+struct lu_range {
+        __u64 lr_start;
+        __u64 lr_end;
+};
+
+static inline __u64 range_space(struct lu_range *r)
+{
+        return r->lr_end - r->lr_start;
+}
+
+static inline void range_zero(struct lu_range *r)
+{
+        r->lr_start = r->lr_end = 0;
+}
+
+static inline int range_within(struct lu_range *r,
+                               __u64 s)
+{
+        return s >= r->lr_start && s < r->lr_end;
+}
+
+static inline void range_alloc(struct lu_range *r,
+                               struct lu_range *s,
+                               __u64 w)
+{
+        r->lr_start = s->lr_start;
+        r->lr_end = s->lr_start + w;
+        s->lr_start += w;
+}
+static inline int range_is_sane(struct lu_range *r)
+{
+        return (r->lr_end >= r->lr_start);
+}
+
+static inline int range_is_zero(struct lu_range *r)
+{
+        return (r->lr_start == 0 && r->lr_end == 0);
+}
+
+static inline int range_is_exhausted(struct lu_range *r)
+{
+        return range_space(r) == 0;
+}
+
+#define DRANGE "[%#16.16"LPF64"x-%#16.16"LPF64"x]"
+
+#define PRANGE(range)      \
+        (range)->lr_start, \
+        (range)->lr_end
+
+enum {
+        /*
+         * This is how may FIDs may be allocated in one sequence.
+         */
+        LUSTRE_SEQ_MAX_WIDTH = 0x0000000000004000ULL,
+};
+
+enum lu_cli_type {
+        LUSTRE_SEQ_METADATA,
+        LUSTRE_SEQ_DATA
+};
+
+struct lu_client_seq {
+        /* Sequence-controller export. */
+        struct obd_export      *lcs_exp;
+        struct semaphore        lcs_sem;
+
+        /*
+         * Range of allowed for allocation sequences. When using lu_client_seq
+         * on clients, this contains meta-sequence range. And for servers this
+         * contains super-sequence range.
+         */
+        struct lu_range         lcs_space;
+
+        /* This holds last allocated fid in last obtained seq */
+        struct lu_fid           lcs_fid;
+
+        /* LUSTRE_SEQ_METADATA or LUSTRE_SEQ_DATA */
+        enum lu_cli_type        lcs_type;
+        /*
+         * Service uuid, passed from MDT + seq name to form unique seq name to
+         * use it with procfs.
+         */
+        char                    lcs_name[80];
+
+        /*
+         * Sequence width, that is how many objects may be allocated in one
+         * sequence. Default value for it is LUSTRE_SEQ_MAX_WIDTH.
+         */
+        __u64                   lcs_width;
+
+};
+
+/*
+ * fid constants
+ */
+enum {
+        /* initial fid id value */
+        LUSTRE_FID_INIT_OID  = 1UL
+};
+
+extern void lustre_swab_lu_fid(struct lu_fid *fid);
+
+/* get object sequence */
+static inline __u64 fid_seq(const struct lu_fid *fid)
+{
+        return fid->f_seq;
+}
+
+/* get object id */
+static inline __u32 fid_oid(const struct lu_fid *fid)
+{
+        return fid->f_oid;
+}
+
+/* get object version */
+static inline __u32 fid_ver(const struct lu_fid *fid)
+{
+        return fid->f_ver;
+}
+
+static inline void fid_init(struct lu_fid *fid)
+{
+        memset(fid, 0, sizeof(*fid));
+}
+
+/* Normal FID sequence starts from this value, i.e. 1<<33 */
+#define FID_SEQ_START  0x200000000ULL
+
+/* IDIF sequence starts from this value, i.e. 1<<32 */
+#define IDIF_SEQ_START 0x100000000ULL
+
+/**
+ * Check if a fid is igif or not.
+ * \param fid the fid to be tested.
+ * \return true if the fid is a igif; otherwise false. 
+ */
+static inline int fid_is_igif(const struct lu_fid *fid)
+{
+        return fid_seq(fid) > 0 && fid_seq(fid) < IDIF_SEQ_START;
+}
+
+/**
+ * Check if a fid is idif or not.
+ * \param fid the fid to be tested.
+ * \return true if the fid is a idif; otherwise false. 
+ */
+static inline int fid_is_idif(const struct lu_fid *fid)
+{
+        return fid_seq(fid) >= IDIF_SEQ_START  && fid_seq(fid) < FID_SEQ_START;
+}
+
+/**
+ * Check if a fid is zero.
+ * \param fid the fid to be tested.
+ * \return true if the fid is zero; otherwise false. 
+ */
+static inline int fid_is_zero(const struct lu_fid *fid)
+{
+        return fid_seq(fid) == 0 && fid_oid(fid) == 0;
+}
+
+/**
+ * Get inode number from a igif.
+ * \param fid a igif to get inode number from.
+ * \return inode number for the igif.
+ */
+static inline ino_t lu_igif_ino(const struct lu_fid *fid)
+{
+        return fid_seq(fid);
+}
+
+/**
+ * Get inode generation from a igif.
+ * \param fid a igif to get inode generation from.
+ * \return inode generation for the igif.
+ */ 
+static inline __u32 lu_igif_gen(const struct lu_fid *fid)
+{
+        return fid_oid(fid);
+}
+
+/**
+ * Check if two fids are equal or not.
+ * \param f0 the first fid
+ * \param f1 the second fid
+ * \return true if the two fids are equal; otherwise false. 
+ */
+static inline int lu_fid_eq(const struct lu_fid *f0,
+                            const struct lu_fid *f1)
+{
+        /* Check that there is no alignment padding. */
+        CLASSERT(sizeof *f0 ==
+                 sizeof f0->f_seq + sizeof f0->f_oid + sizeof f0->f_ver);
+        LASSERTF(fid_is_igif(f0) || fid_ver(f0) == 0, DFID"\n", PFID(f0));
+        LASSERTF(fid_is_igif(f1) || fid_ver(f1) == 0, DFID"\n", PFID(f1));
+        return memcmp(f0, f1, sizeof *f0) == 0;
+}
+
+void fid_cpu_to_le(struct lu_fid *dst, const struct lu_fid *src);
+void fid_le_to_cpu(struct lu_fid *dst, const struct lu_fid *src);
+
+struct ldlm_res_id *
+fid_build_reg_res_name(const struct lu_fid *f, struct ldlm_res_id *name);
+int fid_res_name_eq(const struct lu_fid *f, const struct ldlm_res_id *name);
 
 #define MDS_STATUS_CONN 1
 #define MDS_STATUS_LOV 2
@@ -1025,22 +996,6 @@ struct mds_status_req {
 };
 
 extern void lustre_swab_mds_status_req (struct mds_status_req *r);
-
-/* mdt_thread_info.mti_flags. */
-enum md_op_flags {
-        /* The flag indicates Size-on-MDS attributes are changed. */
-        MF_SOM_CHANGE           = (1 << 0),
-        /* Flags indicates an epoch opens or closes. */
-        MF_EPOCH_OPEN           = (1 << 1),
-        MF_EPOCH_CLOSE          = (1 << 2),
-        MF_MDC_CANCEL_FID1      = (1 << 3),
-        MF_MDC_CANCEL_FID2      = (1 << 4),
-        MF_MDC_CANCEL_FID3      = (1 << 5),
-        MF_MDC_CANCEL_FID4      = (1 << 6),
-};
-
-#define MF_SOM_LOCAL_FLAGS (MF_MDC_CANCEL_FID1 | MF_MDC_CANCEL_FID2 | \
-                            MF_MDC_CANCEL_FID3 | MF_MDC_CANCEL_FID4)
 
 #define MDS_BFLAG_UNCOMMITTED_WRITES   0x1
 #define MDS_BFLAG_EXT_FLAGS     0x80000000 /* == EXT3_RESERVED_FL */
@@ -1070,13 +1025,13 @@ static inline int ll_ext_to_inode_flags(int flags)
                (flags & ~MDS_BFLAG_EXT_FLAGS);
 }
 
-/* If MDS_BFLAG_EXT_FLAGS is set it means we requested EXT3_*_FL inode flags
- * and we pass these straight through.  Otherwise we need to convert from
- * S_* flags to their EXT3_*_FL equivalents (see bug 9486). */
-static inline int ll_inode_to_ext_flags(int oflags, int iflags)
+/* If keep is set, we do not do anything with iflags, if it is not set, we
+ * assume that iflags are inode flags and we need to conver those to
+ * EXT3_*_FL flags (see bug 9486 and 12848) */
+static inline int ll_inode_to_ext_flags(int iflags, int keep)
 {
-        return (oflags & MDS_BFLAG_EXT_FLAGS) ? (oflags & ~MDS_BFLAG_EXT_FLAGS):
-               (((iflags & S_SYNC)      ? MDS_SYNC_FL      : 0) |
+        return keep ? (iflags & ~MDS_BFLAG_EXT_FLAGS) :
+                (((iflags & S_SYNC)     ? MDS_SYNC_FL      : 0) |
                 ((iflags & S_NOATIME)   ? MDS_NOATIME_FL   : 0) |
                 ((iflags & S_APPEND)    ? MDS_APPEND_FL    : 0) |
 #if defined(S_DIRSYNC)
@@ -1086,6 +1041,41 @@ static inline int ll_inode_to_ext_flags(int oflags, int iflags)
 }
 #endif
 
+struct mds_body {
+        struct ll_fid  fid1;
+        struct ll_fid  fid2;
+        struct lustre_handle handle;
+        __u64          valid;
+        __u64          size;   /* Offset, in the case of MDS_READPAGE */
+        __u64          mtime;
+        __u64          atime;
+        __u64          ctime;
+        __u64          blocks; /* XID, in the case of MDS_READPAGE */
+        __u64          io_epoch;
+        __u64          ino;
+        __u32          fsuid;
+        __u32          fsgid;
+        __u32          capability;
+        __u32          mode;
+        __u32          uid;
+        __u32          gid;
+        __u32          flags; /* from vfs for pin/unpin, MDS_BFLAG for close */
+        __u32          rdev;
+        __u32          nlink; /* #bytes to read in the case of MDS_READPAGE */
+        __u32          generation;
+        __u32          suppgid;
+        __u32          eadatasize;
+        __u32          aclsize;
+        __u32          max_mdsize;
+        __u32          max_cookiesize; /* also fix lustre_swab_mds_body */
+        __u32          padding_4; /* also fix lustre_swab_mds_body */
+};
+
+extern void lustre_swab_mds_body (struct mds_body *b);
+
+/* struct mdt_body is only used for size checking.
+ * mdt_body & mds_body should have the same size.
+ */
 struct mdt_body {
         struct lu_fid  fid1;
         struct lu_fid  fid2;
@@ -1116,55 +1106,16 @@ struct mdt_body {
         __u32          padding_4; /* also fix lustre_swab_mdt_body */
 };
 
-struct mds_body {
-        struct ll_fid  fid1;
-        struct ll_fid  fid2;
-        struct lustre_handle handle;
-        __u64          valid;
-        __u64          size;   /* Offset, in the case of MDS_READPAGE */
-        __u64          mtime;
-        __u64          atime;
-        __u64          ctime;
-        __u64          blocks; /* XID, in the case of MDS_READPAGE */
-        __u64          io_epoch;
-        __u64          ino;
-        __u32          fsuid;
-        __u32          fsgid;
-        __u32          capability;
-        __u32          mode;
-        __u32          uid;
-        __u32          gid;
-        __u32          flags; /* from vfs for pin/unpin, MDS_BFLAG for close */
-        __u32          rdev;
-        __u32          nlink; /* #bytes to read in the case of MDS_READPAGE */
-        __u32          generation;
-        __u32          suppgid;
-        __u32          eadatasize;
-        __u32          aclsize;
-        __u32          max_mdsize;
-        __u32          max_cookiesize;
-        __u32          padding_4; /* also fix lustre_swab_mds_body */
-};
-
-extern void lustre_swab_mds_body (struct mds_body *b);
-extern void lustre_swab_mdt_body (struct mdt_body *b);
-
-struct mdt_epoch {
-        struct lustre_handle handle;
-        __u64  ioepoch;
-        __u32  flags;
-        __u32  padding;
-};
-
-extern void lustre_swab_mdt_epoch (struct mdt_epoch *b);
-
 #define Q_QUOTACHECK    0x800100
 #define Q_INITQUOTA     0x800101        /* init slave limits */
 #define Q_GETOINFO      0x800102        /* get obd quota info */
 #define Q_GETOQUOTA     0x800103        /* get obd quotas */
+#define Q_FINVALIDATE   0x800104        /* invalidate operational quotas */
 
-#define Q_TYPESET(oqc, type) \
-        ((oqc)->qc_type == type || (oqc)->qc_type == UGQUOTA)
+#define Q_TYPEMATCH(id, type) \
+        ((id) == (type) || (id) == UGQUOTA)
+
+#define Q_TYPESET(oqc, type) Q_TYPEMATCH((oqc)->qc_type, type)
 
 #define Q_GETOCMD(oqc) \
         ((oqc)->qc_cmd == Q_GETOINFO || (oqc)->qc_cmd == Q_GETOQUOTA)
@@ -1180,35 +1131,33 @@ struct obd_quotactl {
 
 extern void lustre_swab_obd_quotactl(struct obd_quotactl *q);
 
-/* inode access permission for remote user, the inode info are omitted,
- * for client knows them. */
-struct mds_remote_perm {
-        __u32           rp_uid;
-        __u32           rp_gid;
-        __u32           rp_fsuid;
-        __u32           rp_fsgid;
-        __u32           rp_access_perm; /* MAY_READ/WRITE/EXEC */
+struct quota_adjust_qunit {
+        __u32 qaq_flags;
+        __u32 qaq_id;
+        __u64 qaq_bunit_sz;
+        __u64 qaq_iunit_sz;
+        __u64 padding1;
 };
+extern void lustre_swab_quota_adjust_qunit(struct quota_adjust_qunit *q);
 
-/* permissions for md_perm.mp_perm */
-enum {
-        CFS_SETUID_PERM = 0x01,
-        CFS_SETGID_PERM = 0x02,
-        CFS_SETGRP_PERM = 0x04,
-        CFS_RMTACL_PERM = 0x08
-};
+/* flags in qunit_data and quota_adjust_qunit will use macroes below */
+#define LQUOTA_FLAGS_GRP       1UL   /* 0 is user, 1 is group */
+#define LQUOTA_FLAGS_BLK       2UL   /* 0 is inode, 1 is block */
+#define LQUOTA_FLAGS_ADJBLK    4UL   /* adjust the block qunit size */
+#define LQUOTA_FLAGS_ADJINO    8UL   /* adjust the inode qunit size */
+#define LQUOTA_FLAGS_CHG_QS   16UL   /* indicate whether it has capability of
+                                      * OBD_CONNECT_CHANGE_QS */
 
-extern void lustre_swab_mds_remote_perm(struct mds_remote_perm *p);
+/* the status of lqs_flags in struct lustre_qunit_size  */
+#define LQUOTA_QUNIT_FLAGS (LQUOTA_FLAGS_GRP | LQUOTA_FLAGS_BLK)
 
-struct mdt_remote_perm {
-        __u32           rp_uid;
-        __u32           rp_gid;
-        __u32           rp_fsuid;
-        __u32           rp_fsgid;
-        __u32           rp_access_perm; /* MAY_READ/WRITE/EXEC */
-};
+#define QAQ_IS_GRP(qaq)    ((qaq)->qaq_flags & LQUOTA_FLAGS_GRP)
+#define QAQ_IS_ADJBLK(qaq) ((qaq)->qaq_flags & LQUOTA_FLAGS_ADJBLK)
+#define QAQ_IS_ADJINO(qaq) ((qaq)->qaq_flags & LQUOTA_FLAGS_ADJINO)
 
-extern void lustre_swab_mdt_remote_perm(struct mdt_remote_perm *p);
+#define QAQ_SET_GRP(qaq)    ((qaq)->qaq_flags |= LQUOTA_FLAGS_GRP)
+#define QAQ_SET_ADJBLK(qaq) ((qaq)->qaq_flags |= LQUOTA_FLAGS_ADJBLK)
+#define QAQ_SET_ADJINO(qaq) ((qaq)->qaq_flags |= LQUOTA_FLAGS_ADJINO)
 
 struct mds_rec_setattr {
         __u32           sa_opcode;
@@ -1228,34 +1177,6 @@ struct mds_rec_setattr {
         __u32           sa_attr_flags;
         __u32           sa_padding; /* also fix lustre_swab_mds_rec_setattr */
 };
-
-extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
-
-struct mdt_rec_setattr {
-        __u32           sa_opcode;
-        __u32           sa_fsuid;
-        __u32           sa_fsgid;
-        __u32           sa_cap;
-        __u32           sa_suppgid;
-        __u32           sa_padding_1;
-        struct lu_fid   sa_fid;
-        __u64           sa_valid;
-        __u32           sa_uid;
-        __u32           sa_gid;
-        __u64           sa_size;
-        __u64           sa_blocks;
-        __u64           sa_mtime;
-        __u64           sa_atime;
-        __u64           sa_ctime;
-        __u32           sa_attr_flags;
-        __u32           sa_mode;
-        __u32           sa_padding_2;
-        __u32           sa_padding_3;
-        __u32           sa_padding_4;
-        __u32           sa_padding_5;
-};
-
-extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
 
 /*
  * Attribute flags used in mds_rec_setattr::sa_valid.
@@ -1280,19 +1201,12 @@ extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
 #define MDS_ATTR_FROM_OPEN  0x4000ULL /* = 16384, called from open path, ie O_TRUNC */
 #define MDS_ATTR_BLOCKS     0x8000ULL /* = 32768 */
 
+extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
+
 #ifndef FMODE_READ
 #define FMODE_READ               00000001
 #define FMODE_WRITE              00000002
 #endif
-
-#define FMODE_EPOCH              01000000
-#define FMODE_EPOCHLCK           02000000
-#define FMODE_SOM                04000000
-#define FMODE_CLOSED             0
-
-#define MDS_OPEN_CREATED         00000010
-#define MDS_OPEN_CROSS           00000020
-
 #define MDS_FMODE_EXEC           00000004
 #define MDS_OPEN_CREAT           00000100
 #define MDS_OPEN_EXCL            00000200
@@ -1304,53 +1218,9 @@ extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
 #define MDS_OPEN_DELAY_CREATE  0100000000 /* delay initial object create */
 #define MDS_OPEN_OWNEROVERRIDE 0200000000 /* NFSD rw-reopen ro file for owner */
 #define MDS_OPEN_JOIN_FILE     0400000000 /* open for join file*/
-#define MDS_CREATE_RMT_ACL    01000000000 /* indicate create on remote server
-                                           * with default ACL */
-#define MDS_CREATE_SLAVE_OBJ  02000000000 /* indicate create slave object
-                                           * actually, this is for create, not
-                                           * conflict with other open flags */
 #define MDS_OPEN_LOCK         04000000000 /* This open requires open lock */
 #define MDS_OPEN_HAS_EA      010000000000 /* specify object create pattern */
 #define MDS_OPEN_HAS_OBJS    020000000000 /* Just set the EA the obj exist */
-
-/* permission for create non-directory file */
-#define MAY_CREATE      (1 << 7)
-/* permission for create directory file */
-#define MAY_LINK        (1 << 8)
-/* permission for delete from the directory */
-#define MAY_UNLINK      (1 << 9)
-/* source's permission for rename */
-#define MAY_RENAME_SRC  (1 << 10)
-/* target's permission for rename */
-#define MAY_RENAME_TAR  (1 << 11)
-/* part (parent's) VTX permission check */
-#define MAY_VTX_PART    (1 << 12)
-/* full VTX permission check */
-#define MAY_VTX_FULL    (1 << 13)
-/* lfs rgetfacl permission check */
-#define MAY_RGETFACL    (1 << 14)
-
-enum {
-        MDS_CHECK_SPLIT  = 1 << 0,
-        MDS_CROSS_REF    = 1 << 1,
-        MDS_VTX_BYPASS   = 1 << 2,
-        MDS_PERM_BYPASS  = 1 << 3,
-        MDS_SOM          = 1 << 4
-};
-
-struct mds_rec_join {
-        struct ll_fid  jr_fid;
-        __u64          jr_headsize;
-};
-
-extern void lustre_swab_mds_rec_join (struct mds_rec_join *jr);
-
-struct mdt_rec_join {
-        struct lu_fid  jr_fid;
-        __u64          jr_headsize;
-};
-
-extern void lustre_swab_mdt_rec_join (struct mdt_rec_join *jr);
 
 struct mds_rec_create {
         __u32           cr_opcode;
@@ -1382,7 +1252,7 @@ struct mdt_rec_create {
         __u32           cr_suppgid2;
         struct lu_fid   cr_fid1;
         struct lu_fid   cr_fid2;
-        struct lustre_handle cr_old_handle; /* u64 handle in case of open replay */
+        struct lustre_handle cr_old_handle; /* handle in case of open replay */
         __u64           cr_time;
         __u64           cr_rdev;
         __u64           cr_ioepoch;
@@ -1390,12 +1260,30 @@ struct mdt_rec_create {
         __u32           cr_mode;
         __u32           cr_bias;
         __u32           cr_flags;     /* for use with open */
-        __u32           cr_padding_2;
-        __u32           cr_padding_3;
-        __u32           cr_padding_4;
+        __u32           cr_padding_2; /* pad for 64 bits*/
+        __u32           cr_padding_3; /* pad for 64 bits*/
+        __u32           cr_padding_4; /* pad for 64 bits*/
 };
 
-extern void lustre_swab_mdt_rec_create (struct mdt_rec_create *cr);
+struct mdt_epoch {
+        struct lustre_handle handle;
+        __u64  ioepoch;
+        __u32  flags;
+        __u32  padding;
+};
+
+struct mds_rec_join {
+        struct ll_fid  jr_fid;
+        __u64          jr_headsize;
+};
+
+extern void lustre_swab_mds_rec_join (struct mds_rec_join *jr);
+
+struct mdt_rec_join {
+        struct lu_fid  jr_fid;
+        __u64          jr_headsize;
+};
+
 
 struct mds_rec_link {
         __u32           lk_opcode;
@@ -1461,7 +1349,7 @@ struct mdt_rec_unlink {
         __u32           ul_fsgid;
         __u32           ul_cap;
         __u32           ul_suppgid1;
-        __u32           ul_suppgid2;
+        __u32           ul_padding2;
         struct lu_fid   ul_fid1;
         struct lu_fid   ul_fid2;
         __u64           ul_time;
@@ -1517,6 +1405,30 @@ struct mdt_rec_rename {
         __u32           rn_padding_8;
 };
 
+struct mdt_rec_setattr {
+        __u32           sa_opcode;
+        __u32           sa_fsuid;
+        __u32           sa_fsgid;
+        __u32           sa_cap;
+        __u32           sa_suppgid;
+        __u32           sa_padding_1;
+        struct lu_fid   sa_fid;
+        __u64           sa_valid;
+        __u32           sa_uid;
+        __u32           sa_gid;
+        __u64           sa_size;
+        __u64           sa_blocks;
+        __u64           sa_mtime;
+        __u64           sa_atime;
+        __u64           sa_ctime;
+        __u32           sa_attr_flags;
+        __u32           sa_mode;
+        __u32           sa_padding_2;
+        __u32           sa_padding_3;
+        __u32           sa_padding_4;
+        __u32           sa_padding_5;
+};
+
 struct mdt_rec_setxattr {
         __u32           sx_opcode;
         __u32           sx_fsuid;
@@ -1529,7 +1441,7 @@ struct mdt_rec_setxattr {
         __u32           sx_padding_2;
         __u32           sx_padding_3;
         __u64           sx_valid;
-        __u64           sx_time;
+        __u64           sx_padding_4;
         __u64           sx_padding_5;
         __u64           sx_padding_6;
         __u64           sx_padding_7;
@@ -1541,61 +1453,26 @@ struct mdt_rec_setxattr {
         __u32           sx_padding_11;
 };
 
-struct mdt_rec_reint {
-        __u32           rr_opcode;
-        __u32           rr_fsuid;
-        __u32           rr_fsgid;
-        __u32           rr_cap;
-        __u32           rr_suppgid1;
-        __u32           rr_suppgid2;
-        struct lu_fid   rr_fid1;
-        struct lu_fid   rr_fid2;
-        __u64           rr_mtime;
-        __u64           rr_atime;
-        __u64           rr_ctime;
-        __u64           rr_size;
-        __u64           rr_blocks;
-        __u32           rr_bias;
-        __u32           rr_mode;
-        __u32           rr_padding_1; /* also fix lustre_swab_mdt_rec_reint */
-        __u32           rr_padding_2; /* also fix lustre_swab_mdt_rec_reint */
-        __u32           rr_padding_3; /* also fix lustre_swab_mdt_rec_reint */
-        __u32           rr_padding_4; /* also fix lustre_swab_mdt_rec_reint */
-};
+/*
+ * capa related definitions
+ */
+#define CAPA_HMAC_MAX_LEN       64
+#define CAPA_HMAC_KEY_MAX_LEN   56
 
-extern void lustre_swab_mdt_rec_reint(struct mdt_rec_reint *rr);
+/* NB take care when changing the sequence of elements this struct,
+ * because the offset info is used in find_capa() */
+struct lustre_capa {
+        struct lu_fid   lc_fid;     /* fid */
+        __u64           lc_opc;     /* operations allowed */
+        __u32           lc_uid;     /* uid, it is obsolete, but maybe used in
+                                     * future, reserve it for 64-bits aligned.*/
+        __u32           lc_flags;   /* HMAC algorithm & flags */
+        __u32           lc_keyid;   /* key used for the capability */
+        __u32           lc_timeout; /* capa timeout value (sec) */
+        __u64           lc_expiry;  /* expiry time (sec) */
+        __u8            lc_hmac[CAPA_HMAC_MAX_LEN];   /* HMAC */
+} __attribute__((packed));
 
-struct lmv_desc {
-        __u32 ld_tgt_count;                /* how many MDS's */
-        __u32 ld_active_tgt_count;         /* how many active */
-        struct obd_uuid ld_uuid;
-};
-
-extern void lustre_swab_lmv_desc (struct lmv_desc *ld);
-
-struct md_fld {
-        seqno_t mf_seq;
-        mdsno_t mf_mds;
-};
-
-extern void lustre_swab_md_fld (struct md_fld *mf);
-
-enum fld_rpc_opc {
-        FLD_QUERY                       = 600,
-        FLD_LAST_OPC,
-        FLD_FIRST_OPC                   = FLD_QUERY
-};
-
-enum seq_rpc_opc {
-        SEQ_QUERY                       = 700,
-        SEQ_LAST_OPC,
-        SEQ_FIRST_OPC                   = SEQ_QUERY
-};
-
-enum seq_op {
-        SEQ_ALLOC_SUPER = 0,
-        SEQ_ALLOC_META = 1
-};
 
 /*
  *  LOV data structures
@@ -1656,13 +1533,13 @@ extern void lustre_swab_ldlm_res_id (struct ldlm_res_id *id);
 /* lock types */
 typedef enum {
         LCK_MINMODE = 0,
-        LCK_EX      = 1,
-        LCK_PW      = 2,
-        LCK_PR      = 4,
-        LCK_CW      = 8,
-        LCK_CR      = 16,
-        LCK_NL      = 32,
-        LCK_GROUP   = 64,
+        LCK_EX = 1,
+        LCK_PW = 2,
+        LCK_PR = 4,
+        LCK_CW = 8,
+        LCK_CR = 16,
+        LCK_NL = 32,
+        LCK_GROUP = 64,
         LCK_MAXMODE
 } ldlm_mode_t;
 
@@ -1749,8 +1626,6 @@ struct ldlm_request {
         struct lustre_handle lock_handle[LDLM_LOCKREQ_HANDLES];
 };
 
-extern void lustre_swab_ldlm_request (struct ldlm_request *rq);
-
 /* If LDLM_ENQUEUE, 1 slot is already occupied, 1 is available.
  * Otherwise, 2 are available. */
 #define ldlm_request_bufsize(count,type)                                \
@@ -1758,9 +1633,11 @@ extern void lustre_swab_ldlm_request (struct ldlm_request *rq);
         int _avail = LDLM_LOCKREQ_HANDLES;                              \
         _avail -= (type == LDLM_ENQUEUE ? LDLM_ENQUEUE_CANCEL_OFF : 0); \
         sizeof(struct ldlm_request) +                                   \
-        (count > _avail ? count - _avail : 0) *                         \
+        (count - _avail > 0 ? count - _avail : 0) *                     \
         sizeof(struct lustre_handle);                                   \
 })
+
+extern void lustre_swab_ldlm_request (struct ldlm_request *rq);
 
 struct ldlm_reply {
         __u32 lock_flags;
@@ -1772,6 +1649,7 @@ struct ldlm_reply {
 };
 
 extern void lustre_swab_ldlm_reply (struct ldlm_reply *r);
+
 
 /*
  * Opcodes for mountconf (mgs and mgc)
@@ -1983,7 +1861,7 @@ struct llog_setattr_rec {
 struct llog_size_change_rec {
         struct llog_rec_hdr     lsc_hdr;
         struct ll_fid           lsc_fid;
-        __u32                   lsc_ioepoch;
+        __u32                   lsc_io_epoch;
         __u32                   padding;
         struct llog_rec_tail    lsc_tail;
 } __attribute__((packed));
@@ -2038,7 +1916,7 @@ struct llog_cookie {
 } __attribute__((packed));
 
 /* llog protocol */
-enum llogd_rpc_ops {
+typedef enum {
         LLOG_ORIGIN_HANDLE_CREATE       = 501,
         LLOG_ORIGIN_HANDLE_NEXT_BLOCK   = 502,
         LLOG_ORIGIN_HANDLE_READ_HEADER  = 503,
@@ -2048,9 +1926,9 @@ enum llogd_rpc_ops {
         LLOG_CATINFO                    = 507,  /* for lfs catinfo */
         LLOG_ORIGIN_HANDLE_PREV_BLOCK   = 508,
         LLOG_ORIGIN_HANDLE_DESTROY      = 509,  /* for destroy llog object*/
-        LLOG_LAST_OPC,
-        LLOG_FIRST_OPC                  = LLOG_ORIGIN_HANDLE_CREATE
-};
+        LLOG_LAST_OPC
+} llog_cmd_t;
+#define LLOG_FIRST_OPC LLOG_ORIGIN_HANDLE_CREATE
 
 struct llogd_body {
         struct llog_logid  lgd_logid;
@@ -2091,7 +1969,7 @@ struct lov_user_md_join {         /* LOV EA user data (host-endian) */
         struct lov_user_ost_data_join lmm_objects[0]; /* per-stripe data */
 } __attribute__((packed));
 
-/* Note: 64-bit types are 64-bit aligned in structure */
+
 struct obdo {
         obd_valid               o_valid;        /* hot fields in this obdo */
         obd_id                  o_id;
@@ -2135,7 +2013,6 @@ struct obdo {
 extern void lustre_swab_obdo (struct obdo *o);
 
 /* request structure for OST's */
-
 struct ost_body {
         struct  obdo oa;
 };
@@ -2151,8 +2028,10 @@ extern void lustre_swab_ost_body (struct ost_body *b);
 extern void lustre_swab_ost_last_id(obd_id *id);
 extern void lustre_swab_fiemap(struct ll_user_fiemap *fiemap);
 
-extern void lustre_swab_lov_user_md(struct lov_user_md *lum);
-extern void lustre_swab_lov_user_md_objects(struct lov_user_md *lum);
+extern void lustre_swab_lov_user_md_v1(struct lov_user_md_v1 *lum);
+extern void lustre_swab_lov_user_md_v3(struct lov_user_md_v3 *lum);
+extern void lustre_swab_lov_user_md_objects(struct lov_user_ost_data *lod,
+                                            int stripe_count);
 extern void lustre_swab_lov_user_md_join(struct lov_user_md_join *lumj);
 
 /* llog_swab.c */
@@ -2165,127 +2044,93 @@ extern void lustre_swab_llog_rec(struct llog_rec_hdr  *rec,
 struct lustre_cfg;
 extern void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg);
 
-/* quota. fixed by tianzy for bug10707 */
-#define QUOTA_IS_GRP   0X1UL  /* 0 is user, 1 is group. Used by qd_flags*/
-#define QUOTA_IS_BLOCK 0x2UL  /* 0 is inode, 1 is block. Used by qd_flags*/
-
+/* this will be used when OBD_CONNECT_CHANGE_QS is set */
 struct qunit_data {
+        __u32 qd_id;    /* ID appiles to (uid, gid) */
+        __u32 qd_flags; /* LQUOTA_FLAGS_* affect the responding bits */
+        __u64 qd_count; /* acquire/release count (bytes for block quota) */
+        __u64 qd_qunit; /* when a master returns the reply to a slave, it will
+                         * contain the current corresponding qunit size */
+        __u64 padding;
+};
+
+#define QDATA_IS_GRP(qdata)    ((qdata)->qd_flags & LQUOTA_FLAGS_GRP)
+#define QDATA_IS_BLK(qdata)    ((qdata)->qd_flags & LQUOTA_FLAGS_BLK)
+#define QDATA_IS_ADJBLK(qdata) ((qdata)->qd_flags & LQUOTA_FLAGS_ADJBLK)
+#define QDATA_IS_ADJINO(qdata) ((qdata)->qd_flags & LQUOTA_FLAGS_ADJINO)
+#define QDATA_IS_CHANGE_QS(qdata) ((qdata)->qd_flags & LQUOTA_FLAGS_CHG_QS)
+
+#define QDATA_SET_GRP(qdata)    ((qdata)->qd_flags |= LQUOTA_FLAGS_GRP)
+#define QDATA_SET_BLK(qdata)    ((qdata)->qd_flags |= LQUOTA_FLAGS_BLK)
+#define QDATA_SET_ADJBLK(qdata) ((qdata)->qd_flags |= LQUOTA_FLAGS_ADJBLK)
+#define QDATA_SET_ADJINO(qdata) ((qdata)->qd_flags |= LQUOTA_FLAGS_ADJINO)
+#define QDATA_SET_CHANGE_QS(qdata) ((qdata)->qd_flags |= LQUOTA_FLAGS_CHG_QS)
+
+#define QDATA_CLR_GRP(qdata)        ((qdata)->qd_flags &= ~LQUOTA_FLAGS_GRP)
+#define QDATA_CLR_CHANGE_QS(qdata)  ((qdata)->qd_flags &= ~LQUOTA_FLAGS_CHG_QS)
+
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 9, 0, 0)
+/* this will be used when OBD_CONNECT_QUOTA64 is set */
+struct qunit_data_old2 {
         __u32 qd_id; /* ID appiles to (uid, gid) */
         __u32 qd_flags; /* Quota type (USRQUOTA, GRPQUOTA) occupy one bit;
                          * Block quota or file quota occupy one bit */
         __u64 qd_count; /* acquire/release count (bytes for block quota) */
 };
-
-struct qunit_data_old {
-        __u32 qd_id;    /* ID appiles to (uid, gid) */
-        __u32 qd_type;  /* Quota type (USRQUOTA, GRPQUOTA) */
-        __u32 qd_count; /* acquire/release count (bytes for block quota) */
-        __u32 qd_isblk; /* Block quota or file quota */
-};
+#else
+#warning "remove quota code above for format absolete in new release"
+#endif
 
 extern void lustre_swab_qdata(struct qunit_data *d);
-extern void lustre_swab_qdata_old(struct qunit_data_old *d);
-extern struct qunit_data *lustre_quota_old_to_new(struct qunit_data_old *d);
-extern struct qunit_data_old *lustre_quota_new_to_old(struct qunit_data *d);
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 9, 0, 0)
+extern void lustre_swab_qdata_old2(struct qunit_data_old2 *d);
+#else
+#warning "remove quota code above for format absolete in new release"
+#endif
+extern int quota_get_qdata(void*req, struct qunit_data *qdata,
+                           int is_req, int is_exp);
+extern int quota_copy_qdata(void *request, struct qunit_data *qdata,
+                            int is_req, int is_exp);
 
 typedef enum {
         QUOTA_DQACQ     = 601,
         QUOTA_DQREL     = 602,
+        QUOTA_LAST_OPC
 } quota_cmd_t;
+#define QUOTA_FIRST_OPC QUOTA_DQACQ
+
+
+enum fld_rpc_opc {
+        FLD_QUERY                       = 600,
+        FLD_LAST_OPC,
+        FLD_FIRST_OPC                   = FLD_QUERY
+};
+
+enum seq_rpc_opc {
+        SEQ_QUERY                       = 700,
+        SEQ_LAST_OPC,
+        SEQ_FIRST_OPC                   = SEQ_QUERY
+};
+
+enum seq_op {
+        SEQ_ALLOC_SUPER = 0,
+        SEQ_ALLOC_META = 1
+};
+
 
 #define JOIN_FILE_ALIGN 4096
 
-/* security opcodes */
-typedef enum {
-        SEC_CTX_INIT            = 801,
-        SEC_CTX_INIT_CONT       = 802,
-        SEC_CTX_FINI            = 803,
-        SEC_LAST_OPC,
-        SEC_FIRST_OPC           = SEC_CTX_INIT
-} sec_cmd_t;
-
-/*
- * capa related definitions
- */
-#define CAPA_HMAC_MAX_LEN       64
-#define CAPA_HMAC_KEY_MAX_LEN   56
-
-/* NB take care when changing the sequence of elements this struct,
- * because the offset info is used in find_capa() */
-struct lustre_capa {
-        struct lu_fid   lc_fid;     /* fid */
-        __u64           lc_opc;     /* operations allowed */
-        __u32           lc_uid;     /* uid, it is obsolete, but maybe used in
-                                     * future, reserve it for 64-bits aligned.*/
-        __u32           lc_flags;   /* HMAC algorithm & flags */
-        __u32           lc_keyid;   /* key used for the capability */
-        __u32           lc_timeout; /* capa timeout value (sec) */
-        __u64           lc_expiry;  /* expiry time (sec) */
-        __u8            lc_hmac[CAPA_HMAC_MAX_LEN];   /* HMAC */
-} __attribute__((packed));
-
-extern void lustre_swab_lustre_capa(struct lustre_capa *c);
-
-/* lustre_capa.lc_opc */
-enum {
-        CAPA_OPC_BODY_WRITE   = 1<<0,  /* write object data */
-        CAPA_OPC_BODY_READ    = 1<<1,  /* read object data */
-        CAPA_OPC_INDEX_LOOKUP = 1<<2,  /* lookup object fid */
-        CAPA_OPC_INDEX_INSERT = 1<<3,  /* insert object fid */
-        CAPA_OPC_INDEX_DELETE = 1<<4,  /* delete object fid */
-        CAPA_OPC_OSS_WRITE    = 1<<5,  /* write oss object data */
-        CAPA_OPC_OSS_READ     = 1<<6,  /* read oss object data */
-        CAPA_OPC_OSS_TRUNC    = 1<<7,  /* truncate oss object */
-        CAPA_OPC_META_WRITE   = 1<<8,  /* write object meta data */
-        CAPA_OPC_META_READ    = 1<<9,  /* read object meta data */
-
-};
-
-#define CAPA_OPC_OSS_RW (CAPA_OPC_OSS_READ | CAPA_OPC_OSS_WRITE)
-#define CAPA_OPC_MDS_ONLY                                                   \
-        (CAPA_OPC_BODY_WRITE | CAPA_OPC_BODY_READ | CAPA_OPC_INDEX_LOOKUP | \
-         CAPA_OPC_INDEX_INSERT | CAPA_OPC_INDEX_DELETE)
-#define CAPA_OPC_OSS_ONLY                                                   \
-        (CAPA_OPC_OSS_WRITE | CAPA_OPC_OSS_READ | CAPA_OPC_OSS_TRUNC)
-#define CAPA_OPC_MDS_DEFAULT ~CAPA_OPC_OSS_ONLY
-#define CAPA_OPC_OSS_DEFAULT ~(CAPA_OPC_MDS_ONLY | CAPA_OPC_OSS_ONLY)
-
-/* MDS capability covers object capability for operations of body r/w
- * (dir readpage/sendpage), index lookup/insert/delete and meta data r/w,
- * while OSS capability only covers object capability for operations of
- * oss data(file content) r/w/truncate.
- */
-static inline int capa_for_mds(struct lustre_capa *c)
-{
-        return (c->lc_opc & CAPA_OPC_INDEX_LOOKUP) != 0;
-}
-
-static inline int capa_for_oss(struct lustre_capa *c)
-{
-        return (c->lc_opc & CAPA_OPC_INDEX_LOOKUP) == 0;
-}
-
-/* lustre_capa.lc_hmac_alg */
-enum {
-        CAPA_HMAC_ALG_SHA1 = 1, /* sha1 algorithm */
-        CAPA_HMAC_ALG_MAX,
-};
-
-#define CAPA_FL_MASK            0x00ffffff
-#define CAPA_HMAC_ALG_MASK      0xff000000
-
-struct lustre_capa_key {
-        __u64   lk_mdsid;     /* mds# */
-        __u32   lk_keyid;     /* key# */
-        __u32   lk_padding;
-        __u8    lk_key[CAPA_HMAC_KEY_MAX_LEN];    /* key */
-} __attribute__((packed));
-
-extern void lustre_swab_lustre_capa_key(struct lustre_capa_key *k);
+#define QUOTA_REQUEST   1
+#define QUOTA_REPLY     0
+#define QUOTA_EXPORT    1
+#define QUOTA_IMPORT    0
 
 /* quota check function */
 #define QUOTA_RET_OK           0 /* return successfully */
 #define QUOTA_RET_NOQUOTA      1 /* not support quota */
 #define QUOTA_RET_NOLIMIT      2 /* quota limit isn't set */
-#define QUOTA_RET_ACQUOTA      3 /* need to acquire extra quota */
+#define QUOTA_RET_ACQUOTA      4 /* need to acquire extra quota */
+#define QUOTA_RET_INC_PENDING  8 /* pending value is increased */
+
+extern int quota_get_qunit_data_size(__u64 flag);
 #endif

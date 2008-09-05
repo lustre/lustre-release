@@ -36,19 +36,20 @@
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
-#define DEBUG_SUBSYSTEM S_MDS
+#define DEBUG_SUBSYSTEM S_LQUOTA
 
 #ifdef __KERNEL__
 # include <linux/version.h>
 # include <linux/module.h>
 # include <linux/init.h>
-# include <linux/fs.h>
-# include <linux/jbd.h>
-# include <linux/ext3_fs.h>
-# include <linux/smp_lock.h>
-# include <linux/buffer_head.h>
-# include <linux/workqueue.h>
-# include <linux/mount.h>
+# if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+#  include <linux/smp_lock.h>
+#  include <linux/buffer_head.h>
+#  include <linux/workqueue.h>
+#  include <linux/mount.h>
+# else
+#  include <linux/locks.h>
+# endif
 #else /* __KERNEL__ */
 # include <liblustre.h>
 #endif
@@ -67,19 +68,19 @@ static int target_quotacheck_callback(struct obd_export *exp,
                                       struct obd_quotactl *oqctl)
 {
         struct ptlrpc_request *req;
-        struct obd_quotactl   *body;
-        int                    rc;
+        struct obd_quotactl *body;
+        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*oqctl) };
         ENTRY;
 
-        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp), &RQF_QC_CALLBACK,
-                                        LUSTRE_OBD_VERSION, OBD_QC_CALLBACK);
-        if (req == NULL)
+        req = ptlrpc_prep_req(exp->exp_imp_reverse, LUSTRE_OBD_VERSION,
+                              OBD_QC_CALLBACK, 2, size, NULL);
+        if (!req)
                 RETURN(-ENOMEM);
 
-        body = req_capsule_client_get(&req->rq_pill, &RMF_OBD_QUOTACTL);
+        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
         *body = *oqctl;
 
-        ptlrpc_request_set_replen(req);
+        ptlrpc_req_set_repsize(req, 1, NULL);
 
         rc = ptlrpc_queue_wait(req);
         ptlrpc_req_finished(req);
@@ -137,6 +138,7 @@ int target_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl)
 
         qta->qta_exp = exp;
         qta->qta_oqctl = *oqctl;
+        qta->qta_oqctl.qc_id = obt->obt_qfmt; /* override qfmt version */
         qta->qta_sb = obt->obt_sb;
         qta->qta_sem = &obt->obt_quotachecking;
 
@@ -169,10 +171,11 @@ out:
 
 int client_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl)
 {
-        struct client_obd     *cli = &exp->exp_obd->u.cli;
+        struct client_obd *cli = &exp->exp_obd->u.cli;
         struct ptlrpc_request *req;
-        struct obd_quotactl   *body;
-        int                    ver, opc, rc;
+        struct obd_quotactl *body;
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int ver, opc, rc;
         ENTRY;
 
         if (!strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_MDC_NAME)) {
@@ -185,15 +188,14 @@ int client_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl)
                 RETURN(-EINVAL);
         }
 
-        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
-                                        &RQF_MDS_QUOTACHECK, ver, opc);
-        if (req == NULL)
-                RETURN(-ENOMEM);
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), ver, opc, 2, size, NULL);
+        if (!req)
+                GOTO(out, rc = -ENOMEM);
 
-        body = req_capsule_client_get(&req->rq_pill, &RMF_OBD_QUOTACTL);
+        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
         *body = *oqctl;
 
-        ptlrpc_request_set_replen(req);
+        ptlrpc_req_set_repsize(req, 1, NULL);
 
         /* the next poll will find -ENODATA, that means quotacheck is
          * going on */
@@ -201,6 +203,7 @@ int client_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl)
         rc = ptlrpc_queue_wait(req);
         if (rc)
                 cli->cl_qchk_stat = rc;
+out:
         ptlrpc_req_finished(req);
         RETURN(rc);
 }
@@ -220,11 +223,11 @@ int client_quota_poll_check(struct obd_export *exp, struct if_quotacheck *qchk)
         qchk->obd_uuid = cli->cl_target_uuid;
         /* FIXME change strncmp to strcmp and save the strlen op */
         if (strncmp(exp->exp_obd->obd_type->typ_name, LUSTRE_OSC_NAME,
-            strlen(LUSTRE_OSC_NAME)))
+                    strlen(LUSTRE_OSC_NAME)) == 0)
                 memcpy(qchk->obd_type, LUSTRE_OST_NAME,
                        strlen(LUSTRE_OST_NAME));
         else if (strncmp(exp->exp_obd->obd_type->typ_name, LUSTRE_MDC_NAME,
-                 strlen(LUSTRE_MDC_NAME)))
+                         strlen(LUSTRE_MDC_NAME)) == 0)
                 memcpy(qchk->obd_type, LUSTRE_MDS_NAME,
                        strlen(LUSTRE_MDS_NAME));
 

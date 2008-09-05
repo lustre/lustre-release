@@ -1,3 +1,4 @@
+subdir-m += libcfs
 
 lnet-subdirs += lnet
 lnet-subdirs += klnds

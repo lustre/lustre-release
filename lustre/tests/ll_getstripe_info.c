@@ -64,7 +64,7 @@ int main(int argc, char** argv)
                 return 1;
         }
 
-        lum_size = lov_mds_md_size(MAX_LOV_UUID_COUNT);
+        lum_size = lov_mds_md_size(MAX_LOV_UUID_COUNT, LOV_MAGIC);
 
         if ((lum_file = (struct lov_user_md *)malloc(lum_size)) == NULL) {
                 fprintf(stderr, "unable to allocate memory for ioctl's");

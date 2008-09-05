@@ -66,7 +66,6 @@ struct obd_device;
 #define LDLM_DEFAULT_LRU_SIZE (100 * num_online_cpus())
 #endif
 #define LDLM_DEFAULT_MAX_ALIVE (cfs_time_seconds(36000))
-#define LDLM_CTIME_AGE_LIMIT (10)
 
 typedef enum {
         ELDLM_OK = 0,
@@ -168,9 +167,6 @@ typedef enum {
  * w/o involving separate thread. in order to decrease cs rate */
 #define LDLM_FL_ATOMIC_CB      0x4000000
 
-/* Cancel lock asynchronously. See ldlm_cli_cancel_unused_resource. */
-#define LDLM_FL_ASYNC           0x8000000
-
 /* It may happen that a client initiate 2 operations, e.g. unlink and mkdir,
  * such that server send blocking ast for conflict locks to this client for
  * the 1st operation, whereas the 2nd operation has canceled this lock and
@@ -208,9 +204,9 @@ static inline void lockmode_verify(ldlm_mode_t mode)
        LASSERT(mode > LCK_MINMODE && mode < LCK_MAXMODE);
 }
 
-static inline int lockmode_compat(ldlm_mode_t exist_mode, ldlm_mode_t new_mode)
+static inline int lockmode_compat(ldlm_mode_t exist, ldlm_mode_t new)
 {
-       return (lck_compat_array[exist_mode] & new_mode);
+       return (lck_compat_array[exist] & new);
 }
 
 /*
@@ -346,14 +342,13 @@ struct ldlm_pool {
          */
         struct lprocfs_stats  *pl_stats;
 };
-
 typedef int (*ldlm_res_policy)(struct ldlm_namespace *, struct ldlm_lock **,
                                void *req_cookie, ldlm_mode_t mode, int flags,
                                void *data);
 
 struct ldlm_valblock_ops {
         int (*lvbo_init)(struct ldlm_resource *res);
-        int (*lvbo_update)(struct ldlm_resource *res, struct lustre_msg *m,
+        int (*lvbo_update)(struct ldlm_resource *res, struct ptlrpc_request *r,
                            int buf_idx, int increase);
 };
 
@@ -362,89 +357,42 @@ typedef enum {
         LDLM_NAMESPACE_MODEST = 1 << 1
 } ldlm_appetite_t;
 
-/*
- * Default value for ->ns_shrink_thumb. If lock is not extent one its cost
- * is one page. Here we have 256 pages which is 1M on i386. Thus by default
- * all extent locks which have more than 1M long extent will be kept in lru,
- * others (including ibits locks) will be canceled on memory pressure event.
- */
-#define LDLM_LOCK_SHRINK_THUMB 256
-
-/*
- * Default values for the "max_nolock_size", "contention_time" and
- * "contended_locks" namespace tunables.
- */
+/* default values for the "max_nolock_size", "contention_time"
+ * and "contended_locks" namespace tunables */
 #define NS_DEFAULT_MAX_NOLOCK_BYTES 0
 #define NS_DEFAULT_CONTENTION_SECONDS 2
 #define NS_DEFAULT_CONTENDED_LOCKS 32
 
+/* Default value for ->ns_shrink_thumb. If lock is not extent one its cost
+ * is one page. Here we have 256 pages which is 1M on i386. Thus by default
+ * all extent locks which have more than 1M long extent will be kept in lru,
+ * others (including ibits locks) will be canceled on memory pressure event. */
+#define LDLM_LOCK_SHRINK_THUMB 256
+
 struct ldlm_namespace {
-        /**
-         * Namespace name. Used for logging, etc.
-         */
         char                  *ns_name;
-
-        /**
-         * Is this a client-side lock tree?
-         */
-        ldlm_side_t            ns_client;
-
-        /**
-         * Namespce connect flags supported by server (may be changed via proc,
-         * lru resize may be disabled/enabled).
-         */
-        __u64                  ns_connect_flags;
-
-         /**
-          * Client side orig connect flags supported by server.
-          */
-        __u64                  ns_orig_connect_flags;
-
-        /**
-         * Hash table for namespace.
-         */
-        struct list_head      *ns_hash;
+        ldlm_side_t            ns_client; /* is this a client-side lock tree? */
+        __u64                  ns_connect_flags; /* ns connect flags supported
+                                           * by server (may be changed via proc,
+                                           * lru resize may be disabled/enabled) */
+        __u64                  ns_orig_connect_flags; /* client side orig connect
+                                           * flags supported by server */
+        struct list_head      *ns_hash;   /* hash table for ns */
         spinlock_t             ns_hash_lock;
+        __u32                  ns_refcount; /* count of resources in the hash */
+        struct list_head       ns_root_list; /* all root resources in ns */
+        struct list_head       ns_list_chain; /* position in global NS list */
 
-         /**
-          * Count of resources in the hash.
-          */
-        __u32                  ns_refcount;
-
-         /**
-          * All root resources in namespace.
-          */
-        struct list_head       ns_root_list;
-
-        /**
-         * Position in global namespace list.
-         */
-        struct list_head       ns_list_chain;
-
-        /**
-         * All root resources in namespace.
-         */
-        struct list_head       ns_unused_list;
+        struct list_head       ns_unused_list; /* all root resources in ns */
         int                    ns_nr_unused;
         spinlock_t             ns_unused_lock;
 
         unsigned int           ns_max_unused;
         unsigned int           ns_max_age;
 
-         /**
-          * Seconds.
-          */
-        unsigned int           ns_ctime_age_limit;
-
-        /**
-         * Lower limit to number of pages in lock to keep it in cache.
-         */
+        /* Lower limit to number of pages in lock to keep it in cache */
         unsigned int           ns_shrink_thumb;
-
-        /**
-         * Next debug dump, jiffies.
-         */
-        cfs_time_t             ns_next_dump;
+        cfs_time_t             ns_next_dump;   /* next debug dump, jiffies */
 
         atomic_t               ns_locks;
         __u64                  ns_resources;
@@ -455,29 +403,18 @@ struct ldlm_namespace {
         struct ldlm_pool       ns_pool;
         ldlm_appetite_t        ns_appetite;
 
-        /**
-         * If more than @ns_contented_locks found, the resource considered
-         * as contended.
-         */
+        /* if more than @ns_contented_locks found, the resource considered
+         * as contended */
         unsigned               ns_contended_locks;
-
-        /**
-         * The resource remembers contended state during @ns_contention_time,
-         * in seconds.
-         */
+        /* the resource remembers contended state during @ns_contention_time,
+         * in seconds */
         unsigned               ns_contention_time;
-
-        /**
-         * Limit size of nolock requests, in bytes.
-         */
+        /* limit size of nolock requests, in bytes */
         unsigned               ns_max_nolock_size;
 
-        /**
-         * Backward link to obd, required for ldlm pool to store new SLV.
-         */
-        struct obd_device     *ns_obd;
-
         struct adaptive_timeout ns_at_estimate;/* estimated lock callback time*/
+        /* backward link to obd, required for ldlm pool to store new SLV. */
+        struct obd_device     *ns_obd;
 };
 
 static inline int ns_is_client(struct ldlm_namespace *ns)
@@ -667,11 +604,10 @@ struct ldlm_ast_work {
 struct ldlm_enqueue_info {
         __u32 ei_type;   /* Type of the lock being enqueued. */
         __u32 ei_mode;   /* Mode of the lock being enqueued. */
-        void *ei_cb_bl;  /* blocking lock callback */
-        void *ei_cb_cp;  /* lock completion callback */
-        void *ei_cb_gl;  /* lock glimpse callback */
+        void *ei_cb_bl;  /* Different callbacks for lock handling (blocking, */
+        void *ei_cb_cp;  /* completion, glimpse) */
+        void *ei_cb_gl;
         void *ei_cbdata; /* Data to be passed into callbacks. */
-        short ei_async:1; /* async request */
 };
 
 extern struct obd_ops ldlm_obd_ops;
@@ -679,8 +615,8 @@ extern struct obd_ops ldlm_obd_ops;
 extern char *ldlm_lockname[];
 extern char *ldlm_typename[];
 extern char *ldlm_it2str(int it);
-#ifdef LIBCFS_DEBUG
-#define ldlm_lock_debug(cdls, level, lock, file, func, line, fmt, a...) do { \
+
+#define ldlm_lock_debug(cdls, level, lock, file, func, line, fmt, a...) do {  \
         CHECK_STACK();                                                  \
                                                                         \
         if (((level) & D_CANTMASK) != 0 ||                              \
@@ -699,11 +635,11 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 mask,
                       ...)
         __attribute__ ((format (printf, 4, 5)));
 
-#define LDLM_ERROR(lock, fmt, a...) do {                                \
-        static cfs_debug_limit_state_t _ldlm_cdls;                      \
-        ldlm_lock_debug(&_ldlm_cdls, D_ERROR, lock,                     \
-                        __FILE__, __FUNCTION__, __LINE__,               \
-                        "### " fmt , ##a);                              \
+#define LDLM_ERROR(lock, fmt, a...) do {                                 \
+        static cfs_debug_limit_state_t _ldlm_cdls;                       \
+        ldlm_lock_debug(&_ldlm_cdls, D_ERROR, lock,                      \
+                        __FILE__, __FUNCTION__, __LINE__,                \
+                        "### " fmt , ##a);                               \
 } while (0)
 
 #define LDLM_DEBUG(lock, fmt, a...)   do {                              \
@@ -711,12 +647,8 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 mask,
                         __FILE__, __FUNCTION__, __LINE__,               \
                          "### " fmt , ##a);                             \
 } while (0)
-#else
-#define LDLM_DEBUG(lock, fmt, a...) ((void)0)
-#define LDLM_ERROR(lock, fmt, a...) ((void)0)
-#endif
 
-#define LDLM_DEBUG_NOLOCK(format, a...)                 \
+#define LDLM_DEBUG_NOLOCK(format, a...)                                 \
         CDEBUG(D_DLMTRACE, "### " format "\n" , ##a)
 
 typedef int (*ldlm_processing_policy)(struct ldlm_lock *lock, int *flags,
@@ -741,7 +673,7 @@ int ldlm_namespace_foreach_res(struct ldlm_namespace *ns,
                                ldlm_res_iterator_t iter, void *closure);
 
 int ldlm_replay_locks(struct obd_import *imp);
-void ldlm_resource_iterate(struct ldlm_namespace *, const struct ldlm_res_id *,
+void ldlm_resource_iterate(struct ldlm_namespace *, struct ldlm_res_id *,
                            ldlm_iterator_t iter, void *data);
 
 /* ldlm_flock.c */
@@ -761,37 +693,35 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req, ldlm_completion_callback,
 int ldlm_handle_convert(struct ptlrpc_request *req);
 int ldlm_handle_cancel(struct ptlrpc_request *req);
 int ldlm_request_cancel(struct ptlrpc_request *req,
-                        const struct ldlm_request *dlm_req, int first);
+                        struct ldlm_request *dlm_req, int first);
 int ldlm_del_waiting_lock(struct ldlm_lock *lock);
 int ldlm_refresh_waiting_lock(struct ldlm_lock *lock);
-void ldlm_revoke_export_locks(struct obd_export *exp);
 int ldlm_get_ref(void);
 void ldlm_put_ref(void);
 
 /* ldlm_lock.c */
 ldlm_processing_policy ldlm_get_processing_policy(struct ldlm_resource *res);
 void ldlm_register_intent(struct ldlm_namespace *ns, ldlm_res_policy arg);
-void ldlm_lock2handle(const struct ldlm_lock *lock,
-                      struct lustre_handle *lockh);
-struct ldlm_lock *__ldlm_handle2lock(const struct lustre_handle *, int flags);
+void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh);
+struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *, int flags);
 void ldlm_cancel_callback(struct ldlm_lock *);
 int ldlm_lock_set_data(struct lustre_handle *, void *data);
 int ldlm_lock_remove_from_lru(struct ldlm_lock *);
 struct ldlm_lock *ldlm_handle2lock_ns(struct ldlm_namespace *,
-                                      const struct lustre_handle *);
+                                      struct lustre_handle *);
 
-static inline struct ldlm_lock *ldlm_handle2lock(const struct lustre_handle *h)
+static inline struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *h)
 {
         return __ldlm_handle2lock(h, 0);
 }
 
 static inline int ldlm_res_lvbo_update(struct ldlm_resource *res,
-                                       struct lustre_msg *m, int buf_idx,
+                                       struct ptlrpc_request *r, int buf_idx,
                                        int increase)
 {
         if (res->lr_namespace->ns_lvbo &&
             res->lr_namespace->ns_lvbo->lvbo_update) {
-                return res->lr_namespace->ns_lvbo->lvbo_update(res, m, buf_idx,
+                return res->lr_namespace->ns_lvbo->lvbo_update(res, r, buf_idx,
                                                                increase);
         }
         return 0;
@@ -820,7 +750,7 @@ do {                                            \
                 list_del_init(&_lock->member);                  \
                 LDLM_LOCK_PUT(_lock);                           \
         }                                                       \
-        LASSERT(c <= 0);                                        \
+        LASSERT(c <= 0);                                       \
 })
 
 struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock);
@@ -834,7 +764,7 @@ void ldlm_lock_allow_match(struct ldlm_lock *lock);
 int ldlm_lock_fast_match(struct ldlm_lock *, int, obd_off, obd_off, void **);
 void ldlm_lock_fast_release(void *, int);
 ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,
-                            const struct ldlm_res_id *, ldlm_type_t type,
+                            struct ldlm_res_id *, ldlm_type_t type,
                             ldlm_policy_data_t *, ldlm_mode_t mode,
                             struct lustre_handle *);
 struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
@@ -872,8 +802,8 @@ static inline void ldlm_proc_cleanup(void) {}
 /* resource.c - internal */
 struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
                                         struct ldlm_resource *parent,
-                                        const struct ldlm_res_id *,
-                                        ldlm_type_t type, int create);
+                                        struct ldlm_res_id, ldlm_type_t type,
+                                        int create);
 struct ldlm_resource *ldlm_resource_getref(struct ldlm_resource *res);
 int ldlm_resource_putref(struct ldlm_resource *res);
 void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
@@ -884,13 +814,7 @@ void ldlm_dump_all_namespaces(ldlm_side_t client, int level);
 void ldlm_namespace_dump(int level, struct ldlm_namespace *);
 void ldlm_resource_dump(int level, struct ldlm_resource *);
 int ldlm_lock_change_resource(struct ldlm_namespace *, struct ldlm_lock *,
-                              const struct ldlm_res_id *);
-
-struct ldlm_callback_suite {
-        ldlm_completion_callback lcs_completion;
-        ldlm_blocking_callback   lcs_blocking;
-        ldlm_glimpse_callback    lcs_glimpse;
-};
+                              struct ldlm_res_id);
 
 /* ldlm_request.c */
 int ldlm_expired_completion_wait(void *data);
@@ -898,30 +822,25 @@ int ldlm_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                       void *data, int flag);
 int ldlm_glimpse_ast(struct ldlm_lock *lock, void *reqp);
 int ldlm_completion_ast(struct ldlm_lock *lock, int flags, void *data);
-int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
-                     struct ldlm_enqueue_info *einfo,
-                     const struct ldlm_res_id *res_id,
+int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **req,
+                     struct ldlm_enqueue_info *einfo, struct ldlm_res_id res_id,
                      ldlm_policy_data_t *policy, int *flags,
                      void *lvb, __u32 lvb_len, void *lvb_swabber,
                      struct lustre_handle *lockh, int async);
-int ldlm_prep_enqueue_req(struct obd_export *exp,
-                          struct ptlrpc_request *req,
-                          struct list_head *cancels,
-                          int count);
-int ldlm_prep_elc_req(struct obd_export *exp,
-                      struct ptlrpc_request *req,
-                      int version, int opc, int canceloff,
-                      struct list_head *cancels, int count);
-int ldlm_handle_enqueue0(struct ldlm_namespace *ns, struct ptlrpc_request *req,
-                         const struct ldlm_request *dlm_req,
-                         const struct ldlm_callback_suite *cbs);
+struct ptlrpc_request *ldlm_prep_enqueue_req(struct obd_export *exp,
+                                             int bufcount, __u32 *size,
+                                             struct list_head *head, int count);
+struct ptlrpc_request *ldlm_prep_elc_req(struct obd_export *exp, int version,
+                                         int opc, int bufcount, __u32 *size,
+                                         int bufoff, int canceloff,
+                                         struct list_head *cancels, int count);
 int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
                           ldlm_type_t type, __u8 with_policy, ldlm_mode_t mode,
                           int *flags, void *lvb, __u32 lvb_len,
                           void *lvb_swabber, struct lustre_handle *lockh,
                           int rc);
 int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
-                           const struct ldlm_res_id *res_id,
+                           struct ldlm_res_id *res_id,
                            ldlm_type_t type, ldlm_policy_data_t *policy,
                            ldlm_mode_t mode, int *flags,
                            ldlm_blocking_callback blocking,
@@ -933,27 +852,18 @@ int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *new,
                     void *data, __u32 data_len);
 int ldlm_cli_convert(struct lustre_handle *, int new_mode, __u32 *flags);
 int ldlm_cli_update_pool(struct ptlrpc_request *req);
-int ldlm_handle_convert0(struct ptlrpc_request *req,
-                         const struct ldlm_request *dlm_req);
 int ldlm_cli_cancel(struct lustre_handle *lockh);
-int ldlm_cli_cancel_unused(struct ldlm_namespace *, const struct ldlm_res_id *,
+int ldlm_cli_cancel_unused(struct ldlm_namespace *, struct ldlm_res_id *,
                            int flags, void *opaque);
-int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
-                                    const struct ldlm_res_id *res_id,
-                                    ldlm_policy_data_t *policy,
-                                    ldlm_mode_t mode, int flags, void *opaque);
-int ldlm_cli_cancel_req(struct obd_export *exp, struct list_head *head,
-                        int count, int flags);
-int ldlm_cli_join_lru(struct ldlm_namespace *,
-                      const struct ldlm_res_id *, int join);
+int ldlm_cli_cancel_req(struct obd_export *exp,
+                        struct list_head *head, int count);
+int ldlm_cli_join_lru(struct ldlm_namespace *, struct ldlm_res_id *, int join);
 int ldlm_cancel_resource_local(struct ldlm_resource *res,
                                struct list_head *cancels,
-                               ldlm_policy_data_t *policy,
-                               ldlm_mode_t mode, int lock_flags,
-                               int cancel_flags, void *opaque);
+                               ldlm_policy_data_t *policy, ldlm_mode_t mode,
+                               int lock_flags, int cancel_flags, void *opaque);
 int ldlm_cli_cancel_list(struct list_head *head, int count,
-                         struct ptlrpc_request *req, int flags);
-
+                         struct ptlrpc_request *req, int off);
 /* mds/handler.c */
 /* This has to be here because recursive inclusion sucks. */
 int intent_disposition(struct ldlm_reply *rep, int flag);

@@ -245,7 +245,8 @@ int obd_proc_read_version(char *page, char **start, off_t off, int count,
                         BUILD_VERSION);
 #else
         return snprintf(page, count, "lustre: %s\nkernel: %s\nbuild:  %s\n",
-                        LUSTRE_VERSION_STRING, "patchless", BUILD_VERSION);
+                        LUSTRE_VERSION_STRING, "patchless_client",
+                        BUILD_VERSION);
 #endif
 }
 
@@ -345,7 +346,7 @@ static void obd_device_list_seq_stop(struct seq_file *p, void *v)
 }
 
 static void *obd_device_list_seq_next(struct seq_file *p, void *v, loff_t *pos)
-{ 
+{
         ++*pos;
         if (*pos >= class_devno_max())
                 return NULL;
@@ -414,16 +415,24 @@ struct file_operations obd_device_list_fops = {
 int class_procfs_init(void)
 {
 #ifdef __KERNEL__
-        int rc;
+        struct proc_dir_entry *entry;
         ENTRY;
 
         obd_sysctl_init();
-        proc_lustre_root = lprocfs_register("lustre", proc_root_fs,
-                                            lprocfs_base, NULL);
-        rc = lprocfs_seq_create(proc_lustre_root, "devices", 0444,
-                                &obd_device_list_fops, NULL);
-        if (rc)
-                CERROR("error adding /proc/fs/lustre/devices file\n");
+        proc_lustre_root = proc_mkdir("lustre", proc_root_fs);
+        if (!proc_lustre_root) {
+                printk(KERN_ERR
+                       "LustreError: error registering /proc/fs/lustre\n");
+                RETURN(-ENOMEM);
+        }
+        proc_version = lprocfs_add_vars(proc_lustre_root, lprocfs_base, NULL);
+        entry = create_proc_entry("devices", 0444, proc_lustre_root);
+        if (entry == NULL) {
+                CERROR("error registering /proc/fs/lustre/devices\n");
+                lprocfs_remove(&proc_lustre_root);
+                RETURN(-ENOMEM);
+        }
+        entry->proc_fops = &obd_device_list_fops;
 #else
         ENTRY;
 #endif
@@ -434,9 +443,8 @@ int class_procfs_init(void)
 int class_procfs_clean(void)
 {
         ENTRY;
-        if (proc_lustre_root) {
+        if (proc_lustre_root)
                 lprocfs_remove(&proc_lustre_root);
-        }
         RETURN(0);
 }
 

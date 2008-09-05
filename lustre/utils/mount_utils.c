@@ -110,7 +110,7 @@ int get_mountdata(char *dev, struct lustre_disk_data *mo_ldd)
         /* Make a temporary directory to hold Lustre data files. */
         if (!mkdtemp(tmpdir)) {
                 verrprint("%s: Can't create temporary directory %s: %s\n",
-                        progname, tmpdir, strerror(errno));
+			  progname, tmpdir, strerror(errno));
                 return errno;
         }
 
@@ -133,7 +133,7 @@ int get_mountdata(char *dev, struct lustre_disk_data *mo_ldd)
                 verrprint("%s: Unable to read %d.%d config %s.\n",
                           progname, LUSTRE_MAJOR, LUSTRE_MINOR, filepnm);
                 goto out_close;
-	}	
+	}
 
 out_close:
         fclose(filep);

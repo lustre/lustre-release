@@ -41,7 +41,7 @@
 #ifndef __LNET_ST_H__
 #define __LNET_ST_H__
 
-#include <libcfs/libcfs.h>
+#include <libcfs/kp30.h>
 #include <lnet/lnet.h>
 #include <lnet/lib-types.h>
 

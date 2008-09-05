@@ -46,6 +46,7 @@ struct obd_import;
 struct ldlm_res_id;
 struct ptlrpc_request_set;
 extern int test_req_buffer_pressure;
+extern cfs_mem_cache_t *ptlrpc_cbdata_slab;
 
 void ptlrpc_request_handle_notconn(struct ptlrpc_request *);
 void lustre_assert_wire_constants(void);
@@ -73,7 +74,6 @@ void ptlrpc_lprocfs_do_request_stat (struct ptlrpc_request *req,
 #endif /* LPROCFS */
 
 /* recovd_thread.c */
-
 int ptlrpc_expire_one_request(struct ptlrpc_request *req);
 
 /* pers.c */
@@ -81,10 +81,6 @@ void ptlrpc_fill_bulk_md(lnet_md_t *md, struct ptlrpc_bulk_desc *desc);
 void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, cfs_page_t *page,
                           int pageoffset, int len);
 void ptl_rpc_wipe_bulk_pages(struct ptlrpc_bulk_desc *desc);
-
-/* pack_generic.c */
-struct ptlrpc_reply_state *lustre_get_emerg_rs(struct ptlrpc_service *svc);
-void lustre_put_emerg_rs(struct ptlrpc_reply_state *rs);
 
 /* pinger.c */
 int ptlrpc_start_pinger(void);
@@ -97,32 +93,6 @@ int ping_evictor_wake(struct obd_export *exp);
 #else
 #define ping_evictor_wake(exp)     1
 #endif
-
-/* sec_null.c */
-int  sptlrpc_null_init(void);
-void sptlrpc_null_fini(void);
-
-/* sec_plain.c */
-int  sptlrpc_plain_init(void);
-void sptlrpc_plain_fini(void);
-
-/* sec_bulk.c */
-int  sptlrpc_enc_pool_init(void);
-void sptlrpc_enc_pool_fini(void);
-int sptlrpc_proc_read_enc_pool(char *page, char **start, off_t off, int count,
-                               int *eof, void *data);
-
-/* sec_lproc.c */
-int  sptlrpc_lproc_init(void);
-void sptlrpc_lproc_fini(void);
-
-/* sec_gc.c */
-int sptlrpc_gc_start_thread(void);
-void sptlrpc_gc_stop_thread(void);
-
-/* sec.c */
-int  __init sptlrpc_init(void);
-void __exit sptlrpc_fini(void);
 
 /* recov_thread.c */
 int llog_recov_init(void);

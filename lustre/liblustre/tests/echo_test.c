@@ -294,7 +294,6 @@ int main(int argc, char **argv)
 	if (liblustre_init_current(argv[0]) ||
 	    init_obdclass() || init_lib_portals() ||
 	    ptlrpc_init() ||
-	    lmv_init() ||
 	    mdc_init() ||
 	    lov_init() ||
 	    osc_init() ||

@@ -161,28 +161,35 @@ lnet_connect(cfs_socket_t **sockp, lnet_nid_t peer_nid,
 
                 CLASSERT (LNET_PROTO_ACCEPTOR_VERSION == 1);
 
-                cr.acr_magic   = LNET_PROTO_ACCEPTOR_MAGIC;
-                cr.acr_version = LNET_PROTO_ACCEPTOR_VERSION;
-                cr.acr_nid     = peer_nid;
+                if (the_lnet.ln_ptlcompat != 2) {
+                        /* When portals compatibility is "strong", simply
+                         * connect (i.e. send no acceptor connection request).
+                         * Othewise send an acceptor connection request. I can
+                         * have no portals peers so everyone else should
+                         * understand my protocol. */
+                        cr.acr_magic   = LNET_PROTO_ACCEPTOR_MAGIC;
+                        cr.acr_version = LNET_PROTO_ACCEPTOR_VERSION;
+                        cr.acr_nid     = peer_nid;
 
-                if (the_lnet.ln_testprotocompat != 0) {
-                        /* single-shot proto check */
-                        LNET_LOCK();
-                        if ((the_lnet.ln_testprotocompat & 4) != 0) {
-                                cr.acr_version++;
-                                the_lnet.ln_testprotocompat &= ~4;
+                        if (the_lnet.ln_testprotocompat != 0) {
+                                /* single-shot proto check */
+                                LNET_LOCK();
+                                if ((the_lnet.ln_testprotocompat & 4) != 0) {
+                                        cr.acr_version++;
+                                        the_lnet.ln_testprotocompat &= ~4;
+                                }
+                                if ((the_lnet.ln_testprotocompat & 8) != 0) {
+                                        cr.acr_magic = LNET_PROTO_MAGIC;
+                                        the_lnet.ln_testprotocompat &= ~8;
+                                }
+                                LNET_UNLOCK();
                         }
-                        if ((the_lnet.ln_testprotocompat & 8) != 0) {
-                                cr.acr_magic = LNET_PROTO_MAGIC;
-                                the_lnet.ln_testprotocompat &= ~8;
-                        }
-                        LNET_UNLOCK();
+
+                        rc = libcfs_sock_write(sock, &cr, sizeof(cr),
+                                               accept_timeout);
+                        if (rc != 0)
+                                goto failed_sock;
                 }
-
-                rc = libcfs_sock_write(sock, &cr, sizeof(cr),
-                                       accept_timeout);
-                if (rc != 0)
-                        goto failed_sock;
                 
                 *sockp = sock;
                 return 0;
@@ -207,7 +214,7 @@ lnet_accept_magic(__u32 magic, __u32 constant)
 }
 
 int
-lnet_accept(cfs_socket_t *sock, __u32 magic)
+lnet_accept(lnet_ni_t *blind_ni, cfs_socket_t *sock, __u32 magic)
 {
         lnet_acceptor_connreq_t cr;
         __u32                   peer_ip;
@@ -216,6 +223,10 @@ lnet_accept(cfs_socket_t *sock, __u32 magic)
         int                     flip;
         lnet_ni_t              *ni;
         char                   *str;
+
+        /* CAVEAT EMPTOR: I may be called by an LND in any thread's context if
+         * I passed the new socket "blindly" to the single NI that needed an
+         * acceptor.  If so, blind_ni != NULL... */
 
         LASSERT (sizeof(cr) <= 16);             /* not too big for the stack */
         
@@ -326,13 +337,25 @@ lnet_accept(cfs_socket_t *sock, __u32 magic)
                 return -EPERM;
         }
 
-        CDEBUG(D_NET, "Accept %s from %u.%u.%u.%u\n",
-               libcfs_nid2str(cr.acr_nid), HIPQUAD(peer_ip));
+        CDEBUG(D_NET, "Accept %s from %u.%u.%u.%u%s\n",
+               libcfs_nid2str(cr.acr_nid), HIPQUAD(peer_ip),
+               blind_ni == NULL ? "" : " (blind)");
 
-        rc = ni->ni_lnd->lnd_accept(ni, sock);
+        if (blind_ni == NULL) {
+                /* called by the acceptor: call into the requested NI... */
+                rc = ni->ni_lnd->lnd_accept(ni, sock);
+        } else {
+                /* portals_compatible set and the (only) NI called me to verify
+                 * and skip the connection request... */
+                LASSERT (the_lnet.ln_ptlcompat != 0);
+                LASSERT (ni == blind_ni);
+                rc = 0;
+        }
+
         lnet_ni_decref(ni);
         return rc;
 }
+EXPORT_SYMBOL(lnet_accept);
         
 int
 lnet_acceptor(void *arg)
@@ -340,12 +363,25 @@ lnet_acceptor(void *arg)
 	char           name[16];
 	cfs_socket_t  *newsock;
 	int            rc;
+        int            n_acceptor_nis;
 	__u32          magic;
 	__u32          peer_ip;
 	int            peer_port;
+        lnet_ni_t     *blind_ni = NULL;
         int            secure = (int)((unsigned long)arg);
 
 	LASSERT (lnet_acceptor_state.pta_sock == NULL);
+
+        if (the_lnet.ln_ptlcompat != 0) {
+                /* When portals_compatibility is enabled, peers may connect
+                 * without sending an acceptor connection request.  There is no
+                 * ambiguity about which network the peer wants to connect to
+                 * since there can only be 1 network, so I pass connections
+                 * "blindly" to it. */
+                n_acceptor_nis = lnet_count_acceptor_nis(&blind_ni);
+                LASSERT (n_acceptor_nis == 1);
+                LASSERT (blind_ni != NULL);
+        }
 
 	snprintf(name, sizeof(name), "acceptor_%03d", accept_port);
 	cfs_daemonize(name);
@@ -365,7 +401,9 @@ lnet_acceptor(void *arg)
 
 		lnet_acceptor_state.pta_sock = NULL;
         } else {
-                LCONSOLE(0, "Accept %s, port %d\n", accept, accept_port);
+                LCONSOLE(0, "Accept %s, port %d%s\n", 
+                         accept, accept_port,
+                         blind_ni == NULL ? "" : " (proto compatible)");
         }
         
 	/* set init status and unblock parent */
@@ -399,6 +437,18 @@ lnet_acceptor(void *arg)
                         goto failed;
                 }
 
+                if (blind_ni != NULL) {
+                        rc = blind_ni->ni_lnd->lnd_accept(blind_ni, newsock);
+                        if (rc != 0) {
+                                CERROR("NI %s refused 'blind' connection from "
+                                       "%u.%u.%u.%u\n", 
+                                       libcfs_nid2str(blind_ni->ni_nid), 
+                                       HIPQUAD(peer_ip));
+                                goto failed;
+                        }
+                        continue;
+                }
+                
 		rc = libcfs_sock_read(newsock, &magic, sizeof(magic),
 				      accept_timeout);
 		if (rc != 0) {
@@ -407,7 +457,7 @@ lnet_acceptor(void *arg)
 			goto failed;
 		}
 
-                rc = lnet_accept(newsock, magic);
+                rc = lnet_accept(NULL, newsock, magic);
                 if (rc != 0)
                         goto failed;
                 
@@ -420,7 +470,10 @@ lnet_acceptor(void *arg)
 	libcfs_sock_release(lnet_acceptor_state.pta_sock);
         lnet_acceptor_state.pta_sock = NULL;
 
-        LCONSOLE(0, "Acceptor stopping\n");
+        if (blind_ni != NULL)
+                lnet_ni_decref(blind_ni);
+
+        LCONSOLE(0,"Acceptor stopping\n");
 	
 	/* unblock lnet_acceptor_stop() */
 	mutex_up(&lnet_acceptor_state.pta_signal);
@@ -448,7 +501,7 @@ lnet_acceptor_start(void)
                 return -EINVAL;
         }
 	
-	if (lnet_count_acceptor_nis() == 0)  /* not required */
+	if (lnet_count_acceptor_nis(NULL) == 0)  /* not required */
 		return 0;
 	
 	pid = cfs_kernel_thread(lnet_acceptor, (void *)secure, 0);
@@ -764,7 +817,7 @@ lnet_acceptor_start(void)
                 return -EINVAL;
         }
 
-        if (lnet_count_acceptor_nis() == 0) { /* not required */
+        if (lnet_count_acceptor_nis(NULL) == 0) { /* not required */
                 skip_waiting_for_completion = 1;
                 return 0;
         }

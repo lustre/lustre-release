@@ -43,10 +43,35 @@
 #define  _GNU_SOURCE
 #endif
 
-#include <libcfs/libcfsutil.h>
-#include <lnet/lnetctl.h>
+#include <stdio.h>
+#ifdef HAVE_NETDB_H
+#include <netdb.h>
+#endif
+#include <stdlib.h>
+#include <string.h>
+#ifdef HAVE_SYS_IOCTL_H
+#include <sys/ioctl.h>
+#endif
+#ifndef _IOWR
+#include "ioctl.h"
+#endif
+#include <fcntl.h>
+#include <errno.h>
+#include <unistd.h>
+#include <assert.h>
 
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
 #include <sys/utsname.h>
+
+#include <lnet/api-support.h>
+#include <lnet/lnetctl.h>
+#include <libcfs/portals_utils.h>
+#include "parser.h"
+
+#include <time.h>
 
 static char rawbuf[8192];
 static char *buf = rawbuf;
@@ -62,7 +87,7 @@ static const char *libcfs_debug_subsystems[] =
          "ost", "class", "log", "llite",
          "rpc", "mgmt", "lnet", "lnd",
          "pinger", "filter", "", "echo",
-         "ldlm", "lov", "", "",
+         "ldlm", "lov", "lquota", "",
          "", "", "", "lmv",
          "", "sec", "gss", "", 
          "mgc", "mgs", "fid", "fld", NULL};
@@ -74,6 +99,17 @@ static const char *libcfs_debug_masks[] =
          "dlmtrace", "error", "emerg", "ha",
          "rpctrace", "vfstrace", "reada", "mmap",
          "config", "console", "quota", "sec", NULL};
+
+struct debug_daemon_cmd {
+        char *cmd;
+        unsigned int cmdv;
+};
+
+static const struct debug_daemon_cmd libcfs_debug_daemon_cmd[] = {
+        {"start", DEBUG_DAEMON_START},
+        {"stop", DEBUG_DAEMON_STOP},
+        {0, 0}
+};
 
 #ifdef __linux__
 
@@ -722,7 +758,7 @@ int jt_dbg_mark_debug_buf(int argc, char **argv)
 static struct mod_paths {
         char *name, *path;
 } mod_paths[] = {
-        {"libcfs", "libcfs/libcfs"},
+        {"libcfs", "lnet/libcfs"},
         {"lnet", "lnet/lnet"},
         {"kciblnd", "lnet/klnds/ciblnd"},
         {"kgmlnd", "lnet/klnds/gmlnd"},
@@ -778,6 +814,44 @@ static struct mod_paths {
 
 static int jt_dbg_modules_2_4(int argc, char **argv)
 {
+#ifdef HAVE_LINUX_VERSION_H
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        struct mod_paths *mp;
+        char *path = "";
+        char *kernel = "linux";
+
+        if (argc >= 2)
+                path = argv[1];
+        if (argc == 3)
+                kernel = argv[2];
+        if (argc > 3) {
+                printf("%s [path] [kernel]\n", argv[0]);
+                return 0;
+        }
+
+        for (mp = mod_paths; mp->name != NULL; mp++) {
+                struct module_info info;
+                int rc;
+                size_t crap;
+                int query_module(const char *name, int which, void *buf,
+                                 size_t bufsize, size_t *ret);
+
+                rc = query_module(mp->name, QM_INFO, &info, sizeof(info),
+                                  &crap);
+                if (rc < 0) {
+                        if (errno != ENOENT)
+                                printf("query_module(%s) failed: %s\n",
+                                       mp->name, strerror(errno));
+                } else {
+                        printf("add-symbol-file %s%s%s/%s.o 0x%0lx\n", path,
+                               path[0] ? "/" : "", mp->path, mp->name,
+                               info.addr + sizeof(struct module));
+                }
+        }
+
+        return 0;
+#endif // Headers are 2.6-only
+#endif // !HAVE_LINUX_VERSION_H
         return -EINVAL;
 }
 

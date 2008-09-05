@@ -15,5 +15,5 @@ autoMakefile
 .tmp_versions
 .depend
 sources
-fsfilt_ldiskfs.*
-fsfilt-ldiskfs.*
+fsfilt_ldiskfs*
+fsfilt-ldiskfs*

@@ -39,8 +39,8 @@
 
 #ifdef __KERNEL__
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9)
-#error sorry, lustre requires at least linux kernel 2.6.9 or later
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0) && LINUX_VERSION_CODE < KERNEL_VERSION(2,5,69)
+#error sorry, lustre requires at least 2.5.69
 #endif
 
 #include <libcfs/linux/portals_compat25.h>
@@ -48,12 +48,12 @@
 #include <linux/lustre_patchless_compat.h>
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14)
-struct ll_iattr {
+struct ll_iattr_struct {
         struct iattr    iattr;
         unsigned int    ia_attr_flags;
 };
 #else
-#define ll_iattr iattr
+#define ll_iattr_struct iattr
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14) */
 
 #ifndef HAVE_SET_FS_PWD
@@ -79,13 +79,7 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 #define ll_set_fs_pwd set_fs_pwd
 #endif /* HAVE_SET_FS_PWD */
 
-/*
- * set ATTR_BLOCKS to a high value to avoid any risk of collision with other
- * ATTR_* attributes (see bug 13828)
- */
-#define ATTR_BLOCKS    (1 << 27)
-
-#if HAVE_INODE_I_MUTEX
+#ifdef HAVE_INODE_I_MUTEX
 #define UNLOCK_INODE_MUTEX(inode) do {mutex_unlock(&(inode)->i_mutex); } while(0)
 #define LOCK_INODE_MUTEX(inode) do {mutex_lock(&(inode)->i_mutex); } while(0)
 #define TRYLOCK_INODE_MUTEX(inode) mutex_trylock(&(inode)->i_mutex)
@@ -108,8 +102,29 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 #define LOCK_DQONOFF_MUTEX(dqopt) do {down(&(dqopt)->dqonoff_sem); } while(0)
 #endif /* HAVE_DQUOTOFF_MUTEX */
 
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,4)
+#define NGROUPS_SMALL           NGROUPS
+#define NGROUPS_PER_BLOCK       ((int)(EXEC_PAGESIZE / sizeof(gid_t)))
+
+struct group_info {
+        int        ngroups;
+        atomic_t   usage;
+        gid_t      small_block[NGROUPS_SMALL];
+        int        nblocks;
+        gid_t     *blocks[0];
+};
+#define current_ngroups current->ngroups
+#define current_groups current->groups
+
+struct group_info *groups_alloc(int gidsetsize);
+void groups_free(struct group_info *ginfo);
+#else /* >= 2.6.4 */
+
 #define current_ngroups current->group_info->ngroups
 #define current_groups current->group_info->small_block
+
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2,6,4) */
 
 #ifndef page_private
 #define page_private(page) ((page)->private)
@@ -120,9 +135,13 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 #define gfp_t int
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
+
 #define lock_dentry(___dentry)          spin_lock(&(___dentry)->d_lock)
 #define unlock_dentry(___dentry)        spin_unlock(&(___dentry)->d_lock)
 
+#define lock_24kernel()         do {} while (0)
+#define unlock_24kernel()       do {} while (0)
 #define ll_kernel_locked()      kernel_locked()
 
 /*
@@ -218,6 +237,205 @@ extern void __d_move(struct dentry *dentry, struct dentry *target);
         ((!PageWriteback(page) && (cmd & OBD_BRW_READ)) || \
          (PageWriteback(page) && (cmd & OBD_BRW_WRITE)))
 
+#else /* 2.4.. */
+
+#define ll_flock_lock_file_wait(file, lock, can_sleep) \
+        do {} while(0)
+
+#define lock_dentry(___dentry)
+#define unlock_dentry(___dentry)
+
+#define lock_24kernel()         lock_kernel()
+#define unlock_24kernel()       unlock_kernel()
+#define ll_kernel_locked()      (current->lock_depth >= 0)
+
+/* 2.4 kernels have HZ=100 on i386/x86_64, this should be reasonably safe */
+#define get_jiffies_64()        (__u64)jiffies
+
+#ifdef HAVE_MM_INLINE
+#include <linux/mm_inline.h>
+#endif
+
+#ifndef pgoff_t
+#define pgoff_t unsigned long
+#endif
+
+#define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c)
+#define ll_permission(inode,mask,nd)        permission(inode,mask)
+#define ILOOKUP(sb, ino, test, data)        ilookup4(sb, ino, test, data);
+#define DCACHE_DISCONNECTED                 DCACHE_NFSD_DISCONNECTED
+#define ll_dev_t                            int
+#define old_encode_dev(dev)                 (dev)
+
+/* 2.5 uses hlists for some things, like the d_hash.  we'll treat them
+ * as 2.5 and let macros drop back.. */
+#ifndef HLIST_HEAD /* until we get a kernel newer than l28 */
+#define hlist_entry                     list_entry
+#define hlist_head                      list_head
+#define hlist_node                      list_head
+#define HLIST_HEAD                      LIST_HEAD
+#define INIT_HLIST_HEAD                 INIT_LIST_HEAD
+#define hlist_del_init                  list_del_init
+#define hlist_add_head                  list_add
+#endif
+
+#ifndef INIT_HLIST_NODE
+#define INIT_HLIST_NODE(p)              ((p)->next = NULL, (p)->prev = NULL)
+#endif
+
+#ifndef hlist_for_each
+#define hlist_for_each                  list_for_each
+#endif
+
+#ifndef hlist_for_each_safe
+#define hlist_for_each_safe             list_for_each_safe
+#endif
+
+#define KDEVT_INIT(val)                 (val)
+#define ext3_xattr_set_handle           ext3_xattr_set
+#define try_module_get                  __MOD_INC_USE_COUNT
+#define module_put                      __MOD_DEC_USE_COUNT
+#define LTIME_S(time)                   (time)
+
+#if !defined(CONFIG_RH_2_4_20) && !defined(cpu_online)
+#define cpu_online(cpu)                 test_bit(cpu, &(cpu_online_map))
+#endif
+
+static inline int ll_path_lookup(const char *path, unsigned flags,
+                                 struct nameidata *nd)
+{
+        int error = 0;
+        if (path_init(path, flags, nd))
+                error = path_walk(path, nd);
+        return error;
+}
+#define ll_permission(inode,mask,nd)    permission(inode,mask)
+typedef long sector_t;
+
+#define ll_pgcache_lock(mapping)        spin_lock(&pagecache_lock)
+#define ll_pgcache_unlock(mapping)      spin_unlock(&pagecache_lock)
+#define ll_call_writepage(inode, page)  \
+                               (inode)->i_mapping->a_ops->writepage(page)
+#define ll_invalidate_inode_pages(inode) invalidate_inode_pages(inode)
+#define ll_truncate_complete_page(page) truncate_complete_page(page)
+
+static inline void clear_page_dirty(struct page *page)
+{
+        if (PageDirty(page))
+                ClearPageDirty(page);
+}
+
+static inline int clear_page_dirty_for_io(struct page *page)
+{
+        struct address_space *mapping = page->mapping;
+
+        if (page->mapping && PageDirty(page)) {
+                ClearPageDirty(page);
+                ll_pgcache_lock(mapping);
+                list_del(&page->list);
+                list_add(&page->list, &mapping->locked_pages);
+                ll_pgcache_unlock(mapping);
+                return 1;
+        }
+        return 0;
+}
+
+static inline void ll_redirty_page(struct page *page)
+{
+        SetPageDirty(page);
+        ClearPageLaunder(page);
+}
+
+static inline void __d_drop(struct dentry *dentry)
+{
+        list_del_init(&dentry->d_hash);
+}
+
+static inline int cleanup_group_info(void)
+{
+        /* Get rid of unneeded supplementary groups */
+        current->ngroups = 0;
+        memset(current->groups, 0, sizeof(current->groups));
+        return 0;
+}
+
+#ifndef HAVE_COND_RESCHED
+static inline void cond_resched(void)
+{
+        if (unlikely(need_resched())) {
+                set_current_state(TASK_RUNNING);
+                schedule();
+        }
+}
+#endif
+
+/* to find proc_dir_entry from inode. 2.6 has native one -bzzz */
+#ifndef HAVE_PDE
+#define PDE(ii)         ((ii)->u.generic_ip)
+#endif
+
+#define __set_page_ll_data(page, llap) set_page_private(page, (unsigned long)llap)
+#define __clear_page_ll_data(page) set_page_private(page, 0)
+#define PageWriteback(page) 0
+#define CheckWriteback(page, cmd) 1
+#define set_page_writeback(page) do {} while (0)
+#define end_page_writeback(page) do {} while (0)
+
+static inline int mapping_mapped(struct address_space *mapping)
+{
+        if (mapping->i_mmap_shared)
+                return 1;
+        if (mapping->i_mmap)
+                return 1;
+        return 0;
+}
+
+#ifdef ZAP_PAGE_RANGE_VMA
+#define ll_zap_page_range(vma, addr, len)  zap_page_range(vma, addr, len)
+#else
+#define ll_zap_page_range(vma, addr, len)  zap_page_range(vma->vm_mm, addr, len)
+#endif
+
+#ifndef HAVE_PAGE_MAPPED
+/* Poor man's page_mapped. substract from page count, counts from
+   buffers/pagecache and our own count (we are supposed to hold one reference).
+   What is left are user mappings and also others who work with this page now,
+   but there are supposedly none. */
+static inline int page_mapped(struct page *page)
+{
+        return page_count(page) - !!page->mapping - !!page->buffers - 1;
+}
+#endif /* !HAVE_PAGE_MAPPED */
+
+static inline void touch_atime(struct vfsmount *mnt, struct dentry *dentry)
+{
+        update_atime(dentry->d_inode);
+}
+
+static inline void file_accessed(struct file *file)
+{
+#ifdef O_NOATIME
+        if (file->f_flags & O_NOATIME)
+                return;
+#endif
+        touch_atime(file->f_vfsmnt, file->f_dentry);
+}
+
+#ifndef typecheck
+/*
+ * Check at compile time that something is of a particular type.
+ * Always evaluates to 1 so you may use it easily in comparisons.
+ */
+#define typecheck(type,x) \
+({	type __dummy; \
+	typeof(x) __dummy2; \
+	(void)(&__dummy == &__dummy2); \
+	1; \
+})
+#endif
+
+#endif /* end of 2.4 compat macros */
+
 #ifdef HAVE_PAGE_LIST
 static inline int mapping_has_pages(struct address_space *mapping)
 {
@@ -248,7 +466,8 @@ static inline int mapping_has_pages(struct address_space *mapping)
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,7))
 #define ll_set_dflags(dentry, flags) do { dentry->d_vfs_flags |= flags; } while(0)
-#define ll_vfs_symlink(dir, dentry, path, mode) vfs_symlink(dir, dentry, path)
+#define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
+                       vfs_symlink(dir, dentry, path)
 #else
 #define ll_set_dflags(dentry, flags) do { \
                 spin_lock(&dentry->d_lock); \
@@ -313,45 +532,6 @@ ll_kern_mount(const char *fstype, int flags, const char *name, void *data)
 #define ll_kern_mount(fstype, flags, name, data) do_kern_mount((fstype), (flags), (name), (data))
 #endif
 
-#ifndef HAVE_GENERIC_FILE_READ
-static inline
-ssize_t
-generic_file_read(struct file *filp, char __user *buf, size_t len, loff_t *ppos)
-{
-        struct iovec iov = { .iov_base = (void __user *)buf, .iov_len = len };
-        struct kiocb kiocb;
-        ssize_t ret;
-
-        init_sync_kiocb(&kiocb, filp);
-        kiocb.ki_pos = *ppos;
-        kiocb.ki_left = len;
-
-        ret = generic_file_aio_read(&kiocb, &iov, 1, kiocb.ki_pos);
-        *ppos = kiocb.ki_pos;
-        return ret;
-}
-#endif
-
-#ifndef HAVE_GENERIC_FILE_WRITE
-static inline
-ssize_t
-generic_file_write(struct file *filp, const char __user *buf, size_t len, loff_t *ppos)
-{
-        struct iovec iov = { .iov_base = (void __user *)buf, .iov_len = len };
-        struct kiocb kiocb;
-        ssize_t ret;
-
-        init_sync_kiocb(&kiocb, filp);
-        kiocb.ki_pos = *ppos;
-        kiocb.ki_left = len;
-
-        ret = generic_file_aio_write(&kiocb, &iov, 1, kiocb.ki_pos);
-        *ppos = kiocb.ki_pos;
-
-        return ret;
-}
-#endif
-
 #ifdef HAVE_STATFS_DENTRY_PARAM
 #define ll_do_statfs(sb, sfs) (sb)->s_op->statfs((sb)->s_root, (sfs))
 #else
@@ -361,24 +541,6 @@ generic_file_write(struct file *filp, const char __user *buf, size_t len, loff_t
 /* task_struct */
 #ifndef HAVE_TASK_PPTR
 #define p_pptr parent
-#endif
-
-#ifndef HAVE_SB_TIME_GRAN
-#ifndef HAVE_S_TIME_GRAN
-#error Need s_time_gran patch!
-#endif
-static inline u32 get_sb_time_gran(struct super_block *sb)
-{
-        return sb->s_time_gran;
-}
-#endif
-
-#ifdef HAVE_RW_TREE_LOCK
-#define TREE_READ_LOCK_IRQ(mapping)	read_lock_irq(&(mapping)->tree_lock)
-#define TREE_READ_UNLOCK_IRQ(mapping) read_unlock_irq(&(mapping)->tree_lock)
-#else
-#define TREE_READ_LOCK_IRQ(mapping) spin_lock_irq(&(mapping)->tree_lock)
-#define TREE_READ_UNLOCK_IRQ(mapping) spin_unlock_irq(&(mapping)->tree_lock)
 #endif
 
 #ifdef HAVE_UNREGISTER_BLKDEV_RETURN_INT
@@ -398,173 +560,11 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 #define ll_invalidate_bdev(a,b)         invalidate_bdev((a))
 #endif
 
-#ifdef HAVE_INODE_BLKSIZE
-#define ll_inode_blksize(a)     (a)->i_blksize
-#else
-#define ll_inode_blksize(a)     (1<<(a)->i_blkbits)
-#endif
-
 #ifdef HAVE_FS_RENAME_DOES_D_MOVE
 #define LL_RENAME_DOES_D_MOVE	FS_RENAME_DOES_D_MOVE
 #else
 #define LL_RENAME_DOES_D_MOVE	FS_ODD_RENAME
 #endif
-
-/* add a lustre compatible layer for crypto API */
-#include <linux/crypto.h>
-#ifdef HAVE_ASYNC_BLOCK_CIPHER
-#define ll_crypto_hash          crypto_hash
-#define ll_crypto_cipher        crypto_blkcipher
-#define ll_crypto_alloc_hash(name, type, mask)  crypto_alloc_hash(name, type, mask)
-#define ll_crypto_hash_setkey(tfm, key, keylen) crypto_hash_setkey(tfm, key, keylen)
-#define ll_crypto_hash_init(desc)               crypto_hash_init(desc)
-#define ll_crypto_hash_update(desc, sl, bytes)  crypto_hash_update(desc, sl, bytes)
-#define ll_crypto_hash_final(desc, out)         crypto_hash_final(desc, out)
-#define ll_crypto_alloc_blkcipher(name, type, mask) \
-                crypto_alloc_blkcipher(name ,type, mask)
-#define ll_crypto_blkcipher_setkey(tfm, key, keylen) \
-                crypto_blkcipher_setkey(tfm, key, keylen)
-#define ll_crypto_blkcipher_set_iv(tfm, src, len) \
-                crypto_blkcipher_set_iv(tfm, src, len)
-#define ll_crypto_blkcipher_get_iv(tfm, dst, len) \
-                crypto_blkcipher_get_iv(tfm, dst, len)
-#define ll_crypto_blkcipher_encrypt(desc, dst, src, bytes) \
-                crypto_blkcipher_encrypt(desc, dst, src, bytes)
-#define ll_crypto_blkcipher_decrypt(desc, dst, src, bytes) \
-                crypto_blkcipher_decrypt(desc, dst, src, bytes)
-#define ll_crypto_blkcipher_encrypt_iv(desc, dst, src, bytes) \
-                crypto_blkcipher_encrypt_iv(desc, dst, src, bytes)
-#define ll_crypto_blkcipher_decrypt_iv(desc, dst, src, bytes) \
-                crypto_blkcipher_decrypt_iv(desc, dst, src, bytes)
-
-static inline int ll_crypto_hmac(struct ll_crypto_hash *tfm,
-                                 u8 *key, unsigned int *keylen,
-                                 struct scatterlist *sg,
-                                 unsigned int size, u8 *result)
-{
-        struct hash_desc desc;
-        int              rv;
-        desc.tfm   = tfm;
-        desc.flags = 0;
-        rv = crypto_hash_setkey(desc.tfm, key, *keylen);
-        if (rv) {
-                CERROR("failed to hash setkey: %d\n", rv);
-                return rv;
-        }
-        return crypto_hash_digest(&desc, sg, size, result);
-}
-static inline
-unsigned int crypto_tfm_alg_max_keysize(struct crypto_blkcipher *tfm)
-{
-        return crypto_blkcipher_tfm(tfm)->__crt_alg->cra_blkcipher.max_keysize;
-}
-static inline
-unsigned int crypto_tfm_alg_min_keysize(struct crypto_blkcipher *tfm)
-{
-        return crypto_blkcipher_tfm(tfm)->__crt_alg->cra_blkcipher.min_keysize;
-}
-
-#define ll_crypto_hash_blocksize(tfm)       crypto_hash_blocksize(tfm)
-#define ll_crypto_hash_digestsize(tfm)      crypto_hash_digestsize(tfm)
-#define ll_crypto_blkcipher_ivsize(tfm)     crypto_blkcipher_ivsize(tfm)
-#define ll_crypto_blkcipher_blocksize(tfm)  crypto_blkcipher_blocksize(tfm)
-#define ll_crypto_free_hash(tfm)            crypto_free_hash(tfm)
-#define ll_crypto_free_blkcipher(tfm)       crypto_free_blkcipher(tfm)
-#else /* HAVE_ASYNC_BLOCK_CIPHER */
-#include <linux/scatterlist.h>
-#define ll_crypto_hash          crypto_tfm
-#define ll_crypto_cipher        crypto_tfm
-struct hash_desc {
-        struct ll_crypto_hash *tfm;
-        u32                    flags;
-};
-struct blkcipher_desc {
-        struct ll_crypto_cipher *tfm;
-        void                    *info;
-        u32                      flags;
-};
-#define ll_crypto_blkcipher_setkey(tfm, key, keylen) \
-        crypto_cipher_setkey(tfm, key, keylen)
-#define ll_crypto_blkcipher_set_iv(tfm, src, len) \
-        crypto_cipher_set_iv(tfm, src, len)
-#define ll_crypto_blkcipher_get_iv(tfm, dst, len) \
-        crypto_cipher_get_iv(tfm, dst, len)
-#define ll_crypto_blkcipher_encrypt(desc, dst, src, bytes) \
-        crypto_cipher_encrypt((desc)->tfm, dst, src, bytes)
-#define ll_crypto_blkcipher_decrypt(desc, dst, src, bytes) \
-        crypto_cipher_decrypt((desc)->tfm, dst, src, bytes)
-#define ll_crypto_blkcipher_decrypt_iv(desc, dst, src, bytes) \
-        crypto_cipher_decrypt_iv((desc)->tfm, dst, src, bytes, (desc)->info)
-#define ll_crypto_blkcipher_encrypt_iv(desc, dst, src, bytes) \
-        crypto_cipher_encrypt_iv((desc)->tfm, dst, src, bytes, (desc)->info)
-
-extern struct ll_crypto_cipher *ll_crypto_alloc_blkcipher(
-                            const char * algname, u32 type, u32 mask);
-static inline 
-struct ll_crypto_hash *ll_crypto_alloc_hash(const char *alg, u32 type, u32 mask)
-{
-        char        buf[CRYPTO_MAX_ALG_NAME + 1];
-        const char *pan = alg;
-
-        if (strncmp("hmac(", alg, 5) == 0) {
-                char *vp = strnchr(alg, CRYPTO_MAX_ALG_NAME, ')');
-                if (vp) {
-                        memcpy(buf, alg+ 5, vp - alg- 5);
-                        buf[vp - alg - 5] = 0x00;
-                        pan = buf;
-                }
-        }
-        return crypto_alloc_tfm(pan, 0);
-}
-static inline int ll_crypto_hash_init(struct hash_desc *desc)
-{
-       crypto_digest_init(desc->tfm); return 0;
-}
-static inline int ll_crypto_hash_update(struct hash_desc *desc,
-                                        struct scatterlist *sg,
-                                        unsigned int nbytes)
-{
-        struct scatterlist *sl = sg;
-        unsigned int        count;
-                /* 
-                 * This way is very weakness. We must ensure that
-                 * the sum of sg[0..i]->length isn't greater than nbytes.
-                 * In the upstream kernel the crypto_hash_update() also 
-                 * via the nbytes computed the count of sg[...].
-                 * The old style is more safely. but it gone.
-                 */
-        for (count = 0; nbytes > 0; count ++, sl ++) {
-                nbytes -= sl->length;
-        }
-        crypto_digest_update(desc->tfm, sg, count); return 0;
-}
-static inline int ll_crypto_hash_final(struct hash_desc *desc, u8 *out)
-{
-        crypto_digest_final(desc->tfm, out); return 0;
-}
-static inline int ll_crypto_hmac(struct crypto_tfm *tfm,
-                                 u8 *key, unsigned int *keylen,
-                                 struct scatterlist *sg,
-                                 unsigned int nbytes,
-                                 u8 *out)
-{
-        struct scatterlist *sl = sg;
-        int                 count;
-        for (count = 0; nbytes > 0; count ++, sl ++) {
-                nbytes -= sl->length;
-        }
-        crypto_hmac(tfm, key, keylen, sg, count, out);
-        return 0;
-}
-
-#define ll_crypto_hash_setkey(tfm, key, keylen) crypto_digest_setkey(tfm, key, keylen)
-#define ll_crypto_blkcipher_blocksize(tfm)      crypto_tfm_alg_blocksize(tfm)
-#define ll_crypto_blkcipher_ivsize(tfm) crypto_tfm_alg_ivsize(tfm)
-#define ll_crypto_hash_digestsize(tfm)  crypto_tfm_alg_digestsize(tfm)
-#define ll_crypto_hash_blocksize(tfm)   crypto_tfm_alg_blocksize(tfm)
-#define ll_crypto_free_hash(tfm)        crypto_free_tfm(tfm)
-#define ll_crypto_free_blkcipher(tfm)   crypto_free_tfm(tfm)
-#endif /* HAVE_ASYNC_BLOCK_CIPHER */
 
 #ifdef HAVE_SECURITY_PLUG
 #define ll_remove_suid(inode,mnt)               remove_suid(inode,mnt)

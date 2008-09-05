@@ -70,9 +70,11 @@ enum lcfg_command_type {
         LCFG_LOG_START      = 0x00ce011,
         LCFG_LOG_END        = 0x00ce012,
         LCFG_LOV_ADD_INA    = 0x00ce013,
-        LCFG_ADD_MDC        = 0x00cf014,
-        LCFG_DEL_MDC        = 0x00cf015,
         LCFG_SPTLRPC_CONF   = 0x00ce016,
+        LCFG_POOL_NEW       = 0x00ce020,
+        LCFG_POOL_ADD       = 0x00ce021,
+        LCFG_POOL_REM       = 0x00ce022,
+        LCFG_POOL_DEL       = 0x00ce023,
 };
 
 struct lustre_cfg_bufs {
@@ -95,11 +97,6 @@ struct lustre_cfg {
 
         __u32 lcfg_bufcount;
         __u32 lcfg_buflens[0];
-};
-
-enum cfg_record_type {
-        PORTALS_CFG_TYPE = 1,
-        LUSTRE_CFG_TYPE = 123,
 };
 
 #define LUSTRE_CFG_BUFLEN(lcfg, idx)            \
@@ -222,7 +219,7 @@ static inline struct lustre_cfg *lustre_cfg_new(int cmd,
         OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount,
                                        bufs->lcfg_buflen));
         if (!lcfg)
-                RETURN(lcfg);
+                RETURN(ERR_PTR(-ENOMEM));
 
         lcfg->lcfg_version = LUSTRE_CFG_VERSION;
         lcfg->lcfg_command = cmd;
@@ -274,9 +271,5 @@ static inline int lustre_cfg_sanity_check(void *buf, int len)
 
         RETURN(0);
 }
-
-#include <lustre/lustre_user.h>
-
-#define INVALID_UID     (-1)
 
 #endif // _LUSTRE_CFG_H

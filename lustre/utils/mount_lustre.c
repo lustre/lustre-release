@@ -39,6 +39,7 @@
  * Author: Nathan Rutman <nathan@clusterfs.com>
  */
 
+
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
@@ -228,7 +229,6 @@ static const struct opt_map opt_map[] = {
   { "nouser",   1, 0         },      /* Forbid ordinary user to mount */
   { "noowner",  1, 0         },      /* Device owner has no special privs */
   { "_netdev",  0, 0         },      /* Device accessible only via network */
-  { "loop",     0, 0         },
   { NULL,       0, 0         }
 };
 /****************************************************************************/
@@ -529,8 +529,7 @@ int main(int argc, char *const argv[])
         if (verbose) {
                 for (i = 0; i < argc; i++)
                         printf("arg[%d] = %s\n", i, argv[i]);
-                printf("source = %s (%s), target = %s\n", usource, source,
-                       target);
+                printf("source = %s (%s), target = %s\n", usource, source, target);
                 printf("options = %s\n", orig_options);
         }
 
@@ -583,7 +582,8 @@ int main(int argc, char *const argv[])
                 printf("mounting device %s at %s, flags=%#x options=%s\n",
                        source, target, flags, optcopy);
 
-        if (set_tunables(source, strlen(source)) && verbose)
+        if (!strstr(usource, ":/") && set_tunables(source, strlen(source)) &&
+            verbose)
                 fprintf(stderr, "%s: unable to set tunables for %s"
                                 " (may cause reduced IO performance)\n",
                                 argv[0], source);

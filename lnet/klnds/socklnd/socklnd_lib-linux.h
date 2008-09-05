@@ -76,7 +76,7 @@
 # include <linux/syscalls.h>
 #endif
 
-#include <libcfs/libcfs.h>
+#include <libcfs/kp30.h>
 #include <libcfs/linux/portals_compat25.h>
 
 #include <linux/crc32.h>

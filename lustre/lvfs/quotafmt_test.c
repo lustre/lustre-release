@@ -107,7 +107,7 @@ static int quotfmt_initialize(struct lustre_quota_info *lqi,
                                        sizeof(struct lustre_disk_dqheader),
                                        &offset);
                 if (size != sizeof(struct lustre_disk_dqheader)) {
-                        CERROR("error writing quoafile header %s (rc = %d)\n",
+                        CERROR("error writing quotafile header %s (rc = %d)\n",
                                name, rc);
                         rc = size;
                         break;
@@ -166,7 +166,7 @@ static int quotfmt_test_1(struct lustre_quota_info *lqi)
         ENTRY;
 
         for (i = 0; i < MAXQUOTAS; i++) {
-                if (!lustre_check_quota_file(lqi, i))
+                if (lustre_check_quota_file(lqi, i))
                         RETURN(-EINVAL);
         }
         RETURN(0);
@@ -180,12 +180,13 @@ static void print_quota_info(struct lustre_quota_info *lqi)
 
         for (i = 0; i < MAXQUOTAS; i++) {
                 dqinfo = &lqi->qi_info[i];
-                CDEBUG(D_INFO, "%s quota info:\n", i == USRQUOTA ? "user " : "group");
-                CDEBUG(D_INFO, "dqi_bgrace(%u) dqi_igrace(%u) dqi_flags(%lu) dqi_blocks(%u) "
-                       "dqi_free_blk(%u) dqi_free_entry(%u)\n",
-                       dqinfo->dqi_bgrace, dqinfo->dqi_igrace, dqinfo->dqi_flags,
-                       dqinfo->dqi_blocks, dqinfo->dqi_free_blk,
-                       dqinfo->dqi_free_entry);
+                printk("%s quota info:\n", i == USRQUOTA ? "user " : "group");
+                printk
+                    ("dqi_bgrace(%u) dqi_igrace(%u) dqi_flags(%lu) dqi_blocks(%u) "
+                     "dqi_free_blk(%u) dqi_free_entry(%u)\n",
+                     dqinfo->dqi_bgrace, dqinfo->dqi_igrace, dqinfo->dqi_flags,
+                     dqinfo->dqi_blocks, dqinfo->dqi_free_blk,
+                     dqinfo->dqi_free_entry);
         }
 #endif
 }
@@ -256,7 +257,7 @@ static void put_rand_dquot(struct lustre_dquot *dquot)
 static int write_check_dquot(struct lustre_quota_info *lqi)
 {
         struct lustre_dquot *dquot;
-        struct mem_dqblk dqblk;
+        struct lustre_mem_dqblk dqblk;
         int rc = 0;
         ENTRY;
 
@@ -397,10 +398,10 @@ static int quotfmt_test_5(struct lustre_quota_info *lqi)
                 list_for_each_entry_safe(dqid, tmp, &list, di_link) {
                         list_del_init(&dqid->di_link);
                         if (rc == 0)
-                                CDEBUG(D_INFO, "%d ", dqid->di_id);
+                                printk("%d ", dqid->di_id);
                         kfree(dqid);
                 }
-                CDEBUG(D_INFO, "\n");
+                printk("\n");
         }
         return rc;
 #else
@@ -476,9 +477,10 @@ static int quotfmt_test_cleanup(struct obd_device *obd)
         RETURN(0);
 }
 
-static int quotfmt_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
+static int quotfmt_test_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lprocfs_static_vars lvars;
+        struct lustre_cfg *lcfg = buf;
         struct obd_device *tgt;
         int rc;
         ENTRY;
@@ -526,8 +528,8 @@ static int __init quotfmt_test_init(void)
         struct lprocfs_static_vars lvars;
 
         lprocfs_quotfmt_test_init_vars(&lvars);
-        return class_register_type(&quotfmt_obd_ops, NULL, lvars.module_vars,
-                                   "quotfmt_test", NULL);
+        return class_register_type(&quotfmt_obd_ops, lvars.module_vars,
+                                   "quotfmt_test");
 }
 
 static void __exit quotfmt_test_exit(void)

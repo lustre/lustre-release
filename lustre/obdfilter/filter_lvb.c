@@ -79,8 +79,7 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         obd = res->lr_namespace->ns_lvbp;
         LASSERT(obd != NULL);
 
-        dentry = filter_fid2dentry(obd, NULL, res->lr_name.name[1], 
-                                              res->lr_name.name[0]);
+        dentry = filter_fid2dentry(obd, NULL, 0, res->lr_name.name[0]);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("%s: bad object "LPU64"/"LPU64": rc %d\n", obd->obd_name,
@@ -94,8 +93,8 @@ static int filter_lvbo_init(struct ldlm_resource *res)
 
         inode_init_lvb(dentry->d_inode, lvb);
 
-        CDEBUG(D_DLMTRACE, "res: "LPX64" initial lvb size: "LPX64", "
-               "mtime: "LPX64", blocks: "LPX64"\n",
+        CDEBUG(D_DLMTRACE, "res: "LPU64" initial lvb size: "LPU64", "
+               "mtime: "LPU64", blocks: "LPU64"\n",
                res->lr_name.name[0], lvb->lvb_size,
                lvb->lvb_mtime, lvb->lvb_blocks);
 
@@ -116,7 +115,7 @@ out_dentry:
  *
  *   If 'increase_only' is true, don't allow values to move backwards.
  */
-static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
+static int filter_lvbo_update(struct ldlm_resource *res, struct ptlrpc_request *r,
                               int buf_idx, int increase_only)
 {
         int rc = 0;
@@ -135,11 +134,12 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
         }
 
         /* Update the LVB from the network message */
-        if (m != NULL) {
+        if (r != NULL) {
                 struct ost_lvb *new;
 
-                new = lustre_swab_buf(m, buf_idx, sizeof(*new),
-                                      lustre_swab_ost_lvb);
+                /* XXX update always from reply buffer */
+                new = lustre_swab_repbuf(r, buf_idx, sizeof(*new),
+                                         lustre_swab_ost_lvb);
                 if (new == NULL) {
                         CERROR("lustre_swab_buf failed\n");
                         goto disk_update;
@@ -174,9 +174,8 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
         /* Update the LVB from the disk inode */
         obd = res->lr_namespace->ns_lvbp;
         LASSERT(obd);
-        
-        dentry = filter_fid2dentry(obd, NULL, res->lr_name.name[1], 
-                                              res->lr_name.name[0]);
+
+        dentry = filter_fid2dentry(obd, NULL, 0, res->lr_name.name[0]);
         if (IS_ERR(dentry))
                 GOTO(out, rc = PTR_ERR(dentry));
 
@@ -210,8 +209,8 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
         }
         if (lvb->lvb_blocks != dentry->d_inode->i_blocks) {
                 CDEBUG(D_DLMTRACE,"res: "LPU64" updating lvb blocks from disk: "
-                       LPU64" -> %llu\n", res->lr_name.name[0],
-                       lvb->lvb_blocks, (unsigned long long)dentry->d_inode->i_blocks);
+                       LPU64" -> %lu\n", res->lr_name.name[0],
+                       lvb->lvb_blocks, dentry->d_inode->i_blocks);
                 lvb->lvb_blocks = dentry->d_inode->i_blocks;
         }
 

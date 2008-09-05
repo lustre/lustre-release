@@ -113,12 +113,12 @@ struct fsfilt_operations {
         int     (* fs_read_record)(struct file *, void *, int size, loff_t *);
         int     (* fs_setup)(struct super_block *sb);
         int     (* fs_get_op_len)(int, struct fsfilt_objinfo *, int);
-        int     (* fs_quotactl)(struct super_block *sb,
-                                struct obd_quotactl *oqctl);
         int     (* fs_quotacheck)(struct super_block *sb,
                                   struct obd_quotactl *oqctl);
         __u64   (* fs_get_version) (struct inode *inode);
         __u64   (* fs_set_version) (struct inode *inode, __u64 new_version);
+        int     (* fs_quotactl)(struct super_block *sb,
+                                struct obd_quotactl *oqctl);
         int     (* fs_quotainfo)(struct lustre_quota_info *lqi, int type,
                                  int cmd);
         int     (* fs_qids)(struct file *file, struct inode *inode, int type,
@@ -195,10 +195,10 @@ do {                                                                    \
                        (jiffies - start) / HZ);                         \
 } while (0)
 
-#define fsfilt_check_slow(obd, start, msg)              \
-do {                                                    \
-        __fsfilt_check_slow(obd, start, msg);           \
-        start = jiffies;                                \
+#define fsfilt_check_slow(obd, start, msg)    \
+do {                                          \
+        __fsfilt_check_slow(obd, start, msg); \
+        start = jiffies;                      \
 } while (0)
 
 static inline void *fsfilt_start_log(struct obd_device *obd,
@@ -426,7 +426,7 @@ static inline int fsfilt_quotainfo(struct obd_device *obd,
 }
 
 static inline int fsfilt_qids(struct obd_device *obd, struct file *file,
-                              struct inode *inode, int type, 
+                              struct inode *inode, int type,
                               struct list_head *list)
 {
         if (obd->obd_fsops->fs_qids)

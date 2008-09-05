@@ -78,7 +78,7 @@
 
 #define DEBUG_SUBSYSTEM S_LND
 
-#include <libcfs/libcfs.h>
+#include <libcfs/kp30.h>
 #include <lnet/lnet.h>
 #include <lnet/lib-lnet.h>
 
@@ -191,6 +191,7 @@ typedef struct kqswnal_rx
         int              krx_npages;            /* # pages in receive buffer */
         int              krx_nob;               /* Number Of Bytes received into buffer */
         int              krx_rpc_reply_needed:1; /* peer waiting for EKC RPC reply */
+        int              krx_raw_lnet_hdr:1;    /* msg is a raw lnet hdr (portals compatible) */
         int              krx_state;             /* what this RX is doing */
         atomic_t         krx_refcount;          /* how to tell when rpc is done */
 #if KQSW_CKSUM

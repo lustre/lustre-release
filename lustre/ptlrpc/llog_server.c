@@ -60,29 +60,35 @@
 
 int llog_origin_handle_create(struct ptlrpc_request *req)
 {
-        struct obd_export    *exp = req->rq_export;
-        struct obd_device    *obd = exp->exp_obd;
-        struct obd_device    *disk_obd;
-        struct llog_handle   *loghandle;
-        struct llogd_body    *body;
-        struct lvfs_run_ctxt  saved;
-        struct llog_logid    *logid = NULL;
-        struct llog_ctxt     *ctxt;
-        char                 *name = NULL;
-        int                   rc, rc2;
+        struct obd_export *exp = req->rq_export;
+        struct obd_device *obd = exp->exp_obd;
+        struct obd_device *disk_obd;
+        struct llog_handle  *loghandle;
+        struct llogd_body *body;
+        struct lvfs_run_ctxt saved;
+        struct llog_logid *logid = NULL;
+        struct llog_ctxt *ctxt;
+        char * name = NULL;
+        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int rc, rc2;
         ENTRY;
 
-        body = req_capsule_client_get(&req->rq_pill, &RMF_LLOGD_BODY);
-        if (body == NULL)
+        body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
+                                 lustre_swab_llogd_body);
+        if (body == NULL) {
+                CERROR ("Can't unpack llogd_body\n");
                 RETURN(-EFAULT);
+        }
 
         if (body->lgd_logid.lgl_oid > 0)
                 logid = &body->lgd_logid;
 
-        if (req_capsule_field_present(&req->rq_pill, &RMF_NAME, RCL_CLIENT)) {
-                name = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
-                if (name == NULL)
+        if (lustre_msg_bufcount(req->rq_reqmsg) > 2) {
+                name = lustre_msg_string(req->rq_reqmsg, REQ_REC_OFF + 1, 0);
+                if (name == NULL) {
+                        CERROR("Can't unpack name\n");
                         RETURN(-EFAULT);
+                }
                 CDEBUG(D_INFO, "opening log %s\n", name);
         }
 
@@ -96,11 +102,11 @@ int llog_origin_handle_create(struct ptlrpc_request *req)
         if (rc)
                 GOTO(out_pop, rc);
 
-        rc = req_capsule_server_pack(&req->rq_pill);
+        rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
                 GOTO(out_close, rc = -ENOMEM);
 
-        body = req_capsule_server_get(&req->rq_pill, &RMF_LLOGD_BODY);
+        body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*body));
         body->lgd_logid = loghandle->lgh_id;
 
 out_close:
@@ -115,21 +121,25 @@ out_pop:
 
 int llog_origin_handle_destroy(struct ptlrpc_request *req)
 {
-        struct obd_export    *exp = req->rq_export;
-        struct obd_device    *obd = exp->exp_obd;
-        struct obd_device    *disk_obd;
-        struct llog_handle   *loghandle;
-        struct llogd_body    *body;
-        struct lvfs_run_ctxt  saved;
-        struct llog_logid    *logid = NULL;
-        struct llog_ctxt     *ctxt;
-        __u32                 flags;
-        int                   rc;
+        struct obd_export *exp = req->rq_export;
+        struct obd_device *obd = exp->exp_obd;
+        struct obd_device *disk_obd;
+        struct llog_handle  *loghandle;
+        struct llogd_body *body;
+        struct lvfs_run_ctxt saved;
+        struct llog_logid *logid = NULL;
+        struct llog_ctxt *ctxt;
+        int size[] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int rc;
+        __u32 flags;
         ENTRY;
 
-        body = req_capsule_client_get(&req->rq_pill, &RMF_LLOGD_BODY);
-        if (body == NULL)
+        body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
+                                 lustre_swab_llogd_body);
+        if (body == NULL) {
+                CERROR ("Can't unpack llogd_body\n");
                 RETURN(-EFAULT);
+        }
 
         if (body->lgd_logid.lgl_oid > 0)
                 logid = &body->lgd_logid;
@@ -145,11 +155,11 @@ int llog_origin_handle_destroy(struct ptlrpc_request *req)
         if (rc)
                 GOTO(out_pop, rc);
 
-        rc = req_capsule_server_pack(&req->rq_pill);
+        rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
                 GOTO(out_close, rc = -ENOMEM);
 
-        body = req_capsule_server_get(&req->rq_pill, &RMF_LLOGD_BODY);
+        body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof (*body));
         body->lgd_logid = loghandle->lgh_id;
         flags = body->lgd_llh_flags;
         rc = llog_init_handle(loghandle, LLOG_F_IS_PLAIN, NULL);
@@ -171,23 +181,28 @@ out_pop:
 
 int llog_origin_handle_next_block(struct ptlrpc_request *req)
 {
-        struct obd_export   *exp = req->rq_export;
-        struct obd_device   *obd = exp->exp_obd;
-        struct obd_device   *disk_obd;
+        struct obd_export *exp = req->rq_export;
+        struct obd_device *obd = exp->exp_obd;
+        struct obd_device *disk_obd;
         struct llog_handle  *loghandle;
-        struct llogd_body   *body;
-        struct llogd_body   *repbody;
+        struct llogd_body *body;
         struct lvfs_run_ctxt saved;
-        struct llog_ctxt    *ctxt;
-        __u32                flags;
-        __u8                *buf;
-        void                *ptr;
-        int                  rc, rc2;
+        struct llog_ctxt *ctxt;
+        __u32 flags;
+        __u8 *buf;
+        void * ptr;
+        int size[3] = { sizeof(struct ptlrpc_body),
+                        sizeof(*body),
+                        LLOG_CHUNK_SIZE };
+        int rc, rc2;
         ENTRY;
 
-        body = req_capsule_client_get(&req->rq_pill, &RMF_LLOGD_BODY);
-        if (body == NULL)
+        body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
+                                  lustre_swab_llogd_body);
+        if (body == NULL) {
+                CERROR ("Can't unpack llogd_body\n");
                 RETURN(-EFAULT);
+        }
 
         OBD_ALLOC(buf, LLOG_CHUNK_SIZE);
         if (!buf)
@@ -215,16 +230,15 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req)
         if (rc)
                 GOTO(out_close, rc);
 
-        req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_SERVER,
-                             LLOG_CHUNK_SIZE);
-        rc = req_capsule_server_pack(&req->rq_pill);
+
+        rc = lustre_pack_reply(req, 3, size, NULL);
         if (rc)
                 GOTO(out_close, rc = -ENOMEM);
 
-        repbody = req_capsule_server_get(&req->rq_pill, &RMF_LLOGD_BODY);
-        *repbody = *body;
+        ptr = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof (body));
+        memcpy(ptr, body, sizeof(*body));
 
-        ptr = req_capsule_server_get(&req->rq_pill, &RMF_EADATA);
+        ptr = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF+1, LLOG_CHUNK_SIZE);
         memcpy(ptr, buf, LLOG_CHUNK_SIZE);
 
 out_close:
@@ -242,23 +256,28 @@ out_free:
 
 int llog_origin_handle_prev_block(struct ptlrpc_request *req)
 {
-        struct obd_export    *exp = req->rq_export;
-        struct obd_device    *obd = exp->exp_obd;
-        struct llog_handle   *loghandle;
-        struct llogd_body    *body;
-        struct llogd_body    *repbody;
-        struct obd_device    *disk_obd;
-        struct lvfs_run_ctxt  saved;
-        struct llog_ctxt     *ctxt;
-        __u32                 flags;
-        __u8                 *buf;
-        void                 *ptr;
-        int                   rc, rc2;
+        struct obd_export *exp = req->rq_export;
+        struct obd_device *obd = exp->exp_obd;
+        struct llog_handle  *loghandle;
+        struct llogd_body *body;
+        struct obd_device *disk_obd;
+        struct lvfs_run_ctxt saved;
+        struct llog_ctxt *ctxt;
+        __u32 flags;
+        __u8 *buf;
+        void * ptr;
+        int size[] = { sizeof(struct ptlrpc_body),
+                       sizeof(*body),
+                       LLOG_CHUNK_SIZE };
+        int rc, rc2;
         ENTRY;
 
-        body = req_capsule_client_get(&req->rq_pill, &RMF_LLOGD_BODY);
-        if (body == NULL)
+        body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
+                                  lustre_swab_llogd_body);
+        if (body == NULL) {
+                CERROR ("Can't unpack llogd_body\n");
                 RETURN(-EFAULT);
+        }
 
         OBD_ALLOC(buf, LLOG_CHUNK_SIZE);
         if (!buf)
@@ -284,16 +303,14 @@ int llog_origin_handle_prev_block(struct ptlrpc_request *req)
         if (rc)
                 GOTO(out_close, rc);
 
-        req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_SERVER,
-                             LLOG_CHUNK_SIZE);
-        rc = req_capsule_server_pack(&req->rq_pill);
+        rc = lustre_pack_reply(req, 3, size, NULL);
         if (rc)
                 GOTO(out_close, rc = -ENOMEM);
 
-        repbody = req_capsule_server_get(&req->rq_pill, &RMF_LLOGD_BODY);
-        *repbody = *body;
+        ptr = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(body));
+        memcpy(ptr, body, sizeof(*body));
 
-        ptr = req_capsule_server_get(&req->rq_pill, &RMF_EADATA);
+        ptr = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF+1, LLOG_CHUNK_SIZE);
         memcpy(ptr, buf, LLOG_CHUNK_SIZE);
 
 out_close:
@@ -310,21 +327,25 @@ out_pop:
 
 int llog_origin_handle_read_header(struct ptlrpc_request *req)
 {
-        struct obd_export    *exp = req->rq_export;
-        struct obd_device    *obd = exp->exp_obd;
-        struct obd_device    *disk_obd;
-        struct llog_handle   *loghandle;
-        struct llogd_body    *body;
-        struct llog_log_hdr  *hdr;
-        struct lvfs_run_ctxt  saved;
-        struct llog_ctxt     *ctxt;
-        __u32                 flags;
-        int                   rc, rc2;
+        struct obd_export *exp = req->rq_export;
+        struct obd_device *obd = exp->exp_obd;
+        struct obd_device *disk_obd;
+        struct llog_handle  *loghandle;
+        struct llogd_body *body;
+        struct llog_log_hdr *hdr;
+        struct lvfs_run_ctxt saved;
+        struct llog_ctxt *ctxt;
+        __u32 flags;
+        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*hdr) };
+        int rc, rc2;
         ENTRY;
 
-        body = req_capsule_client_get(&req->rq_pill, &RMF_LLOGD_BODY);
-        if (body == NULL)
+        body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
+                                  lustre_swab_llogd_body);
+        if (body == NULL) {
+                CERROR ("Can't unpack llogd_body\n");
                 RETURN(-EFAULT);
+        }
 
         ctxt = llog_get_context(obd, body->lgd_ctxt_idx);
         if (ctxt == NULL)
@@ -342,12 +363,12 @@ int llog_origin_handle_read_header(struct ptlrpc_request *req)
         if (rc)
                 GOTO(out_close, rc);
 
-        rc = req_capsule_server_pack(&req->rq_pill);
+        rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
                 GOTO(out_close, rc = -ENOMEM);
 
-        hdr = req_capsule_server_get(&req->rq_pill, &RMF_LLOG_LOG_HDR);
-        *hdr = *loghandle->lgh_hdr;
+        hdr = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*hdr));
+        memcpy(hdr, loghandle->lgh_hdr, sizeof(*hdr));
 
 out_close:
         rc2 = llog_close(loghandle);
@@ -381,9 +402,10 @@ int llog_origin_handle_cancel(struct ptlrpc_request *req)
         void *handle;
         ENTRY;
 
-        logcookies = req_capsule_client_get(&req->rq_pill, &RMF_LOGCOOKIES);
-        num_cookies = req_capsule_get_size(&req->rq_pill, &RMF_LOGCOOKIES,
-                                           RCL_CLIENT) / sizeof(*logcookies);
+        logcookies = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF,
+                                    sizeof(*logcookies));
+        num_cookies = lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF) /
+                      sizeof(*logcookies);
         if (logcookies == NULL || num_cookies == 0) {
                 DEBUG_REQ(D_HA, req, "no cookies sent");
                 RETURN(-EFAULT);
@@ -434,13 +456,13 @@ EXPORT_SYMBOL(llog_origin_handle_cancel);
 static int llog_catinfo_config(struct obd_device *obd, char *buf, int buf_len,
                                char *client)
 {
-        struct mds_obd       *mds = &obd->u.mds;
-        struct llog_ctxt     *ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
-        struct lvfs_run_ctxt  saved;
-        struct llog_handle   *handle = NULL;
-        char                  name[4][64];
-        int                   rc, i, l, remains = buf_len;
-        char                 *out = buf;
+        struct mds_obd *mds = &obd->u.mds;
+        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+        struct lvfs_run_ctxt saved;
+        struct llog_handle *handle = NULL;
+        char name[4][64];
+        int rc, i, l, remains = buf_len;
+        char *out = buf;
 
         if (ctxt == NULL || mds == NULL)
                 GOTO(release_ctxt, rc = -EOPNOTSUPP);
@@ -512,7 +534,7 @@ static int llog_catinfo_cb(struct llog_handle *cat,
                 cbd->init = 0;
         }
 
-        if (!(cat->lgh_hdr->llh_flags & LLOG_F_IS_CAT))
+        if (!(cat->lgh_hdr->llh_flags & LLOG_F_IS_CAT)) 
                 RETURN(-EINVAL);
 
         if (!cbd->ctxt)
@@ -562,13 +584,13 @@ static int llog_catinfo_deletions(struct obd_device *obd, char *buf,
         struct llog_catid *idarray;
         struct llog_logid *id;
         char name[32] = CATLIST;
+        int rc;
         struct cb_data data;
         struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
-        int rc;
 
         if (ctxt == NULL || mds == NULL)
                 GOTO(release_ctxt, rc = -EOPNOTSUPP);
-
+       
         count = mds->mds_lov_desc.ld_tgt_count;
         size = sizeof(*idarray) * count;
 
@@ -631,43 +653,39 @@ int llog_catinfo(struct ptlrpc_request *req)
 {
         struct obd_export *exp = req->rq_export;
         struct obd_device *obd = exp->exp_obd;
-        char              *keyword;
-        char              *buf, *reply;
-        int                rc;
+        char *keyword;
+        char *buf, *reply;
+        int rc, buf_len = LLOG_CHUNK_SIZE;
+        int size[2] = { sizeof(struct ptlrpc_body), buf_len };
 
-        OBD_ALLOC(buf, LLOG_CHUNK_SIZE);
+        OBD_ALLOC(buf, buf_len);
         if (buf == NULL)
                 return -ENOMEM;
-        memset(buf, 0, LLOG_CHUNK_SIZE);
+        memset(buf, 0, buf_len);
 
-        keyword = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
-        LASSERT(keyword);
+        keyword = lustre_msg_string(req->rq_reqmsg, REQ_REC_OFF, 0);
 
         if (strcmp(keyword, "config") == 0) {
-                char *client = req_capsule_client_get(&req->rq_pill,
-                                                      &RMF_STRING);
-
-                LASSERT(client);
-                rc = llog_catinfo_config(obd, buf, LLOG_CHUNK_SIZE, client);
+                char *client = lustre_msg_string(req->rq_reqmsg,
+                                                 REQ_REC_OFF + 1, 0);
+                rc = llog_catinfo_config(obd, buf, buf_len, client);
         } else if (strcmp(keyword, "deletions") == 0) {
-                rc = llog_catinfo_deletions(obd, buf, LLOG_CHUNK_SIZE);
+                rc = llog_catinfo_deletions(obd, buf, buf_len);
         } else {
                 rc = -EOPNOTSUPP;
         }
 
-        req_capsule_set_size(&req->rq_pill, &RMF_STRING, RCL_SERVER,
-                             LLOG_CHUNK_SIZE);
-        rc = req_capsule_server_pack(&req->rq_pill);
+        rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
                 GOTO(out_free, rc = -ENOMEM);
 
-        reply = req_capsule_server_get(&req->rq_pill, &RMF_STRING);
+        reply = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, buf_len);
         if (strlen(buf) == 0)
                 sprintf(buf, "%s", "No log informations\n");
-        memcpy(reply, buf, LLOG_CHUNK_SIZE);
+        memcpy(reply, buf, buf_len);
 
 out_free:
-        OBD_FREE(buf, LLOG_CHUNK_SIZE);
+        OBD_FREE(buf, buf_len);
         return rc;
 }
 

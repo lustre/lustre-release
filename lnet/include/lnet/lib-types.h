@@ -494,6 +494,8 @@ typedef struct
         int                ln_refcount;         /* LNetNIInit/LNetNIFini counter */
         int                ln_niinit_self;      /* Have I called LNetNIInit myself? */
 
+        int                ln_ptlcompat;        /* do I support talking to portals? */
+        
         struct list_head   ln_lnds;             /* registered LNDs */
 
 #ifdef __KERNEL__

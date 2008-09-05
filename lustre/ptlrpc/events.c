@@ -45,12 +45,11 @@
 #endif
 #include <obd_class.h>
 #include <lustre_net.h>
-#include <lustre_sec.h>
 #include "ptlrpc_internal.h"
 
 lnet_handle_eq_t   ptlrpc_eq_h;
 
-/*
+/*  
  *  Client's outgoing request callback
  */
 void request_out_callback(lnet_event_t *ev)
@@ -65,8 +64,6 @@ void request_out_callback(lnet_event_t *ev)
 
         DEBUG_REQ((ev->status == 0) ? D_NET : D_ERROR, req,
                   "type %d, status %d", ev->type, ev->status);
-
-        sptlrpc_request_out_callback(req);
 
         if (ev->type == LNET_EVENT_UNLINK || ev->status != 0) {
 
@@ -97,9 +94,9 @@ void reply_in_callback(lnet_event_t *ev)
         DEBUG_REQ((ev->status == 0) ? D_NET : D_ERROR, req,
                   "type %d, status %d", ev->type, ev->status);
 
-        LASSERT (ev->type == LNET_EVENT_PUT || ev->type == LNET_EVENT_UNLINK);
-        LASSERT (ev->md.start == req->rq_repbuf);
-        LASSERT (ev->mlength <= req->rq_repbuf_len);
+        LASSERT(ev->type == LNET_EVENT_PUT || ev->type == LNET_EVENT_UNLINK);
+        LASSERT(ev->md.start == req->rq_repbuf);
+        LASSERT(ev->mlength <= req->rq_replen);
         /* We've set LNET_MD_MANAGE_REMOTE for all outgoing requests
            for adaptive timeouts' early reply. */
         LASSERT((ev->md.options & LNET_MD_MANAGE_REMOTE) != 0);
@@ -118,12 +115,16 @@ void reply_in_callback(lnet_event_t *ev)
         }
 
         if ((ev->offset == 0) &&
-            ((lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT))) {
+            (lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT)) {
                 /* Early reply */
                 DEBUG_REQ(D_ADAPTTO, req,
                           "Early reply received: mlen=%u offset=%d replen=%d "
                           "replied=%d unlinked=%d", ev->mlength, ev->offset,
                           req->rq_replen, req->rq_replied, ev->unlinked);
+
+                if (unlikely(ev->mlength != lustre_msg_early_size(req)))
+                        CERROR("early reply sized %u, expect %u\n",
+                               ev->mlength, lustre_msg_early_size(req));
 
                 req->rq_early_count++; /* number received, client side */
                 if (req->rq_replied) {
@@ -139,18 +140,21 @@ void reply_in_callback(lnet_event_t *ev)
                         goto out_wake;
                 }
                 req->rq_early = 1;
-                req->rq_reply_off = ev->offset;
                 req->rq_nob_received = ev->mlength;
+                /* repmsg points to early reply */
+                req->rq_repmsg = req->rq_repbuf;
                 /* And we're still receiving */
                 req->rq_receiving_reply = 1;
         } else {
                 /* Real reply */
                 req->rq_replied = 1;
-                req->rq_reply_off = ev->offset;
                 req->rq_nob_received = ev->mlength;
+                /* repmsg points to real reply */
+                req->rq_repmsg = (struct lustre_msg *)((char *)req->rq_repbuf +
+                                                       ev->offset);
                 /* LNetMDUnlink can't be called under the LNET_LOCK,
                    so we must unlink in ptlrpc_unregister_reply */
-                DEBUG_REQ(D_INFO, req,
+                DEBUG_REQ(D_INFO, req, 
                           "reply in flags=%x mlen=%u offset=%d replen=%d",
                           lustre_msg_get_flags(req->rq_reqmsg),
                           ev->mlength, ev->offset, req->rq_replen);
@@ -166,7 +170,7 @@ out_wake:
         EXIT;
 }
 
-/*
+/* 
  * Client's bulk has been written/read
  */
 void client_bulk_callback (lnet_event_t *ev)
@@ -175,7 +179,10 @@ void client_bulk_callback (lnet_event_t *ev)
         struct ptlrpc_bulk_desc *desc = cbid->cbid_arg;
         ENTRY;
 
-        LASSERT ((desc->bd_type == BULK_PUT_SINK &&
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_CLIENT_BULK_CB))
+                ev->status = -EIO;
+
+        LASSERT ((desc->bd_type == BULK_PUT_SINK && 
                   ev->type == LNET_EVENT_PUT) ||
                  (desc->bd_type == BULK_GET_SOURCE &&
                   ev->type == LNET_EVENT_GET) ||
@@ -183,7 +190,7 @@ void client_bulk_callback (lnet_event_t *ev)
         LASSERT (ev->unlinked);
 
         CDEBUG((ev->status == 0) ? D_NET : D_ERROR,
-               "event type %d, status %d, desc %p\n",
+               "event type %d, status %d, desc %p\n", 
                ev->type, ev->status, desc);
 
         spin_lock(&desc->bd_lock);
@@ -197,8 +204,6 @@ void client_bulk_callback (lnet_event_t *ev)
                 desc->bd_sender = ev->sender;
         }
 
-        sptlrpc_enc_pool_put_pages(desc);
-
         /* NB don't unlock till after wakeup; desc can disappear under us
          * otherwise */
         ptlrpc_wake_client_req(desc->bd_req);
@@ -207,7 +212,7 @@ void client_bulk_callback (lnet_event_t *ev)
         EXIT;
 }
 
-/*
+/* 
  * Server's incoming request callback
  */
 void request_in_callback(lnet_event_t *ev)
@@ -225,7 +230,7 @@ void request_in_callback(lnet_event_t *ev)
                  rqbd->rqbd_buffer + service->srv_buf_size);
 
         CDEBUG((ev->status == 0) ? D_NET : D_ERROR,
-               "event type %d, status %d, service %s\n",
+               "event type %d, status %d, service %s\n", 
                ev->type, ev->status, service->srv_name);
 
         if (ev->unlinked) {
@@ -246,7 +251,7 @@ void request_in_callback(lnet_event_t *ev)
                 if (req == NULL) {
                         CERROR("Can't allocate incoming request descriptor: "
                                "Dropping %s RPC from %s\n",
-                               service->srv_name,
+                               service->srv_name, 
                                libcfs_id2str(ev->initiator));
                         return;
                 }
@@ -256,9 +261,9 @@ void request_in_callback(lnet_event_t *ev)
          * flags are reset and scalars are zero.  We only set the message
          * size to non-zero if this was a successful receive. */
         req->rq_xid = ev->match_bits;
-        req->rq_reqbuf = ev->md.start + ev->offset;
+        req->rq_reqmsg = ev->md.start + ev->offset;
         if (ev->type == LNET_EVENT_PUT && ev->status == 0)
-                req->rq_reqdata_len = ev->mlength;
+                req->rq_reqlen = ev->mlength;
         do_gettimeofday(&req->rq_arrival_time);
         req->rq_peer = ev->initiator;
         req->rq_self = ev->target.nid;
@@ -272,8 +277,6 @@ void request_in_callback(lnet_event_t *ev)
         atomic_set(&req->rq_refcount, 1);
         if (ev->type == LNET_EVENT_PUT)
                 DEBUG_REQ(D_RPCTRACE, req, "incoming req");
-
-        CDEBUG(D_RPCTRACE, "peer: %s\n", libcfs_id2str(req->rq_peer));
 
         spin_lock(&service->srv_lock);
 
@@ -365,11 +368,11 @@ void server_bulk_callback (lnet_event_t *ev)
                   ev->type == LNET_EVENT_REPLY));
 
         CDEBUG((ev->status == 0) ? D_NET : D_ERROR,
-               "event type %d, status %d, desc %p\n",
+               "event type %d, status %d, desc %p\n", 
                ev->type, ev->status, desc);
 
         spin_lock(&desc->bd_lock);
-
+        
         if ((ev->type == LNET_EVENT_ACK ||
              ev->type == LNET_EVENT_REPLY) &&
             ev->status == 0) {
@@ -404,11 +407,11 @@ static void ptlrpc_master_callback(lnet_event_t *ev)
                  callback == request_in_callback ||
                  callback == reply_out_callback ||
                  callback == server_bulk_callback);
-
+        
         callback (ev);
 }
 
-int ptlrpc_uuid_to_peer (struct obd_uuid *uuid,
+int ptlrpc_uuid_to_peer (struct obd_uuid *uuid, 
                          lnet_process_id_t *peer, lnet_nid_t *self)
 {
         int               best_dist = 0;
@@ -436,7 +439,7 @@ int ptlrpc_uuid_to_peer (struct obd_uuid *uuid,
                         rc = 0;
                         break;
                 }
-
+                
                 if (rc < 0 ||
                     dist < best_dist ||
                     (dist == best_dist && order < best_order)) {
@@ -458,7 +461,7 @@ int ptlrpc_uuid_to_peer (struct obd_uuid *uuid,
         }
 
         CDEBUG(D_NET,"%s->%s\n", uuid->uuid, libcfs_id2str(*peer));
-        if (rc != 0)
+        if (rc != 0) 
                 CERROR("No NID found for %s\n", uuid->uuid);
         return rc;
 }
@@ -469,7 +472,7 @@ void ptlrpc_ni_fini(void)
         struct l_wait_info  lwi;
         int                 rc;
         int                 retries;
-
+        
         /* Wait for the event queue to become idle since there may still be
          * messages in flight with pending events (i.e. the fire-and-forget
          * messages == client requests and "non-difficult" server
@@ -484,11 +487,11 @@ void ptlrpc_ni_fini(void)
                 case 0:
                         LNetNIFini();
                         return;
-
+                        
                 case -EBUSY:
                         if (retries != 0)
                                 CWARN("Event queue still busy\n");
-
+                        
                         /* Wait for a bit */
                         cfs_waitq_init(&waitq);
                         lwi = LWI_TIMEOUT(cfs_time_seconds(2), NULL, NULL);
@@ -510,7 +513,7 @@ lnet_pid_t ptl_get_pid(void)
 #endif
         return pid;
 }
-
+        
 int ptlrpc_ni_init(void)
 {
         int              rc;
@@ -559,15 +562,15 @@ liblustre_register_waitidle_callback (struct list_head *callback_list,
                                       int (*fn)(void *arg), void *arg)
 {
         struct liblustre_wait_callback *llwc;
-
+        
         OBD_ALLOC(llwc, sizeof(*llwc));
         LASSERT (llwc != NULL);
-
+        
         llwc->llwc_name = name;
         llwc->llwc_fn = fn;
         llwc->llwc_arg = arg;
         list_add_tail(&llwc->llwc_list, callback_list);
-
+        
         return (llwc);
 }
 
@@ -575,7 +578,7 @@ void
 liblustre_deregister_waitidle_callback (void *opaque)
 {
         struct liblustre_wait_callback *llwc = opaque;
-
+        
         list_del(&llwc->llwc_list);
         OBD_FREE(llwc, sizeof(*llwc));
 }
@@ -619,16 +622,16 @@ liblustre_check_events (int timeout)
         rc = LNetEQPoll(&ptlrpc_eq_h, 1, timeout * 1000, &ev, &i);
         if (rc == 0)
                 RETURN(0);
-
+        
         LASSERT (rc == -EOVERFLOW || rc == 1);
-
+        
         /* liblustre: no asynch callback so we can't affort to miss any
          * events... */
         if (rc == -EOVERFLOW) {
                 CERROR ("Dropped an event!!!\n");
                 abort();
         }
-
+        
         ptlrpc_master_callback (&ev);
         RETURN(1);
 }
@@ -652,9 +655,9 @@ liblustre_wait_event (int timeout)
 
                 /* Give all registered callbacks a bite at the cherry */
                 list_for_each(tmp, &liblustre_wait_callbacks) {
-                        llwc = list_entry(tmp, struct liblustre_wait_callback,
+                        llwc = list_entry(tmp, struct liblustre_wait_callback, 
                                           llwc_list);
-
+                
                         if (llwc->llwc_fn(llwc->llwc_arg))
                                 found_something = 1;
                 }
@@ -716,10 +719,9 @@ int ptlrpc_init_portals(void)
                 return -EIO;
         }
 #ifndef __KERNEL__
-        liblustre_services_callback =
+        liblustre_services_callback = 
                 liblustre_register_wait_callback("liblustre_check_services",
-                                                 &liblustre_check_services,
-                                                 NULL);
+                                                 &liblustre_check_services, NULL);
 #endif
         rc = ptlrpcd_addref();
         if (rc == 0)

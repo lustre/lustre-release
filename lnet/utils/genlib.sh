@@ -25,8 +25,7 @@ build_obj_list() {
 }
 
 # lnet components libs
-build_obj_list ../../libcfs/libcfs libcfs.a
-build_obj_list ../../libcfs/libcfs libcfsutil.a
+build_obj_list ../../lnet/libcfs libcfs.a
 if $(echo "$LND_LIBS" | grep "socklnd" >/dev/null) ; then
 	build_obj_list ../../lnet/ulnds/socklnd libsocklnd.a
 fi

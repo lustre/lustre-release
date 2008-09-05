@@ -199,11 +199,11 @@ static int do_bio_filebacked(struct lloop_device *lo, struct bio *bio)
         struct inode *inode = lo->lo_backing_file->f_dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
-        struct obd_info oinfo = {{{ 0 }}};
+        struct obd_info oinfo = {{{0}}};
         struct brw_page *pg = lo->lo_requests[0].lrd_pages;
         struct obdo *oa = &lo->lo_requests[0].lrd_oa;
         pgoff_t offset;
-        int ret, cmd, i, opc;
+        int ret, cmd, i;
         struct bio_vec *bvec;
 
         BUG_ON(bio->bi_hw_segments > LLOOP_MAX_SEGMENTS);
@@ -225,8 +225,8 @@ static int do_bio_filebacked(struct lloop_device *lo, struct bio *bio)
         oa->o_mode = inode->i_mode;
         oa->o_id = lsm->lsm_object_id;
         oa->o_gr = lsm->lsm_object_gr;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLMODE |
-                      OBD_MD_FLTYPE |OBD_MD_FLGROUP;
+        oa->o_valid = OBD_MD_FLID   | OBD_MD_FLGROUP | 
+                      OBD_MD_FLMODE | OBD_MD_FLTYPE;
         obdo_from_inode(oa, inode, OBD_MD_FLFID | OBD_MD_FLGENER);
 
         cmd = OBD_BRW_READ;
@@ -239,12 +239,9 @@ static int do_bio_filebacked(struct lloop_device *lo, struct bio *bio)
                 ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_BRW_READ, bio->bi_size);
         oinfo.oi_oa = oa;
         oinfo.oi_md = lsm;
-        opc = cmd & OBD_BRW_WRITE ? CAPA_OPC_OSS_WRITE : CAPA_OPC_OSS_RW;
-        oinfo.oi_capa = ll_osscapa_get(inode, opc);
-        ret = obd_brw(cmd, ll_i2dtexp(inode), &oinfo, 
+        ret = obd_brw(cmd, ll_i2obdexp(inode), &oinfo, 
                       (obd_count)(i - bio->bi_idx), 
                       lo->lo_requests[0].lrd_pages, NULL);
-        capa_put(oinfo.oi_capa);
         if (ret == 0)
                 obdo_to_inode(inode, oa, OBD_MD_FLBLOCKS);
         return ret;
@@ -595,8 +592,6 @@ static enum llioc_iter lloop_ioctl(struct inode *unused, struct file *file,
 
         if (disks == NULL)
                 GOTO(out1, err = -ENODEV);
-
-        CWARN("Enter llop_ioctl\n");
 
         down(&lloop_mutex);
         switch (cmd) {

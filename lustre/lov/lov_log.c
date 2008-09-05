@@ -74,7 +74,7 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt,
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct lov_obd *lov = &obd->u.lov;
-        int i, rc = 0, rc1;
+        int i, rc = 0;
         ENTRY;
 
         LASSERTF(logcookies && numcookies >= lsm->lsm_stripe_count, 
@@ -104,13 +104,10 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt,
                 default:
                         break;
                 }
-                LASSERT(lsm->lsm_object_gr == loi->loi_gr);
-                rc1 = llog_add(cctxt, rec, NULL, logcookies + rc,
-                               numcookies - rc);
+
+                rc += llog_add(cctxt, rec, NULL, logcookies + rc,
+                                numcookies - rc);
                 llog_ctxt_put(cctxt);
-                if (rc1 < 0)
-                        RETURN(rc1);
-                rc += rc1;
         }
 
         RETURN(rc);
@@ -197,22 +194,20 @@ static struct llog_operations lov_size_repl_logops = {
         lop_cancel: lov_llog_repl_cancel
 };
 
-int lov_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                  struct obd_device *tgt, int count, struct llog_catid *logid, 
-                  struct obd_uuid *uuid)
+int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
+                  int count, struct llog_catid *logid, struct obd_uuid *uuid)
 {
         struct lov_obd *lov = &obd->u.lov;
         struct obd_device *child;
         int i, rc = 0, err = 0;
         ENTRY;
 
-        LASSERT(olg == &obd->obd_olg);
-        rc = llog_setup(obd, olg, LLOG_MDS_OST_ORIG_CTXT, tgt, 0, NULL,
+        rc = llog_setup(obd, LLOG_MDS_OST_ORIG_CTXT, tgt, 0, NULL,
                         &lov_mds_ost_orig_logops);
         if (rc)
                 RETURN(rc);
 
-        rc = llog_setup(obd, olg, LLOG_SIZE_REPL_CTXT, tgt, 0, NULL,
+        rc = llog_setup(obd, LLOG_SIZE_REPL_CTXT, tgt, 0, NULL,
                         &lov_size_repl_logops);
         if (rc)
                 RETURN(rc);
@@ -227,7 +222,7 @@ int lov_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                 CDEBUG(D_CONFIG, "init %d/%d\n", i, count);
                 LASSERT(lov->lov_tgts[i]->ltd_exp);
                 child = lov->lov_tgts[i]->ltd_exp->exp_obd;
-                rc = obd_llog_init(child, &child->obd_olg, tgt, 1, logid + i, uuid);
+                rc = obd_llog_init(child, tgt, 1, logid + i, uuid);
                 if (rc) {
                         CERROR("error osc_llog_init idx %d osc '%s' tgt '%s' "
                                "(rc=%d)\n", i, child->obd_name, tgt->obd_name,

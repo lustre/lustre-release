@@ -1,5 +1,4 @@
-/*
- * -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  * GPL HEADER START
@@ -80,7 +79,7 @@
 
 #define DEBUG_SUBSYSTEM S_LND
 
-#include "libcfs/libcfs.h"
+#include "libcfs/kp30.h"
 #include "lnet/lnet.h"
 #include "lnet/lib-lnet.h"
 

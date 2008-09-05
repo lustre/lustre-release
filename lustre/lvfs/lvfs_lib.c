@@ -48,8 +48,20 @@
 #include <lustre_lib.h>
 #include <lprocfs_status.h>
 
+__u64 obd_max_pages = 0;
+__u64 obd_max_alloc = 0;
+
+#ifdef __KERNEL__
+struct lprocfs_stats *obd_memory = NULL;
+spinlock_t obd_updatemax_lock = SPIN_LOCK_UNLOCKED;
+/* refine later and change to seqlock or simlar from libcfs */
+#else
+__u64 obd_alloc;
+__u64 obd_pages;
+#endif
+
 unsigned int obd_fail_val = 0;
-unsigned long obd_fail_loc = 0;
+unsigned int obd_fail_loc = 0;
 unsigned int obd_alloc_fail_rate = 0;
 
 int obd_alloc_fail(const void *ptr, const char *name, const char *type,
@@ -67,98 +79,101 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
                        obd_pages_sum() << CFS_PAGE_SHIFT,
                        obd_pages_sum(),
                        atomic_read(&libcfs_kmemory));
-                return 1;
+               return 1;
         }
         return 0;
 }
 EXPORT_SYMBOL(obd_alloc_fail);
 
-int __obd_fail_check_set(__u32 id, __u32 value, int set)
+#ifdef __KERNEL__
+void obd_update_maxusage()
 {
-        static atomic_t obd_fail_count = ATOMIC_INIT(0);
+        __u64 max1, max2;
 
-        LASSERT(!(id & OBD_FAIL_ONCE));
+        max1 = obd_pages_sum();
+        max2 = obd_memory_sum();
 
-        if ((obd_fail_loc & (OBD_FAILED | OBD_FAIL_ONCE)) ==
-            (OBD_FAILED | OBD_FAIL_ONCE)) {
-                atomic_set(&obd_fail_count, 0); /* paranoia */
-                return 0;
-        }
-
-        /* Fail 1/obd_fail_val times */
-        if (obd_fail_loc & OBD_FAIL_RAND) {
-                if (obd_fail_val < 2 || ll_rand() % obd_fail_val > 0)
-                        return 0;
-        }
-
-        /* Skip the first obd_fail_val, then fail */
-        if (obd_fail_loc & OBD_FAIL_SKIP) {
-                if (atomic_inc_return(&obd_fail_count) <= obd_fail_val)
-                        return 0;
-        }
-
-        /* Fail obd_fail_val times, overridden by FAIL_ONCE */
-        if (obd_fail_loc & OBD_FAIL_SOME &&
-            (!(obd_fail_loc & OBD_FAIL_ONCE) || obd_fail_val <= 1)) {
-                int count = atomic_inc_return(&obd_fail_count);
-
-                if (count >= obd_fail_val) {
-                        set_bit(OBD_FAIL_ONCE_BIT, &obd_fail_loc);
-                        atomic_set(&obd_fail_count, 0);
-                        /* we are lost race to increase obd_fail_count */
-                        if (count > obd_fail_val)
-                                return 0;
-                }
-        }
-
-        if ((set == OBD_FAIL_LOC_ORSET || set == OBD_FAIL_LOC_RESET) &&
-            (value & OBD_FAIL_ONCE))
-                set_bit(OBD_FAIL_ONCE_BIT, &obd_fail_loc);
-
-        /* Lost race to set OBD_FAILED_BIT. */
-        if (test_and_set_bit(OBD_FAILED_BIT, &obd_fail_loc)) {
-                /* If OBD_FAIL_ONCE is valid, only one process can fail,
-                 * otherwise multi-process can fail at the same time. */
-                if (obd_fail_loc & OBD_FAIL_ONCE)
-                        return 0;
-        }
-
-        switch (set) {
-                case OBD_FAIL_LOC_NOSET:
-                        break;
-                case OBD_FAIL_LOC_ORSET:
-                        obd_fail_loc |= value & ~(OBD_FAILED | OBD_FAIL_ONCE);
-                        break;
-                case OBD_FAIL_LOC_RESET:
-                        obd_fail_loc = value;
-                        break;
-                default:
-                        LASSERTF(0, "called with bad set %u\n", set);
-                        break;
-        }
-
-        return 1;
+        spin_lock(&obd_updatemax_lock);
+        if (max1 > obd_max_pages)
+                obd_max_pages = max1;
+        if (max2 > obd_max_alloc)
+                obd_max_alloc = max2;
+        spin_unlock(&obd_updatemax_lock);
 }
-EXPORT_SYMBOL(__obd_fail_check_set);
 
-int __obd_fail_timeout_set(__u32 id, __u32 value, int ms, int set)
+__u64 obd_memory_max(void)
 {
-        int ret = 0;
+        __u64 ret;
 
-        ret = __obd_fail_check_set(id, value, set);
-        if (ret) {
-                CERROR("obd_fail_timeout id %x sleeping for %dms\n",
-                       id, ms);
-                cfs_schedule_timeout(CFS_TASK_UNINT,
-                                     cfs_time_seconds(ms) / 1000);
-                set_current_state(CFS_TASK_RUNNING);
-                CERROR("obd_fail_timeout id %x awake\n", id);
-        }
+        spin_lock(&obd_updatemax_lock);
+        ret = obd_max_alloc;
+        spin_unlock(&obd_updatemax_lock);
+
         return ret;
 }
-EXPORT_SYMBOL(__obd_fail_timeout_set);
+
+__u64 obd_pages_max(void)
+{
+        __u64 ret;
+
+        spin_lock(&obd_updatemax_lock);
+        ret = obd_max_pages;
+        spin_unlock(&obd_updatemax_lock);
+
+        return ret;
+}
+
+EXPORT_SYMBOL(obd_update_maxusage);
+EXPORT_SYMBOL(obd_pages_max);
+EXPORT_SYMBOL(obd_memory_max);
+EXPORT_SYMBOL(obd_memory);
+
+#endif
 
 #ifdef LPROCFS
+__s64 lprocfs_read_helper(struct lprocfs_counter *lc,
+                          enum lprocfs_fields_flags field)
+{
+        __s64 ret = 0;
+        int centry;
+
+        if (!lc)
+                RETURN(0);
+        do {
+                centry = atomic_read(&lc->lc_cntl.la_entry);
+
+                switch (field) {
+                        case LPROCFS_FIELDS_FLAGS_CONFIG:
+                                ret = lc->lc_config;
+                                break;
+                        case LPROCFS_FIELDS_FLAGS_SUM:
+                                ret = lc->lc_sum;
+                                break;
+                        case LPROCFS_FIELDS_FLAGS_MIN:
+                                ret = lc->lc_min;
+                                break;
+                        case LPROCFS_FIELDS_FLAGS_MAX:
+                                ret = lc->lc_max;
+                                break;
+                        case LPROCFS_FIELDS_FLAGS_AVG:
+                                ret = (lc->lc_max - lc->lc_min)/2;
+                                break;
+                        case LPROCFS_FIELDS_FLAGS_SUMSQUARE:
+                                ret = lc->lc_sumsquare;
+                                break;
+                        case LPROCFS_FIELDS_FLAGS_COUNT:
+                                ret = lc->lc_count;
+                                break;
+                        default:
+                                break;
+                };
+        } while (centry != atomic_read(&lc->lc_cntl.la_entry) &&
+                 centry != atomic_read(&lc->lc_cntl.la_exit));
+
+        RETURN(ret);
+}
+EXPORT_SYMBOL(lprocfs_read_helper);
+
 void lprocfs_counter_add(struct lprocfs_stats *stats, int idx,
                                        long amount)
 {
@@ -179,7 +194,7 @@ void lprocfs_counter_add(struct lprocfs_stats *stats, int idx,
         if (percpu_cntr->lc_config & LPROCFS_CNTR_AVGMINMAX) {
                 percpu_cntr->lc_sum += amount;
                 if (percpu_cntr->lc_config & LPROCFS_CNTR_STDDEV)
-                        percpu_cntr->lc_sumsquare += (__s64)amount * amount;
+                        percpu_cntr->lc_sumsquare += (__u64)amount * amount;
                 if (amount < percpu_cntr->lc_min)
                         percpu_cntr->lc_min = amount;
                 if (amount > percpu_cntr->lc_max)
@@ -216,3 +231,50 @@ EXPORT_SYMBOL(lprocfs_counter_sub);
 EXPORT_SYMBOL(obd_fail_loc);
 EXPORT_SYMBOL(obd_alloc_fail_rate);
 EXPORT_SYMBOL(obd_fail_val);
+
+int obd_fail_check(__u32 id)
+{
+        static int count = 0;
+        if (likely((obd_fail_loc & OBD_FAIL_MASK_LOC) !=
+                   (id & OBD_FAIL_MASK_LOC)))
+                return 0;
+
+        if ((obd_fail_loc & (OBD_FAILED | OBD_FAIL_ONCE)) ==
+            (OBD_FAILED | OBD_FAIL_ONCE)) {
+                count = 0; /* paranoia */
+                return 0;
+        }
+
+        if (obd_fail_loc & OBD_FAIL_RAND) {
+                unsigned int ll_rand(void);
+                if (obd_fail_val < 2)
+                        return 0;
+                if (ll_rand() % obd_fail_val > 0)
+                        return 0;
+        }
+
+        if (obd_fail_loc & OBD_FAIL_SKIP) {
+                count++;
+                if (count < obd_fail_val)
+                        return 0;
+                count = 0;
+        }
+
+        /* Overridden by FAIL_ONCE */
+        if (obd_fail_loc & OBD_FAIL_SOME) {
+                count++;
+                if (count >= obd_fail_val) {
+                        count = 0;
+                        /* Don't fail anymore */
+                        obd_fail_loc |= OBD_FAIL_ONCE;
+                }
+        }
+
+        obd_fail_loc |= OBD_FAILED;
+        /* Handle old checks that OR in this */
+        if (id & OBD_FAIL_ONCE)
+                obd_fail_loc |= OBD_FAIL_ONCE;
+
+        return 1;
+}
+EXPORT_SYMBOL(obd_fail_check);

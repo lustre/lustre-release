@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
  *
  *   This file is part of Portals, http://www.sf.net/projects/lustre/
  *
@@ -46,10 +46,11 @@
 #include <endian.h>
 #endif
 
-#include <libcfs/libcfsutil.h>
+#include <libcfs/portals_utils.h>
 #include <lnet/api-support.h>
 #include <lnet/lnetctl.h>
 #include <lnet/socklnd.h>
+#include "parser.h"
 
 unsigned int libcfs_debug;
 unsigned int libcfs_printk = D_CANTMASK;

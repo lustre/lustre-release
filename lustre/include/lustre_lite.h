@@ -64,7 +64,7 @@
         (LASSERT(((struct ll_async_page *)(c))->llap_magic == LLAP_MAGIC),     \
          (struct ll_async_page *)(c))
 
-/* 4UL * 1024 * 1024 */
+// 4*1024*1024
 #define LL_MAX_BLKSIZE_BITS     (22)
 #define LL_MAX_BLKSIZE          (1UL<<LL_MAX_BLKSIZE_BITS)
 
@@ -169,23 +169,4 @@ static inline int ll_ocd_update(struct obd_device *host,
         RETURN(result);
 }
 
-/*      
- * Chain of hash overflow pages.
- */            
-struct ll_dir_chain {
-        /* XXX something. Later */
-};
-        
-static inline void ll_dir_chain_init(struct ll_dir_chain *chain)
-{       
-}
-
-static inline void ll_dir_chain_fini(struct ll_dir_chain *chain)
-{
-}
-
-static inline __u32 hash_x_index(__u32 value)
-{
-        return ((__u32)~0) - value;
-}
 #endif

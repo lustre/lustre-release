@@ -2101,13 +2101,16 @@ ksocknal_send_hello (lnet_ni_t *ni, ksock_conn_t *conn,
 {
         /* CAVEAT EMPTOR: this byte flips 'ipaddrs' */
         ksock_net_t         *net = (ksock_net_t *)ni->ni_data;
+        lnet_nid_t           srcnid;
 
         LASSERT (0 <= hello->kshm_nips && hello->kshm_nips <= LNET_MAX_INTERFACES);
 
         /* rely on caller to hold a ref on socket so it wouldn't disappear */
         LASSERT (conn->ksnc_proto != NULL);
 
-        hello->kshm_src_nid         = ni->ni_nid;
+        srcnid = lnet_ptlcompat_srcnid(ni->ni_nid, peer_nid);
+
+        hello->kshm_src_nid         = srcnid;
         hello->kshm_dst_nid         = peer_nid;
         hello->kshm_src_pid         = the_lnet.ln_pid;
 
@@ -2170,11 +2173,42 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
             hello->kshm_magic != __swab32(LNET_PROTO_MAGIC) &&
             hello->kshm_magic != le32_to_cpu (LNET_PROTO_TCP_MAGIC)) {
                 /* Unexpected magic! */
-                CERROR ("Bad magic(1) %#08x (%#08x expected) from "
-                        "%u.%u.%u.%u\n", __cpu_to_le32 (hello->kshm_magic),
-                        LNET_PROTO_TCP_MAGIC,
-                        HIPQUAD(conn->ksnc_ipaddr));
-                return -EPROTO;
+                if (active ||
+                    the_lnet.ln_ptlcompat == 0) {
+                        CERROR ("Bad magic(1) %#08x (%#08x expected) from "
+                                "%u.%u.%u.%u\n", __cpu_to_le32 (hello->kshm_magic),
+                                LNET_PROTO_TCP_MAGIC,
+                                HIPQUAD(conn->ksnc_ipaddr));
+                        return -EPROTO;
+                }
+
+                /* When portals compatibility is set, I may be passed a new
+                 * connection "blindly" by the acceptor, and I have to
+                 * determine if my peer has sent an acceptor connection request
+                 * or not.  This isn't a 'hello', so I'll get the acceptor to
+                 * look at it... */
+                rc = lnet_accept(ni, sock, hello->kshm_magic);
+                if (rc != 0)
+                        return -EPROTO;
+
+                /* ...and if it's OK I'm back to looking for a 'hello'... */
+                rc = libcfs_sock_read(sock, &hello->kshm_magic, 
+                                      sizeof (hello->kshm_magic), timeout);
+                if (rc != 0) {
+                        CERROR ("Error %d reading HELLO from %u.%u.%u.%u\n",
+                                rc, HIPQUAD(conn->ksnc_ipaddr));
+                        LASSERT (rc < 0);
+                        return rc;
+                }
+
+                /* Only need to check V1.x magic */
+                if (hello->kshm_magic != le32_to_cpu (LNET_PROTO_TCP_MAGIC)) {
+                        CERROR ("Bad magic(2) %#08x (%#08x expected) from "
+                                "%u.%u.%u.%u\n", __cpu_to_le32 (hello->kshm_magic),
+                                LNET_PROTO_TCP_MAGIC,
+                                HIPQUAD(conn->ksnc_ipaddr));
+                        return -EPROTO;
+                }
         }
 
         rc = libcfs_sock_read(sock, &hello->kshm_version,
@@ -2234,7 +2268,13 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
                 recv_id.nid = LNET_MKNID(LNET_NIDNET(ni->ni_nid), conn->ksnc_ipaddr);
         } else {
                 recv_id.nid = hello->kshm_src_nid;
-                recv_id.pid = hello->kshm_src_pid;
+
+                if (the_lnet.ln_ptlcompat > 1 && /* portals peers may exist */
+                    LNET_NIDNET(recv_id.nid) == 0) /* this is one */
+                        recv_id.pid = the_lnet.ln_pid; /* give it a sensible pid */
+                else
+                        recv_id.pid = hello->kshm_src_pid;
+
         }
 
         if (!active) {
@@ -2253,7 +2293,7 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
         }
 
         if (peerid->pid != recv_id.pid ||
-            peerid->nid != recv_id.nid) {
+            !lnet_ptlcompat_matchnid(peerid->nid, recv_id.nid)) {
                 LCONSOLE_ERROR_MSG(0x130, "Connected successfully to %s on host"
                                    " %u.%u.%u.%u, but they claimed they were "
                                    "%s; please check your Lustre "

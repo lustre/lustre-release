@@ -84,7 +84,8 @@ kibnal_pack_msg(kib_msg_t *msg, __u32 version, int credits,
         msg->ibm_credits  = credits;
         /*   ibm_nob */
         msg->ibm_cksum    = 0;
-        msg->ibm_srcnid   = kibnal_data.kib_ni->ni_nid;
+        msg->ibm_srcnid   = lnet_ptlcompat_srcnid(kibnal_data.kib_ni->ni_nid,
+                                                  dstnid);
         msg->ibm_srcstamp = kibnal_data.kib_incarnation;
         msg->ibm_dstnid   = dstnid;
         msg->ibm_dststamp = dststamp;
@@ -2147,6 +2148,12 @@ kibnal_module_init (void)
 {
         int    rc;
 
+        if (the_lnet.ln_ptlcompat != 0) {
+                LCONSOLE_ERROR_MSG(0x12c, "IIB does not support portals "
+                                   "compatibility mode\n");
+                return -ENODEV;
+        }
+        
         rc = kibnal_tunables_init();
         if (rc != 0)
                 return rc;

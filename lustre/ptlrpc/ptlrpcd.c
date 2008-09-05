@@ -45,6 +45,7 @@
 # include <ctype.h>
 #endif
 
+#include <libcfs/kp30.h>
 #include <lustre_net.h>
 # include <lustre_lib.h>
 
@@ -81,12 +82,11 @@ void ptlrpcd_add_req(struct ptlrpc_request *req)
                 pc = &ptlrpcd_pc;
         else
                 pc = &ptlrpcd_recovery_pc;
-
         rc = ptlrpc_set_add_new_req(pc, req);
         if (rc) {
                 int (*interpreter)(struct ptlrpc_request *,
                                    void *, int);
-                                   
+                                
                 interpreter = req->rq_interpret_reply;
 
                 /*
@@ -95,7 +95,7 @@ void ptlrpcd_add_req(struct ptlrpc_request *req)
                  * interpret for it to let know we're killing it
                  * so that higher levels might free assosiated
                  * resources.
-                 */
+                */
                 req->rq_status = -EBADR;
                 interpreter(req, &req->rq_async_args,
                             req->rq_status);
@@ -259,12 +259,13 @@ int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
         /* 
          * Do not allow start second thread for one pc. 
          */
-        if (test_and_set_bit(LIOD_START, &pc->pc_flags)) {
+        if (test_bit(LIOD_START, &pc->pc_flags)) {
                 CERROR("Starting second thread (%s) for same pc %p\n",
                        name, pc);
                 RETURN(-EALREADY);
         }
 
+        set_bit(LIOD_START, &pc->pc_flags);
         init_completion(&pc->pc_starting);
         init_completion(&pc->pc_finishing);
         spin_lock_init(&pc->pc_lock);

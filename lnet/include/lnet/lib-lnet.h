@@ -51,8 +51,8 @@
 #error Unsupported Operating System
 #endif
 
-#include <libcfs/libcfs.h>
 #include <lnet/types.h>
+#include <libcfs/kp30.h>
 #include <lnet/lnet.h>
 #include <lnet/lib-types.h>
 
@@ -481,6 +481,36 @@ lnet_ni_decref(lnet_ni_t *ni)
         LNET_UNLOCK();
 }
 
+static inline lnet_nid_t
+lnet_ptlcompat_srcnid(lnet_nid_t src, lnet_nid_t dst)
+{
+        /* Give myself a portals srcnid if I'm sending to portals */
+        if (the_lnet.ln_ptlcompat > 0 &&   
+            LNET_NIDNET(dst) == 0)
+                return LNET_MKNID(0, LNET_NIDADDR(src));
+        
+        return src;
+}
+
+static inline int
+lnet_ptlcompat_matchnid(lnet_nid_t lnet_nid, lnet_nid_t ptl_nid) 
+{
+        return ((ptl_nid == lnet_nid) ||
+                (the_lnet.ln_ptlcompat > 0 &&
+                 LNET_NIDNET(ptl_nid) == 0 &&
+                 LNET_NETTYP(LNET_NIDNET(lnet_nid)) != LOLND &&
+                 LNET_NIDADDR(ptl_nid) == LNET_NIDADDR(lnet_nid)));
+}
+
+static inline int
+lnet_ptlcompat_matchnet(__u32 lnet_net, __u32 ptl_net) 
+{
+        return ((ptl_net == lnet_net) ||
+                (the_lnet.ln_ptlcompat > 0 &&
+                 ptl_net == 0 &&
+                 LNET_NETTYP(lnet_net) != LOLND));
+}
+
 static inline struct list_head *
 lnet_nid2peerhash (lnet_nid_t nid)
 {
@@ -650,13 +680,14 @@ int lnet_connect(cfs_socket_t **sockp, lnet_nid_t peer_nid,
                  __u32 local_ip, __u32 peer_ip, int peer_port);
 void lnet_connect_console_error(int rc, lnet_nid_t peer_nid,
                                 __u32 peer_ip, int port);
-int lnet_count_acceptor_nis(void);
+int lnet_count_acceptor_nis(lnet_ni_t **first_ni);
+int lnet_accept(lnet_ni_t *blind_ni, cfs_socket_t *sock, __u32 magic);
 int lnet_acceptor_timeout(void);
 int lnet_acceptor_port(void);
 #endif
 
 #ifdef HAVE_LIBPTHREAD
-int lnet_count_acceptor_nis(void);
+int lnet_count_acceptor_nis(lnet_ni_t **first_ni);
 int lnet_acceptor_port(void);
 #endif
 

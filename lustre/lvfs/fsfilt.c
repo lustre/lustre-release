@@ -44,10 +44,10 @@
 #include <linux/module.h>
 #include <linux/kmod.h>
 #include <linux/slab.h>
-#include <libcfs/libcfs.h>
+#include <libcfs/kp30.h>
 #include <lustre_fsfilt.h>
 
-CFS_LIST_HEAD(fsfilt_types);
+LIST_HEAD(fsfilt_types);
 
 static struct fsfilt_operations *fsfilt_search_type(const char *type)
 {

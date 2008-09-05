@@ -189,7 +189,6 @@ int
 obdio_cancel (struct obdio_conn *conn, struct lustre_handle *lh)
 {
         obdio_iocinit (conn);
-
         conn->oc_data.ioc_obdo1.o_handle = *lh;
         conn->oc_data.ioc_obdo1.o_valid = OBD_MD_FLHANDLE;
 

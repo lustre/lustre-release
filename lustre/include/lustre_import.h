@@ -40,7 +40,6 @@
 #include <lustre_handles.h>
 #include <lustre/lustre_idl.h>
 
-
 /* Adaptive Timeout stuff */
 #define D_ADAPTTO D_OTHER
 #define AT_BINS 4                  /* "bin" means "N seconds of history" */
@@ -120,9 +119,6 @@ struct obd_import {
         struct list_head          imp_delayed_list;
 
         struct obd_device        *imp_obd;
-        struct ptlrpc_sec        *imp_sec;
-        struct semaphore          imp_sec_mutex;
-        cfs_time_t                imp_sec_expire;
         cfs_waitq_t               imp_recovery_waitq;
 
         atomic_t                  imp_inflight;
@@ -147,14 +143,16 @@ struct obd_import {
         spinlock_t                imp_lock;
 
         /* flags */
-        unsigned long             imp_no_timeout:1,       /* timeouts are disabled */
-                                  imp_invalid:1,          /* evicted */
+        unsigned long             imp_invalid:1,          /* evicted */
                                   imp_deactive:1,         /* administratively disabled */
                                   imp_replayable:1,       /* try to recover the import */
                                   imp_dlm_fake:1,         /* don't run recovery (timeout instead) */
                                   imp_server_timeout:1,   /* use 1/2 timeout on MDS' OSCs */
-                                  imp_initial_recov:1,    /* retry the initial connection */  
+                                  imp_initial_recov:1,    /* retry the initial connection */
                                   imp_initial_recov_bk:1, /* turn off init_recov after trying all failover nids */
+                                  imp_delayed_recovery:1, /* VBR: imp in delayed recovery */
+                                  imp_no_lock_replay:1,   /* VBR: if gap was found then no lock replays */
+                                  imp_vbr_failed:1,       /* recovery by versions was failed */
                                   imp_force_verify:1,     /* force an immidiate ping */
                                   imp_pingable:1,         /* pingable */
                                   imp_resend_replay:1,    /* resend for replay */
@@ -163,7 +161,6 @@ struct obd_import {
         __u32                     imp_connect_op;
         struct obd_connect_data   imp_connect_data;
         __u64                     imp_connect_flags_orig;
-        int                       imp_connect_error;
 
         __u32                     imp_msg_magic;
         __u32                     imp_msghdr_flags;       /* adjusted based on server capability */
@@ -173,22 +170,6 @@ struct obd_import {
         struct imp_at             imp_at;                 /* adaptive timeout data */
         time_t                    imp_last_reply_time;    /* for health check */
 };
-
-typedef void (*obd_import_callback)(struct obd_import *imp, void *closure,
-                                    int event, void *event_arg, void *cb_data);
-
-struct obd_import_observer {
-        struct list_head     oio_chain;
-        obd_import_callback  oio_cb;
-        void                *oio_cb_data;
-};
-
-void class_observe_import(struct obd_import *imp, obd_import_callback cb,
-                          void *cb_data);
-void class_unobserve_import(struct obd_import *imp, obd_import_callback cb,
-                            void *cb_data);
-void class_notify_import_observers(struct obd_import *imp, int event,
-                                   void *event_arg);
 
 /* import.c */
 static inline void at_init(struct adaptive_timeout *at, int val, int flags) {

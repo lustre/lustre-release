@@ -48,6 +48,7 @@ CFS_MODULE_PARM(local_nid_dist_zero, "i", int, 0444,
 
 /* forward ref */
 static void lnet_commit_md (lnet_libmd_t *md, lnet_msg_t *msg);
+static void lnet_drop_delayed_put(lnet_msg_t *msg, char *reason);
 
 #define LNET_MATCHMD_NONE     0   /* Didn't match */
 #define LNET_MATCHMD_OK       1   /* Matched OK */
@@ -1232,8 +1233,10 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
 
                 LASSERT (src_nid != LNET_NID_ANY);
 
-                if (!msg->msg_routing)
+                if (!msg->msg_routing) {
+                        src_nid = lnet_ptlcompat_srcnid(src_nid, dst_nid);
                         msg->msg_hdr.src_nid = cpu_to_le64(src_nid);
+                }
 
                 if (src_ni == the_lnet.ln_loni) {
                         /* No send credit hassles with LOLND */
@@ -1307,6 +1310,7 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
 
                 if (!msg->msg_routing) {
                         /* I'm the source and now I know which NI to send on */
+                        src_nid = lnet_ptlcompat_srcnid(src_nid, dst_nid);
                         msg->msg_hdr.src_nid = cpu_to_le64(src_nid);
                 }
 
@@ -1755,16 +1759,13 @@ lnet_parse_reply(lnet_ni_t *ni, lnet_msg_t *msg)
 
         /* NB handles only looked up by creator (no flips) */
         md = lnet_wire_handle2md(&hdr->msg.reply.dst_wmd);
-        if (md == NULL || md->md_threshold == 0 || md->md_me != NULL) {
+        if (md == NULL || md->md_threshold == 0) {
                 CDEBUG(D_NETERROR, "%s: Dropping REPLY from %s for %s "
                        "MD "LPX64"."LPX64"\n", 
                        libcfs_nid2str(ni->ni_nid), libcfs_id2str(src),
                        (md == NULL) ? "invalid" : "inactive",
                        hdr->msg.reply.dst_wmd.wh_interface_cookie,
                        hdr->msg.reply.dst_wmd.wh_object_cookie);
-                if (md != NULL && md->md_me != NULL)
-                        CERROR("REPLY MD also attached to portal %d\n",
-                               md->md_me->me_portal);
 
                 LNET_UNLOCK();
                 return ENOENT;                  /* +ve: OK but no match */
@@ -1831,7 +1832,7 @@ lnet_parse_ack(lnet_ni_t *ni, lnet_msg_t *msg)
 
         /* NB handles only looked up by creator (no flips) */
         md = lnet_wire_handle2md(&hdr->msg.ack.dst_wmd);
-        if (md == NULL || md->md_threshold == 0 || md->md_me != NULL) {
+        if (md == NULL || md->md_threshold == 0) {
                 /* Don't moan; this is expected */
                 CDEBUG(D_NET,
                        "%s: Dropping ACK from %s to %s MD "LPX64"."LPX64"\n",
@@ -1839,10 +1840,6 @@ lnet_parse_ack(lnet_ni_t *ni, lnet_msg_t *msg)
                        (md == NULL) ? "invalid" : "inactive",
                        hdr->msg.ack.dst_wmd.wh_interface_cookie,
                        hdr->msg.ack.dst_wmd.wh_object_cookie);
-                if (md != NULL && md->md_me != NULL)
-                        CERROR("Source MD also attached to portal %d\n",
-                               md->md_me->me_portal);
-
                 LNET_UNLOCK();
                 return ENOENT;                  /* +ve! */
         }
@@ -1968,7 +1965,7 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
         dest_nid = le64_to_cpu(hdr->dest_nid);
         payload_length = le32_to_cpu(hdr->payload_length);
 
-        for_me = (ni->ni_nid == dest_nid);
+        for_me = lnet_ptlcompat_matchnid(ni->ni_nid, dest_nid);
 
         switch (type) {
         case LNET_MSG_ACK:
@@ -2008,7 +2005,18 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
          * or malicious so we chop them off at the knees :) */
 
         if (!for_me) {
-                if (LNET_NIDNET(dest_nid) == LNET_NIDNET(ni->ni_nid)) {
+                if (the_lnet.ln_ptlcompat > 0) {
+                        /* portals compatibility is single-network */
+                        CERROR ("%s, src %s: Bad dest nid %s "
+                                "(routing not supported)\n",
+                                libcfs_nid2str(from_nid),
+                                libcfs_nid2str(src_nid),
+                                libcfs_nid2str(dest_nid));
+                        return -EPROTO;
+                }
+
+                if (the_lnet.ln_ptlcompat == 0 &&
+                    LNET_NIDNET(dest_nid) == LNET_NIDNET(ni->ni_nid)) {
                         /* should have gone direct */
                         CERROR ("%s, src %s: Bad dest nid %s "
                                 "(should have been sent direct)\n",
@@ -2018,7 +2026,8 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
                         return -EPROTO;
                 }
 
-                if (lnet_islocalnid(dest_nid)) {
+                if (the_lnet.ln_ptlcompat == 0 &&
+                    lnet_islocalnid(dest_nid)) {
                         /* dest is another local NI; sender should have used
                          * this node's NID on its own network */
                         CERROR ("%s, src %s: Bad dest nid %s "
@@ -2197,17 +2206,12 @@ LNetPut(lnet_nid_t self, lnet_handle_md_t mdh, lnet_ack_req_t ack,
         LNET_LOCK();
 
         md = lnet_handle2md(&mdh);
-        if (md == NULL || md->md_threshold == 0 || md->md_me != NULL) {
+        if (md == NULL || md->md_threshold == 0) {
                 lnet_msg_free(msg);
-
-                CERROR("Dropping PUT ("LPU64":%d:%s): MD (%d) invalid\n",
-                       match_bits, portal, libcfs_id2str(target),
-                       md == NULL ? -1 : md->md_threshold);
-                if (md != NULL && md->md_me != NULL)
-                        CERROR("Source MD also attached to portal %d\n",
-                               md->md_me->me_portal);
-
                 LNET_UNLOCK();
+
+                CERROR("Dropping PUT to %s: MD invalid\n", 
+                       libcfs_id2str(target));
                 return -ENOENT;
         }
 
@@ -2379,17 +2383,12 @@ LNetGet(lnet_nid_t self, lnet_handle_md_t mdh,
         LNET_LOCK();
 
         md = lnet_handle2md(&mdh);
-        if (md == NULL || md->md_threshold == 0 || md->md_me != NULL) {
+        if (md == NULL || md->md_threshold == 0) {
                 lnet_msg_free(msg);
-
-                CERROR("Dropping GET ("LPU64":%d:%s): MD (%d) invalid\n",
-                       match_bits, portal, libcfs_id2str(target),
-                       md == NULL ? -1 : md->md_threshold);
-                if (md != NULL && md->md_me != NULL)
-                        CERROR("REPLY MD also attached to portal %d\n",
-                               md->md_me->me_portal);
-
                 LNET_UNLOCK();
+
+                CERROR("Dropping GET to %s: MD invalid\n",
+                       libcfs_id2str(target));
                 return -ENOENT;
         }
 
@@ -2464,7 +2463,11 @@ LNetDist (lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
         list_for_each (e, &the_lnet.ln_nis) {
                 ni = list_entry(e, lnet_ni_t, ni_list);
 
-                if (ni->ni_nid == dstnid) {
+                if (ni->ni_nid == dstnid ||
+                    (the_lnet.ln_ptlcompat > 0 &&
+                     LNET_NIDNET(dstnid) == 0 &&
+                     LNET_NIDADDR(dstnid) == LNET_NIDADDR(ni->ni_nid) &&
+                     LNET_NETTYP(LNET_NIDNET(ni->ni_nid)) != LOLND)) {
                         if (srcnidp != NULL)
                                 *srcnidp = dstnid;
                         if (orderp != NULL) {
@@ -2478,7 +2481,10 @@ LNetDist (lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
                         return local_nid_dist_zero ? 0 : 1;
                 }
 
-                if (LNET_NIDNET(ni->ni_nid) == dstnet) {
+                if (LNET_NIDNET(ni->ni_nid) == dstnet ||
+                    (the_lnet.ln_ptlcompat > 0 &&
+                     dstnet == 0 &&
+                     LNET_NETTYP(LNET_NIDNET(ni->ni_nid)) != LOLND)) {
                         if (srcnidp != NULL)
                                 *srcnidp = ni->ni_nid;
                         if (orderp != NULL)

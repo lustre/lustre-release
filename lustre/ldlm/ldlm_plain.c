@@ -69,12 +69,12 @@ ldlm_plain_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                 if (req == lock)
                         RETURN(compat);
 
-                 /* last lock in mode group */
-                 tmp = &list_entry(lock->l_sl_mode.prev,
-                                   struct ldlm_lock,
-                                   l_sl_mode)->l_res_link;
+                /* last lock in mode group */
+                tmp = &list_entry(lock->l_sl_mode.prev,
+                                  struct ldlm_lock,
+                                  l_sl_mode)->l_res_link;
 
-                 if (lockmode_compat(lock->l_req_mode, req_mode))
+                if (lockmode_compat(lock->l_req_mode, req_mode))
                         continue;
 
                 if (!work_list)
@@ -112,7 +112,7 @@ int ldlm_process_plain_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                             ldlm_error_t *err, struct list_head *work_list)
 {
         struct ldlm_resource *res = lock->l_resource;
-        CFS_LIST_HEAD(rpc_list);
+        struct list_head rpc_list = CFS_LIST_HEAD_INIT(rpc_list);
         int rc;
         ENTRY;
 
@@ -147,7 +147,7 @@ int ldlm_process_plain_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                 if (list_empty(&lock->l_res_link))
                         ldlm_resource_add_lock(res, &res->lr_waiting, lock);
                 unlock_res(res);
-                rc = ldlm_run_ast_work(&rpc_list, LDLM_WORK_BL_AST);
+                rc = ldlm_run_bl_ast_work(&rpc_list);
                 lock_res(res);
                 if (rc == -ERESTART)
                         GOTO(restart, -ERESTART);

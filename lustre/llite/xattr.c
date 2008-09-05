@@ -44,9 +44,20 @@
 #include <obd_support.h>
 #include <lustre_lite.h>
 #include <lustre_dlm.h>
-#include <lustre_ver.h>
-//#include <lustre_mdc.h>
-#include <lustre_acl.h>
+#include <linux/lustre_version.h>
+
+#ifndef POSIX_ACL_XATTR_ACCESS
+#ifndef XATTR_NAME_ACL_ACCESS
+#define XATTR_NAME_ACL_ACCESS   "system.posix_acl_access"
+#endif
+#define POSIX_ACL_XATTR_ACCESS XATTR_NAME_ACL_ACCESS
+#endif
+#ifndef POSIX_ACL_XATTR_DEFAULT
+#ifndef XATTR_NAME_ACL_DEFAULT
+#define XATTR_NAME_ACL_DEFAULT  "system.posix_acl_default"
+#endif
+#define POSIX_ACL_XATTR_DEFAULT XATTR_NAME_ACL_DEFAULT
+#endif
 
 #include "llite_internal.h"
 
@@ -96,7 +107,7 @@ int xattr_type_filter(struct ll_sb_info *sbi, int xattr_type)
 {
         if ((xattr_type == XATTR_ACL_ACCESS_T ||
              xattr_type == XATTR_ACL_DEFAULT_T) &&
-           !(sbi->ll_flags & LL_SBI_ACL))
+            !(sbi->ll_flags & LL_SBI_ACL))
                 return -EOPNOTSUPP;
 
         if (xattr_type == XATTR_USER_T && !(sbi->ll_flags & LL_SBI_USER_XATTR))
@@ -116,13 +127,10 @@ int ll_setxattr_common(struct inode *inode, const char *name,
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *req;
+        struct ll_fid fid;
         int xattr_type, rc;
-        struct obd_capa *oc;
-        posix_acl_xattr_header *new_value = NULL;
-        struct rmtacl_ctl_entry *rce = NULL;
-        ext_acl_xattr_header *acl = NULL;
-        const char *pv = value;
         ENTRY;
+
 
         xattr_type = get_xattr_type(name);
         rc = xattr_type_filter(sbi, xattr_type);
@@ -134,61 +142,9 @@ int ll_setxattr_common(struct inode *inode, const char *name,
             (xattr_type == XATTR_LUSTRE_T && strcmp(name, "lustre.lov") == 0))
                 RETURN(0);
 
-#ifdef CONFIG_FS_POSIX_ACL
-        if (sbi->ll_flags & LL_SBI_RMT_CLIENT &&
-            (xattr_type == XATTR_ACL_ACCESS_T ||
-            xattr_type == XATTR_ACL_DEFAULT_T)) {
-                rce = rct_search(&sbi->ll_rct, cfs_curproc_pid());
-                if (rce == NULL ||
-                    (rce->rce_ops != RMT_LSETFACL &&
-                    rce->rce_ops != RMT_RSETFACL))
-                        RETURN(-EOPNOTSUPP);
-
-                if (rce->rce_ops == RMT_LSETFACL) {
-                        struct eacl_entry *ee;
-
-                        ee = et_search_del(&sbi->ll_et, cfs_curproc_pid(),
-                                           ll_inode2fid(inode), xattr_type);
-                        LASSERT(ee != NULL);
-                        if (valid & OBD_MD_FLXATTR) {
-                                acl = lustre_acl_xattr_merge2ext(
-                                                (posix_acl_xattr_header *)value,
-                                                size, ee->ee_acl);
-                                if (IS_ERR(acl)) {
-                                        ee_free(ee);
-                                        RETURN(PTR_ERR(acl));
-                                }
-                                size =  CFS_ACL_XATTR_SIZE(\
-                                                le32_to_cpu(acl->a_count), \
-                                                ext_acl_xattr);
-                                pv = (const char *)acl;
-                        }
-                        ee_free(ee);
-                } else if (rce->rce_ops == RMT_RSETFACL) {
-                        size = lustre_posix_acl_xattr_filter(
-                                                (posix_acl_xattr_header *)value,
-                                                size, &new_value);
-                        if (unlikely(size < 0))
-                                RETURN(size);
-
-                        pv = (const char *)new_value;
-                } else
-                        RETURN(-EOPNOTSUPP);
-
-                valid |= rce_ops2valid(rce->rce_ops);
-        }
-#endif
-        oc = ll_mdscapa_get(inode);
-        rc = md_setxattr(sbi->ll_md_exp, ll_inode2fid(inode), oc,
-                         valid, name, pv, size, 0, flags, ll_i2suppgid(inode),
-                         &req);
-        capa_put(oc);
-#ifdef CONFIG_FS_POSIX_ACL
-        if (new_value != NULL)
-                lustre_posix_acl_xattr_free(new_value, size);
-        if (acl != NULL)
-                lustre_ext_acl_xattr_free(acl);
-#endif
+        ll_inode2fid(&fid, inode);
+        rc = mdc_setxattr(sbi->ll_mdc_exp, &fid, valid,
+                          name, value, size, 0, flags, &req);
         if (rc) {
                 if (rc == -EOPNOTSUPP && xattr_type == XATTR_USER_T) {
                         LCONSOLE_INFO("Disabling user_xattr feature because "
@@ -216,10 +172,10 @@ int ll_setxattr(struct dentry *dentry, const char *name,
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_SETXATTR, 1);
 
         if ((strncmp(name, XATTR_TRUSTED_PREFIX, 
-                     sizeof(XATTR_TRUSTED_PREFIX) - 1) == 0 &&
+                    sizeof(XATTR_TRUSTED_PREFIX) - 1) == 0 &&
              strcmp(name + sizeof(XATTR_TRUSTED_PREFIX) - 1, "lov") == 0) ||
             (strncmp(name, XATTR_LUSTRE_PREFIX, 
-                     sizeof(XATTR_LUSTRE_PREFIX) - 1) == 0 &&
+                    sizeof(XATTR_LUSTRE_PREFIX) - 1) == 0 &&
              strcmp(name + sizeof(XATTR_LUSTRE_PREFIX) - 1, "lov") == 0)) {
                 struct lov_user_md *lump = (struct lov_user_md *)value;
                 int rc = 0;
@@ -265,15 +221,15 @@ int ll_getxattr_common(struct inode *inode, const char *name,
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *req = NULL;
-        struct mdt_body *body;
-        int xattr_type, rc;
+        struct mds_body *body;
+        struct ll_fid fid;
         void *xdata;
-        struct obd_capa *oc;
-        struct rmtacl_ctl_entry *rce = NULL;
+        int xattr_type, rc;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n",
                inode->i_ino, inode->i_generation, inode);
+
 
         /* listxattr have slightly different behavior from of ext3:
          * without 'user_xattr' ext3 will list all xattr names but
@@ -289,27 +245,12 @@ int ll_getxattr_common(struct inode *inode, const char *name,
         if (rc)
                 RETURN(rc);
 
-#ifdef CONFIG_FS_POSIX_ACL
-        if (sbi->ll_flags & LL_SBI_RMT_CLIENT &&
-            (xattr_type == XATTR_ACL_ACCESS_T ||
-            xattr_type == XATTR_ACL_DEFAULT_T)) {
-                rce = rct_search(&sbi->ll_rct, cfs_curproc_pid());
-                if (rce == NULL ||
-                    (rce->rce_ops != RMT_LSETFACL &&
-                    rce->rce_ops != RMT_LGETFACL &&
-                    rce->rce_ops != RMT_RSETFACL &&
-                    rce->rce_ops != RMT_RGETFACL))
-                        RETURN(-EOPNOTSUPP);
-        }
-#endif
-
         /* posix acl is under protection of LOOKUP lock. when calling to this,
          * we just have path resolution to the target inode, so we have great
          * chance that cached ACL is uptodate.
          */
 #ifdef CONFIG_FS_POSIX_ACL
-        if (xattr_type == XATTR_ACL_ACCESS_T &&
-            !(sbi->ll_flags & LL_SBI_RMT_CLIENT)) {
+        if (xattr_type == XATTR_ACL_ACCESS_T) {
                 struct ll_inode_info *lli = ll_i2info(inode);
                 struct posix_acl *acl;
 
@@ -329,11 +270,9 @@ int ll_getxattr_common(struct inode *inode, const char *name,
 #endif
 
 do_getxattr:
-        oc = ll_mdscapa_get(inode);
-        rc = md_getxattr(sbi->ll_md_exp, ll_inode2fid(inode), oc,
-                         valid | (rce ? rce_ops2valid(rce->rce_ops) : 0),
-                         name, NULL, 0, size, 0, &req);
-        capa_put(oc);
+        ll_inode2fid(&fid, inode);
+        rc = mdc_getxattr(sbi->ll_mdc_exp, &fid, valid, name, NULL, 0, size,
+                          &req);
         if (rc) {
                 if (rc == -EOPNOTSUPP && xattr_type == XATTR_USER_T) {
                         LCONSOLE_INFO("Disabling user_xattr feature because "
@@ -343,8 +282,9 @@ do_getxattr:
                 RETURN(rc);
         }
 
-        body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+        body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*body));
         LASSERT(body);
+        LASSERT(lustre_rep_swabbed(req, REPLY_REC_OFF));
 
         /* only detect the xattr size */
         if (size == 0)
@@ -356,39 +296,28 @@ do_getxattr:
                 GOTO(out, rc = -ERANGE);
         }
 
-        /* do not need swab xattr data */
-        xdata = req_capsule_server_sized_get(&req->rq_pill, &RMF_EADATA,
-                                             body->eadatasize);
-        if (!xdata)
+        if (lustre_msg_bufcount(req->rq_repmsg) < 3) {
+                CERROR("reply bufcount %u\n",
+                       lustre_msg_bufcount(req->rq_repmsg));
                 GOTO(out, rc = -EFAULT);
-
-#ifdef CONFIG_FS_POSIX_ACL
-        if (body->eadatasize >= 0 && rce && rce->rce_ops == RMT_LSETFACL) {
-                ext_acl_xattr_header *acl;
-
-                acl = lustre_posix_acl_xattr_2ext((posix_acl_xattr_header *)xdata,
-                                                  body->eadatasize);
-                if (IS_ERR(acl))
-                        GOTO(out, rc = PTR_ERR(acl));
-
-                rc = ee_add(&sbi->ll_et, cfs_curproc_pid(), ll_inode2fid(inode),
-                            xattr_type, acl);
-                if (unlikely(rc < 0)) {
-                        lustre_ext_acl_xattr_free(acl);
-                        GOTO(out, rc);
-                }
         }
 
-        if (xattr_type == XATTR_ACL_ACCESS_T && !body->eadatasize)
-                GOTO(out, rc = -ENODATA);
-#endif
+        /* do not need swab xattr data */
+        lustre_set_rep_swabbed(req, REPLY_REC_OFF + 1);
+        xdata = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1,
+                               body->eadatasize);
+        if (!xdata) {
+                CERROR("can't extract: %u : %u\n", body->eadatasize,
+                       lustre_msg_buflen(req->rq_repmsg, REPLY_REC_OFF + 1));
+                GOTO(out, rc = -EFAULT);
+        }
+
         LASSERT(buffer);
         memcpy(buffer, xdata, body->eadatasize);
         rc = body->eadatasize;
-        EXIT;
 out:
         ptlrpc_req_finished(req);
-        return rc;
+        RETURN(rc);
 }
 
 ssize_t ll_getxattr(struct dentry *dentry, const char *name,
@@ -405,10 +334,10 @@ ssize_t ll_getxattr(struct dentry *dentry, const char *name,
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_GETXATTR, 1);
 
         if ((strncmp(name, XATTR_TRUSTED_PREFIX, 
-                     sizeof(XATTR_TRUSTED_PREFIX) - 1) == 0 &&
+                    sizeof(XATTR_TRUSTED_PREFIX) - 1) == 0 &&
              strcmp(name + sizeof(XATTR_TRUSTED_PREFIX) - 1, "lov") == 0) ||
             (strncmp(name, XATTR_LUSTRE_PREFIX, 
-                     sizeof(XATTR_LUSTRE_PREFIX) - 1) == 0 &&
+                    sizeof(XATTR_LUSTRE_PREFIX) - 1) == 0 &&
              strcmp(name + sizeof(XATTR_LUSTRE_PREFIX) - 1, "lov") == 0)) {
                 struct lov_user_md *lump;
                 struct lov_mds_md *lmm = NULL;

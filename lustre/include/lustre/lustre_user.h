@@ -95,13 +95,11 @@ struct obd_statfs;
 #define LL_IOC_JOIN                     _IOW ('f', 163, long)
 #define IOC_OBD_STATFS                  _IOWR('f', 164, struct obd_statfs *)
 #define IOC_LOV_GETINFO                 _IOWR('f', 165, struct lov_user_mds_data *)
-#define LL_IOC_FLUSHCTX                 _IOW ('f', 166, long)
-#define LL_IOC_RMTACL                   _IOW ('f', 167, long)
 
-#define LL_IOC_LLOOP_ATTACH             _IOWR('f', 169, long)
-#define LL_IOC_LLOOP_DETACH             _IOWR('f', 170, long)
-#define LL_IOC_LLOOP_INFO               _IOWR('f', 171, long)
-#define LL_IOC_LLOOP_DETACH_BYDEV       _IOWR('f', 172, long)
+#define LL_IOC_LLOOP_ATTACH             _IOWR('f', 166, OBD_IOC_DATA_TYPE)
+#define LL_IOC_LLOOP_DETACH             _IOWR('f', 167, OBD_IOC_DATA_TYPE)
+#define LL_IOC_LLOOP_INFO               _IOWR('f', 168, OBD_IOC_DATA_TYPE)
+#define LL_IOC_LLOOP_DETACH_BYDEV       _IOWR('f', 169, OBD_IOC_DATA_TYPE)
 
 #define LL_STATFS_MDC           1
 #define LL_STATFS_LOV           2
@@ -119,22 +117,24 @@ struct obd_statfs;
 /* Do not define O_CHECK_STALE as 0200000000,
  * which is conflict with MDS_OPEN_OWNEROVERRIDE */
 #define O_CHECK_STALE       020000000  /* hopefully this does not conflict */
+
 #define O_LOV_DELAY_CREATE 0100000000  /* hopefully this does not conflict */
 #define O_JOIN_FILE        0400000000  /* hopefully this does not conflict */
 
 #define LL_FILE_IGNORE_LOCK             0x00000001
 #define LL_FILE_GROUP_LOCKED            0x00000002
 #define LL_FILE_READAHEAD               0x00000004
-#define LL_FILE_RMTACL                  0x00000008
 
 #define LOV_USER_MAGIC_V1 0x0BD10BD0
 #define LOV_USER_MAGIC    LOV_USER_MAGIC_V1
-
 #define LOV_USER_MAGIC_JOIN 0x0BD20BD0
+#define LOV_USER_MAGIC_V3 0x0BD30BD0
 
 #define LOV_PATTERN_RAID0 0x001
 #define LOV_PATTERN_RAID1 0x002
 #define LOV_PATTERN_FIRST 0x100
+
+#define MAXPOOLNAME 16
 
 #define lov_user_ost_data lov_user_ost_data_v1
 struct lov_user_ost_data_v1 {     /* per-stripe data structure */
@@ -156,6 +156,18 @@ struct lov_user_md_v1 {           /* LOV EA user data (host-endian) */
         struct lov_user_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 } __attribute__((packed));
 
+struct lov_user_md_v3 {           /* LOV EA user data (host-endian) */
+        __u32 lmm_magic;          /* magic number = LOV_USER_MAGIC_V3 */
+        __u32 lmm_pattern;        /* LOV_PATTERN_RAID0, LOV_PATTERN_RAID1 */
+        __u64 lmm_object_id;      /* LOV object ID */
+        __u64 lmm_object_gr;      /* LOV object group */
+        __u32 lmm_stripe_size;    /* size of stripe in bytes */
+        __u16 lmm_stripe_count;   /* num stripes in use for this object */
+        __u16 lmm_stripe_offset;  /* starting stripe offset in lmm_objects */
+        char  lmm_pool_name[MAXPOOLNAME]; /* pool name */
+        struct lov_user_ost_data_v1 lmm_objects[0]; /* per-stripe data */
+} __attribute__((packed));
+
 /* Compile with -D_LARGEFILE64_SOURCE or -D_GNU_SOURCE (or #define) to
  * use this.  It is unsafe to #define those values in this header as it
  * is possible the application has already #included <sys/stat.h>. */
@@ -163,14 +175,31 @@ struct lov_user_md_v1 {           /* LOV EA user data (host-endian) */
 #define lov_user_mds_data lov_user_mds_data_v1
 struct lov_user_mds_data_v1 {
         lstat_t lmd_st;                 /* MDS stat struct */
-        struct lov_user_md_v1 lmd_lmm;  /* LOV EA user data */
+        struct lov_user_md_v1 lmd_lmm;  /* LOV EA V1 user data */
+} __attribute__((packed));
+
+struct lov_user_mds_data_v3 {
+        lstat_t lmd_st;                 /* MDS stat struct */
+        struct lov_user_md_v3 lmd_lmm;  /* LOV EA V3 user data */
 } __attribute__((packed));
 #endif
 
 struct ll_recreate_obj {
         __u64 lrc_id;
-        __u64 lrc_group;
         __u32 lrc_ost_idx;
+};
+
+struct ll_fid {
+        __u64 id;         /* holds object id */
+        __u32 generation; /* holds object generation */
+        __u32 f_type;     /* holds object type or stripe idx when passing it to
+                           * OST for saving into EA. */
+};
+
+struct filter_fid {
+        struct ll_fid   ff_fid;  /* ff_fid.f_type == file stripe number */
+        __u64           ff_objid;
+        __u64           ff_group;
 };
 
 struct obd_uuid {
@@ -187,7 +216,7 @@ static inline int obd_uuid_empty(struct obd_uuid *uuid)
         return uuid->uuid[0] == '\0';
 }
 
-static inline void obd_str2uuid(struct obd_uuid *uuid, const char *tmp)
+static inline void obd_str2uuid(struct obd_uuid *uuid, char *tmp)
 {
         strncpy((char *)uuid->uuid, tmp, sizeof(*uuid));
         uuid->uuid[sizeof(*uuid) - 1] = '\0';
@@ -207,54 +236,33 @@ static inline char *obd_uuid2str(struct obd_uuid *uuid)
         return (char *)(uuid->uuid);
 }
 
-#define LUSTRE_Q_QUOTAON  0x800002     /* turn quotas on */
-#define LUSTRE_Q_QUOTAOFF 0x800003     /* turn quotas off */
-#define LUSTRE_Q_GETINFO  0x800005     /* get information about quota files */
-#define LUSTRE_Q_SETINFO  0x800006     /* set information about quota files */
-#define LUSTRE_Q_GETQUOTA 0x800007     /* get user quota structure */
-#define LUSTRE_Q_SETQUOTA 0x800008     /* set user quota structure */
+/* these must be explicitly translated into linux Q_* in ll_dir_ioctl */
+#define LUSTRE_Q_QUOTAON    0x800002     /* turn quotas on */
+#define LUSTRE_Q_QUOTAOFF   0x800003     /* turn quotas off */
+#define LUSTRE_Q_GETINFO    0x800005     /* get information about quota files */
+#define LUSTRE_Q_SETINFO    0x800006     /* set information about quota files */
+#define LUSTRE_Q_GETQUOTA   0x800007     /* get user quota structure */
+#define LUSTRE_Q_SETQUOTA   0x800008     /* set user quota structure */
+/* lustre-specific control commands */
+#define LUSTRE_Q_INVALIDATE  0x80000b     /* invalidate quota data */
+#define LUSTRE_Q_FINVALIDATE 0x80000c     /* invalidate filter quota data */
 
 #define UGQUOTA 2       /* set both USRQUOTA and GRPQUOTA */
-
-#define QFMT_LDISKFS 2  /* QFMT_VFS_V0(2), quota format for ldiskfs */
 
 struct if_quotacheck {
         char                    obd_type[16];
         struct obd_uuid         obd_uuid;
 };
 
-#define IDENTITY_DOWNCALL_MAGIC 0x6d6dd620
+#define MDS_GRP_DOWNCALL_MAGIC 0x6d6dd620
 
-/* permission */
-#define N_PERMS_MAX      64
-
-struct perm_downcall_data {
-        __u64 pdd_nid;
-        __u32 pdd_perm;
-};
-
-struct identity_downcall_data {
-        __u32                            idd_magic;
-        __u32                            idd_err;
-        __u32                            idd_uid;
-        __u32                            idd_gid;
-        __u32                            idd_nperms;
-        struct perm_downcall_data idd_perms[N_PERMS_MAX];
-        __u32                            idd_ngroups;
-        __u32                            idd_groups[0];
-};
-
-/* for non-mapped uid/gid */
-#define NOBODY_UID      99
-#define NOBODY_GID      99
-
-#define INVALID_ID      (-1)
-
-enum {
-        RMT_LSETFACL    = 1,
-        RMT_LGETFACL    = 2,
-        RMT_RSETFACL    = 3,
-        RMT_RGETFACL    = 4
+struct mds_grp_downcall_data {
+        __u32           mgd_magic;
+        __u32           mgd_err;
+        __u32           mgd_uid;
+        __u32           mgd_gid;
+        __u32           mgd_ngroups;
+        __u32           mgd_groups[0];
 };
 
 #ifdef NEED_QUOTA_DEFS
@@ -284,6 +292,11 @@ enum {
 #endif
 
 #endif /* !__KERNEL__ */
+
+typedef enum lustre_quota_version {
+        LUSTRE_QUOTA_V1 = 0,
+        LUSTRE_QUOTA_V2 = 1
+} lustre_quota_version_t;
 
 /* XXX: same as if_dqinfo struct in kernel */
 struct obd_dqinfo {

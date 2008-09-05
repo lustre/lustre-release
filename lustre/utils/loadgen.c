@@ -58,7 +58,7 @@
 #include <sys/time.h>
 
 #include <lnet/lnetctl.h>
-#include <libcfs/libcfsutil.h>
+#include "parser.h"
 #include "obdctl.h"
 
 static char cmdname[512];
@@ -264,7 +264,7 @@ static int write_proc(char *proc_path, char *value)
         return rc;
 }
 
-static int read_proc(char *proc_path,  unsigned long long *value)
+static int read_proc(char *proc_path, unsigned long long *value)
 {
         int fd, rc;
         char buf[50];
@@ -477,7 +477,6 @@ static int obj_create(struct kid_t *kid)
         data.ioc_dev = kid->k_dev;
         data.ioc_obdo1.o_mode = 0100644;
         data.ioc_obdo1.o_id = 0;
-        data.ioc_obdo1.o_gr = 2;
         data.ioc_obdo1.o_uid = 0;
         data.ioc_obdo1.o_gid = 0;
         data.ioc_obdo1.o_valid = OBD_MD_FLTYPE | OBD_MD_FLMODE |

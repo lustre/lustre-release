@@ -1,0 +1,57 @@
+Index: linux-2.6.4-51.0/fs/filesystems.c
+===================================================================
+--- linux-2.6.4-51.0.orig/fs/filesystems.c	2004-04-05 12:41:59.000000000 -0400
++++ linux-2.6.4-51.0/fs/filesystems.c	2004-04-15 14:59:56.000000000 -0400
+@@ -27,7 +27,9 @@
+  */
+ 
+ static struct file_system_type *file_systems;
+-static rwlock_t file_systems_lock = RW_LOCK_UNLOCKED;
++rwlock_t file_systems_lock = RW_LOCK_UNLOCKED;
++
++EXPORT_SYMBOL(file_systems_lock);
+ 
+ /* WARNING: This can be used only if we _already_ own a reference */
+ void get_filesystem(struct file_system_type *fs)
+Index: linux-2.6.4-51.0/include/linux/fs.h
+===================================================================
+--- linux-2.6.4-51.0.orig/include/linux/fs.h	2004-04-15 14:59:50.000000000 -0400
++++ linux-2.6.4-51.0/include/linux/fs.h	2004-04-15 14:59:56.000000000 -0400
+@@ -1432,6 +1432,7 @@
+ 
+ extern struct file_operations generic_ro_fops;
+ 
++extern rwlock_t file_systems_lock;
+ #define special_file(m) (S_ISCHR(m)||S_ISBLK(m)||S_ISFIFO(m)||S_ISSOCK(m))
+ 
+ extern int vfs_readlink(struct dentry *, char __user *, int, const char *);
+Index: linux-2.6.4-51.0/include/linux/ext2_fs_sb.h
+===================================================================
+--- linux-2.6.4-51.0.orig/include/linux/ext2_fs_sb.h	2004-04-05 12:42:07.000000000 -0400
++++ linux-2.6.4-51.0/include/linux/ext2_fs_sb.h	2004-04-15 14:59:56.000000000 -0400
+@@ -16,9 +16,11 @@
+ #ifndef _LINUX_EXT2_FS_SB
+ #define _LINUX_EXT2_FS_SB
+ 
++#ifndef EXT_INCLUDE
++#define EXT_INCLUDE
+ #include <linux/blockgroup_lock.h>
+ #include <linux/percpu_counter.h>
+-
++#endif
+ /*
+  * second extended-fs super-block data in memory
+  */
+Index: linux-2.6.5-12.1/kernel/exit.c
+===================================================================
+--- linux-2.6.5-12.1.orig/kernel/exit.c	2004-05-10 12:21:56.000000000 -0400
++++ linux-2.6.5-12.1/kernel/exit.c	2004-06-03 18:31:28.000000000 -0400
+@@ -260,6 +260,8 @@
+ 	write_unlock_irq(&tasklist_lock);
+ }
+ 
++EXPORT_SYMBOL(reparent_to_init);
++
+ void __set_special_pids(pid_t session, pid_t pgrp)
+ {
+ 	struct task_struct *curr = current;

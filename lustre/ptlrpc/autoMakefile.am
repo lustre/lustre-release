@@ -45,14 +45,13 @@ LDLM_COMM_SOURCES= $(top_srcdir)/lustre/ldlm/l_lock.c	\
 	$(top_srcdir)/lustre/ldlm/ldlm_lockd.c		\
 	$(top_srcdir)/lustre/ldlm/ldlm_internal.h	\
 	$(top_srcdir)/lustre/ldlm/ldlm_inodebits.c	\
-	$(top_srcdir)/lustre/ldlm/ldlm_flock.c          \
+	$(top_srcdir)/lustre/ldlm/ldlm_flock.c 		\
 	$(top_srcdir)/lustre/ldlm/ldlm_pool.c
 
 COMMON_SOURCES =  client.c recover.c connection.c niobuf.c pack_generic.c   \
     events.c ptlrpc_module.c service.c pinger.c recov_thread.c llog_net.c   \
-    llog_client.c llog_server.c import.c ptlrpcd.c pers.c wiretest.c   	    \
-    ptlrpc_internal.h layout.c sec.c sec_bulk.c sec_gc.c sec_config.c       \
-    sec_lproc.c sec_null.c sec_plain.c lproc_ptlrpc.c $(LDLM_COMM_SOURCES)
+    llog_client.c llog_server.c import.c ptlrpcd.c pers.c lproc_ptlrpc.c wiretest.c \
+    ptlrpc_internal.h $(LDLM_COMM_SOURCES)
 
 if LIBLUSTRE
 
@@ -91,13 +90,6 @@ ptlrpc_SOURCES := \
         recov_thread.c \
         service.c \
 	wiretest.c \
-	sec.c \
-	sec_bulk.c \
-	sec_gc.c \
-	sec_config.c \
-	sec_lproc.c \
-	sec_null.c \
-	sec_plain.c \
         $(LDLM_COMM_SOURCES)
 
 ptlrpc_CFLAGS := $(EXTRA_KCFLAGS)
@@ -111,10 +103,6 @@ install_data_hook := fix-kext-ownership
 endif # DARWIN
 
 endif # MODULES
-
-if GSS
-SUBDIRS = gss
-endif
 
 install-data-hook: $(install_data_hook)
 DIST_SOURCES = $(ptlrpc_objs:.o=.c) ptlrpc_internal.h

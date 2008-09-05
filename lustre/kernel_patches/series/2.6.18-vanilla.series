@@ -10,8 +10,7 @@ export-2.6.18-vanilla.patch
 8kstack-2.6.12.patch
 export-show_task-2.6.18-vanilla.patch 
 sd_iostats-2.6-rhel5.patch 
-export_symbol_numa-2.6.18.patch
+export_symbol_numa-2.6.18.patch 
 jbd-16tb-overflow-fixes.patch
 jbd-check-for-unmapped-buffer.patch
 jbd-stats-2.6-rhel5.patch
-export-nr_free_buffer_pages.patch

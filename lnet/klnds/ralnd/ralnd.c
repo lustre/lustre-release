@@ -69,7 +69,8 @@ kranal_pack_connreq(kra_connreq_t *connreq, kra_conn_t *conn, lnet_nid_t dstnid)
                 return;
 
         connreq->racr_devid     = conn->rac_device->rad_id;
-        connreq->racr_srcnid    = kranal_data.kra_ni->ni_nid;
+        connreq->racr_srcnid    = lnet_ptlcompat_srcnid(kranal_data.kra_ni->ni_nid,
+                                                        dstnid);
         connreq->racr_dstnid    = dstnid;
         connreq->racr_peerstamp = kranal_data.kra_peerstamp;
         connreq->racr_connstamp = conn->rac_my_connstamp;
@@ -100,6 +101,7 @@ kranal_recv_connreq(struct socket *sock, kra_connreq_t *connreq, int active)
             connreq->racr_magic != __swab32(RANAL_MSG_MAGIC)) {
                 /* Unexpected magic! */
                 if (!active &&
+                    the_lnet.ln_ptlcompat == 0 &&
                     (connreq->racr_magic == LNET_PROTO_MAGIC ||
                      connreq->racr_magic == __swab32(LNET_PROTO_MAGIC))) {
                         /* future protocol version compatibility!
@@ -109,9 +111,36 @@ kranal_recv_connreq(struct socket *sock, kra_connreq_t *connreq, int active)
                         return EPROTO;
                 }
 
-                CERROR("Unexpected magic %08x (%s)\n",
-                       connreq->racr_magic, active ? "active" : "passive");
-                return -EPROTO;
+                if (active ||
+                    the_lnet.ln_ptlcompat == 0) {
+                        CERROR("Unexpected magic %08x (1)\n",
+                               connreq->racr_magic);
+                        return -EPROTO;
+                }
+
+                /* When portals compatibility is set, I may be passed a new
+                 * connection "blindly" by the acceptor, and I have to
+                 * determine if my peer has sent an acceptor connection request
+                 * or not.  This isn't a connreq, so I'll get the acceptor to
+                 * look at it... */
+                rc = lnet_accept(kranal_data.kra_ni, sock, connreq->racr_magic);
+                if (rc != 0)
+                        return -EPROTO;
+
+                /* ...and if it's OK I'm back to looking for a connreq... */
+                rc = libcfs_sock_read(sock, &connreq->racr_magic,
+                                      sizeof(connreq->racr_magic), timeout);
+                if (rc != 0) {
+                        CERROR("Read(magic) failed(2): %d\n", rc);
+                        return -EIO;
+                }
+
+                if (connreq->racr_magic != RANAL_MSG_MAGIC &&
+                    connreq->racr_magic != __swab32(RANAL_MSG_MAGIC)) {
+                        CERROR("Unexpected magic %08x(2)\n",
+                               connreq->racr_magic);
+                        return -EPROTO;
+                }
         }
 
         swab = (connreq->racr_magic == __swab32(RANAL_MSG_MAGIC));
@@ -716,7 +745,7 @@ kranal_conn_handshake (struct socket *sock, kra_peer_t *peer)
         /* Refuse connection if peer thinks we are a different NID.  We check
          * this while holding the global lock, to synch with connection
          * destruction on NID change. */
-        if (kranal_data.kra_ni->ni_nid != dst_nid) {
+        if (!lnet_ptlcompat_matchnid(kranal_data.kra_ni->ni_nid, dst_nid)) {
                 write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
 
                 CERROR("Stale/bad connection with %s: dst_nid %s, expected %s\n",

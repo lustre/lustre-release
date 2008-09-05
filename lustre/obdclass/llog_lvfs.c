@@ -103,7 +103,6 @@ static int llog_lvfs_write_blob(struct obd_device *obd, struct l_file *file,
         struct llog_rec_tail end;
         loff_t saved_off = file->f_pos;
         int buflen = rec->lrh_len;
-
         ENTRY;
 
         file->f_pos = off;
@@ -176,7 +175,7 @@ static int llog_lvfs_read_header(struct llog_handle *handle)
         obd = handle->lgh_ctxt->loc_exp->exp_obd;
 
         if (i_size_read(handle->lgh_file->f_dentry->d_inode) == 0) {
-                CDEBUG(D_HA, "not reading header from 0-byte log\n");
+                CDEBUG(D_RPCTRACE, "not reading header from 0-byte log\n");
                 RETURN(LLOG_EEMPTY);
         }
 
@@ -246,7 +245,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         if (buf)
                 /* write_blob adds header and tail to lrh_len. */ 
                 reclen = sizeof(*rec) + rec->lrh_len + 
-                         sizeof(struct llog_rec_tail);
+                        sizeof(struct llog_rec_tail);
 
         if (idx != -1) {
                 loff_t saved_offset;
@@ -436,7 +435,7 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
                 /* put number of bytes read into rc to make code simpler */
                 rc = ppos - *cur_offset;
                 *cur_offset = ppos;
-
+                
                 if (rc < len) {
                         /* signal the end of the valid buffer to llog_process */
                         memset(buf + rc, 0, len - rc);

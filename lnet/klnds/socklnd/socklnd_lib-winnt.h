@@ -43,6 +43,7 @@
 #define __WINNT_TDILND_LIB_H__
 
 #include <libcfs/libcfs.h>
+#include <libcfs/kp30.h>
 
 #ifndef CONFIG_SMP
 

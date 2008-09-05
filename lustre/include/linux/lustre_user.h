@@ -41,6 +41,13 @@
 #ifndef _LINUX_LUSTRE_USER_H
 #define _LINUX_LUSTRE_USER_H
 
+#ifdef HAVE_ASM_TYPES_H
+#include <asm/types.h>
+#else
+#include <lustre/types.h>
+#endif
+
+
 #ifndef __KERNEL__
 # define NEED_QUOTA_DEFS
 # ifdef HAVE_QUOTA_SUPPORT
@@ -48,6 +55,9 @@
 # endif
 #else
 # include <linux/version.h>
+# if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,21)
+#  define NEED_QUOTA_DEFS
+# endif
 # ifdef HAVE_QUOTA_SUPPORT
 #  include <linux/quota.h>
 # endif
