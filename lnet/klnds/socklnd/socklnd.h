@@ -209,6 +209,7 @@ typedef struct                                  /* transmit packet */
         lnet_kiov_t            *tx_kiov;        /* packet page frags */
         struct ksock_conn      *tx_conn;        /* owning conn */
         lnet_msg_t             *tx_lnetmsg;     /* lnet message for lnet_finalize() */
+        cfs_time_t              tx_deadline;    /* when (in jiffies) tx times out */
         ksock_msg_t             tx_msg;         /* socklnd message buffer */
         int                     tx_desc_size;   /* size of this descriptor */
         union {

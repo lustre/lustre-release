@@ -18,6 +18,13 @@ Description:
 Details    : 
 
 Severity   : normal
+Bugzilla   : 16308
+Description: finalize network operation in reasonable time
+Details    : conf-sanity test_32a couldn't stop ost and mds because it
+             tried to access non-existent peer and tcp connect took
+             quite long before timing out.
+
+Severity   : normal
 Bugzilla   : 13139
 Description: Remove portals compatibility
 Details    : Remove portals compatibility, not interoperable with releases
