@@ -79,7 +79,7 @@ init_test_env() {
     export LUSTRE=`absolute_path $LUSTRE`
     export TESTSUITE=`basename $0 .sh`
 
-    #[ -d /r ] && export ROOT=${ROOT:-/r}
+    [ -d /r ] && export ROOT=${ROOT:-/r}
     export TMP=${TMP:-$ROOT/tmp}
     export TESTSUITELOG=${TMP}/${TESTSUITE}.log
     export HOSTNAME=${HOSTNAME:-`hostname`}
@@ -90,7 +90,7 @@ init_test_env() {
 	export PATH=$PATH:$LUSTRE/tests
     fi
     export MDSRATE=${MDSRATE:-"$LUSTRE/tests/mdsrate"}
-    [ ! -f "$MDSRATE" ] && export MDSRATE=$(which mdsrate 2> /dev/null)
+    [ ! -f "$MDSRATE" ] && export MDSRATE=$(which mdsrate)
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     export LFS=${LFS:-"$LUSTRE/utils/lfs"}
     [ ! -f "$LCTL" ] && export LCTL=$(which lctl) 
@@ -137,6 +137,7 @@ init_test_env() {
 }
 
 case `uname -r` in
+2.4.*) EXT=".o"; USE_QUOTA=no; [ ! "$CLIENTONLY" ] && FSTYPE=ext3;;
     *) EXT=".ko"; USE_QUOTA=yes;;
 esac
 
@@ -249,7 +250,7 @@ unload_modules() {
     wait_exit_ST client # bug 12845
 
     lsmod | grep libcfs > /dev/null && $LCTL dl
-    [ -z "$CLIENTONLY" ] && unload_dep_module $FSTYPE
+    unload_dep_module $FSTYPE
     unload_dep_module libcfs
 
     local MODULES=$($LCTL modules | awk '{ print $2 }')
@@ -362,6 +363,7 @@ zconf_mount() {
         lctl set_param subsystem_debug=${SUBSYSTEM# };
         lctl set_param debug_mb=${DEBUG_SIZE}"
 
+    [ -d /r ] && $LCTL modules > /r/tmp/ogdb-$HOSTNAME
     return 0
 }
 
@@ -575,10 +577,8 @@ client_df() {
 
 client_reconnect() {
     uname -n >> $MOUNT/recon
-    if [ -z "$CLIENTS" ]; then
-        df $MOUNT; uname -n >> $MOUNT/recon
-    else
-        do_nodes $CLIENTS "df $MOUNT; uname -n >> $MOUNT/recon" > /dev/null
+    if [ ! -z "$CLIENTS" ]; then
+        $PDSH $CLIENTS "df $MOUNT; uname -n >> $MOUNT/recon" > /dev/null
     fi
     echo Connected clients:
     cat $MOUNT/recon
@@ -1069,16 +1069,9 @@ at_is_enabled() {
 }
 
 at_max_get() {
-    local facet=$1
-
     at_is_valid || error "invalid call"
 
-    # suppose that all ost-s has the same at_max set
-    if [ $facet == "ost" ]; then
-        do_facet ost1 "cat $AT_MAX_PATH"
-    else
-        do_facet $facet "cat $AT_MAX_PATH"
-    fi
+    do_facet $1 "cat $AT_MAX_PATH"
 }
 
 at_max_set() {
@@ -1087,7 +1080,6 @@ at_max_set() {
 
     at_is_valid || error "invalid call"
 
-    local facet
     for facet in $@; do
         if [ $facet == "ost" ]; then
             for i in `seq $OSTCOUNT`; do
@@ -1194,10 +1186,8 @@ set_nodes_failloc () {
 
 cancel_lru_locks() {
     $LCTL mark "cancel_lru_locks $1 start"
-    for d in `lctl get_param -N ldlm.namespaces.*.lru_size | egrep -i $1`; do
-        $LCTL set_param -n $d=clear
-    done
-    $LCTL get_param ldlm.namespaces.*.lock_unused_count | egrep -i $1 | grep -v '=0'
+    lctl set_param ldlm.namespaces.*$1*.lru_size=0
+    lctl get_param ldlm.namespaces.*$1*.lock_unused_count | grep -v '=0'
     $LCTL mark "cancel_lru_locks $1 stop"
 }
 
@@ -1280,8 +1270,7 @@ error_ignore() {
 
 skip () {
 	log " SKIP: ${TESTSUITE} ${TESTNAME} $@"
-	[ "$TESTSUITELOG" ] && \
-		echo "${TESTSUITE}: SKIP: $TESTNAME $@" >> $TESTSUITELOG || true
+	[ "$TESTSUITELOG" ] && echo "${TESTSUITE}: SKIP: $TESTNAME $@" >> $TESTSUITELOG
 }
 
 build_test_filter() {
@@ -1378,7 +1367,6 @@ log() {
     MSG=${MSG//\|/\\\|}
     MSG=${MSG//\>/\\\>}
     MSG=${MSG//\</\\\<}
-    MSG=${MSG//\//\\\/}
     local NODES=$(nodes_list)
     for NODE in $NODES; do
         do_node $NODE $LCTL mark "$MSG" 2> /dev/null || true
@@ -1429,7 +1417,8 @@ run_one() {
     cd $SAVE_PWD
     reset_fail_loc
     check_grant ${testnum} || error "check_grant $testnum failed with $?"
-    check_catastrophe || error "LBUG/LASSERT detected"
+    [ -f $CATASTROPHE ] && [ `cat $CATASTROPHE` -ne 0 ] && \
+        error "LBUG/LASSERT detected"
     ps auxww | grep -v grep | grep -q multiop && error "multiop still running"
     pass "($((`date +%s` - $BEFORE))s)"
     unset TESTNAME
@@ -1552,12 +1541,6 @@ nodes_list () {
     myNODES_sort=$(for i in $myNODES; do echo $i; done | sort -u)
 
     echo $myNODES_sort
-}
-
-remote_nodes_list () {
-    local rnodes=$(nodes_list)
-    rnodes=$(echo " $rnodes " | sed -re "s/\s+$HOSTNAME\s+/ /g")
-    echo $rnodes 
 }
 
 init_clients_lists () {
@@ -1718,14 +1701,5 @@ restore_lustre_params() {
         while IFS=" =" read node name val; do
                 do_node $node "lctl set_param -n $name $val"
         done
-}
-
-check_catastrophe () {
-    local rnodes=$(comma_list $(remote_nodes_list))
-
-    [ -f $CATASTROPHE ] && [ `cat $CATASTROPHE` -ne 0 ] && return 1
-    if [ $rnodes ]; then
-        do_nodes $rnodes "[ -f $CATASTROPHE ] && { [ \`cat $CATASTROPHE\` -eq 0 ] || false; } || true"
-    fi 
 }
 

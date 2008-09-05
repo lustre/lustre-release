@@ -234,7 +234,7 @@ int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
 
         if (mdc_exp_is_2_0_server(exp)) {
                 struct client_obd *cli = &obd->u.cli;
-                rc = mdc_fid_alloc(cli->cl_seq, (void *)&op_data->fid2);
+                rc = mdc_fid_alloc(cli->cl_seq, (struct lu_fid*)&op_data->fid2);
                 if (rc) {
                         CERROR("fid allocation result: %d\n", rc);
                         RETURN(rc);

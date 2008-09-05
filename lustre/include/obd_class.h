@@ -58,7 +58,6 @@
 /* OBD Device Declarations */
 extern struct obd_device *obd_devs[MAX_OBD_DEVICES];
 extern spinlock_t obd_dev_lock;
-extern cfs_mem_cache_t *obd_lvfs_ctxt_cache;
 
 /* OBD Operations Declarations */
 extern struct obd_device *class_conn2obd(struct lustre_handle *);
@@ -222,9 +221,7 @@ void class_fail_export(struct obd_export *exp);
 void class_disconnect_exports(struct obd_device *obddev);
 void class_set_export_delayed(struct obd_export *exp);
 void class_handle_stale_exports(struct obd_device *obddev);
-void class_disconnect_expired_exports(struct obd_device *obd);
 void class_disconnect_stale_exports(struct obd_device *obd);
-int class_stale_export_list(struct obd_device *obd, struct obd_ioctl_data *data);
 int class_manual_cleanup(struct obd_device *obd);
 
 /* obdo.c */
@@ -746,54 +743,6 @@ static inline int obd_ping(struct obd_export *exp)
         EXP_COUNTER_INCREMENT(exp, ping);
 
         rc = OBP(exp->exp_obd, ping)(exp);
-        RETURN(rc);
-}
-
-static inline int obd_pool_new(struct obd_device *obd, char *poolname)
-{
-        int rc;
-        ENTRY;
-
-        OBD_CHECK_OP(obd, pool_new, -EOPNOTSUPP);
-        OBD_COUNTER_INCREMENT(obd, pool_new);
-
-        rc = OBP(obd, pool_new)(obd, poolname);
-        RETURN(rc);
-}
-
-static inline int obd_pool_del(struct obd_device *obd, char *poolname)
-{
-        int rc;
-        ENTRY;
-
-        OBD_CHECK_OP(obd, pool_del, -EOPNOTSUPP);
-        OBD_COUNTER_INCREMENT(obd, pool_del);
-
-        rc = OBP(obd, pool_del)(obd, poolname);
-        RETURN(rc);
-}
-
-static inline int obd_pool_add(struct obd_device *obd, char *poolname, char *ostname)
-{
-        int rc;
-        ENTRY;
-
-        OBD_CHECK_OP(obd, pool_add, -EOPNOTSUPP);
-        OBD_COUNTER_INCREMENT(obd, pool_add);
-
-        rc = OBP(obd, pool_add)(obd, poolname, ostname);
-        RETURN(rc);
-}
-
-static inline int obd_pool_rem(struct obd_device *obd, char *poolname, char *ostname)
-{
-        int rc;
-        ENTRY;
-
-        OBD_CHECK_OP(obd, pool_rem, -EOPNOTSUPP);
-        OBD_COUNTER_INCREMENT(obd, pool_rem);
-
-        rc = OBP(obd, pool_rem)(obd, poolname, ostname);
         RETURN(rc);
 }
 
@@ -1461,7 +1410,6 @@ static inline int obd_notify_observer(struct obd_device *observer,
         return rc1 ?: rc2;
  }
 
-#ifdef HAVE_QUOTA_SUPPORT
 static inline int obd_quotacheck(struct obd_export *exp,
                                  struct obd_quotactl *oqctl)
 {
@@ -1519,7 +1467,6 @@ static inline int obd_quota_adjust_qunit(struct obd_export *exp,
 #endif
         RETURN(rc);
 }
-#endif
 
 static inline int obd_health_check(struct obd_device *obd)
 {

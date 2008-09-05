@@ -171,8 +171,9 @@ int lustre_write_quota_info(struct lustre_quota_info *lqi, int type)
                               sizeof(struct lustre_disk_dqinfo), &offset);
         set_fs(fs);
         if (size != sizeof(struct lustre_disk_dqinfo)) {
-                CWARN("Can't write info structure on device %s.\n",
-                      f->f_vfsmnt->mnt_sb->s_id);
+                printk(KERN_WARNING
+                       "Can't write info structure on device %s.\n",
+                       f->f_vfsmnt->mnt_sb->s_id);
                 return -1;
         }
         return 0;
@@ -240,7 +241,8 @@ dqbuf_t getdqbuf(void)
 {
         dqbuf_t buf = kmalloc(LUSTRE_DQBLKSIZE, GFP_NOFS);
         if (!buf)
-                CWARN("VFS: Not enough memory for quota buffers.\n");
+                printk(KERN_WARNING
+                       "VFS: Not enough memory for quota buffers.\n");
         return buf;
 }
 
@@ -585,8 +587,8 @@ static int lustre_write_dquot(struct lustre_dquot *dquot,
                                 dqblk_sz, &offset);
         set_fs(fs);
         if (ret != dqblk_sz) {
-                CWARN("VFS: dquota write failed on dev %s\n",
-                      filp->f_dentry->d_sb->s_id);
+                printk(KERN_WARNING "VFS: dquota write failed on dev %s\n",
+                       filp->f_dentry->d_sb->s_id);
                 if (ret >= 0)
                         ret = -ENOSPC;
         } else

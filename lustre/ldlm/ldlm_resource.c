@@ -994,8 +994,8 @@ void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
         check_res_locked(res);
 
         ldlm_resource_dump(D_INFO, res);
-        CDEBUG(D_OTHER, "About to add this lock:\n");
-        ldlm_lock_dump(D_OTHER, lock, 0);
+        CDEBUG(D_INFO, "About to add this lock:\n");
+        ldlm_lock_dump(D_INFO, lock, 0);
 
         if (lock->l_destroyed) {
                 CDEBUG(D_OTHER, "Lock destroyed, not adding to resource\n");
@@ -1014,7 +1014,7 @@ void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
 
         check_res_locked(res);
 
-        ldlm_resource_dump(D_INFO, res);
+        ldlm_resource_dump(D_OTHER, res);
         CDEBUG(D_OTHER, "About to insert this lock after %p:\n", original);
         ldlm_lock_dump(D_OTHER, new, 0);
 

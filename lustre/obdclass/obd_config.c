@@ -207,7 +207,6 @@ int class_attach(struct lustre_cfg *lcfg)
         obd->obd_pool_slv = 0;
 
         CFS_INIT_LIST_HEAD(&obd->obd_exports);
-        CFS_INIT_LIST_HEAD(&obd->obd_delayed_exports);
         CFS_INIT_LIST_HEAD(&obd->obd_exports_timed);
         CFS_INIT_LIST_HEAD(&obd->obd_nid_stats);
         spin_lock_init(&obd->obd_nid_lock);
@@ -491,6 +490,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (err)
                 CERROR("Precleanup %s returned %d\n",
                        obd->obd_name, err);
+
         class_decref(obd);
         obd->obd_set_up = 0;
 
@@ -620,29 +620,6 @@ int class_del_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
         rc = obd_del_conn(imp, &uuid);
 
         RETURN(rc);
-}
-
-struct sptlrpc_conf_log_hdr {
-        __u32   scl_max;
-        __u32   scl_nrule;
-};
-
-static int class_sptlrpc_conf(struct obd_device *obd, struct lustre_cfg *lcfg)
-{
-        struct sptlrpc_conf_log_hdr *log;
-
-        log = lustre_cfg_buf(lcfg, 1);
-        if (log == NULL || lcfg->lcfg_buflens[1] < sizeof(*log)) {
-                CERROR("missing data in sptlrpc config record\n");
-                return 0;
-        }
-
-        /* don't care endian */
-        if (log->scl_nrule != 0)
-                CWARN("Please notify your sysadmin to remove all "
-                      "sptlrpc rules on MGS\n");
-
-        return 0;
 }
 
 CFS_LIST_HEAD(lustre_profile_list);
@@ -869,32 +846,6 @@ int class_process_config(struct lustre_cfg *lcfg)
                 err = class_del_conn(obd, lcfg);
                 GOTO(out, err = 0);
         }
-        case LCFG_SPTLRPC_CONF: {
-                err = class_sptlrpc_conf(obd, lcfg);
-                GOTO(out, err = 0);
-        }
-        case LCFG_POOL_NEW: {
-                err = obd_pool_new(obd, lustre_cfg_string(lcfg, 2));
-                GOTO(out, err = 0);
-                break;
-        }
-        case LCFG_POOL_ADD: {
-                err = obd_pool_add(obd, lustre_cfg_string(lcfg, 2),
-                                   lustre_cfg_string(lcfg, 3));
-                GOTO(out, err = 0);
-                break;
-        }
-        case LCFG_POOL_REM: {
-                err = obd_pool_rem(obd, lustre_cfg_string(lcfg, 2),
-                                   lustre_cfg_string(lcfg, 3));
-                GOTO(out, err = 0);
-                break;
-        }
-        case LCFG_POOL_DEL: {
-                err = obd_pool_del(obd, lustre_cfg_string(lcfg, 2));
-                GOTO(out, err = 0);
-                break;
-        }
         default: {
                 err = obd_process_config(obd, sizeof(*lcfg), lcfg);
                 GOTO(out, err);
@@ -1013,13 +964,11 @@ static int class_config_llog_handler(struct llog_handle * handle,
                 struct lustre_cfg_bufs bufs;
                 char *inst_name = NULL;
                 int inst_len = 0;
-                int inst = 0, swab = 0;
+                int inst = 0;
 
                 lcfg = (struct lustre_cfg *)cfg_buf;
-                if (lcfg->lcfg_version == __swab32(LUSTRE_CFG_VERSION)) {
+                if (lcfg->lcfg_version == __swab32(LUSTRE_CFG_VERSION))
                         lustre_swab_lustre_cfg(lcfg);
-                        swab = 1;
-                }
 
                 rc = lustre_cfg_sanity_check(cfg_buf, cfg_len);
                 if (rc)
@@ -1028,8 +977,6 @@ static int class_config_llog_handler(struct llog_handle * handle,
                 /* Figure out config state info */
                 if (lcfg->lcfg_command == LCFG_MARKER) {
                         struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
-                        if (swab)
-                                lustre_swab_cfg_marker(marker);
                         CDEBUG(D_CONFIG, "Marker, inst_flg=%#x mark_flg=%#x\n",
                                clli->cfg_flags, marker->cm_flags);
                         if (marker->cm_flags & CM_START) {
@@ -1180,15 +1127,15 @@ int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
 
         /* continue processing from where we last stopped to end-of-log */
         if (cfg)
-                cd.lpcd_first_idx = cfg->cfg_last_idx;
-        cd.lpcd_last_idx = 0;
+                cd.first_idx = cfg->cfg_last_idx;
+        cd.last_idx = 0;
 
         rc = llog_process(llh, class_config_llog_handler, cfg, &cd);
 
         CDEBUG(D_CONFIG, "Processed log %s gen %d-%d (rc=%d)\n", name, 
-               cd.lpcd_first_idx + 1, cd.lpcd_last_idx, rc);
+               cd.first_idx + 1, cd.last_idx, rc);
         if (cfg)
-                cfg->cfg_last_idx = cd.lpcd_last_idx;
+                cfg->cfg_last_idx = cd.last_idx;
 
 parse_out:
         rc2 = llog_close(llh);

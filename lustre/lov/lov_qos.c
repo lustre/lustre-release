@@ -108,7 +108,7 @@ int qos_add_tgt(struct obd_device *obd, __u32 index)
         list_add_tail(&oss->lqo_oss_list, &temposs->lqo_oss_list);
 
         lov->lov_qos.lq_dirty = 1;
-        lov->lov_qos.lq_rr.lqr_dirty = 1;
+        lov->lov_qos.lq_dirty_rr = 1;
 
         CDEBUG(D_QOS, "add tgt %s to OSS %s (%d OSTs)\n",
                obd_uuid2str(&lov->lov_tgts[index]->ltd_uuid),
@@ -146,7 +146,7 @@ int qos_del_tgt(struct obd_device *obd, __u32 index)
         }
 
         lov->lov_qos.lq_dirty = 1;
-        lov->lov_qos.lq_rr.lqr_dirty = 1;
+        lov->lov_qos.lq_dirty_rr = 1;
 out:
         up_write(&lov->lov_qos.lq_rw_sem);
         RETURN(rc);
@@ -316,11 +316,10 @@ static int qos_used(struct lov_obd *lov, __u32 index, __u64 *total_wt)
                         *total_wt += lov->lov_tgts[i]->ltd_qos.ltq_weight;
 
 #ifdef QOS_DEBUG
-                CDEBUG(D_QOS, "recalc tgt %d usable=%d avail="LPU64
+                CDEBUG(D_QOS, "recalc tgt %d avail="LPU64
                        " ostppo="LPU64" ostp="LPU64" ossppo="LPU64
                        " ossp="LPU64" wt="LPU64"\n",
-                       i, lov->lov_tgts[i]->ltd_qos.ltq_usable,
-                       TGT_BAVAIL(i) >> 10,
+                       i, TGT_BAVAIL(i) >> 10,
                        lov->lov_tgts[i]->ltd_qos.ltq_penalty_per_obj >> 10,
                        lov->lov_tgts[i]->ltd_qos.ltq_penalty >> 10,
                        lov->lov_tgts[i]->ltd_qos.ltq_oss->lqo_penalty_per_obj>>10,
@@ -333,57 +332,62 @@ static int qos_used(struct lov_obd *lov, __u32 index, __u64 *total_wt)
 }
 
 #define LOV_QOS_EMPTY ((__u32)-1)
-/* compute optimal round-robin order, based on OSTs per OSS
- */
-static int qos_calc_rr(struct lov_obd *lov, struct ost_pool *src_pool,
-                       struct lov_qos_rr *lqr)
+/* compute optimal round-robin order, based on OSTs per OSS */
+static int qos_calc_rr(struct lov_obd *lov)
 {
         struct lov_qos_oss *oss;
-        unsigned placed, real_count;
-        int i, rc;
+        unsigned ost_count, placed, real_count;
+        int i;
         ENTRY;
 
-        if (!lqr->lqr_dirty) {
-                LASSERT(lqr->lqr_pool.op_size);
+        if (!lov->lov_qos.lq_dirty_rr) {
+                LASSERT(lov->lov_qos.lq_rr_size);
                 RETURN(0);
         }
 
         /* Do actual allocation. */
         down_write(&lov->lov_qos.lq_rw_sem);
+        ost_count = lov->desc.ld_tgt_count;
 
-        if (lqr->lqr_pool.op_size)
-                lov_ost_pool_free(&lqr->lqr_pool);
-        rc = lov_ost_pool_init(&lqr->lqr_pool, src_pool->op_count);
-        if (rc) {
+        if (lov->lov_qos.lq_rr_size)
+                OBD_FREE(lov->lov_qos.lq_rr_array, lov->lov_qos.lq_rr_size);
+        lov->lov_qos.lq_rr_size = ost_count *
+                sizeof(lov->lov_qos.lq_rr_array[0]);
+        OBD_ALLOC(lov->lov_qos.lq_rr_array, lov->lov_qos.lq_rr_size);
+        if (!lov->lov_qos.lq_rr_array) {
+                lov->lov_qos.lq_rr_size = 0;
                 up_write(&lov->lov_qos.lq_rw_sem);
-                RETURN(rc);
+                RETURN(-ENOMEM);
         }
 
-        for (i = 0; i < src_pool->op_count; i++)
-                lqr->lqr_pool.op_array[i] = LOV_QOS_EMPTY;
-        lqr->lqr_pool.op_count = src_pool->op_count;
+        real_count = 0;
+        for (i = 0; i < ost_count; i++) {
+                lov->lov_qos.lq_rr_array[i] = LOV_QOS_EMPTY;
+                if (lov->lov_tgts[i])
+                        real_count++;
+        }
 
         /* Place all the OSTs from 1 OSS at the same time. */
-        real_count = lqr->lqr_pool.op_count;
         placed = 0;
         list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
                 int j = 0;
-                for (i = 0; i < lqr->lqr_pool.op_count; i++) {
-                        if (lov->lov_tgts[src_pool->op_array[i]] &&
-                            (lov->lov_tgts[src_pool->op_array[i]]->ltd_qos.ltq_oss == oss)) {
+                for (i = 0; i < ost_count; i++) {
+                        if (lov->lov_tgts[i] &&
+                            lov->lov_tgts[i]->ltd_qos.ltq_oss == oss) {
                               /* Evenly space these OSTs across arrayspace */
-                              int next = j * lqr->lqr_pool.op_count / oss->lqo_ost_count;
-                              while (lqr->lqr_pool.op_array[next] !=
+                              int next = j * ost_count / oss->lqo_ost_count;
+                              while (lov->lov_qos.lq_rr_array[next] !=
                                      LOV_QOS_EMPTY)
-                                      next = (next + 1) % lqr->lqr_pool.op_count;
-                              lqr->lqr_pool.op_array[next] = src_pool->op_array[i];
+                                      next = (next + 1) % ost_count;
+                              lov->lov_qos.lq_rr_array[next] = i;
                               j++;
                               placed++;
                         }
                 }
+                LASSERT(j == oss->lqo_ost_count);
         }
 
-        lqr->lqr_dirty = 0;
+        lov->lov_qos.lq_dirty_rr = 0;
         up_write(&lov->lov_qos.lq_rw_sem);
 
         if (placed != real_count) {
@@ -391,18 +395,18 @@ static int qos_calc_rr(struct lov_obd *lov, struct ost_pool *src_pool,
                 LCONSOLE_ERROR_MSG(0x14e, "Failed to place all OSTs in the "
                                    "round-robin list (%d of %d).\n",
                                    placed, real_count);
-                for (i = 0; i < lqr->lqr_pool.op_count; i++) {
+                for (i = 0; i < ost_count; i++) {
                         LCONSOLE(D_WARNING, "rr #%d ost idx=%d\n", i,
-                                 lqr->lqr_pool.op_array[i]);
+                                 lov->lov_qos.lq_rr_array[i]);
                 }
-                lqr->lqr_dirty = 1;
+                lov->lov_qos.lq_dirty_rr = 1;
                 RETURN(-EAGAIN);
         }
 
 #ifdef QOS_DEBUG
-        for (i = 0; i < lqr->lqr_pool.op_count; i++) {
+        for (i = 0; i < ost_count; i++) {
                 LCONSOLE(D_QOS, "rr #%d ost idx=%d\n", i,
-                         lqr->lqr_pool.op_array[i]);
+                         lov->lov_qos.lq_rr_array[i]);
         }
 #endif
 
@@ -501,70 +505,54 @@ static int min_stripe_count(int stripe_cnt, int flags)
 #define LOV_CREATE_RESEED_MIN  1000
 /* Allocate objects on osts with round-robin algorithm */
 static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt,
-                    char *poolname, int flags)
+                    int flags)
 {
-        unsigned array_idx;
+        unsigned array_idx, ost_count = lov->desc.ld_tgt_count;
+        unsigned ost_active_count = lov->desc.ld_active_tgt_count;
         int i, *idx_pos;
         __u32 ost_idx;
         int ost_start_idx_temp;
         int speed = 0;
         int stripe_cnt_min = min_stripe_count(*stripe_cnt, flags);
-        struct pool_desc *pool;
-        struct ost_pool *osts;
-        struct lov_qos_rr *lqr;
         ENTRY;
 
-        pool = lov_find_pool(lov, poolname);
-        if (pool == NULL) {
-                osts = &(lov->lov_packed);
-                lqr = &(lov->lov_qos.lq_rr);
-        } else {
-                read_lock(&pool_tgt_rwlock(pool));
-                osts = &(pool->pool_obds);
-                lqr = &(pool->pool_rr);
-        }
-
-        i = qos_calc_rr(lov, osts, lqr);
-        if (i) {
-                if (pool != NULL)
-                        read_unlock(&pool_tgt_rwlock(pool));
+        i = qos_calc_rr(lov);
+        if (i)
                 RETURN(i);
-        }
 
-        if (--lqr->lqr_start_count <= 0) {
-                lqr->lqr_start_idx = ll_rand() % osts->op_count;
-                lqr->lqr_start_count =
-                        (LOV_CREATE_RESEED_MIN / max(osts->op_count, 1U) +
-                         LOV_CREATE_RESEED_MULT) * max(osts->op_count, 1U);
-        } else if (stripe_cnt_min >= osts->op_count ||
-                   lqr->lqr_start_idx > osts->op_count) {
+        if (--lov->lov_start_count <= 0) {
+                lov->lov_start_idx = ll_rand() % ost_count;
+                lov->lov_start_count =
+                        (LOV_CREATE_RESEED_MIN / max(ost_active_count, 1U) +
+                         LOV_CREATE_RESEED_MULT) * max(ost_active_count, 1U);
+        } else if (stripe_cnt_min >= ost_active_count ||
+                   lov->lov_start_idx > ost_count) {
                 /* If we have allocated from all of the OSTs, slowly
                  * precess the next start if the OST/stripe count isn't
                  * already doing this for us. */
-                lqr->lqr_start_idx %= osts->op_count;
-                if (*stripe_cnt > 1 && (osts->op_count % (*stripe_cnt)) != 1)
-                        ++lqr->lqr_offset_idx;
+                lov->lov_start_idx %= ost_count;
+                if (*stripe_cnt > 1 && (ost_active_count % (*stripe_cnt)) != 1)
+                        ++lov->lov_offset_idx;
         }
         down_read(&lov->lov_qos.lq_rw_sem);
-        ost_start_idx_temp = lqr->lqr_start_idx;
+        ost_start_idx_temp = lov->lov_start_idx;
 
 repeat_find:
-        array_idx = (lqr->lqr_start_idx + lqr->lqr_offset_idx) % osts->op_count;
+        array_idx = (lov->lov_start_idx + lov->lov_offset_idx) % ost_count;
         idx_pos = idx_arr;
 #ifdef QOS_DEBUG
-        CDEBUG(D_QOS, "pool '%s' want %d startidx %d startcnt %d offset %d "
-               "active %d count %d arrayidx %d\n", poolname,
-               *stripe_cnt, lqr->lqr_start_idx, lqr->lqr_start_count,
-               lqr->lqr_offset_idx, osts->op_count, osts->op_count, array_idx);
+        CDEBUG(D_QOS, "want %d startidx %d startcnt %d offset %d active %d "
+               "count %d arrayidx %d\n",
+               stripe_cnt, lov->lov_start_idx, lov->lov_start_count,
+               lov->lov_offset_idx, ost_active_count, ost_count, array_idx);
 #endif
 
-        for (i = 0; i < osts->op_count;
-                    i++, array_idx=(array_idx + 1) % osts->op_count) {
-                ++lqr->lqr_start_idx;
-                ost_idx = lqr->lqr_pool.op_array[array_idx];
+        for (i = 0; i < ost_count; i++, array_idx=(array_idx + 1) % ost_count) {
+                ++lov->lov_start_idx;
+                ost_idx = lov->lov_qos.lq_rr_array[array_idx];
 #ifdef QOS_DEBUG
                 CDEBUG(D_QOS, "#%d strt %d act %d strp %d ary %d idx %d\n",
-                       i, lqr->lqr_start_idx,
+                       i, lov->lov_start_idx,
                        ((ost_idx != LOV_QOS_EMPTY) && lov->lov_tgts[ost_idx]) ?
                        lov->lov_tgts[ost_idx]->ltd_active : 0,
                        idx_pos - idx_arr, array_idx, ost_idx);
@@ -591,12 +579,9 @@ repeat_find:
         if ((speed < 2) && (idx_pos - idx_arr < stripe_cnt_min)) {
                 /* Try again, allowing slower OSCs */
                 speed++;
-                lqr->lqr_start_idx = ost_start_idx_temp;
+                lov->lov_start_idx = ost_start_idx_temp;
                 goto repeat_find;
         }
-
-        if (pool != NULL)
-                read_unlock(&pool_tgt_rwlock(pool));
 
         up_read(&lov->lov_qos.lq_rw_sem);
 
@@ -608,45 +593,15 @@ repeat_find:
 static int alloc_specific(struct lov_obd *lov, struct lov_stripe_md *lsm,
                           int *idx_arr)
 {
-        unsigned ost_idx, array_idx, ost_count;
+        unsigned ost_idx, ost_count = lov->desc.ld_tgt_count;
         int i, *idx_pos;
         int speed = 0;
-        struct pool_desc *pool = NULL;
-        struct ost_pool *osts;
         ENTRY;
 
-        pool = lov_find_pool(lov, lsm->lsm_pool_name);
-        if (pool == NULL) {
-                osts = &(lov->lov_packed);
-        } else {
-                read_lock(&pool_tgt_rwlock(pool));
-                osts = &(pool->pool_obds);
-        }
-
-        ost_count = osts->op_count;
-
 repeat_find:
-        /* search loi_ost_idx in ost array */
-        array_idx = 0;
-        for (i = 0; i < ost_count; i++) {
-                if (osts->op_array[i] == lsm->lsm_oinfo[0]->loi_ost_idx) {
-                        array_idx = i;
-                        break;
-                }
-        }
-        if (i == ost_count) {
-                if (pool != NULL)
-                        read_unlock(&pool_tgt_rwlock(pool));
-                CERROR("Start index %d not found in pool '%s'\n",
-                       lsm->lsm_oinfo[0]->loi_ost_idx, lsm->lsm_pool_name);
-                RETURN(-EINVAL);
-        }
-
+        ost_idx = lsm->lsm_oinfo[0]->loi_ost_idx;
         idx_pos = idx_arr;
-        for (i = 0; i < ost_count;
-             i++, array_idx = (array_idx + 1) % ost_count) {
-                ost_idx = osts->op_array[array_idx];
-
+        for (i = 0; i < ost_count; i++, ost_idx = (ost_idx + 1) % ost_count) {
                 if (!lov->lov_tgts[ost_idx] ||
                     !lov->lov_tgts[ost_idx]->ltd_active) {
                         continue;
@@ -665,11 +620,8 @@ repeat_find:
                 *idx_pos = ost_idx;
                 idx_pos++;
                 /* We have enough stripes */
-                if (idx_pos - idx_arr == lsm->lsm_stripe_count) {
-                        if (pool != NULL)
-                                read_unlock(&pool_tgt_rwlock(pool));
+                if (idx_pos - idx_arr == lsm->lsm_stripe_count)
                         RETURN(0);
-                }
         }
         if (speed < 2) {
                 /* Try again, allowing slower OSCs */
@@ -686,10 +638,6 @@ repeat_find:
         CERROR("can't lstripe objid "LPX64": have %d want %u\n",
                lsm->lsm_object_id, (int)(idx_pos - idx_arr),
                lsm->lsm_stripe_count);
-
-        if (pool != NULL)
-                read_unlock(&pool_tgt_rwlock(pool));
-
         RETURN(-EFBIG);
 }
 
@@ -698,34 +646,24 @@ repeat_find:
    - network resources (shared OSS's)
 */
 static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
-                     char *poolname, int flags)
+                     int flags)
 {
         struct lov_obd *lov = &exp->exp_obd->u.lov;
         static time_t last_warn = 0;
         time_t now = cfs_time_current_sec();
         __u64 total_bavail, total_weight = 0;
+        __u32 ost_count;
         int nfound, good_osts, i, warn = 0, rc = 0;
         int stripe_cnt_min = min_stripe_count(*stripe_cnt, flags);
-        struct pool_desc *pool = NULL;
-        struct ost_pool *osts;
-        struct lov_qos_rr *lqr;
         ENTRY;
 
         if (stripe_cnt_min < 1)
                 GOTO(out, rc = -EINVAL);
 
-        pool = lov_find_pool(lov, poolname);
-        if (pool == NULL) {
-                osts = &(lov->lov_packed);
-                lqr = &(lov->lov_qos.lq_rr);
-        } else {
-                read_lock(&pool_tgt_rwlock(pool));
-                osts = &(pool->pool_obds);
-                lqr = &(pool->pool_rr);
-        }
-
         lov_getref(exp->exp_obd);
         down_write(&lov->lov_qos.lq_rw_sem);
+
+        ost_count = lov->desc.ld_tgt_count;
 
         if (lov->desc.ld_active_tgt_count < 2)
                 GOTO(out, rc = -EAGAIN);
@@ -740,25 +678,24 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
         if (cfs_time_sub(now, last_warn) > 60 * 30)
                 warn = 1;
         /* Find all the OSTs that are valid stripe candidates */
-        for (i = 0; i < osts->op_count; i++) {
+        for (i = 0; i < ost_count; i++) {
                 __u64 bavail;
 
-                if (!lov->lov_tgts[osts->op_array[i]] ||
-                    !lov->lov_tgts[osts->op_array[i]]->ltd_active)
+                if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active)
                         continue;
-                bavail = TGT_BAVAIL(osts->op_array[i]);
+                bavail = TGT_BAVAIL(i);
                 if (!bavail) {
                         if (warn) {
                                 CDEBUG(D_QOS, "no free space on %s\n",
-                                     obd_uuid2str(&lov->lov_tgts[osts->op_array[i]]->ltd_uuid));
+                                     obd_uuid2str(&lov->lov_tgts[i]->ltd_uuid));
                                 last_warn = now;
                         }
                         continue;
                 }
-                if (!TGT_FFREE(osts->op_array[i])) {
+                if (!TGT_FFREE(i)) {
                         if (warn) {
                                 CDEBUG(D_QOS, "no free inodes on %s\n",
-                                     obd_uuid2str(&lov->lov_tgts[osts->op_array[i]]->ltd_uuid));
+                                     obd_uuid2str(&lov->lov_tgts[i]->ltd_uuid));
                                 last_warn = now;
                         }
                         continue;
@@ -766,23 +703,19 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
 
                 /* Fail Check before osc_precreate() is called
                    so we can only 'fail' single OSC. */
-                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_PRECREATE) && osts->op_array[i] == 0)
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_PRECREATE) && i == 0)
                         continue;
 
-                if (obd_precreate(lov->lov_tgts[osts->op_array[i]]->ltd_exp) > 2)
+                if (obd_precreate(lov->lov_tgts[i]->ltd_exp) > 2)
                         continue;
 
-                lov->lov_tgts[osts->op_array[i]]->ltd_qos.ltq_usable = 1;
-                qos_calc_weight(lov, osts->op_array[i]);
+                lov->lov_tgts[i]->ltd_qos.ltq_usable = 1;
+                qos_calc_weight(lov, i);
                 total_bavail += bavail;
-                total_weight += lov->lov_tgts[osts->op_array[i]]->ltd_qos.ltq_weight;
+                total_weight += lov->lov_tgts[i]->ltd_qos.ltq_weight;
 
                 good_osts++;
         }
-
-#ifdef QOS_DEBUG
-        CDEBUG(D_QOS, "found %d good osts\n", good_osts);
-#endif
 
         if (good_osts < stripe_cnt_min)
                 GOTO(out, rc = -EAGAIN);
@@ -829,46 +762,36 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
 
                 /* On average, this will hit larger-weighted osts more often.
                    0-weight osts will always get used last (only when rand=0).*/
-                for (i = 0; i < osts->op_count; i++) {
-                        if (!lov->lov_tgts[osts->op_array[i]] ||
-                            !lov->lov_tgts[osts->op_array[i]]->ltd_qos.ltq_usable)
+                for (i = 0; i < ost_count; i++) {
+                        if (!lov->lov_tgts[i] ||
+                            !lov->lov_tgts[i]->ltd_qos.ltq_usable)
                                 continue;
 
-                        cur_weight += lov->lov_tgts[osts->op_array[i]]->ltd_qos.ltq_weight;
-#ifdef QOS_DEBUG
-                        CDEBUG(D_QOS, "cur_weight="LPU64" rand="LPU64"\n",
-                                      cur_weight, rand);
-#endif
+                        cur_weight += lov->lov_tgts[i]->ltd_qos.ltq_weight;
                         if (cur_weight >= rand) {
 #ifdef QOS_DEBUG
                                 CDEBUG(D_QOS, "assigned stripe=%d to idx=%d\n",
-                                       nfound, osts->op_array[i]);
+                                       nfound, i);
 #endif
-                                idx_arr[nfound++] = osts->op_array[i];
-                                qos_used(lov, osts->op_array[i], &total_weight);
+                                idx_arr[nfound++] = i;
+                                qos_used(lov, i, &total_weight);
                                 rc = 0;
                                 break;
                         }
                 }
+                /* should never satisfy below condition */
                 if (rc) {
-                        CDEBUG(D_QOS, "Didn't find any OSTs? Reduce total weight\n");
-                        if (total_weight == 0)
-                                break;
-                        else
-                                total_weight = 0;
+                        CERROR("Didn't find any OSTs?\n");
+                        break;
                 }
         }
-
         LASSERT(nfound == *stripe_cnt);
 
 out:
-        if (pool != NULL)
-                        read_unlock(&pool_tgt_rwlock(pool));
-
         up_write(&lov->lov_qos.lq_rw_sem);
 
         if (rc == -EAGAIN)
-                rc = alloc_rr(lov, idx_arr, stripe_cnt, poolname, flags);
+                rc = alloc_rr(lov, idx_arr, stripe_cnt, flags);
 
         lov_putref(exp->exp_obd);
         RETURN(rc);
@@ -893,8 +816,7 @@ static int alloc_idx_array(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         if (newea ||
             lsm->lsm_oinfo[0]->loi_ost_idx >= lov->desc.ld_tgt_count)
-                rc = alloc_qos(exp, tmp_arr, &stripe_cnt,
-                               lsm->lsm_pool_name, flags);
+                rc = alloc_qos(exp, tmp_arr, &stripe_cnt, flags);
         else
                 rc = alloc_specific(lov, lsm, tmp_arr);
 

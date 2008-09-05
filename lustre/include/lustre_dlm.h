@@ -255,93 +255,47 @@ struct ldlm_pool_ops {
         int (*po_setup)(struct ldlm_pool *pl, int limit);
 };
 
-/** 
- * One second for pools thread check interval. Each pool has own period. 
- */
+/* One second for pools thread check interval. */
 #define LDLM_POOLS_THREAD_PERIOD (1)
 
-/** 
- * 5% margin for modest pools. See ldlm_pool.c for details. 
- */
+/* 5% margin for modest pools. See ldlm_pool.c for details. */
 #define LDLM_POOLS_MODEST_MARGIN (5)
 
-/**
- * Default recalc period for server side pools in sec.
- */
-#define LDLM_POOL_SRV_DEF_RECALC_PERIOD (1)
-
-/**
- * Default recalc period for client side pools in sec.
- */
-#define LDLM_POOL_CLI_DEF_RECALC_PERIOD (10)
+/* A change to SLV in % after which we want to wake up pools thread asap. */
+#define LDLM_POOLS_FAST_SLV_CHANGE (50)
 
 struct ldlm_pool {
-        /**
-         * Pool proc directory.
-         */
-        cfs_proc_dir_entry_t  *pl_proc_dir;
-        /**
-         * Pool name, should be long enough to contain compound proc entry name.
-         */
-        char                   pl_name[100];
-        /**
-         * Lock for protecting slv/clv updates.
-         */
-        spinlock_t             pl_lock;
-        /**
-         * Number of allowed locks in in pool, both, client and server side.
-         */
-        atomic_t               pl_limit;
-        /**
-         * Number of granted locks in
-         */
-        atomic_t               pl_granted;
-        /**
-         * Grant rate per T.
-         */
-        atomic_t               pl_grant_rate;
-        /**
-         * Cancel rate per T.
-         */
-        atomic_t               pl_cancel_rate;
-        /**
-         * Grant speed (GR-CR) per T.
-         */
-        atomic_t               pl_grant_speed;
-        /**
-         * Server lock volume. Protected by pl_lock.
-         */
-        __u64                  pl_server_lock_volume;
-        /**
-         * Current biggest client lock volume. Protected by pl_lock.
-         */
-        __u64                  pl_client_lock_volume;
-        /**
-         * Lock volume factor. SLV on client is calculated as following:
-         * server_slv * lock_volume_factor.
-         */
-        atomic_t               pl_lock_volume_factor;
-        /**
-         * Time when last slv from server was obtained.
-         */
-        time_t                 pl_recalc_time;
-        /**
-          * Recalc period for pool.
-          */
-        time_t                 pl_recalc_period;
-        /**
-         * Recalc and shrink ops.
-         */
-        struct ldlm_pool_ops  *pl_ops;
-        /**
-         * Number of planned locks for next period.
-         */
-        int                    pl_grant_plan;
-        /**
-         * Pool statistics.
-         */
-        struct lprocfs_stats  *pl_stats;
+        /* Common pool fields */
+        cfs_proc_dir_entry_t  *pl_proc_dir;      /* Pool proc directory. */
+        char                   pl_name[100];     /* Pool name, should be long
+                                                  * enough to contain complex
+                                                  * proc entry name. */
+        spinlock_t             pl_lock;          /* Lock for protecting slv/clv
+                                                  * updates. */
+        atomic_t               pl_limit;         /* Number of allowed locks in
+                                                  * in pool, both, client and
+                                                  * server side. */
+        atomic_t               pl_granted;       /* Number of granted locks. */
+        atomic_t               pl_grant_rate;    /* Grant rate per T. */
+        atomic_t               pl_cancel_rate;   /* Cancel rate per T. */
+        atomic_t               pl_grant_speed;   /* Grant speed (GR-CR) per T. */
+        __u64                  pl_server_lock_volume; /* Server lock volume.
+                                                  * Protected by pl_lock */
+        __u64                  pl_client_lock_volume; /* Client lock volue. */
+        atomic_t               pl_lock_volume_factor; /* Lock volume factor. */
+
+        time_t                 pl_recalc_time;   /* Time when last slv from
+                                                  * server was obtained. */
+        struct ldlm_pool_ops  *pl_ops;           /* Recalc and shrink ops. */
+
+        int                    pl_grant_plan;    /* Planned number of granted
+                                                  * locks for next T. */
+        int                    pl_grant_step;    /* Grant plan step for next
+                                                  * T. */
+
+        struct lprocfs_stats  *pl_stats;         /* Pool statistics. */
 };
+
 typedef int (*ldlm_res_policy)(struct ldlm_namespace *, struct ldlm_lock **,
                                void *req_cookie, ldlm_mode_t mode, int flags,
                                void *data);
@@ -902,6 +856,7 @@ void unlock_res_and_lock(struct ldlm_lock *lock);
 void ldlm_pools_recalc(ldlm_side_t client);
 int ldlm_pools_init(void);
 void ldlm_pools_fini(void);
+void ldlm_pools_wakeup(void);
 
 int ldlm_pool_init(struct ldlm_pool *pl, struct ldlm_namespace *ns,
                    int idx, ldlm_side_t client);

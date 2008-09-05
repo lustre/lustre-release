@@ -1,5 +1,5 @@
 lnxmaj="2.6.16"
-lnxrel="60-0.27"
+lnxrel="60-0.23"
 
 # this is the delimeter that goes between $lnxmaj and $lnxrel
 # defaults to "-"

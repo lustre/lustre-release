@@ -170,8 +170,8 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                         OBD_FREE(lock->l_lvb_data, lock->l_lvb_len);
 
                 ldlm_interval_free(ldlm_interval_detach(lock));
-                OBD_FREE_RCU_CB(lock, sizeof(*lock), &lock->l_handle,
-                                ldlm_lock_free);
+                OBD_FREE_RCU_CB(lock, sizeof(*lock), &lock->l_handle, 
+                      	        ldlm_lock_free);
         }
 
         EXIT;
@@ -554,7 +554,7 @@ void ldlm_add_ast_work_item(struct ldlm_lock *lock, struct ldlm_lock *new,
         check_res_locked(lock->l_resource);
         if (new)
                 ldlm_add_bl_work_item(lock, new, work_list);
-        else
+        else 
                 ldlm_add_cp_work_item(lock, work_list);
         EXIT;
 }
@@ -590,7 +590,7 @@ void ldlm_lock_addref_internal(struct ldlm_lock *lock, __u32 mode)
 
 /* only called in ldlm_flock_destroy and for local locks.
  * for LDLM_FLOCK type locks, l_blocking_ast is null, and
- * ldlm_lock_remove_from_lru() does nothing, it is safe
+ * ldlm_lock_remove_from_lru() does nothing, it is safe 
  * for ldlm_flock_destroy usage by dropping some code */
 void ldlm_lock_decref_internal_nolock(struct ldlm_lock *lock, __u32 mode)
 {
@@ -650,10 +650,10 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                  * reference, put it on the LRU. */
                 ldlm_lock_add_to_lru(lock);
                 unlock_res_and_lock(lock);
-                /* Call ldlm_cancel_lru() only if EARLY_CANCEL and LRU RESIZE
-                 * are not supported by the server, otherwise, it is done on
+                /* Call ldlm_cancel_lru() only if EARLY_CANCEL and LRU RESIZE 
+                 * are not supported by the server, otherwise, it is done on 
                  * enqueue. */
-                if (!exp_connect_cancelset(lock->l_conn_export) &&
+                if (!exp_connect_cancelset(lock->l_conn_export) && 
                     !ns_connect_lru_resize(ns))
                         ldlm_cancel_lru(ns, 0, LDLM_ASYNC, 0);
         } else {
@@ -762,7 +762,7 @@ static void search_granted_lock(struct list_head *queue,
 
                                 /* jump to next policy group within the mode group */
                                 tmp = policy_end->l_res_link.next;
-                                lock = list_entry(tmp, struct ldlm_lock,
+                                lock = list_entry(tmp, struct ldlm_lock, 
                                                   l_res_link);
                         }  /* loop over policy groups within the mode group */
 
@@ -788,7 +788,7 @@ static void search_granted_lock(struct list_head *queue,
         return;
 }
 
-static void ldlm_granted_list_add_lock(struct ldlm_lock *lock,
+static void ldlm_granted_list_add_lock(struct ldlm_lock *lock, 
                                        struct sl_insert_point *prev)
 {
         struct ldlm_resource *res = lock->l_resource;
@@ -796,7 +796,7 @@ static void ldlm_granted_list_add_lock(struct ldlm_lock *lock,
 
         check_res_locked(res);
 
-        ldlm_resource_dump(D_INFO, res);
+        ldlm_resource_dump(D_OTHER, res);
         CDEBUG(D_OTHER, "About to add this lock:\n");
         ldlm_lock_dump(D_OTHER, lock, 0);
 
@@ -947,34 +947,15 @@ int ldlm_lock_fast_match(struct ldlm_lock *lock, int rw,
                          void **cookie)
 {
         LASSERT(rw == OBD_BRW_READ || rw == OBD_BRW_WRITE);
-
-        if (!lock)
-                return 0;
-
-        lock_res_and_lock(lock);
-        /* check if granted mode is compatible */
-        if (rw == OBD_BRW_WRITE &&
-            !(lock->l_granted_mode & (LCK_PW|LCK_GROUP)))
-                goto no_match;
-
-        /* does the lock cover the region we would like to access? */
-        if ((lock->l_policy_data.l_extent.start > start) ||
-            (lock->l_policy_data.l_extent.end < end))
-                goto no_match;
-
-        /* if we received a blocking callback and the lock is no longer
-         * referenced, don't use it */
-        if ((lock->l_flags & LDLM_FL_CBPENDING) &&
-            !lock->l_writers && !lock->l_readers)
-                goto no_match;
-
-        ldlm_lock_addref_internal_nolock(lock, rw == OBD_BRW_WRITE ? LCK_PW : LCK_PR);
-        unlock_res_and_lock(lock);
-        *cookie = (void *)lock;
-        return 1; /* avoid using rc for stack relief */
-
-no_match:
-        unlock_res_and_lock(lock);
+        /* should LCK_GROUP be handled in a special way? */
+        if (lock && (rw == OBD_BRW_READ ||
+                     (lock->l_granted_mode & (LCK_PW|LCK_GROUP))) &&
+            (lock->l_policy_data.l_extent.start <= start) &&
+            (lock->l_policy_data.l_extent.end >= end)) {
+                ldlm_lock_addref_internal(lock, rw == OBD_BRW_WRITE ? LCK_PW : LCK_PR);
+                *cookie = (void *)lock;
+                return 1; /* avoid using rc for stack relief */
+        }
         return 0;
 }
 
@@ -1303,7 +1284,7 @@ int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue,
 }
 
 /* Helper function for pair ldlm_run_{bl,cp}_ast_work().
- *
+ * 
  * Send an existing rpc set specified by @arg->set and then
  * destroy it. Create new one if @do_create flag is set. */
 static void
@@ -1352,7 +1333,7 @@ int ldlm_run_bl_ast_work(struct list_head *rpc_list)
 
                 LDLM_LOCK_PUT(lock->l_blocking_lock);
                 lock->l_blocking_lock = NULL;
-                rc = lock->l_blocking_ast(lock, &d, (void *)&arg,
+                rc = lock->l_blocking_ast(lock, &d, (void *)&arg, 
                                           LDLM_CB_BLOCKING);
                 LDLM_LOCK_PUT(lock);
                 ast_count++;
@@ -1371,7 +1352,7 @@ int ldlm_run_bl_ast_work(struct list_head *rpc_list)
         else
                 /* In case when number of ASTs is multiply of
                  * PARALLEL_AST_LIMIT or @rpc_list was initially empty,
-                 * @arg.set must be destroyed here, otherwise we get
+                 * @arg.set must be destroyed here, otherwise we get 
                  * write memory leaking. */
                 ptlrpc_set_destroy(arg.set);
 
@@ -1437,7 +1418,7 @@ int ldlm_run_cp_ast_work(struct list_head *rpc_list)
         else
                 /* In case when number of ASTs is multiply of
                  * PARALLEL_AST_LIMIT or @rpc_list was initially empty,
-                 * @arg.set must be destroyed here, otherwise we get
+                 * @arg.set must be destroyed here, otherwise we get 
                  * write memory leaking. */
                 ptlrpc_set_destroy(arg.set);
 
@@ -1561,7 +1542,7 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
 
         /* Yes, second time, just in case it was added again while we were
            running with no res lock in ldlm_cancel_callback */
-        ldlm_del_waiting_lock(lock);
+        ldlm_del_waiting_lock(lock); 
         ldlm_resource_unlink_lock(lock);
         ldlm_lock_destroy_nolock(lock);
 
@@ -1650,8 +1631,8 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
         old_mode = lock->l_req_mode;
         lock->l_req_mode = new_mode;
         if (res->lr_type == LDLM_PLAIN || res->lr_type == LDLM_IBITS) {
-                /* remember the lock position where the lock might be
-                 * added back to the granted list later and also
+                /* remember the lock position where the lock might be 
+                 * added back to the granted list later and also 
                  * remember the join mode for skiplist fixing. */
                 prev.res_link = lock->l_res_link.prev;
                 prev.mode_link = lock->l_sl_mode.prev;
@@ -1660,7 +1641,7 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
         } else {
                 ldlm_resource_unlink_lock(lock);
                 if (res->lr_type == LDLM_EXTENT) {
-                        /* FIXME: ugly code, I have to attach the lock to a
+                        /* FIXME: ugly code, I have to attach the lock to a 
                          * interval node again since perhaps it will be granted
                          * soon */
                         CFS_INIT_LIST_HEAD(&node->li_group);

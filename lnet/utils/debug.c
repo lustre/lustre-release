@@ -861,8 +861,9 @@ static int jt_dbg_modules_2_5(int argc, char **argv)
         char *path = "";
         char *kernel = "linux";
         const char *proc = "/proc/modules";
-        char modname[128], buf[4096];
+        char modname[128], others[4096];
         long modaddr;
+        int rc;
         FILE *file;
 
         if (argc >= 2)
@@ -880,17 +881,15 @@ static int jt_dbg_modules_2_5(int argc, char **argv)
                 return 0;
         }
 
-        while (fgets(buf, sizeof(buf), file) != NULL) {
-                if (sscanf(buf, "%s %*s %*s %*s %*s %lx", modname, &modaddr) == 2) {
-                        for (mp = mod_paths; mp->name != NULL; mp++) {
-                                if (!strcmp(mp->name, modname))
-                                        break;
-                        }
-                        if (mp->name) {
-                                printf("add-symbol-file %s%s%s/%s.o 0x%0lx\n", 
-                                       path, path[0] ? "/" : "", 
-                                       mp->path, mp->name, modaddr);
-                        }
+        while ((rc = fscanf(file, "%s %s %s %s %s %lx\n",
+                modname, others, others, others, others, &modaddr)) == 6) {
+                for (mp = mod_paths; mp->name != NULL; mp++) {
+                        if (!strcmp(mp->name, modname))
+                                break;
+                }
+                if (mp->name) {
+                        printf("add-symbol-file %s%s%s/%s.o 0x%0lx\n", path,
+                               path[0] ? "/" : "", mp->path, mp->name, modaddr);
                 }
         }
 

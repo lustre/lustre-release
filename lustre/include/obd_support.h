@@ -55,7 +55,7 @@ extern unsigned int obd_fail_val;
 extern unsigned int obd_debug_peer_on_timeout;
 extern unsigned int obd_dump_on_timeout;
 extern unsigned int obd_dump_on_eviction;
-/* obd_timeout should only be used for recovery, not for
+/* obd_timeout should only be used for recovery, not for 
    networking / disk / timings affected by load (use Adaptive Timeouts) */
 extern unsigned int obd_timeout;          /* seconds */
 extern unsigned int ldlm_timeout;         /* seconds */
@@ -70,7 +70,6 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_TIMEOUT_DEFAULT             100
 #define LDLM_TIMEOUT_DEFAULT            20
 #define MDS_LDLM_TIMEOUT_DEFAULT        6
-#define STALE_EXPORT_MAXTIME_DEFAULT    (24*60*60) /**< one day, in seconds */
 #ifdef CRAY_XT3
  #define OBD_RECOVERY_MAX_TIME (obd_timeout * 18) /* b13079 */
 #endif
@@ -93,12 +92,12 @@ extern unsigned int obd_alloc_fail_rate;
 #define CONNECTION_SWITCH_MAX min(50U, max(CONNECTION_SWITCH_MIN,obd_timeout))
 #define CONNECTION_SWITCH_INC 5  /* Connection timeout backoff */
 #ifndef CRAY_XT3
-/* In general this should be low to have quick detection of a system
+/* In general this should be low to have quick detection of a system 
    running on a backup server. (If it's too low, import_select_connection
    will increase the timeout anyhow.)  */
 #define INITIAL_CONNECT_TIMEOUT max(CONNECTION_SWITCH_MIN,obd_timeout/20)
 #else
-/* ...but for very large systems (e.g. CRAY) we need to keep the initial
+/* ...but for very large systems (e.g. CRAY) we need to keep the initial 
    connect t.o. high (bz 10803), because they will nearly ALWAYS be doing the
    connects for the first time (clients "reboot" after every process, so no
    chance to generate adaptive timeout data. */
@@ -231,7 +230,6 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_LDLM_PAUSE_CANCEL       0x312
 #define OBD_FAIL_LDLM_CLOSE_THREAD       0x313
 #define OBD_FAIL_LDLM_CANCEL_BL_CB_RACE  0x314
-#define OBD_FAIL_LDLM_CP_CB_WAIT         0x315
 
 #define OBD_FAIL_OSC                     0x400
 #define OBD_FAIL_OSC_BRW_READ_BULK       0x401
@@ -261,8 +259,6 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_PTLRPC_PAUSE_REP        0x50c
 #define OBD_FAIL_PTLRPC_IMP_DEACTIVE     0x50d
 
-#define OBD_FAIL_PTLRPC_DUMP_LOG         0x50e
-
 #define OBD_FAIL_OBD_PING_NET            0x600
 #define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601
 #define OBD_FAIL_OBD_LOGD_NET            0x602
@@ -278,7 +274,6 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_TGT_DELAY_PRECREATE     0x705
 #define OBD_FAIL_TGT_TOOMANY_THREADS     0x706
 #define OBD_FAIL_TGT_REPLAY_DROP         0x707
-#define OBD_FAIL_TGT_FAKE_EXP            0x708
 
 #define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
 #define OBD_FAIL_MDC_ENQUEUE_PAUSE       0x801
@@ -405,7 +400,7 @@ extern atomic_t libcfs_kmemory;
 #define OBD_ALLOC_FAIL_MASK ((1 << OBD_ALLOC_FAIL_BITS) - 1)
 #define OBD_ALLOC_FAIL_MULT (OBD_ALLOC_FAIL_MASK / 100)
 
-#ifdef LPROCFS
+#ifdef LPROCFS 
 #define obd_memory_add(size)                                                  \
         lprocfs_counter_add(obd_memory, OBD_MEMORY_STAT, (long)(size))
 #define obd_memory_sub(size)                                                  \
@@ -447,7 +442,7 @@ static inline void obd_memory_sub(long size)
         obd_alloc -= size;
 }
 
-static inline void obd_pages_add(int order)
+static inline void obd_pages_add(int order) 
 {
         obd_pages += 1<< order;
         if (obd_pages > obd_max_pages)
@@ -607,7 +602,7 @@ do {                                                                          \
         cfs_mem_cache_free((slab), (ptr));                                    \
         (ptr) = NULL;                                                         \
         0;                                                                    \
-})
+}) 
 #define OBD_SLAB_ALLOC(ptr, slab, type, size)                                 \
 do {                                                                          \
         LASSERT(!in_interrupt());                                             \

@@ -864,7 +864,7 @@ schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                 qunit_get(qunit);
 
         CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
-        aa = ptlrpc_req_async_args(req);
+        aa = (struct dqacq_async_args *)&req->rq_async_args;
         aa->aa_ctxt = qctxt;
         aa->aa_qunit = qunit;
 

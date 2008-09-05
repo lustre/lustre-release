@@ -152,7 +152,7 @@ Index: linux-2.6.9-67.0.22/fs/ext3/ioctl.c
 +		       return -EFAULT;
 +
 +	if (fieinfo.fi_flags & FIEMAP_FLAG_SYNC)
-+		ext3_sync_file(filp, filp->f_dentry, 1);
++		filemap_write_and_wait(inode->i_mapping);
 +
 +	error = ext3_fiemap(inode, &fieinfo, fiemap.fm_start, len);
 +	fiemap.fm_flags = fieinfo.fi_flags;

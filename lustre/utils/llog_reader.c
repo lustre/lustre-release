@@ -386,26 +386,6 @@ void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
                        createtime, canceltime);
                 break;
         }
-        case(LCFG_POOL_NEW):{
-                printf("pool new ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_POOL_ADD):{
-                printf("pool add ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_POOL_REM):{
-                printf("pool remove ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_POOL_DEL):{
-                printf("pool destroy ");
-                print_1_cfg(lcfg);
-                break;
-        }
         default:
                 printf("unsupported cmd_code = %x\n",cmd);
         }

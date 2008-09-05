@@ -1611,25 +1611,11 @@ static int llu_lov_dir_setstripe(struct inode *ino, unsigned long arg)
         if (rc)
                 return(-EFAULT);
 
-        switch (lum.lmm_magic) {
-        case LOV_USER_MAGIC_V1: {
-                if (lum.lmm_magic != cpu_to_le32(LOV_USER_MAGIC_V1))
-                        lustre_swab_lov_user_md_v1(&lum);
-                break;
-                }
-        case LOV_USER_MAGIC_V3: {
-                if (lum.lmm_magic != cpu_to_le32(LOV_USER_MAGIC_V3))
-                        lustre_swab_lov_user_md_v3((struct lov_user_md_v3 *)&lum);
-                break;
-                }
-        default: {
-                CDEBUG(D_IOCTL, "bad userland LOV MAGIC:"
-                                " %#08x != %#08x nor %#08x\n",
-                                lum.lmm_magic, LOV_USER_MAGIC_V1,
-                                LOV_USER_MAGIC_V3);
+        if (lum.lmm_magic != LOV_USER_MAGIC)
                 RETURN(-EINVAL);
-        }
-        }
+
+        if (lum.lmm_magic != cpu_to_le32(LOV_USER_MAGIC))
+                lustre_swab_lov_user_md(&lum);
 
         /* swabbing is done in lov_setstripe() on server side */
         rc = mdc_setattr(sbi->ll_mdc_exp, &op_data,

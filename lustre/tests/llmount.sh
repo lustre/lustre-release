@@ -7,6 +7,5 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-[ -n "$LOAD" ] && load_modules && exit 0
 [ -z "$NOFORMAT" ] && formatall
 [ -z "$NOSETUP" ] && setupall

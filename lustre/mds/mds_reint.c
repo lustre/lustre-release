@@ -170,32 +170,33 @@ int mds_version_get_check(struct ptlrpc_request *req, struct inode *inode,
         /* version recovery */
         struct obd_device *obd = req->rq_export->exp_obd;
         __u64 curr_version, *pre_versions;
-        ENTRY;
 
-        if (inode == NULL || !exp_connect_vbr(req->rq_export))
+        if (inode == NULL)
                 RETURN(0);
 
         curr_version = fsfilt_get_version(obd, inode);
         if ((__s64)curr_version == -EOPNOTSUPP)
                 RETURN(0);
         /* VBR: version is checked always because costs nothing */
+#ifdef PTLRPC_INTEROP_1_6
+        /* if we have old clients then check versions only if gap is occured
+         * or we will have false mismatches due to old client don't supply
+         * versions */
+        if (lustre_msg_get_transno(req->rq_reqmsg) != 0 &&
+            obd->obd_version_recov) {
+#else
         if (lustre_msg_get_transno(req->rq_reqmsg) != 0) {
+#endif
                 pre_versions = lustre_msg_get_versions(req->rq_reqmsg);
                 LASSERT(index < PTLRPC_NUM_VERSIONS);
-                /* Sanity check for malformed buffers */
-                if (pre_versions == NULL) {
-                        CERROR("No versions in request buffer\n");
-                        spin_lock(&req->rq_export->exp_lock);
-                        req->rq_export->exp_vbr_failed = 1;
-                        spin_unlock(&req->rq_export->exp_lock);
-                        RETURN(-EOVERFLOW);
-                } else if (pre_versions[index] != curr_version) {
+                if (pre_versions != NULL &&
+                    pre_versions[index] != curr_version) {
                         CDEBUG(D_INODE, "Version mismatch "LPX64" != "LPX64"\n",
                                pre_versions[index], curr_version);
                         spin_lock(&req->rq_export->exp_lock);
                         req->rq_export->exp_vbr_failed = 1;
                         spin_unlock(&req->rq_export->exp_lock);
-                        RETURN(-EOVERFLOW);
+                        RETURN (-EOVERFLOW);
                 }
         }
         /* save pre-versions in reply */
@@ -307,7 +308,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode **inodes, void *handle,
                         lcd->lcd_last_data    = cpu_to_le32(op_data);
                 }
         }
-        lcd->lcd_last_time = cpu_to_le32(cfs_time_current_sec());
+
         if (off <= 0) {
                 CERROR("client idx %d has offset %lld\n", med->med_lr_idx, off);
                 err = -EINVAL;
@@ -740,8 +741,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                         GOTO(cleanup, rc = -ENOMEM);
 
                 cleanup_phase = 2;
-                rc = mds_get_md(obd, inode, lmm, &lmm_size, need_lock, 0,
-                                req->rq_export->exp_connect_flags);
+                rc = mds_get_md(obd, inode, lmm, &lmm_size, need_lock, 0);
                 if (rc < 0)
                         GOTO(cleanup, rc);
                 rc = 0;
@@ -792,15 +792,16 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                         GOTO(cleanup, rc);
 
                 lum = rec->ur_eadata;
-                /* if { size, offset, count } = { 0, -1, 0 } and no pool
-                 * (i.e. all default values specified) then delete default
-                 * striping from dir. */
+                /* if { size, offset, count } = { 0, -1, 0 } (i.e. all default
+                 * values specified) then delete default striping from dir. */
                 if (S_ISDIR(inode->i_mode) &&
-                    (lum->lmm_stripe_size == 0 &&
+                    ((lum->lmm_stripe_size == 0 &&
                       lum->lmm_stripe_offset ==
                       (typeof(lum->lmm_stripe_offset))(-1) &&
-                      lum->lmm_stripe_count == 0 &&
-                      lum->lmm_magic != LOV_USER_MAGIC_V3)){
+                      lum->lmm_stripe_count == 0) ||
+                    /* lmm_stripe_size == -1 is deprecated in 1.4.6 */
+                    lum->lmm_stripe_size ==
+                    (typeof(lum->lmm_stripe_size))(-1))){
                         rc = fsfilt_set_md(obd, inode, handle, NULL, 0, "lov");
                         if (rc)
                                 GOTO(cleanup, rc);
@@ -1049,9 +1050,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 handle = fsfilt_start(obd, dir, FSFILT_OP_CREATE, NULL);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
-                LOCK_INODE_MUTEX(dir);
                 rc = ll_vfs_create(dir, dchild, rec->ur_mode, NULL);
-                UNLOCK_INODE_MUTEX(dir);
                 mds_counter_incr(req->rq_export, LPROC_MDS_MKNOD);
                 EXIT;
                 break;
@@ -1060,9 +1059,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 handle = fsfilt_start(obd, dir, FSFILT_OP_MKDIR, NULL);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
-                LOCK_INODE_MUTEX(dir);
                 rc = ll_vfs_mkdir(dir, dchild, mds->mds_vfsmnt, rec->ur_mode);
-                UNLOCK_INODE_MUTEX(dir);
                 mds_counter_incr(req->rq_export, LPROC_MDS_MKDIR);
                 EXIT;
                 break;
@@ -1071,13 +1068,11 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 handle = fsfilt_start(obd, dir, FSFILT_OP_SYMLINK, NULL);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
-                LOCK_INODE_MUTEX(dir);
                 if (rec->ur_tgt == NULL)        /* no target supplied */
                         rc = -EINVAL;           /* -EPROTO? */
                 else
                         rc = ll_vfs_symlink(dir, dchild, mds->mds_vfsmnt, 
                                             rec->ur_tgt, S_IALLUGO);
-                UNLOCK_INODE_MUTEX(dir);
                 mds_counter_incr(req->rq_export, LPROC_MDS_MKNOD);
                 EXIT;
                 break;
@@ -1090,10 +1085,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 handle = fsfilt_start(obd, dir, FSFILT_OP_MKNOD, NULL);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
-                LOCK_INODE_MUTEX(dir);
                 rc = ll_vfs_mknod(dir, dchild, mds->mds_vfsmnt, rec->ur_mode, 
                                   rdev);
-                UNLOCK_INODE_MUTEX(dir);
                 mds_counter_incr(req->rq_export, LPROC_MDS_MKNOD);
                 EXIT;
                 break;
@@ -1152,10 +1145,9 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         CERROR("error on parent setattr: rc = %d\n", rc);
 
                 if (S_ISDIR(inode->i_mode)) {
-                        struct lov_mds_md_v3 lmm;
+                        struct lov_mds_md lmm;
                         int lmm_size = sizeof(lmm);
-                        rc = mds_get_md(obd, dir, &lmm, &lmm_size, 1, 0,
-                                        req->rq_export->exp_connect_flags);
+                        rc = mds_get_md(obd, dir, &lmm, &lmm_size, 1, 0);
                         if (rc > 0) {
                                 LOCK_INODE_MUTEX(inode);
                                 rc = fsfilt_set_md(obd, inode, handle,
@@ -1190,16 +1182,12 @@ cleanup_no_trans:
                  */
                 switch (type) {
                 case S_IFDIR:
-                        LOCK_INODE_MUTEX(dir);
                         err = ll_vfs_rmdir(dir, dchild, mds->mds_vfsmnt);
-                        UNLOCK_INODE_MUTEX(dir);
                         if (err)
                                 CERROR("rmdir in error path: %d\n", err);
                         break;
                 default:
-                        LOCK_INODE_MUTEX(dir);
                         err = ll_vfs_unlink(dir, dchild, mds->mds_vfsmnt);
-                        UNLOCK_INODE_MUTEX(dir);
                         if (err)
                                 CERROR("unlink in error path: %d\n", err);
                         break;
@@ -1901,8 +1889,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 } else if (S_ISREG(child_inode->i_mode)) {
                         mds_pack_inode2body(body, child_inode);
                         mds_pack_md(obd, req->rq_repmsg, offset + 1, body,
-                                    child_inode, MDS_PACK_MD_LOCK, 0,
-                                    req->rq_export->exp_connect_flags);
+                                    child_inode, MDS_PACK_MD_LOCK, 0);
                 }
         }
 
@@ -1917,9 +1904,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                                       NULL);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
-                LOCK_INODE_MUTEX(dparent->d_inode);
                 rc = ll_vfs_rmdir(dparent->d_inode, dchild, mds->mds_vfsmnt);
-                UNLOCK_INODE_MUTEX(dparent->d_inode);
                 mds_counter_incr(req->rq_export, LPROC_MDS_RMDIR);
                 break;
         case S_IFREG: {
@@ -1930,9 +1915,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                                           le32_to_cpu(lmm->lmm_stripe_count));
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
-                LOCK_INODE_MUTEX(dparent->d_inode);
                 rc = ll_vfs_unlink(dparent->d_inode, dchild, mds->mds_vfsmnt);
-                UNLOCK_INODE_MUTEX(dparent->d_inode);
                 mds_counter_incr(req->rq_export, LPROC_MDS_UNLINK);
                 break;
         }
@@ -1945,9 +1928,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                                       NULL);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
-                LOCK_INODE_MUTEX(dparent->d_inode);
                 rc = ll_vfs_unlink(dparent->d_inode, dchild, mds->mds_vfsmnt);
-                UNLOCK_INODE_MUTEX(dparent->d_inode);
                 mds_counter_incr(req->rq_export, LPROC_MDS_UNLINK);
                 break;
         default:
@@ -2156,10 +2137,8 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         if (IS_ERR(handle))
                 GOTO(cleanup, rc = PTR_ERR(handle));
 
-        LOCK_INODE_MUTEX(de_tgt_dir->d_inode);
         rc = ll_vfs_link(de_src, mds->mds_vfsmnt, de_tgt_dir->d_inode, dchild,
                          mds->mds_vfsmnt);
-        UNLOCK_INODE_MUTEX(de_tgt_dir->d_inode);
         if (rc && rc != -EPERM && rc != -EACCES)
                 CERROR("vfs_link error %d\n", rc);
 cleanup:
@@ -2525,8 +2504,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                 } else if (S_ISREG(new_inode->i_mode)) {
                         mds_pack_inode2body(body, new_inode);
                         mds_pack_md(obd, req->rq_repmsg, offset + 1, body,
-                                    new_inode, MDS_PACK_MD_LOCK, 0,
-                                    req->rq_export->exp_connect_flags);
+                                    new_inode, MDS_PACK_MD_LOCK, 0);
                 }
         }
 

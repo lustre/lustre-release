@@ -703,7 +703,7 @@ void nidstats_refcount_put(struct hlist_node * actual_hnode)
 
 /*******************************************************************************/
 
-#if defined(__KERNEL__) && defined(HAVE_QUOTA_SUPPORT)
+#ifdef __KERNEL__
 /*
  * define ( lqs <-> qctxt ) hash operations and function define
  */

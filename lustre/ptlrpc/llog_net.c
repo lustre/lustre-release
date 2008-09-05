@@ -164,11 +164,9 @@ int llog_receptor_accept(struct llog_ctxt *ctxt, struct obd_import *imp)
         LASSERT(ctxt);
         mutex_down(&ctxt->loc_sem);
         if (ctxt->loc_imp != imp) {
-                if (ctxt->loc_imp) {
-                        CWARN("changing the import %p - %p\n",
-                              ctxt->loc_imp, imp);
+                CWARN("changing the import %p - %p\n", ctxt->loc_imp, imp);
+                if (ctxt->loc_imp)
                         class_import_put(ctxt->loc_imp);
-                }
                 ctxt->loc_imp = class_import_get(imp);
         }
         mutex_up(&ctxt->loc_sem);

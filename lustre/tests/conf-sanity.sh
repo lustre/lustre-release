@@ -29,10 +29,6 @@ HOSTNAME=`hostname`
 
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-# STORED_MDSSIZE is used in test_18
-if [ -n "$MDSSIZE" ]; then
-    STORED_MDSSIZE=$MDSSIZE
-fi
 # use small MDS + OST size to speed formatting time
 MDSSIZE=40000
 OSTSIZE=40000
@@ -713,38 +709,10 @@ test_17() {
 run_test 17 "Verify failed mds_postsetup won't fail assertion (2936) (should return errs)"
 
 test_18() {
-        [ "$FSTYPE" != "ldiskfs" ] && skip "not needed for FSTYPE=$FSTYPE" && return
-
-        local MIN=2000000
-
-        local OK=
-        # check if current MDSSIZE is large enough
-        [ $MDSSIZE -ge $MIN ] && OK=1 && myMDSSIZE=$MDSSIZE && \
-                log "use MDSSIZE=$MDSSIZE"
-
-        # check if the global config has a large enough MDSSIZE
-        [ -z "$OK" -a ! -z "$STORED_MDSSIZE" ] && [ $STORED_MDSSIZE -ge $MIN ] && \
-                OK=1 && myMDSSIZE=$STORED_MDSSIZE && \
-                log "use STORED_MDSSIZE=$STORED_MDSSIZE"
-
-        # check if the block device is large enough
-        [ -z "$OK" -a -b $MDSDEV ] && \
-                [ "$(dd if=$MDSDEV of=/dev/null bs=1k count=1 skip=$MIN 2>&1 |
-                     awk '($3 == "in") { print $1 }')" = "1+0" ] && OK=1 && \
-                myMDSSIZE=$MIN && log "use device $MDSDEV with MIN=$MIN"
-
-        # check if a loopback device has enough space for fs metadata (5%)
-        [ -z "$OK" ] && [ -f $MDSDEV -o ! -e $MDSDEV ] &&
-                SPACE=$(df -P $(dirname $MDSDEV) |
-                        awk '($1 != "Filesystem") {print $4}') &&
-                [ $SPACE -gt $((MIN / 20)) ] && OK=1 && myMDSSIZE=$MIN && \
-                        log "use file $MDSDEV with MIN=$MIN"
-
-        [ -z "$OK" ] && skip "$MDSDEV too small for ${MIN}kB MDS" && return
-
-
+        [ -f $MDSDEV ] && echo "remove $MDSDEV" && rm -f $MDSDEV
         echo "mount mds with large journal..."
-        local OLD_MDS_MKFS_OPTS=$MDS_MKFS_OPTS
+        local myMDSSIZE=2000000
+        OLD_MDS_MKFS_OPTS=$MDS_MKFS_OPTS
 
         MDS_MKFS_OPTS="--mgs --mdt --fsname=$FSNAME --device-size=$myMDSSIZE --param sys.timeout=$TIMEOUT $MDSOPT"
 
@@ -754,7 +722,7 @@ test_18() {
         check_mount || return 41
 
         echo "check journal size..."
-        local FOUNDSIZE=`do_facet mds "debugfs -c -R 'stat <8>' $MDSDEV" | awk '/Size: / { print $NF; exit;}'`
+        FOUNDSIZE=`do_facet mds "debugfs -c -R 'stat <8>' $MDSDEV" | awk '/Size: / { print $NF; exit;}'`
         if [ $FOUNDSIZE -gt $((32 * 1024 * 1024)) ]; then
                 log "Success: mkfs creates large journals. Size: $((FOUNDSIZE >> 20))M"
         else
@@ -1056,7 +1024,6 @@ test_27b() {
 	facet_failover mds
 	set_and_check mds "lctl get_param -n mds.$FSNAME-MDT0000.group_acquire_expire" "$FSNAME-MDT0000.mdt.group_acquire_expire" || return 3
 	set_and_check client "lctl get_param -n mdc.$FSNAME-MDT0000-mdc-*.max_rpcs_in_flight" "$FSNAME-MDT0000.mdc.max_rpcs_in_flight" || return 4
-	check_mount
 	cleanup
 }
 run_test 27b "Reacquire MGS lock after failover"
@@ -1319,7 +1286,6 @@ test_33a() { # bug 12333, was test_33
         do_facet mds "$LCTL conf_param $FSNAME2.sys.timeout=200" || rc=1
         mkdir -p $MOUNT2
         mount -t lustre $MGSNID:/${FSNAME2} $MOUNT2 || rc=2
-        cp /etc/hosts $MOUNT2/. || rc=3
         echo "ok."
 
         umount -d $MOUNT2
@@ -1645,13 +1611,6 @@ run_test 42 "invalid config param should not prevent client from mounting"
 
 test_43() { #bug 15993
         setup
-        VERSION_1_8=$(do_facet mds $LCTL get_param version | grep ^lustre.*1\.[78])
-        if [ -z "$VERSION_1_8" ]; then
-                skip "skipping test for non 1.8 MDS"
-                cleanup
-                return 0
-        fi
-
         check_mount || return 2
         testfile=$DIR/$tfile
         lma="this-should-be-removed-after-remount-and-accessed"
@@ -1676,23 +1635,6 @@ test_43() { #bug 15993
         return 0
 }
 run_test 43 "remove common EA if it exists"
-
-test_44() { # 16317
-        setup
-        check_mount || return 2
-        UUID=$($LCTL get_param llite.${FSNAME}*.uuid | cut -d= -f2)
-        STATS_FOUND=no
-        UUIDS=$(do_facet mds "$LCTL get_param mds.${FSNAME}*.exports.*.uuid")
-        for VAL in $UUIDS; do
-                NID=$(echo $VAL | cut -d= -f1)
-                CLUUID=$(echo $VAL | cut -d= -f2)
-                [ "$UUID" = "$CLUUID" ] && STATS_FOUND=yes && break
-        done
-        [ "$STATS_FOUND" = "no" ] && error "stats not found for client"
-        cleanup
-        return 0
-}
-run_test 44 "mounted client proc entry exists"
 
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true

@@ -40,11 +40,6 @@
  * Author: Robert Read <rread@clusterfs.com>
  */
 
-/* for O_DIRECTORY */
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <getopt.h>
@@ -55,12 +50,10 @@
 #include <grp.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/param.h>
 #include <fcntl.h>
 #include <dirent.h>
 #include <time.h>
 #include <ctype.h>
-#include <sys/quota.h>
 
 #include <lnet/api-support.h>
 #include <lnet/lnetctl.h>
@@ -93,7 +86,6 @@ static int lfs_quota(int argc, char **argv);
 static int lfs_quotainv(int argc, char **argv);
 #endif
 static int lfs_join(int argc, char **argv);
-static int lfs_poollist(int argc, char **argv);
 
 /* all avaialable commands */
 command_t cmdlist[] = {
@@ -101,34 +93,30 @@ command_t cmdlist[] = {
          "Create a new file with a specific striping pattern or\n"
          "set the default striping pattern on an existing directory or\n"
          "delete the default striping pattern from an existing directory\n"
-         "usage: setstripe [--size|-s stripe_size] [--offset|-o start_ost]\n"
-         "                 [--count|-c stripe_count] [--pool|-p pool_name]\n"
-         "                 <dir|filename>\n"
+         "usage: setstripe <filename|dirname> <stripe_size> <stripe_index> <stripe_count>\n"
          "       or \n"
-         "       setstripe -d <dir>   (to delete default striping)\n"
+         "       setstripe <filename|dirname> [--size|-s stripe_size]\n"
+         "                                    [--index|-i stripe_index]\n"
+         "                                    [--count|-c stripe_count]\n"
+         "       or \n"
+         "       setstripe -d <dirname>   (to delete default striping)\n"
          "\tstripe_size:  Number of bytes on each OST (0 filesystem default)\n"
-         "\t              Can be specified with k, m or g (in KB, MB and GB\n"
-         "\t              respectively)\n"
-         "\tstart_ost:    OST index of first stripe (-1 filesystem default)\n"
-         "\tstripe_count: Number of OSTs to stripe over (0 default, -1 all)\n"
-         "\tpool_name:    Name of OST pool"},
+         "\t              Can be specified with k, m or g (in KB, MB and GB respectively)\n"
+         "\tstripe_index: OST index of first stripe (-1 filesystem default)\n"
+         "\tstripe_count: Number of OSTs to stripe over (0 default, -1 all)"},
         {"getstripe", lfs_getstripe, 0,
-         "To list the striping info for a given file or files in a\n"
+         "To list the striping info for a given filename or files in a\n"
          "directory or recursively for all files in a directory tree.\n"
          "usage: getstripe [--obd|-O <uuid>] [--quiet | -q] [--verbose | -v]\n"
          "                 [--recursive | -r] <dir|file> ..."},
-        {"poollist", lfs_poollist, 0,
-         "List pools or pool OSTs\n"
-         "usage: poollist <fsname>[.<poolname>] | <pathname>\n"},
         {"find", lfs_find, 0,
          "To find files that match given parameters recursively in a directory tree.\n"
-         "usage: find <dir|file> ... \n"
+         "usage: find <dir/file> ... \n"
          "     [[!] --atime|-A [+-]N] [[!] --mtime|-M [+-]N] [[!] --ctime|-C [+-]N]\n"
          "     [--maxdepth|-D N] [[!] --name|-n <pattern>] [--print0|-P]\n"
          "     [--print|-p] [--obd|-O <uuid[s]>] [[!] --size|-s [+-]N[bkMGTP]]\n"
          "     [[!] --type|-t <filetype>] [[!] --gid|-g N] [[!] --group|-G <name>]\n"
          "     [[!] --uid|-u N] [[!] --user|-U <name>]\n"
-         "     [[!] --pool <name>]\n"
          "\t !: used before an option indicates 'NOT' the requested attribute\n"
          "\t -: used before an value indicates 'AT MOST' the requested value\n"
          "\t +: used before an option indicates 'AT LEAST' the requested value\n"},
@@ -201,15 +189,12 @@ static int lfs_setstripe(int argc, char **argv)
         char *stripe_size_arg = NULL;
         char *stripe_off_arg = NULL;
         char *stripe_count_arg = NULL;
-        char *pool_name_arg = NULL;
         unsigned long long size_units;
 
         struct option long_opts[] = {
                 {"size",        required_argument, 0, 's'},
                 {"count",       required_argument, 0, 'c'},
                 {"index",       required_argument, 0, 'i'},
-                {"offset",      required_argument, 0, 'o'},
-                {"pool",        required_argument, 0, 'p'},
                 {"delete",      no_argument,       0, 'd'},
                 {0, 0, 0, 0}
         };
@@ -222,7 +207,7 @@ static int lfs_setstripe(int argc, char **argv)
                  * usage */
                 fname = argv[2];
                 optind = 2;
-        } else if (argc == 5  &&
+        } else if (argc == 5  && 
                    (argv[2][0] != '-' || isdigit(argv[2][1])) &&
                    (argv[3][0] != '-' || isdigit(argv[3][1])) &&
                    (argv[4][0] != '-' || isdigit(argv[4][1])) ) {
@@ -235,7 +220,7 @@ static int lfs_setstripe(int argc, char **argv)
                 optind = 4;
         } else {
                 optind = 0;
-                while ((c = getopt_long(argc, argv, "c:di:o:s:p:",
+                while ((c = getopt_long(argc, argv, "c:di:s:",
                                                 long_opts, NULL)) >= 0) {
                         switch (c) {
                         case 0:
@@ -249,14 +234,10 @@ static int lfs_setstripe(int argc, char **argv)
                                 delete = 1;
                                 break;
                         case 'i':
-                        case 'o':
                                 stripe_off_arg = optarg;
                                 break;
                         case 's':
                                 stripe_size_arg = optarg;
-                                break;
-                        case 'p':
-                                pool_name_arg = optarg;
                                 break;
                         case '?':
                                 return CMD_HELP;
@@ -273,11 +254,11 @@ static int lfs_setstripe(int argc, char **argv)
                 else
                         return CMD_HELP;
 
-                if (delete &&
-                    (stripe_size_arg != NULL || stripe_off_arg != NULL ||
-                     stripe_count_arg != NULL || pool_name_arg != NULL)) {
+                if (delete && 
+                    (stripe_size_arg != NULL || stripe_off_arg != NULL || 
+                     stripe_count_arg != NULL)) {
                         fprintf(stderr, "error: %s: cannot specify -d with "
-                                        "-s, -c -o or -p options\n",
+                                        "-s, -c or -i options\n",
                                         argv[0]);
                         return CMD_HELP;
                 }
@@ -318,12 +299,7 @@ static int lfs_setstripe(int argc, char **argv)
                 }
         }
 
-        if (pool_name_arg == NULL)
-                result = llapi_file_create(fname, st_size, st_offset, st_count, 0);
-        else
-                result = llapi_file_create_pool(fname, st_size, st_offset,
-                                                st_count, 0, pool_name_arg);
-
+        result = llapi_file_create(fname, st_size, st_offset, st_count, 0);
         if (result)
                 fprintf(stderr, "error: %s: create stripe file failed\n",
                                 argv[0]);
@@ -331,19 +307,11 @@ static int lfs_setstripe(int argc, char **argv)
         return result;
 }
 
-static int lfs_poollist(int argc, char **argv)
-{
-        if (argc != 2)
-                return CMD_HELP;
-
-        return llapi_poollist(argv[1]);
-}
-
 static int set_time(time_t *time, time_t *set, char *str)
 {
         time_t t;
         int res = 0;
-
+        
         if (str[0] == '+')
                 res = 1;
         else if (str[0] == '-')
@@ -418,7 +386,6 @@ static int id2name(char **name, unsigned int id, int type)
         return 0;
 }
 
-#define FIND_POOL_OPT 3
 static int lfs_find(int argc, char **argv)
 {
         int new_fashion = 1;
@@ -437,8 +404,6 @@ static int lfs_find(int argc, char **argv)
                 {"uid",       required_argument, 0, 'u'},
                 {"user",      required_argument, 0, 'U'},
                 {"name",      required_argument, 0, 'n'},
-                /* no short option for pool, p/P already used */
-                {"pool",      required_argument, 0, FIND_POOL_OPT},
                 /* --obd is considered as a new option. */
                 {"obd",       required_argument, 0, 'O'},
                 {"ost",       required_argument, 0, 'O'},
@@ -544,8 +509,8 @@ static int lfs_find(int argc, char **argv)
                         new_fashion = 1;
                         param.gid = strtol(optarg, &endptr, 10);
                         if (optarg == endptr) {
-                                ret = name2id(&param.gid, optarg, GRPQUOTA);
-                                if (ret != 0) {
+	                        ret = name2id(&param.gid, optarg, GRPQUOTA);
+        	                if (ret != 0) {
                                         fprintf(stderr, "Group/GID: %s cannot "
                                                 "be found.\n", optarg);
                                         return -1;
@@ -568,8 +533,8 @@ static int lfs_find(int argc, char **argv)
                         new_fashion = 1;
                         param.uid = strtol(optarg, &endptr, 10);
                         if (optarg == endptr) {
-                                ret = name2id(&param.uid, optarg, USRQUOTA);
-                                if (ret != 0) {
+	                        ret = name2id(&param.uid, optarg, USRQUOTA);
+        	                if (ret != 0) {
                                         fprintf(stderr, "User/UID: %s cannot "
                                                 "be found.\n", optarg);
                                         return -1;
@@ -577,22 +542,6 @@ static int lfs_find(int argc, char **argv)
                         }
                         param.exclude_uid = !!neg_opt;
                         param.check_uid = 1;
-                        break;
-                case FIND_POOL_OPT:
-                        new_fashion = 1;
-                        if (strlen(optarg) > MAXPOOLNAME) {
-                                fprintf(stderr,
-                                        "Pool name %s is too long"
-                                        " (max is %d)\n", optarg,
-                                        MAXPOOLNAME);
-                                return -1;
-                        }
-                        /* we do check for empty pool because empty pool
-                         * is used to find V1 lov attributes */
-                        strncpy(param.poolname, optarg, MAXPOOLNAME);
-                        param.poolname[MAXPOOLNAME] = '\0';
-                        param.exclude_pool = !!neg_opt;
-                        param.check_pool = 1;
                         break;
                 case 'n':
                         new_fashion = 1;
@@ -803,7 +752,7 @@ static int lfs_getstripe(int argc, char **argv)
         } while (++optind < argc && !rc);
 
         if (rc)
-                fprintf(stderr, "error: %s failed for %s.\n",
+                fprintf(stderr, "error: %s failed for %s.\n", 
                         argv[0], argv[optind - 1]);
         return rc;
 }
@@ -1448,7 +1397,7 @@ static int lfs_quotaoff(int argc, char **argv)
 
         rc = llapi_quotactl(mnt, &qctl);
         if (rc == -1 && errno == ESRCH) {
-                fprintf(stderr, "\n%s quotas are not enabled.\n",
+                fprintf(stderr, "\n%s quotas are not enabled.\n", 
                         qctl.qc_type == 0x00 ? "user" : "group");
                 return 0;
         }
@@ -1552,7 +1501,7 @@ static unsigned long str2sec(const char* timestr) {
 
                 v = strtoul(timestr, &tail, 10);
                 if (v == ULONG_MAX || *tail == '\0')
-                        /* value too large (ULONG_MAX or more)
+                        /* value too large (ULONG_MAX or more) 
                            or missing specifier */
                         goto error;
 
@@ -1940,10 +1889,10 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type)
                 struct obd_dqblk *dqb = &qctl->qc_dqblk;
 
                 if (dqb->dqb_bhardlimit &&
-                    toqb(dqb->dqb_curspace) >= dqb->dqb_bhardlimit) {
+                    toqb(dqb->dqb_curspace) > dqb->dqb_bhardlimit) {
                         bover = 1;
                 } else if (dqb->dqb_bsoftlimit &&
-                           toqb(dqb->dqb_curspace) >= dqb->dqb_bsoftlimit) {
+                           toqb(dqb->dqb_curspace) > dqb->dqb_bsoftlimit) {
                         if (dqb->dqb_btime > now) {
                                 bover = 2;
                         } else {
@@ -1952,10 +1901,10 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type)
                 }
 
                 if (dqb->dqb_ihardlimit &&
-                    dqb->dqb_curinodes >= dqb->dqb_ihardlimit) {
+                    dqb->dqb_curinodes > dqb->dqb_ihardlimit) {
                         iover = 1;
                 } else if (dqb->dqb_isoftlimit &&
-                           dqb->dqb_curinodes >= dqb->dqb_isoftlimit) {
+                           dqb->dqb_curinodes > dqb->dqb_isoftlimit) {
                         if (dqb->dqb_btime > now) {
                                 iover = 2;
                         } else {
@@ -2183,7 +2132,7 @@ ug_output:
 
         rc1 = llapi_quotactl(mnt, &qctl);
         if (rc1 == -1 && errno == ESRCH) {
-                fprintf(stderr, "\n%s quotas are not enabled.\n",
+                fprintf(stderr, "\n%s quotas are not enabled.\n", 
                         qctl.qc_type == USRQUOTA ? "user" : "group");
                 goto out;
         }

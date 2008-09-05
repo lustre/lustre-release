@@ -591,9 +591,8 @@ test_23() { #b=4561
 }
 run_test 23 "client hang when close a file after mds crash"
 
-test_24() { # bug 11710 details correct fsync() behavior
+test_24() {	# bug 2248 - eviction fails writeback but app doesn't see it
 	mkdir -p $DIR/$tdir
-	lfs setstripe $DIR/$tdir -s 0 -i 0 -c 1
 	cancel_lru_locks osc
 	multiop_bg_pause $DIR/$tdir/$tfile Owy_wyc || return 1
 	MULTI_PID=$!

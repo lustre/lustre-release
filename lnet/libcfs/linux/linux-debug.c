@@ -79,42 +79,6 @@
 #endif
 
 char lnet_upcall[1024] = "/usr/lib/lustre/lnet_upcall";
-char lnet_debug_log_upcall[1024] = "/usr/lib/lustre/lnet_debug_log_upcall";
-
-/**
- * Upcall function once a Lustre log has been dumped.
- *
- * \param file  path of the dumped log
- */
-void libcfs_run_debug_log_upcall(char *file)
-{
-        char *argv[3];
-        int   rc;
-        char *envp[] = {
-                "HOME=/",
-                "PATH=/sbin:/bin:/usr/sbin:/usr/bin",
-                NULL};
-        ENTRY;
-
-        argv[0] = lnet_debug_log_upcall;
-
-        LASSERTF(file != NULL, "called on a null filename\n");
-        argv[1] = file; //only need to pass the path of the file
-
-        argv[2] = NULL;
-
-        rc = USERMODEHELPER(argv[0], argv, envp);
-        if (rc < 0 && rc != -ENOENT) {
-                CERROR("Error %d invoking LNET debug log upcall %s %s; "
-                       "check /proc/sys/lnet/debug_log_upcall\n",
-                       rc, argv[0], argv[1]);
-        } else {
-                CDEBUG(D_HA, "Invoked LNET debug log upcall %s %s\n",
-                       argv[0], argv[1]);
-        }
-
-        EXIT;
-}
 
 void libcfs_run_upcall(char **argv)
 {
@@ -152,7 +116,7 @@ void libcfs_run_upcall(char **argv)
         }
 }
 
-void libcfs_run_lbug_upcall(const char *file, const char *fn, const int line)
+void libcfs_run_lbug_upcall(char *file, const char *fn, const int line)
 {
         char *argv[6];
         char buf[32];
@@ -161,7 +125,7 @@ void libcfs_run_lbug_upcall(const char *file, const char *fn, const int line)
         snprintf (buf, sizeof buf, "%d", line);
 
         argv[1] = "LBUG";
-        argv[2] = (char *)file;
+        argv[2] = file;
         argv[3] = (char *)fn;
         argv[4] = buf;
         argv[5] = NULL;
@@ -170,7 +134,7 @@ void libcfs_run_lbug_upcall(const char *file, const char *fn, const int line)
 }
 
 #ifdef __arch_um__
-void lbug_with_loc(const char *file, const char *func, const int line)
+void lbug_with_loc(char *file, const char *func, const int line)
 {
         libcfs_catastrophe = 1;
         libcfs_debug_msg(NULL, 0, D_EMERG, file, func, line,
@@ -182,7 +146,7 @@ void lbug_with_loc(const char *file, const char *func, const int line)
 }
 #else
 /* coverity[+kill] */
-void lbug_with_loc(const char *file, const char *func, const int line)
+void lbug_with_loc(char *file, const char *func, const int line)
 {
         libcfs_catastrophe = 1;
         libcfs_debug_msg(NULL, 0, D_EMERG, file, func, line, "LBUG\n");

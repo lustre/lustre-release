@@ -371,33 +371,6 @@ check_lov_mds_md_join(void)
 }
 
 static void
-check_lov_mds_md_v3(void)
-{
-        BLANK_LINE();
-        CHECK_STRUCT(lov_mds_md_v3);
-        CHECK_MEMBER(lov_mds_md_v3, lmm_magic);
-        CHECK_MEMBER(lov_mds_md_v3, lmm_pattern);
-        CHECK_MEMBER(lov_mds_md_v3, lmm_object_id);
-        CHECK_MEMBER(lov_mds_md_v3, lmm_object_gr);
-        CHECK_MEMBER(lov_mds_md_v3, lmm_stripe_size);
-        CHECK_MEMBER(lov_mds_md_v3, lmm_stripe_count);
-        CHECK_MEMBER(lov_mds_md_v3, lmm_pool_name);
-        CHECK_MEMBER(lov_mds_md_v3, lmm_objects);
-
-        BLANK_LINE();
-        CHECK_STRUCT(lov_ost_data_v1);
-        CHECK_MEMBER(lov_ost_data_v1, l_object_id);
-        CHECK_MEMBER(lov_ost_data_v1, l_object_gr);
-        CHECK_MEMBER(lov_ost_data_v1, l_ost_gen);
-        CHECK_MEMBER(lov_ost_data_v1, l_ost_idx);
-
-        CHECK_CDEFINE(LOV_MAGIC_V3);
-
-        CHECK_VALUE(LOV_PATTERN_RAID0);
-        CHECK_VALUE(LOV_PATTERN_RAID1);
-}
-
-static void
 check_obd_statfs(void)
 {
         BLANK_LINE();
@@ -1131,50 +1104,6 @@ check_quota_adjust_qunit(void)
 }
 
 static void
-check_ll_user_fiemap(void)
-{
-        BLANK_LINE();
-        CHECK_STRUCT(ll_user_fiemap);
-        CHECK_MEMBER(ll_user_fiemap, fm_start);
-        CHECK_MEMBER(ll_user_fiemap, fm_length);
-        CHECK_MEMBER(ll_user_fiemap, fm_flags);
-        CHECK_MEMBER(ll_user_fiemap, fm_mapped_extents);
-        CHECK_MEMBER(ll_user_fiemap, fm_extent_count);
-        CHECK_MEMBER(ll_user_fiemap, fm_reserved);
-        CHECK_MEMBER(ll_user_fiemap, fm_extents);
-
-        CHECK_CDEFINE(FIEMAP_FLAG_SYNC);
-        CHECK_CDEFINE(FIEMAP_FLAG_XATTR);
-        CHECK_CDEFINE(FIEMAP_FLAG_DEVICE_ORDER);
-}
-
-static void
-check_ll_fiemap_extent(void)
-{
-        BLANK_LINE();
-        CHECK_STRUCT(ll_fiemap_extent);
-        CHECK_MEMBER(ll_fiemap_extent, fe_logical);
-        CHECK_MEMBER(ll_fiemap_extent, fe_physical);
-        CHECK_MEMBER(ll_fiemap_extent, fe_length);
-        CHECK_MEMBER(ll_fiemap_extent, fe_flags);
-        CHECK_MEMBER(ll_fiemap_extent, fe_device);
-
-        CHECK_CDEFINE(FIEMAP_EXTENT_LAST);
-        CHECK_CDEFINE(FIEMAP_EXTENT_UNKNOWN);
-        CHECK_CDEFINE(FIEMAP_EXTENT_DELALLOC);
-        CHECK_CDEFINE(FIEMAP_EXTENT_NO_DIRECT);
-        CHECK_CDEFINE(FIEMAP_EXTENT_SECONDARY);
-        CHECK_CDEFINE(FIEMAP_EXTENT_NET);
-        CHECK_CDEFINE(FIEMAP_EXTENT_DATA_COMPRESSED);
-        CHECK_CDEFINE(FIEMAP_EXTENT_DATA_ENCRYPTED);
-        CHECK_CDEFINE(FIEMAP_EXTENT_NOT_ALIGNED);
-        CHECK_CDEFINE(FIEMAP_EXTENT_DATA_INLINE);
-        CHECK_CDEFINE(FIEMAP_EXTENT_DATA_TAIL);
-        CHECK_CDEFINE(FIEMAP_EXTENT_UNWRITTEN);
-        CHECK_CDEFINE(FIEMAP_EXTENT_MERGED);
-}
-
-static void
 system_string (char *cmdline, char *str, int len)
 {
         int   fds[2];
@@ -1308,7 +1237,6 @@ main(int argc, char **argv)
         CHECK_VALUE(REINT_UNLINK);
         CHECK_VALUE(REINT_RENAME);
         CHECK_VALUE(REINT_OPEN);
-        CHECK_VALUE(REINT_SETXATTR);
         CHECK_VALUE(REINT_MAX);
 
         CHECK_VALUE(MGS_CONNECT);
@@ -1378,7 +1306,6 @@ main(int argc, char **argv)
         check_obd_connect_data();
         check_obdo();
         check_lov_mds_md_v1();
-        check_lov_mds_md_v3();
         check_lov_mds_md_join();
         check_obd_statfs();
         check_obd_ioobj();
@@ -1425,12 +1352,11 @@ main(int argc, char **argv)
         check_mds_extent_desc();
         check_qunit_data();
         check_qunit_data_old2();
+        check_qunit_data_old();
         check_quota_adjust_qunit();
         check_mgs_target_info();
         check_lustre_disk_data();
-        check_ll_user_fiemap();
-        check_ll_fiemap_extent();
-        printf("#if defined(LIBLUSTRE_POSIX_ACL) && defined(CONFIG_FS_POSIX_ACL)\n");
+        printf("#ifdef LIBLUSTRE_POSIX_ACL\n");
 #ifndef LIBLUSTRE_POSIX_ACL
 #error build generator without LIBLUSTRE_POSIX_ACL defined - produce wrong check code.
 #endif

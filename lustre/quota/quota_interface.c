@@ -45,6 +45,7 @@
 # include <linux/init.h>
 # include <linux/fs.h>
 # include <linux/jbd.h>
+# include <linux/ext3_fs.h>
 # if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #  include <linux/smp_lock.h>
 #  include <linux/buffer_head.h>

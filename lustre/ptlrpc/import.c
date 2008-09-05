@@ -553,8 +553,8 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
         ptlrpc_req_set_repsize(request, 2, size);
         request->rq_interpret_reply = ptlrpc_connect_interpret;
 
-        CLASSERT(sizeof(*aa) <= sizeof(request->rq_async_args));
-        aa = ptlrpc_req_async_args(request);
+        CLASSERT(sizeof (*aa) <= sizeof (request->rq_async_args));
+        aa = (struct ptlrpc_connect_async_args *)&request->rq_async_args;
         memset(aa, 0, sizeof *aa);
 
         aa->pcaa_peer_committed = committed_before_reconnect;
@@ -677,24 +677,10 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 imp->imp_remote_handle =
                                 *lustre_msg_get_handle(request->rq_repmsg);
 
-                /* Initial connects are allowed for clients with non-random
-                 * uuids when servers are in recovery.  Simply signal the
-                 * servers replay is complete and wait in REPLAY_WAIT. */
-                if (msg_flags & MSG_CONNECT_RECOVERING) {
-                        CDEBUG(D_HA, "connect to %s during recovery\n",
-                               obd2cli_tgt(imp->imp_obd));
-                        IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY_LOCKS);
-                } else {
-                        IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
-                }
+                IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
 
-                spin_lock(&imp->imp_lock);
-                if (imp->imp_invalid) {
-                        spin_unlock(&imp->imp_lock);
+                if (imp->imp_invalid)
                         ptlrpc_activate_import(imp);
-                } else {
-                        spin_unlock(&imp->imp_lock);
-                }
                 GOTO(finish, rc = 0);
         } else {
                 spin_unlock(&imp->imp_lock);
@@ -715,34 +701,19 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 if (memcmp(&imp->imp_remote_handle,
                            lustre_msg_get_handle(request->rq_repmsg),
                            sizeof(imp->imp_remote_handle))) {
-                        int level = msg_flags & MSG_CONNECT_RECOVERING ? D_HA :
-                                                                         D_WARNING;
 
-                        /* Bug 16611/14775: if server handle have changed,
-                         * that means some sort of disconnection happened.
-                         * If the server is not in recovery, that also means it
-                         * already erased all of our state because of previous
-                         * eviction. If it is in recovery - we are safe to
-                         * participate since we can reestablish all of our state
-                         * with server again */
-                        CDEBUG(level,"%s@%s changed server handle from "
-                                     LPX64" to "LPX64"%s \n" "but is still in recovery \n",
-                                     obd2cli_tgt(imp->imp_obd),
-                                     imp->imp_connection->c_remote_uuid.uuid,
-                                     imp->imp_remote_handle.cookie,
-                                     lustre_msg_get_handle(request->rq_repmsg)->
-                                                                        cookie,
-                                     (MSG_CONNECT_RECOVERING & msg_flags) ?
-                                         "but is still in recovery" : "");
-
+                        CWARN("%s@%s changed server handle from "
+                               LPX64" to "LPX64" - evicting.\n",
+                               obd2cli_tgt(imp->imp_obd),
+                               imp->imp_connection->c_remote_uuid.uuid,
+                               imp->imp_remote_handle.cookie,
+                               lustre_msg_get_handle(request->rq_repmsg)->
+                                         cookie);
                         imp->imp_remote_handle =
                                      *lustre_msg_get_handle(request->rq_repmsg);
 
-                        if (!(MSG_CONNECT_RECOVERING & msg_flags)) {
-                                IMPORT_SET_STATE(imp, LUSTRE_IMP_EVICTED);
-                                GOTO(finish, rc = 0);
-                        }
-
+                        IMPORT_SET_STATE(imp, LUSTRE_IMP_EVICTED);
+                        GOTO(finish, rc = 0);
                 } else {
                         CDEBUG(D_HA, "reconnected to %s@%s after partition\n",
                                obd2cli_tgt(imp->imp_obd),

@@ -61,13 +61,11 @@
 
 #define MAX_HW_SECTORS_KB_PATH  "queue/max_hw_sectors_kb"
 #define MAX_SECTORS_KB_PATH     "queue/max_sectors_kb"
-#define MAX_RETRIES 99
 
 int          verbose = 0;
 int          nomtab = 0;
 int          fake = 0;
 int          force = 0;
-int          retry = 0;
 char         *progname = NULL;
 
 void usage(FILE *out)
@@ -93,7 +91,6 @@ void usage(FILE *out)
                 "\t\tnomgs: only start target obds, using existing MGS\n"
                 "\t\texclude=<ostname>[:<ostname>] : colon-separated list of "
                 "inactive OSTs (e.g. lustre-OST0001)\n"
-                "\t\tretry=<num>: number of times mount is retried by client\n"
                 );
         exit((out != stdout) ? EINVAL : 0);
 }
@@ -259,7 +256,7 @@ static int parse_one_option(const char *check, int *flagp)
    fill in mount flags */
 int parse_options(char *orig_options, int *flagp)
 {
-        char *options, *opt, *nextopt, *arg, *val;
+        char *options, *opt, *nextopt;
 
         options = calloc(strlen(orig_options) + 1, 1);
         *flagp = 0;
@@ -268,19 +265,7 @@ int parse_options(char *orig_options, int *flagp)
                 if (!*opt)
                         /* empty option */
                         continue;
-
-                /* Handle retries in a slightly different
-                 * manner */
-                arg = opt;
-                val = strchr(opt, '=');
-                if (val != NULL && strncmp(arg, "retry", 5) == 0) {
-                        retry = atoi(val + 1);
-                        if (retry > MAX_RETRIES)
-                                retry = MAX_RETRIES;
-                        else if (retry < 0)
-                                retry = 0;
-                }
-                else if (parse_one_option(opt, flagp) == 0) {
+                if (parse_one_option(opt, flagp) == 0) {
                         /* pass this on as an option */
                         if (*options)
                                 strcat(options, ",");
@@ -340,7 +325,7 @@ int set_tunables(char *source, int src_len)
         ret_path = realpath(source, real_path);
         if (ret_path == NULL) {
                 if (verbose)
-                        fprintf(stderr, "warning: %s: cannot resolve: %s\n",
+                        fprintf(stderr, "warning: %s: cannot resolve: %s",
                                 source, strerror(errno));
                 return -EINVAL;
         }
@@ -582,39 +567,18 @@ int main(int argc, char *const argv[])
                 printf("mounting device %s at %s, flags=%#x options=%s\n",
                        source, target, flags, optcopy);
 
-        if (!strstr(usource, ":/") && set_tunables(source, strlen(source)) &&
-            verbose)
+        if (set_tunables(source, strlen(source)) && verbose)
                 fprintf(stderr, "%s: unable to set tunables for %s"
-                                " (may cause reduced IO performance)\n",
+                                " (may cause reduced IO performance)",
                                 argv[0], source);
 
         register_service_tags(usource, source, target);
 
-        if (!fake) {
+        if (!fake)
                 /* flags and target get to lustre_get_sb, but not
                    lustre_fill_super.  Lustre ignores the flags, but mount
                    does not. */
-                for (i = 0, rc = -EAGAIN; i <= retry && rc != 0; i++) {
-                        rc = mount(source, target, "lustre", flags,
-                                   (void *)optcopy);
-                        if (rc) {
-                                if (verbose) {
-                                        fprintf(stderr, "%s: mount %s at %s "
-                                                "failed: %s retries left: "
-                                                "%d\n", basename(progname),
-                                                usource, target,
-                                                strerror(errno), retry-i);
-                                }
-
-                                if (retry) {
-                                        sleep(1 << max((i/2), 5));
-                                }
-                                else {
-                                        rc = errno;
-                                }
-                        }
-                }
-        }
+                rc = mount(source, target, "lustre", flags, (void *)optcopy);
 
         if (rc) {
                 char *cli;

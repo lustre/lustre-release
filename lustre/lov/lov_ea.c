@@ -68,19 +68,19 @@ static int lsm_lmm_verify_common(struct lov_mds_md *lmm, int lmm_bytes,
 
         if (stripe_count == 0 || stripe_count > LOV_V1_INSANE_STRIPE_COUNT) {
                 CERROR("bad stripe count %d\n", stripe_count);
-                lov_dump_lmm(D_WARNING, lmm);
+                lov_dump_lmm_v1(D_WARNING, lmm);
                 return -EINVAL;
         }
 
         if (lmm->lmm_object_id == 0) {
                 CERROR("zero object id\n");
-                lov_dump_lmm(D_WARNING, lmm);
+                lov_dump_lmm_v1(D_WARNING, lmm);
                 return -EINVAL;
         }
 
         if (lmm->lmm_pattern != cpu_to_le32(LOV_PATTERN_RAID0)) {
                 CERROR("bad striping pattern\n");
-                lov_dump_lmm(D_WARNING, lmm);
+                lov_dump_lmm_v1(D_WARNING, lmm);
                 return -EINVAL;
         }
 
@@ -90,7 +90,7 @@ static int lsm_lmm_verify_common(struct lov_mds_md *lmm, int lmm_bytes,
              0xffffffff)) {
                 CERROR("bad stripe size %u\n",
                        le32_to_cpu(lmm->lmm_stripe_size));
-                lov_dump_lmm(D_WARNING, lmm);
+                lov_dump_lmm_v1(D_WARNING, lmm);
                 return -EINVAL;
         }
         return 0;
@@ -118,7 +118,6 @@ struct lov_stripe_md *lsm_alloc_plain(int stripe_count, int *size)
                 lsm->lsm_oinfo[i] = loi;
         }
         lsm->lsm_stripe_count = stripe_count;
-        lsm->lsm_pool_name[0] = '\0';
         return lsm;
 
 err:
@@ -143,15 +142,10 @@ void lsm_free_plain(struct lov_stripe_md *lsm)
 static void lsm_unpackmd_common(struct lov_stripe_md *lsm,
                                 struct lov_mds_md *lmm)
 {
-        /*
-         * This supposes lov_mds_md_v1/v3 first fields are
-         * are the same
-         */
         lsm->lsm_object_id = le64_to_cpu(lmm->lmm_object_id);
         lsm->lsm_object_gr = le64_to_cpu(lmm->lmm_object_gr);
         lsm->lsm_stripe_size = le32_to_cpu(lmm->lmm_stripe_size);
         lsm->lsm_pattern = le32_to_cpu(lmm->lmm_pattern);
-        lsm->lsm_pool_name[0] = '\0';
 }
 
 static void
@@ -203,20 +197,20 @@ static int lsm_destroy_plain(struct lov_stripe_md *lsm, struct obdo *oa,
         return 0;
 }
 
-static int lsm_lmm_verify_v1(struct lov_mds_md_v1 *lmm, int lmm_bytes,
+static int lsm_lmm_verify_plain(struct lov_mds_md *lmm, int lmm_bytes,
                              int *stripe_count)
 {
         if (lmm_bytes < sizeof(*lmm)) {
-                CERROR("lov_mds_md_v1 too small: %d, need at least %d\n",
+                CERROR("lov_mds_md too small: %d, need at least %d\n",
                        lmm_bytes, (int)sizeof(*lmm));
                 return -EINVAL;
         }
 
         *stripe_count = le32_to_cpu(lmm->lmm_stripe_count);
 
-        if (lmm_bytes < lov_mds_md_size(*stripe_count, LOV_MAGIC_V1)) {
-                CERROR("LOV EA V1 too small: %d, need %d\n",
-                       lmm_bytes, lov_mds_md_size(*stripe_count, LOV_MAGIC_V1));
+        if (lmm_bytes < lov_mds_md_v1_size(*stripe_count)) {
+                CERROR("LOV EA too small: %d, need %d\n",
+                       lmm_bytes, lov_mds_md_v1_size(*stripe_count));
                 lov_dump_lmm_v1(D_WARNING, lmm);
                 return -EINVAL;
         }
@@ -224,7 +218,7 @@ static int lsm_lmm_verify_v1(struct lov_mds_md_v1 *lmm, int lmm_bytes,
         return lsm_lmm_verify_common(lmm, lmm_bytes, *stripe_count);
 }
 
-int lsm_unpackmd_v1(struct lov_obd *lov, struct lov_stripe_md *lsm,
+int lsm_unpackmd_plain(struct lov_obd *lov, struct lov_stripe_md *lsm,
                     struct lov_mds_md_v1 *lmm)
 {
         struct lov_oinfo *loi;
@@ -255,7 +249,7 @@ int lsm_unpackmd_v1(struct lov_obd *lov, struct lov_stripe_md *lsm,
         return 0;
 }
 
-struct lsm_operations lsm_v1_ops = {
+struct lsm_operations lsm_plain_ops = {
         .lsm_free            = lsm_free_plain,
         .lsm_destroy         = lsm_destroy_plain,
         .lsm_stripe_by_index    = lsm_stripe_by_index_plain,
@@ -264,8 +258,8 @@ struct lsm_operations lsm_v1_ops = {
         .lsm_stripe_offset_by_index  = lsm_stripe_offset_by_index_plain,
         .lsm_stripe_offset_by_offset = lsm_stripe_offset_by_offset_plain,
         .lsm_stripe_index_by_offset  = lsm_stripe_index_by_offset_plain,
-        .lsm_lmm_verify         = lsm_lmm_verify_v1,
-        .lsm_unpackmd           = lsm_unpackmd_v1,
+        .lsm_lmm_verify         = lsm_lmm_verify_plain,
+        .lsm_unpackmd           = lsm_unpackmd_plain,
 };
 
 struct lov_extent *lovea_off2le(struct lov_stripe_md *lsm, obd_off lov_off)
@@ -450,8 +444,7 @@ static int lovea_unpack_array(struct llog_handle *handle,
         /* insert extent desc into lsm extent array  */
         lai->lai_ext_array[cursor].le_start = le64_to_cpu(med->med_start);
         lai->lai_ext_array[cursor].le_len   = le64_to_cpu(med->med_len);
-        lai->lai_ext_array[cursor].le_stripe_count =
-                                   le32_to_cpu(lmm->lmm_stripe_count);
+        lai->lai_ext_array[cursor].le_stripe_count = lmm->lmm_stripe_count;
 
         /* unpack extent's lmm to lov_oinfo array */
         loi_index = lai->lai_ext_array[cursor].le_loi_idx;
@@ -591,10 +584,8 @@ static int lovea_init_array_info(struct lov_stripe_md *lsm,
         if (!lai)
                 RETURN(-ENOMEM);
 
-        lai->lai_array_id.lgl_oid = le64_to_cpu(logid->lgl_oid);
-        lai->lai_array_id.lgl_ogr = le64_to_cpu(logid->lgl_ogr);
-        lai->lai_array_id.lgl_ogen = le32_to_cpu(logid->lgl_ogen);
-        lai->lai_ext_count = le32_to_cpu(extent_count);
+        lai->lai_array_id = *logid;
+        lai->lai_ext_count = extent_count;
         lsm->lsm_array = lai;
         RETURN(0);
 }
@@ -631,79 +622,3 @@ struct lsm_operations lsm_join_ops = {
         .lsm_lmm_verify         = lsm_lmm_verify_join,
         .lsm_unpackmd           = lsm_unpackmd_join,
 };
-
-
-static int lsm_lmm_verify_v3(struct lov_mds_md *lmmv1, int lmm_bytes,
-                             int *stripe_count)
-{
-        struct lov_mds_md_v3 *lmm;
-
-        lmm = (struct lov_mds_md_v3 *)lmmv1;
-
-        if (lmm_bytes < sizeof(*lmm)) {
-                CERROR("lov_mds_md_v3 too small: %d, need at least %d\n",
-                       lmm_bytes, (int)sizeof(*lmm));
-                return -EINVAL;
-        }
-
-        *stripe_count = le32_to_cpu(lmm->lmm_stripe_count);
-
-        if (lmm_bytes < lov_mds_md_size(*stripe_count, LOV_MAGIC_V3)) {
-                CERROR("LOV EA V3 too small: %d, need %d\n",
-                       lmm_bytes, lov_mds_md_size(*stripe_count, LOV_MAGIC_V3));
-                lov_dump_lmm_v3(D_WARNING, lmm);
-                return -EINVAL;
-        }
-
-        return lsm_lmm_verify_common((struct lov_mds_md_v1 *)lmm, lmm_bytes,
-                                     *stripe_count);
-}
-
-int lsm_unpackmd_v3(struct lov_obd *lov, struct lov_stripe_md *lsm,
-                    struct lov_mds_md *lmmv1)
-{
-        struct lov_mds_md_v3 *lmm;
-        struct lov_oinfo *loi;
-        int i;
-
-        lmm = (struct lov_mds_md_v3 *)lmmv1;
-
-        lsm_unpackmd_common(lsm, (struct lov_mds_md_v1 *)lmm);
-        strncpy(lsm->lsm_pool_name, lmm->lmm_pool_name, MAXPOOLNAME);
-
-        for (i = 0; i < lsm->lsm_stripe_count; i++) {
-                /* XXX LOV STACKING call down to osc_unpackmd() */
-                loi = lsm->lsm_oinfo[i];
-                loi->loi_id = le64_to_cpu(lmm->lmm_objects[i].l_object_id);
-                loi->loi_gr = le64_to_cpu(lmm->lmm_objects[i].l_object_gr);
-                loi->loi_ost_idx = le32_to_cpu(lmm->lmm_objects[i].l_ost_idx);
-                loi->loi_ost_gen = le32_to_cpu(lmm->lmm_objects[i].l_ost_gen);
-                if (loi->loi_ost_idx >= lov->desc.ld_tgt_count) {
-                        CERROR("OST index %d more than OST count %d\n",
-                               loi->loi_ost_idx, lov->desc.ld_tgt_count);
-                        lov_dump_lmm_v3(D_WARNING, lmm);
-                        return -EINVAL;
-                }
-                if (!lov->lov_tgts[loi->loi_ost_idx]) {
-                        CERROR("OST index %d missing\n", loi->loi_ost_idx);
-                        lov_dump_lmm_v3(D_WARNING, lmm);
-                        return -EINVAL;
-                }
-        }
-
-        return 0;
-}
-
-struct lsm_operations lsm_v3_ops = {
-        .lsm_free            = lsm_free_plain,
-        .lsm_destroy         = lsm_destroy_plain,
-        .lsm_stripe_by_index    = lsm_stripe_by_index_plain,
-        .lsm_stripe_by_offset   = lsm_stripe_by_offset_plain,
-        .lsm_revalidate         = lsm_revalidate_plain,
-        .lsm_stripe_offset_by_index  = lsm_stripe_offset_by_index_plain,
-        .lsm_stripe_offset_by_offset = lsm_stripe_offset_by_offset_plain,
-        .lsm_stripe_index_by_offset  = lsm_stripe_index_by_offset_plain,
-        .lsm_lmm_verify         = lsm_lmm_verify_v3,
-        .lsm_unpackmd           = lsm_unpackmd_v3,
-};
-

@@ -52,7 +52,9 @@
 #include <obd_class.h>
 #include <lustre_fsfilt.h>
 #include <lustre_mds.h>
+#include <lustre_commit_confd.h>
 #include <lustre_log.h>
+
 #include "mds_internal.h"
 
 static int mds_llog_origin_add(struct llog_ctxt *ctxt,

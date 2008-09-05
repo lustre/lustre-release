@@ -180,7 +180,6 @@ EXPORT_SYMBOL(mds_lov_destroy_objids);
 static int mds_lov_update_max_ost(struct mds_obd *mds, obd_id index)
 {
         __u32 page = index / OBJID_PER_PAGE();
-        __u32 off = index % OBJID_PER_PAGE();
         obd_id *data =  mds->mds_lov_page_array[page];
 
         if (data == NULL) {
@@ -191,29 +190,25 @@ static int mds_lov_update_max_ost(struct mds_obd *mds, obd_id index)
                 mds->mds_lov_page_array[page] = data;
         }
 
-        if (index > mds->mds_lov_objid_max_index) {
-                mds->mds_lov_objid_lastpage = page;
-                mds->mds_lov_objid_lastidx = off;
-                mds->mds_lov_objid_max_index = index;
-        }
-
-        /* workaround - New target not in objids file; increase mdsize */
-        /* ld_tgt_count is used as the max index everywhere, despite its name. */
-        if (data[off] == 0) {
+        /* XXX mds_lov_objid_count max index (not count) now. this need fix in
+         * lov first */
+        if (index > mds->mds_lov_objid_count) {
+                __u32 off = index % OBJID_PER_PAGE();
                 __u32 stripes;
 
-                data[off] = 1;
-                mds->mds_lov_objid_count++;
+                mds->mds_lov_objid_count = index;
+                mds->mds_lov_objid_lastpage = page;
+                mds->mds_lov_objid_lastidx = off;
+
                 stripes = min_t(__u32, LOV_MAX_STRIPE_COUNT,
-                                mds->mds_lov_objid_count);
+                                index);
 
-                mds->mds_max_mdsize = lov_mds_md_size(stripes, LOV_MAGIC_V3);
+                mds->mds_max_mdsize = lov_mds_md_size(stripes);
                 mds->mds_max_cookiesize = stripes * sizeof(struct llog_cookie);
-                CDEBUG(D_CONFIG, "updated max_mdsize/max_cookiesize for %d "
-                       "stripes: %d/%d\n", mds->mds_max_mdsize,
-                       mds->mds_max_cookiesize, stripes);
+                CDEBUG(D_CONFIG, "updated max_mdsize/max_cookiesize for %d stripes: "
+                       "%d/%d\n", mds->mds_max_mdsize, mds->mds_max_cookiesize,
+                       stripes);
         }
-
         EXIT;
         return 0;
 }
@@ -222,20 +217,14 @@ int mds_lov_prepare_objids(struct obd_device *obd, struct lov_mds_md *lmm)
 {
         int rc = 0;
         __u32 j;
-        struct lov_ost_data_v1 *lmm_objects;
 
         /* if we create file without objects - lmm is NULL */
         if (lmm == NULL)
                 return 0;
 
         mutex_down(&obd->obd_dev_sem);
-        if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V3)
-                lmm_objects = ((struct lov_mds_md_v3 *)lmm)->lmm_objects;
-        else
-                lmm_objects = lmm->lmm_objects;
-
         for (j = 0; j < le32_to_cpu(lmm->lmm_stripe_count); j++) {
-                __u32 i = le32_to_cpu(lmm_objects[j].l_ost_idx);
+                __u32 i = le32_to_cpu(lmm->lmm_objects[j].l_ost_idx);
                 if (mds_lov_update_max_ost(&obd->u.mds, i)) {
                         rc = -ENOMEM;
                         break;
@@ -251,21 +240,15 @@ void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm)
 {
         struct mds_obd *mds = &obd->u.mds;
         int j;
-        struct lov_ost_data_v1 *lmm_objects;
         ENTRY;
 
         /* if we create file without objects - lmm is NULL */
         if (lmm == NULL)
                 return;
 
-        if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V3)
-                lmm_objects = ((struct lov_mds_md_v3 *)lmm)->lmm_objects;
-        else
-                lmm_objects = lmm->lmm_objects;
-
         for (j = 0; j < le32_to_cpu(lmm->lmm_stripe_count); j++) {
-                __u32 i = le32_to_cpu(lmm_objects[j].l_ost_idx);
-                obd_id id = le64_to_cpu(lmm_objects[j].l_object_id);
+                __u32 i = le32_to_cpu(lmm->lmm_objects[j].l_ost_idx);
+                obd_id id = le64_to_cpu(lmm->lmm_objects[j].l_object_id);
                 __u32 page = i / OBJID_PER_PAGE();
                 __u32 idx = i % OBJID_PER_PAGE();
                 obd_id *data;
@@ -283,30 +266,6 @@ void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm)
         return;
 }
 EXPORT_SYMBOL(mds_lov_update_objids);
-
-static int mds_lov_update_from_read(struct mds_obd *mds, obd_id *data,
-                                    __u32 count)
-{
-        __u32 i;
-        __u32 stripes;
-
-        for(i = 0; i < count; i++) {
-                if (data[i] == 0)
-                        continue;
-
-                mds->mds_lov_objid_count++;
-                stripes = min_t(__u32, LOV_MAX_STRIPE_COUNT,
-                                mds->mds_lov_objid_count);
-
-                mds->mds_max_mdsize = lov_mds_md_size(stripes, LOV_MAGIC_V3);
-                mds->mds_max_cookiesize = stripes * sizeof(struct llog_cookie);
-                CDEBUG(D_CONFIG, "updated max_mdsize/max_cookiesize for %d stripes: "
-                       "%d/%d\n", mds->mds_max_mdsize, mds->mds_max_cookiesize,
-                       stripes);
-        }
-        EXIT;
-        return 0;
-}
 
 static int mds_lov_read_objids(struct obd_device *obd)
 {
@@ -330,10 +289,10 @@ static int mds_lov_read_objids(struct obd_device *obd)
                 loff_t off_old = off;
 
                 LASSERT(mds->mds_lov_page_array[i] == NULL);
-                OBD_ALLOC(mds->mds_lov_page_array[i], MDS_LOV_ALLOC_SIZE);
-                if (mds->mds_lov_page_array[i] == NULL)
-                        GOTO(out, rc = -ENOMEM);
-
+                if (mds_lov_update_max_ost(mds, i)) {
+                        CERROR("Can't update mds data\n");
+                        GOTO(out, rc = -EIO);
+                }
                 data = mds->mds_lov_page_array[i];
 
                 rc = fsfilt_read_record(obd, mds->mds_lov_objid_filp, data,
@@ -342,20 +301,13 @@ static int mds_lov_read_objids(struct obd_device *obd)
                         CERROR("Error reading objids %d\n", rc);
                         GOTO(out, rc);
                 }
-
-                count = (off - off_old) / sizeof(obd_id);
-                if (mds_lov_update_from_read(mds, data, count)) {
-                        CERROR("Can't update mds data\n");
-                        GOTO(out, rc = -EIO);
-                }
-
                 if (off == off_old)
                         break; /* eof */
-         }
-         mds->mds_lov_objid_lastpage = i;
-         mds->mds_lov_objid_lastidx = count;
 
-        CDEBUG(D_INFO, "Read %u - %u %u objid\n", mds->mds_lov_objid_count,
+                count += (off - off_old) / sizeof(obd_id);
+        }
+
+        CDEBUG(D_INFO, "Read %u - %u %u objid\n", count,
                mds->mds_lov_objid_lastpage, mds->mds_lov_objid_lastidx);
 out:
         mds_lov_dump_objids("read",obd);
@@ -467,6 +419,9 @@ static int mds_lov_set_one_nextid(struct obd_device * obd, __u32 idx, obd_id *id
 
         LASSERT(!obd->obd_recovering);
 
+        /* obd->obd_dev_sem must be held so mds_lov_objids doesn't change */
+        LASSERT_SEM_LOCKED(&obd->obd_dev_sem);
+
         info.idx = idx;
         info.data = id;
         rc = obd_set_info_async(mds->mds_osc_exp, sizeof(KEY_NEXT_ID),
@@ -478,9 +433,21 @@ static int mds_lov_set_one_nextid(struct obd_device * obd, __u32 idx, obd_id *id
         RETURN(rc);
 }
 
+static __u32 mds_lov_get_idx(struct obd_export *lov,
+                             struct obd_uuid *ost_uuid)
+{
+        int rc;
+        int valsize = sizeof(ost_uuid);
+
+        rc = obd_get_info(lov, sizeof(KEY_LOV_IDX), KEY_LOV_IDX,
+                          &valsize, ost_uuid, NULL);
+        LASSERT(rc >= 0);
+
+        RETURN(rc);
+}
+
 /* Update the lov desc for a new size lov. */
-static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov,
-                                __u32 index)
+static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lov_desc *ld;
@@ -503,10 +470,7 @@ static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov,
         CDEBUG(D_CONFIG, "updated lov_desc, tgt_count: %d\n",
                mds->mds_lov_desc.ld_tgt_count);
 
-        mutex_down(&obd->obd_dev_sem);
-        rc = mds_lov_update_max_ost(mds, index);
-        mutex_up(&obd->obd_dev_sem);
-        if (rc)
+        if (mds_lov_update_max_ost(mds, mds->mds_lov_desc.ld_tgt_count))
                 GOTO(out, rc = -ENOMEM);
 
         /* If we added a target we have to reconnect the llogs */
@@ -535,8 +499,10 @@ static int mds_lov_update_mds(struct obd_device *obd,
         ENTRY;
 
         /* Don't let anyone else mess with mds_lov_objids now */
+        mutex_down(&obd->obd_dev_sem);
+
         old_count = mds->mds_lov_desc.ld_tgt_count;
-        rc = mds_lov_update_desc(obd, mds->mds_osc_exp, idx);
+        rc = mds_lov_update_desc(obd, mds->mds_osc_exp);
         if (rc)
                 GOTO(out, rc);
 
@@ -575,6 +541,7 @@ static int mds_lov_update_mds(struct obd_device *obd,
         CDEBUG(D_CONFIG, "last object "LPU64" from OST %d rc=%d\n",
                data[off], idx, rc);
 out:
+        mutex_up(&obd->obd_dev_sem);
         RETURN(rc);
 }
 
@@ -996,6 +963,7 @@ int mds_lov_start_synchronize(struct obd_device *obd,
                               void *data, int nonblock)
 {
         struct mds_lov_sync_info *mlsi;
+        struct mds_obd *mds = &obd->u.mds;
         int rc;
         struct obd_uuid *uuid;
         ENTRY;
@@ -1007,10 +975,12 @@ int mds_lov_start_synchronize(struct obd_device *obd,
         if (mlsi == NULL)
                 RETURN(-ENOMEM);
 
-        LASSERT(data);
         mlsi->mlsi_obd = obd;
         mlsi->mlsi_watched = watched;
-        mlsi->mlsi_index = *(__u32 *)data;
+        if (data)
+                mlsi->mlsi_index = *(__u32 *)data;
+        else
+                mlsi->mlsi_index = mds_lov_get_idx(mds->mds_osc_exp, uuid);
 
         /* Although class_export_get(obd->obd_self_export) would lock
            the MDS in place, since it's only a self-export
@@ -1056,16 +1026,11 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         case OBD_NOTIFY_ACTIVE:
                 /* lov want one or more _active_ targets for work */
                 mds_allow_cli(obd, CONFIG_TARGET);
-                /* activate event should be pass lov idx as argument */
         case OBD_NOTIFY_SYNC:
         case OBD_NOTIFY_SYNC_NONBLOCK:
-                /* sync event should be pass lov idx as argument */
                 break;
         case OBD_NOTIFY_CONFIG:
                 mds_allow_cli(obd, (unsigned long)data);
-                /* call this only when config is processed and stale_export_age
-                 * value is configured */
-                class_disconnect_expired_exports(obd);
         default:
                 RETURN(0);
         }
@@ -1083,9 +1048,9 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
                 /* We still have to fix the lov descriptor for ost's added
                    after the mdt in the config log.  They didn't make it into
                    mds_lov_connect. */
-                LASSERT(data);
-                rc = mds_lov_update_desc(obd, obd->u.mds.mds_osc_exp,
-                                        *(__u32 *)data);
+                mutex_down(&obd->obd_dev_sem);
+                rc = mds_lov_update_desc(obd, obd->u.mds.mds_osc_exp);
+                mutex_up(&obd->obd_dev_sem);
                 mds_allow_cli(obd, CONFIG_SYNC);
                 RETURN(rc);
         }
@@ -1133,46 +1098,15 @@ int mds_get_default_md(struct obd_device *obd, struct lov_mds_md *lmm,
  * reason.  We will not delete the old lmm data until we have written the
  * new format lmm data in fsfilt_set_md(). */
 int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
-                       struct lov_mds_md *lmm, int lmm_size,
-                       __u64 connect_flags)
+                       struct lov_mds_md *lmm, int lmm_size)
 {
         struct lov_stripe_md *lsm = NULL;
         void *handle;
         int rc, err;
         ENTRY;
 
-        if (((connect_flags & OBD_CONNECT_LOV_V3) == 0) &&
-            (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V3)) {
-                /* client does not support LOV_MAGIC_V3, so we have to convert
-                 * it to V1
-                 * we convert the lmm from v3 to v1
-                 * and return the new size (which is smaller)
-                 * the caller supports this way to return the new size */
-                int new_lmm_size;
-
-                lmm->lmm_magic = cpu_to_le32(LOV_MAGIC_V1);
-                /* lmm_stripe_count for non reg files is not used or -1 */
-                if (!S_ISREG(inode->i_mode)) {
-                        new_lmm_size = lov_mds_md_size(0, LOV_MAGIC_V1);
-                } else {
-                        __u32 lmm_stripe_count;
-
-                        lmm_stripe_count = le32_to_cpu(lmm->lmm_stripe_count);
-                        new_lmm_size = lov_mds_md_size(lmm_stripe_count,
-                                                       LOV_MAGIC_V1);
-                        /* move the objects to the new place */
-                        memmove(lmm->lmm_objects,
-                                ((struct lov_mds_md_v3 *)lmm)->lmm_objects,
-                                lmm_stripe_count * sizeof(struct lov_ost_data_v1));
-                }
-                /* even if new size is smaller than old one,
-                 * this should not generate memory leak */
-                RETURN(new_lmm_size);
-        }
-
-        if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V1 ||
-            le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V3 ||
-            le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_JOIN)
+        if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC ||
+            le32_to_cpu(lmm->lmm_magic == LOV_MAGIC_JOIN))
                 RETURN(0);
 
         CDEBUG(D_INODE, "converting LOV EA on %lu/%u from %#08x to %#08x\n",

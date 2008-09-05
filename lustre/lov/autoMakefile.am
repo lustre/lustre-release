@@ -36,7 +36,7 @@
 
 if LIBLUSTRE
 noinst_LIBRARIES = liblov.a
-liblov_a_SOURCES = lov_log.c lov_pool.c lov_obd.c lov_pack.c lov_request.c lov_offset.c lov_qos.c lov_merge.c lov_ea.c lov_internal.h
+liblov_a_SOURCES = lov_log.c lov_obd.c lov_pack.c lov_request.c lov_offset.c lov_qos.c lov_merge.c lov_ea.c lov_internal.h
 liblov_a_CPPFLAGS = $(LLCPPFLAGS)
 liblov_a_CFLAGS = $(LLCFLAGS)
 endif
@@ -51,7 +51,6 @@ macos_PROGRAMS := lov
 
 lov_SOURCES :=          \
         lov_log.c       \
-	lov_pool.c	\
         lov_obd.c       \
         lov_pack.c      \
         lov_request.c   \

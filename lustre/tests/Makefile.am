@@ -59,9 +59,6 @@ multiop_LDADD=$(LIBLUSTREAPI)
 ll_dirstripe_verify_SOURCES= ll_dirstripe_verify.c
 ll_dirstripe_verify_LDADD= -L$(top_builddir)/lustre/utils -llustreapi
 
-flocks_test_SOURCES=flocks_test.c
-flocks_test_LDADD=-lpthread
-
 if MPITESTS
 #LAM_LD_FLAGS=-L/opt/lam/lib -lmpi -llam -lpthread
 LAM_LD_FLAGS=-lmpich -lpthread

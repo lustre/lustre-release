@@ -576,28 +576,6 @@ AC_DEFUN([LC_XATTR_ACL],
 [])
 ])
 
-#
-# LC_LINUX_FIEMAP_H
-#
-# If we have fiemap.h
-# after 2.6.27 use fiemap.h in include/linux
-#
-AC_DEFUN([LC_LINUX_FIEMAP_H],
-[LB_CHECK_FILE([$LINUX/include/linux/fiemap.h],[
-        AC_MSG_CHECKING([if fiemap.h can be compiled])
-        LB_LINUX_TRY_COMPILE([
-                #include <linux/fiemap.h>
-        ],[],[
-                AC_MSG_RESULT([yes])
-                AC_DEFINE(HAVE_LINUX_FIEMAP_H, 1, [Kernel has fiemap.h])
-        ],[
-                AC_MSG_RESULT([no])
-        ])
-],
-[])
-])
-
-
 AC_DEFUN([LC_STRUCT_INTENT_FILE],
 [AC_MSG_CHECKING([if struct open_intent has a file field])
 LB_LINUX_TRY_COMPILE([
@@ -1480,49 +1458,39 @@ if test x$enable_liblustre_acl = xyes ; then
 fi
 
 #
-# --enable-mpitest
+# check --with-mpi option
 #
-AC_ARG_ENABLE(mpitests,
-	AC_HELP_STRING([--enable-mpitest=yes|no|mpich directory],
-                           [include mpi tests]),
-	[
-	 enable_mpitests=yes
-         case $enableval in
-         yes)
-		MPI_ROOT=/opt/mpich
-		LDFLAGS="$LDFLAGS -L$MPI_ROOT/ch-p4/lib -L$MPI_ROOT/ch-p4/lib64"
-		CFLAGS="$CFLAGS -I$MPI_ROOT/include"
-		;;
-         no)
-		enable_mpitests=no
-		;;
-	 [[\\/$]]* | ?:[[\\/]]* )
-		MPI_ROOT=$enableval
-		LDFLAGS="$LDFLAGS -L$with_mpi/lib"
-		CFLAGS="$CFLAGS -I$MPI_ROOT/include"
-                ;;
-         *)
-                 AC_MSG_ERROR([expected absolute directory name for --enable-mpitests or yes or no])
+AC_ARG_WITH([mpi],
+            AC_HELP_STRING([--with-mpi=path],
+                           [set path to mpi install (default=/opt/mpich)]),
+            [
+             case $with_mpi in
+             [[\\/$]]* | ?:[[\\/]]* )
                  ;;
-	 esac
-	],
-	[
-	MPI_ROOT=/opt/mpich
-        LDFLAGS="$LDFLAGS -L$MPI_ROOT/ch-p4/lib -L$MPI_ROOT/ch-p4/lib64"
-        CFLAGS="$CFLAGS -I$MPI_ROOT/include"
-	enable_mpitests=yes
-	]
-)
+             *)
+                 AC_MSG_ERROR([expected absolute directory name for --with-mpi])
+                 ;;
+             esac
+
+             MPI_ROOT=$with_mpi
+             LDFLAGS="$LDFLAGS -L$with_mpi/lib"
+             CFLAGS="$CFLAGS -I$with_mpi/include"
+            ],
+            [
+             MPI_ROOT=/opt/mpich
+             LDFLAGS="$LDFLAGS -L$MPI_ROOT/ch-p4/lib -L$MPI_ROOT/ch-p4/lib64"
+             CFLAGS="$CFLAGS -I$MPI_ROOT/include"
+            ])
 AC_SUBST(MPI_ROOT)
 
-if test x$enable_mpitests != xno; then
-	AC_MSG_CHECKING([whether to mpitests can be built])
-        AC_CHECK_FILE([$MPI_ROOT/include/mpi.h],
-                      [AC_CHECK_LIB([mpich],[MPI_Start],[enable_mpitests=yes],[enable_mpitests=no])],
-                      [enable_mpitests=no])
-fi
+#
+# check mpi's includes and library
+#
+AC_MSG_CHECKING([whether to build mpitests])
+AC_CHECK_FILE([$MPI_ROOT/include/mpi.h],
+              [AC_CHECK_LIB([mpich],[MPI_Start],[enable_mpitests=yes],[enable_mpitests=no])],
+              [enable_mpitests=no])
 AC_MSG_RESULT([$enable_mpitests])
-
 
 AC_MSG_NOTICE([Enabling Lustre configure options for libsysio])
 ac_configure_args="$ac_configure_args --with-lustre-hack --with-sockets"

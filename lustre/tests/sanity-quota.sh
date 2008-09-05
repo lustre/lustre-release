@@ -670,6 +670,7 @@ test_7()
 {
 	mkdir -p $DIR/$tdir
 	chmod 0777 $DIR/$tdir
+	remote_mds && skip "remote mds" && return 0
 
 	wait_delete_completed
 
@@ -722,6 +723,9 @@ test_8() {
 	mkdir -p $DIR/$tdir
 	BLK_LIMIT=$((100 * 1024 * 1024)) # 100G
 	FILE_LIMIT=1000000
+	DBENCH_LIB=${DBENCH_LIB:-/usr/lib/dbench}
+
+	[ ! -d $DBENCH_LIB ] && skip "dbench not installed" && return 0
 
 	wait_delete_completed
 
@@ -730,14 +734,26 @@ test_8() {
 	echo "  Set enough high limit for group: $TSTUSR"
 	$LFS setquota -g $USER -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR
 
+	TGT=$DIR/$tdir/client.txt
+	SRC=${SRC:-$DBENCH_LIB/client.txt}
+	[ ! -e $TGT -a -e $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
+	SRC=$DBENCH_LIB/client_plain.txt
+	[ ! -e $TGT -a -e $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
+
 	chmod 0777 $DIR/$tdir
+	SAVE_PWD=$PWD
+	cd $DIR/$tdir
 	local duration=""
 	[ "$SLOW" = "no" ] && duration=" -t 120"
-	$RUNAS bash rundbench -D $DIR/$tdir 3 $duration || error "dbench failed!"
+	$RUNAS dbench -c client.txt 3 $duration
+	RC=$?
+	[ $RC -ne 0 ] && killall -9 dbench
 
+	rm -f client.txt
 	sync; sleep 3; sync;
 
-	return 0 
+	cd $SAVE_PWD
+	return $RC
 }
 run_test_with_stat 8 "Run dbench with quota enabled ==========="
 
@@ -1477,9 +1493,12 @@ test_18a() {
 }
 run_test_with_stat 18a "run for fixing bug14840 ==========="
 
-run_to_block_limit() {
-	local LIMIT=$((($OSTCOUNT + 1) * 1024))
-	local TESTFILE=$1
+test_19() {
+	# 1 Mb bunit per each MDS/OSS
+	LIMIT=$((($OSTCOUNT + 1) * 1024))
+	TESTFILE="$DIR/$tdir/$tfile"
+	mkdir -p $DIR/$tdir
+
 	wait_delete_completed
 
 	# set 1 Mb quota unit size
@@ -1504,14 +1523,6 @@ run_to_block_limit() {
 	cancel_lru_locks osc
 	$RUNAS dd if=/dev/zero of=$TESTFILE seek=1028 bs=$BLK_SZ count=1 && \
 		error "(usr) write success, should be EDQUOT"
-}
-
-test_19() {
-	# 1 Mb bunit per each MDS/OSS
-	local TESTFILE="$DIR/$tdir/$tfile"
-	mkdir -p $DIR/$tdir
-
-	run_to_block_limit $TESTFILE
 	$SHOW_QUOTA_USER
 
 	# cleanup
@@ -1692,32 +1703,15 @@ test_23_sub() {
 }
 
 test_23() {
-	log "run for $((OSTCOUNT * 3))MB test file"
-	test_23_sub $((OSTCOUNT * 3 * 1024))
+	log "run for 10MB test file"
+	test_23_sub 10240  #10MB
 
 	OST0_MIN=120000
 	check_whether_skip && return 0
-	log "run for $((OSTCOUNT * 30))MB test file"
-	test_23_sub $((OSTCOUNT * 30 * 1024))
+	log "run for 100MB test file"
+	test_23_sub 102400 #100MB
 }
 run_test_with_stat 23 "run for fixing bug16125 ==========="
-
-test_24() {
-	local TESTFILE="$DIR/$tdir/$tfile"
-	mkdir -p $DIR/$tdir
-
-	run_to_block_limit $TESTFILE
-	$SHOW_QUOTA_USER | grep '*' || error "no matching *"
-
-	# cleanup
-	rm -f $TESTFILE
-	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $MOUNT
-
-	set_blk_unitsz $((128 * 1024))
-	set_blk_tunesz $((128 * 1024 / 2))
-        
-}
-run_test_with_stat 24 "test if lfs draws an asterix when limit is reached (16646) ==========="
 
 # turn off quota
 test_99()

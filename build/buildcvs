@@ -166,15 +166,6 @@ case "$lustretag" in
     b_hd_lnet_smp)
         # LNet grained locking and SMP improvement branch
         lnettag="b_hd_lnet_smp"
-        ldiskfstag="$ldiskfstag_head"
-        lustretag="HEAD"
-        libcfstag="HEAD"
-        ;;
-
-    b_hd_o2ib_new_proto)
-        # LNet branch for new o2iblnd protocol (15983, 13621, 14425, 14358)
-        lnettag="b_hd_o2ib_new_proto"
-        ldiskfstag="$ldiskfstag_head"
         lustretag="HEAD"
         libcfstag="HEAD"
         ;;
@@ -240,13 +231,6 @@ case "$lustretag" in
         libcfstag="HEAD"
         ;;
     
-    # HEAD cmd fixes
-    b_head_cmd)
-        lnettag="HEAD"
-        ldiskfstag="$ldiskfstag_head"
-        libcfstag="HEAD"
-        ;;
-    
     # windows client porting (lustre: b_client_io_layering, lnet: HEAD) 
     b_winnt_port)
         ldiskfstag="$ldiskfstag_head"
@@ -286,7 +270,7 @@ case "$lustretag" in
 
     # Branches that have been updated to include
     # the libcfs split should be added here
-    HEAD|b_head_quota|b_hd_comp_fld)
+    HEAD|b_head_quota)
         lnettag="HEAD"
         ldiskfstag="$ldiskfstag_head"
         libcfstag="HEAD"

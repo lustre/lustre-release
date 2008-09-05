@@ -111,34 +111,28 @@ static int lprocfs_obd_snprintf(char **page, int end, int *len,
         return n;
 }
 
-cfs_proc_dir_entry_t *lprocfs_add_simple(struct proc_dir_entry *root,
-                                        char *name,
-                                        read_proc_t *read_proc,
-                                        write_proc_t *write_proc,
-                                        void *data,
-                                        struct file_operations *fops)
+int lprocfs_add_simple(struct proc_dir_entry *root, char *name,
+                       read_proc_t *read_proc, write_proc_t *write_proc,
+                       void *data)
 {
-        cfs_proc_dir_entry_t *proc;
+        struct proc_dir_entry *proc;
         mode_t mode = 0;
 
         if (root == NULL || name == NULL)
-                return ERR_PTR(-EINVAL);
+                return -EINVAL;
         if (read_proc)
                 mode = 0444;
         if (write_proc)
                 mode |= 0200;
-        if (fops)
-                mode = 0644;
         proc = create_proc_entry(name, mode, root);
         if (!proc) {
                 CERROR("LprocFS: No memory to create /proc entry %s", name);
-                return ERR_PTR(-ENOMEM);
+                return -ENOMEM;
         }
         proc->read_proc = read_proc;
         proc->write_proc = write_proc;
         proc->data = data;
-        proc->proc_fops = fops;
-        return proc;
+        return 0;
 }
 
 
@@ -664,7 +658,6 @@ int lprocfs_rd_timeouts(char *page, char **start, off_t off, int count,
         return rc;
 }
 
-/* see OBD_CONNECT_* */
 static const char *obd_connect_names[] = {
         "read_only",
         "lov_index",
@@ -698,7 +691,6 @@ static const char *obd_connect_names[] = {
         "alt_checksum_algorithm",
         "fid_is_enabled",
         "version_recovery",
-        "pools",
         NULL
 };
 
@@ -1179,10 +1171,6 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_OBD_OP_INIT(num_private_stats,stats,unregister_page_removal_cb);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, register_lock_cancel_cb);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats,unregister_lock_cancel_cb);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_new);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_rem);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_add);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_del);
 }
 
 void lprocfs_init_ldlm_stats(struct lprocfs_stats *ldlm_stats)
@@ -1366,7 +1354,6 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
         struct nid_stat *tmp, *tmp1;
         struct nid_stat_uuid *cursor, *tmp_ns_uuid;
         struct obd_device *obd;
-        cfs_proc_dir_entry_t *entry;
         ENTRY;
 
         *newnid = 0;
@@ -1457,12 +1444,10 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
         list_add(&tmp_ns_uuid->ns_uuid_list, &tmp->nid_uuid_list);
         spin_unlock(&obd->obd_nid_lock);
 
-        entry = lprocfs_add_simple(tmp->nid_proc, "uuid",
-                                   lprocfs_exp_rd_uuid, NULL, tmp, NULL);
-        if (IS_ERR(entry)) {
+        rc = lprocfs_add_simple(tmp->nid_proc, "uuid",
+                                lprocfs_exp_rd_uuid, NULL, tmp);
+        if (rc)
                 CWARN("Error adding the uuid file\n");
-                rc = PTR_ERR(entry);
-        }
 
         exp->exp_nid_stats = tmp;
         *newnid = 1;
@@ -1882,77 +1867,6 @@ int lprocfs_obd_wr_recovery_maxtime(struct file *file, const char *buffer,
 }
 EXPORT_SYMBOL(lprocfs_obd_wr_recovery_maxtime);
 #endif /* CRAY_XT3 */
-
-int lprocfs_obd_rd_stale_export_age(char *page, char **start, off_t off,
-                                    int count, int *eof, void *data)
-{
-        struct obd_device *obd = (struct obd_device *)data;
-        LASSERT(obd != NULL);
-
-        return snprintf(page, count, "%u\n",
-                        obd->u.obt.obt_stale_export_age);
-}
-EXPORT_SYMBOL(lprocfs_obd_rd_stale_export_age);
-
-int lprocfs_obd_wr_stale_export_age(struct file *file, const char *buffer,
-                                    unsigned long count, void *data)
-{
-        struct obd_device *obd = (struct obd_device *)data;
-        int val, rc;
-        LASSERT(obd != NULL);
-
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
-
-        obd->u.obt.obt_stale_export_age = val;
-        return count;
-}
-EXPORT_SYMBOL(lprocfs_obd_wr_stale_export_age);
-
-static int obd_stale_exports_seq_show(struct seq_file *seq, void *v)
-{
-        struct obd_device *obd = seq->private;
-        struct obd_export *exp;
-
-        spin_lock(&obd->obd_dev_lock);
-        list_for_each_entry(exp, &obd->obd_delayed_exports,
-                            exp_obd_chain) {
-                seq_printf(seq, "%s: %ld seconds ago%s\n",
-                           obd_uuid2str(&exp->exp_client_uuid),
-                           cfs_time_current_sec() - exp->exp_last_request_time,
-                           exp_expired(exp, obd->u.obt.obt_stale_export_age) ?
-                                       " [EXPIRED]" : "");
-        }
-        spin_unlock(&obd->obd_dev_lock);
-        return 0;
-}
-
-LPROC_SEQ_FOPS_RO(obd_stale_exports);
-
-int lprocfs_obd_attach_stale_exports(struct obd_device *dev)
-{
-        return lprocfs_obd_seq_create(dev, "stale_exports", 0444,
-                                      &obd_stale_exports_fops, dev);
-}
-EXPORT_SYMBOL(lprocfs_obd_attach_stale_exports);
-
-int lprocfs_obd_wr_flush_stale_exports(struct file *file, const char *buffer,
-                                       unsigned long count, void *data)
-{
-        struct obd_device *obd = (struct obd_device *)data;
-        int val, rc;
-        LASSERT(obd != NULL);
-
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
-
-        class_disconnect_expired_exports(obd);
-        return count;
-}
-EXPORT_SYMBOL(lprocfs_obd_wr_flush_stale_exports);
-
 
 EXPORT_SYMBOL(lprocfs_register);
 EXPORT_SYMBOL(lprocfs_srch);

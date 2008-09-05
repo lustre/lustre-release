@@ -155,9 +155,6 @@
 #define OST_MAXREQSIZE  (5 * 1024)
 #define OST_MAXREPSIZE  (9 * 1024)
 
-/* Macro to hide a typecast. */
-#define ptlrpc_req_async_args(req) ((void *)&req->rq_async_args)
-
 struct ptlrpc_connection {
         struct list_head        c_link;
         struct hlist_node       c_hash;
@@ -358,11 +355,11 @@ struct ptlrpc_request {
 
         struct ptlrpc_bulk_desc *rq_bulk;       /* client side bulk */
         /* client outgoing req */
-        time_t rq_sent;                         /* when request sent, seconds,
+        time_t rq_sent;                         /* when request sent, seconds, 
                                                  * or time when request should
                                                  * be sent */
         volatile time_t rq_deadline;     /* when request must finish. volatile
-               so that servers' early reply updates to the deadline aren't
+               so that servers' early reply updates to the deadline aren't 
                kept in per-cpu cache */
         int    rq_timeout;               /* service time estimate (secs) */
 
@@ -518,7 +515,7 @@ struct ptlrpc_bulk_desc {
 
 struct ptlrpc_thread {
 
-        struct list_head t_link; /* active threads in svc->srv_threads */
+        struct list_head t_link; /* active threads for service, from svc->srv_threads */
 
         void *t_data;            /* thread-private data (preallocated memory) */
         __u32 t_flags;
@@ -562,7 +559,7 @@ struct ptlrpc_service {
 
         __u32            srv_req_portal;
         __u32            srv_rep_portal;
-
+        
         /* AT stuff */
         struct adaptive_timeout srv_at_estimate;/* estimated rpc service time */
         spinlock_t        srv_at_lock;
@@ -609,7 +606,7 @@ struct ptlrpc_service {
         struct list_head         srv_free_rs_list;
         /* waitq to run, when adding stuff to srv_free_rs_list */
         cfs_waitq_t              srv_free_rs_waitq;
-
+        
         /*
          * if non-NULL called during thread creation (ptlrpc_start_thread())
          * to initialize service specific per-thread state.
@@ -622,69 +619,6 @@ struct ptlrpc_service {
         void (*srv_done)(struct ptlrpc_thread *thread);
 
         //struct ptlrpc_srv_ni srv_interfaces[0];
-};
-
-struct ptlrpcd_ctl {
-        /**
-         * Ptlrpc thread control flags (LIOD_START, LIOD_STOP, LIOD_STOP_FORCE)
-         */
-        unsigned long               pc_flags;
-        /**
-         * Thread lock protecting structure fields.
-         */
-        spinlock_t                  pc_lock;
-        /**
-         * Start completion.
-         */
-        struct completion           pc_starting;
-        /**
-         * Stop completion.
-         */
-        struct completion           pc_finishing;
-        /**
-         * Thread requests set.
-         */
-        struct ptlrpc_request_set  *pc_set;
-        /**
-         * Thread name used in cfs_daemonize()
-         */
-        char                        pc_name[16];
-#ifndef __KERNEL__
-        /**
-         * Async rpcs flag to make sure that ptlrpcd_check() is called only 
-         * once.
-         */
-        int                         pc_recurred;
-        /**
-         * Currently not used.
-         */
-        void                       *pc_callback;
-        /**
-         * User-space async rpcs callback.
-         */
-        void                       *pc_wait_callback;
-        /**
-         * User-space check idle rpcs callback.
-         */
-        void                       *pc_idle_callback;
-#endif
-};
-
-/* Bits for pc_flags */
-enum ptlrpcd_ctl_flags {
-        /**
-         * Ptlrpc thread start flag.
-         */
-        LIOD_START       = 1 << 0,
-        /**
-         * Ptlrpc thread stop flag.
-         */
-        LIOD_STOP        = 1 << 1,
-        /**
-         * Ptlrpc thread stop force flag. This will cause also 
-         * aborting any inflight rpcs handled by thread.
-         */
-        LIOD_STOP_FORCE  = 1 << 2
 };
 
 /* ptlrpc/events.c */
@@ -767,7 +701,6 @@ int ptlrpc_replay_req(struct ptlrpc_request *req);
 void ptlrpc_unregister_reply(struct ptlrpc_request *req);
 void ptlrpc_restart_req(struct ptlrpc_request *req);
 void ptlrpc_abort_inflight(struct obd_import *imp);
-void ptlrpc_abort_set(struct ptlrpc_request_set *set);
 
 struct ptlrpc_request_set *ptlrpc_prep_set(void);
 int ptlrpc_set_add_cb(struct ptlrpc_request_set *set,
@@ -780,16 +713,13 @@ void ptlrpc_interrupted_set(void *data);
 void ptlrpc_mark_interrupted(struct ptlrpc_request *req);
 void ptlrpc_set_destroy(struct ptlrpc_request_set *);
 void ptlrpc_set_add_req(struct ptlrpc_request_set *, struct ptlrpc_request *);
-int ptlrpc_set_add_new_req(struct ptlrpcd_ctl *pc,
-                           struct ptlrpc_request *req);
+void ptlrpc_set_add_new_req(struct ptlrpc_request_set *,
+                            struct ptlrpc_request *);
 
 void ptlrpc_free_rq_pool(struct ptlrpc_request_pool *pool);
 void ptlrpc_add_rqs_to_pool(struct ptlrpc_request_pool *pool, int num_rq);
-
-struct ptlrpc_request_pool *
-ptlrpc_init_rq_pool(int, int,
-                    void (*populate_pool)(struct ptlrpc_request_pool *, int));
-
+struct ptlrpc_request_pool *ptlrpc_init_rq_pool(int, int,
+                                                void (*populate_pool)(struct ptlrpc_request_pool *, int));
 void ptlrpc_at_set_req_timeout(struct ptlrpc_request *req);
 struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, __u32 version,
                                        int opcode, int count, __u32 *lengths,
@@ -826,7 +756,7 @@ struct ptlrpc_service *ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
                                        int watchdog_factor,
                                        svc_handler_t, char *name,
                                        cfs_proc_dir_entry_t *proc_entry,
-                                       svcreq_printfn_t,
+                                       svcreq_printfn_t, 
                                        int min_threads, int max_threads,
                                        char *threadname);
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc);
@@ -869,7 +799,7 @@ void lustre_shrink_reply(struct ptlrpc_request *req, int segment,
 void lustre_free_reply_state(struct ptlrpc_reply_state *rs);
 int lustre_msg_size(__u32 magic, int count, __u32 *lengths);
 int lustre_packed_msg_size(struct lustre_msg *msg);
-int lustre_msg_early_size(struct ptlrpc_request *req);
+int lustre_msg_early_size(void);
 int lustre_unpack_msg(struct lustre_msg *m, int len);
 void *lustre_msg_buf(struct lustre_msg *m, int n, int minlen);
 int lustre_msg_buflen(struct lustre_msg *m, int n);
@@ -941,7 +871,7 @@ ptlrpc_rs_decref(struct ptlrpc_reply_state *rs)
 /* Should only be called once per req */
 static inline void ptlrpc_req_drop_rs(struct ptlrpc_request *req)
 {
-        if (req->rq_reply_state == NULL)
+        if (req->rq_reply_state == NULL) 
                 return; /* shouldn't occur */
         ptlrpc_rs_decref(req->rq_reply_state);
         req->rq_reply_state = NULL;
@@ -972,8 +902,8 @@ static inline void
 ptlrpc_req_set_repsize(struct ptlrpc_request *req, int count, __u32 *lens)
 {
         int size = lustre_msg_size(req->rq_reqmsg->lm_magic, count, lens);
-
-        req->rq_replen = size + lustre_msg_early_size(req);
+        
+        req->rq_replen = size + lustre_msg_early_size();
         if (req->rq_reqmsg->lm_magic == LUSTRE_MSG_MAGIC_V2)
                 req->rq_reqmsg->lm_repsize = size;
 }
@@ -1002,8 +932,6 @@ void ping_evictor_stop(void);
 #endif
 
 /* ptlrpc/ptlrpcd.c */
-int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc);
-void ptlrpcd_stop(struct ptlrpcd_ctl *pc, int force);
 void ptlrpcd_wake(struct ptlrpc_request *req);
 void ptlrpcd_add_req(struct ptlrpc_request *req);
 int ptlrpcd_addref(void);
@@ -1014,11 +942,12 @@ const char* ll_opcode2str(__u32 opcode);
 #ifdef LPROCFS
 void ptlrpc_lprocfs_register_obd(struct obd_device *obd);
 void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd);
-void ptlrpc_lprocfs_brw(struct ptlrpc_request *req, int bytes);
+void ptlrpc_lprocfs_brw(struct ptlrpc_request *req, int opc, int bytes);
 #else
 static inline void ptlrpc_lprocfs_register_obd(struct obd_device *obd) {}
 static inline void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd) {}
-static inline void ptlrpc_lprocfs_brw(struct ptlrpc_request *req, int bytes) {}
+static inline void ptlrpc_lprocfs_brw(struct ptlrpc_request *req, int opc,
+                                      int bytes) {}
 #endif
 
 /* ptlrpc/llog_server.c */

@@ -202,8 +202,8 @@ static void mdc_create_pack_20(struct ptlrpc_request *req, int offset,
         rec->cr_fsuid    = uid;
         rec->cr_fsgid    = gid;
         rec->cr_cap      = cap_effective;
-        memcpy(&rec->cr_fid1, &op_data->fid1, sizeof(op_data->fid1));
-        memcpy(&rec->cr_fid2, &op_data->fid2, sizeof(op_data->fid2));
+        rec->cr_fid1     = *((struct lu_fid*)&op_data->fid1);
+        rec->cr_fid2     = *((struct lu_fid*)&op_data->fid2);
         rec->cr_mode     = mode;
         rec->cr_rdev     = rdev;
         rec->cr_time     = op_data->mod_time;
@@ -282,7 +282,7 @@ static void mdc_join_pack_20(struct ptlrpc_request *req, int offset,
 
         rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*rec));
         LASSERT(rec != NULL);
-        memcpy(&rec->jr_fid, &op_data->fid2, sizeof(op_data->fid2));
+        rec->jr_fid = *((struct lu_fid*)&op_data->fid2);
         rec->jr_headsize = head_size;
         EXIT;
 }
@@ -352,8 +352,8 @@ static void mdc_open_pack_20(struct ptlrpc_request *req, int offset,
         rec->cr_fsuid  = current->fsuid;
         rec->cr_fsgid  = current->fsgid;
         rec->cr_cap    = current->cap_effective;
-        memcpy(&rec->cr_fid1, &op_data->fid1, sizeof(op_data->fid1));
-        memcpy(&rec->cr_fid2, &op_data->fid2, sizeof(op_data->fid2));
+        rec->cr_fid1   = *((struct lu_fid*)&op_data->fid1);
+        rec->cr_fid2   = *((struct lu_fid*)&op_data->fid2);
         rec->cr_mode   = mode;
         rec->cr_flags  = mds_pack_open_flags(flags);
         rec->cr_rdev   = rdev;
@@ -375,7 +375,7 @@ static void mdc_open_pack_20(struct ptlrpc_request *req, int offset,
                 rec->cr_flags |= MDS_OPEN_HAS_EA;
 #ifndef __KERNEL__
                 /*XXX a hack for liblustre to set EA (LL_IOC_LOV_SETSTRIPE) */
-                memcpy(&rec->cr_fid2, &op_data->fid2, sizeof(op_data->fid2));
+                rec->cr_fid2     = *((struct lu_fid*)&op_data->fid2);
 #endif
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset + 4, lmmlen);
                 memcpy(tmp, lmm, lmmlen);
@@ -495,7 +495,7 @@ static void mdc_setattr_pack_20(struct ptlrpc_request *req, int offset,
         rec->sa_fsuid   = current->fsuid;
         rec->sa_fsgid   = current->fsgid;
         rec->sa_cap     = current->cap_effective;
-        memcpy(&rec->sa_fid, &data->fid1, sizeof(data->fid1));
+        rec->sa_fid     = *((struct lu_fid*)&data->fid1);
         rec->sa_suppgid = -1;
 
         if (iattr) {
@@ -583,8 +583,8 @@ static void mdc_unlink_pack_20(struct ptlrpc_request *req, int offset,
         rec->ul_cap     = current->cap_effective;
         rec->ul_mode    = data->create_mode;
         rec->ul_suppgid1= data->suppgids[0];
-        memcpy(&rec->ul_fid1, &data->fid1, sizeof(data->fid1));
-        memcpy(&rec->ul_fid2, &data->fid2, sizeof(data->fid2));
+        rec->ul_fid1    = *((struct lu_fid*)&data->fid1);
+        rec->ul_fid2    = *((struct lu_fid*)&data->fid2);
         rec->ul_time    = data->mod_time;
 
         /* NULL capa is skipped. */
@@ -642,8 +642,8 @@ static void mdc_link_pack_20(struct ptlrpc_request *req, int offset,
         rec->lk_cap      = current->cap_effective;
         rec->lk_suppgid1 = data->suppgids[0];
         rec->lk_suppgid2 = data->suppgids[1];
-        memcpy(&rec->lk_fid1, &data->fid1, sizeof(data->fid1));
-        memcpy(&rec->lk_fid2, &data->fid2, sizeof(data->fid2));
+        rec->lk_fid1     = *((struct lu_fid*)&data->fid1);
+        rec->lk_fid2     = *((struct lu_fid*)&data->fid2);
         rec->lk_time     = data->mod_time;
 
 
@@ -712,8 +712,8 @@ static void mdc_rename_pack_20(struct ptlrpc_request *req, int offset,
         rec->rn_cap      = current->cap_effective;
         rec->rn_suppgid1 = data->suppgids[0];
         rec->rn_suppgid2 = data->suppgids[1];
-        memcpy(&rec->rn_fid1, &data->fid1, sizeof(data->fid1));
-        memcpy(&rec->rn_fid2, &data->fid2, sizeof(data->fid2));
+        rec->rn_fid1     = *((struct lu_fid*)&data->fid1);
+        rec->rn_fid2     = *((struct lu_fid*)&data->fid2);
         rec->rn_time     = data->mod_time;
         rec->rn_mode     = data->create_mode;
 
@@ -788,8 +788,8 @@ static void mdc_getattr_pack_20(struct ptlrpc_request *req, int offset,
         b->flags = flags | MDS_BFLAG_EXT_FLAGS;
         b->suppgid = data->suppgids[0];
 
-        memcpy(&b->fid1, &data->fid1, sizeof(data->fid1));
-        memcpy(&b->fid2, &data->fid2, sizeof(data->fid2));
+        b->fid1 = *((struct lu_fid*)&data->fid1);
+        b->fid2 = *((struct lu_fid*)&data->fid2);
         b->valid |= OBD_MD_FLID;
         if (data->name) {
                 char *tmp;
@@ -866,7 +866,7 @@ static void mdc_close_pack_20(struct ptlrpc_request *req, int offset,
         rec->sa_cap     = current->cap_effective;
         rec->sa_suppgid = -1;
 
-        memcpy(&rec->sa_fid, &data->fid1, sizeof(data->fid1));
+        rec->sa_fid = *((struct lu_fid*)&data->fid1);
 
         if (oa->o_valid & OBD_MD_FLATIME) {
                 rec->sa_atime = oa->o_atime;

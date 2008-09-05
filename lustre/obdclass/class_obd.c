@@ -58,7 +58,6 @@ atomic_t libcfs_kmemory = {0};
 struct obd_device *obd_devs[MAX_OBD_DEVICES];
 struct list_head obd_types;
 spinlock_t obd_dev_lock = SPIN_LOCK_UNLOCKED;
-cfs_mem_cache_t *obd_lvfs_ctxt_cache;
 
 /* The following are visible and mutable through /proc/sys/lustre/. */
 unsigned int obd_debug_peer_on_timeout;
@@ -378,7 +377,6 @@ void *obd_psdev = NULL;
 #endif
 
 EXPORT_SYMBOL(obd_devs);
-EXPORT_SYMBOL(obd_lvfs_ctxt_cache);
 EXPORT_SYMBOL(obd_print_fail_loc);
 EXPORT_SYMBOL(obd_race_waitq);
 EXPORT_SYMBOL(obd_race_state);
@@ -524,11 +522,15 @@ int init_obdclass(void)
         int i, err;
 #ifdef __KERNEL__
         int lustre_register_fs(void);
-#endif
 
-        LCONSOLE_INFO("OBD class driver, http://www.lustre.org/\n");
-        LCONSOLE_INFO("    Lustre Version: "LUSTRE_VERSION_STRING"\n");
-        LCONSOLE_INFO("    Build Version: "BUILD_VERSION"\n");
+        printk(KERN_INFO "Lustre: OBD class driver, http://www.lustre.org/\n");
+        printk(KERN_INFO "        Lustre Version: "LUSTRE_VERSION_STRING"\n");
+        printk(KERN_INFO "        Build Version: "BUILD_VERSION"\n");
+#else
+        CDEBUG(D_INFO, "Lustre: OBD class driver, http://www.lustre.org/\n");
+        CDEBUG(D_INFO, "        Lustre Version: "LUSTRE_VERSION_STRING"\n");
+        CDEBUG(D_INFO, "        Build Version: "BUILD_VERSION"\n");
+#endif
 
         spin_lock_init(&obd_types_lock);
         cfs_waitq_init(&obd_race_waitq);
@@ -548,11 +550,6 @@ int init_obdclass(void)
                              LPROCFS_CNTR_AVGMINMAX,
                              "pagesused", "pages");
 #endif
-        obd_lvfs_ctxt_cache = cfs_mem_cache_create("obd_lvfs_ctxt_cache",
-                sizeof(struct lvfs_run_ctxt), 0, 0);
-        if (obd_lvfs_ctxt_cache == NULL)
-                RETURN(-ENOMEM);
-
         err = obd_init_checks();
         if (err == -EOVERFLOW)
                 return err;
@@ -634,8 +631,6 @@ static void cleanup_obdclass(void)
 
         memory_max = obd_memory_max();
         pages_max = obd_pages_max();
-
-        cfs_mem_cache_destroy(obd_lvfs_ctxt_cache);
 
         lprocfs_free_stats(&obd_memory);
         CDEBUG((memory_leaked | pages_leaked) ? D_ERROR : D_INFO,

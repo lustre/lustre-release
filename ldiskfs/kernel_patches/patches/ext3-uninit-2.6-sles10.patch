@@ -88,9 +88,9 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/resize.c
 -}
 -
 -/*
-  * If we have fewer than thresh credits, extend by EXT3_MAX_TRANS_DATA.
-  * If that fails, restart the transaction & regain write access for the
-  * buffer head which is used for block_bitmap modifications.
+  * Set up the block and inode bitmaps, and the inode table for the new group.
+  * This doesn't need to be part of the main transaction, since we are only
+  * changing blocks outside the actual filesystem.  We still do journaling to
 @@ -818,6 +800,7 @@ int ext3_group_add(struct super_block *s
  	gdp->bg_inode_table = cpu_to_le32(input->inode_table);
  	gdp->bg_free_blocks_count = cpu_to_le16(input->free_blocks_count);

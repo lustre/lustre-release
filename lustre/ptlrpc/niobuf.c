@@ -359,11 +359,9 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int flags)
         service_time = max_t(int, cfs_time_current_sec() -
                              req->rq_arrival_time.tv_sec, 1);
         if (!(flags & PTLRPC_REPLY_EARLY) && 
-            (req->rq_type != PTL_RPC_MSG_ERR) &&
-            !(lustre_msg_get_flags(req->rq_reqmsg) &
-              (MSG_RESENT | MSG_REPLAY | MSG_LAST_REPLAY))) {
-                /* early replies, errors and recovery requests don't count
-                 * toward our service time estimate */
+            (req->rq_type != PTL_RPC_MSG_ERR)) {
+                /* early replies and errors don't count toward our service
+                   time estimate */
                 int oldse = at_add(&svc->srv_at_estimate, service_time);
                 if (oldse != 0)
                         DEBUG_REQ(D_ADAPTTO, req,
@@ -394,7 +392,7 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int flags)
                         lustre_msg_set_cksum(req->rq_repmsg, 
                                          lustre_msg_calc_cksum(req->rq_repmsg));
                 } else {
-                        offset = lustre_msg_early_size(req);
+                        offset = lustre_msg_early_size();
                 }
         } else {
                 CDEBUG(D_ADAPTTO, "No early reply support: flags=%#x "
