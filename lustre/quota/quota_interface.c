@@ -289,6 +289,7 @@ static int quota_chk_acq_common(struct obd_device *obd, unsigned int uid,
         int rc = 0, cycle = 0, count_err = 0;
         ENTRY;
 
+        CDEBUG(D_QUOTA, "check quota for %s\n", obd->obd_name);
         /* Unfortunately, if quota master is too busy to handle the
          * pre-dqacq in time and quota hash on ost is used up, we
          * have to wait for the completion of in flight dqacq/dqrel,
@@ -373,6 +374,7 @@ static int quota_pending_commit(struct obd_device *obd, unsigned int uid,
         struct qunit_data qdata[MAXQUOTAS];
         ENTRY;
 
+        CDEBUG(D_QUOTA, "commit pending quota for  %s\n", obd->obd_name);
         CLASSERT(MAXQUOTAS < 4);
         if (!sb_any_quota_enabled(qctxt->lqc_sb))
                 RETURN(0);
