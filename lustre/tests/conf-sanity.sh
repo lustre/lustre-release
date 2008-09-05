@@ -1322,6 +1322,9 @@ test_33a() { # bug 12333, was test_33
         cp /etc/hosts $MOUNT2/. || rc=3
         echo "ok."
 
+        cp /etc/hosts $MOUNT2/ || rc=3 
+        $LFS getstripe $MOUNT2/hosts
+
         umount -d $MOUNT2
         stop fs2ost -f
         stop fs2mds -f
