@@ -38,6 +38,12 @@ tbd Sun Microsystems, Inc.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
 
+Severity   : minor 
+Bugzilla   : 16717 
+Description: LBUG when llog conf file is full 
+Details    : When llog bitmap is full, ENOSPC should be returned for plain
+	     log.
+
 Severity   : normal
 Bugzilla   : 16907
 Description: Prevent import from entering FULL state when server in recovery
