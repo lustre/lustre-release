@@ -240,13 +240,6 @@ case "$lustretag" in
         libcfstag="HEAD"
         ;;
     
-    # HEAD cmd fixes
-    b_head_cmd)
-        lnettag="HEAD"
-        ldiskfstag="$ldiskfstag_head"
-        libcfstag="HEAD"
-        ;;
-    
     # windows client porting (lustre: b_client_io_layering, lnet: HEAD) 
     b_winnt_port)
         ldiskfstag="$ldiskfstag_head"
@@ -286,7 +279,7 @@ case "$lustretag" in
 
     # Branches that have been updated to include
     # the libcfs split should be added here
-    HEAD|b_head_quota|b_hd_comp_fld)
+    HEAD|b_head_quota)
         lnettag="HEAD"
         ldiskfstag="$ldiskfstag_head"
         libcfstag="HEAD"

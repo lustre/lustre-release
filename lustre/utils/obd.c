@@ -201,7 +201,7 @@ int lcfg_mgs_ioctl(char *func, int dev_id, struct lustre_cfg *lcfg)
         
         IOC_INIT(data);
         rc = data.ioc_dev = get_mgs_device();
-        if (rc < 0)
+        if (rc)
                 goto out;
         data.ioc_type = LUSTRE_CFG_TYPE;
         data.ioc_plen1 = lustre_cfg_len(lcfg->lcfg_bufcount,
@@ -2665,7 +2665,7 @@ static int pool_cmd(enum lcfg_command_type cmd,
 
         IOC_INIT(data);
         rc = data.ioc_dev = get_mgs_device();
-        if (rc < 0)
+        if (rc)
                 goto out;
 
         data.ioc_type = LUSTRE_CFG_TYPE;

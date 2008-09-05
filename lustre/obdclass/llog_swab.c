@@ -177,7 +177,7 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
                 __swab32s(&lid->lid_id.lgl_ogen);
                 break;
         }
-        case LLOG_JOIN_REC:
+
         case LLOG_PAD_MAGIC:
         /* ignore old pad records of type 0 */
         case 0:
@@ -273,16 +273,3 @@ void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg)
         return;
 }
 EXPORT_SYMBOL(lustre_swab_lustre_cfg);
-
-void lustre_swab_cfg_marker(struct cfg_marker *marker)
-{
-        ENTRY;
-
-        __swab32s(&marker->cm_step);
-        __swab32s(&marker->cm_flags);
-        __swab32s(&marker->cm_vers);
-
-        EXIT;
-        return;
-}
-EXPORT_SYMBOL(lustre_swab_cfg_marker);

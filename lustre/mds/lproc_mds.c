@@ -479,9 +479,6 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
                              lprocfs_wr_nosquash_nid, 0 },
         { "sync_permission", lprocfs_mds_rd_sync_perm,
                              lprocfs_mds_wr_sync_perm, 0 },
-        { "stale_export_age", lprocfs_obd_rd_stale_export_age,
-                              lprocfs_obd_wr_stale_export_age, 0},
-        { "flush_stale_exports", 0, lprocfs_obd_wr_flush_stale_exports, 0 },
         { 0 }
 };
 

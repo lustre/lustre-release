@@ -1063,9 +1063,6 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
                 break;
         case OBD_NOTIFY_CONFIG:
                 mds_allow_cli(obd, (unsigned long)data);
-                /* call this only when config is processed and stale_export_age
-                 * value is configured */
-                class_disconnect_expired_exports(obd);
         default:
                 RETURN(0);
         }

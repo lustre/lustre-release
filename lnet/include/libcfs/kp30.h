@@ -133,7 +133,7 @@
 
 #define KLASSERT(e) LASSERT(e)
 
-void lbug_with_loc(const char *file, const char *func, const int line)
+void lbug_with_loc(char *file, const char *func, const int line)
         __attribute__((noreturn));
 
 #define LBUG() lbug_with_loc(__FILE__, __FUNCTION__, __LINE__)
@@ -221,12 +221,12 @@ do {                                                                    \
 
 void libcfs_debug_dumpstack(cfs_task_t *tsk);
 void libcfs_run_upcall(char **argv);
-void libcfs_run_lbug_upcall(const char * file, const char *fn, const int line);
+void libcfs_run_lbug_upcall(char * file, const char *fn, const int line);
 void libcfs_debug_dumplog(void);
 int libcfs_debug_init(unsigned long bufsize);
 int libcfs_debug_cleanup(void);
 int libcfs_debug_clear_buffer(void);
-int libcfs_debug_mark_buffer(const char *text);
+int libcfs_debug_mark_buffer(char *text);
 
 void libcfs_debug_set_level(unsigned int debug_level);
 

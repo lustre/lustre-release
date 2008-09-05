@@ -169,12 +169,6 @@ struct obd_export {
 #define exp_mds_data    u.eu_mds_data
 #define exp_filter_data u.eu_filter_data
 #define exp_ec_data     u.eu_ec_data
-static inline int exp_expired(struct obd_export *exp, __u32 age)
-{
-        LASSERT(exp->exp_delayed);
-        return cfs_time_before(exp->exp_last_request_time + age,
-                               cfs_time_current_sec());
-}
 
 static inline int exp_connect_cancelset(struct obd_export *exp)
 {

@@ -1056,7 +1056,6 @@ test_27b() {
 	facet_failover mds
 	set_and_check mds "lctl get_param -n mds.$FSNAME-MDT0000.group_acquire_expire" "$FSNAME-MDT0000.mdt.group_acquire_expire" || return 3
 	set_and_check client "lctl get_param -n mdc.$FSNAME-MDT0000-mdc-*.max_rpcs_in_flight" "$FSNAME-MDT0000.mdc.max_rpcs_in_flight" || return 4
-	check_mount
 	cleanup
 }
 run_test 27b "Reacquire MGS lock after failover"
@@ -1319,7 +1318,6 @@ test_33a() { # bug 12333, was test_33
         do_facet mds "$LCTL conf_param $FSNAME2.sys.timeout=200" || rc=1
         mkdir -p $MOUNT2
         mount -t lustre $MGSNID:/${FSNAME2} $MOUNT2 || rc=2
-        cp /etc/hosts $MOUNT2/. || rc=3
         echo "ok."
 
         umount -d $MOUNT2
@@ -1645,13 +1643,6 @@ run_test 42 "invalid config param should not prevent client from mounting"
 
 test_43() { #bug 15993
         setup
-        VERSION_1_8=$(do_facet mds $LCTL get_param version | grep ^lustre.*1\.[78])
-        if [ -z "$VERSION_1_8" ]; then
-                skip "skipping test for non 1.8 MDS"
-                cleanup
-                return 0
-        fi
-
         check_mount || return 2
         testfile=$DIR/$tfile
         lma="this-should-be-removed-after-remount-and-accessed"

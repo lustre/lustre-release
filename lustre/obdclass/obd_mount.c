@@ -1887,9 +1887,8 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                 goto invalid;
         }
 
-        s1 = strstr(devname, ":/");
+        s1 = strrchr(devname, ':');
         if (s1) {
-                ++s1;
                 lmd->lmd_flags = LMD_FLG_CLIENT;
                 /* Remove leading /s from fsname */
                 while (*++s1 == '/') ;

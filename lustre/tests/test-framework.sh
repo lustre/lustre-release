@@ -1069,16 +1069,9 @@ at_is_enabled() {
 }
 
 at_max_get() {
-    local facet=$1
-
     at_is_valid || error "invalid call"
 
-    # suppose that all ost-s has the same at_max set
-    if [ $facet == "ost" ]; then
-        do_facet ost1 "cat $AT_MAX_PATH"
-    else
-        do_facet $facet "cat $AT_MAX_PATH"
-    fi
+    do_facet $1 "cat $AT_MAX_PATH"
 }
 
 at_max_set() {
@@ -1087,7 +1080,6 @@ at_max_set() {
 
     at_is_valid || error "invalid call"
 
-    local facet
     for facet in $@; do
         if [ $facet == "ost" ]; then
             for i in `seq $OSTCOUNT`; do
@@ -1280,8 +1272,7 @@ error_ignore() {
 
 skip () {
 	log " SKIP: ${TESTSUITE} ${TESTNAME} $@"
-	[ "$TESTSUITELOG" ] && \
-		echo "${TESTSUITE}: SKIP: $TESTNAME $@" >> $TESTSUITELOG || true
+	[ "$TESTSUITELOG" ] && echo "${TESTSUITE}: SKIP: $TESTNAME $@" >> $TESTSUITELOG
 }
 
 build_test_filter() {
@@ -1378,7 +1369,6 @@ log() {
     MSG=${MSG//\|/\\\|}
     MSG=${MSG//\>/\\\>}
     MSG=${MSG//\</\\\<}
-    MSG=${MSG//\//\\\/}
     local NODES=$(nodes_list)
     for NODE in $NODES; do
         do_node $NODE $LCTL mark "$MSG" 2> /dev/null || true
@@ -1725,7 +1715,7 @@ check_catastrophe () {
 
     [ -f $CATASTROPHE ] && [ `cat $CATASTROPHE` -ne 0 ] && return 1
     if [ $rnodes ]; then
-        do_nodes $rnodes "[ -f $CATASTROPHE ] && { [ \`cat $CATASTROPHE\` -eq 0 ] || false; } || true"
+        do_nodes $rnodes "[ -f $CATASTROPHE ] && { [ `cat $CATASTROPHE` -eq 0 ] || false; } || true"
     fi 
 }
 

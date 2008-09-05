@@ -26,12 +26,12 @@ display_elapsed_time() {
 
 debug_client_on()
 {
-	lctl set_param -n debug=-1
+	echo -1 > /proc/sys/lnet/debug
 }
 
 debug_client_off()
 {
-	lctl set_param -n debug=0x3f0400
+	echo 0x3f0400 > /proc/sys/lnet/debug
 }
 
 MNT=${MNT:-/mnt/lustre}

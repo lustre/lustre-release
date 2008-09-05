@@ -312,6 +312,7 @@ test_15() {
 }
 run_test 15 "open(O_CREAT), unlink |X|  touch new, close"
 
+
 test_16() {
     replay_barrier mds
     mcreate $DIR/$tfile
@@ -424,7 +425,6 @@ test_20c() { # bug 10480
     kill -USR1 $pid
     test -s $DIR/$tfile || error "File was truncated"
 
-    wait $pid || return 1
     return 0
 }
 run_test 20c "check that client eviction does not affect file content"
@@ -636,8 +636,7 @@ test_32() {
     df $MOUNT || sleep 1 && df $MOUNT || return 1
     kill -USR1 $pid1
     kill -USR1 $pid2
-    wait $pid1 || return 4
-    wait $pid2 || return 5
+    sleep 1
     return 0
 }
 run_test 32 "close() notices client eviction; close() after client eviction"
@@ -714,7 +713,6 @@ test_37() {
     fail_abort mds
     kill -USR1 $pid
     dmesg | grep  "mds_unlink_orphan.*error .* unlinking orphan" && return 1
-    wait $pid || return 3
     sync
     return 0
 }
@@ -1257,7 +1255,7 @@ test_57() {
 run_test 57 "test recovery from llog for setattr op"
 
 #recovery many mds-ost setattr from llog
-test_58a() {
+test_58() {
     mkdir -p $DIR/$tdir
 #define OBD_FAIL_MDS_OST_SETATTR       0x12c
     do_facet mds "lctl set_param fail_loc=0x8000012c"
@@ -1270,40 +1268,7 @@ test_58a() {
     unlinkmany $DIR/$tdir/$tfile-%d 2500
     rmdir $DIR/$tdir
 }
-run_test 58a "test recovery from llog for setattr op (test llog_gen_rec)"
-
-test_58b() {
-    mount_client $MOUNT2
-    mkdir -p $DIR/$tdir
-    touch $DIR/$tdir/$tfile
-    replay_barrier mds
-    setfattr -n trusted.foo -v bar $DIR/$tdir/$tfile
-    fail mds
-    VAL=`getfattr --absolute-names --only-value -n trusted.foo $MOUNT2/$tdir/$tfile`
-    [ x$VAL = x"bar" ] || return 1
-    rm -f $DIR/$tdir/$tfile
-    rmdir $DIR/$tdir
-    zconf_umount `hostname` $MOUNT2
-}
-run_test 58b "test replay of setxattr op"
-
-test_58c() { # bug 16570
-        mount_client $MOUNT2
-        mkdir -p $DIR/$tdir
-        touch $DIR/$tdir/$tfile
-        drop_request "setfattr -n trusted.foo -v bar $DIR/$tdir/$tfile" || \
-                return 1
-        VAL=`getfattr --absolute-names --only-value -n trusted.foo $MOUNT2/$tdir/$tfile`
-        [ x$VAL = x"bar" ] || return 2
-        drop_reint_reply "setfattr -n trusted.foo1 -v bar1 $DIR/$tdir/$tfile" || \
-                return 3
-        VAL=`getfattr --absolute-names --only-value -n trusted.foo1 $MOUNT2/$tdir/$tfile`
-        [ x$VAL = x"bar1" ] || return 4
-        rm -f $DIR/$tdir/$tfile
-        rmdir $DIR/$tdir
-       	zconf_umount `hostname` $MOUNT2
-}
-run_test 58c "resend/reconstruct setxattr op"
+run_test 58 "test recovery from llog for setattr op (test llog_gen_rec)"
 
 # log_commit_thread vs filter_destroy race used to lead to import use after free
 # bug 11658
@@ -1402,29 +1367,19 @@ run_test 62 "don't mis-drop resent replay"
 
 #Adaptive Timeouts (bug 3055)
 AT_MAX_SET=0
-# Suppose that all osts have the same at_max
-for facet in mds client ost; do
-    eval AT_MAX_SAVE_${facet}=$(at_max_get $facet)
-done
 
 at_start()
 {
-    local at_max_new=600
     if ! at_is_valid; then
         skip "AT env is invalid"
         return 1
     fi
 
-    local at_max
-
-    for facet in mds client ost; do
-        at_max=$(at_max_get $facet)
-        if [ $at_max -ne $at_max_new ]; then
-            echo "AT value on $facet is $at_max, set it by force temporarily to $at_max_new"
-            at_max_set $at_max_new $facet
-            AT_MAX_SET=1
-        fi
-    done
+    if ! at_is_enabled; then
+        echo "AT is disabled, enable it by force temporarily"
+        at_max_set 600 mds ost client
+        AT_MAX_SET=1
+    fi
 
     if [ -z "$ATOLDBASE" ]; then
 	local at_history=$(do_facet mds "find /sys/ -name at_history")
@@ -1603,15 +1558,8 @@ if [ -n "$ATOLDBASE" ]; then
 fi
 
 if [ $AT_MAX_SET -ne 0 ]; then
-    for facet in mds client ost; do
-        var=AT_MAX_SAVE_${facet}
-        echo restore AT on $facet to saved value ${!var}
-        at_max_set ${!var} $facet
-        AT_NEW=$(at_max_get $facet)
-        echo Restored AT value on $facet $AT_NEW 
-        [ $AT_NEW -ne ${!var} ] && \
-            error "$facet : AT value was not restored SAVED ${!var} NEW $AT_NEW"
-    done
+    echo "restore AT status to be disabled"
+    at_max_set 0 mds ost client
 fi
 
 # end of AT tests includes above lines
@@ -1685,116 +1633,6 @@ test_70b () {
 }
 run_test 70b "mds recovery; $CLIENTCOUNT clients"
 # end multi-client tests
-
-# vbr export handling
-create_fake_exports ()
-{
-    local facet=$1
-    local num=$2
-#obd_fail_val = num;
-#define OBD_FAIL_TGT_FAKE_EXP 0x708
-    do_facet $facet "lctl set_param fail_val=$num"
-    do_facet $facet "lctl set_param fail_loc=0x80000708"
-    fail $facet
-}
-
-test_71a() {
-    do_facet mds $LCTL get_param version | grep -q ^lustre.*1.6 && \
-        skip "skipping test for old 1.6 servers" && return 0
-    UUID=$(lctl dl | awk '/mdc.*-mdc-/ { print $5 }')
-    echo "Client UUID is $UUID"
-    replay_barrier mds
-    umount $DIR
-    facet_failover mds
-    zconf_mount `hostname` $DIR || error "mount fails"
-    df $DIR || error "post-failover df failed"
-    do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep $UUID" || \
-        error "no delayed exports"
-    OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
-    NEW_AGE=10
-    do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$NEW_AGE"
-    sleep $NEW_AGE
-    do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep \"$UUID.*EXPIRED\"" || \
-        error "exports didn't expire"
-    do_facet mds "lctl set_param mds.${mds_svc}.evict_client=$UUID"
-    do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep $UUID" && \
-        error "Export wasn't removed manually"
-    do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$OLD_AGE"
-    return 0;
-}
-run_test 71a "lost client export is kept"
-
-test_71b() {
-    do_facet mds $LCTL get_param version | grep -q ^lustre.*1.6 && \
-        skip "skipping test for old 1.6 servers" && return 0
-    FAKE_NUM=10
-    create_fake_exports mds $FAKE_NUM
-    NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|wc -l")
-    [ $NUM -eq 0 ] && error "no fake exports $NUM - $FAKE_NUM"
-    OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
-    NEW_AGE=10
-    do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$NEW_AGE"
-    sleep $NEW_AGE
-    EX_NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep -c EXPIRED")
-    [ "$EX_NUM" -eq "$NUM" ] || error "not all exports are expired $EX_NUM != $NUM"
-    do_facet mds "lctl set_param mds.${mds_svc}.flush_stale_exports=1"
-    do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep EXPIRED" && \
-        error "Exports weren't flushed"
-    do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$OLD_AGE"
-    return 0;
-}
-run_test 71b "stale exports are expired, lctl flushes them"
-
-test_71c() {
-    do_facet mds $LCTL get_param version | grep -q ^lustre.*1.6 && \
-        skip "skipping test for old 1.6 servers" && return 0
-    FAKE_NUM=10
-    create_fake_exports mds $FAKE_NUM
-    NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|wc -l")
-    [ "$NUM" -eq "$FAKE_NUM" ] || error "no fake exports $NUM - $FAKE_NUM"
-    OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
-    NEW_AGE=10
-    do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$NEW_AGE"
-    sleep $NEW_AGE
-    EX_NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep -c EXPIRED")
-    [ "$EX_NUM" -eq "$NUM" ] || error "not all exports are expired $EX_NUM != $NUM"
-
-    umount $DIR
-    zconf_mount `hostname` $DIR || error "mount fails"
-
-    NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|wc -l")
-    [ $NUM -eq 0 ] || error "$NUM fake exports are still exists"
-    do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$OLD_AGE"
-    return 0;
-}
-run_test 71c "stale exports are expired, new client connection flush them"
-
-test_71d() {
-    do_facet mds $LCTL get_param version | grep -q ^lustre.*1.6 && \
-        skip "skipping test for old 1.6 servers" && return 0
-    FAKE_NUM=10
-    create_fake_exports mds $FAKE_NUM
-    NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|wc -l")
-    [ "$NUM" -eq "$FAKE_NUM" ] || error "no fake exports $NUM - $FAKE_NUM"
-    OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
-    NEW_AGE=10
-    do_facet mds "lctl conf_param ${mds_svc}.mdt.stale_export_age=$NEW_AGE"
-    sleep $NEW_AGE
-    EX_NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep -c EXPIRED")
-    [ "$EX_NUM" -eq "$NUM" ] || error "not all exports are expired $EX_NUM != $NUM"
-
-    fail mds
-
-    FAIL_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
-    [ $FAIL_AGE -eq $NEW_AGE ] || error "new age wasn't set after recovery"
-    NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|wc -l")
-    [ $NUM -eq 0 ] || error "$NUM fake exports are still exists"
-    do_facet mds "lctl conf_param ${mds_svc}.mdt.stale_export_age=$OLD_AGE"
-    return 0;
-}
-run_test 71d "expired exports, server init removes them, conf_param works"
-
-# end vbr exports tests
 
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre

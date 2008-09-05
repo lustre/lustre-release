@@ -1711,8 +1711,6 @@ struct cfg_marker {
         char              cm_comment[MTI_NAME_MAXLEN];
 };
 
-extern void lustre_swab_cfg_marker(struct cfg_marker *marker);
-
 /*
  * Opcodes for multiple servers.
  */

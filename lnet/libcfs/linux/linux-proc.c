@@ -374,8 +374,8 @@ static cfs_sysctl_table_t lnet_table[] = {
         {
                 .ctl_name = PSDEV_DEBUG_PATH,
                 .procname = "debug_path",
-                .data     = debug_file_path_arr,
-                .maxlen   = sizeof(debug_file_path_arr),
+                .data     = debug_file_path,
+                .maxlen   = sizeof(debug_file_path),
                 .mode     = 0644,
                 .proc_handler = &proc_dostring,
         },
