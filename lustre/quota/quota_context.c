@@ -320,6 +320,12 @@ check_cur_qunit(struct obd_device *obd,
                        limit_org > qdata->qd_count + qunit_sz)
                         qdata->qd_count += qunit_sz;
                 ret = 2;
+                /* if there are other pending writes for this uid/gid, releasing
+                 * quota is put off until the last pending write b=16645 */
+                if (ret == 2 && pending_write) {
+                        CDEBUG(D_QUOTA, "delay quota release\n");
+                        ret = 0;
+                }
         }
         CDEBUG(D_QUOTA, "type: %c, limit: "LPU64", usage: "LPU64
                ", pending_write: "LPU64", record: "LPD64
