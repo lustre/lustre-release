@@ -2447,15 +2447,6 @@ cleanup:
         RETURN(rc);
 }
 
-/**
- * Close inode open handle
- *
- * \param dentry [in]     dentry which contains the inode
- * \param it     [in,out] intent which contains open info and result
- *
- * \retval 0     success
- * \retval <0    failure
- */
 int ll_release_openhandle(struct dentry *dentry, struct lookup_intent *it)
 {
         struct inode *inode = dentry->d_inode;

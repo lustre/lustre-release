@@ -205,7 +205,7 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
                 struct obd_uuid *uuid;
 
                 LASSERT(watched);
-
+                
                 if (strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME)) {
                         CERROR("unexpected notification of %s %s!\n",
                                watched->obd_type->typ_name,
@@ -218,14 +218,12 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
                  * observer can use the OSC normally.
                  */
                 rc = lov_set_osc_active(obd, uuid, ev == OBD_NOTIFY_ACTIVE);
-                if (rc < 0) {
+                if (rc) {
                         CERROR("%sactivation of %s failed: %d\n",
                                (ev == OBD_NOTIFY_ACTIVE) ? "" : "de",
                                obd_uuid2str(uuid), rc);
                         RETURN(rc);
                 }
-                /* active event should be pass lov target index as data */
-                data = &rc;
         }
 
         /* Pass the notification up the chain. */
@@ -233,7 +231,6 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
                 rc = obd_notify_observer(obd, watched, ev, data);
         } else {
                 /* NULL watched means all osc's in the lov (only for syncs) */
-                /* sync event should be send lov idx as data */
                 struct lov_obd *lov = &obd->u.lov;
                 struct obd_device *tgt_obd;
                 int i;
@@ -242,11 +239,6 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
                         if (!lov->lov_tgts[i])
                                 continue;
                         tgt_obd = class_exp2obd(lov->lov_tgts[i]->ltd_exp);
-
-                        if ((ev == OBD_NOTIFY_SYNC) ||
-                            (ev == OBD_NOTIFY_SYNC_NONBLOCK))
-                                data = &i;
-
                         rc = obd_notify_observer(obd, tgt_obd, ev, data);
                         if (rc) {
                                 CERROR("%s: notify %s of %s failed %d\n",
@@ -563,14 +555,13 @@ out:
  *  -EINVAL  : UUID can't be found in the LOV's target list
  *  -ENOTCONN: The UUID is found, but the target connection is bad (!)
  *  -EBADF   : The UUID is found, but the OBD is the wrong type (!)
- *  - any above 0 is lov index
  */
 static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
                               int activate)
 {
         struct lov_obd *lov = &obd->u.lov;
         struct lov_tgt_desc *tgt;
-        int i = 0;
+        int i, rc = 0;
         ENTRY;
 
         CDEBUG(D_INFO, "Searching in lov %p for uuid %s (activate=%d)\n",
@@ -590,12 +581,12 @@ static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
         }
 
         if (i == lov->desc.ld_tgt_count)
-                GOTO(out, i = -EINVAL);
+                GOTO(out, rc = -EINVAL);
 
         if (lov->lov_tgts[i]->ltd_active == activate) {
                 CDEBUG(D_INFO, "OSC %s already %sactive!\n", uuid->uuid,
                        activate ? "" : "in");
-                GOTO(out, i);
+                GOTO(out, rc);
         }
 
         CDEBUG(D_CONFIG, "Marking OSC %s %sactive\n", obd_uuid2str(uuid),
@@ -615,7 +606,7 @@ static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
 
  out:
         lov_putref(obd);
-        RETURN(i);
+        RETURN(rc);
 }
 
 
@@ -2925,6 +2916,14 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                 *desc_ret = lov->desc;
 
                 GOTO(out, rc = 0);
+        } else if (KEY_IS(KEY_LOV_IDX)) {
+                struct lov_tgt_desc *tgt;
+
+                for(i = 0; i < lov->desc.ld_tgt_count; i++) {
+                        tgt = lov->lov_tgts[i];
+                        if (tgt && obd_uuid_equals(val, &tgt->ltd_uuid))
+                                GOTO(out, rc = i);
+                }
         } else if (KEY_IS(KEY_FIEMAP)) {
                 rc = lov_fiemap(lov, keylen, key, vallen, val, lsm);
                 GOTO(out, rc);

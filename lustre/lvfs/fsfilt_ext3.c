@@ -114,9 +114,6 @@ struct fsfilt_cb_data {
 #ifndef EXT3_XATTR_INDEX_TRUSTED        /* temporary until we hit l28 kernel */
 #define EXT3_XATTR_INDEX_TRUSTED        4
 #endif
-#ifndef XATTR_NO_CTIME
-#define XATTR_NO_CTIME 0x80
-#endif
 
 static char *fsfilt_ext3_get_label(struct super_block *sb)
 {
@@ -1426,7 +1423,7 @@ static int fsfilt_ext3_setup(struct super_block *sb)
 #endif
         if (!EXT3_HAS_COMPAT_FEATURE(sb, EXT3_FEATURE_COMPAT_DIR_INDEX))
                 CWARN("filesystem doesn't have dir_index feature enabled\n");
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,6)) && defined(HAVE_QUOTA_SUPPORT)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,6)) && HAVE_QUOTA_SUPPORT
         /* enable journaled quota support */
         /* kfreed in ext3_put_super() */
         sbi->s_qf_names[USRQUOTA] = kstrdup("lquota.user.reserved", GFP_KERNEL);

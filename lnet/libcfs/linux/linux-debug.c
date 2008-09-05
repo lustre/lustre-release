@@ -152,7 +152,7 @@ void libcfs_run_upcall(char **argv)
         }
 }
 
-void libcfs_run_lbug_upcall(const char *file, const char *fn, const int line)
+void libcfs_run_lbug_upcall(char *file, const char *fn, const int line)
 {
         char *argv[6];
         char buf[32];
@@ -161,7 +161,7 @@ void libcfs_run_lbug_upcall(const char *file, const char *fn, const int line)
         snprintf (buf, sizeof buf, "%d", line);
 
         argv[1] = "LBUG";
-        argv[2] = (char *)file;
+        argv[2] = file;
         argv[3] = (char *)fn;
         argv[4] = buf;
         argv[5] = NULL;
@@ -170,7 +170,7 @@ void libcfs_run_lbug_upcall(const char *file, const char *fn, const int line)
 }
 
 #ifdef __arch_um__
-void lbug_with_loc(const char *file, const char *func, const int line)
+void lbug_with_loc(char *file, const char *func, const int line)
 {
         libcfs_catastrophe = 1;
         libcfs_debug_msg(NULL, 0, D_EMERG, file, func, line,
@@ -182,7 +182,7 @@ void lbug_with_loc(const char *file, const char *func, const int line)
 }
 #else
 /* coverity[+kill] */
-void lbug_with_loc(const char *file, const char *func, const int line)
+void lbug_with_loc(char *file, const char *func, const int line)
 {
         libcfs_catastrophe = 1;
         libcfs_debug_msg(NULL, 0, D_EMERG, file, func, line, "LBUG\n");

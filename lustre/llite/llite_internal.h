@@ -51,11 +51,6 @@
 #include <lustre_ver.h>
 #include <linux/lustre_version.h>
 #include <lustre_disk.h>  /* for s2sbi */
-
-#ifndef HAVE_LE_TYPES
-typedef __u16 __le16;
-typedef __u32 __le32;
-#endif
  
 /*
 struct lustre_intent_data {

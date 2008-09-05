@@ -58,7 +58,6 @@ atomic_t libcfs_kmemory = {0};
 struct obd_device *obd_devs[MAX_OBD_DEVICES];
 struct list_head obd_types;
 spinlock_t obd_dev_lock = SPIN_LOCK_UNLOCKED;
-cfs_mem_cache_t *obd_lvfs_ctxt_cache;
 
 /* The following are visible and mutable through /proc/sys/lustre/. */
 unsigned int obd_debug_peer_on_timeout;
@@ -378,7 +377,6 @@ void *obd_psdev = NULL;
 #endif
 
 EXPORT_SYMBOL(obd_devs);
-EXPORT_SYMBOL(obd_lvfs_ctxt_cache);
 EXPORT_SYMBOL(obd_print_fail_loc);
 EXPORT_SYMBOL(obd_race_waitq);
 EXPORT_SYMBOL(obd_race_state);
@@ -548,11 +546,6 @@ int init_obdclass(void)
                              LPROCFS_CNTR_AVGMINMAX,
                              "pagesused", "pages");
 #endif
-        obd_lvfs_ctxt_cache = cfs_mem_cache_create("obd_lvfs_ctxt_cache",
-                sizeof(struct lvfs_run_ctxt), 0, 0);
-        if (obd_lvfs_ctxt_cache == NULL)
-                RETURN(-ENOMEM);
-
         err = obd_init_checks();
         if (err == -EOVERFLOW)
                 return err;
@@ -634,8 +627,6 @@ static void cleanup_obdclass(void)
 
         memory_max = obd_memory_max();
         pages_max = obd_pages_max();
-
-        cfs_mem_cache_destroy(obd_lvfs_ctxt_cache);
 
         lprocfs_free_stats(&obd_memory);
         CDEBUG((memory_leaked | pages_leaked) ? D_ERROR : D_INFO,

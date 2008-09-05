@@ -427,6 +427,9 @@ static int mds_destroy_export(struct obd_export *export)
         if (obd_uuid_equals(&export->exp_client_uuid, &obd->obd_uuid))
                 RETURN(0);
 
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        /* Close any open files (which may also cause orphan unlinking). */
+
         lmm_sz = mds->mds_max_mdsize;
         OBD_ALLOC(lmm, lmm_sz);
         if (lmm == NULL) {
@@ -444,8 +447,6 @@ static int mds_destroy_export(struct obd_export *export)
                 GOTO(out, rc = -ENOMEM);
         }
 
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        /* Close any open files (which may also cause orphan unlinking). */
         spin_lock(&med->med_open_lock);
         while (!list_empty(&med->med_open_head)) {
                 struct list_head *tmp = med->med_open_head.next;
@@ -1339,7 +1340,6 @@ static int mds_filter_recovery_request(struct ptlrpc_request *req,
         case MDS_CLOSE:
         case MDS_SYNC: /* used in unmounting */
         case OBD_PING:
-        case MDS_SETXATTR:
         case MDS_REINT:
         case LDLM_ENQUEUE:
                 *process = target_queue_recovery_request(req, obd);
@@ -2014,7 +2014,6 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
             lprocfs_alloc_obd_stats(obd, LPROC_MDS_LAST) == 0) {
                 /* Init private stats here */
                 mds_stats_counter_init(obd->obd_stats);
-                lprocfs_obd_attach_stale_exports(obd);
                 obd->obd_proc_exports_entry = proc_mkdir("exports",
                                                          obd->obd_proc_entry);
         }

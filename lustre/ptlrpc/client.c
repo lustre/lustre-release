@@ -238,10 +238,6 @@ static void ptlrpc_at_adj_service(struct ptlrpc_request *req)
         unsigned int serv_est, oldse;
         struct imp_at *at = &req->rq_import->imp_at;
 
-        /* do estimate only if is not in recovery */
-        if (!(req->rq_send_state & (LUSTRE_IMP_FULL | LUSTRE_IMP_CONNECTING)))
-                return;
-
         LASSERT(req->rq_import);
 
         /* service estimate is returned in the repmsg timeout field,

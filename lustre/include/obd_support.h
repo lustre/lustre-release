@@ -70,7 +70,6 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_TIMEOUT_DEFAULT             100
 #define LDLM_TIMEOUT_DEFAULT            20
 #define MDS_LDLM_TIMEOUT_DEFAULT        6
-#define STALE_EXPORT_MAXTIME_DEFAULT    (24*60*60) /**< one day, in seconds */
 #ifdef CRAY_XT3
  #define OBD_RECOVERY_MAX_TIME (obd_timeout * 18) /* b13079 */
 #endif
@@ -278,7 +277,6 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_TGT_DELAY_PRECREATE     0x705
 #define OBD_FAIL_TGT_TOOMANY_THREADS     0x706
 #define OBD_FAIL_TGT_REPLAY_DROP         0x707
-#define OBD_FAIL_TGT_FAKE_EXP            0x708
 
 #define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
 #define OBD_FAIL_MDC_ENQUEUE_PAUSE       0x801

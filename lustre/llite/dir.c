@@ -1355,7 +1355,6 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 obd_ioctl_freedata(buf, len);
                 RETURN(rc);
         }
-#ifdef HAVE_QUOTA_SUPPORT
         case OBD_IOC_QUOTACHECK: {
                 struct obd_quotactl *oqctl;
                 int rc, error = 0;
@@ -1412,6 +1411,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 OBD_FREE_PTR(check);
                 RETURN(rc);
         }
+#ifdef HAVE_QUOTA_SUPPORT
         case OBD_IOC_QUOTACTL: {
                 struct if_quotactl *qctl;
                 struct obd_quotactl *oqctl;

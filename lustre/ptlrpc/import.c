@@ -677,24 +677,10 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 imp->imp_remote_handle =
                                 *lustre_msg_get_handle(request->rq_repmsg);
 
-                /* Initial connects are allowed for clients with non-random
-                 * uuids when servers are in recovery.  Simply signal the
-                 * servers replay is complete and wait in REPLAY_WAIT. */
-                if (msg_flags & MSG_CONNECT_RECOVERING) {
-                        CDEBUG(D_HA, "connect to %s during recovery\n",
-                               obd2cli_tgt(imp->imp_obd));
-                        IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY_LOCKS);
-                } else {
-                        IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
-                }
+                IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
 
-                spin_lock(&imp->imp_lock);
-                if (imp->imp_invalid) {
-                        spin_unlock(&imp->imp_lock);
+                if (imp->imp_invalid)
                         ptlrpc_activate_import(imp);
-                } else {
-                        spin_unlock(&imp->imp_lock);
-                }
                 GOTO(finish, rc = 0);
         } else {
                 spin_unlock(&imp->imp_lock);

@@ -478,6 +478,19 @@ static int mds_lov_set_one_nextid(struct obd_device * obd, __u32 idx, obd_id *id
         RETURN(rc);
 }
 
+static __u32 mds_lov_get_idx(struct obd_export *lov,
+                             struct obd_uuid *ost_uuid)
+{
+        int rc;
+        int valsize = sizeof(ost_uuid);
+
+        rc = obd_get_info(lov, sizeof(KEY_LOV_IDX), KEY_LOV_IDX,
+                          &valsize, ost_uuid, NULL);
+        LASSERT(rc >= 0);
+
+        RETURN(rc);
+}
+
 /* Update the lov desc for a new size lov. */
 static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov,
                                 __u32 index)
@@ -996,6 +1009,7 @@ int mds_lov_start_synchronize(struct obd_device *obd,
                               void *data, int nonblock)
 {
         struct mds_lov_sync_info *mlsi;
+        struct mds_obd *mds = &obd->u.mds;
         int rc;
         struct obd_uuid *uuid;
         ENTRY;
@@ -1007,10 +1021,12 @@ int mds_lov_start_synchronize(struct obd_device *obd,
         if (mlsi == NULL)
                 RETURN(-ENOMEM);
 
-        LASSERT(data);
         mlsi->mlsi_obd = obd;
         mlsi->mlsi_watched = watched;
-        mlsi->mlsi_index = *(__u32 *)data;
+        if (data)
+                mlsi->mlsi_index = *(__u32 *)data;
+        else
+                mlsi->mlsi_index = mds_lov_get_idx(mds->mds_osc_exp, uuid);
 
         /* Although class_export_get(obd->obd_self_export) would lock
            the MDS in place, since it's only a self-export
@@ -1056,16 +1072,11 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         case OBD_NOTIFY_ACTIVE:
                 /* lov want one or more _active_ targets for work */
                 mds_allow_cli(obd, CONFIG_TARGET);
-                /* activate event should be pass lov idx as argument */
         case OBD_NOTIFY_SYNC:
         case OBD_NOTIFY_SYNC_NONBLOCK:
-                /* sync event should be pass lov idx as argument */
                 break;
         case OBD_NOTIFY_CONFIG:
                 mds_allow_cli(obd, (unsigned long)data);
-                /* call this only when config is processed and stale_export_age
-                 * value is configured */
-                class_disconnect_expired_exports(obd);
         default:
                 RETURN(0);
         }
@@ -1077,15 +1088,16 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         }
 
         if (obd->obd_recovering) {
+                __u32 idx;
                 CWARN("MDS %s: in recovery, not resetting orphans on %s\n",
                       obd->obd_name,
                       obd_uuid2str(&watched->u.cli.cl_target_uuid));
                 /* We still have to fix the lov descriptor for ost's added
                    after the mdt in the config log.  They didn't make it into
                    mds_lov_connect. */
-                LASSERT(data);
-                rc = mds_lov_update_desc(obd, obd->u.mds.mds_osc_exp,
-                                        *(__u32 *)data);
+                idx = mds_lov_get_idx(obd->u.mds.mds_osc_exp,
+                                      &watched->u.cli.cl_target_uuid);
+                rc = mds_lov_update_desc(obd, obd->u.mds.mds_osc_exp, idx);
                 mds_allow_cli(obd, CONFIG_SYNC);
                 RETURN(rc);
         }

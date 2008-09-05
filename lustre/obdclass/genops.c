@@ -47,7 +47,6 @@
 #include <obd_class.h>
 #include <lprocfs_status.h>
 #include <class_hash.h>
-#include <lustre_export.h>
 
 extern struct list_head obd_types;
 spinlock_t obd_types_lock;
@@ -1041,7 +1040,6 @@ void class_disconnect_exports(struct obd_device *obd)
         /* Move all of the exports from obd_exports to a work list, en masse. */
         CFS_INIT_LIST_HEAD(&work_list);
         spin_lock(&obd->obd_dev_lock);
-        list_splice_init(&obd->obd_delayed_exports, &work_list);
         list_splice_init(&obd->obd_exports, &work_list);
         spin_unlock(&obd->obd_dev_lock);
 
@@ -1079,35 +1077,6 @@ void class_disconnect_stale_exports(struct obd_device *obd)
 }
 EXPORT_SYMBOL(class_disconnect_stale_exports);
 
-void class_disconnect_expired_exports(struct obd_device *obd)
-{
-        struct list_head expired_list;
-        struct obd_export *exp, *n;
-        int cnt = 0;
-        ENTRY;
-
-        CFS_INIT_LIST_HEAD(&expired_list);
-        spin_lock(&obd->obd_dev_lock);
-        list_for_each_entry_safe(exp, n, &obd->obd_delayed_exports,
-                                 exp_obd_chain) {
-                if (exp_expired(exp, obd->u.obt.obt_stale_export_age)) {
-                        list_move(&exp->exp_obd_chain, &expired_list);
-                        cnt++;
-                }
-        }
-        spin_unlock(&obd->obd_dev_lock);
-
-        if (cnt == 0)
-                return;
-
-        CDEBUG(D_ERROR, "%s: disconnecting %d expired exports\n",
-               obd->obd_name, cnt);
-        class_disconnect_export_list(&expired_list, get_exp_flags_from_obd(obd));
-
-        EXIT;
-}
-EXPORT_SYMBOL(class_disconnect_expired_exports);
-
 void class_set_export_delayed(struct obd_export *exp)
 {
         struct obd_device *obd = class_exp2obd(exp);
@@ -1120,7 +1089,6 @@ void class_set_export_delayed(struct obd_export *exp)
         /* no need to ping delayed exports */
         spin_lock(&obd->obd_dev_lock);
         list_del_init(&exp->exp_obd_chain_timed);
-        list_move_tail(&exp->exp_obd_chain, &obd->obd_delayed_exports);
         spin_unlock(&obd->obd_dev_lock);
 
         LASSERT(obd->obd_recoverable_clients > 0);
@@ -1130,8 +1098,7 @@ void class_set_export_delayed(struct obd_export *exp)
         obd->obd_recoverable_clients--;
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
-        CDEBUG(D_HA, "%s: set client %s as delayed\n",
-               obd->obd_name, exp->exp_client_uuid.uuid);
+        CDEBUG(D_HA, "Set client %s as delayed\n", exp->exp_client_uuid.uuid);
 }
 EXPORT_SYMBOL(class_set_export_delayed);
 
@@ -1148,9 +1115,8 @@ void class_handle_stale_exports(struct obd_device *obd)
         CFS_INIT_LIST_HEAD(&evict_list);
         spin_lock(&obd->obd_dev_lock);
         list_for_each_entry_safe(exp, n, &obd->obd_exports, exp_obd_chain) {
-                LASSERT(!exp->exp_delayed);
-                /* clients finished recovery */
-                if (!exp->exp_replay_needed)
+                /* clients finished recovery or delayed */
+                if (!exp->exp_replay_needed || exp->exp_delayed)
                         continue;
                 /* connected non-vbr clients are evicted */
                 if (exp->exp_in_recovery && !exp_connect_vbr(exp)) {
@@ -1162,11 +1128,13 @@ void class_handle_stale_exports(struct obd_device *obd)
         }
         spin_unlock(&obd->obd_dev_lock);
 
-        list_for_each_entry_safe(exp, n, &delay_list, exp_obd_chain) {
+        list_for_each_entry(exp, &delay_list, exp_obd_chain)
                 class_set_export_delayed(exp);
-                exp->exp_last_request_time = cfs_time_current_sec();
-        }
-        LASSERT(list_empty(&delay_list));
+
+        /* put delayed list back to obd_exports */
+        spin_lock(&obd->obd_dev_lock);
+        list_splice(&delay_list, obd->obd_exports.prev);
+        spin_unlock(&obd->obd_dev_lock);
 
         /* evict clients without VBR support */
         class_disconnect_export_list(&evict_list, get_exp_flags_from_obd(obd));

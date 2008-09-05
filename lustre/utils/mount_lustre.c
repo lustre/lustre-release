@@ -582,8 +582,7 @@ int main(int argc, char *const argv[])
                 printf("mounting device %s at %s, flags=%#x options=%s\n",
                        source, target, flags, optcopy);
 
-        if (!strstr(usource, ":/") && set_tunables(source, strlen(source)) &&
-            verbose)
+        if (set_tunables(source, strlen(source)) && verbose)
                 fprintf(stderr, "%s: unable to set tunables for %s"
                                 " (may cause reduced IO performance)\n",
                                 argv[0], source);

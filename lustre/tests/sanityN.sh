@@ -254,14 +254,11 @@ test_13() {	# bug 2451 - directory coherency
 run_test 13 "test directory page revocation ===================="
 
 test_14() {
-	mkdir -p $DIR1/$tdir
-	cp -p /bin/ls $DIR1/$tdir/$tfile
-	multiop_bg_pause $DIR1/$tdir/$tfile Ow_c || return 1
-	MULTIPID=$!
-
-	$DIR2/$tdir/$tfile && error || true
-	kill -USR1 $MULTIPID
-	wait $MULTIPID || return 2
+	mkdir $DIR1/d14
+	cp -p /bin/ls $DIR1/d14/ls
+	exec 100>> $DIR1/d14/ls
+	$DIR2/d14/ls && error || true
+	exec 100<&-
 }
 run_test 14 "execution of file open for write returns -ETXTBSY ="
 

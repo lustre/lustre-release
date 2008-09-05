@@ -394,7 +394,7 @@ void *cfs_stack_trace_frame(struct cfs_stack_trace *trace, int frame_no)
 /* __linux__ */
 #endif
 
-void lbug_with_loc(const char *file, const char *func, const int line)
+void lbug_with_loc(char *file, const char *func, const int line)
 {
         /* No libcfs_catastrophe in userspace! */
         libcfs_debug_msg(NULL, 0, D_EMERG, file, func, line, "LBUG\n");
