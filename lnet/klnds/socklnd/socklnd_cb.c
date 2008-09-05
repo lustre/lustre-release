@@ -463,6 +463,10 @@ ksocknal_check_zc_req(ksock_tx_t *tx)
 
         spin_lock(&peer->ksnp_lock);
 
+        /* ZC_REQ is going to be pinned to the peer */
+        tx->tx_deadline =
+                cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
+
         LASSERT (tx->tx_msg.ksm_zc_req_cookie == 0);
         tx->tx_msg.ksm_zc_req_cookie = peer->ksnp_zc_next_cookie++;
         list_add_tail(&tx->tx_zc_list, &peer->ksnp_zc_req_list);
@@ -980,6 +984,10 @@ ksocknal_launch_packet (lnet_ni_t *ni, ksock_tx_t *tx, lnet_process_id_t id)
 
         if (peer->ksnp_accepting > 0 ||
             ksocknal_find_connecting_route_locked (peer) != NULL) {
+                /* the message is going to be pinned to the peer */
+                tx->tx_deadline =
+                        cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
+                
                 /* Queue the message until a connection is established */
                 list_add_tail (&tx->tx_list, &peer->ksnp_tx_queue);
                 write_unlock_bh (g_lock);
@@ -2641,6 +2649,31 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
         return (NULL);
 }
 
+static inline void
+ksocknal_flush_stale_txs(ksock_peer_t *peer)
+{
+        ksock_tx_t        *tx;
+        CFS_LIST_HEAD      (stale_txs);
+        
+        write_lock_bh (&ksocknal_data.ksnd_global_lock);
+
+        while (!list_empty (&peer->ksnp_tx_queue)) {
+                tx = list_entry (peer->ksnp_tx_queue.next,
+                                 ksock_tx_t, tx_list);
+
+                if (!cfs_time_aftereq(cfs_time_current(),
+                                      tx->tx_deadline))
+                        break;
+                
+                list_del (&tx->tx_list);
+                list_add_tail (&tx->tx_list, &stale_txs);
+        }
+
+        write_unlock_bh (&ksocknal_data.ksnd_global_lock);
+
+        ksocknal_txlist_done(peer->ksnp_ni, &stale_txs, 1);
+}
+
 void
 ksocknal_check_peer_timeouts (int idx)
 {
@@ -2670,8 +2703,50 @@ ksocknal_check_peer_timeouts (int idx)
                         ksocknal_conn_decref(conn);
                         goto again;
                 }
+
+                /* we can't process stale txs right here because we're
+                 * holding only shared lock */
+                if (!list_empty (&peer->ksnp_tx_queue)) {
+                        ksock_tx_t *tx = list_entry (peer->ksnp_tx_queue.next,
+                                                     ksock_tx_t, tx_list);
+
+                        if (cfs_time_aftereq(cfs_time_current(),
+                                             tx->tx_deadline)) {
+
+                                ksocknal_peer_addref(peer);
+                                read_unlock (&ksocknal_data.ksnd_global_lock);
+                                
+                                ksocknal_flush_stale_txs(peer);
+
+                                ksocknal_peer_decref(peer);
+                                goto again;
+                        }
+                }
         }
 
+        /* print out warnings about stale ZC_REQs */
+        list_for_each_entry(peer, peers, ksnp_list) {
+                ksock_tx_t *tx;
+                int         n = 0;
+                
+                list_for_each_entry(tx, &peer->ksnp_zc_req_list, tx_zc_list) {
+                        if (!cfs_time_aftereq(cfs_time_current(),
+                                              tx->tx_deadline))
+                                break;
+                        n++;
+                }
+
+                if (n != 0) {
+                        tx = list_entry (peer->ksnp_zc_req_list.next,
+                                         ksock_tx_t, tx_zc_list);
+                        CWARN("Stale ZC_REQs for peer %s detected: %d; the "
+                              "oldest (%p) timed out %ld secs ago\n",
+                              libcfs_nid2str(peer->ksnp_id.nid), n, tx,
+                              cfs_duration_sec(cfs_time_current() -
+                                               tx->tx_deadline));
+                }
+        }
+        
         read_unlock (&ksocknal_data.ksnd_global_lock);
 }
 
