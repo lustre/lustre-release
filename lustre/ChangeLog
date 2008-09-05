@@ -591,6 +591,12 @@ Details    : FIEMAP ioctl will allow an application to efficiently fetch the
              extent information of a file. It can be used to map logical blocks
              in a file to physical blocks in the block device.
 
+Severity   : minor 
+Bugzilla   : 16717 
+Description: LBUG when llog conf file is full 
+Details    : When llog bitmap is full, ENOSPC should be returned for plain
+	     log.
+
 -------------------------------------------------------------------------------
 
 
