@@ -230,8 +230,8 @@ exit:
 static void mds_finish_join(struct mds_obd *mds, struct ptlrpc_request *req,
                            struct inode *inode, struct lov_mds_md_join *lmmj)
 {
-        struct mds_body *body = (struct mds_body *)
-                                lustre_msg_buf(req->rq_repmsg, 1, 0);
+        struct mds_body *body = lustre_msg_buf(req->rq_repmsg,DLM_REPLY_REC_OFF,
+                                               sizeof(*body));
         int max_cookiesize = lmmj->lmmj_md.lmm_stripe_count *
                                 sizeof(struct llog_cookie);
         int max_easize = sizeof(*lmmj);
@@ -239,7 +239,7 @@ static void mds_finish_join(struct mds_obd *mds, struct ptlrpc_request *req,
         CDEBUG(D_INFO, "change the max md size from %d to "LPSZ"\n",
                mds->mds_max_mdsize, sizeof(*lmmj));
 
-        if (mds->mds_max_mdsize < max_easize || 
+        if (mds->mds_max_mdsize < max_easize ||
             mds->mds_max_cookiesize < max_cookiesize) {
                 body->max_mdsize = mds->mds_max_mdsize > max_easize ?
                                    mds->mds_max_mdsize : max_easize;
