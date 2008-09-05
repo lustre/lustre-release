@@ -827,7 +827,6 @@ struct obd_device {
         struct list_head        obd_nid_stats;
         atomic_t                obd_refcount;
         cfs_waitq_t             obd_refcount_waitq;
-        cfs_waitq_t             obd_llog_waitq;
         struct list_head        obd_exports;
         int                     obd_num_exports;
         spinlock_t              obd_nid_lock;
@@ -842,7 +841,11 @@ struct obd_device {
         struct obd_statfs       obd_osfs;       /* locked by obd_osfs_lock */
         __u64                   obd_osfs_age;
         struct lvfs_run_ctxt    obd_lvfs_ctxt;
-        struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
+
+        struct llog_ctxt       *obd_llog_ctxt[LLOG_MAX_CTXTS];
+        struct semaphore        obd_llog_alloc;
+        cfs_waitq_t             obd_llog_waitq;
+
         struct obd_device       *obd_observer;
         struct obd_notify_upcall obd_upcall;
         struct obd_export       *obd_self_export;

@@ -582,7 +582,6 @@ static int llog_catinfo_deletions(struct obd_device *obd, char *buf,
         struct lvfs_run_ctxt saved;
         int size, i, count;
         struct llog_catid *idarray;
-        struct llog_logid *id;
         char name[32] = CATLIST;
         int rc;
         struct cb_data data;
@@ -594,11 +593,11 @@ static int llog_catinfo_deletions(struct obd_device *obd, char *buf,
         count = mds->mds_lov_desc.ld_tgt_count;
         size = sizeof(*idarray) * count;
 
-        OBD_ALLOC(idarray, size);
+        OBD_VMALLOC(idarray, size);
         if (!idarray)
                 GOTO(release_ctxt, rc = -ENOMEM);
 
-        rc = llog_get_cat_list(obd, obd, name, count, idarray);
+        rc = llog_get_cat_list(obd, obd, name, 0, count, idarray);
         if (rc)
                 GOTO(out_free, rc);
 
@@ -610,8 +609,7 @@ static int llog_catinfo_deletions(struct obd_device *obd, char *buf,
         for (i = 0; i < count; i++) {
                 int l, index, uncanceled = 0;
 
-                id = &idarray[i].lci_logid;
-                rc = llog_create(ctxt, &handle, id, NULL);
+                rc = llog_create(ctxt, &handle, &idarray[i].lci_logid, NULL);
                 if (rc)
                         GOTO(out_pop, rc);
                 rc = llog_init_handle(handle, 0, NULL);
@@ -626,8 +624,9 @@ static int llog_catinfo_deletions(struct obd_device *obd, char *buf,
                 l = snprintf(data.out, data.remains,
                              "\n[Catlog ID]: #"LPX64"#"LPX64"#%08x  "
                              "[Log Count]: %d\n",
-                             id->lgl_oid, id->lgl_ogr, id->lgl_ogen,
-                             uncanceled);
+                             idarray[i].lci_logid.lgl_oid,
+                             idarray[i].lci_logid.lgl_ogr,
+                             idarray[i].lci_logid.lgl_ogen, uncanceled);
 
                 data.out += l;
                 data.remains -= l;
@@ -642,7 +641,7 @@ static int llog_catinfo_deletions(struct obd_device *obd, char *buf,
 out_pop:
         pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
 out_free:
-        OBD_FREE(idarray, size);
+        OBD_VFREE(idarray, size);
 release_ctxt:
         llog_ctxt_put(ctxt);
 

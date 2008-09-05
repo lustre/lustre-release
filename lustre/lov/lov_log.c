@@ -202,6 +202,8 @@ int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
         int i, rc = 0, err = 0;
         ENTRY;
 
+        LASSERT(uuid);
+
         rc = llog_setup(obd, LLOG_MDS_OST_ORIG_CTXT, tgt, 0, NULL,
                         &lov_mds_ost_orig_logops);
         if (rc)
@@ -213,16 +215,15 @@ int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
                 RETURN(rc);
 
         lov_getref(obd);
-        /* count may not match lov->desc.ld_tgt_count during dynamic ost add */
-        for (i = 0; i < count; i++) {
+        for (i = 0; i < lov->desc.ld_tgt_count ; i++) {
                 if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active)
                         continue;
-                if (uuid && !obd_uuid_equals(uuid, &lov->lov_tgts[i]->ltd_uuid))
+                if (!obd_uuid_equals(uuid, &lov->lov_tgts[i]->ltd_uuid))
                         continue;
                 CDEBUG(D_CONFIG, "init %d/%d\n", i, count);
                 LASSERT(lov->lov_tgts[i]->ltd_exp);
                 child = lov->lov_tgts[i]->ltd_exp->exp_obd;
-                rc = obd_llog_init(child, tgt, 1, logid + i, uuid);
+                rc = obd_llog_init(child, tgt, 1, logid, uuid);
                 if (rc) {
                         CERROR("error osc_llog_init idx %d osc '%s' tgt '%s' "
                                "(rc=%d)\n", i, child->obd_name, tgt->obd_name,

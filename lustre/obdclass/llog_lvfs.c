@@ -765,13 +765,13 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
 
 /* reads the catalog list */
 int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
-                      char *name, int count, struct llog_catid *idarray)
+                      char *name, int idx, int count, struct llog_catid *idarray)
 {
         struct lvfs_run_ctxt saved;
         struct l_file *file;
-        int rc;
+        int rc, rc1 = 0;
         int size = sizeof(*idarray) * count;
-        loff_t off = 0;
+        loff_t off = idx *  sizeof(*idarray);
         ENTRY;
 
         if (!count) 
@@ -785,7 +785,7 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                        name, rc);
                 GOTO(out, rc);
         }
-        
+
         if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
                 CERROR("%s is not a regular file!: mode = %o\n", name,
                        file->f_dentry->d_inode->i_mode);
@@ -794,6 +794,12 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
 
         CDEBUG(D_CONFIG, "cat list: disk size=%d, read=%d\n",
                (int)i_size_read(file->f_dentry->d_inode), size);
+
+        /* read for new ost index or for empty file */
+        if (i_size_read(file->f_dentry->d_inode) < off) {
+                memset(idarray, 0, size);
+                GOTO(out, rc = 0);
+        }
 
         rc = fsfilt_read_record(disk_obd, file, idarray, size, &off);
         if (rc) {
@@ -805,22 +811,24 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
  out:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         if (file && !IS_ERR(file))
-                rc = filp_close(file, 0);
+                rc1 = filp_close(file, 0);
+        if (rc == 0)
+                rc = rc1;
         return rc;
 }
 EXPORT_SYMBOL(llog_get_cat_list);
 
 /* writes the cat list */
 int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
-                      char *name, int count, struct llog_catid *idarray)
+                      char *name, int idx, int count, struct llog_catid *idarray)
 {
         struct lvfs_run_ctxt saved;
         struct l_file *file;
-        int rc;
+        int rc, rc1 = 0;
         int size = sizeof(*idarray) * count;
-        loff_t off = 0;
+        loff_t off = idx * sizeof(*idarray);
 
-        if (!count) 
+        if (!count)
                 return (0);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
@@ -840,7 +848,7 @@ int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
 
         rc = fsfilt_write_record(disk_obd, file, idarray, size, &off, 1);
         if (rc) {
-                CDEBUG(D_INODE,"OBD filter: error reading %s: rc %d\n",
+                CDEBUG(D_INODE,"OBD filter: error writeing %s: rc %d\n",
                        name, rc);
                 GOTO(out, rc);
         }
@@ -848,7 +856,10 @@ int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
  out:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         if (file && !IS_ERR(file))
-                rc = filp_close(file, 0);
+                rc1 = filp_close(file, 0);
+
+        if (rc == 0)
+                rc = rc1;
         RETURN(rc);
 }
 
@@ -917,14 +928,14 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
 }
 
 int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
-                      char *name, int count, struct llog_catid *idarray)
+                      char *name, int idx, int count, struct llog_catid *idarray)
 {
         LBUG();
         return 0;
 }
 
 int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
-                      char *name, int count, struct llog_catid *idarray)
+                      char *name, int idx, int count, struct llog_catid *idarray)
 {
         LBUG();
         return 0;

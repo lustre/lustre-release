@@ -223,6 +223,7 @@ int class_attach(struct lustre_cfg *lcfg)
         cfs_waitq_init(&obd->obd_next_transno_waitq);
         cfs_waitq_init(&obd->obd_evict_inprogress_waitq);
         cfs_waitq_init(&obd->obd_llog_waitq);
+        init_mutex(&obd->obd_llog_alloc);
         CFS_INIT_LIST_HEAD(&obd->obd_recovery_queue);
         CFS_INIT_LIST_HEAD(&obd->obd_delayed_reply_queue);
 

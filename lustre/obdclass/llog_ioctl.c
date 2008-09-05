@@ -432,12 +432,11 @@ int llog_catalog_list(struct obd_device *obd, int count,
         ENTRY;
         size = sizeof(*idarray) * count;
 
-        OBD_ALLOC(idarray, size);
+        OBD_VMALLOC(idarray, size);
         if (!idarray)
                 RETURN(-ENOMEM);
-        memset(idarray, 0, size);
 
-        rc = llog_get_cat_list(obd, obd, name, count, idarray);
+        rc = llog_get_cat_list(obd, obd, name, 0, count, idarray);
         if (rc) {
                 OBD_FREE(idarray, size);
                 RETURN(rc);
@@ -457,7 +456,7 @@ int llog_catalog_list(struct obd_device *obd, int count,
                         break;
                 }
         }
-        OBD_FREE(idarray, size);
+        OBD_VFREE(idarray, size);
         RETURN(0);
 
 }
