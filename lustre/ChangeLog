@@ -16,7 +16,7 @@ Severity   : minor
 Bugzilla   : 16717 
 Description: LBUG when llog conf file is full 
 Details    : When llog bitmap is full, ENOSPC should be returned for plain
-             log.
+	     log.
 
 Severity   : normal
 Bugzilla   : 16907
@@ -26,21 +26,21 @@ Severity   : major
 Bugzilla   : 16750
 Description: service mount cannot take device name with ":"
 Details    : Only when device name contains ":/" will mount treat it as
-             client mount.
+	     client mount.
 
 Severity   : normal
 Bugzilla   : 15927
 Frequency  : rare
 Description: replace ptlrpcd with the statahead thread to interpret the async
-             statahead RPC callback
+	     statahead RPC callback
 
 Severity   : normal
 Bugzilla   : 16611
 Frequency  : on recovery
 Description: I/O failures after umount during fail back
 Details    : if client reconnected to restarted server we need join to recovery
-             instead of find server handler is changed and process self eviction
-             with cancel all locks.
+	     instead of find server handler is changed and process self eviction
+	     with cancel all locks.
 
 Severity   : enhancement
 Bugzilla   : 16633
@@ -54,24 +54,24 @@ Severity   : enhancement
 Bugzilla   : 16566
 Description: Upcall on Lustre log has been dumped
 Details    : Allow for a user mode script to be called once a Lustre log has
-             been dumped. It passes the filename of the dumped log to the
+	     been dumped. It passes the filename of the dumped log to the
 	     script, the location of the script can be specified via
 	     /proc/sys/lnet/debug_log_upcall.
 
 Severity   : minor
 Bugzilla   : 16583
 Frequency  : rare
-Description: avoid messages about idr_remove called for id  which is not allocated.
-Details    : Move assigment s_dev for clustered nfs to end of initialization, for
-             avoid problem with error handling.
+Description: avoid idr_remove called for id which is not allocated.
+Details    : Move assigment s_dev for clustered nfs to end of initialization,
+	     to avoid problem with error handling.
 
 Severity   : minor
 Bugzilla   : 16109
 Frequency  : rare
 Description: avoid Already found the key in hash [CONN_UNUSED_HASH] messages
-Details    : When connection is reused this not moved from CONN_UNUSED_HASH into
-             CONN_USED_HASH and this prodice warning when put connection again
-             in unused hash.
+Details    : When connection is reused this not moved from CONN_UNUSED_HASH
+	     into CONN_USED_HASH and this prodice warning when put connection
+	     again in unused hash.
 
 Severity   : enhancement
 Bugzilla   : 16573
@@ -81,7 +81,7 @@ Severity   : normal
 Bugzilla   : 16237
 Description: Early reply size mismatch, MGC loses connection
 Details    : Apply the MGS_CONNECT_SUPPORTED mask at reconnect time so
-             the connect flags are properly negotiated.
+	     the connect flags are properly negotiated.
 
 Severity   : normal
 Bugzilla   : 16006
@@ -91,16 +91,16 @@ Details    : restore missing copy oi_flags to lov requests.
 Severity   : enhancement
 Bugzilla   : 16581
 Description: Add man pages for llobdstat(8), llstat(8), plot-llstat(8),
-           : l_getgroups(8), lst(8), routerstat(8)
+	   : l_getgroups(8), lst(8), routerstat(8)
 Details    : included man pages for llobdstat(8), llstat(8),
-           : plot-llstat(8), l_getgroups(8), lst(8), routerstat(8)
+	   : plot-llstat(8), l_getgroups(8), lst(8), routerstat(8)
 
 Severity   : enhancement
 Bugzilla   : 16091
 Description: configure's --enable-quota should check the
-           : kernel .config for CONFIG_QUOTA
+	   : kernel .config for CONFIG_QUOTA
 Details    : configure is terminated if --enable-quota is passed but
-           : no quota support is in kernel
+	   : no quota support is in kernel
 
 Severity   : normal
 Bugzilla   : 13139
@@ -1211,15 +1211,15 @@ Severity   : enhancement
 Bugzilla   : 11089
 Description: organize the server-side client stats on per-nid basis
 Details    : Change the structure of stats under obdfilter and mds to
-             New structure:
-                +- exports
-                        +- nid#1
-                        |   + stats
-                        |   + uuids
-                        +- nid#2...
-                        +- clear
-             The "uuid"s file would list the uuids of _active_ exports.
-             And the clear entry is to clear all stats and stale nids.
+	     New structure:
+	        +- exports
+	                +- nid#1
+	                |   + stats
+	                |   + uuids
+	                +- nid#2...
+	                +- clear
+	     The "uuid"s file would list the uuids of _active_ exports.
+	     And the clear entry is to clear all stats and stale nids.
 
 Severity   : enhancement
 Bugzilla   : 11270
@@ -1249,15 +1249,15 @@ Severity   : normal
 Bugzilla   : 15346
 Description: skiplist implementation simplification
 Details    : skiplists are used to group compatible locks on granted list
-	     that was implemented as tracking first and last lock of each lock group
-	     the patch changes that to using doubly linked lists
+	     that was implemented as tracking first and last lock of each
+	     lock group the patch changes that to using doubly linked lists
 
 Severity   : normal
 Bugzilla   : 15574
 Description: MDS LBUG: ASSERTION(!IS_ERR(dchild))
 Details    : Change LASSERTs to client eviction (i.e. abort client's recovery)
-	     because LASSERT on both the data supplied by a client, and the data
-	     on disk is dangerous and incorrect.
+	     because LASSERT on both the data supplied by a client, and the
+	     data on disk is dangerous and incorrect.
 
 Severity   : enhancement
 Bugzilla   : 10718
@@ -1363,16 +1363,16 @@ Severity   : enhancement
 Bugzilla   : 10555
 Description: Add a FIEMAP(FIle Extent MAP) ioctl
 Details    : FIEMAP ioctl will allow an application to efficiently fetch the
-             extent information of a file. It can be used to map logical blocks
-             in a file to physical blocks in the block device.
+	     extent information of a file. It can be used to map logical blocks
+	     in a file to physical blocks in the block device.
 
 Severity   : normal
 Bugzilla   : 15198
 Description: LDLM soft lockups - improvement
 Details    : It is be possible to send the lock handle along with each read
-             or write request because the client is already doing a lock match
-             itself so there isn't any reason the OST should have to re-do that
-             search.
+	     or write request because the client is already doing a lock match
+	     itself so there isn't any reason the OST should have to re-do that
+	     search.
 
 --------------------------------------------------------------------------------
 
@@ -1720,10 +1720,17 @@ Severity   : enhancement
 Bugzilla   : 4900
 Description: Async OSC create to avoid the blocking unnecessarily.
 Details    : If a OST has no remain object, system will block on the creating
-	    when need to create a new object on this OST. Now, ways use
-	    pre-created objects when available, instead of blocking on an
-	    empty osc while others are not empty.  If we must block, we block
-	    for the shortest possible period of time.
+	     when need to create a new object on this OST. Now, ways use
+	     pre-created objects when available, instead of blocking on an
+	     empty osc while others are not empty.  If we must block, we block
+	     for the shortest possible period of time.
+
+Severity   : major
+Bugzilla   : 11710
+Description: improve handling recoverable errors
+Details    : if request processig with error which can be recoverable on server
+	     request should be resend, otherwise page released from cache and
+	     marked as error.
 
 Severity   : enhancement
 Bugzilla   : 12702
