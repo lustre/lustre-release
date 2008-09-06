@@ -1699,14 +1699,11 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
 
         //fixup_handle_for_resent_req(req, lock, &lockh);
 
-        /* If we grant any lock at all, it will be a whole-file read lock.
-         * Call the extent policy function to see if our request can be
-         * granted, or is blocked. 
-         * If the OST lock has LDLM_FL_HAS_INTENT set, it means a glimpse lock
+        /* Call the extent policy function to see if our request can be
+         * granted, or is blocked.
+         * If the OST lock has LDLM_FL_HAS_INTENT set, it means a glimpse
+         * lock, and should not be granted if the lock will be blocked.
          */
-        lock->l_policy_data.l_extent.start = 0;
-        lock->l_policy_data.l_extent.end = OBD_OBJECT_EOF;
-        lock->l_req_mode = LCK_PR;
 
         LASSERT(ns == res->lr_namespace);
         lock_res(res);
