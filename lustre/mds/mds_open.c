@@ -1099,7 +1099,8 @@ int mds_open(struct mds_update_record *rec, int offset,
                 }
                 inode = dchild->d_inode;
                 if (ino) {
-                        LASSERT(ino == inode->i_ino);
+                        if (ino != inode->i_ino)
+                                GOTO(cleanup, rc = -EFAULT);
                         /* Written as part of setattr */
                         inode->i_generation = rec->ur_fid2->generation;
                         CDEBUG(D_HA, "recreated ino %lu with gen %u\n",
