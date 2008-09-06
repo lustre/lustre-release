@@ -137,7 +137,8 @@ cfs_proc_dir_entry_t *lprocfs_add_simple(struct proc_dir_entry *root,
         proc->read_proc = read_proc;
         proc->write_proc = write_proc;
         proc->data = data;
-        proc->proc_fops = fops;
+        if (fops)
+                proc->proc_fops = fops;
         return proc;
 }
 
