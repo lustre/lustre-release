@@ -26,3 +26,4 @@ ext3-max-dir-size-2.6.5-suse.patch
 ext3-print-inum-in-htree-warning.patch
 ext3-xattr-no-update-ctime-suse.patch
 ext3-check-bad-inode.patch
+ext3-get-raid-stripe-from-sb-2.6-suse.patch
