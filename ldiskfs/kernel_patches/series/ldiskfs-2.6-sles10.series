@@ -29,3 +29,4 @@ ext3-block-bitmap-validation-2.6-sles10.patch
 ext3-xattr-no-update-ctime-2.6-sles10.patch
 ext3-check-bad-inode.patch
 ext3-journal-chksum-2.6.18-vanilla.patch
+ext3-get-raid-stripe-from-sb.patch
