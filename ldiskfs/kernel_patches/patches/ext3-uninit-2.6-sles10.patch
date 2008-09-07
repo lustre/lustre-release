@@ -6,10 +6,10 @@ group descriptor to avoid reading or scanning them at e2fsck time.
 A checksum of each group descriptor is used to ensure that corruption in
 the group descriptor's bit flags does not cause incorrect operation.
 
-Index: linux-2.6.16.60-0.23/include/linux/ext3_fs.h
+Index: linux-2.6.16.60-0.27/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.16.60-0.23.orig/include/linux/ext3_fs.h
-+++ linux-2.6.16.60-0.23/include/linux/ext3_fs.h
+--- linux-2.6.16.60-0.27.orig/include/linux/ext3_fs.h
++++ linux-2.6.16.60-0.27/include/linux/ext3_fs.h
 @@ -153,16 +153,22 @@ struct ext3_allocation_request {
   */
  struct ext3_group_desc
@@ -53,10 +53,10 @@ Index: linux-2.6.16.60-0.23/include/linux/ext3_fs.h
  					 EXT4_FEATURE_RO_COMPAT_DIR_NLINK| \
  					 EXT3_FEATURE_RO_COMPAT_BTREE_DIR)
  
-Index: linux-2.6.16.60-0.23/fs/ext3/resize.c
+Index: linux-2.6.16.60-0.27/fs/ext3/resize.c
 ===================================================================
---- linux-2.6.16.60-0.23.orig/fs/ext3/resize.c
-+++ linux-2.6.16.60-0.23/fs/ext3/resize.c
+--- linux-2.6.16.60-0.27.orig/fs/ext3/resize.c
++++ linux-2.6.16.60-0.27/fs/ext3/resize.c
 @@ -19,6 +19,7 @@
  #include <linux/errno.h>
  #include <linux/slab.h>
@@ -88,10 +88,10 @@ Index: linux-2.6.16.60-0.23/fs/ext3/resize.c
 -}
 -
 -/*
-  * Set up the block and inode bitmaps, and the inode table for the new group.
-  * This doesn't need to be part of the main transaction, since we are only
-  * changing blocks outside the actual filesystem.  We still do journaling to
-@@ -818,6 +800,7 @@ int ext3_group_add(struct super_block *s
+  * If we have fewer than thresh credits, extend by EXT3_MAX_TRANS_DATA.
+  * If that fails, restart the transaction & regain write access for the
+  * buffer head which is used for block_bitmap modifications.
+@@ -865,6 +847,7 @@ int ext3_group_add(struct super_block *s
  	gdp->bg_inode_table = cpu_to_le32(input->inode_table);
  	gdp->bg_free_blocks_count = cpu_to_le16(input->free_blocks_count);
  	gdp->bg_free_inodes_count = cpu_to_le16(EXT3_INODES_PER_GROUP(sb));
@@ -99,10 +99,10 @@ Index: linux-2.6.16.60-0.23/fs/ext3/resize.c
  
  	/*
  	 * Make the new blocks and inodes valid next.  We do this before
-Index: linux-2.6.16.60-0.23/fs/ext3/super.c
+Index: linux-2.6.16.60-0.27/fs/ext3/super.c
 ===================================================================
---- linux-2.6.16.60-0.23.orig/fs/ext3/super.c
-+++ linux-2.6.16.60-0.23/fs/ext3/super.c
+--- linux-2.6.16.60-0.27.orig/fs/ext3/super.c
++++ linux-2.6.16.60-0.27/fs/ext3/super.c
 @@ -42,6 +42,7 @@
  #include "xattr.h"
  #include "acl.h"
@@ -216,10 +216,10 @@ Index: linux-2.6.16.60-0.23/fs/ext3/super.c
  		block += EXT3_BLOCKS_PER_GROUP(sb);
  		gdp++;
  	}
-Index: linux-2.6.16.60-0.23/fs/ext3/group.h
+Index: linux-2.6.16.60-0.27/fs/ext3/group.h
 ===================================================================
 --- /dev/null
-+++ linux-2.6.16.60-0.23/fs/ext3/group.h
++++ linux-2.6.16.60-0.27/fs/ext3/group.h
 @@ -0,0 +1,30 @@
 +/*
 + *  linux/fs/ext3/group.h
@@ -251,10 +251,10 @@ Index: linux-2.6.16.60-0.23/fs/ext3/group.h
 +				       struct ext3_group_desc *desc);
 +extern void mark_bitmap_end(int start_bit, int end_bit, char *bitmap);
 +#endif /* _LINUX_EXT3_GROUP_H */
-Index: linux-2.6.16.60-0.23/fs/ext3/ialloc.c
+Index: linux-2.6.16.60-0.27/fs/ext3/ialloc.c
 ===================================================================
---- linux-2.6.16.60-0.23.orig/fs/ext3/ialloc.c
-+++ linux-2.6.16.60-0.23/fs/ext3/ialloc.c
+--- linux-2.6.16.60-0.27.orig/fs/ext3/ialloc.c
++++ linux-2.6.16.60-0.27/fs/ext3/ialloc.c
 @@ -28,6 +28,7 @@
  
  #include "xattr.h"
@@ -450,10 +450,10 @@ Index: linux-2.6.16.60-0.23/fs/ext3/ialloc.c
  	/* This is the optimal IO size (for stat), not the fs block size */
  	inode->i_blksize = PAGE_SIZE;
  	inode->i_blocks = 0;
-Index: linux-2.6.16.60-0.23/fs/ext3/mballoc.c
+Index: linux-2.6.16.60-0.27/fs/ext3/mballoc.c
 ===================================================================
---- linux-2.6.16.60-0.23.orig/fs/ext3/mballoc.c
-+++ linux-2.6.16.60-0.23/fs/ext3/mballoc.c
+--- linux-2.6.16.60-0.27.orig/fs/ext3/mballoc.c
++++ linux-2.6.16.60-0.27/fs/ext3/mballoc.c
 @@ -36,6 +36,8 @@
  #include <linux/seq_file.h>
  #include <linux/version.h>
@@ -560,10 +560,10 @@ Index: linux-2.6.16.60-0.23/fs/ext3/mballoc.c
  	spin_unlock(sb_bgl_lock(sbi, block_group));
  	percpu_counter_mod(&sbi->s_freeblocks_counter, count);
  
-Index: linux-2.6.16.60-0.23/fs/ext3/balloc.c
+Index: linux-2.6.16.60-0.27/fs/ext3/balloc.c
 ===================================================================
---- linux-2.6.16.60-0.23.orig/fs/ext3/balloc.c
-+++ linux-2.6.16.60-0.23/fs/ext3/balloc.c
+--- linux-2.6.16.60-0.27.orig/fs/ext3/balloc.c
++++ linux-2.6.16.60-0.27/fs/ext3/balloc.c
 @@ -21,6 +21,7 @@
  #include <linux/quotaops.h>
  #include <linux/buffer_head.h>
