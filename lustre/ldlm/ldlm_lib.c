@@ -1787,6 +1787,17 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         master_obd = obd->obd_observer->obd_observer;
         qctxt = &master_obd->u.obt.obt_qctxt;
 
+        if (!qctxt->lqc_setup) {
+                /* quota_type has not been processed yet, return EAGAIN
+                 * until we know whether or not quotas are supposed to
+                 * be enabled */
+                CDEBUG(D_QUOTA, "quota_type not processed yet, return "
+                                "-EAGAIN\n");
+                req->rq_status = -EAGAIN;
+                rc = ptlrpc_reply(req);
+                GOTO(out, rc);
+        }
+
         LASSERT(qctxt->lqc_handler);
         rc = qctxt->lqc_handler(master_obd, qdata,
                                 lustre_msg_get_opc(req->rq_reqmsg));

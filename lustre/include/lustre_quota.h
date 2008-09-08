@@ -230,8 +230,12 @@ struct lustre_quota_ctxt {
         dqacq_handler_t lqc_handler;    /* dqacq/dqrel RPC handler, only for quota master */
         unsigned long lqc_flags;        /* quota flags */
         unsigned long lqc_recovery:1,   /* Doing recovery */
-                      lqc_switch_qs:1;  /* the function of change qunit size
+                      lqc_switch_qs:1,  /* the function of change qunit size
                                          * 0:Off, 1:On */
+                      lqc_setup:1;      /* tell whether of not quota_type has
+                                         * been processed, so that the master
+                                         * knows when it can start processing
+                                         * incoming acq/rel quota requests */
         unsigned long lqc_iunit_sz;     /* original unit size of file quota and
                                          * upper limitation for adjust file
                                          * qunit */
