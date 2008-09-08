@@ -611,6 +611,12 @@ Details    : ptlrpc_at_recv_early_reply() should not modify req->rq_repmsg
 	     because it can be accessed by reply_in_callback() without the
 	     rq_lock held.
 
+Severity   : normal
+Frequency  : only X2
+Bugzilla   : 16813
+Description: X2 build failures
+Details    : fix build failures on Cray X2.
+
 -------------------------------------------------------------------------------
 
 
