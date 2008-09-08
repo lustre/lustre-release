@@ -38,6 +38,10 @@ tbd Sun Microsystems, Inc.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
 
+Severity   : enhancement 
+Bugzilla   : 16845 
+Description: Allow OST glimpses to return PW locks
+
 Severity   : minor 
 Bugzilla   : 16717 
 Description: LBUG when llog conf file is full 
