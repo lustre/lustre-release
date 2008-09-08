@@ -590,7 +590,6 @@ static inline unsigned long dir_pages(struct inode *inode)
         return (inode->i_size + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
 }
 
-/* llite/namei.c */
 int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir);
 struct inode *ll_iget(struct super_block *sb, ino_t hash,
                       struct lustre_md *lic);
@@ -687,6 +686,11 @@ int ll_fiemap(struct inode *inode, struct ll_user_fiemap *fiemap,
               int num_bytes);
 
 /* llite/dcache.c */
+/* llite/namei.c */
+/**
+ * protect race ll_find_aliases vs ll_revalidate_it vs ll_unhash_aliases
+ */
+extern spinlock_t ll_lookup_lock;
 extern struct dentry_operations ll_init_d_ops;
 extern struct dentry_operations ll_d_ops;
 extern struct dentry_operations ll_fini_d_ops;

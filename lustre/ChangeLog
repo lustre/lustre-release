@@ -38,6 +38,7 @@ tbd Sun Microsystems, Inc.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
 
+
 Severity   : normal
 Bugzilla   : 16907
 Description: Prevent import from entering FULL state when server in recovery
@@ -151,6 +152,11 @@ Details    : Apply the MGS_CONNECT_SUPPORTED mask at reconnect time so
 	  For more information, please refer to bugzilla 13904.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
+
+Severity   : normal
+Bugzilla   : 15975
+Frequency  : only patchless client
+Description: add workaround for race between add/remove dentry from hash
 
 Severity   : normal
 Bugzilla   : 15139
