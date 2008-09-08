@@ -54,7 +54,9 @@
 #include <dirent.h>
 #include <time.h>
 #include <ctype.h>
+#ifdef HAVE_SYS_QUOTA_H
 #include <sys/quota.h>
+#endif
 
 #include <lnet/api-support.h>
 #include <lnet/lnetctl.h>
@@ -77,7 +79,7 @@ static int lfs_osts(int argc, char **argv);
 static int lfs_df(int argc, char **argv);
 static int lfs_check(int argc, char **argv);
 static int lfs_catinfo(int argc, char **argv);
-#ifdef HAVE_QUOTA_SUPPORT
+#ifdef HAVE_SYS_QUOTA_H
 static int lfs_quotachown(int argc, char **argv);
 static int lfs_quotacheck(int argc, char **argv);
 static int lfs_quotaon(int argc, char **argv);
@@ -138,7 +140,7 @@ command_t cmdlist[] = {
          "report filesystem disk space usage or inodes usage"
          "of each MDS/OSD.\n"
          "Usage: df [-i] [-h] [path]"},
-#ifdef HAVE_QUOTA_SUPPORT
+#ifdef HAVE_SYS_QUOTA_H
         {"quotachown",lfs_quotachown, 0,
          "Change files' owner or group on the specified filesystem.\n"
          "usage: quotachown [-i] <filesystem>\n"
@@ -333,9 +335,12 @@ static int set_time(time_t *time, time_t *set, char *str)
         return res;
 }
 
+#define USER 0
+#define GROUP 1
+
 static int name2id(unsigned int *id, char *name, int type)
 {
-        if (type == USRQUOTA) {
+        if (type == USER) {
                 struct passwd *entry;
 
                 if (!(entry = getpwnam(name))) {
@@ -362,7 +367,7 @@ static int name2id(unsigned int *id, char *name, int type)
 
 static int id2name(char **name, unsigned int id, int type)
 {
-        if (type == USRQUOTA) {
+        if (type == USER) {
                 struct passwd *entry;
 
                 if (!(entry = getpwuid(id))) {
@@ -510,7 +515,7 @@ static int lfs_find(int argc, char **argv)
                         new_fashion = 1;
                         param.gid = strtol(optarg, &endptr, 10);
                         if (optarg == endptr) {
-	                        ret = name2id(&param.gid, optarg, GRPQUOTA);
+	                        ret = name2id(&param.gid, optarg, GROUP);
         	                if (ret != 0) {
                                         fprintf(stderr, "Group/GID: %s cannot "
                                                 "be found.\n", optarg);
@@ -534,7 +539,7 @@ static int lfs_find(int argc, char **argv)
                         new_fashion = 1;
                         param.uid = strtol(optarg, &endptr, 10);
                         if (optarg == endptr) {
-	                        ret = name2id(&param.uid, optarg, USRQUOTA);
+	                        ret = name2id(&param.uid, optarg, USER);
         	                if (ret != 0) {
                                         fprintf(stderr, "User/UID: %s cannot "
                                                 "be found.\n", optarg);
@@ -1202,7 +1207,7 @@ out:
         return rc;
 }
 
-#ifdef HAVE_QUOTA_SUPPORT
+#ifdef HAVE_SYS_QUOTA_H
 static int lfs_quotachown(int argc, char **argv)
 {
 
@@ -1701,7 +1706,8 @@ int lfs_setquota(int argc, char **argv)
                                 " be available in future releases!\n");
 
                 qctl.qc_type = !strcmp(argv[1], "-u") ? USRQUOTA : GRPQUOTA;
-                rc = name2id(&qctl.qc_id, argv[2], qctl.qc_type);
+                rc = name2id(&qctl.qc_id, argv[2],
+                             (qctl.qc_type == USRQUOTA) ? USER : GROUP);
                 if (rc) {
                         fprintf(stderr, "error: unknown id %s\n", optarg);
                         return CMD_HELP;
@@ -1731,7 +1737,8 @@ int lfs_setquota(int argc, char **argv)
                                 return CMD_HELP;
                         }
                         qctl.qc_type = (c == 'u') ? USRQUOTA : GRPQUOTA;
-                        rc = name2id(&qctl.qc_id, optarg, qctl.qc_type);
+                        rc = name2id(&qctl.qc_id, optarg,
+                                     (qctl.qc_type == USRQUOTA) ? USER : GROUP);
                         if (rc) {
                                 fprintf(stderr, "error: unknown id %s\n",
                                         optarg);
@@ -2105,7 +2112,8 @@ ug_output:
                         qctl.qc_type = GRPQUOTA;
                         qctl.qc_id = getegid();
                 }
-                rc = id2name(&name, qctl.qc_id, qctl.qc_type);
+                rc = id2name(&name, qctl.qc_id,
+                             (qctl.qc_type == USRQUOTA) ? USER : GROUP);
                 if (rc)
                         name = "<unknown>";
         } else if (qctl.qc_cmd == LUSTRE_Q_GETQUOTA) {
@@ -2115,7 +2123,8 @@ ug_output:
                 }
 
                 name = argv[optind++];
-                rc = name2id(&qctl.qc_id, name, qctl.qc_type);
+                rc = name2id(&qctl.qc_id, name,
+                             (qctl.qc_type == USRQUOTA) ? USER : GROUP);
                 if (rc) {
                         fprintf(stderr,"error: can't find id for name %s: %s\n",
                                 name, strerror(errno));
@@ -2161,7 +2170,7 @@ out:
 
         return 0;
 }
-#endif /* HAVE_QUOTA_SUPPORT */
+#endif /* HAVE_SYS_QUOTA_H! */
 
 int main(int argc, char **argv)
 {

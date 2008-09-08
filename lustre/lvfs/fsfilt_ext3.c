@@ -1470,6 +1470,7 @@ static int fsfilt_ext3_get_op_len(int op, struct fsfilt_objinfo *fso, int logs)
         return 0;
 }
 
+#ifdef HAVE_QUOTA_SUPPORT
 #define DQINFO_COPY(out, in)                    \
 do {                                            \
         Q_COPY(out, in, dqi_bgrace);            \
@@ -2159,7 +2160,6 @@ out:
         RETURN(rc);
 }
 
-#ifdef HAVE_QUOTA_SUPPORT
 static int fsfilt_ext3_quotainfo(struct lustre_quota_info *lqi, int type, 
                                  int cmd)
 {
@@ -2274,13 +2274,13 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         .fs_setup               = fsfilt_ext3_setup,
         .fs_send_bio            = fsfilt_ext3_send_bio,
         .fs_get_op_len          = fsfilt_ext3_get_op_len,
-        .fs_quotactl            = fsfilt_ext3_quotactl,
-        .fs_quotacheck          = fsfilt_ext3_quotacheck,
 #ifdef HAVE_DISK_INODE_VERSION
         .fs_get_version         = fsfilt_ext3_get_version,
         .fs_set_version         = fsfilt_ext3_set_version,
 #endif
 #ifdef HAVE_QUOTA_SUPPORT
+        .fs_quotactl            = fsfilt_ext3_quotactl,
+        .fs_quotacheck          = fsfilt_ext3_quotacheck,
         .fs_quotainfo           = fsfilt_ext3_quotainfo,
         .fs_qids                = fsfilt_ext3_qids,
         .fs_dquot               = fsfilt_ext3_dquot,
