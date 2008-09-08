@@ -1073,6 +1073,7 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_CANCEL_DIRTY_PAGE],
 [AC_MSG_CHECKING([kernel has cancel_dirty_page])
 LB_LINUX_TRY_COMPILE([
+        #include <linux/mm.h>
         #include <linux/page-flags.h>
 ],[
         cancel_dirty_page(NULL, 0);
@@ -1095,6 +1096,7 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_PAGE_CONSTANT],
 [AC_MSG_CHECKING([if kernel have PageConstant defined])
 LB_LINUX_TRY_COMPILE([
+        #include <linux/mm.h>
         #include <linux/page-flags.h>
 ],[
         #ifndef PG_constant
@@ -1113,6 +1115,7 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_PG_FS_MISC],
 [AC_MSG_CHECKING([kernel has PG_fs_misc])
 LB_LINUX_TRY_COMPILE([
+        #include <linux/mm.h>
         #include <linux/page-flags.h>
 ],[
         #ifndef PG_fs_misc
@@ -1131,6 +1134,7 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_PAGE_CHECKED],
 [AC_MSG_CHECKING([kernel has PageChecked and SetPageChecked])
 LB_LINUX_TRY_COMPILE([
+        #include <linux/mm.h>
         #include <linux/page-flags.h>
 ],[
         #ifndef PageChecked
