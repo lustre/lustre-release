@@ -1673,11 +1673,6 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
         EXIT;
 }
 
-void ptlrpc_free_req(struct ptlrpc_request *request)
-{
-        __ptlrpc_free_req(request, 0);
-}
-
 static int __ptlrpc_req_finished(struct ptlrpc_request *request, int locked);
 void ptlrpc_req_finished_with_imp_lock(struct ptlrpc_request *request)
 {

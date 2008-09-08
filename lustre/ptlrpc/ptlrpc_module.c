@@ -176,7 +176,6 @@ EXPORT_SYMBOL(ptlrpc_request_free);
 EXPORT_SYMBOL(ptlrpc_request_pack);
 EXPORT_SYMBOL(ptlrpc_request_alloc_pack);
 EXPORT_SYMBOL(ptlrpc_prep_req);
-EXPORT_SYMBOL(ptlrpc_free_req);
 EXPORT_SYMBOL(ptlrpc_unregister_reply);
 EXPORT_SYMBOL(ptlrpc_req_finished);
 EXPORT_SYMBOL(ptlrpc_req_finished_with_imp_lock);
