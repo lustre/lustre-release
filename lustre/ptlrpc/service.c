@@ -394,6 +394,10 @@ static void ptlrpc_server_req_decref(struct ptlrpc_request *req)
         if (!atomic_dec_and_test(&req->rq_refcount))
                 return;
 
+        /* DEBUG_REQ() assumes the reply state of a request with a valid
+         * ref will not be destroyed until that reference is dropped. */
+        ptlrpc_req_drop_rs(req);
+
         LASSERT(list_empty(&req->rq_timed_list));
         if (req != &rqbd->rqbd_req) {
                 /* NB request buffers use an embedded
@@ -414,7 +418,6 @@ static void ptlrpc_server_req_decref(struct ptlrpc_request *req)
 static void __ptlrpc_server_free_request(struct ptlrpc_request *req)
 {
         list_del(&req->rq_list);
-        ptlrpc_req_drop_rs(req);
         ptlrpc_server_req_decref(req);
 }
 
