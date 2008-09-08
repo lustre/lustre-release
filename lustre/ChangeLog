@@ -1383,6 +1383,12 @@ Details    : It is be possible to send the lock handle along with each read
 	     itself so there isn't any reason the OST should have to re-do that
 	     search.
 
+Severity   : normal
+Frequency  : only X2
+Bugzilla   : 16813
+Description: X2 build failures
+Details    : fix build failures on Cray X2.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
