@@ -46,9 +46,9 @@ Severity   : enhancement
 Bugzilla   : 16845 
 Description: Allow OST glimpses to return PW locks
 
-Severity   : minor 
-Bugzilla   : 16717 
-Description: LBUG when llog conf file is full 
+Severity   : minor
+Bugzilla   : 16717
+Description: LBUG when llog conf file is full
 Details    : When llog bitmap is full, ENOSPC should be returned for plain
 	     log.
 
@@ -570,6 +570,14 @@ Description: Add a FIEMAP(FIle Extent MAP) ioctl for ldiskfs
 Details    : FIEMAP ioctl will allow an application to efficiently fetch the
 	     extent information of a file. It can be used to map logical blocks
 	     in a file to physical blocks in the block device.
+
+Severity   : normal
+Frequency  : only with adaptive timeout enabled
+Bugzilla   : 16972
+Description: DEBUG_REQ() bad paging request
+Details    : ptlrpc_at_recv_early_reply() should not modify req->rq_repmsg
+	     because it can be accessed by reply_in_callback() without the
+	     rq_lock held.
 
 -------------------------------------------------------------------------------
 
