@@ -12,6 +12,11 @@ tbd  Sun Microsystems, Inc.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
         removed cwd "./" (refer to Bugzilla 14399).
 
+Severity   : normal
+Bugzilla   : 15975
+Frequency  : only patchless client
+Description: add workaround for race between add/remove dentry from hash
+
 Severity   : enhancement 
 Bugzilla   : 16845 
 Description: Allow OST glimpses to return PW locks

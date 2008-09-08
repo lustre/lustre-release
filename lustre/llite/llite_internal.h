@@ -813,6 +813,11 @@ int ll_extent_lock_cancel_cb(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
                              void *data, int flag);
 
 /* llite/dcache.c */
+/* llite/namei.c */
+/**
+ * protect race ll_find_aliases vs ll_revalidate_it vs ll_unhash_aliases
+ */
+extern spinlock_t ll_lookup_lock;
 extern struct dentry_operations ll_init_d_ops;
 extern struct dentry_operations ll_d_ops;
 extern struct dentry_operations ll_fini_d_ops;

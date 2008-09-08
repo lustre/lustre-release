@@ -141,6 +141,7 @@ static void ll_drop_negative_dentry(struct inode *dir)
 { 
         struct dentry *dentry, *tmp_alias, *tmp_subdir;
 
+        spin_lock(&ll_lookup_lock);
         spin_lock(&dcache_lock);
 restart:
         list_for_each_entry_safe(dentry, tmp_alias,
@@ -161,6 +162,7 @@ restart:
                 }
         }
         spin_unlock(&dcache_lock);
+        spin_unlock(&ll_lookup_lock);
 }
 
 
@@ -335,6 +337,7 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
         struct dentry *dentry;
         struct dentry *last_discon = NULL;
  
+        spin_lock(&ll_lookup_lock);
         spin_lock(&dcache_lock);
         list_for_each(tmp, &inode->i_dentry) {
                 dentry = list_entry(tmp, struct dentry, d_alias);
@@ -373,6 +376,7 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                 unlock_dentry(dentry);
                 d_rehash_cond(dentry, 0); /* avoid taking dcache_lock inside */
                 spin_unlock(&dcache_lock);
+                spin_unlock(&ll_lookup_lock);
                 iput(inode);
                 CDEBUG(D_DENTRY, "alias dentry %.*s (%p) parent %p inode %p "
                        "refc %d\n", de->d_name.len, de->d_name.name, de,
@@ -386,6 +390,7 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                         atomic_read(&last_discon->d_count));
                 dget_locked(last_discon);
                 spin_unlock(&dcache_lock);
+                spin_unlock(&ll_lookup_lock);
                 d_rehash(de);
                 d_move(last_discon, de);
                 iput(inode);
@@ -395,6 +400,7 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
         ll_d_add(de, inode);
 
         spin_unlock(&dcache_lock);
+        spin_unlock(&ll_lookup_lock);
 
         return de;
 }
