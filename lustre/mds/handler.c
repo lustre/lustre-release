@@ -1402,6 +1402,7 @@ static int mds_set_info_rpc(struct obd_export *exp, struct ptlrpc_request *req)
         RETURN(0);
 }
 
+#ifdef HAVE_QUOTA_SUPPORT
 static int mds_handle_quotacheck(struct ptlrpc_request *req)
 {
         struct obd_quotactl *oqctl;
@@ -1442,6 +1443,7 @@ static int mds_handle_quotactl(struct ptlrpc_request *req)
         *repoqc = *oqctl;
         RETURN(0);
 }
+#endif
 
 static int mds_msg_check_version(struct lustre_msg *msg)
 {
@@ -1760,7 +1762,7 @@ int mds_handle(struct ptlrpc_request *req)
                 DEBUG_REQ(D_INODE, req, "set_info");
                 rc = mds_set_info_rpc(req->rq_export, req);
                 break;
-
+#ifdef HAVE_QUOTA_SUPPORT
         case MDS_QUOTACHECK:
                 DEBUG_REQ(D_INODE, req, "quotacheck");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_QUOTACHECK_NET, 0);
@@ -1772,7 +1774,7 @@ int mds_handle(struct ptlrpc_request *req)
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_QUOTACTL_NET, 0);
                 rc = mds_handle_quotactl(req);
                 break;
-
+#endif
         case OBD_PING:
                 DEBUG_REQ(D_INODE, req, "ping");
                 rc = target_handle_ping(req);
