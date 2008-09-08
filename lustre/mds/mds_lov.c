@@ -1069,6 +1069,9 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
                 /* call this only when config is processed and stale_export_age
                  * value is configured */
                 class_disconnect_expired_exports(obd);
+                /* quota_type has been processed, we can now handle
+                 * incoming quota requests */
+                obd->u.obt.obt_qctxt.lqc_setup = 1;
         default:
                 RETURN(0);
         }
