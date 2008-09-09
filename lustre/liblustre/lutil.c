@@ -228,6 +228,34 @@ int liblustre_init_current(char *comm)
         return 0;
 }
 
+void cfs_cap_raise(cfs_cap_t cap)
+{
+        current->cap_effective |= (1 << cap);
+}
+
+void cfs_cap_lower(cfs_cap_t cap)
+{
+        current->cap_effective &= ~(1 << cap);
+}
+
+int cfs_cap_raised(cfs_cap_t cap)
+{
+        return current->cap_effective & (1 << cap);
+}
+
+cfs_cap_t cfs_curproc_cap_pack(void) {
+        return cfs_current()->cap_effective;
+}
+
+void cfs_curproc_cap_unpack(cfs_cap_t cap) {
+        cfs_current()->cap_effective = cap;
+}
+
+int cfs_capable(cfs_cap_t cap)
+{
+        return cfs_cap_raised(cap);
+}
+
 int init_lib_portals()
 {
         int rc;

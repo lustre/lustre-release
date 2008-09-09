@@ -293,7 +293,7 @@ static int mdc_attr_set(const struct lu_env *env, struct md_object *mo,
         } else {
                 mci->mci_opdata.op_fsuid = la->la_uid;
                 mci->mci_opdata.op_fsgid = la->la_gid;
-                mci->mci_opdata.op_cap = current->cap_effective;
+                mci->mci_opdata.op_cap = cfs_curproc_cap_pack();
                 mci->mci_opdata.op_suppgids[0] =
                                 mci->mci_opdata.op_suppgids[1] = -1;
         }
@@ -319,7 +319,7 @@ static int mdc_object_create(const struct lu_env *env,
         int rc, symlen;
         uid_t uid;
         gid_t gid;
-        __u32 cap;
+        cfs_cap_t cap;
         ENTRY;
 
         LASSERT(S_ISDIR(la->la_mode));
@@ -415,7 +415,7 @@ static int mdc_ref_add(const struct lu_env *env, struct md_object *mo,
         } else {
                 mci->mci_opdata.op_fsuid = la->la_uid;
                 mci->mci_opdata.op_fsgid = la->la_gid;
-                mci->mci_opdata.op_cap = current->cap_effective;
+                mci->mci_opdata.op_cap = cfs_curproc_cap_pack();
                 mci->mci_opdata.op_suppgids[0] =
                                 mci->mci_opdata.op_suppgids[1] = -1;
         }
@@ -459,7 +459,7 @@ static int mdc_ref_del(const struct lu_env *env, struct md_object *mo,
         } else {
                 mci->mci_opdata.op_fsuid = la->la_uid;
                 mci->mci_opdata.op_fsgid = la->la_gid;
-                mci->mci_opdata.op_cap = current->cap_effective;
+                mci->mci_opdata.op_cap = cfs_curproc_cap_pack();
                 mci->mci_opdata.op_suppgids[0] = -1;
         }
 
@@ -535,7 +535,7 @@ static int mdc_rename_tgt(const struct lu_env *env, struct md_object *mo_p,
         } else {
                 mci->mci_opdata.op_fsuid = la->la_uid;
                 mci->mci_opdata.op_fsgid = la->la_gid;
-                mci->mci_opdata.op_cap = current->cap_effective;
+                mci->mci_opdata.op_cap = cfs_curproc_cap_pack();
                 mci->mci_opdata.op_suppgids[0] =
                                 mci->mci_opdata.op_suppgids[1] = -1;
         }

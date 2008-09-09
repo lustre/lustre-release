@@ -163,16 +163,25 @@ char  *cfs_curproc_comm(void)
 #endif
 }
 
-cfs_kernel_cap_t cfs_curproc_cap_get(void)
+void cfs_cap_raise(cfs_cap_t cap) {}
+void cfs_cap_lower(cfs_cap_t cap) {}
+
+int cfs_cap_raised(cfs_cap_t cap)
 {
+        return 1;
+}
+
+cfs_cap_t cfs_curproc_cap_pack(void) {
         return -1;
 }
 
-void cfs_curproc_cap_set(cfs_kernel_cap_t cap)
-{
-        return;
+void cfs_curproc_cap_unpack(cfs_cap_t cap) {
 }
 
+int cfs_capable(cfs_cap_t cap)
+{
+        return cap == CFS_CAP_SYS_BOOT ? is_suser(): is_suser1();
+}
 
 /*
  * Local variables:

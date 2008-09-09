@@ -137,7 +137,7 @@ libcfs_ioctl(cfs_file_t * file, unsigned int cmd, ulong_ptr arg)
 	/* Handle platform-dependent IOC requests */
 	switch (cmd) { 
 	case IOC_LIBCFS_PANIC: 
-		if (!capable (CAP_SYS_BOOT)) 
+		if (!cfs_capable(CFS_CAP_SYS_BOOT)) 
 			return (-EPERM); 
 		CERROR(("debugctl-invoked panic"));
         KeBugCheckEx('LUFS', (ULONG_PTR)libcfs_ioctl, (ULONG_PTR)NULL, (ULONG_PTR)NULL, (ULONG_PTR)NULL);
@@ -145,7 +145,7 @@ libcfs_ioctl(cfs_file_t * file, unsigned int cmd, ulong_ptr arg)
 		return (0);
 	case IOC_LIBCFS_MEMHOG:
 
-		if (!capable (CAP_SYS_ADMIN)) 
+		if (!cfs_capable(CFS_CAP_SYS_ADMIN)) 
 			return -EPERM;
         break;
 	}

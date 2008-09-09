@@ -326,7 +326,7 @@ struct mdd_object *mdd_object_find(const struct lu_env *env,
 #define mdd_cap_raised(c, flag) (mdd_cap_t(c) & MDD_CAP_TO_MASK(flag))
 
 /* capable() is copied from linux kernel! */
-static inline int mdd_capable(struct md_ucred *uc, int cap)
+static inline int mdd_capable(struct md_ucred *uc, cfs_cap_t cap)
 {
         if (mdd_cap_raised(uc->mu_cap, cap))
                 return 1;

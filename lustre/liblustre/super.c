@@ -92,12 +92,12 @@ static int ll_permission(struct inode *inode, int mask)
 
         if ((mask & (MAY_READ|MAY_WRITE)) ||
             (st->st_mode & S_IXUGO))
-                if (capable(CAP_DAC_OVERRIDE))
+                if (cfs_capable(CFS_CAP_DAC_OVERRIDE))
                         return 0;
 
         if (mask == MAY_READ ||
             (S_ISDIR(st->st_mode) && !(mask & MAY_WRITE))) {
-                if (capable(CAP_DAC_READ_SEARCH))
+                if (cfs_capable(CFS_CAP_DAC_READ_SEARCH))
                         return 0;
         }
 
@@ -635,7 +635,7 @@ static int inode_setattr(struct inode * inode, struct iattr * attr)
                 st->st_ctime = attr->ia_ctime;
         if (ia_valid & ATTR_MODE) {
                 st->st_mode = attr->ia_mode;
-                if (!in_group_p(st->st_gid) && !capable(CAP_FSETID))
+                if (!in_group_p(st->st_gid) && !cfs_capable(CFS_CAP_FSETID))
                         st->st_mode &= ~S_ISGID;
         }
         /* mark_inode_dirty(inode); */
@@ -821,7 +821,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                         } else {
                                 /* from inode_change_ok() */
                                 if (current->fsuid != st->st_uid &&
-                                    !capable(CAP_FOWNER))
+                                    !cfs_capable(CFS_CAP_FOWNER))
                                         RETURN(-EPERM);
                         }
                 }
@@ -979,10 +979,9 @@ static int llu_iop_symlink_raw(struct pnode *pno, const char *tgt)
         llu_prep_md_op_data(&op_data, dir, NULL, name, len, 0, 
                             LUSTRE_OPC_SYMLINK);
 
-        err = md_create(sbi->ll_md_exp, &op_data,
-                        tgt, strlen(tgt) + 1, S_IFLNK | S_IRWXUGO,
-                        current->fsuid, current->fsgid, current->cap_effective,
-                        0, &request);
+        err = md_create(sbi->ll_md_exp, &op_data, tgt, strlen(tgt) + 1,
+                        S_IFLNK | S_IRWXUGO, current->fsuid, current->fsgid,
+                        cfs_curproc_cap_pack(), 0, &request);
         ptlrpc_req_finished(request);
         liblustre_wait_event(0);
         RETURN(err);
@@ -1108,7 +1107,7 @@ static int llu_iop_mknod_raw(struct pnode *pno,
 
                 err = md_create(sbi->ll_md_exp, &op_data, NULL, 0, mode,
                                 current->fsuid, current->fsgid,
-                                current->cap_effective, dev, &request);
+                                cfs_curproc_cap_pack(), dev, &request);
                 ptlrpc_req_finished(request);
                 break;
         case S_IFDIR:
@@ -1343,7 +1342,7 @@ static int llu_iop_mkdir_raw(struct pnode *pno, mode_t mode)
 
         err = md_create(llu_i2sbi(dir)->ll_md_exp, &op_data, NULL, 0,
                         mode | S_IFDIR, current->fsuid, current->fsgid,
-                        current->cap_effective, 0, &request);
+                        cfs_curproc_cap_pack(), 0, &request);
         ptlrpc_req_finished(request);
         liblustre_wait_event(0);
         RETURN(err);

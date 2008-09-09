@@ -190,7 +190,7 @@ __entry_nesting(&__cdd);
 /*
  * XNU has no capabilities
  */
-typedef int cfs_kernel_cap_t;
+typedef __u32 cfs_kernel_cap_t;
 
 #ifdef __KERNEL__
 enum {

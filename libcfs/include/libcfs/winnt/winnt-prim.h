@@ -708,11 +708,6 @@ libcfs_arch_cleanup(void);
 #define lock_kernel()               do {} while(0)
 #define unlock_kernel()             do {} while(0)
 
-#define CAP_SYS_ADMIN                    0
-#define CAP_SYS_ROOT                     1
-
-#define capable(a)		                (TRUE)
-
 #define USERMODEHELPER(path, argv, envp)	(0)
 
 

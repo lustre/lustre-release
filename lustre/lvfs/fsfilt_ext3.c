@@ -523,7 +523,8 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
                 if (iattr->ia_valid & ATTR_MODE) {
                         inode->i_mode = iattr->ia_mode;
 
-                        if (!in_group_p(inode->i_gid) && !capable(CAP_FSETID))
+                        if (!in_group_p(inode->i_gid) &&
+                            !cfs_capable(CFS_CAP_FSETID))
                                 inode->i_mode &= ~S_ISGID;
                 }
 

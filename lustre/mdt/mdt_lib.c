@@ -243,7 +243,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 
         /* remove fs privilege for non-root user */
         if (ucred->mu_fsuid)
-                ucred->mu_cap = pud->pud_cap & ~CAP_FS_MASK;
+                ucred->mu_cap = pud->pud_cap & ~CFS_CAP_FS_MASK;
         else
                 ucred->mu_cap = pud->pud_cap;
         ucred->mu_valid = UCRED_NEW;
@@ -406,7 +406,7 @@ static int old_init_ucred(struct mdt_thread_info *info,
 
         /* remove fs privilege for non-root user */
         if (uc->mu_fsuid)
-                uc->mu_cap = body->capability & ~CAP_FS_MASK;
+                uc->mu_cap = body->capability & ~CFS_CAP_FS_MASK;
         else
                 uc->mu_cap = body->capability;
         uc->mu_valid = UCRED_OLD;
@@ -446,7 +446,7 @@ static int old_init_ucred_reint(struct mdt_thread_info *info)
 
         /* remove fs privilege for non-root user */
         if (uc->mu_fsuid)
-                uc->mu_cap &= ~CAP_FS_MASK;
+                uc->mu_cap &= ~CFS_CAP_FS_MASK;
         uc->mu_valid = UCRED_OLD;
 
         RETURN(0);

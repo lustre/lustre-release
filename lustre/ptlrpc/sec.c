@@ -2203,7 +2203,7 @@ int sptlrpc_pack_user_desc(struct lustre_msg *msg, int offset)
         pud->pud_gid = cfs_current()->gid;
         pud->pud_fsuid = cfs_current()->fsuid;
         pud->pud_fsgid = cfs_current()->fsgid;
-        pud->pud_cap = cfs_current()->cap_effective;
+        pud->pud_cap = cfs_curproc_cap_pack();
         pud->pud_ngroups = (msg->lm_buflens[offset] - sizeof(*pud)) / 4;
 
 #ifdef __KERNEL__

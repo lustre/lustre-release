@@ -259,12 +259,12 @@ int __mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
 check_capabilities:
         if (!(mask & MAY_EXEC) ||
             (la->la_mode & S_IXUGO) || S_ISDIR(la->la_mode))
-                if (mdd_capable(uc, CAP_DAC_OVERRIDE))
+                if (mdd_capable(uc, CFS_CAP_DAC_OVERRIDE))
                         RETURN(0);
 
         if ((mask == MAY_READ) ||
             (S_ISDIR(la->la_mode) && !(mask & MAY_WRITE)))
-                if (mdd_capable(uc, CAP_DAC_READ_SEARCH))
+                if (mdd_capable(uc, CFS_CAP_DAC_READ_SEARCH))
                         RETURN(0);
 
         RETURN(-EACCES);
@@ -365,7 +365,8 @@ int mdd_permission(const struct lu_env *env,
                                 RETURN(rc);
                 }
 
-                if (la->la_uid != uc->mu_fsuid && !mdd_capable(uc, CAP_FOWNER))
+                if (la->la_uid != uc->mu_fsuid &&
+                    !mdd_capable(uc, CFS_CAP_FOWNER))
                         rc = -EPERM;
         }
 

@@ -1513,7 +1513,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
         /* POSIX: check before ATTR_*TIME_SET set (from inode_change_ok) */
         if (ia_valid & (ATTR_MTIME_SET | ATTR_ATIME_SET)) {
-                if (current->fsuid != inode->i_uid && !capable(CAP_FOWNER))
+                if (current->fsuid != inode->i_uid &&
+                    !cfs_capable(CFS_CAP_FOWNER))
                         RETURN(-EPERM);
         }
 
@@ -2399,7 +2400,7 @@ struct md_op_data * ll_prep_md_op_data(struct md_op_data *op_data,
         op_data->op_mod_time = cfs_time_current_sec();
         op_data->op_fsuid = current->fsuid;
         op_data->op_fsgid = current->fsgid;
-        op_data->op_cap = current->cap_effective;
+        op_data->op_cap = cfs_curproc_cap_pack();
         op_data->op_bias = MDS_CHECK_SPLIT;
         op_data->op_opc = opc;
         op_data->op_mds = 0;

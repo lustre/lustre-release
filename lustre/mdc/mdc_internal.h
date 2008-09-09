@@ -64,7 +64,7 @@ void mdc_setattr_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
                      void *ea, int ealen, void *ea2, int ea2len);
 void mdc_create_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
                      const void *data, int datalen, __u32 mode, __u32 uid,
-                     __u32 gid, __u32 cap_effective, __u64 rdev);
+                     __u32 gid, cfs_cap_t capability, __u64 rdev);
 void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
                    __u32 mode, __u64 rdev, __u32 flags, const void *data,
                    int datalen);
@@ -144,7 +144,8 @@ void mdc_commit_delayed(struct ptlrpc_request *req);
 
 int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
                const void *data, int datalen, int mode, __u32 uid, __u32 gid,
-               __u32 cap_effective, __u64 rdev, struct ptlrpc_request **request);
+               cfs_cap_t capability, __u64 rdev,
+               struct ptlrpc_request **request);
 int mdc_link(struct obd_export *exp, struct md_op_data *op_data,
              struct ptlrpc_request **request);
 int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,

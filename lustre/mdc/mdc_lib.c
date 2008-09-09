@@ -59,7 +59,7 @@ static void __mdc_pack_body(struct mdt_body *b, __u32 suppgid)
         b->gid = current->gid;
         b->fsuid = current->fsuid;
         b->fsgid = current->fsgid;
-        b->capability = current->cap_effective;
+        b->capability = cfs_curproc_cap_pack();
 }
 
 void mdc_pack_capa(struct ptlrpc_request *req, const struct req_msg_field *field,
@@ -128,7 +128,7 @@ void mdc_readdir_pack(struct ptlrpc_request *req, __u64 pgoff,
 /* packing of MDS records */
 void mdc_create_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
                      const void *data, int datalen, __u32 mode,
-                     __u32 uid, __u32 gid, __u32 cap_effective, __u64 rdev)
+                     __u32 uid, __u32 gid, cfs_cap_t cap_effective, __u64 rdev)
 {
         struct mdt_rec_create *rec;
         char                  *tmp;
@@ -218,7 +218,7 @@ void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
         rec->cr_opcode   = REINT_OPEN;
         rec->cr_fsuid    = current->fsuid;
         rec->cr_fsgid    = current->fsgid;
-        rec->cr_cap      = current->cap_effective;
+        rec->cr_cap      = cfs_curproc_cap_pack();
         if (op_data != NULL) {
                 rec->cr_fid1 = op_data->op_fid1;
                 rec->cr_fid2 = op_data->op_fid2;
@@ -298,7 +298,7 @@ static void mdc_setattr_pack_rec(struct mdt_rec_setattr *rec,
         rec->sa_opcode  = REINT_SETATTR;
         rec->sa_fsuid   = current->fsuid;
         rec->sa_fsgid   = current->fsgid;
-        rec->sa_cap     = current->cap_effective;
+        rec->sa_cap     = cfs_curproc_cap_pack();
         rec->sa_suppgid = -1;
 
         rec->sa_fid    = op_data->op_fid1;
@@ -452,7 +452,7 @@ void mdc_getattr_pack(struct ptlrpc_request *req, __u64 valid, int flags,
 
         b->fsuid = current->fsuid;
         b->fsgid = current->fsgid;
-        b->capability = current->cap_effective;
+        b->capability = cfs_curproc_cap_pack();
         b->valid = valid;
         if (op_data->op_bias & MDS_CHECK_SPLIT)
                 b->valid |= OBD_MD_FLCKSPLIT;

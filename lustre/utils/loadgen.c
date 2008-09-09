@@ -667,7 +667,7 @@ static void *run_one_child(void *threadvp)
 {
         struct kid_t *kid;
         char oname[10], ename[10];
-        int thread = (long)threadvp, dev;
+        int thread = (long)threadvp, dev = 0;
         int rc = 0, err;
 
         if (o_verbose > 2)

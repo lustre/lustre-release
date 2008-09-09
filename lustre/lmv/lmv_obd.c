@@ -1378,7 +1378,7 @@ cleanup:
 
 int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
                const void *data, int datalen, int mode, __u32 uid,
-               __u32 gid, __u32 cap_effective,  __u64 rdev,
+               __u32 gid, cfs_cap_t cap_effective, __u64 rdev,
                struct ptlrpc_request **request)
 {
         struct obd_device *obd = exp->exp_obd;
@@ -1897,7 +1897,7 @@ repeat:
 
         op_data->op_fsuid = current->fsuid;
         op_data->op_fsgid = current->fsgid;
-        op_data->op_cap   = current->cap_effective;
+        op_data->op_cap = cfs_curproc_cap_pack();
 
         tgt_exp = lmv->tgts[mds].ltd_exp;
         if (op_data->op_namelen) {
@@ -2021,7 +2021,7 @@ repeat:
 request:
         op_data->op_fsuid = current->fsuid;
         op_data->op_fsgid = current->fsgid;
-        op_data->op_cap   = current->cap_effective;
+        op_data->op_cap = cfs_curproc_cap_pack();
 
         src_exp = lmv_get_export(lmv, mds1);
         tgt_exp = lmv_get_export(lmv, mds2);
@@ -2468,7 +2468,7 @@ repeat:
 
         op_data->op_fsuid = current->fsuid;
         op_data->op_fsgid = current->fsgid;
-        op_data->op_cap   = current->cap_effective;
+        op_data->op_cap = cfs_curproc_cap_pack();
 
         /* If child's fid is given, cancel unused locks for it if it is from
          * another export than parent. */

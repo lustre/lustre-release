@@ -120,14 +120,48 @@ char  *cfs_curproc_comm(void)
         return current->comm;
 }
 
-cfs_kernel_cap_t cfs_curproc_cap_get(void)
+/* Currently all the CFS_CAP_* defines match CAP_* ones. */
+#define cfs_cap_pack(cap) (cap)
+#define cfs_cap_unpack(cap) (cap)
+
+void cfs_cap_raise(cfs_cap_t cap)
 {
-        return current->cap_effective;
+        cap_raise(cfs_current()->cap_effective, cfs_cap_unpack(cap));
 }
 
-void cfs_curproc_cap_set(cfs_kernel_cap_t cap)
+void cfs_cap_lower(cfs_cap_t cap)
 {
-        current->cap_effective = cap;
+        cap_lower(cfs_current()->cap_effective, cfs_cap_unpack(cap));
+}
+
+int cfs_cap_raised(cfs_cap_t cap)
+{
+        return cap_raised(cfs_current()->cap_effective, cfs_cap_unpack(cap));
+}
+
+cfs_cap_t cfs_curproc_cap_pack(void) {
+#if _LINUX_CAPABILITY_VERSION == 0x19980330
+        return cfs_cap_pack(current->cap_effective);
+#elif _LINUX_CAPABILITY_VERSION == 0x20071026
+        return cfs_cap_pack(current->cap_effective[0]);
+#else
+        #error "need correct _LINUX_CAPABILITY_VERSION "
+#endif
+}
+
+void cfs_curproc_cap_unpack(cfs_cap_t cap) {
+#if _LINUX_CAPABILITY_VERSION == 0x19980330
+        current->cap_effective = cfs_cap_unpack(cap);
+#elif _LINUX_CAPABILITY_VERSION == 0x20071026
+        current->cap_effective[0] = cfs_cap_unpack(cap);
+#else
+        #error "need correct _LINUX_CAPABILITY_VERSION "
+#endif
+}
+
+int cfs_capable(cfs_cap_t cap)
+{
+        return capable(cfs_cap_unpack(cap));
 }
 
 EXPORT_SYMBOL(cfs_curproc_uid);
@@ -140,8 +174,12 @@ EXPORT_SYMBOL(cfs_curproc_comm);
 EXPORT_SYMBOL(cfs_curproc_groups_nr);
 EXPORT_SYMBOL(cfs_curproc_groups_dump);
 EXPORT_SYMBOL(cfs_curproc_is_in_groups);
-EXPORT_SYMBOL(cfs_curproc_cap_get);
-EXPORT_SYMBOL(cfs_curproc_cap_set);
+EXPORT_SYMBOL(cfs_cap_raise);
+EXPORT_SYMBOL(cfs_cap_lower);
+EXPORT_SYMBOL(cfs_cap_raised);
+EXPORT_SYMBOL(cfs_curproc_cap_pack);
+EXPORT_SYMBOL(cfs_curproc_cap_unpack);
+EXPORT_SYMBOL(cfs_capable);
 
 /*
  * Local variables:

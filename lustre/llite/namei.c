@@ -847,7 +847,7 @@ static int ll_new_node(struct inode *dir, struct qstr *name,
 
         err = md_create(sbi->ll_md_exp, op_data, tgt, tgt_len, mode,
                         current->fsuid, current->fsgid,
-                        current->cap_effective, rdev, &request);
+                        cfs_curproc_cap_pack(), rdev, &request);
         ll_finish_md_op_data(op_data);
         if (err)
                 GOTO(err_exit, err);

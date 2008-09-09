@@ -1094,7 +1094,7 @@ struct md_op_data {
         __u32                   op_suppgids[2];
         __u32                   op_fsuid;
         __u32                   op_fsgid;
-        __u32                   op_cap;
+        cfs_cap_t               op_cap;
         void                   *op_data;
 
         /* iattr fields and blocks. */
@@ -1400,7 +1400,7 @@ struct md_ops {
         int (*m_close)(struct obd_export *, struct md_op_data *,
                        struct md_open_data *, struct ptlrpc_request **);
         int (*m_create)(struct obd_export *, struct md_op_data *,
-                        const void *, int, int, __u32, __u32, __u32,
+                        const void *, int, int, __u32, __u32, cfs_cap_t,
                         __u64, struct ptlrpc_request **);
         int (*m_done_writing)(struct obd_export *, struct md_op_data  *,
                               struct md_open_data *);
