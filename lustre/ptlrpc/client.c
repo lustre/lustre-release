@@ -221,8 +221,7 @@ void ptlrpc_at_set_req_timeout(struct ptlrpc_request *req)
         idx = import_at_get_index(req->rq_import,
                                   req->rq_request_portal);
         serv_est = at_get(&at->iat_service_estimate[idx]);
-        /* add an arbitrary minimum: 125% +5 sec */
-        req->rq_timeout = serv_est + (serv_est >> 2) + 5;
+        req->rq_timeout = at_est2timeout(serv_est);
         /* We could get even fancier here, using history to predict increased
            loading... */
 
@@ -238,6 +237,10 @@ static void ptlrpc_at_adj_service(struct ptlrpc_request *req,
         int idx;
         unsigned int oldse;
         struct imp_at *at;
+
+        /* do estimate only if is not in recovery */
+        if (!(req->rq_send_state & (LUSTRE_IMP_FULL | LUSTRE_IMP_CONNECTING)))
+                return;
 
         LASSERT(req->rq_import);
         at = &req->rq_import->imp_at;
