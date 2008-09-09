@@ -1196,7 +1196,7 @@ void target_stop_recovery(void *data, int abort)
                               "(%d clients did)\n", obd->obd_name,
                               obd->obd_recoverable_clients,
                               obd->obd_connected_clients);
-        class_disconnect_stale_exports(obd);
+                class_disconnect_stale_exports(obd);
         }
         abort_recovery_queue(obd);
         target_finish_recovery(obd);
@@ -1321,12 +1321,18 @@ target_start_and_reset_recovery_timer(struct obd_device *obd,
                                       struct ptlrpc_request *req,
                                       int new_client)
 {
+        int req_timeout = lustre_msg_get_timeout(req->rq_reqmsg);
+
         /* teach server about old server's estimates */
         if (!new_client)
                 at_add(&req->rq_rqbd->rqbd_service->srv_at_estimate,
-                       lustre_msg_get_timeout(req->rq_reqmsg));
+                       at_timeout2est(req_timeout));
 
         check_and_start_recovery_timer(obd, handler);
+
+        req_timeout *= OBD_RECOVERY_FACTOR;
+        if (req_timeout > obd->obd_recovery_timeout && !new_client)
+                reset_recovery_timer(obd, req_timeout, 0);
 }
 
 static int check_for_next_transno(struct obd_device *obd)
@@ -1647,7 +1653,7 @@ int target_queue_last_replay_reply(struct ptlrpc_request *req, int rc)
 
 
                 if (!delayed_done)
-                target_finish_recovery(obd);
+                        target_finish_recovery(obd);
                 CDEBUG(D_HA, "%s: recovery complete\n",
                        obd_uuid2str(&obd->obd_uuid));
         } else {
