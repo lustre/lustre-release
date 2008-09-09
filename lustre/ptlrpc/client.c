@@ -221,8 +221,7 @@ void ptlrpc_at_set_req_timeout(struct ptlrpc_request *req)
         idx = import_at_get_index(req->rq_import,
                                   req->rq_request_portal);
         serv_est = at_get(&at->iat_service_estimate[idx]);
-        /* add an arbitrary minimum: 125% +5 sec */
-        req->rq_timeout = serv_est + (serv_est >> 2) + 5;
+        req->rq_timeout = at_est2timeout(serv_est);
         /* We could get even fancier here, using history to predict increased
            loading... */
 
