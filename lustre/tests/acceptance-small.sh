@@ -47,11 +47,11 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 
-export SANITY_GSS="no"
 if $GSS; then
-    export SANITY_GSS="yes"
     # liblustre doesn't support GSS
     export LIBLUSTRE=no
+else
+    export SANITY_GSS="no"
 fi
 
 SETUP=${SETUP:-setupall}
