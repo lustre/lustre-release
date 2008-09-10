@@ -239,6 +239,17 @@ struct file_operations lprocfs_evict_client_fops = {
 };
 EXPORT_SYMBOL(lprocfs_evict_client_fops);
 
+/**
+ * Add /proc entrys.
+ *
+ * \param root [in]  The parent proc entry on which new entry will be added.
+ * \param list [in]  Array of proc entries to be added.
+ * \param data [in]  The argument to be passed when entries read/write routines
+ *                   are called through /proc file.
+ *
+ * \retval 0   on success
+ *         < 0 on error
+ */
 int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
                      void *data)
 {
@@ -278,10 +289,14 @@ int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
                                             proc_mkdir(cur, cur_root));
                         } else if (proc == NULL) {
                                 mode_t mode = 0;
-                                if (list->read_fptr)
-                                        mode = 0444;
-                                if (list->write_fptr)
-                                        mode |= 0200;
+                                if (list->proc_mode != 0000) {
+                                        mode = list->proc_mode;
+                                } else {
+                                        if (list->read_fptr)
+                                                mode = 0444;
+                                        if (list->write_fptr)
+                                                mode |= 0200;
+                                }
                                 proc = create_proc_entry(cur, mode, cur_root);
                         }
                 }
