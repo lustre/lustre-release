@@ -37,13 +37,20 @@ tbd Sun Microsystems, Inc.
 	  For more information, please refer to bugzilla 13904.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
+
+Severity   : major
+Bugzilla   : 16561
+Description: Hitting mdc_commit_close() ASSERTION
+Details    : Properly handle request reference release in
+             ll_release_openhandle().
+
 Severity   : normal
 Bugzilla   : 15975
 Frequency  : only patchless client
 Description: add workaround for race between add/remove dentry from hash
 
-Severity   : enhancement 
-Bugzilla   : 16845 
+Severity   : enhancement
+Bugzilla   : 16845
 Description: Allow OST glimpses to return PW locks
 
 Severity   : minor
