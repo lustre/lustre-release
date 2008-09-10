@@ -388,7 +388,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
                      it_open_error(DISP_OPEN_OPEN, itp))
                         GOTO(out, rc);
                 ll_release_openhandle(file->f_dentry, itp);
-                GOTO(out_stale, rc);
+                GOTO(out, rc);
         }
 
         if (rc != 0 || it_open_error(DISP_OPEN_OPEN, itp)) {
@@ -405,8 +405,6 @@ static int ll_intent_file_open(struct file *file, void *lmm,
         rc = ll_prep_inode(&file->f_dentry->d_inode, req, NULL);
 out:
         ptlrpc_req_finished(itp->d.lustre.it_data);
-
-out_stale:
         it_clear_disposition(itp, DISP_ENQ_COMPLETE);
         ll_intent_drop_lock(itp);
 
@@ -2357,6 +2355,8 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
                 ldlm_lock_decref(&lockh, oit.d.lustre.it_lock_mode);
                 oit.d.lustre.it_lock_mode = 0;
         }
+        ptlrpc_req_finished((struct ptlrpc_request *) oit.d.lustre.it_data);
+        it_clear_disposition(&oit, DISP_ENQ_COMPLETE);
         ll_release_openhandle(head_filp->f_dentry, &oit);
 out:
         ll_intent_release(&oit);
@@ -2495,7 +2495,8 @@ int ll_release_openhandle(struct dentry *dentry, struct lookup_intent *it)
                                        inode, och);
  out:
         /* this one is in place of ll_file_open */
-        ptlrpc_req_finished(it->d.lustre.it_data);
+        if (it_disposition(it, DISP_ENQ_OPEN_REF))
+                ptlrpc_req_finished(it->d.lustre.it_data);
         it_clear_disposition(it, DISP_ENQ_OPEN_REF);
         RETURN(rc);
 }
