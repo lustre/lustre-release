@@ -700,15 +700,22 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
                 RETURN(-ENOSYS);
         }
 
-        if (extra_time) {
-                /* Fake our processing time into the future to ask the
-                   clients for some extra amount of time */
-                extra_time += cfs_time_current_sec() -
-                        req->rq_arrival_time.tv_sec;
-                at_add(&svc->srv_at_estimate, extra_time);
+        if (req->rq_export->exp_in_recovery) {
+                /* don't increase server estimates during recovery, and give
+                   clients the full recovery time. */
+                newdl = cfs_time_current_sec() +
+                        req->rq_export->exp_obd->obd_recovery_timeout;
+        } else {
+                if (extra_time) {
+                        /* Fake our processing time into the future to ask the
+                           clients for some extra amount of time */
+                        extra_time += cfs_time_current_sec() -
+                                      req->rq_arrival_time.tv_sec;
+                        at_add(&svc->srv_at_estimate, extra_time);
+                }
+                newdl = req->rq_arrival_time.tv_sec +
+                        at_get(&svc->srv_at_estimate);
         }
-
-        newdl = req->rq_arrival_time.tv_sec + at_get(&svc->srv_at_estimate);
         if (req->rq_deadline >= newdl) {
                 /* We're not adding any time, no need to send an early reply
                    (e.g. maybe at adaptive_max) */
