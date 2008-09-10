@@ -33,7 +33,6 @@ CREATETEST=${CREATETEST:-createtest}
 LFS=${LFS:-lfs}
 SETSTRIPE=${SETSTRIPE:-"$LFS setstripe"}
 GETSTRIPE=${GETSTRIPE:-"$LFS getstripe"}
-LSTRIPE=${LSTRIPE:-"$LFS setstripe"}
 LFIND=${LFIND:-"$LFS find"}
 LVERIFY=${LVERIFY:-ll_dirstripe_verify}
 LSTRIPEINFO=${LSTRIPEINFO:-ll_getstripe_info}
@@ -1011,7 +1010,7 @@ run_test 27r "stripe file with some full OSTs (shouldn't LBUG) ="
 
 test_27s() { # bug 10725
 	mkdir -p $DIR/$tdir
-	$LSTRIPE $DIR/$tdir $((2048 * 1024 * 1024)) -1 2 && \
+	$SETSTRIPE $DIR/$tdir $((2048 * 1024 * 1024)) -1 2 && \
 		error "stripe width >= 2^32 succeeded" || true
 }
 run_test 27s "lsm_xfersize overflow (should error) (bug 10725)"
@@ -1075,14 +1074,14 @@ run_test 27v "skip object creation on slow OST ================="
 
 test_27w() { # bug 10997
         mkdir -p $DIR/d27w || error "mkdir failed"
-        $LSTRIPE $DIR/d27w/f0 -s 65536 || error "lstripe failed"
+        $SETSTRIPE $DIR/d27w/f0 -s 65536 || error "lstripe failed"
         size=`$LSTRIPEINFO $DIR/d27w/f0 | awk {'print $1'}`
         [ $size -ne 65536 ] && error "stripe size $size != 65536" || true
 
         [ "$OSTCOUNT" -lt "2" ] && skip "skipping multiple stripe count/offset test" && return
         for i in `seq 1 $OSTCOUNT`; do
                 offset=$(($i-1))
-                $LSTRIPE $DIR/d27w/f$i -c $i -i $offset || error "lstripe -c $i -i $offset failed"
+                $SETSTRIPE $DIR/d27w/f$i -c $i -i $offset || error "lstripe -c $i -i $offset failed"
                 count=`$LSTRIPEINFO $DIR/d27w/f$i | awk {'print $2'}`
                 index=`$LSTRIPEINFO $DIR/d27w/f$i | awk {'print $3'}`
                 [ $count -ne $i ] && error "stripe count $count != $i" || true
@@ -2421,7 +2420,7 @@ setup_56_special() {
 }
 
 test_56g() {
-        $LSTRIPE -d $DIR
+        $SETSTRIPE -d $DIR
 
         setup_56 $NUMFILES $NUMDIRS
 
@@ -2437,7 +2436,7 @@ test_56g() {
 run_test 56g "check lfs find -name ============================="
 
 test_56h() {
-        $LSTRIPE -d $DIR
+        $SETSTRIPE -d $DIR
 
         setup_56 $NUMFILES $NUMDIRS
 
@@ -4329,7 +4328,7 @@ reset_async() {
 	FILE=$DIR/reset_async
 
 	# Ensure all OSCs are cleared
-	$LSTRIPE $FILE 0 -1 -1
+	$SETSTRIPE $FILE 0 -1 -1
         dd if=/dev/zero of=$FILE bs=64k count=$OSTCOUNT
 	sync
         rm $FILE
@@ -5152,7 +5151,7 @@ test_126() { # bug 12829/13455
 run_test 126 "check that the fsgid provided by the client is taken into account"
 
 test_127() { # bug 15521
-        $LSTRIPE -i 0 -c 1 $DIR/$tfile
+        $SETSTRIPE -i 0 -c 1 $DIR/$tfile
         $LCTL set_param osc.*.stats=0
         FSIZE=$((2048 * 1024))
         dd if=/dev/zero of=$DIR/$tfile bs=$FSIZE count=1
