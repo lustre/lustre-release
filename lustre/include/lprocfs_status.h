@@ -64,6 +64,10 @@ struct lprocfs_vars {
         cfs_write_proc_t *write_fptr;
         void *data;
         struct file_operations *fops;
+        /**
+         * /proc file mode.
+         */
+        mode_t proc_mode;
 };
 
 struct lprocfs_static_vars {
