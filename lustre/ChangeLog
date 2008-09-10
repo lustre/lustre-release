@@ -38,6 +38,12 @@ tbd Sun Microsystems, Inc.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
 
+Severity   : enhancement
+Bugzilla   : 16643
+Description: Generic /proc file permissions
+Details    : Set /Proc file permissions in a more generic way to enable non-
+             root users operate on some /proc files.
+
 Severity   : major
 Bugzilla   : 16561
 Description: Hitting mdc_commit_close() ASSERTION
