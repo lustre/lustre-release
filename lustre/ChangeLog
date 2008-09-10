@@ -598,6 +598,12 @@ Bugzilla   : 16813
 Description: X2 build failures
 Details    : fix build failures on Cray X2.
 
+Severity   : normal
+Bugzilla   : 2066
+Description: xid & resent requests
+Details    : Initialize RPC XID from clock at startup (randomly if clock is
+	     bad).
+
 -------------------------------------------------------------------------------
 
 
