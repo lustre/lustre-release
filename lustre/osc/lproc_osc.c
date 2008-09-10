@@ -61,7 +61,7 @@ static int osc_wr_active(struct file *file, const char *buffer,
 {
         struct obd_device *dev = data;
         int val, rc;
-        
+
         rc = lprocfs_write_helper(buffer, count, &val);
         if (rc)
                 return rc;
@@ -70,11 +70,11 @@ static int osc_wr_active(struct file *file, const char *buffer,
 
         LPROCFS_CLIMP_CHECK(dev);
         /* opposite senses */
-        if (dev->u.cli.cl_import->imp_deactive == val) 
+        if (dev->u.cli.cl_import->imp_deactive == val)
                 rc = ptlrpc_set_import_active(dev->u.cli.cl_import, val);
         else
                 CDEBUG(D_CONFIG, "activate %d: ignoring repeat request\n", val);
-        
+
         LPROCFS_CLIMP_EXIT(dev);
         return count;
 }
@@ -112,7 +112,7 @@ static int osc_wr_max_pages_per_rpc(struct file *file, const char *buffer,
         client_obd_list_lock(&cli->cl_loi_list_lock);
         cli->cl_max_pages_per_rpc = val;
         client_obd_list_unlock(&cli->cl_loi_list_lock);
-        
+
         LPROCFS_CLIMP_EXIT(dev);
         return count;
 }
@@ -152,7 +152,7 @@ static int osc_wr_max_rpcs_in_flight(struct file *file, const char *buffer,
         client_obd_list_lock(&cli->cl_loi_list_lock);
         cli->cl_max_rpcs_in_flight = val;
         client_obd_list_unlock(&cli->cl_loi_list_lock);
-        
+
         LPROCFS_CLIMP_EXIT(dev);
         return count;
 }
@@ -458,7 +458,7 @@ static int osc_rd_resend_count(char *page, char **start, off_t off, int count,
 {
         struct obd_device *obd = data;
 
-        return snprintf(page, count, "%u\n", atomic_read(&obd->u.cli.cl_resends)); 
+        return snprintf(page, count, "%u\n", atomic_read(&obd->u.cli.cl_resends));
 }
 
 static int osc_wr_resend_count(struct file *file, const char *buffer,
@@ -481,7 +481,7 @@ static int osc_wr_resend_count(struct file *file, const char *buffer,
 
 static struct lprocfs_vars lprocfs_osc_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
-        { "ping",            0, lprocfs_wr_ping,        0 },
+        { "ping",            0, lprocfs_wr_ping,     0, 0, 0222 },
         { "connect_flags",   lprocfs_rd_connect_flags, 0, 0 },
         { "blocksize",       lprocfs_rd_blksize,     0, 0 },
         { "kbytestotal",     lprocfs_rd_kbytestotal, 0, 0 },
@@ -492,7 +492,7 @@ static struct lprocfs_vars lprocfs_osc_obd_vars[] = {
         //{ "filegroups",      lprocfs_rd_filegroups,  0, 0 },
         { "ost_server_uuid", lprocfs_rd_server_uuid, 0, 0 },
         { "ost_conn_uuid",   lprocfs_rd_conn_uuid, 0, 0 },
-        { "active",          osc_rd_active, 
+        { "active",          osc_rd_active,
                              osc_wr_active, 0 },
         { "max_pages_per_rpc", osc_rd_max_pages_per_rpc,
                                osc_wr_max_pages_per_rpc, 0 },
@@ -605,7 +605,7 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
                 write_cum += w;
                 seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
                            (i == 0) ? 0 : 1 << (i - 1),
-                           r, pct(r, read_tot), pct(read_cum, read_tot), 
+                           r, pct(r, read_tot), pct(read_cum, read_tot),
                            w, pct(w, write_tot), pct(write_cum, write_tot));
                 if (read_cum == read_tot && write_cum == write_tot)
                         break;

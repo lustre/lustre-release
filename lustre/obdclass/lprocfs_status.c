@@ -117,7 +117,7 @@ int lprocfs_add_simple(struct proc_dir_entry *root, char *name,
 {
         struct proc_dir_entry *proc;
         mode_t mode = 0;
-        
+
         if (root == NULL || name == NULL)
                 return -EINVAL;
         if (read_proc)
@@ -167,7 +167,7 @@ static ssize_t lprocfs_fops_read(struct file *f, char __user *buf,
         LPROCFS_ENTRY();
         OBD_FAIL_TIMEOUT(OBD_FAIL_LPROC_REMOVE, 10);
         if (!dp->deleted && dp->read_proc)
-                rc = dp->read_proc(page, &start, *ppos, CFS_PAGE_SIZE, 
+                rc = dp->read_proc(page, &start, *ppos, CFS_PAGE_SIZE,
                         &eof, dp->data);
         LPROCFS_EXIT();
         if (rc <= 0)
@@ -247,6 +247,17 @@ struct file_operations lprocfs_evict_client_fops = {
 };
 EXPORT_SYMBOL(lprocfs_evict_client_fops);
 
+/**
+ * Add /proc entrys.
+ *
+ * \param root [in]  The parent proc entry on which new entry will be added.
+ * \param list [in]  Array of proc entries to be added.
+ * \param data [in]  The argument to be passed when entries read/write routines
+ *                   are called through /proc file.
+ *
+ * \retval 0   on success
+ *         < 0 on error
+ */
 int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
                      void *data)
 {
@@ -286,10 +297,14 @@ int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
                                             proc_mkdir(cur, cur_root));
                         } else if (proc == NULL) {
                                 mode_t mode = 0;
-                                if (list->read_fptr)
-                                        mode = 0444;
-                                if (list->write_fptr)
-                                        mode |= 0200;
+                                if (list->proc_mode != 0000) {
+                                        mode = list->proc_mode;
+                                } else {
+                                        if (list->read_fptr)
+                                                mode = 0444;
+                                        if (list->write_fptr)
+                                                mode |= 0200;
+                                }
                                 proc = create_proc_entry(cur, mode, cur_root);
                         }
                 }
@@ -343,7 +358,7 @@ void lprocfs_remove(struct proc_dir_entry **rooth)
                          "0x%p  %s/%s len %d\n", rm_entry, temp->name,
                          rm_entry->name, (int)strlen(rm_entry->name));
 
-                /* Now, the rm_entry->deleted flags is protected 
+                /* Now, the rm_entry->deleted flags is protected
                  * by _lprocfs_lock. */
                 rm_entry->data = NULL;
                 remove_proc_entry(rm_entry->name, temp);
@@ -433,14 +448,14 @@ int lprocfs_wr_atomic(struct file *file, const char *buffer,
         atomic_t *atm = data;
         int val = 0;
         int rc;
-        
+
         rc = lprocfs_write_helper(buffer, count, &val);
         if (rc < 0)
                 return rc;
 
         if (val <= 0)
                 return -ERANGE;
-                
+
         atomic_set(atm, val);
         return count;
 }
@@ -783,7 +798,7 @@ int lprocfs_obd_setup(struct obd_device *obd, struct lprocfs_vars *list)
 
 int lprocfs_obd_cleanup(struct obd_device *obd)
 {
-        if (!obd) 
+        if (!obd)
                 return -EINVAL;
         if (obd->obd_proc_exports_entry) {
                 /* Should be no exports left */
@@ -1234,7 +1249,7 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
 
 void lprocfs_free_obd_stats(struct obd_device *obd)
 {
-        if (obd->obd_stats) 
+        if (obd->obd_stats)
                 lprocfs_free_stats(&obd->obd_stats);
 }
 
@@ -1592,7 +1607,7 @@ int lprocfs_read_frac_helper(char *buffer, unsigned long count, long val, int mu
                         2. #echo x.0x > /proc/xxx       output result : x.0x
                         3. #echo x.x0 > /proc/xxx       output result : x.x
                         4. #echo x.xx > /proc/xxx       output result : x.xx
-                        Only reserved 2bits fraction.       
+                        Only reserved 2bits fraction.
                  */
                 for (i = 0; i < (5 - prtn); i++)
                         temp_mult *= 10;
@@ -1671,7 +1686,7 @@ int lprocfs_write_frac_u64_helper(const char *buffer, unsigned long count,
                 units <<= 10;
         }
         /* Specified units override the multiplier */
-        if (units) 
+        if (units)
                 mult = mult < 0 ? -units : units;
 
         frac *= mult;
@@ -1680,7 +1695,7 @@ int lprocfs_write_frac_u64_helper(const char *buffer, unsigned long count,
         return 0;
 }
 
-int lprocfs_seq_create(cfs_proc_dir_entry_t *parent, 
+int lprocfs_seq_create(cfs_proc_dir_entry_t *parent,
                        char *name, mode_t mode,
                        struct file_operations *seq_fops, void *data)
 {
@@ -1702,7 +1717,7 @@ __inline__ int lprocfs_obd_seq_create(struct obd_device *dev, char *name,
                                       struct file_operations *seq_fops,
                                       void *data)
 {
-        return (lprocfs_seq_create(dev->obd_proc_entry, name, 
+        return (lprocfs_seq_create(dev->obd_proc_entry, name,
                                    mode, seq_fops, data));
 }
 EXPORT_SYMBOL(lprocfs_obd_seq_create);
@@ -1856,7 +1871,7 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
                                  obd->obd_requests_queued_for_recovery) <= 0)
                 goto out;
 
-        if (lprocfs_obd_snprintf(&page, size, &len, "next_transno: "LPD64"\n", 
+        if (lprocfs_obd_snprintf(&page, size, &len, "next_transno: "LPD64"\n",
                                  obd->obd_next_recovery_transno) <= 0)
                 goto out;
 
@@ -1873,7 +1888,7 @@ int lprocfs_obd_rd_recovery_maxtime(char *page, char **start, off_t off,
         struct obd_device *obd = (struct obd_device *)data;
         LASSERT(obd != NULL);
 
-        return snprintf(page, count, "%lu\n", 
+        return snprintf(page, count, "%lu\n",
                         obd->obd_recovery_max_time);
 }
 EXPORT_SYMBOL(lprocfs_obd_rd_recovery_maxtime);
