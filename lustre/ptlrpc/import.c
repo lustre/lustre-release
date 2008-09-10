@@ -1022,15 +1022,19 @@ static int completed_replay_interpret(struct ptlrpc_request *req,
             !req->rq_import->imp_vbr_failed) {
                 ptlrpc_import_recovery_state_machine(req->rq_import);
         } else {
-                if (req->rq_import->imp_vbr_failed)
+                if (req->rq_import->imp_vbr_failed) {
                         CDEBUG(D_WARNING,
                                "%s: version recovery fails, reconnecting\n",
                                req->rq_import->imp_obd->obd_name);
-                else
+                        spin_lock(&req->rq_import->imp_lock);
+                        req->rq_import->imp_vbr_failed = 0;
+                        spin_unlock(&req->rq_import->imp_lock);
+                } else {
                         CDEBUG(D_HA, "%s: LAST_REPLAY message error: %d, "
                                      "reconnecting\n",
                                req->rq_import->imp_obd->obd_name,
                                req->rq_status);
+                }
                 ptlrpc_connect_import(req->rq_import, NULL);
         }
         RETURN(0);
