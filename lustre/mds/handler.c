@@ -589,6 +589,41 @@ int mds_get_md(struct obd_device *obd, struct inode *inode, void *md,
                 LOCK_INODE_MUTEX(inode);
         rc = fsfilt_get_md(obd, inode, md, *size, "lov");
 
+        /* rc == 0 may come from a not large enough buffer if
+         * we downgrade from a pool version and the file
+         * is a large stripe like full stripe
+         */
+        if (rc == 0) {
+                /* get the size of the lov EA */
+                rc = fsfilt_get_md(obd, inode, NULL, *size, "lov");
+                /* test if the difference is from poolname */
+                if (rc == (*size + MAXPOOLNAME)) {
+                        void *buf;
+                        int new_size;
+
+                        new_size = *size + MAXPOOLNAME;
+                        OBD_ALLOC(buf, new_size);
+                        if (buf == NULL) {
+                                rc = -ENOMEM;
+                                goto out;
+                        }
+                        rc = fsfilt_get_md(obd, inode, buf, new_size, "lov");
+                        if (rc <= 0) {
+                                OBD_FREE(buf, new_size);
+                                goto out;
+                        }
+
+                        /* convert V3 EA to V1 */
+                        lmm_size = rc;
+                        rc = mds_convert_lov_ea(obd, inode, buf, lmm_size);
+                        /* copy converted EA to provided buffer */
+                        memcpy(md, buf, rc);
+                        *size = rc;
+                        OBD_FREE(buf, new_size);
+                        goto out;
+               }
+        }
+
         if (rc == 0 && flags == MDS_GETATTR)
                 rc = mds_get_default_md(obd, md, &lmm_size);
 
@@ -608,6 +643,8 @@ int mds_get_md(struct obd_device *obd, struct inode *inode, void *md,
         } else {
                 *size = 0;
         }
+
+out:
         if (lock)
                 UNLOCK_INODE_MUTEX(inode);
 
@@ -843,9 +880,14 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
                         }
                         size[bufcount] = 0;
                 } else if (rc > mds->mds_max_mdsize) {
-                        size[bufcount] = 0;
-                        CERROR("MD size %d larger than maximum possible %u\n",
-                               rc, mds->mds_max_mdsize);
+                        /* pool downgrade case */
+                        if (rc <= (mds->mds_max_mdsize + MAXPOOLNAME)) {
+                                size[bufcount] = rc;
+                        } else {
+                                size[bufcount] = 0;
+                                CERROR("MD size %d larger than maximum possible %u\n",
+                                       rc, mds->mds_max_mdsize);
+                        }
                 } else {
                         size[bufcount] = rc;
                 }

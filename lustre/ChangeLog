@@ -164,6 +164,12 @@ Details    : Apply the MGS_CONNECT_SUPPORTED mask at reconnect time so
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
 
+Severity   : minor
+Bugzilla   : 15899
+Description: Add support for downgrading pools-striped files
+Details    : This version can understand the new LOV magic from pools 
+	     striped files (pools will be available in a future release).
+
 Severity   : normal
 Bugzilla   : 15975
 Frequency  : only patchless client
