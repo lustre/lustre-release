@@ -762,31 +762,42 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
 static int ptlrpc_check_reply(struct ptlrpc_request *req)
 {
         int rc = 0;
+        const char *what = "";
         ENTRY;
 
         /* serialise with network callback */
         spin_lock(&req->rq_lock);
 
-        if (req->rq_replied)
+        if (req->rq_replied) {
+                what = "REPLIED: ";
                 GOTO(out, rc = 1);
+        }
 
         if (req->rq_net_err && !req->rq_timedout) {
+                what = "NETERR: ";
                 spin_unlock(&req->rq_lock);
                 rc = ptlrpc_expire_one_request(req);
                 spin_lock(&req->rq_lock);
                 GOTO(out, rc);
         }
 
-        if (req->rq_err)
+        if (req->rq_err) {
+                what = "ABORTED: ";
                 GOTO(out, rc = 1);
+        }
 
-        if (req->rq_resend)
+        if (req->rq_resend) {
+                what = "RESEND: ";
                 GOTO(out, rc = 1);
+        }
 
-        if (req->rq_restart)
+        if (req->rq_restart) {
+                what = "RESTART: ";
                 GOTO(out, rc = 1);
+        }
 
         if (req->rq_early) {
+                what = "EARLYREP: ";
                 ptlrpc_at_recv_early_reply(req);
                 GOTO(out, rc = 0); /* keep waiting */
         }
@@ -794,7 +805,7 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
         EXIT;
  out:
         spin_unlock(&req->rq_lock);
-        DEBUG_REQ(D_NET, req, "rc = %d for", rc);
+        DEBUG_REQ(D_NET, req, "%src = %d for", what, rc);
         return rc;
 }
 
