@@ -401,6 +401,7 @@ ksocknal_conn_addref (ksock_conn_t *conn)
 }
 
 extern void ksocknal_queue_zombie_conn (ksock_conn_t *conn);
+extern void ksocknal_finalize_zcreq(ksock_conn_t *conn);
 
 static inline void
 ksocknal_conn_decref (ksock_conn_t *conn)
@@ -434,6 +435,7 @@ ksocknal_connsock_decref (ksock_conn_t *conn)
                 LASSERT (conn->ksnc_closing);
                 libcfs_sock_release(conn->ksnc_sock);
                 conn->ksnc_sock = NULL;
+                ksocknal_finalize_zcreq(conn);
         }
 }
 
