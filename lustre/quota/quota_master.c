@@ -309,7 +309,7 @@ int dqacq_adjust_qunit_sz(struct obd_device *obd, qid_t id, int type,
 
         up(&dquot->dq_sem);
 
-        rc = qctxt_adjust_qunit(obd, qctxt, uid, gid, is_blk, 0);
+        rc = qctxt_adjust_qunit(obd, qctxt, uid, gid, is_blk, 0, NULL);
         if (rc == -EDQUOT || rc == -EBUSY) {
                 CDEBUG(D_QUOTA, "rc: %d.\n", rc);
                 rc = 0;
@@ -481,21 +481,26 @@ int mds_quota_adjust(struct obd_device *obd, unsigned int qcids[],
         switch (opc) {
         case FSFILT_OP_RENAME:
                 /* acquire/release block quota on owner of original parent */
-                rc2 = qctxt_adjust_qunit(obd, qctxt, qpids[2], qpids[3], 1, 0);
+                rc2 = qctxt_adjust_qunit(obd, qctxt, qpids[2], qpids[3], 1, 0,
+                                         NULL);
                 /* fall-through */
         case FSFILT_OP_SETATTR:
                 /* acquire/release file quota on original owner */
-                rc2 |= qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 0, 0);
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 0, 0,
+                                          NULL);
                 /* fall-through */
         case FSFILT_OP_CREATE:
         case FSFILT_OP_UNLINK:
                 /* acquire/release file/block quota on owner of child
                  * (or current owner) */
-                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 0, 0);
-                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 1, 0);
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 0, 0,
+                                          NULL);
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 1, 0,
+                                          NULL);
                 /* acquire/release block quota on owner of parent
                  * (or original owner) */
-                rc2 |= qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 1, 0);
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 1, 0,
+                                          NULL);
                 break;
         default:
                 LBUG();
@@ -521,14 +526,17 @@ int filter_quota_adjust(struct obd_device *obd, unsigned int qcids[],
         switch (opc) {
         case FSFILT_OP_SETATTR:
                 /* acquire/release block quota on original & current owner */
-                rc = qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 1, 0);
-                rc2 = qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 1, 0);
+                rc = qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 1, 0,
+                                        NULL);
+                rc2 = qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 1, 0,
+                                         NULL);
                 break;
         case FSFILT_OP_UNLINK:
                 /* release block quota on this owner */
         case FSFILT_OP_CREATE: /* XXX for write operation on obdfilter */
                 /* acquire block quota on this owner */
-                rc = qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 1, 0);
+                rc = qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 1, 0,
+                                        NULL);
                 break;
         default:
                 LBUG();
@@ -1145,7 +1153,8 @@ static int mds_init_slave_ilimits(struct obd_device *obd,
         else
                 gid = oqctl->qc_id;
 
-        rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt, uid, gid, 0, 0);
+        rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt, uid, gid, 0, 0,
+                                NULL);
         if (rc == -EDQUOT || rc == -EBUSY) {
                 CDEBUG(D_QUOTA, "rc: %d.\n", rc);
                 rc = 0;
@@ -1213,7 +1222,8 @@ static int mds_init_slave_blimits(struct obd_device *obd,
         /* initialize all slave's limit */
         rc = obd_quotactl(mds->mds_osc_exp, ioqc);
 
-        rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt, uid, gid, 1, 0);
+        rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt, uid, gid, 1, 0,
+                                NULL);
         if (rc == -EDQUOT || rc == -EBUSY) {
                 CDEBUG(D_QUOTA, "rc: %d.\n", rc);
                 rc = 0;
