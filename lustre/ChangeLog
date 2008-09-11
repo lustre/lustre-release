@@ -73,7 +73,7 @@ Severity   : major
 Bugzilla   : 16750
 Description: service mount cannot take device name with ":"
 Details    : Only when device name contains ":/" will mount treat it as
-             client mount.
+	     client mount.
 
 Severity   : normal
 Bugzilla   : 15927
@@ -550,6 +550,13 @@ Bugzilla   : 16496
 Description: assertion failure in ldlm_handle2lock()
 Details    : fix a race between class_handle_unhash() and class_handle2object()
 	     introduced in lustre 1.6.5 by bug 13622.
+
+Severity   : enhancement
+Bugzilla   : 11817
+Description: superblock lock contention with many SMP cores on one client
+Details    : several client filesystem locks were highly contended on SMP
+	     NUMA systems with 8 or more cores.  Per-CPU datastructures
+	     and more efficient locking implemented to reduce contention.
 
 Severity   : minor
 Frequency  : rare
@@ -2218,10 +2225,10 @@ Details    : Lov_mds_md was not free in an error handler in mds_create_object.
 	     be freed no matter whether fsfilt_commit success or not.
 
 Severity   : minor
-Frequency  : only with huge numbers of clients
+Frequency  : only with large numbers of cores on a single node
 Bugzilla   : 11817
 Description: Prevents from taking the superblock lock in llap_from_page for
-	     a soon died page.
+	     a soon killed page.
 Details    : using LL_ORIGIN_REMOVEPAGE origin flag instead of LL_ORIGIN_UNKNOW
 	     for llap_from_page call in ll_removepage() prevents from taking
 	     the superblock lock for a soon died page.
