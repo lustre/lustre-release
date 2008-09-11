@@ -280,10 +280,11 @@ static int applymask(char* procpath, int value)
         if (rc != 0) {
                 fprintf(stderr, "Write to %s failed: %s\n",
                         procpath, strerror(errno));
-                return rc;
         }
+
         dbg_close_ctlhandle(fd);
-        return 0;
+
+        return rc;
 }
 
 static void applymask_all(unsigned int subs_mask, unsigned int debug_mask)
@@ -515,7 +516,7 @@ int jt_dbg_debug_kernel(int argc, char **argv)
         if (rc != 0) {
                 fprintf(stderr, "write(%s) failed: %s\n", filename,
                         strerror(errno));
-                close(fd);
+                dbg_close_ctlhandle(fd);
                 return 1;
         }
         dbg_close_ctlhandle(fd);
