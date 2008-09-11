@@ -2134,6 +2134,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         dchild = mds_lookup(obd, rec->ur_name, de_tgt_dir, rec->ur_namelen-1);
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
+                dchild = NULL;
                 if (rc != -EPERM && rc != -EACCES && rc != -ENAMETOOLONG)
                         CERROR("child lookup error %d\n", rc);
                 GOTO(cleanup, rc);
@@ -2166,7 +2167,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
                 CERROR("vfs_link error %d\n", rc);
 cleanup:
         inodes[0] = de_tgt_dir ? de_tgt_dir->d_inode : NULL;
-        inodes[1] = dchild->d_inode;
+        inodes[1] = (dchild && !IS_ERR(dchild)) ? dchild->d_inode : NULL;
         rc = mds_finish_transno(mds, inodes, handle, req, rc, 0, 0);
         EXIT;
 
