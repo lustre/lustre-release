@@ -750,7 +750,7 @@ struct obd_trans_info {
         int                      oti_numcookies;
 
         /* initial thread handling transaction */
-        int                      oti_thread_id;
+        struct ptlrpc_thread *   oti_thread;
         __u32                    oti_conn_cnt;
         /* VBR: versions */
         __u64                    oti_pre_version;
@@ -781,7 +781,7 @@ static inline void oti_init(struct obd_trans_info *oti,
         /* called from mds_create_objects */
         if (req->rq_repmsg != NULL)
                 oti->oti_transno = lustre_msg_get_transno(req->rq_repmsg);
-        oti->oti_thread_id = req->rq_svc_thread ? req->rq_svc_thread->t_id : -1;
+        oti->oti_thread = req->rq_svc_thread;
         if (req->rq_reqmsg != NULL)
                 oti->oti_conn_cnt = lustre_msg_get_conn_cnt(req->rq_reqmsg);
 }
