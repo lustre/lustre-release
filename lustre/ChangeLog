@@ -604,6 +604,15 @@ Description: xid & resent requests
 Details    : Initialize RPC XID from clock at startup (randomly if clock is
 	     bad).
 
+Severity   : major
+Bugzilla   : 14840
+Description: quota recovery deadlock during mds failover
+Details    : This patch includes att18982, att18236, att18237 in bz14840.
+             Slove the problems:
+             1. fix osts hang when mds does failover with quotaon
+             2. prevent watchdog storm when osts threads wait for the
+	        recovery of mds
+
 -------------------------------------------------------------------------------
 
 
