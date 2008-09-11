@@ -524,6 +524,8 @@ struct ptlrpc_thread {
         __u32 t_flags;
 
         unsigned int t_id; /* service thread index, from ptlrpc_start_threads */
+        struct lc_watchdog *t_watchdog; /* put watchdog in the structure per
+                                         * thread b=14840 */
         cfs_waitq_t t_ctl_waitq;
 };
 
