@@ -613,6 +613,11 @@ Details    : This patch includes att18982, att18236, att18237 in bz14840.
              2. prevent watchdog storm when osts threads wait for the
 	        recovery of mds
 
+Severity   : normal
+Bugzilla   : 16695
+Description: kernel panic on racer
+Details    : Do not access dchild->d_inode when IS_ERR(dchild) is true.
+
 -------------------------------------------------------------------------------
 
 
