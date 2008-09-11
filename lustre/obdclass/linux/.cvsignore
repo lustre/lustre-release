@@ -1,5 +1,0 @@
-Makefile
-Makefile.in
-.linux-module.o.cmd
-.linux-obdo.o.cmd
-.linux-sysctl.o.cmd

@@ -23,3 +23,5 @@ ext3-max-dir-size.patch
 ext3-print-inum-in-htree-warning.patch
 ext3-block-bitmap-validation-2.6-rhel5.patch
 ext3-xattr-no-update-ctime-2.6.22-vanilla.patch
+ext3-journal-chksum-2.6.18-vanilla.patch
+ext3-get-raid-stripe-from-sb.patch
