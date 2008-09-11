@@ -447,7 +447,7 @@ restart:
 
                                 unlock_res_and_lock(req);
                                 rc = ldlm_run_ast_work(&rpc_list,
-                                                       LDLM_WORK_BL_AST);
+                                                       LDLM_WORK_CP_AST);
                                 lock_res_and_lock(req);
                                 if (rc == -ERESTART)
                                         GOTO(restart, -ERESTART);
