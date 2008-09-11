@@ -1319,7 +1319,6 @@ static int ptlrpc_main(void *arg)
         struct ptlrpc_thread   *thread = data->thread;
         struct obd_device      *dev = data->dev;
         struct ptlrpc_reply_state *rs;
-        struct lc_watchdog     *watchdog;
 #ifdef WITH_GROUP_INFO
         struct group_info *ginfo = NULL;
 #endif
@@ -1377,9 +1376,10 @@ static int ptlrpc_main(void *arg)
          */
         cfs_waitq_signal(&thread->t_ctl_waitq);
 
-        watchdog = lc_watchdog_add(max_t(int, obd_timeout, AT_OFF ? 0 :
-                                   at_get(&svc->srv_at_estimate)) *
-                                   svc->srv_watchdog_factor, NULL, NULL);
+        thread->t_watchdog = lc_watchdog_add(max_t(int, obd_timeout, AT_OFF ? 0 :
+                                                   at_get(&svc->srv_at_estimate))
+                                             *  svc->srv_watchdog_factor,
+                                             NULL, NULL);
 
         spin_lock(&svc->srv_lock);
         svc->srv_threads_running++;
@@ -1398,7 +1398,7 @@ static int ptlrpc_main(void *arg)
                 struct l_wait_info lwi = LWI_TIMEOUT(svc->srv_rqbd_timeout,
                                                      ptlrpc_retry_rqbds, svc);
 
-                lc_watchdog_disable(watchdog);
+                lc_watchdog_disable(thread->t_watchdog);
 
                 cond_resched();
 
@@ -1415,7 +1415,7 @@ static int ptlrpc_main(void *arg)
                               svc->srv_at_check,
                               &lwi);
 
-                lc_watchdog_touch_ms(watchdog, max_t(int, obd_timeout,
+                lc_watchdog_touch_ms(thread->t_watchdog, max_t(int, obd_timeout,
                                      AT_OFF ? 0 :
                                      at_get(&svc->srv_at_estimate)) *
                                      svc->srv_watchdog_factor);
@@ -1459,7 +1459,8 @@ static int ptlrpc_main(void *arg)
                 }
         }
 
-        lc_watchdog_delete(watchdog);
+        lc_watchdog_delete(thread->t_watchdog);
+        thread->t_watchdog = NULL;
 
 out_srv_init:
         /*
