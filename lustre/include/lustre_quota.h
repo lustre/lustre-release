@@ -232,6 +232,7 @@ struct lustre_quota_ctxt {
         unsigned long lqc_recovery:1,   /* Doing recovery */
                       lqc_switch_qs:1,  /* the function of change qunit size
                                          * 0:Off, 1:On */
+                      lqc_valid:1,      /* this qctxt is valid or not */
                       lqc_setup:1;      /* tell whether of not quota_type has
                                          * been processed, so that the master
                                          * knows when it can start processing
@@ -264,6 +265,10 @@ struct lustre_quota_ctxt {
                                              * seconds must be waited between
                                              * enlarging and shinking qunit */
         spinlock_t    lqc_lock;         /* guard lqc_imp_valid now */
+        cfs_waitq_t   lqc_wait_for_qmaster; /* when mds isn't connected, threads
+                                             * on osts who send the quota reqs
+                                             * with wait==1 will be put here
+                                             * b=14840 */
         struct proc_dir_entry *lqc_proc_dir;
         struct lprocfs_stats  *lqc_stats; /* lquota statistics */
 };
@@ -355,8 +360,9 @@ struct quotacheck_thread_args {
         atomic_t            *qta_sem;   /* obt_quotachecking */
 };
 
-typedef int (*quota_acquire)(struct obd_device *obd,
-                             unsigned int uid, unsigned int gid);
+struct obd_trans_info;
+typedef int (*quota_acquire)(struct obd_device *obd, unsigned int uid,
+                             unsigned int gid, struct obd_trans_info *oti);
 
 typedef struct {
         int (*quota_init) (void);
@@ -386,13 +392,15 @@ typedef struct {
         int (*quota_getflag) (struct obd_device *, struct obdo *);
 
         /* For quota slave, acquire/release quota from master if needed */
-        int (*quota_acquire) (struct obd_device *, unsigned int, unsigned int);
+        int (*quota_acquire) (struct obd_device *, unsigned int, unsigned int,
+                              struct obd_trans_info *);
 
         /* For quota slave, check whether specified uid/gid's remaining quota
          * can finish a block_write or inode_create rpc. It updates the pending
          * record of block and inode, acquires quota if necessary */
         int (*quota_chkquota) (struct obd_device *, unsigned int, unsigned int,
-                               int, int *, quota_acquire);
+                               int, int *, quota_acquire,
+                               struct obd_trans_info *);
 
         /* For quota client, poll if the quota check done */
         int (*quota_poll_check) (struct obd_export *, struct if_quotacheck *);
@@ -593,20 +601,21 @@ static inline int lquota_getflag(quota_interface_t *interface,
 
 static inline int lquota_acquire(quota_interface_t *interface,
                                  struct obd_device *obd,
-                                 unsigned int uid, unsigned int gid)
+                                 unsigned int uid, unsigned int gid,
+                                 struct obd_trans_info *oti)
 {
         int rc;
         ENTRY;
 
         QUOTA_CHECK_OP(interface, acquire);
-        rc = QUOTA_OP(interface, acquire)(obd, uid, gid);
+        rc = QUOTA_OP(interface, acquire)(obd, uid, gid, oti);
         RETURN(rc);
 }
 
 static inline int lquota_chkquota(quota_interface_t *interface,
                                   struct obd_device *obd,
-                                  unsigned int uid, unsigned int gid,
-                                  int count, int *flag)
+                                  unsigned int uid, unsigned int gid, int count,
+                                  int *flag, struct obd_trans_info *oti)
 {
         int rc;
         ENTRY;
@@ -614,7 +623,7 @@ static inline int lquota_chkquota(quota_interface_t *interface,
         QUOTA_CHECK_OP(interface, chkquota);
         QUOTA_CHECK_OP(interface, acquire);
         rc = QUOTA_OP(interface, chkquota)(obd, uid, gid, count, flag,
-                                           QUOTA_OP(interface, acquire));
+                                           QUOTA_OP(interface, acquire), oti);
         RETURN(rc);
 }
 

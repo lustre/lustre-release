@@ -122,6 +122,15 @@ Description: Early reply size mismatch, MGC loses connection
 Details    : Apply the MGS_CONNECT_SUPPORTED mask at reconnect time so
              the connect flags are properly negotiated.
 
+Severity   : major
+Bugzilla   : 14840
+Description: quota recovery deadlock during mds failover
+Details    : This patch includes att18982, att18236, att18237 in bz14840.
+             Slove the problems:
+             1. fix osts hang when mds does failover with quotaon
+             2. prevent watchdog storm when osts threads wait for the
+	        recovery of mds
+
 --------------------------------------------------------------------------
 
 2008-08-31 Sun Microsystems, Inc.

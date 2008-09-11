@@ -241,7 +241,8 @@ void filter_free_iobuf(struct filter_iobuf *iobuf)
 void filter_iobuf_put(struct filter_obd *filter, struct filter_iobuf *iobuf,
                       struct obd_trans_info *oti)
 {
-        int thread_id = oti ? oti->oti_thread_id : -1;
+        int thread_id = (oti && oti->oti_thread) ?
+                        oti->oti_thread->t_id : -1;
 
         if (unlikely(thread_id < 0)) {
                 filter_free_iobuf(iobuf);
@@ -661,7 +662,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         /* we try to get enough quota to write here, and let ldiskfs
          * decide if it is out of quota or not b=14783 */
         lquota_chkquota(filter_quota_interface_ref, obd, oa->o_uid,
-                        oa->o_gid, niocount, &rec_pending);
+                        oa->o_gid, niocount, &rec_pending, oti);
 
         iobuf = filter_iobuf_get(&obd->u.filter, oti);
         if (IS_ERR(iobuf))

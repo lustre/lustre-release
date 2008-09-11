@@ -933,7 +933,7 @@ int echo_client_brw_ioctl(int rw, struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct echo_client_obd *ec = &obd->u.echo_client;
-        struct obd_trans_info dummy_oti = { .oti_thread_id = -1 };
+        struct obd_trans_info dummy_oti = { .oti_thread = NULL };
         struct ec_object *eco;
         int rc;
         ENTRY;

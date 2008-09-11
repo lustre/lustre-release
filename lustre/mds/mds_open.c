@@ -1071,9 +1071,11 @@ int mds_open(struct mds_update_record *rec, int offset,
                         gid = current->fsgid;
 
                 /* we try to get enough quota to write here, and let ldiskfs
-                 * decide if it is out of quota or not b=14783 */
+                 * decide if it is out of quota or not b=14783
+                 * FIXME: after CMD is used, pointer to obd_trans_info* couldn't
+                 * be NULL, b=14840 */
                 lquota_chkquota(mds_quota_interface_ref, obd,
-                                current->fsuid, gid, 1, &rec_pending);
+                                current->fsuid, gid, 1, &rec_pending, NULL);
 
                 intent_set_disposition(rep, DISP_OPEN_CREATE);
                 handle = fsfilt_start(obd, dparent->d_inode, FSFILT_OP_CREATE,
