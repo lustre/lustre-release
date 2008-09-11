@@ -99,7 +99,8 @@
 void qunit_cache_cleanup(void);
 int qunit_cache_init(void);
 int qctxt_adjust_qunit(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
-                       uid_t uid, gid_t gid, __u32 isblk, int wait);
+                       uid_t uid, gid_t gid, __u32 isblk, int wait,
+                       struct obd_trans_info *oti);
 int qctxt_wait_pending_dqacq(struct lustre_quota_ctxt *qctxt, unsigned int id,
                              unsigned short type, int isblk);
 int qctxt_init(struct obd_device *obd, dqacq_handler_t handler);
@@ -109,6 +110,7 @@ void qslave_start_recovery(struct obd_device *obd,
 int compute_remquota(struct obd_device *obd,
                      struct lustre_quota_ctxt *qctxt, struct qunit_data *qdata,
                      int isblk);
+int check_qm(struct lustre_quota_ctxt *qctxt);
 /* quota_master.c */
 int lustre_dquot_init(void);
 void lustre_dquot_exit(void);
