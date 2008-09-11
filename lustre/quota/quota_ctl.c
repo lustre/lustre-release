@@ -232,8 +232,8 @@ adjust:
                 else
                         gid = oqctl->qc_id;
 
-                rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt, 
-                                        uid, gid, 1, 0);
+                rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt,
+                                        uid, gid, 1, 0, NULL);
                 if (rc == -EDQUOT || rc == -EBUSY) {
                         CDEBUG(D_QUOTA, "rc: %d.\n", rc);
                         rc = 0;
