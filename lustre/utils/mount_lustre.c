@@ -97,7 +97,7 @@ void usage(FILE *out)
         exit((out != stdout) ? EINVAL : 0);
 }
 
-static int check_mtab_entry(char *spec, char *mtpt, char *type)
+static int check_mtab_entry(char *spec1, char *spec2, char *mtpt, char *type)
 {
         FILE *fp;
         struct mntent *mnt;
@@ -107,7 +107,8 @@ static int check_mtab_entry(char *spec, char *mtpt, char *type)
                 return(0);
 
         while ((mnt = getmntent(fp)) != NULL) {
-                if (strcmp(mnt->mnt_fsname, spec) == 0 &&
+                if ((strcmp(mnt->mnt_fsname, spec1) == 0 ||
+                     strcmp(mnt->mnt_fsname, spec2) == 0) &&
                         strcmp(mnt->mnt_dir, mtpt) == 0 &&
                         strcmp(mnt->mnt_type, type) == 0) {
                         endmntent(fp);
@@ -544,7 +545,7 @@ int main(int argc, char *const argv[])
         }
 
         if (!force) {
-                rc = check_mtab_entry(usource, target, "lustre");
+                rc = check_mtab_entry(usource, source, target, "lustre");
                 if (rc && !(flags & MS_REMOUNT)) {
                         fprintf(stderr, "%s: according to %s %s is "
                                 "already mounted on %s\n",
