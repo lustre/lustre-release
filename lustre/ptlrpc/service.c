@@ -700,7 +700,7 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
                 RETURN(-ENOSYS);
         }
 
-        if (req->rq_export->exp_in_recovery) {
+        if (req->rq_export && req->rq_export->exp_in_recovery) {
                 /* don't increase server estimates during recovery, and give
                    clients the full recovery time. */
                 newdl = cfs_time_current_sec() +
