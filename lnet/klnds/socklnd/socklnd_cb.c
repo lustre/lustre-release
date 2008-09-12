@@ -761,10 +761,9 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
         tx->tx_conn = conn;
         ksocknal_conn_addref(conn); /* +1 ref for tx */
 
-        /* 
-         * NB Darwin: SOCK_WMEM_QUEUED()->sock_getsockopt() will take
-         * a blockable lock(socket lock), so SOCK_WMEM_QUEUED can't be
-         * put in spinlock. 
+        /*
+         * FIXME: SOCK_WMEM_QUEUED and SOCK_ERROR could block in __DARWIN8__
+         * but they're used inside spinlocks a lot.
          */
         bufnob = SOCK_WMEM_QUEUED(conn->ksnc_sock);
         spin_lock_bh (&sched->kss_lock);
