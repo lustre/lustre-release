@@ -122,6 +122,26 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# LC_FUNC_RELEASEPAGE_WITH_GFP
+#
+# if ->releasepage() takes a gfp_t arg in 2.6.9
+# This kernel defines gfp_t (HAS_GFP_T) but doesn't use it for this function,
+# while others either don't have gfp_t or pass gfp_t as the parameter.
+#
+AC_DEFUN([LC_FUNC_RELEASEPAGE_WITH_GFP],
+[AC_MSG_CHECKING([if releasepage has a gfp_t parameter])
+RELEASEPAGE_WITH_GFP="`grep -c 'releasepage.*gfp_t' $LINUX/include/linux/fs.h`"
+if test "$RELEASEPAGE_WITH_GFP" != 0 ; then
+	AC_DEFINE(HAVE_RELEASEPAGE_WITH_GFP, 1,
+                  [releasepage with gfp_t parameter])
+	AC_MSG_RESULT([yes])
+else
+	AC_MSG_RESULT([no])
+fi
+])
+
+
+#
 # LC_FUNC_ZAP_PAGE_RANGE
 #
 # if zap_page_range() takes a vma arg
@@ -1352,6 +1372,7 @@ AC_DEFUN([LC_PROG_LINUX],
 
           LC_STRUCT_KIOBUF
           LC_FUNC_COND_RESCHED
+          LC_FUNC_RELEASEPAGE_WITH_GFP
           LC_FUNC_ZAP_PAGE_RANGE
           LC_FUNC_PDE
           LC_FUNC_DIRECT_IO
