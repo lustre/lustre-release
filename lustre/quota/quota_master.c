@@ -1637,7 +1637,8 @@ int mds_quota_recovery(struct obd_device *obd)
 
         mutex_down(&lov->lov_lock);
         if (lov->desc.ld_tgt_count != lov->desc.ld_active_tgt_count) {
-                CWARN("Not all osts are active, abort quota recovery\n");
+                CWARN("Only %u/%u OSTs are active, abort quota recovery\n",
+                      lov->desc.ld_tgt_count, lov->desc.ld_active_tgt_count);
                 mutex_up(&lov->lov_lock);
                 RETURN(rc);
         }
