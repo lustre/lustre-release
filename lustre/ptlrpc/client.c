@@ -2350,8 +2350,37 @@ void ptlrpc_abort_set(struct ptlrpc_request_set *set)
         }
 }
 
-static __u64 ptlrpc_last_xid = 0;
-spinlock_t ptlrpc_last_xid_lock;
+static __u64 ptlrpc_last_xid;
+static spinlock_t ptlrpc_last_xid_lock;
+
+/* Initialize the XID for the node.  This is common among all requests on
+ * this node, and only requires the property that it is monotonically
+ * increasing.  It does not need to be sequential.  Since this is also used
+ * as the RDMA match bits, it is important that a single client NOT have
+ * the same match bits for two different in-flight requests, hence we do
+ * NOT want to have an XID per target or similar.
+ *
+ * To avoid an unlikely collision between match bits after a client reboot
+ * (which would cause old to be delivered into the wrong buffer) we initialize
+ * the XID based on the current time, assuming a maximum RPC rate of 1M RPC/s.
+ * If the time is clearly incorrect, we instead use a 62-bit random number.
+ * In the worst case the random number will overflow 1M RPCs per second in
+ * 9133 years, or permutations thereof.
+ */
+#define YEAR_2004 (1ULL << 30)
+void ptlrpc_init_xid(void)
+{
+        time_t now = cfs_time_current_sec();
+
+        spin_lock_init(&ptlrpc_last_xid_lock);
+        if (now < YEAR_2004) {
+                ll_get_random_bytes(&ptlrpc_last_xid, sizeof(ptlrpc_last_xid));
+                ptlrpc_last_xid >>= 2;
+                ptlrpc_last_xid |= (1ULL << 61);
+        } else {
+                ptlrpc_last_xid = (now << 20);
+        }
+}
 
 __u64 ptlrpc_next_xid(void)
 {
@@ -2364,10 +2393,16 @@ __u64 ptlrpc_next_xid(void)
 
 __u64 ptlrpc_sample_next_xid(void)
 {
+#if BITS_PER_LONG == 32
+        /* need to avoid possible word tearing on 32-bit systems */
         __u64 tmp;
         spin_lock(&ptlrpc_last_xid_lock);
         tmp = ptlrpc_last_xid + 1;
         spin_unlock(&ptlrpc_last_xid_lock);
         return tmp;
+#else
+        /* No need to lock, since returned value is racy anyways */
+        return ptlrpc_last_xid + 1;
+#endif
 }
 EXPORT_SYMBOL(ptlrpc_sample_next_xid);
