@@ -2257,16 +2257,15 @@ __u64 ptlrpc_next_xid(void)
 
 __u64 ptlrpc_sample_next_xid(void)
 {
-#if _LWORDSIZE == 32
-        /* need to avoid possible word tearing on 32-bit systems */
-        __u64 tmp;
-        spin_lock(&ptlrpc_last_xid_lock);
-        tmp = ptlrpc_last_xid + 1;
-        spin_unlock(&ptlrpc_last_xid_lock);
-        return tmp;
-#else
+        if (sizeof(long) < 8) {
+                /* need to avoid possible word tearing on 32-bit systems */
+                __u64 tmp;
+                spin_lock(&ptlrpc_last_xid_lock);
+                tmp = ptlrpc_last_xid + 1;
+                spin_unlock(&ptlrpc_last_xid_lock);
+                return tmp;
+        }
         /* No need to lock, since returned value is racy anyways */
         return ptlrpc_last_xid + 1;
-#endif
 }
 EXPORT_SYMBOL(ptlrpc_sample_next_xid);
