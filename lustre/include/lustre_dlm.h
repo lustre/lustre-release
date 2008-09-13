@@ -543,81 +543,153 @@ struct ldlm_interval_tree {
 };
 
 struct ldlm_lock {
-        struct portals_handle l_handle; // must be first in the structure
-        atomic_t              l_refc;
-
-        /* internal spinlock protects l_resource.  we should hold this lock
-         * first before grabbing res_lock.*/
-        spinlock_t            l_lock;
-
-        /* ldlm_lock_change_resource() can change this */
-        struct ldlm_resource *l_resource;
-
-        /* protected by ns_hash_lock. FIXME */
-        struct list_head      l_lru;
-
-        /* protected by lr_lock, linkage to resource's lock queues */
-        struct list_head      l_res_link;
-
-        struct ldlm_interval *l_tree_node;      /* tree node for ldlm_extent */
-
-        /* protected by led_lock */
-        struct list_head      l_export_chain; // per-export chain of locks
-
-        /* protected by lr_lock */
-        ldlm_mode_t           l_req_mode;
-        ldlm_mode_t           l_granted_mode;
-
+        /** 
+         * Must be first in the structure.
+         */
+        struct portals_handle    l_handle;
+        /**
+         * Lock reference count.
+         */
+        atomic_t                 l_refc;
+        /** 
+         * Internal spinlock protects l_resource.  we should hold this lock
+         * first before grabbing res_lock.
+         */
+        spinlock_t               l_lock;
+        /** 
+         * ldlm_lock_change_resource() can change this. 
+         */
+        struct ldlm_resource    *l_resource;
+        /** 
+         * Protected by ns_hash_lock. List item for client side lru list.
+         */
+        struct list_head         l_lru;
+        /** 
+         * Protected by lr_lock, linkage to resource's lock queues. 
+         */
+        struct list_head         l_res_link;
+        /** 
+         * Tree node for ldlm_extent. 
+         */
+        struct ldlm_interval    *l_tree_node;
+        /** 
+         * Protected by per-bucket exp->exp_lock_hash locks. Per export hash
+         * of locks.
+         */
+        struct hlist_node        l_exp_hash;
+        /** 
+         * Protected by lr_lock. Requested mode. 
+         */
+        ldlm_mode_t              l_req_mode;
+        /**
+         * Granted mode, also protected by lr_lock.
+         */
+        ldlm_mode_t              l_granted_mode;
+        /**
+         * Lock enqueue completion handler.
+         */
         ldlm_completion_callback l_completion_ast;
+        /**
+         * Lock blocking ast handler.
+         */
         ldlm_blocking_callback   l_blocking_ast;
+        /**
+         * Lock glimpse handler.
+         */
         ldlm_glimpse_callback    l_glimpse_ast;
 
-        struct obd_export    *l_export;
-        struct obd_export    *l_conn_export;
+        /**
+         * Lock export.
+         */
+        struct obd_export       *l_export;
+        /**
+         * Lock connection export.
+         */
+        struct obd_export       *l_conn_export;
 
-        struct lustre_handle  l_remote_handle;
-        ldlm_policy_data_t    l_policy_data;
+        /**
+         * Remote lock handle.
+         */
+        struct lustre_handle     l_remote_handle;
 
-        /* protected by lr_lock */
+        ldlm_policy_data_t       l_policy_data;
+
+        /*
+         * Protected by lr_lock. Various counters: readers, writers, etc.
+         */
         __u32                 l_flags;
         __u32                 l_readers;
         __u32                 l_writers;
         __u8                  l_destroyed;
 
-        /* If the lock is granted, a process sleeps on this waitq to learn when
+        /** 
+         * If the lock is granted, a process sleeps on this waitq to learn when
          * it's no longer in use.  If the lock is not granted, a process sleeps
-         * on this waitq to learn when it becomes granted. */
+         * on this waitq to learn when it becomes granted. 
+         */
         cfs_waitq_t           l_waitq;
+
         struct timeval        l_enqueued_time;
 
-        cfs_time_t            l_last_used;      /* jiffies */
+        /**
+         * Jiffies. Should be converted to time if needed. 
+         */
+        cfs_time_t            l_last_used;
+
         struct ldlm_extent    l_req_extent;
 
-        /* Client-side-only members */
-        __u32                 l_lvb_len;        /* temporary storage for */
-        void                 *l_lvb_data;       /* an LVB received during */
-        void                 *l_lvb_swabber;    /* an enqueue */
+        /* 
+         * Client-side-only members. 
+         */
+         
+        /** 
+         * Temporary storage for an LVB received during an enqueue operation.
+         */
+        __u32                 l_lvb_len;
+        void                 *l_lvb_data;
+        void                 *l_lvb_swabber;
+
         void                 *l_ast_data;
         spinlock_t            l_extents_list_lock;
         struct list_head      l_extents_list;
 
         struct list_head      l_cache_locks_list;
 
-        /* Server-side-only members */
+        /* 
+         * Server-side-only members. 
+         */
 
-        /* protected by elt_lock */
-        struct list_head      l_pending_chain;  /* callbacks pending */
-        cfs_time_t            l_callback_timeout; /* jiffies */
+        /** 
+         * Protected by elt_lock. Callbacks pending.
+         */
+        struct list_head      l_pending_chain;
 
-        __u32                 l_pid;            /* pid which created this lock */
+        cfs_time_t            l_callback_timeout;
 
-        /* for ldlm_add_ast_work_item() */
+        /** 
+         * Pid which created this lock. 
+         */
+        __u32                 l_pid;
+
+        /** 
+         * For ldlm_add_ast_work_item(). 
+         */
         struct list_head      l_bl_ast;
+        /** 
+         * For ldlm_add_ast_work_item(). 
+         */
         struct list_head      l_cp_ast;
+        /** 
+         * For ldlm_add_ast_work_item(). 
+         */
+        struct list_head      l_rk_ast;
+
         struct ldlm_lock     *l_blocking_lock;
         int                   l_bl_ast_run;
 
-        /* protected by lr_lock, linkages to "skip lists" */
+        /** 
+         * Protected by lr_lock, linkages to "skip lists". 
+         */
         struct list_head      l_sl_mode;
         struct list_head      l_sl_policy;
 };
@@ -767,6 +839,8 @@ int ldlm_refresh_waiting_lock(struct ldlm_lock *lock);
 void ldlm_revoke_export_locks(struct obd_export *exp);
 int ldlm_get_ref(void);
 void ldlm_put_ref(void);
+int ldlm_init_export(struct obd_export *exp);
+void ldlm_destroy_export(struct obd_export *exp);
 
 /* ldlm_lock.c */
 ldlm_processing_policy ldlm_get_processing_policy(struct ldlm_resource *res);

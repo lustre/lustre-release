@@ -2712,26 +2712,22 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
                 RETURN(ELDLM_LOCK_REPLACED);
         }
 
-        /* This lock might already be given to the client by an resent req,
-         * in this case we should return ELDLM_LOCK_ABORTED,
-         * so we should check led_held_locks here, but it will affect
-         * performance, FIXME
+        /* 
+         * Fixup the lock to be given to the client. 
          */
-        /* Fixup the lock to be given to the client */
         lock_res_and_lock(new_lock);
         new_lock->l_readers = 0;
         new_lock->l_writers = 0;
 
         new_lock->l_export = class_export_get(req->rq_export);
-        spin_lock(&req->rq_export->exp_ldlm_data.led_lock);
-        list_add(&new_lock->l_export_chain,
-                 &new_lock->l_export->exp_ldlm_data.led_held_locks);
-        spin_unlock(&req->rq_export->exp_ldlm_data.led_lock);
-
         new_lock->l_blocking_ast = lock->l_blocking_ast;
         new_lock->l_completion_ast = lock->l_completion_ast;
         new_lock->l_remote_handle = lock->l_remote_handle;
         new_lock->l_flags &= ~LDLM_FL_LOCAL;
+
+        lustre_hash_add(new_lock->l_export->exp_lock_hash,
+                        &new_lock->l_remote_handle, 
+                        &new_lock->l_exp_hash);
 
         unlock_res_and_lock(new_lock);
         LDLM_LOCK_PUT(new_lock);
@@ -2749,7 +2745,7 @@ static void mdt_intent_fixup_resent(struct mdt_thread_info *info,
         struct obd_export      *exp = req->rq_export;
         struct lustre_handle    remote_hdl;
         struct ldlm_request    *dlmreq;
-        struct list_head       *iter;
+        struct ldlm_lock       *lock;
 
         if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT))
                 return;
@@ -2757,27 +2753,24 @@ static void mdt_intent_fixup_resent(struct mdt_thread_info *info,
         dlmreq = req_capsule_client_get(info->mti_pill, &RMF_DLM_REQ);
         remote_hdl = dlmreq->lock_handle[0];
 
-        spin_lock(&exp->exp_ldlm_data.led_lock);
-        list_for_each(iter, &exp->exp_ldlm_data.led_held_locks) {
-                struct ldlm_lock *lock;
-                lock = list_entry(iter, struct ldlm_lock, l_export_chain);
-                if (lock == new_lock)
-                        continue;
-                if (lock->l_remote_handle.cookie == remote_hdl.cookie) {
+        lock = lustre_hash_lookup(exp->exp_lock_hash, &remote_hdl);
+        if (lock) {
+                if (lock != new_lock) {
                         lh->mlh_reg_lh.cookie = lock->l_handle.h_cookie;
                         lh->mlh_reg_mode = lock->l_granted_mode;
 
-                        LDLM_DEBUG(lock, "restoring lock cookie");
+                        LDLM_DEBUG(lock, "Restoring lock cookie");
                         DEBUG_REQ(D_DLMTRACE, req,
                                   "restoring lock cookie "LPX64,
                                   lh->mlh_reg_lh.cookie);
                         if (old_lock)
                                 *old_lock = LDLM_LOCK_GET(lock);
-                        spin_unlock(&exp->exp_ldlm_data.led_lock);
+                        lh_put(exp->exp_lock_hash, &lock->l_exp_hash);
                         return;
                 }
+
+                lh_put(exp->exp_lock_hash, &lock->l_exp_hash);
         }
-        spin_unlock(&exp->exp_ldlm_data.led_lock);
 
         /*
          * If the xid matches, then we know this is a resent request, and allow
@@ -3040,12 +3033,6 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
                 if (it != NULL) {
                         const struct ldlm_request *dlmreq;
                         __u64 req_bits;
-#if 0
-                        struct ldlm_lock       *lock = *lockp;
-
-                        LDLM_DEBUG(lock, "intent policy opc: %s\n",
-                                   ldlm_it2str(it->opc));
-#endif
 
                         rc = mdt_intent_opc(it->opc, info, lockp, flags);
                         if (rc == 0)
@@ -4482,6 +4469,7 @@ static int mdt_obd_disconnect(struct obd_export *exp)
 static int mdt_init_export(struct obd_export *exp)
 {
         struct mdt_export_data *med = &exp->exp_mdt_data;
+        int                     rc;
         ENTRY;
 
         CFS_INIT_LIST_HEAD(&med->med_open_head);
@@ -4491,7 +4479,10 @@ static int mdt_init_export(struct obd_export *exp)
         spin_lock(&exp->exp_lock);
         exp->exp_connecting = 1;
         spin_unlock(&exp->exp_lock);
-        RETURN(0);
+        rc = ldlm_init_export(exp);
+        if (rc)
+                CERROR("Error %d while initializing export\n", rc);
+        RETURN(rc);
 }
 
 static int mdt_destroy_export(struct obd_export *export)
@@ -4512,6 +4503,7 @@ static int mdt_destroy_export(struct obd_export *export)
                 mdt_cleanup_idmap(med);
 
         target_destroy_export(export);
+        ldlm_destroy_export(export);
 
         if (obd_uuid_equals(&export->exp_client_uuid, &obd->obd_uuid))
                 RETURN(0);

@@ -909,6 +909,7 @@ dont_check_exports:
                                                        &remote_uuid);
 
         spin_lock(&target->obd_dev_lock);
+
         /* Export might be hashed already, e.g. if this is reconnect */
         if (hlist_unhashed(&export->exp_nid_hash))
                 lustre_hash_add(export->exp_obd->obd_nid_hash,

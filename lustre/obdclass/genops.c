@@ -735,15 +735,12 @@ struct obd_export *class_new_export(struct obd_device *obd,
                 return ERR_PTR(-ENOMEM);
 
         export->exp_conn_cnt = 0;
+        export->exp_lock_hash = NULL;
         atomic_set(&export->exp_refcount, 2);
         atomic_set(&export->exp_rpc_count, 0);
         export->exp_obd = obd;
         CFS_INIT_LIST_HEAD(&export->exp_outstanding_replies);
         CFS_INIT_LIST_HEAD(&export->exp_req_replay_queue);
-        /* XXX this should be in LDLM init */
-        CFS_INIT_LIST_HEAD(&export->exp_ldlm_data.led_held_locks);
-        spin_lock_init(&export->exp_ldlm_data.led_lock);
-
         CFS_INIT_LIST_HEAD(&export->exp_handle.h_link);
         class_handle_hash(&export->exp_handle, export_handle_addref);
         export->exp_last_request_time = cfs_time_current_sec();

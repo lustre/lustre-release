@@ -398,10 +398,11 @@ reprocess:
                 new2->l_conn_export = lock->l_conn_export;
                 if (lock->l_export != NULL) {
                         new2->l_export = class_export_get(lock->l_export);
-                        spin_lock(&new2->l_export->exp_ldlm_data.led_lock);
-                        list_add(&new2->l_export_chain,
-                                 &new2->l_export->exp_ldlm_data.led_held_locks);
-                        spin_unlock(&new2->l_export->exp_ldlm_data.led_lock);
+                        if (new2->l_export->exp_lock_hash && 
+                            hlist_unhashed(&new2->l_exp_hash))
+                                lustre_hash_add(new2->l_export->exp_lock_hash,
+                                                &new2->l_remote_handle,
+                                                &new2->l_exp_hash);
                 }
                 if (*flags == LDLM_FL_WAIT_NOREPROC) {
                         ldlm_lock_addref_internal_nolock(new2, lock->l_granted_mode);

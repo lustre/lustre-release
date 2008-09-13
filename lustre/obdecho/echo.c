@@ -97,11 +97,17 @@ static int echo_disconnect(struct obd_export *exp)
         return class_disconnect(exp);
 }
 
+static int echo_init_export(struct obd_export *exp)
+{
+        return ldlm_init_export(exp);
+}
+
 static int echo_destroy_export(struct obd_export *exp)
 {
         ENTRY;
 
         target_destroy_export(exp);
+        ldlm_destroy_export(exp);
 
         RETURN(0);
 }
@@ -539,6 +545,7 @@ static struct obd_ops echo_obd_ops = {
         .o_owner           = THIS_MODULE,
         .o_connect         = echo_connect,
         .o_disconnect      = echo_disconnect,
+        .o_init_export     = echo_init_export,
         .o_destroy_export  = echo_destroy_export,
         .o_create          = echo_create,
         .o_destroy         = echo_destroy,

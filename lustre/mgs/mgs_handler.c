@@ -694,11 +694,17 @@ out:
         RETURN(0);
 }
 
+static inline int mgs_init_export(struct obd_export *exp)
+{
+        return ldlm_init_export(exp);
+}
+
 static inline int mgs_destroy_export(struct obd_export *exp)
 {
         ENTRY;
 
         target_destroy_export(exp);
+        ldlm_destroy_export(exp);
 
         RETURN(0);
 }
@@ -808,6 +814,7 @@ static struct obd_ops mgs_obd_ops = {
         .o_setup           = mgs_setup,
         .o_precleanup      = mgs_precleanup,
         .o_cleanup         = mgs_cleanup,
+        .o_init_export     = mgs_init_export,
         .o_destroy_export  = mgs_destroy_export,
         .o_iocontrol       = mgs_iocontrol,
         .o_llog_init       = mgs_llog_init,
