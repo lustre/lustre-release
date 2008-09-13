@@ -38,17 +38,24 @@ tbd Sun Microsystems, Inc.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
 
+Severity   : major
+Frequency  : Only on FC kernels 2.6.22+
+Bugzilla   : 16303
+Description: Oops in statahead when CONFIG_SLUB is enabled
+Details    : Disable statahead on systems with CONFIG_SLUB enabled, until
+	     such a time as problem is understood.
+
 Severity   : enhancement
 Bugzilla   : 16643
 Description: Generic /proc file permissions
 Details    : Set /Proc file permissions in a more generic way to enable non-
-             root users operate on some /proc files.
+	     root users operate on some /proc files.
 
 Severity   : major
 Bugzilla   : 16561
 Description: Hitting mdc_commit_close() ASSERTION
 Details    : Properly handle request reference release in
-             ll_release_openhandle().
+	     ll_release_openhandle().
 
 Severity   : normal
 Bugzilla   : 15975
