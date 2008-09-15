@@ -965,21 +965,21 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
                 fsname = ll_get_fsname(inode);
                 /* Set root stripesize */
                 sprintf(param, "%s-MDT0000.lov.stripesize=%u", fsname,
-                        lump->lmm_stripe_size);
+                        le32_to_cpu(lump->lmm_stripe_size));
                 rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
                 if (rc)
                         goto end;
 
                 /* Set root stripecount */
                 sprintf(param, "%s-MDT0000.lov.stripecount=%u", fsname,
-                        lump->lmm_stripe_count);
+                        le16_to_cpu(lump->lmm_stripe_count));
                 rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
                 if (rc)
                         goto end;
 
                 /* Set root stripeoffset */
                 sprintf(param, "%s-MDT0000.lov.stripeoffset=%u", fsname,
-                        lump->lmm_stripe_offset);
+                        le16_to_cpu(lump->lmm_stripe_offset));
                 rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
                 if (rc)
                         goto end;
