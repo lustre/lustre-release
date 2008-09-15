@@ -597,7 +597,7 @@ struct task_struct {
         int max_groups;
         int ngroups;
         gid_t *groups;
-        __u32 cap_effective;
+        cfs_cap_t cap_effective;
 };
 
 typedef struct task_struct cfs_task_t;
@@ -607,13 +607,6 @@ typedef struct task_struct cfs_task_t;
 
 extern struct task_struct *current;
 int in_group_p(gid_t gid);
-static inline int capable(int cap)
-{
-        if (current->cap_effective & (1 << cap))
-                return 1;
-        else
-                return 0;
-}
 
 #define set_current_state(foo) do { current->state = foo; } while (0)
 
@@ -752,12 +745,6 @@ typedef enum {
     CAP_CLEAR=0,
     CAP_SET=1
 } cap_flag_value_t;
-
-#define CAP_DAC_OVERRIDE        1
-#define CAP_DAC_READ_SEARCH     2
-#define CAP_FOWNER              3
-#define CAP_FSETID              4
-#define CAP_SYS_ADMIN          21
 
 cap_t   cap_get_proc(void);
 int     cap_get_flag(cap_t, cap_value_t, cap_flag_t, cap_flag_value_t *);
