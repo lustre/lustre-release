@@ -1360,7 +1360,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 struct obd_quotactl *oqctl;
                 int rc, error = 0;
 
-                if (!capable(CAP_SYS_ADMIN))
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         RETURN(-EPERM);
 
                 OBD_ALLOC_PTR(oqctl);
@@ -1384,7 +1384,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 struct if_quotacheck *check;
                 int rc;
 
-                if (!capable(CAP_SYS_ADMIN))
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         RETURN(-EPERM);
 
                 OBD_ALLOC_PTR(check);
@@ -1440,13 +1440,13 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 case Q_QUOTAOFF:
                 case Q_SETQUOTA:
                 case Q_SETINFO:
-                        if (!capable(CAP_SYS_ADMIN))
+                        if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                                 GOTO(out_quotactl, rc = -EPERM);
                         break;
                 case Q_GETQUOTA:
                         if (((type == USRQUOTA && current->euid != id) ||
                              (type == GRPQUOTA && !in_egroup_p(id))) &&
-                            !capable(CAP_SYS_ADMIN))
+                            !cfs_capable(CFS_CAP_SYS_ADMIN))
                                 GOTO(out_quotactl, rc = -EPERM);
 
                         /* XXX: dqb_valid is borrowed as a flag to mark that
