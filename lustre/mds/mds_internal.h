@@ -204,7 +204,7 @@ int mds_init_ucred(struct lvfs_ucred *ucred, struct ptlrpc_request *req,
                    int offset);
 void mds_exit_ucred(struct lvfs_ucred *ucred, struct mds_obd *obd);
 void mds_root_squash(struct mds_obd *mds, lnet_nid_t *peernid,
-                     __u32 *fsuid, __u32 *fsgid, __u32 *cap,
+                     __u32 *fsuid, __u32 *fsgid, cfs_kernel_cap_t *cap,
                      __u32 *suppgid, __u32 *suppgid2);
 
 /* mds/mds_unlink_open.c */
