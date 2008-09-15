@@ -258,7 +258,8 @@ case "$lustretag" in
     # windows client porting (lustre: b_client_io_layering, lnet: HEAD) 
     b_winnt_port)
         ldiskfstag="$ldiskfstag_head"
-        lnettag="$lustretag"
+        lnettag="b_winnt_port"
+        libcfstag="b_winnt_port"
         ;;
     
     # v1.0-v1.3, v1.4.0-v1.4.2
