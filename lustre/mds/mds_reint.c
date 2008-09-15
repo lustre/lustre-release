@@ -800,7 +800,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                       lum->lmm_stripe_offset ==
                       (typeof(lum->lmm_stripe_offset))(-1) &&
                       lum->lmm_stripe_count == 0 &&
-                      lum->lmm_magic != LOV_USER_MAGIC_V3)){
+                      le32_to_cpu(lum->lmm_magic) != LOV_USER_MAGIC_V3)){
                         rc = fsfilt_set_md(obd, inode, handle, NULL, 0, "lov");
                         if (rc)
                                 GOTO(cleanup, rc);
