@@ -1481,8 +1481,9 @@ int filter_vfs_unlink(struct inode *dir, struct dentry *dentry,
                 GOTO(out, rc = -EPERM);
 
         /* check_sticky() */
-        if ((dentry->d_inode->i_uid != current->fsuid && !capable(CAP_FOWNER))||
-            IS_APPEND(dentry->d_inode) || IS_IMMUTABLE(dentry->d_inode))
+        if ((dentry->d_inode->i_uid != current->fsuid &&
+             !cfs_capable(CFS_CAP_FOWNER)) || IS_APPEND(dentry->d_inode) ||
+            IS_IMMUTABLE(dentry->d_inode))
                 GOTO(out, rc = -EPERM);
 
         /* NOTE: This might need to go outside i_mutex, though it isn't clear if
