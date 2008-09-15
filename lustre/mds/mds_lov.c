@@ -367,7 +367,7 @@ static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
         stripes = min_t(__u32, LOV_MAX_STRIPE_COUNT,
                                mds->mds_lov_desc.ld_tgt_count);
 
-        mds->mds_max_mdsize = lov_mds_md_size(stripes);
+        mds->mds_max_mdsize = lov_mds_md_size(stripes, LOV_MAGIC_V3);
         mds->mds_max_cookiesize = stripes * sizeof(struct llog_cookie);
         CDEBUG(D_CONFIG, "updated max_mdsize/max_cookiesize for %d stripes: "
                "%d/%d\n", mds->mds_max_mdsize, mds->mds_max_cookiesize,

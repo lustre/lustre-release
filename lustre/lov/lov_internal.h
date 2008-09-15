@@ -285,6 +285,9 @@ void lov_free_memmd(struct lov_stripe_md **lsmp);
 
 void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm);
 void lov_dump_lmm_join(int level, struct lov_mds_md_join *lmmj);
+void lov_dump_lmm_v3(int level, struct lov_mds_md_v3 *lmm);
+void lov_dump_lmm(int level, void *lmm);
+
 /* lov_ea.c */
 int lov_unpackmd_join(struct lov_obd *lov, struct lov_stripe_md *lsm,
                       struct lov_mds_md *lmm);
@@ -305,5 +308,24 @@ static inline void lprocfs_lov_init_vars(struct lprocfs_static_vars *lvars)
         memset(lvars, 0, sizeof(*lvars));
 }
 #endif
+
+/* pools */
+extern lustre_hash_ops_t pool_hash_operations;
+/* ost_pool methods */
+int lov_ost_pool_init(struct ost_pool *op, unsigned int count);
+int lov_ost_pool_extend(struct ost_pool *op, unsigned int max_count);
+int lov_ost_pool_add(struct ost_pool *op, __u32 idx, unsigned int max_count);
+int lov_ost_pool_remove(struct ost_pool *op, __u32 idx);
+int lov_ost_pool_free(struct ost_pool *op);
+
+/* high level pool methods */
+int lov_pool_new(struct obd_device *obd, char *poolname);
+int lov_pool_del(struct obd_device *obd, char *poolname);
+int lov_pool_add(struct obd_device *obd, char *poolname, char *ostname);
+int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname);
+void lov_dump_pool(int level, struct pool_desc *pool);
+struct pool_desc *lov_find_pool(struct lov_obd *lov, char *poolname);
+int lov_check_index_in_pool(__u32 idx, struct pool_desc *pool);
+
 
 #endif

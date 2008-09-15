@@ -111,28 +111,35 @@ static int lprocfs_obd_snprintf(char **page, int end, int *len,
         return n;
 }
 
-int lprocfs_add_simple(struct proc_dir_entry *root, char *name,
-                       read_proc_t *read_proc, write_proc_t *write_proc,
-                       void *data)
+cfs_proc_dir_entry_t *lprocfs_add_simple(struct proc_dir_entry *root,
+                                         char *name,
+                                         read_proc_t *read_proc,
+                                         write_proc_t *write_proc,
+                                         void *data,
+                                         struct file_operations *fops)
 {
-        struct proc_dir_entry *proc;
+        cfs_proc_dir_entry_t *proc;
         mode_t mode = 0;
 
         if (root == NULL || name == NULL)
-                return -EINVAL;
+                return ERR_PTR(-EINVAL);
         if (read_proc)
                 mode = 0444;
         if (write_proc)
                 mode |= 0200;
+        if (fops)
+                mode = 0644;
         proc = create_proc_entry(name, mode, root);
         if (!proc) {
                 CERROR("LprocFS: No memory to create /proc entry %s", name);
-                return -ENOMEM;
+                return ERR_PTR(-ENOMEM);
         }
         proc->read_proc = read_proc;
         proc->write_proc = write_proc;
         proc->data = data;
-        return 0;
+        if (fops)
+                proc->proc_fops = fops;
+        return proc;
 }
 
 struct proc_dir_entry *lprocfs_add_symlink(const char *name,
@@ -730,6 +737,8 @@ static const char *obd_connect_names[] = {
         "change_qunit_size",
         "alt_checksum_algorithm",
         "fid_is_enabled",
+        "version_recovery",
+        "pools",
         NULL
 };
 
@@ -1207,6 +1216,10 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_OBD_OP_INIT(num_private_stats,stats,unregister_page_removal_cb);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, register_lock_cancel_cb);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats,unregister_lock_cancel_cb);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_new);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_rem);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_add);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_del);
 }
 
 int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
@@ -1488,6 +1501,7 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
         int rc = 0;
         struct nid_stat *tmp = NULL, *tmp1;
         struct obd_device *obd = NULL;
+        cfs_proc_dir_entry_t *entry;
         ENTRY;
 
         *newnid = 0;
@@ -1538,15 +1552,19 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
                 GOTO(destroy_new, rc = -ENOMEM);
         }
 
-        rc = lprocfs_add_simple(tmp->nid_proc, "uuid",
-                                lprocfs_exp_rd_uuid, NULL, tmp);
-        if (rc)
+        entry = lprocfs_add_simple(tmp->nid_proc, "uuid",
+                                   lprocfs_exp_rd_uuid, NULL, tmp, NULL);
+        if (IS_ERR(entry)) {
                 CWARN("Error adding the uuid file\n");
+                rc = PTR_ERR(entry);
+        }
 
-        rc = lprocfs_add_simple(tmp->nid_proc, "hash",
-                                lprocfs_exp_rd_hash, NULL, tmp);
-        if (rc)
+        entry = lprocfs_add_simple(tmp->nid_proc, "hash",
+                                lprocfs_exp_rd_hash, NULL, tmp, NULL);
+        if (IS_ERR(entry)) {
                 CWARN("Error adding the hash file\n");
+                rc = PTR_ERR(entry);
+        }
 
         exp->exp_nid_stats = tmp;
         *newnid = 1;

@@ -946,6 +946,54 @@ static inline int obd_ping(struct obd_export *exp)
         RETURN(rc);
 }
 
+static inline int obd_pool_new(struct obd_device *obd, char *poolname)
+{
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_DT_OP(obd, pool_new, -EOPNOTSUPP);
+        OBD_COUNTER_INCREMENT(obd, pool_new);
+
+        rc = OBP(obd, pool_new)(obd, poolname);
+        RETURN(rc);
+}
+
+static inline int obd_pool_del(struct obd_device *obd, char *poolname)
+{
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_DT_OP(obd, pool_del, -EOPNOTSUPP);
+        OBD_COUNTER_INCREMENT(obd, pool_del);
+
+        rc = OBP(obd, pool_del)(obd, poolname);
+        RETURN(rc);
+}
+
+static inline int obd_pool_add(struct obd_device *obd, char *poolname, char *ostname)
+{
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_DT_OP(obd, pool_add, -EOPNOTSUPP);
+        OBD_COUNTER_INCREMENT(obd, pool_add);
+
+        rc = OBP(obd, pool_add)(obd, poolname, ostname);
+        RETURN(rc);
+}
+
+static inline int obd_pool_rem(struct obd_device *obd, char *poolname, char *ostname)
+{
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_DT_OP(obd, pool_rem, -EOPNOTSUPP);
+        OBD_COUNTER_INCREMENT(obd, pool_rem);
+
+        rc = OBP(obd, pool_rem)(obd, poolname, ostname);
+        RETURN(rc);
+}
+
 static inline int obd_init_export(struct obd_export *exp)
 {
         int rc = 0;

@@ -344,6 +344,33 @@ check_lov_mds_md_join(void)
 }
 
 static void
+check_lov_mds_md_v3(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(lov_mds_md_v3);
+        CHECK_MEMBER(lov_mds_md_v3, lmm_magic);
+        CHECK_MEMBER(lov_mds_md_v3, lmm_pattern);
+        CHECK_MEMBER(lov_mds_md_v3, lmm_object_id);
+        CHECK_MEMBER(lov_mds_md_v3, lmm_object_gr);
+        CHECK_MEMBER(lov_mds_md_v3, lmm_stripe_size);
+        CHECK_MEMBER(lov_mds_md_v3, lmm_stripe_count);
+        CHECK_MEMBER(lov_mds_md_v3, lmm_pool_name);
+        CHECK_MEMBER(lov_mds_md_v3, lmm_objects);
+
+        BLANK_LINE();
+        CHECK_STRUCT(lov_ost_data_v1);
+        CHECK_MEMBER(lov_ost_data_v1, l_object_id);
+        CHECK_MEMBER(lov_ost_data_v1, l_object_gr);
+        CHECK_MEMBER(lov_ost_data_v1, l_ost_gen);
+        CHECK_MEMBER(lov_ost_data_v1, l_ost_idx);
+
+        CHECK_CDEFINE(LOV_MAGIC_V3);
+
+        CHECK_VALUE(LOV_PATTERN_RAID0);
+        CHECK_VALUE(LOV_PATTERN_RAID1);
+}
+
+static void
 check_obd_statfs(void)
 {
         BLANK_LINE();
@@ -1307,6 +1334,7 @@ main(int argc, char **argv)
         check_obd_connect_data();
         check_obdo();
         check_lov_mds_md_v1();
+        check_lov_mds_md_v3();
         check_lov_mds_md_join();
         check_obd_statfs();
         check_obd_ioobj();

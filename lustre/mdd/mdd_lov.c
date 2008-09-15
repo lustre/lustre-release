@@ -265,12 +265,11 @@ static int mdd_lov_set_dir_md(const struct lu_env *env,
         LASSERT(S_ISDIR(mdd_object_type(obj)));
         lum = (struct lov_user_md*)buf->lb_buf;
 
-        /* if { size, offset, count } = { 0, -1, 0 } (i.e. all default
+        /* if { size, offset, count } = { 0, -1, 0 } and no pool (i.e. all default
          * values specified) then delete default striping from dir. */
-        if ((lum->lmm_stripe_size == 0 && lum->lmm_stripe_count == 0 &&
-             lum->lmm_stripe_offset == (typeof(lum->lmm_stripe_offset))(-1)) ||
-             /* lmm_stripe_size == -1 is deprecated in 1.4.6 */
-             lum->lmm_stripe_size == (typeof(lum->lmm_stripe_size))(-1)){
+        if (lum->lmm_stripe_size == 0 && lum->lmm_stripe_count == 0 &&
+            lum->lmm_stripe_offset == (typeof(lum->lmm_stripe_offset))(-1) &&
+            lum->lmm_magic != LOV_USER_MAGIC_V3) {
                 rc = mdd_xattr_set_txn(env, obj, &LU_BUF_NULL,
                                        MDS_LOV_MD_NAME, 0, handle);
                 if (rc == -ENODATA)
@@ -324,7 +323,7 @@ int mdd_lov_set_md(const struct lu_env *env, struct mdd_object *pobj,
                 if (lmmp == NULL && lmm_size == 0) {
                         struct mdd_device *mdd = mdd_obj2mdd_dev(child);
                         struct lov_mds_md *lmm = mdd_max_lmm_get(env, mdd);
-                        int size = sizeof(*lmm);
+                        int size = sizeof(struct lov_mds_md_v3);
 
                         /* Get parent dir stripe and set */
                         if (pobj != NULL)
@@ -362,15 +361,21 @@ static void mdd_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm
 {
         struct mds_obd *mds = &obd->u.mds;
         int j;
+        struct lov_ost_data_v1 *lmm_objects;
         ENTRY;
 
         /* if we create file without objects - lmm is NULL */
         if (lmm == NULL)
                 return;
 
+        if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V3)
+                lmm_objects = ((struct lov_mds_md_v3 *)lmm)->lmm_objects;
+        else
+                lmm_objects = lmm->lmm_objects;
+
         for (j = 0; j < le32_to_cpu(lmm->lmm_stripe_count); j++) {
-                int i = le32_to_cpu(lmm->lmm_objects[j].l_ost_idx);
-                obd_id id = le64_to_cpu(lmm->lmm_objects[j].l_object_id);
+                int i = le32_to_cpu(lmm_objects[j].l_ost_idx);
+                obd_id id = le64_to_cpu(lmm_objects[j].l_object_id);
                 int page = i / OBJID_PER_PAGE();
                 int idx = i % OBJID_PER_PAGE();
                 obd_id *data = mds->mds_lov_page_array[page];

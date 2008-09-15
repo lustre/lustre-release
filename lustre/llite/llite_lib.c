@@ -248,7 +248,7 @@ static struct dentry_operations ll_d_root_ops = {
  * calculate this (via a call into the LOV + OSCs) each time we make an RPC. */
 static int ll_init_ea_size(struct obd_export *md_exp, struct obd_export *dt_exp)
 {
-        struct lov_stripe_md lsm = { .lsm_magic = LOV_MAGIC };
+        struct lov_stripe_md lsm = { .lsm_magic = LOV_MAGIC_V3 };
         __u32 valsize = sizeof(struct lov_desc);
         int rc, easize, def_easize, cookiesize;
         struct lov_desc desc;
@@ -316,7 +316,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
                                   OBD_CONNECT_JOIN     | OBD_CONNECT_ATTRFID  |
                                   OBD_CONNECT_VERSION  | OBD_CONNECT_MDS_CAPA |
                                   OBD_CONNECT_OSS_CAPA | OBD_CONNECT_CANCELSET|
-                                  OBD_CONNECT_FID      | OBD_CONNECT_AT;
+                                  OBD_CONNECT_FID      | OBD_CONNECT_AT |
+                                  OBD_CONNECT_LOV_V3;
 
 #ifdef HAVE_LRU_RESIZE_SUPPORT
         if (sbi->ll_flags & LL_SBI_LRU_RESIZE)
@@ -1802,7 +1803,8 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         LASSERT ((lsm != NULL) == ((body->valid & OBD_MD_FLEASIZE) != 0));
         if (lsm != NULL) {
                 if (lli->lli_smd == NULL) {
-                        if (lsm->lsm_magic != LOV_MAGIC &&
+                        if (lsm->lsm_magic != LOV_MAGIC_V1 &&
+                            lsm->lsm_magic != LOV_MAGIC_V3 &&
                             lsm->lsm_magic != LOV_MAGIC_JOIN) {
                                 dump_lsm(D_ERROR, lsm);
                                 LBUG();

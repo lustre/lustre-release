@@ -667,7 +667,6 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
                        lov->lov_tgts, lov->lov_tgt_size);
         }
 
-
         OBD_ALLOC_PTR(tgt);
         if (!tgt) {
                 mutex_up(&lov->lov_lock);
@@ -683,6 +682,11 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
         lov->lov_tgts[index] = tgt;
         if (index >= lov->desc.ld_tgt_count)
                 lov->desc.ld_tgt_count = index + 1;
+
+        rc = lov_ost_pool_add(&lov->lov_packed, index, lov->lov_tgt_size);
+        if (rc)
+                RETURN(rc);
+
         mutex_up(&lov->lov_lock);
 
         CDEBUG(D_CONFIG, "idx=%d ltd_gen=%d ld_tgt_count=%d\n",
@@ -781,6 +785,7 @@ static void __lov_del_obd(struct obd_device *obd, __u32 index)
          * maximum tgt index for computing the mds_max_easize. So we can't
          * shrink it. */
 
+        lov_ost_pool_remove(&lov->lov_packed, index);
         lov->lov_tgts[index] = NULL;
         OBD_FREE_PTR(tgt);
 
@@ -841,6 +846,7 @@ static int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         struct lov_desc *desc;
         struct lov_obd *lov = &obd->u.lov;
         int count;
+        int rc;
         ENTRY;
 
         if (LUSTRE_CFG_BUFLEN(lcfg, 1) < 1) {
@@ -884,15 +890,26 @@ static int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         desc->ld_active_tgt_count = 0;
         lov->desc = *desc;
         lov->lov_tgt_size = 0;
+        rc = lov_ost_pool_init(&lov->lov_packed, 0);
+        if (rc)
+                RETURN(rc);
+
         sema_init(&lov->lov_lock, 1);
         atomic_set(&lov->lov_refcount, 0);
         CFS_INIT_LIST_HEAD(&lov->lov_qos.lq_oss_list);
         init_rwsem(&lov->lov_qos.lq_rw_sem);
         lov->lov_qos.lq_dirty = 1;
-        lov->lov_qos.lq_dirty_rr = 1;
+        lov->lov_qos.lq_rr.lqr_dirty = 1;
         lov->lov_qos.lq_reset = 1;
         /* Default priority is toward free space balance */
         lov->lov_qos.lq_prio_free = 232;
+
+        lov->lov_pools_hash_body = lustre_hash_init("POOLS", 128, 128,
+                                                    &pool_hash_operations,
+                                                    0);
+
+        CFS_INIT_LIST_HEAD(&lov->lov_pool_list);
+        lov->lov_pool_count = 0;
 
         lprocfs_lov_init_vars(&lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
@@ -906,6 +923,9 @@ static int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                         CWARN("Error adding the target_obd file\n");
         }
 #endif
+        lov->lov_pool_proc_entry = lprocfs_register("pools",
+                                                    obd->obd_proc_entry,
+                                                    NULL, NULL);
 
         RETURN(0);
 }
@@ -939,8 +959,23 @@ static int lov_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 static int lov_cleanup(struct obd_device *obd)
 {
         struct lov_obd *lov = &obd->u.lov;
+        struct list_head *pos, *tmp;
+        struct pool_desc *pool;
+
+        list_for_each_safe(pos, tmp, &lov->lov_pool_list) {
+                pool = list_entry(pos, struct pool_desc, pool_list);
+                list_del(&pool->pool_list);
+                lustre_hash_del_key(lov->lov_pools_hash_body, pool->pool_name);
+                lov_ost_pool_free(&(pool->pool_rr.lqr_pool));
+                lov_ost_pool_free(&(pool->pool_obds));
+                OBD_FREE(pool, sizeof(*pool));
+        }
+        lustre_hash_exit(lov->lov_pools_hash_body);
 
         lprocfs_obd_cleanup(obd);
+
+        lov_ost_pool_free(&lov->lov_packed);
+
         if (lov->lov_tgts) {
                 int i;
                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
@@ -964,8 +999,7 @@ static int lov_cleanup(struct obd_device *obd)
                 lov->lov_tgt_size = 0;
         }
 
-        if (lov->lov_qos.lq_rr_size)
-                OBD_FREE(lov->lov_qos.lq_rr_array, lov->lov_qos.lq_rr_size);
+        lov_ost_pool_free(&(lov->lov_qos.lq_rr.lqr_pool));
 
         RETURN(0);
 }
@@ -1015,6 +1049,12 @@ static int lov_process_config(struct obd_device *obd, obd_count len, void *buf)
                                               lcfg, obd);
                 GOTO(out, rc);
         }
+        case LCFG_POOL_NEW:
+        case LCFG_POOL_ADD:
+        case LCFG_POOL_DEL:
+        case LCFG_POOL_REM:
+                GOTO(out, rc);
+
         default: {
                 CERROR("Unknown command: %d\n", lcfg->lcfg_command);
                 GOTO(out, rc = -EINVAL);
@@ -1193,7 +1233,8 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
 #define ASSERT_LSM_MAGIC(lsmp)                                                  \
 do {                                                                            \
         LASSERT((lsmp) != NULL);                                                \
-        LASSERTF(((lsmp)->lsm_magic == LOV_MAGIC ||                             \
+        LASSERTF(((lsmp)->lsm_magic == LOV_MAGIC_V1 ||                          \
+                 (lsmp)->lsm_magic == LOV_MAGIC_V3 ||                           \
                  (lsmp)->lsm_magic == LOV_MAGIC_JOIN), "%p->lsm_magic=%x\n",    \
                  (lsmp), (lsmp)->lsm_magic);                                    \
 } while (0)
@@ -3332,6 +3373,10 @@ struct obd_ops lov_obd_ops = {
         .o_unregister_page_removal_cb = lov_unregister_page_removal_cb,
         .o_register_lock_cancel_cb = lov_register_lock_cancel_cb,
         .o_unregister_lock_cancel_cb = lov_unregister_lock_cancel_cb,
+        .o_pool_new            = lov_pool_new,
+        .o_pool_rem            = lov_pool_remove,
+        .o_pool_add            = lov_pool_add,
+        .o_pool_del            = lov_pool_del,
 };
 
 static quota_interface_t *quota_interface;

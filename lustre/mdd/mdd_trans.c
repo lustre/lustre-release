@@ -121,7 +121,10 @@ int mdd_log_txn_param_build(const struct lu_env *env, struct md_object *obj,
         if (rc || !(ma->ma_valid & MA_LOV))
                 RETURN(rc);
 
-        LASSERT(le32_to_cpu(ma->ma_lmm->lmm_magic) == LOV_MAGIC);
+        LASSERTF(le32_to_cpu(ma->ma_lmm->lmm_magic) == LOV_MAGIC_V1 ||
+                 le32_to_cpu(ma->ma_lmm->lmm_magic) == LOV_MAGIC_V3,
+                 "%08x", le32_to_cpu(ma->ma_lmm->lmm_magic));
+
         if ((int)le32_to_cpu(ma->ma_lmm->lmm_stripe_count) < 0)
                 stripe = mdd2obd_dev(mdd)->u.mds.mds_lov_desc.ld_tgt_count;
         else

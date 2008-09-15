@@ -64,7 +64,8 @@ int mds_post_mds_lovconf(struct obd_device *obd);
 int mds_notify(struct obd_device *obd, struct obd_device *watched,
                enum obd_notify_event ev, void *data);
 int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
-                       struct lov_mds_md *lmm, int lmm_size);
+                       struct lov_mds_md *lmm, int lmm_size,
+                       __u64 connect_flags);
 int mds_init_lov_desc(struct obd_device *obd, struct obd_export *osc_exp);
 
 int mds_obd_create(struct obd_export *exp, struct obdo *oa,

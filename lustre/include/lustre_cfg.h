@@ -73,6 +73,10 @@ enum lcfg_command_type {
         LCFG_ADD_MDC        = 0x00cf014,
         LCFG_DEL_MDC        = 0x00cf015,
         LCFG_SPTLRPC_CONF   = 0x00ce016,
+        LCFG_POOL_NEW       = 0x00ce020,
+        LCFG_POOL_ADD       = 0x00ce021,
+        LCFG_POOL_REM       = 0x00ce022,
+        LCFG_POOL_DEL       = 0x00ce023,
 };
 
 struct lustre_cfg_bufs {
@@ -222,7 +226,7 @@ static inline struct lustre_cfg *lustre_cfg_new(int cmd,
         OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount,
                                        bufs->lcfg_buflen));
         if (!lcfg)
-                RETURN(lcfg);
+                RETURN(ERR_PTR(-ENOMEM));
 
         lcfg->lcfg_version = LUSTRE_CFG_VERSION;
         lcfg->lcfg_command = cmd;

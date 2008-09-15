@@ -240,7 +240,7 @@ int main(int argc, char **argv)
                 return rc;
         }
 
-        lum_size = lov_mds_md_size(MAX_LOV_UUID_COUNT);
+        lum_size = lov_mds_md_size(MAX_LOV_UUID_COUNT, LOV_MAGIC);
         if ((lum_dir = (struct lov_user_md *)malloc(lum_size)) == NULL) {
                 rc = ENOMEM;
                 llapi_err(LLAPI_MSG_ERROR, "error: can't allocate %d bytes "

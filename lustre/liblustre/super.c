@@ -1730,11 +1730,25 @@ static int llu_lov_dir_setstripe(struct inode *ino, unsigned long arg)
         if (rc)
                 return(-EFAULT);
 
-        if (lum.lmm_magic != LOV_USER_MAGIC)
+        switch (lum.lmm_magic) {
+        case LOV_USER_MAGIC_V1: {
+                if (lum.lmm_magic != cpu_to_le32(LOV_USER_MAGIC_V1))
+                        lustre_swab_lov_user_md_v1(&lum);
+                break;
+                }
+        case LOV_USER_MAGIC_V3: {
+                if (lum.lmm_magic != cpu_to_le32(LOV_USER_MAGIC_V3))
+                        lustre_swab_lov_user_md_v3((struct lov_user_md_v3 *)&lum);
+                break;
+                }
+        default: {
+                CDEBUG(D_IOCTL, "bad userland LOV MAGIC:"
+                                " %#08x != %#08x nor %#08x\n",
+                                lum.lmm_magic, LOV_USER_MAGIC_V1,
+                                LOV_USER_MAGIC_V3);
                 RETURN(-EINVAL);
-
-        if (lum.lmm_magic != cpu_to_le32(LOV_USER_MAGIC))
-                lustre_swab_lov_user_md(&lum);
+        }
+        }
 
         /* swabbing is done in lov_setstripe() on server side */
         rc = md_setattr(sbi->ll_md_exp, &op_data, &lum,
@@ -1968,7 +1982,9 @@ struct inode *llu_iget(struct filesys *fs, struct lustre_md *md)
 static int
 llu_init_ea_size(struct obd_export *md_exp, struct obd_export *dt_exp)
 {
-        struct lov_stripe_md lsm = { .lsm_magic = LOV_MAGIC };
+        /* even if default lov is LOV_MAGIC_V1 we use LOV_MAGIC_V3
+         * to be sure buffer are large enough */
+        struct lov_stripe_md lsm = { .lsm_magic = LOV_MAGIC_V3 };
         __u32 valsize = sizeof(struct lov_desc);
         int rc, easize, def_easize, cookiesize;
         struct lov_desc desc;

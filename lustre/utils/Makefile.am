@@ -33,7 +33,7 @@ endif # UTILS
 lib_LIBRARIES = liblustreapi.a libiam.a
 
 lctl_SOURCES = obd.c lustre_cfg.c lctl.c obdctl.h
-lctl_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
+lctl_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
 lctl_DEPENDENCIES := $(LIBPTLCTL)
 
 lfs_SOURCES = lfs.c obd.c lustre_cfg.c
@@ -41,7 +41,7 @@ lfs_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
 lfs_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a 
 
 loadgen_SOURCES = loadgen.c lustre_cfg.c obd.c
-loadgen_LDADD := $(LIBREADLINE) $(LIBPTLCTL) $(PTHREAD_LIBS)
+loadgen_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL) $(PTHREAD_LIBS)
 loadgen_DEPENDENCIES := $(LIBPTLCTL)
 
 if EXT2FS_DEVEL

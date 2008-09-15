@@ -150,6 +150,7 @@ struct lov_stripe_md {
                 __u32 lw_stripe_size;      /* size of the stripe */
                 __u32 lw_pattern;          /* striping pattern (RAID0, RAID1) */
                 unsigned lw_stripe_count;  /* number of objects being striped over */
+                char  lw_pool_name[MAXPOOLNAME]; /* pool name */
         } lsm_wire;
 
         struct lov_array_info *lsm_array; /*Only for joined file array info*/
@@ -163,6 +164,7 @@ struct lov_stripe_md {
 #define lsm_stripe_size  lsm_wire.lw_stripe_size
 #define lsm_pattern      lsm_wire.lw_pattern
 #define lsm_stripe_count lsm_wire.lw_stripe_count
+#define lsm_pool_name    lsm_wire.lw_pool_name
 
 struct obd_info;
 
@@ -649,15 +651,32 @@ struct ltd_qos {
         unsigned int        ltq_usable:1;    /* usable for striping */
 };
 
+/* Generic subset of OSTs */
+struct ost_pool {
+        __u32              *op_array;        /* array of index of
+                                                lov_obd->lov_tgts */
+        unsigned int        op_count;        /* number of OSTs in the array */
+        unsigned int        op_size;         /* allocated size of lp_array */
+        rwlock_t            op_rwlock;       /* to protect lov_pool use */
+};
+
+/* Round-robin allocator data */
+struct lov_qos_rr {
+        __u32               lqr_start_idx;   /* start index of new inode */
+        __u32               lqr_offset_idx;  /* aliasing for start_idx  */
+        int                 lqr_start_count; /* reseed counter */
+        struct ost_pool     lqr_pool;        /* round-robin optimized list */
+        unsigned long       lqr_dirty:1;     /* recalc round-robin list */
+};
+
+/* Stripe placement optimization */
 struct lov_qos {
         struct list_head    lq_oss_list;    /* list of OSSs that targets use */
         struct rw_semaphore lq_rw_sem;
         __u32               lq_active_oss_count;
-        __u32              *lq_rr_array;    /* round-robin optimized list */
-        unsigned int        lq_rr_size;     /* rr array size */
         unsigned int        lq_prio_free;   /* priority for free space */
+        struct lov_qos_rr   lq_rr;          /* round robin qos data */
         unsigned long       lq_dirty:1,     /* recalc qos data */
-                            lq_dirty_rr:1,  /* recalc round-robin list */
                             lq_same_space:1,/* the ost's all have approx.
                                                the same space avail */
                             lq_reset:1;     /* zero current penalties */
@@ -674,9 +693,29 @@ struct lov_tgt_desc {
                             ltd_reap:1;  /* should this target be deleted */
 };
 
+/* Pool metadata */
+#define pool_tgt_size(_p)   _p->pool_obds.op_size
+#define pool_tgt_count(_p)  _p->pool_obds.op_count
+#define pool_tgt_array(_p)  _p->pool_obds.op_array
+#define pool_tgt_rwlock(_p) _p->pool_obds.op_rwlock
+#define pool_tgt(_p, _i)    _p->pool_lov->lov_tgts[_p->pool_obds.op_array[_i]]
+
+struct pool_desc {
+        char                    pool_name[MAXPOOLNAME + 1]; /* name of pool */
+        struct ost_pool         pool_obds;              /* pool members */
+        struct lov_qos_rr       pool_rr;                /* round robin qos */
+        struct hlist_node       pool_hash;              /* access by poolname */
+        struct list_head        pool_list;              /* serial access */
+        cfs_proc_dir_entry_t   *pool_proc_entry;        /* file in /proc */
+        struct lov_obd         *pool_lov;               /* lov obd to which this
+                                                           pool belong */
+};
+
 struct lov_obd {
         struct lov_desc         desc;
-        struct lov_tgt_desc   **lov_tgts;
+        struct lov_tgt_desc   **lov_tgts;              /* sparse array */
+        struct ost_pool         lov_packed;            /* all OSTs in a packed
+                                                          array */
         struct semaphore        lov_lock;
         struct obd_connect_data lov_ocd;
         struct lov_qos          lov_qos;               /* qos info per lov */
@@ -685,13 +724,14 @@ struct lov_obd {
         __u32                   lov_active_tgt_count;  /* how many active */
         __u32                   lov_death_row;/* tgts scheduled to be deleted */
         __u32                   lov_tgt_size;   /* size of tgts array */
-        __u32                   lov_start_idx;  /* start index of new inode */
-        __u32                   lov_offset_idx; /* aliasing for start_idx  */
-        int                     lov_start_count;/* reseed counter */
         int                     lov_connects;
         obd_page_removal_cb_t   lov_page_removal_cb;
         obd_pin_extent_cb       lov_page_pin_cb;
         obd_lock_cancel_cb      lov_lock_cancel_cb;
+        int                     lov_pool_count;
+        lustre_hash_t          *lov_pools_hash_body; /* used for key access */
+        struct list_head        lov_pool_list; /* used for sequential access */
+        cfs_proc_dir_entry_t   *lov_pool_proc_entry;
 };
 
 struct lmv_tgt_desc {
@@ -1340,7 +1380,13 @@ struct obd_ops {
                                        obd_lock_cancel_cb cb);
         int (*o_unregister_lock_cancel_cb)(struct obd_export *exp,
                                          obd_lock_cancel_cb cb);
-
+        /* pools methods */
+        int (*o_pool_new)(struct obd_device *obd, char *poolname);
+        int (*o_pool_del)(struct obd_device *obd, char *poolname);
+        int (*o_pool_add)(struct obd_device *obd, char *poolname,
+                          char *ostname);
+        int (*o_pool_rem)(struct obd_device *obd, char *poolname,
+                          char *ostname);
         /*
          * NOTE: If adding ops, add another LPROCFS_OBD_OP_INIT() line
          * to lprocfs_alloc_obd_stats() in obdclass/lprocfs_status.c.
@@ -1511,15 +1557,18 @@ struct lsm_operations {
                              struct lov_mds_md *lmm);
 };
 
-extern struct lsm_operations lsm_plain_ops;
+extern struct lsm_operations lsm_v1_ops;
 extern struct lsm_operations lsm_join_ops;
+extern struct lsm_operations lsm_v3_ops;
 static inline struct lsm_operations *lsm_op_find(int magic)
 {
         switch(magic) {
-        case LOV_MAGIC:
-               return &lsm_plain_ops;
+        case LOV_MAGIC_V1:
+               return &lsm_v1_ops;
         case LOV_MAGIC_JOIN:
                return &lsm_join_ops;
+        case LOV_MAGIC_V3:
+               return &lsm_v3_ops;
         default:
                CERROR("Cannot recognize lsm_magic %d\n", magic);
                return NULL;

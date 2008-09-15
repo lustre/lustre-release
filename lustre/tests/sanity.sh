@@ -3540,6 +3540,7 @@ test_99a() {
 run_test 99a "cvs init ========================================="
 
 test_99b() {
+        [ -z "$(which cvs 2>/dev/null)" ] && skip "could not find cvs" && return
 	[ ! -d $DIR/d99cvsroot ] && test_99a
 	cd /etc/init.d
 	# some versions of cvs import exit(1) when asked to import links or
@@ -3552,6 +3553,7 @@ test_99b() {
 run_test 99b "cvs import ======================================="
 
 test_99c() {
+        [ -z "$(which cvs 2>/dev/null)" ] && skip "could not find cvs" && return
 	[ ! -d $DIR/d99cvsroot ] && test_99b
 	cd $DIR
 	mkdir -p $DIR/d99reposname
@@ -3561,6 +3563,7 @@ test_99c() {
 run_test 99c "cvs checkout ====================================="
 
 test_99d() {
+        [ -z "$(which cvs 2>/dev/null)" ] && skip "could not find cvs" && return
 	[ ! -d $DIR/d99cvsroot ] && test_99c
 	cd $DIR/d99reposname
 	$RUNAS touch foo99
@@ -3569,6 +3572,7 @@ test_99d() {
 run_test 99d "cvs add =========================================="
 
 test_99e() {
+        [ -z "$(which cvs 2>/dev/null)" ] && skip "could not find cvs" && return
 	[ ! -d $DIR/d99cvsroot ] && test_99c
 	cd $DIR/d99reposname
 	$RUNAS cvs update
@@ -3576,6 +3580,7 @@ test_99e() {
 run_test 99e "cvs update ======================================="
 
 test_99f() {
+        [ -z "$(which cvs 2>/dev/null)" ] && skip "could not find cvs" && return
 	[ ! -d $DIR/d99cvsroot ] && test_99d
 	cd $DIR/d99reposname
 	$RUNAS cvs commit -m 'nomsg' foo99
@@ -4955,8 +4960,10 @@ test_121() { #bug #10589
 run_test 121 "read cancel race ========="
 
 test_123a() { # was test 123, statahead(bug 11401)
+        SLOWOK=0
         if [ -z "$(grep "processor.*: 1" /proc/cpuinfo)" ]; then
                 log "testing on UP system. Performance may be not as good as expected."
+		SLOWOK=1
         fi
 
         remount_client $MOUNT
@@ -5011,7 +5018,7 @@ test_123a() { # was test 123, statahead(bug 11401)
         lctl get_param -n llite.*.statahead_stats
         # wait for commitment of removal
         sleep 2
-        [ $error -ne 0 ] && error "statahead is slow!"
+        [ $error -ne 0 -a $SLOWOK -eq 0 ] && error "statahead is slow!"
         return 0
 }
 run_test 123a "verify statahead work"
@@ -5495,6 +5502,123 @@ test_130e() {
 	echo "FIEMAP with continuation calls succeeded"
 }
 run_test 130e "FIEMAP (test continuation FIEMAP calls)"
+
+POOL=${POOL:-cea1}
+TGT_COUNT=$OSTCOUNT
+TGTPOOL_FIRST=1
+TGTPOOL_MAX=$(($TGT_COUNT - 1))
+TGTPOOL_STEP=2
+TGTPOOL_LIST=`seq $TGTPOOL_FIRST $TGTPOOL_STEP $TGTPOOL_MAX`
+POOL_ROOT=${POOL_ROOT:-$DIR/d200.pools}
+POOL_DIR=$POOL_ROOT/dir_tst
+POOL_FILE=$POOL_ROOT/file_tst
+
+check_file_in_pool()
+{
+	file=$1
+	res=$($GETSTRIPE $file | grep 0x | cut -f2)
+	for i in $res
+	do
+		found=$(echo :$TGTPOOL_LIST: | tr " " ":"  | grep :$i:)
+		if [[ "$found" == "" ]]
+		then
+			echo "pool list: $TGTPOOL_LIST"
+			echo "striping: $res"
+			error "$file not allocated in $POOL"
+			return 1
+		fi
+	done
+	return 0
+}
+
+test_200() {
+	do_facet mgs $LCTL pool_new $FSNAME.$POOL
+	do_facet mgs $LCTL get_param -n lov.$FSNAME-MDT0000-mdtlov.pools.$POOL
+	[ $? == 0 ] || error "Pool creation of $POOL failed"
+}
+run_test 200 "Create new pool =========================================="
+
+test_201() {
+	TGT=$(seq -f $FSNAME-OST%04g_UUID $TGTPOOL_FIRST $TGTPOOL_STEP \
+		$TGTPOOL_MAX | tr '\n' ' ')
+	do_facet mgs $LCTL pool_add $FSNAME.$POOL \
+		$FSNAME-OST[$TGTPOOL_FIRST-$TGTPOOL_MAX/$TGTPOOL_STEP]_UUID
+	res=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-MDT0000-mdtlov.pools.$POOL | sort \
+			| tr '\n' ' ')
+	[ "$res" = "$TGT" ] || error "Pool content ($res) do not match requested ($TGT)"
+}
+run_test 201 "Add targets to a pool ===================================="
+
+test_202a() {
+	mkdir -p $POOL_DIR
+	$SETSTRIPE -c 2 -p $POOL $POOL_DIR
+	[ $? = 0 ] || error "Cannot set pool $POOL to $POOL_DIR"
+}
+run_test 202a "Set pool on a directory ================================="
+
+test_202b() {
+	res=$($GETSTRIPE $POOL_DIR | grep pool: | cut -f8 -d " ")
+	[ "$res" = $POOL ] || error "Pool on $POOL_DIR is not $POOL"
+}
+run_test 202b "Check pool on a directory ==============================="
+
+test_202c() {
+	failed=0
+	for i in $(seq -w 1 $(($TGT_COUNT * 3)))
+	do
+		file=$POOL_DIR/file-$i
+		touch $file
+		check_file_in_pool $file
+		if [[ $? != 0 ]]
+		then
+			failed=$(($failed + 1))
+		fi
+	done
+	[ "$failed" = 0 ] || error "$failed files not allocated in $POOL"
+}
+run_test 202c "Check files allocation from directory pool =============="
+
+test_203() {
+	mkdir -p $POOL_FILE
+	failed=0
+	for i in $(seq -w 1 $(($TGT_COUNT * 3)))
+	do
+		file=$POOL_FILE/spoo-$i
+		$SETSTRIPE -p $POOL $file
+		check_file_in_pool $file
+		if [[ $? != 0 ]]
+		then
+			failed=$(($failed + 1))
+		fi
+	done
+	[ "$failed" = 0 ] || error "$failed files not allocated in $POOL"
+}
+run_test 203 "Create files in a pool ==================================="
+
+test_210a() {
+	TGT=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-MDT0000-mdtlov.pools.$POOL | head -1)
+	do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
+	res=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-MDT0000-mdtlov.pools.$POOL | grep $TGT)
+	[ "$res" = "" ] || error "$TGT not removed from $FSNAME.$POOL"
+}
+run_test 210a "Remove a target from a pool ============================="
+
+test_210b() {
+	for TGT in $(do_facet mgs $LCTL get_param -n lov.$FSNAME-MDT0000-mdtlov.pools.$POOL)
+	do
+		do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
+ 	done
+	res=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-MDT0000-mdtlov.pools.$POOL)
+	[ "$res" = "" ] || error "Pool $FSNAME.$POOL cannot be drained"
+}
+run_test 210b "Remove all targets from a pool =========================="
+
+test_211() {
+	do_facet mgs $LCTL pool_destroy $FSNAME.$POOL
+	res=$(do_facet mgs "$LCTL get_param -n lov.$FSNAME-MDT0000-mdtlov.pools.$POOL 2>/dev/null")
+	[ "$res" = "" ] || error "Pool $FSNAME.$POOL is not destroyed"
+}
+run_test 211 "Remove a pool ============================================"
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP

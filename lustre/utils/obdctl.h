@@ -119,4 +119,6 @@ int jt_blockdev_attach(int argc, char **argv);
 int jt_blockdev_detach(int argc, char **argv);
 int jt_blockdev_info(int argc, char **argv);
 
+int jt_pool_cmd(int argc, char **argv);
+
 #endif

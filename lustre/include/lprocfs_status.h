@@ -403,9 +403,12 @@ extern int lprocfs_add_clear_entry(struct obd_device * obd,
 extern int lprocfs_exp_setup(struct obd_export *exp,
                              lnet_nid_t *peer_nid, int *newnid);
 extern int lprocfs_exp_cleanup(struct obd_export *exp);
-extern int lprocfs_add_simple(struct proc_dir_entry *root,
-                              char *name, cfs_read_proc_t *read_proc,
-                              cfs_write_proc_t *write_proc, void *data);
+extern cfs_proc_dir_entry_t *lprocfs_add_simple(struct proc_dir_entry *root,
+                                                char *name,
+                                                cfs_read_proc_t *read_proc,
+                                                cfs_write_proc_t *write_proc,
+                                                void *data,
+                                                struct file_operations *fops);
 extern struct proc_dir_entry *lprocfs_add_symlink(const char *name,
                         struct proc_dir_entry *parent, const char *dest);
 extern void lprocfs_free_per_client_stats(struct obd_device *obd);
@@ -436,10 +439,6 @@ extern cfs_proc_dir_entry_t *lprocfs_srch(cfs_proc_dir_entry_t *root,
 
 extern int lprocfs_obd_setup(struct obd_device *obd, struct lprocfs_vars *list);
 extern int lprocfs_obd_cleanup(struct obd_device *obd);
-extern int lprocfs_add_simple(struct proc_dir_entry *root, char *name,
-                              cfs_read_proc_t *read_proc,
-                              cfs_write_proc_t *write_proc,
-                              void *data);
 extern void lprocfs_free_per_client_stats(struct obd_device *obd);
 extern struct file_operations lprocfs_evict_client_fops;
 
@@ -658,11 +657,12 @@ static inline int lprocfs_exp_setup(struct obd_export *exp,
 { return 0; }
 static inline int lprocfs_exp_cleanup(struct obd_export *exp)
 { return 0; }
-static inline int lprocfs_add_simple(struct proc_dir_entry *root,
+static inline cfs_proc_dir_entry_t *lprocfs_add_simple(struct proc_dir_entry *root,
                                      char *name,
                                      cfs_read_proc_t *read_proc,
                                      cfs_write_proc_t *write_proc,
-                                     void *data)
+                                     void *data,
+                                     struct file_operations *fops)
 {return 0; }
 static inline struct proc_dir_entry *lprocfs_add_symlink(const char *name,
                         struct proc_dir_entry *parent, const char *dest)
