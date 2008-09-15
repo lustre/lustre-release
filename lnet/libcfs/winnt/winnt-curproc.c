@@ -107,16 +107,45 @@ char  *cfs_curproc_comm(void)
     return this_task.comm;
 }
 
-cfs_kernel_cap_t cfs_curproc_cap_get(void)
+void cfs_cap_raise(cfs_cap_t cap)
 {
-    return this_task.cap_effective;
+        this_task.cap_effective |= (1 << cap);
 }
 
-void cfs_curproc_cap_set(cfs_kernel_cap_t cap)
+void cfs_cap_lower(cfs_cap_t cap)
 {
-    this_task.cap_effective = cap;
+        this_task.cap_effective &= ~(1 << cap);
 }
 
+int cfs_cap_raised(cfs_cap_t cap)
+{
+        return this_task.cap_effective & (1 << cap);
+}
+
+void cfs_kernel_cap_pack(cfs_kernel_cap_t kcap, cfs_cap_t *cap)
+{
+        *cap = kcap;
+}
+
+void cfs_kernel_cap_unpack(cfs_kernel_cap_t *kcap, cfs_cap_t cap)
+{
+        *kcap = cap;
+}
+
+cfs_cap_t cfs_curproc_cap_pack(void) {
+        cfs_cap_t cap;
+        cfs_kernel_cap_pack(this_task.cap_effective, &cap);
+        return cap;
+}
+
+void cfs_curproc_cap_unpack(cfs_cap_t cap) {
+        cfs_kernel_cap_unpack(&this_task.cap_effective, cap);
+}
+
+int cfs_capable(cfs_cap_t cap)
+{
+        return TRUE;
+}
 
 /*
  * Implementation of linux task management routines
@@ -469,5 +498,11 @@ EXPORT_SYMBOL(cfs_curproc_comm);
 EXPORT_SYMBOL(cfs_curproc_groups_nr);
 EXPORT_SYMBOL(cfs_curproc_groups_dump);
 EXPORT_SYMBOL(cfs_curproc_is_in_groups);
-EXPORT_SYMBOL(cfs_curproc_cap_get);
-EXPORT_SYMBOL(cfs_curproc_cap_set);
+EXPORT_SYMBOL(cfs_cap_raise);
+EXPORT_SYMBOL(cfs_cap_lower);
+EXPORT_SYMBOL(cfs_cap_raised);
+EXPORT_SYMBOL(cfs_kernel_cap_pack);
+EXPORT_SYMBOL(cfs_kernel_cap_unpack);
+EXPORT_SYMBOL(cfs_curproc_cap_pack);
+EXPORT_SYMBOL(cfs_curproc_cap_unpack);
+EXPORT_SYMBOL(cfs_capable);
