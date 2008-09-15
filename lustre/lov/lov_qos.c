@@ -266,10 +266,11 @@ static int qos_calc_weight(struct lov_obd *lov, int i)
 }
 
 /* We just used this index for a stripe; adjust everyone's weights */
-static int qos_used(struct lov_obd *lov, __u32 index, __u64 *total_wt)
+static int qos_used(struct lov_obd *lov, struct ost_pool *osts,
+                    __u32 index, __u64 *total_wt)
 {
         struct lov_qos_oss *oss;
-        int i;
+        int j;
         ENTRY;
 
         /* Don't allocate from this stripe anymore, until the next alloc_qos */
@@ -299,7 +300,10 @@ static int qos_used(struct lov_obd *lov, __u32 index, __u64 *total_wt)
 
         *total_wt = 0;
         /* Decrease all OST penalties */
-        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+        for (j = 0; j < osts->op_count; j++) {
+                int i;
+
+                i = osts->op_array[j];
                 if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active)
                         continue;
                 if (lov->lov_tgts[i]->ltd_qos.ltq_penalty <
@@ -836,8 +840,9 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
 
                         cur_weight += lov->lov_tgts[osts->op_array[i]]->ltd_qos.ltq_weight;
 #ifdef QOS_DEBUG
-                        CDEBUG(D_QOS, "cur_weight="LPU64" rand="LPU64"\n",
-                                      cur_weight, rand);
+                        CDEBUG(D_QOS, "stripe_cnt=%d nfound=%d cur_weight="LPU64
+                                      " rand="LPU64" total_weight="LPU64"\n",
+                               *stripe_cnt, nfound, cur_weight, rand, total_weight);
 #endif
                         if (cur_weight >= rand) {
 #ifdef QOS_DEBUG
@@ -845,7 +850,7 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
                                        nfound, osts->op_array[i]);
 #endif
                                 idx_arr[nfound++] = osts->op_array[i];
-                                qos_used(lov, osts->op_array[i], &total_weight);
+                                qos_used(lov, osts, osts->op_array[i], &total_weight);
                                 rc = 0;
                                 break;
                         }
