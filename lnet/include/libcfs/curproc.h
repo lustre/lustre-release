@@ -70,9 +70,38 @@ char  *cfs_curproc_comm(void);
  *
  * cfs_kernel_cap_t
  */
-cfs_kernel_cap_t cfs_curproc_cap_get(void);
-void cfs_curproc_cap_set(cfs_kernel_cap_t cap);
 #endif
+
+typedef __u32 cfs_cap_t;
+
+#define CFS_CAP_CHOWN                   0
+#define CFS_CAP_DAC_OVERRIDE            1
+#define CFS_CAP_DAC_READ_SEARCH         2
+#define CFS_CAP_FOWNER                  3
+#define CFS_CAP_FSETID                  4
+#define CFS_CAP_LINUX_IMMUTABLE         9
+#define CFS_CAP_SYS_ADMIN              21
+#define CFS_CAP_SYS_BOOT               23
+#define CFS_CAP_SYS_RESOURCE           24
+
+#define CFS_CAP_FS_MASK ((1 << CFS_CAP_CHOWN) |                 \
+                         (1 << CFS_CAP_DAC_OVERRIDE) |          \
+                         (1 << CFS_CAP_DAC_READ_SEARCH) |       \
+                         (1 << CFS_CAP_FOWNER) |                \
+                         (1 << CFS_CAP_FSETID ) |               \
+                         (1 << CFS_CAP_LINUX_IMMUTABLE) |       \
+                         (1 << CFS_CAP_SYS_ADMIN) |             \
+                         (1 << CFS_CAP_SYS_BOOT) |              \
+                         (1 << CFS_CAP_SYS_RESOURCE))
+
+void cfs_cap_raise(cfs_cap_t cap);
+void cfs_cap_lower(cfs_cap_t cap);
+int cfs_cap_raised(cfs_cap_t cap);
+void cfs_kernel_cap_pack(cfs_kernel_cap_t kcap, cfs_cap_t *cap);
+void cfs_kernel_cap_unpack(cfs_kernel_cap_t *kcap, cfs_cap_t cap);
+cfs_cap_t cfs_curproc_cap_pack(void);
+void cfs_curproc_cap_unpack(cfs_cap_t cap);
+int cfs_capable(cfs_cap_t cap);
 
 /* __LIBCFS_CURPROC_H__ */
 #endif
