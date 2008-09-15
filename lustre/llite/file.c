@@ -1921,7 +1921,7 @@ static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
         struct lov_stripe_md *lsm, *lsm2;
         ENTRY;
 
-        if (!capable (CAP_SYS_ADMIN))
+        if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                 RETURN(-EPERM);
 
         rc = copy_from_user(&ucreatp, (struct ll_recreate_obj *)arg,
@@ -2134,7 +2134,7 @@ static int ll_lov_setea(struct inode *inode, struct file *file,
         int rc;
         ENTRY;
 
-        if (!capable (CAP_SYS_ADMIN))
+        if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                 RETURN(-EPERM);
 
         OBD_ALLOC(lump, lum_size);
@@ -3146,10 +3146,10 @@ check_groups:
 check_capabilities:
         if (!(mask & MAY_EXEC) ||
             (inode->i_mode & S_IXUGO) || S_ISDIR(inode->i_mode))
-                if (capable(CAP_DAC_OVERRIDE))
+                if (cfs_capable(CFS_CAP_DAC_OVERRIDE))
                         return 0;
 
-        if (capable(CAP_DAC_READ_SEARCH) && ((mask == MAY_READ) ||
+        if (cfs_capable(CFS_CAP_DAC_READ_SEARCH) && ((mask == MAY_READ) ||
             (S_ISDIR(inode->i_mode) && !(mask & MAY_WRITE))))
                 return 0;
 

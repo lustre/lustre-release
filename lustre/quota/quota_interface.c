@@ -156,9 +156,9 @@ static int filter_quota_enforce(struct obd_device *obd, unsigned int ignore)
 
         if (ignore) {
                 CDEBUG(D_QUOTA, "blocks will be written with ignoring quota.\n");
-                cap_raise(current->cap_effective, CAP_SYS_RESOURCE);
+                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
         } else {
-                cap_lower(current->cap_effective, CAP_SYS_RESOURCE);
+                cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
         }
 
         RETURN(0);

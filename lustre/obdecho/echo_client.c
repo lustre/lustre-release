@@ -1148,7 +1148,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
 
         switch (cmd) {
         case OBD_IOC_CREATE:                    /* may create echo object */
-                if (!capable (CAP_SYS_ADMIN))
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
 
                 rc = echo_create_object (obd, 1, &data->ioc_obdo1,
@@ -1157,7 +1157,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 GOTO(out, rc);
 
         case OBD_IOC_DESTROY:
-                if (!capable (CAP_SYS_ADMIN))
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
                 rc = echo_get_object (&eco, obd, &data->ioc_obdo1);
                 if (rc == 0) {
@@ -1184,7 +1184,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 GOTO(out, rc);
 
         case OBD_IOC_SETATTR:
-                if (!capable (CAP_SYS_ADMIN))
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
 
                 rc = echo_get_object (&eco, obd, &data->ioc_obdo1);
@@ -1199,7 +1199,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 GOTO(out, rc);
 
         case OBD_IOC_BRW_WRITE:
-                if (!capable (CAP_SYS_ADMIN))
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
 
                 rw = OBD_BRW_WRITE;
@@ -1218,7 +1218,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 GOTO(out, rc);
 
         case ECHO_IOC_SET_STRIPE:
-                if (!capable (CAP_SYS_ADMIN))
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
 
                 if (data->ioc_pbuf1 == NULL) {  /* unset */
@@ -1235,7 +1235,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 GOTO (out, rc);
 
         case ECHO_IOC_ENQUEUE:
-                if (!capable (CAP_SYS_ADMIN))
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
 
                 rc = echo_client_enqueue(exp, &data->ioc_obdo1,

@@ -3426,7 +3426,7 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_DESTROY: {
                 struct obdo            *oa;
 
-                if (!capable (CAP_SYS_ADMIN))
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, err = -EPERM);
                 oa = &data->ioc_obdo1;
 

@@ -60,7 +60,7 @@ void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
                       void *ea2, int ea2len);
 void mdc_create_pack(struct ptlrpc_request *req, int offset,
                      struct mdc_op_data *op_data, const void *data, int datalen,
-                     __u32 mode, __u32 uid, __u32 gid, __u32 cap_effective,
+                     __u32 mode, __u32 uid, __u32 gid, cfs_cap_t cap_effective,
                      __u64 rdev);
 void mdc_open_pack(struct ptlrpc_request *req, int offset,
                    struct mdc_op_data *op_data, __u32 mode, __u64 rdev,

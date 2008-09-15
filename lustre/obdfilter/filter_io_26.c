@@ -745,7 +745,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                 CDEBUG(D_INODE, "update UID/GID to %lu/%lu\n",
                        (unsigned long)oa->o_uid, (unsigned long)oa->o_gid);
 
-                cap_raise(current->cap_effective, CAP_SYS_RESOURCE);
+                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
 
                 iattr.ia_valid |= ATTR_MODE;
                 iattr.ia_mode = inode->i_mode;

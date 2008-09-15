@@ -331,14 +331,6 @@ extern int llog_recov_thread_start(struct llog_commit_master *lcm);
 extern void llog_recov_thread_stop(struct llog_commit_master *lcm, 
                                    int force);
 
-#ifndef __KERNEL__
-
-#define cap_raise(c, flag) do {} while(0)
-
-#define CAP_SYS_RESOURCE 24
-
-#endif   /* !__KERNEL__ */
-
 static inline void llog_gen_init(struct llog_ctxt *ctxt)
 {
         struct obd_device *obd = ctxt->loc_exp->exp_obd;
@@ -442,8 +434,7 @@ static inline int llog_write_rec(struct llog_handle *handle,
                                  int numcookies, void *buf, int idx)
 {
         struct llog_operations *lop;
-        __u32 cap;
-        int rc, buflen;
+        int raised, rc, buflen;
         ENTRY;
 
         rc = llog_handle2ops(handle, &lop);
@@ -459,10 +450,12 @@ static inline int llog_write_rec(struct llog_handle *handle,
                 buflen = rec->lrh_len;
         LASSERT(size_round(buflen) == buflen);
 
-        cap = current->cap_effective;             
-        cap_raise(current->cap_effective, CAP_SYS_RESOURCE); 
+        raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+        if (!raised)
+                cfs_cap_raise(CFS_CAP_SYS_RESOURCE); 
         rc = lop->lop_write_rec(handle, rec, logcookies, numcookies, buf, idx);
-        current->cap_effective = cap; 
+        if (!raised)
+                cfs_cap_lower(CFS_CAP_SYS_RESOURCE); 
         RETURN(rc);
 }
 
@@ -558,8 +551,7 @@ static inline int llog_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                               struct llog_logid *logid, char *name)
 {
         struct llog_operations *lop;
-        __u32 cap;
-        int rc;
+        int raised, rc;
         ENTRY;
 
         rc = llog_obd2ops(ctxt, &lop);
@@ -568,10 +560,12 @@ static inline int llog_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         if (lop->lop_create == NULL)
                 RETURN(-EOPNOTSUPP);
 
-        cap = current->cap_effective;             
-        cap_raise(current->cap_effective, CAP_SYS_RESOURCE);
+        raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+        if (!raised)
+                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
         rc = lop->lop_create(ctxt, res, logid, name);
-        current->cap_effective = cap; 
+        if (!raised)
+                cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
         RETURN(rc);
 }
 

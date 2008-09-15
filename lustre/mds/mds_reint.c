@@ -2464,7 +2464,7 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
                  * NB root's creds are believed... */
                 LASSERT (req->rq_uid != 0);
                 rec->ur_uc.luc_fsuid = req->rq_uid;
-                rec->ur_uc.luc_cap = 0;
+                cfs_kernel_cap_unpack(&rec->ur_uc.luc_cap, 0);
         }
 #endif
 

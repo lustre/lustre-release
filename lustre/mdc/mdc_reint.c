@@ -176,7 +176,8 @@ int mdc_setattr(struct obd_export *exp, struct mdc_op_data *op_data,
 
 int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
                const void *data, int datalen, int mode, __u32 uid, __u32 gid,
-               __u32 cap_effective, __u64 rdev, struct ptlrpc_request **request)
+               cfs_cap_t cap_effective, __u64 rdev,
+               struct ptlrpc_request **request)
 {
         CFS_LIST_HEAD(cancels);
         struct obd_device *obd = exp->exp_obd;

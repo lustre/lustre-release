@@ -209,7 +209,8 @@ int mdc_readpage(struct obd_export *exp, struct ll_fid *mdc_fid, __u64 offset,
                  struct page *, struct ptlrpc_request **);
 int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
                const void *data, int datalen, int mode, __u32 uid, __u32 gid,
-               __u32 cap_effective, __u64 rdev,struct ptlrpc_request **request);
+               cfs_cap_t cap_effective, __u64 rdev,
+               struct ptlrpc_request **request);
 int mdc_unlink(struct obd_export *exp, struct mdc_op_data *data,
                struct ptlrpc_request **request);
 int mdc_link(struct obd_export *exp, struct mdc_op_data *data,
