@@ -313,6 +313,12 @@ case "$lustretag" in
         libcfstag="b_head_procfs"
 	;;
 
+    b2_0-bld*)
+        lnettag="$lustretag"
+        ldiskfstag="$ldiskfstag_head"
+        libcfstag="$lustretag"
+	;;
+
     # all later v* tags
     v[1-9]*)
         lnettag="$lustretag"
