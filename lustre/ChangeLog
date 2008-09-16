@@ -1411,6 +1411,11 @@ Description: xid & resent requests
 Details    : Initialize RPC XID from clock at startup (randomly if clock is
 	     bad).
 
+Severity   : enhancement
+Bugzilla   : 14095
+Description: Add lustre_start utility to start or stop multiple Lustre servers
+             from a CSV file.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
