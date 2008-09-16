@@ -632,6 +632,11 @@ Bugzilla   : 16695
 Description: kernel panic on racer
 Details    : Do not access dchild->d_inode when IS_ERR(dchild) is true.
 
+Severity   : enhancement
+Bugzilla   : 14095
+Description: Add lustre_start utility to start or stop multiple Lustre servers
+             from a CSV file.
+
 -------------------------------------------------------------------------------
 
 
