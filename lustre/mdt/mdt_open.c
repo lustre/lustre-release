@@ -717,7 +717,7 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
                 }
                 child = mdt_object_find(env, mdt, rr->rr_fid2);
                 if (IS_ERR(child)) {
-                        rc = PTR_ERR(parent);
+                        rc = PTR_ERR(child);
                         LCONSOLE_WARN("Child "DFID" lookup error %d."
                                       " Evicting client %s with export %s.\n",
                                       PFID(mdt_object_fid(child)), rc,
