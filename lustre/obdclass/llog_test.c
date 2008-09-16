@@ -238,7 +238,7 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
         if ((rc = verify_handle("3c", llh, num_recs)))
                 RETURN(rc);
 	
-	CWARN("3d: write log more than BITMAP_SIZE, return -ENOSPC\n");
+        CWARN("3d: write log more than BITMAP_SIZE, return -ENOSPC\n");
         for (i = 0; i < LLOG_BITMAP_SIZE(llh->lgh_hdr) + 1; i++) {
                 struct llog_rec_hdr hdr;
                 char buf_even[24];
@@ -261,7 +261,7 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
                         } else {
                                 CERROR("3d: write recs failed at #%d: %d\n",
                                	        i + 1, rc);
-	                        RETURN(rc);
+                                RETURN(rc);
                         }
                 }
                 num_recs++;
