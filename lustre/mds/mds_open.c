@@ -563,6 +563,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                               obd_uuid2str(&exp->exp_client_uuid),
                               obd_export_nid2str(exp));
                 mds_export_evict(exp);
+                l_dput(parent);
                 EXIT;
                 return;
         }
