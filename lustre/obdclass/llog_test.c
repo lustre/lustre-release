@@ -237,6 +237,41 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
 
         if ((rc = verify_handle("3c", llh, num_recs)))
                 RETURN(rc);
+	
+	CWARN("3d: write log more than BITMAP_SIZE, return -ENOSPC\n");
+        for (i = 0; i < LLOG_BITMAP_SIZE(llh->lgh_hdr) + 1; i++) {
+                struct llog_rec_hdr hdr;
+                char buf_even[24];
+                char buf_odd[32];
+
+                memset(buf_odd, 0, sizeof buf_odd);
+                memset(buf_even, 0, sizeof buf_even);
+		if ((i % 2) == 0) {
+			hdr.lrh_len = 24;
+			hdr.lrh_type = OBD_CFG_REC;
+			rc = llog_write_rec(llh, &hdr, NULL, 0, buf_even, -1);
+		} else {
+			hdr.lrh_len = 32;
+			hdr.lrh_type = OBD_CFG_REC;
+			rc = llog_write_rec(llh, &hdr, NULL, 0, buf_odd, -1);
+		}
+                if (rc) {
+			if (rc == -ENOSPC) {
+				break;
+			} else {
+                        	CERROR("3c: write 8k recs failed at #%d: %d\n",
+                               		i + 1, rc);
+                        	RETURN(rc);
+			}
+                }
+                num_recs++;
+        }
+	if (rc != -ENOSPC) {
+		CWARN("3d: write record more than BITMAP size!\n");
+		RETURN(-EINVAL);
+	}
+        if ((rc = verify_handle("3d", llh, num_recs)))
+                RETURN(rc);
 
         RETURN(rc);
 }
