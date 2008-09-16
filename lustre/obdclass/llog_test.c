@@ -258,7 +258,7 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
                 if (rc) {
                         if (rc == -ENOSPC) {
                                 break;
-			} else {
+                        } else {
                        	        CERROR("3c: write recs failed at #%d: %d\n",
                                	        i + 1, rc);
                        	        RETURN(rc);
