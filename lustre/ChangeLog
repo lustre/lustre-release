@@ -607,7 +607,7 @@ Details    : ptlrpc_at_recv_early_reply() should not modify req->rq_repmsg
 	     rq_lock held.
 
 Severity   : normal
-Frequency  : only X2
+Frequency  : only on Cray X2
 Bugzilla   : 16813
 Description: X2 build failures
 Details    : fix build failures on Cray X2.
@@ -637,8 +637,13 @@ Bugzilla   : 14095
 Description: Add lustre_start utility to start or stop multiple Lustre servers
              from a CSV file.
 
--------------------------------------------------------------------------------
+Severity   : major
+Bugzilla   : 17024
+Description: Lustre GPF in {:ptlrpc:ptlrpc_server_free_request+373}
+Details    : In case of memory pressure, list_del() can be called twice on
+	     req->rq_history_list, causing a kernel oops.
 
+-------------------------------------------------------------------------------
 
 2008-05-26  Sun Microsystems, Inc.
        * version 1.6.5
