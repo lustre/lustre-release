@@ -795,11 +795,10 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
         CDEBUG(D_CONFIG, "cat list: disk size=%d, read=%d\n",
                (int)i_size_read(file->f_dentry->d_inode), size);
 
+        memset(idarray, 0, size);
         /* read for new ost index or for empty file */
-        if (i_size_read(file->f_dentry->d_inode) < off) {
-                memset(idarray, 0, size);
+        if (i_size_read(file->f_dentry->d_inode) < off)
                 GOTO(out, rc = 0);
-        }
 
         rc = fsfilt_read_record(disk_obd, file, idarray, size, &off);
         if (rc) {
