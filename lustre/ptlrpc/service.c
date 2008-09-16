@@ -485,7 +485,7 @@ static void ptlrpc_server_free_request(struct ptlrpc_request *req)
         } else if (req->rq_reply_state && req->rq_reply_state->rs_prealloc) {
                  /* If we are low on memory, we are not interested in
                     history */
-                list_del(&req->rq_history_list);
+                list_del_init(&req->rq_history_list);
                 __ptlrpc_server_free_request(req);
         }
 
