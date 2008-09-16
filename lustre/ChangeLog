@@ -131,6 +131,11 @@ Details    : This patch includes att18982, att18236, att18237 in bz14840.
              2. prevent watchdog storm when osts threads wait for the
 	        recovery of mds
 
+Severity   : enhancement
+Bugzilla   : 14095
+Description: Add lustre_start utility to start or stop multiple Lustre servers
+             from a CSV file.
+
 --------------------------------------------------------------------------
 
 2008-08-31 Sun Microsystems, Inc.

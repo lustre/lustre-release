@@ -114,9 +114,11 @@ shift  `expr $OPTIND - 1`
 
 # Here we expect the csv file
 if [ $# -eq 0 ]; then
-    echo >&2 "`basename $0`: Missing csv file!"
+    error_output "Missing csv file!"
     usage
 fi
+
+CSV_FILE=$1
 
 # check_md_item index
 #
@@ -124,7 +126,7 @@ fi
 check_md_item() {
     # Check argument
     if [ $# -eq 0 ]; then
-        echo >&2 "`basename $0`: check_md_item() error:"\
+        error_output "check_md_item():"\
                  "Missing argument!"
         return 1
     fi
@@ -133,7 +135,7 @@ check_md_item() {
 
     # Check hostname
     if [ -z "${HOST_NAME[i]}" ]; then
-        echo >&2 "`basename $0`: check_md_item() error:"\
+        error_output "check_md_item():"\
                  "hostname item has null value!"
         return 1
     fi
@@ -142,19 +144,19 @@ check_md_item() {
     if [ -z "${OP_MODE[i]}" -o "${OP_MODE[i]}" = "create" ]; then
         # Check MD device name 
         if [ -z "${MD_NAME[i]}" ]; then
-            echo >&2 "`basename $0`: check_md_item() error:"\
+            error_output "check_md_item():"\
             "md name item has null value!"
             return 1
         fi
 
         if [ -z "${RAID_LEVEL[i]}" ]; then
-            echo >&2 "`basename $0`: check_md_item() error:"\
+            error_output "check_md_item():"\
             "raid level item of MD device ${MD_NAME[i]} has null value!"
             return 1
         fi
 
         if [ -z "${MD_DEVS[i]}" ]; then
-            echo >&2 "`basename $0`: check_md_item() error:"\
+            error_output "check_md_item():"\
             "component devices item of ${MD_NAME[i]} has null value!"
             return 1
         fi
@@ -169,11 +171,11 @@ check_md_item() {
 get_md_items() {
     # Check argument
     if [ $# -eq 0 ]; then
-        echo >&2 "`basename $0`: get_md_items() error: Missing csv file!"
+        error_output "get_md_items(): Missing csv file!"
         return 1
     fi
 
-    CSV_FILE=$1
+    local CSV_FILE=$1
     local LINE
     local hostname
     declare -i line_num=0
@@ -208,7 +210,7 @@ get_md_items() {
 
         # Check some required items
         if ! check_md_item $idx; then
-            echo >&2 "`basename $0`: check_md_item() error:"\
+            error_output "check_md_item():"\
                      "Occurred on line ${line_num} in ${CSV_FILE}."
             return 1    
         fi
@@ -231,7 +233,7 @@ md_is_active() {
     ret_str=$(${REMOTE} ${host_name} "${cmd}" 2>&1)
     if [ ${PIPESTATUS[0]} -ne 0 ]; then
         if [ -n "${ret_str}" ]; then
-            echo >&2 "`basename $0`: md_is_active() error:"\
+            error_output "md_is_active():"\
             "remote command to ${host_name} error: ${ret_str}!"
             return 2    # Error occurred
         else
@@ -365,7 +367,7 @@ construct_mdadm_cmdline() {
                     # Construct the create command line
                     mdadm_cmd=$(construct_mdadm_create_cmdline ${i})
                     if [ ${PIPESTATUS[0]} -ne 0 ]; then
-                        echo >&2 "${mdadm_cmd}"
+                        error_output "${mdadm_cmd}"
                         return 1
                     fi
 
@@ -429,7 +431,7 @@ config_md_devs() {
     verbose_output "Configuring MD devices in host ${host_name}..."
     verbose_output "Configure command line is: \"${MDADM_CMDLINE}\""
     REMOTE_CMD[pid_num]="${REMOTE} ${host_name} \"${MDADM_CMDLINE}\""
-    ${REMOTE} ${host_name} "${MDADM_CMDLINE}" >&2 &
+    $REMOTE $host_name "export PATH=\$PATH:/sbin:/usr/sbin; $MDADM_CMDLINE" &
     REMOTE_PID[pid_num]=$!
     let "pid_num += 1"
     sleep 1
@@ -471,7 +473,7 @@ config_md() {
     for ((pid_num = 0; pid_num < ${#REMOTE_PID[@]}; pid_num++)); do
         wait ${REMOTE_PID[${pid_num}]}
         if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo >&2 "`basename $0`: config_md() error: Failed"\
+            error_output "config_md(): Failed"\
                  "to execute \"${REMOTE_CMD[${pid_num}]}\"!"
             failed_status=true
         fi
@@ -487,13 +489,10 @@ config_md() {
 
 # Main flow
 # Check the csv file
-if ! check_file $1; then
-    exit 1    
-fi
+check_file $CSV_FILE || exit ${PIPESTATUS[0]}
 
 # Get the list of nodes to be operated on
-NODES_TO_USE=$(get_nodelist)
-[ ${PIPESTATUS[0]} -ne 0 ] && echo >&2 "${NODES_TO_USE}" && exit 1
+NODES_TO_USE=$(get_nodelist) || error_exit ${PIPESTATUS[0]} "$NODES_TO_USE"
 
 # Check the node list
 check_nodelist ${NODES_TO_USE} || exit 1
