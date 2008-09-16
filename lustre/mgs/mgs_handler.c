@@ -90,6 +90,8 @@ static int mgs_connect(const struct lu_env *env,
                 data->ocd_version = LUSTRE_VERSION_CODE;
         }
 
+        rc = mgs_client_add(obd, exp, localdata);
+
         if (rc) {
                 class_disconnect(exp);
         } else {
@@ -107,6 +109,8 @@ static int mgs_reconnect(const struct lu_env *env,
 
         if (exp == NULL || obd == NULL || cluuid == NULL)
                 RETURN(-EINVAL);
+
+        mgs_counter_incr(exp, LPROC_MGS_CONNECT);
 
         if (data != NULL) {
                 data->ocd_connect_flags &= MGS_CONNECT_SUPPORTED;
@@ -463,7 +467,7 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                 }
                 mti->mti_flags |= LDD_F_UPDATE;
                 /* Erased logs means start from scratch. */
-                mti->mti_flags &= ~LDD_F_UPGRADE14; 
+                mti->mti_flags &= ~LDD_F_UPGRADE14;
         }
 
         /* COMPAT_146 */
@@ -473,7 +477,7 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                         CERROR("Can't upgrade from 1.4 (%d)\n", rc);
                         GOTO(out, rc);
                 }
-                
+
                 /* We're good to go */
                 mti->mti_flags |= LDD_F_UPDATE;
         }
@@ -709,6 +713,7 @@ static inline int mgs_destroy_export(struct obd_export *exp)
         ENTRY;
 
         target_destroy_export(exp);
+        mgs_client_free(exp);
         ldlm_destroy_export(exp);
 
         RETURN(0);
@@ -732,7 +737,7 @@ static int mgs_extract_fs_pool(char * arg, char *fsname, char *poolname)
         RETURN(0);
 }
 
-static int mgs_iocontrol_pool(struct obd_device *obd, 
+static int mgs_iocontrol_pool(struct obd_device *obd,
                               struct obd_ioctl_data *data)
 {
         int rc;

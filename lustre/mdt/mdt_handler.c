@@ -2081,8 +2081,8 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         LASSERT(current->journal_info == NULL);
 
         /*
-         * Checking for various OBD_FAIL_$PREF_$OPC_NET codes. _Do_ not try 
-         * to put same checks into handlers like mdt_close(), mdt_reint(), 
+         * Checking for various OBD_FAIL_$PREF_$OPC_NET codes. _Do_ not try
+         * to put same checks into handlers like mdt_close(), mdt_reint(),
          * etc., without talking to mdt authors first. Checking same thing
          * there again is useless and returning 0 error wihtout packing reply
          * is buggy! Handlers either pack reply or return error.
@@ -2712,8 +2712,8 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
                 RETURN(ELDLM_LOCK_REPLACED);
         }
 
-        /* 
-         * Fixup the lock to be given to the client. 
+        /*
+         * Fixup the lock to be given to the client.
          */
         lock_res_and_lock(new_lock);
         new_lock->l_readers = 0;
@@ -2726,7 +2726,7 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
         new_lock->l_flags &= ~LDLM_FL_LOCAL;
 
         lustre_hash_add(new_lock->l_export->exp_lock_hash,
-                        &new_lock->l_remote_handle, 
+                        &new_lock->l_remote_handle,
                         &new_lock->l_exp_hash);
 
         unlock_res_and_lock(new_lock);
@@ -2912,7 +2912,7 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
 
         lhc->mlh_reg_lh.cookie = 0ull;
         if (rc == -ENOTCONN || rc == -ENODEV) {
-                /* 
+                /*
                  * If it is the disconnect error (ENODEV & ENOCONN), the error
                  * will be returned by rq_status, and client at ptlrpc layer
                  * will detect this, then disconnect, reconnect the import
@@ -2920,15 +2920,15 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
                  */
                 RETURN(rc);
         } else {
-                /* 
+                /*
                  * For other cases, the error will be returned by intent.
                  * and client will retrieve the result from intent.
-                 */ 
-                 /* 
+                 */
+                 /*
                   * FIXME: when open lock is finished, that should be
                   * checked here.
                   */
-                RETURN(ELDLM_LOCK_ABORTED); 
+                RETURN(ELDLM_LOCK_ABORTED);
         }
 }
 
@@ -4445,6 +4445,9 @@ static int mdt_obd_disconnect(struct obd_export *exp)
         rc = class_disconnect(exp);
         if (mdt->mdt_namespace != NULL || exp->exp_obd->obd_namespace != NULL)
                 ldlm_cancel_locks_for_export(exp);
+
+        /* release nid stat refererence */
+        lprocfs_exp_cleanup(exp);
 
         /* complete all outstanding replies */
         spin_lock(&exp->exp_lock);

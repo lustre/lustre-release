@@ -135,7 +135,7 @@ int filter_finish_transno(struct obd_export *exp, struct obd_trans_info *oti,
                 err = -EINVAL;
         } else {
                 if (!force_sync)
-                        force_sync = fsfilt_add_journal_cb(exp->exp_obd, 
+                        force_sync = fsfilt_add_journal_cb(exp->exp_obd,
                                                            last_rcvd,
                                                            oti->oti_handle,
                                                            filter_commit_cb,
@@ -255,7 +255,7 @@ static int filter_client_add(struct obd_device *obd, struct obd_export *exp,
         struct filter_export_data *fed = &exp->exp_filter_data;
         unsigned long *bitmap = filter->fo_last_rcvd_slots;
         int new_client = (cl_idx == -1);
- 
+
         ENTRY;
 
         LASSERT(bitmap != NULL);
@@ -987,7 +987,7 @@ static int filter_read_group_internal(struct obd_device *obd, int group,
                         RETURN(PTR_ERR(dentry));
                 }
         } else {
-                dentry = simple_mkdir(filter->fo_dentry_O, filter->fo_vfsmnt, 
+                dentry = simple_mkdir(filter->fo_dentry_O, filter->fo_vfsmnt,
                                       name, 0700, 1);
                 if (IS_ERR(dentry)) {
                         CERROR("cannot lookup/create O/%s: rc = %ld\n", name,
@@ -1022,7 +1022,7 @@ static int filter_read_group_internal(struct obd_device *obd, int group,
                         char dir[20];
                         snprintf(dir, sizeof(dir), "d%u", i);
 
-                        tmp_subdirs->dentry[i] = simple_mkdir(dentry, 
+                        tmp_subdirs->dentry[i] = simple_mkdir(dentry,
                                                               filter->fo_vfsmnt,
                                                               dir, 0700, 1);
                         if (IS_ERR(tmp_subdirs->dentry[i])) {
@@ -1150,7 +1150,7 @@ static int filter_prep_groups(struct obd_device *obd)
         loff_t off = 0;
         ENTRY;
 
-        O_dentry = simple_mkdir(current->fs->pwd, filter->fo_vfsmnt, 
+        O_dentry = simple_mkdir(current->fs->pwd, filter->fo_vfsmnt,
                                 "O", 0700, 1);
         CDEBUG(D_INODE, "got/created O: %p\n", O_dentry);
         if (IS_ERR(O_dentry)) {
@@ -1764,7 +1764,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
                 if (tree->lit_mode == LCK_PR)
                         continue;
 
-                interval_iterate_reverse(tree->lit_root, 
+                interval_iterate_reverse(tree->lit_root,
                                          filter_intent_cb, &arg);
         }
         unlock_res(res);
@@ -2195,7 +2195,7 @@ static int filter_olg_fini(struct obd_llog_group *olg)
         RETURN(rc);
 }
 
-static int 
+static int
 filter_olg_init(struct obd_device *obd, struct obd_llog_group *olg,
                 struct obd_device *tgt)
 {
@@ -2221,7 +2221,7 @@ cleanup:
 /**
  * Init the default olg, which is embeded in the obd_device, for filter.
  */
-static int 
+static int
 filter_default_olg_init(struct obd_device *obd, struct obd_llog_group *olg,
                         struct obd_device *tgt)
 {
@@ -2245,7 +2245,7 @@ filter_default_olg_init(struct obd_device *obd, struct obd_llog_group *olg,
 
         ctxt = llog_group_get_ctxt(olg, LLOG_MDS_OST_REPL_CTXT);
         if (!ctxt) {
-                CERROR("Can't get ctxt for %p:%x\n", olg, 
+                CERROR("Can't get ctxt for %p:%x\n", olg,
                        LLOG_MDS_OST_REPL_CTXT);
                 GOTO(cleanup_olg, rc = -ENODEV);
         }
@@ -2261,8 +2261,8 @@ cleanup_lcm:
         filter->fo_lcm = NULL;
         return rc;
 }
-                     
-static int 
+
+static int
 filter_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                  struct obd_device *tgt, int count, struct llog_catid *catid,
                  struct obd_uuid *uuid)
@@ -2282,7 +2282,7 @@ filter_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                 RETURN(rc);
         ctxt = llog_group_get_ctxt(olg, LLOG_MDS_OST_REPL_CTXT);
         if (!ctxt) {
-                CERROR("Can't get ctxt for %p:%x\n", olg, 
+                CERROR("Can't get ctxt for %p:%x\n", olg,
                        LLOG_MDS_OST_REPL_CTXT);
                 filter_olg_fini(olg);
                 RETURN(-ENODEV);
@@ -2298,7 +2298,7 @@ static int filter_llog_finish(struct obd_device *obd, int count)
         struct filter_obd *filter = &obd->u.filter;
         struct llog_ctxt *ctxt;
         ENTRY;
-        
+
         ctxt = llog_group_get_ctxt(&obd->obd_olg, LLOG_MDS_OST_REPL_CTXT);
         LASSERT(ctxt != NULL);
         mutex_down(&ctxt->loc_sem);
@@ -2354,11 +2354,11 @@ struct obd_llog_group *filter_find_olg(struct obd_device *obd, int group)
         olg = filter_find_olg_internal(filter, group);
         spin_unlock(&filter->fo_llog_list_lock);
 
-        RETURN(olg); 
+        RETURN(olg);
 }
 /**
  * Find the llog_group of the filter according to the group. If it can not
- * find, create the llog_group, which only happens when mds is being synced 
+ * find, create the llog_group, which only happens when mds is being synced
  * with OST.
  */
 struct obd_llog_group *filter_find_create_olg(struct obd_device *obd, int group)
@@ -2428,7 +2428,7 @@ static int filter_llog_connect(struct obd_export *exp,
         olg = filter_find_olg(obd, body->lgdc_logid.lgl_ogr);
         if (!olg) {
                 CERROR(" %s: can not find olg of group %d\n",
-                       obd->obd_name, (int)body->lgdc_logid.lgl_ogr); 
+                       obd->obd_name, (int)body->lgdc_logid.lgl_ogr);
                 RETURN(-ENOENT);
         }
         llog_group_set_export(olg, exp);
@@ -2469,8 +2469,8 @@ static int filter_llog_preclean(struct obd_device *obd)
                 list_add(&olg->olg_list, &remove_list);
         }
         spin_unlock(&filter->fo_llog_list_lock);
-        
-        list_for_each_entry_safe(olg, tmp, &remove_list, olg_list) {  
+
+        list_for_each_entry_safe(olg, tmp, &remove_list, olg_list) {
                 list_del_init(&olg->olg_list);
                 rc = filter_olg_fini(olg);
                 if (rc)
@@ -2943,7 +2943,7 @@ static void filter_sync_llogs(struct obd_device *obd, struct obd_export *dexp)
                         llog_ctxt_put(ctxt);
                         if (err)
                                 CERROR("error flushing logs to MDS: rc %d\n",
-                                       err);                        
+                                       err);
                 }
         } while (olg_min != NULL);
 }
@@ -3259,7 +3259,7 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
 
         /* This would be very bad - accidentally truncating a file when
          * changing the time or similar - bug 12203. */
-        if (oinfo->oi_oa->o_valid & OBD_MD_FLSIZE && 
+        if (oinfo->oi_oa->o_valid & OBD_MD_FLSIZE &&
             oinfo->oi_policy.l_extent.end != OBD_OBJECT_EOF) {
                 static char mdsinum[48];
 
@@ -3407,7 +3407,7 @@ static int filter_destroy_precreated(struct obd_export *exp, struct obdo *oa,
 
         CWARN("%s: deleting orphan objects from "LPU64" to "LPU64"\n",
                exp->exp_obd->obd_name, oa->o_id + 1, last);
-               
+
         for (id = last; id > oa->o_id; id--) {
                 doa.o_id = id;
                 rc = filter_destroy(exp, &doa, NULL, NULL, NULL);
@@ -3634,7 +3634,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                         rc = -EAGAIN;
                         break;
                 }
-                
+
                 if (recreate_obj) {
                         __u64 last_id;
                         next_id = oa->o_id;
@@ -3947,13 +3947,13 @@ cleanup:
                                                      filter_cancel_cookies_cb,
                                                      fcc);
                 /* If add_journal_cb failed, then filter_finish_transno
-                 * will commit the handle and we will do a sync 
-                 * on commit. then we call callback directly to free 
-                 * the fcc. 
+                 * will commit the handle and we will do a sync
+                 * on commit. then we call callback directly to free
+                 * the fcc.
                  */
                 rc = filter_finish_transno(exp, oti, rc, sync);
                 if (sync) {
-                        filter_cancel_cookies_cb(obd, 0, fcc, rc); 
+                        filter_cancel_cookies_cb(obd, 0, fcc, rc);
                         fcc = NULL;
                 }
                 rc2 = fsfilt_commit(obd, dparent->d_inode, handle, 0);
@@ -4202,7 +4202,7 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
                 RETURN(PTR_ERR(olg));
 
         llog_group_set_export(olg, exp);
-        
+
         ctxt = llog_group_get_ctxt(olg, LLOG_MDS_OST_REPL_CTXT);
         LASSERTF(ctxt != NULL, "ctxt is null\n"),
 

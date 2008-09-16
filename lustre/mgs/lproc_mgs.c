@@ -121,7 +121,7 @@ int lproc_mgs_cleanup(struct obd_device *obd)
         struct mgs_obd *mgs;
 
         if (!obd)
-                RETURN(-EINVAL);
+                return -EINVAL;
 
         mgs = &obd->u.mgs;
         if (mgs->mgs_proc_live) {
@@ -130,6 +130,7 @@ int lproc_mgs_cleanup(struct obd_device *obd)
                 lprocfs_remove(&mgs->mgs_proc_live);
                 mgs->mgs_proc_live = NULL;
         }
+        lprocfs_free_per_client_stats(obd);
         lprocfs_free_obd_stats(obd);
 
         return lprocfs_obd_cleanup(obd);
@@ -165,22 +166,22 @@ static void seq_show_srpc_rule(struct seq_file *seq, const char *tgtname,
         }
 }
 
-static int mgs_live_seq_show(struct seq_file *seq, void *v) 
+static int mgs_live_seq_show(struct seq_file *seq, void *v)
 {
         struct fs_db             *fsdb = seq->private;
         struct mgs_tgt_srpc_conf *srpc_tgt;
         int i;
-        
+
         down(&fsdb->fsdb_sem);
 
         seq_printf(seq, "fsname: %s\n", fsdb->fsdb_name);
-        seq_printf(seq, "flags: %#x     gen: %d\n", 
+        seq_printf(seq, "flags: %#x     gen: %d\n",
                    fsdb->fsdb_flags, fsdb->fsdb_gen);
         for (i = 0; i < INDEX_MAP_SIZE * 8; i++)
-                 if (test_bit(i, fsdb->fsdb_mdt_index_map)) 
+                 if (test_bit(i, fsdb->fsdb_mdt_index_map))
                          seq_printf(seq, "%s-MDT%04x\n", fsdb->fsdb_name, i);
         for (i = 0; i < INDEX_MAP_SIZE * 8; i++)
-                 if (test_bit(i, fsdb->fsdb_ost_index_map)) 
+                 if (test_bit(i, fsdb->fsdb_ost_index_map))
                          seq_printf(seq, "%s-OST%04x\n", fsdb->fsdb_name, i);
 
         seq_printf(seq, "\nSecure RPC Config Rules:\n");
@@ -206,9 +207,9 @@ int lproc_mgs_add_live(struct obd_device *obd, struct fs_db *fsdb)
         struct mgs_obd *mgs = &obd->u.mgs;
         int rc;
 
-        if (!mgs->mgs_proc_live) 
+        if (!mgs->mgs_proc_live)
                 return 0;
-        rc = lprocfs_seq_create(mgs->mgs_proc_live, fsdb->fsdb_name, 0444, 
+        rc = lprocfs_seq_create(mgs->mgs_proc_live, fsdb->fsdb_name, 0444,
                                 &mgs_live_fops, fsdb);
 
         return 0;
@@ -218,7 +219,7 @@ int lproc_mgs_del_live(struct obd_device *obd, struct fs_db *fsdb)
 {
         struct mgs_obd *mgs = &obd->u.mgs;
 
-        if (!mgs->mgs_proc_live) 
+        if (!mgs->mgs_proc_live)
                 return 0;
 
         lprocfs_remove_proc_entry(fsdb->fsdb_name, mgs->mgs_proc_live);

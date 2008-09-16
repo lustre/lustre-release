@@ -49,9 +49,9 @@
 
 /* mgs_llog.c */
 int class_dentry_readdir(struct obd_device *obd, struct dentry *dir,
-                         struct vfsmount *inmnt, 
+                         struct vfsmount *inmnt,
                          struct list_head *dentry_list);
- 
+
 struct mgs_tgt_srpc_conf {
         struct mgs_tgt_srpc_conf  *mtsc_next;
         char                      *mtsc_tgt;
@@ -99,6 +99,9 @@ int mgs_pool_cmd(struct obd_device *obd, enum lcfg_command_type cmd,
                  char *poolname, char *fsname, char *ostname);
 
 /* mgs_fs.c */
+int mgs_client_add(struct obd_device *obd, struct obd_export *exp,
+                   void *localdata);
+int mgs_client_free(struct obd_export *exp);
 int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt);
 int mgs_fs_cleanup(struct obd_device *obddev);
 
@@ -110,7 +113,7 @@ int lproc_mgs_add_live(struct obd_device *obd, struct fs_db *fsdb);
 int lproc_mgs_del_live(struct obd_device *obd, struct fs_db *fsdb);
 void lprocfs_mgs_init_vars(struct lprocfs_static_vars *lvars);
 #else
-static inline int lproc_mgs_setup(struct obd_device *dev) 
+static inline int lproc_mgs_setup(struct obd_device *dev)
 {return 0;}
 static inline int lproc_mgs_cleanup(struct obd_device *obd)
 {return 0;}
