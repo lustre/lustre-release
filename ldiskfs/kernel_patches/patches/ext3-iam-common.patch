@@ -1,0 +1,5477 @@
+Index: linux-2.6.22.14/fs/ext3/iam_lvar.c
+===================================================================
+--- /dev/null
++++ linux-2.6.22.14/fs/ext3/iam_lvar.c
+@@ -0,0 +1,1091 @@
++/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
++ * vim:expandtab:shiftwidth=8:tabstop=8:
++ *
++ * GPL HEADER START
++ *
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 only,
++ * as published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful, but
++ * WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * General Public License version 2 for more details (a copy is included
++ * in the LICENSE file that accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License
++ * version 2 along with this program; If not, see [sun.com URL with a
++ * copy of GPLv2].
++ *
++ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
++ * CA 95054 USA or visit www.sun.com if you need additional information or
++ * have any questions.
++ *
++ * GPL HEADER END
++ */
++/*
++ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
++ * Use is subject to license terms.
++ */
++/*
++ * This file is part of Lustre, http://www.lustre.org/
++ * Lustre is a trademark of Sun Microsystems, Inc.
++ *
++ * iam_lvar.c
++ *
++ * implementation of iam format for fixed size records, variable sized keys.
++ *
++ * Author: Nikita Danilov <nikita@clusterfs.com>
++ */
++
++#include <linux/types.h>
++#include <linux/jbd.h>
++/* ext3_error() */
++#include <linux/ext3_fs.h>
++
++#include <linux/lustre_iam.h>
++
++/*
++ * Leaf operations.
++ */
++
++enum {
++        IAM_LVAR_LEAF_MAGIC = 0x1973 /* This is duplicated in
++                                      * lustre/utils/create_iam.c */
++};
++
++/* This is duplicated in lustre/utils/create_iam.c */
++struct lvar_leaf_header {
++        __le16 vlh_magic; /* magic number IAM_LVAR_LEAF_MAGIC */
++        __le16 vlh_used;  /* used bytes, including header */
++};
++
++/*
++ * Format of leaf entry:
++ *
++ * __le16 keysize
++ *     u8 key[keysize]
++ *     u8 record[rec_size]
++ *
++ * Entries are ordered in key order.
++ */
++
++/* This is duplicated in lustre/utils/create_iam.c */
++typedef __u32 lvar_hash_t;
++
++/* This is duplicated in lustre/utils/create_iam.c */
++struct lvar_leaf_entry {
++        __le32 vle_hash;
++        __le16 vle_keysize;
++        u8     vle_key[0];
++};
++
++#define PDIFF(ptr0, ptr1) (((char *)(ptr0)) - ((char *)(ptr1)))
++
++
++static inline int blocksize(const struct iam_leaf *leaf)
++{
++        return iam_leaf_container(leaf)->ic_object->i_sb->s_blocksize;
++}
++
++static inline const char *kchar(const struct iam_key *key)
++{
++        return (void *)key;
++}
++
++static inline struct iam_lentry *lvar_lentry(const struct lvar_leaf_entry *ent)
++{
++        return (struct iam_lentry *)ent;
++}
++
++static inline struct lvar_leaf_entry *lentry_lvar(const struct iam_lentry *lent)
++{
++        return (struct lvar_leaf_entry *)lent;
++}
++
++
++static inline int e_keysize(const struct lvar_leaf_entry *ent)
++{
++        return le16_to_cpu(ent->vle_keysize);
++}
++
++/* This is duplicated in lustre/utils/create_iam.c */
++enum {
++        LVAR_PAD   = 4,
++        LVAR_ROUND = LVAR_PAD - 1
++};
++
++static inline int getsize(const struct iam_leaf *leaf, int namelen, int recsize)
++{
++        CLASSERT(!(LVAR_PAD & (LVAR_PAD - 1)));
++
++        return (offsetof(struct lvar_leaf_entry, vle_key) +
++                namelen + recsize + LVAR_ROUND) & ~LVAR_ROUND;
++}
++
++static inline int rec_size(const struct iam_rec *rec)
++{
++        return *(const char *)rec;
++}
++
++static inline struct iam_rec *e_rec(const struct lvar_leaf_entry *ent)
++{
++        return ((void *)ent) +
++                offsetof(struct lvar_leaf_entry, vle_key) + e_keysize(ent);
++}
++
++static inline int e_size(const struct iam_leaf *leaf,
++                         const struct lvar_leaf_entry *ent)
++{
++        return getsize(leaf, e_keysize(ent), rec_size(e_rec(ent)));
++}
++
++static inline char *e_char(const struct lvar_leaf_entry *ent)
++{
++        return (char *)&ent->vle_key;
++}
++
++static inline struct iam_key *e_key(const struct lvar_leaf_entry *ent)
++{
++        return (struct iam_key *)e_char(ent);
++}
++
++static inline lvar_hash_t e_hash(const struct lvar_leaf_entry *ent)
++{
++        return le32_to_cpu(ent->vle_hash);
++}
++
++static void e_print(const struct lvar_leaf_entry *ent)
++{
++        printk("        %p %8.8x \"%*.*s\"\n", ent, e_hash(ent),
++               e_keysize(ent), e_keysize(ent), e_char(ent));
++}
++#if 0
++static int e_check(const struct iam_leaf *leaf,
++                   const struct lvar_leaf_entry *ent)
++{
++        const void *point = ent;
++        const void *start = leaf->il_bh->b_data;
++        return
++                start + sizeof(struct lvar_leaf_header) <= point &&
++                point + e_size(leaf, ent) < start + blocksize(leaf);
++}
++#endif
++
++static inline struct lvar_leaf_entry *e_next(const struct iam_leaf *leaf,
++                                             const struct lvar_leaf_entry *ent)
++{
++        return ((void *)ent) + e_size(leaf, ent);
++}
++
++#define LVAR_HASH_SANDWICH  (0)
++#define LVAR_HASH_TEA       (1)
++#define LVAR_HASH_R5        (0)
++#define LVAR_HASH_PREFIX    (0)
++
++static __u32 hash_build0(const char *name, int namelen)
++{
++        __u32 result;
++
++        if (namelen == 0)
++                return 0;
++        if (strncmp(name, ".", 1) == 0 && namelen == 1)
++                return 1;
++        if (strncmp(name, "..", 2) == 0 && namelen == 2)
++                return 2;
++
++        if (LVAR_HASH_PREFIX) {
++                result = 0;
++                strncpy((void *)&result,
++                        name, min(namelen, (int)sizeof result));
++        } else {
++                struct dx_hash_info hinfo;
++
++                if (LVAR_HASH_TEA)
++                        hinfo.hash_version = DX_HASH_TEA;
++                else
++                        hinfo.hash_version = DX_HASH_R5;
++                hinfo.seed = 0;
++                ext3fs_dirhash(name, namelen, &hinfo);
++                result = hinfo.hash;
++                if (LVAR_HASH_SANDWICH) {
++                        __u32 result2;
++
++                        hinfo.hash_version = DX_HASH_TEA;
++                        hinfo.seed = 0;
++                        ext3fs_dirhash(name, namelen, &hinfo);
++                        result2 = hinfo.hash;
++                        result = (0xfc000000 & result2) | (0x03ffffff & result);
++                }
++        }
++        return result;
++}
++
++enum {
++        HASH_GRAY_AREA = 1024,
++        MAX_HASH_SIZE  = 0x7fffffffUL
++};
++
++static __u32 hash_build(const char *name, int namelen)
++{
++        __u32 hash;
++
++        hash = (hash_build0(name, namelen) << 1) & MAX_HASH_SIZE;
++        if (hash > MAX_HASH_SIZE - HASH_GRAY_AREA)
++                hash &= HASH_GRAY_AREA - 1;
++        return hash;
++}
++
++static inline lvar_hash_t get_hash(const struct iam_container *bag,
++                                   const char *name, int namelen)
++{
++        return hash_build(name, namelen);
++}
++
++static inline int e_eq(const struct lvar_leaf_entry *ent,
++                       const char *name, int namelen)
++{
++        return namelen == e_keysize(ent) && !memcmp(e_char(ent), name, namelen);
++}
++
++static inline int e_cmp(const struct iam_leaf *leaf,
++                        const struct lvar_leaf_entry *ent, lvar_hash_t hash)
++{
++        lvar_hash_t ehash;
++
++        ehash = e_hash(ent);
++        return ehash == hash ? 0 : (ehash < hash ? -1 : +1);
++}
++
++static struct lvar_leaf_header *n_head(const struct iam_leaf *l)
++{
++        return (struct lvar_leaf_header *)l->il_bh->b_data;
++}
++
++static int h_used(const struct lvar_leaf_header *hdr)
++{
++        return le16_to_cpu(hdr->vlh_used);
++}
++
++static void h_used_adj(const struct iam_leaf *leaf,
++                       struct lvar_leaf_header *hdr, int adj)
++{
++        int used;
++
++        used = h_used(hdr) + adj;
++        assert_corr(sizeof *hdr <= used && used <= blocksize(leaf));
++        hdr->vlh_used = cpu_to_le16(used);
++}
++
++static struct lvar_leaf_entry *n_start(const struct iam_leaf *leaf)
++{
++        return (void *)leaf->il_bh->b_data + sizeof(struct lvar_leaf_header);
++}
++
++static struct lvar_leaf_entry *n_end(const struct iam_leaf *l)
++{
++        return (void *)l->il_bh->b_data + h_used(n_head(l));
++}
++
++static struct lvar_leaf_entry *n_cur(const struct iam_leaf *l)
++{
++        return lentry_lvar(l->il_at);
++}
++
++void n_print(const struct iam_leaf *l)
++{
++        struct lvar_leaf_entry *scan;
++
++        printk(KERN_EMERG "used: %d\n", h_used(n_head(l)));
++        for (scan = n_start(l); scan < n_end(l); scan = e_next(l, scan))
++                e_print(scan);
++}
++
++#if EXT3_CORRECTNESS_ON
++static int n_at_rec(const struct iam_leaf *folio)
++{
++        return
++                n_start(folio) <= lentry_lvar(folio->il_at) &&
++                lentry_lvar(folio->il_at) < n_end(folio);
++}
++
++#if EXT3_INVARIANT_ON
++static int n_invariant(const struct iam_leaf *leaf)
++{
++        struct iam_path        *path;
++        struct lvar_leaf_entry *scan;
++        struct lvar_leaf_entry *end;
++        lvar_hash_t             hash;
++        lvar_hash_t             nexthash;
++        lvar_hash_t             starthash;
++
++        end  = n_end(leaf);
++        hash = 0;
++        path = leaf->il_path;
++
++        if (h_used(n_head(leaf)) > blocksize(leaf))
++                return 0;
++
++        /*
++         * Delimiting key in the parent index node. Clear least bit to account
++         * for hash collision marker.
++         */
++        starthash = *(lvar_hash_t *)iam_ikey_at(path, path->ip_frame->at) & ~1;
++        for (scan = n_start(leaf); scan < end; scan = e_next(leaf, scan)) {
++                nexthash = e_hash(scan);
++                if (nexthash != get_hash(iam_leaf_container(leaf),
++                                         e_char(scan), e_keysize(scan))) {
++                        BREAKPOINT();
++                        return 0;
++                }
++                if (0 && nexthash < starthash) {
++                        /*
++                         * Unfortunately this useful invariant cannot be
++                         * reliably checked as parent node is nor necessarily
++                         * locked.
++                         */
++                        n_print(leaf);
++                        printk("%#x < %#x\n", nexthash, starthash);
++                        dump_stack();
++                        return 0;
++                }
++                if (nexthash < hash) {
++                        BREAKPOINT();
++                        return 0;
++                }
++                hash = nexthash;
++        }
++        if (scan != end) {
++                BREAKPOINT();
++                return 0;
++        }
++        return 1;
++}
++/* EXT3_INVARIANT_ON */
++#endif
++
++/* EXT3_CORRECTNESS_ON */
++#endif
++
++static struct iam_ikey *lvar_ikey(const struct iam_leaf *l,
++                                  struct iam_ikey *key)
++{
++        lvar_hash_t *hash;
++
++        assert_corr(n_at_rec(l));
++
++        hash = (void *)key;
++        *hash = e_hash(n_cur(l));
++        return key;
++}
++
++static struct iam_key *lvar_key(const struct iam_leaf *l)
++{
++        return e_key(n_cur(l));
++}
++
++static int lvar_key_size(const struct iam_leaf *l)
++{
++        return e_keysize(n_cur(l));
++}
++
++static void lvar_start(struct iam_leaf *l)
++{
++        l->il_at = lvar_lentry(n_start(l));
++}
++
++static int lvar_init(struct iam_leaf *l)
++{
++        int result;
++        int used;
++        struct lvar_leaf_header *head;
++
++        assert_corr(l->il_bh != NULL);
++
++        head = n_head(l);
++        used = h_used(head);
++        if (head->vlh_magic == le16_to_cpu(IAM_LVAR_LEAF_MAGIC) &&
++            used <= blocksize(l)) {
++                l->il_at = l->il_entries = lvar_lentry(n_start(l));
++                result = 0;
++        } else {
++                struct inode *obj;
++
++                obj = iam_leaf_container(l)->ic_object;
++                ext3_error(obj->i_sb, __FUNCTION__,
++                           "Wrong magic in node %llu (#%lu): %#x != %#x or "
++                           "wrong used: %i",
++                           (unsigned long long)l->il_bh->b_blocknr, obj->i_ino,
++                           head->vlh_magic, le16_to_cpu(IAM_LVAR_LEAF_MAGIC),
++                           used);
++                result = -EIO;
++        }
++        return result;
++}
++
++static void lvar_fini(struct iam_leaf *l)
++{
++        l->il_entries = l->il_at = NULL;
++}
++
++struct iam_rec *lvar_rec(const struct iam_leaf *l)
++{
++        assert_corr(n_at_rec(l));
++        return e_rec(n_cur(l));
++}
++
++static void lvar_next(struct iam_leaf *l)
++{
++        assert_corr(n_at_rec(l));
++        assert_corr(iam_leaf_is_locked(l));
++        l->il_at = lvar_lentry(e_next(l, n_cur(l)));
++}
++
++static int lvar_lookup(struct iam_leaf *leaf, const struct iam_key *k)
++{
++        struct lvar_leaf_entry *found;
++        struct lvar_leaf_entry *scan;
++        struct lvar_leaf_entry *end;
++        int                     result;
++        const char             *name;
++        int                     namelen;
++        int                     found_equal;
++        lvar_hash_t             hash;
++        int                     last;
++
++        assert_inv(n_invariant(leaf));
++        end = n_end(leaf);
++
++        name = kchar(k);
++        namelen = strlen(name);
++        hash = get_hash(iam_leaf_container(leaf), name, namelen);
++        found = NULL;
++        found_equal = 0;
++        last = 1;
++
++        for (scan = n_start(leaf); scan < end; scan = e_next(leaf, scan)) {
++                lvar_hash_t scan_hash;
++
++                scan_hash = e_hash(scan);
++                if (scan_hash < hash)
++                        found = scan;
++                else if (scan_hash == hash) {
++                        if (e_eq(scan, name, namelen)) {
++                                /*
++                                 * perfect match
++                                 */
++                                leaf->il_at = lvar_lentry(scan);
++                                return IAM_LOOKUP_EXACT;
++                        } else if (!found_equal) {
++                                        found = scan;
++                                        found_equal = 1;
++                        }
++                } else {
++                        last = 0;
++                        break;
++                }
++        }
++        if (found == NULL) {
++                /*
++                 * @k is less than all hashes in the leaf.
++                 */
++                lvar_start(leaf);
++                result = IAM_LOOKUP_BEFORE;
++        } else {
++                leaf->il_at = lvar_lentry(found);
++                result = IAM_LOOKUP_OK;
++                assert_corr(n_at_rec(leaf));
++        }
++        if (last)
++                result |= IAM_LOOKUP_LAST;
++        assert_inv(n_invariant(leaf));
++
++        return result;
++}
++
++static int lvar_ilookup(struct iam_leaf *leaf, const struct iam_ikey *ik)
++{
++        struct lvar_leaf_entry *scan;
++        struct lvar_leaf_entry *end;
++        lvar_hash_t             hash;
++
++        assert_inv(n_invariant(leaf));
++        end  = n_end(leaf);
++        hash = *(const lvar_hash_t *)ik;
++
++        lvar_start(leaf);
++        for (scan = n_start(leaf); scan < end; scan = e_next(leaf, scan)) {
++                lvar_hash_t scan_hash;
++
++                scan_hash = e_hash(scan);
++                if (scan_hash > hash)
++                        return scan == n_start(leaf) ?
++                                IAM_LOOKUP_BEFORE : IAM_LOOKUP_OK;
++                leaf->il_at = lvar_lentry(scan);
++                if (scan_hash == hash)
++                        return IAM_LOOKUP_EXACT;
++        }
++        assert_inv(n_invariant(leaf));
++        /*
++         * @ik is greater than any key in the node. Return last record in the
++         * node.
++         */
++        return IAM_LOOKUP_OK;
++}
++
++static void __lvar_key_set(struct iam_leaf *l, const struct iam_key *k)
++{
++        memcpy(e_key(n_cur(l)), k, e_keysize(n_cur(l)));
++}
++
++static void lvar_key_set(struct iam_leaf *l, const struct iam_key *k)
++{
++        assert_corr(n_at_rec(l));
++        assert_corr(strlen(kchar(k)) == e_keysize(n_cur(l)));
++        assert_corr(iam_leaf_is_locked(l));
++        __lvar_key_set(l, k);
++        assert_inv(n_invariant(l));
++}
++
++static int lvar_key_cmp(const struct iam_leaf *l, const struct iam_key *k)
++{
++        lvar_hash_t hash;
++        const char *name;
++
++        name = kchar(k);
++
++        hash = get_hash(iam_leaf_container(l), name, strlen(name));
++        return e_cmp(l, n_cur(l), hash);
++}
++
++static int lvar_key_eq(const struct iam_leaf *l, const struct iam_key *k)
++{
++        const char *name;
++
++        name = kchar(k);
++        return e_eq(n_cur(l), name, strlen(name));
++}
++
++static void __lvar_rec_set(struct iam_leaf *l, const struct iam_rec *r)
++{
++        memcpy(e_rec(n_cur(l)), r, rec_size(r));
++}
++
++static void lvar_rec_set(struct iam_leaf *l, const struct iam_rec *r)
++{
++        assert_corr(n_at_rec(l));
++        assert_corr(iam_leaf_is_locked(l));
++        __lvar_rec_set(l, r);
++        assert_inv(n_invariant(l));
++}
++
++static void lvar_rec_get(const struct iam_leaf *l, struct iam_rec *r)
++{
++        struct iam_rec *rec;
++
++        rec = e_rec(n_cur(l));
++        assert_corr(n_at_rec(l));
++        assert_corr(iam_leaf_is_locked(l));
++        memcpy(r, rec, rec_size(rec));
++        assert_inv(n_invariant(l));
++}
++
++static int lvar_can_add(const struct iam_leaf *l,
++                        const struct iam_key *k, const struct iam_rec *r)
++{
++        assert_corr(iam_leaf_is_locked(l));
++        return
++                h_used(n_head(l)) +
++                getsize(l, strlen(kchar(k)), rec_size(r)) <= blocksize(l);
++}
++
++static int lvar_at_end(const struct iam_leaf *folio)
++{
++        assert_corr(iam_leaf_is_locked(folio));
++        return n_cur(folio) == n_end(folio);
++}
++
++static void lvar_rec_add(struct iam_leaf *leaf,
++                         const struct iam_key *k, const struct iam_rec *r)
++{
++        const char *key;
++        int   ksize;
++        int   shift;
++        void *end;
++        void *start;
++        ptrdiff_t diff;
++
++        assert_corr(lvar_can_add(leaf, k, r));
++        assert_inv(n_invariant(leaf));
++        assert_corr(iam_leaf_is_locked(leaf));
++
++        key   = kchar(k);
++        ksize = strlen(key);
++        shift = getsize(leaf, ksize, rec_size(r));
++
++        if (!lvar_at_end(leaf)) {
++                assert_corr(n_cur(leaf) < n_end(leaf));
++                end = n_end(leaf);
++                if (lvar_key_cmp(leaf, k) <= 0)
++                        lvar_next(leaf);
++                else
++                        /*
++                         * Another exceptional case: insertion with the key
++                         * less than least key in the leaf.
++                         */
++                        assert_corr(leaf->il_at == leaf->il_entries);
++
++                start = leaf->il_at;
++                diff  = PDIFF(end, start);
++                assert_corr(diff >= 0);
++                memmove(start + shift, start, diff);
++        }
++        h_used_adj(leaf, n_head(leaf), shift);
++        n_cur(leaf)->vle_keysize = cpu_to_le16(ksize);
++        n_cur(leaf)->vle_hash = cpu_to_le32(get_hash(iam_leaf_container(leaf),
++                                                     key, ksize));
++        __lvar_key_set(leaf, k);
++        __lvar_rec_set(leaf, r);
++        assert_corr(n_at_rec(leaf));
++        assert_inv(n_invariant(leaf));
++}
++
++static void lvar_rec_del(struct iam_leaf *leaf, int shift)
++{
++        void *next;
++        void *end;
++        int nob;
++
++        assert_corr(n_at_rec(leaf));
++        assert_inv(n_invariant(leaf));
++        assert_corr(iam_leaf_is_locked(leaf));
++
++        end  = n_end(leaf);
++        next = e_next(leaf, n_cur(leaf));
++        nob  = e_size(leaf, n_cur(leaf));
++        memmove(leaf->il_at, next, end - next);
++        h_used_adj(leaf, n_head(leaf), -nob);
++        assert_inv(n_invariant(leaf));
++}
++
++static void lvar_init_new(struct iam_container *c, struct buffer_head *bh)
++{
++        struct lvar_leaf_header *hdr;
++
++        hdr = (struct lvar_leaf_header *)bh->b_data;
++        hdr->vlh_magic = cpu_to_le16(IAM_LVAR_LEAF_MAGIC);
++        hdr->vlh_used  = sizeof *hdr;
++}
++
++static struct lvar_leaf_entry *find_pivot(const struct iam_leaf *leaf,
++                                          struct lvar_leaf_entry **prev)
++{
++        void *scan;
++        void *start;
++        int threshold;
++
++        *prev = NULL;
++        threshold = blocksize(leaf) / 2;
++        for (scan = start = n_start(leaf); scan - start <= threshold;
++             *prev = scan, scan = e_next(leaf, scan)) {
++                ;
++        }
++        return scan;
++}
++
++static void lvar_split(struct iam_leaf *leaf, struct buffer_head **bh,
++                       iam_ptr_t new_blknr)
++{
++        struct lvar_leaf_entry  *first_to_move;
++        struct lvar_leaf_entry  *last_to_stay;
++        struct iam_path         *path;
++        struct lvar_leaf_header *hdr;
++        struct buffer_head      *new_leaf;
++
++        ptrdiff_t   tomove;
++        lvar_hash_t hash;
++
++        assert_inv(n_invariant(leaf));
++        assert_corr(iam_leaf_is_locked(leaf));
++
++        new_leaf = *bh;
++        path = iam_leaf_path(leaf);
++
++        hdr = (void *)new_leaf->b_data;
++
++        first_to_move = find_pivot(leaf, &last_to_stay);
++        assert_corr(last_to_stay != NULL);
++        assert_corr(e_next(leaf, last_to_stay) == first_to_move);
++
++        hash = e_hash(first_to_move);
++        if (hash == e_hash(last_to_stay))
++                /*
++                 * Duplicate hash.
++                 */
++                hash |= 1;
++
++        tomove = PDIFF(n_end(leaf), first_to_move);
++        memmove(hdr + 1, first_to_move, tomove);
++
++        h_used_adj(leaf, hdr, tomove);
++        h_used_adj(leaf, n_head(leaf), -tomove);
++
++        assert_corr(n_end(leaf) == first_to_move);
++
++        if (n_cur(leaf) >= first_to_move) {
++                /*
++                 * insertion point moves into new leaf.
++                 */
++                ptrdiff_t shift;
++                int result;
++
++                shift = PDIFF(leaf->il_at, first_to_move);
++                *bh = leaf->il_bh;
++                leaf->il_bh = new_leaf;
++                leaf->il_curidx = new_blknr;
++
++                assert_corr(iam_leaf_is_locked(leaf));
++                result = lvar_init(leaf);
++                /*
++                 * init cannot fail, as node was just initialized.
++                 */
++                assert_corr(result == 0);
++                leaf->il_at = ((void *)leaf->il_at) + shift;
++        }
++        /*
++         * Insert pointer to the new node (together with the least key in
++         * the node) into index node.
++         */
++        iam_insert_key_lock(path, path->ip_frame, (struct iam_ikey *)&hash,
++                            new_blknr);
++        assert_corr(n_cur(leaf) < n_end(leaf));
++        assert_inv(n_invariant(leaf));
++}
++
++static struct iam_leaf_operations lvar_leaf_ops = {
++        .init           = lvar_init,
++        .init_new       = lvar_init_new,
++        .fini           = lvar_fini,
++        .start          = lvar_start,
++        .next           = lvar_next,
++        .key            = lvar_key,
++        .ikey           = lvar_ikey,
++        .rec            = lvar_rec,
++        .key_set        = lvar_key_set,
++        .key_cmp        = lvar_key_cmp,
++        .key_eq         = lvar_key_eq,
++        .key_size       = lvar_key_size,
++        .rec_set        = lvar_rec_set,
++        .rec_get        = lvar_rec_get,
++        .lookup         = lvar_lookup,
++        .ilookup        = lvar_ilookup,
++        .at_end         = lvar_at_end,
++        .rec_add        = lvar_rec_add,
++        .rec_del        = lvar_rec_del,
++        .can_add        = lvar_can_add,
++        .split          = lvar_split
++};
++
++/*
++ * Index operations.
++ */
++
++enum {
++        /* This is duplicated in lustre/utils/create_iam.c */
++        /* egrep -i '^o?x?[olabcdef]*$' /usr/share/dict/words */
++        IAM_LVAR_ROOT_MAGIC = 0xb01dface
++};
++
++/* This is duplicated in lustre/utils/create_iam.c */
++struct lvar_root {
++        __le32 vr_magic;
++        __le16 vr_recsize;
++        __le16 vr_ptrsize;
++        u8     vr_indirect_levels;
++        u8     vr_padding0;
++        __le16 vr_padding1;
++};
++
++static __u32 lvar_root_ptr(struct iam_container *c)
++{
++        return 0;
++}
++
++static int lvar_node_init(struct iam_container *c, struct buffer_head *bh,
++                          int root)
++{
++        return 0;
++}
++
++static struct iam_entry *lvar_root_inc(struct iam_container *c,
++                                       struct iam_path *path,
++                                       struct iam_frame *frame)
++{
++        struct lvar_root *root;
++        struct iam_entry *entries;
++
++        assert_corr(iam_frame_is_locked(path, frame));
++        entries = frame->entries;
++
++        dx_set_count(entries, 2);
++        assert_corr(dx_get_limit(entries) == dx_root_limit(path));
++
++        root = (void *)frame->bh->b_data;
++        assert_corr(le64_to_cpu(root->vr_magic) == IAM_LVAR_ROOT_MAGIC);
++        root->vr_indirect_levels ++;
++        frame->at = entries = iam_entry_shift(path, entries, 1);
++        memset(iam_ikey_at(path, entries), 0,
++               iam_path_descr(path)->id_ikey_size);
++        return entries;
++}
++
++static int lvar_node_check(struct iam_path *path, struct iam_frame *frame)
++{
++        unsigned count;
++        unsigned limit;
++        unsigned limit_correct;
++        struct iam_entry *entries;
++
++        entries = dx_node_get_entries(path, frame);
++
++        if (frame == path->ip_frames) {
++                struct lvar_root *root;
++
++                root = (void *)frame->bh->b_data;
++                if (le64_to_cpu(root->vr_magic) != IAM_LVAR_ROOT_MAGIC)
++                        return -EIO;
++                limit_correct = dx_root_limit(path);
++        } else
++                limit_correct = dx_node_limit(path);
++        count = dx_get_count(entries);
++        limit = dx_get_limit(entries);
++        if (count > limit)
++                return -EIO;
++        if (limit != limit_correct)
++                return -EIO;
++        return 0;
++}
++
++static int lvar_node_load(struct iam_path *path, struct iam_frame *frame)
++{
++        struct iam_entry *entries;
++        void *data;
++        entries = dx_node_get_entries(path, frame);
++
++        data = frame->bh->b_data;
++
++        if (frame == path->ip_frames) {
++                struct lvar_root *root;
++                const char *name;
++
++                root = data;
++                name = kchar(path->ip_key_target);
++                path->ip_indirect = root->vr_indirect_levels;
++                if (path->ip_ikey_target == NULL) {
++                        path->ip_ikey_target = iam_path_ikey(path, 4);
++                        *(lvar_hash_t *)path->ip_ikey_target =
++                                get_hash(path->ip_container, name,
++                                         strlen(name));
++                }
++        }
++        frame->entries = frame->at = entries;
++        return 0;
++}
++
++static int lvar_ikeycmp(const struct iam_container *c,
++                        const struct iam_ikey *k1, const struct iam_ikey *k2)
++{
++	lvar_hash_t p1 = le32_to_cpu(*(lvar_hash_t *)k1);
++	lvar_hash_t p2 = le32_to_cpu(*(lvar_hash_t *)k2);
++
++	return p1 > p2 ? +1 : (p1 < p2 ? -1 : 0);
++}
++
++static struct iam_path_descr *lvar_ipd_alloc(const struct iam_container *c,
++                                             void *area)
++{
++        return iam_ipd_alloc(area, c->ic_descr->id_ikey_size);
++}
++
++static int root_limit(int rootgap, int blocksize, int size)
++{
++        int limit;
++        int nlimit;
++
++        limit = (blocksize - rootgap) / size;
++        nlimit = blocksize / size;
++        if (limit == nlimit)
++                limit--;
++        return limit;
++}
++
++static int lvar_root_limit(int blocksize, int size)
++{
++        return root_limit(sizeof(struct lvar_root), blocksize, size);
++}
++
++static void lvar_root(void *buf,
++                      int blocksize, int keysize, int ptrsize, int recsize)
++{
++        struct lvar_root *root;
++        struct dx_countlimit *limit;
++        void                 *entry;
++        int isize;
++
++        isize = sizeof(lvar_hash_t) + ptrsize;
++        root = buf;
++        *root = (typeof(*root)) {
++                .vr_magic            = cpu_to_le32(IAM_LVAR_ROOT_MAGIC),
++                .vr_recsize          = cpu_to_le16(recsize),
++                .vr_ptrsize          = cpu_to_le16(ptrsize),
++                .vr_indirect_levels  = 0
++        };
++
++        limit = (void *)(root + 1);
++        *limit = (typeof(*limit)){
++                /*
++                 * limit itself + one pointer to the leaf.
++                 */
++                .count = cpu_to_le16(2),
++                .limit = lvar_root_limit(blocksize,
++                                         sizeof (lvar_hash_t) + ptrsize)
++        };
++
++        entry = root + 1;
++        /*
++         * Skip over @limit.
++         */
++        entry += isize;
++
++        /*
++         * Entry format is <key> followed by <ptr>. In the minimal tree
++         * consisting of a root and single node, <key> is a minimal possible
++         * key.
++         */
++        *(lvar_hash_t *)entry = 0;
++        entry += sizeof(lvar_hash_t);
++        /* now @entry points to <ptr> */
++        if (ptrsize == 4)
++                *(u_int32_t *)entry = cpu_to_le32(1);
++        else
++                *(u_int64_t *)entry = cpu_to_le64(1);
++}
++
++static int lvar_esize(int namelen, int recsize)
++{
++        return (offsetof(struct lvar_leaf_entry, vle_key) +
++                namelen + recsize + LVAR_ROUND) & ~LVAR_ROUND;
++}
++
++static void lvar_leaf(void *buf,
++                      int blocksize, int keysize, int ptrsize, int recsize)
++{
++        struct lvar_leaf_header *head;
++        struct lvar_leaf_entry  *entry;
++
++        /* form leaf */
++        head = buf;
++        *head = (typeof(*head)) {
++                .vlh_magic = cpu_to_le16(IAM_LVAR_LEAF_MAGIC),
++                .vlh_used  = cpu_to_le16(sizeof *head + lvar_esize(0, recsize))
++        };
++        entry = (void *)(head + 1);
++        *entry = (typeof(*entry)) {
++                .vle_hash    = 0,
++                .vle_keysize = 0
++        };
++        memset(e_rec(entry), 0, recsize);
++        *(char *)e_rec(entry) = recsize;
++}
++
++#include <linux/jbd.h>
++#include <linux/ext3_fs.h>
++#include <linux/ext3_jbd.h>
++
++int iam_lvar_create(struct inode *obj,
++                    int keysize, int ptrsize, int recsize, handle_t *handle)
++{
++        struct buffer_head *root_node;
++        struct buffer_head *leaf_node;
++        struct super_block *sb;
++
++        u32 blknr;
++        int result;
++        unsigned long bsize;
++
++        assert_corr(obj->i_size == 0);
++
++        sb = obj->i_sb;
++        bsize = sb->s_blocksize;
++        root_node = ext3_append(handle, obj, &blknr, &result);
++        leaf_node = ext3_append(handle, obj, &blknr, &result);
++        if (root_node != NULL && leaf_node != NULL) {
++                lvar_root(root_node->b_data, bsize, keysize, ptrsize, recsize);
++                lvar_leaf(leaf_node->b_data, bsize, keysize, ptrsize, recsize);
++                ext3_mark_inode_dirty(handle, obj);
++                result = ext3_journal_dirty_metadata(handle, root_node);
++                if (result == 0)
++                        result = ext3_journal_dirty_metadata(handle, leaf_node);
++                if (result != 0)
++                        ext3_std_error(sb, result);
++        }
++        brelse(leaf_node);
++        brelse(root_node);
++        return result;
++}
++EXPORT_SYMBOL(iam_lvar_create);
++
++static struct iam_operations lvar_ops = {
++        .id_root_ptr    = lvar_root_ptr,
++        .id_node_read   = iam_node_read,
++        .id_node_init   = lvar_node_init,
++        .id_node_check  = lvar_node_check,
++        .id_node_load   = lvar_node_load,
++        .id_ikeycmp     = lvar_ikeycmp,
++        .id_root_inc    = lvar_root_inc,
++        .id_ipd_alloc   = lvar_ipd_alloc,
++        .id_ipd_free    = iam_ipd_free,
++        .id_name        = "lvar"
++};
++
++static int lvar_guess(struct iam_container *c)
++{
++        int result;
++        struct buffer_head *bh;
++        const struct lvar_root *root;
++
++        assert_corr(c->ic_object != NULL);
++
++        result = iam_node_read(c, lvar_root_ptr(c), NULL, &bh);
++        if (result == 0) {
++                root = (void *)bh->b_data;
++                if (le64_to_cpu(root->vr_magic) == IAM_LVAR_ROOT_MAGIC) {
++                        struct iam_descr *descr;
++
++                        descr = c->ic_descr;
++                        descr->id_key_size  = EXT3_NAME_LEN;
++                        descr->id_ikey_size = sizeof (lvar_hash_t);
++                        descr->id_rec_size  = le16_to_cpu(root->vr_recsize);
++                        descr->id_ptr_size  = le16_to_cpu(root->vr_ptrsize);
++                        descr->id_root_gap  = sizeof *root;
++                        descr->id_node_gap  = 0;
++                        descr->id_ops       = &lvar_ops;
++                        descr->id_leaf_ops  = &lvar_leaf_ops;
++                } else
++                        result = -EBADF;
++                brelse(bh);
++        }
++        return result;
++}
++
++static struct iam_format lvar_format = {
++        .if_guess = lvar_guess
++};
++
++void iam_lvar_format_init(void)
++{
++        iam_format_register(&lvar_format);
++}
++
+Index: linux-2.6.22.14/fs/ext3/iam_lfix.c
+===================================================================
+--- /dev/null
++++ linux-2.6.22.14/fs/ext3/iam_lfix.c
+@@ -0,0 +1,745 @@
++/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
++ * vim:expandtab:shiftwidth=8:tabstop=8:
++ *
++ * GPL HEADER START
++ *
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 only,
++ * as published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful, but
++ * WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * General Public License version 2 for more details (a copy is included
++ * in the LICENSE file that accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License
++ * version 2 along with this program; If not, see [sun.com URL with a
++ * copy of GPLv2].
++ *
++ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
++ * CA 95054 USA or visit www.sun.com if you need additional information or
++ * have any questions.
++ *
++ * GPL HEADER END
++ */
++/*
++ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
++ * Use is subject to license terms.
++ */
++/*
++ * This file is part of Lustre, http://www.lustre.org/
++ * Lustre is a trademark of Sun Microsystems, Inc.
++ *
++ * iam_lfix.c
++ * implementation of iam format for fixed size records.
++ *
++ * Author: Wang Di <wangdi@clusterfs.com>
++ * Author: Nikita Danilov <nikita@clusterfs.com>
++ */
++
++#include <linux/types.h>
++#include <linux/jbd.h>
++/* ext3_error() */
++#include <linux/ext3_fs.h>
++
++#include <linux/lustre_iam.h>
++
++/*
++ * Leaf operations.
++ */
++
++enum {
++        IAM_LEAF_HEADER_MAGIC = 0x1976 /* This is duplicated in
++                                        * lustre/utils/create_iam.c */
++};
++
++/* This is duplicated in lustre/utils/create_iam.c */
++struct iam_leaf_head {
++        __le16 ill_magic;
++        __le16 ill_count;
++};
++
++static inline int iam_lfix_entry_size(const struct iam_leaf *l)
++{
++        return iam_leaf_descr(l)->id_key_size + iam_leaf_descr(l)->id_rec_size;
++}
++
++static inline struct iam_lentry *
++iam_lfix_shift(const struct iam_leaf *l, struct iam_lentry *entry, int shift)
++{
++        return (void *)entry + shift * iam_lfix_entry_size(l);
++}
++
++static inline struct iam_key *iam_leaf_key_at(struct iam_lentry *entry)
++{
++        return (struct iam_key *)entry;
++}
++
++static inline int lfix_keycmp(const struct iam_container *c,
++                              const struct iam_key *k1,
++                              const struct iam_key *k2)
++{
++	return memcmp(k1, k2, c->ic_descr->id_key_size);
++}
++
++static struct iam_leaf_head *iam_get_head(const struct iam_leaf *l)
++{
++        return (struct iam_leaf_head *)l->il_bh->b_data;
++}
++
++static struct iam_lentry *iam_entries(const struct buffer_head *bh)
++{
++        return (void *)bh->b_data + sizeof(struct iam_leaf_head);
++}
++
++static struct iam_lentry *iam_get_lentries(const struct iam_leaf *l)
++{
++        return iam_entries(l->il_bh);
++}
++
++static int leaf_count_limit(const struct iam_leaf *leaf)
++{
++        int free_space;
++
++        free_space = iam_leaf_container(leaf)->ic_object->i_sb->s_blocksize;
++        free_space -= sizeof(struct iam_leaf_head);
++        return free_space / iam_lfix_entry_size(leaf);
++}
++
++static int lentry_count_get(const struct iam_leaf *leaf)
++{
++        return le16_to_cpu(iam_get_head(leaf)->ill_count);
++}
++
++static void lentry_count_set(struct iam_leaf *leaf, unsigned count)
++{
++        assert_corr(0 <= count && count <= leaf_count_limit(leaf));
++        iam_get_head(leaf)->ill_count = cpu_to_le16(count);
++}
++
++static struct iam_lentry *iam_lfix_get_end(const struct iam_leaf *l);
++
++#if EXT3_CORRECTNESS_ON || EXT3_INVARIANT_ON
++static int iam_leaf_at_rec(const struct iam_leaf *folio)
++{
++        return
++                iam_get_lentries(folio) <= folio->il_at &&
++                folio->il_at < iam_lfix_get_end(folio);
++}
++#endif
++
++static struct iam_ikey *iam_lfix_ikey(const struct iam_leaf *l,
++                                      struct iam_ikey *key)
++{
++        void *ie = l->il_at;
++        assert_corr(iam_leaf_at_rec(l));
++        return (struct iam_ikey*)ie;
++}
++
++static struct iam_key *iam_lfix_key(const struct iam_leaf *l)
++{
++        void *ie = l->il_at;
++        assert_corr(iam_leaf_at_rec(l));
++        return (struct iam_key*)ie;
++}
++
++static int iam_lfix_key_size(const struct iam_leaf *l)
++{
++        return iam_leaf_descr(l)->id_key_size;
++}
++
++static void iam_lfix_start(struct iam_leaf *l)
++{
++        l->il_at = iam_get_lentries(l);
++}
++
++static inline ptrdiff_t iam_lfix_diff(const struct iam_leaf *l,
++                                      const struct iam_lentry *e1,
++                                      const struct iam_lentry *e2)
++{
++        ptrdiff_t diff;
++        int esize;
++
++        esize = iam_lfix_entry_size(l);
++        diff = (void *)e1 - (void *)e2;
++        assert_corr(diff / esize * esize == diff);
++        return diff / esize;
++}
++
++static int iam_lfix_init(struct iam_leaf *l)
++{
++        int result;
++        struct iam_leaf_head *ill;
++        int count;
++
++        assert_corr(l->il_bh != NULL);
++
++        ill = iam_get_head(l);
++        count = le16_to_cpu(ill->ill_count);
++        if (ill->ill_magic == le16_to_cpu(IAM_LEAF_HEADER_MAGIC) &&
++            0 <= count && count <= leaf_count_limit(l)) {
++                l->il_at = l->il_entries = iam_get_lentries(l);
++                result = 0;
++        } else {
++                struct inode *obj;
++
++                obj = iam_leaf_container(l)->ic_object;
++                ext3_error(obj->i_sb, __FUNCTION__,
++                           "Wrong magic in node %llu (#%lu): %#x != %#x or "
++                           "wrong count: %i (%i)",
++                           (unsigned long long)l->il_bh->b_blocknr, obj->i_ino,
++                           ill->ill_magic, le16_to_cpu(IAM_LEAF_HEADER_MAGIC),
++                           count, leaf_count_limit(l));
++                result = -EIO;
++        }
++        return result;
++}
++
++static void iam_lfix_fini(struct iam_leaf *l)
++{
++        l->il_entries = l->il_at = NULL;
++}
++
++static struct iam_lentry *iam_lfix_get_end(const struct iam_leaf *l)
++{
++        int count = lentry_count_get(l);
++        struct iam_lentry *ile = iam_lfix_shift(l, l->il_entries, count);
++
++        return ile;
++}
++
++struct iam_rec *iam_lfix_rec(const struct iam_leaf *l)
++{
++        void *e = l->il_at;
++        assert_corr(iam_leaf_at_rec(l));
++        return e + iam_leaf_descr(l)->id_key_size;
++}
++
++static void iam_lfix_next(struct iam_leaf *l)
++{
++        assert_corr(iam_leaf_at_rec(l));
++        l->il_at = iam_lfix_shift(l, l->il_at, 1);
++}
++
++/*
++ * Bug chasing.
++ */
++int lfix_dump = 0;
++EXPORT_SYMBOL(lfix_dump);
++
++static char hdigit(char ch)
++{
++        static char d[] = "0123456789abcdef";
++        return d[ch & 0xf];
++}
++
++static char *hex(char ch, char *area)
++{
++        area[0] = hdigit(ch >> 4);
++        area[1] = hdigit(ch);
++        area[2] = 0;
++        return area;
++}
++
++static void l_print(struct iam_leaf *leaf, struct iam_lentry *entry)
++{
++        int i;
++        char *area;
++        char h[3];
++
++        area = (char *)entry;
++        printk(KERN_EMERG "[");
++        for (i = iam_lfix_key_size(leaf); i > 0; --i, ++area)
++                printk("%s", hex(*area, h));
++        printk("]-(");
++        for (i = iam_leaf_descr(leaf)->id_rec_size; i > 0; --i, ++area)
++                printk("%s", hex(*area, h));
++        printk(")\n");
++}
++
++static void lfix_print(struct iam_leaf *leaf)
++{
++        struct iam_lentry *entry;
++        int count;
++        int i;
++
++        entry = leaf->il_entries;
++        count = lentry_count_get(leaf);
++        printk(KERN_EMERG "lfix: %p %p %d\n", leaf, leaf->il_at, count);
++        for (i = 0; i < count; ++i, entry = iam_lfix_shift(leaf, entry, 1))
++                l_print(leaf, entry);
++}
++
++static int iam_lfix_lookup(struct iam_leaf *l, const struct iam_key *k)
++{
++        struct iam_lentry *p, *q, *m, *t;
++        struct iam_container *c;
++        int count;
++        int result;
++
++        count = lentry_count_get(l);
++        if (count == 0)
++                return IAM_LOOKUP_EMPTY;
++
++        result = IAM_LOOKUP_OK;
++        c = iam_leaf_container(l);
++
++        p = l->il_entries;
++        q = iam_lfix_shift(l, p, count - 1);
++        if (lfix_keycmp(c, k, iam_leaf_key_at(p)) < 0) {
++                /*
++                 * @k is less than the least key in the leaf
++                 */
++                l->il_at = p;
++                result = IAM_LOOKUP_BEFORE;
++        } else if (lfix_keycmp(c, iam_leaf_key_at(q), k) <= 0) {
++                l->il_at = q;
++        } else {
++                /*
++                 * EWD1293
++                 */
++                while (iam_lfix_shift(l, p, 1) != q) {
++                        m = iam_lfix_shift(l, p, iam_lfix_diff(l, q, p) / 2);
++                        assert_corr(p < m && m < q);
++                        if (lfix_keycmp(c, iam_leaf_key_at(m), k) <= 0)
++                                p = m;
++                        else
++                                q = m;
++                }
++                assert_corr(lfix_keycmp(c, iam_leaf_key_at(p), k) <= 0 &&
++                            lfix_keycmp(c, k, iam_leaf_key_at(q)) < 0);
++                /*
++                 * skip over records with duplicate keys.
++                 */
++                while (p > l->il_entries) {
++                        t = iam_lfix_shift(l, p, -1);
++                        if (lfix_keycmp(c, iam_leaf_key_at(t), k) == 0)
++                                p = t;
++                        else
++                                break;
++                }
++                l->il_at = p;
++        }
++        assert_corr(iam_leaf_at_rec(l));
++
++        if (lfix_keycmp(c, iam_leaf_key_at(l->il_at), k) == 0)
++                result = IAM_LOOKUP_EXACT;
++
++        if (lfix_dump)
++                lfix_print(l);
++
++        return result;
++}
++
++static int iam_lfix_ilookup(struct iam_leaf *l, const struct iam_ikey *ik)
++{
++        assert(0);
++        return IAM_LOOKUP_OK;
++}
++
++static void iam_lfix_key_set(struct iam_leaf *l, const struct iam_key *k)
++{
++        assert_corr(iam_leaf_at_rec(l));
++        memcpy(iam_leaf_key_at(l->il_at), k, iam_leaf_descr(l)->id_key_size);
++}
++
++static int iam_lfix_key_cmp(const struct iam_leaf *l, const struct iam_key *k)
++{
++        return lfix_keycmp(iam_leaf_container(l), iam_leaf_key_at(l->il_at), k);
++}
++
++static int iam_lfix_key_eq(const struct iam_leaf *l, const struct iam_key *k)
++{
++        return !lfix_keycmp(iam_leaf_container(l),
++                            iam_leaf_key_at(l->il_at), k);
++}
++
++static void iam_lfix_rec_set(struct iam_leaf *l, const struct iam_rec *r)
++{
++        assert_corr(iam_leaf_at_rec(l));
++        memcpy(iam_lfix_rec(l), r, iam_leaf_descr(l)->id_rec_size);
++}
++
++static void iam_lfix_rec_get(const struct iam_leaf *l, struct iam_rec *r)
++{
++        assert_corr(iam_leaf_at_rec(l));
++        memcpy(r, iam_lfix_rec(l), iam_leaf_descr(l)->id_rec_size);
++}
++
++static void iam_lfix_rec_add(struct iam_leaf *leaf,
++                             const struct iam_key *k, const struct iam_rec *r)
++{
++        struct iam_lentry *end;
++        struct iam_lentry *cur;
++        struct iam_lentry *start;
++        ptrdiff_t diff;
++        int count;
++
++        assert_corr(iam_leaf_can_add(leaf, k, r));
++
++        count = lentry_count_get(leaf);
++        /*
++         * This branch handles two exceptional cases:
++         *
++         *   - leaf positioned beyond last record, and
++         *
++         *   - empty leaf.
++         */
++        if (!iam_leaf_at_end(leaf)) {
++                end   = iam_lfix_get_end(leaf);
++                cur   = leaf->il_at;
++                if (lfix_keycmp(iam_leaf_container(leaf),
++                               k, iam_leaf_key_at(cur)) >= 0)
++                        iam_lfix_next(leaf);
++                else
++                        /*
++                         * Another exceptional case: insertion with the key
++                         * less than least key in the leaf.
++                         */
++                        assert_corr(cur == leaf->il_entries);
++
++                start = leaf->il_at;
++                diff  = (void *)end - (void *)start;
++                assert_corr(diff >= 0);
++                memmove(iam_lfix_shift(leaf, start, 1), start, diff);
++        }
++        lentry_count_set(leaf, count + 1);
++        iam_lfix_key_set(leaf, k);
++        iam_lfix_rec_set(leaf, r);
++        assert_corr(iam_leaf_at_rec(leaf));
++}
++
++static void iam_lfix_rec_del(struct iam_leaf *leaf, int shift)
++{
++        struct iam_lentry *next, *end;
++        int count;
++        ptrdiff_t diff;
++
++        assert_corr(iam_leaf_at_rec(leaf));
++
++        count = lentry_count_get(leaf);
++        end = iam_lfix_get_end(leaf);
++        next = iam_lfix_shift(leaf, leaf->il_at, 1);
++        diff = (void *)end - (void *)next;
++        memmove(leaf->il_at, next, diff);
++
++        lentry_count_set(leaf, count - 1);
++}
++
++static int iam_lfix_can_add(const struct iam_leaf *l,
++                            const struct iam_key *k, const struct iam_rec *r)
++{
++        return lentry_count_get(l) < leaf_count_limit(l);
++}
++
++static int iam_lfix_at_end(const struct iam_leaf *folio)
++{
++        return folio->il_at == iam_lfix_get_end(folio);
++}
++
++static void iam_lfix_init_new(struct iam_container *c, struct buffer_head *bh)
++{
++        struct iam_leaf_head *hdr;
++
++        hdr = (struct iam_leaf_head*)bh->b_data;
++        hdr->ill_magic = cpu_to_le16(IAM_LEAF_HEADER_MAGIC);
++        hdr->ill_count = cpu_to_le16(0);
++}
++
++static void iam_lfix_split(struct iam_leaf *l, struct buffer_head **bh,
++                           iam_ptr_t new_blknr)
++{
++        struct iam_path       *path;
++        struct iam_leaf_head  *hdr;
++        const struct iam_ikey *pivot;
++        struct buffer_head    *new_leaf;
++
++        unsigned count;
++        unsigned split;
++
++        void *start;
++        void *finis;
++
++        new_leaf = *bh;
++        path = iam_leaf_path(l);
++
++        hdr = (void *)new_leaf->b_data;
++
++        count = lentry_count_get(l);
++        split = count / 2;
++
++        start = iam_lfix_shift(l, iam_get_lentries(l), split);
++        finis = iam_lfix_shift(l, iam_get_lentries(l), count);
++
++        pivot = (const struct iam_ikey *)iam_leaf_key_at(start);
++
++        memmove(iam_entries(new_leaf), start, finis - start);
++        hdr->ill_count = count - split;
++        lentry_count_set(l, split);
++        if ((void *)l->il_at >= start) {
++                /*
++                 * insertion point moves into new leaf.
++                 */
++                int shift;
++                int result;
++
++                shift = iam_lfix_diff(l, l->il_at, start);
++                *bh = l->il_bh;
++                l->il_bh = new_leaf;
++                l->il_curidx = new_blknr;
++                result = iam_lfix_init(l);
++                /*
++                 * init cannot fail, as node was just initialized.
++                 */
++                assert_corr(result == 0);
++                l->il_at = iam_lfix_shift(l, iam_get_lentries(l), shift);
++        }
++        /*
++         * Insert pointer to the new node (together with the least key in
++         * the node) into index node.
++         */
++        iam_insert_key_lock(path, path->ip_frame, pivot, new_blknr);
++}
++
++static struct iam_leaf_operations iam_lfix_leaf_ops = {
++        .init           = iam_lfix_init,
++        .init_new       = iam_lfix_init_new,
++        .fini           = iam_lfix_fini,
++        .start          = iam_lfix_start,
++        .next           = iam_lfix_next,
++        .key            = iam_lfix_key,
++        .ikey           = iam_lfix_ikey,
++        .rec            = iam_lfix_rec,
++        .key_set        = iam_lfix_key_set,
++        .key_cmp        = iam_lfix_key_cmp,
++        .key_eq         = iam_lfix_key_eq,
++        .key_size       = iam_lfix_key_size,
++        .rec_set        = iam_lfix_rec_set,
++        .rec_get        = iam_lfix_rec_get,
++        .lookup         = iam_lfix_lookup,
++        .ilookup        = iam_lfix_ilookup,
++        .at_end         = iam_lfix_at_end,
++        .rec_add        = iam_lfix_rec_add,
++        .rec_del        = iam_lfix_rec_del,
++        .can_add        = iam_lfix_can_add,
++        .split          = iam_lfix_split
++};
++
++/*
++ * Index operations.
++ */
++
++enum {
++        /* This is duplicated in lustre/utils/create_iam.c */
++        /*
++         * Then shalt thou see the dew-BEDABBLED wretch
++         * Turn, and return, indenting with the way;
++         * Each envious brier his weary legs doth scratch,
++         * Each shadow makes him stop, each murmur stay:
++         * For misery is trodden on by many,
++         * And being low never relieved by any.
++         */
++        IAM_LFIX_ROOT_MAGIC = 0xbedabb1edULL // d01efull
++};
++
++/* This is duplicated in lustre/utils/create_iam.c */
++struct iam_lfix_root {
++        __le64  ilr_magic;
++        __le16  ilr_keysize;
++        __le16  ilr_recsize;
++        __le16  ilr_ptrsize;
++        u8      ilr_indirect_levels;
++        u8      ilr_padding;
++};
++
++static __u32 iam_lfix_root_ptr(struct iam_container *c)
++{
++        return 0;
++}
++
++static int iam_lfix_node_init(struct iam_container *c, struct buffer_head *bh,
++                              int root)
++{
++        return 0;
++}
++
++static struct iam_entry *iam_lfix_root_inc(struct iam_container *c,
++                                           struct iam_path *path,
++                                           struct iam_frame *frame)
++{
++        struct iam_lfix_root *root;
++        struct iam_entry     *entries;
++
++        entries = frame->entries;
++
++        dx_set_count(entries, 2);
++        assert_corr(dx_get_limit(entries) == dx_root_limit(path));
++
++        root = (void *)frame->bh->b_data;
++        assert_corr(le64_to_cpu(root->ilr_magic) == IAM_LFIX_ROOT_MAGIC);
++        root->ilr_indirect_levels ++;
++        frame->at = entries = iam_entry_shift(path, entries, 1);
++        memset(iam_ikey_at(path, entries), 0,
++               iam_path_descr(path)->id_ikey_size);
++        return entries;
++}
++
++static int iam_lfix_node_check(struct iam_path *path, struct iam_frame *frame)
++{
++        unsigned count;
++        unsigned limit;
++        unsigned limit_correct;
++        struct iam_entry *entries;
++
++        entries = dx_node_get_entries(path, frame);
++
++        if (frame == path->ip_frames) {
++                struct iam_lfix_root *root;
++
++                root = (void *)frame->bh->b_data;
++                if (le64_to_cpu(root->ilr_magic) != IAM_LFIX_ROOT_MAGIC) {
++                        return -EIO;
++                }
++                limit_correct = dx_root_limit(path);
++        } else
++                limit_correct = dx_node_limit(path);
++        count = dx_get_count(entries);
++        limit = dx_get_limit(entries);
++        if (count > limit) {
++                return -EIO;
++        }
++        if (limit != limit_correct) {
++                return -EIO;
++        }
++        return 0;
++}
++
++static int iam_lfix_node_load(struct iam_path *path, struct iam_frame *frame)
++{
++        struct iam_entry *entries;
++        void *data;
++        entries = dx_node_get_entries(path, frame);
++
++        data = frame->bh->b_data;
++
++        if (frame == path->ip_frames) {
++                struct iam_lfix_root *root;
++
++                root = data;
++                path->ip_indirect = root->ilr_indirect_levels;
++                if (path->ip_ikey_target == NULL)
++                        path->ip_ikey_target =
++                                (struct iam_ikey *)path->ip_key_target;
++        }
++        frame->entries = frame->at = entries;
++        return 0;
++}
++
++static int iam_lfix_ikeycmp(const struct iam_container *c,
++                            const struct iam_ikey *k1,
++                            const struct iam_ikey *k2)
++{
++        return memcmp(k1, k2, c->ic_descr->id_ikey_size);
++}
++
++static struct iam_path_descr *iam_lfix_ipd_alloc(const struct iam_container *c,
++                                                 void *area)
++{
++        return iam_ipd_alloc(area, c->ic_descr->id_ikey_size);
++}
++
++static struct iam_operations iam_lfix_ops = {
++        .id_root_ptr    = iam_lfix_root_ptr,
++        .id_node_read   = iam_node_read,
++        .id_node_init   = iam_lfix_node_init,
++        .id_node_check  = iam_lfix_node_check,
++        .id_node_load   = iam_lfix_node_load,
++        .id_ikeycmp     = iam_lfix_ikeycmp,
++        .id_root_inc    = iam_lfix_root_inc,
++        .id_ipd_alloc   = iam_lfix_ipd_alloc,
++        .id_ipd_free    = iam_ipd_free,
++        .id_name        = "lfix"
++};
++
++static int iam_lfix_guess(struct iam_container *c)
++{
++        int result;
++        struct buffer_head *bh;
++        const struct iam_lfix_root *root;
++
++        assert_corr(c->ic_object != NULL);
++
++        result = iam_node_read(c, iam_lfix_root_ptr(c), NULL, &bh);
++        if (result == 0) {
++                root = (void *)bh->b_data;
++                if (le64_to_cpu(root->ilr_magic) == IAM_LFIX_ROOT_MAGIC) {
++                        struct iam_descr *descr;
++
++                        descr = c->ic_descr;
++                        descr->id_key_size  = le16_to_cpu(root->ilr_keysize);
++                        descr->id_ikey_size = le16_to_cpu(root->ilr_keysize);
++                        descr->id_rec_size  = le16_to_cpu(root->ilr_recsize);
++                        descr->id_ptr_size  = le16_to_cpu(root->ilr_ptrsize);
++                        descr->id_root_gap  = sizeof(struct iam_lfix_root);
++                        descr->id_node_gap  = 0;
++                        descr->id_ops       = &iam_lfix_ops;
++                        descr->id_leaf_ops  = &iam_lfix_leaf_ops;
++                } else
++                        result = -EBADF;
++                brelse(bh);
++        }
++        return result;
++}
++
++static struct iam_format iam_lfix_format = {
++        .if_guess = iam_lfix_guess
++};
++
++void iam_lfix_format_init(void)
++{
++        iam_format_register(&iam_lfix_format);
++}
++
++/*
++ * Debugging aid.
++ */
++
++#define KEYSIZE (8)
++#define RECSIZE (8)
++#define PTRSIZE (4)
++
++#define LFIX_ROOT_RECNO \
++        ((4096 - sizeof(struct iam_lfix_root)) / (KEYSIZE + PTRSIZE))
++
++#define LFIX_INDEX_RECNO (4096 / (KEYSIZE + PTRSIZE))
++
++#define LFIX_LEAF_RECNO \
++        ((4096 - sizeof(struct iam_leaf_head)) / (KEYSIZE + RECSIZE))
++
++struct lfix_root {
++        struct iam_lfix_root lr_root;
++        struct {
++                char key[KEYSIZE];
++                char ptr[PTRSIZE];
++        } lr_entry[LFIX_ROOT_RECNO];
++};
++
++struct lfix_index {
++        struct dx_countlimit li_cl;
++        char   li_padding[KEYSIZE + PTRSIZE - sizeof(struct dx_countlimit)];
++        struct {
++                char key[KEYSIZE];
++                char ptr[PTRSIZE];
++        } li_entry[LFIX_INDEX_RECNO - 1];
++};
++
++struct lfix_leaf {
++        struct iam_leaf_head ll_head;
++        struct {
++                char key[KEYSIZE];
++                char rec[RECSIZE];
++        } ll_entry[LFIX_LEAF_RECNO];
++};
+Index: linux-2.6.22.14/fs/ext3/iam_htree.c
+===================================================================
+--- /dev/null
++++ linux-2.6.22.14/fs/ext3/iam_htree.c
+@@ -0,0 +1,698 @@
++/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
++ * vim:expandtab:shiftwidth=8:tabstop=8:
++ *
++ * GPL HEADER START
++ *
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 only,
++ * as published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful, but
++ * WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * General Public License version 2 for more details (a copy is included
++ * in the LICENSE file that accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License
++ * version 2 along with this program; If not, see [sun.com URL with a
++ * copy of GPLv2].
++ *
++ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
++ * CA 95054 USA or visit www.sun.com if you need additional information or
++ * have any questions.
++ *
++ * GPL HEADER END
++ */
++/*
++ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
++ * Use is subject to license terms.
++ */
++/*
++ * This file is part of Lustre, http://www.lustre.org/
++ * Lustre is a trademark of Sun Microsystems, Inc.
++ *
++ * iam_htree.c
++ * implementation of iam format for ext3/htree.
++ *
++ * Author: Nikita Danilov <nikita@clusterfs.com>
++ */
++
++#include <linux/types.h>
++#include <linux/jbd.h>
++/* ext3_error(), EXT3_DIR_ROUND() */
++#include <linux/ext3_fs.h>
++
++#include <linux/lustre_iam.h>
++
++
++static inline struct ext3_dir_entry_2 *dent(struct iam_lentry *ent)
++{
++        return (struct ext3_dir_entry_2 *)ent;
++}
++
++static inline struct iam_path_compat *getipc(const struct iam_leaf *folio)
++{
++        struct iam_path *path;
++
++        path = iam_leaf_path(folio);
++        assert_corr(dx_index_is_compat(path));
++        assert_corr(path->ip_data != NULL);
++        return container_of(path->ip_data, struct iam_path_compat, ipc_descr);
++}
++
++static inline struct ext3_dir_entry_2 *getent(const struct iam_leaf *folio)
++{
++        return dent(folio->il_at);
++}
++
++static __u32 hashname(const struct iam_leaf *folio,
++                      const char *name, int namelen)
++{
++        int result;
++        struct dx_hash_info *hinfo;
++
++        hinfo = getipc(folio)->ipc_hinfo;
++        assert_corr(hinfo != NULL);
++        result = ext3fs_dirhash(name, namelen, hinfo);
++        assert_corr(result == 0);
++        return hinfo->hash;
++}
++
++static __u32 gethash(const struct iam_leaf *folio,
++                     const struct ext3_dir_entry_2 *ent)
++{
++        return hashname(folio, ent->name, ent->name_len);
++}
++
++static inline size_t recsize(size_t namelen)
++{
++        return EXT3_DIR_REC_LEN(namelen);
++}
++
++static struct ext3_dir_entry_2 *getlast(const struct iam_leaf *folio, int namelen)
++{
++        return
++                (void *)folio->il_bh->b_data +
++                iam_leaf_container(folio)->ic_object->i_sb->s_blocksize -
++                recsize(namelen);
++}
++
++static struct ext3_dir_entry_2 *gettop(const struct iam_leaf *folio)
++{
++        return getlast(folio, 0);
++}
++
++static inline int ent_is_live(const struct ext3_dir_entry_2 *ent)
++{
++        return ent->inode != 0;
++}
++
++static struct ext3_dir_entry_2 *entnext(const struct ext3_dir_entry_2 *ent)
++{
++	return (void *)ent + le16_to_cpu(ent->rec_len);
++}
++
++static struct ext3_dir_entry_2 *skipdead(struct ext3_dir_entry_2 *ent)
++{
++        if (!ent_is_live(ent))
++                ent = entnext(ent);
++        /*
++         * There can be no more than one dead entry in a row.
++         */
++        return ent;
++}
++
++static struct ext3_dir_entry_2 *getstart(const struct iam_leaf *folio)
++{
++        return (void *)folio->il_bh->b_data;
++}
++
++static int getfreespace(const struct ext3_dir_entry_2 *ent)
++{
++        int free;
++
++        free = le16_to_cpu(ent->rec_len);
++        if (ent_is_live(ent))
++                free -= recsize(ent->name_len);
++        assert_corr(free >= 0);
++        return free;
++}
++
++static int entcmp(const struct iam_leaf *folio,
++                  const struct ext3_dir_entry_2 *e0, const struct ext3_dir_entry_2 *e1)
++{
++        __u32 hash0;
++        __u32 hash1;
++
++        assert_corr(ent_is_live(e0));
++        assert_corr(ent_is_live(e1));
++
++        hash0 = gethash(folio, e0);
++        hash1 = gethash(folio, e1);
++        if (hash0 < hash1)
++                return -1;
++        else if (hash0 > hash1)
++                return +1;
++        else if (e0 < e1)
++                return -1;
++        else if (e0 > e1)
++                return +1;
++        else
++                return 0;
++}
++
++#if EXT3_CORRECTNESS_ON || EXT3_INVARIANT_ON
++static int iam_leaf_at_rec(const struct iam_leaf *folio)
++{
++        struct ext3_dir_entry_2 *ent;
++
++        ent = getent(folio);
++        return getstart(folio) <= ent &&
++                ent < gettop(folio) && ent_is_live(ent);
++}
++#endif
++
++/*
++ * Leaf operations.
++ */
++
++static struct iam_ikey *iam_htree_ikey(const struct iam_leaf *l,
++                                       struct iam_ikey *key)
++{
++        __u32 *hash;
++        assert_corr(iam_leaf_at_rec(l));
++
++        hash = (void *)key;
++        *hash = gethash(l, getent(l));
++        return key;
++}
++
++static struct iam_key *iam_htree_key(const struct iam_leaf *l)
++{
++        assert_corr(iam_leaf_at_rec(l));
++
++        return (struct iam_key *)&getent(l)->name;
++}
++
++static int iam_htree_key_size(const struct iam_leaf *l)
++{
++        assert_corr(iam_leaf_at_rec(l));
++
++        return getent(l)->name_len;
++}
++
++static void iam_htree_start(struct iam_leaf *l)
++{
++        l->il_at = (void *)skipdead(getstart(l));
++}
++
++static int iam_htree_init(struct iam_leaf *l)
++{
++        assert_corr(l->il_bh != NULL);
++
++        l->il_at = l->il_entries = (void *)getstart(l);
++        return 0;
++}
++
++static void iam_htree_fini(struct iam_leaf *l)
++{
++        l->il_entries = l->il_at = NULL;
++}
++
++struct iam_rec *iam_htree_rec(const struct iam_leaf *l)
++{
++        assert_corr(iam_leaf_at_rec(l));
++        return (void *)&getent(l)->inode;
++}
++
++static void iam_htree_next(struct iam_leaf *l)
++{
++        struct ext3_dir_entry_2 *scan;
++        struct ext3_dir_entry_2 *found;
++
++        assert_corr(iam_leaf_at_rec(l));
++        found = NULL;
++        for (scan = getstart(l); scan < gettop(l); scan = entnext(scan)) {
++                if (scan != getent(l) && ent_is_live(scan) &&
++                    entcmp(l, getent(l), scan) < 0 &&
++                    (found == NULL || entcmp(l, scan, found) < 0))
++                        found = scan;
++        }
++        assert_corr(ergo(found != NULL,
++                         gethash(l, getent(l)) <= gethash(l, found)));
++        l->il_at = (void *)(found ? : gettop(l));
++}
++
++static int iam_htree_at_end(const struct iam_leaf *folio)
++{
++        return getent(folio) >= gettop(folio);
++}
++
++
++static inline int match(int len, const char *const name,
++                        struct ext3_dir_entry_2 *de)
++{
++	if (len != de->name_len)
++		return 0;
++	if (!de->inode)
++		return 0;
++	return !memcmp(name, de->name, len);
++}
++
++static int iam_htree_lookup(struct iam_leaf *l, const struct iam_key *k)
++{
++        struct iam_container *c;
++        struct ext3_dir_entry_2 *scan;
++        struct ext3_dir_entry_2 *found;
++        __u32 hash;
++        int result;
++        int namelen;
++        int last = 1;
++        const char *name;
++
++        c = iam_leaf_container(l);
++        name = (const char *)k;
++        namelen = strlen(name);
++        hash = hashname(l, name, namelen);
++        found = NULL;
++        result = IAM_LOOKUP_OK;
++        for (scan = getstart(l); scan < getlast(l, namelen);
++             scan = entnext(scan)) {
++                if (match(namelen, name, scan)) {
++                        found = scan;
++                        result = IAM_LOOKUP_EXACT;
++                        break;
++                } else if (ent_is_live(scan)) {
++                        if (gethash(l, scan) <= hash)
++                                found = scan;
++                        else
++                                last = 0;
++                }
++        }
++        if (found == NULL) {
++                /*
++                 * @k is less than all hashes in the leaf.
++                 */
++                iam_htree_start(l);
++                result = IAM_LOOKUP_BEFORE;
++        } else {
++                l->il_at = (void *)found;
++                assert_corr(iam_leaf_at_rec(l));
++        }
++        if (last)
++                result |= IAM_LOOKUP_LAST;
++        return result;
++}
++
++static int iam_htree_ilookup(struct iam_leaf *l, const struct iam_ikey *ik)
++{
++        assert(0);
++        return IAM_LOOKUP_OK;
++}
++
++static void iam_htree_key_set(struct iam_leaf *l, const struct iam_key *k)
++{
++        assert_corr(iam_leaf_at_rec(l));
++        assert(0);
++}
++
++static int iam_htree_key_cmp(const struct iam_leaf *l, const struct iam_key *k)
++{
++        const char *name;
++        __u32 h0;
++        __u32 h1;
++
++        name = (const char *)k;
++
++        assert_corr(ent_is_live(getent(l)));
++
++        h0 = gethash(l, getent(l));
++        h1 = hashname(l, name, strlen(name));
++
++        return h0 < h1 ? -1 : (h0 == h1 ? 0 : +1);
++}
++
++static int iam_htree_key_eq(const struct iam_leaf *l, const struct iam_key *k)
++{
++        const char *name;
++
++        name = (const char *)k;
++        return match(strlen(name), name, getent(l));
++}
++
++static void iam_htree_rec_set(struct iam_leaf *l, const struct iam_rec *r)
++{
++        __u32 *ino;
++
++        ino = (void *)r;
++        getent(l)->inode = cpu_to_le32(*ino);
++}
++
++static void iam_htree_rec_get(const struct iam_leaf *l, struct iam_rec *r)
++{
++        __u32 *ino;
++
++        ino = (void *)r;
++        *ino = le32_to_cpu(getent(l)->inode);
++}
++
++static void iam_htree_rec_add(struct iam_leaf *leaf, const struct iam_key *k,
++                              const struct iam_rec *r)
++{
++        struct ext3_dir_entry_2 *scan;
++        struct inode        *dir;
++        const  char         *name;
++
++        __u32 *ino;
++        int    namelen;
++
++        assert_corr(iam_leaf_can_add(leaf, k, r));
++
++        dir = iam_leaf_container(leaf)->ic_object;
++        ino = (void *)r;
++        name = (const char *)k;
++        namelen = strlen(name);
++
++        scan = find_insertion_point(dir, leaf->il_bh, name, namelen);
++        assert_corr(!IS_ERR(scan));
++        scan = split_entry(dir, scan, *ino, EXT3_FT_UNKNOWN, name, namelen);
++        leaf->il_at = (void *)scan;
++}
++
++static void iam_htree_rec_del(struct iam_leaf *leaf, int shift)
++{
++        struct ext3_dir_entry_2 *orig;
++        struct ext3_dir_entry_2 *scan;
++        struct ext3_dir_entry_2 *prev;
++
++        assert_corr(iam_leaf_at_rec(leaf));
++
++        orig = getent(leaf);
++
++        if (shift)
++                iam_htree_next(leaf);
++
++        for (prev = NULL, scan = getstart(leaf); scan < orig;
++             prev = scan, scan = entnext(scan))
++                ;
++
++        assert_corr(scan == orig);
++        if (prev != NULL) {
++                prev->rec_len = cpu_to_le16(le16_to_cpu(prev->rec_len) +
++                                              le16_to_cpu(scan->rec_len));
++        } else {
++                assert_corr(scan == getstart(leaf));
++                scan->inode = 0;
++        }
++        iam_leaf_container(leaf)->ic_object->i_version ++;
++}
++
++static int iam_htree_can_add(const struct iam_leaf *leaf,
++                             const struct iam_key *k, const struct iam_rec *r)
++{
++        struct ext3_dir_entry_2 *scan;
++        int size;
++
++        size = recsize(strlen((const char *)k));
++        for (scan = getstart(leaf);
++             scan < gettop(leaf); scan = entnext(scan)) {
++                if (getfreespace(scan) >= size)
++                        return 1;
++        }
++        return 0;
++}
++
++static void iam_htree_init_new(struct iam_container *c, struct buffer_head *bh)
++{
++        /*
++         * Do nothing, all work is done by iam_htree_split().
++         */
++}
++
++static void iam_htree_split(struct iam_leaf *l, struct buffer_head **bh,
++                           iam_ptr_t new_blknr)
++{
++        __u32 delim_hash;
++        __u32 old_hash;
++        struct buffer_head *newbh = *bh;
++        struct iam_path *path;
++
++        old_hash = gethash(l, getent(l));
++        move_entries(iam_leaf_container(l)->ic_object,
++                     getipc(l)->ipc_hinfo, &l->il_bh, bh, &delim_hash);
++        /*
++         * Insert pointer to the new node (together with the least key in
++         * the node) into index node.
++         */
++        path = iam_leaf_path(l);
++        if (l->il_bh == newbh) {
++                /*
++                 * insertion point moves into new leaf.
++                 */
++                assert_corr(delim_hash >= old_hash);
++                l->il_curidx = new_blknr;
++                iam_htree_lookup(l, (void *)&old_hash);
++        }
++        iam_insert_key_lock(path,
++                            path->ip_frame, (void *)&delim_hash, new_blknr);
++}
++
++static struct iam_leaf_operations iam_htree_leaf_ops = {
++        .init           = iam_htree_init,
++        .init_new       = iam_htree_init_new,
++        .fini           = iam_htree_fini,
++        .start          = iam_htree_start,
++        .next           = iam_htree_next,
++        .key            = iam_htree_key,
++        .ikey           = iam_htree_ikey,
++        .rec            = iam_htree_rec,
++        .key_set        = iam_htree_key_set,
++        .key_cmp        = iam_htree_key_cmp,
++        .key_eq         = iam_htree_key_eq,
++        .key_size       = iam_htree_key_size,
++        .rec_set        = iam_htree_rec_set,
++        .rec_get        = iam_htree_rec_get,
++        .lookup         = iam_htree_lookup,
++        .ilookup        = iam_htree_ilookup,
++        .at_end         = iam_htree_at_end,
++        .rec_add        = iam_htree_rec_add,
++        .rec_del        = iam_htree_rec_del,
++        .can_add        = iam_htree_can_add,
++        .split          = iam_htree_split
++};
++
++/*
++ * Index operations.
++ */
++
++static __u32 iam_htree_root_ptr(struct iam_container *c)
++{
++	return 0;
++}
++
++static int iam_htree_node_check(struct iam_path *path, struct iam_frame *frame)
++{
++	/* XXX no checks yet */
++	return 0;
++}
++
++static int is_htree(struct super_block *sb,
++                    const struct dx_root *root, int silent)
++{
++        if (root->info.hash_version > DX_HASH_MAX) {
++                if (!silent)
++                        ext3_warning(sb, __FUNCTION__,
++                                     "Unrecognised inode hash code %d",
++                                     root->info.hash_version);
++                return -EIO;
++        }
++
++        if (root->info.unused_flags & 1) {
++                if (!silent)
++			ext3_warning(sb, __FUNCTION__,
++				     "Unimplemented inode hash flags: %#06x",
++				     root->info.unused_flags);
++			return -EIO;
++        }
++
++        if (root->info.indirect_levels > DX_MAX_TREE_HEIGHT - 1) {
++                if (!silent)
++                        ext3_warning(sb, __FUNCTION__,
++                                     "Unimplemented inode hash depth: %#06x",
++                                     root->info.indirect_levels);
++                return -EIO;
++        }
++        return 0;
++}
++
++static int iam_htree_node_load(struct iam_path *path, struct iam_frame *frame)
++{
++	void *data;
++	struct iam_entry *entries;
++	struct super_block *sb;
++
++	data = frame->bh->b_data;
++	entries = dx_node_get_entries(path, frame);
++	sb = iam_path_obj(path)->i_sb;
++	if (frame == path->ip_frames) {
++		/* root node */
++		struct dx_root *root;
++		struct iam_path_compat *ipc;
++                int check;
++                const char *name;
++                int namelen;
++
++		root = data;
++		assert_corr(path->ip_data != NULL);
++		ipc = container_of(path->ip_data, struct iam_path_compat,
++				   ipc_descr);
++
++                check = is_htree(sb, root, 0);
++                if (check != 0)
++                        return check;
++		path->ip_indirect = root->info.indirect_levels;
++
++		assert_corr((char *)entries == (((char *)&root->info) +
++                                                root->info.info_length));
++		assert_corr(dx_get_limit(entries) == dx_root_limit(path));
++
++		ipc->ipc_hinfo->hash_version = root->info.hash_version;
++		ipc->ipc_hinfo->seed = EXT3_SB(sb)->s_hash_seed;
++                name = NULL;
++		if (ipc->ipc_qstr) {
++                        name = ipc->ipc_qstr->name;
++                        namelen = ipc->ipc_qstr->len;
++                } else if (ipc->ipc_hinfo == &ipc->ipc_hinfo_area){
++                        name = (const char *)path->ip_key_target;
++                        namelen = strlen(name);
++                }
++                if (name != NULL)
++                        ext3fs_dirhash(name, namelen, ipc->ipc_hinfo);
++                if (path->ip_ikey_target == NULL) {
++                        path->ip_ikey_target = iam_path_ikey(path, 4);
++                        *(__u32 *)path->ip_ikey_target = ipc->ipc_hinfo->hash;
++                }
++	} else {
++		/* non-root index */
++		assert_corr(entries ==
++                            data + iam_path_descr(path)->id_node_gap);
++		assert_corr(dx_get_limit(entries) == dx_node_limit(path));
++	}
++	frame->entries = frame->at = entries;
++	return 0;
++}
++
++static int iam_htree_node_init(struct iam_container *c,
++                               struct buffer_head *bh, int root)
++{
++	struct dx_node *node;
++
++	assert_corr(!root);
++
++	node = (void *)bh->b_data;
++	node->fake.rec_len = cpu_to_le16(c->ic_object->i_sb->s_blocksize);
++	node->fake.inode = 0;
++	return 0;
++}
++
++static struct iam_entry *iam_htree_root_inc(struct iam_container *c,
++                                            struct iam_path *path,
++                                            struct iam_frame *frame)
++{
++        struct dx_root   *root;
++        struct iam_entry *entries;
++
++        entries = frame->entries;
++
++        dx_set_count(entries, 1);
++        root = (struct dx_root *) frame->bh->b_data;
++        root->info.indirect_levels++;
++
++        return entries;
++}
++
++static int iam_htree_ikeycmp(const struct iam_container *c,
++                             const struct iam_ikey *k1,
++                             const struct iam_ikey *k2)
++{
++	__u32 p1 = le32_to_cpu(*(__u32 *)k1);
++	__u32 p2 = le32_to_cpu(*(__u32 *)k2);
++
++	return p1 > p2 ? +1 : (p1 < p2 ? -1 : 0);
++}
++
++static struct iam_path_descr *iam_htree_ipd_alloc(const struct iam_container *c,
++                                                  void *area)
++{
++	struct iam_path_compat *ipc;
++
++	ipc = area;
++        memset(ipc, 0, sizeof *ipc);
++        iam_path_compat_init(ipc, c->ic_object);
++        return &ipc->ipc_descr;
++}
++
++static void iam_htree_ipd_free(struct iam_path_descr *ipd)
++{
++}
++
++static struct iam_operations iam_htree_ops = {
++        .id_root_ptr    = iam_htree_root_ptr,
++        .id_node_read   = iam_node_read,
++        .id_node_init   = iam_htree_node_init,
++        .id_node_check  = iam_htree_node_check,
++        .id_node_load   = iam_htree_node_load,
++        .id_ikeycmp     = iam_htree_ikeycmp,
++        .id_root_inc    = iam_htree_root_inc,
++        .id_ipd_alloc   = iam_htree_ipd_alloc,
++        .id_ipd_free    = iam_htree_ipd_free,
++        .id_name        = "htree"
++};
++
++/*
++ * Parameters describing iam compatibility mode in which existing ext3 htrees
++ * can be manipulated.
++ */
++struct iam_descr iam_htree_compat_param = {
++	.id_key_size  = EXT3_NAME_LEN,
++        .id_rec_size  = sizeof ((struct ext3_dir_entry_2 *)NULL)->inode,
++	.id_ikey_size = sizeof ((struct dx_map_entry *)NULL)->hash,
++	.id_ptr_size  = sizeof ((struct dx_map_entry *)NULL)->offs,
++	.id_node_gap  = offsetof(struct dx_node, entries),
++	.id_root_gap  = offsetof(struct dx_root, entries),
++	.id_ops	      = &iam_htree_ops,
++	.id_leaf_ops  = &iam_htree_leaf_ops
++};
++EXPORT_SYMBOL(iam_htree_compat_param);
++
++static int iam_htree_guess(struct iam_container *c)
++{
++        int result;
++        struct buffer_head *bh;
++        const struct dx_root *root;
++
++        assert_corr(c->ic_object != NULL);
++
++        result = iam_node_read(c, iam_htree_root_ptr(c), NULL, &bh);
++        if (result == 0) {
++                root = (void *)bh->b_data;
++                result = is_htree(c->ic_object->i_sb, root, 1);
++                if (result == 0)
++                        c->ic_descr = &iam_htree_compat_param;
++                else
++                        result = -EBADF;
++                brelse(bh);
++        }
++        return result;
++}
++
++static struct iam_format iam_htree_format = {
++        .if_guess = iam_htree_guess
++};
++
++void iam_htree_format_init(void)
++{
++        iam_format_register(&iam_htree_format);
++}
+Index: linux-2.6.22.14/fs/ext3/iam.c
+===================================================================
+--- /dev/null
++++ linux-2.6.22.14/fs/ext3/iam.c
+@@ -0,0 +1,1446 @@
++/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
++ * vim:expandtab:shiftwidth=8:tabstop=8:
++ *
++ * GPL HEADER START
++ *
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 only,
++ * as published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful, but
++ * WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * General Public License version 2 for more details (a copy is included
++ * in the LICENSE file that accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License
++ * version 2 along with this program; If not, see [sun.com URL with a
++ * copy of GPLv2].
++ *
++ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
++ * CA 95054 USA or visit www.sun.com if you need additional information or
++ * have any questions.
++ *
++ * GPL HEADER END
++ */
++/*
++ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
++ * Use is subject to license terms.
++ */
++/*
++ * This file is part of Lustre, http://www.lustre.org/
++ * Lustre is a trademark of Sun Microsystems, Inc.
++ *
++ * iam.c
++ * Top-level entry points into iam module
++ *
++ * Author: Wang Di <wangdi@clusterfs.com>
++ * Author: Nikita Danilov <nikita@clusterfs.com>
++ */
++
++/*
++ * iam: big theory statement.
++ *
++ * iam (Index Access Module) is a module providing abstraction of persistent
++ * transactional container on top of generalized ext3 htree.
++ *
++ * iam supports:
++ *
++ *     - key, pointer, and record size specifiable per container.
++ *
++ *     - trees taller than 2 index levels.
++ *
++ *     - read/write to existing ext3 htree directories as iam containers.
++ *
++ * iam container is a tree, consisting of leaf nodes containing keys and
++ * records stored in this container, and index nodes, containing keys and
++ * pointers to leaf or index nodes.
++ *
++ * iam does not work with keys directly, instead it calls user-supplied key
++ * comparison function (->dpo_keycmp()).
++ *
++ * Pointers are (currently) interpreted as logical offsets (measured in
++ * blocksful) within underlying flat file on top of which iam tree lives.
++ *
++ * On-disk format:
++ *
++ * iam mostly tries to reuse existing htree formats.
++ *
++ * Format of index node:
++ *
++ * +-----+-------+-------+-------+------+-------+------------+
++ * |     | count |       |       |      |       |            |
++ * | gap |   /   | entry | entry | .... | entry | free space |
++ * |     | limit |       |       |      |       |            |
++ * +-----+-------+-------+-------+------+-------+------------+
++ *
++ *       gap           this part of node is never accessed by iam code. It
++ *                     exists for binary compatibility with ext3 htree (that,
++ *                     in turn, stores fake struct ext2_dirent for ext2
++ *                     compatibility), and to keep some unspecified per-node
++ *                     data. Gap can be different for root and non-root index
++ *                     nodes. Gap size can be specified for each container
++ *                     (gap of 0 is allowed).
++ *
++ *       count/limit   current number of entries in this node, and the maximal
++ *                     number of entries that can fit into node. count/limit
++ *                     has the same size as entry, and is itself counted in
++ *                     count.
++ *
++ *       entry         index entry: consists of a key immediately followed by
++ *                     a pointer to a child node. Size of a key and size of a
++ *                     pointer depends on container. Entry has neither
++ *                     alignment nor padding.
++ *
++ *       free space    portion of node new entries are added to
++ *
++ * Entries in index node are sorted by their key value.
++ *
++ * Format of a leaf node is not specified. Generic iam code accesses leaf
++ * nodes through ->id_leaf methods in struct iam_descr.
++ *
++ */
++
++#include <linux/module.h>
++#include <linux/fs.h>
++#include <linux/pagemap.h>
++#include <linux/jbd.h>
++#include <linux/time.h>
++#include <linux/ext3_fs.h>
++#include <linux/ext3_jbd.h>
++#include <linux/fcntl.h>
++#include <linux/stat.h>
++#include <linux/string.h>
++#include <linux/quotaops.h>
++#include <linux/buffer_head.h>
++#include <linux/smp_lock.h>
++#include <linux/lustre_iam.h>
++
++#include "xattr.h"
++#include "iopen.h"
++#include "acl.h"
++
++/*
++ * List of all registered formats.
++ *
++ * No locking. Callers synchronize.
++ */
++static LIST_HEAD(iam_formats);
++
++void iam_format_register(struct iam_format *fmt)
++{
++        list_add(&fmt->if_linkage, &iam_formats);
++}
++EXPORT_SYMBOL(iam_format_register);
++
++/*
++ * Determine format of given container. This is done by scanning list of
++ * registered formats and calling ->if_guess() method of each in turn.
++ */
++static int iam_format_guess(struct iam_container *c)
++{
++        int result;
++        struct iam_format *fmt;
++
++        /*
++         * XXX temporary initialization hook.
++         */
++        {
++                static int initialized = 0;
++
++                if (!initialized) {
++                        /*
++                         * Keep that order: htree should be registered first,
++                         * so that iam_htree_guess() runs last.
++                         */
++                        iam_htree_format_init();
++                        iam_lvar_format_init();
++                        iam_lfix_format_init();
++                        initialized = 1;
++                }
++        }
++
++        result = -ENOENT;
++        list_for_each_entry(fmt, &iam_formats, if_linkage) {
++                result = fmt->if_guess(c);
++                if (result == 0)
++                        break;
++        }
++        return result;
++}
++
++/*
++ * Initialize container @c.
++ */
++int iam_container_init(struct iam_container *c,
++		       struct iam_descr *descr, struct inode *inode)
++{
++	memset(c, 0, sizeof *c);
++	c->ic_descr  = descr;
++	c->ic_object = inode;
++        init_rwsem(&c->ic_sem);
++        return 0;
++}
++EXPORT_SYMBOL(iam_container_init);
++
++/*
++ * Determine container format.
++ */
++int iam_container_setup(struct iam_container *c)
++{
++        return iam_format_guess(c);
++}
++EXPORT_SYMBOL(iam_container_setup);
++
++/*
++ * Finalize container @c, release all resources.
++ */
++void iam_container_fini(struct iam_container *c)
++{
++}
++EXPORT_SYMBOL(iam_container_fini);
++
++void iam_path_init(struct iam_path *path, struct iam_container *c,
++                   struct iam_path_descr *pd)
++{
++	memset(path, 0, sizeof *path);
++	path->ip_container = c;
++	path->ip_frame = path->ip_frames;
++	path->ip_data = pd;
++        path->ip_leaf.il_path = path;
++}
++
++static void iam_leaf_fini(struct iam_leaf *leaf);
++
++void iam_path_release(struct iam_path *path)
++{
++	int i;
++
++	for (i = 0; i < ARRAY_SIZE(path->ip_frames); i++) {
++		if (path->ip_frames[i].bh != NULL) {
++			brelse(path->ip_frames[i].bh);
++			path->ip_frames[i].bh = NULL;
++		}
++	}
++}
++
++void iam_path_fini(struct iam_path *path)
++{
++	iam_leaf_fini(&path->ip_leaf);
++        iam_path_release(path);
++}
++
++void iam_path_compat_init(struct iam_path_compat *path, struct inode *inode)
++{
++	int i;
++
++        path->ipc_hinfo = &path->ipc_hinfo_area;
++	for (i = 0; i < ARRAY_SIZE(path->ipc_scratch); ++i)
++		path->ipc_descr.ipd_key_scratch[i] =
++			(struct iam_ikey *)&path->ipc_scratch[i];
++
++	iam_container_init(&path->ipc_container,
++                           &iam_htree_compat_param, inode);
++	iam_path_init(&path->ipc_path, &path->ipc_container, &path->ipc_descr);
++}
++
++void iam_path_compat_fini(struct iam_path_compat *path)
++{
++	iam_path_fini(&path->ipc_path);
++	iam_container_fini(&path->ipc_container);
++}
++
++/*
++ * Helper function initializing iam_path_descr and its key scratch area.
++ */
++struct iam_path_descr *iam_ipd_alloc(void *area, int keysize)
++{
++        struct iam_path_descr *ipd;
++        void *karea;
++        int i;
++
++        ipd = area;
++        karea = ipd + 1;
++        for (i = 0; i < ARRAY_SIZE(ipd->ipd_key_scratch); ++i, karea += keysize)
++                ipd->ipd_key_scratch[i] = karea;
++        return ipd;
++}
++EXPORT_SYMBOL(iam_ipd_alloc);
++
++void iam_ipd_free(struct iam_path_descr *ipd)
++{
++}
++EXPORT_SYMBOL(iam_ipd_free);
++
++int iam_node_read(struct iam_container *c, iam_ptr_t ptr,
++                  handle_t *h, struct buffer_head **bh)
++{
++	int result = 0;
++
++	*bh = ext3_bread(h, c->ic_object, (int)ptr, 0, &result);
++	if (*bh == NULL)
++		result = -EIO;
++	return result;
++}
++
++/*
++ * Return pointer to current leaf record. Pointer is valid while corresponding
++ * leaf node is locked and pinned.
++ */
++static struct iam_rec *iam_leaf_rec(const struct iam_leaf *leaf)
++{
++	return iam_leaf_ops(leaf)->rec(leaf);
++}
++
++/*
++ * Return pointer to the current leaf key. This function returns pointer to
++ * the key stored in node.
++ *
++ * Caller should assume that returned pointer is only valid while leaf node is
++ * pinned and locked.
++ */
++static struct iam_key *iam_leaf_key(const struct iam_leaf *leaf)
++{
++	return iam_leaf_ops(leaf)->key(leaf);
++}
++
++static int iam_leaf_key_size(const struct iam_leaf *leaf)
++{
++	return iam_leaf_ops(leaf)->key_size(leaf);
++}
++
++static struct iam_ikey *iam_leaf_ikey(const struct iam_leaf *leaf,
++                                      struct iam_ikey *key)
++{
++	return iam_leaf_ops(leaf)->ikey(leaf, key);
++}
++
++static int iam_leaf_keycmp(const struct iam_leaf *leaf,
++                           const struct iam_key *key)
++{
++	return iam_leaf_ops(leaf)->key_cmp(leaf, key);
++}
++
++static int iam_leaf_keyeq(const struct iam_leaf *leaf,
++                          const struct iam_key *key)
++{
++	return iam_leaf_ops(leaf)->key_eq(leaf, key);
++}
++
++#if EXT3_INVARIANT_ON
++static int iam_leaf_check(struct iam_leaf *leaf);
++extern int dx_node_check(struct iam_path *p, struct iam_frame *f);
++
++static int iam_path_check(struct iam_path *p)
++{
++        int i;
++        int result;
++        struct iam_frame *f;
++        struct iam_descr *param;
++
++        result = 1;
++        param = iam_path_descr(p);
++        for (i = 0; result && i < ARRAY_SIZE(p->ip_frames); ++i) {
++                f = &p->ip_frames[i];
++                if (f->bh != NULL) {
++                        result = dx_node_check(p, f);
++                        if (result)
++                                result = !param->id_ops->id_node_check(p, f);
++                }
++        }
++        if (result && p->ip_leaf.il_bh != NULL)
++                result = iam_leaf_check(&p->ip_leaf);
++        if (result == 0) {
++                ext3_std_error(iam_path_obj(p)->i_sb, result);
++        }
++        return result;
++}
++#endif
++
++static int iam_leaf_load(struct iam_path *path)
++{
++	iam_ptr_t block;
++	int err;
++	struct iam_container *c;
++	struct buffer_head   *bh;
++	struct iam_leaf      *leaf;
++	struct iam_descr     *descr;
++	
++	c     = path->ip_container;
++	leaf  = &path->ip_leaf;
++	descr = iam_path_descr(path);
++	block = path->ip_frame->leaf;
++        if (block == 0) {
++                /* XXX bug 11027 */
++                printk(KERN_EMERG "wrong leaf: %lu %d [%p %p %p]\n",
++                       (long unsigned)path->ip_frame->leaf,
++                       dx_get_count(dx_node_get_entries(path, path->ip_frame)),
++                       path->ip_frames[0].bh, path->ip_frames[1].bh,
++                       path->ip_frames[2].bh);
++        }
++	err   = descr->id_ops->id_node_read(c, block, NULL, &bh);
++	if (err == 0) {
++		leaf->il_bh = bh;
++                leaf->il_curidx = block;
++		err = iam_leaf_ops(leaf)->init(leaf);
++                assert_inv(ergo(err == 0, iam_leaf_check(leaf)));
++	}
++	return err;
++}
++
++static void iam_leaf_unlock(struct iam_leaf *leaf)
++{
++        if (leaf->il_lock != NULL) {
++                dx_unlock_htree(iam_leaf_container(leaf)->ic_object,
++                                leaf->il_lock);
++		do_corr(schedule());
++                leaf->il_lock = NULL;
++        }
++}
++
++static void iam_leaf_fini(struct iam_leaf *leaf)
++{
++        if (leaf->il_path != NULL) {
++                iam_leaf_unlock(leaf);
++                assert_inv(ergo(leaf->il_bh != NULL, iam_leaf_check(leaf)));
++                iam_leaf_ops(leaf)->fini(leaf);
++                if (leaf->il_bh) {
++                        brelse(leaf->il_bh);
++                        leaf->il_bh = NULL;
++                        leaf->il_curidx = 0;
++                }
++        }
++}
++
++static void iam_leaf_start(struct iam_leaf *folio)
++{
++	iam_leaf_ops(folio)->start(folio);
++}
++
++void iam_leaf_next(struct iam_leaf *folio)
++{
++	iam_leaf_ops(folio)->next(folio);
++}
++
++static void iam_leaf_rec_add(struct iam_leaf *leaf, const struct iam_key *key,
++                             const struct iam_rec *rec)
++{
++        iam_leaf_ops(leaf)->rec_add(leaf, key, rec);
++}
++
++static void iam_rec_del(struct iam_leaf *leaf, int shift)
++{
++        iam_leaf_ops(leaf)->rec_del(leaf, shift);
++}
++
++int iam_leaf_at_end(const struct iam_leaf *leaf)
++{
++        return iam_leaf_ops(leaf)->at_end(leaf);
++}
++
++void iam_leaf_split(struct iam_leaf *l, struct buffer_head **bh, iam_ptr_t nr)
++{
++        iam_leaf_ops(l)->split(l, bh, nr);
++}
++
++int iam_leaf_can_add(const struct iam_leaf *l,
++                     const struct iam_key *k, const struct iam_rec *r)
++{
++        return iam_leaf_ops(l)->can_add(l, k, r);
++}
++
++#if EXT3_INVARIANT_ON
++static int iam_leaf_check(struct iam_leaf *leaf)
++{
++        return 1;
++#if 0
++        struct iam_lentry    *orig;
++        struct iam_path      *path;
++        struct iam_container *bag;
++        struct iam_ikey       *k0;
++        struct iam_ikey       *k1;
++        int result;
++        int first;
++
++        orig = leaf->il_at;
++        path = iam_leaf_path(leaf);
++        bag  = iam_leaf_container(leaf);
++
++        result = iam_leaf_ops(leaf)->init(leaf);
++        if (result != 0)
++                return result;
++
++        first = 1;
++        iam_leaf_start(leaf);
++        k0 = iam_path_ikey(path, 0);
++        k1 = iam_path_ikey(path, 1);
++        while (!iam_leaf_at_end(leaf)) {
++		iam_ikeycpy(bag, k0, k1);
++		iam_ikeycpy(bag, k1, iam_leaf_ikey(leaf, k1));
++                if (!first && iam_ikeycmp(bag, k0, k1) > 0) {
++                        return 0;
++                }
++                first = 0;
++                iam_leaf_next(leaf);
++        }
++        leaf->il_at = orig;
++        return 1;
++#endif
++}
++#endif
++
++static int iam_txn_dirty(handle_t *handle,
++                         struct iam_path *path, struct buffer_head *bh)
++{
++        int result;
++
++        result = ext3_journal_dirty_metadata(handle, bh);
++        if (result != 0)
++                ext3_std_error(iam_path_obj(path)->i_sb, result);
++        return result;
++}
++
++static int iam_txn_add(handle_t *handle,
++                       struct iam_path *path, struct buffer_head *bh)
++{
++        int result;
++
++        result = ext3_journal_get_write_access(handle, bh);
++        if (result != 0)
++                ext3_std_error(iam_path_obj(path)->i_sb, result);
++        return result;
++}
++
++/***********************************************************************/
++/* iterator interface                                                  */
++/***********************************************************************/
++
++static enum iam_it_state it_state(const struct iam_iterator *it)
++{
++        return it->ii_state;
++}
++
++/*
++ * Helper function returning scratch key.
++ */
++static struct iam_container *iam_it_container(const struct iam_iterator *it)
++{
++	return it->ii_path.ip_container;
++}
++
++static inline int it_keycmp(const struct iam_iterator *it,
++                            const struct iam_key *k)
++{
++	return iam_leaf_keycmp(&it->ii_path.ip_leaf, k);
++}
++
++static inline int it_keyeq(const struct iam_iterator *it,
++                           const struct iam_key *k)
++{
++	return iam_leaf_keyeq(&it->ii_path.ip_leaf, k);
++}
++
++static int it_ikeycmp(const struct iam_iterator *it, const struct iam_ikey *ik)
++{
++        return iam_ikeycmp(it->ii_path.ip_container,
++                           iam_leaf_ikey(&it->ii_path.ip_leaf,
++                                         iam_path_ikey(&it->ii_path, 0)), ik);
++}
++
++static inline int it_at_rec(const struct iam_iterator *it)
++{
++        return !iam_leaf_at_end(&it->ii_path.ip_leaf);
++}
++
++static inline int it_before(const struct iam_iterator *it)
++{
++        return it_state(it) == IAM_IT_SKEWED && it_at_rec(it);
++}
++
++/*
++ * Helper wrapper around iam_it_get(): returns 0 (success) only when record
++ * with exactly the same key as asked is found.
++ */
++static int iam_it_get_exact(struct iam_iterator *it, const struct iam_key *k)
++{
++        int result;
++
++        result = iam_it_get(it, k);
++        if (result > 0)
++                result = 0;
++        else if (result == 0)
++                /*
++                 * Return -ENOENT if cursor is located above record with a key
++                 * different from one specified, or in the empty leaf.
++                 *
++                 * XXX returning -ENOENT only works if iam_it_get() never
++                 * returns -ENOENT as a legitimate error.
++                 */
++                result = -ENOENT;
++        return result;
++}
++
++void iam_container_write_lock(struct iam_container *ic)
++{
++        down_write(&ic->ic_sem);
++}
++
++void iam_container_write_unlock(struct iam_container *ic)
++{
++        up_write(&ic->ic_sem);
++}
++
++void iam_container_read_lock(struct iam_container *ic)
++{
++        down_read(&ic->ic_sem);
++}
++
++void iam_container_read_unlock(struct iam_container *ic)
++{
++        up_read(&ic->ic_sem);
++}
++
++/*
++ * Initialize iterator to IAM_IT_DETACHED state.
++ *
++ * postcondition: it_state(it) == IAM_IT_DETACHED
++ */
++int  iam_it_init(struct iam_iterator *it, struct iam_container *c, __u32 flags,
++		 struct iam_path_descr *pd)
++{
++	memset(it, 0, sizeof *it);
++	it->ii_flags  = flags;
++	it->ii_state  = IAM_IT_DETACHED;
++	iam_path_init(&it->ii_path, c, pd);
++	return 0;
++}
++EXPORT_SYMBOL(iam_it_init);
++
++/*
++ * Finalize iterator and release all resources.
++ *
++ * precondition: it_state(it) == IAM_IT_DETACHED
++ */
++void iam_it_fini(struct iam_iterator *it)
++{
++	assert_corr(it_state(it) == IAM_IT_DETACHED);
++	iam_path_fini(&it->ii_path);
++}
++EXPORT_SYMBOL(iam_it_fini);
++
++/*
++ * Performs tree top-to-bottom traversal starting from root, and loads leaf
++ * node.
++ */
++static int iam_path_lookup(struct iam_path *path, int index)
++{
++	struct iam_container *c;
++	struct iam_descr *descr;
++	struct iam_leaf  *leaf;
++	int result;
++	
++	c = path->ip_container;
++	leaf = &path->ip_leaf;
++	descr = iam_path_descr(path);
++	result = dx_lookup_lock(path, &leaf->il_lock, DLT_WRITE);
++        assert_inv(iam_path_check(path));
++        do_corr(schedule());
++	if (result == 0) {
++		result = iam_leaf_load(path);
++                assert_inv(ergo(result == 0, iam_leaf_check(leaf)));
++		if (result == 0) {
++                        do_corr(schedule());
++                        if (index)
++                                result = iam_leaf_ops(leaf)->
++                                        ilookup(leaf, path->ip_ikey_target);
++                        else
++                                result = iam_leaf_ops(leaf)->
++                                        lookup(leaf, path->ip_key_target);
++                        do_corr(schedule());
++                }
++                if (result < 0)
++                        iam_leaf_unlock(leaf);
++	}
++	return result;
++}
++
++/*
++ * Common part of iam_it_{i,}get().
++ */
++static int __iam_it_get(struct iam_iterator *it, int index)
++{
++        int result;
++        assert_corr(it_state(it) == IAM_IT_DETACHED);
++
++        result = iam_path_lookup(&it->ii_path, index);
++        if (result >= 0) {
++                int collision;
++
++                collision = result & IAM_LOOKUP_LAST;
++                switch (result & ~IAM_LOOKUP_LAST) {
++                case IAM_LOOKUP_EXACT:
++                        result = +1;
++                        it->ii_state = IAM_IT_ATTACHED;
++                        break;
++                case IAM_LOOKUP_OK:
++                        result = 0;
++                        it->ii_state = IAM_IT_ATTACHED;
++                        break;
++                case IAM_LOOKUP_BEFORE:
++                case IAM_LOOKUP_EMPTY:
++                        result = 0;
++                        it->ii_state = IAM_IT_SKEWED;
++                        break;
++                default:
++                        assert(0);
++                }
++                result |= collision;
++        }
++        /*
++         * See iam_it_get_exact() for explanation.
++         */
++        assert_corr(result != -ENOENT);
++        return result;
++}
++
++/*
++ * Correct hash, but not the same key was found, iterate through hash
++ * collision chain, looking for correct record.
++ */
++static int iam_it_collision(struct iam_iterator *it)
++{
++        int result;
++
++        assert(ergo(it_at_rec(it), !it_keyeq(it, it->ii_path.ip_key_target)));
++
++        while ((result = iam_it_next(it)) == 0) {
++		do_corr(schedule());
++                if (it_ikeycmp(it, it->ii_path.ip_ikey_target) != 0)
++                        return -ENOENT;
++                if (it_keyeq(it, it->ii_path.ip_key_target))
++                        return 0;
++        }
++        return result;
++}
++
++/*
++ * Attach iterator. After successful completion, @it points to record with
++ * least key not larger than @k.
++ *
++ * Return value: 0: positioned on existing record,
++ *             +ve: exact position found,
++ *             -ve: error.
++ *
++ * precondition:  it_state(it) == IAM_IT_DETACHED
++ * postcondition: ergo(result == 0 && it_state(it) == IAM_IT_ATTACHED,
++ *                     it_keycmp(it, k) <= 0)
++ */
++int iam_it_get(struct iam_iterator *it, const struct iam_key *k)
++{
++        int result;
++        assert_corr(it_state(it) == IAM_IT_DETACHED);
++
++        it->ii_path.ip_ikey_target = NULL;
++        it->ii_path.ip_key_target  = k;
++
++        result = __iam_it_get(it, 0);
++
++        if (result == IAM_LOOKUP_LAST) {
++                result = iam_it_collision(it);
++                if (result != 0) {
++                        iam_it_put(it);
++                        iam_it_fini(it);
++                        result = __iam_it_get(it, 0);
++                } else
++                        result = +1;
++        }
++        if (result > 0)
++                result &= ~IAM_LOOKUP_LAST;
++
++        assert_corr(ergo(result > 0, it_keycmp(it, k) == 0));
++	assert_corr(ergo(result == 0 && it_state(it) == IAM_IT_ATTACHED,
++                         it_keycmp(it, k) <= 0));
++        return result;
++}
++EXPORT_SYMBOL(iam_it_get);
++
++/*
++ * Attach iterator by index key.
++ */
++static int iam_it_iget(struct iam_iterator *it, const struct iam_ikey *k)
++{
++        assert_corr(it_state(it) == IAM_IT_DETACHED);
++
++        it->ii_path.ip_ikey_target = k;
++        return __iam_it_get(it, 1) & ~IAM_LOOKUP_LAST;
++}
++
++/*
++ * Attach iterator, and assure it points to the record (not skewed).
++ *
++ * Return value: 0: positioned on existing record,
++ *             +ve: exact position found,
++ *             -ve: error.
++ *
++ * precondition:  it_state(it) == IAM_IT_DETACHED &&
++ *                !(it->ii_flags&IAM_IT_WRITE)
++ * postcondition: ergo(result == 0, it_state(it) == IAM_IT_ATTACHED)
++ */
++int iam_it_get_at(struct iam_iterator *it, const struct iam_key *k)
++{
++        int result;
++        assert_corr(it_state(it) == IAM_IT_DETACHED &&
++                    !(it->ii_flags&IAM_IT_WRITE));
++        result = iam_it_get(it, k);
++        if (result == 0) {
++                if (it_state(it) != IAM_IT_ATTACHED) {
++                        assert_corr(it_state(it) == IAM_IT_SKEWED);
++                        result = iam_it_next(it);
++                }
++        }
++        assert_corr(ergo(result >= 0, it_state(it) == IAM_IT_ATTACHED));
++        return result;
++}
++EXPORT_SYMBOL(iam_it_get_at);
++
++/*
++ * Duplicates iterator.
++ *
++ * postcondition: it_state(dst) == it_state(src) &&
++ *                iam_it_container(dst) == iam_it_container(src) &&
++ *                dst->ii_flags = src->ii_flags &&
++ *                ergo(it_state(src) == IAM_IT_ATTACHED,
++ *                     iam_it_rec_get(dst) == iam_it_rec_get(src) &&
++ *                     iam_it_key_get(dst) == iam_it_key_get(src))
++ */
++void iam_it_dup(struct iam_iterator *dst, const struct iam_iterator *src)
++{
++        dst->ii_flags     = src->ii_flags;
++        dst->ii_state     = src->ii_state;
++        /* XXX not yet. iam_path_dup(&dst->ii_path, &src->ii_path); */
++        /*
++         * XXX: duplicate lock.
++         */
++	assert_corr(it_state(dst) == it_state(src));
++	assert_corr(iam_it_container(dst) == iam_it_container(src));
++	assert_corr(dst->ii_flags = src->ii_flags);
++	assert_corr(ergo(it_state(src) == IAM_IT_ATTACHED,
++		    iam_it_rec_get(dst) == iam_it_rec_get(src) &&
++		    iam_it_key_get(dst) == iam_it_key_get(src)));
++
++}
++
++/*
++ * Detach iterator. Does nothing it detached state.
++ *
++ * postcondition: it_state(it) == IAM_IT_DETACHED
++ */
++void iam_it_put(struct iam_iterator *it)
++{
++        if (it->ii_state != IAM_IT_DETACHED) {
++                it->ii_state = IAM_IT_DETACHED;
++		iam_leaf_fini(&it->ii_path.ip_leaf);
++        }
++}
++EXPORT_SYMBOL(iam_it_put);
++
++static struct iam_ikey *iam_it_ikey_get(const struct iam_iterator *it,
++                                        struct iam_ikey *ikey);
++/*
++ * Move iterator one record right.
++ *
++ * Return value: 0: success,
++ *              +1: end of container reached
++ *             -ve: error
++ *
++ * precondition:  (it_state(it) == IAM_IT_ATTACHED ||
++ *                 it_state(it) == IAM_IT_SKEWED) && it->ii_flags&IAM_IT_MOVE
++ * postcondition: ergo(result == 0, it_state(it) == IAM_IT_ATTACHED) &&
++ *                ergo(result >  0, it_state(it) == IAM_IT_DETACHED)
++ */
++int iam_it_next(struct iam_iterator *it)
++{
++        int result;
++        struct iam_path      *path;
++        struct iam_leaf      *leaf;
++        struct inode         *obj;
++        do_corr(struct iam_ikey *ik_orig);
++
++        /* assert_corr(it->ii_flags&IAM_IT_MOVE); */
++        assert_corr(it_state(it) == IAM_IT_ATTACHED ||
++                    it_state(it) == IAM_IT_SKEWED);
++
++        path = &it->ii_path;
++        leaf = &path->ip_leaf;
++        obj  = iam_path_obj(path);
++
++        assert_corr(iam_leaf_is_locked(leaf));
++
++        result = 0;
++        do_corr(ik_orig = it_at_rec(it) ?
++                iam_it_ikey_get(it, iam_path_ikey(path, 2)) : NULL);
++        if (it_before(it)) {
++                assert_corr(!iam_leaf_at_end(leaf));
++                it->ii_state = IAM_IT_ATTACHED;
++        } else {
++                if (!iam_leaf_at_end(leaf))
++                        /* advance within leaf node */
++                        iam_leaf_next(leaf);
++                /*
++                 * multiple iterations may be necessary due to empty leaves.
++                 */
++                while (result == 0 && iam_leaf_at_end(leaf)) {
++                        do_corr(schedule());
++                        /* advance index portion of the path */
++                        result = iam_index_next(iam_it_container(it), path);
++                        assert_corr(iam_leaf_is_locked(leaf));
++                        if (result == 1) {
++                                struct dynlock_handle *lh;
++                                lh = dx_lock_htree(obj, path->ip_frame->leaf,
++                                                   DLT_WRITE);
++                                if (lh != NULL) {
++                                        iam_leaf_fini(leaf);
++                                        leaf->il_lock = lh;
++                                        result = iam_leaf_load(path);
++                                        if (result == 0)
++                                                iam_leaf_start(leaf);
++                                } else
++                                        result = -ENOMEM;
++                        } else if (result == 0)
++                                /* end of container reached */
++                                result = +1;
++                        if (result != 0)
++                                iam_it_put(it);
++                }
++                if (result == 0)
++                        it->ii_state = IAM_IT_ATTACHED;
++        }
++        assert_corr(ergo(result == 0, it_state(it) == IAM_IT_ATTACHED));
++        assert_corr(ergo(result >  0, it_state(it) == IAM_IT_DETACHED));
++        assert_corr(ergo(result == 0 && ik_orig != NULL,
++                         it_ikeycmp(it, ik_orig) >= 0));
++        return result;
++}
++EXPORT_SYMBOL(iam_it_next);
++
++/*
++ * Return pointer to the record under iterator.
++ *
++ * precondition:  it_state(it) == IAM_IT_ATTACHED && it_at_rec(it)
++ * postcondition: it_state(it) == IAM_IT_ATTACHED
++ */
++struct iam_rec *iam_it_rec_get(const struct iam_iterator *it)
++{
++        assert_corr(it_state(it) == IAM_IT_ATTACHED);
++        assert_corr(it_at_rec(it));
++        return iam_leaf_rec(&it->ii_path.ip_leaf);
++}
++EXPORT_SYMBOL(iam_it_rec_get);
++
++static void iam_it_reccpy(struct iam_iterator *it, const struct iam_rec *r)
++{
++        struct iam_leaf *folio;
++
++        folio = &it->ii_path.ip_leaf;
++        iam_leaf_ops(folio)->rec_set(folio, r);
++}
++
++/*
++ * Replace contents of record under iterator.
++ *
++ * precondition:  it_state(it) == IAM_IT_ATTACHED &&
++ *                it->ii_flags&IAM_IT_WRITE
++ * postcondition: it_state(it) == IAM_IT_ATTACHED &&
++ *                ergo(result == 0, !memcmp(iam_it_rec_get(it), r, ...))
++ */
++int iam_it_rec_set(handle_t *h,
++                   struct iam_iterator *it, const struct iam_rec *r)
++{
++        int result;
++        struct iam_path *path;
++        struct buffer_head *bh;
++
++        assert_corr(it_state(it) == IAM_IT_ATTACHED &&
++                    it->ii_flags&IAM_IT_WRITE);
++        assert_corr(it_at_rec(it));
++
++        path = &it->ii_path;
++        bh   = path->ip_leaf.il_bh;
++        result = iam_txn_add(h, path, bh);
++        if (result == 0) {
++                iam_it_reccpy(it, r);
++                result = iam_txn_dirty(h, path, bh);
++        }
++        return result;
++}
++EXPORT_SYMBOL(iam_it_rec_set);
++
++/*
++ * Return pointer to the index key under iterator.
++ *
++ * precondition:  it_state(it) == IAM_IT_ATTACHED ||
++ *                it_state(it) == IAM_IT_SKEWED
++ */
++static struct iam_ikey *iam_it_ikey_get(const struct iam_iterator *it,
++                                        struct iam_ikey *ikey)
++{
++        assert_corr(it_state(it) == IAM_IT_ATTACHED ||
++                    it_state(it) == IAM_IT_SKEWED);
++        assert_corr(it_at_rec(it));
++        return iam_leaf_ikey(&it->ii_path.ip_leaf, ikey);
++}
++
++/*
++ * Return pointer to the key under iterator.
++ *
++ * precondition:  it_state(it) == IAM_IT_ATTACHED ||
++ *                it_state(it) == IAM_IT_SKEWED
++ */
++struct iam_key *iam_it_key_get(const struct iam_iterator *it)
++{
++        assert_corr(it_state(it) == IAM_IT_ATTACHED ||
++                    it_state(it) == IAM_IT_SKEWED);
++        assert_corr(it_at_rec(it));
++        return iam_leaf_key(&it->ii_path.ip_leaf);
++}
++EXPORT_SYMBOL(iam_it_key_get);
++
++/*
++ * Return size of key under iterator (in bytes)
++ *
++ * precondition:  it_state(it) == IAM_IT_ATTACHED ||
++ *                it_state(it) == IAM_IT_SKEWED
++ */
++int iam_it_key_size(const struct iam_iterator *it)
++{
++        assert_corr(it_state(it) == IAM_IT_ATTACHED ||
++                    it_state(it) == IAM_IT_SKEWED);
++        assert_corr(it_at_rec(it));
++        return iam_leaf_key_size(&it->ii_path.ip_leaf);
++}
++EXPORT_SYMBOL(iam_it_key_size);
++
++/*
++ * Insertion of new record. Interaction with jbd during non-trivial case (when
++ * split happens) is as following:
++ *
++ *  - new leaf node is involved into transaction by ext3_append();
++ *
++ *  - old leaf node is involved into transaction by iam_add_rec();
++ *
++ *  - leaf where insertion point ends in, is marked dirty by iam_add_rec();
++ *
++ *  - leaf without insertion point is marked dirty (as @new_leaf) by
++ *  iam_new_leaf();
++ *
++ *  - split index nodes are involved into transaction and marked dirty by
++ *  split_index_node().
++ *
++ *  - "safe" index node, which is no split, but where new pointer is inserted
++ *  is involved into transaction and marked dirty by split_index_node().
++ *
++ *  - index node where pointer to new leaf is inserted is involved into
++ *  transaction by split_index_node() and marked dirty by iam_add_rec().
++ *
++ *  - inode is marked dirty by iam_add_rec().
++ *
++ */
++
++static int iam_new_leaf(handle_t *handle, struct iam_leaf *leaf)
++{
++        int err;
++        iam_ptr_t blknr;
++        struct buffer_head   *new_leaf;
++        struct buffer_head   *old_leaf;
++        struct iam_container *c;
++        struct inode         *obj;
++        struct iam_path      *path;
++
++        assert_inv(iam_leaf_check(leaf));
++
++        c = iam_leaf_container(leaf);
++        path = leaf->il_path;
++
++        obj = c->ic_object;
++        new_leaf = ext3_append(handle, obj, (__u32 *)&blknr, &err);
++        do_corr(schedule());
++        if (new_leaf != NULL) {
++                struct dynlock_handle *lh;
++
++                lh = dx_lock_htree(obj, blknr, DLT_WRITE);
++                do_corr(schedule());
++                if (lh != NULL) {
++                        iam_leaf_ops(leaf)->init_new(c, new_leaf);
++                        do_corr(schedule());
++                        old_leaf = leaf->il_bh;
++                        iam_leaf_split(leaf, &new_leaf, blknr);
++                        if (old_leaf != leaf->il_bh) {
++                                /*
++                                 * Switched to the new leaf.
++                                 */
++                                iam_leaf_unlock(leaf);
++                                leaf->il_lock = lh;
++                                path->ip_frame->leaf = blknr;
++                        } else
++                                dx_unlock_htree(obj, lh);
++                        do_corr(schedule());
++                        err = iam_txn_dirty(handle, path, new_leaf);
++                        brelse(new_leaf);
++                        if (err == 0)
++                                err = ext3_mark_inode_dirty(handle, obj);
++                        do_corr(schedule());
++                } else
++                        err = -ENOMEM;
++        }
++        assert_inv(iam_leaf_check(leaf));
++        assert_inv(iam_leaf_check(&iam_leaf_path(leaf)->ip_leaf));
++        assert_inv(iam_path_check(iam_leaf_path(leaf)));
++        return err;
++}
++
++static int iam_add_rec(handle_t *handle, struct iam_iterator *it,
++                       struct iam_path *path,
++                       const struct iam_key *k, const struct iam_rec *r)
++{
++	int err;
++        struct iam_leaf *leaf;
++
++        leaf = &path->ip_leaf;
++        assert_inv(iam_leaf_check(leaf));
++        assert_inv(iam_path_check(path));
++        err = iam_txn_add(handle, path, leaf->il_bh);
++        if (err == 0) {
++		do_corr(schedule());
++                if (!iam_leaf_can_add(leaf, k, r)) {
++                        struct dynlock_handle *lh = NULL;
++
++                        do {
++                                assert_corr(lh == NULL);
++                                do_corr(schedule());
++                                err = split_index_node(handle, path, &lh);
++                                if (err == -EAGAIN) {
++                                        assert_corr(lh == NULL);
++
++                                        iam_path_fini(path);
++                                        it->ii_state = IAM_IT_DETACHED;
++
++                                        do_corr(schedule());
++                                        err = iam_it_get_exact(it, k);
++                                        if (err == -ENOENT)
++                                                err = +1; /* repeat split */
++                                        else if (err == 0)
++                                                err = -EEXIST;
++                                }
++                        } while (err > 0);
++                        assert_inv(iam_path_check(path));
++                        if (err == 0) {
++                                assert_corr(lh != NULL);
++                                do_corr(schedule());
++                                err = iam_new_leaf(handle, leaf);
++                                if (err == 0)
++                                        err = iam_txn_dirty(handle, path,
++                                                            path->ip_frame->bh);
++                        }
++                        dx_unlock_htree(iam_path_obj(path), lh);
++                        do_corr(schedule());
++                }
++                if (err == 0) {
++                        iam_leaf_rec_add(leaf, k, r);
++                        err = iam_txn_dirty(handle, path, leaf->il_bh);
++                }
++        }
++        assert_inv(iam_leaf_check(leaf));
++        assert_inv(iam_leaf_check(&path->ip_leaf));
++        assert_inv(iam_path_check(path));
++	return err;
++}
++
++/*
++ * Insert new record with key @k and contents from @r, shifting records to the
++ * right. On success, iterator is positioned on the newly inserted record.
++ *
++ * precondition: it->ii_flags&IAM_IT_WRITE &&
++ *               (it_state(it) == IAM_IT_ATTACHED ||
++ *                it_state(it) == IAM_IT_SKEWED) &&
++ *               ergo(it_state(it) == IAM_IT_ATTACHED,
++ *                    it_keycmp(it, k) <= 0) &&
++ *               ergo(it_before(it), it_keycmp(it, k) > 0));
++ * postcondition: ergo(result == 0,
++ *                     it_state(it) == IAM_IT_ATTACHED &&
++ *                     it_keycmp(it, k) == 0 &&
++ *                     !memcmp(iam_it_rec_get(it), r, ...))
++ */
++int iam_it_rec_insert(handle_t *h, struct iam_iterator *it,
++                      const struct iam_key *k, const struct iam_rec *r)
++{
++        int result;
++        struct iam_path *path;
++
++        path = &it->ii_path;
++
++        assert_corr(it->ii_flags&IAM_IT_WRITE);
++        assert_corr(it_state(it) == IAM_IT_ATTACHED ||
++                    it_state(it) == IAM_IT_SKEWED);
++        assert_corr(ergo(it_state(it) == IAM_IT_ATTACHED,
++                         it_keycmp(it, k) <= 0));
++        assert_corr(ergo(it_before(it), it_keycmp(it, k) > 0));
++	result = iam_add_rec(h, it, path, k, r);
++        if (result == 0)
++                it->ii_state = IAM_IT_ATTACHED;
++        assert_corr(ergo(result == 0,
++                         it_state(it) == IAM_IT_ATTACHED &&
++                         it_keycmp(it, k) == 0));
++        return result;
++}
++EXPORT_SYMBOL(iam_it_rec_insert);
++
++/*
++ * Delete record under iterator.
++ *
++ * precondition:  it_state(it) == IAM_IT_ATTACHED &&
++ *                it->ii_flags&IAM_IT_WRITE &&
++ *                it_at_rec(it)
++ * postcondition: it_state(it) == IAM_IT_ATTACHED ||
++ *                it_state(it) == IAM_IT_DETACHED
++ */
++int iam_it_rec_delete(handle_t *h, struct iam_iterator *it)
++{
++        int result;
++        struct iam_leaf *leaf;
++        struct iam_path *path;
++
++        assert_corr(it_state(it) == IAM_IT_ATTACHED &&
++                    it->ii_flags&IAM_IT_WRITE);
++        assert_corr(it_at_rec(it));
++
++        path = &it->ii_path;
++        leaf = &path->ip_leaf;
++
++        assert_inv(iam_leaf_check(leaf));
++        assert_inv(iam_path_check(path));
++
++        result = iam_txn_add(h, path, leaf->il_bh);
++        /*
++         * no compaction for now.
++         */
++        if (result == 0) {
++                iam_rec_del(leaf, it->ii_flags&IAM_IT_MOVE);
++                result = iam_txn_dirty(h, path, leaf->il_bh);
++                if (result == 0 && iam_leaf_at_end(leaf) &&
++                    it->ii_flags&IAM_IT_MOVE) {
++                        result = iam_it_next(it);
++                        if (result > 0)
++                                result = 0;
++                }
++        }
++        assert_inv(iam_leaf_check(leaf));
++        assert_inv(iam_path_check(path));
++        assert_corr(it_state(it) == IAM_IT_ATTACHED ||
++                    it_state(it) == IAM_IT_DETACHED);
++	return result;
++}
++EXPORT_SYMBOL(iam_it_rec_delete);
++
++/*
++ * Convert iterator to cookie.
++ *
++ * precondition:  it_state(it) == IAM_IT_ATTACHED &&
++ *                iam_path_descr(it->ii_path)->id_key_size <= sizeof(iam_pos_t)
++ * postcondition: it_state(it) == IAM_IT_ATTACHED
++ */
++iam_pos_t iam_it_store(const struct iam_iterator *it)
++{
++        iam_pos_t result;
++
++        assert_corr(it_state(it) == IAM_IT_ATTACHED);
++        assert_corr(it_at_rec(it));
++        assert_corr(iam_it_container(it)->ic_descr->id_ikey_size <=
++                    sizeof result);
++
++        result = 0;
++        return *(iam_pos_t *)iam_it_ikey_get(it, (void *)&result);
++}
++EXPORT_SYMBOL(iam_it_store);
++
++/*
++ * Restore iterator from cookie.
++ *
++ * precondition:  it_state(it) == IAM_IT_DETACHED && it->ii_flags&IAM_IT_MOVE &&
++ *                iam_path_descr(it->ii_path)->id_key_size <= sizeof(iam_pos_t)
++ * postcondition: ergo(result == 0, it_state(it) == IAM_IT_ATTACHED &&
++ *                                  iam_it_store(it) == pos)
++ */
++int iam_it_load(struct iam_iterator *it, iam_pos_t pos)
++{
++        assert_corr(it_state(it) == IAM_IT_DETACHED &&
++                    it->ii_flags&IAM_IT_MOVE);
++        assert_corr(iam_it_container(it)->ic_descr->id_ikey_size <= sizeof pos);
++        return iam_it_iget(it, (struct iam_ikey *)&pos);
++}
++EXPORT_SYMBOL(iam_it_load);
++
++/***********************************************************************/
++/* invariants                                                          */
++/***********************************************************************/
++
++static inline int ptr_inside(void *base, size_t size, void *ptr)
++{
++        return (base <= ptr) && (ptr < base + size);
++}
++
++int iam_frame_invariant(struct iam_frame *f)
++{
++        return
++                (f->bh != NULL &&
++                f->bh->b_data != NULL &&
++                ptr_inside(f->bh->b_data, f->bh->b_size, f->entries) &&
++                ptr_inside(f->bh->b_data, f->bh->b_size, f->at) &&
++                f->entries <= f->at);
++}
++int iam_leaf_invariant(struct iam_leaf *l)
++{
++        return
++                l->il_bh != NULL &&
++                l->il_bh->b_data != NULL &&
++                ptr_inside(l->il_bh->b_data, l->il_bh->b_size, l->il_entries) &&
++                ptr_inside(l->il_bh->b_data, l->il_bh->b_size, l->il_at) &&
++                l->il_entries <= l->il_at;
++}
++
++int iam_path_invariant(struct iam_path *p)
++{
++        int i;
++
++        if (p->ip_container == NULL ||
++            p->ip_indirect < 0 || p->ip_indirect > DX_MAX_TREE_HEIGHT - 1 ||
++            p->ip_frame != p->ip_frames + p->ip_indirect ||
++            !iam_leaf_invariant(&p->ip_leaf))
++                return 0;
++        for (i = 0; i < ARRAY_SIZE(p->ip_frames); ++i) {
++                if (i <= p->ip_indirect) {
++                        if (!iam_frame_invariant(&p->ip_frames[i]))
++                                return 0;
++                }
++        }
++        return 1;
++}
++
++int iam_it_invariant(struct iam_iterator *it)
++{
++        return
++                (it->ii_state == IAM_IT_DETACHED ||
++                 it->ii_state == IAM_IT_ATTACHED ||
++                 it->ii_state == IAM_IT_SKEWED) &&
++                !(it->ii_flags & ~(IAM_IT_MOVE | IAM_IT_WRITE)) &&
++                ergo(it->ii_state == IAM_IT_ATTACHED ||
++                     it->ii_state == IAM_IT_SKEWED,
++                     iam_path_invariant(&it->ii_path) &&
++                     equi(it_at_rec(it), it->ii_state == IAM_IT_SKEWED));
++}
++
++/*
++ * Search container @c for record with key @k. If record is found, its data
++ * are moved into @r.
++ *
++ * Return values: 0: found, -ENOENT: not-found, -ve: error
++ */
++int iam_lookup(struct iam_container *c, const struct iam_key *k,
++               struct iam_rec *r, struct iam_path_descr *pd)
++{
++        struct iam_iterator it;
++        int result;
++
++        iam_it_init(&it, c, 0, pd);
++
++        result = iam_it_get_exact(&it, k);
++        if (result == 0)
++                /*
++                 * record with required key found, copy it into user buffer
++                 */
++                iam_reccpy(&it.ii_path.ip_leaf, r);
++        iam_it_put(&it);
++        iam_it_fini(&it);
++        return result;
++}
++EXPORT_SYMBOL(iam_lookup);
++
++/*
++ * Insert new record @r with key @k into container @c (within context of
++ * transaction @h).
++ *
++ * Return values: 0: success, -ve: error, including -EEXIST when record with
++ * given key is already present.
++ *
++ * postcondition: ergo(result == 0 || result == -EEXIST,
++ *                                  iam_lookup(c, k, r2) > 0;
++ */
++int iam_insert(handle_t *h, struct iam_container *c, const struct iam_key *k,
++               const struct iam_rec *r, struct iam_path_descr *pd)
++{
++        struct iam_iterator it;
++        int result;
++
++        iam_it_init(&it, c, IAM_IT_WRITE, pd);
++
++        result = iam_it_get_exact(&it, k);
++        if (result == -ENOENT)
++                result = iam_it_rec_insert(h, &it, k, r);
++        else if (result == 0)
++                result = -EEXIST;
++        iam_it_put(&it);
++        iam_it_fini(&it);
++        return result;
++}
++EXPORT_SYMBOL(iam_insert);
++
++/*
++ * Update record with the key @k in container @c (within context of
++ * transaction @h), new record is given by @r.
++ *
++ * Return values: 0: success, -ve: error, including -ENOENT if no record with
++ * the given key found.
++ */
++int iam_update(handle_t *h, struct iam_container *c, const struct iam_key *k,
++               const struct iam_rec *r, struct iam_path_descr *pd)
++{
++        struct iam_iterator it;
++        int result;
++
++        iam_it_init(&it, c, IAM_IT_WRITE, pd);
++
++        result = iam_it_get_exact(&it, k);
++        if (result == 0)
++                iam_it_rec_set(h, &it, r);
++        iam_it_put(&it);
++        iam_it_fini(&it);
++        return result;
++}
++EXPORT_SYMBOL(iam_update);
++
++/*
++ * Delete existing record with key @k.
++ *
++ * Return values: 0: success, -ENOENT: not-found, -ve: other error.
++ *
++ * postcondition: ergo(result == 0 || result == -ENOENT,
++ *                                 !iam_lookup(c, k, *));
++ */
++int iam_delete(handle_t *h, struct iam_container *c, const struct iam_key *k,
++	       struct iam_path_descr *pd)
++{
++        struct iam_iterator it;
++        int result;
++
++        iam_it_init(&it, c, IAM_IT_WRITE, pd);
++
++        result = iam_it_get_exact(&it, k);
++        if (result == 0)
++                iam_it_rec_delete(h, &it);
++        iam_it_put(&it);
++        iam_it_fini(&it);
++        return result;
++}
++EXPORT_SYMBOL(iam_delete);
++
+Index: linux-2.6.22.14/fs/ext3/iam-uapi.c
+===================================================================
+--- /dev/null
++++ linux-2.6.22.14/fs/ext3/iam-uapi.c
+@@ -0,0 +1,380 @@
++/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
++ * vim:expandtab:shiftwidth=8:tabstop=8:
++ *
++ * GPL HEADER START
++ *
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 only,
++ * as published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful, but
++ * WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * General Public License version 2 for more details (a copy is included
++ * in the LICENSE file that accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License
++ * version 2 along with this program; If not, see [sun.com URL with a
++ * copy of GPLv2].
++ *
++ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
++ * CA 95054 USA or visit www.sun.com if you need additional information or
++ * have any questions.
++ *
++ * GPL HEADER END
++ */
++/*
++ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
++ * Use is subject to license terms.
++ */
++/*
++ * This file is part of Lustre, http://www.lustre.org/
++ * Lustre is a trademark of Sun Microsystems, Inc.
++ *
++ * iam_uapi.c
++ * User-level interface to iam (ioctl based)
++ *
++ * Author: Nikita Danilov <nikita@clusterfs.com>
++ */
++
++#include <linux/types.h>
++#include <linux/jbd.h>
++/* ext3_error() */
++#include <linux/ext3_fs.h>
++#include <linux/ext3_jbd.h>
++
++#include <asm/uaccess.h>
++#include <linux/lustre_iam.h>
++
++
++struct iam_private_info {
++        struct dir_private_info ipi_dir; /* has to be first */
++        struct iam_container   ipi_bag;
++        struct iam_descr       ipi_descr;
++        struct iam_iterator    ipi_it;
++        struct iam_path_descr *ipi_ipd;
++        char                   ipi_ipd_area[DX_IPD_MAX_SIZE];
++};
++
++enum {
++        IAM_INSERT_CREDITS = 20
++};
++
++static struct iam_private_info *get_ipi(struct file *filp)
++{
++        return filp->private_data;
++}
++
++static int iam_uapi_it(int cmd, struct inode *inode,
++                       struct file *filp, struct iam_uapi_it *itop)
++{
++        struct iam_private_info *ipi;
++        struct iam_iterator     *it;
++        enum iam_it_state        st;
++        int result = 0;
++
++        ipi = get_ipi(filp);
++        it = &ipi->ipi_it;
++        st = it->ii_state;
++        switch (cmd) {
++        case IAM_IOC_IT_START:
++                result = iam_it_init(it, &ipi->ipi_bag,
++                                     IAM_IT_MOVE, ipi->ipi_ipd);
++                if (result == 0)
++                        result = iam_it_get(it, itop->iui_op.iul_key);
++                break;
++        case IAM_IOC_IT_NEXT:
++                if (st == IAM_IT_ATTACHED || st == IAM_IT_SKEWED)
++                        result = iam_it_next(it);
++                else
++                        result = -EBUSY;
++                break;
++        case IAM_IOC_IT_STOP:
++                iam_it_put(it);
++                iam_it_fini(it);
++                result = 0;
++                break;
++        }
++        st = it->ii_state;
++        if (st == IAM_IT_ATTACHED || st == IAM_IT_SKEWED)
++                memcpy(itop->iui_op.iul_key, iam_it_key_get(it),
++                       iam_it_key_size(it));
++        if (st == IAM_IT_ATTACHED)
++                iam_reccpy(&it->ii_path.ip_leaf, itop->iui_op.iul_rec);
++        itop->iui_state = st;
++        return result;
++}
++
++static int iam_uapi_op(int cmd, struct inode *inode,
++                       struct file *filp, struct iam_uapi_op *op)
++{
++        int result;
++        struct iam_private_info *ipi;
++
++        ipi = get_ipi(filp);
++        if (cmd == IAM_IOC_INSERT || cmd == IAM_IOC_DELETE) {
++                handle_t *h;
++
++                h = ext3_journal_start(inode, IAM_INSERT_CREDITS);
++                if (!IS_ERR(h)) {
++                        if (cmd == IAM_IOC_INSERT)
++                                result = iam_insert(h, &ipi->ipi_bag,
++                                                    op->iul_key,
++                                                    op->iul_rec, ipi->ipi_ipd);
++                        else
++                                result = iam_delete(h, &ipi->ipi_bag,
++                                                    op->iul_key, ipi->ipi_ipd);
++                        ext3_journal_stop(h);
++                } else {
++                        result = PTR_ERR(h);
++                        ext3_std_error(inode->i_sb, result);
++                }
++        } else
++                result = iam_lookup(&ipi->ipi_bag, op->iul_key,
++                                    op->iul_rec, ipi->ipi_ipd);
++        return result;
++}
++
++struct iam_private_info *ext3_iam_alloc_info(int flags)
++{
++        struct iam_private_info *info;
++
++        info = kmalloc(sizeof *info, flags);
++        if (info != NULL)
++                memset(info, 0, sizeof *info);
++        return info;
++}
++
++void ext3_iam_release_info(struct iam_private_info *info)
++{
++        iam_it_put(&info->ipi_it);
++        iam_it_fini(&info->ipi_it);
++        if (info->ipi_ipd != NULL)
++                info->ipi_bag.ic_descr->id_ops->id_ipd_free(info->ipi_ipd);
++        iam_container_fini(&info->ipi_bag);
++}
++
++void ext3_iam_release(struct file *filp, struct inode *inode)
++{
++        struct iam_private_info *info;
++
++        info = filp->private_data;
++        ext3_iam_release_info(info);
++
++        kfree(info);
++        EXT3_I(inode)->i_flags &= ~EXT3_INDEX_FL;
++}
++
++static int iam_uapi_init(struct inode *inode,
++                         struct file *filp, struct iam_uapi_info *ua)
++{
++        int result;
++        struct iam_private_info *info;
++
++        info = ext3_iam_alloc_info(GFP_KERNEL);
++        if (info != NULL) {
++                struct iam_container *bag;
++                struct iam_descr     *des;
++
++                bag = &info->ipi_bag;
++                des = &info->ipi_descr;
++                result = iam_container_init(bag, des, inode);
++                if (result == 0) {
++                        result = iam_container_setup(bag);
++                        if (result == 0) {
++                                /*
++                                 * Container setup might change ->ic_descr
++                                 */
++                                des = bag->ic_descr;
++                                info->ipi_ipd = des->id_ops->
++                                        id_ipd_alloc(bag, info->ipi_ipd_area);
++                                if (info->ipi_ipd != NULL) {
++                                        filp->private_data = info;
++                                        EXT3_I(inode)->i_flags |= EXT3_INDEX_FL;
++                                } else
++                                        result = -ENOMEM;
++                        }
++                }
++        } else
++                result = -ENOMEM;
++        return result;
++}
++
++
++static int getua(struct iam_uapi_info *ua, unsigned long arg)
++{
++        if (copy_from_user(ua, (struct iam_uapi_info __user *)arg, sizeof *ua))
++                return -EFAULT;
++        else
++                return 0;
++}
++
++static int putua(struct iam_uapi_info *ua, unsigned long arg)
++{
++        if (copy_to_user((struct iam_uapi_info __user *)arg, ua, sizeof *ua))
++                return -EFAULT;
++        else
++                return 0;
++}
++
++enum outop_t {
++        KEY   = 1 << 0,
++        REC   = 1 << 1,
++        STATE = 1 << 2
++};
++
++static int outop(struct iam_uapi_op *op, struct iam_uapi_op *uop,
++                 struct iam_descr *des, enum outop_t opt)
++{
++        int result;
++
++        if (((opt & REC) && copy_to_user((void __user *)uop->iul_rec,
++                                         op->iul_rec, des->id_rec_size)) ||
++            ((opt & KEY) && copy_to_user((void __user *)uop->iul_key,
++                                         op->iul_key, des->id_key_size)))
++                result = -EFAULT;
++        else
++                result = 0;
++        return result;
++}
++
++static void putop(struct iam_uapi_op *op)
++{
++        kfree(op->iul_key);
++        kfree(op->iul_rec);
++}
++
++static int getop(struct iam_uapi_op *op, struct iam_uapi_op *uop,
++                 struct iam_descr *des, unsigned long arg)
++{
++        int result;
++        int ks;
++        int rs;
++
++        ks = des->id_key_size;
++        rs = des->id_rec_size;
++        op->iul_key = kmalloc(ks, GFP_KERNEL);
++        op->iul_rec = kmalloc(rs, GFP_KERNEL);
++        if (!copy_from_user(uop,
++                            (struct iam_uapi_op __user *)arg, sizeof *uop) &&
++            op->iul_key != NULL && op->iul_rec != NULL &&
++            !copy_from_user(op->iul_key, (void __user *)uop->iul_key, ks) &&
++            !copy_from_user(op->iul_rec, (void __user *)uop->iul_rec, rs))
++                result = 0;
++        else {
++                result = -EFAULT;
++                putop(op);
++        }
++        return result;
++}
++
++static int outit(struct iam_uapi_it *it, struct iam_uapi_it *uit,
++                 struct iam_descr *des, enum outop_t opt, unsigned long arg)
++{
++        int result;
++
++        result = outop(&it->iui_op, &uit->iui_op, des, opt);
++        if (result == 0 && (opt&STATE))
++                result = put_user(it->iui_state, (int __user *) arg);
++        return result;
++}
++
++static void putit(struct iam_uapi_it *it)
++{
++        putop(&it->iui_op);
++}
++
++static int getit(struct iam_uapi_it *it, struct iam_uapi_it *uit,
++                 struct iam_descr *des, unsigned long arg)
++{
++        return getop(&it->iui_op, &uit->iui_op, des,
++                     (unsigned long)&((struct iam_uapi_it *)arg)->iui_op);
++}
++
++int iam_uapi_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
++                   unsigned long arg)
++{
++        int result;
++        struct iam_uapi_info ua;
++        struct iam_uapi_op   uop;
++        struct iam_uapi_op   op;
++        struct iam_uapi_it   uit;
++        struct iam_uapi_it   it;
++        enum outop_t opt;
++
++        if ((current->fsuid != inode->i_uid) && !capable(CAP_FOWNER)) {
++                result = -EACCES;
++        } else if (cmd == IAM_IOC_POLYMORPH) {
++                /*
++                 * If polymorphing into directory, increase hard-link count.
++                 */
++                if (S_ISDIR((umode_t)arg) && !S_ISDIR(inode->i_mode))
++                        inode->i_nlink++;
++                else if (!S_ISDIR((umode_t)arg) && S_ISDIR(inode->i_mode))
++                        inode->i_nlink--;
++                inode->i_mode = (umode_t)arg;
++                mark_inode_dirty(inode);
++                result = 0;
++        } else if (cmd == IAM_IOC_INIT) {
++                if (filp->private_data == NULL) {
++                        result = getua(&ua, arg);
++                        if (result == 0)
++                                result = iam_uapi_init(inode, filp, &ua);
++                } else
++                        result = -EBUSY;
++        } else if (is_dx(inode) && filp->private_data != NULL) {
++                struct iam_descr *des;
++
++                switch (cmd) {
++                case IAM_IOC_IT_START:
++                case IAM_IOC_IT_NEXT:
++                        opt = KEY|REC|STATE;
++                        break;
++                case IAM_IOC_LOOKUP:
++                        opt = REC;
++                        break;
++                default:
++                        opt = 0;
++                        break;
++                }
++
++                des = get_ipi(filp)->ipi_bag.ic_descr;
++                if (cmd == IAM_IOC_GETINFO) {
++                        ua.iui_keysize = des->id_key_size;
++                        ua.iui_recsize = des->id_rec_size;
++                        ua.iui_ptrsize = des->id_ptr_size;
++                        ua.iui_height  = 0; /* not yet */
++                        memcpy(ua.iui_fmt_name, des->id_ops->id_name,
++                               ARRAY_SIZE(ua.iui_fmt_name));
++                        result = putua(&ua, arg);
++                } else if (cmd == IAM_IOC_INSERT || cmd == IAM_IOC_LOOKUP ||
++                           cmd == IAM_IOC_DELETE) {
++                        result = getop(&op, &uop, des, arg);
++                        if (result == 0) {
++                                int res2;
++                                result = iam_uapi_op(cmd, inode, filp, &op);
++
++                                res2 = outop(&op, &uop, des, opt);
++                                result = result ? : res2;
++                                putop(&op);
++                        }
++                } else if (cmd == IAM_IOC_IT_START || cmd == IAM_IOC_IT_NEXT ||
++                           cmd == IAM_IOC_IT_STOP) {
++                        result = getit(&it, &uit, des, arg);
++                        if (result == 0) {
++                                int res2;
++
++                                result = iam_uapi_it(cmd, inode, filp, &it);
++
++                                res2 = outit(&it, &uit, des, opt, arg);
++                                result = result ? : res2;
++                                putit(&it);
++                        }
++                } else
++                        result = -EINVAL;
++        } else
++                result = -ENOENT;
++        return result;
++}
+Index: linux-2.6.22.14/include/linux/lustre_iam.h
+===================================================================
+--- /dev/null
++++ linux-2.6.22.14/include/linux/lustre_iam.h
+@@ -0,0 +1,1087 @@
++/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
++ * vim:expandtab:shiftwidth=8:tabstop=8:
++ *
++ * GPL HEADER START
++ *
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 only,
++ * as published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful, but
++ * WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * General Public License version 2 for more details (a copy is included
++ * in the LICENSE file that accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License
++ * version 2 along with this program; If not, see [sun.com URL with a
++ * copy of GPLv2].
++ *
++ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
++ * CA 95054 USA or visit www.sun.com if you need additional information or
++ * have any questions.
++ *
++ * GPL HEADER END
++ */
++/*
++ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
++ * Use is subject to license terms.
++ */
++/*
++ * This file is part of Lustre, http://www.lustre.org/
++ * Lustre is a trademark of Sun Microsystems, Inc.
++ *
++ * lustre_iam.c
++ * Top-level entry points into osd module
++ *
++ * Author: Wang Di <wangdi@clusterfs.com>
++ * Author: Nikita Danilov <nikita@clusterfs.com>
++ */
++
++#ifndef __LINUX_LUSTRE_IAM_H__
++#define __LINUX_LUSTRE_IAM_H__
++
++#include <linux/module.h>
++#include <asm/unaligned.h>
++
++/*
++ *  linux/include/linux/lustre_iam.h
++ */
++#define CLASSERT(cond) ({ switch(42) { case (cond): case 0: break; } })
++/* implication */
++#define ergo(a, b) (!(a) || (b))
++/* logical equivalence */
++#define equi(a, b) (!!(a) == !!(b))
++
++enum {
++        /*
++         * Maximal number of non-leaf levels in htree. In the stock ext3 this
++         * is 2.
++         */
++        /*
++         * XXX reduced back to 2 to make per-node locking work.
++         */
++	DX_MAX_TREE_HEIGHT = 5,
++        /*
++         * Scratch keys used by generic code for temporaries.
++         *
++         * Allocation:
++         *
++         *         [0] reserved for assertions and as a staging area for
++         *         record keys immediately used for key comparisons.
++         *
++         *         [1] reserved for record key, stored during iteration over
++         *         node records (see dx_node_check()).
++         *
++         *         [2] reserved for leaf node operations.
++         *
++         *         [3] reserved for index operations.
++         *
++         *         [4] reserved for path->ip_ikey_target
++         *
++         */
++	DX_SCRATCH_KEYS    = 5,
++        /*
++         * Maximal format name length.
++         */
++        DX_FMT_NAME_LEN    = 16,
++};
++
++#ifdef __KERNEL__
++/* handle_t, journal_start(), journal_stop() */
++#include <linux/jbd.h>
++
++/*
++ * Debugging.
++ *
++ * Various debugging levels.
++ */
++
++#if 0
++/*
++ * Following macros are defined in config.h and are tunable through
++ * appropriate configure switches (indicated below).
++ */
++
++/*
++ * Compile basic assertions in. You want this most of the time.
++ *
++ * --{enable,disable}-ldiskfs-assert (on by default).
++ */
++#define EXT3_ASSERT (1)
++
++/*
++ * Compile heavier correctness checks in. You want this during development
++ * cycle.
++ *
++ * --{enable,disable}-ldiskfs-correctness (off by default).
++ */
++#define EXT3_CORRECTNESS (1)
++
++/*
++ * Compile heavy invariant checking in. You want this early during development
++ * or when chasing a bug.
++ *
++ * --{enable,disable}-ldiskfs-invariant (off by default).
++ */
++#define EXT3_INVARIANT (1)
++#endif
++
++#if defined(EXT3_ASSERT)
++#define EXT3_ASSERT_ON (1)
++#else
++#define EXT3_ASSERT_ON (0)
++#endif
++
++#if defined(EXT3_CORRECTNESS)
++#define EXT3_CORRECTNESS_ON (1)
++#else
++#define EXT3_CORRECTNESS_ON (0)
++#endif
++
++#if defined(EXT3_INVARIANT)
++#define EXT3_INVARIANT_ON (1)
++#else
++#define EXT3_INVARIANT_ON (0)
++#endif
++
++#ifndef assert
++#if EXT3_ASSERT_ON
++#define assert(test) J_ASSERT(test)
++#else
++#define assert(test) ((void)(test))
++#endif
++#endif
++
++#if EXT3_CORRECTNESS_ON
++#define assert_corr(test) J_ASSERT(test)
++#define do_corr(exp) exp
++#else
++#define assert_corr(test) do {;} while (0)
++#define do_corr(exp) do {;} while (0)
++#endif
++
++#if EXT3_INVARIANT_ON
++#define assert_inv(test) J_ASSERT(test)
++#else
++#define assert_inv(test) do {;} while (0)
++#endif
++
++/*
++ * Entry within index tree node. Consists of a key immediately followed
++ * (without padding) by a pointer to the child node.
++ *
++ * Both key and pointer are of variable size, hence incomplete type.
++ */
++struct iam_entry;
++
++struct iam_entry_compat {
++	__le32 hash;
++	__le32 block;
++};
++
++/*
++ * Incomplete type used to refer to keys in iam container.
++ *
++ * As key size can be different from container to container, iam has to use
++ * incomplete type. Clients cast pointer to iam_key to real key type and back.
++ */
++struct iam_key;
++
++/*
++ * Incomplete type use to refer to the records stored in iam containers.
++ */
++struct iam_rec;
++
++/*
++ * Key in index node. Possibly compressed. Fixed size.
++ */
++struct iam_ikey;
++
++/*
++ * Scalar type into which certain iam_key's can be uniquely mapped. Used to
++ * support interfaces like readdir(), where iteration over index has to be
++ * re-startable.
++ */
++typedef __u32 iam_ptr_t;
++
++/*
++ * Index node traversed during tree lookup.
++ */
++struct iam_frame {
++	struct buffer_head *bh;    /* buffer holding node data */
++	struct iam_entry *entries; /* array of entries */
++	struct iam_entry *at;      /* target entry, found by binary search */
++	iam_ptr_t         leaf;    /* (logical) offset of child node found by
++                                    * binary search. */
++	iam_ptr_t         curidx;  /* (logical) offset of this node. Used to
++                                    * per-node locking to detect concurrent
++                                    * splits. */
++};
++
++/*
++ * Opaque entry in the leaf node.
++ */
++struct iam_lentry;
++
++struct iam_path;
++struct iam_container;
++
++
++/* leaf node reached by tree lookup */
++struct iam_leaf {
++        struct iam_path    *il_path;
++	struct buffer_head *il_bh;
++	struct iam_lentry  *il_entries;
++	struct iam_lentry  *il_at;
++        /*
++         * Lock on a leaf node.
++         */
++        struct dynlock_handle *il_lock;
++        iam_ptr_t              il_curidx; /* logical offset of leaf node. */
++	void               *il_descr_data;
++};
++
++/*
++ * Return values of ->lookup() operation from struct iam_leaf_operations.
++ */
++enum iam_lookup_t {
++        /*
++         * lookup found a record with the key requested
++         */
++        IAM_LOOKUP_EXACT  = 0,
++        /*
++         * lookup positioned leaf on some record
++         */
++        IAM_LOOKUP_OK     = 1,
++        /*
++         * leaf was empty
++         */
++        IAM_LOOKUP_EMPTY  = 2,
++        /*
++         * lookup positioned leaf before first record
++         */
++        IAM_LOOKUP_BEFORE = 3,
++        /*
++         * Found hash may have a continuation in the next leaf.
++         */
++        IAM_LOOKUP_LAST   = 0x100
++};
++
++/*
++ * Format-specific container operations. These are called by generic iam code.
++ */
++struct iam_operations {
++	/*
++	 * Returns pointer (in the same sense as pointer in index entry) to
++	 * the root node.
++	 */
++	__u32 (*id_root_ptr)(struct iam_container *c);
++
++	/*
++	 * Check validity and consistency of index node.
++	 */
++	int (*id_node_check)(struct iam_path *path, struct iam_frame *frame);
++	/*
++	 * Copy some data from node header into frame. This is called when
++	 * new node is loaded into frame.
++	 */
++	int (*id_node_load)(struct iam_path *path, struct iam_frame *frame);
++	/*
++	 * Initialize new node (stored in @bh) that is going to be added into
++	 * tree.
++	 */
++	int (*id_node_init)(struct iam_container *c,
++			    struct buffer_head *bh, int root);
++	int (*id_node_read)(struct iam_container *c, iam_ptr_t ptr,
++			    handle_t *h, struct buffer_head **bh);
++	/*
++	 * Key comparison functions. Returns -1, 0, +1.
++	 */
++	int (*id_ikeycmp)(const struct iam_container *c,
++                          const struct iam_ikey *k1,
++                          const struct iam_ikey *k2);
++	/*
++         * Modify root node when tree height increases.
++	 */
++	struct iam_entry *(*id_root_inc)(struct iam_container *c,
++                                         struct iam_path *path,
++                                         struct iam_frame *frame);
++
++        struct iam_path_descr *(*id_ipd_alloc)(const struct iam_container *c,
++                                               void *area);
++        void (*id_ipd_free)(struct iam_path_descr *ipd);
++        /*
++         * Format name.
++         */
++        char id_name[DX_FMT_NAME_LEN];
++};
++
++/*
++ * Another format-specific operation vector, consisting of methods to access
++ * leaf nodes. This is separated from struct iam_operations, because it is
++ * assumed that there will be many formats with different format of leaf
++ * nodes, yes the same struct iam_operations.
++ */
++struct iam_leaf_operations {
++		/*
++		 * leaf operations.
++		 */
++
++        /*
++         * initialize just loaded leaf node.
++         */
++        int (*init)(struct iam_leaf *p);
++        /*
++         * Format new node.
++         */
++        void (*init_new)(struct iam_container *c, struct buffer_head *bh);
++        /*
++         * Release resources.
++         */
++        void (*fini)(struct iam_leaf *l);
++		/*
++		 * returns true iff leaf is positioned at the last entry.
++		 */
++        int (*at_end)(const struct iam_leaf *l);
++		/* position leaf at the first entry */
++        void (*start)(struct iam_leaf *l);
++		/* more leaf to the next entry. */
++        void (*next)(struct iam_leaf *l);
++        /*
++         * return key of current leaf record. This method may return
++         * either pointer to the key stored in node, or copy key into
++         * @k buffer supplied by caller and return pointer to this
++         * buffer. The latter approach is used when keys in nodes are
++         * not stored in plain form (e.g., htree doesn't store keys at
++         * all).
++         *
++         * Caller should assume that returned pointer is only valid
++         * while leaf node is pinned and locked.
++         */
++        struct iam_ikey *(*ikey)(const struct iam_leaf *l, struct iam_ikey *k);
++        struct iam_key *(*key)(const struct iam_leaf *l);
++        /* return pointer to entry body. Pointer is valid while
++           corresponding leaf node is locked and pinned. */
++        struct iam_rec *(*rec)(const struct iam_leaf *l);
++
++        void (*key_set)(struct iam_leaf *l, const struct iam_key *k);
++        void (*rec_set)(struct iam_leaf *l, const struct iam_rec *r);
++        void (*rec_get)(const struct iam_leaf *l, struct iam_rec *r);
++
++	int (*key_cmp)(const struct iam_leaf *l, const struct iam_key *k);
++	int (*key_eq)(const struct iam_leaf *l, const struct iam_key *k);
++
++        int (*key_size)(const struct iam_leaf *l);
++        /*
++         * Search leaf @l for a record with key @k or for a place
++         * where such record is to be inserted.
++         *
++         * Scratch keys from @path can be used.
++         */
++        int (*lookup)(struct iam_leaf *l, const struct iam_key *k);
++        int (*ilookup)(struct iam_leaf *l, const struct iam_ikey *ik);
++
++        int (*can_add)(const struct iam_leaf *l,
++                       const struct iam_key *k, const struct iam_rec *r);
++        /*
++         * add rec for a leaf
++         */
++        void (*rec_add)(struct iam_leaf *l,
++                        const struct iam_key *k, const struct iam_rec *r);
++        /*
++         * remove rec for a leaf
++         */
++        void (*rec_del)(struct iam_leaf *l, int shift);
++        /*
++         * split leaf node, moving some entries into @bh (the latter currently
++         * is assumed to be empty).
++         */
++        void (*split)(struct iam_leaf *l, struct buffer_head **bh,
++                      iam_ptr_t newblknr);
++};
++
++/*
++ * Parameters, describing a flavor of iam container.
++ */
++struct iam_descr {
++	/*
++	 * Size of a key in this container, in bytes.
++	 */
++ 	size_t       id_key_size;
++	/*
++	 * Size of a key in index nodes, in bytes.
++	 */
++ 	size_t       id_ikey_size;
++	/*
++	 * Size of a pointer to the next level (stored in index nodes), in
++	 * bytes.
++	 */
++	size_t       id_ptr_size;
++	/*
++	 * Size of a record (stored in leaf nodes), in bytes.
++	 */
++	size_t       id_rec_size;
++	/*
++	 * Size of unused (by iam) space at the beginning of every non-root
++	 * node, in bytes. Used for compatibility with ext3.
++	 */
++	size_t       id_node_gap;
++	/*
++	 * Size of unused (by iam) space at the beginning of root node, in
++	 * bytes. Used for compatibility with ext3.
++	 */
++	size_t       id_root_gap;
++
++        struct iam_operations           *id_ops;
++        struct iam_leaf_operations      *id_leaf_ops;
++};
++
++/*
++ * An instance of iam container.
++ */
++struct iam_container {
++	/*
++	 * Underlying flat file. IO against this object is issued to
++	 * read/write nodes.
++	 */
++	struct inode     *ic_object;
++	/*
++	 * container flavor.
++	 */
++	struct iam_descr *ic_descr;
++        /*
++         * read-write lock protecting index consistency.
++         */
++        struct rw_semaphore ic_sem;
++};
++
++/*
++ * description-specific part of iam_path. This is usually embedded into larger
++ * structure.
++ */
++struct iam_path_descr {
++	/*
++	 * Scratch-pad area for temporary keys.
++	 */
++	struct iam_ikey *ipd_key_scratch[DX_SCRATCH_KEYS];
++};
++
++/*
++ * Structure to keep track of a path drilled through htree.
++ */
++struct iam_path {
++	/*
++	 * Parent container.
++	 */
++	struct iam_container  *ip_container;
++	/*
++	 * Number of index levels minus one.
++	 */
++	int                    ip_indirect;
++	/*
++	 * Nodes that top-to-bottom traversal passed through.
++	 */
++	struct iam_frame       ip_frames[DX_MAX_TREE_HEIGHT];
++	/*
++	 * Last filled frame in ->ip_frames. Refers to the 'twig' node (one
++	 * immediately above leaf).
++	 */
++	struct iam_frame      *ip_frame;
++	/*
++	 * Leaf node: a child of ->ip_frame.
++	 */
++	struct iam_leaf        ip_leaf;
++	/*
++	 * Key searched for.
++	 */
++	const struct iam_key  *ip_key_target;
++	const struct iam_ikey *ip_ikey_target;
++	/*
++	 * Description-specific data.
++	 */
++	struct iam_path_descr *ip_data;
++};
++
++struct dx_hash_info;
++
++/*
++ * Helper structure for legacy htrees.
++ */
++struct iam_path_compat {
++	struct iam_path      ipc_path;
++	struct iam_container ipc_container;
++	__u32                 ipc_scratch[DX_SCRATCH_KEYS];
++	struct dx_hash_info  *ipc_hinfo;
++	struct qstr          *ipc_qstr;
++	struct iam_path_descr ipc_descr;
++        struct dx_hash_info   ipc_hinfo_area;
++};
++
++#define const_max(p, q) ((p > q) ? p : q)
++
++enum {
++        DX_MAX_IKEY_SIZE   = 32, /* be generous */
++        /*
++         * Hack to avoid dynamic allocation and freeing of ipd.
++         */
++        DX_IPD_MAX_SIZE    = const_max(sizeof(struct iam_path_compat),
++                                       DX_MAX_IKEY_SIZE * DX_SCRATCH_KEYS +
++                                       sizeof(struct iam_path_descr))
++};
++
++/*
++ * iam cursor (iterator) api.
++ */
++
++/*
++ * States of iterator state machine.
++ */
++enum iam_it_state {
++	/* initial state */
++	IAM_IT_DETACHED,
++	/* iterator is above particular record in the container */
++	IAM_IT_ATTACHED,
++        /* iterator is positioned before record  */
++        IAM_IT_SKEWED
++};
++
++/*
++ * Flags controlling iterator functionality.
++ */
++enum iam_it_flags {
++	/*
++	 * this iterator will move (iam_it_next() will be called on it)
++	 */
++	IAM_IT_MOVE  = (1 << 0),
++	/*
++	 * tree can be updated through this iterator.
++	 */
++	IAM_IT_WRITE = (1 << 1)
++};
++
++/*
++ * Iterator.
++ *
++ * Immediately after call to iam_it_init() iterator is in "detached"
++ * (IAM_IT_DETACHED) state: it is associated with given parent container, but
++ * doesn't point to any particular record in this container.
++ *
++ * After successful call to iam_it_get() and until corresponding call to
++ * iam_it_put() iterator is in one of "active" states: IAM_IT_ATTACHED or
++ * IAM_IT_SKEWED.
++ *
++ * Active iterator can move through records in a container (provided
++ * IAM_IT_MOVE permission) in a key order, can get record and key values as it
++ * passes over them, and can modify container (provided IAM_IT_WRITE
++ * permission).
++ *
++ * Iteration may reach the end of container, at which point iterator switches
++ * into IAM_IT_DETACHED state.
++ *
++ * Concurrency: iterators are supposed to be local to thread. Interfaces below
++ * do no internal serialization of access to the iterator fields.
++ *
++ * When in non-detached state, iterator keeps some container nodes pinned in
++ * memory and locked (that locking may be implemented at the container
++ * granularity though). In particular, clients may assume that pointers to
++ * records and keys obtained through iterator interface as valid until
++ * iterator is detached (except that they may be invalidated by sub-sequent
++ * operations done through the same iterator).
++ *
++ */
++struct iam_iterator {
++	/*
++	 * iterator flags, taken from enum iam_it_flags.
++	 */
++	__u32                 ii_flags;
++	enum iam_it_state     ii_state;
++	/*
++	 * path to the record. Valid in IAM_IT_ATTACHED, and IAM_IT_SKEWED
++	 * states.
++	 */
++	struct iam_path       ii_path;
++};
++
++void iam_path_init(struct iam_path *path, struct iam_container *c,
++		   struct iam_path_descr *pd);
++void iam_path_fini(struct iam_path *path);
++void iam_path_release(struct iam_path *path);
++
++void iam_path_compat_init(struct iam_path_compat *path, struct inode *inode);
++void iam_path_compat_fini(struct iam_path_compat *path);
++
++struct iam_path_descr *iam_ipd_alloc(void *area, int keysize);
++void iam_ipd_free(struct iam_path_descr *ipd);
++
++int  iam_it_init(struct iam_iterator *it, struct iam_container *c, __u32 flags,
++		 struct iam_path_descr *pd);
++void iam_it_fini(struct iam_iterator *it);
++int iam_it_get(struct iam_iterator *it, const struct iam_key *k);
++int iam_it_get_at(struct iam_iterator *it, const struct iam_key *k);
++void iam_it_dup(struct iam_iterator *dst, const struct iam_iterator *src);
++void iam_it_put(struct iam_iterator *it);
++int iam_it_next(struct iam_iterator *it);
++struct iam_rec *iam_it_rec_get(const struct iam_iterator *it);
++int iam_it_rec_set(handle_t *h,
++                   struct iam_iterator *it, const struct iam_rec *r);
++struct iam_key *iam_it_key_get(const struct iam_iterator *it);
++int iam_it_key_size(const struct iam_iterator *it);
++int iam_it_rec_insert(handle_t *h, struct iam_iterator *it,
++		      const struct iam_key *k, const struct iam_rec *r);
++int iam_it_rec_delete(handle_t *h, struct iam_iterator *it);
++
++typedef __u64 iam_pos_t;
++
++iam_pos_t iam_it_store(const struct iam_iterator *it);
++int iam_it_load(struct iam_iterator *it, iam_pos_t pos);
++
++int iam_lookup(struct iam_container *c, const struct iam_key *k,
++               struct iam_rec *r, struct iam_path_descr *pd);
++int iam_delete(handle_t *h, struct iam_container *c, const struct iam_key *k,
++	       struct iam_path_descr *pd);
++int iam_update(handle_t *h, struct iam_container *c, const struct iam_key *k,
++	       const struct iam_rec *r, struct iam_path_descr *pd);
++int iam_insert(handle_t *handle, struct iam_container *c,
++               const struct iam_key *k,
++	       const struct iam_rec *r, struct iam_path_descr *pd);
++/*
++ * Initialize container @c.
++ */
++int iam_container_init(struct iam_container *c,
++		       struct iam_descr *descr, struct inode *inode);
++/*
++ * Finalize container @c, release all resources.
++ */
++void iam_container_fini(struct iam_container *c);
++
++/*
++ * Determine container format.
++ */
++int iam_container_setup(struct iam_container *c);
++
++static inline struct iam_descr *iam_container_descr(struct iam_container *c)
++{
++        return c->ic_descr;
++}
++
++static inline struct iam_descr *iam_path_descr(const struct iam_path *p)
++{
++	return p->ip_container->ic_descr;
++}
++
++static inline struct inode *iam_path_obj(struct iam_path *p)
++{
++	return p->ip_container->ic_object;
++}
++
++static inline void iam_ikeycpy(const struct iam_container *c,
++                               struct iam_ikey *k1, const struct iam_ikey *k2)
++{
++	memcpy(k1, k2, c->ic_descr->id_ikey_size);
++}
++
++static inline size_t iam_entry_size(struct iam_path *p)
++{
++	return iam_path_descr(p)->id_ikey_size + iam_path_descr(p)->id_ptr_size;
++}
++
++static inline struct iam_entry *iam_entry_shift(struct iam_path *p,
++						struct iam_entry *entry,
++						int shift)
++{
++	void *e = entry;
++	return e + shift * iam_entry_size(p);
++}
++
++static inline struct iam_ikey *iam_get_ikey(struct iam_path *p,
++                                            struct iam_entry *entry,
++                                            struct iam_ikey *key)
++{
++	return memcpy(key, entry, iam_path_descr(p)->id_ikey_size);
++}
++
++static inline struct iam_ikey *iam_ikey_at(struct iam_path *p,
++                                           struct iam_entry *entry)
++{
++	return (struct iam_ikey *)entry;
++}
++
++static inline ptrdiff_t iam_entry_diff(struct iam_path *p,
++				       struct iam_entry *e1,
++				       struct iam_entry *e2)
++{
++	ptrdiff_t diff;
++
++	diff = (void *)e1 - (void *)e2;
++	assert_corr(diff / iam_entry_size(p) * iam_entry_size(p) == diff);
++	return diff / iam_entry_size(p);
++}
++
++/*
++ * Helper for the frequent case, where key was already placed into @k1 by
++ * callback.
++ */
++static inline void iam_ikeycpy0(const struct iam_container *c,
++                                struct iam_ikey *k1, const struct iam_ikey *k2)
++{
++        if (k1 != k2)
++                iam_ikeycpy(c, k1, k2);
++}
++
++static inline int iam_ikeycmp(const struct iam_container *c,
++                              const struct iam_ikey *k1,
++                              const struct iam_ikey *k2)
++{
++	return c->ic_descr->id_ops->id_ikeycmp(c, k1, k2);
++}
++
++static inline void *iam_entry_off(struct iam_entry *entry, size_t off)
++{
++	return (void *)((char *)entry + off);
++}
++
++/*
++ * Leaf helpers.
++ */
++
++static inline struct iam_path *iam_leaf_path(const struct iam_leaf *leaf)
++{
++        return leaf->il_path;
++}
++
++static inline struct iam_container *
++iam_leaf_container(const struct iam_leaf *leaf)
++{
++        return iam_leaf_path(leaf)->ip_container;
++}
++
++static inline struct iam_descr *iam_leaf_descr(const struct iam_leaf *leaf)
++{
++        return iam_leaf_container(leaf)->ic_descr;
++}
++
++static inline struct iam_leaf_operations *
++iam_leaf_ops(const struct iam_leaf *leaf)
++{
++        return iam_leaf_descr(leaf)->id_leaf_ops;
++}
++
++static inline void iam_reccpy(const struct iam_leaf *leaf,
++                              struct iam_rec *rec_dst)
++{
++        iam_leaf_ops(leaf)->rec_get(leaf, rec_dst);
++}
++
++/*XXX These stuff put here, just because they are used by iam.c and namei.c*/
++static inline unsigned dx_get_block(struct iam_path *p, struct iam_entry *entry)
++{
++        u32 *addr;
++
++        addr = iam_entry_off(entry, iam_path_descr(p)->id_ikey_size);
++        return le32_to_cpu(get_unaligned(addr)) & 0x00ffffff;
++}
++
++static inline void dx_set_block(struct iam_path *p,
++				struct iam_entry *entry, unsigned value)
++{
++        u32 *addr;
++
++        addr = iam_entry_off(entry, iam_path_descr(p)->id_ikey_size);
++        put_unaligned(cpu_to_le32(value), addr);
++}
++
++static inline void dx_set_ikey(struct iam_path *p, struct iam_entry *entry,
++                               const struct iam_ikey *key)
++{
++        iam_ikeycpy(p->ip_container, iam_entry_off(entry, 0), key);
++}
++
++struct dx_map_entry
++{
++	u32 hash;
++	u32 offs;
++};
++
++struct fake_dirent {
++	__le32 inode;
++	__le16 rec_len;
++	u8 name_len;
++	u8 file_type;
++};
++
++struct dx_countlimit {
++	__le16 limit;
++	__le16 count;
++};
++
++/*
++ * dx_root_info is laid out so that if it should somehow get overlaid by a
++ * dirent the two low bits of the hash version will be zero.  Therefore, the
++ * hash version mod 4 should never be 0.  Sincerely, the paranoia department.
++ */
++
++struct dx_root {
++	struct fake_dirent dot;
++	char dot_name[4];
++	struct fake_dirent dotdot;
++	char dotdot_name[4];
++	struct dx_root_info
++	{
++		__le32 reserved_zero;
++		u8 hash_version;
++		u8 info_length; /* 8 */
++		u8 indirect_levels;
++		u8 unused_flags;
++	}
++	info;
++	struct {} entries[0];
++};
++
++struct dx_node
++{
++	struct fake_dirent fake;
++	struct {} entries[0];
++};
++
++
++static inline unsigned dx_get_count(struct iam_entry *entries)
++{
++	return le16_to_cpu(((struct dx_countlimit *) entries)->count);
++}
++
++static inline unsigned dx_get_limit(struct iam_entry *entries)
++{
++	return le16_to_cpu(((struct dx_countlimit *) entries)->limit);
++}
++
++static inline void dx_set_count(struct iam_entry *entries, unsigned value)
++{
++	((struct dx_countlimit *) entries)->count = cpu_to_le16(value);
++}
++
++static inline unsigned dx_node_limit(struct iam_path *p)
++{
++	struct iam_descr *param = iam_path_descr(p);
++	unsigned entry_space   = iam_path_obj(p)->i_sb->s_blocksize -
++		param->id_node_gap;
++	return entry_space / (param->id_ikey_size + param->id_ptr_size);
++}
++
++static inline unsigned dx_root_limit(struct iam_path *p)
++{
++	struct iam_descr *param = iam_path_descr(p);
++	unsigned limit = iam_path_obj(p)->i_sb->s_blocksize -
++                param->id_root_gap;
++        limit /= (param->id_ikey_size + param->id_ptr_size);
++        if (limit == dx_node_limit(p))
++                limit--;
++	return limit;
++}
++
++
++static inline struct iam_entry *dx_get_entries(struct iam_path *path,
++					       void *data, int root)
++{
++	struct iam_descr *param = iam_path_descr(path);
++	return data + (root ? param->id_root_gap : param->id_node_gap);
++}
++
++
++static inline struct iam_entry *dx_node_get_entries(struct iam_path *path,
++						    struct iam_frame *frame)
++{
++	return dx_get_entries(path,
++			      frame->bh->b_data, frame == path->ip_frames);
++}
++
++static inline struct iam_ikey *iam_path_ikey(const struct iam_path *path,
++                                             int nr)
++{
++	assert(0 <= nr && nr < ARRAY_SIZE(path->ip_data->ipd_key_scratch));
++	return path->ip_data->ipd_key_scratch[nr];
++}
++
++static inline struct dynlock *path_dynlock(struct iam_path *path)
++{
++        return &EXT3_I(iam_path_obj(path))->i_htree_lock;
++}
++
++static inline int iam_leaf_is_locked(const struct iam_leaf *leaf)
++{
++        int result;
++
++        result = dynlock_is_locked(path_dynlock(leaf->il_path),
++                                   leaf->il_curidx);
++        if (!result)
++                dump_stack();
++        return result;
++}
++
++static inline int iam_frame_is_locked(struct iam_path *path,
++                                      const struct iam_frame *frame)
++{
++        int result;
++
++        result = dynlock_is_locked(path_dynlock(path), frame->curidx);
++        if (!result)
++                dump_stack();
++        return result;
++}
++
++int dx_lookup_lock(struct iam_path *path,
++		   struct dynlock_handle **dl, enum dynlock_type lt);
++
++void dx_insert_block(struct iam_path *path, struct iam_frame *frame,
++		     u32 hash, u32 block);
++int dx_index_is_compat(struct iam_path *path);
++
++int ext3_htree_next_block(struct inode *dir, __u32 hash,
++			  struct iam_path *path, __u32 *start_hash);
++
++struct buffer_head *ext3_append(handle_t *handle, struct inode *inode,
++				u32 *block, int *err);
++int split_index_node(handle_t *handle, struct iam_path *path,
++		     struct dynlock_handle **lh);
++struct ext3_dir_entry_2 *split_entry(struct inode *dir,
++				     struct ext3_dir_entry_2 *de,
++				     unsigned long ino, mode_t mode,
++				     const char *name, int namelen);
++struct ext3_dir_entry_2 *find_insertion_point(struct inode *dir,
++					      struct buffer_head *bh,
++					      const char *name, int namelen);
++struct ext3_dir_entry_2 *move_entries(struct inode *dir,
++				      struct dx_hash_info *hinfo,
++				      struct buffer_head **bh1,
++				      struct buffer_head **bh2,
++				      __u32 *delim_hash);
++
++extern struct iam_descr iam_htree_compat_param;
++
++struct dynlock_handle *dx_lock_htree(struct inode *dir, unsigned long value,
++				     enum dynlock_type lt);
++void dx_unlock_htree(struct inode *dir, struct dynlock_handle *lh);
++
++/*
++ * external
++ */
++void iam_container_write_lock(struct iam_container *c);
++void iam_container_write_unlock(struct iam_container *c);
++
++void iam_container_read_lock(struct iam_container *c);
++void iam_container_read_unlock(struct iam_container *c);
++
++int iam_index_next(struct iam_container *c, struct iam_path *p);
++int iam_read_leaf(struct iam_path *p);
++
++int iam_node_read(struct iam_container *c, iam_ptr_t ptr,
++		  handle_t *handle, struct buffer_head **bh);
++
++void iam_insert_key_lock(struct iam_path *path, struct iam_frame *frame,
++		    const struct iam_ikey *key, iam_ptr_t ptr);
++
++int  iam_leaf_at_end(const struct iam_leaf *l);
++void iam_leaf_next(struct iam_leaf *folio);
++int iam_leaf_can_add(const struct iam_leaf *l,
++                     const struct iam_key *k, const struct iam_rec *r);
++
++struct iam_path *iam_leaf_path(const struct iam_leaf *leaf);
++struct iam_container *iam_leaf_container(const struct iam_leaf *leaf);
++struct iam_descr *iam_leaf_descr(const struct iam_leaf *leaf);
++struct iam_leaf_operations *iam_leaf_ops(const struct iam_leaf *leaf);
++
++
++int iam_node_read(struct iam_container *c, iam_ptr_t ptr,
++                  handle_t *h, struct buffer_head **bh);
++
++/*
++ * Container format.
++ */
++struct iam_format {
++        /*
++         * Method called to recognize container format. Should return true iff
++         * container @c conforms to this format. This method may do IO to read
++         * container pages.
++         *
++         * If container is recognized, this method sets operation vectors
++         * ->id_ops and ->id_leaf_ops in container description (c->ic_descr),
++         * and fills other description fields.
++         */
++        int (*if_guess)(struct iam_container *c);
++        /*
++         * Linkage into global list of container formats.
++         */
++        struct list_head if_linkage;
++};
++
++void iam_format_register(struct iam_format *fmt);
++
++void iam_lfix_format_init(void);
++void iam_lvar_format_init(void);
++void iam_htree_format_init(void);
++
++struct iam_private_info;
++
++void ext3_iam_release(struct file *filp, struct inode *inode);
++
++int iam_uapi_ioctl(struct inode * inode, struct file * filp, unsigned int cmd,
++                   unsigned long arg);
++
++/* dir.c */
++#if EXT3_INVARIANT_ON
++extern int ext3_check_dir_entry(const char *, struct inode *,
++				struct ext3_dir_entry_2 *,
++				struct buffer_head *, unsigned long);
++#else
++static inline int ext3_check_dir_entry(const char * function,
++				       struct inode * dir,
++				       struct ext3_dir_entry_2 * de,
++				       struct buffer_head * bh,
++				       unsigned long offset)
++{
++	return 1;
++}
++#endif
++
++/* __KERNEL__ */
++#endif
++
++/*
++ * User level API. Copy exists in lustre/lustre/tests/iam_ut.c
++ */
++
++struct iam_uapi_info {
++        __u16 iui_keysize;
++        __u16 iui_recsize;
++        __u16 iui_ptrsize;
++        __u16 iui_height;
++        char  iui_fmt_name[DX_FMT_NAME_LEN];
++};
++
++struct iam_uapi_op {
++        void *iul_key;
++        void *iul_rec;
++};
++
++struct iam_uapi_it {
++        struct iam_uapi_op iui_op;
++        __u16              iui_state;
++};
++
++enum iam_ioctl_cmd {
++        IAM_IOC_INIT     = _IOW('i', 1, struct iam_uapi_info),
++        IAM_IOC_GETINFO  = _IOR('i', 2, struct iam_uapi_info),
++        IAM_IOC_INSERT   = _IOR('i', 3, struct iam_uapi_op),
++        IAM_IOC_LOOKUP   = _IOWR('i', 4, struct iam_uapi_op),
++        IAM_IOC_DELETE   = _IOR('i', 5, struct iam_uapi_op),
++        IAM_IOC_IT_START = _IOR('i', 6, struct iam_uapi_it),
++        IAM_IOC_IT_NEXT  = _IOW('i', 7, struct iam_uapi_it),
++        IAM_IOC_IT_STOP  = _IOR('i', 8, struct iam_uapi_it),
++
++        IAM_IOC_POLYMORPH = _IOR('i', 9, unsigned long)
++};
++
++/* __LINUX_LUSTRE_IAM_H__ */
++#endif

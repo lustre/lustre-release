@@ -1,7 +1,7 @@
-Index: linux-2.6.16-sles10/fs/ext3/inode.c
+Index: linux-2.6.16.54-0.2.3/fs/ext3/inode.c
 ===================================================================
---- linux-2.6.16-sles10.orig/fs/ext3/inode.c
-+++ linux-2.6.16-sles10/fs/ext3/inode.c
+--- linux-2.6.16.54-0.2.3.orig/fs/ext3/inode.c
++++ linux-2.6.16.54-0.2.3/fs/ext3/inode.c
 @@ -2561,6 +2561,13 @@ void ext3_read_inode(struct inode * inod
  	EXT3_INODE_GET_XTIME(i_atime, inode, raw_inode);
  	EXT3_EINODE_GET_XTIME(i_crtime, ei, raw_inode);
@@ -66,10 +66,10 @@ Index: linux-2.6.16-sles10/fs/ext3/inode.c
  	if (!err)
  		err = ext3_mark_iloc_dirty(handle, inode, &iloc);
  	return err;
-Index: linux-2.6.16-sles10/include/linux/ext3_fs.h
+Index: linux-2.6.16.54-0.2.3/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.16-sles10.orig/include/linux/ext3_fs.h
-+++ linux-2.6.16-sles10/include/linux/ext3_fs.h
+--- linux-2.6.16.54-0.2.3.orig/include/linux/ext3_fs.h
++++ linux-2.6.16.54-0.2.3/include/linux/ext3_fs.h
 @@ -227,6 +227,7 @@ struct ext3_group_desc
  #define EXT3_STATE_JDATA		0x00000001 /* journaled data exists */
  #define EXT3_STATE_NEW			0x00000002 /* inode is newly created */
@@ -104,10 +104,10 @@ Index: linux-2.6.16-sles10/include/linux/ext3_fs.h
  #if defined(__KERNEL__) || defined(__linux__)
  #define i_reserved1	osd1.linux1.l_i_reserved1
  #define i_frag		osd2.linux2.l_i_frag
-Index: linux-2.6.16-sles10/include/linux/ext3_fs_i.h
+Index: linux-2.6.16.54-0.2.3/include/linux/ext3_fs_i.h
 ===================================================================
---- linux-2.6.16-sles10.orig/include/linux/ext3_fs_i.h
-+++ linux-2.6.16-sles10/include/linux/ext3_fs_i.h
+--- linux-2.6.16.54-0.2.3.orig/include/linux/ext3_fs_i.h
++++ linux-2.6.16.54-0.2.3/include/linux/ext3_fs_i.h
 @@ -20,6 +20,8 @@
  #include <linux/rbtree.h>
  #include <linux/seqlock.h>
@@ -126,10 +126,10 @@ Index: linux-2.6.16-sles10/include/linux/ext3_fs_i.h
  };
  
  #endif	/* _LINUX_EXT3_FS_I */
-Index: linux-2.6.16-sles10/fs/ext3/xattr.c
+Index: linux-2.6.16.54-0.2.3/fs/ext3/xattr.c
 ===================================================================
---- linux-2.6.16-sles10.orig/fs/ext3/xattr.c
-+++ linux-2.6.16-sles10/fs/ext3/xattr.c
+--- linux-2.6.16.54-0.2.3.orig/fs/ext3/xattr.c
++++ linux-2.6.16.54-0.2.3/fs/ext3/xattr.c
 @@ -505,6 +505,20 @@ ext3_xattr_release_block(handle_t *handl
  	}
  }
@@ -170,18 +170,16 @@ Index: linux-2.6.16-sles10/fs/ext3/xattr.c
  	error = ext3_get_inode_loc(inode, &is.iloc);
  	if (error)
  		goto cleanup;
-@@ -1007,7 +1026,10 @@ ext3_xattr_set_handle(handle_t *handle, 
- 	if (!error) {
+@@ -1008,6 +1027,8 @@ ext3_xattr_set_handle(handle_t *handle, 
  		ext3_xattr_update_super_block(handle, inode->i_sb);
  		inode->i_ctime = ext3_current_time(inode);
-+
  		error = ext3_mark_iloc_dirty(handle, inode, &is.iloc);
 +		if (!value)
 +			EXT3_I(inode)->i_state &= ~EXT3_STATE_NO_EXPAND;
  		/*
  		 * The bh is consumed by ext3_mark_iloc_dirty, even with
  		 * error != 0.
-@@ -1020,6 +1042,8 @@ ext3_xattr_set_handle(handle_t *handle, 
+@@ -1020,6 +1041,8 @@ ext3_xattr_set_handle(handle_t *handle, 
  cleanup:
  	brelse(is.iloc.bh);
  	brelse(bs.bh);
@@ -190,7 +188,7 @@ Index: linux-2.6.16-sles10/fs/ext3/xattr.c
  	up_write(&EXT3_I(inode)->xattr_sem);
  	return error;
  }
-@@ -1059,6 +1083,249 @@ retry:
+@@ -1059,6 +1082,249 @@ retry:
  	return error;
  }
  
@@ -440,10 +438,10 @@ Index: linux-2.6.16-sles10/fs/ext3/xattr.c
  /*
   * ext3_xattr_delete_inode()
   *
-Index: linux-2.6.16-sles10/fs/ext3/xattr.h
+Index: linux-2.6.16.54-0.2.3/fs/ext3/xattr.h
 ===================================================================
---- linux-2.6.16-sles10.orig/fs/ext3/xattr.h
-+++ linux-2.6.16-sles10/fs/ext3/xattr.h
+--- linux-2.6.16.54-0.2.3.orig/fs/ext3/xattr.h
++++ linux-2.6.16.54-0.2.3/fs/ext3/xattr.h
 @@ -75,6 +75,9 @@ extern int ext3_xattr_set_handle(handle_
  extern void ext3_xattr_delete_inode(handle_t *, struct inode *);
  extern void ext3_xattr_put_super(struct super_block *);
@@ -454,10 +452,10 @@ Index: linux-2.6.16-sles10/fs/ext3/xattr.h
  extern int init_ext3_xattr(void);
  extern void exit_ext3_xattr(void);
  
-Index: linux-2.6.16-sles10/fs/ext3/ialloc.c
+Index: linux-2.6.16.54-0.2.3/fs/ext3/ialloc.c
 ===================================================================
---- linux-2.6.16-sles10.orig/fs/ext3/ialloc.c
-+++ linux-2.6.16-sles10/fs/ext3/ialloc.c
+--- linux-2.6.16.54-0.2.3.orig/fs/ext3/ialloc.c
++++ linux-2.6.16.54-0.2.3/fs/ext3/ialloc.c
 @@ -750,6 +750,7 @@ got:
  	ei->i_dtime = 0;
  	ei->i_block_alloc_info = NULL;

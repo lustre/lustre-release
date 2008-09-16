@@ -1,8 +1,8 @@
-Index: linux-2.6.18/fs/ext3/inode.c
+Index: linux-2.6.18-53.1.4/fs/ext3/inode.c
 ===================================================================
---- linux-2.6.18.orig/fs/ext3/inode.c
-+++ linux-2.6.18/fs/ext3/inode.c
-@@ -2690,6 +2690,13 @@ void ext3_read_inode(struct inode * inod
+--- linux-2.6.18-53.1.4.orig/fs/ext3/inode.c
++++ linux-2.6.18-53.1.4/fs/ext3/inode.c
+@@ -2687,6 +2687,13 @@ void ext3_read_inode(struct inode * inod
  	EXT3_INODE_GET_XTIME(i_atime, inode, raw_inode);
  	EXT3_EINODE_GET_XTIME(i_crtime, ei, raw_inode);
  
@@ -16,7 +16,7 @@ Index: linux-2.6.18/fs/ext3/inode.c
  	if (S_ISREG(inode->i_mode)) {
  		inode->i_op = &ext3_file_inode_operations;
  		inode->i_fop = &ext3_file_operations;
-@@ -2828,8 +2835,14 @@ static int ext3_do_update_inode(handle_t
+@@ -2825,8 +2832,14 @@ static int ext3_do_update_inode(handle_t
  	} else for (block = 0; block < EXT3_N_BLOCKS; block++)
  		raw_inode->i_block[block] = ei->i_data[block];
  
@@ -32,7 +32,7 @@ Index: linux-2.6.18/fs/ext3/inode.c
  
  	BUFFER_TRACE(bh, "call ext3_journal_dirty_metadata");
  	rc = ext3_journal_dirty_metadata(handle, bh);
-@@ -3103,10 +3116,32 @@ ext3_reserve_inode_write(handle_t *handl
+@@ -3100,10 +3113,32 @@ ext3_reserve_inode_write(handle_t *handl
  int ext3_mark_inode_dirty(handle_t *handle, struct inode *inode)
  {
  	struct ext3_iloc iloc;
@@ -66,10 +66,10 @@ Index: linux-2.6.18/fs/ext3/inode.c
  	if (!err)
  		err = ext3_mark_iloc_dirty(handle, inode, &iloc);
  	return err;
-Index: linux-2.6.18/include/linux/ext3_fs.h
+Index: linux-2.6.18-53.1.4/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.18.orig/include/linux/ext3_fs.h
-+++ linux-2.6.18/include/linux/ext3_fs.h
+--- linux-2.6.18-53.1.4.orig/include/linux/ext3_fs.h
++++ linux-2.6.18-53.1.4/include/linux/ext3_fs.h
 @@ -224,6 +224,7 @@ struct ext3_group_desc
  #define EXT3_STATE_JDATA		0x00000001 /* journaled data exists */
  #define EXT3_STATE_NEW			0x00000002 /* inode is newly created */
@@ -104,10 +104,10 @@ Index: linux-2.6.18/include/linux/ext3_fs.h
  #if defined(__KERNEL__) || defined(__linux__)
  #define i_reserved1	osd1.linux1.l_i_reserved1
  #define i_frag		osd2.linux2.l_i_frag
-Index: linux-2.6.18/include/linux/ext3_fs_i.h
+Index: linux-2.6.18-53.1.4/include/linux/ext3_fs_i.h
 ===================================================================
---- linux-2.6.18.orig/include/linux/ext3_fs_i.h
-+++ linux-2.6.18/include/linux/ext3_fs_i.h
+--- linux-2.6.18-53.1.4.orig/include/linux/ext3_fs_i.h
++++ linux-2.6.18-53.1.4/include/linux/ext3_fs_i.h
 @@ -21,6 +21,8 @@
  #include <linux/seqlock.h>
  #include <linux/mutex.h>
@@ -126,10 +126,10 @@ Index: linux-2.6.18/include/linux/ext3_fs_i.h
  };
  
  #endif	/* _LINUX_EXT3_FS_I */
-Index: linux-2.6.18/fs/ext3/xattr.c
+Index: linux-2.6.18-53.1.4/fs/ext3/xattr.c
 ===================================================================
---- linux-2.6.18.orig/fs/ext3/xattr.c
-+++ linux-2.6.18/fs/ext3/xattr.c
+--- linux-2.6.18-53.1.4.orig/fs/ext3/xattr.c
++++ linux-2.6.18-53.1.4/fs/ext3/xattr.c
 @@ -505,6 +505,20 @@ ext3_xattr_release_block(handle_t *handl
  	}
  }
@@ -438,10 +438,10 @@ Index: linux-2.6.18/fs/ext3/xattr.c
  /*
   * ext3_xattr_delete_inode()
   *
-Index: linux-2.6.18/fs/ext3/xattr.h
+Index: linux-2.6.18-53.1.4/fs/ext3/xattr.h
 ===================================================================
---- linux-2.6.18.orig/fs/ext3/xattr.h
-+++ linux-2.6.18/fs/ext3/xattr.h
+--- linux-2.6.18-53.1.4.orig/fs/ext3/xattr.h
++++ linux-2.6.18-53.1.4/fs/ext3/xattr.h
 @@ -74,6 +74,9 @@ extern int ext3_xattr_set_handle(handle_
  extern void ext3_xattr_delete_inode(handle_t *, struct inode *);
  extern void ext3_xattr_put_super(struct super_block *);
@@ -452,11 +452,11 @@ Index: linux-2.6.18/fs/ext3/xattr.h
  extern int init_ext3_xattr(void);
  extern void exit_ext3_xattr(void);
  
-Index: linux-2.6.18/fs/ext3/ialloc.c
+Index: linux-2.6.18-53.1.4/fs/ext3/ialloc.c
 ===================================================================
---- linux-2.6.18.orig/fs/ext3/ialloc.c
-+++ linux-2.6.18/fs/ext3/ialloc.c
-@@ -751,6 +751,7 @@ got:
+--- linux-2.6.18-53.1.4.orig/fs/ext3/ialloc.c
++++ linux-2.6.18-53.1.4/fs/ext3/ialloc.c
+@@ -750,6 +750,7 @@ got:
  	ei->i_dtime = 0;
  	ei->i_block_alloc_info = NULL;
  	ei->i_block_group = group;
