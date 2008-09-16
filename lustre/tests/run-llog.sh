@@ -19,8 +19,8 @@ load_llog_test() {
 PATH=`dirname $0`:`dirname $0`/../utils:$PATH
 TMP=${TMP:-/tmp}
 
-MDS=`ls /proc/fs/lustre/mdt | grep -v num_refs | head -n 1`
-[ -z "$MDS" ] && echo "no MDS available, skipping llog test" && exit 0
+MGS=`lctl dl | awk '/mgs/ { print $4 }'`
+[ -z "$MGS" ] && echo "no MGS available, skipping llog test" && exit 0
 
 load_llog_test || exit 0
 lctl modules > $TMP/ogdb-`hostname`
@@ -29,7 +29,7 @@ echo "NOW reload debugging syms.."
 RC=0
 lctl <<EOT || RC=2
 attach llog_test llt_name llt_uuid
-setup $MDS
+setup $MGS
 EOT
 
 # Using ignore_errors will allow lctl to cleanup even if the test fails.

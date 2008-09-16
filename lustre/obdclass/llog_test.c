@@ -131,10 +131,8 @@ static int llog_test_1(struct obd_device *obd, char *name)
 static int llog_test_2(struct obd_device *obd, char *name,
                        struct llog_handle **llh)
 {
-        struct llog_handle *loghandle;
-        struct llog_logid logid;
-        int rc;
         struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
+        int rc;
         ENTRY;
 
         CWARN("2a: re-open a log with name: %s\n", name);
@@ -147,7 +145,7 @@ static int llog_test_2(struct obd_device *obd, char *name,
 
         if ((rc = verify_handle("2", *llh, 1)))
                 GOTO(out, rc);
-
+#if 0
         CWARN("2b: create a log without specified NAME & LOGID\n");
         rc = llog_create(ctxt, &loghandle, NULL, NULL);
         if (rc) {
@@ -173,6 +171,7 @@ static int llog_test_2(struct obd_device *obd, char *name,
                 GOTO(out, rc);
         }
         llog_free_handle(loghandle);
+#endif
 out:
         llog_ctxt_put(ctxt);
 
@@ -185,7 +184,7 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
         struct llog_create_rec lcr;
         int rc, i;
         int num_recs = 1;       /* 1 for the header */
-        ENTRY;
+	ENTRY;
 
         lcr.lcr_hdr.lrh_len = lcr.lcr_tail.lrt_len = sizeof(lcr);
         lcr.lcr_hdr.lrh_type = OST_SZ_REC;
@@ -236,6 +235,41 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
         }
 
         if ((rc = verify_handle("3c", llh, num_recs)))
+                RETURN(rc);
+	
+	CWARN("3d: write log more than BITMAP_SIZE, return -ENOSPC\n");
+        for (i = 0; i < LLOG_BITMAP_SIZE(llh->lgh_hdr) + 1; i++) {
+                struct llog_rec_hdr hdr;
+                char buf_even[24];
+                char buf_odd[32];
+
+                memset(buf_odd, 0, sizeof buf_odd);
+                memset(buf_even, 0, sizeof buf_even);
+		if ((i % 2) == 0) {
+			hdr.lrh_len = 24;
+			hdr.lrh_type = OBD_CFG_REC;
+			rc = llog_write_rec(llh, &hdr, NULL, 0, buf_even, -1);
+		} else {
+			hdr.lrh_len = 32;
+			hdr.lrh_type = OBD_CFG_REC;
+			rc = llog_write_rec(llh, &hdr, NULL, 0, buf_odd, -1);
+		}
+                if (rc) {
+			if (rc == -ENOSPC) {
+				break;
+			} else {
+                        	CERROR("3c: write 8k recs failed at #%d: %d\n",
+                               		i + 1, rc);
+                        	RETURN(rc);
+			}
+                }
+                num_recs++;
+        }
+	if (rc != -ENOSPC) {
+		CWARN("3d: write record more than BITMAP size!\n");
+		RETURN(-EINVAL);
+	}
+        if ((rc = verify_handle("3d", llh, num_recs)))
                 RETURN(rc);
 
         RETURN(rc);
@@ -464,9 +498,9 @@ static int llog_test_5(struct obd_device *obd)
 /* Test client api; open log by name and process */
 static int llog_test_6(struct obd_device *obd, char *name)
 {
-        struct obd_device *mdc_obd;
+        struct obd_device *mgc_obd;
         struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
-        struct obd_uuid *mds_uuid = &ctxt->loc_exp->exp_obd->obd_uuid;
+        struct obd_uuid *mgs_uuid = &ctxt->loc_exp->exp_obd->obd_uuid;
         struct lustre_handle exph = {0, };
         struct obd_export *exp;
         struct obd_uuid uuid = {"LLOG_TEST6_UUID"};
@@ -475,22 +509,22 @@ static int llog_test_6(struct obd_device *obd, char *name)
         int rc;
 
         CWARN("6a: re-open log %s using client API\n", name);
-        mdc_obd = class_find_client_obd(mds_uuid, LUSTRE_MDC_NAME, NULL);
-        if (mdc_obd == NULL) {
-                CERROR("6: no MDC devices connected to %s found.\n",
-                       mds_uuid->uuid);
+        mgc_obd = class_find_client_obd(mgs_uuid, LUSTRE_MGC_NAME, NULL);
+        if (mgc_obd == NULL) {
+                CERROR("6: no MGC devices connected to %s found.\n",
+                       mgs_uuid->uuid);
                 GOTO(ctxt_release, rc = -ENOENT);
         }
 
-        rc = obd_connect(NULL, &exph, mdc_obd, &uuid,
+        rc = obd_connect(NULL, &exph, mgc_obd, &uuid,
                          NULL /* obd_connect_data */, NULL);
         if (rc) {
-                CERROR("6: failed to connect to MDC: %s\n", mdc_obd->obd_name);
+                CERROR("6: failed to connect to MGC: %s\n", mgc_obd->obd_name);
                 GOTO(ctxt_release, rc);
         }
         exp = class_conn2export(&exph);
 
-        nctxt = llog_get_context(mdc_obd, LLOG_CONFIG_REPL_CTXT);
+        nctxt = llog_get_context(mgc_obd, LLOG_CONFIG_REPL_CTXT);
         rc = llog_create(nctxt, &llh, NULL, name);
         if (rc) {
                 CERROR("6: llog_create failed %d\n", rc);

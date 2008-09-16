@@ -2686,7 +2686,7 @@ TEST60_HEAD="test_60 run $RANDOM"
 test_60a() {
         [ ! -f run-llog.sh ] && skip "missing subtest run-llog.sh" && return
 	log "$TEST60_HEAD - from kernel mode"
-#	sh run-llog.sh
+	sh run-llog.sh
 }
 run_test 60a "llog sanity tests run from kernel module =========="
 
