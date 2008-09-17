@@ -297,6 +297,7 @@ for NAME in $CONFIGS; do
 			MDS_MOUNT_OPTS=${MDS_MOUNT_OPTS/#,/-o } \
 			$SETUP
 		export LIBLUSTRE_MOUNT_POINT=$MOUNT2
+		export LIBLUSTRE_MOUNT_RETRY=5
 		export LIBLUSTRE_MOUNT_TARGET=$MGSNID:/$FSNAME
 		export LIBLUSTRE_TIMEOUT=`lctl get_param -n timeout`
 		#export LIBLUSTRE_DEBUG_MASK=`lctl get_param -n debug`
