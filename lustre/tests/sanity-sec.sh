@@ -22,11 +22,6 @@ RUNAS=${RUNAS:-"$LUSTRE/tests/runas"}
 WTL=${WTL:-"$LUSTRE/tests/write_time_limit"}
 
 PERM_CONF=/etc/lustre/perm.conf
-LLITE_LPROC=$LPROC/llite
-MDC_LPROC=$LPROC/mdc
-MDT_LPROC=$LPROC/mdt
-OST_LPROC=$LPROC/obdfilter
-
 SANITYSECLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 FAIL_ON_ERROR=false
 
@@ -63,15 +58,15 @@ else
 	echo "without GSS support"
 fi
 
-MDT="`do_facet $SINGLEMDS find $MDT_LPROC/ -name \*MDT\* -printf %f 2>/dev/null || true`"
+MDT="`do_facet $SINGLEMDS "lctl get_param -N mdt.\*MDT\*/stats | cut -d"." -f2" || true`"
 if [ ! -z "$MDT" ]; then
-	IDENTITY_FLUSH=$MDT_LPROC/$MDT/identity_flush
-	MDSCAPA=$MDT_LPROC/$MDT/capa
-	CAPA_TIMEOUT=$MDT_LPROC/$MDT/capa_timeout
+	IDENTITY_FLUSH=mdt.$MDT.identity_flush
+	MDSCAPA=mdt.$MDT.capa
+	CAPA_TIMEOUT=mdt.$MDT.capa_timeout
 fi
 
 # for CLIENT_TYPE
-if [ -z "$(grep remote $LLITE_LPROC/*/client_type 2>/dev/null)" ]; then
+if [ -z "$(lctl get_param -n llite.*.client_type | grep remote 2>/dev/null)" ]; then
 	CLIENT_TYPE="local"
 	echo "local client"
 else
@@ -149,7 +144,7 @@ test_1() {
 		skip "test_1 for local client only" && return
 
 	do_facet $SINGLEMDS "rm -f $PERM_CONF"
-	do_facet $SINGLEMDS "echo -1 > $IDENTITY_FLUSH"
+	do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
 
 	rm -rf $DIR/d1
 	mkdir $DIR/d1
@@ -158,7 +153,7 @@ test_1() {
 	$RUNAS -u $ID1 -v $ID0 touch $DIR/d1/f0 && error "touch (2)"
 	do_facet $SINGLEMDS "echo '* $ID1 setuid' > $PERM_CONF"
 	echo "enable uid $ID1 setuid"
-	do_facet $SINGLEMDS "echo -1 > $IDENTITY_FLUSH"
+	do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
 	$RUNAS -u $ID1 -v $ID0 touch $DIR/d1/f1 || error "touch (3)"
 
 	chown root $DIR/d1 || error "chown (4)"
@@ -168,14 +163,14 @@ test_1() {
 	$RUNAS -u $ID1 -g $ID1 -j $ID0 touch $DIR/d1/f3 && error "touch (8)"
 	do_facet $SINGLEMDS "echo '* $ID1 setuid,setgid' > $PERM_CONF"
 	echo "enable uid $ID1 setuid,setgid"
-	do_facet $SINGLEMDS "echo -1 > $IDENTITY_FLUSH"
+	do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
 	$RUNAS -u $ID1 -g $ID1 -j $ID0 touch $DIR/d1/f4 || error "touch (9)"
 	$RUNAS -u $ID1 -v $ID0 -g $ID1 -j $ID0 touch $DIR/d1/f5 || error "touch (10)"
 
 	rm -rf $DIR/d1
 
 	do_facet $SINGLEMDS "rm -f $PERM_CONF"
-	do_facet $SINGLEMDS "echo -1 > $IDENTITY_FLUSH"
+	do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
 }
 run_test 1 "setuid/gid ============================="
 
@@ -189,7 +184,7 @@ run_rmtacl_subtest() {
 test_2 () {
 	[ "$CLIENT_TYPE" = "local" ] && \
 		skip "remote_acl for remote client only" && return
-    	[ -z "$(grep ^acl $MDC_LPROC/*-mdc-*/connect_flags)" ] && \
+    	[ -z "$(lctl get_param -n mdc.*-mdc-*.connect_flags | grep ^acl)" ] && \
 		skip "must have acl enabled" && return
     	[ -z "$(which setfacl 2>/dev/null)" ] && \
 		skip "could not find setfacl" && return
@@ -206,7 +201,7 @@ test_2 () {
 
 	if [ ! -z "$MDT" ]; then
 		do_facet $SINGLEMDS "echo '* 0 rmtacl' > $PERM_CONF"
-		do_facet $SINGLEMDS "echo -1 > $IDENTITY_FLUSH"
+		do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
 	fi
 
         if lfs rgetfacl $DIR; then
@@ -233,7 +228,7 @@ test_2 () {
 
 	if [ ! -z "$MDT" ]; then
 		do_facet $SINGLEMDS "rm -f $PERM_CONF"
-		do_facet $SINGLEMDS "echo -1 > $IDENTITY_FLUSH"
+		do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
 	fi
 
     	cd $SAVE_PWD
@@ -261,12 +256,12 @@ test_4() {
 	if [ "$CLIENT_TYPE" != "remote" ]; then
 		if [ ! -z "$MDT" ]; then
 			do_facet $SINGLEMDS "echo '* $ID1 setgrp' > $PERM_CONF"
-			do_facet $SINGLEMDS "echo -1 > $IDENTITY_FLUSH"
+			do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
 		fi
 		$RUNAS -u $ID1 -G1,2,$ID0 ls $DIR/d4 || error "setgroups (2)"
 		if [ ! -z "$MDT" ]; then
 			do_facet $SINGLEMDS "rm -f $PERM_CONF"
-			do_facet $SINGLEMDS "echo -1 > $IDENTITY_FLUSH"
+			do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
 		fi
 	fi
 	$RUNAS -u $ID1 -G1,2 ls $DIR/d4 && error "setgroups (3)"
@@ -278,7 +273,7 @@ mds_capability_timeout() {
         [ $# -lt 1 ] && echo "Miss mds capability timeout value" && return 1
 
         echo "Set mds capability timeout as $1 seconds"
-	do_facet $SINGLEMDS "echo $1 > $CAPA_TIMEOUT"
+	do_facet $SINGLEMDS "lctl set_param -n $CAPA_TIMEOUT=$1"
         return 0
 }
 
@@ -291,7 +286,7 @@ mds_capability_switch() {
                 *) echo "Invalid mds capability switch value" && return 2;;
         esac
 
-	do_facet $SINGLEMDS "echo $1 > $MDSCAPA"
+	do_facet $SINGLEMDS "lctl set_param -n $MDSCAPA=$1"
         return 0
 }
 
@@ -306,8 +301,8 @@ oss_capability_switch() {
 
 	for i in `seq $OSTCOUNT`; do
 		local j=`expr $i - 1`
-		local OST="`do_facet ost$i find $OST_LPROC/ -name \*OST\*$j -printf %f 2>/dev/null || true`"
-		do_facet ost$i "echo $1 > $OST_LPROC/$OST/capa"
+		local OST="`do_facet ost$i "lctl get_param -N obdfilter.\*OST\*$j/stats | cut -d"." -f2" || true`"
+		do_facet ost$i "lctl set_param -n obdfilter.$OST.capa=$1"
 	done
         return 0
 }

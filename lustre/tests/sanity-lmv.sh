@@ -81,10 +81,10 @@ trace() {
 TRACE=${TRACE:-""}
 
 check_kernel_version() {
-	VERSION_FILE=$LPROC/version
+	VERSION_FILE=version
 	WANT_VER=$1
 	[ ! -f $VERSION_FILE ] && echo "can't find kernel version" && return 1
-	GOT_VER=$(awk '/kernel:/ {print $2}' $VERSION_FILE)
+	GOT_VER=$(lctl get_param $VERSION_FILE | awk '/kernel:/ {print $2}')
 	[ $GOT_VER -ge $WANT_VER ] && return 0
 	log "test needs at least kernel version $WANT_VER, running $GOT_VER"
 	return 1
@@ -201,13 +201,13 @@ fi
 DIR=${DIR:-$MOUNT}
 [ -z "`echo $DIR | grep $MOUNT`" ] && echo "$DIR not in $MOUNT" && exit 99
 
-LOVNAME=`cat $LPROC/llite/*/lov/common_name | tail -n 1`
-OSTCOUNT=`cat $LPROC/lov/$LOVNAME/numobd`
-STRIPECOUNT=`cat $LPROC/lov/$LOVNAME/stripecount`
-STRIPESIZE=`cat $LPROC/lov/$LOVNAME/stripesize`
-ORIGFREE=`cat $LPROC/lov/$LOVNAME/kbytesavail`
+LOVNAME=`lctl get_param -n llite.*.lov.common_name | tail -n 1`
+OSTCOUNT=`lctl get_param -n lov.$LOVNAME.numobd`
+STRIPECOUNT=`lctl get_param -n lov.$LOVNAME.stripecount`
+STRIPESIZE=`lctl get_param -n lov.$LOVNAME.stripesize`
+ORIGFREE=`lctl get_param -n  lov.$LOVNAME.kbytesavail`
 MAXFREE=${MAXFREE:-$((200000 * $OSTCOUNT))}
-MDS=$(\ls $LPROC/mdt 2> /dev/null | grep -v num_refs | tail -n 1)
+MDS=$(lctl get_param -N mdt.* | grep -v num_refs | tail -n 1 | cut -d"." -f2)
 
 [ -f $DIR/d52a/foo ] && chattr -a $DIR/d52a/foo
 [ -f $DIR/d52b/foo ] && chattr -i $DIR/d52b/foo
@@ -393,11 +393,15 @@ test_5a() {
 	cancel_lru_locks osc
         dd if=$MOUNT2/$tdir/d2/f1 of=/dev/null
         stat $MOUNT2/$tdir/d2 $MOUNT2/$tdir/d2/f1 > /dev/null
-        can1=`awk '/ldlm_cancel/ {print $2}' /proc/fs/lustre/ldlm/services/ldlm_canceld/stats`
-        blk1=`awk '/ldlm_bl_callback/ {print $2}' /proc/fs/lustre/ldlm/services/ldlm_cbd/stats`
+        can1=`lctl get_param -n ldlm.services.ldlm_canceld.stats |
+              awk '/ldlm_cancel/ {print $2}'`
+        blk1=`lctl get_param -n ldlm.services.ldlm_cbd.stats |
+              awk '/ldlm_bl_callback/ {print $2}'`
         unlink $MOUNT2/$tdir/d2/f1
-        can2=`awk '/ldlm_cancel/ {print $2}' /proc/fs/lustre/ldlm/services/ldlm_canceld/stats`
-        blk2=`awk '/ldlm_bl_callback/ {print $2}' /proc/fs/lustre/ldlm/services/ldlm_cbd/stats`
+        can2=`lctl get_param -n ldlm.services.ldlm_canceld.stats |
+              awk '/ldlm_cancel/ {print $2}'`
+        blk2=`lctl get_param -n ldlm.services.ldlm_cbd.stats |
+              awk '/ldlm_bl_callback/ {print $2}'`
         umount $MOUNT2
         [ $can1 -eq $can2 ] && error "It does not look like a cross-ref file."
         [ $[$can1+1] -eq $can2 ] || error $[$[$can2-$can1]] "cancel RPC occured."
@@ -415,11 +419,15 @@ test_5b() {
 	cancel_lru_locks osc
         dd if=$MOUNT2/$tdir/d1/f1 of=/dev/null
         stat $MOUNT2/$tdir/d1/f1 $MOUNT2/$tdir/d2 > /dev/null
-        can1=`awk '/ldlm_cancel/ {print $2}' /proc/fs/lustre/ldlm/services/ldlm_canceld/stats`
-        blk1=`awk '/ldlm_bl_callback/ {print $2}' /proc/fs/lustre/ldlm/services/ldlm_cbd/stats`
+        can1=`lctl get_param -n ldlm.services.ldlm_canceld.stats |
+              awk '/ldlm_cancel/ {print $2}'`
+        blk1=`lctl get_param -n ldlm.services.ldlm_cbd.stats |
+              awk '/ldlm_bl_callback/ {print $2}'`
         ln $MOUNT2/$tdir/d1/f1 $MOUNT2/$tdir/d2/f2
-        can2=`awk '/ldlm_cancel/ {print $2}' /proc/fs/lustre/ldlm/services/ldlm_canceld/stats`
-        blk2=`awk '/ldlm_bl_callback/ {print $2}' /proc/fs/lustre/ldlm/services/ldlm_cbd/stats`
+        can2=`lctl get_param -n ldlm.services.ldlm_canceld.stats |
+              awk '/ldlm_cancel/ {print $2}'`
+        blk2=`lctl get_param -n ldlm.services.ldlm_cbd.stats |
+              awk '/ldlm_bl_callback/ {print $2}'`
         umount $MOUNT2
         [ $can1 -eq $can2 ] && error "It does not look like a cross-ref file."
         [ $[$can1+1] -eq $can2 ] || error $[$[$can2-$can1]] "cancel RPC occured."

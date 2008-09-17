@@ -58,6 +58,8 @@ cnt_all2mdt=0
 cnt_all2all=0
 DBENCH_PID=0
 PROC_CLI="srpc.info"
+# Escape "." to use lctl
+PROC_CLI=${PROC_CLI//\./\*} 
 
 # set manually
 GSS=true
@@ -183,7 +185,7 @@ flvr_cnt_cli2mdt()
 {
     local flavor=$1
 
-    output=`do_facet client cat $LPROC/mdc/*-MDT*-mdc-*/$PROC_CLI 2>/dev/null`
+    output=`do_facet client lctl get_param -n mdc.*-MDT*-mdc-*.$PROC_CLI 2>/dev/null`
     count_flvr "$output" $flavor
 }
 
@@ -191,7 +193,7 @@ flvr_cnt_cli2ost()
 {
     local flavor=$1
 
-    output=`do_facet client cat $LPROC/osc/*OST*-osc-[^M][^D][^T]*/$PROC_CLI 2>/dev/null`
+    output=`do_facet client lctl get_param -n osc.*OST*-osc-[^M][^D][^T]*.$PROC_CLI 2>/dev/null`
     count_flvr "$output" $flavor
 }
 
@@ -206,7 +208,7 @@ flvr_cnt_mdt2mdt()
     fi
 
     for num in `seq $MDSCOUNT`; do
-        output=`do_facet mds$num cat $LPROC/mdc/*-MDT*-mdc[0-9]*/$PROC_CLI 2>/dev/null`
+        output=`do_facet mds$num lctl get_param -n mdc.*-MDT*-mdc[0-9]*.$PROC_CLI 2>/dev/null`
         tmpcnt=`count_flvr "$output" $flavor`
         cnt=$((cnt + tmpcnt))
     done
@@ -219,7 +221,7 @@ flvr_cnt_mdt2ost()
     local cnt=0
 
     for num in `seq $MDSCOUNT`; do
-        output=`do_facet mds$num cat $LPROC/osc/*OST*-osc-MDT*/$PROC_CLI 2>/dev/null`
+        output=`do_facet mds$num lctl get_param -n osc.*OST*-osc-MDT*.$PROC_CLI 2>/dev/null`
         tmpcnt=`count_flvr "$output" $flavor`
         cnt=$((cnt + tmpcnt))
     done
@@ -284,16 +286,16 @@ wait_flavor()
 
 restore_to_default_flavor()
 {
-    local proc=$LPROC/mgs/MGS/live/$FSNAME
+    local proc="mgs.MGS.live.$FSNAME"
 
     echo "restoring to default flavor..."
 
-    nrule=`do_facet mgs cat $proc 2>/dev/null | grep ".srpc.flavor." | wc -l`
+    nrule=`do_facet mgs lctl get_param -n $proc 2>/dev/null | grep ".srpc.flavor." | wc -l`
 
     # remove all existing rules if any
     if [ $nrule -ne 0 ]; then
         echo "$nrule existing rules"
-        for rule in `do_facet mgs cat $proc 2>/dev/null | grep ".srpc.flavor."`; do
+        for rule in `do_facet mgs lctl get_param -n $proc 2>/dev/null | grep ".srpc.flavor."`; do
             echo "remove rule: $rule"
             spec=`echo $rule | awk -F = '{print $1}'`
             do_facet mgs "$LCTL conf_param $spec="
@@ -301,7 +303,7 @@ restore_to_default_flavor()
     fi
 
     # verify no rules left
-    nrule=`do_facet mgs cat $proc 2>/dev/null | grep ".srpc.flavor." | wc -l`
+    nrule=`do_facet mgs lctl get_param -n $proc 2>/dev/null | grep ".srpc.flavor." | wc -l`
     [ $nrule -ne 0 ] && error "still $nrule rules left"
 
     # wait for default flavor to be applied
@@ -788,7 +790,7 @@ test_99() {
     #
     # general rules
     #
-    nrule_old=`do_facet mgs cat $LPROC/mgs/MGS/live/$FSNAME 2>/dev/null \
+    nrule_old=`do_facet mgs lctl get_param -n mgs.MGS.live.$FSNAME 2>/dev/null \
                | grep "$FSNAME.srpc.flavor." | wc -l`
     echo "original general rules: $nrule_old"
 
@@ -800,7 +802,7 @@ test_99() {
         set_rule $FSNAME elan$i any || error "remove rule $i"
     done
 
-    nrule_new=`do_facet mgs cat $LPROC/mgs/MGS/live/$FSNAME 2>/dev/null \
+    nrule_new=`do_facet mgs lctl get_param -n mgs.MGS.live.$FSNAME 2>/dev/null \
                | grep "$FSNAME.srpc.flavor." | wc -l`
     if [ $nrule_new != $nrule_old ]; then
         error "general rule: $nrule_new != $nrule_old"
@@ -809,7 +811,7 @@ test_99() {
     #
     # target-specific rules
     #
-    nrule_old=`do_facet mgs cat $LPROC/mgs/MGS/live/$FSNAME 2>/dev/null \
+    nrule_old=`do_facet mgs lctl get_param -n mgs.MGS.live.$FSNAME 2>/dev/null \
                | grep "$FSNAME-MDT0000.srpc.flavor." | wc -l`
     echo "original target rules: $nrule_old"
 
@@ -821,7 +823,7 @@ test_99() {
         set_rule $FSNAME-MDT0000 elan$i any || error "remove rule $i"
     done
 
-    nrule_new=`do_facet mgs cat $LPROC/mgs/MGS/live/$FSNAME 2>/dev/null \
+    nrule_new=`do_facet mgs lctl get_param -n mgs.MGS.live.$FSNAME 2>/dev/null \
                | grep "$FSNAME-MDT0000.srpc.flavor." | wc -l`
     if [ $nrule_new != $nrule_old ]; then
         error "general rule: $nrule_new != $nrule_old"

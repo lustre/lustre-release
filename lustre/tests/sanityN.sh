@@ -54,13 +54,10 @@ FAIL_ON_ERROR=false
 SETUP=${SETUP:-:}
 TRACE=${TRACE:-""}
 
-LPROC=/proc/fs/lustre
-
 [ "$SANITYLOG" ] && rm -f $SANITYLOG || true
 
 check_and_setup_lustre
 
-LPROC=/proc/fs/lustre
 LOVNAME=`lctl get_param -n llite.*.lov.common_name | tail -n 1`
 OSTCOUNT=`lctl get_param -n lov.$LOVNAME.numobd`
 
@@ -360,10 +357,8 @@ run_test 18 "mmap sanity check ================================="
 test_19() { # bug3811
 	[ -d /proc/fs/lustre/obdfilter ] || return 0
 
-	MAX=`cat /proc/fs/lustre/obdfilter/*/readcache_max_filesize | head -n 1`
-	for O in /proc/fs/lustre/obdfilter/*OST*; do
-		echo 4096 > $O/readcache_max_filesize
-	done
+	MAX=`lctl get_param -n obdfilter.*.readcache_max_filesize | head -n 1`
+	lctl set_param -n obdfilter.*OST*.readcache_max_filesize=4096
 	dd if=/dev/urandom of=$TMP/f19b bs=512k count=32
 	SUM=`cksum $TMP/f19b | cut -d" " -f 1,2`
 	cp $TMP/f19b $DIR1/f19b
@@ -378,9 +373,7 @@ test_19() { # bug3811
 		[ "`cat $TMP/sum2`" = "$SUM" ] || \
 			error "$DIR2/f19b `cat $TMP/sum2` != $SUM"
 	done
-	for O in /proc/fs/lustre/obdfilter/*OST*; do
-		echo $MAX > $O/readcache_max_filesize
-	done
+	lctl set_param -n obdfilter.*OST*.readcache_max_filesize=$MAX
 	rm $DIR1/f19b
 }
 run_test 19 "test concurrent uncached read races ==============="
@@ -388,12 +381,12 @@ run_test 19 "test concurrent uncached read races ==============="
 test_20() {
 	mkdir $DIR1/d20
 	cancel_lru_locks osc
-	CNT=$((`cat /proc/fs/lustre/llite/*/dump_page_cache | wc -l`))
+	CNT=$((`lctl get_param -n llite.*.dump_page_cache | wc -l`))
 	multiop $DIR1/f20 Ow8190c
 	multiop $DIR2/f20 Oz8194w8190c
 	multiop $DIR1/f20 Oz0r8190c
 	cancel_lru_locks osc
-	CNTD=$((`cat /proc/fs/lustre/llite/*/dump_page_cache | wc -l` - $CNT))
+	CNTD=$((`lctl get_param -n llite.*.dump_page_cache | wc -l` - $CNT))
 	[ $CNTD -gt 0 ] && \
 	    error $CNTD" page left in cache after lock cancel" || true
 }
