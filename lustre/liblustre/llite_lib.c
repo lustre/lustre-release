@@ -326,6 +326,8 @@ int _sysio_lustre_init(void)
 
 extern int _sysio_native_init();
 
+static int mnt_retry = 0;
+
 char *lustre_path = NULL;
 
 void __liblustre_setup_(void)
@@ -333,11 +335,18 @@ void __liblustre_setup_(void)
         char *target = NULL;
         char *lustre_driver = "lustre";
         unsigned mntflgs = 0;
-        int err;
+        int err, count;
 
         lustre_path = getenv("LIBLUSTRE_MOUNT_POINT");
         if (!lustre_path) {
                 lustre_path = "/mnt/lustre";
+        }
+
+        target = getenv("LIBLUSTRE_MOUNT_RETRY");
+        if (target) {
+                mnt_retry = atoi(target);
+                if (mnt_retry < 0)
+                        mnt_retry = 0;
         }
 
         /* mount target */
@@ -368,7 +377,16 @@ void __liblustre_setup_(void)
                 exit(1);
 #endif /* INIT_SYSIO */
 
-        err = mount(target, lustre_path, lustre_driver, mntflgs, NULL);
+        count = mnt_retry;
+        do {
+                err = mount(target, lustre_path, lustre_driver, mntflgs, NULL);
+                if (err && mnt_retry && (-- count)) {
+                        fprintf(stderr, "Lustre mount failed: %s. "
+                                 "Will retry %d more times\n",
+                                strerror(errno), mnt_retry - count );
+                        sleep(2);
+                }
+        } while (err && count > 0);
         if (err) {
                 fprintf(stderr, "Lustre mount failed: %s\n", strerror(errno));
                 exit(1);
