@@ -5160,9 +5160,10 @@ test_127() { # bug 15521
 
         $LCTL get_param osc.*0000-osc-*.stats | grep samples > $DIR/${tfile}.tmp
         while read NAME COUNT SAMP UNIT MIN MAX SUM SUMSQ; do
-                eval $NAME=$COUNT
                 echo "got $COUNT $NAME"
-
+                [ ! $MIN ] && error "Missing min value for $NAME proc entry"
+                eval $NAME=$COUNT || error "Wrong proc format"
+		
                 case $NAME in
                         read_bytes|write_bytes)
                         [ $MIN -lt 4096 ] && error "min is too small: $MIN"
@@ -5180,8 +5181,10 @@ test_127() { # bug 15521
         done < $DIR/${tfile}.tmp
 
         #check that we actually got some stats
-        [ "$read_bytes" ] || error "no read done"
-        [ "$write_bytes" ] || error "no write done"
+        [ "$read_bytes" ] || error "Missing read_bytes stats"
+        [ "$write_bytes" ] || error "Missing write_bytes stats"
+        [ "$read_bytes" = 0 ] && error "no read done"
+        [ "$write_bytes" = 0 ] && error "no write done"
 }
 run_test 127 "verify the client stats are sane"
 
