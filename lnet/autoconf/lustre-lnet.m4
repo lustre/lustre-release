@@ -554,7 +554,7 @@ else
 			AC_DEFINE(HAVE_OFED_IB_DMA_MAP, 1,
 				  [ib_dma_map_single defined])
 		],[
-			AC_MSG_RESULT(NO)
+			AC_MSG_RESULT(no)
 		])
 
 		LB_LINUX_TRY_COMPILE([
@@ -572,7 +572,7 @@ else
 			AC_DEFINE(HAVE_OFED_IB_COMP_VECTOR, 1,
 				  [has completion vector])
 		],[
-			AC_MSG_RESULT(NO)
+			AC_MSG_RESULT(no)
 		])
 
 		EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
