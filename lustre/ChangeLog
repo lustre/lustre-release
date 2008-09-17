@@ -12,6 +12,13 @@ tbd  Sun Microsystems, Inc.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
         removed cwd "./" (refer to Bugzilla 14399).
 
+Severity   : major
+Frequency  : Only on FC kernels 2.6.22+
+Bugzilla   : 16303
+Description: oops in statahead
+Details    : Do not drop reference count for the dentry from VFS when lookup,
+	     VFS will do that by itself.
+
 Severity   : enhancement
 Bugzilla   : 16643
 Description: Generic /proc file permissions
