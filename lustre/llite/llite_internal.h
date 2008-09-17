@@ -899,11 +899,7 @@ int ll_removexattr(struct dentry *dentry, const char *name);
 /* statahead.c */
 
 #define LL_SA_RPC_MIN   2
-#ifdef CONFIG_SLUB /* can be removed once bug 16303 is fixed */
-#define LL_SA_RPC_DEF   0
-#else
 #define LL_SA_RPC_DEF   32
-#endif
 #define LL_SA_RPC_MAX   8192
 
 /* per inode struct, for dir only */
