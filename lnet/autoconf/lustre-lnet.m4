@@ -601,41 +601,41 @@ else
 			fi
 		fi
 
-			LB_LINUX_TRY_COMPILE([
-				#include <linux/version.h>
-				#include <linux/pci.h>
-				#if !HAVE_GFP_T
-				typedef int gfp_t;
-				#endif
-				#include <rdma/ib_verbs.h>
-			],[
-				ib_dma_map_single(NULL, NULL, 0, 0);
-				return 0;
-			],[
-				AC_MSG_RESULT(yes)
-				AC_DEFINE(HAVE_OFED_IB_DMA_MAP, 1,
-					  [ib_dma_map_single defined])
-			],[
-				AC_MSG_RESULT(NO)
-			])
+		LB_LINUX_TRY_COMPILE([
+			#include <linux/version.h>
+			#include <linux/pci.h>
+			#if !HAVE_GFP_T
+			typedef int gfp_t;
+			#endif
+			#include <rdma/ib_verbs.h>
+		],[
+			ib_dma_map_single(NULL, NULL, 0, 0);
+			return 0;
+		],[
+			AC_MSG_RESULT(yes)
+			AC_DEFINE(HAVE_OFED_IB_DMA_MAP, 1,
+				  [ib_dma_map_single defined])
+		],[
+			AC_MSG_RESULT(NO)
+		])
 
-			LB_LINUX_TRY_COMPILE([
-				#include <linux/version.h>
-				#include <linux/pci.h>
-				#if !HAVE_GFP_T
-				typedef int gfp_t;
-				#endif
-				#include <rdma/ib_verbs.h>
-			],[
-				ib_create_cq(NULL, NULL, NULL, NULL, 0, 0);
-				return 0;
-			],[
-				AC_MSG_RESULT(yes)
-				AC_DEFINE(HAVE_OFED_IB_COMP_VECTOR, 1,
-					  [has completion vector])
-			],[
-				AC_MSG_RESULT(NO)
-			])
+		LB_LINUX_TRY_COMPILE([
+			#include <linux/version.h>
+			#include <linux/pci.h>
+			#if !HAVE_GFP_T
+			typedef int gfp_t;
+			#endif
+			#include <rdma/ib_verbs.h>
+		],[
+			ib_create_cq(NULL, NULL, NULL, NULL, 0, 0);
+			return 0;
+		],[
+			AC_MSG_RESULT(yes)
+			AC_DEFINE(HAVE_OFED_IB_COMP_VECTOR, 1,
+				  [has completion vector])
+		],[
+			AC_MSG_RESULT(NO)
+		])
 
 		EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 	fi
@@ -1213,7 +1213,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_KMEM_CACHE_DESTROY_INT, 1,
                 [kmem_cache_destroy(cachep) return int])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1232,7 +1232,7 @@ LB_LINUX_TRY_COMPILE([
 	AC_DEFINE(HAVE_ATOMIC_PANIC_NOTIFIER, 1,
 		[panic_notifier_list is atomic_notifier_head])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1251,7 +1251,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_3ARGS_INIT_WORK, 1,
                   [INIT_WORK use 3 args and store data inside])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1268,7 +1268,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_2ARGS_REGISTER_SYSCTL, 1,
                   [register_sysctl_table want 2 args])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1290,7 +1290,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_KMEM_CACHE, 1,
                   [kernel has struct kmem_cache])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 EXTRA_KCFLAGS="$tmp_flags"
 ])
@@ -1306,7 +1306,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_KMEM_CACHE_CREATE_DTOR, 1,
                   [kmem_cache_create has dtor argument])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
