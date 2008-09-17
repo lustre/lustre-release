@@ -41,9 +41,9 @@ tbd Sun Microsystems, Inc.
 Severity   : major
 Frequency  : Only on FC kernels 2.6.22+
 Bugzilla   : 16303
-Description: Oops in statahead when CONFIG_SLUB is enabled
-Details    : Disable statahead on systems with CONFIG_SLUB enabled, until
-	     such a time as problem is understood.
+Description: oops in statahead
+Details    : Do not drop reference count for the dentry from VFS when lookup,
+	     VFS will do that by itself.
 
 Severity   : enhancement
 Bugzilla   : 16643
