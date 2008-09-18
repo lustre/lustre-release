@@ -735,7 +735,7 @@ int gss_cli_ctx_verify(struct ptlrpc_cli_ctx *ctx,
         struct gss_header      *ghdr, *reqhdr;
         struct lustre_msg      *msg = req->rq_repdata;
         __u32                   major;
-        int                     pack_bulk, early = 0, rc = 0;
+        int                     pack_bulk, rc = 0;
         ENTRY;
 
         LASSERT(req->rq_cli_ctx == ctx);
@@ -743,13 +743,9 @@ int gss_cli_ctx_verify(struct ptlrpc_cli_ctx *ctx,
 
         gctx = container_of(ctx, struct gss_cli_ctx, gc_base);
 
-        if ((char *) msg < req->rq_repbuf ||
-            (char *) msg >= req->rq_repbuf + req->rq_repbuf_len)
-                early = 1;
-
         /* special case for context negotiation, rq_repmsg/rq_replen actually
          * are not used currently. but early reply always be treated normally */
-        if (req->rq_ctx_init && !early) {
+        if (req->rq_ctx_init && !req->rq_early) {
                 req->rq_repmsg = lustre_msg_buf(msg, 1, 0);
                 req->rq_replen = msg->lm_buflens[1];
                 RETURN(0);
@@ -780,7 +776,7 @@ int gss_cli_ctx_verify(struct ptlrpc_cli_ctx *ctx,
         case PTLRPC_GSS_PROC_DATA:
                 pack_bulk = ghdr->gh_flags & LUSTRE_GSS_PACK_BULK;
 
-                if (!early && !equi(req->rq_pack_bulk == 1, pack_bulk)) {
+                if (!req->rq_early && !equi(req->rq_pack_bulk == 1, pack_bulk)){
                         CERROR("%s bulk flag in reply\n",
                                req->rq_pack_bulk ? "missing" : "unexpected");
                         RETURN(-EPROTO);
@@ -805,7 +801,7 @@ int gss_cli_ctx_verify(struct ptlrpc_cli_ctx *ctx,
                 if (major != GSS_S_COMPLETE)
                         RETURN(-EPERM);
 
-                if (early && reqhdr->gh_svc == SPTLRPC_SVC_NULL) {
+                if (req->rq_early && reqhdr->gh_svc == SPTLRPC_SVC_NULL) {
                         __u32 cksum;
 
                         cksum = crc32_le(!(__u32) 0,
@@ -837,7 +833,7 @@ int gss_cli_ctx_verify(struct ptlrpc_cli_ctx *ctx,
                 req->rq_replen = msg->lm_buflens[1];
                 break;
         case PTLRPC_GSS_PROC_ERR:
-                if (early) {
+                if (req->rq_early) {
                         CERROR("server return error with early reply\n");
                         rc = -EPROTO;
                 } else {
@@ -957,7 +953,7 @@ int gss_cli_ctx_unseal(struct ptlrpc_cli_ctx *ctx,
         struct gss_cli_ctx      *gctx;
         struct gss_header       *ghdr;
         struct lustre_msg       *msg = req->rq_repdata;
-        int                      msglen, pack_bulk, early = 0, rc;
+        int                      msglen, pack_bulk, rc;
         __u32                    major;
         ENTRY;
 
@@ -966,10 +962,6 @@ int gss_cli_ctx_unseal(struct ptlrpc_cli_ctx *ctx,
         LASSERT(msg);
 
         gctx = container_of(ctx, struct gss_cli_ctx, gc_base);
-
-        if ((char *) msg < req->rq_repbuf ||
-            (char *) msg >= req->rq_repbuf + req->rq_repbuf_len)
-                early = 1;
 
         ghdr = gss_swab_header(msg, 0);
         if (ghdr == NULL) {
@@ -988,7 +980,7 @@ int gss_cli_ctx_unseal(struct ptlrpc_cli_ctx *ctx,
         case PTLRPC_GSS_PROC_DATA:
                 pack_bulk = ghdr->gh_flags & LUSTRE_GSS_PACK_BULK;
 
-                if (!early && !equi(req->rq_pack_bulk == 1, pack_bulk)) {
+                if (!req->rq_early && !equi(req->rq_pack_bulk == 1, pack_bulk)){
                         CERROR("%s bulk flag in reply\n",
                                req->rq_pack_bulk ? "missing" : "unexpected");
                         RETURN(-EPROTO);
@@ -1036,7 +1028,12 @@ int gss_cli_ctx_unseal(struct ptlrpc_cli_ctx *ctx,
                 rc = 0;
                 break;
         case PTLRPC_GSS_PROC_ERR:
-                rc = gss_cli_ctx_handle_err_notify(ctx, req, ghdr);
+                if (req->rq_early) {
+                        CERROR("server return error with early reply\n");
+                        rc = -EPROTO;
+                } else {
+                        rc = gss_cli_ctx_handle_err_notify(ctx, req, ghdr);
+                }
                 break;
         default:
                 CERROR("unexpected proc %d\n", ghdr->gh_proc);

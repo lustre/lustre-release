@@ -151,7 +151,6 @@ static
 int plain_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 {
         struct lustre_msg *msg = req->rq_repdata;
-        int                early = 0;
         __u32              cksum;
         ENTRY;
 
@@ -160,18 +159,13 @@ int plain_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
                 RETURN(-EPROTO);
         }
 
-        /* find out if it's an early reply */
-        if ((char *) msg < req->rq_repbuf ||
-            (char *) msg >= req->rq_repbuf + req->rq_repbuf_len)
-                early = 1;
-
         /* expect no user desc in reply */
         if (PLAIN_WFLVR_HAS_USER(msg->lm_secflvr)) {
                 CERROR("Unexpected udesc flag in reply\n");
                 RETURN(-EPROTO);
         }
 
-        if (unlikely(early)) {
+        if (unlikely(req->rq_early)) {
                 cksum = crc32_le(!(__u32) 0,
                                  lustre_msg_buf(msg, PLAIN_PACK_MSG_OFF, 0),
                                  lustre_msg_buflen(msg, PLAIN_PACK_MSG_OFF));
@@ -183,7 +177,7 @@ int plain_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
         } else {
                 /* whether we sent with bulk or not, we expect the same
                  * in reply, except for early reply */
-                if (!early &&
+                if (!req->rq_early &&
                     !equi(req->rq_pack_bulk == 1,
                           PLAIN_WFLVR_HAS_BULK(msg->lm_secflvr))) {
                         CERROR("%s bulk checksum in reply\n",

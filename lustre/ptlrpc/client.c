@@ -218,17 +218,15 @@ void ptlrpc_at_set_req_timeout(struct ptlrpc_request *req)
 }
 
 /* Adjust max service estimate based on server value */
-static void ptlrpc_at_adj_service(struct ptlrpc_request *req)
+static void ptlrpc_at_adj_service(struct ptlrpc_request *req,
+                                  unsigned int serv_est)
 {
         int idx;
-        unsigned int serv_est, oldse;
-        struct imp_at *at = &req->rq_import->imp_at;
+        unsigned int oldse;
+        struct imp_at *at;
 
         LASSERT(req->rq_import);
-
-        /* service estimate is returned in the repmsg timeout field,
-           may be 0 on err */
-        serv_est = lustre_msg_get_timeout(req->rq_repmsg);
+        at = &req->rq_import->imp_at;
 
         idx = import_at_get_index(req->rq_import, req->rq_request_portal);
         /* max service estimates are tracked on the server side,
@@ -248,21 +246,22 @@ int ptlrpc_at_get_net_latency(struct ptlrpc_request *req)
 }
 
 /* Adjust expected network latency */
-static void ptlrpc_at_adj_net_latency(struct ptlrpc_request *req)
+static void ptlrpc_at_adj_net_latency(struct ptlrpc_request *req,
+                                      unsigned int service_time)
 {
-        unsigned int st, nl, oldnl;
-        struct imp_at *at = &req->rq_import->imp_at;
+        unsigned int nl, oldnl;
+        struct imp_at *at;
         time_t now = cfs_time_current_sec();
 
         LASSERT(req->rq_import);
-
-        st = lustre_msg_get_service_time(req->rq_repmsg);
+        at = &req->rq_import->imp_at;
 
         /* Network latency is total time less server processing time */
-        nl = max_t(int, now - req->rq_sent - st, 0) + 1/*st rounding*/;
-        if (st > now - req->rq_sent + 3 /* bz16408 */)
+        nl = max_t(int, now - req->rq_sent - service_time, 0) +1/*st rounding*/;
+        if (service_time > now - req->rq_sent + 3 /* bz16408 */)
                 CWARN("Reported service time %u > total measured time "
-                       CFS_DURATION_T"\n", st, cfs_time_sub(now, req->rq_sent));
+                      CFS_DURATION_T"\n", service_time,
+                      cfs_time_sub(now, req->rq_sent));
 
         oldnl = at_add(&at->iat_net_latency, nl);
         if (oldnl != 0)
@@ -299,45 +298,53 @@ static int unpack_reply(struct ptlrpc_request *req)
  * Handle an early reply message, called with the rq_lock held.
  * If anything goes wrong just ignore it - same as if it never happened
  */
-static int ptlrpc_at_recv_early_reply(struct ptlrpc_request *req) {
-        time_t          olddl;
-        int             rc;
+static int ptlrpc_at_recv_early_reply(struct ptlrpc_request *req)
+{
+        struct ptlrpc_request *early_req;
+        time_t                 olddl;
+        int                    rc;
         ENTRY;
 
         req->rq_early = 0;
         spin_unlock(&req->rq_lock);
 
-        rc = sptlrpc_cli_unwrap_early_reply(req);
-        if (rc)
-                GOTO(out, rc);
+        rc = sptlrpc_cli_unwrap_early_reply(req, &early_req);
+        if (rc) {
+                spin_lock(&req->rq_lock);
+                RETURN(rc);
+        }
 
-        rc = unpack_reply(req);
-        if (rc)
-                GOTO(out_cleanup, rc);
+        rc = unpack_reply(early_req);
+        if (rc == 0) {
+                /* Expecting to increase the service time estimate here */
+                ptlrpc_at_adj_service(req,
+                        lustre_msg_get_timeout(early_req->rq_repmsg));
+                ptlrpc_at_adj_net_latency(req,
+                        lustre_msg_get_service_time(early_req->rq_repmsg));
+        }
 
-        /* Expecting to increase the service time estimate here */
-        ptlrpc_at_adj_service(req);
-        ptlrpc_at_adj_net_latency(req);
+        sptlrpc_cli_finish_early_reply(early_req);
 
-        /* Adjust the local timeout for this req */
-        ptlrpc_at_set_req_timeout(req);
-
-        olddl = req->rq_deadline;
-        /* server assumes it now has rq_timeout from when it sent the
-           early reply, so client should give it at least that long. */
-        req->rq_deadline = cfs_time_current_sec() + req->rq_timeout +
-                    ptlrpc_at_get_net_latency(req);
-
-        DEBUG_REQ(D_ADAPTTO, req,
-                  "Early reply #%d, new deadline in "CFS_DURATION_T"s ("
-                  CFS_DURATION_T"s)", req->rq_early_count,
-                  cfs_time_sub(req->rq_deadline, cfs_time_current_sec()),
-                  cfs_time_sub(req->rq_deadline, olddl));
-
-out_cleanup:
-        sptlrpc_cli_finish_early_reply(req);
-out:
         spin_lock(&req->rq_lock);
+
+        if (rc == 0) {
+                /* Adjust the local timeout for this req */
+                ptlrpc_at_set_req_timeout(req);
+
+                olddl = req->rq_deadline;
+                /* server assumes it now has rq_timeout from when it sent the
+                   early reply, so client should give it at least that long. */
+                req->rq_deadline = cfs_time_current_sec() + req->rq_timeout +
+                            ptlrpc_at_get_net_latency(req);
+
+                DEBUG_REQ(D_ADAPTTO, req,
+                          "Early reply #%d, new deadline in "CFS_DURATION_T"s "
+                          "("CFS_DURATION_T"s)", req->rq_early_count,
+                          cfs_time_sub(req->rq_deadline,
+                                       cfs_time_current_sec()),
+                          cfs_time_sub(req->rq_deadline, olddl));
+        }
+
         RETURN(rc);
 }
 
@@ -976,8 +983,9 @@ static int after_reply(struct ptlrpc_request *req)
         }
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_PAUSE_REP, obd_fail_val);
-        ptlrpc_at_adj_service(req);
-        ptlrpc_at_adj_net_latency(req);
+        ptlrpc_at_adj_service(req, lustre_msg_get_timeout(req->rq_repmsg));
+        ptlrpc_at_adj_net_latency(req,
+                                  lustre_msg_get_service_time(req->rq_repmsg));
 
         rc = ptlrpc_check_status(req);
         imp->imp_connect_error = rc;

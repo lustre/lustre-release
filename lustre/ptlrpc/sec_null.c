@@ -109,10 +109,7 @@ int null_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 
         LASSERT(req->rq_repdata);
 
-        /* real reply rq_repdata point inside of rq_reqbuf; early reply
-         * rq_repdata point to a separate allocated space */
-        if ((char *) req->rq_repdata < req->rq_repbuf ||
-            (char *) req->rq_repdata >= req->rq_repbuf + req->rq_repbuf_len) {
+        if (req->rq_early) {
                 cksums = req->rq_repdata->lm_cksum;
                 req->rq_repdata->lm_cksum = 0;
 
