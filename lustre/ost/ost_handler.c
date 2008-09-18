@@ -814,9 +814,15 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 }
 
                 if (page_rc != pp_rnb[i].len) { /* short read */
+                        int j = i;
+
                         /* All subsequent pages should be 0 */
                         while(++i < npages)
-                                LASSERT(local_nb[i].rc == 0);
+                                LASSERTF(local_nb[i].rc == 0,
+                                         "page_rc %d, pp_rnb[%u].len=%d, "
+                                         "local_nb[%u/%u].rc=%d\n",
+                                         page_rc, j, pp_rnb[j].len,
+                                         i, npages, local_nb[i].rc);
                         break;
                 }
         }
