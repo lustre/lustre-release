@@ -1039,18 +1039,19 @@ int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmmp,
          * little endian.  We convert it to host endian before
          * passing it to userspace.
          */
-        if (LOV_MAGIC != cpu_to_le32(LOV_MAGIC)) {
-            if (cpu_to_le32(LOV_MAGIC_V1) == lmm->lmm_magic) {
-                lustre_swab_lov_user_md_v1((struct lov_user_md_v1 *)lmm);
-                lustre_swab_lov_user_md_objects(
-                        ((struct lov_user_md_v1 *)lmm)->lmm_objects,
-                        ((struct lov_user_md_v1 *)lmm)->lmm_stripe_count);
-            } else if (cpu_to_le32(LOV_MAGIC_V3) == lmm->lmm_magic) {
-                lustre_swab_lov_user_md_v3((struct lov_user_md_v3 *)lmm);
-                lustre_swab_lov_user_md_objects(
-                        ((struct lov_user_md_v3 *)lmm)->lmm_objects,
-                        ((struct lov_user_md_v3 *)lmm)->lmm_stripe_count);
-            }
+        /* We don't swab objects for directories */
+        switch (le32_to_cpu(lmm->lmm_magic)) {
+        case LOV_MAGIC_V1:
+                if (LOV_MAGIC != cpu_to_le32(LOV_MAGIC))
+                        lustre_swab_lov_user_md_v1((struct lov_user_md_v1 *)lmm);
+                break;
+        case LOV_MAGIC_V3:
+                if (LOV_MAGIC != cpu_to_le32(LOV_MAGIC))
+                        lustre_swab_lov_user_md_v3((struct lov_user_md_v3 *)lmm);
+                break;
+        default:
+                CERROR("unknown magic: %lX\n", (unsigned long)lmm->lmm_magic);
+                rc = -EPROTO;
         }
 
 out:
