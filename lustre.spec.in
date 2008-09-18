@@ -72,7 +72,7 @@ systems.
 Summary: Lustre testing framework
 Group: Development/Kernel
 Provides: lustre-tests = %{version}
-Requires: lustre = %{version}
+Requires: lustre = %{version}, lustre-modules = %{version}
 
 %description tests
 This package contains a set of test binaries and scripts that are intended
