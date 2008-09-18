@@ -1265,21 +1265,27 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 if (rc)
                         GOTO(free_lmm, rc = -EFAULT);
 
-                if (lmm->lmm_magic != LOV_USER_MAGIC)
-                        GOTO(free_lmm, rc = -EINVAL);
-
-                if (LOV_USER_MAGIC != cpu_to_le32(LOV_USER_MAGIC)) {
-                    if (cpu_to_le32(LOV_USER_MAGIC_V1) == cpu_to_le32(lmm->lmm_magic)) {
-                        lustre_swab_lov_user_md_v1((struct lov_user_md_v1 *)lmm);
+                switch (lmm->lmm_magic) {
+                case LOV_USER_MAGIC_V1:
+                        if (LOV_USER_MAGIC == cpu_to_le32(LOV_USER_MAGIC))
+                                break;
+                        /* swab objects first so that stripes num will be sane */
                         lustre_swab_lov_user_md_objects(
                                 ((struct lov_user_md_v1 *)lmm)->lmm_objects,
                                 ((struct lov_user_md_v1 *)lmm)->lmm_stripe_count);
-                    } else if (cpu_to_le32(LOV_USER_MAGIC_V3) == cpu_to_le32(lmm->lmm_magic)) {
-                        lustre_swab_lov_user_md_v3((struct lov_user_md_v3 *)lmm);
+                        lustre_swab_lov_user_md_v1((struct lov_user_md_v1 *)lmm);
+                        break;
+                case LOV_USER_MAGIC_V3:
+                        if (LOV_USER_MAGIC == cpu_to_le32(LOV_USER_MAGIC))
+                                break;
+                        /* swab objects first so that stripes num will be sane */
                         lustre_swab_lov_user_md_objects(
                                 ((struct lov_user_md_v3 *)lmm)->lmm_objects,
                                 ((struct lov_user_md_v3 *)lmm)->lmm_stripe_count);
-                    }
+                        lustre_swab_lov_user_md_v3((struct lov_user_md_v3 *)lmm);
+                        break;
+                default:
+                        GOTO(free_lmm, rc = -EINVAL);
                 }
 
                 rc = obd_unpackmd(sbi->ll_osc_exp, &lsm, lmm, lmmsize);
