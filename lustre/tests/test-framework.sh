@@ -296,6 +296,19 @@ unload_dep_module() {
     $RMMOD $MODULE || true
 }
 
+check_mem_leak () {
+    LEAK_LUSTRE=$(dmesg | tail -n 30 | grep "obd_memory.*leaked" || true)
+    LEAK_PORTALS=$(dmesg | tail -n 20 | grep "Portals memory leaked" || true)
+    if [ "$LEAK_LUSTRE" -o "$LEAK_PORTALS" ]; then
+        echo "$LEAK_LUSTRE" 1>&2
+        echo "$LEAK_PORTALS" 1>&2
+        mv $TMP/debug $TMP/debug-leak.`date +%s` || true
+        log "Memory leaks detected"
+        [ -n "$IGNORE_LEAK" ] && { echo "ignoring leaks" && return 0; } || true
+        return 1
+    fi
+}
+
 unload_modules() {
     wait_exit_ST client # bug 12845
 
@@ -320,16 +333,8 @@ unload_modules() {
     fi
     HAVE_MODULES=false
 
-    LEAK_LUSTRE=$(dmesg | tail -n 30 | grep "obd mem.*leaked" || true)
-    LEAK_PORTALS=$(dmesg | tail -n 20 | grep "Portals memory leaked" || true)
-    if [ "$LEAK_LUSTRE" -o "$LEAK_PORTALS" ]; then
-        echo "$LEAK_LUSTRE" 1>&2
-        echo "$LEAK_PORTALS" 1>&2
-        mv $TMP/debug $TMP/debug-leak.`date +%s` || true
-        echo "Memory leaks detected"
-        [ -n "$IGNORE_LEAK" ] && echo "ignoring leaks" && return 0
-        return 254
-    fi
+    check_mem_leak || return 254
+
     echo "modules unloaded."
     return 0
 }
@@ -591,15 +596,8 @@ cleanup_check() {
         [ -e $TMP/debug ] && mv $TMP/debug $TMP/debug-busy.`date +%s`
         exit 205
     fi
-    LEAK_LUSTRE=`dmesg | tail -n 30 | grep "obd mem.*leaked" || true`
-    LEAK_PORTALS=`dmesg | tail -n 20 | grep "Portals memory leaked" || true`
-    if [ "$LEAK_LUSTRE" -o "$LEAK_PORTALS" ]; then
-        echo "$0: $LEAK_LUSTRE" 1>&2
-        echo "$0: $LEAK_PORTALS" 1>&2
-        echo "$0: Memory leak(s) detected..." 1>&2
-        mv $TMP/debug $TMP/debug-leak.`date +%s`
-        exit 204
-    fi
+
+    check_mem_leak || exit 204
 
     [ "`lctl dl 2> /dev/null | wc -l`" -gt 0 ] && lctl dl && \
         echo "$0: lustre didn't clean up..." 1>&2 && return 202 || true
