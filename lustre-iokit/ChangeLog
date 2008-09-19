@@ -1,1 +1,22 @@
 2006-10-31 - Borrowing mjmac's most excellent work and setting up autogen/RPM
+2007-07-24 - 
+	Bugs committed:
+	10851 - minor obdfilter fixes
+	11485 - sgpdd_survey uses readcap for block size
+	12741 - better error checking for sgpdd_survey
+2007-07-26 Jitendra Pawar <jitendra@clusterfs.com>
+	Fixes for bug: 11171
+	- Added common library "libobd"
+	- Improved obdfilter-survey
+2007-08-01 Jitendra Pawar <jitendra@clusterfs.com>
+	Fixes for bug: 10961
+	- Modified README.obdfilter-survey
+2007-08-22 Jitendra Pawar <jitendra@clusterfs.com>
+	Aditions for bug: 11171
+	- Added automatic ondecho module load support on client and server
+	- Added flexible OSS setup and cleanup
+2007-09-21 Jitendra Pawar <jitendra@clusterfs.com>
+	Aditions for bug: 11171, 10961
+	- removed OSTS and ECHO_CLIENTS command line options, instead 
+	  used only 'targets' option for all three cases. 
+	- modified README-obdfilter-survey as per changes in 11171. 

@@ -1,5 +1,5 @@
 .\" -*- nroff -*-
-.\" Copyright 2006 by Cluster FileSystems.  All Rights Reserved.
+.\" Copyright 2008 by Sun Microsystems, Inc.  All Rights Reserved.
 .\" This file may be copied under the terms of the GNU Public License.
 .\"
 .TH Lustre 7 "2006 Jun 15" Lustre "A high-performance cluster file system"
@@ -11,63 +11,60 @@ A high-performance file system designed for clusters.
 .B Lustre®
 is a high-performance, massively-scalable, POSIX-compliant network file system
 designed for the world's largest high-performance compute clusters. Lustre
-is under active development from Cluster FileSystems (http://clusterfs.com).
+is under active development from Sun Microsystems (http://www.lustre.org).
 
-Lustre filesystems are made up of multiple servers typically distributed
+Lustre filesystems are made up of multiple services typically distributed
 across multiple nodes.  Lustre clients can contact these server nodes over
 multiple high-speed network fabrics via LNET, the Lustre NETworking
-system.  Clients then present the filesystem at a mount point.
+system.  Clients then present the filesystem at a mount point to userspace.
 
 A filesystem is comprised of a 
 .I MDT
-, MetaData Target, which stores directory and file meta-information, and a
+, MetaData Target, which stores directory and file meta-information such as
+file ownership, timestamps, access permissions, etc, and a
 series of 
 .I OSTs
-, Object Storage Targets, which hold the file data.  There is typically not
-a 1:1 mapping of a file on disk and what is presented as a file on a Lustre client.
+, Object Storage Targets, which hold the file data in one or more objects.
+There is typically not a 1:1 mapping of OST objects and what is presented
+as a file on a Lustre client.
 
 Lustre and LNET are implemented as a series of kernel modules, for both
-servers and clients. LNET networks are defined in the modprobe.conf file on
-all nodes.  Lustre and LNET make extensive use of /proc files for making
-system data available, for example
-.TP
-.B /proc/sys/lnet/nis
-to show the local LNET Network Interfaces.
-.TP
-.B /proc/fs/lustre/devices
-to show locally running Lustre objects.
+servers and clients.  LNET networks are defined in the modprobe.conf file on
+all nodes.  Lustre is started on the clients and servers using the
+.BR mount (8)
+command.
 
 .SH COMMANDS
 .TP
-.B mkfs.lustre(8)
+.BR mkfs.lustre (8)
 Format a physical disk for use as a Lustre server's backend storage (aka
 target).
 .TP
-.B tunefs.lustre(8)
+.BR tunefs.lustre (8)
 Modify configuration information on a Lustre target disk.
 .TP
-.B mount.lustre(8)
+.BR mount.lustre (8)
 A helper program for
 .BR mount (8)
-that starts Lustre servers and clients.
+that starts Lustre servers and clients mounts the client filesystem.
 .TP
-.B lctl(8)
+.BR lctl (8)
 A low-level interface to control various aspects of Lustre
 .TP
-.B lfs(1)
+.BR lfs (1)
 A user-level interface to control Lustre-specific information for
 individual files. 
-.B lustre_config
+.B lustre_config.sh
 Format multiple Lustre targets simultaneously from definitions in a CSV
 file.
 .SH BUGS
-Please report all bugs to Cluster FileSystems, support@clusterfs.com
+Please report all bugs to Sun Microsystems via http://bugzilla.lustre.org/
 .SH AVAILABILITY
 .B The
 .BR Lustre (7) 
-filesystem package is available from CFS
+filesystem package is available from Sun Microsystems, Inc via
 .br
-http://clusterfs.com
+http://downloads.lustre.org/
 .SH SEE ALSO
 .BR mkfs.lustre (8),
 .BR tunefs.lustre (8),

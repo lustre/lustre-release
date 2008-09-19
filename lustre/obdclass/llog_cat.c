@@ -1,32 +1,47 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001-2003 Cluster File Systems, Inc.
- *   Author: Andreas Dilger <adilger@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/obdclass/llog_cat.c
  *
  * OST<->MDS recovery logging infrastructure.
  *
  * Invariants in implementation:
  * - we do not share logs among different OST<->MDS connections, so that
  *   if an OST or MDS fails it need only look at log(s) relevant to itself
+ *
+ * Author: Andreas Dilger <adilger@clusterfs.com>
  */
 
 #define DEBUG_SUBSYSTEM S_LOG
@@ -65,30 +80,32 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
         if (llh->llh_cat_idx == index) {
                 CERROR("no free catalog slots for log...\n");
                 RETURN(ERR_PTR(-ENOSPC));
-        } else {
-                if (index == 0)
-                        index = 1;
-                if (ext2_set_bit(index, llh->llh_bitmap)) {
-                        CERROR("argh, index %u already set in log bitmap?\n",
-                               index);
-                        LBUG(); /* should never happen */
-                }
-                cathandle->lgh_last_idx = index;
-                llh->llh_count++;
-                llh->llh_tail.lrt_index = index;
         }
 
+        if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_LLOG_CREATE_FAILED))
+                RETURN(ERR_PTR(-ENOSPC));
+        
         rc = llog_create(cathandle->lgh_ctxt, &loghandle, NULL, NULL);
         if (rc)
                 RETURN(ERR_PTR(rc));
-
+        
         rc = llog_init_handle(loghandle,
                               LLOG_F_IS_PLAIN | LLOG_F_ZAP_WHEN_EMPTY,
                               &cathandle->lgh_hdr->llh_tgtuuid);
         if (rc)
                 GOTO(out_destroy, rc);
+        if (index == 0)
+                index = 1;
+        if (ext2_set_bit(index, llh->llh_bitmap)) {
+                CERROR("argh, index %u already set in log bitmap?\n",
+                       index);
+                LBUG(); /* should never happen */
+        }
+        cathandle->lgh_last_idx = index;
+        llh->llh_count++;
+        llh->llh_tail.lrt_index = index;
 
-        CDEBUG(D_HA, "new recovery log "LPX64":%x for index %u of catalog "
+        CDEBUG(D_RPCTRACE,"new recovery log "LPX64":%x for index %u of catalog "
                LPX64"\n", loghandle->lgh_id.lgl_oid, loghandle->lgh_id.lgl_ogen,
                index, cathandle->lgh_id.lgl_oid);
         /* build the record for this log in the catalog */
@@ -322,8 +339,8 @@ int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
                         llog_cat_set_first_idx(cathandle, index);
                         rc = llog_cancel_rec(cathandle, index);
                         if (rc == 0)
-                                CDEBUG(D_HA, "cancel plain log at index %u "
-                                       "of catalog "LPX64"\n",
+                                CDEBUG(D_RPCTRACE,"cancel plain log at index %u"
+                                       " of catalog "LPX64"\n",
                                        index, cathandle->lgh_id.lgl_oid);
                 }
         }
@@ -377,14 +394,14 @@ int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data)
                 CWARN("catlog "LPX64" crosses index zero\n",
                       cat_llh->lgh_id.lgl_oid);
 
-                cd.first_idx = llh->llh_cat_idx;
-                cd.last_idx = 0;
+                cd.lpcd_first_idx = llh->llh_cat_idx;
+                cd.lpcd_last_idx = 0;
                 rc = llog_process(cat_llh, llog_cat_process_cb, &d, &cd);
                 if (rc != 0)
                         RETURN(rc);
 
-                cd.first_idx = 0;
-                cd.last_idx = cat_llh->lgh_last_idx;
+                cd.lpcd_first_idx = 0;
+                cd.lpcd_last_idx = cat_llh->lgh_last_idx;
                 rc = llog_process(cat_llh, llog_cat_process_cb, &d, &cd);
         } else {
                 rc = llog_process(cat_llh, llog_cat_process_cb, &d, NULL);
@@ -393,6 +410,56 @@ int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data)
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cat_process);
+
+#ifdef __KERNEL__
+int llog_cat_process_thread(void *data)
+{
+        struct llog_process_cat_args *args = data;
+        struct llog_ctxt *ctxt = args->lpca_ctxt;
+        struct llog_handle *llh = NULL;
+        void  *cb = args->lpca_cb;
+        struct llog_logid logid;
+        int rc;
+        ENTRY;
+
+        cfs_daemonize_ctxt("ll_log_process");
+
+        logid = *(struct llog_logid *)(args->lpca_arg);
+        rc = llog_create(ctxt, &llh, &logid, NULL);
+        if (rc) {
+                CERROR("llog_create() failed %d\n", rc);
+                GOTO(out, rc);
+        }
+        rc = llog_init_handle(llh, LLOG_F_IS_CAT, NULL);
+        if (rc) {
+                CERROR("llog_init_handle failed %d\n", rc);
+                GOTO(release_llh, rc);
+        }
+
+        if (cb) {
+                rc = llog_cat_process(llh, (llog_cb_t)cb, NULL);
+                if (rc != LLOG_PROC_BREAK)
+                        CERROR("llog_cat_process() failed %d\n", rc);
+        } else {
+                CWARN("No callback function for recovery\n");
+        }
+
+        /* 
+         * Make sure that all cached data is sent. 
+         */
+        llog_sync(ctxt, NULL);
+        EXIT;
+release_llh:
+        rc = llog_cat_put(llh);
+        if (rc)
+                CERROR("llog_cat_put() failed %d\n", rc);
+out:
+        llog_ctxt_put(ctxt);
+        OBD_FREE(args, sizeof(*args));
+        return rc;
+}
+EXPORT_SYMBOL(llog_cat_process_thread);
+#endif
 
 static int llog_cat_reverse_process_cb(struct llog_handle *cat_llh,
                                        struct llog_rec_hdr *rec, void *data)
@@ -438,15 +505,15 @@ int llog_cat_reverse_process(struct llog_handle *cat_llh,
                 CWARN("catalog "LPX64" crosses index zero\n",
                       cat_llh->lgh_id.lgl_oid);
 
-                cd.first_idx = 0;
-                cd.last_idx = cat_llh->lgh_last_idx;
+                cd.lpcd_first_idx = 0;
+                cd.lpcd_last_idx = cat_llh->lgh_last_idx;
                 rc = llog_reverse_process(cat_llh, llog_cat_reverse_process_cb,
                                           &d, &cd);
                 if (rc != 0)
                         RETURN(rc);
 
-                cd.first_idx = le32_to_cpu(llh->llh_cat_idx);
-                cd.last_idx = 0;
+                cd.lpcd_first_idx = le32_to_cpu(llh->llh_cat_idx);
+                cd.lpcd_last_idx = 0;
                 rc = llog_reverse_process(cat_llh, llog_cat_reverse_process_cb,
                                           &d, &cd);
         } else {
@@ -483,7 +550,7 @@ int llog_cat_set_first_idx(struct llog_handle *cathandle, int index)
                         }
                 }
 out:
-                CDEBUG(D_HA, "set catlog "LPX64" first idx %u\n",
+                CDEBUG(D_RPCTRACE, "set catlog "LPX64" first idx %u\n",
                        cathandle->lgh_id.lgl_oid, llh->llh_cat_idx);
         }
 
@@ -504,7 +571,7 @@ int llog_cat_init(struct llog_handle *cathandle, struct obd_uuid *tgtuuid)
         down(&cathandle->lgh_lock);
         llh = cathandle->lgh_hdr;
 
-        if (cathandle->lgh_file->f_dentry->d_inode->i_size == 0) {
+        if (i_size_read(cathandle->lgh_file->f_dentry->d_inode) == 0) {
                 llog_write_rec(cathandle, &llh->llh_hdr, NULL, 0, NULL, 0);
 
 write_hdr:

@@ -1,27 +1,45 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/mgs/mgs_fs.c
- *  Lustre Management Server (MGS) filesystem interface code
+ * GPL HEADER START
  *
- *  Copyright (C) 2006 Cluster File Systems, Inc.
- *   Author: Nathan Rutman <nathan@clusterfs.com>
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
  */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/mgs/mgs_fs.c
+ *
+ * Lustre Management Server (MGS) filesystem interface code
+ *
+ * Author: Nathan Rutman <nathan@clusterfs.com>
+ */
+
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
@@ -42,6 +60,66 @@
 #include <libcfs/list.h>
 #include "mgs_internal.h"
 
+
+static int mgs_export_stats_init(struct obd_device *obd,
+                                 struct obd_export *exp,
+                                 void *localdata)
+{
+        lnet_nid_t *client_nid = localdata;
+        int rc, num_stats, newnid = 0;
+
+        rc = lprocfs_exp_setup(exp, client_nid, &newnid);
+        if (rc) {
+                /* Mask error for already created
+                 * /proc entries */
+                if (rc == -EALREADY)
+                        rc = 0;
+                return rc;
+        }
+
+        if (newnid) {
+                num_stats = (sizeof(*obd->obd_type->typ_ops) / sizeof(void *)) +
+                             LPROC_MGS_LAST - 1;
+                exp->exp_ops_stats = lprocfs_alloc_stats(num_stats,
+                                                         LPROCFS_STATS_FLAG_NOPERCPU);
+                if (exp->exp_ops_stats == NULL)
+                        return -ENOMEM;
+                lprocfs_init_ops_stats(LPROC_MGS_LAST, exp->exp_ops_stats);
+                mgs_stats_counter_init(exp->exp_ops_stats);
+                lprocfs_register_stats(exp->exp_nid_stats->nid_proc, "stats", exp->exp_ops_stats);
+
+                /* Always add in ldlm_stats */
+                exp->exp_nid_stats->nid_ldlm_stats = lprocfs_alloc_stats(LDLM_LAST_OPC -
+                                                                         LDLM_FIRST_OPC, 0);
+                if (exp->exp_nid_stats->nid_ldlm_stats == NULL)
+                        return -ENOMEM;
+
+                lprocfs_init_ldlm_stats(exp->exp_nid_stats->nid_ldlm_stats);
+
+                rc = lprocfs_register_stats(exp->exp_nid_stats->nid_proc, "ldlm_stats",
+                                            exp->exp_nid_stats->nid_ldlm_stats);
+        }
+
+        return 0;
+}
+
+/* Add client export data to the MGS.  This data is currently NOT stored on
+ * disk in the last_rcvd file or anywhere else.  In the event of a MGS
+ * crash all connections are treated as new connections.
+ */
+int mgs_client_add(struct obd_device *obd,
+                   struct obd_export *exp,
+                   void *localdata)
+{
+        return mgs_export_stats_init(obd, exp, localdata);
+}
+
+/* Remove client export data from the MGS */
+int mgs_client_free(struct obd_export *exp)
+{
+        return 0; 
+}
+
 /* Same as mds_fid2dentry */
 /* Look up an entry by inode number. */
 /* this function ONLY returns valid dget'd dentries with an initialized inode
@@ -59,9 +137,9 @@ static struct dentry *mgs_fid2dentry(struct mgs_obd *mgs, struct ll_fid *fid)
 
         if (ino == 0)
                 RETURN(ERR_PTR(-ESTALE));
-        
+
         snprintf(fid_name, sizeof(fid_name), "0x%lx", ino);
-        
+
         /* under ext3 this is neither supposed to return bad inodes
            nor NULL inodes. */
         result = ll_lookup_one_len(fid_name, mgs->mgs_fid_de, strlen(fid_name));
@@ -126,7 +204,9 @@ int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         mgs->mgs_vfsmnt = mnt;
         mgs->mgs_sb = mnt->mnt_root->d_inode->i_sb;
 
-        fsfilt_setup(obd, mgs->mgs_sb);
+        rc = fsfilt_setup(obd, mgs->mgs_sb);
+        if (rc)
+                CWARN("fail to set fsfilter options\n");
 
         OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
         obd->obd_lvfs_ctxt.pwdmnt = mnt;
@@ -137,10 +217,10 @@ int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         /* Setup the configs dir */
-        dentry = simple_mkdir(current->fs->pwd, MOUNT_CONFIGS_DIR, 0777, 1);
+        dentry = simple_mkdir(current->fs->pwd, mnt, MOUNT_CONFIGS_DIR, 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
-                CERROR("cannot create %s directory: rc = %d\n", 
+                CERROR("cannot create %s directory: rc = %d\n",
                        MOUNT_CONFIGS_DIR, rc);
                 GOTO(err_pop, rc);
         }

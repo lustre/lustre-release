@@ -1,26 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
@@ -189,6 +200,178 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
         EXIT;
 }
 
+/* Set server timelimit for this req */
+void ptlrpc_at_set_req_timeout(struct ptlrpc_request *req)
+{
+        __u32 serv_est;
+        int idx;
+        struct imp_at *at;
+
+        LASSERT(req->rq_import);
+
+        if (AT_OFF) {
+                /* non-AT settings */
+                req->rq_timeout = req->rq_import->imp_server_timeout ?
+                        obd_timeout / 2 : obd_timeout;
+                lustre_msg_set_timeout(req->rq_reqmsg, req->rq_timeout);
+                return;
+        }
+
+        at = &req->rq_import->imp_at;
+        idx = import_at_get_index(req->rq_import,
+                                  req->rq_request_portal);
+        serv_est = at_get(&at->iat_service_estimate[idx]);
+        req->rq_timeout = at_est2timeout(serv_est);
+        /* We could get even fancier here, using history to predict increased
+           loading... */
+
+        /* Let the server know what this RPC timeout is by putting it in the
+           reqmsg*/
+        lustre_msg_set_timeout(req->rq_reqmsg, req->rq_timeout);
+}
+
+/* Adjust max service estimate based on server value */
+static void ptlrpc_at_adj_service(struct ptlrpc_request *req,
+                                  unsigned int serv_est)
+{
+        int idx;
+        unsigned int oldse;
+        struct imp_at *at;
+
+        /* do estimate only if is not in recovery */
+        if (!(req->rq_send_state & (LUSTRE_IMP_FULL | LUSTRE_IMP_CONNECTING)))
+                return;
+
+        LASSERT(req->rq_import);
+        at = &req->rq_import->imp_at;
+
+        idx = import_at_get_index(req->rq_import, req->rq_request_portal);
+        /* max service estimates are tracked on the server side,
+           so just keep minimal history here */
+        oldse = at_add(&at->iat_service_estimate[idx], serv_est);
+        if (oldse != 0)
+                CDEBUG(D_ADAPTTO, "The RPC service estimate for %s ptl %d "
+                       "has changed from %d to %d\n",
+                       req->rq_import->imp_obd->obd_name,req->rq_request_portal,
+                       oldse, at_get(&at->iat_service_estimate[idx]));
+}
+
+/* Expected network latency per remote node (secs) */
+int ptlrpc_at_get_net_latency(struct ptlrpc_request *req)
+{
+        return AT_OFF ? 0 : at_get(&req->rq_import->imp_at.iat_net_latency);
+}
+
+/* Adjust expected network latency */
+static void ptlrpc_at_adj_net_latency(struct ptlrpc_request *req,
+                                      unsigned int service_time)
+{
+        unsigned int nl, oldnl;
+        struct imp_at *at;
+        time_t now = cfs_time_current_sec();
+
+        LASSERT(req->rq_import);
+        at = &req->rq_import->imp_at;
+
+        /* Network latency is total time less server processing time */
+        nl = max_t(int, now - req->rq_sent - service_time, 0) + 1/*st rounding*/;
+        if (service_time > now - req->rq_sent + 3 /* bz16408 */)
+                CWARN("Reported service time %u > total measured time %ld\n",
+                      service_time, now - req->rq_sent);
+
+        oldnl = at_add(&at->iat_net_latency, nl);
+        if (oldnl != 0)
+                CDEBUG(D_ADAPTTO, "The network latency for %s (nid %s) "
+                       "has changed from %d to %d\n",
+                       req->rq_import->imp_obd->obd_name,
+                       obd_uuid2str(
+                               &req->rq_import->imp_connection->c_remote_uuid),
+                       oldnl, at_get(&at->iat_net_latency));
+}
+
+static int unpack_reply(struct ptlrpc_request *req)
+{
+        int rc;
+
+        req->rq_rep_swab_mask = 0;
+        rc = lustre_unpack_msg(req->rq_repmsg, req->rq_nob_received);
+        if (rc < 0) {
+                DEBUG_REQ(D_ERROR, req, "unpack_rep failed: %d", rc);
+                return(-EPROTO);
+        }
+
+        if (rc > 0)
+                lustre_set_rep_swabbed(req, MSG_PTLRPC_HEADER_OFF);
+
+        rc = lustre_unpack_rep_ptlrpc_body(req, MSG_PTLRPC_BODY_OFF);
+        if (rc) {
+                DEBUG_REQ(D_ERROR, req, "unpack ptlrpc body failed: %d", rc);
+                return(-EPROTO);
+        }
+        return 0;
+}
+
+/* Handle an early reply message.
+   We can't risk the real reply coming in and changing rq_repmsg,
+   so this fn must be called under the rq_lock */
+static int ptlrpc_at_recv_early_reply(struct ptlrpc_request *req) {
+        struct lustre_msg *msgcpy;
+        time_t olddl;
+        int oldlen, rc;
+        ENTRY;
+
+        req->rq_early = 0;
+
+        rc = unpack_reply(req);
+        if (rc)
+                /* Let's just ignore it - same as if it never got here */
+                RETURN(rc);
+
+        /* We've got to make sure another early reply doesn't land on
+           top of our current repbuf.  Make a copy and verify checksum. */
+        oldlen = req->rq_replen;
+        spin_unlock(&req->rq_lock);
+        OBD_ALLOC(msgcpy, oldlen);
+        if (!msgcpy) {
+                spin_lock(&req->rq_lock);
+                RETURN(-ENOMEM);
+        }
+        spin_lock(&req->rq_lock);
+        /* Another reply might have changed the repmsg and replen while
+           we dropped the lock; doesn't really matter, just use the latest.
+           If it doesn't fit in oldlen, checksum will be wrong. */
+        memcpy(msgcpy, req->rq_repmsg, oldlen);
+        if (lustre_msg_get_cksum(msgcpy) !=
+            lustre_msg_calc_cksum(msgcpy)) {
+                CDEBUG(D_ADAPTTO, "Early reply checksum mismatch, "
+                       "discarding %x != %x\n", lustre_msg_get_cksum(msgcpy),
+                       lustre_msg_calc_cksum(msgcpy));
+                GOTO(out, rc = -EINVAL);
+        }
+
+        /* Expecting to increase the service time estimate here */
+        ptlrpc_at_adj_service(req, lustre_msg_get_timeout(msgcpy));
+        ptlrpc_at_adj_net_latency(req, lustre_msg_get_service_time(msgcpy));
+
+        /* Adjust the local timeout for this req */
+        ptlrpc_at_set_req_timeout(req);
+
+        olddl = req->rq_deadline;
+        /* server assumes it now has rq_timeout from when it sent the
+           early reply, so client should give it at least that long. */
+        req->rq_deadline = cfs_time_current_sec() + req->rq_timeout +
+                    ptlrpc_at_get_net_latency(req);
+
+        DEBUG_REQ(D_ADAPTTO, req,
+                  "Early reply #%d, new deadline in %lds (%+lds)",
+                  req->rq_early_count, req->rq_deadline -
+                  cfs_time_current_sec(), req->rq_deadline - olddl);
+
+out:
+        OBD_FREE(msgcpy, oldlen);
+        RETURN(rc);
+}
+
 void ptlrpc_free_rq_pool(struct ptlrpc_request_pool *pool)
 {
         struct list_head *l, *tmp;
@@ -307,7 +490,7 @@ static struct ptlrpc_request *ptlrpc_prep_req_from_pool(struct ptlrpc_request_po
 
 struct ptlrpc_request *
 ptlrpc_prep_req_pool(struct obd_import *imp, __u32 version, int opcode,
-                     int count, int *lengths, char **bufs,
+                     int count, __u32 *lengths, char **bufs,
                      struct ptlrpc_request_pool *pool)
 {
         struct ptlrpc_request *request = NULL;
@@ -342,11 +525,6 @@ ptlrpc_prep_req_pool(struct obd_import *imp, __u32 version, int opcode,
         }
 
         lustre_msg_add_version(request->rq_reqmsg, version);
-
-        if (imp->imp_server_timeout)
-                request->rq_timeout = obd_timeout / 2;
-        else
-                request->rq_timeout = obd_timeout;
         request->rq_send_state = LUSTRE_IMP_FULL;
         request->rq_type = PTL_RPC_MSG_REQUEST;
         request->rq_import = class_import_get(imp);
@@ -360,27 +538,28 @@ ptlrpc_prep_req_pool(struct obd_import *imp, __u32 version, int opcode,
 
         request->rq_phase = RQ_PHASE_NEW;
 
-        /* XXX FIXME bug 249 */
         request->rq_request_portal = imp->imp_client->cli_request_portal;
         request->rq_reply_portal = imp->imp_client->cli_reply_portal;
+
+        ptlrpc_at_set_req_timeout(request);
 
         spin_lock_init(&request->rq_lock);
         CFS_INIT_LIST_HEAD(&request->rq_list);
         CFS_INIT_LIST_HEAD(&request->rq_replay_list);
         CFS_INIT_LIST_HEAD(&request->rq_set_chain);
+        CFS_INIT_LIST_HEAD(&request->rq_history_list);
         cfs_waitq_init(&request->rq_reply_waitq);
         request->rq_xid = ptlrpc_next_xid();
         atomic_set(&request->rq_refcount, 1);
 
         lustre_msg_set_opc(request->rq_reqmsg, opcode);
-        lustre_msg_set_flags(request->rq_reqmsg, 0);
 
         RETURN(request);
 }
 
 struct ptlrpc_request *
 ptlrpc_prep_req(struct obd_import *imp, __u32 version, int opcode, int count,
-                int *lengths, char **bufs)
+                __u32 *lengths, char **bufs)
 {
         return ptlrpc_prep_req_pool(imp, version, opcode, count, lengths, bufs,
                                     NULL);
@@ -399,6 +578,7 @@ struct ptlrpc_request_set *ptlrpc_prep_set(void)
         set->set_remaining = 0;
         spin_lock_init(&set->set_new_req_lock);
         CFS_INIT_LIST_HEAD(&set->set_new_requests);
+        CFS_INIT_LIST_HEAD(&set->set_cblist);
 
         RETURN(set);
 }
@@ -458,6 +638,23 @@ void ptlrpc_set_destroy(struct ptlrpc_request_set *set)
         EXIT;
 }
 
+int ptlrpc_set_add_cb(struct ptlrpc_request_set *set,
+                      set_interpreter_func fn, void *data)
+{
+        struct ptlrpc_set_cbdata *cbdata;
+
+        OBD_SLAB_ALLOC(cbdata, ptlrpc_cbdata_slab,
+                        CFS_ALLOC_STD, sizeof(*cbdata));
+        if (cbdata == NULL)
+                RETURN(-ENOMEM);
+
+        cbdata->psc_interpret = fn;
+        cbdata->psc_data = data;
+        list_add_tail(&cbdata->psc_item, &set->set_cblist);
+
+        RETURN(0);
+}
+
 void ptlrpc_set_add_req(struct ptlrpc_request_set *set,
                         struct ptlrpc_request *req)
 {
@@ -469,16 +666,36 @@ void ptlrpc_set_add_req(struct ptlrpc_request_set *set,
         atomic_inc(&req->rq_import->imp_inflight);
 }
 
-/* lock so many callers can add things, the context that owns the set
- * is supposed to notice these and move them into the set proper. */
-void ptlrpc_set_add_new_req(struct ptlrpc_request_set *set,
-                            struct ptlrpc_request *req)
+/** 
+ * Lock so many callers can add things, the context that owns the set
+ * is supposed to notice these and move them into the set proper. 
+ */
+int ptlrpc_set_add_new_req(struct ptlrpcd_ctl *pc,
+                           struct ptlrpc_request *req)
 {
+        struct ptlrpc_request_set *set = pc->pc_set;
+
+        /* 
+         * Let caller know that we stopped and will not handle this request.
+         * It needs to take care itself of request.
+         */
+        if (test_bit(LIOD_STOP, &pc->pc_flags))
+                return -EALREADY;
+
         spin_lock(&set->set_new_req_lock);
-        /* The set takes over the caller's request reference */
+        /* 
+         * The set takes over the caller's request reference. 
+         */
         list_add_tail(&req->rq_set_chain, &set->set_new_requests);
         req->rq_set = set;
         spin_unlock(&set->set_new_req_lock);
+
+        /*
+         * Let thead know that we added something and better it to wake up 
+         * and process.
+         */
+        cfs_waitq_signal(&set->set_waitq);
+        return 0;
 }
 
 /*
@@ -510,21 +727,33 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
         } else if (req->rq_send_state == LUSTRE_IMP_CONNECTING &&
                  imp->imp_state == LUSTRE_IMP_CONNECTING) {
                 /* allow CONNECT even if import is invalid */ ;
-        } else if (imp->imp_invalid) {
+                if (atomic_read(&imp->imp_inval_count) != 0) {
+                        DEBUG_REQ(D_ERROR, req, "invalidate in flight");
+                        *status = -EIO;
+                }
+        } else if ((imp->imp_invalid && (!imp->imp_recon_bk)) ||
+                                         imp->imp_obd->obd_no_recov) {
                 /* If the import has been invalidated (such as by an OST
-                 * failure), the request must fail with -EIO. */
+                 * failure), and if the import(MGC) tried all of its connection
+                 * list (Bug 13464), the request must fail with -ESHUTDOWN.
+                 * This indicates the requests should be discarded; an -EIO
+                 * may result in a resend of the request. */
                 if (!imp->imp_deactive)
                         DEBUG_REQ(D_ERROR, req, "IMP_INVALID");
-                *status = -EIO;
+                *status = -ESHUTDOWN; /* bz 12940 */
         } else if (req->rq_import_generation != imp->imp_generation) {
                 DEBUG_REQ(D_ERROR, req, "req wrong generation:");
                 *status = -EIO;
         } else if (req->rq_send_state != imp->imp_state) {
-                if (imp->imp_obd->obd_no_recov || imp->imp_dlm_fake ||
-                    req->rq_no_delay)
+                /* invalidate in progress - any requests should be drop */
+                if (atomic_read(&imp->imp_inval_count) != 0) {
+                        DEBUG_REQ(D_ERROR, req, "invalidate in flight");
+                        *status = -EIO;
+                } else if (imp->imp_dlm_fake || req->rq_no_delay) {
                         *status = -EWOULDBLOCK;
-                else
+                } else {
                         delay = 1;
+                }
         }
 
         RETURN(delay);
@@ -533,33 +762,50 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
 static int ptlrpc_check_reply(struct ptlrpc_request *req)
 {
         int rc = 0;
+        const char *what = "";
         ENTRY;
 
         /* serialise with network callback */
         spin_lock(&req->rq_lock);
 
-        if (req->rq_replied)
+        if (req->rq_replied) {
+                what = "REPLIED: ";
                 GOTO(out, rc = 1);
+        }
 
         if (req->rq_net_err && !req->rq_timedout) {
+                what = "NETERR: ";
                 spin_unlock(&req->rq_lock);
                 rc = ptlrpc_expire_one_request(req);
                 spin_lock(&req->rq_lock);
                 GOTO(out, rc);
         }
 
-        if (req->rq_err)
+        if (req->rq_err) {
+                what = "ABORTED: ";
                 GOTO(out, rc = 1);
+        }
 
-        if (req->rq_resend)
+        if (req->rq_resend) {
+                what = "RESEND: ";
                 GOTO(out, rc = 1);
+        }
 
-        if (req->rq_restart)
+        if (req->rq_restart) {
+                what = "RESTART: ";
                 GOTO(out, rc = 1);
+        }
+
+        if (req->rq_early) {
+                what = "EARLYREP: ";
+                ptlrpc_at_recv_early_reply(req);
+                GOTO(out, rc = 0); /* keep waiting */
+        }
+
         EXIT;
  out:
         spin_unlock(&req->rq_lock);
-        DEBUG_REQ(D_NET, req, "rc = %d for", rc);
+        DEBUG_REQ(D_NET, req, "%src = %d for", what, rc);
         return rc;
 }
 
@@ -570,8 +816,13 @@ static int ptlrpc_check_status(struct ptlrpc_request *req)
 
         err = lustre_msg_get_status(req->rq_repmsg);
         if (lustre_msg_get_type(req->rq_repmsg) == PTL_RPC_MSG_ERR) {
-                DEBUG_REQ(D_ERROR, req, "type == PTL_RPC_MSG_ERR, err == %d",
-                          err);
+                struct obd_import *imp = req->rq_import;
+                __u32 opc = lustre_msg_get_opc(req->rq_reqmsg);
+
+                LCONSOLE_ERROR_MSG(0x011,"an error occurred while communicating"
+                               " with %s. The %s operation failed with %d\n",
+                               libcfs_nid2str(imp->imp_connection->c_peer.nid),
+                               ll_opcode2str(opc), err);
                 RETURN(err < 0 ? err : -EINVAL);
         }
 
@@ -585,71 +836,101 @@ static int ptlrpc_check_status(struct ptlrpc_request *req)
         RETURN(err);
 }
 
+/* VBR: we should save pre-versions for replay*/
+static void ptlrpc_save_versions(struct ptlrpc_request *req)
+{
+        struct lustre_msg *repmsg = req->rq_repmsg;
+        struct lustre_msg *reqmsg = req->rq_reqmsg;
+        __u64 *versions = lustre_msg_get_versions(repmsg);
+        ENTRY;
+        /* Interoperability with 1.6. This should be changed to LASSERT in HEAD */
+        if (versions == NULL)
+                return;
+
+        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
+                return;
+
+        lustre_msg_set_versions(reqmsg, versions);
+        CDEBUG(D_INFO, "Client save versions ["LPX64"/"LPX64"]\n",
+               versions[0], versions[1]);
+
+        EXIT;
+}
+
 static int after_reply(struct ptlrpc_request *req)
 {
         struct obd_import *imp = req->rq_import;
+        struct obd_device *obd = req->rq_import->imp_obd;
         int rc;
+        struct timeval work_start;
+        long timediff;
         ENTRY;
 
         LASSERT(!req->rq_receiving_reply);
+        LASSERT(obd);
 
         /* NB Until this point, the whole of the incoming message,
          * including buflens, status etc is in the sender's byte order. */
 
-#if SWAB_PARANOIA
-        /* Clear reply swab mask; this is a new reply in sender's byte order */
-        req->rq_rep_swab_mask = 0;
-#endif
         LASSERT (req->rq_nob_received <= req->rq_replen);
-        rc = lustre_unpack_msg(req->rq_repmsg, req->rq_nob_received);
-        if (rc) {
-                DEBUG_REQ(D_ERROR, req, "unpack_rep failed: %d\n", rc);
-                RETURN(-EPROTO);
-        }
+        rc = unpack_reply(req);
+        if (rc)
+                RETURN(rc);
 
-        rc = lustre_unpack_rep_ptlrpc_body(req, MSG_PTLRPC_BODY_OFF);
-        if (rc) {
-                DEBUG_REQ(D_ERROR, req, "unpack ptlrpc body failed: %d\n", rc);
-                RETURN(-EPROTO);
-        }
+        do_gettimeofday(&work_start);
+        timediff = cfs_timeval_sub(&work_start, &req->rq_arrival_time, NULL);
+        if (obd->obd_svc_stats != NULL)
+                lprocfs_counter_add(obd->obd_svc_stats, PTLRPC_REQWAIT_CNTR,
+                                    timediff);
+
+        OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_PAUSE_REP, obd_fail_val);
+        ptlrpc_at_adj_service(req, lustre_msg_get_timeout(req->rq_repmsg));
+        ptlrpc_at_adj_net_latency(req, lustre_msg_get_service_time(req->rq_repmsg));
 
         if (lustre_msg_get_type(req->rq_repmsg) != PTL_RPC_MSG_REPLY &&
             lustre_msg_get_type(req->rq_repmsg) != PTL_RPC_MSG_ERR) {
-                DEBUG_REQ(D_ERROR, req, "invalid packet received (type=%u)\n",
+                DEBUG_REQ(D_ERROR, req, "invalid packet received (type=%u)",
                           lustre_msg_get_type(req->rq_repmsg));
                 RETURN(-EPROTO);
         }
 
         rc = ptlrpc_check_status(req);
-
-        /* Either we've been evicted, or the server has failed for
-         * some reason. Try to reconnect, and if that fails, punt to the
-         * upcall. */
-        if ((rc == -ENOTCONN) || (rc == -ENODEV)) {
-                if (req->rq_send_state != LUSTRE_IMP_FULL ||
-                    imp->imp_obd->obd_no_recov || imp->imp_dlm_fake) {
-                        RETURN(-ENOTCONN);
+        if (rc) {
+                /* Either we've been evicted, or the server has failed for
+                 * some reason. Try to reconnect, and if that fails, punt to
+                 * the upcall. */
+                if (ll_rpc_recoverable_error(rc)) {
+                        if (req->rq_send_state != LUSTRE_IMP_FULL ||
+                            imp->imp_obd->obd_no_recov || imp->imp_dlm_fake) {
+                                RETURN(rc);
+                        }
+                        ptlrpc_request_handle_notconn(req);
+                        RETURN(rc);
                 }
-
-                ptlrpc_request_handle_notconn(req);
-
-                RETURN(rc);
+        } else {
+                /* Let's look if server sent slv. Do it only for RPC with
+                 * rc == 0. */
+                ldlm_cli_update_pool(req);
         }
 
         /* Store transno in reqmsg for replay. */
-        req->rq_transno = lustre_msg_get_transno(req->rq_repmsg);
-        lustre_msg_set_transno(req->rq_reqmsg, req->rq_transno);
+        if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)) {
+                req->rq_transno = lustre_msg_get_transno(req->rq_repmsg);
+                lustre_msg_set_transno(req->rq_reqmsg, req->rq_transno);
+        }
 
-        if (req->rq_import->imp_replayable) {
+        if (imp->imp_replayable) {
                 spin_lock(&imp->imp_lock);
                 /* no point in adding already-committed requests to the replay
                  * list, we will just remove them immediately. b=9829 */
-                if (req->rq_transno != 0 && 
-                    (req->rq_transno > 
+                if (req->rq_transno != 0 &&
+                    (req->rq_transno >
                      lustre_msg_get_last_committed(req->rq_repmsg) ||
-                     req->rq_replay))
+                     req->rq_replay)) {
+                        /* version recovery */
+                        ptlrpc_save_versions(req);
                         ptlrpc_retain_replayable_request(req, imp);
-                else if (req->rq_commit_cb != NULL) {
+                } else if (req->rq_commit_cb != NULL) {
                         spin_unlock(&imp->imp_lock);
                         req->rq_commit_cb(req);
                         spin_lock(&imp->imp_lock);
@@ -673,6 +954,9 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
         ENTRY;
 
         LASSERT(req->rq_phase == RQ_PHASE_NEW);
+        if (req->rq_sent && (req->rq_sent > CURRENT_SECONDS))
+                RETURN (0);
+
         req->rq_phase = RQ_PHASE_RPC;
 
         imp = req->rq_import;
@@ -711,7 +995,7 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 
         lustre_msg_set_status(req->rq_reqmsg, cfs_curproc_pid());
         CDEBUG(D_RPCTRACE, "Sending RPC pname:cluuid:pid:xid:nid:opc"
-               " %s:%s:%d:"LPU64":%s:%d\n", cfs_curproc_comm(),
+               " %s:%s:%d:x"LPU64":%s:%d\n", cfs_curproc_comm(),
                imp->imp_obd->obd_uuid.uuid,
                lustre_msg_get_status(req->rq_reqmsg), req->rq_xid,
                libcfs_nid2str(imp->imp_connection->c_peer.nid),
@@ -746,6 +1030,9 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                     ptlrpc_send_new_req(req)) {
                         force_timer_recalc = 1;
                 }
+                /* delayed send - skip */
+                if (req->rq_phase == RQ_PHASE_NEW && req->rq_sent)
+                        continue;
 
                 if (!(req->rq_phase == RQ_PHASE_RPC ||
                       req->rq_phase == RQ_PHASE_BULK ||
@@ -855,13 +1142,27 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                                 force_timer_recalc = 1;
                         }
 
-                        /* Still waiting for a reply? */
-                        if (ptlrpc_client_receiving_reply(req))
+                        spin_lock(&req->rq_lock);
+
+                        if (req->rq_early) {
+                                ptlrpc_at_recv_early_reply(req);
+                                spin_unlock(&req->rq_lock);
                                 continue;
+                        }
+
+                        /* Still waiting for a reply? */
+                        if (req->rq_receiving_reply) {
+                                spin_unlock(&req->rq_lock);
+                                continue;
+                        }
 
                         /* Did we actually receive a reply? */
-                        if (!ptlrpc_client_replied(req))
+                        if (!req->rq_replied) {
+                                spin_unlock(&req->rq_lock);
                                 continue;
+                        }
+
+                        spin_unlock(&req->rq_lock);
 
                         spin_lock(&imp->imp_lock);
                         list_del_init(&req->rq_list);
@@ -872,10 +1173,10 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                                 /* Add this req to the delayed list so
                                    it can be errored if the import is
                                    evicted after recovery. */
-                                spin_lock(&req->rq_lock);
+                                spin_lock(&imp->imp_lock);
                                 list_add_tail(&req->rq_list,
                                               &imp->imp_delayed_list);
-                                spin_unlock(&req->rq_lock);
+                                spin_unlock(&imp->imp_lock);
                                 continue;
                         }
 
@@ -902,7 +1203,9 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                          * was good after getting the REPLY for her GET or
                          * the ACK for her PUT. */
                         DEBUG_REQ(D_ERROR, req, "bulk transfer failed");
-                        LBUG();
+                        req->rq_status = -EIO;
+                        req->rq_phase = RQ_PHASE_INTERPRET;
+                        GOTO(interpret, req->rq_status);
                 }
 
                 req->rq_phase = RQ_PHASE_INTERPRET;
@@ -915,17 +1218,16 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                 if (req->rq_bulk != NULL)
                         ptlrpc_unregister_bulk (req);
 
-                req->rq_phase = RQ_PHASE_COMPLETE;
-
                 if (req->rq_interpret_reply != NULL) {
                         int (*interpreter)(struct ptlrpc_request *,void *,int) =
                                 req->rq_interpret_reply;
                         req->rq_status = interpreter(req, &req->rq_async_args,
                                                      req->rq_status);
                 }
+                req->rq_phase = RQ_PHASE_COMPLETE;
 
                 CDEBUG(D_RPCTRACE, "Completed RPC pname:cluuid:pid:xid:nid:"
-                       "opc %s:%s:%d:"LPU64":%s:%d\n", cfs_curproc_comm(),
+                       "opc %s:%s:%d:x"LPU64":%s:%d\n", cfs_curproc_comm(),
                        imp->imp_obd->obd_uuid.uuid,
                        lustre_msg_get_status(req->rq_reqmsg), req->rq_xid,
                        libcfs_nid2str(imp->imp_connection->c_peer.nid),
@@ -941,14 +1243,25 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
         RETURN(set->set_remaining == 0 || force_timer_recalc);
 }
 
+/* Return 1 if we should give up, else 0 */
 int ptlrpc_expire_one_request(struct ptlrpc_request *req)
 {
         struct obd_import *imp = req->rq_import;
         int rc = 0;
         ENTRY;
 
-        DEBUG_REQ(D_ERROR|D_NETERROR, req, "timeout (sent at %lu, %lus ago)",
-                  (long)req->rq_sent, CURRENT_SECONDS - req->rq_sent);
+        DEBUG_REQ(D_NETERROR, req, "%s (sent at %lu, %lus ago)",
+                  req->rq_net_err ? "network error" : "timeout",
+                  (long)req->rq_sent, cfs_time_current_sec() - req->rq_sent);
+
+        if (imp) {
+                LCONSOLE_WARN("Request x"LPU64" sent from %s to NID %s %lus ago"
+                              " has timed out (limit %lus).\n", req->rq_xid,
+                              req->rq_import->imp_obd->obd_name,
+                              libcfs_nid2str(imp->imp_connection->c_peer.nid),
+                              cfs_time_current_sec() - req->rq_sent,
+                              req->rq_deadline - req->rq_sent);
+        }
 
         if (imp != NULL && obd_debug_peer_on_timeout)
                 LNetCtl(IOC_LIBCFS_DEBUG_PEER, &imp->imp_connection->c_peer);
@@ -978,6 +1291,9 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
          * then error it out here. */
         if (req->rq_send_state != LUSTRE_IMP_FULL ||
             imp->imp_obd->obd_no_recov) {
+                DEBUG_REQ(D_RPCTRACE, req, "err -110, sent_state=%s (now=%s)",
+                          ptlrpc_import_state_name(req->rq_send_state),
+                          ptlrpc_import_state_name(imp->imp_state));
                 spin_lock(&req->rq_lock);
                 req->rq_status = -ETIMEDOUT;
                 req->rq_err = 1;
@@ -985,7 +1301,8 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
                 RETURN(1);
         }
 
-        /* if request can't be resend we can't wait answer after timeout */
+        /* if a request can't be resent we can't wait for an answer after
+           the timeout */
         if (req->rq_no_resend) {
                 DEBUG_REQ(D_RPCTRACE, req, "TIMEOUT-NORESEND:");
                 rc = 1;
@@ -1000,13 +1317,13 @@ int ptlrpc_expired_set(void *data)
 {
         struct ptlrpc_request_set *set = data;
         struct list_head          *tmp;
-        time_t                     now = CURRENT_SECONDS;
+        time_t                     now = cfs_time_current_sec();
         ENTRY;
 
         LASSERT(set != NULL);
 
         /* A timeout expired; see which reqs it applies to... */
-        list_for_each (tmp, &set->set_requests) {
+        list_for_each(tmp, &set->set_requests) {
                 struct ptlrpc_request *req =
                         list_entry(tmp, struct ptlrpc_request, rq_set_chain);
 
@@ -1017,7 +1334,7 @@ int ptlrpc_expired_set(void *data)
                         continue;
 
                 if (req->rq_timedout ||           /* already dealt with */
-                    req->rq_sent + req->rq_timeout > now) /* not expired */
+                    req->rq_deadline > now) /* not expired */
                         continue;
 
                 /* deal with this guy */
@@ -1057,13 +1374,14 @@ void ptlrpc_interrupted_set(void *data)
         }
 }
 
+/* get the smallest timeout in the set; this does NOT set a timeout. */
 int ptlrpc_set_next_timeout(struct ptlrpc_request_set *set)
 {
         struct list_head      *tmp;
-        time_t                 now = CURRENT_SECONDS;
-        time_t                 deadline;
+        time_t                 now = cfs_time_current_sec();
         int                    timeout = 0;
         struct ptlrpc_request *req;
+        int                    deadline;
         ENTRY;
 
         SIGNAL_MASK_ASSERT(); /* XXX BUG 1511 */
@@ -1072,18 +1390,26 @@ int ptlrpc_set_next_timeout(struct ptlrpc_request_set *set)
                 req = list_entry(tmp, struct ptlrpc_request, rq_set_chain);
 
                 /* request in-flight? */
-                if (!((req->rq_phase == RQ_PHASE_RPC && !req->rq_waiting) ||
-                      (req->rq_phase == RQ_PHASE_BULK)))
+                if (!(((req->rq_phase == RQ_PHASE_RPC) && !req->rq_waiting) ||
+                      (req->rq_phase == RQ_PHASE_BULK) ||
+                      (req->rq_phase == RQ_PHASE_NEW)))
                         continue;
 
                 if (req->rq_timedout)   /* already timed out */
                         continue;
 
-                deadline = req->rq_sent + req->rq_timeout;
-                if (deadline <= now)    /* actually expired already */
+                if (req->rq_phase == RQ_PHASE_NEW)
+                        deadline = req->rq_sent;        /* delayed send */
+                else
+                        deadline = req->rq_deadline;
+
+                if (deadline <= now) {  /* actually expired already */
                         timeout = 1;    /* ASAP */
-                else if (timeout == 0 || timeout > deadline - now)
+                        break;
+                }
+                if ((timeout == 0) || (timeout > (deadline - now))) {
                         timeout = deadline - now;
+                }
         }
         RETURN(timeout);
 }
@@ -1110,7 +1436,7 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
 
                 /* wait until all complete, interrupted, or an in-flight
                  * req times out */
-                CDEBUG(D_HA, "set %p going to sleep for %d seconds\n",
+                CDEBUG(D_RPCTRACE, "set %p going to sleep for %d seconds\n",
                        set, timeout);
                 lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(timeout ? timeout : 1),
                                        ptlrpc_expired_set,
@@ -1143,6 +1469,19 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
                 int (*interpreter)(struct ptlrpc_request_set *set,void *,int) =
                         set->set_interpret;
                 rc = interpreter (set, set->set_arg, rc);
+        } else {
+                struct ptlrpc_set_cbdata *cbdata, *n;
+                int err;
+
+                list_for_each_entry_safe(cbdata, n,
+                                         &set->set_cblist, psc_item) {
+                        list_del_init(&cbdata->psc_item);
+                        err = cbdata->psc_interpret(set, cbdata->psc_data, rc);
+                        if (err && !rc)
+                                rc = err;
+                        OBD_SLAB_FREE(cbdata, ptlrpc_cbdata_slab,
+                                        sizeof(*cbdata));
+                }
         }
 
         RETURN(rc);
@@ -1169,6 +1508,7 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
         LASSERTF(request->rq_rqbd == NULL, "req %p\n",request);/* client-side */
         LASSERTF(list_empty(&request->rq_list), "req %p\n", request);
         LASSERTF(list_empty(&request->rq_set_chain), "req %p\n", request);
+        LASSERTF(!request->rq_replay, "req %p\n", request);
 
         /* We must take it off the imp_replay_list first.  Otherwise, we'll set
          * request->rq_reqmsg to NULL while osc_close is dereferencing it. */
@@ -1187,8 +1527,9 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
                 LBUG();
         }
 
-        if (request->rq_repmsg != NULL) {
-                OBD_FREE(request->rq_repmsg, request->rq_replen);
+        if (request->rq_repbuf != NULL) {
+                OBD_FREE(request->rq_repbuf, request->rq_replen);
+                request->rq_repbuf = NULL;
                 request->rq_repmsg = NULL;
         }
         if (request->rq_export != NULL) {
@@ -1212,11 +1553,6 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
                 OBD_FREE(request, sizeof(*request));
         }
         EXIT;
-}
-
-void ptlrpc_free_req(struct ptlrpc_request *request)
-{
-        __ptlrpc_free_req(request, 0);
 }
 
 static int __ptlrpc_req_finished(struct ptlrpc_request *request, int locked);
@@ -1274,14 +1610,15 @@ void ptlrpc_unregister_reply (struct ptlrpc_request *request)
         ENTRY;
 
         LASSERT(!in_interrupt ());             /* might sleep */
-
-        if (!ptlrpc_client_receiving_reply(request))
+        if (!ptlrpc_client_recv_or_unlink(request))
+                /* Nothing left to do */
                 return;
 
         LNetMDUnlink (request->rq_reply_md_h);
 
         /* We have to l_wait_event() whatever the result, to give liblustre
-         * a chance to run reply_in_callback() */
+         * a chance to run reply_in_callback(), and to make sure we've
+         * unlinked before returning a req to the pool */
 
         if (request->rq_set != NULL)
                 wq = &request->rq_set->set_waitq;
@@ -1291,13 +1628,16 @@ void ptlrpc_unregister_reply (struct ptlrpc_request *request)
         for (;;) {
                 /* Network access will complete in finite time but the HUGE
                  * timeout lets us CWARN for visibility of sluggish NALs */
-                lwi = LWI_TIMEOUT(cfs_time_seconds(300), NULL, NULL);
-                rc = l_wait_event (*wq, !ptlrpc_client_receiving_reply(request), &lwi);
+                lwi = LWI_TIMEOUT(cfs_time_seconds(LONG_UNLINK), NULL, NULL);
+                rc = l_wait_event (*wq, !ptlrpc_client_recv_or_unlink(request),
+                                   &lwi);
                 if (rc == 0)
                         return;
 
                 LASSERT (rc == -ETIMEDOUT);
-                DEBUG_REQ(D_WARNING, request, "Unexpectedly long timeout");
+                DEBUG_REQ(D_WARNING, request, "Unexpectedly long timeout "
+                          "rvcng=%d unlnk=%d", request->rq_receiving_reply,
+                          request->rq_must_unlink);
         }
         EXIT;
 }
@@ -1317,12 +1657,13 @@ void ptlrpc_free_committed(struct obd_import *imp)
 
         if (imp->imp_peer_committed_transno == imp->imp_last_transno_checked &&
             imp->imp_generation == imp->imp_last_generation_checked) {
-                CDEBUG(D_HA, "%s: skip recheck for last_committed "LPU64"\n",
+                CDEBUG(D_RPCTRACE, "%s: skip recheck: last_committed "LPU64"\n",
                        imp->imp_obd->obd_name, imp->imp_peer_committed_transno);
+                EXIT;
                 return;
         }
-        
-        CDEBUG(D_HA, "%s: committing for last_committed "LPU64" gen %d\n",
+
+        CDEBUG(D_RPCTRACE, "%s: committing for last_committed "LPU64" gen %d\n",
                imp->imp_obd->obd_name, imp->imp_peer_committed_transno,
                imp->imp_generation);
         imp->imp_last_transno_checked = imp->imp_peer_committed_transno;
@@ -1336,22 +1677,22 @@ void ptlrpc_free_committed(struct obd_import *imp)
                 last_req = req;
 
                 if (req->rq_import_generation < imp->imp_generation) {
-                        DEBUG_REQ(D_HA, req, "freeing request with old gen");
+                        DEBUG_REQ(D_RPCTRACE, req, "free request with old gen");
                         GOTO(free_req, 0);
                 }
 
                 if (req->rq_replay) {
-                        DEBUG_REQ(D_HA, req, "keeping (FL_REPLAY)");
+                        DEBUG_REQ(D_RPCTRACE, req, "keeping (FL_REPLAY)");
                         continue;
                 }
 
                 /* not yet committed */
                 if (req->rq_transno > imp->imp_peer_committed_transno) {
-                        DEBUG_REQ(D_HA, req, "stopping search");
+                        DEBUG_REQ(D_RPCTRACE, req, "stopping search");
                         break;
                 }
 
-                DEBUG_REQ(D_HA, req, "committing (last_committed "LPU64")",
+                DEBUG_REQ(D_RPCTRACE, req, "commit (last_committed "LPU64")",
                           imp->imp_peer_committed_transno);
 free_req:
                 spin_lock(&req->rq_lock);
@@ -1407,14 +1748,6 @@ void ptlrpc_restart_req(struct ptlrpc_request *req)
         req->rq_timedout = 0;
         ptlrpc_wake_client_req(req);
         spin_unlock(&req->rq_lock);
-}
-
-static int expired_request(void *data)
-{
-        struct ptlrpc_request *req = data;
-        ENTRY;
-
-        RETURN(ptlrpc_expire_one_request(req));
 }
 
 static void interrupted_request(void *data)
@@ -1485,7 +1818,8 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         int brc;
         struct l_wait_info lwi;
         struct obd_import *imp = req->rq_import;
-        cfs_duration_t timeout = 0;
+        cfs_duration_t timeout = CFS_TICK;
+        long timeoutl;
         ENTRY;
 
         LASSERT(req->rq_set == NULL);
@@ -1496,7 +1830,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         lustre_msg_set_status(req->rq_reqmsg, cfs_curproc_pid());
         LASSERT(imp->imp_obd != NULL);
         CDEBUG(D_RPCTRACE, "Sending RPC pname:cluuid:pid:xid:nid:opc "
-               "%s:%s:%d:"LPU64":%s:%d\n", cfs_curproc_comm(),
+               "%s:%s:%d:x"LPU64":%s:%d\n", cfs_curproc_comm(),
                imp->imp_obd->obd_uuid.uuid,
                lustre_msg_get_status(req->rq_reqmsg), req->rq_xid,
                libcfs_nid2str(imp->imp_connection->c_peer.nid),
@@ -1533,6 +1867,7 @@ restart:
                 list_del_init(&req->rq_list);
 
                 if (req->rq_err) {
+                        /* rq_status was set locally */
                         rc = -EIO;
                 }
                 else if (req->rq_intr) {
@@ -1579,25 +1914,34 @@ restart:
         spin_unlock(&imp->imp_lock);
 
         rc = ptl_send_rpc(req, 0);
-        if (rc) {
+        if (rc)
                 DEBUG_REQ(D_HA, req, "send failed (%d); recovering", rc);
-                timeout = CFS_TICK;
-        } else {
-                timeout = cfs_timeout_cap(cfs_time_seconds(req->rq_timeout));
-                DEBUG_REQ(D_NET, req, 
-                          "-- sleeping for "CFS_DURATION_T" jiffies", timeout);
+        do {
+                timeoutl = req->rq_deadline - cfs_time_current_sec();
+                timeout = (timeoutl <= 0 || rc) ? CFS_TICK :
+                        cfs_time_seconds(timeoutl);
+                DEBUG_REQ(D_NET, req,
+                          "-- sleeping for "CFS_DURATION_T" ticks", timeout);
+                lwi = LWI_TIMEOUT_INTR(timeout, NULL, interrupted_request, req);
+                brc = l_wait_event(req->rq_reply_waitq, ptlrpc_check_reply(req),
+                                  &lwi);
+                /* Wait again if we changed deadline */
+        } while ((brc == -ETIMEDOUT) &&
+                 (req->rq_deadline > cfs_time_current_sec()));
+
+        if ((brc == -ETIMEDOUT) && !ptlrpc_expire_one_request(req)) {
+                /* Wait forever for reconnect / replay or failure */
+                lwi = LWI_INTR(interrupted_request, req);
+                rc = l_wait_event(req->rq_reply_waitq, ptlrpc_check_reply(req),
+                                  &lwi);
         }
-        lwi = LWI_TIMEOUT_INTR(timeout, expired_request, interrupted_request,
-                               req);
-        l_wait_event(req->rq_reply_waitq, ptlrpc_check_reply(req), &lwi);
 
         CDEBUG(D_RPCTRACE, "Completed RPC pname:cluuid:pid:xid:nid:opc "
-               "%s:%s:%d:"LPU64":%s:%d\n", cfs_curproc_comm(),
+               "%s:%s:%d:x"LPU64":%s:%d\n", cfs_curproc_comm(),
                imp->imp_obd->obd_uuid.uuid,
                lustre_msg_get_status(req->rq_reqmsg), req->rq_xid,
                libcfs_nid2str(imp->imp_connection->c_peer.nid),
                lustre_msg_get_opc(req->rq_reqmsg));
-
         spin_lock(&imp->imp_lock);
         list_del_init(&req->rq_list);
         spin_unlock(&imp->imp_lock);
@@ -1607,16 +1951,11 @@ restart:
          * req->rq_receiving_reply is clear and returns. */
         ptlrpc_unregister_reply (req);
 
-        if (req->rq_err)
-                GOTO(out, rc = -EIO);
 
-        /* Resend if we need to, unless we were interrupted. */
-        if (req->rq_resend && !req->rq_intr) {
-                /* ...unless we were specifically told otherwise. */
-                if (req->rq_no_resend)
-                        GOTO(out, rc = -ETIMEDOUT);
-                spin_lock(&imp->imp_lock);
-                goto restart;
+        if (req->rq_err) {
+                DEBUG_REQ(D_RPCTRACE, req, "err rc=%d status=%d",
+                          rc, req->rq_status);
+                GOTO(out, rc = -EIO);
         }
 
         if (req->rq_intr) {
@@ -1625,6 +1964,15 @@ restart:
                         DEBUG_REQ(D_ERROR, req,
                                   "rq_intr set but rq_timedout not");
                 GOTO(out, rc = -EINTR);
+        }
+
+        /* Resend if we need to */
+        if (req->rq_resend) {
+                /* ...unless we were specifically told otherwise. */
+                if (req->rq_no_resend)
+                        GOTO(out, rc = -ETIMEDOUT);
+                spin_lock(&imp->imp_lock);
+                goto restart;
         }
 
         if (req->rq_timedout) {                 /* non-recoverable timeout */
@@ -1699,12 +2047,32 @@ static int ptlrpc_replay_interpret(struct ptlrpc_request *req,
         }
 
         if (lustre_msg_get_type(req->rq_repmsg) == PTL_RPC_MSG_ERR &&
-            lustre_msg_get_status(req->rq_repmsg) == -ENOTCONN)
+            (lustre_msg_get_status(req->rq_repmsg) == -ENOTCONN ||
+             lustre_msg_get_status(req->rq_repmsg) == -ENODEV))
                 GOTO(out, rc = lustre_msg_get_status(req->rq_repmsg));
 
-        /* The transno had better not change over replay. */
-        LASSERT(lustre_msg_get_transno(req->rq_reqmsg) ==
-                lustre_msg_get_transno(req->rq_repmsg));
+        /* VBR: check version failure */
+        if (lustre_msg_get_status(req->rq_repmsg) == -EOVERFLOW) {
+                /* replay was failed due to version mismatch */
+                DEBUG_REQ(D_WARNING, req, "Version mismatch during replay\n");
+                spin_lock(&imp->imp_lock);
+                imp->imp_vbr_failed = 1;
+                imp->imp_no_lock_replay = 1;
+                spin_unlock(&imp->imp_lock);
+        } else {
+                /* The transno had better not change over replay. */
+                LASSERT(lustre_msg_get_transno(req->rq_reqmsg) ==
+                        lustre_msg_get_transno(req->rq_repmsg) ||
+                        lustre_msg_get_transno(req->rq_repmsg) == 0);
+        }
+
+        spin_lock(&imp->imp_lock);
+        /* if replays by version then gap was occur on server, no trust to locks */
+        if (lustre_msg_get_flags(req->rq_repmsg) & MSG_VERSION_REPLAY)
+                imp->imp_no_lock_replay = 1;
+        imp->imp_last_replay_transno = lustre_msg_get_transno(req->rq_reqmsg);
+        spin_unlock(&imp->imp_lock);
+        LASSERT(imp->imp_last_replay_transno);
 
         DEBUG_REQ(D_HA, req, "got rep");
 
@@ -1721,10 +2089,6 @@ static int ptlrpc_replay_interpret(struct ptlrpc_request *req,
                 /* Put it back for re-replay. */
                 lustre_msg_set_status(req->rq_repmsg, aa->praa_old_status);
         }
-
-        spin_lock(&imp->imp_lock);
-        imp->imp_last_replay_transno = req->rq_transno;
-        spin_unlock(&imp->imp_lock);
 
         /* continue with recovery */
         rc = ptlrpc_import_recovery_state_machine(imp);
@@ -1745,24 +2109,26 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
         ENTRY;
 
         LASSERT(req->rq_import->imp_state == LUSTRE_IMP_REPLAY);
-
         /* Not handling automatic bulk replay yet (or ever?) */
         LASSERT(req->rq_bulk == NULL);
 
-        DEBUG_REQ(D_HA, req, "REPLAY");
-
-        LASSERT (sizeof (*aa) <= sizeof (req->rq_async_args));
-        aa = (struct ptlrpc_replay_async_args *)&req->rq_async_args;
+        CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
+        aa = ptlrpc_req_async_args(req);
         memset(aa, 0, sizeof *aa);
 
         /* Prepare request to be resent with ptlrpcd */
         aa->praa_old_state = req->rq_send_state;
         req->rq_send_state = LUSTRE_IMP_REPLAY;
         req->rq_phase = RQ_PHASE_NEW;
-        aa->praa_old_status = lustre_msg_get_status(req->rq_repmsg);
+        if (req->rq_repmsg)
+                aa->praa_old_status = lustre_msg_get_status(req->rq_repmsg);
         req->rq_status = 0;
-
         req->rq_interpret_reply = ptlrpc_replay_interpret;
+        /* Readjust the timeout for current conditions */
+        ptlrpc_at_set_req_timeout(req);
+
+        DEBUG_REQ(D_HA, req, "REPLAY");
+
         atomic_inc(&req->rq_import->imp_replay_inflight);
         ptlrpc_request_addref(req); /* ptlrpcd needs a ref */
 
@@ -1789,11 +2155,12 @@ void ptlrpc_abort_inflight(struct obd_import *imp)
                 struct ptlrpc_request *req =
                         list_entry(tmp, struct ptlrpc_request, rq_list);
 
-                DEBUG_REQ(D_HA, req, "inflight");
+                DEBUG_REQ(D_RPCTRACE, req, "inflight");
 
                 spin_lock (&req->rq_lock);
                 if (req->rq_import_generation < imp->imp_generation) {
                         req->rq_err = 1;
+                        req->rq_status = -EINTR;
                         ptlrpc_wake_client_req(req);
                 }
                 spin_unlock (&req->rq_lock);
@@ -1803,11 +2170,12 @@ void ptlrpc_abort_inflight(struct obd_import *imp)
                 struct ptlrpc_request *req =
                         list_entry(tmp, struct ptlrpc_request, rq_list);
 
-                DEBUG_REQ(D_HA, req, "aborting waiting req");
+                DEBUG_REQ(D_RPCTRACE, req, "aborting waiting req");
 
                 spin_lock (&req->rq_lock);
                 if (req->rq_import_generation < imp->imp_generation) {
                         req->rq_err = 1;
+                        req->rq_status = -EINTR;
                         ptlrpc_wake_client_req(req);
                 }
                 spin_unlock (&req->rq_lock);
@@ -1823,8 +2191,60 @@ void ptlrpc_abort_inflight(struct obd_import *imp)
         EXIT;
 }
 
-static __u64 ptlrpc_last_xid = 0;
-spinlock_t ptlrpc_last_xid_lock;
+void ptlrpc_abort_set(struct ptlrpc_request_set *set)
+{
+        struct list_head *tmp, *n;
+
+        LASSERT(set != NULL);
+
+        list_for_each_safe(tmp, n, &set->set_requests) {
+                struct ptlrpc_request *req =
+                        list_entry(tmp, struct ptlrpc_request, rq_set_chain);
+
+                spin_lock (&req->rq_lock);
+                if (req->rq_phase != RQ_PHASE_RPC) {
+                        spin_unlock (&req->rq_lock);
+                        continue;
+                }
+
+                req->rq_err = 1;
+                req->rq_status = -EINTR;
+                ptlrpc_wake_client_req(req);
+                spin_unlock (&req->rq_lock);
+        }
+}
+
+static __u64 ptlrpc_last_xid;
+static spinlock_t ptlrpc_last_xid_lock;
+
+/* Initialize the XID for the node.  This is common among all requests on
+ * this node, and only requires the property that it is monotonically
+ * increasing.  It does not need to be sequential.  Since this is also used
+ * as the RDMA match bits, it is important that a single client NOT have
+ * the same match bits for two different in-flight requests, hence we do
+ * NOT want to have an XID per target or similar.
+ *
+ * To avoid an unlikely collision between match bits after a client reboot
+ * (which would cause old to be delivered into the wrong buffer) we initialize
+ * the XID based on the current time, assuming a maximum RPC rate of 1M RPC/s.
+ * If the time is clearly incorrect, we instead use a 62-bit random number.
+ * In the worst case the random number will overflow 1M RPCs per second in
+ * 9133 years, or permutations thereof.
+ */
+#define YEAR_2004 (1ULL << 30)
+void ptlrpc_init_xid(void)
+{
+        time_t now = cfs_time_current_sec();
+
+        spin_lock_init(&ptlrpc_last_xid_lock);
+        if (now < YEAR_2004) {
+                ll_get_random_bytes(&ptlrpc_last_xid, sizeof(ptlrpc_last_xid));
+                ptlrpc_last_xid >>= 2;
+                ptlrpc_last_xid |= (1ULL << 61);
+        } else {
+                ptlrpc_last_xid = (now << 20);
+        }
+}
 
 __u64 ptlrpc_next_xid(void)
 {
@@ -1837,10 +2257,15 @@ __u64 ptlrpc_next_xid(void)
 
 __u64 ptlrpc_sample_next_xid(void)
 {
-        __u64 tmp;
-        spin_lock(&ptlrpc_last_xid_lock);
-        tmp = ptlrpc_last_xid + 1;
-        spin_unlock(&ptlrpc_last_xid_lock);
-        return tmp;
+        if (sizeof(long) < 8) {
+                /* need to avoid possible word tearing on 32-bit systems */
+                __u64 tmp;
+                spin_lock(&ptlrpc_last_xid_lock);
+                tmp = ptlrpc_last_xid + 1;
+                spin_unlock(&ptlrpc_last_xid_lock);
+                return tmp;
+        }
+        /* No need to lock, since returned value is racy anyways */
+        return ptlrpc_last_xid + 1;
 }
 EXPORT_SYMBOL(ptlrpc_sample_next_xid);

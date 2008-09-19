@@ -1,25 +1,47 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2005 Cluster File Systems, Inc. All rights reserved.
- *   Author: PJ Kirner <pjkirner@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is confidential source code owned by Cluster File Systems.
- *   No viewing, modification, compilation, redistribution, or any other
- *   form of use is permitted except through a signed license agreement.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you have not signed such an agreement, then you have no rights to
- *   this file.  Please destroy it immediately and contact CFS.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/klnds/ptllnd/ptllnd.h
+ *
+ * Author: PJ Kirner <pjkirner@clusterfs.com>
  */
 
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
-#ifdef HAVE_KERNEL_CONFIG_H
+#ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
 #include <linux/module.h>
@@ -100,8 +122,8 @@ typedef struct
         int             *kptl_simulation_bitmap;/* simulation bitmap */
 #endif
 
-#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
-        struct ctl_table_header *kptl_sysctl;    /* sysctl interface */
+#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
+        cfs_sysctl_table_header_t *kptl_sysctl; /* sysctl interface */
 #endif
 } kptl_tunables_t;
 
@@ -135,6 +157,10 @@ typedef struct kptl_rx                          /* receive message */
         kptl_peer_t            *rx_peer;        /* pointer to peer */
         char                    rx_space[0];    /* copy of incoming request */
 } kptl_rx_t;
+
+#define PTLLND_POSTRX_DONT_POST    0            /* don't post */
+#define PTLLND_POSTRX_NO_CREDIT    1            /* post: no credits */
+#define PTLLND_POSTRX_PEER_CREDIT  2            /* post: give peer back 1 credit */
 
 typedef struct kptl_rx_buffer_pool
 {
@@ -217,6 +243,7 @@ struct kptl_peer
         atomic_t                peer_refcount;          /* The current refrences */
         enum kptllnd_peer_state peer_state;
         spinlock_t              peer_lock;              /* serialize */
+        struct list_head        peer_noops;             /* PTLLND_MSG_TYPE_NOOP txs */
         struct list_head        peer_sendq;             /* txs waiting for mh handles */
         struct list_head        peer_activeq;           /* txs awaiting completion */
         lnet_process_id_t       peer_id;                /* Peer's LNET id */
@@ -401,8 +428,8 @@ kptllnd_rx_buffer_decref(kptl_rx_buffer_t *rxb)
 /*
  * RX SUPPORT FUNCTIONS
  */
-void kptllnd_rx_done(kptl_rx_t *rx);
 void kptllnd_rx_parse(kptl_rx_t *rx);
+void kptllnd_rx_done(kptl_rx_t *rx, int post_credit);
 
 /*
  * PEER SUPPORT FUNCTIONS
@@ -547,4 +574,3 @@ void kptllnd_dump_ptltrace(void);
 #else
 #define IS_SIMULATION_ENABLED(x)       0
 #endif
-

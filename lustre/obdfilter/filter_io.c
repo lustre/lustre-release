@@ -1,35 +1,48 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  linux/fs/obdfilter/filter_io.c
+ * GPL HEADER START
  *
- *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
- *   Author: Peter Braam <braam@clusterfs.com>
- *   Author: Andreas Dilger <adilger@clusterfs.com>
- *   Author: Phil Schwan <phil@clusterfs.com>
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/obdfilter/filter_io.c
+ *
+ * Author: Peter Braam <braam@clusterfs.com>
+ * Author: Andreas Dilger <adilger@clusterfs.com>
+ * Author: Phil Schwan <phil@clusterfs.com>
  */
 
 #define DEBUG_SUBSYSTEM S_FILTER
 
-#ifdef HAVE_KERNEL_CONFIG_H
+#ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
 #include <linux/module.h>
@@ -80,9 +93,6 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
 {
         struct filter_export_data *fed;
         struct obd_device *obd = exp->exp_obd;
-        static unsigned long last_msg;
-        static int last_count;
-        int mask = D_CACHE;
         ENTRY;
 
         LASSERT_SPIN_LOCKED(&obd->obd_osfs_lock);
@@ -96,20 +106,10 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
 
         fed = &exp->exp_filter_data;
 
-        /* Don't print this to the console the first time it happens, since
-         * it can happen legitimately on occasion, but only rarely. */
-        if (time_after(jiffies, last_msg + 60 * HZ)) {
-                last_count = 0;
-                last_msg = jiffies;
-        }
-        if ((last_count & (-last_count)) == last_count)
-                mask = D_HA /* until bug 3273 is fixed D_WARNING */;
-        last_count++;
-
         /* Add some margin, since there is a small race if other RPCs arrive
          * out-or-order and have already consumed some grant.  We want to
          * leave this here in case there is a large error in accounting. */
-        CDEBUG(oa->o_grant > fed->fed_grant + FILTER_GRANT_CHUNK ? mask:D_CACHE,
+        CDEBUG(D_CACHE,
                "%s: cli %s/%p reports grant: "LPU64" dropped: %u, local: %lu\n",
                obd->obd_name, exp->exp_client_uuid.uuid, exp, oa->o_grant,
                oa->o_dropped, fed->fed_grant);
@@ -124,7 +124,7 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
                 oa->o_dirty = fed->fed_grant + 4 * FILTER_GRANT_CHUNK;
         obd->u.filter.fo_tot_dirty += oa->o_dirty - fed->fed_dirty;
         if (fed->fed_grant < oa->o_dropped) {
-                CDEBUG(D_HA,"%s: cli %s/%p reports %u dropped > fedgrant %lu\n",
+                CDEBUG(D_CACHE,"%s: cli %s/%p reports %u dropped > grant %lu\n",
                        obd->obd_name, exp->exp_client_uuid.uuid, exp,
                        oa->o_dropped, fed->fed_grant);
                 oa->o_dropped = 0;
@@ -258,8 +258,10 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
                 }
         }
 
-        CDEBUG(D_CACHE,"%s: cli %s/%p wants: "LPU64" granting: "LPU64"\n",
-               obd->obd_name, exp->exp_client_uuid.uuid, exp, want, grant);
+        CDEBUG(D_CACHE,
+               "%s: cli %s/%p wants: "LPU64" current grant "LPU64 
+               " granting: "LPU64"\n", obd->obd_name, exp->exp_client_uuid.uuid,
+               exp, want, current_grant, grant);
         CDEBUG(D_CACHE,
                "%s: cli %s/%p tot cached:"LPU64" granted:"LPU64
                " num_exports: %d\n", obd->obd_name, exp->exp_client_uuid.uuid,
@@ -315,7 +317,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
         inode = dentry->d_inode;
 
         obdo_to_inode(inode, oa, OBD_MD_FLATIME);
-        fsfilt_check_slow(obd, now, obd_timeout, "preprw_read setup");
+        fsfilt_check_slow(obd, now, "preprw_read setup");
 
         for (i = 0, lnb = res, rnb = nb; i < obj->ioo_bufcnt;
              i++, rnb++, lnb++) {
@@ -331,15 +333,15 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                  */
                 LASSERT(lnb->page != NULL);
 
-                if (inode->i_size <= rnb->offset)
+                if (i_size_read(inode) <= rnb->offset)
                         /* If there's no more data, abort early.  lnb->rc == 0,
                          * so it's easy to detect later. */
                         break;
                 else
                         filter_alloc_dio_page(obd, inode, lnb);
 
-                if (inode->i_size < lnb->offset + lnb->len - 1)
-                        lnb->rc = inode->i_size - lnb->offset;
+                if (i_size_read(inode) < lnb->offset + lnb->len - 1)
+                        lnb->rc = i_size_read(inode) - lnb->offset;
                 else
                         lnb->rc = lnb->len;
 
@@ -348,7 +350,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                 filter_iobuf_add_page(obd, iobuf, inode, lnb->page);
         }
 
-        fsfilt_check_slow(obd, now, obd_timeout, "start_page_read");
+        fsfilt_check_slow(obd, now, "start_page_read");
 
         rc = filter_direct_io(OBD_BRW_READ, dentry, iobuf,
                               exp, NULL, NULL, NULL);
@@ -356,8 +358,9 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                 GOTO(cleanup, rc);
 
         lprocfs_counter_add(obd->obd_stats, LPROC_FILTER_READ_BYTES, tot_bytes);
-        lprocfs_counter_add(exp->exp_ops_stats, LPROC_FILTER_READ_BYTES,
-                            tot_bytes);
+        if (exp->exp_nid_stats && exp->exp_nid_stats->nid_stats)
+                lprocfs_counter_add(exp->exp_nid_stats->nid_stats,
+                                    LPROC_FILTER_READ_BYTES, tot_bytes);
 
         EXIT;
 
@@ -386,16 +389,16 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
  * right on through.
  *
  * Caller must hold obd_osfs_lock. */
-static int filter_grant_check(struct obd_export *exp, int objcount,
-                              struct fsfilt_objinfo *fso, int niocount,
-                              struct niobuf_remote *rnb,
+static int filter_grant_check(struct obd_export *exp, struct obdo *oa, 
+                              int objcount, struct fsfilt_objinfo *fso, 
+                              int niocount, struct niobuf_remote *rnb,
                               struct niobuf_local *lnb, obd_size *left,
                               struct inode *inode)
 {
         struct filter_export_data *fed = &exp->exp_filter_data;
         int blocksize = exp->exp_obd->u.obt.obt_sb->s_blocksize;
         unsigned long used = 0, ungranted = 0, using;
-        int i, rc = -ENOSPC, obj, n = 0, mask = D_CACHE;
+        int i, rc = -ENOSPC, obj, n = 0;
 
         LASSERT_SPIN_LOCKED(&exp->exp_obd->obd_osfs_lock);
 
@@ -410,7 +413,8 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
                         if (tmp)
                                 bytes += blocksize - tmp;
 
-                        if (rnb[n].flags & OBD_BRW_FROM_GRANT) {
+                        if ((rnb[n].flags & OBD_BRW_FROM_GRANT) &&
+                            (oa->o_valid & OBD_MD_FLGRANT)) {
                                 if (fed->fed_grant < used + bytes) {
                                         CDEBUG(D_CACHE,
                                                "%s: cli %s/%p claims %ld+%d "
@@ -418,7 +422,6 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
                                                exp->exp_obd->obd_name,
                                                exp->exp_client_uuid.uuid, exp,
                                                used, bytes, fed->fed_grant, n);
-                                        mask = D_RPCTRACE;
                                 } else {
                                         used += bytes;
                                         rnb[n].flags |= OBD_BRW_GRANTED;
@@ -428,10 +431,11 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
                                         continue;
                                 }
                         }
-                        if (*left > ungranted) {
+                        if (*left > ungranted + bytes) {
                                 /* if enough space, pretend it was granted */
                                 ungranted += bytes;
                                 rnb[n].flags |= OBD_BRW_GRANTED;
+                                lnb[n].lnb_grant_used = bytes;
                                 CDEBUG(0, "idx %d ungranted=%lu\n",n,ungranted);
                                 rc = 0;
                                 continue;
@@ -457,10 +461,11 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
          * happens in filter_grant_commit() after the writes are done. */
         *left -= ungranted;
         fed->fed_grant -= used;
-        fed->fed_pending += used;
-        exp->exp_obd->u.filter.fo_tot_pending += used;
+        fed->fed_pending += used + ungranted;
+        exp->exp_obd->u.filter.fo_tot_granted += ungranted;
+        exp->exp_obd->u.filter.fo_tot_pending += used + ungranted;
 
-        CDEBUG(mask,
+        CDEBUG(D_CACHE,
                "%s: cli %s/%p used: %lu ungranted: %lu grant: %lu dirty: %lu\n",
                exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, exp, used,
                ungranted, fed->fed_grant, fed->fed_dirty);
@@ -543,7 +548,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         fso.fso_dentry = dentry;
         fso.fso_bufcnt = obj->ioo_bufcnt;
 
-        fsfilt_check_slow(exp->exp_obd, now, obd_timeout, "preprw_write setup");
+        fsfilt_check_slow(exp->exp_obd, now, "preprw_write setup");
 
         /* Don't update inode timestamps if this write is older than a
          * setattr which modifies the timestamps. b=10150 */
@@ -552,29 +557,27 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
          * already exist so we can store the reservation handle there. */
         fmd = filter_fmd_find(exp, obj->ioo_id, obj->ioo_gr);
 
+        LASSERT(oa != NULL);
         spin_lock(&exp->exp_obd->obd_osfs_lock);
-        if (oa) {
-                filter_grant_incoming(exp, oa);
-                if (fmd && fmd->fmd_mactime_xid > oti->oti_xid)
-                        oa->o_valid &= ~(OBD_MD_FLMTIME | OBD_MD_FLCTIME |
-                                         OBD_MD_FLATIME);
-                else
-                        obdo_to_inode(dentry->d_inode, oa, OBD_MD_FLATIME |
-                                      OBD_MD_FLMTIME | OBD_MD_FLCTIME);
-        }
+ 
+        filter_grant_incoming(exp, oa);
+        if (fmd && fmd->fmd_mactime_xid > oti->oti_xid)
+                oa->o_valid &= ~(OBD_MD_FLMTIME | OBD_MD_FLCTIME |
+                                 OBD_MD_FLATIME);
+        else
+                obdo_to_inode(dentry->d_inode, oa, OBD_MD_FLATIME |
+                              OBD_MD_FLMTIME | OBD_MD_FLCTIME);
         cleanup_phase = 3;
 
         left = filter_grant_space_left(exp);
 
-        rc = filter_grant_check(exp, objcount, &fso, niocount, nb, res,
+        rc = filter_grant_check(exp, oa, objcount, &fso, niocount, nb, res,
                                 &left, dentry->d_inode);
 
         /* do not zero out oa->o_valid as it is used in filter_commitrw_write()
          * for setting UID/GID and fid EA in first write time. */
-        if (oa && oa->o_valid & OBD_MD_FLGRANT) {
+        if (oa->o_valid & OBD_MD_FLGRANT)
                 oa->o_grant = filter_grant(exp,oa->o_grant,oa->o_undirty,left);
-                oa->o_valid |= OBD_MD_FLGRANT;
-        }
 
         spin_unlock(&exp->exp_obd->obd_osfs_lock);
         filter_fmd_put(exp, fmd);
@@ -616,13 +619,13 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                 if (lnb->len != CFS_PAGE_SIZE) {
                         __s64 maxidx;
 
-                        maxidx = ((dentry->d_inode->i_size + CFS_PAGE_SIZE - 1) >>
-                                 CFS_PAGE_SHIFT) - 1;
+                        maxidx = ((i_size_read(dentry->d_inode) +
+                                   CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT) - 1;
                         if (maxidx >= lnb->page->index) {
                                 LL_CDEBUG_PAGE(D_PAGE, lnb->page, "write %u @ "
                                                LPU64" flg %x before EOF %llu\n",
                                                lnb->len, lnb->offset,lnb->flags,
-                                               dentry->d_inode->i_size);
+                                               i_size_read(dentry->d_inode));
                                 filter_iobuf_add_page(exp->exp_obd, iobuf,
                                                       dentry->d_inode,
                                                       lnb->page);
@@ -646,12 +649,13 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         rc = filter_direct_io(OBD_BRW_READ, dentry, iobuf, exp,
                               NULL, NULL, NULL);
 
-        fsfilt_check_slow(exp->exp_obd, now, obd_timeout, "start_page_write");
+        fsfilt_check_slow(exp->exp_obd, now, "start_page_write");
 
         lprocfs_counter_add(exp->exp_obd->obd_stats, LPROC_FILTER_WRITE_BYTES,
                             tot_bytes);
-        lprocfs_counter_add(exp->exp_ops_stats, LPROC_FILTER_WRITE_BYTES, 
-                            tot_bytes);
+        if (exp->exp_nid_stats && exp->exp_nid_stats->nid_stats)
+                lprocfs_counter_add(exp->exp_nid_stats->nid_stats,
+                                    LPROC_FILTER_WRITE_BYTES, tot_bytes);
         EXIT;
 cleanup:
         switch(cleanup_phase) {
@@ -698,7 +702,7 @@ void filter_release_read_page(struct filter_obd *filter, struct inode *inode,
         int drop = 0;
 
         if (inode != NULL &&
-            (inode->i_size > filter->fo_readcache_max_filesize))
+            (i_size_read(inode) > filter->fo_readcache_max_filesize))
                 drop = 1;
 
         /* drop from cache like truncate_list_pages() */

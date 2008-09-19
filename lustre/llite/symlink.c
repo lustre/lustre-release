@@ -1,22 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2002 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #include <linux/fs.h>
@@ -36,7 +51,7 @@ static int ll_readlink_internal(struct inode *inode,
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ll_fid fid;
         struct mds_body *body;
-        int rc, symlen = inode->i_size + 1;
+        int rc, symlen = i_size_read(inode) + 1;
         ENTRY;
 
         *request = NULL;
@@ -59,7 +74,7 @@ static int ll_readlink_internal(struct inode *inode,
         body = lustre_msg_buf((*request)->rq_repmsg, REPLY_REC_OFF,
                               sizeof(*body));
         LASSERT(body != NULL);
-        LASSERT_REPSWABBED(*request, REPLY_REC_OFF);
+        LASSERT(lustre_rep_swabbed(*request, REPLY_REC_OFF));
 
         if ((body->valid & OBD_MD_LINKNAME) == 0) {
                 CERROR("OBD_MD_LINKNAME not set on reply\n");
@@ -110,7 +125,7 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
 
         CDEBUG(D_VFSTRACE, "VFS Op\n");
         /* on symlinks lli_open_sem protects lli_symlink_name allocation/data */
-        down(&lli->lli_open_sem);
+        down(&lli->lli_size_sem);
         rc = ll_readlink_internal(inode, &request, &symname);
         if (rc)
                 GOTO(out, rc);
@@ -118,7 +133,7 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
         rc = vfs_readlink(dentry, buffer, buflen, symname);
         ptlrpc_req_finished(request);
  out:
-        up(&lli->lli_open_sem);
+        up(&lli->lli_size_sem);
         RETURN(rc);
 }
 
@@ -132,7 +147,7 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry, struct n
 {
         struct inode *inode = dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         struct lookup_intent *it = ll_nd2it(nd);
 #endif
         struct ptlrpc_request *request;
@@ -140,7 +155,7 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry, struct n
         char *symname;
         ENTRY;
 
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         if (it != NULL) {
                 int op = it->it_op;
                 int mode = it->it_create_mode;
@@ -152,9 +167,9 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry, struct n
 #endif
 
         CDEBUG(D_VFSTRACE, "VFS Op\n");
-        down(&lli->lli_open_sem);
+        down(&lli->lli_size_sem);
         rc = ll_readlink_internal(inode, &request, &symname);
-        up(&lli->lli_open_sem);
+        up(&lli->lli_size_sem);
         if (rc) {
                 path_release(nd); /* Kernel assumes that ->follow_link()
                                      releases nameidata on error */
@@ -199,7 +214,7 @@ static void ll_put_link(struct dentry *dentry, struct nameidata *nd, void *cooki
 struct inode_operations ll_fast_symlink_inode_operations = {
         .readlink       = ll_readlink,
         .setattr        = ll_setattr,
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         .setattr_raw    = ll_setattr_raw,
 #endif
         .follow_link    = ll_follow_link,

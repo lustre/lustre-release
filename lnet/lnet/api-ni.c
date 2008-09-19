@@ -1,22 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.sf.net/projects/lustre/
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #define DEBUG_SUBSYSTEM S_LNET
@@ -65,7 +80,7 @@ lnet_get_networks(void)
                                    "'ip2nets' but not both at once\n");
                 return NULL;
         }
-        
+
         if (*ip2nets != 0) {
                 rc = lnet_parse_ip2nets(&nets, ip2nets);
                 return (rc == 0) ? nets : NULL;
@@ -92,7 +107,7 @@ lnet_get_portals_compatibility(void)
         if (!strcmp(portals_compatibility, "strong")) {
                 return 2;
                 LCONSOLE_WARN("Starting in strong portals-compatible mode\n");
-        } 
+        }
 
         LCONSOLE_ERROR_MSG(0x102, "portals_compatibility=\"%s\" not supported\n",
                            portals_compatibility);
@@ -119,7 +134,7 @@ char *
 lnet_get_routes(void)
 {
         char *str = getenv("LNET_ROUTES");
-        
+
         return (str == NULL) ? "" : str;
 }
 
@@ -160,21 +175,21 @@ lnet_get_networks (void)
         str = default_networks;
         *str = 0;
         sep = "";
-                
+
         list_for_each (tmp, &the_lnet.ln_lnds) {
-                        lnd_t *lnd = list_entry(tmp, lnd_t, lnd_list);
-                        
-                        nob = snprintf(str, len, "%s%s", sep,
-                                       libcfs_lnd2str(lnd->lnd_type));
-                        len -= nob;
-                        if (len < 0) {
-                                /* overflowed the string; leave it where it was */
-                                *str = 0;
-                                break;
-                        }
-                        
-                        str += nob;
-                        sep = ",";
+                lnd_t *lnd = list_entry(tmp, lnd_t, lnd_list);
+
+                nob = snprintf(str, len, "%s%s", sep,
+                               libcfs_lnd2str(lnd->lnd_type));
+                len -= nob;
+                if (len < 0) {
+                        /* overflowed the string; leave it where it was */
+                        *str = 0;
+                        break;
+                }
+
+                str += nob;
+                sep = ",";
         }
 
         return default_networks;
@@ -317,7 +332,7 @@ void lnet_assert_wire_constants (void)
 }
 
 lnd_t *
-lnet_find_lnd_by_type (int type) 
+lnet_find_lnd_by_type (int type)
 {
         lnd_t              *lnd;
         struct list_head   *tmp;
@@ -329,7 +344,7 @@ lnet_find_lnd_by_type (int type)
                 if (lnd->lnd_type == type)
                         return lnd;
         }
-        
+
         return NULL;
 }
 
@@ -341,7 +356,7 @@ lnet_register_lnd (lnd_t *lnd)
         LASSERT (the_lnet.ln_init);
         LASSERT (libcfs_isknown_lnd(lnd->lnd_type));
         LASSERT (lnet_find_lnd_by_type(lnd->lnd_type) == NULL);
-        
+
         list_add_tail (&lnd->lnd_list, &the_lnet.ln_lnds);
         lnd->lnd_refcount = 0;
 
@@ -358,7 +373,7 @@ lnet_unregister_lnd (lnd_t *lnd)
         LASSERT (the_lnet.ln_init);
         LASSERT (lnet_find_lnd_by_type(lnd->lnd_type) == lnd);
         LASSERT (lnd->lnd_refcount == 0);
-        
+
         list_del (&lnd->lnd_list);
         CDEBUG(D_NET, "%s LND unregistered\n", libcfs_lnd2str(lnd->lnd_type));
 
@@ -424,7 +439,7 @@ lnet_freelist_fini (lnet_freelist_t *fl)
         LASSERT (count == fl->fl_nobjs);
 
         LIBCFS_FREE(fl->fl_objs, fl->fl_nobjs * fl->fl_objsize);
-        memset (fl, 0, sizeof (fl));
+        memset (fl, 0, sizeof (*fl));
 }
 
 int
@@ -492,10 +507,10 @@ lnet_create_interface_cookie (void)
 }
 
 int
-lnet_setup_handle_hash (void) 
+lnet_setup_handle_hash (void)
 {
         int       i;
-        
+
         /* Arbitrary choice of hash table size */
 #ifdef __KERNEL__
         the_lnet.ln_lh_hash_size = CFS_PAGE_SIZE / sizeof (struct list_head);
@@ -506,12 +521,12 @@ lnet_setup_handle_hash (void)
                      the_lnet.ln_lh_hash_size * sizeof (struct list_head));
         if (the_lnet.ln_lh_hash_table == NULL)
                 return (-ENOMEM);
-        
+
         for (i = 0; i < the_lnet.ln_lh_hash_size; i++)
                 CFS_INIT_LIST_HEAD (&the_lnet.ln_lh_hash_table[i]);
 
         the_lnet.ln_next_object_cookie = LNET_COOKIE_TYPES;
-        
+
         return (0);
 }
 
@@ -520,13 +535,13 @@ lnet_cleanup_handle_hash (void)
 {
         if (the_lnet.ln_lh_hash_table == NULL)
                 return;
-        
+
         LIBCFS_FREE(the_lnet.ln_lh_hash_table,
                     the_lnet.ln_lh_hash_size * sizeof (struct list_head));
 }
 
 lnet_libhandle_t *
-lnet_lookup_cookie (__u64 cookie, int type) 
+lnet_lookup_cookie (__u64 cookie, int type)
 {
         /* ALWAYS called with LNET_LOCK held */
         struct list_head    *list;
@@ -535,23 +550,23 @@ lnet_lookup_cookie (__u64 cookie, int type)
 
         if ((cookie & (LNET_COOKIE_TYPES - 1)) != type)
                 return (NULL);
-        
+
         hash = ((unsigned int)cookie) % the_lnet.ln_lh_hash_size;
         list = &the_lnet.ln_lh_hash_table[hash];
-        
+
         list_for_each (el, list) {
                 lnet_libhandle_t *lh = list_entry (el, lnet_libhandle_t,
                                                   lh_hash_chain);
-                
+
                 if (lh->lh_cookie == cookie)
                         return (lh);
         }
-        
+
         return (NULL);
 }
 
 void
-lnet_initialise_handle (lnet_libhandle_t *lh, int type) 
+lnet_initialise_handle (lnet_libhandle_t *lh, int type)
 {
         /* ALWAYS called with LNET_LOCK held */
         unsigned int    hash;
@@ -559,7 +574,7 @@ lnet_initialise_handle (lnet_libhandle_t *lh, int type)
         LASSERT (type >= 0 && type < LNET_COOKIE_TYPES);
         lh->lh_cookie = the_lnet.ln_next_object_cookie | type;
         the_lnet.ln_next_object_cookie += LNET_COOKIE_TYPES;
-        
+
         hash = ((unsigned int)lh->lh_cookie) % the_lnet.ln_lh_hash_size;
         list_add (&lh->lh_hash_chain, &the_lnet.ln_lh_hash_table[hash]);
 }
@@ -580,7 +595,7 @@ lnet_init_finalizers(void)
         the_lnet.ln_nfinalizers = num_online_cpus();
 
         LIBCFS_ALLOC(the_lnet.ln_finalizers,
-                     the_lnet.ln_nfinalizers * 
+                     the_lnet.ln_nfinalizers *
                      sizeof(*the_lnet.ln_finalizers));
         if (the_lnet.ln_finalizers == NULL) {
                 CERROR("Can't allocate ln_finalizers\n");
@@ -602,7 +617,7 @@ lnet_fini_finalizers(void)
 {
 #ifdef __KERNEL__
         int    i;
-        
+
         for (i = 0; i < the_lnet.ln_nfinalizers; i++)
                 LASSERT (the_lnet.ln_finalizers[i] == NULL);
 
@@ -614,6 +629,17 @@ lnet_fini_finalizers(void)
 #endif
         LASSERT (list_empty(&the_lnet.ln_finalizeq));
 }
+
+#ifndef __KERNEL__
+/* Temporary workaround to allow uOSS and test programs force server
+ * mode in userspace. See comments near ln_server_mode_flag in
+ * lnet/lib-types.h */
+
+void
+lnet_server_mode() {
+        the_lnet.ln_server_mode_flag = 1;
+}
+#endif
 
 int
 lnet_prepare(lnet_pid_t requested_pid)
@@ -630,15 +656,25 @@ lnet_prepare(lnet_pid_t requested_pid)
         LASSERT ((requested_pid & LNET_PID_USERFLAG) == 0);
         the_lnet.ln_pid = requested_pid;
 #else
-        /* My PID must be unique on this node and flag I'm userspace */
-        the_lnet.ln_pid = getpid() | LNET_PID_USERFLAG;
+        if (the_lnet.ln_server_mode_flag) {/* server case (uOSS) */
+                LASSERT ((requested_pid & LNET_PID_USERFLAG) == 0);
+
+                if (cfs_curproc_uid())/* Only root can run user-space server */
+                        return -EPERM;
+                the_lnet.ln_pid = requested_pid;
+
+        } else {/* client case (liblustre) */
+
+                /* My PID must be unique on this node and flag I'm userspace */
+                the_lnet.ln_pid = getpid() | LNET_PID_USERFLAG;
+        }
 #endif
 
         rc = lnet_descriptor_setup();
         if (rc != 0)
                 goto failed0;
 
-        memset(&the_lnet.ln_counters, 0, 
+        memset(&the_lnet.ln_counters, 0,
                sizeof(the_lnet.ln_counters));
 
         CFS_INIT_LIST_HEAD (&the_lnet.ln_active_msgs);
@@ -667,8 +703,8 @@ lnet_prepare(lnet_pid_t requested_pid)
                 goto failed2;
 
         the_lnet.ln_nportals = MAX_PORTALS;
-        LIBCFS_ALLOC(the_lnet.ln_portals, 
-                     the_lnet.ln_nportals * 
+        LIBCFS_ALLOC(the_lnet.ln_portals,
+                     the_lnet.ln_nportals *
                      sizeof(*the_lnet.ln_portals));
         if (the_lnet.ln_portals == NULL) {
                 rc = -ENOMEM;
@@ -682,7 +718,7 @@ lnet_prepare(lnet_pid_t requested_pid)
         }
 
         return 0;
-        
+
  failed3:
         lnet_fini_finalizers();
  failed2:
@@ -698,7 +734,7 @@ int
 lnet_unprepare (void)
 {
         int       idx;
-        
+
         /* NB no LNET_LOCK since this is the last reference.  All LND instances
          * have shut down already, so it is safe to unlink and free all
          * descriptors, even those that appear committed to a network op (eg MD
@@ -711,7 +747,7 @@ lnet_unprepare (void)
         LASSERT (list_empty(&the_lnet.ln_nis));
         LASSERT (list_empty(&the_lnet.ln_zombie_nis));
         LASSERT (the_lnet.ln_nzombie_nis == 0);
-               
+
         for (idx = 0; idx < the_lnet.ln_nportals; idx++) {
                 LASSERT (list_empty(&the_lnet.ln_portals[idx].ptl_msgq));
 
@@ -780,7 +816,7 @@ lnet_net2ni_locked (__u32 net)
                         return ni;
                 }
         }
-        
+
         return NULL;
 }
 
@@ -788,7 +824,7 @@ int
 lnet_islocalnet (__u32 net)
 {
         lnet_ni_t        *ni;
-        
+
         LNET_LOCK();
         ni = lnet_net2ni_locked(net);
         if (ni != NULL)
@@ -812,7 +848,7 @@ lnet_nid2ni_locked (lnet_nid_t nid)
                         return ni;
                 }
         }
-        
+
         return NULL;
 }
 
@@ -820,7 +856,7 @@ int
 lnet_islocalnid (lnet_nid_t nid)
 {
         lnet_ni_t     *ni;
-        
+
         LNET_LOCK();
         ni = lnet_nid2ni_locked(nid);
         if (ni != NULL)
@@ -837,7 +873,7 @@ lnet_count_acceptor_nis (lnet_ni_t **first_ni)
          * *first_ni so the acceptor can pass it connections "blind" to retain
          * binary compatibility. */
         int                count = 0;
-#ifdef __KERNEL__
+#if defined(__KERNEL__) || defined(HAVE_LIBPTHREAD)
         struct list_head  *tmp;
         lnet_ni_t         *ni;
 
@@ -854,9 +890,10 @@ lnet_count_acceptor_nis (lnet_ni_t **first_ni)
                         count++;
                 }
         }
-        
+
         LNET_UNLOCK();
-#endif
+
+#endif /* defined(__KERNEL__) || defined(HAVE_LIBPTHREAD) */
         return count;
 }
 
@@ -974,7 +1011,7 @@ lnet_startup_lndnis (void)
         int                nicount = 0;
         char              *nets = lnet_get_networks();
 
-        INIT_LIST_HEAD(&nilist);
+        CFS_INIT_LIST_HEAD(&nilist);
 
         if (nets == NULL)
                 goto failed;
@@ -1096,7 +1133,7 @@ lnet_startup_lndnis (void)
                         }
                         libcfs_setnet0alias(lnd->lnd_type);
                 }
-                
+
                 nicount++;
         }
 
@@ -1300,21 +1337,21 @@ LNetCtl(unsigned int cmd, void *arg)
 
         case IOC_LIBCFS_FAIL_NID:
                 return lnet_fail_nid(data->ioc_nid, data->ioc_count);
-                
+
         case IOC_LIBCFS_ADD_ROUTE:
-                rc = lnet_add_route(data->ioc_net, data->ioc_count, 
+                rc = lnet_add_route(data->ioc_net, data->ioc_count,
                                     data->ioc_nid);
                 return (rc != 0) ? rc : lnet_check_routes();
-                
+
         case IOC_LIBCFS_DEL_ROUTE:
                 return lnet_del_route(data->ioc_net, data->ioc_nid);
 
         case IOC_LIBCFS_GET_ROUTE:
-                return lnet_get_route(data->ioc_count, 
-                                      &data->ioc_net, &data->ioc_count, 
+                return lnet_get_route(data->ioc_count,
+                                      &data->ioc_net, &data->ioc_count,
                                       &data->ioc_nid, &data->ioc_flags);
         case IOC_LIBCFS_NOTIFY_ROUTER:
-                return lnet_notify(NULL, data->ioc_nid, data->ioc_flags, 
+                return lnet_notify(NULL, data->ioc_nid, data->ioc_flags,
                                    (time_t)data->ioc_u64[0]);
 
         case IOC_LIBCFS_PORTALS_COMPATIBILITY:
@@ -1324,7 +1361,7 @@ LNetCtl(unsigned int cmd, void *arg)
                 rc = LNetDist(data->ioc_nid, &data->ioc_nid, &data->ioc_u32[1]);
                 if (rc < 0 && rc != -EHOSTUNREACH)
                         return rc;
-                
+
                 data->ioc_u32[0] = rc;
                 return 0;
 
@@ -1362,12 +1399,12 @@ LNetCtl(unsigned int cmd, void *arg)
                         } else {
                                 (void)ni->ni_lnd->lnd_ctl(ni, cmd, arg);
                         }
-                        
+
                         lnet_ni_decref(ni);
                 }
                 return 0;
         }
-                
+
         default:
                 ni = lnet_net2ni(data->ioc_net);
                 if (ni == NULL)
@@ -1399,7 +1436,7 @@ LNetGetId(unsigned int index, lnet_process_id_t *id)
         list_for_each(tmp, &the_lnet.ln_nis) {
                 if (index-- != 0)
                         continue;
-                
+
                 ni = list_entry(tmp, lnet_ni_t, ni_list);
 
                 id->nid = ni->ni_nid;
@@ -1430,7 +1467,7 @@ lnet_ping_target_init(void)
         int               n;
         int               infosz;
         int               i;
-        
+
         for (n = 0; ; n++) {
                 rc = LNetGetId(n, &id);
                 if (rc == -ENOENT)
@@ -1456,7 +1493,7 @@ lnet_ping_target_init(void)
                 LASSERT (rc == 0);
                 the_lnet.ln_ping_info->pi_nid[i] = id.nid;
         }
-        
+
         /* We can have a tiny EQ since we only need to see the unlink event on
          * teardown, which by definition is the last one! */
         rc = LNetEQAlloc(2, LNET_EQ_HANDLER_NONE, &the_lnet.ln_ping_target_eq);
@@ -1697,7 +1734,7 @@ lnet_ping (lnet_process_id_t id, int timeout_ms, lnet_process_id_t *ids, int n_i
         }
 
         if (nob < offsetof(lnet_ping_info_t, pi_nid[0])) {
-                CERROR("%s: Short reply %d(%d min)\n", libcfs_id2str(id), 
+                CERROR("%s: Short reply %d(%d min)\n", libcfs_id2str(id),
                        nob, (int)offsetof(lnet_ping_info_t, pi_nid[0]));
                 goto out_1;
         }
@@ -1706,7 +1743,7 @@ lnet_ping (lnet_process_id_t id, int timeout_ms, lnet_process_id_t *ids, int n_i
                 n_ids = info->pi_nnids;
 
         if (nob < offsetof(lnet_ping_info_t, pi_nid[n_ids])) {
-                CERROR("%s: Short reply %d(%d expected)\n", libcfs_id2str(id), 
+                CERROR("%s: Short reply %d(%d expected)\n", libcfs_id2str(id),
                        nob, (int)offsetof(lnet_ping_info_t, pi_nid[n_ids]));
                 goto out_1;
         }

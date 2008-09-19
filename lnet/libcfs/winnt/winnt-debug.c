@@ -1,19 +1,37 @@
-/* -*- mode: c; c-basic-offset: 4; indent-tabs-mode: nil; -*-
- * vim:expandtab:shiftwidth=4:tabstop=4:
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2004 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or modify it under
- *   the terms of version 2 of the GNU General Public License as published by
- *   the Free Software Foundation. Lustre is distributed in the hope that it
- *   will be useful, but WITHOUT ANY WARRANTY; without even the implied
- *   warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details. You should have received a
- *   copy of the GNU General Public License along with Lustre; if not, write
- *   to the Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139,
- *   USA.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 # define DEBUG_SUBSYSTEM S_LNET
@@ -23,12 +41,12 @@
 #include "tracefile.h"
 
 void lnet_debug_dumpstack(cfs_task_t *tsk)
-{ 
+{
 	return;
 }
 
 cfs_task_t *lnet_current(void)
-{ 
+{
 	return cfs_current();
 }
 
@@ -42,17 +60,21 @@ int lnet_arch_debug_cleanup(void)
 	return 0;
 }
 
-void lnet_run_lbug_upcall(char *file, const char *fn, const int line)
+void libcfs_run_lbug_upcall(const char *file, const char *fn, const int line)
 {
 }
 
-void lbug_with_loc(char *file, const char *func, const int line)
+void libcfs_debug_dumplog(void)
+{
+}
+
+void lbug_with_loc(const char *file, const char *func, const int line)
 {
         libcfs_catastrophe = 1;
         CEMERG("LBUG: pid: %u thread: %#x\n",
-	       (unsigned)cfs_curproc_pid(), (unsigned)PsGetCurrentThread());
-        // portals_debug_dumplog();
-        // portals_run_lbug_upcall(file, func, line);
+               (unsigned)cfs_curproc_pid(), (unsigned)PsGetCurrentThread());
+        libcfs_debug_dumplog();
+        libcfs_run_lbug_upcall(file, func, line);
 }
 
 #if TDI_LIBCFS_DBG

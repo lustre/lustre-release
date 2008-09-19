@@ -1,35 +1,48 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/mds/mds_log.c
+ * GPL HEADER START
  *
- *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
- *   Author: Peter Braam <braam@clusterfs.com>
- *   Author: Andreas Dilger <adilger@clusterfs.com>
- *   Author: Phil Schwan <phil@clusterfs.com>
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/mds/mds_log.c
+ *
+ * Author: Peter Braam <braam@clusterfs.com>
+ * Author: Andreas Dilger <adilger@clusterfs.com>
+ * Author: Phil Schwan <phil@clusterfs.com>
  */
 
 #define DEBUG_SUBSYSTEM S_MDS
 
-#ifdef HAVE_KERNEL_CONFIG_H
+#ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
 #include <linux/module.h>
@@ -39,9 +52,7 @@
 #include <obd_class.h>
 #include <lustre_fsfilt.h>
 #include <lustre_mds.h>
-#include <lustre_commit_confd.h>
 #include <lustre_log.h>
-
 #include "mds_internal.h"
 
 static int mds_llog_origin_add(struct llog_ctxt *ctxt,
@@ -56,6 +67,8 @@ static int mds_llog_origin_add(struct llog_ctxt *ctxt,
 
         lctxt = llog_get_context(lov_obd, ctxt->loc_idx);
         rc = llog_add(lctxt, rec, lsm, logcookies, numcookies);
+        llog_ctxt_put(lctxt);
+
         RETURN(rc);
 }
 
@@ -72,6 +85,7 @@ static int mds_llog_origin_connect(struct llog_ctxt *ctxt, int count,
 
         lctxt = llog_get_context(lov_obd, ctxt->loc_idx);
         rc = llog_connect(lctxt, count, logid, gen, uuid);
+        llog_ctxt_put(lctxt);
         RETURN(rc);
 }
 
@@ -86,6 +100,7 @@ static int mds_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *ls
 
         lctxt = llog_get_context(lov_obd, ctxt->loc_idx);
         rc = llog_cancel(lctxt, lsm, count, cookies, flags);
+        llog_ctxt_put(lctxt);
         RETURN(rc);
 }
 
@@ -119,6 +134,7 @@ int mds_log_op_unlink(struct obd_device *obd,
         ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
         rc = llog_add(ctxt, &lur->lur_hdr, lsm, logcookies,
                       cookies_size / sizeof(struct llog_cookie));
+        llog_ctxt_put(ctxt);
 
         OBD_FREE(lur, sizeof(*lur));
 out:
@@ -162,6 +178,8 @@ int mds_log_op_setattr(struct obd_device *obd, struct inode *inode,
         ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
         rc = llog_add(ctxt, &lsr->lsr_hdr, lsm, logcookies,
                       cookies_size / sizeof(struct llog_cookie));
+
+        llog_ctxt_put(ctxt);
 
         OBD_FREE(lsr, sizeof(*lsr));
  out:

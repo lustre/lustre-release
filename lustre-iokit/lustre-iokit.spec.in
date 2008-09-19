@@ -10,14 +10,14 @@ Release: %{release}
 License: GPL
 Group: Applications/System
 Source: %{name}-%{version}.tar.gz
-URL: http://clusterfs.com/
+URL: http://www.sun.com/software/products/lustre/index.xml
 BuildRoot: /var/tmp/%{name}-%{version}-root
 Provides: %{name} = %{version}
 BuildArch: noarch
 Requires: python > 2.2, sg3_utils
 
 %description
-This package includes four tools:
+This package includes five tools:
 sgpdd-survey:
 A test of the 'bare metal' performance, bypassing as much of the kernel as we can. Uses the sgp_dd utility. 
 
@@ -31,6 +31,9 @@ or remote obdecho instances.
 ost-survey 
 This survey tests the client-to-disk performance of individual OSTs, and 
 ranks then for comparison.
+
+stats-collect
+This script will collect IO stats on a defined set of nodes. 
 
 ior-survey:
 A script to run the IOR benchmark. The latest version can be downloaded from http://www.llnl.gov/asci/purple/benchmarks/limited/ior/
@@ -49,20 +52,26 @@ make install DESTDIR=$RPM_BUILD_ROOT
 %files
 /usr/bin/ior-survey
 /usr/bin/parse-ior
-/usr/bin/create-echoclient
+/usr/bin/libecho
 /usr/bin/obdfilter-survey
-/usr/bin/obparse
+/usr/bin/plot-obdfilter
 /usr/bin/plot-ost
 /usr/bin/ost-survey
 /usr/bin/sgpdd-survey
-/usr/bin/parse-sgpdd
+/usr/bin/plot-sgpdd
+/usr/bin/lstats.sh
+/usr/bin/gather_stats_everywhere.sh
+/usr/bin/config.sh
 %doc obdfilter-survey/README.obdfilter-survey
 %doc ior-survey/README.ior-survey
 %doc ost-survey/README.ost-survey
 %doc sgpdd-survey/README.sgpdd-survey
+%doc stats-collect/README.lstats.sh
 
 
 %changelog
+* Tue Jul 24 2007 Cliff White
+- Added stats-collect
 * Mon Apr 9 2007 Cliff White
 - Merged with existing, changed to .in format.
 * Thu Oct 4 2006  Kalpak Shah

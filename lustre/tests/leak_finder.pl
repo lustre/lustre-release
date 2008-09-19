@@ -14,7 +14,7 @@ my $max = 0;
 while ($line = <>) {
     $debug_line++;
     my ($file, $func, $lno, $name, $size, $addr, $type);
-    if ($line =~ m/^.*(\.).*\((.*):(\d+):(.*)\(\)\) (k|v|slab-)(.*) '(.*)': (\d+) at (.*) \(tot (.*)\).*$/){
+    if ($line =~ m/^.*(\.).*\((.*):(\d+):(.*)\(\)\) (k|v|slab-)(.*) '(.*)': (\d+) at ([\da-f]+)/){
         $file = $2;
         $lno  = $3;
         $func = $4;
@@ -22,7 +22,6 @@ while ($line = <>) {
         $name = $7;
         $size = $8;
         $addr = $9;
-        $tot  = $10;
 
 	# we can't dump the log after portals has exited, so skip "leaks"
 	# from memory freed in the portals module unloading.
@@ -68,10 +67,6 @@ while ($line = <>) {
 
         delete $memory->{$addr};
         $total -= $size;
-    }
-    if ($total != int($tot)) {
-        print "kernel total $tot != my total $total\n";
-        $total = $tot;
     }
 }
 

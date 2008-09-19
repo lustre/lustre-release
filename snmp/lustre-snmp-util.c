@@ -1,23 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2005 Cluster File Systems, Inc.
- *   Author: PJ Kirner <pjkirner@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * snmp/lustre-snmp-util.c
+ *
+ * Author: PJ Kirner <pjkirner@clusterfs.com>
  */
 
 /*
@@ -33,12 +51,15 @@
  */ 
 
 #include <sys/types.h>
+#if defined (__linux__)
 #include <sys/vfs.h>
+#endif
 #include <dirent.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <string.h>
 #include "lustre-snmp-util.h"
 
 /*********************************************************************
@@ -341,9 +362,9 @@ int read_counter64(const char *file_path, counter64 *c64,int factor)
 
     if ((ret_val = read_string(file_path, file_data,sizeof(file_data))) == SUCCESS) {
         tmp = atoll(file_data) * factor;
-        c64->low = (ulong) (0x0FFFFFFFF & tmp);
+        c64->low = (unsigned long) (0x0FFFFFFFF & tmp);
         tmp >>= 32; /* Shift right by 4 bytes */
-        c64->high = (ulong) (0x0FFFFFFFF & tmp);
+        c64->high = (unsigned long) (0x0FFFFFFFF & tmp);
     }
     return ret_val;
 }
@@ -650,3 +671,99 @@ cleanup_and_exit:
     return ret_val;
 };
 
+/**************************************************************************
+ * Function:   stats_values
+ *
+ * Description: Setup nb_sample, min, max, sum and sum_square stats values
+                for name_value from filepath.
+ *
+ * Input:  filepath, name_value,
+ *         pointer to nb_sample, min, max, sum, sum_square
+ *
+ * Output: SUCCESS or ERROR on failure
+ *
+ **************************************************************************/
+int stats_values(char * filepath,char * name_value, unsigned long long * nb_sample, unsigned long long * min, unsigned long long * max, unsigned long long * sum, unsigned long long * sum_square)
+{
+  FILE * statfile;
+  char line[MAX_LINE_SIZE];
+  int nbReadValues = 0;
+
+  if( (statfile=fopen(filepath,"r")) == NULL) {
+    report("stats_value() failed to open %s",filepath);
+    return ERROR;
+  }
+/*find the good line for name_value*/
+  do {
+    if( fgets(line,MAX_LINE_SIZE,statfile) == NULL ) {
+      report("stats_values() failed to find %s values in %s stat_file",name_value,statfile);
+      goto error_out;
+    }
+  } while ( strstr(line,name_value) == NULL );
+/*get stats*/
+  if((nbReadValues=sscanf(line,"%*s %llu %*s %*s %llu %llu %llu %llu",nb_sample,min,max,sum,sum_square)) == 5) {
+    goto success_out;
+  } else if( nbReadValues == 1 && *nb_sample == 0) {
+    *min = *max = *sum = *sum_square = 0;
+    goto success_out;
+  } else {
+    report("stats_values() failed to read stats_values for %s value in %s stat_file",name_value,statfile);
+    goto error_out;
+  }
+
+success_out :
+  fclose(statfile);
+  return SUCCESS;
+error_out :
+  fclose(statfile);
+  return ERROR;
+}
+
+/**************************************************************************
+ * Function:   mds_stats_values
+ *
+ * Description: Setup nb_sample, min, max, sum and sum_square stats values
+                for mds stats name_value .
+ *
+ * Input:  name_value,
+ *         pointer to nb_sample, min, max, sum, sum_square
+ *
+ * Output: SUCCESS or ERROR on failure
+ *
+ **************************************************************************/
+extern int mds_stats_values(char * name_value, unsigned long long * nb_sample, unsigned long long * min, unsigned long long * max, unsigned long long * sum, unsigned long long * sum_square)
+{
+  unsigned long long tmp_nb_sample=0,tmp_min=0,tmp_max=0,tmp_sum=0,tmp_sum_square=0;
+/*we parse the three MDS stat files and sum values*/
+  if( stats_values(FILEPATH_MDS_SERVER_STATS,name_value,&tmp_nb_sample,&tmp_min,&tmp_max,&tmp_sum,&tmp_sum_square) == ERROR ) {
+    return ERROR;
+  } else {
+    *nb_sample=tmp_nb_sample;
+    *min=tmp_min;
+    *max=tmp_max;
+    *sum=tmp_sum;
+    *sum_square=tmp_sum_square;
+  }
+
+  if( stats_values(FILEPATH_MDS_SERVER_READPAGE_STATS,name_value,&tmp_nb_sample,&tmp_min,&tmp_max,&tmp_sum,&tmp_sum_square) == ERROR ) {
+    return ERROR;
+  } else {
+    *nb_sample += tmp_nb_sample;
+    *min += tmp_min;
+    *max += tmp_max;
+    *sum += tmp_sum;
+    *sum_square += tmp_sum_square;
+  }
+
+  if( stats_values(FILEPATH_MDS_SERVER_SETATTR_STATS,name_value,&tmp_nb_sample,&tmp_min,&tmp_max,&tmp_sum,&tmp_sum_square) == ERROR ) {
+    return ERROR;
+  } else {
+    *nb_sample += tmp_nb_sample;
+    *min += tmp_min;
+    *max += tmp_max;
+    *sum += tmp_sum;
+    *sum_square += tmp_sum_square;
+  }
+  
+  return SUCCESS;
+}

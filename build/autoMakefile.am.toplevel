@@ -17,19 +17,19 @@ tags:
 	rm -f $(top_srcdir)/TAGS
 	ETAGSF=`etags --version | grep -iq exuberant && \
 		echo "-I __initdata,__exitdata,EXPORT_SYMBOL"`; \
-	find $(top_srcdir) -name '*.[hc]' |grep -v linux-stage |xargs etags $$ETAGSF -a
+	find $(top_srcdir) -name .pc -prune -o -name '*.[hc]' |xargs etags $$ETAGSF -a
 
 	rm -f $(top_srcdir)/tags
 	CTAGSF=`ctags --version | grep -iq exuberant && \
 		echo "-I __initdata,__exitdata,EXPORT_SYMBOL"`; \
-	find $(top_srcdir) -name '*.[hc]' |grep -v linux-stage |xargs ctags $$CTAGSF -a
+	find $(top_srcdir) -name .pc -prune -o -name '*.[hc]' |xargs ctags $$CTAGSF -a
 
 if MODULES
 sources: all-sources
 
-all-sources:
+all-sources: $(EXTRA_SOURCES)
 	for dir in $(SOURCES_SUBDIRS) ; do \
-		$(MAKE) sources -C $$dir ; \
+		$(MAKE) sources -C $$dir || exit $$? ; \
 	done
 
 if LINUX
@@ -51,9 +51,7 @@ endif # !LINUX25
 modules: $(DEP) all-sources
 	$(MAKE) $(ARCH_UM) CC="$(CC)" -C $(LINUX_OBJ)		     \
 	-f $(PWD)/build/Makefile LUSTRE_LINUX_CONFIG=$(LINUX_CONFIG) \
-        LINUXINCLUDE='$(EXTRA_LNET_INCLUDE) -Iinclude 		     \
-        $$(if $$(KBUILD_SRC),-Iinclude2 -I$$(srctree)/include) 	     \
-        -include include/linux/autoconf.h' 			     \
+        LINUXINCLUDE='$(EXTRA_LNET_INCLUDE) -Iinclude $$(if $$(KBUILD_SRC),-Iinclude2 -I$$(srctree)/include) -include include/linux/autoconf.h' \
 	$(MODULE_TARGET)=$(PWD) -o tmp_include_depends -o scripts -o \
 	include/config/MARKER $@
 endif # LINUX
@@ -61,6 +59,8 @@ endif # LINUX
 endif # MODULES
 
 dist-hook:
+	rm -f $(distdir)/ldiskfs/*.spec
+	rm -f $(distdir)/lustre-iokit/*.spec
 	find $(distdir) -name .deps -o \
 			-name CVS -o \
 			-name .svn -o \
@@ -89,6 +89,7 @@ rpms:
 	for subdir in $(RPM_SUBDIRS) ; do				\
 		echo "Making rpms in $$subdir";				\
 		(cd $$subdir && $(MAKE) $(AM_MAKEFLAGS) rpms);		\
+		echo "Finished rpms in $$subdir";			\
 	done;								\
 	$(MAKE) $(AM_MAKEFLAGS) rpms-real
 
@@ -96,6 +97,7 @@ srpm:
 	for subdir in $(RPM_SUBDIRS) ; do				\
 		echo "Making srpm in $$subdir";				\
 		(cd $$subdir && $(MAKE) $(AM_MAKEFLAGS) srpm);		\
+		echo "Finished rpms in $$subdir";			\
 	done;								\
 	$(MAKE) $(AM_MAKEFLAGS) srpm-real
 

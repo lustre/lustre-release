@@ -1,24 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/liblustre/file.c
+ *
  * Lustre Light file operations
- *
- *  Copyright (c) 2002-2004 Cluster File Systems, Inc.
- *
- *   This file is part of Lustre, http://www.lustre.org.
- *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
- *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #define DEBUG_SUBSYSTEM S_LLITE
@@ -32,10 +49,10 @@
 #include <sys/queue.h>
 #include <fcntl.h>
 
+#include <sysio.h>
 #ifdef HAVE_XTIO_H
 #include <xtio.h>
 #endif
-#include <sysio.h>
 #include <fs.h>
 #include <mount.h>
 #include <inode.h>
@@ -82,14 +99,14 @@ void llu_prepare_mdc_op_data(struct mdc_op_data *data,
 
         if (i1) {
                 ll_i2gids(data->suppgids, i1, i2);
-                ll_inode2fid(&data->fid1, i1);
+                llu_inode2fid(&data->fid1, i1);
         }else {
                 ll_i2gids(data->suppgids, i2, i1);
-                ll_inode2fid(&data->fid1, i2);
+                llu_inode2fid(&data->fid1, i2);
         }
 
         if (i2)
-                ll_inode2fid(&data->fid2, i2);
+                llu_inode2fid(&data->fid2, i2);
         else
                 memset(&data->fid2, 0, sizeof(data->fid2));
 
@@ -97,6 +114,7 @@ void llu_prepare_mdc_op_data(struct mdc_op_data *data,
         data->namelen = namelen;
         data->create_mode = mode;
         data->mod_time = CURRENT_TIME;
+        data->data = NULL;
 }
 
 void obdo_refresh_inode(struct inode *dst,
@@ -143,7 +161,8 @@ int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it)
 
         body = lustre_msg_buf(req->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);                 /* reply already checked out */
-        LASSERT_REPSWABBED(req, DLM_REPLY_REC_OFF);       /* and swabbed down */
+        /* and swabbed down */
+        LASSERT(lustre_rep_swabbed(req, DLM_REPLY_REC_OFF));
 
         /* already opened? */
         if (lli->lli_open_count++)
@@ -278,7 +297,7 @@ int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         }
         LASSERT(rc >= sizeof(*lsm));
 
-        oa = obdo_alloc();
+        OBDO_ALLOC(oa);
         if (oa == NULL)
                 GOTO(out_free_memmd, rc = -ENOMEM);
 
@@ -299,7 +318,7 @@ int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         }
 
         rc = obd_destroy(llu_i2obdexp(dir), oa, lsm, &oti, NULL);
-        obdo_free(oa);
+        OBDO_FREE(oa);
         if (rc)
                 CERROR("obd destroy objid 0x"LPX64" error %d\n",
                        lsm->lsm_object_id, rc);
@@ -317,6 +336,7 @@ int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode)
         struct ptlrpc_request *req = NULL;
         struct obd_client_handle *och = &fd->fd_mds_och;
         struct obdo obdo;
+        struct mdc_op_data data = { { 0 } };
         int rc, valid;
         ENTRY;
 
@@ -341,7 +361,8 @@ int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode)
                 obdo.o_flags = MDS_BFLAG_UNCOMMITTED_WRITES;
                 obdo.o_valid |= OBD_MD_FLFLAGS;
         }
-        rc = mdc_close(mdc_exp, &obdo, och, &req);
+        data.fid1 = lli->lli_fid;
+        rc = mdc_close(mdc_exp, &data, &obdo, och, &req);
         if (rc == EAGAIN) {
                 /* We are the last writer, so the MDS has instructed us to get
                  * the file size and any write cookies, then close again. */
@@ -401,8 +422,32 @@ int llu_file_release(struct inode *inode)
 int llu_iop_close(struct inode *inode)
 {
         int rc;
+        struct ldlm_res_id res_id =
+                { .name = {llu_i2stat(inode)->st_ino,
+                 (__u64)llu_i2info(inode)->lli_st_generation, LDLM_FLOCK} };
+        struct lustre_handle lockh = {0};
 
         liblustre_wait_event(0);
+
+        /* If we have posix locks on this file - clear all of those */
+        if (ldlm_lock_match(
+                      class_exp2obd(llu_i2mdcexp(inode))->obd_namespace,
+                      LDLM_FL_BLOCK_GRANTED|LDLM_FL_TEST_LOCK|LDLM_FL_CBPENDING,
+                      &res_id, LDLM_FLOCK, NULL, LCK_PR|LCK_PW, &lockh)) {
+                struct file_lock lock;
+                lock.fl_type = F_UNLCK;
+                lock.fl_flags = FL_POSIX;
+                lock.fl_start = 0;
+                lock.fl_end = OFFSET_MAX;
+                lock.fl_pid = getpid();
+                lock.fl_notify = NULL;
+                lock.fl_insert = NULL;
+                lock.fl_remove = NULL;
+                lock.fl_owner = NULL;
+                lock.fl_file = NULL;
+
+                llu_file_flock(inode, F_SETLK, &lock);
+        }
 
         rc = llu_file_release(inode);
         if (rc) {
@@ -410,7 +455,7 @@ int llu_iop_close(struct inode *inode)
         }
         /* if open count == 0 && stale_flag is set, should we
          * remove the inode immediately? */
-        liblustre_wait_event(0);
+        liblustre_wait_idle();
         return 0;
 }
 

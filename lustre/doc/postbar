@@ -1,6 +1,8 @@
 #! /usr/bin/perl
 # postbar - Massage chbar.sh output into valid LaTeX
-# Copyright (C) 2002  Cluster File Systems, Inc.
+# Copyright  2008 Sun Microsystems, Inc. All rights reserved
+# Use is subject to license terms.
+#
 # Gord Eagle <gord@clusterfs.com>, 2002-08-10
 
 my $progname = $0;

@@ -1,24 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/liblustre/rw.c
+ *
  * Lustre Light block IO
- *
- *  Copyright (c) 2002-2004 Cluster File Systems, Inc.
- *
- *   This file is part of Lustre, http://www.lustre.org.
- *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
- *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #define DEBUG_SUBSYSTEM S_LLITE
@@ -33,10 +50,10 @@
 #include <fcntl.h>
 #include <sys/uio.h>
 
+#include <sysio.h>
 #ifdef HAVE_XTIO_H
 #include <xtio.h>
 #endif
-#include <sysio.h>
 #include <fs.h>
 #include <mount.h>
 #include <inode.h>
@@ -93,8 +110,7 @@ static int llu_lock_to_stripe_offset(struct inode *inode, struct ldlm_lock *lock
         struct {
                 char name[16];
                 struct ldlm_lock *lock;
-                struct lov_stripe_md *lsm;
-        } key = { .name = "lock_to_stripe", .lock = lock, .lsm = lsm };
+        } key = { .name = KEY_LOCK_TO_STRIPE, .lock = lock };
         __u32 stripe, vallen = sizeof(stripe);
         int rc;
         ENTRY;
@@ -103,7 +119,7 @@ static int llu_lock_to_stripe_offset(struct inode *inode, struct ldlm_lock *lock
                 RETURN(0);
 
         /* get our offset in the lov */
-        rc = obd_get_info(exp, sizeof(key), &key, &vallen, &stripe);
+        rc = obd_get_info(exp, sizeof(key), &key, &vallen, &stripe, lsm);
         if (rc != 0) {
                 CERROR("obd_get_info: rc = %d\n", rc);
                 LBUG();
@@ -112,7 +128,7 @@ static int llu_lock_to_stripe_offset(struct inode *inode, struct ldlm_lock *lock
         RETURN(stripe);
 }
 
-static int llu_extent_lock_callback(struct ldlm_lock *lock,
+int llu_extent_lock_cancel_cb(struct ldlm_lock *lock,
                                     struct ldlm_lock_desc *new, void *data,
                                     int flag)
 {
@@ -179,7 +195,7 @@ static int llu_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         struct inode *inode = llu_inode_from_lock(lock);
         struct llu_inode_info *lli;
         struct ost_lvb *lvb;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*lvb) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*lvb) };
         int rc, stripe = 0;
         ENTRY;
 
@@ -196,10 +212,8 @@ static int llu_glimpse_callback(struct ldlm_lock *lock, void *reqp)
                 stripe = llu_lock_to_stripe_offset(inode, lock);
 
         rc = lustre_pack_reply(req, 2, size, NULL);
-        if (rc) {
-                CERROR("lustre_pack_reply: %d\n", rc);
+        if (rc)
                 GOTO(iput, rc);
-        }
 
         lvb = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*lvb));
         lvb->lvb_size = lli->lli_smd->lsm_oinfo[stripe]->loi_kms;
@@ -226,7 +240,7 @@ int llu_glimpse_size(struct inode *inode)
         struct intnl_stat *st = llu_i2stat(inode);
         struct llu_sb_info *sbi = llu_i2sbi(inode);
         struct lustre_handle lockh = { 0 };
-        struct obd_enqueue_info einfo = { 0 };
+        struct ldlm_enqueue_info einfo = { 0 };
         struct obd_info oinfo = { { { 0 } } };
         struct ost_lvb lvb;
         int rc;
@@ -242,8 +256,7 @@ int llu_glimpse_size(struct inode *inode)
 
         einfo.ei_type = LDLM_EXTENT;
         einfo.ei_mode = LCK_PR;
-        einfo.ei_flags = LDLM_FL_HAS_INTENT;
-        einfo.ei_cb_bl = llu_extent_lock_callback;
+        einfo.ei_cb_bl = osc_extent_blocking_cb;
         einfo.ei_cb_cp = ldlm_completion_ast;
         einfo.ei_cb_gl = llu_glimpse_callback;
         einfo.ei_cbdata = inode;
@@ -251,6 +264,7 @@ int llu_glimpse_size(struct inode *inode)
         oinfo.oi_policy.l_extent.end = OBD_OBJECT_EOF;
         oinfo.oi_lockh = &lockh;
         oinfo.oi_md = lli->lli_smd;
+        oinfo.oi_flags = LDLM_FL_HAS_INTENT;
 
         rc = obd_enqueue_rqset(sbi->ll_osc_exp, &oinfo, &einfo);
         if (rc) {
@@ -259,15 +273,18 @@ int llu_glimpse_size(struct inode *inode)
         }
 
         inode_init_lvb(inode, &lvb);
-        obd_merge_lvb(sbi->ll_osc_exp, lli->lli_smd, &lvb, 0);
+        rc = obd_merge_lvb(sbi->ll_osc_exp, lli->lli_smd, &lvb, 0);
         st->st_size = lvb.lvb_size;
         st->st_blocks = lvb.lvb_blocks;
+        /* handle st_blocks overflow gracefully */
+        if (st->st_blocks < lvb.lvb_blocks)
+                st->st_blocks = ~0UL;
         st->st_mtime = lvb.lvb_mtime;
         st->st_atime = lvb.lvb_atime;
         st->st_ctime = lvb.lvb_ctime;
 
-        CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: %llu\n",
-               (long long)st->st_size, (long long)st->st_blocks);
+        CDEBUG(D_DLMTRACE, "glimpse: size: "LPU64", blocks: "LPU64"\n",
+               (__u64)st->st_size, (__u64)st->st_blocks);
 
         RETURN(rc);
 }
@@ -279,7 +296,7 @@ int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
 {
         struct llu_sb_info *sbi = llu_i2sbi(inode);
         struct intnl_stat *st = llu_i2stat(inode);
-        struct obd_enqueue_info einfo = { 0 };
+        struct ldlm_enqueue_info einfo = { 0 };
         struct obd_info oinfo = { { { 0 } } };
         struct ost_lvb lvb;
         int rc;
@@ -299,8 +316,7 @@ int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
 
         einfo.ei_type = LDLM_EXTENT;
         einfo.ei_mode = mode;
-        einfo.ei_flags = ast_flags;
-        einfo.ei_cb_bl = llu_extent_lock_callback;
+        einfo.ei_cb_bl = osc_extent_blocking_cb;
         einfo.ei_cb_cp = ldlm_completion_ast;
         einfo.ei_cb_gl = llu_glimpse_callback;
         einfo.ei_cbdata = inode;
@@ -308,8 +324,9 @@ int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
         oinfo.oi_policy = *policy;
         oinfo.oi_lockh = lockh;
         oinfo.oi_md = lsm;
+        oinfo.oi_flags = ast_flags;
 
-        rc = obd_enqueue(sbi->ll_osc_exp, &oinfo, &einfo);
+        rc = obd_enqueue(sbi->ll_osc_exp, &oinfo, &einfo, NULL);
         *policy = oinfo.oi_policy;
         if (rc > 0)
                 rc = -EIO;
@@ -485,7 +502,9 @@ static int llu_queue_pio(int cmd, struct llu_io_group *group,
                 rc = obd_prep_async_page(exp, lsm, NULL, page,
                                          (obd_off)page->index << CFS_PAGE_SHIFT,
                                          &llu_async_page_ops,
-                                         llap, &llap->llap_cookie);
+                                         llap, &llap->llap_cookie,
+                                         1 /* no cache in liblustre at all */,
+                                         NULL);
                 if (rc) {
                         LASSERT(rc < 0);
                         llap->llap_cookie = NULL;
@@ -556,7 +575,8 @@ struct llu_io_group * get_io_group(struct inode *inode, int maxpages,
         if (!llap_cookie_size)
                 llap_cookie_size = obd_prep_async_page(llu_i2obdexp(inode),
                                                        NULL, NULL, NULL, 0,
-                                                       NULL, NULL, NULL);
+                                                       NULL, NULL, NULL, 0,
+                                                       NULL);
 
         OBD_ALLOC(group, LLU_IO_GROUP_SIZE(maxpages));
         if (!group)
@@ -735,7 +755,7 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
 
         err = oig_wait(iogroup->lig_oig);
         if (err) {
-                CERROR("sync error %d, data corruption possible\n", err);
+                CERROR("%s error: %s\n", is_read ? "read" : "write", strerror(-err));
                 GOTO(err_unlock, err);
         }
 

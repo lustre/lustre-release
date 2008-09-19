@@ -58,7 +58,7 @@
 #include "sysio-symbols.h"
 
 #ifdef HAVE_LUSTRE_HACK
-#include <syscall.h>
+#include <sys/syscall.h>
 #include <native.h>
 #endif
 

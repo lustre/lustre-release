@@ -1,26 +1,43 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2004 Cluster File Systems, Inc.
- * Author: Nikita Danilov <nikita@clusterfs.com>
+ * GPL HEADER START
  *
- * This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * Lustre is free software; you can redistribute it and/or modify it under the
- * terms of version 2 of the GNU General Public License as published by the
- * Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- * Lustre is distributed in the hope that it will be useful, but WITHOUT ANY
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
- * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- * You should have received a copy of the GNU General Public License along
- * with Lustre; if not, write to the Free Software Foundation, Inc., 675 Mass
- * Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/include/libcfs/linux/linux-time.h
  *
  * Implementation of portable time API for Linux (kernel and user-level).
  *
+ * Author: Nikita Danilov <nikita@clusterfs.com>
  */
 
 #ifndef __LIBCFS_LINUX_LINUX_TIME_H__
@@ -73,7 +90,7 @@
 #define ONE_MILLION 1000000
 
 #ifdef __KERNEL__
-#ifdef HAVE_KERNEL_CONFIG_H
+#ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
 #include <linux/module.h>
@@ -281,12 +298,17 @@ static inline int cfs_time_before_64(__u64 t1, __u64 t2)
         return (__s64)t2 - (__s64)t1 > 0;
 }
 
+static inline int cfs_time_beforeq_64(__u64 t1, __u64 t2)
+{
+        return (__s64)t2 - (__s64)t1 >= 0;
+}
+
 #else
 #define cfs_time_current_64 cfs_time_current
 #define cfs_time_add_64     cfs_time_add
 #define cfs_time_shift_64   cfs_time_shift
 #define cfs_time_before_64  cfs_time_before
-
+#define cfs_time_beforeq_64 cfs_time_beforeq
 #endif
 
 /*
@@ -302,7 +324,11 @@ static inline int cfs_time_before_64(__u64 t1, __u64 t2)
 /*
  * Liblustre. time(2) based implementation.
  */
+
+#define CFS_TIME_T              "%lu"
+
 #include <libcfs/user-time.h>
+
 #endif /* __KERNEL__ */
 
 /* __LIBCFS_LINUX_LINUX_TIME_H__ */

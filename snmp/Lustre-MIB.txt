@@ -12,14 +12,13 @@ LUSTRE-MIB DEFINITIONS ::= BEGIN
 
 lustreMIB MODULE-IDENTITY
     LAST-UPDATED "200505150100Z"
-    ORGANIZATION "Cluster Filesystems, Inc."
+    ORGANIZATION "Sun Microsystems, Inc."
     CONTACT-INFO
-    "         info@clusterfs.com
+    "         http://www.lustre.org/
 
-    Postal: Cluster File Systems, Inc.
-            110 Capen St
-            Medford, MA 02155
-            USA"
+    Postal: Sun Microsystems, Inc.,
+	    4150 Network Circle, Santa Clara,
+            CA 95054 USA"
 
     DESCRIPTION
         "Management information for the Lustre parallel filesystem."
@@ -439,6 +438,13 @@ mddFreeFiles OBJECT-TYPE
         "The number of unused files on a Meta Data Device."
     ::= { mddEntry 7 }
   
+mdsNbSampledReq OBJECT-TYPE
+    SYNTAX Counter64
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The number of sampled requests ."
+    ::= { metaDataServers 3 }
     
 --============================================================================
 --

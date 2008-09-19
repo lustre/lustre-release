@@ -1,24 +1,40 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2003 Los Alamos National Laboratory (LANL)
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org/
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
  */
-
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ *
+ * Copyright (c) 2003 Los Alamos National Laboratory (LANL)
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ */
 
 /*
  *	This file implements the nal cb functions
@@ -43,7 +59,7 @@ gmnal_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
 
 	LASSERT (msg->gmm_type == GMNAL_MSG_IMMEDIATE);
         LASSERT (iov == NULL || kiov == NULL);
-        
+
         if (rx->rx_recv_nob < nob) {
                 CERROR("Short message from nid %s: got %d, need %d\n",
                        libcfs_nid2str(msg->gmm_srcnid), rx->rx_recv_nob, nob);
@@ -133,7 +149,7 @@ gmnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 else
                         lnet_copy_kiov2flat(len, buffer, 0,
                                             niov, kiov, offset, len);
-                
+
                 tx->tx_msgnob += len;
                 tx->tx_large_nob = 0;
         } else {
@@ -149,7 +165,7 @@ gmnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
         LASSERT(tx->tx_lntmsg == NULL);
         tx->tx_lntmsg = lntmsg;
-        
+
         spin_lock(&gmni->gmni_tx_lock);
 
         list_add_tail(&tx->tx_list, &gmni->gmni_buf_txq);

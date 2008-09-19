@@ -2,40 +2,30 @@
 
 set -e
 
-# bug number:  6088 10124 10800
-ALWAYS_EXCEPT="8    15c   17    $REPLAY_DUAL_EXCEPT"
+# bug number:  10124
+ALWAYS_EXCEPT="15c   $REPLAY_DUAL_EXCEPT"
 
+SAVE_PWD=$PWD
 PTLDEBUG=${PTLDEBUG:--1}
-LUSTRE=${LUSTRE:-`dirname $0`/..}
+LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+SETUP=${SETUP:-""}
+CLEANUP=${CLEANUP:-""}
+MOUNT_2=${MOUNT_2:-"yes"}
 . $LUSTRE/tests/test-framework.sh
 
 init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-SETUP=${SETUP:-"setup"}
-CLEANUP=${CLEANUP:-"cleanup"}
+#
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="1 2 3 4 5 14"
 
 build_test_filter
 
-cleanup() {
-    stopall
-}
+cleanup_and_setup_lustre
+assert_DIR
+rm -rf $DIR/[df][0-9]*
 
-if [ "$ONLY" == "cleanup" ]; then
-    sysctl -w lnet.debug=0
-    cleanup
-    exit
-fi
-
-setup() {
-    cleanup
-    formatall
-    setupall
-    mount_client $MOUNT2
-}
-
-$SETUP
 [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
 
 test_1() {
@@ -103,10 +93,8 @@ run_test 4 "|X| mkdir adir (-EEXIST), mkdir adir/bdir "
 test_5() {
     # multiclient version of replay_single.sh/test_8
     mcreate $MOUNT1/a
-    multiop $MOUNT2/a o_tSc &
+    multiop_bg_pause $MOUNT2/a o_tSc || return  1
     pid=$!
-    # give multiop a chance to open
-    sleep 1 
     rm -f $MOUNT1/a
     replay_barrier mds
     kill -USR1 $pid
@@ -121,12 +109,10 @@ run_test 5 "open, unlink |X| close"
 
 test_6() {
     mcreate $MOUNT1/a
-    multiop $MOUNT2/a o_c &
+    multiop_bg_pause $MOUNT2/a o_c || return 1
     pid1=$!
-    multiop $MOUNT1/a o_c &
+    multiop_bg_pause $MOUNT1/a o_c || return 1
     pid2=$!
-    # give multiop a chance to open
-    sleep 1 
     rm -f $MOUNT1/a
     replay_barrier mds
     kill -USR1 $pid1
@@ -156,9 +142,9 @@ test_9() {
     mcreate $MOUNT1/$tfile-1
     mcreate $MOUNT2/$tfile-2
     # drop first reint reply
-    sysctl -w lustre.fail_loc=0x80000119
+    do_facet mds lctl set_param fail_loc=0x80000119
     fail mds
-    sysctl -w lustre.fail_loc=0
+    do_facet mds lctl set_param fail_loc=0
 
     rm $MOUNT1/$tfile-[1,2] || return 1
 
@@ -172,9 +158,9 @@ test_10() {
     munlink $MOUNT1/$tfile-1
     mcreate $MOUNT2/$tfile-2
     # drop first reint reply
-    sysctl -w lustre.fail_loc=0x80000119
+    do_facet mds lctl set_param fail_loc=0x80000119
     fail mds
-    sysctl -w lustre.fail_loc=0
+    do_facet mds lctl set_param fail_loc=0
 
     checkstat $MOUNT1/$tfile-1 && return 1
     checkstat $MOUNT1/$tfile-2 || return 2
@@ -192,11 +178,13 @@ test_11() {
     mcreate $MOUNT2/$tfile-4
     mcreate $MOUNT1/$tfile-5
     # drop all reint replies for a while
-    sysctl -w lustre.fail_loc=0x0119
+    do_facet mds lctl set_param fail_loc=0x0119
+    # note that with this fail_loc set, facet_failover df will fail
     facet_failover mds
     #sleep for while, let both clients reconnect and timeout
     sleep $((TIMEOUT * 2))
-    sysctl -w lustre.fail_loc=0
+    do_facet mds lctl set_param fail_loc=0
+    client_df
     while [ -z "$(ls $MOUNT1/$tfile-[1-5] 2>/dev/null)" ]; do
 	sleep 5
 	echo -n "."
@@ -211,15 +199,14 @@ run_test 11 "both clients timeout during replay"
 test_12() {
     replay_barrier mds
 
-    multiop $DIR/$tfile mo_c &
+    multiop_bg_pause $DIR/$tfile mo_c || return 1
     MULTIPID=$!
-    sleep 5
 
 #define OBD_FAIL_LDLM_ENQUEUE            0x302
-    sysctl -w lustre.fail_loc=0x80000302
+    do_facet mds lctl set_param fail_loc=0x80000302
     facet_failover mds
-    df $MOUNT || return 1
-    sysctl -w lustre.fail_loc=0
+    do_facet mds lctl set_param fail_loc=0
+    df $MOUNT || { kill -USR1 $MULTIPID  && return 1; }
 
     ls $DIR/$tfile
     kill -USR1 $MULTIPID || return 3
@@ -232,9 +219,8 @@ test_12() {
 run_test 12 "open resend timeout"
 
 test_13() {
-    multiop $DIR/$tfile mo_c &
+    multiop_bg_pause $DIR/$tfile mo_c || return 1
     MULTIPID=$!
-    sleep 5
 
     replay_barrier mds
 
@@ -242,10 +228,10 @@ test_13() {
     wait $MULTIPID || return 4
 
     # drop close 
-    sysctl -w lustre.fail_loc=0x80000115
+    do_facet mds lctl set_param fail_loc=0x80000115
     facet_failover mds
+    do_facet mds lctl set_param fail_loc=0
     df $MOUNT || return 1
-    sysctl -w lustre.fail_loc=0
 
     ls $DIR/$tfile
     $CHECKSTAT -t file $DIR/$tfile || return 2
@@ -263,19 +249,19 @@ test_14() {
     umount $MOUNT2
 
     facet_failover mds
-    # expect failover to fail
-    df $MOUNT && return 1
+    # expect recovery to fail due to missing client 2
+    df $MOUNT1 && return 1
     sleep 1
 
-    # first 25 files should have been replayed 
+    # first 25 files should have been replayed
     unlinkmany $MOUNT1/$tfile- 25 || return 2
 
-    zconf_mount `hostname` $MOUNT2
+    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
     return 0
 }
 run_test 14 "timeouts waiting for lost client during replay"
 
-test_15() {
+test_15a() {	# was test_15
     replay_barrier mds
     createmany -o $MOUNT1/$tfile- 25
     createmany -o $MOUNT2/$tfile-2- 1
@@ -287,88 +273,23 @@ test_15() {
     unlinkmany $MOUNT1/$tfile- 25 || return 2
     [ -e $MOUNT1/$tfile-2-0 ] && error "$tfile-2-0 exists"
 
-    zconf_mount `hostname` $MOUNT2
+    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
     return 0
 }
-run_test 15 "timeout waiting for lost client during replay, 1 client completes"
-
-test_15a() {
-    local ost_last_id=""
-    local osc_last_id=""
-    
-    replay_barrier mds
-    echo "data" > "$MOUNT2/${tfile}-m2"
-
-    umount $MOUNT2
-    facet_failover mds
-    df $MOUNT || return 1
-    
-    ost_last_id=`cat /proc/fs/lustre/obdfilter/*/last_id`
-    mds_last_id=`cat /proc/fs/lustre/osc/*mds*/last_id`
-    
-    echo "Ids after MDS<->OST synchonizing"
-    echo "--------------------------------"
-    echo "MDS last_id:"
-    echo $mds_last_id
-    echo "OST last_id:"
-    echo $ost_last_id
-
-    local i=0
-    echo $ost_last_id | while read id; do
-	ost_ids[$i]=$id
-	((i++))
-    done
-    
-    i=0
-    echo $mds_last_id | while read id; do
-	mds_ids[$i]=$id
-	((i++))
-    done
-    
-    local arr_len=${#mds_ids[*]}
-    for ((i=0;i<$arr_len;i++)); do
-	    mds_id=${mds_ids[i]}
-	    ost_id=${ost_ids[i]}
-	    
-	    test $mds_id -ge $ost_id || {
-		echo "MDS last id ($mds_id) is smaller than OST one ($ost_id)"
-		return 2
-	    }
-    done
-
-    zconf_mount `hostname` $MOUNT2
-    return 0
-}
-#CROW run_test 15a "OST clear orphans - synchronize ids on MDS and OST"
-
-test_15b() {
-    replay_barrier mds
-    echo "data" > "$MOUNT2/${tfile}-m2"
-    umount $MOUNT2
-
-    do_facet ost1 "sysctl -w lustre.fail_loc=0x80000802"
-    facet_failover mds
-
-    df $MOUNT || return 1
-    do_facet ost1 "sysctl -w lustre.fail_loc=0"
-    
-    zconf_mount `hostname` $MOUNT2
-    return 0
-}
-#CROW run_test 15b "multiple delayed OST clear orphans"
+run_test 15a "timeout waiting for lost client during replay, 1 client completes"
 
 test_15c() {
     replay_barrier mds
     for ((i = 0; i < 2000; i++)); do
-	echo "data" > "$MOUNT2/${tfile}-$i" || error "create ${tfile}-$i failed"
+        echo "data" > "$MOUNT2/${tfile}-$i" || error "create ${tfile}-$i failed"
     done
-    
+
     umount $MOUNT2
     facet_failover mds
 
     df $MOUNT || return 1
-    
-    zconf_mount `hostname` $MOUNT2
+
+    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
     return 0
 }
 run_test 15c "remove multiple OST orphans"
@@ -386,7 +307,7 @@ test_16() {
 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
 
-    zconf_mount `hostname` $MOUNT2
+    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
     return 0
 
 }
@@ -407,7 +328,7 @@ test_17() {
 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
 
-    zconf_mount `hostname` $MOUNT2
+    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
     return 0
 
 }
@@ -424,12 +345,12 @@ test_18() { # bug 3822 - evicting client with enqueued lock
     statmany -s $MOUNT1/$tdir/f 1 500 &
     OPENPID=$!
     NOW=`date +%s`
-    do_facet mds sysctl -w lustre.fail_loc=0x8000030b  # hold enqueue
+    do_facet mds lctl set_param fail_loc=0x8000030b  # hold enqueue
     sleep 1
 #define OBD_FAIL_LDLM_BL_CALLBACK        0x305
-    do_facet client sysctl -w lustre.fail_loc=0x80000305  # drop cb, evict
+    do_facet client lctl set_param fail_loc=0x80000305  # drop cb, evict
     cancel_lru_locks mdc
-    usleep 500 # wait to ensure first client is one that will be evicted
+    sleep 0.500s # wait to ensure first client is one that will be evicted
     openfile -f O_RDONLY $MOUNT2/$tdir/f0
     wait $OPENPID
     dmesg | grep "entering recovery in server" && \
@@ -448,10 +369,35 @@ test_19() { # Bug 10991 - resend of open request does not fail assertion.
 }
 run_test 19 "resend of open request"
 
-if [ "$ONLY" != "setup" ]; then
-   equals_msg test complete, cleaning up
-   SLEEP=$((`date +%s` - $NOW))
-   [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP
-   $CLEANUP
-fi
-echo "$0: completed"
+test_20() { #16389
+    BEFORE=`date +%s`
+    replay_barrier mds
+    touch $MOUNT1/a
+    touch $MOUNT2/b
+    umount $MOUNT2
+    facet_failover mds
+    df $MOUNT1 || return 1
+    rm $MOUNT1/a
+    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
+    TIER1=$((`date +%s` - BEFORE))
+    BEFORE=`date +%s`
+    replay_barrier mds
+    touch $MOUNT1/a
+    touch $MOUNT2/b
+    umount $MOUNT2
+    facet_failover mds
+    df $MOUNT1 || return 1
+    rm $MOUNT1/a
+    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
+    TIER2=$((`date +%s` - BEFORE))
+    [ $TIER2 -ge $((TIER1 * 2)) ] && \
+        error "recovery time is growing $TIER2 > $TIER1"
+    return 0
+}
+run_test 20 "recovery time is not increasing"
+
+equals_msg `basename $0`: test complete, cleaning up
+SLEEP=$((`date +%s` - $NOW))
+[ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP
+check_and_cleanup_lustre
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true

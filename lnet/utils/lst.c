@@ -1,9 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
- * 
- * Author: Liang Zhen <liangzhen@clusterfs.com>
  *
- * This file is part of Lustre, http://www.lustre.org
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/selftest/conctl.c
+ *
+ * Author: Liang Zhen <liangzhen@clusterfs.com>
  */
 
 #define _GNU_SOURCE
@@ -1636,7 +1668,7 @@ lst_print_lnet_stat(char *name, int bwrt, int rdwr, int type)
                         i == 0 ? "Rates" : "Bandwidth", name);
 
                 for (j = start2; j <= end2; j++) {
-                        fprintf(stdout, "[%c] ", j == 0 ? 'W' : 'R');
+                        fprintf(stdout, "[%c] ", j == 0 ? 'R' : 'W');
 
                         if ((type & 1) != 0) {
                                 fprintf(stdout, i == 0 ? "Avg: %-8.0f RPC/s " :
@@ -3106,7 +3138,7 @@ static command_t lst_cmdlist[] = {
          "Usage: lst stat [--bw] [--rate] [--read] [--write] [--max] [--min] [--avg] "
          " [--timeout #] [--delay #] GROUP [GROUP]"                                     },
         {"show_error",          jt_lst_show_error,      NULL,
-         "Usage: lst show_error [--group NAME] | [--nodes IDS]"                         },
+         "Usage: lst show_error NAME | IDS ..."                                         },
         {"add_batch",           jt_lst_add_batch,       NULL,
          "Usage: lst add_batch NAME"                                                    },
         {"run",                 jt_lst_start_batch,     NULL,

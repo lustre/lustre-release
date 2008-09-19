@@ -11,7 +11,6 @@ Requirements
   raw device support
   sg3_utils
 
-
 Overview
 --------
 
@@ -40,7 +39,6 @@ Raw device:
 	"raw" utility (including that shipped with RHEL4U4.)
 
 You may not mix raw and SCSI devices in the test specification.
-
 
 Running
 -------
@@ -72,7 +70,6 @@ I/O buffers, "ENOMEM" is printed.
 If not all the sgp_dd instances successfully reported a bandwidth number
 "failed" is printed.
 
-
 Visualising Results
 -------------------
 
@@ -83,9 +80,7 @@ with varying queue depth.  If the series (varying numbers of concurrent
 regions) all seem to land on top of each other, it shows the device is
 phased by seeks at the given record size.
 
-
-The included script "parse.pl" will process output files and create
-.csv files for spreadsheet import
-
-The "plot-sgpdd.pl" script plots the results directly using gnuplot.
+The included script "plot-sgpdd" will process output files and create
+.dat (similar to csv) files for spreadsheet import. It also plots the 
+results directly using gnuplot and creates .png files.
 

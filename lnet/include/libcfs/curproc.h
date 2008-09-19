@@ -1,22 +1,45 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/include/libcfs/curproc.h
+ *
  * Lustre curproc API declaration
  *
- * Copyright (C) 2004 Cluster File Systems, Inc.
  * Author: Nikita Danilov <nikita@clusterfs.com>
- *
- * This file is part of Lustre, http://www.lustre.org.
- *
- * Lustre is free software; you can redistribute it and/or modify it under the
- * terms of version 2 of the GNU General Public License as published by the
- * Free Software Foundation. Lustre is distributed in the hope that it will be
- * useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
- * Public License for more details. You should have received a copy of the GNU
- * General Public License along with Lustre; if not, write to the Free
- * Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
+
 #ifndef __LIBCFS_CURPROC_H__
 #define __LIBCFS_CURPROC_H__
 
@@ -47,9 +70,38 @@ char  *cfs_curproc_comm(void);
  *
  * cfs_kernel_cap_t
  */
-cfs_kernel_cap_t cfs_curproc_cap_get(void);
-void cfs_curproc_cap_set(cfs_kernel_cap_t cap);
 #endif
+
+typedef __u32 cfs_cap_t;
+
+#define CFS_CAP_CHOWN                   0
+#define CFS_CAP_DAC_OVERRIDE            1
+#define CFS_CAP_DAC_READ_SEARCH         2
+#define CFS_CAP_FOWNER                  3
+#define CFS_CAP_FSETID                  4
+#define CFS_CAP_LINUX_IMMUTABLE         9
+#define CFS_CAP_SYS_ADMIN              21
+#define CFS_CAP_SYS_BOOT               23
+#define CFS_CAP_SYS_RESOURCE           24
+
+#define CFS_CAP_FS_MASK ((1 << CFS_CAP_CHOWN) |                 \
+                         (1 << CFS_CAP_DAC_OVERRIDE) |          \
+                         (1 << CFS_CAP_DAC_READ_SEARCH) |       \
+                         (1 << CFS_CAP_FOWNER) |                \
+                         (1 << CFS_CAP_FSETID ) |               \
+                         (1 << CFS_CAP_LINUX_IMMUTABLE) |       \
+                         (1 << CFS_CAP_SYS_ADMIN) |             \
+                         (1 << CFS_CAP_SYS_BOOT) |              \
+                         (1 << CFS_CAP_SYS_RESOURCE))
+
+void cfs_cap_raise(cfs_cap_t cap);
+void cfs_cap_lower(cfs_cap_t cap);
+int cfs_cap_raised(cfs_cap_t cap);
+void cfs_kernel_cap_pack(cfs_kernel_cap_t kcap, cfs_cap_t *cap);
+void cfs_kernel_cap_unpack(cfs_kernel_cap_t *kcap, cfs_cap_t cap);
+cfs_cap_t cfs_curproc_cap_pack(void);
+void cfs_curproc_cap_unpack(cfs_cap_t cap);
+int cfs_capable(cfs_cap_t cap);
 
 /* __LIBCFS_CURPROC_H__ */
 #endif

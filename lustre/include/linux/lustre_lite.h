@@ -1,5 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #ifndef _LINUX_LL_H
@@ -30,6 +62,34 @@
 #include <linux/lustre_compat25.h>
 #include <linux/pagemap.h>
 
+#ifdef HAVE_PERCPU_COUNTER
+#include <linux/percpu_counter.h>
+
+typedef struct percpu_counter lcounter_t;
+
+#define lcounter_read(counter)          (int)percpu_counter_read(counter)
+#define lcounter_inc(counter)           percpu_counter_inc(counter)
+#define lcounter_dec(counter)           percpu_counter_dec(counter)
+
+#ifdef HAVE_PERCPU_2ND_ARG
+# define lcounter_init(counter)          percpu_counter_init(counter, 0)
+#else
+# define lcounter_init(counter)          percpu_counter_init(counter)
+#endif
+
+#define lcounter_destroy(counter)       percpu_counter_destroy(counter)
+
+#else
+typedef struct { atomic_t count; } lcounter_t;
+
+#define lcounter_read(counter)          atomic_read(&counter->count)
+#define lcounter_inc(counter)           atomic_inc(&counter->count)
+#define lcounter_dec(counter)           atomic_dec(&counter->count)
+#define lcounter_init(counter)          atomic_set(&counter->count, 0)
+#define lcounter_destroy(counter)       
+
+#endif /* if defined HAVE_PERCPU_COUNTER */
+
 /* lprocfs.c */
 enum {
          LPROC_LL_DIRTY_HITS = 0,
@@ -50,6 +110,8 @@ enum {
          LPROC_LL_FSYNC,
          LPROC_LL_SETATTR,
          LPROC_LL_TRUNC,
+         LPROC_LL_LOCKLESS_TRUNC,
+         LPROC_LL_FLOCK,
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
          LPROC_LL_GETATTR,
@@ -60,9 +122,13 @@ enum {
          LPROC_LL_ALLOC_INODE,
          LPROC_LL_SETXATTR,
          LPROC_LL_GETXATTR,
-
+         LPROC_LL_LISTXATTR,
+         LPROC_LL_REMOVEXATTR,
+         LPROC_LL_INODE_PERM,
          LPROC_LL_DIRECT_READ,
          LPROC_LL_DIRECT_WRITE,
+         LPROC_LL_LOCKLESS_READ,
+         LPROC_LL_LOCKLESS_WRITE,
          LPROC_LL_FILE_OPCODES
 };
 

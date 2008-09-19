@@ -1,25 +1,44 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2004 Cluster File Systems, Inc.
- *   Author: Eric Barton <eric@bartonsoftware.com>
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ *
  * Copyright (C) 2006 Myricom, Inc.
- *   Author: Scott Atchley <atchley at myri.com>
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * lnet/klnds/mxlnd/mxlnd.c
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
- *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Author: Eric Barton <eric@bartonsoftware.com>
+ * Author: Scott Atchley <atchley at myri.com>
  */
 
 #include "mxlnd.h"
@@ -122,11 +141,9 @@ mxlnd_ctx_init(struct kmx_ctx *ctx)
         ctx->mxc_state = MXLND_CTX_IDLE;
         /* ignore mxc_global_list */
         if (ctx->mxc_list.next != NULL && !list_empty(&ctx->mxc_list)) {
-                if (ctx->mxc_peer != NULL)
-                        spin_lock(&ctx->mxc_lock);
+                if (ctx->mxc_peer != NULL) spin_lock(&ctx->mxc_lock);
                 list_del_init(&ctx->mxc_list);
-                if (ctx->mxc_peer != NULL)
-                        spin_unlock(&ctx->mxc_lock);
+                if (ctx->mxc_peer != NULL) spin_unlock(&ctx->mxc_lock);
         }
         /* ignore mxc_rx_list */
         /* ignore mxc_lock */
@@ -388,6 +405,10 @@ mxlnd_parse_line(char *line)
         host->mxh_addr = ((ip[0]<<24)|(ip[1]<<16)|(ip[2]<<8)|ip[3]);
         len = strlen(hostname);
         MXLND_ALLOC(host->mxh_hostname, len + 1);
+        if (host->mxh_hostname == NULL) {
+                mxlnd_host_free(host);
+                return -ENOMEM;
+        }
         memset(host->mxh_hostname, 0, len + 1);
         strncpy(host->mxh_hostname, hostname, len);
         host->mxh_board = board;
@@ -433,6 +454,7 @@ mxlnd_parse_hosts(char *filename)
         s32             allocd          = 0;
         loff_t          offset          = 0;
         struct file     *filp           = NULL;
+        struct inode    *inode          = NULL;
         char            *buf            = NULL;
         s32             buf_off         = 0;
         char            *sep            = NULL;
@@ -446,7 +468,13 @@ mxlnd_parse_hosts(char *filename)
                 return -1;
         }
 
-        size = (s32) filp->f_dentry->d_inode->i_size;
+        inode = filp->f_dentry->d_inode;
+        if (!S_ISREG(inode->i_mode)) {
+                CERROR("%s is not a regular file\n", filename);
+                return -1;
+        }
+
+        size = (s32) inode->i_size;
         if (size < MXLND_BUFSIZE) bufsize = size;
         allocd = bufsize;
         MXLND_ALLOC(buf, allocd + 1);
@@ -608,8 +636,8 @@ mxlnd_thread_start(int (*fn)(void *arg), void *arg)
         init_completion(&kmxlnd_data.kmx_completions[i]);
 
         pid = kernel_thread (fn, arg, 0);
-        if (pid <= 0) {
-                CERROR("mx_thread_start() failed with %d\n", pid);
+        if (pid < 0) {
+                CERROR("kernel_thread() failed with %d\n", pid);
                 atomic_dec(&kmxlnd_data.kmx_nthreads);
         }
         return pid;
@@ -638,7 +666,8 @@ mxlnd_thread_stop(long id)
 void
 mxlnd_shutdown (lnet_ni_t *ni)
 {
-        int             i               = 0;
+        int     i               = 0;
+        int     nthreads        = 2 + *kmxlnd_tunables.kmx_n_waitd;
 
         LASSERT (ni == kmxlnd_data.kmx_ni);
         LASSERT (ni->ni_data == &kmxlnd_data);
@@ -666,7 +695,7 @@ mxlnd_shutdown (lnet_ni_t *ni)
 
                 CDEBUG(D_NET, "waiting on threads\n");
                 /* wait for threads to complete */
-                for (i = 0; i < MXLND_NCOMPLETIONS; i++) {
+                for (i = 0; i < nthreads; i++) {
                         wait_for_completion(&kmxlnd_data.kmx_completions[i]);
                 }
                 LASSERT(atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
@@ -745,9 +774,10 @@ mxlnd_shutdown (lnet_ni_t *ni)
 int
 mxlnd_startup (lnet_ni_t *ni)
 {
-        int                     i       = 0;
-        int                     ret     = 0;
-        struct timeval          tv;
+        int             i               = 0;
+        int             ret             = 0;
+        int             nthreads        = 2; /* for timeoutd and tx_queued */
+        struct timeval  tv;
 
         LASSERT (ni->ni_lnd == &the_kmxlnd);
 
@@ -762,6 +792,8 @@ mxlnd_startup (lnet_ni_t *ni)
         /* reserve 1/2 of tx for connect request messages */
         ni->ni_maxtxcredits = *kmxlnd_tunables.kmx_ntx / 2;
         ni->ni_peertxcredits = *kmxlnd_tunables.kmx_credits;
+        if (ni->ni_maxtxcredits < ni->ni_peertxcredits)
+                ni->ni_maxtxcredits = ni->ni_peertxcredits;
 
         PORTAL_MODULE_USE;
         memset (&kmxlnd_data, 0, sizeof (kmxlnd_data));
@@ -799,7 +831,7 @@ mxlnd_startup (lnet_ni_t *ni)
         spin_lock_init (&kmxlnd_data.kmx_rxs_lock);
         INIT_LIST_HEAD (&kmxlnd_data.kmx_rx_idle);
         spin_lock_init (&kmxlnd_data.kmx_rx_idle_lock);
-        
+
         kmxlnd_data.kmx_init = MXLND_INIT_DATA;
         /*****************************************************/
 
@@ -830,20 +862,17 @@ mxlnd_startup (lnet_ni_t *ni)
 
         /* start threads */
 
+        nthreads += *kmxlnd_tunables.kmx_n_waitd;
         MXLND_ALLOC (kmxlnd_data.kmx_completions,
-                      MXLND_NCOMPLETIONS * sizeof(struct completion));
+                     nthreads * sizeof(struct completion));
         if (kmxlnd_data.kmx_completions == NULL) {
-                CERROR("failed to alloc kmxlnd_data.kmx_completions");
+                CERROR("failed to alloc kmxlnd_data.kmx_completions\n");
                 goto failed;
         }
         memset(kmxlnd_data.kmx_completions, 0, 
-               MXLND_NCOMPLETIONS * sizeof(struct completion));
+               nthreads * sizeof(struct completion));
 
         {
-                int     i               = 0;
-                if (MXLND_N_SCHED > *kmxlnd_tunables.kmx_n_waitd) {
-                        *kmxlnd_tunables.kmx_n_waitd = MXLND_N_SCHED;
-                }
                 CDEBUG(D_NET, "using %d %s in mx_wait_any()\n",
                         *kmxlnd_tunables.kmx_n_waitd, 
                         *kmxlnd_tunables.kmx_n_waitd == 1 ? "thread" : "threads");
@@ -852,6 +881,8 @@ mxlnd_startup (lnet_ni_t *ni)
                         ret = mxlnd_thread_start(mxlnd_request_waitd, (void*)((long)i));
                         if (ret < 0) {
                                 CERROR("Starting mxlnd_request_waitd[%d] failed with %d\n", i, ret);
+                                kmxlnd_data.kmx_shutdown = 1;
+                                mx_wakeup(kmxlnd_data.kmx_endpt);
                                 for (--i; i >= 0; i--) {
                                         wait_for_completion(&kmxlnd_data.kmx_completions[i]);
                                 }
@@ -865,6 +896,8 @@ mxlnd_startup (lnet_ni_t *ni)
                 ret = mxlnd_thread_start(mxlnd_tx_queued, (void*)((long)i++));
                 if (ret < 0) {
                         CERROR("Starting mxlnd_tx_queued failed with %d\n", ret);
+                        kmxlnd_data.kmx_shutdown = 1;
+                        mx_wakeup(kmxlnd_data.kmx_endpt);
                         for (--i; i >= 0; i--) {
                                 wait_for_completion(&kmxlnd_data.kmx_completions[i]);
                         }
@@ -876,6 +909,9 @@ mxlnd_startup (lnet_ni_t *ni)
                 ret = mxlnd_thread_start(mxlnd_timeoutd, (void*)((long)i++));
                 if (ret < 0) {
                         CERROR("Starting mxlnd_timeoutd failed with %d\n", ret);
+                        kmxlnd_data.kmx_shutdown = 1;
+                        mx_wakeup(kmxlnd_data.kmx_endpt);
+                        up(&kmxlnd_data.kmx_tx_queue_sem);
                         for (--i; i >= 0; i--) {
                                 wait_for_completion(&kmxlnd_data.kmx_completions[i]);
                         }
@@ -888,27 +924,27 @@ mxlnd_startup (lnet_ni_t *ni)
 
         kmxlnd_data.kmx_init = MXLND_INIT_THREADS;
         /*****************************************************/
-        
+
         kmxlnd_data.kmx_init = MXLND_INIT_ALL;
         CDEBUG(D_MALLOC, "startup complete (kmx_mem_used %ld)\n", kmxlnd_data.kmx_mem_used);
-        
+
         return 0;
 failed:
         CERROR("mxlnd_startup failed\n");
-        mxlnd_shutdown (ni);    
+        mxlnd_shutdown(ni);
         return (-ENETDOWN);
 }
 
 static int mxlnd_init(void)
 {
         lnet_register_lnd(&the_kmxlnd);
-	return 0;
+        return 0;
 }
 
 static void mxlnd_exit(void)
 {
         lnet_unregister_lnd(&the_kmxlnd);
-	return;
+        return;
 }
 
 module_init(mxlnd_init);

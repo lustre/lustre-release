@@ -1,28 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2003 Cluster File Systems, Inc.
- *   Author: Phil Schwan <phil@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- * A kernel module which tests the llog API from the OBD setup function.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/obdclass/llog_test.c
+ *
+ * Author: Phil Schwan <phil@clusterfs.com>
  */
 
 #ifndef EXPORT_SYMTAB
@@ -94,6 +107,7 @@ static int llog_test_1(struct obd_device *obd, char *name)
         rc = llog_create(ctxt, &llh, NULL, name);
         if (rc) {
                 CERROR("1a: llog_create with name %s failed: %d\n", name, rc);
+                llog_ctxt_put(ctxt);
                 RETURN(rc);
         }
         llog_init_handle(llh, LLOG_F_IS_PLAIN, &uuid);
@@ -104,6 +118,7 @@ static int llog_test_1(struct obd_device *obd, char *name)
  out:
         CWARN("1b: close newly-created log\n");
         rc2 = llog_close(llh);
+        llog_ctxt_put(ctxt);
         if (rc2) {
                 CERROR("1b: close log %s failed: %d\n", name, rc2);
                 if (rc == 0)
@@ -126,18 +141,18 @@ static int llog_test_2(struct obd_device *obd, char *name,
         rc = llog_create(ctxt, llh, NULL, name);
         if (rc) {
                 CERROR("2a: re-open log with name %s failed: %d\n", name, rc);
-                RETURN(rc);
+                GOTO(out, rc);
         }
         llog_init_handle(*llh, LLOG_F_IS_PLAIN, &uuid);
 
         if ((rc = verify_handle("2", *llh, 1)))
-                RETURN(rc);
+                GOTO(out, rc);
 
         CWARN("2b: create a log without specified NAME & LOGID\n");
         rc = llog_create(ctxt, &loghandle, NULL, NULL);
         if (rc) {
                 CERROR("2b: create log failed\n");
-                RETURN(rc);
+                GOTO(out, rc);
         }
         llog_init_handle(loghandle, LLOG_F_IS_PLAIN, &uuid);
         logid = loghandle->lgh_id;
@@ -147,7 +162,7 @@ static int llog_test_2(struct obd_device *obd, char *name,
         rc = llog_create(ctxt, &loghandle, &logid, NULL);
         if (rc) {
                 CERROR("2b: re-open log by LOGID failed\n");
-                RETURN(rc);
+                GOTO(out, rc);
         }
         llog_init_handle(loghandle, LLOG_F_IS_PLAIN, &uuid);
 
@@ -155,9 +170,11 @@ static int llog_test_2(struct obd_device *obd, char *name,
         rc = llog_destroy(loghandle);
         if (rc) {
                 CERROR("2b: destroy log failed\n");
-                RETURN(rc);
+                GOTO(out, rc);
         }
         llog_free_handle(loghandle);
+out:
+        llog_ctxt_put(ctxt);
 
         RETURN(rc);
 }
@@ -220,6 +237,41 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
 
         if ((rc = verify_handle("3c", llh, num_recs)))
                 RETURN(rc);
+	
+        CWARN("3d: write log more than BITMAP_SIZE, return -ENOSPC\n");
+        for (i = 0; i < LLOG_BITMAP_SIZE(llh->lgh_hdr) + 1; i++) {
+                struct llog_rec_hdr hdr;
+                char buf_even[24];
+                char buf_odd[32];
+
+                memset(buf_odd, 0, sizeof buf_odd);
+                memset(buf_even, 0, sizeof buf_even);
+                if ((i % 2) == 0) {
+                        hdr.lrh_len = 24;
+                        hdr.lrh_type = OBD_CFG_REC;
+                        rc = llog_write_rec(llh, &hdr, NULL, 0, buf_even, -1);
+                } else {
+                        hdr.lrh_len = 32;
+                        hdr.lrh_type = OBD_CFG_REC;
+                        rc = llog_write_rec(llh, &hdr, NULL, 0, buf_odd, -1);
+                }
+                if (rc) {
+                        if (rc == -ENOSPC) {
+                                break;
+                        } else {
+                       	        CERROR("3c: write recs failed at #%d: %d\n",
+                               	        i + 1, rc);
+                       	        RETURN(rc);
+                        }
+                }
+                num_recs++;
+        }
+	if (rc != -ENOSPC) {
+                CWARN("3d: write record more than BITMAP size!\n");
+                RETURN(-EINVAL);
+        }
+        if ((rc = verify_handle("3d", llh, num_recs)))
+                RETURN(rc);
 
         RETURN(rc);
 }
@@ -261,10 +313,10 @@ static int llog_test_4(struct obd_device *obd)
         }
         num_recs++;
         if ((rc = verify_handle("4b", cath, 2)))
-                RETURN(rc);
+                GOTO(ctxt_release, rc);
 
         if ((rc = verify_handle("4b", cath->u.chd.chd_current_log, num_recs)))
-                RETURN(rc);
+                GOTO(ctxt_release, rc);
 
         CWARN("4c: cancel 1 log record\n");
         rc = llog_cat_cancel_records(cath, 1, &cookie);
@@ -275,7 +327,7 @@ static int llog_test_4(struct obd_device *obd)
         num_recs--;
 
         if ((rc = verify_handle("4c", cath->u.chd.chd_current_log, num_recs)))
-                RETURN(rc);
+                GOTO(ctxt_release, rc);
 
         CWARN("4d: write 40,000 more log records\n");
         for (i = 0; i < 40000; i++) {
@@ -311,6 +363,8 @@ static int llog_test_4(struct obd_device *obd)
  out:
         CWARN("4f: put newly-created catalog\n");
         rc = llog_cat_put(cath);
+ctxt_release:
+        llog_ctxt_put(ctxt);
         if (rc)
                 CERROR("1b: close log %s failed: %d\n", name, rc);
         RETURN(rc);
@@ -437,6 +491,8 @@ static int llog_test_5(struct obd_device *obd)
                 rc = llog_cat_put(llh);
         if (rc)
                 CERROR("1b: close log %s failed: %d\n", name, rc);
+        llog_ctxt_put(ctxt);
+
         RETURN(rc);
 }
 
@@ -458,13 +514,14 @@ static int llog_test_6(struct obd_device *obd, char *name)
         if (mdc_obd == NULL) {
                 CERROR("6: no MDC devices connected to %s found.\n",
                        mds_uuid->uuid);
-                RETURN(-ENOENT);
+                GOTO(ctxt_release, rc = -ENOENT);
         }
 
-        rc = obd_connect(&exph, mdc_obd, &uuid, NULL /* obd_connect_data */);
+        rc = obd_connect(&exph, mdc_obd, &uuid, NULL /* obd_connect_data */,
+                         NULL);
         if (rc) {
                 CERROR("6: failed to connect to MDC: %s\n", mdc_obd->obd_name);
-                RETURN(rc);
+                GOTO(ctxt_release, rc);
         }
         exp = class_conn2export(&exph);
 
@@ -472,7 +529,8 @@ static int llog_test_6(struct obd_device *obd, char *name)
         rc = llog_create(nctxt, &llh, NULL, name);
         if (rc) {
                 CERROR("6: llog_create failed %d\n", rc);
-                RETURN(rc);
+                llog_ctxt_put(nctxt);
+                GOTO(ctxt_release, rc);
         }
 
         rc = llog_init_handle(llh, LLOG_F_IS_PLAIN, NULL);
@@ -491,12 +549,13 @@ static int llog_test_6(struct obd_device *obd, char *name)
 
 parse_out:
         rc = llog_close(llh);
+        llog_ctxt_put(nctxt);
         if (rc) {
                 CERROR("6: llog_close failed: rc = %d\n", rc);
         }
-
         rc = obd_disconnect(exp);
-
+ctxt_release:
+        llog_ctxt_put(ctxt);
         RETURN(rc);
 }
 
@@ -516,7 +575,7 @@ static int llog_test_7(struct obd_device *obd)
         rc = llog_create(ctxt, &llh, NULL, name);
         if (rc) {
                 CERROR("7: llog_create with name %s failed: %d\n", name, rc);
-                RETURN(rc);
+                GOTO(ctxt_release, rc);
         }
         llog_init_handle(llh, LLOG_F_IS_PLAIN, &uuid);
 
@@ -525,7 +584,7 @@ static int llog_test_7(struct obd_device *obd)
         rc = llog_write_rec(llh,  &lcr.lcr_hdr, NULL, 0, NULL, -1);
         if (rc) {
                 CERROR("7: write one log record failed: %d\n", rc);
-                RETURN(rc);
+                GOTO(ctxt_release, rc);
         }
 
         rc = llog_destroy(llh);
@@ -533,6 +592,8 @@ static int llog_test_7(struct obd_device *obd)
                 CERROR("7: llog_destroy failed: %d\n", rc);
         else
                 llog_free_handle(llh); 
+ctxt_release:
+        llog_ctxt_put(ctxt);
         RETURN(rc);
 }
 
@@ -591,7 +652,7 @@ static int llog_run_tests(struct obd_device *obd)
         case 0:
                 pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
         }
-
+        llog_ctxt_put(ctxt);
         return rc;
 }
 
@@ -626,6 +687,16 @@ static int llog_test_cleanup(struct obd_device *obd)
 
         return rc;
 }
+
+#ifdef LPROCFS
+static struct lprocfs_vars lprocfs_llog_test_obd_vars[] = { {0} };
+static struct lprocfs_vars lprocfs_llog_test_module_vars[] = { {0} };
+static void lprocfs_llog_test_init_vars(struct lprocfs_static_vars *lvars)
+{
+    lvars->module_vars  = lprocfs_llog_test_module_vars;
+    lvars->obd_vars     = lprocfs_llog_test_obd_vars;
+}
+#endif
 
 static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
 {
@@ -662,7 +733,7 @@ static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc)
                 llog_test_cleanup(obd);
 
-        lprocfs_init_vars(llog_test, &lvars);
+        lprocfs_llog_test_init_vars(&lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
 
         RETURN(rc);
@@ -676,17 +747,11 @@ static struct obd_ops llog_obd_ops = {
         .o_llog_finish = llog_test_llog_finish,
 };
 
-#ifdef LPROCFS
-static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
-static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
-LPROCFS_INIT_VARS(llog_test, lprocfs_module_vars, lprocfs_obd_vars)
-#endif
-
 static int __init llog_test_init(void)
 {
         struct lprocfs_static_vars lvars;
 
-        lprocfs_init_vars(llog_test, &lvars);
+        lprocfs_llog_test_init_vars(&lvars);
         return class_register_type(&llog_obd_ops,lvars.module_vars,"llog_test");
 }
 
@@ -695,7 +760,7 @@ static void __exit llog_test_exit(void)
         class_unregister_type("llog_test");
 }
 
-MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
+MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("llog test module");
 MODULE_LICENSE("GPL");
 

@@ -257,7 +257,7 @@ Index: linux-2.6.15-fc5/fs/namei.c
 +		counter++;
 +		if (counter < 10)
 +			goto revalidate_again;
-+		printk("excessive revalidate_it loops\n");
++		//printk("excessive revalidate_it loops\n");
 +		return -ESTALE;
 +	}
 +	return 0;

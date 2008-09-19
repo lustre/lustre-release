@@ -1,20 +1,37 @@
-/* -*- mode: c; c-basic-offset: 4; indent-tabs-mode: nil; -*-
- * vim:expandtab:shiftwidth=4:tabstop=4:
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
  *
+ * GPL HEADER START
  *
- *  Copyright (c) 2004 Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is free software; you can redistribute it and/or modify it under
- *   the terms of version 2 of the GNU General Public License as published by
- *   the Free Software Foundation. Lustre is distributed in the hope that it
- *   will be useful, but WITHOUT ANY WARRANTY; without even the implied
- *   warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details. You should have received a
- *   copy of the GNU General Public License along with Lustre; if not, write
- *   to the Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139,
- *   USA.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 
@@ -1449,6 +1466,55 @@ static struct ctl_table top_table[2] = {
         {0}
 };
 
+
+int trace_write_dump_kernel(struct file *file, const char *buffer,
+                             unsigned long count, void *data)
+{
+        int rc = trace_dump_debug_buffer_usrstr(buffer, count);
+        
+        return (rc < 0) ? rc : count;
+}
+
+int trace_write_daemon_file(struct file *file, const char *buffer,
+                            unsigned long count, void *data)
+{
+        int rc = trace_daemon_command_usrstr(buffer, count);
+
+        return (rc < 0) ? rc : count;
+}
+
+int trace_read_daemon_file(char *page, char **start, off_t off, int count,
+                           int *eof, void *data)
+{
+	int rc;
+
+	tracefile_read_lock();
+
+        rc = trace_copyout_string(page, count, tracefile, "\n");
+
+        tracefile_read_unlock();
+
+	return rc;
+}
+
+int trace_write_debug_mb(struct file *file, const char *buffer,
+                         unsigned long count, void *data)
+{
+        int rc = trace_set_debug_mb_userstr(buffer, count);
+        
+        return (rc < 0) ? rc : count;
+}
+
+int trace_read_debug_mb(char *page, char **start, off_t off, int count,
+                        int *eof, void *data)
+{
+        char   str[32];
+
+        snprintf(str, sizeof(str), "%d\n", trace_get_debug_mb());
+
+        return trace_copyout_string(page, count, str, NULL);
+}
+
 int insert_proc(void)
 {
         cfs_proc_entry_t *ent;
@@ -1458,7 +1524,7 @@ int insert_proc(void)
                 CERROR(("couldn't register dump_kernel\n"));
                 return -1;
         }
-        ent->write_proc = trace_dk;
+        ent->write_proc = trace_write_dump_kernel;
 
         ent = create_proc_entry("sys/lnet/daemon_file", 0, NULL);
         if (ent == NULL) {

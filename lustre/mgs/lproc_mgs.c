@@ -1,26 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2002 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 #define DEBUG_SUBSYSTEM S_CLASS
 
@@ -87,8 +98,30 @@ int lproc_mgs_setup(struct obd_device *obd)
         rc = lprocfs_obd_seq_create(obd, "filesystems", 0444,
                                     &mgs_fs_fops, obd);
         mgs->mgs_proc_live = proc_mkdir("live", obd->obd_proc_entry);
+        obd->obd_proc_exports_entry = proc_mkdir("exports",
+                                                 obd->obd_proc_entry);
 
         return rc;
+}
+
+int lproc_mgs_cleanup(struct obd_device *obd)
+{
+        struct mgs_obd *mgs;
+
+        if (!obd)
+                return -EINVAL;
+
+        mgs = &obd->u.mgs;
+        if (mgs->mgs_proc_live) {
+                /* Should be no live entries */
+                LASSERT(mgs->mgs_proc_live->subdir == NULL);
+                lprocfs_remove(&mgs->mgs_proc_live);
+                mgs->mgs_proc_live = NULL;
+        }
+        lprocfs_free_per_client_stats(obd);
+        lprocfs_free_obd_stats(obd);
+
+        return lprocfs_obd_cleanup(obd);
 }
 
 static int mgs_live_seq_show(struct seq_file *seq, void *v) 
@@ -142,6 +175,7 @@ struct lprocfs_vars lprocfs_mgs_obd_vars[] = {
         { "fstype",          lprocfs_rd_fstype,      0, 0 },
         { "mntdev",          lprocfs_mgs_rd_mntdev,  0, 0 },
         { "num_exports",     lprocfs_rd_num_exports, 0, 0 },
+        { "evict_client",    0, lprocfs_wr_evict_client, 0 },
         { 0 }
 };
 
@@ -149,5 +183,26 @@ struct lprocfs_vars lprocfs_mgs_module_vars[] = {
         { 0 }
 };
 
-LPROCFS_INIT_VARS(mgs, lprocfs_mgs_module_vars, lprocfs_mgs_obd_vars);
+void mgs_counter_incr(struct obd_export *exp, int opcode)
+{
+        lprocfs_counter_incr(exp->exp_obd->obd_stats, opcode);
+        lprocfs_counter_incr(exp->exp_ops_stats, opcode);
+}
+
+void mgs_stats_counter_init(struct lprocfs_stats *stats)
+{
+        lprocfs_counter_init(stats, LPROC_MGS_CONNECT, 0, "connect", "reqs");
+        lprocfs_counter_init(stats, LPROC_MGS_DISCONNECT, 0, "disconnect",
+                             "reqs");
+        lprocfs_counter_init(stats, LPROC_MGS_EXCEPTION, 0, "exception",
+                             "reqs");
+        lprocfs_counter_init(stats, LPROC_MGS_TARGET_REG, 0, "tgtreg", "reqs");
+        lprocfs_counter_init(stats, LPROC_MGS_TARGET_DEL, 0, "tgtdel", "reqs");
+}
+
+void lprocfs_mgs_init_vars(struct lprocfs_static_vars *lvars)
+{
+    lvars->module_vars  = lprocfs_mgs_module_vars;
+    lvars->obd_vars     = lprocfs_mgs_obd_vars;
+}
 #endif

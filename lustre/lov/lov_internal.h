@@ -1,10 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2003 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- * This code is issued under the GNU General Public License.
- * See the file COPYING in this distribution
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #ifndef LOV_INTERNAL_H
@@ -36,7 +63,7 @@ struct lov_request {
 };
 
 struct lov_request_set {
-        struct obd_enqueue_info *set_ei;
+        struct ldlm_enqueue_info*set_ei;
         struct obd_info         *set_oi;
         atomic_t                 set_refcount;
         struct obd_export       *set_exp;
@@ -111,9 +138,12 @@ static inline void lov_llh_put(struct lov_lock_handles *llh)
                 atomic_read(&llh->llh_refcount) < 0x5a5a);
         if (atomic_dec_and_test(&llh->llh_refcount)) {
                 class_handle_unhash(&llh->llh_handle);
-                LASSERT(list_empty(&llh->llh_handle.h_link));
-                OBD_FREE(llh, sizeof *llh +
-                         sizeof(*llh->llh_handles) * llh->llh_stripe_count);
+                /* The structure may be held by other threads because RCU. -jxiong */
+                if (atomic_read(&llh->llh_refcount))
+                        return;
+
+                OBD_FREE_RCU(llh, sizeof *llh +
+                         sizeof(*llh->llh_handles) * llh->llh_stripe_count, &llh->llh_handle);
         }
 }
 
@@ -141,6 +171,8 @@ int lov_stripe_intersects(struct lov_stripe_md *lsm, int stripeno,
 int lov_stripe_number(struct lov_stripe_md *lsm, obd_off lov_off);
 
 /* lov_qos.c */
+#define LOV_USES_ASSIGNED_STRIPE        0
+#define LOV_USES_DEFAULT_STRIPE         1
 int qos_add_tgt(struct obd_device *obd, __u32 index);
 int qos_del_tgt(struct obd_device *obd, __u32 index);
 void qos_shrink_lsm(struct lov_request_set *set);
@@ -192,9 +224,10 @@ int lov_prep_sync_set(struct obd_export *exp, struct obd_info *obd_info,
                       obd_off end, struct lov_request_set **reqset);
 int lov_fini_sync_set(struct lov_request_set *set);
 int lov_prep_enqueue_set(struct obd_export *exp, struct obd_info *oinfo,
-                         struct obd_enqueue_info *einfo,
+                         struct ldlm_enqueue_info *einfo,
                          struct lov_request_set **reqset);
-int lov_fini_enqueue_set(struct lov_request_set *set, __u32 mode, int rc);
+int lov_fini_enqueue_set(struct lov_request_set *set, __u32 mode, int rc,
+                         struct ptlrpc_request_set *rqset);
 int lov_prep_match_set(struct obd_export *exp, struct obd_info *oinfo,
                        struct lov_stripe_md *lsm,
                        ldlm_policy_data_t *policy, __u32 mode,
@@ -210,15 +243,19 @@ int lov_prep_cancel_set(struct obd_export *exp, struct obd_info *oinfo,
 int lov_fini_cancel_set(struct lov_request_set *set);
 int lov_prep_statfs_set(struct obd_device *obd, struct obd_info *oinfo,
                         struct lov_request_set **reqset);
-void lov_update_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                       struct obd_statfs *lov_sfs, int success);
+void lov_update_statfs(struct obd_statfs *osfs, struct obd_statfs *lov_sfs,
+                       int success);
 int lov_fini_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                     int success);
 int lov_fini_statfs_set(struct lov_request_set *set);
 
 /* lov_obd.c */
 void lov_fix_desc(struct lov_desc *desc);
-int lov_get_stripecnt(struct lov_obd *lov, int stripe_count);
+void lov_fix_desc_stripe_size(__u64 *val);
+void lov_fix_desc_stripe_count(__u32 *val);
+void lov_fix_desc_pattern(__u32 *val);
+void lov_fix_desc_qos_maxage(__u32 *val);
+int lov_get_stripecnt(struct lov_obd *lov, __u32 stripe_count);
 void lov_getref(struct obd_device *obd);
 void lov_putref(struct obd_device *obd);
 
@@ -244,6 +281,9 @@ void lov_free_memmd(struct lov_stripe_md **lsmp);
 
 void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm);
 void lov_dump_lmm_join(int level, struct lov_mds_md_join *lmmj);
+void lov_dump_lmm_v3(int level, struct lov_mds_md_v3 *lmm);
+void lov_dump_lmm(int level, void *lmm);
+
 /* lov_ea.c */
 int lov_unpackmd_join(struct lov_obd *lov, struct lov_stripe_md *lsm,
                       struct lov_mds_md *lmm);
@@ -256,5 +296,32 @@ int lovea_destroy_object(struct lov_obd *lov, struct lov_stripe_md *lsm,
                          struct obdo *oa, void *data);
 /* lproc_lov.c */
 extern struct file_operations lov_proc_target_fops;
+#ifdef LPROCFS
+void lprocfs_lov_init_vars(struct lprocfs_static_vars *lvars);
+#else
+static inline void lprocfs_lov_init_vars(struct lprocfs_static_vars *lvars)
+{
+        memset(lvars, 0, sizeof(*lvars));
+}
+#endif
+
+/* pools */
+extern struct lustre_hash_operations pool_hash_operations;
+/* ost_pool methods */
+int lov_ost_pool_init(struct ost_pool *op, unsigned int count);
+int lov_ost_pool_extend(struct ost_pool *op, unsigned int max_count);
+int lov_ost_pool_add(struct ost_pool *op, __u32 idx, unsigned int max_count);
+int lov_ost_pool_remove(struct ost_pool *op, __u32 idx);
+int lov_ost_pool_free(struct ost_pool *op);
+
+/* high level pool methods */
+int lov_pool_new(struct obd_device *obd, char *poolname);
+int lov_pool_del(struct obd_device *obd, char *poolname);
+int lov_pool_add(struct obd_device *obd, char *poolname, char *ostname);
+int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname);
+void lov_dump_pool(int level, struct pool_desc *pool);
+struct pool_desc *lov_find_pool(struct lov_obd *lov, char *poolname);
+int lov_check_index_in_pool(__u32 idx, struct pool_desc *pool);
+
 
 #endif

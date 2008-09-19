@@ -1,7 +1,8 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2001, 2002 Cluster File Systems, Inc.
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ *
  *   Author: Eric Barton <eric@bartonsoftware.com>
  *
  *   Portals is free software; you can redistribute it and/or
@@ -107,7 +108,7 @@ static int inject_csum_error = 0;
 CFS_MODULE_PARM(inject_csum_error, "i", int, 0644,
                 "set non-zero to inject a checksum error");
 #ifdef CPU_AFFINITY
-static int enable_irq_affinity = 1;
+static int enable_irq_affinity = 0;
 CFS_MODULE_PARM(enable_irq_affinity, "i", int, 0644,
                 "enable IRQ affinity");
 #endif
@@ -126,13 +127,19 @@ CFS_MODULE_PARM(backoff_max, "i", int, 0644,
                 "seconds for maximum tcp backoff");
 #endif
 
+#if SOCKNAL_VERSION_DEBUG
+static int protocol = 2;
+CFS_MODULE_PARM(protocol, "i", int, 0644,
+                "protocol version");
+#endif
+
 ksock_tunables_t ksocknal_tunables = {
         .ksnd_timeout         = &sock_timeout,
-	.ksnd_credits         = &credits,
-	.ksnd_peercredits     = &peer_credits,
-	.ksnd_nconnds         = &nconnds,
-	.ksnd_min_reconnectms = &min_reconnectms,
-	.ksnd_max_reconnectms = &max_reconnectms,
+        .ksnd_credits         = &credits,
+        .ksnd_peercredits     = &peer_credits,
+        .ksnd_nconnds         = &nconnds,
+        .ksnd_min_reconnectms = &min_reconnectms,
+        .ksnd_max_reconnectms = &max_reconnectms,
         .ksnd_eager_ack       = &eager_ack,
         .ksnd_typed_conns     = &typed_conns,
         .ksnd_min_bulk        = &min_bulk,
@@ -151,6 +158,9 @@ ksock_tunables_t ksocknal_tunables = {
 #ifdef SOCKNAL_BACKOFF
         .ksnd_backoff_init    = &backoff_init,
         .ksnd_backoff_max     = &backoff_max,
+#endif
+#if SOCKNAL_VERSION_DEBUG
+        .ksnd_protocol        = &protocol,
 #endif
 };
 

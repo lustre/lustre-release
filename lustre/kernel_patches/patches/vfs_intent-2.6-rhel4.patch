@@ -1,26 +1,30 @@
----
- fs/exec.c              |   14 ++++---
- fs/inode.c             |    1 
- fs/namei.c             |   98 ++++++++++++++++++++++++++++++++++++++++++++++---
- fs/namespace.c         |   10 +++++
- fs/open.c              |   57 ++++++++++++++--------------
- fs/stat.c              |   24 +++++++++---
- include/linux/dcache.h |    3 +
- include/linux/fs.h     |   10 +++++
- include/linux/mount.h  |    2 +
- include/linux/namei.h  |   61 ++++++++++++++++++++++++++----
- 10 files changed, 225 insertions(+), 55 deletions(-)
+diff -rup RH_2_6_9_55.orig/fs/cifs/dir.c RH_2_6_9_55/fs/cifs/dir.c
+--- RH_2_6_9_55.orig/fs/cifs/dir.c
++++ RH_2_6_9_55/fs/cifs/dir.c
+@@ -157,11 +157,7 @@ cifs_create(struct inode *inode, struct 
 
---- linux-2.6.9.orig/fs/exec.c
-+++ linux-2.6.9/fs/exec.c
+ #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 5, 0)
+	if(nd && (nd->flags & LOOKUP_OPEN)) {
+-#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,5) /* SUSE included Lustre patch */
+		int oflags = nd->intent.it_flags;
+-#else
+-		int oflags = nd->intent.open.flags;
+-#endif
+
+		desiredAccess = 0;
+		if (oflags & FMODE_READ)
+diff -rup RH_2_6_9_55.orig/fs/exec.c RH_2_6_9_55/fs/exec.c
+--- RH_2_6_9_55.orig/fs/exec.c
++++ RH_2_6_9_55/fs/exec.c
 @@ -126,9 +126,10 @@ asmlinkage long sys_uselib(const char __
  	struct file * file;
  	struct nameidata nd;
  	int error;
-+	intent_init(&nd.intent, IT_OPEN);
- 
--	nd.intent.open.flags = FMODE_READ;
+-
+-	nd.intent.open.flags = FMODE_READ|FMODE_EXEC;
 -	error = __user_walk(library, LOOKUP_FOLLOW|LOOKUP_OPEN, &nd);
++	intent_init(&nd.intent, IT_OPEN);
++  
 +	nd.intent.it_flags = FMODE_READ|FMODE_EXEC;
 +	error = __user_walk_it(library, LOOKUP_FOLLOW|LOOKUP_OPEN, &nd);
  	if (error)
@@ -39,16 +43,16 @@
  	int err;
  	struct file *file;
  
--	nd.intent.open.flags = FMODE_READ;
+-	nd.intent.open.flags = FMODE_READ|FMODE_EXEC;
 -	err = path_lookup(name, LOOKUP_FOLLOW|LOOKUP_OPEN, &nd);
 +	intent_init(&nd.intent, IT_OPEN);
 +	nd.intent.it_flags = FMODE_READ|FMODE_EXEC;
-+	err = path_lookup(name, LOOKUP_FOLLOW, &nd);
++	err = path_lookup_it(name, LOOKUP_FOLLOW, &nd);
  	file = ERR_PTR(err);
  
  	if (!err) {
-@@ -503,7 +505,7 @@ struct file *open_exec(const char *name)
- 				err = -EACCES;
+@@ -501,7 +503,7 @@ struct file *open_exec(const char *name)
+			int err = permission(inode, MAY_EXEC, &nd);
  			file = ERR_PTR(err);
  			if (!err) {
 -				file = dentry_open(nd.dentry, nd.mnt, O_RDONLY);
@@ -56,8 +60,9 @@
  				if (!IS_ERR(file)) {
  					err = deny_write_access(file);
  					if (err) {
---- linux-2.6.9.orig/fs/inode.c
-+++ linux-2.6.9/fs/inode.c
+diff -rup RH_2_6_9_55.orig/fs/inode.c RH_2_6_9_55/fs/inode.c
+--- RH_2_6_9_55.orig/fs/inode.c
++++ RH_2_6_9_55/fs/inode.c
 @@ -235,6 +235,7 @@ void __iget(struct inode * inode)
  	inodes_stat.nr_unused--;
  }
@@ -66,9 +71,10 @@
  /**
   * clear_inode - clear an inode
   * @inode: inode to clear
---- linux-2.6.9.orig/fs/namei.c
-+++ linux-2.6.9/fs/namei.c
-@@ -274,8 +274,19 @@ int deny_write_access(struct file * file
+diff -rup RH_2_6_9_55.orig/fs/namei.c RH_2_6_9_55/fs/namei.c
+--- RH_2_6_9_55.orig/fs/namei.c
++++ RH_2_6_9_55/fs/namei.c
+@@ -282,8 +282,19 @@ int deny_write_access(struct file * file
  	return 0;
  }
  
@@ -88,30 +94,36 @@
  	dput(nd->dentry);
  	mntput(nd->mnt);
  }
-@@ -367,7 +378,10 @@ static struct dentry * real_lookup(struc
+@@ -395,8 +406,12 @@ static struct dentry * real_lookup(struc
  {
  	struct dentry * result;
  	struct inode *dir = parent->d_inode;
+-
 +	int counter = 0;
- 
++	
 +again:
-+	counter++;
  	down(&dir->i_sem);
++	counter++;
++
  	/*
  	 * First re-do the cached lookup just in case it was created
-@@ -406,7 +420,10 @@ static struct dentry * real_lookup(struc
+	 * while we waited for the directory semaphore..
+@@ -433,8 +448,12 @@ static struct dentry * real_lookup(struc
+	up(&dir->i_sem);
  	if (result->d_op && result->d_op->d_revalidate) {
- 		if (!result->d_op->d_revalidate(result, nd) && !d_invalidate(result)) {
- 			dput(result);
+		result = do_revalidate(result, nd);
+-		if (!result)
 -			result = ERR_PTR(-ENOENT);
++		if (!result) {
 +			if (counter > 10)
 +				result = ERR_PTR(-ESTALE);
 +			if (!IS_ERR(result))
 +				goto again;
- 		}
++		}
  	}
  	return result;
-@@ -437,6 +454,7 @@ static inline int __vfs_follow_link(stru
+ }
+@@ -464,6 +483,7 @@ static inline int __vfs_follow_link(stru
  {
  	int res = 0;
  	char *name;
@@ -119,7 +131,7 @@
  	if (IS_ERR(link))
  		goto fail;
  
-@@ -446,6 +464,7 @@ static inline int __vfs_follow_link(stru
+@@ -473,6 +493,7 @@ static inline int __vfs_follow_link(stru
  			/* weird __emul_prefix() stuff did it */
  			goto out;
  	}
@@ -127,7 +139,7 @@
  	res = link_path_walk(link, nd);
  out:
  	if (nd->depth || res || nd->last_type!=LAST_NORM)
-@@ -654,6 +673,33 @@ fail:
+@@ -681,6 +702,33 @@ fail:
  	return PTR_ERR(dentry);
  }
  
@@ -152,7 +164,7 @@
 +		counter++;
 +		if (counter < 10)
 +			goto revalidate_again;
-+		printk("excessive revalidate_it loops\n");
++		//printk("excessive revalidate_it loops\n");
 +		return -ESTALE;
 +	}
 +	return 0;
@@ -161,12 +173,17 @@
  /*
   * Name resolution.
   * This is the basic name resolution function, turning a pathname into
-@@ -755,8 +801,12 @@ static fastcall int __link_path_walk(con
+@@ -782,13 +830,17 @@ static fastcall int __link_path_walk(con
  			goto out_dput;
  
  		if (inode->i_op->follow_link) {
 +			int save_flags = nd->flags;
  			mntget(next.mnt);
+			if (next.mnt != nd->mnt) {
+				dput(nd->dentry);
+				nd->mnt = next.mnt;
+				nd->dentry = dget(next.dentry);
+			}
 +			nd->flags |= LOOKUP_LINK_NOTLAST;
  			err = do_follow_link(next.dentry, nd);
 +			if (!(save_flags & LOOKUP_LINK_NOTLAST))
@@ -174,17 +191,17 @@
  			dput(next.dentry);
  			mntput(next.mnt);
  			if (err)
-@@ -795,14 +845,34 @@ last_component:
+@@ -828,14 +880,34 @@ last_component:
  				inode = nd->dentry->d_inode;
  				/* fallthrough */
  			case 1:
-+ 				nd->flags |= LOOKUP_LAST;
-+ 				err = revalidate_special(nd);
-+ 				nd->flags &= ~LOOKUP_LAST;
++				nd->flags |= LOOKUP_LAST;
++				err = revalidate_special(nd);
++				nd->flags &= ~LOOKUP_LAST;
 +				if (!nd->dentry->d_inode)
 +					err = -ENOENT;
 +				if (err) {
-+ 					path_release(nd);
++					path_release(nd);
 +					goto return_err;
 +				}
 +				if (lookup_flags & LOOKUP_DIRECTORY) {
@@ -197,7 +214,7 @@
 +				}
  				goto return_reval;
  		}
-+
++		
  		if (nd->dentry->d_op && nd->dentry->d_op->d_hash) {
  			err = nd->dentry->d_op->d_hash(nd->dentry, &this);
  			if (err < 0)
@@ -209,7 +226,29 @@
  		if (err)
  			break;
  		follow_mount(&next.mnt, &next.dentry);
-@@ -1053,7 +1123,7 @@ struct dentry * lookup_hash(struct qstr 
+@@ -1007,7 +1079,7 @@ set_it:
+ }
+ 
+ /* Returns 0 and nd will be valid on success; Retuns error, otherwise. */
+-int fastcall path_lookup(const char *name, unsigned int flags, struct nameidata *nd)
++int fastcall path_lookup_it(const char *name, unsigned int flags, struct nameidata *nd)
+ {
+ 	int retval = 0;
+ 
+@@ -1041,6 +1113,12 @@ out:
+ 	return retval;
+ }
+ 
++int fastcall path_lookup(const char *name, unsigned int flags, struct nameidata *nd)
++{
++	intent_init(&nd->intent, IT_GETATTR);
++	return path_lookup_it(name, flags, nd);
++}
++
+ /*
+  * Restricted form of lookup. Doesn't follow links, single-component only,
+  * needs parent already locked. Doesn't follow mounts.
+@@ -1091,7 +1169,7 @@ struct dentry * lookup_hash(struct qstr 
  }
  
  /* SMP-safe */
@@ -218,7 +257,7 @@
  {
  	unsigned long hash;
  	struct qstr this;
-@@ -1073,11 +1143,16 @@ struct dentry * lookup_one_len(const cha
+@@ -1111,11 +1189,16 @@ struct dentry * lookup_one_len(const cha
  	}
  	this.hash = end_name_hash(hash);
  
@@ -236,7 +275,7 @@
  /*
   *	namei()
   *
-@@ -1089,7 +1164,7 @@ access:
+@@ -1127,18 +1210,24 @@ access:
   * that namei follows links, while lnamei does not.
   * SMP-safe
   */
@@ -245,7 +284,12 @@
  {
  	char *tmp = getname(name);
  	int err = PTR_ERR(tmp);
-@@ -1101,6 +1176,12 @@ int fastcall __user_walk(const char __us
+ 
+ 	if (!IS_ERR(tmp)) {
+-		err = path_lookup(tmp, flags, nd);
++		err = path_lookup_it(tmp, flags, nd);
+ 		putname(tmp);
+ 	}
  	return err;
  }
  
@@ -258,7 +302,16 @@
  /*
   * It's inline, so penalty for filesystems that don't use sticky bit is
   * minimal.
-@@ -1387,8 +1468,8 @@ int open_namei(const char * pathname, in
+@@ -1384,7 +1473,7 @@ int may_open(struct nameidata *nd, int a
+ 		if (!error) {
+ 			DQUOT_INIT(inode);
+ 			
+-			error = do_truncate(dentry, 0, ATTR_MTIME|ATTR_CTIME);
++			error = do_truncate(dentry, 0, ATTR_MTIME|ATTR_CTIME|ATTR_FROM_OPEN);
+ 		}
+ 		put_write_access(inode);
+ 		if (error)
+@@ -1425,14 +1514,14 @@ int open_namei(const char * pathname, in
  		acc_mode |= MAY_APPEND;
  
  	/* Fill in the open() intent data */
@@ -269,15 +322,24 @@
  
  	/*
  	 * The simplest case - just a plain lookup.
-@@ -1403,6 +1484,7 @@ int open_namei(const char * pathname, in
+ 	 */
+ 	if (!(flag & O_CREAT)) {
+-		error = path_lookup(pathname, lookup_flags(flag)|LOOKUP_OPEN, nd);
++		error = path_lookup_it(pathname, lookup_flags(flag)|LOOKUP_OPEN, nd);
+ 		if (error)
+ 			return error;
+ 		goto ok;
+@@ -1441,7 +1530,8 @@ int open_namei(const char * pathname, in
  	/*
  	 * Create - we need to know the parent.
  	 */
+-	error = path_lookup(pathname, LOOKUP_PARENT|LOOKUP_OPEN|LOOKUP_CREATE, nd);
 +	nd->intent.it_op |= IT_CREAT;
- 	error = path_lookup(pathname, LOOKUP_PARENT|LOOKUP_OPEN|LOOKUP_CREATE, nd);
++	error = path_lookup_it(pathname, LOOKUP_PARENT|LOOKUP_OPEN|LOOKUP_CREATE, nd);
  	if (error)
  		return error;
-@@ -1419,7 +1501,9 @@ int open_namei(const char * pathname, in
+ 
+@@ -1457,7 +1547,9 @@ int open_namei(const char * pathname, in
  	dir = nd->dentry;
  	nd->flags &= ~LOOKUP_PARENT;
  	down(&dir->d_inode->i_sem);
@@ -287,7 +349,7 @@
  
  do_last:
  	error = PTR_ERR(dentry);
-@@ -1532,7 +1616,9 @@ do_link:
+@@ -1570,7 +1662,9 @@ do_link:
  	}
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
@@ -297,16 +359,228 @@
  	__putname(nd->last.name);
  	goto do_last;
  }
---- linux-2.6.9.orig/fs/namespace.c
-+++ linux-2.6.9/fs/namespace.c
-@@ -61,6 +61,7 @@ struct vfsmount *alloc_vfsmnt(const char
- 		INIT_LIST_HEAD(&mnt->mnt_mounts);
- 		INIT_LIST_HEAD(&mnt->mnt_list);
- 		INIT_LIST_HEAD(&mnt->mnt_fslink);
-+		INIT_LIST_HEAD(&mnt->mnt_lustre_list);
- 		if (name) {
- 			int size = strlen(name)+1;
- 			char *newname = kmalloc(size, GFP_KERNEL);
+@@ -1644,10 +1738,20 @@ asmlinkage long sys_mknod(const char __u
+ 	tmp = getname(filename);
+ 	if (IS_ERR(tmp))
+ 		return PTR_ERR(tmp);
+-
+-	error = path_lookup(tmp, LOOKUP_PARENT, &nd);
++		
++	intent_init(&nd.intent, IT_LOOKUP);
++	error = path_lookup_it(tmp, LOOKUP_PARENT, &nd);
+ 	if (error)
+ 		goto out;
++
++	if (nd.dentry->d_inode->i_op->mknod_raw) {
++		struct inode_operations *op = nd.dentry->d_inode->i_op;
++		error = op->mknod_raw(&nd, mode, dev);
++		/* the file system wants to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto out2;
++	}
++
+ 	dentry = lookup_create(&nd, 0);
+ 	error = PTR_ERR(dentry);
+ 
+@@ -1674,6 +1778,7 @@ asmlinkage long sys_mknod(const char __u
+ 		dput(dentry);
+ 	}
+ 	up(&nd.dentry->d_inode->i_sem);
++out2:
+ 	path_release(&nd);
+ out:
+ 	putname(tmp);
+@@ -1716,10 +1821,20 @@ asmlinkage long sys_mkdir(const char __u
+ 	if (!IS_ERR(tmp)) {
+ 		struct dentry *dentry;
+ 		struct nameidata nd;
++		intent_init(&nd.intent, IT_LOOKUP);
+ 
+-		error = path_lookup(tmp, LOOKUP_PARENT, &nd);
++		error = path_lookup_it(tmp, LOOKUP_PARENT, &nd);
+ 		if (error)
+ 			goto out;
++
++		if (nd.dentry->d_inode->i_op->mkdir_raw) {
++			struct inode_operations *op = nd.dentry->d_inode->i_op;
++			error = op->mkdir_raw(&nd, mode);
++			/* the file system wants to use normal vfs path now */
++			if (error != -EOPNOTSUPP)
++				goto out2;
++		}
++
+ 		dentry = lookup_create(&nd, 1);
+ 		error = PTR_ERR(dentry);
+ 		if (!IS_ERR(dentry)) {
+@@ -1729,6 +1844,7 @@ asmlinkage long sys_mkdir(const char __u
+ 			dput(dentry);
+ 		}
+ 		up(&nd.dentry->d_inode->i_sem);
++out2:
+ 		path_release(&nd);
+ out:
+ 		putname(tmp);
+@@ -1814,7 +1930,8 @@ asmlinkage long sys_rmdir(const char __u
+ 	if(IS_ERR(name))
+ 		return PTR_ERR(name);
+ 
+-	error = path_lookup(name, LOOKUP_PARENT, &nd);
++	intent_init(&nd.intent, IT_LOOKUP);
++	error = path_lookup_it(name, LOOKUP_PARENT, &nd);
+ 	if (error)
+ 		goto exit;
+ 
+@@ -1829,6 +1946,16 @@ asmlinkage long sys_rmdir(const char __u
+ 			error = -EBUSY;
+ 			goto exit1;
+ 	}
++
++	if (nd.dentry->d_inode->i_op->rmdir_raw) {
++		struct inode_operations *op = nd.dentry->d_inode->i_op;
++
++		error = op->rmdir_raw(&nd);
++		/* the file system wants to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto exit1;
++	}
++
+ 	down(&nd.dentry->d_inode->i_sem);
+ 	dentry = lookup_hash(&nd.last, nd.dentry);
+ 	error = PTR_ERR(dentry);
+@@ -1892,12 +2019,22 @@ asmlinkage long sys_unlink(const char __
+ 	if(IS_ERR(name))
+ 		return PTR_ERR(name);
+ 
+-	error = path_lookup(name, LOOKUP_PARENT, &nd);
++	intent_init(&nd.intent, IT_LOOKUP);
++	error = path_lookup_it(name, LOOKUP_PARENT, &nd);
+ 	if (error)
+ 		goto exit;
+ 	error = -EISDIR;
+ 	if (nd.last_type != LAST_NORM)
+ 		goto exit1;
++	
++	if (nd.dentry->d_inode->i_op->unlink_raw) {
++		struct inode_operations *op = nd.dentry->d_inode->i_op;
++		error = op->unlink_raw(&nd);
++		/* the file system wants to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto exit1;
++	}
++
+ 	down(&nd.dentry->d_inode->i_sem);
+ 	dentry = lookup_hash(&nd.last, nd.dentry);
+ 	error = PTR_ERR(dentry);
+@@ -1965,10 +2102,20 @@ asmlinkage long sys_symlink(const char _
+ 	if (!IS_ERR(to)) {
+ 		struct dentry *dentry;
+ 		struct nameidata nd;
++		intent_init(&nd.intent, IT_LOOKUP);
+ 
+-		error = path_lookup(to, LOOKUP_PARENT, &nd);
++		error = path_lookup_it(to, LOOKUP_PARENT, &nd);
+ 		if (error)
+ 			goto out;
++
++		if (nd.dentry->d_inode->i_op->symlink_raw) {
++			struct inode_operations *op = nd.dentry->d_inode->i_op;
++			error = op->symlink_raw(&nd, from);
++			/* the file system wants to use normal vfs path now */
++			if (error != -EOPNOTSUPP)
++				goto out2;
++		}
++
+ 		dentry = lookup_create(&nd, 0);
+ 		error = PTR_ERR(dentry);
+ 		if (!IS_ERR(dentry)) {
+@@ -1976,6 +2123,7 @@ asmlinkage long sys_symlink(const char _
+ 			dput(dentry);
+ 		}
+ 		up(&nd.dentry->d_inode->i_sem);
++out2:
+ 		path_release(&nd);
+ out:
+ 		putname(to);
+@@ -2045,15 +2193,26 @@ asmlinkage long sys_link(const char __us
+ 	if (IS_ERR(to))
+ 		return PTR_ERR(to);
+ 
+-	error = __user_walk(oldname, 0, &old_nd);
++	intent_init(&old_nd.intent, IT_LOOKUP);
++	error = __user_walk_it(oldname, 0, &old_nd);
+ 	if (error)
+ 		goto exit;
+-	error = path_lookup(to, LOOKUP_PARENT, &nd);
++		
++	intent_init(&nd.intent, IT_LOOKUP);		
++	error = path_lookup_it(to, LOOKUP_PARENT, &nd);
+ 	if (error)
+ 		goto out;
+ 	error = -EXDEV;
+ 	if (old_nd.mnt != nd.mnt)
+ 		goto out_release;
++	if (nd.dentry->d_inode->i_op->link_raw) {
++		struct inode_operations *op = nd.dentry->d_inode->i_op;
++		error = op->link_raw(&old_nd, &nd);
++		/* the file system wants to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto out_release;
++	}
++
+ 	new_dentry = lookup_create(&nd, 0);
+ 	error = PTR_ERR(new_dentry);
+ 	if (!IS_ERR(new_dentry)) {
+@@ -2229,11 +2388,13 @@ static inline int do_rename(const char *
+ 	struct dentry * trap;
+ 	struct nameidata oldnd, newnd;
+ 
+-	error = path_lookup(oldname, LOOKUP_PARENT, &oldnd);
++	intent_init(&oldnd.intent, IT_LOOKUP);
++	error = path_lookup_it(oldname, LOOKUP_PARENT, &oldnd);
+ 	if (error)
+ 		goto exit;
+ 
+-	error = path_lookup(newname, LOOKUP_PARENT, &newnd);
++	intent_init(&newnd.intent, IT_LOOKUP);
++	error = path_lookup_it(newname, LOOKUP_PARENT, &newnd);
+ 	if (error)
+ 		goto exit1;
+ 
+@@ -2250,6 +2411,13 @@ static inline int do_rename(const char *
+ 	if (newnd.last_type != LAST_NORM)
+ 		goto exit2;
+ 
++	if (old_dir->d_inode->i_op->rename_raw) {
++		error = old_dir->d_inode->i_op->rename_raw(&oldnd, &newnd);
++		/* the file system wants to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto exit2;
++	}
++
+ 	trap = lock_rename(new_dir, old_dir);
+ 
+ 	old_dentry = lookup_hash(&oldnd.last, old_dir);
+@@ -2281,8 +2449,7 @@ static inline int do_rename(const char *
+ 	if (new_dentry == trap)
+ 		goto exit5;
+ 
+-	error = vfs_rename(old_dir->d_inode, old_dentry,
+-				   new_dir->d_inode, new_dentry);
++	error = vfs_rename(old_dir->d_inode, old_dentry, new_dir->d_inode, new_dentry);
+ exit5:
+ 	dput(new_dentry);
+ exit4:
+@@ -2473,6 +2640,7 @@ EXPORT_SYMBOL(page_readlink);
+ EXPORT_SYMBOL(page_symlink);
+ EXPORT_SYMBOL(page_symlink_inode_operations);
+ EXPORT_SYMBOL(path_lookup);
++EXPORT_SYMBOL(path_lookup_it);
+ EXPORT_SYMBOL(path_release);
+ EXPORT_SYMBOL(path_walk);
+ EXPORT_SYMBOL(permission);
+diff -urNp RH_2_6_9_42_0_3.orig/fs/namespace.c RH_2_6_9_42_0_3/fs/namespace.c
+--- RH_2_6_9_42_0_3.orig/fs/namespace.c
++++ RH_2_6_9_42_0_3/fs/namespace.c
 @@ -114,6 +115,7 @@ static inline int check_mnt(struct vfsmo
  
  static void detach_mnt(struct vfsmount *mnt, struct nameidata *old_nd)
@@ -315,17 +589,7 @@
  	old_nd->dentry = mnt->mnt_mountpoint;
  	old_nd->mnt = mnt->mnt_parent;
  	mnt->mnt_parent = mnt;
-@@ -177,6 +179,9 @@ void __mntput(struct vfsmount *mnt)
- {
- 	struct super_block *sb = mnt->mnt_sb;
- 	dput(mnt->mnt_root);
-+	spin_lock(&dcache_lock);
-+	list_del(&mnt->mnt_lustre_list);
-+	spin_unlock(&dcache_lock);
- 	free_vfsmnt(mnt);
- 	deactivate_super(sb);
- }
-@@ -403,6 +408,8 @@ static int do_umount(struct vfsmount *mn
+@@ -441,6 +442,8 @@ static int do_umount(struct vfsmount *mn
  	 */
  
  	lock_kernel();
@@ -334,48 +598,231 @@
  	if( (flags&MNT_FORCE) && sb->s_op->umount_begin)
  		sb->s_op->umount_begin(sb);
  	unlock_kernel();
-@@ -627,6 +634,7 @@ static int do_loopback(struct nameidata 
+@@ -665,7 +668,8 @@ static int do_loopback(struct nameidata 
  		return err;
  	if (!old_name || !*old_name)
  		return -EINVAL;
+-	err = path_lookup(old_name, LOOKUP_FOLLOW, &old_nd);
 +	intent_init(&old_nd.intent, IT_LOOKUP);
- 	err = path_lookup(old_name, LOOKUP_FOLLOW, &old_nd);
++	err = path_lookup_it(old_name, LOOKUP_FOLLOW, &old_nd);
  	if (err)
  		return err;
-@@ -701,6 +709,7 @@ static int do_move_mount(struct nameidat
+ 
+@@ -739,7 +743,8 @@ static int do_move_mount(struct nameidat
  		return -EPERM;
  	if (!old_name || !*old_name)
  		return -EINVAL;
+-	err = path_lookup(old_name, LOOKUP_FOLLOW, &old_nd);
 +	intent_init(&old_nd.intent, IT_LOOKUP);
- 	err = path_lookup(old_name, LOOKUP_FOLLOW, &old_nd);
++	err = path_lookup_it(old_name, LOOKUP_FOLLOW, &old_nd);
  	if (err)
  		return err;
-@@ -1012,6 +1021,7 @@ long do_mount(char * dev_name, char * di
- 	int retval = 0;
- 	int mnt_flags = 0;
  
-+	intent_init(&nd.intent, IT_LOOKUP);
- 	/* Discard magic */
- 	if ((flags & MS_MGC_MSK) == MS_MGC_VAL)
- 		flags &= ~MS_MGC_MSK;
---- linux-2.6.9.orig/fs/open.c
-+++ linux-2.6.9/fs/open.c
-@@ -216,12 +216,12 @@ static inline long do_sys_truncate(const
+@@ -1074,7 +1079,8 @@ long do_mount(char * dev_name, char * di
+ 	flags &= ~(MS_NOSUID|MS_NOEXEC|MS_NODEV|MS_ACTIVE);
+ 
+ 	/* ... and get the mountpoint */
+-	retval = path_lookup(dir_name, LOOKUP_FOLLOW, &nd);
++	intent_init(&nd.intent, IT_LOOKUP);	
++	retval = path_lookup_it(dir_name, LOOKUP_FOLLOW, &nd);
+ 	if (retval)
+ 		return retval;
+ 
+diff -rup RH_2_6_9_55.orig/fs/nfs/dir.c RH_2_6_9_55/fs/nfs/dir.c
+--- RH_2_6_9_55.orig/fs/nfs/dir.c
++++ RH_2_6_9_55/fs/nfs/dir.c
+@@ -839,7 +839,7 @@ int nfs_is_exclusive_create(struct inode
+ 		return 0;
+ 	if (!nd || (nd->flags & LOOKUP_CONTINUE) || !(nd->flags & LOOKUP_CREATE))
+ 		return 0;
+-	return (nd->intent.open.flags & O_EXCL) != 0;
++	return (nd->intent.it_flags & O_EXCL) != 0;
+ }
+ 
+ static struct dentry *nfs_lookup(struct inode *dir, struct dentry * dentry, struct nameidata *nd)
+@@ -915,7 +915,7 @@ static int is_atomic_open(struct inode *
+ 	if (nd->flags & LOOKUP_DIRECTORY)
+ 		return 0;
+ 	/* Are we trying to write to a read only partition? */
+-	if (IS_RDONLY(dir) && (nd->intent.open.flags & (O_CREAT|O_TRUNC|FMODE_WRITE)))
++	if (IS_RDONLY(dir) && (nd->intent.it_flags & (O_CREAT|O_TRUNC|FMODE_WRITE)))
+ 		return 0;
+ 	return 1;
+ }
+@@ -936,7 +936,7 @@ static struct dentry *nfs_atomic_lookup(
+ 	dentry->d_op = NFS_PROTO(dir)->dentry_ops;
+ 
+ 	/* Let vfs_create() deal with O_EXCL */
+-	if (nd->intent.open.flags & O_EXCL)
++	if (nd->intent.it_flags & O_EXCL)
+ 		goto no_entry;
+ 
+ 	/* Open the file on the server */
+@@ -948,7 +948,7 @@ static struct dentry *nfs_atomic_lookup(
+ 		goto out;
+ 	}
+ 
+-	if (nd->intent.open.flags & O_CREAT) {
++	if (nd->intent.it_flags & O_CREAT) {
+ 		nfs_begin_data_update(dir);
+ 		inode = nfs4_atomic_open(dir, dentry, nd);
+ 		nfs_end_data_update(dir);
+@@ -967,7 +967,7 @@ static struct dentry *nfs_atomic_lookup(
+ 			case -ENOTDIR:
+ 				goto no_open;
+ 			case -ELOOP:
+-				if (!(nd->intent.open.flags & O_NOFOLLOW))
++				if (!(nd->intent.it_flags & O_NOFOLLOW))
+ 					goto no_open;
+ 			/* case -EINVAL: */
+ 			default:
+@@ -1005,7 +1005,7 @@ static int nfs_open_revalidate(struct de
+ 	/* NFS only supports OPEN on regular files */
+ 	if (!S_ISREG(inode->i_mode))
+ 		goto no_open;
+-	openflags = nd->intent.open.flags;
++	openflags = nd->intent.it_flags;
+ 	/* We cannot do exclusive creation on a positive dentry */
+ 	if ((openflags & (O_CREAT|O_EXCL)) == (O_CREAT|O_EXCL))
+ 		goto no_open;
+@@ -1213,7 +1213,7 @@ static int nfs_create(struct inode *dir,
+ 	attr.ia_valid = ATTR_MODE;
+ 
+ 	if (nd && (nd->flags & LOOKUP_CREATE))
+-		open_flags = nd->intent.open.flags;
++		open_flags = nd->intent.it_flags;
+ 
+ 	/*
+ 	 * The 0 argument passed into the create function should one day
+diff -rup RH_2_6_9_55.orig/fs/nfs/nfs4proc.c RH_2_6_9_55/fs/nfs/nfs4proc.c
+--- RH_2_6_9_55.orig/fs/nfs/nfs4proc.c
++++ RH_2_6_9_55/fs/nfs/nfs4proc.c
+@@ -770,27 +770,27 @@ nfs4_atomic_open(struct inode *dir, stru
+ 	struct nfs4_inc_open *inc_open;
+ 
+ 	if (nd->flags & LOOKUP_CREATE) {
+-		attr.ia_mode = nd->intent.open.create_mode;
++		attr.ia_mode = nd->intent.it_create_mode;
+ 		attr.ia_valid = ATTR_MODE;
+ 		if (!IS_POSIXACL(dir))
+ 			attr.ia_mode &= ~current->fs->umask;
+ 	} else {
+ 		attr.ia_valid = 0;
+-		BUG_ON(nd->intent.open.flags & O_CREAT);
++		BUG_ON(nd->intent.it_flags & O_CREAT);
+ 	}
+ 
+ 	/* track info in case the open never completes */
+ 	if (!(inc_open = kmalloc(sizeof(*inc_open), GFP_KERNEL)))
+ 		return ERR_PTR(-ENOMEM);
+ 	cred = rpcauth_lookupcred(NFS_SERVER(dir)->client->cl_auth, 0);
+-	state = nfs4_do_open(dir, &dentry->d_name, nd->intent.open.flags, &attr, cred);
++	state = nfs4_do_open(dir, &dentry->d_name, nd->intent.it_flags, &attr, cred);
+ 	put_rpccred(cred);
+ 	if (IS_ERR(state)) {
+ 		kfree(inc_open);
+		return (struct inode *)state;
+	}
+	inc_open->task = current;
+-	inc_open->flags = nd->intent.open.flags;
++	inc_open->flags = nd->intent.it_flags;
+	INIT_LIST_HEAD(&inc_open->state);
+	spin_lock(&state->inode->i_lock);
+	list_add(&inc_open->state, &state->inc_open);
+diff -rup RH_2_6_9_55.orig/fs/open.c RH_2_6_9_55/fs/open.c
+--- RH_2_6_9_55.orig/fs/open.c
++++ RH_2_6_9_55/fs/open.c
+@@ -195,6 +195,7 @@ out:
+ int do_truncate(struct dentry *dentry, loff_t length, unsigned int time_attrs)
+ {
+ 	int err;
++	struct inode_operations *op = dentry->d_inode->i_op;
+ 	struct iattr newattrs;
+ 
+ 	/* Not pretty: "inode->i_size" shouldn't really be signed. But it is. */
+@@ -204,8 +205,16 @@ int do_truncate(struct dentry *dentry, l
+	newattrs.ia_size = length;
+	newattrs.ia_valid = ATTR_SIZE | time_attrs;
+ 	down(&dentry->d_inode->i_sem);
+-	err = notify_change(dentry, &newattrs);
+-	up(&dentry->d_inode->i_sem);
++	if (op->setattr_raw) {
++		newattrs.ia_valid |= ATTR_RAW;
++		newattrs.ia_ctime = CURRENT_TIME;
++		down_write(&dentry->d_inode->i_alloc_sem);
++		err = op->setattr_raw(dentry->d_inode, &newattrs);
++		up_write(&dentry->d_inode->i_alloc_sem);
++	} else
++		err = notify_change(dentry, &newattrs);
++	up(&dentry->d_inode->i_sem);		
++
+ 	return err;
+ }
+
+@@ -214,12 +223,13 @@ static inline long do_sys_truncate(const
  	struct nameidata nd;
  	struct inode * inode;
  	int error;
 -
-+	intent_init(&nd.intent, IT_GETATTR);
++	
  	error = -EINVAL;
  	if (length < 0)	/* sorry, but loff_t says... */
  		goto out;
- 
+-
 -	error = user_path_walk(path, &nd);
++		
++	intent_init(&nd.intent, IT_GETATTR);
 +	error = user_path_walk_it(path, &nd);
  	if (error)
  		goto out;
  	inode = nd.dentry->d_inode;
-@@ -475,6 +475,7 @@ asmlinkage long sys_access(const char __
+@@ -390,9 +400,19 @@ asmlinkage long sys_utime(char __user * 
+ 		    (error = permission(inode,MAY_WRITE,&nd)) != 0)
+ 			goto dput_and_out;
+ 	}
+-	down(&inode->i_sem);
+-	error = notify_change(nd.dentry, &newattrs);
+-	up(&inode->i_sem);
++	if (inode->i_op->setattr_raw) {
++		struct inode_operations *op = nd.dentry->d_inode->i_op;
++
++		newattrs.ia_valid |= ATTR_RAW;
++		error = op->setattr_raw(inode, &newattrs);
++		/* the file system wants to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto dput_and_out;
++	} else {
++		down(&inode->i_sem);
++		error = notify_change(nd.dentry, &newattrs);
++		up(&inode->i_sem);
++	}
+ dput_and_out:
+ 	path_release(&nd);
+ out:
+@@ -443,9 +463,19 @@ long do_utimes(char __user * filename, s
+ 		    (error = permission(inode,MAY_WRITE,&nd)) != 0)
+ 			goto dput_and_out;
+ 	}
+-	down(&inode->i_sem);
+-	error = notify_change(nd.dentry, &newattrs);
+-	up(&inode->i_sem);
++	if (inode->i_op->setattr_raw) {
++		struct inode_operations *op = nd.dentry->d_inode->i_op;
++
++		newattrs.ia_valid |= ATTR_RAW;
++		error = op->setattr_raw(inode, &newattrs);
++		/* the file system wants to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto dput_and_out;
++	} else {
++		down(&inode->i_sem);
++		error = notify_change(nd.dentry, &newattrs);
++		up(&inode->i_sem);
++	}
+ dput_and_out:
+ 	path_release(&nd);
+ out:
+@@ -473,6 +503,7 @@ asmlinkage long sys_access(const char __
  	int old_fsuid, old_fsgid;
  	kernel_cap_t old_cap;
  	int res;
@@ -383,7 +830,7 @@
  
  	if (mode & ~S_IRWXO)	/* where's F_OK, X_OK, W_OK, R_OK? */
  		return -EINVAL;
-@@ -499,13 +500,14 @@ asmlinkage long sys_access(const char __
+@@ -497,13 +528,14 @@ asmlinkage long sys_access(const char __
  	else
  		current->cap_effective = current->cap_permitted;
  
@@ -399,7 +846,7 @@
  		path_release(&nd);
  	}
  
-@@ -520,8 +522,9 @@ asmlinkage long sys_chdir(const char __u
+@@ -518,8 +550,9 @@ asmlinkage long sys_chdir(const char __u
  {
  	struct nameidata nd;
  	int error;
@@ -410,7 +857,7 @@
  	if (error)
  		goto out;
  
-@@ -573,8 +576,9 @@ asmlinkage long sys_chroot(const char __
+@@ -571,8 +604,9 @@ asmlinkage long sys_chroot(const char __
  {
  	struct nameidata nd;
  	int error;
@@ -421,7 +868,137 @@
  	if (error)
  		goto out;
  
-@@ -741,8 +745,6 @@ asmlinkage long sys_fchown(unsigned int 
+@@ -595,36 +629,52 @@ out:
+ 
+ EXPORT_SYMBOL_GPL(sys_chroot);
+ 
+-asmlinkage long sys_fchmod(unsigned int fd, mode_t mode)
++int chmod_common(struct dentry *dentry, mode_t mode)
+ {
+-	struct inode * inode;
+-	struct dentry * dentry;
+-	struct file * file;
+-	int err = -EBADF;
++	struct inode * inode = dentry->d_inode;
+ 	struct iattr newattrs;
++	int error = -EROFS;
+ 
+-	file = fget(fd);
+-	if (!file)
++	if (IS_RDONLY(inode))
+ 		goto out;
++	
++	if (inode->i_op->setattr_raw) {
++		struct inode_operations *op = dentry->d_inode->i_op;
+ 
+-	dentry = file->f_dentry;
+-	inode = dentry->d_inode;
++		newattrs.ia_mode = mode;
++		newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
++		newattrs.ia_valid |= ATTR_RAW;
++		error = op->setattr_raw(inode, &newattrs);
++		/* the file system wants to use the normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto out;
++	}
+ 
+-	err = -EROFS;
+-	if (IS_RDONLY(inode))
+-		goto out_putf;
+-	err = -EPERM;
++	error = -EPERM;
+ 	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
+-		goto out_putf;
++		goto out;
++
+ 	down(&inode->i_sem);
+ 	if (mode == (mode_t) -1)
+ 		mode = inode->i_mode;
+ 	newattrs.ia_mode = (mode & S_IALLUGO) | (inode->i_mode & ~S_IALLUGO);
+ 	newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
+-	err = notify_change(dentry, &newattrs);
++	error = notify_change(dentry, &newattrs);
+ 	up(&inode->i_sem);
++out:
++	return error;
++}
+ 
+-out_putf:
++asmlinkage long sys_fchmod(unsigned int fd, mode_t mode)
++{
++	struct file * file;
++	int err = -EBADF;
++
++	file = fget(fd);
++	if (!file)
++		goto out;
++
++	err = chmod_common(file->f_dentry, mode);
+ 	fput(file);
+ out:
+ 	return err;
+@@ -633,32 +683,13 @@ out:
+ asmlinkage long sys_chmod(const char __user * filename, mode_t mode)
+ {
+ 	struct nameidata nd;
+-	struct inode * inode;
+ 	int error;
+-	struct iattr newattrs;
+ 
+ 	error = user_path_walk(filename, &nd);
+ 	if (error)
+ 		goto out;
+-	inode = nd.dentry->d_inode;
+
+-	error = -EROFS;
+-	if (IS_RDONLY(inode))
+-		goto dput_and_out;
+-
+-	error = -EPERM;
+-	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
+-		goto dput_and_out;
+-
+-	down(&inode->i_sem);
+-	if (mode == (mode_t) -1)
+-		mode = inode->i_mode;
+-	newattrs.ia_mode = (mode & S_IALLUGO) | (inode->i_mode & ~S_IALLUGO);
+-	newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
+-	error = notify_change(nd.dentry, &newattrs);
+-	up(&inode->i_sem);
+-
+-dput_and_out:
++	error = chmod_common(nd.dentry, mode);
+ 	path_release(&nd);
+ out:
+ 	return error;
+@@ -679,6 +710,18 @@ static int chown_common(struct dentry * 
+ 	if (IS_RDONLY(inode))
+ 		goto out;
+ 	error = -EPERM;
++	if (inode->i_op->setattr_raw) {
++		struct inode_operations *op = dentry->d_inode->i_op;
++
++		newattrs.ia_uid = user;
++		newattrs.ia_gid = group;
++		newattrs.ia_valid = ATTR_UID | ATTR_GID | ATTR_CTIME;
++		newattrs.ia_valid |= ATTR_RAW;
++		error = op->setattr_raw(inode, &newattrs);
++		/* the file system wants to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			return error;
++	}
+ 	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
+ 		goto out;
+ 	newattrs.ia_valid =  ATTR_CTIME;
+@@ -692,6 +735,7 @@ static int chown_common(struct dentry * 
+ 	}
+ 	if (!S_ISDIR(inode->i_mode))
+ 		newattrs.ia_valid |= ATTR_KILL_SUID|ATTR_KILL_SGID;
++
+ 	down(&inode->i_sem);
+ 	error = notify_change(dentry, &newattrs);
+ 	up(&inode->i_sem);
+@@ -739,8 +783,6 @@ asmlinkage long sys_fchown(unsigned int 
  	return error;
  }
  
@@ -430,7 +1007,7 @@
  /*
   * Note that while the flag value (low two bits) for sys_open means:
   *	00 - read-only
-@@ -760,8 +762,9 @@ static struct file *__dentry_open(struct
+@@ -758,8 +800,9 @@ static struct file *__dentry_open(struct
  struct file *filp_open(const char * filename, int flags, int mode)
  {
  	int namei_flags, error;
@@ -441,7 +1018,7 @@
  
  	namei_flags = flags;
  	if ((namei_flags+1) & O_ACCMODE)
-@@ -769,16 +772,11 @@ struct file *filp_open(const char * file
+@@ -767,16 +810,11 @@ struct file *filp_open(const char * file
  	if (namei_flags & O_TRUNC)
  		namei_flags |= 2;
  
@@ -458,17 +1035,19 @@
 +	if (!error) {
 +		temp_filp = dentry_open_it(nd.dentry, nd.mnt, flags, &nd.intent);
 +		return temp_filp;
-+	}
++	}	
  	return ERR_PTR(error);
  }
  
-@@ -786,29 +784,27 @@ EXPORT_SYMBOL(filp_open);
+@@ -784,29 +822,27 @@ EXPORT_SYMBOL(filp_open);
  
  struct file *dentry_open(struct dentry *dentry, struct vfsmount *mnt, int flags)
  {
 -	int error;
 -	struct file *f;
--
++	struct lookup_intent it;
++	intent_init(&it, IT_LOOKUP);
+ 
 -	error = -ENFILE;
 -	f = get_empty_filp();
 -	if (f == NULL) {
@@ -476,9 +1055,7 @@
 -		mntput(mnt);
 -		return ERR_PTR(error);
 -	}
-+	struct lookup_intent it;
-+	intent_init(&it, IT_LOOKUP);
- 
+-
 -	return __dentry_open(dentry, mnt, flags, f);
 +	return dentry_open_it(dentry, mnt, flags, &it);
  }
@@ -502,7 +1079,7 @@
  	inode = dentry->d_inode;
  	if (f->f_mode & FMODE_WRITE) {
  		error = get_write_access(inode);
-@@ -827,6 +823,7 @@ static struct file *__dentry_open(struct
+@@ -825,6 +861,7 @@ static struct file *__dentry_open(struct
  		error = f->f_op->open(inode,f);
  		if (error)
  			goto cleanup_all;
@@ -510,7 +1087,7 @@
  	}
  	f->f_flags &= ~(O_CREAT | O_EXCL | O_NOCTTY | O_TRUNC);
  
-@@ -851,6 +848,8 @@ cleanup_all:
+@@ -849,6 +886,8 @@ cleanup_all:
  	f->f_vfsmnt = NULL;
  cleanup_file:
  	put_filp(f);
@@ -519,8 +1096,9 @@
  	dput(dentry);
  	mntput(mnt);
  	return ERR_PTR(error);
---- linux-2.6.9.orig/fs/stat.c
-+++ linux-2.6.9/fs/stat.c
+diff -rup RH_2_6_9_55.orig/fs/stat.c RH_2_6_9_55/fs/stat.c
+--- RH_2_6_9_55.orig/fs/stat.c
++++ RH_2_6_9_55/fs/stat.c
 @@ -37,7 +37,7 @@ void generic_fillattr(struct inode *inod
  
  EXPORT_SYMBOL(generic_fillattr);
@@ -539,13 +1117,44 @@
  	if (inode->i_op->getattr)
  		return inode->i_op->getattr(mnt, dentry, stat);
  
-@@ -62,14 +64,20 @@ int vfs_getattr(struct vfsmount *mnt, st
+@@ -62,7 +64,7 @@ int vfs_getattr(struct vfsmount *mnt, st
  
  EXPORT_SYMBOL(vfs_getattr);
  
+-int vfs_getattr64(struct vfsmount *mnt, struct dentry *dentry, struct kstat64 *stat)
++int vfs_getattr64_it(struct vfsmount *mnt, struct dentry *dentry, struct lookup_intent *it, struct kstat64 *stat)
+ {
+	struct inode *inode = dentry->d_inode;
+	int retval;
+@@ -79,6 +81,13 @@ int vfs_getattr64(struct vfsmount *mnt, 
+		return ixop->getattr64(mnt, dentry, stat);
+	}
+
++	if (inode->i_op->getattr_it) {
++		retval = inode->i_op->getattr_it(mnt, dentry, it, (struct kstat *) stat);
++		if (retval == 0)
++			stat->ino64 = stat->ino;
++		return retval;
++	}
++
+	if (inode->i_op->getattr) {
+		retval = inode->i_op->getattr(mnt, dentry, (struct kstat *) stat);
+		if (retval == 0)
+@@ -98,16 +107,28 @@ int vfs_getattr64(struct vfsmount *mnt, 
+	return 0;
+ }
+
++
+ EXPORT_SYMBOL(vfs_getattr64);
+
 +int vfs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat)
 +{
 +	return vfs_getattr_it(mnt, dentry, NULL, stat);
++}
++
++int vfs_getattr64(struct vfsmount *mnt, struct dentry *dentry, struct kstat64 *stat)
++{
++	return vfs_getattr64_it(mnt, dentry, NULL, stat);
 +}
 +
  int vfs_stat(char __user *name, struct kstat *stat)
@@ -562,7 +1171,7 @@
  		path_release(&nd);
  	}
  	return error;
-@@ -81,10 +89,11 @@ int vfs_lstat(char __user *name, struct 
+@@ -119,10 +140,11 @@ int vfs_lstat(char __user *name, struct 
  {
  	struct nameidata nd;
  	int error;
@@ -576,7 +1185,7 @@
  		path_release(&nd);
  	}
  	return error;
-@@ -96,9 +105,12 @@ int vfs_fstat(unsigned int fd, struct ks
+@@ -134,9 +156,12 @@ int vfs_fstat(unsigned int fd, struct ks
  {
  	struct file *f = fget(fd);
  	int error = -EBADF;
@@ -590,8 +1199,50 @@
  		fput(f);
  	}
  	return error;
---- linux-2.6.9.orig/include/linux/dcache.h
-+++ linux-2.6.9/include/linux/dcache.h
+@@ -148,10 +173,11 @@ int vfs_stat64(char __user *name, struct
+ {
+	struct nameidata nd;
+	int error;
++	intent_init(&nd.intent, IT_GETATTR);
+
+-	error = user_path_walk(name, &nd);
++	error = user_path_walk_it(name, &nd);
+ 	if (!error) {
+-		error = vfs_getattr64(nd.mnt, nd.dentry, stat);
++		error = vfs_getattr64_it(nd.mnt, nd.dentry, &nd.intent, stat);
+		path_release(&nd);
+	}
+	return error;
+@@ -163,10 +189,11 @@ int vfs_lstat64(char __user *name, struc
+ {
+	struct nameidata nd;
+	int error;
++	intent_init(&nd.intent, IT_GETATTR);
+
+-	error = user_path_walk_link(name, &nd);
++	error = user_path_walk_link_it(name, &nd);
+ 	if (!error) {
+-		error = vfs_getattr64(nd.mnt, nd.dentry, stat);
++		error = vfs_getattr64_it(nd.mnt, nd.dentry, &nd.intent, stat);
+		path_release(&nd);
+	}
+	return error;
+@@ -178,9 +205,11 @@ int vfs_fstat64(unsigned int fd, struct 
+ {
+	struct file *f = fget(fd);
+	int error = -EBADF;
++	struct nameidata nd;
++	intent_init(&nd.intent, IT_GETATTR);
+
+	if (f) {
+-		error = vfs_getattr64(f->f_vfsmnt, f->f_dentry, stat);
++		error = vfs_getattr64_it(f->f_vfsmnt, f->f_dentry, &nd.intent, stat);
+		fput(f);
+	}
+	return error;
+diff -rup RH_2_6_9_55.orig/include/linux/dcache.h RH_2_6_9_55/include/linux/dcache.h
+--- RH_2_6_9_55.orig/include/linux/dcache.h
++++ RH_2_6_9_55/include/linux/dcache.h
 @@ -4,6 +4,7 @@
  #ifdef __KERNEL__
  
@@ -609,21 +1260,10 @@
  struct dentry_stat_t {
  	int nr_dentry;
  	int nr_unused;
---- linux-2.6.9.orig/include/linux/fs.h
-+++ linux-2.6.9/include/linux/fs.h
-@@ -81,6 +81,11 @@ extern int leases_enable, dir_notify_ena
- #define FMODE_PREAD	8
- #define FMODE_PWRITE	FMODE_PREAD	/* These go hand in hand */
- 
-+/* File is being opened for execution. Primary users of this flag are
-+   distributed filesystems that can use it to achieve correct ETXTBUSY
-+   behavior for cross-node execution/opening_for_writing of files */
-+#define FMODE_EXEC	16
-+
- #define RW_MASK		1
- #define RWA_MASK	2
- #define READ 0
-@@ -259,6 +260,8 @@ typedef void (dio_iodone_t)(struct inode
+diff -rup RH_2_6_9_55.orig/include/linux/fs.h RH_2_6_9_55/include/linux/fs.h
+--- RH_2_6_9_55.orig/include/linux/fs.h
++++ RH_2_6_9_55/include/linux/fs.h
+@@ -266,6 +266,8 @@ typedef void (dio_iodone_t)(struct inode
  #define ATTR_ATTR_FLAG	1024
  #define ATTR_KILL_SUID	2048
  #define ATTR_KILL_SGID	4096
@@ -632,7 +1272,7 @@
  
  /*
   * This is the Inode Attributes structure, used for notify_change().  It
-@@ -457,6 +460,7 @@ struct inode {
+@@ -464,6 +466,7 @@ struct inode {
  	struct block_device	*i_bdev;
  	struct cdev		*i_cdev;
  	int			i_cindex;
@@ -640,7 +1280,7 @@
  
  	__u32			i_generation;
  
-@@ -590,6 +594,7 @@ struct file {
+@@ -597,6 +600,7 @@ struct file {
  	spinlock_t		f_ep_lock;
  #endif /* #ifdef CONFIG_EPOLL */
  	struct address_space	*f_mapping;
@@ -648,7 +1288,27 @@
  };
  extern spinlock_t files_lock;
  #define file_list_lock() spin_lock(&files_lock);
-@@ -962,7 +967,9 @@ struct inode_operations {
+@@ -967,20 +971,29 @@ struct inode_operations {
+ 	int (*create) (struct inode *,struct dentry *,int, struct nameidata *);
+ 	struct dentry * (*lookup) (struct inode *,struct dentry *, struct nameidata *);
+ 	int (*link) (struct dentry *,struct inode *,struct dentry *);
++	int (*link_raw) (struct nameidata *,struct nameidata *);
+ 	int (*unlink) (struct inode *,struct dentry *);
++	int (*unlink_raw) (struct nameidata *);
+ 	int (*symlink) (struct inode *,struct dentry *,const char *);
++	int (*symlink_raw) (struct nameidata *,const char *);
+ 	int (*mkdir) (struct inode *,struct dentry *,int);
++	int (*mkdir_raw) (struct nameidata *,int);
+ 	int (*rmdir) (struct inode *,struct dentry *);
++	int (*rmdir_raw) (struct nameidata *);
+ 	int (*mknod) (struct inode *,struct dentry *,int,dev_t);
++	int (*mknod_raw) (struct nameidata *,int,dev_t);
+ 	int (*rename) (struct inode *, struct dentry *,
+ 			struct inode *, struct dentry *);
++	int (*rename_raw) (struct nameidata *, struct nameidata *);
+ 	int (*readlink) (struct dentry *, char __user *,int);
+ 	int (*follow_link) (struct dentry *, struct nameidata *);
+ 	void (*put_link) (struct dentry *, struct nameidata *);
  	void (*truncate) (struct inode *);
  	int (*permission) (struct inode *, int, struct nameidata *);
  	int (*setattr) (struct dentry *, struct iattr *);
@@ -658,7 +1318,7 @@
  	int (*setxattr) (struct dentry *, const char *,const void *,size_t,int);
  	ssize_t (*getxattr) (struct dentry *, const char *, void *, size_t);
  	ssize_t (*listxattr) (struct dentry *, char *, size_t);
-@@ -1002,6 +1009,7 @@ struct super_operations {
+@@ -1025,6 +1038,7 @@ struct super_operations {
  	int (*remount_fs) (struct super_block *, int *, char *);
  	void (*clear_inode) (struct inode *);
  	void (*umount_begin) (struct super_block *);
@@ -666,7 +1326,7 @@
  
  	int (*show_options)(struct seq_file *, struct vfsmount *);
  };
-@@ -1194,6 +1202,7 @@ extern int unregister_filesystem(struct 
+@@ -1217,6 +1231,7 @@ extern int unregister_filesystem(struct 
  extern struct vfsmount *kern_mount(struct file_system_type *);
  extern int may_umount_tree(struct vfsmount *);
  extern int may_umount(struct vfsmount *);
@@ -674,27 +1334,32 @@
  extern long do_mount(char *, char *, char *, unsigned long, void *);
  
  extern int vfs_statfs(struct super_block *, struct kstatfs *);
-@@ -1258,6 +1267,7 @@ static inline int break_lease(struct ino
- extern int do_truncate(struct dentry *, loff_t start);
+@@ -1277,10 +1292,10 @@ static inline int break_lease(struct ino
+ }
+ 
+ /* fs/open.c */
+-
+ extern int do_truncate(struct dentry *, loff_t start, unsigned int);
  extern struct file *filp_open(const char *, int, int);
  extern struct file * dentry_open(struct dentry *, struct vfsmount *, int);
 +extern struct file * dentry_open_it(struct dentry *, struct vfsmount *, int, struct lookup_intent *);
  extern int filp_close(struct file *, fl_owner_t id);
  extern char * getname(const char __user *);
  
---- linux-2.6.9.orig/include/linux/mount.h
-+++ linux-2.6.9/include/linux/mount.h
-@@ -34,6 +34,8 @@ struct vfsmount
+diff -rup RH_2_6_9_55.orig/include/linux/mount.h RH_2_6_9_55/include/linux/mount.h
+--- RH_2_6_9_55.orig/include/linux/mount.h
++++ RH_2_6_9_55/include/linux/mount.h
+@@ -34,6 +34,7 @@ struct vfsmount
  	struct list_head mnt_list;
  	struct list_head mnt_fslink;	/* link in fs-specific expiry list */
  	struct namespace *mnt_namespace; /* containing namespace */
-+	struct list_head mnt_lustre_list; /* GNS mount list */
 +	unsigned long mnt_last_used;	/* for GNS auto-umount (jiffies) */
  };
  
  static inline struct vfsmount *mntget(struct vfsmount *mnt)
---- linux-2.6.9.orig/include/linux/namei.h
-+++ linux-2.6.9/include/linux/namei.h
+diff -rup RH_2_6_9_55.orig/include/linux/namei.h RH_2_6_9_55/include/linux/namei.h
+--- RH_2_6_9_55.orig/include/linux/namei.h
++++ RH_2_6_9_55/include/linux/namei.h
 @@ -2,14 +2,55 @@
  #define _LINUX_NAMEI_H
  
@@ -775,7 +1440,7 @@
  
  /*
   * Intent data
-@@ -56,6 +96,12 @@ enum {LAST_NORM, LAST_ROOT, LAST_DOT, LA
+@@ -56,11 +96,18 @@ enum {LAST_NORM, LAST_ROOT, LAST_DOT, LA
  #define LOOKUP_ACCESS		(0x0400)
  
  extern int FASTCALL(__user_walk(const char __user *, unsigned, struct nameidata *));
@@ -788,11 +1453,9 @@
  #define user_path_walk(name,nd) \
  	__user_walk(name, LOOKUP_FOLLOW, nd)
  #define user_path_walk_link(name,nd) \
-@@ -68,7 +114,6 @@ extern void path_release_on_umount(struc
- 
- extern struct dentry * lookup_one_len(const char *, struct dentry *, int);
- extern struct dentry * lookup_hash(struct qstr *, struct dentry *);
--
- extern int follow_down(struct vfsmount **, struct dentry **);
- extern int follow_up(struct vfsmount **, struct dentry **);
- 
+ 	__user_walk(name, 0, nd)
+ extern int FASTCALL(path_lookup(const char *, unsigned, struct nameidata *));
++extern int FASTCALL(path_lookup_it(const char *, unsigned, struct nameidata *));
+ extern int FASTCALL(path_walk(const char *, struct nameidata *));
+ extern int FASTCALL(link_path_walk(const char *, struct nameidata *));
+ extern void path_release(struct nameidata *);

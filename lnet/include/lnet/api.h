@@ -1,3 +1,39 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ */
+
 #ifndef __LNET_API_H__
 #define __LNET_API_H__
 
@@ -10,7 +46,7 @@ int LNetNIInit(lnet_pid_t requested_pid);
 int LNetNIFini(void);
 
 int LNetGetId(unsigned int index, lnet_process_id_t *id);
-int LNetDist(lnet_nid_t nid, lnet_nid_t *srcnid, int *order);
+int LNetDist(lnet_nid_t nid, lnet_nid_t *srcnid, __u32 *order);
 int LNetCtl(unsigned int cmd, void *arg);
 void LNetSnprintHandle (char *str, int str_len, lnet_handle_any_t handle);
 
@@ -98,5 +134,13 @@ int LNetGet(lnet_nid_t        self,
 
 
 int LNetSetAsync(lnet_process_id_t id, int nasync);
+
+#ifndef __KERNEL__
+/* Temporary workaround to allow uOSS and test programs force server
+ * mode in userspace. See comments near ln_server_mode_flag in
+ * lnet/lib-types.h */
+
+void lnet_server_mode();
+#endif        
 
 #endif

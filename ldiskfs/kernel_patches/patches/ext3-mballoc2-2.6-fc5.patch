@@ -362,9 +362,9 @@ Index: linux-2.6.16.i686/fs/ext3/mballoc.c
 ===================================================================
 --- linux-2.6.16.i686.orig/fs/ext3/mballoc.c	2006-05-31 04:14:15.752410384 +0800
 +++ linux-2.6.16.i686/fs/ext3/mballoc.c	2006-05-30 23:03:38.000000000 +0800
-@@ -0,0 +1,2725 @@
+@@ -0,0 +1,2726 @@
 +/*
-+ * Copyright (c) 2003-2005, Cluster File Systems, Inc, info@clusterfs.com
++ * Copyright 2008 Sun Microsystems, Inc.
 + * Written by Alex Tomas <alex@clusterfs.com>
 + *
 + * This program is free software; you can redistribute it and/or modify
@@ -1335,8 +1335,8 @@ Index: linux-2.6.16.i686/fs/ext3/mballoc.c
 +	struct ext3_free_extent *gex = &ac->ac_g_ex;
 +
 +	J_ASSERT(ex->fe_len > 0);
-+	J_ASSERT(ex->fe_len < (1 << ac->ac_sb->s_blocksize_bits) * 8);
-+	J_ASSERT(ex->fe_start < (1 << ac->ac_sb->s_blocksize_bits) * 8);
++	J_ASSERT(ex->fe_len < EXT3_BLOCKS_PER_GROUP(ac->ac_sb));
++	J_ASSERT(ex->fe_start < EXT3_BLOCKS_PER_GROUP(ac->ac_sb));
 +
 +	ac->ac_found++;
 +
@@ -1530,8 +1530,8 @@ Index: linux-2.6.16.i686/fs/ext3/mballoc.c
 +	i = e3b->bd_info->bb_first_free;
 +
 +	while (free && ac->ac_status == AC_STATUS_CONTINUE) {
-+		i = mb_find_next_zero_bit(bitmap, sb->s_blocksize * 8, i);
-+		if (i >= sb->s_blocksize * 8) {
++		i = mb_find_next_zero_bit(bitmap, EXT3_BLOCKS_PER_GROUP(sb), i);
++		if (i >= EXT3_BLOCKS_PER_GROUP(sb)) {
 +			J_ASSERT(free == 0);
 +			break;
 +		}
@@ -1569,7 +1569,7 @@ Index: linux-2.6.16.i686/fs/ext3/mballoc.c
 +	i = (i - le32_to_cpu(sbi->s_es->s_first_data_block))
 +			% EXT3_BLOCKS_PER_GROUP(sb);
 +
-+	while (i < sb->s_blocksize * 8) {
++	while (i < EXT3_BLOCKS_PER_GROUP(sb)) {
 +		if (!mb_test_bit(i, bitmap)) {
 +			max = mb_find_extent(e3b, 0, i, sbi->s_stripe, &ex);
 +			if (max >= sbi->s_stripe) {
@@ -2243,7 +2243,8 @@ Index: linux-2.6.16.i686/fs/ext3/mballoc.c
 +	spin_lock_init(&sbi->s_mb_history_lock);
 +	i = sbi->s_mb_history_max * sizeof(struct ext3_mb_history);
 +	sbi->s_mb_history = kmalloc(i, GFP_KERNEL);
-+	memset(sbi->s_mb_history, 0, i);
++       if (likely(sbi->s_mb_history != NULL))
++               memset(sbi->s_mb_history, 0, i);
 +	/* if we can't allocate history, then we simple won't use it */
 +}
 +
@@ -2254,7 +2255,7 @@ Index: linux-2.6.16.i686/fs/ext3/mballoc.c
 +	struct ext3_sb_info *sbi = EXT3_SB(sb);
 +	struct ext3_mb_history h;
 +
-+	if (likely(sbi->s_mb_history == NULL))
++	if (unlikely(sbi->s_mb_history == NULL))
 +		return;
 +
 +	h.pid = current->pid;

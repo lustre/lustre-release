@@ -9,3 +9,5 @@ Rules
 autoMakefile.in
 autoMakefile
 lustre.spec
+Module.symvers
+Modules.symvers

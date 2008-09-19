@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2001, 2002 Cluster File Systems, Inc.
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
  *
  *   This file is part of Portals, http://www.sf.net/projects/lustre/
  *
@@ -53,14 +53,14 @@
 #include "parser.h"
 
 unsigned int libcfs_debug;
-unsigned int libcfs_printk;
+unsigned int libcfs_printk = D_CANTMASK;
 
 static int   g_net_set;
 static __u32 g_net;
 
 /* Convert a string boolean to an int; "enable" -> 1 */
-int 
-lnet_parse_bool (int *b, char *str) 
+int
+lnet_parse_bool (int *b, char *str)
 {
         if (!strcasecmp (str, "no") ||
             !strcasecmp (str, "n") ||
@@ -71,7 +71,7 @@ lnet_parse_bool (int *b, char *str)
                 *b = 0;
                 return (0);
         }
-        
+
         if (!strcasecmp (str, "yes") ||
             !strcasecmp (str, "y") ||
             !strcasecmp (str, "on") ||
@@ -81,7 +81,7 @@ lnet_parse_bool (int *b, char *str)
                 *b = 1;
                 return (0);
         }
-        
+
         return (-1);
 }
 
@@ -89,13 +89,13 @@ int
 lnet_parse_port (int *port, char *str)
 {
         char      *end;
-        
+
         *port = strtol (str, &end, 0);
 
         if (*end == 0 &&                        /* parsed whole string */
             *port > 0 && *port < 65536)         /* minimal sanity check */
                 return (0);
-        
+
         return (-1);
 }
 
@@ -194,41 +194,41 @@ ptl_ipaddr_2_str (__u32 ipaddr, char *str, int lookup)
 }
 
 int
-lnet_parse_time (time_t *t, char *str) 
+lnet_parse_time (time_t *t, char *str)
 {
         char          *end;
         int            n;
         struct tm      tm;
-        
+
         *t = strtol (str, &end, 0);
         if (*end == 0) /* parsed whole string */
                 return (0);
-        
+
         memset (&tm, 0, sizeof (tm));
         n = sscanf (str, "%d-%d-%d-%d:%d:%d",
-                    &tm.tm_year, &tm.tm_mon, &tm.tm_mday, 
+                    &tm.tm_year, &tm.tm_mon, &tm.tm_mday,
                     &tm.tm_hour, &tm.tm_min, &tm.tm_sec);
         if (n != 6)
                 return (-1);
-        
+
         tm.tm_mon--;                    /* convert to 0 == Jan */
         tm.tm_year -= 1900;             /* y2k quirk */
         tm.tm_isdst = -1;               /* dunno if it's daylight savings... */
-        
+
         *t = mktime (&tm);
         if (*t == (time_t)-1)
                 return (-1);
-                        
+
         return (0);
 }
 
-int g_net_is_set (char *cmd) 
+int g_net_is_set (char *cmd)
 {
         if (g_net_set)
                 return 1;
-        
+
         if (cmd != NULL)
-                fprintf(stderr, 
+                fprintf(stderr,
                         "You must run the 'network' command before '%s'.\n",
                         cmd);
         return 0;
@@ -251,18 +251,18 @@ int g_net_is_compatible (char *cmd, ...)
                         return 1;
                 }
         } while (nal != 0);
-        
+
         va_end (ap);
-        
+
         if (cmd != NULL)
-                fprintf (stderr, 
+                fprintf (stderr,
                          "Command %s not compatible with %s NAL\n",
-                         cmd, 
+                         cmd,
                          libcfs_lnd2str(LNET_NETTYP(g_net)));
         return 0;
 }
 
-int ptl_initialize(int argc, char **argv) 
+int ptl_initialize(int argc, char **argv)
 {
         register_ioc_dev(LNET_DEV_ID, LNET_DEV_PATH,
                          LNET_DEV_MAJOR, LNET_DEV_MINOR);
@@ -346,7 +346,7 @@ jt_ptl_list_nids(int argc, char **argv)
                 LIBCFS_IOC_INIT (data);
                 data.ioc_count = count;
                 rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_NI, &data);
-                
+
                 if (rc < 0) {
                         if ((count > 0) && (errno == ENOENT))
                                 /* We found them all */
@@ -358,7 +358,7 @@ jt_ptl_list_nids(int argc, char **argv)
 
                 if (all || (LNET_NETTYP(LNET_NIDNET(data.ioc_nid)) != LOLND)) {
                         printf("%s\n", libcfs_nid2str(data.ioc_nid));
-                        if (return_nid) { 
+                        if (return_nid) {
                                 *(__u64 *)(argv[1]) = data.ioc_nid;
                                 return_nid--;
                         }
@@ -386,7 +386,7 @@ jt_ptl_which_nid (int argc, char **argv)
                 fprintf(stderr, "usage: %s NID [NID...]\n", argv[0]);
                 return 0;
         }
-        
+
         for (i = 1; i < argc; i++) {
                 nidstr = argv[i];
                 nid = libcfs_str2nid(nidstr);
@@ -394,10 +394,10 @@ jt_ptl_which_nid (int argc, char **argv)
                         fprintf(stderr, "Can't parse NID %s\n", nidstr);
                         return -1;
                 }
-                
+
                 LIBCFS_IOC_INIT(data);
                 data.ioc_nid = nid;
-                
+
                 rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_LNET_DIST, &data);
                 if (rc != 0) {
                         fprintf(stderr, "Can't get distance to %s: %s\n",
@@ -411,12 +411,12 @@ jt_ptl_which_nid (int argc, char **argv)
                 if (dist < 0) {
                         if (dist == -EHOSTUNREACH)
                                 continue;
-                
+
                         fprintf(stderr, "Unexpected distance to %s: %d\n",
                                 nidstr, dist);
                         return -1;
                 }
-                
+
                 if (best_nid == LNET_NID_ANY ||
                     dist < best_dist ||
                     (dist == best_dist && order < best_order)) {
@@ -430,7 +430,7 @@ jt_ptl_which_nid (int argc, char **argv)
                 fprintf(stderr, "No reachable NID\n");
                 return -1;
         }
-        
+
         printf("%s\n", libcfs_nid2str(best_nid));
         return 0;
 }
@@ -450,7 +450,7 @@ jt_ptl_print_interfaces (int argc, char **argv)
                 LIBCFS_IOC_INIT(data);
                 data.ioc_net   = g_net;
                 data.ioc_count = index;
-                
+
                 rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_INTERFACE, &data);
                 if (rc != 0)
                         break;
@@ -546,7 +546,7 @@ jt_ptl_del_interface (int argc, char **argv)
                 fprintf (stderr, "Can't parse ip: %s\n", argv[1]);
                 return -1;
         }
-        
+
         LIBCFS_IOC_INIT(data);
         data.ioc_net    = g_net;
         data.ioc_u32[0] = ipaddr;
@@ -578,7 +578,7 @@ jt_ptl_print_peers (int argc, char **argv)
                 LIBCFS_IOC_INIT(data);
                 data.ioc_net     = g_net;
                 data.ioc_count   = index;
-                
+
                 rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_PEER, &data);
                 if (rc != 0)
                         break;
@@ -636,7 +636,7 @@ jt_ptl_print_peers (int argc, char **argv)
         return 0;
 }
 
-int 
+int
 jt_ptl_add_peer (int argc, char **argv)
 {
         struct libcfs_ioctl_data data;
@@ -645,19 +645,19 @@ jt_ptl_add_peer (int argc, char **argv)
         int                      port = 0;
         int                      rc;
 
-        if (!g_net_is_compatible (argv[0], SOCKLND, RALND, 
+        if (!g_net_is_compatible (argv[0], SOCKLND, RALND,
                                   OPENIBLND, CIBLND, IIBLND, VIBLND, 0))
                 return -1;
 
         if (g_net_is_compatible(NULL, SOCKLND, OPENIBLND, CIBLND, RALND, 0)) {
                 if (argc != 4) {
-                        fprintf (stderr, "usage(tcp,openib,cib,ra): %s nid ipaddr port\n", 
+                        fprintf (stderr, "usage(tcp,openib,cib,ra): %s nid ipaddr port\n",
                                  argv[0]);
                         return 0;
                 }
         } else if (g_net_is_compatible(NULL, VIBLND, 0)) {
                 if (argc != 3) {
-                        fprintf (stderr, "usage(vib): %s nid ipaddr\n", 
+                        fprintf (stderr, "usage(vib): %s nid ipaddr\n",
                                  argv[0]);
                         return 0;
                 }
@@ -696,11 +696,11 @@ jt_ptl_add_peer (int argc, char **argv)
                          strerror (errno));
                 return -1;
         }
-        
+
         return 0;
 }
 
-int 
+int
 jt_ptl_del_peer (int argc, char **argv)
 {
         struct libcfs_ioctl_data data;
@@ -730,7 +730,7 @@ jt_ptl_del_peer (int argc, char **argv)
                 fprintf (stderr, "usage: %s [nid]\n", argv[0]);
                 return 0;
         }
-                
+
         if (argc > 1 &&
             !libcfs_str2anynid(&nid, argv[1])) {
                 fprintf (stderr, "Can't parse nid: %s\n", argv[1]);
@@ -754,7 +754,7 @@ jt_ptl_del_peer (int argc, char **argv)
                         }
                 }
         }
-                   
+
         LIBCFS_IOC_INIT(data);
         data.ioc_net    = g_net;
         data.ioc_nid    = nid;
@@ -767,11 +767,11 @@ jt_ptl_del_peer (int argc, char **argv)
                          strerror (errno));
                 return -1;
         }
-        
+
         return 0;
 }
 
-int 
+int
 jt_ptl_print_connections (int argc, char **argv)
 {
         struct libcfs_ioctl_data data;
@@ -780,7 +780,7 @@ jt_ptl_print_connections (int argc, char **argv)
         int                      index;
         int                      rc;
 
-        if (!g_net_is_compatible (argv[0], SOCKLND, RALND, 
+        if (!g_net_is_compatible (argv[0], SOCKLND, RALND, MXLND,
                                   OPENIBLND, CIBLND, IIBLND, VIBLND, O2IBLND, 0))
                 return -1;
 
@@ -863,7 +863,7 @@ int jt_ptl_disconnect(int argc, char **argv)
         data.ioc_net     = g_net;
         data.ioc_nid     = nid;
         data.ioc_u32[0]  = ipaddr;
-        
+
         rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_CLOSE_CONNECTION, &data);
         if (rc != 0) {
                 fprintf(stderr, "failed to remove connection: %s\n",
@@ -887,17 +887,17 @@ int jt_ptl_push_connection (int argc, char **argv)
 
         if (!g_net_is_compatible (argv[0], SOCKLND, 0))
                 return -1;
-        
+
         if (argc > 1 &&
             !libcfs_str2anynid(&nid, argv[1])) {
                 fprintf(stderr, "Can't parse nid: %s\n", argv[1]);
                 return -1;
         }
-                        
+
         LIBCFS_IOC_INIT(data);
         data.ioc_net     = g_net;
         data.ioc_nid     = nid;
-        
+
         rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_PUSH_CONNECTION, &data);
         if (rc != 0) {
                 fprintf(stderr, "failed to push connection: %s\n",
@@ -908,7 +908,7 @@ int jt_ptl_push_connection (int argc, char **argv)
         return 0;
 }
 
-int 
+int
 jt_ptl_print_active_txs (int argc, char **argv)
 {
         struct libcfs_ioctl_data data;
@@ -977,7 +977,7 @@ int jt_ptl_ping(int argc, char **argv)
                 }
         } else {
                 char   *end;
-                
+
                 if (argv[1][0] == 'u' ||
                     argv[1][0] == 'U')
                         id.pid = strtoul(&argv[1][1], &end, 0) | LNET_PID_USERFLAG;
@@ -985,7 +985,7 @@ int jt_ptl_ping(int argc, char **argv)
                         id.pid = strtoul(argv[1], &end, 0);
 
                 id.nid = libcfs_str2nid(sep + 1);
-                
+
                 if (end != sep ||
                     id.nid == LNET_NID_ANY) {
                         fprintf(stderr, "Can't parse process id \"%s\"\n", argv[1]);
@@ -1067,7 +1067,7 @@ jt_ptl_fail_nid (int argc, char **argv)
                 fprintf (stderr, "usage: %s nid|\"*\" [count (0 == mend)]\n", argv[0]);
                 return (0);
         }
-        
+
         if (!libcfs_str2anynid(&nid, argv[1]))
         {
                 fprintf (stderr, "Can't parse nid \"%s\"\n", argv[1]);
@@ -1080,18 +1080,18 @@ jt_ptl_fail_nid (int argc, char **argv)
                 fprintf (stderr, "Can't parse count \"%s\"\n", argv[2]);
                 return (-1);
         }
-        
+
         LIBCFS_IOC_INIT (data);
         data.ioc_nid = nid;
         data.ioc_count = threshold;
-        
+
         rc = l_ioctl (LNET_DEV_ID, IOC_LIBCFS_FAIL_NID, &data);
         if (rc < 0)
                 fprintf (stderr, "IOC_LIBCFS_FAIL_NID failed: %s\n",
                          strerror (errno));
         else
                 printf ("%s %s\n", threshold == 0 ? "Unfailing" : "Failing", argv[1]);
-        
+
         return (0);
 }
 
@@ -1103,7 +1103,7 @@ jt_ptl_add_route (int argc, char **argv)
         unsigned int             hops = 1;
         char                    *end;
         int                      rc;
-        
+
         if (argc < 2 || argc > 3)
         {
                 fprintf (stderr, "usage: %s gateway [hopcount]\n", argv[0]);
@@ -1126,7 +1126,7 @@ jt_ptl_add_route (int argc, char **argv)
                         return -1;
                 }
         }
-        
+
         LIBCFS_IOC_INIT(data);
         data.ioc_net = g_net;
         data.ioc_count = hops;
@@ -1137,7 +1137,7 @@ jt_ptl_add_route (int argc, char **argv)
                 fprintf (stderr, "IOC_LIBCFS_ADD_ROUTE failed: %s\n", strerror (errno));
                 return (-1);
         }
-        
+
         return (0);
 }
 
@@ -1147,7 +1147,7 @@ jt_ptl_del_route (int argc, char **argv)
         struct libcfs_ioctl_data data;
         lnet_nid_t               nid;
         int                      rc;
-        
+
         if (argc != 2) {
                 fprintf (stderr, "usage: %s gatewayNID\n", argv[0]);
                 return (0);
@@ -1165,11 +1165,11 @@ jt_ptl_del_route (int argc, char **argv)
 
         rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_DEL_ROUTE, &data);
         if (rc != 0) {
-                fprintf (stderr, "IOC_LIBCFS_DEL_ROUTE (%s) failed: %s\n", 
+                fprintf (stderr, "IOC_LIBCFS_DEL_ROUTE (%s) failed: %s\n",
                          libcfs_nid2str(nid), strerror (errno));
                 return (-1);
         }
-        
+
         return (0);
 }
 
@@ -1202,7 +1202,7 @@ jt_ptl_notify_router (int argc, char **argv)
         }
 
         gettimeofday(&now, NULL);
-        
+
         if (argc < 4) {
                 when = now.tv_sec;
         } else if (lnet_parse_time (&when, argv[3]) != 0) {
@@ -1221,14 +1221,14 @@ jt_ptl_notify_router (int argc, char **argv)
         data.ioc_flags = enable;
         /* Yeuch; 'cept I need a __u64 on 64 bit machines... */
         data.ioc_u64[0] = (__u64)when;
-        
+
         rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_NOTIFY_ROUTER, &data);
         if (rc != 0) {
                 fprintf (stderr, "IOC_LIBCFS_NOTIFY_ROUTER (%s) failed: %s\n",
                          libcfs_nid2str(nid), strerror (errno));
                 return (-1);
         }
-        
+
         return (0);
 }
 
@@ -1247,7 +1247,7 @@ jt_ptl_print_routes (int argc, char **argv)
         {
                 LIBCFS_IOC_INIT(data);
                 data.ioc_count = index;
-                
+
                 rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_ROUTE, &data);
                 if (rc != 0)
                         break;
@@ -1288,7 +1288,7 @@ lwt_control(int enable, int clear)
 }
 
 static int
-lwt_snapshot(cycles_t *now, int *ncpu, int *totalsize, 
+lwt_snapshot(cycles_t *now, int *ncpu, int *totalsize,
              lwt_event_t *events, int size)
 {
         struct libcfs_ioctl_data data;
@@ -1419,7 +1419,7 @@ get_cycles_per_usec ()
         FILE      *f = fopen ("/proc/cpuinfo", "r");
         double     mhz;
         char      line[64];
-        
+
         if (f != NULL) {
                 while (fgets (line, sizeof (line), f) != NULL)
                         if (sscanf (line, "cpu MHz : %lf", &mhz) == 1) {
@@ -1465,7 +1465,7 @@ jt_ptl_lwt(int argc, char **argv)
                         "        %s stop [fname]\n", argv[0], argv[0]);
                 return (-1);
         }
-        
+
         if (!strcmp(argv[1], "start")) {
                 /* disable */
                 if (lwt_control(0, 0) != 0)
@@ -1481,12 +1481,12 @@ jt_ptl_lwt(int argc, char **argv)
 
                 return (0);
         }
-                
+
         if (lwt_snapshot(NULL, &ncpus, &totalspace, NULL, 0) != 0)
                 return (-1);
 
         if (ncpus > lwt_max_cpus) {
-                fprintf(stderr, "Too many cpus: %d (%d)\n", 
+                fprintf(stderr, "Too many cpus: %d (%d)\n",
                         ncpus, lwt_max_cpus);
                 return (-1);
         }
@@ -1520,7 +1520,7 @@ jt_ptl_lwt(int argc, char **argv)
         }
 
         mhz = get_cycles_per_usec();
-        
+
         /* carve events into per-cpu slices */
         nevents_per_cpu = totalspace / (ncpus * sizeof(lwt_event_t));
         for (cpu = 0; cpu <= ncpus; cpu++)
@@ -1548,17 +1548,17 @@ jt_ptl_lwt(int argc, char **argv)
                 e = first_event[cpu];
                 if (e == NULL)                  /* no events this cpu */
                         continue;
-                
+
                 if (e == cpu_event[cpu])
                         e = cpu_event[cpu + 1] - 1;
-                else 
+                else
                         e = e - 1;
-                
+
                 /* If there's an event immediately before the first one, this
                  * cpu wrapped its event buffer */
                 if (e->lwte_where == NULL)
                         continue;
-         
+
                 /* We should only start outputting events from the most recent
                  * first event in any wrapped cpu.  Events before this time on
                  * other cpus won't have any events from this CPU to interleave
@@ -1587,20 +1587,20 @@ jt_ptl_lwt(int argc, char **argv)
                         /* no wrapped cpus and this is he first ever event */
                         t0 = next_event[cpu]->lwte_when;
                 }
-                
+
                 if (t0 <= next_event[cpu]->lwte_when) {
                         /* on or after the first event */
                         if (!printed_date) {
                                 cycles_t du = (tnow - t0) / mhz;
                                 time_t   then = tvnow.tv_sec - du/1000000;
-                                
+
                                 if (du % 1000000 > tvnow.tv_usec)
                                         then--;
 
                                 fprintf(f, "%s", ctime(&then));
                                 printed_date = 1;
                         }
-                        
+
                         rc = lwt_print(f, t0, tlast, mhz, cpu, next_event[cpu]);
                         if (rc != 0)
                                 break;
@@ -1613,7 +1613,7 @@ jt_ptl_lwt(int argc, char **argv)
                 }
 
                 tlast = next_event[cpu]->lwte_when;
-                
+
                 next_event[cpu]++;
                 if (next_event[cpu] == cpu_event[cpu + 1])
                         next_event[cpu] = cpu_event[cpu];
@@ -1640,7 +1640,7 @@ int jt_ptl_memhog(int argc, char **argv)
         int                       rc;
         int                       count;
         char                     *end;
-        
+
         if (argc < 2)  {
                 fprintf(stderr, "usage: %s <npages> [<GFP flags>]\n", argv[0]);
                 return 0;
@@ -1660,7 +1660,7 @@ int jt_ptl_memhog(int argc, char **argv)
                 }
                 gfp = rc;
         }
-        
+
         LIBCFS_IOC_INIT(data);
         data.ioc_count = count;
         data.ioc_flags = gfp;
@@ -1670,7 +1670,7 @@ int jt_ptl_memhog(int argc, char **argv)
                 fprintf(stderr, "memhog %d failed: %s\n", count, strerror(errno));
                 return -1;
         }
-        
+
         printf("memhog %d OK\n", count);
         return 0;
 }

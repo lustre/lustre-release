@@ -1,4 +1,133 @@
-tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+tbd  Sun Microsystems, Inc.
+	* version 3.0.6
+
+Severity   : normal
+Bugzilla   : 15320
+Description: OSS crashes frequently, e2fsck does not fix
+Details    : Add an extra check to ldiskfs extents code for the condition, 
+	     eh_entries = 0 & eh_depth != 0
+
+Severity   : normal
+Bugzilla   : 15459
+Description: migrate ldiskfs - ldiskfs2 (extents on directories)
+Details    : disable preallocation for non-regular files.
+
+Severity   : normal
+Frequency  : blocks per group < blocksize*8 and uninit_groups is enabled
+Bugzilla   : 15932
+Description: ldiskfs error: XXX blocks in bitmap, YYY in gd
+Details    : If blocks per group is less than blocksize*8, set rest of the
+	     bitmap to 1.
+
+Severity   : enhancement
+Bugzilla   : 10555
+Description: Add a FIEMAP(FIle Extent MAP) ioctl for ldiskfs
+Details    : FIEMAP ioctl will allow an application to efficiently fetch the
+             extent information of a file. It can be used to map logical blocks
+             in a file to physical blocks in the block device.
+
+Severity   : normal
+Bugzilla   : 16498
+Description: Get RAID stripe size from superblock
+Details    : RAID striping parameters are now saved in the superblock itself,
+	     so we should use these parameters instead of having to specify
+	     a mount option each time.
+
+-------------------------------------------------------------------------------
+
+04-26-2008  Sun Microsystems, Inc.
+	* version 3.0.5
+
+Severity   : normal
+Bugzilla   : 14493
+Description: Kernel BUG at ... ldiskfs/ldiskfs/mballoc.c:3853
+Details    : Removing the underlying device (e.g. via a SCSI rescan) can cause a
+	     kernel BUG in ldiskfs_mb_discard_inode_preallocations().
+
+Severity   : major
+Bugzilla   : 14596
+Description: deadlock in ext3_expand_extra_isize
+Details    : Inode expansion during ext3_mark_inode_dirty may lead to deadlock.
+	     This is solved by making sure that ext3_expand_extra_isize isn't
+	     called from ext3_xattr_set_handle.
+
+Severity   : normal
+Bugzilla   : 14594
+Description: soft lockups on 1.6.2 MDS (is_subdir)
+Details    : don't add dentries with ".." to dcache and ignore such dentries in
+	     iopen_lookup().
+
+Severity   : critical
+Frequency  : very rare, if additional xattrs are used on kernels >= 2.6.12
+Bugzilla   : 15777
+Description: files may lose file attributes in some cases
+Details    : If there are multiple extended attributes stored on the inode,
+	    in particular ACLs, SELinux, or user attributes (if user_xattr
+	    is specified for the client mount options) then there is a risk
+	    of attribute loss.  If an additional attribute is be stored
+	    initially in the inode and then increase in size enough to be
+	    moved to the external attribute block (e.g. ACL growing in size)
+	    for the attribute to be lost.
+
+--------------------------------------------------------------------------------
+
+2008-01-11  Sun Microsystems, Inc.
+       * version 3.0.4
+
+Severity   : normal
+Bugzilla   : 13397
+Description: Add support for vanilla-2.6.22 kernel.
+
+--------------------------------------------------------------------------------
+
+2007-12-07  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 3.0.3
+
+Severity   : normal
+Bugzilla   : 13164
+Description: statfs speedup patches.
+Details    : The patches  improve statfs performance for very large
+	     filesystems.
+
+Severity   : normal
+Frequency  : if the uninit_groups feature is enabled on ldiskfs
+Bugzilla   : 13706
+Description: e2fsck reports "invalid unused inodes count"
+Details    : If a new ldiskfs filesystem is created with the "uninit_groups"
+	     feature and only a single inode is created in a group then the
+	     "bg_unused_inodes" count is incorrectly updated.  Creating a
+	     second inode in that group would update it correctly.
+
+--------------------------------------------------------------------------------
+
+2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 3.0.2
+
+Severity   : enhancement
+Bugzilla   : 10555
+Description: Add a FIEMAP(FIle Extent MAP) ioctl for ldiskfs
+Details    : FIEMAP ioctl will allow an application to efficiently fetch the
+	     extent information of a file. It can be used to map logical blocks
+	     in a file to physical blocks in the block device.
+
+--------------------------------------------------------------------------------
+
+2007-08-29         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 3.0.1
+
+Severity   : major
+Frequency  : rare
+Bugzilla   : 6334
+Description: Multiple mount protection(MMP) support.
+Details    : This feature will protect the filesystem from being mounted more
+	     than once simultaneously. It will also protect changes by e2fsprogs
+	     to the filesystem if it is mounted. This assumes high importance
+	     in a shared storage environment where multiple mounts can severely
+	     corrupt the filesystem.
+
+--------------------------------------------------------------------------------
+
+2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 3.0.0
        * Initial release of ldiskfs as a separate package.
 
@@ -8,3 +137,4 @@ Bugzilla   : 12415
 Description: Updated patchess for new RHEL4 kernel
 Details    : Add patch ext3-unlink-race.patch
 	     Updated series file ldiskfs-2.6-rhel4.series
+

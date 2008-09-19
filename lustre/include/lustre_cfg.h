@@ -1,23 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001 Cluster File Systems, Inc. <braam@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #ifndef _LUSTRE_CFG_H
@@ -56,28 +70,33 @@ enum lcfg_command_type {
         LCFG_LOG_START      = 0x00ce011,
         LCFG_LOG_END        = 0x00ce012,
         LCFG_LOV_ADD_INA    = 0x00ce013,
+        LCFG_SPTLRPC_CONF   = 0x00ce016,
+        LCFG_POOL_NEW       = 0x00ce020,
+        LCFG_POOL_ADD       = 0x00ce021,
+        LCFG_POOL_REM       = 0x00ce022,
+        LCFG_POOL_DEL       = 0x00ce023,
 };
 
 struct lustre_cfg_bufs {
         void    *lcfg_buf[LUSTRE_CFG_MAX_BUFCOUNT];
-        uint32_t lcfg_buflen[LUSTRE_CFG_MAX_BUFCOUNT];
-        uint32_t lcfg_bufcount;
+        __u32    lcfg_buflen[LUSTRE_CFG_MAX_BUFCOUNT];
+        __u32    lcfg_bufcount;
 };
 
 /* Mountconf transitional hack, should go away after 1.6 */
 #define LCFG_FLG_MOUNTCONF 0x400
 
 struct lustre_cfg {
-        uint32_t lcfg_version;
-        uint32_t lcfg_command;
+        __u32 lcfg_version;
+        __u32 lcfg_command;
 
-        uint32_t lcfg_num; 
-        uint32_t lcfg_flags;
-        uint64_t lcfg_nid;
-        uint32_t lcfg_nal;                      /* not used any more */
+        __u32 lcfg_num; 
+        __u32 lcfg_flags;
+        __u64 lcfg_nid;
+        __u32 lcfg_nal;                      /* not used any more */
 
-        uint32_t lcfg_bufcount;
-        uint32_t lcfg_buflens[0];
+        __u32 lcfg_bufcount;
+        __u32 lcfg_buflens[0];
 };
 
 #define LUSTRE_CFG_BUFLEN(lcfg, idx)            \
@@ -86,9 +105,9 @@ struct lustre_cfg {
          : (lcfg)->lcfg_buflens[(idx)])
 
 static inline void lustre_cfg_bufs_set(struct lustre_cfg_bufs *bufs,
-                                       uint32_t                index,
+                                       __u32                   index,
                                        void                   *buf,
-                                       uint32_t                buflen)
+                                       __u32                   buflen)
 {
         if (index >= LUSTRE_CFG_MAX_BUFCOUNT)
                 return;
@@ -103,7 +122,7 @@ static inline void lustre_cfg_bufs_set(struct lustre_cfg_bufs *bufs,
 }
 
 static inline void lustre_cfg_bufs_set_string(struct lustre_cfg_bufs *bufs,
-                                              uint32_t index,
+                                              __u32 index,
                                               char *str)
 {
         lustre_cfg_bufs_set(bufs, index, str, str ? strlen(str) + 1 : 0);
@@ -172,7 +191,7 @@ static inline char *lustre_cfg_string(struct lustre_cfg *lcfg, int index)
         return s;
 }
 
-static inline int lustre_cfg_len(uint32_t bufcount, uint32_t *buflens)
+static inline int lustre_cfg_len(__u32 bufcount, __u32 *buflens)
 {
         int i;
         int len;
@@ -200,7 +219,7 @@ static inline struct lustre_cfg *lustre_cfg_new(int cmd,
         OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount,
                                        bufs->lcfg_buflen));
         if (!lcfg)
-                RETURN(lcfg);
+                RETURN(ERR_PTR(-ENOMEM));
 
         lcfg->lcfg_version = LUSTRE_CFG_VERSION;
         lcfg->lcfg_command = cmd;

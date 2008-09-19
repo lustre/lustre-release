@@ -22,7 +22,9 @@ AC_DEFUN([LB_CANONICAL_SYSTEM],
 	darwin*)
 		lb_target_os="darwin"
 		;;
-esac
+	solaris*)
+		lb_target_os="SunOS"
+		;;esac
 AC_SUBST(lb_target_os)
 ])
 
@@ -158,6 +160,46 @@ AC_CONFIG_SUBDIRS(libsysio)
 ])
 
 #
+# LB_PATH_LUSTREIOKIT
+#
+# Handle internal/external lustre-iokit
+#
+AC_DEFUN([LB_PATH_LUSTREIOKIT],
+[AC_ARG_WITH([],
+	AC_HELP_STRING([--with-lustre-iokit=path],
+			[set path to lustre-iokit source (default is included lustre-iokit)]),
+	[],[
+			with_lustre_iokit='yes'
+	])
+AC_MSG_CHECKING([location of lustre-iokit])
+enable_lustre_iokit="$with_lustre_iokit"
+case x$with_lustre_iokit in
+	xyes)
+		AC_MSG_RESULT([internal])
+		LB_CHECK_FILE([$srcdir/lustre-iokit/ior-survey/ior-survey],[],[
+			AC_MSG_ERROR([A complete internal lustre-iokit was not found.])
+		])
+		LUSTREIOKIT_SUBDIR="lustre-iokit"
+		LUSTREIOKIT="$PWD/lustre-iokit"
+		;;
+	xno)
+		AC_MSG_RESULT([disabled])
+		;;
+	*)
+		AC_MSG_RESULT([$with_lustre_iokit])
+		LB_CHECK_FILE([$with_lustre_iokit/ior-survey/ior_survey],[],[
+			AC_MSG_ERROR([A complete (built) external lustre-iokit was not found.])
+		])
+		LUSTREIOKIT="$with_lustre_iokit"
+		with_lustre_iokit="yes"
+		;;
+esac
+AC_SUBST(LUSTREIOKIT_SUBDIR)
+# We have to configure even if we don't build here for make dist to work
+AC_CONFIG_SUBDIRS(lustre-iokit)
+])
+
+#
 # LB_PATH_LDISKFS
 #
 # Handle internal/external ldiskfs
@@ -196,9 +238,27 @@ case x$with_ldiskfs in
 esac
 AC_SUBST(LDISKFS_DIR)
 AC_SUBST(LDISKFS_SUBDIR)
+AM_CONDITIONAL(LDISKFS_ENABLED, test x$with_ldiskfs != xno)
 
 # We have to configure even if we don't build here for make dist to work
 AC_CONFIG_SUBDIRS(ldiskfs)
+])
+
+# Define no libcfs by default.
+AC_DEFUN([LB_LIBCFS_DIR],
+[
+case x$libcfs_is_module in
+	xyes)
+          LIBCFS_INCLUDE_DIR="libcfs/include"
+          LIBCFS_SUBDIR="libcfs"
+          ;;
+        x*)
+          LIBCFS_INCLUDE_DIR="lnet/include"
+          LIBCFS_SUBDIR=""
+          ;;
+esac
+AC_SUBST(LIBCFS_SUBDIR)
+AC_SUBST(LIBCFS_INCLUDE_DIR)
 ])
 
 #
@@ -245,13 +305,75 @@ AC_ARG_ENABLE([bgl],
 	[enable_bgl='yes'],[enable_bgl='no'])
 AC_MSG_RESULT([$enable_bgl])
 if test x$enable_bgl != xno; then
-        AC_DEFINE(BGL_SUPPORT, 1, Enable BGL Features)
+        AC_DEFINE(HAVE_BGL_SUPPORT, 1, Enable BGL Features)
         enable_doc='no'
         enable_tests='no'
         enable_server='no'
         enable_liblustre='no'
         enable_libreadline='no'
 fi
+])
+
+#
+# Support for --enable-uoss
+#
+AC_DEFUN([LB_UOSS],
+[AC_MSG_CHECKING([whether to enable uoss])
+AC_ARG_ENABLE([uoss],
+	AC_HELP_STRING([--enable-uoss],
+			[enable userspace OSS]),
+	[enable_uoss='yes'],[enable_uoss='no'])
+AC_MSG_RESULT([$enable_uoss])
+if test x$enable_uoss = xyes; then
+	AC_DEFINE(UOSS_SUPPORT, 1, Enable user-level OSS)
+	AC_DEFINE(LUSTRE_ULEVEL_MT, 1, Multi-threaded user-level lustre port)
+	enable_uoss='yes'
+	enable_ulevel_mt='yes'
+	enable_modules='no'
+	enable_client='no'
+	enable_tests='no'
+	enable_liblustre='no'
+	with_ldiskfs='no'
+fi
+AC_SUBST(enable_uoss)
+])
+
+#
+# Support for --enable-posix-osd
+#
+AC_DEFUN([LB_POSIX_OSD],
+[AC_MSG_CHECKING([whether to enable posix osd])
+AC_ARG_ENABLE([posix-osd],
+	AC_HELP_STRING([--enable-posix-osd],
+			[enable using of posix osd]),
+	[enable_posix_osd='yes'],[enable_posix_osd='no'])
+AC_MSG_RESULT([$enable_posix_osd])
+if test x$enable_uoss = xyes -a x$enable_posix_osd = xyes ; then
+	AC_DEFINE(POSIX_OSD, 1, Enable POSIX OSD)
+	posix_osd='yes'
+fi
+AM_CONDITIONAL(POSIX_OSD_ENABLED, test x$posix_osd = xyes)
+])
+
+#
+# LB_PATH_DMU
+#
+AC_DEFUN([LB_PATH_DMU],
+[AC_MSG_CHECKING([whether to enable DMU])
+if test x$enable_uoss = xyes -a x$enable_posix_osd != xyes; then
+	DMU_SRC="$PWD/lustre/zfs-lustre"
+	AC_DEFINE(DMU_OSD, 1, Enable DMU OSD)
+	AC_MSG_RESULT([yes])
+	LB_CHECK_FILE([$DMU_SRC/src/.patched],[],[
+		AC_MSG_ERROR([A complete (patched) DMU tree was not found.])
+	])
+	AC_CONFIG_SUBDIRS(lustre/zfs-lustre)
+	dmu_osd='yes'
+else
+	AC_MSG_RESULT([no])
+fi
+AC_SUBST(DMU_SRC)
+AM_CONDITIONAL(DMU_OSD_ENABLED, test x$dmu_osd = xyes)
 ])
 
 #
@@ -288,11 +410,13 @@ if test x$enable_modules = xyes ; then
 	case $target_os in
 		linux*)
 			LB_PROG_LINUX
+			LIBCFS_PROG_LINUX
 			LN_PROG_LINUX
 			LC_PROG_LINUX
 			;;
 		darwin*)
 			LB_PROG_DARWIN
+			LIBCFS_PROG_DARWIN
 			;;
 		*)
 			# This is strange - Lustre supports a target we don't
@@ -418,6 +542,7 @@ AC_SUBST(sysconfdir)
 docdir='${datadir}/doc/$(PACKAGE)'
 AC_SUBST(docdir)
 
+LIBCFS_PATH_DEFAULTS
 LN_PATH_DEFAULTS
 LC_PATH_DEFAULTS
 
@@ -468,33 +593,23 @@ if test $ac_cv_sizeof_unsigned_long_long != 8 ; then
         AC_MSG_ERROR([** we assume that sizeof(long long) == 8.  Tell phil@clusterfs.com])
 fi
 
-# FIXME
-AC_CHECK_DECL([__i386__], [], [
-
-if test x$enable_bgl != xyes; then
-AC_MSG_CHECKING([if $CC accepts -m64])
-CC_save="$CC"
-CC="$CC -m64"
-AC_TRY_COMPILE([],[],[
-	AC_MSG_RESULT([yes])
-],[
-	AC_MSG_RESULT([no])
-	CC="$CC_save"
-])
+if test $target_cpu == "powerpc64"; then
+	AC_MSG_WARN([set compiler with -m64])
+	CFLAGS="$CFLAGS -m64"
+	CC="$CC -m64"
 fi
 
-])
-
-CPPFLAGS="-I\$(top_builddir)/lnet/include -I\$(top_srcdir)/lnet/include -I\$(top_builddir)/lustre/include -I\$(top_srcdir)/lustre/include $CPPFLAGS"
+CPPFLAGS="-I\$(top_builddir)/$LIBCFS_INCLUDE_DIR -I\$(top_srcdir)/$LIBCFS_INCLUDE_DIR-I\$(top_builddir)/lnet/include -I\$(top_srcdir)/lnet/include -I\$(top_builddir)/lustre/include -I\$(top_srcdir)/lustre/include $CPPFLAGS"
 
 LLCPPFLAGS="-D__arch_lib__ -D_LARGEFILE64_SOURCE=1"
 AC_SUBST(LLCPPFLAGS)
 
-LLCFLAGS="-g -Wall -fPIC"
+# Add _GNU_SOURCE for strnlen on linux
+LLCFLAGS="-g -Wall -fPIC -D_GNU_SOURCE"
 AC_SUBST(LLCFLAGS)
 
 # everyone builds against lnet and lustre
-EXTRA_KCFLAGS="$EXTRA_KCFLAGS -g -I$PWD/lnet/include -I$PWD/lustre/include"
+EXTRA_KCFLAGS="$EXTRA_KCFLAGS -g -I$PWD/$LIBCFS_INCLUDE_DIR -I$PWD/lnet/include -I$PWD/lustre/include"
 AC_SUBST(EXTRA_KCFLAGS)
 ])
 
@@ -512,6 +627,7 @@ AM_CONDITIONAL(INIT_SCRIPTS, test x$ENABLE_INIT_SCRIPTS = "x1")
 AM_CONDITIONAL(LINUX, test x$lb_target_os = "xlinux")
 AM_CONDITIONAL(DARWIN, test x$lb_target_os = "xdarwin")
 AM_CONDITIONAL(CRAY_XT3, test x$enable_cray_xt3 = "xyes")
+AM_CONDITIONAL(SUNOS, test x$lb_target_os = "xSunOS")
 
 # this lets lustre cancel libsysio, per-branch or if liblustre is
 # disabled
@@ -527,6 +643,7 @@ AC_SUBST(SYSIO)
 LB_LINUX_CONDITIONALS
 LB_DARWIN_CONDITIONALS
 
+LIBCFS_CONDITIONALS
 LN_CONDITIONALS
 LC_CONDITIONALS
 ])
@@ -555,6 +672,8 @@ AC_PACKAGE_TARNAME[.spec]
 AC_DEFUN([LB_CONFIGURE],
 [LB_CANONICAL_SYSTEM
 
+LB_LIBCFS_DIR
+
 LB_INCLUDE_RULES
 
 LB_CONFIG_CRAY_XT3
@@ -563,6 +682,10 @@ LB_PATH_DEFAULTS
 
 LB_PROG_CC
 
+LB_UOSS
+LB_POSIX_OSD
+LB_PATH_DMU
+
 LB_CONFIG_DOCS
 LB_CONFIG_UTILS
 LB_CONFIG_TESTS
@@ -570,16 +693,18 @@ LC_CONFIG_CLIENT_SERVER
 
 # three macros for cmd3 
 LC_CONFIG_SPLIT
-LC_CONFIG_LDISKFS
 LN_CONFIG_CDEBUG
+LC_QUOTA
 
 LB_CONFIG_MODULES
 
 LB_PATH_LIBSYSIO
 LB_PATH_SNMP
 LB_PATH_LDISKFS
+LB_PATH_LUSTREIOKIT
 
 LC_CONFIG_LIBLUSTRE
+LIBCFS_CONFIGURE
 LN_CONFIGURE
 
 LC_CONFIGURE
@@ -588,9 +713,11 @@ if test "$SNMP_DIST_SUBDIR" ; then
 	LS_CONFIGURE
 fi
 
+
 LB_CONDITIONALS
 LB_CONFIG_HEADERS
 
+LIBCFS_CONFIG_FILES
 LB_CONFIG_FILES
 LN_CONFIG_FILES
 LC_CONFIG_FILES
@@ -600,7 +727,7 @@ fi
 
 AC_SUBST(ac_configure_args)
 
-MOSTLYCLEANFILES='.*.cmd .*.flags *.o *.ko *.mod.c .depend .*.1.*'
+MOSTLYCLEANFILES='.*.cmd .*.flags *.o *.ko *.mod.c .depend .*.1.* Modules.symvers Module.symvers'
 AC_SUBST(MOSTLYCLEANFILES)
 
 AC_OUTPUT

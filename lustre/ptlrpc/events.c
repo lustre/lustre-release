@@ -1,26 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
@@ -66,8 +77,6 @@ void request_out_callback(lnet_event_t *ev)
                 ptlrpc_wake_client_req(req);
         }
 
-        /* these balance the references in ptl_send_rpc() */
-        atomic_dec(&req->rq_import->imp_inflight);
         ptlrpc_req_finished(req);
 
         EXIT;
@@ -82,30 +91,81 @@ void reply_in_callback(lnet_event_t *ev)
         struct ptlrpc_request *req = cbid->cbid_arg;
         ENTRY;
 
-        LASSERT (ev->type == LNET_EVENT_PUT ||
-                 ev->type == LNET_EVENT_UNLINK);
-        LASSERT (ev->unlinked);
-        LASSERT (ev->md.start == req->rq_repmsg);
-        LASSERT (ev->offset == 0);
-        LASSERT (ev->mlength <= req->rq_replen);
-        
         DEBUG_REQ((ev->status == 0) ? D_NET : D_ERROR, req,
                   "type %d, status %d", ev->type, ev->status);
 
+        LASSERT(ev->type == LNET_EVENT_PUT || ev->type == LNET_EVENT_UNLINK);
+        LASSERT(ev->md.start == req->rq_repbuf);
+        LASSERT(ev->mlength <= req->rq_replen);
+        /* We've set LNET_MD_MANAGE_REMOTE for all outgoing requests
+           for adaptive timeouts' early reply. */
+        LASSERT((ev->md.options & LNET_MD_MANAGE_REMOTE) != 0);
+
         spin_lock(&req->rq_lock);
 
-        LASSERT (req->rq_receiving_reply);
         req->rq_receiving_reply = 0;
+        req->rq_early = 0;
 
-        if (ev->type == LNET_EVENT_PUT && ev->status == 0) {
-                req->rq_replied = 1;
-                req->rq_nob_received = ev->mlength;
+        if (ev->status)
+                goto out_wake;
+        if (ev->type == LNET_EVENT_UNLINK) {
+                req->rq_must_unlink = 0;
+                DEBUG_REQ(D_RPCTRACE, req, "unlink");
+                goto out_wake;
         }
 
+        if ((ev->offset == 0) &&
+            (lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT)) {
+                /* Early reply */
+                DEBUG_REQ(D_ADAPTTO, req,
+                          "Early reply received: mlen=%u offset=%d replen=%d "
+                          "replied=%d unlinked=%d", ev->mlength, ev->offset,
+                          req->rq_replen, req->rq_replied, ev->unlinked);
+
+                if (unlikely(ev->mlength != lustre_msg_early_size(req)))
+                        CERROR("early reply sized %u, expect %u\n",
+                               ev->mlength, lustre_msg_early_size(req));
+
+                req->rq_early_count++; /* number received, client side */
+                if (req->rq_replied) {
+                        /* If we already got the real reply, then we need to
+                         * check if lnet_finalize() unlinked the md.  In that
+                         * case, there will be no further callback of type
+                         * LNET_EVENT_UNLINK.
+                         */
+                        if (ev->unlinked)
+                                req->rq_must_unlink = 0;
+                        else
+                                DEBUG_REQ(D_RPCTRACE, req, "unlinked in reply");
+                        goto out_wake;
+                }
+                req->rq_early = 1;
+                req->rq_nob_received = ev->mlength;
+                /* repmsg points to early reply */
+                req->rq_repmsg = req->rq_repbuf;
+                /* And we're still receiving */
+                req->rq_receiving_reply = 1;
+        } else {
+                /* Real reply */
+                req->rq_replied = 1;
+                req->rq_nob_received = ev->mlength;
+                /* repmsg points to real reply */
+                req->rq_repmsg = (struct lustre_msg *)((char *)req->rq_repbuf +
+                                                       ev->offset);
+                /* LNetMDUnlink can't be called under the LNET_LOCK,
+                   so we must unlink in ptlrpc_unregister_reply */
+                DEBUG_REQ(D_INFO, req, 
+                          "reply in flags=%x mlen=%u offset=%d replen=%d",
+                          lustre_msg_get_flags(req->rq_reqmsg),
+                          ev->mlength, ev->offset, req->rq_replen);
+        }
+
+        req->rq_import->imp_last_reply_time = cfs_time_current_sec();
+
+out_wake:
         /* NB don't unlock till after wakeup; req can disappear under us
          * since we don't have our own ref */
         ptlrpc_wake_client_req(req);
-
         spin_unlock(&req->rq_lock);
         EXIT;
 }
@@ -118,6 +178,9 @@ void client_bulk_callback (lnet_event_t *ev)
         struct ptlrpc_cb_id     *cbid = ev->md.user_ptr;
         struct ptlrpc_bulk_desc *desc = cbid->cbid_arg;
         ENTRY;
+
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_CLIENT_BULK_CB))
+                ev->status = -EIO;
 
         LASSERT ((desc->bd_type == BULK_PUT_SINK && 
                   ev->type == LNET_EVENT_PUT) ||
@@ -209,6 +272,11 @@ void request_in_callback(lnet_event_t *ev)
 #ifdef CRAY_XT3
         req->rq_uid = ev->uid;
 #endif
+        spin_lock_init(&req->rq_lock);
+        CFS_INIT_LIST_HEAD(&req->rq_timed_list);
+        atomic_set(&req->rq_refcount, 1);
+        if (ev->type == LNET_EVENT_PUT)
+                DEBUG_REQ(D_RPCTRACE, req, "incoming req");
 
         spin_lock(&service->srv_lock);
 
@@ -217,7 +285,7 @@ void request_in_callback(lnet_event_t *ev)
 
         if (ev->unlinked) {
                 service->srv_nrqbd_receiving--;
-                CDEBUG(D_RPCTRACE,"Buffer complete: %d buffers still posted\n",
+                CDEBUG(D_INFO, "Buffer complete: %d buffers still posted\n",
                        service->srv_nrqbd_receiving);
 
                 /* Normally, don't complain about 0 buffers posted; LNET won't
@@ -234,7 +302,7 @@ void request_in_callback(lnet_event_t *ev)
                 rqbd->rqbd_refcount++;
         }
 
-        list_add_tail(&req->rq_list, &service->srv_request_queue);
+        list_add_tail(&req->rq_list, &service->srv_req_in_queue);
         service->srv_n_queued_reqs++;
 
         /* NB everything can disappear under us once the request
@@ -347,12 +415,12 @@ int ptlrpc_uuid_to_peer (struct obd_uuid *uuid,
                          lnet_process_id_t *peer, lnet_nid_t *self)
 {
         int               best_dist = 0;
-        int               best_order = 0;
+        __u32             best_order = 0;
         int               count = 0;
         int               rc = -ENOENT;
         int               portals_compatibility;
         int               dist;
-        int               order;
+        __u32             order;
         lnet_nid_t        dst_nid;
         lnet_nid_t        src_nid;
 
@@ -372,7 +440,6 @@ int ptlrpc_uuid_to_peer (struct obd_uuid *uuid,
                         break;
                 }
                 
-                LASSERT (order >= 0);
                 if (rc < 0 ||
                     dist < best_dist ||
                     (dist == best_dist && order < best_order)) {

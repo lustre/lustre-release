@@ -37,17 +37,23 @@ filesystem with or without ACL support.
 	
 	$ mkdir d
 	$ touch d/y
-	$ ln -s d l
+various version of getfacl handle symlink differently
+#	$ ln -s d l
 	$ getfacl -dR . | grep file | sort
 	> # file: .
 	> # file: d
 	> # file: d/y
 	> # file: x
+	$ ln -s d l
 	
 	$ ln -s l ll
-	$ getfacl -dLR ll | grep file | sort
-	> # file: ll
-	> # file: ll/y
+#	$ getfacl -dLR ll | grep file | sort
+#       (rhel4)
+#	> # file: ll
+#	> # file: ll/y
+#       (rhel5)
+#	> # file: l
+#	> # file: l/y
 	
 	$ rm l ll x
 	$ rm -rf d

@@ -6,7 +6,7 @@
 AC_DEFUN([LN_CONFIG_MAX_PAYLOAD],
 [AC_MSG_CHECKING([for non-default maximum LNET payload])
 AC_ARG_WITH([max-payload-mb],
-  	AC_HELP_STRING([--with-max-payload-mb=MBytes],
+	AC_HELP_STRING([--with-max-payload-mb=MBytes],
                        [set maximum lnet payload in MBytes]),
         [
 		AC_MSG_RESULT([$with_max_payload_mb])
@@ -82,7 +82,7 @@ if test x$enable_libcfs_assert = xyes; then
    AC_DEFINE(LIBCFS_DEBUG, 1, [enable libcfs LASSERT, LASSERTF])
 fi
 ])
- 
+
 #
 # LN_CONFIG_AFFINITY
 #
@@ -106,7 +106,7 @@ else
 		cpumask_t     m;
 	        #else
 	        unsigned long m;
-	 	#endif
+		#endif
 		set_cpus_allowed(&t, m);
 	],[
 		AC_DEFINE(CPU_AFFINITY, 1, [kernel has cpu affinity support])
@@ -125,7 +125,7 @@ fi
 AC_DEFUN([LN_CONFIG_PORTALS],
 [AC_MSG_CHECKING([for portals])
 AC_ARG_WITH([portals],
-  	AC_HELP_STRING([--with-portals=path],
+	AC_HELP_STRING([--with-portals=path],
                        [set path to portals]),
         [
 		case $with_portals in
@@ -135,7 +135,6 @@ AC_ARG_WITH([portals],
 				ENABLEPORTALS=1
 				;;
 		esac
-		
 	], [
 		ENABLEPORTALS=0
 	])
@@ -170,6 +169,9 @@ else
        if test "$BOCD" != 0 ; then
                AC_DEFINE(SOCKNAL_BACKOFF, 1, [use tunable backoff TCP])
                AC_MSG_RESULT(yes)
+               if grep rto_max $LINUX/include/linux/tcp.h|grep -q __u16; then
+                   AC_DEFINE(SOCKNAL_BACKOFF_MS, 1, [tunable backoff TCP in ms])
+               fi
        else
                AC_MSG_RESULT([no (no kernel support)])
        fi
@@ -499,86 +501,144 @@ AC_SUBST(MXLND)
 AC_DEFUN([LN_CONFIG_O2IB],[
 AC_MSG_CHECKING([whether to enable OpenIB gen2 support])
 # set default
-O2IBPATH="$LINUX/drivers/infiniband"
 AC_ARG_WITH([o2ib],
 	AC_HELP_STRING([--with-o2ib=path],
 	               [build o2iblnd against path]),
 	[
 		case $with_o2ib in
-		yes)    ENABLEO2IB=2
+		yes)    O2IBPATHS="$LINUX $LINUX/drivers/infiniband"
+			ENABLEO2IB=2
 			;;
 		no)     ENABLEO2IB=0
 			;;
-		*)      O2IBPATH=$with_o2ib
+		*)      O2IBPATHS=$with_o2ib
 			ENABLEO2IB=3
 			;;
 		esac
 	],[
+		O2IBPATHS="$LINUX $LINUX/drivers/infiniband"
 		ENABLEO2IB=1
 	])
 if test $ENABLEO2IB -eq 0; then
 	AC_MSG_RESULT([disabled])
-elif test ! \( -f ${O2IBPATH}/include/rdma/rdma_cm.h -a \
-               -f ${O2IBPATH}/include/rdma/ib_cm.h -a\
-               -f ${O2IBPATH}/include/rdma/ib_verbs.h -a\
-	       -f ${O2IBPATH}/include/rdma/ib_fmr_pool.h \); then
-	AC_MSG_RESULT([no])
-	case $ENABLEO2IB in
-	1) ;;
-	2) AC_MSG_ERROR([kernel OpenIB gen2 headers not present]);;
-	3) AC_MSG_ERROR([bad --with-o2ib path]);;
-	*) AC_MSG_ERROR([internal error]);;
-	esac
 else
-	O2IBCPPFLAGS="-I$O2IBPATH/include"
-	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
-	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $O2IBCPPFLAGS"
-	EXTRA_LNET_INCLUDE="$O2IBCPPFLAGS $EXTRA_LNET_INCLUDE"
-	LB_LINUX_TRY_COMPILE([
-	        #include <linux/version.h>
-	        #if !HAVE_GFP_T
-		typedef int gfp_t;
-		#endif
-		#include <rdma/rdma_cm.h>
-		#include <rdma/ib_cm.h>
-		#include <rdma/ib_verbs.h>
-	        #include <rdma/ib_fmr_pool.h>
-	],[
-       	        struct rdma_cm_id          *cm_id;
-	        struct rdma_conn_param      conn_param;
-	        struct ib_device_attr       device_attr;
-	        struct ib_qp_attr           qp_attr;
-		struct ib_pool_fmr          pool_fmr;	        
-		enum   ib_cm_rej_reason     rej_reason;
+	o2ib_found=false
 
-		cm_id = rdma_create_id(NULL, NULL, RDMA_PS_TCP);
-		return PTR_ERR(cm_id);
-	],[
-		AC_MSG_RESULT([yes])
-		O2IBLND="o2iblnd"
-	],[
+	for O2IBPATH in $O2IBPATHS; do
+		if test \( -f ${O2IBPATH}/include/rdma/rdma_cm.h -a \
+			   -f ${O2IBPATH}/include/rdma/ib_cm.h -a \
+			   -f ${O2IBPATH}/include/rdma/ib_verbs.h -a \
+			   -f ${O2IBPATH}/include/rdma/ib_fmr_pool.h \); then
+			o2ib_found=true
+			break
+		fi
+	done
+
+	if ! $o2ib_found; then
 		AC_MSG_RESULT([no])
 		case $ENABLEO2IB in
-		1) ;;
-		2) AC_MSG_ERROR([can't compile with kernel OpenIB gen2 headers]);;
-		3) AC_MSG_ERROR([can't compile with OpenIB gen2 headers under $O2IBPATH]);;
-		*) AC_MSG_ERROR([internal error]);;
+			1) ;;
+			2) AC_MSG_ERROR([kernel OpenIB gen2 headers not present]);;
+			3) AC_MSG_ERROR([bad --with-o2ib path]);;
+			*) AC_MSG_ERROR([internal error]);;
 		esac
-		O2IBLND=""
-		O2IBCPPFLAGS=""
-	])
-
-	IB_DMA_MAP="`grep -c ib_dma_map_single ${O2IBPATH}/include/rdma/ib_verbs.h`"
-	if test "$IB_DMA_MAP" != 0 ; then
-		IBLND_OFED_VERSION="102"
 	else
-		IBLND_OFED_VERSION="101"
+		O2IBCPPFLAGS="-I$O2IBPATH/include"
+		EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
+		EXTRA_KCFLAGS="$EXTRA_KCFLAGS $O2IBCPPFLAGS"
+		EXTRA_LNET_INCLUDE="$O2IBCPPFLAGS $EXTRA_LNET_INCLUDE"
+		LB_LINUX_TRY_COMPILE([
+		        #include <linux/version.h>
+		        #include <linux/pci.h>
+		        #if !HAVE_GFP_T
+		        typedef int gfp_t;
+		        #endif
+		        #include <rdma/rdma_cm.h>
+		        #include <rdma/ib_cm.h>
+		        #include <rdma/ib_verbs.h>
+		        #include <rdma/ib_fmr_pool.h>
+		],[
+		        struct rdma_cm_id          *cm_id;
+		        struct rdma_conn_param      conn_param;
+		        struct ib_device_attr       device_attr;
+		        struct ib_qp_attr           qp_attr;
+		        struct ib_pool_fmr          pool_fmr;
+		        enum   ib_cm_rej_reason     rej_reason;
+
+		        cm_id = rdma_create_id(NULL, NULL, RDMA_PS_TCP);
+		        return PTR_ERR(cm_id);
+		],[
+		        AC_MSG_RESULT([yes])
+		        O2IBLND="o2iblnd"
+		],[
+		        AC_MSG_RESULT([no])
+		        case $ENABLEO2IB in
+		        1) ;;
+		        2) AC_MSG_ERROR([can't compile with kernel OpenIB gen2 headers]);;
+		        3) AC_MSG_ERROR([can't compile with OpenIB gen2 headers under $O2IBPATH]);;
+		        *) AC_MSG_ERROR([internal error]);;
+		        esac
+		        O2IBLND=""
+		        O2IBCPPFLAGS=""
+		])
+		# we know at this point that the found OFED source is good
+		O2IB_SYMVER=""
+		if test $ENABLEO2IB -eq 3 ; then
+			# OFED default rpm not handle sles10 Modules.symvers name
+			for name in Module.symvers Modules.symvers; do
+				if test -f $O2IBPATH/$name; then
+					O2IB_SYMVER=$name;
+					break;
+				fi
+			done
+			if test -n $O2IB_SYMVER ; then
+				AC_MSG_NOTICE([adding $O2IBPATH/Module.symvers to $PWD/$SYMVERFILE])
+				# strip out the existing symbols versions first
+				egrep -v $(echo $(awk '{ print $2 }' $O2IBPATH/$O2IB_SYMVER) | tr ' ' '|') $PWD/$SYMVERFILE > $PWD/$SYMVERFILE.old
+				cat $PWD/$SYMVERFILE.old $O2IBPATH/$O2IB_SYMVER > $PWD/$SYMVERFILE
+			else
+				AC_MSG_ERROR([an external source tree was specified for o2iblnd however I could not find a $O2IBPATH/Module.symvers there])
+			fi
+		fi
+
+		LB_LINUX_TRY_COMPILE([
+			#include <linux/version.h>
+			#include <linux/pci.h>
+			#if !HAVE_GFP_T
+			typedef int gfp_t;
+			#endif
+			#include <rdma/ib_verbs.h>
+		],[
+			ib_dma_map_single(NULL, NULL, 0, 0);
+			return 0;
+		],[
+			AC_MSG_RESULT(yes)
+			AC_DEFINE(HAVE_OFED_IB_DMA_MAP, 1,
+				  [ib_dma_map_single defined])
+		],[
+			AC_MSG_RESULT(NO)
+		])
+
+		LB_LINUX_TRY_COMPILE([
+			#include <linux/version.h>
+			#include <linux/pci.h>
+			#if !HAVE_GFP_T
+			typedef int gfp_t;
+			#endif
+			#include <rdma/ib_verbs.h>
+		],[
+			ib_create_cq(NULL, NULL, NULL, NULL, 0, 0);
+			return 0;
+		],[
+			AC_MSG_RESULT(yes)
+			AC_DEFINE(HAVE_OFED_IB_COMP_VECTOR, 1,
+				  [has completion vector])
+		],[
+			AC_MSG_RESULT(NO)
+		])
+
+		EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 	fi
-
-        AC_DEFINE_UNQUOTED(IBLND_OFED_VERSION, $IBLND_OFED_VERSION,
-			   [OFED version])
-
-	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 fi
 
 AC_SUBST(EXTRA_LNET_INCLUDE)
@@ -613,7 +673,7 @@ AC_ARG_WITH([openib],
 if test $ENABLEOPENIB -eq 0; then
 	AC_MSG_RESULT([disabled])
 elif test ! \( -f ${OPENIBPATH}/include/ts_ib_core.h -a \
-               -f ${OPENIBPATH}/include/ts_ib_cm.h -a\
+               -f ${OPENIBPATH}/include/ts_ib_cm.h -a \
 	       -f ${OPENIBPATH}/include/ts_ib_sa_client.h \); then
 	AC_MSG_RESULT([no])
 	case $ENABLEOPENIB in
@@ -623,7 +683,7 @@ elif test ! \( -f ${OPENIBPATH}/include/ts_ib_core.h -a \
 	*) AC_MSG_ERROR([internal error]);;
 	esac
 else
-    	case $ENABLEOPENIB in
+	case $ENABLEOPENIB in
 	1|2) OPENIBCPPFLAGS="-I$OPENIBPATH/include -DIN_TREE_BUILD";;
 	3)   OPENIBCPPFLAGS="-I$OPENIBPATH/include";;
 	*)   AC_MSG_RESULT([no])
@@ -637,7 +697,7 @@ else
 		#include <ts_ib_cm.h>
 	        #include <ts_ib_sa_client.h>
 	],[
-       	        struct ib_device_properties dev_props;
+	        struct ib_device_properties dev_props;
 	        struct ib_cm_active_param   cm_active_params;
 	        tTS_IB_CLIENT_QUERY_TID     tid;
 	        int                         enum1 = IB_QP_ATTRIBUTE_STATE;
@@ -700,7 +760,7 @@ if test -n "$CIBPATH"; then
 		#include <ts_ib_cm.h>
 	        #include <ts_ib_sa_client.h>
 	],[
-       	        struct ib_device_properties dev_props;
+	        struct ib_device_properties dev_props;
 	        struct ib_cm_active_param   cm_active_params;
 	        tTS_IB_CLIENT_QUERY_TID     tid;
 	        int                         enum1 = TS_IB_QP_ATTRIBUTE_STATE;
@@ -825,7 +885,7 @@ else
 	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $VIBCPPFLAGS"
 	LB_LINUX_TRY_COMPILE([
-        	#include <linux/list.h>
+		#include <linux/list.h>
 		#include <asm/byteorder.h>
 		#ifdef __BIG_ENDIAN
 		# define CPU_BE 1
@@ -835,7 +895,7 @@ else
 		# define CPU_BE 0
 		# define CPU_LE 1
 		#endif
-	 	#include <vverbs.h>
+		#include <vverbs.h>
 	        #include <ib-cm.h>
 	        #include <ibat.h>
 	],[
@@ -864,7 +924,7 @@ if test -n "$VIBLND"; then
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $VIBCPPFLAGS"
 	AC_MSG_CHECKING([if Voltaire still uses void * sg addresses])
 	LB_LINUX_TRY_COMPILE([
-        	#include <linux/list.h>
+		#include <linux/list.h>
 		#include <asm/byteorder.h>
 		#ifdef __BIG_ENDIAN
 		# define CPU_BE 1
@@ -874,7 +934,7 @@ if test -n "$VIBLND"; then
 		# define CPU_BE 0
 		# define CPU_LE 1
 		#endif
-	 	#include <vverbs.h>
+		#include <vverbs.h>
 	        #include <ib-cm.h>
 	        #include <ibat.h>
 	],[
@@ -1038,6 +1098,96 @@ AC_DEFINE(HAVE_SHOW_TASK, 1, [show_task is exported])
 ])
 ])
 
+# check userland __u64 type
+AC_DEFUN([LN_U64_LONG_LONG],
+[AC_MSG_CHECKING([u64 is long long type])
+tmp_flags="$CFLAGS"
+CFLAGS="$CFLAGS -Werror"
+AC_COMPILE_IFELSE([
+	#include <linux/types.h>
+	int main(void) {
+		unsigned long long *data1;
+		__u64 *data2;
+		
+		data1 = data2;
+		return 0;
+	}
+],[
+	AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_U64_LONG_LONG, 1,
+                  [__u64 is long long type])
+],[
+	AC_MSG_RESULT([no])
+])
+CFLAGS="$tmp_flags"
+])
+
+# check userland size_t type
+AC_DEFUN([LN_SIZE_T_LONG],
+[AC_MSG_CHECKING([size_t is unsigned long type])
+tmp_flags="$CFLAGS"
+CFLAGS="$CFLAGS -Werror"
+AC_COMPILE_IFELSE([
+	#include <linux/types.h>
+	int main(void) {
+		unsigned long *data1;
+		size_t *data2;
+		
+		data1 = data2;
+		return 0;
+	}
+],[
+	AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_SIZE_T_LONG, 1,
+                  [size_t is long type])
+],[
+	AC_MSG_RESULT([no])
+])
+CFLAGS="$tmp_flags"
+])
+
+AC_DEFUN([LN_SSIZE_T_LONG],
+[AC_MSG_CHECKING([ssize_t is signed long type])
+tmp_flags="$CFLAGS"
+CFLAGS="$CFLAGS -Werror"
+AC_COMPILE_IFELSE([
+	#include <linux/types.h>
+	int main(void) {
+		long *data1;
+		ssize_t *data2;
+		
+		data1 = data2;
+		return 0;
+	}
+],[
+	AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_SSIZE_T_LONG, 1,
+                  [ssize_t is long type])
+],[
+	AC_MSG_RESULT([no])
+])
+CFLAGS="$tmp_flags"
+])
+
+
+# check kernel __le16, __le32 types
+AC_DEFUN([LN_LE_TYPES],
+[AC_MSG_CHECKING([__le16 and __le32 types are defined])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/types.h>
+],[
+	__le16 a;
+	__le32 b;
+],[
+	AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_LE_TYPES, 1,
+                  [__le16 and __le32 types are defined])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+
 # LN_TASKLIST_LOCK
 # 2.6.18 remove tasklist_lock export
 AC_DEFUN([LN_TASKLIST_LOCK],
@@ -1050,7 +1200,7 @@ AC_DEFINE(HAVE_TASKLIST_LOCK, 1,
 ])
 
 # 2.6.19 API changes
-# kmem_cache_destroy(cachep) return void instead of 
+# kmem_cache_destroy(cachep) return void instead of
 # int
 AC_DEFUN([LN_KMEM_CACHE_DESTROY_INT],
 [AC_MSG_CHECKING([kmem_cache_destroy(cachep) return int])
@@ -1063,7 +1213,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_KMEM_CACHE_DESTROY_INT, 1,
                 [kmem_cache_destroy(cachep) return int])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1074,7 +1224,7 @@ AC_DEFUN([LN_ATOMIC_PANIC_NOTIFIER],
 [AC_MSG_CHECKING([panic_notifier_list is atomic])
 LB_LINUX_TRY_COMPILE([
 	#include <linux/notifier.h>
-	#include <linux/kernel.h>	
+	#include <linux/kernel.h>
 ],[
 	struct atomic_notifier_head panic_notifier_list;
 ],[
@@ -1082,11 +1232,11 @@ LB_LINUX_TRY_COMPILE([
 	AC_DEFINE(HAVE_ATOMIC_PANIC_NOTIFIER, 1,
 		[panic_notifier_list is atomic_notifier_head])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
-# 2.6.20 API change INIT_WORK use 2 args and not 
+# 2.6.20 API change INIT_WORK use 2 args and not
 # store data inside
 AC_DEFUN([LN_3ARGS_INIT_WORK],
 [AC_MSG_CHECKING([check INIT_WORK want 3 args])
@@ -1101,7 +1251,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_3ARGS_INIT_WORK, 1,
                   [INIT_WORK use 3 args and store data inside])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1118,31 +1268,46 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_2ARGS_REGISTER_SYSCTL, 1,
                   [register_sysctl_table want 2 args])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
-# 2.6.21 uses struct kmem_cache instead of kmem_cache_s for
-# kmem_cache_t
-AC_DEFUN([LN_KMEM_CACHE_S],
-[AC_MSG_CHECKING([check kernel has struct kmem_cache_s])
+# 2.6.21 marks kmem_cache_t deprecated and uses struct kmem_cache
+# instead
+AC_DEFUN([LN_KMEM_CACHE],
+[AC_MSG_CHECKING([check kernel has struct kmem_cache])
 tmp_flags="$EXTRA_KCFLAGS"
 EXTRA_KCFLAGS="-Werror"
 LB_LINUX_TRY_COMPILE([
         #include <linux/slab.h>
+        typedef struct kmem_cache cache_t;
 ],[
-	struct kmem_cache_s *cachep = NULL;
-	
-	kmem_cache_free(cachep, NULL);
+	cache_t *cachep = NULL;
 
+	kmem_cache_alloc(cachep, 0);
 ],[
         AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_KMEM_CACHE_S, 1,
-                  [kernel has struct kmem_cache_s])
+        AC_DEFINE(HAVE_KMEM_CACHE, 1,
+                  [kernel has struct kmem_cache])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 EXTRA_KCFLAGS="$tmp_flags"
+])
+# 2.6.23 lost dtor argument
+AC_DEFUN([LN_KMEM_CACHE_CREATE_DTOR],
+[AC_MSG_CHECKING([check kmem_cache_create has dtor argument])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/slab.h>
+],[
+	kmem_cache_create(NULL, 0, 0, 0, NULL, NULL);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_KMEM_CACHE_CREATE_DTOR, 1,
+                  [kmem_cache_create has dtor argument])
+],[
+        AC_MSG_RESULT(no)
+])
 ])
 
 #
@@ -1172,6 +1337,10 @@ LN_CONFIG_MX
 LN_STRUCT_PAGE_LIST
 LN_STRUCT_SIGHAND
 LN_FUNC_SHOW_TASK
+LN_U64_LONG_LONG
+LN_SSIZE_T_LONG
+LN_SIZE_T_LONG
+LN_LE_TYPES
 # 2.6.18
 LN_TASKLIST_LOCK
 # 2.6.19
@@ -1181,7 +1350,9 @@ LN_ATOMIC_PANIC_NOTIFIER
 LN_3ARGS_INIT_WORK
 # 2.6.21
 LN_2ARGS_REGISTER_SYSCTL
-LN_KMEM_CACHE_S
+LN_KMEM_CACHE
+# 2.6.23
+LN_KMEM_CACHE_CREATE_DTOR
 ])
 
 #
