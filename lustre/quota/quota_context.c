@@ -61,7 +61,7 @@
 #include <lprocfs_status.h>
 #include "quota_internal.h"
 
-extern struct lustre_hash_operations lqs_hash_operations;
+static lustre_hash_ops_t lqs_hash_ops;
 
 unsigned long default_bunit_sz = 128 * 1024 * 1024; /* 128M bytes */
 unsigned long default_btune_ratio = 50;             /* 50 percentage */
@@ -1072,6 +1072,7 @@ qctxt_init(struct obd_device *obd, dqacq_handler_t handler)
         if (rc)
                 RETURN(rc);
 
+        cfs_waitq_init(&qctxt->lqc_wait_for_qmaster);
         spin_lock_init(&qctxt->lqc_lock);
         spin_lock(&qctxt->lqc_lock);
         qctxt->lqc_handler = handler;
@@ -1092,15 +1093,12 @@ qctxt_init(struct obd_device *obd, dqacq_handler_t handler)
         qctxt->lqc_itune_sz = default_iunit_sz * default_itune_ratio / 100;
         qctxt->lqc_switch_seconds = 300; /* enlarging will wait 5 minutes
                                           * after the last shrinking */
-        rc = lustre_hash_init(&LQC_HASH_BODY(qctxt), "LQS_HASH",128,
-                              &lqs_hash_operations);
-        if (rc) {
-                CDEBUG(D_ERROR, "initialize hash lqs for %s error!\n",
-                       obd->obd_name);
-                lustre_hash_exit(&LQC_HASH_BODY(qctxt));
-        }
-        cfs_waitq_init(&qctxt->lqc_wait_for_qmaster);
         spin_unlock(&qctxt->lqc_lock);
+
+        qctxt->lqc_lqs_hash = lustre_hash_init("LQS_HASH", 128, 128,
+                                              &lqs_hash_ops, 0);
+        if (!qctxt->lqc_lqs_hash)
+                CERROR("initialize hash lqs for %s error!\n", obd->obd_name);
 
 #ifdef LPROCFS
         if (lquota_proc_setup(obd, is_master(obd, qctxt, 0, 0)))
@@ -1144,7 +1142,8 @@ void qctxt_cleanup(struct lustre_quota_ctxt *qctxt, int force)
                 qunit_put(qunit);
         }
 
-        lustre_hash_exit(&LQC_HASH_BODY(qctxt));
+        lustre_hash_exit(qctxt->lqc_lqs_hash);
+
         /* after qctxt_cleanup, qctxt might be freed, then check_qm() is
          * unpredicted. So we must wait until lqc_wait_for_qmaster is empty */
         while (cfs_waitq_active(&qctxt->lqc_wait_for_qmaster)) {
@@ -1272,3 +1271,98 @@ qslave_start_recovery(struct obd_device *obd, struct lustre_quota_ctxt *qctxt)
 exit:
         EXIT;
 }
+
+/*
+ * lqs<->qctxt hash operations
+ */
+
+/* string hashing using djb2 hash algorithm */
+static unsigned
+lqs_hash(lustre_hash_t *lh, void *key, unsigned mask)
+{
+        struct quota_adjust_qunit *lqs_key;
+        unsigned hash;
+        ENTRY;
+
+        LASSERT(key);
+        lqs_key = (struct quota_adjust_qunit *)key;
+        hash = (QAQ_IS_GRP(lqs_key) ? 5381 : 5387) * lqs_key->qaq_id;
+
+        RETURN(hash & mask);
+}
+
+static int
+lqs_compare(void *key, struct hlist_node *hnode)
+{
+        struct quota_adjust_qunit *lqs_key;
+        struct lustre_qunit_size *q;
+        int rc;
+        ENTRY;
+
+        LASSERT(key);
+        lqs_key = (struct quota_adjust_qunit *)key;
+        q = hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
+
+        spin_lock(&q->lqs_lock);
+        rc = ((lqs_key->qaq_id == q->lqs_id) &&
+              (QAQ_IS_GRP(lqs_key) == LQS_IS_GRP(q)));
+        spin_unlock(&q->lqs_lock);
+
+        RETURN(rc);
+}
+
+static void *
+lqs_get(struct hlist_node *hnode)
+{
+        struct lustre_qunit_size *q = 
+            hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
+        ENTRY;
+
+        atomic_inc(&q->lqs_refcount);
+        CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
+               q, atomic_read(&q->lqs_refcount));
+
+        RETURN(q);
+}
+
+static void *
+lqs_put(struct hlist_node *hnode)
+{
+        struct lustre_qunit_size *q = 
+            hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
+        ENTRY;
+
+        LASSERT(atomic_read(&q->lqs_refcount) > 0);
+        atomic_dec(&q->lqs_refcount);
+        CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
+               q, atomic_read(&q->lqs_refcount));
+
+        RETURN(q);
+}
+
+static void
+lqs_exit(struct hlist_node *hnode)
+{
+        struct lustre_qunit_size *q;
+        ENTRY;
+
+        q = hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
+        /* 
+         * Nothing should be left. User of lqs put it and
+         * lqs also was deleted from table by this time
+         * so we should have 0 refs.
+         */
+        LASSERTF(atomic_read(&q->lqs_refcount) == 0, 
+                 "Busy lqs %p with %d refs\n", q,
+                 atomic_read(&q->lqs_refcount));
+        OBD_FREE_PTR(q);
+        EXIT;
+}
+
+static lustre_hash_ops_t lqs_hash_ops = {
+        .lh_hash    = lqs_hash,
+        .lh_compare = lqs_compare,
+        .lh_get     = lqs_get,
+        .lh_put     = lqs_put,
+        .lh_exit    = lqs_exit
+};
