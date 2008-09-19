@@ -519,7 +519,7 @@ static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt,
                     char *poolname, int flags)
 {
         unsigned array_idx;
-        int i, *idx_pos;
+        int i, rc, *idx_pos;
         __u32 ost_idx;
         int ost_start_idx_temp;
         int speed = 0;
@@ -539,12 +539,9 @@ static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt,
                 lqr = &(pool->pool_rr);
         }
 
-        i = qos_calc_rr(lov, osts, lqr);
-        if (i) {
-                if (pool != NULL)
-                        read_unlock(&pool_tgt_rwlock(pool));
-                RETURN(i);
-        }
+        rc = qos_calc_rr(lov, osts, lqr);
+        if (rc)
+                GOTO(out, rc);
 
         if (--lqr->lqr_start_count <= 0) {
                 lqr->lqr_start_idx = ll_rand() % osts->op_count;
@@ -610,13 +607,13 @@ repeat_find:
                 goto repeat_find;
         }
 
-        if (pool != NULL)
-                read_unlock(&pool_tgt_rwlock(pool));
-
         up_read(&lov->lov_qos.lq_rw_sem);
 
         *stripe_cnt = idx_pos - idx_arr;
-        RETURN(0);
+out:
+        if (pool != NULL)
+                read_unlock(&pool_tgt_rwlock(pool));
+        RETURN(rc);
 }
 
 /* alloc objects on osts with specific stripe offset */
@@ -624,9 +621,9 @@ static int alloc_specific(struct lov_obd *lov, struct lov_stripe_md *lsm,
                           int *idx_arr)
 {
         unsigned ost_idx, array_idx, ost_count;
-        int i, *idx_pos;
+        int i, rc, *idx_pos;
         int speed = 0;
-        struct pool_desc *pool = NULL;
+        struct pool_desc *pool;
         struct ost_pool *osts;
         ENTRY;
 
@@ -650,11 +647,9 @@ repeat_find:
                 }
         }
         if (i == ost_count) {
-                if (pool != NULL)
-                        read_unlock(&pool_tgt_rwlock(pool));
                 CERROR("Start index %d not found in pool '%s'\n",
                        lsm->lsm_oinfo[0]->loi_ost_idx, lsm->lsm_pool_name);
-                RETURN(-EINVAL);
+                GOTO(out, rc = -EINVAL);
         }
 
         idx_pos = idx_arr;
@@ -680,11 +675,8 @@ repeat_find:
                 *idx_pos = ost_idx;
                 idx_pos++;
                 /* We have enough stripes */
-                if (idx_pos - idx_arr == lsm->lsm_stripe_count) {
-                        if (pool != NULL)
-                                read_unlock(&pool_tgt_rwlock(pool));
-                        RETURN(0);
-                }
+                if (idx_pos - idx_arr == lsm->lsm_stripe_count)
+                        GOTO(out, rc = 0);
         }
         if (speed < 2) {
                 /* Try again, allowing slower OSCs */
@@ -701,11 +693,11 @@ repeat_find:
         CERROR("can't lstripe objid "LPX64": have %d want %u\n",
                lsm->lsm_object_id, (int)(idx_pos - idx_arr),
                lsm->lsm_stripe_count);
-
+        rc = -EFBIG;
+out:
         if (pool != NULL)
                 read_unlock(&pool_tgt_rwlock(pool));
-
-        RETURN(-EFBIG);
+        RETURN(rc);
 }
 
 /* Alloc objects on osts with optimization based on:
@@ -727,7 +719,7 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
         ENTRY;
 
         if (stripe_cnt_min < 1)
-                GOTO(out_nolock, rc = -EINVAL);
+                RETURN(-EINVAL);
 
         pool = lov_find_pool(lov, poolname);
         if (pool == NULL) {
@@ -891,12 +883,12 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
         LASSERT(nfound == *stripe_cnt);
 
 out:
-        if (pool != NULL)
-                read_unlock(&pool_tgt_rwlock(pool));
-
         up_write(&lov->lov_qos.lq_rw_sem);
 
 out_nolock:
+        if (pool != NULL)
+                read_unlock(&pool_tgt_rwlock(pool));
+
         if (rc == -EAGAIN)
                 rc = alloc_rr(lov, idx_arr, stripe_cnt, poolname, flags);
 
@@ -958,7 +950,7 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
 
         LASSERT(src_oa->o_valid & OBD_MD_FLID);
         LASSERT(src_oa->o_valid & OBD_MD_FLGROUP);
- 
+
         if (set->set_oi->oi_md == NULL) {
                 int stripes_def = lov_get_stripecnt(lov, 0);
 
