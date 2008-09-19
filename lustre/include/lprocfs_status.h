@@ -505,6 +505,10 @@ extern int lprocfs_counter_write(struct file *file, const char *buffer,
 int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
                                    int count, int *eof, void *data);
 
+/* lprocfs_statuc.c: hash statistics */
+int lprocfs_obd_rd_hash(char *page, char **start, off_t off,
+                        int count, int *eof, void *data);
+
 extern int lprocfs_seq_release(struct inode *, struct file *);
 
 /* in lprocfs_stat.c, to protect the private data for proc entries */

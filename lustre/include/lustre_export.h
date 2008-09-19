@@ -40,6 +40,7 @@
 #include <lustre/lustre_idl.h>
 #include <lustre_dlm.h>
 #include <lprocfs_status.h>
+#include <class_hash.h>
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
 struct mds_export_data {
@@ -62,11 +63,6 @@ struct osc_creator {
         struct obdo             oscc_oa;
         int                     oscc_flags;
         cfs_waitq_t             oscc_waitq; /* creating procs wait on this */
-};
-
-struct ldlm_export_data {
-        struct list_head       led_held_locks; /* protected by led_lock below */
-        spinlock_t             led_lock;
 };
 
 struct ec_export_data { /* echo client */
@@ -122,7 +118,8 @@ struct obd_export {
         struct lprocfs_stats     *exp_ops_stats;
         struct ptlrpc_connection *exp_connection;
         __u32                     exp_conn_cnt;
-        struct ldlm_export_data   exp_ldlm_data;
+        lustre_hash_t            *exp_lock_hash; /* existing lock hash */
+        spinlock_t                exp_lock_hash_lock;
         struct list_head          exp_outstanding_replies;
         time_t                    exp_last_request_time;
         struct list_head          exp_req_replay_queue;

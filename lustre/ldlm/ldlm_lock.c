@@ -265,11 +265,9 @@ int ldlm_lock_destroy_internal(struct ldlm_lock *lock)
         }
         lock->l_destroyed = 1;
 
-        if (lock->l_export)
-                spin_lock(&lock->l_export->exp_ldlm_data.led_lock);
-        list_del_init(&lock->l_export_chain);
-        if (lock->l_export)
-                spin_unlock(&lock->l_export->exp_ldlm_data.led_lock);
+        if (lock->l_export && lock->l_export->exp_lock_hash)
+                lustre_hash_del(lock->l_export->exp_lock_hash,
+                                &lock->l_remote_handle, &lock->l_exp_hash);
 
         ldlm_lock_remove_from_lru(lock);
         class_handle_unhash(&lock->l_handle);
@@ -343,7 +341,6 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
         atomic_set(&lock->l_refc, 2);
         CFS_INIT_LIST_HEAD(&lock->l_res_link);
         CFS_INIT_LIST_HEAD(&lock->l_lru);
-        CFS_INIT_LIST_HEAD(&lock->l_export_chain);
         CFS_INIT_LIST_HEAD(&lock->l_pending_chain);
         CFS_INIT_LIST_HEAD(&lock->l_bl_ast);
         CFS_INIT_LIST_HEAD(&lock->l_cp_ast);
@@ -351,6 +348,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
         lock->l_blocking_lock = NULL;
         CFS_INIT_LIST_HEAD(&lock->l_sl_mode);
         CFS_INIT_LIST_HEAD(&lock->l_sl_policy);
+        CFS_INIT_HLIST_NODE(&lock->l_exp_hash);
 
         atomic_inc(&resource->lr_namespace->ns_locks);
         CFS_INIT_LIST_HEAD(&lock->l_handle.h_link);
@@ -1588,30 +1586,29 @@ int ldlm_lock_set_data(struct lustre_handle *lockh, void *data)
         RETURN(0);
 }
 
+void ldlm_cancel_locks_for_export_cb(void *obj, void *data)
+{
+        struct obd_export     *exp = data;
+        struct ldlm_lock      *lock = obj;
+        struct ldlm_resource  *res;
+
+        res = ldlm_resource_getref(lock->l_resource);
+        LDLM_LOCK_GET(lock);
+
+        LDLM_DEBUG(lock, "export %p", exp);
+        ldlm_res_lvbo_update(res, NULL, 0, 1);
+
+        ldlm_lock_cancel(lock);
+        ldlm_reprocess_all(res);
+
+        ldlm_resource_putref(res);
+        LDLM_LOCK_PUT(lock);
+}
+
 void ldlm_cancel_locks_for_export(struct obd_export *exp)
 {
-        struct ldlm_lock *lock;
-        struct ldlm_resource *res;
-
-        spin_lock(&exp->exp_ldlm_data.led_lock);
-        while(!list_empty(&exp->exp_ldlm_data.led_held_locks)) {
-                lock = list_entry(exp->exp_ldlm_data.led_held_locks.next,
-                                  struct ldlm_lock, l_export_chain);
-                res = ldlm_resource_getref(lock->l_resource);
-                LDLM_LOCK_GET(lock);
-                spin_unlock(&exp->exp_ldlm_data.led_lock);
-
-                LDLM_DEBUG(lock, "export %p", exp);
-                ldlm_res_lvbo_update(res, NULL, 0, 1);
-
-                ldlm_lock_cancel(lock);
-                ldlm_reprocess_all(res);
-
-                ldlm_resource_putref(res);
-                LDLM_LOCK_PUT(lock);
-                spin_lock(&exp->exp_ldlm_data.led_lock);
-        }
-        spin_unlock(&exp->exp_ldlm_data.led_lock);
+        lustre_hash_for_each_empty(exp->exp_lock_hash,
+                                   ldlm_cancel_locks_for_export_cb, exp);
 }
 
 struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,

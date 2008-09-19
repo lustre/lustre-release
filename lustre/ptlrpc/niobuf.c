@@ -406,7 +406,7 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int flags)
         }
 
         if (req->rq_export == NULL || req->rq_export->exp_connection == NULL)
-                conn = ptlrpc_get_connection(req->rq_peer, req->rq_self, NULL);
+                conn = ptlrpc_connection_get(req->rq_peer, req->rq_self, NULL);
         else
                 conn = ptlrpc_connection_addref(req->rq_export->exp_connection);
 
@@ -427,7 +427,7 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int flags)
                 atomic_dec (&svc->srv_outstanding_replies);
                 ptlrpc_req_drop_rs(req);
         }
-        ptlrpc_put_connection(conn);
+        ptlrpc_connection_put(conn);
         return rc;
 }
 

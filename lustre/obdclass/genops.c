@@ -697,15 +697,12 @@ struct obd_export *class_new_export(struct obd_device *obd,
                 return ERR_PTR(-ENOMEM);
 
         export->exp_conn_cnt = 0;
+        export->exp_lock_hash = NULL;
         atomic_set(&export->exp_refcount, 2);
         atomic_set(&export->exp_rpc_count, 0);
         export->exp_obd = obd;
         CFS_INIT_LIST_HEAD(&export->exp_outstanding_replies);
         CFS_INIT_LIST_HEAD(&export->exp_req_replay_queue);
-        /* XXX this should be in LDLM init */
-        CFS_INIT_LIST_HEAD(&export->exp_ldlm_data.led_held_locks);
-        spin_lock_init(&export->exp_ldlm_data.led_lock);
-
         CFS_INIT_LIST_HEAD(&export->exp_handle.h_link);
         class_handle_hash(&export->exp_handle, export_handle_addref);
         export->exp_last_request_time = cfs_time_current_sec();
@@ -717,15 +714,15 @@ struct obd_export *class_new_export(struct obd_device *obd,
         obd_init_export(export);
 
         if (!obd_uuid_equals(cluuid, &obd->obd_uuid)) {
-               rc = lustre_hash_additem_unique(obd->obd_uuid_hash_body, cluuid,
-                                               &export->exp_uuid_hash);
-               if (rc != 0) {
-                       CWARN("%s: denying duplicate export for %s\n",
-                             obd->obd_name, cluuid->uuid);
-                       class_handle_unhash(&export->exp_handle);
-                       OBD_FREE_PTR(export);
-                       return ERR_PTR(-EALREADY);
-               }
+                rc = lustre_hash_add_unique(obd->obd_uuid_hash, cluuid,
+                                            &export->exp_uuid_hash);
+                if (rc != 0) {
+                        LCONSOLE_WARN("%s: denying duplicate export for %s, %d\n",
+                                      obd->obd_name, cluuid->uuid, rc);
+                        class_handle_unhash(&export->exp_handle);
+                        OBD_FREE_PTR(export);
+                        return ERR_PTR(-EALREADY);
+                }
         }
 
         spin_lock(&obd->obd_dev_lock);
@@ -747,10 +744,11 @@ void class_unlink_export(struct obd_export *exp)
 
         spin_lock(&exp->exp_obd->obd_dev_lock);
         /* delete an uuid-export hashitem from hashtables */
-        if (!hlist_unhashed(&exp->exp_uuid_hash)) {
-                lustre_hash_delitem(exp->exp_obd->obd_uuid_hash_body,
-                                    &exp->exp_client_uuid, &exp->exp_uuid_hash);
-        }
+        if (!hlist_unhashed(&exp->exp_uuid_hash))
+                lustre_hash_del(exp->exp_obd->obd_uuid_hash,
+                                &exp->exp_client_uuid,
+                                &exp->exp_uuid_hash);
+
         list_del_init(&exp->exp_obd_chain);
         list_del_init(&exp->exp_obd_chain_timed);
         exp->exp_obd->obd_num_exports--;
@@ -941,10 +939,11 @@ int class_disconnect(struct obd_export *export)
         already_disconnected = export->exp_disconnected;
         export->exp_disconnected = 1;
 
-        if (!hlist_unhashed(&export->exp_nid_hash)) {
-                lustre_hash_delitem(export->exp_obd->obd_nid_hash_body,
-                                    &export->exp_connection->c_peer.nid, &export->exp_nid_hash);
-        }
+        if (!hlist_unhashed(&export->exp_nid_hash))
+                lustre_hash_del(export->exp_obd->obd_nid_hash,
+                                &export->exp_connection->c_peer.nid,
+                                &export->exp_nid_hash);
+
         spin_unlock(&export->exp_lock);
 
         /* class_cleanup(), abort_recovery(), and class_fail_export()
@@ -1255,8 +1254,7 @@ int obd_export_evict_by_nid(struct obd_device *obd, char *nid)
         lnet_nid_t nid_key = libcfs_str2nid(nid);
 
         do {
-                doomed_exp = lustre_hash_get_object_by_key(obd->obd_nid_hash_body,
-                                                           &nid_key);
+                doomed_exp = lustre_hash_lookup(obd->obd_nid_hash, &nid_key);
 
                 if (doomed_exp == NULL)
                         break;
@@ -1284,17 +1282,16 @@ EXPORT_SYMBOL(obd_export_evict_by_nid);
 int obd_export_evict_by_uuid(struct obd_device *obd, char *uuid)
 {
         struct obd_export *doomed_exp = NULL;
-        struct obd_uuid doomed;
+        struct obd_uuid doomed_uuid;
         int exports_evicted = 0;
 
-        obd_str2uuid(&doomed, uuid);
-        if(obd_uuid_equals(&doomed, &obd->obd_uuid)) {
+        obd_str2uuid(&doomed_uuid, uuid);
+        if(obd_uuid_equals(&doomed_uuid, &obd->obd_uuid)) {
                 CERROR("%s: can't evict myself\n", obd->obd_name);
                 return exports_evicted;
         }
 
-        doomed_exp = lustre_hash_get_object_by_key(obd->obd_uuid_hash_body,
-                                                   &doomed);
+        doomed_exp = lustre_hash_lookup(obd->obd_uuid_hash, &doomed_uuid);
 
         if (doomed_exp == NULL) {
                 CERROR("%s: can't disconnect %s: no exports found\n",

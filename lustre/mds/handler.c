@@ -403,6 +403,7 @@ out:
 int mds_init_export(struct obd_export *exp)
 {
         struct mds_export_data *med = &exp->exp_mds_data;
+        ENTRY;
 
         INIT_LIST_HEAD(&med->med_open_head);
         spin_lock_init(&med->med_open_lock);
@@ -411,7 +412,7 @@ int mds_init_export(struct obd_export *exp)
         exp->exp_connecting = 1;
         spin_unlock(&exp->exp_lock);
 
-        RETURN(0);
+        RETURN(ldlm_init_export(exp));
 }
 
 static int mds_destroy_export(struct obd_export *export)
@@ -428,6 +429,7 @@ static int mds_destroy_export(struct obd_export *export)
 
         med = &export->exp_mds_data;
         target_destroy_export(export);
+        ldlm_destroy_export(export);
 
         if (obd_uuid_equals(&export->exp_client_uuid, &obd->obd_uuid))
                 RETURN(0);
@@ -2386,29 +2388,26 @@ static void fixup_handle_for_resent_req(struct ptlrpc_request *req, int offset,
         struct ldlm_request *dlmreq =
                 lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*dlmreq));
         struct lustre_handle remote_hdl = dlmreq->lock_handle[0];
-        struct list_head *iter;
+        struct ldlm_lock *lock;
 
         if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT))
                 return;
 
-        spin_lock(&exp->exp_ldlm_data.led_lock);
-        list_for_each(iter, &exp->exp_ldlm_data.led_held_locks) {
-                struct ldlm_lock *lock;
-                lock = list_entry(iter, struct ldlm_lock, l_export_chain);
-                if (lock == new_lock)
-                        continue;
-                if (lock->l_remote_handle.cookie == remote_hdl.cookie) {
+        lock = lustre_hash_lookup(exp->exp_lock_hash, &remote_hdl);
+        if (lock) {
+                if (lock != new_lock) {
                         lockh->cookie = lock->l_handle.h_cookie;
                         LDLM_DEBUG(lock, "restoring lock cookie");
-                        DEBUG_REQ(D_DLMTRACE, req,"restoring lock cookie "LPX64,
-                                  lockh->cookie);
+                        DEBUG_REQ(D_DLMTRACE, req, "restoring lock cookie "
+                                  LPX64, lockh->cookie);
                         if (old_lock)
                                 *old_lock = LDLM_LOCK_GET(lock);
-                        spin_unlock(&exp->exp_ldlm_data.led_lock);
+
+                        lh_put(exp->exp_lock_hash, &lock->l_exp_hash);
                         return;
                 }
+                lh_put(exp->exp_lock_hash, &lock->l_exp_hash);
         }
-        spin_unlock(&exp->exp_ldlm_data.led_lock);
 
         /* If the xid matches, then we know this is a resent request,
          * and allow it. (It's probably an OPEN, for which we don't
@@ -2623,18 +2622,15 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         new_lock->l_writers = 0;
 
         new_lock->l_export = class_export_get(req->rq_export);
-        spin_lock(&req->rq_export->exp_ldlm_data.led_lock);
-        list_add(&new_lock->l_export_chain,
-                 &new_lock->l_export->exp_ldlm_data.led_held_locks);
-        spin_unlock(&req->rq_export->exp_ldlm_data.led_lock);
-
         new_lock->l_blocking_ast = lock->l_blocking_ast;
         new_lock->l_completion_ast = lock->l_completion_ast;
+        new_lock->l_flags &= ~LDLM_FL_LOCAL;
 
         memcpy(&new_lock->l_remote_handle, &lock->l_remote_handle,
                sizeof(lock->l_remote_handle));
 
-        new_lock->l_flags &= ~LDLM_FL_LOCAL;
+        lustre_hash_add(new_lock->l_export->exp_lock_hash,
+                        &new_lock->l_remote_handle, &new_lock->l_exp_hash);
 
         unlock_res_and_lock(new_lock);
         LDLM_LOCK_PUT(new_lock);

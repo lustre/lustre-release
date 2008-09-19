@@ -129,7 +129,6 @@ typedef unsigned short umode_t;
 #define set_page_private(page, v) ((page)->private = (v))
 #endif
 
-
 static inline void inter_module_put(void *a)
 {
         return;

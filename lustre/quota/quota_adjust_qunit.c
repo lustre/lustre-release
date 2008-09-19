@@ -143,8 +143,7 @@ int quota_search_lqs(struct qunit_data *qdata, struct quota_adjust_qunit *oqaq,
                 oqaq_tmp = oqaq;
         }
 
-        *lqs_return = lustre_hash_get_object_by_key(LQC_HASH_BODY(qctxt),
-                                                    oqaq_tmp);
+        *lqs_return = lustre_hash_lookup(qctxt->lqc_lqs_hash, oqaq_tmp);
         if (*lqs_return)
                 LQS_DEBUG((*lqs_return), "show lqs\n");
 
@@ -157,45 +156,42 @@ int quota_create_lqs(struct qunit_data *qdata, struct quota_adjust_qunit *oqaq,
                      struct lustre_quota_ctxt *qctxt,
                      struct lustre_qunit_size **lqs_return)
 {
-        int rc = 0;
-        struct quota_adjust_qunit *oqaq_tmp = NULL;
         struct lustre_qunit_size *lqs = NULL;
+        int rc = 0;
         ENTRY;
 
         LASSERT(*lqs_return == NULL);
         LASSERT(oqaq || qdata);
 
-        if (!oqaq) {
-                OBD_ALLOC_PTR(oqaq_tmp);
-                if (!oqaq_tmp)
-                        RETURN(-ENOMEM);
-                qdata_to_oqaq(qdata, oqaq_tmp);
-        } else {
-                oqaq_tmp = oqaq;
-        }
-
         OBD_ALLOC_PTR(lqs);
         if (!lqs)
                 GOTO(out, rc = -ENOMEM);
+
+        if (!oqaq) {
+                qdata_to_oqaq(qdata, &lqs->lqs_key);
+        } else {
+                lqs->lqs_key = *oqaq;
+        }
 
         spin_lock_init(&lqs->lqs_lock);
         lqs->lqs_bwrite_pending = 0;
         lqs->lqs_iwrite_pending = 0;
         lqs->lqs_ino_rec = 0;
         lqs->lqs_blk_rec = 0;
-        lqs->lqs_id = oqaq_tmp->qaq_id;
-        lqs->lqs_flags = QAQ_IS_GRP(oqaq_tmp);
+        lqs->lqs_id = lqs->lqs_key.qaq_id;
+        lqs->lqs_flags = QAQ_IS_GRP(&lqs->lqs_key);
         lqs->lqs_bunit_sz = qctxt->lqc_bunit_sz;
         lqs->lqs_iunit_sz = qctxt->lqc_iunit_sz;
         lqs->lqs_btune_sz = qctxt->lqc_btune_sz;
         lqs->lqs_itune_sz = qctxt->lqc_itune_sz;
+        lqs->lqs_ctxt = qctxt;
         if (qctxt->lqc_handler) {
                 lqs->lqs_last_bshrink  = 0;
                 lqs->lqs_last_ishrink  = 0;
         }
         lqs_initref(lqs);
-        rc = lustre_hash_additem_unique(LQC_HASH_BODY(qctxt),
-                                        oqaq_tmp, &lqs->lqs_hash);
+        rc = lustre_hash_add_unique(qctxt->lqc_lqs_hash,
+                                    &lqs->lqs_key, &lqs->lqs_hash);
         LQS_DEBUG(lqs, "create lqs\n");
         if (!rc) {
                 lqs_getref(lqs);
@@ -204,8 +200,6 @@ int quota_create_lqs(struct qunit_data *qdata, struct quota_adjust_qunit *oqaq,
  out:
         if (rc && lqs)
                 OBD_FREE_PTR(lqs);
-        if (!oqaq)
-                OBD_FREE_PTR(oqaq_tmp);
         RETURN(rc);
 }
 
@@ -233,7 +227,7 @@ search_lqs:
                         LQS_DEBUG(lqs, "release lqs\n");
                         /* this is for quota_search_lqs */
                         lqs_putref(lqs);
-                        /* this is for deleting this lqs */
+                        /* kill lqs */
                         lqs_putref(lqs);
                 }
                 RETURN(rc);

@@ -604,5 +604,10 @@ static inline long labs(long x)
 }
 #endif
 
+/* Using kernel fls(). Userspace will use one defined in user-bitops.h. */
+#ifndef __fls
+#define __fls fls
+#endif
+
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */

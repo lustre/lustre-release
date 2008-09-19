@@ -414,13 +414,13 @@ static int import_select_connection(struct obd_import *imp)
 
         /* switch connection, don't mind if it's same as the current one */
         if (imp->imp_connection)
-                ptlrpc_put_connection(imp->imp_connection);
+                ptlrpc_connection_put(imp->imp_connection);
         imp->imp_connection = ptlrpc_connection_addref(imp_conn->oic_conn);
 
         dlmexp =  class_conn2export(&imp->imp_dlm_handle);
         LASSERT(dlmexp != NULL);
         if (dlmexp->exp_connection)
-                ptlrpc_put_connection(dlmexp->exp_connection);
+                ptlrpc_connection_put(dlmexp->exp_connection);
         dlmexp->exp_connection = ptlrpc_connection_addref(imp_conn->oic_conn);
         class_export_put(dlmexp);
 

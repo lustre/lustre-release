@@ -1267,6 +1267,16 @@ struct exp_uuid_cb_data {
         int                    *len;
 };
 
+static void
+lprocfs_exp_rd_cb_data_init(struct exp_uuid_cb_data *cb_data, char *page,
+                            int count, int *eof, int *len)
+{
+        cb_data->page = page;
+        cb_data->count = count;
+        cb_data->eof = eof;
+        cb_data->len = len;
+}
+
 void lprocfs_exp_print_uuid(void *obj, void *cb_data)
 {
         struct obd_export *exp = (struct obd_export *)obj;
@@ -1288,15 +1298,43 @@ int lprocfs_exp_rd_uuid(char *page, char **start, off_t off, int count,
 
         *eof = 1;
         page[0] = '\0';
-        LASSERT(obd != NULL);
+        lprocfs_exp_rd_cb_data_init(&cb_data, page, count, eof, &len);
+        lustre_hash_for_each_key(obd->obd_nid_hash, &stats->nid,
+                                 lprocfs_exp_print_uuid, &cb_data);
+        return (*cb_data.len);
+}
 
-        cb_data.page = page;
-        cb_data.count = count;
-        cb_data.eof = eof;
-        cb_data.len = &len;
-        lustre_hash_bucket_iterate(obd->obd_nid_hash_body,
-                                   &stats->nid, lprocfs_exp_print_uuid,
-                                   &cb_data);
+void lprocfs_exp_print_hash(void *obj, void *cb_data)
+{
+        struct obd_export *exp = (struct obd_export *)obj;
+        struct exp_uuid_cb_data *data = (struct exp_uuid_cb_data *)cb_data;
+        lustre_hash_t *lh;
+
+        lh = exp->exp_lock_hash;
+        if (lh) {
+                if (!*data->len)
+                        *data->len += lustre_hash_debug_header(data->page,
+                                                               data->count);
+
+                *data->len += lustre_hash_debug_str(lh, data->page + 
+                                                    *data->len,
+                                                    data->count);
+     }
+}
+
+int lprocfs_exp_rd_hash(char *page, char **start, off_t off, int count,
+                     int *eof,  void *data)
+{
+        struct nid_stat *stats = (struct nid_stat *)data;
+        struct exp_uuid_cb_data cb_data;
+        struct obd_device *obd = stats->nid_obd;
+        int len = 0;
+
+        *eof = 1;
+        page[0] = '\0';
+        lprocfs_exp_rd_cb_data_init(&cb_data, page, count, eof, &len);
+        lustre_hash_for_each_key(obd->obd_nid_hash, &stats->nid,
+                                 lprocfs_exp_print_hash, &cb_data);
         return (*cb_data.len);
 }
 
@@ -1340,7 +1378,6 @@ void lprocfs_nid_stats_clear_write_cb(void *obj, void *data)
         return;
 }
 
-
 int lprocfs_nid_stats_clear_write(struct file *file, const char *buffer,
                                          unsigned long count, void *data)
 {
@@ -1348,8 +1385,8 @@ int lprocfs_nid_stats_clear_write(struct file *file, const char *buffer,
         struct nid_stat *client_stat;
         CFS_LIST_HEAD(free_list);
 
-        lustre_hash_iterate_all(obd->obd_nid_stats_hash_body,
-                                lprocfs_nid_stats_clear_write_cb, &free_list);
+        lustre_hash_for_each(obd->obd_nid_stats_hash,
+                             lprocfs_nid_stats_clear_write_cb, &free_list);
 
         while (!list_empty(&free_list)) {
                 client_stat = list_entry(free_list.next, struct nid_stat, nid_list);
@@ -1372,7 +1409,7 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
         *newnid = 0;
 
         if (!exp || !exp->exp_obd || !exp->exp_obd->obd_proc_exports_entry ||
-            !exp->exp_obd->obd_nid_stats_hash_body)
+            !exp->exp_obd->obd_nid_stats_hash)
                 RETURN(-EINVAL);
 
 	/* not test against zero because eric say:
@@ -1383,7 +1420,7 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
 
         obd = exp->exp_obd;
 
-        CDEBUG(D_CONFIG, "using hash %p\n", obd->obd_nid_stats_hash_body);
+        CDEBUG(D_CONFIG, "using hash %p\n", obd->obd_nid_stats_hash);
 
         OBD_ALLOC(tmp, sizeof(struct nid_stat));
         if (tmp == NULL)
@@ -1408,8 +1445,8 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
         list_add(&tmp->nid_list, &obd->obd_nid_stats);
         spin_unlock(&obd->obd_nid_lock);
 
-        tmp1 = lustre_hash_findadd_unique(obd->obd_nid_stats_hash_body, nid,
-                                          &tmp->nid_hash);
+        tmp1 = lustre_hash_findadd_unique(obd->obd_nid_stats_hash,
+                                          nid, &tmp->nid_hash);
         CDEBUG(D_INFO, "Found stats %p for nid %s - ref %d\n",
                tmp1, libcfs_nid2str(*nid), tmp->nid_exp_ref_count);
 
@@ -1447,8 +1484,7 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
         if (!tmp->nid_proc) {
                 CERROR("Error making export directory for"
                        " nid %s\n", libcfs_nid2str(*nid));
-                lustre_hash_delitem(obd->obd_nid_stats_hash_body, nid,
-                                    &tmp->nid_hash);
+                lustre_hash_del(obd->obd_nid_stats_hash, nid, &tmp->nid_hash);
                 GOTO(destroy_new, rc = -ENOMEM);
         }
 
@@ -1461,6 +1497,11 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
                                 lprocfs_exp_rd_uuid, NULL, tmp);
         if (rc)
                 CWARN("Error adding the uuid file\n");
+
+        rc = lprocfs_add_simple(tmp->nid_proc, "hash",
+                                lprocfs_exp_rd_hash, NULL, tmp);
+        if (rc)
+                CWARN("Error adding the hash file\n");
 
         exp->exp_nid_stats = tmp;
         *newnid = 1;
@@ -1841,6 +1882,24 @@ out:
         return min(count, len - (int)off);
 }
 EXPORT_SYMBOL(lprocfs_obd_rd_recovery_status);
+
+int lprocfs_obd_rd_hash(char *page, char **start, off_t off,
+                        int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        int c = 0;
+
+        if (obd == NULL)
+                return 0;
+
+        c += lustre_hash_debug_header(page, count);
+        c += lustre_hash_debug_str(obd->obd_uuid_hash, page + c, count - c);
+        c += lustre_hash_debug_str(obd->obd_nid_hash, page + c, count - c);
+        c += lustre_hash_debug_str(obd->obd_nid_stats_hash, page+c, count-c);
+
+        return c;
+}
+EXPORT_SYMBOL(lprocfs_obd_rd_hash);
 
 #ifdef CRAY_XT3
 int lprocfs_obd_rd_recovery_maxtime(char *page, char **start, off_t off,
