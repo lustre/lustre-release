@@ -724,7 +724,7 @@ static int filter_init_export(struct obd_export *exp)
         exp->exp_connecting = 1;
         spin_unlock(&exp->exp_lock);
 
-        return 0;
+        return ldlm_init_export(exp);
 }
 
 static int filter_free_server_data(struct filter_obd *filter)
@@ -2527,6 +2527,7 @@ static int filter_destroy_export(struct obd_export *exp)
         lquota_clearinfo(filter_quota_interface_ref, exp, exp->exp_obd);
 
         target_destroy_export(exp);
+        ldlm_destroy_export(exp);
 
         if (obd_uuid_equals(&exp->exp_client_uuid, &exp->exp_obd->obd_uuid))
                 RETURN(0);
