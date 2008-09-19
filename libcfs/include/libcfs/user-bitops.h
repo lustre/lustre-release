@@ -72,6 +72,45 @@ static __inline__ int test_bit(int nr, const unsigned long *addr)
 }
 
 /* using binary seach */
+static __inline__ unsigned long __fls(long data)
+{
+	int pos = 32;
+
+	if (!data)
+		return 0;
+
+#if BITS_PER_LONG == 64
+        pos += 32;
+
+        if ((data & 0xFFFFFFFF) == 0) {
+                data <<= 32;
+                pos -= 32;
+        }
+#endif
+
+	if (!(data & 0xFFFF0000u)) {
+		data <<= 16;
+		pos -= 16;
+	}
+	if (!(data & 0xFF000000u)) {
+		data <<= 8;
+		pos -= 8;
+	}
+	if (!(data & 0xF0000000u)) {
+		data <<= 4;
+		pos -= 4;
+	}
+	if (!(data & 0xC0000000u)) {
+		data <<= 2;
+		pos -= 2;
+	}
+	if (!(data & 0x80000000u)) {
+		data <<= 1;
+		pos -= 1;
+	}
+	return pos;
+}
+
 static __inline__ unsigned long __ffs(long data)
 {
         int pos = 0;
@@ -105,6 +144,7 @@ static __inline__ unsigned long __ffs(long data)
 }
 
 #define __ffz(x)	__ffs(~(x))
+#define __flz(x)	__fls(~(x))
 
 unsigned long find_next_bit(unsigned long *addr,
                             unsigned long size, unsigned long offset);

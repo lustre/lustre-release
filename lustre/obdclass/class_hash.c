@@ -88,19 +88,10 @@ lustre_hash_init(char *name, unsigned int cur_size, unsigned int max_size,
         if (!lh)
                 RETURN(NULL);
   
-        lh->lh_name_size = strlen(name) + 1;
-        rwlock_init(&lh->lh_rwlock);
-  
-        OBD_ALLOC(lh->lh_name, lh->lh_name_size);
-        if (!lh->lh_name) {
-                OBD_FREE_PTR(lh);
-                RETURN(NULL);
-        }
-  
-        strncpy(lh->lh_name, name, lh->lh_name_size);
-  
-        atomic_set(&lh->lh_count, 0);
+        strncpy(lh->lh_name, name, sizeof(lh->lh_name));
         atomic_set(&lh->lh_rehash_count, 0);
+        atomic_set(&lh->lh_count, 0);
+        rwlock_init(&lh->lh_rwlock);
         lh->lh_cur_size = cur_size;
         lh->lh_min_size = cur_size;
         lh->lh_max_size = max_size;
@@ -111,7 +102,6 @@ lustre_hash_init(char *name, unsigned int cur_size, unsigned int max_size,
 
         OBD_VMALLOC(lh->lh_buckets, sizeof(*lh->lh_buckets) * lh->lh_cur_size);
         if (!lh->lh_buckets) {
-                OBD_FREE(lh->lh_name, lh->lh_name_size);
                 OBD_FREE_PTR(lh);
                 RETURN(NULL);
         }
@@ -157,8 +147,6 @@ lustre_hash_exit(lustre_hash_t *lh)
         }
   
         OBD_VFREE(lh->lh_buckets, sizeof(*lh->lh_buckets) * lh->lh_cur_size);
-        OBD_FREE(lh->lh_name, lh->lh_name_size);
-  
         LASSERT(atomic_read(&lh->lh_count) == 0);
         write_unlock(&lh->lh_rwlock);
   
@@ -215,18 +203,14 @@ lustre_hash_add(lustre_hash_t *lh, void *key, struct hlist_node *hnode)
         EXIT;
 }
 EXPORT_SYMBOL(lustre_hash_add);
-  
-/**
- * Add item @hnode to lustre hash @lh using @key.  The registered
- * ops->lh_get function will be called if the item was added.
- * Returns 0 on success or -EALREADY on key collisions.
- */
-int
-lustre_hash_add_unique(lustre_hash_t *lh, void *key, struct hlist_node *hnode)
+
+static struct hlist_node *
+lustre_hash_findadd_unique_hnode(lustre_hash_t *lh, void *key,
+                                 struct hlist_node *hnode)
 {
+        struct hlist_node    *ehnode;
         lustre_hash_bucket_t *lhb;
         int                   size;
-        int                   rc = -EALREADY;
         unsigned              i;
         ENTRY;
   
@@ -237,20 +221,41 @@ lustre_hash_add_unique(lustre_hash_t *lh, void *key, struct hlist_node *hnode)
         lhb = &lh->lh_buckets[i];
         LASSERT(i < lh->lh_cur_size);
         LASSERT(hlist_unhashed(hnode));
-  
+
         write_lock(&lhb->lhb_rwlock);
-        if (!__lustre_hash_bucket_lookup(lh, lhb, key)) {
+        ehnode = __lustre_hash_bucket_lookup(lh, lhb, key);
+        if (ehnode) {
+                lh_get(lh, ehnode);
+        } else {
                 __lustre_hash_bucket_add(lh, lhb, hnode);
-                rc = 0;
+                ehnode = hnode;
         }
         write_unlock(&lhb->lhb_rwlock);
-  
+
         size = lustre_hash_rehash_size(lh);
         read_unlock(&lh->lh_rwlock);
         if (size)
                 lustre_hash_rehash(lh, size);
   
-        RETURN(rc);
+        RETURN(ehnode);
+}
+  
+/**
+ * Add item @hnode to lustre hash @lh using @key.  The registered
+ * ops->lh_get function will be called if the item was added.
+ * Returns 0 on success or -EALREADY on key collisions.
+ */
+int
+lustre_hash_add_unique(lustre_hash_t *lh, void *key, struct hlist_node *hnode)
+{
+        struct hlist_node    *ehnode;
+        ENTRY;
+        
+        ehnode = lustre_hash_findadd_unique_hnode(lh, key, hnode);
+        if (ehnode != hnode)
+                RETURN(-EALREADY);
+        
+        RETURN(0);
 }
 EXPORT_SYMBOL(lustre_hash_add_unique);
   
@@ -264,34 +269,13 @@ void *
 lustre_hash_findadd_unique(lustre_hash_t *lh, void *key,
                            struct hlist_node *hnode)
 {
-        struct hlist_node    *existing_hnode;
-        lustre_hash_bucket_t *lhb;
-        int                   size;
-        unsigned              i;
+        struct hlist_node    *ehnode;
         void                 *obj;
         ENTRY;
-  
-        __lustre_hash_key_validate(lh, key, hnode);
-  
-        read_lock(&lh->lh_rwlock);
-        i = lh_hash(lh, key, lh->lh_cur_size - 1);
-        lhb = &lh->lh_buckets[i];
-        LASSERT(i < lh->lh_cur_size);
-        LASSERT(hlist_unhashed(hnode));
-
-        write_lock(&lhb->lhb_rwlock);
-        existing_hnode = __lustre_hash_bucket_lookup(lh, lhb, key);
-        if (existing_hnode)
-                obj = lh_get(lh, existing_hnode);
-        else
-                obj = __lustre_hash_bucket_add(lh, lhb, hnode);
-        write_unlock(&lhb->lhb_rwlock);
-
-        size = lustre_hash_rehash_size(lh);
-        read_unlock(&lh->lh_rwlock);
-        if (size)
-                lustre_hash_rehash(lh, size);
-  
+        
+        ehnode = lustre_hash_findadd_unique_hnode(lh, key, hnode);
+        obj = lh_get(lh, ehnode);
+        lh_put(lh, ehnode);
         RETURN(obj);
 }
 EXPORT_SYMBOL(lustre_hash_findadd_unique);
@@ -760,7 +744,7 @@ int lustre_hash_debug_str(lustre_hash_t *lh, char *str, int size)
          * Non-Uniform hash distribution:  128/125/0/0/0/0/2/1
          */
         lh_for_each_bucket(lh, lhb, i)
-                dist[MIN(fls(atomic_read(&lhb->lhb_count)/MAX(theta,1)),7)]++;
+                dist[MIN(__fls(atomic_read(&lhb->lhb_count)/MAX(theta,1)),7)]++;
 
         for (i = 0; i < 8; i++)
                 c += snprintf(str + c, size - c, "%d%c",  dist[i],
