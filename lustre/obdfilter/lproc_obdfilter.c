@@ -203,6 +203,7 @@ static struct lprocfs_vars lprocfs_filter_obd_vars[] = {
         { "tot_pending",  lprocfs_filter_rd_tot_pending, 0, 0 },
         { "tot_granted",  lprocfs_filter_rd_tot_granted, 0, 0 },
         { "recovery_status", lprocfs_obd_rd_recovery_status, 0, 0 },
+        { "hash_stats",   lprocfs_obd_rd_hash,      0, 0 },
 #ifdef CRAY_XT3
         { "recovery_maxtime", lprocfs_obd_rd_recovery_maxtime,
                               lprocfs_obd_wr_recovery_maxtime, 0},
