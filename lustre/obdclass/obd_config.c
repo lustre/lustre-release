@@ -628,29 +628,6 @@ int class_del_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
         RETURN(rc);
 }
 
-struct sptlrpc_conf_log_hdr {
-        __u32   scl_max;
-        __u32   scl_nrule;
-};
-
-static int class_sptlrpc_conf(struct obd_device *obd, struct lustre_cfg *lcfg)
-{
-        struct sptlrpc_conf_log_hdr *log;
-
-        log = lustre_cfg_buf(lcfg, 1);
-        if (log == NULL || lcfg->lcfg_buflens[1] < sizeof(*log)) {
-                CERROR("missing data in sptlrpc config record\n");
-                return 0;
-        }
-
-        /* don't care endian */
-        if (log->scl_nrule != 0)
-                CWARN("Please notify your sysadmin to remove all "
-                      "sptlrpc rules on MGS\n");
-
-        return 0;
-}
-
 CFS_LIST_HEAD(lustre_profile_list);
 
 struct lustre_profile *class_get_profile(char * prof)
@@ -873,10 +850,6 @@ int class_process_config(struct lustre_cfg *lcfg)
         }
         case LCFG_DEL_CONN: {
                 err = class_del_conn(obd, lcfg);
-                GOTO(out, err = 0);
-        }
-        case LCFG_SPTLRPC_CONF: {
-                err = class_sptlrpc_conf(obd, lcfg);
                 GOTO(out, err = 0);
         }
         case LCFG_POOL_NEW: {
