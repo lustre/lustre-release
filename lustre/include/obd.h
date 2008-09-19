@@ -696,7 +696,7 @@ struct lov_obd {
         obd_pin_extent_cb       lov_page_pin_cb;
         obd_lock_cancel_cb      lov_lock_cancel_cb;
         int                     lov_pool_count;
-        struct lustre_class_hash_body   *lov_pools_hash_body; /* used for key access */
+        lustre_hash_t          *lov_pools_hash_body; /* used for key access */
         struct list_head        lov_pool_list; /* used for sequential access */
         cfs_proc_dir_entry_t   *lov_pool_proc_entry;
 };
@@ -894,11 +894,11 @@ struct obd_device {
                       obd_inactive:1;      /* device active/inactive
                                             * (for /proc/status only!!) */
         /* uuid-export hash body */
-        struct lustre_class_hash_body *obd_uuid_hash_body;
+        struct lustre_hash     *obd_uuid_hash;
         /* nid-export hash body */
-        struct lustre_class_hash_body *obd_nid_hash_body;
+        struct lustre_hash     *obd_nid_hash;
         /* nid stats body */
-        struct lustre_class_hash_body *obd_nid_stats_hash_body;
+        struct lustre_hash     *obd_nid_stats_hash;
         struct list_head        obd_nid_stats;
         atomic_t                obd_refcount;
         cfs_waitq_t             obd_refcount_waitq;
