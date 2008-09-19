@@ -117,7 +117,7 @@ AC_DEFINE(HAVE___D_MOVE, 1,
 LB_CONFIG_FILES
 AC_CONFIG_FILES([ldiskfs/autoMakefile ldiskfs/Makefile])
 
-MOSTLYCLEANFILES='.*.cmd .*.flags *.o *.ko *.mod.c .depend .*.1.*'
+MOSTLYCLEANFILES='.*.cmd .*.flags *.o *.ko *.mod.c .depend .*.1.* Modules.symvers Module.symvers'
 AC_SUBST(MOSTLYCLEANFILES)
 
 AC_OUTPUT
