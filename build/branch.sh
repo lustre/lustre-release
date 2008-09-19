@@ -16,7 +16,7 @@ if [ ! -d $dir ]; then
     echo >&2 "${progname}: directory '$dir' does not exist."
     exit 1
 fi
-module=$(basename `cat $dir/CVS/Repository`)
+module=$(basename $(<$dir/CVS/Repository))
 
 if [ "$module" = "lustre" ]; then
     echo >&2 "${progname}: You probably want to branch lustre or lnet."
