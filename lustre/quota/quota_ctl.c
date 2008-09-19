@@ -282,6 +282,11 @@ int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         ptlrpc_req_set_repsize(req, 2, size);
 
         rc = ptlrpc_queue_wait(req);
+        if (rc) {
+                CERROR("ptlrpc_queue_wait failed, rc: %d\n", rc);
+                GOTO(out, rc);
+        }
+
         oqc = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*oqc),
                                  lustre_swab_obd_quotactl);
         if (oqc == NULL) {
