@@ -82,8 +82,12 @@ static __inline__ unsigned long __fls(long data)
 		return 0;
 
 #if BITS_PER_LONG == 64
-        if ((data & 0xFFFFFFFF) == 0)
+        pos += 32;
+
+        if ((data & 0xFFFFFFFF) == 0) {
                 data <<= 32;
+                pos -= 32;
+        }
 #endif
 
 	if (!(data & 0xFFFF0000u)) {
