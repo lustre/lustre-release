@@ -925,8 +925,9 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         /* Default priority is toward free space balance */
         lov->lov_qos.lq_prio_free = 232;
 
-        lustre_hash_init(&lov->lov_pools_hash_body, "POOLS", 128,
-                         &pool_hash_operations);
+        lov->lov_pools_hash_body = lustre_hash_init("POOLS", 128, 128,
+                                                    &pool_hash_operations,
+                                                    0);
 
         CFS_INIT_LIST_HEAD(&lov->lov_pool_list);
         lov->lov_pool_count = 0;
@@ -991,12 +992,12 @@ static int lov_cleanup(struct obd_device *obd)
         list_for_each_safe(pos, tmp, &lov->lov_pool_list) {
                 pool = list_entry(pos, struct pool_desc, pool_list);
                 list_del(&pool->pool_list);
-                lustre_hash_delitem_by_key(lov->lov_pools_hash_body, pool->pool_name);
+                lustre_hash_del_key(lov->lov_pools_hash_body, pool->pool_name);
                 lov_ost_pool_free(&(pool->pool_rr.lqr_pool));
                 lov_ost_pool_free(&(pool->pool_obds));
                 OBD_FREE(pool, sizeof(*pool));
         }
-        lustre_hash_exit(&lov->lov_pools_hash_body);
+        lustre_hash_exit(lov->lov_pools_hash_body);
 
         lprocfs_obd_cleanup(obd);
 
