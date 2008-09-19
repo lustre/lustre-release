@@ -70,7 +70,7 @@ struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid)
                 return NULL;
         }
 
-        c = ptlrpc_get_connection(peer, self, uuid);
+        c = ptlrpc_connection_get(peer, self, uuid);
         if (c) {
                 memcpy(c->c_remote_uuid.uuid,
                        uuid->uuid, sizeof(c->c_remote_uuid.uuid));
@@ -79,24 +79,6 @@ struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid)
         CDEBUG(D_INFO, "%s -> %p\n", uuid->uuid, c);
 
         return c;
-}
-
-void ptlrpc_readdress_connection(struct ptlrpc_connection *conn,
-                                 struct obd_uuid *uuid)
-{
-        lnet_nid_t        self;
-        lnet_process_id_t peer;
-        int               err;
-
-        err = ptlrpc_uuid_to_peer(uuid, &peer, &self);
-        if (err != 0) {
-                CERROR("cannot find peer %s!\n", uuid->uuid);
-                return;
-        }
-
-        conn->c_peer = peer;
-        conn->c_self = self;
-        return;
 }
 
 static inline struct ptlrpc_bulk_desc *new_bulk(int npages, int type, int portal)
