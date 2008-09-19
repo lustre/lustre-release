@@ -58,7 +58,7 @@
  * Chapter 6.4.
  * Addison Wesley, 1973
  */
-static __u32 pool_hashfn(struct lustre_class_hash_body *hash_body, void *key)
+static __u32 pool_hashfn(lustre_hash_t *hash_body, void *key, unsigned mask)
 {
         int i;
         __u32 result;
@@ -71,7 +71,15 @@ static __u32 pool_hashfn(struct lustre_class_hash_body *hash_body, void *key)
                         break;
                 result = (result << 4)^(result >> 28) ^  poolname[i];
         }
-        return (result % hash_body->lchb_hash_max_size);
+        return (result % mask);
+}
+
+static void *pool_key(struct hlist_node *hnode)
+{
+        struct pool_desc *pool;
+
+        pool = hlist_entry(hnode, struct pool_desc, pool_hash);
+        return (pool->pool_name);
 }
 
 static int pool_hashkey_compare(void *key, struct hlist_node *compared_hnode)
@@ -86,26 +94,28 @@ static int pool_hashkey_compare(void *key, struct hlist_node *compared_hnode)
         return (!rc);
 }
 
-static void *pool_hashrefcount_get(struct hlist_node *actual_hnode)
+static void *pool_hashrefcount_get(struct hlist_node *hnode)
 {
         struct pool_desc *pool;
 
-        pool = hlist_entry(actual_hnode, struct pool_desc, pool_hash);
-        return pool;
+        pool = hlist_entry(hnode, struct pool_desc, pool_hash);
+        return (pool);
 }
 
-static void pool_hashrefcount_put(struct hlist_node *actual_hnode)
+static void *pool_hashrefcount_put(struct hlist_node *hnode)
 {
         struct pool_desc *pool;
 
-        pool = hlist_entry(actual_hnode, struct pool_desc, pool_hash);
+        pool = hlist_entry(hnode, struct pool_desc, pool_hash);
+        return (pool);
 }
 
-struct lustre_hash_operations pool_hash_operations = {
-        .lustre_hashfn                          = pool_hashfn,
-        .lustre_hash_key_compare                = pool_hashkey_compare,
-        .lustre_hash_object_refcount_get        = pool_hashrefcount_get,
-        .lustre_hash_object_refcount_put        = pool_hashrefcount_put,
+lustre_hash_ops_t pool_hash_operations = {
+        .lh_hash        = pool_hashfn,
+        .lh_key         = pool_key,
+        .lh_compare     = pool_hashkey_compare,
+        .lh_get         = pool_hashrefcount_get,
+        .lh_put         = pool_hashrefcount_put,
 };
 
 #ifdef LPROCFS
@@ -390,8 +400,8 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
 
         spin_lock(&obd->obd_dev_lock);
         /* check if pool alreaddy exists */
-        if (lustre_hash_get_object_by_key(lov->lov_pools_hash_body,
-                                          poolname) != NULL) {
+        if (lustre_hash_lookup(lov->lov_pools_hash_body,
+                                poolname) != NULL) {
                 spin_unlock(&obd->obd_dev_lock);
                 lov_ost_pool_free(&new_pool->pool_obds);
                 OBD_FREE(new_pool, sizeof(*new_pool));
@@ -399,8 +409,8 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
         }
 
         INIT_HLIST_NODE(&new_pool->pool_hash);
-        lustre_hash_additem(lov->lov_pools_hash_body, poolname,
-                            &new_pool->pool_hash);
+        lustre_hash_add_unique(lov->lov_pools_hash_body, poolname,
+                               &new_pool->pool_hash);
         list_add_tail(&new_pool->pool_list, &lov->lov_pool_list);
         lov->lov_pool_count++;
         spin_unlock(&obd->obd_dev_lock);
@@ -433,8 +443,8 @@ int lov_pool_del(struct obd_device *obd, char *poolname)
         lov = &(obd->u.lov);
 
         spin_lock(&obd->obd_dev_lock);
-        pool = lustre_hash_get_object_by_key(lov->lov_pools_hash_body,
-                                             poolname);
+        pool = lustre_hash_lookup(lov->lov_pools_hash_body,
+                                  poolname);
         if (pool == NULL) {
                 spin_unlock(&obd->obd_dev_lock);
                 return -ENOENT;
@@ -449,7 +459,7 @@ int lov_pool_del(struct obd_device *obd, char *poolname)
         /* pool is kept in the list to be freed by lov_cleanup()
          * list_del(&pool->pool_list);
          */
-        lustre_hash_delitem_by_key(lov->lov_pools_hash_body, poolname);
+        lustre_hash_del_key(lov->lov_pools_hash_body, poolname);
 
         lov->lov_pool_count--;
 
@@ -479,8 +489,7 @@ int lov_pool_add(struct obd_device *obd, char *poolname, char *ostname)
 
         lov = &(obd->u.lov);
 
-        pool = lustre_hash_get_object_by_key(lov->lov_pools_hash_body,
-                                             poolname);
+        pool = lustre_hash_lookup(lov->lov_pools_hash_body, poolname);
         if (pool == NULL) {
                 return -ENOENT;
         }
@@ -538,8 +547,7 @@ int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
         lov = &(obd->u.lov);
 
         spin_lock(&obd->obd_dev_lock);
-        pool = lustre_hash_get_object_by_key(lov->lov_pools_hash_body,
-                                             poolname);
+        pool = lustre_hash_lookup(lov->lov_pools_hash_body, poolname);
         if (pool == NULL) {
                 spin_unlock(&obd->obd_dev_lock);
                 return -ENOENT;
@@ -596,8 +604,7 @@ struct pool_desc *lov_find_pool(struct lov_obd *lov, char *poolname)
 
         pool = NULL;
         if (poolname[0] != '\0') {
-                pool = lustre_hash_get_object_by_key(lov->lov_pools_hash_body,
-                                                     poolname);
+                pool = lustre_hash_lookup(lov->lov_pools_hash_body, poolname);
                 if (pool == NULL)
                         CWARN("Request for an unknown pool ("POOLNAMEF")\n",
                               poolname);
