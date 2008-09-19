@@ -658,7 +658,7 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
         ENTRY;
 
         if (stripe_cnt_min < 1)
-                GOTO(out, rc = -EINVAL);
+                RETURN(-EINVAL);
 
         lov_getref(exp->exp_obd);
         down_write(&lov->lov_qos.lq_rw_sem);
