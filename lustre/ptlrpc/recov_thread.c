@@ -545,11 +545,6 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
                 GOTO(out, rc = -ENODEV);
         }
 
-        if (ctxt->loc_obd->obd_stopping) {
-                CDEBUG(D_RPCTRACE, "Obd is stopping for ctxt %p\n", ctxt);
-                GOTO(out, rc = -ENODEV);
-        }
-
         if (test_bit(LLOG_LCM_FL_EXIT, &lcm->lcm_flags)) {
                 CDEBUG(D_RPCTRACE, "Commit thread is stopping for ctxt %p\n", 
                        ctxt);
