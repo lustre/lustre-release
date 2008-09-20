@@ -2216,13 +2216,13 @@ int mds_postrecov(struct obd_device *obd)
 
         LASSERT(!obd->obd_recovering);
 
+        /* VBR: update boot epoch after recovery */
+        mds_update_last_epoch(obd);
+
         /* clean PENDING dir */
         rc = mds_cleanup_pending(obd);
         if (rc < 0)
                 GOTO(out, rc);
-        /* VBR: update boot epoch after recovery */
-        mds_update_last_epoch(obd);
-
         /* FIXME Does target_finish_recovery really need this to block? */
         /* Notify the LOV, which will in turn call mds_notify for each tgt */
         /* This means that we have to hack obd_notify to think we're obd_set_up
