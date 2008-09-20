@@ -151,7 +151,7 @@ int filter_finish_transno(struct obd_export *exp, struct inode *inode,
         lcd->lcd_last_transno = cpu_to_le64(last_rcvd);
         lcd->lcd_pre_versions[0] = cpu_to_le64(oti->oti_pre_version);
         lcd->lcd_last_xid = cpu_to_le64(oti->oti_xid);
-        lcd->lcd_last_time = cpu_to_le32(cfs_time_current_sec());
+        target_trans_table_update(exp, last_rcvd);
 
         spin_unlock(&filter->fo_translock);
 
@@ -309,7 +309,6 @@ static int filter_update_client_epoch(struct obd_export *exp)
                         le32_to_cpu(filter->fo_fsd->lsd_start_epoch))
                 return rc;
         fed->fed_lcd->lcd_last_epoch = filter->fo_fsd->lsd_start_epoch;
-        fed->fed_lcd->lcd_last_time = cpu_to_le32(cfs_time_current_sec());
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
         rc = fsfilt_write_record(exp->exp_obd, filter->fo_rcvd_filp,
                                  fed->fed_lcd, sizeof(*fed->fed_lcd), &off,
@@ -440,8 +439,6 @@ static int filter_client_add(struct obd_device *obd, struct obd_export *exp,
                         fed->fed_lcd->lcd_last_epoch =
                                               filter->fo_fsd->lsd_start_epoch;
                         exp->exp_last_request_time = cfs_time_current_sec();
-                        fed->fed_lcd->lcd_last_time =
-                                      cpu_to_le32(exp->exp_last_request_time);
                         rc = fsfilt_add_journal_cb(obd, 0, handle,
                                                    target_client_add_cb, exp);
                         if (rc == 0) {
@@ -825,6 +822,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 fsd->lsd_server_size = cpu_to_le32(LR_SERVER_SIZE);
                 fsd->lsd_client_start = cpu_to_le32(LR_CLIENT_START);
                 fsd->lsd_client_size = cpu_to_le16(LR_CLIENT_SIZE);
+                fsd->lsd_expire_intervals = cpu_to_le32(LR_EXPIRE_INTERVALS);
                 fsd->lsd_subdir_count = cpu_to_le16(FILTER_SUBDIR_COUNT);
                 filter->fo_subdir_count = FILTER_SUBDIR_COUNT;
                 fsd->lsd_feature_incompat = cpu_to_le32(OBD_INCOMPAT_OST);
@@ -951,7 +949,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                         /* VBR: set export last committed */
                         exp->exp_last_committed = last_rcvd;
                         /* read last time from disk */
-                        exp->exp_last_request_time = le32_to_cpu(lcd->lcd_last_time);
+                        exp->exp_last_request_time = target_trans_table_last_time(exp);
 
                         spin_lock(&exp->exp_lock);
                         exp->exp_replay_needed = 1;
@@ -1906,6 +1904,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         filter->fo_vfsmnt = mnt;
         obd->u.obt.obt_sb = mnt->mnt_sb;
         obd->u.obt.obt_stale_export_age = STALE_EXPORT_MAXTIME_DEFAULT;
+        spin_lock_init(&obd->u.obt.obt_trans_table_lock);
 
         filter->fo_fstype = mnt->mnt_sb->s_type->name;
         CDEBUG(D_SUPER, "%s: mnt = %p\n", filter->fo_fstype, mnt);
