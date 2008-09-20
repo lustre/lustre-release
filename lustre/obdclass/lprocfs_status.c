@@ -1983,6 +1983,7 @@ int lprocfs_obd_wr_stale_export_age(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
+        target_trans_table_recalc(obd, val);
         obd->u.obt.obt_stale_export_age = val;
         return count;
 }
