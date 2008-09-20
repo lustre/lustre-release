@@ -344,9 +344,13 @@ patch_kernel()
 set_make()
 {
     MAKE="make -s"
-    if [ "$CC" ] ; then
-	MAKE_CC="CC=$CC"
-    fi
+    [ "$CC" ] && {
+        if [ "$TARGET_ARCH" == "ppc64" ] ; then
+                MAKE_CC="CC=$CC -m64"
+        else 
+                MAKE_CC="CC=$CC"
+        fi
+    }
     if [ "$ARCH" ] ; then
 	MAKE_ARCH="$MAKE ARCH=$ARCH"
     else
