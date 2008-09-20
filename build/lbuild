@@ -508,7 +508,7 @@ load_target()
 
     BUILD_ARCHS=
     for arch in $(uniqify "$ALL_ARCHS") ; do
-        if [ -z "$TARGET_ARCHS" ] || echo "$TARGET_ARCHS" | grep "$arch" >/dev/null 2>/dev/null ; then
+        if [ -z "$TARGET_ARCHS" ] || [[ $TARGET_ARCHES =~ (\ |^)$arch(\ |$) ]] ; then
             BUILD_ARCHS="$BUILD_ARCHS $arch"
         fi
     done
