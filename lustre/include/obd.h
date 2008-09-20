@@ -294,6 +294,7 @@ struct obd_device_target {
         struct lustre_quota_ctxt  obt_qctxt;
         lustre_quota_version_t    obt_qfmt;
         __u32                     obt_stale_export_age;
+        spinlock_t                obt_trans_table_lock;
 };
 
 typedef void (*obd_pin_extent_cb)(void *data);
@@ -918,7 +919,7 @@ struct obd_device {
         __u64                   obd_osfs_age;
         struct lvfs_run_ctxt    obd_lvfs_ctxt;
 
-        struct llog_ctxt       *obd_llog_ctxt[LLOG_MAX_CTXTS];
+        struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
         struct semaphore        obd_llog_alloc;
         cfs_waitq_t             obd_llog_waitq;
 
