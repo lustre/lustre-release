@@ -133,7 +133,6 @@ int mds_update_client_epoch(struct obd_export *exp)
                 return rc;
 
         med->med_lcd->lcd_last_epoch = mds->mds_server_data->lsd_start_epoch;
-        med->med_lcd->lcd_last_time = cpu_to_le32(cfs_time_current_sec());
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
         rc = fsfilt_write_record(exp->exp_obd, mds->mds_rcvd_filp,
                                  med->med_lcd, sizeof(*med->med_lcd), &off,
@@ -257,8 +256,9 @@ int mds_client_add(struct obd_device *obd, struct obd_export *exp,
                         med->med_lcd->lcd_last_epoch =
                                         mds->mds_server_data->lsd_start_epoch;
                         exp->exp_last_request_time = cfs_time_current_sec();
-                        med->med_lcd->lcd_last_time =
-                                      cpu_to_le32(exp->exp_last_request_time);
+                        /* remember first epoch of client for orphan handling */
+                        med->med_lcd->lcd_first_epoch =
+                                 cpu_to_le32(lr_epoch(mds->mds_last_transno));
                         rc = fsfilt_add_journal_cb(obd, 0, handle,
                                                    target_client_add_cb, exp);
                         if (rc == 0) {
@@ -444,7 +444,6 @@ static void mds_add_fake_export(struct obd_device *obd, int num,
                 class_export_put(exp);
 
                 lcd->lcd_last_epoch = cpu_to_le32(1);
-                lcd->lcd_last_time = cpu_to_le32(exp->exp_last_request_time);
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = fsfilt_write_record(obd, file, lcd, sizeof(*lcd), &off, 0);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
@@ -496,6 +495,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 lsd->lsd_server_size = cpu_to_le32(LR_SERVER_SIZE);
                 lsd->lsd_client_start = cpu_to_le32(LR_CLIENT_START);
                 lsd->lsd_client_size = cpu_to_le16(LR_CLIENT_SIZE);
+                lsd->lsd_expire_intervals = cpu_to_le32(LR_EXPIRE_INTERVALS);
                 lsd->lsd_feature_rocompat = cpu_to_le32(OBD_ROCOMPAT_LOVOBJID);
                 lsd->lsd_feature_incompat = cpu_to_le32(OBD_INCOMPAT_MDT);
         } else {
@@ -627,7 +627,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                         /* VBR: set export last committed version */
                         exp->exp_last_committed = last_transno;
                         /* read last time from disk */
-                        exp->exp_last_request_time = le32_to_cpu(lcd->lcd_last_time);
+                        exp->exp_last_request_time = target_trans_table_last_time(exp);
                         lcd = NULL;
 
                         spin_lock(&exp->exp_lock);
@@ -724,6 +724,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         /* why not mnt->mnt_sb instead of mnt->mnt_root->d_inode->i_sb? */
         obd->u.obt.obt_sb = mnt->mnt_root->d_inode->i_sb;
         obd->u.obt.obt_stale_export_age = STALE_EXPORT_MAXTIME_DEFAULT;
+        spin_lock_init(&obd->u.obt.obt_trans_table_lock);
 
         rc = fsfilt_setup(obd, obd->u.obt.obt_sb);
         if (rc)
