@@ -307,7 +307,9 @@ int mds_finish_transno(struct mds_obd *mds, struct inode **inodes, void *handle,
                         lcd->lcd_last_data    = cpu_to_le32(op_data);
                 }
         }
-        lcd->lcd_last_time = cpu_to_le32(cfs_time_current_sec());
+        /** update trans table */
+        target_trans_table_update(req->rq_export, transno);
+
         if (off <= 0) {
                 CERROR("client idx %d has offset %lld\n", med->med_lr_idx, off);
                 err = -EINVAL;
@@ -1023,6 +1025,11 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 GOTO(cleanup, rc = -EROFS);
         }
 
+        /** check there is no stale orphan with same inode number */
+        rc = mds_check_stale_orphan(obd, rec->ur_fid2);
+        if (rc)
+                GOTO(cleanup, rc);
+
         /* version recovery check */
         rc = mds_version_get_check(req, dir, 0);
         if (rc)
@@ -1716,7 +1723,7 @@ static int mds_orphan_add_link(struct mds_update_record *rec,
                S_ISDIR(inode->i_mode) ? "dir" :
                 S_ISREG(inode->i_mode) ? "file" : "other",rec->ur_name,fidname);
 
-        if (mds_orphan_open_count(inode) == 0 || inode->i_nlink != 0)
+        if (!mds_orphan_needed(obd, inode) || inode->i_nlink != 0)
                 RETURN(0);
 
         pending_child = lookup_one_len(fidname, mds->mds_pending_dir, fidlen);
@@ -1897,7 +1904,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
          * only do the object removal later if no open files/links remain. */
         if ((S_ISDIR(child_inode->i_mode) && child_inode->i_nlink == 2) ||
             child_inode->i_nlink == 1) {
-                if (mds_orphan_open_count(child_inode) > 0) {
+                if (mds_orphan_needed(obd, child_inode)) {
                         /* need to lock pending_dir before transaction */
                         LOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode);
                         cleanup_phase = 5; /* UNLOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode); */
@@ -1961,7 +1968,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         }
 
         if (rc == 0 && child_inode->i_nlink == 0) {
-                if (mds_orphan_open_count(child_inode) > 0)
+                if (mds_orphan_needed(obd, child_inode))
                         rc = mds_orphan_add_link(rec, obd, dchild);
 
                 if (rc == 1)
@@ -2522,7 +2529,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
 
         if ((S_ISDIR(new_inode->i_mode) && new_inode->i_nlink == 2) ||
             new_inode->i_nlink == 1) {
-                if (mds_orphan_open_count(new_inode) > 0) {
+                if (mds_orphan_needed(obd, new_inode)) {
                         /* need to lock pending_dir before transaction */
                         LOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode);
                         cleanup_phase = 4; /* UNLOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode); */
@@ -2561,7 +2568,7 @@ no_unlink:
         unlock_kernel();
 
         if (rc == 0 && new_inode != NULL && new_inode->i_nlink == 0) {
-                if (mds_orphan_open_count(new_inode) > 0)
+                if (mds_orphan_needed(obd, new_inode))
                         rc = mds_orphan_add_link(rec, obd, de_new);
 
                 if (rc == 1)
