@@ -1069,6 +1069,11 @@ int mds_open(struct mds_update_record *rec, int offset,
                 if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
                         GOTO(cleanup, rc = -EROFS);
 
+                /** check there is no stale orphan with same inode number */
+                rc = mds_check_stale_orphan(obd, rec->ur_fid2);
+                if (rc)
+                        GOTO(cleanup, rc);
+
                 /* version recovery check */
                 rc = mds_version_get_check(req, dparent->d_inode, 0);
                 if (rc)
@@ -1109,6 +1114,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                         GOTO(cleanup, rc);
                 }
                 inode = dchild->d_inode;
+                created = 1;
                 if (ino) {
                         if (ino != inode->i_ino) {
                                 /* FID support is needed to replay this
@@ -1126,7 +1132,6 @@ int mds_open(struct mds_update_record *rec, int offset,
                                inode->i_ino, inode->i_generation);
                 }
 
-                created = 1;
                 LTIME_S(iattr.ia_atime) = rec->ur_time;
                 LTIME_S(iattr.ia_ctime) = rec->ur_time;
                 LTIME_S(iattr.ia_mtime) = rec->ur_time;
@@ -1349,8 +1354,9 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
         CDEBUG(D_INODE, "inode %p ino %s nlink %d orphan %d\n", inode, fidname,
                inode->i_nlink, mds_orphan_open_count(inode));
 
-        last_orphan = mds_orphan_open_dec_test(inode) &&
-                      mds_inode_is_orphan(inode);
+        last_orphan = (!obd->obd_recovering &&
+                       mds_orphan_open_dec_test(inode) &&
+                       mds_inode_is_orphan(inode));
 
         /* this is half of the actual "close" */
         if (mfd->mfd_mode & FMODE_WRITE) {
@@ -1563,7 +1569,8 @@ int mds_close(struct ptlrpc_request *req, int offset)
         inode = mfd->mfd_dentry->d_inode;
         /* child orphan sem protects orphan_dec_test && is_orphan race */
         MDS_DOWN_WRITE_ORPHAN_SEM(inode); /* mds_mfd_close drops this */
-        if (mds_inode_is_orphan(inode) && mds_orphan_open_count(inode) == 1) {
+        if (!obd->obd_recovering &&
+            mds_inode_is_orphan(inode) && mds_orphan_open_count(inode) == 1) {
                 body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                       sizeof(*body));
                 LASSERT(body != NULL);
