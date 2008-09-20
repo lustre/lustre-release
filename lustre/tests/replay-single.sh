@@ -1713,7 +1713,7 @@ test_71a() {
     OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
     NEW_AGE=10
     do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$NEW_AGE"
-    sleep $NEW_AGE
+    sleep $((NEW_AGE + 2))
     do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep \"$UUID.*EXPIRED\"" || \
         error "exports didn't expire"
     do_facet mds "lctl set_param mds.${mds_svc}.evict_client=$UUID"
@@ -1734,7 +1734,7 @@ test_71b() {
     OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
     NEW_AGE=10
     do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$NEW_AGE"
-    sleep $NEW_AGE
+    sleep $((NEW_AGE + 2))
     EX_NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep -c EXPIRED")
     [ "$EX_NUM" -eq "$NUM" ] || error "not all exports are expired $EX_NUM != $NUM"
     do_facet mds "lctl set_param mds.${mds_svc}.flush_stale_exports=1"
@@ -1755,7 +1755,7 @@ test_71c() {
     OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
     NEW_AGE=10
     do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$NEW_AGE"
-    sleep $NEW_AGE
+    sleep $((NEW_AGE + 2))
     EX_NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep -c EXPIRED")
     [ "$EX_NUM" -eq "$NUM" ] || error "not all exports are expired $EX_NUM != $NUM"
 
@@ -1779,7 +1779,7 @@ test_71d() {
     OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
     NEW_AGE=10
     do_facet mds "lctl conf_param ${mds_svc}.mdt.stale_export_age=$NEW_AGE"
-    sleep $NEW_AGE
+    sleep $((NEW_AGE + 2))
     EX_NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep -c EXPIRED")
     [ "$EX_NUM" -eq "$NUM" ] || error "not all exports are expired $EX_NUM != $NUM"
 
