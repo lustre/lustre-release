@@ -1000,7 +1000,7 @@ static int lprocfs_stats_seq_show(struct seq_file *p, void *v)
        struct lprocfs_stats *stats = p->private;
        struct lprocfs_counter  *cntr = v;
        struct lprocfs_counter  t, ret = { .lc_min = LC_MIN_INIT };
-       int i, idx, rc;
+       int i, idx, rc = 0;
        unsigned int num_cpu;
 
        if (cntr == &(stats->ls_percpu[0])->lp_cntr[0]) {
@@ -1040,6 +1040,9 @@ static int lprocfs_stats_seq_show(struct seq_file *p, void *v)
                        ret.lc_max = t.lc_max;
                ret.lc_sumsquare += t.lc_sumsquare;
        }
+
+       if (ret.lc_count == 0)
+               goto out;
 
        rc = seq_printf(p, "%-25s "LPD64" samples [%s]", cntr->lc_name,
                        ret.lc_count, cntr->lc_units);
@@ -1535,8 +1538,8 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
             !exp->exp_obd->obd_nid_stats_hash)
                 RETURN(-EINVAL);
 
-	/* not test against zero because eric say:
-	 * You may only test nid against another nid, or LNET_NID_ANY.
+        /* not test against zero because eric say:
+         * You may only test nid against another nid, or LNET_NID_ANY.
          * Anything else is nonsense.*/
         if (!nid || *nid == LNET_NID_ANY)
                 RETURN(0);
