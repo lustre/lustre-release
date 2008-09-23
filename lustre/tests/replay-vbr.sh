@@ -16,6 +16,9 @@ init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
+[ -n "$CLIENTS" ] || { skip "Need two or more clients" && exit 0; }
+[ $CLIENTCOUNT -ge 2 ] || \
+    { skip "Need two or more clients, have $CLIENTCOUNT" && exit 0; }
 #
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
 
@@ -33,11 +36,6 @@ rm -rf $DIR/[df][0-9]*
 [ "$CLIENTS" ] && zconf_umount_clients $CLIENTS $DIR
 
 test_1() {
-    [ -n "$CLIENTS" ] || \
-        { skip "Need two or more clients" && return 0; }
-    [ $CLIENTCOUNT -ge 2 ] || \
-        { skip "Need two or more clients, have $CLIENTCOUNT" && return 0; }
-
     echo "mount client $CLIENT1,$CLIENT2..."
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -66,11 +64,6 @@ test_1() {
 run_test 1 "VBR: client during replay doesn't affect another one"
 
 test_2() {
-    [ -n "$CLIENTS" ] || \
-        { skip "Need two or more clients" && return 0; }
-    [ $CLIENTCOUNT -ge 2 ] || \
-        { skip "Need two or more clients, have $CLIENTCOUNT" && return 0; }
-
     #ls -al $DIR/$tdir/$tfile
 
     zconf_mount_clients $CLIENT1 $DIR
@@ -103,11 +96,6 @@ test_2() {
 run_test 2 "VBR: lost data due to missed REMOTE client during replay"
 
 test_3a() {
-    [ -n "$CLIENTS" ] || \
-        { skip "Need two or more clients" && return 0; }
-    [ $CLIENTCOUNT -ge 2 ] || \
-        { skip "Need two or more clients, have $CLIENTCOUNT" && return 0; }
-
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
 
@@ -140,11 +128,6 @@ test_3a() {
 run_test 3a "VBR: setattr of time/size doesn't change version"
 
 test_3b() {
-    [ -n "$CLIENTS" ] || \
-        { skip "Need two or more clients" && return 0; }
-    [ $CLIENTCOUNT -ge 2 ] || \
-        { skip "Need two or more clients, have $CLIENTCOUNT" && return 0; }
-
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
 
@@ -180,11 +163,6 @@ test_3c() {
         { skip "The HARD failure is needed" && return 0; }
 
     [ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
-
-    [ -n "$CLIENTS" ] || \
-        { skip "Need two or more clients" && return 0; }
-    [ $CLIENTCOUNT -ge 2 ] || \
-        { skip "Need two or more clients, have $CLIENTCOUNT" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -238,11 +216,6 @@ vbr_activate_client() {
 }
 
 test_4a() {
-    [ $CLIENTS ] || \
-        { skip "Need two or more clients" && return 0; }
-    [ $CLIENTCOUNT -ge 2 ] || \
-        { skip "Need two or more clients, have $CLIENTCOUNT" && return 0; }
-
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
 
@@ -271,11 +244,6 @@ test_4a() {
 run_test 4a "fail MDS, delayed recovery"
 
 test_4b() {
-    [ -n "$CLIENTS" ] || \
-        { skip "Need two or more clients" && return 0; }
-    [ $CLIENTCOUNT -ge 2 ] || \
-        { skip "Need two or more clients, have $CLIENTCOUNT" && return 0; }
-
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
 
@@ -303,11 +271,6 @@ test_4b() {
 run_test 4b "fail MDS, normal operation, delayed open recovery"
 
 test_4c() {
-    [ -n "$CLIENTS" ] || \
-        { skip "Need two or more clients" && return 0; }
-    [ $CLIENTCOUNT -ge 2 ] || \
-        { skip "Need two or more clients, have $CLIENTCOUNT" && return 0; }
-
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
 
@@ -335,11 +298,6 @@ test_4c() {
 run_test 4c "fail MDS, normal operation, delayed recovery"
 
 test_5a() {
-    [ -n "$CLIENTS" ] || \
-        { skip "Need two or more clients" && return 0; }
-    [ $CLIENTCOUNT -ge 2 ] || \
-        { skip "Need two or more clients, have $CLIENTCOUNT" && return 0; }
-
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
 
@@ -367,11 +325,6 @@ test_5a() {
 run_test 5a "fail MDS, delayed recovery should fail"
 
 test_5b() {
-    [ -n "$CLIENTS" ] || \
-        { skip "Need two or more clients" && return 0; }
-    [ $CLIENTCOUNT -ge 2 ] || \
-        { skip "Need two or more clients, have $CLIENTCOUNT" && return 0; }
-
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
 
@@ -401,11 +354,6 @@ test_5b() {
 run_test 5b "fail MDS, normal operation, delayed recovery should fail"
 
 test_6a() {
-    [ -n "$CLIENTS" ] || \
-        { skip "Need two or more clients" && echo $CLIENTS && return 0; }
-    [ $CLIENTCOUNT -ge 2 ] || \
-        { skip "Need two or more clients, have $CLIENTCOUNT" && return 0; }
-
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
 
@@ -440,11 +388,6 @@ test_6a() {
 run_test 6a "fail MDS, delayed recovery, fail MDS"
 
 test_7a() {
-    [ -n "$CLIENTS" ] || \
-        { skip "Need two or more clients" && return 0; }
-    [ $CLIENTCOUNT -ge 2 ] || \
-        { skip "Need two or more clients, have $CLIENTCOUNT" && return 0; }
-
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
 
@@ -682,11 +625,6 @@ run_test 8g "create | unlink, create shouldn't fail"
 
 test_10 () {
     [ -z "$DBENCH_LIB" ] && skip "DBENCH_LIB is not set" && return 0
-
-    [ -n "$CLIENTS" ] || \
-        { skip "Need two or more clients" && return 0; }
-    [ $CLIENTCOUNT -ge 2 ] || \
-        { skip "Need two or more clients, have $CLIENTCOUNT" && return 0; }
 
     zconf_mount_clients $CLIENTS $DIR
 
