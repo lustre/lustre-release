@@ -39,6 +39,12 @@ tbd Sun Microsystems, Inc.
 	  old (verbose) output can be obtained by using -v option.
 
 Severity   : enhancement
+Bugzilla   : 15966
+Description: Re-disable certain /proc logging
+Details    : Enable and disable client's offset_stats, extents_stats and
+             extents_stats_per_process stats logging on the fly.
+
+Severity   : enhancement
 Bugzilla   : 16643
 Description: Generic /proc file permissions
 Details    : Set /Proc file permissions in a more generic way to enable non-

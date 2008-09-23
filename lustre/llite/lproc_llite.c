@@ -318,7 +318,7 @@ static int ll_wr_max_cached_mb(struct file *file, const char *buffer,
         spin_lock(&sbi->ll_lock);
         sbi->ll_async_page_max = pages_number ;
         spin_unlock(&sbi->ll_lock);
-        
+
         if (!sbi->ll_osc_exp)
                 /* Not set up yet, don't call llap_shrink_cache */
                 return count;
@@ -387,7 +387,7 @@ static int ll_wr_max_rw_chunk(struct file *file, const char *buffer,
         return count;
 }
 
-static int ll_rd_track_id(char *page, int count, void *data, 
+static int ll_rd_track_id(char *page, int count, void *data,
                           enum stats_track_type type)
 {
         struct super_block *sb = data;
@@ -395,7 +395,7 @@ static int ll_rd_track_id(char *page, int count, void *data,
         if (ll_s2sbi(sb)->ll_stats_track_type == type) {
                 return snprintf(page, count, "%d\n",
                                 ll_s2sbi(sb)->ll_stats_track_id);
-        
+
         } else if (ll_s2sbi(sb)->ll_stats_track_type == STATS_TRACK_ALL) {
                 return snprintf(page, count, "0 (all)\n");
         } else {
@@ -453,7 +453,7 @@ static int ll_rd_track_gid(char *page, char **start, off_t off,
 
 static int ll_wr_track_gid(struct file *file, const char *buffer,
                           unsigned long count, void *data)
-{                                                                 
+{
         return (ll_wr_track_id(buffer, count, data, STATS_TRACK_GID));
 }
 
@@ -683,12 +683,12 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         len = strlen(lsi->lsi_lmd->lmd_profile);
         ptr = strrchr(lsi->lsi_lmd->lmd_profile, '-');
         if (ptr && (strcmp(ptr, "-client") == 0))
-                len -= 7; 
-        
+                len -= 7;
+
         /* Mount info */
         snprintf(name, MAX_STRING_SIZE, "%.*s-%p", len,
                  lsi->lsi_lmd->lmd_profile, sb);
-        
+
         sbi->ll_proc_root = lprocfs_register(name, parent, NULL, NULL);
         if (IS_ERR(sbi->ll_proc_root)) {
                 err = PTR_ERR(sbi->ll_proc_root);
@@ -728,7 +728,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         entry->data = sbi;
 
         /* File operations stats */
-        sbi->ll_stats = lprocfs_alloc_stats(LPROC_LL_FILE_OPCODES, 
+        sbi->ll_stats = lprocfs_alloc_stats(LPROC_LL_FILE_OPCODES,
                                             LPROCFS_STATS_FLAG_PERCPU);
         if (sbi->ll_stats == NULL)
                 GOTO(out, err = -ENOMEM);
@@ -884,7 +884,7 @@ static int llite_dump_pgcache_seq_show(struct seq_file *seq, void *v)
         return 0;
 }
 
-static void *llite_dump_pgcache_seq_next(struct seq_file *seq, void *v, 
+static void *llite_dump_pgcache_seq_next(struct seq_file *seq, void *v,
                                          loff_t *pos)
 {
         struct ll_async_page *llap, *dummy_llap = seq->private;
@@ -1028,7 +1028,7 @@ static int ll_ra_stats_seq_show(struct seq_file *seq, void *v)
                    ra->ra_cur_pages);
 
         for(i = 0; i < _NR_RA_STAT; i++)
-                seq_printf(seq, "%-25s %lu\n", ra_stat_strings[i], 
+                seq_printf(seq, "%-25s %lu\n", ra_stat_strings[i],
                            ra->ra_stats[i]);
 
         spin_unlock(&sbi->ll_lock);
@@ -1104,14 +1104,15 @@ static int ll_rw_extents_stats_pp_seq_show(struct seq_file *seq, void *v)
         do_gettimeofday(&now);
 
         if (!sbi->ll_rw_stats_on) {
-                seq_printf(seq, "Disabled\n"
-                                "Write anything in this file to activate\n");
+                seq_printf(seq, "disabled\n"
+                                "write anything in this file to activate, "
+                                "then 0 or \"[D/d]isabled\" to deactivate\n");
                 return 0;
         }
         seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
                    now.tv_sec, now.tv_usec);
         seq_printf(seq, "%15s %19s       | %20s\n", " ", "read", "write");
-        seq_printf(seq, "%13s   %14s %4s %4s  | %14s %4s %4s\n", 
+        seq_printf(seq, "%13s   %14s %4s %4s  | %14s %4s %4s\n",
                    "extents", "calls", "%", "cum%",
                    "calls", "%", "cum%");
         spin_lock(&sbi->ll_pp_extent_lock);
@@ -1134,8 +1135,18 @@ static ssize_t ll_rw_extents_stats_pp_seq_write(struct file *file,
         struct ll_sb_info *sbi = seq->private;
         struct ll_rw_extents_info *io_extents = &sbi->ll_rw_extents_info;
         int i;
+        int value = 1, rc = 0;
 
-        sbi->ll_rw_stats_on = 1;
+        rc = lprocfs_write_helper(buf, len, &value);
+        if (rc < 0 && (strcmp(buf, "disabled") == 0 ||
+                       strcmp(buf, "Disabled") == 0))
+                value = 0;
+
+        if (value == 0)
+                sbi->ll_rw_stats_on = 0;
+        else
+                sbi->ll_rw_stats_on = 1;
+
         spin_lock(&sbi->ll_pp_extent_lock);
         for(i = 0; i < LL_PROCESS_HIST_MAX; i++) {
                 io_extents->pp_extents[i].pid = 0;
@@ -1157,15 +1168,16 @@ static int ll_rw_extents_stats_seq_show(struct seq_file *seq, void *v)
         do_gettimeofday(&now);
 
         if (!sbi->ll_rw_stats_on) {
-                seq_printf(seq, "Disabled\n"
-                                "Write anything in this file to activate\n");
+                seq_printf(seq, "disabled\n"
+                                "write anything in this file to activate, "
+                                "then 0 or \"[D/d]isabled\" to deactivate\n");
                 return 0;
         }
         seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
                    now.tv_sec, now.tv_usec);
 
         seq_printf(seq, "%15s %19s       | %20s\n", " ", "read", "write");
-        seq_printf(seq, "%13s   %14s %4s %4s  | %14s %4s %4s\n", 
+        seq_printf(seq, "%13s   %14s %4s %4s  | %14s %4s %4s\n",
                    "extents", "calls", "%", "cum%",
                    "calls", "%", "cum%");
         spin_lock(&sbi->ll_lock);
@@ -1182,8 +1194,17 @@ static ssize_t ll_rw_extents_stats_seq_write(struct file *file, const char *buf,
         struct ll_sb_info *sbi = seq->private;
         struct ll_rw_extents_info *io_extents = &sbi->ll_rw_extents_info;
         int i;
+        int value = 1, rc = 0;
 
-        sbi->ll_rw_stats_on = 1;
+        rc = lprocfs_write_helper(buf, len, &value);
+        if (rc < 0 && (strcmp(buf, "disabled") == 0 ||
+                       strcmp(buf, "Disabled") == 0))
+                value = 0;
+
+        if (value == 0)
+                sbi->ll_rw_stats_on = 0;
+        else
+                sbi->ll_rw_stats_on = 1;
         spin_lock(&sbi->ll_pp_extent_lock);
         for(i = 0; i <= LL_PROCESS_HIST_MAX; i++)
         {
@@ -1224,7 +1245,7 @@ void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid, struct file
 
         if (cur == -1) {
                 /* new process */
-                sbi->ll_extent_process_count = 
+                sbi->ll_extent_process_count =
                         (sbi->ll_extent_process_count + 1) % LL_PROCESS_HIST_MAX;
                 cur = sbi->ll_extent_process_count;
                 io_extents->pp_extents[cur].pid = pid;
@@ -1232,7 +1253,7 @@ void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid, struct file
                 lprocfs_oh_clear(&io_extents->pp_extents[cur].pp_w_hist);
         }
 
-        for(i = 0; (count >= (1 << LL_HIST_START << i)) && 
+        for(i = 0; (count >= (1 << LL_HIST_START << i)) &&
              (i < (LL_HIST_MAX - 1)); i++);
         if (rw == 0) {
                 io_extents->pp_extents[cur].pp_r_hist.oh_buckets[i]++;
@@ -1315,8 +1336,9 @@ static int ll_rw_offset_stats_seq_show(struct seq_file *seq, void *v)
         do_gettimeofday(&now);
 
         if (!sbi->ll_rw_stats_on) {
-                seq_printf(seq, "Disabled\n"
-                                "Write anything in this file to activate\n");
+                seq_printf(seq, "disabled\n"
+                                "write anything in this file to activate, "
+                                "then 0 or \"[D/d]isabled\" to deactivate\n");
                 return 0;
         }
         spin_lock(&sbi->ll_process_lock);
@@ -1365,8 +1387,18 @@ static ssize_t ll_rw_offset_stats_seq_write(struct file *file, const char *buf,
         struct ll_sb_info *sbi = seq->private;
         struct ll_rw_process_info *process_info = sbi->ll_rw_process_info;
         struct ll_rw_process_info *offset_info = sbi->ll_rw_offset_info;
+        int value = 1, rc = 0;
 
-        sbi->ll_rw_stats_on = 1;
+        rc = lprocfs_write_helper(buf, len, &value);
+
+        if (rc < 0 && (strcmp(buf, "disabled") == 0 ||
+                           strcmp(buf, "Disabled") == 0))
+                value = 0;
+
+        if (value == 0)
+                sbi->ll_rw_stats_on = 0;
+        else
+                sbi->ll_rw_stats_on = 1;
 
         spin_lock(&sbi->ll_process_lock);
         sbi->ll_offset_process_count = 0;
