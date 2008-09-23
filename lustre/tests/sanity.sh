@@ -802,7 +802,7 @@ run_test 27c "create two stripe file f01 ======================="
 
 test_27d() {
 	mkdir -p $DIR/d27
-	$SETSTRIPE $DIR/d27/fdef 0 -1 0 || error "lstripe failed"
+	$SETSTRIPE -c0 -i-1 -s0 $DIR/d27/fdef || error "lstripe failed"
 	$CHECKSTAT -t file $DIR/d27/fdef || error "checkstat failed"
 	dd if=/dev/zero of=$DIR/d27/fdef bs=4k count=4 || error
 }
@@ -2814,7 +2814,7 @@ test_65e() {
 	touch $DIR/d65/f6
 	$LVERIFY $DIR/d65 $DIR/d65/f6 || error "lverify failed"
 }
-run_test 65e "directory setstripe 0 -1 0 ======================="
+run_test 65e "directory setstripe defaults ======================="
 
 test_65f() {
 	mkdir -p $DIR/d65f
