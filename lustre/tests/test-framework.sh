@@ -115,7 +115,6 @@ init_test_env() {
     export CHECKSTAT="${CHECKSTAT:-"checkstat -v"} "
     export FSYTPE=${FSTYPE:-"ldiskfs"}
     export NAME=${NAME:-local}
-    export LPROC=/proc/fs/lustre
     export LGSSD=${LGSSD:-"$LUSTRE/utils/gss/lgssd"}
     [ "$GSS_PIPEFS" = "true" ] && [ ! -f "$LGSSD" ] && \
         export LGSSD=$(which lgssd)
