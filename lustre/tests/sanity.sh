@@ -3265,9 +3265,8 @@ set_checksums()
 {
 	[ "$ORIG_CSUM" ] || ORIG_CSUM=`lctl get_param -n osc.*.checksums |
 				       head -n1`
-	for f in $LPROC/osc/*/checksums; do
-		echo $1 >> $f
-	done
+
+	lctl set_param -n osc.*.checksums=$1
 	return 0
 }
 
