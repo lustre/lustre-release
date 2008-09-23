@@ -355,20 +355,22 @@ static int qos_calc_rr(struct lov_obd *lov, struct ost_pool *src_pool,
         /* Do actual allocation. */
         down_write(&lov->lov_qos.lq_rw_sem);
 
-        if (lqr->lqr_pool.op_size)
-                lov_ost_pool_free(&lqr->lqr_pool);
-        rc = lov_ost_pool_init(&lqr->lqr_pool, src_pool->op_count);
+        real_count = src_pool->op_count;
+
+        /* Zero the pool array */
+        /* alloc_rr is holding a read lock on the pool, so nobody is adding/
+           deleting from the pool. The lq_rw_sem insures that nobody else
+           is reading. */
+        lqr->lqr_pool.op_count = real_count;
+        rc = lov_ost_pool_extend(&lqr->lqr_pool, real_count);
         if (rc) {
                 up_write(&lov->lov_qos.lq_rw_sem);
                 RETURN(rc);
         }
-
-        for (i = 0; i < src_pool->op_count; i++)
+        for (i = 0; i < lqr->lqr_pool.op_count; i++)
                 lqr->lqr_pool.op_array[i] = LOV_QOS_EMPTY;
-        lqr->lqr_pool.op_count = src_pool->op_count;
 
         /* Place all the OSTs from 1 OSS at the same time. */
-        real_count = lqr->lqr_pool.op_count;
         placed = 0;
         list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
                 int j = 0;
