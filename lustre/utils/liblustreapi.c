@@ -235,80 +235,32 @@ int llapi_stripe_limit_check(unsigned long stripe_size, int stripe_offset,
                                   LOV_MIN_STRIPE_SIZE);
         }
         if (stripe_size < 0 || (stripe_size & (LOV_MIN_STRIPE_SIZE - 1))) {
+                errno = -EINVAL;
                 llapi_err(LLAPI_MSG_ERROR, "error: bad stripe_size %lu, "
                           "must be an even multiple of %d bytes", 
                           stripe_size, page_size);
                 return -EINVAL;
         }
         if (stripe_offset < -1 || stripe_offset > MAX_OBD_DEVICES) {
+                errno = -EINVAL;
                 llapi_err(LLAPI_MSG_ERROR, "error: bad stripe offset %d", 
                           stripe_offset);
                 return -EINVAL;
         }
         if (stripe_count < -1 || stripe_count > LOV_MAX_STRIPE_COUNT) {
+                errno = -EINVAL;
                 llapi_err(LLAPI_MSG_ERROR, "error: bad stripe count %d", 
                           stripe_count);
                 return -EINVAL;
         }
         if (stripe_count > 0 && (__u64)stripe_size * stripe_count > 0xffffffff){
+                errno = -EINVAL;
                 llapi_err(LLAPI_MSG_ERROR, "error: stripe_size %lu * "
                           "stripe_count %u exceeds 4GB", stripe_size, 
                           stripe_count);
                 return -EINVAL;
         }
         return 0;
-}
-
-int llapi_file_open(const char *name, int flags, int mode,
-                    unsigned long stripe_size, int stripe_offset,
-                    int stripe_count, int stripe_pattern)
-{
-        struct lov_user_md lum = { 0 };
-        int fd, rc = 0;
-        int isdir = 0;
-
-        fd = open(name, flags | O_LOV_DELAY_CREATE, mode);
-        if (fd < 0 && errno == EISDIR) {
-                fd = open(name, O_DIRECTORY | O_RDONLY);
-                isdir++;
-        }
-
-        if (fd < 0) {
-                rc = -errno;
-                llapi_err(LLAPI_MSG_ERROR, "unable to open '%s'", name);
-                return rc;
-        }
-
-        if ((rc = llapi_stripe_limit_check(stripe_size, stripe_offset,
-                                           stripe_count, stripe_pattern)) != 0) {
-                errno = rc;
-                goto out;
-        }
-
-        /*  Initialize IOCTL striping pattern structure */
-        lum.lmm_magic = LOV_USER_MAGIC;
-        lum.lmm_pattern = stripe_pattern;
-        lum.lmm_stripe_size = stripe_size;
-        lum.lmm_stripe_count = stripe_count;
-        lum.lmm_stripe_offset = stripe_offset;
-
-        if (ioctl(fd, LL_IOC_LOV_SETSTRIPE, &lum)) {
-                char *errmsg = "stripe already set";
-                rc = -errno;
-                if (errno != EEXIST && errno != EALREADY)
-                        errmsg = strerror(errno);
-
-                llapi_err_noerrno(LLAPI_MSG_ERROR,
-                                  "error on ioctl "LPX64" for '%s' (%d): %s",
-                                  (__u64)LL_IOC_LOV_SETSTRIPE, name, fd, errmsg);
-        }
-out:
-        if (rc) {
-                close(fd);
-                fd = rc;
-        }
-
-        return fd;
 }
 
 static int poolpath(char *fsname, char *pathname, char *pool_pathname);
@@ -335,21 +287,9 @@ int llapi_file_open_pool(const char *name, int flags, int mode,
         }
 
         if ((rc = llapi_stripe_limit_check(stripe_size, stripe_offset,
-                                           stripe_count, stripe_pattern)) != 0) {
+                                           stripe_count, stripe_pattern)) != 0){
                 errno = rc;
                 goto out;
-        }
-
-        /* in case user give the full pool name <fsname>.<poolname>, skip
-         * the fsname */
-        ptr = strchr(pool_name, '.');
-        if (ptr != NULL) {
-                strncpy(fsname, pool_name, ptr - pool_name);
-                fsname[ptr - pool_name] = '\0';
-                /* if fsname matches a fs skip it
-                 * if not keep the poolname as is */
-                if (poolpath(fsname, NULL, NULL) == 0)
-                        pool_name = ptr + 1;
         }
 
         /*  Initialize IOCTL striping pattern structure */
@@ -358,7 +298,24 @@ int llapi_file_open_pool(const char *name, int flags, int mode,
         lum.lmm_stripe_size = stripe_size;
         lum.lmm_stripe_count = stripe_count;
         lum.lmm_stripe_offset = stripe_offset;
-        strncpy(lum.lmm_pool_name, pool_name, MAXPOOLNAME);
+
+        /* in case user give the full pool name <fsname>.<poolname>, skip
+         * the fsname */
+        if (pool_name != NULL) {
+                ptr = strchr(pool_name, '.');
+                if (ptr != NULL) {
+                        strncpy(fsname, pool_name, ptr - pool_name);
+                        fsname[ptr - pool_name] = '\0';
+                        /* if fsname matches a filesystem skip it
+                         * if not keep the poolname as is */
+                        if (poolpath(fsname, NULL, NULL) == 0)
+                                pool_name = ptr + 1;
+                }
+                strncpy(lum.lmm_pool_name, pool_name, MAXPOOLNAME);
+        } else {
+                /* If no pool is specified at all, use V1 request */
+                lum.lmm_magic = LOV_USER_MAGIC_V1;
+        }
 
         if (ioctl(fd, LL_IOC_LOV_SETSTRIPE, &lum)) {
                 char *errmsg = "stripe already set";
@@ -368,7 +325,7 @@ int llapi_file_open_pool(const char *name, int flags, int mode,
 
                 llapi_err_noerrno(LLAPI_MSG_ERROR,
                                   "error on ioctl "LPX64" for '%s' (%d): %s",
-                                  (__u64)LL_IOC_LOV_SETSTRIPE, name, fd, errmsg);
+                                  (__u64)LL_IOC_LOV_SETSTRIPE, name, fd,errmsg);
         }
 out:
         if (rc) {
@@ -379,13 +336,23 @@ out:
         return fd;
 }
 
+int llapi_file_open(const char *name, int flags, int mode,
+                    unsigned long stripe_size, int stripe_offset,
+                    int stripe_count, int stripe_pattern)
+{
+        return llapi_file_open_pool(name, flags, mode, stripe_size,
+                                    stripe_offset, stripe_count,
+                                    stripe_pattern, NULL);
+}
+
 int llapi_file_create(const char *name, unsigned long stripe_size,
                       int stripe_offset, int stripe_count, int stripe_pattern)
 {
         int fd;
 
-        fd = llapi_file_open(name, O_CREAT | O_WRONLY, 0644, stripe_size,
-                             stripe_offset, stripe_count, stripe_pattern);
+        fd = llapi_file_open_pool(name, O_CREAT | O_WRONLY, 0644, stripe_size,
+                                  stripe_offset, stripe_count, stripe_pattern,
+                                  NULL);
         if (fd < 0)
                 return fd;
 
