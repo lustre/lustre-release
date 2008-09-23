@@ -182,6 +182,9 @@ lnet_md_alloc (lnet_md_t *umd)
         md = (lnet_libmd_t *)lnet_freelist_alloc(&the_lnet.ln_free_mds);
         LNET_UNLOCK();
 
+        if (md != NULL)
+                CFS_INIT_LIST_HEAD(&md->md_list);
+
         return (md);
 }
 
@@ -282,6 +285,7 @@ lnet_md_alloc (lnet_md_t *umd)
                 /* Set here in case of early free */
                 md->md_options = umd->options;
                 md->md_niov = niov;
+                CFS_INIT_LIST_HEAD(&md->md_list);
         }
         
         return (md);

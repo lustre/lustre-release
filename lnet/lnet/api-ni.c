@@ -734,7 +734,7 @@ lnet_unprepare (void)
                                                lnet_libmd_t, md_list);
 
                 CERROR ("Active md %p on exit\n", md);
-                list_del (&md->md_list);
+                list_del_init (&md->md_list);
                 lnet_md_free (md);
         }
 
