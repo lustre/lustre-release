@@ -5180,8 +5180,8 @@ test_127() { # bug 15521
         #check that we actually got some stats
         [ "$read_bytes" ] || error "Missing read_bytes stats"
         [ "$write_bytes" ] || error "Missing write_bytes stats"
-        [ "$read_bytes" = 0 ] && error "no read done"
-        [ "$write_bytes" = 0 ] && error "no write done"
+        [ "$read_bytes" != 0 ] || error "no read done"
+        [ "$write_bytes" != 0 ] || error "no write done"
 }
 run_test 127 "verify the client stats are sane"
 
