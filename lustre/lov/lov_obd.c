@@ -911,9 +911,6 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         desc->ld_active_tgt_count = 0;
         lov->desc = *desc;
         lov->lov_tgt_size = 0;
-        rc = lov_ost_pool_init(&lov->lov_packed, 0);
-        if (rc)
-                RETURN(rc);
 
         sema_init(&lov->lov_lock, 1);
         atomic_set(&lov->lov_refcount, 0);
@@ -926,11 +923,17 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         lov->lov_qos.lq_prio_free = 232;
 
         lov->lov_pools_hash_body = lustre_hash_init("POOLS", 128, 128,
-                                                    &pool_hash_operations,
-                                                    0);
-
+                                                    &pool_hash_operations, 0);
         CFS_INIT_LIST_HEAD(&lov->lov_pool_list);
         lov->lov_pool_count = 0;
+        rc = lov_ost_pool_init(&lov->lov_packed, 0);
+        if (rc)
+                RETURN(rc);
+        rc = lov_ost_pool_init(&lov->lov_qos.lq_rr.lqr_pool, 0);
+        if (rc) {
+                lov_ost_pool_free(&lov->lov_packed);
+                RETURN(rc);
+        }
 
         lprocfs_lov_init_vars(&lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
@@ -989,19 +992,18 @@ static int lov_cleanup(struct obd_device *obd)
         struct list_head *pos, *tmp;
         struct pool_desc *pool;
 
+        lprocfs_obd_cleanup(obd);
+
         list_for_each_safe(pos, tmp, &lov->lov_pool_list) {
                 pool = list_entry(pos, struct pool_desc, pool_list);
                 list_del(&pool->pool_list);
-                lustre_hash_del_key(lov->lov_pools_hash_body, pool->pool_name);
                 lov_ost_pool_free(&(pool->pool_rr.lqr_pool));
                 lov_ost_pool_free(&(pool->pool_obds));
-                OBD_FREE(pool, sizeof(*pool));
+                OBD_FREE_PTR(pool);
         }
-        lustre_hash_exit(lov->lov_pools_hash_body);
-
-        lprocfs_obd_cleanup(obd);
-
+        lov_ost_pool_free(&(lov->lov_qos.lq_rr.lqr_pool));
         lov_ost_pool_free(&lov->lov_packed);
+        lustre_hash_exit(lov->lov_pools_hash_body);
 
         if (lov->lov_tgts) {
                 int i;
@@ -1024,8 +1026,6 @@ static int lov_cleanup(struct obd_device *obd)
                          lov->lov_tgt_size);
                 lov->lov_tgt_size = 0;
         }
-
-        lov_ost_pool_free(&(lov->lov_qos.lq_rr.lqr_pool));
 
         RETURN(0);
 }
