@@ -1642,8 +1642,6 @@ test_70a () {
 	done
 	
 	ls $DIR
-
-	zconf_umount_clients $CLIENTS $DIR
 }
 run_test 70a "check multi client t-f"
 
@@ -1681,7 +1679,6 @@ test_70b () {
 		echo "load on ${CLIENT} returned $rc"
 	done
 
-	zconf_umount_clients $CLIENTS $DIR 
 }
 run_test 70b "mds recovery; $CLIENTCOUNT clients"
 # end multi-client tests
