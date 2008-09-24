@@ -595,6 +595,8 @@ int llu_iop_lookup(struct pnode *pnode,
         }
 
 out:
+        if (it)
+                OBD_FREE(it, sizeof(*it));
         liblustre_wait_event(0);
         RETURN(rc);
 }
