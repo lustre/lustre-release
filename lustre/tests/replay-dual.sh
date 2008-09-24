@@ -369,6 +369,35 @@ test_19() { # Bug 10991 - resend of open request does not fail assertion.
 }
 run_test 19 "resend of open request"
 
+test_20() { #16389
+    BEFORE=`date +%s`
+    replay_barrier mds
+    touch $MOUNT1/a
+    touch $MOUNT2/b
+    umount $MOUNT2
+    facet_failover mds
+    df $MOUNT1 || return 1
+    rm $MOUNT1/a
+    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
+    TIER1=$((`date +%s` - BEFORE))
+    echo "First recovery time is $TIER1 sec"
+    BEFORE=`date +%s`
+    replay_barrier mds
+    touch $MOUNT1/a
+    touch $MOUNT2/b
+    umount $MOUNT2
+    facet_failover mds
+    df $MOUNT1 || return 1
+    rm $MOUNT1/a
+    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
+    TIER2=$((`date +%s` - BEFORE))
+    echo "Second recovery time is $TIER2 sec"
+    [ $TIER2 -ge $((TIER1 * 2)) ] && \
+        error "recovery time is growing $TIER2 > $TIER1"
+    return 0
+}
+run_test 20 "recovery time is not increasing"
+
 equals_msg `basename $0`: test complete, cleaning up
 SLEEP=$((`date +%s` - $NOW))
 [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP
