@@ -1837,12 +1837,12 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         cleanup_phase = 1; /* dchild, dparent, locks */
 
+        dget(dchild);
         /* VBR: version recovery check for parent */
         rc = mds_version_get_check(req, dparent->d_inode, 0);
         if (rc)
                 GOTO(cleanup_no_trans, rc);
 
-        dget(dchild);
         child_inode = dchild->d_inode;
         if (child_inode == NULL) {
                 CDEBUG(D_INODE, "child doesn't exist (dir %lu, name %s)\n",
