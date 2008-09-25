@@ -382,10 +382,10 @@ void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
                         else
                                 printf("EXCLUDE END   ");
                 }
-                ctime_r((const time_t *)(&marker->cm_createtime), createtime);
+                ctime_r((time_t *)((char*)&marker->cm_createtime), createtime);
                 createtime[strlen(createtime) - 1] = 0;
                 if (marker->cm_canceltime) {
-                        ctime_r((const time_t *)(&marker->cm_canceltime),
+                        ctime_r((time_t *)((char*)&marker->cm_canceltime),
                                 canceltime);
                         canceltime[strlen(canceltime) - 1] = 0;
                 }
