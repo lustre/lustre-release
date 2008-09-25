@@ -762,7 +762,7 @@ void class_unlink_export(struct obd_export *exp)
         spin_lock_bh(&exp->exp_obd->obd_processing_task_lock);
         if (exp->exp_delayed)
                 exp->exp_obd->obd_delayed_clients--;
-        else
+        else if (exp->exp_replay_needed)
                 exp->exp_obd->obd_recoverable_clients--;
         spin_unlock_bh(&exp->exp_obd->obd_processing_task_lock);
         class_export_put(exp);
@@ -1100,7 +1100,7 @@ void class_disconnect_expired_exports(struct obd_device *obd)
         if (cnt == 0)
                 return;
 
-        CDEBUG(D_ERROR, "%s: disconnecting %d expired exports\n",
+        CDEBUG(D_INFO, "%s: disconnecting %d expired exports\n",
                obd->obd_name, cnt);
         class_disconnect_export_list(&expired_list, get_exp_flags_from_obd(obd));
 
