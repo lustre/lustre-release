@@ -72,7 +72,7 @@ int rprintf(int rank, int loop, const char *fmt, ...)
 int main(int argc, char ** argv)
 {
         int i, rc = 0, do_open = 0, do_link = 0, rank;
-        char format[4096], *fmt, *tgt;
+        char format[4096], *fmt, *tgt = NULL;
         char filename[4096];
         long start, last, end;
         long begin = 0, count;
@@ -87,8 +87,8 @@ int main(int argc, char ** argv)
         }
 
         if (strcmp(argv[1], "-o") == 0) {
-                tgt = NULL;
                 do_open = 1;
+                tgt = NULL;
         } else if (strncmp(argv[1], "-l", 2) == 0 && argv[1][2]) {
                 tgt = argv[1] + 2;
                 do_link = 1;
