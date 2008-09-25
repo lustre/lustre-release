@@ -2486,7 +2486,7 @@ cleanup:
         }
         RETURN(rc);
 }
-#endif
+#endif /* LUSTRE_FIX >= 50 */
 
 /**
  * Close inode open handle
