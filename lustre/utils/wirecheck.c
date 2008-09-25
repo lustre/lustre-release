@@ -782,6 +782,19 @@ check_ldlm_lvb(void)
         CHECK_MEMBER(ost_lvb, lvb_blocks);
 }
 
+static void
+check_cfg_marker(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(cfg_marker);
+        CHECK_MEMBER(cfg_marker, cm_step);
+        CHECK_MEMBER(cfg_marker, cm_flags);
+        CHECK_MEMBER(cfg_marker, cm_vers);
+        CHECK_MEMBER(cfg_marker, cm_createtime);
+        CHECK_MEMBER(cfg_marker, cm_canceltime);
+        CHECK_MEMBER(cfg_marker, cm_tgtname);
+        CHECK_MEMBER(cfg_marker, cm_comment);
+}
 
 static void
 check_llog_logid(void)
@@ -1361,6 +1374,7 @@ main(int argc, char **argv)
         check_ldlm_request();
         check_ldlm_reply();
         check_ldlm_lvb();
+        check_cfg_marker();
         check_llog_logid();
         check_llog_catid();
         check_llog_rec_hdr();

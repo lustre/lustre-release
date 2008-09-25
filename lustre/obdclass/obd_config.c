@@ -981,8 +981,8 @@ static int class_config_llog_handler(struct llog_handle * handle,
                 /* Figure out config state info */
                 if (lcfg->lcfg_command == LCFG_MARKER) {
                         struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
-                        if (swab)
-                                lustre_swab_cfg_marker(marker);
+                        lustre_swab_cfg_marker(marker, swab,
+                                               LUSTRE_CFG_BUFLEN(lcfg, 1));
                         CDEBUG(D_CONFIG, "Marker, inst_flg=%#x mark_flg=%#x\n",
                                clli->cfg_flags, marker->cm_flags);
                         if (marker->cm_flags & CM_START) {
