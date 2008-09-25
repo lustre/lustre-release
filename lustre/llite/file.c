@@ -2274,6 +2274,7 @@ static int ll_put_grouplock(struct inode *inode, struct file *file,
         RETURN(0);
 }
 
+#if LUSTRE_FIX >= 50
 static int join_sanity_check(struct inode *head, struct inode *tail)
 {
         ENTRY;
@@ -2446,6 +2447,7 @@ cleanup:
         }
         RETURN(rc);
 }
+#endif  /* LUSTRE_FIX >= 50 */
 
 /**
  * Close inode open handle
