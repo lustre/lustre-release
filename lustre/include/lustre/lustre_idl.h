@@ -1237,13 +1237,14 @@ struct cfg_marker {
         __u32             cm_flags;
         __u32             cm_vers;       /* lustre release version number */
         __u32             padding;       /* 64 bit align */
-        time_t            cm_createtime; /*when this record was first created */
-        time_t            cm_canceltime; /*when this record is no longer valid*/
+        __u64             cm_createtime; /*when this record was first created */
+        __u64             cm_canceltime; /*when this record is no longer valid*/
         char              cm_tgtname[MTI_NAME_MAXLEN];
         char              cm_comment[MTI_NAME_MAXLEN];
 };
 
-extern void lustre_swab_cfg_marker(struct cfg_marker *marker);
+extern void lustre_swab_cfg_marker(struct cfg_marker *marker,
+                                   int swab, int size);
 
 /*
  * Opcodes for multiple servers.
