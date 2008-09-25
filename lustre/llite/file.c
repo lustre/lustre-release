@@ -2651,6 +2651,8 @@ error:
         case EXT3_IOC_GETVERSION:
                 RETURN(put_user(inode->i_generation, (int *)arg));
         case LL_IOC_JOIN: {
+#if LUSTRE_FIX >= 50
+                /* Allow file join in beta builds to allow debuggging */
                 char *ftail;
                 int rc;
 
@@ -2660,6 +2662,10 @@ error:
                 rc = ll_file_join(inode, file, ftail);
                 putname(ftail);
                 RETURN(rc);
+#else
+                CWARN("file join is not supported in this version of Lustre\n");
+                RETURN(-ENOTTY);
+#endif
         }
         case LL_IOC_GROUP_LOCK:
                 RETURN(ll_get_grouplock(inode, file, arg));
