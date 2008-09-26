@@ -421,7 +421,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                         if (rc)
                                 GOTO(out_oa, rc);
                 }
-                rc = obd_create(mds->mds_osc_exp, oinfo.oi_oa, 
+                rc = obd_create(mds->mds_osc_exp, oinfo.oi_oa,
                                 &oinfo.oi_md, &oti);
                 if (rc) {
                         int level = D_ERROR;
@@ -544,7 +544,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         parent = mds_fid2dentry(mds, rec->ur_fid1, NULL);
         if (IS_ERR(parent)) {
                 rc = PTR_ERR(parent);
-                LCONSOLE_WARN("Parent "LPU64"/%u lookup error %d." 
+                LCONSOLE_WARN("Parent "LPU64"/%u lookup error %d."
                               " Evicting client %s with export %s.\n",
                               rec->ur_fid1->id, rec->ur_fid1->generation, rc,
                               obd_uuid2str(&exp->exp_client_uuid),
@@ -557,7 +557,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         dchild = mds_lookup(obd, rec->ur_name, parent, rec->ur_namelen - 1);
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
-                LCONSOLE_WARN("Child "LPU64"/%u lookup error %d." 
+                LCONSOLE_WARN("Child "LPU64"/%u lookup error %d."
                               " Evicting client %s with export %s.\n",
                               rec->ur_fid1->id, rec->ur_fid1->generation, rc,
                               obd_uuid2str(&exp->exp_client_uuid),
@@ -649,9 +649,16 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
          * to detect a re-open */
         if (mfd == NULL) {
                 if (rec->ur_flags & MDS_OPEN_JOIN_FILE) {
+#if LUSTRE_FIX >= 50
+                        /* Allow file join in beta builds to allow debugging */
                         rc = mds_join_file(rec, req, dchild, NULL);
                         if (rc)
                                 GOTO(out_dput, rc);
+#else
+                        CWARN("file join is not supported in this version of "
+                              "Lustre\n");
+                        GOTO(out_dput, req->rq_status = rc = -EOPNOTSUPP);
+#endif
                 }
                 mntget(mds->mds_vfsmnt);
                 CERROR("Re-opened file \n");
@@ -736,11 +743,18 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                         RETURN(-EEXIST);
                 }
                 if (rec->ur_flags & MDS_OPEN_JOIN_FILE) {
+#if LUSTRE_FIX >= 50
+                        /* Allow file join in beta builds to allow debugging */
                         UNLOCK_INODE_MUTEX(dchild->d_inode);
                         rc = mds_join_file(rec, req, dchild, lockh);
                         if (rc)
                                 RETURN(rc);
                         LOCK_INODE_MUTEX(dchild->d_inode);
+#else
+                        CWARN("file join is not supported in this version of "
+                              "Lustre\n");
+                        RETURN(-EOPNOTSUPP);
+#endif
                 }
                 if (!(body->valid & OBD_MD_FLEASIZE) &&
                     !(body->valid & OBD_MD_FLMODEASIZE)) {
@@ -1034,7 +1048,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                  * dentry w/o filename to open the file. the anon dentry's
                  * parent was set to itself, so rec->ur_fid1 is the file.
                  * And in MDC it cannot derive the dentry's parent dentry,
-                 * hence the file's name, so we hack here in MDS, 
+                 * hence the file's name, so we hack here in MDS,
                  * refer to bug 13030. */
                 dchild = mds_fid2dentry(mds, rec->ur_fid1, NULL);
         } else {
@@ -1312,6 +1326,7 @@ found_child:
         /* trigger dqacq on the owner of child and parent */
         lquota_adjust(mds_quota_interface_ref, obd, qcids, qpids, rc,
                       FSFILT_OP_CREATE);
+
         RETURN(rc);
 }
 
@@ -1365,7 +1380,7 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
         } else if (mfd->mfd_mode & MDS_FMODE_EXEC) {
                 mds_allow_write_access(inode);
         }
-        /* here writecount change also needs protection from orphan write sem. 
+        /* here writecount change also needs protection from orphan write sem.
          * so drop orphan write sem after mds_put_write_access, bz 12888. */
         MDS_UP_WRITE_ORPHAN_SEM(inode);
 
@@ -1396,7 +1411,7 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
 
                 cleanup_phase = 2; /* dput(pending_child) when finished */
                 if (S_ISDIR(pending_child->d_inode->i_mode)) {
-                        rc = ll_vfs_rmdir(pending_dir, pending_child, 
+                        rc = ll_vfs_rmdir(pending_dir, pending_child,
                                           mds->mds_vfsmnt);
                         if (rc)
                                 CERROR("error unlinking orphan dir %s: rc %d\n",
