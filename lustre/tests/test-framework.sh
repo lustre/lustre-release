@@ -96,6 +96,8 @@ init_test_env() {
     if ! echo $PATH | grep -q $LUSTRE/tests; then
 	export PATH=$PATH:$LUSTRE/tests
     fi
+    export MDSRATE=${MDSRATE:-"$LUSTRE/tests/mdsrate"}
+    [ ! -f "$MDSRATE" ] && export MDSRATE=$(which mdsrate)
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     [ ! -f "$LCTL" ] && export LCTL=$(which lctl)
     export LFS=${LFS:-"$LUSTRE/utils/lfs"}
@@ -1844,6 +1846,22 @@ mixed_ost_devs () {
     [ ! "$OSTCOUNT" = "$osscount" ]
 }
 
+generate_machine_file() {
+    local nodes=${1//,/ }
+    local machinefile=$2
+    rm -f $machinefile || error "can't rm $machinefile"
+    for node in $nodes; do
+        echo $node >>$machinefile
+    done
+}
+
+get_stripe () {
+    local file=$1/stripe
+    touch $file
+    $LFS getstripe -v $file || error
+    rm -f $file
+}
+
 check_runas_id_ret() {
     local myRC=0
     local myRUNAS_ID=$1
@@ -1901,6 +1919,27 @@ multiop_bg_pause() {
     fi
 
     return 0
+}
+
+check_rate() {
+    local OP=$1
+    local TARGET_RATE=$2
+    local NUM_CLIENTS=$3
+    local LOG=$4
+
+    local RATE=$(awk '/^Rate: [0-9\.]+ '"${OP}"'s\/sec/ { print $2}' ${LOG})
+
+    # We need to use bc since the rate is a floating point number
+    local RES=$(echo "${RATE} < ${TARGET_RATE}" | bc -l )
+    if [ ${RES} -eq 0 ]; then
+        echo "Success: ${RATE} ${OP}s/sec met target rate" \
+             "${TARGET_RATE} ${OP}s/sec for ${NUM_CLIENTS} client(s)."
+        return 0
+    else
+        echo "Failure: ${RATE} ${OP}s/sec did not meet target rate" \
+             "${TARGET_RATE} ${OP}s/sec for ${NUM_CLIENTS} client(s)."
+        return 1
+    fi
 }
 
 # reset llite stat counters

@@ -10,3 +10,8 @@ init_clients_lists
                 error "tests for remote clients $RCLIENTS needs pdsh != do_dsh " || true
 
 [ -n "$FUNCTIONS" ] && . $FUNCTIONS || true
+
+MPIBIN=${MPIBIN:-/testsuite/tests/`arch`/bin}
+export PATH=:$PATH:$MPIBIN
+MPIRUN=$(which mpirun)
+
