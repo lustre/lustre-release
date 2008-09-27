@@ -1115,6 +1115,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                         GOTO(cleanup, rc);
                 }
                 inode = dchild->d_inode;
+                created = 1;
                 if (ino) {
                         if (ino != inode->i_ino)
                                 GOTO(cleanup, rc = -EFAULT);
@@ -1124,7 +1125,6 @@ int mds_open(struct mds_update_record *rec, int offset,
                                inode->i_ino, inode->i_generation);
                 }
 
-                created = 1;
                 LTIME_S(iattr.ia_atime) = rec->ur_time;
                 LTIME_S(iattr.ia_ctime) = rec->ur_time;
                 LTIME_S(iattr.ia_mtime) = rec->ur_time;
