@@ -161,8 +161,9 @@ static int mdc_req2attr_update(const struct lu_env *env,
         struct mdc_thread_info *mci;
         struct ptlrpc_request *req;
         struct mdt_body *body;
-        struct lov_mds_md *lov;
+        struct lov_mds_md *md;
         struct llog_cookie *cookie;
+        void *acl;
 
         ENTRY;
         mci = mdc_info_get(env);
@@ -182,42 +183,68 @@ static int mdc_req2attr_update(const struct lu_env *env,
                 *ma->ma_capa = *capa;
         }
                 
-        if (!(body->valid & OBD_MD_FLEASIZE))
-                RETURN(0);
+        if ((body->valid & OBD_MD_FLEASIZE) || (body->valid & OBD_MD_FLDIREA)) {
+                if (body->eadatasize == 0) {
+                        CERROR("No size defined for easize field\n");
+                        RETURN(-EPROTO);
+                }
 
-        if (body->eadatasize == 0) {
-                CERROR("OBD_MD_FLEASIZE is set but eadatasize is zero\n");
-                RETURN(-EPROTO);
+                md = req_capsule_server_sized_get(&req->rq_pill, &RMF_MDT_MD,
+                                                  body->eadatasize);
+                if (md == NULL)
+                        RETURN(-EPROTO);
+
+                LASSERT(ma->ma_lmm != NULL);
+                LASSERT(ma->ma_lmm_size >= body->eadatasize); 
+                ma->ma_lmm_size = body->eadatasize;
+                memcpy(ma->ma_lmm, md, ma->ma_lmm_size);
+                ma->ma_valid |= MA_LOV;
         }
 
-        lov = req_capsule_server_sized_get(&req->rq_pill, &RMF_MDT_MD,
-                                           body->eadatasize);
-        if (lov == NULL)
-                RETURN(-EPROTO);
+        if (body->valid & OBD_MD_FLCOOKIE) {
+                /*
+                 * ACL and cookie share the same body->aclsize, we need
+                 * to make sure that they both never come here.
+                 */
+                LASSERT(!(body->valid & OBD_MD_FLACL));
 
-        LASSERT(ma->ma_lmm != NULL);
-        LASSERT(ma->ma_lmm_size >= body->eadatasize); 
-        ma->ma_lmm_size = body->eadatasize;
-        memcpy(ma->ma_lmm, lov, ma->ma_lmm_size);
-        ma->ma_valid |= MA_LOV;
+                if (body->aclsize == 0) {
+                        CERROR("No size defined for cookie field\n");
+                        RETURN(-EPROTO);
+                }
 
-        if (!(body->valid & OBD_MD_FLCOOKIE))
-                RETURN(0);
+                cookie = req_capsule_server_sized_get(&req->rq_pill, 
+                                                      &RMF_LOGCOOKIES,
+                                                      body->aclsize);
+                if (cookie == NULL)
+                        RETURN(-EPROTO);
 
-        if (body->aclsize == 0) {
-                CERROR("OBD_MD_FLCOOKIE is set but cookie size is zero\n");
-                RETURN(-EPROTO);
+                LASSERT(ma->ma_cookie != NULL);
+                LASSERT(ma->ma_cookie_size == body->aclsize);
+                memcpy(ma->ma_cookie, cookie, ma->ma_cookie_size);
+                ma->ma_valid |= MA_COOKIE;
         }
 
-        cookie = req_capsule_server_sized_get(&req->rq_pill, &RMF_ACL,
-                                              body->aclsize);
-        if (cookie == NULL)
-                RETURN(-EPROTO);
+#ifdef CONFIG_FS_POSIX_ACL
+        if (body->valid & OBD_MD_FLACL) {
+                if (body->aclsize == 0) {
+                        CERROR("No size defined for acl field\n");
+                        RETURN(-EPROTO);
+                }
 
-        LASSERT(ma->ma_cookie != NULL);
-        LASSERT(ma->ma_cookie_size == body->aclsize);
-        memcpy(ma->ma_cookie, cookie, ma->ma_cookie_size);
-        ma->ma_valid |= MA_COOKIE;
+                acl = req_capsule_server_sized_get(&req->rq_pill, 
+                                                   &RMF_ACL,
+                                                   body->aclsize);
+                if (acl == NULL)
+                        RETURN(-EPROTO);
+
+                LASSERT(ma->ma_acl != NULL);
+                LASSERT(ma->ma_acl_size == body->aclsize);
+                memcpy(ma->ma_acl, acl, ma->ma_acl_size);
+                ma->ma_valid |= MA_ACL_DEF;
+        }
+#endif
+
         RETURN(0);
 }
 

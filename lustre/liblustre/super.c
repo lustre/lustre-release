@@ -2023,7 +2023,6 @@ llu_fsswop_mount(const char *source,
         struct inode *root;
         struct pnode_base *rootpb;
         struct obd_device *obd;
-        struct lu_fid rootfid;
         struct llu_sb_info *sbi;
         struct obd_statfs osfs;
         static struct qstr noname = { NULL, 0, 0 };
@@ -2165,16 +2164,20 @@ llu_fsswop_mount(const char *source,
 
         llu_init_ea_size(sbi->ll_md_exp, sbi->ll_dt_exp);
 
-        err = md_getstatus(sbi->ll_md_exp, &rootfid, NULL);
+        fid_zero(&sbi->ll_root_fid);
+        err = md_getstatus(sbi->ll_md_exp, &sbi->ll_root_fid, NULL);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
                 GOTO(out_lock_cn_cb, err);
         }
-        CDEBUG(D_SUPER, "rootfid "DFID"\n", PFID(&rootfid));
-        sbi->ll_root_fid = rootfid;
+        if (!fid_is_sane(&sbi->ll_root_fid)) {
+                CERROR("Invalid root fid during mount\n");
+                GOTO(out_lock_cn_cb, err = -EINVAL);
+        }
+        CDEBUG(D_SUPER, "rootfid "DFID"\n", PFID(&sbi->ll_root_fid));
 
         /* fetch attr of root inode */
-        err = md_getattr(sbi->ll_md_exp, &rootfid, NULL,
+        err = md_getattr(sbi->ll_md_exp, &sbi->ll_root_fid, NULL,
                          OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS, 0, &request);
         if (err) {
                 CERROR("md_getattr failed for root: rc = %d\n", err);

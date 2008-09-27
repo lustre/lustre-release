@@ -47,6 +47,15 @@ DIR=${DIR:-$MOUNT}
 DIR1=${DIR:-$MOUNT1}
 DIR2=${DIR2:-$MOUNT2}
 
+if [ $UID -ne 0 ]; then
+        log "running as non-root uid $UID"
+        RUNAS_ID="$UID"
+        RUNAS=""
+else
+        RUNAS_ID=${RUNAS_ID:-500}
+        RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
+fi
+
 PDSH=${PDSH:-no_dsh}
 FAILURE_MODE=${FAILURE_MODE:-SOFT} # or HARD
 POWER_DOWN=${POWER_DOWN:-"powerman --off"}

@@ -1373,8 +1373,11 @@ static void *__req_capsule_get(struct req_capsule *pill,
                 [RCL_SERVER] = "server"
         };
 
+        LASSERT(pill != NULL);
+        LASSERT(pill != LP_POISON);
         fmt = pill->rc_fmt;
         LASSERT(fmt != NULL);
+        LASSERT(fmt != LP_POISON);
         LASSERT(__req_format_is_sane(fmt));
 
         offset = __req_capsule_offset(pill, field, loc);

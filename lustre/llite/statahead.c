@@ -370,6 +370,7 @@ static int do_statahead_interpret(struct ll_statahead_info *sai)
         struct dentry          *dentry;
         struct lookup_intent   *it;
         int                     rc = 0;
+        struct mdt_body        *body;
         ENTRY;
 
         spin_lock(&lli->lli_lock);
@@ -392,6 +393,10 @@ static int do_statahead_interpret(struct ll_statahead_info *sai)
         if (entry->se_stat != SA_ENTRY_STATED)
                 GOTO(out, rc = entry->se_stat);
 
+        body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+        if (body == NULL)
+                GOTO(out, rc = -EFAULT);
+
         if (dentry->d_inode == NULL) {
                 /*
                  * lookup.
@@ -403,6 +408,13 @@ static int do_statahead_interpret(struct ll_statahead_info *sai)
                 };
 
                 LASSERT(fid_is_zero(&minfo->mi_data.op_fid2));
+
+                /*
+                 * XXX: No fid in reply, this is probaly cross-ref case.
+                 * SA can't handle it yet.
+                 */
+                if (body->valid & OBD_MD_MDS)
+                        GOTO(out, rc = -EAGAIN);
 
                 rc = ll_lookup_it_finish(req, it, &icbd);
                 if (!rc)
@@ -421,10 +433,6 @@ static int do_statahead_interpret(struct ll_statahead_info *sai)
                 /*
                  * revalidate.
                  */
-                struct mdt_body *body;
-
-                body = lustre_msg_buf(req->rq_repmsg, DLM_REPLY_REC_OFF,
-                                      sizeof(*body));
                 if (!lu_fid_eq(&minfo->mi_data.op_fid2, &body->fid1)) {
                         ll_unhash_aliases(dentry->d_inode);
                         GOTO(out, rc = -EAGAIN);

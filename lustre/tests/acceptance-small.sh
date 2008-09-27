@@ -87,7 +87,7 @@ for NAME in $CONFIGS; do
 	    export CLIENTMODSONLY=true
 	fi
 	
-	assert_env mds_HOST MDS_MKFS_OPTS MDSDEV
+	assert_env mds_HOST MDS_MKFS_OPTS 
 	assert_env ost_HOST OST_MKFS_OPTS OSTCOUNT
 	assert_env FSNAME MOUNT MOUNT2
 

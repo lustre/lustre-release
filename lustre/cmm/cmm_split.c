@@ -368,8 +368,6 @@ static int cmm_split_slaves_create(const struct lu_env *env,
                         GOTO(cleanup, rc);
                 i++;
         }
-
-        ma->ma_valid |= MA_LMV;
         EXIT;
 cleanup:
         return rc;
@@ -395,7 +393,7 @@ static inline struct lu_name *cmm_name(const struct lu_env *env,
         cmi = cmm_env_info(env);
         lname = &cmi->cti_name;
         lname->ln_name = name;
-        /* NOT count the terminating '\0' of name for length */
+        /* do NOT count the terminating '\0' of name for length */
         lname->ln_namelen = buflen - 1;
         return lname;
 }
@@ -410,7 +408,7 @@ static int cmm_split_remove_entry(const struct lu_env *env,
 {
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
         struct cmm_thread_info *cmi;
-         struct md_attr *ma;
+        struct md_attr *ma;
         struct cmm_object *obj;
         int is_dir, rc;
         char *name;
@@ -434,7 +432,7 @@ static int cmm_split_remove_entry(const struct lu_env *env,
                 /*
                  * XXX: These days only cross-ref dirs are possible, so for the
                  * sake of simplicity, in split, we suppose that all cross-ref
-                 * names pint to directory and do not do additional getattr to
+                 * names point to directory and do not do additional getattr to
                  * remote MDT.
                  */
                 is_dir = 1;
@@ -616,7 +614,7 @@ static int cmm_split_process_dir(const struct lu_env *env,
 {
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
         struct lu_rdpg *rdpg = &cmm_env_info(env)->cmi_rdpg;
-        __u64 hash_segement;
+        __u64 hash_segment;
         int rc = 0, i;
         ENTRY;
 
@@ -631,23 +629,23 @@ static int cmm_split_process_dir(const struct lu_env *env,
                         GOTO(cleanup, rc = -ENOMEM);
         }
 
-        LASSERT(ma->ma_valid & MA_LMV);
-        hash_segement = MAX_HASH_SIZE / (cmm->cmm_tgt_count + 1);
+        hash_segment = MAX_HASH_SIZE;
+        do_div(hash_segment, cmm->cmm_tgt_count + 1);
         for (i = 1; i < cmm->cmm_tgt_count + 1; i++) {
                 struct lu_fid *lf;
                 __u64 hash_end;
 
                 lf = &ma->ma_lmv->mea_ids[i];
 
-                rdpg->rp_hash = i * hash_segement;
+                rdpg->rp_hash = i * hash_segment;
                 if (i == cmm->cmm_tgt_count)
                         hash_end = MAX_HASH_SIZE;
                 else
-                        hash_end = rdpg->rp_hash + hash_segement;
+                        hash_end = rdpg->rp_hash + hash_segment;
                 rc = cmm_split_process_stripe(env, mo, rdpg, lf, hash_end);
                 if (rc) {
                         CERROR("Error (rc = %d) while splitting for %d: fid="
-                               DFID", %08x:%08x\n", rc, i, PFID(lf),
+                               DFID", "LPX64":"LPX64"\n", rc, i, PFID(lf),
                                rdpg->rp_hash, hash_end);
                         GOTO(cleanup, rc);
                 }
@@ -718,7 +716,6 @@ int cmm_split_dir(const struct lu_env *env, struct md_object *mo)
         }
 
         /* Step5: Set mea to the master object. */
-        LASSERT(ma->ma_valid & MA_LMV);
         buf = cmm_buf_get(env, ma->ma_lmv, ma->ma_lmv_size);
         rc = mo_xattr_set(env, md_object_next(mo), buf,
                           MDS_LMV_MD_NAME, 0);

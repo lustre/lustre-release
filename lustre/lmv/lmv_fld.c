@@ -75,12 +75,13 @@ int lmv_fld_lookup(struct lmv_obd *lmv,
                 RETURN(rc);
         }
         
-        CDEBUG(D_INFO, "Got mds "LPU64" for sequence: "LPU64"\n",
-               *mds, fid_seq(fid));
+        CDEBUG(D_INODE, "FLD lookup got mds #"LPU64" for fid="DFID"\n",
+               *mds, PFID(fid));
 
         if (*mds >= lmv->desc.ld_tgt_count) {
-                CERROR("Got invalid mds: "LPU64" (max: %d)\n",
-                       *mds, lmv->desc.ld_tgt_count);
+                CERROR("FLD lookup got invalid mds #"LPU64" (max: %d) "
+                       "for fid="DFID"\n", *mds, lmv->desc.ld_tgt_count,
+                       PFID(fid));
                 rc = -EINVAL;
         }
         RETURN(rc);

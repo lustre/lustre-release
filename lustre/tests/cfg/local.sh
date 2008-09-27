@@ -13,8 +13,12 @@ CLIENTS=""
 TMP=${TMP:-/tmp}
 
 DAEMONSIZE=${DAEMONSIZE:-500}
-MDSDEV=${MDSDEV:-$TMP/${FSNAME}-mdt1}
 MDSCOUNT=${MDSCOUNT:-1}
+[ $MDSCOUNT -gt 4 ] && MDSCOUNT=4
+for num in $(seq $MDSCOUNT); do
+    eval mds${num}_HOST=\$\{mds${num}_HOST:-$mds_HOST\}
+    eval mds${num}failover_HOST=\$\{mds${num}failover_HOST:-$mdsfailover_HOST\}
+done
 MDSDEVBASE=${MDSDEVBASE:-$TMP/${FSNAME}-mdt}
 MDSSIZE=${MDSSIZE:-100000}
 MDSOPT=${MDSOPT:-"--mountfsoptions=acl"}
@@ -56,7 +60,8 @@ MKFSOPT=""
     MDSOPT=$MDSOPT" --param lov.stripecount=$STRIPES_PER_OBJ"
 [ "x$L_GETIDENTITY" != "x" ] &&
     MDSOPT=$MDSOPT" --param mdt.identity_upcall=$L_GETIDENTITY"
-MDS_MKFS_OPTS="--mgs --mdt --fsname=$FSNAME --device-size=$MDSSIZE --param sys.timeout=$TIMEOUT $MKFSOPT $MDSOPT $MDS_MKFS_OPTS"
+MDS_MKFS_OPTS="--mgs --mdt --fsname=$FSNAME --device-size=$MDSSIZE --param sys.timeout=$TIMEOUT $MKFSOPT $MDSOPT"
+MDSn_MKFS_OPTS="--mgsnode=$MGSNID --mdt --fsname=$FSNAME --device-size=$MDSSIZE --param sys.timeout=$TIMEOUT $MKFSOPT $MDSOPT"
 
 MKFSOPT=""
 [ "x$OSTJOURNALSIZE" != "x" ] &&

@@ -690,7 +690,8 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
         in &= ~(ATTR_MODE|ATTR_UID|ATTR_GID|ATTR_SIZE|ATTR_BLOCKS|
                 ATTR_ATIME|ATTR_MTIME|ATTR_CTIME|ATTR_FROM_OPEN|
                 ATTR_ATIME_SET|ATTR_CTIME_SET|ATTR_MTIME_SET|
-                ATTR_ATTR_FLAG|ATTR_RAW|MDS_OPEN_OWNEROVERRIDE);
+                ATTR_ATTR_FLAG|ATTR_RAW|MDS_OPEN_OWNEROVERRIDE|
+                ATTR_FORCE|ATTR_KILL_SUID);
         if (in != 0)
                 CERROR("Unknown attr bits: %#llx\n", in);
         return out;
@@ -848,9 +849,14 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
                                  req_capsule_client_get(pill, &RMF_CAPA1));
         mdt_set_capainfo(info, 1, rr->rr_fid2, BYPASS_CAPA);
 
-        rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
-        rr->rr_namelen = req_capsule_get_size(pill, &RMF_NAME, RCL_CLIENT) - 1;
-        LASSERT(rr->rr_name && rr->rr_namelen > 0);
+        if (!info->mti_cross_ref) {
+                rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
+                rr->rr_namelen = req_capsule_get_size(pill, &RMF_NAME, RCL_CLIENT) - 1;
+                LASSERT(rr->rr_name && rr->rr_namelen > 0);
+        } else {
+                rr->rr_name = NULL;
+                rr->rr_namelen = 0;
+        }
 
 #ifdef CONFIG_FS_POSIX_ACL
         if (sp->sp_cr_flags & MDS_CREATE_RMT_ACL) {
@@ -938,13 +944,14 @@ static int mdt_link_unpack(struct mdt_thread_info *info)
                 mdt_set_capainfo(info, 1, rr->rr_fid2,
                                  req_capsule_client_get(pill, &RMF_CAPA2));
 
+        info->mti_spec.sp_ck_split = !!(rec->lk_bias & MDS_CHECK_SPLIT);
+        info->mti_cross_ref = !!(rec->lk_bias & MDS_CROSS_REF);
         rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
         if (rr->rr_name == NULL)
                 RETURN(-EFAULT);
         rr->rr_namelen = req_capsule_get_size(pill, &RMF_NAME, RCL_CLIENT) - 1;
-        LASSERT(rr->rr_namelen > 0);
-        info->mti_spec.sp_ck_split = !!(rec->lk_bias & MDS_CHECK_SPLIT);
-        info->mti_cross_ref = !!(rec->lk_bias & MDS_CROSS_REF);
+        if (!info->mti_cross_ref)
+                LASSERT(rr->rr_namelen > 0);
 
         rc = mdt_dlmreq_unpack(info);
         RETURN(rc);
@@ -985,13 +992,18 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
                 mdt_set_capainfo(info, 0, rr->rr_fid1,
                                  req_capsule_client_get(pill, &RMF_CAPA1));
 
-        rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
-        if (rr->rr_name == NULL)
-                RETURN(-EFAULT);
-        rr->rr_namelen = req_capsule_get_size(pill, &RMF_NAME, RCL_CLIENT) - 1;
-        LASSERT(rr->rr_namelen > 0);
-        info->mti_spec.sp_ck_split = !!(rec->ul_bias & MDS_CHECK_SPLIT);
         info->mti_cross_ref = !!(rec->ul_bias & MDS_CROSS_REF);
+        if (!info->mti_cross_ref) {
+                rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
+                rr->rr_namelen = req_capsule_get_size(pill, &RMF_NAME, RCL_CLIENT) - 1;
+                if (rr->rr_name == NULL || rr->rr_namelen == 0)
+                        RETURN(-EFAULT);
+        } else {
+                rr->rr_name = NULL;
+                rr->rr_namelen = 0;
+                
+        }
+        info->mti_spec.sp_ck_split = !!(rec->ul_bias & MDS_CHECK_SPLIT);
         if (rec->ul_bias & MDS_VTX_BYPASS)
                 ma->ma_attr_flags |= MDS_VTX_BYPASS;
         else
@@ -1040,16 +1052,16 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
                 mdt_set_capainfo(info, 1, rr->rr_fid2,
                                  req_capsule_client_get(pill, &RMF_CAPA2));
 
+        info->mti_spec.sp_ck_split = !!(rec->rn_bias & MDS_CHECK_SPLIT);
+        info->mti_cross_ref = !!(rec->rn_bias & MDS_CROSS_REF);
         rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
         rr->rr_tgt = req_capsule_client_get(pill, &RMF_SYMTGT);
         if (rr->rr_name == NULL || rr->rr_tgt == NULL)
                 RETURN(-EFAULT);
         rr->rr_namelen = req_capsule_get_size(pill, &RMF_NAME, RCL_CLIENT) - 1;
-        LASSERT(rr->rr_namelen > 0);
         rr->rr_tgtlen = req_capsule_get_size(pill, &RMF_SYMTGT, RCL_CLIENT) - 1;
-        LASSERT(rr->rr_tgtlen > 0);
-        info->mti_spec.sp_ck_split = !!(rec->rn_bias & MDS_CHECK_SPLIT);
-        info->mti_cross_ref = !!(rec->rn_bias & MDS_CROSS_REF);
+        if (!info->mti_cross_ref)
+                LASSERT(rr->rr_namelen > 0 && rr->rr_tgtlen > 0);
         if (rec->rn_bias & MDS_VTX_BYPASS)
                 ma->ma_attr_flags |= MDS_VTX_BYPASS;
         else

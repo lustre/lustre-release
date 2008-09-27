@@ -879,11 +879,11 @@ test_41() {
     do_facet client dd if=/dev/zero of=$f bs=4k count=1 || return 3
     cancel_lru_locks osc
     # fail ost2 and read from ost1
-    local osc2dev=`do_facet mds "lctl get_param -n devices | grep ${ost2_svc}-osc-MDT0000" | awk '{print $1}'`
+    local osc2dev=`do_facet $SINGLEMDS "lctl get_param -n devices | grep ${ost2_svc}-osc-MDT0000" | awk '{print $1}'`
     [ -z "$osc2dev" ] && echo "OST: $ost2_svc" && lctl get_param -n devices && return 4
-    do_facet mds $LCTL --device $osc2dev deactivate || return 1
+    do_facet $SINGLEMDS $LCTL --device $osc2dev deactivate || return 1
     do_facet client dd if=$f of=/dev/null bs=4k count=1 || return 3
-    do_facet mds $LCTL --device $osc2dev activate || return 2
+    do_facet $SINGLEMDS $LCTL --device $osc2dev activate || return 2
     return 0
 }
 run_test 41 "read from a valid osc while other oscs are invalid"
@@ -1764,6 +1764,71 @@ test_70b () {
 }
 run_test 70b "mds recovery; $CLIENTCOUNT clients"
 # end multi-client tests
+
+test_80a() {
+    [ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+
+    mkdir -p $DIR/$tdir
+    replay_barrier mds2
+    $CHECKSTAT -t dir $DIR/$tdir || error "$CHECKSTAT -t dir $DIR/$tdir failed"
+    rmdir $DIR/$tdir || error "rmdir $DIR/$tdir failed"
+    fail mds2
+    stat $DIR/$tdir
+}
+run_test 80a "CMD: unlink cross-node dir (fail mds with inode)"
+
+test_80b() {
+    [ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+
+    mkdir -p $DIR/$tdir
+    replay_barrier mds1
+    $CHECKSTAT -t dir $DIR/$tdir || error "$CHECKSTAT -t dir $DIR/$tdir failed"
+    rmdir $DIR/$tdir || error "rmdir $DIR/$tdir failed"
+    fail mds1
+    stat $DIR/$tdir
+}
+run_test 80b "CMD: unlink cross-node dir (fail mds with name)"
+
+test_81a() {
+    [ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+
+    mkdir -p $DIR/$tdir
+    createmany -o $DIR/$tdir/f 3000 || error "createmany failed"
+    sleep 10
+    $CHECKSTAT -t dir $DIR/$tdir || error "$CHECKSTAT -t dir failed"
+    $CHECKSTAT -t file $DIR/$tdir/f1002 || error "$CHECKSTAT -t file failed"
+    replay_barrier mds1
+    rm $DIR/$tdir/f1002 || error "rm $DIR/$tdir/f1002 failed"
+    fail mds1
+    stat $DIR/$tdir/f1002
+}
+run_test 81a "CMD: unlink cross-node file (fail mds with name)"
+
+test_82a() {
+    [ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+
+    local dir=$DIR/d82a
+    replay_barrier mds2
+    mkdir $dir || error "mkdir $dir failed"
+    log "FAILOVER mds2"
+    fail mds2
+    stat $DIR
+    $CHECKSTAT -t dir $dir || error "$CHECKSTAT -t dir $dir failed"
+}
+run_test 82a "CMD: mkdir cross-node dir (fail mds with inode)"
+
+test_82b() {
+    [ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+
+    local dir=$DIR/d82b
+    replay_barrier mds1
+    mkdir $dir || error "mkdir $dir failed"
+    log "FAILOVER mds1"
+    fail mds1
+    stat $DIR
+    $CHECKSTAT -t dir $dir || error "$CHECKSTAT -t dir $dir failed"
+}
+run_test 82b "CMD: mkdir cross-node dir (fail mds with name)"
 
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre

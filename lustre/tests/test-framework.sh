@@ -461,9 +461,9 @@ mount_facet() {
 
 # start facet device options
 start() {
-    facet=$1
+    local facet=$1
     shift
-    device=$1
+    local device=$1
     shift
     eval export ${facet}_dev=${device}
     eval export ${facet}_opt=\"$@\"
@@ -475,7 +475,7 @@ start() {
 
 stop() {
     local running
-    facet=$1
+    local facet=$1
     shift
     HOST=`facet_active_host $facet`
     [ -z $HOST ] && echo stop: no host for $facet && return 0
@@ -642,14 +642,14 @@ wait_for() {
 }
 
 wait_mds_recovery_done () {
-    local timeout=`do_facet mds lctl get_param  -n timeout`
+    local timeout=`do_facet $SINGLEMDS lctl get_param  -n timeout`
 #define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 / 2)
 # as we are in process of changing obd_timeout in different ways
 # let's set MAX longer than that
     MAX=$(( timeout * 4 ))
     WAIT=0
     while [ $WAIT -lt $MAX ]; do
-        STATUS=`do_facet $SINGLEMDS "lctl get_param -n mdt.*-MDT*.recovery_status | grep status"`
+        STATUS=`do_facet $SINGLEMDS "lctl get_param -n mdt.*-MDT0000.recovery_status | grep status"`
         echo $STATUS | grep COMPLETE && return 0
         sleep 5
         WAIT=$((WAIT + 5))
@@ -1048,6 +1048,7 @@ formatall() {
 
     if [ ! -z $SEC ]; then
         MDS_MKFS_OPTS="$MDS_MKFS_OPTS --param srpc.flavor.default=$SEC"
+        MDSn_MKFS_OPTS="$MDSn_MKFS_OPTS --param srpc.flavor.default=$SEC"
         OST_MKFS_OPTS="$OST_MKFS_OPTS --param srpc.flavor.default=$SEC"
     fi
 
@@ -1275,7 +1276,7 @@ absolute_path() {
 
 at_is_valid() {
     if [ -z "$AT_MAX_PATH" ]; then
-        AT_MAX_PATH=$(do_facet mds "find /sys/ -name at_max")
+        AT_MAX_PATH=$(do_facet $SINGLEMDS "find /sys/ -name at_max")
         [ -z "$AT_MAX_PATH" ] && echo "missing /sys/.../at_max " && return 1
     fi
     return 0
@@ -1285,7 +1286,7 @@ at_is_enabled() {
     at_is_valid || error "invalid call"
 
     # only check mds, we assume at_max is the same on all nodes
-    local at_max=$(do_facet mds "cat $AT_MAX_PATH")
+    local at_max=$(do_facet $SINGLEMDS "cat $AT_MAX_PATH")
     if [ $at_max -eq 0 ]; then
         return 1
     else
@@ -1334,27 +1335,27 @@ at_max_set() {
 drop_request() {
 # OBD_FAIL_MDS_ALL_REQUEST_NET
     RC=0
-    do_facet mds lctl set_param fail_loc=0x123
+    do_facet $SINGLEMDS lctl set_param fail_loc=0x123
     do_facet client "$1" || RC=$?
-    do_facet mds lctl set_param fail_loc=0
+    do_facet $SINGLEMDS lctl set_param fail_loc=0
     return $RC
 }
 
 drop_reply() {
 # OBD_FAIL_MDS_ALL_REPLY_NET
     RC=0
-    do_facet mds lctl set_param fail_loc=0x122
+    do_facet $SINGLEMDS lctl set_param fail_loc=0x122
     do_facet client "$@" || RC=$?
-    do_facet mds lctl set_param fail_loc=0
+    do_facet $SINGLEMDS lctl set_param fail_loc=0
     return $RC
 }
 
 drop_reint_reply() {
 # OBD_FAIL_MDS_REINT_NET_REP
     RC=0
-    do_facet mds lctl set_param fail_loc=0x119
+    do_facet $SINGLEMDS lctl set_param fail_loc=0x119
     do_facet client "$@" || RC=$?
-    do_facet mds lctl set_param fail_loc=0
+    do_facet $SINGLEMDS lctl set_param fail_loc=0
     return $RC
 }
 
@@ -1389,9 +1390,9 @@ drop_bl_callback() {
 drop_ldlm_reply() {
 #define OBD_FAIL_LDLM_REPLY              0x30c
     RC=0
-    do_facet mds lctl set_param fail_loc=0x30c
+    do_facet $SINGLEMDS lctl set_param fail_loc=0x30c
     do_facet client "$@" || RC=$?
-    do_facet mds lctl set_param fail_loc=0
+    do_facet $SINGLEMDS lctl set_param fail_loc=0
     return $RC
 }
 
@@ -1627,8 +1628,8 @@ pass() {
 }
 
 check_mds() {
-    FFREE=`lctl get_param -n osd.*MDT*.filesfree`
-    FTOTAL=`lctl get_param -n osd.*MDT*.filestotal`
+    FFREE=$(do_node $SINGLEMDS lctl get_param -n osd.*MDT*.filesfree | awk 'BEGIN{avail=0}; {avail+=$1}; END{print avail}')
+    FTOTAL=$(do_node $SINGLEMDS lctl get_param -n osd.*MDT*.filestotal | awk 'BEGIN{avail=0}; {avail+=$1}; END{print avail}')
     [ $FFREE -ge $FTOTAL ] && error "files free $FFREE > total $FTOTAL" || true
 }
 
@@ -1754,17 +1755,10 @@ remote_ost_nodsh()
 }
 
 mdts_nodes () {
-    local MDSNODES=$(facet_host $SINGLEMDS)
+    local MDSNODES
     local NODES_sort
-
-    # FIXME: Currenly we use only $SINGLEMDS,
-    # should be fixed when we will start to test cmd.
-    echo $MDSNODES
-    return
-
     for num in `seq $MDSCOUNT`; do
-        local myMDS=$(facet_host mds$num)
-        MDSNODES="$MDSNODES $myMDS"
+        MDSNODES="$MDSNODES $(facet_host mds$num)"
     done
     NODES_sort=$(for i in $MDSNODES; do echo $i; done | sort -u)
 

@@ -777,7 +777,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         struct md_object       *next      = mdt_object_child(parent);
         struct lu_fid          *child_fid = &info->mti_tmp_fid1;
         struct lu_name         *lname     = NULL;
-        const char             *name;
+        const char             *name      = NULL;
         int                     namelen   = 0;
         struct mdt_lock_handle *lhp;
         struct ldlm_lock       *lock;
@@ -798,27 +798,30 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 
         namelen = req_capsule_get_size(info->mti_pill, &RMF_NAME,
                                        RCL_CLIENT) - 1;
-        LASSERT(namelen >= 0);
+        if (!info->mti_cross_ref) {
+                /* 
+                 * XXX: Check for "namelen == 0" is for getattr by fid 
+                 * (OBD_CONNECT_ATTRFID), otherwise do not allow empty name,
+                 * that is the name must contain at least one character and
+                 * the terminating '\0'
+                 */
+                if (namelen == 0) {
+                        reqbody = req_capsule_client_get(info->mti_pill, 
+                                                         &RMF_MDT_BODY);
+                        LASSERT(fid_is_sane(&reqbody->fid2));
+                        name = NULL;
 
-        /* XXX: "namelen == 0" is for getattr by fid (OBD_CONNECT_ATTRFID),
-         * otherwise do not allow empty name, that is the name must contain
-         * at least one character and the terminating '\0'*/
-        if (namelen == 0) {
-                reqbody =req_capsule_client_get(info->mti_pill, &RMF_MDT_BODY);
-                LASSERT(fid_is_sane(&reqbody->fid2));
-                name = NULL;
-
-                CDEBUG(D_INODE, "getattr with lock for "DFID"/"DFID", "
-                       "ldlm_rep = %p\n",
-                       PFID(mdt_object_fid(parent)), PFID(&reqbody->fid2),
-                       ldlm_rep);
-        } else {
-                lname = mdt_name(info->mti_env, (char *)name, namelen);
-                CDEBUG(D_INODE, "getattr with lock for "DFID"/%s, "
-                       "ldlm_rep = %p\n",
-                       PFID(mdt_object_fid(parent)), name, ldlm_rep);
+                        CDEBUG(D_INODE, "getattr with lock for "DFID"/"DFID", "
+                               "ldlm_rep = %p\n",
+                               PFID(mdt_object_fid(parent)), PFID(&reqbody->fid2),
+                               ldlm_rep);
+                } else {
+                        lname = mdt_name(info->mti_env, (char *)name, namelen);
+                        CDEBUG(D_INODE, "getattr with lock for "DFID"/%s, "
+                               "ldlm_rep = %p\n", PFID(mdt_object_fid(parent)), 
+                               name, ldlm_rep);
+                }
         }
-
         mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_EXECD);
 
         rc = mdt_object_exists(parent);
@@ -827,10 +830,10 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                                 &parent->mot_obj.mo_lu,
                                 "Parent doesn't exist!\n");
                 RETURN(-ESTALE);
-        } else
+        } else if (!info->mti_cross_ref) {
                 LASSERTF(rc > 0, "Parent "DFID" is on remote server\n",
                          PFID(mdt_object_fid(parent)));
-
+        }
         if (lname) {
                 rc = mdt_raw_lookup(info, parent, lname, ldlm_rep);
                 if (rc != 0) {
@@ -1244,7 +1247,7 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page,
                         continue;
 
                 fid_le_to_cpu(lf, &ent->lde_fid);
-                if (le32_to_cpu(ent->lde_hash) & MAX_HASH_HIGHEST_BIT)
+                if (le64_to_cpu(ent->lde_hash) & MAX_HASH_HIGHEST_BIT)
                         ma->ma_attr.la_mode = S_IFDIR;
                 else
                         ma->ma_attr.la_mode = 0;
@@ -1254,7 +1257,7 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page,
 
                 memcpy(name, ent->lde_name, le16_to_cpu(ent->lde_namelen));
                 lname = mdt_name(info->mti_env, name,
-                                 le16_to_cpu(ent->lde_namelen) + 1);
+                                 le16_to_cpu(ent->lde_namelen));
                 ma->ma_attr_flags |= MDS_PERM_BYPASS;
                 rc = mdo_name_insert(info->mti_env,
                                      md_object_next(&object->mot_obj),
@@ -1392,9 +1395,9 @@ static int mdt_readpage(struct mdt_thread_info *info)
          * reqbody->nlink contains number bytes to read.
          */
         rdpg->rp_hash = reqbody->size;
-        if ((__u64)rdpg->rp_hash != reqbody->size) {
-                CERROR("Invalid hash: %#llx != %#llx\n",
-                       (__u64)rdpg->rp_hash, reqbody->size);
+        if (rdpg->rp_hash != reqbody->size) {
+                CERROR("Invalid hash: "LPX64" != "LPX64"\n",
+                       rdpg->rp_hash, reqbody->size);
                 RETURN(-EFAULT);
         }
         rdpg->rp_count  = reqbody->nlink;
@@ -1800,6 +1803,17 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
                 LASSERT(lh->mlh_type != MDT_PDO_LOCK);
         }
 
+        if (lh->mlh_type == MDT_PDO_LOCK) {
+                /* check for exists after object is locked */
+                if (mdt_object_exists(o) == 0) {
+                        /* Non-existent object shouldn't have PDO lock */
+                        RETURN(-ESTALE);
+                } else {
+                        /* Non-dir object shouldn't have PDO lock */
+                        LASSERT(S_ISDIR(lu_object_attr(&o->mot_obj.mo_lu)));
+                }
+        }
+
         memset(policy, 0, sizeof(*policy));
         fid_build_reg_res_name(mdt_object_fid(o), res_id);
 
@@ -1835,7 +1849,7 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
         /*
          * Use LDLM_FL_LOCAL_ONLY for this lock. We do not know yet if it is
          * going to be sent to client. If it is - mdt_intent_policy() path will
-         * fix it up and turns FL_LOCAL flag off.
+         * fix it up and turn FL_LOCAL flag off.
          */
         rc = mdt_fid_lock(ns, &lh->mlh_reg_lh, lh->mlh_reg_mode, policy,
                           res_id, LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB);
@@ -1843,16 +1857,6 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
         if (rc)
                 GOTO(out, rc);
 
-        if (lh->mlh_type == MDT_PDO_LOCK) {
-                /* check for exists after object is locked */
-                if (mdt_object_exists(o) == 0) {
-                        /* Non-existent object shouldn't have PDO lock */
-                        rc = -ESTALE;
-                } else {
-                        /* Non-dir object shouldn't have PDO lock */
-                        LASSERT(S_ISDIR(lu_object_attr(&o->mot_obj.mo_lu)));
-                }
-        }
 out:
         if (rc)
                 mdt_object_unlock(info, o, lh, 1);

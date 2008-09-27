@@ -470,11 +470,21 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK))
                 RETURN(err_serious(-ENOENT));
 
-        /* step 1: lock the parent */
+        /* 
+         * step 1: lock the parent. Note, this may be child in case of
+         * remote operation denoted by ->mti_cross_ref flag. 
+         */
         parent_lh = &info->mti_lh[MDT_LH_PARENT];
-        mdt_lock_pdo_init(parent_lh, LCK_PW, rr->rr_name,
-                          rr->rr_namelen);
-
+        if (info->mti_cross_ref) {
+                /*
+                 * Init reg lock for cross ref case when we need to do only
+                 * ref del locally.
+                 */
+                mdt_lock_reg_init(parent_lh, LCK_PW);
+        } else {
+                mdt_lock_pdo_init(parent_lh, LCK_PW, rr->rr_name,
+                                  rr->rr_namelen);
+        }
         mp = mdt_object_find_lock(info, rr->rr_fid1, parent_lh,
                                   MDS_INODELOCK_UPDATE);
         if (IS_ERR(mp)) {
@@ -500,7 +510,8 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
                         mdt_set_capainfo(info, 0, rr->rr_fid1, BYPASS_CAPA);
                         rc = mo_ref_del(info->mti_env,
                                         mdt_object_child(mp), ma);
-                        mdt_handle_last_unlink(info, mp, ma);
+                        if (rc == 0)
+                                mdt_handle_last_unlink(info, mp, ma);
                 } else
                         rc = 0;
                 GOTO(out_unlock_parent, rc);

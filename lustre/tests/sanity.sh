@@ -1126,14 +1126,32 @@ test_29() {
 	touch $DIR/d29/foo
 	log 'first d29'
 	ls -l $DIR/d29
-	LOCKCOUNTORIG=`lctl get_param -n ldlm.namespaces.*mdc*.lock_count`
-	LOCKUNUSEDCOUNTORIG=`lctl get_param -n ldlm.namespaces.*mdc*.lock_unused_count`
-	[ -z $"LOCKCOUNTORIG" ] && echo "No mdc lock count" && return 1
+
+	declare -i LOCKCOUNTORIG=0
+	for lock_count in $(lctl get_param -n ldlm.namespaces.*mdc*.lock_count); do
+		let LOCKCOUNTORIG=$LOCKCOUNTORIG+$lock_count
+	done
+	[ $LOCKCOUNTORIG -eq 0 ] && echo "No mdc lock count" && return 1
+
+	declare -i LOCKUNUSEDCOUNTORIG=0
+	for unused_count in $(lctl get_param -n ldlm.namespaces.*mdc*.lock_unused_count); do
+		let LOCKUNUSEDCOUNTORIG=$LOCKUNUSEDCOUNTORIG+$unused_count
+	done
+
 	log 'second d29'
 	ls -l $DIR/d29
 	log 'done'
-	LOCKCOUNTCURRENT=`lctl get_param -n ldlm.namespaces.*mdc*.lock_count`
-	LOCKUNUSEDCOUNTCURRENT=`lctl get_param -n ldlm.namespaces.*mdc*.lock_unused_count`
+
+	declare -i LOCKCOUNTCURRENT=0
+	for lock_count in $(lctl get_param -n ldlm.namespaces.*mdc*.lock_count); do
+		let LOCKCOUNTCURRENT=$LOCKCOUNTCURRENT+$lock_count
+	done
+
+	declare -i LOCKUNUSEDCOUNTCURRENT=0
+	for unused_count in $(lctl get_param -n ldlm.namespaces.*mdc*.lock_unused_count); do
+		let LOCKUNUSEDCOUNTCURRENT=$LOCKUNUSEDCOUNTCURRENT+$unused_count
+	done
+
 	if [ "$LOCKCOUNTCURRENT" -gt "$LOCKCOUNTORIG" ]; then
 		lctl set_param -n ldlm.dump_namespaces ""
 		error "CURRENT: $LOCKCOUNTCURRENT > $LOCKCOUNTORIG"
@@ -2180,6 +2198,42 @@ test_51b() {
 }
 run_test 51b "mkdir .../t-0 --- .../t-$NUMTEST ===================="
 
+test_51bb() {
+	[ -z "$CLIENTS" ] && skip "needs >= 2 CLIENTS" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 
+ 
+	NUMFREE=`df -i -P $DIR | tail -n 1 | awk '{ print $4 }'`
+	[ $NUMFREE -lt 21000 ] && \
+		skip "not enough free inodes ($NUMFREE)" && \
+		return
+
+	check_kernel_version 40 || NUMTEST=31000
+	[ $NUMFREE -lt $NUMTEST ] && NUMTEST=$(($NUMFREE - 50))
+
+	mkdir -p $DIR/d51bb
+
+	IUSED=$(lfs df -i $DIR | grep MDT | awk '{print $3}')
+	OLDUSED=($IUSED)
+
+	do_nodes $CLIENTS "mkdir -p $DIR/\$(hostname)"
+
+	ls $DIR
+
+	do_nodes $CLIENTS "createmany -d $DIR/\$(hostname)/t- $NUMTEST"
+	IUSED=$(lfs df -i $DIR | grep MDT | awk '{print $3}')
+	NEWUSED=($IUSED)
+
+	local rc=0
+	for ((i=0; i<${#NEWUSED[@]}; i++)); do
+		echo "mds $i: inodes count OLD ${OLDUSED[$i]} NEW ${NEWUSED[$i]}"
+		[ ${OLDUSED[$i]} -lt ${NEWUSED[$i]} ] || rc=1
+	done
+	
+	[ $rc -ne 0 ] && error "no CMD functionality!"
+}
+run_test 51bb "mkdir .../t-0 --- .../t-$NUMTEST (CMD) ===================="
+
+
 test_51c() {
 	[ ! -d $DIR/d51b ] && skip "$DIR/51b missing" && \
 		return
@@ -2261,7 +2315,7 @@ test_53() {
         for value in `lctl get_param osc.*-osc-MDT0000.prealloc_last_id` ; do
                 param=`echo ${value[0]} | cut -d "=" -f1`
                 ostname=`echo $param | cut -d "." -f2 | cut -d - -f 1-2`
-                ost_last=`lctl get_param -n obdfilter.$ostname.last_id`
+                ost_last=`lctl get_param -n obdfilter.$ostname.last_id | head -n 1`
                 mds_last=`lctl get_param -n $param`
                 echo "$ostname.last_id=$ost_last ; MDS.last_id=$mds_last"
                 if [ $ost_last != $mds_last ]; then
@@ -2639,7 +2693,7 @@ test_57b() {
 	$GETSTRIPE $FILE1 2>&1 | grep -q "no stripe" || error "$FILE1 has an EA"
 	$GETSTRIPE $FILEN 2>&1 | grep -q "no stripe" || error "$FILEN has an EA"
 
-	MDSFREE="`lctl get_param -n osd.*MDT*.kbytesfree 2> /dev/null`"
+	MDSFREE="`lctl get_param -n osd.*MDT0000.kbytesfree 2> /dev/null`"
 	MDCFREE="`lctl get_param -n mdc.*.kbytesfree | head -n 1`"
 	echo "opening files to create objects/EAs"
 	for FILE in `seq -f $DIR/d57b/f%g 1 $FILECOUNT`; do
@@ -2906,19 +2960,21 @@ test_65k() { # bug11679
         remote_mds_nodsh && skip "remote MDS" && return
 
         echo "Check OST status: "
-        MDS_OSCS=`do_facet mds lctl dl | awk '/[oO][sS][cC].*md[ts]/ { print $4 }'`
+        MDS_OSCS=`do_facet $SINGLEMDS lctl dl | awk '/[oO][sS][cC].*md[ts]/ { print $4 }'`
         for OSC in $MDS_OSCS; do
                 echo $OSC "is activate"
-                do_facet mds lctl --device %$OSC activate
+                do_facet $SINGLEMDS lctl --device %$OSC activate
         done
         do_facet client mkdir -p $DIR/$tdir
         for INACTIVE_OSC in $MDS_OSCS; do
                 echo $INACTIVE_OSC "is Deactivate:"
-                do_facet mds lctl --device  %$INACTIVE_OSC deactivate
+                do_facet $SINGLEMDS lctl --device  %$INACTIVE_OSC deactivate
                 for STRIPE_OSC in $MDS_OSCS; do
                         STRIPE_OST=`osc_to_ost $STRIPE_OSC`
-                        STRIPE_INDEX=`do_facet mds lctl get_param -n lov.*md*.target_obd |
-                                      grep $STRIPE_OST | awk -F: '{print $1}'`
+                        STRIPE_INDEX=`do_facet $SINGLEMDS lctl get_param -n lov.*md*.target_obd |
+                                      grep $STRIPE_OST | awk -F: '{print $1}' | head -n 1`
+
+			[ -f $DIR/$tdir/${STRIPE_INDEX} ] && continue
                         echo "$SETSTRIPE $DIR/$tdir/${STRIPE_INDEX} -i ${STRIPE_INDEX} -c 1"
                         do_facet client $SETSTRIPE $DIR/$tdir/${STRIPE_INDEX} -i ${STRIPE_INDEX} -c 1
                         RC=$?
@@ -2926,7 +2982,7 @@ test_65k() { # bug11679
                 done
                 do_facet client rm -f $DIR/$tdir/*
                 echo $INACTIVE_OSC "is Activate."
-                do_facet mds lctl --device  %$INACTIVE_OSC activate
+                do_facet $SINGLEMDS lctl --device  %$INACTIVE_OSC activate
         done
 }
 run_test 65k "validate manual striping works properly with deactivated OSCs"
@@ -5111,16 +5167,27 @@ test_124a() {
 }
 run_test 124a "lru resize ======================================="
 
+get_max_pool_limit()
+{
+        local limit=`lctl get_param -n ldlm.namespaces.*-MDT0000-mdc-*.pool.limit`
+        local max=0
+        for l in $limit; do
+                if test $l -gt $max; then
+                        max=$l
+                fi
+        done
+        echo $max
+}
+
 test_124b() {
 	[ -z "`lctl get_param -n mdc.*.connect_flags | grep lru_resize`" ] && \
                skip "no lru resize on server" && return 0
 
-        # even for cmd no matter what metadata namespace to use for getting
-        # the limit, we use appropriate.
-        LIMIT=`lctl get_param -n ldlm.namespaces.*mdc*.pool.limit`
+        LIMIT=`get_max_pool_limit`
 
         NR=$(($(default_lru_size)*20))
         if [ $NR -gt $LIMIT ]; then
+                log "Limit lock number by $LIMIT locks"
                 NR=$LIMIT
         fi
         lru_resize_disable mdc
@@ -5252,41 +5319,51 @@ test_128() { # bug 15212
 }
 run_test 128 "interactive lfs for 2 consecutive find's"
 
+set_dir_limits () {
+        local mntdev
+        local node
+
+	local LDPROC=/proc/fs/ldiskfs
+
+        for node in $(mdts_nodes); do
+                devs=$(do_node $node "lctl get_param -n devices" | awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }')
+	        for dev in $devs; do
+		        mntdev=$(do_node $node "lctl get_param -n osd.$dev.mntdev")
+		        do_node $node "echo $1 >$LDPROC/\\\$(basename $mntdev)/max_dir_size"
+		done
+	done
+}
 test_129() {
         [ "$FSTYPE" != "ldiskfs" ] && skip "not needed for FSTYPE=$FSTYPE" && return 0
 
-        DEV=$(basename $(do_facet mds lctl get_param -n osd.*MDT*.mntdev))
-        [ -z "$DEV" ] && error "can't access mds mntdev"
         EFBIG=27
-        LDPROC=/proc/fs/ldiskfs/$DEV/max_dir_size
         MAX=16384
 
-        do_facet mds "echo $MAX > $LDPROC"
+        set_dir_limits $MAX
 
         mkdir -p $DIR/$tdir
 
         I=0
         J=0
-        while [ ! $I -gt $MAX ]; do
+        while [ ! $I -gt $((MAX * MDSCOUNT)) ]; do
                 multiop $DIR/$tdir/$J Oc
                 rc=$?
                 if [ $rc -eq $EFBIG ]; then
-                        do_facet mds "echo 0 >$LDPROC"
+                        set_dir_limits 0
                         echo "return code $rc received as expected"
                         return 0
                 elif [ $rc -ne 0 ]; then
-                        do_facet mds "echo 0 >$LDPROC"
+                        set_dir_limits 0
                         error_exit "return code $rc received instead of expected $EFBIG"
                 fi
                 J=$((J+1))
                 I=$(stat -c%s "$DIR/$tdir")
         done
 
-        error "exceeded dir size limit: $I bytes"
-        do_facet mds "echo 0 >$LDPROC"
+        error "exceeded dir size limit $MAX x $MDSCOUNT $((MAX * MDSCOUNT)) : $I bytes"
+        do_facet $SINGLEMDS "echo 0 >$LDPROC"
 }
 run_test 129 "test directory size limit ========================"
-
 
 test_130a() {
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")

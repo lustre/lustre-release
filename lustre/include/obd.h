@@ -742,10 +742,20 @@ struct lmv_tgt_desc {
         struct semaphore        ltd_fid_sem;
 };
 
+enum placement_policy {
+        PLACEMENT_CHAR_POLICY   = 0,
+        PLACEMENT_NID_POLICY    = 1,
+        PLACEMENT_INVAL_POLICY  = 2,
+        PLACEMENT_MAX_POLICY
+};
+
+typedef enum placement_policy placement_policy_t;
+
 struct lmv_obd {
         int                     refcount;
         struct lu_client_fld    lmv_fld;
         spinlock_t              lmv_lock;
+        placement_policy_t      lmv_placement;
         struct lmv_desc         desc;
         struct obd_uuid         cluuid;
         struct obd_export       *exp;
@@ -1417,7 +1427,7 @@ enum {
 
 #define MAX_HASH_SIZE_32         0x7fffffffUL
 #define MAX_HASH_SIZE            0x7fffffffffffffffULL
-#define MAX_HASH_HIGHEST_BIT     0x1000000000000000
+#define MAX_HASH_HIGHEST_BIT     0x1000000000000000ULL
 
 struct lustre_md {
         struct mdt_body         *body;

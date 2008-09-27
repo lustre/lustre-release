@@ -281,7 +281,6 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
         struct inode *root = 0;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_device *obd;
-        struct lu_fid rootfid;
         struct obd_capa *oc = NULL;
         struct obd_statfs osfs;
         struct ptlrpc_request *request = NULL;
@@ -563,13 +562,17 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
                         GOTO(out_lock_cn_cb, err = -ENOMEM);
         }
 
-        err = md_getstatus(sbi->ll_md_exp, &rootfid, &oc);
+        fid_zero(&sbi->ll_root_fid);
+        err = md_getstatus(sbi->ll_md_exp, &sbi->ll_root_fid, &oc);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
                 GOTO(out_lock_cn_cb, err);
         }
-        CDEBUG(D_SUPER, "rootfid "DFID"\n", PFID(&rootfid));
-        sbi->ll_root_fid = rootfid;
+        if (!fid_is_sane(&sbi->ll_root_fid)) {
+                CERROR("Invalid root fid during mount\n");
+                GOTO(out_lock_cn_cb, err = -EINVAL);
+        }
+        CDEBUG(D_SUPER, "rootfid "DFID"\n", PFID(&sbi->ll_root_fid));
 
         sb->s_op = &lustre_super_operations;
         sb->s_export_op = &lustre_export_operations;
@@ -582,7 +585,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
         else if (sbi->ll_flags & LL_SBI_ACL)
                 valid |= OBD_MD_FLACL;
 
-        err = md_getattr(sbi->ll_md_exp, &rootfid, oc, valid, 0, &request);
+        err = md_getattr(sbi->ll_md_exp, &sbi->ll_root_fid, oc, valid, 0, 
+                         &request);
         if (oc)
                 free_capa(oc);
         if (err) {
@@ -1875,6 +1879,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                 inode->i_mode = (inode->i_mode & S_IFMT)|(body->mode & ~S_IFMT);
         if (body->valid & OBD_MD_FLTYPE)
                 inode->i_mode = (inode->i_mode & ~S_IFMT)|(body->mode & S_IFMT);
+        LASSERT(inode->i_mode != 0);
         if (S_ISREG(inode->i_mode)) {
                 inode->i_blkbits = min(PTLRPC_MAX_BRW_BITS + 1, LL_MAX_BLKSIZE_BITS);
         } else {
