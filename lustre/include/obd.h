@@ -921,6 +921,7 @@ struct obd_device {
 
         struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
         struct semaphore        obd_llog_alloc;
+        struct semaphore        obd_llog_cat_process;
         cfs_waitq_t             obd_llog_waitq;
 
         struct obd_device       *obd_observer;
