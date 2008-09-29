@@ -2815,12 +2815,19 @@ static int mds_health_check(struct obd_device *obd)
 static int mds_process_config(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lustre_cfg *lcfg = buf;
-        struct lprocfs_static_vars lvars;
-        int rc;
+        int rc = 0;
 
-        lprocfs_mds_init_vars(&lvars);
+        switch(lcfg->lcfg_command) {
+        case LCFG_PARAM: {
+                struct lprocfs_static_vars lvars;
+                lprocfs_mds_init_vars(&lvars);
 
-        rc = class_process_proc_param(PARAM_MDT, lvars.obd_vars, lcfg, obd);
+                rc = class_process_proc_param(PARAM_MDT, lvars.obd_vars, lcfg, obd);
+                break;
+        }
+        default:
+                break;
+        }
 
         return(rc);
 }

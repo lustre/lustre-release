@@ -491,8 +491,8 @@ static int mds_lov_update_desc(struct obd_device *obd, __u32 index,
         /* Don't change the mds_lov_desc until the objids size matches the
            count (paranoia) */
         mds->mds_lov_desc = *ld;
-        CDEBUG(D_CONFIG, "updated lov_desc, tgt_count: %d\n",
-               mds->mds_lov_desc.ld_tgt_count);
+        CDEBUG(D_CONFIG, "updated lov_desc, tgt_count: %d - idx %d / uuid %s\n",
+               mds->mds_lov_desc.ld_tgt_count, index, uuid->uuid);
 
         mutex_down(&obd->obd_dev_sem);
         rc = mds_lov_update_max_ost(mds, index);
