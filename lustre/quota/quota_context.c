@@ -1054,6 +1054,7 @@ qctxt_wait_pending_dqacq(struct lustre_quota_ctxt *qctxt, unsigned int id,
         struct timeval work_end;
         long timediff;
         struct l_wait_info lwi = { 0 };
+        int rc = 0;
         ENTRY;
 
         do_gettimeofday(&work_start);
@@ -1086,6 +1087,13 @@ qctxt_wait_pending_dqacq(struct lustre_quota_ctxt *qctxt, unsigned int id,
                                     isblk ? LQUOTA_WAIT_PENDING_BLK_QUOTA :
                                             LQUOTA_WAIT_PENDING_INO_QUOTA,
                                     timediff);
+                /* keep same as schedule_dqacq() b=17030 */
+                spin_lock(&qunit->lq_lock);
+                if (qunit->lq_rc == 0)
+                        rc = -EAGAIN;
+                else
+                        rc = qunit->lq_rc;
+                spin_unlock(&qunit->lq_lock);
         } else {
                 do_gettimeofday(&work_end);
                 timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
@@ -1095,7 +1103,7 @@ qctxt_wait_pending_dqacq(struct lustre_quota_ctxt *qctxt, unsigned int id,
                                     timediff);
         }
 
-        RETURN(0);
+        RETURN(rc);
 }
 
 int
