@@ -1073,6 +1073,9 @@ test_33a() { # bug 12333, was test_33
         mount -t lustre $MGSNID:/${FSNAME2} $MOUNT2 || rc=2
         echo "ok."
 
+        cp /etc/hosts $MOUNT2/ || rc=3 
+        $LFS getstripe $MOUNT2/hosts
+
         umount -d $MOUNT2
         stop fs2ost -f
         stop fs2mds -f

@@ -341,7 +341,8 @@ static int mds_lov_set_one_nextid(struct obd_device *obd, __u32 idx, obd_id *id)
 }
 
 /* Update the lov desc for a new size lov. */
-static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
+static int mds_lov_update_desc(struct obd_device *obd, int idx,
+                               struct obd_uuid *uuid)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lov_desc *ld;
@@ -353,7 +354,7 @@ static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
         if (!ld)
                 RETURN(-ENOMEM);
 
-        rc = obd_get_info(lov, sizeof(KEY_LOVDESC), KEY_LOVDESC,
+        rc = obd_get_info(mds->mds_osc_exp, sizeof(KEY_LOVDESC), KEY_LOVDESC,
                           &valsize, ld, NULL);
         if (rc)
                 GOTO(out, rc);
@@ -376,8 +377,9 @@ static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
         /* If we added a target we have to reconnect the llogs */
         /* We only _need_ to do this at first add (idx), or the first time
            after recovery.  However, it should now be safe to call anytime. */
-        rc = llog_cat_initialize(obd, &obd->obd_olg,
-                                 mds->mds_lov_desc.ld_tgt_count, NULL);
+        rc = llog_cat_initialize(obd, &obd->obd_olg, idx, uuid);
+        if (rc)
+                GOTO(out, rc);
 
         /*XXX this notifies the MDD until lov handling use old mds code */
         if (obd->obd_upcall.onu_owner) {
@@ -406,7 +408,7 @@ static int mds_lov_update_mds(struct obd_device *obd,
         /* Don't let anyone else mess with mds_lov_objids now */
         mutex_down(&obd->obd_dev_sem);
 
-        rc = mds_lov_update_desc(obd, mds->mds_osc_exp);
+        rc = mds_lov_update_desc(obd, idx, &watched->u.cli.cl_target_uuid);
         if (rc)
                 GOTO(out, rc);
 
@@ -507,34 +509,6 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         if (rc) {
                 CERROR("cannot read %s: rc = %d\n", "lov_objids", rc);
                 GOTO(err_reg, rc);
-        }
-
-        rc = mds_lov_update_desc(obd, mds->mds_osc_exp);
-        if (rc)
-                GOTO(err_reg, rc);
-
-        /* tgt_count may be 0! */
-        rc = llog_cat_initialize(obd, &obd->obd_olg, 
-                                 mds->mds_lov_desc.ld_tgt_count, NULL);
-        if (rc) {
-                CERROR("failed to initialize catalog %d\n", rc);
-                GOTO(err_reg, rc);
-        }
-
-        /* If we're mounting this code for the first time on an existing FS,
-         * we need to populate the objids array from the real OST values */
-        if (mds->mds_lov_desc.ld_tgt_count > mds->mds_lov_objid_count) {
-                __u32 i = mds->mds_lov_objid_count;
-                for(; i <= mds->mds_lov_desc.ld_tgt_count; i++) {
-                        rc = mds_lov_get_objid(obd, i);
-                        if (rc != 0)
-                                break;
-                }
-                if (rc == 0)
-                        rc = mds_lov_write_objids(obd);
-                if (rc)
-                        CERROR("got last objids from OSTs, but error "
-                                "in update objids file: %d\n", rc);
         }
         mutex_up(&obd->obd_dev_sem);
 
@@ -815,22 +789,14 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
                    after the mdt in the config log.  They didn't make it into
                    mds_lov_connect. */
                 mutex_down(&obd->obd_dev_sem);
-                rc = mds_lov_update_desc(obd, obd->u.mds.mds_osc_exp);
-                if (rc) {
-                        mutex_up(&obd->obd_dev_sem);
-                        RETURN(rc);
-                }
-                /* We should update init llog here too for replay unlink and 
-                 * possiable llog init race when recovery complete */
-                llog_cat_initialize(obd, &obd->obd_olg, 
-                                    obd->u.mds.mds_lov_desc.ld_tgt_count,
-                                    &watched->u.cli.cl_target_uuid);
+                rc = mds_lov_update_desc(obd, *(__u32 *)data,
+                                        &watched->u.cli.cl_target_uuid);
                 mutex_up(&obd->obd_dev_sem);
-                mds_allow_cli(obd, CONFIG_SYNC);
+                if (rc == 0)
+                        mds_allow_cli(obd, CONFIG_SYNC);
                 RETURN(rc);
         }
 
-        LASSERT(!llog_ctxt_null(obd, LLOG_MDS_OST_ORIG_CTXT));
         rc = mds_lov_start_synchronize(obd, watched, data,
                                        !(ev == OBD_NOTIFY_SYNC));
 

@@ -149,39 +149,39 @@ int llog_setup(struct obd_device *obd,  struct obd_llog_group *olg, int index,
                 RETURN(-EFAULT);
 
         LASSERT(olg != NULL);
-        ctxt = llog_group_get_ctxt(olg, index);
 
-        /* in some recovery cases, obd_llog_ctxt might already be set,
-         * but llogs might still be zero, for example in obd_filter recovery */
-        if (ctxt) {
-                /* mds_lov_update_mds might call here multiple times. So if the
-                   llog is already set up then don't to do it again. */
-                CDEBUG(D_CONFIG, "obd %s ctxt %d already set up\n",
-                       obd->obd_name, index);
-                LASSERT(ctxt->loc_olg == olg);
-                LASSERT(ctxt->loc_obd == obd);
-                LASSERT(ctxt->loc_exp == disk_obd->obd_self_export);
-                LASSERT(ctxt->loc_logops == op);
-                llog_ctxt_put(ctxt);
-                GOTO(out, rc = 0);
-        }
         ctxt = llog_new_ctxt(obd);
         if (!ctxt)
                 GOTO(out, rc = -ENOMEM);
 
-        rc = llog_group_set_ctxt(olg, ctxt, index);
-        if (rc) {
-                llog_ctxt_destroy(ctxt);
-                if (rc == -EEXIST)
-                        rc = 0;
-                GOTO(out, rc);
-        }
         ctxt->loc_obd = obd;
         ctxt->loc_exp = class_export_get(disk_obd->obd_self_export);
         ctxt->loc_olg = olg;
         ctxt->loc_idx = index;
         ctxt->loc_logops = op;
         sema_init(&ctxt->loc_sem, 1);
+
+        rc = llog_group_set_ctxt(olg, ctxt, index);
+        if (rc) {
+                llog_ctxt_destroy(ctxt);
+                if (rc == -EEXIST) {
+                        /* sanity check */
+                        ctxt = llog_group_get_ctxt(olg, index);
+
+                        /* mds_lov_update_mds might call here multiple times.
+                         * So if the llog is already set up then don't to do
+                         * it again. */
+                        CDEBUG(D_CONFIG, "obd %s ctxt %d already set up\n",
+                                obd->obd_name, index);
+                        LASSERT(ctxt->loc_olg == olg);
+                        LASSERT(ctxt->loc_obd == obd);
+                        LASSERT(ctxt->loc_exp == disk_obd->obd_self_export);
+                        LASSERT(ctxt->loc_logops == op);
+                        llog_ctxt_put(ctxt);
+                        rc = 0;
+                }
+                GOTO(out, rc);
+        }
 
         if (op->lop_setup)
                 rc = op->lop_setup(obd, olg, index, disk_obd, count, logid);
@@ -407,41 +407,32 @@ int llog_obd_origin_add(struct llog_ctxt *ctxt,
 EXPORT_SYMBOL(llog_obd_origin_add);
 
 int llog_cat_initialize(struct obd_device *obd, struct obd_llog_group *olg,
-                        int count, struct obd_uuid *uuid)
+                        int idx, struct obd_uuid *uuid)
 {
         char name[32] = CATLIST;
-        struct llog_catid *idarray = NULL;
-        int size = sizeof(*idarray) * count;
+        struct llog_catid idarray;
         int rc;
         ENTRY;
 
-        if (count) {
-                OBD_VMALLOC(idarray, size);
-                if (!idarray)
-                        RETURN(-ENOMEM);
-        }
-
-        rc = llog_get_cat_list(obd, obd, name, count, idarray);
+        rc = llog_get_cat_list(obd, obd, name, idx, 1, &idarray);
         if (rc) {
                 CERROR("rc: %d\n", rc);
                 GOTO(out, rc);
         }
 
-        rc = obd_llog_init(obd, olg, obd, count, idarray, uuid);
+        rc = obd_llog_init(obd, olg, obd, 1, &idarray, uuid);
         if (rc) {
                 CERROR("rc: %d\n", rc);
                 GOTO(out, rc);
         }
 
-        rc = llog_put_cat_list(obd, obd, name, count, idarray);
+        rc = llog_put_cat_list(obd, obd, name, idx, 1, &idarray);
         if (rc) {
                 CERROR("rc: %d\n", rc);
                 GOTO(out, rc);
         }
 
  out:
-        if (idarray)
-                OBD_VFREE(idarray, size);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cat_initialize);

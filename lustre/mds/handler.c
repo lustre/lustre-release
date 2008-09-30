@@ -232,8 +232,6 @@ int mds_postrecov(struct obd_device *obd)
                 RETURN(0);
 
         LASSERT(!obd->obd_recovering);
-        LASSERT(!llog_ctxt_null(obd, LLOG_MDS_OST_ORIG_CTXT));
-
         /* clean PENDING dir */
 #if 0
         if (strncmp(obd->obd_name, MDD_OBD_NAME, strlen(MDD_OBD_NAME)))

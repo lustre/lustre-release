@@ -198,13 +198,16 @@ static struct llog_operations lov_size_repl_logops = {
 };
 
 int lov_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                  struct obd_device *tgt, int count, struct llog_catid *logid, 
+                  struct obd_device *tgt, int count, struct llog_catid *logid,
                   struct obd_uuid *uuid)
 {
         struct lov_obd *lov = &obd->u.lov;
         struct obd_device *child;
-        int i, rc = 0, err = 0;
+        int i, rc = 0;
         ENTRY;
+
+        /* allow init only one target at one time */
+        LASSERT(uuid);
 
         LASSERT(olg == &obd->obd_olg);
         rc = llog_setup(obd, olg, LLOG_MDS_OST_ORIG_CTXT, tgt, 0, NULL,
@@ -219,25 +222,23 @@ int lov_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
 
         lov_getref(obd);
         /* count may not match lov->desc.ld_tgt_count during dynamic ost add */
-        for (i = 0; i < count; i++) {
+        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active)
                         continue;
-                if (uuid && !obd_uuid_equals(uuid, &lov->lov_tgts[i]->ltd_uuid))
+                if (!obd_uuid_equals(uuid, &lov->lov_tgts[i]->ltd_uuid))
                         continue;
-                CDEBUG(D_CONFIG, "init %d/%d\n", i, count);
+
                 LASSERT(lov->lov_tgts[i]->ltd_exp);
                 child = lov->lov_tgts[i]->ltd_exp->exp_obd;
-                rc = obd_llog_init(child, &child->obd_olg, tgt, 1, logid + i, uuid);
-                if (rc) {
+                rc = obd_llog_init(child, &child->obd_olg, tgt, 1, logid, uuid);
+                if (rc)
                         CERROR("error osc_llog_init idx %d osc '%s' tgt '%s' "
                                "(rc=%d)\n", i, child->obd_name, tgt->obd_name,
                                rc);
-                        if (!err) 
-                                err = rc;
-                }
+                break;
         }
         lov_putref(obd);
-        RETURN(err);
+        RETURN(rc);
 }
 
 int lov_llog_finish(struct obd_device *obd, int count)
