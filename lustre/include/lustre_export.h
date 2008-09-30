@@ -101,6 +101,12 @@ typedef struct nid_stat {
         int                      nid_exp_ref_count;
 } nid_stat_t;
 
+enum obd_option {
+        OBD_OPT_FORCE =         0x0001,
+        OBD_OPT_FAILOVER =      0x0002,
+        OBD_OPT_ABORT_RECOV =   0x0004,
+};
+
 struct obd_export {
         struct portals_handle     exp_handle;
         atomic_t                  exp_refcount;
@@ -126,7 +132,7 @@ struct obd_export {
         spinlock_t                exp_lock; /* protects flags int below */
         /* ^ protects exp_outstanding_replies too */
         __u64                     exp_connect_flags;
-        int                       exp_flags;
+        enum obd_option           exp_flags;
         unsigned long             exp_failed:1,
                                   exp_disconnected:1,
                                   exp_connecting:1,

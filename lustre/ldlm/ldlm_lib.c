@@ -1131,6 +1131,7 @@ void target_cleanup_recovery(struct obd_device *obd)
 void target_abort_recovery(void *data)
 {
         struct obd_device *obd = data;
+        enum obd_option flags;
         ENTRY;
 
         spin_lock_bh(&obd->obd_processing_task_lock);
@@ -1139,6 +1140,7 @@ void target_abort_recovery(void *data)
                 EXIT;
                 return;
         }
+        flags = exp_flags_from_obd(obd) | OBD_OPT_ABORT_RECOV;
         obd->obd_recovering = obd->obd_abort_recovery = 0;
         target_cancel_recovery_timer(obd);
         spin_unlock_bh(&obd->obd_processing_task_lock);
@@ -1148,7 +1150,7 @@ void target_abort_recovery(void *data)
                       obd->obd_name, obd->obd_recoverable_clients,
                       cfs_time_current_sec()- obd->obd_recovery_start,
                       obd->obd_connected_clients);
-        class_disconnect_stale_exports(obd);
+        class_disconnect_stale_exports(obd, flags);
         abort_recovery_queue(obd);
 
         target_finish_recovery(obd);

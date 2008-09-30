@@ -537,9 +537,7 @@ void class_decref(struct obd_device *obd)
                                obd->obd_name, err);
 
                 spin_lock(&obd->obd_self_export->exp_lock);
-                obd->obd_self_export->exp_flags |=
-                        (obd->obd_fail ? OBD_OPT_FAILOVER : 0) |
-                        (obd->obd_force ? OBD_OPT_FORCE : 0);
+                obd->obd_self_export->exp_flags |= exp_flags_from_obd(obd);
                 spin_unlock(&obd->obd_self_export->exp_lock);
 
                 /* note that we'll recurse into class_decref again */
