@@ -66,6 +66,7 @@
 #include <lustre_quota.h>
 #include "quota_internal.h"
 
+#ifdef HAVE_QUOTA_SUPPORT
 #ifdef __KERNEL__
 int mds_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
 {
@@ -253,6 +254,7 @@ adjust:
         RETURN(rc);
 }
 #endif /* __KERNEL__ */
+#endif
 
 int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
 {
@@ -310,9 +312,12 @@ int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         int i, rc = 0;
         ENTRY;
 
-        if (oqctl->qc_cmd != Q_QUOTAON && oqctl->qc_cmd != Q_QUOTAOFF &&
-            oqctl->qc_cmd != Q_GETOQUOTA && oqctl->qc_cmd != Q_INITQUOTA &&
-            oqctl->qc_cmd != Q_SETQUOTA && oqctl->qc_cmd != Q_FINVALIDATE) {
+        if (oqctl->qc_cmd != LUSTRE_Q_QUOTAON &&
+            oqctl->qc_cmd != LUSTRE_Q_QUOTAOFF &&
+            oqctl->qc_cmd != Q_GETOQUOTA &&
+            oqctl->qc_cmd != Q_INITQUOTA &&
+            oqctl->qc_cmd != LUSTRE_Q_SETQUOTA &&
+            oqctl->qc_cmd != Q_FINVALIDATE) {
                 CERROR("bad quota opc %x for lov obd", oqctl->qc_cmd);
                 RETURN(-EFAULT);
         }
