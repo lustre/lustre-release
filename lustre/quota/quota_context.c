@@ -61,6 +61,8 @@
 #include <lprocfs_status.h>
 #include "quota_internal.h"
 
+#ifdef HAVE_QUOTA_SUPPORT
+
 static lustre_hash_ops_t lqs_hash_ops;
 
 unsigned long default_bunit_sz = 128 * 1024 * 1024; /* 128M bytes */
@@ -1280,6 +1282,7 @@ exit:
         EXIT;
 }
 
+
 /*
  * lqs<->qctxt hash operations
  */
@@ -1374,3 +1377,4 @@ static lustre_hash_ops_t lqs_hash_ops = {
         .lh_put     = lqs_put,
         .lh_exit    = lqs_exit
 };
+#endif /* HAVE_QUOTA_SUPPORT */
