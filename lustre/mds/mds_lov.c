@@ -1055,9 +1055,11 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         case OBD_NOTIFY_CONFIG:
                 mds_allow_cli(obd, (unsigned long)data);
 
+#ifdef HAVE_QUOTA_SUPPORT
                 /* quota_type has been processed, we can now handle
                  * incoming quota requests */
                 obd->u.obt.obt_qctxt.lqc_setup = 1;
+#endif
         default:
                 RETURN(0);
         }

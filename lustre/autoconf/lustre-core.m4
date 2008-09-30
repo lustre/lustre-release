@@ -1545,7 +1545,6 @@ AC_DEFUN([LC_CONFIG_QUOTA_LIBLUSTRE],
 if test x$enable_quota != xno; then
 	AC_MSG_CHECKING([if compile liblustre with quota])
 	enable_quota_liblustre='yes'
-	AC_DEFINE(HAVE_QUOTA_SUPPORT, 1, [Enable quota support])
 	AC_DEFINE(HAVE_QUOTA_LIBLUSTRE_SUPPORT, 1, [Enable liblustre quota support])
 	AC_MSG_RESULT([yes])
 fi

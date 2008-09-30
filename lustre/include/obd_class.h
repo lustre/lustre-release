@@ -1385,7 +1385,6 @@ static inline int obd_notify_observer(struct obd_device *observer,
         return rc1 ?: rc2;
  }
 
-#ifdef HAVE_QUOTA_SUPPORT
 static inline int obd_quotacheck(struct obd_export *exp,
                                  struct obd_quotactl *oqctl)
 {
@@ -1416,7 +1415,7 @@ static inline int obd_quota_adjust_qunit(struct obd_export *exp,
                                          struct quota_adjust_qunit *oqaq,
                                          struct lustre_quota_ctxt *qctxt)
 {
-#ifdef LPROCFS
+#if defined(LPROCFS) && defined(HAVE_QUOTA_SUPPORT)
         struct timeval work_start;
         struct timeval work_end;
         long timediff;
@@ -1424,7 +1423,7 @@ static inline int obd_quota_adjust_qunit(struct obd_export *exp,
         int rc;
         ENTRY;
 
-#ifdef LPROCFS
+#if defined(LPROCFS) && defined(HAVE_QUOTA_SUPPORT)
         if (qctxt)
                 do_gettimeofday(&work_start);
 #endif
@@ -1433,7 +1432,7 @@ static inline int obd_quota_adjust_qunit(struct obd_export *exp,
 
         rc = OBP(exp->exp_obd, quota_adjust_qunit)(exp, oqaq, qctxt);
 
-#ifdef LPROCFS
+#if defined(LPROCFS) && defined(HAVE_QUOTA_SUPPORT)
         if (qctxt) {
                 do_gettimeofday(&work_end);
                 timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
@@ -1443,7 +1442,6 @@ static inline int obd_quota_adjust_qunit(struct obd_export *exp,
 #endif
         RETURN(rc);
 }
-#endif
 
 static inline int obd_health_check(struct obd_device *obd)
 {

@@ -653,6 +653,19 @@ static inline int lquota_pending_commit(quota_interface_t *interface,
 extern quota_interface_t osc_quota_interface;
 extern quota_interface_t mdc_quota_interface;
 extern quota_interface_t lov_quota_interface;
+
+#ifndef MAXQUOTAS
+#define MAXQUOTAS 2
+#endif
+
+#ifndef USRQUOTA
+#define USRQUOTA 0
+#endif
+
+#ifndef GRPQUOTA
+#define GRPQUOTA 1
+#endif
+
 #endif
 
 #define LUSTRE_ADMIN_QUOTAFILES_V1 {\

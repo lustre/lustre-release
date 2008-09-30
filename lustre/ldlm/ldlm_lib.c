@@ -1736,7 +1736,6 @@ void target_committed_to_req(struct ptlrpc_request *req)
 
 EXPORT_SYMBOL(target_committed_to_req);
 
-#ifdef HAVE_QUOTA_SUPPORT
 int target_handle_qc_callback(struct ptlrpc_request *req)
 {
         struct obd_quotactl *oqctl;
@@ -1754,6 +1753,7 @@ int target_handle_qc_callback(struct ptlrpc_request *req)
         return 0;
 }
 
+#ifdef HAVE_QUOTA_SUPPORT
 int target_handle_dqacq_callback(struct ptlrpc_request *req)
 {
 #ifdef __KERNEL__

@@ -80,13 +80,12 @@ int target_handle_ping(struct ptlrpc_request *req);
 int target_pack_pool_reply(struct ptlrpc_request *req);
 void target_committed_to_req(struct ptlrpc_request *req);
 
-#ifdef HAVE_QUOTA_SUPPORT
 /* quotacheck callback, dqacq/dqrel callback handler */
 int target_handle_qc_callback(struct ptlrpc_request *req);
+#ifdef HAVE_QUOTA_SUPPORT
 int target_handle_dqacq_callback(struct ptlrpc_request *req);
 #else
 #define target_handle_dqacq_callback(req) ldlm_callback_reply(req, -ENOTSUPP)
-#define target_handle_qc_callback(req) (0)
 #endif
 
 void target_cancel_recovery_timer(struct obd_device *obd);

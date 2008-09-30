@@ -67,6 +67,8 @@
 #include <class_hash.h>
 #include "quota_internal.h"
 
+#ifdef HAVE_QUOTA_SUPPORT
+
 #ifdef __KERNEL__
 /* this function is charge of recording lqs_ino_rec and
  * lqs_blk_rec. when a lquota slave checks a quota
@@ -346,6 +348,7 @@ int filter_quota_adjust_qunit(struct obd_export *exp,
         RETURN(rc);
 }
 #endif /* __KERNEL__ */
+#endif
 
 int client_quota_adjust_qunit(struct obd_export *exp,
                               struct quota_adjust_qunit *oqaq,

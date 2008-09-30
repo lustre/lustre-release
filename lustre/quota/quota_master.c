@@ -62,6 +62,8 @@
 
 #include "quota_internal.h"
 
+#ifdef HAVE_QUOTA_SUPPORT
+
 /* lock ordering: mds->mds_qonoff_sem > dquot->dq_sem */
 static struct list_head lustre_dquot_hash[NR_DQHASH];
 static spinlock_t dquot_hash_lock = SPIN_LOCK_UNLOCKED;
@@ -1653,3 +1655,5 @@ int mds_quota_recovery(struct obd_device *obd)
         wait_for_completion(&data.comp);
         RETURN(rc);
 }
+
+#endif /* HAVE_QUOTA_SUPPORT */

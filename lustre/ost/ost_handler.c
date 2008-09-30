@@ -1489,6 +1489,7 @@ int ost_msg_check_version(struct lustre_msg *msg)
         case OST_QUOTACHECK:
         case OST_QUOTACTL:
         case OST_QUOTA_ADJUST_QUNIT:
+#endif
                 rc = lustre_msg_check_version(msg, LUSTRE_OST_VERSION);
                 if (rc)
                         CERROR("bad opc %u version %08x, expecting %08x\n",
@@ -1496,7 +1497,6 @@ int ost_msg_check_version(struct lustre_msg *msg)
                                lustre_msg_get_version(msg),
                                LUSTRE_OST_VERSION);
                 break;
-#endif
         case LDLM_ENQUEUE:
         case LDLM_CONVERT:
         case LDLM_CANCEL:

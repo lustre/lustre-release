@@ -871,7 +871,6 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 obd_ioctl_freedata(buf, len);
                 RETURN(rc);
         }
-#ifdef HAVE_QUOTA_SUPPORT
         case OBD_IOC_QUOTACHECK: {
                 struct obd_quotactl *oqctl;
                 int rc, error = 0;
@@ -1043,7 +1042,6 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 OBD_FREE_PTR(oqctl);
                 RETURN(rc);
         }
-#endif /* HAVE_QUOTA_SUPPORT */
         case OBD_IOC_GETNAME_OLD:
         case OBD_IOC_GETNAME: {
                 struct obd_device *obd = class_exp2obd(sbi->ll_osc_exp);
