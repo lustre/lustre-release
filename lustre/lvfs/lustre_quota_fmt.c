@@ -39,7 +39,6 @@
  * from linux/fs/quota_v2.c
  */
 
-
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
@@ -59,6 +58,8 @@
 #include <lustre_quota.h>
 #include <obd_support.h>
 #include "lustre_quota_fmt.h"
+
+#ifdef HAVE_QUOTA_SUPPORT
 
 static const uint lustre_initqversions[][MAXQUOTAS] = {
         [LUSTRE_QUOTA_V1] = LUSTRE_INITQVERSIONS,
@@ -1108,3 +1109,4 @@ EXPORT_SYMBOL(lustre_read_dquot);
 EXPORT_SYMBOL(lustre_commit_dquot);
 EXPORT_SYMBOL(lustre_init_quota_info);
 EXPORT_SYMBOL(lustre_get_qids);
+#endif
