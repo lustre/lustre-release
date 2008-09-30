@@ -100,7 +100,7 @@ test_3a() {
     zconf_mount_clients $CLIENT2 $DIR
 
     #make sure the time will change
-    do_facet mds "echo 0 > /proc/fs/lustre/mds/${mds_svc}/atime_diff" || return
+    do_facet mds "$LCTL set_param mds.${mds_svc}.atime_diff=0" || return
     do_node $CLIENT1 touch $DIR/$tfile
     do_node $CLIENT2 $CHECKSTAT $DIR/$tfile
     sleep 1
@@ -132,8 +132,8 @@ test_3b() {
     zconf_mount_clients $CLIENT2 $DIR
 
     #make sure the time will change
-    do_facet mds "echo 0 > /proc/fs/lustre/mds/${mds_svc}/atime_diff" || return
-    do_facet mds "echo 0 > /proc/fs/lustre/mds/${mds_svc}/sync_permission" || return
+    do_facet mds "$LCTL set_param mds.${mds_svc}.atime_diff=0" || return
+    do_facet mds "$LCTL set_param mds.${mds_svc}.sync_permission=0" || return
     do_node $CLIENT1 touch $DIR/$tfile
     do_node $CLIENT2 $CHECKSTAT $DIR/$tfile
     sleep 1
@@ -168,7 +168,7 @@ test_3c() {
     zconf_mount_clients $CLIENT2 $DIR
 
     # check that permission changes are synced
-    do_facet mds "echo 1 > /proc/fs/lustre/mds/${mds_svc}/sync_permission"
+    do_facet mds "$LCTL set_param mds.${mds_svc}.sync_permission=1"
 
     do_node $CLIENT1 mkdir -p $DIR/d3c/sub || error
     #chown -R $RUNAS_ID $MOUNT1/d3
@@ -197,7 +197,7 @@ test_3c() {
     zconf_mount $CLIENT2 $DIR || error "mount $CLIENT2 $DIR fail"
     do_node $CLIENT1 $RUNAS cat $DIR/d3c/sub/$tfile && return 6
     do_node $CLIENT2 $RUNAS cat $DIR/d3c/sub/$tfile && return 7
-    do_facet mds "echo 0 > /proc/fs/lustre/mds/${mds_svc}/sync_permission"
+    do_facet mds "$LCTL set_param mds.${mds_svc}.sync_permission=0"
 
     return 0
 }
