@@ -1414,7 +1414,9 @@ out:
 
 static int fsfilt_ext3_setup(struct super_block *sb)
 {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,6)) && defined(HAVE_QUOTA_SUPPORT)
         struct ext3_sb_info *sbi = EXT3_SB(sb);
+#endif
 #if 0
         sbi->dx_lock = fsfilt_ext3_dx_lock;
         sbi->dx_unlock = fsfilt_ext3_dx_unlock;
