@@ -975,7 +975,8 @@ int class_disconnect(struct obd_export *export)
         RETURN(0);
 }
 
-static void class_disconnect_export_list(struct list_head *list, int flags)
+static void class_disconnect_export_list(struct list_head *list,
+                                         enum obd_option flags)
 {
         int rc;
         struct lustre_handle fake_conn;
@@ -1027,12 +1028,6 @@ static void class_disconnect_export_list(struct list_head *list, int flags)
         EXIT;
 }
 
-static inline int get_exp_flags_from_obd(struct obd_device *obd)
-{
-        return ((obd->obd_fail ? OBD_OPT_FAILOVER : 0) |
-                (obd->obd_force ? OBD_OPT_FORCE : 0));
-}
-
 void class_disconnect_exports(struct obd_device *obd)
 {
         struct list_head work_list;
@@ -1047,13 +1042,14 @@ void class_disconnect_exports(struct obd_device *obd)
 
         CDEBUG(D_HA, "OBD device %d (%p) has exports, "
                "disconnecting them\n", obd->obd_minor, obd);
-        class_disconnect_export_list(&work_list, get_exp_flags_from_obd(obd));
+        class_disconnect_export_list(&work_list, exp_flags_from_obd(obd));
         EXIT;
 }
 EXPORT_SYMBOL(class_disconnect_exports);
 
 /* Remove exports that have not completed recovery. */
-void class_disconnect_stale_exports(struct obd_device *obd)
+void class_disconnect_stale_exports(struct obd_device *obd,
+                                    enum obd_option flags)
 {
         struct list_head work_list;
         struct list_head *pos, *n;
@@ -1074,7 +1070,7 @@ void class_disconnect_stale_exports(struct obd_device *obd)
 
         CDEBUG(D_ERROR, "%s: disconnecting %d stale clients\n",
                obd->obd_name, cnt);
-        class_disconnect_export_list(&work_list, get_exp_flags_from_obd(obd));
+        class_disconnect_export_list(&work_list, flags);
         EXIT;
 }
 EXPORT_SYMBOL(class_disconnect_stale_exports);
@@ -1102,7 +1098,7 @@ void class_disconnect_expired_exports(struct obd_device *obd)
 
         CDEBUG(D_INFO, "%s: disconnecting %d expired exports\n",
                obd->obd_name, cnt);
-        class_disconnect_export_list(&expired_list, get_exp_flags_from_obd(obd));
+        class_disconnect_export_list(&expired_list, exp_flags_from_obd(obd));
 
         EXIT;
 }
@@ -1169,7 +1165,7 @@ void class_handle_stale_exports(struct obd_device *obd)
         LASSERT(list_empty(&delay_list));
 
         /* evict clients without VBR support */
-        class_disconnect_export_list(&evict_list, get_exp_flags_from_obd(obd));
+        class_disconnect_export_list(&evict_list, exp_flags_from_obd(obd));
 
         EXIT;
 }
