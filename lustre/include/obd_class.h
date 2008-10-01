@@ -223,9 +223,18 @@ void class_disconnect_exports(struct obd_device *obddev);
 void class_set_export_delayed(struct obd_export *exp);
 void class_handle_stale_exports(struct obd_device *obddev);
 void class_disconnect_expired_exports(struct obd_device *obd);
-void class_disconnect_stale_exports(struct obd_device *obd);
+void class_disconnect_stale_exports(struct obd_device *obddev,
+                                    enum obd_option flags);
 int class_stale_export_list(struct obd_device *obd, struct obd_ioctl_data *data);
 int class_manual_cleanup(struct obd_device *obd);
+
+static inline enum obd_option exp_flags_from_obd(struct obd_device *obd)
+{
+        return ((obd->obd_fail ? OBD_OPT_FAILOVER : 0) |
+                (obd->obd_force ? OBD_OPT_FORCE : 0) |
+                (obd->obd_abort_recovery ? OBD_OPT_ABORT_RECOV : 0) |
+                0);
+}
 
 /* obdo.c */
 void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_flag valid);
