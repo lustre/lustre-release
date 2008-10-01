@@ -250,6 +250,9 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                       char *name, int idx, int count,
                       struct llog_catid *idarray);
 
+int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
+                      char *name, int idx, int count, struct llog_catid *idarray);
+
 struct llog_ctxt {
         int                      loc_idx; /* my index the obd array of ctxt's */
         struct llog_gen          loc_gen;
@@ -410,6 +413,7 @@ static inline void llog_group_init(struct obd_llog_group *olg, int group)
 {
         cfs_waitq_init(&olg->olg_waitq);
         spin_lock_init(&olg->olg_lock);
+        sema_init(&olg->olg_cat_processing, 1);
         olg->olg_group = group;
 }
 

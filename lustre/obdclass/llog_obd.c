@@ -414,11 +414,16 @@ int llog_cat_initialize(struct obd_device *obd, struct obd_llog_group *olg,
         int rc;
         ENTRY;
 
+        mutex_down(&olg->olg_cat_processing);
         rc = llog_get_cat_list(obd, obd, name, idx, 1, &idarray);
         if (rc) {
                 CERROR("rc: %d\n", rc);
                 GOTO(out, rc);
         }
+
+        CDEBUG(D_INFO, "init llog for %s/%d - catid "LPX64"/"LPX64"/%x\n",
+               uuid->uuid, idx, idarray.lci_logid.lgl_oid,
+               idarray.lci_logid.lgl_ogr, idarray.lci_logid.lgl_ogen);
 
         rc = obd_llog_init(obd, olg, obd, 1, &idarray, uuid);
         if (rc) {
@@ -433,6 +438,8 @@ int llog_cat_initialize(struct obd_device *obd, struct obd_llog_group *olg,
         }
 
  out:
+        mutex_up(&olg->olg_cat_processing);
+
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cat_initialize);

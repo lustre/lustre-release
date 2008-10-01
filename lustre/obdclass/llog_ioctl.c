@@ -436,11 +436,10 @@ int llog_catalog_list(struct obd_device *obd, int count,
         if (!idarray)
                 RETURN(-ENOMEM);
 
+        mutex_down(&obd->obd_olg.olg_cat_processing);
         rc = llog_get_cat_list(obd, obd, name, 0, count, idarray);
-        if (rc) {
-                OBD_FREE(idarray, size);
-                RETURN(rc);
-        }
+        if (rc)
+                GOTO(out, rc);
 
         out = data->ioc_bulk;
         remains = data->ioc_inllen1;
@@ -456,8 +455,12 @@ int llog_catalog_list(struct obd_device *obd, int count,
                         break;
                 }
         }
+out:
+        /* release semaphore */
+        mutex_up(&obd->obd_olg.olg_cat_processing);
+
         OBD_VFREE(idarray, size);
-        RETURN(0);
+        RETURN(rc);
 
 }
 EXPORT_SYMBOL(llog_catalog_list);

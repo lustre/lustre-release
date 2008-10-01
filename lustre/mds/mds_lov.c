@@ -362,8 +362,8 @@ static int mds_lov_update_desc(struct obd_device *obd, int idx,
         /* Don't change the mds_lov_desc until the objids size matches the
            count (paranoia) */
         mds->mds_lov_desc = *ld;
-        CDEBUG(D_CONFIG, "updated lov_desc, tgt_count: %d\n",
-               mds->mds_lov_desc.ld_tgt_count);
+        CDEBUG(D_CONFIG, "updated lov_desc, tgt_count: %d - idx %d / uuid %s\n",
+               mds->mds_lov_desc.ld_tgt_count, idx, uuid->uuid);
 
         stripes = min_t(__u32, LOV_MAX_STRIPE_COUNT,
                                mds->mds_lov_desc.ld_tgt_count);

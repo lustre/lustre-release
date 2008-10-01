@@ -575,6 +575,7 @@ static int llog_catinfo_deletions(struct obd_device *obd, char *buf,
         if (!idarray)
                 GOTO(release_ctxt, rc = -ENOMEM);
 
+        mutex_down(&obd->obd_olg.olg_cat_processing);
         rc = llog_get_cat_list(obd, obd, name, 0, count, idarray);
         if (rc)
                 GOTO(out_free, rc);
@@ -620,6 +621,9 @@ static int llog_catinfo_deletions(struct obd_device *obd, char *buf,
 out_pop:
         pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
 out_free:
+        /* release semphore */
+        mutex_up(&obd->obd_olg.olg_cat_processing);
+
         OBD_VFREE(idarray, size);
 release_ctxt:
         llog_ctxt_put(ctxt);

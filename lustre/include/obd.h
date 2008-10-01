@@ -946,6 +946,7 @@ struct obd_llog_group {
         spinlock_t         olg_lock;
         struct obd_export *olg_exp;
         int                olg_initializing;
+        struct semaphore   olg_cat_processing;
 };
 
 /* corresponds to one of the obd's */
