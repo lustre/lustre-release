@@ -284,12 +284,13 @@ int mds_client_add(struct obd_device *obd, struct obd_export *exp,
         return rc;
 }
 
+struct lsd_client_data zero_lcd; /* globals are implicitly zeroed */
+ 
 int mds_client_free(struct obd_export *exp)
 {
         struct mds_export_data *med = &exp->exp_mds_data;
         struct mds_obd *mds = &exp->exp_obd->u.mds;
         struct obd_device *obd = exp->exp_obd;
-        struct lsd_client_data zero_lcd;
         struct lvfs_run_ctxt *saved = NULL;
         int rc;
         loff_t off;
@@ -327,22 +328,31 @@ int mds_client_free(struct obd_export *exp)
         }
 
         if (!(exp->exp_flags & OBD_OPT_FAILOVER)) {
+                /* Don't force sync on each disconnect if aborting recovery,
+                 * or it does num_clients * num_osts syncs.  b=17194 */
+                int need_sync = (!exp->exp_libclient || exp->exp_need_sync) &&
+                                 !(exp->exp_flags & OBD_OPT_ABORT_RECOV);
                 OBD_SLAB_ALLOC_PTR(saved, obd_lvfs_ctxt_cache);
                 if (saved == NULL) {
                         CERROR("cannot allocate memory for run ctxt\n");
                         GOTO(free, rc = -ENOMEM);
                 }
-                memset(&zero_lcd, 0, sizeof(zero_lcd));
                 push_ctxt(saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = fsfilt_write_record(obd, mds->mds_rcvd_filp, &zero_lcd,
-                                         sizeof(zero_lcd), &off,
-                                         (!exp->exp_libclient ||
-                                          exp->exp_need_sync));
+                                         sizeof(zero_lcd), &off, 0);
+
+                /* Make sure the server's last_transno is up to date. Do this
+                 * after the client is freed so we know all the client's
+                 * transactions have been committed. */
+                if (rc == 0)
+                        mds_update_server_data(exp->exp_obd, need_sync);
+
                 pop_ctxt(saved, &obd->obd_lvfs_ctxt, NULL);
 
                 CDEBUG(rc == 0 ? D_INFO : D_ERROR,
-                       "zeroing out client %s idx %u in %s rc %d\n",
-                       med->med_lcd->lcd_uuid, med->med_lr_idx, LAST_RCVD, rc);
+                       "zero out client %s at idx %u/%llu in %s %ssync rc %d\n",
+                       med->med_lcd->lcd_uuid, med->med_lr_idx, med->med_lr_off,
+                       LAST_RCVD, need_sync ? "" : "a", rc);
         }
 
         if (!test_and_clear_bit(med->med_lr_idx, mds->mds_client_bitmap)) {
@@ -350,12 +360,6 @@ int mds_client_free(struct obd_export *exp)
                        med->med_lr_idx);
                 LBUG();
         }
-
-
-        /* Make sure the server's last_transno is up to date. Do this
-         * after the client is freed so we know all the client's
-         * transactions have been committed. */
-        mds_update_server_data(exp->exp_obd, 0);
 
         EXIT;
 free:
