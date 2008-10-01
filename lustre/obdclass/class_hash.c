@@ -500,14 +500,14 @@ restart:
 }
 EXPORT_SYMBOL(lustre_hash_for_each_empty);
   
-  /*
+/*
  * For each item in the lustre hash @lh which matches the @key call
  * the passed callback @func and pass to it as an argument each hash
  * item and the private @data.  Before each callback ops->lh_get will
  * be called, and after each callback ops->lh_put will be called.
  * Finally, during the callback the bucket lock is held so the
  * callback must never sleep.
-   */
+ */
 void
 lustre_hash_for_each_key(lustre_hash_t *lh, void *key,
                          lh_for_each_cb func, void *data)
