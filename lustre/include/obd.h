@@ -980,9 +980,6 @@ struct obd_device {
         __u64                  obd_pool_slv;
 };
 
-#define OBD_OPT_FORCE           0x0001
-#define OBD_OPT_FAILOVER        0x0002
-
 #define OBD_LLOG_FL_SENDNOW     0x0001
 
 enum obd_cleanup_stage {
