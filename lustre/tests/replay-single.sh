@@ -1433,10 +1433,6 @@ at_start()
         # speed up the timebase so we can check decreasing AT
 	do_facet mds "echo 8 >> $at_history"
 	do_facet ost1 "echo 8 >> $at_history"
-
-	# sleep for a while to cool down, should be > 8s and also allow
-	# at least one ping to be sent. simply use TIMEOUT to be safe.
-	sleep $TIMEOUT
     fi
 }
 
