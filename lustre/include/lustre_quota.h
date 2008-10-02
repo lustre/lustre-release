@@ -51,6 +51,7 @@
 #include <lustre_net.h>
 #include <lvfs.h>
 #include <obd_support.h>
+#include <class_hash.h>
 
 struct obd_device;
 struct client_obd;
@@ -248,9 +249,8 @@ struct lustre_quota_ctxt {
                                          * upper limitation for adjust block
                                          * qunit */
         unsigned long lqc_btune_sz;     /* See comment of lqc_itune_sz */
-        struct lustre_class_hash_body *lqc_lqs_hash_body;
-                                        /* all lustre_qunit_size structure in
-                                         * it */
+        struct lustre_hash *lqc_lqs_hash; /* all lustre_qunit_size structures */
+
         /* the values below are relative to how master change its qunit sizes */
         unsigned long lqc_cqs_boundary_factor; /* this affects the boundary of
                                                 * shrinking and enlarging qunit
@@ -272,8 +272,6 @@ struct lustre_quota_ctxt {
         struct proc_dir_entry *lqc_proc_dir;
         struct lprocfs_stats  *lqc_stats; /* lquota statistics */
 };
-
-#define LQC_HASH_BODY(qctxt) (qctxt->lqc_lqs_hash_body)
 
 struct lustre_qunit_size {
         struct hlist_node lqs_hash; /* the hash entry */
@@ -297,6 +295,8 @@ struct lustre_qunit_size {
         cfs_time_t lqs_last_bshrink;   /* time of last block shrink */
         cfs_time_t lqs_last_ishrink;   /* time of last inode shrink */
         spinlock_t lqs_lock;
+        struct quota_adjust_qunit lqs_key; /* hash key */
+        struct lustre_quota_ctxt *lqs_ctxt; /* quota ctxt */
 };
 
 #define LQS_IS_GRP(lqs)    ((lqs)->lqs_flags & LQUOTA_FLAGS_GRP)
@@ -310,15 +310,24 @@ struct lustre_qunit_size {
 static inline void lqs_getref(struct lustre_qunit_size *lqs)
 {
         atomic_inc(&lqs->lqs_refcount);
+        CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
+               lqs, atomic_read(&lqs->lqs_refcount));
 }
 
 static inline void lqs_putref(struct lustre_qunit_size *lqs)
 {
-        if (atomic_dec_and_test(&lqs->lqs_refcount)) {
-                spin_lock(&lqs->lqs_lock);
-                hlist_del_init(&lqs->lqs_hash);
-                spin_unlock(&lqs->lqs_lock);
+        LASSERT(atomic_read(&lqs->lqs_refcount) > 0);
+
+        /* killing last ref, let's let hash table kill it */
+        if (atomic_read(&lqs->lqs_refcount) == 1) {
+                lustre_hash_del(lqs->lqs_ctxt->lqc_lqs_hash,
+                                &lqs->lqs_key, &lqs->lqs_hash);
                 OBD_FREE_PTR(lqs);
+        } else {
+                atomic_dec(&lqs->lqs_refcount);
+                CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
+                       lqs, atomic_read(&lqs->lqs_refcount));
+
         }
 }
 
@@ -644,6 +653,19 @@ static inline int lquota_pending_commit(quota_interface_t *interface,
 extern quota_interface_t osc_quota_interface;
 extern quota_interface_t mdc_quota_interface;
 extern quota_interface_t lov_quota_interface;
+
+#ifndef MAXQUOTAS
+#define MAXQUOTAS 2
+#endif
+
+#ifndef USRQUOTA
+#define USRQUOTA 0
+#endif
+
+#ifndef GRPQUOTA
+#define GRPQUOTA 1
+#endif
+
 #endif
 
 #define LUSTRE_ADMIN_QUOTAFILES_V1 {\

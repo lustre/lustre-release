@@ -73,12 +73,12 @@ __init int ptlrpc_init(void)
                 RETURN(rc);
         cleanup_phase = 1;
 
-        rc = ptlrpc_init_connection();
+        rc = ptlrpc_connection_init();
         if (rc)
                 GOTO(cleanup, rc);
         cleanup_phase = 2;
 
-        ptlrpc_put_connection_superhack = ptlrpc_put_connection;
+        ptlrpc_put_connection_superhack = ptlrpc_connection_put;
 
         rc = ptlrpc_start_pinger();
         if (rc)
@@ -112,7 +112,7 @@ cleanup:
         case 3:
                 ptlrpc_stop_pinger();
         case 2:
-                ptlrpc_cleanup_connection();
+                ptlrpc_connection_fini();
         case 1:
                 ptlrpc_exit_portals();
         default: ;
@@ -128,18 +128,16 @@ static void __exit ptlrpc_exit(void)
         ldlm_exit();
         ptlrpc_stop_pinger();
         ptlrpc_exit_portals();
-        ptlrpc_cleanup_connection();
+        ptlrpc_connection_fini();
         cfs_mem_cache_destroy(ptlrpc_cbdata_slab);
 }
 
 /* connection.c */
-EXPORT_SYMBOL(ptlrpc_dump_connections);
-EXPORT_SYMBOL(ptlrpc_readdress_connection);
-EXPORT_SYMBOL(ptlrpc_get_connection);
-EXPORT_SYMBOL(ptlrpc_put_connection);
+EXPORT_SYMBOL(ptlrpc_connection_get);
+EXPORT_SYMBOL(ptlrpc_connection_put);
 EXPORT_SYMBOL(ptlrpc_connection_addref);
-EXPORT_SYMBOL(ptlrpc_init_connection);
-EXPORT_SYMBOL(ptlrpc_cleanup_connection);
+EXPORT_SYMBOL(ptlrpc_connection_init);
+EXPORT_SYMBOL(ptlrpc_connection_fini);
 
 /* niobuf.c */
 EXPORT_SYMBOL(ptlrpc_start_bulk_transfer);

@@ -1433,6 +1433,10 @@ at_start()
         # speed up the timebase so we can check decreasing AT
 	do_facet mds "echo 8 >> $at_history"
 	do_facet ost1 "echo 8 >> $at_history"
+
+	# sleep for a while to cool down, should be > 8s and also allow
+	# at least one ping to be sent. simply use TIMEOUT to be safe.
+	sleep $TIMEOUT
     fi
 }
 
@@ -1642,8 +1646,6 @@ test_70a () {
 	done
 	
 	ls $DIR
-
-	zconf_umount_clients $CLIENTS $DIR
 }
 run_test 70a "check multi client t-f"
 
@@ -1681,7 +1683,6 @@ test_70b () {
 		echo "load on ${CLIENT} returned $rc"
 	done
 
-	zconf_umount_clients $CLIENTS $DIR 
 }
 run_test 70b "mds recovery; $CLIENTCOUNT clients"
 # end multi-client tests
@@ -1713,7 +1714,7 @@ test_71a() {
     OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
     NEW_AGE=10
     do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$NEW_AGE"
-    sleep $NEW_AGE
+    sleep $((NEW_AGE + 2))
     do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep \"$UUID.*EXPIRED\"" || \
         error "exports didn't expire"
     do_facet mds "lctl set_param mds.${mds_svc}.evict_client=$UUID"
@@ -1734,7 +1735,7 @@ test_71b() {
     OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
     NEW_AGE=10
     do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$NEW_AGE"
-    sleep $NEW_AGE
+    sleep $((NEW_AGE + 2))
     EX_NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep -c EXPIRED")
     [ "$EX_NUM" -eq "$NUM" ] || error "not all exports are expired $EX_NUM != $NUM"
     do_facet mds "lctl set_param mds.${mds_svc}.flush_stale_exports=1"
@@ -1755,7 +1756,7 @@ test_71c() {
     OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
     NEW_AGE=10
     do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$NEW_AGE"
-    sleep $NEW_AGE
+    sleep $((NEW_AGE + 2))
     EX_NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep -c EXPIRED")
     [ "$EX_NUM" -eq "$NUM" ] || error "not all exports are expired $EX_NUM != $NUM"
 
@@ -1779,7 +1780,7 @@ test_71d() {
     OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
     NEW_AGE=10
     do_facet mds "lctl conf_param ${mds_svc}.mdt.stale_export_age=$NEW_AGE"
-    sleep $NEW_AGE
+    sleep $((NEW_AGE + 2))
     EX_NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep -c EXPIRED")
     [ "$EX_NUM" -eq "$NUM" ] || error "not all exports are expired $EX_NUM != $NUM"
 

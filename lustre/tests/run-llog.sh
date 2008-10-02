@@ -1,26 +1,28 @@
 #!/bin/bash
 
+LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+
 load_llog_test() {
     grep -q llog_test /proc/modules && return
     # Module should have been placed with other lustre modules...
     modprobe llog_test 2>&1 | grep -v "llog_test not found"
     grep -q llog_test /proc/modules && return
     # But maybe we're running from a developer tree...
-    insmod ../obdclass/llog_test.ko
+    insmod $LUSTRE/obdclass/llog_test.ko
     grep -q llog_test /proc/modules && return
     # This is for 2.4 kernels (deprecated!)
-    insmod ../obdclass/llog_test.o
+    insmod $LUSTRE/obdclass/llog_test.o
     grep -q llog_test /proc/modules && return
     echo "Unable to load llog_test module!"
     false
     return
 }
 
-PATH=`dirname $0`:`dirname $0`/../utils:$PATH
+PATH=`dirname $0`:$LUSTRE/utils:$PATH
 TMP=${TMP:-/tmp}
 
-MDS=`ls $LPROC/mds | grep -v num_refs | head -n 1`
-[ -z "$MDS" ] && echo "no MDS available, skipping llog test" && exit 0
+MDS=`lctl dl | grep mds | awk '{print $4}' | head -n 1`
+[ -z "$MDS" ] && echo "$0: SKIP: no MDS available, skipping llog test" && exit 0
 
 load_llog_test || exit 0
 lctl modules > $TMP/ogdb-`hostname`

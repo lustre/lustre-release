@@ -103,7 +103,6 @@ init_test_env() {
     export CHECKSTAT="${CHECKSTAT:-"checkstat -v"} "
     export FSYTPE=${FSTYPE:-"ldiskfs"}
     export NAME=${NAME:-local}
-    export LPROC=/proc/fs/lustre
     export DIR2
     export AT_MAX_PATH
     export SAVE_PWD=${SAVE_PWD:-$LUSTRE/tests}

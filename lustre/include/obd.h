@@ -294,6 +294,7 @@ struct obd_device_target {
         struct lustre_quota_ctxt  obt_qctxt;
         lustre_quota_version_t    obt_qfmt;
         __u32                     obt_stale_export_age;
+        spinlock_t                obt_trans_table_lock;
 };
 
 typedef void (*obd_pin_extent_cb)(void *data);
@@ -696,7 +697,7 @@ struct lov_obd {
         obd_pin_extent_cb       lov_page_pin_cb;
         obd_lock_cancel_cb      lov_lock_cancel_cb;
         int                     lov_pool_count;
-        struct lustre_class_hash_body   *lov_pools_hash_body; /* used for key access */
+        lustre_hash_t          *lov_pools_hash_body; /* used for key access */
         struct list_head        lov_pool_list; /* used for sequential access */
         cfs_proc_dir_entry_t   *lov_pool_proc_entry;
 };
@@ -894,11 +895,11 @@ struct obd_device {
                       obd_inactive:1;      /* device active/inactive
                                             * (for /proc/status only!!) */
         /* uuid-export hash body */
-        struct lustre_class_hash_body *obd_uuid_hash_body;
+        struct lustre_hash     *obd_uuid_hash;
         /* nid-export hash body */
-        struct lustre_class_hash_body *obd_nid_hash_body;
+        struct lustre_hash     *obd_nid_hash;
         /* nid stats body */
-        struct lustre_class_hash_body *obd_nid_stats_hash_body;
+        struct lustre_hash     *obd_nid_stats_hash;
         struct list_head        obd_nid_stats;
         atomic_t                obd_refcount;
         cfs_waitq_t             obd_refcount_waitq;
@@ -918,8 +919,9 @@ struct obd_device {
         __u64                   obd_osfs_age;
         struct lvfs_run_ctxt    obd_lvfs_ctxt;
 
-        struct llog_ctxt       *obd_llog_ctxt[LLOG_MAX_CTXTS];
+        struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
         struct semaphore        obd_llog_alloc;
+        struct semaphore        obd_llog_cat_process;
         cfs_waitq_t             obd_llog_waitq;
 
         struct obd_device       *obd_observer;
@@ -977,9 +979,6 @@ struct obd_device {
         int                    obd_pool_limit;
         __u64                  obd_pool_slv;
 };
-
-#define OBD_OPT_FORCE           0x0001
-#define OBD_OPT_FAILOVER        0x0002
 
 #define OBD_LLOG_FL_SENDNOW     0x0001
 

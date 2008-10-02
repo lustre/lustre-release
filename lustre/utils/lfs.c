@@ -190,6 +190,21 @@ command_t cmdlist[] = {
         { 0, 0, 0, NULL }
 };
 
+static int isnumber(const char *str)
+{
+        const char *ptr;
+
+        if (str[0] != '-' && !isdigit(str[0]))
+                return 0;
+
+        for (ptr = str + 1; *ptr != '\0'; ptr++) {
+                if (!isdigit(*ptr))
+                        return 0;
+        }
+
+        return 1;
+}
+
 /* functions */
 static int lfs_setstripe(int argc, char **argv)
 {
@@ -219,15 +234,12 @@ static int lfs_setstripe(int argc, char **argv)
         st_size = 0;
         st_offset = -1;
         st_count = 0;
-        if (argc == 3 && strcmp(argv[1], "-d") == 0) {
-                /* for compatibility with the existing positional parameter
-                 * usage */
-                fname = argv[2];
-                optind = 2;
-        } else if (argc == 5  &&
-                   (argv[2][0] != '-' || isdigit(argv[2][1])) &&
-                   (argv[3][0] != '-' || isdigit(argv[3][1])) &&
-                   (argv[4][0] != '-' || isdigit(argv[4][1])) ) {
+
+#if LUSTRE_VERSION < OBD_OCD_VERSION(2,1,0,0)
+        if (argc == 5 && argv[1][0] != '-' &&
+            isnumber(argv[2]) && isnumber(argv[3]) && isnumber(argv[4])) {
+                fprintf(stderr, "warning: deprecated usage of setstripe "
+                        "positional parameters.  Use -c, -i, -s instead.\n");
                 /* for compatibility with the existing positional parameter
                  * usage */
                 fname = argv[1];
@@ -235,7 +247,11 @@ static int lfs_setstripe(int argc, char **argv)
                 stripe_off_arg = argv[3];
                 stripe_count_arg = argv[4];
                 optind = 4;
-        } else {
+        } else
+#else
+#warning "remove obsolete positional parameter code"
+#endif
+        {
                 optind = 0;
                 while ((c = getopt_long(argc, argv, "c:di:o:s:p:",
                                                 long_opts, NULL)) >= 0) {
@@ -270,11 +286,8 @@ static int lfs_setstripe(int argc, char **argv)
                         }
                 }
 
-                if (optind < argc)
-                        fname = argv[optind];
-                else
-                        return CMD_HELP;
-
+                fname = argv[optind];
+                
                 if (delete &&
                     (stripe_size_arg != NULL || stripe_off_arg != NULL ||
                      stripe_count_arg != NULL || pool_name_arg != NULL)) {
@@ -285,10 +298,9 @@ static int lfs_setstripe(int argc, char **argv)
                 }
         }
 
-        if (optind != argc - 1) {
-                fprintf(stderr, "error: %s: only 1 filename|dirname can be "
-                                "specified: '%s'\n",
-                                argv[0], argv[argc-1]);
+        if (optind == argc) {
+                fprintf(stderr, "error: %s: missing filename|dirname\n",
+                        argv[0]);
                 return CMD_HELP;
         }
 
@@ -296,8 +308,8 @@ static int lfs_setstripe(int argc, char **argv)
         if (stripe_size_arg != NULL) {
                 result = parse_size(stripe_size_arg, &st_size, &size_units, 0);
                 if (result) {
-                        fprintf(stderr,"error: bad size '%s'\n",
-                                stripe_size_arg);
+                        fprintf(stderr, "error: %s: bad size '%s'\n",
+                                argv[0], stripe_size_arg);
                         return result;
                 }
         }
@@ -320,15 +332,16 @@ static int lfs_setstripe(int argc, char **argv)
                 }
         }
 
-        if (pool_name_arg == NULL)
-                result = llapi_file_create(fname, st_size, st_offset, st_count, 0);
-        else
+        do {
                 result = llapi_file_create_pool(fname, st_size, st_offset,
                                                 st_count, 0, pool_name_arg);
-
-        if (result)
-                fprintf(stderr, "error: %s: create stripe file failed\n",
-                                argv[0]);
+                if (result) {
+                        fprintf(stderr,"error: %s: create stripe file '%s' "
+                                "failed\n", argv[0], fname);
+                        break;
+                }
+                fname = argv[++optind];
+        } while (fname != NULL);
 
         return result;
 }
@@ -468,6 +481,7 @@ static int lfs_find(int argc, char **argv)
         time(&t);
 
         optind = 0;
+        /* when getopt_long_only() hits '!' it returns 1 and puts "!" in optarg */
         while ((c = getopt_long_only(argc, argv, "-A:C:D:g:G:M:n:PpO:qrs:t:u:U:v",
                                      long_opts, NULL)) >= 0) {
                 xtime = NULL;
@@ -475,6 +489,12 @@ static int lfs_find(int argc, char **argv)
                 if (neg_opt)
                         --neg_opt;
                 /* '!' is part of option */
+                /* when getopt_long_only() finds a string which is not
+                 * an option nor a known option argument it returns 1
+                 * in that case if we already have found pathstart and pathend
+                 * (i.e. we have the list of pathnames),
+                 * the only supported value is "!"
+                 */
                 isoption = (c != 1) || (strcmp(optarg, "!") == 0);
                 if (!isoption && pathend != -1) {
                         fprintf(stderr, "err: %s: filename|dirname must either "
@@ -496,6 +516,9 @@ static int lfs_find(int argc, char **argv)
                         /* Long options. */
                         break;
                 case 1:
+                        /* unknown; opt is "!" or path component,
+                         * checking done above.
+                         */
                         if (strcmp(optarg, "!") == 0)
                                 neg_opt = 2;
                       break;
@@ -615,7 +638,7 @@ static int lfs_find(int argc, char **argv)
                         strcpy(buf, (char *)optarg);
 
                         if (param.num_alloc_obds == 0) {
-                                param.obduuid = (struct obd_uuid *)malloc(FIND_MAX_OSTS *
+                                param.obduuid = malloc(FIND_MAX_OSTS *
                                                        sizeof(struct obd_uuid));
                                 if (param.obduuid == NULL)
                                         return -ENOMEM;

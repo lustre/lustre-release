@@ -777,6 +777,8 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
         if (!count) 
                 RETURN(0);
 
+        LASSERT_SEM_LOCKED(&obd->obd_llog_cat_process);
+
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);
         if (!file || IS_ERR(file)) {
@@ -828,8 +830,9 @@ int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
         loff_t off = idx * sizeof(*idarray);
 
         if (!count)
-                return (0);
+                GOTO(out1, rc = 0);
 
+        LASSERT_SEM_LOCKED(&obd->obd_llog_cat_process);
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);
         if (!file || IS_ERR(file)) {
@@ -852,15 +855,17 @@ int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                 GOTO(out, rc);
         }
 
- out:
+out:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         if (file && !IS_ERR(file))
                 rc1 = filp_close(file, 0);
 
         if (rc == 0)
                 rc = rc1;
+out1:
         RETURN(rc);
 }
+EXPORT_SYMBOL(llog_put_cat_list);
 
 struct llog_operations llog_lvfs_ops = {
         lop_write_rec:   llog_lvfs_write_rec,

@@ -99,6 +99,13 @@ static inline int mds_orphan_open_count(struct inode *inode)
         return mds_inode_oatomic(inode);
 }
 
+static inline int mds_orphan_needed(struct obd_device *obd,
+                                    struct inode * inode)
+{
+        return (obd->obd_recovering ||
+                mds_orphan_open_count(inode) > 0);
+}
+
 static inline int mds_orphan_open_inc(struct inode *inode)
 {
         LASSERT_MDS_ORPHAN_WRITE_LOCKED(inode);
@@ -212,6 +219,7 @@ int mds_osc_destroy_orphan(struct obd_device *obd, umode_t mode,
                            struct lov_mds_md *lmm, int lmm_size,
                            struct llog_cookie *logcookies, int log_unlink);
 int mds_cleanup_pending(struct obd_device *obd);
+int mds_check_stale_orphan(struct obd_device *obd, struct ll_fid *fid);
 
 /* mds/mds_log.c */
 int mds_log_op_unlink(struct obd_device *obd,

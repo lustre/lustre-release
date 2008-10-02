@@ -802,7 +802,7 @@ run_test 27c "create two stripe file f01 ======================="
 
 test_27d() {
 	mkdir -p $DIR/d27
-	$SETSTRIPE $DIR/d27/fdef 0 -1 0 || error "lstripe failed"
+	$SETSTRIPE -c0 -i-1 -s0 $DIR/d27/fdef || error "lstripe failed"
 	$CHECKSTAT -t file $DIR/d27/fdef || error "checkstat failed"
 	dd if=/dev/zero of=$DIR/d27/fdef bs=4k count=4 || error
 }
@@ -2814,7 +2814,7 @@ test_65e() {
 	touch $DIR/d65/f6
 	$LVERIFY $DIR/d65 $DIR/d65/f6 || error "lverify failed"
 }
-run_test 65e "directory setstripe 0 -1 0 ======================="
+run_test 65e "directory setstripe defaults ======================="
 
 test_65f() {
 	mkdir -p $DIR/d65f
@@ -3265,9 +3265,8 @@ set_checksums()
 {
 	[ "$ORIG_CSUM" ] || ORIG_CSUM=`lctl get_param -n osc.*.checksums |
 				       head -n1`
-	for f in $LPROC/osc/*/checksums; do
-		echo $1 >> $f
-	done
+
+	lctl set_param -n osc.*.checksums=$1
 	return 0
 }
 
@@ -5183,8 +5182,8 @@ test_127() { # bug 15521
         #check that we actually got some stats
         [ "$read_bytes" ] || error "Missing read_bytes stats"
         [ "$write_bytes" ] || error "Missing write_bytes stats"
-        [ "$read_bytes" = 0 ] && error "no read done"
-        [ "$write_bytes" = 0 ] && error "no write done"
+        [ "$read_bytes" != 0 ] || error "no read done"
+        [ "$write_bytes" != 0 ] || error "no write done"
 }
 run_test 127 "verify the client stats are sane"
 

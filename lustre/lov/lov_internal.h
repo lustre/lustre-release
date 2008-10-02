@@ -306,7 +306,8 @@ static inline void lprocfs_lov_init_vars(struct lprocfs_static_vars *lvars)
 #endif
 
 /* pools */
-extern struct lustre_hash_operations pool_hash_operations;
+extern lustre_hash_ops_t pool_hash_operations;
+
 /* ost_pool methods */
 int lov_ost_pool_init(struct ost_pool *op, unsigned int count);
 int lov_ost_pool_extend(struct ost_pool *op, unsigned int max_count);

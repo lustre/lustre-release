@@ -70,7 +70,6 @@ enum lcfg_command_type {
         LCFG_LOG_START      = 0x00ce011,
         LCFG_LOG_END        = 0x00ce012,
         LCFG_LOV_ADD_INA    = 0x00ce013,
-        LCFG_SPTLRPC_CONF   = 0x00ce016,
         LCFG_POOL_NEW       = 0x00ce020,
         LCFG_POOL_ADD       = 0x00ce021,
         LCFG_POOL_REM       = 0x00ce022,

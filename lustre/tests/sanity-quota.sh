@@ -1538,7 +1538,7 @@ test_18bc_sub() {
 	fi
 
         DDPID=$!
-        do_facet mds "$LCTL conf_param lustre-MDT0000.mdt.quota_type=ug"
+        do_facet mds "$LCTL conf_param ${FSNAME}-MDT*.mdt.quota_type=ug"
 
 	log "failing mds for $((2 * timeout)) seconds"
         fail mds $((2 * timeout))
