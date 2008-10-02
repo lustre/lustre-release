@@ -1093,7 +1093,7 @@ kiblnd_tx_complete (kib_tx_t *tx, int status)
         if (failed) {
                 if (conn->ibc_state == IBLND_CONN_ESTABLISHED)
                         CDEBUG(D_NETERROR, "Tx -> %s cookie "LPX64
-                               "sending %d waiting %d: failed %d\n",
+                               " sending %d waiting %d: failed %d\n",
                                libcfs_nid2str(conn->ibc_peer->ibp_nid),
                                tx->tx_cookie, tx->tx_sending, tx->tx_waiting,
                                status);
