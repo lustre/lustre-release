@@ -294,6 +294,7 @@ struct obd_device_target {
         struct lustre_quota_ctxt  obt_qctxt;
         lustre_quota_version_t    obt_qfmt;
         __u32                     obt_stale_export_age;
+        spinlock_t                obt_trans_table_lock;
 };
 
 typedef void (*obd_pin_extent_cb)(void *data);
@@ -696,7 +697,7 @@ struct lov_obd {
         obd_pin_extent_cb       lov_page_pin_cb;
         obd_lock_cancel_cb      lov_lock_cancel_cb;
         int                     lov_pool_count;
-        struct lustre_class_hash_body   *lov_pools_hash_body; /* used for key access */
+        lustre_hash_t          *lov_pools_hash_body; /* used for key access */
         struct list_head        lov_pool_list; /* used for sequential access */
         cfs_proc_dir_entry_t   *lov_pool_proc_entry;
 };
@@ -750,7 +751,7 @@ struct obd_trans_info {
         int                      oti_numcookies;
 
         /* initial thread handling transaction */
-        int                      oti_thread_id;
+        struct ptlrpc_thread *   oti_thread;
         __u32                    oti_conn_cnt;
         /* VBR: versions */
         __u64                    oti_pre_version;
@@ -781,7 +782,7 @@ static inline void oti_init(struct obd_trans_info *oti,
         /* called from mds_create_objects */
         if (req->rq_repmsg != NULL)
                 oti->oti_transno = lustre_msg_get_transno(req->rq_repmsg);
-        oti->oti_thread_id = req->rq_svc_thread ? req->rq_svc_thread->t_id : -1;
+        oti->oti_thread = req->rq_svc_thread;
         if (req->rq_reqmsg != NULL)
                 oti->oti_conn_cnt = lustre_msg_get_conn_cnt(req->rq_reqmsg);
 }
@@ -894,15 +895,14 @@ struct obd_device {
                       obd_inactive:1;      /* device active/inactive
                                             * (for /proc/status only!!) */
         /* uuid-export hash body */
-        struct lustre_class_hash_body *obd_uuid_hash_body;
+        struct lustre_hash     *obd_uuid_hash;
         /* nid-export hash body */
-        struct lustre_class_hash_body *obd_nid_hash_body;
+        struct lustre_hash     *obd_nid_hash;
         /* nid stats body */
-        struct lustre_class_hash_body *obd_nid_stats_hash_body;
+        struct lustre_hash     *obd_nid_stats_hash;
         struct list_head        obd_nid_stats;
         atomic_t                obd_refcount;
         cfs_waitq_t             obd_refcount_waitq;
-        cfs_waitq_t             obd_llog_waitq;
         struct list_head        obd_exports;
         struct list_head        obd_delayed_exports;
         int                     obd_num_exports;
@@ -918,7 +918,12 @@ struct obd_device {
         struct obd_statfs       obd_osfs;       /* locked by obd_osfs_lock */
         __u64                   obd_osfs_age;
         struct lvfs_run_ctxt    obd_lvfs_ctxt;
+
         struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
+        struct semaphore        obd_llog_alloc;
+        struct semaphore        obd_llog_cat_process;
+        cfs_waitq_t             obd_llog_waitq;
+
         struct obd_device       *obd_observer;
         struct obd_notify_upcall obd_upcall;
         struct obd_export       *obd_self_export;
@@ -974,9 +979,6 @@ struct obd_device {
         int                    obd_pool_limit;
         __u64                  obd_pool_slv;
 };
-
-#define OBD_OPT_FORCE           0x0001
-#define OBD_OPT_FAILOVER        0x0002
 
 #define OBD_LLOG_FL_SENDNOW     0x0001
 
@@ -1271,11 +1273,14 @@ static inline void obd_transno_commit_cb(struct obd_device *obd, __u64 transno,
                        obd->obd_name, transno, error);
                 return;
         }
-        CDEBUG(D_HA, "%s: transno "LPU64" committed\n",
-               obd->obd_name, transno);
         if (exp && transno > exp->exp_last_committed) {
+                CDEBUG(D_HA, "%s: transno "LPU64" committed\n",
+                       obd->obd_name, transno);
                 exp->exp_last_committed = transno;
                 ptlrpc_commit_replies(exp);
+        } else {
+                CDEBUG(D_INFO, "%s: transno "LPU64" committed\n",
+                       obd->obd_name, transno);
         }
         if (transno > obd->obd_last_committed)
                 obd->obd_last_committed = transno;

@@ -77,7 +77,7 @@ static int mdc_wr_max_rpcs_in_flight(struct file *file, const char *buffer,
 }
 static struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
-        { "ping",            0, lprocfs_wr_ping,        0 },
+        { "ping",            0, lprocfs_wr_ping,     0, 0, 0222 },
         { "connect_flags",   lprocfs_rd_connect_flags, 0, 0 },
         { "blocksize",       lprocfs_rd_blksize,     0, 0 },
         { "kbytestotal",     lprocfs_rd_kbytestotal, 0, 0 },

@@ -64,7 +64,7 @@ struct lvfs_ucred {
         struct upcall_cache_entry *luc_uce;
         __u32 luc_fsuid;
         __u32 luc_fsgid;
-        __u32 luc_cap;
+        cfs_kernel_cap_t luc_cap;
         __u32 luc_suppgid1;
         __u32 luc_suppgid2;
         __u32 luc_umask;

@@ -325,7 +325,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
                      it_open_error(DISP_OPEN_OPEN, itp))
                         GOTO(out, rc);
                 ll_release_openhandle(file->f_dentry, itp);
-                GOTO(out_stale, rc);
+                GOTO(out, rc);
         }
 
         if (rc != 0 || it_open_error(DISP_OPEN_OPEN, itp)) {
@@ -342,8 +342,6 @@ static int ll_intent_file_open(struct file *file, void *lmm,
                            req, DLM_REPLY_REC_OFF, NULL);
 out:
         ptlrpc_req_finished(itp->d.lustre.it_data);
-
-out_stale:
         it_clear_disposition(itp, DISP_ENQ_COMPLETE);
         ll_intent_drop_lock(itp);
 
@@ -1929,7 +1927,7 @@ static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
         struct lov_stripe_md *lsm, *lsm2;
         ENTRY;
 
-        if (!capable (CAP_SYS_ADMIN))
+        if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                 RETURN(-EPERM);
 
         rc = copy_from_user(&ucreatp, (struct ll_recreate_obj *)arg,
@@ -2151,7 +2149,7 @@ static int ll_lov_setea(struct inode *inode, struct file *file,
         int rc;
         ENTRY;
 
-        if (!capable (CAP_SYS_ADMIN))
+        if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                 RETURN(-EPERM);
 
         OBD_ALLOC(lump, lum_size);
@@ -2276,6 +2274,7 @@ static int ll_put_grouplock(struct inode *inode, struct file *file,
         RETURN(0);
 }
 
+#if LUSTRE_FIX >= 50
 static int join_sanity_check(struct inode *head, struct inode *tail)
 {
         ENTRY;
@@ -2346,6 +2345,8 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
                 ldlm_lock_decref(&lockh, oit.d.lustre.it_lock_mode);
                 oit.d.lustre.it_lock_mode = 0;
         }
+        ptlrpc_req_finished((struct ptlrpc_request *) oit.d.lustre.it_data);
+        it_clear_disposition(&oit, DISP_ENQ_COMPLETE);
         ll_release_openhandle(head_filp->f_dentry, &oit);
 out:
         if (op_data)
@@ -2446,6 +2447,7 @@ cleanup:
         }
         RETURN(rc);
 }
+#endif  /* LUSTRE_FIX >= 50 */
 
 /**
  * Close inode open handle
@@ -2486,7 +2488,8 @@ int ll_release_openhandle(struct dentry *dentry, struct lookup_intent *it)
         OBD_FREE(och, sizeof(*och));
  out:
         /* this one is in place of ll_file_open */
-        ptlrpc_req_finished(it->d.lustre.it_data);
+        if (it_disposition(it, DISP_ENQ_OPEN_REF))
+                ptlrpc_req_finished(it->d.lustre.it_data);
         it_clear_disposition(it, DISP_ENQ_OPEN_REF);
         RETURN(rc);
 }
@@ -2650,6 +2653,8 @@ error:
         case EXT3_IOC_GETVERSION:
                 RETURN(put_user(inode->i_generation, (int *)arg));
         case LL_IOC_JOIN: {
+#if LUSTRE_FIX >= 50
+                /* Allow file join in beta builds to allow debuggging */
                 char *ftail;
                 int rc;
 
@@ -2659,6 +2664,10 @@ error:
                 rc = ll_file_join(inode, file, ftail);
                 putname(ftail);
                 RETURN(rc);
+#else
+                CWARN("file join is not supported in this version of Lustre\n");
+                RETURN(-ENOTTY);
+#endif
         }
         case LL_IOC_GROUP_LOCK:
                 RETURN(ll_get_grouplock(inode, file, arg));
@@ -3023,9 +3032,11 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                    here to preserve get_cwd functionality on 2.6.
                    Bug 10503 */
                 if (!dentry->d_inode->i_nlink) {
+                        spin_lock(&ll_lookup_lock);
                         spin_lock(&dcache_lock);
                         ll_drop_dentry(dentry);
                         spin_unlock(&dcache_lock);
+                        spin_unlock(&ll_lookup_lock);
                 }
 
                 ll_lookup_finish_locks(&oit, dentry);
@@ -3187,10 +3198,10 @@ check_groups:
 check_capabilities:
         if (!(mask & MAY_EXEC) ||
             (inode->i_mode & S_IXUGO) || S_ISDIR(inode->i_mode))
-                if (capable(CAP_DAC_OVERRIDE))
+                if (cfs_capable(CFS_CAP_DAC_OVERRIDE))
                         return 0;
 
-        if (capable(CAP_DAC_READ_SEARCH) && ((mask == MAY_READ) ||
+        if (cfs_capable(CFS_CAP_DAC_READ_SEARCH) && ((mask == MAY_READ) ||
             (S_ISDIR(inode->i_mode) && !(mask & MAY_WRITE))))
                 return 0;
 

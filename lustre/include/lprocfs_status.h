@@ -64,6 +64,10 @@ struct lprocfs_vars {
         cfs_write_proc_t *write_fptr;
         void *data;
         struct file_operations *fops;
+        /**
+         * /proc file mode.
+         */
+        mode_t proc_mode;
 };
 
 struct lprocfs_static_vars {
@@ -523,6 +527,10 @@ extern int lprocfs_counter_write(struct file *file, const char *buffer,
 /* lprocfs_status.c: recovery status */
 int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
                                    int count, int *eof, void *data);
+
+/* lprocfs_statuc.c: hash statistics */
+int lprocfs_obd_rd_hash(char *page, char **start, off_t off,
+                        int count, int *eof, void *data);
 
 extern int lprocfs_seq_release(struct inode *, struct file *);
 

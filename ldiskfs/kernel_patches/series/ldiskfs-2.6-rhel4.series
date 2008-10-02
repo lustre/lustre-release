@@ -27,3 +27,4 @@ ext3-print-inum-in-htree-warning.patch
 ext3-xattr-no-update-ctime-rhel4.patch
 ext3-check-bad-inode.patch
 ext3-fiemap-2.6-rhel4.patch
+ext3-get-raid-stripe-from-sb.patch

@@ -179,7 +179,7 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
                         stripe_count = lsm->lsm_stripe_count;
                 }
         } else if (lmmp && *lmmp) {
-                lmm_magic = (*lmmp)->lmm_magic;
+                lmm_magic = le32_to_cpu((*lmmp)->lmm_magic);
         } else {
                 /* lsm == NULL and lmmp == NULL */
                 lmm_magic = LOV_MAGIC;
@@ -200,7 +200,7 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
 
         if (*lmmp && !lsm) {
                 stripe_count = le32_to_cpu((*lmmp)->lmm_stripe_count);
-                lmm_size = lov_mds_md_size(stripe_count, (*lmmp)->lmm_magic);
+                lmm_size = lov_mds_md_size(stripe_count, le32_to_cpu((*lmmp)->lmm_magic));
                 OBD_FREE(*lmmp, lmm_size);
                 *lmmp = NULL;
                 RETURN(0);

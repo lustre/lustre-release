@@ -394,6 +394,10 @@ static void ptlrpc_server_req_decref(struct ptlrpc_request *req)
         if (!atomic_dec_and_test(&req->rq_refcount))
                 return;
 
+        /* DEBUG_REQ() assumes the reply state of a request with a valid
+         * ref will not be destroyed until that reference is dropped. */
+        ptlrpc_req_drop_rs(req);
+
         LASSERT(list_empty(&req->rq_timed_list));
         if (req != &rqbd->rqbd_req) {
                 /* NB request buffers use an embedded
@@ -414,7 +418,6 @@ static void ptlrpc_server_req_decref(struct ptlrpc_request *req)
 static void __ptlrpc_server_free_request(struct ptlrpc_request *req)
 {
         list_del(&req->rq_list);
-        ptlrpc_req_drop_rs(req);
         ptlrpc_server_req_decref(req);
 }
 
@@ -482,7 +485,7 @@ static void ptlrpc_server_free_request(struct ptlrpc_request *req)
         } else if (req->rq_reply_state && req->rq_reply_state->rs_prealloc) {
                  /* If we are low on memory, we are not interested in
                     history */
-                list_del(&req->rq_history_list);
+                list_del_init(&req->rq_history_list);
                 __ptlrpc_server_free_request(req);
         }
 
@@ -697,15 +700,22 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
                 RETURN(-ENOSYS);
         }
 
-        if (extra_time) {
-                /* Fake our processing time into the future to ask the
-                   clients for some extra amount of time */
-                extra_time += cfs_time_current_sec() -
-                        req->rq_arrival_time.tv_sec;
-                at_add(&svc->srv_at_estimate, extra_time);
+        if (req->rq_export && req->rq_export->exp_in_recovery) {
+                /* don't increase server estimates during recovery, and give
+                   clients the full recovery time. */
+                newdl = cfs_time_current_sec() +
+                        req->rq_export->exp_obd->obd_recovery_timeout;
+        } else {
+                if (extra_time) {
+                        /* Fake our processing time into the future to ask the
+                           clients for some extra amount of time */
+                        extra_time += cfs_time_current_sec() -
+                                      req->rq_arrival_time.tv_sec;
+                        at_add(&svc->srv_at_estimate, extra_time);
+                }
+                newdl = req->rq_arrival_time.tv_sec +
+                        at_get(&svc->srv_at_estimate);
         }
-
-        newdl = req->rq_arrival_time.tv_sec + at_get(&svc->srv_at_estimate);
         if (req->rq_deadline >= newdl) {
                 /* We're not adding any time, no need to send an early reply
                    (e.g. maybe at adaptive_max) */
@@ -1309,7 +1319,6 @@ static int ptlrpc_main(void *arg)
         struct ptlrpc_thread   *thread = data->thread;
         struct obd_device      *dev = data->dev;
         struct ptlrpc_reply_state *rs;
-        struct lc_watchdog     *watchdog;
 #ifdef WITH_GROUP_INFO
         struct group_info *ginfo = NULL;
 #endif
@@ -1367,9 +1376,10 @@ static int ptlrpc_main(void *arg)
          */
         cfs_waitq_signal(&thread->t_ctl_waitq);
 
-        watchdog = lc_watchdog_add(max_t(int, obd_timeout, AT_OFF ? 0 :
-                                   at_get(&svc->srv_at_estimate)) *
-                                   svc->srv_watchdog_factor, NULL, NULL);
+        thread->t_watchdog = lc_watchdog_add(max_t(int, obd_timeout, AT_OFF ? 0 :
+                                                   at_get(&svc->srv_at_estimate))
+                                             *  svc->srv_watchdog_factor,
+                                             NULL, NULL);
 
         spin_lock(&svc->srv_lock);
         svc->srv_threads_running++;
@@ -1388,7 +1398,7 @@ static int ptlrpc_main(void *arg)
                 struct l_wait_info lwi = LWI_TIMEOUT(svc->srv_rqbd_timeout,
                                                      ptlrpc_retry_rqbds, svc);
 
-                lc_watchdog_disable(watchdog);
+                lc_watchdog_disable(thread->t_watchdog);
 
                 cond_resched();
 
@@ -1405,7 +1415,7 @@ static int ptlrpc_main(void *arg)
                               svc->srv_at_check,
                               &lwi);
 
-                lc_watchdog_touch_ms(watchdog, max_t(int, obd_timeout,
+                lc_watchdog_touch_ms(thread->t_watchdog, max_t(int, obd_timeout,
                                      AT_OFF ? 0 :
                                      at_get(&svc->srv_at_estimate)) *
                                      svc->srv_watchdog_factor);
@@ -1449,7 +1459,8 @@ static int ptlrpc_main(void *arg)
                 }
         }
 
-        lc_watchdog_delete(watchdog);
+        lc_watchdog_delete(thread->t_watchdog);
+        thread->t_watchdog = NULL;
 
 out_srv_init:
         /*

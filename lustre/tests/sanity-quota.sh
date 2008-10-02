@@ -48,7 +48,7 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 DIRECTIO=${DIRECTIO:-$LUSTRE/tests/directio}
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="9 10 11 21"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="9 10 11 18b 21"
 
 QUOTALOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 
@@ -1505,6 +1505,105 @@ run_to_block_limit() {
 	$RUNAS dd if=/dev/zero of=$TESTFILE seek=1028 bs=$BLK_SZ count=1 && \
 		error "(usr) write success, should be EDQUOT"
 }
+
+# test when mds do failover, the ost still could work well without trigger
+# watchdog b=14840
+test_18bc_sub() {
+        type=$1
+
+        LIMIT=$((110 * 1024 )) # 110M
+        TESTFILE="$DIR/$tdir/$tfile"
+        mkdir -p $DIR/$tdir
+
+        wait_delete_completed
+
+        set_blk_tunesz 512
+        set_blk_unitsz 1024
+
+        log "   User quota (limit: $LIMIT kbytes)"
+        $LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $MOUNT
+        $SHOW_QUOTA_USER
+
+        $LFS setstripe $TESTFILE -i 0 -c 1
+        chown $TSTUSR.$TSTUSR $TESTFILE
+
+        timeout=$(sysctl -n lustre.timeout)
+
+	if [ $type = "directio" ]; then
+	    log "   write 100M block(directio) ..."
+	    $RUNAS $DIRECTIO write $TESTFILE 0 100 $((BLK_SZ * 1024)) &
+	else
+	    log "   write 100M block(normal) ..."
+	    $RUNAS dd if=/dev/zero of=$TESTFILE bs=$((BLK_SZ * 1024)) count=100 &
+	fi
+
+        DDPID=$!
+        do_facet mds "$LCTL conf_param ${FSNAME}-MDT*.mdt.quota_type=ug"
+
+	log "failing mds for $((2 * timeout)) seconds"
+        fail mds $((2 * timeout))
+
+        # check if quotaon successful
+        $LFS quota -u $TSTUSR $MOUNT 2>&1 | grep -q "quotas are not enabled"
+        if [ $? -eq 0 ]; then
+            error "quotaon failed!"
+            rm -rf $TESTFILE
+            return
+        fi
+
+        count=0
+        while [ true ]; do
+            if [ -z `ps -ef | awk '$2 == '${DDPID}' { print $8 }'` ]; then break; fi
+            if [ $((++count % (2 * timeout) )) -eq 0 ]; then
+                log "it took $count second"
+            fi
+            sleep 1
+        done
+        log "(dd_pid=$DDPID, time=$count, timeout=$timeout)"
+        sync; sleep 1; sync
+
+        testfile_size=$(stat -c %s $TESTFILE)
+        [ $testfile_size -ne $((BLK_SZ * 1024 * 100)) ] && \
+            error "verifying file failed!"
+        $SHOW_QUOTA_USER
+        $LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $MOUNT
+        rm -rf $TESTFILE
+        sync; sleep 1; sync
+}
+
+# test when mds does failover, the ost still could work well
+# this test shouldn't trigger watchdog b=14840
+test_18b() {
+	test_18bc_sub normal
+	test_18bc_sub directio
+	# check if watchdog is triggered
+	MSG="test 18b: run for fixing bug14840"
+	do_facet ost1 "dmesg > $TMP/lustre-log-${TESTNAME}.log"
+	do_facet client cat > $TMP/lustre-log-${TESTNAME}.awk <<-EOF
+		/$MSG/ {
+		    start = 1;
+		}
+		/Watchdog triggered/ {
+		    if (start) {
+		        print \$0;
+		    }
+		}
+	EOF
+	watchdog=`do_facet ost1 awk -f $TMP/lustre-log-${TESTNAME}.awk $TMP/lustre-log-${TESTNAME}.log`
+	if [ -n "$watchdog" ]; then error "$watchdog"; fi
+}
+run_test_with_stat 18b "run for fixing bug14840(mds failover, no watchdog) ==========="
+
+# test when mds does failover, the ost still could work well
+# this test will prevent OST_DISCONNET from happening b=14840
+test_18c() {
+	# define OBD_FAIL_OST_DISCONNECT_NET 0x202(disable ost_disconnect for osts)
+	lustre_fail ost  0x202
+	test_18bc_sub normal
+	test_18bc_sub directio
+	lustre_fail ost  0
+}
+run_test_with_stat 18c "run for fixing bug14840(mds failover, OST_DISCONNECT is disabled) ==========="
 
 test_19() {
 	# 1 Mb bunit per each MDS/OSS

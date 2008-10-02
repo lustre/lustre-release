@@ -371,6 +371,7 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
 {
         struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
         int is_replay = *flags & LDLM_FL_REPLAY;
+        struct lustre_handle old_hash_key;
         struct ldlm_lock *lock;
         struct ldlm_reply *reply;
         int cleanup_phase = 1;
@@ -422,7 +423,15 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
         cleanup_phase = 0;
 
         lock_res_and_lock(lock);
+        old_hash_key = lock->l_remote_handle;
         lock->l_remote_handle = reply->lock_handle;
+
+        /* Key change rehash lock in per-export hash with new key */
+        if (exp->exp_lock_hash)
+                lustre_hash_rehash_key(exp->exp_lock_hash, &old_hash_key,
+                                       &lock->l_remote_handle,
+                                       &lock->l_exp_hash);
+
         *flags = reply->lock_flags;
         lock->l_flags |= reply->lock_flags & LDLM_INHERIT_FLAGS;
         /* move NO_TIMEOUT flag to the lock to force ldlm_lock_match()
@@ -1871,14 +1880,15 @@ static int ldlm_chain_lock_for_replay(struct ldlm_lock *lock, void *closure)
 static int replay_lock_interpret(struct ptlrpc_request *req,
                                  struct ldlm_async_args *aa, int rc)
 {
-        struct ldlm_lock *lock;
-        struct ldlm_reply *reply;
+        struct lustre_handle  old_hash_key;
+        struct ldlm_lock     *lock;
+        struct ldlm_reply    *reply;
+        struct obd_export    *exp;
 
         ENTRY;
         atomic_dec(&req->rq_import->imp_replay_inflight);
         if (rc != ELDLM_OK)
                 GOTO(out, rc);
-
 
         reply = lustre_swab_repbuf(req, DLM_LOCKREPLY_OFF, sizeof(*reply),
                                    lustre_swab_ldlm_reply);
@@ -1897,7 +1907,16 @@ static int replay_lock_interpret(struct ptlrpc_request *req,
                 GOTO(out, rc = -ESTALE);
         }
 
+        old_hash_key = lock->l_remote_handle;
         lock->l_remote_handle = reply->lock_handle;
+
+        /* Key change rehash lock in per-export hash with new key */
+	exp = req->rq_export;
+        if (exp && exp->exp_lock_hash)
+                lustre_hash_rehash_key(exp->exp_lock_hash, &old_hash_key,
+				       &lock->l_remote_handle,
+                                       &lock->l_exp_hash);
+
         LDLM_DEBUG(lock, "replayed lock:");
         ptlrpc_import_recovery_state_machine(req->rq_import);
         LDLM_LOCK_PUT(lock);

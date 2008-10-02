@@ -63,7 +63,8 @@
  *
  * Assumes caller has already pushed us into the kernel context and is locking.
  */
-static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
+static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle,
+                                            struct llog_logid *lid)
 {
         struct llog_handle *loghandle;
         struct llog_log_hdr *llh;
@@ -84,11 +85,14 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
 
         if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_LLOG_CREATE_FAILED))
                 RETURN(ERR_PTR(-ENOSPC));
-        
-        rc = llog_create(cathandle->lgh_ctxt, &loghandle, NULL, NULL);
+
+        if (lid != NULL && lid->lgl_oid == 0)
+                lid = NULL;
+
+        rc = llog_create(cathandle->lgh_ctxt, &loghandle, lid, NULL);
         if (rc)
                 RETURN(ERR_PTR(rc));
-        
+
         rc = llog_init_handle(loghandle,
                               LLOG_F_IS_PLAIN | LLOG_F_ZAP_WHEN_EMPTY,
                               &cathandle->lgh_hdr->llh_tgtuuid);
@@ -128,13 +132,12 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
         LASSERT(list_empty(&loghandle->u.phd.phd_entry));
         list_add_tail(&loghandle->u.phd.phd_entry, &cathandle->u.chd.chd_head);
 
- out_destroy:
+out_destroy:
         if (rc < 0)
                 llog_destroy(loghandle);
 
         RETURN(loghandle);
 }
-EXPORT_SYMBOL(llog_cat_new_log);
 
 /* Open an existent log handle and add it to the open list.
  * This log handle will be closed when all of the records in it are removed.
@@ -218,6 +221,7 @@ EXPORT_SYMBOL(llog_cat_put);
  * NOTE: loghandle is write-locked upon successful return
  */
 static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
+                                                struct llog_logid *lid,
                                                 int create)
 {
         struct llog_handle *loghandle = NULL;
@@ -232,6 +236,7 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
                         up_read(&cathandle->lgh_lock);
                         RETURN(loghandle);
                 } else {
+                        lid = NULL;
                         up_write(&loghandle->lgh_lock);
                 }
         }
@@ -255,12 +260,13 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
                         up_write(&cathandle->lgh_lock);
                         RETURN(loghandle);
                 } else {
+                        lid = NULL;
                         up_write(&loghandle->lgh_lock);
                 }
         }
 
         CDEBUG(D_INODE, "creating new log\n");
-        loghandle = llog_cat_new_log(cathandle);
+        loghandle = llog_cat_new_log(cathandle, lid);
         if (!IS_ERR(loghandle))
                 down_write(&loghandle->lgh_lock);
         up_write(&cathandle->lgh_lock);
@@ -280,7 +286,7 @@ int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
         ENTRY;
 
         LASSERT(rec->lrh_len <= LLOG_CHUNK_SIZE);
-        loghandle = llog_cat_current_log(cathandle, 1);
+        loghandle = llog_cat_current_log(cathandle, &reccookie->lgc_lgl, 1);
         if (IS_ERR(loghandle))
                 RETURN(PTR_ERR(loghandle));
         /* loghandle is already locked by llog_cat_current_log() for us */
@@ -288,7 +294,7 @@ int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
         up_write(&loghandle->lgh_lock);
         if (rc == -ENOSPC) {
                 /* to create a new plain log */
-                loghandle = llog_cat_current_log(cathandle, 1);
+                loghandle = llog_cat_current_log(cathandle, &reccookie->lgc_lgl, 1);
                 if (IS_ERR(loghandle))
                         RETURN(PTR_ERR(loghandle));
                 rc = llog_write_rec(loghandle, rec, reccookie, 1, buf, -1);

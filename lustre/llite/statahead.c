@@ -1078,7 +1078,8 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
                                           &(*dentryp)->d_name);
                         if (result) {
                                 LASSERT(result != *dentryp);
-                                dput(*dentryp);
+                                /* BUG 16303: do not drop reference count for
+                                 * "*dentryp", VFS will do that by itself. */
                                 *dentryp = result;
                                 RETURN(1);
                         }

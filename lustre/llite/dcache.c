@@ -49,6 +49,8 @@
 
 #include "llite_internal.h"
 
+spinlock_t ll_lookup_lock = SPIN_LOCK_UNLOCKED;
+
 /* should NOT be called with the dcache lock, see fs/dcache.c */
 void ll_release(struct dentry *de)
 {
@@ -206,7 +208,9 @@ int ll_drop_dentry(struct dentry *dentry)
                 __d_drop(dentry);
                 unlock_dentry(dentry);
                 spin_unlock(&dcache_lock);
+                spin_unlock(&ll_lookup_lock);
                 dput(dentry);
+                spin_lock(&ll_lookup_lock);
                 spin_lock(&dcache_lock);
                 return 1;
         }
@@ -263,6 +267,7 @@ void ll_unhash_aliases(struct inode *inode)
                inode->i_ino, inode->i_generation, inode);
 
         head = &inode->i_dentry;
+        spin_lock(&ll_lookup_lock);
         spin_lock(&dcache_lock);
 restart:
         tmp = head;
@@ -291,6 +296,8 @@ restart:
                           goto restart;
         }
         spin_unlock(&dcache_lock);
+        spin_unlock(&ll_lookup_lock);
+
         EXIT;
 }
 
@@ -492,12 +499,14 @@ revalidate_finish:
 
         /* unfortunately ll_intent_lock may cause a callback and revoke our
          * dentry */
+        spin_lock(&ll_lookup_lock);
         spin_lock(&dcache_lock);
         lock_dentry(de);
         __d_drop(de);
         unlock_dentry(de);
         d_rehash_cond(de, 0);
         spin_unlock(&dcache_lock);
+        spin_unlock(&ll_lookup_lock);
 
  out:
         /* We do not free request as it may be reused during following lookup

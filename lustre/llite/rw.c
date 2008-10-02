@@ -1007,7 +1007,7 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
         if (exp == NULL)
                 RETURN(-EINVAL);
 
-        llap->llap_ignore_quota = capable(CAP_SYS_RESOURCE);
+        llap->llap_ignore_quota = cfs_capable(CFS_CAP_SYS_RESOURCE);
 
         /* queue a write for some time in the future the first time we
          * dirty the page */
@@ -2211,7 +2211,7 @@ static int ll_file_oig_pages(struct inode * inode, struct page **pages,
         if (rc)
                 RETURN(rc);
         brw_flags = OBD_BRW_SRVLOCK;
-        if (capable(CAP_SYS_RESOURCE))
+        if (cfs_capable(CFS_CAP_SYS_RESOURCE))
                 brw_flags |= OBD_BRW_NOQUOTA;
 
         for (i = 0; i < numpages; i++) {

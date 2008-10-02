@@ -70,7 +70,7 @@ struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid)
                 return NULL;
         }
 
-        c = ptlrpc_get_connection(peer, self, uuid);
+        c = ptlrpc_connection_get(peer, self, uuid);
         if (c) {
                 memcpy(c->c_remote_uuid.uuid,
                        uuid->uuid, sizeof(c->c_remote_uuid.uuid));
@@ -79,24 +79,6 @@ struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid)
         CDEBUG(D_INFO, "%s -> %p\n", uuid->uuid, c);
 
         return c;
-}
-
-void ptlrpc_readdress_connection(struct ptlrpc_connection *conn,
-                                 struct obd_uuid *uuid)
-{
-        lnet_nid_t        self;
-        lnet_process_id_t peer;
-        int               err;
-
-        err = ptlrpc_uuid_to_peer(uuid, &peer, &self);
-        if (err != 0) {
-                CERROR("cannot find peer %s!\n", uuid->uuid);
-                return;
-        }
-
-        conn->c_peer = peer;
-        conn->c_self = self;
-        return;
 }
 
 static inline struct ptlrpc_bulk_desc *new_bulk(int npages, int type, int portal)
@@ -221,8 +203,7 @@ void ptlrpc_at_set_req_timeout(struct ptlrpc_request *req)
         idx = import_at_get_index(req->rq_import,
                                   req->rq_request_portal);
         serv_est = at_get(&at->iat_service_estimate[idx]);
-        /* add an arbitrary minimum: 125% +5 sec */
-        req->rq_timeout = serv_est + (serv_est >> 2) + 5;
+        req->rq_timeout = at_est2timeout(serv_est);
         /* We could get even fancier here, using history to predict increased
            loading... */
 
@@ -232,21 +213,19 @@ void ptlrpc_at_set_req_timeout(struct ptlrpc_request *req)
 }
 
 /* Adjust max service estimate based on server value */
-static void ptlrpc_at_adj_service(struct ptlrpc_request *req)
+static void ptlrpc_at_adj_service(struct ptlrpc_request *req,
+                                  unsigned int serv_est)
 {
         int idx;
-        unsigned int serv_est, oldse;
-        struct imp_at *at = &req->rq_import->imp_at;
+        unsigned int oldse;
+        struct imp_at *at;
 
         /* do estimate only if is not in recovery */
         if (!(req->rq_send_state & (LUSTRE_IMP_FULL | LUSTRE_IMP_CONNECTING)))
                 return;
 
         LASSERT(req->rq_import);
-
-        /* service estimate is returned in the repmsg timeout field,
-           may be 0 on err */
-        serv_est = lustre_msg_get_timeout(req->rq_repmsg);
+        at = &req->rq_import->imp_at;
 
         idx = import_at_get_index(req->rq_import, req->rq_request_portal);
         /* max service estimates are tracked on the server side,
@@ -266,21 +245,21 @@ int ptlrpc_at_get_net_latency(struct ptlrpc_request *req)
 }
 
 /* Adjust expected network latency */
-static void ptlrpc_at_adj_net_latency(struct ptlrpc_request *req)
+static void ptlrpc_at_adj_net_latency(struct ptlrpc_request *req,
+                                      unsigned int service_time)
 {
-        unsigned int st, nl, oldnl;
-        struct imp_at *at = &req->rq_import->imp_at;
+        unsigned int nl, oldnl;
+        struct imp_at *at;
         time_t now = cfs_time_current_sec();
 
         LASSERT(req->rq_import);
-
-        st = lustre_msg_get_service_time(req->rq_repmsg);
+        at = &req->rq_import->imp_at;
 
         /* Network latency is total time less server processing time */
-        nl = max_t(int, now - req->rq_sent - st, 0) + 1/*st rounding*/;
-        if (st > now - req->rq_sent + 3 /* bz16408 */)
+        nl = max_t(int, now - req->rq_sent - service_time, 0) + 1/*st rounding*/;
+        if (service_time > now - req->rq_sent + 3 /* bz16408 */)
                 CWARN("Reported service time %u > total measured time %ld\n",
-                      st, now - req->rq_sent);
+                      service_time, now - req->rq_sent);
 
         oldnl = at_add(&at->iat_net_latency, nl);
         if (oldnl != 0)
@@ -318,7 +297,7 @@ static int unpack_reply(struct ptlrpc_request *req)
    We can't risk the real reply coming in and changing rq_repmsg,
    so this fn must be called under the rq_lock */
 static int ptlrpc_at_recv_early_reply(struct ptlrpc_request *req) {
-        struct lustre_msg *oldmsg, *msgcpy;
+        struct lustre_msg *msgcpy;
         time_t olddl;
         int oldlen, rc;
         ENTRY;
@@ -343,8 +322,7 @@ static int ptlrpc_at_recv_early_reply(struct ptlrpc_request *req) {
         /* Another reply might have changed the repmsg and replen while
            we dropped the lock; doesn't really matter, just use the latest.
            If it doesn't fit in oldlen, checksum will be wrong. */
-        oldmsg = req->rq_repmsg;
-        memcpy(msgcpy, oldmsg, oldlen);
+        memcpy(msgcpy, req->rq_repmsg, oldlen);
         if (lustre_msg_get_cksum(msgcpy) !=
             lustre_msg_calc_cksum(msgcpy)) {
                 CDEBUG(D_ADAPTTO, "Early reply checksum mismatch, "
@@ -353,13 +331,9 @@ static int ptlrpc_at_recv_early_reply(struct ptlrpc_request *req) {
                 GOTO(out, rc = -EINVAL);
         }
 
-        /* Our copied msg is valid, now we can adjust the timeouts without
-           worrying that a new reply will land on the copy. */
-        req->rq_repmsg = msgcpy;
-
         /* Expecting to increase the service time estimate here */
-        ptlrpc_at_adj_service(req);
-        ptlrpc_at_adj_net_latency(req);
+        ptlrpc_at_adj_service(req, lustre_msg_get_timeout(msgcpy));
+        ptlrpc_at_adj_net_latency(req, lustre_msg_get_service_time(msgcpy));
 
         /* Adjust the local timeout for this req */
         ptlrpc_at_set_req_timeout(req);
@@ -374,8 +348,6 @@ static int ptlrpc_at_recv_early_reply(struct ptlrpc_request *req) {
                   "Early reply #%d, new deadline in %lds (%+lds)",
                   req->rq_early_count, req->rq_deadline -
                   cfs_time_current_sec(), req->rq_deadline - olddl);
-
-        req->rq_repmsg = oldmsg;
 
 out:
         OBD_FREE(msgcpy, oldlen);
@@ -772,31 +744,42 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
 static int ptlrpc_check_reply(struct ptlrpc_request *req)
 {
         int rc = 0;
+        const char *what = "";
         ENTRY;
 
         /* serialise with network callback */
         spin_lock(&req->rq_lock);
 
-        if (req->rq_replied)
+        if (req->rq_replied) {
+                what = "REPLIED: ";
                 GOTO(out, rc = 1);
+        }
 
         if (req->rq_net_err && !req->rq_timedout) {
+                what = "NETERR: ";
                 spin_unlock(&req->rq_lock);
                 rc = ptlrpc_expire_one_request(req);
                 spin_lock(&req->rq_lock);
                 GOTO(out, rc);
         }
 
-        if (req->rq_err)
+        if (req->rq_err) {
+                what = "ABORTED: ";
                 GOTO(out, rc = 1);
+        }
 
-        if (req->rq_resend)
+        if (req->rq_resend) {
+                what = "RESEND: ";
                 GOTO(out, rc = 1);
+        }
 
-        if (req->rq_restart)
+        if (req->rq_restart) {
+                what = "RESTART: ";
                 GOTO(out, rc = 1);
+        }
 
         if (req->rq_early) {
+                what = "EARLYREP: ";
                 ptlrpc_at_recv_early_reply(req);
                 GOTO(out, rc = 0); /* keep waiting */
         }
@@ -804,7 +787,7 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
         EXIT;
  out:
         spin_unlock(&req->rq_lock);
-        DEBUG_REQ(D_NET, req, "rc = %d for", rc);
+        DEBUG_REQ(D_NET, req, "%src = %d for", what, rc);
         return rc;
 }
 
@@ -883,8 +866,8 @@ static int after_reply(struct ptlrpc_request *req)
                                     timediff);
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_PAUSE_REP, obd_fail_val);
-        ptlrpc_at_adj_service(req);
-        ptlrpc_at_adj_net_latency(req);
+        ptlrpc_at_adj_service(req, lustre_msg_get_timeout(req->rq_repmsg));
+        ptlrpc_at_adj_net_latency(req, lustre_msg_get_service_time(req->rq_repmsg));
 
         if (lustre_msg_get_type(req->rq_repmsg) != PTL_RPC_MSG_REPLY &&
             lustre_msg_get_type(req->rq_repmsg) != PTL_RPC_MSG_ERR) {
@@ -1554,11 +1537,6 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
         EXIT;
 }
 
-void ptlrpc_free_req(struct ptlrpc_request *request)
-{
-        __ptlrpc_free_req(request, 0);
-}
-
 static int __ptlrpc_req_finished(struct ptlrpc_request *request, int locked);
 void ptlrpc_req_finished_with_imp_lock(struct ptlrpc_request *request)
 {
@@ -2218,8 +2196,37 @@ void ptlrpc_abort_set(struct ptlrpc_request_set *set)
         }
 }
 
-static __u64 ptlrpc_last_xid = 0;
-spinlock_t ptlrpc_last_xid_lock;
+static __u64 ptlrpc_last_xid;
+static spinlock_t ptlrpc_last_xid_lock;
+
+/* Initialize the XID for the node.  This is common among all requests on
+ * this node, and only requires the property that it is monotonically
+ * increasing.  It does not need to be sequential.  Since this is also used
+ * as the RDMA match bits, it is important that a single client NOT have
+ * the same match bits for two different in-flight requests, hence we do
+ * NOT want to have an XID per target or similar.
+ *
+ * To avoid an unlikely collision between match bits after a client reboot
+ * (which would cause old to be delivered into the wrong buffer) we initialize
+ * the XID based on the current time, assuming a maximum RPC rate of 1M RPC/s.
+ * If the time is clearly incorrect, we instead use a 62-bit random number.
+ * In the worst case the random number will overflow 1M RPCs per second in
+ * 9133 years, or permutations thereof.
+ */
+#define YEAR_2004 (1ULL << 30)
+void ptlrpc_init_xid(void)
+{
+        time_t now = cfs_time_current_sec();
+
+        spin_lock_init(&ptlrpc_last_xid_lock);
+        if (now < YEAR_2004) {
+                ll_get_random_bytes(&ptlrpc_last_xid, sizeof(ptlrpc_last_xid));
+                ptlrpc_last_xid >>= 2;
+                ptlrpc_last_xid |= (1ULL << 61);
+        } else {
+                ptlrpc_last_xid = (now << 20);
+        }
+}
 
 __u64 ptlrpc_next_xid(void)
 {
@@ -2232,10 +2239,15 @@ __u64 ptlrpc_next_xid(void)
 
 __u64 ptlrpc_sample_next_xid(void)
 {
-        __u64 tmp;
-        spin_lock(&ptlrpc_last_xid_lock);
-        tmp = ptlrpc_last_xid + 1;
-        spin_unlock(&ptlrpc_last_xid_lock);
-        return tmp;
+        if (sizeof(long) < 8) {
+                /* need to avoid possible word tearing on 32-bit systems */
+                __u64 tmp;
+                spin_lock(&ptlrpc_last_xid_lock);
+                tmp = ptlrpc_last_xid + 1;
+                spin_unlock(&ptlrpc_last_xid_lock);
+                return tmp;
+        }
+        /* No need to lock, since returned value is racy anyways */
+        return ptlrpc_last_xid + 1;
 }
 EXPORT_SYMBOL(ptlrpc_sample_next_xid);

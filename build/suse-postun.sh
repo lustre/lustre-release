@@ -45,6 +45,23 @@ if [ "$(readlink /boot/$image$SHORTNM)" = $image-%ver_str ]; then
     shopt -u nullglob
 fi
 
+# remove the bootloader entry for the kernel being removed
+if [ -x /usr/lib/bootloader/bootloader_entry ]; then
+    # handle 10.2 and SLES10 SP1
+    /usr/lib/bootloader/bootloader_entry \
+        remove \
+        smp \
+        %ver_str \
+        vmlinuz-%ver_str \
+        initrd-%ver_str
+elif [ -x /sbin/update-bootloader ]; then
+    # handle 10.1 and SLES10 GA
+    /sbin/update-bootloader --image /boot/vmlinuz-%ver_str \
+    			--initrd /boot/initrd-%ver_str \
+                            --remove --force
+    /sbin/update-bootloader --refresh
+fi
+
 # Check whether there is a .previous link to the image we're about
 # to remove or to the image we point the new symlink to (so .previous
 # would be identical to the current symlink)

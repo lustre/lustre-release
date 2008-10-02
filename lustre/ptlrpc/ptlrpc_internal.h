@@ -48,6 +48,13 @@ struct ptlrpc_request_set;
 extern int test_req_buffer_pressure;
 extern cfs_mem_cache_t *ptlrpc_cbdata_slab;
 
+/* client.c */
+void ptlrpc_init_xid(void);
+
+/* events.c */
+int ptlrpc_init_portals(void);
+void ptlrpc_exit_portals(void);
+
 void ptlrpc_request_handle_notconn(struct ptlrpc_request *);
 void lustre_assert_wire_constants(void);
 int ptlrpc_import_in_recovery(struct obd_import *imp);

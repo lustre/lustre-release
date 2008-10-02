@@ -396,7 +396,8 @@ void filter_free_iobuf(struct filter_iobuf *buf)
 void filter_iobuf_put(struct filter_obd *filter, struct filter_iobuf *iobuf,
                       struct obd_trans_info *oti)
 {
-        int thread_id = oti ? oti->oti_thread_id : -1;
+        int thread_id = (oti && oti->oti_thread) ?
+                        oti->oti_thread->t_id : -1;
 
         if (unlikely(thread_id < 0)) {
                 filter_free_iobuf(iobuf);
@@ -505,7 +506,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                 CDEBUG(D_INODE, "update UID/GID to %lu/%lu\n",
                        (unsigned long)oa->o_uid, (unsigned long)oa->o_gid);
 
-                cap_raise(current->cap_effective, CAP_SYS_RESOURCE);
+                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
 
                 iattr.ia_valid |= ATTR_MODE;
                 iattr.ia_mode = inode->i_mode;

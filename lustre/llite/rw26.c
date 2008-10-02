@@ -98,7 +98,12 @@ static void ll_invalidatepage(struct page *page, unsigned long offset)
 }
 #endif
 
-static int ll_releasepage(struct page *page, gfp_t gfp_mask)
+#ifdef HAVE_RELEASEPAGE_WITH_GFP
+#define RELEASEPAGE_ARG_TYPE gfp_t
+#else
+#define RELEASEPAGE_ARG_TYPE int
+#endif
+static int ll_releasepage(struct page *page, RELEASEPAGE_ARG_TYPE gfp_mask)
 {
         if (PagePrivate(page))
                 ll_removepage(page);

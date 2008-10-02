@@ -203,6 +203,7 @@ static struct lprocfs_vars lprocfs_filter_obd_vars[] = {
         { "tot_pending",  lprocfs_filter_rd_tot_pending, 0, 0 },
         { "tot_granted",  lprocfs_filter_rd_tot_granted, 0, 0 },
         { "recovery_status", lprocfs_obd_rd_recovery_status, 0, 0 },
+        { "hash_stats",   lprocfs_obd_rd_hash,      0, 0 },
 #ifdef CRAY_XT3
         { "recovery_maxtime", lprocfs_obd_rd_recovery_maxtime,
                               lprocfs_obd_wr_recovery_maxtime, 0},
@@ -261,8 +262,8 @@ void filter_tally(struct obd_export *exp, struct page **pages, int nr_pages,
         lprocfs_oh_tally_log2(&fed->fed_brw_stats.hist[BRW_R_PAGES + wr],
                               nr_pages);
         if (exp->exp_nid_stats && exp->exp_nid_stats->nid_brw_stats)
-                lprocfs_oh_tally_log2(&exp->exp_nid_stats->nid_brw_stats->hist[BRW_W_PAGES + wr],
-                                      nr_pages);
+                lprocfs_oh_tally_log2(&exp->exp_nid_stats->nid_brw_stats->
+                                        hist[BRW_R_PAGES + wr], nr_pages);
 
         while (nr_pages-- > 0) {
                 if (last_page && (*pages)->index != (last_page->index + 1))
@@ -286,9 +287,11 @@ void filter_tally(struct obd_export *exp, struct page **pages, int nr_pages,
                          discont_blocks);
 
         if (exp->exp_nid_stats && exp->exp_nid_stats->nid_brw_stats) {
-                lprocfs_oh_tally_log2(&exp->exp_nid_stats->nid_brw_stats->hist[BRW_W_DISCONT_PAGES + wr],
+                lprocfs_oh_tally_log2(&exp->exp_nid_stats->nid_brw_stats->
+                                        hist[BRW_R_DISCONT_PAGES + wr],
                                       discont_pages);
-                lprocfs_oh_tally_log2(&exp->exp_nid_stats->nid_brw_stats->hist[BRW_W_DISCONT_BLOCKS + wr],
+                lprocfs_oh_tally_log2(&exp->exp_nid_stats->nid_brw_stats->
+                                        hist[BRW_R_DISCONT_BLOCKS + wr],
                                       discont_blocks);
         }
 }
@@ -302,7 +305,7 @@ static void display_brw_stats(struct seq_file *seq, char *name, char *units,
         int i;
 
         seq_printf(seq, "\n%26s read      |     write\n", " ");
-        seq_printf(seq, "%-22s %-5s %% cum %% |  %-5s %% cum %%\n", 
+        seq_printf(seq, "%-22s %-5s %% cum %% |  %-5s %% cum %%\n",
                    name, units, units);
 
         read_tot = lprocfs_oh_sum(read);
@@ -315,7 +318,7 @@ static void display_brw_stats(struct seq_file *seq, char *name, char *units,
                 if (read_cum == 0 && write_cum == 0)
                         continue;
 
-                if (!log2) 
+                if (!log2)
                         seq_printf(seq, "%u", i);
                 else if (i < 10)
                         seq_printf(seq, "%u", 1<<i);
@@ -325,7 +328,7 @@ static void display_brw_stats(struct seq_file *seq, char *name, char *units,
                         seq_printf(seq, "%uM", 1<<(i-20));
 
                 seq_printf(seq, ":\t\t%10lu %3lu %3lu   | %4lu %3lu %3lu\n",
-                           r, pct(r, read_tot), pct(read_cum, read_tot), 
+                           r, pct(r, read_tot), pct(read_cum, read_tot),
                            w, pct(w, write_tot), pct(write_cum, write_tot));
 
                 if (read_cum == read_tot && write_cum == write_tot)

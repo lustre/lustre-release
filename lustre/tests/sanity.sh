@@ -33,7 +33,6 @@ CREATETEST=${CREATETEST:-createtest}
 LFS=${LFS:-lfs}
 SETSTRIPE=${SETSTRIPE:-"$LFS setstripe"}
 GETSTRIPE=${GETSTRIPE:-"$LFS getstripe"}
-LSTRIPE=${LSTRIPE:-"$LFS setstripe"}
 LFIND=${LFIND:-"$LFS find"}
 LVERIFY=${LVERIFY:-ll_dirstripe_verify}
 LSTRIPEINFO=${LSTRIPEINFO:-ll_getstripe_info}
@@ -803,7 +802,7 @@ run_test 27c "create two stripe file f01 ======================="
 
 test_27d() {
 	mkdir -p $DIR/d27
-	$SETSTRIPE $DIR/d27/fdef 0 -1 0 || error "lstripe failed"
+	$SETSTRIPE -c0 -i-1 -s0 $DIR/d27/fdef || error "lstripe failed"
 	$CHECKSTAT -t file $DIR/d27/fdef || error "checkstat failed"
 	dd if=/dev/zero of=$DIR/d27/fdef bs=4k count=4 || error
 }
@@ -1011,7 +1010,7 @@ run_test 27r "stripe file with some full OSTs (shouldn't LBUG) ="
 
 test_27s() { # bug 10725
 	mkdir -p $DIR/$tdir
-	$LSTRIPE $DIR/$tdir $((2048 * 1024 * 1024)) -1 2 && \
+	$SETSTRIPE $DIR/$tdir $((2048 * 1024 * 1024)) -1 2 && \
 		error "stripe width >= 2^32 succeeded" || true
 }
 run_test 27s "lsm_xfersize overflow (should error) (bug 10725)"
@@ -1075,14 +1074,14 @@ run_test 27v "skip object creation on slow OST ================="
 
 test_27w() { # bug 10997
         mkdir -p $DIR/d27w || error "mkdir failed"
-        $LSTRIPE $DIR/d27w/f0 -s 65536 || error "lstripe failed"
+        $SETSTRIPE $DIR/d27w/f0 -s 65536 || error "lstripe failed"
         size=`$LSTRIPEINFO $DIR/d27w/f0 | awk {'print $1'}`
         [ $size -ne 65536 ] && error "stripe size $size != 65536" || true
 
         [ "$OSTCOUNT" -lt "2" ] && skip "skipping multiple stripe count/offset test" && return
         for i in `seq 1 $OSTCOUNT`; do
                 offset=$(($i-1))
-                $LSTRIPE $DIR/d27w/f$i -c $i -i $offset || error "lstripe -c $i -i $offset failed"
+                $SETSTRIPE $DIR/d27w/f$i -c $i -i $offset || error "lstripe -c $i -i $offset failed"
                 count=`$LSTRIPEINFO $DIR/d27w/f$i | awk {'print $2'}`
                 index=`$LSTRIPEINFO $DIR/d27w/f$i | awk {'print $3'}`
                 [ $count -ne $i ] && error "stripe count $count != $i" || true
@@ -2421,7 +2420,7 @@ setup_56_special() {
 }
 
 test_56g() {
-        $LSTRIPE -d $DIR
+        $SETSTRIPE -d $DIR
 
         setup_56 $NUMFILES $NUMDIRS
 
@@ -2437,7 +2436,7 @@ test_56g() {
 run_test 56g "check lfs find -name ============================="
 
 test_56h() {
-        $LSTRIPE -d $DIR
+        $SETSTRIPE -d $DIR
 
         setup_56 $NUMFILES $NUMDIRS
 
@@ -2815,7 +2814,7 @@ test_65e() {
 	touch $DIR/d65/f6
 	$LVERIFY $DIR/d65 $DIR/d65/f6 || error "lverify failed"
 }
-run_test 65e "directory setstripe 0 -1 0 ======================="
+run_test 65e "directory setstripe defaults ======================="
 
 test_65f() {
 	mkdir -p $DIR/d65f
@@ -3266,9 +3265,8 @@ set_checksums()
 {
 	[ "$ORIG_CSUM" ] || ORIG_CSUM=`lctl get_param -n osc.*.checksums |
 				       head -n1`
-	for f in $LPROC/osc/*/checksums; do
-		echo $1 >> $f
-	done
+
+	lctl set_param -n osc.*.checksums=$1
 	return 0
 }
 
@@ -4329,7 +4327,7 @@ reset_async() {
 	FILE=$DIR/reset_async
 
 	# Ensure all OSCs are cleared
-	$LSTRIPE $FILE 0 -1 -1
+	$SETSTRIPE $FILE 0 -1 -1
         dd if=/dev/zero of=$FILE bs=64k count=$OSTCOUNT
 	sync
         rm $FILE
@@ -5152,7 +5150,7 @@ test_126() { # bug 12829/13455
 run_test 126 "check that the fsgid provided by the client is taken into account"
 
 test_127() { # bug 15521
-        $LSTRIPE -i 0 -c 1 $DIR/$tfile
+        $SETSTRIPE -i 0 -c 1 $DIR/$tfile
         $LCTL set_param osc.*.stats=0
         FSIZE=$((2048 * 1024))
         dd if=/dev/zero of=$DIR/$tfile bs=$FSIZE count=1
@@ -5161,9 +5159,10 @@ test_127() { # bug 15521
 
         $LCTL get_param osc.*0000-osc-*.stats | grep samples > $DIR/${tfile}.tmp
         while read NAME COUNT SAMP UNIT MIN MAX SUM SUMSQ; do
-                eval $NAME=$COUNT
                 echo "got $COUNT $NAME"
-
+                [ ! $MIN ] && error "Missing min value for $NAME proc entry"
+                eval $NAME=$COUNT || error "Wrong proc format"
+		
                 case $NAME in
                         read_bytes|write_bytes)
                         [ $MIN -lt 4096 ] && error "min is too small: $MIN"
@@ -5181,8 +5180,10 @@ test_127() { # bug 15521
         done < $DIR/${tfile}.tmp
 
         #check that we actually got some stats
-        [ "$read_bytes" ] || error "no read done"
-        [ "$write_bytes" ] || error "no write done"
+        [ "$read_bytes" ] || error "Missing read_bytes stats"
+        [ "$write_bytes" ] || error "Missing write_bytes stats"
+        [ "$read_bytes" != 0 ] || error "no read done"
+        [ "$write_bytes" != 0 ] || error "no write done"
 }
 run_test 127 "verify the client stats are sane"
 

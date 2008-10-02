@@ -37,6 +37,47 @@ tbd Sun Microsystems, Inc.
 	  For more information, please refer to bugzilla 13904.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
+	* File join has been disabled in this release, refer to Bugzilla 16929.
+
+Severity   : enhancement
+Bugzilla   : 15966
+Description: Re-disable certain /proc logging
+Details    : Enable and disable client's offset_stats, extents_stats and
+             extents_stats_per_process stats logging on the fly.
+
+Severity   : major
+Frequency  : Only on FC kernels 2.6.22+
+Bugzilla   : 16303
+Description: oops in statahead
+Details    : Do not drop reference count for the dentry from VFS when lookup,
+	     VFS will do that by itself.
+
+Severity   : enhancement
+Bugzilla   : 16643
+Description: Generic /proc file permissions
+Details    : Set /Proc file permissions in a more generic way to enable non-
+	     root users operate on some /proc files.
+
+Severity   : major
+Bugzilla   : 16561
+Description: Hitting mdc_commit_close() ASSERTION
+Details    : Properly handle request reference release in
+	     ll_release_openhandle().
+
+Severity   : normal
+Bugzilla   : 15975
+Frequency  : only patchless client
+Description: add workaround for race between add/remove dentry from hash
+
+Severity   : enhancement
+Bugzilla   : 16845
+Description: Allow OST glimpses to return PW locks
+
+Severity   : minor
+Bugzilla   : 16717
+Description: LBUG when llog conf file is full
+Details    : When llog bitmap is full, ENOSPC should be returned for plain
+	     log.
 
 Severity   : normal
 Bugzilla   : 16907
@@ -46,7 +87,7 @@ Severity   : major
 Bugzilla   : 16750
 Description: service mount cannot take device name with ":"
 Details    : Only when device name contains ":/" will mount treat it as
-             client mount.
+	     client mount.
 
 Severity   : normal
 Bugzilla   : 15927
@@ -524,6 +565,13 @@ Description: assertion failure in ldlm_handle2lock()
 Details    : fix a race between class_handle_unhash() and class_handle2object()
 	     introduced in lustre 1.6.5 by bug 13622.
 
+Severity   : enhancement
+Bugzilla   : 11817
+Description: superblock lock contention with many SMP cores on one client
+Details    : several client filesystem locks were highly contended on SMP
+	     NUMA systems with 8 or more cores.  Per-CPU datastructures
+	     and more efficient locking implemented to reduce contention.
+
 Severity   : minor
 Frequency  : rare
 Bugzilla   : 12755
@@ -557,8 +605,52 @@ Details    : FIEMAP ioctl will allow an application to efficiently fetch the
 	     extent information of a file. It can be used to map logical blocks
 	     in a file to physical blocks in the block device.
 
--------------------------------------------------------------------------------
+Severity   : normal
+Frequency  : only with adaptive timeout enabled
+Bugzilla   : 16972
+Description: DEBUG_REQ() bad paging request
+Details    : ptlrpc_at_recv_early_reply() should not modify req->rq_repmsg
+	     because it can be accessed by reply_in_callback() without the
+	     rq_lock held.
 
+Severity   : normal
+Frequency  : only on Cray X2
+Bugzilla   : 16813
+Description: X2 build failures
+Details    : fix build failures on Cray X2.
+
+Severity   : normal
+Bugzilla   : 2066
+Description: xid & resent requests
+Details    : Initialize RPC XID from clock at startup (randomly if clock is
+	     bad).
+
+Severity   : major
+Bugzilla   : 14840
+Description: quota recovery deadlock during mds failover
+Details    : This patch includes att18982, att18236, att18237 in bz14840.
+             Slove the problems:
+             1. fix osts hang when mds does failover with quotaon
+             2. prevent watchdog storm when osts threads wait for the
+	        recovery of mds
+
+Severity   : normal
+Bugzilla   : 16695
+Description: kernel panic on racer
+Details    : Do not access dchild->d_inode when IS_ERR(dchild) is true.
+
+Severity   : enhancement
+Bugzilla   : 14095
+Description: Add lustre_start utility to start or stop multiple Lustre servers
+             from a CSV file.
+
+Severity   : major
+Bugzilla   : 17024
+Description: Lustre GPF in {:ptlrpc:ptlrpc_server_free_request+373}
+Details    : In case of memory pressure, list_del() can be called twice on
+	     req->rq_history_list, causing a kernel oops.
+
+-------------------------------------------------------------------------------
 
 2008-05-26  Sun Microsystems, Inc.
        * version 1.6.5
@@ -2157,10 +2249,10 @@ Details    : Lov_mds_md was not free in an error handler in mds_create_object.
 	     be freed no matter whether fsfilt_commit success or not.
 
 Severity   : minor
-Frequency  : only with huge numbers of clients
+Frequency  : only with large numbers of cores on a single node
 Bugzilla   : 11817
 Description: Prevents from taking the superblock lock in llap_from_page for
-	     a soon died page.
+	     a soon killed page.
 Details    : using LL_ORIGIN_REMOVEPAGE origin flag instead of LL_ORIGIN_UNKNOW
 	     for llap_from_page call in ll_removepage() prevents from taking
 	     the superblock lock for a soon died page.

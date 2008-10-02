@@ -820,9 +820,15 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 }
 
                 if (page_rc != pp_rnb[i].len) { /* short read */
+                        int j = i;
+
                         /* All subsequent pages should be 0 */
                         while(++i < npages)
-                                LASSERT(local_nb[i].rc == 0);
+                                LASSERTF(local_nb[i].rc == 0,
+                                         "page_rc %d, pp_rnb[%u].len=%d, "
+                                         "local_nb[%u/%u].rc=%d\n",
+                                         page_rc, j, pp_rnb[j].len,
+                                         i, npages, local_nb[i].rc);
                         break;
                 }
         }
@@ -1360,6 +1366,7 @@ static int ost_get_info(struct obd_export *exp, struct ptlrpc_request *req)
         RETURN(rc);
 }
 
+#ifdef HAVE_QUOTA_SUPPORT
 static int ost_handle_quotactl(struct ptlrpc_request *req)
 {
         struct obd_quotactl *oqctl, *repoqc;
@@ -1426,6 +1433,7 @@ static int ost_handle_quota_adjust_qunit(struct ptlrpc_request *req)
  out:
         RETURN(rc);
 }
+#endif
 
 static int ost_filter_recovery_request(struct ptlrpc_request *req,
                                        struct obd_device *obd, int *process)
@@ -1483,9 +1491,11 @@ int ost_msg_check_version(struct lustre_msg *msg)
         case OST_SYNC:
         case OST_SET_INFO:
         case OST_GET_INFO:
+#ifdef HAVE_QUOTA_SUPPORT
         case OST_QUOTACHECK:
         case OST_QUOTACTL:
         case OST_QUOTA_ADJUST_QUNIT:
+#endif
                 rc = lustre_msg_check_version(msg, LUSTRE_OST_VERSION);
                 if (rc)
                         CERROR("bad opc %u version %08x, expecting %08x\n",
@@ -1663,6 +1673,7 @@ static int ost_handle(struct ptlrpc_request *req)
                 DEBUG_REQ(D_INODE, req, "get_info");
                 rc = ost_get_info(req->rq_export, req);
                 break;
+#ifdef HAVE_QUOTA_SUPPORT
         case OST_QUOTACHECK:
                 CDEBUG(D_INODE, "quotacheck\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_QUOTACHECK_NET, 0);
@@ -1677,6 +1688,7 @@ static int ost_handle(struct ptlrpc_request *req)
                 CDEBUG(D_INODE, "quota_adjust_qunit\n");
                 rc = ost_handle_quota_adjust_qunit(req);
                 break;
+#endif
         case OBD_PING:
                 DEBUG_REQ(D_INODE, req, "ping");
                 rc = target_handle_ping(req);

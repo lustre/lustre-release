@@ -1064,11 +1064,12 @@ run_test 27b "Reacquire MGS lock after failover"
 test_28() {
         setup
 	TEST="lctl get_param -n llite.$FSNAME-*.max_read_ahead_whole_mb"
-	ORIG=$($TEST) 
-	declare -i FINAL
-	FINAL=$(($ORIG + 10))
-	set_and_check client "$TEST" "$FSNAME.llite.max_read_ahead_whole_mb" || return 3
-	set_and_check client "$TEST" "$FSNAME.llite.max_read_ahead_whole_mb" || return 3
+	PARAM="$FSNAME.llite.max_read_ahead_whole_mb"
+	ORIG=$($TEST)
+	FINAL=$(($ORIG + 1))
+	set_and_check client "$TEST" "$PARAM" $FINAL || return 3
+	FINAL=$(($FINAL + 1))
+	set_and_check client "$TEST" "$PARAM" $FINAL || return 4
  	umount_client $MOUNT || return 200
 	mount_client $MOUNT
 	RESULT=$($TEST)
@@ -1078,6 +1079,7 @@ test_28() {
 	else
 	    echo "New config success: got $RESULT"
 	fi
+	set_and_check client "$TEST" "$PARAM" $ORIG || return 5
 	cleanup
 }
 run_test 28 "permanent parameter setting"
@@ -1153,8 +1155,9 @@ test_30() {
 	setup
 
 	TEST="lctl get_param -n llite.$FSNAME-*.max_read_ahead_whole_mb"
-	ORIG=$($TEST) 
-	for i in $(seq 1 20); do 
+	ORIG=$($TEST)
+	LIST=(1 2 3 4 5 4 3 2 1 2 3 4 5 4 3 2 1 2 3 4 5)
+	for i in ${LIST[@]}; do
 	    set_and_check client "$TEST" "$FSNAME.llite.max_read_ahead_whole_mb" $i || return 3
 	done
 	# make sure client restart still works 
@@ -1321,6 +1324,9 @@ test_33a() { # bug 12333, was test_33
         mount -t lustre $MGSNID:/${FSNAME2} $MOUNT2 || rc=2
         cp /etc/hosts $MOUNT2/. || rc=3
         echo "ok."
+
+        cp /etc/hosts $MOUNT2/ || rc=3 
+        $LFS getstripe $MOUNT2/hosts
 
         umount -d $MOUNT2
         stop fs2ost -f

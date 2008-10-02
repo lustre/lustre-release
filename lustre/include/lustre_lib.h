@@ -71,6 +71,9 @@ struct obd_export;
 
 void target_client_add_cb(struct obd_device *obd, __u64 transno, void *cb_data,
                           int error);
+__u32 target_trans_table_last_time(struct obd_export *exp);
+void target_trans_table_recalc(struct obd_device *obd, __u32 new_age);
+void target_trans_table_update(struct obd_export *exp, __u64 transno);
 int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler);
 int target_handle_disconnect(struct ptlrpc_request *req);
 void target_destroy_export(struct obd_export *exp);
@@ -80,13 +83,12 @@ int target_handle_ping(struct ptlrpc_request *req);
 int target_pack_pool_reply(struct ptlrpc_request *req);
 void target_committed_to_req(struct ptlrpc_request *req);
 
-#ifdef HAVE_QUOTA_SUPPORT
 /* quotacheck callback, dqacq/dqrel callback handler */
 int target_handle_qc_callback(struct ptlrpc_request *req);
+#ifdef HAVE_QUOTA_SUPPORT
 int target_handle_dqacq_callback(struct ptlrpc_request *req);
 #else
 #define target_handle_dqacq_callback(req) ldlm_callback_reply(req, -ENOTSUPP)
-#define target_handle_qc_callback(req) (0)
 #endif
 
 void target_cancel_recovery_timer(struct obd_device *obd);

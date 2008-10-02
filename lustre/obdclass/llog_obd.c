@@ -57,10 +57,10 @@ static struct llog_ctxt* llog_new_ctxt(struct obd_device *obd)
         OBD_ALLOC(ctxt, sizeof(*ctxt));
         if (!ctxt)
                 return NULL;
-        
+
         ctxt->loc_obd = obd;
         atomic_set(&ctxt->loc_refcount, 1);
-        
+
         return ctxt;
 }
 
@@ -144,18 +144,22 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
         if (index < 0 || index >= LLOG_MAX_CTXTS)
                 RETURN(-EFAULT);
 
-        ctxt = llog_get_context(obd, index); 
+        /* someone can call lov_llog_init with NULL uuid - this can produce
+         * parallel enter to this function */
+        mutex_down(&obd->obd_llog_alloc);
+        ctxt = llog_get_context(obd, index);
         if (ctxt) {
                 /* mds_lov_update_mds might call here multiple times. So if the
                    llog is already set up then don't to do it again. */
-                CDEBUG(D_CONFIG, "obd %s ctxt %d already set up\n", 
+                CDEBUG(D_CONFIG, "obd %s ctxt %d already set up\n",
                        obd->obd_name, index);
                 LASSERT(ctxt->loc_obd == obd);
                 LASSERT(ctxt->loc_exp == disk_obd->obd_self_export);
                 LASSERT(ctxt->loc_logops == op);
-                llog_ctxt_put(ctxt); 
+                llog_ctxt_put(ctxt);
                 GOTO(out, rc = 0);
         }
+
         ctxt = llog_new_ctxt(obd);
         if (!ctxt)
                 GOTO(out, rc = -ENOMEM);
@@ -178,6 +182,7 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
                 obd->obd_llog_ctxt[index] = NULL;
         }
 out:
+        mutex_up(&obd->obd_llog_alloc);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_setup);
@@ -201,8 +206,7 @@ int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
                 struct lov_stripe_md *lsm, struct llog_cookie *logcookies,
                 int numcookies)
 {
-        __u32 cap;
-        int rc;
+        int raised, rc;
         ENTRY;
 
         if (!ctxt) {
@@ -211,10 +215,12 @@ int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
         }
         
         CTXT_CHECK_OP(ctxt, add, -EOPNOTSUPP);
-        cap = current->cap_effective;             
-        cap_raise(current->cap_effective, CAP_SYS_RESOURCE);
+        raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+        if (!raised)
+                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
         rc = CTXTP(ctxt, add)(ctxt, rec, lsm, logcookies, numcookies);
-        current->cap_effective = cap; 
+        if (!raised)
+                cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_add);
@@ -396,42 +402,40 @@ int llog_obd_origin_add(struct llog_ctxt *ctxt,
 }
 EXPORT_SYMBOL(llog_obd_origin_add);
 
-int llog_cat_initialize(struct obd_device *obd, int count,
+int llog_cat_initialize(struct obd_device *obd, int idx,
                         struct obd_uuid *uuid)
 {
+        struct llog_catid idarray;
         char name[32] = CATLIST;
-        struct llog_catid *idarray = NULL;
-        int size = sizeof(*idarray) * count;
         int rc;
         ENTRY;
 
-        if (count) {
-                OBD_VMALLOC(idarray, size);
-                if (!idarray)
-                        RETURN(-ENOMEM);
-        }
-
-        rc = llog_get_cat_list(obd, obd, name, count, idarray);
+        mutex_down(&obd->obd_llog_cat_process);
+        rc = llog_get_cat_list(obd, obd, name, idx, 1, &idarray);
         if (rc) {
                 CERROR("rc: %d\n", rc);
                 GOTO(out, rc);
         }
 
-        rc = obd_llog_init(obd, obd, count, idarray, uuid);
+        CDEBUG(D_INFO, "init llog for %s/%d - catid "LPX64"/"LPX64"/%x\n",
+               uuid->uuid, idx, idarray.lci_logid.lgl_oid,
+               idarray.lci_logid.lgl_ogr, idarray.lci_logid.lgl_ogen);
+
+        rc = obd_llog_init(obd, obd, 1, &idarray, uuid);
         if (rc) {
                 CERROR("rc: %d\n", rc);
                 GOTO(out, rc);
         }
 
-        rc = llog_put_cat_list(obd, obd, name, count, idarray);
+        rc = llog_put_cat_list(obd, obd, name, idx, 1, &idarray);
         if (rc) {
                 CERROR("rc: %d\n", rc);
                 GOTO(out, rc);
         }
 
  out:
-        if (idarray)
-                OBD_VFREE(idarray, size);
+        mutex_up(&obd->obd_llog_cat_process);
+
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cat_initialize);
