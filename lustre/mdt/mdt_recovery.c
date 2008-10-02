@@ -1124,6 +1124,8 @@ static void mdt_reconstruct_create(struct mdt_thread_info *mti,
         }
 
         body = req_capsule_server_get(mti->mti_pill, &RMF_MDT_BODY);
+        mti->mti_attr.ma_need = MA_INODE;
+        mti->mti_attr.ma_valid = 0;
         rc = mo_attr_get(mti->mti_env, mdt_object_child(child), &mti->mti_attr);
         if (rc == -EREMOTE) {
                 /* object was created on remote server */
@@ -1161,6 +1163,8 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
                 EXIT;
                 return;
         }
+        mti->mti_attr.ma_need = MA_INODE;
+        mti->mti_attr.ma_valid = 0;
         mo_attr_get(mti->mti_env, mdt_object_child(obj), &mti->mti_attr);
         mdt_pack_attr2body(mti, body, &mti->mti_attr.ma_attr,
                            mdt_object_fid(obj));
