@@ -1706,7 +1706,7 @@ repeat:
         }
 
         chunk = end - *ppos + 1;
-        CDEBUG(D_INODE, "Read ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
+        CDEBUG(D_INODE,"Read ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
                inode->i_ino, chunk, *ppos, i_size_read(inode));
 
         if (lock_style != LL_LOCK_STYLE_NOLOCK) {
@@ -1893,7 +1893,7 @@ static ssize_t ll_file_sendfile(struct file *in_file, loff_t *ppos,size_t count,
 
         /* File with no objects, nothing to lock */
         if (!lsm)
-                RETURN(generic_file_sendfile(in_file, ppos, count, actor, target));
+                RETURN(generic_file_sendfile(in_file, ppos,count,actor,target));
 
         node = ll_node_from_inode(inode, *ppos, *ppos + count - 1, LCK_PR);
         if (IS_ERR(node))
@@ -2779,10 +2779,6 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
         if (offset >= 0 && offset <= ll_file_maxbytes(inode)) {
                 if (offset != file->f_pos) {
                         file->f_pos = offset;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                        file->f_reada = 0;
-                        file->f_version = ++event;
-#endif
                 }
                 retval = offset;
         }
