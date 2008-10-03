@@ -539,7 +539,8 @@ int llapi_poollist(char *name)
                             !((pool->d_name[0] == '.') &&
                               (pool->d_name[1] == '.') &&
                               (pool->d_name[2] == '\0')))
-                        llapi_printf(LLAPI_MSG_NORMAL, " %s.%s\n", fsname, pool->d_name);
+                        llapi_printf(LLAPI_MSG_NORMAL, " %s.%s\n",
+                                     fsname, pool->d_name);
                 }
                 closedir(dir);
         }
@@ -820,21 +821,21 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
         }
 
         if (header && (obdstripe == 1)) {
-                llapi_printf(LLAPI_MSG_NORMAL,
-                             "lmm_magic:          0x%08X\n",  lum->lmm_magic);
-                llapi_printf(LLAPI_MSG_NORMAL,
-                             "lmm_object_gr:      "LPX64"\n", lum->lmm_object_gr);
-                llapi_printf(LLAPI_MSG_NORMAL,
-                             "lmm_object_id:      "LPX64"\n", lum->lmm_object_id);
-                llapi_printf(LLAPI_MSG_NORMAL,
-                             "lmm_stripe_count:   %u\n", (int)lum->lmm_stripe_count);
-                llapi_printf(LLAPI_MSG_NORMAL,
-                             "lmm_stripe_size:    %u\n",      lum->lmm_stripe_size);
-                llapi_printf(LLAPI_MSG_NORMAL,
-                             "lmm_stripe_pattern: %x\n",      lum->lmm_pattern);
+                llapi_printf(LLAPI_MSG_NORMAL, "lmm_magic:          0x%08X\n",
+                             lum->lmm_magic);
+                llapi_printf(LLAPI_MSG_NORMAL, "lmm_object_gr:      "LPX64"\n",
+                             lum->lmm_object_gr);
+                llapi_printf(LLAPI_MSG_NORMAL, "lmm_object_id:      "LPX64"\n",
+                             lum->lmm_object_id);
+                llapi_printf(LLAPI_MSG_NORMAL, "lmm_stripe_count:   %u\n",
+                             (int)lum->lmm_stripe_count);
+                llapi_printf(LLAPI_MSG_NORMAL, "lmm_stripe_size:    %u\n",
+                             lum->lmm_stripe_size);
+                llapi_printf(LLAPI_MSG_NORMAL, "lmm_stripe_pattern: %x\n",
+                             lum->lmm_pattern);
                 if (pool_name != NULL)
                         llapi_printf(LLAPI_MSG_NORMAL,
-                                     "lmm_pool_name:      %s\n",      pool_name);
+                             "lmm_pool_name:      %s\n", pool_name);
         }
 
         if (body) {
@@ -848,9 +849,9 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
                         long long gr = objects[i].l_object_gr;
                         if ((obdindex == OBD_NOT_FOUND) || (obdindex == idx))
                                 llapi_printf(LLAPI_MSG_NORMAL,
-                                             "\t%6u\t%14llu\t%#13llx\t%14llu%s\n",
-                                             idx, oid, oid, gr,
-                                             obdindex == idx ? " *" : "");
+                                           "\t%6u\t%14llu\t%#13llx\t%14llu%s\n",
+                                           idx, oid, oid, gr,
+                                           obdindex == idx ? " *" : "");
                 }
                 llapi_printf(LLAPI_MSG_NORMAL, "\n");
         }
@@ -897,8 +898,8 @@ void lov_dump_user_lmm_join(struct lov_user_md_v1 *lum, char *path,
                 unsigned long long start = -1, end = 0;
                 if (!quiet && obdstripe == 1)
                         llapi_printf(LLAPI_MSG_NORMAL,
-                                     "joined\tobdidx\t\t objid\t\tobjid\t\t group"
-                                     "\t\tstart\t\tend\n");
+                                     "joined\tobdidx\t\t objid\t\tobjid\t\t "
+                                     "group\t\tstart\t\tend\n");
                 for (i = 0; i < lumj->lmm_stripe_count; i++) {
                         int idx = lumj->lmm_objects[i].l_ost_idx;
                         long long oid = lumj->lmm_objects[i].l_object_id;
@@ -911,7 +912,7 @@ void lov_dump_user_lmm_join(struct lov_user_md_v1 *lum, char *path,
                         if (start != lumj->lmm_objects[i].l_extent_start ||
                             end != lumj->lmm_objects[i].l_extent_end) {
                                 start = lumj->lmm_objects[i].l_extent_start;
-                                llapi_printf(LLAPI_MSG_NORMAL, "\t%14llu", start);
+                                llapi_printf(LLAPI_MSG_NORMAL,"\t%14llu",start);
                                 end = lumj->lmm_objects[i].l_extent_end;
                                 if (end == (unsigned long long)-1)
                                         llapi_printf(LLAPI_MSG_NORMAL,
@@ -948,17 +949,16 @@ void llapi_lov_dump_user_lmm(struct find_param *param,
         case LOV_USER_MAGIC_V3: {
                 char pool_name[MAXPOOLNAME + 1];
                 struct lov_user_ost_data_v1 *objects;
+                struct lov_user_md_v3 *lmmv3 = (void *)&param->lmd->lmd_lmm;
 
-                strncpy(pool_name,
-                        ((struct lov_user_md_v3 *)(&param->lmd->lmd_lmm))->lmm_pool_name,
-                        MAXPOOLNAME);
+                strncpy(pool_name, lmmv3->lmm_pool_name, MAXPOOLNAME);
                 pool_name[MAXPOOLNAME] = '\0';
-                objects = ((struct lov_user_md_v3 *)(&param->lmd->lmd_lmm))->lmm_objects;
+                objects = lmmv3->lmm_objects;
                 lov_dump_user_lmm_v1v3(&param->lmd->lmd_lmm, pool_name,
-                                      objects, path, is_dir,
-                                      param->obdindex, param->quiet,
-                                      param->verbose,
-                                      (param->verbose || !param->obduuid));
+                                       objects, path, is_dir,
+                                       param->obdindex, param->quiet,
+                                       param->verbose,
+                                       (param->verbose || !param->obduuid));
                 break;
         }
         default:
@@ -1073,8 +1073,8 @@ int llapi_mds_getfileinfo(char *path, DIR *parent,
                         return -ENOENT;
                 } else {
                         llapi_err(LLAPI_MSG_ERROR,
-                                  "error: %s: IOC_MDC_GETFILEINFO failed for %s",
-                                  __FUNCTION__, path);
+                                 "error: %s: IOC_MDC_GETFILEINFO failed for %s",
+                                 __FUNCTION__, path);
                         return ret;
                 }
         }
@@ -1152,8 +1152,9 @@ static int llapi_semantic_traverse(char *path, int size, DIR *parent,
                                              ((struct find_param *)data)->lmd);
                         if (ret == 0) {
                                 ((struct find_param *)data)->have_fileinfo = 1;
-                                dent->d_type = llapi_filetype_dir_table[st->st_mode &
-                                                                        S_IFMT];
+                                dent->d_type =
+                                        llapi_filetype_dir_table[st->st_mode &
+                                                                 S_IFMT];
                         }
                         if (ret == -ENOENT)
                                 continue;
@@ -1367,7 +1368,7 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
                                   __FUNCTION__, path);
                         goto decided;
                 } else {
-                        llapi_err(LLAPI_MSG_ERROR, "error: %s: %s failed for %s",
+                        llapi_err(LLAPI_MSG_ERROR,"error: %s: %s failed for %s",
                                   __FUNCTION__, dir ? "LL_IOC_MDC_GETINFO" :
                                   "IOC_MDC_GETFILEINFO", path);
                         return ret;
@@ -1426,8 +1427,10 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
 
                         if (param->lmd->lmd_lmm.lmm_magic ==
                             LOV_USER_MAGIC_V3) {
-                                lmm_objects =
-                                 ((struct lov_user_md_v3 *)(&(param->lmd->lmd_lmm)))->lmm_objects;
+                                struct lov_user_md_v3 *lmmv3 =
+                                        (void *)&param->lmd->lmd_lmm;
+
+                                lmm_objects = lmmv3->lmm_objects;
                         } else {
                                 lmm_objects = param->lmd->lmd_lmm.lmm_objects;
                         }
@@ -1467,11 +1470,13 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
         }
 
         if (param->check_pool) {
+                struct lov_user_md_v3 *lmmv3 = (void *)&param->lmd->lmd_lmm;
+
                 /* empty requested pool is taken as no pool search => V1 */
                 if (((param->lmd->lmd_lmm.lmm_magic == LOV_USER_MAGIC_V1) &&
                      (param->poolname[0] == '\0')) ||
                     ((param->lmd->lmd_lmm.lmm_magic == LOV_USER_MAGIC_V3) &&
-                     (strncmp(((struct lov_user_md_v3 *)(&(param->lmd->lmd_lmm)))->lmm_pool_name,
+                     (strncmp(lmmv3->lmm_pool_name,
                               param->poolname, MAXPOOLNAME) == 0)) ||
                     ((param->lmd->lmd_lmm.lmm_magic == LOV_USER_MAGIC_V3) &&
                      (strcmp(param->poolname, "*") == 0))) {
@@ -1778,7 +1783,7 @@ int llapi_ping(char *obd_type, char *obd_name)
         return rc;
 }
 
-int llapi_target_iterate(int type_num, char **obd_type, void *args, llapi_cb_t cb)
+int llapi_target_iterate(int type_num, char **obd_type,void *args,llapi_cb_t cb)
 {
         char buf[MAX_STRING_SIZE];
         FILE *fp = fopen(DEVICES_LIST, "r");
@@ -2016,7 +2021,8 @@ static int cb_quotachown(char *path, DIR *parent, DIR *d, void *data,
 
         rc = chmod(path, st->st_mode);
         if (rc)
-                llapi_err(LLAPI_MSG_ERROR,"error: chmod %s (%hu)", path, st->st_mode);
+                llapi_err(LLAPI_MSG_ERROR, "error: chmod %s (%hu)",
+                          path, st->st_mode);
 
         return rc;
 }
