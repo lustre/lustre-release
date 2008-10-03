@@ -111,7 +111,7 @@ LB_LINUX_TRY_COMPILE([
 		RHEL_KENEL="yes"
 		AC_MSG_RESULT([yes])
 	],[
-	        AC_MSG_RESULT([no])
+		AC_MSG_RESULT([no])
 ])
 
 AC_MSG_CHECKING([that SuSe kernel])
@@ -125,7 +125,7 @@ LB_LINUX_TRY_COMPILE([
 		SUSE_KERNEL="yes"
 		AC_MSG_RESULT([yes])
 	],[
-	        AC_MSG_RESULT([no])
+		AC_MSG_RESULT([no])
 ])
 
 ])
@@ -501,14 +501,14 @@ AC_DEFUN([LB_LINUX_CONDITIONALS],
 
 #
 # LB_CHECK_SYMBOL_EXPORT
-# check symbol exported or not 
+# check symbol exported or not
 # $1 - symbol
 # $2 - file(s) for find.
 # $3 - do 'yes'
 # $4 - do 'no'
 #
 # 2.6 based kernels - put modversion info into $LINUX/Module.modvers
-# or check 
+# or check
 AC_DEFUN([LB_CHECK_SYMBOL_EXPORT],
 [AC_MSG_CHECKING([if Linux was built with symbol $1 is exported])
 grep -q -E '[[[:space:]]]$1[[[:space:]]]' $LINUX/$SYMVERFILE 2>/dev/null
