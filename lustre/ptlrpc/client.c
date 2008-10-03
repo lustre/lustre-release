@@ -575,9 +575,10 @@ struct ptlrpc_request *__ptlrpc_request_alloc(struct obd_import *imp,
                 OBD_ALLOC_PTR(request);
 
         if (request) {
-                LASSERT((unsigned long)imp > 0x1000);
+                LASSERTF((unsigned long)imp > 0x1000, "%p", imp);
                 LASSERT(imp != LP_POISON);
-                LASSERT((unsigned long)imp->imp_client > 0x1000);
+                LASSERTF((unsigned long)imp->imp_client > 0x1000, "%p",
+                        imp->imp_client);
                 LASSERT(imp->imp_client != LP_POISON);
 
                 request->rq_import = class_import_get(imp);
