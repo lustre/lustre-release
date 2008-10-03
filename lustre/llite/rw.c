@@ -219,8 +219,7 @@ void ll_truncate(struct inode *inode)
 
         if (unlikely((ll_i2sbi(inode)->ll_flags & LL_SBI_CHECKSUM) &&
                      (i_size_read(inode) & ~CFS_PAGE_MASK))) {
-                /* If the truncate leaves behind a partial page, update its
-                 * checksum. */
+                /* If the truncate leaves a partial page, update its checksum */
                 struct page *page = find_get_page(inode->i_mapping,
                                                   i_size_read(inode) >>
                                                   CFS_PAGE_SHIFT);
@@ -934,7 +933,7 @@ static int queue_or_sync_write(struct obd_export *exp, struct inode *inode,
                                "sync write before EOF: size_index %lu, to %d\n",
                                size_index, to);
                 to = CFS_PAGE_SIZE;
-        } else if (to != CFS_PAGE_SIZE && llap->llap_page->index == size_index) {
+        } else if (to != CFS_PAGE_SIZE && llap->llap_page->index == size_index){
                 int size_to = i_size_read(inode) & ~CFS_PAGE_MASK;
                 LL_CDEBUG_PAGE(D_PAGE, llap->llap_page,
                                "sync write at EOF: size_index %lu, to %d/%d\n",
