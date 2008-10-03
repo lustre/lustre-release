@@ -2005,9 +2005,6 @@ void lustre_register_kill_super_cb(void (*cfs)(struct super_block *sb))
 struct super_block * lustre_get_sb(struct file_system_type *fs_type,
                                int flags, const char *devname, void * data)
 {
-        /* calls back in fill super */
-        /* we could append devname= onto options (*data) here,
-           but 2.4 doesn't get devname.  So we do it in mount_lustre.c */
         return get_sb_nodev(fs_type, flags, data, lustre_fill_super);
 }
 #else
@@ -2015,9 +2012,6 @@ int lustre_get_sb(struct file_system_type *fs_type,
                                int flags, const char *devname, void * data,
                                struct vfsmount *mnt)
 {
-        /* calls back in fill super */
-        /* we could append devname= onto options (*data) here,
-           but 2.4 doesn't get devname.  So we do it in mount_lustre.c */
         return get_sb_nodev(fs_type, flags, data, lustre_fill_super, mnt);
 }
 #endif
@@ -2026,7 +2020,7 @@ void lustre_kill_super(struct super_block *sb)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
 
-        if (kill_super_cb && lsi &&(lsi->lsi_flags & LSI_SERVER))
+        if (kill_super_cb && lsi && !(lsi->lsi_flags & LSI_SERVER))
                 (*kill_super_cb)(sb);
 
         kill_anon_super(sb);
