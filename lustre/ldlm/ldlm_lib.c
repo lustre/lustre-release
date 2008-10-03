@@ -980,6 +980,9 @@ dont_check_exports:
         revimp->imp_remote_handle = conn;
         revimp->imp_dlm_fake = 1;
         revimp->imp_state = LUSTRE_IMP_FULL;
+
+        /* unknown versions will be caught in
+         * ptlrpc_handle_server_req_in->lustre_unpack_msg() */
         revimp->imp_msg_magic = req->rq_reqmsg->lm_magic;
 
         if ((export->exp_connect_flags & OBD_CONNECT_AT) &&
