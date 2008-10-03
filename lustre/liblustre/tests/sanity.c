@@ -73,7 +73,9 @@ extern char *lustre_path;
         do {                                                            \
                 char buf[100];                                          \
                 int len;                                                \
-                sprintf(buf, "===== START %s: %s ", __FUNCTION__, (str)); \
+                gettimeofday(&start, NULL);                             \
+                sprintf(buf, "===== START %s: %s %ld", __FUNCTION__,    \
+                        (str), (long)start.tv_sec);                     \
                 len = strlen(buf);                                      \
                 if (len < 79) {                                         \
                         memset(buf+len, '=', 100-len);                  \
@@ -81,7 +83,6 @@ extern char *lustre_path;
                         buf[80] = 0;                                    \
                 }                                                       \
                 printf("%s", buf);                                      \
-                gettimeofday(&start, NULL);                             \
         } while (0)
 
 #define LEAVE()                                                         \
@@ -576,7 +577,8 @@ static int check_file_size(char *file, long long size)
                 return(1);
         }
         if (statbuf.st_size != size) {
-                printf("size of %s: %ld != %lld\n", file, statbuf.st_size, size);
+                printf("size of %s: %lld != %lld\n", file,
+                       (long long)statbuf.st_size, size);
                 return(-1);
         }
         return 0;
@@ -623,12 +625,12 @@ int t20(char *name)
 
         ret = write(fd, NULL, 20);
         if (ret != -1 || errno != EFAULT) {
-                printf("write 1: ret %ld, errno %d\n", ret, errno);
+                printf("write 1: ret %lld, errno %d\n", (long long)ret, errno);
                 return(1);
         }
         ret = write(fd, (void *)-1, 20);
         if (ret != -1 || errno != EFAULT) {
-                printf("write 2: ret %ld, errno %d\n", ret, errno);
+                printf("write 2: ret %lld, errno %d\n", (long long)ret, errno);
                 return(1);
         }
         iov[0].iov_base = NULL;
@@ -637,7 +639,7 @@ int t20(char *name)
         iov[1].iov_len = 10;
         ret = writev(fd, iov, 2);
         if (ret != -1 || errno != EFAULT) {
-                printf("writev 1: ret %ld, errno %d\n", ret, errno);
+                printf("writev 1: ret %lld, errno %d\n", (long long)ret, errno);
                 return(1);
         }
         iov[0].iov_base = NULL;
@@ -646,19 +648,19 @@ int t20(char *name)
         iov[1].iov_len = sizeof(buf);
         ret = writev(fd, iov, 2);
         if (ret != sizeof(buf)) {
-                printf("write 3 ret %ld, error %d\n", ret, errno);
+                printf("writev 2: ret %lld, error %d\n", (long long)ret, errno);
                 return(1);
         }
         lseek(fd, 0, SEEK_SET);
 
         ret = read(fd, NULL, 20);
         if (ret != -1 || errno != EFAULT) {
-                printf("read 1: ret %ld, errno %d\n", ret, errno);
+                printf("read 1: ret %lld, errno %d\n", (long long)ret, errno);
                 return(1);
         }
         ret = read(fd, (void *)-1, 20);
         if (ret != -1 || errno != EFAULT) {
-                printf("read 2: ret %ld, errno %d\n", ret, errno);
+                printf("read 2: ret %lld, error %d\n", (long long)ret, errno);
                 return(1);
         }
         iov[0].iov_base = NULL;
@@ -667,7 +669,7 @@ int t20(char *name)
         iov[1].iov_len = 10;
         ret = readv(fd, iov, 2);
         if (ret != -1 || errno != EFAULT) {
-                printf("readv 1: ret %ld, errno %d\n", ret, errno);
+                printf("readv 1: ret %lld, error %d\n", (long long)ret, errno);
                 return(1);
         }
         iov[0].iov_base = NULL;
@@ -676,7 +678,7 @@ int t20(char *name)
         iov[1].iov_len = sizeof(buf);
         ret = readv(fd, iov, 2);
         if (ret != sizeof(buf)) {
-                printf("read 3 ret %ld, error %d\n", ret, errno);
+                printf("readv 2: ret %lld, error %d\n", (long long)ret, errno);
                 return(1);
         }
 
@@ -741,14 +743,14 @@ int t22(char *name)
         lseek(fd, 100, SEEK_SET);
         ret = write(fd, str, strlen(str));
         if (ret != strlen(str)) {
-                printf("write 1: ret %ld, errno %d\n", ret, errno);
+                printf("write 1: ret %lld, errno %d\n", (long long)ret, errno);
                 return(1);
         }
 
         lseek(fd, 0, SEEK_SET);
         ret = read(fd, buf, sizeof(buf));
         if (ret != strlen(str)) {
-                printf("read 1 got %ld\n", ret);
+                printf("read 1: ret %lld\n", (long long)ret);
                 return(1);
         }
 
@@ -765,14 +767,14 @@ int t22(char *name)
         lseek(fd, 100, SEEK_SET);
         ret = write(fd, str, strlen(str));
         if (ret != strlen(str)) {
-                printf("write 2: ret %ld, errno %d\n", ret, errno);
+                printf("write 2: ret %lld, errno %d\n", (long long)ret, errno);
                 return(1);
         }
 
         lseek(fd, 100, SEEK_SET);
         ret = read(fd, buf, sizeof(buf));
         if (ret != strlen(str)) {
-                printf("read 2 got %ld\n", ret);
+                printf("read 2: ret %lld\n", (long long)ret);
                 return(1);
         }
 
@@ -1372,13 +1374,14 @@ int t56(char *name)
         rc = getdirentries(fd, (char *)&dir, nbytes, &basep);
 
         if (rc != -1) {
-                printf("Test failed: getdirentries returned %ld\n", rc);
+                printf("Test failed: getdirentries returned %lld\n",
+                       (long long)rc);
                 t_close(fd);
                 return -1;
         }
         if (errno != EINVAL) {
-                printf("Test failed: getdirentries returned %ld but errno is set"
-                                " to %d (should be EINVAL)\n", rc, errno);
+                printf("Test failed: getdirentries returned %lld but errno is "
+                       "set to %d (should be EINVAL)\n", (long long)rc, errno);
                 t_close(fd);
                 return -1;
         }
