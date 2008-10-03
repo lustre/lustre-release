@@ -69,9 +69,11 @@ gen_config() {
 
 start_mds() {
 	local facet=$SINGLEMDS
-	local dev=${facet}_dev
+	# we can not use MDSDEV1 here because SINGLEMDS could be set not to mds1 only
+	local num=$(echo $facet | tr -d "mds")
+	local dev=$(mdsdevname $num)
 	echo "start mds service on `facet_active_host $facet`"
-	start $facet ${!dev} $MDS_MOUNT_OPTS || return 94
+	start $facet ${dev} $MDS_MOUNT_OPTS || return 94
 }
 
 stop_mds() {
