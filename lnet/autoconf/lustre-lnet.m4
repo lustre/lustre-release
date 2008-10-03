@@ -1607,3 +1607,12 @@ lnet/libcfs/darwin/Makefile
 		;;
 esac
 ])
+
+#
+# LIBCFS stub macros. (These are defined in the libcfs module on HEAD))
+#
+AC_DEFUN([LIBCFS_PATH_DEFAULTS], [])
+AC_DEFUN([LIBCFS_PROG_LINUX], [])
+AC_DEFUN([LIBCFS_CONDITIONALS], [])
+AC_DEFUN([LIBCFS_CONFIGURE], [])
+AC_DEFUN([LIBCFS_CONFIG_FILES], [])
