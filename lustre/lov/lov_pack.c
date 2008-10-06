@@ -183,7 +183,7 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
                  * Anyway, this is pretty inaccurate since ld_tgt_count now
                  * represents max index and we should rely on the actual number
                  * of OSTs instead */
-                stripe_count = min(LOV_MAX_STRIPE_COUNT,
+                stripe_count = min((__u32)LOV_MAX_STRIPE_COUNT,
                                    lov->desc.ld_tgt_count);
 
                 if (lmmp && *lmmp)
