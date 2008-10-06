@@ -5489,7 +5489,7 @@ check_file_in_pool()
 	return 0
 }
 
-test_200() {
+test_200a() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
 		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
@@ -5497,9 +5497,9 @@ test_200() {
 	do_facet mgs $LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL
 	[ $? == 0 ] || error "Pool creation of $POOL failed"
 }
-run_test 200 "Create new pool =========================================="
+run_test 200a "Create new pool =========================================="
 
-test_201() {
+test_200b() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
 		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
@@ -5511,9 +5511,9 @@ test_201() {
 		sort | tr '\n' ' ')
 	[ "$res" = "$TGT" ] || error "Pool ($res) do not match requested ($TGT)"
 }
-run_test 201 "Add targets to a pool ===================================="
+run_test 200b "Add targets to a pool ===================================="
 
-test_202a() {
+test_200c() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
 		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
@@ -5521,18 +5521,18 @@ test_202a() {
 	$SETSTRIPE -c 2 -p $POOL $POOL_DIR
 	[ $? = 0 ] || error "Cannot set pool $POOL to $POOL_DIR"
 }
-run_test 202a "Set pool on a directory ================================="
+run_test 200c "Set pool on a directory ================================="
 
-test_202b() {
+test_200d() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
 		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
 	res=$($GETSTRIPE $POOL_DIR | grep pool: | cut -f8 -d " ")
 	[ "$res" = $POOL ] || error "Pool on $POOL_DIR is not $POOL"
 }
-run_test 202b "Check pool on a directory ==============================="
+run_test 200d "Check pool on a directory ==============================="
 
-test_202c() {
+test_200e() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
 		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
@@ -5547,9 +5547,9 @@ test_202c() {
 	done
 	[ "$failed" = 0 ] || error "$failed files not allocated in $POOL"
 }
-run_test 202c "Check files allocation from directory pool =============="
+run_test 200e "Check files allocation from directory pool =============="
 
-test_203() {
+test_200f() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
 		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
@@ -5565,9 +5565,9 @@ test_203() {
 	done
 	[ "$failed" = 0 ] || error "$failed files not allocated in $POOL"
 }
-run_test 203 "Create files in a pool ==================================="
+run_test 200f "Create files in a pool ==================================="
 
-test_210a() {
+test_200g() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
 		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
@@ -5578,9 +5578,9 @@ test_210a() {
 		grep $TGT)
 	[ "$res" = "" ] || error "$TGT not removed from $FSNAME.$POOL"
 }
-run_test 210a "Remove a target from a pool ============================="
+run_test 200g "Remove a target from a pool ============================="
 
-test_210b() {
+test_200h() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
 		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
@@ -5590,9 +5590,9 @@ test_210b() {
 	res=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL)
 	[ "$res" = "" ] || error "Pool $FSNAME.$POOL cannot be drained"
 }
-run_test 210b "Remove all targets from a pool =========================="
+run_test 200h "Remove all targets from a pool =========================="
 
-test_211() {
+test_200i() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
 		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
@@ -5600,7 +5600,7 @@ test_211() {
 	res=$(do_facet mgs "$LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL 2>/dev/null")
 	[ "$res" = "" ] || error "Pool $FSNAME.$POOL is not destroyed"
 }
-run_test 211 "Remove a pool ============================================"
+run_test 200i "Remove a pool ============================================"
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
