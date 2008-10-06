@@ -1914,8 +1914,8 @@ restart:
         if ((brc == -ETIMEDOUT) && !ptlrpc_expire_one_request(req)) {
                 /* Wait forever for reconnect / replay or failure */
                 lwi = LWI_INTR(interrupted_request, req);
-                rc = l_wait_event(req->rq_reply_waitq, ptlrpc_check_reply(req),
-                                  &lwi);
+                brc = l_wait_event(req->rq_reply_waitq, ptlrpc_check_reply(req),
+                                   &lwi);
         }
 
         CDEBUG(D_RPCTRACE, "Completed RPC pname:cluuid:pid:xid:nid:opc "
@@ -1937,7 +1937,7 @@ restart:
         if (req->rq_err) {
                 DEBUG_REQ(D_RPCTRACE, req, "err rc=%d status=%d",
                           rc, req->rq_status);
-                GOTO(out, rc = -EIO);
+                GOTO(out, rc = rc ? rc : -EIO);
         }
 
         if (req->rq_intr) {
