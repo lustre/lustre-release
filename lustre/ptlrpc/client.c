@@ -2083,8 +2083,8 @@ repeat:
                   "-- sleeping for "CFS_DURATION_T" ticks", timeout);
         lwi = LWI_TIMEOUT_INTR(timeout, expired_request, interrupted_request,
                                req);
-        rc = l_wait_event(req->rq_reply_waitq, ptlrpc_check_reply(req), &lwi);
-        if (rc == -ETIMEDOUT && ((req->rq_deadline > cfs_time_current_sec()) ||
+        brc = l_wait_event(req->rq_reply_waitq, ptlrpc_check_reply(req), &lwi);
+        if (brc == -ETIMEDOUT && ((req->rq_deadline > cfs_time_current_sec()) ||
                                  ptlrpc_check_and_wait_suspend(req)))
                 goto repeat;
 
@@ -2109,7 +2109,7 @@ after_send:
         if (req->rq_err) {
                 DEBUG_REQ(D_RPCTRACE, req, "err rc=%d status=%d",
                           rc, req->rq_status);
-                GOTO(out, rc = -EIO);
+                GOTO(out, rc = rc ? rc : -EIO);
         }
 
         if (req->rq_intr) {

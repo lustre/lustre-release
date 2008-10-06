@@ -490,6 +490,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                        request->rq_import->imp_obd->obd_name);
                 /* this prevents us from waiting in ptlrpc_queue_wait */
                 request->rq_err = 1;
+                request->rq_status = -ENODEV;
                 RETURN(-ENODEV);
         }
 
@@ -521,8 +522,13 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                         LASSERT(request->rq_repmsg == NULL);
                         rc = sptlrpc_cli_alloc_repbuf(request,
                                                       request->rq_replen);
-                        if (rc)
+                        if (rc) {
+                                /* this prevents us from looping in
+                                 * ptlrpc_queue_wait */
+                                request->rq_err = 1;
+                                request->rq_status = rc;
                                 GOTO(cleanup_bulk, rc);
+                        }
                 } else {
                         request->rq_repdata = NULL;
                         request->rq_repmsg = NULL;
