@@ -1559,7 +1559,7 @@ test_67b() #bug 3055
     do_facet ost1 "lctl set_param fail_loc=0x80000223"
     cp /etc/profile $DIR/$tfile || error "cp failed"
     client_reconnect
-    lctl get_param -n ost.OSS.ost_create.timeouts
+    do_facet ost1 "lctl get_param -n ost.OSS.ost_create.timeouts"
     log "phase 2"
     CONN2=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
     ATTEMPTS=$(($CONN2 - $CONN1))
@@ -1569,8 +1569,8 @@ test_67b() #bug 3055
     cp /etc/profile $DIR/$tfile || error "cp failed"
     do_facet ost1 "lctl set_param fail_loc=0"
     client_reconnect
-    lctl get_param -n ost.OSS.ost_create.timeouts
-    CONN3=$(`lctl get_param -n osc.*.stats` | awk '/_connect/ {total+=$2} END {print total}')
+    do_facet ost1 "lctl get_param -n ost.OSS.ost_create.timeouts"
+    CONN3=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
     ATTEMPTS=$(($CONN3 - $CONN2))
     echo "$ATTEMPTS osc reconnect attemps on 2nd slow"
     [ $ATTEMPTS -gt 0 ] && error "AT should have prevented reconnect"
