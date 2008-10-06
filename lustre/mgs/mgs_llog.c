@@ -1231,7 +1231,7 @@ static int mgs_write_log_lmv(struct obd_device *obd, struct fs_db *fsdb,
 
         CDEBUG(D_MGS, "Writing lmv(%s) log for %s\n", lmvname,logname);
 
-        OBD_ALLOC(lmvdesc, sizeof(*lmvdesc));
+        OBD_ALLOC_PTR(lmvdesc);
         if (lmvdesc == NULL)
                 RETURN(-ENOMEM);
         lmvdesc->ld_active_tgt_count = 0;
@@ -1246,10 +1246,9 @@ static int mgs_write_log_lmv(struct obd_device *obd, struct fs_db *fsdb,
         rc = record_marker(obd, llh, fsdb, CM_END, lmvname, "lmv setup");
         rc = record_end_log(obd, &llh);
 
-        OBD_FREE(lmvdesc, sizeof(*lmvdesc));
+        OBD_FREE_PTR(lmvdesc);
         RETURN(rc);
 }
-/***************************************END PROTO**********************/
 
 /* lov is the first thing in the mdt and client logs */
 static int mgs_write_log_lov(struct obd_device *obd, struct fs_db *fsdb,
@@ -1271,7 +1270,7 @@ static int mgs_write_log_lov(struct obd_device *obd, struct fs_db *fsdb,
         */
 
         /* FIXME just make lov_setup accept empty desc (put uuid in buf 2) */
-        OBD_ALLOC(lovdesc, sizeof(*lovdesc));
+        OBD_ALLOC_PTR(lovdesc);
         if (lovdesc == NULL)
                 RETURN(-ENOMEM);
         lovdesc->ld_magic = LOV_DESC_MAGIC;
@@ -1297,9 +1296,11 @@ static int mgs_write_log_lov(struct obd_device *obd, struct fs_db *fsdb,
         rc = record_lov_setup(obd, llh, lovname, lovdesc);
         rc = record_marker(obd, llh, fsdb, CM_END, lovname, "lov setup");
         rc = record_end_log(obd, &llh);
-out:        
-        OBD_FREE(lovdesc, sizeof(*lovdesc));
-        RETURN(rc);
+
+        EXIT;
+out:
+        OBD_FREE_PTR(lovdesc);
+        return rc;
 }
 
 /* add failnids to open log */
@@ -2628,7 +2629,7 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
                 CDEBUG(D_MGS, "next param '%s'\n", ptr);
 
                 /* The params are stored in MOUNT_DATA_FILE and modified 
-                   via tunefs.lustre */
+                   via tunefs.lustre, or set using lctl conf_param */
 
                 /* Processed in lustre_start_mgc */
                 if (class_match_param(ptr, PARAM_MGSNODE, NULL) == 0) 
@@ -2849,6 +2850,7 @@ active_err:
 
                 /* All mdt., ost. params in proc */
                 if ((class_match_param(ptr, PARAM_MDT, NULL) == 0) || 
+                    (class_match_param(ptr, PARAM_MDD, NULL) == 0) ||
                     (class_match_param(ptr, PARAM_OST, NULL) == 0)) {
                         CDEBUG(D_MGS, "%.3s param %s\n", ptr, ptr + 4);
                         if (mgs_log_is_empty(obd, mti->mti_svname)) {
@@ -3235,24 +3237,24 @@ out:
         RETURN(rc);
 }
 
-static int mgs_write_log_pool(struct obd_device *obd, char *logname, struct fs_db *fsdb,
-                       char *lovname,
-                       enum lcfg_command_type cmd,
-                       char *poolname, char *fsname,
-                       char *ostname, char *comment)
+static int mgs_write_log_pool(struct obd_device *obd, char *logname,
+                              struct fs_db *fsdb, char *lovname,
+                              enum lcfg_command_type cmd,
+                              char *poolname, char *fsname,
+                              char *ostname, char *comment)
 {
         struct llog_handle *llh = NULL;
         int rc;
 
         rc = record_start_log(obd, &llh, logname);
         if (rc)
-                RETURN(rc);
+                return rc;
         rc = record_marker(obd, llh, fsdb, CM_START, lovname, comment);
         record_base(obd, llh, lovname, 0, cmd, poolname, fsname, ostname, 0);
         rc = record_marker(obd, llh, fsdb, CM_END, lovname, comment);
         rc = record_end_log(obd, &llh);
 
-        return(rc);
+        return rc;
 }
 
 int mgs_pool_cmd(struct obd_device *obd, enum lcfg_command_type cmd,
@@ -3262,10 +3264,10 @@ int mgs_pool_cmd(struct obd_device *obd, enum lcfg_command_type cmd,
         char mdt_index[16];
         char *lovname;
         char *logname;
-        char *label, *canceled_label = NULL;
+        char *label = NULL, *canceled_label = NULL;
         int label_sz;
-        struct mgs_target_info *mti;
-        int rc;
+        struct mgs_target_info *mti = NULL;
+        int rc, i;
         ENTRY;
 
         rc = mgs_find_or_make_fsdb(obd, fsname, &fsdb);
@@ -3294,7 +3296,7 @@ int mgs_pool_cmd(struct obd_device *obd, enum lcfg_command_type cmd,
 
         OBD_ALLOC(label, label_sz);
         if (label == NULL)
-                RETURN(-ENOMEM);
+                GOTO(out, rc = -ENOMEM);
 
         switch(cmd) {
         case LCFG_POOL_NEW: {
@@ -3310,7 +3312,7 @@ int mgs_pool_cmd(struct obd_device *obd, enum lcfg_command_type cmd,
         case LCFG_POOL_REM: {
                 OBD_ALLOC(canceled_label, label_sz);
                 if (canceled_label == NULL)
-                         RETURN(-ENOMEM);
+                         GOTO(out, rc = -ENOMEM);
                 sprintf(label,
                         "rem %s.%s.%s", fsname, poolname, ostname);
                 sprintf(canceled_label,
@@ -3320,7 +3322,7 @@ int mgs_pool_cmd(struct obd_device *obd, enum lcfg_command_type cmd,
         case LCFG_POOL_DEL: {
                 OBD_ALLOC(canceled_label, label_sz);
                 if (canceled_label == NULL)
-                         RETURN(-ENOMEM);
+                         GOTO(out, rc = -ENOMEM);
                 sprintf(label,
                         "del %s.%s", fsname, poolname);
                 sprintf(canceled_label,
@@ -3334,44 +3336,56 @@ int mgs_pool_cmd(struct obd_device *obd, enum lcfg_command_type cmd,
 
         down(&fsdb->fsdb_sem);
 
-        sprintf(mdt_index, "-MDT%04x", 0);
-        name_create(&logname, fsname, mdt_index);
-        name_create(&lovname, logname, "-mdtlov");
-
-        mti = NULL;
         if (canceled_label != NULL) {
-                OBD_ALLOC(mti, sizeof(*mti));
-                if (mti != NULL) {
-                        strcpy(mti->mti_svname, "lov pool");
-                        mgs_modify(obd, fsdb, mti, logname, lovname,
-                                   canceled_label, CM_SKIP);
+                OBD_ALLOC_PTR(mti);
+                if (mti == NULL)
+                        GOTO(out, rc = -ENOMEM);
+        }
+
+        /* loop on all potential MDT */
+        for (i = 0; i < INDEX_MAP_SIZE * 8; i++) {
+                 if (test_bit(i,  fsdb->fsdb_mdt_index_map)) {
+                        sprintf(mdt_index, "-MDT%04x", i);
+                        name_create(&logname, fsname, mdt_index);
+                        name_create(&lovname, logname, "-mdtlov");
+
+                        if (canceled_label != NULL) {
+                                strcpy(mti->mti_svname, "lov pool");
+                                mgs_modify(obd, fsdb, mti, logname, lovname,
+                                           canceled_label, CM_SKIP);
+                        }
+
+                        mgs_write_log_pool(obd, logname, fsdb, lovname,
+                                           cmd, fsname, poolname, ostname,
+                                           label);
+                        name_destroy(&logname);
+                        name_destroy(&lovname);
                 }
         }
 
-        mgs_write_log_pool(obd, logname, fsdb, lovname,
-                           cmd, fsname, poolname, ostname, label);
-        name_destroy(&logname);
-
         name_create(&logname, fsname, "-client");
-        if (canceled_label != NULL) {
-                mgs_modify(obd, fsdb, mti, logname, lovname,
+        if (canceled_label != NULL)
+                mgs_modify(obd, fsdb, mti, logname, fsdb->fsdb_clilov,
                            canceled_label, CM_SKIP);
-        }
+
         mgs_write_log_pool(obd, logname, fsdb, fsdb->fsdb_clilov,
                            cmd, fsname, poolname, ostname, label);
         name_destroy(&logname);
-        name_destroy(&lovname);
 
         up(&fsdb->fsdb_sem);
 
-        OBD_FREE(label, label_sz);
+        EXIT;
+out:
+        if (label != NULL)
+                OBD_FREE(label, label_sz);
+
         if (canceled_label != NULL)
                 OBD_FREE(canceled_label, label_sz);
 
         if (mti != NULL)
-                OBD_FREE(mti, sizeof(*mti));
+                OBD_FREE_PTR(mti);
 
-        RETURN(rc);
+        return rc;
 }
 
 #if 0

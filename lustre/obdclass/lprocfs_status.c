@@ -255,7 +255,7 @@ struct file_operations lprocfs_evict_client_fops = {
 EXPORT_SYMBOL(lprocfs_evict_client_fops);
 
 /**
- * Add /proc entrys.
+ * Add /proc entries.
  *
  * \param root [in]  The parent proc entry on which new entry will be added.
  * \param list [in]  Array of proc entries to be added.

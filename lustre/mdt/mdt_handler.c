@@ -4132,9 +4132,10 @@ static int mdt_process_config(const struct lu_env *env,
                 struct obd_device *obd = d->ld_obd;
 
                 lprocfs_mdt_init_vars(&lvars);
-                rc = class_process_proc_param(PARAM_MDT, lvars.obd_vars, cfg, obd);
-                if (rc)
-                        /* others are passed further */
+                rc = class_process_proc_param(PARAM_MDT, lvars.obd_vars,
+                                              cfg, obd);
+                if (rc == -ENOSYS)
+                        /* we don't understand; pass it on */
                         rc = next->ld_ops->ldo_process_config(env, next, cfg);
                 break;
         }

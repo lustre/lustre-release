@@ -56,6 +56,7 @@
 #include <linux/ldiskfs_fs.h>
 #include <lustre_mds.h>
 #include <lustre/lustre_idl.h>
+#include <lustre_param.h>
 
 #include "mdd_internal.h"
 
@@ -140,6 +141,16 @@ static int mdd_process_config(const struct lu_env *env,
         ENTRY;
 
         switch (cfg->lcfg_command) {
+        case LCFG_PARAM: {
+                struct lprocfs_static_vars lvars;
+
+                lprocfs_mdd_init_vars(&lvars);
+                rc = class_process_proc_param(PARAM_MDD, lvars.obd_vars, cfg,m);
+                if (rc == -ENOSYS)
+                        /* we don't understand; pass it on */
+                        rc = next->ld_ops->ldo_process_config(env, next, cfg);
+                break;
+        }
         case LCFG_SETUP:
                 rc = next->ld_ops->ldo_process_config(env, next, cfg);
                 if (rc)

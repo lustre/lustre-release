@@ -74,6 +74,7 @@ int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
 #define PARAM_OST                  "ost."
 #define PARAM_OSC                  "osc."
 #define PARAM_MDT                  "mdt."
+#define PARAM_MDD                  "mdd."
 #define PARAM_MDC                  "mdc."
 #define PARAM_LLITE                "llite."
 #define PARAM_LOV                  "lov."

@@ -547,6 +547,7 @@ static char *display_name(char *filename)
 }
 
 /* Find a character in a length limited string */
+/* BEWARE - kernel definition of strnchr has args in different order! */
 static char *strnchr(const char *p, char c, size_t n)
 {
        if (!p)

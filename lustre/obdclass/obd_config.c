@@ -887,7 +887,7 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                 class_match_param(key, prefix, &key);
                 sval = strchr(key, '=');
                 if (!sval || (*(sval + 1) == 0)) {
-                        CERROR("Can't parse param %s\n", key);
+                        CERROR("Can't parse param %s (missing '=')\n", key);
                         /* rc = -EINVAL; continue parsing other params */
                         continue;
                 }
@@ -919,6 +919,10 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                         j++;
                 }
                 if (!matched) {
+                        /* If the prefix doesn't match, return error so we
+                           can pass it down the stack */
+                        if (strnchr(key, keylen, '.'))
+                            RETURN(-ENOSYS);
                         CERROR("%s: unknown param %s\n",
                                (char *)lustre_cfg_string(lcfg, 0), key);
                         /* rc = -EINVAL;	continue parsing other params */

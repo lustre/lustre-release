@@ -5611,14 +5611,14 @@ check_file_in_pool()
 	return 0
 }
 
-test_200() {
+test_200a() {
 	do_facet mgs $LCTL pool_new $FSNAME.$POOL
 	do_facet mgs $LCTL get_param -n lov.$FSNAME-MDT0000-mdtlov.pools.$POOL
 	[ $? == 0 ] || error "Pool creation of $POOL failed"
 }
-run_test 200 "Create new pool =========================================="
+run_test 200a "Create new pool =========================================="
 
-test_201() {
+test_200b() {
 	TGT=$(seq -f $FSNAME-OST%04g_UUID $TGTPOOL_FIRST $TGTPOOL_STEP \
 		$TGTPOOL_MAX | tr '\n' ' ')
 	do_facet mgs $LCTL pool_add $FSNAME.$POOL \
@@ -5627,22 +5627,22 @@ test_201() {
 			| tr '\n' ' ')
 	[ "$res" = "$TGT" ] || error "Pool content ($res) do not match requested ($TGT)"
 }
-run_test 201 "Add targets to a pool ===================================="
+run_test 200b "Add targets to a pool ===================================="
 
-test_202a() {
+test_200c() {
 	mkdir -p $POOL_DIR
 	$SETSTRIPE -c 2 -p $POOL $POOL_DIR
 	[ $? = 0 ] || error "Cannot set pool $POOL to $POOL_DIR"
 }
-run_test 202a "Set pool on a directory ================================="
+run_test 200c "Set pool on a directory ================================="
 
-test_202b() {
+test_200d() {
 	res=$($GETSTRIPE $POOL_DIR | grep pool: | cut -f8 -d " ")
 	[ "$res" = $POOL ] || error "Pool on $POOL_DIR is not $POOL"
 }
-run_test 202b "Check pool on a directory ==============================="
+run_test 200d "Check pool on a directory ==============================="
 
-test_202c() {
+test_200e() {
 	failed=0
 	for i in $(seq -w 1 $(($TGT_COUNT * 3)))
 	do
@@ -5656,9 +5656,9 @@ test_202c() {
 	done
 	[ "$failed" = 0 ] || error "$failed files not allocated in $POOL"
 }
-run_test 202c "Check files allocation from directory pool =============="
+run_test 200e "Check files allocation from directory pool =============="
 
-test_203() {
+test_200f() {
 	mkdir -p $POOL_FILE
 	failed=0
 	for i in $(seq -w 1 $(($TGT_COUNT * 3)))
@@ -5673,17 +5673,17 @@ test_203() {
 	done
 	[ "$failed" = 0 ] || error "$failed files not allocated in $POOL"
 }
-run_test 203 "Create files in a pool ==================================="
+run_test 200f "Create files in a pool ==================================="
 
-test_210a() {
+test_200g() {
 	TGT=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-MDT0000-mdtlov.pools.$POOL | head -1)
 	do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
 	res=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-MDT0000-mdtlov.pools.$POOL | grep $TGT)
 	[ "$res" = "" ] || error "$TGT not removed from $FSNAME.$POOL"
 }
-run_test 210a "Remove a target from a pool ============================="
+run_test 200g "Remove a target from a pool ============================="
 
-test_210b() {
+test_200h() {
 	for TGT in $(do_facet mgs $LCTL get_param -n lov.$FSNAME-MDT0000-mdtlov.pools.$POOL)
 	do
 		do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
@@ -5691,14 +5691,14 @@ test_210b() {
 	res=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-MDT0000-mdtlov.pools.$POOL)
 	[ "$res" = "" ] || error "Pool $FSNAME.$POOL cannot be drained"
 }
-run_test 210b "Remove all targets from a pool =========================="
+run_test 200h "Remove all targets from a pool =========================="
 
-test_211() {
+test_200i() {
 	do_facet mgs $LCTL pool_destroy $FSNAME.$POOL
 	res=$(do_facet mgs "$LCTL get_param -n lov.$FSNAME-MDT0000-mdtlov.pools.$POOL 2>/dev/null")
 	[ "$res" = "" ] || error "Pool $FSNAME.$POOL is not destroyed"
 }
-run_test 211 "Remove a pool ============================================"
+run_test 200i "Remove a pool ============================================"
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
