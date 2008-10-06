@@ -482,6 +482,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                        request->rq_import->imp_obd->obd_name);
                 /* this prevents us from waiting in ptlrpc_queue_wait */
                 request->rq_err = 1;
+                request->rq_status = -ENODEV;
                 RETURN(-ENODEV);
         }
 
@@ -505,8 +506,12 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                 LASSERT (request->rq_replen != 0);
                 if (request->rq_repbuf == NULL)
                         OBD_ALLOC(request->rq_repbuf, request->rq_replen);
-                if (request->rq_repbuf == NULL)
+                if (request->rq_repbuf == NULL) {
+                        /* this prevents us from looping in ptlrpc_queue_wait */
+                        request->rq_err = 1;
+                        request->rq_status = -ENOMEM;
                         GOTO(cleanup_bulk, rc = -ENOMEM);
+                }
                 request->rq_repmsg = NULL;
 
                 rc = LNetMEAttach(request->rq_reply_portal,/*XXX FIXME bug 249*/
