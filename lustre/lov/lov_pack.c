@@ -161,7 +161,7 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
         struct lov_obd *lov = &obd->u.lov;
         struct lov_mds_md_v1 *lmmv1;
         struct lov_mds_md_v3 *lmmv3;
-        int stripe_count = lov->desc.ld_tgt_count;
+        int stripe_count;
         struct lov_ost_data_v1 *lmm_objects;
         int lmm_size, lmm_magic;
         int i;
@@ -179,11 +179,19 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
                 } else {
                         stripe_count = lsm->lsm_stripe_count;
                 }
-        } else if (lmmp && *lmmp) {
-                lmm_magic = le32_to_cpu((*lmmp)->lmm_magic);
         } else {
-                /* lsm == NULL and lmmp == NULL */
-                lmm_magic = LOV_MAGIC;
+                /* No needs to allocated more than LOV_MAX_STRIPE_COUNT.
+                 * Anyway, this is pretty inaccurate since ld_tgt_count now
+                 * represents max index and we should rely on the actual number
+                 * of OSTs instead */
+                stripe_count = min(LOV_MAX_STRIPE_COUNT,
+                                   lov->desc.ld_tgt_count);
+
+                if (lmmp && *lmmp)
+                        lmm_magic = le32_to_cpu((*lmmp)->lmm_magic);
+                else
+                        /* lsm == NULL and lmmp == NULL */
+                        lmm_magic = LOV_MAGIC;
         }
 
         if ((lmm_magic != LOV_MAGIC_V1) &&
