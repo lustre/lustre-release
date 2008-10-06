@@ -115,7 +115,7 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
         struct lov_obd *lov = &obd->u.lov;
         struct lov_oinfo *loi;
         struct lov_mds_md *lmm;
-        int stripe_count = lov->desc.ld_tgt_count;
+        int stripe_count;
         int lmm_size;
         int i;
         ENTRY;
@@ -132,6 +132,13 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
                 } else {
                         stripe_count = lsm->lsm_stripe_count;
                 }
+        } else {
+                /* No needs to allocated more than LOV_MAX_STRIPE_COUNT.
+                 * Anyway, this is pretty inaccurate since ld_tgt_count now
+                 * represents max index and we should rely on the actual number
+                 * of OSTs instead */
+                stripe_count = min(LOV_MAX_STRIPE_COUNT,
+                                   lov->desc.ld_tgt_count);
         }
 
         /* XXX LOV STACKING call into osc for sizes */
