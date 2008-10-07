@@ -4387,7 +4387,7 @@ Index: linux-2.6.22.14/include/linux/lustre_iam.h
 ===================================================================
 --- /dev/null
 +++ linux-2.6.22.14/include/linux/lustre_iam.h
-@@ -0,0 +1,1087 @@
+@@ -0,0 +1,1089 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -4439,7 +4439,9 @@ Index: linux-2.6.22.14/include/linux/lustre_iam.h
 +/*
 + *  linux/include/linux/lustre_iam.h
 + */
-+#define CLASSERT(cond) ({ switch(42) { case (cond): case 0: break; } })
++#ifndef CLASSERT
++#define CLASSERT(cond) do {switch(42) {case (cond): case 0: break;}} while (0)
++#endif
 +/* implication */
 +#define ergo(a, b) (!(a) || (b))
 +/* logical equivalence */
