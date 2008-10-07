@@ -179,7 +179,7 @@ for NAME in $CONFIGS; do
 		SPACE=$(( OSTCOUNT * MIN ))
 		[ $SPACE -lt $SIZE ] && SIZE=$((SPACE * 3 / 4))
 		log "min OST has ${MIN}kB available, using ${SIZE}kB file size"
-		IOZONE_OPTS="-i 0 -i 1 -i 2 -e -+d -r $RSIZE -s $SIZE"
+		IOZONE_OPTS="-i 0 -i 1 -i 2 -e -+d -r $RSIZE"
 		IOZFILE="$IOZDIR/iozone"
 		IOZLOG=$TMP/iozone.log
 		# $SPACE was calculated with all OSTs
@@ -188,7 +188,7 @@ for NAME in $CONFIGS; do
 		myRUNAS=$RUNAS
 		FAIL_ON_ERROR=false check_runas_id_ret $myUID $myRUNAS || { myRUNAS="" && myUID=$UID; }
 		chown $myUID:$myUID $IOZDIR
-		$myRUNAS iozone $IOZONE_OPTS -f $IOZFILE 2>&1 | tee $IOZLOG
+		$myRUNAS iozone $IOZONE_OPTS -s $SIZE -f $IOZFILE 2>&1 | tee $IOZLOG
 		tail -1 $IOZLOG | grep -q complete || \
 			{ error "iozone (1) failed" && false; }
 		rm -f $IOZLOG
@@ -200,14 +200,14 @@ for NAME in $CONFIGS; do
 		if [ -z "$O_DIRECT" ]; then
 			touch $MOUNT/f.iozone
 			if ! ./directio write $MOUNT/f.iozone 0 1; then
+				log "SKIP iozone DIRECT IO test"
 				O_DIRECT=no
 			fi
 			rm -f $MOUNT/f.iozone
 		fi
 		if [ "$O_DIRECT" != "no" -a "$IOZONE_DIR" != "no" ]; then
 			$DEBUG_OFF
-			# cd TMP to have write permission for tmp file iozone writes
-			( cd $TMP && $myRUNAS iozone -I $IOZONE_OPTS $IOZFILE.odir 2>&1 | tee $IOZLOG)
+			$myRUNAS iozone -I $IOZONE_OPTS -s $SIZE -f $IOZFILE.odir 2>&1 | tee $IOZLOG
 			tail -1 $IOZLOG | grep -q complete || \
 				{ error "iozone (2) failed" && false; }
 			rm -f $IOZLOG
@@ -224,12 +224,12 @@ for NAME in $CONFIGS; do
 			$LFS setstripe -c -1 $IOZDIR
 			$DEBUG_OFF
 			THREAD=1
-			IOZFILE="-F "
+			IOZFILE=" "
 			while [ $THREAD -le $IOZ_THREADS ]; do
 				IOZFILE="$IOZFILE $IOZDIR/iozone.$THREAD"
 				THREAD=$((THREAD + 1))
 			done
-			$myRUNAS iozone $IOZONE_OPTS -t $IOZ_THREADS $IOZFILE 2>&1 | tee $IOZLOG
+			$myRUNAS iozone $IOZONE_OPTS -s $((SIZE / IOZ_THREADS)) -t $IOZ_THREADS -F $IOZFILE 2>&1 | tee $IOZLOG
 			tail -1 $IOZLOG | grep -q complete || \
 				{ error "iozone (3) failed" && false; }
 			rm -f $IOZLOG
