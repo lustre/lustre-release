@@ -54,6 +54,21 @@
 #include <obd.h>
 
 /**
+ * Initialize trans_table if it is not initialized yet
+ */
+void target_trans_table_init(struct obd_device *obd)
+{
+        struct lr_server_data *lsd = obd->u.obt.obt_lsd;
+        /** new export or from 1.6 fs */
+        if (le32_to_cpu(lsd->lsd_trans_table_time) == 0)
+                lsd->lsd_trans_table_time = cpu_to_le32(cfs_time_current_sec());
+        /** number of interval changed, write new value */
+        if (le32_to_cpu(lsd->lsd_expire_intervals) == 0)
+                lsd->lsd_expire_intervals = cpu_to_le32(LR_EXPIRE_INTERVALS);
+}
+EXPORT_SYMBOL(target_trans_table_init);
+
+/**
  * Calculate time by index. All expiration time is divided by LR_EXPIRE_INTERVALS,
  * so time of each index is calculated from time of first index
  */
