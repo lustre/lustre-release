@@ -2596,9 +2596,9 @@ no_unlink:
 
         GOTO(cleanup, rc);
 cleanup:
-        inodes[0] = de_srcdir ? de_srcdir->d_inode : NULL;
+        inodes[0] = de_srcdir && !IS_ERR(de_srcdir) ? de_srcdir->d_inode : NULL;
         inodes[1] = old_inode;
-        inodes[2] = de_tgtdir ? de_tgtdir->d_inode : NULL;
+        inodes[2] = de_tgtdir && !IS_ERR(de_tgtdir) ? de_tgtdir->d_inode : NULL;
         inodes[3] = new_inode;
         rc = mds_finish_transno(mds, inodes, handle, req, rc, 0, 0);
 
