@@ -826,7 +826,6 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 fsd->lsd_server_size = cpu_to_le32(LR_SERVER_SIZE);
                 fsd->lsd_client_start = cpu_to_le32(LR_CLIENT_START);
                 fsd->lsd_client_size = cpu_to_le16(LR_CLIENT_SIZE);
-                fsd->lsd_expire_intervals = cpu_to_le32(LR_EXPIRE_INTERVALS);
                 fsd->lsd_subdir_count = cpu_to_le16(FILTER_SUBDIR_COUNT);
                 filter->fo_subdir_count = FILTER_SUBDIR_COUNT;
                 fsd->lsd_feature_incompat = cpu_to_le32(OBD_INCOMPAT_OST);
@@ -868,6 +867,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 GOTO(err_fsd, rc = -EINVAL);
         }
 
+        target_trans_table_init(obd);
         start_epoch = le32_to_cpu(fsd->lsd_start_epoch);
 
         CDEBUG(D_INODE, "%s: server start_epoch : %#x\n",
