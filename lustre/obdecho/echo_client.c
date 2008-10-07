@@ -605,9 +605,12 @@ struct echo_async_page {
         struct list_head        eap_item;
 };
 
-#define EAP_FROM_COOKIE(c)                                                      \
-        (LASSERT(((struct echo_async_page *)(c))->eap_magic == EAP_MAGIC),      \
-         (struct echo_async_page *)(c))
+static inline struct echo_async_page *eap_from_cookie(void *ptr)
+{
+        struct echo_async_page *ap = ptr;
+        LASSERT(ap->eap_magic == EAP_MAGIC);
+        return ap;
+}
 
 struct echo_async_state {
         spinlock_t              eas_lock;
@@ -646,15 +649,15 @@ static int ec_ap_refresh_count(void *data, int cmd)
 }
 static void ec_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
 {
-        struct echo_async_page *eap = EAP_FROM_COOKIE(data);
+        struct echo_async_page *eap = eap_from_cookie(data);
 
         memcpy(oa, &eap->eap_eas->eas_oa, sizeof(*oa));
 }
 
 static int ec_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 {
-        struct echo_async_page *eap = EAP_FROM_COOKIE(data);
         struct echo_async_state *eas;
+        struct echo_async_page *eap = eap_from_cookie(data);
 
         eas = eap->eap_eas;
 

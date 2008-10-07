@@ -1797,14 +1797,14 @@ out:
 
 static int lov_ap_make_ready(void *data, int cmd)
 {
-        struct lov_async_page *lap = LAP_FROM_COOKIE(data);
+        struct lov_async_page *lap = lap_from_cookie(data);
 
         return lap->lap_caller_ops->ap_make_ready(lap->lap_caller_data, cmd);
 }
 
 static int lov_ap_refresh_count(void *data, int cmd)
 {
-        struct lov_async_page *lap = LAP_FROM_COOKIE(data);
+        struct lov_async_page *lap = lap_from_cookie(data);
 
         return lap->lap_caller_ops->ap_refresh_count(lap->lap_caller_data,
                                                      cmd);
@@ -1812,7 +1812,7 @@ static int lov_ap_refresh_count(void *data, int cmd)
 
 static void lov_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
 {
-        struct lov_async_page *lap = LAP_FROM_COOKIE(data);
+        struct lov_async_page *lap = lap_from_cookie(data);
 
         lap->lap_caller_ops->ap_fill_obdo(lap->lap_caller_data, cmd, oa);
         /* XXX woah, shouldn't we be altering more here?  size? */
@@ -1825,14 +1825,14 @@ static void lov_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
 static void lov_ap_update_obdo(void *data, int cmd, struct obdo *oa,
                                obd_valid valid)
 {
-        struct lov_async_page *lap = LAP_FROM_COOKIE(data);
+        struct lov_async_page *lap = lap_from_cookie(data);
 
         lap->lap_caller_ops->ap_update_obdo(lap->lap_caller_data, cmd,oa,valid);
 }
 
 static int lov_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 {
-        struct lov_async_page *lap = LAP_FROM_COOKIE(data);
+        struct lov_async_page *lap = lap_from_cookie(data);
 
         /* in a raid1 regime this would down a count of many ios
          * in flight, onl calling the caller_ops completion when all
@@ -1843,7 +1843,7 @@ static int lov_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 
 static struct obd_capa *lov_ap_lookup_capa(void *data, int cmd)
 {
-        struct lov_async_page *lap = LAP_FROM_COOKIE(data);
+        struct lov_async_page *lap = lap_from_cookie(data);
         return lap->lap_caller_ops->ap_lookup_capa(lap->lap_caller_data, cmd);
 }
 
@@ -1939,7 +1939,7 @@ static int lov_queue_async_io(struct obd_export *exp,
 
         ASSERT_LSM_MAGIC(lsm);
 
-        lap = LAP_FROM_COOKIE(cookie);
+        lap = lap_from_cookie(cookie);
 
         loi = lsm->lsm_oinfo[lap->lap_stripe];
 
@@ -1962,7 +1962,7 @@ static int lov_set_async_flags(struct obd_export *exp,
 
         ASSERT_LSM_MAGIC(lsm);
 
-        lap = LAP_FROM_COOKIE(cookie);
+        lap = lap_from_cookie(cookie);
 
         loi = lsm->lsm_oinfo[lap->lap_stripe];
 
@@ -1986,7 +1986,7 @@ static int lov_queue_group_io(struct obd_export *exp,
 
         ASSERT_LSM_MAGIC(lsm);
 
-        lap = LAP_FROM_COOKIE(cookie);
+        lap = lap_from_cookie(cookie);
 
         loi = lsm->lsm_oinfo[lap->lap_stripe];
 
@@ -2039,7 +2039,7 @@ static int lov_teardown_async_page(struct obd_export *exp,
 
         ASSERT_LSM_MAGIC(lsm);
 
-        lap = LAP_FROM_COOKIE(cookie);
+        lap = lap_from_cookie(cookie);
 
         loi = lsm->lsm_oinfo[lap->lap_stripe];
 

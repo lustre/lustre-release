@@ -95,9 +95,12 @@ struct lov_async_page {
         void                            *lap_caller_data;
 };
 
-#define LAP_FROM_COOKIE(c)                                                     \
-        (LASSERT(((struct lov_async_page *)(c))->lap_magic == LOV_AP_MAGIC),   \
-         (struct lov_async_page *)(c))
+static inline struct lov_async_page *lap_from_cookie(void *ptr)
+{
+        struct lov_async_page *ap = ptr;
+        LASSERT(ap->lap_magic == LOV_AP_MAGIC);
+        return ap;
+}
 
 extern cfs_mem_cache_t *lov_oinfo_slab;
 

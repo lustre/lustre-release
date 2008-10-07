@@ -94,7 +94,7 @@ static inline struct ptlrpc_bulk_desc *new_bulk(int npages, int type, int portal
         cfs_waitq_init(&desc->bd_waitq);
         desc->bd_max_iov = npages;
         desc->bd_iov_count = 0;
-        desc->bd_md_h = LNET_INVALID_HANDLE;
+        LNetInvalidateHandle(&desc->bd_md_h);
         desc->bd_portal = portal;
         desc->bd_type = type;
 

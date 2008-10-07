@@ -42,7 +42,6 @@
 
 #undef LASSERT
 #undef LASSERTF
-#define CLASSERT(cond) ({ switch(42) { case (cond): case 0: break; } })
 #define LASSERT(cond) if (!(cond)) { printf("failed " #cond "\n"); ret = 1; }
 #define LASSERTF(cond, fmt, arg) if (!(cond)) { printf("failed '" #cond "'" fmt, arg);ret = 1;}
 

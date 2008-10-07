@@ -71,10 +71,6 @@ struct osc_async_page {
 #define oap_count       oap_brw_page.count
 #define oap_brw_flags   oap_brw_page.flag
 
-#define OAP_FROM_COOKIE(c)                                                    \
-        (LASSERT(((struct osc_async_page *)(c))->oap_magic == OAP_MAGIC),     \
-         (struct osc_async_page *)(c))
-
 struct osc_cache_waiter {
         struct list_head        ocw_entry;
         cfs_waitq_t             ocw_waitq;
