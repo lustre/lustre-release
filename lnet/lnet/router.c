@@ -606,6 +606,7 @@ lnet_router_checker(void *arg)
         int                  rc;
         lnet_handle_md_t     mdh;
         lnet_peer_t         *rtr;
+        lnet_md_t            md = {0};
         struct list_head    *entry;
         time_t               now;
         lnet_process_id_t    rtr_id;
@@ -618,13 +619,16 @@ lnet_router_checker(void *arg)
 
         LASSERT (the_lnet.ln_rc_state == LNET_RC_STATE_SHUTDOWN);
 
-        rc = LNetMDBind((lnet_md_t){.start     = &pinginfo,
-                                    .length    = sizeof(pinginfo),
-                                    .threshold = LNET_MD_THRESH_INF,
-                                    .options   = LNET_MD_TRUNCATE,
-                                    .eq_handle = the_lnet.ln_rc_eqh},
-                        LNET_UNLINK,
-                        &mdh);
+        /* initialize md content */
+        md.start     = &pinginfo;
+        md.length    = sizeof(pinginfo);
+        md.threshold = LNET_MD_THRESH_INF;
+        md.max_size  = 0;
+        md.options   = LNET_MD_TRUNCATE,
+        md.user_ptr  = NULL;
+        md.eq_handle = the_lnet.ln_rc_eqh;
+
+        rc = LNetMDBind(md, LNET_UNLINK, &mdh);
 
         if (rc < 0) {
                 CERROR("Can't bind MD: %d\n", rc);

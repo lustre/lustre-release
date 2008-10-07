@@ -60,8 +60,8 @@ extern lnet_t  the_lnet;                        /* THE network */
 
 static inline int lnet_is_wire_handle_none (lnet_handle_wire_t *wh)
 {
-        return (wh->wh_interface_cookie == LNET_WIRE_HANDLE_NONE.wh_interface_cookie &&
-                wh->wh_object_cookie == LNET_WIRE_HANDLE_NONE.wh_object_cookie);
+        return (wh->wh_interface_cookie == LNET_WIRE_HANDLE_COOKIE_NONE &&
+                wh->wh_object_cookie == LNET_WIRE_HANDLE_COOKIE_NONE);
 }
 
 static inline int lnet_md_exhausted (lnet_libmd_t *md) 
@@ -267,7 +267,7 @@ lnet_md_alloc (lnet_md_t *umd)
 {
         /* NEVER called with liblock held */
         lnet_libmd_t *md;
-        int           size;
+        unsigned int  size;
         unsigned int  niov;
 
         if ((umd->options & LNET_MD_KIOV) != 0) {
@@ -295,7 +295,7 @@ static inline void
 lnet_md_free (lnet_libmd_t *md)
 {
         /* ALWAYS called with liblock held */
-        int       size;
+        unsigned int  size;
 
         if ((md->md_options & LNET_MD_KIOV) != 0)
                 size = offsetof(lnet_libmd_t, md_iov.kiov[md->md_niov]);
@@ -357,7 +357,7 @@ static inline void
 lnet_eq2handle (lnet_handle_eq_t *handle, lnet_eq_t *eq)
 {
         if (eq == NULL) {
-                *handle = LNET_EQ_NONE;
+                LNetInvalidateHandle(handle);
                 return;
         }
 

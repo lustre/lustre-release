@@ -191,17 +191,19 @@ ping_server_handle (srpc_server_rpc_t *rpc)
         return 0;
 }
 
-sfw_test_client_ops_t ping_test_client = 
+sfw_test_client_ops_t ping_test_client;
+void ping_init_test_client(void)
 {
-        .tso_init       = ping_client_init,
-        .tso_fini       = ping_client_fini,
-        .tso_prep_rpc   = ping_client_prep_rpc,
-        .tso_done_rpc   = ping_client_done_rpc,
-};
+        ping_test_client.tso_init     = ping_client_init;
+        ping_test_client.tso_fini     = ping_client_fini;
+        ping_test_client.tso_prep_rpc = ping_client_prep_rpc;
+        ping_test_client.tso_done_rpc = ping_client_done_rpc;
+}
 
-srpc_service_t ping_test_service = 
+srpc_service_t ping_test_service;
+void ping_init_test_service(void)
 {
-        .sv_name        = "ping test",
-        .sv_handler     = ping_server_handle,
-        .sv_id          = SRPC_SERVICE_PING,
-};
+        ping_test_service.sv_id       = SRPC_SERVICE_PING;
+        ping_test_service.sv_name     = "ping_test";
+        ping_test_service.sv_handler  = ping_server_handle;
+}

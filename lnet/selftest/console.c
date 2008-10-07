@@ -78,7 +78,8 @@ lstcon_node_find(lnet_process_id_t id, lstcon_node_t **ndpp, int create)
 
         LASSERT (id.nid != LNET_NID_ANY);
 
-        list_for_each_entry(ndl, &console_session.ses_ndl_hash[idx], ndl_hlink) {
+        cfs_list_for_each_entry_typed(ndl, &console_session.ses_ndl_hash[idx],
+                                      lstcon_ndlink_t, ndl_hlink) {
                 if (ndl->ndl_node->nd_id.nid != id.nid ||
                     ndl->ndl_node->nd_id.pid != id.pid)
                         continue;
@@ -150,7 +151,8 @@ lstcon_ndlink_find(struct list_head *hash,
                 return -EINVAL;
 
         /* search in hash */
-        list_for_each_entry(ndl, &hash[idx], ndl_hlink) {
+        cfs_list_for_each_entry_typed(ndl, &hash[idx],
+                                      lstcon_ndlink_t, ndl_hlink) {
                 if (ndl->ndl_node->nd_id.nid != id.nid ||
                     ndl->ndl_node->nd_id.pid != id.pid)
                         continue;
@@ -238,7 +240,8 @@ lstcon_group_drain(lstcon_group_t *grp, int keep)
         lstcon_ndlink_t *ndl;
         lstcon_ndlink_t *tmp;
 
-        list_for_each_entry_safe(ndl, tmp, &grp->grp_ndl_list, ndl_link) {
+        cfs_list_for_each_entry_safe_typed(ndl, tmp, &grp->grp_ndl_list,
+                                           lstcon_ndlink_t, ndl_link) {
                 if ((ndl->ndl_node->nd_state & keep) == 0)
                         lstcon_group_ndlink_release(grp, ndl);
         }
@@ -270,7 +273,8 @@ lstcon_group_find(char *name, lstcon_group_t **grpp)
 {
         lstcon_group_t   *grp;
 
-        list_for_each_entry(grp, &console_session.ses_grp_list, grp_link) {
+        cfs_list_for_each_entry_typed(grp, &console_session.ses_grp_list,
+                                      lstcon_group_t, grp_link) {
                 if (strncmp(grp->grp_name, name, LST_NAME_SIZE) != 0)
                         continue;
 
@@ -730,7 +734,8 @@ lstcon_group_list(int index, int len, char *name_up)
         LASSERT (index >= 0);
         LASSERT (name_up != NULL);
 
-        list_for_each_entry(grp, &console_session.ses_grp_list, grp_link) {
+        cfs_list_for_each_entry_typed(grp, &console_session.ses_grp_list,
+                                      lstcon_group_t, grp_link) {
                 if (index-- == 0) {
                         return copy_to_user(name_up, grp->grp_name, len) ?
                                -EFAULT : 0;
@@ -754,7 +759,7 @@ lstcon_nodes_getent(struct list_head *head, int *index_p,
         LASSERT (*index_p >= 0);
         LASSERT (*count_p > 0);
 
-        list_for_each_entry(ndl, head, ndl_link) {
+        cfs_list_for_each_entry_typed(ndl, head, lstcon_ndlink_t, ndl_link) {
                 if (index++ < *index_p)
                         continue;
 
@@ -815,7 +820,8 @@ lstcon_group_info(char *name, lstcon_ndlist_ent_t *gents_p,
 
         memset(gentp, 0, sizeof(lstcon_ndlist_ent_t));
 
-        list_for_each_entry(ndl, &grp->grp_ndl_list, ndl_link)
+        cfs_list_for_each_entry_typed(ndl, &grp->grp_ndl_list,
+                                      lstcon_ndlink_t, ndl_link)
                 LST_NODE_STATE_COUNTER(ndl->ndl_node, gentp);
 
         rc = copy_to_user(gents_p, gentp,
@@ -833,7 +839,8 @@ lstcon_batch_find(char *name, lstcon_batch_t **batpp)
 {
         lstcon_batch_t   *bat;
 
-        list_for_each_entry(bat, &console_session.ses_bat_list, bat_link) {
+        cfs_list_for_each_entry_typed(bat, &console_session.ses_bat_list,
+                                      lstcon_batch_t, bat_link) {
                 if (strncmp(bat->bat_name, name, LST_NAME_SIZE) == 0) {
                         *batpp = bat;
                         return 0;
@@ -911,7 +918,8 @@ lstcon_batch_list(int index, int len, char *name_up)
         LASSERT (name_up != NULL);
         LASSERT (index >= 0);
 
-        list_for_each_entry(bat, &console_session.ses_bat_list, bat_link) {
+        cfs_list_for_each_entry_typed(bat, &console_session.ses_bat_list,
+                                      lstcon_batch_t, bat_link) {
                 if (index-- == 0) {
                         return copy_to_user(name_up,bat->bat_name, len) ?
                                -EFAULT: 0;
@@ -942,7 +950,8 @@ lstcon_batch_info(char *name, lstcon_test_batch_ent_t *ent_up, int server,
 
         if (testidx > 0) {
                 /* query test, test index start from 1 */
-                list_for_each_entry(test, &bat->bat_test_list, tes_link) {
+                cfs_list_for_each_entry_typed(test, &bat->bat_test_list,
+                                              lstcon_test_t, tes_link) {
                         if (testidx-- == 1)
                                 break;
                 }
@@ -982,10 +991,10 @@ lstcon_batch_info(char *name, lstcon_test_batch_ent_t *ent_up, int server,
                 entp->u.tbe_test.tse_concur = test->tes_concur;
         }
 
-        list_for_each_entry(ndl, clilst, ndl_link)
+        cfs_list_for_each_entry_typed(ndl, clilst, lstcon_ndlink_t, ndl_link)
                 LST_NODE_STATE_COUNTER(ndl->ndl_node, &entp->tbe_cli_nle);
 
-        list_for_each_entry(ndl, srvlst, ndl_link)
+        cfs_list_for_each_entry_typed(ndl, srvlst, lstcon_ndlink_t, ndl_link)
                 LST_NODE_STATE_COUNTER(ndl->ndl_node, &entp->tbe_srv_nle);
 
         rc = copy_to_user(ent_up, entp,
@@ -1335,7 +1344,8 @@ lstcon_test_find(lstcon_batch_t *batch, int idx, lstcon_test_t **testpp)
 {
         lstcon_test_t *test;
 
-        list_for_each_entry(test, &batch->bat_test_list, tes_link) {
+        cfs_list_for_each_entry_typed(test, &batch->bat_test_list,
+                                      lstcon_test_t, tes_link) {
                 if (idx == test->tes_hdr.tsb_index) {
                         *testpp = test;
                         return 0;
@@ -1749,7 +1759,8 @@ lstcon_session_info(lst_sid_t *sid_up, int *key_up,
 
         memset(entp, 0, sizeof(*entp));
 
-        list_for_each_entry(ndl, &console_session.ses_ndl_list, ndl_link)
+        cfs_list_for_each_entry_typed(ndl, &console_session.ses_ndl_list,
+                                      lstcon_ndlink_t, ndl_link)
                 LST_NODE_STATE_COUNTER(ndl->ndl_node, entp);
 
         if (copy_to_user(sid_up, &console_session.ses_id, sizeof(lst_sid_t)) ||
@@ -1901,14 +1912,15 @@ out:
         return rc;
 }
 
-srpc_service_t lstcon_acceptor_service =
+srpc_service_t lstcon_acceptor_service;
+void lstcon_init_acceptor_service(void)
 {
-        .sv_name        = "join session",
-        .sv_handler     = lstcon_acceptor_handle,
-        .sv_bulk_ready  = NULL,
-        .sv_id          = SRPC_SERVICE_JOIN,
-        .sv_concur      = SFW_SERVICE_CONCURRENCY,
-};
+        /* initialize selftest console acceptor service table */
+        lstcon_acceptor_service.sv_name    = "join session";
+        lstcon_acceptor_service.sv_handler = lstcon_acceptor_handle;
+        lstcon_acceptor_service.sv_id      = SRPC_SERVICE_JOIN;
+        lstcon_acceptor_service.sv_concur  = SFW_SERVICE_CONCURRENCY;
+}
 
 extern int lstcon_ioctl_entry(unsigned int cmd, struct libcfs_ioctl_data *data);
 
@@ -1945,6 +1957,10 @@ lstcon_console_init(void)
 
         for (i = 0; i < LST_GLOBAL_HASHSIZE; i++)
                 CFS_INIT_LIST_HEAD(&console_session.ses_ndl_hash[i]);
+
+
+        /* initialize acceptor service table */
+        lstcon_init_acceptor_service();
 
         rc = srpc_add_service(&lstcon_acceptor_service);
         LASSERT (rc != -EBUSY);

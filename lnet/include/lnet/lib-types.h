@@ -62,14 +62,12 @@
  * one epoch (i.e. new cookie when the interface restarts or the node
  * reboots).  The object cookie only matches one object on that interface
  * during that object's lifetime (i.e. no cookie re-use). */
+#include <libcfs/libcfs_pack.h>
 typedef struct {
         __u64 wh_interface_cookie;
         __u64 wh_object_cookie;
 } WIRE_ATTR lnet_handle_wire_t;
-
-/* byte-flip insensitive! */
-#define LNET_WIRE_HANDLE_NONE \
-((const lnet_handle_wire_t) {.wh_interface_cookie = -1, .wh_object_cookie = -1})
+#include <libcfs/libcfs_unpack.h>
 
 typedef enum {
         LNET_MSG_ACK = 0,
@@ -83,6 +81,7 @@ typedef enum {
  * byte boundary in the message header.  Note that all types used in these
  * wire structs MUST be fixed size and the smaller types are placed at the
  * end. */
+#include <libcfs/libcfs_pack.h>
 typedef struct lnet_ack {
         lnet_handle_wire_t  dst_wmd;
         __u64               match_bits;
@@ -175,6 +174,7 @@ typedef struct {
         __u32       acr_version;                /* protocol version */
         __u64       acr_nid;                    /* target NID */
 } WIRE_ATTR lnet_acceptor_connreq_t;
+#include <libcfs/libcfs_unpack.h>
 
 #define LNET_PROTO_ACCEPTOR_VERSION       1
 
@@ -224,7 +224,7 @@ typedef struct lnet_libhandle {
 } lnet_libhandle_t;
 
 #define lh_entry(ptr, type, member) \
-	((type *)((char *)(ptr)-(unsigned long)(&((type *)0)->member)))
+	((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
 
 typedef struct lnet_eq {
         struct list_head  eq_list;
@@ -442,6 +442,7 @@ typedef struct {
         lnet_kiov_t        rb_kiov[0];          /* the buffer space */
 } lnet_rtrbuf_t;
 
+#include <libcfs/libcfs_pack.h>
 typedef struct {
         __u32        msgs_alloc;
         __u32        msgs_max;
@@ -454,7 +455,8 @@ typedef struct {
         __u64        recv_length;
         __u64        route_length;
         __u64        drop_length;
-} lnet_counters_t;
+} WIRE_ATTR lnet_counters_t;
+#include <libcfs/libcfs_unpack.h>
 
 #define LNET_PEER_HASHSIZE   503                /* prime! */
 

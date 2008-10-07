@@ -27,7 +27,9 @@
 
 #if defined(__KERNEL__) && defined(LNET_ROUTER)
 
+#if defined(__linux__)
 #include <linux/seq_file.h>
+#endif
 
 /* this is really lnet_proc.c */
 
@@ -248,10 +250,10 @@ lnet_route_seq_show (struct seq_file *s, void *iter)
 }
 
 static struct seq_operations lnet_routes_sops = {
-        .start = lnet_route_seq_start,
-        .stop  = lnet_route_seq_stop,
-        .next  = lnet_route_seq_next,
-        .show  = lnet_route_seq_show,
+        /* start */ lnet_route_seq_start,
+        /* stop */  lnet_route_seq_stop,
+        /* next */  lnet_route_seq_next,
+        /* show */  lnet_route_seq_show,
 };
 
 static int
@@ -270,13 +272,17 @@ lnet_route_seq_open(struct inode *inode, struct file *file)
         return rc;
 }
 
-static struct file_operations lnet_routes_fops = {
-        .owner   = THIS_MODULE,
-        .open    = lnet_route_seq_open,
-        .read    = seq_read,
-        .llseek  = seq_lseek,
-        .release = seq_release,
-};
+static struct file_operations lnet_routes_fops;
+
+static void
+lnet_init_routes_fops(void)
+{
+        lnet_routes_fops.owner   =  THIS_MODULE;
+        lnet_routes_fops.llseek  =  seq_lseek;
+        lnet_routes_fops.read    =  seq_read;
+        lnet_routes_fops.open    =  lnet_route_seq_open;
+        lnet_routes_fops.release =  seq_release;
+}
 
 typedef struct {
         __u64                lrtrsi_version;
@@ -434,10 +440,10 @@ lnet_router_seq_show (struct seq_file *s, void *iter)
 }
 
 static struct seq_operations lnet_routers_sops = {
-        .start = lnet_router_seq_start,
-        .stop  = lnet_router_seq_stop,
-        .next  = lnet_router_seq_next,
-        .show  = lnet_router_seq_show,
+        /* start */ lnet_router_seq_start,
+        /* stop */  lnet_router_seq_stop,
+        /* next */  lnet_router_seq_next,
+        /* show */  lnet_router_seq_show,
 };
 
 static int
@@ -456,13 +462,17 @@ lnet_router_seq_open(struct inode *inode, struct file *file)
         return rc;
 }
 
-static struct file_operations lnet_routers_fops = {
-        .owner   = THIS_MODULE,
-        .open    = lnet_router_seq_open,
-        .read    = seq_read,
-        .llseek  = seq_lseek,
-        .release = seq_release,
-};
+static struct file_operations lnet_routers_fops;
+
+static void
+lnet_init_routers_fops(void)
+{
+        lnet_routers_fops.owner   =  THIS_MODULE;
+        lnet_routers_fops.llseek  =  seq_lseek;
+        lnet_routers_fops.read    =  seq_read;
+        lnet_routers_fops.open    =  lnet_router_seq_open;
+        lnet_routers_fops.release =  seq_release;
+}
 
 typedef struct {
         unsigned long long   lpsi_version;
@@ -643,10 +653,10 @@ lnet_peer_seq_show (struct seq_file *s, void *iter)
 }
 
 static struct seq_operations lnet_peer_sops = {
-        .start = lnet_peer_seq_start,
-        .stop  = lnet_peer_seq_stop,
-        .next  = lnet_peer_seq_next,
-        .show  = lnet_peer_seq_show,
+        /* start */ lnet_peer_seq_start,
+        /* stop */  lnet_peer_seq_stop,
+        /* next */  lnet_peer_seq_next,
+        /* show */  lnet_peer_seq_show,
 };
 
 static int
@@ -665,13 +675,17 @@ lnet_peer_seq_open(struct inode *inode, struct file *file)
         return rc;
 }
 
-static struct file_operations lnet_peer_fops = {
-        .owner   = THIS_MODULE,
-        .open    = lnet_peer_seq_open,
-        .read    = seq_read,
-        .llseek  = seq_lseek,
-        .release = seq_release,
-};
+static struct file_operations lnet_peer_fops;
+
+static void
+lnet_init_peer_fops(void)
+{
+        lnet_peer_fops.owner   =  THIS_MODULE;
+        lnet_peer_fops.llseek  =  seq_lseek;
+        lnet_peer_fops.read    =  seq_read;
+        lnet_peer_fops.open    =  lnet_peer_seq_open;
+        lnet_peer_fops.release =  seq_release;
+}
 
 typedef struct {
         int                  lbsi_idx;
@@ -803,10 +817,10 @@ lnet_buffer_seq_show (struct seq_file *s, void *iter)
 }
 
 static struct seq_operations lnet_buffer_sops = {
-        .start = lnet_buffer_seq_start,
-        .stop  = lnet_buffer_seq_stop,
-        .next  = lnet_buffer_seq_next,
-        .show  = lnet_buffer_seq_show,
+        /* start */ lnet_buffer_seq_start,
+        /* stop */  lnet_buffer_seq_stop,
+        /* next */  lnet_buffer_seq_next,
+        /* show */  lnet_buffer_seq_show,
 };
 
 static int
@@ -825,13 +839,17 @@ lnet_buffer_seq_open(struct inode *inode, struct file *file)
         return rc;
 }
 
-static struct file_operations lnet_buffers_fops = {
-        .owner   = THIS_MODULE,
-        .open    = lnet_buffer_seq_open,
-        .read    = seq_read,
-        .llseek  = seq_lseek,
-        .release = seq_release,
-};
+static struct file_operations lnet_buffers_fops;
+
+static void
+lnet_init_buffers_fops(void)
+{
+        lnet_buffers_fops.owner   =  THIS_MODULE;
+        lnet_buffers_fops.llseek  =  seq_lseek;
+        lnet_buffers_fops.read    =  seq_read;
+        lnet_buffers_fops.open    =  lnet_buffer_seq_open;
+        lnet_buffers_fops.release =  seq_release;
+}
 
 typedef struct {
         lnet_ni_t           *lnsi_ni;
@@ -971,10 +989,10 @@ lnet_ni_seq_show (struct seq_file *s, void *iter)
 }
 
 static struct seq_operations lnet_ni_sops = {
-        .start = lnet_ni_seq_start,
-        .stop  = lnet_ni_seq_stop,
-        .next  = lnet_ni_seq_next,
-        .show  = lnet_ni_seq_show,
+        /* start */ lnet_ni_seq_start,
+        /* stop */  lnet_ni_seq_stop,
+        /* next */  lnet_ni_seq_next,
+        /* show */  lnet_ni_seq_show,
 };
 
 static int
@@ -993,13 +1011,17 @@ lnet_ni_seq_open(struct inode *inode, struct file *file)
         return rc;
 }
 
-static struct file_operations lnet_ni_fops = {
-        .owner   = THIS_MODULE,
-        .open    = lnet_ni_seq_open,
-        .read    = seq_read,
-        .llseek  = seq_lseek,
-        .release = seq_release,
-};
+static struct file_operations lnet_ni_fops;
+
+static void
+lnet_init_ni_fops(void)
+{
+        lnet_ni_fops.owner   =  THIS_MODULE;
+        lnet_ni_fops.llseek  =  seq_lseek;
+        lnet_ni_fops.read    =  seq_read;
+        lnet_ni_fops.open    =  lnet_ni_seq_open;
+        lnet_ni_fops.release =  seq_release;
+}
 
 void
 lnet_proc_init(void)
@@ -1024,6 +1046,7 @@ lnet_proc_init(void)
                 return;
         }
 
+        lnet_init_routes_fops();
         pde->proc_fops = &lnet_routes_fops;
         pde->data = NULL;
 
@@ -1034,6 +1057,7 @@ lnet_proc_init(void)
                 return;
         }
 
+        lnet_init_routers_fops();
         pde->proc_fops = &lnet_routers_fops;
         pde->data = NULL;
 
@@ -1044,6 +1068,7 @@ lnet_proc_init(void)
                 return;
         }
 
+        lnet_init_peer_fops();
         pde->proc_fops = &lnet_peer_fops;
         pde->data = NULL;
 
@@ -1054,6 +1079,7 @@ lnet_proc_init(void)
                 return;
         }
 
+        lnet_init_buffers_fops();
         pde->proc_fops = &lnet_buffers_fops;
         pde->data = NULL;
 
@@ -1064,6 +1090,7 @@ lnet_proc_init(void)
                 return;
         }
 
+        lnet_init_ni_fops();
         pde->proc_fops = &lnet_ni_fops;
         pde->data = NULL;
 }

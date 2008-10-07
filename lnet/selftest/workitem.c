@@ -147,7 +147,7 @@ swi_schedule_serial_workitem (swi_workitem_t *wi)
 int
 swi_scheduler_main (void *arg)
 {
-        int  id = (long) arg;
+        int  id = (int)(long_ptr_t) arg;
         char name[16];
 
         snprintf(name, sizeof(name), "swi_sd%03d", id);
@@ -189,9 +189,9 @@ swi_scheduler_main (void *arg)
                 spin_unlock(&swi_data.wi_lock);
 
                 if (nloops < SWI_RESCHED)
-                        wait_event_interruptible_exclusive(
+                        cfs_wait_event_interruptible_exclusive(
                                    swi_data.wi_waitq,
-                                   !swi_sched_cansleep(&swi_data.wi_runq));
+                                   !swi_sched_cansleep(&swi_data.wi_runq), rc);
                 else
                         our_cond_resched();
 
@@ -242,9 +242,9 @@ swi_serial_scheduler_main (void *arg)
                 spin_unlock(&swi_data.wi_lock);
 
                 if (nloops < SWI_RESCHED)
-                        wait_event_interruptible_exclusive(
+                        cfs_wait_event_interruptible_exclusive(
                              swi_data.wi_serial_waitq, 
-                             !swi_sched_cansleep(&swi_data.wi_serial_runq));
+                             !swi_sched_cansleep(&swi_data.wi_serial_runq), rc);
                 else
                         our_cond_resched();
 
@@ -334,7 +334,8 @@ swi_startup (void)
         }
 
         for (i = 0; i < num_online_cpus(); i++) {
-                rc = swi_start_thread(swi_scheduler_main, (void *) (long) i);
+                rc = swi_start_thread(swi_scheduler_main,
+                                      (void *) (long_ptr_t) i);
                 if (rc != 0) {
                         CERROR ("Can't spawn workitem scheduler: %d\n", rc);
                         swi_shutdown();

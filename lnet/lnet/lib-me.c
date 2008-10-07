@@ -54,7 +54,7 @@ LNetMEAttach(unsigned int portal,
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
 
-        if (portal >= the_lnet.ln_nportals)
+        if ((int)portal >= the_lnet.ln_nportals)
                 return -EINVAL;
 
         me = lnet_me_alloc();

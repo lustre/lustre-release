@@ -61,14 +61,25 @@ command_t list[] = {
 
 int main(int argc, char **argv)
 {
-        if (ptl_initialize(argc, argv) < 0)
-                exit(1);
+        int rc = 0;
+
+        rc = libcfs_arch_init();
+        if (rc < 0)
+                return rc;
+
+        rc = ptl_initialize(argc, argv);
+        if (rc < 0)
+                goto errorout;
 
         Parser_init("ptlctl > ", list);
-        if (argc > 1)
-                return Parser_execarg(argc - 1, &argv[1], list);
+        if (argc > 1) {
+                rc = Parser_execarg(argc - 1, &argv[1], list);
+                goto errorout;
+        }
 
         Parser_commands();
 
-        return 0;
+errorout:
+        libcfs_arch_cleanup();
+        return rc;
 }

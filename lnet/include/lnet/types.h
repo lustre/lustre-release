@@ -65,13 +65,21 @@ typedef lnet_handle_any_t lnet_handle_eq_t;
 typedef lnet_handle_any_t lnet_handle_md_t;
 typedef lnet_handle_any_t lnet_handle_me_t;
 
-#define LNET_INVALID_HANDLE \
-    ((const lnet_handle_any_t){.cookie = -1})
-#define LNET_EQ_NONE LNET_INVALID_HANDLE
+#define LNET_WIRE_HANDLE_COOKIE_NONE   (-1)
+
+static inline void LNetInvalidateHandle(lnet_handle_any_t *h)
+{
+        h->cookie = LNET_WIRE_HANDLE_COOKIE_NONE;
+}
 
 static inline int LNetHandleIsEqual (lnet_handle_any_t h1, lnet_handle_any_t h2)
 {
         return (h1.cookie == h2.cookie);
+}
+
+static inline int LNetHandleIsInvalid(lnet_handle_any_t h)
+{
+        return (LNET_WIRE_HANDLE_COOKIE_NONE == h.cookie);
 }
 
 typedef struct {

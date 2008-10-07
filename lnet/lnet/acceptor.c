@@ -343,7 +343,7 @@ lnet_acceptor(void *arg)
 	__u32          magic;
 	__u32          peer_ip;
 	int            peer_port;
-        int            secure = (int)((unsigned long)arg);
+        int            secure = (int)((long_ptr_t)arg);
 
 	LASSERT (lnet_acceptor_state.pta_sock == NULL);
 
@@ -451,7 +451,7 @@ lnet_acceptor_start(void)
 	if (lnet_count_acceptor_nis() == 0)  /* not required */
 		return 0;
 	
-	pid = cfs_kernel_thread(lnet_acceptor, (void *)secure, 0);
+	pid = cfs_kernel_thread(lnet_acceptor, (void *)(ulong_ptr_t)secure, 0);
 	if (pid < 0) {
 		CERROR("Can't start acceptor thread: %ld\n", pid);
 		return -ESRCH;
@@ -695,7 +695,7 @@ lnet_acceptor(void *arg)
 
                 /* maybe we're waken up with libcfs_sock_abort_accept() */
                 if (lnet_acceptor_state.pta_shutdown) {
-                        close(newsock);
+                        libcfs_sock_release(newsock);
                         break;
                 }
 
@@ -721,10 +721,10 @@ lnet_acceptor(void *arg)
                 continue;
                 
           failed:
-                close(newsock);
+                libcfs_sock_release(newsock);
         }
         
-        close(lnet_acceptor_state.pta_sock);
+        libcfs_sock_release(lnet_acceptor_state.pta_sock);
         LCONSOLE(0,"Acceptor stopping\n");
 
         /* unblock lnet_acceptor_stop() */

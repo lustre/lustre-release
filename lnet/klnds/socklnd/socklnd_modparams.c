@@ -133,34 +133,53 @@ CFS_MODULE_PARM(protocol, "i", int, 0644,
                 "protocol version");
 #endif
 
-ksock_tunables_t ksocknal_tunables = {
-        .ksnd_timeout         = &sock_timeout,
-        .ksnd_credits         = &credits,
-        .ksnd_peercredits     = &peer_credits,
-        .ksnd_nconnds         = &nconnds,
-        .ksnd_min_reconnectms = &min_reconnectms,
-        .ksnd_max_reconnectms = &max_reconnectms,
-        .ksnd_eager_ack       = &eager_ack,
-        .ksnd_typed_conns     = &typed_conns,
-        .ksnd_min_bulk        = &min_bulk,
-        .ksnd_tx_buffer_size  = &tx_buffer_size,
-        .ksnd_rx_buffer_size  = &rx_buffer_size,
-        .ksnd_nagle           = &nagle,
-        .ksnd_keepalive_idle  = &keepalive_idle,
-        .ksnd_keepalive_count = &keepalive_count,
-        .ksnd_keepalive_intvl = &keepalive_intvl,
-        .ksnd_enable_csum     = &enable_csum,
-        .ksnd_inject_csum_error = &inject_csum_error,
-        .ksnd_zc_min_frag     = &zc_min_frag,
+ksock_tunables_t ksocknal_tunables;
+
+int ksocknal_tunables_init(void)
+{
+
+        /* initialize ksocknal_tunables structure */
+        ksocknal_tunables.ksnd_timeout         = &sock_timeout;
+        ksocknal_tunables.ksnd_nconnds         = &nconnds;
+        ksocknal_tunables.ksnd_min_reconnectms = &min_reconnectms;
+        ksocknal_tunables.ksnd_max_reconnectms = &max_reconnectms;
+        ksocknal_tunables.ksnd_eager_ack       = &eager_ack;
+        ksocknal_tunables.ksnd_typed_conns     = &typed_conns;
+        ksocknal_tunables.ksnd_min_bulk        = &min_bulk;
+        ksocknal_tunables.ksnd_tx_buffer_size  = &tx_buffer_size;
+        ksocknal_tunables.ksnd_rx_buffer_size  = &rx_buffer_size;
+        ksocknal_tunables.ksnd_nagle           = &nagle;
+        ksocknal_tunables.ksnd_keepalive_idle  = &keepalive_idle;
+        ksocknal_tunables.ksnd_keepalive_count = &keepalive_count;
+        ksocknal_tunables.ksnd_keepalive_intvl = &keepalive_intvl;
+        ksocknal_tunables.ksnd_credits         = &credits;
+        ksocknal_tunables.ksnd_peercredits     = &peer_credits;
+        ksocknal_tunables.ksnd_enable_csum     = &enable_csum;
+        ksocknal_tunables.ksnd_inject_csum_error = &inject_csum_error;
+        ksocknal_tunables.ksnd_zc_min_frag     = &zc_min_frag;
+
 #ifdef CPU_AFFINITY
-        .ksnd_irq_affinity    = &enable_irq_affinity,
+        ksocknal_tunables.ksnd_irq_affinity    = &enable_irq_affinity;
 #endif
+
 #ifdef SOCKNAL_BACKOFF
-        .ksnd_backoff_init    = &backoff_init,
-        .ksnd_backoff_max     = &backoff_max,
+        ksocknal_tunables.ksnd_backoff_init     = &backoff_init;
+        ksocknal_tunables.ksnd_backoff_max      = &backoff_max;
 #endif
+
 #if SOCKNAL_VERSION_DEBUG
-        .ksnd_protocol        = &protocol,
+        ksocknal_tunables.ksnd_protocol         = &protocol;
 #endif
+
+#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
+        ksocknal_tunables.ksnd_sysctl           =  NULL;
+#endif
+
+        /* initialize platform-sepcific tunables */
+        return ksocknal_lib_tunables_init();
 };
 
+void ksocknal_tunables_fini(void)
+{
+        ksocknal_lib_tunables_fini();
+}

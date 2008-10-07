@@ -515,9 +515,9 @@ srpc_init_client_rpc (srpc_client_rpc_t *rpc, lnet_process_id_t peer,
         rpc->crpc_bulk.bk_niov = nbulkiov;
         rpc->crpc_done         = rpc_done;
         rpc->crpc_fini         = rpc_fini;
-        rpc->crpc_reqstmdh     =
-        rpc->crpc_replymdh     =
-        rpc->crpc_bulk.bk_mdh  = LNET_INVALID_HANDLE;
+        LNetInvalidateHandle(&rpc->crpc_reqstmdh);
+        LNetInvalidateHandle(&rpc->crpc_replymdh);
+        LNetInvalidateHandle(&rpc->crpc_bulk.bk_mdh);
 
         /* no event is expected at this point */
         rpc->crpc_bulkev.ev_fired  =
@@ -571,14 +571,12 @@ int selftest_wait_events(void);
 
 #endif
 
-#define lst_wait_until(cond, lock, fmt, a...)                           \
+#define lst_wait_until(cond, lock, fmt, ...)                            \
 do {                                                                    \
         int __I = 2;                                                    \
         while (!(cond)) {                                               \
-                __I++;                                                  \
-                CDEBUG(((__I & (-__I)) == __I) ? D_WARNING :            \
-                                                 D_NET,     /* 2**n? */ \
-                       fmt, ## a);                                      \
+                CDEBUG(IS_PO2(++__I) ? D_WARNING : D_NET,               \
+                       fmt, ## __VA_ARGS__);                            \
                 spin_unlock(&(lock));                                   \
                                                                         \
                 selftest_wait_events();                                 \

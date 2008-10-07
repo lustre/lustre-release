@@ -72,8 +72,7 @@ typedef struct {
         __u64                   ses_stamp;              /* time stamp */
 } lst_sid_t;                                            /*** session id */
 
-#define LST_INVALID_SID         ((const lst_sid_t){.ses_nid   = LNET_NID_ANY,\
-                                                   .ses_stamp = -1})
+extern lst_sid_t LST_INVALID_SID;
 
 typedef struct {
         __u64                   bat_id;                 /* unique id in session */
@@ -458,7 +457,7 @@ typedef struct {
 } lst_test_ping_param_t;
 
 /* more tests */
-
+#include <libcfs/libcfs_pack.h>
 typedef struct {
         __u32 errors;
         __u32 rpcs_sent;
@@ -467,7 +466,7 @@ typedef struct {
         __u32 rpcs_expired;
         __u64 bulk_get;
         __u64 bulk_put;
-} srpc_counters_t;
+} WIRE_ATTR srpc_counters_t;
 
 typedef struct {
         __u32 active_tests;
@@ -475,6 +474,7 @@ typedef struct {
         __u32 zombie_sessions;
         __u32 brw_errors;
         __u32 ping_errors;
-} sfw_counters_t;
+} WIRE_ATTR sfw_counters_t;
+#include <libcfs/libcfs_unpack.h>
 
 #endif

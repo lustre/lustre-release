@@ -178,6 +178,7 @@ stt_check_timers (cfs_time_t *last)
 int
 stt_timer_main (void *arg)
 {
+        int rc = 0;
         UNUSED(arg);
 
         cfs_daemonize("st_timer");
@@ -188,7 +189,8 @@ stt_timer_main (void *arg)
 
                 cfs_waitq_wait_event_timeout(stt_data.stt_waitq,
                                    stt_data.stt_shuttingdown,
-                                   cfs_time_seconds(STTIMER_SLOTTIME));
+                                   cfs_time_seconds(STTIMER_SLOTTIME),
+                                   rc);
         }
 
         spin_lock(&stt_data.stt_lock);

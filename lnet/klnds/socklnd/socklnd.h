@@ -223,7 +223,7 @@ typedef struct                                  /* transmit packet */
         }                       tx_frags;
 } ksock_tx_t;
 
-#define KSOCK_NOOP_TX_SIZE      offsetof(ksock_tx_t, tx_frags.paged.kiov[0])
+#define KSOCK_NOOP_TX_SIZE  ((int)offsetof(ksock_tx_t, tx_frags.paged.kiov[0]))
 
 /* network zero copy callback descriptor embedded in ksock_tx_t */
 
@@ -549,6 +549,8 @@ extern int ksocknal_lib_recv_kiov (ksock_conn_t *conn);
 extern int ksocknal_lib_get_conn_tunables (ksock_conn_t *conn, int *txmem, 
                                            int *rxmem, int *nagle);
 
+extern int ksocknal_tunables_init(void);
+extern void ksocknal_tunables_fini(void);
 extern int ksocknal_lib_tunables_init(void);
 extern void ksocknal_lib_tunables_fini(void);
 

@@ -41,29 +41,4 @@
 #error Do not #include this file directly. #include <lnet/lib-types.h> instead
 #endif
 
-#include <libcfs/libcfs.h>
-
-typedef struct {
-    spinlock_t lock;
-} lib_ni_lock_t;
-
-static inline void lib_ni_lock_init(lib_ni_lock_t *l)
-{
-        spin_lock_init(&l->lock);
-}
-
-static inline void lib_ni_lock_fini(lib_ni_lock_t *l)
-{}
-
-static inline void lib_ni_lock(lib_ni_lock_t *l)
-{
-        int     flags;
-        spin_lock_irqsave(&l->lock, flags);
-}
-
-static inline void lib_ni_unlock(lib_ni_lock_t *l)
-{
-        spin_unlock_irqrestore(&l->lock, 0);
-}
-
 #endif

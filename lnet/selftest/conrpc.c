@@ -242,7 +242,8 @@ lstcon_rpc_trans_prep(struct list_head *translist,
         lstcon_rpc_trans_t *trans;
 
         if (translist != NULL) {
-                list_for_each_entry(trans, translist, tas_link) {
+                cfs_list_for_each_entry_typed(trans, translist,
+                                              lstcon_rpc_trans_t, tas_link) {
                         /* Can't enqueue two private transaction on
                          * the same object */
                         if ((trans->tas_opc & transop) == LST_TRANS_PRIVATE)
@@ -287,7 +288,8 @@ lstcon_rpc_trans_abort(lstcon_rpc_trans_t *trans, int error)
         lstcon_rpc_t      *crpc;
         lstcon_node_t     *nd;
 
-        list_for_each_entry (crpc, &trans->tas_rpcs_list, crp_link) {
+        cfs_list_for_each_entry_typed (crpc, &trans->tas_rpcs_list,
+                                       lstcon_rpc_t, crp_link) {
                 rpc = crpc->crp_rpc;
 
                 spin_lock(&rpc->crpc_lock);
@@ -343,7 +345,8 @@ lstcon_rpc_trans_postwait(lstcon_rpc_trans_t *trans, int timeout)
                lstcon_rpc_trans_name(trans->tas_opc));
 
         /* post all requests */
-        list_for_each_entry (crpc, &trans->tas_rpcs_list, crp_link) {
+        cfs_list_for_each_entry_typed (crpc, &trans->tas_rpcs_list,
+                                       lstcon_rpc_t, crp_link) {
                 LASSERT (!crpc->crp_posted);
 
                 lstcon_rpc_post(crpc);
@@ -351,9 +354,9 @@ lstcon_rpc_trans_postwait(lstcon_rpc_trans_t *trans, int timeout)
 
         mutex_up(&console_session.ses_mutex);
 
-        rc = cfs_waitq_wait_event_interruptible_timeout(trans->tas_waitq,
+        cfs_waitq_wait_event_interruptible_timeout(trans->tas_waitq,
                                               lstcon_rpc_trans_check(trans),
-                                              timeout * HZ);
+                                              cfs_time_seconds(timeout), rc);
 
         rc = (rc > 0)? 0: ((rc < 0)? -EINTR: -ETIMEDOUT);
 
@@ -427,7 +430,8 @@ lstcon_rpc_trans_stat(lstcon_rpc_trans_t *trans, lstcon_trans_stat_t *stat)
 
         memset(stat, 0, sizeof(*stat));
 
-        list_for_each_entry(crpc, &trans->tas_rpcs_list, crp_link) {
+        cfs_list_for_each_entry_typed(crpc, &trans->tas_rpcs_list,
+                                      lstcon_rpc_t, crp_link) {
                 lstcon_rpc_stat_total(stat, 1);
 
                 rpc = crpc->crp_rpc;
@@ -481,7 +485,8 @@ lstcon_rpc_trans_interpreter(lstcon_rpc_trans_t *trans,
 
         next = head_up;
 
-        list_for_each_entry(crpc, &trans->tas_rpcs_list, crp_link) {
+        cfs_list_for_each_entry_typed(crpc, &trans->tas_rpcs_list,
+                                      lstcon_rpc_t, crp_link) {
                 if (copy_from_user(&tmp, next, sizeof(struct list_head)))
                         return -EFAULT;
 
@@ -500,8 +505,8 @@ lstcon_rpc_trans_interpreter(lstcon_rpc_trans_t *trans,
 
                 nd = crpc->crp_node;
 
-                dur = cfs_time_sub(crpc->crp_stamp,
-                                   console_session.ses_id.ses_stamp);
+                dur = (cfs_duration_t)cfs_time_sub(crpc->crp_stamp,
+                      (cfs_time_t)console_session.ses_id.ses_stamp);
                 cfs_duration_usec(dur, &tv);
 
                 if (copy_to_user(&ent->rpe_peer,
@@ -542,8 +547,9 @@ lstcon_rpc_trans_destroy(lstcon_rpc_trans_t *trans)
         lstcon_rpc_t      *tmp;
         int                count = 0;
         
-        list_for_each_entry_safe(crpc, tmp,
-                                 &trans->tas_rpcs_list, crp_link) {
+        cfs_list_for_each_entry_safe_typed(crpc, tmp,
+                                           &trans->tas_rpcs_list,
+                                           lstcon_rpc_t, crp_link) {
                 rpc = crpc->crp_rpc;
 
                 spin_lock(&rpc->crpc_lock);
@@ -730,7 +736,8 @@ lstcon_dstnodes_prep(lstcon_group_t *grp, int idx,
         start = ((idx / dist) * span) % grp->grp_nnode;
         end   = ((idx / dist) * span + span - 1) % grp->grp_nnode;
 
-        list_for_each_entry(ndl, &grp->grp_ndl_list, ndl_link) {
+        cfs_list_for_each_entry_typed(ndl, &grp->grp_ndl_list,
+                                      lstcon_ndlink_t, ndl_link) {
                 nd = ndl->ndl_node;
                 if (i < start) {
                         i ++;
@@ -748,7 +755,8 @@ lstcon_dstnodes_prep(lstcon_group_t *grp, int idx,
         if (start <= end) /* done */
                 return 0;
 
-        list_for_each_entry(ndl, &grp->grp_ndl_list, ndl_link) {
+        cfs_list_for_each_entry_typed(ndl, &grp->grp_ndl_list,
+                                      lstcon_ndlink_t, ndl_link) {
                 if (i > grp->grp_nnode + end)
                         break;
 
@@ -848,7 +856,7 @@ lstcon_testrpc_prep(lstcon_node_t *nd, int transop,
         trq->tsr_bid        = test->tes_hdr.tsb_id;
         trq->tsr_concur     = test->tes_concur;
         trq->tsr_is_client  = (transop == LST_TRANS_TSBCLIADD) ? 1 : 0;
-        trq->tsr_stop_onerr = test->tes_stop_onerr;
+        trq->tsr_stop_onerr = !!test->tes_stop_onerr;
 
         switch (test->tes_type) {
         case LST_TEST_PING:
@@ -877,7 +885,7 @@ lstcon_rpc_stat_reply(int transop, srpc_msg_t *msg,
         srpc_batch_reply_t *bat_rep;
         srpc_test_reply_t  *test_rep;
         srpc_stat_reply_t  *stat_rep;
-        int                 errno = 0;
+        int                 rc = 0;
 
         switch (transop) {
         case LST_TRANS_SESNEW:
@@ -894,7 +902,7 @@ lstcon_rpc_stat_reply(int transop, srpc_msg_t *msg,
                          mksn_rep->mksn_status == EINVAL);
 
                 lstcon_sesop_stat_failure(stat, 1);
-                errno = mksn_rep->mksn_status;
+                rc = mksn_rep->mksn_status;
                 break;
 
         case LST_TRANS_SESEND:
@@ -910,7 +918,7 @@ lstcon_rpc_stat_reply(int transop, srpc_msg_t *msg,
                          rmsn_rep->rmsn_status == EINVAL);
 
                 lstcon_sesop_stat_failure(stat, 1);
-                errno = rmsn_rep->rmsn_status;
+                rc = rmsn_rep->rmsn_status;
                 break;
 
         case LST_TRANS_SESQRY:
@@ -946,7 +954,7 @@ lstcon_rpc_stat_reply(int transop, srpc_msg_t *msg,
                 }
 
                 lstcon_tsbop_stat_failure(stat, 1);
-                errno = bat_rep->bar_status;
+                rc = bat_rep->bar_status;
                 break;
 
         case LST_TRANS_TSBCLIQRY:
@@ -962,7 +970,7 @@ lstcon_rpc_stat_reply(int transop, srpc_msg_t *msg,
                         return;
 
                 lstcon_tsbqry_stat_failure(stat, 1);
-                errno = bat_rep->bar_status;
+                rc = bat_rep->bar_status;
                 break;
 
         case LST_TRANS_TSBCLIADD:
@@ -975,7 +983,7 @@ lstcon_rpc_stat_reply(int transop, srpc_msg_t *msg,
                 }
 
                 lstcon_tsbop_stat_failure(stat, 1);
-                errno = test_rep->tsr_status;
+                rc = test_rep->tsr_status;
                 break;
 
         case LST_TRANS_STATQRY:
@@ -987,7 +995,7 @@ lstcon_rpc_stat_reply(int transop, srpc_msg_t *msg,
                 }
 
                 lstcon_statqry_stat_failure(stat, 1);
-                errno = stat_rep->str_status;
+                rc = stat_rep->str_status;
                 break;
 
         default:
@@ -995,7 +1003,7 @@ lstcon_rpc_stat_reply(int transop, srpc_msg_t *msg,
         }
 
         if (stat->trs_fwk_errno == 0)
-                stat->trs_fwk_errno = errno;
+                stat->trs_fwk_errno = rc;
 
         return;
 }
@@ -1020,7 +1028,7 @@ lstcon_rpc_trans_ndlist(struct list_head *ndlist,
                 return rc;
         }
 
-        list_for_each_entry(ndl, ndlist, ndl_link) {
+        cfs_list_for_each_entry_typed(ndl, ndlist, lstcon_ndlink_t, ndl_link) {
                 rc = condition == NULL ? 1 :
                      condition(transop, ndl->ndl_node, arg);
 
@@ -1109,14 +1117,15 @@ lstcon_rpc_pinger(void *arg)
 
         if (!console_session.ses_expired &&
             cfs_time_current_sec() - console_session.ses_laststamp >
-            console_session.ses_timeout)
+            (time_t)console_session.ses_timeout)
                 console_session.ses_expired = 1;
 
         trans = console_session.ses_ping;
 
         LASSERT (trans != NULL);
 
-        list_for_each_entry(ndl, &console_session.ses_ndl_list, ndl_link) {
+        cfs_list_for_each_entry_typed(ndl, &console_session.ses_ndl_list,
+                                      lstcon_ndlink_t, ndl_link) {
                 nd = ndl->ndl_node;
 
                 if (console_session.ses_expired) {
@@ -1166,7 +1175,7 @@ lstcon_rpc_pinger(void *arg)
 
                 intv = cfs_duration_sec(cfs_time_sub(cfs_time_current(),
                                                      nd->nd_stamp));
-                if (intv < nd->nd_timeout / 2)
+                if (intv < (time_t)nd->nd_timeout / 2)
                         continue;
 
                 rc = lstcon_rpc_init(nd, SRPC_SERVICE_DEBUG, 0, 0, crpc);
@@ -1193,7 +1202,7 @@ lstcon_rpc_pinger(void *arg)
 
         CDEBUG(D_NET, "Ping %d nodes in session\n", count);
 
-        ptimer->stt_expires = cfs_time_current_sec() + LST_PING_INTERVAL;
+        ptimer->stt_expires = (cfs_time_t)(cfs_time_current_sec() + LST_PING_INTERVAL);
         stt_add_timer(ptimer);
 
         mutex_up(&console_session.ses_mutex);
@@ -1216,7 +1225,7 @@ lstcon_rpc_pinger_start(void)
         }
 
         ptimer = &console_session.ses_ping_timer;
-        ptimer->stt_expires = cfs_time_current_sec() + LST_PING_INTERVAL;
+        ptimer->stt_expires = (cfs_time_t)(cfs_time_current_sec() + LST_PING_INTERVAL);
 
         stt_add_timer(ptimer);
 

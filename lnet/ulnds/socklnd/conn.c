@@ -443,15 +443,12 @@ usocklnd_create_tx(lnet_msg_t *lntmsg)
         tx->tx_size = size;
         tx->tx_lnetmsg = lntmsg;
 
-        tx->tx_resid = tx->tx_nob =
-                offsetof(ksock_msg_t,  ksm_u.lnetmsg.ksnm_payload) +
-                payload_nob;
+        tx->tx_resid = tx->tx_nob = sizeof(ksock_msg_t) + payload_nob;
         
         usocklnd_init_msg(&tx->tx_msg, KSOCK_MSG_LNET);
         tx->tx_msg.ksm_u.lnetmsg.ksnm_hdr = lntmsg->msg_hdr;
         tx->tx_iova[0].iov_base = (void *)&tx->tx_msg;
-        tx->tx_iova[0].iov_len = offsetof(ksock_msg_t,
-                                          ksm_u.lnetmsg.ksnm_payload);
+        tx->tx_iova[0].iov_len = sizeof(ksock_msg_t);
         tx->tx_iov = tx->tx_iova;
 
         tx->tx_niov = 1 + 
@@ -642,8 +639,7 @@ usocklnd_get_conn_type(lnet_msg_t *lntmsg)
         if (the_lnet.ln_pid & LNET_PID_USERFLAG)
                 return SOCKLND_CONN_ANY;
 
-        nob = offsetof(ksock_msg_t, ksm_u.lnetmsg.ksnm_payload) +
-                lntmsg->msg_len;
+        nob = sizeof(ksock_msg_t) + lntmsg->msg_len;
         
         if (nob >= usock_tuns.ut_min_bulk)
                 return SOCKLND_CONN_BULK_OUT;

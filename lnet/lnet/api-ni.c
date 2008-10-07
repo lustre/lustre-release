@@ -309,7 +309,7 @@ lnet_find_lnd_by_type (int type)
         list_for_each (tmp, &the_lnet.ln_lnds) {
                 lnd = list_entry(tmp, lnd_t, lnd_list);
 
-                if (lnd->lnd_type == type)
+                if ((int)lnd->lnd_type == type)
                         return lnd;
         }
 
@@ -560,7 +560,7 @@ lnet_init_finalizers(void)
 #ifdef __KERNEL__
         int    i;
 
-        the_lnet.ln_nfinalizers = num_online_cpus();
+        the_lnet.ln_nfinalizers = (int) num_online_cpus();
 
         LIBCFS_ALLOC(the_lnet.ln_finalizers,
                      the_lnet.ln_nfinalizers *
@@ -1264,7 +1264,7 @@ int
 LNetCtl(unsigned int cmd, void *arg)
 {
         struct libcfs_ioctl_data *data = arg;
-        lnet_process_id_t         id;
+        lnet_process_id_t         id = {0};
         lnet_ni_t                *ni;
         int                       rc;
 
@@ -1315,9 +1315,9 @@ LNetCtl(unsigned int cmd, void *arg)
                 return 0;
 
         case IOC_LIBCFS_PING:
-                rc = lnet_ping((lnet_process_id_t) {.nid = data->ioc_nid,
-                                                    .pid = data->ioc_u32[0]},
-                               data->ioc_u32[1], /* timeout */
+                id.nid = data->ioc_nid;
+                id.pid = data->ioc_u32[0];
+                rc = lnet_ping(id, data->ioc_u32[1], /* timeout */
                                (lnet_process_id_t *)data->ioc_pbuf1,
                                data->ioc_plen1/sizeof(lnet_process_id_t));
                 if (rc < 0)
@@ -1328,17 +1328,17 @@ LNetCtl(unsigned int cmd, void *arg)
         case IOC_LIBCFS_DEBUG_PEER: {
                 /* CAVEAT EMPTOR: this one designed for calling directly; not
                  * via an ioctl */
-                lnet_process_id_t *id = arg;
+                id = *((lnet_process_id_t *) arg);
 
-                lnet_debug_peer(id->nid);
+                lnet_debug_peer(id.nid);
 
-                ni = lnet_net2ni(LNET_NIDNET(id->nid));
+                ni = lnet_net2ni(LNET_NIDNET(id.nid));
                 if (ni == NULL) {
-                        CDEBUG(D_WARNING, "No NI for %s\n", libcfs_id2str(*id));
+                        CDEBUG(D_WARNING, "No NI for %s\n", libcfs_id2str(id));
                 } else {
                         if (ni->ni_lnd->lnd_ctl == NULL) {
                                 CDEBUG(D_WARNING, "No ctl for %s\n",
-                                       libcfs_id2str(*id));
+                                       libcfs_id2str(id));
                         } else {
                                 (void)ni->ni_lnd->lnd_ctl(ni, cmd, arg);
                         }
@@ -1405,10 +1405,11 @@ lnet_ping_target_init(void)
 {
         lnet_handle_me_t  meh;
         lnet_process_id_t id;
+        lnet_md_t         md = {0};
         int               rc;
         int               rc2;
         int               n;
-        int               infosz;
+        unsigned int      infosz;
         int               i;
 
         for (n = 0; ; n++) {
@@ -1445,10 +1446,12 @@ lnet_ping_target_init(void)
                 goto failed_0;
         }
 
-        rc = LNetMEAttach(LNET_RESERVED_PORTAL,
-                          (lnet_process_id_t){.nid = LNET_NID_ANY,
-                                              .pid = LNET_PID_ANY},
-                          LNET_PROTO_PING_MATCHBITS, 0LL,
+        memset(&id, 0, sizeof(lnet_process_id_t));
+        id.nid = LNET_NID_ANY;
+        id.pid = LNET_PID_ANY;
+
+        rc = LNetMEAttach(LNET_RESERVED_PORTAL, id,
+                          LNET_PROTO_PING_MATCHBITS, 0,
                           LNET_UNLINK, LNET_INS_AFTER,
                           &meh);
         if (rc != 0) {
@@ -1456,14 +1459,17 @@ lnet_ping_target_init(void)
                 goto failed_1;
         }
 
-        rc = LNetMDAttach(meh,
-                          (lnet_md_t){.start = the_lnet.ln_ping_info,
-                                      .length = infosz,
-                                      .threshold = LNET_MD_THRESH_INF,
-                                      .options = (LNET_MD_OP_GET |
-                                                  LNET_MD_TRUNCATE |
-                                                  LNET_MD_MANAGE_REMOTE),
-                                      .eq_handle = the_lnet.ln_ping_target_eq},
+        /* initialize md content */
+        md.start     = the_lnet.ln_ping_info;
+        md.length    = infosz;
+        md.threshold = LNET_MD_THRESH_INF;
+        md.max_size  = 0;
+        md.options   = LNET_MD_OP_GET | LNET_MD_TRUNCATE |
+                       LNET_MD_MANAGE_REMOTE;
+        md.user_ptr  = NULL;
+        md.eq_handle = the_lnet.ln_ping_target_eq;
+
+        rc = LNetMDAttach(meh, md,
                           LNET_RETAIN,
                           &the_lnet.ln_ping_target_md);
         if (rc != 0) {
@@ -1532,6 +1538,7 @@ lnet_ping (lnet_process_id_t id, int timeout_ms, lnet_process_id_t *ids, int n_i
         lnet_handle_eq_t     eqh;
         lnet_handle_md_t     mdh;
         lnet_event_t         event;
+        lnet_md_t            md = {0};
         int                  which;
         int                  unlinked = 0;
         int                  replied = 0;
@@ -1565,13 +1572,16 @@ lnet_ping (lnet_process_id_t id, int timeout_ms, lnet_process_id_t *ids, int n_i
                 goto out_0;
         }
 
-        rc = LNetMDBind((lnet_md_t){.start = info,
-                                    .length = infosz,
-                                    .threshold = 2, /* GET/REPLY */
-                                    .options = LNET_MD_TRUNCATE,
-                                    .eq_handle = eqh},
-                        LNET_UNLINK,
-                        &mdh);
+        /* initialize md content */
+        md.start     = info;
+        md.length    = infosz;
+        md.threshold = 2; /*GET/REPLY*/
+        md.max_size  = 0;
+        md.options   = LNET_MD_TRUNCATE;
+        md.user_ptr  = NULL;
+        md.eq_handle = eqh;
+
+        rc = LNetMDBind(md, LNET_UNLINK, &mdh);
         if (rc != 0) {
                 CERROR("Can't bind MD: %d\n", rc);
                 goto out_1;
@@ -1661,7 +1671,7 @@ lnet_ping (lnet_process_id_t id, int timeout_ms, lnet_process_id_t *ids, int n_i
                 __swab32s(&info->pi_version);
                 __swab32s(&info->pi_pid);
                 __swab32s(&info->pi_nnids);
-                for (i = 0; i < info->pi_nnids && i < n_ids; i++)
+                for (i = 0; i < (int)info->pi_nnids && i < (int)n_ids; i++)
                         __swab64s(&info->pi_nid[i]);
 
         } else if (info->pi_magic != LNET_PROTO_PING_MAGIC) {
@@ -1676,16 +1686,16 @@ lnet_ping (lnet_process_id_t id, int timeout_ms, lnet_process_id_t *ids, int n_i
                 goto out_1;
         }
 
-        if (nob < offsetof(lnet_ping_info_t, pi_nid[0])) {
+        if (nob < (int)offsetof(lnet_ping_info_t, pi_nid[0])) {
                 CERROR("%s: Short reply %d(%d min)\n", libcfs_id2str(id),
                        nob, (int)offsetof(lnet_ping_info_t, pi_nid[0]));
                 goto out_1;
         }
 
-        if (info->pi_nnids < n_ids)
+        if ((int) info->pi_nnids < n_ids)
                 n_ids = info->pi_nnids;
 
-        if (nob < offsetof(lnet_ping_info_t, pi_nid[n_ids])) {
+        if (nob < (int)offsetof(lnet_ping_info_t, pi_nid[n_ids])) {
                 CERROR("%s: Short reply %d(%d expected)\n", libcfs_id2str(id),
                        nob, (int)offsetof(lnet_ping_info_t, pi_nid[n_ids]));
                 goto out_1;

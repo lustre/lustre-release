@@ -96,7 +96,7 @@ lib_md_build(lnet_libmd_t *lmd, lnet_md_t *umd, int unlink)
          * otherwise caller may only lnet_md_free() it.
          */
 
-        if (!LNetHandleIsEqual (umd->eq_handle, LNET_EQ_NONE)) {
+        if (!LNetHandleIsInvalid (umd->eq_handle)) {
                 eq = lnet_handle2eq(&umd->eq_handle);
                 if (eq == NULL)
                         return -ENOENT;
@@ -131,7 +131,7 @@ lib_md_build(lnet_libmd_t *lmd, lnet_md_t *umd, int unlink)
                 memcpy(lmd->md_iov.iov, umd->start,
                        niov * sizeof (lmd->md_iov.iov[0]));
 
-                for (i = 0; i < niov; i++) {
+                for (i = 0; i < (int)niov; i++) {
                         /* We take the base address on trust */
                         if (lmd->md_iov.iov[i].iov_len <= 0) /* invalid length */
                                 return -EINVAL;
@@ -154,7 +154,7 @@ lib_md_build(lnet_libmd_t *lmd, lnet_md_t *umd, int unlink)
                 memcpy(lmd->md_iov.kiov, umd->start,
                        niov * sizeof (lmd->md_iov.kiov[0]));
 
-                for (i = 0; i < niov; i++) {
+                for (i = 0; i < (int)niov; i++) {
                         /* We take the page pointer on trust */
                         if (lmd->md_iov.kiov[i].kiov_offset +
                             lmd->md_iov.kiov[i].kiov_len > CFS_PAGE_SIZE )
@@ -178,7 +178,7 @@ lib_md_build(lnet_libmd_t *lmd, lnet_md_t *umd, int unlink)
 
                 if ((umd->options & LNET_MD_MAX_SIZE) != 0 && /* max size used */
                     (umd->max_size < 0 ||
-                     umd->max_size > umd->length)) // illegal max_size
+                     umd->max_size > (int)umd->length)) // illegal max_size
                         return -EINVAL;
         }
 

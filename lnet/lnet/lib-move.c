@@ -169,7 +169,8 @@ lnet_match_md(int index, int op_mask, lnet_process_id_t src,
                 return LNET_MATCHMD_DROP;
         }
 
-        list_for_each_entry_safe (me, tmp, &ptl->ptl_ml, me_list) {
+        cfs_list_for_each_entry_safe_typed (me, tmp, &ptl->ptl_ml,
+                                            lnet_me_t, me_list) {
                 md = me->me_md;
 
                 /* ME attached but MD not attached yet */
@@ -409,7 +410,7 @@ lnet_extract_iov (int dst_niov, struct iovec *dst,
         niov = 1;
         for (;;) {
                 LASSERT (src_niov > 0);
-                LASSERT (niov <= dst_niov);
+                LASSERT ((int)niov <= dst_niov);
 
                 frag_len = src->iov_len - offset;
                 dst->iov_base = ((char *)src->iov_base) + offset;
@@ -726,7 +727,7 @@ lnet_extract_kiov (int dst_niov, lnet_kiov_t *dst,
         niov = 1;
         for (;;) {
                 LASSERT (src_niov > 0);
-                LASSERT (niov <= dst_niov);
+                LASSERT ((int)niov <= dst_niov);
 
                 frag_len = src->kiov_len - offset;
                 dst->kiov_page = src->kiov_page;
@@ -979,7 +980,7 @@ lnet_msg2bufpool(lnet_msg_t *msg)
         lnet_rtrbufpool_t *rbp = &the_lnet.ln_rtrpools[0];
 
         LASSERT (msg->msg_len <= LNET_MTU);
-        while (msg->msg_len > rbp->rbp_npages * CFS_PAGE_SIZE) {
+        while (msg->msg_len > (unsigned int)rbp->rbp_npages * CFS_PAGE_SIZE) {
                 rbp++;
                 LASSERT (rbp < &the_lnet.ln_rtrpools[LNET_NRBPOOLS]);
         }
@@ -1374,6 +1375,11 @@ lnet_drop_message (lnet_ni_t *ni, void *private, unsigned int nob)
 static void
 lnet_drop_delayed_put(lnet_msg_t *msg, char *reason)
 {
+        lnet_process_id_t id = {0};
+
+        id.nid = msg->msg_hdr.src_nid;
+        id.pid = msg->msg_hdr.src_pid;
+
         LASSERT (msg->msg_md == NULL);
         LASSERT (msg->msg_delayed);
         LASSERT (msg->msg_rxpeer != NULL);
@@ -1381,9 +1387,7 @@ lnet_drop_delayed_put(lnet_msg_t *msg, char *reason)
 
         CWARN("Dropping delayed PUT from %s portal %d match "LPU64
               " offset %d length %d: %s\n", 
-              libcfs_id2str((lnet_process_id_t){
-                      .nid = msg->msg_hdr.src_nid,
-                      .pid = msg->msg_hdr.src_pid}),
+              libcfs_id2str(id),
               msg->msg_hdr.msg.put.ptl_index,
               msg->msg_hdr.msg.put.match_bits,
               msg->msg_hdr.msg.put.offset,
@@ -1511,7 +1515,7 @@ lnet_match_blocked_msg(lnet_libmd_t *md)
         lnet_me_t        *me  = md->md_me;
         lnet_portal_t    *ptl = &the_lnet.ln_portals[me->me_portal];
 
-        LASSERT (me->me_portal < the_lnet.ln_nportals);
+        LASSERT (me->me_portal < (unsigned int)the_lnet.ln_nportals);
 
         if ((ptl->ptl_options & LNET_PTL_LAZY) == 0) {
                 LASSERT (list_empty(&ptl->ptl_msgq));
@@ -1605,9 +1609,11 @@ lnet_parse_put(lnet_ni_t *ni, lnet_msg_t *msg)
         unsigned int      rlength = hdr->payload_length;
         unsigned int      mlength = 0;
         unsigned int      offset = 0;
-        lnet_process_id_t src = {/* .nid = */ hdr->src_nid,
-                                 /* .pid = */ hdr->src_pid};
+        lnet_process_id_t src= {0};
         lnet_libmd_t     *md;
+
+        src.nid = hdr->src_nid;
+        src.pid = hdr->src_pid;
 
         /* Convert put fields to host byte order */
         hdr->msg.put.match_bits = le64_to_cpu(hdr->msg.put.match_bits);
@@ -1669,11 +1675,13 @@ lnet_parse_get(lnet_ni_t *ni, lnet_msg_t *msg, int rdma_get)
         lnet_hdr_t        *hdr = &msg->msg_hdr;
         unsigned int       mlength = 0;
         unsigned int       offset = 0;
-        lnet_process_id_t  src = {/* .nid = */ hdr->src_nid,
-                                  /* .pid = */ hdr->src_pid};
+        lnet_process_id_t  src = {0};
         lnet_handle_wire_t reply_wmd;
         lnet_libmd_t      *md;
         int                rc;
+
+        src.nid = hdr->src_nid;
+        src.pid = hdr->src_pid;
 
         /* Convert get fields to host byte order */
         hdr->msg.get.match_bits = le64_to_cpu(hdr->msg.get.match_bits);
@@ -1745,13 +1753,15 @@ lnet_parse_reply(lnet_ni_t *ni, lnet_msg_t *msg)
 {
         void             *private = msg->msg_private;
         lnet_hdr_t       *hdr = &msg->msg_hdr;
-        lnet_process_id_t src = {/* .nid = */ hdr->src_nid,
-                                 /* .pid = */ hdr->src_pid};
+        lnet_process_id_t src = {0};
         lnet_libmd_t     *md;
         int               rlength;
         int               mlength;
 
         LNET_LOCK();
+
+        src.nid = hdr->src_nid;
+        src.pid = hdr->src_pid;
 
         /* NB handles only looked up by creator (no flips) */
         md = lnet_wire_handle2md(&hdr->msg.reply.dst_wmd);
@@ -1773,7 +1783,7 @@ lnet_parse_reply(lnet_ni_t *ni, lnet_msg_t *msg)
         LASSERT (md->md_offset == 0);
 
         rlength = hdr->payload_length;
-        mlength = MIN(rlength, md->md_length);
+        mlength = MIN(rlength, (int)md->md_length);
 
         if (mlength < rlength &&
             (md->md_options & LNET_MD_TRUNCATE) == 0) {
@@ -1819,9 +1829,11 @@ static int
 lnet_parse_ack(lnet_ni_t *ni, lnet_msg_t *msg)
 {
         lnet_hdr_t       *hdr = &msg->msg_hdr;
-        lnet_process_id_t src = {/* .nid = */ hdr->src_nid,
-                                 /* .pid = */ hdr->src_pid};
-        lnet_libmd_t    *md;
+        lnet_process_id_t src = {0};
+        lnet_libmd_t     *md;
+
+        src.nid = hdr->src_nid;
+        src.pid = hdr->src_pid;
 
         /* Convert ack fields to host byte order */
         hdr->msg.ack.match_bits = le64_to_cpu(hdr->msg.ack.match_bits);
@@ -1893,11 +1905,15 @@ lnet_msgtyp2str (int type)
 void
 lnet_print_hdr(lnet_hdr_t * hdr)
 {
-        lnet_process_id_t src = {/* .nid = */ hdr->src_nid,
-                                 /* .pid = */ hdr->src_pid};
-        lnet_process_id_t dst = {/* .nid = */ hdr->dest_nid,
-                                 /* .pid = */ hdr->dest_pid};
+        lnet_process_id_t src = {0};
+        lnet_process_id_t dst = {0};
         char *type_str = lnet_msgtyp2str (hdr->type);
+
+        src.nid = hdr->src_nid;
+        src.pid = hdr->src_pid;
+
+        dst.nid = hdr->dest_nid;
+        dst.pid = hdr->dest_pid;
 
         CWARN("P3 Header at %p of type %s\n", hdr, type_str);
         CWARN("    From %s\n", libcfs_id2str(src));
@@ -1984,7 +2000,7 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
 
         case LNET_MSG_PUT:
         case LNET_MSG_REPLY:
-                if (payload_length > (for_me ? LNET_MAX_PAYLOAD : LNET_MTU)) {
+                if (payload_length > (__u32)(for_me ? LNET_MAX_PAYLOAD : LNET_MTU)) {
                         CERROR("%s, src %s: bad %s payload %d "
                                "(%d max expected)\n",
                                libcfs_nid2str(from_nid),
@@ -2229,7 +2245,10 @@ LNetPut(lnet_nid_t self, lnet_handle_md_t mdh, lnet_ack_req_t ack,
                 msg->msg_hdr.msg.put.ack_wmd.wh_object_cookie = 
                         md->md_lh.lh_cookie;
         } else {
-                msg->msg_hdr.msg.put.ack_wmd = LNET_WIRE_HANDLE_NONE;
+                msg->msg_hdr.msg.put.ack_wmd.wh_interface_cookie = 
+                        LNET_WIRE_HANDLE_COOKIE_NONE;
+                msg->msg_hdr.msg.put.ack_wmd.wh_object_cookie = 
+                        LNET_WIRE_HANDLE_COOKIE_NONE;
         }
 
         msg->msg_ev.type = LNET_EVENT_SEND;

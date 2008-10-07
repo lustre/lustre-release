@@ -40,17 +40,12 @@
 
 #define _GNU_SOURCE
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <getopt.h>
-#include <errno.h>
-#include <pwd.h>
+#include <libcfs/libcfsutil.h>
 #include <lnet/lnetctl.h>
 #include <lnet/lnetst.h>
-#include <libcfs/libcfsutil.h>
 
-static command_t           lst_cmdlist[];
+
+lst_sid_t LST_INVALID_SID = {LNET_NID_ANY, -1};
 static lst_sid_t           session_id;
 static int                 session_key;
 static lstcon_trans_stat_t trans_stat;
@@ -413,7 +408,7 @@ lst_reset_rpcent(struct list_head *head)
 {
         lstcon_rpc_ent_t *ent;
 
-        list_for_each_entry(ent, head, rpe_link) {
+        cfs_list_for_each_entry_typed(ent, head, lstcon_rpc_ent_t, rpe_link) {
                 ent->rpe_sid      = LST_INVALID_SID;
                 ent->rpe_peer.nid = LNET_NID_ANY;
                 ent->rpe_peer.pid = LNET_PID_ANY;
@@ -450,7 +445,7 @@ lst_print_transerr(struct list_head *head, char *optstr)
 {
         lstcon_rpc_ent_t  *ent;
 
-        list_for_each_entry(ent, head, rpe_link) {
+        cfs_list_for_each_entry_typed(ent, head, lstcon_rpc_ent_t, rpe_link) {
                 if (ent->rpe_rpc_errno == 0 && ent->rpe_fwk_errno == 0)
                         continue;
 
@@ -512,14 +507,14 @@ lst_ioctl(unsigned int opc, void *buf, int len)
 int
 lst_new_session_ioctl (char *name, int timeout, int force, lst_sid_t *sid)
 {
-	lstio_session_new_args_t        args = {
-                .lstio_ses_key          = session_key,
-                .lstio_ses_timeout      = timeout,
-                .lstio_ses_force        = force,
-                .lstio_ses_idp          = sid,
-                .lstio_ses_namep        = name,
-                .lstio_ses_nmlen        = strlen(name),
-        };
+        lstio_session_new_args_t args = {0};
+
+        args.lstio_ses_key     = session_key;
+        args.lstio_ses_timeout = timeout;
+        args.lstio_ses_force   = force;
+        args.lstio_ses_idp     = sid;
+        args.lstio_ses_nmlen   = strlen(name);
+        args.lstio_ses_namep   = name;
 
         return lst_ioctl (LSTIO_SESSION_NEW, &args, sizeof(args));
 }
@@ -622,13 +617,13 @@ int
 lst_session_info_ioctl(char *name, int len, int *key,
                        lst_sid_t *sid, lstcon_ndlist_ent_t *ndinfo)
 {
-        lstio_session_info_args_t args = {
-                .lstio_ses_keyp         = key,
-                .lstio_ses_idp          = sid,
-                .lstio_ses_ndinfo       = ndinfo,
-                .lstio_ses_nmlen        = len,
-                .lstio_ses_namep        = name,
-        };
+        lstio_session_info_args_t args = {0};
+
+        args.lstio_ses_idp    = sid;
+        args.lstio_ses_keyp   = key;
+        args.lstio_ses_ndinfo = ndinfo;
+        args.lstio_ses_nmlen  = len;
+        args.lstio_ses_namep  = name;
 
         return lst_ioctl(LSTIO_SESSION_INFO, &args, sizeof(args));
 }
@@ -660,10 +655,9 @@ jt_lst_show_session(int argc, char **argv)
 int
 lst_end_session_ioctl(void)
 {
-        lstio_session_end_args_t args = {
-                .lstio_ses_key           = session_key,
-        };
+        lstio_session_end_args_t args = {0};
 
+        args.lstio_ses_key =  session_key;
         return lst_ioctl (LSTIO_SESSION_END, &args, sizeof(args));
 }
 
@@ -712,17 +706,17 @@ int
 lst_ping_ioctl(char *str, int type, int timeout,
                int count, lnet_process_id_t *ids, struct list_head *head)
 {
-        lstio_debug_args_t args = {
-                .lstio_dbg_key          = session_key,
-                .lstio_dbg_type         = type,
-                .lstio_dbg_flags        = 0,
-                .lstio_dbg_timeout      = timeout,
-                .lstio_dbg_nmlen        = (str == NULL) ? 0: strlen(str),
-                .lstio_dbg_namep        = str,
-                .lstio_dbg_count        = count,
-                .lstio_dbg_idsp         = ids,
-                .lstio_dbg_resultp      = head,
-        };
+        lstio_debug_args_t args = {0};
+
+        args.lstio_dbg_key     = session_key;
+        args.lstio_dbg_type    = type;
+        args.lstio_dbg_flags   = 0;
+        args.lstio_dbg_timeout = timeout;
+        args.lstio_dbg_nmlen   = (str == NULL) ? 0: strlen(str);
+        args.lstio_dbg_namep   = str;
+        args.lstio_dbg_count   = count;
+        args.lstio_dbg_idsp    = ids;
+        args.lstio_dbg_resultp = head;
 
         return lst_ioctl (LSTIO_DEBUG, &args, sizeof(args));
 }
@@ -881,7 +875,7 @@ jt_lst_ping(int argc,  char **argv)
         }
 
         /* ignore RPC errors and framwork errors */
-        list_for_each_entry(ent, &head, rpe_link) {
+        cfs_list_for_each_entry_typed(ent, &head, lstcon_rpc_ent_t, rpe_link) {
                 fprintf(stdout, "\t%s: %s [session: %s id: %s]\n",
                         libcfs_id2str(ent->rpe_peer),
                         lst_node_state2str(ent->rpe_state),
@@ -906,14 +900,14 @@ int
 lst_add_nodes_ioctl (char *name, int count, lnet_process_id_t *ids,
                      struct list_head *resultp)
 {
-        lstio_group_nodes_args_t        args = {
-                .lstio_grp_key          = session_key,
-                .lstio_grp_nmlen        = strlen(name),
-                .lstio_grp_namep        = name,
-                .lstio_grp_count        = count,
-                .lstio_grp_idsp         = ids,
-                .lstio_grp_resultp      = resultp,
-        };
+        lstio_group_nodes_args_t args = {0};
+
+        args.lstio_grp_key     = session_key;
+        args.lstio_grp_nmlen   = strlen(name);
+        args.lstio_grp_namep   = name;
+        args.lstio_grp_count   = count;
+        args.lstio_grp_idsp    = ids;
+        args.lstio_grp_resultp = resultp;
 
         return lst_ioctl(LSTIO_NODES_ADD, &args, sizeof(args));
 }
@@ -921,11 +915,11 @@ lst_add_nodes_ioctl (char *name, int count, lnet_process_id_t *ids,
 int
 lst_add_group_ioctl (char *name)
 {
-        lstio_group_add_args_t  args = {
-                .lstio_grp_key          = session_key,
-                .lstio_grp_nmlen        = strlen(name),
-                .lstio_grp_namep        = name,
-        };
+        lstio_group_add_args_t args = {0};
+
+        args.lstio_grp_key     =  session_key;
+        args.lstio_grp_nmlen   =  strlen(name);
+        args.lstio_grp_namep   =  name;
 
         return lst_ioctl(LSTIO_GROUP_ADD, &args, sizeof(args));
 }
@@ -1012,11 +1006,11 @@ jt_lst_add_group(int argc, char **argv)
 int
 lst_del_group_ioctl (char *name)
 {
-        lstio_group_del_args_t  args = {
-                .lstio_grp_key          = session_key,
-                .lstio_grp_nmlen        = strlen(name),
-                .lstio_grp_namep        = name,
-        };
+        lstio_group_del_args_t args = {0};
+
+        args.lstio_grp_key   = session_key;
+        args.lstio_grp_nmlen = strlen(name);
+        args.lstio_grp_namep = name;
 
         return lst_ioctl(LSTIO_GROUP_DEL, &args, sizeof(args));
 }
@@ -1071,16 +1065,16 @@ int
 lst_update_group_ioctl(int opc, char *name, int clean, int count,
                        lnet_process_id_t *ids, struct list_head *resultp)
 {
-        lstio_group_update_args_t  args = {
-                .lstio_grp_key          = session_key,
-                .lstio_grp_opc          = opc,
-                .lstio_grp_args         = clean,
-                .lstio_grp_nmlen        = strlen(name),
-                .lstio_grp_namep        = name,
-                .lstio_grp_count        = count,
-                .lstio_grp_idsp         = ids,
-                .lstio_grp_resultp      = resultp,
-        };
+        lstio_group_update_args_t args = {0};
+
+        args.lstio_grp_key      = session_key;
+        args.lstio_grp_opc      = opc;
+        args.lstio_grp_args     = clean;
+        args.lstio_grp_nmlen    = strlen(name);
+        args.lstio_grp_namep    = name;
+        args.lstio_grp_count    = count;
+        args.lstio_grp_idsp     = ids;
+        args.lstio_grp_resultp  = resultp;
 
         return lst_ioctl(LSTIO_GROUP_UPDATE, &args, sizeof(args));
 }
@@ -1213,12 +1207,12 @@ jt_lst_update_group(int argc, char **argv)
 int
 lst_list_group_ioctl(int len, char *name, int idx)
 {
-        lstio_group_list_args_t         args = {
-                .lstio_grp_key          = session_key,
-                .lstio_grp_idx          = idx,
-                .lstio_grp_nmlen        = len,
-                .lstio_grp_namep        = name,
-        };
+        lstio_group_list_args_t args = {0};
+
+        args.lstio_grp_key   = session_key;
+        args.lstio_grp_idx   = idx;
+        args.lstio_grp_nmlen = len;
+        args.lstio_grp_namep = name;
 
         return lst_ioctl(LSTIO_GROUP_LIST, &args, sizeof(args));
 }
@@ -1227,15 +1221,15 @@ int
 lst_info_group_ioctl(char *name, lstcon_ndlist_ent_t *gent,
                      int *idx, int *count, lstcon_node_ent_t *dents)
 {
-        lstio_group_info_args_t         args = {
-                .lstio_grp_key          = session_key,
-                .lstio_grp_nmlen        = strlen(name),
-                .lstio_grp_namep        = name,
-                .lstio_grp_entp         = gent,
-                .lstio_grp_idxp         = idx,
-                .lstio_grp_ndentp       = count,
-                .lstio_grp_dentsp       = dents,
-        };
+        lstio_group_info_args_t args = {0};
+
+        args.lstio_grp_key    = session_key;
+        args.lstio_grp_nmlen  = strlen(name);
+        args.lstio_grp_namep  = name;
+        args.lstio_grp_entp   = gent;
+        args.lstio_grp_idxp   = idx;
+        args.lstio_grp_ndentp = count;
+        args.lstio_grp_dentsp = dents;
 
         return lst_ioctl(LSTIO_GROUP_INFO, &args, sizeof(args));
 }
@@ -1421,15 +1415,15 @@ int
 lst_stat_ioctl (char *name, int count, lnet_process_id_t *idsp,
                 int timeout, struct list_head *resultp)
 {
-        lstio_stat_args_t  args = {
-                .lstio_sta_key           = session_key,
-                .lstio_sta_timeout       = timeout,
-                .lstio_sta_nmlen         = strlen(name),
-                .lstio_sta_namep         = name,
-                .lstio_sta_count         = count,
-                .lstio_sta_idsp          = idsp,
-                .lstio_sta_resultp       = resultp,
-        };
+        lstio_stat_args_t args = {0};
+
+        args.lstio_sta_key     = session_key;
+        args.lstio_sta_timeout = timeout;
+        args.lstio_sta_nmlen   = strlen(name);
+        args.lstio_sta_namep   = name;
+        args.lstio_sta_count   = count;
+        args.lstio_sta_idsp    = idsp;
+        args.lstio_sta_resultp = resultp;
 
         return lst_ioctl (LSTIO_STAT_QUERY, &args, sizeof(args));
 }
@@ -1513,6 +1507,7 @@ lst_stat_req_param_alloc(char *name, lst_stat_req_param_t **srpp, int save_old)
 
 typedef struct {
         /* TODO */
+        int foo;
 } lst_srpc_stat_result;
 
 #define LST_LNET_AVG    0
@@ -1906,7 +1901,8 @@ jt_lst_stat(int argc, char **argv)
 
                 last = now;
 
-                list_for_each_entry(srp, &head, srp_link) {
+                cfs_list_for_each_entry_typed(srp, &head, lst_stat_req_param_t,
+                                              srp_link) {
                         rc = lst_stat_ioctl(srp->srp_name,
                                             srp->srp_count, srp->srp_ids,
                                             timeout, &srp->srp_result[idx]);
@@ -1995,7 +1991,8 @@ jt_lst_show_error(int argc, char **argv)
                 list_add_tail(&srp->srp_link, &head);
         }
 
-        list_for_each_entry(srp, &head, srp_link) {
+        cfs_list_for_each_entry_typed(srp, &head, lst_stat_req_param_t,
+                                      srp_link) {
                 rc = lst_stat_ioctl(srp->srp_name, srp->srp_count,
                                     srp->srp_ids, 5, &srp->srp_result[0]);
 
@@ -2009,7 +2006,8 @@ jt_lst_show_error(int argc, char **argv)
 
                 ecount = 0;
 
-                list_for_each_entry(ent, &srp->srp_result[0], rpe_link) {
+                cfs_list_for_each_entry_typed(ent, &srp->srp_result[0],
+                                              lstcon_rpc_ent_t, rpe_link) {
                         if (ent->rpe_rpc_errno != 0) {
                                 ecount ++;
                                 fprintf(stderr, "RPC failure, can't show error on %s\n",
@@ -2066,11 +2064,11 @@ out:
 int
 lst_add_batch_ioctl (char *name)
 {
-        lstio_batch_add_args_t  args = {
-                .lstio_bat_key           = session_key,
-                .lstio_bat_nmlen         = strlen(name),
-                .lstio_bat_namep         = name,
-        };
+        lstio_batch_add_args_t args = {0};
+
+        args.lstio_bat_key   = session_key;
+        args.lstio_bat_nmlen = strlen(name);
+        args.lstio_bat_namep = name;
 
         return lst_ioctl (LSTIO_BATCH_ADD, &args, sizeof(args));
 }
@@ -2112,13 +2110,13 @@ jt_lst_add_batch(int argc, char **argv)
 int
 lst_start_batch_ioctl (char *name, int timeout, struct list_head *resultp)
 {
-        lstio_batch_run_args_t   args = {
-                .lstio_bat_key          = session_key,
-                .lstio_bat_timeout      = timeout,
-                .lstio_bat_nmlen        = strlen(name),
-                .lstio_bat_namep        = name,
-                .lstio_bat_resultp      = resultp,
-        };
+        lstio_batch_run_args_t args = {0};
+
+        args.lstio_bat_key     = session_key;
+        args.lstio_bat_timeout = timeout;
+        args.lstio_bat_nmlen   = strlen(name);
+        args.lstio_bat_namep   = name;
+        args.lstio_bat_resultp = resultp;
 
         return lst_ioctl(LSTIO_BATCH_START, &args, sizeof(args));
 }
@@ -2215,13 +2213,13 @@ jt_lst_start_batch(int argc, char **argv)
 int
 lst_stop_batch_ioctl(char *name, int force, struct list_head *resultp)
 {
-        lstio_batch_stop_args_t   args = {
-                .lstio_bat_key          = session_key,
-                .lstio_bat_force        = force,
-                .lstio_bat_nmlen        = strlen(name),
-                .lstio_bat_namep        = name,
-                .lstio_bat_resultp      = resultp,
-        };
+        lstio_batch_stop_args_t args = {0};
+
+        args.lstio_bat_key     = session_key;
+        args.lstio_bat_force   = force;
+        args.lstio_bat_nmlen   = strlen(name);
+        args.lstio_bat_namep   = name;
+        args.lstio_bat_resultp = resultp;
 
         return lst_ioctl(LSTIO_BATCH_STOP, &args, sizeof(args));
 }
@@ -2335,12 +2333,12 @@ out:
 int
 lst_list_batch_ioctl(int len, char *name, int index)
 {
-        lstio_batch_list_args_t         args = {
-                .lstio_bat_key          = session_key,
-                .lstio_bat_idx          = index,
-                .lstio_bat_nmlen        = len,
-                .lstio_bat_namep        = name,
-        };
+        lstio_batch_list_args_t args = {0};
+
+        args.lstio_bat_key   = session_key;
+        args.lstio_bat_idx   = index;
+        args.lstio_bat_nmlen = len;
+        args.lstio_bat_namep = name;
 
         return lst_ioctl(LSTIO_BATCH_LIST, &args, sizeof(args));
 }
@@ -2350,17 +2348,17 @@ lst_info_batch_ioctl(char *batch, int test, int server,
                      lstcon_test_batch_ent_t *entp, int *idxp,
                      int *ndentp, lstcon_node_ent_t *dentsp)
 {
-        lstio_batch_info_args_t         args = {
-                .lstio_bat_key          = session_key,
-                .lstio_bat_nmlen        = strlen(batch),
-                .lstio_bat_namep        = batch,
-                .lstio_bat_server       = server,
-                .lstio_bat_testidx      = test,
-                .lstio_bat_entp         = entp,
-                .lstio_bat_idxp         = idxp,
-                .lstio_bat_ndentp       = ndentp,
-                .lstio_bat_dentsp       = dentsp,
-        };
+        lstio_batch_info_args_t args = {0};
+
+        args.lstio_bat_key     = session_key;
+        args.lstio_bat_nmlen   = strlen(batch);
+        args.lstio_bat_namep   = batch;
+        args.lstio_bat_server  = server;
+        args.lstio_bat_testidx = test;
+        args.lstio_bat_entp    = entp;
+        args.lstio_bat_idxp    = idxp;
+        args.lstio_bat_ndentp  = ndentp;
+        args.lstio_bat_dentsp  = dentsp;
 
         return lst_ioctl(LSTIO_BATCH_INFO, &args, sizeof(args));
 }
@@ -2584,15 +2582,15 @@ int
 lst_query_batch_ioctl(char *batch, int test, int server,
                       int timeout, struct list_head *head)
 {
-        lstio_batch_query_args_t args = {
-                .lstio_bat_key     = session_key,
-                .lstio_bat_testidx = test,
-                .lstio_bat_client  = !(server),
-                .lstio_bat_timeout = timeout,
-                .lstio_bat_nmlen   = strlen(batch),
-                .lstio_bat_namep   = batch,
-                .lstio_bat_resultp = head,
-        };
+        lstio_batch_query_args_t args = {0};
+
+        args.lstio_bat_key     = session_key;
+        args.lstio_bat_testidx = test;
+        args.lstio_bat_client  = !(server);
+        args.lstio_bat_timeout = timeout;
+        args.lstio_bat_nmlen   = strlen(batch);
+        args.lstio_bat_namep   = batch;
+        args.lstio_bat_resultp = head;
 
         return lst_ioctl(LSTIO_BATCH_QUERY, &args, sizeof(args));
 }
@@ -2603,7 +2601,7 @@ lst_print_tsb_verbose(struct list_head *head,
 {
         lstcon_rpc_ent_t *ent;
 
-        list_for_each_entry(ent, head, rpe_link) {
+        cfs_list_for_each_entry_typed(ent, head, lstcon_rpc_ent_t, rpe_link) {
                 if (ent->rpe_priv[0] == 0 && active)
                         continue;
 
@@ -2940,24 +2938,25 @@ lst_add_test_ioctl(char *batch, int type, int loop, int concur,
                    int dist, int span, char *sgrp, char *dgrp,
                    void *param, int plen, int *retp, struct list_head *resultp)
 {
-        lstio_test_args_t args = {
-                .lstio_tes_key          = session_key,
-                .lstio_tes_bat_nmlen    = strlen(batch),
-                .lstio_tes_bat_name     = batch,
-                .lstio_tes_type         = type,
-                .lstio_tes_loop         = loop,
-                .lstio_tes_concur       = concur,
-                .lstio_tes_dist         = dist,
-                .lstio_tes_span         = span,
-                .lstio_tes_sgrp_nmlen   = strlen(sgrp),
-                .lstio_tes_sgrp_name    = sgrp,
-                .lstio_tes_dgrp_nmlen   = strlen(dgrp),
-                .lstio_tes_dgrp_name    = dgrp,
-                .lstio_tes_param_len    = plen,
-                .lstio_tes_param        = param,
-                .lstio_tes_retp         = retp,
-                .lstio_tes_resultp      = resultp,
-        };
+        lstio_test_args_t args = {0};
+
+        args.lstio_tes_key        = session_key;
+        args.lstio_tes_bat_nmlen  = strlen(batch);
+        args.lstio_tes_bat_name   = batch;
+        args.lstio_tes_type       = type;
+        args.lstio_tes_oneside    = 0;
+        args.lstio_tes_loop       = loop;
+        args.lstio_tes_concur     = concur;
+        args.lstio_tes_dist       = dist;
+        args.lstio_tes_span       = span;
+        args.lstio_tes_sgrp_nmlen = strlen(sgrp);
+        args.lstio_tes_sgrp_name  = sgrp;
+        args.lstio_tes_dgrp_nmlen = strlen(dgrp);
+        args.lstio_tes_dgrp_name  = dgrp;
+        args.lstio_tes_param_len  = plen;
+        args.lstio_tes_param      = param;
+        args.lstio_tes_retp       = retp;
+        args.lstio_tes_resultp    = resultp;
 
         return lst_ioctl(LSTIO_TEST_ADD, &args, sizeof(args));
 }
@@ -3178,20 +3177,32 @@ lst_initialize(void)
 int
 main(int argc, char **argv)
 {
+        int rc = 0;
+
         setlinebuf(stdout);
 
-        if (lst_initialize() < 0)
-                exit(0);
+        rc = libcfs_arch_init();
+        if (rc < 0)
+                return rc;
 
-        if (ptl_initialize(argc, argv) < 0)
-                exit(0);
+        rc = lst_initialize();
+        if (rc < 0)
+                goto errorout;
 
+        rc = ptl_initialize(argc, argv);
+        if (rc < 0)
+                goto errorout;
+        
         Parser_init("lst > ", lst_cmdlist);
 
-        if (argc != 1)
-                return Parser_execarg(argc - 1, argv + 1, lst_cmdlist);
+        if (argc != 1)  {
+                rc = Parser_execarg(argc - 1, argv + 1, lst_cmdlist);
+                goto errorout;
+        }
 
         Parser_commands();
 
-        return 0;
+errorout:
+        libcfs_arch_cleanup();
+        return rc;
 }

@@ -46,7 +46,6 @@
 #include <libcfs/libcfsutil.h>
 #include <lnet/lnetctl.h>
 
-#include <sys/utsname.h>
 
 static char rawbuf[8192];
 static char *buf = rawbuf;
@@ -148,6 +147,40 @@ dbg_write_cmd(int fd, char *str, int len)
                         sysctl_name, str, errno);
         }
         return (rc == 0 ? 0: 1);
+}
+
+#elif defined(__WINNT__)
+
+#define DAEMON_CTL_NAME         "/proc/sys/lnet/daemon_file"
+#define SUBSYS_DEBUG_CTL_NAME   "/proc/sys/lnet/subsystem_debug"
+#define DEBUG_CTL_NAME          "/proc/sys/lnet/debug"
+#define DUMP_KERNEL_CTL_NAME    "/proc/sys/lnet/dump_kernel"
+
+static int
+dbg_open_ctlhandle(const char *str)
+{
+        int fd;
+        fd = cfs_proc_open((char *)str, (int)O_WRONLY);
+        if (fd < 0) {
+                fprintf(stderr, "open %s failed: %s\n", str,
+                        strerror(errno));
+                return -1;
+        }
+        return fd;
+}
+
+static void
+dbg_close_ctlhandle(int fd)
+{
+        cfs_proc_close(fd);
+}
+
+static int
+dbg_write_cmd(int fd, char *str, int len)
+{
+        int    rc  = cfs_proc_write(fd, str, len);
+
+        return (rc == len ? 0 : 1);
 }
 
 #else
@@ -328,7 +361,7 @@ static void print_rec(struct dbg_line **linev, int used, FILE *out)
                 struct dbg_line *line = linev[i];
                 struct ptldebug_header *hdr = line->hdr;
 
-                fprintf(out, "%08x:%08x:%u:%u.%06llu:%u:%u:%u:(%s:%u:%s()) %s",
+                fprintf(out, "%08x:%08x:%u:%u." LPU64 ":%u:%u:%u:(%s:%u:%s()) %s",
                         hdr->ph_subsys, hdr->ph_mask, hdr->ph_cpu_id,
                         hdr->ph_sec, (unsigned long long)hdr->ph_usec,
                         hdr->ph_stack, hdr->ph_pid, hdr->ph_extern_pid,
@@ -463,8 +496,8 @@ int jt_dbg_debug_kernel(int argc, char **argv)
         if (argc > 1 && raw)
                 strcpy(filename, argv[1]);
         else
-                sprintf(filename, "/tmp/lustre-log."CFS_TIME_T".%u",
-			time(NULL),getpid());
+                sprintf(filename, "%s"CFS_TIME_T".%u",
+			DEBUG_FILE_PATH_DEFAULT, time(NULL), getpid());
 
         if (stat(filename, &st) == 0 && S_ISREG(st.st_mode))
                 unlink(filename);

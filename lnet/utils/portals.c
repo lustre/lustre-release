@@ -20,32 +20,6 @@
  *
  */
 
-#include <stdio.h>
-#include <sys/types.h>
-#ifdef HAVE_NETDB_H
-#include <netdb.h>
-#endif
-#include <sys/socket.h>
-#ifdef HAVE_NETINET_TCP_H
-#include <netinet/tcp.h>
-#endif
-#include <stdlib.h>
-#include <string.h>
-#include <fcntl.h>
-#ifdef HAVE_SYS_IOCTL_H
-#include <sys/ioctl.h>
-#endif
-#ifndef _IOWR
-#include "ioctl.h"
-#endif
-#include <errno.h>
-#include <unistd.h>
-#include <time.h>
-#include <stdarg.h>
-#ifdef HAVE_ENDIAN_H
-#include <endian.h>
-#endif
-
 #include <libcfs/libcfsutil.h>
 #include <lnet/api-support.h>
 #include <lnet/lnetctl.h>
@@ -1432,17 +1406,18 @@ get_cycles_per_usec ()
         return (1000.0);
 }
 
+#define LWT_MAX_CPUS (32)
+
 int
 jt_ptl_lwt(int argc, char **argv)
 {
-        const int       lwt_max_cpus = 32;
         int             ncpus;
         int             totalspace;
         int             nevents_per_cpu;
         lwt_event_t    *events;
-        lwt_event_t    *cpu_event[lwt_max_cpus + 1];
-        lwt_event_t    *next_event[lwt_max_cpus];
-        lwt_event_t    *first_event[lwt_max_cpus];
+        lwt_event_t    *cpu_event[LWT_MAX_CPUS + 1];
+        lwt_event_t    *next_event[LWT_MAX_CPUS];
+        lwt_event_t    *first_event[LWT_MAX_CPUS];
         int             cpu;
         lwt_event_t    *e;
         int             rc;
@@ -1484,9 +1459,9 @@ jt_ptl_lwt(int argc, char **argv)
         if (lwt_snapshot(NULL, &ncpus, &totalspace, NULL, 0) != 0)
                 return (-1);
 
-        if (ncpus > lwt_max_cpus) {
+        if (ncpus > LWT_MAX_CPUS) {
                 fprintf(stderr, "Too many cpus: %d (%d)\n",
-                        ncpus, lwt_max_cpus);
+                        ncpus, LWT_MAX_CPUS);
                 return (-1);
         }
 
