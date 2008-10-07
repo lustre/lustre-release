@@ -144,6 +144,13 @@ Bugzilla   : 14095
 Description: Add lustre_start utility to start or stop multiple Lustre servers
              from a CSV file.
 
+Severity   : normal
+Bugzilla   : 17026
+Description: (ptllnd_peer.c:557:kptllnd_peer_check_sends()) ASSERTION(!in_interrupt()) failed
+Details    : fix stack overflow in the distributed lock manager by defering export
+	     eviction after a failed ast to the elt thread instead of handling
+	     it in the dlm interpret routine.
+
 --------------------------------------------------------------------------
 
 2008-08-31 Sun Microsystems, Inc.
