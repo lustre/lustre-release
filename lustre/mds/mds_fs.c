@@ -415,7 +415,7 @@ static void mds_add_fake_export(struct obd_device *obd, int num,
                       idx * le16_to_cpu(obt->obt_lsd->lsd_client_size);
 
                 sprintf(lcd->lcd_uuid, "dead-%.16u", idx);
-                CERROR("Create fake export %s, index %u, offset %lu\n",
+                CDEBUG(D_INFO, "Create fake export %s, index %u, offset %lu\n",
                        lcd->lcd_uuid, idx, (unsigned long)off);
 
                 exp = class_new_export(obd, (struct obd_uuid *)lcd->lcd_uuid);
@@ -499,7 +499,6 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 lsd->lsd_server_size = cpu_to_le32(LR_SERVER_SIZE);
                 lsd->lsd_client_start = cpu_to_le32(LR_CLIENT_START);
                 lsd->lsd_client_size = cpu_to_le16(LR_CLIENT_SIZE);
-                lsd->lsd_expire_intervals = cpu_to_le32(LR_EXPIRE_INTERVALS);
                 lsd->lsd_feature_rocompat = cpu_to_le32(OBD_ROCOMPAT_LOVOBJID);
                 lsd->lsd_feature_incompat = cpu_to_le32(OBD_INCOMPAT_MDT);
         } else {
@@ -540,6 +539,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
 
         lsd->lsd_feature_compat = cpu_to_le32(OBD_COMPAT_MDT);
 
+        target_trans_table_init(obd);
         mds->mds_last_transno = le64_to_cpu(lsd->lsd_last_transno);
         start_epoch = le32_to_cpu(lsd->lsd_start_epoch);
 
