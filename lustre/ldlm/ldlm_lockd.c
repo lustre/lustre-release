@@ -486,7 +486,14 @@ static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
 
         if (obd_dump_on_timeout)
                 libcfs_debug_dumplog();
+#ifdef __KERNEL__
+        spin_lock_bh(&waiting_locks_spinlock);
+        list_add(&lock->l_pending_chain, &expired_lock_thread.elt_expired_locks);
+        cfs_waitq_signal(&expired_lock_thread.elt_waitq);
+        spin_unlock_bh(&waiting_locks_spinlock);
+#else
         class_fail_export(lock->l_export);
+#endif
 }
 
 static int ldlm_handle_ast_error(struct ldlm_lock *lock,
