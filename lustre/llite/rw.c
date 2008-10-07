@@ -348,7 +348,7 @@ static int ll_ap_make_ready(void *data, int cmd)
         struct page *page;
         ENTRY;
 
-        llap = LLAP_FROM_COOKIE(data);
+        llap = llap_from_cookie(data);
         page = llap->llap_page;
 
         /* we're trying to write, but the page is locked.. come back later */
@@ -411,7 +411,7 @@ static int ll_ap_refresh_count(void *data, int cmd)
         /* readpage queues with _COUNT_STABLE, shouldn't get here. */
         LASSERT(cmd != OBD_BRW_READ);
 
-        llap = LLAP_FROM_COOKIE(data);
+        llap = llap_from_cookie(data);
         page = llap->llap_page;
         inode = page->mapping->host;
         lli = ll_i2info(inode);
@@ -462,7 +462,7 @@ static void ll_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
         struct ll_async_page *llap;
         ENTRY;
 
-        llap = LLAP_FROM_COOKIE(data);
+        llap = llap_from_cookie(data);
         ll_inode_fill_obdo(llap->llap_page->mapping->host, cmd, oa);
 
         EXIT;
@@ -474,7 +474,7 @@ static void ll_ap_update_obdo(void *data, int cmd, struct obdo *oa,
         struct ll_async_page *llap;
         ENTRY;
 
-        llap = LLAP_FROM_COOKIE(data);
+        llap = llap_from_cookie(data);
         obdo_from_inode(oa, llap->llap_page->mapping->host, valid);
 
         EXIT;
@@ -482,8 +482,8 @@ static void ll_ap_update_obdo(void *data, int cmd, struct obdo *oa,
 
 static struct obd_capa *ll_ap_lookup_capa(void *data, int cmd)
 {
-        struct ll_async_page *llap = LLAP_FROM_COOKIE(data);
         int opc = cmd & OBD_BRW_WRITE ? CAPA_OPC_OSS_WRITE : CAPA_OPC_OSS_RW;
+        struct ll_async_page *llap = llap_from_cookie(data);
 
         return ll_osscapa_get(llap->llap_page->mapping->host, opc);
 }
@@ -1130,7 +1130,7 @@ int ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
         int ret = 0;
         ENTRY;
 
-        llap = LLAP_FROM_COOKIE(data);
+        llap = llap_from_cookie(data);
         page = llap->llap_page;
         LASSERT(PageLocked(page));
         LASSERT(CheckWriteback(page,cmd));

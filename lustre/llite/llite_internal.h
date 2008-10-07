@@ -639,6 +639,13 @@ struct ll_async_page {
         __u32            llap_checksum;
 };
 
+static inline struct ll_async_page *llap_from_cookie(void *ptr)
+{
+        struct ll_async_page *ap = ptr;
+        LASSERT(ap->llap_magic == LLAP_MAGIC);
+        return ap;
+}
+
 /*
  * enumeration of llap_from_page() call-sites. Used to export statistics in
  * /proc/fs/lustre/llite/fsN/dump_page_cache.
