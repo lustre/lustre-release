@@ -535,7 +535,7 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
 
         mutex_down(&ctxt->loc_sem);
         lcm = ctxt->loc_lcm;
-        
+
         /*
          * Let's check if we have all structures alive. We also check for
          * possible shutdown. Do nothing if we're stopping.
