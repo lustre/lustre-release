@@ -4204,7 +4204,7 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
         llog_group_set_export(olg, exp);
 
         ctxt = llog_group_get_ctxt(olg, LLOG_MDS_OST_REPL_CTXT);
-        LASSERTF(ctxt != NULL, "ctxt is null\n"),
+        LASSERTF(ctxt != NULL, "ctxt is null\n");
 
         rc = llog_receptor_accept(ctxt, exp->exp_imp_reverse);
         llog_ctxt_put(ctxt);
