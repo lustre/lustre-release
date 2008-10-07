@@ -179,23 +179,23 @@ static inline int cdebug_show(unsigned int mask, unsigned int subsystem)
                 ((libcfs_debug & mask) && (libcfs_subsystem_debug & subsystem));
 }
 
-#define __CDEBUG(cdls, mask, format, a...)                              \
+#define __CDEBUG(cdls, mask, format, ...)                               \
 do {                                                                    \
         CHECK_STACK();                                                  \
                                                                         \
         if (cdebug_show(mask, DEBUG_SUBSYSTEM))                         \
                 libcfs_debug_msg(cdls, DEBUG_SUBSYSTEM, mask,           \
                                  __FILE__, __FUNCTION__, __LINE__,      \
-                                 format, ## a);                         \
+                                 format, ## __VA_ARGS__);               \
 } while (0)
 
-#define CDEBUG(mask, format, a...) __CDEBUG(NULL, mask, format, ## a)
+#define CDEBUG(mask, format, ...) __CDEBUG(NULL, mask, format, ## __VA_ARGS__)
 
-#define CDEBUG_LIMIT(mask, format, a...)        \
+#define CDEBUG_LIMIT(mask, format, ...)         \
 do {                                            \
         static cfs_debug_limit_state_t cdls;    \
                                                 \
-        __CDEBUG(&cdls, mask, format, ## a);    \
+        __CDEBUG(&cdls, mask, format, ## __VA_ARGS__);\
 } while (0)
 
 #else /* !CDEBUG_ENABLED */
@@ -203,18 +203,18 @@ static inline int cdebug_show(unsigned int mask, unsigned int subsystem)
 {
         return 0;
 }
-#define CDEBUG(mask, format, a...) (void)(0)
-#define CDEBUG_LIMIT(mask, format, a...) (void)(0)
+#define CDEBUG(mask, format, ...) (void)(0)
+#define CDEBUG_LIMIT(mask, format, ...) (void)(0)
 #warning "CDEBUG IS DISABLED. THIS SHOULD NEVER BE DONE FOR PRODUCTION!"
 #endif
 
 #else /* !__KERNEL__ && (!__arch_lib__ || LUSTRE_UTILS) */
 
-#define CDEBUG(mask, format, a...)                                      \
+#define CDEBUG(mask, format, ...)                                       \
 do {                                                                    \
         if (((mask) & D_CANTMASK) != 0)                                 \
                 fprintf(stderr, "(%s:%d:%s()) " format,                 \
-                        __FILE__, __LINE__, __FUNCTION__, ## a);        \
+                        __FILE__, __LINE__, __FUNCTION__, ## __VA_ARGS__);\
 } while (0)
 
 #define CDEBUG_LIMIT CDEBUG
@@ -222,27 +222,27 @@ do {                                                                    \
 #endif /* !__KERNEL__ ... */
 
 
-#define CWARN(format, a...)          CDEBUG_LIMIT(D_WARNING, format, ## a)
-#define CERROR(format, a...)         CDEBUG_LIMIT(D_ERROR, format, ## a)
-#define CEMERG(format, a...)         CDEBUG_LIMIT(D_EMERG, format, ## a)
+#define CWARN(format, ...)          CDEBUG_LIMIT(D_WARNING, format, ## __VA_ARGS__)
+#define CERROR(format, ...)         CDEBUG_LIMIT(D_ERROR, format, ## __VA_ARGS__)
+#define CEMERG(format, ...)         CDEBUG_LIMIT(D_EMERG, format, ## __VA_ARGS__)
 
-#define LCONSOLE(mask, format, a...) CDEBUG(D_CONSOLE | (mask), format, ## a)
-#define LCONSOLE_INFO(format, a...)  CDEBUG_LIMIT(D_CONSOLE, format, ## a)
-#define LCONSOLE_WARN(format, a...)  CDEBUG_LIMIT(D_CONSOLE | D_WARNING, format, ## a)
-#define LCONSOLE_ERROR_MSG(errnum, format, a...) CDEBUG_LIMIT(D_CONSOLE | D_ERROR, \
-                           "%x-%x: " format, errnum, LERRCHKSUM(errnum),  ## a)
-#define LCONSOLE_ERROR(format, a...) LCONSOLE_ERROR_MSG(0x00, format, ## a)
+#define LCONSOLE(mask, format, ...) CDEBUG(D_CONSOLE | (mask), format, ## __VA_ARGS__)
+#define LCONSOLE_INFO(format, ...)  CDEBUG_LIMIT(D_CONSOLE, format, ## __VA_ARGS__)
+#define LCONSOLE_WARN(format, ...)  CDEBUG_LIMIT(D_CONSOLE | D_WARNING, format, ## __VA_ARGS__)
+#define LCONSOLE_ERROR_MSG(errnum, format, ...) CDEBUG_LIMIT(D_CONSOLE | D_ERROR, \
+                           "%x-%x: " format, errnum, LERRCHKSUM(errnum), ## __VA_ARGS__)
+#define LCONSOLE_ERROR(format, ...) LCONSOLE_ERROR_MSG(0x00, format, ## __VA_ARGS__)
 
-#define LCONSOLE_EMERG(format, a...) CDEBUG(D_CONSOLE | D_EMERG, format, ## a)
+#define LCONSOLE_EMERG(format, ...) CDEBUG(D_CONSOLE | D_EMERG, format, ## __VA_ARGS__)
 
 #ifdef CDEBUG_ENABLED
 
 #define GOTO(label, rc)                                                 \
 do {                                                                    \
-        long GOTO__ret = (long)(rc);                                    \
-        CDEBUG(D_TRACE,"Process leaving via %s (rc=%lu : %ld : %lx)\n", \
-               #label, (unsigned long)GOTO__ret, (signed long)GOTO__ret,\
-               (signed long)GOTO__ret);                                 \
+        long_ptr_t GOTO__ret = (long_ptr_t)(rc);                        \
+        CDEBUG(D_TRACE,"Process leaving via %s (rc=" LPLU " : " LPLD    \
+               " : " LPLX ")\n", #label, (ulong_ptr_t)GOTO__ret,        \
+               GOTO__ret, GOTO__ret);                                   \
         goto label;                                                     \
 } while (0)
 #else
@@ -255,6 +255,7 @@ do {                                                                    \
  * if rc == NULL, we need to code as RETURN((void *)NULL), otherwise
  * there will be a warning in osx.
  */
+#if defined(__GNUC__)
 #define RETURN(rc)                                                      \
 do {                                                                    \
         typeof(rc) RETURN__ret = (rc);                                  \
@@ -263,6 +264,16 @@ do {                                                                    \
         EXIT_NESTING;                                                   \
         return RETURN__ret;                                             \
 } while (0)
+#elif defined(_MSC_VER)
+#define RETURN(rc)                                                      \
+do {                                                                    \
+        CDEBUG(D_TRACE, "Process leaving.\n");                          \
+        EXIT_NESTING;                                                   \
+        return (rc);                                                    \
+} while (0)
+#else
+# error "Unkown compiler"
+#endif /* __GNUC__ */
 
 #define ENTRY                                                           \
 ENTRY_NESTING;                                                          \
@@ -293,11 +304,11 @@ struct libcfs_debug_msg_data {
 };
 
 #define DEBUG_MSG_DATA_INIT(cdls, subsystem, file, func, ln ) { \
-        .msg_cdls           = (cdls),       \
-        .msg_subsys         = (subsystem),  \
-        .msg_file           = (file),       \
-        .msg_fn             = (func),       \
-        .msg_line           = (ln)          \
+        /* msg_cdls */          (cdls),       \
+        /* msg_subsys */        (subsystem),  \
+        /* msg_file */          (file),       \
+        /* msg_fn */            (func),       \
+        /* msg_line */          (ln)          \
     }
 
 
@@ -311,8 +322,8 @@ extern int libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls,
 #define libcfs_debug_vmsg(cdls, subsys, mask, file, fn, line, format, args)   \
     libcfs_debug_vmsg2(cdls, subsys, mask, file, fn,line,format,args,NULL,NULL)
 
-#define libcfs_debug_msg(cdls, subsys, mask, file, fn, line, format, a...)    \
-    libcfs_debug_vmsg2(cdls, subsys, mask, file, fn,line,NULL,NULL,format, ##a)
+#define libcfs_debug_msg(cdls, subsys, mask, file, fn, line, format, ...)    \
+    libcfs_debug_vmsg2(cdls, subsys, mask, file, fn,line,NULL,NULL,format, ## __VA_ARGS__)
 
 #define cdebug_va(cdls, mask, file, func, line, fmt, args)      do {          \
         CHECK_STACK();                                                        \
@@ -322,17 +333,26 @@ extern int libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls,
                                   (file), (func), (line), fmt, args);         \
 } while(0);
 
-#define cdebug(cdls, mask, file, func, line, fmt, a...) do {                  \
+#define cdebug(cdls, mask, file, func, line, fmt, ...) do {                   \
         CHECK_STACK();                                                        \
                                                                               \
         if (cdebug_show(mask, DEBUG_SUBSYSTEM))                               \
                 libcfs_debug_msg(cdls, DEBUG_SUBSYSTEM, (mask),               \
-                                 (file), (func), (line), fmt, ## a);          \
+                                 (file), (func), (line), fmt, ## __VA_ARGS__);\
 } while(0);
 
 extern void libcfs_assertion_failed(const char *expr, const char *file,
                                     const char *fn, const int line);
 
 
+#if defined(HAVE_BGL_SUPPORT)
+#define DEBUG_FILE_PATH_DEFAULT "/bgl/ion/tmp/lustre-log"
+#elif defined(__arch_um__)
+#define DEBUG_FILE_PATH_DEFAULT "/r/tmp/lustre-log"
+#elif defined(__WINNT__)
+#define DEBUG_FILE_PATH_DEFAULT "\\SystemRoot\\temp\\lustre-log"
+#else
+#define DEBUG_FILE_PATH_DEFAULT "/tmp/lustre-log"
+#endif
 
 #endif	/* __LIBCFS_DEBUG_H__ */

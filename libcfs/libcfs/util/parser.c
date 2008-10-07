@@ -19,14 +19,6 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
  */
-#include <stdio.h>
-#include <stdlib.h>
-#include <ctype.h>
-#include <string.h>
-#include <stddef.h>
-#include <unistd.h>
-#include <sys/param.h>
-#include <assert.h>
 
 #include <libcfs/libcfsutil.h>
 
@@ -137,7 +129,7 @@ static command_t * find_cmd(char * name, command_t cmds[], char ** next)
            this with strtok*/
         name = skipwhitespace(name);
         *next = skiptowhitespace(name);
-        len = *next - name;
+        len = (int)(*next - name);
         if (len == 0)
                 return NULL;
 
@@ -343,7 +335,7 @@ char * readline(char * prompt)
                 if ((c = fgetc(stdin)) != EOF) {
                         if (c == '\n')
                                 goto out;
-                        *ptr++ = c;
+                        *ptr++ = (char)c;
 
                         if (ptr - line >= size - 1) {
                                 char *tmp;

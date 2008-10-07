@@ -1,5 +1,5 @@
-/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
- * vim:expandtab:shiftwidth=8:tabstop=8:
+/* -*- mode: c; c-basic-offset: 4; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=4:tabstop=4
  *
  * GPL HEADER START
  *
@@ -53,30 +53,23 @@
 #define cfs_clear_flag(x,f)  ((x) &= ~(f))
 #endif
 
-
-static inline __u32 __do_div(__u32 * n, __u32 b) 
+static inline __u32 do_div64(__u64 * n, __u64 b) 
 {
-    __u32   mod;
+    __u64   mod;
 
     mod = *n % b;
     *n  = *n / b;
-    return mod;
+    return (__u32)mod;
 } 
 
-#define do_div(n,base)  __do_div((__u32 *)&(n), (__u32) (base))
-
+#define do_div(n, b) do_div64(&(n), (__u64)b)
 #ifdef __KERNEL__
 
 #include <stdlib.h>
 #include <libcfs/winnt/winnt-types.h>
 
 char * strsep(char **s, const char *ct);
-static inline size_t strnlen(const char * s, size_t count) {
-    size_t len = 0;
-    while(len < count && s[len++]);
-    return len;
-}
-char * ul2dstr(ulong_ptr address, char *buf, int len);
+char * ul2dstr(ulong_ptr_t address, char *buf, int len);
 
 #define simple_strtol(a1, a2, a3)               strtol(a1, a2, a3)
 #define simple_strtoll(a1, a2, a3)              (__s64)strtoull(a1, a2, a3)
@@ -84,25 +77,154 @@ char * ul2dstr(ulong_ptr address, char *buf, int len);
 
 unsigned long simple_strtoul(const char *cp,char **endp, unsigned int base);
 
-static inline int test_bit(int nr, void * addr)
-{
-    return ((1UL << (nr & 31)) & (((volatile ULONG *) addr)[nr >> 5])) != 0;
-}
-
-static inline void clear_bit(int nr, void * addr)
-{
-    (((volatile ULONG *) addr)[nr >> 5]) &= (~(1UL << (nr & 31)));
-}
-
-
-static inline void set_bit(int nr, void * addr)
+static inline int set_bit(int nr, void * addr)
 {
     (((volatile ULONG *) addr)[nr >> 5]) |= (1UL << (nr & 31));
+    return *((int *) addr);
+}
+
+static inline int test_bit(int nr, void * addr)
+{
+    return (int)(((1UL << (nr & 31)) & (((volatile ULONG *) addr)[nr >> 5])) != 0);
+}
+
+static inline int clear_bit(int nr, void * addr)
+{
+    (((volatile ULONG *) addr)[nr >> 5]) &= (~(1UL << (nr & 31)));
+    return *((int *) addr);
+}
+
+static inline int test_and_set_bit(int nr, volatile void *addr)
+{
+    int rc;
+    unsigned char  mask;
+    volatile unsigned char *ADDR = addr;
+
+    ADDR += nr >> 3;
+    mask = 1 << (nr & 0x07);
+    rc = ((mask & *ADDR) != 0);
+    *ADDR |= mask;
+
+    return rc;
+}
+
+#define ext2_set_bit(nr,addr)   (set_bit(nr, addr), 0)
+#define ext2_clear_bit(nr,addr)	(clear_bit(nr, addr), 0)
+#define ext2_test_bit(nr,addr)  test_bit(nr, addr)
+
+static inline int ffs(int x)
+{
+        int r = 1;
+
+        if (!x)
+                return 0;
+        if (!(x & 0xffff)) {
+                x >>= 16;
+                r += 16;
+        }
+        if (!(x & 0xff)) {
+                x >>= 8;
+                r += 8;
+        }
+        if (!(x & 0xf)) {
+                x >>= 4;
+                r += 4;
+        }
+        if (!(x & 3)) {
+                x >>= 2;
+                r += 2;
+        }
+        if (!(x & 1)) {
+                x >>= 1;
+                r += 1;
+        }
+        return r;
+}
+
+static inline unsigned long __ffs(unsigned long word)
+{
+        int num = 0;
+
+#if BITS_PER_LONG == 64
+        if ((word & 0xffffffff) == 0) {
+                num += 32;
+                word >>= 32;
+        }
+#endif
+        if ((word & 0xffff) == 0) {
+                num += 16;
+                word >>= 16;
+        }
+        if ((word & 0xff) == 0) {
+                num += 8;
+                word >>= 8;
+        }
+        if ((word & 0xf) == 0) {
+                num += 4;
+                word >>= 4;
+        }
+        if ((word & 0x3) == 0) {
+                num += 2;
+                word >>= 2;
+        }
+        if ((word & 0x1) == 0)
+                num += 1;
+        return num;
+}
+
+/**
+ * fls - find last (most-significant) bit set
+ * @x: the word to search
+ *
+ * This is defined the same way as ffs.
+ * Note fls(0) = 0, fls(1) = 1, fls(0x80000000) = 32.
+ */
+static inline
+int fls(int x)
+{
+        int r = 32;
+
+        if (!x)
+                return 0;
+        if (!(x & 0xffff0000u)) {
+                x <<= 16;
+                r -= 16;
+        }
+        if (!(x & 0xff000000u)) {
+                x <<= 8;
+                r -= 8;
+        }
+        if (!(x & 0xf0000000u)) {
+                x <<= 4;
+                r -= 4;
+        }
+        if (!(x & 0xc0000000u)) {
+                x <<= 2;
+                r -= 2;
+        }
+        if (!(x & 0x80000000u)) {
+                x <<= 1;
+                r -= 1;
+        }
+        return r;
+}
+
+static inline unsigned find_first_bit(const unsigned long *addr, unsigned size)
+{
+        unsigned x = 0;
+
+        while (x < size) {
+                unsigned long val = *addr++;
+                if (val)
+                        return __ffs(val) + x;
+                x += (sizeof(*addr)<<3);
+        }
+        return x;
 }
 
 static inline void read_random(char *buf, int len)
 {
-    ULONG   Seed = (ULONG) buf;
+    ULONG   Seed = (ULONG)(ULONG_PTR) buf;
     Seed = RtlRandom(&Seed);
     while (len >0) {
         if (len > sizeof(ULONG)) {
@@ -116,6 +238,7 @@ static inline void read_random(char *buf, int len)
         } 
     }
 }
+
 #define get_random_bytes(buf, len)  read_random(buf, len)
 
 /* do NOT use function or expression as parameters ... */
@@ -147,12 +270,18 @@ static int copy_from_user(void *to, void *from, int c)
     return 0;
 }
 
-static int copy_to_user(void *to, void *from, int c) 
+static int copy_to_user(void *to, const void *from, int c) 
 {
     memcpy(to, from, c);
     return 0;
 }
 
+static unsigned long
+clear_user(void __user *to, unsigned long n)
+{
+    memset(to, 0, n);
+	return n;
+}
 
 #define put_user(x, ptr)        \
 (                               \
@@ -169,12 +298,46 @@ static int copy_to_user(void *to, void *from, int c)
 
 #define num_physpages			(64 * 1024)
 
-#define snprintf  _snprintf
-#define vsnprintf _vsnprintf
+#else
 
+#define unlink _unlink 
+#define close  _close
+#define open   _open
+#define fdopen _fdopen
+#define strdup _strdup
+#define fileno _fileno
+#define isattry _isattry
+#define stat    _stat
 
 #endif	/* !__KERNEL__ */
 
 int cfs_error_code(NTSTATUS);
+
+static inline int vsnprintf(char *buf, size_t cnt,
+                            const char *fmt, va_list va)
+{
+    int rc;
+
+#ifdef TRUE /* using msvcrt from windkk 3790 */
+    rc = _vsnprintf(buf, cnt, fmt, va);
+#else
+    rc = _vsnprintf_s(buf, cnt, cnt, fmt, va);
+#endif
+    if (rc == -1)
+        return cnt;
+    return rc;
+}
+
+static inline int snprintf(char *buf, size_t cnt, 
+                           const char *fmt, ...)
+{
+    int         rc;
+    va_list     va;
+
+    va_start(va, fmt);
+    rc = vsnprintf(buf, cnt, fmt, va);
+    va_end(va);
+    return rc;
+}
 
 #endif

@@ -39,31 +39,21 @@
 #include <libcfs/libcfs.h>
 #include "tracefile.h"
 
-void lnet_debug_dumpstack(cfs_task_t *tsk)
+void libcfs_debug_dumpstack(cfs_task_t *tsk)
 {
 	return;
 }
 
-cfs_task_t *lnet_current(void)
+void libcfs_run_debug_log_upcall(char *file)
+{
+}
+
+cfs_task_t *libcfs_current(void)
 {
 	return cfs_current();
 }
 
-int lnet_arch_debug_init(unsigned long bufsize)
-{
-	return 0;
-}
-
-int lnet_arch_debug_cleanup(void)
-{
-	return 0;
-}
-
 void libcfs_run_lbug_upcall(const char *file, const char *fn, const int line)
-{
-}
-
-void libcfs_debug_dumplog(void)
 {
 }
 
@@ -71,18 +61,28 @@ void lbug_with_loc(const char *file, const char *func, const int line)
 {
         libcfs_catastrophe = 1;
         CEMERG("LBUG: pid: %u thread: %#x\n",
-               (unsigned)cfs_curproc_pid(), (unsigned)PsGetCurrentThread());
+               cfs_curproc_pid(), PsGetCurrentThread());
+        cfs_enter_debugger();
         libcfs_debug_dumplog();
         libcfs_run_lbug_upcall(file, func, line);
 }
 
-#if TDI_LIBCFS_DBG
+void cfs_enter_debugger(void)
+{
+# if _X86_
+    __asm int 3;
+# else
+    KdBreakPoint();
+# endif
+}
+
+#if DBG
 
 /*
  * Definitions
  */
 
-LONG  KsDebugLevel = 0x5;
+LONG  KsDebugLevel = 1;
 
 
 /*
@@ -1058,21 +1058,66 @@ KsPrintf(
     ...
     )
 {
-    va_list  ap;
+    LARGE_INTEGER tick;
+    va_list       ap;
 
     va_start(ap, DebugMessage);
-
-    if (DebugPrintLevel <= KsDebugLevel)
-    {
+    if (DebugPrintLevel <= KsDebugLevel) {
         CHAR buffer[0x200];
-
+        KeQueryTickCount(&tick);
         vsprintf(buffer, DebugMessage, ap);
-
-        KdPrint(("TID:%8.8x: %s", PsGetCurrentThread(), buffer));
+        KdPrint(("%8.8X cpu:%d:%d tid:%p %s",
+                 tick.LowPart,
+                 KeGetCurrentProcessorNumber(),
+                 KeGetCurrentIrql(), 
+                 PsGetCurrentThread(), buffer));
     }
-
     va_end(ap);
 
 } // KsPrint()
 
 #endif
+
+
+void libcfs_panic(char *msg)
+{
+    DbgPrint("%s", msg);
+    cfs_enter_debugger();
+}
+
+/* BUGCHECK callback record */
+static int libcfs_bugcheck_inited = 0;
+KBUGCHECK_CALLBACK_RECORD libcfs_bugcheck_record;
+
+void
+libcfs_bugcheck_callback(
+    IN PVOID Buffer, 
+    IN ULONG Length 
+    )
+{
+    cfs_enter_debugger();
+}
+
+
+void libcfs_register_panic_notifier(void)
+{
+    if (libcfs_bugcheck_inited) {
+        return;
+    }
+
+    KeInitializeCallbackRecord(&libcfs_bugcheck_record);
+    KeRegisterBugCheckCallback(&libcfs_bugcheck_record,
+                                libcfs_bugcheck_callback,
+                               &libcfs_bugcheck_record,
+                                sizeof(KBUGCHECK_CALLBACK_RECORD),
+                                "Lustre");
+}
+
+void libcfs_unregister_panic_notifier(void)
+{
+    if (!libcfs_bugcheck_inited) {
+        return;
+    }
+
+    KeDeregisterBugCheckCallback(&libcfs_bugcheck_record);
+}

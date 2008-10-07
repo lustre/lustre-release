@@ -43,6 +43,7 @@
 #ifndef __LIBCFS_POSIX_LIBCFS_H__
 #define __LIBCFS_POSIX_LIBCFS_H__
 
+#include <errno.h>
 #include <sys/errno.h>
 #include <string.h>
 #include <stdarg.h>
@@ -51,14 +52,28 @@
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <unistd.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <assert.h>
+#include <sys/ioctl.h>
 #include <sys/signal.h>
 #include <signal.h>
 #include <sys/time.h>
 #include <time.h>
+#include <getopt.h>
+#include <signal.h>
+#include <pwd.h>
+#include <sys/socket.h>
+#include <sys/utsname.h>
+#include <ctype.h>
+
+#ifdef HAVE_NETDB_H
+#include <netdb.h>
+#endif
+
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
 
 #ifdef HAVE_LIBPTHREAD
 #include <pthread.h>
@@ -331,7 +346,8 @@ static inline struct radix_tree_node *radix_tree_lookup0(struct radix_tree_root 
         if (list_empty(&root->list))
                 return NULL;
 
-        list_for_each_entry(node, &root->list, _node)
+        cfs_list_for_each_entry_typed(node, &root->list,
+                                      struct radix_tree_node, _node)
                 if (node->index == idx)
                         return node;
 

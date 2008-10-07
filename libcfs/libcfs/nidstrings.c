@@ -479,7 +479,7 @@ libcfs_str2nid(const char *str)
                 LASSERT (nf != NULL);
         }
 
-        if (!nf->nf_str2addr(str, sep - str, &addr))
+        if (!nf->nf_str2addr(str, (int)(sep - str), &addr))
                 return LNET_NID_ANY;
 
         return LNET_MKNID(net, addr);

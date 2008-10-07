@@ -112,13 +112,8 @@ EXPORT_SYMBOL(libcfs_kmemory);
 
 static cfs_waitq_t debug_ctlwq;
 
-#ifdef HAVE_BGL_SUPPORT
-char debug_file_path_arr[1024] = "/bgl/ion/tmp/lustre-log";
-#elif defined(__arch_um__)
-char debug_file_path_arr[1024] = "/r/tmp/lustre-log";
-#else
-char debug_file_path_arr[1024] = "/tmp/lustre-log";
-#endif
+char debug_file_path_arr[1024] = DEBUG_FILE_PATH_DEFAULT;
+
 /* We need to pass a pointer here, but elsewhere this must be a const */
 static char *debug_file_path = &debug_file_path_arr[0];
 CFS_MODULE_PARM(debug_file_path, "s", charp, 0644,
@@ -429,8 +424,8 @@ void libcfs_debug_dumplog_internal(void *arg)
 
         if (strncmp(debug_file_path_arr, "NONE", 4) != 0) {
                 snprintf(debug_file_name, sizeof(debug_file_name) - 1,
-                         "%s.%ld.%ld", debug_file_path_arr,
-                         cfs_time_current_sec(), (long)arg);
+                         "%s.%ld." LPLD, debug_file_path_arr,
+                         cfs_time_current_sec(), (long_ptr_t)arg);
                 printk(KERN_ALERT "LustreError: dumping log to %s\n",
                        debug_file_name);
                 tracefile_dump_all_pages(debug_file_name);
@@ -461,7 +456,7 @@ void libcfs_debug_dumplog(void)
         cfs_waitq_add(&debug_ctlwq, &wait);
 
         rc = cfs_kernel_thread(libcfs_debug_dumplog_thread,
-                               (void *)(long)cfs_curproc_pid(),
+                               (void *)(long_ptr_t)cfs_curproc_pid(),
                                CLONE_VM | CLONE_FS | CLONE_FILES);
         if (rc < 0)
                 printk(KERN_ERR "LustreError: cannot start log dump thread: "

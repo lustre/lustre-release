@@ -151,7 +151,7 @@ int cfs_kernel_thread(int (*func)(void *), void *arg, int flag)
 static CFS_DECL_RWSEM(cfs_symbol_lock);
 CFS_LIST_HEAD(cfs_symbol_list);
 
-int MPSystem = FALSE;
+int libcfs_is_mp_system = FALSE;
 
 /*
  * cfs_symbol_get
@@ -364,7 +364,12 @@ cfs_timer_dpc_proc (
     KeReleaseSpinLock(&(timer->Lock), Irql);
 
     /* call the user specified timer procedure */
-    timer->proc((unsigned long)(timer->arg));
+    timer->proc((long_ptr_t)timer->arg);
+}
+
+void cfs_init_timer(cfs_timer_t *timer)
+{
+    memset(timer, 0, sizeof(cfs_timer_t));
 }
 
 /*
@@ -383,7 +388,7 @@ cfs_timer_dpc_proc (
  *   N/A
  */
 
-void cfs_timer_init(cfs_timer_t *timer, void (*func)(unsigned long), void *arg)
+void cfs_timer_init(cfs_timer_t *timer, void (*func)(ulong_ptr_t), void *arg)
 {
     memset(timer, 0, sizeof(cfs_timer_t));
 
@@ -441,7 +446,7 @@ void cfs_timer_arm(cfs_timer_t *timer, cfs_time_t deadline)
 
         timeout.QuadPart = (LONGLONG)-1*1000*1000*10/HZ*deadline;
 
-        if (KeSetTimer(&timer->Timer, timeout, &timer->Dpc )) {
+        if (KeSetTimer(&timer->Timer, timeout, &timer->Dpc)) {
             cfs_set_flag(timer->Flags, CFS_TIMER_FLAG_TIMERED);
         }
 
@@ -533,6 +538,11 @@ void cfs_daemonize(char *str)
     return;
 }
 
+int cfs_daemonize_ctxt(char *str) {
+    cfs_daemonize(str);
+    return 0;
+}
+
 /*
  *  routine related with sigals
  */
@@ -566,9 +576,176 @@ void cfs_clear_sigpending(void)
     return;
 }
 
+/*
+ *  thread cpu affinity routines
+ */ 
+
+typedef struct _THREAD_BASIC_INFORMATION {
+    NTSTATUS ExitStatus;
+    PVOID TebBaseAddress;
+    CLIENT_ID ClientId;
+    ULONG_PTR AffinityMask;
+    KPRIORITY Priority;
+    LONG BasePriority;
+} THREAD_BASIC_INFORMATION;
+
+typedef THREAD_BASIC_INFORMATION *PTHREAD_BASIC_INFORMATION;
+
+#define THREAD_QUERY_INFORMATION       (0x0040)
+
+NTSYSAPI
+NTSTATUS
+NTAPI
+ZwOpenThread (
+    __out PHANDLE ThreadHandle,
+    __in ACCESS_MASK DesiredAccess,
+    __in POBJECT_ATTRIBUTES ObjectAttributes,
+    __in_opt PCLIENT_ID ClientId
+    );
+
+NTSYSAPI
+NTSTATUS
+NTAPI
+ZwQueryInformationThread (
+    __in HANDLE ThreadHandle,
+    __in THREADINFOCLASS ThreadInformationClass,
+    __out_bcount(ThreadInformationLength) PVOID ThreadInformation,
+    __in ULONG ThreadInformationLength,
+    __out_opt PULONG ReturnLength
+    );
+
+NTSYSAPI
+NTSTATUS
+NTAPI
+ZwSetInformationThread (
+    __in HANDLE ThreadHandle,
+    __in THREADINFOCLASS ThreadInformationClass,
+    __in_bcount(ThreadInformationLength) PVOID ThreadInformation,
+    __in ULONG ThreadInformationLength
+    );
+
+HANDLE
+cfs_open_current_thread()
+{
+    NTSTATUS         status;
+    HANDLE           handle = NULL;
+    OBJECT_ATTRIBUTES oa;
+    CLIENT_ID        cid;
+
+    /* initialize object attributes */
+    InitializeObjectAttributes( &oa, NULL, OBJ_KERNEL_HANDLE |
+                                OBJ_CASE_INSENSITIVE, NULL, NULL);
+
+    /* initialize client id */
+    cid.UniqueProcess = PsGetCurrentProcessId();
+    cid.UniqueThread  = PsGetCurrentThreadId();
+
+    /* get thread handle */
+    status = ZwOpenThread( &handle, THREAD_QUERY_INFORMATION |
+                           THREAD_SET_INFORMATION, &oa, &cid);
+    if (!NT_SUCCESS(status)) {
+        handle = NULL;
+    }
+
+    return handle;
+}
+
+void
+cfs_close_thread_handle(HANDLE handle)
+{
+    if (handle)
+        ZwClose(handle);
+}
+
+KAFFINITY
+cfs_query_thread_affinity()
+{
+    NTSTATUS         status;
+    HANDLE           handle = NULL;
+    DWORD            size;
+    THREAD_BASIC_INFORMATION TBI = {0};
+
+    /* open current thread */
+    handle = cfs_open_current_thread();
+    if (!handle) {
+        goto errorout;
+    }
+
+    /* query thread cpu affinity */
+    status = ZwQueryInformationThread(handle, ThreadBasicInformation,
+                       &TBI, sizeof(THREAD_BASIC_INFORMATION), &size);
+    if (!NT_SUCCESS(status)) {
+        goto errorout;
+    }
+
+errorout:
+
+    cfs_close_thread_handle(handle);
+    return TBI.AffinityMask;
+}
+
+int
+cfs_set_thread_affinity(KAFFINITY affinity)
+{
+    NTSTATUS         status;
+    HANDLE           handle = NULL;
+
+    /* open current thread */
+    handle = cfs_open_current_thread();
+    if (!handle) {
+        goto errorout;
+    }
+
+    /* set thread cpu affinity */
+    status = ZwSetInformationThread(handle, ThreadAffinityMask,
+                                    &affinity, sizeof(KAFFINITY));
+    if (!NT_SUCCESS(status)) {
+        goto errorout;
+    }
+
+errorout:
+
+    cfs_close_thread_handle(handle);
+    return NT_SUCCESS(status);
+}
+
+int
+cfs_tie_thread_to_cpu(int cpu)
+{
+    return cfs_set_thread_affinity((KAFFINITY) (1 << cpu));
+}
+
+int
+cfs_set_thread_priority(KPRIORITY priority)
+{
+    NTSTATUS         status;
+    HANDLE           handle = NULL;
+
+    /* open current thread */
+    handle = cfs_open_current_thread();
+    if (!handle) {
+        goto errorout;
+    }
+
+    /* set thread cpu affinity */
+    status = ZwSetInformationThread(handle, ThreadPriority,
+                                    &priority, sizeof(KPRIORITY));
+    if (!NT_SUCCESS(status)) {
+        KdPrint(("set_thread_priority failed: %xh\n", status));
+        goto errorout;
+    }
+
+errorout:
+
+    cfs_close_thread_handle(handle);
+    return NT_SUCCESS(status);
+}
+
 /**
  **  Initialize routines 
  **/
+
+void cfs_libc_init();
 
 int
 libcfs_arch_init(void)
@@ -579,10 +756,14 @@ libcfs_arch_init(void)
     /* Workground to check the system is MP build or UP build */
     spin_lock_init(&lock);
     spin_lock(&lock);
-    MPSystem = (int)lock.lock;
+    libcfs_is_mp_system = (int)lock.lock;
     /* MP build system: it's a real spin, for UP build system, it
        only raises the IRQL to DISPATCH_LEVEL */
     spin_unlock(&lock);
+
+    /* initialize libc routines (confliction between libcnptr.lib
+       and kernel ntoskrnl.lib) */
+    cfs_libc_init();
 
     /* create slab memory caches for page alloctors */
     cfs_page_t_slab = cfs_mem_cache_create(
@@ -598,7 +779,6 @@ libcfs_arch_init(void)
     }    
 
     rc = init_task_manager();
-
     if (rc != 0) {
         cfs_enter_debugger();
         KdPrint(("winnt-prim.c:libcfs_arch_init: error initializing task manager ...\n"));
@@ -607,7 +787,6 @@ libcfs_arch_init(void)
 
     /* initialize the proc file system */
     rc = proc_init_fs();
-
     if (rc != 0) {
         cfs_enter_debugger();
         KdPrint(("winnt-prim.c:libcfs_arch_init: error initializing proc fs ...\n"));
@@ -617,14 +796,15 @@ libcfs_arch_init(void)
 
     /* initialize the tdi data */
     rc = ks_init_tdi_data();
-
     if (rc != 0) {
         cfs_enter_debugger();
-        KdPrint(("winnt-prim.c:libcfs_arch_init: error initializing tdi ...\n"));
+        KdPrint(("winnt-prim.c:libcfs_arch_init: failed to initialize tdi.\n"));
         proc_destroy_fs();
         cleanup_task_manager();
         goto errorout;
     }
+
+    rc = start_shrinker_timer();
 
 errorout:
 
@@ -644,11 +824,17 @@ errorout:
 void
 libcfs_arch_cleanup(void)
 {
+    /* stop shrinker timer */
+    stop_shrinker_timer();
+
     /* finialize the tdi data */
     ks_fini_tdi_data();
 
     /* detroy the whole proc fs tree and nodes */
     proc_destroy_fs();
+
+    /* cleanup context of task manager */
+    cleanup_task_manager();
 
     /* destroy the taskslot cache slab */
     if (cfs_page_t_slab) {
@@ -659,7 +845,7 @@ libcfs_arch_cleanup(void)
         cfs_mem_cache_destroy(cfs_page_p_slab);
     }
 
-	return; 
+    return; 
 }
 
 EXPORT_SYMBOL(libcfs_arch_init);

@@ -71,55 +71,53 @@
  *
  * requires -Wall. Unfortunately this rules out use of likely/unlikely.
  */
-#define LASSERT(cond)                                           \
-({                                                              \
-        if (cond)                                               \
-                ;                                               \
-        else                                                    \
-                libcfs_assertion_failed( #cond , __FILE__,      \
-                        __FUNCTION__, __LINE__);                \
-})
+#define LASSERT(cond)                                                   \
+do {                                                                    \
+        if (cond)                                                       \
+                ;                                                       \
+        else                                                            \
+                libcfs_assertion_failed( #cond , __FILE__,              \
+                        __FUNCTION__, __LINE__);                        \
+} while(0)
 
-#define LASSERTF(cond, fmt, a...)                                       \
-({                                                                      \
+#define LASSERTF(cond, fmt, ...)                                        \
+do {                                                                    \
          if (cond)                                                      \
                  ;                                                      \
          else {                                                         \
                  libcfs_debug_msg(NULL, DEBUG_SUBSYSTEM, D_EMERG,       \
                                   __FILE__, __FUNCTION__,__LINE__,      \
                                   "ASSERTION(" #cond ") failed: " fmt,  \
-                                  ## a);                                \
+                                  ## __VA_ARGS__);                      \
                  LBUG();                                                \
          }                                                              \
-})
-
+} while(0)
 
 #else /* !LASSERT_CHECKED */
 
-#define LASSERT(cond)                                           \
-({                                                              \
-        if (unlikely(!(cond)))                                  \
-                libcfs_assertion_failed(#cond , __FILE__,       \
-                        __FUNCTION__, __LINE__);                \
-})
+#define LASSERT(cond)                                                   \
+do {                                                                    \
+        if (unlikely(!(cond)))                                          \
+                libcfs_assertion_failed(#cond , __FILE__,               \
+                        __FUNCTION__, __LINE__);                        \
+} while(0)
 
-#define LASSERTF(cond, fmt, a...)                                       \
-({                                                                      \
+#define LASSERTF(cond, fmt, ...)                                        \
+do {                                                                    \
         if (unlikely(!(cond))) {                                        \
                 libcfs_debug_msg(NULL, DEBUG_SUBSYSTEM, D_EMERG,        \
                                  __FILE__, __FUNCTION__,__LINE__,       \
                                  "ASSERTION(" #cond ") failed: " fmt,   \
-                                 ## a);                                 \
+                                 ## __VA_ARGS__ );                      \
                 LBUG();                                                 \
         }                                                               \
-})
-
+} while(0)
 
 #endif /* !LASSERT_CHECKED */
 #else /* !LIBCFS_DEBUG */
 /* sizeof is to use expression without evaluating it. */
 # define LASSERT(e) ((void)sizeof!!(e))
-# define LASSERTF(cond, fmt...) ((void)sizeof!!(cond))
+# define LASSERTF(cond, ...) ((void)sizeof!!(cond))
 #endif /* !LIBCFS_DEBUG */
 
 #ifdef INVARIANT_CHECK
@@ -237,10 +235,10 @@ void libcfs_debug_set_level(unsigned int debug_level);
 #  undef NDEBUG
 #  include <assert.h>
 #  define LASSERT(e)     assert(e)
-#  define LASSERTF(cond, args...)                                              \
+#  define LASSERTF(cond, ...)                                                  \
 do {                                                                           \
           if (!(cond))                                                         \
-                CERROR(args);                                                  \
+                CERROR(__VA_ARGS__);                                           \
           assert(cond);                                                        \
 } while (0)
 #  define LBUG()   assert(0)
@@ -251,12 +249,12 @@ do {                                                                           \
 #  endif
 # else
 #  define LASSERT(e) ((void)sizeof!!(e))
-#  define LASSERTF(cond, args...) ((void)sizeof!!(cond))
+#  define LASSERTF(cond, ...) ((void)sizeof!!(cond))
 #  define LBUG()   ((void)(0))
 #  define LINVRNT(exp) ((void)sizeof!!(exp))
 # endif /* LIBCFS_DEBUG */
 # define KLASSERT(e) ((void)0)
-# define printk(format, args...) printf (format, ## args)
+# define printk printf
 # ifdef CRAY_XT3                                /* buggy calloc! */
 #  define LIBCFS_ALLOC(ptr, size)               \
    do {                                         \
@@ -277,10 +275,13 @@ int libcfs_debug_cleanup(void);
  * build go below this comment. Actual compiler/compiler version
  * specific implementations come from the above header files
  */
-
+#ifdef __GNUC__
 #define likely(x)      __builtin_expect(!!(x), 1)
 #define unlikely(x)    __builtin_expect(!!(x), 0)
-
+#else
+#define likely(x)	(!!(x))
+#define unlikely(x)	(!!(x))
+#endif
 /* !__KERNEL__ */
 #endif
 
@@ -298,7 +299,7 @@ int libcfs_debug_cleanup(void);
  *       value  after  conversion...
  *
  */
-#define CLASSERT(cond) ({ switch(42) { case (cond): case 0: break; } })
+#define CLASSERT(cond) do {switch(42) {case (cond): case 0: break;}} while (0)
 
 /* support decl needed both by kernel and liblustre */
 int         libcfs_isknown_lnd(int type);

@@ -97,7 +97,7 @@
 
 typedef time_t cfs_fs_time_t;
 typedef time_t cfs_time_t;
-typedef long cfs_duration_t;
+typedef time_t cfs_duration_t;
 
 /* looks like linux */
 #define time_after(a, b) ((long)(b) - (long)(a) < 0)
@@ -110,7 +110,7 @@ static inline cfs_time_t cfs_time_current(void)
         return time(NULL);
 }
 
-static inline cfs_duration_t cfs_time_seconds(int seconds)
+static inline cfs_duration_t cfs_time_seconds(cfs_time_t seconds)
 {
         return seconds;
 }

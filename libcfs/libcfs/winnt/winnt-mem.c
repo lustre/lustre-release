@@ -42,6 +42,25 @@
 cfs_mem_cache_t *cfs_page_t_slab = NULL;
 cfs_mem_cache_t *cfs_page_p_slab = NULL;
 
+cfs_page_t * virt_to_page(void * addr)
+{
+    cfs_page_t *pg;
+    pg = cfs_mem_cache_alloc(cfs_page_t_slab, 0);
+    
+    if (NULL == pg) {
+        cfs_enter_debugger();
+        return NULL;
+    }
+
+    memset(pg, 0, sizeof(cfs_page_t));
+    pg->addr = (void *)((__u64)addr & (~((__u64)PAGE_SIZE-1)));
+    pg->mapping = addr;
+    atomic_set(&pg->count, 1);
+    set_bit(PG_virt, &(pg->flags));
+    cfs_enter_debugger();
+    return pg;
+}
+
 /*
  * cfs_alloc_page
  *   To allocate the cfs_page_t and also 1 page of memory
@@ -56,6 +75,8 @@ cfs_mem_cache_t *cfs_page_p_slab = NULL;
  * Notes: 
  *   N/A
  */
+
+atomic_t libcfs_total_pages;
 
 cfs_page_t * cfs_alloc_page(int flags)
 {
@@ -75,6 +96,7 @@ cfs_page_t * cfs_alloc_page(int flags)
         if (cfs_is_flag_set(flags, CFS_ALLOC_ZERO)) {
             memset(pg->addr, 0, CFS_PAGE_SIZE);
         }
+        atomic_inc(&libcfs_total_pages);
     } else {
         cfs_enter_debugger();
         cfs_mem_cache_free(cfs_page_t_slab, pg);
@@ -103,10 +125,60 @@ void cfs_free_page(cfs_page_t *pg)
     ASSERT(pg->addr  != NULL);
     ASSERT(atomic_read(&pg->count) <= 1);
 
-    cfs_mem_cache_free(cfs_page_p_slab, pg->addr);
+    if (!test_bit(PG_virt, &pg->flags)) {
+        cfs_mem_cache_free(cfs_page_p_slab, pg->addr);
+        atomic_dec(&libcfs_total_pages);
+    } else {
+        cfs_enter_debugger();
+    }
     cfs_mem_cache_free(cfs_page_t_slab, pg);
 }
 
+cfs_page_t *cfs_alloc_pages(unsigned int flags, unsigned int order)
+{
+    cfs_page_t *pg;
+    pg = cfs_mem_cache_alloc(cfs_page_t_slab, 0);
+    
+    if (NULL == pg) {
+        cfs_enter_debugger();
+        return NULL;
+    }
+
+    memset(pg, 0, sizeof(cfs_page_t));
+    pg->addr = cfs_alloc((CFS_PAGE_SIZE << order),0);
+    atomic_set(&pg->count, 1);
+
+    if (pg->addr) {
+        if (cfs_is_flag_set(flags, CFS_ALLOC_ZERO)) {
+            memset(pg->addr, 0, CFS_PAGE_SIZE << order);
+        }
+        atomic_add(1 << order, &libcfs_total_pages);
+    } else {
+        cfs_enter_debugger();
+        cfs_mem_cache_free(cfs_page_t_slab, pg);
+        pg = NULL;
+    }
+
+    return pg;
+}
+
+void __cfs_free_pages(cfs_page_t *pg, unsigned int order)
+{
+    ASSERT(pg != NULL);
+    ASSERT(pg->addr  != NULL);
+    ASSERT(atomic_read(&pg->count) <= 1);
+
+    atomic_sub(1 << order, &libcfs_total_pages);
+    cfs_free(pg->addr);
+    cfs_mem_cache_free(cfs_page_t_slab, pg);
+}
+
+int cfs_mem_is_in_cache(const void *addr, const cfs_mem_cache_t *kmem)
+{
+    KdPrint(("cfs_mem_is_in_cache: not implemented. (should maintain a"
+              "chain to keep all allocations traced.)\n"));
+    return 1;
+}
 
 /*
  * cfs_alloc
@@ -127,21 +199,19 @@ void cfs_free_page(cfs_page_t *pg)
 void *
 cfs_alloc(size_t nr_bytes, u_int32_t flags)
 {
-	void *ptr;
+    void *ptr;
 
     /* Ignore the flags: always allcoate from NonPagedPool */
-
-	ptr = ExAllocatePoolWithTag(NonPagedPool, nr_bytes, 'Lufs');
-
-	if (ptr != NULL && (flags & CFS_ALLOC_ZERO)) {
-		memset(ptr, 0, nr_bytes);
+    ptr = ExAllocatePoolWithTag(NonPagedPool, nr_bytes, 'Lufs');
+    if (ptr != NULL && (flags & CFS_ALLOC_ZERO)) {
+        memset(ptr, 0, nr_bytes);
     }
 
     if (!ptr) {
         cfs_enter_debugger();
     }
 
-	return ptr;
+    return ptr;
 }
 
 /*
@@ -161,7 +231,7 @@ cfs_alloc(size_t nr_bytes, u_int32_t flags)
 void
 cfs_free(void *addr)
 {
-	ExFreePool(addr);
+    ExFreePool(addr);
 }
 
 /*
@@ -182,7 +252,7 @@ cfs_free(void *addr)
 void *
 cfs_alloc_large(size_t nr_bytes)
 {
-	return cfs_alloc(nr_bytes, 0);
+    return cfs_alloc(nr_bytes, 0);
 }
 
 /*
@@ -202,7 +272,7 @@ cfs_alloc_large(size_t nr_bytes)
 void
 cfs_free_large(void *addr)
 {
-	cfs_free(addr);
+    cfs_free(addr);
 }
 
 
@@ -252,7 +322,6 @@ cfs_mem_cache_create(
     }
 
     memset(kmc, 0, sizeof(cfs_mem_cache_t));
-
     kmc->flags = flags;
 
     if (name) {
@@ -344,4 +413,75 @@ void *cfs_mem_cache_alloc(cfs_mem_cache_t * kmc, int flags)
 void cfs_mem_cache_free(cfs_mem_cache_t * kmc, void * buf)
 {
     ExFreeToNPagedLookasideList(&(kmc->npll), buf);
+}
+
+spinlock_t  shrinker_guard = {0};
+CFS_LIST_HEAD(shrinker_hdr);
+cfs_timer_t shrinker_timer = {0};
+
+struct shrinker * set_shrinker(int seeks, shrink_callback cb)
+{
+    struct shrinker * s = (struct shrinker *)
+        cfs_alloc(sizeof(struct shrinker), CFS_ALLOC_ZERO);
+    if (s) {
+        s->cb = cb;
+        s->seeks = seeks;
+        s->nr = 2;
+        spin_lock(&shrinker_guard);
+        list_add(&s->list, &shrinker_hdr); 
+        spin_unlock(&shrinker_guard);
+    }
+
+    return s;
+}
+
+void remove_shrinker(struct shrinker *s)
+{
+    struct shrinker *tmp;
+    spin_lock(&shrinker_guard);
+#if TRUE
+    cfs_list_for_each_entry_typed(tmp, &shrinker_hdr,
+                            struct shrinker, list) {
+        if (tmp == s) {
+            list_del(&tmp->list);
+            break;
+        } 
+    }
+#else
+    list_del(&s->list);
+#endif
+    spin_unlock(&shrinker_guard);
+    cfs_free(s);
+}
+
+/* time ut test proc */
+void shrinker_timer_proc(ulong_ptr_t arg)
+{
+    struct shrinker *s;
+    spin_lock(&shrinker_guard);
+
+    cfs_list_for_each_entry_typed(s, &shrinker_hdr,
+                            struct shrinker, list) {
+        s->cb(s->nr, __GFP_FS);
+    }
+    spin_unlock(&shrinker_guard);
+    cfs_timer_arm(&shrinker_timer, 300);
+}
+
+int start_shrinker_timer()
+{
+    /* initialize shriner timer */
+    cfs_timer_init(&shrinker_timer, shrinker_timer_proc, NULL);
+
+    /* start the timer to trigger in 5 minutes */
+    cfs_timer_arm(&shrinker_timer, 300);
+
+    return 0;
+}
+
+void stop_shrinker_timer()
+{
+    /* cancel the timer */
+    cfs_timer_disarm(&shrinker_timer);
+    cfs_timer_done(&shrinker_timer);
 }

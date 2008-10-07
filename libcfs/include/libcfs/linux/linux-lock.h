@@ -82,6 +82,7 @@
  * - down_write(x)
  * - up_write(x)
  */
+#define fini_rwsem(s) do {} while(0)
 
 /*
  * rwlock_t (use Linux kernel's primitives)

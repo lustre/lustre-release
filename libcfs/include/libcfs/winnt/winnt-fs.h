@@ -54,18 +54,51 @@
 #define NODEV		0
 #define MKDEV(ma,mi)	(((ma) << MINORBITS) | (mi))
 
+#define PATH_MAX (260)
 
 #ifdef __KERNEL__
 
+/* linux/fs.h */
+
+#define MAY_EXEC 1
+#define MAY_WRITE 2
+#define MAY_READ 4
+#define MAY_APPEND 8
+
+#define FMODE_READ 1
+#define FMODE_WRITE 2
+
+/* Internal kernel extensions */
+#define FMODE_LSEEK	4
+#define FMODE_PREAD	8
+#define FMODE_PWRITE	FMODE_PREAD	/* These go hand in hand */
+
+/* File is being opened for execution. Primary users of this flag are
+   distributed filesystems that can use it to achieve correct ETXTBUSY
+   behavior for cross-node execution/opening_for_writing of files */
+#define FMODE_EXEC	16
+
+#define RW_MASK         1
+#define RWA_MASK        2
+#define READ 0
+#define WRITE 1
+#define READA 2         /* read-ahead  - don't block if no resources */
+#define SWRITE 3        /* for ll_rw_block() - wait for buffer lock */
+#define SPECIAL 4       /* For non-blockdevice requests in request queue */
+#define READ_SYNC       (READ | (1 << BIO_RW_SYNC))
+#define WRITE_SYNC      (WRITE | (1 << BIO_RW_SYNC))
+#define WRITE_BARRIER   ((1 << BIO_RW) | (1 << BIO_RW_BARRIER))
+
 struct file_operations
 {
-    loff_t (*lseek)(struct file * file, loff_t offset, int origin);
+    struct module *owner;
+    loff_t (*llseek)(struct file * file, loff_t offset, int origin);
     ssize_t (*read) (struct file * file, char * buf, size_t nbytes, loff_t *ppos);
     ssize_t (*write)(struct file * file, const char * buffer,
         size_t count, loff_t *ppos);
-    int (*ioctl) (struct file *, unsigned int, ulong_ptr);
-    int (*open) (struct file *);
-    int (*release) (struct file *);
+    int (*ioctl) (struct file *, unsigned int, ulong_ptr_t);
+    int (*open) (struct inode*, struct file *);
+    int (*release) (struct inode*, struct file *);
 };
 
 struct file {
@@ -73,23 +106,23 @@ struct file {
     cfs_handle_t            f_handle;
     unsigned int            f_flags;
     mode_t                  f_mode;
-    ulong_ptr           f_count;
-
-    //struct list_head      f_list;
-    //struct dentry *       f_dentry;
-
-    cfs_proc_entry_t *      proc_dentry;
-    cfs_file_operations_t * f_op;
+    __u32                   f_count;
 
     size_t                  f_size;
     loff_t                  f_pos;
     unsigned int            f_uid, f_gid;
     int                     f_error;
 
-    ulong_ptr           f_version;
+    __u32                   f_version;
+
+    //struct list_head      f_list;
+    struct dentry *         f_dentry;
+
+    cfs_proc_entry_t *      proc_dentry;
+    cfs_file_operations_t * f_op;
 
     void *                  private_data;
-
+    struct inode *          f_inode;
     char                    f_name[1];
 
 };
@@ -105,9 +138,7 @@ int cfs_filp_fsync(cfs_file_t *fp);
 int cfs_get_file(cfs_file_t *fp);
 int cfs_put_file(cfs_file_t *fp);
 int cfs_file_count(cfs_file_t *fp);
-
-
-
+#define cfs_filp_unlink(x, y) (KdBreakPoint(),0) 
 /*
  * CFS_FLOCK routines
  */
@@ -146,40 +177,211 @@ typedef struct file_lock{
 #define ATTR_RAW        0x0800  /* file system, not vfs will massage attrs */
 #define ATTR_FROM_OPEN  0x1000  /* called from open path, ie O_TRUNC */
 //#define ATTR_CTIME_SET  0x2000
-#define ATTR_BLOCKS     0x4000
+
+/*
+ * set ATTR_BLOCKS to a high value to avoid any risk of collision with other
+ * ATTR_* attributes (see bug 13828): lustre/include/winnt/lustre_compat25.h
+ */
+/* #define ATTR_BLOCKS     0x4000 */
+#define ATTR_BLOCKS    (1 << 27)
+
 #define ATTR_KILL_SUID  0
 #define ATTR_KILL_SGID  0
 
+
+
 #define in_group_p(x)	(0)
+
+
+/* VFS structures for windows */
+
+/* 
+ * inode formats
+ */
+
+#define S_IFMT   00170000
+#define S_IFSOCK 0140000
+#define S_IFLNK	 0120000
+#define S_IFREG  0100000
+#define S_IFBLK  0060000
+#define S_IFDIR  0040000
+#define S_IFCHR  0020000
+#define S_IFIFO  0010000
+#define S_ISUID  0004000
+#define S_ISGID  0002000
+#define S_ISVTX  0001000
+
+/* Inode flags - they have nothing to superblock flags now */
+
+#define S_SYNC		1	/* Writes are synced at once */
+#define S_NOATIME	2	/* Do not update access times */
+#define S_APPEND	4	/* Append-only file */
+#define S_IMMUTABLE	8	/* Immutable file */
+#define S_DEAD		16	/* removed, but still open directory */
+#define S_NOQUOTA	32	/* Inode is not counted to quota */
+#define S_DIRSYNC	64	/* Directory modifications are synchronous */
+#define S_NOCMTIME	128	/* Do not update file c/mtime */
+#define S_SWAPFILE	256	/* Do not truncate: swapon got its bmaps */
+#define S_PRIVATE	512	/* Inode is fs-internal */
+
+
+struct inode {
+        __u32           i_mode;
+        __u64           i_size;
+        __u64           i_blocks;
+        struct timespec i_atime;
+        struct timespec i_ctime;
+        struct timespec i_mtime;
+        struct timespec i_dtime;
+        __u32           i_ino;
+        __u32           i_generation;
+        __u32           i_state;
+        __u32           i_blkbits;
+        int             i_uid;
+        int             i_gid;
+        __u32           i_flags;
+        mutex_t         i_sem;
+        void *          i_priv;
+};
+
+#define I_FREEING       0x0001
+
+struct dentry {
+        atomic_t        d_count;
+        struct {
+            int         len;
+            char *      name;
+        } d_name;
+        struct inode *  d_inode;
+        struct dentry*  d_parent;
+};
+
+extern struct dentry *dget(struct dentry *de);
+extern void dput(struct dentry *de);
+static __inline struct dentry *lookup_one_len(const char *name, struct dentry *de, int len)
+{
+    cfs_enter_debugger();
+    return NULL;
+}
+
+static inline loff_t i_size_read(const struct inode *inode)
+{
+    cfs_enter_debugger();
+    return inode->i_size;
+}
+
+static inline void i_size_write(struct inode *inode, loff_t i_size)
+{
+    cfs_enter_debugger();
+    inode->i_size = i_size;
+}
+
+struct kstatfs {
+        u64     f_type;
+        long    f_bsize;
+        u64     f_blocks;
+        u64     f_bfree;
+        u64     f_bavail;
+        u64     f_files;
+        u64     f_ffree;
+        __u32   f_fsid;
+        long    f_namelen;
+        long    f_frsize;
+        long    f_spare[5];
+};
+
+struct super_block {
+        void *  s_fs_info;
+};
+
+struct vfsmount {
+        struct dentry * pwd;
+        struct dentry * mnt_root;
+        struct super_block *mnt_sb;
+};
+
+
+/*
+ * quota definitions (linux/quota.h)
+ */
+
+#define MAXQUOTAS 2
+#define USRQUOTA  0		/* element used for user quotas */
+#define GRPQUOTA  1		/* element used for group quotas */
+
 
 /*
  * proc fs routines
  */
 
+typedef int (read_proc_t)(char *page, char **start, off_t off,
+                          int count, int *eof, void *data);
+
+struct file; /* forward ref */
+typedef int (write_proc_t)(struct file *file, const char *buffer,
+                           unsigned long count, void *data);
+
+void proc_destory_subtree(cfs_proc_entry_t *entry);
+
 int proc_init_fs();
 void proc_destroy_fs();
 
-
 /*
- *  misc
+ *  thread affinity
  */
 
-static inline void *ERR_PTR(long_ptr error)
-{
-	return (void *) error;
-}
+HANDLE cfs_open_current_thread();
+void cfs_close_thread_handle(HANDLE handle);
+KAFFINITY cfs_query_thread_affinity();
+int cfs_set_thread_affinity(KAFFINITY affinity);
+int cfs_tie_thread_to_cpu(int cpu);
+typedef PVOID mm_segment_t;
 
-static inline long_ptr PTR_ERR(const void *ptr)
-{
-	return (long_ptr) ptr;
-}
+/*
+ * thread priority
+ */
+int cfs_set_thread_priority(KPRIORITY priority);
 
-static inline long_ptr IS_ERR(const void *ptr)
-{
-	return (ulong_ptr)ptr > (ulong_ptr)-1000L;
-}
+#define MAKE_MM_SEG(s) ((mm_segment_t)(ulong_ptr_t)(s))
+#define KERNEL_DS       MAKE_MM_SEG(0xFFFFFFFFUL)
+#define USER_DS         MAKE_MM_SEG(PAGE_OFFSET)
+
+#define get_ds()        (KERNEL_DS)
+#define set_fs(x) do {} while(0)
+#define get_fs() (NULL)
+
+/*
+ * radix tree (linux/radix_tree.h)
+ */
+
+/* radix tree root structure */
+struct radix_tree_root {
+    RTL_GENERIC_TABLE   table;
+};
+
+/* #define RADIX_TREE_INIT(mask) {0}
+
+#define RADIX_TREE(name, mask) \
+	struct radix_tree_root name RADIX_TREE_INIT(mask) */
+
+VOID RadixInitTable(IN PRTL_GENERIC_TABLE Table);
+#define INIT_RADIX_TREE(root, mask)	RadixInitTable(&((root)->table))
+
+/* all radix tree routines should be protected by external locks */
+unsigned int
+radix_tree_gang_lookup(struct radix_tree_root *root, void **results,
+			unsigned long first_index, unsigned int max_items);
+void *radix_tree_lookup(struct radix_tree_root *root, unsigned long index);
+int radix_tree_insert(struct radix_tree_root *root,unsigned long index, void *item);
+void *radix_tree_delete(struct radix_tree_root *root, unsigned long index);
+
+struct rcu_head {
+    int     foo;
+};
 
 #else  /* !__KERNEL__ */
+
+#if !defined(_WINDOWS_)
 
 #define CREATE_NEW          1
 #define CREATE_ALWAYS       2
@@ -222,6 +424,13 @@ CloseHandle(
     );
 
 NTSYSAPI
+DWORD
+NTAPI
+GetLastError(
+   VOID
+   );
+
+NTSYSAPI
 HANDLE
 NTAPI
 CreateFileMappingA(
@@ -259,6 +468,7 @@ NTAPI
 UnmapViewOfFile(
     IN PVOID lpBaseAddress
     );
+#endif
 
 #endif /* __KERNEL__ */
 
@@ -266,5 +476,12 @@ typedef struct {
 	void	*d;
 } cfs_dentry_t;
 
+/*
+ *  misc
+ */
+
+#define ERR_PTR(error) ((void *)(long_ptr_t)(error))
+#define PTR_ERR(ptr)   ((long)(long_ptr_t) (ptr))
+#define IS_ERR(ptr)    ((long)(((ulong_ptr_t) (ptr)) > (ulong_ptr_t)(-1000L)))
 
 #endif /* __LIBCFS_WINNT_CFS_FS_H__*/

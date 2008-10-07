@@ -28,11 +28,7 @@
  * using the generic single-entry routines.
  */
 
-#ifndef __WINNT__
 #define prefetch(a) ((void)a)
-#else
-#define prefetch(a) ((void *)a)
-#endif
 
 struct list_head {
 	struct list_head *next, *prev;
@@ -208,7 +204,7 @@ static inline void list_splice_init(struct list_head *list,
  * @member:	the name of the list_struct within the struct.
  */
 #define list_entry(ptr, type, member) \
-	((type *)((char *)(ptr)-(unsigned long)(&((type *)0)->member)))
+	((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
 
 /**
  * list_for_each	-	iterate over a list
@@ -253,8 +249,8 @@ struct hlist_node {
 #define NULL_P ((void *)0)
 #endif
 
-#define CFS_HLIST_HEAD_INIT { .first = NULL_P }
-#define CFS_HLIST_HEAD(name) struct hlist_head name = {  .first = NULL_P }
+#define CFS_HLIST_HEAD_INIT { NULL_P }
+#define CFS_HLIST_HEAD(name) struct hlist_head name = { NULL_P }
 #define CFS_INIT_HLIST_HEAD(ptr) ((ptr)->first = NULL_P)
 #define CFS_INIT_HLIST_NODE(ptr) ((ptr)->next = NULL_P, (ptr)->pprev = NULL_P)
 
@@ -329,11 +325,11 @@ static inline void hlist_add_after(struct hlist_node *n,
 #define hlist_entry(ptr, type, member) container_of(ptr,type,member)
 
 #define hlist_for_each(pos, head) \
-	for (pos = (head)->first; pos && ({ prefetch(pos->next); 1; }); \
+	for (pos = (head)->first; pos && (prefetch(pos->next), 1); \
 	     pos = pos->next)
 
 #define hlist_for_each_safe(pos, n, head) \
-	for (pos = (head)->first; pos && ({ n = pos->next; 1; }); \
+	for (pos = (head)->first; pos && (n = pos->next, 1); \
 	     pos = n)
 
 /**
@@ -395,7 +391,7 @@ static inline void hlist_add_after(struct hlist_node *n,
  * @head:	the head for your list.
  */
 #define list_for_each_prev(pos, head) \
-	for (pos = (head)->prev, prefetch(pos->prev); pos != (head); \
+	for (pos = (head)->prev, prefetch(pos->prev); pos != (head);     \
 		pos = pos->prev, prefetch(pos->prev))
 
 #endif /* list_for_each_prev */
@@ -441,6 +437,7 @@ static inline void hlist_add_after(struct hlist_node *n,
 		n = list_entry(pos->member.next, typeof(*pos), member);	\
 	     &pos->member != (head);					\
 	     pos = n, n = list_entry(n->member.next, typeof(*n), member))
+
 #endif /* list_for_each_entry_safe */
 
 #ifndef list_for_each_entry_safe_from
@@ -454,10 +451,44 @@ static inline void hlist_add_after(struct hlist_node *n,
  * Iterate over list of given type from current point, safe against
  * removal of list entry.
  */
-#define list_for_each_entry_safe_from(pos, n, head, member)                 \
-        for (n = list_entry(pos->member.next, typeof(*pos), member);        \
-             &pos->member != (head);                                        \
+#define list_for_each_entry_safe_from(pos, n, head, member)             \
+        for (n = list_entry(pos->member.next, typeof(*pos), member);    \
+             &pos->member != (head);                                    \
              pos = n, n = list_entry(n->member.next, typeof(*n), member))
 #endif /* list_for_each_entry_safe_from */
+
+#define cfs_list_for_each_entry_typed(pos, head, type, member)		\
+        for (pos = list_entry((head)->next, type, member),		\
+		     prefetch(pos->member.next);	 		\
+	     &pos->member != (head);		 			\
+	     pos = list_entry(pos->member.next, type, member),		\
+	     prefetch(pos->member.next))
+
+#define cfs_list_for_each_entry_reverse_typed(pos, head, type, member)	\
+	for (pos = list_entry((head)->prev, type, member);		\
+	     prefetch(pos->member.prev), &pos->member != (head);	\
+	     pos = list_entry(pos->member.prev, type, member))
+
+#define cfs_list_for_each_entry_safe_typed(pos, n, head, type, member)	\
+    for (pos = list_entry((head)->next, type, member),			\
+		n = list_entry(pos->member.next, type, member);		\
+	     &pos->member != (head);				 	\
+	     pos = n, n = list_entry(n->member.next, type, member))
+
+#define cfs_list_for_each_entry_safe_from_typed(pos, n, head, type, member)   \
+        for (n = list_entry(pos->member.next, type, member);            \
+             &pos->member != (head);                                    \
+             pos = n, n = list_entry(n->member.next, type, member))
+#define cfs_hlist_for_each_entry_typed(tpos, pos, head, type, member)   \
+	for (pos = (head)->first;                                       \
+	     pos && (prefetch(pos->next), 1) &&                         \
+		(tpos = hlist_entry(pos, type, member), 1);             \
+	     pos = pos->next)
+
+#define cfs_hlist_for_each_entry_safe_typed(tpos, pos, n, head, type, member)\
+	for (pos = (head)->first;					\
+	     pos && (n = pos->next, 1) && 				\
+		(tpos = hlist_entry(pos, type, member), 1);             \
+	     pos = n)
 
 #endif /* __LIBCFS_LUSTRE_LIST_H__ */

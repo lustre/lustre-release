@@ -319,7 +319,8 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *a
                 struct libcfs_ioctl_handler *hand;
                 err = -EINVAL;
                 down_read(&ioctl_list_sem);
-                list_for_each_entry(hand, &ioctl_list, item) {
+                cfs_list_for_each_entry_typed(hand, &ioctl_list,
+                        struct libcfs_ioctl_handler, item) {
                         err = hand->handle_ioctl(cmd, data);
                         if (err != -EINVAL) {
                                 if (err == 0)
@@ -432,6 +433,10 @@ static void exit_libcfs_module(void)
         rc = libcfs_debug_cleanup();
         if (rc)
                 printk(KERN_ERR "LustreError: libcfs_debug_cleanup: %d\n", rc);
+
+        fini_rwsem(&ioctl_list_sem);
+        fini_rwsem(&tracefile_sem);
+
         libcfs_arch_cleanup();
 }
 

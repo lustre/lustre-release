@@ -43,6 +43,7 @@
 
 #include <libcfs/libcfs.h>
 #include "tracefile.h"
+#include <lustre_lib.h>
 
 #ifdef __KERNEL__
 
@@ -51,25 +52,26 @@
  *  /proc emulator routines ...
  */
 
-/* The root node of the proc fs emulation: /proc */
-cfs_proc_entry_t *              proc_fs_root = NULL;
+/* The root node of the proc fs emulation: / */
+cfs_proc_entry_t *              cfs_proc_root = NULL;
 
+/* The root node of the proc fs emulation: /proc */
+cfs_proc_entry_t *              cfs_proc_proc = NULL;
+
+/* The fs sys directory: /proc/fs */
+cfs_proc_entry_t *              cfs_proc_fs = NULL;
 
 /* The sys root: /proc/sys */
-cfs_proc_entry_t *              proc_sys_root = NULL;
-
+cfs_proc_entry_t *              cfs_proc_sys = NULL;
 
 /* The sys root: /proc/dev | to implement misc device */
-
-cfs_proc_entry_t *              proc_dev_root = NULL;
+cfs_proc_entry_t *              cfs_proc_dev = NULL;
 
 
 /* SLAB object for cfs_proc_entry_t allocation */
-
 cfs_mem_cache_t *               proc_entry_cache = NULL;
 
 /* root node for sysctl table */
-
 cfs_sysctl_table_header_t       root_table_header;
 
 /* The global lock to protect all the access */
@@ -101,7 +103,7 @@ proc_file_read(struct file * file, const char * buf, size_t nbytes, loff_t *ppos
     char    *start;
     cfs_proc_entry_t * dp;
 
-    dp = (cfs_proc_entry_t  *) file->private_data;
+    dp = (cfs_proc_entry_t  *) file->f_inode->i_priv;
     if (!(page = (char*) cfs_alloc(CFS_PAGE_SIZE, 0)))
         return -ENOMEM;
 
@@ -158,7 +160,7 @@ proc_file_write(struct file * file, const char * buffer,
 {
     cfs_proc_entry_t  * dp;
     
-    dp = (cfs_proc_entry_t *) file->private_data;
+    dp = (cfs_proc_entry_t *) file->f_inode->i_priv;
 
     if (!dp->write_proc)
         return -EIO;
@@ -168,6 +170,7 @@ proc_file_write(struct file * file, const char * buffer,
 }
 
 struct file_operations proc_file_operations = {
+    /*owner*/       THIS_MODULE,
     /*lseek:*/      NULL, //proc_file_lseek,
     /*read:*/       proc_file_read,
     /*write:*/      proc_file_write,
@@ -212,7 +215,7 @@ proc_free_entry(cfs_proc_entry_t * entry)
 
 void
 proc_dissect_name(
-    char *path,
+    const char *path,
     char **first,
     int  *first_len,
     char **remain
@@ -229,12 +232,12 @@ proc_dissect_name(
 
     if (i < len) {
 
-        *first = path + i;
+        *first = (char *)path + i;
         while (i < len && (path[i] != '/')) i++;
-        *first_len = (path + i - *first);
+        *first_len = (int)(path + i - *first);
 
         if (i + 1 < len) {
-            *remain = path + i + 1;
+            *remain = (char *)path + i + 1;
         }
     }
 }
@@ -282,7 +285,6 @@ proc_search_splay (
 
             /*  The prefix is less than the full name
                 so we go down the right child      */
-            //
 
             link = RtlRightChild(link);
 
@@ -362,6 +364,7 @@ proc_insert_splay (
 
     cfs_set_flag(child->flags, CFS_PROC_FLAG_ATTACHED);
     parent->nlink++;
+    child->parent = parent;
 
     return TRUE;
 }
@@ -381,6 +384,7 @@ proc_remove_splay (
     ASSERT(child->magic == CFS_PROC_ENTRY_MAGIC);
     ASSERT(cfs_is_flag_set(parent->flags, CFS_PROC_FLAG_DIRECTORY));
     ASSERT(cfs_is_flag_set(child->flags, CFS_PROC_FLAG_ATTACHED));
+    ASSERT(child->parent == parent);
 
     entry = proc_search_splay(parent, child->name);
 
@@ -401,7 +405,7 @@ proc_remove_splay (
 
 cfs_proc_entry_t *
 proc_search_entry(
-    char *              name,
+    const char *        name,
     cfs_proc_entry_t *  root
     )
 {
@@ -463,7 +467,7 @@ errorout:
 
 cfs_proc_entry_t *
 proc_insert_entry(
-    char *              name,
+    const char *        name,
     cfs_proc_entry_t *  root
     )
 {
@@ -523,7 +527,7 @@ again:
 
 void
 proc_remove_entry(
-    char *              name,
+    const char *        name,
     cfs_proc_entry_t *  root
     )
 {
@@ -564,12 +568,11 @@ proc_remove_entry(
 
 cfs_proc_entry_t *
 create_proc_entry (
-    char *              name,
+    const char *        name,
     mode_t              mode,
-    cfs_proc_entry_t *  root
+    cfs_proc_entry_t *  parent
     )
 {
-    cfs_proc_entry_t *parent = root;
     cfs_proc_entry_t *entry  = NULL;
 
     if (S_ISDIR(mode)) {
@@ -583,11 +586,15 @@ create_proc_entry (
     }
 
     LOCK_PROCFS();
-
-    ASSERT(NULL != proc_fs_root);
+    ASSERT(NULL != cfs_proc_root);
 
     if (!parent) {
-        parent = proc_fs_root;
+        if (name[0] == '/') {
+            parent = cfs_proc_root;
+        } else {
+            ASSERT(NULL != cfs_proc_proc);
+            parent = cfs_proc_proc;
+        }
     }
 
     entry = proc_search_entry(name, parent);
@@ -619,15 +626,21 @@ errorout:
 
 cfs_proc_entry_t *
 search_proc_entry(
-    char *              name,
+    const char *        name,
     cfs_proc_entry_t *  root
     )
 {
     cfs_proc_entry_t * entry;
 
     LOCK_PROCFS();
+    ASSERT(cfs_proc_root != NULL);
     if (root == NULL) {
-        root = proc_fs_root;
+        if (name[0] == '/') {
+            root = cfs_proc_root;
+        } else {
+            ASSERT(cfs_proc_proc != NULL);
+            root = cfs_proc_proc;
+        }
     }
     entry = proc_search_entry(name, root);
     UNLOCK_PROCFS();
@@ -639,13 +652,19 @@ search_proc_entry(
 
 void
 remove_proc_entry(
-    char *              name,
+    const char *        name,
     cfs_proc_entry_t *  parent
     )
 {
     LOCK_PROCFS();
+    ASSERT(cfs_proc_root != NULL);
     if (parent == NULL) {
-        parent = proc_fs_root;
+        if (name[0] == '/') {
+            parent = cfs_proc_root;
+        } else {
+            ASSERT(cfs_proc_proc != NULL);
+            parent = cfs_proc_proc;
+        }
     }
     proc_remove_entry(name, parent);
     UNLOCK_PROCFS();
@@ -668,6 +687,30 @@ void proc_destroy_splay(cfs_proc_entry_t * entry)
     proc_free_entry(entry);
 }
 
+cfs_proc_entry_t *proc_symlink(
+    const char *name,
+	cfs_proc_entry_t *parent,
+    const char *dest
+    )
+{
+    cfs_enter_debugger();
+    return NULL;
+}
+
+cfs_proc_entry_t *proc_mkdir(
+    const char *name,
+	cfs_proc_entry_t *parent)
+{
+    return create_proc_entry((char *)name, S_IFDIR, parent);
+}
+
+void proc_destory_subtree(cfs_proc_entry_t *entry)
+{
+    LOCK_PROCFS();
+    entry->root = NULL;
+    proc_destroy_splay(entry);
+    UNLOCK_PROCFS();
+}
 
 /* destory the whole proc fs tree */
 
@@ -675,8 +718,8 @@ void proc_destroy_fs()
 {
     LOCK_PROCFS();
 
-    if (proc_fs_root) {
-        proc_destroy_splay(proc_fs_root);
+    if (cfs_proc_root) {
+        proc_destroy_splay(cfs_proc_root);
     }
 
     if (proc_entry_cache) {
@@ -686,14 +729,77 @@ void proc_destroy_fs()
     UNLOCK_PROCFS();
 }
 
-/* initilaize / build the proc fs tree */
+static char proc_item_path[512];
 
+
+void proc_show_tree(cfs_proc_entry_t * node);
+void proc_print_node(cfs_proc_entry_t * node)
+{
+    if (node != cfs_proc_root) {
+        if (S_ISDIR(node->mode)) {
+            printk("%s/%s/\n", proc_item_path, node->name);
+        } else {
+            printk("%s/%s\n", proc_item_path, node->name);
+        }
+    } else {
+         printk("%s\n", node->name);
+    }
+
+    if (S_ISDIR(node->mode)) {
+        proc_show_tree(node);
+    }
+}
+
+void proc_show_child(PRTL_SPLAY_LINKS link)
+{
+    cfs_proc_entry_t * entry  = NULL;
+
+    if (!link) {
+        return;
+    }
+
+    proc_show_child(link->LeftChild);
+    entry = CONTAINING_RECORD(link, cfs_proc_entry_t, s_link);
+    proc_print_node(entry);
+    proc_show_child(link->RightChild);
+}
+
+void proc_show_tree(cfs_proc_entry_t * node)
+{
+    PRTL_SPLAY_LINKS link = NULL;
+    cfs_proc_entry_t * entry = NULL;
+    int i;
+
+    link = node->root;
+    i = strlen(proc_item_path);
+    ASSERT(S_ISDIR(node->mode));
+    if (node != cfs_proc_root) {
+        strcat(proc_item_path, "/");
+        strcat(proc_item_path, node->name);
+    }
+    proc_show_child(link);
+    proc_item_path[i] = 0;
+}
+
+void proc_print_splay()
+{
+    printk("=================================================\n");
+    printk("Lustre virtual proc entries:\n");
+    printk("-------------------------------------------------\n");
+    LOCK_PROCFS();
+    proc_show_tree(cfs_proc_root);
+    UNLOCK_PROCFS();
+    printk("=================================================\n");
+}
+
+
+/* initilaize / build the proc fs tree */
 int proc_init_fs()
 {
     cfs_proc_entry_t * root = NULL;
 
     memset(&(root_table_header), 0, sizeof(struct ctl_table_header));
-    INIT_LIST_HEAD(&(root_table_header.ctl_entry));
+    CFS_INIT_LIST_HEAD(&(root_table_header.ctl_entry));
 
     INIT_PROCFS_LOCK();
     proc_entry_cache = cfs_mem_cache_create(
@@ -708,49 +814,49 @@ int proc_init_fs()
     }
 
     root = proc_alloc_entry();
-
     if (!root) {
         proc_destroy_fs();
         return (-ENOMEM);
     }
-
     root->magic = CFS_PROC_ENTRY_MAGIC;
     root->flags = CFS_PROC_FLAG_DIRECTORY;
     root->mode  = S_IFDIR | S_IRUGO | S_IXUGO;
     root->nlink = 3; // root should never be deleted.
+    root->name[0]='/';
+    root->name[1]= 0;
+    cfs_proc_root = root;
 
-    root->name[0]='p';
-    root->name[1]='r';
-    root->name[2]='o';
-    root->name[3]='c';
-
-    proc_fs_root = root;
-
-    proc_sys_root = create_proc_entry("sys", S_IFDIR, root);
-
-    if (!proc_sys_root) {
-        proc_free_entry(root);
-        proc_fs_root = NULL;
-        proc_destroy_fs();
-        return (-ENOMEM);
+    cfs_proc_dev = create_proc_entry("dev", S_IFDIR, root);
+    if (!cfs_proc_dev) {
+        goto errorout;
     }
+    cfs_proc_dev->nlink = 1;
 
-    proc_sys_root->nlink = 1;
-
-    proc_dev_root = create_proc_entry("dev", S_IFDIR, root);
-
-    if (!proc_dev_root) {
-        proc_free_entry(proc_sys_root);
-        proc_sys_root = NULL;
-        proc_free_entry(proc_fs_root);
-        proc_fs_root = NULL;
-        proc_destroy_fs();
-        return (-ENOMEM);
+    cfs_proc_proc  = create_proc_entry("proc", S_IFDIR, root);
+    if (!cfs_proc_proc) {
+        goto errorout;
     }
+    cfs_proc_proc->nlink = 1;
 
-    proc_dev_root->nlink = 1;
-   
+    cfs_proc_fs = create_proc_entry("fs",  S_IFDIR, cfs_proc_proc);
+    if (!cfs_proc_fs) {
+        goto errorout;
+    }
+    cfs_proc_fs->nlink = 1;
+
+    cfs_proc_sys = create_proc_entry("sys",  S_IFDIR, cfs_proc_proc);
+    if (!cfs_proc_sys) {
+        goto errorout;
+    }
+    cfs_proc_sys->nlink = 1;
+
+  
     return 0;
+
+errorout:
+
+    proc_destroy_fs();
+    return (-ENOMEM);
 }
 
 
@@ -772,9 +878,6 @@ static ssize_t do_rw_proc(int write, struct file * file, char * buf,
         return -ENOTDIR;
     op = (write ? 002 : 004);
 
-//  if (ctl_perm(table, op))
-//      return -EPERM;
-    
     res = count;
 
     /*
@@ -801,6 +904,7 @@ static ssize_t proc_writesys(struct file * file, const char * buf,
 
 
 struct file_operations proc_sys_file_operations = {
+    /*owner*/       THIS_MODULE,
     /*lseek:*/      NULL,
     /*read:*/       proc_readsys,
     /*write:*/      proc_writesys,
@@ -943,14 +1047,14 @@ unsigned long simple_strtoul(const char *cp,char **endp,unsigned int base)
         if (*cp == '0') {
             base = 8;
             cp++;
-            if ((*cp == 'x') && isxdigit(cp[1])) {
+            if ((*cp == 'x') && cfs_isxdigit(cp[1])) {
                 cp++;
                 base = 16;
             }
         }
     }
-    while (isxdigit(*cp) &&
-           (value = isdigit(*cp) ? *cp-'0' : toupper(*cp)-'A'+10) < base) {
+    while (cfs_isxdigit(*cp) &&
+           (value = cfs_isdigit(*cp) ? *cp-'0' : toupper(*cp)-'A'+10) < base) {
         result = result*base + value;
         cp++;
     }
@@ -1353,13 +1457,13 @@ struct ctl_table_header *register_sysctl_table(cfs_sysctl_table_t * table,
         return NULL;
     tmp->ctl_table = table;
 
-    INIT_LIST_HEAD(&tmp->ctl_entry);
+    CFS_INIT_LIST_HEAD(&tmp->ctl_entry);
     if (insert_at_head)
         list_add(&tmp->ctl_entry, &root_table_header.ctl_entry);
     else
         list_add_tail(&tmp->ctl_entry, &root_table_header.ctl_entry);
 #ifdef CONFIG_PROC_FS
-    register_proc_table(table, proc_sys_root);
+    register_proc_table(table, cfs_proc_sys);
 #endif
     return tmp;
 }
@@ -1375,7 +1479,7 @@ void unregister_sysctl_table(struct ctl_table_header * header)
 {
     list_del(&header->ctl_entry);
 #ifdef CONFIG_PROC_FS
-    unregister_proc_table(header->ctl_table, proc_sys_root);
+    unregister_proc_table(header->ctl_table, cfs_proc_sys);
 #endif
     cfs_free(header);
 }
@@ -1388,7 +1492,7 @@ int cfs_psdev_register(cfs_psdev_t * psdev)
     entry = create_proc_entry (
                 (char *)psdev->name,
                 S_IFREG,
-                proc_dev_root
+                cfs_proc_dev
             );
 
     if (!entry) {
@@ -1409,7 +1513,7 @@ int cfs_psdev_deregister(cfs_psdev_t * psdev)
 
     entry = search_proc_entry (
                 (char *)psdev->name,
-                proc_dev_root
+                cfs_proc_dev
             );
 
     if (entry) {
@@ -1419,14 +1523,12 @@ int cfs_psdev_deregister(cfs_psdev_t * psdev)
 
         remove_proc_entry(
             (char *)psdev->name,
-            proc_dev_root
+            cfs_proc_dev
             );
     }
 
     return 0;
 }
-
-extern char debug_file_path[1024];
 
 #define PSDEV_LNET  (0x100)
 enum {
@@ -1446,10 +1548,8 @@ static struct ctl_table lnet_table[] = {
          sizeof(int), 0644, NULL, &proc_dointvec},
         {PSDEV_PRINTK, "printk", &libcfs_printk, sizeof(int), 0644, NULL,
          &proc_dointvec},
-        {PSDEV_CONSOLE_RATELIMIT, "console_ratelimit", &libcfs_console_ratelimit, 
+        {PSDEV_CONSOLE_RATELIMIT, "console_ratelimit", &libcfs_console_ratelimit,
          sizeof(int), 0644, NULL, &proc_dointvec},
-        {PSDEV_DEBUG_PATH, "debug_path", debug_file_path,
-         sizeof(debug_file_path), 0644, NULL, &proc_dostring, &sysctl_string},
 /*
         {PSDEV_PORTALS_UPCALL, "upcall", portals_upcall,
          sizeof(portals_upcall), 0644, NULL, &proc_dostring,
@@ -1469,7 +1569,7 @@ static struct ctl_table top_table[2] = {
 int trace_write_dump_kernel(struct file *file, const char *buffer,
                              unsigned long count, void *data)
 {
-        int rc = trace_dump_debug_buffer_usrstr(buffer, count);
+        int rc = trace_dump_debug_buffer_usrstr((void *)buffer, count);
         
         return (rc < 0) ? rc : count;
 }
@@ -1477,7 +1577,7 @@ int trace_write_dump_kernel(struct file *file, const char *buffer,
 int trace_write_daemon_file(struct file *file, const char *buffer,
                             unsigned long count, void *data)
 {
-        int rc = trace_daemon_command_usrstr(buffer, count);
+        int rc = trace_daemon_command_usrstr((void *)buffer, count);
 
         return (rc < 0) ? rc : count;
 }
@@ -1485,21 +1585,17 @@ int trace_write_daemon_file(struct file *file, const char *buffer,
 int trace_read_daemon_file(char *page, char **start, off_t off, int count,
                            int *eof, void *data)
 {
-	int rc;
-
-	tracefile_read_lock();
-
+        int rc;
+        tracefile_read_lock();
         rc = trace_copyout_string(page, count, tracefile, "\n");
-
         tracefile_read_unlock();
-
-	return rc;
+        return rc;
 }
 
 int trace_write_debug_mb(struct file *file, const char *buffer,
                          unsigned long count, void *data)
 {
-        int rc = trace_set_debug_mb_userstr(buffer, count);
+        int rc = 0; /*trace_set_debug_mb_userstr((void *)buffer, count);*/
         
         return (rc < 0) ? rc : count;
 }
@@ -1520,14 +1616,14 @@ int insert_proc(void)
 
         ent = create_proc_entry("sys/lnet/dump_kernel", 0, NULL);
         if (ent == NULL) {
-                CERROR(("couldn't register dump_kernel\n"));
+                CERROR("couldn't register dump_kernel\n");
                 return -1;
         }
         ent->write_proc = trace_write_dump_kernel;
 
         ent = create_proc_entry("sys/lnet/daemon_file", 0, NULL);
         if (ent == NULL) {
-                CERROR(("couldn't register daemon_file\n"));
+                CERROR("couldn't register daemon_file\n");
                 return -1;
         }
         ent->write_proc = trace_write_daemon_file;
@@ -1535,7 +1631,7 @@ int insert_proc(void)
 
         ent = create_proc_entry("sys/lnet/debug_mb", 0, NULL);
         if (ent == NULL) {
-                CERROR(("couldn't register debug_mb\n"));
+                CERROR("couldn't register debug_mb\n");
                 return -1;
         }
         ent->write_proc = trace_write_debug_mb;
@@ -1546,15 +1642,9 @@ int insert_proc(void)
 
 void remove_proc(void)
 {
-        remove_proc_entry("sys/portals/dump_kernel", NULL);
-        remove_proc_entry("sys/portals/daemon_file", NULL);
-        remove_proc_entry("sys/portals/debug_mb", NULL);
-
-#ifdef CONFIG_SYSCTL
-        if (portals_table_header)
-                unregister_sysctl_table(portals_table_header);
-        portals_table_header = NULL;
-#endif
+        remove_proc_entry("sys/lnet/dump_kernel", NULL);
+        remove_proc_entry("sys/lnet/daemon_file", NULL);
+        remove_proc_entry("sys/lnet/debug_mb", NULL);
 }
 
 
@@ -1569,30 +1659,33 @@ lustre_open_file(char * filename)
     cfs_file_t * fh = NULL;
     cfs_proc_entry_t * fp = NULL;
 
-    fp = search_proc_entry(filename, proc_fs_root);
-
+    fp = search_proc_entry(filename, cfs_proc_root);
     if (!fp) {
-        rc =  -ENOENT;
         return NULL;
     }
 
     fh = cfs_alloc(sizeof(cfs_file_t), CFS_ALLOC_ZERO);
-
     if (!fh) {
-        rc =  -ENOMEM;
         return NULL;
     }
 
-    fh->private_data = (void *)fp;
+    fh->f_inode = cfs_alloc(sizeof(struct inode), CFS_ALLOC_ZERO);
+    if (!fh->f_inode) {
+        cfs_free(fh);
+        return NULL;
+    }
+
+    fh->f_inode->i_priv = (void *)fp;
     fh->f_op = fp->proc_fops;
 
     if (fh->f_op->open) {
-        rc = (fh->f_op->open)(fh);
+        rc = (fh->f_op->open)(fh->f_inode, fh);
     } else {
         fp->nlink++;
     }
 
     if (0 != rc) {
+        cfs_free(fh->f_inode);
         cfs_free(fh);
         return NULL;
     }
@@ -1606,14 +1699,14 @@ lustre_close_file(cfs_file_t * fh)
     int rc = 0;
     cfs_proc_entry_t * fp = NULL;
 
-    fp = (cfs_proc_entry_t *) fh->private_data;
-
+    fp = (cfs_proc_entry_t *) fh->f_inode->i_priv;
     if (fh->f_op->release) {
-        rc = (fh->f_op->release)(fh);
+        rc = (fh->f_op->release)(fh->f_inode, fh);
     } else {
         fp->nlink--;
     }
 
+    cfs_free(fh->f_inode);
     cfs_free(fh);
 
     return rc;
@@ -1622,17 +1715,12 @@ lustre_close_file(cfs_file_t * fh)
 int
 lustre_do_ioctl( cfs_file_t * fh,
                  unsigned long cmd,
-                 ulong_ptr arg )
+                 ulong_ptr_t arg )
 {
     int rc = 0;
 
     if (fh->f_op->ioctl) {
         rc = (fh->f_op->ioctl)(fh, cmd, arg);
-    }
-
-    if (rc != 0) {
-        printk("lustre_do_ioctl: fialed: cmd = %xh arg = %xh rc = %d\n",
-                cmd, arg, rc);
     }
 
     return rc;
@@ -1642,13 +1730,18 @@ int
 lustre_ioctl_file(cfs_file_t * fh, PCFS_PROC_IOCTL devctl)
 {
     int         rc = 0;
-    ulong_ptr   data;
+    ulong_ptr_t data;
 
-    data = (ulong_ptr)devctl + sizeof(CFS_PROC_IOCTL);
+    data = (ulong_ptr_t)devctl + sizeof(CFS_PROC_IOCTL);
+#if defined(_X86_)    
+    CLASSERT(sizeof(struct obd_ioctl_data) == 528);
+#else
+    CLASSERT(sizeof(struct obd_ioctl_data) == 576);
+#endif
 
     /* obd ioctl code */
     if (_IOC_TYPE(devctl->cmd) == 'f') {
-#if 0
+
         struct obd_ioctl_data * obd = (struct obd_ioctl_data *) data;
 
         if ( devctl->cmd != (ULONG)OBD_IOC_BRW_WRITE  &&
@@ -1656,17 +1749,21 @@ lustre_ioctl_file(cfs_file_t * fh, PCFS_PROC_IOCTL devctl)
 
             unsigned long off = obd->ioc_len;
 
-            if (obd->ioc_pbuf1) {
+            if (obd->ioc_plen1) {
                 obd->ioc_pbuf1 = (char *)(data + off);
                 off += size_round(obd->ioc_plen1);
+            } else {
+                obd->ioc_pbuf1 = NULL;
             }
 
-            if (obd->ioc_pbuf2) {
+            if (obd->ioc_plen2) {
                 obd->ioc_pbuf2 = (char *)(data + off);
+                off += size_round(obd->ioc_plen2);
+            } else {
+                obd->ioc_pbuf2 = NULL;
             }
         }
- #endif
-   }
+    }
 
     rc = lustre_do_ioctl(fh, devctl->cmd, data);
 
@@ -1682,10 +1779,18 @@ lustre_read_file(
     char *          buf
     )
 {
-    size_t rc = 0;
+    size_t  rc = 0;
+    off_t   low, high;
+
+    low = (off_t) size;
+    high = (off_t)(off >> 32);
 
     if (fh->f_op->read) {
         rc = (fh->f_op->read) (fh, buf, size, &off);
+    }
+
+    if (rc) {
+        fh->f_pos = off + rc;
     }
 
     return rc;
@@ -1701,7 +1806,7 @@ lustre_write_file(
     )
 {
     size_t rc = 0;
-
+    off = 0;
     if (fh->f_op->write) {
         rc = (fh->f_op->write)(fh, buf, size, &off);
     }
@@ -1709,347 +1814,528 @@ lustre_write_file(
     return rc;
 }  
 
-#else /* !__KERNEL__ */
-
-#include <lnet/api-support.h>
-#include <liblustre.h>
-#include <lustre_lib.h>
 
 /*
- * proc process routines of user space
+ *  seq file routines
  */
 
-HANDLE cfs_proc_open (char * filename, int oflag)
+/**
+ *	seq_open -	initialize sequential file
+ *	@file: file we initialize
+ *	@op: method table describing the sequence
+ *
+ *	seq_open() sets @file, associating it with a sequence described
+ *	by @op.  @op->start() sets the iterator up and returns the first
+ *	element of sequence. @op->stop() shuts it down.  @op->next()
+ *	returns the next element of sequence.  @op->show() prints element
+ *	into the buffer.  In case of error ->start() and ->next() return
+ *	ERR_PTR(error).  In the end of sequence they return %NULL. ->show()
+ *	returns 0 in case of success and negative number in case of error.
+ */
+int seq_open(struct file *file, const struct seq_operations *op)
 {
-    NTSTATUS            status;
-    IO_STATUS_BLOCK     iosb;
-    int                 rc;
+	struct seq_file *p = file->private_data;
 
-    HANDLE              FileHandle = INVALID_HANDLE_VALUE;
-    OBJECT_ATTRIBUTES   ObjectAttributes;
-    ACCESS_MASK         DesiredAccess;
-    ULONG               CreateDisposition;
-    ULONG               ShareAccess;
-    ULONG               CreateOptions;
-    UNICODE_STRING      UnicodeName;
-    USHORT              NameLength;
+	if (!p) {
+		p = kmalloc(sizeof(*p), GFP_KERNEL);
+		if (!p)
+			return -ENOMEM;
+		file->private_data = p;
+	}
+	memset(p, 0, sizeof(*p));
+	mutex_init(&p->lock);
+	p->op = op;
 
-    PFILE_FULL_EA_INFORMATION Ea = NULL;
-    ULONG               EaLength;
-    UCHAR               EaBuffer[EA_MAX_LENGTH];
+	/*
+	 * Wrappers around seq_open(e.g. swaps_open) need to be
+	 * aware of this. If they set f_version themselves, they
+	 * should call seq_open first and then set f_version.
+	 */
+	file->f_version = 0;
 
-    /* Check the filename: should start with "/proc" or "/dev" */
-    NameLength = (USHORT)strlen(filename);
-    if (NameLength > 0x05) {
-        if (_strnicmp(filename, "/proc/", 6) == 0) {
-            filename += 6;
-            NameLength -=6;
-            if (NameLength <= 0) {
-                rc = -EINVAL;
-                goto errorout;
-            }
-        } else if (_strnicmp(filename, "/dev/", 5) == 0) {
-        } else {
-            rc = -EINVAL;
-            goto errorout;
-        }
-    } else {
-        rc = -EINVAL;
-        goto errorout;
-    }
+	/* SEQ files support lseek, but not pread/pwrite */
+	file->f_mode &= ~(FMODE_PREAD | FMODE_PWRITE);
+	return 0;
+}
+EXPORT_SYMBOL(seq_open);
 
-    /* Analyze the flags settings */
+/**
+ *	seq_read -	->read() method for sequential files.
+ *	@file: the file to read from
+ *	@buf: the buffer to read to
+ *	@size: the maximum number of bytes to read
+ *	@ppos: the current position in the file
+ *
+ *	Ready-made ->f_op->read()
+ */
+ssize_t seq_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
+{
+	struct seq_file *m = (struct seq_file *)file->private_data;
+	size_t copied = 0;
+	loff_t pos;
+	size_t n;
+	void *p;
+	int err = 0;
 
-    if (cfs_is_flag_set(oflag, O_WRONLY)) {
-        DesiredAccess = (GENERIC_WRITE | SYNCHRONIZE);
-        ShareAccess = 0;
-    }  else if (cfs_is_flag_set(oflag, O_RDWR)) {
-        DesiredAccess = (GENERIC_READ | GENERIC_WRITE | SYNCHRONIZE);
-        ShareAccess = FILE_SHARE_READ | FILE_SHARE_WRITE;
-    } else {
-        DesiredAccess = (GENERIC_READ | SYNCHRONIZE);
-        ShareAccess = FILE_SHARE_READ;
-    }
+	mutex_lock(&m->lock);
+	/*
+	 * seq_file->op->..m_start/m_stop/m_next may do special actions
+	 * or optimisations based on the file->f_version, so we want to
+	 * pass the file->f_version to those methods.
+	 *
+	 * seq_file->version is just copy of f_version, and seq_file
+	 * methods can treat it simply as file version.
+	 * It is copied in first and copied out after all operations.
+	 * It is convenient to have it as  part of structure to avoid the
+	 * need of passing another argument to all the seq_file methods.
+	 */
+	m->version = file->f_version;
+	/* grab buffer if we didn't have one */
+	if (!m->buf) {
+		m->buf = kmalloc(m->size = PAGE_SIZE, GFP_KERNEL);
+		if (!m->buf)
+			goto Enomem;
+	}
+	/* if not empty - flush it first */
+	if (m->count) {
+		n = min(m->count, size);
+		err = copy_to_user(buf, m->buf + m->from, n);
+		if (err)
+			goto Efault;
+		m->count -= n;
+		m->from += n;
+		size -= n;
+		buf += n;
+		copied += n;
+		if (!m->count)
+			m->index++;
+		if (!size)
+			goto Done;
+	}
+	/* we need at least one record in buffer */
+	while (1) {
+		pos = m->index;
+		p = m->op->start(m, &pos);
+		err = PTR_ERR(p);
+		if (!p || IS_ERR(p))
+			break;
+		err = m->op->show(m, p);
+		if (err)
+			break;
+		if (m->count < m->size)
+			goto Fill;
+		m->op->stop(m, p);
+		cfs_free(m->buf);
+		m->buf = kmalloc(m->size <<= 1, GFP_KERNEL);
+		if (!m->buf)
+			goto Enomem;
+		m->count = 0;
+		m->version = 0;
+	}
+	m->op->stop(m, p);
+	m->count = 0;
+	goto Done;
+Fill:
+	/* they want more? let's try to get some more */
+	while (m->count < size) {
+		size_t offs = m->count;
+		loff_t next = pos;
+		p = m->op->next(m, p, &next);
+		if (!p || IS_ERR(p)) {
+			err = PTR_ERR(p);
+			break;
+		}
+		err = m->op->show(m, p);
+		if (err || m->count == m->size) {
+			m->count = offs;
+			break;
+		}
+		pos = next;
+	}
+	m->op->stop(m, p);
+	n = min(m->count, size);
+	err = copy_to_user(buf, m->buf, n);
+	if (err)
+		goto Efault;
+	copied += n;
+	m->count -= n;
+	if (m->count)
+		m->from = n;
+	else
+		pos++;
+	m->index = pos;
+Done:
+	if (!copied)
+		copied = err;
+	else
+		*ppos += copied;
+	file->f_version = m->version;
+	mutex_unlock(&m->lock);
+	return copied;
+Enomem:
+	err = -ENOMEM;
+	goto Done;
+Efault:
+	err = -EFAULT;
+	goto Done;
+}
+EXPORT_SYMBOL(seq_read);
 
-    if (cfs_is_flag_set(oflag, O_CREAT)) {
-        if (cfs_is_flag_set(oflag, O_EXCL)) {
-            CreateDisposition = FILE_CREATE;
-            rc = -EINVAL;
-            goto errorout;
-        } else {
-            CreateDisposition = FILE_OPEN_IF;
-        }
-    } else {
-        CreateDisposition = FILE_OPEN;
-    }
+static int traverse(struct seq_file *m, loff_t offset)
+{
+	loff_t pos = 0, index;
+	int error = 0;
+	void *p;
 
-    if (cfs_is_flag_set(oflag, O_TRUNC)) {
-        if (cfs_is_flag_set(oflag, O_EXCL)) {
-            CreateDisposition = FILE_OVERWRITE;
-        } else {
-            CreateDisposition = FILE_OVERWRITE_IF;
-        }
-    }
+	m->version = 0;
+	index = 0;
+	m->count = m->from = 0;
+	if (!offset) {
+		m->index = index;
+		return 0;
+	}
+	if (!m->buf) {
+		m->buf = kmalloc(m->size = PAGE_SIZE, GFP_KERNEL);
+		if (!m->buf)
+			return -ENOMEM;
+	}
+	p = m->op->start(m, &index);
+	while (p) {
+		error = PTR_ERR(p);
+		if (IS_ERR(p))
+			break;
+		error = m->op->show(m, p);
+		if (error)
+			break;
+		if (m->count == m->size)
+			goto Eoverflow;
+		if (pos + (loff_t)(m->count) > offset) {
+			m->from = (size_t)(offset - pos);
+			m->count -= m->from;
+			m->index = index;
+			break;
+		}
+		pos += m->count;
+		m->count = 0;
+		if (pos == offset) {
+			index++;
+			m->index = index;
+			break;
+		}
+		p = m->op->next(m, p, &index);
+	}
+	m->op->stop(m, p);
+	return error;
 
-    CreateOptions = 0;
-
-    if (cfs_is_flag_set(oflag, O_DIRECTORY)) {
-        cfs_set_flag(CreateOptions,  FILE_DIRECTORY_FILE);
-    }
-
-    if (cfs_is_flag_set(oflag, O_SYNC)) {
-         cfs_set_flag(CreateOptions, FILE_WRITE_THROUGH);
-    }
-
-    if (cfs_is_flag_set(oflag, O_DIRECT)) {
-         cfs_set_flag(CreateOptions, FILE_NO_INTERMEDIATE_BUFFERING);
-    }
-
-    /* Initialize the unicode path name for the specified file */
-    RtlInitUnicodeString(&UnicodeName, LUSTRE_PROC_SYMLNK);
-
-    /* Setup the object attributes structure for the file. */
-    InitializeObjectAttributes(
-            &ObjectAttributes,
-            &UnicodeName,
-            OBJ_CASE_INSENSITIVE,
-            NULL,
-            NULL );
-
-    /* building EA for the proc entry ...  */
-    Ea = (PFILE_FULL_EA_INFORMATION)EaBuffer;
-    Ea->NextEntryOffset = 0;
-    Ea->Flags = 0;
-    Ea->EaNameLength = (UCHAR)NameLength;
-    Ea->EaValueLength = 0;
-    RtlCopyMemory(
-        &(Ea->EaName),
-        filename,
-        NameLength + 1
-        );
-    EaLength =	sizeof(FILE_FULL_EA_INFORMATION) - 1 +
-				Ea->EaNameLength + 1;
-
-    /* Now to open or create the file now */
-    status = ZwCreateFile(
-                &FileHandle,
-                DesiredAccess,
-                &ObjectAttributes,
-                &iosb,
-                0,
-                FILE_ATTRIBUTE_NORMAL,
-                ShareAccess,
-                CreateDisposition,
-                CreateOptions,
-                Ea,
-                EaLength );
-
-    /* Check the returned status of Iosb ... */
-
-    if (!NT_SUCCESS(status)) {
-        rc = cfs_error_code(status);
-        goto errorout;
-    }
-
-errorout:
-
-    return FileHandle;
+Eoverflow:
+	m->op->stop(m, p);
+	cfs_free(m->buf);
+	m->buf = cfs_alloc(m->size <<= 1, GFP_KERNEL | CFS_ALLOC_ZERO);
+	return !m->buf ? -ENOMEM : -EAGAIN;
 }
 
-int cfs_proc_close(HANDLE handle)
+/**
+ *	seq_lseek -	->llseek() method for sequential files.
+ *	@file: the file in question
+ *	@offset: new position
+ *	@origin: 0 for absolute, 1 for relative position
+ *
+ *	Ready-made ->f_op->llseek()
+ */
+loff_t seq_lseek(struct file *file, loff_t offset, int origin)
 {
-    if (handle) {
-        NtClose((HANDLE)handle);
-    }
+	struct seq_file *m = (struct seq_file *)file->private_data;
+	long long retval = -EINVAL;
 
-    return 0;
+	mutex_lock(&m->lock);
+	m->version = file->f_version;
+	switch (origin) {
+		case 1:
+			offset += file->f_pos;
+		case 0:
+			if (offset < 0)
+				break;
+			retval = offset;
+			if (offset != file->f_pos) {
+				while ((retval=traverse(m, offset)) == -EAGAIN)
+					;
+				if (retval) {
+					/* with extreme prejudice... */
+					file->f_pos = 0;
+					m->version = 0;
+					m->index = 0;
+					m->count = 0;
+				} else {
+					retval = file->f_pos = offset;
+				}
+			}
+	}
+	file->f_version = m->version;
+	mutex_unlock(&m->lock);
+	return retval;
+}
+EXPORT_SYMBOL(seq_lseek);
+
+/**
+ *	seq_release -	free the structures associated with sequential file.
+ *	@file: file in question
+ *	@inode: file->f_path.dentry->d_inode
+ *
+ *	Frees the structures associated with sequential file; can be used
+ *	as ->f_op->release() if you don't have private data to destroy.
+ */
+int seq_release(struct inode *inode, struct file *file)
+{
+	struct seq_file *m = (struct seq_file *)file->private_data;
+    if (m) {
+        if (m->buf)
+	        cfs_free(m->buf);
+	    cfs_free(m);
+    }
+	return 0;
+}
+EXPORT_SYMBOL(seq_release);
+
+/**
+ *	seq_escape -	print string into buffer, escaping some characters
+ *	@m:	target buffer
+ *	@s:	string
+ *	@esc:	set of characters that need escaping
+ *
+ *	Puts string into buffer, replacing each occurrence of character from
+ *	@esc with usual octal escape.  Returns 0 in case of success, -1 - in
+ *	case of overflow.
+ */
+int seq_escape(struct seq_file *m, const char *s, const char *esc)
+{
+	char *end = m->buf + m->size;
+        char *p;
+	char c;
+
+        for (p = m->buf + m->count; (c = *s) != '\0' && p < end; s++) {
+		if (!strchr(esc, c)) {
+			*p++ = c;
+			continue;
+		}
+		if (p + 3 < end) {
+			*p++ = '\\';
+			*p++ = '0' + ((c & 0300) >> 6);
+			*p++ = '0' + ((c & 070) >> 3);
+			*p++ = '0' + (c & 07);
+			continue;
+		}
+		m->count = m->size;
+		return -1;
+        }
+	m->count = p - m->buf;
+        return 0;
+}
+EXPORT_SYMBOL(seq_escape);
+
+int seq_printf(struct seq_file *m, const char *f, ...)
+{
+	va_list args;
+	int len;
+
+	if (m->count < m->size) {
+		va_start(args, f);
+		len = vsnprintf(m->buf + m->count, m->size - m->count, f, args);
+		va_end(args);
+		if (m->count + len < m->size) {
+			m->count += len;
+			return 0;
+		}
+	}
+	m->count = m->size;
+	return -1;
+}
+EXPORT_SYMBOL(seq_printf);
+
+char *d_path(struct path *p, char *buffer, int buflen)
+{
+	cfs_enter_debugger();
+	return ERR_PTR(-ENAMETOOLONG);
 }
 
-int cfs_proc_read(HANDLE handle, void *buffer, unsigned int count)
+int seq_path(struct seq_file *m, struct path *path, char *esc)
 {
-    NTSTATUS            status;
-    IO_STATUS_BLOCK     iosb;
-    LARGE_INTEGER       offset;
+	if (m->count < m->size) {
+		char *s = m->buf + m->count;
+		char *p = d_path(path, s, m->size - m->count);
+		if (!IS_ERR(p)) {
+			while (s <= p) {
+				char c = *p++;
+				if (!c) {
+					p = m->buf + m->count;
+					m->count = s - m->buf;
+					return (int)(s - p);
+				} else if (!strchr(esc, c)) {
+					*s++ = c;
+				} else if (s + 4 > p) {
+					break;
+				} else {
+					*s++ = '\\';
+					*s++ = '0' + ((c & 0300) >> 6);
+					*s++ = '0' + ((c & 070) >> 3);
+					*s++ = '0' + (c & 07);
+				}
+			}
+		}
+	}
+	m->count = m->size;
+	return -1;
+}
+EXPORT_SYMBOL(seq_path);
 
-
-    offset.QuadPart = 0;
-
-    /* read file data */
-    status = NtReadFile(
-                (HANDLE)handle,
-                0,
-                NULL,
-                NULL,
-                &iosb,
-                buffer,
-                count,
-                &offset,
-                NULL);                     
-
-    /* check the return status */
-    if (!NT_SUCCESS(status)) {
-        printf("NtReadFile request failed 0x%0x\n", status);
-        goto errorout;
-    }
-
-errorout:
-
-    if (NT_SUCCESS(status)) {
-        return iosb.Information;
-    }
-
-    return cfs_error_code(status);
+static void *single_start(struct seq_file *p, loff_t *pos)
+{
+	return (void *) (INT_PTR) (*pos == 0);
 }
 
-
-int cfs_proc_write(HANDLE handle, void *buffer, unsigned int count)
+static void *single_next(struct seq_file *p, void *v, loff_t *pos)
 {
-    NTSTATUS            status;
-    IO_STATUS_BLOCK     iosb;
-    LARGE_INTEGER       offset;
-
-    offset.QuadPart = -1;
-
-    /* write buffer to the opened file */
-    status = NtWriteFile(
-                (HANDLE)handle,
-                0,
-                NULL,
-                NULL,
-                &iosb,
-                buffer,
-                count,
-                &offset,
-                NULL);                     
-
-    /* check the return status */
-    if (!NT_SUCCESS(status)) {
-        printf("NtWriteFile request failed 0x%0x\n", status);
-        goto errorout;
-    }
-
-errorout:
-
-    if (NT_SUCCESS(status)) {
-        return iosb.Information;
-    }
-
-    return cfs_error_code(status);
+	++*pos;
+	return NULL;
 }
 
-int cfs_proc_ioctl(HANDLE handle, int cmd, void *buffer)
+static void single_stop(struct seq_file *p, void *v)
 {
-    PUCHAR          procdat = NULL;
-    CFS_PROC_IOCTL  procctl;
-    ULONG           length = 0;
-    ULONG           extra = 0;
-
-    NTSTATUS        status;
-    IO_STATUS_BLOCK iosb;
-
-    procctl.cmd = cmd;
-
-    if(_IOC_TYPE(cmd) == IOC_LIBCFS_TYPE) {
-        struct libcfs_ioctl_data * portal;
-        portal = (struct libcfs_ioctl_data *) buffer;
-        length = portal->ioc_len;
-    } else if (_IOC_TYPE(cmd) == 'f') {
-        struct obd_ioctl_data * obd;
-        obd = (struct obd_ioctl_data *) buffer;
-        length = obd->ioc_len;
-        extra = size_round(obd->ioc_plen1) + size_round(obd->ioc_plen2);
-    } else if(_IOC_TYPE(cmd) == 'u') {
-        length = 4;
-        extra  = 0;
-    } else {
-        printf("user:winnt-proc:cfs_proc_ioctl: un-supported ioctl type ...\n");
-        cfs_enter_debugger();
-        status = STATUS_INVALID_PARAMETER;
-        goto errorout;
-    }
-
-    procctl.len = length + extra;
-    procdat = malloc(length + extra + sizeof(CFS_PROC_IOCTL));
-
-    if (NULL == procdat) {
-        printf("user:winnt-proc:cfs_proc_ioctl: no enough memory ...\n");
-        status = STATUS_INSUFFICIENT_RESOURCES;
-        cfs_enter_debugger();
-        goto errorout;
-    }
-    memset(procdat, 0, length + extra + sizeof(CFS_PROC_IOCTL));
-    memcpy(procdat, &procctl, sizeof(CFS_PROC_IOCTL));
-    memcpy(&procdat[sizeof(CFS_PROC_IOCTL)], buffer, length);
-    length += sizeof(CFS_PROC_IOCTL);
-
-    if (_IOC_TYPE(cmd) == 'f') {
-
-        char *ptr;
-        struct obd_ioctl_data * data;
-        struct obd_ioctl_data * obd;
-
-        data = (struct obd_ioctl_data *) buffer;
-        obd  = (struct obd_ioctl_data *) (procdat + sizeof(CFS_PROC_IOCTL));
-        ptr = obd->ioc_bulk;
-
-        if (data->ioc_inlbuf1) {
-                obd->ioc_inlbuf1 = ptr;
-                LOGL(data->ioc_inlbuf1, data->ioc_inllen1, ptr);
-        }
-
-        if (data->ioc_inlbuf2) {
-                obd->ioc_inlbuf2 = ptr;
-                LOGL(data->ioc_inlbuf2, data->ioc_inllen2, ptr);
-        }
-        if (data->ioc_inlbuf3) {
-                obd->ioc_inlbuf3 = ptr;
-                LOGL(data->ioc_inlbuf3, data->ioc_inllen3, ptr);
-        }
-        if (data->ioc_inlbuf4) {
-                obd->ioc_inlbuf4 = ptr;
-                LOGL(data->ioc_inlbuf4, data->ioc_inllen4, ptr);
-        }
-    
-        if ( cmd != (ULONG)OBD_IOC_BRW_WRITE  &&
-             cmd != (ULONG)OBD_IOC_BRW_READ ) {
-
-            if (data->ioc_pbuf1 && data->ioc_plen1) {
-                obd->ioc_pbuf1 = &procdat[length];
-                memcpy(obd->ioc_pbuf1, data->ioc_pbuf1, data->ioc_plen1); 
-                length += size_round(data->ioc_plen1);
-            }
-
-            if (data->ioc_pbuf2 && data->ioc_plen2) {
-                obd->ioc_pbuf2 = &procdat[length];
-                memcpy(obd->ioc_pbuf2, data->ioc_pbuf2, data->ioc_plen2);
-                length += size_round(data->ioc_plen2);
-            }
-        }
-
-        if (obd_ioctl_is_invalid(obd)) {
-            cfs_enter_debugger();
-        }
-    }
-
-    status = NtDeviceIoControlFile(
-                (HANDLE)handle,
-                NULL, NULL, NULL, &iosb,
-                IOCTL_LIBCFS_ENTRY,
-                procdat, length,
-                procdat, length );
-
-
-    if (NT_SUCCESS(status)) {
-        memcpy(buffer, &procdat[sizeof(CFS_PROC_IOCTL)], procctl.len); 
-    }
-
-errorout:
-
-    if (procdat) {
-        free(procdat);
-    }
-
-    return cfs_error_code(status);
 }
+
+int single_open(struct file *file, int (*show)(struct seq_file *, void *),
+		void *data)
+{
+	struct seq_operations *op = kmalloc(sizeof(*op), GFP_KERNEL);
+	int res = -ENOMEM;
+
+	if (op) {
+		op->start = single_start;
+		op->next = single_next;
+		op->stop = single_stop;
+		op->show = show;
+		res = seq_open(file, op);
+		if (!res)
+			((struct seq_file *)file->private_data)->private = data;
+		else
+			cfs_free(op);
+	}
+	return res;
+}
+EXPORT_SYMBOL(single_open);
+
+int single_release(struct inode *inode, struct file *file)
+{
+	const struct seq_operations *op = ((struct seq_file *)file->private_data)->op;
+	int res = seq_release(inode, file);
+	cfs_free((void *)op);
+	return res;
+}
+EXPORT_SYMBOL(single_release);
+
+int seq_release_private(struct inode *inode, struct file *file)
+{
+	struct seq_file *seq = file->private_data;
+
+	cfs_free(seq->private);
+	seq->private = NULL;
+	return seq_release(inode, file);
+}
+EXPORT_SYMBOL(seq_release_private);
+
+void *__seq_open_private(struct file *f, const struct seq_operations *ops,
+		int psize)
+{
+	int rc;
+	void *private;
+	struct seq_file *seq;
+
+	private = cfs_alloc(psize, GFP_KERNEL | CFS_ALLOC_ZERO);
+	if (private == NULL)
+		goto out;
+
+	rc = seq_open(f, ops);
+	if (rc < 0)
+		goto out_free;
+
+	seq = f->private_data;
+	seq->private = private;
+	return private;
+
+out_free:
+	cfs_free(private);
+out:
+	return NULL;
+}
+EXPORT_SYMBOL(__seq_open_private);
+
+int seq_open_private(struct file *filp, const struct seq_operations *ops,
+		int psize)
+{
+	return __seq_open_private(filp, ops, psize) ? 0 : -ENOMEM;
+}
+EXPORT_SYMBOL(seq_open_private);
+
+int seq_putc(struct seq_file *m, char c)
+{
+	if (m->count < m->size) {
+		m->buf[m->count++] = c;
+		return 0;
+	}
+	return -1;
+}
+EXPORT_SYMBOL(seq_putc);
+
+int seq_puts(struct seq_file *m, const char *s)
+{
+	int len = strlen(s);
+	if (m->count + len < m->size) {
+		memcpy(m->buf + m->count, s, len);
+		m->count += len;
+		return 0;
+	}
+	m->count = m->size;
+	return -1;
+}
+EXPORT_SYMBOL(seq_puts);
+
+struct list_head *seq_list_start(struct list_head *head, loff_t pos)
+{
+	struct list_head *lh;
+
+	list_for_each(lh, head)
+		if (pos-- == 0)
+			return lh;
+
+	return NULL;
+}
+
+EXPORT_SYMBOL(seq_list_start);
+
+struct list_head *seq_list_start_head(struct list_head *head, loff_t pos)
+{
+	if (!pos)
+		return head;
+
+	return seq_list_start(head, pos - 1);
+}
+
+EXPORT_SYMBOL(seq_list_start_head);
+
+struct list_head *seq_list_next(void *v, struct list_head *head, loff_t *ppos)
+{
+	struct list_head *lh;
+
+	lh = ((struct list_head *)v)->next;
+	++*ppos;
+	return lh == head ? NULL : lh;
+}
+
+EXPORT_SYMBOL(seq_list_next);
+
+struct proc_dir_entry *PDE(const struct inode *inode)
+{
+	return (struct proc_dir_entry *)inode->i_priv;
+}
+
 
 #endif /* __KERNEL__ */

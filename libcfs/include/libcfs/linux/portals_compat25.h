@@ -96,6 +96,11 @@
 
 #endif
 
+# define cfs_wait_event_interruptible(wq, condition, ret)               \
+         ret = wait_event_interruptible(wq, condition)
+# define cfs_wait_event_interruptible_exclusive(wq, condition, ret)     \
+         ret = wait_event_interruptible(wq, condition)
+
 #if defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,20))
 #define UML_PID(tsk) ((tsk)->thread.extern_pid)
 #elif defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))

@@ -45,52 +45,64 @@
 #define put_cpu() do { } while (0)
 #endif
 
-#define TCD_TYPE_MAX        1
+/* only define one trace_data type for windows */
+enum {
+        TCD_TYPE_PASSIVE = 0,
+        TCD_TYPE_DISPATCH,
+        TCD_TYPE_MAX
+};
 
-event_t     tracefile_event;
+/* percents to share the total debug memory for each type */
+static unsigned int pages_factor[TCD_TYPE_MAX] = {
+        90,  /* 90% pages for TCD_TYPE_PASSIVE */
+        10   /* 10% pages for TCD_TYPE_DISPATCH */
+};
 
-void tracefile_init_arch()
+char *trace_console_buffers[NR_CPUS][TCD_TYPE_MAX];
+
+struct rw_semaphore tracefile_sem;
+
+int tracefile_init_arch()
 {
 	int    i;
 	int    j;
-    struct trace_cpu_data *tcd;
+	struct trace_cpu_data *tcd;
 
-    cfs_init_event(&tracefile_event, TRUE, TRUE);
+	init_rwsem(&tracefile_sem);
 
-    /* initialize trace_data */
-    memset(trace_data, 0, sizeof(trace_data));
-    for (i = 0; i < TCD_TYPE_MAX; i++) {
-        trace_data[i]=cfs_alloc(sizeof(struct trace_data_union)*NR_CPUS, 0);
-        if (trace_data[i] == NULL)
-            goto out;
-    }
+	/* initialize trace_data */
+	memset(trace_data, 0, sizeof(trace_data));
+	for (i = 0; i < TCD_TYPE_MAX; i++) {
+		trace_data[i]=cfs_alloc(sizeof(union trace_data_union)*NR_CPUS,
+							  GFP_KERNEL);
+		if (trace_data[i] == NULL)
+			goto out;
+	}
 
-    /* arch related info initialized */
-    tcd_for_each(tcd, i, j) {
-        tcd->tcd_pages_factor = 100; /* Only one type */
-        tcd->tcd_cpu = j;
-        tcd->tcd_type = i;
-    }
+	/* arch related info initialized */
+	tcd_for_each(tcd, i, j) {
+		tcd->tcd_pages_factor = (USHORT) pages_factor[i];
+		tcd->tcd_type = (USHORT) i;
+		tcd->tcd_cpu = (USHORT)j;
+	}
 
-    memset(trace_console_buffers, 0, sizeof(trace_console_buffers));
-
-	for (i = 0; i < NR_CPUS; i++) {
-		for (j = 0; j < 1; j++) {
+	for (i = 0; i < num_possible_cpus(); i++)
+		for (j = 0; j < TCD_TYPE_MAX; j++) {
 			trace_console_buffers[i][j] =
 				cfs_alloc(TRACE_CONSOLE_BUFFER_SIZE,
-					CFS_ALLOC_ZERO);
+                                          GFP_KERNEL);
 
 			if (trace_console_buffers[i][j] == NULL)
-                goto out;
+				goto out;
 		}
-    }
 
 	return 0;
 
 out:
 	tracefile_fini_arch();
-	KsPrint((0, "lnet: No enough memory\n"));
+	printk(KERN_ERR "lnet: No enough memory\n");
 	return -ENOMEM;
+
 }
 
 void tracefile_fini_arch()
@@ -98,84 +110,104 @@ void tracefile_fini_arch()
 	int    i;
 	int    j;
 
-	for (i = 0; i < NR_CPUS; i++) {
-		for (j = 0; j < 2; j++) {
+	for (i = 0; i < num_possible_cpus(); i++) {
+		for (j = 0; j < TCD_TYPE_MAX; j++) {
 			if (trace_console_buffers[i][j] != NULL) {
 				cfs_free(trace_console_buffers[i][j]);
 				trace_console_buffers[i][j] = NULL;
 			}
-        }
-    }
+		}
+	}
 
-    for (i = 0; trace_data[i] != NULL; i++) {
-        cfs_free(trace_data[i]);
-        trace_data[i] = NULL;
-    }
+	for (i = 0; trace_data[i] != NULL; i++) {
+		cfs_free(trace_data[i]);
+		trace_data[i] = NULL;
+	}
+
+	fini_rwsem(&tracefile_sem);
 }
 
 void tracefile_read_lock()
 {
-    cfs_wait_event(&tracefile_event, 0);
+	down_read(&tracefile_sem);
 }
 
 void tracefile_read_unlock()
 {
-    cfs_wake_event(&tracefile_event);
+	up_read(&tracefile_sem);
 }
 
 void tracefile_write_lock()
 {
-    cfs_wait_event(&tracefile_event, 0);
+	down_write(&tracefile_sem);
 }
 
 void tracefile_write_unlock()
 {
-    cfs_wake_event(&tracefile_event);
+	up_write(&tracefile_sem);
 }
 
 char *
 trace_get_console_buffer(void)
 {
-#pragma message ("is there possible problem with pre-emption ?")
-    int cpu = (int) KeGetCurrentProcessorNumber();
-    return trace_console_buffers[cpu][0];
+        int cpu  = get_cpu();
+        int type = 0;
+        
+        if (KeGetCurrentIrql() >= DISPATCH_LEVEL)
+                type = TCD_TYPE_DISPATCH;
+        else
+                type = TCD_TYPE_PASSIVE;
+	return trace_console_buffers[cpu][type];
 }
 
 void
 trace_put_console_buffer(char *buffer)
 {
+	put_cpu();
 }
 
 struct trace_cpu_data *
 trace_get_tcd(void)
 {
-#pragma message("todo: return NULL if in interrupt context")
-
-	int cpu = (int) KeGetCurrentProcessorNumber();
-	return &(*trace_data[0])[cpu].tcd;
+        int cpu  = get_cpu();
+        int type = 0;
+        
+        if (KeGetCurrentIrql() >= DISPATCH_LEVEL)
+                type = TCD_TYPE_DISPATCH;
+        else
+                type = TCD_TYPE_PASSIVE;
+	return &(*trace_data[type])[cpu].tcd;
 }
 
 void
-trace_put_tcd (struct trace_cpu_data *tcd, unsigned long flags)
+trace_put_tcd (struct trace_cpu_data *tcd)
 {
+	put_cpu();
 }
 
-int 
-trace_lock_tcd(struct trace_cpu_data *tcd)
+int trace_lock_tcd(struct trace_cpu_data *tcd)
 {
-    __LASSERT(tcd->tcd_type < TCD_TYPE_MAX);
-    return 1;
+	__LASSERT(tcd->tcd_type < TCD_TYPE_MAX);
+	return 1;
 }
 
-void
-trace_unlock_tcd(struct trace_cpu_data *tcd)
+void trace_unlock_tcd(struct trace_cpu_data *tcd)
 {
-    __LASSERT(tcd->tcd_type < TCD_TYPE_MAX);
+	__LASSERT(tcd->tcd_type < TCD_TYPE_MAX);
+}
+
+int tcd_owns_tage(struct trace_cpu_data *tcd, struct trace_page *tage)
+{
+	/*
+	 * XXX nikita: do NOT call portals_debug_msg() (CDEBUG/ENTRY/EXIT)
+	 * from here: this will lead to infinite recursion.
+	 */
+	return tcd->tcd_cpu == tage->cpu;
 }
 
 void
 set_ptldebug_header(struct ptldebug_header *header, int subsys, int mask,
-                    const int line, unsigned long stack)
+		    const int line, unsigned long stack)
 {
 	struct timeval tv;
 
@@ -187,16 +219,16 @@ set_ptldebug_header(struct ptldebug_header *header, int subsys, int mask,
 	header->ph_sec = (__u32)tv.tv_sec;
 	header->ph_usec = tv.tv_usec;
 	header->ph_stack = stack;
-	header->ph_pid = current->pid;
+	header->ph_pid = (__u32)(ULONG_PTR)current->pid;
 	header->ph_line_num = line;
 	header->ph_extern_pid = 0;
 	return;
 }
 
 void print_to_console(struct ptldebug_header *hdr, int mask, const char *buf,
-			          int len, const char *file, const char *fn)
+			     int len, const char *file, const char *fn)
 {
-	char *prefix = NULL, *ptype = NULL;
+	char *prefix = "Lustre", *ptype = NULL;
 
 	if ((mask & D_EMERG) != 0) {
 		prefix = "LustreError";
@@ -207,23 +239,18 @@ void print_to_console(struct ptldebug_header *hdr, int mask, const char *buf,
 	} else if ((mask & D_WARNING) != 0) {
 		prefix = "Lustre";
 		ptype = KERN_WARNING;
-	} else if ((mask & libcfs_printk) != 0 || (mask & D_CONSOLE)) {
+	} else if ((mask & (D_CONSOLE | libcfs_printk)) != 0) {
 		prefix = "Lustre";
 		ptype = KERN_INFO;
 	}
 
 	if ((mask & D_CONSOLE) != 0) {
-		printk("%s%s: %s", ptype, prefix, buf);
+		printk("%s%s: %.*s", ptype, prefix, len, buf);
 	} else {
-		printk("%s%s: %d:%d:(%s:%d:%s()) %s", ptype, prefix, hdr->ph_pid,
-		       hdr->ph_extern_pid, file, hdr->ph_line_num, fn, buf);
+		printk("%s%s: %d:%d:(%s:%d:%s()) %.*s", ptype, prefix, hdr->ph_pid,
+		       hdr->ph_extern_pid, file, hdr->ph_line_num, fn, len, buf);
 	}
 	return;
-}
-
-int tcd_owns_tage(struct trace_cpu_data *tcd, struct trace_page *tage)
-{
-	return 1;
 }
 
 int trace_max_debug_mb(void)
@@ -234,7 +261,16 @@ int trace_max_debug_mb(void)
 }
 
 void
-trace_call_on_all_cpus(void (*fn)(void *arg), void *arg)
+trace_call_on_all_cpus(void (*fn)(void *_arg), void *arg)
 {
-#error "tbd"
+    int         cpu;
+    KAFFINITY   mask = cfs_query_thread_affinity();
+
+    for (cpu = 0; cpu < num_possible_cpus(); cpu++) {
+        if (cfs_tie_thread_to_cpu(cpu)) {
+            ASSERT((int)KeGetCurrentProcessorNumber() == cpu);
+		    fn(arg);
+            cfs_set_thread_affinity(mask);
+        }
+    }
 }

@@ -246,6 +246,12 @@ void up_write(struct rw_semaphore *s)
         (void)s;
 }
 
+void fini_rwsem(struct rw_semaphore *s)
+{
+        LASSERT(s != NULL);
+        (void)s;
+}
+
 #ifdef HAVE_LIBPTHREAD
 
 /*

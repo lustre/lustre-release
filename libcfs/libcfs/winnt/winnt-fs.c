@@ -38,7 +38,9 @@
 
 #include <libcfs/libcfs.h>
 
-const CHAR *dos_file_prefix = "\\??\\";
+const CHAR *dos_file_prefix[] = {
+            "\\??\\", "\\DosDevices\\",
+            "\\SystemRoot\\", NULL};
 
 /*
  * cfs_filp_open
@@ -56,6 +58,9 @@ const CHAR *dos_file_prefix = "\\??\\";
  * Notes: 
  *   N/A
  */
+
+#define is_drv_letter_valid(x) (((x) >= 0 && (x) <= 9) || \
+                ( ((x)|0x20) <= 'z' && ((x)|0x20) >= 'a'))
 
 cfs_file_t *cfs_filp_open(const char *name, int flags, int mode, int *err)
 {
@@ -81,7 +86,6 @@ cfs_file_t *cfs_filp_open(const char *name, int flags, int mode, int *err)
     PUCHAR              AnsiString = NULL;
 
     /* Analyze the flags settings */
-
     if (cfs_is_flag_set(flags, O_WRONLY)) {
         DesiredAccess = (GENERIC_WRITE | SYNCHRONIZE);
         ShareAccess = 0;
@@ -126,11 +130,28 @@ cfs_file_t *cfs_filp_open(const char *name, int flags, int mode, int *err)
     }
 
     /* Initialize the unicode path name for the specified file */
-
     NameLength = (USHORT)strlen(name);
 
+    /* Check file & path name */
     if (name[0] != '\\') {
-        PrefixLength = (USHORT)strlen(dos_file_prefix);
+        if (NameLength < 1 || name[1] != ':' || !is_drv_letter_valid(name[0])) {
+            /* invalid file path name */
+            if (err) *err = -EINVAL;
+            return NULL;
+        }
+        PrefixLength = (USHORT)strlen(dos_file_prefix[0]);
+    } else {
+        int i, j;
+        for (i=0; i < 3 && dos_file_prefix[i] != NULL; i++) {
+            j = strlen(dos_file_prefix[i]);
+            if (NameLength > j && _strnicmp(dos_file_prefix[i], name, j) == 0) {
+                break;
+            }
+        }
+        if (i >= 3) {
+            if (err) *err = -EINVAL;
+            return NULL;
+        }
     }
 
     AnsiString = cfs_alloc( sizeof(CHAR) * (NameLength + PrefixLength + 1),
@@ -142,7 +163,6 @@ cfs_file_t *cfs_filp_open(const char *name, int flags, int mode, int *err)
 
     UnicodeString = cfs_alloc( sizeof(WCHAR) * (NameLength + PrefixLength + 1),
                                CFS_ALLOC_ZERO);
-
     if (NULL == UnicodeString) {
         if (err) *err = -ENOMEM;
         cfs_free(AnsiString);
@@ -150,7 +170,7 @@ cfs_file_t *cfs_filp_open(const char *name, int flags, int mode, int *err)
     }
 
     if (PrefixLength) {
-        RtlCopyMemory(&AnsiString[0], dos_file_prefix , PrefixLength);
+        RtlCopyMemory(&AnsiString[0], dos_file_prefix[0], PrefixLength);
     }
 
     RtlCopyMemory(&AnsiString[PrefixLength], name, NameLength);
@@ -167,7 +187,6 @@ cfs_file_t *cfs_filp_open(const char *name, int flags, int mode, int *err)
     RtlAnsiStringToUnicodeString(&UnicodeName, &AnsiName, FALSE);
 
     /* Setup the object attributes structure for the file. */
-
     InitializeObjectAttributes(
             &ObjectAttributes,
             &UnicodeName,
@@ -177,7 +196,6 @@ cfs_file_t *cfs_filp_open(const char *name, int flags, int mode, int *err)
             NULL );
 
     /* Now to open or create the file now */
-
     Status = ZwCreateFile(
             &FileHandle,
             DesiredAccess,
@@ -192,22 +210,24 @@ cfs_file_t *cfs_filp_open(const char *name, int flags, int mode, int *err)
             0 );
 
     /* Check the returned status of IoStatus... */
-
     if (!NT_SUCCESS(IoStatus.Status)) {
-        *err = cfs_error_code(IoStatus.Status);
+        if (err) {
+            *err = cfs_error_code(IoStatus.Status);
+        }
         cfs_free(UnicodeString);
         cfs_free(AnsiString);
         return NULL;
     }
 
     /* Allocate the cfs_file_t: libcfs file object */
-
     fp = cfs_alloc(sizeof(cfs_file_t) + NameLength, CFS_ALLOC_ZERO);
 
     if (NULL == fp) {
         Status = ZwClose(FileHandle);
         ASSERT(NT_SUCCESS(Status));
-        *err = -ENOMEM;
+        if (err) {
+            *err = -ENOMEM;
+        }
         cfs_free(UnicodeString);
         cfs_free(AnsiString);
         return NULL;
@@ -218,7 +238,9 @@ cfs_file_t *cfs_filp_open(const char *name, int flags, int mode, int *err)
     fp->f_flags = flags;
     fp->f_mode  = (mode_t)mode;
     fp->f_count = 1;
-    *err = 0;
+    if (err) {
+        *err = 0;
+    }
 
     /* free the memory of temporary name strings */
     cfs_free(UnicodeString);
@@ -260,6 +282,164 @@ int cfs_filp_close(cfs_file_t *fp)
 }
 
 
+NTSTATUS CompletionRoutine(PDEVICE_OBJECT DeviceObject, PIRP Irp, PVOID Context)
+{
+    /* copy the IoStatus result */
+    if (Irp->UserIosb)
+        *Irp->UserIosb = Irp->IoStatus;
+    
+    /* singal the event we set */
+    KeSetEvent((PKEVENT) Context, 0, FALSE);
+   
+    /* free the Irp we allocated */
+    IoFreeIrp(Irp);
+    
+    return STATUS_MORE_PROCESSING_REQUIRED;
+}
+
+
+NTSTATUS cfs_nt_filp_io(HANDLE Handle, BOOLEAN Writing, PLARGE_INTEGER Offset,
+                        ULONG Length,  PUCHAR Buffer,   PULONG Bytes)
+{
+    NTSTATUS                status;
+    IO_STATUS_BLOCK         iosb;
+
+    PIRP                    irp = NULL;
+    PIO_STACK_LOCATION      irpSp = NULL;
+
+    PFILE_OBJECT            fileObject = NULL;
+    PDEVICE_OBJECT          deviceObject;
+
+    KEVENT                  event;
+
+    KeInitializeEvent(&event, SynchronizationEvent, FALSE);
+
+    status = ObReferenceObjectByHandle( Handle,
+                                        Writing ? FILE_WRITE_DATA : 
+                                                  FILE_READ_DATA,
+                                        *IoFileObjectType,
+                                        KernelMode,
+                                        (PVOID *) &fileObject,
+                                        NULL );
+    if (!NT_SUCCESS(status)) {
+        goto errorout;
+    }
+
+    /* query the DeviceObject in case no input */
+    deviceObject = IoGetBaseFileSystemDeviceObject(fileObject);
+
+
+    /* allocate our own irp */
+    irp = IoAllocateIrp(deviceObject->StackSize, FALSE);
+    if (NULL == irp) {
+        status = STATUS_INSUFFICIENT_RESOURCES;
+        goto errorout;
+    }
+
+    irp->Tail.Overlay.OriginalFileObject = fileObject;
+    irp->Tail.Overlay.Thread = PsGetCurrentThread();
+    irp->Tail.Overlay.AuxiliaryBuffer = (PVOID) NULL;
+    irp->PendingReturned = FALSE;
+    irp->Cancel = FALSE;
+    irp->CancelRoutine = (PDRIVER_CANCEL) NULL;
+    irp->RequestorMode = KernelMode;
+    irp->UserIosb = &iosb;
+
+    /* set up the next I/O stack location. */
+    irpSp = (PIO_STACK_LOCATION)IoGetNextIrpStackLocation(irp);
+    irpSp->MajorFunction = Writing ? IRP_MJ_WRITE : IRP_MJ_READ;
+    irpSp->FileObject = fileObject;
+    irpSp->DeviceObject = deviceObject;
+
+    if (deviceObject->Flags & DO_BUFFERED_IO) {
+        irp->AssociatedIrp.SystemBuffer = Buffer;
+        irp->UserBuffer = Buffer;
+        irp->Flags |= (ULONG) (IRP_BUFFERED_IO |
+                               IRP_INPUT_OPERATION);
+    } else if (deviceObject->Flags & DO_DIRECT_IO) {
+
+        PMDL mdl = NULL;
+
+        mdl = IoAllocateMdl(Buffer, Length, FALSE, TRUE, irp);
+        if (mdl == NULL) {
+            KsPrint((0, "cfs_nt_filp_io: failed to allocate MDL for %wZ .\n",
+                        &fileObject->FileName));
+            status = STATUS_INSUFFICIENT_RESOURCES;
+            goto errorout;
+        }
+
+        __try {
+            MmProbeAndLockPages(mdl, KernelMode, Writing ? IoReadAccess : IoWriteAccess );
+        } __except(EXCEPTION_EXECUTE_HANDLER) {
+            KsPrint((0, "cfs_nt_filp_io: failed to lock buffer %p for %wZ .\n",
+                        Buffer, &fileObject->FileName));
+            IoFreeMdl(irp->MdlAddress);
+            irp->MdlAddress = NULL;
+            status = STATUS_INSUFFICIENT_RESOURCES;
+        }
+    } else {
+        irp->UserBuffer = Buffer;
+        irp->Flags = 0;
+    }
+
+    if (Writing) {
+        irp->Flags |= IRP_WRITE_OPERATION | IRP_DEFER_IO_COMPLETION;
+        irpSp->Parameters.Write.Length = Length;
+        irpSp->Parameters.Write.ByteOffset = *Offset;
+    } else {
+        irp->Flags |= IRP_READ_OPERATION | IRP_DEFER_IO_COMPLETION;
+        irpSp->Parameters.Read.Length = Length;
+        irpSp->Parameters.Read.ByteOffset = *Offset;
+    }
+
+    /* set the Irp completion routine */
+    IoSetCompletionRoutine( irp, CompletionRoutine, 
+                            &event, TRUE, TRUE, TRUE);
+
+
+    /* issue the irp to the lower layer device */
+    status = IoCallDriver(deviceObject, irp);
+
+    /* Irp is to be cleaned up in the compleiton routine */
+    irp = NULL;
+
+    if (status == STATUS_PENDING) {
+
+        /* we need wait until operation is completed, then we can
+           get the returned status and information length */
+
+        status = KeWaitForSingleObject(
+                    &event,
+                    Executive,
+                    KernelMode,
+                    FALSE,
+                    NULL
+                    );
+        if (NT_SUCCESS(status)) {
+            status = iosb.Status;
+        }
+    }
+
+    if (NT_SUCCESS(status)) {
+        *Bytes = (ULONG)iosb.Information;
+    } else {
+        *Bytes = 0;
+    }
+
+errorout:
+
+    if (fileObject) {
+        ObDereferenceObject(fileObject);
+    }
+
+    /* free the Irp in error case */
+    if (irp) {
+        IoFreeIrp(irp);
+    }
+
+    return status;
+}
+
 /*
  * cfs_filp_read
  *     To read data from the opened file
@@ -281,44 +461,32 @@ int cfs_filp_close(cfs_file_t *fp)
 
 int cfs_filp_read(cfs_file_t *fp, void *buf, size_t nbytes, loff_t *pos)
 {
-    LARGE_INTEGER   address;
-    NTSTATUS        Status;
-    IO_STATUS_BLOCK IoStatus;
-
+    LARGE_INTEGER   offset;
+    NTSTATUS        status;
     int             rc = 0;
 
     /* Read data from the file into the specified buffer */
-
     if (pos != NULL) {
-        address.QuadPart = *pos;
+        offset.QuadPart = *pos;
     } else {
-        address.QuadPart = fp->f_pos;
+        offset.QuadPart = fp->f_pos;
     }
 
-    Status = ZwReadFile( fp->f_handle,
-                         0,
-                         NULL,
-                         NULL,
-                         &IoStatus,
-                         buf,
-                         nbytes,
-                         &address,
-                         NULL );
+    status = cfs_nt_filp_io(fp->f_handle, 0, &offset,
+                            nbytes, buf, &rc);
 
-    if (!NT_SUCCESS(IoStatus.Status)) {
-        rc = cfs_error_code(IoStatus.Status);
-    } else {
-        rc = (int)IoStatus.Information;
-        fp->f_pos = address.QuadPart + rc;
- 
-        if (pos != NULL) {
+    if (!NT_SUCCESS(status)) {
+        rc = cfs_error_code(status);
+    }
+
+    if (rc > 0) {
+        fp->f_pos = offset.QuadPart + rc;
+        if (pos != NULL)
             *pos = fp->f_pos;
-        }   
     }
 
-    return rc;     
+    return rc;
 }
-
 
 /*
  * cfs_filp_wrtie
@@ -341,62 +509,32 @@ int cfs_filp_read(cfs_file_t *fp, void *buf, size_t nbytes, loff_t *pos)
 
 int cfs_filp_write(cfs_file_t *fp, void *buf, size_t nbytes, loff_t *pos)
 {
-    LARGE_INTEGER   address;
-    NTSTATUS        Status;
-    IO_STATUS_BLOCK IoStatus;
+    LARGE_INTEGER   offset;
+    NTSTATUS        status;
     int             rc = 0;
 
-    /* Write user specified data into the file */
-
+    /* Read data from the file into the specified buffer */
     if (pos != NULL) {
-        address.QuadPart = *pos;
+        offset.QuadPart = *pos;
     } else {
-        address.QuadPart = fp->f_pos;
+        offset.QuadPart = fp->f_pos;
     }
 
-    Status = ZwWriteFile( fp->f_handle,
-                         0,
-                         NULL,
-                         NULL,
-                         &IoStatus,
-                         buf,
-                         nbytes,
-                         &address,
-                         NULL );
+    status = cfs_nt_filp_io(fp->f_handle, 1, &offset,
+                            nbytes, buf, &rc);
 
-    if (!NT_SUCCESS(Status)) {
-        rc =  cfs_error_code(Status);
-    } else {
-        rc = (int)IoStatus.Information;
-        fp->f_pos = address.QuadPart + rc;
- 
-        if (pos != NULL) {
+    if (!NT_SUCCESS(status)) {
+        rc = cfs_error_code(status);
+    }
+
+    if (rc > 0) {
+        fp->f_pos = offset.QuadPart + rc;
+        if (pos != NULL)
             *pos = fp->f_pos;
-        }   
     }
 
     return rc;
 }
-
-
-NTSTATUS
-CompletionRoutine(
-    PDEVICE_OBJECT DeviceObject,
-    PIRP Irp,
-    PVOID Context)
-{
-    /* copy the IoStatus result */
-    *Irp->UserIosb = Irp->IoStatus;
-    
-    /* singal the event we set */
-    KeSetEvent(Irp->UserEvent, 0, FALSE);
-   
-    /* free the Irp we allocated */
-    IoFreeIrp(Irp);
-    
-    return STATUS_MORE_PROCESSING_REQUIRED;
-}
-
 
 /*
  * cfs_filp_fsync
@@ -428,7 +566,6 @@ int cfs_filp_fsync(cfs_file_t *fp)
     PIO_STACK_LOCATION      IrpSp;
 
     /* get the FileObject and the DeviceObject */
-
     Status = ObReferenceObjectByHandle(
                 fp->f_handle,
                 FILE_WRITE_DATA,
@@ -444,11 +581,8 @@ int cfs_filp_fsync(cfs_file_t *fp)
     DeviceObject = IoGetRelatedDeviceObject(FileObject);
 
     /* allocate a new Irp */
-
     Irp = IoAllocateIrp(DeviceObject->StackSize, FALSE);
-
     if (!Irp) {
-
         ObDereferenceObject(FileObject);
         return -ENOMEM;
     }
@@ -457,7 +591,6 @@ int cfs_filp_fsync(cfs_file_t *fp)
     KeInitializeEvent(&Event, SynchronizationEvent, FALSE);
 
     /* setup the Irp */
-    Irp->UserEvent = &Event;
     Irp->UserIosb = &IoSb;
     Irp->RequestorMode = KernelMode;
 
@@ -471,7 +604,8 @@ int cfs_filp_fsync(cfs_file_t *fp)
     IrpSp->DeviceObject = DeviceObject;
     IrpSp->FileObject = FileObject;
 
-    IoSetCompletionRoutine(Irp, CompletionRoutine, 0, TRUE, TRUE, TRUE);
+    IoSetCompletionRoutine( Irp, CompletionRoutine,
+                            &Event, TRUE, TRUE, TRUE);
 
 
     /* issue the Irp to the underlying file system driver */
@@ -552,4 +686,22 @@ int cfs_put_file(cfs_file_t *fp)
 int cfs_file_count(cfs_file_t *fp)
 {
     return (int)(fp->f_count);
+}
+
+struct dentry *dget(struct dentry *de)
+{
+    if (de) {
+        atomic_inc(&de->d_count);
+    }
+    return de;
+}
+
+void dput(struct dentry *de)
+{
+    if (!de || atomic_read(&de->d_count) == 0) {
+        return;
+    }
+    if (atomic_dec_and_test(&de->d_count)) {
+        cfs_free(de);
+    }
 }

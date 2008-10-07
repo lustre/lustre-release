@@ -63,6 +63,8 @@ cfs_page_t *cfs_alloc_pages(int mask, unsigned long order)
         pg->addr = mmap(0, PAGE_SIZE << order, PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
 #elif defined (__DARWIN__)
         pg->addr = valloc(CFS_PAGE_SIZE << order);
+#elif defined (__WINNT__)
+        pg->addr = pgalloc(order);
 #else
         pg->addr = memalign(CFS_PAGE_SIZE, CFS_PAGE_SIZE << order);
 #endif
@@ -78,6 +80,8 @@ void cfs_free_pages(cfs_page_t *pg, int what)
 {
 #if 0 //#ifdef MAP_ANONYMOUS
         munmap(pg->addr, PAGE_SIZE);
+#elif defined (__WINNT__)
+        pgfree(pg->addr);
 #else
         free(pg->addr);
 #endif

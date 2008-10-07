@@ -195,7 +195,8 @@ static void tcd_shrink(struct trace_cpu_data *tcd)
         CFS_INIT_LIST_HEAD(&pc.pc_pages);
         spin_lock_init(&pc.pc_lock);
 
-        list_for_each_entry_safe(tage, tmp, &tcd->tcd_pages, linkage) {
+        cfs_list_for_each_entry_safe_typed(tage, tmp, &tcd->tcd_pages, 
+                                           struct trace_page, linkage) {
                 if (pgcount-- == 0)
                         break;
 
@@ -537,7 +538,8 @@ static void put_pages_back_on_cpu(void *info)
         tcd_for_each_type_lock(tcd, i) {
                 cur_head = tcd->tcd_pages.next;
 
-                list_for_each_entry_safe(tage, tmp, &pc->pc_pages, linkage) {
+                cfs_list_for_each_entry_safe_typed(tage, tmp, &pc->pc_pages,
+                                                   struct trace_page, linkage) {
 
                         __LASSERT_TAGE_INVARIANT(tage);
 
@@ -568,7 +570,8 @@ static void put_pages_on_tcd_daemon_list(struct page_collection *pc,
         struct trace_page *tmp;
 
         spin_lock(&pc->pc_lock);
-        list_for_each_entry_safe(tage, tmp, &pc->pc_pages, linkage) {
+        cfs_list_for_each_entry_safe_typed(tage, tmp, &pc->pc_pages,
+                                           struct trace_page, linkage) {
 
                 __LASSERT_TAGE_INVARIANT(tage);
 
@@ -619,7 +622,8 @@ void trace_debug_print(void)
 
         pc.pc_want_daemon_pages = 1;
         collect_pages(&pc);
-        list_for_each_entry_safe(tage, tmp, &pc.pc_pages, linkage) {
+        cfs_list_for_each_entry_safe_typed(tage, tmp, &pc.pc_pages,
+                                           struct trace_page, linkage) {
                 char *p, *file, *fn;
                 cfs_page_t *page;
 
@@ -636,7 +640,7 @@ void trace_debug_print(void)
                         p += strlen(file) + 1;
                         fn = p;
                         p += strlen(fn) + 1;
-                        len = hdr->ph_len - (p - (char *)hdr);
+                        len = hdr->ph_len - (int)(p - (char *)hdr);
 
                         print_to_console(hdr, D_EMERG, p, len, file, fn);
 
@@ -680,7 +684,8 @@ int tracefile_dump_all_pages(char *filename)
         /* ok, for now, just write the pages.  in the future we'll be building
          * iobufs with the pages and calling generic_direct_IO */
         CFS_MMSPACE_OPEN;
-        list_for_each_entry_safe(tage, tmp, &pc.pc_pages, linkage) {
+        cfs_list_for_each_entry_safe_typed(tage, tmp, &pc.pc_pages,
+                                           struct trace_page, linkage) {
 
                 __LASSERT_TAGE_INVARIANT(tage);
 
@@ -717,7 +722,8 @@ void trace_flush_pages(void)
 
         pc.pc_want_daemon_pages = 1;
         collect_pages(&pc);
-        list_for_each_entry_safe(tage, tmp, &pc.pc_pages, linkage) {
+        cfs_list_for_each_entry_safe_typed(tage, tmp, &pc.pc_pages,
+                                           struct trace_page, linkage) {
 
                 __LASSERT_TAGE_INVARIANT(tage);
 
@@ -997,14 +1003,15 @@ static int tracefiled(void *arg)
                 hdr = cfs_page_address(tage->page);
                 hdr->ph_flags |= PH_FLAG_FIRST_RECORD;
 
-                list_for_each_entry_safe(tage, tmp, &pc.pc_pages, linkage) {
+                cfs_list_for_each_entry_safe_typed(tage, tmp, &pc.pc_pages,
+                                                   struct trace_page, linkage) {
                         static loff_t f_pos;
 
                         __LASSERT_TAGE_INVARIANT(tage);
 
                         if (f_pos >= (off_t)tracefile_size)
                                 f_pos = 0;
-                        else if (f_pos > cfs_filp_size(filp))
+                        else if (f_pos > (off_t)cfs_filp_size(filp))
                                 f_pos = cfs_filp_size(filp);
 
                         rc = cfs_filp_write(filp, cfs_page_address(tage->page),
@@ -1105,7 +1112,8 @@ static void trace_cleanup_on_cpu(void *info)
         tcd_for_each_type_lock(tcd, i) {
                 tcd->tcd_shutting_down = 1;
 
-                list_for_each_entry_safe(tage, tmp, &tcd->tcd_pages, linkage) {
+                cfs_list_for_each_entry_safe_typed(tage, tmp, &tcd->tcd_pages,
+                                                   struct trace_page, linkage) {
                         __LASSERT_TAGE_INVARIANT(tage);
 
                         list_del(&tage->linkage);

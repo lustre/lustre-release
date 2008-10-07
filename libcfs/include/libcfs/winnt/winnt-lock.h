@@ -49,9 +49,18 @@
 
 
 /*
- *  nt specific part ...
+ * IMPORTANT !!!!!!!!
+ *
+ * All locks' declaration are not guaranteed to be initialized,
+ * Althought some of they are initialized in Linux. All locks
+ * declared by CFS_DECL_* should be initialized explicitly.
  */
 
+/*
+ *  spinlock & event definitions
+ */
+
+typedef struct spin_lock spinlock_t;
 
 /* atomic */
 
@@ -73,6 +82,13 @@ void FASTCALL atomic_dec(atomic_t *v);
 int FASTCALL atomic_dec_and_test(atomic_t *v);
 int FASTCALL atomic_inc_and_test(atomic_t *v);
 
+int FASTCALL atomic_add_return(int i, atomic_t *v);
+int FASTCALL atomic_sub_return(int i, atomic_t *v);
+
+#define atomic_inc_return(v)  atomic_add_return(1, v)
+#define atomic_dec_return(v)  atomic_sub_return(1, v)
+
+int FASTCALL atomic_dec_and_lock(atomic_t *v, spinlock_t *lock);
 
 /* event */
 
@@ -107,7 +123,7 @@ static inline void
 }
 
 /*
- * cfs_wait_event
+ * cfs_wait_event_internal
  *   To wait on an event to syncrhonize the process
  *
  * Arguments:
@@ -123,7 +139,7 @@ static inline void
  */
 
 static inline int64_t
-cfs_wait_event(event_t * event, int64_t timeout)
+cfs_wait_event_internal(event_t * event, int64_t timeout)
 {
     NTSTATUS        Status;
     LARGE_INTEGER   TimeOut;
@@ -185,16 +201,6 @@ cfs_clear_event(event_t * event)
     KeResetEvent(event);
 }
 
-
-/*
- * IMPORTANT !!!!!!!!
- *
- * All locks' declaration are not guaranteed to be initialized,
- * Althought some of they are initialized in Linux. All locks
- * declared by CFS_DECL_* should be initialized explicitly.
- */
-
-
 /*
  * spin lock defintions / routines
  */
@@ -209,25 +215,27 @@ cfs_clear_event(event_t * event)
  *
  */
 
-typedef struct spin_lock {
-
+struct spin_lock {
     KSPIN_LOCK lock;
     KIRQL      irql;
-
-} spinlock_t;
-
+};
 
 #define CFS_DECL_SPIN(name)  spinlock_t name;
 #define CFS_DECL_SPIN_EXTERN(name)  extern spinlock_t name;
 
+#define SPIN_LOCK_UNLOCKED {0}
 
 static inline void spin_lock_init(spinlock_t *lock)
 {
     KeInitializeSpinLock(&(lock->lock));
 }
 
-
 static inline void spin_lock(spinlock_t *lock)
+{
+    KeAcquireSpinLock(&(lock->lock), &(lock->irql));
+}
+
+static inline void spin_lock_nested(spinlock_t *lock, unsigned subclass)
 {
     KeAcquireSpinLock(&(lock->lock), &(lock->irql));
 }
@@ -248,7 +256,7 @@ static inline void spin_unlock(spinlock_t *lock)
    no way to identify the system is MP build or UP build
    on the runtime. We just uses a workaround for it. */
 
-extern int MPSystem;
+extern int libcfs_mp_system;
 
 static int spin_trylock(spinlock_t *lock)
 {
@@ -259,8 +267,8 @@ static int spin_trylock(spinlock_t *lock)
 
     KeRaiseIrql(DISPATCH_LEVEL, &Irql);
 
-    if (MPSystem) {
-        if (0 == (ulong_ptr)lock->lock) {
+    if (libcfs_mp_system) {
+        if (0 == (ulong_ptr_t)lock->lock) {
 #if _X86_
             __asm {
                 mov  edx, dword ptr [ebp + 8]
@@ -287,6 +295,16 @@ static int spin_trylock(spinlock_t *lock)
     return rc;
 }
 
+static int spin_is_locked(spinlock_t *lock)
+{
+#if _WIN32_WINNT >= 0x502
+    /* KeTestSpinLock only avalilable on 2k3 server or later */
+    return (!KeTestSpinLock(&lock->lock));
+#else
+    return (int) (lock->lock);
+#endif
+}
+
 /* synchronization between cpus: it will disable all DPCs
    kernel task scheduler on the CPU */
 #define spin_lock_bh(x)		    spin_lock(x)
@@ -305,7 +323,7 @@ typedef struct rw_semaphore {
 
 #define CFS_DECL_RWSEM(name) rw_semaphore_t name
 #define CFS_DECL_RWSEM_EXTERN(name) extern rw_semaphore_t name
-
+#define DECLARE_RWSEM CFS_DECL_RWSEM
 
 /*
  * init_rwsem
@@ -325,7 +343,7 @@ static inline void init_rwsem(rw_semaphore_t *s)
 {
 	ExInitializeResourceLite(&s->rwsem);
 }
-
+#define rwsem_init init_rwsem
 
 /*
  * fini_rwsem
@@ -346,6 +364,7 @@ static inline void fini_rwsem(rw_semaphore_t *s)
 {
     ExDeleteResourceLite(&s->rwsem);
 }
+#define rwsem_fini fini_rwsem
 
 /*
  * down_read
@@ -365,6 +384,7 @@ static inline void down_read(struct rw_semaphore *s)
 {
 	ExAcquireResourceSharedLite(&s->rwsem, TRUE);
 }
+#define down_read_nested down_read
 
 
 /*
@@ -406,7 +426,7 @@ static inline void down_write(struct rw_semaphore *s)
 {
 	ExAcquireResourceExclusiveLite(&(s->rwsem), TRUE);
 }
-
+#define down_write_nested down_write
 
 /*
  * down_write_trylock
@@ -500,6 +520,11 @@ void write_unlock(rwlock_t * rwlock);
 #define read_lock_irqsave(l, f)	        do {f=0; read_lock(l);} while(0)
 #define read_unlock_irqrestore(l, f)    do {read_unlock(l);} while(0)
 
+#define write_lock_bh   write_lock
+#define write_unlock_bh write_unlock
+
+struct lock_class_key {int foo;};
+#define lockdep_set_class(lock, class) do {} while(0)
 
 /*
  * Semaphore
@@ -509,9 +534,9 @@ void write_unlock(rwlock_t * rwlock);
  * - __up(x)
  */
 
-typedef struct semaphore {
+struct semaphore{
 	KSEMAPHORE sem;
-} mutex_t;
+};
 
 static inline void sema_init(struct semaphore *s, int val)
 {
@@ -524,10 +549,23 @@ static inline void __down(struct semaphore *s)
                           KernelMode, FALSE, NULL );
 
 }
-
 static inline void __up(struct semaphore *s)
 {
 	KeReleaseSemaphore(&s->sem, 0, 1, FALSE);
+}
+
+static inline int down_trylock(struct semaphore * s)
+{
+    LARGE_INTEGER  timeout = {0};
+    NTSTATUS status =
+        KeWaitForSingleObject( &(s->sem), Executive,
+                               KernelMode, FALSE, &timeout);
+
+    if (status == STATUS_SUCCESS) {
+        return 0;
+    }
+
+    return 1;
 }
 
 /*
@@ -539,6 +577,10 @@ static inline void __up(struct semaphore *s)
  * - mutex_down(x)
  */
 
+#define mutex semaphore
+typedef struct semaphore mutex_t;
+
+#define DECLARE_MUTEX(x) mutex_t x
 
 /*
  * init_mutex
@@ -553,13 +595,13 @@ static inline void __up(struct semaphore *s)
  * Notes: 
  *   N/A
  */
-
+#define mutex_init init_mutex
 static inline void init_mutex(mutex_t *mutex)
 {
     sema_init(mutex, 1);
 }
 
-
+#define init_MUTEX init_mutex
 /*
  * mutex_down
  *   To acquire the mutex lock
@@ -579,6 +621,10 @@ static inline void mutex_down(mutex_t *mutex)
     __down(mutex);
 }
 
+#define mutex_lock(m) mutex_down(m)
+#define mutex_trylock(s) down_trylock(s)
+#define mutex_lock_nested(m) mutex_down(m)
+#define down(m)       mutex_down(m)
 
 /*
  * mutex_up
@@ -599,6 +645,8 @@ static inline void mutex_up(mutex_t *mutex)
     __up(mutex);
 }
 
+#define mutex_unlock(m) mutex_up(m)
+#define up(m)           mutex_up(m)
 
 /*
  * init_mutex_locked
@@ -614,10 +662,16 @@ static inline void mutex_up(mutex_t *mutex)
  *   N/A
  */
 
-static inline init_mutex_locked(mutex_t *mutex)
+static inline void init_mutex_locked(mutex_t *mutex)
 {
     init_mutex(mutex);
     mutex_down(mutex);
+}
+
+#define init_MUTEX_LOCKED init_mutex_locked
+
+static inline void mutex_destroy(mutex_t *mutex)
+{
 }
 
 /*
@@ -689,14 +743,15 @@ static inline void complete(struct completion *c)
 
 static inline void wait_for_completion(struct completion *c)
 {
-    cfs_wait_event(&(c->event), 0);
+    cfs_wait_event_internal(&(c->event), 0);
 }
 
-/* __KERNEL__ */
-#else
+static inline int wait_for_completion_interruptible(struct completion *c)
+{
+    cfs_wait_event_internal(&(c->event), 0);
+    return 0;
+}
 
-#include "../user-lock.h"
-
-/* __KERNEL__ */
-#endif
+#else  /* !__KERNEL__ */
+#endif /* !__KERNEL__ */
 #endif

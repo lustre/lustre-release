@@ -1,5 +1,5 @@
-/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
- * vim:expandtab:shiftwidth=8:tabstop=8:
+/* -*- mode: c; c-basic-offset: 4; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=4:tabstop=4:
  *
  * GPL HEADER START
  *
@@ -36,7 +36,27 @@
 
 #ifndef __LIBCFS_WINNT_PORTALS_COMPAT_H__
 #define __LIBCFS_WINNT_PORTALS_COMPAT_H__
+#ifdef __KERNEL__
+/*
+ * Signal
+ */
 
+#define SIGNAL_MASK_ASSERT()                    do {} while(0)
+#define SIGNAL_MASK_LOCK(task, flags)           do {} while(0)
+#define SIGNAL_MASK_UNLOCK(task, flags)         do {} while(0)
+#define USERMODEHELPER(path, argv, envp)        do {} while(0)
+#define RECALC_SIGPENDING                       do {} while(0)
+#define CLEAR_SIGPENDING                        do {} while(0)
+#define CURRENT_SECONDS                         get_seconds()
+#endif
 
+#define ll_proc_dointvec(table, write, filp, buffer, lenp, ppos)        \
+        proc_dointvec(table, write, filp, buffer, lenp)
+#define ll_proc_dostring(table, write, filp, buffer, lenp, ppos)        \
+        proc_dostring(table, write, filp, buffer, lenp)
+#define LL_PROC_PROTO(name)                                             \
+        name(cfs_sysctl_table_t *table, int write, struct file *filp,   \
+             void __user *buffer, size_t *lenp)
+#define DECLARE_LL_PROC_PPOS_DECL  loff_t *ppos = &filp->f_pos
 
 #endif /* _PORTALS_COMPAT_H */

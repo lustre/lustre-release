@@ -42,12 +42,13 @@
 #endif
 
 /* workgroud for VC compiler */
-#ifndef __FUNCTION__
-#define __FUNCTION__ "generic"
+#if _MSC_VER <= 1300
+#define __FUNCTION__ ("generic")
 #endif
 
+#include <config.h>
 #include <libcfs/winnt/winnt-types.h>
-#include <libcfs/portals_utils.h>
+#include <libcfs/list.h>
 #include <libcfs/winnt/winnt-time.h>
 #include <libcfs/winnt/winnt-lock.h>
 #include <libcfs/winnt/winnt-mem.h>
@@ -55,20 +56,6 @@
 #include <libcfs/winnt/winnt-fs.h>
 #include <libcfs/winnt/winnt-tcpip.h>
 #include <libcfs/winnt/kp30.h>
-
-struct ptldebug_header {
-        __u32 ph_len;
-        __u32 ph_flags;
-        __u32 ph_subsys;
-        __u32 ph_mask;
-        __u32 ph_cpu_id;
-        __u32 ph_sec;
-        __u64 ph_usec;
-        __u32 ph_stack;
-        __u32 ph_pid;
-        __u32 ph_extern_pid;
-        __u32 ph_line_num;
-} __attribute__((packed));
 
 #ifdef __KERNEL__
 
@@ -85,18 +72,25 @@ static inline __u32 query_stack_size()
 {
     ULONG   LowLimit, HighLimit;
 
-    IoGetStackLimits(&LowLimit, &HighLimit);
+    IoGetStackLimits((PULONG_PTR)&LowLimit, (PULONG_PTR)&HighLimit);
     ASSERT(HighLimit > LowLimit);
 
     return (__u32) (HighLimit - LowLimit);
 }
-#else
+
+/* disable watchdog */
+#undef WITH_WATCHDOG
+
+#else /* !__KERNEL__*/
+
+#include <libcfs/user-bitops.h>
+
 static inline __u32 query_stack_size()
 {
-   return 4096;
+   return PAGE_SIZE; /* using one page in default */
 }
-#endif
 
+#endif /* __KERNEL__*/
 
 #ifndef THREAD_SIZE
 # define THREAD_SIZE query_stack_size()
@@ -105,26 +99,8 @@ static inline __u32 query_stack_size()
 #define LUSTRE_TRACE_SIZE (THREAD_SIZE >> 5)
 
 #ifdef __KERNEL__
-# ifdef  __ia64__
-#  define CDEBUG_STACK() (THREAD_SIZE -                         \
-                          ((ulong_ptr)__builtin_dwarf_cfa() &   \
-                           (THREAD_SIZE - 1)))
-# else
-#  define CDEBUG_STACK (IoGetRemainingStackSize())
-#  error "This doesn't seem right; CDEBUG_STACK should grow with the stack"
-# endif /* __ia64__ */
-
-#define CHECK_STACK()                                                   \
-do {                                                                    \
-        unsigned long _stack = CDEBUG_STACK();                          \
-                                                                        \
-        if (_stack > 3*THREAD_SIZE/4 && _stack > libcfs_stack) {        \
-                libcfs_stack = _stack;                                  \
-                libcfs_debug_msg(NULL, DEBUG_SUBSYSTEM, D_WARNING,      \
-                                 __FILE__, NULL, __LINE__,              \
-                                 "maximum lustre stack %lu\n", _stack); \
-        }                                                               \
-} while (0)
+#define CDEBUG_STACK() (THREAD_SIZE - (__u32)IoGetRemainingStackSize())
+#define CHECK_STACK() do {} while(0)
 #else /* !__KERNEL__ */
 #define CHECK_STACK() do { } while(0)
 #define CDEBUG_STACK() (0L)
@@ -134,8 +110,8 @@ do {                                                                    \
 #define LUSTRE_LNET_PID          12345
 
 #define ENTRY_NESTING_SUPPORT (0)
-#define ENTRY_NESTING   do {;} while (0)
-#define EXIT_NESTING   do {;} while (0)
+#define ENTRY_NESTING   do {} while (0)
+#define EXIT_NESTING   do {} while (0)
 #define __current_nesting_level() (0)
 
 #endif /* _WINNT_LIBCFS_H */

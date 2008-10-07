@@ -56,10 +56,9 @@
 #include "curproc.h"
 
 #ifndef offsetof
-# define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))
+# define offsetof(typ,memb) ((long)(long_ptr_t)((char *)&(((typ *)0)->memb)))
 #endif
 
-/* cardinality of array */
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(a) ((sizeof (a)) / (sizeof ((a)[0])))
 #endif
@@ -68,31 +67,15 @@
 /* given a pointer @ptr to the field @member embedded into type (usually
  * struct) @type, return pointer to the embedding instance of @type. */
 #define container_of(ptr, type, member) \
-        ((type *)((char *)(ptr)-(unsigned long)(&((type *)0)->member)))
+        ((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
 #endif
 
-#define container_of0(ptr, type, member)                        \
-({                                                              \
-        typeof(ptr) __ptr = (ptr);                              \
-        type       *__res;                                      \
-                                                                \
-        if (unlikely(IS_ERR(__ptr) || __ptr == NULL))           \
-                __res = (type *)__ptr;                          \
-        else                                                    \
-                __res = container_of(__ptr, type, member);      \
-        __res;                                                  \
-})
+static inline int __is_po2(unsigned long long val)
+{
+        return !(val & (val - 1));
+}
 
-/*
- * true iff @i is power-of-2
- */
-#define IS_PO2(i)                               \
-({                                              \
-        typeof(i) __i;                          \
-                                                \
-        __i = (i);                              \
-        !(__i & (__i - 1));                     \
-})
+#define IS_PO2(val) __is_po2((unsigned long long)(val))
 
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
 
@@ -300,6 +283,18 @@ int cfs_univ2oflags(int flags);
 #include <libcfs/libcfs_ioctl.h>
 #include <libcfs/libcfs_prim.h>
 #include <libcfs/libcfs_time.h>
+
+/* container_of depends on "likely" which is defined in libcfs_private.h */
+static inline void *__container_of(void *ptr, unsigned long shift)
+{
+        if (unlikely(IS_ERR(ptr) || ptr == NULL))
+                return ptr;
+        else
+                return (char *)ptr - shift;
+}
+
+#define container_of0(ptr, type, member) \
+        ((type *)__container_of((void *)(ptr), offsetof(type, member)))
 
 #define _LIBCFS_H
 

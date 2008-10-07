@@ -149,6 +149,7 @@ struct completion {
 typedef int (*cfs_wait_handler_t) (int timeout);
 void set_completion_wait_handler(cfs_wait_handler_t *handler);
 void init_completion(struct completion *c);
+void init_completion_module(cfs_wait_handler_t handler);
 void complete(struct completion *c);
 void wait_for_completion(struct completion *c);
 int wait_for_completion_interruptible(struct completion *c);
@@ -182,6 +183,7 @@ void down_write(struct rw_semaphore *s);
 int down_write_trylock(struct rw_semaphore *s);
 void up_read(struct rw_semaphore *s);
 void up_write(struct rw_semaphore *s);
+void fini_rwsem(struct rw_semaphore *s);
 
 /*
  * read-write lock : Need to be investigated more!!
@@ -348,7 +350,7 @@ static inline int mutex_is_locked(struct mutex *lock)
  **************************************************************************/
 
 struct lock_class_key {
-        ;
+        int foo;
 };
 
 static inline void lockdep_set_class(void *lock, struct lock_class_key *key)

@@ -265,21 +265,21 @@ extern void trace_assertion_failed(const char *str, const char *fn,
 				   const char *file, int line);
 
 /* ASSERTION that is safe to use within the debug system */
-#define __LASSERT(cond)								\
-({										\
-	if (unlikely(!(cond))) {						\
-                trace_assertion_failed("ASSERTION("#cond") failed",		\
-				       __FUNCTION__, __FILE__, __LINE__);	\
-	}									\
-})
+#define __LASSERT(cond)                                                 \
+    do {                                                                \
+        if (unlikely(!(cond))) {                                        \
+                trace_assertion_failed("ASSERTION("#cond") failed",     \
+                                 __FUNCTION__, __FILE__, __LINE__);     \
+        }                                                               \
+    } while (0)
 
-#define __LASSERT_TAGE_INVARIANT(tage)			\
-({							\
-        __LASSERT(tage != NULL);			\
-        __LASSERT(tage->page != NULL);			\
-        __LASSERT(tage->used <= CFS_PAGE_SIZE);		\
-        __LASSERT(cfs_page_count(tage->page) > 0);	\
-})
+#define __LASSERT_TAGE_INVARIANT(tage)                                  \
+    do {                                                                \
+        __LASSERT(tage != NULL);                                        \
+        __LASSERT(tage->page != NULL);                                  \
+        __LASSERT(tage->used <= CFS_PAGE_SIZE);                         \
+        __LASSERT(cfs_page_count(tage->page) > 0);                      \
+    } while (0)
 
 #endif	/* LUSTRE_TRACEFILE_PRIVATE */
 

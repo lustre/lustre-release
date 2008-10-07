@@ -34,7 +34,7 @@
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
-#define DEBUG_SUBSYSTEM S_LIBCFS
+#define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/libcfs.h>
 
@@ -61,7 +61,7 @@ void cfs_waitq_init(cfs_waitq_t *waitq)
 {
     waitq->magic = CFS_WAITQ_MAGIC;
     waitq->flags = 0;
-    INIT_LIST_HEAD(&(waitq->waiters));
+    CFS_INIT_LIST_HEAD(&(waitq->waiters));
     spin_lock_init(&(waitq->guard));
 }
 
@@ -103,8 +103,8 @@ void cfs_waitlink_init(cfs_waitlink_t *link)
 
     atomic_inc(&slot->count);
 
-    INIT_LIST_HEAD(&(link->waitq[0].link));
-    INIT_LIST_HEAD(&(link->waitq[1].link));
+    CFS_INIT_LIST_HEAD(&(link->waitq[0].link));
+    CFS_INIT_LIST_HEAD(&(link->waitq[1].link));
 
     link->waitq[0].waitl = link->waitq[1].waitl = link;
 }
@@ -322,8 +322,9 @@ void cfs_waitq_signal_nr(cfs_waitq_t *waitq, int nr)
     LASSERT(waitq->magic == CFS_WAITQ_MAGIC);
 
     spin_lock(&waitq->guard);
-
-    list_for_each_entry(scan, &waitq->waiters, cfs_waitlink_channel_t, link) {
+    cfs_list_for_each_entry_typed(scan, &waitq->waiters, 
+                            cfs_waitlink_channel_t,
+                            link) {
 
         cfs_waitlink_t *waitl = scan->waitl;
 
@@ -407,7 +408,7 @@ void cfs_waitq_wait(cfs_waitlink_t *link, cfs_task_state_t state)
         atomic_dec(link->hits);
         LASSERT((__u32)atomic_read(link->hits) < (__u32)0xFFFFFF00);
     } else {
-        cfs_wait_event(link->event, 0);
+        cfs_wait_event_internal(link->event, 0);
     }
 }
 
@@ -428,16 +429,16 @@ void cfs_waitq_wait(cfs_waitlink_t *link, cfs_task_state_t state)
  *   What if it happens to be woken up at the just timeout time !?
  */
 
-cfs_duration_t cfs_waitq_timedwait( cfs_waitlink_t *link,
-                                    cfs_task_state_t state,
-                                    cfs_duration_t timeout)
+int64_t cfs_waitq_timedwait( cfs_waitlink_t *link,
+                             cfs_task_state_t state,
+                             int64_t timeout)
 { 
 
     if (atomic_read(link->hits) > 0) {
         atomic_dec(link->hits);
         LASSERT((__u32)atomic_read(link->hits) < (__u32)0xFFFFFF00);
-        return TRUE;
+        return (int64_t)TRUE;
     }
 
-    return (cfs_duration_t)cfs_wait_event(link->event, timeout);
+    return (int64_t)cfs_wait_event_internal(link->event, timeout);
 }

@@ -1,5 +1,5 @@
-/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
- * vim:expandtab:shiftwidth=8:tabstop=8:
+/* -*- mode: c; c-basic-offset: 4; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=4:tabstop=4:
  *
  * GPL HEADER START
  *
@@ -51,22 +51,21 @@
 // iovec is defined in libcfs: winnt_prim.h 
 // lnetkiov_t is defined in lnet/types.h
 
-typedef struct socket ksock_tconn_t;
-typedef struct socket cfs_socket_t;
+typedef struct socket ks_tconn_t, cfs_socket_t;
 
 // completion notification callback routine
 
-typedef VOID (*ksock_schedule_cb)(struct socket*, int, void *, ulong_ptr);
+typedef VOID (*ks_schedule_cb)(struct socket*, int);
 
-/* completion routine to update tx structure for async sending */
-typedef PVOID (*ksock_update_tx)(struct socket*, PVOID tx, ulong_ptr);
+#define SOCK_ERROR(s)          ((s->kstc_state >= ksts_disconnected) ? ECONNRESET : 0)
+#define SOCK_TEST_NOSPACE(s)   (1)
 
 //
 // tdinal definitions
 //
 
 
-#if TDI_LIBCFS_DBG
+#if DBG
 #define KsPrint(X)     KsPrintf X
 #else
 #define KsPrint(X)
@@ -77,17 +76,17 @@ typedef PVOID (*ksock_update_tx)(struct socket*, PVOID tx, ulong_ptr);
 // Socket Addresses Related ...
 //
 
-#define	    INADDR_ANY		    (ULONG)0x00000000
+#define     INADDR_ANY          (ULONG)0x00000000
 #define     INADDR_LOOPBACK     (ULONG)0x7f000001
-#define	    INADDR_BROADCAST	(ULONG)0xffffffff
-#define	    INADDR_NONE		    (ULONG)0xffffffff
+#define     INADDR_BROADCAST    (ULONG)0xffffffff
+#define     INADDR_NONE         (ULONG)0xffffffff
 
 /*
  *  TCP / IP options
  */
 
 #define     SOL_TCP             6
-#define     SOL_UDP		        17
+#define     SOL_UD              17
 
 
 #define TL_INSTANCE             0
@@ -104,7 +103,7 @@ typedef PVOID (*ksock_update_tx)(struct socket*, PVOID tx, ulong_ptr);
    Added those for 1003.1g not all are supported yet
  */
  
-#define MSG_OOB 	    1
+#define MSG_OOB         1
 #define MSG_PEEK        2
 #define MSG_DONTROUTE   4
 #define MSG_TRYHARD     4       /* Synonym for MSG_DONTROUTE for DECnet */
@@ -168,15 +167,14 @@ typedef PVOID (*ksock_update_tx)(struct socket*, PVOID tx, ulong_ptr);
 
 typedef struct _KS_TSDU {
 
-    ULONG               Magic;
-    ULONG               Flags;
+    ULONG               Magic;          /* magic */
+    ULONG               Flags;          /* flags */
 
-    struct list_head    Link;
+    struct list_head    Link;           /* link list */
 
-    ULONG               TotalLength;    // Total size of KS_TSDU
-
-    ULONG               StartOffset;    // Start offset of the first Tsdu unit
-    ULONG               LastOffset;     // End offset of the last Tsdu unit
+    ULONG               TotalLength;    /* total size of KS_TSDU */
+    ULONG               StartOffset;    /* offset of the first Tsdu unit */
+    ULONG               LastOffset;     /* end offset of the last Tsdu unit */
 
 /*
     union {
@@ -192,7 +190,8 @@ typedef struct _KS_TSDU {
 #define TSDU_TYPE_DAT   ((USHORT)0x5402)
 #define TSDU_TYPE_MDL   ((USHORT)0x5403)
 
-#define KS_TSDU_BUF_RECEIVING       0x0001
+#define KS_TSDU_COMM_PARTIAL         0x0001
+
 typedef struct _KS_TSDU_BUF {
 
     USHORT              TsduType;
@@ -202,10 +201,8 @@ typedef struct _KS_TSDU_BUF {
     ULONG               StartOffset;
 
     PVOID               UserBuffer;
-
+    PMDL                Mdl;         /* mdl */
 } KS_TSDU_BUF, *PKS_TSDU_BUF;
-
-#define KS_TSDU_DAT_RECEIVING       0x0001
 
 typedef struct _KS_TSDU_DAT {
 
@@ -216,48 +213,65 @@ typedef struct _KS_TSDU_DAT {
     ULONG               StartOffset;
 
     ULONG               TotalLength;
+    PMDL                Mdl;        /* mdl */
 
-    UCHAR               Data[1];
+    UCHAR               Data[0];
 
 } KS_TSDU_DAT, *PKS_TSDU_DAT;
 
-#define KS_DWORD_ALIGN(x)      (((x) + 0x03) & (~(0x03)))
-#define KS_TSDU_STRU_SIZE(Len) (KS_DWORD_ALIGN((Len) + FIELD_OFFSET(KS_TSDU_DAT, Data)))
+#define KS_QWORD_ALIGN(x)      (((x) + 0x07) & 0xFFFFFFF8)
+#define KS_TSDU_STRU_SIZE(Len) (KS_QWORD_ALIGN((Len) + FIELD_OFFSET(KS_TSDU_DAT, Data[0])))
 
 typedef struct _KS_TSDU_MDL {
+    USHORT              TsduType;      /* TSDU_TYPE_MDL */
+    USHORT              TsduFlags;     /* */
 
-    USHORT              TsduType;
-    USHORT              TsduFlags;
+    ULONG               DataLength;    /* total valid data length */
+    ULONG               BaseOffset;    /* payload offset in Tsdu */
+    ULONG               StartOffset;   /* offset in payload */
 
-    ULONG               DataLength;
-    ULONG               StartOffset;    
-
+    PVOID               Descriptor;    /* tdi descriptor for receiving */
     PMDL                Mdl;
-    PVOID               Descriptor;
-
 } KS_TSDU_MDL, *PKS_TSDU_MDL;
 
+typedef struct ks_engine_mgr {
+    spinlock_t              lock;
+    int                     stop;
+    event_t                 exit;
+    event_t                 start;
+    struct list_head        list;
+} ks_engine_mgr_t;
+
+typedef struct ks_engine_slot {
+    ks_tconn_t *            tconn;
+    void *                  tsdumgr;
+    struct list_head        link;
+    int                     queued;
+    ks_engine_mgr_t *       emgr;
+} ks_engine_slot_t;
 
 typedef struct _KS_TSDUMGR {
-
-    struct list_head    TsduList;
-    ULONG               NumOfTsdu;
-    ULONG               TotalBytes;
-    KEVENT              Event;
-
+    struct list_head        TsduList;
+    ULONG                   NumOfTsdu;
+    ULONG                   TotalBytes;
+    KEVENT                  Event;
+    spinlock_t              Lock;
+    ks_engine_slot_t        Slot;
+    ULONG                   Payload;
+    int                     Busy:1;
+    int                     OOB:1;
 } KS_TSDUMGR, *PKS_TSDUMGR;
 
+#define ks_lock_tsdumgr(mgr)   spin_lock(&((mgr)->Lock))
+#define ks_unlock_tsdumgr(mgr) spin_unlock(&((mgr)->Lock))
 
 typedef struct _KS_CHAIN {
-
-    KS_TSDUMGR          Normal;
-    KS_TSDUMGR          Expedited;
-
+    KS_TSDUMGR          Normal;      /* normal queue */
+    KS_TSDUMGR          Expedited;   /* OOB/expedited queue */
 } KS_CHAIN, *PKS_CHAIN;
 
 
-#define TDINAL_SCHED_FACTOR (1)
-#define CAN_BE_SCHED(Len, Limit) (Len >= ((Limit) >> TDINAL_SCHED_FACTOR))
+#define KS_CAN_SCHED(TM) ((TM)->TotalBytes >= ((TM)->Payload >> 2))
 
 //
 // Handler Settings Indictor 
@@ -299,7 +313,7 @@ typedef struct _KS_ADDRESS {
 typedef struct _KS_DISCONNECT_WORKITEM {
 
     WORK_QUEUE_ITEM         WorkItem;       // Workitem to perform disconnection
-    ksock_tconn_t *         tconn;          // tdi connecton
+    ks_tconn_t *            tconn;          // tdi connecton
     ULONG                   Flags;          // connection broken/discnnection flags
     KEVENT                  Event;          // sync event
 
@@ -323,45 +337,38 @@ typedef struct _KS_CONNECTION {
 // type definitions
 //
 
-typedef MDL                         ksock_mdl_t;
-typedef UNICODE_STRING              ksock_unicode_name_t;
-typedef WORK_QUEUE_ITEM             ksock_workitem_t;
+typedef MDL                         ks_mdl_t;
+typedef UNICODE_STRING              ks_unicode_name_t;
+typedef WORK_QUEUE_ITEM             ks_workitem_t;
 
 
-typedef KS_CHAIN                    ksock_chain_t;
-typedef KS_ADDRESS                  ksock_tdi_addr_t;
-typedef KS_CONNECTION               ksock_tconn_info_t;
-typedef KS_DISCONNECT_WORKITEM      ksock_disconnect_workitem_t;
+typedef KS_CHAIN                    ks_chain_t;
+typedef KS_ADDRESS                  ks_tdi_addr_t;
+typedef KS_CONNECTION               ks_tconn_info_t;
+typedef KS_DISCONNECT_WORKITEM      ks_disconnect_t;
 
 
 //
 // Structures for transmission done Workitem
 //
 
-typedef struct _KS_TCPX_FINILIZE {
-    ksock_workitem_t        item;
-    void *                  tx;
-} ksock_tcpx_fini_t;
-
-
-typedef struct ksock_backlogs {
+typedef struct ks_backlogs {
 
         struct list_head    list;   /* list to link the backlog connections */
         int                 num;    /* number of backlogs in the list */
 
-} ksock_backlogs_t;
+} ks_backlogs_t;
 
 
-typedef struct ksock_daemon {
+typedef struct ks_daemon {
 
-    ksock_tconn_t *         tconn;         /* the listener connection object */
+    ks_tconn_t *            tconn;         /* the listener connection object */
     unsigned short          nbacklogs;     /* number of listening backlog conns */
     unsigned short          port;          /* listening port number */ 
     int                     shutdown;      /* daemon threads is to exit */
-    struct list_head        list;          /* to be attached into ksock_nal_data_t*/
+    struct list_head        list;          /* to be attached into ks_nal_data_t */
 
-} ksock_daemon_t ;
-
+} ks_daemon_t;
 
 typedef enum {
 
@@ -373,8 +380,10 @@ typedef enum {
                         // or refuse the connecting request from remote peers.
 
     kstt_child,         // accepted child connection type, it's parent must be Listener
+
     kstt_lasttype
-} ksock_tconn_type;
+
+} ks_tconn_type_t;
 
 typedef enum {
 
@@ -401,7 +410,8 @@ typedef enum {
     ksts_aborted,       // un-exptected broken status
 
     ksts_last           // total number of tconn statuses
-} ksock_tconn_state;
+
+} ks_tconn_state_t;
 
 #define KS_TCONN_MAGIC              'KSTM'
 
@@ -411,23 +421,22 @@ typedef enum {
 
 #define KS_TCONN_DAEMON_STARTED     0x00100000  // indict the daemon is started,
                                                 // only valid for listener
-
 struct socket {
 
-        ulong_ptr                   kstc_magic;      /* Magic & Flags */
-        ulong_ptr                   kstc_flags;
+        ulong                       kstc_magic;      /* Magic & Flags */
+        ulong                       kstc_flags;
 
         spinlock_t                  kstc_lock;       /* serialise lock*/
-        void *                      kstc_conn;       /* ksock_conn_t */
+        void *                      kstc_conn;       /* ks_conn_t */
 
-        ksock_tconn_type            kstc_type;		 /* tdi connection Type */
-        ksock_tconn_state           kstc_state;      /* tdi connection state flag */
+        ks_tconn_type_t             kstc_type;		 /* tdi connection Type */
+        ks_tconn_state_t            kstc_state;      /* tdi connection state flag */
 
-        ksock_unicode_name_t        kstc_dev;        /* tcp transport device name */
+        ks_unicode_name_t           kstc_dev;        /* tcp transport device name */
 
-        ksock_tdi_addr_t            kstc_addr;       /* local address handlers / Objects */
+        ks_tdi_addr_t               kstc_addr;       /* local address handlers / Objects */
 
-        atomic_t                    kstc_refcount;   /* reference count of ksock_tconn */
+        atomic_t                    kstc_refcount;   /* reference count of ks_tconn_t */
 
         struct list_head            kstc_list;       /* linked to global ksocknal_data */
 
@@ -435,17 +444,17 @@ struct socket {
 
             struct {
                 int                 nbacklog;         /* total number of backlog tdi connections */
-                ksock_backlogs_t    kstc_listening;   /* listeing backlog child connections */
-                ksock_backlogs_t    kstc_accepted;    /* connected backlog child connections */
+                ks_backlogs_t       kstc_listening;   /* listeing backlog child connections */
+                ks_backlogs_t       kstc_accepted;    /* connected backlog child connections */
                 event_t             kstc_accept_event;   /* Signaled by AcceptedHander, 
                                                             ksocknal_wait_accpeted_conns waits on */
                 event_t             kstc_destroy_event;  /* Signaled when accepted child is released */
             } listener; 
 
             struct  {
-                ksock_tconn_info_t  kstc_info;      /* Connection Info if Connected */
-                ksock_chain_t       kstc_recv;      /* tsdu engine for data receiving */
-                ksock_chain_t       kstc_send;      /* tsdu engine for data sending */
+                ks_tconn_info_t     kstc_info;      /* Connection Info if Connected */
+                ks_chain_t          kstc_recv;      /* tsdu engine for data receiving */
+                ks_chain_t          kstc_send;      /* tsdu engine for data sending */
 
                 int                 kstc_queued;    /* Attached to Parent->ChildList ... */
                 int                 kstc_queueno;   /* 0: Attached to Listening list 
@@ -455,30 +464,28 @@ struct socket {
                 int                 kstc_accepted;  /* the connection is built ready ? */
 
                 struct list_head    kstc_link;      /* linked to parent tdi connection */
-                ksock_tconn_t   *   kstc_parent;    /* pointers to it's listener parent */
+                ks_tconn_t   *      kstc_parent;    /* pointers to it's listener parent */
             } child;
 
             struct {
-                ksock_tconn_info_t  kstc_info;      /* Connection Info if Connected */
-                ksock_chain_t       kstc_recv;      /* tsdu engine for data receiving */
-                ksock_chain_t       kstc_send;      /* tsdu engine for data sending */
+                ks_tconn_info_t     kstc_info;      /* Connection Info if Connected */
+                ks_chain_t          kstc_recv;      /* tsdu engine for data receiving */
+                ks_chain_t          kstc_send;      /* tsdu engine for data sending */
             } sender; 
         };
 
-        ulong_ptr                   kstc_snd_wnd;   /* Sending window size */
-        ulong_ptr                   kstc_rcv_wnd;   /* Recving window size */
+        ulong                       kstc_snd_wnd;   /* Sending window size */
+        ulong                       kstc_rcv_wnd;   /* Recving window size */
 
-        ksock_workitem_t            kstc_destroy;    /* tconn destruction workitem */
-        ksock_disconnect_workitem_t kstc_disconnect; /* connection disconnect workitem */
+        ks_workitem_t               kstc_destroy;    /* tconn destruction workitem */
+        ks_disconnect_t             kstc_disconnect; /* connection disconnect workitem */
 
-        ksock_schedule_cb           kstc_sched_cb;   /* notification callback routine of completion */
-        ksock_update_tx             kstc_update_tx;  /* aync sending callback to update tx */
+        ks_schedule_cb              kstc_sched_cb;   /* notification callback routine of completion */
 };
 
 #define SOCK_WMEM_QUEUED(sock) (0)
-
 #define TDINAL_WINDOW_DEFAULT_SIZE  (0x100000)
-
+#define TDINAL_MAX_TSDU_QUEUE_SIZE  (0x200000)
 
 struct _KS_UDP_COMPLETION_CONTEXT;
 struct _KS_TCP_COMPLETION_CONTEXT;
@@ -510,7 +517,7 @@ typedef struct _KS_UDP_COMPLETION_CONTEXT {
     PKEVENT                             Event;
     union {
         PFILE_OBJECT                    AddressObject;
-        ksock_tconn_t *                 tconn;
+        ks_tconn_t *                    tconn;
     };
 
     PKS_UDP_COMPLETION_ROUTINE          CompletionRoutine;
@@ -523,29 +530,20 @@ typedef struct _KS_UDP_COMPLETION_CONTEXT {
 // Tcp Irp Completion Context (used by tcp data recv/send)
 //
 
+#define KS_TCP_CONTEXT_MAGIC 'CCTK'
+
 typedef struct _KS_TCP_COMPLETION_CONTEXT {
-
     PKEVENT                             Event;      // Event to be waited on by Irp caller ...
-
-    ksock_tconn_t *                     tconn;      // the tdi connection
-
+    ks_tconn_t *                        tconn;      // the tdi connection
     PKS_TCP_COMPLETION_ROUTINE          CompletionRoutine;
     PVOID                               CompletionContext;
-    PVOID                               CompletionContext2;
-
-    PKS_TSDUMGR                         KsTsduMgr;  // Tsdu buffer manager
-
-    //
-    // These tow new members are for NON_BLOCKING transmission
-    //
-
-    BOOLEAN							    bCounted;    // To indict needing refcount to
-                                                     // execute CompetionRoutine
-    ULONG                               ReferCount;  // Refer count of this structure
-
+    PKS_TSDUMGR                         TsduMgr;    // Tsdu buffer manager
+    ULONG                               Length;     // Payload length in KsTsdu queue
+    PCHAR                               Buffer;     // User allocated buffer
+    ULONG                               Magic;      // Magic key
 } KS_TCP_COMPLETION_CONTEXT, *PKS_TCP_COMPLETION_CONTEXT;
 
-typedef KS_TCP_COMPLETION_CONTEXT  ksock_tdi_tx_t, ksock_tdi_rx_t;
+typedef KS_TCP_COMPLETION_CONTEXT  ks_tdi_tx_t, ks_tdi_rx_t;
 
 
 /*
@@ -596,7 +594,6 @@ typedef KS_TCP_COMPLETION_CONTEXT  ksock_tdi_tx_t, ksock_tdi_rx_t;
         Irp->UserBuffer = OutBuffer;                            \
     }
 
-
 typedef struct ks_addr_slot {
     LIST_ENTRY      link;
     int             up;
@@ -626,30 +623,28 @@ typedef struct {
 
     int               ksnd_init;            /* initialisation state */
 
-    TDI_PROVIDER_INFO ksnd_provider;    /* tdi tcp/ip provider's information */
+    TDI_PROVIDER_INFO ksnd_provider;        /* tdi tcp/ip provider's information */
 
     spinlock_t        ksnd_tconn_lock;      /* tdi connections access serialise */
 
     int               ksnd_ntconns;         /* number of tconns attached in list */
     struct list_head  ksnd_tconns;          /* tdi connections list */
-    cfs_mem_cache_t * ksnd_tconn_slab;      /* slabs for ksock_tconn_t allocations */
+    cfs_mem_cache_t * ksnd_tconn_slab;      /* slabs for ks_tconn_t allocations */
     event_t           ksnd_tconn_exit;      /* exit event to be signaled by the last tconn */
 
     spinlock_t        ksnd_tsdu_lock;       /* tsdu access serialise */
         
     int               ksnd_ntsdus;          /* number of tsdu buffers allocated */
-    ulong_ptr     ksnd_tsdu_size;       /* the size of a signel tsdu buffer */
+    ulong             ksnd_tsdu_size;       /* the size of a signel tsdu buffer */
     cfs_mem_cache_t * ksnd_tsdu_slab;       /* slab cache for tsdu buffer allocation */
 
     int               ksnd_nfreetsdus;      /* number of tsdu buffers in the freed list */
-    struct list_head  ksnd_freetsdus;          /* List of the freed Tsdu buffer. */
+    struct list_head  ksnd_freetsdus;       /* List of the freed Tsdu buffer. */
 
-    spinlock_t        ksnd_daemon_lock;     /* stabilize daemon ops */
-    int               ksnd_ndaemons;        /* number of listening daemons */
-    struct list_head  ksnd_daemons;         /* listening daemon list */
-    event_t           ksnd_daemon_exit;     /* the last daemon quiting should singal it */
+    int               ksnd_engine_nums;     /* number of tcp sending engine threads */
+    ks_engine_mgr_t * ksnd_engine_mgr;      /* tcp sending engine structure */
 
-} ks_data_t;
+} ks_tdi_data_t;
 
 int
 ks_init_tdi_data();
@@ -657,6 +652,71 @@ ks_init_tdi_data();
 void
 ks_fini_tdi_data();
 
+
+int
+ks_query_local_ipaddr(
+    ks_tconn_t *     tconn
+    );
+
+void
+ks_get_tconn(
+    ks_tconn_t * tconn
+    );
+
+void
+ks_put_tconn(
+    ks_tconn_t * tconn
+    );
+
+void
+ks_abort_tconn(
+  ks_tconn_t *     tconn
+    );
+int
+ks_disconnect_tconn(
+    ks_tconn_t *    tconn,
+    ulong           flags
+    );
+
+void
+ks_destroy_tconn(
+    ks_tconn_t *     tconn
+    );
+
+NTSTATUS
+KsLockUserBuffer (
+    IN PVOID            UserBuffer,
+    IN BOOLEAN          bPaged,
+    IN ULONG            Length,
+    IN LOCK_OPERATION   Operation,
+    OUT PMDL *          pMdl
+    );
+
+VOID
+KsReleaseMdl (IN PMDL   Mdl,
+              IN int    Paged );
+
+void
+KsQueueTdiEngine(ks_tconn_t * tconn, PKS_TSDUMGR);
+
+void
+KsRemoveTdiEngine(PKS_TSDUMGR);
+
+NTSTATUS
+ks_set_tcp_option (
+    ks_tconn_t *    tconn,
+    ULONG           ID,
+    PVOID           OptionValue,
+    ULONG           Length
+    );
+
+int
+ks_get_tcp_option (
+    ks_tconn_t *        tconn,
+    ULONG               ID,
+    PVOID               OptionValue,
+    PULONG              Length
+    );
 
 #endif /* __KERNEL__ */
 #endif /* __LIBCFS_WINNT_TCPIP_H__ */

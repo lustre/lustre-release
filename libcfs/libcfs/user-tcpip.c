@@ -528,6 +528,11 @@ libcfs_sock_create(int *fdp)
         return 0;
 }
 
+void libcfs_sock_release(int fd)
+{
+        close(fd);
+}
+
 int
 libcfs_sock_bind_to_port(int fd, __u16 port)
 {

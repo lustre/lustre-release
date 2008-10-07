@@ -47,12 +47,12 @@
 
 static inline cfs_time_t cfs_time_add(cfs_time_t t, cfs_duration_t d)
 {
-        return t + d;
+        return (cfs_time_t)(t + d);
 }
 
 static inline cfs_duration_t cfs_time_sub(cfs_time_t t1, cfs_time_t t2)
 {
-        return t1 - t2;
+        return (cfs_time_t)(t1 - t2);
 }
 
 static inline int cfs_time_before(cfs_time_t t1, cfs_time_t t2)

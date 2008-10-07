@@ -156,22 +156,13 @@ void cfs_timer_init(cfs_timer_t *l, cfs_timer_func_t *func, void *arg)
 {
         CFS_INIT_LIST_HEAD(&l->tl_list);
         l->function = func;
-        l->data = (unsigned long)arg;
+        l->data = (ulong_ptr_t)arg;
         return;
 }
 
-#define cfs_jiffies                             \
-({                                              \
-        unsigned long _ret = 0;                 \
-        struct timeval tv;                      \
-        if (gettimeofday(&tv, NULL) == 0)       \
-                _ret = tv.tv_sec;               \
-        _ret;                                   \
-})
-
 int cfs_timer_is_armed(cfs_timer_t *l)
 {
-        if (cfs_time_before(cfs_jiffies, l->expires))
+        if (cfs_time_before(cfs_time_current(), l->expires))
                 return 1;
         else
                 return 0;
@@ -185,8 +176,7 @@ void cfs_timer_arm(cfs_timer_t *l, cfs_time_t deadline)
 void cfs_timer_disarm(cfs_timer_t *l)
 {
 }
-
-long cfs_timer_deadline(cfs_timer_t *l)
+cfs_time_t cfs_timer_deadline(cfs_timer_t *l)
 {
         return l->expires;
 }
@@ -247,7 +237,7 @@ int cfs_parse_int_tunable(int *value, char *name)
         if (env == NULL)
                 return 0;
 
-        *value = strtoull(env, &end, 0);
+        *value = (int)strtoull(env, &end, 0);
         if (*end == 0)
                 return 0;
 

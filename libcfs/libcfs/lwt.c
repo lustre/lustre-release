@@ -42,23 +42,6 @@
 # define EXPORT_SYMTAB
 #endif
 
-#ifndef AUTOCONF_INCLUDED
-#include <linux/config.h>
-#endif
-#include <linux/module.h>
-#include <linux/kmod.h>
-#include <linux/kernel.h>
-#include <linux/kernel.h>
-#include <linux/mm.h>
-#include <linux/string.h>
-#include <linux/stat.h>
-#include <linux/errno.h>
-#include <linux/smp_lock.h>
-#include <linux/unistd.h>
-#include <linux/interrupt.h>
-#include <asm/system.h>
-#include <asm/uaccess.h>
-
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/libcfs.h>

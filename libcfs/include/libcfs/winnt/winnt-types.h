@@ -44,39 +44,36 @@
 #ifdef __KERNEL__
 
 #include <ntifs.h>
+#include <basetsd.h>
 #include <windef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
-
 #include <tdi.h>
 #include <tdikrnl.h>
 #include <tdiinfo.h>
 
 #else
 
-#include <ntddk.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <ntddk.h>
 #include <stdarg.h>
-#include <time.h>
 #include <io.h>
+#include <time.h>
 #include <string.h>
 #include <assert.h>
-
 #endif
 
 
 #define __LITTLE_ENDIAN
+#define __user
 
 #define inline     __inline
 #define __inline__ __inline
 
-typedef unsigned __int8     __u8;
-typedef signed   __int8     __s8;
-
-typedef signed   __int64    __s64;
-typedef unsigned __int64    __u64;
+typedef unsigned __int8         __u8;
+typedef signed   __int8         __s8;
 
 typedef	signed   __int16	__s16;
 typedef	unsigned __int16	__u16;
@@ -87,19 +84,7 @@ typedef	unsigned __int32	__u32;
 typedef	signed   __int64	__s64;
 typedef	unsigned __int64	__u64;
 
-typedef unsigned long       ULONG;
-
-
-#if defined(_WIN64)
-    #define long_ptr        __int64
-    #define ulong_ptr       unsigned __int64
-    #define BITS_PER_LONG   (64)
-#else
-    #define long_ptr        long
-    #define ulong_ptr       unsigned long
-    #define BITS_PER_LONG   (32)
-
-#endif
+typedef unsigned long           ULONG;
 
 /* bsd */
 typedef unsigned char		u_char;
@@ -123,6 +108,11 @@ typedef		__s16		int16_t;
 typedef		__u32		u_int32_t;
 typedef		__s32		int32_t;
 
+#define    u8           __u8
+#define    u16          __u16
+#define    u32          __u32
+#define    u64          __u64
+
 #endif /* !(__BIT_TYPES_DEFINED__) */
 
 typedef		__u8		uint8_t;
@@ -133,63 +123,48 @@ typedef		__u64		uint64_t;
 typedef		__u64		u_int64_t;
 typedef		__s64		int64_t;
 
-typedef long            ssize_t;
+typedef     long        ssize_t;
 
-typedef __u32           suseconds_t;
+typedef     __u32       suseconds_t;
 
-typedef __u32           pid_t, tid_t;
+typedef     __u16       uid_t, gid_t;
 
-typedef __u16           uid_t, gid_t;
+typedef     __u16       mode_t;
+typedef     __u16       umode_t;
 
-typedef __u16           mode_t;
-typedef __u16           umode_t;
+typedef     __u32       sigset_t;
 
-typedef ulong_ptr       sigset_t;
-
-typedef uint64_t        loff_t;
-typedef HANDLE          cfs_handle_t;
+typedef int64_t         loff_t;
+typedef void *          cfs_handle_t;
 typedef uint64_t        cycles_t;
 
 #ifndef INVALID_HANDLE_VALUE
 #define INVALID_HANDLE_VALUE ((HANDLE)-1)
 #endif
 
+# define BITS_PER_LONG   (32)
+
+#if defined(_WIN64)
+typedef  __int64  long_ptr_t;
+typedef  unsigned __int64 ulong_ptr_t;
+#else
+typedef long long_ptr_t;
+typedef unsigned long ulong_ptr_t;
+#endif
 
 #ifdef __KERNEL__ /* kernel */
 
 typedef __u32           off_t;
-typedef __u32           time_t;
 
 typedef unsigned short  kdev_t;
 
-#else  /* !__KERNEL__ */
+typedef __u32           pid_t;
+typedef __u32           tid_t;
 
-typedef int             BOOL;
-typedef __u8            BYTE;
-typedef __u16           WORD;
-typedef __u32           DWORD;
+typedef __u32           ino_t;
 
-#endif /* __KERNEL__ */
-
-/*
- * Conastants suffix
- */
-
-#define ULL i64
-#define ull i64
-
-/*
- * Winnt kernel has no capabilities.
- */
-
-typedef __u32 cfs_kernel_cap_t;
-
-#define INT_MAX         ((int)(~0U>>1))
-#define INT_MIN         (-INT_MAX - 1)
-#define UINT_MAX        (~0U)
-
-#endif /* _WINNT_TYPES_H */
-
+#define dma_addr_t      PVOID
+#define gfp_t           __u32
 
 /*
  *  Bytes order 
@@ -199,6 +174,48 @@ typedef __u32 cfs_kernel_cap_t;
 // Byte order swapping routines
 //
 
+#if 0 && NTDDI_VERSION < 0x06000000
+
+USHORT
+FASTCALL
+RtlUshortByteSwap(
+    IN USHORT Source
+    );
+
+ULONG
+FASTCALL
+RtlUlongByteSwap(
+    IN ULONG Source
+    );
+
+ULONGLONG
+FASTCALL
+RtlUlonglongByteSwap(
+    IN ULONGLONG Source
+    );
+#endif
+
+#else  /* !__KERNEL__ */
+
+typedef int             BOOL;
+
+#ifndef _WINDOWS_
+typedef __u8            BYTE;
+typedef __u16           WORD;
+typedef __u32           DWORD;
+#endif
+
+#define __WORDSIZE 32
+typedef long            off_t;
+
+#endif /* __KERNEL__ */
+
+/*
+ * Conastants suffix
+ */
+
+#define ULL i64
+#define ull i64
 
 #define ___swab16(x) RtlUshortByteSwap(x)
 #define ___swab32(x) RtlUlongByteSwap(x)
@@ -218,14 +235,14 @@ typedef __u32 cfs_kernel_cap_t;
 
 #define ___constant_swab64(x) \
 	((__u64)( \
-		(__u64)(((__u64)(x) & (__u64)0x00000000000000ffUL) << 56) | \
-		(__u64)(((__u64)(x) & (__u64)0x000000000000ff00UL) << 40) | \
-		(__u64)(((__u64)(x) & (__u64)0x0000000000ff0000UL) << 24) | \
-		(__u64)(((__u64)(x) & (__u64)0x00000000ff000000UL) <<  8) | \
-	        (__u64)(((__u64)(x) & (__u64)0x000000ff00000000UL) >>  8) | \
-		(__u64)(((__u64)(x) & (__u64)0x0000ff0000000000UL) >> 24) | \
-		(__u64)(((__u64)(x) & (__u64)0x00ff000000000000UL) >> 40) | \
-		(__u64)(((__u64)(x) & (__u64)0xff00000000000000UL) >> 56) ))
+		(__u64)(((__u64)(x) & (__u64)0x00000000000000ffUi64) << 56) | \
+		(__u64)(((__u64)(x) & (__u64)0x000000000000ff00Ui64) << 40) | \
+		(__u64)(((__u64)(x) & (__u64)0x0000000000ff0000Ui64) << 24) | \
+		(__u64)(((__u64)(x) & (__u64)0x00000000ff000000Ui64) <<  8) | \
+	        (__u64)(((__u64)(x) & (__u64)0x000000ff00000000Ui64) >>  8) | \
+		(__u64)(((__u64)(x) & (__u64)0x0000ff0000000000Ui64) >> 24) | \
+		(__u64)(((__u64)(x) & (__u64)0x00ff000000000000Ui64) >> 40) | \
+		(__u64)(((__u64)(x) & (__u64)0xff00000000000000Ui64) >> 56) ))
 
 
 #define __swab16(x)  ___constant_swab16(x)
@@ -347,15 +364,23 @@ typedef __u32 cfs_kernel_cap_t;
 #define htons(x)           ntohs(x)
 
 
+/*
+ *  array must be used for array not pointer
+ */
+#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+
+#endif /* _WINNT_TYPES_H */
 
 #ifndef _I386_ERRNO_H
 #define _I386_ERRNO_H
+
+#include <errno.h>
 
 #define	EPERM		 1	/* Operation not permitted */
 #define	ENOENT		 2	/* No such file or directory */
 #define	ESRCH		 3	/* No such process */
 #define	EINTR		 4	/* Interrupted system call */
-#define	EIO		     5	/* I/O error */
+#define	EIO			 5	/* I/O error */
 #define	ENXIO		 6	/* No such device or address */
 #define	E2BIG		 7	/* Arg list too long */
 #define	ENOEXEC		 8	/* Exec format error */
@@ -385,16 +410,6 @@ typedef __u32 cfs_kernel_cap_t;
 #define	EPIPE		32	/* Broken pipe */
 #define	EDOM		33	/* Math argument out of domain of func */
 #define	ERANGE		34	/* Math result not representable */
-#undef EDEADLK
-#define	EDEADLK		35	/* Resource deadlock would occur */
-#undef ENAMETOOLONG
-#define	ENAMETOOLONG	36	/* File name too long */
-#undef ENOLCK
-#define	ENOLCK		37	/* No record locks available */
-#undef ENOSYS
-#define	ENOSYS		38	/* Function not implemented */
-#undef ENOTEMPTY
-#define	ENOTEMPTY	39	/* Directory not empty */
 #define	ELOOP		40	/* Too many symbolic links encountered */
 #define	EWOULDBLOCK	EAGAIN	/* Operation would block */
 #define	ENOMSG		42	/* No message of desired type */
@@ -441,8 +456,6 @@ typedef __u32 cfs_kernel_cap_t;
 #define	ELIBSCN		81	/* .lib section in a.out corrupted */
 #define	ELIBMAX		82	/* Attempting to link in too many shared libraries */
 #define	ELIBEXEC	83	/* Cannot exec a shared library directly */
-#undef EILSEQ
-#define	EILSEQ		84	/* Illegal byte sequence */
 #define	ERESTART	85	/* Interrupted system call should be restarted */
 #define	ESTRPIPE	86	/* Streams pipe error */
 #define	EUSERS		87	/* Too many users */
@@ -500,8 +513,6 @@ typedef __u32 cfs_kernel_cap_t;
 #define ESERVERFAULT	526	/* An untranslatable error occurred */
 #define EBADTYPE	527	/* Type not supported by server */
 #define EJUKEBOX	528	/* Request initiated, but will not complete before timeout */
-
-
 
 /* open/fcntl - O_SYNC is only implemented on blocks devices and on files
    located on an ext2 file system */
@@ -578,6 +589,7 @@ typedef __u32 cfs_kernel_cap_t;
  *  signal values ...
  */
 
+#ifdef __KERNEL__
 #define SIGHUP		 1
 #define SIGINT		 2
 #define SIGQUIT		 3
@@ -619,6 +631,8 @@ typedef __u32 cfs_kernel_cap_t;
 /* These should not be considered constants from userland.  */
 #define SIGRTMIN	32
 #define SIGRTMAX	(_NSIG-1)
+
+#endif
 
 /*
  * SA_FLAGS values:

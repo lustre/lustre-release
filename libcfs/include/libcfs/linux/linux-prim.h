@@ -53,6 +53,7 @@
 #include <linux/config.h>
 #endif
 #include <linux/module.h>
+#include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/version.h>
 #include <linux/proc_fs.h>
@@ -204,15 +205,15 @@ do {                                                             \
    retval == 0; condition met; we're good.
    retval > 0; timed out.
 */
-#define cfs_waitq_wait_event_timeout(wq, condition, timeout)         \
-({                                                                   \
-	int __ret = 0;                                               \
+#define cfs_waitq_wait_event_timeout(wq, condition, timeout, ret)    \
+do {                                                                 \
+	ret = 0;                                                     \
 	if (!(condition))                                            \
-		__wait_event_timeout(wq, condition, timeout, __ret); \
-	__ret;                                                       \
-})
+		__wait_event_timeout(wq, condition, timeout, ret);   \
+} while (0)
 #else
-#define cfs_waitq_wait_event_timeout  wait_event_timeout
+#define cfs_waitq_wait_event_timeout(wq, condition, timeout, ret)    \
+        ret = wait_event_timeout(wq, condition, timeout)
 #endif
 
 #ifndef wait_event_interruptible_timeout /* Only for RHEL3 2.4.21 kernel */
@@ -251,16 +252,16 @@ do {                                                           \
    retval < 0; interrupted by signal.
    retval > 0; timed out.
 */
-#define cfs_waitq_wait_event_interruptible_timeout(wq, condition, timeout) \
-({                                                                \
-	int __ret = 0;                                            \
+#define cfs_waitq_wait_event_interruptible_timeout(wq, condition, timeout, ret)\
+do {                                                              \
+	ret = 0;                                                  \
 	if (!(condition))                                         \
 		__wait_event_interruptible_timeout(wq, condition, \
-						timeout, __ret);  \
-	__ret;                                                    \
-})
+						timeout, ret);     \
+} while (0)
 #else
-#define cfs_waitq_wait_event_interruptible_timeout wait_event_interruptible_timeout
+#define cfs_waitq_wait_event_interruptible_timeout(wq, c, timeout, ret) \
+        ret = wait_event_interruptible_timeout(wq, c, timeout)
 #endif
 
 #endif

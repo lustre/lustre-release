@@ -23,7 +23,6 @@
 #define __USE_FILE_OFFSET64
 
 #include <libcfs/libcfsutil.h>
-
 #include <lnet/api-support.h>
 #include <lnet/lnetctl.h>
 
@@ -77,15 +76,15 @@ open_ioc_dev(int dev_id)
         }
 
         if (ioc_dev_list[dev_id].dev_fd < 0) {
-                int fd = open(dev_name, O_RDWR);
+                int fd = cfs_proc_open((char *)dev_name, O_RDWR);
 
                 /* Make the /dev/ node if we need to */
                 if (fd < 0 && errno == ENOENT) {
-                        if (mknod(dev_name, 
+                        if (cfs_proc_mknod(dev_name, 
                                   S_IFCHR|S_IWUSR|S_IRUSR,
                                   MKDEV(ioc_dev_list[dev_id].dev_major,
                                         ioc_dev_list[dev_id].dev_minor)) == 0)
-                                fd = open(dev_name, O_RDWR);
+                                fd = cfs_proc_open((char *)dev_name, O_RDWR);
                         else
                                 fprintf(stderr, "mknod %s failed: %s\n",
                                         dev_name, strerror(errno));
@@ -113,7 +112,7 @@ do_ioctl(int dev_id, unsigned int opc, void *buf)
         if (fd < 0) 
                 return fd;
 
-        rc = ioctl(fd, opc, buf);
+        rc = cfs_proc_ioctl(fd, opc, buf);
         return rc;
         
 }
@@ -197,7 +196,7 @@ unregister_ioc_dev(int dev_id)
                 return;
         if (ioc_dev_list[dev_id].dev_name != NULL &&
             ioc_dev_list[dev_id].dev_fd >= 0) 
-                close(ioc_dev_list[dev_id].dev_fd);
+                cfs_proc_close(ioc_dev_list[dev_id].dev_fd);
 
         ioc_dev_list[dev_id].dev_name = NULL;
         ioc_dev_list[dev_id].dev_fd = -1;
@@ -237,16 +236,53 @@ int
 parse_dump(char * dump_file, ioc_handler_t ioc_func)
 {
         int line =0;
-        struct stat st;
         char *start, *buf, *end;
-#ifndef __CYGWIN__
-        int fd;
-#else
+
+#if defined(__CYGWIN__) || defined(__WINNT__)
+
         HANDLE fd, hmap;
         DWORD size;
-#endif
-        
-#ifndef __CYGWIN__
+
+        fd = CreateFile(dump_file, GENERIC_READ, FILE_SHARE_READ, NULL,
+                        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (fd == INVALID_HANDLE_VALUE) {
+                fprintf(stderr, "couldn't open %s (error code: %u)\n",
+                                dump_file, GetLastError());
+                exit(1);
+        }
+        size = GetFileSize(fd, NULL);
+        if (size < 1 || size == 0xFFFFFFFF) {
+                fprintf(stderr, "KML is empty\n");
+                CloseHandle(fd);
+                exit(1);
+        }
+
+        hmap = CreateFileMapping(fd, NULL, PAGE_READONLY, 0,0, NULL);
+        if (hmap == NULL) {
+                fprintf(stderr, "can't create file mapping\n");
+                CloseHandle(fd);
+                exit(1);
+        }
+        start = buf = MapViewOfFile(hmap, FILE_MAP_READ, 0, 0, 0);
+        if (start == NULL) {
+                fprintf(stderr, "can't map file content\n");
+                CloseHandle(hmap);
+                CloseHandle(fd);
+                exit(1);
+        }
+        end = buf + size;
+        CloseHandle(fd);
+        if (start == NULL) {
+                fprintf(stderr, "can't create file mapping\n");
+                UnmapViewOfFile(start);
+                CloseHandle(hmap);
+                exit(1);
+        }
+#else
+
+        struct stat st;
+        int fd;
+
         fd = open(dump_file, O_RDONLY);
         if (fd < 0) {
                 fprintf(stderr, "couldn't open %s: %s\n", dump_file, 
@@ -271,24 +307,7 @@ parse_dump(char * dump_file, ioc_handler_t ioc_func)
                 fprintf(stderr, "can't create file mapping\n");
                 exit(1);
         }
-#else
-        fd = CreateFile(dump_file, GENERIC_READ, FILE_SHARE_READ, NULL,
-                        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-        size = GetFileSize(fd, NULL);
-        if (size < 1) {
-                fprintf(stderr, "KML is empty\n");
-                exit(1);
-        }
-
-        hmap = CreateFileMapping(fd, NULL, PAGE_READONLY, 0,0, NULL);
-        start = buf = MapViewOfFile(hmap, FILE_MAP_READ, 0, 0, 0);
-        end = buf + size;
-        CloseHandle(fd);
-        if (start == NULL) {
-                fprintf(stderr, "can't create file mapping\n");
-                exit(1);
-        }
-#endif /* __CYGWIN__ */
+#endif
 
         while (buf < end) {
                 struct dump_hdr *dump_hdr = (struct dump_hdr *) buf;
@@ -323,11 +342,11 @@ parse_dump(char * dump_file, ioc_handler_t ioc_func)
                 buf += data->ioc_len + sizeof(*dump_hdr);
         }
 
-#ifndef __CYGWIN__
-        munmap(start, end - start);
-#else
+#if defined(__CYGWIN__) || defined(__WINNT__)
         UnmapViewOfFile(start);
         CloseHandle(hmap);
+#else
+        munmap(start, end - start);
 #endif
 
         return 0;

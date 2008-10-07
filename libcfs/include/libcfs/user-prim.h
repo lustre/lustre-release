@@ -112,12 +112,11 @@ typedef sigset_t                        cfs_sigset_t;
 /*
  * Timer
  */
-#include <sys/time.h>
 
 typedef struct {
         struct list_head tl_list;
-        void (*function)(unsigned long unused);
-        unsigned long data;
+        void (*function)(ulong_ptr_t unused);
+        ulong_ptr_t data;
         long expires;
 } cfs_timer_t;
 
@@ -169,6 +168,7 @@ struct cfs_stack_trace {
 /*
  * arithmetic
  */
+#ifndef do_div /* gcc only, platform-specific will override */
 #define do_div(a,b)                     \
         ({                              \
                 unsigned long remainder;\
@@ -176,6 +176,34 @@ struct cfs_stack_trace {
                 (a) = (a) / (b);        \
                 (remainder);            \
         })
+#endif
+
+/* utility libcfs init/fini entries */
+#ifdef __WINNT__
+extern int libcfs_arch_init(void);
+extern void libcfs_arch_cleanup(void);
+#else /* !__WINNT__ */
+static inline int libcfs_arch_init(void) {
+        return 0;
+}
+static inline void libcfs_arch_cleanup(void) {
+}
+/* __WINNT__ */
+#endif
+
+/* proc interface wrappers for non-win OS */
+#ifndef __WINNT__
+#define cfs_proc_open   open
+#define cfs_proc_mknod  mknod
+#define cfs_proc_ioctl  ioctl
+#define cfs_proc_close  close
+#define cfs_proc_read   read
+#define cfs_proc_write  write
+#define cfs_proc_fopen  fopen
+#define cfs_proc_fclose fclose
+#define cfs_proc_fgets  fgets
+/* !__WINNT__ */
+#endif
 
 /* !__KERNEL__ */
 #endif

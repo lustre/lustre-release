@@ -124,6 +124,8 @@ void tracefile_fini_arch()
 		kfree(trace_data[i]);
 		trace_data[i] = NULL;
 	}
+
+	fini_rwsem(&tracefile_sem);
 }
 
 void tracefile_read_lock()

@@ -127,4 +127,16 @@ typedef struct {
 # define LL_POISON ((long)0x5a5a5a5a)
 # define LP_POISON ((void *)(long)0x5a5a5a5a)
 
+/*
+ * long_ptr_t & ulong_ptr_t, same to "long" for gcc
+ */
+# define LPLU "%lu"
+# define LPLD "%ld"
+# define LPLX "%#lx"
+
+/*
+ * pid_t
+ */
+# define LPPID "%d"
+
 #endif

@@ -146,4 +146,16 @@ typedef struct {
 # error "No word size defined"
 #endif
 
+/*
+ * long_ptr_t & ulong_ptr_t, same to "long" for gcc
+ */
+# define LPLU "%lu"
+# define LPLD "%ld"
+# define LPLX "%#lx"
+
+/*
+ * pid_t
+ */
+# define LPPID "%d"
+
 #endif

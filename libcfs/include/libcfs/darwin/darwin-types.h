@@ -61,6 +61,10 @@ typedef int16_t         __s16;
 typedef int32_t         __s32;
 typedef int64_t         __s64;
 
+/* long integer with size equal to pointer */
+typedef unsigned long ulong_ptr_t;
+typedef long long_ptr_t;
+
 #ifdef __KERNEL__
 
 #include <kern/kern_types.h>

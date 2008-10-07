@@ -42,16 +42,21 @@
 
 #include <libcfs/libcfs.h>
 
-
 /*
  * Implementation of cfs_curproc API (see portals/include/libcfs/curproc.h)
  * for Linux kernel.
  */
 
-cfs_task_t this_task = 
-    { 0, 0, 0, 0, 0, 0, 0, 
-      0, 0, 0, 0,  1, 0,  0, 0, 0,
-      "sysetm\0" };
+cfs_task_t this_task =
+    { /* umask */ 0,/* blocked*/0, /* pid */ 0, /* pgrp */ 0,
+      /* uid,euid,suid,fsuid */  0, 0, 0, 0, 
+      /* gid_t gid,egid,sgid,fsgid */ 0, 0, 0, 0,
+      /* ngroups*/ 1, /*cgroups*/ 0, /*groups*/ 0,
+      /* group_info */ NULL,
+      /* cap_effective, cap_inheritable, cap_permitted */  0, 0, 0,
+      /* comm */"sysetm\0",
+      /* journal_info */ NULL
+    };
 
 
 uid_t  cfs_curproc_uid(void)
@@ -141,8 +146,10 @@ int cfs_capable(cfs_cap_t cap)
 
 /* global of the task manager structure */
 
-TASK_MAN TaskMan;
+TASK_MAN cfs_win_task_manger;
 
+/* global idr context */
+struct idr_context * cfs_win_task_slot_idp = NULL;
 
 /*
  *  task slot routiens
@@ -153,8 +160,8 @@ alloc_task_slot()
 {
     PTASK_SLOT task = NULL;
 
-    if (TaskMan.slab) {
-        task = cfs_mem_cache_alloc(TaskMan.slab, 0);
+    if (cfs_win_task_manger.slab) {
+        task = cfs_mem_cache_alloc(cfs_win_task_manger.slab, 0);
     } else {
         task = cfs_alloc(sizeof(TASK_SLOT), 0);
     }
@@ -168,16 +175,18 @@ init_task_slot(PTASK_SLOT task)
     memset(task, 0, sizeof(TASK_SLOT));
     task->Magic = TASKSLT_MAGIC;
     task->task  = this_task;
-    task->task.pid = (pid_t)PsGetCurrentThreadId();
     cfs_init_event(&task->Event, TRUE, FALSE);
 }
-
 
 void
 cleanup_task_slot(PTASK_SLOT task)
 {
-    if (TaskMan.slab) {
-        cfs_mem_cache_free(TaskMan.slab, task);
+    if (task->task.pid) {
+        cfs_idr_remove(cfs_win_task_slot_idp, task->task.pid);
+    }
+
+    if (cfs_win_task_manger.slab) {
+        cfs_mem_cache_free(cfs_win_task_manger.slab, task);
     } else {
         cfs_free(task);
     }
@@ -197,25 +206,19 @@ task_manager_notify(
     PLIST_ENTRY ListEntry = NULL; 
     PTASK_SLOT  TaskSlot  = NULL;
 
-    spin_lock(&(TaskMan.Lock));
+    spin_lock(&(cfs_win_task_manger.Lock));
 
-    ListEntry = TaskMan.TaskList.Flink;
-
-    while (ListEntry != (&(TaskMan.TaskList))) {
+    ListEntry = cfs_win_task_manger.TaskList.Flink;
+    while (ListEntry != (&(cfs_win_task_manger.TaskList))) {
 
         TaskSlot = CONTAINING_RECORD(ListEntry, TASK_SLOT, Link);
 
         if (TaskSlot->Pid == ProcessId && TaskSlot->Tid == ThreadId) {
 
-            if (Create) {
-/*
-                DbgPrint("task_manager_notify: Pid=%xh Tid %xh resued (TaskSlot->Tet = %xh)...\n",
-                         ProcessId, ThreadId, TaskSlot->Tet);
-*/
-            } else {
+            if (!Create) {
                 /* remove the taskslot */
                 RemoveEntryList(&(TaskSlot->Link));
-                TaskMan.NumOfTasks--;
+                cfs_win_task_manger.NumOfTasks--;
 
                 /* now free the task slot */
                 cleanup_task_slot(TaskSlot);
@@ -225,7 +228,7 @@ task_manager_notify(
         ListEntry = ListEntry->Flink;
     }
 
-    spin_unlock(&(TaskMan.Lock));
+    spin_unlock(&(cfs_win_task_manger.Lock));
 }
 
 int
@@ -234,24 +237,35 @@ init_task_manager()
     NTSTATUS    status;
 
     /* initialize the content and magic */
-    memset(&TaskMan, 0, sizeof(TASK_MAN));
-    TaskMan.Magic = TASKMAN_MAGIC;
+    memset(&cfs_win_task_manger, 0, sizeof(TASK_MAN));
+    cfs_win_task_manger.Magic = TASKMAN_MAGIC;
 
     /* initialize the spinlock protection */
-    spin_lock_init(&TaskMan.Lock);
+    spin_lock_init(&cfs_win_task_manger.Lock);
 
     /* create slab memory cache */
-    TaskMan.slab = cfs_mem_cache_create(
+    cfs_win_task_manger.slab = cfs_mem_cache_create(
         "TSLT", sizeof(TASK_SLOT), 0, 0);
 
     /* intialize the list header */
-    InitializeListHead(&(TaskMan.TaskList));
+    InitializeListHead(&(cfs_win_task_manger.TaskList));
+
+    cfs_win_task_slot_idp = cfs_idr_init();
+    if (!cfs_win_task_slot_idp) {
+        return -ENOMEM;
+    }
 
     /* set the thread creation/destruction notify routine */
     status = PsSetCreateThreadNotifyRoutine(task_manager_notify);
 
     if (!NT_SUCCESS(status)) {
         cfs_enter_debugger();
+        /* remove idr context */
+        if (cfs_win_task_slot_idp) {
+            cfs_idr_exit(cfs_win_task_slot_idp);
+            cfs_win_task_slot_idp = NULL;
+        }
+        return cfs_error_code(status);
     }
 
     return 0;
@@ -263,28 +277,32 @@ cleanup_task_manager()
     PLIST_ENTRY ListEntry = NULL; 
     PTASK_SLOT  TaskSlot  = NULL;
 
-    /* we must stay in system since we succeed to register the
-       CreateThreadNotifyRoutine: task_manager_notify */
-    cfs_enter_debugger();
+    /* remove ThreadNotifyRoutine: task_manager_notify */
+    PsRemoveCreateThreadNotifyRoutine(task_manager_notify);
 
+    /* remove idr context */
+    if (cfs_win_task_slot_idp) {
+        cfs_idr_exit(cfs_win_task_slot_idp);
+        cfs_win_task_slot_idp = NULL;
+    }
 
     /* cleanup all the taskslots attached to the list */
-    spin_lock(&(TaskMan.Lock));
+    spin_lock(&(cfs_win_task_manger.Lock));
 
-    while (!IsListEmpty(&(TaskMan.TaskList))) {
+    while (!IsListEmpty(&(cfs_win_task_manger.TaskList))) {
 
-        ListEntry = TaskMan.TaskList.Flink;
+        ListEntry = cfs_win_task_manger.TaskList.Flink;
         TaskSlot = CONTAINING_RECORD(ListEntry, TASK_SLOT, Link);
 
         RemoveEntryList(ListEntry);
         cleanup_task_slot(TaskSlot);
     }
 
-    spin_unlock(&TaskMan.Lock);
+    spin_unlock(&cfs_win_task_manger.Lock);
 
     /* destroy the taskslot cache slab */
-    cfs_mem_cache_destroy(TaskMan.slab);
-    memset(&TaskMan, 0, sizeof(TASK_MAN));
+    cfs_mem_cache_destroy(cfs_win_task_manger.slab);
+    memset(&cfs_win_task_manger, 0, sizeof(TASK_MAN));
 }
 
 
@@ -303,21 +321,15 @@ cfs_current()
     PLIST_ENTRY ListEntry = NULL; 
     PTASK_SLOT  TaskSlot  = NULL;
 
-    spin_lock(&(TaskMan.Lock));
+    spin_lock(&(cfs_win_task_manger.Lock));
 
-    ListEntry = TaskMan.TaskList.Flink;
-
-    while (ListEntry != (&(TaskMan.TaskList))) {
+    ListEntry = cfs_win_task_manger.TaskList.Flink;
+    while (ListEntry != (&(cfs_win_task_manger.TaskList))) {
 
         TaskSlot = CONTAINING_RECORD(ListEntry, TASK_SLOT, Link);
-
         if (TaskSlot->Pid == Pid && TaskSlot->Tid == Tid) {
             if (TaskSlot->Tet != Tet) {
 
-/*
-                DbgPrint("cfs_current: Pid=%xh Tid %xh Tet = %xh resued (TaskSlot->Tet = %xh)...\n",
-                         Pid, Tid, Tet, TaskSlot->Tet);
-*/
                 //
                 // The old thread was already exit. This must be a
                 // new thread which get the same Tid to the previous.
@@ -329,16 +341,15 @@ cfs_current()
 
         } else {
 
-            if ((ULONG)TaskSlot->Pid > (ULONG)Pid) {
+            if (TaskSlot->Pid > Pid) {
                 TaskSlot = NULL;
                 break;
-            } else if ((ULONG)TaskSlot->Pid == (ULONG)Pid) {
-                if ((ULONG)TaskSlot->Tid > (ULONG)Tid) {
+            } else if (TaskSlot->Pid == Pid) {
+                if (TaskSlot->Tid > Tid) {
                     TaskSlot = NULL;
                     break;
                 }
             }
-
             TaskSlot =  NULL;
         }
 
@@ -347,24 +358,25 @@ cfs_current()
 
     if (!TaskSlot) {
 
+        /* allocate new task slot */
         TaskSlot = alloc_task_slot();
-
         if (!TaskSlot) {
             cfs_enter_debugger();
             goto errorout;
         }
 
+        /* set task slot IDs */
         init_task_slot(TaskSlot);
-
         TaskSlot->Pid = Pid;
         TaskSlot->Tid = Tid;
         TaskSlot->Tet = Tet;
+        TaskSlot->task.pid = (pid_t)cfs_idr_get_new(cfs_win_task_slot_idp, Tet);
 
-        if (ListEntry == (&(TaskMan.TaskList))) {
+        if (ListEntry == (&(cfs_win_task_manger.TaskList))) {
             //
             // Empty case or the biggest case, put it to the tail.
             //
-            InsertTailList(&(TaskMan.TaskList), &(TaskSlot->Link));
+            InsertTailList(&(cfs_win_task_manger.TaskList), &(TaskSlot->Link));
         } else {
             //
             // Get a slot and smaller than it's tid, put it just before.
@@ -372,7 +384,7 @@ cfs_current()
             InsertHeadList(ListEntry->Blink, &(TaskSlot->Link));
         }
 
-        TaskMan.NumOfTasks++;
+        cfs_win_task_manger.NumOfTasks++;
     }
 
     //
@@ -382,18 +394,18 @@ cfs_current()
     {
         PTASK_SLOT  Prev = NULL, Curr = NULL;
         
-        ListEntry = TaskMan.TaskList.Flink;
+        ListEntry = cfs_win_task_manger.TaskList.Flink;
 
-        while (ListEntry != (&(TaskMan.TaskList))) {
+        while (ListEntry != (&(cfs_win_task_manger.TaskList))) {
 
             Curr = CONTAINING_RECORD(ListEntry, TASK_SLOT, Link);
             ListEntry = ListEntry->Flink;
 
             if (Prev) {
-                if ((ULONG)Prev->Pid > (ULONG)Curr->Pid) {
+                if (Prev->Pid > Curr->Pid) {
                     cfs_enter_debugger();
-                } else if ((ULONG)Prev->Pid == (ULONG)Curr->Pid) {
-                    if ((ULONG)Prev->Tid > (ULONG)Curr->Tid) {
+                } else if (Prev->Pid == Curr->Pid) {
+                    if (Prev->Tid > Curr->Tid) {
                         cfs_enter_debugger();
                     }
                 }
@@ -405,7 +417,7 @@ cfs_current()
 
 errorout:
 
-    spin_unlock(&(TaskMan.Lock));
+    spin_unlock(&(cfs_win_task_manger.Lock));
 
     if (!TaskSlot) {
         cfs_enter_debugger();
@@ -415,15 +427,28 @@ errorout:
     return (&(TaskSlot->task));
 }
 
-int
-schedule_timeout(int64_t time)
+/* deschedule for a bit... */
+void
+cfs_pause(cfs_duration_t ticks)
+{
+    cfs_schedule_timeout(CFS_TASK_UNINTERRUPTIBLE, ticks);
+}
+
+void
+our_cond_resched()
+{
+    cfs_schedule_timeout(CFS_TASK_UNINTERRUPTIBLE, 1i64);
+}
+
+void
+cfs_schedule_timeout(cfs_task_state_t state, int64_t time)
 {
     cfs_task_t * task = cfs_current();
     PTASK_SLOT   slot = NULL;
 
     if (!task) {
         cfs_enter_debugger();
-        return 0;
+        return;
     }
 
     slot = CONTAINING_RECORD(task, TASK_SLOT, task);
@@ -433,13 +458,13 @@ schedule_timeout(int64_t time)
         time = 0;
     }
 
-    return (cfs_wait_event(&(slot->Event), time) != 0);
+    cfs_wait_event_internal(&(slot->Event), time);
 }
 
-int
-schedule()
+void
+cfs_schedule()
 {
-    return schedule_timeout(0);
+    cfs_schedule_timeout(CFS_TASK_UNINTERRUPTIBLE, 0);
 }
 
 int
@@ -463,9 +488,7 @@ wake_up_process(
 }
 
 void
-sleep_on(
-    cfs_waitq_t *waitq
-    )
+sleep_on(cfs_waitq_t *waitq)
 {
 	cfs_waitlink_t link;
 	

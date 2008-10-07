@@ -40,7 +40,7 @@
 #include <libcfs/libcfs.h>
 
 
-#if _X86_
+#if defined(_X86_)
 
 void __declspec (naked) FASTCALL
 atomic_add(
@@ -148,7 +148,7 @@ atomic_dec_and_test(
     }
 }
 
-#else
+#elif defined(_AMD64_)
 
 void FASTCALL
 atomic_add(
@@ -235,7 +235,7 @@ atomic_dec_and_test(
     do {
 
         counter = v->counter;
-        result = counter + 1;
+        result = counter - 1;
 
     } while ( InterlockedCompareExchange(
                 &(v->counter),
@@ -245,7 +245,61 @@ atomic_dec_and_test(
     return (result == 0);
 }
 
+#else
+
+#error CPU arch type isn't specified.
+
 #endif
+
+/**
+ * atomic_add_return - add integer and return
+ * @v: pointer of type atomic_t
+ * @i: integer value to add
+ *
+ * Atomically adds @i to @v and returns @i + @v
+ */
+int FASTCALL atomic_add_return(int i, atomic_t *v)
+{
+    int counter, result;
+
+    do {
+
+        counter = v->counter;
+        result = counter + i;
+
+    } while ( InterlockedCompareExchange(
+                &(v->counter),
+                result,
+                counter) !=  counter);
+
+    return result;
+
+}
+
+/**
+ * atomic_sub_return - subtract integer and return
+ * @v: pointer of type atomic_t
+ * @i: integer value to subtract
+ *
+ * Atomically subtracts @i from @v and returns @v - @i
+ */
+int FASTCALL atomic_sub_return(int i, atomic_t *v)
+{
+	return atomic_add_return(-i, v);
+}
+
+int FASTCALL atomic_dec_and_lock(atomic_t *v, spinlock_t *lock)
+{
+    if (atomic_read(v) != 1) {
+        return 0;
+    } 
+
+	spin_lock(lock);
+	if (atomic_dec_and_test(v))
+		return 1;
+	spin_unlock(lock);
+	return 0;
+}
 
 
 /*

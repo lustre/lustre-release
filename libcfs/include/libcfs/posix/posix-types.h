@@ -61,4 +61,8 @@ typedef unsigned int __u32;
 typedef __signed__ long long __s64;
 typedef unsigned long long __u64;
 
+/* long integer with size equal to pointer */
+typedef unsigned long ulong_ptr_t;
+typedef long long_ptr_t;
+
 #endif

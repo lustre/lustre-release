@@ -354,6 +354,18 @@ extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
 # define LPF64 "l"
 #endif
 
+/*
+ * long_ptr_t & ulong_ptr_t, same to "long" for gcc
+ */
+# define LPLU "%lu"
+# define LPLD "%ld"
+# define LPLX "%#lx"
+
+/*
+ * pid_t
+ */
+# define LPPID "%d"
+
 #ifdef HAVE_SIZE_T_LONG
 # define LPSZ  "%lu"
 #else

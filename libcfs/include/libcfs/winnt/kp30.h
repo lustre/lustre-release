@@ -37,9 +37,6 @@
 #ifndef __LIBCFS_WINNT_KP30_H__
 #define __LIBCFS_WINNT_KP30_H__
 
-#include <libcfs/winnt/portals_compat25.h>
-#include <lnet/types.h>
-
 #ifdef __KERNEL__
 
 /* Module parameter support */
@@ -47,22 +44,18 @@
 
 #define CFS_SYSFS_MODULE_PARM    0 /* no sysfs access to module parameters */
 
+#define cond_resched our_cond_resched
+void our_cond_resched();
 
-static inline void our_cond_resched()
-{
-    schedule_timeout(1i64);
-}
-
-#ifdef CONFIG_SMP
-#define LASSERT_SPIN_LOCKED(lock) do {} while(0) /* XXX */
-#else
 #define LASSERT_SPIN_LOCKED(lock) do {} while(0)
-#endif
+#define LASSERT_SEM_LOCKED(sem) LASSERT(down_trylock(sem) != 0)
 
-#error Need a winnt version of panic()
-#define LIBCFS_PANIC(msg) KeBugCheckEx(msg, (ULONG_PTR)NULL, (ULONG_PTR)NULL, (ULONG_PTR)NULL, (ULONG_PTR)NULL)
-#error libcfs_register_panic_notifier() missing
-#error libcfs_unregister_panic_notifier() missing
+/* winnt panic */
+void libcfs_panic(char *msg);
+#define LIBCFS_PANIC(msg) libcfs_panic(msg)
+void libcfs_register_panic_notifier();
+void libcfs_unregister_panic_notifier();
+
 
 #define cfs_work_struct_t WORK_QUEUE_ITEM
 #define cfs_prepare_work(tq, routine, contex)
@@ -82,6 +75,10 @@ static inline void our_cond_resched()
 
 #define printk                                  DbgPrint
 #define ptintf                                  DbgPrint
+#define printk_ratelimit()                      (FALSE)
+#define vprintk(f, a)                           vDbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL, f, a)
+                                                /* vDbgPrintEx only available on xp and later OS */
+#define cfs_assert                              ASSERT
 
 #else  /* !__KERNEL__ */
 
@@ -91,6 +88,9 @@ static inline void our_cond_resched()
 # include <cygwin-ioctl.h>
 #endif
 # include <time.h>
+#include <crtdbg.h>
+
+#define cfs_assert     _ASSERT
 
 #endif /* End of !__KERNEL__ */
 
@@ -104,12 +104,12 @@ typedef struct {
         __s64      lwte_when;
         char       *lwte_where;
         void       *lwte_task;
-        long_ptr        lwte_p1;
-        long_ptr        lwte_p2;
-        long_ptr        lwte_p3;
-        long_ptr        lwte_p4;
+        long_ptr_t        lwte_p1;
+        long_ptr_t        lwte_p2;
+        long_ptr_t        lwte_p3;
+        long_ptr_t        lwte_p4;
 # if BITS_PER_LONG > 32
-        long_ptr        lwte_pad;
+        long_ptr_t        lwte_pad;
 # endif
 } lwt_event_t;
 
@@ -119,7 +119,7 @@ typedef struct {
 
 /* ------------------------------------------------------------------ */
 
-#define IOCTL_LIBCFS_TYPE long_ptr
+#define IOCTL_LIBCFS_TYPE long_ptr_t
 
 #ifdef __CYGWIN__
 # ifndef BITS_PER_LONG
@@ -133,35 +133,34 @@ typedef struct {
 
 #if BITS_PER_LONG > 32
 # define LI_POISON ((int)0x5a5a5a5a5a5a5a5a)
-# define LL_POISON ((long_ptr)0x5a5a5a5a5a5a5a5a)
-# define LP_POISON ((char *)(long_ptr)0x5a5a5a5a5a5a5a5a)
+# define LL_POISON ((long_ptr_t)0x5a5a5a5a5a5a5a5a)
+# define LP_POISON ((char *)(long_ptr_t)0x5a5a5a5a5a5a5a5a)
 #else
 # define LI_POISON ((int)0x5a5a5a5a)
-# define LL_POISON ((long_ptr)0x5a5a5a5a)
-# define LP_POISON ((char *)(long_ptr)0x5a5a5a5a)
+# define LL_POISON ((long_ptr_t)0x5a5a5a5a)
+# define LP_POISON ((char *)(long_ptr_t)0x5a5a5a5a)
 #endif
 
-#if defined(__x86_64__)
-# define LPU64 "%I64u"
-# define LPD64 "%I64d"
-# define LPX64 "%I64x"
-# define LPSZ  "%lu"
-# define LPSSZ "%ld"
-#elif (BITS_PER_LONG == 32 || __WORDSIZE == 32)
-# define LPU64 "%I64u"
-# define LPD64 "%I64d"
-# define LPX64 "%I64x"
-# define LPSZ  "%u"
-# define LPSSZ "%d"
-#elif (BITS_PER_LONG == 64 || __WORDSIZE == 64)
-# define LPU64 "%I64u"
-# define LPD64 "%I64d"
-# define LPX64 "%I64x"
-# define LPSZ  "%u"
-# define LPSSZ "%d"
-#endif
-#ifndef LPU64
-# error "No word size defined"
+#define LPF64 "%I64d"
+#define LPU64 "%I64u"
+#define LPD64 "%I64d"
+#define LPX64 "%#I64x"
+#define LPSZ  "%lu"
+#define LPSSZ "%ld"
+
+/*
+ * long_ptr_t & ulong_ptr_t, same to "long" for linux
+ */
+#if _x86_
+# define LPLU "%u"
+# define LPLD "%d"
+# define LPLX "%#x"
+# define LPPID "%d"
+#else
+# define LPLU "%Ii64u"
+# define LPLD "%I64d"
+# define LPLX "%#I64x"
+# define LPPID "%d"
 #endif
 
 #endif

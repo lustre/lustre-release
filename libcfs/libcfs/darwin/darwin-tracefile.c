@@ -68,6 +68,7 @@ int tracefile_init_arch() {
 }
 
 void tracefile_fini_arch() {
+    fini_rwsem(&tracefile_sem);
 }
 
 void tracefile_read_lock() {
