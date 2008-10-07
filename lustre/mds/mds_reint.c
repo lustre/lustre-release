@@ -2393,8 +2393,7 @@ no_unlink:
 
         GOTO(cleanup, rc);
 cleanup:
-        rc = mds_finish_transno(mds, de_tgtdir && !IS_ERR(de_tgtdir) ?
-                                                      de_tgtdir->d_inode : NULL,
+        rc = mds_finish_transno(mds, de_tgtdir ? de_tgtdir->d_inode : NULL,
                                 handle, req, rc, 0, 0);
 
         switch (cleanup_phase) {
