@@ -761,7 +761,7 @@ diff -ruN ad_lustre_orig/ad_lustre_close.c ad_lustre/ad_lustre_close.c
 +}
 diff -ruN ad_lustre_orig/ad_lustre.h ad_lustre/ad_lustre.h
 --- ad_lustre_orig/ad_lustre.h	2008-09-17 14:36:57.000000000 +0800
-+++ ad_lustre/ad_lustre.h	2008-09-17 18:20:35.000000000 +0800
++++ ad_lustre/ad_lustre.h	2008-10-06 16:07:21.000000000 +0800
 @@ -1,9 +1,11 @@
  /* -*- Mode: C; c-basic-offset:4 ; -*- */
 -/* 
@@ -776,7 +776,40 @@ diff -ruN ad_lustre_orig/ad_lustre.h ad_lustre/ad_lustre.h
   */
  
  #ifndef AD_UNIX_INCLUDE
-@@ -41,24 +43,62 @@
+@@ -24,7 +26,32 @@
+ 
+ /*#include <fcntl.h>*/
+ #include <sys/ioctl.h>
++#ifdef WITH_LUSTRE
+ #include "lustre/lustre_user.h"
++#else
++/* copy something from lustre_user.h here */
++#  define LOV_USER_MAGIC 0x0BD10BD0
++#  define LL_IOC_LOV_SETSTRIPE  _IOW ('f', 154, long)
++#  define LL_IOC_LOV_GETSTRIPE  _IOW ('f', 155, long)
++#  define lov_user_ost_data lov_user_ost_data_v1
++struct lov_user_ost_data_v1 {     /* per-stripe data structure */
++        __u64 l_object_id;        /* OST object ID */
++        __u64 l_object_gr;        /* OST object group (creating MDS number) */
++        __u32 l_ost_gen;          /* generation of this OST index */
++        __u32 l_ost_idx;          /* OST index in LOV */
++} __attribute__((packed));
++#define lov_user_md lov_user_md_v1
++struct lov_user_md_v1 {           /* LOV EA user data (host-endian) */
++        __u32 lmm_magic;          /* magic number = LOV_USER_MAGIC_V1 */
++        __u32 lmm_pattern;        /* LOV_PATTERN_RAID0, LOV_PATTERN_RAID1 */
++        __u64 lmm_object_id;      /* LOV object ID */
++        __u64 lmm_object_gr;      /* LOV object group */
++        __u32 lmm_stripe_size;    /* size of stripe in bytes */
++        __u16 lmm_stripe_count;   /* num stripes in use for this object */
++        __u16 lmm_stripe_offset;  /* starting stripe offset in lmm_objects */
++        struct lov_user_ost_data_v1 lmm_objects[0]; /* per-stripe data */
++} __attribute__((packed));
++#endif
+ #include "adio.h"
+ /*#include "adioi.h"*/
+ 
+@@ -41,24 +68,62 @@
  
  void ADIOI_LUSTRE_Open(ADIO_File fd, int *error_code);
  void ADIOI_LUSTRE_Close(ADIO_File fd, int *error_code);
