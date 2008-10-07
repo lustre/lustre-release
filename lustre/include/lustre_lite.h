@@ -60,10 +60,6 @@
 
 #endif
 
-#define LLAP_FROM_COOKIE(c)                                                    \
-        (LASSERT(((struct ll_async_page *)(c))->llap_magic == LLAP_MAGIC),     \
-         (struct ll_async_page *)(c))
-
 /* 4UL * 1024 * 1024 */
 #define LL_MAX_BLKSIZE_BITS     (22)
 #define LL_MAX_BLKSIZE          (1UL<<LL_MAX_BLKSIZE_BITS)
