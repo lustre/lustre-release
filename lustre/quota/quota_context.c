@@ -1143,6 +1143,7 @@ qctxt_init(struct obd_device *obd, dqacq_handler_t handler)
         qctxt->lqc_itune_sz = default_iunit_sz * default_itune_ratio / 100;
         qctxt->lqc_switch_seconds = 300; /* enlarging will wait 5 minutes
                                           * after the last shrinking */
+        qctxt->lqc_sync_blk = 0;
         spin_unlock(&qctxt->lqc_lock);
 
         qctxt->lqc_lqs_hash = lustre_hash_init("LQS_HASH", 128, 128,

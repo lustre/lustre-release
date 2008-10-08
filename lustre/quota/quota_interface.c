@@ -169,6 +169,7 @@ static int filter_quota_enforce(struct obd_device *obd, unsigned int ignore)
 static int filter_quota_getflag(struct obd_device *obd, struct obdo *oa)
 {
         struct obd_device_target *obt = &obd->u.obt;
+        struct lustre_quota_ctxt *qctxt = &obt->obt_qctxt;
         int err, cnt, rc = 0;
         struct obd_quotactl *oqctl;
         ENTRY;
@@ -176,15 +177,42 @@ static int filter_quota_getflag(struct obd_device *obd, struct obdo *oa)
         if (!sb_any_quota_enabled(obt->obt_sb))
                 RETURN(0);
 
-        oa->o_flags &= ~(OBD_FL_NO_USRQUOTA | OBD_FL_NO_GRPQUOTA);
-
         OBD_ALLOC_PTR(oqctl);
         if (!oqctl) {
                 CERROR("Not enough memory!");
                 RETURN(-ENOMEM);
         }
 
+        /* set over quota flags for a uid/gid */
+        oa->o_valid |= OBD_MD_FLUSRQUOTA | OBD_MD_FLGRPQUOTA;
+        oa->o_flags &= ~(OBD_FL_NO_USRQUOTA | OBD_FL_NO_GRPQUOTA);
+
         for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
+                struct quota_adjust_qunit oqaq_tmp;
+                struct lustre_qunit_size *lqs = NULL;
+
+                oqaq_tmp.qaq_flags = cnt;
+                oqaq_tmp.qaq_id = (cnt == USRQUOTA) ? oa->o_uid : oa->o_gid;
+
+                quota_search_lqs(NULL, &oqaq_tmp, qctxt, &lqs);
+                if (lqs) {
+                        spin_lock(&lqs->lqs_lock);
+                        if (lqs->lqs_bunit_sz <= qctxt->lqc_sync_blk) {
+                                oa->o_flags |= (cnt == USRQUOTA) ?
+                                        OBD_FL_NO_USRQUOTA : OBD_FL_NO_GRPQUOTA;
+                                CDEBUG(D_QUOTA, "set sync flag: bunit(%lu), "
+                                       "sync_blk(%d)\n", lqs->lqs_bunit_sz,
+                                       qctxt->lqc_sync_blk);
+                                spin_unlock(&lqs->lqs_lock);
+                                /* this is for quota_search_lqs */
+                                lqs_putref(lqs);
+                                continue;
+                        }
+                        spin_unlock(&lqs->lqs_lock);
+                        /* this is for quota_search_lqs */
+                        lqs_putref(lqs);
+                }
+
                 memset(oqctl, 0, sizeof(*oqctl));
 
                 oqctl->qc_cmd = Q_GETQUOTA;
@@ -194,12 +222,11 @@ static int filter_quota_getflag(struct obd_device *obd, struct obdo *oa)
                 if (err) {
                         if (!rc)
                                 rc = err;
+                        oa->o_valid &= ~((cnt == USRQUOTA) ? OBD_MD_FLUSRQUOTA :
+                                                             OBD_MD_FLGRPQUOTA);
                         continue;
                 }
 
-                /* set over quota flags for a uid/gid */
-                oa->o_valid |= (cnt == USRQUOTA) ?
-                               OBD_MD_FLUSRQUOTA : OBD_MD_FLGRPQUOTA;
                 if (oqctl->qc_dqblk.dqb_bhardlimit &&
                    (toqb(oqctl->qc_dqblk.dqb_curspace) >=
                     oqctl->qc_dqblk.dqb_bhardlimit))

@@ -264,6 +264,9 @@ struct lustre_quota_ctxt {
                                              * adjusting qunit size. How many
                                              * seconds must be waited between
                                              * enlarging and shinking qunit */
+        int           lqc_sync_blk;         /* when blk qunit reaches this value,
+                                             * later write reqs from client
+                                             * should be sync b=16642 */
         spinlock_t    lqc_lock;         /* guard lqc_imp_valid now */
         cfs_waitq_t   lqc_wait_for_qmaster; /* when mds isn't connected, threads
                                              * on osts who send the quota reqs
