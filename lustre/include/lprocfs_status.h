@@ -639,6 +639,10 @@ extern int lprocfs_quota_rd_switch_seconds(char *page, char **start, off_t off,
                                            int count, int *eof, void *data);
 extern int lprocfs_quota_wr_switch_seconds(struct file *file, const char *buffer,
                                            unsigned long count, void *data);
+extern int lprocfs_quota_rd_sync_blk(char *page, char **start, off_t off,
+                                     int count, int *eof, void *data);
+extern int lprocfs_quota_wr_sync_blk(struct file *file, const char *buffer,
+                                     unsigned long count, void *data);
 extern int lprocfs_quota_rd_switch_qs(char *page, char **start, off_t off,
                                       int count, int *eof, void *data);
 extern int lprocfs_quota_wr_switch_qs(struct file *file, const char *buffer,
