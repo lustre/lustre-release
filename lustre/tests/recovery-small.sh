@@ -146,23 +146,23 @@ run_test 12 "recover from timed out resend in ptlrpcd (b=2494)"
 
 # Bug 113, check that readdir lost recv timeout works.
 test_13() {
-    mkdir $DIR/readdir || return 1
-    touch $DIR/readdir/newentry || return
+    mkdir -p $DIR/$tdir || return 1
+    touch $DIR/$tdir/newentry || return
 # OBD_FAIL_MDS_READPAGE_NET|OBD_FAIL_ONCE
     do_facet mds "lctl set_param fail_loc=0x80000104"
-    ls $DIR/readdir || return 3
+    ls $DIR/$tdir || return 3
     do_facet mds "lctl set_param fail_loc=0"
-    rm -rf $DIR/readdir || return 4
+    rm -rf $DIR/$tdir || return 4
 }
 run_test 13 "mdc_readpage restart test (bug 1138)"
 
 # Bug 113, check that readdir lost send timeout works.
 test_14() {
-    mkdir $DIR/readdir
-    touch $DIR/readdir/newentry
+    mkdir -p $DIR/$tdir
+    touch $DIR/$tdir/newentry
 # OBD_FAIL_MDS_SENDPAGE|OBD_FAIL_ONCE
     do_facet mds "lctl set_param fail_loc=0x80000106"
-    ls $DIR/readdir || return 1
+    ls $DIR/$tdir || return 1
     do_facet mds "lctl set_param fail_loc=0"
 }
 run_test 14 "mdc_readpage resend test (bug 1138)"
