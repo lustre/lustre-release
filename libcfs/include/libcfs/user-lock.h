@@ -147,7 +147,7 @@ struct completion {
         cfs_waitq_t wait;
 };
 typedef int (*cfs_wait_handler_t) (int timeout);
-void set_completion_wait_handler(cfs_wait_handler_t *handler);
+void init_completion_module(cfs_wait_handler_t handler);
 void init_completion(struct completion *c);
 void init_completion_module(cfs_wait_handler_t handler);
 void complete(struct completion *c);
