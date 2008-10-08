@@ -276,6 +276,9 @@ struct lustre_quota_ctxt {
         struct lprocfs_stats  *lqc_stats; /* lquota statistics */
 };
 
+#define QUOTA_MASTER_READY(qctxt)   (qctxt)->lqc_setup = 1
+#define QUOTA_MASTER_UNREADY(qctxt) (qctxt)->lqc_setup = 0
+
 struct lustre_qunit_size {
         struct hlist_node lqs_hash; /* the hash entry */
         unsigned int lqs_id;        /* id of user/group */
@@ -358,6 +361,9 @@ struct lustre_quota_info {
 
 struct lustre_quota_ctxt {
 };
+
+#define QUOTA_MASTER_READY(qctxt)
+#define QUOTA_MASTER_UNREADY(qctxt)
 
 #endif /* !HAVE_QUOTA_SUPPORT */
 

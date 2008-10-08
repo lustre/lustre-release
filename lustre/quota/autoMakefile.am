@@ -41,7 +41,7 @@ libquota_a_CPPFLAGS = $(LLCPPFLAGS)
 libquota_a_CFLAGS = $(LLCFLAGS)
 endif
 
-if MODULES
+if QUOTA
 modulefs_DATA = lquota$(KMODEXT)
 endif
 
