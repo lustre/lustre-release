@@ -2199,39 +2199,54 @@ test_51b() {
 run_test 51b "mkdir .../t-0 --- .../t-$NUMTEST ===================="
 
 test_51bb() {
-	[ -z "$CLIENTS" ] && skip "needs >= 2 CLIENTS" && return
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 
- 
-	NUMFREE=`df -i -P $DIR | tail -n 1 | awk '{ print $4 }'`
-	[ $NUMFREE -lt 21000 ] && \
-		skip "not enough free inodes ($NUMFREE)" && \
-		return
 
-	check_kernel_version 40 || NUMTEST=31000
-	[ $NUMFREE -lt $NUMTEST ] && NUMTEST=$(($NUMFREE - 50))
+	local ndirs=${TEST51BB_NDIRS:-10}
+	local nfiles=${TEST51BB_NFILES:-100}
 
-	mkdir -p $DIR/d51bb
+	local numfree=`df -i -P $DIR | tail -n 1 | awk '{ print $4 }'`
 
-	IUSED=$(lfs df -i $DIR | grep MDT | awk '{print $3}')
+	[ $numfree -lt $(( ndirs * nfiles)) ] && \
+		nfiles=$(( numfree / ndirs - 10 ))
+
+	local dir=$DIR/d51bb
+	mkdir -p $dir
+	local savePOLICY=$(lctl get_param -n lmv.*.placement)
+	lctl set_param -n lmv.*.placement=CHAR
+
+	lfs df -i $dir
+	local IUSED=$(lfs df -i $dir | grep MDT | awk '{print $3}')
 	OLDUSED=($IUSED)
 
-	do_nodes $CLIENTS "mkdir -p $DIR/\$(hostname)"
+	declare -a dirs
+	for ((i=0; i < $ndirs; i++)); do
+		dirs[i]=$dir/$RANDOM
+		echo Creating directory ${dirs[i]} 
+		mkdir -p ${dirs[i]}
+		ls $dir
+		echo Creating $nfiles in dir ${dirs[i]} ...
+		echo "createmany -o ${dirs[i]}/$tfile- $nfiles"
+		createmany -o ${dirs[i]}/$tfile- $nfiles
+	done
+	ls $dir
 
-	ls $DIR
+	sleep 1
 
-	do_nodes $CLIENTS "createmany -d $DIR/\$(hostname)/t- $NUMTEST"
-	IUSED=$(lfs df -i $DIR | grep MDT | awk '{print $3}')
+	IUSED=$(lfs df -i $dir | grep MDT | awk '{print $3}')
 	NEWUSED=($IUSED)
 
 	local rc=0
 	for ((i=0; i<${#NEWUSED[@]}; i++)); do
 		echo "mds $i: inodes count OLD ${OLDUSED[$i]} NEW ${NEWUSED[$i]}"
-		[ ${OLDUSED[$i]} -lt ${NEWUSED[$i]} ] || rc=1
+		[ ${OLDUSED[$i]} -lt ${NEWUSED[$i]} ] || rc=$((rc + 1))
 	done
 	
-	[ $rc -ne 0 ] && error "no CMD functionality!"
+	lctl set_param -n lmv.*.placement=$savePOLICY
+
+	[ $rc -ne $MDSCOUNT ] || \
+		error "Objects/inodes are not distributed over all mds servers"
 }
-run_test 51bb "mkdir .../t-0 --- .../t-$NUMTEST (CMD) ===================="
+run_test 51bb "mkdir createmany CMD $MDSCOUNT  ===================="
 
 
 test_51c() {
