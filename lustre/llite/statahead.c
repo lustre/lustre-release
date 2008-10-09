@@ -179,7 +179,7 @@ static struct ll_statahead_info *ll_sai_alloc(void)
         return sai;
 }
 
-static inline 
+static inline
 struct ll_statahead_info *ll_sai_get(struct ll_statahead_info *sai)
 {
         LASSERT(sai);
@@ -264,7 +264,7 @@ static void ll_sai_entry_fini(struct ll_statahead_info *sai)
         struct ll_inode_info *lli = ll_i2info(sai->sai_inode);
         struct ll_sai_entry  *entry;
         ENTRY;
-        
+
         spin_lock(&lli->lli_lock);
         sai->sai_index_next++;
         if (likely(!list_empty(&sai->sai_entries_stated))) {
@@ -480,7 +480,7 @@ static int ll_statahead_interpret(struct obd_export *exp,
 
         spin_lock(&lli->lli_lock);
         if (unlikely(lli->lli_sai == NULL ||
-            lli->lli_sai->sai_generation != minfo->mi_generation)) {
+                     lli->lli_sai->sai_generation != minfo->mi_generation)) {
                 spin_unlock(&lli->lli_lock);
                 ll_intent_release(it);
                 dput(dentry);
@@ -564,7 +564,7 @@ static int do_sa_lookup(struct inode *dir, struct dentry *dentry)
 {
         struct md_enqueue_info   *minfo;
         struct ldlm_enqueue_info *einfo;
-        int                       rc;                
+        int                       rc;
         ENTRY;
 
         rc = sa_args_prep(dir, dentry, &minfo, &einfo);
@@ -1092,7 +1092,7 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
 
          /*
           * I am the "lli_opendir_pid" owner, only me can set "lli_sai".
-          */ 
+          */
         LASSERT(lli->lli_sai == NULL);
 
         rc = is_first_dirent(dir, *dentryp);
@@ -1128,7 +1128,7 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
                 RETURN(rc);
         }
 
-        l_wait_event(sai->sai_thread.t_ctl_waitq, 
+        l_wait_event(sai->sai_thread.t_ctl_waitq,
                      sa_is_running(sai) || sa_is_stopped(sai),
                      &lwi);
 
