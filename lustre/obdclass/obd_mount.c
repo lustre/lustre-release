@@ -1322,6 +1322,10 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
                 GOTO(out_free, rc);
         }
 
+        if (lmd->lmd_flags & LMD_FLG_ABORT_RECOV)
+                simple_truncate(mnt->mnt_sb->s_root, mnt, LAST_RCVD,
+                                LR_CLIENT_START);
+
         OBD_PAGE_FREE(__page);
         lsi->lsi_ldd = ldd;   /* freed at lsi cleanup */
         CDEBUG(D_SUPER, "%s: mnt = %p\n", lmd->lmd_dev, mnt);
