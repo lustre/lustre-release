@@ -325,6 +325,7 @@ case "$lustretag" in
         libsysiotag="$lustretag"
         snmptag="$lustretag"
         ldiskfstag="$lustretag"
+        libcfstag="$lustretag"
         ;;
 
     b_HEAD_*|b_head_*|b_hd_*)
