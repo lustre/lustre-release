@@ -215,7 +215,7 @@ case "$lustretag" in
     # read-only cache for oss
     b_hd_rocache_oss)
         lnettag="HEAD"
-        ldiskfstag="b_hd_rocache_oss"
+        ldiskfstag="b1_8_iam"
         libcfstag="HEAD"
         ;;
  
