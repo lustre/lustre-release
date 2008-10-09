@@ -1,7 +1,7 @@
-Index: linux-2.6.5-7.311/include/linux/ext3_fs.h
+Index: linux-2.6.16.54-0.2.5/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.5-7.311.orig/include/linux/ext3_fs.h
-+++ linux-2.6.5-7.311/include/linux/ext3_fs.h
+--- linux-2.6.16.54-0.2.5.orig/include/linux/ext3_fs.h
++++ linux-2.6.16.54-0.2.5/include/linux/ext3_fs.h
 @@ -57,6 +57,30 @@ struct statfs;
  #define ext3_debug(f, a...)	do {} while (0)
  #endif
@@ -33,7 +33,7 @@ Index: linux-2.6.5-7.311/include/linux/ext3_fs.h
  /*
   * Special inodes numbers
   */
-@@ -361,6 +385,14 @@ struct ext3_inode {
+@@ -402,6 +426,14 @@ struct ext3_inode {
  #define ext3_find_first_zero_bit	ext2_find_first_zero_bit
  #define ext3_find_next_zero_bit		ext2_find_next_zero_bit
  
@@ -41,14 +41,14 @@ Index: linux-2.6.5-7.311/include/linux/ext3_fs.h
 +#ifdef __LITTLE_ENDIAN
 +#define ext2_find_next_le_bit(addr, size, off) find_next_bit((addr), (size), (off))
 +#else
-+#error "mballoc needs a patch for big-endian systems - CFS bug 10634"
++#error "mballoc needs a patch for big-endian systems - Lustre bug 10634"
 +#endif	/* __LITTLE_ENDIAN */
 +#endif	/* !ext2_find_next_le_bit */
 +
  /*
   * Maximal mount counts between two filesystem checks
   */
-@@ -735,6 +767,20 @@ extern unsigned long ext3_count_dirs (st
+@@ -788,6 +820,20 @@ extern unsigned long ext3_count_dirs (st
  extern void ext3_check_inodes_bitmap (struct super_block *);
  extern unsigned long ext3_count_free (struct buffer_head *, unsigned);
  
@@ -68,9 +68,9 @@ Index: linux-2.6.5-7.311/include/linux/ext3_fs.h
 +
  
  /* inode.c */
- extern int ext3_block_truncate_page(handle_t *, struct page *,
-@@ -769,6 +815,10 @@ extern int ext3_htree_fill_tree(struct f
- 				__u32 start_minor_hash, __u32 *next_hash);
+ extern int ext3_block_truncate_page(handle_t *, struct page *, struct address_space *, loff_t);
+@@ -830,6 +876,10 @@ extern int ext3_group_extend(struct supe
+ 				unsigned long n_blocks_count);
  
  /* super.c */
 +extern struct proc_dir_entry *proc_root_ext3;
@@ -80,13 +80,13 @@ Index: linux-2.6.5-7.311/include/linux/ext3_fs.h
  extern void ext3_error (struct super_block *, const char *, const char *, ...)
  	__attribute__ ((format (printf, 3, 4)));
  extern void __ext3_std_error (struct super_block *, const char *, int);
-Index: linux-2.6.5-7.311/include/linux/ext3_fs_sb.h
+Index: linux-2.6.16.54-0.2.5/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.6.5-7.311.orig/include/linux/ext3_fs_sb.h
-+++ linux-2.6.5-7.311/include/linux/ext3_fs_sb.h
+--- linux-2.6.16.54-0.2.5.orig/include/linux/ext3_fs_sb.h
++++ linux-2.6.16.54-0.2.5/include/linux/ext3_fs_sb.h
 @@ -78,6 +78,61 @@ struct ext3_sb_info {
- 	struct timer_list turn_ro_timer;	/* For turning read-only (crash simulation) */
- 	wait_queue_head_t ro_wait_queue;	/* For people waiting for the fs to go read-only */
+ 	char *s_qf_names[MAXQUOTAS];		/* Names of quota files with journalled quota */
+ 	int s_jquota_fmt;			/* Format of quota to use */
  #endif
 +
 +	/* for buddy allocator */
@@ -146,11 +146,11 @@ Index: linux-2.6.5-7.311/include/linux/ext3_fs_sb.h
 +				 [(group) & (EXT3_DESC_PER_BLOCK(sb) - 1)]
 +
  #endif	/* _LINUX_EXT3_FS_SB */
-Index: linux-2.6.5-7.311/fs/ext3/super.c
+Index: linux-2.6.16.54-0.2.5/fs/ext3/super.c
 ===================================================================
---- linux-2.6.5-7.311.orig/fs/ext3/super.c
-+++ linux-2.6.5-7.311/fs/ext3/super.c
-@@ -389,6 +389,7 @@ void ext3_put_super (struct super_block 
+--- linux-2.6.16.54-0.2.5.orig/fs/ext3/super.c
++++ linux-2.6.16.54-0.2.5/fs/ext3/super.c
+@@ -392,6 +392,7 @@ static void ext3_put_super (struct super
  	struct ext3_super_block *es = sbi->s_es;
  	int i;
  
@@ -158,7 +158,7 @@ Index: linux-2.6.5-7.311/fs/ext3/super.c
  	ext3_ext_release(sb);
  	ext3_xattr_put_super(sb);
  	journal_destroy(sbi->s_journal);
-@@ -428,6 +429,8 @@ void ext3_put_super (struct super_block 
+@@ -434,6 +435,8 @@ static void ext3_put_super (struct super
  		invalidate_bdev(sbi->journal_bdev, 0);
  		ext3_blkdev_remove(sbi);
  	}
@@ -167,7 +167,7 @@ Index: linux-2.6.5-7.311/fs/ext3/super.c
  	sb->s_fs_info = NULL;
  	kfree(sbi);
  	return;
-@@ -453,6 +456,8 @@ static struct inode *ext3_alloc_inode(st
+@@ -459,6 +462,8 @@ static struct inode *ext3_alloc_inode(st
  	ei->vfs_inode.i_version = 1;
  	
  	memset(&ei->i_cached_extent, 0, sizeof(ei->i_cached_extent));
@@ -176,7 +176,7 @@ Index: linux-2.6.5-7.311/fs/ext3/super.c
  	return &ei->vfs_inode;
  }
  
-@@ -1151,6 +1156,13 @@ static int ext3_fill_super (struct super
+@@ -1437,6 +1442,13 @@ static int ext3_fill_super (struct super
  	sbi->s_mount_opt = 0;
  	sbi->s_resuid = EXT3_DEF_RESUID;
  	sbi->s_resgid = EXT3_DEF_RESGID;
@@ -188,9 +188,9 @@ Index: linux-2.6.5-7.311/fs/ext3/super.c
 +		return -ENOMEM;
 +	}
  
- 	blocksize = sb_min_blocksize(sb, EXT3_MIN_BLOCK_SIZE);
- 	if (!blocksize) {
-@@ -1526,6 +1538,8 @@ failed_mount:
+ 	unlock_kernel();
+ 
+@@ -1840,6 +1852,8 @@ failed_mount:
  	ext3_blkdev_remove(sbi);
  	brelse(bh);
  out_fail:
@@ -198,8 +198,8 @@ Index: linux-2.6.5-7.311/fs/ext3/super.c
 +	sbi->s_dev_proc = NULL;
  	sb->s_fs_info = NULL;
  	kfree(sbi);
- 	return -EINVAL;
-@@ -2158,9 +2172,46 @@ static struct file_system_type ext3_fs_t
+ 	lock_kernel();
+@@ -2748,9 +2762,46 @@ static struct file_system_type ext3_fs_t
  	.fs_flags	= FS_REQUIRES_DEV,
  };
  
@@ -247,7 +247,7 @@ Index: linux-2.6.5-7.311/fs/ext3/super.c
  	if (err)
  		return err;
  	err = init_inodecache();
-@@ -2189,6 +2240,7 @@ static void __exit exit_ext3_fs(void)
+@@ -2772,6 +2823,7 @@ static void __exit exit_ext3_fs(void)
  	unregister_filesystem(&ext3_fs_type);
  	destroy_inodecache();
  	exit_ext3_xattr();
@@ -255,10 +255,10 @@ Index: linux-2.6.5-7.311/fs/ext3/super.c
  }
  
  int ext3_map_inode_page(struct inode *inode, struct page *page,
-Index: linux-2.6.5-7.311/fs/ext3/mballoc.c
+Index: linux-2.6.16.54-0.2.5/fs/ext3/mballoc.c
 ===================================================================
 --- /dev/null
-+++ linux-2.6.5-7.311/fs/ext3/mballoc.c
++++ linux-2.6.16.54-0.2.5/fs/ext3/mballoc.c
 @@ -0,0 +1,4385 @@
 +/*
 + * Copyright 2008 Sun Microsystems, Inc.
