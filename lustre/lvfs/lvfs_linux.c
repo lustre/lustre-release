@@ -473,6 +473,57 @@ long l_readdir(struct file *file, struct list_head *dentry_list)
 }
 EXPORT_SYMBOL(l_readdir);
 
+int l_notify_change(struct vfsmount *mnt, struct dentry *dchild,
+                    struct iattr *newattrs)
+{
+        int rc;
+
+        LOCK_INODE_MUTEX(dchild->d_inode);
+#ifdef HAVE_SECURITY_PLUG
+        rc = notify_change(dchild, mnt, newattrs);
+#else
+        rc = notify_change(dchild, newattrs);
+#endif
+        UNLOCK_INODE_MUTEX(dchild->d_inode);
+        return rc;
+}
+EXPORT_SYMBOL(l_notify_change);
+
+/* utility to truncate a file */
+int simple_truncate(struct dentry *dir, struct vfsmount *mnt, 
+                    char *name, loff_t length)
+{
+        struct dentry *dchild;
+        struct iattr newattrs;
+        int err = 0;
+        ENTRY;
+
+        CDEBUG(D_INODE, "truncating file %.*s to %lld\n", (int)strlen(name),
+               name, (long long)length);
+        dchild = ll_lookup_one_len(name, dir, strlen(name));
+        if (IS_ERR(dchild))
+                GOTO(out, err = PTR_ERR(dchild));
+
+        if (dchild->d_inode) {
+                int old_mode = dchild->d_inode->i_mode;
+                if (S_ISDIR(old_mode)) {
+                        CERROR("found %s (%lu/%u) is mode %o\n", name,
+                               dchild->d_inode->i_ino,
+                               dchild->d_inode->i_generation, old_mode);
+                        GOTO(out_dput, err = -EISDIR);
+                }
+
+                newattrs.ia_size = length;
+                newattrs.ia_valid = ATTR_SIZE;
+                err = l_notify_change(mnt, dchild, &newattrs);
+        }
+        EXIT;
+out_dput:
+        dput(dchild);
+out:
+        return err;
+}
+EXPORT_SYMBOL(simple_truncate);
 
 #ifdef LUSTRE_KERNEL_VERSION
 #ifndef HAVE_CLEAR_RDONLY_ON_PUT
