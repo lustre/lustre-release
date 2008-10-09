@@ -110,6 +110,10 @@ int lustre_fread(struct file *file, void *buf, int len, loff_t *off);
 int lustre_fwrite(struct file *file, const void *buf, int len, loff_t *off);
 int lustre_fsync(struct file *file);
 long l_readdir(struct file * file, struct list_head *dentry_list);
+int l_notify_change(struct vfsmount *mnt, struct dentry *dchild,
+                    struct iattr *newattrs);
+int simple_truncate(struct dentry *dir, struct vfsmount *mnt,
+                               char *name, loff_t length);
 
 static inline void l_dput(struct dentry *de)
 {
