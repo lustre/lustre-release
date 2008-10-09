@@ -836,12 +836,12 @@ static void lprocfs_free_client_stats(struct nid_stat *client_stat)
                 lprocfs_free_stats(&client_stat->nid_stats);
 
         if (client_stat->nid_brw_stats)
-                OBD_FREE(client_stat->nid_brw_stats, sizeof(struct brw_stats));
+                OBD_FREE_PTR(client_stat->nid_brw_stats);
 
         if (client_stat->nid_ldlm_stats)
                 lprocfs_free_stats(&client_stat->nid_ldlm_stats);
 
-        OBD_FREE(client_stat, sizeof(*client_stat));
+        OBD_FREE_PTR(client_stat);
         return;
 
 }
@@ -1548,13 +1548,13 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
 
         CDEBUG(D_CONFIG, "using hash %p\n", obd->obd_nid_stats_hash);
 
-        OBD_ALLOC(new_stat, sizeof(struct nid_stat));
+        OBD_ALLOC_PTR(new_stat);
         if (new_stat == NULL)
                 RETURN(-ENOMEM);
 
-        OBD_ALLOC(new_ns_uuid, sizeof(struct nid_stat_uuid));
+        OBD_ALLOC_PTR(new_ns_uuid);
         if (new_ns_uuid == NULL) {
-                OBD_FREE(new_stat, sizeof(struct nid_stat));
+                OBD_FREE_PTR(new_stat);
                 RETURN(-ENOMEM);
         }
         CFS_INIT_LIST_HEAD(&new_ns_uuid->ns_uuid_list);
@@ -1600,7 +1600,7 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
                         list_add(&new_ns_uuid->ns_uuid_list,
                                  &old_stat->nid_uuid_list);
                 else
-                        OBD_FREE(new_ns_uuid, sizeof(struct nid_stat));
+                        OBD_FREE_PTR(new_ns_uuid);
 
                 spin_unlock(&obd->obd_nid_lock);
 
@@ -1613,9 +1613,7 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
         if (new_stat->nid_proc == NULL) {
                 CERROR("Error making export directory for nid %s\n",
                        libcfs_nid2str(*nid));
-                lustre_hash_del(obd->obd_nid_stats_hash, nid,
-                                &new_stat->nid_hash);
-                GOTO(destroy_new, rc = -ENOMEM);
+                GOTO(destroy_new_ns, rc = -ENOMEM);
         }
 
         /* Add in uuid to our nid_stats list */
@@ -1628,24 +1626,31 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
         if (IS_ERR(entry)) {
                 CWARN("Error adding the NID stats file\n");
                 rc = PTR_ERR(entry);
+                GOTO(destroy_new_ns, rc);
         }
 
         entry = lprocfs_add_simple(new_stat->nid_proc, "hash",
                                    lprocfs_exp_rd_hash, NULL, new_stat, NULL);
         if (IS_ERR(entry)) {
                 CWARN("Error adding the hash file\n");
+                lprocfs_remove(&new_stat->nid_proc);
                 rc = PTR_ERR(entry);
+                GOTO(destroy_new_ns, rc);
         }
 
         exp->exp_nid_stats = new_stat;
         *newnid = 1;
         RETURN(rc);
 
+destroy_new_ns:
+        lustre_hash_del(obd->obd_nid_stats_hash, nid, &new_stat->nid_hash);
+        OBD_FREE_PTR(new_ns_uuid);
+
 destroy_new:
         spin_lock(&obd->obd_nid_lock);
         list_del(&new_stat->nid_list);
         spin_unlock(&obd->obd_nid_lock);
-        OBD_FREE(new_stat, sizeof(struct nid_stat));
+        OBD_FREE_PTR(new_stat);
         RETURN(rc);
 }
 
@@ -1666,7 +1671,7 @@ int lprocfs_exp_cleanup(struct obd_export *exp)
                                               &exp->exp_client_uuid)) {
                         found = 1;
                         list_del(&cursor->ns_uuid_list);
-                        OBD_FREE(cursor, sizeof(struct nid_stat_uuid));
+                        OBD_FREE_PTR(cursor);
                         break;
                 }
         }
