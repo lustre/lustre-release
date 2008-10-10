@@ -335,7 +335,7 @@ void lprocfs_remove(struct proc_dir_entry **rooth)
 
         parent = root->parent;
         LASSERT(parent != NULL);
-        LPROCFS_ENTRY(); /* search vs remove race */
+        LPROCFS_WRITE_ENTRY(); /* search vs remove race */
 
         while (1) {
                 while (temp->subdir != NULL)
@@ -357,7 +357,7 @@ void lprocfs_remove(struct proc_dir_entry **rooth)
                 if (temp == parent)
                         break;
         }
-        LPROCFS_EXIT();
+        LPROCFS_WRITE_EXIT();
 }
 
 struct proc_dir_entry *lprocfs_register(const char *name,
@@ -1332,7 +1332,7 @@ void lprocfs_exp_print_hash(void *obj, void *cb_data)
                         *data->len += lustre_hash_debug_header(data->page,
                                                                data->count);
 
-                *data->len += lustre_hash_debug_str(lh, data->page + 
+                *data->len += lustre_hash_debug_str(lh, data->page +
                                                     *data->len,
                                                     data->count);
      }
