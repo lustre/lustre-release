@@ -550,6 +550,12 @@ extern struct rw_semaphore _lprocfs_lock;
                 return -ENODEV;                 \
         }                                       \
 } while(0)
+#define LPROCFS_WRITE_ENTRY()     do {  \
+        down_write(&_lprocfs_lock);     \
+} while(0)
+#define LPROCFS_WRITE_EXIT()      do {  \
+        up_write(&_lprocfs_lock);       \
+} while(0)
 
 /* You must use these macros when you want to refer to
  * the import in a client obd_device for a lprocfs entry */
