@@ -47,4 +47,3 @@ endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
 DIST_SOURCES := $(lquota-objs:%.o=%.c) quota_internal.h
-DIST_SOURCES += quotactl_test.c quotacheck_test.c
