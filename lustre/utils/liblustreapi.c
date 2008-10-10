@@ -301,7 +301,7 @@ int llapi_file_open_pool(const char *name, int flags, int mode,
                         if (poolpath(fsname, NULL, NULL) == 0)
                                 pool_name = ptr + 1;
                 }
-                strncpy(lum.lmm_pool_name, pool_name, MAXPOOLNAME);
+                strncpy(lum.lmm_pool_name, pool_name, LOV_MAXPOOLNAME);
         } else {
                 /* If no pool is specified at all, use V1 request */
                 lum.lmm_magic = LOV_USER_MAGIC_V1;
@@ -947,12 +947,12 @@ void llapi_lov_dump_user_lmm(struct find_param *param,
                                        (param->verbose || !param->obduuid));
                 break;
         case LOV_USER_MAGIC_V3: {
-                char pool_name[MAXPOOLNAME + 1];
+                char pool_name[LOV_MAXPOOLNAME + 1];
                 struct lov_user_ost_data_v1 *objects;
                 struct lov_user_md_v3 *lmmv3 = (void *)&param->lmd->lmd_lmm;
 
-                strncpy(pool_name, lmmv3->lmm_pool_name, MAXPOOLNAME);
-                pool_name[MAXPOOLNAME] = '\0';
+                strncpy(pool_name, lmmv3->lmm_pool_name, LOV_MAXPOOLNAME);
+                pool_name[LOV_MAXPOOLNAME] = '\0';
                 objects = lmmv3->lmm_objects;
                 lov_dump_user_lmm_v1v3(&param->lmd->lmd_lmm, pool_name,
                                        objects, path, is_dir,
@@ -1477,7 +1477,7 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
                      (param->poolname[0] == '\0')) ||
                     ((param->lmd->lmd_lmm.lmm_magic == LOV_USER_MAGIC_V3) &&
                      (strncmp(lmmv3->lmm_pool_name,
-                              param->poolname, MAXPOOLNAME) == 0)) ||
+                              param->poolname, LOV_MAXPOOLNAME) == 0)) ||
                     ((param->lmd->lmd_lmm.lmm_magic == LOV_USER_MAGIC_V3) &&
                      (strcmp(param->poolname, "*") == 0))) {
                         if (param->exclude_pool)

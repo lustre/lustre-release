@@ -752,7 +752,7 @@ static int mgs_iocontrol_pool(struct obd_device *obd,
         if (fsname == NULL)
                 RETURN(-ENOMEM);
 
-        OBD_ALLOC(poolname, MAXPOOLNAME + 1);
+        OBD_ALLOC(poolname, LOV_MAXPOOLNAME + 1);
         if (poolname == NULL) {
                 rc = -ENOMEM;
                 GOTO(out_pool, rc);
@@ -842,7 +842,7 @@ out_pool:
                 OBD_FREE(fsname, MTI_NAME_MAXLEN);
 
         if (poolname != NULL)
-                OBD_FREE(poolname, MAXPOOLNAME + 1);
+                OBD_FREE(poolname, LOV_MAXPOOLNAME + 1);
 
         RETURN(rc);
 }

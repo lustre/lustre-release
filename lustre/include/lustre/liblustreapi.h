@@ -135,7 +135,7 @@ struct find_param {
         unsigned int depth;
         dev_t   st_dev;
 
-        char poolname[MAXPOOLNAME+1];
+        char poolname[LOV_MAXPOOLNAME + 1];
 };
 
 extern int llapi_getstripe(char *path, struct find_param *param);

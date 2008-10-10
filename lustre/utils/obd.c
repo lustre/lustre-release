@@ -2781,15 +2781,15 @@ static int extract_fsname_poolname(char *arg, char *fsname, char *poolname)
                 rc = -EINVAL;
                 goto err;
         }
-        if (len > MAXPOOLNAME) {
+        if (len > LOV_MAXPOOLNAME) {
                 fprintf(stderr,
                         "poolname %s is too long (length is %d max is %d)\n",
-                        ptr + 1, len, MAXPOOLNAME);
+                        ptr + 1, len, LOV_MAXPOOLNAME);
                 rc = -ENAMETOOLONG;
                 goto err;
         }
-        strncpy(poolname, ptr + 1, MAXPOOLNAME);
-        poolname[MAXPOOLNAME] = '\0';
+        strncpy(poolname, ptr + 1, LOV_MAXPOOLNAME);
+        poolname[LOV_MAXPOOLNAME] = '\0';
         *ptr = '\0';
         return 0;
 
@@ -2802,7 +2802,7 @@ int jt_pool_cmd(int argc, char **argv)
 {
         enum lcfg_command_type cmd;
         char fsname[PATH_MAX + 1];
-        char poolname[MAXPOOLNAME + 1];
+        char poolname[LOV_MAXPOOLNAME + 1];
         char *ostnames_buf = NULL;
         int i, rc;
         int *array = NULL, array_sz;
