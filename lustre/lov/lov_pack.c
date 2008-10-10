@@ -105,7 +105,7 @@ void lov_dump_lmm_v3(int level, struct lov_mds_md_v3 *lmm)
         CDEBUG(level,"stripe_size %u, stripe_count %u\n",
                le32_to_cpu(lmm->lmm_stripe_size),
                le32_to_cpu(lmm->lmm_stripe_count));
-        CDEBUG(level,"pool_name "POOLNAMEF"\n", lmm->lmm_pool_name);
+        CDEBUG(level,"pool_name "LOV_POOLNAMEF"\n", lmm->lmm_pool_name);
 
         if (le32_to_cpu(lmm->lmm_stripe_count) <= LOV_V1_INSANE_STRIPE_COUNT) {
                 for (i = 0, lod = lmm->lmm_objects;
@@ -242,7 +242,7 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
         lmmv1->lmm_stripe_size = cpu_to_le32(lsm->lsm_stripe_size);
         lmmv1->lmm_stripe_count = cpu_to_le32(stripe_count);
         if (lsm->lsm_magic == LOV_MAGIC_V3) {
-                strncpy(lmmv3->lmm_pool_name, lsm->lsm_pool_name, MAXPOOLNAME);
+                strncpy(lmmv3->lmm_pool_name, lsm->lsm_pool_name, LOV_MAXPOOLNAME);
                 lmm_objects = lmmv3->lmm_objects;
         } else {
                 lmm_objects = lmmv1->lmm_objects;
@@ -517,7 +517,7 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
 
         if (lmm_magic == LOV_USER_MAGIC_V3)
                 strncpy((*lsmp)->lsm_pool_name, lumv3.lmm_pool_name,
-                        MAXPOOLNAME);
+                        LOV_MAXPOOLNAME);
 
         RETURN(0);
 }
