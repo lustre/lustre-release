@@ -120,20 +120,4 @@ int client_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl);
 int lov_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl);
 int client_quota_poll_check(struct obd_export *exp, struct if_quotacheck *qchk);
 
-#ifdef LPROCFS
-void lprocfs_quotactl_test_init_vars(struct lprocfs_static_vars *lvars);
-void lprocfs_quotacheck_test_init_vars(struct lprocfs_static_vars *lvars);
-#else
-static inline void lprocfs_quotactl_test_init_vars
-                                (struct lprocfs_static_vars *lvars)
-{
-        memset(lvars, 0, sizeof(*lvars));
-}
-static inline void lprocfs_quotacheck_test_init_vars
-                                (struct lprocfs_static_vars *lvars)
-{
-        memset(lvars, 0, sizeof(*lvars));
-}
-#endif
-
 #endif
