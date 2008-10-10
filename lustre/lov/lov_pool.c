@@ -66,7 +66,7 @@ static __u32 pool_hashfn(lustre_hash_t *hash_body, void *key, unsigned mask)
 
         result = 0;
         poolname = (char *)key;
-        for (i = 0; i < MAXPOOLNAME; i++) {
+        for (i = 0; i < LOV_MAXPOOLNAME; i++) {
                 if (poolname[i] == '\0')
                         break;
                 result = (result << 4)^(result >> 28) ^  poolname[i];
@@ -90,7 +90,7 @@ static int pool_hashkey_compare(void *key, struct hlist_node *compared_hnode)
 
         pool_name = (char *)key;
         pool = hlist_entry(compared_hnode, struct pool_desc, pool_hash);
-        rc = strncmp(pool_name, pool->pool_name, MAXPOOLNAME);
+        rc = strncmp(pool_name, pool->pool_name, LOV_MAXPOOLNAME);
         return (!rc);
 }
 
@@ -260,14 +260,15 @@ void lov_dump_pool(int level, struct pool_desc *pool)
 {
         int i;
 
-        CDEBUG(level, "pool "POOLNAMEF" has %d members\n",
+        CDEBUG(level, "pool "LOV_POOLNAMEF" has %d members\n",
                pool->pool_name, pool->pool_obds.op_count);
         read_lock(&pool_tgt_rwlock(pool));
         for (i = 0; i < pool_tgt_count(pool) ; i++) {
                 if (!pool_tgt(pool, i) || !(pool_tgt(pool, i))->ltd_exp)
                         continue;
-                CDEBUG(level, "pool "POOLNAMEF"[%d] = %s\n", pool->pool_name,
-                       i, obd_uuid2str(&((pool_tgt(pool, i))->ltd_uuid)));
+                CDEBUG(level, "pool "LOV_POOLNAMEF"[%d] = %s\n",
+                       pool->pool_name, i,
+                       obd_uuid2str(&((pool_tgt(pool, i))->ltd_uuid)));
         }
         read_unlock(&pool_tgt_rwlock(pool));
 }
@@ -378,15 +379,15 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
 
         lov = &(obd->u.lov);
 
-        if (strlen(poolname) > MAXPOOLNAME)
+        if (strlen(poolname) > LOV_MAXPOOLNAME)
                 return -ENAMETOOLONG;
 
         OBD_ALLOC_PTR(new_pool);
         if (new_pool == NULL)
                 return -ENOMEM;
 
-        strncpy(new_pool->pool_name, poolname, MAXPOOLNAME);
-        new_pool->pool_name[MAXPOOLNAME] = '\0';
+        strncpy(new_pool->pool_name, poolname, LOV_MAXPOOLNAME);
+        new_pool->pool_name[LOV_MAXPOOLNAME] = '\0';
         new_pool->pool_lov = lov;
         rc = lov_ost_pool_init(&new_pool->pool_obds, 0);
         if (rc)
@@ -415,7 +416,7 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
         lov->lov_pool_count++;
         spin_unlock(&obd->obd_dev_lock);
 
-        CDEBUG(D_CONFIG, POOLNAMEF" is pool #%d\n",
+        CDEBUG(D_CONFIG, LOV_POOLNAMEF" is pool #%d\n",
                poolname, lov->lov_pool_count);
 
 #ifdef LPROCFS
@@ -427,7 +428,7 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
 #endif
 
         if (IS_ERR(new_pool->pool_proc_entry)) {
-                CWARN("Cannot add proc pool entry "POOLNAMEF"\n", poolname);
+                CWARN("Cannot add proc pool entry "LOV_POOLNAMEF"\n", poolname);
                 new_pool->pool_proc_entry = NULL;
         }
 
@@ -513,7 +514,7 @@ int lov_pool_add(struct obd_device *obd, char *poolname, char *ostname)
 
         pool->pool_rr.lqr_dirty = 1;
 
-        CDEBUG(D_CONFIG, "Added %s to "POOLNAMEF" as member %d\n",
+        CDEBUG(D_CONFIG, "Added %s to "LOV_POOLNAMEF" as member %d\n",
                ostname, poolname,  pool_tgt_count(pool));
         return 0;
 }
@@ -559,7 +560,8 @@ int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
 
         pool->pool_rr.lqr_dirty = 1;
 
-        CDEBUG(D_CONFIG, "%s removed from "POOLNAMEF"\n", ostname, poolname);
+        CDEBUG(D_CONFIG, "%s removed from "LOV_POOLNAMEF"\n", ostname,
+               poolname);
 
         return 0;
 }
@@ -587,10 +589,10 @@ struct pool_desc *lov_find_pool(struct lov_obd *lov, char *poolname)
         if (poolname[0] != '\0') {
                 pool = lustre_hash_lookup(lov->lov_pools_hash_body, poolname);
                 if (pool == NULL)
-                        CWARN("Request for an unknown pool ("POOLNAMEF")\n",
+                        CWARN("Request for an unknown pool ("LOV_POOLNAMEF")\n",
                               poolname);
                 if ((pool != NULL) && (pool_tgt_count(pool) == 0)) {
-                        CWARN("Request for an empty pool ("POOLNAMEF")\n",
+                        CWARN("Request for an empty pool ("LOV_POOLNAMEF")\n",
                                poolname);
                         pool = NULL;
                 }
