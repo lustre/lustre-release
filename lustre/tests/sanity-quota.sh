@@ -621,7 +621,7 @@ test_8() {
 	echo "  Set enough high limit for user: $TSTUSR"
 	$LFS setquota -u $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $DIR
 	echo "  Set enough high limit for group: $TSTUSR"
-	$LFS setquota -g $USER 0 $BLK_LIMIT 0 $FILE_LIMIT $DIR
+	$LFS setquota -g $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $DIR
 
 	chmod 0777 $DIR/$tdir
 	local duration=""
