@@ -147,7 +147,7 @@ struct lov_stripe_md {
                 __u32 lw_stripe_size;      /* size of the stripe */
                 __u32 lw_pattern;          /* striping pattern (RAID0, RAID1) */
                 unsigned lw_stripe_count;  /* number of objects being striped over */
-                char  lw_pool_name[MAXPOOLNAME]; /* pool name */
+                char  lw_pool_name[LOV_MAXPOOLNAME]; /* pool name */
         } lsm_wire;
 
         struct lov_array_info *lsm_array; /*Only for joined file array info*/
@@ -669,14 +669,14 @@ struct lov_tgt_desc {
 #define pool_tgt(_p, _i)    _p->pool_lov->lov_tgts[_p->pool_obds.op_array[_i]]
 
 struct pool_desc {
-        char                    pool_name[MAXPOOLNAME + 1]; /* name of pool */
-        struct ost_pool         pool_obds;              /* pool members */
-        struct lov_qos_rr       pool_rr;                /* round robin qos */
-        struct hlist_node       pool_hash;              /* access by poolname */
-        struct list_head        pool_list;              /* serial access */
-        cfs_proc_dir_entry_t   *pool_proc_entry;        /* file in /proc */
-        struct lov_obd         *pool_lov;               /* lov obd to which this
-                                                           pool belong */
+        char                  pool_name[LOV_MAXPOOLNAME + 1]; /* name of pool */
+        struct ost_pool       pool_obds;              /* pool members */
+        struct lov_qos_rr     pool_rr;                /* round robin qos */
+        struct hlist_node     pool_hash;              /* access by poolname */
+        struct list_head      pool_list;              /* serial access */
+        cfs_proc_dir_entry_t *pool_proc_entry;        /* file in /proc */
+        struct lov_obd       *pool_lov;               /* lov obd to which this
+                                                         pool belong */
 };
 
 struct lov_obd {
