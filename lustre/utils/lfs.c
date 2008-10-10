@@ -608,17 +608,17 @@ static int lfs_find(int argc, char **argv)
                         break;
                 case FIND_POOL_OPT:
                         new_fashion = 1;
-                        if (strlen(optarg) > MAXPOOLNAME) {
+                        if (strlen(optarg) > LOV_MAXPOOLNAME) {
                                 fprintf(stderr,
                                         "Pool name %s is too long"
                                         " (max is %d)\n", optarg,
-                                        MAXPOOLNAME);
+                                        LOV_MAXPOOLNAME);
                                 return -1;
                         }
                         /* we do check for empty pool because empty pool
                          * is used to find V1 lov attributes */
-                        strncpy(param.poolname, optarg, MAXPOOLNAME);
-                        param.poolname[MAXPOOLNAME] = '\0';
+                        strncpy(param.poolname, optarg, LOV_MAXPOOLNAME);
+                        param.poolname[LOV_MAXPOOLNAME] = '\0';
                         param.exclude_pool = !!neg_opt;
                         param.check_pool = 1;
                         break;
