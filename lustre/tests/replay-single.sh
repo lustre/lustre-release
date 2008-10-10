@@ -1446,15 +1446,20 @@ test_65a() #bug 3055
     $LCTL dk > /dev/null
     debugsave
     lctl set_param debug="+other"
-    # slow down a request
-    do_facet mds lctl set_param fail_val=30000
+    # Slow down a request to the current service time, this is critical
+    # because previous tests may have caused this value to increase.
+    REQ_DELAY=`lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts |
+               awk '/portal 12/ {print $5}'`
+    REQ_DELAY=$((${REQ_DELAY} + 5))
+
+    do_facet mds lctl set_param fail_val=$((${REQ_DELAY} * 1000))
 #define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
     do_facet mds lctl set_param fail_loc=0x8000050a
     createmany -o $DIR/$tfile 10 > /dev/null
     unlinkmany $DIR/$tfile 10 > /dev/null
     # check for log message
     $LCTL dk | grep "Early reply #" || error "No early reply" 
-    # client should show 30s estimates
+    # client should show REQ_DELAY estimates
     lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts | grep portal
     sleep 9
     lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts | grep portal
@@ -1468,8 +1473,13 @@ test_65b() #bug 3055
     debugsave
     lctl set_param debug="+other"
     $LCTL dk > /dev/null
-    # slow down bulk i/o
-    do_facet ost1 lctl set_param fail_val=30
+    # Slow down a request to the current service time, this is critical
+    # because previous tests may have caused this value to increase.
+    REQ_DELAY=`lctl get_param -n osc.${FSNAME}-OST0000-osc-*.timeouts |
+               awk '/portal 6/ {print $5}'`
+    REQ_DELAY=$((${REQ_DELAY} + 5))
+
+    do_facet ost1 lctl set_param fail_val=${REQ_DELAY}
 #define OBD_FAIL_OST_BRW_PAUSE_PACK      0x224
     do_facet ost1 lctl set_param fail_loc=0x224
 
@@ -1482,7 +1492,7 @@ test_65b() #bug 3055
     # check for log message
     $LCTL dk | grep "Early reply #" || error "No early reply"
     debugrestore
-    # client should show 30s estimates
+    # client should show REQ_DELAY estimates
     lctl get_param -n osc.${FSNAME}-OST0000-osc-*.timeouts | grep portal
 }
 run_test 65b "AT: verify early replies on packed reply / bulk"
