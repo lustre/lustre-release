@@ -1899,35 +1899,25 @@ static int lmv_link(struct obd_export *exp, struct md_op_data *op_data,
 repeat:
         ++loop;
         LASSERT(loop <= 2);
-        if (op_data->op_namelen != 0) {
-                obj = lmv_object_find(obd, &op_data->op_fid2);
-                if (obj) {
-                        sidx = raw_name2idx(obj->lo_hashtype,
-                                               obj->lo_objcount,
-                                               op_data->op_name,
-                                               op_data->op_namelen);
-                        op_data->op_fid2 = obj->lo_stripes[sidx].ls_fid;
-                        mds = obj->lo_stripes[sidx].ls_mds;
-                        lmv_object_put(obj);
-                } else {
-                        rc = lmv_fld_lookup(lmv, &op_data->op_fid2, &mds);
-                        if (rc)
-                                RETURN(rc);
-                }
+        LASSERT(op_data->op_namelen != 0);
 
-                CDEBUG(D_INODE, "LINK "DFID":%*s to "DFID"\n",
-                       PFID(&op_data->op_fid2), op_data->op_namelen,
-                       op_data->op_name, PFID(&op_data->op_fid1));
+        CDEBUG(D_INODE, "LINK "DFID":%*s to "DFID"\n",
+               PFID(&op_data->op_fid2), op_data->op_namelen,
+               op_data->op_name, PFID(&op_data->op_fid1));
+
+        obj = lmv_object_find(obd, &op_data->op_fid2);
+        if (obj) {
+                sidx = raw_name2idx(obj->lo_hashtype,
+                                    obj->lo_objcount,
+                                    op_data->op_name,
+                                    op_data->op_namelen);
+                op_data->op_fid2 = obj->lo_stripes[sidx].ls_fid;
+                mds = obj->lo_stripes[sidx].ls_mds;
+                lmv_object_put(obj);
         } else {
-                rc = lmv_fld_lookup(lmv, &op_data->op_fid1, &mds);
+                rc = lmv_fld_lookup(lmv, &op_data->op_fid2, &mds);
                 if (rc)
                         RETURN(rc);
-
-                /* 
-                 * Request from MDS to acquire i_links for inode by fid1. 
-                 */
-                CDEBUG(D_INODE, "Inc i_nlinks for "DFID"\n",
-                       PFID(&op_data->op_fid1));
         }
 
         CDEBUG(D_INODE, "Forward to mds #"LPU64" ("DFID")\n",
@@ -1938,14 +1928,12 @@ repeat:
         op_data->op_cap = cfs_curproc_cap_pack();
         tgt = lmv_get_target(lmv, mds);
 
-        if (op_data->op_namelen) {
-                /* 
-                 * Cancel UPDATE lock on child (fid1). 
-                 */
-                op_data->op_flags |= MF_MDC_CANCEL_FID2;
-                rc = lmv_early_cancel(exp, op_data, tgt->ltd_idx, LCK_EX,
-                                      MDS_INODELOCK_UPDATE, MF_MDC_CANCEL_FID1);
-        }
+        /* 
+         * Cancel UPDATE lock on child (fid1). 
+         */
+        op_data->op_flags |= MF_MDC_CANCEL_FID2;
+        rc = lmv_early_cancel(exp, op_data, tgt->ltd_idx, LCK_EX,
+                              MDS_INODELOCK_UPDATE, MF_MDC_CANCEL_FID1);
         if (rc == 0)
                 rc = md_link(tgt->ltd_exp, op_data, request);
         if (rc == -ERESTART) {
@@ -1983,6 +1971,8 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
         mdsno_t                  mds2;
         ENTRY;
 
+        LASSERT(oldlen != 0);
+
         CDEBUG(D_INODE, "RENAME %*s in "DFID" to %*s in "DFID"\n",
                oldlen, old, PFID(&op_data->op_fid1),
                newlen, new, PFID(&op_data->op_fid2));
@@ -1990,37 +1980,6 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
         rc = lmv_check_connect(obd);
         if (rc)
                 RETURN(rc);
-
-        if (oldlen == 0) {
-                /*
-                 * MDS with old dir entry is asking another MDS to create name
-                 * there.
-                 */
-                CDEBUG(D_INODE,
-                       "Create %*s(%d/%d) in "DFID" pointing "
-                       "to "DFID"\n", newlen, new, oldlen, newlen,
-                       PFID(&op_data->op_fid2), PFID(&op_data->op_fid1));
-
-                rc = lmv_fld_lookup(lmv, &op_data->op_fid2, &mds1);
-                if (rc)
-                        RETURN(rc);
-
-                /*
-                 * Target directory can be split, sowe should forward request to
-                 * the right MDS.
-                 */
-                obj = lmv_object_find(obd, &op_data->op_fid2);
-                if (obj) {
-                        sidx = raw_name2idx(obj->lo_hashtype,
-                                            obj->lo_objcount,
-                                            (char *)new, newlen);
-                        op_data->op_fid2 = obj->lo_stripes[sidx].ls_fid;
-                        CDEBUG(D_INODE, "Parent obj "DFID"\n",
-                               PFID(&op_data->op_fid2));
-                        lmv_object_put(obj);
-                }
-                goto request;
-        }
 
 repeat:
         ++loop;
@@ -2058,49 +2017,48 @@ repeat:
                         RETURN(rc);
         }
 
-request:
         op_data->op_fsuid = current->fsuid;
         op_data->op_fsgid = current->fsgid;
         op_data->op_cap = cfs_curproc_cap_pack();
 
         src_tgt = lmv_get_target(lmv, mds1);
         tgt_tgt = lmv_get_target(lmv, mds2);
-        if (oldlen) {
-                /* 
-                 * LOOKUP lock on src child (fid3) should also be cancelled for
-                 * src_tgt in mdc_rename. 
-                 */
-                op_data->op_flags |= MF_MDC_CANCEL_FID1 | MF_MDC_CANCEL_FID3;
 
-                /* 
-                 * Cancel UPDATE locks on tgt parent (fid2), tgt_tgt is its
-                 * own target. 
-                 */
+        /* 
+         * LOOKUP lock on src child (fid3) should also be cancelled for
+         * src_tgt in mdc_rename. 
+         */
+        op_data->op_flags |= MF_MDC_CANCEL_FID1 | MF_MDC_CANCEL_FID3;
+
+        /* 
+         * Cancel UPDATE locks on tgt parent (fid2), tgt_tgt is its
+         * own target. 
+         */
+        rc = lmv_early_cancel(exp, op_data, src_tgt->ltd_idx, 
+                              LCK_EX, MDS_INODELOCK_UPDATE, 
+                              MF_MDC_CANCEL_FID2);
+
+        /* 
+         * Cancel LOOKUP locks on tgt child (fid4) for parent tgt_tgt.
+         */
+        if (rc == 0) {
                 rc = lmv_early_cancel(exp, op_data, src_tgt->ltd_idx, 
-                                      LCK_EX, MDS_INODELOCK_UPDATE, 
-                                      MF_MDC_CANCEL_FID2);
-
-                /* 
-                 * Cancel LOOKUP locks on tgt child (fid4) for parent tgt_tgt.
-                 */
-                if (rc == 0) {
-                        rc = lmv_early_cancel(exp, op_data, src_tgt->ltd_idx, 
-                                              LCK_EX, MDS_INODELOCK_LOOKUP,
-                                              MF_MDC_CANCEL_FID4);
-                }
-
-                /* 
-                 * Cancel all the locks on tgt child (fid4). 
-                 */
-                if (rc == 0)
-                        rc = lmv_early_cancel(exp, op_data, src_tgt->ltd_idx, 
-                                              LCK_EX, MDS_INODELOCK_FULL,
-                                              MF_MDC_CANCEL_FID4);
+                                      LCK_EX, MDS_INODELOCK_LOOKUP,
+                                      MF_MDC_CANCEL_FID4);
         }
+
+        /* 
+         * Cancel all the locks on tgt child (fid4). 
+         */
+        if (rc == 0)
+                rc = lmv_early_cancel(exp, op_data, src_tgt->ltd_idx, 
+                                      LCK_EX, MDS_INODELOCK_FULL,
+                                      MF_MDC_CANCEL_FID4);
 
         if (rc == 0)
                 rc = md_rename(src_tgt->ltd_exp, op_data, old, oldlen,
                                new, newlen, request);
+
         if (rc == -ERESTART) {
                 LASSERT(*request != NULL);
                 DEBUG_REQ(D_WARNING|D_RPCTRACE, *request, 
@@ -2412,6 +2370,7 @@ static int lmv_unlink(struct obd_export *exp, struct md_op_data *op_data,
         struct lmv_tgt_desc     *tgt = NULL;
         struct lmv_object       *obj;
         int                      rc;
+        int                      sidx;
         int                      loop = 0;
         ENTRY;
 
@@ -2422,28 +2381,24 @@ static int lmv_unlink(struct obd_export *exp, struct md_op_data *op_data,
 repeat:
         ++loop;
         LASSERT(loop <= 2);
-        if (op_data->op_namelen != 0) {
-                int sidx;
+        LASSERT(op_data->op_namelen != 0);
 
-                obj = lmv_object_find(obd, &op_data->op_fid1);
-                if (obj) {
-                        sidx = raw_name2idx(obj->lo_hashtype,
-                                            obj->lo_objcount,
-                                            op_data->op_name,
-                                            op_data->op_namelen);
-                        op_data->op_bias &= ~MDS_CHECK_SPLIT;
-                        op_data->op_fid1 = obj->lo_stripes[sidx].ls_fid;
-                        tgt = lmv_get_target(lmv,
-                                             obj->lo_stripes[sidx].ls_mds);
-                        lmv_object_put(obj);
-                        CDEBUG(D_INODE, "UNLINK '%*s' in "DFID" -> %u\n",
-                               op_data->op_namelen, op_data->op_name,
-                               PFID(&op_data->op_fid1), sidx);
-                }
-        } else {
-                CDEBUG(D_INODE, "Drop i_nlink on "DFID"\n",
-                       PFID(&op_data->op_fid1));
+        obj = lmv_object_find(obd, &op_data->op_fid1);
+        if (obj) {
+                sidx = raw_name2idx(obj->lo_hashtype,
+                                    obj->lo_objcount,
+                                    op_data->op_name,
+                                    op_data->op_namelen);
+                op_data->op_bias &= ~MDS_CHECK_SPLIT;
+                op_data->op_fid1 = obj->lo_stripes[sidx].ls_fid;
+                tgt = lmv_get_target(lmv,
+                                     obj->lo_stripes[sidx].ls_mds);
+                lmv_object_put(obj);
+                CDEBUG(D_INODE, "UNLINK '%*s' in "DFID" -> %u\n",
+                       op_data->op_namelen, op_data->op_name,
+                       PFID(&op_data->op_fid1), sidx);
         }
+
         if (tgt == NULL) {
                 tgt = lmv_find_target(lmv, &op_data->op_fid1);
                 if (IS_ERR(tgt))
@@ -2457,23 +2412,22 @@ repeat:
 
         /* 
          * If child's fid is given, cancel unused locks for it if it is from
-         * another export than parent. 
+         * another export than parent.
+         *
+         * LOOKUP lock for child (fid3) should also be cancelled on parent 
+         * tgt_tgt in mdc_unlink(). 
          */
-        if (op_data->op_namelen) {
-                /*
-                 * LOOKUP lock for child (fid3) should also be cancelled on 
-                 * parent tgt_tgt in mdc_unlink(). 
-                 */
-                op_data->op_flags |= MF_MDC_CANCEL_FID1 | MF_MDC_CANCEL_FID3;
+        op_data->op_flags |= MF_MDC_CANCEL_FID1 | MF_MDC_CANCEL_FID3;
 
-                /* 
-                 * Cancel FULL locks on child (fid3). 
-                 */
-                rc = lmv_early_cancel(exp, op_data, tgt->ltd_idx, LCK_EX,
-                                      MDS_INODELOCK_FULL, MF_MDC_CANCEL_FID3);
-        }
+        /* 
+         * Cancel FULL locks on child (fid3). 
+         */
+        rc = lmv_early_cancel(exp, op_data, tgt->ltd_idx, LCK_EX,
+                              MDS_INODELOCK_FULL, MF_MDC_CANCEL_FID3);
+
         if (rc == 0)
                 rc = md_unlink(tgt->ltd_exp, op_data, request);
+
         if (rc == -ERESTART) {
                 LASSERT(*request != NULL);
                 DEBUG_REQ(D_WARNING|D_RPCTRACE, *request,
