@@ -187,6 +187,56 @@ int lprocfs_filter_wr_fmd_max_age(struct file *file, const char *buffer,
         return count;
 }
 
+static int lprocfs_filter_rd_cache(char *page, char **start, off_t off,
+                                   int count, int *eof, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        LASSERT(obd != NULL);
+
+        return snprintf(page, count, "%u\n", obd->u.filter.fo_read_cache);
+}
+
+static int lprocfs_filter_wr_cache(struct file *file, const char *buffer,
+                     unsigned long count, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        int val, rc;
+        LASSERT(obd != NULL);
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+
+        if (rc)
+                return rc;
+
+        obd->u.filter.fo_read_cache = val;
+        return count;
+}
+
+static int lprocfs_filter_rd_wcache(char *page, char **start, off_t off,
+                                   int count, int *eof, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        LASSERT(obd != NULL);
+
+        return snprintf(page, count, "%u\n", obd->u.filter.fo_writethrough_cache);
+}
+
+static int lprocfs_filter_wr_wcache(struct file *file, const char *buffer,
+                     unsigned long count, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        int val, rc;
+        LASSERT(obd != NULL);
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+
+        if (rc)
+                return rc;
+
+        obd->u.filter.fo_writethrough_cache = val;
+        return count;
+}
+
 static struct lprocfs_vars lprocfs_filter_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid,          0, 0 },
         { "blocksize",    lprocfs_rd_blksize,       0, 0 },
@@ -232,6 +282,9 @@ static struct lprocfs_vars lprocfs_filter_obd_vars[] = {
                           lprocfs_filter_wr_fmd_max_num, 0 },
         { "client_cache_seconds", lprocfs_filter_rd_fmd_max_age,
                           lprocfs_filter_wr_fmd_max_age, 0 },
+        { "read_cache_enable", lprocfs_filter_rd_cache, lprocfs_filter_wr_cache, 0},
+        { "writethrough_cache_enable", lprocfs_filter_rd_wcache,
+                          lprocfs_filter_wr_wcache, 0},
         { "stale_export_age", lprocfs_obd_rd_stale_export_age,
                               lprocfs_obd_wr_stale_export_age, 0},
         { "flush_stale_exports", 0, lprocfs_obd_wr_flush_stale_exports, 0 },
