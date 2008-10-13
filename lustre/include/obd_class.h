@@ -1443,7 +1443,7 @@ static inline int obd_teardown_async_page(struct obd_export *exp,
 
 static inline int obd_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
                              int objcount, struct obd_ioobj *obj,
-                             int niocount, struct niobuf_remote *remote,
+                             struct niobuf_remote *remote, int *pages,
                              struct niobuf_local *local,
                              struct obd_trans_info *oti,
                              struct lustre_capa *capa)
@@ -1454,14 +1454,15 @@ static inline int obd_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
         EXP_CHECK_DT_OP(exp, preprw);
         EXP_COUNTER_INCREMENT(exp, preprw);
 
-        rc = OBP(exp->exp_obd, preprw)(cmd, exp, oa, objcount, obj, niocount,
-                                       remote, local, oti, capa);
+        rc = OBP(exp->exp_obd, preprw)(cmd, exp, oa, objcount, obj, remote,
+                                       pages, local, oti, capa);
         RETURN(rc);
 }
 
 static inline int obd_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                                int objcount, struct obd_ioobj *obj,
-                               int niocount, struct niobuf_local *local,
+                               struct niobuf_remote *rnb, int pages,
+                               struct niobuf_local *local,
                                struct obd_trans_info *oti, int rc)
 {
         ENTRY;
@@ -1469,8 +1470,8 @@ static inline int obd_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
         EXP_CHECK_DT_OP(exp, commitrw);
         EXP_COUNTER_INCREMENT(exp, commitrw);
 
-        rc = OBP(exp->exp_obd, commitrw)(cmd, exp, oa, objcount, obj, niocount,
-                                         local, oti, rc);
+        rc = OBP(exp->exp_obd, commitrw)(cmd, exp, oa, objcount, obj,
+                                         rnb, pages, local, oti, rc);
         RETURN(rc);
 }
 

@@ -2013,6 +2013,8 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
         CFS_INIT_LIST_HEAD(&filter->fo_export_list);
         sema_init(&filter->fo_alloc_lock, 1);
         init_brw_stats(&filter->fo_filter_stats);
+        filter->fo_read_cache = 1; /* enable read-only cache by default */
+        filter->fo_writethrough_cache = 0; /* disable writethrough cache */
         filter->fo_readcache_max_filesize = FILTER_MAX_CACHE_SIZE;
         filter->fo_fmd_max_num = FILTER_FMD_MAX_NUM_DEFAULT;
         filter->fo_fmd_max_age = FILTER_FMD_MAX_AGE_DEFAULT;
@@ -2136,6 +2138,21 @@ static int filter_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
                 lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_WRITE_BYTES,
                                      LPROCFS_CNTR_AVGMINMAX,
                                      "write_bytes", "bytes");
+                lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_GET_PAGE,
+                                     LPROCFS_CNTR_AVGMINMAX|LPROCFS_CNTR_STDDEV,
+                                     "get_page", "usec");
+                lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_NO_PAGE,
+                                     LPROCFS_CNTR_AVGMINMAX,
+                                     "get_page_failures", "num");
+                lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_CACHE_ACCESS,
+                                     LPROCFS_CNTR_AVGMINMAX,
+                                     "cache_access", "pages");
+                lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_CACHE_HIT,
+                                     LPROCFS_CNTR_AVGMINMAX,
+                                     "cache_hit", "pages");
+                lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_CACHE_MISS,
+                                     LPROCFS_CNTR_AVGMINMAX,
+                                     "cache_miss", "pages");
 
                 lproc_filter_attach_seqstat(obd);
                 obd->obd_proc_exports_entry = lprocfs_register("exports",
@@ -3207,13 +3224,8 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         }
 
         if (locked) {
-                /* Let's flush truncated page on disk immediately, then we can
-                 * avoid need to search for page aliases before directio writes
-                 * and this sort of stuff at expense of somewhat slower
-                 * truncates not on a page boundary. I believe this is the only
-                 * place in filter code that can lead to pages getting to
-                 * pagecache so far. */
-                filter_clear_truncated_page(inode);
+                /* truncate can leave dirty pages in the cache.
+                 * we'll take care of them in write path -bzzz */
                 UNLOCK_INODE_MUTEX(inode);
                 locked = 0;
         }

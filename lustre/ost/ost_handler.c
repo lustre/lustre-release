@@ -389,101 +389,6 @@ static int ost_bulk_timeout(void *data)
         RETURN(1);
 }
 
-static int get_per_page_niobufs(struct obd_ioobj *ioo, int nioo,
-                                struct niobuf_remote *rnb, int nrnb,
-                                struct niobuf_remote **pp_rnbp)
-{
-        /* Copy a remote niobuf, splitting it into page-sized chunks
-         * and setting ioo[i].ioo_bufcnt accordingly */
-        struct niobuf_remote *pp_rnb;
-        int   i;
-        int   j;
-        int   page;
-        int   rnbidx = 0;
-        int   npages = 0;
-
-        /*
-         * array of sufficient size already preallocated by caller
-         */
-        LASSERT(pp_rnbp != NULL);
-        LASSERT(*pp_rnbp != NULL);
-
-        /* first count and check the number of pages required */
-        for (i = 0; i < nioo; i++)
-                for (j = 0; j < ioo->ioo_bufcnt; j++, rnbidx++) {
-                        obd_off offset = rnb[rnbidx].offset;
-                        obd_off p0 = offset >> CFS_PAGE_SHIFT;
-                        obd_off pn = (offset + rnb[rnbidx].len - 1) >>
-                                     CFS_PAGE_SHIFT;
-
-                        LASSERT(rnbidx < nrnb);
-
-                        npages += (pn + 1 - p0);
-
-                        if (rnb[rnbidx].len == 0) {
-                                CERROR("zero len BRW: obj %d objid "LPX64
-                                       " buf %u\n", i, ioo[i].ioo_id, j);
-                                return -EINVAL;
-                        }
-                        if (j > 0 &&
-                            rnb[rnbidx].offset <= rnb[rnbidx-1].offset) {
-                                CERROR("unordered BRW: obj %d objid "LPX64
-                                       " buf %u offset "LPX64" <= "LPX64"\n",
-                                       i, ioo[i].ioo_id, j, rnb[rnbidx].offset,
-                                       rnb[rnbidx].offset);
-                                return -EINVAL;
-                        }
-                }
-
-        LASSERT(rnbidx == nrnb);
-
-        if (npages == nrnb) {       /* all niobufs are for single pages */
-                *pp_rnbp = rnb;
-                return npages;
-        }
-
-        pp_rnb = *pp_rnbp;
-
-        /* now do the actual split */
-        page = rnbidx = 0;
-        for (i = 0; i < nioo; i++) {
-                int  obj_pages = 0;
-
-                for (j = 0; j < ioo[i].ioo_bufcnt; j++, rnbidx++) {
-                        obd_off off = rnb[rnbidx].offset;
-                        int     nob = rnb[rnbidx].len;
-
-                        LASSERT(rnbidx < nrnb);
-                        do {
-                                obd_off  poff = off & ~CFS_PAGE_MASK;
-                                int      pnob = (poff + nob > CFS_PAGE_SIZE) ?
-                                                CFS_PAGE_SIZE - poff : nob;
-
-                                LASSERT(page < npages);
-                                pp_rnb[page].len = pnob;
-                                pp_rnb[page].offset = off;
-                                pp_rnb[page].flags = rnb[rnbidx].flags;
-
-                                CDEBUG(0, "   obj %d id "LPX64
-                                       "page %d(%d) "LPX64" for %d, flg %x\n",
-                                       i, ioo[i].ioo_id, obj_pages, page,
-                                       pp_rnb[page].offset, pp_rnb[page].len,
-                                       pp_rnb[page].flags);
-                                page++;
-                                obj_pages++;
-
-                                off += pnob;
-                                nob -= pnob;
-                        } while (nob > 0);
-                        LASSERT(nob == 0);
-                }
-                ioo[i].ioo_bufcnt = obj_pages;
-        }
-        LASSERT(page == npages);
-
-        return npages;
-}
-
 static __u32 ost_checksum_bulk(struct ptlrpc_bulk_desc *desc, int opc,
                                cksum_type_t cksum_type)
 {
@@ -506,60 +411,15 @@ static __u32 ost_checksum_bulk(struct ptlrpc_bulk_desc *desc, int opc,
                 /* corrupt the data after we compute the checksum, to
                  * simulate an OST->client data error */
                 if (i == 0 && opc == OST_READ &&
-                    OBD_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_SEND))
+                    OBD_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_SEND)) {
                         memcpy(ptr, "bad4", min(4, len));
+                        /* nobody should use corrupted page again */
+                        ClearPageUptodate(page);
+                }
                 kunmap(page);
         }
 
         return cksum;
-}
-
-/*
- * populate @nio by @nrpages pages from per-thread page pool
- */
-static void ost_nio_pages_get(struct ptlrpc_request *req,
-                              struct niobuf_local *nio, int nrpages)
-{
-        int i;
-        struct ost_thread_local_cache *tls;
-
-        ENTRY;
-
-        LASSERT(nrpages <= OST_THREAD_POOL_SIZE);
-        LASSERT(req != NULL);
-        LASSERT(req->rq_svc_thread != NULL);
-
-        tls = ost_tls(req);
-        LASSERT(tls != NULL);
-
-        memset(nio, 0, nrpages * sizeof *nio);
-        for (i = 0; i < nrpages; ++ i) {
-                struct page *page;
-
-                page = tls->page[i];
-                LASSERT(page != NULL);
-                POISON_PAGE(page, 0xf1);
-                nio[i].page = page;
-                LL_CDEBUG_PAGE(D_INFO, page, "%d\n", i);
-        }
-        EXIT;
-}
-
-/*
- * Dual for ost_nio_pages_get(). Poison pages in pool for debugging
- */
-static void ost_nio_pages_put(struct ptlrpc_request *req,
-                              struct niobuf_local *nio, int nrpages)
-{
-        int i;
-
-        ENTRY;
-
-        LASSERT(nrpages <= OST_THREAD_POOL_SIZE);
-
-        for (i = 0; i < nrpages; ++ i)
-                POISON_PAGE(nio[i].page, 0xf2);
-        EXIT;
 }
 
 static int ost_brw_lock_get(int mode, struct obd_export *exp,
@@ -694,10 +554,9 @@ static void ost_prolong_locks(struct obd_export *exp, struct obd_ioobj *obj,
 
 static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
 {
-        struct ptlrpc_bulk_desc *desc;
+        struct ptlrpc_bulk_desc *desc = NULL;
         struct obd_export *exp = req->rq_export;
         struct niobuf_remote *remote_nb;
-        struct niobuf_remote *pp_rnb = NULL;
         struct niobuf_local *local_nb;
         struct obd_ioobj *ioo;
         struct ost_body *body, *repbody;
@@ -705,7 +564,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         struct l_wait_info lwi;
         struct lustre_handle lockh = { 0 };
         __u32  size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
-        int niocount, npages, nob = 0, rc, i;
+        int objcount, niocount, npages, nob = 0, rc, i;
         int no_reply = 0;
         ENTRY;
 
@@ -731,6 +590,17 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                   lustre_swab_ost_body);
         if (body == NULL) {
                 CERROR("Missing/short ost_body\n");
+                GOTO(out, rc = -EFAULT);
+        }
+
+        objcount = lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF + 1) /
+                   sizeof(*ioo);
+        if (objcount == 0) {
+                CERROR("Missing/short ioobj\n");
+                GOTO(out, rc = -EFAULT);
+        }
+        if (objcount > 1) {
+                CERROR("too many ioobjs (%d)\n", objcount);
                 GOTO(out, rc = -EFAULT);
         }
 
@@ -772,24 +642,8 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
          * ost_thread_init().
          */
         local_nb = ost_tls(req)->local;
-        pp_rnb   = ost_tls(req)->remote;
 
-        /* FIXME all niobuf splitting should be done in obdfilter if needed */
-        /* CAVEAT EMPTOR this sets ioo->ioo_bufcnt to # pages */
-        npages = get_per_page_niobufs(ioo, 1, remote_nb, niocount, &pp_rnb);
-        if (npages < 0)
-                GOTO(out, rc = npages);
-
-        LASSERT(npages <= OST_THREAD_POOL_SIZE);
-
-        ost_nio_pages_get(req, local_nb, npages);
-
-        desc = ptlrpc_prep_bulk_exp(req, npages,
-                                     BULK_PUT_SOURCE, OST_BULK_PORTAL);
-        if (desc == NULL)
-                GOTO(out, rc = -ENOMEM);
-
-        rc = ost_brw_lock_get(LCK_PR, exp, ioo, pp_rnb, &lockh);
+        rc = ost_brw_lock_get(LCK_PR, exp, ioo, remote_nb, &lockh);
         if (rc != 0)
                 GOTO(out_bulk, rc);
 
@@ -808,12 +662,18 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 GOTO(out_lock, rc = -ETIMEDOUT);
         }
 
-        rc = obd_preprw(OBD_BRW_READ, exp, &body->oa, 1,
-                        ioo, npages, pp_rnb, local_nb, oti, capa);
+        npages = OST_THREAD_POOL_SIZE;
+        rc = obd_preprw(OBD_BRW_READ, exp, &body->oa, 1, ioo,
+                        remote_nb, &npages, local_nb, oti, capa);
         if (rc != 0)
                 GOTO(out_lock, rc);
 
-        ost_prolong_locks(exp, ioo, pp_rnb, &body->oa, LCK_PW | LCK_PR);
+        desc = ptlrpc_prep_bulk_exp(req, npages,
+                                     BULK_PUT_SOURCE, OST_BULK_PORTAL);
+        if (desc == NULL) /* XXX: check all cleanup stuff */
+                GOTO(out, rc = -ENOMEM);
+
+        ost_prolong_locks(exp, ioo, remote_nb, &body->oa, LCK_PW | LCK_PR);
 
         nob = 0;
         for (i = 0; i < npages; i++) {
@@ -824,26 +684,18 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         break;
                 }
 
-                LASSERTF(page_rc <= pp_rnb[i].len, "page_rc (%d) > "
-                         "pp_rnb[%d].len (%d)\n", page_rc, i, pp_rnb[i].len);
                 nob += page_rc;
                 if (page_rc != 0) {             /* some data! */
                         LASSERT (local_nb[i].page != NULL);
                         ptlrpc_prep_bulk_page(desc, local_nb[i].page,
-                                              pp_rnb[i].offset & ~CFS_PAGE_MASK,
+                                              local_nb[i].offset & ~CFS_PAGE_MASK,
                                               page_rc);
                 }
 
-                if (page_rc != pp_rnb[i].len) { /* short read */
-                        int j = i;
-
+                if (page_rc != local_nb[i].len) { /* short read */
                         /* All subsequent pages should be 0 */
                         while(++i < npages)
-                                LASSERTF(local_nb[i].rc == 0,
-                                         "page_rc %d, pp_rnb[%u].len=%d, "
-                                         "local_nb[%u/%u].rc=%d\n",
-                                         page_rc, j, pp_rnb[j].len,
-                                         i, npages, local_nb[i].rc);
+                                LASSERT(local_nb[i].rc == 0);
                         break;
                 }
         }
@@ -931,10 +783,8 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         }
 
         /* Must commit after prep above in all cases */
-        rc = obd_commitrw(OBD_BRW_READ, exp, &body->oa, 1,
-                          ioo, npages, local_nb, oti, rc);
-
-        ost_nio_pages_put(req, local_nb, npages);
+        rc = obd_commitrw(OBD_BRW_READ, exp, &body->oa, 1, ioo,
+                          remote_nb, npages, local_nb, oti, rc);
 
         if (rc == 0) {
                 repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
@@ -943,9 +793,10 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         }
 
 out_lock:
-        ost_brw_lock_put(LCK_PR, ioo, pp_rnb, &lockh);
+        ost_brw_lock_put(LCK_PR, ioo, remote_nb, &lockh);
 out_bulk:
-        ptlrpc_free_bulk(desc);
+        if (desc)
+                ptlrpc_free_bulk(desc);
 out:
         LASSERT(rc <= 0);
         if (rc == 0) {
@@ -974,10 +825,9 @@ out:
 
 static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 {
-        struct ptlrpc_bulk_desc *desc;
+        struct ptlrpc_bulk_desc *desc = NULL;
         struct obd_export       *exp = req->rq_export;
         struct niobuf_remote    *remote_nb;
-        struct niobuf_remote    *pp_rnb;
         struct niobuf_local     *local_nb;
         struct obd_ioobj        *ioo;
         struct ost_body         *body, *repbody;
@@ -1081,24 +931,8 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
          * ost_thread_init().
          */
         local_nb = ost_tls(req)->local;
-        pp_rnb   = ost_tls(req)->remote;
 
-        /* FIXME all niobuf splitting should be done in obdfilter if needed */
-        /* CAVEAT EMPTOR this sets ioo->ioo_bufcnt to # pages */
-        npages = get_per_page_niobufs(ioo, objcount,remote_nb,niocount,&pp_rnb);
-        if (npages < 0)
-                GOTO(out, rc = npages);
-
-        LASSERT(npages <= OST_THREAD_POOL_SIZE);
-
-        ost_nio_pages_get(req, local_nb, npages);
-
-        desc = ptlrpc_prep_bulk_exp(req, npages,
-                                     BULK_GET_SINK, OST_BULK_PORTAL);
-        if (desc == NULL)
-                GOTO(out, rc = -ENOMEM);
-
-        rc = ost_brw_lock_get(LCK_PW, exp, ioo, pp_rnb, &lockh);
+        rc = ost_brw_lock_get(LCK_PW, exp, ioo, remote_nb, &lockh);
         if (rc != 0)
                 GOTO(out_bulk, rc);
 
@@ -1117,7 +951,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 GOTO(out_lock, rc = -ETIMEDOUT);
         }
 
-        ost_prolong_locks(exp, ioo, pp_rnb, &body->oa, LCK_PW);
+        ost_prolong_locks(exp, ioo, remote_nb,&body->oa,  LCK_PW);
 
         /* obd_preprw clobbers oa->valid, so save what we need */
         if (body->oa.o_valid & OBD_MD_FLCKSUM) {
@@ -1134,17 +968,23 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 body->oa.o_valid &= ~OBD_MD_FLGRANT;
         }
 
+        npages = OST_THREAD_POOL_SIZE;
         rc = obd_preprw(OBD_BRW_WRITE, exp, &body->oa, objcount,
-                        ioo, npages, pp_rnb, local_nb, oti, capa);
+                        ioo, remote_nb, &npages, local_nb, oti, capa);
         if (rc != 0)
                 GOTO(out_lock, rc);
+
+        desc = ptlrpc_prep_bulk_exp(req, npages,
+                                     BULK_GET_SINK, OST_BULK_PORTAL);
+        if (desc == NULL)
+                GOTO(out, rc = -ENOMEM);
 
         /* NB Having prepped, we must commit... */
 
         for (i = 0; i < npages; i++)
                 ptlrpc_prep_bulk_page(desc, local_nb[i].page,
-                                      pp_rnb[i].offset & ~CFS_PAGE_MASK,
-                                      pp_rnb[i].len);
+                                      local_nb[i].offset & ~CFS_PAGE_MASK,
+                                      local_nb[i].len);
 
         /* Check if client was evicted while we were doing i/o before touching
            network */
@@ -1221,8 +1061,8 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         }
 
         /* Must commit after prep above in all cases */
-        rc = obd_commitrw(OBD_BRW_WRITE, exp, &repbody->oa,
-                           objcount, ioo, npages, local_nb, oti, rc);
+        rc = obd_commitrw(OBD_BRW_WRITE, exp, &repbody->oa, objcount, ioo,
+                          remote_nb, npages, local_nb, oti, rc);
 
         if (unlikely(client_cksum != server_cksum && rc == 0)) {
                 int  new_cksum = ost_checksum_bulk(desc, OST_WRITE, cksum_type);
@@ -1257,15 +1097,13 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                    body->oa.o_id,
                                    body->oa.o_valid & OBD_MD_FLGROUP ?
                                                 body->oa.o_gr : (__u64)0,
-                                   pp_rnb[0].offset,
-                                   pp_rnb[npages-1].offset+pp_rnb[npages-1].len
-                                   - 1 );
+                                   local_nb[0].offset,
+                                   local_nb[npages-1].offset +
+                                   local_nb[npages-1].len - 1 );
                 CERROR("client csum %x, original server csum %x, "
                        "server csum now %x\n",
                        client_cksum, server_cksum, new_cksum);
         }
-
-        ost_nio_pages_put(req, local_nb, npages);
 
         if (rc == 0) {
                 int nob = 0;
@@ -1280,7 +1118,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                 LASSERT(j < npages);
                                 if (local_nb[j].rc < 0)
                                         rcs[i] = local_nb[j].rc;
-                                len -= pp_rnb[j].len;
+                                len -= local_nb[j].len;
                                 j++;
                         } while (len > 0);
                         LASSERT(len == 0);
@@ -1290,9 +1128,10 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         }
 
 out_lock:
-        ost_brw_lock_put(LCK_PW, ioo, pp_rnb, &lockh);
+        ost_brw_lock_put(LCK_PW, ioo, remote_nb, &lockh);
 out_bulk:
-        ptlrpc_free_bulk(desc);
+        if (desc)
+                ptlrpc_free_bulk(desc);
 out:
         if (rc == 0) {
                 oti_to_request(oti, req);
@@ -1854,7 +1693,6 @@ EXPORT_SYMBOL(ost_handle);
  */
 static void ost_thread_done(struct ptlrpc_thread *thread)
 {
-        int i;
         struct ost_thread_local_cache *tls; /* TLS stands for Thread-Local
                                              * Storage */
 
@@ -1868,10 +1706,6 @@ static void ost_thread_done(struct ptlrpc_thread *thread)
          */
         tls = thread->t_data;
         if (tls != NULL) {
-                for (i = 0; i < OST_THREAD_POOL_SIZE; ++ i) {
-                        if (tls->page[i] != NULL)
-                                OBD_PAGE_FREE(tls->page[i]);
-                }
                 OBD_FREE_PTR(tls);
                 thread->t_data = NULL;
         }
@@ -1883,8 +1717,6 @@ static void ost_thread_done(struct ptlrpc_thread *thread)
  */
 static int ost_thread_init(struct ptlrpc_thread *thread)
 {
-        int result;
-        int i;
         struct ost_thread_local_cache *tls;
 
         ENTRY;
@@ -1894,23 +1726,10 @@ static int ost_thread_init(struct ptlrpc_thread *thread)
         LASSERTF(thread->t_id <= OSS_THREADS_MAX, "%u\n", thread->t_id);
 
         OBD_ALLOC_PTR(tls);
-        if (tls != NULL) {
-                result = 0;
-                thread->t_data = tls;
-                /*
-                 * populate pool
-                 */
-                for (i = 0; i < OST_THREAD_POOL_SIZE; ++ i) {
-                        OBD_PAGE_ALLOC(tls->page[i], OST_THREAD_POOL_GFP);
-                        if (tls->page[i] == NULL) {
-                                ost_thread_done(thread);
-                                result = -ENOMEM;
-                                break;
-                        }
-                }
-        } else
-                result = -ENOMEM;
-        RETURN(result);
+        if (tls == NULL)
+                RETURN(-ENOMEM);
+        thread->t_data = tls;
+        RETURN(0);
 }
 
 #define OST_WATCHDOG_TIMEOUT (obd_timeout * 1000)

@@ -242,6 +242,56 @@ static int lprocfs_filter_rd_capa_count(char *page, char **start, off_t off,
                         capa_count[CAPA_SITE_SERVER]);
 }
 
+static int lprocfs_filter_rd_cache(char *page, char **start, off_t off,
+                                   int count, int *eof, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        LASSERT(obd != NULL);
+
+        return snprintf(page, count, "%u\n", obd->u.filter.fo_read_cache);
+}
+
+static int lprocfs_filter_wr_cache(struct file *file, const char *buffer,
+                     unsigned long count, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        int val, rc;
+        LASSERT(obd != NULL);
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+
+        if (rc)
+                return rc;
+
+        obd->u.filter.fo_read_cache = val;
+        return count;
+}
+
+static int lprocfs_filter_rd_wcache(char *page, char **start, off_t off,
+                                   int count, int *eof, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        LASSERT(obd != NULL);
+
+        return snprintf(page, count, "%u\n", obd->u.filter.fo_writethrough_cache);
+}
+
+static int lprocfs_filter_wr_wcache(struct file *file, const char *buffer,
+                     unsigned long count, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        int val, rc;
+        LASSERT(obd != NULL);
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+
+        if (rc)
+                return rc;
+
+        obd->u.filter.fo_writethrough_cache = val;
+        return count;
+}
+
 static struct lprocfs_vars lprocfs_filter_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid,          0, 0 },
         { "blocksize",    lprocfs_rd_blksize,       0, 0 },
@@ -281,6 +331,9 @@ static struct lprocfs_vars lprocfs_filter_obd_vars[] = {
         { "capa",         lprocfs_filter_rd_capa,
                           lprocfs_filter_wr_capa, 0 },
         { "capa_count",   lprocfs_filter_rd_capa_count, 0, 0 },
+        { "read_cache_enable", lprocfs_filter_rd_cache, lprocfs_filter_wr_cache, 0},
+        { "writethrough_cache_enable", lprocfs_filter_rd_wcache,
+                          lprocfs_filter_wr_wcache, 0},
         { 0 }
 };
 
