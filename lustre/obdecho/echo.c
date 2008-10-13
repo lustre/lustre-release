@@ -288,16 +288,79 @@ echo_page_debug_check(cfs_page_t *page, obd_id id,
 /* This allows us to verify that desc_private is passed unmolested */
 #define DESC_PRIV 0x10293847
 
+static int echo_map_nb_to_lb(struct obdo *oa, struct obd_ioobj *obj,
+                             struct niobuf_remote *nb, int *pages,
+                             struct niobuf_local *lb, int cmd, int *left)
+{
+        int gfp_mask = (obj->ioo_id & 1) ? CFS_ALLOC_HIGHUSER : CFS_ALLOC_STD;
+        int ispersistent = obj->ioo_id == ECHO_PERSISTENT_OBJID;
+        int debug_setup = (!ispersistent &&
+                           (oa->o_valid & OBD_MD_FLFLAGS) != 0 &&
+                           (oa->o_flags & OBD_FL_DEBUG_CHECK) != 0);
+        struct niobuf_local *res = lb;
+        obd_off offset = nb->offset;
+        int len = nb->len;
+
+        while (len > 0) {
+                int plen = CFS_PAGE_SIZE - (offset & (CFS_PAGE_SIZE-1));
+                if (len < plen)
+                        plen = len;
+
+                /* check for local buf overflow */
+                if (*left == 0)
+                        return -EINVAL;
+
+                res->offset = offset;
+                res->len = plen;
+                LASSERT((res->offset & ~CFS_PAGE_MASK) + res->len <= CFS_PAGE_SIZE);
+
+
+                if (ispersistent &&
+                    (res->offset >> CFS_PAGE_SHIFT) < ECHO_PERSISTENT_PAGES) {
+                        res->page = echo_persistent_pages[res->offset >>
+                                CFS_PAGE_SHIFT];
+                        /* Take extra ref so __free_pages() can be called OK */
+                        cfs_get_page (res->page);
+                } else {
+                        OBD_PAGE_ALLOC(res->page, gfp_mask);
+                        if (res->page == NULL) {
+                                CERROR("can't get page for id " LPU64"\n",
+                                       obj->ioo_id);
+                                return -ENOMEM;
+                        }
+                }
+
+                CDEBUG(D_PAGE, "$$$$ get page %p @ "LPU64" for %d\n",
+                       res->page, res->offset, res->len);
+
+                if (cmd & OBD_BRW_READ)
+                        res->rc = res->len;
+
+                if (debug_setup)
+                        echo_page_debug_setup(res->page, cmd, obj->ioo_id,
+                                              res->offset, res->len);
+
+                offset += plen;
+                len -= plen;
+                res++;
+
+                (*left)--;
+                (*pages)++;
+        }
+        
+        return 0;
+}
+
 int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
-                int objcount, struct obd_ioobj *obj, int niocount,
-                struct niobuf_remote *nb, struct niobuf_local *res,
+                int objcount, struct obd_ioobj *obj, struct niobuf_remote *nb,
+                int *pages, struct niobuf_local *res,
                 struct obd_trans_info *oti)
 {
         struct obd_device *obd;
         struct niobuf_local *r = res;
         int tot_bytes = 0;
         int rc = 0;
-        int i;
+        int i, left;
         ENTRY;
 
         obd = export->exp_obd;
@@ -307,59 +370,33 @@ int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
         /* Temp fix to stop falling foul of osc_announce_cached() */
         oa->o_valid &= ~(OBD_MD_FLBLOCKS | OBD_MD_FLGRANT);
 
-        memset(res, 0, sizeof(*res) * niocount);
+        memset(res, 0, sizeof(*res) * *pages);
 
         CDEBUG(D_PAGE, "%s %d obdos with %d IOs\n",
-               cmd == OBD_BRW_READ ? "reading" : "writing", objcount, niocount);
+               cmd == OBD_BRW_READ ? "reading" : "writing", objcount, *pages);
 
         if (oti)
                 oti->oti_handle = (void *)DESC_PRIV;
 
+        left = *pages;
+        *pages = 0;
+
         for (i = 0; i < objcount; i++, obj++) {
-                int gfp_mask = (obj->ioo_id & 1) ? CFS_ALLOC_HIGHUSER : CFS_ALLOC_STD;
-                int ispersistent = obj->ioo_id == ECHO_PERSISTENT_OBJID;
-                int debug_setup = (!ispersistent &&
-                                   (oa->o_valid & OBD_MD_FLFLAGS) != 0 &&
-                                   (oa->o_flags & OBD_FL_DEBUG_CHECK) != 0);
                 int j;
 
                 for (j = 0 ; j < obj->ioo_bufcnt ; j++, nb++, r++) {
 
-                        if (ispersistent &&
-                            (nb->offset >> CFS_PAGE_SHIFT) < ECHO_PERSISTENT_PAGES) {
-                                r->page = echo_persistent_pages[nb->offset >>
-                                                                CFS_PAGE_SHIFT];
-                                /* Take extra ref so __free_pages() can be called OK */
-                                cfs_get_page (r->page);
-                        } else {
-                                OBD_PAGE_ALLOC(r->page, gfp_mask);
-                                if (r->page == NULL) {
-                                        CERROR("can't get page %u/%u for id "
-                                               LPU64"\n",
-                                               j, obj->ioo_bufcnt, obj->ioo_id);
-                                        GOTO(preprw_cleanup, rc = -ENOMEM);
-                                }
-                        }
+                        rc = echo_map_nb_to_lb(oa, obj, nb, pages,
+                                               res + *pages, cmd, &left);
+                        if (rc)
+                                GOTO(preprw_cleanup, rc);
 
                         tot_bytes += nb->len;
-
-                        atomic_inc(&obd->u.echo.eo_prep);
-
-                        r->offset = nb->offset;
-                        r->len = nb->len;
-                        LASSERT((r->offset & ~CFS_PAGE_MASK) + r->len <= CFS_PAGE_SIZE);
-
-                        CDEBUG(D_PAGE, "$$$$ get page %p @ "LPU64" for %d\n",
-                               r->page, r->offset, r->len);
-
-                        if (cmd & OBD_BRW_READ)
-                                r->rc = r->len;
-
-                        if (debug_setup)
-                                echo_page_debug_setup(r->page, cmd, obj->ioo_id,
-                                                      r->offset, r->len);
                 }
         }
+
+        atomic_add(*pages, &obd->u.echo.eo_prep);
+
         if (cmd & OBD_BRW_READ)
                 lprocfs_counter_add(obd->obd_stats, LPROC_ECHO_READ_BYTES,
                                     tot_bytes);
@@ -378,21 +415,22 @@ preprw_cleanup:
          * all down again.  I believe that this is what the in-kernel
          * prep/commit operations do.
          */
-        CERROR("cleaning up %ld pages (%d obdos)\n", (long)(r - res), objcount);
-        while (r-- > res) {
-                cfs_kunmap(r->page);
+        CERROR("cleaning up %u pages (%d obdos)\n", *pages, objcount);
+        for (i = 0; i < *pages; i++) {
+                cfs_kunmap(res[i].page);
                 /* NB if this is a persistent page, __free_pages will just
                  * lose the extra ref gained above */
-                OBD_PAGE_FREE(r->page);
+                OBD_PAGE_FREE(res[i].page);
+                res[i].page = NULL;
                 atomic_dec(&obd->u.echo.eo_prep);
         }
-        memset(res, 0, sizeof(*res) * niocount);
 
         return rc;
 }
 
 int echo_commitrw(int cmd, struct obd_export *export, struct obdo *oa,
-                  int objcount, struct obd_ioobj *obj, int niocount,
+                  int objcount, struct obd_ioobj *obj,
+                  struct niobuf_remote *rb, int niocount,
                   struct niobuf_local *res, struct obd_trans_info *oti, int rc)
 {
         struct obd_device *obd;
