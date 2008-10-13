@@ -876,6 +876,8 @@ static int echo_client_prep_commit(struct obd_export *exp, int rw,
         off = offset;
 
         for(; tot_pages; tot_pages -= npages) {
+                int lpages;
+
                 if (tot_pages < npages)
                         npages = tot_pages;
 
@@ -887,11 +889,13 @@ static int echo_client_prep_commit(struct obd_export *exp, int rw,
                 ioo.ioo_bufcnt = npages;
                 oti->oti_transno = 0;
 
-                ret = obd_preprw(rw, exp, oa, 1, &ioo, npages, rnb, lnb, oti);
+                lpages = npages;
+                ret = obd_preprw(rw, exp, oa, 1, &ioo, rnb, &lpages, lnb, oti);
                 if (ret != 0)
                         GOTO(out, ret);
+                LASSERT(lpages == npages);
 
-                for (i = 0; i < npages; i++) {
+                for (i = 0; i < lpages; i++) {
                         cfs_page_t *page = lnb[i].page;
 
                         /* read past eof? */
@@ -915,7 +919,7 @@ static int echo_client_prep_commit(struct obd_export *exp, int rw,
                                                              rnb[i].len);
                 }
 
-                ret = obd_commitrw(rw, exp, oa, 1, &ioo, npages, lnb, oti, ret);
+                ret = obd_commitrw(rw, exp, oa, 1,&ioo,rnb,npages,lnb,oti,ret);
                 if (ret != 0)
                         GOTO(out, ret);
         }
