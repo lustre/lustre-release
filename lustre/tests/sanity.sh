@@ -5602,6 +5602,119 @@ test_200i() {
 }
 run_test 200i "Remove a pool ============================================"
 
+test_150() {
+	local TF="$TMP/$tfile"
+
+        dd if=/dev/urandom of=$TF bs=6096 count=1 || error "dd failed"
+        cp $TF $DIR/$tfile
+        cancel_lru_locks osc
+        cmp $TF $DIR/$tfile || error "$TMP/$tfile $DIR/$tfile differ"
+        remount_client $MOUNT
+        cmp $TF $DIR/$tfile || error "$TF $DIR/$tfile differ (remount)"
+
+        $TRUNCATE $TF 6000
+        $TRUNCATE $DIR/$tfile 6000
+        cancel_lru_locks osc
+        cmp $TF $DIR/$tfile || error "$TF $DIR/$tfile differ (truncate1)"
+
+        echo "12345" >>$TF
+        echo "12345" >>$DIR/$tfile
+        cancel_lru_locks osc
+        cmp $TF $DIR/$tfile || error "$TF $DIR/$tfile differ (append1)"
+
+        echo "12345" >>$TF
+        echo "12345" >>$DIR/$tfile
+        cancel_lru_locks osc
+        cmp $TF $DIR/$tfile || error "$TF $DIR/$tfile differ (append2)"
+
+        rm -f $TF
+        true
+}
+run_test 150 "truncate/append tests"
+
+function roc_access() {
+	ACCNUM=`$LCTL get_param -n obdfilter.*.stats | \
+		grep 'cache_access'| awk '{print $2}' | \
+		awk '{sum=sum+$3} END{print sum}'`
+	echo $ACCNUM
+}
+
+function roc_hit() {
+	ACCNUM=`$LCTL get_param -n obdfilter.*.stats | \
+		grep 'cache_hit'|awk '{print $2}' | \
+		awk '{sum=sum+$1} END{print sum}'`
+	echo $ACCNUM
+}
+
+test_151() {
+	local CPAGES=3
+
+	# check whether obdfilter is cache capable at all
+	if ! $LCTL get_param -n obdfilter.*.read_cache_enable; then
+		echo "not cache-capable obdfilter"
+		return 0
+	fi
+
+	# check cache is enabled on all obdfilters
+	if $LCTL get_param -n obdfilter.*.read_cache_enable | grep 0 >&/dev/null; then
+		echo "oss cache is disabled"
+		return 0
+	fi
+
+	$LCTL set_param -n obdfilter.*.writethrough_cache_enable 1
+
+	# pages should be in the case right after write 
+        dd if=/dev/urandom of=$DIR/$tfile bs=4k count=$CPAGES || error "dd failed"
+	BEFORE=`roc_hit`
+        cancel_lru_locks osc
+	cat $DIR/$tfile >/dev/null
+	AFTER=`roc_hit`
+	if ! let "AFTER - BEFORE == CPAGES"; then
+		error "NOT IN CACHE: before: $BEFORE, after: $AFTER"
+	fi
+
+	# the following read invalidates the cache
+        cancel_lru_locks osc
+	$LCTL set_param -n obdfilter.*.read_cache_enable 0
+	cat $DIR/$tfile >/dev/null
+
+	# now data shouldn't be found in the cache
+	BEFORE=`roc_hit`
+        cancel_lru_locks osc
+	cat $DIR/$tfile >/dev/null
+	AFTER=`roc_hit`
+	if ! let "AFTER - BEFORE == CPAGES"; then
+		error "IN CACHE: before: $BEFORE, after: $AFTER"
+	fi
+
+	$LCTL set_param -n obdfilter.*.read_cache_enable 1
+        rm -f $DIR/$tfile
+}
+run_test 151 "test cache on oss and controls ==============================="
+
+test_152() {
+        local TF="$TMP/$tfile"
+
+	# simulate ENOMEM during write
+#define OBD_FAIL_OST_NOMEM     	0x226
+        lctl set_param fail_loc=0x80000226
+        dd if=/dev/urandom of=$TF bs=6096 count=1 || error "dd failed"
+        cp $TF $DIR/$tfile
+        sync || error "sync failed"
+        lctl set_param fail_loc=0
+	
+        # discard client's cache
+        cancel_lru_locks osc
+
+        # simulate ENOMEM during read
+        lctl set_param fail_loc=0x80000226
+        cmp $TF $DIR/$tfile || error "cmp failed"
+        lctl set_param fail_loc=0
+
+	rm -f $TF
+}
+run_test 152 "test read/write with enomem ============================"
+
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
 HOME=$OLDHOME
