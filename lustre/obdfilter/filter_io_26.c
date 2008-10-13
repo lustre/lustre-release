@@ -65,7 +65,6 @@ struct filter_iobuf {
         int               dr_error;
         struct page     **dr_pages;
         unsigned long    *dr_blocks;
-        spinlock_t        dr_lock;              /* IRQ lock */
         unsigned int      dr_ignore_quota:1;
         struct filter_obd *dr_filter;
 };
@@ -115,12 +114,8 @@ static void record_finish_io(struct filter_iobuf *iobuf, int rw, int rc)
 static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
 {
         struct filter_iobuf *iobuf = bio->bi_private;
-        unsigned long        flags;
-
-#ifdef HAVE_PAGE_CONSTANT
         struct bio_vec *bvl;
         int i;
-#endif
 
         /* CAVEAT EMPTOR: possibly in IRQ context 
          * DO NOT record procfs stats here!!! */
@@ -128,7 +123,7 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
         if (bio->bi_size)                       /* Not complete */
                 return 1;
 
-        if (iobuf == NULL) {
+        if (unlikely(iobuf == NULL)) {
                 CERROR("***** bio->bi_private is NULL!  This should never "
                        "happen.  Normally, I would crash here, but instead I "
                        "will dump the bio contents to the console.  Please "
@@ -146,18 +141,31 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
                 return 0;
         }
 
+        /* the check is outside of the cycle for performance reason -bzzz */
+        if (!test_bit(BIO_RW, &bio->bi_rw)) {
+                bio_for_each_segment(bvl, bio, i) {
+                        if (likely(error == 0))
+                                SetPageUptodate(bvl->bv_page);
+                        LASSERT(PageLocked(bvl->bv_page));
 #ifdef HAVE_PAGE_CONSTANT
-        bio_for_each_segment(bvl, bio, i)
-                ClearPageConstant(bvl->bv_page);
+                        ClearPageConstant(bvl->bv_page);
 #endif
+                }
+                record_finish_io(iobuf, OBD_BRW_READ, error);
+        } else {
+#ifdef HAVE_PAGE_CONSTANT
+                if (mapping_cap_page_constant_write(iobuf->dr_pages[0]->mapping)){
+                        bio_for_each_segment(bvl, bio, i) {
+                                ClearPageConstant(bvl->bv_page);
+                        }
+                }
+#endif
+                record_finish_io(iobuf, OBD_BRW_WRITE, error);
+        }
 
-        spin_lock_irqsave(&iobuf->dr_lock, flags);
-        if (iobuf->dr_error == 0)
+        /* any real error is good enough -bzzz */
+        if (error != 0 && iobuf->dr_error == 0)
                 iobuf->dr_error = error;
-        spin_unlock_irqrestore(&iobuf->dr_lock, flags);
-
-        record_finish_io(iobuf, test_bit(BIO_RW, &bio->bi_rw) ?
-                         OBD_BRW_WRITE : OBD_BRW_READ, error);
 
         /* Completed bios used to be chained off iobuf->dr_bios and freed in
          * filter_clear_dreq().  It was then possible to exhaust the biovec-256
@@ -202,7 +210,6 @@ struct filter_iobuf *filter_alloc_iobuf(struct filter_obd *filter,
         iobuf->dr_filter = filter;
         init_waitqueue_head(&iobuf->dr_wait);
         atomic_set(&iobuf->dr_numreqs, 0);
-        spin_lock_init(&iobuf->dr_lock);
         iobuf->dr_max_pages = num_pages;
         iobuf->dr_npages = 0;
         iobuf->dr_error = 0;
@@ -329,7 +336,7 @@ int filter_do_bio(struct obd_export *exp, struct inode *inode,
                         if ((rw == OBD_BRW_WRITE) && 
                             (nblocks == blocks_per_page) && 
                             mapping_cap_page_constant_write(inode->i_mapping))
-                                SetPageConstant(page);
+                               SetPageConstant(page);
 #endif
 
                         if (bio != NULL &&
@@ -435,110 +442,6 @@ int filter_do_bio(struct obd_export *exp, struct inode *inode,
         RETURN(rc);
 }
 
-/* These are our hacks to keep our directio/bh IO coherent with ext3's
- * page cache use.  Most notably ext3 reads file data into the page
- * cache when it is zeroing the tail of partial-block truncates and
- * leaves it there, sometimes generating io from it at later truncates.
- * This removes the partial page and its buffers from the page cache,
- * so it should only ever cause a wait in rare cases, as otherwise we
- * always do full-page IO to the OST.
- *
- * The call to truncate_complete_page() will call journal_invalidatepage()
- * to free the buffers and drop the page from cache.  The buffers should
- * not be dirty, because we already called fdatasync/fdatawait on them.
- */
-static int filter_sync_inode_data(struct inode *inode, int locked)
-{
-        int rc = 0;
-
-        /* This is nearly do_fsync(), without the waiting on the inode */
-        /* XXX: in 2.6.16 (at least) we don't need to hold i_mutex over
-         * filemap_fdatawrite() and filemap_fdatawait(), so we may no longer
-         * need this lock here at all. */
-        if (!locked)
-                LOCK_INODE_MUTEX(inode);
-        if (inode->i_mapping->nrpages) {
-#ifdef PF_SYNCWRITE
-                current->flags |= PF_SYNCWRITE;
-#endif
-                rc = filemap_fdatawrite(inode->i_mapping);
-                if (rc == 0)
-                        rc = filemap_fdatawait(inode->i_mapping);
-#ifdef PF_SYNCWRITE
-                current->flags &= ~PF_SYNCWRITE;
-#endif
-        }
-        if (!locked)
-                UNLOCK_INODE_MUTEX(inode);
-
-        return rc;
-}
-
-/* Clear pages from the mapping before we do direct IO to that offset.
- * Now that the only source of such pages in the truncate path flushes
- * these pages to disk and then discards them, this is error condition.
- * If add back read cache this will happen again.  This could be disabled
- * until that time if we never see the below error. */
-static int filter_clear_page_cache(struct inode *inode,
-                                   struct filter_iobuf *iobuf)
-{
-        struct page *page;
-        int i, rc;
-
-        rc = filter_sync_inode_data(inode, 0);
-        if (rc != 0)
-                RETURN(rc);
-
-        /* be careful to call this after fsync_inode_data_buffers has waited
-         * for IO to complete before we evict it from the cache */
-        for (i = 0; i < iobuf->dr_npages; i++) {
-                page = find_lock_page(inode->i_mapping,
-                                      iobuf->dr_pages[i]->index);
-                if (page == NULL)
-                        continue;
-                if (page->mapping != NULL) {
-                        CERROR("page %lu (%d/%d) in page cache during write!\n",
-                               page->index, i, iobuf->dr_npages);
-                        wait_on_page_writeback(page);
-                        ll_truncate_complete_page(page);
-                }
-
-                unlock_page(page);
-                page_cache_release(page);
-        }
-
-        return 0;
-}
-
-int filter_clear_truncated_page(struct inode *inode)
-{
-        struct page *page;
-        int rc;
-
-        /* Truncate on page boundary, so nothing to flush? */
-        if (!(i_size_read(inode) & ~CFS_PAGE_MASK))
-                return 0;
-
-        rc = filter_sync_inode_data(inode, 1);
-        if (rc != 0)
-                RETURN(rc);
-
-        /* be careful to call this after fsync_inode_data_buffers has waited
-         * for IO to complete before we evict it from the cache */
-        page = find_lock_page(inode->i_mapping,
-                              i_size_read(inode) >> CFS_PAGE_SHIFT);
-        if (page) {
-                if (page->mapping != NULL) {
-                        wait_on_page_writeback(page);
-                        ll_truncate_complete_page(page);
-                }
-                unlock_page(page);
-                page_cache_release(page);
-        }
-
-        return 0;
-}
-
 /* Must be called with i_mutex taken for writes; this will drop it */
 int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
                      struct obd_export *exp, struct iattr *attr,
@@ -604,10 +507,6 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
                              iobuf->dr_blocks, blocks_per_page, 0);
         }
 
-        rc = filter_clear_page_cache(inode, iobuf);
-        if (rc != 0)
-                RETURN(rc);
-
         RETURN(filter_do_bio(exp, inode, iobuf, rw));
 }
 
@@ -632,8 +531,20 @@ static int filter_range_is_mapped(struct inode *inode, obd_size offset, int len)
         return 1;
 }
 
+/*
+ * interesting use cases on how it interacts with VM:
+ *
+ * - vm writeout -- shouldn't see our pages as we don't mark them dirty
+ *   though vm can find partial page left dirty by truncate. in this
+ *   usual writeout is used unless our write rewrite that page - then we
+ *   drop PG_dirty with PG_lock held.
+ *
+ * - else?
+ *
+ */
 int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
-                          int objcount, struct obd_ioobj *obj, int niocount,
+                          int objcount, struct obd_ioobj *obj,
+                          struct niobuf_remote *nb, int niocount,
                           struct niobuf_local *res, struct obd_trans_info *oti,
                           int rc)
 {
@@ -646,6 +557,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         unsigned long now = jiffies;
         int i, err, cleanup_phase = 0;
         struct obd_device *obd = exp->exp_obd;
+        struct filter_obd *fo = &obd->u.filter;
         void *wait_handle;
         int total_size = 0;
         int rec_pending = 0;
@@ -674,7 +586,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         inode = res->dentry->d_inode;
 
         iobuf->dr_ignore_quota = 0;
-        for (i = 0, lnb = res; i < obj->ioo_bufcnt; i++, lnb++) {
+        for (i = 0, lnb = res; i < niocount; i++, lnb++) {
                 loff_t this_size;
 
                 /* If overwriting an existing block, we don't need a grant */
@@ -686,6 +598,14 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                         CDEBUG(D_INODE, "Skipping [%d] == %d\n", i, lnb->rc);
                         continue;
                 }
+
+                LASSERT(PageLocked(lnb->page));
+                LASSERT(!PageWriteback(lnb->page));
+
+                /* truncate might leave tail dirty */
+                clear_page_dirty_for_io(lnb->page);
+
+                SetPageUptodate(lnb->page);
 
                 err = filter_iobuf_add_page(obd, iobuf, inode, lnb->page);
                 LASSERT (err == 0);
@@ -820,6 +740,21 @@ cleanup:
                             FSFILT_OP_CREATE);
         CDEBUG(err ? D_ERROR : D_QUOTA,
                "filter adjust qunit! (rc:%d)\n", err);
+
+        for (i = 0, lnb = res; i < niocount; i++, lnb++) {
+                if (lnb->page == NULL)
+                        continue;
+
+                LASSERT(PageLocked(lnb->page));
+                unlock_page(lnb->page);
+
+                page_cache_release(lnb->page);
+                lnb->page = NULL;
+        }
+
+        if (inode && (fo->fo_writethrough_cache == 0 ||
+                        i_size_read(inode) > fo->fo_readcache_max_filesize))
+                filter_invalidate_cache(obd, obj, nb, inode);
 
         RETURN(rc);
 }
