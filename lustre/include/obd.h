@@ -332,6 +332,8 @@ struct filter_obd {
         obd_size             fo_tot_pending;
 
         obd_size             fo_readcache_max_filesize;
+        int                  fo_read_cache;
+        int                  fo_writethrough_cache;
 
         struct obd_import   *fo_mdc_imp;
         struct obd_uuid      fo_mdc_uuid;
@@ -1147,11 +1149,13 @@ struct obd_ops {
                          obd_id *startid, obd_gr group, void *data);
         int (*o_preprw)(int cmd, struct obd_export *exp, struct obdo *oa,
                         int objcount, struct obd_ioobj *obj,
-                        int niocount, struct niobuf_remote *remote,
-                        struct niobuf_local *local, struct obd_trans_info *oti);
+                        struct niobuf_remote *remote, int *nr_pages,
+                        struct niobuf_local *local,
+                        struct obd_trans_info *oti);
         int (*o_commitrw)(int cmd, struct obd_export *exp, struct obdo *oa,
                           int objcount, struct obd_ioobj *obj,
-                          int niocount, struct niobuf_local *local,
+                          struct niobuf_remote *remote, int pages,
+                          struct niobuf_local *local,
                           struct obd_trans_info *oti, int rc);
         int (*o_enqueue)(struct obd_export *, struct obd_info *oinfo,
                          struct ldlm_enqueue_info *einfo,
