@@ -516,7 +516,7 @@ rc=$?
 if test $rc -ne 0; then
     export=0
     for file in $2; do
-    	grep -q -E "EXPORT_SYMBOL.*($1)" "$LINUX/$file" 2>/dev/null
+    	grep -q -E "EXPORT_SYMBOL.*\($1\)" "$LINUX/$file" 2>/dev/null
     	rc=$?
 	if test $rc -eq 0; then
 		export=1
