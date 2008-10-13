@@ -627,5 +627,9 @@ static inline long labs(long x)
 #define __fls fls
 #endif
 
+#ifdef HAVE_INVALIDATE_INODE_PAGES
+#define invalidate_mapping_pages(mapping,s,e) invalidate_inode_pages(mapping)
+#endif
+
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */
