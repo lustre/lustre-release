@@ -251,8 +251,8 @@ int ll_file_release(struct inode *inode, struct file *file)
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
         int rc;
-
         ENTRY;
+
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
 
@@ -262,12 +262,10 @@ int ll_file_release(struct inode *inode, struct file *file)
         fd = LUSTRE_FPRIVATE(file);
         LASSERT(fd != NULL);
 
-        /*
-         * The last ref on @file, maybe not the the owner pid of statahead.
+        /* The last ref on @file, maybe not the the owner pid of statahead.
          * Different processes can open the same dir, "ll_opendir_key" means:
-         * it is me that should stop the statahead thread.
-         */
-        if (lli->lli_opendir_key == fd)
+         * it is me that should stop the statahead thread. */
+        if (lli->lli_opendir_key == fd && lli->lli_opendir_pid != 0)
                 ll_stop_statahead(inode, fd);
 
         if (inode->i_sb->s_root == file->f_dentry) {
@@ -430,27 +428,29 @@ int ll_file_open(struct inode *inode, struct file *file)
                 RETURN(-ENOMEM);
 
         if (S_ISDIR(inode->i_mode)) {
+again:
                 spin_lock(&lli->lli_lock);
-                /*
-                 * "lli->lli_opendir_pid != 0" means someone has set it.
-                 * "lli->lli_sai != NULL" means the previous statahead has not
-                 *                        been cleanup.
-                 */
-                if (lli->lli_opendir_pid == 0 && lli->lli_sai == NULL) {
-                        opendir_set = 1;
-                        lli->lli_opendir_pid = cfs_curproc_pid();
+                if (lli->lli_opendir_key == NULL && lli->lli_opendir_pid == 0) {
+                        LASSERT(lli->lli_sai == NULL);
                         lli->lli_opendir_key = fd;
-                } else if (unlikely(lli->lli_opendir_pid == cfs_curproc_pid())) {
+                        lli->lli_opendir_pid = cfs_curproc_pid();
+                        opendir_set = 1;
+                } else if (unlikely(lli->lli_opendir_pid == cfs_curproc_pid() &&
+                                    lli->lli_opendir_key != NULL)) {
                         /* Two cases for this:
                          * (1) The same process open such directory many times.
                          * (2) The old process opened the directory, and exited
                          *     before its children processes. Then new process
                          *     with the same pid opens such directory before the
                          *     old process's children processes exit.
-                         * Change the owner to the latest one.
-                         */
-                        opendir_set = 2;
-                        lli->lli_opendir_key = fd;
+                         * reset stat ahead for such cases. */
+                        spin_unlock(&lli->lli_lock);
+                        CDEBUG(D_INFO, "Conflict statahead for %.*s %lu/%u"
+                               " reset it.\n", file->f_dentry->d_name.len,
+                               file->f_dentry->d_name.name,
+                               inode->i_ino, inode->i_generation);
+                        ll_stop_statahead(inode, lli->lli_opendir_key);
+                        goto again;
                 }
                 spin_unlock(&lli->lli_lock);
         }
@@ -596,13 +596,10 @@ out_och_free:
                 }
                 up(&lli->lli_och_sem);
 out_openerr:
-                if (opendir_set) {
-                        lli->lli_opendir_key = NULL;
-                        lli->lli_opendir_pid = 0;
-                } else if (unlikely(opendir_set == 2)) {
+                if (opendir_set != 0)
                         ll_stop_statahead(inode, fd);
-                }
         }
+
         return rc;
 }
 
