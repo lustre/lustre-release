@@ -1313,6 +1313,8 @@ basetest() {
     IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
 }
 
+# print a newline if the last test was skipped
+export LAST_SKIPPED=
 run_test() {
     assert_DIR
 
@@ -1320,38 +1322,46 @@ run_test() {
     if [ ! -z "$ONLY" ]; then
         testname=ONLY_$1
         if [ ${!testname}x != x ]; then
+            [ "$LAST_SKIPPED" ] && echo "" && LAST_SKIPPED=
             run_one $1 "$2"
             return $?
         fi
         testname=ONLY_$base
         if [ ${!testname}x != x ]; then
+            [ "$LAST_SKIPPED" ] && echo "" && LAST_SKIPPED=
             run_one $1 "$2"
             return $?
         fi
+        LAST_SKIPPED="y"
         echo -n "."
         return 0
     fi
     testname=EXCEPT_$1
     if [ ${!testname}x != x ]; then
+        LAST_SKIPPED="y"
         TESTNAME=test_$1 skip "skipping excluded test $1"
         return 0
     fi
     testname=EXCEPT_$base
     if [ ${!testname}x != x ]; then
+        LAST_SKIPPED="y"
         TESTNAME=test_$1 skip "skipping excluded test $1 (base $base)"
         return 0
     fi
     testname=EXCEPT_SLOW_$1
     if [ ${!testname}x != x ]; then
+        LAST_SKIPPED="y"
         TESTNAME=test_$1 skip "skipping SLOW test $1"
         return 0
     fi
     testname=EXCEPT_SLOW_$base
     if [ ${!testname}x != x ]; then
+        LAST_SKIPPED="y"
         TESTNAME=test_$1 skip "skipping SLOW test $1 (base $base)"
         return 0
     fi
 
+    LAST_SKIPPED=
     run_one $1 "$2"
     
     return $?
