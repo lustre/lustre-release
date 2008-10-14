@@ -331,6 +331,9 @@ void filter_invalidate_cache(struct obd_device *obd, struct obd_ioobj *obj,
                 obd_off start = rnb->offset >> CFS_PAGE_SHIFT;
                 obd_off end = (rnb->offset + rnb->len) >> CFS_PAGE_SHIFT;
                 invalidate_mapping_pages(inode->i_mapping, start, end);
+                /* just to avoid warnings */
+                start = 0;
+                end = 0;
         }
         
 }
