@@ -1235,11 +1235,12 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
         if (!lov->desc.ld_active_tgt_count)
                 RETURN(-EIO);
 
+        lov_getref(exp->exp_obd);
         /* Recreate a specific object id at the given OST index */
         if ((src_oa->o_valid & OBD_MD_FLFLAGS) &&
             (src_oa->o_flags & OBD_FL_RECREATE_OBJS)) {
                  rc = lov_recreate(exp, src_oa, ea, oti);
-                 RETURN(rc);
+                 GOTO(out, rc);
         }
 
         maxage = cfs_time_shift_64(-lov->desc.ld_qos_maxage);
@@ -1247,7 +1248,7 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
 
         rc = lov_prep_create_set(exp, &oinfo, ea, src_oa, oti, &set);
         if (rc)
-                RETURN(rc);
+                GOTO(out, rc);
 
         list_for_each_entry(req, &set->set_list, rq_link) {
                 /* XXX: LOV STACKING: use real "obj_mdp" sub-data */
@@ -1256,6 +1257,8 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
                 lov_update_create_set(set, req, rc);
         }
         rc = lov_fini_create_set(set, ea);
+out:
+        lov_putref(exp->exp_obd);
         RETURN(rc);
 }
 
@@ -1291,9 +1294,10 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
         }
 
         lov = &exp->exp_obd->u.lov;
+        lov_getref(exp->exp_obd);
         rc = lov_prep_destroy_set(exp, &oinfo, oa, lsm, oti, &set);
         if (rc)
-                RETURN(rc);
+                GOTO(out, rc);
 
         list_for_each (pos, &set->set_list) {
                 int err;
@@ -1320,6 +1324,8 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
                 rc = lsm_op_find(lsm->lsm_magic)->lsm_destroy(lsm, oa, md_exp);
         }
         err = lov_fini_destroy_set(set);
+out:
+        lov_putref(exp->exp_obd);
         RETURN(rc ? rc : err);
 }
 
