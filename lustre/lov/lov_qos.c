@@ -939,7 +939,6 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                         /* Find a small number of stripes we can use
                            (up to # of active osts). */
                         stripes = 1;
-                        lov_getref(exp->exp_obd);
                         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                                 if (!lov->lov_tgts[i] ||
                                     !lov->lov_tgts[i]->ltd_active)
@@ -949,7 +948,6 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                                         break;
                                 stripes++;
                         }
-                        lov_putref(exp->exp_obd);
 
                         if (stripes < stripes_def)
                                 stripes = stripes_def;
