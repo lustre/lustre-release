@@ -44,13 +44,13 @@ lnd_t               the_ptllnd = {
         .lnd_type       = PTLLND,
         .lnd_startup    = ptllnd_startup,
         .lnd_shutdown   = ptllnd_shutdown,
-	.lnd_ctl        = ptllnd_ctl,
+        .lnd_ctl        = ptllnd_ctl,
         .lnd_send       = ptllnd_send,
         .lnd_recv       = ptllnd_recv,
         .lnd_eager_recv = ptllnd_eager_recv,
         .lnd_notify     = ptllnd_notify,
         .lnd_wait       = ptllnd_wait,
-	.lnd_setasync   = ptllnd_setasync,
+        .lnd_setasync   = ptllnd_setasync,
 };
 
 static int ptllnd_ni_count = 0;
@@ -61,112 +61,112 @@ static struct list_head ptllnd_history_list;
 void
 ptllnd_history_fini(void)
 {
-	ptllnd_he_t *he;
+        ptllnd_he_t *he;
 
-	while (!list_empty(&ptllnd_idle_history)) {
-		he = list_entry(ptllnd_idle_history.next,
-				ptllnd_he_t, he_list);
-		
-		list_del(&he->he_list);
-		LIBCFS_FREE(he, sizeof(*he));
-	}
-	
-	while (!list_empty(&ptllnd_history_list)) {
-		he = list_entry(ptllnd_history_list.next,
-				ptllnd_he_t, he_list);
-		
-		list_del(&he->he_list);
-		LIBCFS_FREE(he, sizeof(*he));
-	}
+        while (!list_empty(&ptllnd_idle_history)) {
+                he = list_entry(ptllnd_idle_history.next,
+                                ptllnd_he_t, he_list);
+
+                list_del(&he->he_list);
+                LIBCFS_FREE(he, sizeof(*he));
+        }
+
+        while (!list_empty(&ptllnd_history_list)) {
+                he = list_entry(ptllnd_history_list.next,
+                                ptllnd_he_t, he_list);
+
+                list_del(&he->he_list);
+                LIBCFS_FREE(he, sizeof(*he));
+        }
 }
 
 int
 ptllnd_history_init(void)
 {
-	int          i;
-	ptllnd_he_t *he;
-	int          n;
-	int          rc;
-	
-	CFS_INIT_LIST_HEAD(&ptllnd_idle_history);
-	CFS_INIT_LIST_HEAD(&ptllnd_history_list);
-	
-	rc = ptllnd_parse_int_tunable(&n, "PTLLND_HISTORY", 0);
-	if (rc != 0)
-		return rc;
-	
-	for (i = 0; i < n; i++) {
-		LIBCFS_ALLOC(he, sizeof(*he));
-		if (he == NULL) {
-			ptllnd_history_fini();
-			return -ENOMEM;
-		}
-		
-		list_add(&he->he_list, &ptllnd_idle_history);
-	}
+        int          i;
+        ptllnd_he_t *he;
+        int          n;
+        int          rc;
 
-	PTLLND_HISTORY("Init");
+        CFS_INIT_LIST_HEAD(&ptllnd_idle_history);
+        CFS_INIT_LIST_HEAD(&ptllnd_history_list);
 
-	return 0;
+        rc = ptllnd_parse_int_tunable(&n, "PTLLND_HISTORY", 0);
+        if (rc != 0)
+                return rc;
+
+        for (i = 0; i < n; i++) {
+                LIBCFS_ALLOC(he, sizeof(*he));
+                if (he == NULL) {
+                        ptllnd_history_fini();
+                        return -ENOMEM;
+                }
+
+                list_add(&he->he_list, &ptllnd_idle_history);
+        }
+
+        PTLLND_HISTORY("Init");
+
+        return 0;
 }
 
 void
 ptllnd_history(const char *fn, const char *file, const int line,
-	       const char *fmt, ...)
+               const char *fmt, ...)
 {
-	static int     seq;
-	
+        static int     seq;
+
         va_list        ap;
-	ptllnd_he_t   *he;
-	
-	if (!list_empty(&ptllnd_idle_history)) {
-		he = list_entry(ptllnd_idle_history.next,
-				ptllnd_he_t, he_list);
-	} else if (!list_empty(&ptllnd_history_list)) {
-		he = list_entry(ptllnd_history_list.next,
-				ptllnd_he_t, he_list);
-	} else {
-		return;
-	}
+        ptllnd_he_t   *he;
 
-	list_del(&he->he_list);
-	list_add_tail(&he->he_list, &ptllnd_history_list);
+        if (!list_empty(&ptllnd_idle_history)) {
+                he = list_entry(ptllnd_idle_history.next,
+                                ptllnd_he_t, he_list);
+        } else if (!list_empty(&ptllnd_history_list)) {
+                he = list_entry(ptllnd_history_list.next,
+                                ptllnd_he_t, he_list);
+        } else {
+                return;
+        }
 
-	he->he_seq = seq++;
-	he->he_fn = fn;
-	he->he_file = file;
-	he->he_line = line;
-	gettimeofday(&he->he_time, NULL);
-	
-	va_start(ap, fmt);
-	vsnprintf(he->he_msg, sizeof(he->he_msg), fmt, ap);
-	va_end(ap);
+        list_del(&he->he_list);
+        list_add_tail(&he->he_list, &ptllnd_history_list);
+
+        he->he_seq = seq++;
+        he->he_fn = fn;
+        he->he_file = file;
+        he->he_line = line;
+        gettimeofday(&he->he_time, NULL);
+
+        va_start(ap, fmt);
+        vsnprintf(he->he_msg, sizeof(he->he_msg), fmt, ap);
+        va_end(ap);
 }
 
 void
 ptllnd_dump_history(void)
 {
-	ptllnd_he_t    *he;
+        ptllnd_he_t    *he;
 
-	PTLLND_HISTORY("dumping...");
-	
-	while (!list_empty(&ptllnd_history_list)) {
-		he = list_entry(ptllnd_history_list.next,
-				ptllnd_he_t, he_list);
+        PTLLND_HISTORY("dumping...");
 
-		list_del(&he->he_list);
-		
-		CDEBUG(D_WARNING, "%d %d.%06d (%s:%d:%s()) %s\n", he->he_seq,
-		       (int)he->he_time.tv_sec, (int)he->he_time.tv_usec,
-		       he->he_file, he->he_line, he->he_fn, he->he_msg);
+        while (!list_empty(&ptllnd_history_list)) {
+                he = list_entry(ptllnd_history_list.next,
+                                ptllnd_he_t, he_list);
 
-		list_add_tail(&he->he_list, &ptllnd_idle_history);
-	}
+                list_del(&he->he_list);
 
-	PTLLND_HISTORY("complete");
+                CDEBUG(D_WARNING, "%d %d.%06d (%s:%d:%s()) %s\n", he->he_seq,
+                       (int)he->he_time.tv_sec, (int)he->he_time.tv_usec,
+                       he->he_file, he->he_line, he->he_fn, he->he_msg);
+
+                list_add_tail(&he->he_list, &ptllnd_idle_history);
+        }
+
+        PTLLND_HISTORY("complete");
 }
 
-void 
+void
 ptllnd_assert_wire_constants (void)
 {
         /* Wire protocol assertions generated by 'wirecheck'
@@ -272,10 +272,10 @@ ptllnd_get_tunables(lnet_ni_t *ni)
         int          rc;
         int          temp;
 
-	/*  Other tunable defaults depend on this */
-	rc = ptllnd_parse_int_tunable(&plni->plni_debug, "PTLLND_DEBUG", 0);
-	if (rc != 0)
-		return rc;
+        /*  Other tunable defaults depend on this */
+        rc = ptllnd_parse_int_tunable(&plni->plni_debug, "PTLLND_DEBUG", 0);
+        if (rc != 0)
+                return rc;
 
         rc = ptllnd_parse_int_tunable(&plni->plni_portal,
                                       "PTLLND_PORTAL", PTLLND_PORTAL);
@@ -292,6 +292,11 @@ ptllnd_get_tunables(lnet_ni_t *ni)
                                       "PTLLND_PEERCREDITS", PTLLND_PEERCREDITS);
         if (rc != 0)
                 return rc;
+        /* kptl_msg_t::ptlm_credits is only a __u8 */
+        if (plni->plni_peer_credits > 255) {
+                CERROR("PTLLND_PEERCREDITS must be <= 255\n");
+                return -EINVAL;
+        }
 
         rc = ptllnd_parse_int_tunable(&max_msg_size,
                                       "PTLLND_MAX_MSG_SIZE",
@@ -320,56 +325,56 @@ ptllnd_get_tunables(lnet_ni_t *ni)
         if (rc != 0)
                 return rc;
 
-	rc = ptllnd_parse_int_tunable(&plni->plni_checksum,
-				      "PTLLND_CHECKSUM", 0);
-	if (rc != 0)
-		return rc;
+        rc = ptllnd_parse_int_tunable(&plni->plni_checksum,
+                                      "PTLLND_CHECKSUM", 0);
+        if (rc != 0)
+                return rc;
 
-	rc = ptllnd_parse_int_tunable(&plni->plni_max_tx_history,
-				      "PTLLND_TX_HISTORY",
-				      plni->plni_debug ? 1024 : 0);
-	if (rc != 0)
-		return rc;
+        rc = ptllnd_parse_int_tunable(&plni->plni_max_tx_history,
+                                      "PTLLND_TX_HISTORY",
+                                      plni->plni_debug ? 1024 : 0);
+        if (rc != 0)
+                return rc;
 
-	rc = ptllnd_parse_int_tunable(&plni->plni_abort_on_protocol_mismatch,
-				      "PTLLND_ABORT_ON_PROTOCOL_MISMATCH", 1);
-	if (rc != 0)
-		return rc;
+        rc = ptllnd_parse_int_tunable(&plni->plni_abort_on_protocol_mismatch,
+                                      "PTLLND_ABORT_ON_PROTOCOL_MISMATCH", 1);
+        if (rc != 0)
+                return rc;
 
-	rc = ptllnd_parse_int_tunable(&plni->plni_abort_on_nak,
-				      "PTLLND_ABORT_ON_NAK", 0);
-	if (rc != 0)
-		return rc;
+        rc = ptllnd_parse_int_tunable(&plni->plni_abort_on_nak,
+                                      "PTLLND_ABORT_ON_NAK", 0);
+        if (rc != 0)
+                return rc;
 
-	rc = ptllnd_parse_int_tunable(&plni->plni_dump_on_nak,
-				      "PTLLND_DUMP_ON_NAK", plni->plni_debug);
-	if (rc != 0)
-		return rc;
+        rc = ptllnd_parse_int_tunable(&plni->plni_dump_on_nak,
+                                      "PTLLND_DUMP_ON_NAK", plni->plni_debug);
+        if (rc != 0)
+                return rc;
 
-	rc = ptllnd_parse_int_tunable(&plni->plni_watchdog_interval,
-				      "PTLLND_WATCHDOG_INTERVAL", 1);
-	if (rc != 0)
-		return rc;
-	if (plni->plni_watchdog_interval <= 0)
-		plni->plni_watchdog_interval = 1;
+        rc = ptllnd_parse_int_tunable(&plni->plni_watchdog_interval,
+                                      "PTLLND_WATCHDOG_INTERVAL", 1);
+        if (rc != 0)
+                return rc;
+        if (plni->plni_watchdog_interval <= 0)
+                plni->plni_watchdog_interval = 1;
 
-	rc = ptllnd_parse_int_tunable(&plni->plni_timeout,
-				      "PTLLND_TIMEOUT", 50);
-	if (rc != 0)
-		return rc;
+        rc = ptllnd_parse_int_tunable(&plni->plni_timeout,
+                                      "PTLLND_TIMEOUT", 50);
+        if (rc != 0)
+                return rc;
 
-	rc = ptllnd_parse_int_tunable(&plni->plni_long_wait,
-				      "PTLLND_LONG_WAIT",
-				      plni->plni_debug ? 5 : plni->plni_timeout);
-	if (rc != 0)
-		return rc;
-	plni->plni_long_wait *= 1000;		/* convert to mS */
+        rc = ptllnd_parse_int_tunable(&plni->plni_long_wait,
+                                      "PTLLND_LONG_WAIT",
+                                      plni->plni_debug ? 5 : plni->plni_timeout);
+        if (rc != 0)
+                return rc;
+        plni->plni_long_wait *= 1000;           /* convert to mS */
 
         plni->plni_max_msg_size = max_msg_size & ~7;
         if (plni->plni_max_msg_size < PTLLND_MIN_BUFFER_SIZE)
                 plni->plni_max_msg_size = PTLLND_MIN_BUFFER_SIZE;
-	CLASSERT ((PTLLND_MIN_BUFFER_SIZE & 7) == 0);
-	CLASSERT (sizeof(kptl_msg_t) <= PTLLND_MIN_BUFFER_SIZE);
+        CLASSERT ((PTLLND_MIN_BUFFER_SIZE & 7) == 0);
+        CLASSERT (sizeof(kptl_msg_t) <= PTLLND_MIN_BUFFER_SIZE);
 
         plni->plni_buffer_size = plni->plni_max_msg_size * msgs_per_buffer;
 
@@ -441,9 +446,9 @@ ptllnd_size_buffers (lnet_ni_t *ni, int delta)
         CDEBUG(D_NET, "nposted_buffers = %d (before)\n",plni->plni_nposted_buffers);
         CDEBUG(D_NET, "nbuffers = %d (before)\n",plni->plni_nbuffers);
 
-	plni->plni_nmsgs += delta;
-	LASSERT(plni->plni_nmsgs >= 0);
-	
+        plni->plni_nmsgs += delta;
+        LASSERT(plni->plni_nmsgs >= 0);
+
         nmsgs = plni->plni_nmsgs + plni->plni_msgs_spare;
 
         nbufs = (nmsgs * plni->plni_max_msg_size + plni->plni_buffer_size - 1) /
@@ -490,22 +495,22 @@ ptllnd_destroy_buffers (lnet_ni_t *ni)
 
                 LASSERT (plni->plni_nbuffers > 0);
                 if (buf->plb_posted) {
-			time_t   start = cfs_time_current_sec();
-			int      w = plni->plni_long_wait;
+                        time_t   start = cfs_time_current_sec();
+                        int      w = plni->plni_long_wait;
 
                         LASSERT (plni->plni_nposted_buffers > 0);
 
 #ifdef LUSTRE_PORTALS_UNLINK_SEMANTICS
                         (void) PtlMDUnlink(buf->plb_md);
 
-			while (buf->plb_posted) {
-				if (w > 0 && cfs_time_current_sec() > start + w/1000) {
-					CWARN("Waited %ds to unlink buffer\n",
-					      (int)(cfs_time_current_sec() - start));
-					w *= 2;
-				}
-				ptllnd_wait(ni, w);
-			}
+                        while (buf->plb_posted) {
+                                if (w > 0 && cfs_time_current_sec() > start + w/1000) {
+                                        CWARN("Waited %ds to unlink buffer\n",
+                                              (int)(cfs_time_current_sec() - start));
+                                        w *= 2;
+                                }
+                                ptllnd_wait(ni, w);
+                        }
 #else
                         while (buf->plb_posted) {
                                 rc = PtlMDUnlink(buf->plb_md);
@@ -515,12 +520,12 @@ ptllnd_destroy_buffers (lnet_ni_t *ni)
                                         break;
                                 }
                                 LASSERT (rc == PTL_MD_IN_USE);
-				if (w > 0 && cfs_time_current_sec() > start + w/1000) {
-					CWARN("Waited %ds to unlink buffer\n",
-					      cfs_time_current_sec() - start);
-					w *= 2;
-				}
-				ptllnd_wait(ni, w);
+                                if (w > 0 && cfs_time_current_sec() > start + w/1000) {
+                                        CWARN("Waited %ds to unlink buffer\n",
+                                              cfs_time_current_sec() - start);
+                                        w *= 2;
+                                }
+                                ptllnd_wait(ni, w);
                         }
 #endif
                 }
@@ -590,14 +595,14 @@ ptllnd_close_peers (lnet_ni_t *ni)
 int
 ptllnd_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
 {
-	switch (cmd) {
-	case IOC_LIBCFS_DEBUG_PEER:
-		ptllnd_dump_debug(ni, *((lnet_process_id_t *)arg));
-		return 0;
-		
-	default:
-		return -EINVAL;
-	}
+        switch (cmd) {
+        case IOC_LIBCFS_DEBUG_PEER:
+                ptllnd_dump_debug(ni, *((lnet_process_id_t *)arg));
+                return 0;
+
+        default:
+                return -EINVAL;
+        }
 }
 
 __u64
@@ -615,25 +620,25 @@ ptllnd_shutdown (lnet_ni_t *ni)
 {
         ptllnd_ni_t *plni = ni->ni_data;
         int          rc;
-	time_t       start = cfs_time_current_sec();
-	int          w = plni->plni_long_wait;
+        time_t       start = cfs_time_current_sec();
+        int          w = plni->plni_long_wait;
 
         LASSERT (ptllnd_ni_count == 1);
-	plni->plni_max_tx_history = 0;
+        plni->plni_max_tx_history = 0;
 
-	ptllnd_cull_tx_history(plni);
+        ptllnd_cull_tx_history(plni);
 
         ptllnd_close_peers(ni);
         ptllnd_destroy_buffers(ni);
 
         while (plni->plni_npeers > 0) {
-		if (w > 0 && cfs_time_current_sec() > start + w/1000) {
-			CWARN("Waited %ds for peers to shutdown\n",
-			      (int)(cfs_time_current_sec() - start));
-			w *= 2;
-		}
+                if (w > 0 && cfs_time_current_sec() > start + w/1000) {
+                        CWARN("Waited %ds for peers to shutdown\n",
+                              (int)(cfs_time_current_sec() - start));
+                        w *= 2;
+                }
                 ptllnd_wait(ni, w);
-	}
+        }
 
         LASSERT (plni->plni_ntxs == 0);
         LASSERT (plni->plni_nrxs == 0);
@@ -655,9 +660,9 @@ ptllnd_startup (lnet_ni_t *ni)
         ptllnd_ni_t *plni;
         int          rc;
 
-	/* could get limits from portals I guess... */
-	ni->ni_maxtxcredits =
-	ni->ni_peertxcredits = 1000;
+        /* could get limits from portals I guess... */
+        ni->ni_maxtxcredits =
+        ni->ni_peertxcredits = 1000;
 
         if (ptllnd_ni_count != 0) {
                 CERROR("Can't have > 1 instance of ptllnd\n");
@@ -666,12 +671,12 @@ ptllnd_startup (lnet_ni_t *ni)
 
         ptllnd_ni_count++;
 
-	rc = ptllnd_history_init();
-	if (rc != 0) {
-		CERROR("Can't init history\n");
-		goto failed0;
-	}
-	
+        rc = ptllnd_history_init();
+        if (rc != 0) {
+                CERROR("Can't init history\n");
+                goto failed0;
+        }
+
         LIBCFS_ALLOC(plni, sizeof(*plni));
         if (plni == NULL) {
                 CERROR("Can't allocate ptllnd state\n");
@@ -684,9 +689,9 @@ ptllnd_startup (lnet_ni_t *ni)
         plni->plni_stamp = ptllnd_get_timestamp();
         plni->plni_nrxs = 0;
         plni->plni_ntxs = 0;
-	plni->plni_ntx_history = 0;
-	plni->plni_watchdog_peeridx = 0;
-	plni->plni_watchdog_nextt = cfs_time_current_sec();
+        plni->plni_ntx_history = 0;
+        plni->plni_watchdog_peeridx = 0;
+        plni->plni_watchdog_nextt = cfs_time_current_sec();
         CFS_INIT_LIST_HEAD(&plni->plni_zombie_txs);
         CFS_INIT_LIST_HEAD(&plni->plni_tx_history);
 
@@ -713,7 +718,7 @@ ptllnd_startup (lnet_ni_t *ni)
                        NULL, NULL, &plni->plni_nih);
         if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
                 CERROR("PtlNIInit failed: %s(%d)\n",
-		       ptllnd_errtype2str(rc), rc);
+                       ptllnd_errtype2str(rc), rc);
                 rc = -ENODEV;
                 goto failed2;
         }
@@ -722,7 +727,7 @@ ptllnd_startup (lnet_ni_t *ni)
                         PTL_EQ_HANDLER_NONE, &plni->plni_eqh);
         if (rc != PTL_OK) {
                 CERROR("PtlEQAlloc failed: %s(%d)\n",
-		       ptllnd_errtype2str(rc), rc);
+                       ptllnd_errtype2str(rc), rc);
                 rc = -ENODEV;
                 goto failed3;
         }
@@ -730,10 +735,10 @@ ptllnd_startup (lnet_ni_t *ni)
         /*
          * Fetch the Portals NID
          */
-	rc = PtlGetId(plni->plni_nih, &plni->plni_portals_id);
+        rc = PtlGetId(plni->plni_nih, &plni->plni_portals_id);
         if (rc != PTL_OK) {
                 CERROR ("PtlGetID failed : %s(%d)\n",
-			ptllnd_errtype2str(rc), rc);
+                        ptllnd_errtype2str(rc), rc);
                 rc = -EINVAL;
                 goto failed4;
         }
@@ -753,7 +758,7 @@ ptllnd_startup (lnet_ni_t *ni)
         if (rc != 0)
                 goto failed4;
 
-	return 0;
+        return 0;
 
  failed4:
         ptllnd_destroy_buffers(ni);
@@ -765,7 +770,7 @@ ptllnd_startup (lnet_ni_t *ni)
  failed1:
         LIBCFS_FREE(plni, sizeof(*plni));
  failed0:
-	ptllnd_history_fini();
+        ptllnd_history_fini();
         ptllnd_ni_count--;
         CDEBUG(D_NET, "<<< rc=%d\n",rc);
         return rc;

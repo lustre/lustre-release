@@ -18,6 +18,10 @@ Description:
 Details    : 
 
 Severity   : normal
+Bugzilla   : 13490
+Description: fix credit flow deadlock in uptllnd
+
+Severity   : normal
 Bugzilla   : 16308
 Description: finalize network operation in reasonable time
 Details    : conf-sanity test_32a couldn't stop ost and mds because it
