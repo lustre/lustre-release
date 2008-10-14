@@ -147,7 +147,7 @@ run_test_with_stat() {
 	    do_facet ost$j "lctl set_param lquota.${FSNAME}-OST*.stats=0" > /dev/null
 	done
 	run_test "$@"
-	if [ ${STAT:-"yes"} != "no" ]; then
+	if [ ${STAT:-"yes"} != "no" -a -z "$LAST_SKIPPED" ]; then
 	    echo "statistics info begin ***************************************"
 	    do_facet mds  "lctl get_param lquota.${FSNAME}-MDT*.stats"
 	    for j in `seq $OSTCOUNT`; do
