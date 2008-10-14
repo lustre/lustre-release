@@ -52,7 +52,7 @@
 spinlock_t ll_lookup_lock = SPIN_LOCK_UNLOCKED;
 
 /* should NOT be called with the dcache lock, see fs/dcache.c */
-void ll_release(struct dentry *de)
+static void ll_release(struct dentry *de)
 {
         struct ll_dentry_data *lld;
         ENTRY;
@@ -139,14 +139,13 @@ void ll_set_dd(struct dentry *de)
         if (de->d_fsdata == NULL) {
                 struct ll_dentry_data *lld;
 
-                OBD_ALLOC(lld, sizeof(struct ll_dentry_data));
+                OBD_ALLOC_PTR(lld);
                 if (likely(lld != NULL)) {
-                        cfs_waitq_init(&lld->lld_waitq);
                         lock_dentry(de);
                         if (likely(de->d_fsdata == NULL))
                                 de->d_fsdata = lld;
                         else
-                                OBD_FREE(lld, sizeof(struct ll_dentry_data));
+                                OBD_FREE_PTR(lld);
                         unlock_dentry(de);
                 }
         }
@@ -468,6 +467,9 @@ do_lock:
         it->it_flags &= ~O_CHECK_STALE;
         if (it->it_op == IT_GETATTR && !first)
                 ll_statahead_exit(de, rc);
+        else if (first == -EEXIST)
+                ll_statahead_mark(de);
+
         /* If req is NULL, then mdc_intent_lock only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
         if (req == NULL && rc >= 0) {
@@ -584,6 +586,8 @@ out_sa:
                 first = ll_statahead_enter(de->d_parent->d_inode, &de, 0);
                 if (!first)
                         ll_statahead_exit(de, rc);
+                else if (first == -EEXIST)
+                        ll_statahead_mark(de);
         }
 
         return rc;
@@ -774,46 +778,4 @@ struct dentry_operations ll_d_ops = {
         .d_pin = ll_pin,
         .d_unpin = ll_unpin,
 #endif
-};
-
-static int ll_fini_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
-{
-        ENTRY;
-        /* need lookup */
-        RETURN(0);
-}
-
-struct dentry_operations ll_fini_d_ops = {
-        .d_revalidate = ll_fini_revalidate_nd,
-        .d_release = ll_release,
-};
-
-/*
- * It is for the following race condition:
- * When someone (maybe statahead thread) adds the dentry to the dentry hash
- * table, the dentry's "d_op" maybe NULL, at the same time, another (maybe
- * "ls -l") process finds such dentry by "do_lookup()" without "do_revalidate()"
- * called. It causes statahead window lost, and maybe other issues. --Fan Yong
- */
-static int ll_init_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
-{
-        struct l_wait_info lwi = { 0 };
-        struct ll_dentry_data *lld;
-        ENTRY;
-
-        ll_set_dd(dentry);
-        lld = ll_d2d(dentry);
-        if (unlikely(lld == NULL))
-                RETURN(-ENOMEM);
-
-        l_wait_event(lld->lld_waitq, dentry->d_op != &ll_init_d_ops, &lwi);
-        if (likely(dentry->d_op == &ll_d_ops))
-                RETURN(ll_revalidate_nd(dentry, nd));
-        else
-                RETURN(dentry->d_op == &ll_fini_d_ops ? 0 : -EINVAL);
-}
-
-struct dentry_operations ll_init_d_ops = {
-        .d_revalidate = ll_init_revalidate_nd,
-        .d_release = ll_release,
 };
