@@ -176,18 +176,7 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
         result->d_flags |= DCACHE_DISCONNECTED;
 
 #endif
-        ll_set_dd(result);
-
-        lock_dentry(result);
-        if (unlikely(result->d_op == &ll_init_d_ops)) {
-                result->d_op = &ll_d_ops;
-                unlock_dentry(result);
-                smp_wmb();
-                ll_d_wakeup(result);
-        } else {
-                result->d_op = &ll_d_ops;
-                unlock_dentry(result);
-        }
+        ll_dops_init(result, 1);
 
         RETURN(result);
 }
