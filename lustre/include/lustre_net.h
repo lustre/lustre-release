@@ -155,6 +155,9 @@
 #define OST_MAXREQSIZE  (5 * 1024)
 #define OST_MAXREPSIZE  (9 * 1024)
 
+/* Macro to hide a typecast. */
+#define ptlrpc_req_async_args(req) ((void *)&req->rq_async_args)
+
 struct ptlrpc_connection {
         struct hlist_node       c_hash;
         lnet_nid_t              c_self;
