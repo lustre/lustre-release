@@ -45,7 +45,7 @@ if [ "$WAS_MOUNTED" ]; then
 fi
 
 get_mnt_devs() {
-	DEVS=`cat /proc/fs/lustre/$1/*/mntdev`
+	DEVS=`lctl get_param -n $1.*.mntdev`
 	for DEV in $DEVS; do
 		case $DEV in
 		*loop*) losetup $DEV | sed -e "s/.*(//" -e "s/).*//" ;;

@@ -118,7 +118,7 @@ test_5() {
 run_test 5 "Fail OST during iozone"
 
 kbytesfree() {
-   lctl get_param -n osc.*-osc-*.kbytesfree | awk '{total+=$1} END {print total}'
+   calc_osc_kbytes kbytesfree
 }
 
 test_6() {
