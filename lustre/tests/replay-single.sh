@@ -20,6 +20,13 @@ GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 # bug number:
 ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT"
 
+if [ "$FAILURE_MODE" = "HARD" ] && mixed_ost_devs; then
+    CONFIG_EXCEPTIONS="0b 42 47 61a 61c"
+    echo -n "Several ost services on one ost node are used with FAILURE_MODE=$FAILURE_MODE. "
+    echo "Except the tests: $CONFIG_EXCEPTIONS"
+    ALWAYS_EXCEPT="$ALWAYS_EXCEPT $CONFIG_EXCEPTIONS"
+fi
+
 #                                                  63 min  7 min  AT AT AT AT"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="1 2 3 4 6 12 16 44a     44b    65 66 67 68"
 
