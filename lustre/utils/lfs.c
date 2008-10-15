@@ -1234,7 +1234,6 @@ static int lfs_quotachown(int argc, char **argv)
         return rc;
 }
 
-
 static int lfs_quotacheck(int argc, char **argv)
 {
         int c, check_type = 0;
@@ -1275,6 +1274,8 @@ static int lfs_quotacheck(int argc, char **argv)
         memset(&qctl, 0, sizeof(qctl));
         qctl.qc_cmd = LUSTRE_Q_QUOTAOFF;
         qctl.qc_type = check_type;
+        qctl.qc_id = QFMT_LDISKFS; /* compatibility: 1.6.5 and earliers
+                                    * take this parameter into account */
         rc = llapi_quotactl(mnt, &qctl);
         if (rc) {
                 fprintf(stderr, "quota off failed: %s\n", strerror(errno));
@@ -1299,6 +1300,8 @@ static int lfs_quotacheck(int argc, char **argv)
         memset(&qctl, 0, sizeof(qctl));
         qctl.qc_cmd = LUSTRE_Q_QUOTAON;
         qctl.qc_type = check_type;
+        qctl.qc_id = QFMT_LDISKFS; /* compatibility: 1.6.5 and earliers
+                                    * take this parameter into account */
         rc = llapi_quotactl(mnt, &qctl);
         if (rc) {
                 if (*obd_type)
@@ -1322,6 +1325,8 @@ static int lfs_quotaon(int argc, char **argv)
 
         memset(&qctl, 0, sizeof(qctl));
         qctl.qc_cmd = LUSTRE_Q_QUOTAON;
+        qctl.qc_id = QFMT_LDISKFS; /* compatibility: 1.6.5 and earliers
+                                    * take this parameter into account */
 
         optind = 0;
         while ((c = getopt(argc, argv, "ugf")) != -1) {
