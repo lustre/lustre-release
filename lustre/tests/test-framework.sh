@@ -1713,6 +1713,14 @@ calc_llite_stats() {
         echo $res
 }
 
+calc_sum () {
+        awk 'BEGIN {s = 0}; {s += $1}; END {print s}'
+}
+
+calc_osc_kbytes () {
+        $LCTL get_param -n osc.*[oO][sS][cC][-_]*.$1 | calc_sum
+}
+
 # save_lustre_params(node, parameter_mask)
 # generate a stream of formatted strings (<node> <param name>=<param value>)
 save_lustre_params() {
