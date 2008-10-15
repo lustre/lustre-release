@@ -1238,7 +1238,7 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
         struct lov_request *req;
         struct list_head *pos;
         struct lov_obd *lov;
-        int rc = 0, err;
+        int rc = 0, err = 0;
         ENTRY;
 
         ASSERT_LSM_MAGIC(lsm);
@@ -1258,7 +1258,6 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
                 GOTO(out, rc);
 
         list_for_each (pos, &set->set_list) {
-                int err;
                 req = list_entry(pos, struct lov_request, rq_link);
 
                 if (oa->o_valid & OBD_MD_FLCOOKIE)
