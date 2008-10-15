@@ -1665,7 +1665,6 @@ run_one() {
     unset TESTNAME
     unset tdir
     umask $SAVE_UMASK
-    $CLEANUP
 }
 
 canonical_path() {
