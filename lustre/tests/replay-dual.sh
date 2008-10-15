@@ -13,6 +13,13 @@ CLEANUP=${CLEANUP:-""}
 MOUNT_2=${MOUNT_2:-"yes"}
 . $LUSTRE/tests/test-framework.sh
 
+if [ "$FAILURE_MODE" = "HARD" ] && mixed_ost_devs; then
+    CONFIG_EXCEPTIONS="17"
+    echo -n "Several ost services on one ost node are used with FAILURE_MODE=$FAILURE_MODE. "
+    echo "Except the tests: $CONFIG_EXCEPTIONS"
+    ALWAYS_EXCEPT="$ALWAYS_EXCEPT $CONFIG_EXCEPTIONS"
+fi
+
 init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
