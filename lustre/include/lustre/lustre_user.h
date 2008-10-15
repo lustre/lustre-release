@@ -294,6 +294,8 @@ struct mds_grp_downcall_data {
 
 #endif /* !__KERNEL__ */
 
+#define QFMT_LDISKFS 2 /* pre-1.6.6 compatibility */
+
 typedef enum lustre_quota_version {
         LUSTRE_QUOTA_V1 = 0,
         LUSTRE_QUOTA_V2 = 1
