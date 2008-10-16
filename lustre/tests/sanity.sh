@@ -3705,7 +3705,7 @@ test_101b() {
 	local ITERATION=$((FILE_LENGTH/STRIDE_SIZE))
 	# prepare the read-ahead file
 	setup_101b
-	cancel_lru_locks osc 
+	cancel_lru_locks osc
 	for BIDX in 2 4 8 16 32 64 128 256; do
 		local BSIZE=$((BIDX*4096))
 		local READ_COUNT=$((STRIPE_SIZE/BSIZE))
@@ -4032,6 +4032,15 @@ test_102h() { # bug 15777
 	log "$XBIG still valid after growing $XSML"
 }
 run_test 102h "grow xattr from inside inode to external block"
+
+test_102i() { # bug 17038
+        touch $DIR/$tfile
+        ln -s $DIR/$tfile $DIR/${tfile}link
+        getfattr -n trusted.lov $DIR/$tfile || error "lgetxattr on $DIR/$tfile failed"
+        getfattr -h -n trusted.lov $DIR/${tfile}link 2>&1 | grep -i "no such attr" || error "error for lgetxattr on $DIR/${tfile}link is not ENODATA"
+        rm -f $DIR/$tfile $DIR/${tfile}link
+}
+run_test 102i "lgetxattr test on symbolic link ============"
 
 run_acl_subtest()
 {
@@ -5523,7 +5532,7 @@ test_151() {
 
 	$LCTL set_param obdfilter.*.writethrough_cache_enable=1
 
-	# pages should be in the case right after write 
+	# pages should be in the case right after write
         dd if=/dev/urandom of=$DIR/$tfile bs=4k count=$CPAGES||error "dd failed"
 	BEFORE=`roc_hit`
         cancel_lru_locks osc
