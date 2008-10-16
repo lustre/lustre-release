@@ -1417,7 +1417,8 @@ struct dentry *filter_parent(struct obd_device *obd, obd_gr group, obd_id objid)
         struct filter_subdirs *subdirs;
         LASSERT(group < filter->fo_group_count); /* FIXME: object groups */
 
-        if (group > 0 || filter->fo_subdir_count == 0)
+        if ((group > 0 && group < FILTER_GROUP_MDS0) || 
+             filter->fo_subdir_count == 0)
                 return filter->fo_dentry_O_groups[group];
 
         subdirs = &filter->fo_dentry_O_sub[group];
@@ -2364,7 +2365,7 @@ struct obd_llog_group *filter_find_olg(struct obd_device *obd, int group)
 
         filter = &obd->u.filter;
 
-        if (group == OBD_LLOG_GROUP)
+        if (group == FILTER_GROUP_LLOG)
                 RETURN(&obd->obd_olg);
 
         spin_lock(&filter->fo_llog_list_lock);
@@ -2386,7 +2387,7 @@ struct obd_llog_group *filter_find_create_olg(struct obd_device *obd, int group)
 
         filter = &obd->u.filter;
 
-        if (group == OBD_LLOG_GROUP)
+        if (group == FILTER_GROUP_LLOG)
                 RETURN(&obd->obd_olg);
 
         spin_lock(&filter->fo_llog_list_lock);

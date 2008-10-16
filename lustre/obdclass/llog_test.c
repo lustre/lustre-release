@@ -722,7 +722,7 @@ static int llog_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 RETURN(-EINVAL);
         }
 
-        rc = obd_llog_init(obd, OBD_LLOG_GROUP, tgt, 0, NULL, NULL);
+        rc = obd_llog_init(obd, NULL, tgt, 0, NULL, NULL);
         if (rc)
                 RETURN(rc);
 

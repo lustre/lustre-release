@@ -932,8 +932,6 @@ struct target_recovery_data {
         struct completion trd_finishing;
 };
 
-#define OBD_LLOG_GROUP  0
-
 enum filter_groups {
         FILTER_GROUP_LLOG = 1,
         FILTER_GROUP_ECHO,
