@@ -337,6 +337,7 @@ typedef spinlock_t rwlock_t;
 #ifndef ERESTARTSYS
 #define ERESTARTSYS ERESTART
 #endif
+#undef HZ
 #define HZ 1
 
 /* random */
