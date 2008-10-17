@@ -898,24 +898,25 @@ reset_enospc() {
 	[ "$1" ] && FAIL_LOC=$1 || FAIL_LOC=0
 	mkdir -p $DIR/d27/nospc
 	rmdir $DIR/d27/nospc
-	lctl set_param fail_loc=$FAIL_LOC
+	do_nodes $(comma_list $(osts_nodes)) lctl set_param fail_loc=$FAIL_LOC
 }
 
 exhaust_precreations() {
 	OSTIDX=$1
-	OST=$(lctl get_param -n lov.${LOVNAME}.target_obd | grep ${OSTIDX}": " | \
+
+	OST=$(lfs osts | grep ${OSTIDX}": " | \
 	    awk '{print $2}' | sed -e 's/_UUID$//')
 	# on the mdt's osc
-	last_id=$(lctl get_param -n osc.${OST}-osc.prealloc_last_id)
-	next_id=$(lctl get_param -n osc.${OST}-osc.prealloc_next_id)
+	last_id=$(do_facet mds lctl get_param -n osc.${OST}-osc.prealloc_last_id)
+	next_id=$(do_facet mds lctl get_param -n osc.${OST}-osc.prealloc_next_id)
 
 	mkdir -p $DIR/d27/${OST}
 	$SETSTRIPE $DIR/d27/${OST} -i $OSTIDX -c 1
 	#define OBD_FAIL_OST_ENOSPC 0x215
-	lctl set_param fail_loc=0x215
+	do_facet ost$((OSTIDX + 1)) lctl set_param fail_loc=0x215
 	echo "Creating to objid $last_id on ost $OST..."
 	createmany -o $DIR/d27/${OST}/f $next_id $((last_id - next_id + 2))
-	lctl get_param -n osc.${OST}-osc.prealloc* | grep '[0-9]'
+	do_facet mds "lctl get_param -n osc.${OST}-osc.prealloc*" | grep '[0-9]'
 	reset_enospc $2
 }
 
@@ -929,7 +930,8 @@ exhaust_all_precreations() {
 
 test_27n() {
 	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
-	remote_mds && skip "remote MDS" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return        
 
 	reset_enospc
 	rm -f $DIR/d27/f27n
@@ -943,7 +945,8 @@ run_test 27n "create file with some full OSTs =================="
 
 test_27o() {
 	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
-	remote_mds && skip "remote MDS" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return        
 
 	reset_enospc
 	rm -f $DIR/d27/f27o
@@ -958,7 +961,8 @@ run_test 27o "create file with all full OSTs (should error) ===="
 
 test_27p() {
 	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
-	remote_mds && skip "remote MDS" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return        
 
 	reset_enospc
 	rm -f $DIR/d27/f27p
@@ -977,7 +981,8 @@ run_test 27p "append to a truncated file with some full OSTs ==="
 
 test_27q() {
 	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
-	remote_mds && skip "remote MDS" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return        
 
 	reset_enospc
 	rm -f $DIR/d27/f27q
@@ -997,7 +1002,8 @@ run_test 27q "append to truncated file with all OSTs full (should error) ==="
 
 test_27r() {
 	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
-	remote_mds && skip "remote MDS" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return        
 
 	reset_enospc
 	rm -f $DIR/d27/f27r
@@ -1028,7 +1034,7 @@ run_test 27t "check that utils parse path correctly"
 
 test_27u() { # bug 4900
 	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
-	remote_mds && skip "remote MDS" && return
+        remote_ost_nodsh && skip "remote OST with nodsh" && return
 
         #define OBD_FAIL_MDS_OSC_PRECREATE      0x139
 
@@ -1048,7 +1054,8 @@ run_test 27u "skip object creation on OSC w/o objects =========="
 
 test_27v() { # bug 4900
 	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
-	remote_mds && skip "remote MDS" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return        
 
         exhaust_all_precreations
 
@@ -1566,10 +1573,12 @@ test_36f() {
 run_test 36f "utime on file racing with OST BRW write =========="
 
 test_36g() {
-	remote_ost && skip "remote OST" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+
+	mkdir -p $DIR/$tdir
 	export FMD_MAX_AGE=`do_facet ost1 lctl get_param -n obdfilter.*.client_cache_seconds 2> /dev/null | head -n 1`
 	FMD_BEFORE="`awk '/ll_fmd_cache/ { print $2 }' /proc/slabinfo`"
-	touch $DIR/d36/$tfile
+	touch $DIR/$tdir/$tfile
 	sleep $((FMD_MAX_AGE + 12))
 	FMD_AFTER="`awk '/ll_fmd_cache/ { print $2 }' /proc/slabinfo`"
 	[ "$FMD_AFTER" -gt "$FMD_BEFORE" ] && \
@@ -2225,13 +2234,21 @@ test_52c() { # 12848 simulating client < 1.4.7
 run_test 52c "immutable flag test for client < 1.4.7 ======="
 
 test_53() {
-	remote_mds && skip "remote MDS" && return
-	
-	for VALUE in `lctl get_param osc.*-osc.prealloc_last_id`; do
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+
+	local param
+	local ostname
+	local mds_last
+	local ost_last
+	local ostnum
+
+	for VALUE in $(do_facet mds lctl get_param osc.*-osc.prealloc_last_id); do
 		param=`echo ${VALUE[0]} | cut -d "=" -f1`;
 		ostname=`echo $param | cut -d "." -f2 | cut -d - -f 1-2`
-		mds_last=`lctl get_param -n $param`
-		ost_last=`lctl get_param -n obdfilter.$ostname.last_id`
+		mds_last=$(do_facet mds lctl get_param -n $param)
+		ostnum=$(echo $ostname | sed 's/lustre-OST//g' | awk '{print ($1+0)}' )
+		ost_last=$(do_facet ost$ostnum lctl get_param -n obdfilter.$ostname.last_id)
 		echo "$ostname.last_id=$ost_last ; MDS.last_id=$mds_last"
 		if [ $ost_last != $mds_last ]; then
 			error "$ostname.last_id=$ost_last ; MDS.last_id=$mds_last"
@@ -2580,12 +2597,13 @@ test_56q() {
 run_test 56q "check lfs find -gid and ! -gid ==============================="
 
 test_57a() {
-	remote_mds && skip "remote MDS" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+
 	local MNTDEV="mds.*.mntdev"
-	DEV=$(lctl get_param -n $MNTDEV)
+	DEV=$(do_facet mds lctl get_param -n $MNTDEV)
 	[ -z "$DEV" ] && error "can't access $MNTDEV"
-	for DEV in `lctl get_param -n $MNTDEV`; do
-		dumpe2fs -h $DEV > $TMP/t57a.dump || error "can't access $DEV"
+	for DEV in $(do_facet mds lctl get_param -n $MNTDEV); do
+		do_facet mds dumpe2fs -h $DEV > $TMP/t57a.dump || error "can't access $DEV"
 		DEVISIZE=`awk '/Inode size:/ { print $3 }' $TMP/t57a.dump`
 		[ "$DEVISIZE" -gt 128 ] || error "inode size $DEVISIZE"
 		rm $TMP/t57a.dump
@@ -2864,7 +2882,7 @@ run_test 65j "set default striping on root directory (bug 6367)="
 
 test_65k() { # bug11679
         [ "$OSTCOUNT" -lt 2 ] && skip "too few OSTs" && return
-        remote_mds_nodsh && skip "remote MDS" && return
+        remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
         echo "Check OST status: "
         MDS_OSCS=`do_facet mds lctl dl | awk '/[oO][sS][cC].*md[ts]/ { print $4 }'`
@@ -3025,30 +3043,29 @@ run_test 68 "support swapping to Lustre ========================"
 # bug5265, obdfilter oa2dentry return -ENOENT
 # #define OBD_FAIL_OST_ENOENT 0x217
 test_69() {
-	[ $(lctl get_param -n devices |  grep -c obdfilter) -eq 0 ] &&
-		skip "skipping test for remote OST" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	f="$DIR/$tfile"
-	touch $f
+	$SETSTRIPE $f -c 1 -i 0 
 
 	$DIRECTIO write ${f}.2 0 1 || error "directio write error"
 
 	#define OBD_FAIL_OST_ENOENT 0x217
-	lctl set_param fail_loc=0x217
+	do_facet ost1 lctl set_param fail_loc=0x217
 	truncate $f 1 # vmtruncate() will ignore truncate() error.
 	$DIRECTIO write $f 0 2 && error "write succeeded, expect -ENOENT"
 
-	lctl set_param fail_loc=0
+	do_facet ost1 lctl set_param fail_loc=0
 	$DIRECTIO write $f 0 2 || error "write error"
 
 	cancel_lru_locks osc
 	$DIRECTIO read $f 0 1 || error "read error"
 
 	#define OBD_FAIL_OST_ENOENT 0x217
-	lctl set_param fail_loc=0x217
+	do_facet ost1 lctl set_param fail_loc=0x217
 	$DIRECTIO read $f 1 1 && error "read succeeded, expect -ENOENT"
 
-	lctl set_param fail_loc=0
+	do_facet ost1 lctl set_param fail_loc=0
 	rm -f $f
 }
 run_test 69 "verify oa2dentry return -ENOENT doesn't LBUG ======"
@@ -3371,29 +3388,31 @@ test_77f() { # bug 10889
 run_test 77f "repeat checksum error on write (expect error) ===="
 
 test_77g() { # bug 10889
-	[ $(lctl get_param -n devices | grep -c obdfilter) -eq 0 ] && \
-		skip "remote OST" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+
 	[ ! -f $F77_TMP ] && setup_f77
+
+	$SETSTRIPE $DIR/f77g -c 1 -i 0
 	#define OBD_FAIL_OST_CHECKSUM_RECEIVE       0x21a
-	lctl set_param fail_loc=0x8000021a
+	do_facet ost1 lctl set_param fail_loc=0x8000021a
 	set_checksums 1
 	dd if=$F77_TMP of=$DIR/f77g bs=1M count=$F77SZ || \
 		error "write error: rc=$?"
-	lctl set_param fail_loc=0
+	do_facet ost1 lctl set_param fail_loc=0
 	set_checksums 0
 }
 run_test 77g "checksum error on OST write ======================"
 
 test_77h() { # bug 10889
-	[ $(lctl get_param -n devices | grep -c obdfilter) -eq 0 ] && \
-		skip "remote OST" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+
 	[ ! -f $DIR/f77g ] && skip "requires 77g - skipping" && return
 	cancel_lru_locks osc
 	#define OBD_FAIL_OST_CHECKSUM_SEND          0x21b
-	lctl set_param fail_loc=0x8000021b
+	do_facet ost1 lctl set_param fail_loc=0x8000021b
 	set_checksums 1
 	cmp $F77_TMP $DIR/f77g || error "file compare failed"
-	lctl set_param fail_loc=0
+	do_facet ost1 lctl set_param fail_loc=0
 	set_checksums 0
 }
 run_test 77h "checksum error on OST read ======================="
@@ -3465,17 +3484,11 @@ test_78() { # bug 10901
 run_test 78 "handle large O_DIRECT writes correctly ============"
 
 test_79() { # bug 12743
-	[ $(lctl get_param -n devices | grep -c obdfilter) -eq 0 ] &&
-		skip "skipping test for remote OST" && return
-
 	wait_delete_completed
 
-        BKTOTAL=`lctl get_param -n obdfilter.*.kbytestotal |
-                 awk 'BEGIN{total=0}; {total+=$1}; END{print total}'`
-        BKFREE=`lctl get_param -n obdfilter.*.kbytesfree |
-                awk 'BEGIN{free=0}; {free+=$1}; END{print free}'`
-        BKAVAIL=`lctl get_param -n obdfilter.*.kbytesavail |
-                 awk 'BEGIN{avail=0}; {avail+=$1}; END{print avail}'`
+        BKTOTAL=$(calc_osc_kbytes kbytestotal)
+        BKFREE=$(calc_osc_kbytes kbytesfree)
+        BKAVAIL=$(calc_osc_kbytes kbytesavail)
         STRING=`df -P $MOUNT | tail -n 1 | awk '{print $2","$3","$4}'`
         DFTOTAL=`echo $STRING | cut -d, -f1`
         DFUSED=`echo $STRING  | cut -d, -f2`
@@ -4232,7 +4245,6 @@ free_min_max () {
 
 test_116() {
 	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
-	remote_mds && skip "remote MDS" && return
 
 	echo -n "Free space priority "
 	lctl get_param -n lov.*.qos_prio_free
@@ -4361,7 +4373,7 @@ run_test 118a "verify O_SYNC works =========="
 
 test_118b()
 {
-	remote_ost_nodsh && skip "remote OST" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_async
 
@@ -4396,7 +4408,7 @@ run_test 118b "Reclaim dirty pages on fatal error =========="
 
 test_118c()
 {
-	remote_ost_nodsh && skip "remote OST" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_async
 
@@ -4438,7 +4450,7 @@ run_test 118c "Fsync blocks on EROFS until dirty pages are flushed =========="
 
 test_118d()
 {
-	remote_ost_nodsh && skip "remote OST" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_async
 
@@ -4542,7 +4554,7 @@ test_118g() {
 run_test 118g "Don't stay in wait if we got local -ENOMEM  =========="
 
 test_118h() {
-	remote_ost_nodsh && skip "remote OST" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
         reset_async
 
@@ -4576,7 +4588,7 @@ test_118h() {
 run_test 118h "Verify timeout in handling recoverables errors  =========="
 
 test_118i() {
-	remote_ost_nodsh && skip "remote OST" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
         reset_async
 
@@ -4614,7 +4626,7 @@ test_118i() {
 run_test 118i "Fix error before timeout in recoverable error  =========="
 
 test_118j() {
-	remote_ost_nodsh && skip "remote OST" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
         reset_async
 
@@ -4650,6 +4662,8 @@ run_test 118j "Simulate unrecoverable OST side error =========="
 
 test_118k()
 {
+	remote_ost_nodsh && skip "remote OSTs with nodsh" && return
+
 	#define OBD_FAIL_OST_BRW_WRITE_BULK      0x20e
 	set_nodes_failloc "$(osts_nodes)" 0x20e
 	mkdir -p $DIR/$tdir
@@ -5209,6 +5223,7 @@ run_test 128 "interactive lfs for 2 consecutive find's"
 
 test_129() {
         [ "$FSTYPE" != "ldiskfs" ] && skip "not needed for FSTYPE=$FSTYPE" && return 0
+        remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
         DEV=$(basename $(do_facet mds lctl get_param -n mds.*.mntdev))
         [ -z "$DEV" ] && error "can't access mds mntdev"
