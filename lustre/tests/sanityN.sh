@@ -335,16 +335,17 @@ test_16() {
 run_test 16 "2500 iterations of dual-mount fsx ================="
 
 test_17() { # bug 3513, 3667
-	[ ! -d /proc/fs/lustre/ost ] && skip "remote OST, skipping OST-only test" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
-	cp /etc/termcap $DIR1/f17
+	lfs setstripe $DIR1/$tfile -i 0 -c 1
+	cp /etc/termcap $DIR1/$tfile
 	cancel_lru_locks osc > /dev/null
 	#define OBD_FAIL_ONCE|OBD_FAIL_LDLM_CREATE_RESOURCE    0x30a
-	lctl set_param fail_loc=0x8000030a
-	ls -ls $DIR1/f17 | awk '{ print $1,$6 }' > $DIR1/f17-1 & \
-	ls -ls $DIR2/f17 | awk '{ print $1,$6 }' > $DIR2/f17-2
+	do_facet ost1 lctl set_param fail_loc=0x8000030a
+	ls -ls $DIR1/$tfile | awk '{ print $1,$6 }' > $DIR1/$tfile-1 & \
+	ls -ls $DIR2/$tfile | awk '{ print $1,$6 }' > $DIR2/$tfile-2
 	wait
-	diff -u $DIR1/f17-1 $DIR2/f17-2 || error "files are different"
+	diff -u $DIR1/$tfile-1 $DIR2/$tfile-2 || error "files are different"
 }
 run_test 17 "resource creation/LVB creation race ==============="
 
@@ -649,6 +650,8 @@ test_32a() { # bug 11270
 run_test 32a "lockless truncate"
 
 test_32b() { # bug 11270
+        remote_ost_nodsh && skip "remote OST with nodsh" && return
+
         local node
         local p="$TMP/sanityN-$TESTNAME.parameters"
         save_lustre_params $HOSTNAME "llite.*.contention_seconds" > $p
