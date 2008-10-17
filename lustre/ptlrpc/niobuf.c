@@ -536,6 +536,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
         request->rq_net_err = 0;
         request->rq_resend = 0;
         request->rq_restart = 0;
+        request->rq_rep_swab_mask = 0;
         spin_unlock(&request->rq_lock);
 
         if (!noreply) {
