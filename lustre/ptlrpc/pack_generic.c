@@ -70,7 +70,7 @@ static inline int lustre_msg_hdr_size_v2(int count)
         return size_round(offsetof(struct lustre_msg_v2, lm_buflens[count]));
 }
 
-static int lustre_msg_need_swab(struct lustre_msg *msg)
+int lustre_msg_need_swab(struct lustre_msg *msg)
 {
         return (msg->lm_magic == LUSTRE_MSG_MAGIC_V1_SWABBED) ||
                (msg->lm_magic == LUSTRE_MSG_MAGIC_V2_SWABBED);
@@ -897,6 +897,20 @@ static inline int lustre_unpack_ptlrpc_body_v2(struct lustre_msg_v2 *m,
         }
 
         return 0;
+}
+
+int lustre_unpack_msg_ptlrpc_body(struct lustre_msg *msg,
+                                  int offset, int swab_needed)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+                return 0;
+        case LUSTRE_MSG_MAGIC_V2:
+                return lustre_unpack_ptlrpc_body_v2(msg, offset, swab_needed);
+        default:
+                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+                return -EINVAL;
+        }
 }
 
 int lustre_unpack_req_ptlrpc_body(struct ptlrpc_request *req, int offset)
