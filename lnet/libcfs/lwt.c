@@ -86,7 +86,7 @@ lwt_lookup_string (int *size, char *knl_ptr,
          * trying to determine the string length, so we're trusting our
          * caller... */
 
-        if (!capable(CAP_SYS_ADMIN))
+        if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                 return (-EPERM);
 
         if (user_size > 0 && 
@@ -117,7 +117,7 @@ lwt_control (int enable, int clear)
         int          i;
         int          j;
 
-        if (!capable(CAP_SYS_ADMIN))
+        if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                 return (-EPERM);
 
         if (!enable) {
@@ -164,7 +164,7 @@ lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
         int          i;
         int          j;
 
-        if (!capable(CAP_SYS_ADMIN))
+        if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                 return (-EPERM);
 
         *ncpu = num_online_cpus();

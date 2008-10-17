@@ -33,7 +33,6 @@ CREATETEST=${CREATETEST:-createtest}
 LFS=${LFS:-lfs}
 SETSTRIPE=${SETSTRIPE:-"$LFS setstripe"}
 GETSTRIPE=${GETSTRIPE:-"$LFS getstripe"}
-LSTRIPE=${LSTRIPE:-"$LFS setstripe"}
 LFIND=${LFIND:-"$LFS find"}
 LVERIFY=${LVERIFY:-ll_dirstripe_verify}
 LSTRIPEINFO=${LSTRIPEINFO:-ll_getstripe_info}
@@ -803,7 +802,7 @@ run_test 27c "create two stripe file f01 ======================="
 
 test_27d() {
 	mkdir -p $DIR/d27
-	$SETSTRIPE $DIR/d27/fdef 0 -1 0 || error "lstripe failed"
+	$SETSTRIPE -c0 -i-1 -s0 $DIR/d27/fdef || error "lstripe failed"
 	$CHECKSTAT -t file $DIR/d27/fdef || error "checkstat failed"
 	dd if=/dev/zero of=$DIR/d27/fdef bs=4k count=4 || error
 }
@@ -1011,7 +1010,7 @@ run_test 27r "stripe file with some full OSTs (shouldn't LBUG) ="
 
 test_27s() { # bug 10725
 	mkdir -p $DIR/$tdir
-	$LSTRIPE $DIR/$tdir $((2048 * 1024 * 1024)) -1 2 && \
+	$SETSTRIPE $DIR/$tdir $((2048 * 1024 * 1024)) -1 2 && \
 		error "stripe width >= 2^32 succeeded" || true
 }
 run_test 27s "lsm_xfersize overflow (should error) (bug 10725)"
@@ -1075,14 +1074,15 @@ run_test 27v "skip object creation on slow OST ================="
 
 test_27w() { # bug 10997
         mkdir -p $DIR/d27w || error "mkdir failed"
-        $LSTRIPE $DIR/d27w/f0 -s 65536 || error "lstripe failed"
+        $SETSTRIPE $DIR/d27w/f0 -s 65536 || error "lstripe failed"
         size=`$LSTRIPEINFO $DIR/d27w/f0 | awk {'print $1'}`
         [ $size -ne 65536 ] && error "stripe size $size != 65536" || true
 
         [ "$OSTCOUNT" -lt "2" ] && skip "skipping multiple stripe count/offset test" && return
         for i in `seq 1 $OSTCOUNT`; do
                 offset=$(($i-1))
-                $LSTRIPE $DIR/d27w/f$i -c $i -i $offset || error "lstripe -c $i -i $offset failed"
+                log setstripe $DIR/d27w/f$i -c $i -i $offset
+                $SETSTRIPE $DIR/d27w/f$i -c $i -i $offset || error "lstripe -c $i -i $offset failed"
                 count=`$LSTRIPEINFO $DIR/d27w/f$i | awk {'print $2'}`
                 index=`$LSTRIPEINFO $DIR/d27w/f$i | awk {'print $3'}`
                 [ $count -ne $i ] && error "stripe count $count != $i" || true
@@ -2421,7 +2421,7 @@ setup_56_special() {
 }
 
 test_56g() {
-        $LSTRIPE -d $DIR
+        $SETSTRIPE -d $DIR
 
         setup_56 $NUMFILES $NUMDIRS
 
@@ -2437,7 +2437,7 @@ test_56g() {
 run_test 56g "check lfs find -name ============================="
 
 test_56h() {
-        $LSTRIPE -d $DIR
+        $SETSTRIPE -d $DIR
 
         setup_56 $NUMFILES $NUMDIRS
 
@@ -2815,7 +2815,7 @@ test_65e() {
 	touch $DIR/d65/f6
 	$LVERIFY $DIR/d65 $DIR/d65/f6 || error "lverify failed"
 }
-run_test 65e "directory setstripe 0 -1 0 ======================="
+run_test 65e "directory setstripe defaults ======================="
 
 test_65f() {
 	mkdir -p $DIR/d65f
@@ -3266,9 +3266,8 @@ set_checksums()
 {
 	[ "$ORIG_CSUM" ] || ORIG_CSUM=`lctl get_param -n osc.*.checksums |
 				       head -n1`
-	for f in $LPROC/osc/*/checksums; do
-		echo $1 >> $f
-	done
+
+	lctl set_param -n osc.*.checksums=$1
 	return 0
 }
 
@@ -3706,7 +3705,7 @@ test_101b() {
 	local ITERATION=$((FILE_LENGTH/STRIDE_SIZE))
 	# prepare the read-ahead file
 	setup_101b
-	cancel_lru_locks osc 
+	cancel_lru_locks osc
 	for BIDX in 2 4 8 16 32 64 128 256; do
 		local BSIZE=$((BIDX*4096))
 		local READ_COUNT=$((STRIPE_SIZE/BSIZE))
@@ -4034,6 +4033,15 @@ test_102h() { # bug 15777
 }
 run_test 102h "grow xattr from inside inode to external block"
 
+test_102i() { # bug 17038
+        touch $DIR/$tfile
+        ln -s $DIR/$tfile $DIR/${tfile}link
+        getfattr -n trusted.lov $DIR/$tfile || error "lgetxattr on $DIR/$tfile failed"
+        getfattr -h -n trusted.lov $DIR/${tfile}link 2>&1 | grep -i "no such attr" || error "error for lgetxattr on $DIR/${tfile}link is not ENODATA"
+        rm -f $DIR/$tfile $DIR/${tfile}link
+}
+run_test 102i "lgetxattr test on symbolic link ============"
+
 run_acl_subtest()
 {
     $LUSTRE/tests/acl/run $LUSTRE/tests/acl/$1.test
@@ -4329,7 +4337,7 @@ reset_async() {
 	FILE=$DIR/reset_async
 
 	# Ensure all OSCs are cleared
-	$LSTRIPE $FILE 0 -1 -1
+	$SETSTRIPE $FILE 0 -1 -1
         dd if=/dev/zero of=$FILE bs=64k count=$OSTCOUNT
 	sync
         rm $FILE
@@ -5152,7 +5160,7 @@ test_126() { # bug 12829/13455
 run_test 126 "check that the fsgid provided by the client is taken into account"
 
 test_127() { # bug 15521
-        $LSTRIPE -i 0 -c 1 $DIR/$tfile
+        $SETSTRIPE -i 0 -c 1 $DIR/$tfile
         $LCTL set_param osc.*.stats=0
         FSIZE=$((2048 * 1024))
         dd if=/dev/zero of=$DIR/$tfile bs=$FSIZE count=1
@@ -5161,9 +5169,10 @@ test_127() { # bug 15521
 
         $LCTL get_param osc.*0000-osc-*.stats | grep samples > $DIR/${tfile}.tmp
         while read NAME COUNT SAMP UNIT MIN MAX SUM SUMSQ; do
-                eval $NAME=$COUNT
                 echo "got $COUNT $NAME"
-
+                [ ! $MIN ] && error "Missing min value for $NAME proc entry"
+                eval $NAME=$COUNT || error "Wrong proc format"
+		
                 case $NAME in
                         read_bytes|write_bytes)
                         [ $MIN -lt 4096 ] && error "min is too small: $MIN"
@@ -5181,8 +5190,10 @@ test_127() { # bug 15521
         done < $DIR/${tfile}.tmp
 
         #check that we actually got some stats
-        [ "$read_bytes" ] || error "no read done"
-        [ "$write_bytes" ] || error "no write done"
+        [ "$read_bytes" ] || error "Missing read_bytes stats"
+        [ "$write_bytes" ] || error "Missing write_bytes stats"
+        [ "$read_bytes" != 0 ] || error "no read done"
+        [ "$write_bytes" != 0 ] || error "no write done"
 }
 run_test 127 "verify the client stats are sane"
 
@@ -5460,6 +5471,120 @@ test_130e() {
 }
 run_test 130e "FIEMAP (test continuation FIEMAP calls)"
 
+test_150() {
+	local TF="$TMP/$tfile"
+
+        dd if=/dev/urandom of=$TF bs=6096 count=1 || error "dd failed"
+        cp $TF $DIR/$tfile
+        cancel_lru_locks osc
+        cmp $TF $DIR/$tfile || error "$TMP/$tfile $DIR/$tfile differ"
+        remount_client $MOUNT
+        cmp $TF $DIR/$tfile || error "$TF $DIR/$tfile differ (remount)"
+
+        $TRUNCATE $TF 6000
+        $TRUNCATE $DIR/$tfile 6000
+        cancel_lru_locks osc
+        cmp $TF $DIR/$tfile || error "$TF $DIR/$tfile differ (truncate1)"
+
+        echo "12345" >>$TF
+        echo "12345" >>$DIR/$tfile
+        cancel_lru_locks osc
+        cmp $TF $DIR/$tfile || error "$TF $DIR/$tfile differ (append1)"
+
+        echo "12345" >>$TF
+        echo "12345" >>$DIR/$tfile
+        cancel_lru_locks osc
+        cmp $TF $DIR/$tfile || error "$TF $DIR/$tfile differ (append2)"
+
+        rm -f $TF
+        true
+}
+run_test 150 "truncate/append tests"
+
+function roc_access() {
+	ACCNUM=`$LCTL get_param -n obdfilter.*.stats | \
+		grep 'cache_access' | awk '{print $2}' | \
+		awk '{sum=sum+$3} END{print sum}'`
+	echo $ACCNUM
+}
+
+function roc_hit() {
+	ACCNUM=`$LCTL get_param -n obdfilter.*.stats | \
+		grep 'cache_hit' | awk '{print $2}' | \
+		awk '{sum=sum+$1} END{print sum}'`
+	echo $ACCNUM
+}
+
+test_151() {
+	local CPAGES=3
+
+	# check whether obdfilter is cache capable at all
+	if ! $LCTL get_param -n obdfilter.*.read_cache_enable; then
+		echo "not cache-capable obdfilter"
+		return 0
+	fi
+
+	# check cache is enabled on all obdfilters
+	if $LCTL get_param -n obdfilter.*.read_cache_enable | grep -q 0; then
+		echo "oss cache is disabled"
+		return 0
+	fi
+
+	$LCTL set_param obdfilter.*.writethrough_cache_enable=1
+
+	# pages should be in the case right after write
+        dd if=/dev/urandom of=$DIR/$tfile bs=4k count=$CPAGES||error "dd failed"
+	BEFORE=`roc_hit`
+        cancel_lru_locks osc
+	cat $DIR/$tfile >/dev/null
+	AFTER=`roc_hit`
+	if let "AFTER - BEFORE != CPAGES"; then
+		error "NOT IN CACHE: before: $BEFORE, after: $AFTER"
+	fi
+
+	# the following read invalidates the cache
+        cancel_lru_locks osc
+	$LCTL set_param -n obdfilter.*.read_cache_enable 0
+	cat $DIR/$tfile >/dev/null
+
+	# now data shouldn't be found in the cache
+	BEFORE=`roc_hit`
+        cancel_lru_locks osc
+	cat $DIR/$tfile >/dev/null
+	AFTER=`roc_hit`
+	if let "AFTER - BEFORE != 0"; then
+		error "IN CACHE: before: $BEFORE, after: $AFTER"
+	fi
+
+	$LCTL set_param -n obdfilter.*.read_cache_enable=1
+	$LCTL set_param obdfilter.*.writethrough_cache_enable=0
+        rm -f $DIR/$tfile
+}
+run_test 151 "test cache on oss and controls ==============================="
+
+test_152() {
+        local TF="$TMP/$tfile"
+
+	# simulate ENOMEM during write
+#define OBD_FAIL_OST_NOMEM     	0x226
+        lctl set_param fail_loc=0x80000226
+        dd if=/dev/urandom of=$TF bs=6096 count=1 || error "dd failed"
+        cp $TF $DIR/$tfile
+        sync || error "sync failed"
+        lctl set_param fail_loc=0
+	
+        # discard client's cache
+        cancel_lru_locks osc
+
+        # simulate ENOMEM during read
+        lctl set_param fail_loc=0x80000226
+        cmp $TF $DIR/$tfile || error "cmp failed"
+        lctl set_param fail_loc=0
+
+	rm -f $TF
+}
+run_test 152 "test read/write with enomem ============================"
+
 POOL=${POOL:-cea1}
 TGT_COUNT=$OSTCOUNT
 TGTPOOL_FIRST=1
@@ -5488,7 +5613,7 @@ check_file_in_pool()
 	return 0
 }
 
-test_200() {
+test_200a() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
 		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
@@ -5496,9 +5621,9 @@ test_200() {
 	do_facet mgs $LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL
 	[ $? == 0 ] || error "Pool creation of $POOL failed"
 }
-run_test 200 "Create new pool =========================================="
+run_test 200a "Create new pool =========================================="
 
-test_201() {
+test_200b() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
 		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
@@ -5510,9 +5635,9 @@ test_201() {
 		sort | tr '\n' ' ')
 	[ "$res" = "$TGT" ] || error "Pool ($res) do not match requested ($TGT)"
 }
-run_test 201 "Add targets to a pool ===================================="
+run_test 200b "Add targets to a pool ===================================="
 
-test_202a() {
+test_200c() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
 		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
@@ -5520,18 +5645,18 @@ test_202a() {
 	$SETSTRIPE -c 2 -p $POOL $POOL_DIR
 	[ $? = 0 ] || error "Cannot set pool $POOL to $POOL_DIR"
 }
-run_test 202a "Set pool on a directory ================================="
+run_test 200c "Set pool on a directory ================================="
 
-test_202b() {
+test_200d() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
 		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
 	res=$($GETSTRIPE $POOL_DIR | grep pool: | cut -f8 -d " ")
 	[ "$res" = $POOL ] || error "Pool on $POOL_DIR is not $POOL"
 }
-run_test 202b "Check pool on a directory ==============================="
+run_test 200d "Check pool on a directory ==============================="
 
-test_202c() {
+test_200e() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
 		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
@@ -5546,9 +5671,9 @@ test_202c() {
 	done
 	[ "$failed" = 0 ] || error "$failed files not allocated in $POOL"
 }
-run_test 202c "Check files allocation from directory pool =============="
+run_test 200e "Check files allocation from directory pool =============="
 
-test_203() {
+test_200f() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
 		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
@@ -5564,9 +5689,9 @@ test_203() {
 	done
 	[ "$failed" = 0 ] || error "$failed files not allocated in $POOL"
 }
-run_test 203 "Create files in a pool ==================================="
+run_test 200f "Create files in a pool ==================================="
 
-test_210a() {
+test_200g() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
 		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
@@ -5577,9 +5702,9 @@ test_210a() {
 		grep $TGT)
 	[ "$res" = "" ] || error "$TGT not removed from $FSNAME.$POOL"
 }
-run_test 210a "Remove a target from a pool ============================="
+run_test 200g "Remove a target from a pool ============================="
 
-test_210b() {
+test_200h() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
 		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
@@ -5589,9 +5714,9 @@ test_210b() {
 	res=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL)
 	[ "$res" = "" ] || error "Pool $FSNAME.$POOL cannot be drained"
 }
-run_test 210b "Remove all targets from a pool =========================="
+run_test 200h "Remove all targets from a pool =========================="
 
-test_211() {
+test_200i() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
 		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS" && return
@@ -5599,7 +5724,7 @@ test_211() {
 	res=$(do_facet mgs "$LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL 2>/dev/null")
 	[ "$res" = "" ] || error "Pool $FSNAME.$POOL is not destroyed"
 }
-run_test 211 "Remove a pool ============================================"
+run_test 200i "Remove a pool ============================================"
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP

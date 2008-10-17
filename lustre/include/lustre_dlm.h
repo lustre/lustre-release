@@ -498,8 +498,8 @@ struct ldlm_lock {
 
         struct ldlm_interval *l_tree_node;      /* tree node for ldlm_extent */
 
-        /* protected by led_lock */
-        struct list_head      l_export_chain; // per-export chain of locks
+        /* protected by per-bucket exp->exp_lock_hash locks */
+        struct hlist_node     l_exp_hash;       /* per export hash of locks */
 
         /* protected by lr_lock */
         ldlm_mode_t           l_req_mode;
@@ -698,6 +698,8 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock);
 int ldlm_refresh_waiting_lock(struct ldlm_lock *lock);
 int ldlm_get_ref(void);
 void ldlm_put_ref(void);
+int ldlm_init_export(struct obd_export *exp);
+void ldlm_destroy_export(struct obd_export *exp);
 
 /* ldlm_lock.c */
 ldlm_processing_policy ldlm_get_processing_policy(struct ldlm_resource *res);

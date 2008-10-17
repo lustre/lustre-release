@@ -20,7 +20,7 @@ sources:
 endif
 
 obdclass-all-objs := llog.o llog_cat.o llog_lvfs.o llog_obd.o llog_swab.o
-obdclass-all-objs += class_obd.o class_hash.o
+obdclass-all-objs += class_obd.o class_hash.o target.o
 obdclass-all-objs += debug.o genops.o uuid.o llog_ioctl.o
 obdclass-all-objs += lprocfs_status.o lustre_handles.o lustre_peer.o
 obdclass-all-objs += statfs_pack.o obdo.o obd_config.o obd_mount.o

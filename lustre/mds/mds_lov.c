@@ -301,8 +301,7 @@ static int mds_lov_update_from_read(struct mds_obd *mds, obd_id *data,
                 mds->mds_max_mdsize = lov_mds_md_size(stripes, LOV_MAGIC_V3);
                 mds->mds_max_cookiesize = stripes * sizeof(struct llog_cookie);
                 CDEBUG(D_CONFIG, "updated max_mdsize/max_cookiesize for %d stripes: "
-                       "%d/%d\n", mds->mds_max_mdsize, mds->mds_max_cookiesize,
-                       stripes);
+                       "%d/%d\n", stripes, mds->mds_max_mdsize, mds->mds_max_cookiesize);
         }
         EXIT;
         return 0;
@@ -413,7 +412,7 @@ static int mds_lov_get_objid(struct obd_device * obd,
         off = idx % OBJID_PER_PAGE();
 
         data = mds->mds_lov_page_array[page];
-        if (data[off] == 0) {
+        if (data[off] < 2) {
                 /* We never read this lastid; ask the osc */
                 struct obd_id_info lastid;
                 __u32 size = sizeof(lastid);
@@ -424,6 +423,10 @@ static int mds_lov_get_objid(struct obd_device * obd,
                                   KEY_LAST_ID, &size, &lastid, NULL);
                 if (rc)
                         GOTO(out, rc);
+
+                /* workaround for clean filter */
+                if (data[off] == 0)
+                        data[off] = 1;
 
                 cfs_bitmap_set(mds->mds_lov_page_dirty, page);
         }
@@ -479,8 +482,8 @@ static int mds_lov_set_one_nextid(struct obd_device * obd, __u32 idx, obd_id *id
 }
 
 /* Update the lov desc for a new size lov. */
-static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov,
-                                __u32 index)
+static int mds_lov_update_desc(struct obd_device *obd, __u32 index,
+                               struct obd_uuid *uuid)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lov_desc *ld;
@@ -492,7 +495,7 @@ static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov,
         if (!ld)
                 RETURN(-ENOMEM);
 
-        rc = obd_get_info(lov, sizeof(KEY_LOVDESC), KEY_LOVDESC,
+        rc = obd_get_info(mds->mds_osc_exp, sizeof(KEY_LOVDESC), KEY_LOVDESC,
                           &valsize, ld, NULL);
         if (rc)
                 GOTO(out, rc);
@@ -500,8 +503,8 @@ static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov,
         /* Don't change the mds_lov_desc until the objids size matches the
            count (paranoia) */
         mds->mds_lov_desc = *ld;
-        CDEBUG(D_CONFIG, "updated lov_desc, tgt_count: %d\n",
-               mds->mds_lov_desc.ld_tgt_count);
+        CDEBUG(D_CONFIG, "updated lov_desc, tgt_count: %d - idx %d / uuid %s\n",
+               mds->mds_lov_desc.ld_tgt_count, index, uuid->uuid);
 
         mutex_down(&obd->obd_dev_sem);
         rc = mds_lov_update_max_ost(mds, index);
@@ -512,7 +515,7 @@ static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov,
         /* If we added a target we have to reconnect the llogs */
         /* We only _need_ to do this at first add (idx), or the first time
            after recovery.  However, it should now be safe to call anytime. */
-        rc = llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count, NULL);
+        rc = llog_cat_initialize(obd, index, uuid);
 
 out:
         OBD_FREE(ld, sizeof(*ld));
@@ -536,7 +539,7 @@ static int mds_lov_update_mds(struct obd_device *obd,
 
         /* Don't let anyone else mess with mds_lov_objids now */
         old_count = mds->mds_lov_desc.ld_tgt_count;
-        rc = mds_lov_update_desc(obd, mds->mds_osc_exp, idx);
+        rc = mds_lov_update_desc(obd, idx, &watched->u.cli.cl_target_uuid);
         if (rc)
                 GOTO(out, rc);
 
@@ -1066,6 +1069,9 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
                 /* call this only when config is processed and stale_export_age
                  * value is configured */
                 class_disconnect_expired_exports(obd);
+                /* quota_type has been processed, we can now handle
+                 * incoming quota requests */
+                QUOTA_MASTER_READY(&obd->u.obt.obt_qctxt);
         default:
                 RETURN(0);
         }
@@ -1084,8 +1090,9 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
                    after the mdt in the config log.  They didn't make it into
                    mds_lov_connect. */
                 LASSERT(data);
-                rc = mds_lov_update_desc(obd, obd->u.mds.mds_osc_exp,
-                                        *(__u32 *)data);
+                rc = mds_lov_update_desc(obd, *(__u32 *)data,
+                                          &watched->u.cli.cl_target_uuid);
+
                 mds_allow_cli(obd, CONFIG_SYNC);
                 RETURN(rc);
         }

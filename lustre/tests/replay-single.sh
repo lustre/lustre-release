@@ -20,6 +20,13 @@ GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 # bug number:
 ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT"
 
+if [ "$FAILURE_MODE" = "HARD" ] && mixed_ost_devs; then
+    CONFIG_EXCEPTIONS="0b 42 47 61a 61c"
+    echo -n "Several ost services on one ost node are used with FAILURE_MODE=$FAILURE_MODE. "
+    echo "Except the tests: $CONFIG_EXCEPTIONS"
+    ALWAYS_EXCEPT="$ALWAYS_EXCEPT $CONFIG_EXCEPTIONS"
+fi
+
 #                                                  63 min  7 min  AT AT AT AT"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="1 2 3 4 6 12 16 44a     44b    65 66 67 68"
 
@@ -1433,6 +1440,10 @@ at_start()
         # speed up the timebase so we can check decreasing AT
 	do_facet mds "echo 8 >> $at_history"
 	do_facet ost1 "echo 8 >> $at_history"
+
+	# sleep for a while to cool down, should be > 8s and also allow
+	# at least one ping to be sent. simply use TIMEOUT to be safe.
+	sleep $TIMEOUT
     fi
 }
 
@@ -1442,15 +1453,20 @@ test_65a() #bug 3055
     $LCTL dk > /dev/null
     debugsave
     lctl set_param debug="+other"
-    # slow down a request
-    do_facet mds lctl set_param fail_val=30000
+    # Slow down a request to the current service time, this is critical
+    # because previous tests may have caused this value to increase.
+    REQ_DELAY=`lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts |
+               awk '/portal 12/ {print $5}'`
+    REQ_DELAY=$((${REQ_DELAY} + 5))
+
+    do_facet mds lctl set_param fail_val=$((${REQ_DELAY} * 1000))
 #define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
     do_facet mds lctl set_param fail_loc=0x8000050a
     createmany -o $DIR/$tfile 10 > /dev/null
     unlinkmany $DIR/$tfile 10 > /dev/null
     # check for log message
     $LCTL dk | grep "Early reply #" || error "No early reply" 
-    # client should show 30s estimates
+    # client should show REQ_DELAY estimates
     lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts | grep portal
     sleep 9
     lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts | grep portal
@@ -1464,8 +1480,13 @@ test_65b() #bug 3055
     debugsave
     lctl set_param debug="+other"
     $LCTL dk > /dev/null
-    # slow down bulk i/o
-    do_facet ost1 lctl set_param fail_val=30
+    # Slow down a request to the current service time, this is critical
+    # because previous tests may have caused this value to increase.
+    REQ_DELAY=`lctl get_param -n osc.${FSNAME}-OST0000-osc-*.timeouts |
+               awk '/portal 6/ {print $5}'`
+    REQ_DELAY=$((${REQ_DELAY} + 5))
+
+    do_facet ost1 lctl set_param fail_val=${REQ_DELAY}
 #define OBD_FAIL_OST_BRW_PAUSE_PACK      0x224
     do_facet ost1 lctl set_param fail_loc=0x224
 
@@ -1478,7 +1499,7 @@ test_65b() #bug 3055
     # check for log message
     $LCTL dk | grep "Early reply #" || error "No early reply"
     debugrestore
-    # client should show 30s estimates
+    # client should show REQ_DELAY estimates
     lctl get_param -n osc.${FSNAME}-OST0000-osc-*.timeouts | grep portal
 }
 run_test 65b "AT: verify early replies on packed reply / bulk"
@@ -1555,7 +1576,7 @@ test_67b() #bug 3055
     do_facet ost1 "lctl set_param fail_loc=0x80000223"
     cp /etc/profile $DIR/$tfile || error "cp failed"
     client_reconnect
-    lctl get_param -n ost.OSS.ost_create.timeouts
+    do_facet ost1 "lctl get_param -n ost.OSS.ost_create.timeouts"
     log "phase 2"
     CONN2=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
     ATTEMPTS=$(($CONN2 - $CONN1))
@@ -1565,8 +1586,8 @@ test_67b() #bug 3055
     cp /etc/profile $DIR/$tfile || error "cp failed"
     do_facet ost1 "lctl set_param fail_loc=0"
     client_reconnect
-    lctl get_param -n ost.OSS.ost_create.timeouts
-    CONN3=$(`lctl get_param -n osc.*.stats` | awk '/_connect/ {total+=$2} END {print total}')
+    do_facet ost1 "lctl get_param -n ost.OSS.ost_create.timeouts"
+    CONN3=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
     ATTEMPTS=$(($CONN3 - $CONN2))
     echo "$ATTEMPTS osc reconnect attemps on 2nd slow"
     [ $ATTEMPTS -gt 0 ] && error "AT should have prevented reconnect"
@@ -1642,8 +1663,6 @@ test_70a () {
 	done
 	
 	ls $DIR
-
-	zconf_umount_clients $CLIENTS $DIR
 }
 run_test 70a "check multi client t-f"
 
@@ -1681,7 +1700,6 @@ test_70b () {
 		echo "load on ${CLIENT} returned $rc"
 	done
 
-	zconf_umount_clients $CLIENTS $DIR 
 }
 run_test 70b "mds recovery; $CLIENTCOUNT clients"
 # end multi-client tests
@@ -1713,7 +1731,7 @@ test_71a() {
     OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
     NEW_AGE=10
     do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$NEW_AGE"
-    sleep $NEW_AGE
+    sleep $((NEW_AGE + 2))
     do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep \"$UUID.*EXPIRED\"" || \
         error "exports didn't expire"
     do_facet mds "lctl set_param mds.${mds_svc}.evict_client=$UUID"
@@ -1734,7 +1752,7 @@ test_71b() {
     OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
     NEW_AGE=10
     do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$NEW_AGE"
-    sleep $NEW_AGE
+    sleep $((NEW_AGE + 2))
     EX_NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep -c EXPIRED")
     [ "$EX_NUM" -eq "$NUM" ] || error "not all exports are expired $EX_NUM != $NUM"
     do_facet mds "lctl set_param mds.${mds_svc}.flush_stale_exports=1"
@@ -1755,7 +1773,7 @@ test_71c() {
     OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
     NEW_AGE=10
     do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$NEW_AGE"
-    sleep $NEW_AGE
+    sleep $((NEW_AGE + 2))
     EX_NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep -c EXPIRED")
     [ "$EX_NUM" -eq "$NUM" ] || error "not all exports are expired $EX_NUM != $NUM"
 
@@ -1779,7 +1797,7 @@ test_71d() {
     OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
     NEW_AGE=10
     do_facet mds "lctl conf_param ${mds_svc}.mdt.stale_export_age=$NEW_AGE"
-    sleep $NEW_AGE
+    sleep $((NEW_AGE + 2))
     EX_NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep -c EXPIRED")
     [ "$EX_NUM" -eq "$NUM" ] || error "not all exports are expired $EX_NUM != $NUM"
 

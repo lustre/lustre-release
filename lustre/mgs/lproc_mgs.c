@@ -175,6 +175,7 @@ struct lprocfs_vars lprocfs_mgs_obd_vars[] = {
         { "fstype",          lprocfs_rd_fstype,      0, 0 },
         { "mntdev",          lprocfs_mgs_rd_mntdev,  0, 0 },
         { "num_exports",     lprocfs_rd_num_exports, 0, 0 },
+        { "hash_stats",      lprocfs_obd_rd_hash,    0, 0 },
         { "evict_client",    0, lprocfs_wr_evict_client, 0 },
         { 0 }
 };

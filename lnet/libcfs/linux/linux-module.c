@@ -153,12 +153,12 @@ libcfs_ioctl(struct inode *inode, struct file *file,
 	/* Handle platform-dependent IOC requests */
 	switch (cmd) {
 	case IOC_LIBCFS_PANIC:
-		if (!capable (CAP_SYS_BOOT))
+		if (!cfs_capable(CFS_CAP_SYS_BOOT))
 			return (-EPERM);
 		panic("debugctl-invoked panic");
 		return (0);
 	case IOC_LIBCFS_MEMHOG:
-		if (!capable (CAP_SYS_ADMIN))
+		if (!cfs_capable(CFS_CAP_SYS_ADMIN))
 			return -EPERM;
 		/* go thought */
 	}

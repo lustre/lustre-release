@@ -2604,6 +2604,9 @@ void _debug_req(struct ptlrpc_request *req, __u32 mask,
         int rep_fl = 0;
         int rep_status = 0;
 
+        /* Caller is responsible holding a reference on the request */
+        LASSERT(req && atomic_read(&req->rq_refcount) > 0);
+
         if (req->rq_reqmsg &&
             (!lustre_msg_need_swab(req->rq_reqmsg) ||
              (lustre_req_need_swab(req) &&
@@ -2621,24 +2624,23 @@ void _debug_req(struct ptlrpc_request *req, __u32 mask,
         }
 
         va_start(args, fmt);
-        libcfs_debug_vmsg2(data->msg_cdls, data->msg_subsys, mask, data->msg_file,
-                           data->msg_fn, data->msg_line, fmt, args,
-                           " req@%p x"LPD64"/t"LPD64" o%d->%s@%s:%d/%d "
-                           "lens %d/%d e %d to %d dl %ld ref %d "
-                           "fl "REQ_FLAGS_FMT"/%x/%x rc %d/%d\n",
-                           req, req->rq_xid, req->rq_transno, opc,
-                           req->rq_import ? obd2cli_tgt(req->rq_import->imp_obd) :
-                           req->rq_export ?
-                                (char*)req->rq_export->exp_client_uuid.uuid : "<?>",
-                           req->rq_import ?
-                                (char *)req->rq_import->imp_connection->c_remote_uuid.uuid :
-                           req->rq_export ?
-                                (char *)req->rq_export->exp_connection->c_remote_uuid.uuid : "<?>",
-                           req->rq_request_portal,  req->rq_reply_portal,
-                           req->rq_reqlen, req->rq_replen,
-                           req->rq_early_count, req->rq_timeout, req->rq_deadline,
-                           atomic_read(&req->rq_refcount), DEBUG_REQ_FLAGS(req),
-                           req_fl, rep_fl, req->rq_status, rep_status);
+        libcfs_debug_vmsg2(data->msg_cdls, data->msg_subsys, mask,
+                data->msg_file, data->msg_fn, data->msg_line, fmt, args,
+                " req@%p x"LPD64"/t"LPD64" o%d->%s@%s:%d/%d lens %d/%d e %d "
+                "to %d dl %ld ref %d fl "REQ_FLAGS_FMT"/%x/%x rc %d/%d\n",
+                req, req->rq_xid, req->rq_transno, opc,
+                req->rq_import ? obd2cli_tgt(req->rq_import->imp_obd) :
+                req->rq_export ?
+                (char*)req->rq_export->exp_client_uuid.uuid : "<?>",
+                req->rq_import ?
+                (char *)req->rq_import->imp_connection->c_remote_uuid.uuid :
+                req->rq_export ?
+                (char *)req->rq_export->exp_connection->c_remote_uuid.uuid :
+                "<?>", req->rq_request_portal,  req->rq_reply_portal,
+                req->rq_reqlen, req->rq_replen,
+                req->rq_early_count, req->rq_timeout, req->rq_deadline,
+                atomic_read(&req->rq_refcount), DEBUG_REQ_FLAGS(req),
+                req_fl, rep_fl, req->rq_status, rep_status);
         va_end(args);
 }
 

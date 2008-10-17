@@ -307,7 +307,9 @@ int mds_finish_transno(struct mds_obd *mds, struct inode **inodes, void *handle,
                         lcd->lcd_last_data    = cpu_to_le32(op_data);
                 }
         }
-        lcd->lcd_last_time = cpu_to_le32(cfs_time_current_sec());
+        /** update trans table */
+        target_trans_table_update(req->rq_export, transno);
+
         if (off <= 0) {
                 CERROR("client idx %d has offset %lld\n", med->med_lr_idx, off);
                 err = -EINVAL;
@@ -800,7 +802,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                       lum->lmm_stripe_offset ==
                       (typeof(lum->lmm_stripe_offset))(-1) &&
                       lum->lmm_stripe_count == 0 &&
-                      lum->lmm_magic != LOV_USER_MAGIC_V3)){
+                      le32_to_cpu(lum->lmm_magic) != LOV_USER_MAGIC_V3)){
                         rc = fsfilt_set_md(obd, inode, handle, NULL, 0, "lov");
                         if (rc)
                                 GOTO(cleanup, rc);
@@ -940,6 +942,7 @@ static void reconstruct_reint_create(struct mds_update_record *rec, int offset,
                               obd_uuid2str(&exp->exp_client_uuid),
                               obd_export_nid2str(exp));
                 mds_export_evict(exp);
+                l_dput(parent);
                 EXIT;
                 return;
         }
@@ -1022,6 +1025,11 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 GOTO(cleanup, rc = -EROFS);
         }
 
+        /** check there is no stale orphan with same inode number */
+        rc = mds_check_stale_orphan(obd, rec->ur_fid2);
+        if (rc)
+                GOTO(cleanup, rc);
+
         /* version recovery check */
         rc = mds_version_get_check(req, dir, 0);
         if (rc)
@@ -1040,9 +1048,11 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 gid = current->fsgid;
 
         /* we try to get enough quota to write here, and let ldiskfs
-         * decide if it is out of quota or not b=14783 */
+         * decide if it is out of quota or not b=14783
+         * FIXME: after CMD is used, pointer to obd_trans_info* couldn't
+         * be NULL, b=14840 */
         lquota_chkquota(mds_quota_interface_ref, obd,
-                        current->fsuid, gid, 1, &rec_pending);
+                        current->fsuid, gid, 1, &rec_pending, NULL);
 
         switch (type) {
         case S_IFREG:{
@@ -1713,7 +1723,7 @@ static int mds_orphan_add_link(struct mds_update_record *rec,
                S_ISDIR(inode->i_mode) ? "dir" :
                 S_ISREG(inode->i_mode) ? "file" : "other",rec->ur_name,fidname);
 
-        if (mds_orphan_open_count(inode) == 0 || inode->i_nlink != 0)
+        if (!mds_orphan_needed(obd, inode) || inode->i_nlink != 0)
                 RETURN(0);
 
         pending_child = lookup_one_len(fidname, mds->mds_pending_dir, fidlen);
@@ -1827,12 +1837,12 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         cleanup_phase = 1; /* dchild, dparent, locks */
 
+        dget(dchild);
         /* VBR: version recovery check for parent */
         rc = mds_version_get_check(req, dparent->d_inode, 0);
         if (rc)
                 GOTO(cleanup_no_trans, rc);
 
-        dget(dchild);
         child_inode = dchild->d_inode;
         if (child_inode == NULL) {
                 CDEBUG(D_INODE, "child doesn't exist (dir %lu, name %s)\n",
@@ -1894,7 +1904,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
          * only do the object removal later if no open files/links remain. */
         if ((S_ISDIR(child_inode->i_mode) && child_inode->i_nlink == 2) ||
             child_inode->i_nlink == 1) {
-                if (mds_orphan_open_count(child_inode) > 0) {
+                if (mds_orphan_needed(obd, child_inode)) {
                         /* need to lock pending_dir before transaction */
                         LOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode);
                         cleanup_phase = 5; /* UNLOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode); */
@@ -1958,7 +1968,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         }
 
         if (rc == 0 && child_inode->i_nlink == 0) {
-                if (mds_orphan_open_count(child_inode) > 0)
+                if (mds_orphan_needed(obd, child_inode))
                         rc = mds_orphan_add_link(rec, obd, dchild);
 
                 if (rc == 1)
@@ -2132,6 +2142,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         dchild = mds_lookup(obd, rec->ur_name, de_tgt_dir, rec->ur_namelen-1);
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
+                dchild = NULL;
                 if (rc != -EPERM && rc != -EACCES && rc != -ENAMETOOLONG)
                         CERROR("child lookup error %d\n", rc);
                 GOTO(cleanup, rc);
@@ -2164,7 +2175,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
                 CERROR("vfs_link error %d\n", rc);
 cleanup:
         inodes[0] = de_tgt_dir ? de_tgt_dir->d_inode : NULL;
-        inodes[1] = dchild->d_inode;
+        inodes[1] = (dchild && !IS_ERR(dchild)) ? dchild->d_inode : NULL;
         rc = mds_finish_transno(mds, inodes, handle, req, rc, 0, 0);
         EXIT;
 
@@ -2518,7 +2529,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
 
         if ((S_ISDIR(new_inode->i_mode) && new_inode->i_nlink == 2) ||
             new_inode->i_nlink == 1) {
-                if (mds_orphan_open_count(new_inode) > 0) {
+                if (mds_orphan_needed(obd, new_inode)) {
                         /* need to lock pending_dir before transaction */
                         LOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode);
                         cleanup_phase = 4; /* UNLOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode); */
@@ -2557,7 +2568,7 @@ no_unlink:
         unlock_kernel();
 
         if (rc == 0 && new_inode != NULL && new_inode->i_nlink == 0) {
-                if (mds_orphan_open_count(new_inode) > 0)
+                if (mds_orphan_needed(obd, new_inode))
                         rc = mds_orphan_add_link(rec, obd, de_new);
 
                 if (rc == 1)
@@ -2585,9 +2596,9 @@ no_unlink:
 
         GOTO(cleanup, rc);
 cleanup:
-        inodes[0] = de_srcdir ? de_srcdir->d_inode : NULL;
+        inodes[0] = de_srcdir && !IS_ERR(de_srcdir) ? de_srcdir->d_inode : NULL;
         inodes[1] = old_inode;
-        inodes[2] = de_tgtdir ? de_tgtdir->d_inode : NULL;
+        inodes[2] = de_tgtdir && !IS_ERR(de_tgtdir) ? de_tgtdir->d_inode : NULL;
         inodes[3] = new_inode;
         rc = mds_finish_transno(mds, inodes, handle, req, rc, 0, 0);
 
@@ -2661,7 +2672,7 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
                  * NB root's creds are believed... */
                 LASSERT (req->rq_uid != 0);
                 rec->ur_uc.luc_fsuid = req->rq_uid;
-                rec->ur_uc.luc_cap = 0;
+                cfs_kernel_cap_unpack(&rec->ur_uc.luc_cap, 0);
         }
 #endif
 

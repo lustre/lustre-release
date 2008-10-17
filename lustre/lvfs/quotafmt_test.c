@@ -57,6 +57,8 @@
 
 #include "lustre_quota_fmt.h"
 
+#ifdef HAVE_QUOTA_SUPPORT
+
 char *test_quotafile[2] = { "usrquota_test", "grpquota_test" };
 
 static int quotfmt_initialize(struct lustre_quota_info *lqi,
@@ -543,3 +545,5 @@ MODULE_LICENSE("GPL");
 
 module_init(quotfmt_test_init);
 module_exit(quotfmt_test_exit);
+
+#endif /* HAVE_QUOTA_SUPPORT */

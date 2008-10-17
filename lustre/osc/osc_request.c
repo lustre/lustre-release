@@ -904,7 +904,7 @@ static int check_write_rcs(struct ptlrpc_request *req,
 
         if (req->rq_bulk->bd_nob_transferred != requested_nob) {
                 CERROR("Unexpected # bytes transferred: %d (requested %d)\n",
-                       requested_nob, req->rq_bulk->bd_nob_transferred);
+                       req->rq_bulk->bd_nob_transferred, requested_nob);
                 return(-EPROTO);
         }
 
@@ -2586,7 +2586,6 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
                 RETURN(-EBUSY);
 
         /* check if the file's owner/group is over quota */
-#ifdef HAVE_QUOTA_SUPPORT
         if ((cmd & OBD_BRW_WRITE) && !(cmd & OBD_BRW_NOQUOTA)){
                 struct obd_async_page_ops *ops;
                 struct obdo *oa;
@@ -2605,7 +2604,6 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
                 if (rc)
                         RETURN(rc);
         }
-#endif
 
         if (loi == NULL)
                 loi = lsm->lsm_oinfo[0];
@@ -3467,7 +3465,7 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_DESTROY: {
                 struct obdo            *oa;
 
-                if (!capable (CAP_SYS_ADMIN))
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, err = -EPERM);
                 oa = &data->ioc_obdo1;
 

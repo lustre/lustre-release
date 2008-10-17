@@ -148,6 +148,7 @@ static void ll_drop_negative_dentry(struct inode *dir)
 { 
         struct dentry *dentry, *tmp_alias, *tmp_subdir;
 
+        spin_lock(&ll_lookup_lock);
         spin_lock(&dcache_lock);
 restart:
         list_for_each_entry_safe(dentry, tmp_alias,
@@ -168,6 +169,7 @@ restart:
                 }
         }
         spin_unlock(&dcache_lock);
+        spin_unlock(&ll_lookup_lock);
 }
 
 int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
@@ -376,6 +378,7 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
         struct dentry *dentry;
         struct dentry *last_discon = NULL;
 
+        spin_lock(&ll_lookup_lock);
         spin_lock(&dcache_lock);
         list_for_each(tmp, &inode->i_dentry) {
                 dentry = list_entry(tmp, struct dentry, d_alias);
@@ -412,29 +415,35 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                 dentry->d_flags &= ~DCACHE_LUSTRE_INVALID;
 #endif
                 unlock_dentry(dentry);
+                ll_dops_init(dentry, 0);
                 d_rehash_cond(dentry, 0); /* avoid taking dcache_lock inside */
                 spin_unlock(&dcache_lock);
+                spin_unlock(&ll_lookup_lock);
                 iput(inode);
                 CDEBUG(D_DENTRY, "alias dentry %.*s (%p) parent %p inode %p "
                        "refc %d\n", de->d_name.len, de->d_name.name, de,
                        de->d_parent, de->d_inode, atomic_read(&de->d_count));
                 return dentry;
         }
+
         if (last_discon) {
-                 CDEBUG(D_DENTRY, "Reuse disconnected dentry %p inode %p "
+                CDEBUG(D_DENTRY, "Reuse disconnected dentry %p inode %p "
                         "refc %d\n", last_discon, last_discon->d_inode,
                         atomic_read(&last_discon->d_count));
-                 dget_locked(last_discon);
-                 spin_unlock(&dcache_lock);
-                 d_rehash(de);
-                 d_move(last_discon, de);
-                 iput(inode);
-                 return last_discon;
+                dget_locked(last_discon);
+                spin_unlock(&dcache_lock);
+                spin_unlock(&ll_lookup_lock);
+                ll_dops_init(last_discon, 1);
+                d_rehash(de);
+                d_move(last_discon, de);
+                iput(inode);
+                return last_discon;
         }
 
         ll_d_add(de, inode);
 
         spin_unlock(&dcache_lock);
+        spin_unlock(&ll_lookup_lock);
 
         return de;
 }
@@ -447,15 +456,8 @@ int lookup_it_finish(struct ptlrpc_request *request, int offset,
         struct inode *parent = icbd->icbd_parent;
         struct ll_sb_info *sbi = ll_i2sbi(parent);
         struct inode *inode = NULL;
-        int set = 0, rc;
+        int rc;
         ENTRY;
-
-        lock_dentry(*de);
-        if (likely((*de)->d_op != &ll_d_ops)) {
-                (*de)->d_op = &ll_init_d_ops;
-                set = 1;
-        }
-        unlock_dentry(*de);
 
         /* NB 1 request reference will be taken away by ll_intent_lock()
          * when I return */
@@ -464,20 +466,8 @@ int lookup_it_finish(struct ptlrpc_request *request, int offset,
 
                 rc = ll_prep_inode(sbi->ll_osc_exp, &inode, request, offset,
                                    (*de)->d_sb);
-                if (rc) {
-                        if (set) {
-                                lock_dentry(*de);
-                                if (likely((*de)->d_op == &ll_init_d_ops)) {
-                                        (*de)->d_op = &ll_fini_d_ops;
-                                        unlock_dentry(*de);
-                                        smp_wmb();
-                                        ll_d_wakeup(*de);
-                                } else {
-                                        unlock_dentry(*de);
-                                }
-                        }
+                if (rc)
                         RETURN(rc);
-                }
 
                 CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%lu/%u)\n",
                        inode, inode->i_ino, inode->i_generation);
@@ -491,19 +481,22 @@ int lookup_it_finish(struct ptlrpc_request *request, int offset,
                    Everybody else who needs correct file size would call
                    ll_glimpse_size or some equivalent themselves anyway.
                    Also see bug 7198. */
+
+                ll_dops_init(*de, 1);
                 *de = ll_find_alias(inode, *de);
-                if (set && *de != save) {
-                        lock_dentry(save);
-                        if (likely(save->d_op == &ll_init_d_ops)) {
-                                save->d_op = &ll_fini_d_ops;
-                                unlock_dentry(save);
-                                smp_wmb();
-                                ll_d_wakeup(save);
-                        } else {
-                                unlock_dentry(save);
+                if (*de != save) {
+                        struct ll_dentry_data *lld = ll_d2d(*de);
+
+                        /* just make sure the ll_dentry_data is ready */
+                        if (unlikely(lld == NULL)) {
+                                ll_set_dd(*de);
+                                lld = ll_d2d(*de);
+                                if (likely(lld != NULL))
+                                        lld->lld_sa_generation = 0;
                         }
                 }
         } else {
+                ll_dops_init(*de, 1);
                 /* Check that parent has UPDATE lock. If there is none, we
                    cannot afford to hash this dentry (done by ll_d_add) as it
                    might get picked up later when UPDATE lock will appear */
@@ -512,6 +505,7 @@ int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         ll_d_add(*de, inode);
                         spin_unlock(&dcache_lock);
                 } else {
+                        (*de)->d_inode = NULL;
                         /* We do not want to hash the dentry if don`t have a
                          * lock, but if this dentry is later used in d_move,
                          * we'd hit uninitialised list head d_hash, so we just
@@ -520,19 +514,6 @@ int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         d_rehash(*de);
                         d_drop(*de);
                 }
-        }
-
-        ll_set_dd(*de);
-
-        lock_dentry(*de);
-        if (likely((*de)->d_op == &ll_init_d_ops)) {
-                (*de)->d_op = &ll_d_ops;
-                unlock_dentry(*de);
-                smp_wmb();
-                ll_d_wakeup(*de);
-        } else {
-                (*de)->d_op = &ll_d_ops;
-                unlock_dentry(*de);
         }
 
         RETURN(0);
@@ -546,7 +527,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         struct it_cb_data icbd;
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
-        int rc;
+        int rc, first = 0;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p),intent=%s\n",
@@ -568,10 +549,10 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         }
 
         if (it->it_op == IT_GETATTR) {
-                rc = ll_statahead_enter(parent, &dentry, 1);
-                if (rc >= 0) {
-                        ll_statahead_exit(dentry, rc);
-                        if (rc == 1)
+                first = ll_statahead_enter(parent, &dentry, 1);
+                if (first >= 0) {
+                        ll_statahead_exit(dentry, first);
+                        if (first == 1)
                                 RETURN(retval = dentry);
                 }
         }
@@ -597,6 +578,9 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                 ll_intent_release(it);
                 GOTO(out, retval = ERR_PTR(rc));
         }
+
+        if (first == -EEXIST)
+                ll_statahead_mark(dentry);
 
         if ((it->it_op & IT_OPEN) && dentry->d_inode &&
             !S_ISREG(dentry->d_inode->i_mode) &&
@@ -877,7 +861,7 @@ static int ll_new_node(struct inode *dir, struct qstr *name,
 
         err = mdc_create(sbi->ll_mdc_exp, &op_data, tgt, tgt_len,
                          mode, current->fsuid, current->fsgid,
-                         current->cap_effective, rdev, &request);
+                         cfs_curproc_cap_pack(), rdev, &request);
         if (err)
                 GOTO(err_exit, err);
 

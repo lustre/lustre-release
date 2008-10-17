@@ -655,11 +655,17 @@ int mgs_handle(struct ptlrpc_request *req)
         RETURN(0);
 }
 
+static inline int mgs_init_export(struct obd_export *exp)
+{
+        return ldlm_init_export(exp);
+}
+
 static inline int mgs_destroy_export(struct obd_export *exp)
 {
         ENTRY;
 
         target_destroy_export(exp);
+        ldlm_destroy_export(exp);
         mgs_client_free(exp);
 
         RETURN(0);
@@ -698,7 +704,7 @@ static int mgs_iocontrol_pool(struct obd_device *obd,
         if (fsname == NULL)
                 RETURN(-ENOMEM);
 
-        OBD_ALLOC(poolname, MAXPOOLNAME + 1);
+        OBD_ALLOC(poolname, LOV_MAXPOOLNAME + 1);
         if (poolname == NULL) {
                 rc = -ENOMEM;
                 GOTO(out_pool, rc);
@@ -788,7 +794,7 @@ out_pool:
                 OBD_FREE(fsname, MTI_NAME_MAXLEN);
 
         if (poolname != NULL)
-                OBD_FREE(poolname, MAXPOOLNAME + 1);
+                OBD_FREE(poolname, LOV_MAXPOOLNAME + 1);
 
         RETURN(rc);
 }
@@ -896,6 +902,7 @@ static struct obd_ops mgs_obd_ops = {
         .o_setup           = mgs_setup,
         .o_precleanup      = mgs_precleanup,
         .o_cleanup         = mgs_cleanup,
+        .o_init_export     = mgs_init_export,
         .o_destroy_export  = mgs_destroy_export,
         .o_iocontrol       = mgs_iocontrol,
 };

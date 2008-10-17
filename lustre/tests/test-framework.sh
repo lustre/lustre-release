@@ -103,7 +103,6 @@ init_test_env() {
     export CHECKSTAT="${CHECKSTAT:-"checkstat -v"} "
     export FSYTPE=${FSTYPE:-"ldiskfs"}
     export NAME=${NAME:-local}
-    export LPROC=/proc/fs/lustre
     export DIR2
     export AT_MAX_PATH
     export SAVE_PWD=${SAVE_PWD:-$LUSTRE/tests}
@@ -245,6 +244,19 @@ unload_dep_module() {
     $RMMOD $MODULE || true
 }
 
+check_mem_leak () {
+    LEAK_LUSTRE=$(dmesg | tail -n 30 | grep "obd_memory.*leaked" || true)
+    LEAK_PORTALS=$(dmesg | tail -n 20 | grep "Portals memory leaked" || true)
+    if [ "$LEAK_LUSTRE" -o "$LEAK_PORTALS" ]; then
+        echo "$LEAK_LUSTRE" 1>&2
+        echo "$LEAK_PORTALS" 1>&2
+        mv $TMP/debug $TMP/debug-leak.`date +%s` || true
+        log "Memory leaks detected"
+        [ -n "$IGNORE_LEAK" ] && { echo "ignoring leaks" && return 0; } || true
+        return 1
+    fi
+}
+
 unload_modules() {
     wait_exit_ST client # bug 12845
 
@@ -268,16 +280,8 @@ unload_modules() {
     fi
     HAVE_MODULES=false
 
-    LEAK_LUSTRE=$(dmesg | tail -n 30 | grep "obd mem.*leaked" || true)
-    LEAK_PORTALS=$(dmesg | tail -n 20 | grep "Portals memory leaked" || true)
-    if [ "$LEAK_LUSTRE" -o "$LEAK_PORTALS" ]; then
-        echo "$LEAK_LUSTRE" 1>&2
-        echo "$LEAK_PORTALS" 1>&2
-        mv $TMP/debug $TMP/debug-leak.`date +%s` || true
-        echo "Memory leaks detected"
-        [ -n "$IGNORE_LEAK" ] && echo "ignoring leaks" && return 0
-        return 254
-    fi
+    check_mem_leak || return 254
+
     echo "modules unloaded."
     return 0
 }
@@ -444,15 +448,8 @@ cleanup_check() {
         [ -e $TMP/debug ] && mv $TMP/debug $TMP/debug-busy.`date +%s`
         exit 205
     fi
-    LEAK_LUSTRE=`dmesg | tail -n 30 | grep "obd mem.*leaked" || true`
-    LEAK_PORTALS=`dmesg | tail -n 20 | grep "Portals memory leaked" || true`
-    if [ "$LEAK_LUSTRE" -o "$LEAK_PORTALS" ]; then
-        echo "$0: $LEAK_LUSTRE" 1>&2
-        echo "$0: $LEAK_PORTALS" 1>&2
-        echo "$0: Memory leak(s) detected..." 1>&2
-        mv $TMP/debug $TMP/debug-leak.`date +%s`
-        exit 204
-    fi
+
+    check_mem_leak || exit 204
 
     [ "`lctl dl 2> /dev/null | wc -l`" -gt 0 ] && lctl dl && \
         echo "$0: lustre didn't clean up..." 1>&2 && return 202 || true
@@ -588,8 +585,10 @@ client_reconnect() {
 
 facet_failover() {
     facet=$1
+    sleep_time=$2
     echo "Failing $facet on node `facet_active_host $facet`"
     shutdown_facet $facet
+    [ -n "$sleep_time" ] && sleep $sleep_time
     reboot_facet $facet
     client_df &
     DFPID=$!
@@ -1312,6 +1311,8 @@ basetest() {
     IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
 }
 
+# print a newline if the last test was skipped
+export LAST_SKIPPED=
 run_test() {
     assert_DIR
 
@@ -1319,38 +1320,46 @@ run_test() {
     if [ ! -z "$ONLY" ]; then
         testname=ONLY_$1
         if [ ${!testname}x != x ]; then
+            [ "$LAST_SKIPPED" ] && echo "" && LAST_SKIPPED=
             run_one $1 "$2"
             return $?
         fi
         testname=ONLY_$base
         if [ ${!testname}x != x ]; then
+            [ "$LAST_SKIPPED" ] && echo "" && LAST_SKIPPED=
             run_one $1 "$2"
             return $?
         fi
+        LAST_SKIPPED="y"
         echo -n "."
         return 0
     fi
     testname=EXCEPT_$1
     if [ ${!testname}x != x ]; then
+        LAST_SKIPPED="y"
         TESTNAME=test_$1 skip "skipping excluded test $1"
         return 0
     fi
     testname=EXCEPT_$base
     if [ ${!testname}x != x ]; then
+        LAST_SKIPPED="y"
         TESTNAME=test_$1 skip "skipping excluded test $1 (base $base)"
         return 0
     fi
     testname=EXCEPT_SLOW_$1
     if [ ${!testname}x != x ]; then
+        LAST_SKIPPED="y"
         TESTNAME=test_$1 skip "skipping SLOW test $1"
         return 0
     fi
     testname=EXCEPT_SLOW_$base
     if [ ${!testname}x != x ]; then
+        LAST_SKIPPED="y"
         TESTNAME=test_$1 skip "skipping SLOW test $1 (base $base)"
         return 0
     fi
 
+    LAST_SKIPPED=
     run_one $1 "$2"
     
     return $?
@@ -1435,7 +1444,6 @@ run_one() {
     unset TESTNAME
     unset tdir
     umask $SAVE_UMASK
-    $CLEANUP
 }
 
 canonical_path() {
@@ -1701,6 +1709,14 @@ calc_llite_stats() {
         local res=$(lctl get_param -n llite.*.stats |
                     awk 'BEGIN {s = 0} END {print s} /^'"$1"'/ {s += $2}')
         echo $res
+}
+
+calc_sum () {
+        awk 'BEGIN {s = 0}; {s += $1}; END {print s}'
+}
+
+calc_osc_kbytes () {
+        $LCTL get_param -n osc.*[oO][sS][cC][-_]*.$1 | calc_sum
 }
 
 # save_lustre_params(node, parameter_mask)

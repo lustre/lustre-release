@@ -134,7 +134,8 @@ struct obd_statfs;
 #define LOV_PATTERN_RAID1 0x002
 #define LOV_PATTERN_FIRST 0x100
 
-#define MAXPOOLNAME 16
+#define LOV_MAXPOOLNAME 16
+#define LOV_POOLNAMEF "%.16s"
 
 #define lov_user_ost_data lov_user_ost_data_v1
 struct lov_user_ost_data_v1 {     /* per-stripe data structure */
@@ -164,7 +165,7 @@ struct lov_user_md_v3 {           /* LOV EA user data (host-endian) */
         __u32 lmm_stripe_size;    /* size of stripe in bytes */
         __u16 lmm_stripe_count;   /* num stripes in use for this object */
         __u16 lmm_stripe_offset;  /* starting stripe offset in lmm_objects */
-        char  lmm_pool_name[MAXPOOLNAME]; /* pool name */
+        char  lmm_pool_name[LOV_MAXPOOLNAME]; /* pool name */
         struct lov_user_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 } __attribute__((packed));
 
@@ -292,6 +293,8 @@ struct mds_grp_downcall_data {
 #endif
 
 #endif /* !__KERNEL__ */
+
+#define QFMT_LDISKFS 2 /* pre-1.6.6 compatibility */
 
 typedef enum lustre_quota_version {
         LUSTRE_QUOTA_V1 = 0,

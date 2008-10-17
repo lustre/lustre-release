@@ -465,7 +465,14 @@ static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
 
         if (obd_dump_on_timeout)
                 libcfs_debug_dumplog();
+#ifdef __KERNEL__
+        spin_lock_bh(&waiting_locks_spinlock);
+        list_add(&lock->l_pending_chain, &expired_lock_thread.elt_expired_locks);
+        cfs_waitq_signal(&expired_lock_thread.elt_waitq);
+        spin_unlock_bh(&waiting_locks_spinlock);
+#else
         class_fail_export(lock->l_export);
+#endif
 }
 
 static int ldlm_handle_ast_error(struct ldlm_lock *lock,
@@ -829,25 +836,6 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
         RETURN(rc);
 }
 
-static struct ldlm_lock *
-find_existing_lock(struct obd_export *exp, struct lustre_handle *remote_hdl)
-{
-        struct list_head *iter;
-
-        spin_lock(&exp->exp_ldlm_data.led_lock);
-        list_for_each(iter, &exp->exp_ldlm_data.led_held_locks) {
-                struct ldlm_lock *lock;
-                lock = list_entry(iter, struct ldlm_lock, l_export_chain);
-                if (lock->l_remote_handle.cookie == remote_hdl->cookie) {
-                        LDLM_LOCK_GET(lock);
-                        spin_unlock(&exp->exp_ldlm_data.led_lock);
-                        return lock;
-                }
-        }
-        spin_unlock(&exp->exp_ldlm_data.led_lock);
-        return NULL;
-}
-
 static void ldlm_svc_get_eopc(struct ldlm_request *dlm_req,
                        struct lprocfs_stats *srv_stats)
 {
@@ -972,8 +960,9 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
 #endif
 
         if (flags & LDLM_FL_REPLAY) {
-                lock = find_existing_lock(req->rq_export,
-                                          &dlm_req->lock_handle[0]);
+                /* Find an existing lock in the per-export lock hash */
+                lock = lustre_hash_lookup(req->rq_export->exp_lock_hash,
+                                          (void *)&dlm_req->lock_handle[0]);
                 if (lock != NULL) {
                         DEBUG_REQ(D_DLMTRACE, req, "found existing lock cookie "
                                   LPX64, lock->l_handle.h_cookie);
@@ -1003,10 +992,11 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                 GOTO(out, rc = -ENOTCONN);
         }
         lock->l_export = class_export_get(req->rq_export);
-        spin_lock(&lock->l_export->exp_ldlm_data.led_lock);
-        list_add(&lock->l_export_chain,
-                 &lock->l_export->exp_ldlm_data.led_held_locks);
-        spin_unlock(&lock->l_export->exp_ldlm_data.led_lock);
+
+        if (lock->l_export->exp_lock_hash)
+                lustre_hash_add(lock->l_export->exp_lock_hash,
+                                &lock->l_remote_handle, 
+                                &lock->l_exp_hash);
 
 existing_lock:
 
@@ -1891,6 +1881,88 @@ static int ldlm_bl_thread_main(void *arg)
 }
 
 #endif
+
+/* 
+ * Export handle<->lock hash operations. 
+ */
+static unsigned
+ldlm_export_lock_hash(lustre_hash_t *lh, void *key, unsigned mask)
+{
+        return lh_u64_hash(((struct lustre_handle *)key)->cookie, mask);
+}
+
+static void *
+ldlm_export_lock_key(struct hlist_node *hnode)
+{
+        struct ldlm_lock *lock;
+        ENTRY;
+
+        lock = hlist_entry(hnode, struct ldlm_lock, l_exp_hash);
+        RETURN(&lock->l_remote_handle);
+}
+
+static int
+ldlm_export_lock_compare(void *key, struct hlist_node *hnode)
+{
+        ENTRY;
+        RETURN(lustre_handle_equal(ldlm_export_lock_key(hnode), key));
+}
+
+static void *
+ldlm_export_lock_get(struct hlist_node *hnode)
+{
+        struct ldlm_lock *lock;
+        ENTRY;
+
+        lock = hlist_entry(hnode, struct ldlm_lock, l_exp_hash);
+        LDLM_LOCK_GET(lock);
+
+        RETURN(lock);
+}
+
+static void *
+ldlm_export_lock_put(struct hlist_node *hnode)
+{
+        struct ldlm_lock *lock;
+        ENTRY;
+
+        lock = hlist_entry(hnode, struct ldlm_lock, l_exp_hash);
+        LDLM_LOCK_PUT(lock);
+
+        RETURN(lock);
+}
+
+static lustre_hash_ops_t ldlm_export_lock_ops = {
+        .lh_hash    = ldlm_export_lock_hash,
+        .lh_key     = ldlm_export_lock_key,
+        .lh_compare = ldlm_export_lock_compare,
+        .lh_get     = ldlm_export_lock_get,
+        .lh_put     = ldlm_export_lock_put
+};
+
+int ldlm_init_export(struct obd_export *exp)
+{
+        ENTRY;
+
+        exp->exp_lock_hash =
+                lustre_hash_init(obd_uuid2str(&exp->exp_client_uuid),
+                                 128, 65536, &ldlm_export_lock_ops, LH_REHASH);
+
+        if (!exp->exp_lock_hash)
+                RETURN(-ENOMEM);
+
+        RETURN(0);
+}
+EXPORT_SYMBOL(ldlm_init_export);
+
+void ldlm_destroy_export(struct obd_export *exp)
+{
+        ENTRY;
+        lustre_hash_exit(exp->exp_lock_hash);
+        exp->exp_lock_hash = NULL;
+        EXIT;
+}
+EXPORT_SYMBOL(ldlm_destroy_export);
 
 static int ldlm_setup(void);
 static int ldlm_cleanup(void);

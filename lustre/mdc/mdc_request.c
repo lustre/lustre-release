@@ -313,7 +313,7 @@ int mdc_xattr_common(struct obd_export *exp, struct ll_fid *fid,
                 rec->sx_opcode = REINT_SETXATTR;
                 rec->sx_fsuid  = current->fsuid;
                 rec->sx_fsgid  = current->fsgid;
-                rec->sx_cap    = current->cap_effective;
+                rec->sx_cap    = cfs_curproc_cap_pack();
                 rec->sx_suppgid1 = -1;
                 rec->sx_suppgid2 = -1;
                 rec->sx_fid    = *((struct lu_fid*)fid);

@@ -77,7 +77,7 @@ void *inter_module_get(char *arg)
                 return ldlm_namespace_cleanup;
         else if (!strcmp(arg, "ldlm_replay_locks"))
                 return ldlm_replay_locks;
-#ifdef HAVE_QUOTA_SUPPORT
+#ifdef HAVE_QUOTA_LIBLUSTRE_SUPPORT
         else if (!strcmp(arg, "osc_quota_interface"))
                 return &osc_quota_interface;
         else if (!strcmp(arg, "mdc_quota_interface"))
@@ -225,6 +225,46 @@ int liblustre_init_current(char *comm)
         init_capability(&current->cap_effective);
 
         return 0;
+}
+
+void cfs_cap_raise(cfs_cap_t cap)
+{
+        current->cap_effective |= (1 << cap);
+}
+
+void cfs_cap_lower(cfs_cap_t cap)
+{
+        current->cap_effective &= ~(1 << cap);
+}
+
+int cfs_cap_raised(cfs_cap_t cap)
+{
+        return current->cap_effective & (1 << cap);
+}
+
+void cfs_kernel_cap_pack(cfs_kernel_cap_t kcap, cfs_cap_t *cap)
+{
+        *cap = kcap;
+}
+
+void cfs_kernel_cap_unpack(cfs_kernel_cap_t *kcap, cfs_cap_t cap)
+{
+        *kcap = cap;
+}
+
+cfs_cap_t cfs_curproc_cap_pack(void) {
+        cfs_cap_t cap;
+        cfs_kernel_cap_pack(cfs_current()->cap_effective, &cap);
+        return cap;
+}
+
+void cfs_curproc_cap_unpack(cfs_cap_t cap) {
+        cfs_kernel_cap_unpack(&cfs_current()->cap_effective, cap);
+}
+
+int cfs_capable(cfs_cap_t cap)
+{
+        return cfs_cap_raised(cap);
 }
 
 int init_lib_portals()

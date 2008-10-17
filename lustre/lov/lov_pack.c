@@ -105,7 +105,7 @@ void lov_dump_lmm_v3(int level, struct lov_mds_md_v3 *lmm)
         CDEBUG(level,"stripe_size %u, stripe_count %u\n",
                le32_to_cpu(lmm->lmm_stripe_size),
                le32_to_cpu(lmm->lmm_stripe_count));
-        CDEBUG(level,"pool_name "POOLNAMEF"\n", lmm->lmm_pool_name);
+        CDEBUG(level,"pool_name "LOV_POOLNAMEF"\n", lmm->lmm_pool_name);
 
         if (le32_to_cpu(lmm->lmm_stripe_count) <= LOV_V1_INSANE_STRIPE_COUNT) {
                 for (i = 0, lod = lmm->lmm_objects;
@@ -162,7 +162,7 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
         struct lov_mds_md_v1 *lmmv1;
         struct lov_mds_md_v3 *lmmv3;
         struct lov_oinfo *loi;
-        int stripe_count = lov->desc.ld_tgt_count;
+        int stripe_count;
         struct lov_ost_data_v1 *lmm_objects;
         int lmm_size, lmm_magic;
         int i;
@@ -178,11 +178,19 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
                 } else {
                         stripe_count = lsm->lsm_stripe_count;
                 }
-        } else if (lmmp && *lmmp) {
-                lmm_magic = (*lmmp)->lmm_magic;
         } else {
-                /* lsm == NULL and lmmp == NULL */
-                lmm_magic = LOV_MAGIC;
+                /* No needs to allocated more than LOV_MAX_STRIPE_COUNT.
+                 * Anyway, this is pretty inaccurate since ld_tgt_count now
+                 * represents max index and we should rely on the actual number
+                 * of OSTs instead */
+                stripe_count = min((__u32)LOV_MAX_STRIPE_COUNT,
+                                   lov->desc.ld_tgt_count);
+
+                if (lmmp && *lmmp)
+                        lmm_magic = le32_to_cpu((*lmmp)->lmm_magic);
+                else
+                        /* lsm == NULL and lmmp == NULL */
+                        lmm_magic = LOV_MAGIC;
         }
 
         if ((lmm_magic != LOV_MAGIC_V1) &&
@@ -200,7 +208,7 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
 
         if (*lmmp && !lsm) {
                 stripe_count = le32_to_cpu((*lmmp)->lmm_stripe_count);
-                lmm_size = lov_mds_md_size(stripe_count, (*lmmp)->lmm_magic);
+                lmm_size = lov_mds_md_size(stripe_count, le32_to_cpu((*lmmp)->lmm_magic));
                 OBD_FREE(*lmmp, lmm_size);
                 *lmmp = NULL;
                 RETURN(0);
@@ -234,7 +242,7 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
         lmmv1->lmm_stripe_size = cpu_to_le32(lsm->lsm_stripe_size);
         lmmv1->lmm_stripe_count = cpu_to_le32(stripe_count);
         if (lsm->lsm_magic == LOV_MAGIC_V3) {
-                strncpy(lmmv3->lmm_pool_name, lsm->lsm_pool_name, MAXPOOLNAME);
+                strncpy(lmmv3->lmm_pool_name, lsm->lsm_pool_name, LOV_MAXPOOLNAME);
                 lmm_objects = lmmv3->lmm_objects;
         } else {
                 lmm_objects = lmmv1->lmm_objects;
@@ -509,7 +517,7 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
 
         if (lmm_magic == LOV_USER_MAGIC_V3)
                 strncpy((*lsmp)->lsm_pool_name, lumv3.lmm_pool_name,
-                        MAXPOOLNAME);
+                        LOV_MAXPOOLNAME);
 
         RETURN(0);
 }

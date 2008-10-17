@@ -387,38 +387,32 @@ failed:
         return NULL;
 }
 
-static void ptlrpc_server_req_decref(struct ptlrpc_request *req)
+/**
+ * to actually free the request, must be called without holding svc_lock.
+ * note it's caller's responsibility to unlink req->rq_list.
+ */
+static void ptlrpc_server_free_request(struct ptlrpc_request *req)
 {
-        struct ptlrpc_request_buffer_desc *rqbd = req->rq_rqbd;
-
-        if (!atomic_dec_and_test(&req->rq_refcount))
-                return;
-
+        LASSERT(atomic_read(&req->rq_refcount) == 0);
         LASSERT(list_empty(&req->rq_timed_list));
-        if (req != &rqbd->rqbd_req) {
+
+        /* DEBUG_REQ() assumes the reply state of a request with a valid
+         * ref will not be destroyed until that reference is dropped. */
+        ptlrpc_req_drop_rs(req);
+
+        if (req != &req->rq_rqbd->rqbd_req) {
                 /* NB request buffers use an embedded
                  * req if the incoming req unlinked the
                  * MD; this isn't one of them! */
                 OBD_FREE(req, sizeof(*req));
-        } else {
-                struct ptlrpc_service *svc = rqbd->rqbd_service;
-                /* schedule request buffer for re-use.
-                 * NB I can only do this after I've disposed of their
-                 * reqs; particularly the embedded req */
-                spin_lock(&svc->srv_lock);
-                list_add_tail(&rqbd->rqbd_list, &svc->srv_idle_rqbds);
-                spin_unlock(&svc->srv_lock);
         }
 }
 
-static void __ptlrpc_server_free_request(struct ptlrpc_request *req)
-{
-        list_del(&req->rq_list);
-        ptlrpc_req_drop_rs(req);
-        ptlrpc_server_req_decref(req);
-}
-
-static void ptlrpc_server_free_request(struct ptlrpc_request *req)
+/**
+ * drop a reference count of the request. if it reaches 0, we either
+ * put it into history list, or free it immediately.
+ */
+static void ptlrpc_server_drop_request(struct ptlrpc_request *req)
 {
         struct ptlrpc_request_buffer_desc *rqbd = req->rq_rqbd;
         struct ptlrpc_service             *svc = rqbd->rqbd_service;
@@ -426,12 +420,8 @@ static void ptlrpc_server_free_request(struct ptlrpc_request *req)
         struct list_head                  *tmp;
         struct list_head                  *nxt;
 
-        if (req->rq_phase != RQ_PHASE_NEW) /* incorrect message magic */
-                DEBUG_REQ(D_INFO, req, "free req");
-        spin_lock(&svc->srv_at_lock);
-        req->rq_sent_final = 1;
-        list_del_init(&req->rq_timed_list);
-        spin_unlock(&svc->srv_at_lock);
+        if (!atomic_dec_and_test(&req->rq_refcount))
+                return;
 
         spin_lock(&svc->srv_lock);
 
@@ -474,19 +464,49 @@ static void ptlrpc_server_free_request(struct ptlrpc_request *req)
                                 req = list_entry(rqbd->rqbd_reqs.next,
                                                  struct ptlrpc_request,
                                                  rq_list);
-                                __ptlrpc_server_free_request(req);
+                                list_del(&req->rq_list);
+                                ptlrpc_server_free_request(req);
                         }
 
                         spin_lock(&svc->srv_lock);
+                        /*
+                         * now all reqs including the embedded req has been
+                         * disposed, schedule request buffer for re-use.
+                         */
+                        LASSERT(atomic_read(&rqbd->rqbd_req.rq_refcount) == 0);
+                        list_add_tail(&rqbd->rqbd_list, &svc->srv_idle_rqbds);
                 }
-        } else if (req->rq_reply_state && req->rq_reply_state->rs_prealloc) {
-                 /* If we are low on memory, we are not interested in
-                    history */
-                list_del(&req->rq_history_list);
-                __ptlrpc_server_free_request(req);
-        }
 
-        spin_unlock(&svc->srv_lock);
+                spin_unlock(&svc->srv_lock);
+        } else if (req->rq_reply_state && req->rq_reply_state->rs_prealloc) {
+                 /* If we are low on memory, we are not interested in history */
+                list_del(&req->rq_list);
+                list_del_init(&req->rq_history_list);
+                spin_unlock(&svc->srv_lock);
+
+                ptlrpc_server_free_request(req);
+        } else {
+                spin_unlock(&svc->srv_lock);
+        }
+}
+
+/**
+ * to finish a request: stop sending more early replies, and release
+ * the request. should be called after we finished handling the request.
+ */
+static void ptlrpc_server_finish_request(struct ptlrpc_request *req)
+{
+        struct ptlrpc_service  *svc = req->rq_rqbd->rqbd_service;
+
+        if (req->rq_phase != RQ_PHASE_NEW) /* incorrect message magic */
+                DEBUG_REQ(D_INFO, req, "free req");
+
+        spin_lock(&svc->srv_at_lock);
+        req->rq_sent_final = 1;
+        list_del_init(&req->rq_timed_list);
+        spin_unlock(&svc->srv_at_lock);
+
+        ptlrpc_server_drop_request(req);
 }
 
 /* This function makes sure dead exports are evicted in a timely manner.
@@ -697,15 +717,22 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
                 RETURN(-ENOSYS);
         }
 
-        if (extra_time) {
-                /* Fake our processing time into the future to ask the
-                   clients for some extra amount of time */
-                extra_time += cfs_time_current_sec() -
-                        req->rq_arrival_time.tv_sec;
-                at_add(&svc->srv_at_estimate, extra_time);
+        if (req->rq_export && req->rq_export->exp_in_recovery) {
+                /* don't increase server estimates during recovery, and give
+                   clients the full recovery time. */
+                newdl = cfs_time_current_sec() +
+                        req->rq_export->exp_obd->obd_recovery_timeout;
+        } else {
+                if (extra_time) {
+                        /* Fake our processing time into the future to ask the
+                           clients for some extra amount of time */
+                        extra_time += cfs_time_current_sec() -
+                                      req->rq_arrival_time.tv_sec;
+                        at_add(&svc->srv_at_estimate, extra_time);
+                }
+                newdl = req->rq_arrival_time.tv_sec +
+                        at_get(&svc->srv_at_estimate);
         }
-
-        newdl = req->rq_arrival_time.tv_sec + at_get(&svc->srv_at_estimate);
         if (req->rq_deadline >= newdl) {
                 /* We're not adding any time, no need to send an early reply
                    (e.g. maybe at adaptive_max) */
@@ -842,8 +869,8 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
                       at_get(&svc->srv_at_estimate), delay);
         }
 
-        /* ptlrpc_server_free_request may delete an entry out of the work
-           list */
+        /* ptlrpc_server_finish_request may delete an entry out of
+         * the work list */
         spin_lock(&svc->srv_at_lock);
         while (!list_empty(&work_list)) {
                 rq = list_entry(work_list.next, struct ptlrpc_request,
@@ -857,7 +884,7 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
                 if (ptlrpc_at_send_early_reply(rq, at_extra) == 0)
                         ptlrpc_at_add_timed(rq);
 
-                ptlrpc_server_req_decref(rq);
+                ptlrpc_server_drop_request(rq);
                 spin_lock(&svc->srv_at_lock);
         }
         spin_unlock(&svc->srv_at_lock);
@@ -962,7 +989,7 @@ err_req:
         svc->srv_n_queued_reqs--;
         svc->srv_n_active_reqs++;
         spin_unlock(&svc->srv_lock);
-        ptlrpc_server_free_request(req);
+        ptlrpc_server_finish_request(req);
 
         RETURN(1);
 }
@@ -1118,7 +1145,7 @@ put_conn:
                           work_end.tv_sec - request->rq_arrival_time.tv_sec);
         }
 
-        ptlrpc_server_free_request(request);
+        ptlrpc_server_finish_request(request);
 
         RETURN(1);
 }
@@ -1309,7 +1336,6 @@ static int ptlrpc_main(void *arg)
         struct ptlrpc_thread   *thread = data->thread;
         struct obd_device      *dev = data->dev;
         struct ptlrpc_reply_state *rs;
-        struct lc_watchdog     *watchdog;
 #ifdef WITH_GROUP_INFO
         struct group_info *ginfo = NULL;
 #endif
@@ -1367,9 +1393,10 @@ static int ptlrpc_main(void *arg)
          */
         cfs_waitq_signal(&thread->t_ctl_waitq);
 
-        watchdog = lc_watchdog_add(max_t(int, obd_timeout, AT_OFF ? 0 :
-                                   at_get(&svc->srv_at_estimate)) *
-                                   svc->srv_watchdog_factor, NULL, NULL);
+        thread->t_watchdog = lc_watchdog_add(max_t(int, obd_timeout, AT_OFF ? 0 :
+                                                   at_get(&svc->srv_at_estimate))
+                                             *  svc->srv_watchdog_factor,
+                                             NULL, NULL);
 
         spin_lock(&svc->srv_lock);
         svc->srv_threads_running++;
@@ -1388,7 +1415,7 @@ static int ptlrpc_main(void *arg)
                 struct l_wait_info lwi = LWI_TIMEOUT(svc->srv_rqbd_timeout,
                                                      ptlrpc_retry_rqbds, svc);
 
-                lc_watchdog_disable(watchdog);
+                lc_watchdog_disable(thread->t_watchdog);
 
                 cond_resched();
 
@@ -1405,7 +1432,7 @@ static int ptlrpc_main(void *arg)
                               svc->srv_at_check,
                               &lwi);
 
-                lc_watchdog_touch_ms(watchdog, max_t(int, obd_timeout,
+                lc_watchdog_touch_ms(thread->t_watchdog, max_t(int, obd_timeout,
                                      AT_OFF ? 0 :
                                      at_get(&svc->srv_at_estimate)) *
                                      svc->srv_watchdog_factor);
@@ -1449,7 +1476,8 @@ static int ptlrpc_main(void *arg)
                 }
         }
 
-        lc_watchdog_delete(watchdog);
+        lc_watchdog_delete(thread->t_watchdog);
+        thread->t_watchdog = NULL;
 
 out_srv_init:
         /*
@@ -1677,7 +1705,7 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
                 list_del(&req->rq_list);
                 service->srv_n_queued_reqs--;
                 service->srv_n_active_reqs++;
-                ptlrpc_server_free_request(req);
+                ptlrpc_server_finish_request(req);
         }
         while (!list_empty(&service->srv_request_queue)) {
                 struct ptlrpc_request *req =
@@ -1688,7 +1716,7 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
                 list_del(&req->rq_list);
                 service->srv_n_queued_reqs--;
                 service->srv_n_active_reqs++;
-                ptlrpc_server_free_request(req);
+                ptlrpc_server_finish_request(req);
         }
         LASSERT(service->srv_n_queued_reqs == 0);
         LASSERT(service->srv_n_active_reqs == 0);
