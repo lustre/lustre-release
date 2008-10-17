@@ -328,10 +328,11 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_LRU_RESIZE 0x02000000ULL /*Lru resize feature. */
 #define OBD_CONNECT_MDS_MDS    0x04000000ULL /*MDS-MDS connection */
 #define OBD_CONNECT_REAL       0x08000000ULL /*real connection */
-#define OBD_CONNECT_CHANGE_QS  0x10000000ULL /*shrink/enlarge qunit size
-                                              *b=10600 */
+#define OBD_CONNECT_CHANGE_QS  0x10000000ULL /*shrink/enlarge qunit b=10600 */
 #define OBD_CONNECT_CKSUM      0x20000000ULL /*support several cksum algos */
 #define OBD_CONNECT_FID        0x40000000ULL /* FID is supported */
+#define OBD_CONNECT_VBR        0x80000000ULL /* version based recovery */
+#define OBD_CONNECT_LOV_V3    0x100000000ULL /* client supports lov v3 ea */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
 

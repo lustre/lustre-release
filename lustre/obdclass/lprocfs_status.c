@@ -705,6 +705,8 @@ static const char *obd_connect_names[] = {
         "change_qunit_size",
         "alt_checksum_algorithm",
         "fid_is_enabled",
+        "version_recovery",
+        "pools",
         NULL
 };
 
