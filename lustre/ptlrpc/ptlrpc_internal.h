@@ -63,6 +63,8 @@ void ptlrpc_handle_failed_import(struct obd_import *imp);
 int ptlrpc_replay_next(struct obd_import *imp, int *inflight);
 void ptlrpc_initiate_recovery(struct obd_import *imp);
 
+int lustre_msg_need_swab(struct lustre_msg *msg);
+int lustre_unpack_msg_ptlrpc_body(struct lustre_msg *msg, int offset, int swab);
 int lustre_unpack_req_ptlrpc_body(struct ptlrpc_request *req, int offset);
 int lustre_unpack_rep_ptlrpc_body(struct ptlrpc_request *req, int offset);
 
