@@ -859,7 +859,7 @@ LB_LINUX_TRY_COMPILE([
 # LC_INODE_I_MUTEX
 # after 2.6.15 inode have i_mutex intead of i_sem
 AC_DEFUN([LC_INODE_I_MUTEX],
-[AC_MSG_CHECKING([use inode have i_mutex ])
+[AC_MSG_CHECKING([if inode has i_mutex ])
 LB_LINUX_TRY_COMPILE([
 	#include <linux/mutex.h>
 	#include <linux/fs.h>
@@ -873,7 +873,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_INODE_I_MUTEX, 1,
                 [after 2.6.15 inode have i_mutex intead of i_sem])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -894,7 +894,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_DQUOTOFF_MUTEX, 1,
                 [after 2.6.17 dquote use mutex instead if semaphore])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -954,7 +954,7 @@ LB_LINUX_TRY_COMPILE([
 	AC_DEFINE(HAVE_INVALIDATEPAGE_RETURN_INT, 1,
 		[Define if return type of invalidatepage should be int])
 ],[
-	AC_MSG_RESULT(NO)
+	AC_MSG_RESULT(no)
 ])
 ])
 
@@ -983,7 +983,7 @@ LB_LINUX_TRY_COMPILE([
 	AC_DEFINE(HAVE_UMOUNTBEGIN_VFSMOUNT, 1,
 		[Define umount_begin need second argument])
 ],[
-	AC_MSG_RESULT(NO)
+	AC_MSG_RESULT(no)
 ])
 EXTRA_KCFLAGS="$tmp_flags"
 ])
@@ -1002,7 +1002,7 @@ LB_LINUX_TRY_COMPILE([
 	AC_DEFINE(HAVE_INODE_BLKSIZE, 1,
 		[struct inode has i_blksize field])
 ],[
-	AC_MSG_RESULT(NO)
+	AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1029,7 +1029,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_VFS_READDIR_U64_INO, 1,
                 [if vfs_readdir need 64bit inode number])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 EXTRA_KCFLAGS="$tmp_flags"
 ])
@@ -1048,7 +1048,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_FILE_WRITEV, 1,
                 [use fops->writev])
 ],[
-	AC_MSG_RESULT(NO)
+	AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1066,7 +1066,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_FILE_READV, 1,
                 [use fops->readv])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1083,7 +1083,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_NR_PAGECACHE, 1,
                 [is kernel export nr_pagecache])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1102,7 +1102,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_CANCEL_DIRTY_PAGE, 1,
                   [kernel has cancel_dirty_page instead of clear_page_dirty])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1146,7 +1146,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_PG_FS_MISC, 1,
                   [is kernel have PG_fs_misc])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1168,7 +1168,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_PAGE_CHECKED, 1,
                   [does kernel have PageChecked and SetPageChecked])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1757,7 +1757,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_SECURITY_PLUG, 1,
                 [SLES10 SP2 use extra parameter in vfs])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
