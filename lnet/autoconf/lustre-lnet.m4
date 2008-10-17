@@ -1100,7 +1100,7 @@ AC_DEFINE(HAVE_SHOW_TASK, 1, [show_task is exported])
 
 # check userland __u64 type
 AC_DEFUN([LN_U64_LONG_LONG],
-[AC_MSG_CHECKING([u64 is long long type])
+[AC_MSG_CHECKING([__u64 is long long type])
 tmp_flags="$CFLAGS"
 CFLAGS="$CFLAGS -Werror"
 AC_COMPILE_IFELSE([
