@@ -323,7 +323,7 @@ int check_last_id(char *mount_path)
 
 	for (group = 0; group < MAX_GROUPS; group++) {
 		max_objid = 0;
-		sprintf(dirname, "%s/O/"LPU64, mount_path, group);
+		sprintf(dirname, "%s/O/%llu", mount_path, group);
 
 		strcpy(lastid_path, dirname);
 		strcat(lastid_path, "/LAST_ID");
