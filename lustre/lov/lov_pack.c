@@ -85,12 +85,12 @@ void lov_dump_lmm_join(int level, struct lov_mds_md_join *lmmj)
 {
 
         CDEBUG(level, "objid "LPX64", magic 0x%08X, pattern %#X\n",
-               le64_to_cpu(lmmj->lmmj_md.lmm_object_id), 
+               le64_to_cpu(lmmj->lmmj_md.lmm_object_id),
                le32_to_cpu(lmmj->lmmj_md.lmm_magic),
                le32_to_cpu(lmmj->lmmj_md.lmm_pattern));
         CDEBUG(level,"stripe_size %u, stripe_count %u extent_count %u \n",
                le32_to_cpu(lmmj->lmmj_md.lmm_stripe_size),
-               le32_to_cpu(lmmj->lmmj_md.lmm_stripe_count), 
+               le32_to_cpu(lmmj->lmmj_md.lmm_stripe_count),
                le32_to_cpu(lmmj->lmmj_extent_count));
 }
 
@@ -309,7 +309,7 @@ static int lov_verify_lmm(void *lmm, int lmm_bytes, int *stripe_count)
         return rc;
 }
 
-int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count, 
+int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count,
                       int pattern, int magic)
 {
         int i, lsm_size;
@@ -340,10 +340,10 @@ int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count,
 void lov_free_memmd(struct lov_stripe_md **lsmp)
 {
         struct lov_stripe_md *lsm = *lsmp;
-        
+
         LASSERT(lsm_op_find(lsm->lsm_magic) != NULL);
         lsm_op_find(lsm->lsm_magic)->lsm_free(lsm);
-        
+
         *lsmp = NULL;
 }
 
@@ -351,7 +351,7 @@ void lov_free_memmd(struct lov_stripe_md **lsmp)
 /* Unpack LOV object metadata from disk storage.  It is packed in LE byte
  * order and is opaque to the networking layer.
  */
-int lov_unpackmd(struct obd_export *exp,  struct lov_stripe_md **lsmp, 
+int lov_unpackmd(struct obd_export *exp,  struct lov_stripe_md **lsmp,
                  struct lov_mds_md *lmm, int lmm_bytes)
 {
         struct obd_device *obd = class_exp2obd(exp);
@@ -384,7 +384,7 @@ int lov_unpackmd(struct obd_export *exp,  struct lov_stripe_md **lsmp,
                 RETURN(0);
         }
 
-        lsm_size = lov_alloc_memmd(lsmp, stripe_count, LOV_PATTERN_RAID0, 
+        lsm_size = lov_alloc_memmd(lsmp, stripe_count, LOV_PATTERN_RAID0,
                                    magic);
         if (lsm_size < 0)
                 RETURN(lsm_size);
@@ -615,7 +615,7 @@ int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
         /* User wasn't expecting this many OST entries */
         if (lum.lmm_stripe_count == 0) {
                 if (copy_to_user(lump, lmmk, lum_size))
-                    rc = -EFAULT;
+                        rc = -EFAULT;
         } else if (lum.lmm_stripe_count < lmmk->lmm_stripe_count) {
                 rc = -EOVERFLOW;
         } else if (copy_to_user(lump, lmmk, lmm_size)) {
