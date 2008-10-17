@@ -271,7 +271,7 @@ static void ptlrpc_at_adj_net_latency(struct ptlrpc_request *req,
                        oldnl, at_get(&at->iat_net_latency));
 }
 
-static int unpack_reply(struct ptlrpc_request *req)
+static int unpack_reply_common(struct ptlrpc_request *req)
 {
         int rc;
 
@@ -285,6 +285,17 @@ static int unpack_reply(struct ptlrpc_request *req)
         if (rc > 0)
                 lustre_set_rep_swabbed(req, MSG_PTLRPC_HEADER_OFF);
 
+        return rc;
+}
+
+static int unpack_reply(struct ptlrpc_request *req)
+{
+        int rc;
+
+        rc = unpack_reply_common(req);
+        if (rc < 0)
+                return rc;
+
         rc = lustre_unpack_rep_ptlrpc_body(req, MSG_PTLRPC_BODY_OFF);
         if (rc) {
                 DEBUG_REQ(D_ERROR, req, "unpack ptlrpc body failed: %d", rc);
@@ -293,53 +304,103 @@ static int unpack_reply(struct ptlrpc_request *req)
         return 0;
 }
 
-/* Handle an early reply message.
-   We can't risk the real reply coming in and changing rq_repmsg,
-   so this fn must be called under the rq_lock */
-static int ptlrpc_at_recv_early_reply(struct ptlrpc_request *req) {
+static inline void unpack_reply_free_msg(struct lustre_msg *msg, int len)
+{
+        OBD_FREE(msg, len);
+}
+
+static int unpack_reply_copy_msg(struct ptlrpc_request *req,
+                                 struct lustre_msg **msg, int *len)
+{
         struct lustre_msg *msgcpy;
-        time_t olddl;
-        int oldlen, rc;
+        __u32 csum_calc, csum_get;
+        int lencpy, rc;
         ENTRY;
 
-        req->rq_early = 0;
+        LASSERT_SPIN_LOCKED(&req->rq_lock);
+        *msg = NULL;
+        *len = 0;
 
-        rc = unpack_reply(req);
-        if (rc)
-                /* Let's just ignore it - same as if it never got here */
+        /* Swabbing required when rc == 1 */
+        rc = unpack_reply_common(req);
+        if (rc < 0)
                 RETURN(rc);
 
-        /* We've got to make sure another early reply doesn't land on
-           top of our current repbuf.  Make a copy and verify checksum. */
-        oldlen = req->rq_replen;
+        lencpy = req->rq_replen;
         spin_unlock(&req->rq_lock);
-        OBD_ALLOC(msgcpy, oldlen);
+
+        OBD_ALLOC(msgcpy, lencpy);
         if (!msgcpy) {
                 spin_lock(&req->rq_lock);
                 RETURN(-ENOMEM);
         }
         spin_lock(&req->rq_lock);
-        /* Another reply might have changed the repmsg and replen while
-           we dropped the lock; doesn't really matter, just use the latest.
-           If it doesn't fit in oldlen, checksum will be wrong. */
-        memcpy(msgcpy, req->rq_repmsg, oldlen);
-        if (lustre_msg_get_cksum(msgcpy) !=
-            lustre_msg_calc_cksum(msgcpy)) {
-                CDEBUG(D_ADAPTTO, "Early reply checksum mismatch, "
-                       "discarding %x != %x\n", lustre_msg_get_cksum(msgcpy),
-                       lustre_msg_calc_cksum(msgcpy));
-                GOTO(out, rc = -EINVAL);
+
+        /* Checksum must be calculated before being unswabbed.  If the magic
+         * in the copy is unswabbed discard like the checksum failure case */
+        memcpy(msgcpy, req->rq_repmsg, lencpy);
+        if (lustre_msg_need_swab(msgcpy)) {
+                DEBUG_REQ(D_NET, req, "incorrect message magic: %08x\n",
+                          msgcpy->lm_magic);
+                GOTO(err, rc = -EINVAL);
+        }
+
+        csum_calc = lustre_msg_calc_cksum(msgcpy);
+
+        /* Unpack the copy the original rq_repmsg is untouched */
+        rc = lustre_unpack_msg_ptlrpc_body(msgcpy, MSG_PTLRPC_BODY_OFF, rc);
+        if (rc) {
+                DEBUG_REQ(D_ERROR, req, "unpack msg copy failed: %d", rc);
+                GOTO(err, rc = -EPROTO);
+        }
+
+        /* For early replies the LND may update repmsg outside req->rq_lock
+         * resulting in a checksum failure which is non-harmful */
+        csum_get = lustre_msg_get_cksum(msgcpy);
+        if (csum_calc != csum_get) {
+                DEBUG_REQ(D_NET, req, "checksum mismatch: %x != %x\n",
+                          csum_calc, csum_get);
+                GOTO(err, rc = -EINVAL);
+        }
+
+        *msg = msgcpy;
+        *len = lencpy;
+        return 0;
+err:
+        unpack_reply_free_msg(msgcpy, lencpy);
+        return rc;
+}
+
+/* Handle an early reply message.  To prevent a real reply from arriving
+ * and changing req->rq_repmsg this func is called under the rq_lock */
+static int ptlrpc_at_recv_early_reply(struct ptlrpc_request *req) {
+        struct lustre_msg *msg;
+        time_t olddl;
+        int len, rc;
+        ENTRY;
+
+        LASSERT_SPIN_LOCKED(&req->rq_lock);
+        req->rq_early = 0;
+
+        /* All early replys for this request use a single repbuf which can
+         * be updated outside the req->rq_lock.  To prevent racing we create
+         * a copy of the repmsg and verify its checksum before it is used. */
+        rc = unpack_reply_copy_msg(req, &msg, &len);
+        if (rc) {
+                /* Let's just ignore it - same as if it never got here */
+                CDEBUG(D_ADAPTTO, "Discarding racing early reply: %d\n", rc);
+                RETURN(rc);
         }
 
         /* Expecting to increase the service time estimate here */
-        ptlrpc_at_adj_service(req, lustre_msg_get_timeout(msgcpy));
-        ptlrpc_at_adj_net_latency(req, lustre_msg_get_service_time(msgcpy));
+        ptlrpc_at_adj_service(req, lustre_msg_get_timeout(msg));
+        ptlrpc_at_adj_net_latency(req, lustre_msg_get_service_time(msg));
 
         /* Adjust the local timeout for this req */
         ptlrpc_at_set_req_timeout(req);
 
         olddl = req->rq_deadline;
-        /* server assumes it now has rq_timeout from when it sent the
+        /* Server assumes it now has rq_timeout from when it sent the
            early reply, so client should give it at least that long. */
         req->rq_deadline = cfs_time_current_sec() + req->rq_timeout +
                     ptlrpc_at_get_net_latency(req);
@@ -349,8 +410,7 @@ static int ptlrpc_at_recv_early_reply(struct ptlrpc_request *req) {
                   req->rq_early_count, req->rq_deadline -
                   cfs_time_current_sec(), req->rq_deadline - olddl);
 
-out:
-        OBD_FREE(msgcpy, oldlen);
+        unpack_reply_free_msg(msg, len);
         RETURN(rc);
 }
 
