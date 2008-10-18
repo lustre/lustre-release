@@ -1513,6 +1513,13 @@ Description: Use struct ldlm_callback_suite in ldlm_lock_create().
 Details    : Instead of specifying each ldlm_lock call-back through separate
 	     parameter, wrap them into struct ldlm_callback_suite.
 
+Severity   : normal
+Bugzilla   : 16450
+Description: Kill join_lru obd method and its callers.
+Details    : CLIO uses lock weighting policy to keep locks over mmapped regions
+	     in memory---a requirement implemented through ->o_join_lru() obd
+	     method in HEAD. Remove this method and its users.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

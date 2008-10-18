@@ -395,7 +395,7 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
 
         lsm = lli->lli_smd;
         rc = ll_extent_lock(fd, inode, lsm, mode, &policy,
-                            &lockh, LDLM_FL_CBPENDING | LDLM_FL_NO_LRU);
+                            &lockh, LDLM_FL_CBPENDING);
         if (rc != 0)
                 RETURN(NULL);
 
@@ -491,21 +491,7 @@ static void ll_vm_open(struct vm_area_struct * vma)
         LASSERT(atomic_read(&lli->lli_mmap_cnt) >= 0);
 
         atomic_inc(&lli->lli_mmap_cnt);
-        if (atomic_read(&lli->lli_mmap_cnt) == 1) {
-                struct lov_stripe_md *lsm = lli->lli_smd;
-                struct ll_sb_info *sbi = ll_i2sbi(inode);
-                int count;
-
                 spin_unlock(&lli->lli_lock);
-
-                if (!lsm)
-                        return;
-                count = obd_join_lru(sbi->ll_dt_exp, lsm, 0);
-                VMA_DEBUG(vma, "split %d unused locks from lru\n", count);
-        } else {
-                spin_unlock(&lli->lli_lock);
-        }
-
 }
 
 static void ll_vm_close(struct vm_area_struct *vma)
@@ -520,20 +506,7 @@ static void ll_vm_close(struct vm_area_struct *vma)
         LASSERT(atomic_read(&lli->lli_mmap_cnt) > 0);
 
         atomic_dec(&lli->lli_mmap_cnt);
-        if (atomic_read(&lli->lli_mmap_cnt) == 0) {
-                struct lov_stripe_md *lsm = lli->lli_smd;
-                struct ll_sb_info *sbi = ll_i2sbi(inode);
-                int count;
-
                 spin_unlock(&lli->lli_lock);
-
-                if (!lsm)
-                        return;
-                count = obd_join_lru(sbi->ll_dt_exp, lsm, 1);
-                VMA_DEBUG(vma, "join %d unused locks to lru\n", count);
-        } else {
-                spin_unlock(&lli->lli_lock);
-        }
 }
 
 #ifndef HAVE_FILEMAP_POPULATE

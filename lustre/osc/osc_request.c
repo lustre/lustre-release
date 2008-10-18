@@ -3044,7 +3044,6 @@ static void osc_set_data_with_check(struct lustre_handle *lockh, void *data,
         }
 #endif
         lock->l_ast_data = data;
-        lock->l_flags |= (flags & LDLM_FL_NO_LRU);
         unlock_res_and_lock(lock);
         LDLM_LOCK_PUT(lock);
 }
@@ -3319,21 +3318,8 @@ static int osc_cancel_unused(struct obd_export *exp,
         return ldlm_cli_cancel_unused(obd->obd_namespace, resp, flags, opaque);
 }
 
-static int osc_join_lru(struct obd_export *exp,
-                        struct lov_stripe_md *lsm, int join)
-{
-        struct obd_device *obd = class_exp2obd(exp);
-        struct ldlm_res_id res_id, *resp = NULL;
-
-        if (lsm != NULL) {
-                resp = osc_build_res_name(lsm->lsm_object_id,
-                                          lsm->lsm_object_gr, &res_id);
-        }
-
-        return ldlm_cli_join_lru(obd->obd_namespace, resp, join);
-}
-
-static int osc_statfs_interpret(struct ptlrpc_request *req,
+static int osc_statfs_interpret(const struct lu_env *env,
+                                struct ptlrpc_request *req,
                                 struct osc_async_args *aa, int rc)
 {
         struct obd_statfs *msfs;
@@ -4223,7 +4209,6 @@ struct obd_ops osc_obd_ops = {
         .o_change_cbdata        = osc_change_cbdata,
         .o_cancel               = osc_cancel,
         .o_cancel_unused        = osc_cancel_unused,
-        .o_join_lru             = osc_join_lru,
         .o_iocontrol            = osc_iocontrol,
         .o_get_info             = osc_get_info,
         .o_set_info_async       = osc_set_info_async,

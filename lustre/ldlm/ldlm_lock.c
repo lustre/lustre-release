@@ -656,7 +656,6 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                         ldlm_handle_bl_callback(ns, NULL, lock);
         } else if (ns_is_client(ns) &&
                    !lock->l_readers && !lock->l_writers &&
-                   !(lock->l_flags & LDLM_FL_NO_LRU) &&
                    !(lock->l_flags & LDLM_FL_BL_AST)) {
                 /* If this is a client-side namespace and this was the last
                  * reference, put it on the LRU. */

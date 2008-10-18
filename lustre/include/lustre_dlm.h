@@ -1027,8 +1027,6 @@ int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
                                     ldlm_mode_t mode, int flags, void *opaque);
 int ldlm_cli_cancel_req(struct obd_export *exp, struct list_head *head,
                         int count, int flags);
-int ldlm_cli_join_lru(struct ldlm_namespace *,
-                      const struct ldlm_res_id *, int join);
 int ldlm_cancel_resource_local(struct ldlm_resource *res,
                                struct list_head *cancels,
                                ldlm_policy_data_t *policy,

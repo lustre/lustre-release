@@ -1610,19 +1610,6 @@ static inline int obd_cancel_unused(struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline int obd_join_lru(struct obd_export *exp,
-                               struct lov_stripe_md *ea, int join)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, join_lru);
-        EXP_COUNTER_INCREMENT(exp, join_lru);
-
-        rc = OBP(exp->exp_obd, join_lru)(exp, ea, join);
-        RETURN(rc);
-}
-
 static inline int obd_pin(struct obd_export *exp, const struct lu_fid *fid,
                           struct obd_capa *oc, struct obd_client_handle *handle,
                           int flag)

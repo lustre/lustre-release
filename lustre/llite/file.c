@@ -1182,10 +1182,6 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
         LASSERT(!lustre_handle_is_used(lockh));
         LASSERT(lsm != NULL);
 
-        /* don't drop the mmapped file to LRU */
-        if (mapping_mapped(inode->i_mapping))
-                ast_flags |= LDLM_FL_NO_LRU;
-
         /* XXX phil: can we do this?  won't it screw the file size up? */
         if ((fd && (fd->fd_flags & LL_FILE_IGNORE_LOCK)) ||
             (sbi->ll_flags & LL_SBI_NOLCK))
