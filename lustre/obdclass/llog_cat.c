@@ -211,7 +211,15 @@ int llog_cat_put(struct llog_handle *cathandle)
 }
 EXPORT_SYMBOL(llog_cat_put);
 
-/* Return the currently active log handle.  If the current log handle doesn't
+/**
+ * lockdep markers for nested struct llog_handle::lgh_lock locking.
+ */
+enum {
+        LLOGH_CAT,
+        LLOGH_LOG
+};
+
+/** Return the currently active log handle.  If the current log handle doesn't
  * have enough space left for the current record, start a new one.
  *
  * If reclen is 0, we only want to know what the currently active log is,
@@ -228,11 +236,11 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
         struct llog_handle *loghandle = NULL;
         ENTRY;
 
-        down_read(&cathandle->lgh_lock);
+        down_read_nested(&cathandle->lgh_lock, LLOGH_CAT);
         loghandle = cathandle->u.chd.chd_current_log;
         if (loghandle) {
                 struct llog_log_hdr *llh = loghandle->lgh_hdr;
-                down_write(&loghandle->lgh_lock);
+                down_write_nested(&loghandle->lgh_lock, LLOGH_LOG);
                 if (loghandle->lgh_last_idx < LLOG_BITMAP_SIZE(llh) - 1) {
                         up_read(&cathandle->lgh_lock);
                         RETURN(loghandle);
@@ -252,11 +260,11 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
         /* time to create new log */
 
         /* first, we have to make sure the state hasn't changed */
-        down_write(&cathandle->lgh_lock);
+        down_write_nested(&cathandle->lgh_lock, LLOGH_CAT);
         loghandle = cathandle->u.chd.chd_current_log;
         if (loghandle) {
                 struct llog_log_hdr *llh = loghandle->lgh_hdr;
-                down_write(&loghandle->lgh_lock);
+                down_write_nested(&loghandle->lgh_lock, LLOGH_LOG);
                 if (loghandle->lgh_last_idx < LLOG_BITMAP_SIZE(llh) - 1) {
                         up_write(&cathandle->lgh_lock);
                         RETURN(loghandle);
@@ -269,7 +277,7 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
         CDEBUG(D_INODE, "creating new log\n");
         loghandle = llog_cat_new_log(cathandle, lid);
         if (!IS_ERR(loghandle))
-                down_write(&loghandle->lgh_lock);
+                down_write_nested(&loghandle->lgh_lock, LLOGH_LOG);
         up_write(&cathandle->lgh_lock);
         RETURN(loghandle);
 }
@@ -321,7 +329,7 @@ int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
         int i, index, rc = 0;
         ENTRY;
 
-        down_write(&cathandle->lgh_lock);
+        down_write_nested(&cathandle->lgh_lock, LLOGH_CAT);
         for (i = 0; i < count; i++, cookies++) {
                 struct llog_handle *loghandle;
                 struct llog_logid *lgl = &cookies->lgc_lgl;
@@ -332,7 +340,7 @@ int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
                         break;
                 }
 
-                down_write(&loghandle->lgh_lock);
+                down_write_nested(&loghandle->lgh_lock, LLOGH_LOG);
                 rc = llog_cancel_rec(loghandle, cookies->lgc_index);
                 up_write(&loghandle->lgh_lock);
 

@@ -736,7 +736,7 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
                 rc = llog_lvfs_close(handle);
 
                 if (rc == 0) {
-                        LOCK_INODE_MUTEX(inode);
+                        LOCK_INODE_MUTEX_PARENT(inode);
                         rc = ll_vfs_unlink(inode, fdentry, mnt);
                         UNLOCK_INODE_MUTEX(inode);
                 }

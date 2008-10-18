@@ -1575,6 +1575,12 @@ Details    : Add new ->l_weigh_ast() call-back to ldlm_lock. It is called
         by ldlm_cancel_shrink_policy() to estimate lock "value", instead of
         hard-coded `number of pages' logic.
 
+Severity   : normal
+Bugzilla   : 16450
+Description: Add lockdep annotations to llog code.
+Details    : Use appropriately tagged _nested() locking calls in the places
+	     where llog takes more than one ->lgh_lock lock.
+	
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
