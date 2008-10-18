@@ -1170,6 +1170,17 @@ void  lu_context_key_revive  (struct lu_context_key *key);
         }                                                              \
         struct __##mod##_dummy_type_fini {;}
 
+#define LU_TYPE_START(mod, ...)                                 \
+        static void mod##_type_start(struct lu_device_type *t)  \
+        {                                                       \
+        }                                                       \
+        struct __##mod##_dummy_type_start {;}
+
+#define LU_TYPE_STOP(mod, ...)                                  \
+        static void mod##_type_stop(struct lu_device_type *t)   \
+        {                                                       \
+        }                                                       \
+        struct __##mod##_dummy_type_stop {;}
 
 
 

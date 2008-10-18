@@ -518,18 +518,54 @@ struct lu_object *lu_object_find(const struct lu_env *env,
 EXPORT_SYMBOL(lu_object_find);
 
 /*
+/**
+ * Global list of all device types.
+ */
+static CFS_LIST_HEAD(lu_device_types);
+
+int lu_device_type_init(struct lu_device_type *ldt)
+{
+        int result;
+
+        CFS_INIT_LIST_HEAD(&ldt->ldt_linkage);
+        result = ldt->ldt_ops->ldto_init(ldt);
+        if (result == 0)
+                list_add(&ldt->ldt_linkage, &lu_device_types);
+        return result;
+}
+EXPORT_SYMBOL(lu_device_type_init);
+
+void lu_device_type_fini(struct lu_device_type *ldt)
+{
+        list_del_init(&ldt->ldt_linkage);
+        ldt->ldt_ops->ldto_fini(ldt);
+}
+EXPORT_SYMBOL(lu_device_type_fini);
+
+void lu_types_stop(void)
+{
+        struct lu_device_type *ldt;
+
+        list_for_each_entry(ldt, &lu_device_types, ldt_linkage) {
+                if (ldt->ldt_device_nr == 0)
+                        ldt->ldt_ops->ldto_stop(ldt);
+        }
+}
+EXPORT_SYMBOL(lu_types_stop);
+
+/**
  * Global list of all sites on this node
  */
 static CFS_LIST_HEAD(lu_sites);
 static DECLARE_MUTEX(lu_sites_guard);
 
-/*
+/**
  * Global environment used by site shrinker.
  */
 static struct lu_env lu_shrink_env;
 
-/*
- * Print all objects in @s.
+/**
+ * Print all objects in \a s.
  */
 void lu_site_print(const struct lu_env *env, struct lu_site *s, void *cookie,
                    lu_printer_t printer)
@@ -673,8 +709,8 @@ int lu_site_init_finish(struct lu_site *s)
 }
 EXPORT_SYMBOL(lu_site_init_finish);
 
-/*
- * Acquire additional reference on device @d
+/**
+ * Acquire additional reference on device \a d
  */
 void lu_device_get(struct lu_device *d)
 {
@@ -682,44 +718,55 @@ void lu_device_get(struct lu_device *d)
 }
 EXPORT_SYMBOL(lu_device_get);
 
-/*
- * Release reference on device @d.
+/**
+ * Release reference on device \a d.
  */
 void lu_device_put(struct lu_device *d)
 {
+        LASSERT(atomic_read(&d->ld_ref) > 0);
         atomic_dec(&d->ld_ref);
 }
 EXPORT_SYMBOL(lu_device_put);
 
-/*
- * Initialize device @d of type @t.
+/**
+ * Initialize device \a d of type \a t.
  */
 int lu_device_init(struct lu_device *d, struct lu_device_type *t)
 {
+        if (t->ldt_device_nr++ == 0 && t->ldt_ops->ldto_start != NULL)
+                t->ldt_ops->ldto_start(t);
         memset(d, 0, sizeof *d);
         atomic_set(&d->ld_ref, 0);
         d->ld_type = t;
+        lu_ref_init(&d->ld_reference);
         return 0;
 }
 EXPORT_SYMBOL(lu_device_init);
 
-/*
- * Finalize device @d.
+/**
+ * Finalize device \a d.
  */
 void lu_device_fini(struct lu_device *d)
 {
+        struct lu_device_type *t;
+
+        t = d->ld_type;
         if (d->ld_obd != NULL)
                 /* finish lprocfs */
                 lprocfs_obd_cleanup(d->ld_obd);
 
+        lu_ref_fini(&d->ld_reference);
         LASSERTF(atomic_read(&d->ld_ref) == 0,
                  "Refcount is %u\n", atomic_read(&d->ld_ref));
+        LASSERT(t->ldt_device_nr > 0);
+        if (--t->ldt_device_nr == 0 && t->ldt_ops->ldto_stop != NULL)
+                t->ldt_ops->ldto_stop(t);
 }
 EXPORT_SYMBOL(lu_device_fini);
 
-/*
- * Initialize object @o that is part of compound object @h and was created by
- * device @d.
+/**
+ * Initialize object \a o that is part of compound object \a h and was created
+ * by device \a d.
  */
 int lu_object_init(struct lu_object *o,
                    struct lu_object_header *h, struct lu_device *d)

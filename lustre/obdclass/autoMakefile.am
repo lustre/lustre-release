@@ -11,6 +11,7 @@ liblustreclass_a_SOURCES = class_obd.c debug.c genops.c statfs_pack.c mea.c uuid
 liblustreclass_a_SOURCES += lustre_handles.c lustre_peer.c lprocfs_status.c class_hash.c
 liblustreclass_a_SOURCES += obdo.c obd_config.c llog.c llog_obd.c llog_cat.c 
 liblustreclass_a_SOURCES += llog_lvfs.c llog_swab.c capa.c
+liblustreclass_a_SOURCES += lu_object.c
 liblustreclass_a_SOURCES += #llog_ioctl.c rbtree.c
 liblustreclass_a_CPPFLAGS = $(LLCPPFLAGS)
 liblustreclass_a_CFLAGS = $(LLCFLAGS)

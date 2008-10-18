@@ -321,6 +321,9 @@ static struct lu_device_type_operations mdc_device_type_ops = {
         .ldto_init = mdc_type_init,
         .ldto_fini = mdc_type_fini,
 
+        .ldto_start = mdc_type_start,
+        .ldto_stop  = mdc_type_stop,
+
         .ldto_device_alloc = mdc_device_alloc,
         .ldto_device_free  = mdc_device_free,
 

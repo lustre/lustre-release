@@ -194,7 +194,7 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
 #endif
         if (ldt != NULL) {
                 type->typ_lu = ldt;
-                rc = ldt->ldt_ops->ldto_init(ldt);
+                rc = lu_device_type_init(ldt);
                 if (rc != 0)
                         GOTO (failed, rc);
         }
@@ -240,7 +240,7 @@ int class_unregister_type(const char *name)
         }
 
         if (type->typ_lu)
-                type->typ_lu->ldt_ops->ldto_fini(type->typ_lu);
+                lu_device_type_fini(type->typ_lu);
 
         spin_lock(&obd_types_lock);
         list_del(&type->typ_chain);
