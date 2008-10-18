@@ -455,7 +455,7 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
                         LDLM_DEBUG(lock, "setting FL_LOCAL_ONLY");
                         if (lock->l_completion_ast)
                                 lock->l_completion_ast(lock, 0, NULL);
-                        LDLM_LOCK_PUT(lock);
+                        LDLM_LOCK_RELEASE(lock);
                         continue;
                 }
 
@@ -474,7 +474,7 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
                                    "client node");
                         ldlm_lock_destroy(lock);
                 }
-                LDLM_LOCK_PUT(lock);
+                LDLM_LOCK_RELEASE(lock);
         } while (1);
 
         EXIT;
@@ -498,6 +498,7 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags)
                         res = list_entry(tmp, struct ldlm_resource, lr_hash);
                         ldlm_resource_getref(res);
                         spin_unlock(&ns->ns_hash_lock);
+                        LDLM_RESOURCE_ADDREF(res);
 
                         cleanup_resource(res, &res->lr_granted, flags);
                         cleanup_resource(res, &res->lr_converting, flags);
@@ -511,6 +512,7 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags)
                          * client gets blocking ast when lock gets distracted by
                          * server. This is 1_4 branch solution, let's see how
                          * will it behave. */
+                        LDLM_RESOURCE_DELREF(res);
                         if (!ldlm_resource_putref_locked(res))
                                 CDEBUG(D_INFO,
                                        "Namespace %s resource refcount nonzero "
@@ -794,6 +796,7 @@ static struct ldlm_resource *ldlm_resource_new(void)
 
         atomic_set(&res->lr_refcount, 1);
         spin_lock_init(&res->lr_lock);
+        lu_ref_init(&res->lr_reference);
 
         /* one who creates the resource must unlock
          * the semaphore after lvb initialization */
@@ -965,6 +968,7 @@ void __ldlm_resource_putref_final(struct ldlm_resource *res)
         ldlm_namespace_put_locked(ns, 0);
         list_del_init(&res->lr_hash);
         list_del_init(&res->lr_childof);
+        lu_ref_fini(&res->lr_reference);
 
         ns->ns_resources--;
         if (ns->ns_resources == 0)
@@ -1119,11 +1123,13 @@ void ldlm_namespace_dump(int level, struct ldlm_namespace *ns)
 
                 ldlm_resource_getref(res);
                 spin_unlock(&ns->ns_hash_lock);
+                LDLM_RESOURCE_ADDREF(res);
 
                 lock_res(res);
                 ldlm_resource_dump(level, res);
                 unlock_res(res);
 
+                LDLM_RESOURCE_DELREF(res);
                 spin_lock(&ns->ns_hash_lock);
                 tmp = tmp->next;
                 ldlm_resource_putref_locked(res);

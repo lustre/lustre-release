@@ -411,7 +411,7 @@ reprocess:
 
                 /* insert new2 at lock */
                 ldlm_resource_add_lock(res, ownlocks, new2);
-                LDLM_LOCK_PUT(new2);
+                LDLM_LOCK_RELEASE(new2);
                 break;
         }
 

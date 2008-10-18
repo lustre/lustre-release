@@ -91,11 +91,12 @@ int mdc_resource_get_unused(struct obd_export *exp, struct lu_fid *fid,
                                 NULL, &res_id, 0, 0);
         if (res == NULL)
                 RETURN(0);
-
+        LDLM_RESOURCE_ADDREF(res);
         /* Initialize ibits lock policy. */
         policy.l_inodebits.bits = bits;
         count = ldlm_cancel_resource_local(res, cancels, &policy,
                                            mode, 0, 0, NULL);
+        LDLM_RESOURCE_DELREF(res);
         ldlm_resource_putref(res);
         RETURN(count);
 }

@@ -2680,7 +2680,7 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
          * lock.
          */
         if (new_lock == NULL)
-                new_lock = ldlm_handle2lock(&lh->mlh_reg_lh);
+                new_lock = ldlm_handle2lock_long(&lh->mlh_reg_lh, 0);
 
         if (new_lock == NULL && (flags & LDLM_FL_INTENT_ONLY)) {
                 lh->mlh_reg_lh.cookie = 0;
@@ -2720,8 +2720,18 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
          * Fixup the lock to be given to the client.
          */
         lock_res_and_lock(new_lock);
-        new_lock->l_readers = 0;
-        new_lock->l_writers = 0;
+        /* Zero new_lock->l_readers and new_lock->l_writers without triggering
+         * possible blocking AST. */
+        while (new_lock->l_readers > 0) {
+                lu_ref_del(&new_lock->l_reference, "reader", new_lock);
+                lu_ref_del(&new_lock->l_reference, "user", new_lock);
+                new_lock->l_readers--;
+        }
+        while (new_lock->l_writers > 0) {
+                lu_ref_del(&new_lock->l_reference, "writer", new_lock);
+                lu_ref_del(&new_lock->l_reference, "user", new_lock);
+                new_lock->l_writers--;
+        }
 
         new_lock->l_export = class_export_get(req->rq_export);
         new_lock->l_blocking_ast = lock->l_blocking_ast;
@@ -2734,7 +2744,7 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
                         &new_lock->l_exp_hash);
 
         unlock_res_and_lock(new_lock);
-        LDLM_LOCK_PUT(new_lock);
+        LDLM_LOCK_RELEASE(new_lock);
         lh->mlh_reg_lh.cookie = 0;
 
         RETURN(ELDLM_LOCK_REPLACED);

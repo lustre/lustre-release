@@ -159,6 +159,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 LASSERT(list_empty(&lock->l_pending_chain));
 
                 atomic_dec(&res->lr_namespace->ns_locks);
+                lu_ref_del(&res->lr_reference, "lock", lock);
                 ldlm_resource_putref(res);
                 lock->l_resource = NULL;
                 if (lock->l_export) {
@@ -170,6 +171,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                         OBD_FREE(lock->l_lvb_data, lock->l_lvb_len);
 
                 ldlm_interval_free(ldlm_interval_detach(lock));
+                lu_ref_fini(&lock->l_reference);
                 OBD_FREE_RCU_CB(lock, sizeof(*lock), &lock->l_handle, 
                       	        ldlm_lock_free);
         }
@@ -295,8 +297,10 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
         unlock_res_and_lock(lock);
 
         /* drop reference from hashtable only for first destroy */
-        if (first)
-                LDLM_LOCK_PUT(lock);
+        if (first) {
+                lu_ref_del(&lock->l_reference, "hash", lock);
+                LDLM_LOCK_RELEASE(lock);
+        }
         EXIT;
 }
 
@@ -306,8 +310,10 @@ void ldlm_lock_destroy_nolock(struct ldlm_lock *lock)
         ENTRY;
         first = ldlm_lock_destroy_internal(lock);
         /* drop reference from hashtable only for first destroy */
-        if (first)
-                LDLM_LOCK_PUT(lock);
+        if (first) {
+                lu_ref_del(&lock->l_reference, "hash", lock);
+                LDLM_LOCK_RELEASE(lock);
+        }
         EXIT;
 }
 
@@ -337,6 +343,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
 
         spin_lock_init(&lock->l_lock);
         lock->l_resource = ldlm_resource_getref(resource);
+        lu_ref_add(&resource->lr_reference, "lock", lock);
 
         atomic_set(&lock->l_refc, 2);
         CFS_INIT_LIST_HEAD(&lock->l_res_link);
@@ -358,6 +365,8 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
         CFS_INIT_LIST_HEAD(&lock->l_extents_list);
         spin_lock_init(&lock->l_extents_list_lock);
         CFS_INIT_LIST_HEAD(&lock->l_cache_locks_list);
+        lu_ref_init(&lock->l_reference);
+        lu_ref_add(&lock->l_reference, "hash", lock);
 
         RETURN(lock);
 }
@@ -389,6 +398,7 @@ int ldlm_lock_change_resource(struct ldlm_namespace *ns, struct ldlm_lock *lock,
         unlock_res_and_lock(lock);
 
         newres = ldlm_resource_get(ns, NULL, new_resid, type, 1);
+        lu_ref_add(&newres->lr_reference, "lock", lock);
         if (newres == NULL)
                 RETURN(-ENOMEM);
         /*
@@ -413,6 +423,7 @@ int ldlm_lock_change_resource(struct ldlm_namespace *ns, struct ldlm_lock *lock,
         unlock_res_and_lock(lock);
 
         /* ...and the flowers are still standing! */
+        lu_ref_del(&oldres->lr_reference, "lock", lock);
         ldlm_resource_putref(oldres);
 
         RETURN(0);
@@ -448,6 +459,7 @@ struct ldlm_lock *__ldlm_handle2lock(const struct lustre_handle *handle,
         ns = lock->l_resource->lr_namespace;
         LASSERT(ns != NULL);
 
+        lu_ref_add_atomic(&lock->l_reference, "handle", cfs_current());
         lock_res_and_lock(lock);
 
         /* It's unlikely but possible that someone marked the lock as
@@ -576,11 +588,16 @@ void ldlm_lock_addref(struct lustre_handle *lockh, __u32 mode)
 void ldlm_lock_addref_internal_nolock(struct ldlm_lock *lock, __u32 mode)
 {
         ldlm_lock_remove_from_lru(lock);
-        if (mode & (LCK_NL | LCK_CR | LCK_PR))
+        if (mode & (LCK_NL | LCK_CR | LCK_PR)) {
                 lock->l_readers++;
-        if (mode & (LCK_EX | LCK_CW | LCK_PW | LCK_GROUP))
+                lu_ref_add_atomic(&lock->l_reference, "reader", lock);
+        }
+        if (mode & (LCK_EX | LCK_CW | LCK_PW | LCK_GROUP)) {
                 lock->l_writers++;
+                lu_ref_add_atomic(&lock->l_reference, "writer", lock);
+        }
         LDLM_LOCK_GET(lock);
+        lu_ref_add_atomic(&lock->l_reference, "user", lock);
         LDLM_DEBUG(lock, "ldlm_lock_addref(%s)", ldlm_lockname[mode]);
 }
 
@@ -601,14 +618,17 @@ void ldlm_lock_decref_internal_nolock(struct ldlm_lock *lock, __u32 mode)
         LDLM_DEBUG(lock, "ldlm_lock_decref(%s)", ldlm_lockname[mode]);
         if (mode & (LCK_NL | LCK_CR | LCK_PR)) {
                 LASSERT(lock->l_readers > 0);
+                lu_ref_del(&lock->l_reference, "reader", lock);
                 lock->l_readers--;
         }
         if (mode & (LCK_EX | LCK_CW | LCK_PW | LCK_GROUP)) {
                 LASSERT(lock->l_writers > 0);
+                lu_ref_del(&lock->l_reference, "writer", lock);
                 lock->l_writers--;
         }
 
-        LDLM_LOCK_PUT(lock);    /* matches the ldlm_lock_get in addref */
+        lu_ref_del(&lock->l_reference, "user", lock);
+        LDLM_LOCK_RELEASE(lock);    /* matches the LDLM_LOCK_GET() in addref */
 }
 
 void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
@@ -1076,6 +1096,7 @@ ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                 RETURN(0);
         }
 
+        LDLM_RESOURCE_ADDREF(res);
         lock_res(res);
 
         lock = search_queue(&res->lr_granted, &mode, policy, old_lock, flags);
@@ -1093,6 +1114,7 @@ ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,
         EXIT;
  out:
         unlock_res(res);
+        LDLM_RESOURCE_DELREF(res);
         ldlm_resource_putref(res);
 
         if (lock) {
@@ -1106,7 +1128,7 @@ ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                                                                  NULL);
                                 if (err) {
                                         if (flags & LDLM_FL_TEST_LOCK)
-                                                LDLM_LOCK_PUT(lock);
+                                                LDLM_LOCK_RELEASE(lock);
                                         else
                                                 ldlm_lock_decref_internal(lock, mode);
                                         rc = 0;
@@ -1140,7 +1162,7 @@ ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                 }
 
                 if (flags & LDLM_FL_TEST_LOCK)
-                        LDLM_LOCK_PUT(lock);
+                        LDLM_LOCK_RELEASE(lock);
 
         } else if (!(flags & LDLM_FL_TEST_LOCK)) {/*less verbose for test-only*/
                 LDLM_DEBUG_NOLOCK("not matched ns %p type %u mode %u res "
@@ -1238,7 +1260,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
                          * work here is done. */
                         if (lock != *lockp) {
                                 ldlm_lock_destroy(lock);
-                                LDLM_LOCK_PUT(lock);
+                                LDLM_LOCK_RELEASE(lock);
                         }
                         *flags |= LDLM_FL_LOCK_CHANGED;
                         RETURN(0);
@@ -1396,11 +1418,11 @@ ldlm_work_bl_ast_lock(struct list_head *tmp, struct ldlm_cb_set_arg *arg)
 
         ldlm_lock2desc(lock->l_blocking_lock, &d);
 
-        LDLM_LOCK_PUT(lock->l_blocking_lock);
+        LDLM_LOCK_RELEASE(lock->l_blocking_lock);
         lock->l_blocking_lock = NULL;
         lock->l_blocking_ast(lock, &d, (void *)arg, 
                              LDLM_CB_BLOCKING);
-        LDLM_LOCK_PUT(lock);
+        LDLM_LOCK_RELEASE(lock);
 
         RETURN(1);
 }
@@ -1438,7 +1460,7 @@ ldlm_work_cp_ast_lock(struct list_head *tmp, struct ldlm_cb_set_arg *arg)
                 completion_callback(lock, 0, (void *)arg);
                 rc = 1;
         }
-        LDLM_LOCK_PUT(lock);
+        LDLM_LOCK_RELEASE(lock);
 
         RETURN(rc);
 }
@@ -1458,7 +1480,7 @@ ldlm_work_revoke_ast_lock(struct list_head *tmp, struct ldlm_cb_set_arg *arg)
         desc.l_granted_mode = 0;
 
         lock->l_blocking_ast(lock, &desc, (void*)arg, LDLM_CB_BLOCKING);
-        LDLM_LOCK_PUT(lock);
+        LDLM_LOCK_RELEASE(lock);
 
         RETURN(1);
 }
@@ -1539,9 +1561,11 @@ void ldlm_reprocess_all_ns(struct ldlm_namespace *ns)
 
                         ldlm_resource_getref(res);
                         spin_unlock(&ns->ns_hash_lock);
+                        LDLM_RESOURCE_ADDREF(res);
 
                         rc = reprocess_one_queue(res, NULL);
 
+                        LDLM_RESOURCE_DELREF(res);
                         spin_lock(&ns->ns_hash_lock);
                         tmp = tmp->next;
                         ldlm_resource_putref_locked(res);
@@ -1677,7 +1701,7 @@ void ldlm_cancel_locks_for_export_cb(void *obj, void *data)
         ldlm_lock_cancel(lock);
         ldlm_reprocess_all(res);
         ldlm_resource_putref(res);
-        LDLM_LOCK_PUT(lock);
+        LDLM_LOCK_RELEASE(lock);
 }
 
 void ldlm_cancel_locks_for_export(struct obd_export *exp)

@@ -623,9 +623,9 @@ static void discard_bl_list(struct list_head *bl_list)
                 lock->l_flags &= ~LDLM_FL_AST_SENT;
                 LASSERT(lock->l_bl_ast_run == 0);
                 LASSERT(lock->l_blocking_lock);
-                LDLM_LOCK_PUT(lock->l_blocking_lock);
+                LDLM_LOCK_RELEASE(lock->l_blocking_lock);
                 lock->l_blocking_lock = NULL;
-                LDLM_LOCK_PUT(lock);
+                LDLM_LOCK_RELEASE(lock);
         }
         EXIT;
 }

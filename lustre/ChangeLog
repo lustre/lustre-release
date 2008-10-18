@@ -1540,6 +1540,32 @@ Bugzilla   : 16450
 Description: Kill unused ldlm_handle2lock_ns() function.
 Details    : Kill unused ldlm_handle2lock_ns() function.
 
+Severity   : minor
+Bugzilla   : 16450
+Description: Kill unused ldlm_handle2lock_ns() function.
+Details    : Kill unused ldlm_handle2lock_ns() function.
+
+Severity   : minor
+Bugzilla   : 16450
+Description: Add lu_ref support to ldlm_lock
+Details    : lu_ref support for ldlm_lock and ldlm_resource. See lu_ref patch. 
+        lu_ref fields ->l_reference and ->lr_reference are added to ldlm_lock 
+        and ldlm_resource. LDLM interface has to be changed, because code that 
+        releases a reference on a lock, has to "know" what reference this is.
+        In the most frequent case
+
+                lock = ldlm_handle2lock(handle);
+                ...
+                LDLM_LOCK_PUT(lock);
+
+        no changes are required. When any other reference (received _not_ from 
+        ldlm_handle2lock()) is released, LDLM_LOCK_RELEASE() has to be called 
+        instead of LDLM_LOCK_PUT().
+
+        Arguably, changes are pervasive, and interface requires some discipline
+        for proper use. On the other hand, it was very instrumental in finding 
+        a few leaked lock references.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

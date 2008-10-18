@@ -53,6 +53,7 @@
 #include <lustre_handles.h>
 #include <lustre_export.h> /* for obd_export, for LDLM_DEBUG */
 #include <interval_tree.h> /* for interval_node{}, ldlm_extent */
+#include <lu_ref.h>
 
 struct obd_ops;
 struct obd_device;
@@ -699,6 +700,7 @@ struct ldlm_lock {
          */
         struct list_head      l_sl_mode;
         struct list_head      l_sl_policy;
+        struct lu_ref         l_reference;
 };
 
 struct ldlm_resource {
@@ -730,6 +732,10 @@ struct ldlm_resource {
 
         /* when the resource was considered as contended */
         cfs_time_t             lr_contention_time;
+        /**
+         * List of references to this resource. For debugging.
+         */
+        struct lu_ref          lr_reference;
 };
 
 struct ldlm_ast_work {
@@ -860,12 +866,24 @@ struct ldlm_lock *__ldlm_handle2lock(const struct lustre_handle *, int flags);
 void ldlm_cancel_callback(struct ldlm_lock *);
 int ldlm_lock_set_data(struct lustre_handle *, void *data);
 int ldlm_lock_remove_from_lru(struct ldlm_lock *);
-struct ldlm_lock *ldlm_handle2lock_ns(struct ldlm_namespace *,
-                                      const struct lustre_handle *);
 
 static inline struct ldlm_lock *ldlm_handle2lock(const struct lustre_handle *h)
 {
         return __ldlm_handle2lock(h, 0);
+}
+
+#define LDLM_LOCK_REF_DEL(lock) \
+        lu_ref_del(&lock->l_reference, "handle", cfs_current())
+
+static inline struct ldlm_lock *
+ldlm_handle2lock_long(const struct lustre_handle *h, int flags)
+{
+        struct ldlm_lock *lock;
+
+        lock = __ldlm_handle2lock(h, flags);
+        if (lock != NULL)
+                LDLM_LOCK_REF_DEL(lock);
+        return lock;
 }
 
 static inline int ldlm_res_lvbo_update(struct ldlm_resource *res,
@@ -880,7 +898,26 @@ static inline int ldlm_res_lvbo_update(struct ldlm_resource *res,
         return 0;
 }
 
+int ldlm_error2errno(ldlm_error_t error);
+ldlm_error_t ldlm_errno2error(int err_no); /* don't call it `errno': this
+                                            * confuses user-space. */
+
+/**
+ * Release a temporary lock reference obtained by ldlm_handle2lock() or
+ * __ldlm_handle2lock().
+ */
 #define LDLM_LOCK_PUT(lock)                     \
+do {                                            \
+        LDLM_LOCK_REF_DEL(lock);                \
+        /*LDLM_DEBUG((lock), "put");*/          \
+        ldlm_lock_put(lock);                    \
+} while (0)
+
+/**
+ * Release a lock reference obtained by some other means (see
+ * LDLM_LOCK_PUT()).
+ */
+#define LDLM_LOCK_RELEASE(lock)                 \
 do {                                            \
         /*LDLM_DEBUG((lock), "put");*/          \
         ldlm_lock_put(lock);                    \
@@ -901,7 +938,7 @@ do {                                            \
                 if (c-- == 0)                                   \
                         break;                                  \
                 list_del_init(&_lock->member);                  \
-                LDLM_LOCK_PUT(_lock);                           \
+                LDLM_LOCK_RELEASE(_lock);                       \
         }                                                       \
         LASSERT(c <= 0);                                        \
 })
@@ -969,10 +1006,19 @@ void ldlm_resource_dump(int level, struct ldlm_resource *);
 int ldlm_lock_change_resource(struct ldlm_namespace *, struct ldlm_lock *,
                               const struct ldlm_res_id *);
 
+#define LDLM_RESOURCE_ADDREF(res) do {                                  \
+        lu_ref_add(&(res)->lr_reference, __FUNCTION__, cfs_current());  \
+} while (0)
+
+#define LDLM_RESOURCE_DELREF(res) do {                                  \
+        lu_ref_del(&(res)->lr_reference, __FUNCTION__, cfs_current());  \
+} while (0)
+
 struct ldlm_callback_suite {
         ldlm_completion_callback lcs_completion;
         ldlm_blocking_callback   lcs_blocking;
         ldlm_glimpse_callback    lcs_glimpse;
+        ldlm_weigh_callback      lcs_weigh;
 };
 
 /* ldlm_request.c */

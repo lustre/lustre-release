@@ -631,8 +631,10 @@ static int osc_resource_get_unused(struct obd_export *exp, struct obdo *oa,
         if (res == NULL)
                 RETURN(0);
 
+        LDLM_RESOURCE_ADDREF(res);
         count = ldlm_cancel_resource_local(res, cancels, NULL, mode,
                                            lock_flags, 0, NULL);
+        LDLM_RESOURCE_DELREF(res);
         ldlm_resource_putref(res);
         RETURN(count);
 }

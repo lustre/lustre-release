@@ -566,7 +566,7 @@ static int ldlm_cb_interpret(struct ptlrpc_request *req, void *data, int rc)
                                            ? "blocking" : "completion");
         }
 
-        LDLM_LOCK_PUT(lock);
+        LDLM_LOCK_RELEASE(lock);
 
         if (rc == -ERESTART)
                 atomic_set(&arg->restart, 1);
@@ -1142,7 +1142,7 @@ existing_lock:
                 if (!err && dlm_req->lock_desc.l_resource.lr_type != LDLM_FLOCK)
                         ldlm_reprocess_all(lock->l_resource);
 
-                LDLM_LOCK_PUT(lock);
+                LDLM_LOCK_RELEASE(lock);
         }
 
         LDLM_DEBUG_NOLOCK("server-side enqueue handler END (lock %p, rc %d)",
@@ -1276,10 +1276,12 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
                 if (res != pres) {
                         if (pres != NULL) {
                                 ldlm_reprocess_all(pres);
+                                LDLM_RESOURCE_DELREF(pres);
                                 ldlm_resource_putref(pres);
                         }
                         if (res != NULL) {
                                 ldlm_resource_getref(res);
+                                LDLM_RESOURCE_ADDREF(res);
                                 ldlm_res_lvbo_update(res, NULL, 0, 1);
                         }
                         pres = res;
@@ -1289,6 +1291,7 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
         }
         if (pres != NULL) {
                 ldlm_reprocess_all(pres);
+                LDLM_RESOURCE_DELREF(pres);
                 ldlm_resource_putref(pres);
         }
         LDLM_DEBUG_NOLOCK("server-side cancel handler END");
@@ -1354,7 +1357,7 @@ void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
         }
 
         LDLM_DEBUG(lock, "client blocking callback handler END");
-        LDLM_LOCK_PUT(lock);
+        LDLM_LOCK_RELEASE(lock);
         EXIT;
 }
 
@@ -1384,7 +1387,7 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
                 /* bug 11300: the lock has already been granted */
                 unlock_res_and_lock(lock);
                 LDLM_DEBUG(lock, "Double grant race happened");
-                LDLM_LOCK_PUT(lock);
+                LDLM_LOCK_RELEASE(lock);
                 EXIT;
                 return;
         }
@@ -1409,7 +1412,7 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
                 if (ldlm_lock_change_resource(ns, lock,
                                 &dlm_req->lock_desc.l_resource.lr_name) != 0) {
                         LDLM_ERROR(lock, "Failed to allocate resource");
-                        LDLM_LOCK_PUT(lock);
+                        LDLM_LOCK_RELEASE(lock);
                         EXIT;
                         return;
                 }
@@ -1448,7 +1451,7 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
 
         LDLM_DEBUG_NOLOCK("client completion callback handler END (lock %p)",
                           lock);
-        LDLM_LOCK_PUT(lock);
+        LDLM_LOCK_RELEASE(lock);
         EXIT;
 }
 
@@ -1486,7 +1489,7 @@ static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
                 return;
         }
         unlock_res_and_lock(lock);
-        LDLM_LOCK_PUT(lock);
+        LDLM_LOCK_RELEASE(lock);
         EXIT;
 }
 
@@ -1697,7 +1700,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                         CERROR("ldlm_cli_cancel: %d\n", rc);
         }
 
-        lock = ldlm_handle2lock_ns(ns, &dlm_req->lock_handle[0]);
+        lock = ldlm_handle2lock_long(&dlm_req->lock_handle[0], 0);
         if (!lock) {
                 CDEBUG(D_DLMTRACE, "callback on lock "LPX64" - lock "
                        "disappeared\n", dlm_req->lock_handle[0].cookie);
@@ -1718,7 +1721,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                                    LPX64" - lock disappeared\n",
                                    dlm_req->lock_handle[0].cookie);
                         unlock_res_and_lock(lock);
-                        LDLM_LOCK_PUT(lock);
+                        LDLM_LOCK_RELEASE(lock);
                         ldlm_callback_reply(req, -EINVAL);
                         RETURN(0);
                 }
@@ -2081,7 +2084,7 @@ ldlm_export_lock_put(struct hlist_node *hnode)
         ENTRY;
 
         lock = hlist_entry(hnode, struct ldlm_lock, l_exp_hash);
-        LDLM_LOCK_PUT(lock);
+        LDLM_LOCK_RELEASE(lock);
 
         RETURN(lock);
 }

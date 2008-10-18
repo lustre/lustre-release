@@ -1652,7 +1652,7 @@ static enum interval_iter filter_intent_cb(struct interval_node *n,
                         *v = LDLM_LOCK_GET(lck);
                 } else if ((*v)->l_policy_data.l_extent.start <
                            lck->l_policy_data.l_extent.start) {
-                        LDLM_LOCK_PUT(*v);
+                        LDLM_LOCK_RELEASE(*v);
                         *v = LDLM_LOCK_GET(lck);
                 }
 
@@ -1721,7 +1721,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
                 LASSERT(lock->l_flags & LDLM_FL_CP_REQD);
                 lock->l_flags &= ~LDLM_FL_CP_REQD;
                 list_del_init(&wlock->l_cp_ast);
-                LDLM_LOCK_PUT(wlock);
+                LDLM_LOCK_RELEASE(wlock);
         }
 
         /* The lock met with no resistance; we're finished. */
@@ -1817,7 +1817,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         unlock_res(res);
 
  out:
-        LDLM_LOCK_PUT(l);
+        LDLM_LOCK_RELEASE(l);
 
         RETURN(ELDLM_LOCK_ABORTED);
 }
@@ -3316,7 +3316,9 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
                                 &res_id, LDLM_EXTENT, 0);
 
         if (res != NULL) {
+                LDLM_RESOURCE_ADDREF(res);
                 rc = ldlm_res_lvbo_update(res, NULL, 0, 0);
+                LDLM_RESOURCE_DELREF(res);
                 ldlm_resource_putref(res);
         }
 
