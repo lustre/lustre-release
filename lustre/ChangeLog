@@ -1660,6 +1660,11 @@ Description: Introduce struct md_site and move meta-data specific parts of
 Details    : Move md-specific fields out of struct lu_site into special struct 
         md_site, so that lu_site can be used on a client.
 
+Severity   : minor
+Bugzilla   : 16450
+Description: Kill mdd_lov_destroy()
+Details    : Remove unused mdd code.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
