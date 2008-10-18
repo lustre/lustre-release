@@ -1627,6 +1627,13 @@ Description: Introduce lu_kmem_descr.
 Details    : lu_kmem_descr and its companion interface allow to create
 	     and destroy a number of kmem caches at once.
 
+Severity   : normal
+Bugzilla   : 16450
+Description: Fix lu_object finalization race.
+Details    : Fix a race between lu_object_find() finding an object and its
+	     concurrent finalization. This race is (most likely) not possible
+	     on the server, but might happen on the client.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

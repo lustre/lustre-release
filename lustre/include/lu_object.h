@@ -631,15 +631,25 @@ struct lu_site {
 
         /*
          * Client Seq Manager
+        /**
+         * Wait-queue signaled when an object in this site is ultimately
+         * destroyed (lu_object_free()). It is used by lu_object_find() to
+         * wait before re-trying when object in the process of destruction is
+         * found in the hash table.
+         *
+         * If having a single wait-queue turns out to be a problem, a
+         * wait-queue per hash-table bucket can be easily implemented.
+         *
+         * \see htable_lookup().
          */
-        struct lu_client_seq *ls_client_seq;
+        cfs_waitq_t           ls_marche_funebre;
 
-        /* statistical counters. Protected by nothing, races are accepted. */
+        /** statistical counters. Protected by nothing, races are accepted. */
         struct {
                 __u32 s_created;
                 __u32 s_cache_hit;
                 __u32 s_cache_miss;
-                /*
+                /**
                  * Number of hash-table entry checks made.
                  *
                  *       ->s_cache_check / (->s_cache_miss + ->s_cache_hit)
