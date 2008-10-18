@@ -1535,6 +1535,11 @@ Details    : Add functions to map (rather arbitrary) between LDLM error codes
 	     and standard errno values. CLIO needs this to prevent LDLM specific
 	     constants from escaping ldlm and osc.
 
+Severity   : minor
+Bugzilla   : 16450
+Description: Kill unused ldlm_handle2lock_ns() function.
+Details    : Kill unused ldlm_handle2lock_ns() function.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

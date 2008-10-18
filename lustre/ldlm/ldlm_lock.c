@@ -475,14 +475,6 @@ struct ldlm_lock *__ldlm_handle2lock(const struct lustre_handle *handle,
         return retval;
 }
 
-struct ldlm_lock *ldlm_handle2lock_ns(struct ldlm_namespace *ns,
-                                      const struct lustre_handle *handle)
-{
-        struct ldlm_lock *retval = NULL;
-        retval = __ldlm_handle2lock(handle, 0);
-        return retval;
-}
-
 void ldlm_lock2desc(struct ldlm_lock *lock, struct ldlm_lock_desc *desc)
 {
         struct obd_export *exp = lock->l_export?:lock->l_conn_export;
