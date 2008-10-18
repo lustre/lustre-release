@@ -262,7 +262,6 @@ static inline struct osd_thread_info *osd_oti_get(const struct lu_env *env)
         return lu_context_key_get(&env->le_ctx, &osd_key);
 }
 
-#if OSD_COUNTERS
 /*
  * Concurrency: doesn't matter
  */
@@ -279,15 +278,6 @@ static int osd_write_locked(const struct lu_env *env, struct osd_object *o)
         struct osd_thread_info *oti = osd_oti_get(env);
         return oti->oti_w_locks > 0 && o->oo_owner == env;
 }
-
-#define OSD_COUNTERS_DO(exp) exp
-#else
-
-
-#define osd_read_locked(env, o) (1)
-#define osd_write_locked(env, o) (1)
-#define OSD_COUNTERS_DO(exp) ((void)0)
-#endif
 
 /*
  * Concurrency: doesn't access mutable data
@@ -675,35 +665,25 @@ static void osd_trans_stop(const struct lu_env *env, struct thandle *th)
 {
         int result;
         struct osd_thandle *oh;
+        struct osd_thread_info *oti = osd_oti_get(env);
 
         ENTRY;
 
         oh = container_of0(th, struct osd_thandle, ot_super);
         if (oh->ot_handle != NULL) {
                 handle_t *hdl = oh->ot_handle;
-                /*
-                 * XXX temporary stuff. Some abstraction layer should be used.
-                 */
+
+                LASSERT(oti->oti_txns == 1);
+                oti->oti_txns--;
+                LASSERT(oti->oti_r_locks == 0);
+                LASSERT(oti->oti_w_locks == 0);
                 result = dt_txn_hook_stop(env, th);
                 if (result != 0)
                         CERROR("Failure in transaction hook: %d\n", result);
-
-                /**/
                 oh->ot_handle = NULL;
                 result = journal_stop(hdl);
                 if (result != 0)
                         CERROR("Failure to stop transaction: %d\n", result);
-
-#if OSD_COUNTERS
-                {
-                        struct osd_thread_info *oti = osd_oti_get(env);
-
-                        LASSERT(oti->oti_txns == 1);
-                        LASSERT(oti->oti_r_locks == 0);
-                        LASSERT(oti->oti_w_locks == 0);
-                        oti->oti_txns--;
-                }
-#endif
         }
         EXIT;
 }
@@ -2231,13 +2211,11 @@ LU_KEY_FINI(osd, struct osd_thread_info);
 static void osd_key_exit(const struct lu_context *ctx,
                          struct lu_context_key *key, void *data)
 {
-#if OSD_COUNTERS
         struct osd_thread_info *info = data;
 
         LASSERT(info->oti_r_locks == 0);
         LASSERT(info->oti_w_locks == 0);
         LASSERT(info->oti_txns    == 0);
-#endif
 }
 
 static int osd_device_init(const struct lu_env *env, struct lu_device *d,

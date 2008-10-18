@@ -1453,6 +1453,12 @@ Bugzilla   : 16450
 Description: Grammar fixes.
 Details    : A couple of trivial spelling fixes.
 
+Severity   : normal
+Bugzilla   : 16450
+Description: OSD_COUNTERS-mandatory
+Details    : Make previously optional ->oti_{w,r}_locks sanity checks mandatory
+	     to simplify the code.
+	
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

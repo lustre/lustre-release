@@ -66,8 +66,6 @@
 
 struct inode;
 
-#define OSD_COUNTERS (0)
-
 /*
  * osd device.
  */
@@ -144,11 +142,9 @@ struct osd_thread_info {
         char                   oti_ipd[DX_IPD_MAX_SIZE];
                 long long      oti_alignment_lieutenant;
         };
-#if OSD_COUNTERS
         int                    oti_r_locks;
         int                    oti_w_locks;
         int                    oti_txns;
-#endif
 };
 
 #ifdef LPROCFS
