@@ -1507,6 +1507,12 @@ Details    : Use spin_lock_nested() in (the only) situation where more than
 	     dead-lock in ldlm_lock_change_resource() by enforcing particular
 	     lock ordering.
 
+Severity   : normal
+Bugzilla   : 16450
+Description: Use struct ldlm_callback_suite in ldlm_lock_create().
+Details    : Instead of specifying each ldlm_lock call-back through separate
+	     parameter, wrap them into struct ldlm_callback_suite.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

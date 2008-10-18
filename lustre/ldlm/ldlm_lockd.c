@@ -984,8 +984,7 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
         lock = ldlm_lock_create(ns, &dlm_req->lock_desc.l_resource.lr_name,
                                 dlm_req->lock_desc.l_resource.lr_type,
                                 dlm_req->lock_desc.l_req_mode,
-                                cbs->lcs_blocking, cbs->lcs_completion,
-                                cbs->lcs_glimpse, NULL, 0);
+                                cbs, NULL, 0);
 
         if (!lock)
                 GOTO(out, rc = -ENOMEM);

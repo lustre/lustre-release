@@ -1171,9 +1171,7 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
                                    const struct ldlm_res_id *res_id,
                                    ldlm_type_t type,
                                    ldlm_mode_t mode,
-                                   ldlm_blocking_callback blocking,
-                                   ldlm_completion_callback completion,
-                                   ldlm_glimpse_callback glimpse,
+                                   const struct ldlm_callback_suite *cbs,
                                    void *data, __u32 lvb_len)
 {
         struct ldlm_lock *lock;
@@ -1192,10 +1190,13 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
 
         lock->l_req_mode = mode;
         lock->l_ast_data = data;
-        lock->l_blocking_ast = blocking;
-        lock->l_completion_ast = completion;
-        lock->l_glimpse_ast = glimpse;
         lock->l_pid = cfs_curproc_pid();
+        if (cbs) {
+                lock->l_blocking_ast = cbs->lcs_blocking;
+                lock->l_completion_ast = cbs->lcs_completion;
+                lock->l_glimpse_ast = cbs->lcs_glimpse;
+                lock->l_weigh_ast = cbs->lcs_weigh;
+        }
 
         lock->l_tree_node = NULL;
         /* if this is the extent lock, allocate the interval tree node */

@@ -112,9 +112,9 @@ typedef enum {
 void ldlm_grant_lock(struct ldlm_lock *lock, struct list_head *work_list);
 struct ldlm_lock *
 ldlm_lock_create(struct ldlm_namespace *ns, const struct ldlm_res_id *,
-                 ldlm_type_t type, ldlm_mode_t, ldlm_blocking_callback,
-                 ldlm_completion_callback, ldlm_glimpse_callback, void *data,
-                 __u32 lvb_len);
+                 ldlm_type_t type, ldlm_mode_t,
+                 const struct ldlm_callback_suite *cbs,
+                 void *data, __u32 lvb_len);
 ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *, struct ldlm_lock **,
                                void *cookie, int *flags);
 void ldlm_lock_addref_internal(struct ldlm_lock *, __u32 mode);

@@ -168,6 +168,7 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
         int added = (mode == LCK_NL);
         int overlaps = 0;
         int splitted = 0;
+        const struct ldlm_callback_suite null_cbs = { NULL };
         ENTRY;
 
         CDEBUG(D_DLMTRACE, "flags %#x pid %u mode %u start "LPU64" end "LPU64
@@ -373,7 +374,7 @@ reprocess:
                 if (!new2) {
                         unlock_res_and_lock(req);
                          new2 = ldlm_lock_create(ns, &res->lr_name, LDLM_FLOCK,
-                                        lock->l_granted_mode, NULL, NULL, NULL,
+                                        lock->l_granted_mode, &null_cbs,
                                         NULL, 0);
                         lock_res_and_lock(req);
                         if (!new2) {

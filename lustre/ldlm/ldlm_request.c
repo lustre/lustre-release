@@ -303,6 +303,10 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
 {
         struct ldlm_lock *lock;
         int err;
+        const struct ldlm_callback_suite cbs = { .lcs_completion = completion,
+                                                 .lcs_blocking   = blocking,
+                                                 .lcs_glimpse    = glimpse,
+        };
         ENTRY;
 
         LASSERT(!(*flags & LDLM_FL_REPLAY));
@@ -311,8 +315,7 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
                 LBUG();
         }
 
-        lock = ldlm_lock_create(ns, res_id, type, mode, blocking,
-                                completion, glimpse, data, lvb_len);
+        lock = ldlm_lock_create(ns, res_id, type, mode, &cbs, data, lvb_len);
         if (unlikely(!lock))
                 GOTO(out_nolock, err = -ENOMEM);
         LDLM_DEBUG(lock, "client-side local enqueue handler, new lock created");
@@ -669,15 +672,20 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
         /* If we're replaying this lock, just check some invariants.
          * If we're creating a new lock, get everything all setup nice. */
         if (is_replay) {
-                lock = ldlm_handle2lock(lockh);
+                lock = ldlm_handle2lock_long(lockh, 0);
                 LASSERT(lock != NULL);
                 LDLM_DEBUG(lock, "client-side enqueue START");
                 LASSERT(exp == lock->l_conn_export);
         } else {
+                const struct ldlm_callback_suite cbs = {
+                        .lcs_completion = einfo->ei_cb_cp,
+                        .lcs_blocking   = einfo->ei_cb_bl,
+                        .lcs_glimpse    = einfo->ei_cb_gl,
+                        .lcs_weigh      = einfo->ei_cb_wg
+                };
                 lock = ldlm_lock_create(ns, res_id, einfo->ei_type,
-                                        einfo->ei_mode, einfo->ei_cb_bl,
-                                        einfo->ei_cb_cp, einfo->ei_cb_gl,
-                                        einfo->ei_cbdata, lvb_len);
+                                        einfo->ei_mode, &cbs, einfo->ei_cbdata,
+                                        lvb_len);
                 if (lock == NULL)
                         RETURN(-ENOMEM);
                 /* for the local lock, add the reference */
