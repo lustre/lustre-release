@@ -1697,6 +1697,11 @@ Bugzilla   : 16450
 Description: Add rwv.c test program.
 Details    : New testing program exercising readv(2) and writev(2) (Qian).
 
+Severity   : normal
+Bugzilla   : 16450
+Description: Add sendfile.c test program.
+Details    : New testing program exercising sendfile(2) (Jay).
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

@@ -33,7 +33,7 @@ EXTRA_DIST = $(noinst_SCRIPTS) $(noinst_DATA) \
 
 if TESTS
 noinst_PROGRAMS = openunlink truncate directio openme writeme mlink utime it_test
-noinst_PROGRAMS += tchmod toexcl fsx test_brw openclose createdestroy
+noinst_PROGRAMS += tchmod toexcl fsx test_brw openclose createdestroy sendfile
 noinst_PROGRAMS += createmany chownmany statmany multifstat createtest
 noinst_PROGRAMS += opendirunlink opendevunlink unlinkmany fchdir_test checkstat
 noinst_PROGRAMS += statone runas openfile getdents o_directory rmdirmany
