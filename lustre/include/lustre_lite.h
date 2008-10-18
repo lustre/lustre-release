@@ -128,7 +128,7 @@ struct lustre_client_ocd {
         spinlock_t lco_lock;
 };
 
-/*
+/**
  * This function is used as an upcall-callback hooked by liblustre and llite
  * clients into obd_notify() listeners chain to handle notifications about
  * change of import connect_flags. See llu_fsswop_mount() and

@@ -36,7 +36,11 @@
  * lustre/include/lustre/lustre_idl.h
  *
  * Lustre wire protocol definitions.
+ */
+
+/** \defgroup lustreidl lustreidl
  *
+ * Lustre wire protocol definitions.
  *
  * We assume all nodes are either little-endian or big-endian, and we
  * always send messages in the sender's native format.  The receiver
@@ -79,6 +83,8 @@
  * For variable length types, a second 'lustre_swab_v_xxxtypexxx()' routine
  * may be defined that swabs just the variable part, after the caller has
  * verified that the message buffer is large enough.
+ *
+ * @{
  */
 
 #ifndef _LUSTRE_IDL_H_
@@ -216,15 +222,38 @@ static inline int range_is_exhausted(struct lu_range *r)
         (range)->lr_start, \
         (range)->lr_end
 
+/** \defgroup lu_fid lu_fid
+ * @{ */
+
+/**
+ * File identifier.
+ *
+ * Fid is a cluster-wide unique identifier of a file or an object
+ * (stripe). Fids are never reused. Fids are transmitted across network (in
+ * the sender byte-ordering), and stored on disk in a packed form (struct
+ * lu_fid_pack) in a big-endian order.
+ */
 struct lu_fid {
-        __u64 f_seq;  /* holds fid sequence. Lustre should support 2 ^ 64
-                       * objects, thus even if one sequence has one object we
-                       * will never reach this value. */
-        __u32 f_oid;  /* fid number within its sequence. */
-        __u32 f_ver;  /* holds fid version. */
+        /**
+         * fid sequence. Sequence is a unit of migration: all files (objects)
+         * with fids from a given sequence are stored on the same
+         * server.
+         *
+         * Lustre should support 2 ^ 64 objects, thus even if one
+         * sequence has one object we will never reach this value.
+         */
+        __u64 f_seq;
+        /** fid number within sequence. */
+        __u32 f_oid;
+        /**
+         * fid version, used to distinguish different versions (in the sense
+         * of snapshots, etc.) of the same file system object. Not currently
+         * used.
+         */
+        __u32 f_ver;
 };
 
-/*
+/**
  * fid constants
  */
 enum {
@@ -232,19 +261,19 @@ enum {
         LUSTRE_FID_INIT_OID  = 1UL
 };
 
-/* get object sequence */
+/** returns fid object sequence */
 static inline __u64 fid_seq(const struct lu_fid *fid)
 {
         return fid->f_seq;
 }
 
-/* get object id */
+/** returns fid object id */
 static inline __u32 fid_oid(const struct lu_fid *fid)
 {
         return fid->f_oid;
 }
 
-/* get object version */
+/** returns fid object version */
 static inline __u32 fid_ver(const struct lu_fid *fid)
 {
         return fid->f_ver;
@@ -357,7 +386,8 @@ static inline void fid_be_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
 }
 
 #ifdef __KERNEL__
-/*
+
+/**
  * Storage representation for fids.
  *
  * Variable size, first byte contains the length of the whole record.
@@ -403,7 +433,28 @@ static inline int lu_fid_eq(const struct lu_fid *f0,
 	return memcmp(f0, f1, sizeof *f0) == 0;
 }
 
-/*
+#define __diff_normalize(val0, val1)                            \
+({                                                              \
+        typeof(val0) __val0 = (val0);                           \
+        typeof(val1) __val1 = (val1);                           \
+                                                                \
+        (__val0 == __val1 ? 0 : __val0 > __val1 ? +1 : -1);     \
+})
+
+static inline int lu_fid_cmp(const struct lu_fid *f0,
+                             const struct lu_fid *f1)
+{
+        return
+                __diff_normalize(fid_seq(f0), fid_seq(f1)) ?:
+                __diff_normalize(fid_oid(f0), fid_oid(f1)) ?:
+                __diff_normalize(fid_ver(f0), fid_ver(f1));
+}
+
+/** @} lu_fid */
+
+/** \defgroup lu_dir lu_dir
+ * @{ */
+/**
  * Layout of readdir pages, as transmitted on wire.
  */
 struct lu_dirent {
@@ -457,6 +508,8 @@ static inline int lu_dirent_size(struct lu_dirent *ent)
 }
 
 #define DIR_END_OFF              0xfffffffffffffffeULL
+
+/** @} lu_dir */
 
 struct lustre_handle {
         __u64 cookie;
@@ -732,7 +785,7 @@ typedef __u32 obd_count;
 #define OBD_FL_NO_USRQUOTA   (0x00000100) /* the object's owner is over quota */
 #define OBD_FL_NO_GRPQUOTA   (0x00000200) /* the object's group is over quota */
 
-/*
+/**
  * Set this to delegate DLM locking during obd_punch() to the OSTs. Only OSTs
  * that declared OBD_CONNECT_TRUNCLOCK in their connect flags support this
  * functionality.
@@ -1864,14 +1917,14 @@ typedef enum {
 
 /* catalog of log objects */
 
-/* Identifier for a single log object */
+/** Identifier for a single log object */
 struct llog_logid {
         __u64                   lgl_oid;
         __u64                   lgl_ogr;
         __u32                   lgl_ogen;
 } __attribute__((packed));
 
-/* Records written to the CATALOGS list */
+/** Records written to the CATALOGS list */
 #define CATLIST "CATALOGS"
 struct llog_catid {
         struct llog_logid       lci_logid;
@@ -1880,7 +1933,7 @@ struct llog_catid {
         __u32                   lci_padding3;
 } __attribute__((packed));
 
-/*join file lov mds md*/
+/** join file lov mds md*/
 struct lov_mds_md_join {
         struct lov_mds_md lmmj_md;
         /*join private info*/
@@ -1917,7 +1970,7 @@ typedef enum {
          __swab32(LLOG_OP_MAGIC) ||                                     \
          (((r)->lrh_type == 0) && ((r)->lrh_len > LLOG_CHUNK_SIZE)))
 
-/* Log record header - stored in little endian order.
+/** Log record header - stored in little endian order.
  * Each record must start with this struct, end with a llog_rec_tail,
  * and be a multiple of 256 bits in size.
  */
@@ -1944,7 +1997,7 @@ struct llog_logid_rec {
         struct llog_rec_tail    lid_tail;
 } __attribute__((packed));
 
-/* MDS extent description
+/** MDS extent description
  * It is for joined file extent info, each extent info for joined file
  * just like (start, end, lmm).
  */
@@ -1953,7 +2006,8 @@ struct mds_extent_desc {
         __u64                   med_len;   /* extent length */
         struct lov_mds_md       med_lmm;   /* extent's lmm  */
 };
-/*Joined file array extent log record*/
+
+/** Joined file array extent log record*/
 struct llog_array_rec {
         struct llog_rec_hdr     lmr_hdr;
         struct mds_extent_desc  lmr_med;
@@ -2044,7 +2098,7 @@ struct llog_log_hdr {
                                  llh->llh_bitmap_offset -       \
                                  sizeof(llh->llh_tail)) * 8)
 
-/* log cookies are used to reference a specific log file and a record therein */
+/** log cookies are used to reference a specific log file and a record therein */
 struct llog_cookie {
         struct llog_logid       lgc_lgl;
         __u32                   lgc_subsys;
@@ -2052,7 +2106,7 @@ struct llog_cookie {
         __u32                   lgc_padding;
 } __attribute__((packed));
 
-/* llog protocol */
+/** llog protocol */
 enum llogd_rpc_ops {
         LLOG_ORIGIN_HANDLE_CREATE       = 501,
         LLOG_ORIGIN_HANDLE_NEXT_BLOCK   = 502,
@@ -2212,7 +2266,7 @@ typedef enum {
 
 #define JOIN_FILE_ALIGN 4096
 
-/* security opcodes */
+/** security opcodes */
 typedef enum {
         SEC_CTX_INIT            = 801,
         SEC_CTX_INIT_CONT       = 802,
@@ -2243,18 +2297,18 @@ struct lustre_capa {
 
 extern void lustre_swab_lustre_capa(struct lustre_capa *c);
 
-/* lustre_capa.lc_opc */
+/** lustre_capa::lc_opc */
 enum {
-        CAPA_OPC_BODY_WRITE   = 1<<0,  /* write object data */
-        CAPA_OPC_BODY_READ    = 1<<1,  /* read object data */
-        CAPA_OPC_INDEX_LOOKUP = 1<<2,  /* lookup object fid */
-        CAPA_OPC_INDEX_INSERT = 1<<3,  /* insert object fid */
-        CAPA_OPC_INDEX_DELETE = 1<<4,  /* delete object fid */
-        CAPA_OPC_OSS_WRITE    = 1<<5,  /* write oss object data */
-        CAPA_OPC_OSS_READ     = 1<<6,  /* read oss object data */
-        CAPA_OPC_OSS_TRUNC    = 1<<7,  /* truncate oss object */
-        CAPA_OPC_META_WRITE   = 1<<8,  /* write object meta data */
-        CAPA_OPC_META_READ    = 1<<9,  /* read object meta data */
+        CAPA_OPC_BODY_WRITE   = 1<<0,  /**< write object data */
+        CAPA_OPC_BODY_READ    = 1<<1,  /**< read object data */
+        CAPA_OPC_INDEX_LOOKUP = 1<<2,  /**< lookup object fid */
+        CAPA_OPC_INDEX_INSERT = 1<<3,  /**< insert object fid */
+        CAPA_OPC_INDEX_DELETE = 1<<4,  /**< delete object fid */
+        CAPA_OPC_OSS_WRITE    = 1<<5,  /**< write oss object data */
+        CAPA_OPC_OSS_READ     = 1<<6,  /**< read oss object data */
+        CAPA_OPC_OSS_TRUNC    = 1<<7,  /**< truncate oss object */
+        CAPA_OPC_META_WRITE   = 1<<8,  /**< write object meta data */
+        CAPA_OPC_META_READ    = 1<<9,  /**< read object meta data */
 
 };
 
@@ -2282,9 +2336,9 @@ static inline int capa_for_oss(struct lustre_capa *c)
         return (c->lc_opc & CAPA_OPC_INDEX_LOOKUP) == 0;
 }
 
-/* lustre_capa.lc_hmac_alg */
+/* lustre_capa::lc_hmac_alg */
 enum {
-        CAPA_HMAC_ALG_SHA1 = 1, /* sha1 algorithm */
+        CAPA_HMAC_ALG_SHA1 = 1, /**< sha1 algorithm */
         CAPA_HMAC_ALG_MAX,
 };
 
@@ -2292,17 +2346,19 @@ enum {
 #define CAPA_HMAC_ALG_MASK      0xff000000
 
 struct lustre_capa_key {
-        __u64   lk_mdsid;     /* mds# */
-        __u32   lk_keyid;     /* key# */
+        __u64   lk_mdsid;     /**< mds# */
+        __u32   lk_keyid;     /**< key# */
         __u32   lk_padding;
-        __u8    lk_key[CAPA_HMAC_KEY_MAX_LEN];    /* key */
+        __u8    lk_key[CAPA_HMAC_KEY_MAX_LEN];    /**< key */
 } __attribute__((packed));
 
 extern void lustre_swab_lustre_capa_key(struct lustre_capa_key *k);
 
 /* quota check function */
-#define QUOTA_RET_OK           0 /* return successfully */
-#define QUOTA_RET_NOQUOTA      1 /* not support quota */
-#define QUOTA_RET_NOLIMIT      2 /* quota limit isn't set */
-#define QUOTA_RET_ACQUOTA      3 /* need to acquire extra quota */
+#define QUOTA_RET_OK           0 /**< return successfully */
+#define QUOTA_RET_NOQUOTA      1 /**< not support quota */
+#define QUOTA_RET_NOLIMIT      2 /**< quota limit isn't set */
+#define QUOTA_RET_ACQUOTA      3 /**< need to acquire extra quota */
 #endif
+
+/** @} lustreidl */

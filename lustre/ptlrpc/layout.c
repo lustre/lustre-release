@@ -594,7 +594,7 @@ static const struct req_format *req_formats[] = {
 struct req_msg_field {
         __u32       rmf_flags;
         const char *rmf_name;
-        /*
+        /**
          * Field length. (-1) means "variable length".
          */
         int         rmf_size;

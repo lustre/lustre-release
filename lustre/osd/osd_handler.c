@@ -90,7 +90,7 @@ struct osd_directory {
 
 struct osd_object {
         struct dt_object       oo_dt;
-        /*
+        /**
          * Inode for file system object represented by this osd_object. This
          * inode is pinned for the whole duration of lu_object life.
          *

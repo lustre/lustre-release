@@ -308,7 +308,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 
         if (info->mti_dlm_req)
                 ldlm_request_cancel(req, info->mti_dlm_req, 0);
-        
+
         repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
         mo = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid1);
         if (IS_ERR(mo))
@@ -489,7 +489,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
                                   MDS_INODELOCK_UPDATE);
         if (IS_ERR(mp)) {
                 rc = PTR_ERR(mp);
-                /* errors are possible here in cross-ref cases, see below */ 
+                /* errors are possible here in cross-ref cases, see below */
                 if (info->mti_cross_ref)
                         rc = 0;
                 GOTO(out, rc);
@@ -727,11 +727,11 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
         int rc;
         ENTRY;
 
-        /* 
-         * Disable global rename BFL lock temporarily because 
-         * when a mds do rename recoverying, which might enqueue 
-         * BFL lock to the controller mds. and this req might be 
-         * replay req for controller mds. but we did not have 
+        /*
+         * Disable global rename BFL lock temporarily because
+         * when a mds do rename recoverying, which might enqueue
+         * BFL lock to the controller mds. and this req might be
+         * replay req for controller mds. but we did not have
          * such handling in controller mds. XXX
          */
         RETURN(0);

@@ -95,7 +95,8 @@ typedef enum {
 #define LDLM_FL_BLOCK_WAIT     0x000008
 
 #define LDLM_FL_CBPENDING      0x000010 /* this lock is being destroyed */
-#define LDLM_FL_AST_SENT       0x000020 /* blocking or cancel packet was sent */
+#define LDLM_FL_AST_SENT       0x000020 /* blocking or cancel packet was
+                                         * queued for sending. */
 #define LDLM_FL_WAIT_NOREPROC  0x000040 /* not a real flag, not saved in lock */
 #define LDLM_FL_CANCEL         0x000080 /* cancellation callback already run */
 
@@ -143,11 +144,10 @@ typedef enum {
  * list. */
 #define LDLM_FL_KMS_IGNORE     0x200000
 
-/* Don't drop lock covering mmapped file in LRU */
-#define LDLM_FL_NO_LRU         0x400000
-
 /* Immediatelly cancel such locks when they block some other locks. Send
-   cancel notification to original lock holder, but expect no reply. */
+ * cancel notification to original lock holder, but expect no reply. This is
+ * for clients (like liblustre) that cannot be expected to reliably response
+ * to blocking ast. */
 #define LDLM_FL_CANCEL_ON_BLOCK 0x800000
 
 /* Flags flags inherited from parent lock when doing intents. */
@@ -620,6 +620,13 @@ struct ldlm_lock {
         __u32                 l_flags;
         __u32                 l_readers;
         __u32                 l_writers;
+        /*
+         * Set for locks that were removed from class hash table and will be
+         * destroyed when last reference to them is released. Set by
+         * ldlm_lock_destroy_internal().
+         *
+         * Protected by lock and resource locks.
+         */
         __u8                  l_destroyed;
 
         /** 
@@ -783,9 +790,11 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 mask,
                         __FILE__, __FUNCTION__, __LINE__,               \
                          "### " fmt , ##a);                             \
 } while (0)
-#else
-#define LDLM_DEBUG(lock, fmt, a...) ((void)0)
-#define LDLM_ERROR(lock, fmt, a...) ((void)0)
+#else /* !LIBCFS_DEBUG */
+# define LDLM_DEBUG(lock, fmt, a...) ((void)0)
+# define LDLM_ERROR(lock, fmt, a...) ((void)0)
+# define ldlm_lock_debuf(cdls, level, lock, file, func, line, fmt, a...) \
+         ((void)0)
 #endif
 
 #define LDLM_DEBUG_NOLOCK(format, a...)                 \

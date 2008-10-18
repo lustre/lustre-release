@@ -39,7 +39,7 @@
  * These are the only exported functions, they provide some generic
  * infrastructure for managing object devices
  *
- * Author: Nikita Danilov <nikita@clusterfs.com>
+ *   Author: Nikita Danilov <nikita.danilov@sun.com>
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
@@ -47,12 +47,15 @@
 # define EXPORT_SYMTAB
 #endif
 
-#include <linux/seq_file.h>
-#include <linux/module.h>
-/* nr_free_pages() */
-#include <linux/swap.h>
+#include <libcfs/libcfs.h>
+
+#ifdef __KERNEL__
+# include <linux/module.h>
+#endif
+
 /* hash_long() */
 #include <libcfs/libcfs_hash.h>
+#include <obd_class.h>
 #include <obd_support.h>
 #include <lustre_disk.h>
 #include <lustre_fid.h>
@@ -63,7 +66,7 @@
 
 static void lu_object_free(const struct lu_env *env, struct lu_object *o);
 
-/*
+/**
  * Decrease reference counter on object. If last reference is freed, return
  * object to the cache, unless lu_object_is_dying(o) holds. In the latter
  * case, free object immediately.
@@ -182,23 +185,26 @@ static struct lu_object *lu_object_alloc(const struct lu_env *env,
                 }
         }
 
-        s->ls_stats.s_created ++;
+        dev->ld_site->ls_stats.s_created ++;
         RETURN(top);
 }
 
-/*
- * Free object.
+/**
+ * Free an object.
  */
 static void lu_object_free(const struct lu_env *env, struct lu_object *o)
 {
         struct list_head splice;
         struct lu_object *scan;
+        struct lu_site          *site;
+        struct list_head        *layers;
 
+        site   = o->lo_dev->ld_site;
+        layers = &o->lo_header->loh_layers;
         /*
          * First call ->loo_object_delete() method to release all resources.
          */
-        list_for_each_entry_reverse(scan,
-                                    &o->lo_header->loh_layers, lo_linkage) {
+        list_for_each_entry_reverse(scan, layers, lo_linkage) {
                 if (scan->lo_ops->loo_object_delete != NULL)
                         scan->lo_ops->loo_object_delete(env, scan);
         }
@@ -210,17 +216,23 @@ static void lu_object_free(const struct lu_env *env, struct lu_object *o)
          * top-level slice.
          */
         CFS_INIT_LIST_HEAD(&splice);
-        list_splice_init(&o->lo_header->loh_layers, &splice);
+        list_splice_init(layers, &splice);
         while (!list_empty(&splice)) {
-                o = container_of0(splice.next, struct lu_object, lo_linkage);
+                /*
+                 * Free layers in bottom-to-top order, so that object header
+                 * lives as long as possible and ->loo_object_free() methods
+                 * can look at its contents.
+                 */
+                o = container_of0(splice.prev, struct lu_object, lo_linkage);
                 list_del_init(&o->lo_linkage);
                 LASSERT(o->lo_ops->loo_object_free != NULL);
                 o->lo_ops->loo_object_free(env, o);
         }
+        cfs_waitq_broadcast(&site->ls_marche_funebre);
 }
 
-/*
- * Free @nr objects from the cold end of the site LRU list.
+/**
+ * Free \a nr objects from the cold end of the site LRU list.
  */
 int lu_site_purge(const struct lu_env *env, struct lu_site *s, int nr)
 {
@@ -286,7 +298,7 @@ EXPORT_SYMBOL(lu_site_purge);
  */
 
 enum {
-        /*
+        /**
          * Maximal line size.
          *
          * XXX overflow is not handled correctly.
@@ -295,20 +307,16 @@ enum {
 };
 
 struct lu_cdebug_data {
-        /*
+        /**
          * Temporary buffer.
          */
         char lck_area[LU_CDEBUG_LINE];
-        /*
-         * fid staging area used by dt_store_open().
-         */
-        struct lu_fid_pack lck_pack;
 };
 
 /* context key constructor/destructor: lu_global_key_init, lu_global_key_fini */
 LU_KEY_INIT_FINI(lu_global, struct lu_cdebug_data);
 
-/*
+/**
  * Key, holding temporary buffer. This key is registered very early by
  * lu_global_init().
  */
@@ -318,7 +326,7 @@ struct lu_context_key lu_global_key = {
         .lct_fini = lu_global_key_fini
 };
 
-/*
+/**
  * Printer function emitting messages through libcfs_debug_msg().
  */
 int lu_cdebug_printer(const struct lu_env *env,
@@ -751,11 +759,11 @@ void lu_object_add_top(struct lu_object_header *h, struct lu_object *o)
 }
 EXPORT_SYMBOL(lu_object_add_top);
 
-/*
- * Add object @o as a layer of compound object, going after @before.1
+/**
+ * Add object \a o as a layer of compound object, going after \a before.
  *
- * This is typically called by the ->ldo_object_alloc() method of
- * @before->lo_dev.
+ * This is typically called by the ->ldo_object_alloc() method of \a
+ * before->lo_dev.
  */
 void lu_object_add(struct lu_object *before, struct lu_object *o)
 {
@@ -763,7 +771,7 @@ void lu_object_add(struct lu_object *before, struct lu_object *o)
 }
 EXPORT_SYMBOL(lu_object_add);
 
-/*
+/**
  * Initialize compound object.
  */
 int lu_object_header_init(struct lu_object_header *h)

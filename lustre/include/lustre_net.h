@@ -306,6 +306,9 @@ struct ptlrpc_request_pool {
 struct lu_context;
 struct lu_env;
 
+/**
+ * Represents remote procedure call.
+ */
 struct ptlrpc_request {
         int rq_type; /* one of PTL_RPC_MSG_* */
         struct list_head rq_list;
@@ -449,7 +452,8 @@ struct ptlrpc_request {
         /* Multi-rpc bits */
         struct list_head rq_set_chain;
         struct ptlrpc_request_set *rq_set;
-        void *rq_interpret_reply;               /* Async completion handler */
+        /** Async completion handler */
+        ptlrpc_interpterer_t rq_interpret_reply;
         union ptlrpc_async_args rq_async_args;  /* Async completion context */
         struct ptlrpc_request_pool *rq_pool;    /* Pool if request from
                                                    preallocated list */

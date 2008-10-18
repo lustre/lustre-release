@@ -37,7 +37,7 @@
 #ifndef __LUSTRE_DT_OBJECT_H
 #define __LUSTRE_DT_OBJECT_H
 
-/*
+/** \defgroup dt dt
  * Sub-class of lu_object with methods common for "data" objects in OST stack.
  *
  * Data objects behave like regular files: you can read/write them, get and
@@ -46,6 +46,7 @@
  * (nlink) based one.
  *
  * Examples: osd (lustre/osd) is an implementation of dt interface.
+ * @{
  */
 
 
@@ -72,7 +73,7 @@ struct dt_device_param {
         unsigned           ddp_block_shift;
 };
 
-/*
+/**
  * Basic transaction credit op
  */
 enum dt_txn_op {
@@ -83,50 +84,50 @@ enum dt_txn_op {
         DTO_OBJECT_DELETE,
         DTO_ATTR_SET,
         DTO_XATTR_SET,
-        DTO_LOG_REC, /* XXX temporary: dt layer knows nothing about llog. */
+        DTO_LOG_REC, /**< XXX temporary: dt layer knows nothing about llog. */
         DTO_WRITE_BASE,
         DTO_WRITE_BLOCK,
 
         DTO_NR
 };
 
-/*
+/**
  * Operations on dt device.
  */
 struct dt_device_operations {
-        /*
+        /**
          * Return device-wide statistics.
          */
         int   (*dt_statfs)(const struct lu_env *env,
                            struct dt_device *dev, struct kstatfs *sfs);
-        /*
-         * Start transaction, described by @param.
+        /**
+         * Start transaction, described by \a param.
          */
         struct thandle *(*dt_trans_start)(const struct lu_env *env,
                                           struct dt_device *dev,
                                           struct txn_param *param);
-        /*
+        /**
          * Finish previously started transaction.
          */
         void  (*dt_trans_stop)(const struct lu_env *env,
                                struct thandle *th);
-        /*
+        /**
          * Return fid of root index object.
          */
         int   (*dt_root_get)(const struct lu_env *env,
                              struct dt_device *dev, struct lu_fid *f);
-        /*
+        /**
          * Return device configuration data.
          */
         void  (*dt_conf_get)(const struct lu_env *env,
                              const struct dt_device *dev,
                              struct dt_device_param *param);
-        /*
+        /**
          *  handling device state, mostly for tests
          */
         int   (*dt_sync)(const struct lu_env *env, struct dt_device *dev);
         void  (*dt_ro)(const struct lu_env *env, struct dt_device *dev);
-        /*
+        /**
          * Initialize capability context.
          */
         int   (*dt_init_capa_ctxt)(const struct lu_env *env,
@@ -134,44 +135,44 @@ struct dt_device_operations {
                                    int mode, unsigned long timeout,
                                    __u32 alg, struct lustre_capa_key *keys);
 
-        /*
-         *  get transaction credits for given @op.
+        /**
+         *  get transaction credits for given \a op.
          */
         int (*dt_credit_get)(const struct lu_env *env, struct dt_device *dev,
                              enum dt_txn_op);
 };
 
 struct dt_index_features {
-        /* required feature flags from enum dt_index_flags */
+        /** required feature flags from enum dt_index_flags */
         __u32 dif_flags;
-        /* minimal required key size */
+        /** minimal required key size */
         size_t dif_keysize_min;
-        /* maximal required key size, 0 if no limit */
+        /** maximal required key size, 0 if no limit */
         size_t dif_keysize_max;
-        /* minimal required record size */
+        /** minimal required record size */
         size_t dif_recsize_min;
-        /* maximal required record size, 0 if no limit */
+        /** maximal required record size, 0 if no limit */
         size_t dif_recsize_max;
 };
 
 enum dt_index_flags {
-        /* index supports variable sized keys */
+        /** index supports variable sized keys */
         DT_IND_VARKEY = 1 << 0,
-        /* index supports variable sized records */
+        /** index supports variable sized records */
         DT_IND_VARREC = 1 << 1,
-        /* index can be modified */
+        /** index can be modified */
         DT_IND_UPDATE = 1 << 2,
-        /* index supports records with non-unique (duplicate) keys */
+        /** index supports records with non-unique (duplicate) keys */
         DT_IND_NONUNQ = 1 << 3
 };
 
-/*
+/**
  * Features, required from index to support file system directories (mapping
  * names to fids).
  */
 extern const struct dt_index_features dt_directory_features;
 
-/*
+/**
  * This is a general purpose dt allocation hint.
  * It now contains the parent object. 
  * It can contain any allocation hint in the future.
@@ -203,7 +204,7 @@ struct dt_object_operations {
          * lu_object_operations, but that would break existing symmetry.
          */
 
-        /*
+        /**
          * Return standard attributes.
          *
          * precondition: lu_object_exists(&dt->do_lu);
@@ -211,7 +212,7 @@ struct dt_object_operations {
         int   (*do_attr_get)(const struct lu_env *env,
                              struct dt_object *dt, struct lu_attr *attr,
                              struct lustre_capa *capa);
-        /*
+        /**
          * Set standard attributes.
          *
          * precondition: dt_object_exists(dt);
@@ -221,7 +222,7 @@ struct dt_object_operations {
                              const struct lu_attr *attr,
                              struct thandle *handle,
                              struct lustre_capa *capa);
-        /*
+        /**
          * Return a value of an extended attribute.
          *
          * precondition: dt_object_exists(dt);
@@ -229,10 +230,10 @@ struct dt_object_operations {
         int   (*do_xattr_get)(const struct lu_env *env, struct dt_object *dt,
                               struct lu_buf *buf, const char *name,
                               struct lustre_capa *capa);
-        /*
+        /**
          * Set value of an extended attribute.
          *
-         * @fl - flags from enum lu_xattr_flags
+         * \a fl - flags from enum lu_xattr_flags
          *
          * precondition: dt_object_exists(dt);
          */
@@ -240,7 +241,7 @@ struct dt_object_operations {
                               struct dt_object *dt, const struct lu_buf *buf,
                               const char *name, int fl, struct thandle *handle,
                               struct lustre_capa *capa);
-        /*
+        /**
          * Delete existing extended attribute.
          *
          * precondition: dt_object_exists(dt);
@@ -249,8 +250,8 @@ struct dt_object_operations {
                               struct dt_object *dt,
                               const char *name, struct thandle *handle,
                               struct lustre_capa *capa);
-        /*
-         * Place list of existing extended attributes into @buf (which has
+        /**
+         * Place list of existing extended attributes into \a buf (which has
          * length len).
          *
          * precondition: dt_object_exists(dt);
@@ -258,18 +259,18 @@ struct dt_object_operations {
         int   (*do_xattr_list)(const struct lu_env *env,
                                struct dt_object *dt, struct lu_buf *buf,
                                struct lustre_capa *capa);
-        /*
+        /**
          * Init allocation hint using parent object and child mode.
-         * (1) The @parent might be NULL if this is a partial creation for
+         * (1) The \a parent might be NULL if this is a partial creation for
          *     remote object.
-         * (2) The type of child is in @child_mode.
-         * (3) The result hint is stored in @ah;
+         * (2) The type of child is in \a child_mode.
+         * (3) The result hint is stored in \a ah;
          */
         void  (*do_ah_init)(const struct lu_env *env,
                             struct dt_allocation_hint *ah,
                             struct dt_object *parent,
                             umode_t child_mode);
-        /*
+        /**
          * Create new object on this device.
          *
          * precondition: !dt_object_exists(dt);
@@ -280,7 +281,7 @@ struct dt_object_operations {
                            struct dt_allocation_hint *hint,
                            struct thandle *th);
 
-        /*
+        /**
          * Announce that this object is going to be used as an index. This
          * operation check that object supports indexing operations and
          * installs appropriate dt_index_operations vector on success.
@@ -291,13 +292,13 @@ struct dt_object_operations {
         int   (*do_index_try)(const struct lu_env *env,
                               struct dt_object *dt,
                               const struct dt_index_features *feat);
-        /*
+        /**
          * Add nlink of the object
          * precondition: dt_object_exists(dt);
          */
         void  (*do_ref_add)(const struct lu_env *env,
                             struct dt_object *dt, struct thandle *th);
-        /*
+        /**
          * Del nlink of the object
          * precondition: dt_object_exists(dt);
          */
@@ -311,17 +312,17 @@ struct dt_object_operations {
         int (*do_object_sync)(const struct lu_env *, struct dt_object *);
 };
 
-/*
+/**
  * Per-dt-object operations on "file body".
  */
 struct dt_body_operations {
-        /*
+        /**
          * precondition: dt_object_exists(dt);
          */
         ssize_t (*dbo_read)(const struct lu_env *env, struct dt_object *dt,
                             struct lu_buf *buf, loff_t *pos,
                             struct lustre_capa *capa);
-        /*
+        /**
          * precondition: dt_object_exists(dt);
          */
         ssize_t (*dbo_write)(const struct lu_env *env, struct dt_object *dt,
@@ -329,48 +330,48 @@ struct dt_body_operations {
                              struct thandle *handle, struct lustre_capa *capa);
 };
 
-/*
+/**
  * Incomplete type of index record.
  */
 struct dt_rec;
 
-/*
+/**
  * Incomplete type of index key.
  */
 struct dt_key;
 
-/*
+/**
  * Incomplete type of dt iterator.
  */
 struct dt_it;
 
-/*
+/**
  * Per-dt-object operations on object as index.
  */
 struct dt_index_operations {
-        /*
+        /**
          * precondition: dt_object_exists(dt);
          */
         int (*dio_lookup)(const struct lu_env *env, struct dt_object *dt,
                           struct dt_rec *rec, const struct dt_key *key,
                           struct lustre_capa *capa);
-        /*
+        /**
          * precondition: dt_object_exists(dt);
          */
         int (*dio_insert)(const struct lu_env *env, struct dt_object *dt,
                           const struct dt_rec *rec, const struct dt_key *key,
                           struct thandle *handle, struct lustre_capa *capa);
-        /*
+        /**
          * precondition: dt_object_exists(dt);
          */
         int (*dio_delete)(const struct lu_env *env, struct dt_object *dt,
                           const struct dt_key *key, struct thandle *handle,
                           struct lustre_capa *capa);
-        /*
+        /**
          * Iterator interface
          */
         struct dt_it_ops {
-                /*
+                /**
                  * Allocate and initialize new iterator.
                  *
                  * precondition: dt_object_exists(dt);
@@ -446,9 +447,9 @@ static inline int dt_object_exists(const struct dt_object *dt)
 }
 
 struct txn_param {
-        /* number of blocks this transaction will modify */
+        /** number of blocks this transaction will modify */
         unsigned int tp_credits;
-        /* sync transaction is needed */
+        /** sync transaction is needed */
         __u32        tp_sync:1;
 };
 
@@ -458,7 +459,7 @@ static inline void txn_param_init(struct txn_param *p, unsigned int credits)
         p->tp_credits = credits;
 }
 
-/*
+/**
  * This is the general purpose transaction handle.
  * 1. Transaction Life Cycle
  *      This transaction handle is allocated upon starting a new transaction,
@@ -473,18 +474,18 @@ static inline void txn_param_init(struct txn_param *p, unsigned int credits)
  *      No RPC request should be issued inside transaction.
  */
 struct thandle {
-        /* the dt device on which the transactions are executed */
+        /** the dt device on which the transactions are executed */
         struct dt_device *th_dev;
 
-        /* context for this transaction, tag is LCT_TX_HANDLE */
+        /** context for this transaction, tag is LCT_TX_HANDLE */
         struct lu_context th_ctx;
 
-        /* the last operation result in this transaction.
+        /** the last operation result in this transaction.
          * this value is used in recovery */
         __s32             th_result;
 };
 
-/*
+/**
  * Transaction call-backs.
  *
  * These are invoked by osd (or underlying transaction engine) when
@@ -518,5 +519,7 @@ int dt_try_as_dir(const struct lu_env *env, struct dt_object *obj);
 struct dt_object *dt_store_open(const struct lu_env *env,
                                 struct dt_device *dt, const char *name,
                                 struct lu_fid *fid);
+
+/** @} dt */
 
 #endif /* __LUSTRE_DT_OBJECT_H */

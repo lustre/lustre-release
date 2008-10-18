@@ -141,7 +141,7 @@ out:
 int mdc_getstatus(struct obd_export *exp, struct lu_fid *rootfid,
                   struct obd_capa **pc)
 {
-        return send_getstatus(class_exp2cliimp(exp), rootfid, pc, 
+        return send_getstatus(class_exp2cliimp(exp), rootfid, pc,
                               LUSTRE_IMP_FULL, 0);
 }
 
@@ -368,8 +368,8 @@ static int mdc_xattr_common(struct obd_export *exp,const struct req_format *fmt,
                          sizeof(struct mdt_rec_reint));
                 rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
                 rec->sx_opcode = REINT_SETXATTR;
-                /* TODO: 
-                 *  cfs_curproc_fs{u,g}id() should replace 
+                /* TODO:
+                 *  cfs_curproc_fs{u,g}id() should replace
                  *  current->fs{u,g}id for portability.
                  */
                 rec->sx_fsuid  = current->fsuid;
@@ -423,7 +423,7 @@ int mdc_setxattr(struct obd_export *exp, const struct lu_fid *fid,
                  const char *input, int input_size, int output_size,
                  int flags, __u32 suppgid, struct ptlrpc_request **request)
 {
-        return mdc_xattr_common(exp, &RQF_MDS_REINT_SETXATTR, 
+        return mdc_xattr_common(exp, &RQF_MDS_REINT_SETXATTR,
                                 fid, oc, MDS_REINT, valid, xattr_name,
                                 input, input_size, output_size, flags,
                                 suppgid, request);
@@ -434,7 +434,7 @@ int mdc_getxattr(struct obd_export *exp, const struct lu_fid *fid,
                  const char *input, int input_size, int output_size,
                  int flags, struct ptlrpc_request **request)
 {
-        return mdc_xattr_common(exp, &RQF_MDS_GETXATTR, 
+        return mdc_xattr_common(exp, &RQF_MDS_GETXATTR,
                                 fid, oc, MDS_GETXATTR, valid, xattr_name,
                                 input, input_size, output_size, flags,
                                 -1, request);
@@ -571,8 +571,8 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
         }
         else if (md->body->valid & OBD_MD_FLACL) {
                 /* for ACL, it's possible that FLACL is set but aclsize is zero.
-                 * only when aclsize != 0 there's an actual segment for ACL 
-                 * in reply buffer. 
+                 * only when aclsize != 0 there's an actual segment for ACL
+                 * in reply buffer.
                  */
                 if (md->body->aclsize) {
                         rc = mdc_unpack_acl(req, md);
@@ -665,7 +665,7 @@ static void mdc_replay_open(struct ptlrpc_request *req)
                                   opc == MDS_CLOSE ? "CLOSE" : "DONE_WRITING");
                 } else if (opc == MDS_REINT) {
                         struct mdt_rec_setattr *rec;
-                        
+
                         /* Check this is REINT_SETATTR. */
                         rec = req_capsule_client_get(&cur->rq_pill,
                                                &RMF_REC_REINT);
@@ -691,7 +691,7 @@ void mdc_commit_delayed(struct ptlrpc_request *req)
 {
         struct md_open_data *mod = req->rq_cb_data;
         struct ptlrpc_request *cur, *tmp;
-        
+
         DEBUG_REQ(D_HA, req, "req committed");
 
         if (mod == NULL)
@@ -864,8 +864,8 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
                         if (rc > 0)
                                 rc = -rc;
                 } else if (mod == NULL) {
-                        if (req->rq_import->imp_replayable) 
-                                CERROR("Unexpected: can't find md_open_data," 
+                        if (req->rq_import->imp_replayable)
+                                CERROR("Unexpected: can't find md_open_data,"
                                        "but close succeeded with replayable imp"
                                        "Please tell "
                                        "http://bugzilla.lustre.org/\n");
@@ -924,7 +924,7 @@ int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data,
          * attribute update is needed. */
         if (rc != -EAGAIN)
                 ptlrpc_close_replay_seq(req);
-                
+
         if (rc && rc != -EAGAIN && req->rq_commit_cb)
                 req->rq_commit_cb(req);
 
@@ -1178,7 +1178,7 @@ int mdc_set_info_async(struct obd_export *exp,
         }
         if (KEY_IS(KEY_MDS_CONN)) {
                 struct obd_import *imp = class_exp2cliimp(exp);
-                
+
                 /* mds-mds import */
                 spin_lock(&imp->imp_lock);
                 imp->imp_server_timeout = 1;
@@ -1218,7 +1218,7 @@ int mdc_get_info(struct obd_export *exp, __u32 keylen, void *key,
                 *data = imp->imp_connect_data;
                 RETURN(0);
         }
-                
+
         RETURN(rc);
 }
 
@@ -1231,8 +1231,8 @@ static int mdc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         int                    rc;
         ENTRY;
 
-                        
-        /*Since the request might also come from lprocfs, so we need 
+
+        /*Since the request might also come from lprocfs, so we need
          *sync this with client_disconnect_export Bug15684*/
         down_read(&obd->u.cli.cl_sem);
         if (obd->u.cli.cl_import)
@@ -1240,7 +1240,7 @@ static int mdc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         up_read(&obd->u.cli.cl_sem);
         if (!imp)
                 RETURN(-ENODEV);
-        
+
         req = ptlrpc_request_alloc_pack(imp, &RQF_MDS_STATFS,
                                         LUSTRE_MDS_VERSION, MDS_STATFS);
         if (req == NULL)
@@ -1419,12 +1419,12 @@ static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
         }
         case IMP_EVENT_INACTIVE: {
                 struct client_obd *cli = &obd->u.cli;
-                /* 
+                /*
                  * Flush current sequence to make client obtain new one
                  * from server in case of disconnect/reconnect.
                  * If range is already empty then no need to flush it.
                  */
-                if (cli->cl_seq != NULL && 
+                if (cli->cl_seq != NULL &&
                     !range_is_exhausted(&cli->cl_seq->lcs_space)) {
                         seq_client_flush(cli->cl_seq);
                 }
@@ -1473,7 +1473,7 @@ static int mdc_fid_init(struct obd_export *exp)
                  exp->exp_obd->obd_name);
 
         /* Init client side sequence-manager */
-        rc = seq_client_init(cli->cl_seq, exp, 
+        rc = seq_client_init(cli->cl_seq, exp,
                              LUSTRE_SEQ_METADATA,
                              prefix, NULL);
         OBD_FREE(prefix, MAX_OBD_NAME + 5);
@@ -1497,7 +1497,7 @@ static int mdc_fid_fini(struct obd_export *exp)
                 OBD_FREE_PTR(cli->cl_seq);
                 cli->cl_seq = NULL;
         }
-        
+
         RETURN(0);
 }
 
@@ -1515,7 +1515,7 @@ int mdc_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
 static int mdc_fid_delete(struct obd_export *exp, const struct lu_fid *fid)
 {
         struct client_obd *cli = &exp->exp_obd->u.cli;
-        
+
         seq_client_flush(cli->cl_seq);
         return 0;
 }
@@ -1874,7 +1874,7 @@ int __init mdc_init(void)
         int rc;
         struct lprocfs_static_vars lvars = { 0 };
         lprocfs_mdc_init_vars(&lvars);
-        
+
         request_module("lquota");
         quota_interface = PORTAL_SYMBOL_GET(mdc_quota_interface);
         init_obd_quota_ops(quota_interface, &mdc_obd_ops);

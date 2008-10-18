@@ -41,7 +41,7 @@
 #ifndef _LUSTRE_MD_OBJECT_H
 #define _LUSTRE_MD_OBJECT_H
 
-/*
+/** \defgroup md md
  * Sub-class of lu_object with methods common for "meta-data" objects in MDT
  * stack.
  *
@@ -49,6 +49,7 @@
  * them, and treat them as directories.
  *
  * Examples: mdt, cmm, and mdt are implementations of md interface.
+ * @{
  */
 
 
@@ -89,14 +90,14 @@ struct md_ucred {
 
 #define MD_CAPAINFO_MAX 5
 
-/* there are at most 5 fids in one operation, see rename, NOTE the last one
+/** there are at most 5 fids in one operation, see rename, NOTE the last one
  * is a temporary one used for is_subdir() */
 struct md_capainfo {
         const struct lu_fid    *mc_fid[MD_CAPAINFO_MAX];
         struct lustre_capa     *mc_capa[MD_CAPAINFO_MAX];
 };
 
-/*
+/**
  * Implemented in mdd/mdd_handler.c.
  *
  * XXX should be moved into separate .h/.c together with all md security
@@ -105,7 +106,7 @@ struct md_capainfo {
 struct md_ucred *md_ucred(const struct lu_env *env);
 struct md_capainfo *md_capainfo(const struct lu_env *env);
 
-/* metadata attributes */
+/** metadata attributes */
 enum ma_valid {
         MA_INODE     = (1 << 0),
         MA_LOV       = (1 << 1),
@@ -150,16 +151,16 @@ struct md_attr {
         struct lustre_capa     *ma_capa;
 };
 
-/* Additional parameters for create */
+/** Additional parameters for create */
 struct md_op_spec {
         union {
-                /* symlink target */
+                /** symlink target */
                 const char               *sp_symname;
-                /* parent FID for cross-ref mkdir */
+                /** parent FID for cross-ref mkdir */
                 const struct lu_fid      *sp_pfid;
-                /* eadata for regular files */
+                /** eadata for regular files */
                 struct md_spec_reg {
-                        /* lov objs exist already */
+                        /** lov objs exist already */
                         const struct lu_fid   *fid;
                         int no_lov_create;
                         const void *eadata;
@@ -167,20 +168,20 @@ struct md_op_spec {
                 } sp_ea;
         } u;
         
-        /* Create flag from client: such as MDS_OPEN_CREAT, and others. */
+        /** Create flag from client: such as MDS_OPEN_CREAT, and others. */
         __u32      sp_cr_flags;
 
-        /* Should mdd do lookup sanity check or not. */
+        /** Should mdd do lookup sanity check or not. */
         int        sp_cr_lookup;
 
-        /* Current lock mode for parent dir where create is performing. */
+        /** Current lock mode for parent dir where create is performing. */
         mdl_mode_t sp_cr_mode;
 
-        /* Check for split */
+        /** Check for split */
         int        sp_ck_split;
 };
 
-/*
+/**
  * Operations implemented for each md object (both directory and leaf).
  */
 struct md_object_operations {
@@ -213,7 +214,7 @@ struct md_object_operations {
         int (*moo_readlink)(const struct lu_env *env, struct md_object *obj,
                             struct lu_buf *buf);
 
-        /* part of cross-ref operation */
+        /** part of cross-ref operation */
         int (*moo_object_create)(const struct lu_env *env,
                                  struct md_object *obj,
                                  const struct md_op_spec *spec,
@@ -238,7 +239,7 @@ struct md_object_operations {
         int (*moo_object_sync)(const struct lu_env *, struct md_object *);
 };
 
-/*
+/**
  * Operations implemented for each directory object.
  */
 struct md_dir_operations {
@@ -258,7 +259,7 @@ struct md_dir_operations {
                           struct md_op_spec *spec,
                           struct md_attr *ma);
 
-        /* This method is used for creating data object for this meta object*/
+        /** This method is used for creating data object for this meta object*/
         int (*mdo_create_data)(const struct lu_env *env, struct md_object *p,
                                struct md_object *o,
                                const struct md_op_spec *spec,
@@ -277,7 +278,7 @@ struct md_dir_operations {
                           struct md_object *cobj, const struct lu_name *lname,
                           struct md_attr *ma);
 
-        /* partial ops for cross-ref case */
+        /** partial ops for cross-ref case */
         int (*mdo_name_insert)(const struct lu_env *env,
                                struct md_object *obj,
                                const struct lu_name *lname,
@@ -295,7 +296,7 @@ struct md_dir_operations {
 };
 
 struct md_device_operations {
-        /* meta-data device related handlers. */
+        /** meta-data device related handlers. */
         int (*mdo_root_get)(const struct lu_env *env, struct md_device *m,
                             struct lu_fid *f);
 
@@ -315,19 +316,20 @@ struct md_device_operations {
 };
 
 enum md_upcall_event {
-        /*sync the md layer*/
+        /**sync the md layer*/
         MD_LOV_SYNC = (1 << 0),
-        MD_NO_TRANS = (1 << 1), /* Just for split, no need trans, for replay */
+        /** Just for split, no need trans, for replay */
+        MD_NO_TRANS = (1 << 1),
         MD_LOV_CONFIG = (1 << 2)
 };
 
 struct md_upcall {
-        /* this lock protects upcall using against its removal
+        /** this lock protects upcall using against its removal
          * read lock is for usage the upcall, write - for init/fini */
         struct rw_semaphore     mu_upcall_sem;
-        /* device to call, upper layer normally */
+        /** device to call, upper layer normally */
         struct md_device       *mu_upcall_dev;
-        /* upcall function */
+        /** upcall function */
         int (*mu_upcall)(const struct lu_env *env, struct md_device *md,
                          enum md_upcall_event ev);
 };
@@ -674,5 +676,7 @@ static inline int mdo_rename_tgt(const struct lu_env *env,
                 return p->mo_dir_ops->mdo_rename_tgt(env, p, t, lf, lname, ma);
         }
 }
+
+/** @} md */
 
 #endif /* _LINUX_MD_OBJECT_H */
