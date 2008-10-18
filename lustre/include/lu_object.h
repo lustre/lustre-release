@@ -782,7 +782,7 @@ struct lu_cdebug_print_info {
         int         lpi_line;
 };
 
-/*
+/**
  * Printer function emitting messages through libcfs_debug_msg().
  */
 int lu_cdebug_printer(const struct lu_env *env,
@@ -795,36 +795,50 @@ int lu_cdebug_printer(const struct lu_env *env,
                 .lpi_file   = __FILE__,         \
                 .lpi_fn     = __FUNCTION__,     \
                 .lpi_line   = __LINE__          \
-        };
+        }
 
-/*
- * Print object description followed by user-supplied message.
+/**
+ * Print object description followed by a user-supplied message.
  */
 #define LU_OBJECT_DEBUG(mask, env, object, format, ...)                 \
 ({                                                                      \
         static DECLARE_LU_CDEBUG_PRINT_INFO(__info, mask);              \
                                                                         \
+        if (cdebug_show(mask, DEBUG_SUBSYSTEM)) {                       \
         lu_object_print(env, &__info, lu_cdebug_printer, object);       \
         CDEBUG(mask, format , ## __VA_ARGS__);                          \
+        }                                                               \
 })
 
-/*
- * Print human readable representation of the @o to the @f.
+/**
+ * Print short object description followed by a user-supplied message.
  */
-void lu_object_print(const struct lu_env *env, void *cookie,
-                     lu_printer_t printer, const struct lu_object *o);
+#define LU_OBJECT_HEADER(mask, env, object, format, ...)                \
+({                                                                      \
+        static DECLARE_LU_CDEBUG_PRINT_INFO(__info, mask);              \
+                                                                        \
+        if (cdebug_show(mask, DEBUG_SUBSYSTEM)) {                       \
+                lu_object_header_print(env, &__info, lu_cdebug_printer, \
+                                       (object)->lo_header);            \
+                lu_cdebug_printer(env, &__info, "\n");                  \
+                CDEBUG(mask, format , ## __VA_ARGS__);                  \
+        }                                                               \
+})
 
-/*
+void lu_object_print       (const struct lu_env *env, void *cookie,
+                     lu_printer_t printer, const struct lu_object *o);
+void lu_object_header_print(const struct lu_env *env, void *cookie,
+                            lu_printer_t printer,
+                            const struct lu_object_header *hdr);
+
+/**
  * Check object consistency.
  */
 int lu_object_invariant(const struct lu_object *o);
 
-/*
- * Finalize and free devices in the device stack.
- */
 void lu_stack_fini(const struct lu_env *env, struct lu_device *top);
 
-/*
+/**
  * Returns 1 iff object @o exists on the stable storage,
  * returns -1 iff object @o is on remote server.
  */

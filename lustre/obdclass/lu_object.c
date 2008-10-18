@@ -351,6 +351,7 @@ int lu_cdebug_printer(const struct lu_env *env,
         vsnprintf(key->lck_area + used,
                   ARRAY_SIZE(key->lck_area) - used, format, args);
         if (complete) {
+                if (cdebug_show(info->lpi_mask, info->lpi_subsys))
                 libcfs_debug_msg(NULL, info->lpi_subsys, info->lpi_mask,
                                  (char *)info->lpi_file, info->lpi_fn,
                                  info->lpi_line, "%s", key->lck_area);
@@ -361,23 +362,24 @@ int lu_cdebug_printer(const struct lu_env *env,
 }
 EXPORT_SYMBOL(lu_cdebug_printer);
 
-/*
+/**
  * Print object header.
  */
-static void lu_object_header_print(const struct lu_env *env,
-                                   void *cookie, lu_printer_t printer,
+void lu_object_header_print(const struct lu_env *env, void *cookie,
+                            lu_printer_t printer,
                                    const struct lu_object_header *hdr)
 {
         (*printer)(env, cookie, "header@%p[%#lx, %d, "DFID"%s%s%s]",
                    hdr, hdr->loh_flags, atomic_read(&hdr->loh_ref),
                    PFID(&hdr->loh_fid),
                    hlist_unhashed(&hdr->loh_hash) ? "" : " hash",
-                   list_empty(&hdr->loh_lru) ? "" : " lru",
+                   list_empty((struct list_head *)&hdr->loh_lru) ? "" : " lru",
                    hdr->loh_attr & LOHA_EXISTS ? " exist":"");
 }
+EXPORT_SYMBOL(lu_object_header_print);
 
-/*
- * Print human readable representation of the @o to the @printer.
+/**
+ * Print human readable representation of the \a o to the \a printer.
  */
 void lu_object_print(const struct lu_env *env, void *cookie,
                      lu_printer_t printer, const struct lu_object *o)
@@ -388,21 +390,24 @@ void lu_object_print(const struct lu_env *env, void *cookie,
 
         top = o->lo_header;
         lu_object_header_print(env, cookie, printer, top);
-        (*printer)(env, cookie, "\n");
+        (*printer)(env, cookie, "{ \n");
         list_for_each_entry(o, &top->loh_layers, lo_linkage) {
                 depth = o->lo_depth + 4;
-                LASSERT(o->lo_ops->loo_object_print != NULL);
+
                 /*
-                 * print `.' @depth times.
+                 * print `.' \a depth times followed by type name and address
                  */
-                (*printer)(env, cookie, "%*.*s", depth, depth, ruler);
+                (*printer)(env, cookie, "%*.*s%s@%p", depth, depth, ruler,
+                           o->lo_dev->ld_type->ldt_name, o);
+                if (o->lo_ops->loo_object_print != NULL)
                 o->lo_ops->loo_object_print(env, cookie, printer, o);
                 (*printer)(env, cookie, "\n");
         }
+        (*printer)(env, cookie, "} header@%p\n", top);
 }
 EXPORT_SYMBOL(lu_object_print);
 
-/*
+/**
  * Check object consistency.
  */
 int lu_object_invariant(const struct lu_object *o)

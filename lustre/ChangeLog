@@ -1708,6 +1708,11 @@ Description: Ratelimit a message that can be very frequent.
 Details    : Ratelimit a memory allocation failure message that can
 	     be too chatty.
 
+Severity   : minor
+Bugzilla   : 16450
+Description: Use cdebug_show() in CDEBUG-style macros defined outside of libcfs.
+Details    : Use cdebug_show() in CDEBUG-style macros defined outside of libcfs.
+
 
 --------------------------------------------------------------------------------
 
