@@ -852,24 +852,34 @@ void lu_stack_fini(const struct lu_env *env, struct lu_device *top)
 
                 next = ldt->ldt_ops->ldto_device_free(env, scan);
                 type = ldt->ldt_obd_type;
+                if (type != NULL) {
                 type->typ_refcnt--;
                 class_put_type(type);
+        }
         }
 }
 EXPORT_SYMBOL(lu_stack_fini);
 
 enum {
-        /*
+        /**
          * Maximal number of tld slots.
          */
-        LU_CONTEXT_KEY_NR = 16
+        LU_CONTEXT_KEY_NR = 32
 };
 
 static struct lu_context_key *lu_keys[LU_CONTEXT_KEY_NR] = { NULL, };
 
 static spinlock_t lu_keys_guard = SPIN_LOCK_UNLOCKED;
 
-/*
+/**
+ * Global counter incremented whenever key is registered, unregistered,
+ * revived or quiesced. This is used to void unnecessary calls to
+ * lu_context_refill(). No locking is provided, as initialization and shutdown
+ * are supposed to be externally serialized.
+ */
+static unsigned key_set_version = 0;
+
+/**
  * Register new key.
  */
 int lu_context_key_register(struct lu_context_key *key)
@@ -889,7 +899,9 @@ int lu_context_key_register(struct lu_context_key *key)
                         key->lct_index = i;
                         atomic_set(&key->lct_used, 1);
                         lu_keys[i] = key;
+                        lu_ref_init(&key->lct_reference);
                         result = 0;
+                        ++key_set_version;
                         break;
                 }
         }
@@ -909,6 +921,7 @@ static void key_fini(struct lu_context *ctx, int index)
                 LASSERT(atomic_read(&key->lct_used) > 1);
 
                 key->lct_fini(ctx, key, ctx->lc_value[index]);
+                lu_ref_del(&key->lct_reference, "ctx", ctx);
                 atomic_dec(&key->lct_used);
                 LASSERT(key->lct_owner != NULL);
                 if (!(ctx->lc_tags & LCT_NOREF)) {
@@ -919,14 +932,15 @@ static void key_fini(struct lu_context *ctx, int index)
         }
 }
 
-/*
+/**
  * Deregister key.
  */
 void lu_context_key_degister(struct lu_context_key *key)
 {
         LASSERT(atomic_read(&key->lct_used) >= 1);
-        LASSERT(0 <= key->lct_index && key->lct_index < ARRAY_SIZE(lu_keys));
+        LINVRNT(0 <= key->lct_index && key->lct_index < ARRAY_SIZE(lu_keys));
 
+        ++key_set_version;
         key_fini(&lu_shrink_env.le_ctx, key->lct_index);
 
         if (atomic_read(&key->lct_used) > 1)
@@ -937,17 +951,133 @@ void lu_context_key_degister(struct lu_context_key *key)
 }
 EXPORT_SYMBOL(lu_context_key_degister);
 
-/*
- * Return value associated with key @key in context @ctx.
+/**
+ * Register a number of keys. This has to be called after all keys have been
+ * initialized by a call to LU_CONTEXT_KEY_INIT().
+ */
+int lu_context_key_register_many(struct lu_context_key *k, ...)
+{
+        struct lu_context_key *key = k;
+        va_list args;
+        int result;
+
+        va_start(args, k);
+        do {
+                result = lu_context_key_register(key);
+                if (result)
+                        break;
+                key = va_arg(args, struct lu_context_key *);
+        } while (key != NULL);
+        va_end(args);
+
+        if (result != 0) {
+                va_start(args, k);
+                while (k != key) {
+                        lu_context_key_degister(k);
+                        k = va_arg(args, struct lu_context_key *);
+                }
+                va_end(args);
+        }
+
+        return result;
+}
+EXPORT_SYMBOL(lu_context_key_register_many);
+
+/**
+ * De-register a number of keys. This is a dual to
+ * lu_context_key_register_many().
+ */
+void lu_context_key_degister_many(struct lu_context_key *k, ...)
+{
+        va_list args;
+
+        va_start(args, k);
+        do {
+                lu_context_key_degister(k);
+                k = va_arg(args, struct lu_context_key*);
+        } while (k != NULL);
+        va_end(args);
+}
+EXPORT_SYMBOL(lu_context_key_degister_many);
+
+/**
+ * Revive a number of keys.
+ */
+void lu_context_key_revive_many(struct lu_context_key *k, ...)
+{
+        va_list args;
+
+        va_start(args, k);
+        do {
+                lu_context_key_revive(k);
+                k = va_arg(args, struct lu_context_key*);
+        } while (k != NULL);
+        va_end(args);
+}
+EXPORT_SYMBOL(lu_context_key_revive_many);
+
+/**
+ * Quiescent a number of keys.
+ */
+void lu_context_key_quiesce_many(struct lu_context_key *k, ...)
+{
+        va_list args;
+
+        va_start(args, k);
+        do {
+                lu_context_key_quiesce(k);
+                k = va_arg(args, struct lu_context_key*);
+        } while (k != NULL);
+        va_end(args);
+}
+EXPORT_SYMBOL(lu_context_key_quiesce_many);
+
+/**
+ * Return value associated with key \a key in context \a ctx.
  */
 void *lu_context_key_get(const struct lu_context *ctx,
-                         struct lu_context_key *key)
+                         const struct lu_context_key *key)
 {
-        LASSERT(ctx->lc_state == LCS_ENTERED);
-        LASSERT(0 <= key->lct_index && key->lct_index < ARRAY_SIZE(lu_keys));
+        LINVRNT(ctx->lc_state == LCS_ENTERED);
+        LINVRNT(0 <= key->lct_index && key->lct_index < ARRAY_SIZE(lu_keys));
         return ctx->lc_value[key->lct_index];
 }
 EXPORT_SYMBOL(lu_context_key_get);
+
+/**
+ * List of remembered contexts. XXX document me.
+ */
+static CFS_LIST_HEAD(lu_context_remembered);
+
+/**
+ * Destroy \a key in all remembered contexts. This is used to destroy key
+ * values in "shared" contexts (like service threads), when a module owning
+ * the key is about to be unloaded.
+ */
+void lu_context_key_quiesce(struct lu_context_key *key)
+{
+        struct lu_context *ctx;
+
+        if (!(key->lct_tags & LCT_QUIESCENT)) {
+                key->lct_tags |= LCT_QUIESCENT;
+                /*
+                 * XXX memory barrier has to go here.
+                 */
+                spin_lock(&lu_keys_guard);
+                list_for_each_entry(ctx, &lu_context_remembered, lc_remember)
+                        key_fini(ctx, key->lct_index);
+                spin_unlock(&lu_keys_guard);
+                ++key_set_version;
+        }
+}
+EXPORT_SYMBOL(lu_context_key_quiesce);
+
+void lu_context_key_revive(struct lu_context_key *key)
+{
+        key->lct_tags &= ~LCT_QUIESCENT;
+        ++key_set_version;
+}
+EXPORT_SYMBOL(lu_context_key_revive);
 
 static void keys_fini(struct lu_context *ctx)
 {
@@ -962,7 +1092,7 @@ static void keys_fini(struct lu_context *ctx)
         }
 }
 
-static int keys_fill(const struct lu_context *ctx)
+static int keys_fill(struct lu_context *ctx)
 {
         int i;
 
@@ -970,12 +1100,17 @@ static int keys_fill(const struct lu_context *ctx)
                 struct lu_context_key *key;
 
                 key = lu_keys[i];
-                if (ctx->lc_value[i] == NULL &&
-                    key != NULL && key->lct_tags & ctx->lc_tags) {
+                if (ctx->lc_value[i] == NULL && key != NULL &&
+                    (key->lct_tags & ctx->lc_tags) &&
+                    /*
+                     * Don't create values for a LCT_QUIESCENT key, as this
+                     * will pin module owning a key.
+                     */
+                    !(key->lct_tags & LCT_QUIESCENT)) {
                         void *value;
 
-                        LASSERT(key->lct_init != NULL);
-                        LASSERT(key->lct_index == i);
+                        LINVRNT(key->lct_init != NULL);
+                        LINVRNT(key->lct_index == i);
 
                         value = key->lct_init(ctx, key);
                         if (unlikely(IS_ERR(value)))
@@ -983,9 +1118,18 @@ static int keys_fill(const struct lu_context *ctx)
                         LASSERT(key->lct_owner != NULL);
                         if (!(ctx->lc_tags & LCT_NOREF))
                                 try_module_get(key->lct_owner);
+                        lu_ref_add_atomic(&key->lct_reference, "ctx", ctx);
                         atomic_inc(&key->lct_used);
+                        /*
+                         * This is the only place in the code, where an
+                         * element of ctx->lc_value[] array is set to non-NULL
+                         * value.
+                         */
                         ctx->lc_value[i] = value;
+                        if (key->lct_exit != NULL)
+                                ctx->lc_tags |= LCT_HAS_EXIT;
                 }
+                ctx->lc_version = key_set_version;
         }
         return 0;
 }
@@ -1005,7 +1149,7 @@ static int keys_init(struct lu_context *ctx)
         return result;
 }
 
-/*
+/**
  * Initialize context data-structure. Create values for all keys.
  */
 int lu_context_init(struct lu_context *ctx, __u32 tags)
@@ -1013,41 +1157,50 @@ int lu_context_init(struct lu_context *ctx, __u32 tags)
         memset(ctx, 0, sizeof *ctx);
         ctx->lc_state = LCS_INITIALIZED;
         ctx->lc_tags = tags;
+        if (tags & LCT_REMEMBER) {
+                spin_lock(&lu_keys_guard);
+                list_add(&ctx->lc_remember, &lu_context_remembered);
+                spin_unlock(&lu_keys_guard);
+        } else
+                CFS_INIT_LIST_HEAD(&ctx->lc_remember);
         return keys_init(ctx);
 }
 EXPORT_SYMBOL(lu_context_init);
 
-/*
+/**
  * Finalize context data-structure. Destroy key values.
  */
 void lu_context_fini(struct lu_context *ctx)
 {
-        LASSERT(ctx->lc_state == LCS_INITIALIZED || ctx->lc_state == LCS_LEFT);
+        LINVRNT(ctx->lc_state == LCS_INITIALIZED || ctx->lc_state == LCS_LEFT);
         ctx->lc_state = LCS_FINALIZED;
         keys_fini(ctx);
+        spin_lock(&lu_keys_guard);
+        list_del_init(&ctx->lc_remember);
+        spin_unlock(&lu_keys_guard);
 }
 EXPORT_SYMBOL(lu_context_fini);
 
-/*
+/**
  * Called before entering context.
  */
 void lu_context_enter(struct lu_context *ctx)
 {
-        LASSERT(ctx->lc_state == LCS_INITIALIZED || ctx->lc_state == LCS_LEFT);
+        LINVRNT(ctx->lc_state == LCS_INITIALIZED || ctx->lc_state == LCS_LEFT);
         ctx->lc_state = LCS_ENTERED;
 }
 EXPORT_SYMBOL(lu_context_enter);
 
-/*
- * Called after exiting from @ctx
+/**
+ * Called after exiting from \a ctx
  */
 void lu_context_exit(struct lu_context *ctx)
 {
         int i;
 
-        LASSERT(ctx->lc_state == LCS_ENTERED);
+        LINVRNT(ctx->lc_state == LCS_ENTERED);
         ctx->lc_state = LCS_LEFT;
-        if (ctx->lc_value != NULL) {
+        if (ctx->lc_tags & LCT_HAS_EXIT && ctx->lc_value != NULL) {
                 for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
                         if (ctx->lc_value[i] != NULL) {
                                 struct lu_context_key *key;
@@ -1063,14 +1216,14 @@ void lu_context_exit(struct lu_context *ctx)
 }
 EXPORT_SYMBOL(lu_context_exit);
 
-/*
+/**
  * Allocate for context all missing keys that were registered after context
  * creation.
  */
-int lu_context_refill(const struct lu_context *ctx)
+int lu_context_refill(struct lu_context *ctx)
 {
-        LASSERT(ctx->lc_value != NULL);
-        return keys_fill(ctx);
+        LINVRNT(ctx->lc_value != NULL);
+        return ctx->lc_version == key_set_version ? 0 : keys_fill(ctx);
 }
 EXPORT_SYMBOL(lu_context_refill);
 
@@ -1079,7 +1232,7 @@ static int lu_env_setup(struct lu_env *env, struct lu_context *ses,
 {
         int result;
 
-        LASSERT(ergo(!noref, !(tags & LCT_NOREF)));
+        LINVRNT(ergo(!noref, !(tags & LCT_NOREF)));
 
         env->le_ses = ses;
         result = lu_context_init(&env->le_ctx, tags);
@@ -1108,6 +1261,20 @@ void lu_env_fini(struct lu_env *env)
 }
 EXPORT_SYMBOL(lu_env_fini);
 
+int lu_env_refill(struct lu_env *env)
+{
+        int result;
+
+        result = lu_context_refill(&env->le_ctx);
+        if (result == 0 && env->le_ses != NULL)
+                result = lu_context_refill(env->le_ses);
+        return result;
+}
+EXPORT_SYMBOL(lu_env_refill);
+
+static struct shrinker *lu_site_shrinker = NULL;
+
+#ifdef __KERNEL__
 static int lu_cache_shrink(int nr, unsigned int gfp_mask)
 {
         struct lu_site *s;
@@ -1140,43 +1307,57 @@ static int lu_cache_shrink(int nr, unsigned int gfp_mask)
         return cached;
 }
 
-static struct shrinker *lu_site_shrinker = NULL;
+#else  /* !__KERNEL__ */
+static int lu_cache_shrink(int nr, unsigned int gfp_mask)
+{
+        return 0;
+}
+#endif /* __KERNEL__ */
 
-/*
+int  lu_ref_global_init(void);
+void lu_ref_global_fini(void);
+
+/**
  * Initialization of global lu_* data.
  */
 int lu_global_init(void)
 {
         int result;
 
+        CDEBUG(D_CONSOLE, "Lustre LU module (%p).\n", &lu_keys);
+
         LU_CONTEXT_KEY_INIT(&lu_global_key);
         result = lu_context_key_register(&lu_global_key);
-        if (result == 0) {
+        if (result != 0)
+                return result;
                 /*
-                 * At this level, we don't know what tags are needed, so
-                 * allocate them conservatively. This should not be too bad,
-                 * because this environment is global.
+         * At this level, we don't know what tags are needed, so allocate them
+         * conservatively. This should not be too bad, because this
+         * environment is global.
                  */
                 down(&lu_sites_guard);
                 result = lu_env_init_noref(&lu_shrink_env, NULL, LCT_SHRINKER);
                 up(&lu_sites_guard);
-                if (result == 0) {
+        if (result != 0)
+                return result;
+
+        result = lu_ref_global_init();
+        if (result != 0)
+                return result;
                         /*
-                         * seeks estimation: 3 seeks to read a record from oi,
-                         * one to read inode, one for ea. Unfortunately
-                         * setting this high value results in lu_object/inode
-                         * cache consuming all the memory.
-                         */
-                        lu_site_shrinker = set_shrinker(DEFAULT_SEEKS,
-                                                        lu_cache_shrink);
-                        if (result == 0)
+         * seeks estimation: 3 seeks to read a record from oi, one to read
+         * inode, one for ea. Unfortunately setting this high value results in
+         * lu_object/inode cache consuming all the memory.
+         */
+        lu_site_shrinker = set_shrinker(DEFAULT_SEEKS, lu_cache_shrink);
+        if (lu_site_shrinker == NULL)
+                return -ENOMEM;
+
                                 result = lu_time_global_init();
-                }
-        }
         return result;
 }
 
-/*
+/**
  * Dual to lu_global_init().
  */
 void lu_global_fini(void)
@@ -1196,6 +1377,8 @@ void lu_global_fini(void)
         down(&lu_sites_guard);
         lu_env_fini(&lu_shrink_env);
         up(&lu_sites_guard);
+
+        lu_ref_global_fini();
 }
 
 struct lu_buf LU_BUF_NULL = {

@@ -912,12 +912,15 @@ enum lu_context_state {
  * that allows each layer to associate arbitrary pieces of data with each
  * context (see pthread_key_create(3) for similar interface).
  *
+ * On a client, lu_context is bound to a thread, see cl_env_get().
+ *
+ * \see lu_context_key
  */
 struct lu_context {
-        /*
-         * Theoretically we'd want to use lu_objects and lu_contexts on the
-         * client side too. On the other hand, we don't want to allocate
-         * values of server-side keys for the client contexts and vice versa.
+        /**
+         * lu_context is used on the client side too. Yet we don't want to
+         * allocate values of server-side keys for the client contexts and
+         * vice versa.
          *
          * To achieve this, set of tags in introduced. Contexts and keys are
          * marked with tags. Key value are created only for context whose set
@@ -925,97 +928,161 @@ struct lu_context {
          * from enum lu_context_tag.
          */
         __u32                  lc_tags;
-        /*
+        /**
          * Pointer to the home service thread. NULL for other execution
          * contexts.
          */
         struct ptlrpc_thread  *lc_thread;
-        /*
+        /**
          * Pointer to an array with key values. Internal implementation
          * detail.
          */
         void                 **lc_value;
         enum lu_context_state  lc_state;
+        /**
+         * Linkage into a list of all remembered contexts. Only
+         * `non-transient' contexts, i.e., ones created for service threads
+         * are placed here.
+         */
+        struct list_head       lc_remember;
+        /**
+         * Version counter used to skip calls to lu_context_refill() when no
+         * keys were registered.
+         */
+        unsigned               lc_version;
 };
 
-/*
+/**
  * lu_context_key interface. Similar to pthread_key.
  */
 
 enum lu_context_tag {
-        /*
+        /**
          * Thread on md server
          */
         LCT_MD_THREAD = 1 << 0,
-        /*
+        /**
          * Thread on dt server
          */
         LCT_DT_THREAD = 1 << 1,
-        /*
+        /**
          * Context for transaction handle
          */
         LCT_TX_HANDLE = 1 << 2,
-        /*
+        /**
          * Thread on client
          */
         LCT_CL_THREAD = 1 << 3,
-        /*
-         * Per-request session on server
+        /**
+         * A per-request session on a server, and a per-system-call session on
+         * a client.
          */
         LCT_SESSION   = 1 << 4,
-        /*
+
+        /**
+         * Set when at least one of keys, having values in this context has
+         * non-NULL lu_context_key::lct_exit() method. This is used to
+         * optimize lu_context_exit() call.
+         */
+        LCT_HAS_EXIT  = 1 << 28,
+        /**
          * Don't add references for modules creating key values in that context.
          * This is only for contexts used internally by lu_object framework.
          */
-        LCT_NOREF     = 1 << 30,
-        /*
+        LCT_NOREF     = 1 << 29,
+        /**
+         * Key is being prepared for retiring, don't create new values for it.
+         */
+        LCT_QUIESCENT = 1 << 30,
+        /**
+         * Context should be remembered.
+         */
+        LCT_REMEMBER  = 1 << 31,
+        /**
          * Contexts usable in cache shrinker thread.
          */
         LCT_SHRINKER  = LCT_MD_THREAD|LCT_DT_THREAD|LCT_CL_THREAD|LCT_NOREF
 };
 
-/*
+/**
  * Key. Represents per-context value slot.
+ *
+ * Keys are usually registered when module owning the key is initialized, and
+ * de-registered when module is unloaded. Once key is registered, all new
+ * contexts with matching tags, will get key value. "Old" contexts, already
+ * initialized at the time of key registration, can be forced to get key value
+ * by calling lu_context_refill().
+ *
+ * Every key value is counted in lu_context_key::lct_used and acquires a
+ * reference on an owning module. This means, that all key values have to be
+ * destroyed before module can be unloaded. This is usually achieved by
+ * stopping threads started by the module, that created contexts in their
+ * entry functions. Situation is complicated by the threads shared by multiple
+ * modules, like ptlrpcd daemon on a client. To work around this problem,
+ * contexts, created in such threads, are `remembered' (see
+ * LCT_REMEMBER)---i.e., added into a global list. When module is preparing
+ * for unloading it does the following:
+ *
+ *     - marks its keys as `quiescent' (lu_context_tag::LCT_QUIESCENT)
+ *       preventing new key values from being allocated in the new contexts,
+ *       and
+ *
+ *     - scans a list of remembered contexts, destroying values of module
+ *       keys, thus releasing references to the module.
+ *
+ * This is done by lu_context_key_quiesce(). If module is re-activated
+ * before key has been de-registered, lu_context_key_revive() call clears
+ * `quiescent' marker.
+ *
+ * lu_context code doesn't provide any internal synchronization for these
+ * activities---it's assumed that startup (including threads start-up) and
+ * shutdown are serialized by some external means.
+ *
+ * \see lu_context
  */
 struct lu_context_key {
-        /*
+        /**
          * Set of tags for which values of this key are to be instantiated.
          */
         __u32 lct_tags;
-        /*
+        /**
          * Value constructor. This is called when new value is created for a
          * context. Returns pointer to new value of error pointer.
          */
         void  *(*lct_init)(const struct lu_context *ctx,
                            struct lu_context_key *key);
-        /*
+        /**
          * Value destructor. Called when context with previously allocated
-         * value of this slot is destroyed. @data is a value that was returned
-         * by a matching call to ->lct_init().
+         * value of this slot is destroyed. \a data is a value that was returned
+         * by a matching call to lu_context_key::lct_init().
          */
         void   (*lct_fini)(const struct lu_context *ctx,
                            struct lu_context_key *key, void *data);
-        /*
+        /**
          * Optional method called on lu_context_exit() for all allocated
          * keys. Can be used by debugging code checking that locks are
          * released, etc.
          */
         void   (*lct_exit)(const struct lu_context *ctx,
                            struct lu_context_key *key, void *data);
-        /*
-         * Internal implementation detail: index within ->lc_value[] reserved
-         * for this key.
+        /**
+         * Internal implementation detail: index within lu_context::lc_value[]
+         * reserved for this key.
          */
         int      lct_index;
-        /*
+        /**
          * Internal implementation detail: number of values created for this
          * key.
          */
         atomic_t lct_used;
-        /*
+        /**
          * Internal implementation detail: module for this key.
          */
         struct module *lct_owner;
+        /**
+         * References to this key. For debugging.
+         */
+        struct lu_ref  lct_reference;
 };
 
 #define LU_KEY_INIT(mod, type)                                    \
@@ -1060,121 +1127,83 @@ do {                                                    \
         (key)->lct_owner = THIS_MODULE;                 \
 } while (0)
 
-
-/*
- * Register new key.
- */
 int   lu_context_key_register(struct lu_context_key *key);
-/*
- * Deregister key.
- */
 void  lu_context_key_degister(struct lu_context_key *key);
+void *lu_context_key_get     (const struct lu_context *ctx,
+                               const struct lu_context_key *key);
+void  lu_context_key_quiesce (struct lu_context_key *key);
+void  lu_context_key_revive  (struct lu_context_key *key);
 
-#define LU_KEY_REGISTER_GENERIC(mod)                                             \
-        static int mod##_key_register_generic(struct lu_context_key *k, ...)     \
+
+/*
+ * LU_KEY_INIT_GENERIC() has to be a macro to correctly determine an
+ * owning module.
+ */
+
+#define LU_KEY_INIT_GENERIC(mod)                                        \
+        static void mod##_key_init_generic(struct lu_context_key *k, ...) \
         {                                                                        \
-                struct lu_context_key* key = k;                                  \
+                struct lu_context_key *key = k;                         \
                 va_list args;                                                    \
-                int result;                                                      \
                                                                                  \
                 va_start(args, k);                                               \
-                                                                                 \
                 do {                                                             \
                         LU_CONTEXT_KEY_INIT(key);                                \
-                        result = lu_context_key_register(key);                   \
-                        if (result)                                              \
-                                break;                                           \
-                        key = va_arg(args, struct lu_context_key*);              \
+                        key = va_arg(args, struct lu_context_key *);    \
                 } while (key != NULL);                                           \
-                                                                                 \
-                va_end(args);                                                    \
-                                                                                 \
-                if (result) {                                                    \
-                        va_start(args, k);                                       \
-                        while (k != key) {                                       \
-                                lu_context_key_degister(k);                      \
-                                k = va_arg(args, struct lu_context_key*);        \
-                        }                                                        \
-                        va_end(args);                                            \
-                }                                                                \
-                                                                                 \
-                return result;                                                   \
-        }
-
-#define LU_KEY_DEGISTER_GENERIC(mod)                                             \
-        static void mod##_key_degister_generic(struct lu_context_key *k, ...)    \
-        {                                                                        \
-                va_list args;                                                    \
-                                                                                 \
-                va_start(args, k);                                               \
-                                                                                 \
-                do {                                                             \
-                        lu_context_key_degister(k);                              \
-                        k = va_arg(args, struct lu_context_key*);                \
-                } while (k != NULL);                                             \
-                                                                                 \
                 va_end(args);                                                    \
         }
 
 #define LU_TYPE_INIT(mod, ...)                                         \
-        LU_KEY_REGISTER_GENERIC(mod)                                   \
+        LU_KEY_INIT_GENERIC(mod)                                        \
         static int mod##_type_init(struct lu_device_type *t)           \
         {                                                              \
-                return mod##_key_register_generic(__VA_ARGS__, NULL);  \
+                mod##_key_init_generic(__VA_ARGS__, NULL);              \
+                return lu_context_key_register_many(__VA_ARGS__, NULL); \
         }                                                              \
         struct __##mod##_dummy_type_init {;}
 
 #define LU_TYPE_FINI(mod, ...)                                         \
-        LU_KEY_DEGISTER_GENERIC(mod)                                   \
         static void mod##_type_fini(struct lu_device_type *t)          \
         {                                                              \
-                mod##_key_degister_generic(__VA_ARGS__, NULL);         \
+                lu_context_key_degister_many(__VA_ARGS__, NULL);        \
         }                                                              \
         struct __##mod##_dummy_type_fini {;}
 
+
+
+
 #define LU_TYPE_INIT_FINI(mod, ...)                                 \
         LU_TYPE_INIT(mod, __VA_ARGS__);                             \
-        LU_TYPE_FINI(mod, __VA_ARGS__)
+        LU_TYPE_FINI(mod, __VA_ARGS__);         \
+        LU_TYPE_START(mod, __VA_ARGS__);        \
+        LU_TYPE_STOP(mod, __VA_ARGS__)
+
+int   lu_context_init  (struct lu_context *ctx, __u32 tags);
+void  lu_context_fini  (struct lu_context *ctx);
+void  lu_context_enter (struct lu_context *ctx);
+void  lu_context_exit  (struct lu_context *ctx);
+int   lu_context_refill(struct lu_context *ctx);
 
 /*
- * Return value associated with key @key in context @ctx.
+ * Helper functions to operate on multiple keys. These are used by the default
+ * device type operations, defined by LU_TYPE_INIT_FINI().
  */
-void *lu_context_key_get(const struct lu_context *ctx,
-                         struct lu_context_key *key);
 
-/*
- * Initialize context data-structure. Create values for all keys.
- */
-int  lu_context_init(struct lu_context *ctx, __u32 tags);
-/*
- * Finalize context data-structure. Destroy key values.
- */
-void lu_context_fini(struct lu_context *ctx);
+int  lu_context_key_register_many(struct lu_context_key *k, ...);
+void lu_context_key_degister_many(struct lu_context_key *k, ...);
+void lu_context_key_revive_many  (struct lu_context_key *k, ...);
+void lu_context_key_quiesce_many (struct lu_context_key *k, ...);
 
-/*
- * Called before entering context.
- */
-void lu_context_enter(struct lu_context *ctx);
-/*
- * Called after exiting from @ctx
- */
-void lu_context_exit(struct lu_context *ctx);
-
-/*
- * Allocate for context all missing keys that were registered after context
- * creation.
- */
-int lu_context_refill(const struct lu_context *ctx);
-
-/*
+/**
  * Environment.
  */
 struct lu_env {
-        /*
+        /**
          * "Local" context, used to store data instead of stack.
          */
         struct lu_context  le_ctx;
-        /*
+        /**
          * "Session" context for per-request data.
          */
         struct lu_context *le_ses;
@@ -1183,7 +1212,15 @@ struct lu_env {
 int  lu_env_init(struct lu_env *env, struct lu_context *ses, __u32 tags);
 void lu_env_fini(struct lu_env *env);
 
-/*
+/** @} lu_context */
+
+/**
+ * Output site statistical counters into a buffer. Suitable for
+ * ll_rd_*()-style functions.
+ */
+int lu_site_stats_print(const struct lu_site *s, char *page, int count);
+
+/**
  * Common name structure to be passed around for various name related methods.
  */
 struct lu_name {

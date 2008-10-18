@@ -1601,6 +1601,13 @@ Details    : On a server, a file system object is uniquely identified
 	     friends to take additional `lu_conf' argument describing object.
 	     Typically this includes layout information.
 
+Severity   : normal
+Bugzilla   : 16450
+Description: lu_context fixes.
+Details    : Introduce new lu_context functions that are needed on the client
+	     side, where some system threads (ptlrpcd) are shared by multiple
+	     modules, and so cannot be stopped during module shutdown.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

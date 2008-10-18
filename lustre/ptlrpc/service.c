@@ -603,26 +603,6 @@ static void ptlrpc_update_export_timer(struct obd_export *exp, long extra_delay)
         EXIT;
 }
 
-#ifndef __KERNEL__
-int lu_context_init(struct lu_context *ctx, __u32 tags)
-{
-        return 0;
-}
-
-void lu_context_fini(struct lu_context *ctx)
-{
-}
-
-void lu_context_enter(struct lu_context *ctx)
-{
-}
-
-void lu_context_exit(struct lu_context *ctx)
-{
-}
-
-#endif
-
 static int ptlrpc_check_req(struct ptlrpc_request *req)
 {
         if (unlikely(lustre_msg_get_conn_cnt(req->rq_reqmsg) <
