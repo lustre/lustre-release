@@ -100,10 +100,11 @@ struct osd_object {
         struct inode          *oo_inode;
         struct rw_semaphore    oo_sem;
         struct osd_directory  *oo_dir;
-        /* protects inode attributes. */
+        /** protects inode attributes. */
         spinlock_t             oo_guard;
-#if OSD_COUNTERS
         const struct lu_env   *oo_owner;
+#ifdef CONFIG_LOCKDEP
+        struct lockdep_map     oo_dep_map;
 #endif
 };
 
@@ -785,58 +786,46 @@ static struct dt_device_operations osd_dt_ops = {
 };
 
 static void osd_object_read_lock(const struct lu_env *env,
-                                 struct dt_object *dt)
+                                 struct dt_object *dt, unsigned role)
 {
         struct osd_object *obj = osd_dt_obj(dt);
+        struct osd_thread_info *oti = osd_oti_get(env);
 
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
 
-        OSD_COUNTERS_DO(LASSERT(obj->oo_owner != env));
-        down_read(&obj->oo_sem);
-#if OSD_COUNTERS
-        {
-                struct osd_thread_info *oti = osd_oti_get(env);
+        LASSERT(obj->oo_owner != env);
+        down_read_nested(&obj->oo_sem, role);
 
                 LASSERT(obj->oo_owner == NULL);
                 oti->oti_r_locks++;
-        }
-#endif
 }
 
 static void osd_object_write_lock(const struct lu_env *env,
-                                  struct dt_object *dt)
+                                  struct dt_object *dt, unsigned role)
 {
         struct osd_object *obj = osd_dt_obj(dt);
+        struct osd_thread_info *oti = osd_oti_get(env);
 
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
 
-        OSD_COUNTERS_DO(LASSERT(obj->oo_owner != env));
-        down_write(&obj->oo_sem);
-#if OSD_COUNTERS
-        {
-                struct osd_thread_info *oti = osd_oti_get(env);
+        LASSERT(obj->oo_owner != env);
+        down_write_nested(&obj->oo_sem, role);
 
                 LASSERT(obj->oo_owner == NULL);
                 obj->oo_owner = env;
                 oti->oti_w_locks++;
-        }
-#endif
 }
 
 static void osd_object_read_unlock(const struct lu_env *env,
                                    struct dt_object *dt)
 {
         struct osd_object *obj = osd_dt_obj(dt);
-
-        LASSERT(osd_invariant(obj));
-#if OSD_COUNTERS
-        {
                 struct osd_thread_info *oti = osd_oti_get(env);
+
+        LINVRNT(osd_invariant(obj));
 
                 LASSERT(oti->oti_r_locks > 0);
                 oti->oti_r_locks--;
-        }
-#endif
         up_read(&obj->oo_sem);
 }
 

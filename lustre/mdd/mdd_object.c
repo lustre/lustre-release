@@ -232,7 +232,7 @@ static void mdd_object_delete(const struct lu_env *env,
                 if (IS_ERR(handle))
                         CERROR("Cannot get thandle\n");
                 else {
-                        mdd_write_lock(env, mdd_obj);
+                        mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
                         /* let's remove obj from the orphan list */
                         __mdd_orphan_del(env, mdd_obj, handle);
                         mdd_write_unlock(env, mdd_obj);
@@ -357,7 +357,7 @@ int mdd_lmm_get_locked(const struct lu_env *env, struct mdd_object *mdd_obj,
         int rc;
         ENTRY;
 
-        mdd_read_lock(env, mdd_obj);
+        mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
         rc = __mdd_lmm_get(env, mdd_obj, ma);
         mdd_read_unlock(env, mdd_obj);
         RETURN(rc);
@@ -419,7 +419,7 @@ int mdd_attr_get_internal_locked(const struct lu_env *env,
         int needlock = ma->ma_need & (MA_LOV | MA_LMV | MA_ACL_DEF);
 
         if (needlock)
-                mdd_read_lock(env, mdd_obj);
+                mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
         rc = mdd_attr_get_internal(env, mdd_obj, ma);
         if (needlock)
                 mdd_read_unlock(env, mdd_obj);
@@ -454,7 +454,7 @@ static int mdd_xattr_get(const struct lu_env *env,
 
         LASSERT(mdd_object_exists(mdd_obj));
 
-        mdd_read_lock(env, mdd_obj);
+        mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
         rc = mdo_xattr_get(env, mdd_obj, buf, name,
                            mdd_object_capa(env, mdd_obj));
         mdd_read_unlock(env, mdd_obj);
@@ -478,7 +478,7 @@ static int mdd_readlink(const struct lu_env *env, struct md_object *obj,
         LASSERT(mdd_object_exists(mdd_obj));
 
         next = mdd_object_child(mdd_obj);
-        mdd_read_lock(env, mdd_obj);
+        mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
         rc = next->do_body_ops->dbo_read(env, next, buf, &pos,
                                          mdd_object_capa(env, mdd_obj));
         mdd_read_unlock(env, mdd_obj);
@@ -496,7 +496,7 @@ static int mdd_xattr_list(const struct lu_env *env, struct md_object *obj,
 
         ENTRY;
 
-        mdd_read_lock(env, mdd_obj);
+        mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
         rc = mdo_xattr_list(env, mdd_obj, buf, mdd_object_capa(env, mdd_obj));
         mdd_read_unlock(env, mdd_obj);
 
@@ -599,7 +599,7 @@ static int mdd_attr_set_internal_locked(const struct lu_env *env,
 
         needacl = needacl && (attr->la_valid & LA_MODE);
         if (needacl)
-                mdd_write_lock(env, obj);
+                mdd_write_lock(env, obj, MOR_TGT_CHILD);
         rc = mdd_attr_set_internal(env, obj, attr, handle, needacl);
         if (needacl)
                 mdd_write_unlock(env, obj);
@@ -617,7 +617,7 @@ int mdd_attr_check_set_internal_locked(const struct lu_env *env,
 
         needacl = needacl && (attr->la_valid & LA_MODE);
         if (needacl)
-                mdd_write_lock(env, obj);
+                mdd_write_lock(env, obj, MOR_TGT_CHILD);
         rc = mdd_attr_check_set_internal(env, obj, attr, handle, needacl);
         if (needacl)
                 mdd_write_unlock(env, obj);
@@ -724,7 +724,8 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
                 if ((uc->mu_fsuid != tmp_la->la_uid) &&
                     !mdd_capable(uc, CFS_CAP_FOWNER)) {
                         rc = mdd_permission_internal_locked(env, obj, tmp_la,
-                                                            MAY_WRITE);
+                                                            MAY_WRITE,
+                                                            MOR_TGT_CHILD);
                         if (rc)
                                 RETURN(rc);
                 }
@@ -829,7 +830,8 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
                               (uc->mu_fsuid == tmp_la->la_uid)) &&
                             !(ma->ma_attr_flags & MDS_PERM_BYPASS)) {
                                 rc = mdd_permission_internal_locked(env, obj,
-                                                            tmp_la, MAY_WRITE);
+                                                            tmp_la, MAY_WRITE,
+                                                            MOR_TGT_CHILD);
                                 if (rc)
                                         RETURN(rc);
                         }
@@ -940,7 +942,7 @@ int mdd_xattr_set_txn(const struct lu_env *env, struct mdd_object *obj,
         int  rc;
         ENTRY;
 
-        mdd_write_lock(env, obj);
+        mdd_write_lock(env, obj, MOR_TGT_CHILD);
         rc = __mdd_xattr_set(env, obj, buf, name, fl, handle);
         mdd_write_unlock(env, obj);
 
@@ -1020,7 +1022,7 @@ int mdd_xattr_del(const struct lu_env *env, struct md_object *obj,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        mdd_write_lock(env, mdd_obj);
+        mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
         rc = mdo_xattr_del(env, mdd_obj, name, handle,
                            mdd_object_capa(env, mdd_obj));
         mdd_write_unlock(env, mdd_obj);
@@ -1057,7 +1059,7 @@ static int mdd_ref_del(const struct lu_env *env, struct md_object *obj,
         if (IS_ERR(handle))
                 RETURN(-ENOMEM);
 
-        mdd_write_lock(env, mdd_obj);
+        mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
 
         rc = mdd_unlink_sanity_check(env, NULL, mdd_obj, ma);
         if (rc)
@@ -1130,7 +1132,7 @@ static int mdd_object_create(const struct lu_env *env,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        mdd_write_lock(env, mdd_obj);
+        mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
         rc = mdd_oc_sanity_check(env, mdd_obj, ma);
         if (rc)
                 GOTO(unlock, rc);
@@ -1179,9 +1181,9 @@ static int mdd_object_create(const struct lu_env *env,
         }
         EXIT;
 unlock:
-        mdd_write_unlock(env, mdd_obj);
         if (rc == 0)
-                rc = mdd_attr_get_internal_locked(env, mdd_obj, ma);
+                rc = mdd_attr_get_internal(env, mdd_obj, ma);
+        mdd_write_unlock(env, mdd_obj);
 
         mdd_trans_stop(env, mdd, rc, handle);
         return rc;
@@ -1203,7 +1205,7 @@ static int mdd_ref_add(const struct lu_env *env, struct md_object *obj,
         if (IS_ERR(handle))
                 RETURN(-ENOMEM);
 
-        mdd_write_lock(env, mdd_obj);
+        mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
         rc = mdd_link_sanity_check(env, NULL, NULL, mdd_obj);
         if (rc == 0)
                 __mdd_ref_add(env, mdd_obj, handle);
@@ -1315,7 +1317,7 @@ static int mdd_open(const struct lu_env *env, struct md_object *obj,
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         int rc = 0;
 
-        mdd_write_lock(env, mdd_obj);
+        mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
 
         rc = mdd_open_sanity_check(env, mdd_obj, flags);
         if (rc == 0)
@@ -1362,7 +1364,7 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        mdd_write_lock(env, mdd_obj);
+        mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
         /* release open count */
         mdd_obj->mod_count --;
 
@@ -1566,7 +1568,7 @@ static int mdd_readpage(const struct lu_env *env, struct md_object *obj,
 
         LASSERT(mdd_object_exists(mdd_obj));
 
-        mdd_read_lock(env, mdd_obj);
+        mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
         rc = mdd_readpage_sanity_check(env, mdd_obj);
         if (rc)
                 GOTO(out_unlock, rc);

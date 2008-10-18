@@ -49,17 +49,54 @@
 #include <lustre_ver.h>
 #include "mdd_internal.h"
 
-void mdd_write_lock(const struct lu_env *env, struct mdd_object *obj)
-{
-        struct dt_object  *next = mdd_object_child(obj);
 
-        next->do_ops->do_write_lock(env, next);
+#ifdef CONFIG_LOCKDEP
+static struct lock_class_key mdd_pdirop_key;
+
+#define RETIP ((unsigned long)__builtin_return_address(0))
+
+static void mdd_lockdep_init(struct mdd_object *obj)
+{
+        lockdep_init_map(&obj->mod_dep_map_pdlock, "pdir", &mdd_pdirop_key);
 }
 
-void mdd_read_lock(const struct lu_env *env, struct mdd_object *obj)
+static void mdd_lockdep_pd_acquire(struct mdd_object *obj,
+                                   enum mdd_object_role role)
+{
+        lock_acquire(&obj->mod_dep_map_pdlock, role, 0, 1, 2, RETIP);
+}
+
+static void mdd_lockdep_pd_release(struct mdd_object *obj)
+{
+        lock_release(&obj->mod_dep_map_pdlock, 0, RETIP);
+}
+
+#else /* !CONFIG_LOCKDEP */
+
+static void mdd_lockdep_init(struct mdd_object *obj)
+{}
+static void mdd_lockdep_pd_acquire(struct mdd_object *obj,
+                                   enum mdd_object_role role)
+{}
+static void mdd_lockdep_pd_release(struct mdd_object *obj)
+{}
+
+#endif /* !CONFIG_LOCKDEP */
+
+void mdd_write_lock(const struct lu_env *env, struct mdd_object *obj,
+                    enum mdd_object_role role)
 {
         struct dt_object  *next = mdd_object_child(obj);
-        next->do_ops->do_read_lock(env, next);
+
+        next->do_ops->do_write_lock(env, next, role);
+}
+
+void mdd_read_lock(const struct lu_env *env, struct mdd_object *obj,
+                   enum mdd_object_role role)
+{
+        struct dt_object  *next = mdd_object_child(obj);
+
+        next->do_ops->do_read_lock(env, next, role);
 }
 
 void mdd_write_unlock(const struct lu_env *env, struct mdd_object *obj)
@@ -82,7 +119,7 @@ void mdd_read_unlock(const struct lu_env *env, struct mdd_object *obj)
 void mdd_pdlock_init(struct mdd_object *obj)
 {
         dynlock_init(&obj->mod_pdlock);
-
+        mdd_lockdep_init(obj);
 }
 
 unsigned long mdd_name2hash(const char *name)
@@ -92,28 +129,41 @@ unsigned long mdd_name2hash(const char *name)
 
 struct dynlock_handle *mdd_pdo_write_lock(const struct lu_env *env,
                                           struct mdd_object *obj,
-                                          const char *name)
+                                          const char *name,
+                                          enum mdd_object_role role)
 {
+        struct dynlock_handle *handle;
         unsigned long value = mdd_name2hash(name);
-        return dynlock_lock(&obj->mod_pdlock, value, DLT_WRITE, GFP_NOFS);
+
+        handle = dynlock_lock(&obj->mod_pdlock, value, DLT_WRITE, GFP_NOFS);
+        if (handle != NULL)
+                mdd_lockdep_pd_acquire(obj, role);
+        return handle;
 }
 
 struct dynlock_handle *mdd_pdo_read_lock(const struct lu_env *env,
                                          struct mdd_object *obj,
-                                         const char *name)
+                                         const char *name,
+                                         enum mdd_object_role role)
 {
+        struct dynlock_handle *handle;
         unsigned long value = mdd_name2hash(name);
-        return dynlock_lock(&obj->mod_pdlock, value, DLT_READ, GFP_NOFS);
+        handle = dynlock_lock(&obj->mod_pdlock, value, DLT_READ, GFP_NOFS);
+        if (handle != NULL)
+                mdd_lockdep_pd_acquire(obj, role);
+        return handle;
 }
 
 void mdd_pdo_write_unlock(const struct lu_env *env, struct mdd_object *obj,
                           struct dynlock_handle *dlh)
 {
+        mdd_lockdep_pd_release(obj);
         return dynlock_unlock(&obj->mod_pdlock, dlh);
 }
 
 void mdd_pdo_read_unlock(const struct lu_env *env, struct mdd_object *obj,
                          struct dynlock_handle *dlh)
 {
+        mdd_lockdep_pd_release(obj);
         return dynlock_unlock(&obj->mod_pdlock, dlh);
 }

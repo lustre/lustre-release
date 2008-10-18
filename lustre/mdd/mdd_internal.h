@@ -100,6 +100,13 @@ enum mod_flags {
 #define LUSTRE_IMMUTABLE_FL LDISKFS_IMMUTABLE_FL
 #define LUSTRE_DIRSYNC_FL LDISKFS_DIRSYNC_FL
 
+enum mdd_object_role {
+        MOR_SRC_PARENT,
+        MOR_SRC_CHILD,
+        MOR_TGT_PARENT,
+        MOR_TGT_CHILD
+};
+
 struct mdd_object {
         struct md_object  mod_obj;
         /* open count */
@@ -107,6 +114,9 @@ struct mdd_object {
         __u32             mod_valid;
         unsigned long     mod_flags;
         struct dynlock    mod_pdlock;
+#ifdef CONFIG_LOCKDEP
+        struct lockdep_map mod_dep_map_pdlock;
+#endif
 };
 
 struct orph_key {
@@ -196,8 +206,10 @@ int mdd_attr_check_set_internal_locked(const struct lu_env *env,
 int mdd_lmm_get_locked(const struct lu_env *env, struct mdd_object *mdd_obj,
                        struct md_attr *ma);
 /* mdd_lock.c */
-void mdd_write_lock(const struct lu_env *env, struct mdd_object *obj);
-void mdd_read_lock(const struct lu_env *env, struct mdd_object *obj);
+void mdd_write_lock(const struct lu_env *env, struct mdd_object *obj,
+                    enum mdd_object_role role);
+void mdd_read_lock(const struct lu_env *env, struct mdd_object *obj,
+                   enum mdd_object_role role);
 void mdd_write_unlock(const struct lu_env *env, struct mdd_object *obj);
 void mdd_read_unlock(const struct lu_env *env, struct mdd_object *obj);
 
@@ -205,10 +217,12 @@ void mdd_pdlock_init(struct mdd_object *obj);
 unsigned long mdd_name2hash(const char *name);
 struct dynlock_handle *mdd_pdo_write_lock(const struct lu_env *env,
                                           struct mdd_object *obj,
-                                          const char *name);
+                                          const char *name,
+                                          enum mdd_object_role role);
 struct dynlock_handle *mdd_pdo_read_lock(const struct lu_env *env,
                                          struct mdd_object *obj,
-                                         const char *name);
+                                         const char *name,
+                                         enum mdd_object_role role);
 void mdd_pdo_write_unlock(const struct lu_env *env, struct mdd_object *obj,
                           struct dynlock_handle *dlh);
 void mdd_pdo_read_unlock(const struct lu_env *env, struct mdd_object *obj,
@@ -340,7 +354,7 @@ int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode,
 int __mdd_acl_init(const struct lu_env *env, struct mdd_object *obj,
                    struct lu_buf *buf, __u32 *mode, struct thandle *handle);
 int __mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
-                              struct lu_attr *la, int mask, int needlock);
+                              struct lu_attr *la, int mask, int role);
 int mdd_permission(const struct lu_env *env,
                    struct md_object *pobj, struct md_object *cobj,
                    struct md_attr *ma, int mask);
@@ -500,14 +514,15 @@ static inline int mdd_permission_internal(const struct lu_env *env,
                                           struct mdd_object *obj,
                                           struct lu_attr *la, int mask)
 {
-        return __mdd_permission_internal(env, obj, la, mask, 0);
+        return __mdd_permission_internal(env, obj, la, mask, -1);
 }
 
 static inline int mdd_permission_internal_locked(const struct lu_env *env,
                                                  struct mdd_object *obj,
-                                                 struct lu_attr *la, int mask)
+                                                 struct lu_attr *la, int mask,
+                                                 enum mdd_object_role role)
 {
-        return __mdd_permission_internal(env, obj, la, mask, 1);
+        return __mdd_permission_internal(env, obj, la, mask, role);
 }
 
 /* mdd inline func for calling osd_dt_object ops */

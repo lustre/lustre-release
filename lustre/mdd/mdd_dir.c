@@ -80,7 +80,7 @@ __mdd_lookup_locked(const struct lu_env *env, struct md_object *pobj,
         struct dynlock_handle *dlh;
         int rc;
 
-        dlh = mdd_pdo_read_lock(env, mdd_obj, name);
+        dlh = mdd_pdo_read_lock(env, mdd_obj, name, MOR_TGT_PARENT);
         if (unlikely(dlh == NULL))
                 return -ENOMEM;
         rc = __mdd_lookup(env, pobj, lname, fid, mask);
@@ -223,7 +223,7 @@ static int mdd_dir_is_empty(const struct lu_env *env,
 {
         struct dt_it     *it;
         struct dt_object *obj;
-        struct dt_it_ops *iops;
+        const struct dt_it_ops *iops;
         int result;
         ENTRY;
 
@@ -295,7 +295,8 @@ int mdd_may_create(const struct lu_env *env, struct mdd_object *pobj,
 
         if (check_perm)
                 rc = mdd_permission_internal_locked(env, pobj, NULL,
-                                                    MAY_WRITE | MAY_EXEC);
+                                                    MAY_WRITE | MAY_EXEC,
+                                                    MOR_TGT_PARENT);
 
         if (!rc && check_nlink)
                 rc = __mdd_may_link(env, pobj);
@@ -320,7 +321,8 @@ int mdd_may_unlink(const struct lu_env *env, struct mdd_object *pobj,
                 RETURN(-EPERM);
 
         rc = mdd_permission_internal_locked(env, pobj, NULL,
-                                            MAY_WRITE | MAY_EXEC);
+                                            MAY_WRITE | MAY_EXEC,
+                                            MOR_TGT_PARENT);
         if (rc)
                 RETURN(rc);
 
@@ -383,7 +385,8 @@ int mdd_may_delete(const struct lu_env *env, struct mdd_object *pobj,
 
                 if (check_perm) {
                         rc = mdd_permission_internal_locked(env, pobj, NULL,
-                                                    MAY_WRITE | MAY_EXEC);
+                                                    MAY_WRITE | MAY_EXEC,
+                                                    MOR_TGT_PARENT);
                         if (rc)
                                 RETURN(rc);
                 }
@@ -521,7 +524,7 @@ static int __mdd_index_insert(const struct lu_env *env, struct mdd_object *pobj,
 
         if (rc == 0) {
                 if (is_dir) {
-                        mdd_write_lock(env, pobj);
+                        mdd_write_lock(env, pobj, MOR_TGT_PARENT);
                         __mdd_ref_add(env, pobj, handle);
                         mdd_write_unlock(env, pobj);
                 }
@@ -547,7 +550,7 @@ static int __mdd_index_delete(const struct lu_env *env, struct mdd_object *pobj,
 
                         if (name != NULL && name[0] == '.' && name[1] == 0)
                                 is_dot = 1;
-                        mdd_write_lock(env, pobj);
+                        mdd_write_lock(env, pobj, MOR_TGT_PARENT);
                         __mdd_ref_del(env, pobj, handle, is_dot);
                         mdd_write_unlock(env, pobj);
                 }
@@ -596,10 +599,10 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        dlh = mdd_pdo_write_lock(env, mdd_tobj, name);
+        dlh = mdd_pdo_write_lock(env, mdd_tobj, name, MOR_TGT_CHILD);
         if (dlh == NULL)
                 GOTO(out_trans, rc = -ENOMEM);
-        mdd_write_lock(env, mdd_sobj);
+        mdd_write_lock(env, mdd_sobj, MOR_TGT_CHILD);
 
         rc = mdd_link_sanity_check(env, mdd_tobj, lname, mdd_sobj);
         if (rc)
@@ -701,10 +704,10 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
                 RETURN(PTR_ERR(handle));
 
 
-        dlh = mdd_pdo_write_lock(env, mdd_pobj, name);
+        dlh = mdd_pdo_write_lock(env, mdd_pobj, name, MOR_TGT_PARENT);
         if (dlh == NULL)
                 GOTO(out_trans, rc = -ENOMEM);
-        mdd_write_lock(env, mdd_cobj);
+        mdd_write_lock(env, mdd_cobj, MOR_TGT_CHILD);
 
         is_dir = S_ISDIR(ma->ma_attr.la_mode);
         rc = mdd_unlink_sanity_check(env, mdd_pobj, mdd_cobj, ma);
@@ -790,7 +793,7 @@ static int mdd_name_insert(const struct lu_env *env,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        dlh = mdd_pdo_write_lock(env, mdd_obj, name);
+        dlh = mdd_pdo_write_lock(env, mdd_obj, name, MOR_TGT_PARENT);
         if (dlh == NULL)
                 GOTO(out_trans, rc = -ENOMEM);
 
@@ -863,7 +866,7 @@ static int mdd_name_remove(const struct lu_env *env,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        dlh = mdd_pdo_write_lock(env, mdd_obj, name);
+        dlh = mdd_pdo_write_lock(env, mdd_obj, name, MOR_TGT_PARENT);
         if (dlh == NULL)
                 GOTO(out_trans, rc = -ENOMEM);
 
@@ -944,11 +947,11 @@ static int mdd_rename_tgt(const struct lu_env *env,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        dlh = mdd_pdo_write_lock(env, mdd_tpobj, name);
+        dlh = mdd_pdo_write_lock(env, mdd_tpobj, name, MOR_TGT_PARENT);
         if (dlh == NULL)
                 GOTO(out_trans, rc = -ENOMEM);
         if (tobj)
-                mdd_write_lock(env, mdd_tobj);
+                mdd_write_lock(env, mdd_tobj, MOR_TGT_CHILD);
 
         rc = mdd_rt_sanity_check(env, mdd_tpobj, mdd_tobj, ma);
         if (rc)
@@ -1114,7 +1117,8 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
         if (unlikely(lname->ln_namelen > m->mdd_dt_conf.ddp_max_name_len))
                 RETURN(-ENAMETOOLONG);
 
-        rc = mdd_permission_internal_locked(env, mdd_obj, NULL, mask);
+        rc = mdd_permission_internal_locked(env, mdd_obj, NULL, mask,
+                                            MOR_TGT_PARENT);
         if (rc)
                 RETURN(rc);
 
@@ -1214,7 +1218,8 @@ static int mdd_create_sanity_check(const struct lu_env *env,
                  * EXEC permission have been checked
                  * when lookup before create already.
                  */
-                rc = mdd_permission_internal_locked(env, obj, NULL, MAY_WRITE);
+                rc = mdd_permission_internal_locked(env, obj, NULL, MAY_WRITE,
+                                                    MOR_TGT_PARENT);
                 if (rc)
                         RETURN(rc);
         }
@@ -1339,7 +1344,7 @@ static int mdd_create(const struct lu_env *env,
                 ma_acl->ma_need = MA_ACL_DEF;
                 ma_acl->ma_valid = 0;
 
-                mdd_read_lock(env, mdd_pobj);
+                mdd_read_lock(env, mdd_pobj, MOR_TGT_PARENT);
                 rc = mdd_def_acl_get(env, mdd_pobj, ma_acl);
                 mdd_read_unlock(env, mdd_pobj);
                 if (rc)
@@ -1353,11 +1358,11 @@ static int mdd_create(const struct lu_env *env,
         if (IS_ERR(handle))
                 GOTO(out_free, rc = PTR_ERR(handle));
 
-        dlh = mdd_pdo_write_lock(env, mdd_pobj, name);
+        dlh = mdd_pdo_write_lock(env, mdd_pobj, name, MOR_TGT_PARENT);
         if (dlh == NULL)
                 GOTO(out_trans, rc = -ENOMEM);
 
-        mdd_write_lock(env, son);
+        mdd_write_lock(env, son, MOR_TGT_CHILD);
         rc = mdd_object_create_internal(env, mdd_pobj, son, ma, handle);
         if (rc) {
                 mdd_write_unlock(env, son);
@@ -1456,7 +1461,7 @@ cleanup:
                 }
 
                 if (rc2 == 0) {
-                        mdd_write_lock(env, son);
+                        mdd_write_lock(env, son, MOR_TGT_CHILD);
                         __mdd_ref_del(env, son, handle, 0);
                         if (initialized && S_ISDIR(attr->la_mode))
                                 __mdd_ref_del(env, son, handle, 1);
@@ -1598,18 +1603,20 @@ static int mdd_rename(const struct lu_env *env,
 
         /* Get locks in determined order */
         if (rc == MDD_RN_SAME) {
-                sdlh = mdd_pdo_write_lock(env, mdd_spobj, sname);
+                sdlh = mdd_pdo_write_lock(env, mdd_spobj,
+                                          sname, MOR_SRC_PARENT);
                 /* check hashes to determine do we need one lock or two */
                 if (mdd_name2hash(sname) != mdd_name2hash(tname))
-                        tdlh = mdd_pdo_write_lock(env, mdd_tpobj, tname);
+                        tdlh = mdd_pdo_write_lock(env, mdd_tpobj, tname,
+                                MOR_TGT_PARENT);
                 else
                         tdlh = sdlh;
         } else if (rc == MDD_RN_SRCTGT) {
-                sdlh = mdd_pdo_write_lock(env, mdd_spobj, sname);
-                tdlh = mdd_pdo_write_lock(env, mdd_tpobj, tname);
+                sdlh = mdd_pdo_write_lock(env, mdd_spobj, sname,MOR_SRC_PARENT);
+                tdlh = mdd_pdo_write_lock(env, mdd_tpobj, tname,MOR_TGT_PARENT);
         } else {
-                tdlh = mdd_pdo_write_lock(env, mdd_tpobj, tname);
-                sdlh = mdd_pdo_write_lock(env, mdd_spobj, sname);
+                tdlh = mdd_pdo_write_lock(env, mdd_tpobj, tname,MOR_SRC_PARENT);
+                sdlh = mdd_pdo_write_lock(env, mdd_spobj, sname,MOR_TGT_PARENT);
         }
         if (sdlh == NULL || tdlh == NULL)
                 GOTO(cleanup, rc = -ENOMEM);
@@ -1657,7 +1664,7 @@ static int mdd_rename(const struct lu_env *env,
          * it must be local one.
          */
         if (tobj && mdd_object_exists(mdd_tobj)) {
-                mdd_write_lock(env, mdd_tobj);
+                mdd_write_lock(env, mdd_tobj, MOR_TGT_CHILD);
                 __mdd_ref_del(env, mdd_tobj, handle, 0);
 
                 /* Remove dot reference. */

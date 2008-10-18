@@ -1464,6 +1464,13 @@ Bugzilla   : 16450
 Description: simplify cmm_device freeing logic.
 Details    : Call cmm_device_free() in the failure path of cmm_device_alloc().
 
+Severity   : normal
+Bugzilla   : 16450
+Description: Add lockdep support to dt_object_operations locking interface.
+Details    : Augment ->do_{read,write}_lock() prototypes with a `role' parameter
+	     indicating lock ordering. Update mdd code to use new locking
+	     interface.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

@@ -202,7 +202,7 @@ static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
 }
 
 int __mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
-                              struct lu_attr *la, int mask, int needlock)
+                              struct lu_attr *la, int mask, int role)
 {
         struct md_ucred *uc = md_ucred(env);
         __u32 mode;
@@ -238,10 +238,10 @@ int __mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
                 mode >>= 6;
         } else {
                 if (mode & S_IRWXG) {
-                        if (needlock)
-                                mdd_read_lock(env, obj);
+                        if (role != -1)
+                                mdd_read_lock(env, obj, role);
                         rc = mdd_check_acl(env, obj, la, mask);
-                        if (needlock)
+                        if (role != -1)
                                 mdd_read_unlock(env, obj);
                         if (rc == -EACCES)
                                 goto check_capabilities;
@@ -315,7 +315,8 @@ int mdd_permission(const struct lu_env *env,
                 MAY_VTX_PART | MAY_VTX_FULL |
                 MAY_RGETFACL);
 
-        rc = mdd_permission_internal_locked(env, mdd_cobj, NULL, mask);
+        rc = mdd_permission_internal_locked(env, mdd_cobj, NULL, mask,
+                                            MOR_TGT_CHILD);
 
         if (!rc && (check_create || check_link))
                 rc = mdd_may_create(env, mdd_cobj, NULL, 1, check_link);

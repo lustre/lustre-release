@@ -220,7 +220,7 @@ int mdd_get_md_locked(const struct lu_env *env, struct mdd_object *obj,
                       void *md, int *md_size, const char *name)
 {
         int rc = 0;
-        mdd_read_lock(env, obj);
+        mdd_read_lock(env, obj, MOR_TGT_CHILD);
         rc = mdd_get_md(env, obj, md, md_size, name);
         mdd_read_unlock(env, obj);
         return rc;
@@ -296,7 +296,7 @@ int mdd_lsm_sanity_check(const struct lu_env *env,  struct mdd_object *obj)
         if ((uc->mu_fsuid != tmp_la->la_uid) &&
             !mdd_capable(uc, CFS_CAP_FOWNER))
                 rc = mdd_permission_internal_locked(env, obj, tmp_la,
-                                                    MAY_WRITE);
+                                                    MAY_WRITE, MOR_TGT_CHILD);
 
         RETURN(rc);
 }
@@ -852,7 +852,7 @@ int mdd_lov_setattr_async(const struct lu_env *env, struct mdd_object *obj,
         int rc = 0;
         ENTRY;
 
-        mdd_read_lock(env, obj);
+        mdd_read_lock(env, obj, MOR_TGT_CHILD);
         rc = mdo_attr_get(env, obj, tmp_la, mdd_object_capa(env, obj));
         mdd_read_unlock(env, obj);
         if (rc)

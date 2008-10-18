@@ -182,19 +182,19 @@ struct dt_allocation_hint {
         __u32             dah_mode;
 };
 
-/*
+/**
  * Per-dt-object operations.
  */
 struct dt_object_operations {
         void  (*do_read_lock)(const struct lu_env *env,
-                              struct dt_object *dt);
+                              struct dt_object *dt, unsigned role);
         void  (*do_write_lock)(const struct lu_env *env,
-                               struct dt_object *dt);
+                               struct dt_object *dt, unsigned role);
         void  (*do_read_unlock)(const struct lu_env *env,
                                 struct dt_object *dt);
         void  (*do_write_unlock)(const struct lu_env *env,
                                  struct dt_object *dt);
-        /*
+        /**
          * Note: following ->do_{x,}attr_{set,get}() operations are very
          * similar to ->moo_{x,}attr_{set,get}() operations in struct
          * md_object_operations (see md_object.h). These operations are not in

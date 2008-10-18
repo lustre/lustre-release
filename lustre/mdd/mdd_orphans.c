@@ -130,7 +130,7 @@ static void orph_key_test_and_del(const struct lu_env *env,
         if (IS_ERR(mdo))
                 CERROR("Invalid orphan!\n");
         else {
-                mdd_write_lock(env, mdo);
+                mdd_write_lock(env, mdo, MOR_TGT_CHILD);
                 if (mdo->mod_count == 0) {
                         /* non-opened orphan, let's delete it */
                         struct md_attr *ma = &mdd_env_info(env)->mti_ma;
