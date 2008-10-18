@@ -150,8 +150,9 @@ static struct trace_page *trace_get_tage_try(struct trace_cpu_data *tcd,
                 } else {
                         tage = tage_alloc(CFS_ALLOC_ATOMIC);
                         if (tage == NULL) {
+                                if (printk_ratelimit())
                                 printk(KERN_WARNING
-                                       "failure to allocate a tage (%ld)\n",
+                                               "cannot allocate a tage (%ld)\n",
                                        tcd->tcd_cur_pages);
                                 return NULL;
                         }
