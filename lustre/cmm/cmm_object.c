@@ -159,7 +159,8 @@ static void cml_object_free(const struct lu_env *env,
         OBD_FREE_PTR(clo);
 }
 
-static int cml_object_init(const struct lu_env *env, struct lu_object *lo)
+static int cml_object_init(const struct lu_env *env, struct lu_object *lo,
+                           const struct lu_object_conf *_)
 {
         struct cmm_device *cd = lu2cmm_dev(lo->lo_dev);
         struct lu_device  *c_dev;
@@ -503,30 +504,11 @@ static int cml_unlink(const struct lu_env *env, struct md_object *mo_p,
         RETURN(rc);
 }
 
-/* rename is split to local/remote by location of new parent dir */
-struct md_object *md_object_find(const struct lu_env *env,
-                                 struct md_device *md,
-                                 const struct lu_fid *f)
-{
-        struct lu_object *o;
-        struct md_object *m;
-        ENTRY;
-
-        o = lu_object_find(env, md2lu_dev(md)->ld_site, f);
-        if (IS_ERR(o))
-                m = (struct md_object *)o;
-        else {
-                o = lu_object_locate(o->lo_header, md2lu_dev(md)->ld_type);
-                m = o ? lu2md(o) : NULL;
-        }
-        RETURN(m);
-}
-
 static int cmm_mode_get(const struct lu_env *env, struct md_device *md,
                         const struct lu_fid *lf, struct md_attr *ma,
                         int *remote)
 {
-        struct md_object *mo_s = md_object_find(env, md, lf);
+        struct md_object *mo_s = md_object_find_slice(env, md, lf);
         struct cmm_thread_info *cmi;
         struct md_attr *tmp_ma;
         int rc;
@@ -558,7 +540,7 @@ static int cmm_mode_get(const struct lu_env *env, struct md_device *md,
 static int cmm_rename_ctime(const struct lu_env *env, struct md_device *md,
                             const struct lu_fid *lf, struct md_attr *ma)
 {
-        struct md_object *mo_s = md_object_find(env, md, lf);
+        struct md_object *mo_s = md_object_find_slice(env, md, lf);
         int rc;
         ENTRY;
 
@@ -619,7 +601,7 @@ static int cml_rename(const struct lu_env *env, struct md_object *mo_po,
                 /* XXX: mo_t is remote object and there is RPC to unlink it.
                  * before that, do local sanity check for rename first. */
                 if (!remote) {
-                        struct md_object *mo_s = md_object_find(env,
+                        struct md_object *mo_s = md_object_find_slice(env,
                                                         md_obj2dev(mo_po), lf);
                         if (IS_ERR(mo_s))
                                 RETURN(PTR_ERR(mo_s));
@@ -815,7 +797,8 @@ static void cmr_object_free(const struct lu_env *env,
         OBD_FREE_PTR(cro);
 }
 
-static int cmr_object_init(const struct lu_env *env, struct lu_object *lo)
+static int cmr_object_init(const struct lu_env *env, struct lu_object *lo,
+                           const struct lu_object_conf *_)
 {
         struct cmm_device *cd = lu2cmm_dev(lo->lo_dev);
         struct lu_device  *c_dev;

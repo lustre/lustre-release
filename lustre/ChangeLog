@@ -1591,6 +1591,16 @@ Bugzilla   : 16450
 Description: Constify instances of struct lsm_operations.
 Details    : Constify instances of struct lsm_operations.
 
+Severity   : normal
+Bugzilla   : 16450
+Description: lu_conf support.
+Details    : On a server, a file system object is uniquely identified
+	     by a fid, which is sufficient to locate and load all object
+	     state (inode). On a client, on the other hand, more data are
+	     necessary instantiate an object. Change lu_object_find() and
+	     friends to take additional `lu_conf' argument describing object.
+	     Typically this includes layout information.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

@@ -1768,7 +1768,7 @@ struct mdt_object *mdt_object_find(const struct lu_env *env,
         ENTRY;
 
         CDEBUG(D_INFO, "Find object for "DFID"\n", PFID(f));
-        o = lu_object_find(env, d->mdt_md_dev.md_lu_dev.ld_site, f);
+        o = lu_object_find(env, &d->mdt_md_dev.md_lu_dev, f, NULL);
         if (unlikely(IS_ERR(o)))
                 m = (struct mdt_object *)o;
         else
@@ -3681,7 +3681,7 @@ static void mdt_stack_fini(const struct lu_env *env,
         m->mdt_bottom = NULL;
 }
 
-static struct lu_device *mdt_layer_setup(const struct lu_env *env,
+static struct lu_device *mdt_layer_setup(struct lu_env *env,
                                          const char *typename,
                                          struct lu_device *child,
                                          struct lustre_cfg *cfg)
@@ -3749,7 +3749,7 @@ out:
         return ERR_PTR(rc);
 }
 
-static int mdt_stack_init(const struct lu_env *env,
+static int mdt_stack_init(struct lu_env *env,
                           struct mdt_device *m, struct lustre_cfg *cfg)
 {
         struct lu_device  *d = &m->mdt_md_dev.md_lu_dev;
@@ -3991,7 +3991,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         }
 
         /* init the stack */
-        rc = mdt_stack_init(env, m, cfg);
+        rc = mdt_stack_init((struct lu_env *)env, m, cfg);
         if (rc) {
                 CERROR("Can't init device stack, rc %d\n", rc);
                 GOTO(err_fini_proc, rc);
@@ -4192,7 +4192,8 @@ static struct lu_object *mdt_object_alloc(const struct lu_env *env,
                 RETURN(NULL);
 }
 
-static int mdt_object_init(const struct lu_env *env, struct lu_object *o)
+static int mdt_object_init(const struct lu_env *env, struct lu_object *o,
+                           const struct lu_object_conf *_)
 {
         struct mdt_device *d = mdt_dev(o->lo_dev);
         struct lu_device  *under;

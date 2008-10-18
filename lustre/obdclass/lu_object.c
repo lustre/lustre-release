@@ -123,15 +123,16 @@ void lu_object_put(const struct lu_env *env, struct lu_object *o)
 }
 EXPORT_SYMBOL(lu_object_put);
 
-/*
+/**
  * Allocate new object.
  *
  * This follows object creation protocol, described in the comment within
  * struct lu_device_operations definition.
  */
 static struct lu_object *lu_object_alloc(const struct lu_env *env,
-                                         struct lu_site *s,
-                                         const struct lu_fid *f)
+                                         struct lu_device *dev,
+                                         const struct lu_fid *f,
+                                         const struct lu_object_conf *conf)
 {
         struct lu_object *scan;
         struct lu_object *top;
@@ -144,8 +145,7 @@ static struct lu_object *lu_object_alloc(const struct lu_env *env,
          * Create top-level object slice. This will also create
          * lu_object_header.
          */
-        top = s->ls_top_dev->ld_ops->ldo_object_alloc(env,
-                                                      NULL, s->ls_top_dev);
+        top = dev->ld_ops->ldo_object_alloc(env, NULL, dev);
         if (top == NULL)
                 RETURN(ERR_PTR(-ENOMEM));
         /*
@@ -166,7 +166,7 @@ static struct lu_object *lu_object_alloc(const struct lu_env *env,
                                 continue;
                         clean = 0;
                         scan->lo_header = top->lo_header;
-                        result = scan->lo_ops->loo_object_init(env, scan);
+                        result = scan->lo_ops->loo_object_init(env, scan, conf);
                         if (result != 0) {
                                 lu_object_free(env, top);
                                 RETURN(ERR_PTR(result));

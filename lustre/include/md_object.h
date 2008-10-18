@@ -425,7 +425,15 @@ static inline void md_device_fini(struct md_device *md)
 	lu_device_fini(&md->md_lu_dev);
 }
 
-/* md operations */
+static inline struct md_object *md_object_find_slice(const struct lu_env *env,
+                                                     struct md_device *md,
+                                                     const struct lu_fid *f)
+{
+        return lu2md(lu_object_find_slice(env, md2lu_dev(md), f, NULL));
+}
+
+
+/** md operations */
 static inline int mo_permission(const struct lu_env *env,
                                 struct md_object *p,
                                 struct md_object *c,

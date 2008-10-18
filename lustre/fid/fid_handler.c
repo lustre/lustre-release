@@ -302,25 +302,27 @@ static int seq_server_handle(struct lu_site *site,
                              struct lu_range *out)
 {
         int rc;
+        struct md_site *mite;
         ENTRY;
 
+        mite = lu_site2md(site);
         switch (opc) {
         case SEQ_ALLOC_META:
-                if (!site->ls_server_seq) {
+                if (!mite->ms_server_seq) {
                         CERROR("Sequence server is not "
                                "initialized\n");
                         RETURN(-EINVAL);
                 }
-                rc = seq_server_alloc_meta(site->ls_server_seq,
+                rc = seq_server_alloc_meta(mite->ms_server_seq,
                                            in, out, env);
                 break;
         case SEQ_ALLOC_SUPER:
-                if (!site->ls_control_seq) {
+                if (!mite->ms_control_seq) {
                         CERROR("Sequence controller is not "
                                "initialized\n");
                         RETURN(-EINVAL);
                 }
-                rc = seq_server_alloc_super(site->ls_control_seq,
+                rc = seq_server_alloc_super(mite->ms_control_seq,
                                             in, out, env);
                 break;
         default:

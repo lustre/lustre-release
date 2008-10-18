@@ -104,7 +104,7 @@ static int mdc_obd_add(const struct lu_env *env,
         const char *uuid_str = lustre_cfg_string(cfg, 1);
         const char *index = lustre_cfg_string(cfg, 2);
         const char *mdc_uuid_str = lustre_cfg_string(cfg, 4);
-        struct lu_site *ls = mdc2lu_dev(mc)->ld_site;
+        struct md_site *ms = lu_site2md(mdc2lu_dev(mc)->ld_site);
         char *p;
         int rc = 0;
 
@@ -162,7 +162,7 @@ static int mdc_obd_add(const struct lu_env *env,
                         desc->cl_exp = class_conn2export(conn);
                         /* set seq controller export for MDC0 if exists */
                         if (mc->mc_num == 0)
-                                ls->ls_control_exp = 
+                                ms->ms_control_exp =
                                         class_export_get(desc->cl_exp);
                         rc = obd_fid_init(desc->cl_exp);
                         if (rc)

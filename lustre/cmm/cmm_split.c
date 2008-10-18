@@ -241,17 +241,7 @@ struct cmm_object *cmm_object_find(const struct lu_env *env,
                                    struct cmm_device *d,
                                    const struct lu_fid *f)
 {
-        struct lu_object *o;
-        struct cmm_object *m;
-        ENTRY;
-
-        o = lu_object_find(env, d->cmm_md_dev.md_lu_dev.ld_site, f);
-        if (IS_ERR(o))
-                m = (struct cmm_object *)o;
-        else
-                m = lu2cmm_obj(lu_object_locate(o->lo_header,
-                               d->cmm_md_dev.md_lu_dev.ld_type));
-        RETURN(m);
+        return md2cmm_obj(md_object_find_slice(env, &d->cmm_md_dev, fid));
 }
 
 static inline void cmm_object_put(const struct lu_env *env,

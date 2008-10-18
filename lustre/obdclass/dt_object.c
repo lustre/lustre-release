@@ -185,7 +185,7 @@ static struct dt_object *dt_locate(const struct lu_env *env,
         struct lu_object *obj;
         struct dt_object *dt;
 
-        obj = lu_object_find(env, dev->dd_lu_dev.ld_site, fid);
+        obj = lu_object_find(env, &dev->dd_lu_dev, fid, NULL);
         if (!IS_ERR(obj)) {
                 obj = lu_object_locate(obj->lo_header, dev->dd_lu_dev.ld_type);
                 LASSERT(obj != NULL);

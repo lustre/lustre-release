@@ -175,7 +175,8 @@ struct lu_object *mdd_object_alloc(const struct lu_env *env,
         }
 }
 
-static int mdd_object_init(const struct lu_env *env, struct lu_object *o)
+static int mdd_object_init(const struct lu_env *env, struct lu_object *o,
+                           const struct lu_object_conf *_)
 {
 	struct mdd_device *d = lu2mdd_dev(o->lo_dev);
 	struct lu_object  *below;
@@ -208,15 +209,8 @@ static void mdd_object_free(const struct lu_env *env, struct lu_object *o)
         OBD_FREE_PTR(mdd);
 }
 
-static int mdd_object_print(const struct lu_env *env, void *cookie,
-                            lu_printer_t p, const struct lu_object *o)
-{
-        return (*p)(env, cookie, LUSTRE_MDD_NAME"-object@%p", o);
-}
-
 /* orphan handling is here */
-static void mdd_object_delete(const struct lu_env *env,
-                               struct lu_object *o)
+static void mdd_object_delete(const struct lu_env *env, struct lu_object *o)
 {
         struct mdd_object *mdd_obj = lu2mdd_obj(o);
         struct thandle *handle = NULL;
@@ -254,21 +248,7 @@ struct mdd_object *mdd_object_find(const struct lu_env *env,
                                    struct mdd_device *d,
                                    const struct lu_fid *f)
 {
-        struct lu_object *o, *lo;
-        struct mdd_object *m;
-        ENTRY;
-
-        o = lu_object_find(env, mdd2lu_dev(d)->ld_site, f);
-        if (IS_ERR(o))
-                m = (struct mdd_object *)o;
-        else {
-                lo = lu_object_locate(o->lo_header, mdd2lu_dev(d)->ld_type);
-                /* remote object can't be located and should be put then */
-                if (lo == NULL)
-                        lu_object_put(env, o);
-                m = lu2mdd_obj(lo);
-        }
-        RETURN(m);
+        return md2mdd_obj(md_object_find_slice(env, &d->mdd_md_dev, f));
 }
 
 int mdd_get_flags(const struct lu_env *env, struct mdd_object *obj)

@@ -159,6 +159,14 @@ struct lu_device_operations {
 };
 
 /**
+ * Object configuration, describing particulars of object being created. On
+ * server this is not used, as server objects are full identified by fid. On
+ * client configuration contains struct lustre_md.
+ */
+struct lu_object_conf {
+};
+
+/**
  * Type of "printer" function used by lu_object_operations::loo_object_print()
  * method.
  *
@@ -710,37 +718,31 @@ static inline int lu_object_is_dying(const struct lu_object_header *h)
         return test_bit(LU_OBJECT_HEARD_BANSHEE, &h->loh_flags);
 }
 
-/*
- * Decrease reference counter on object. If last reference is freed, return
- * object to the cache, unless lu_object_is_dying(o) holds. In the latter
- * case, free object immediately.
- */
-void lu_object_put(const struct lu_env *env,
-                   struct lu_object *o);
+void lu_object_put(const struct lu_env *env, struct lu_object *o);
 
-/*
- * Free @nr objects from the cold end of the site LRU list.
- */
 int lu_site_purge(const struct lu_env *env, struct lu_site *s, int nr);
 
-/*
- * Print all objects in @s.
- */
 void lu_site_print(const struct lu_env *env, struct lu_site *s, void *cookie,
                    lu_printer_t printer);
-/*
- * Search cache for an object with the fid @f. If such object is found, return
- * it. Otherwise, create new object, insert it into cache and return it. In
- * any case, additional reference is acquired on the returned object.
- */
 struct lu_object *lu_object_find(const struct lu_env *env,
-                                 struct lu_site *s, const struct lu_fid *f);
+                                 struct lu_device *dev, const struct lu_fid *f,
+                                 const struct lu_object_conf *conf);
+struct lu_object *lu_object_find_at(const struct lu_env *env,
+                                    struct lu_device *dev,
+                                    const struct lu_fid *f,
+                                    const struct lu_object_conf *conf);
+struct lu_object *lu_object_find_slice(const struct lu_env *env,
+                                       struct lu_device *dev,
+                                       const struct lu_fid *f,
+                                       const struct lu_object_conf *conf);
+/** @} caching */
 
-/*
+/** \name helpers
  * Helpers.
+ * @{
  */
 
-/*
+/**
  * First (topmost) sub-object of given compound object
  */
 static inline struct lu_object *lu_object_top(struct lu_object_header *h)

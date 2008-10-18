@@ -229,7 +229,7 @@ static int fld_req_handle(struct ptlrpc_request *req,
                         RETURN(err_serious(-EPROTO));
                 *out = *in;
 
-                rc = fld_server_handle(site->ls_server_fld,
+                rc = fld_server_handle(lu_site2md(site)->ms_server_fld,
                                        req->rq_svc_thread->t_env,
                                        *opc, out, info);
         } else
@@ -293,16 +293,18 @@ EXPORT_SYMBOL(fld_query);
 int fid_is_local(struct lu_site *site, const struct lu_fid *fid)
 {
         int result;
+        struct md_site *msite;
 
         result = 1; /* conservatively assume fid is local */
-        if (site->ls_client_fld != NULL) {
+        msite = lu_site2md(site);
+        if (msite->ms_client_fld != NULL) {
                 mdsno_t mds;
                 int rc;
 
-                rc = fld_cache_lookup(site->ls_client_fld->lcf_cache,
+                rc = fld_cache_lookup(msite->ms_client_fld->lcf_cache,
                                       fid_seq(fid), &mds);
                 if (rc == 0)
-                        result = (mds == site->ls_node_id);
+                        result = (mds == msite->ms_node_id);
         }
         return result;
 }

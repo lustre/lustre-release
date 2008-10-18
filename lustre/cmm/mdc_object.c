@@ -86,23 +86,17 @@ static void mdc_object_free(const struct lu_env *env, struct lu_object *lo)
         OBD_FREE_PTR(mco);
 }
 
-static int mdc_object_init(const struct lu_env *env, struct lu_object *lo)
+static int mdc_object_init(const struct lu_env *env, struct lu_object *lo,
+                           const struct lu_object_conf *_)
 {
         ENTRY;
         lo->lo_header->loh_attr |= LOHA_REMOTE;
         RETURN(0);
 }
 
-static int mdc_object_print(const struct lu_env *env, void *cookie,
-                            lu_printer_t p, const struct lu_object *lo)
-{
-	return (*p)(env, cookie, LUSTRE_CMM_MDC_NAME"-object@%p", lo);
-}
-
-static struct lu_object_operations mdc_obj_ops = {
+static const struct lu_object_operations mdc_obj_ops = {
         .loo_object_init    = mdc_object_init,
         .loo_object_free    = mdc_object_free,
-	.loo_object_print   = mdc_object_print,
 };
 
 /* md_object_operations */

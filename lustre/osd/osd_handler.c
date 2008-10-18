@@ -117,7 +117,8 @@ static int   osd_mod_init      (void) __init;
 static int   osd_type_init     (struct lu_device_type *t);
 static void  osd_type_fini     (struct lu_device_type *t);
 static int   osd_object_init   (const struct lu_env *env,
-                                struct lu_object *l);
+                                struct lu_object *l,
+                                const struct lu_object_conf *_);
 static void  osd_object_release(const struct lu_env *env,
                                 struct lu_object *l);
 static int   osd_object_print  (const struct lu_env *env, void *cookie,
@@ -337,7 +338,8 @@ static void osd_object_init0(struct osd_object *obj)
  * Concurrency: no concurrent access is possible that early in object
  * life-cycle.
  */
-static int osd_object_init(const struct lu_env *env, struct lu_object *l)
+static int osd_object_init(const struct lu_env *env, struct lu_object *l,
+                           const struct lu_object_conf *_)
 {
         struct osd_object *obj = osd_obj(l);
         int result;
@@ -2133,7 +2135,7 @@ static int osd_index_compat_insert(const struct lu_env *env,
         if (result != 0)
                 return result;
 
-        luch = lu_object_find(env, ludev->ld_site, fid);
+        luch = lu_object_find(env, ludev, fid, NULL);
         if (!IS_ERR(luch)) {
                 if (lu_object_exists(luch)) {
                         struct osd_object *child;
