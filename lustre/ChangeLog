@@ -1692,6 +1692,11 @@ Description: Replace RW_LOCK_UNLOCKED() macro with rwlock_init().
 Details    : Replace RW_LOCK_UNLOCKED() with rwlock_init() as the former
 	     doesn't work with lockdep.
 
+Severity   : normal
+Bugzilla   : 16450
+Description: Add rwv.c test program.
+Details    : New testing program exercising readv(2) and writev(2) (Qian).
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
