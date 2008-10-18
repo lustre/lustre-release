@@ -1621,6 +1621,12 @@ Description: Add lu_ref support to struct lu_device.
 Details    : Add lu_ref support to lu_object and lu_device. lu_ref is used to
 	     track leaked references.
 
+Severity   : normal
+Bugzilla   : 16450
+Description: Introduce lu_kmem_descr.
+Details    : lu_kmem_descr and its companion interface allow to create
+	     and destroy a number of kmem caches at once.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

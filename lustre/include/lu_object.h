@@ -1301,4 +1301,15 @@ enum {
 
 extern const char *lu_time_names[LU_TIME_NR];
 
+struct lu_kmem_descr {
+        cfs_mem_cache_t **ckd_cache;
+        const char       *ckd_name;
+        const size_t      ckd_size;
+};
+
+int  lu_kmem_init(struct lu_kmem_descr *caches);
+void lu_kmem_fini(struct lu_kmem_descr *caches);
+
+/** @} lu */
+
 #endif /* __LUSTRE_LU_OBJECT_H */

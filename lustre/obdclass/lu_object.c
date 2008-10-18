@@ -1529,3 +1529,43 @@ const char *lu_time_names[LU_TIME_NR] = {
         [LU_TIME_FIND_INSERT] = "find_insert"
 };
 EXPORT_SYMBOL(lu_time_names);
+
+/**
+ * Helper function to initialize a number of kmem slab caches at once.
+ */
+int lu_kmem_init(struct lu_kmem_descr *caches)
+{
+        int result;
+
+        for (result = 0; caches->ckd_cache != NULL; ++caches) {
+                *caches->ckd_cache = cfs_mem_cache_create(caches->ckd_name,
+                                                          caches->ckd_size,
+                                                          0, 0);
+                if (*caches->ckd_cache == NULL) {
+                        result = -ENOMEM;
+                        break;
+                }
+        }
+        return result;
+}
+EXPORT_SYMBOL(lu_kmem_init);
+
+/**
+ * Helper function to finalize a number of kmem slab cached at once. Dual to
+ * lu_kmem_init().
+ */
+void lu_kmem_fini(struct lu_kmem_descr *caches)
+{
+        int rc;
+
+        for (; caches->ckd_cache != NULL; ++caches) {
+                if (*caches->ckd_cache != NULL) {
+                        rc = cfs_mem_cache_destroy(*caches->ckd_cache);
+                        LASSERTF(rc == 0, "couldn't destroy %s slab\n",
+                                 caches->ckd_name);
+                        *caches->ckd_cache = NULL;
+                }
+        }
+}
+EXPORT_SYMBOL(lu_kmem_fini);
+
