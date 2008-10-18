@@ -168,6 +168,7 @@ static int cmm_add_mdc(const struct lu_env *env,
         struct mdc_device *mc, *tmp;
         struct lu_fld_target target;
         struct lu_device *ld;
+        struct lu_device *cmm_lu = cmm2lu_dev(cm);
         mdsno_t mdc_num;
         int rc;
         ENTRY;
@@ -223,7 +224,8 @@ static int cmm_add_mdc(const struct lu_env *env,
         cm->cmm_tgt_count++;
         spin_unlock(&cm->cmm_tgt_guard);
 
-        lu_device_get(cmm2lu_dev(cm));
+        lu_device_get(cmm_lu);
+        lu_ref_add(&cmm_lu->ld_reference, "mdc-child", ld);
 
         target.ft_srv = NULL;
         target.ft_idx = mc->mc_num;

@@ -596,7 +596,7 @@ enum {
         LU_CACHE_PERCENT   = 20,
 };
 
-/*
+/**
  * Return desired hash table order.
  */
 static int lu_htable_order(void)
@@ -628,8 +628,10 @@ static int lu_htable_order(void)
         return bits;
 }
 
-/*
- * Initialize site @s, with @d as the top level device.
+static struct lock_class_key lu_site_guard_class;
+
+/**
+ * Initialize site \a s, with \a d as the top level device.
  */
 int lu_site_init(struct lu_site *s, struct lu_device *top)
 {
@@ -640,11 +642,14 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
 
         memset(s, 0, sizeof *s);
         rwlock_init(&s->ls_guard);
+        lockdep_set_class(&s->ls_guard, &lu_site_guard_class);
         CFS_INIT_LIST_HEAD(&s->ls_lru);
         CFS_INIT_LIST_HEAD(&s->ls_linkage);
+        cfs_waitq_init(&s->ls_marche_funebre);
         s->ls_top_dev = top;
         top->ld_site = s;
         lu_device_get(top);
+        lu_ref_add(&top->ld_reference, "site-top", s);
 
         for (bits = lu_htable_order(), size = 1 << bits;
              (s->ls_hash =
@@ -667,8 +672,8 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
 }
 EXPORT_SYMBOL(lu_site_init);
 
-/*
- * Finalize @s and release its resources.
+/**
+ * Finalize \a s and release its resources.
  */
 void lu_site_fini(struct lu_site *s)
 {
@@ -688,13 +693,14 @@ void lu_site_fini(struct lu_site *s)
         }
         if (s->ls_top_dev != NULL) {
                 s->ls_top_dev->ld_site = NULL;
+                lu_ref_del(&s->ls_top_dev->ld_reference, "site-top", s);
                 lu_device_put(s->ls_top_dev);
                 s->ls_top_dev = NULL;
         }
 }
 EXPORT_SYMBOL(lu_site_fini);
 
-/*
+/**
  * Called when initialization of stack for this site is completed.
  */
 int lu_site_init_finish(struct lu_site *s)
@@ -775,27 +781,32 @@ int lu_object_init(struct lu_object *o,
         o->lo_header = h;
         o->lo_dev    = d;
         lu_device_get(d);
+        o->lo_dev_ref = lu_ref_add(&d->ld_reference, "lu_object", o);
         CFS_INIT_LIST_HEAD(&o->lo_linkage);
         return 0;
 }
 EXPORT_SYMBOL(lu_object_init);
 
-/*
+/**
  * Finalize object and release its resources.
  */
 void lu_object_fini(struct lu_object *o)
 {
+        struct lu_device *dev = o->lo_dev;
+
         LASSERT(list_empty(&o->lo_linkage));
 
-        if (o->lo_dev != NULL) {
-                lu_device_put(o->lo_dev);
+        if (dev != NULL) {
+                lu_ref_del_at(&dev->ld_reference,
+                              o->lo_dev_ref , "lu_object", o);
+                lu_device_put(dev);
                 o->lo_dev = NULL;
         }
 }
 EXPORT_SYMBOL(lu_object_fini);
 
-/*
- * Add object @o as first layer of compound object @h
+/**
+ * Add object \a o as first layer of compound object \a h
  *
  * This is typically called by the ->ldo_object_alloc() method of top-level
  * device.
@@ -828,11 +839,12 @@ int lu_object_header_init(struct lu_object_header *h)
         INIT_HLIST_NODE(&h->loh_hash);
         CFS_INIT_LIST_HEAD(&h->loh_lru);
         CFS_INIT_LIST_HEAD(&h->loh_layers);
+        lu_ref_init(&h->loh_reference);
         return 0;
 }
 EXPORT_SYMBOL(lu_object_header_init);
 
-/*
+/**
  * Finalize compound object.
  */
 void lu_object_header_fini(struct lu_object_header *h)
@@ -840,15 +852,16 @@ void lu_object_header_fini(struct lu_object_header *h)
         LASSERT(list_empty(&h->loh_layers));
         LASSERT(list_empty(&h->loh_lru));
         LASSERT(hlist_unhashed(&h->loh_hash));
+        lu_ref_fini(&h->loh_reference);
 }
 EXPORT_SYMBOL(lu_object_header_fini);
 
-/*
+/**
  * Given a compound object, find its slice, corresponding to the device type
- * @dtype.
+ * \a dtype.
  */
 struct lu_object *lu_object_locate(struct lu_object_header *h,
-                                   struct lu_device_type *dtype)
+                                   const struct lu_device_type *dtype)
 {
         struct lu_object *o;
 
@@ -862,7 +875,7 @@ EXPORT_SYMBOL(lu_object_locate);
 
 
 
-/*
+/**
  * Finalize and free devices in the device stack.
  * 
  * Finalize device stack by purging object cache, and calling
@@ -878,6 +891,7 @@ void lu_stack_fini(const struct lu_env *env, struct lu_device *top)
         lu_site_purge(env, site, ~0);
         for (scan = top; scan != NULL; scan = next) {
                 next = scan->ld_type->ldt_ops->ldto_device_fini(env, scan);
+                lu_ref_del(&scan->ld_reference, "lu-stack", &lu_site_init);
                 lu_device_put(scan);
         }
 

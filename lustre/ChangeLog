@@ -1615,6 +1615,12 @@ Details    : Introduce two new methods in lu_device_type_operations, that are
         invoked  when first instance of a given type is created and last one 
         is destroyed respectively. This is need by CLIO.
 
+Severity   : normal
+Bugzilla   : 16450
+Description: Add lu_ref support to struct lu_device.
+Details    : Add lu_ref support to lu_object and lu_device. lu_ref is used to
+	     track leaked references.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

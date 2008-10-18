@@ -231,6 +231,9 @@ struct osd_thandle {
         struct thandle          ot_super;
         handle_t               *ot_handle;
         struct journal_callback ot_jcb;
+        /* Link to the device, for debugging. */
+        struct lu_ref_link     *ot_dev_link;
+
 };
 
 /*
@@ -571,6 +574,7 @@ static void osd_trans_commit_cb(struct journal_callback *jcb, int error)
         struct osd_thandle *oh = container_of0(jcb, struct osd_thandle, ot_jcb);
         struct thandle     *th = &oh->ot_super;
         struct dt_device   *dev = th->th_dev;
+        struct lu_device   *lud = &dev->dd_lu_dev;
 
         LASSERT(dev != NULL);
         LASSERT(oh->ot_handle == NULL);
@@ -588,7 +592,8 @@ static void osd_trans_commit_cb(struct journal_callback *jcb, int error)
                 lu_context_exit(&env->le_ctx);
         }
 
-        lu_device_put(&dev->dd_lu_dev);
+        lu_ref_del_at(&lud->ld_reference, oh->ot_dev_link, "osd-tx", th);
+        lu_device_put(lud);
         th->th_dev = NULL;
 
         lu_context_exit(&th->th_ctx);
@@ -618,6 +623,8 @@ static struct thandle *osd_trans_start(const struct lu_env *env,
         if (osd_param_is_sane(dev, p)) {
                 OBD_ALLOC_GFP(oh, sizeof *oh, CFS_ALLOC_IO);
                 if (oh != NULL) {
+                        struct osd_thread_info *oti = osd_oti_get(env);
+
                         /*
                          * XXX temporary stuff. Some abstraction layer should
                          * be used.
@@ -631,22 +638,18 @@ static struct thandle *osd_trans_start(const struct lu_env *env,
                                 th->th_result = 0;
                                 jh->h_sync = p->tp_sync;
                                 lu_device_get(&d->dd_lu_dev);
+                                oh->ot_dev_link = lu_ref_add
+                                        (&d->dd_lu_dev.ld_reference,
+                                         "osd-tx", th);
                                 /* add commit callback */
                                 lu_context_init(&th->th_ctx, LCT_TX_HANDLE);
                                 lu_context_enter(&th->th_ctx);
                                 journal_callback_set(jh, osd_trans_commit_cb,
                                                      (struct journal_callback *)&oh->ot_jcb);
-#if OSD_COUNTERS
-                                {
-                                        struct osd_thread_info *oti =
-                                                osd_oti_get(env);
-
                                         LASSERT(oti->oti_txns == 0);
                                         LASSERT(oti->oti_r_locks == 0);
                                         LASSERT(oti->oti_w_locks == 0);
                                         oti->oti_txns++;
-                                }
-#endif
                         } else {
                                 OBD_FREE_PTR(oh);
                                 th = (void *)jh;
