@@ -1581,6 +1581,11 @@ Description: Add lockdep annotations to llog code.
 Details    : Use appropriately tagged _nested() locking calls in the places
 	     where llog takes more than one ->lgh_lock lock.
 	
+Severity   : minor
+Bugzilla   : 16450
+Description: Add loi_kms_set().
+Details    : Wrap kms updates into a helper function.
+	
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

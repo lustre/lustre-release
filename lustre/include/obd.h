@@ -107,6 +107,12 @@ struct lov_oinfo {                 /* per-stripe data structure */
         struct osc_async_rc     loi_ar;
 };
 
+static inline void loi_kms_set(struct lov_oinfo *oinfo, __u64 kms)
+{
+        oinfo->loi_kms = kms;
+        oinfo->loi_kms_valid = 1;
+}
+
 static inline void loi_init(struct lov_oinfo *loi)
 {
         CFS_INIT_LIST_HEAD(&loi->loi_read_lop.lop_pending);
