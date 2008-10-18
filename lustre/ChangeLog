@@ -1520,6 +1520,14 @@ Details    : CLIO uses lock weighting policy to keep locks over mmapped regions
 	     in memory---a requirement implemented through ->o_join_lru() obd
 	     method in HEAD. Remove this method and its users.
 
+Severity   : normal
+Bugzilla   : 16450
+Description: Add asynchronous ldlm ENQUEUE completion handler.
+Details    : CLIO posts ENQUEUE requests asynchronously through ptlrpcd---a
+	     case that stock ldlm_completion_ast() cannot handle as it waits
+	     until lock is granted. Introduce new ldlm_completion_ast_async()
+	     for this. Also comment ldlm_completion_ast().
+	
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

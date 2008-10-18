@@ -2380,6 +2380,7 @@ EXPORT_SYMBOL(ldlm_reprocess_all_ns);
 EXPORT_SYMBOL(ldlm_lock_allow_match);
 
 /* ldlm_request.c */
+EXPORT_SYMBOL(ldlm_completion_ast_async);
 EXPORT_SYMBOL(ldlm_completion_ast);
 EXPORT_SYMBOL(ldlm_blocking_ast);
 EXPORT_SYMBOL(ldlm_glimpse_ast);

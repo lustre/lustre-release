@@ -135,6 +135,78 @@ static int is_granted_or_cancelled(struct ldlm_lock *lock)
         return ret;
 }
 
+/**
+ * Helper function for ldlm_completion_ast(), updating timings when lock is
+ * actually granted.
+ */
+static int ldlm_completion_tail(struct ldlm_lock *lock)
+{
+        long delay;
+        int  result;
+
+        if (lock->l_destroyed || lock->l_flags & LDLM_FL_FAILED) {
+                LDLM_DEBUG(lock, "client-side enqueue: destroyed");
+                result = -EIO;
+        } else {
+                delay = cfs_time_sub(cfs_time_current_sec(),
+                                     lock->l_enqueued_time.tv_sec);
+                LDLM_DEBUG(lock, "client-side enqueue: granted after "
+                           CFS_DURATION_T"s", delay);
+
+                /* Update our time estimate */
+                at_add(&lock->l_resource->lr_namespace->ns_at_estimate, delay);
+                result = 0;
+        }
+        return result;
+}
+
+/**
+ * Implementation of ->l_completion_ast() for a client that doesn't wait
+ * until lock is granted. Suitable for locks enqueued through ptlrpcd or
+ * other threads that cannot block for long.
+ */
+int ldlm_completion_ast_async(struct ldlm_lock *lock, int flags, void *data)
+{
+        ENTRY;
+
+        if (flags == LDLM_FL_WAIT_NOREPROC) {
+                LDLM_DEBUG(lock, "client-side enqueue waiting on pending lock");
+                RETURN(0);
+        }
+
+        if (!(flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
+                       LDLM_FL_BLOCK_CONV))) {
+                cfs_waitq_signal(&lock->l_waitq);
+                RETURN(ldlm_completion_tail(lock));
+        }
+
+        LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock, "
+                   "going forward");
+        ldlm_lock_dump(D_OTHER, lock, 0);
+        RETURN(0);
+}
+
+/**
+ * Client side LDLM "completion" AST. This is called in several cases:
+ *
+ *     - when a reply to an ENQUEUE rpc is received from the server
+ *       (ldlm_cli_enqueue_fini()). Lock might be granted or not granted at
+ *       this point (determined by flags);
+ *
+ *     - when LDLM_CP_CALLBACK rpc comes to client to notify it that lock has
+ *       been granted;
+ *
+ *     - when ldlm_lock_match(LDLM_FL_LVB_READY) is about to wait until lock
+ *       gets correct lvb;
+ *
+ *     - to force all locks when resource is destroyed (cleanup_resource());
+ *
+ *     - during lock conversion (not used currently).
+ *
+ * If lock is not granted in the first case, this function waits until second
+ * or penultimate cases happen in some other thread.
+ *
+ */
 int ldlm_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 {
         /* XXX ALLOCATE - 160 bytes */
@@ -160,7 +232,6 @@ int ldlm_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock, "
                    "sleeping");
         ldlm_lock_dump(D_OTHER, lock, 0);
-        ldlm_reprocess_all(lock->l_resource);
 
 noreproc:
 
@@ -196,27 +267,13 @@ noreproc:
         /* Go to sleep until the lock is granted or cancelled. */
         rc = l_wait_event(lock->l_waitq, is_granted_or_cancelled(lock), &lwi);
 
-        if (lock->l_destroyed || lock->l_flags & LDLM_FL_FAILED) {
-                LDLM_DEBUG(lock, "client-side enqueue waking up: destroyed");
-                RETURN(-EIO);
-        }
-
         if (rc) {
                 LDLM_DEBUG(lock, "client-side enqueue waking up: failed (%d)",
                            rc);
                 RETURN(rc);
         }
 
-        LDLM_DEBUG(lock, "client-side enqueue waking up: granted after "
-                   CFS_DURATION_T"s",
-                   cfs_time_sub(cfs_time_current_sec(),
-                   lock->l_enqueued_time.tv_sec));
-
-        /* Update our time estimate */
-        at_add(&lock->l_resource->lr_namespace->ns_at_estimate,
-               cfs_time_current_sec() - lock->l_enqueued_time.tv_sec);
-
-        RETURN(0);
+        RETURN(ldlm_completion_tail(lock));
 }
 
 /*
