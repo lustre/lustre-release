@@ -1640,7 +1640,7 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
 
         /* Make sure we will not be called again for same lock what is possible
          * if not to zero out lock->l_granted_mode */
-        lock->l_granted_mode = 0;
+        lock->l_granted_mode = LCK_MINMODE;
         unlock_res_and_lock(lock);
 
         EXIT;

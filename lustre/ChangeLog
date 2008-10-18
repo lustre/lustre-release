@@ -1493,6 +1493,12 @@ Details    : Add new LINVRNT() macro, optional on new --enable-invariants
 	     sanity checks that are too expensive to be left in `production'
 	     mode.
 
+Severity   : minor
+Bugzilla   : 16450
+Description: Zap lock->l_granted_mode with explicit LCK_MINMODE.
+Details    : Use LCK_MINMODE rather than 0 to reset lock->l_granted_mode to
+	     its initial state.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
