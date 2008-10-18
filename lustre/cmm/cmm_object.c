@@ -77,13 +77,13 @@ int cmm_fld_lookup(struct cmm_device *cm, const struct lu_fid *fid,
         RETURN (rc);
 }
 
-static struct md_object_operations cml_mo_ops;
-static struct md_dir_operations    cml_dir_ops;
-static struct lu_object_operations cml_obj_ops;
+static const struct md_object_operations cml_mo_ops;
+static const struct md_dir_operations    cml_dir_ops;
+static const struct lu_object_operations cml_obj_ops;
 
-static struct md_object_operations cmr_mo_ops;
-static struct md_dir_operations    cmr_dir_ops;
-static struct lu_object_operations cmr_obj_ops;
+static const struct md_object_operations cmr_mo_ops;
+static const struct md_dir_operations    cmr_dir_ops;
+static const struct lu_object_operations cmr_obj_ops;
 
 struct lu_object *cmm_object_alloc(const struct lu_env *env,
                                    const struct lu_object_header *loh,
@@ -195,10 +195,10 @@ static int cml_object_init(const struct lu_env *env, struct lu_object *lo,
 static int cml_object_print(const struct lu_env *env, void *cookie,
                             lu_printer_t p, const struct lu_object *lo)
 {
-	return (*p)(env, cookie, LUSTRE_CMM_NAME"-local@%p", lo);
+        return (*p)(env, cookie, "[local]");
 }
 
-static struct lu_object_operations cml_obj_ops = {
+static const struct lu_object_operations cml_obj_ops = {
 	.loo_object_init    = cml_object_init,
 	.loo_object_free    = cml_object_free,
 	.loo_object_print   = cml_object_print
@@ -353,7 +353,7 @@ static int cml_object_sync(const struct lu_env *env, struct md_object *mo)
         RETURN(rc);
 }
 
-static struct md_object_operations cml_mo_ops = {
+static const struct md_object_operations cml_mo_ops = {
         .moo_permission    = cml_permission,
         .moo_attr_get      = cml_attr_get,
         .moo_attr_set      = cml_attr_set,
@@ -742,7 +742,7 @@ static int cmm_is_subdir(const struct lu_env *env, struct md_object *mo,
         RETURN(rc);
 }
 
-static struct md_dir_operations cml_dir_ops = {
+static const struct md_dir_operations cml_dir_ops = {
         .mdo_is_subdir   = cmm_is_subdir,
         .mdo_lookup      = cml_lookup,
         .mdo_lock_mode   = cml_lock_mode,
@@ -827,10 +827,10 @@ static int cmr_object_init(const struct lu_env *env, struct lu_object *lo,
 static int cmr_object_print(const struct lu_env *env, void *cookie,
                             lu_printer_t p, const struct lu_object *lo)
 {
-	return (*p)(env, cookie, LUSTRE_CMM_NAME"-remote@%p", lo);
+        return (*p)(env, cookie, "[remote]");
 }
 
-static struct lu_object_operations cmr_obj_ops = {
+static const struct lu_object_operations cmr_obj_ops = {
 	.loo_object_init    = cmr_object_init,
 	.loo_object_free    = cmr_object_free,
 	.loo_object_print   = cmr_object_print
@@ -936,7 +936,7 @@ static int cmr_object_sync(const struct lu_env *env, struct md_object *mo)
         return -EFAULT;
 }
 
-static struct md_object_operations cmr_mo_ops = {
+static const struct md_object_operations cmr_mo_ops = {
         .moo_permission    = cmr_permission,
         .moo_attr_get      = cmr_attr_get,
         .moo_attr_set      = cmr_attr_set,
@@ -1266,7 +1266,7 @@ static int cmr_rename_tgt(const struct lu_env *env,
         RETURN(rc);
 }
 
-static struct md_dir_operations cmr_dir_ops = {
+static const struct md_dir_operations cmr_dir_ops = {
         .mdo_is_subdir   = cmm_is_subdir,
         .mdo_lookup      = cmr_lookup,
         .mdo_lock_mode   = cmr_lock_mode,

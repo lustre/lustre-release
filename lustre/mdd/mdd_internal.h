@@ -289,8 +289,8 @@ void mdd_lprocfs_time_end(const struct lu_env *env,
 
 int mdd_get_flags(const struct lu_env *env, struct mdd_object *obj);
 
-extern struct md_dir_operations    mdd_dir_ops;
-extern struct md_object_operations mdd_obj_ops;
+extern const struct md_dir_operations    mdd_dir_ops;
+extern const struct md_object_operations mdd_obj_ops;
 
 /* mdd_trans.c */
 void mdd_txn_param_build(const struct lu_env *env, struct mdd_device *mdd,
@@ -326,7 +326,7 @@ struct lu_object *mdd_object_alloc(const struct lu_env *env,
 /* mdd_object.c */
 int accmode(const struct lu_env *env, struct lu_attr *la, int flags);
 extern struct lu_context_key mdd_thread_key;
-extern struct lu_device_operations mdd_lu_ops;
+extern const struct lu_device_operations mdd_lu_ops;
 
 struct mdd_object *mdd_object_find(const struct lu_env *env,
                                    struct mdd_device *d,
@@ -393,7 +393,8 @@ static inline struct mdd_object* md2mdd_obj(struct md_object *mdo)
         return container_of0(mdo, struct mdd_object, mod_obj);
 }
 
-static inline struct dt_device_operations *mdd_child_ops(struct mdd_device *d)
+static inline const struct dt_device_operations *
+mdd_child_ops(struct mdd_device *d)
 {
         return d->mdd_child->dd_ops;
 }

@@ -1706,7 +1706,7 @@ cleanup_unlocked:
         return rc;
 }
 
-struct md_dir_operations mdd_dir_ops = {
+const struct md_dir_operations mdd_dir_ops = {
         .mdo_is_subdir     = mdd_is_subdir,
         .mdo_lookup        = mdd_lookup,
         .mdo_create        = mdd_create,

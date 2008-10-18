@@ -52,7 +52,7 @@
 #include "cmm_internal.h"
 #include "mdc_internal.h"
 
-static struct lu_device_operations mdc_lu_ops;
+static const struct lu_device_operations mdc_lu_ops;
 
 static inline int lu_device_is_mdc(struct lu_device *ld)
 {
@@ -60,7 +60,7 @@ static inline int lu_device_is_mdc(struct lu_device *ld)
                     ld->ld_ops == &mdc_lu_ops);
 }
 
-static struct md_device_operations mdc_md_ops = { 0 };
+static const struct md_device_operations mdc_md_ops = { 0 };
 
 static int mdc_obd_update(struct obd_device *host,
                           struct obd_device *watched,
@@ -245,7 +245,7 @@ static int mdc_process_config(const struct lu_env *env,
         RETURN(rc);
 }
 
-static struct lu_device_operations mdc_lu_ops = {
+static const struct lu_device_operations mdc_lu_ops = {
 	.ldo_object_alloc   = mdc_object_alloc,
         .ldo_process_config = mdc_process_config
 };

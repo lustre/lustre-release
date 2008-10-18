@@ -405,9 +405,9 @@ struct dt_index_operations {
 
 struct dt_device {
         struct lu_device             dd_lu_dev;
-        struct dt_device_operations *dd_ops;
+        const struct dt_device_operations *dd_ops;
 
-        /*
+        /**
          * List of dt_txn_callback (see below). This is not protected in any
          * way, because callbacks are supposed to be added/deleted only during
          * single-threaded start-up shut-down procedures.
@@ -431,9 +431,9 @@ static inline struct dt_device * lu2dt_dev(struct lu_device *l)
 
 struct dt_object {
         struct lu_object             do_lu;
-        struct dt_object_operations *do_ops;
-        struct dt_body_operations   *do_body_ops;
-        struct dt_index_operations  *do_index_ops;
+        const struct dt_object_operations *do_ops;
+        const struct dt_body_operations   *do_body_ops;
+        const struct dt_index_operations  *do_index_ops;
 };
 
 int  dt_object_init(struct dt_object *obj,

@@ -60,7 +60,7 @@
 
 #include "mdd_internal.h"
 
-struct md_device_operations mdd_ops;
+const struct md_device_operations mdd_ops;
 
 static const char *mdd_root_dir_name = "root";
 static int mdd_device_init(const struct lu_env *env, struct lu_device *d,
@@ -243,7 +243,7 @@ static int mdd_recovery_complete(const struct lu_env *env,
         RETURN(rc);
 }
 
-struct lu_device_operations mdd_lu_ops = {
+const struct lu_device_operations mdd_lu_ops = {
 	.ldo_object_alloc      = mdd_object_alloc,
         .ldo_process_config    = mdd_process_config,
         .ldo_recovery_complete = mdd_recovery_complete
@@ -400,7 +400,7 @@ EXPORT_SYMBOL(md_capainfo);
 /* type constructor/destructor: mdd_type_init, mdd_type_fini */
 LU_TYPE_INIT_FINI(mdd, &mdd_thread_key, &mdd_ucred_key, &mdd_capainfo_key);
 
-struct md_device_operations mdd_ops = {
+const struct md_device_operations mdd_ops = {
         .mdo_statfs         = mdd_statfs,
         .mdo_root_get       = mdd_root_get,
         .mdo_maxsize_get    = mdd_maxsize_get,
@@ -411,6 +411,9 @@ struct md_device_operations mdd_ops = {
 static struct lu_device_type_operations mdd_device_type_ops = {
         .ldto_init = mdd_type_init,
         .ldto_fini = mdd_type_fini,
+
+        .ldto_start = mdd_type_start,
+        .ldto_stop  = mdd_type_stop,
 
         .ldto_device_alloc = mdd_device_alloc,
         .ldto_device_free  = mdd_device_free,

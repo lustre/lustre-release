@@ -60,7 +60,7 @@
 
 #include "mdd_internal.h"
 
-static struct lu_object_operations mdd_lu_obj_ops;
+static const struct lu_object_operations mdd_lu_obj_ops;
 
 int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
                struct lu_attr *la, struct lustre_capa *capa)
@@ -236,11 +236,10 @@ static void mdd_object_delete(const struct lu_env *env, struct lu_object *o)
         }
 }
 
-static struct lu_object_operations mdd_lu_obj_ops = {
+static const struct lu_object_operations mdd_lu_obj_ops = {
 	.loo_object_init    = mdd_object_init,
 	.loo_object_start   = mdd_object_start,
 	.loo_object_free    = mdd_object_free,
-	.loo_object_print   = mdd_object_print,
         .loo_object_delete  = mdd_object_delete
 };
 
@@ -1379,7 +1378,7 @@ static int mdd_readpage_sanity_check(const struct lu_env *env,
 }
 
 static int mdd_dir_page_build(const struct lu_env *env, int first,
-                              void *area, int nob, struct dt_it_ops *iops,
+                              void *area, int nob, const struct dt_it_ops *iops,
                               struct dt_it *it, __u64 *start, __u64 *end,
                               struct lu_dirent **last)
 {
@@ -1453,7 +1452,7 @@ static int __mdd_readpage(const struct lu_env *env, struct mdd_object *obj,
 {
         struct dt_it      *it;
         struct dt_object  *next = mdd_object_child(obj);
-        struct dt_it_ops  *iops;
+        const struct dt_it_ops  *iops;
         struct page       *pg;
         struct lu_dirent  *last = NULL;
         int i;
@@ -1597,7 +1596,7 @@ static int mdd_object_sync(const struct lu_env *env, struct md_object *obj)
         return next->do_ops->do_object_sync(env, next);
 }
 
-struct md_object_operations mdd_obj_ops = {
+const struct md_object_operations mdd_obj_ops = {
         .moo_permission    = mdd_permission,
         .moo_attr_get      = mdd_attr_get,
         .moo_attr_set      = mdd_attr_set,

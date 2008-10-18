@@ -336,7 +336,7 @@ struct md_upcall {
 
 struct md_device {
         struct lu_device             md_lu_dev;
-        struct md_device_operations *md_ops;
+        const struct md_device_operations *md_ops;
         struct md_upcall             md_upcall;
 };
 

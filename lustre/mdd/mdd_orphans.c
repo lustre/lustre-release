@@ -150,7 +150,7 @@ static int orph_index_iterate(const struct lu_env *env,
 {
         struct dt_object *dt_obj = mdd->mdd_orphans;
         struct dt_it     *it;
-        struct dt_it_ops *iops;
+        const struct dt_it_ops *iops;
         struct orph_key  *key = orph_key_empty(env, 0);
         int result;
         ENTRY;

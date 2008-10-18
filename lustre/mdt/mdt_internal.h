@@ -402,7 +402,8 @@ static inline void mdt_trans_add_cb(const struct thandle *th,
         txi->txi_cb_count++;
 }
 
-static inline struct md_device_operations *mdt_child_ops(struct mdt_device * m)
+static inline const struct md_device_operations *
+mdt_child_ops(struct mdt_device * m)
 {
         LASSERT(m->mdt_child);
         return m->mdt_child->md_ops;

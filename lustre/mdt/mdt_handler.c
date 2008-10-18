@@ -162,7 +162,7 @@ static struct mdt_device *mdt_dev(struct lu_device *d);
 static int mdt_regular_handle(struct ptlrpc_request *req);
 static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags);
 
-static struct lu_object_operations mdt_obj_ops;
+static const struct lu_object_operations mdt_obj_ops;
 
 int mdt_get_disposition(struct ldlm_reply *rep, int flag)
 {
@@ -1056,7 +1056,7 @@ out_shrink:
         return rc;
 }
 
-static struct lu_device_operations mdt_lu_ops;
+static const struct lu_device_operations mdt_lu_ops;
 
 static int lu_device_is_mdt(struct lu_device *d)
 {
@@ -4230,21 +4230,14 @@ static void mdt_object_free(const struct lu_env *env, struct lu_object *o)
         EXIT;
 }
 
-static int mdt_object_print(const struct lu_env *env, void *cookie,
-                            lu_printer_t p, const struct lu_object *o)
-{
-        return (*p)(env, cookie, LUSTRE_MDT_NAME"-object@%p", o);
-}
-
-static struct lu_device_operations mdt_lu_ops = {
+static const struct lu_device_operations mdt_lu_ops = {
         .ldo_object_alloc   = mdt_object_alloc,
         .ldo_process_config = mdt_process_config
 };
 
-static struct lu_object_operations mdt_obj_ops = {
+static const struct lu_object_operations mdt_obj_ops = {
         .loo_object_init    = mdt_object_init,
-        .loo_object_free    = mdt_object_free,
-        .loo_object_print   = mdt_object_print
+        .loo_object_free    = mdt_object_free
 };
 
 /* mds_connect_internal */

@@ -58,7 +58,7 @@ static struct obd_ops cmm_obd_device_ops = {
         .o_owner           = THIS_MODULE
 };
 
-static struct lu_device_operations cmm_lu_ops;
+static const struct lu_device_operations cmm_lu_ops;
 
 static inline int lu_device_is_cmm(struct lu_device *d)
 {
@@ -127,7 +127,7 @@ static int cmm_update_capa_key(const struct lu_env *env,
         RETURN(rc);
 }
 
-static struct md_device_operations cmm_md_ops = {
+static const struct md_device_operations cmm_md_ops = {
         .mdo_statfs          = cmm_statfs,
         .mdo_root_get        = cmm_root_get,
         .mdo_maxsize_get     = cmm_maxsize_get,
@@ -336,7 +336,7 @@ static int cmm_recovery_complete(const struct lu_env *env,
         RETURN(rc);
 }
 
-static struct lu_device_operations cmm_lu_ops = {
+static const struct lu_device_operations cmm_lu_ops = {
 	.ldo_object_alloc      = cmm_object_alloc,
         .ldo_process_config    = cmm_process_config,
         .ldo_recovery_complete = cmm_recovery_complete

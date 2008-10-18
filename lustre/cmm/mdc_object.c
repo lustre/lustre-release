@@ -52,9 +52,9 @@
 #include "cmm_internal.h"
 #include "mdc_internal.h"
 
-static struct md_object_operations mdc_mo_ops;
-static struct md_dir_operations mdc_dir_ops;
-static struct lu_object_operations mdc_obj_ops;
+static const struct md_object_operations mdc_mo_ops;
+static const struct md_dir_operations mdc_dir_ops;
+static const struct lu_object_operations mdc_obj_ops;
 
 extern struct lu_context_key mdc_thread_key;
 
@@ -511,7 +511,7 @@ int mdc_send_page(struct cmm_device *cm, const struct lu_env *env,
 }
 #endif
 
-static struct md_object_operations mdc_mo_ops = {
+static const struct md_object_operations mdc_mo_ops = {
         .moo_attr_get       = mdc_attr_get,
         .moo_attr_set       = mdc_attr_set,
         .moo_object_create  = mdc_object_create,
@@ -603,7 +603,7 @@ static int mdc_is_subdir(const struct lu_env *env, struct md_object *mo,
         RETURN(rc);
 }
 
-static struct md_dir_operations mdc_dir_ops = {
+static const struct md_dir_operations mdc_dir_ops = {
         .mdo_is_subdir   = mdc_is_subdir,
         .mdo_rename_tgt  = mdc_rename_tgt
 };

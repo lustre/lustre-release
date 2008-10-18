@@ -216,16 +216,16 @@ static struct thandle     *osd_trans_start  (const struct lu_env *env,
                                              struct txn_param *p);
 static journal_t          *osd_journal      (const struct osd_device *dev);
 
-static struct lu_device_type_operations osd_device_type_ops;
+static const struct lu_device_type_operations osd_device_type_ops;
 static struct lu_device_type            osd_device_type;
-static struct lu_object_operations      osd_lu_obj_ops;
+static const struct lu_object_operations      osd_lu_obj_ops;
 static struct obd_ops                   osd_obd_device_ops;
-static struct lu_device_operations      osd_lu_ops;
+static const struct lu_device_operations      osd_lu_ops;
 static struct lu_context_key            osd_key;
-static struct dt_object_operations      osd_obj_ops;
-static struct dt_body_operations        osd_body_ops;
-static struct dt_index_operations       osd_index_ops;
-static struct dt_index_operations       osd_index_compat_ops;
+static const struct dt_object_operations      osd_obj_ops;
+static const struct dt_body_operations        osd_body_ops;
+static const struct dt_index_operations       osd_index_ops;
+static const struct dt_index_operations       osd_index_compat_ops;
 
 struct osd_thandle {
         struct thandle          ot_super;
@@ -778,7 +778,7 @@ static int osd_credit_get(const struct lu_env *env, struct dt_device *d,
         return osd_dto_credits[op];
 }
 
-static struct dt_device_operations osd_dt_ops = {
+static const struct dt_device_operations osd_dt_ops = {
         .dt_root_get       = osd_root_get,
         .dt_statfs         = osd_statfs,
         .dt_trans_start    = osd_trans_start,
@@ -1511,7 +1511,7 @@ static int osd_object_sync(const struct lu_env *env, struct dt_object *dt)
         RETURN(rc);
 }
 
-static struct dt_object_operations osd_obj_ops = {
+static const struct dt_object_operations osd_obj_ops = {
         .do_read_lock    = osd_object_read_lock,
         .do_write_lock   = osd_object_write_lock,
         .do_read_unlock  = osd_object_read_unlock,
@@ -1584,7 +1584,7 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
         return result;
 }
 
-static struct dt_body_operations osd_body_ops = {
+static const struct dt_body_operations osd_body_ops = {
         .dbo_read  = osd_read,
         .dbo_write = osd_write
 };
@@ -1937,7 +1937,7 @@ static int osd_it_load(const struct lu_env *env,
         return iam_it_load(&it->oi_it, hash);
 }
 
-static struct dt_index_operations osd_index_ops = {
+static const struct dt_index_operations osd_index_ops = {
         .dio_lookup = osd_index_lookup,
         .dio_insert = osd_index_insert,
         .dio_delete = osd_index_delete,
@@ -2538,7 +2538,7 @@ static int osd_object_invariant(const struct lu_object *l)
         return osd_invariant(osd_obj(l));
 }
 
-static struct lu_object_operations osd_lu_obj_ops = {
+static const struct lu_object_operations osd_lu_obj_ops = {
         .loo_object_init      = osd_object_init,
         .loo_object_delete    = osd_object_delete,
         .loo_object_release   = osd_object_release,
@@ -2547,15 +2547,18 @@ static struct lu_object_operations osd_lu_obj_ops = {
         .loo_object_invariant = osd_object_invariant
 };
 
-static struct lu_device_operations osd_lu_ops = {
+static const struct lu_device_operations osd_lu_ops = {
         .ldo_object_alloc      = osd_object_alloc,
         .ldo_process_config    = osd_process_config,
         .ldo_recovery_complete = osd_recovery_complete
 };
 
-static struct lu_device_type_operations osd_device_type_ops = {
+static const struct lu_device_type_operations osd_device_type_ops = {
         .ldto_init = osd_type_init,
         .ldto_fini = osd_type_fini,
+
+        .ldto_start = osd_type_start,
+        .ldto_stop  = osd_type_stop,
 
         .ldto_device_alloc = osd_device_alloc,
         .ldto_device_free  = osd_device_free,

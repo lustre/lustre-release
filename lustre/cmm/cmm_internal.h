@@ -75,9 +75,10 @@ enum cmm_flags {
         CMM_INITIALIZED = 1 << 0
 };
 
-static inline struct md_device_operations *cmm_child_ops(struct cmm_device *d)
+static inline const struct md_device_operations *
+cmm_child_ops(struct cmm_device *d)
 {
-        return (d->cmm_child->md_ops);
+        return d->cmm_child->md_ops;
 }
 
 static inline struct cmm_device *md2cmm_dev(struct md_device *m)

@@ -452,7 +452,7 @@ struct lu_object {
         /*
          * Operations for this object.
          */
-        struct lu_object_operations *lo_ops;
+        const struct lu_object_operations *lo_ops;
         /*
          * Linkage into list of all layers.
          */
@@ -781,21 +781,21 @@ static inline const struct lu_fid *lu_object_fid(const struct lu_object *o)
         return &o->lo_header->loh_fid;
 }
 
-/*
+/**
  * return device operations vector for this object
  */
-static inline struct lu_device_operations *
+static const inline struct lu_device_operations *
 lu_object_ops(const struct lu_object *o)
 {
         return o->lo_dev->ld_ops;
 }
 
-/*
+/**
  * Given a compound object, find its slice, corresponding to the device type
- * @dtype.
+ * \a dtype.
  */
 struct lu_object *lu_object_locate(struct lu_object_header *h,
-                                   struct lu_device_type *dtype);
+                                   const struct lu_device_type *dtype);
 
 struct lu_cdebug_print_info {
         int         lpi_subsys;
