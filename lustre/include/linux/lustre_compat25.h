@@ -88,11 +88,14 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 #if HAVE_INODE_I_MUTEX
 #define UNLOCK_INODE_MUTEX(inode) do {mutex_unlock(&(inode)->i_mutex); } while(0)
 #define LOCK_INODE_MUTEX(inode) do {mutex_lock(&(inode)->i_mutex); } while(0)
+#define LOCK_INODE_MUTEX_PARENT(inode) \
+do {mutex_lock_nested(&(inode)->i_mutex, I_MUTEX_PARENT); } while(0)
 #define TRYLOCK_INODE_MUTEX(inode) mutex_trylock(&(inode)->i_mutex)
 #else
 #define UNLOCK_INODE_MUTEX(inode) do {up(&(inode)->i_sem); } while(0)
 #define LOCK_INODE_MUTEX(inode) do {down(&(inode)->i_sem); } while(0)
 #define TRYLOCK_INODE_MUTEX(inode) (!down_trylock(&(inode)->i_sem))
+#define LOCK_INODE_MUTEX_PARENT(inode) LOCK_INODE_MUTEX(inode)
 #endif /* HAVE_INODE_I_MUTEX */
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15)

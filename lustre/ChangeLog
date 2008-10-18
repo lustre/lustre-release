@@ -1478,6 +1478,13 @@ Details    : Add two new failloc constants to test lockless IO. Only one of
 	     them in implemented---another is checked in yet to be landed
 	     core CLIO code.
 
+Severity   : normal
+Bugzilla   : 16450
+Description: Add lockdep support for inode mutex.
+Details    : Introduce and use new LOCK_INODE_MUTEX_PARENT() macro to be used
+	     in the situations where Lustre has to lock more than one inode
+	     mutex at a time.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

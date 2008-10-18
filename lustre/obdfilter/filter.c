@@ -1406,7 +1406,7 @@ obd_id filter_last_id(struct filter_obd *filter, obd_gr group)
 
 static int filter_lock_dentry(struct obd_device *obd, struct dentry *dparent)
 {
-        LOCK_INODE_MUTEX(dparent->d_inode);
+        LOCK_INODE_MUTEX_PARENT(dparent->d_inode);
         return 0;
 }
 
