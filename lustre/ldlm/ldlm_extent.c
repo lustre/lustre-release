@@ -284,6 +284,9 @@ static int ldlm_check_contention(struct ldlm_lock *lock, int contended_locks)
         struct ldlm_resource *res = lock->l_resource;
         cfs_time_t now = cfs_time_current();
 
+        if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_SET_CONTENTION))
+                return 1;
+
         CDEBUG(D_DLMTRACE, "contended locks = %d\n", contended_locks);
         if (contended_locks > res->lr_namespace->ns_contended_locks)
                 res->lr_contention_time = now;

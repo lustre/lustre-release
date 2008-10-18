@@ -1471,6 +1471,13 @@ Details    : Augment ->do_{read,write}_lock() prototypes with a `role' parameter
 	     indicating lock ordering. Update mdd code to use new locking
 	     interface.
 
+Severity   : normal
+Bugzilla   : 16450
+Description: Introduce failloc constants for lockless IO tests.
+Details    : Add two new failloc constants to test lockless IO. Only one of
+	     them in implemented---another is checked in yet to be landed
+	     core CLIO code.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

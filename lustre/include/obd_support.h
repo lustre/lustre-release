@@ -254,6 +254,9 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_LDLM_CANCEL_BL_CB_RACE  0x314
 #define OBD_FAIL_LDLM_CP_CB_WAIT         0x315
 
+/* LOCKLESS IO */
+#define OBD_FAIL_LDLM_SET_CONTENTION     0x315
+
 #define OBD_FAIL_OSC                     0x400
 #define OBD_FAIL_OSC_BRW_READ_BULK       0x401
 #define OBD_FAIL_OSC_BRW_WRITE_BULK      0x402
@@ -268,6 +271,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_OSC_CONNECT_CKSUM       0x40b
 #define OBD_FAIL_OSC_CKSUM_ADLER_ONLY    0x40c
 #define OBD_FAIL_OSC_DIO_PAUSE           0x40d
+#define OBD_FAIL_OSC_OBJECT_CONTENTION   0x40e
 
 #define OBD_FAIL_PTLRPC                  0x500
 #define OBD_FAIL_PTLRPC_ACK              0x501
