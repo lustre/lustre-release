@@ -359,6 +359,24 @@ int cmm_upcall(const struct lu_env *env, struct md_device *md,
         RETURN(rc);
 }
 
+static struct lu_device *cmm_device_free(const struct lu_env *env,
+                                         struct lu_device *d)
+{
+        struct cmm_device *m = lu2cmm_dev(d);
+        struct lu_device  *next = md2lu_dev(m->cmm_child);
+        ENTRY;
+
+        LASSERT(m->cmm_tgt_count == 0);
+        LASSERT(list_empty(&m->cmm_targets));
+        if (m->cmm_fld != NULL) {
+                OBD_FREE_PTR(m->cmm_fld);
+                m->cmm_fld = NULL;
+        }
+        md_device_fini(&m->cmm_md_dev);
+        OBD_FREE_PTR(m);
+        RETURN(next);
+}
+
 static struct lu_device *cmm_device_alloc(const struct lu_env *env,
                                           struct lu_device_type *t,
                                           struct lustre_cfg *cfg)
@@ -378,32 +396,12 @@ static struct lu_device *cmm_device_alloc(const struct lu_env *env,
                 l->ld_ops = &cmm_lu_ops;
 
                 OBD_ALLOC_PTR(m->cmm_fld);
-                if (!m->cmm_fld)
-                        GOTO(out_free_cmm, l = ERR_PTR(-ENOMEM));
+                if (!m->cmm_fld) {
+                        cmm_device_free(env, l);
+                        l = ERR_PTR(-ENOMEM);
         }
-
+        }
         RETURN(l);
-out_free_cmm:
-        OBD_FREE_PTR(m);
-        return l;
-}
-
-static struct lu_device *cmm_device_free(const struct lu_env *env,
-                                         struct lu_device *d)
-{
-        struct cmm_device *m = lu2cmm_dev(d);
-        struct lu_device  *next = md2lu_dev(m->cmm_child);
-        ENTRY;
-
-        LASSERT(m->cmm_tgt_count == 0);
-        LASSERT(list_empty(&m->cmm_targets));
-        if (m->cmm_fld != NULL) {
-                OBD_FREE_PTR(m->cmm_fld);
-                m->cmm_fld = NULL;
-        }
-        md_device_fini(&m->cmm_md_dev);
-        OBD_FREE_PTR(m);
-        RETURN(next);
 }
 
 /* context key constructor/destructor: cmm_key_init, cmm_key_fini */

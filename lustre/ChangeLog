@@ -1458,7 +1458,12 @@ Bugzilla   : 16450
 Description: OSD_COUNTERS-mandatory
 Details    : Make previously optional ->oti_{w,r}_locks sanity checks mandatory
 	     to simplify the code.
-	
+
+Severity   : normal
+Bugzilla   : 16450
+Description: simplify cmm_device freeing logic.
+Details    : Call cmm_device_free() in the failure path of cmm_device_alloc().
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
