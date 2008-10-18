@@ -280,7 +280,7 @@ int lov_ost_pool_init(struct ost_pool *op, unsigned int count)
                 count = LOV_POOL_INIT_COUNT;
         op->op_array = NULL;
         op->op_count = 0;
-        op->op_rwlock = RW_LOCK_UNLOCKED;
+        rwlock_init(&op->op_rwlock);
         op->op_size = count;
         OBD_ALLOC(op->op_array, op->op_size * sizeof(op->op_array[0]));
         if (op->op_array == NULL) {

@@ -1686,6 +1686,12 @@ Description: Add special type for ptlrpc_request interpret functions.
 Details    : Add lu_env parameter to ->rq_interpreter call-back. NULL is passed 
         there. Actual usage will be in CLIO.
 
+Severity   : normal
+Bugzilla   : 16450
+Description: Replace RW_LOCK_UNLOCKED() macro with rwlock_init().
+Details    : Replace RW_LOCK_UNLOCKED() with rwlock_init() as the former
+	     doesn't work with lockdep.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

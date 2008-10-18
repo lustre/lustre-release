@@ -3938,7 +3938,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                 server_put_mount_2(dev, lmi->lmi_mnt);
         }
 
-        m->mdt_sptlrpc_lock = RW_LOCK_UNLOCKED;
+        rwlock_init(&m->mdt_sptlrpc_lock);
         sptlrpc_rule_set_init(&m->mdt_sptlrpc_rset);
 
         spin_lock_init(&m->mdt_ioepoch_lock);

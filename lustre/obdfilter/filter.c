@@ -2023,7 +2023,7 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
         CFS_INIT_LIST_HEAD(&filter->fo_llog_list);
         spin_lock_init(&filter->fo_llog_list_lock);
 
-        filter->fo_sptlrpc_lock = RW_LOCK_UNLOCKED;
+        rwlock_init(&filter->fo_sptlrpc_lock);
         sptlrpc_rule_set_init(&filter->fo_sptlrpc_rset);
 
         filter->fo_fl_oss_capa = 0;

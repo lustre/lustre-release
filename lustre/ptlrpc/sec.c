@@ -66,7 +66,7 @@
  * policy registers                            *
  ***********************************************/
 
-static rwlock_t policy_lock = RW_LOCK_UNLOCKED;
+static rwlock_t policy_lock;
 static struct ptlrpc_sec_policy *policies[SPTLRPC_POLICY_MAX] = {
         NULL,
 };
@@ -2306,6 +2306,8 @@ EXPORT_SYMBOL(ll_crypto_alloc_blkcipher);
 int __init sptlrpc_init(void)
 {
         int rc;
+
+        rwlock_init(&policy_lock);
 
         rc = sptlrpc_gc_start_thread();
         if (rc)
