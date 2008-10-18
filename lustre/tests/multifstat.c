@@ -95,5 +95,11 @@ int main(int argc, char **argv)
                 return 1;
         }
 
+        if ( st1.st_blocks != st2.st_blocks ) {
+                printf("Blocks don't match %ld, %ld\n",
+                       (long)st1.st_blocks, (long)st2.st_blocks);
+                return 1;
+        }
+
         return 0;
 }
