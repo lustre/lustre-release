@@ -942,7 +942,8 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
         RETURN(rc);
 }
 
-static int mdc_intent_getattr_async_interpret(struct ptlrpc_request *req,
+static int mdc_intent_getattr_async_interpret(const struct lu_env *env,
+                                              struct ptlrpc_request *req,
                                               void *unused, int rc)
 {
         struct obd_export        *exp = req->rq_async_args.pointer_arg[0];

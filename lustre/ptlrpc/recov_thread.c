@@ -149,7 +149,8 @@ static void llcd_print(struct llog_canceld_ctxt *llcd,
  * in cleanup time when all inflight rpcs aborted.
  */
 static int 
-llcd_interpret(struct ptlrpc_request *req, void *noused, int rc)
+llcd_interpret(const struct lu_env *env,
+               struct ptlrpc_request *req, void *noused, int rc)
 {
         struct llog_canceld_ctxt *llcd = req->rq_async_args.pointer_arg[0];
         CDEBUG(D_RPCTRACE, "Sent llcd %p (%d)\n", llcd, rc);
@@ -231,7 +232,7 @@ static int llcd_send(struct llog_canceld_ctxt *llcd)
         /* bug 5515 */
         req->rq_request_portal = LDLM_CANCEL_REQUEST_PORTAL;
         req->rq_reply_portal = LDLM_CANCEL_REPLY_PORTAL;
-        req->rq_interpret_reply = llcd_interpret;
+        req->rq_interpret_reply = (ptlrpc_interpterer_t)llcd_interpret;
         req->rq_async_args.pointer_arg[0] = llcd;
         rc = ptlrpc_set_add_new_req(&lcm->lcm_pc, req);
         if (rc) {

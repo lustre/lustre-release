@@ -296,6 +296,11 @@ enum rq_phase {
         RQ_PHASE_COMPLETE    = 0xebc0de04,
 };
 
+/** Type of request interpreter call-back */
+typedef int (*ptlrpc_interpterer_t)(const struct lu_env *env,
+                                    struct ptlrpc_request *req,
+                                    void *arg, int rc);
+
 struct ptlrpc_request_pool {
         spinlock_t prp_lock;
         struct list_head prp_req_list;    /* list of ptlrpc_request structs */
@@ -742,6 +747,10 @@ struct ptlrpcd_ctl {
          * Thread name used in cfs_daemonize()
          */
         char                        pc_name[16];
+        /**
+         * Environment for request interpreters to run in.
+         */
+        struct lu_env               pc_env;
 #ifndef __KERNEL__
         /**
          * Async rpcs flag to make sure that ptlrpcd_check() is called only
@@ -865,7 +874,7 @@ struct ptlrpc_request_set *ptlrpc_prep_set(void);
 int ptlrpc_set_add_cb(struct ptlrpc_request_set *set,
                       set_interpreter_func fn, void *data);
 int ptlrpc_set_next_timeout(struct ptlrpc_request_set *);
-int ptlrpc_check_set(struct ptlrpc_request_set *set);
+int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set);
 int ptlrpc_set_wait(struct ptlrpc_request_set *);
 int ptlrpc_expired_set(void *data);
 void ptlrpc_interrupted_set(void *data);

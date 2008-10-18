@@ -68,7 +68,8 @@ static quota_interface_t *quota_interface = NULL;
 extern quota_interface_t osc_quota_interface;
 
 static void osc_release_ppga(struct brw_page **ppga, obd_count count);
-static int brw_interpret(struct ptlrpc_request *request, void *data, int rc);
+static int brw_interpret(const struct lu_env *env,
+                         struct ptlrpc_request *req, void *data, int rc);
 int osc_cleanup(struct obd_device *obd);
 
 /* Pack OSC object metadata for disk storage (LE byte order). */
@@ -200,7 +201,8 @@ static inline void osc_set_capa_size(struct ptlrpc_request *req,
                 ;
 }
 
-static int osc_getattr_interpret(struct ptlrpc_request *req,
+static int osc_getattr_interpret(const struct lu_env *env,
+                                 struct ptlrpc_request *req,
                                  struct osc_async_args *aa, int rc)
 {
         struct ost_body *body;
@@ -250,7 +252,7 @@ static int osc_getattr_async(struct obd_export *exp, struct obd_info *oinfo,
         osc_pack_req_body(req, oinfo);
 
         ptlrpc_request_set_replen(req);
-        req->rq_interpret_reply = osc_getattr_interpret;
+        req->rq_interpret_reply = (ptlrpc_interpterer_t)osc_getattr_interpret;
 
         CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
         aa = ptlrpc_req_async_args(req);
@@ -345,7 +347,8 @@ out:
         RETURN(rc);
 }
 
-static int osc_setattr_interpret(struct ptlrpc_request *req,
+static int osc_setattr_interpret(const struct lu_env *env,
+                                 struct ptlrpc_request *req,
                                  struct osc_async_args *aa, int rc)
 {
         struct ost_body *body;
@@ -393,12 +396,13 @@ static int osc_setattr_async(struct obd_export *exp, struct obd_info *oinfo,
                 oinfo->oi_oa->o_lcookie = *oti->oti_logcookies;
         }
 
-        /* do mds to ost setattr asynchronouly */
+        /* do mds to ost setattr asynchronously */
         if (!rqset) {
                 /* Do not wait for response. */
                 ptlrpcd_add_req(req);
         } else {
-                req->rq_interpret_reply = osc_setattr_interpret;
+                req->rq_interpret_reply =
+                        (ptlrpc_interpterer_t)osc_setattr_interpret;
 
                 CLASSERT (sizeof(*aa) <= sizeof(req->rq_async_args));
                 aa = ptlrpc_req_async_args(req);
@@ -495,7 +499,8 @@ out:
         RETURN(rc);
 }
 
-static int osc_punch_interpret(struct ptlrpc_request *req,
+static int osc_punch_interpret(const struct lu_env *env,
+                               struct ptlrpc_request *req,
                                struct osc_async_args *aa, int rc)
 {
         struct ost_body *body;
@@ -552,7 +557,7 @@ static int osc_punch(struct obd_export *exp, struct obd_info *oinfo,
         ptlrpc_request_set_replen(req);
 
 
-        req->rq_interpret_reply = osc_punch_interpret;
+        req->rq_interpret_reply = (ptlrpc_interpterer_t)osc_punch_interpret;
         CLASSERT (sizeof(*aa) <= sizeof(req->rq_async_args));
         aa = ptlrpc_req_async_args(req);
         aa->aa_oi = oinfo;
@@ -639,7 +644,8 @@ static int osc_resource_get_unused(struct obd_export *exp, struct obdo *oa,
         RETURN(count);
 }
 
-static int osc_destroy_interpret(struct ptlrpc_request *req, void *data,
+static int osc_destroy_interpret(const struct lu_env *env,
+                                 struct ptlrpc_request *req, void *data,
                                  int rc)
 {
         struct client_obd *cli = &req->rq_import->imp_obd->u.cli;
@@ -2038,7 +2044,8 @@ static void osc_ap_completion(struct client_obd *cli, struct obdo *oa,
         EXIT;
 }
 
-static int brw_interpret(struct ptlrpc_request *req, void *data, int rc)
+static int brw_interpret(const struct lu_env *env,
+                         struct ptlrpc_request *req, void *data, int rc)
 {
         struct osc_brw_async_args *aa = data;
         struct client_obd *cli;
@@ -3094,7 +3101,8 @@ static int osc_enqueue_fini(struct obd_device *obd, struct ptlrpc_request *req,
         RETURN(rc);
 }
 
-static int osc_enqueue_interpret(struct ptlrpc_request *req,
+static int osc_enqueue_interpret(const struct lu_env *env,
+                                 struct ptlrpc_request *req,
                                  struct osc_enqueue_args *aa, int rc)
 {
         int intent = aa->oa_oi->oi_flags & LDLM_FL_HAS_INTENT;
@@ -3237,7 +3245,8 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                         aa->oa_ei = einfo;
                         aa->oa_exp = exp;
 
-                        req->rq_interpret_reply = osc_enqueue_interpret;
+                        req->rq_interpret_reply =
+                                (ptlrpc_interpterer_t)osc_enqueue_interpret;
                         ptlrpc_set_add_req(rqset, req);
                 } else if (intent) {
                         ptlrpc_req_finished(req);
@@ -3374,7 +3383,7 @@ static int osc_statfs_async(struct obd_device *obd, struct obd_info *oinfo,
                 req->rq_no_delay = 1;
         }
 
-        req->rq_interpret_reply = osc_statfs_interpret;
+        req->rq_interpret_reply = (ptlrpc_interpterer_t)osc_statfs_interpret;
         CLASSERT (sizeof(*aa) <= sizeof(req->rq_async_args));
         aa = ptlrpc_req_async_args(req);
         aa->aa_oi = oinfo;
@@ -3690,7 +3699,8 @@ static int osc_get_info(struct obd_export *exp, obd_count keylen,
         RETURN(-EINVAL);
 }
 
-static int osc_setinfo_mds_conn_interpret(struct ptlrpc_request *req,
+static int osc_setinfo_mds_conn_interpret(const struct lu_env *env,
+                                          struct ptlrpc_request *req,
                                           void *aa, int rc)
 {
         struct llog_ctxt *ctxt;
@@ -3818,7 +3828,7 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
 
         ptlrpc_request_set_replen(req);
         ptlrpc_set_add_req(set, req);
-        ptlrpc_check_set(set);
+        ptlrpc_check_set(NULL, set);
 
         RETURN(0);
 }

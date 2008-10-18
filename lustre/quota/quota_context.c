@@ -559,7 +559,8 @@ struct dqacq_async_args {
         struct lustre_qunit *aa_qunit;
 };
 
-static int dqacq_interpret(struct ptlrpc_request *req, void *data, int rc)
+static int dqacq_interpret(const struct lu_env *env,
+                           struct ptlrpc_request *req, void *data, int rc)
 {
         struct dqacq_async_args *aa = (struct dqacq_async_args *)data;
         struct lustre_quota_ctxt *qctxt = aa->aa_ctxt;

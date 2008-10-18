@@ -723,14 +723,13 @@ void ptlrpc_set_destroy(struct ptlrpc_request_set *set)
                 if (req->rq_phase == RQ_PHASE_NEW) {
 
                         if (req->rq_interpret_reply != NULL) {
-                                int (*interpreter)(struct ptlrpc_request *,
-                                                   void *, int) =
+                                ptlrpc_interpterer_t interpreter =
                                         req->rq_interpret_reply;
 
                                 /* higher level (i.e. LOV) failed;
                                  * let the sub reqs clean up */
                                 req->rq_status = -EBADR;
-                                interpreter(req, &req->rq_async_args,
+                                interpreter(NULL, req, &req->rq_async_args,
                                             req->rq_status);
                         }
                         set->set_remaining--;
@@ -1126,7 +1125,7 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 }
 
 /* this sends any unsent RPCs in @set and returns TRUE if all are sent */
-int ptlrpc_check_set(struct ptlrpc_request_set *set)
+int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 {
         struct list_head *tmp;
         int force_timer_recalc = 0;
@@ -1352,9 +1351,10 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                         ptlrpc_unregister_bulk (req);
 
                 if (req->rq_interpret_reply != NULL) {
-                        int (*interpreter)(struct ptlrpc_request *,void *,int) =
+                        ptlrpc_interpterer_t interpreter =
                                 req->rq_interpret_reply;
-                        req->rq_status = interpreter(req, &req->rq_async_args,
+                        req->rq_status = interpreter(NULL, req,
+                                                     &req->rq_async_args,
                                                      req->rq_status);
                 }
                 req->rq_phase = RQ_PHASE_COMPLETE;
@@ -1577,7 +1577,8 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
                 lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(timeout ? timeout : 1),
                                        ptlrpc_expired_set,
                                        ptlrpc_interrupted_set, set);
-                rc = l_wait_event(set->set_waitq, ptlrpc_check_set(set), &lwi);
+                rc = l_wait_event(set->set_waitq,
+                                  ptlrpc_check_set(NULL, set), &lwi);
 
                 LASSERT(rc == 0 || rc == -EINTR || rc == -ETIMEDOUT);
 
@@ -2186,7 +2187,8 @@ struct ptlrpc_replay_async_args {
         int praa_old_status;
 };
 
-static int ptlrpc_replay_interpret(struct ptlrpc_request *req,
+static int ptlrpc_replay_interpret(const struct lu_env *env,
+                                   struct ptlrpc_request *req,
                                     void * data, int rc)
 {
         struct ptlrpc_replay_async_args *aa = data;

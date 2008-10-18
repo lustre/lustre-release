@@ -1127,7 +1127,7 @@ static int do_set_info_async(struct obd_export *exp,
 
         if (set) {
                 ptlrpc_set_add_req(set, req);
-                ptlrpc_check_set(set);
+                ptlrpc_check_set(NULL, set);
         } else {
                 rc = ptlrpc_queue_wait(req);
                 ptlrpc_req_finished(req);
@@ -1735,7 +1735,8 @@ int mdc_get_remote_perm(struct obd_export *exp, const struct lu_fid *fid,
         RETURN(rc);
 }
 
-static int mdc_interpret_renew_capa(struct ptlrpc_request *req, void *unused,
+static int mdc_interpret_renew_capa(const struct lu_env *env,
+                                    struct ptlrpc_request *req, void *unused,
                                     int status)
 {
         struct obd_capa *oc = req->rq_async_args.pointer_arg[0];

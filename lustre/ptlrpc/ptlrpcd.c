@@ -84,8 +84,7 @@ void ptlrpcd_add_req(struct ptlrpc_request *req)
 
         rc = ptlrpc_set_add_new_req(pc, req);
         if (rc) {
-                int (*interpreter)(struct ptlrpc_request *,
-                                   void *, int);
+                ptlrpc_interpterer_t interpreter;
                                    
                 interpreter = req->rq_interpret_reply;
 
@@ -97,14 +96,14 @@ void ptlrpcd_add_req(struct ptlrpc_request *req)
                  * resources.
                  */
                 req->rq_status = -EBADR;
-                interpreter(req, &req->rq_async_args,
+                interpreter(NULL, req, &req->rq_async_args,
                             req->rq_status);
                 req->rq_set = NULL;
                 ptlrpc_req_finished(req);
         }
 }
 
-static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
+static int ptlrpcd_check(const struct lu_env *env, struct ptlrpcd_ctl *pc)
 {
         struct list_head *tmp, *pos;
         struct ptlrpc_request *req;
@@ -127,7 +126,7 @@ static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
         spin_unlock(&pc->pc_set->set_new_req_lock);
 
         if (pc->pc_set->set_remaining) {
-                rc = rc | ptlrpc_check_set(pc->pc_set);
+                rc = rc | ptlrpc_check_set(env, pc->pc_set);
 
                 /* 
                  * XXX: our set never completes, so we prune the completed
@@ -189,7 +188,10 @@ static int ptlrpcd(void *arg)
                 timeout = cfs_time_seconds(ptlrpc_set_next_timeout(pc->pc_set));
                 lwi = LWI_TIMEOUT(timeout, ptlrpc_expired_set, pc->pc_set);
 
-                l_wait_event(pc->pc_set->set_waitq, ptlrpcd_check(pc), &lwi);
+                lu_context_enter(&pc->pc_env.le_ctx);
+                l_wait_event(pc->pc_set->set_waitq,
+                             ptlrpcd_check(&pc->pc_env, pc), &lwi);
+                lu_context_exit(&pc->pc_env.le_ctx);
 
                 /*
                  * Abort inflight rpcs for forced stop case.
@@ -214,7 +216,7 @@ out:
         return 0;
 }
 
-#else
+#else /* !__KERNEL__ */
 
 int ptlrpcd_check_async_rpcs(void *arg)
 {
@@ -227,14 +229,16 @@ int ptlrpcd_check_async_rpcs(void *arg)
         pc->pc_recurred++;
 
         if (pc->pc_recurred == 1) {
-                rc = ptlrpcd_check(pc);
+                lu_context_enter(&pc->pc_env.le_ctx);
+                rc = ptlrpcd_check(&pc->pc_env, pc);
+                lu_context_exit(&pc->pc_env.le_ctx);
                 if (!rc)
                         ptlrpc_expired_set(pc->pc_set);
                 /* 
                  * XXX: send replay requests. 
                  */
                 if (pc == &ptlrpcd_recovery_pc)
-                        rc = ptlrpcd_check(pc);
+                        rc = ptlrpcd_check(&pc->pc_env, pc);
         }
 
         pc->pc_recurred--;
@@ -253,7 +257,7 @@ int ptlrpcd_idle(void *arg)
 
 int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
 {
-        int rc = 0;
+        int rc;
         ENTRY;
  
         /* 
@@ -269,14 +273,24 @@ int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
         init_completion(&pc->pc_finishing);
         spin_lock_init(&pc->pc_lock);
         snprintf (pc->pc_name, sizeof (pc->pc_name), name);
-
         pc->pc_set = ptlrpc_prep_set();
         if (pc->pc_set == NULL)
                 GOTO(out, rc = -ENOMEM);
+        /*
+         * So far only "client" ptlrpcd uses an environment. In the future,
+         * ptlrpcd thread (or a thread-set) has to be given an argument,
+         * describing its "scope".
+         */
+        rc = lu_context_init(&pc->pc_env.le_ctx, LCT_CL_THREAD|LCT_REMEMBER);
+        if (rc != 0) {
+                ptlrpc_set_destroy(pc->pc_set);
+                GOTO(out, rc);
+        }
 
 #ifdef __KERNEL__
         rc = cfs_kernel_thread(ptlrpcd, pc, 0);
         if (rc < 0)  {
+                lu_context_fini(&pc->pc_env.le_ctx);
                 ptlrpc_set_destroy(pc->pc_set);
                 GOTO(out, rc);
         }
@@ -313,6 +327,7 @@ void ptlrpcd_stop(struct ptlrpcd_ctl *pc, int force)
         liblustre_deregister_wait_callback(pc->pc_wait_callback);
         liblustre_deregister_idle_callback(pc->pc_idle_callback);
 #endif
+        lu_context_fini(&pc->pc_env.le_ctx);
         ptlrpc_set_destroy(pc->pc_set);
 }
 

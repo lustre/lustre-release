@@ -79,7 +79,8 @@ do {                                            \
 } while(0)
 
 
-static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
+static int ptlrpc_connect_interpret(const struct lu_env *env,
+                                    struct ptlrpc_request *request,
                                     void * data, int rc);
 int ptlrpc_import_recovery_state_machine(struct obd_import *imp);
 
@@ -656,7 +657,8 @@ static void ptlrpc_maybe_ping_import_soon(struct obd_import *imp)
         EXIT;
 }
 
-static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
+static int ptlrpc_connect_interpret(const struct lu_env *env,
+                                    struct ptlrpc_request *request,
                                     void * data, int rc)
 {
         struct ptlrpc_connect_async_args *aa = data;
@@ -1039,7 +1041,8 @@ out:
         RETURN(rc);
 }
 
-static int completed_replay_interpret(struct ptlrpc_request *req,
+static int completed_replay_interpret(const struct lu_env *env,
+                                      struct ptlrpc_request *req,
                                     void * data, int rc)
 {
         ENTRY;

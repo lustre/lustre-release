@@ -543,7 +543,8 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
         return rc;
 }
 
-static int ldlm_cb_interpret(struct ptlrpc_request *req, void *data, int rc)
+static int ldlm_cb_interpret(const struct lu_env *env,
+                             struct ptlrpc_request *req, void *data, int rc)
 {
         struct ldlm_cb_set_arg *arg;
         struct ldlm_lock *lock;

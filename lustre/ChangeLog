@@ -1680,6 +1680,12 @@ Bugzilla   : 16450
 Description: Kill obd_set_fail_loc().
 Details    : Remove unused code.
 
+Severity   : normal
+Bugzilla   : 16450
+Description: Add special type for ptlrpc_request interpret functions.
+Details    : Add lu_env parameter to ->rq_interpreter call-back. NULL is passed 
+        there. Actual usage will be in CLIO.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

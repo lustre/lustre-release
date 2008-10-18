@@ -107,7 +107,7 @@ static int lprocfs_mds_wr_evict_client(struct file *file, const char *buffer,
                         CERROR("Failed to evict nid %s from OSTs: rc %d\n",
                                tmpbuf + 4, rc);
 
-                ptlrpc_check_set(set);
+                ptlrpc_check_set(NULL, set);
         }
 
         /* See the comments in function lprocfs_wr_evict_client() 

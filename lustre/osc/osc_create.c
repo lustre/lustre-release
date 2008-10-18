@@ -61,7 +61,8 @@
 #include <obd_class.h>
 #include "osc_internal.h"
 
-static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
+static int osc_interpret_create(const struct lu_env *env,
+                                struct ptlrpc_request *req, void *data, int rc)
 {
         struct osc_creator *oscc;
         struct ost_body *body = NULL;
@@ -97,7 +98,7 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
         case -EAGAIN:
                 /* valid race delorphan vs create, or somthing after resend */
                 spin_unlock(&oscc->oscc_lock);
-                DEBUG_REQ(D_INODE, req, "Got EGAIN - resend \n");
+                DEBUG_REQ(D_INODE, req, "Got EAGAIN - resend \n");
                 break;
         case -ENOSPC:
         case -EROFS: 

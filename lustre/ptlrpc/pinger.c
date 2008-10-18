@@ -642,7 +642,7 @@ static int pinger_check_rpcs(void *arg)
         }
 
 do_check_set:
-        rc = ptlrpc_check_set(set);
+        rc = ptlrpc_check_set(NULL, set);
 
         /* not finished, and we are not expired, simply return */
         if (!rc && cfs_time_before(curtime, cfs_time_add(pd->pd_this_ping,
