@@ -143,6 +143,15 @@ cfs_pause(cfs_duration_t d)
         nanosleep(&s, NULL);
 }
 
+int cfs_need_resched(void)
+{
+        return 0;
+}
+
+void cfs_cond_resched(void)
+{
+}
+
 /*
  * Timer
  */

@@ -1718,6 +1718,12 @@ Bugzilla   : 16450
 Description: Liblustre build fixes.
 Details    : Liblustre build fixes.
 
+Severity   : normal
+Bugzilla   : 16450
+Description: libcfs: add cfs_{need,cond}_resched() interface.
+Details    : libcfs: add cfs_{need,cond}_resched() definition and
+	     implementations for Linux, NT, and liblustre.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

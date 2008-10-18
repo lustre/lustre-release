@@ -153,6 +153,18 @@ cfs_pause(cfs_duration_t ticks)
 }
 EXPORT_SYMBOL(cfs_pause);
 
+int cfs_need_resched(void)
+{
+        return need_resched();
+}
+EXPORT_SYMBOL(cfs_need_resched);
+
+void cfs_cond_resched(void)
+{
+        cond_resched();
+}
+EXPORT_SYMBOL(cfs_cond_resched);
+
 void cfs_init_timer(cfs_timer_t *t)
 {
         init_timer(t);
