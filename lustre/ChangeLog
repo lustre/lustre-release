@@ -1662,7 +1662,7 @@ Details    : Move md-specific fields out of struct lu_site into special struct
 
 Severity   : minor
 Bugzilla   : 16450
-Description: Kill mdd_lov_destroy()
+Description: Kill mdd_lov_destroy().
 Details    : Remove unused mdd code.
 
 Severity   : minor
@@ -1670,10 +1670,15 @@ Bugzilla   : 16450
 Description: Add st_block checking to multistat.c.
 Details    : Add st_block checking to multistat.c.
 
-Severity   : minor
+Severity   : normal
 Bugzilla   : 16450
 Description: Add lu_ref support to struct obd_device.
 Details    : Add lu_ref tracking to obd_device.
+
+Severity   : minor
+Bugzilla   : 16450
+Description: Kill obd_set_fail_loc().
+Details    : Remove unused code.
 
 --------------------------------------------------------------------------------
 
