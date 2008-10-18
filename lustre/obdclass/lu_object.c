@@ -1530,9 +1530,40 @@ struct lu_buf LU_BUF_NULL = {
 };
 EXPORT_SYMBOL(LU_BUF_NULL);
 
+/**
+ * Output site statistical counters into a buffer. Suitable for
+ * lprocfs_rd_*()-style functions.
+ */
+int lu_site_stats_print(const struct lu_site *s, char *page, int count)
+{
+        int i;
+        int populated;
+
+        /*
+         * How many hash buckets are not-empty? Don't bother with locks: it's
+         * an estimation anyway.
+         */
+        for (i = 0, populated = 0; i < s->ls_hash_size; i++)
+                populated += !hlist_empty(&s->ls_hash[i]);
+
+        return snprintf(page, count, "%d %d %d/%d %d %d %d %d %d %d %d\n",
+                        s->ls_total,
+                        s->ls_busy,
+                        populated,
+                        s->ls_hash_size,
+                        s->ls_stats.s_created,
+                        s->ls_stats.s_cache_hit,
+                        s->ls_stats.s_cache_miss,
+                        s->ls_stats.s_cache_check,
+                        s->ls_stats.s_cache_race,
+                        s->ls_stats.s_cache_death_race,
+                        s->ls_stats.s_lru_purged);
+}
+EXPORT_SYMBOL(lu_site_stats_print);
+
 /*
- * XXX: Functions below logically belong to fid module, but they are used by
- * dt_store_open(). Put them here until better place is found.
+ * XXX: Functions below logically belong to the fid module, but they are used
+ * by dt_store_open(). Put them here until better place is found.
  */
 
 void fid_pack(struct lu_fid_pack *pack, const struct lu_fid *fid,

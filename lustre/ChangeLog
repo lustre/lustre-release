@@ -1642,6 +1642,12 @@ Details    : lu_ref is a debugging module allowing to track references to
 	     explicitly enabled with --enable-lu_ref. See usage description
 	     within the patch.
 
+Severity   : minor
+Bugzilla   : 16450
+Description: Factor lu_site procfs stats into a separate function.
+Details    : Separate lu_site stats printing code into a separate function
+	     that can be reused on a client.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
