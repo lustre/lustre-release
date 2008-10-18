@@ -1574,10 +1574,10 @@ struct lsm_operations {
                              struct lov_mds_md *lmm);
 };
 
-extern struct lsm_operations lsm_v1_ops;
-extern struct lsm_operations lsm_join_ops;
-extern struct lsm_operations lsm_v3_ops;
-static inline struct lsm_operations *lsm_op_find(int magic)
+extern const struct lsm_operations lsm_v1_ops;
+extern const struct lsm_operations lsm_join_ops;
+extern const struct lsm_operations lsm_v3_ops;
+static inline const struct lsm_operations *lsm_op_find(int magic)
 {
         switch(magic) {
         case LOV_MAGIC_V1:

@@ -1585,7 +1585,12 @@ Severity   : minor
 Bugzilla   : 16450
 Description: Add loi_kms_set().
 Details    : Wrap kms updates into a helper function.
-	
+
+Severity   : minor
+Bugzilla   : 16450
+Description: Constify instances of struct lsm_operations.
+Details    : Constify instances of struct lsm_operations.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

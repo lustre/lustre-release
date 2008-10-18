@@ -255,7 +255,7 @@ int lsm_unpackmd_v1(struct lov_obd *lov, struct lov_stripe_md *lsm,
         return 0;
 }
 
-struct lsm_operations lsm_v1_ops = {
+const struct lsm_operations lsm_v1_ops = {
         .lsm_free            = lsm_free_plain,
         .lsm_destroy         = lsm_destroy_plain,
         .lsm_stripe_by_index    = lsm_stripe_by_index_plain,
@@ -619,7 +619,7 @@ out:
         RETURN(rc);
 }
 
-struct lsm_operations lsm_join_ops = {
+const struct lsm_operations lsm_join_ops = {
         .lsm_free             = lsm_free_join,
         .lsm_destroy          = lsm_destroy_join,
         .lsm_stripe_by_index  = lsm_stripe_by_index_join,
@@ -694,7 +694,7 @@ int lsm_unpackmd_v3(struct lov_obd *lov, struct lov_stripe_md *lsm,
         return 0;
 }
 
-struct lsm_operations lsm_v3_ops = {
+const struct lsm_operations lsm_v3_ops = {
         .lsm_free            = lsm_free_plain,
         .lsm_destroy         = lsm_destroy_plain,
         .lsm_stripe_by_index    = lsm_stripe_by_index_plain,
