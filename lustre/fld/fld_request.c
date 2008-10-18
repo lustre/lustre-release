@@ -524,7 +524,7 @@ int fld_client_create(struct lu_client_fld *fld,
         if (rc == 0) {
                 /*
                  * Do not return result of calling fld_cache_insert()
-                 * here. First of all because it may return -EEXISTS. Another
+                 * here. First of all because it may return -EEXIST. Another
                  * reason is that, we do not want to stop proceeding because of
                  * cache errors.
                  */

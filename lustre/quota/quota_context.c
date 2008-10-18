@@ -102,7 +102,7 @@ void qunit_cache_cleanup(void)
         if (qunit_cachep) {
                 int rc;
                 rc = cfs_mem_cache_destroy(qunit_cachep);
-                LASSERTF(rc == 0, "couldn't destory qunit_cache slab\n");
+                LASSERTF(rc == 0, "couldn't destroy qunit_cache slab\n");
                 qunit_cachep = NULL;
         }
         EXIT;

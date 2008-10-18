@@ -3498,7 +3498,7 @@ static int filter_handle_precreate(struct obd_export *exp, struct obdo *oa,
                                obd->obd_name);
                         GOTO(out, rc = 0);
                 }
-                /* only precreate if group == 0 and o_id is specfied */
+                /* only precreate if group == 0 and o_id is specified */
                 if (group < FILTER_GROUP_MDS0 || oa->o_id == 0)
                         diff = 1;
                 else

@@ -310,7 +310,7 @@ struct mdt_thread_info {
 
         /*
          * XXX: Part Three:
-         * The following members will be filled expilictly
+         * The following members will be filled explictly
          * with zero in mdt_reint_unpack(), because they are only used
          * by reint requests (including mdt_reint_open()).
          */

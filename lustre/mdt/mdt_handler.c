@@ -1838,7 +1838,7 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
                 }
 
                 /*
-                 * Finish res_id initializing by name hash marking patr of
+                 * Finish res_id initializing by name hash marking part of
                  * directory which is taking modification.
                  */
                 res_id->name[LUSTRE_RES_ID_HSH_OFF] = lh->mlh_pdo_hash;

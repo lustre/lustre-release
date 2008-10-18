@@ -436,7 +436,7 @@ static int cml_create(const struct lu_env *env, struct md_object *mo_p,
                  * Try to split @mo_p. If split is ok, -ERESTART is returned and
                  * current thread will not peoceed with create. Instead it sends
                  * -ERESTART to client to let it know that correct MDT should be
-                 * choosen.
+                 * chosen.
                  */
                 rc = cmm_split_dir(env, mo_p);
                 if (rc)

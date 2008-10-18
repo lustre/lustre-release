@@ -395,7 +395,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
 
         isreg = S_ISREG(la->la_mode);
         isdir = S_ISDIR(la->la_mode);
-        if ((isreg && !(ma->ma_valid & MA_LOV))) {
+        if (isreg && !(ma->ma_valid & MA_LOV)) {
                 /*
                  * No EA, check whether it is will set regEA and dirEA since in
                  * above attr get, these size might be zero, so reset it, to

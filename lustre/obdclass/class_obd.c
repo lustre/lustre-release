@@ -580,7 +580,7 @@ int init_obdclass(void)
                 return err;
         }
 
-        /* This struct is already zerod for us (static global) */
+        /* This struct is already zeroed for us (static global) */
         for (i = 0; i < class_devno_max(); i++)
                 obd_devs[i] = NULL;
 

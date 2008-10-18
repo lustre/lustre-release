@@ -216,7 +216,7 @@ ldlm_extent_internal_policy_waiting(struct ldlm_lock *req,
                         continue;
 
                 /* We grow extents downwards only as far as they don't overlap
-                 * with already-granted locks, on the assumtion that clients
+                 * with already-granted locks, on the assumption that clients
                  * will be writing beyond the initial requested end and would
                  * then need to enqueue a new lock beyond previous request.
                  * l_req_extent->end strictly < req_start, checked above. */

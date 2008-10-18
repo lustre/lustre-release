@@ -1447,7 +1447,12 @@ Severity   : normal
 Bugzilla   : 16450
 Description: Convert some comments to new format.
 Details    : Update documenting comments to match doxygen conventions.
-	
+
+Severity   : normal
+Bugzilla   : 16450
+Description: Grammar fixes.
+Details    : A couple of trivial spelling fixes.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
