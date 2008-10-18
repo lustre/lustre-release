@@ -385,8 +385,6 @@ static inline void fid_be_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
         LASSERTF(fid_is_igif(dst) || fid_ver(dst) == 0, DFID"\n", PFID(dst));
 }
 
-#ifdef __KERNEL__
-
 /**
  * Storage representation for fids.
  *
@@ -401,9 +399,6 @@ struct lu_fid_pack {
 void fid_pack(struct lu_fid_pack *pack, const struct lu_fid *fid,
               struct lu_fid *befider);
 int  fid_unpack(const struct lu_fid_pack *pack, struct lu_fid *fid);
-
-/* __KERNEL__ */
-#endif
 
 static inline int fid_is_sane(const struct lu_fid *fid)
 {

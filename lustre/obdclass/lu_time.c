@@ -47,6 +47,7 @@
 # define EXPORT_SYMTAB
 #endif
 
+#include <obd_class.h>
 /* OBD_{ALLOC,FREE}_PTR() */
 #include <obd_support.h>
 #include <lprocfs_status.h>

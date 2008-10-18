@@ -1713,6 +1713,10 @@ Bugzilla   : 16450
 Description: Use cdebug_show() in CDEBUG-style macros defined outside of libcfs.
 Details    : Use cdebug_show() in CDEBUG-style macros defined outside of libcfs.
 
+Severity   : normal
+Bugzilla   : 16450
+Description: Liblustre build fixes.
+Details    : Liblustre build fixes.
 
 --------------------------------------------------------------------------------
 
