@@ -2247,3 +2247,82 @@ ldlm_mode_t lck_compat_array[] = {
         [LCK_NL] LCK_COMPAT_NL,
         [LCK_GROUP] LCK_COMPAT_GROUP
 };
+
+/**
+ * Rather arbitrary mapping from LDLM error codes to errno values. This should
+ * not escape to the user level.
+ */
+int ldlm_error2errno(ldlm_error_t error)
+{
+        int result;
+
+        switch (error) {
+        case ELDLM_OK:
+                result = 0;
+                break;
+        case ELDLM_LOCK_CHANGED:
+                result = -ESTALE;
+                break;
+        case ELDLM_LOCK_ABORTED:
+                result = -ENAVAIL;
+                break;
+        case ELDLM_LOCK_REPLACED:
+                result = -ESRCH;
+                break;
+        case ELDLM_NO_LOCK_DATA:
+                result = -ENOENT;
+                break;
+        case ELDLM_NAMESPACE_EXISTS:
+                result = -EEXIST;
+                break;
+        case ELDLM_BAD_NAMESPACE:
+                result = -EBADF;
+                break;
+        default:
+                if (((int)error) < 0)  /* cast to signed type */
+                        result = error; /* as ldlm_error_t can be unsigned */
+                else {
+                        CERROR("Invalid DLM result code: %i\n", error);
+                        result = -EPROTO;
+                }
+        }
+        return result;
+}
+EXPORT_SYMBOL(ldlm_error2errno);
+
+/**
+ * Dual to ldlm_error2errno(): maps errno values back to ldlm_error_t.
+ */
+ldlm_error_t ldlm_errno2error(int err_no)
+{
+        int error;
+
+        switch (err_no) {
+        case 0:
+                error = ELDLM_OK;
+                break;
+        case -ESTALE:
+                error = ELDLM_LOCK_CHANGED;
+                break;
+        case -ENAVAIL:
+                error = ELDLM_LOCK_ABORTED;
+                break;
+        case -ESRCH:
+                error = ELDLM_LOCK_REPLACED;
+                break;
+        case -ENOENT:
+                error = ELDLM_NO_LOCK_DATA;
+                break;
+        case -EEXIST:
+                error = ELDLM_NAMESPACE_EXISTS;
+                break;
+        case -EBADF:
+                error = ELDLM_BAD_NAMESPACE;
+                break;
+        default:
+                error = err_no;
+        }
+        return error;
+}
+EXPORT_SYMBOL(ldlm_errno2error);
+

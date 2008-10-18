@@ -1527,7 +1527,14 @@ Details    : CLIO posts ENQUEUE requests asynchronously through ptlrpcd---a
 	     case that stock ldlm_completion_ast() cannot handle as it waits
 	     until lock is granted. Introduce new ldlm_completion_ast_async()
 	     for this. Also comment ldlm_completion_ast().
-	
+
+Severity   : normal
+Bugzilla   : 16450
+Description: ldlm_error <-> errno conversion.
+Details    : Add functions to map (rather arbitrary) between LDLM error codes
+	     and standard errno values. CLIO needs this to prevent LDLM specific
+	     constants from escaping ldlm and osc.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
