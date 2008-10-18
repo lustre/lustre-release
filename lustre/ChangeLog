@@ -1545,7 +1545,7 @@ Bugzilla   : 16450
 Description: Kill unused ldlm_handle2lock_ns() function.
 Details    : Kill unused ldlm_handle2lock_ns() function.
 
-Severity   : minor
+Severity   : normal
 Bugzilla   : 16450
 Description: Add lu_ref support to ldlm_lock
 Details    : lu_ref support for ldlm_lock and ldlm_resource. See lu_ref patch. 
@@ -1565,6 +1565,13 @@ Details    : lu_ref support for ldlm_lock and ldlm_resource. See lu_ref patch.
         Arguably, changes are pervasive, and interface requires some discipline
         for proper use. On the other hand, it was very instrumental in finding 
         a few leaked lock references.
+
+Severity   : normal
+Bugzilla   : 16450
+Description: Add ldlm_lock_addref_try().
+Details    : Introduce ldlm_lock_addref_try() function (used by CLIO) that
+	     attempts to addref a lock that might be being canceled
+	     concurrently.
 
 --------------------------------------------------------------------------------
 

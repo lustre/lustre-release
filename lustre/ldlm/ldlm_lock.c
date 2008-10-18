@@ -601,6 +601,33 @@ void ldlm_lock_addref_internal_nolock(struct ldlm_lock *lock, __u32 mode)
         LDLM_DEBUG(lock, "ldlm_lock_addref(%s)", ldlm_lockname[mode]);
 }
 
+/**
+ * Attempts to addref a lock, and fails if lock is already LDLM_FL_CBPENDING
+ * or destroyed.
+ *
+ * \retval 0 success, lock was addref-ed
+ *
+ * \retval -EAGAIN lock is being canceled.
+ */
+int ldlm_lock_addref_try(struct lustre_handle *lockh, __u32 mode)
+{
+        struct ldlm_lock *lock;
+        int               result;
+
+        result = -EAGAIN;
+        lock = ldlm_handle2lock(lockh);
+        if (lock != NULL) {
+                lock_res_and_lock(lock);
+                if (!(lock->l_flags & LDLM_FL_CBPENDING)) {
+                        ldlm_lock_addref_internal_nolock(lock, mode);
+                        result = 0;
+                }
+                unlock_res_and_lock(lock);
+                LDLM_LOCK_PUT(lock);
+        }
+        return result;
+}
+
 /* only called for local locks */
 void ldlm_lock_addref_internal(struct ldlm_lock *lock, __u32 mode)
 {
