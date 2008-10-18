@@ -342,14 +342,14 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l)
         struct osd_object *obj = osd_obj(l);
         int result;
 
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
 
         result = osd_fid_lookup(env, obj, lu_object_fid(l));
         if (result == 0) {
                 if (obj->oo_inode != NULL)
                         osd_object_init0(obj);
         }
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
         return result;
 }
 
@@ -361,7 +361,7 @@ static void osd_object_free(const struct lu_env *env, struct lu_object *l)
 {
         struct osd_object *obj = osd_obj(l);
 
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
 
         dt_object_fini(&obj->oo_dt);
         OBD_FREE_PTR(obj);
@@ -451,7 +451,7 @@ static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
         struct osd_object *obj   = osd_obj(l);
         struct inode      *inode = obj->oo_inode;
 
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
 
         /*
          * If object is unlinked remove fid->ino mapping from object index.
@@ -833,18 +833,14 @@ static void osd_object_write_unlock(const struct lu_env *env,
                                     struct dt_object *dt)
 {
         struct osd_object *obj = osd_dt_obj(dt);
-
-        LASSERT(osd_invariant(obj));
-#if OSD_COUNTERS
-        {
                 struct osd_thread_info *oti = osd_oti_get(env);
+
+        LINVRNT(osd_invariant(obj));
 
                 LASSERT(obj->oo_owner == env);
                 LASSERT(oti->oti_w_locks > 0);
                 oti->oti_w_locks--;
                 obj->oo_owner = NULL;
-        }
-#endif
         up_write(&obj->oo_sem);
 }
 
@@ -942,7 +938,7 @@ static int osd_attr_get(const struct lu_env *env,
         struct osd_object *obj = osd_dt_obj(dt);
 
         LASSERT(dt_object_exists(dt));
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
 
         if (osd_object_auth(env, dt, capa, CAPA_OPC_META_READ))
                 return -EACCES;
@@ -1064,7 +1060,7 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
         struct inode       *parent;
         struct inode       *inode;
 
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
         LASSERT(obj->oo_inode == NULL);
         LASSERT(osd->od_obj_area != NULL);
 
@@ -1083,7 +1079,7 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
                 result = 0;
         } else
                 result = PTR_ERR(inode);
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
         return result;
 }
 
@@ -1151,7 +1147,7 @@ static int osd_mknod(struct osd_thread_info *info, struct osd_object *obj,
         struct inode      *dir;
         umode_t mode = attr->la_mode & (S_IFMT | S_IRWXUGO | S_ISVTX);
 
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
         LASSERT(obj->oo_inode == NULL);
         LASSERT(osd->od_obj_area != NULL);
         LASSERT(S_ISCHR(mode) || S_ISBLK(mode) ||
@@ -1165,7 +1161,7 @@ static int osd_mknod(struct osd_thread_info *info, struct osd_object *obj,
                 LASSERT(obj->oo_inode != NULL);
                 init_special_inode(obj->oo_inode, mode, attr->la_rdev);
         }
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
         return result;
 }
 
@@ -1229,7 +1225,7 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
 
         ENTRY;
 
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
         LASSERT(!dt_object_exists(dt));
         LASSERT(osd_write_locked(env, obj));
         LASSERT(th != NULL);
@@ -1257,7 +1253,7 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
         }
 
         LASSERT(ergo(result == 0, dt_object_exists(dt)));
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
         RETURN(result);
 }
 
@@ -1271,7 +1267,7 @@ static void osd_object_ref_add(const struct lu_env *env,
         struct osd_object *obj = osd_dt_obj(dt);
         struct inode *inode = obj->oo_inode;
 
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_write_locked(env, obj));
         LASSERT(th != NULL);
@@ -1281,7 +1277,7 @@ static void osd_object_ref_add(const struct lu_env *env,
         inode->i_nlink++;
         spin_unlock(&obj->oo_guard);
         mark_inode_dirty(inode);
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
 }
 
 /*
@@ -1294,7 +1290,7 @@ static void osd_object_ref_del(const struct lu_env *env,
         struct osd_object *obj = osd_dt_obj(dt);
         struct inode *inode = obj->oo_inode;
 
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_write_locked(env, obj));
         LASSERT(th != NULL);
@@ -1304,7 +1300,7 @@ static void osd_object_ref_del(const struct lu_env *env,
         inode->i_nlink--;
         spin_unlock(&obj->oo_guard);
         mark_inode_dirty(inode);
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
 }
 
 /*
@@ -1454,7 +1450,7 @@ static struct obd_capa *osd_capa_get(const struct lu_env *env,
                 RETURN(ERR_PTR(-ENOENT));
 
         LASSERT(dt_object_exists(dt));
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
 
         /* renewal sanity check */
         if (old && osd_object_auth(env, dt, old, opc))
@@ -1656,7 +1652,7 @@ static int osd_index_try(const struct lu_env *env, struct dt_object *dt,
         int result;
         struct osd_object *obj = osd_dt_obj(dt);
 
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
 
         if (osd_object_is_root(obj)) {
@@ -1700,7 +1696,7 @@ static int osd_index_try(const struct lu_env *env, struct dt_object *dt,
                 if (!osd_index_probe(env, obj, feat))
                         result = -ENOTDIR;
         }
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
 
         return result;
 }
@@ -1717,7 +1713,7 @@ static int osd_index_delete(const struct lu_env *env, struct dt_object *dt,
 
         ENTRY;
 
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
         LASSERT(bag->ic_object == obj->oo_inode);
         LASSERT(handle != NULL);
@@ -1735,7 +1731,7 @@ static int osd_index_delete(const struct lu_env *env, struct dt_object *dt,
 
         rc = iam_delete(oh->ot_handle, bag, (const struct iam_key *)key, ipd);
         osd_ipd_put(env, bag, ipd);
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
         RETURN(rc);
 }
 
@@ -1750,7 +1746,7 @@ static int osd_index_lookup(const struct lu_env *env, struct dt_object *dt,
 
         ENTRY;
 
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
         LASSERT(bag->ic_object == obj->oo_inode);
 
@@ -1764,7 +1760,7 @@ static int osd_index_lookup(const struct lu_env *env, struct dt_object *dt,
         rc = iam_lookup(bag, (const struct iam_key *)key,
                         (struct iam_rec *)rec, ipd);
         osd_ipd_put(env, bag, ipd);
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
 
         RETURN(rc);
 }
@@ -1781,7 +1777,7 @@ static int osd_index_insert(const struct lu_env *env, struct dt_object *dt,
 
         ENTRY;
 
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
         LASSERT(bag->ic_object == obj->oo_inode);
         LASSERT(th != NULL);
@@ -1799,7 +1795,7 @@ static int osd_index_insert(const struct lu_env *env, struct dt_object *dt,
         rc = iam_insert(oh->ot_handle, bag, (const struct iam_key *)key,
                         (struct iam_rec *)rec, ipd);
         osd_ipd_put(env, bag, ipd);
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
         RETURN(rc);
 }
 
@@ -2011,7 +2007,7 @@ static int osd_index_compat_lookup(const struct lu_env *env,
         struct dentry *dentry;
         struct dentry *parent;
 
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
         LASSERT(S_ISDIR(obj->oo_inode->i_mode));
         LASSERT(osd_has_index(obj));
 
@@ -2057,7 +2053,7 @@ static int osd_index_compat_lookup(const struct lu_env *env,
         } else
                 result = -ENOMEM;
         dput(parent);
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
         return result;
 }
 
@@ -2127,7 +2123,7 @@ static int osd_index_compat_insert(const struct lu_env *env,
         int result;
 
         LASSERT(S_ISDIR(obj->oo_inode->i_mode));
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
         LASSERT(th != NULL);
 
         if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_INSERT))
@@ -2152,8 +2148,8 @@ static int osd_index_compat_insert(const struct lu_env *env,
                                 CERROR("No osd slice.\n");
                                 result = -ENOENT;
                         }
-                        LASSERT(osd_invariant(obj));
-                        LASSERT(osd_invariant(child));
+                        LINVRNT(osd_invariant(obj));
+                        LINVRNT(osd_invariant(child));
                 } else {
                         CERROR("Sorry.\n");
                         result = -ENOENT;
@@ -2161,11 +2157,11 @@ static int osd_index_compat_insert(const struct lu_env *env,
                 lu_object_put(env, luch);
         } else
                 result = PTR_ERR(luch);
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
         return result;
 }
 
-static struct dt_index_operations osd_index_compat_ops = {
+static const struct dt_index_operations osd_index_compat_ops = {
         .dio_lookup = osd_index_compat_lookup,
         .dio_insert = osd_index_compat_insert,
         .dio_delete = osd_index_compat_delete
@@ -2411,7 +2407,7 @@ static int osd_fid_lookup(const struct lu_env *env,
         struct inode           *inode;
         int                     result;
 
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
         LASSERT(obj->oo_inode == NULL);
         LASSERT(fid_is_sane(fid));
         /*
@@ -2449,7 +2445,7 @@ static int osd_fid_lookup(const struct lu_env *env,
                         result = PTR_ERR(inode);
         } else if (result == -ENOENT)
                 result = 0;
-        LASSERT(osd_invariant(obj));
+        LINVRNT(osd_invariant(obj));
         RETURN(result);
 }
 

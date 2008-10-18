@@ -1485,6 +1485,14 @@ Details    : Introduce and use new LOCK_INODE_MUTEX_PARENT() macro to be used
 	     in the situations where Lustre has to lock more than one inode
 	     mutex at a time.
 
+Severity   : normal
+Bugzilla   : 16450
+Description: Add optional invariants checking support.
+Details    : Add new LINVRNT() macro, optional on new --enable-invariants
+	     configure switch. This macro is to be used for consistency and
+	     sanity checks that are too expensive to be left in `production'
+	     mode.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

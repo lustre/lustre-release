@@ -1971,6 +1971,26 @@ if test x$enable_fail_alloc != xno ; then
         AC_DEFINE([RANDOM_FAIL_ALLOC], 1, [enable randomly alloc failure])
 fi
 
+AC_ARG_ENABLE([invariants],
+        AC_HELP_STRING([--enable-invariants],
+                [enable invariant checking (cpu intensive)]),
+        [],[])
+AC_MSG_CHECKING([whether to check invariants (expensive cpu-wise)])
+AC_MSG_RESULT([$enable_invariants])
+if test x$enable_invariants = xyes ; then
+        AC_DEFINE([INVARIANT_CHECK], 1, [enable invariant checking])
+fi
+
+AC_ARG_ENABLE([lu_ref],
+        AC_HELP_STRING([--enable-lu_ref],
+                [enable lu_ref reference tracking code]),
+        [],[])
+AC_MSG_CHECKING([whether to track references with lu_ref])
+AC_MSG_RESULT([$enable_lu_ref])
+if test x$enable_lu_ref = xyes ; then
+        AC_DEFINE([USE_LU_REF], 1, [enable lu_ref reference tracking code])
+fi
+
 ])
 
 #
