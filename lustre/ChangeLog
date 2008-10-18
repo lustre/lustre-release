@@ -1499,6 +1499,14 @@ Description: Zap lock->l_granted_mode with explicit LCK_MINMODE.
 Details    : Use LCK_MINMODE rather than 0 to reset lock->l_granted_mode to
 	     its initial state.
 
+Severity   : normal
+Bugzilla   : 16450
+Description: Add lockdep support for ldlm_lock and ldlm_resource.
+Details    : Use spin_lock_nested() in (the only) situation where more than
+	     one ldlm_lock is locked simultaneously. Also, fix possible
+	     dead-lock in ldlm_lock_change_resource() by enforcing particular
+	     lock ordering.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

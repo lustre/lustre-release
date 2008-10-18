@@ -1053,10 +1053,26 @@ void intent_set_disposition(struct ldlm_reply *rep, int flag);
 #define IOC_LDLM_REGRESS_STOP           _IOWR('f', 43, long)
 #define IOC_LDLM_MAX_NR                 43
 
+/**
+ * "Modes" of acquiring lock_res, necessary to tell lockdep that taking more
+ * than one lock_res is dead-lock safe.
+ */
+enum lock_res_type {
+        LRT_NORMAL,
+        LRT_NEW
+};
+
 static inline void lock_res(struct ldlm_resource *res)
 {
         spin_lock(&res->lr_lock);
 }
+
+static inline void lock_res_nested(struct ldlm_resource *res,
+                                   enum lock_res_type mode)
+{
+        spin_lock_nested(&res->lr_lock, mode);
+}
+
 
 static inline void unlock_res(struct ldlm_resource *res)
 {
