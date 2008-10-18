@@ -1634,6 +1634,14 @@ Details    : Fix a race between lu_object_find() finding an object and its
 	     concurrent finalization. This race is (most likely) not possible
 	     on the server, but might happen on the client.
 
+Severity   : normal
+Bugzilla   : 16450
+Description: Introduce lu_ref interface.
+Details    : lu_ref is a debugging module allowing to track references to
+	     a given object. It is quite cpu expensive, and has to be
+	     explicitly enabled with --enable-lu_ref. See usage description
+	     within the patch.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
