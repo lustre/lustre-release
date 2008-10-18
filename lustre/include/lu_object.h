@@ -608,29 +608,6 @@ struct lu_site {
          * Top-level device for this stack.
          */
         struct lu_device     *ls_top_dev;
-        /*
-         * mds number of this site.
-         */
-        mdsno_t               ls_node_id;
-        /*
-         * Fid location database
-         */
-        struct lu_server_fld *ls_server_fld;
-        struct lu_client_fld *ls_client_fld;
-
-        /*
-         * Server Seq Manager
-         */
-        struct lu_server_seq *ls_server_seq;
-
-        /*
-         * Controller Seq Manager
-         */
-        struct lu_server_seq *ls_control_seq;
-        struct obd_export    *ls_control_exp;
-
-        /*
-         * Client Seq Manager
         /**
          * Wait-queue signaled when an object in this site is ultimately
          * destroyed (lu_object_free()). It is used by lu_object_find() to

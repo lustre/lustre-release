@@ -723,7 +723,7 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
         struct ldlm_namespace *ns     = info->mti_mdt->mdt_namespace;
         ldlm_policy_data_t    *policy = &info->mti_policy;
         struct ldlm_res_id    *res_id = &info->mti_res_id;
-        struct lu_site        *ls;
+        struct md_site        *ms;
         int rc;
         ENTRY;
 
@@ -735,13 +735,13 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
          * such handling in controller mds. XXX
          */
         RETURN(0);
-        ls = info->mti_mdt->mdt_md_dev.md_lu_dev.ld_site;
+        ms = mdt_md_site(info->mti_mdt);
         fid_build_reg_res_name(&LUSTRE_BFL_FID, res_id);
 
         memset(policy, 0, sizeof *policy);
         policy->l_inodebits.bits = MDS_INODELOCK_UPDATE;
 
-        if (ls->ls_control_exp == NULL) {
+        if (ms->ms_control_exp == NULL) {
                 int flags = LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB;
 
                 /*
@@ -761,7 +761,8 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
                  * This is the case mdt0 is remote node, issue DLM lock like
                  * other clients.
                  */
-                rc = ldlm_cli_enqueue(ls->ls_control_exp, NULL, &einfo, res_id,
+                rc = ldlm_cli_enqueue(ms->ms_control_exp,
+                                      NULL, &einfo, res_id,
                                       policy, &flags, NULL, 0, NULL, lh, 0);
         }
 

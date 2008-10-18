@@ -97,7 +97,7 @@ int mdd_init_obd(const struct lu_env *env, struct mdd_device *mdd,
         struct obd_device      *obd;
         ENTRY;
 
-        mds_id = mdd2lu_dev(mdd)->ld_site->ls_node_id;
+        mds_id = lu_site2md(mdd2lu_dev(mdd)->ld_site)->ms_node_id;
         name_size = strlen(MDD_OBD_NAME) + 35;
         uuid_size = strlen(MDD_OBD_UUID) + 35;
 
@@ -438,7 +438,8 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
 
         oa->o_uid = 0; /* must have 0 uid / gid on OST */
         oa->o_gid = 0;
-        oa->o_gr = FILTER_GROUP_MDS0 + mdd2lu_dev(mdd)->ld_site->ls_node_id;
+        oa->o_gr = FILTER_GROUP_MDS0 +
+                lu_site2md(mdd2lu_dev(mdd)->ld_site)->ms_node_id;
         oa->o_mode = S_IFREG | 0600;
         oa->o_id = mdd_lov_create_id(mdd_object_fid(child));
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLFLAGS |

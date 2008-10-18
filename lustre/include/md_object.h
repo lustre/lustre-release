@@ -378,8 +378,40 @@ static inline int md_do_upcall(const struct lu_env *env, struct md_device *m,
 
 struct md_object {
         struct lu_object             mo_lu;
-        struct md_object_operations *mo_ops;
-        struct md_dir_operations    *mo_dir_ops;
+        const struct md_object_operations *mo_ops;
+        const struct md_dir_operations    *mo_dir_ops;
+};
+
+/**
+ * md-server site.
+ */
+struct md_site {
+        struct lu_site ms_lu;
+        /**
+         * mds number of this site.
+         */
+        mdsno_t               ms_node_id;
+        /**
+         * Fid location database
+         */
+        struct lu_server_fld *ms_server_fld;
+        struct lu_client_fld *ms_client_fld;
+
+        /**
+         * Server Seq Manager
+         */
+        struct lu_server_seq *ms_server_seq;
+
+        /**
+         * Controller Seq Manager
+         */
+        struct lu_server_seq *ms_control_seq;
+        struct obd_export    *ms_control_exp;
+
+        /**
+         * Client Seq Manager
+         */
+        struct lu_client_seq *ms_client_seq;
 };
 
 static inline int lu_device_is_md(const struct lu_device *d)
@@ -413,6 +445,11 @@ static inline struct md_device *md_obj2dev(const struct md_object *o)
 {
         LASSERT(lu_device_is_md(o->mo_lu.lo_dev));
         return container_of0(o->mo_lu.lo_dev, struct md_device, md_lu_dev);
+}
+
+static inline struct md_site *lu_site2md(const struct lu_site *s)
+{
+        return container_of0(s, struct md_site, ms_lu);
 }
 
 static inline int md_device_init(struct md_device *md, struct lu_device_type *t)

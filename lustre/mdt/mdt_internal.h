@@ -452,6 +452,15 @@ static inline const struct lu_fid *mdt_object_fid(struct mdt_object *o)
         return lu_object_fid(&o->mot_obj.mo_lu);
 }
 
+static inline struct lu_site *mdt_lu_site(const struct mdt_device *mdt)
+{
+        return mdt->mdt_md_dev.md_lu_dev.ld_site;
+}
+
+static inline struct md_site *mdt_md_site(const struct mdt_device *mdt)
+{
+        return lu_site2md(mdt_lu_site(mdt));
+}
 
 static inline void mdt_export_evict(struct obd_export *exp)
 {

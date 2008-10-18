@@ -294,7 +294,7 @@ static int cmm_process_config(const struct lu_env *env,
                         struct lu_site *ls = cmm2lu_dev(m)->ld_site;
                         struct lu_fld_target target;
 
-                        target.ft_srv = ls->ls_server_fld;
+                        target.ft_srv = lu_site2md(ls)->ms_server_fld;
                         target.ft_idx = m->cmm_local_num;
                         target.ft_exp = NULL;
 
@@ -446,7 +446,7 @@ static int cmm_device_init(const struct lu_env *env, struct lu_device *d,
 
         /* Assign site's fld client ref, needed for asserts in osd. */
         ls = cmm2lu_dev(m)->ld_site;
-        ls->ls_client_fld = m->cmm_fld;
+        lu_site2md(ls)->ms_client_fld = m->cmm_fld;
         err = cmm_procfs_init(m, name);
         
         RETURN(err);
@@ -464,9 +464,11 @@ static struct lu_device *cmm_device_fini(const struct lu_env *env,
         spin_lock(&cm->cmm_tgt_guard);
         list_for_each_entry_safe(mc, tmp, &cm->cmm_targets, mc_linkage) {
                 struct lu_device *ld_m = mdc2lu_dev(mc);
+                struct lu_device *ld_c = cmm2lu_dev(cm);
 
                 list_del_init(&mc->mc_linkage);
-                lu_device_put(cmm2lu_dev(cm));
+                lu_ref_del(&ld_c->ld_reference, "mdc-child", ld_m);
+                lu_device_put(ld_c);
                 ld_m->ld_type->ldt_ops->ldto_device_fini(env, ld_m);
                 ld_m->ld_type->ldt_ops->ldto_device_free(env, ld_m);
                 cm->cmm_tgt_count--;
@@ -475,7 +477,7 @@ static struct lu_device *cmm_device_fini(const struct lu_env *env,
 
         fld_client_fini(cm->cmm_fld);
         ls = cmm2lu_dev(cm)->ld_site;
-        ls->ls_client_fld = NULL;
+        lu_site2md(ls)->ms_client_fld = NULL;
         cmm_procfs_fini(cm);
 
         RETURN (md2lu_dev(cm->cmm_child));
