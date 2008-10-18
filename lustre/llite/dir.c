@@ -281,7 +281,8 @@ struct page *ll_get_dir_page(struct inode *dir, __u64 hash, int exact,
                            ll_inode2fid(dir), LDLM_IBITS, &policy, mode, &lockh);
         if (!rc) {
                 struct ldlm_enqueue_info einfo = { LDLM_IBITS, mode,
-                       ll_md_blocking_ast, ldlm_completion_ast, NULL, dir };
+                       ll_md_blocking_ast, ldlm_completion_ast,
+                       NULL, NULL, dir };
                 struct lookup_intent it = { .it_op = IT_READDIR };
                 struct ptlrpc_request *request;
                 struct md_op_data *op_data;

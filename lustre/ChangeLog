@@ -1540,11 +1540,6 @@ Bugzilla   : 16450
 Description: Kill unused ldlm_handle2lock_ns() function.
 Details    : Kill unused ldlm_handle2lock_ns() function.
 
-Severity   : minor
-Bugzilla   : 16450
-Description: Kill unused ldlm_handle2lock_ns() function.
-Details    : Kill unused ldlm_handle2lock_ns() function.
-
 Severity   : normal
 Bugzilla   : 16450
 Description: Add lu_ref support to ldlm_lock
@@ -1572,6 +1567,13 @@ Description: Add ldlm_lock_addref_try().
 Details    : Introduce ldlm_lock_addref_try() function (used by CLIO) that
 	     attempts to addref a lock that might be being canceled
 	     concurrently.
+
+Severity   : normal
+Bugzilla   : 16450
+Description: Add ldlm_weigh_callback().
+Details    : Add new ->l_weigh_ast() call-back to ldlm_lock. It is called 
+        by ldlm_cancel_shrink_policy() to estimate lock "value", instead of
+        hard-coded `number of pages' logic.
 
 --------------------------------------------------------------------------------
 

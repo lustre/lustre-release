@@ -1393,7 +1393,7 @@ static int llu_file_flock(struct inode *ino,
                            fid_ver(&lli->lli_fid),
                            LDLM_FLOCK} };
         struct ldlm_enqueue_info einfo = { LDLM_FLOCK, 0, NULL,
-                ldlm_flock_completion_ast, NULL, file_lock };
+                ldlm_flock_completion_ast, NULL, NULL, file_lock };
 
         struct lustre_handle lockh = {0};
         ldlm_policy_data_t flock;
@@ -1773,7 +1773,7 @@ static int llu_lov_setstripe_ea_info(struct inode *ino, int flags,
         struct lov_stripe_md *lsm;
         struct lookup_intent oit = {.it_op = IT_OPEN, .it_flags = flags};
         struct ldlm_enqueue_info einfo = { LDLM_IBITS, LCK_CR,
-                llu_md_blocking_ast, ldlm_completion_ast, NULL, NULL };
+                llu_md_blocking_ast, ldlm_completion_ast, NULL, NULL, NULL };
 
         struct ptlrpc_request *req = NULL;
         struct lustre_md md;

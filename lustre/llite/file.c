@@ -2343,7 +2343,7 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
         struct lookup_intent oit = {.it_op = IT_OPEN,
                                    .it_flags = head_filp->f_flags|O_JOIN_FILE};
         struct ldlm_enqueue_info einfo = { LDLM_IBITS, LCK_CW,
-                ll_md_blocking_ast, ldlm_completion_ast, NULL, NULL };
+                ll_md_blocking_ast, ldlm_completion_ast, NULL, NULL, NULL };
 
         struct lustre_handle lockh;
         struct md_op_data *op_data;

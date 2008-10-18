@@ -914,7 +914,7 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
         if (!it_disposition(it, DISP_ENQ_COMPLETE)) {
                 struct ldlm_enqueue_info einfo =
                         { LDLM_IBITS, it_to_lock_mode(it), cb_blocking,
-                          ldlm_completion_ast, NULL, NULL };
+                          ldlm_completion_ast, NULL, NULL, NULL };
 
                 /* For case if upper layer did not alloc fid, do it now. */
                 if (!fid_is_sane(&op_data->op_fid2) && it->it_op & IT_CREAT) {

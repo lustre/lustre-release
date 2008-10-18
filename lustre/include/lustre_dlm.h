@@ -440,7 +440,7 @@ struct ldlm_namespace {
         /**
          * Lower limit to number of pages in lock to keep it in cache.
          */
-        unsigned int           ns_shrink_thumb;
+        unsigned long          ns_shrink_thumb;
 
         /**
          * Next debug dump, jiffies.
@@ -525,6 +525,7 @@ typedef int (*ldlm_blocking_callback)(struct ldlm_lock *lock,
 typedef int (*ldlm_completion_callback)(struct ldlm_lock *lock, int flags,
                                         void *data);
 typedef int (*ldlm_glimpse_callback)(struct ldlm_lock *lock, void *data);
+typedef unsigned long (*ldlm_weigh_callback)(struct ldlm_lock *lock);
 
 /* Interval node data for each LDLM_EXTENT lock */
 struct ldlm_interval {
@@ -598,6 +599,7 @@ struct ldlm_lock {
          * Lock glimpse handler.
          */
         ldlm_glimpse_callback    l_glimpse_ast;
+        ldlm_weigh_callback      l_weigh_ast;
 
         /**
          * Lock export.
@@ -755,6 +757,7 @@ struct ldlm_enqueue_info {
         void *ei_cb_bl;  /* blocking lock callback */
         void *ei_cb_cp;  /* lock completion callback */
         void *ei_cb_gl;  /* lock glimpse callback */
+        void *ei_cb_wg;  /* lock weigh callback */
         void *ei_cbdata; /* Data to be passed into callbacks. */
         short ei_async:1; /* async request */
 };

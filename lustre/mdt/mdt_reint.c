@@ -754,7 +754,7 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
                                             NULL, lh);
         } else {
                 struct ldlm_enqueue_info einfo = { LDLM_IBITS, LCK_EX,
-                        ldlm_blocking_ast, ldlm_completion_ast, NULL, NULL };
+                     ldlm_blocking_ast, ldlm_completion_ast, NULL, NULL, NULL };
                 int flags = 0;
 
                 /*

@@ -1290,6 +1290,13 @@ static ldlm_policy_res_t ldlm_cancel_shrink_policy(struct ldlm_namespace *ns,
                 return LDLM_POLICY_KEEP_LOCK;
 
         if (lock->l_resource->lr_type == LDLM_EXTENT) {
+                if (lock->l_weigh_ast) {
+                        /*
+                         * For liblustre, l_weigh_ast should return 0 since it
+                         * don't cache pages
+                         */
+                        page_nr = lock->l_weigh_ast(lock);
+                } else {
                 struct ldlm_extent *l_extent;
 
                 /* 
@@ -1297,22 +1304,9 @@ static ldlm_policy_res_t ldlm_cancel_shrink_policy(struct ldlm_namespace *ns,
                  * their extent. 
                  */
                 l_extent = &lock->l_policy_data.l_extent;
-                page_nr = (l_extent->end - l_extent->start);
+                        page_nr = l_extent->end - l_extent->start;
                 do_div(page_nr, CFS_PAGE_SIZE);
-
-#ifdef __KERNEL__
-                /* 
-                 * XXX: In fact this is evil hack, we can't access inode
-                 * here. For doing it right we need somehow to have number
-                 * of covered by lock. This should be fixed later when 10718 
-                 * is landed. 
-                 */
-                if (lock->l_ast_data != NULL) {
-                        struct inode *inode = lock->l_ast_data;
-                        if (page_nr > inode->i_mapping->nrpages)
-                                page_nr = inode->i_mapping->nrpages;
                 }
-#endif
                 lock_cost = 1 + page_nr;
         } else {
                 /* 

@@ -661,7 +661,7 @@ static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
 {
         struct config_llog_data *cld = (struct config_llog_data *)data;
         struct ldlm_enqueue_info einfo = { type, mode, mgc_blocking_ast,
-                ldlm_completion_ast, NULL, data};
+                         ldlm_completion_ast, NULL, NULL, data};
 
         int rc;
         ENTRY;
