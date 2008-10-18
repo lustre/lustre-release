@@ -298,7 +298,7 @@ static int obd_proc_read_health(char *page, char **start, off_t off,
                 if (obd->obd_stopping)
                         continue;
 
-                class_incref(obd);
+                class_incref(obd, __FUNCTION__, cfs_current());
                 spin_unlock(&obd_dev_lock);
 
                 if (obd_health_check(obd)) {
@@ -306,7 +306,7 @@ static int obd_proc_read_health(char *page, char **start, off_t off,
                                        "device %s reported unhealthy\n",
                                        obd->obd_name);
                 }
-                class_decref(obd);
+                class_decref(obd, __FUNCTION__, cfs_current());
                 spin_lock(&obd_dev_lock);
         }
         spin_unlock(&obd_dev_lock);

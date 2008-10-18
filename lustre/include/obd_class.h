@@ -116,8 +116,10 @@ int class_attach(struct lustre_cfg *lcfg);
 int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg);
 int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg);
 int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg);
-struct obd_device *class_incref(struct obd_device *obd);
-void class_decref(struct obd_device *obd);
+struct obd_device *class_incref(struct obd_device *obd,
+                                const char *scope, const void *source);
+void class_decref(struct obd_device *obd,
+                  const char *scope, const void *source);
 
 /*obdecho*/
 #ifdef LPROCFS
@@ -188,26 +190,8 @@ void class_del_profiles(void);
 })
 
 /* genops.c */
-#define class_export_get(exp)                                                  \
-({                                                                             \
-        struct obd_export *exp_ = exp;                                         \
-        atomic_inc(&exp_->exp_refcount);                                       \
-        CDEBUG(D_INFO, "GETting export %p : new refcount %d\n", exp_,          \
-               atomic_read(&exp_->exp_refcount));                              \
-        exp_;                                                                  \
-})
-
-#define class_export_put(exp)                                                  \
-do {                                                                           \
-        LASSERT((exp) != NULL);                                                \
-        CDEBUG(D_INFO, "PUTting export %p : new refcount %d\n", (exp),         \
-               atomic_read(&(exp)->exp_refcount) - 1);                         \
-        LASSERT(atomic_read(&(exp)->exp_refcount) > 0);                        \
-        LASSERT(atomic_read(&(exp)->exp_refcount) < 0x5a5a5a);                 \
-        __class_export_put(exp);                                               \
-} while (0)
-
-void __class_export_put(struct obd_export *);
+struct obd_export *class_export_get(struct obd_export *exp);
+void class_export_put(struct obd_export *exp);
 struct obd_export *class_new_export(struct obd_device *obddev,
                                     struct obd_uuid *cluuid);
 void class_unlink_export(struct obd_export *exp);
@@ -478,8 +462,7 @@ static inline int obd_precleanup(struct obd_device *obd,
 #ifdef __KERNEL__
         ldt = obd->obd_type->typ_lu;
         d = obd->obd_lu_dev;
-        if (ldt != NULL) {
-                LASSERT(d != NULL);
+        if (ldt != NULL && d != NULL) {
                 if (cleanup_stage == OBD_CLEANUP_EXPORTS) {
                         struct lu_env env;
 
@@ -513,9 +496,8 @@ static inline int obd_cleanup(struct obd_device *obd)
 #ifdef __KERNEL__
         ldt = obd->obd_type->typ_lu;
         d = obd->obd_lu_dev;
-        if (ldt != NULL) {
+        if (ldt != NULL && d != NULL) {
                 struct lu_env env;
-                LASSERT(d != NULL);
 
                 rc = lu_env_init(&env, NULL, ldt->ldt_ctx_tags);
                 if (rc == 0) {

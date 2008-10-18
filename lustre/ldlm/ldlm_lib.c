@@ -642,7 +642,7 @@ int target_handle_connect(struct ptlrpc_request *req)
         /* Make sure the target isn't cleaned up while we're here. Yes,
            there's still a race between the above check and our incref here.
            Really, class_uuid2obd should take the ref. */
-        targref = class_incref(target);
+        targref = class_incref(target, __FUNCTION__, cfs_current());
 
 
         str = req_capsule_client_get(&req->rq_pill, &RMF_CLUUID);
@@ -1007,7 +1007,7 @@ out:
                 spin_unlock(&export->exp_lock);
         }
         if (targref)
-                class_decref(targref);
+                class_decref(targref, __FUNCTION__, cfs_current());
         if (rc)
                 req->rq_status = rc;
         RETURN(rc);
@@ -1078,7 +1078,7 @@ struct ptlrpc_request *ptlrpc_clone_req( struct ptlrpc_request *orig_req)
         copy_req->rq_reqmsg = copy_reqmsg;
         copy_req->rq_user_desc = udesc;
 
-        class_export_get(copy_req->rq_export);
+        class_export_rpc_get(copy_req->rq_export);
         CFS_INIT_LIST_HEAD(&copy_req->rq_list);
         CFS_INIT_LIST_HEAD(&copy_req->rq_replay_list);
         sptlrpc_svc_ctx_addref(copy_req);
@@ -1100,7 +1100,7 @@ void ptlrpc_free_clone(struct ptlrpc_request *req)
 
         ptlrpc_req_drop_rs(req);
         sptlrpc_svc_ctx_decref(req);
-        class_export_put(req->rq_export);
+        class_export_rpc_put(req->rq_export);
         list_del(&req->rq_list);
 
         if (req->rq_user_desc) {

@@ -232,6 +232,8 @@ int class_attach(struct lustre_cfg *lcfg)
         spin_lock(&obd->obd_dev_lock);
         atomic_set(&obd->obd_refcount, 1);
         spin_unlock(&obd->obd_dev_lock);
+        lu_ref_init(&obd->obd_reference);
+        lu_ref_add(&obd->obd_reference, "attach", obd);
 
         obd->obd_attached = 1;
         CDEBUG(D_IOCTL, "OBD: dev %d attached type %s with refcount %d\n",
@@ -320,7 +322,7 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         spin_lock(&obd->obd_dev_lock);
         /* cleanup drops this */
-        class_incref(obd);
+        class_incref(obd, "setup", obd);
         spin_unlock(&obd->obd_dev_lock);
 
         CDEBUG(D_IOCTL, "finished setup of obd %s (uuid %s)\n",
@@ -361,7 +363,7 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
         CDEBUG(D_IOCTL, "detach on obd %s (uuid %s)\n",
                obd->obd_name, obd->obd_uuid.uuid);
 
-        class_decref(obd);
+        class_decref(obd, "attach", obd);
 
         /* not strictly necessary, but cleans up eagerly */
         obd_zombie_impexp_cull();
@@ -479,13 +481,15 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (err)
                 CERROR("Precleanup %s returned %d\n",
                        obd->obd_name, err);
-        class_decref(obd);
+        class_decref(obd, "setup", obd);
         obd->obd_set_up = 0;
         RETURN(0);
 }
 
-struct obd_device *class_incref(struct obd_device *obd)
+struct obd_device *class_incref(struct obd_device *obd,
+                                const char *scope, const void *source)
 {
+        lu_ref_add_atomic(&obd->obd_reference, scope, source);
         atomic_inc(&obd->obd_refcount);
         CDEBUG(D_INFO, "incref %s (%p) now %d\n", obd->obd_name, obd,
                atomic_read(&obd->obd_refcount));
@@ -493,7 +497,7 @@ struct obd_device *class_incref(struct obd_device *obd)
         return obd;
 }
 
-void class_decref(struct obd_device *obd)
+void class_decref(struct obd_device *obd, const char *scope, const void *source)
 {
         int err;
         int refs;
@@ -502,6 +506,7 @@ void class_decref(struct obd_device *obd)
         atomic_dec(&obd->obd_refcount);
         refs = atomic_read(&obd->obd_refcount);
         spin_unlock(&obd->obd_dev_lock);
+        lu_ref_del(&obd->obd_reference, scope, source);
 
         CDEBUG(D_INFO, "Decref %s (%p) now %d\n", obd->obd_name, obd, refs);
 

@@ -3741,6 +3741,7 @@ static struct lu_device *mdt_layer_setup(struct lu_env *env,
                 GOTO(out_alloc, rc);
         }
         lu_device_get(d);
+        lu_ref_add(&d->ld_reference, "lu-stack", &lu_site_init);
 
         RETURN(d);
 

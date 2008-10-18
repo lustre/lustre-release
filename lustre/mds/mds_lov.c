@@ -690,7 +690,7 @@ out:
                                    OBD_NOTIFY_INACTIVE, NULL);
         }
 
-        class_decref(obd);
+        class_decref(obd, "mds_lov_synchronize", obd);
         return rc;
 }
 
@@ -733,7 +733,7 @@ int mds_lov_start_synchronize(struct obd_device *obd,
            still disconnected. Taking an obd reference insures that we don't
            disconnect the LOV.  This of course means a cleanup won't
            finish for as long as the sync is blocking. */
-        class_incref(obd);
+        class_incref(obd, "mds_lov_synchronize", obd);
 
         if (nonblock) {
                 /* Synchronize in the background */
@@ -742,7 +742,7 @@ int mds_lov_start_synchronize(struct obd_device *obd,
                 if (rc < 0) {
                         CERROR("%s: error starting mds_lov_synchronize: %d\n",
                                obd->obd_name, rc);
-                        class_decref(obd);
+                        class_decref(obd, "mds_lov_synchronize", obd);
                 } else {
                         CDEBUG(D_HA, "%s: mds_lov_synchronize idx=%d "
                                "thread=%d\n", obd->obd_name,

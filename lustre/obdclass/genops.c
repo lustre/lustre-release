@@ -89,9 +89,9 @@ static void obd_device_free(struct obd_device *obd)
                        obd, obd->obd_namespace, obd->obd_force);
                 LBUG();
         }
+        lu_ref_fini(&obd->obd_reference);
         OBD_SLAB_FREE_PTR(obd, obd_device_cachep);
 }
-EXPORT_SYMBOL(obd_device_free);
 
 struct obd_type *class_search_type(const char *name)
 {
@@ -678,8 +678,23 @@ static void export_handle_addref(void *export)
         class_export_get(export);
 }
 
-void __class_export_put(struct obd_export *exp)
+struct obd_export *class_export_get(struct obd_export *exp)
 {
+        atomic_inc(&exp->exp_refcount);
+        CDEBUG(D_INFO, "GETting export %p : new refcount %d\n", exp,
+               atomic_read(&exp->exp_refcount));
+        return exp;
+}
+EXPORT_SYMBOL(class_export_get);
+
+void class_export_put(struct obd_export *exp)
+{
+        LASSERT(exp != NULL);
+        CDEBUG(D_INFO, "PUTting export %p : new refcount %d\n", exp,
+               atomic_read(&exp->exp_refcount) - 1);
+        LASSERT(atomic_read(&exp->exp_refcount) > 0);
+        LASSERT(atomic_read(&exp->exp_refcount) < 0x5a5a5a);
+
         if (atomic_dec_and_test(&exp->exp_refcount)) {
                 LASSERT (list_empty(&exp->exp_obd_chain));
 
@@ -694,9 +709,9 @@ void __class_export_put(struct obd_export *exp)
                         obd_zombie_impexp_notify();
         }
 }
-EXPORT_SYMBOL(__class_export_put);
+EXPORT_SYMBOL(class_export_put);
 
-void class_export_destroy(struct obd_export *exp)
+static void class_export_destroy(struct obd_export *exp)
 {
         struct obd_device *obd = exp->exp_obd;
         ENTRY;
@@ -715,9 +730,9 @@ void class_export_destroy(struct obd_export *exp)
         LASSERT(list_empty(&exp->exp_outstanding_replies));
         LASSERT(list_empty(&exp->exp_req_replay_queue));
         obd_destroy_export(exp);
+        class_decref(obd, "export", exp);
 
         OBD_FREE_RCU(exp, sizeof(*exp), &exp->exp_handle);
-        class_decref(obd);
         EXIT;
 }
 
@@ -768,7 +783,7 @@ struct obd_export *class_new_export(struct obd_device *obd,
         }
 
         LASSERT(!obd->obd_stopping); /* shouldn't happen, but might race */
-        class_incref(obd);
+        class_incref(obd, "export", export);
         list_add(&export->exp_obd_chain, &export->exp_obd->obd_exports);
         list_add_tail(&export->exp_obd_chain_timed,
                       &export->exp_obd->obd_exports_timed);
@@ -865,7 +880,7 @@ void class_import_destroy(struct obd_import *import)
         }
 
         LASSERT(import->imp_sec == NULL);
-        class_decref(import->imp_obd);
+        class_decref(import->imp_obd, "import", import);
         OBD_FREE_RCU(import, sizeof(*import), &import->imp_handle);
         EXIT;
 }
@@ -897,7 +912,7 @@ struct obd_import *class_new_import(struct obd_device *obd)
         spin_lock_init(&imp->imp_lock);
         imp->imp_last_success_conn = 0;
         imp->imp_state = LUSTRE_IMP_NEW;
-        imp->imp_obd = class_incref(obd);
+        imp->imp_obd = class_incref(obd, "import", imp);
         sema_init(&imp->imp_sec_mutex, 1);
         cfs_waitq_init(&imp->imp_recovery_waitq);
 

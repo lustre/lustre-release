@@ -61,6 +61,7 @@
 
 #include <lustre/lustre_idl.h>
 #include <lu_object.h>
+#include <lu_ref.h>
 #include <lustre_lib.h>
 #include <lustre_export.h>
 #include <lustre_quota.h>
@@ -1078,6 +1079,12 @@ struct obd_device {
         rwlock_t               obd_pool_lock;
         int                    obd_pool_limit;
         __u64                  obd_pool_slv;
+
+        /**
+         * A list of outstanding class_incref()'s against this obd. For
+         * debugging.
+         */
+        struct lu_ref          obd_reference;
 };
 
 #define OBD_OPT_FORCE           0x0001

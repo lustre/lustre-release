@@ -421,7 +421,7 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
 
         /* We take an obd ref to insure that we can't get to mgc_cleanup
            without calling mgc_fs_cleanup first. */
-        class_incref(obd);
+        class_incref(obd, "mgc_fs", obd);
 
         label = fsfilt_get_label(obd, mnt->mnt_sb);
         if (label)
@@ -452,7 +452,7 @@ static int mgc_fs_cleanup(struct obd_device *obd)
                 l_dput(cli->cl_mgc_configs_dir);
                 cli->cl_mgc_configs_dir = NULL;
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                class_decref(obd);
+                class_decref(obd, "mgc_fs", obd);
         }
 
         cli->cl_mgc_vfsmnt = NULL;
