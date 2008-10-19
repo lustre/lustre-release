@@ -54,7 +54,7 @@
  * Return Value:
  *   void: N/A
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -63,7 +63,7 @@ cfs_thread_proc(
     void * context
     )
 {
-    cfs_thread_context_t * thread_context = 
+    cfs_thread_context_t * thread_context =
         (cfs_thread_context_t *) context;
 
     /* Execute the specified function ... */
@@ -73,7 +73,7 @@ cfs_thread_proc(
     }
 
     /* Free the context memory */
-   
+
     cfs_free(context);
 
     /* Terminate this system thread */
@@ -93,7 +93,7 @@ cfs_thread_proc(
  * Return Value:
  *   int:   0 on success or error codes
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -164,7 +164,7 @@ int libcfs_is_mp_system = FALSE;
  *   If the symbol is in the table, return the address of it.
  *   If not, return NULL.
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -180,11 +180,11 @@ cfs_symbol_get(const char *name)
         if (!strcmp(sym->name, name)) {
             sym->ref ++;
             break;
-        } 
-    } 
+        }
+    }
     up_read(&cfs_symbol_lock);
 
-    if (sym != NULL) 
+    if (sym != NULL)
         return sym->value;
 
     return NULL;
@@ -200,7 +200,7 @@ cfs_symbol_get(const char *name)
  * Return Value:
  *   N/A
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -217,8 +217,8 @@ cfs_symbol_put(const char *name)
             LASSERT(sym->ref > 0);
             sym->ref--;
             break;
-        } 
-    } 
+        }
+    }
     up_read(&cfs_symbol_lock);
 
     LASSERT(sym != NULL);
@@ -236,7 +236,7 @@ cfs_symbol_put(const char *name)
  * Return Value:
  *   N/A
  *
- * Notes: 
+ * Notes:
  *   Zero: Succeed to register
  *   Non-Zero: Fail to register the symbol
  */
@@ -282,7 +282,7 @@ cfs_symbol_register(const char *name, const void *value)
  * Return Value:
  *   N/A
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -316,7 +316,7 @@ cfs_symbol_unregister(const char *name)
  * Return Value:
  *   N/A
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -345,7 +345,7 @@ cfs_symbol_clean()
 
 
 /* Timer dpc procedure */
- 
+
 static void
 cfs_timer_dpc_proc (
     IN PKDPC Dpc,
@@ -384,7 +384,7 @@ void cfs_init_timer(cfs_timer_t *timer)
  * Return Value:
  *   N/A
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -412,7 +412,7 @@ void cfs_timer_init(cfs_timer_t *timer, void (*func)(ulong_ptr_t), void *arg)
  * Return Value:
  *   N/A
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -432,7 +432,7 @@ void cfs_timer_done(cfs_timer_t *timer)
  * Return Value:
  *   N/A
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -466,7 +466,7 @@ void cfs_timer_arm(cfs_timer_t *timer, cfs_time_t deadline)
  * Return Value:
  *   N/A
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -492,7 +492,7 @@ void cfs_timer_disarm(cfs_timer_t *timer)
  *   1:  if it's armed.
  *   0:  if it's not.
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -520,7 +520,7 @@ int cfs_timer_is_armed(cfs_timer_t *timer)
  * Return Value:
  *   the deadline value
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -576,9 +576,18 @@ void cfs_clear_sigpending(void)
     return;
 }
 
+int cfs_need_resched(void)
+{
+        return 0;
+}
+
+void cfs_cond_resched(void)
+{
+}
+
 /*
  *  thread cpu affinity routines
- */ 
+ */
 
 typedef struct _THREAD_BASIC_INFORMATION {
     NTSTATUS ExitStatus;
@@ -751,14 +760,14 @@ void cfs_cond_resched(void)
 }
 
 /**
- **  Initialize routines 
+ **  Initialize routines
  **/
 
 void cfs_libc_init();
 
 int
 libcfs_arch_init(void)
-{ 
+{
     int         rc;
 
     spinlock_t  lock;
@@ -785,7 +794,7 @@ libcfs_arch_init(void)
          cfs_page_p_slab == NULL ){
         rc = -ENOMEM;
         goto errorout;
-    }    
+    }
 
     rc = init_task_manager();
     if (rc != 0) {
@@ -854,7 +863,7 @@ libcfs_arch_cleanup(void)
         cfs_mem_cache_destroy(cfs_page_p_slab);
     }
 
-    return; 
+    return;
 }
 
 EXPORT_SYMBOL(libcfs_arch_init);

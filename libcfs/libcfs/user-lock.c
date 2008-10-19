@@ -172,7 +172,7 @@ void wait_for_completion(struct completion *c)
 {
         LASSERT(c != NULL);
         do {
-                if (wait_handler) 
+                if (wait_handler)
                         wait_handler(1000);
                 else
                         break;
@@ -183,7 +183,7 @@ int wait_for_completion_interruptible(struct completion *c)
 {
         LASSERT(c != NULL);
         do {
-                if (wait_handler) 
+                if (wait_handler)
                         wait_handler(1000);
                 else
                         break;

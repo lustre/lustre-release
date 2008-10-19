@@ -119,7 +119,7 @@ void cfs_waitq_wait(struct cfs_waitlink *link, cfs_task_state_t state)
         (void)link;
 }
 
-int64_t cfs_waitq_timedwait(struct cfs_waitlink *link, cfs_task_state_t state, 
+int64_t cfs_waitq_timedwait(struct cfs_waitlink *link, cfs_task_state_t state,
                             int64_t timeout)
 {
         LASSERT(link != NULL);
@@ -129,16 +129,16 @@ int64_t cfs_waitq_timedwait(struct cfs_waitlink *link, cfs_task_state_t state,
 
 void cfs_schedule_timeout(cfs_task_state_t state, int64_t timeout)
 {
-        cfs_waitlink_t    l;  
+        cfs_waitlink_t    l;
         /* sleep(timeout) here instead? */
         cfs_waitq_timedwait(&l, state, timeout);
 }
 
-void 
+void
 cfs_pause(cfs_duration_t d)
 {
         struct timespec s;
-        
+
         cfs_duration_nsec(d, &s);
         nanosleep(&s, NULL);
 }
@@ -198,7 +198,7 @@ cfs_time_t cfs_timer_deadline(cfs_timer_t *l)
  */
 
 struct lustre_thread_arg {
-        cfs_thread_t f; 
+        cfs_thread_t f;
         void *arg;
 };
 static void *cfs_thread_helper(void *data)
@@ -208,7 +208,7 @@ static void *cfs_thread_helper(void *data)
         void *arg = targ->arg;
 
         free(targ);
-        
+
         (void)f(arg);
         return NULL;
 }
@@ -221,11 +221,11 @@ int cfs_create_thread(cfs_thread_t func, void *arg)
 
         if ( targ_p == NULL )
                 return -ENOMEM;
-        
+
         targ_p->f = func;
         targ_p->arg = arg;
 
-        pthread_attr_init(&tattr); 
+        pthread_attr_init(&tattr);
         pthread_attr_setdetachstate(&tattr, PTHREAD_CREATE_DETACHED);
         rc = pthread_create(&tid, &tattr, cfs_thread_helper, targ_p);
         pthread_attr_destroy(&tattr);
@@ -289,7 +289,7 @@ cfs_sigset_t cfs_block_sigs(cfs_sigset_t blocks)
 {
         cfs_sigset_t   old;
         int   rc;
-        
+
         rc = sigprocmask(SIG_SETMASK, &blocks, &old);
         LASSERT (rc == 0);
 

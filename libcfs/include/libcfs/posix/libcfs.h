@@ -307,7 +307,7 @@ struct radix_tree_node {
         unsigned long index;
         void *item;
 };
- 
+
 #define RADIX_TREE_INIT(mask)	{               \
                 NOT_IMPLEMENTED                 \
 }
@@ -334,7 +334,7 @@ static inline int radix_tree_insert(struct radix_tree_root *root,
         node->index = idx;
         node->item = item;
         list_add_tail(&node->_node, &root->list);
-        root->rnode = (void *)1001; 
+        root->rnode = (void *)1001;
         return 0;
 }
 

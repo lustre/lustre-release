@@ -151,7 +151,7 @@ static struct trace_page *trace_get_tage_try(struct trace_cpu_data *tcd,
                         tage = tage_alloc(CFS_ALLOC_ATOMIC);
                         if (tage == NULL) {
                                 if (printk_ratelimit())
-                                printk(KERN_WARNING
+                                        printk(KERN_WARNING
                                                "cannot allocate a tage (%ld)\n",
                                        tcd->tcd_cur_pages);
                                 return NULL;
@@ -196,7 +196,7 @@ static void tcd_shrink(struct trace_cpu_data *tcd)
         CFS_INIT_LIST_HEAD(&pc.pc_pages);
         spin_lock_init(&pc.pc_lock);
 
-        cfs_list_for_each_entry_safe_typed(tage, tmp, &tcd->tcd_pages, 
+        cfs_list_for_each_entry_safe_typed(tage, tmp, &tcd->tcd_pages,
                                            struct trace_page, linkage) {
                 if (pgcount-- == 0)
                         break;
@@ -451,6 +451,7 @@ libcfs_assertion_failed(const char *expr, const char *file,
 {
         libcfs_debug_msg(NULL, 0, D_EMERG, file, func, line,
                          "ASSERTION(%s) failed\n", expr);
+        /* cfs_enter_debugger(); */
         lbug_with_loc(file, func, line);
 }
 EXPORT_SYMBOL(libcfs_assertion_failed);
