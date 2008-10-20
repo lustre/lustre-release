@@ -115,7 +115,8 @@ struct mdd_object {
         unsigned long     mod_flags;
         struct dynlock    mod_pdlock;
 #ifdef CONFIG_LOCKDEP
-        struct lockdep_map mod_dep_map_pdlock;
+        /* "dep_map" name is assumed by lockdep.h macros. */
+        struct lockdep_map dep_map;
 #endif
 };
 
@@ -553,7 +554,7 @@ static inline int mdo_xattr_get(const struct lu_env *env,struct mdd_object *obj,
 
 static inline int mdo_xattr_set(const struct lu_env *env,struct mdd_object *obj,
                                 const struct lu_buf *buf, const char *name,
-                                int fl, struct thandle *handle, 
+                                int fl, struct thandle *handle,
                                 struct lustre_capa *capa)
 {
         struct dt_object *next = mdd_object_child(obj);
@@ -571,7 +572,7 @@ static inline int mdo_xattr_del(const struct lu_env *env,struct mdd_object *obj,
         return next->do_ops->do_xattr_del(env, next, name, handle, capa);
 }
 
-static inline 
+static inline
 int mdo_xattr_list(const struct lu_env *env, struct mdd_object *obj,
                    struct lu_buf *buf, struct lustre_capa *capa)
 {
@@ -580,7 +581,7 @@ int mdo_xattr_list(const struct lu_env *env, struct mdd_object *obj,
         return next->do_ops->do_xattr_list(env, next, buf, capa);
 }
 
-static inline 
+static inline
 int mdo_index_try(const struct lu_env *env, struct mdd_object *obj,
                                  const struct dt_index_features *feat)
 {
@@ -604,8 +605,8 @@ static inline void mdo_ref_del(const struct lu_env *env, struct mdd_object *obj,
         return next->do_ops->do_ref_del(env, next, handle);
 }
 
-static inline 
-int mdo_create_obj(const struct lu_env *env, struct mdd_object *o, 
+static inline
+int mdo_create_obj(const struct lu_env *env, struct mdd_object *o,
                    struct lu_attr *attr,
                    struct dt_allocation_hint *hint,
                    struct thandle *handle)
@@ -615,7 +616,7 @@ int mdo_create_obj(const struct lu_env *env, struct mdd_object *o,
 }
 
 static inline struct obd_capa *mdo_capa_get(const struct lu_env *env,
-                                            struct mdd_object *obj, 
+                                            struct mdd_object *obj,
                                             struct lustre_capa *old,
                                             __u64 opc)
 {

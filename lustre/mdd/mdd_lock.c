@@ -57,18 +57,18 @@ static struct lock_class_key mdd_pdirop_key;
 
 static void mdd_lockdep_init(struct mdd_object *obj)
 {
-        lockdep_init_map(&obj->mod_dep_map_pdlock, "pdir", &mdd_pdirop_key);
+        lockdep_set_class_and_name(obj, &mdd_pdirop_key, "pdir");
 }
 
 static void mdd_lockdep_pd_acquire(struct mdd_object *obj,
                                    enum mdd_object_role role)
 {
-        lock_acquire(&obj->mod_dep_map_pdlock, role, 0, 1, 2, RETIP);
+        lock_acquire(&obj->dep_map, role, 0, 1, 2, RETIP);
 }
 
 static void mdd_lockdep_pd_release(struct mdd_object *obj)
 {
-        lock_release(&obj->mod_dep_map_pdlock, 0, RETIP);
+        lock_release(&obj->dep_map, 0, RETIP);
 }
 
 #else /* !CONFIG_LOCKDEP */
