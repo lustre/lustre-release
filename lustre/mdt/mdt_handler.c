@@ -799,14 +799,14 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         namelen = req_capsule_get_size(info->mti_pill, &RMF_NAME,
                                        RCL_CLIENT) - 1;
         if (!info->mti_cross_ref) {
-                /* 
-                 * XXX: Check for "namelen == 0" is for getattr by fid 
+                /*
+                 * XXX: Check for "namelen == 0" is for getattr by fid
                  * (OBD_CONNECT_ATTRFID), otherwise do not allow empty name,
                  * that is the name must contain at least one character and
                  * the terminating '\0'
                  */
                 if (namelen == 0) {
-                        reqbody = req_capsule_client_get(info->mti_pill, 
+                        reqbody = req_capsule_client_get(info->mti_pill,
                                                          &RMF_MDT_BODY);
                         LASSERT(fid_is_sane(&reqbody->fid2));
                         name = NULL;
@@ -818,7 +818,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 } else {
                         lname = mdt_name(info->mti_env, (char *)name, namelen);
                         CDEBUG(D_INODE, "getattr with lock for "DFID"/%s, "
-                               "ldlm_rep = %p\n", PFID(mdt_object_fid(parent)), 
+                               "ldlm_rep = %p\n", PFID(mdt_object_fid(parent)),
                                name, ldlm_rep);
                 }
         }
@@ -4103,7 +4103,7 @@ err_fini_proc:
 err_fini_site:
         lu_site_fini(s);
 err_free_site:
-        OBD_FREE_PTR(s);
+        OBD_FREE_PTR(mite);
 
         md_device_fini(&m->mdt_md_dev);
         return (rc);
