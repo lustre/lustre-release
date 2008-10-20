@@ -1477,35 +1477,6 @@ test_18a() {
 }
 run_test_with_stat 18a "run for fixing bug14840 ==========="
 
-run_to_block_limit() {
-	local LIMIT=$((($OSTCOUNT + 1) * 1024))
-	local TESTFILE=$1
-	wait_delete_completed
-
-	# set 1 Mb quota unit size
-	set_blk_tunesz 512
-	set_blk_unitsz 1024
-
-	# bind file to a single OST
-	$LFS setstripe -c 1 $TESTFILE
-	chown $TSTUSR.$TSTUSR $TESTFILE
-
-	echo "  User quota (limit: $LIMIT kbytes)"
-	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $MOUNT
-	$SHOW_QUOTA_USER
-	echo "  Updating quota limits"
-	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $MOUNT
-	$SHOW_QUOTA_USER
-
-	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=1028 || true
-	# for now page cache of TESTFILE may still be dirty,
-	# let's push it to the corresponding OST, this will also
-	# cache NOQUOTA on the client from OST's reply
-	cancel_lru_locks osc
-	$RUNAS dd if=/dev/zero of=$TESTFILE seek=1028 bs=$BLK_SZ count=1 && \
-		error "(usr) write success, should be EDQUOT"
-}
-
 # test when mds do failover, the ost still could work well without trigger
 # watchdog b=14840
 test_18bc_sub() {
@@ -1604,6 +1575,35 @@ test_18c() {
 	lustre_fail ost  0
 }
 run_test_with_stat 18c "run for fixing bug14840(mds failover, OST_DISCONNECT is disabled) ==========="
+
+run_to_block_limit() {
+	local LIMIT=$((($OSTCOUNT + 1) * $BUNIT_SZ))
+	local TESTFILE=$1
+	wait_delete_completed
+
+	# set 1 Mb quota unit size
+	set_blk_tunesz 512
+	set_blk_unitsz 1024
+
+	# bind file to a single OST
+	$LFS setstripe -c 1 $TESTFILE
+	chown $TSTUSR.$TSTUSR $TESTFILE
+
+	echo "  User quota (limit: $LIMIT kbytes)"
+	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $MOUNT
+	$SHOW_QUOTA_USER
+	echo "  Updating quota limits"
+	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $MOUNT
+	$SHOW_QUOTA_USER
+
+	RUNDD="$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ"
+	$RUNDD count=$BUNIT_SZ || error "(usr) write failure, but expect success"
+	# for now page cache of TESTFILE may still be dirty,
+	# let's push it to the corresponding OST, this will also
+	# cache NOQUOTA on the client from OST's reply
+	cancel_lru_locks osc
+	$RUNDD seek=$BUNIT_SZ && error "(usr) write success, should be EDQUOT"
+}
 
 test_19() {
 	# 1 Mb bunit per each MDS/OSS
