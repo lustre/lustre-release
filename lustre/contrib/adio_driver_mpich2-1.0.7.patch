@@ -635,7 +635,7 @@ diff -ruN ad_lustre_orig/ad_lustre.h ad_lustre/ad_lustre.h
  #endif /* End of AD_UNIX_INCLUDE */
 diff -ruN ad_lustre_orig/ad_lustre_hints.c ad_lustre/ad_lustre_hints.c
 --- ad_lustre_orig/ad_lustre_hints.c	2008-09-17 14:36:57.000000000 +0800
-+++ ad_lustre/ad_lustre_hints.c	2008-10-15 21:31:00.000000000 +0800
++++ ad_lustre/ad_lustre_hints.c	2008-10-20 14:36:48.000000000 +0800
 @@ -1,9 +1,11 @@
  /* -*- Mode: C; c-basic-offset:4 ; -*- */
 -/* 
@@ -650,7 +650,7 @@ diff -ruN ad_lustre_orig/ad_lustre_hints.c ad_lustre/ad_lustre_hints.c
   */
  
  #include "ad_lustre.h"
-@@ -11,130 +13,189 @@
+@@ -11,130 +13,173 @@
  
  void ADIOI_LUSTRE_SetInfo(ADIO_File fd, MPI_Info users_info, int *error_code)
  {
@@ -884,17 +884,7 @@ diff -ruN ad_lustre_orig/ad_lustre_hints.c ad_lustre/ad_lustre_hints.c
 +                return;
 +	    }
 +	    MPI_Info_set(fd->info, "contiguous_data", "yes");
- 	}
--	
--	MPI_Barrier(fd->comm);
--	/* set the values for collective I/O and data sieving parameters */
--	ADIOI_GEN_SetInfo(fd, users_info, error_code);
--    } else {
--	/* The file has been opened previously and fd->fd_sys is a valid
--           file descriptor. cannot set striping parameters now. */
--	
--	/* set the values for collective I/O and data sieving parameters */
--	ADIOI_GEN_SetInfo(fd, users_info, error_code);
++	}
 +        /* same_io_size: whether the req size is same */
 +	MPI_Info_get(users_info, "same_io_size", MPI_MAX_INFO_VAL,
 +	             value, &flag);
@@ -910,23 +900,17 @@ diff -ruN ad_lustre_orig/ad_lustre_hints.c ad_lustre/ad_lustre_hints.c
 +                return;
 +	    }
 +	    MPI_Info_set(fd->info, "same_io_size", "yes");
-+	}
-+        /* Remember the current cb_nodes that the user set.
-+         * It would be used to improve collective I/O.
-+         */
-+	MPI_Info_get(users_info, "cb_nodes", MPI_MAX_INFO_VAL, value, &flag);
-+	if (flag && (int_val = atoi(value)) > 0) {
-+            tmp_val = int_val;
-+	    MPI_Bcast(&tmp_val, 1, MPI_INT, 0, fd->comm);
-+	    if (tmp_val != int_val) {
-+	        MPIO_ERR_CREATE_CODE_INFO_NOT_SAME(myname,
-+		                                   "big_req_size",
-+	                                           error_code);
-+                ADIOI_Free(value);
-+	        return;
-+	    }
-+	    MPI_Info_set(fd->info, "user_cb_nodes", value);
-+        }
+ 	}
+-	
+-	MPI_Barrier(fd->comm);
+-	/* set the values for collective I/O and data sieving parameters */
+-	ADIOI_GEN_SetInfo(fd, users_info, error_code);
+-    } else {
+-	/* The file has been opened previously and fd->fd_sys is a valid
+-           file descriptor. cannot set striping parameters now. */
+-	
+-	/* set the values for collective I/O and data sieving parameters */
+-	ADIOI_GEN_SetInfo(fd, users_info, error_code);
      }
 - 
 -    if (ADIOI_Direct_read) fd->direct_read = 1;
