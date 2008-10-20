@@ -295,7 +295,7 @@ case "$lustretag" in
 
     # Branches that have been updated to include
     # the libcfs split should be added here
-    HEAD|b_head_quota|b_hd_comp_fld|b_hd_changelog|b_hd_sptlrpc)
+    HEAD|b_head_quota|b_hd_comp_fld|b_hd_changelog|b_hd_sptlrpc|HD_SPTLRPC_BASE)
         lnettag="HEAD"
         ldiskfstag="$ldiskfstag_head"
         libcfstag="HEAD"
