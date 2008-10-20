@@ -964,7 +964,7 @@ EXPORT_SYMBOL(lu_object_locate);
 
 /**
  * Finalize and free devices in the device stack.
- * 
+ *
  * Finalize device stack by purging object cache, and calling
  * lu_device_type_operations::ldto_device_fini() and
  * lu_device_type_operations::ldto_device_free() on all devices in the stack.
@@ -1598,7 +1598,7 @@ void fid_pack(struct lu_fid_pack *pack, const struct lu_fid *fid,
         } else {
                 unsigned char *small_befider;
 
-                small_befider = (char *)befider;
+                small_befider = (unsigned char *)befider;
 
                 small_befider[0] = seq >> 16;
                 small_befider[1] = seq >> 8;
@@ -1627,7 +1627,7 @@ int fid_unpack(const struct lu_fid_pack *pack, struct lu_fid *fid)
         case 6: {
                 const unsigned char *area;
 
-                area = pack->fp_area;
+                area = (unsigned char *)pack->fp_area;
                 fid->f_seq = (area[0] << 16) | (area[1] << 8) | area[2];
                 fid->f_oid = (area[3] << 8) | area[4];
                 fid->f_ver = 0;
