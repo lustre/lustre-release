@@ -84,6 +84,10 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         obd = res->lr_namespace->ns_lvbp;
         LASSERT(obd != NULL);
 
+        CDEBUG(D_INODE, "%s: filter_lvbo_init(o_gr="LPU64", o_id="
+               LPU64")\n", obd->obd_name, res->lr_name.name[1],
+               res->lr_name.name[0]);
+
         dentry = filter_fid2dentry(obd, NULL, 0, res->lr_name.name[0]);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);

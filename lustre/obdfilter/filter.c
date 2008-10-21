@@ -3074,8 +3074,6 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 } else
                         next_id = filter_last_id(filter, group) + 1;
 
-                CDEBUG(D_INFO, "precreate objid "LPU64"\n", next_id);
-
                 dparent = filter_parent_lock(obd, group, next_id);
                 if (IS_ERR(dparent))
                         GOTO(cleanup, rc = PTR_ERR(dparent));
@@ -3120,6 +3118,10 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
                 cleanup_phase = 3;
+
+                CDEBUG(D_INODE, "%s: filter_precreate(od->o_gr="LPU64
+                       ",od->o_id="LPU64")\n", obd->obd_name, group, 
+                       next_id);
 
                 /* We mark object SUID+SGID to flag it for accepting UID+GID
                  * from client on first write.  Currently the permission bits
@@ -3227,7 +3229,7 @@ int filter_recreate(struct obd_device *obd, struct obdo *oa)
 static int filter_create(struct obd_export *exp, struct obdo *oa,
                          struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
-        struct obd_device *obd = NULL;
+        struct obd_device *obd = exp->exp_obd;
         struct lvfs_run_ctxt saved;
         struct lov_stripe_md *lsm = NULL;
         struct ldlm_res_id res_id = { .name = { oa->o_id } };
@@ -3236,6 +3238,9 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
         int flags = 0;
         int rc = 0;
         ENTRY;
+
+        CDEBUG(D_INODE, "%s: filter_create(od->o_gr="LPU64",od->o_id="
+               LPU64")\n", obd->obd_name, oa->o_gr, oa->o_id);
 
         if (!(oa->o_valid & OBD_MD_FLGROUP))
                 oa->o_gr = 0;
@@ -3250,7 +3255,6 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
                 }
         }
 
-        obd = exp->exp_obd;
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         if ((oa->o_valid & OBD_MD_FLFLAGS) &&
@@ -3307,6 +3311,9 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cleanup_phase = 1;
+
+        CDEBUG(D_INODE, "%s: filter_destroy(od->o_gr="LPU64",od->o_id="
+               LPU64")\n", obd->obd_name, oa->o_gr, oa->o_id);
 
         dchild = filter_fid2dentry(obd, NULL, oa->o_gr, oa->o_id);
         if (IS_ERR(dchild))

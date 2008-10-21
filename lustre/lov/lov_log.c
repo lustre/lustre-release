@@ -68,9 +68,9 @@
  * we need to keep cookies in stripe order, even if some are NULL, so that
  * the right cookies are passed back to the right OSTs at the client side.
  * Unset cookies should be all-zero (which will never occur naturally). */
-static int lov_llog_origin_add(struct llog_ctxt *ctxt,
-                        struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
-                        struct llog_cookie *logcookies, int numcookies)
+static int lov_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
+                               struct lov_stripe_md *lsm, 
+                               struct llog_cookie *logcookies, int numcookies)
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct lov_obd *lov = &obd->u.lov;
