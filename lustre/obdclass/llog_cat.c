@@ -63,8 +63,7 @@
  *
  * Assumes caller has already pushed us into the kernel context and is locking.
  */
-static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle,
-                                            struct llog_logid *lid)
+static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
 {
         struct llog_handle *loghandle;
         struct llog_log_hdr *llh;
@@ -86,10 +85,7 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle,
         if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_LLOG_CREATE_FAILED))
                 RETURN(ERR_PTR(-ENOSPC));
 
-        if (lid != NULL && lid->lgl_oid == 0)
-                lid = NULL;
-
-        rc = llog_create(cathandle->lgh_ctxt, &loghandle, lid, NULL);
+        rc = llog_create(cathandle->lgh_ctxt, &loghandle, NULL, NULL);
         if (rc)
                 RETURN(ERR_PTR(rc));
 
@@ -221,7 +217,6 @@ EXPORT_SYMBOL(llog_cat_put);
  * NOTE: loghandle is write-locked upon successful return
  */
 static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
-                                                struct llog_logid *lid,
                                                 int create)
 {
         struct llog_handle *loghandle = NULL;
@@ -236,7 +231,6 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
                         up_read(&cathandle->lgh_lock);
                         RETURN(loghandle);
                 } else {
-                        lid = NULL;
                         up_write(&loghandle->lgh_lock);
                 }
         }
@@ -260,13 +254,12 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
                         up_write(&cathandle->lgh_lock);
                         RETURN(loghandle);
                 } else {
-                        lid = NULL;
                         up_write(&loghandle->lgh_lock);
                 }
         }
 
         CDEBUG(D_INODE, "creating new log\n");
-        loghandle = llog_cat_new_log(cathandle, lid);
+        loghandle = llog_cat_new_log(cathandle);
         if (!IS_ERR(loghandle))
                 down_write(&loghandle->lgh_lock);
         up_write(&cathandle->lgh_lock);
@@ -286,7 +279,7 @@ int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
         ENTRY;
 
         LASSERT(rec->lrh_len <= LLOG_CHUNK_SIZE);
-        loghandle = llog_cat_current_log(cathandle, &reccookie->lgc_lgl, 1);
+        loghandle = llog_cat_current_log(cathandle, 1);
         if (IS_ERR(loghandle))
                 RETURN(PTR_ERR(loghandle));
         /* loghandle is already locked by llog_cat_current_log() for us */
@@ -294,7 +287,7 @@ int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
         up_write(&loghandle->lgh_lock);
         if (rc == -ENOSPC) {
                 /* to create a new plain log */
-                loghandle = llog_cat_current_log(cathandle, &reccookie->lgc_lgl, 1);
+                loghandle = llog_cat_current_log(cathandle, 1);
                 if (IS_ERR(loghandle))
                         RETURN(PTR_ERR(loghandle));
                 rc = llog_write_rec(loghandle, rec, reccookie, 1, buf, -1);
@@ -454,14 +447,14 @@ int llog_cat_process_thread(void *data)
          * Make sure that all cached data is sent. 
          */
         llog_sync(ctxt, NULL);
-        EXIT;
+        GOTO(release_llh, rc);
 release_llh:
         rc = llog_cat_put(llh);
         if (rc)
                 CERROR("llog_cat_put() failed %d\n", rc);
 out:
         llog_ctxt_put(ctxt);
-        OBD_FREE(args, sizeof(*args));
+        OBD_FREE_PTR(args);
         return rc;
 }
 EXPORT_SYMBOL(llog_cat_process_thread);
@@ -562,49 +555,3 @@ out:
 
         RETURN(0);
 }
-
-#if 0
-/* Assumes caller has already pushed us into the kernel context. */
-int llog_cat_init(struct llog_handle *cathandle, struct obd_uuid *tgtuuid)
-{
-        struct llog_log_hdr *llh;
-        loff_t offset = 0;
-        int rc = 0;
-        ENTRY;
-
-        LASSERT(sizeof(*llh) == LLOG_CHUNK_SIZE);
-
-        down(&cathandle->lgh_lock);
-        llh = cathandle->lgh_hdr;
-
-        if (i_size_read(cathandle->lgh_file->f_dentry->d_inode) == 0) {
-                llog_write_rec(cathandle, &llh->llh_hdr, NULL, 0, NULL, 0);
-
-write_hdr:
-                rc = lustre_fwrite(cathandle->lgh_file, llh, LLOG_CHUNK_SIZE,
-                                   &offset);
-                if (rc != LLOG_CHUNK_SIZE) {
-                        CERROR("error writing catalog header: rc %d\n", rc);
-                        OBD_FREE(llh, sizeof(*llh));
-                        if (rc >= 0)
-                                rc = -ENOSPC;
-                } else
-                        rc = 0;
-        } else {
-                rc = lustre_fread(cathandle->lgh_file, llh, LLOG_CHUNK_SIZE,
-                                  &offset);
-                if (rc != LLOG_CHUNK_SIZE) {
-                        CERROR("error reading catalog header: rc %d\n", rc);
-                        /* Can we do much else if the header is bad? */
-                        goto write_hdr;
-                } else
-                        rc = 0;
-        }
-
-        cathandle->lgh_tgtuuid = &llh->llh_tgtuuid;
-        up(&cathandle->lgh_lock);
-        RETURN(rc);
-}
-EXPORT_SYMBOL(llog_cat_init);
-
-#endif
