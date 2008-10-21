@@ -308,7 +308,7 @@ EXPORT_SYMBOL(llog_cat_add_rec);
  * Assumes caller has already pushed us into the kernel context.
  */
 int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
-                        struct llog_cookie *cookies)
+                            struct llog_cookie *cookies)
 {
         int i, index, rc = 0;
         ENTRY;
