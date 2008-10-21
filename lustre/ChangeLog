@@ -14,6 +14,13 @@ tbd  Sun Microsystems, Inc.
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
 Severity   : enhancement
+Bugzilla   : 1819
+Description: Add /proc entry for import status
+Details    : The mdc, osc, and mgc import directories now have
+             an import directory that contains useful import data for debugging
+             connection problems.
+
+Severity   : enhancement
 Bugzilla   : 15966
 Description: Re-disable certain /proc logging
 Details    : Enable and disable client's offset_stats, extents_stats and

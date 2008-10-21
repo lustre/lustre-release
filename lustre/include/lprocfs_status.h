@@ -474,6 +474,8 @@ extern int lprocfs_rd_server_uuid(char *page, char **start, off_t off,
                                   int count, int *eof, void *data);
 extern int lprocfs_rd_conn_uuid(char *page, char **start, off_t off,
                                 int count, int *eof, void *data);
+extern int lprocfs_rd_import(char *page, char **start, off_t off, int count,
+                             int *eof, void *data);
 extern int lprocfs_rd_connect_flags(char *page, char **start, off_t off,
                                     int count, int *eof, void *data);
 extern int lprocfs_rd_num_exports(char *page, char **start, off_t off,
@@ -712,6 +714,8 @@ static inline int lprocfs_rd_server_uuid(char *page, char **start, off_t off,
 static inline int lprocfs_rd_conn_uuid(char *page, char **start, off_t off,
                                        int count, int *eof, void *data)
 { return 0; }
+static inline int lprocfs_rd_import(char *page, char **start, off_t off, int count,
+                                    int *eof, void *data) { return 0; }
 static inline int lprocfs_rd_connect_flags(char *page, char **start, off_t off,
                                            int count, int *eof, void *data)
 { return 0; }
