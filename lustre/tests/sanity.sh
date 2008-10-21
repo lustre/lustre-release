@@ -151,6 +151,12 @@ test_0b() {
 }
 run_test 0b "chmod 0755 $DIR ============================="
 
+test_0c() {
+    $LCTL get_param mdc.*.import | grep  "state: FULL" || error "import not FULL"
+    $LCTL get_param mdc.*.import | grep  "target: $FSNAME-MDT" || error "bad target"
+}
+run_test 0c "check import proc ============================="
+
 test_1a() {
 	mkdir $DIR/d1
 	mkdir $DIR/d1/d2
