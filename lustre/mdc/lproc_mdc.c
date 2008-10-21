@@ -91,6 +91,7 @@ static struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
         { "max_rpcs_in_flight", mdc_rd_max_rpcs_in_flight,
                                 mdc_wr_max_rpcs_in_flight, 0 },
         { "timeouts",        lprocfs_rd_timeouts,    0, 0 },
+        { "import",          lprocfs_rd_import,    0, 0 },
         { 0 }
 };
 
