@@ -167,7 +167,7 @@ struct md_op_spec {
                         int  eadatalen;
                 } sp_ea;
         } u;
-        
+
         /** Create flag from client: such as MDS_OPEN_CREAT, and others. */
         __u32      sp_cr_flags;
 
@@ -233,7 +233,7 @@ struct md_object_operations {
 
         int (*moo_close)(const struct lu_env *env, struct md_object *obj,
                          struct md_attr *ma);
-        
+
         int (*moo_capa_get)(const struct lu_env *, struct md_object *,
                             struct lustre_capa *, int renewal);
         int (*moo_object_sync)(const struct lu_env *, struct md_object *);
@@ -421,7 +421,7 @@ static inline int lu_device_is_md(const struct lu_device *d)
 
 static inline struct md_device *lu2md_dev(const struct lu_device *d)
 {
-        LASSERT(lu_device_is_md(d));
+        LASSERT(IS_ERR(d) || lu_device_is_md(d));
         return container_of0(d, struct md_device, md_lu_dev);
 }
 
@@ -432,7 +432,7 @@ static inline struct lu_device *md2lu_dev(struct md_device *d)
 
 static inline struct md_object *lu2md(const struct lu_object *o)
 {
-        LASSERT(lu_device_is_md(o->lo_dev));
+        LASSERT(o == NULL || IS_ERR(o) || lu_device_is_md(o->lo_dev));
         return container_of0(o, struct md_object, mo_lu);
 }
 
@@ -443,7 +443,7 @@ static inline struct md_object *md_object_next(const struct md_object *obj)
 
 static inline struct md_device *md_obj2dev(const struct md_object *o)
 {
-        LASSERT(lu_device_is_md(o->mo_lu.lo_dev));
+        LASSERT(o == NULL || IS_ERR(o) || lu_device_is_md(o->mo_lu.lo_dev));
         return container_of0(o->mo_lu.lo_dev, struct md_device, md_lu_dev);
 }
 
