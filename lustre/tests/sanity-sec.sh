@@ -21,7 +21,8 @@ init_test_env $@
 RUNAS=${RUNAS:-"$LUSTRE/tests/runas"}
 WTL=${WTL:-"$LUSTRE/tests/write_time_limit"}
 
-PERM_CONF=/etc/lustre/perm.conf
+CONFDIR=/etc/lustre
+PERM_CONF=$CONFDIR/perm.conf
 SANITYSECLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 FAIL_ON_ERROR=false
 
@@ -60,6 +61,7 @@ fi
 
 MDT="`do_facet $SINGLEMDS "lctl get_param -N mdt.\*MDT\*/stats | cut -d"." -f2" || true`"
 if [ ! -z "$MDT" ]; then
+        do_facet $SINGLEMDS "mkdir -p $CONFDIR"
 	IDENTITY_FLUSH=mdt.$MDT.identity_flush
 	MDSCAPA=mdt.$MDT.capa
 	CAPA_TIMEOUT=mdt.$MDT.capa_timeout
@@ -257,9 +259,7 @@ test_4() {
 		if [ ! -z "$MDT" ]; then
 			do_facet $SINGLEMDS "echo '* $ID1 setgrp' > $PERM_CONF"
 			do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
-		fi
-		$RUNAS -u $ID1 -G1,2,$ID0 ls $DIR/d4 || error "setgroups (2)"
-		if [ ! -z "$MDT" ]; then
+        		$RUNAS -u $ID1 -G1,2,$ID0 ls $DIR/d4 || error "setgroups (2)"
 			do_facet $SINGLEMDS "rm -f $PERM_CONF"
 			do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
 		fi
