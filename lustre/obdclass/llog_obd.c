@@ -203,8 +203,8 @@ int llog_sync(struct llog_ctxt *ctxt, struct obd_export *exp)
 EXPORT_SYMBOL(llog_sync);
 
 int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
-                struct lov_stripe_md *lsm, struct llog_cookie *logcookies,
-                int numcookies)
+             struct lov_stripe_md *lsm, struct llog_cookie *logcookies,
+             int numcookies)
 {
         int raised, rc;
         ENTRY;
@@ -417,8 +417,8 @@ int llog_cat_initialize(struct obd_device *obd, int idx,
                 GOTO(out, rc);
         }
 
-        CDEBUG(D_INFO, "init llog for %s/%d - catid "LPX64"/"LPX64"/%x\n",
-               uuid->uuid, idx, idarray.lci_logid.lgl_oid,
+        CDEBUG(D_INFO, "%s: Init llog for %s/%d - catid "LPX64"/"LPX64":%x\n",
+               obd->obd_name, uuid->uuid, idx, idarray.lci_logid.lgl_oid,
                idarray.lci_logid.lgl_ogr, idarray.lci_logid.lgl_ogen);
 
         rc = obd_llog_init(obd, obd, 1, &idarray, uuid);
