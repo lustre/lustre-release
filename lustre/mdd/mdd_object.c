@@ -106,9 +106,11 @@ struct llog_cookie *mdd_max_cookie_get(const struct lu_env *env,
         }
         if (unlikely(mti->mti_max_cookie == NULL)) {
                 OBD_ALLOC(mti->mti_max_cookie, max_cookie_size);
-                if (unlikely(mti->mti_max_cookie != NULL))
+                if (likely(mti->mti_max_cookie != NULL))
                         mti->mti_max_cookie_size = max_cookie_size;
         }
+        if (likely(mti->mti_max_cookie != NULL))
+                memset(mti->mti_max_cookie, 0, mti->mti_max_cookie_size);
         return mti->mti_max_cookie;
 }
 

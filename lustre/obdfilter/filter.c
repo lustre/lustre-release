@@ -2438,10 +2438,9 @@ static int filter_llog_connect(struct obd_export *exp,
         int rc;
         ENTRY;
 
-        CDEBUG(D_OTHER, "handle connect for %s: %u/%u/%u\n", obd->obd_name,
-                (unsigned) body->lgdc_logid.lgl_ogr,
-                (unsigned) body->lgdc_logid.lgl_oid,
-                (unsigned) body->lgdc_logid.lgl_ogen);
+        CDEBUG(D_OTHER, "%s: LLog connect for: "LPX64"/"LPX64":%x\n", 
+               obd->obd_name, body->lgdc_logid.lgl_oid,
+               body->lgdc_logid.lgl_ogr, body->lgdc_logid.lgl_ogen);
 
         olg = filter_find_olg(obd, body->lgdc_logid.lgl_ogr);
         if (!olg) {
@@ -2454,6 +2453,11 @@ static int filter_llog_connect(struct obd_export *exp,
         ctxt = llog_group_get_ctxt(olg, body->lgdc_ctxt_idx);
         LASSERTF(ctxt != NULL, "ctxt is not null, ctxt idx %d \n",
                  body->lgdc_ctxt_idx);
+
+        CWARN("%s: Recovery from log "LPX64"/"LPX64":%x\n",
+              obd->obd_name, body->lgdc_logid.lgl_oid, 
+              body->lgdc_logid.lgl_ogr, body->lgdc_logid.lgl_ogen);
+
         rc = llog_connect(ctxt, 1, &body->lgdc_logid,
                           &body->lgdc_gen, NULL);
         llog_ctxt_put(ctxt);
@@ -3663,8 +3667,6 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 } else
                         next_id = filter_last_id(filter, group) + 1;
 
-                CDEBUG(D_INFO, "precreate objid "LPU64"\n", next_id);
-
                 dparent = filter_parent_lock(obd, group, next_id);
                 if (IS_ERR(dparent))
                         GOTO(cleanup, rc = PTR_ERR(dparent));
@@ -3709,6 +3711,10 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
                 cleanup_phase = 3;
+
+                CDEBUG(D_INODE, "%s: filter_precreate(od->o_gr="LPU64
+                       ",od->o_id="LPU64")\n", obd->obd_name, group, 
+                       next_id);
 
                 /* We mark object SUID+SGID to flag it for accepting UID+GID
                  * from client on first write.  Currently the permission bits
@@ -3767,13 +3773,16 @@ set_last_id:
 static int filter_create(struct obd_export *exp, struct obdo *oa,
                          struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
+        struct obd_device *obd = exp->exp_obd;
         struct filter_export_data *fed;
-        struct obd_device *obd = NULL;
         struct filter_obd *filter;
         struct lvfs_run_ctxt saved;
         struct lov_stripe_md *lsm = NULL;
         int rc = 0, diff, group = oa->o_gr;
         ENTRY;
+
+        CDEBUG(D_INODE, "%s: filter_create(od->o_gr="LPU64",od->o_id="
+               LPU64")\n", obd->obd_name, oa->o_gr, oa->o_id);
 
         if (!(oa->o_valid & OBD_MD_FLGROUP) || group == 0) {
                 CERROR("!!! nid %s sent invalid object group %d\n",
@@ -3781,7 +3790,6 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
-        obd = exp->exp_obd;
         fed = &exp->exp_filter_data;
         filter = &obd->u.filter;
 
@@ -3794,8 +3802,6 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
                 RETURN(-ENOTUNIQ);
         }
 
-        CDEBUG(D_INFO, "filter_create(od->o_gr="LPU64",od->o_id="LPU64")\n",
-               oa->o_gr, oa->o_id);
         if (ea != NULL) {
                 lsm = *ea;
                 if (lsm == NULL) {
@@ -3862,6 +3868,9 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cleanup_phase = 1;
+
+        CDEBUG(D_INODE, "%s: filter_destroy(od->o_gr="LPU64",od->o_id="
+               LPU64")\n", obd->obd_name, oa->o_gr, oa->o_id);
 
         dchild = filter_fid2dentry(obd, NULL, oa->o_gr, oa->o_id);
         if (IS_ERR(dchild))

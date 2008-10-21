@@ -597,9 +597,10 @@ int mdd_log_op_unlink(struct obd_device *obd,
         llog_ctxt_put(ctxt);
 
         OBD_FREE(lur, sizeof(*lur));
+        GOTO(out, rc);
 out:
         obd_free_memmd(mds->mds_osc_exp, &lsm);
-        RETURN(rc);
+        return rc;
 }
 
 int mdd_unlink_log(const struct lu_env *env, struct mdd_device *mdd,

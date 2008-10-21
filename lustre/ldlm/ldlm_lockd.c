@@ -713,10 +713,10 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                 LDLM_ERROR(lock, "enqueue wait took %luus from "CFS_TIME_T,
                            total_enqueue_wait, lock->l_enqueued_time.tv_sec);
 
-         req = ptlrpc_request_alloc(lock->l_export->exp_imp_reverse,
+        req = ptlrpc_request_alloc(lock->l_export->exp_imp_reverse,
                                     &RQF_LDLM_CP_CALLBACK);
-         if (req == NULL)
-                 RETURN(-ENOMEM);
+        if (req == NULL)
+                RETURN(-ENOMEM);
 
         lock_res_and_lock(lock);
         if (lock->l_resource->lr_lvb_len)
