@@ -616,6 +616,73 @@ int lprocfs_rd_conn_uuid(char *page, char **start, off_t off, int count,
         return rc;
 }
 
+#define flag2str(flag) \
+        if (imp->imp_##flag && max - len > 0) \
+                len += snprintf(str + len, max - len, " " #flag);
+        
+/**
+ * Append a space separated list of current set flags to str.
+ */
+static int obd_import_flags2str(struct obd_import *imp, char *str, 
+                                          int max)
+{
+        int len = 0;
+        
+        if (imp->imp_obd->obd_no_recov)
+                len += snprintf(str, max - len, " no_recov");
+
+        flag2str(invalid);
+        flag2str(deactive);
+        flag2str(replayable);
+        flag2str(pingable);
+        flag2str(recon_bk);
+        flag2str(last_recon);
+        return len;
+}
+#undef flags2str
+
+int lprocfs_rd_import(char *page, char **start, off_t off, int count,
+                      int *eof, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        struct obd_import *imp;
+        char *imp_state_name = NULL;
+        int rc = 0;
+
+        LASSERT(obd != NULL);
+        LPROCFS_CLIMP_CHECK(obd);
+        imp = obd->u.cli.cl_import;
+        imp_state_name = ptlrpc_import_state_name(imp->imp_state);
+        *eof = 1;
+
+        rc = snprintf(page, count, 
+                      "import: %s\n"
+                      "    target: %s@%s\n"
+                      "    state: %s\n"
+                      "    inflight: %u\n"
+                      "    conn_cnt: %u\n"
+                      "    generation: %u\n"
+                      "    inval_cnt: %u\n"
+                      "    last_replay_transno: "LPU64"\n"
+                      "    peer_committed_transno: "LPU64"\n"
+                      "    last_trasno_checked: "LPU64"\n"
+                      "    flags:",
+                      obd->obd_name,
+                      obd2cli_tgt(obd), imp->imp_connection->c_remote_uuid.uuid,
+                      imp_state_name,
+                      atomic_read(&imp->imp_inflight),
+                      imp->imp_conn_cnt,
+                      imp->imp_generation,
+                      atomic_read(&imp->imp_inval_count),
+                      imp->imp_last_replay_transno,
+                      imp->imp_peer_committed_transno,
+                      imp->imp_last_transno_checked);
+        rc += obd_import_flags2str(imp, page + rc, count - rc);
+        rc += snprintf(page+rc, count - rc, "\n");
+        LPROCFS_CLIMP_EXIT(obd);
+        return rc;
+}
+
 int lprocfs_at_hist_helper(char *page, int count, int rc,
                            struct adaptive_timeout *at)
 {
@@ -2074,6 +2141,7 @@ EXPORT_SYMBOL(lprocfs_rd_conn_uuid);
 EXPORT_SYMBOL(lprocfs_rd_num_exports);
 EXPORT_SYMBOL(lprocfs_rd_numrefs);
 EXPORT_SYMBOL(lprocfs_at_hist_helper);
+EXPORT_SYMBOL(lprocfs_rd_import);
 EXPORT_SYMBOL(lprocfs_rd_timeouts);
 EXPORT_SYMBOL(lprocfs_rd_blksize);
 EXPORT_SYMBOL(lprocfs_rd_kbytestotal);
