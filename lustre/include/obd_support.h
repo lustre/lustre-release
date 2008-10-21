@@ -266,6 +266,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_OBD_QC_CALLBACK_NET     0x603
 #define OBD_FAIL_OBD_DQACQ               0x604
 #define OBD_FAIL_OBD_LLOG_SETUP          0x605
+#define OBD_FAIL_OBD_LOG_CANCEL_REP      0x606
 
 #define OBD_FAIL_TGT_REPLY_NET           0x700
 #define OBD_FAIL_TGT_CONN_RACE           0x701

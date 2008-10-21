@@ -1120,7 +1120,11 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                                 spin_unlock(&imp->imp_lock);
 
                                 req->rq_waiting = 0;
-                                if (req->rq_resend) {
+
+                                if (req->rq_timedout||req->rq_resend) {
+                                        /* This is re-sending anyways, 
+                                         * let's mark req as resend. */
+                                        req->rq_resend = 1;
                                         lustre_msg_add_flags(req->rq_reqmsg,
                                                              MSG_RESENT);
                                         if (req->rq_bulk) {

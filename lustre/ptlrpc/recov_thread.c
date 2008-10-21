@@ -212,7 +212,7 @@ static int llcd_send(struct llog_canceld_ctxt *llcd)
          * llog_receptor_accept().
          */
         request = ptlrpc_prep_req(import, LUSTRE_LOG_VERSION,
-                                  OBD_LOG_CANCEL, 2, size,bufs);
+                                  OBD_LOG_CANCEL, 2, size, bufs);
         if (request == NULL) {
                 CERROR("Can't allocate request for sending llcd %p\n", 
                        llcd);
