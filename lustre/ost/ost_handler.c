@@ -1546,6 +1546,7 @@ static int ost_handle(struct ptlrpc_request *req)
                 CDEBUG(D_INODE, "log cancel\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOG_CANCEL_NET, 0);
                 rc = llog_origin_handle_cancel(req);
+                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOG_CANCEL_REP, 0);
                 req->rq_status = rc;
                 rc = lustre_pack_reply(req, 1, NULL, NULL);
                 if (rc)
