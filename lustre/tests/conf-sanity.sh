@@ -200,7 +200,7 @@ run_test 1 "start up ost twice (should return errors)"
 
 test_2() {
 	start_ost
-	start_mds	
+	start_mds
 	echo "start mds second time.."
 	start_mds
 	mount_client $MOUNT
@@ -287,7 +287,7 @@ test_5b() {
 	grep " $MOUNT " /etc/mtab && echo "test 5b: mtab before mount" && return 10
 	mount_client $MOUNT && return 1
 	grep " $MOUNT " /etc/mtab && echo "test 5b: mtab after failed mount" && return 11
-	umount_client $MOUNT	
+	umount_client $MOUNT
 	# stop_mds is a no-op here, and should not fail
 	cleanup_nocli || return $?
 	return 0
@@ -928,29 +928,32 @@ test_31() { # bug 10734
 run_test 31 "Connect to non-existent node (shouldn't crash)"
 
 test_32a() {
-        # XXX - make this run on client-only systems with real hardware on
-        #       the OST and MDT
-        #       there appears to be a lot of assumption here about loopback
-        #       devices
-        # or maybe this test is just totally useless on a client-only system
+	# XXX - make this test verify 1.8 -> 2.0 upgrade is working
+	# XXX - make this run on client-only systems with real hardware on
+	#       the OST and MDT
+	#       there appears to be a lot of assumption here about loopback
+	#       devices
+	# or maybe this test is just totally useless on a client-only system
 	[ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
 	[ "$mds_HOST" = "`hostname`" ] || { skip "remote MDS" && return 0; }
 	[ "$ost_HOST" = "`hostname`" -o "$ost1_HOST" = "`hostname`" ] || \
 		{ skip "remote OST" && return 0; }
 
-        [ -z "$TUNEFS" ] && skip "No tunefs" && return
-	local DISK1_4=$LUSTRE/tests/disk1_4.zip
-	[ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
+	[ -z "$TUNEFS" ] && skip "No tunefs" && return
+	local DISK1_8=$LUSTRE/tests/disk1_8.tgz
+	[ ! -r $DISK1_8 ] && skip "Cannot find $DISK1_8" && return 0
 
-	local tmpdir=$TMP/conf32a
-	unzip -o -j -d $tmpdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
+	mkdir -p $TMP/$tdir
+	tar xjvf $DISK1_8 -C $TMP/$tdir || \
+		{ skip "Cannot untar $DISK1_8" && return 0; }
+
 	load_modules
 	lctl set_param debug=$PTLDEBUG
 
 	$TUNEFS $tmpdir/mds || error "tunefs failed"
 	# nids are wrong, so client wont work, but server should start
 	start mds $tmpdir/mds "-o loop,exclude=lustre-OST0000" || return 3
-        local UUID=$(lctl get_param -n mdt.lustre-MDT0000.uuid)
+	local UUID=$(lctl get_param -n mdt.lustre-MDT0000.uuid)
 	echo MDS uuid $UUID
 	[ "$UUID" == "mdsA_UUID" ] || error "UUID is wrong: $UUID" 
 
@@ -973,8 +976,8 @@ test_32a() {
 
 	# With a new good MDT failover nid, we should be able to mount a client
 	# (but it cant talk to OST)
-        local OLDMOUNTOPT=$MOUNTOPT
-        MOUNTOPT="exclude=lustre-OST0000"
+	local OLDMOUNTOPT=$MOUNTOPT
+	MOUNTOPT="exclude=lustre-OST0000"
 	mount_client $MOUNT
         MOUNTOPT=$OLDMOUNTOPT
 	set_and_check client "lctl get_param -n mdc.*.max_rpcs_in_flight" "lustre-MDT0000.mdc.max_rpcs_in_flight" ||
@@ -993,25 +996,27 @@ test_32a() {
 
 	rm -rf $tmpdir || true	# true is only for TMP on NFS
 }
-run_test 32a "Upgrade from 1.4 (not live)"
+run_test 32a "Upgrade from 1.8 (not live)"
 
 test_32b() {
-        # XXX - make this run on client-only systems with real hardware on
-        #       the OST and MDT
-        #       there appears to be a lot of assumption here about loopback
-        #       devices
-        # or maybe this test is just totally useless on a client-only system
-        [ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
-        [ "$mds_HOST" = "`hostname`" ] || { skip "remote MDS" && return 0; }
-        [ "$ost_HOST" = "`hostname`" -o "$ost1_HOST" = "`hostname`" ] || \
+	# XXX - make this test verify 1.8 -> 2.0 upgrade is working
+	# XXX - make this run on client-only systems with real hardware on
+	#       the OST and MDT
+	#       there appears to be a lot of assumption here about loopback
+	#       devices
+	# or maybe this test is just totally useless on a client-only system
+	[ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
+	[ "$mds_HOST" = "`hostname`" ] || { skip "remote MDS" && return 0; }
+	[ "$ost_HOST" = "`hostname`" -o "$ost1_HOST" = "`hostname`" ] || \
 		{ skip "remote OST" && return 0; }
 
-        [ -z "$TUNEFS" ] && skip "No tunefs" && return
-	local DISK1_4=$LUSTRE/tests/disk1_4.zip
-	[ ! -r $DISK1_4 ] && skip "Cant find $DISK1_4, skipping" && return
+	[ -z "$TUNEFS" ] && skip "No tunefs" && return
+	local DISK1_8=$LUSTRE/tests/disk1_8.tgz
+	[ ! -r $DISK1_8 ] && skip "Cannot find $DISK1_8" && return 0
+	mkdir -p $TMP/$tdir
+	tar xjvf $DISK1_8 -C $TMP/$tdir || \
+		{ skip "Cannot untar $DISK1_8" && return ; }
 
-	local tmpdir=$TMP/conf32b
-	unzip -o -j -d $tmpdir $DISK1_4 || { skip "Cant unzip $DISK1_4, skipping" && return ; }
 	load_modules
 	lctl set_param debug=$PTLDEBUG
 	NEWNAME=sofia
@@ -1051,7 +1056,7 @@ test_32b() {
 	cleanup
 	rm -rf $tmpdir || true  # true is only for TMP on NFS
 }
-run_test 32b "Upgrade from 1.4 with writeconf"
+run_test 32b "Upgrade from 1.8 with writeconf"
 
 test_33a() { # bug 12333, was test_33
         local rc=0
@@ -1127,7 +1132,7 @@ test_34b() {
 	fi
 
 	cleanup
-	return 0	
+	return 0
 }
 run_test 34b "force umount with failed mds should be normal"
 
@@ -1143,7 +1148,7 @@ test_34c() {
 	fi
 
 	cleanup
-	return 0	
+	return 0
 }
 run_test 34c "force umount with failed ost should be normal"
 
@@ -1325,8 +1330,8 @@ test_38() { # bug 14222
 	done
 	do_facet $SINGLEMDS "debugfs -c -R \\\"dump lov_objid $TMP/lov_objid.new\\\"  $MDSDEV"
 	do_facet $SINGLEMDS "od -Ax -td8 $TMP/lov_objid.new"
-	[ "$ERROR" = "y" ] && error "old and new files are different after connect" || true	
-	
+	[ "$ERROR" = "y" ] && error "old and new files are different after connect" || true
+
 	# check it's updates in sync
 	umount_client $MOUNT
 	stop_mds
@@ -1346,7 +1351,7 @@ test_38() { # bug 14222
 	umount_client $MOUNT
 	stop_mds
 	[ "$ERROR" = "y" ] && error "old and new files are different after sync" || true
-	
+
 	log "files compared the same"
 	cleanup
 }
