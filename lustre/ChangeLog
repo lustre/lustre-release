@@ -5,26 +5,26 @@ tbd  Sun Microsystems, Inc.
         2.6.18-92.1.10.el5 (RHEL 5),
         2.6.22.14 vanilla (kernel.org).
        * Client support for unpatched kernels:
-        (see http://wiki.lustre.org/index.php?title=Patchless_Client)
-        2.6.16 - 2.6.21 vanilla (kernel.org)
+	 (see http://wiki.lustre.org/index.php?title=Patchless_Client)
+	 2.6.16 - 2.6.21 vanilla (kernel.org)
        * Recommended e2fsprogs version: 1.40.11-sun1
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
-        removed cwd "./" (refer to Bugzilla 14399).
+	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
 Severity   : enhancement
 Bugzilla   : 1819
 Description: Add /proc entry for import status
 Details    : The mdc, osc, and mgc import directories now have
-             an import directory that contains useful import data for debugging
-             connection problems.
+	     an import directory that contains useful import data for debugging
+	     connection problems.
 
 Severity   : enhancement
 Bugzilla   : 15966
 Description: Re-disable certain /proc logging
 Details    : Enable and disable client's offset_stats, extents_stats and
-             extents_stats_per_process stats logging on the fly.
+	     extents_stats_per_process stats logging on the fly.
 
 Severity   : major
 Frequency  : Only on FC kernels 2.6.22+
@@ -37,13 +37,13 @@ Severity   : enhancement
 Bugzilla   : 16643
 Description: Generic /proc file permissions
 Details    : Set /Proc file permissions in a more generic way to enable non-
-             root users operate on some /proc files.
+	     root users operate on some /proc files.
 
 Severity   : major
 Bugzilla   : 16561
 Description: Hitting mdc_commit_close() ASSERTION
 Details    : Properly handle request reference release in
-             ll_release_openhandle().
+	     ll_release_openhandle().
 
 Severity   : normal
 Bugzilla   : 15975
@@ -57,8 +57,7 @@ Description: Allow OST glimpses to return PW locks
 Severity   : minor
 Bugzilla   : 16717
 Description: LBUG when llog conf file is full
-Details    : When llog bitmap is full, ENOSPC should be returned for plain
-	     log.
+Details    : When llog bitmap is full, ENOSPC should be returned for plain log.
 
 Severity   : normal
 Bugzilla   : 16907
@@ -81,8 +80,8 @@ Bugzilla   : 16611
 Frequency  : on recovery
 Description: I/O failures after umount during fail back
 Details    : if client reconnected to restarted server we need join to recovery
-	     instead of find server handler is changed and process self eviction
-	     with cancel all locks.
+	     instead of find server handler is changed and process self
+	     eviction with cancel all locks.
 
 Severity   : enhancement
 Bugzilla   : 16633
@@ -197,7 +196,7 @@ Details    : Lustre does not destroy flock lock before last reference goes
 
 Severity   : normal
 Bugzilla   : 15210
-Description: add recount protection for osc callbacks, so avoid panic on shutdown
+Description: add refcount protection for osc callbacks, avoid panic on shutdown
 
 Severity   : normal
 Bugzilla   : 12653
@@ -229,15 +228,15 @@ Details    : Need properly lock accesses the flock deadlock detection list.
 Severity   : minor
 Bugzilla   : 15837
 Description: oops in page fault handler
-Details    : kernel page fault handler can return two special 'pages' in error case, don't
-	     try dereference NOPAGE_SIGBUS and NOPAGE_OMM.
+Details    : kernel page fault handler can return two special 'pages' in error
+	     case, don't try dereference NOPAGE_SIGBUS and NOPAGE_OMM.
 
 Severity   : minor
 Bugzilla   : 15716
 Description: timeout with invalidate import.
-Details    : ptlrpcd_check call obd_zombie_impexp_cull and wait request which should be
-	     handled by ptlrpcd. This produce long age waiting and -ETIMEOUT
-	     ptlrpc_invalidate_import and as result LASSERT.
+Details    : ptlrpcd_check call obd_zombie_impexp_cull and wait request which
+	     should be handled by ptlrpcd. This produce long age waiting and
+	     -ETIMEOUT ptlrpc_invalidate_import and as result LASSERT.
 
 Severity   : enhancement
 Bugzilla   : 15741
@@ -324,7 +323,7 @@ Details    : Move the 'good_osts' check before the 'total_bavail' check.  This
 Severity   : major
 Bugzilla   : 14326
 Description: Use old size assignment to avoid deadlock
-Details    : This reverts the changes in bugs 2369 and bug 14138 that introduced
+Details    : Reverts the changes in bugs 2369 and bug 14138 that introduced
 	     the scheduling while holding a spinlock.  We do not need locking
 	     for size in ll_update_inode() because size is only updated from
 	     the MDS for directories or files without objects, so there is no
@@ -386,8 +385,8 @@ Bugzilla   : 14533
 Frequency  : rare, on recovery
 Description: read procfs can produce deadlock in some situation
 Details    : Holding lprocfs lock which send rpc can produce block for destroy
-	     obd objects and this also block reconnect with -EALREADY. This isn't
-	     fix all lprocfs bugs - but make it rare.
+	     obd objects and this also block reconnect with -EALREADY. This
+	     isn't fix all lprocfs bugs - but make it rare.
 
 Severity   : enhancement
 Bugzilla   : 15152
@@ -430,11 +429,11 @@ Severity   : normal
 Frequency  : occasional
 Bugzilla   : 13537
 Description: Correctly check stale fid, not start epoch if ost not support SOM
-Details    : open with flag O_CREATE need set old fid in op_fid3 because op_fid2
-	     overwrited with new generated fid, but mds can anwer with one of these
-	     two fids and both is not stale. setattr incorectly start epoch and
-	     assume will be called done_writeting, but without SOM done_writing
-	     never called.
+Details    : open with flag O_CREATE need set old fid in op_fid3 because
+	     op_fid2 was overwritten with new generated fid, but mds can answer
+	     with one of these two fids and both is not stale.  Setattr
+	     incorrectly started an epoch and assume will be called
+	     done_writing, but without SOM done_writing ever being called.
 
 Severity   : major
 Frequency  : rare, depends on device drivers and load
@@ -487,8 +486,8 @@ Severity   : minor
 Frequency  : rare
 Bugzilla   : 13196
 Description: Don't allow skipping OSTs if index has been specified.
-Details    : Don't allow skipping OSTs if index has been specified, make locking
-	     in internal create lots better.
+Details    : Don't allow skipping OSTs if index has been specified, make
+	     locking in internal create lots better.
 
 Severity   : normal
 Bugzilla   : 12228
@@ -965,8 +964,8 @@ Details    : Modify the target file & which_kernel.
 Severity   : enhancement
 Bugzilla   : 10786
 Description: omit set fsid for export NFS
-Details    : fix set/restore device id for avoid EMFILE error and mark lustre fs
-	     as FS_REQUIRES_DEV for avoid problems with generate fsid.
+Details    : fix set/restore device id for avoid EMFILE error and mark lustre
+	     fs as FS_REQUIRES_DEV for avoid problems with generate fsid.
 
 Severity   : normal
 Bugzilla   : 13304
@@ -1327,9 +1326,9 @@ Description: add -gid, -group, -uid, -user options to lfs find
 Severity   : normal
 Bugzilla   : 15950
 Description: Hung threads in invalidate_inode_pages2_range
-Details    : The direct IO path doesn't call check_rpcs to submit a new RPC once
-	     one is completed. As a result, some RPCs are stuck in the queue
-	     and are never sent.
+Details    : The direct IO path doesn't call check_rpcs to submit a new RPC
+	     once one is completed. As a result, some RPCs are stuck in the
+	     queue and are never sent.
 
 Severity   : normal
 Bugzilla   : 14629
@@ -1358,7 +1357,7 @@ Details    : If insertion of an extent fails, then discard the inode
 Severity   : normal
 Bugzilla   : 16199
 Description: don't always update ctime in ext3_xattr_set_handle()
-Details    : Current xattr code updates the inode ctime in ext3_xattr_set_handle.
+Details    : Current xattr code updates inode ctime in ext3_xattr_set_handle.
 	     In some cases the ctime should not be updated, for example for
 	     2.0->1.8 compatibility it is necessary to delete an xattr and it
 	     should not update the ctime.
@@ -1435,7 +1434,7 @@ Details    : Initialize RPC XID from clock at startup (randomly if clock is
 Severity   : enhancement
 Bugzilla   : 14095
 Description: Add lustre_start utility to start or stop multiple Lustre servers
-             from a CSV file.
+	     from a CSV file.
 
 Severity   : major
 Bugzilla   : 17024
@@ -1445,10 +1444,10 @@ Details    : In case of memory pressure, list_del() can be called twice on
 
 Severity   : normal
 Bugzilla   : 17026
-Description: (ptllnd_peer.c:557:kptllnd_peer_check_sends()) ASSERTION(!in_interrupt()) failed
-Details    : fix stack overflow in the distributed lock manager by defering export
-	     eviction after a failed ast to the elt thread instead of handling
-	     it in the dlm interpret routine.
+Description: kptllnd_peer_check_sends()) ASSERTION(!in_interrupt()) failed
+Details    : fix stack overflow in the distributed lock manager by defering
+	     export eviction after a failed AST to the elt thread instead of
+	     handling it in the dlm interpret routine.
 
 Severity   : normal
 Bugzilla   : 16450
@@ -1474,9 +1473,9 @@ Details    : Call cmm_device_free() in the failure path of cmm_device_alloc().
 Severity   : normal
 Bugzilla   : 16450
 Description: Add lockdep support to dt_object_operations locking interface.
-Details    : Augment ->do_{read,write}_lock() prototypes with a `role' parameter
-	     indicating lock ordering. Update mdd code to use new locking
-	     interface.
+Details    : Augment ->do_{read,write}_lock() prototypes with a `role'
+	     parameter indicating lock ordering. Update mdd code to use new
+	     locking interface.
 
 Severity   : normal
 Bugzilla   : 16450
@@ -1690,8 +1689,8 @@ Details    : Remove unused code.
 Severity   : normal
 Bugzilla   : 16450
 Description: Add special type for ptlrpc_request interpret functions.
-Details    : Add lu_env parameter to ->rq_interpreter call-back. NULL is passed 
-        there. Actual usage will be in CLIO.
+Details    : Add lu_env parameter to ->rq_interpreter call-back. NULL is passed
+	     there. Actual usage will be in CLIO.
 
 Severity   : normal
 Bugzilla   : 16450
@@ -1848,8 +1847,8 @@ Severity   : normal
 Frequency  : during server recovery
 Bugzilla   : 11203
 Description: MDS failing to send precreate requests due to OSCC_FLAG_RECOVERING
-Details    : request with rq_no_resend flag not awake l_wait_event if they get a
-	     timeout.
+Details    : request with rq_no_resend flag not awake l_wait_event if they get
+	     a timeout.
 
 Severity   : minor
 Frequency  : nfs export on patchless client
