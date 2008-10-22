@@ -52,7 +52,7 @@ test_0b() {
 run_test 0b "empty replay"
 
 test_1() {
-    date > $DIR/$tfile
+    date > $DIR/$tfile || error "error creating $DIR/$tfile"
     fail ost1
     $CHECKSTAT -t file $DIR/$tfile || return 1
     rm -f $DIR/$tfile
@@ -61,11 +61,11 @@ run_test 1 "touch"
 
 test_2() {
     for i in `seq 10`; do
-        echo "tag-$i" > $DIR/$tfile-$i
+        echo "tag-$i" > $DIR/$tfile-$i || error "create $DIR/$tfile-$i"
     done 
     fail ost1
     for i in `seq 10`; do
-      grep -q "tag-$i" $DIR/$tfile-$i || error "f2-$i"
+      grep -q "tag-$i" $DIR/$tfile-$i || error "grep $DIR/$tfile-$i"
     done 
     rm -f $DIR/$tfile-*
 }
