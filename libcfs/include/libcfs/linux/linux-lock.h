@@ -160,9 +160,11 @@ struct lock_class_key {
 
 # define lockdep_set_class(lock, key) \
         do { (void)sizeof (lock);(void)sizeof (key); } while (0)
-
 /* This has to be a macro, so that `subclass' can be undefined in kernels that
  * do not support lockdep. */
+#endif /* lockdep_set_class */
+
+#ifndef CONFIG_DEBUG_LOCK_ALLOC
 #ifndef mutex_lock_nested
 # define mutex_lock_nested(mutex, subclass) mutex_lock(mutex)
 #endif
@@ -178,7 +180,7 @@ struct lock_class_key {
 #ifndef down_write_nested
 # define down_write_nested(lock, subclass) down_write(lock)
 #endif
+#endif /* CONFIG_DEBUG_LOCK_ALLOC */
 
-#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18) */
 
 #endif /* __LIBCFS_LINUX_CFS_LOCK_H__ */
