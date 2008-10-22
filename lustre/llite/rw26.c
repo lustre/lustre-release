@@ -94,10 +94,10 @@ static void ll_invalidatepage(struct page *page, unsigned long offset)
 }
 #endif
 
-#ifdef HAVE_RELEASEPAGE_WITH_GFP
-#define RELEASEPAGE_ARG_TYPE gfp_t
-#else
+#ifdef HAVE_RELEASEPAGE_WITH_INT
 #define RELEASEPAGE_ARG_TYPE int
+#else
+#define RELEASEPAGE_ARG_TYPE gfp_t
 #endif
 static int ll_releasepage(struct page *page, RELEASEPAGE_ARG_TYPE gfp_mask)
 {
