@@ -473,16 +473,10 @@ int ldlm_refresh_waiting_lock(struct ldlm_lock *lock)
 static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
                             const char *ast_type)
 {
-        struct ptlrpc_connection *conn = lock->l_export->exp_connection;
-        char                     *str = libcfs_nid2str(conn->c_peer.nid);
-
-        LCONSOLE_ERROR_MSG(0x138, "A client on nid %s was evicted from "
-                           "service %s.\n", str,
-                           lock->l_export->exp_obd->obd_name);
-
-        LCONSOLE_ERROR_MSG(0x012, "Lock %s callback to %s timed out for "
-                           "resource %d\n", ast_type,
-                           obd_export_nid2str(lock->l_export), rc);
+        LCONSOLE_ERROR_MSG(0x138, "%s: A client on nid %s was evicted due "
+                           "to a lock %s callback time out: rc %d\n",
+                           lock->l_export->exp_obd->obd_name,
+                           obd_export_nid2str(lock->l_export), ast_type, rc);
 
         if (obd_dump_on_timeout)
                 libcfs_debug_dumplog();
@@ -887,7 +881,7 @@ static void ldlm_svc_get_eopc(const struct ldlm_request *dlm_req,
         if (op)
                 lprocfs_counter_incr(srv_stats, op);
 
-        return ;
+        return;
 }
 
 /*
