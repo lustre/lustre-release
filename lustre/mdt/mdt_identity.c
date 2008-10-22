@@ -138,7 +138,7 @@ static int mdt_identity_do_upcall(struct upcall_cache *cache,
 
         snprintf(keystr, sizeof(keystr), LPU64, entry->ue_key);
 
-        CDEBUG(D_INFO, "The upcall is: %s \n", cache->uc_upcall);
+        CDEBUG(D_INFO, "The upcall is: '%s'\n", cache->uc_upcall);
 
         rc = USERMODEHELPER(argv[0], argv, envp);
         if (rc < 0) {
