@@ -801,9 +801,18 @@ do_node() {
     return ${PIPESTATUS[0]}
 }
 
+single_local_node () {
+   [ "$1" = "$HOSTNAME" ]
+}
+
 do_nodes() {
     local rnodes=$1
     shift
+
+    if $(single_local_node $rnodes); then 
+        do_node $rnodes $@
+        return $?
+    fi
 
     # This is part from do_node
     local myPDSH=$PDSH
