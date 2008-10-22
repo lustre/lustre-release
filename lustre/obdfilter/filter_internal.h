@@ -93,6 +93,12 @@ struct filter_mod_data {
 /* Client cache seconds */
 #define FILTER_FMD_MAX_AGE_DEFAULT ((obd_timeout + 10) * HZ)
 
+#ifndef HAVE_PAGE_CONSTANT
+#define mapping_cap_page_constant_write(mapping) 0
+#define SetPageConstant(page) do {} while (0)
+#define ClearPageConstant(page) do {} while (0)
+#endif
+
 struct filter_mod_data *filter_fmd_find(struct obd_export *exp,
                                         obd_id objid, obd_gr group);
 struct filter_mod_data *filter_fmd_get(struct obd_export *exp,
