@@ -93,7 +93,13 @@ static void ll_invalidatepage(struct page *page, unsigned long offset)
                 ll_removepage(page);
 }
 #endif
-static int ll_releasepage(struct page *page, gfp_t gfp_mask)
+
+#ifdef HAVE_RELEASEPAGE_WITH_GFP
+#define RELEASEPAGE_ARG_TYPE gfp_t
+#else
+#define RELEASEPAGE_ARG_TYPE int
+#endif
+static int ll_releasepage(struct page *page, RELEASEPAGE_ARG_TYPE gfp_mask)
 {
         if (PagePrivate(page))
                 ll_removepage(page);
@@ -104,11 +110,11 @@ static int ll_set_page_dirty(struct page *page)
 {
         struct ll_async_page *llap;
         ENTRY;
-        
+
         llap = llap_from_page(page, LLAP_ORIGIN_UNKNOWN);
         if (IS_ERR(llap))
                 RETURN(PTR_ERR(llap));
-        
+
         llap_write_pending(page->mapping->host, llap);
         RETURN(__set_page_dirty_nobuffers(page));
 }
@@ -183,7 +189,7 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct inode *inode,
                 pga[i].pg = pages[i];
                 pga[i].off = file_offset;
                 /* To the end of the page, or the length, whatever is less */
-                pga[i].count = min_t(int, CFS_PAGE_SIZE - 
+                pga[i].count = min_t(int, CFS_PAGE_SIZE -
                                           (file_offset & ~CFS_PAGE_MASK),
                                      length);
                 pga[i].flag = 0;
@@ -262,7 +268,7 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
         oinfo.oi_md = lsm;
         oinfo.oi_capa = ll_osscapa_get(inode, opc);
 
-        /* need locking between buffered and direct access. and race with 
+        /* need locking between buffered and direct access. and race with
          *size changing by concurrent truncates and writes. */
         if (rw == READ)
                 LOCK_INODE_MUTEX(inode);
@@ -332,7 +338,7 @@ out:
 
         if (tot_bytes > 0) {
                 int rc;
-                
+
                 rc = ptlrpc_set_wait(set);
                 if (rc) {
                         tot_bytes = rc;
