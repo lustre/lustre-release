@@ -175,7 +175,7 @@ static ssize_t lprocfs_fops_read(struct file *f, char __user *buf,
         OBD_FAIL_TIMEOUT(OBD_FAIL_LPROC_REMOVE, 10);
         if (!dp->deleted && dp->read_proc)
                 rc = dp->read_proc(page, &start, *ppos, CFS_PAGE_SIZE,
-                        &eof, dp->data);
+                                   &eof, dp->data);
         LPROCFS_EXIT();
         if (rc <= 0)
                 goto out;
@@ -409,7 +409,7 @@ struct proc_dir_entry *lprocfs_register(const char *name,
 int lprocfs_rd_uint(char *page, char **start, off_t off,
                     int count, int *eof, void *data)
 {
-        unsigned int *temp = (unsigned int *)data;
+        unsigned int *temp = data;
         return snprintf(page, count, "%u\n", *temp);
 }
 
@@ -443,7 +443,7 @@ int lprocfs_rd_u64(char *page, char **start, off_t off,
 int lprocfs_rd_atomic(char *page, char **start, off_t off,
                    int count, int *eof, void *data)
 {
-        atomic_t *atom = (atomic_t *)data;
+        atomic_t *atom = data;
         LASSERT(atom != NULL);
         *eof = 1;
         return snprintf(page, count, "%d\n", atomic_read(atom));
@@ -470,7 +470,7 @@ int lprocfs_wr_atomic(struct file *file, const char *buffer,
 int lprocfs_rd_uuid(char *page, char **start, off_t off, int count,
                     int *eof, void *data)
 {
-        struct obd_device *obd = (struct obd_device*)data;
+        struct obd_device *obd = data;
 
         LASSERT(obd != NULL);
         *eof = 1;
@@ -478,9 +478,9 @@ int lprocfs_rd_uuid(char *page, char **start, off_t off, int count,
 }
 
 int lprocfs_rd_name(char *page, char **start, off_t off, int count,
-                    int *eof, void* data)
+                    int *eof, void *data)
 {
-        struct obd_device *dev = (struct obd_device *)data;
+        struct obd_device *dev = data;
 
         LASSERT(dev != NULL);
         LASSERT(dev->obd_name != NULL);
@@ -491,7 +491,7 @@ int lprocfs_rd_name(char *page, char **start, off_t off, int count,
 int lprocfs_rd_fstype(char *page, char **start, off_t off, int count, int *eof,
                       void *data)
 {
-        struct obd_device *obd = (struct obd_device *)data;
+        struct obd_device *obd = data;
 
         LASSERT(obd != NULL);
         LASSERT(obd->obd_fsops != NULL);
@@ -599,7 +599,7 @@ int lprocfs_rd_filesfree(char *page, char **start, off_t off, int count,
 int lprocfs_rd_server_uuid(char *page, char **start, off_t off, int count,
                            int *eof, void *data)
 {
-        struct obd_device *obd = (struct obd_device *)data;
+        struct obd_device *obd = data;
         struct obd_import *imp;
         char *imp_state_name = NULL;
         int rc = 0;
@@ -620,7 +620,7 @@ int lprocfs_rd_server_uuid(char *page, char **start, off_t off, int count,
 int lprocfs_rd_conn_uuid(char *page, char **start, off_t off, int count,
                          int *eof,  void *data)
 {
-        struct obd_device *obd = (struct obd_device*)data;
+        struct obd_device *obd = data;
         struct ptlrpc_connection *conn;
         int rc = 0;
 
@@ -836,7 +836,7 @@ EXPORT_SYMBOL(lprocfs_rd_connect_flags);
 int lprocfs_rd_num_exports(char *page, char **start, off_t off, int count,
                            int *eof,  void *data)
 {
-        struct obd_device *obd = (struct obd_device*)data;
+        struct obd_device *obd = data;
 
         LASSERT(obd != NULL);
         *eof = 1;
@@ -1174,7 +1174,7 @@ int lprocfs_register_stats(struct proc_dir_entry *root, const char *name,
         if (entry == NULL)
                 return -ENOMEM;
         entry->proc_fops = &lprocfs_stats_seq_fops;
-        entry->data = (void *)stats;
+        entry->data = stats;
         return 0;
 }
 
@@ -1446,7 +1446,7 @@ void lprocfs_init_ldlm_stats(struct lprocfs_stats *ldlm_stats)
 int lprocfs_exp_rd_nid(char *page, char **start, off_t off, int count,
                          int *eof,  void *data)
 {
-        struct obd_export *exp = (struct obd_export*)data;
+        struct obd_export *exp = data;
         LASSERT(exp != NULL);
         *eof = 1;
         return snprintf(page, count, "%s\n", obd_export_nid2str(exp));
@@ -1821,24 +1821,26 @@ int lprocfs_read_frac_helper(char *buffer, unsigned long count, long val, int mu
 
                 temp_frac = frac_val * 10;
                 buffer[prtn++] = '.';
-                while (frac_bits < 2 && (temp_frac / mult) < 1 ) { /*only reserved 2bits fraction*/
+                while (frac_bits < 2 && (temp_frac / mult) < 1 ) {
+                        /* only reserved 2 bits fraction */
                         buffer[prtn++] ='0';
                         temp_frac *= 10;
                         frac_bits++;
                 }
                 /*
-                  Need to think these cases :
-                        1. #echo x.00 > /proc/xxx       output result : x
-                        2. #echo x.0x > /proc/xxx       output result : x.0x
-                        3. #echo x.x0 > /proc/xxx       output result : x.x
-                        4. #echo x.xx > /proc/xxx       output result : x.xx
-                        Only reserved 2bits fraction.
+                 * Need to think these cases :
+                 *      1. #echo x.00 > /proc/xxx       output result : x
+                 *      2. #echo x.0x > /proc/xxx       output result : x.0x
+                 *      3. #echo x.x0 > /proc/xxx       output result : x.x
+                 *      4. #echo x.xx > /proc/xxx       output result : x.xx
+                 *      Only reserved 2 bits fraction.
                  */
                 for (i = 0; i < (5 - prtn); i++)
                         temp_mult *= 10;
 
                 frac_bits = min((int)count - prtn, 3 - frac_bits);
-                prtn += snprintf(buffer + prtn, frac_bits, "%ld", frac_val * temp_mult / mult);
+                prtn += snprintf(buffer + prtn, frac_bits, "%ld",
+                                 frac_val * temp_mult / mult);
 
                 prtn--;
                 while(buffer[prtn] < '1' || buffer[prtn] > '9') {
@@ -1920,8 +1922,7 @@ int lprocfs_write_frac_u64_helper(const char *buffer, unsigned long count,
         return 0;
 }
 
-int lprocfs_seq_create(cfs_proc_dir_entry_t *parent,
-                       char *name, mode_t mode,
+int lprocfs_seq_create(cfs_proc_dir_entry_t *parent, char *name, mode_t mode,
                        struct file_operations *seq_fops, void *data)
 {
         struct proc_dir_entry *entry;
@@ -2110,18 +2111,17 @@ EXPORT_SYMBOL(lprocfs_obd_rd_recovery_status);
 int lprocfs_obd_rd_recovery_maxtime(char *page, char **start, off_t off,
                                     int count, int *eof, void *data)
 {
-        struct obd_device *obd = (struct obd_device *)data;
+        struct obd_device *obd = data;
         LASSERT(obd != NULL);
 
-        return snprintf(page, count, "%lu\n",
-                        obd->obd_recovery_max_time);
+        return snprintf(page, count, "%lu\n", obd->obd_recovery_max_time);
 }
 EXPORT_SYMBOL(lprocfs_obd_rd_recovery_maxtime);
 
 int lprocfs_obd_wr_recovery_maxtime(struct file *file, const char *buffer,
                                     unsigned long count, void *data)
 {
-        struct obd_device *obd = (struct obd_device *)data;
+        struct obd_device *obd = data;
         int val, rc;
         LASSERT(obd != NULL);
 
