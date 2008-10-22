@@ -1595,11 +1595,11 @@ int lfs_setquota_times(int argc, char **argv)
                 qctl.qc_type = !strcmp(argv[2], "-u") ? USRQUOTA : GRPQUOTA;
 
                 if ((dqi->dqi_bgrace = str2sec(argv[3])) == ULONG_MAX) {
-                        fprintf(stderr, "error: bad block-grace: %s\n", optarg);
+                        fprintf(stderr, "error: bad block-grace: %s\n", argv[3]);
                         return CMD_HELP;
                 }
                 if ((dqi->dqi_igrace = str2sec(argv[4])) == ULONG_MAX) {
-                        fprintf(stderr, "error: bad inode-grace: %s\n", optarg);
+                        fprintf(stderr, "error: bad inode-grace: %s\n", argv[4]);
                         return CMD_HELP;
                 }
                 dqb->dqb_valid = QIF_TIMES;
@@ -1714,7 +1714,7 @@ int lfs_setquota(int argc, char **argv)
                 rc = name2id(&qctl.qc_id, argv[2],
                              (qctl.qc_type == USRQUOTA) ? USER : GROUP);
                 if (rc) {
-                        fprintf(stderr, "error: unknown id %s\n", optarg);
+                        fprintf(stderr, "error: unknown id %s\n", argv[2]);
                         return CMD_HELP;
                 }
 
