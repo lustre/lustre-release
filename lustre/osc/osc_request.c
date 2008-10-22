@@ -4233,6 +4233,7 @@ struct obd_ops osc_obd_ops = {
         .o_register_lock_cancel_cb = osc_register_lock_cancel_cb,
         .o_unregister_lock_cancel_cb = osc_unregister_lock_cancel_cb,
 };
+
 int __init osc_init(void)
 {
         struct lprocfs_static_vars lvars = { 0 };

@@ -1630,6 +1630,8 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOG_CANCEL_NET))
                         RETURN(0);
                 rc = llog_origin_handle_cancel(req);
+                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOG_CANCEL_REP))
+                        RETURN(0);
                 ldlm_callback_reply(req, rc);
                 RETURN(0);
         case OBD_QC_CALLBACK:
@@ -1815,6 +1817,8 @@ static int ldlm_cancel_handler(struct ptlrpc_request *req)
                 if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOG_CANCEL_NET))
                         RETURN(0);
                 rc = llog_origin_handle_cancel(req);
+                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOG_CANCEL_REP))
+                        RETURN(0);
                 ldlm_callback_reply(req, rc);
                 RETURN(0);
         default:

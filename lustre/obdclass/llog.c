@@ -100,17 +100,17 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
         int rc = 0;
         ENTRY;
 
-        CDEBUG(D_RPCTRACE, "canceling %d in log "LPX64"\n",
+        CDEBUG(D_RPCTRACE, "Canceling %d in log "LPX64"\n",
                index, loghandle->lgh_id.lgl_oid);
 
         if (index == 0) {
-                CERROR("cannot cancel index 0 (which is header)\n");
+                CERROR("Can't cancel index 0 which is header\n");
                 RETURN(-EINVAL);
         }
 
         if (!ext2_clear_bit(index, llh->llh_bitmap)) {
-                CDEBUG(D_RPCTRACE, "catalog index %u already clear?\n", index);
-                RETURN(-EINVAL);
+                CDEBUG(D_RPCTRACE, "Catalog index %u already clear?\n", index);
+                RETURN(-ENOENT);
         }
 
         llh->llh_count--;
@@ -120,7 +120,7 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
             (loghandle->lgh_last_idx == (LLOG_BITMAP_BYTES * 8) - 1)) {
                 rc = llog_destroy(loghandle);
                 if (rc) {
-                        CERROR("failure destroying log after last cancel: %d\n",
+                        CERROR("Failure destroying log after last cancel: %d\n",
                                rc);
                         ext2_set_bit(index, llh->llh_bitmap);
                         llh->llh_count++;
@@ -132,7 +132,7 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
 
         rc = llog_write_rec(loghandle, &llh->llh_hdr, NULL, 0, NULL, 0);
         if (rc) {
-                CERROR("failure re-writing header %d\n", rc);
+                CERROR("Failure re-writing header %d\n", rc);
                 ext2_set_bit(index, llh->llh_bitmap);
                 llh->llh_count++;
         }

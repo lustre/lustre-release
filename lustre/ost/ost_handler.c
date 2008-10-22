@@ -1631,6 +1631,8 @@ int ost_handle(struct ptlrpc_request *req)
                 if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOG_CANCEL_NET))
                         RETURN(0);
                 rc = llog_origin_handle_cancel(req);
+                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOG_CANCEL_REP))
+                        RETURN(0);
                 req->rq_status = rc;
                 rc = req_capsule_server_pack(&req->rq_pill);
                 if (rc)
