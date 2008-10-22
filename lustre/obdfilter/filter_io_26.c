@@ -99,7 +99,7 @@ static void record_finish_io(struct filter_iobuf *iobuf, int rw, int rc)
 {
         struct filter_obd *filter = iobuf->dr_filter;
 
-        /* CAVEAT EMPTOR: possibly in IRQ context 
+        /* CAVEAT EMPTOR: possibly in IRQ context
          * DO NOT record procfs stats here!!! */
 
         if (rw == OBD_BRW_READ)
@@ -117,7 +117,7 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
         struct bio_vec *bvl;
         int i;
 
-        /* CAVEAT EMPTOR: possibly in IRQ context 
+        /* CAVEAT EMPTOR: possibly in IRQ context
          * DO NOT record procfs stats here!!! */
 
         if (bio->bi_size)                       /* Not complete */
@@ -131,7 +131,7 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
                        "with any interesting messages leading up to this point "
                        "(like SCSI errors, perhaps).  Because bi_private is "
                        "NULL, I can't wake up the thread that initiated this "
-                       "I/O -- so you will probably have to reboot this node.\n");
+                       "IO - you will probably have to reboot this node.\n");
                 CERROR("bi_next: %p, bi_flags: %lx, bi_rw: %lu, bi_vcnt: %d, "
                        "bi_idx: %d, bi->size: %d, bi_end_io: %p, bi_cnt: %d, "
                        "bi_private: %p\n", bio->bi_next, bio->bi_flags,
@@ -147,19 +147,15 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
                         if (likely(error == 0))
                                 SetPageUptodate(bvl->bv_page);
                         LASSERT(PageLocked(bvl->bv_page));
-#ifdef HAVE_PAGE_CONSTANT
                         ClearPageConstant(bvl->bv_page);
-#endif
                 }
                 record_finish_io(iobuf, OBD_BRW_READ, error);
         } else {
-#ifdef HAVE_PAGE_CONSTANT
                 if (mapping_cap_page_constant_write(iobuf->dr_pages[0]->mapping)){
                         bio_for_each_segment(bvl, bio, i) {
                                 ClearPageConstant(bvl->bv_page);
                         }
                 }
-#endif
                 record_finish_io(iobuf, OBD_BRW_WRITE, error);
         }
 
@@ -327,17 +323,15 @@ int filter_do_bio(struct obd_export *exp, struct inode *inode,
                                 sector_bits))
                                 nblocks++;
 
-#ifdef HAVE_PAGE_CONSTANT
-                        /* I only set the page to be constant only if it 
-                         * is mapped to a contiguous underlying disk block(s). 
-                         * It will then make sure the corresponding device 
-                         * cache of raid5 will be overwritten by this page. 
+                        /* I only set the page to be constant only if it
+                         * is mapped to a contiguous underlying disk block(s).
+                         * It will then make sure the corresponding device
+                         * cache of raid5 will be overwritten by this page.
                          * - jay */
-                        if ((rw == OBD_BRW_WRITE) && 
-                            (nblocks == blocks_per_page) && 
+                        if ((rw == OBD_BRW_WRITE) &&
+                            (nblocks == blocks_per_page) &&
                             mapping_cap_page_constant_write(inode->i_mapping))
                                SetPageConstant(page);
-#endif
 
                         if (bio != NULL &&
                             can_be_merged(bio, sector) &&
@@ -622,7 +616,8 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                  * not from direct_io, or it's written by root, then mark
                  * the whole io request as ignore quota request */
                 if (lnb->flags & OBD_BRW_NOQUOTA ||
-                    (lnb->flags & (OBD_BRW_FROM_GRANT | OBD_BRW_SYNC)) == OBD_BRW_FROM_GRANT)
+                    (lnb->flags & (OBD_BRW_FROM_GRANT | OBD_BRW_SYNC)) ==
+                    OBD_BRW_FROM_GRANT)
                         iobuf->dr_ignore_quota = 1;
         }
 
@@ -680,8 +675,8 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                  * in the inode before filter_direct_io() - see bug 10357. */
                 save = iattr.ia_valid;
                 iattr.ia_valid &= (ATTR_UID | ATTR_GID);
-                rc = fsfilt_setattr(obd, res->dentry, oti->oti_handle, &iattr, 0);
-                CDEBUG(D_QUOTA, "set uid(%u)/gid(%u) to ino(%lu). rc(%d)\n", 
+                rc = fsfilt_setattr(obd, res->dentry, oti->oti_handle,&iattr,0);
+                CDEBUG(D_QUOTA, "set uid(%u)/gid(%u) to ino(%lu). rc(%d)\n",
                                 iattr.ia_uid, iattr.ia_gid, inode->i_ino, rc);
                 iattr.ia_valid = save & ~(ATTR_UID | ATTR_GID);
         }
@@ -714,8 +709,8 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 
 cleanup:
         if (rec_pending)
-                lquota_pending_commit(filter_quota_interface_ref, obd, oa->o_uid,
-                                      oa->o_gid, niocount);
+                lquota_pending_commit(filter_quota_interface_ref, obd,
+                                      oa->o_uid, oa->o_gid, niocount);
 
         filter_grant_commit(exp, niocount, res);
 
