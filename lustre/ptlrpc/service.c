@@ -1093,7 +1093,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
         request->rq_session.lc_thread = thread;
         lu_context_enter(&request->rq_session);
 
-        CDEBUG(D_NET, "got req "LPD64"\n", request->rq_xid);
+        CDEBUG(D_NET, "got req "LPU64"\n", request->rq_xid);
 
         request->rq_svc_thread = thread;
         if (thread)
