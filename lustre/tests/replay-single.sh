@@ -16,6 +16,8 @@ init_test_env $@
 CHECK_GRANT=${CHECK_GRANT:-"yes"}
 GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 
+remote_mds_nodsh && log "SKIP: remote MDS with nodsh" && exit 0
+
 # Skip these tests
 # bug number:
 ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT"
@@ -46,6 +48,8 @@ test_0a() {	# was test_0
 run_test 0a "empty replay"
 
 test_0b() {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     # this test attempts to trigger a race in the precreation code, 
     # and must run before any other objects are created on the filesystem
     fail ost1
@@ -832,6 +836,8 @@ run_test 42 "recovery after ost failure"
 
 # timeout in MDS/OST recovery RPC will LBUG MDS
 test_43() { # bug 2530
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     replay_barrier mds
 
     # OBD_FAIL_OST_CREATE_NET 0x204
@@ -924,6 +930,8 @@ test_46() {
 run_test 46 "Don't leak file handle after open resend (3325)"
 
 test_47() { # bug 2824
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     # create some files to make sure precreate has been done on all 
     # OSTs. (just in case this test is run independently)
     createmany -o $DIR/$tfile 20  || return 1
@@ -947,6 +955,8 @@ test_47() { # bug 2824
 run_test 47 "MDS->OSC failure during precreate cleanup (2824)"
 
 test_48() {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     replay_barrier mds
     createmany -o $DIR/$tfile 20  || return 1
     # OBD_FAIL_OST_EROFS 0x216
@@ -1307,6 +1317,8 @@ run_test 58c "resend/reconstruct setxattr op"
 # log_commit_thread vs filter_destroy race used to lead to import use after free
 # bug 11658
 test_59() {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     mkdir -p $DIR/$tdir
     createmany -o $DIR/$tdir/$tfile-%d 200
     sync
@@ -1352,6 +1364,8 @@ run_test 60 "test llog post recovery init vs llog unlink"
 
 #test race  llog recovery thread vs llog cleanup
 test_61a() {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     mkdir -p $DIR/$tdir
     createmany -o $DIR/$tdir/$tfile-%d 800
     replay_barrier ost1 
@@ -1381,6 +1395,8 @@ run_test 61b "test race mds llog sync vs llog cleanup"
 
 #test race  cancel cookie cb vs llog cleanup
 test_61c() {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
 #   OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT 0x222 
     touch $DIR/$tfile 
     do_facet ost "lctl set_param fail_loc=0x80000222"
@@ -1456,6 +1472,8 @@ at_start()
 
 test_65a() #bug 3055
 {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     at_start || return 0
     $LCTL dk > /dev/null
     debugsave
@@ -1482,6 +1500,8 @@ run_test 65a "AT: verify early replies"
 
 test_65b() #bug 3055
 {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     at_start || return 0
     # turn on D_ADAPTTO
     debugsave
@@ -1513,6 +1533,8 @@ run_test 65b "AT: verify early replies on packed reply / bulk"
 
 test_66a() #bug 3055
 {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     at_start || return 0
     lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts | grep "portal 12"
     # adjust 5s at a time so no early reply is sent (within deadline)
@@ -1541,6 +1563,8 @@ run_test 66a "AT: verify MDT service time adjusts with no early replies"
 
 test_66b() #bug 3055
 {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     at_start || return 0
     ORIG=$(lctl get_param -n mdc.${FSNAME}-*.timeouts | awk '/network/ {print $4}')
     lctl set_param fail_val=$(($ORIG + 5))
@@ -1557,6 +1581,8 @@ run_test 66b "AT: verify net latency adjusts"
 
 test_67a() #bug 3055
 {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     at_start || return 0
     CONN1=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
     # sleeping threads may drive values above this
@@ -1576,6 +1602,8 @@ run_test 67a "AT: verify slow request processing doesn't induce reconnects"
 
 test_67b() #bug 3055
 {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     at_start || return 0
     CONN1=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
 #define OBD_FAIL_OST_PAUSE_CREATE        0x223
@@ -1604,6 +1632,8 @@ run_test 67b "AT: verify instant slowdown doesn't induce reconnects"
 
 test_68 () #bug 13813
 {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     at_start || return 0
     local ldlm_enqueue_min=$(find /sys -name ldlm_enqueue_min)
     [ -z "$ldlm_enqueue_min" ] && skip "missing /sys/.../ldlm_enqueue_min" && return 0
