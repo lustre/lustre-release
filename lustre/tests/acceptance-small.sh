@@ -69,6 +69,18 @@ title() {
     RANTEST=${RANTEST}$*", "
 }
 
+skip_remost()
+{
+	remote_ost_nodsh && log "SKIP: $1: remote OST with nodsh" && return 0
+	return 1
+}
+
+skip_remmds()
+{
+	remote_mds_nodsh && log "SKIP: $1: remote MDS with nodsh" && return 0
+	return 1
+}
+
 for NAME in $CONFIGS; do
 	export NAME MOUNT START CLEAN
 	. $LUSTRE/tests/cfg/$NAME.sh
@@ -84,6 +96,8 @@ for NAME in $CONFIGS; do
 
 	setup_if_needed
 
+	MSKIPPED=0
+	OSKIPPED=0
 	if [ "$RUNTESTS" != "no" ]; then
 	        title runtests
 		bash runtests
@@ -263,19 +277,15 @@ for NAME in $CONFIGS; do
 		SANITYN="done"
 	fi
 
-	remote_mds && log "Remote MDS, skipping LFSCK test" && LFSCK=no
-	remote_ost && log "Remote OST, skipping LFSCK test" && LFSCK=no
-
-	if [ "$LFSCK" != "no" -a -x /usr/sbin/lfsck ]; then
+	[ "$LFSCK" != "no" ] && remote_mds && log "Remote MDS, skipping LFSCK test" && LFSCK=no && MSKIPPED=1
+	[ "$LFSCK" != "no" ] && remote_ost && log "Remote OST, skipping LFSCK test" && LFSCK=no && OSKIPPED=1
+	if [ "$LFSCK" != "no" ]; then
 	        title lfsck
-		E2VER=`e2fsck -V 2>&1 | head -n 1 | cut -d' ' -f 2`
-		if [ `echo $E2VER | cut -d. -f2` -ge 39 ] && \
-		   [ "`echo $E2VER | grep cfs`" -o \
-			"`echo $E2VER | grep sun`" ]; then
-		   		bash lfscktest.sh
+		if [ -x /usr/sbin/lfsck ]; then
+			bash lfscktest.sh
 		else
-			e2fsck -V
-			echo "e2fsck does not support lfsck, skipping"
+			log "$(e2fsck -V)"
+			log "SKIP: e2fsck does not support lfsck"
 		fi
 		LFSCK="done"
 	fi
@@ -284,18 +294,6 @@ for NAME in $CONFIGS; do
 	if [ "$LIBLUSTRE" != "no" ]; then
 	        title liblustre
 		assert_env MGSNID MOUNT2
-		$CLEANUP
-		unload_modules
-		# Liblustre needs accept=all, noacl
-		[ -f /etc/modprobe.conf ] && MODPROBECONF=/etc/modprobe.conf
-		[ -f /etc/modprobe.d/Lustre ] && MODPROBECONF=/etc/modprobe.d/Lustre
-
-		LNETOPTS="$(awk '/^options lnet/ { print $0}' $MODPROBECONF | \
-			sed 's/^options lnet //g; s/"//g') accept=all" \
-			MDS_MOUNT_OPTS=$(echo $MDS_MOUNT_OPTS | sed 's/^[ \t]*//;s/[ \t]*$//') \
-			MDS_MOUNT_OPTS="${MDS_MOUNT_OPTS},noacl" \
-			MDS_MOUNT_OPTS=${MDS_MOUNT_OPTS/#,/-o } \
-			$SETUP
 		export LIBLUSTRE_MOUNT_POINT=$MOUNT2
 		export LIBLUSTRE_MOUNT_RETRY=5
 		export LIBLUSTRE_MOUNT_TARGET=$MGSNID:/$FSNAME
@@ -314,49 +312,59 @@ for NAME in $CONFIGS; do
 	$CLEANUP
 done
 
+[ "$REPLAY_SINGLE" != "no" ] && skip_remmds replay-single && REPLAY_SINGLE=no && MSKIPPED=1
 if [ "$REPLAY_SINGLE" != "no" ]; then
         title replay-single
 	bash replay-single.sh
 	REPLAY_SINGLE="done"
 fi
 
+[ "$CONF_SANITY" != "no" ] && skip_remmds conf-sanity && CONF_SANITY=no && MSKIPPED=1
+[ "$CONF_SANITY" != "no" ] && skip_remost conf-sanity && CONF_SANITY=no && OSKIPPED=1
 if [ "$CONF_SANITY" != "no" ]; then
         title conf-sanity
         bash conf-sanity.sh
         CONF_SANITY="done"
 fi
 
+[ "$RECOVERY_SMALL" != "no" ] && skip_remmds recover-small && RECOVERY_SMALL=no && MSKIPPED=1
 if [ "$RECOVERY_SMALL" != "no" ]; then
         title recovery-small
         bash recovery-small.sh
         RECOVERY_SMALL="done"
 fi
 
+[ "$REPLAY_OST_SINGLE" != "no" ] && skip_remost replay-ost-single && REPLAY_OST_SINGLE=no && OSKIPPED=1
 if [ "$REPLAY_OST_SINGLE" != "no" ]; then
         title replay-ost-single
         bash replay-ost-single.sh
         REPLAY_OST_SINGLE="done"
 fi
 
+[ "$REPLAY_DUAL" != "no" ] && skip_remost replay-dual && REPLAY_DUAL=no && OSKIPPED=1
 if [ "$REPLAY_DUAL" != "no" ]; then
         title replay-dual
         bash replay-dual.sh
         REPLAY_DUAL="done"
 fi
 
+[ "$REPLAY_VBR" != "no" ] && skip_remmds replay-vbr && REPLAY_VBR=no && MSKIPPED=1
 if [ "$REPLAY_VBR" != "no" ]; then
         title replay-vbr
         bash replay-vbr.sh
         REPLAY_VBR="done"
 fi
 
-
+[ "$INSANITY" != "no" ] && skip_remmds insanity && INSANITY=no && MSKIPPED=1
+[ "$INSANITY" != "no" ] && skip_remost insanity && INSANITY=no && OSKIPPED=1
 if [ "$INSANITY" != "no" ]; then
         title insanity
         bash insanity.sh -r
         INSANITY="done"
 fi
 
+[ "$SANITY_QUOTA" != "no" ] && skip_remmds sanity-quota && SANITY_QUOTA=no && MSKIPPED=1
+[ "$SANITY_QUOTA" != "no" ] && skip_remost sanity-quota && SANITY_QUOTA=no && OSKIPPED=1
 if [ "$SANITY_QUOTA" != "no" ]; then
         title sanity-quota
         bash sanity-quota.sh
@@ -378,4 +386,6 @@ title FINISHED
 echo "Finished at `date` in $((`date +%s` - $STARTTIME))s"
 echo "Tests ran: $RANTEST"
 print_summary
+[ "$MSKIPPED" = 1 ] && log "FAIL: remote MDS tests skipped" && RC=1
+[ "$OSKIPPED" = 1 ] && log "FAIL: remote OST tests skipped" && RC=1
 echo "$0: completed with rc $RC" && exit $RC
