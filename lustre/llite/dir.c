@@ -616,14 +616,14 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
                         goto end;
 
                 /* Set root stripecount */
-                sprintf(param, "%s-MDT0000.lov.stripecount=%u", fsname,
+                sprintf(param, "%s-MDT0000.lov.stripecount=%hd", fsname,
                         lump->lmm_stripe_count);
                 rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
                 if (rc)
                         goto end;
 
                 /* Set root stripeoffset */
-                sprintf(param, "%s-MDT0000.lov.stripeoffset=%u", fsname,
+                sprintf(param, "%s-MDT0000.lov.stripeoffset=%hd", fsname,
                         lump->lmm_stripe_offset);
                 rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
                 if (rc)
@@ -781,13 +781,11 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 LASSERT(sizeof(lumv3.lmm_objects[0]) ==
                         sizeof(lumv3p->lmm_objects[0]));
                 /* first try with v1 which is smaller than v3 */
-                rc = copy_from_user(lumv1, lumv1p, sizeof(*lumv1));
-                if (rc)
+                if (copy_from_user(lumv1, lumv1p, sizeof(*lumv1)))
                         RETURN(-EFAULT);
 
                 if (lumv1->lmm_magic == LOV_USER_MAGIC_V3) {
-                        rc = copy_from_user(&lumv3, lumv3p, sizeof(lumv3));
-                        if (rc)
+                        if (copy_from_user(&lumv3, lumv3p, sizeof(lumv3)))
                                 RETURN(-EFAULT);
                 }
 
@@ -848,8 +846,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         lmdp = (struct lov_user_mds_data *)arg;
                         lump = &lmdp->lmd_lmm;
                 }
-                rc = copy_to_user(lump, lmm, lmmsize);
-                if (rc)
+                if (copy_to_user(lump, lmm, lmmsize))
                         GOTO(out_lmm, rc = -EFAULT);
         skip_lmm:
                 if (cmd == IOC_MDC_GETFILEINFO || cmd == LL_IOC_MDC_GETINFO) {
@@ -871,8 +868,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         st.st_ino     = inode->i_ino;
 
                         lmdp = (struct lov_user_mds_data *)arg;
-                        rc = copy_to_user(&lmdp->lmd_st, &st, sizeof(st));
-                        if (rc)
+                        if (copy_to_user(&lmdp->lmd_st, &st, sizeof(st)))
                                 GOTO(out_lmm, rc = -EFAULT);
                 }
 
@@ -903,8 +899,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         RETURN(rc);
 
                 OBD_ALLOC(lmm, lmmsize);
-                rc = copy_from_user(lmm, lum, lmmsize);
-                if (rc)
+                if (copy_from_user(lmm, lum, lmmsize))
                         GOTO(free_lmm, rc = -EFAULT);
 
                 switch (lmm->lmm_magic) {
@@ -945,8 +940,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 if (rc)
                         GOTO(free_lsm, rc);
 
-                rc = copy_to_user(&lumd->lmd_st, &st, sizeof(st));
-                if (rc)
+                if (copy_to_user(&lumd->lmd_st, &st, sizeof(st)))
                         GOTO(free_lsm, rc = -EFAULT);
 
                 EXIT;
@@ -1005,7 +999,8 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 if (!rc) {
                         str = req_capsule_server_get(&req->rq_pill,
                                                      &RMF_STRING);
-                        rc = copy_to_user(data->ioc_pbuf1, str, data->ioc_plen1);
+                        if (copy_to_user(data->ioc_pbuf1, str, data->ioc_plen1))
+                                rc = -EFAULT;
                 }
                 ptlrpc_req_finished(req);
         out_catinfo:

@@ -773,17 +773,14 @@ static int mgs_iocontrol_pool(struct obd_device *obd,
         }
 
         OBD_ALLOC(lcfg, data->ioc_plen1);
-        if (lcfg == NULL) {
-                rc = -ENOMEM;
-                GOTO(out_pool, rc);
-        }
-        rc = copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1);
-        if (rc)
-                GOTO(out_pool, rc);
+        if (lcfg == NULL)
+                GOTO(out_pool, rc = -ENOMEM);
+
+        if (copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1))
+                GOTO(out_pool, rc = -EFAULT);
 
         if (lcfg->lcfg_bufcount < 2) {
-                rc = -EINVAL;
-                GOTO(out_pool, rc);
+                GOTO(out_pool, rc = -EFAULT);
         }
 
         /* first arg is always <fsname>.<poolname> */
@@ -879,9 +876,8 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 OBD_ALLOC(lcfg, data->ioc_plen1);
                 if (lcfg == NULL)
                         RETURN(-ENOMEM);
-                rc = copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1);
-                if (rc)
-                        GOTO(out_free, rc);
+                if (copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1))
+                        GOTO(out_free, rc = -EFAULT);
 
                 if (lcfg->lcfg_bufcount < 1)
                         GOTO(out_free, rc = -EINVAL);

@@ -1971,11 +1971,10 @@ static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
         if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                 RETURN(-EPERM);
 
-        rc = copy_from_user(&ucreatp, (struct ll_recreate_obj *)arg,
-                            sizeof(struct ll_recreate_obj));
-        if (rc) {
+        if (copy_from_user(&ucreatp, (struct ll_recreate_obj *)arg,
+                           sizeof(struct ll_recreate_obj)))
                 RETURN(-EFAULT);
-        }
+
         OBDO_ALLOC(oa);
         if (oa == NULL)
                 RETURN(-ENOMEM);
@@ -2194,8 +2193,7 @@ static int ll_lov_setea(struct inode *inode, struct file *file,
         if (lump == NULL) {
                 RETURN(-ENOMEM);
         }
-        rc = copy_from_user(lump, (struct lov_user_md  *)arg, lum_size);
-        if (rc) {
+        if (copy_from_user(lump, (struct lov_user_md  *)arg, lum_size)) {
                 OBD_FREE(lump, lum_size);
                 RETURN(-EFAULT);
         }
@@ -2220,14 +2218,12 @@ static int ll_lov_setstripe(struct inode *inode, struct file *file,
 
         /* first try with v1 which is smaller than v3 */
         lum_size = sizeof(struct lov_user_md_v1);
-        rc = copy_from_user(lumv1, lumv1p, lum_size);
-        if (rc)
+        if (copy_from_user(lumv1, lumv1p, lum_size))
                 RETURN(-EFAULT);
 
         if (lumv1->lmm_magic == LOV_USER_MAGIC_V3) {
                 lum_size = sizeof(struct lov_user_md_v3);
-                rc = copy_from_user(&lumv3, lumv3p, lum_size);
-                if (rc)
+                if (copy_from_user(&lumv3, lumv3p, lum_size))
                         RETURN(-EFAULT);
         }
 

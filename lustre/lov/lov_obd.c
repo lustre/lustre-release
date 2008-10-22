@@ -470,6 +470,7 @@ static int lov_disconnect(struct obd_export *exp)
         /* Let's hold another reference so lov_del_obd doesn't spin through
            putref every time */
         lov_getref(obd);
+
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 if (lov->lov_tgts[i] && lov->lov_tgts[i]->ltd_exp) {
                         /* Disconnection is the last we know about an obd */
@@ -2385,7 +2386,7 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 {
         struct obd_device *obddev = class_exp2obd(exp);
         struct lov_obd *lov = &obddev->u.lov;
-        int i, rc, count = lov->desc.ld_tgt_count;
+        int i, rc = 0, count = lov->desc.ld_tgt_count;
         struct obd_uuid *uuidp;
         ENTRY;
 
@@ -2418,10 +2419,11 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 if (rc)
                         RETURN(rc);
                 if (copy_to_user(data->ioc_pbuf1, &stat_buf, data->ioc_plen1))
-                        RETURN(rc);
+                        RETURN(-EFAULT);
                 /* copy UUID */
-                rc = copy_to_user(data->ioc_pbuf2, obd2cli_tgt(osc_obd),
-                                  data->ioc_plen2);
+                if (copy_to_user(data->ioc_pbuf2, obd2cli_tgt(osc_obd),
+                                 data->ioc_plen2))
+                        RETURN(-EFAULT);
                 break;
         }
         case OBD_IOC_LOV_GET_CONFIG: {
@@ -2464,8 +2466,7 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                         *genp = lov->lov_tgts[i]->ltd_gen;
                 }
 
-                rc = copy_to_user((void *)uarg, buf, len);
-                if (rc)
+                if (copy_to_user((void *)uarg, buf, len))
                         rc = -EFAULT;
                 obd_ioctl_freedata(buf, len);
                 break;
@@ -2485,7 +2486,6 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 if (count == 0)
                         RETURN(-ENOTTY);
 
-                rc = 0;
                 for (i = 0; i < count; i++) {
                         int err;
 

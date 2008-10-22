@@ -758,9 +758,10 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
                 if (rc)
                         RETURN(rc);
                 if (copy_to_user(data->ioc_pbuf1, &stat_buf, data->ioc_plen1))
-                        RETURN(rc);
-                rc = copy_to_user(data->ioc_pbuf2, obd2cli_tgt(mdc_obd),
-                                  data->ioc_plen2);
+                        RETURN(-EFAULT);
+                if (copy_to_user(data->ioc_pbuf2, obd2cli_tgt(mdc_obd),
+                                  data->ioc_plen2))
+                        RETURN(-EFAULT);
                 break;
         }
         default : {

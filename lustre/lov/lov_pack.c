@@ -418,8 +418,7 @@ static int __lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
         int rc;
         ENTRY;
 
-        rc = copy_from_user(&lumv3, lump, sizeof(struct lov_user_md_v1));
-        if (rc)
+        if (copy_from_user(&lumv3, lump, sizeof(struct lov_user_md_v1)))
                 RETURN(-EFAULT);
 
         lmm_magic = lumv1->lmm_magic;
@@ -428,12 +427,10 @@ static int __lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
                 lustre_swab_lov_user_md_v1(lumv1);
                 lmm_magic = LOV_USER_MAGIC_V1;
         } else if (lmm_magic == LOV_USER_MAGIC_V3) {
-                rc = copy_from_user(&lumv3, lump, sizeof(lumv3));
-                if (rc)
+                if (copy_from_user(&lumv3, lump, sizeof(lumv3)))
                         RETURN(-EFAULT);
         } else if (lmm_magic == __swab32(LOV_USER_MAGIC_V3)) {
-                rc = copy_from_user(&lumv3, lump, sizeof(lumv3));
-                if (rc)
+                if (copy_from_user(&lumv3, lump, sizeof(lumv3)))
                         RETURN(-EFAULT);
                 lustre_swab_lov_user_md_v3(&lumv3);
                 lmm_magic = LOV_USER_MAGIC_V3;
@@ -616,9 +613,7 @@ int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
         /* we only need the header part from user space to get lmm_magic and
          * lmm_stripe_count, (the header part is common to v1 and v3) */
         lum_size = sizeof(struct lov_user_md_v1);
-        rc = copy_from_user(&lum, lump, lum_size);
-
-        if (rc)
+        if (copy_from_user(&lum, lump, lum_size))
                 rc = -EFAULT;
         else if ((lum.lmm_magic != LOV_USER_MAGIC) &&
                  (lum.lmm_magic != LOV_USER_MAGIC_V3))
