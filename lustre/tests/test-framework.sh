@@ -1952,7 +1952,7 @@ calc_sum () {
 }
 
 calc_osc_kbytes () {
-        $LCTL get_param -n osc.*[oO][sS][cC][-_]*.$1 | calc_sum
+        $LCTL get_param -n osc.*[oO][sS][cC][-_][0-9a-f]*.$1 | calc_sum
 }
 
 # save_lustre_params(node, parameter_mask)
