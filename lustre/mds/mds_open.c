@@ -1447,43 +1447,28 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
         }
 
         if (request_body != NULL) {
-               if ((request_body->valid & OBD_MD_FLCTIME) &&
-                   (request_body->ctime > LTIME_S(inode->i_ctime))) {
-                       LTIME_S(iattr.ia_ctime) = request_body->ctime;
-                       iattr.ia_valid |= ATTR_CTIME;
-               }
+                /* Only start a transaction to write out only the atime if it
+                 * is more out-of-date than the specified limit.  If we are
+                 * already going to write out the atime then do it anyway. */
+                if ((request_body->valid & OBD_MD_FLATIME) &&
+                    ((LTIME_S(iattr.ia_atime) >
+                      LTIME_S(inode->i_atime) + mds->mds_atime_diff) ||
+                     (iattr.ia_valid != 0 &&
+                      LTIME_S(iattr.ia_atime) > LTIME_S(inode->i_atime)))) {
+                        LTIME_S(iattr.ia_atime) = request_body->atime;
+                        iattr.ia_valid |= ATTR_ATIME;
+                }
 
-               if ((request_body->valid & OBD_MD_FLMTIME) &&
-                   (request_body->mtime > LTIME_S(inode->i_mtime)) &&
-                   (iattr.ia_valid & ATTR_CTIME)) {
-                       LTIME_S(iattr.ia_mtime) = request_body->mtime;
-                       iattr.ia_valid |= ATTR_MTIME;
-               }
-
-               /* Only start a transaction to write out only the atime
-                * if it is more out-of-date than the specified limit.
-                * If we are already going to write out the inode then
-                * update the atime anyway.
-                */
-               if ((request_body->valid & OBD_MD_FLATIME) &&
-                   ((request_body->atime >
-                     LTIME_S(inode->i_atime) + mds->mds_atime_diff) ||
-                    (iattr.ia_valid != 0 &&
-                     request_body->atime > LTIME_S(inode->i_atime)))) {
-                       LTIME_S(iattr.ia_atime) = request_body->atime;
-                       iattr.ia_valid |= ATTR_ATIME;
-               }
-
-               /* Store a rough estimate of the file size on the MDS for
-                * tools like e2scan and HSM that are just using this for
-                * rough decision making and will get the proper size later.
-                * This is NOT guaranteed to be correct with multiple
-                * writers, but is only needed until SOM is done. b=11063 */
-               if ((request_body->valid & OBD_MD_FLSIZE) &&
-                   (iattr.ia_valid != 0)) {
-                       iattr.ia_size = request_body->size;
-                       iattr.ia_valid |= ATTR_SIZE;
-               }
+                /* Store a rough estimate of the file size on the MDS for
+                 * tools like e2scan and HSM that are just using this for *
+                 * rough decision making and will get the proper size later.
+                 * * This is NOT guaranteed to be correct with multiple *
+                 * writers, but is only needed until SOM is done. b=11063 */
+                if ((request_body->valid & OBD_MD_FLSIZE) &&
+                    (iattr.ia_valid != 0)) {
+                        iattr.ia_size = request_body->size;
+                        iattr.ia_valid |= ATTR_SIZE;
+                }
         }
 
         if (iattr.ia_valid != 0) {
