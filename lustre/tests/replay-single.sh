@@ -1750,17 +1750,6 @@ run_test 70b "mds recovery; $CLIENTCOUNT clients"
 # end multi-client tests
 
 # vbr export handling
-create_fake_exports ()
-{
-    local facet=$1
-    local num=$2
-#obd_fail_val = num;
-#define OBD_FAIL_TGT_FAKE_EXP 0x708
-    do_facet $facet "lctl set_param fail_val=$num"
-    do_facet $facet "lctl set_param fail_loc=0x80000708"
-    fail $facet
-}
-
 test_71a() {
     do_facet mds $LCTL get_param version | grep -q ^lustre.*1.6 && \
         skip "skipping test for old 1.6 servers" && return 0
