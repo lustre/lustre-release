@@ -1427,7 +1427,7 @@ test_59b() {
     unlinkmany $DIR/$tdir/$tfile-%d 2000
     sleep 60
     do_facet mds "lctl set_param fail_loc=0x0"
-    $LCTL dk | grep -q "RESENT cancel req" || return 1
+    do_facet mds $LCTL dk | grep -q "RESENT cancel req" || return 1
     rmdir $DIR/$tdir
 }
 run_test 59b "resent handle in llog_origin_handle_cancel"
