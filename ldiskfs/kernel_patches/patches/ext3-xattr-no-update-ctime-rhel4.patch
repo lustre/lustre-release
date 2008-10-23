@@ -1,8 +1,8 @@
-Index: linux-2.6.9-67.0.20/include/linux/ext3_fs.h
+Index: linux-2.6.9-67/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.9-67.0.20.orig/include/linux/ext3_fs.h
-+++ linux-2.6.9-67.0.20/include/linux/ext3_fs.h
-@@ -873,6 +873,13 @@ struct mmp_struct {
+--- linux-2.6.9-67.orig/include/linux/ext3_fs.h
++++ linux-2.6.9-67/include/linux/ext3_fs.h
+@@ -874,6 +874,13 @@ struct mmp_struct {
  #define EXT3_MMP_MIN_CHECK_INTERVAL	5
  
  /*
@@ -16,10 +16,10 @@ Index: linux-2.6.9-67.0.20/include/linux/ext3_fs.h
   * Function prototypes
   */
  
-Index: linux-2.6.9-67.0.20/fs/ext3/xattr.c
+Index: linux-2.6.9-67/fs/ext3/xattr.c
 ===================================================================
---- linux-2.6.9-67.0.20.orig/fs/ext3/xattr.c
-+++ linux-2.6.9-67.0.20/fs/ext3/xattr.c
+--- linux-2.6.9-67.orig/fs/ext3/xattr.c
++++ linux-2.6.9-67/fs/ext3/xattr.c
 @@ -91,7 +91,7 @@
  
  static int ext3_xattr_set_handle2(handle_t *, struct inode *,
@@ -29,7 +29,7 @@ Index: linux-2.6.9-67.0.20/fs/ext3/xattr.c
  
  static int ext3_xattr_cache_insert(struct buffer_head *);
  static struct buffer_head *ext3_xattr_cache_find(handle_t *, struct inode *,
-@@ -1215,12 +1215,12 @@ skip_replace:
+@@ -1209,12 +1209,12 @@ skip_replace:
  		/* This block is now empty. */
  		if (bh && header == HDR(bh))
  			unlock_buffer(bh);  /* we were modifying in-place. */
@@ -44,7 +44,7 @@ Index: linux-2.6.9-67.0.20/fs/ext3/xattr.c
  	}
  
  cleanup:
-@@ -1237,7 +1237,7 @@ cleanup:
+@@ -1231,7 +1231,7 @@ cleanup:
  static int
  ext3_xattr_set_handle2(handle_t *handle, struct inode *inode,
  		       struct buffer_head *old_bh,
@@ -53,7 +53,7 @@ Index: linux-2.6.9-67.0.20/fs/ext3/xattr.c
  {
  	struct super_block *sb = inode->i_sb;
  	struct buffer_head *new_bh = NULL;
-@@ -1311,7 +1311,8 @@ getblk_failed:
+@@ -1305,7 +1305,8 @@ getblk_failed:
  
  	/* Update the inode. */
  	EXT3_I(inode)->i_file_acl = new_bh ? new_bh->b_blocknr : 0;

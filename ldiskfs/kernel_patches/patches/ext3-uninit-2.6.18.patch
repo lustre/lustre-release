@@ -6,10 +6,10 @@ group descriptor to avoid reading or scanning them at e2fsck time.
 A checksum of each group descriptor is used to ensure that corruption in
 the group descriptor's bit flags does not cause incorrect operation.
 
-Index: linux-2.6.18-53.1.14/include/linux/ext3_fs.h
+Index: linux-2.6.18-53.1.19/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.18-53.1.14.orig/include/linux/ext3_fs.h
-+++ linux-2.6.18-53.1.14/include/linux/ext3_fs.h
+--- linux-2.6.18-53.1.19.orig/include/linux/ext3_fs.h
++++ linux-2.6.18-53.1.19/include/linux/ext3_fs.h
 @@ -150,16 +150,22 @@ struct ext3_allocation_request {
   */
  struct ext3_group_desc
@@ -53,10 +53,10 @@ Index: linux-2.6.18-53.1.14/include/linux/ext3_fs.h
  					 EXT4_FEATURE_RO_COMPAT_DIR_NLINK| \
  					 EXT3_FEATURE_RO_COMPAT_BTREE_DIR)
  
-Index: linux-2.6.18-53.1.14/fs/ext3/resize.c
+Index: linux-2.6.18-53.1.19/fs/ext3/resize.c
 ===================================================================
---- linux-2.6.18-53.1.14.orig/fs/ext3/resize.c
-+++ linux-2.6.18-53.1.14/fs/ext3/resize.c
+--- linux-2.6.18-53.1.19.orig/fs/ext3/resize.c
++++ linux-2.6.18-53.1.19/fs/ext3/resize.c
 @@ -18,6 +18,7 @@
  #include <linux/errno.h>
  #include <linux/slab.h>
@@ -99,10 +99,10 @@ Index: linux-2.6.18-53.1.14/fs/ext3/resize.c
  
  	/*
  	 * Make the new blocks and inodes valid next.  We do this before
-Index: linux-2.6.18-53.1.14/fs/ext3/super.c
+Index: linux-2.6.18-53.1.19/fs/ext3/super.c
 ===================================================================
---- linux-2.6.18-53.1.14.orig/fs/ext3/super.c
-+++ linux-2.6.18-53.1.14/fs/ext3/super.c
+--- linux-2.6.18-53.1.19.orig/fs/ext3/super.c
++++ linux-2.6.18-53.1.19/fs/ext3/super.c
 @@ -41,6 +41,7 @@
  #include "xattr.h"
  #include "acl.h"
@@ -217,10 +217,10 @@ Index: linux-2.6.18-53.1.14/fs/ext3/super.c
  		first_block += EXT3_BLOCKS_PER_GROUP(sb);
  		gdp++;
  	}
-Index: linux-2.6.18-53.1.14/fs/ext3/group.h
+Index: linux-2.6.18-53.1.19/fs/ext3/group.h
 ===================================================================
 --- /dev/null
-+++ linux-2.6.18-53.1.14/fs/ext3/group.h
++++ linux-2.6.18-53.1.19/fs/ext3/group.h
 @@ -0,0 +1,30 @@
 +/*
 + *  linux/fs/ext3/group.h
@@ -252,10 +252,10 @@ Index: linux-2.6.18-53.1.14/fs/ext3/group.h
 +				       struct ext3_group_desc *desc);
 +extern void mark_bitmap_end(int start_bit, int end_bit, char *bitmap);
 +#endif /* _LINUX_EXT3_GROUP_H */
-Index: linux-2.6.18-53.1.14/fs/ext3/ialloc.c
+Index: linux-2.6.18-53.1.19/fs/ext3/ialloc.c
 ===================================================================
---- linux-2.6.18-53.1.14.orig/fs/ext3/ialloc.c
-+++ linux-2.6.18-53.1.14/fs/ext3/ialloc.c
+--- linux-2.6.18-53.1.19.orig/fs/ext3/ialloc.c
++++ linux-2.6.18-53.1.19/fs/ext3/ialloc.c
 @@ -28,6 +28,7 @@
  
  #include "xattr.h"
@@ -450,10 +450,10 @@ Index: linux-2.6.18-53.1.14/fs/ext3/ialloc.c
  	/* This is the optimal IO size (for stat), not the fs block size */
  	inode->i_blocks = 0;
  	inode->i_mtime = inode->i_atime = inode->i_ctime = CURRENT_TIME_SEC;
-Index: linux-2.6.18-53.1.14/fs/ext3/mballoc.c
+Index: linux-2.6.18-53.1.19/fs/ext3/mballoc.c
 ===================================================================
---- linux-2.6.18-53.1.14.orig/fs/ext3/mballoc.c
-+++ linux-2.6.18-53.1.14/fs/ext3/mballoc.c
+--- linux-2.6.18-53.1.19.orig/fs/ext3/mballoc.c
++++ linux-2.6.18-53.1.19/fs/ext3/mballoc.c
 @@ -36,6 +36,8 @@
  #include <linux/seq_file.h>
  #include <linux/version.h>
@@ -471,7 +471,7 @@ Index: linux-2.6.18-53.1.14/fs/ext3/mballoc.c
  	unsigned short	bb_first_free;
  	unsigned short	bb_free;
  	unsigned short	bb_fragments;
-@@ -941,10 +944,7 @@ static int ext3_mb_init_cache(struct pag
+@@ -943,10 +946,7 @@ static int ext3_mb_init_cache(struct pag
  		if (first_group + i >= EXT3_SB(sb)->s_groups_count)
  			break;
  
@@ -483,7 +483,7 @@ Index: linux-2.6.18-53.1.14/fs/ext3/mballoc.c
  
  		err = -ENOMEM;
  		bh[i] = sb_getblk(sb, le32_to_cpu(desc->bg_block_bitmap));
-@@ -959,7 +959,12 @@ static int ext3_mb_init_cache(struct pag
+@@ -961,7 +961,12 @@ static int ext3_mb_init_cache(struct pag
  			unlock_buffer(bh[i]);
  			continue;
  		}
@@ -497,7 +497,7 @@ Index: linux-2.6.18-53.1.14/fs/ext3/mballoc.c
  		get_bh(bh[i]);
  		bh[i]->b_end_io = end_buffer_read_sync;
  		submit_bh(READ, bh[i]);
-@@ -1731,6 +1736,10 @@ static int ext3_mb_good_group(struct ext
+@@ -1733,6 +1738,10 @@ static int ext3_mb_good_group(struct ext
  	switch (cr) {
  		case 0:
  			BUG_ON(ac->ac_2order == 0);
@@ -508,7 +508,7 @@ Index: linux-2.6.18-53.1.14/fs/ext3/mballoc.c
  			bits = ac->ac_sb->s_blocksize_bits + 1;
  			for (i = ac->ac_2order; i <= bits; i++)
  				if (grp->bb_counters[i] > 0)
-@@ -1824,7 +1833,9 @@ repeat:
+@@ -1826,7 +1835,9 @@ repeat:
  			}
  
  			ac->ac_groups_scanned++;
@@ -519,7 +519,7 @@ Index: linux-2.6.18-53.1.14/fs/ext3/mballoc.c
  				ext3_mb_simple_scan_group(ac, &e3b);
  			else if (cr == 1 && ac->ac_g_ex.fe_len == sbi->s_stripe)
  				ext3_mb_scan_aligned(ac, &e3b);
-@@ -2304,12 +2315,13 @@ int ext3_mb_init_backend(struct super_bl
+@@ -2306,12 +2317,13 @@ int ext3_mb_init_backend(struct super_bl
  			i--;
  			goto err_freebuddy;
  		}
@@ -534,7 +534,7 @@ Index: linux-2.6.18-53.1.14/fs/ext3/mballoc.c
  		set_bit(EXT3_GROUP_INFO_NEED_INIT_BIT,
  			&meta_group_info[j]->bb_state);
  
-@@ -2943,9 +2955,17 @@ int ext3_mb_mark_diskspace_used(struct e
+@@ -2945,9 +2957,17 @@ int ext3_mb_mark_diskspace_used(struct e
  		    ac->ac_b_ex.fe_start, ac->ac_b_ex.fe_len);
  
  	spin_lock(sb_bgl_lock(sbi, ac->ac_b_ex.fe_group));
@@ -552,7 +552,7 @@ Index: linux-2.6.18-53.1.14/fs/ext3/mballoc.c
  	spin_unlock(sb_bgl_lock(sbi, ac->ac_b_ex.fe_group));
  	percpu_counter_mod(&sbi->s_freeblocks_counter, - ac->ac_b_ex.fe_len);
  
-@@ -4355,6 +4375,7 @@ do_more:
+@@ -4357,6 +4377,7 @@ do_more:
  	spin_lock(sb_bgl_lock(sbi, block_group));
  	gdp->bg_free_blocks_count =
  		cpu_to_le16(le16_to_cpu(gdp->bg_free_blocks_count) + count);
@@ -560,10 +560,10 @@ Index: linux-2.6.18-53.1.14/fs/ext3/mballoc.c
  	spin_unlock(sb_bgl_lock(sbi, block_group));
  	percpu_counter_mod(&sbi->s_freeblocks_counter, count);
  
-Index: linux-2.6.18-53.1.14/fs/ext3/balloc.c
+Index: linux-2.6.18-53.1.19/fs/ext3/balloc.c
 ===================================================================
---- linux-2.6.18-53.1.14.orig/fs/ext3/balloc.c
-+++ linux-2.6.18-53.1.14/fs/ext3/balloc.c
+--- linux-2.6.18-53.1.19.orig/fs/ext3/balloc.c
++++ linux-2.6.18-53.1.19/fs/ext3/balloc.c
 @@ -20,6 +20,7 @@
  #include <linux/quotaops.h>
  #include <linux/buffer_head.h>

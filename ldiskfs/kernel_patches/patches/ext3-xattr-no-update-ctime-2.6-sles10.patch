@@ -1,8 +1,8 @@
-Index: linux-2.6.16.54-0.2.5/include/linux/ext3_fs.h
+Index: linux-2.6.18-53.1.14/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.16.54-0.2.5.orig/include/linux/ext3_fs.h
-+++ linux-2.6.16.54-0.2.5/include/linux/ext3_fs.h
-@@ -913,6 +913,13 @@ struct mmp_struct {
+--- linux-2.6.18-53.1.14.orig/include/linux/ext3_fs.h
++++ linux-2.6.18-53.1.14/include/linux/ext3_fs.h
+@@ -909,6 +909,13 @@ struct mmp_struct {
  #define EXT3_MMP_MIN_CHECK_INTERVAL	5
  
  /*
@@ -16,18 +16,18 @@ Index: linux-2.6.16.54-0.2.5/include/linux/ext3_fs.h
   * Function prototypes
   */
  
-Index: linux-2.6.16.54-0.2.5/fs/ext3/xattr.c
+Index: linux-2.6.18-53.1.14/fs/ext3/xattr.c
 ===================================================================
---- linux-2.6.16.54-0.2.5.orig/fs/ext3/xattr.c
-+++ linux-2.6.16.54-0.2.5/fs/ext3/xattr.c
-@@ -1030,8 +1030,8 @@ ext3_xattr_set_handle(handle_t *handle, 
+--- linux-2.6.18-53.1.14.orig/fs/ext3/xattr.c
++++ linux-2.6.18-53.1.14/fs/ext3/xattr.c
+@@ -1031,7 +1031,8 @@ ext3_xattr_set_handle(handle_t *handle, 
  	}
  	if (!error) {
  		ext3_xattr_update_super_block(handle, inode->i_sb);
 -		inode->i_ctime = ext3_current_time(inode);
--
 +		if (!(flags & XATTR_NO_CTIME))
 +			inode->i_ctime = ext3_current_time(inode);
  		error = ext3_mark_iloc_dirty(handle, inode, &is.iloc);
  		if (!value)
  			EXT3_I(inode)->i_state &= ~EXT3_STATE_NO_EXPAND;
+

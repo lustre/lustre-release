@@ -303,7 +303,7 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/iopen.h
 ===================================================================
 --- /dev/null
 +++ linux-2.6.16.54-0.2.5/fs/ext3/iopen.h
-@@ -0,0 +1,20 @@
+@@ -0,0 +1,24 @@
 +/*
 + * iopen.h
 + *
@@ -320,6 +320,10 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/iopen.h
 +extern struct dentry *iopen_connect_dentry(struct dentry *dentry,
 +					   struct inode *inode, int rehash);
 +extern void iopen_d_instantiate(struct dentry *dentry, struct inode * inode);
++
++#if !defined(HAVE_D_REHASH_COND) && defined(HAVE___D_REHASH)
++#define d_rehash_cond(dentry, lock) __d_rehash(dentry, lock)
++#endif
 +
 +#if !defined(HAVE_D_MOVE_LOCKED) && defined(HAVE___D_MOVE)
 +#define d_move_locked(dentry, target) __d_move(dentry, target)
@@ -398,7 +402,7 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/namei.c
  #include "acl.h"
  
  /*
-@@ -1013,6 +1014,9 @@ static struct dentry *ext3_lookup(struct
+@@ -1004,6 +1005,9 @@ static struct dentry *ext3_lookup(struct
  	if (dentry->d_name.len > EXT3_NAME_LEN)
  		return ERR_PTR(-ENAMETOOLONG);
  
@@ -408,7 +412,7 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/namei.c
  	bh = ext3_find_entry(dentry, &de);
  	inode = NULL;
  	if (bh) {
-@@ -1028,7 +1032,8 @@ static struct dentry *ext3_lookup(struct
+@@ -1019,7 +1023,8 @@ static struct dentry *ext3_lookup(struct
  		if (!inode)
  			return ERR_PTR(-EACCES);
  	}
@@ -418,7 +422,7 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/namei.c
  }
  
  
-@@ -1649,7 +1654,7 @@ static int ext3_add_nondir(handle_t *han
+@@ -1640,7 +1645,7 @@ static int ext3_add_nondir(handle_t *han
  	int err = ext3_add_entry(handle, dentry, inode);
  	if (!err) {
  		ext3_mark_inode_dirty(handle, inode);
@@ -427,7 +431,7 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/namei.c
  		return 0;
  	}
  	ext3_dec_count(handle, inode);
-@@ -1811,7 +1816,7 @@ retry:
+@@ -1810,7 +1815,7 @@ retry:
  	dir->i_nlink++;
  	ext3_update_dx_flag(dir);
  	ext3_mark_inode_dirty(handle, dir);
@@ -436,7 +440,7 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/namei.c
  out_stop:
  	ext3_journal_stop(handle);
  	if (err == -ENOSPC && ext3_should_retry_alloc(dir->i_sb, &retries))
-@@ -2079,10 +2084,6 @@ static int ext3_rmdir (struct inode * di
+@@ -2078,10 +2083,6 @@ static int ext3_rmdir (struct inode * di
  			      inode->i_nlink);
  	inode->i_version++;
  	inode->i_nlink = 0;
@@ -447,7 +451,7 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/namei.c
  	ext3_orphan_add(handle, inode);
  	inode->i_ctime = dir->i_ctime = dir->i_mtime = CURRENT_TIME_SEC;
  	ext3_mark_inode_dirty(handle, inode);
-@@ -2206,6 +2207,23 @@ out_stop:
+@@ -2205,6 +2206,23 @@ out_stop:
  	return err;
  }
  
@@ -471,7 +475,7 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/namei.c
  static int ext3_link (struct dentry * old_dentry,
  		struct inode * dir, struct dentry *dentry)
  {
-@@ -2229,7 +2247,8 @@ retry:
+@@ -2228,7 +2246,8 @@ retry:
  	ext3_inc_count(handle, inode);
  	atomic_inc(&inode->i_count);
  
