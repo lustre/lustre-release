@@ -1362,21 +1362,38 @@ static int mdc_llog_init(struct obd_device *obd, struct obd_device *tgt,
                 ctxt = llog_get_context(obd, LLOG_LOVEA_REPL_CTXT);
                 llog_initiator_connect(ctxt);
                 llog_ctxt_put(ctxt);
+        } else {
+                GOTO(err_cleanup, rc);
         }
 
         RETURN(rc);
+err_cleanup:
+        ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
+        if (ctxt)
+                llog_cleanup(ctxt);
+        ctxt = llog_get_context(obd, LLOG_LOVEA_REPL_CTXT);
+        if (ctxt)
+                llog_cleanup(ctxt);
+        return rc;
 }
 
 static int mdc_llog_finish(struct obd_device *obd, int count)
 {
-        int rc;
+        struct llog_ctxt *ctxt;
+        int rc = 0;
         ENTRY;
 
-        rc = llog_cleanup(llog_get_context(obd, LLOG_LOVEA_REPL_CTXT));
-        if (rc) {
-                CERROR("can not cleanup LLOG_CONFIG_REPL_CTXT rc %d\n", rc);
+        ctxt = llog_get_context(obd, LLOG_LOVEA_REPL_CTXT);
+        if (ctxt) {
+                rc = llog_cleanup(ctxt);
+                if (rc) {
+                        CERROR("Can not cleanup LLOG_CONFIG_REPL_CTXT "
+                               "rc %d\n", rc);
+                }
         }
-        rc = llog_cleanup(llog_get_context(obd, LLOG_CONFIG_REPL_CTXT));
+        ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
+        if (ctxt)
+                rc = llog_cleanup(ctxt);
         RETURN(rc);
 }
 

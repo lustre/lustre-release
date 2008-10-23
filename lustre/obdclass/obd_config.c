@@ -307,23 +307,24 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         obd->obd_uuid_hash = lustre_hash_init("UUID_HASH", 128, 128,
                                               &uuid_hash_ops, 0);
         if (!obd->obd_uuid_hash)
-                GOTO(err_hash, -ENOMEM);
+                GOTO(err_hash, err = -ENOMEM);
 
         /* create a nid-export lustre hash */
         obd->obd_nid_hash = lustre_hash_init("NID_HASH", 128, 128,
                                              &nid_hash_ops, 0);
         if (!obd->obd_nid_hash)
-                GOTO(err_hash, -ENOMEM);
+                GOTO(err_hash, err = -ENOMEM);
 
         /* create a nid-stats lustre hash */
         obd->obd_nid_stats_hash = lustre_hash_init("NID_STATS", 128, 128,
                                                    &nid_stat_hash_ops, 0);
         if (!obd->obd_nid_stats_hash)
-                GOTO(err_hash, -ENOMEM);
+                GOTO(err_hash, err = -ENOMEM);
 
         exp = class_new_export(obd, &obd->obd_uuid);
         if (IS_ERR(exp))
-                RETURN(PTR_ERR(exp));
+                GOTO(err_hash, err = PTR_ERR(exp));
+
         obd->obd_self_export = exp;
         list_del_init(&exp->exp_obd_chain_timed);
         class_export_put(exp);
@@ -342,17 +343,25 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                obd->obd_name, obd->obd_uuid.uuid);
 
         RETURN(0);
-
 err_exp:
         class_unlink_export(obd->obd_self_export);
         obd->obd_self_export = NULL;
 err_hash:
-        lustre_hash_exit(obd->obd_uuid_hash);
-        lustre_hash_exit(obd->obd_nid_hash);
-        lustre_hash_exit(obd->obd_nid_stats_hash);
+        if (obd->obd_uuid_hash) {
+                lustre_hash_exit(obd->obd_uuid_hash);
+                obd->obd_uuid_hash = NULL;
+        }
+        if (obd->obd_nid_hash) {
+                lustre_hash_exit(obd->obd_nid_hash);
+                obd->obd_nid_hash = NULL;
+        }
+        if (obd->obd_nid_stats_hash) {
+                lustre_hash_exit(obd->obd_nid_stats_hash);
+                obd->obd_nid_stats_hash = NULL;
+        }
         obd->obd_starting = 0;
         CERROR("setup %s failed (%d)\n", obd->obd_name, err);
-        RETURN(err);
+        return err;
 }
 
 int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
