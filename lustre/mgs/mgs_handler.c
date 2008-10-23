@@ -163,6 +163,7 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         struct mgs_obd *mgs = &obd->u.mgs;
         struct lustre_mount_info *lmi;
         struct lustre_sb_info *lsi;
+        struct llog_ctxt *ctxt;
         struct vfsmount *mnt;
         int rc = 0;
         ENTRY;
@@ -223,7 +224,7 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
 
         if (!mgs->mgs_service) {
                 CERROR("failed to start service\n");
-                GOTO(err_fs, rc = -ENOMEM);
+                GOTO(err_llog, rc = -ENOMEM);
         }
 
         rc = ptlrpc_start_threads(obd, mgs->mgs_service);
@@ -244,6 +245,10 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
 
 err_thread:
         ptlrpc_unregister_service(mgs->mgs_service);
+err_llog:
+        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+        if (ctxt)
+                llog_cleanup(ctxt);
 err_fs:
         /* No extra cleanup needed for llog_init_commit_thread() */
         mgs_fs_cleanup(obd);
