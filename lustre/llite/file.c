@@ -900,8 +900,8 @@ static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
 
         LDLM_DEBUG(lock, "i_size: %llu -> stripe number %u -> kms "LPU64
                    " atime "LPU64", mtime "LPU64", ctime "LPU64,
-                   i_size_read(inode), stripe, lvb->lvb_size, lvb->lvb_mtime,
-                   lvb->lvb_atime, lvb->lvb_ctime);
+                   i_size_read(inode), stripe, lvb->lvb_size, lvb->lvb_atime,
+                   lvb->lvb_mtime, lvb->lvb_ctime);
  iput:
         iput(inode);
 
@@ -1009,6 +1009,11 @@ int ll_glimpse_size(struct inode *inode, int ast_flags)
 
         ll_inode_size_lock(inode, 1);
         inode_init_lvb(inode, &lvb);
+        /* merge timestamps the most resently obtained from mds with
+           timestamps obtained from osts */
+        lvb.lvb_atime = lli->lli_lvb.lvb_atime;
+        lvb.lvb_mtime = lli->lli_lvb.lvb_mtime;
+        lvb.lvb_ctime = lli->lli_lvb.lvb_ctime;
         rc = obd_merge_lvb(sbi->ll_osc_exp, lli->lli_smd, &lvb, 0);
         i_size_write(inode, lvb.lvb_size);
         inode->i_blocks = lvb.lvb_blocks;
@@ -1564,6 +1569,22 @@ repeat:
 
         /* turn off the kernel's read-ahead */
         if (lock_style != LL_LOCK_STYLE_NOLOCK) {
+                /* read under locks
+                 *
+                 * 1. update inode's atime as long as concurrent stat
+                 * (via ll_glimpse_size) might bring out-of-date ones
+                 *
+                 * 2. update lsm so that next stat (via
+                 * ll_glimpse_size) could get correct values in lsm */
+                struct ost_lvb xtimes;
+
+                lov_stripe_lock(lsm);
+                LTIME_S(inode->i_atime) = LTIME_S(CURRENT_TIME);
+                xtimes.lvb_atime = LTIME_S(inode->i_atime);
+                obd_update_lvb(sbi->ll_osc_exp, lsm, &xtimes,
+                               OBD_MD_FLATIME);
+                lov_stripe_unlock(lsm);
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 file->f_ramax = 0;
 #else
@@ -1588,6 +1609,11 @@ repeat:
                 ll_file_put_lock(inode, end, lock_style, cookie,
                                  &tree, OBD_BRW_READ);
         } else {
+                /* lockless read
+                 *
+                 * current time will get into request as atime
+                 * (lustre/osc/osc_request.c:osc_build_request())
+                 */
                 retval = ll_file_lockless_io(file, iov_copy, nrsegs_copy, ppos,
                                              READ, chunk);
         }
@@ -1755,16 +1781,41 @@ repeat:
         chunk = end - *ppos + 1;
         CDEBUG(D_INFO, "Writing inode %lu, "LPSZ" bytes, offset %Lu\n",
                inode->i_ino, chunk, *ppos);
-        if (tree_locked)
+        if (tree_locked) {
+                /* write under locks
+                 *
+                 * 1. update inode's mtime and ctime as long as
+                 * concurrent stat (via ll_glimpse_size) might bring
+                 * out-of-date ones
+                 *
+                 * 2. update lsm so that next stat (via
+                 * ll_glimpse_size) could get correct values in lsm */
+                struct ost_lvb xtimes;
+
+                lov_stripe_lock(lsm);
+                LTIME_S(inode->i_mtime) = LTIME_S(CURRENT_TIME);
+                LTIME_S(inode->i_ctime) = LTIME_S(CURRENT_TIME);
+                xtimes.lvb_mtime = LTIME_S(inode->i_mtime);
+                xtimes.lvb_ctime = LTIME_S(inode->i_ctime);
+                obd_update_lvb(sbi->ll_osc_exp, lsm, &xtimes,
+                               OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+                lov_stripe_unlock(lsm);
+
 #ifdef HAVE_FILE_WRITEV
                 retval = generic_file_writev(file, iov_copy, nrsegs_copy, ppos);
 #else
                 retval = generic_file_aio_write(iocb, iov_copy, nrsegs_copy,
                                                 *ppos);
 #endif
-        else
+        } else {
+                /* lockless write
+                 *
+                 * current time will get into request as mtime and
+                 * ctime (lustre/osc/osc_request.c:osc_build_request())
+                 */
                 retval = ll_file_lockless_io(file, iov_copy, nrsegs_copy,
                                              ppos, WRITE, chunk);
+        }
         ll_rw_stats_tally(ll_i2sbi(inode), current->pid, file, chunk, 1);
 
 out_unlock:
@@ -3064,8 +3115,12 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
         }
 
         /* if object not yet allocated, don't validate size */
-        if (ll_i2info(inode)->lli_smd == NULL)
+        if (ll_i2info(inode)->lli_smd == NULL) {
+                LTIME_S(inode->i_atime) = ll_i2info(inode)->lli_lvb.lvb_atime;
+                LTIME_S(inode->i_mtime) = ll_i2info(inode)->lli_lvb.lvb_mtime;
+                LTIME_S(inode->i_ctime) = ll_i2info(inode)->lli_lvb.lvb_ctime;
                 GOTO(out, rc = 0);
+        }
 
         /* ll_glimpse_size will prefer locally cached writes if they extend
          * the file */
