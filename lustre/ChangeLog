@@ -1730,6 +1730,12 @@ Description: libcfs: add cfs_{need,cond}_resched() interface.
 Details    : libcfs: add cfs_{need,cond}_resched() definition and
 	     implementations for Linux, NT, and liblustre.
 
+Severity   : enhancement
+Bugzilla   : 12800
+Description: More exported tunables for mballoc
+Details    : Add support for tunable preallocation window and new tunables for
+	     large/small requests
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

@@ -1,7 +1,7 @@
-Index: linux-stage/fs/ext3/ialloc.c
+Index: linux-2.6.5-7.312/fs/ext3/ialloc.c
 ===================================================================
---- linux-stage.orig/fs/ext3/ialloc.c
-+++ linux-stage/fs/ext3/ialloc.c
+--- linux-2.6.5-7.312.orig/fs/ext3/ialloc.c
++++ linux-2.6.5-7.312/fs/ext3/ialloc.c
 @@ -520,12 +520,15 @@ struct inode *ext3_new_inode(handle_t *h
  		return ERR_PTR(-EPERM);
  
@@ -19,10 +19,10 @@ Index: linux-stage/fs/ext3/ialloc.c
  	es = sbi->s_es;
  	if (goal) {
  		group = (goal - 1) / EXT3_INODES_PER_GROUP(sb);
-Index: linux-stage/fs/ext3/super.c
+Index: linux-2.6.5-7.312/fs/ext3/super.c
 ===================================================================
---- linux-stage.orig/fs/ext3/super.c
-+++ linux-stage/fs/ext3/super.c
+--- linux-2.6.5-7.312.orig/fs/ext3/super.c
++++ linux-2.6.5-7.312/fs/ext3/super.c
 @@ -37,6 +37,12 @@
  #include "acl.h"
  #include "group.h"
@@ -130,15 +130,16 @@ Index: linux-stage/fs/ext3/super.c
  	remove_proc_entry(sb->s_id, proc_root_ext3);
  	sbi->s_dev_proc = NULL;
  	sb->s_fs_info = NULL;
-Index: linux-stage/include/linux/ext3_fs_sb.h
+Index: linux-2.6.5-7.312/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-stage.orig/include/linux/ext3_fs_sb.h
-+++ linux-stage/include/linux/ext3_fs_sb.h
-@@ -111,6 +111,7 @@ struct ext3_sb_info {
- 	unsigned long s_mb_max_groups_to_scan;
- 	unsigned long s_mb_stats;
- 	unsigned long s_mb_order2_reqs;
-+	unsigned long s_max_dir_size;
+--- linux-2.6.5-7.312.orig/include/linux/ext3_fs_sb.h
++++ linux-2.6.5-7.312/include/linux/ext3_fs_sb.h
+@@ -119,6 +119,8 @@ struct ext3_sb_info {
+ 	unsigned long s_mb_last_group;
+ 	unsigned long s_mb_last_start;
  
++	unsigned long s_max_dir_size;
++
  	/* history to debug policy */
  	struct ext3_mb_history *s_mb_history;
+ 	int s_mb_history_cur;
