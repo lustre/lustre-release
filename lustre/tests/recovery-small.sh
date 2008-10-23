@@ -697,13 +697,14 @@ test_27() {
 	FAILURE_MODE="SOFT"
 	facet_failover mds
 #define OBD_FAIL_OSC_SHUTDOWN            0x407
-	lctl set_param fail_loc=0x80000407
+	do_facet mds lctl set_param fail_loc=0x80000407
 	# need to wait for reconnect
 	echo -n waiting for fail_loc
-	while [ `lctl get_param -n fail_loc` -eq -2147482617 ]; do
+	while [ $(do_facet mds lctl get_param -n fail_loc) -eq -2147482617 ]; do
 	    sleep 1
 	    echo -n .
 	done
+	do_facet mds lctl get_param -n fail_loc
 	facet_failover mds
 	#no crashes allowed!
         kill -USR1 $CLIENT_PID
