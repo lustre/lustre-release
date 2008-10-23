@@ -158,6 +158,12 @@ Details    : fix stack overflow in the distributed lock manager by defering expo
 	     eviction after a failed ast to the elt thread instead of handling
 	     it in the dlm interpret routine.
 
+Severity   : enhancement
+Bugzilla   : 12800
+Description: More exported tunables for mballoc
+Details    : Add support for tunable preallocation window and new tunables for
+             large/small requests
+
 --------------------------------------------------------------------------
 
 2008-08-31 Sun Microsystems, Inc.
