@@ -254,7 +254,7 @@ static int lfs_setstripe(int argc, char **argv)
         {
                 optind = 0;
                 while ((c = getopt_long(argc, argv, "c:di:o:s:p:",
-                                                long_opts, NULL)) >= 0) {
+                                        long_opts, NULL)) >= 0) {
                         switch (c) {
                         case 0:
                                 /* Long options. */
@@ -287,7 +287,7 @@ static int lfs_setstripe(int argc, char **argv)
                 }
 
                 fname = argv[optind];
-                
+
                 if (delete &&
                     (stripe_size_arg != NULL || stripe_off_arg != NULL ||
                      stripe_count_arg != NULL || pool_name_arg != NULL)) {
