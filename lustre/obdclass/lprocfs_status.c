@@ -1230,6 +1230,7 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, set_async_flags);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, teardown_async_page);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, merge_lvb);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, update_lvb);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, adjust_kms);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, punch);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, sync);
