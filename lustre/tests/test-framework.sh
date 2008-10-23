@@ -593,6 +593,7 @@ facet_failover() {
     reboot_facet $facet
     client_df &
     DFPID=$!
+    RECOVERY_START_TIME=`date +%s`
     echo "df pid is $DFPID"
     change_active $facet
     TO=`facet_active_host $facet`
@@ -1228,6 +1229,16 @@ pgcache_empty() {
         fi
     done
     return 0
+}
+
+create_fake_exports () {
+    local facet=$1
+    local num=$2
+#obd_fail_val = num;
+#define OBD_FAIL_TGT_FAKE_EXP 0x708
+    do_facet $facet "lctl set_param fail_val=$num"
+    do_facet $facet "lctl set_param fail_loc=0x80000708"
+    fail $facet
 }
 
 debugsave() {
