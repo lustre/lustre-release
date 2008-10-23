@@ -157,6 +157,8 @@ int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
                   struct ost_lvb *lvb, int kms_only);
 int lov_adjust_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
                    obd_off size, int shrink);
+int lov_update_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
+                   struct ost_lvb *lvb, obd_flag valid);
 
 /* lov_offset.c */
 obd_size lov_stripe_size(struct lov_stripe_md *lsm, obd_size ost_size,
