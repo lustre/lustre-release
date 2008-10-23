@@ -1131,6 +1131,8 @@ struct obd_ops {
                                      struct lov_oinfo *loi, void *cookie);
         int (*o_merge_lvb)(struct obd_export *exp, struct lov_stripe_md *lsm,
                            struct ost_lvb *lvb, int kms_only);
+        int (*o_update_lvb)(struct obd_export *exp, struct lov_stripe_md *lsm,
+                            struct ost_lvb *lvb, obd_flag valid);
         int (*o_adjust_kms)(struct obd_export *exp, struct lov_stripe_md *lsm,
                             obd_off size, int shrink);
         int (*o_punch)(struct obd_export *exp, struct obd_info *oinfo,
