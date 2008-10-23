@@ -3866,8 +3866,14 @@ static int osc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
 
         rc = llog_setup(obd, &obd->obd_olg, LLOG_SIZE_REPL_CTXT, tgt, count,
                         NULL, &osc_size_repl_logops);
-        if (rc)
+        if (rc) {
+                struct llog_ctxt *ctxt = 
+                        llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
+                if (ctxt)
+                        llog_cleanup(ctxt);
                 CERROR("failed LLOG_SIZE_REPL_CTXT\n");
+        }
+        GOTO(out, rc);
 out:
         if (rc) {
                 CERROR("osc '%s' tgt '%s' cnt %d catid %p rc=%d\n",
@@ -3875,7 +3881,7 @@ out:
                 CERROR("logid "LPX64":0x%x\n",
                        catid->lci_logid.lgl_oid, catid->lci_logid.lgl_ogen);
         }
-        RETURN(rc);
+        return rc;
 }
 
 static int osc_llog_finish(struct obd_device *obd, int count)

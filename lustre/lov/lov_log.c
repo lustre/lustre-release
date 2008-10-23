@@ -218,7 +218,7 @@ int lov_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
         rc = llog_setup(obd, olg, LLOG_SIZE_REPL_CTXT, tgt, 0, NULL,
                         &lov_size_repl_logops);
         if (rc)
-                RETURN(rc);
+                GOTO(err_cleanup, rc);
 
         lov_getref(obd);
         /* count may not match lov->desc.ld_tgt_count during dynamic ost add */
@@ -238,7 +238,18 @@ int lov_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                 break;
         }
         lov_putref(obd);
-        RETURN(rc);
+        GOTO(err_cleanup, rc);
+err_cleanup:
+        if (rc) {
+                struct llog_ctxt *ctxt = 
+                        llog_get_context(obd, LLOG_SIZE_REPL_CTXT);
+                if (ctxt)
+                        llog_cleanup(ctxt);
+                ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
+                if (ctxt)
+                        llog_cleanup(ctxt);
+        }
+        return rc;
 }
 
 int lov_llog_finish(struct obd_device *obd, int count)

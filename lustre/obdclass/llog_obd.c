@@ -94,7 +94,14 @@ int __llog_ctxt_put(struct llog_ctxt *ctxt)
         obd = ctxt->loc_obd;
         spin_lock(&obd->obd_dev_lock);
         spin_unlock(&obd->obd_dev_lock); /* sync with llog ctxt user thread */
-        LASSERT(obd->obd_stopping == 1 || obd->obd_set_up == 0);
+
+        /* obd->obd_starting is needed for the case of cleanup
+         * in error case while obd is starting up. */
+        LASSERTF(obd->obd_starting == 1 || 
+                 obd->obd_stopping == 1 || obd->obd_set_up == 0,
+                 "wrong obd state: %d/%d/%d\n", !!obd->obd_starting, 
+                 !!obd->obd_stopping, !!obd->obd_set_up);
+
         /* cleanup the llog ctxt here */
         if (CTXTP(ctxt, cleanup))
                 rc = CTXTP(ctxt, cleanup)(ctxt);

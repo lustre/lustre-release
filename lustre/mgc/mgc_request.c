@@ -922,6 +922,10 @@ static int mgc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
                 llog_initiator_connect(ctxt);
                 llog_ctxt_put(ctxt);
+        } else {
+                ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+                if (ctxt)
+                        llog_cleanup(ctxt);
         }
 
         RETURN(rc);

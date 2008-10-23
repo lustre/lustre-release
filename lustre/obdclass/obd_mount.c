@@ -167,7 +167,7 @@ struct lustre_mount_info *server_get_mount(const char *name)
         lsi = s2lsi(lmi->lmi_sb);
         mntget(lmi->lmi_mnt);
         atomic_inc(&lsi->lsi_mounts);
-
+        
         CDEBUG(D_MOUNT, "get_mnt %p from %s, refs=%d, vfscount=%d\n",
                lmi->lmi_mnt, name, atomic_read(&lsi->lsi_mounts),
                atomic_read(&lmi->lmi_mnt->mnt_count));
@@ -1132,7 +1132,6 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
         if (rc) {
                 CERROR("failed to start server %s: %d\n",
                        lsi->lsi_ldd->ldd_svname, rc);
-                server_deregister_mount(lsi->lsi_ldd->ldd_svname);
                 GOTO(out_mgc, rc);
         }
 
@@ -1193,10 +1192,8 @@ static int lustre_free_lsi(struct super_block *sb)
         struct lustre_sb_info *lsi = s2lsi(sb);
         ENTRY;
 
-        if (!lsi)
-                RETURN(0);
-
-        CDEBUG(D_MOUNT, "Freeing lsi\n");
+        LASSERT(lsi != NULL);
+        CDEBUG(D_MOUNT, "Freeing lsi %p\n", lsi);
 
         /* someone didn't call server_put_mount. */
         LASSERT(atomic_read(&lsi->lsi_mounts) == 0);
@@ -1235,10 +1232,9 @@ static int lustre_put_lsi(struct super_block *sb)
         struct lustre_sb_info *lsi = s2lsi(sb);
         ENTRY;
 
-        LASSERT(lsi);
+        LASSERT(lsi != NULL);
 
         CDEBUG(D_MOUNT, "put %p %d\n", sb, atomic_read(&lsi->lsi_mounts));
-
         if (atomic_dec_and_test(&lsi->lsi_mounts)) {
                 lustre_free_lsi(sb);
                 RETURN(1);
@@ -1586,9 +1582,9 @@ static int server_fill_super(struct super_block *sb)
         if (IS_ERR(mnt)) {
                 rc = PTR_ERR(mnt);
                 CERROR("Unable to mount device %s: %d\n",
-                      lsi->lsi_lmd->lmd_dev, rc);
+                       lsi->lsi_lmd->lmd_dev, rc);
                 lustre_put_lsi(sb);
-                GOTO(out, rc);
+                RETURN(rc);
         }
         lsi->lsi_srv_mnt = mnt;
 
@@ -1602,12 +1598,12 @@ static int server_fill_super(struct super_block *sb)
                                    "running. Double-mount may have compromised"
                                    " the disk journal.\n",
                                    lsi->lsi_ldd->ldd_svname);
-                unlock_mntput(mnt);
                 lustre_put_lsi(sb);
-                GOTO(out, rc = -EALREADY);
+                unlock_mntput(mnt);
+                RETURN(-EALREADY);
         }
 
-        /* start MGS before MGC */
+        /* Start MGS before MGC */
         if (IS_MGS(lsi->lsi_ldd) && !(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOMGS)) {
                 rc = server_start_mgs(sb);
                 if (rc)
@@ -1645,11 +1641,12 @@ static int server_fill_super(struct super_block *sb)
                       lsi->lsi_ldd->ldd_svname, lsi->lsi_lmd->lmd_dev);
 
         RETURN(0);
-
 out_mnt:
+        /* We jump here in case of failure while starting targets or MGS.
+         * In this case we can't just put @mnt and have to do real cleanup
+         * with stoping targets, etc. */
         server_put_super(sb);
-out:
-        RETURN(rc);
+        return rc;
 }
 
 /* Get the index from the obd name.
@@ -1945,7 +1942,7 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
         /* Figure out the lmd from the mount options */
         if (lmd_parse((char *)data, lmd)) {
                 lustre_put_lsi(sb);
-                RETURN(-EINVAL);
+                GOTO(out, rc = -EINVAL);
         }
 
         if (lmd_is_client(lmd)) {
@@ -1954,12 +1951,13 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                         LCONSOLE_ERROR_MSG(0x165, "Nothing registered for "
                                            "client mount! Is the 'lustre' "
                                            "module loaded?\n");
+                        lustre_put_lsi(sb);
                         rc = -ENODEV;
                 } else {
                         rc = lustre_start_mgc(sb);
                         if (rc) {
-                                lustre_stop_mgc(sb);
-                                goto out;
+                                lustre_put_lsi(sb);
+                                GOTO(out, rc);
                         }
                         /* Connect and start */
                         /* (should always be ll_fill_super) */
@@ -1976,14 +1974,18 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                 /* s_f_s will call server_put_super on failure */
         }
 
+        /* If error happens in fill_super() call, @lsi will be killed there.
+         * This is why we do not put it here. */
+        GOTO(out, rc);
 out:
-        if (rc){
+        if (rc) {
                 CERROR("Unable to mount %s (%d)\n",
                        s2lsi(sb) ? lmd->lmd_dev : "", rc);
         } else {
-                CDEBUG(D_SUPER, "mount %s complete\n", lmd->lmd_dev);
+                CDEBUG(D_SUPER, "Mount %s complete\n", 
+                       lmd->lmd_dev);
         }
-        RETURN(rc);
+        return rc;
 }
 
 

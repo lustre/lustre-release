@@ -128,8 +128,7 @@ lustre_hash_exit(lustre_hash_t *lh)
         int                   i;
         ENTRY;
 
-        if (!lh)
-                return;
+        LASSERT(lh != NULL);
 
         write_lock(&lh->lh_rwlock);
 
