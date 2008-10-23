@@ -2167,6 +2167,7 @@ static int mds_lov_clean(struct obd_device *obd)
 static int mds_postsetup(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
+        struct llog_ctxt *ctxt;
         int rc = 0;
         ENTRY;
 
@@ -2178,7 +2179,7 @@ static int mds_postsetup(struct obd_device *obd)
         rc = llog_setup(obd, LLOG_LOVEA_ORIG_CTXT, obd, 0, NULL,
                         &llog_lvfs_ops);
         if (rc)
-                RETURN(rc);
+                GOTO(err_llog, rc);
 
         if (mds->mds_profile) {
                 struct lustre_profile *lprof;
@@ -2201,9 +2202,14 @@ static int mds_postsetup(struct obd_device *obd)
 
 err_cleanup:
         mds_lov_clean(obd);
-        llog_cleanup(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT));
-        llog_cleanup(llog_get_context(obd, LLOG_LOVEA_ORIG_CTXT));
-        RETURN(rc);
+        ctxt = llog_get_context(obd, LLOG_LOVEA_ORIG_CTXT);
+        if (ctxt)
+                llog_cleanup(ctxt);
+err_llog:
+        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+        if (ctxt)
+                llog_cleanup(ctxt);
+        return rc;
 }
 
 int mds_postrecov(struct obd_device *obd)
