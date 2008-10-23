@@ -39,6 +39,15 @@ tbd Sun Microsystems, Inc.
 	  old (verbose) output can be obtained by using -v option.
 	* File join has been disabled in this release, refer to Bugzilla 16929.
 
+Severity   : major
+Frequency  : rare
+Bugzilla   : 16492
+Description: mds is deadlocked
+Details    : in rare cases, inode in catalog can have i_no less than have parent
+             i_no, this produce wrong order for locking during open, and parallel
+             unlink can be lock open. this need teach mds_open to grab locks in
+             resouce id order, not at parent -> child order.
+
 Severity   : enhancement
 Bugzilla   : 1819
 Description: Add /proc entry for import status
