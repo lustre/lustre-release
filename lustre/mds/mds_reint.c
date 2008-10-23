@@ -1491,6 +1491,10 @@ static int mds_verify_child(struct obd_device *obd,
         int rc = 0, cleanup_phase = 2; /* parent, child locks */
         ENTRY;
 
+        /* not want child - not check it */
+        if (name == NULL)
+                RETURN(0);
+
         vchild = ll_lookup_one_len(name, dparent, namelen - 1);
         if (IS_ERR(vchild))
                 GOTO(cleanup, rc = PTR_ERR(vchild));
@@ -1504,6 +1508,12 @@ static int mds_verify_child(struct obd_device *obd,
                 *dchildp = vchild;
 
                 RETURN(0);
+        }
+        /* resouce is changed, but not want child lock, return new child */
+        if (child_lockh == NULL) {
+                dput(dchild);
+                *dchildp = vchild;
+                GOTO(cleanup, rc = 0);
         }
 
         CDEBUG(D_DLMTRACE, "child inode changed: %p != %p (%lu != "LPU64")\n",
@@ -1544,6 +1554,7 @@ static int mds_verify_child(struct obd_device *obd,
                         GOTO(cleanup, rc = -EIO);
         } else {
                 memset(child_res_id, 0, sizeof(*child_res_id));
+                memset(child_lockh, 0, sizeof(*child_lockh));
         }
 
         EXIT;
@@ -1578,6 +1589,7 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
         struct ldlm_res_id parent_res_id = { .name = {0} };
         ldlm_policy_data_t parent_policy = {.l_inodebits = { parent_lockpart }};
         ldlm_policy_data_t child_policy = {.l_inodebits = { child_lockpart }};
+        static struct ldlm_res_id child_res_id_nolock = { .name = {0} };
         struct inode *inode;
         int rc = 0, cleanup_phase = 0;
         ENTRY;
@@ -1598,6 +1610,8 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
 
         cleanup_phase = 1; /* parent dentry */
 
+        if (name == NULL)
+                GOTO(retry_locks, rc);
         /* Step 2: Lookup child (without DLM lock, to get resource name) */
         *dchildp = mds_lookup(obd, name, *dparentp, namelen - 1);
         if (IS_ERR(*dchildp)) {
@@ -1607,6 +1621,7 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
         }
 
         cleanup_phase = 2; /* child dentry */
+
         inode = (*dchildp)->d_inode;
         if (inode != NULL) {
                 if (is_bad_inode(inode)) {
@@ -1640,7 +1655,9 @@ retry_locks:
          *         exist, we still have to lock the parent and re-lookup. */
         rc = enqueue_ordered_locks(obd,&parent_res_id,parent_lockh,parent_mode,
                                    &parent_policy,
-                                   &child_res_id, child_lockh, child_mode,
+                                   child_lockh ? &child_res_id :
+                                                 &child_res_id_nolock,
+                                   child_lockh, child_mode,
                                    &child_policy);
         if (rc)
                 GOTO(cleanup, rc);
