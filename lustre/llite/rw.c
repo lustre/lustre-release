@@ -126,6 +126,7 @@ int ll_file_punch(struct inode * inode, loff_t new_size, int srvlock)
         struct ll_inode_info *lli = ll_i2info(inode);
         struct obd_info oinfo = { { { 0 } } };
         struct obdo oa;
+        obd_valid valid;
         int rc;
 
         ENTRY;
@@ -139,6 +140,10 @@ int ll_file_punch(struct inode * inode, loff_t new_size, int srvlock)
         oa.o_id = lli->lli_smd->lsm_object_id;
         oa.o_gr = lli->lli_smd->lsm_object_gr;
         oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+
+        valid = OBD_MD_FLTYPE | OBD_MD_FLMODE |OBD_MD_FLFID |
+                OBD_MD_FLATIME | OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLGENER |
+                OBD_MD_FLBLOCKS;
         if (srvlock) {
                 /* set OBD_MD_FLFLAGS in o_valid, only if we 
                  * set OBD_FL_TRUNCLOCK, otherwise ost_punch
@@ -146,11 +151,42 @@ int ll_file_punch(struct inode * inode, loff_t new_size, int srvlock)
                  * in ost_punch */
                 oa.o_flags = OBD_FL_TRUNCLOCK;
                 oa.o_valid |= OBD_MD_FLFLAGS;
+
+                /* lockless truncate
+                 *
+                 * 1. do not use inode's timestamps because concurrent
+                 * stat might fill the inode with out-of-date times,
+                 * send current instead
+                 *
+                 * 2.do no update lsm, as long as stat (via
+                 * ll_glimpse_size) will bring attributes from osts
+                 * anyway */
+                oa.o_mtime = oa.o_ctime = LTIME_S(CURRENT_TIME);
+                oa.o_valid |= OBD_MD_FLMTIME | OBD_MD_FLCTIME;
+        } else {
+                /* truncate under locks
+                 *
+                 * 1. update inode's mtime and ctime as long as
+                 * concurrent stat (via ll_glimpse_size) might bring
+                 * out-of-date ones
+                 *
+                 * 2. update lsm so that next stat (via
+                 * ll_glimpse_size) could get correct values in lsm */
+                struct ost_lvb xtimes;
+
+                lov_stripe_lock(lli->lli_smd);
+                LTIME_S(inode->i_mtime) = LTIME_S(CURRENT_TIME);
+                LTIME_S(inode->i_ctime) = LTIME_S(CURRENT_TIME);
+                xtimes.lvb_mtime = LTIME_S(inode->i_mtime);
+                xtimes.lvb_ctime = LTIME_S(inode->i_ctime);
+                obd_update_lvb(ll_i2obdexp(inode), lli->lli_smd, &xtimes,
+                               OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+                lov_stripe_unlock(lli->lli_smd);
+
+                valid |= OBD_MD_FLMTIME | OBD_MD_FLCTIME;
         }
-        obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLMODE |OBD_MD_FLFID|
-                        OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME |
-                        OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLGENER |
-                        OBD_MD_FLBLOCKS);
+        obdo_from_inode(&oa, inode, valid);
+
         rc = obd_punch_rqset(ll_i2obdexp(inode), &oinfo, NULL);
         if (rc) {
                 CERROR("obd_truncate fails (%d) ino %lu\n", rc, inode->i_ino);
