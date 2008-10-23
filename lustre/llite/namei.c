@@ -822,21 +822,15 @@ static void ll_update_times(struct ptlrpc_request *request, int offset,
                                                sizeof(*body));
         LASSERT(body);
 
-        /* mtime is always updated with ctime, but can be set in past.
-           As write and utime(2) may happen within 1 second, and utime's
-           mtime has a priority over write's one, so take mtime from mds
-           for the same ctimes. */
-        if (body->valid & OBD_MD_FLCTIME &&
-            body->ctime >= LTIME_S(inode->i_ctime)) {
-                LTIME_S(inode->i_ctime) = body->ctime;
-
-                if (body->valid & OBD_MD_FLMTIME) {
-                        CDEBUG(D_INODE, "setting ino %lu mtime from %lu "
-                               "to "LPU64"\n", inode->i_ino,
-                               LTIME_S(inode->i_mtime), body->mtime);
-                        LTIME_S(inode->i_mtime) = body->mtime;
-                }
+        if (body->valid & OBD_MD_FLMTIME &&
+            body->mtime > LTIME_S(inode->i_mtime)) {
+                CDEBUG(D_INODE, "setting ino %lu mtime from %lu to "LPU64"\n",
+                       inode->i_ino, LTIME_S(inode->i_mtime), body->mtime);
+                LTIME_S(inode->i_mtime) = body->mtime;
         }
+        if (body->valid & OBD_MD_FLCTIME &&
+            body->ctime > LTIME_S(inode->i_ctime))
+                LTIME_S(inode->i_ctime) = body->ctime;
 }
 
 static int ll_new_node(struct inode *dir, struct qstr *name,
