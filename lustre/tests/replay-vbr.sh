@@ -216,7 +216,17 @@ vbr_activate_client() {
     do_node $client "sysctl -w lustre.fail_loc=0x0"
 }
 
+remote_server ()
+{
+    local client=$1
+    [ -z "$(do_node $client lctl dl | grep mdt)" ] && \
+    [ -z "$(do_node $client lctl dl | grep ost)" ]
+}
+
 test_4a() {
+    remote_server $CLIENT2 || \
+        skip "Client $CLIENT2 is on the server node" && return 0
+
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
 
@@ -245,6 +255,9 @@ test_4a() {
 run_test 4a "fail MDS, delayed recovery"
 
 test_4b() {
+    remote_server $CLIENT2 || \
+        skip "Client $CLIENT2 is on the server node" && return 0
+
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
 
@@ -272,6 +285,9 @@ test_4b() {
 run_test 4b "fail MDS, normal operation, delayed open recovery"
 
 test_4c() {
+    remote_server $CLIENT2 || \
+        skip "Client $CLIENT2 is on the server node" && return 0
+
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
 
@@ -299,6 +315,9 @@ test_4c() {
 run_test 4c "fail MDS, normal operation, delayed recovery"
 
 test_5a() {
+    remote_server $CLIENT2 || \
+        skip "Client $CLIENT2 is on the server node" && return 0
+
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
 
@@ -326,6 +345,9 @@ test_5a() {
 run_test 5a "fail MDS, delayed recovery should fail"
 
 test_5b() {
+    remote_server $CLIENT2 || \
+        skip "Client $CLIENT2 is on the server node" && return 0
+
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
 
@@ -355,6 +377,9 @@ test_5b() {
 run_test 5b "fail MDS, normal operation, delayed recovery should fail"
 
 test_6a() {
+    remote_server $CLIENT2 || \
+        skip "Client $CLIENT2 is on the server node" && return 0
+
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
 
@@ -389,6 +414,9 @@ test_6a() {
 run_test 6a "fail MDS, delayed recovery, fail MDS"
 
 test_7a() {
+    remote_server $CLIENT2 || \
+        skip "Client $CLIENT2 is on the server node" && return 0
+
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
 
@@ -433,91 +461,87 @@ rmultiop_stop() {
 }
 
 test_8a() {
-    [ -n "$CLIENTS" ] || \
-        { skip "Need two or more clients" && return 0; }
-    [ $CLIENTCOUNT -ge 2 ] || \
-        { skip "Need two or more clients, have $CLIENTCOUNT" && return 0; }
+    remote_server $CLIENT2 || \
+        skip "Client $CLIENT2 is on the server node" && return 0
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
 
-    rmultiop_start $CLIENT1 $DIR/$tfile || return 1
-    do_node $CLIENT1 rm -f $DIR/$tfile
+    rmultiop_start $CLIENT2 $DIR/$tfile || return 1
+    do_node $CLIENT2 rm -f $DIR/$tfile
     replay_barrier mds
-    rmultiop_stop $CLIENT1 || return 2
+    rmultiop_stop $CLIENT2 || return 2
 
-    vbr_deactivate_client $CLIENT1
+    vbr_deactivate_client $CLIENT2
     facet_failover mds
-    do_node $CLIENT2 df $DIR || return 3
+    do_node $CLIENT1 df $DIR || return 3
     #client1 is back and will try to open orphan
-    vbr_activate_client $CLIENT1
-    do_node $CLIENT1 df $DIR || return 4
+    vbr_activate_client $CLIENT2
+    do_node $CLIENT2 df $DIR || return 4
 
-    do_node $CLIENT1 $CHECKSTAT $DIR/$tfile && error "$tfile exists"
+    do_node $CLIENT2 $CHECKSTAT $DIR/$tfile && error "$tfile exists"
     zconf_umount_clients $CLIENTS $DIR
     return 0
 }
 run_test 8a "orphans are kept until delayed recovery"
 
 test_8b() {
-    [ -n "$CLIENTS" ] || \
-        { skip "Need two or more clients" && return 0; }
-    [ $CLIENTCOUNT -ge 2 ] || \
-        { skip "Need two or more clients, have $CLIENTCOUNT" && return 0; }
+    remote_server $CLIENT2 || \
+        skip "Client $CLIENT2 is on the server node" && return 0
+    [ $CLIENT2 -eq $mds_HOST ] || \
+        { skip "Client one the server node" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
 
-    rmultiop_start $CLIENT1 $DIR/$tfile || return 1
+    rmultiop_start $CLIENT2 $DIR/$tfile || return 1
     replay_barrier mds
-    do_node $CLIENT2 rm -f $DIR/$tfile
+    do_node $CLIENT1 rm -f $DIR/$tfile
 
-    vbr_deactivate_client $CLIENT1
+    vbr_deactivate_client $CLIENT2
     facet_failover mds
-    do_node $CLIENT2 df $DIR || return 2
+    do_node $CLIENT1 df $DIR || return 2
     #client1 is back and will try to open orphan
-    vbr_activate_client $CLIENT1
-    do_node $CLIENT1 df $DIR || return 3
+    vbr_activate_client $CLIENT2
+    do_node $CLIENT2 df $DIR || return 3
 
-    rmultiop_stop $CLIENT1 || return 1
-    do_node $CLIENT1 $CHECKSTAT $DIR/$tfile && error "$tfile exists"
+    rmultiop_stop $CLIENT2 || return 1
+    do_node $CLIENT2 $CHECKSTAT $DIR/$tfile && error "$tfile exists"
     zconf_umount_clients $CLIENTS $DIR
     return 0
 }
 run_test 8b "open1 | unlink2 X delayed_replay1, close1"
 
 test_8c() {
-    [ -n "$CLIENTS" ] || \
-        { skip "Need two or more clients" && return 0; }
-    [ $CLIENTCOUNT -ge 2 ] || \
-        { skip "Need two or more clients, have $CLIENTCOUNT" && return 0; }
+    remote_server $CLIENT2 || \
+        skip "Client $CLIENT2 is on the server node" && return 0
+    [ $CLIENT2 -eq $mds_HOST ] || \
+        { skip "Client one the server node" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
 
-    rmultiop_start $CLIENT1 $DIR/$tfile || return 1
+    rmultiop_start $CLIENT2 $DIR/$tfile || return 1
     replay_barrier mds
-    do_node $CLIENT2 rm -f $DIR/$tfile
-    rmultiop_stop $CLIENT1 || return 2
+    do_node $CLIENT1 rm -f $DIR/$tfile
+    rmultiop_stop $CLIENT2 || return 2
 
-    vbr_deactivate_client $CLIENT1
+    vbr_deactivate_client $CLIENT2
     facet_failover mds
-    do_node $CLIENT2 df $DIR || return 3
+    do_node $CLIENT1 df $DIR || return 3
     #client1 is back and will try to open orphan
-    vbr_activate_client $CLIENT1
-    do_node $CLIENT1 df $DIR || return 4
+    vbr_activate_client $CLIENT2
+    do_node $CLIENT2 df $DIR || return 4
 
-    do_node $CLIENT1 $CHECKSTAT $DIR/$tfile && error "$tfile exists"
+    do_node $CLIENT2 $CHECKSTAT $DIR/$tfile && error "$tfile exists"
     zconf_umount_clients $CLIENTS $DIR
     return 0
 }
 run_test 8c "open1 | unlink2, close1 X delayed_replay1"
 
 test_8d() {
-    [ -n "$CLIENTS" ] || \
-        { skip "Need two or more clients" && return 0; }
-    [ $CLIENTCOUNT -ge 2 ] || \
-        { skip "Need two or more clients, have $CLIENTCOUNT" && return 0; }
+    remote_server $CLIENT2 || \
+        skip "Client $CLIENT2 is on the server node" && return 0
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -525,30 +549,25 @@ test_8d() {
     rmultiop_start $CLIENT1 $DIR/$tfile || return 1
     rmultiop_start $CLIENT2 $DIR/$tfile || return 2
     replay_barrier mds
-    do_node $CLIENT2 rm -f $DIR/$tfile
+    do_node $CLIENT1 rm -f $DIR/$tfile
     rmultiop_stop $CLIENT2 || return 3
     rmultiop_stop $CLIENT1 || return 4
 
-    vbr_deactivate_client $CLIENT1
+    vbr_deactivate_client $CLIENT2
     facet_failover mds
-    do_node $CLIENT2 df $DIR || return 6
+    do_node $CLIENT1 df $DIR || return 6
 
     #client1 is back and will try to open orphan
-    vbr_activate_client $CLIENT1
-    do_node $CLIENT1 df $DIR || return 8
+    vbr_activate_client $CLIENT2
+    do_node $CLIENT2 df $DIR || return 8
 
-    do_node $CLIENT1 $CHECKSTAT $DIR/$tfile && error "$tfile exists"
+    do_node $CLIENT2 $CHECKSTAT $DIR/$tfile && error "$tfile exists"
     zconf_umount_clients $CLIENTS $DIR
     return 0
 }
 run_test 8d "open1, open2 | unlink2, close1, close2 X delayed_replay1"
 
 test_8e() {
-    [ -n "$CLIENTS" ] || \
-        { skip "Need two or more clients" && return 0; }
-    [ $CLIENTCOUNT -ge 2 ] || \
-        { skip "Need two or more clients, have $CLIENTCOUNT" && return 0; }
-
     zconf_mount $CLIENT1 $DIR
     zconf_mount $CLIENT2 $DIR
 
@@ -571,11 +590,6 @@ test_8e() {
 run_test 8e "create | unlink, create shouldn't fail"
 
 test_8f() {
-    [ -n "$CLIENTS" ] || \
-        { skip "Need two or more clients" && return 0; }
-    [ $CLIENTCOUNT -ge 2 ] || \
-        { skip "Need two or more clients, have $CLIENTCOUNT" && return 0; }
-
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
 
@@ -598,11 +612,6 @@ test_8f() {
 run_test 8f "create | unlink, create shouldn't fail"
 
 test_8g() {
-    [ -n "$CLIENTS" ] || \
-        { skip "Need two or more clients" && return 0; }
-    [ $CLIENTCOUNT -ge 2 ] || \
-        { skip "Need two or more clients, have $CLIENTCOUNT" && return 0; }
-
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
 
