@@ -1687,6 +1687,19 @@ test_39b() {
 }
 run_test 39b "mtime change on close ============================"
 
+# bug 11063
+test_39c() {
+        touch -m -d "10 years ago" $DIR1/$tfile
+        local MTIME1=`stat -c %y $DIR1/$tfile`
+        echo hello >> $DIR1/$tfile
+        local MTIME2=`stat -c %y $DIR1/$tfile`
+        mv $DIR1/$tfile $DIR1/$tfile-1
+        local MTIME3=`stat -c %y $DIR1/$tfile-1`
+        [ "$MTIME2" = "$MTIME3" ] ||
+                error "mtime ($MTIME2) changed (to $MTIME3) on rename (BZ#11063)"
+}
+run_test 39c "mtime change on rename ==========================="
+
 test_40() {
 	dd if=/dev/zero of=$DIR/f40 bs=4096 count=1
 	$RUNAS $OPENFILE -f O_WRONLY:O_TRUNC $DIR/f40 && error
