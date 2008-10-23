@@ -1245,6 +1245,20 @@ static inline int obd_merge_lvb(struct obd_export *exp,
         RETURN(rc);
 }
 
+static inline int obd_update_lvb(struct obd_export *exp,
+                                 struct lov_stripe_md *lsm,
+                                 struct ost_lvb *lvb, obd_flag valid)
+{
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_OP(exp->exp_obd, update_lvb, -EOPNOTSUPP);
+        EXP_COUNTER_INCREMENT(exp, update_lvb);
+
+        rc = OBP(exp->exp_obd, update_lvb)(exp, lsm, lvb, valid);
+        RETURN(rc);
+}
+
 static inline int obd_adjust_kms(struct obd_export *exp,
                                  struct lov_stripe_md *lsm, obd_off size,
                                  int shrink)
