@@ -36,7 +36,7 @@ Index: linux-2.6.9-67/fs/ext3/iopen.c
 ===================================================================
 --- /dev/null
 +++ linux-2.6.9-67/fs/ext3/iopen.c
-@@ -0,0 +1,314 @@
+@@ -0,0 +1,315 @@
 +/*
 + * linux/fs/ext3/iopen.c
 + *
@@ -338,6 +338,7 @@ Index: linux-2.6.9-67/fs/ext3/iopen.c
 +	inode->i_ctime = CURRENT_TIME;
 +	inode->i_mtime = CURRENT_TIME;
 +	EXT3_I(inode)->i_dtime = 0;
++	EXT3_I(inode)->i_file_acl = 0;
 +	inode->i_blksize = PAGE_SIZE;	/* This is the optimal IO size
 +					 * (for stat), not the fs block
 +					 * size */
