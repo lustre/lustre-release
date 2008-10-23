@@ -183,6 +183,9 @@ struct ll_inode_info {
          * before child -- it is me should cleanup the dir readahead. */
         void                   *lli_opendir_key;
         struct ll_statahead_info *lli_sai;
+        /* the most recent attributes from mds, it is used for timestampts
+         * only so far */
+        struct ost_lvb         lli_lvb;
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         struct inode            lli_vfs_inode;
