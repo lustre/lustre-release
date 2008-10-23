@@ -932,10 +932,9 @@ int mds_open(struct mds_update_record *rec, int offset,
         int child_mode = LCK_CR;
         /* Always returning LOOKUP lock if open succesful to guard
            dentry on client. */
-        ldlm_policy_data_t policy = {.l_inodebits={MDS_INODELOCK_LOOKUP}};
-        struct ldlm_res_id child_res_id = { .name = {0}};
         int lock_flags = 0;
         int rec_pending = 0;
+        int use_parent, need_open_lock;
         unsigned int gid = current->fsgid;
         ENTRY;
 
@@ -1009,17 +1008,45 @@ int mds_open(struct mds_update_record *rec, int offset,
                 RETURN(-ENOMEM);
         }
 
-        /* Step 1: Find and lock the parent */
         if (rec->ur_flags & (MDS_OPEN_CREAT | MDS_OPEN_JOIN_FILE))
                 parent_mode = LCK_EX;
-        dparent = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, parent_mode,
-                                        &parent_lockh, rec->ur_name,
-                                        rec->ur_namelen - 1,
-                                        MDS_INODELOCK_UPDATE);
-        if (IS_ERR(dparent)) {
-                rc = PTR_ERR(dparent);
+
+        /* We cannot use acc_mode here, because it is zeroed in case of
+           creating a file, so we get wrong lockmode */
+        if (rec->ur_flags & FMODE_WRITE)
+                child_mode = LCK_CW;
+        else if (rec->ur_flags & MDS_FMODE_EXEC)
+                child_mode = LCK_PR;
+        else
+                child_mode = LCK_CR;
+
+        /* join file and nfsd can't need lookup dchild as use parent for it */
+        use_parent = (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) &&
+                     (rec->ur_flags & MDS_OPEN_LOCK) && (rec->ur_namelen == 1)) ||
+                     (rec->ur_flags & MDS_OPEN_JOIN_FILE);
+
+        need_open_lock = !(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) &&
+                           (rec->ur_flags & MDS_OPEN_LOCK);
+
+        /* Try to lock both parent and child first. If child is not found,
+         * return only locked parent.  This is enough to prevent other
+         * threads from changing this directory until creation is finished. */
+        rc = mds_get_parent_child_locked(obd, &obd->u.mds,
+                                         rec->ur_fid1,
+                                         &parent_lockh,
+                                         &dparent, parent_mode,
+                                         MDS_INODELOCK_UPDATE,
+                                         use_parent ? NULL : rec->ur_name,
+                                         rec->ur_namelen,
+                                         (rec->ur_flags & MDS_OPEN_LOCK) ?
+                                                child_lockh : NULL,
+                                         &dchild, child_mode,
+                                         MDS_INODELOCK_LOOKUP |
+                                         MDS_INODELOCK_OPEN);
+
+        if (rc) {
                 if (rc != -ENOENT) {
-                        CERROR("parent "LPU64"/%u lookup error %d\n",
+                        CERROR("parent "LPU64"/%u lookup/take lock error %d\n",
                                rec->ur_fid1->id, rec->ur_fid1->generation, rc);
                 } else {
                         /* Just cannot find parent - make it look like
@@ -1033,32 +1060,18 @@ int mds_open(struct mds_update_record *rec, int offset,
 
         cleanup_phase = 1; /* parent dentry and lock */
 
-        if (rec->ur_flags & MDS_OPEN_JOIN_FILE) {
+        if (use_parent)
                 dchild = dget(dparent);
-                cleanup_phase = 2; /* child dentry */
-                acc_mode = accmode(dchild->d_inode, rec->ur_flags);
-                GOTO(found_child, rc);
-        }
 
-        /* Step 2: Lookup the child */
-
-        if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) &&
-            (rec->ur_flags & MDS_OPEN_LOCK) && (rec->ur_namelen == 1)) {
-                /* hack for nfsd with no_subtree_check, it will use anon
-                 * dentry w/o filename to open the file. the anon dentry's
-                 * parent was set to itself, so rec->ur_fid1 is the file.
-                 * And in MDC it cannot derive the dentry's parent dentry,
-                 * hence the file's name, so we hack here in MDS,
-                 * refer to bug 13030. */
-                dchild = mds_fid2dentry(mds, rec->ur_fid1, NULL);
-        } else {
-                dchild = mds_lookup(obd, rec->ur_name, dparent,
-                                    rec->ur_namelen - 1);
-        }
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
                 dchild = NULL; /* don't confuse mds_finish_transno() below */
                 GOTO(cleanup, rc);
+        }
+
+        if (rec->ur_flags & MDS_OPEN_JOIN_FILE) {
+                acc_mode = accmode(dchild->d_inode, rec->ur_flags);
+                GOTO(found_child, rc);
         }
 
         cleanup_phase = 2; /* child dentry */
@@ -1171,6 +1184,14 @@ int mds_open(struct mds_update_record *rec, int offset,
                 acc_mode = 0;           /* Don't check for permissions */
         } else {
                 acc_mode = accmode(dchild->d_inode, rec->ur_flags);
+                /* Child previously existed so the lookup and lock is already
+                 * done, so no further locking is needed. */
+                /* for nfs and join - we need two locks for same fid, but
+                 * with different mode */
+                if (need_open_lock && !use_parent)  {
+                        intent_set_disposition(rep, DISP_OPEN_LOCK);
+                        need_open_lock = 0;
+                }
         }
 
         LASSERTF(!mds_inode_is_orphan(dchild->d_inode),
@@ -1233,20 +1254,10 @@ found_child:
                 GOTO(cleanup, rc = -EAGAIN);
         }
 
-        /* Obtain OPEN lock as well */
-        policy.l_inodebits.bits |= MDS_INODELOCK_OPEN;
+        if (need_open_lock) {
+                ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_LOOKUP | MDS_INODELOCK_OPEN } };
+                struct ldlm_res_id child_res_id;
 
-        /* We cannot use acc_mode here, because it is zeroed in case of
-           creating a file, so we get wrong lockmode */
-        if (rec->ur_flags & FMODE_WRITE)
-                child_mode = LCK_CW;
-        else if (rec->ur_flags & MDS_FMODE_EXEC)
-                child_mode = LCK_PR;
-        else
-                child_mode = LCK_CR;
-
-        if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) &&
-             (rec->ur_flags & MDS_OPEN_LOCK)) {
                 /* In case of replay we do not get a lock assuming that the
                    caller has it already */
                 child_res_id.name[0] = dchild->d_inode->i_ino;
@@ -1262,7 +1273,6 @@ found_child:
 
                 /* Let mds_intent_policy know that we have a lock to return */
                 intent_set_disposition(rep, DISP_OPEN_LOCK);
-                cleanup_phase = 3;
         }
 
         if (!S_ISREG(dchild->d_inode->i_mode) &&
@@ -1289,11 +1299,6 @@ found_child:
                 lquota_pending_commit(mds_quota_interface_ref, obd,
                                       current->fsuid, gid, 1);
         switch (cleanup_phase) {
-        case 3:
-                if (rc)
-                        /* It is safe to leave IT_OPEN_LOCK set, if rc is not 0,
-                         * mds_intent_policy won't try to return any locks */
-                        ldlm_lock_decref(child_lockh, child_mode);
         case 2:
                 if (rc && created) {
                         int err;
@@ -1312,8 +1317,14 @@ found_child:
                         qpids[USRQUOTA] = dparent->d_inode->i_uid;
                         qpids[GRPQUOTA] = dparent->d_inode->i_gid;
                 }
-                l_dput(dchild);
         case 1:
+                if (dchild) {
+                        l_dput(dchild);
+                        /* It is safe to leave IT_OPEN_LOCK set, if rc is not 0,
+                         * mds_intent_policy won't try to return any locks */
+                        if (rc && child_lockh->cookie)
+                                ldlm_lock_decref(child_lockh, child_mode);
+                }
                 if (dparent == NULL)
                         break;
 
