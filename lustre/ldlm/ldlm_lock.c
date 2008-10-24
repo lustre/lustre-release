@@ -172,8 +172,8 @@ void ldlm_lock_put(struct ldlm_lock *lock)
 
                 ldlm_interval_free(ldlm_interval_detach(lock));
                 lu_ref_fini(&lock->l_reference);
-                OBD_FREE_RCU_CB(lock, sizeof(*lock), &lock->l_handle, 
-                      	        ldlm_lock_free);
+                OBD_FREE_RCU_CB(lock, sizeof(*lock), &lock->l_handle,
+                                ldlm_lock_free);
         }
 
         EXIT;
@@ -638,7 +638,7 @@ void ldlm_lock_addref_internal(struct ldlm_lock *lock, __u32 mode)
 
 /* only called in ldlm_flock_destroy and for local locks.
  *  * for LDLM_FLOCK type locks, l_blocking_ast is null, and
- *   * ldlm_lock_remove_from_lru() does nothing, it is safe 
+ *   * ldlm_lock_remove_from_lru() does nothing, it is safe
  *    * for ldlm_flock_destroy usage by dropping some code */
 void ldlm_lock_decref_internal_nolock(struct ldlm_lock *lock, __u32 mode)
 {
@@ -700,10 +700,10 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                  * reference, put it on the LRU. */
                 ldlm_lock_add_to_lru(lock);
                 unlock_res_and_lock(lock);
-                /* Call ldlm_cancel_lru() only if EARLY_CANCEL and LRU RESIZE 
-                 * are not supported by the server, otherwise, it is done on 
+                /* Call ldlm_cancel_lru() only if EARLY_CANCEL and LRU RESIZE
+                 * are not supported by the server, otherwise, it is done on
                  * enqueue. */
-                if (!exp_connect_cancelset(lock->l_conn_export) && 
+                if (!exp_connect_cancelset(lock->l_conn_export) &&
                     !ns_connect_lru_resize(ns))
                         ldlm_cancel_lru(ns, 0, LDLM_ASYNC, 0);
         } else {
@@ -810,9 +810,9 @@ static void search_granted_lock(struct list_head *queue,
                                         /* done with mode group */
                                         break;
 
-                                /* jump to next policy group within the mode group */
+                                /* go to next policy group within mode group */
                                 tmp = policy_end->l_res_link.next;
-                                lock = list_entry(tmp, struct ldlm_lock, 
+                                lock = list_entry(tmp, struct ldlm_lock,
                                                   l_res_link);
                         }  /* loop over policy groups within the mode group */
 
@@ -824,7 +824,7 @@ static void search_granted_lock(struct list_head *queue,
                         EXIT;
                         return;
                 } else {
-                        LDLM_ERROR(lock, "is not LDLM_PLAIN or LDLM_IBITS lock");
+                        LDLM_ERROR(lock,"is not LDLM_PLAIN or LDLM_IBITS lock");
                         LBUG();
                 }
         }
@@ -838,7 +838,7 @@ static void search_granted_lock(struct list_head *queue,
         return;
 }
 
-static void ldlm_granted_list_add_lock(struct ldlm_lock *lock, 
+static void ldlm_granted_list_add_lock(struct ldlm_lock *lock,
                                        struct sl_insert_point *prev)
 {
         struct ldlm_resource *res = lock->l_resource;
@@ -1038,7 +1038,8 @@ int ldlm_lock_fast_match(struct ldlm_lock *lock, int rw,
             !lock->l_writers && !lock->l_readers)
                 goto no_match;
 
-        ldlm_lock_addref_internal_nolock(lock, rw == OBD_BRW_WRITE ? LCK_PW : LCK_PR);
+        ldlm_lock_addref_internal_nolock(lock, rw == OBD_BRW_WRITE ?
+                                                        LCK_PW : LCK_PR);
         unlock_res_and_lock(lock);
         *cookie = (void *)lock;
         return 1; /* avoid using rc for stack relief */
@@ -1131,7 +1132,7 @@ ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                 GOTO(out, rc = 1);
         if (flags & LDLM_FL_BLOCK_GRANTED)
                 GOTO(out, rc = 0);
-        lock = search_queue(&res->lr_converting, &mode, policy, old_lock, flags);
+        lock = search_queue(&res->lr_converting, &mode, policy, old_lock,flags);
         if (lock != NULL)
                 GOTO(out, rc = 1);
         lock = search_queue(&res->lr_waiting, &mode, policy, old_lock, flags);
@@ -1157,14 +1158,15 @@ ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                                         if (flags & LDLM_FL_TEST_LOCK)
                                                 LDLM_LOCK_RELEASE(lock);
                                         else
-                                                ldlm_lock_decref_internal(lock, mode);
+                                                ldlm_lock_decref_internal(lock,
+                                                                          mode);
                                         rc = 0;
                                         goto out2;
                                 }
                         }
 
-                        lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(obd_timeout), NULL,
-                                               LWI_ON_SIGNAL_NOOP, NULL);
+                        lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(obd_timeout),
+                                               NULL, LWI_ON_SIGNAL_NOOP, NULL);
 
                         /* XXX FIXME see comment on CAN_MATCH in lustre_dlm.h */
                         l_wait_event(lock->l_waitq,
@@ -1407,7 +1409,7 @@ int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue,
 }
 
 /* Helper function for ldlm_run_ast_work().
- * 
+ *
  * Send an existing rpc set specified by @arg->set and then
  * destroy it. Create new one if @do_create flag is set. */
 static void
@@ -1447,7 +1449,7 @@ ldlm_work_bl_ast_lock(struct list_head *tmp, struct ldlm_cb_set_arg *arg)
 
         LDLM_LOCK_RELEASE(lock->l_blocking_lock);
         lock->l_blocking_lock = NULL;
-        lock->l_blocking_ast(lock, &d, (void *)arg, 
+        lock->l_blocking_ast(lock, &d, (void *)arg,
                              LDLM_CB_BLOCKING);
         LDLM_LOCK_RELEASE(lock);
 
@@ -1516,7 +1518,7 @@ int ldlm_run_ast_work(struct list_head *rpc_list, ldlm_desc_ast_t ast_type)
 {
         struct ldlm_cb_set_arg arg;
         struct list_head *tmp, *pos;
-        int (*work_ast_lock)(struct list_head *tmp, struct ldlm_cb_set_arg *arg);
+        int (*work_ast_lock)(struct list_head *tmp,struct ldlm_cb_set_arg *arg);
         int ast_count;
         ENTRY;
 
@@ -1557,7 +1559,7 @@ int ldlm_run_ast_work(struct list_head *rpc_list, ldlm_desc_ast_t ast_type)
         else
                 /* In case when number of ASTs is multiply of
                  * PARALLEL_AST_LIMIT or @rpc_list was initially empty,
-                 * @arg.set must be destroyed here, otherwise we get 
+                 * @arg.set must be destroyed here, otherwise we get
                  * write memory leaking. */
                 ptlrpc_set_destroy(arg.set);
 
@@ -1686,7 +1688,7 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
 
         /* Yes, second time, just in case it was added again while we were
            running with no res lock in ldlm_cancel_callback */
-        ldlm_del_waiting_lock(lock); 
+        ldlm_del_waiting_lock(lock);
         ldlm_resource_unlink_lock(lock);
         ldlm_lock_destroy_nolock(lock);
 
@@ -1772,8 +1774,8 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
         old_mode = lock->l_req_mode;
         lock->l_req_mode = new_mode;
         if (res->lr_type == LDLM_PLAIN || res->lr_type == LDLM_IBITS) {
-                /* remember the lock position where the lock might be 
-                 * added back to the granted list later and also 
+                /* remember the lock position where the lock might be
+                 * added back to the granted list later and also
                  * remember the join mode for skiplist fixing. */
                 prev.res_link = lock->l_res_link.prev;
                 prev.mode_link = lock->l_sl_mode.prev;
@@ -1782,7 +1784,7 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
         } else {
                 ldlm_resource_unlink_lock(lock);
                 if (res->lr_type == LDLM_EXTENT) {
-                        /* FIXME: ugly code, I have to attach the lock to a 
+                        /* FIXME: ugly code, I have to attach the lock to a
                          * interval node again since perhaps it will be granted
                          * soon */
                         CFS_INIT_LIST_HEAD(&node->li_group);
@@ -1912,11 +1914,11 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
 {
         va_list args;
         cfs_debug_limit_state_t *cdls = data->msg_cdls;
-        
+
         va_start(args, fmt);
 
         if (lock->l_resource == NULL) {
-                libcfs_debug_vmsg2(cdls, data->msg_subsys, level, data->msg_file,
+                libcfs_debug_vmsg2(cdls, data->msg_subsys, level,data->msg_file,
                                    data->msg_fn, data->msg_line, fmt, args,
                        " ns: \?\? lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
                        "res: \?\? rrc=\?\? type: \?\?\? flags: %x remote: "
@@ -1935,7 +1937,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
 
         switch (lock->l_resource->lr_type) {
         case LDLM_EXTENT:
-                libcfs_debug_vmsg2(cdls, data->msg_subsys, level, data->msg_file,
+                libcfs_debug_vmsg2(cdls, data->msg_subsys, level,data->msg_file,
                                    data->msg_fn, data->msg_line, fmt, args,
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
                        "res: "LPU64"/"LPU64" rrc: %d type: %s ["LPU64"->"LPU64
@@ -1960,7 +1962,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
                 break;
 
         case LDLM_FLOCK:
-                libcfs_debug_vmsg2(cdls, data->msg_subsys, level, data->msg_file,
+                libcfs_debug_vmsg2(cdls, data->msg_subsys, level,data->msg_file,
                                    data->msg_fn, data->msg_line, fmt, args,
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
                        "res: "LPU64"/"LPU64" rrc: %d type: %s pid: %d "
@@ -1985,7 +1987,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
                 break;
 
         case LDLM_IBITS:
-                libcfs_debug_vmsg2(cdls, data->msg_subsys, level, data->msg_file,
+                libcfs_debug_vmsg2(cdls, data->msg_subsys, level,data->msg_file,
                                    data->msg_fn, data->msg_line, fmt, args,
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
                        "res: "LPU64"/"LPU64" bits "LPX64" rrc: %d type: %s "
@@ -2009,7 +2011,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
                 break;
 
         default:
-                libcfs_debug_vmsg2(cdls, data->msg_subsys, level, data->msg_file,
+                libcfs_debug_vmsg2(cdls, data->msg_subsys, level,data->msg_file,
                                    data->msg_fn, data->msg_line, fmt, args,
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
                        "res: "LPU64"/"LPU64" rrc: %d type: %s flags: %x "
