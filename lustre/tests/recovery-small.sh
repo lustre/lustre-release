@@ -694,6 +694,7 @@ test_27() {
 	writemany -q -a $DIR/$tdir/$tfile 0 5 &
 	CLIENT_PID=$!
 	sleep 1
+	local save_FAILURE_MODE=$FAILURE_MODE
 	FAILURE_MODE="SOFT"
 	facet_failover mds
 #define OBD_FAIL_OSC_SHUTDOWN            0x407
@@ -710,6 +711,7 @@ test_27() {
         kill -USR1 $CLIENT_PID
 	wait $CLIENT_PID 
 	true
+	FAILURE_MODE=$save_FAILURE_MODE
 }
 run_test 27 "fail LOV while using OSC's"
 
@@ -852,6 +854,7 @@ test_55() {
 	mkdir -p $DIR/$tdir
 
 	# first dd should be finished quickly
+	lfs setstripe DIR/$tdir/$tfile-1 -c 1 -i 0
 	dd if=/dev/zero of=$DIR/$tdir/$tfile-1 bs=32M count=4  &
 	DDPID=$!
 	count=0
@@ -866,8 +869,9 @@ test_55() {
 	done	
 	echo "(dd_pid=$DDPID, time=$count)successful"
 
-        #define OBD_FAIL_OST_DROP_REQ            0x21d
-	do_facet ost lctl set_param fail_loc=0x0000021d
+	lfs setstripe DIR/$tdir/$tfile-2 -c 1 -i 0
+	#define OBD_FAIL_OST_DROP_REQ            0x21d
+	do_facet ost1 lctl set_param fail_loc=0x0000021d
 	# second dd will be never finished
 	dd if=/dev/zero of=$DIR/$tdir/$tfile-2 bs=32M count=4  &	
 	DDPID=$!
@@ -886,7 +890,7 @@ test_55() {
 	echo "(dd_pid=$DDPID, time=$count)successful"
 
 	#Recover fail_loc and dd will finish soon
-	do_facet ost lctl set_param fail_loc=0
+	do_facet ost1 lctl set_param fail_loc=0
 	count=0
 	echo  "step3: testing ......"
 	while [ true ]; do
