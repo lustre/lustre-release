@@ -113,7 +113,7 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
         RETURN(rc);
 }
 
-static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
+static int lov_llog_origin_connect(struct llog_ctxt *ctxt,
                                    struct llog_logid *logid,
                                    struct llog_gen *gen,
                                    struct obd_uuid *uuid)
@@ -124,7 +124,7 @@ static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
         ENTRY;
 
         lov_getref(obd);
-        for (i = 0; i < count; i++) {
+        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 struct obd_device *child;
                 struct llog_ctxt *cctxt;
                 
@@ -132,10 +132,10 @@ static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
                         continue;
                 if (uuid && !obd_uuid_equals(uuid, &lov->lov_tgts[i]->ltd_uuid))
                         continue;
-                CDEBUG(D_CONFIG, "connect %d/%d\n", i, count);
+                CDEBUG(D_CONFIG, "connect %d/%d\n", i, lov->desc.ld_tgt_count);
                 child = lov->lov_tgts[i]->ltd_exp->exp_obd;
                 cctxt = llog_get_context(child, ctxt->loc_idx);
-                rc = llog_connect(cctxt, 1, logid, gen, uuid);
+                rc = llog_connect(cctxt, logid, gen, uuid);
                 llog_ctxt_put(cctxt);
  
                 if (rc) {

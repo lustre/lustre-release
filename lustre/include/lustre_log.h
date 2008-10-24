@@ -197,7 +197,7 @@ int llog_catalog_list(struct obd_device *obd, int count,
 /* llog_net.c */
 int llog_initiator_connect(struct llog_ctxt *ctxt);
 int llog_receptor_accept(struct llog_ctxt *ctxt, struct obd_import *imp);
-int llog_origin_connect(struct llog_ctxt *ctxt, int count,
+int llog_origin_connect(struct llog_ctxt *ctxt,
                         struct llog_logid *logid, struct llog_gen *gen,
                         struct obd_uuid *uuid);
 int llog_handle_connect(struct ptlrpc_request *req);
@@ -207,7 +207,7 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
                          struct lov_stripe_md *lsm, int count,
                          struct llog_cookie *cookies, int flags);
 int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp);
-int llog_obd_repl_connect(struct llog_ctxt *ctxt, int count,
+int llog_obd_repl_connect(struct llog_ctxt *ctxt,
                           struct llog_logid *logid, struct llog_gen *gen,
                           struct obd_uuid *uuid);
 
@@ -236,7 +236,7 @@ struct llog_operations {
                        struct llog_cookie *logcookies, int numcookies);
         int (*lop_cancel)(struct llog_ctxt *ctxt, struct lov_stripe_md *lsm,
                           int count, struct llog_cookie *cookies, int flags);
-        int (*lop_connect)(struct llog_ctxt *ctxt, int count,
+        int (*lop_connect)(struct llog_ctxt *ctxt,
                            struct llog_logid *logid, struct llog_gen *gen,
                            struct obd_uuid *uuid);
         /* XXX add 2 more: commit callbacks and llog recovery functions */
@@ -572,7 +572,7 @@ static inline int llog_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         RETURN(rc);
 }
 
-static inline int llog_connect(struct llog_ctxt *ctxt, int count,
+static inline int llog_connect(struct llog_ctxt *ctxt,
                                struct llog_logid *logid, struct llog_gen *gen,
                                struct obd_uuid *uuid)
 {
@@ -586,7 +586,7 @@ static inline int llog_connect(struct llog_ctxt *ctxt, int count,
         if (lop->lop_connect == NULL)
                 RETURN(-EOPNOTSUPP);
 
-        rc = lop->lop_connect(ctxt, count, logid, gen, uuid);
+        rc = lop->lop_connect(ctxt, logid, gen, uuid);
         RETURN(rc);
 }
 

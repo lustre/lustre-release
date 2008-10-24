@@ -63,7 +63,7 @@
 #include <lustre_fsfilt.h>
 
 #ifdef __KERNEL__
-int llog_origin_connect(struct llog_ctxt *ctxt, int count,
+int llog_origin_connect(struct llog_ctxt *ctxt,
                         struct llog_logid *logid, struct llog_gen *gen,
                         struct obd_uuid *uuid)
 {
@@ -153,7 +153,7 @@ int llog_handle_connect(struct ptlrpc_request *req)
                                   sizeof(*req_body));
 
         ctxt = llog_get_context(obd, req_body->lgdc_ctxt_idx);
-        rc = llog_connect(ctxt, 1, &req_body->lgdc_logid,
+        rc = llog_connect(ctxt, &req_body->lgdc_logid,
                           &req_body->lgdc_gen, NULL);
 
         llog_ctxt_put(ctxt);
@@ -184,7 +184,7 @@ EXPORT_SYMBOL(llog_receptor_accept);
 
 #else /* !__KERNEL__ */
 
-int llog_origin_connect(struct llog_ctxt *ctxt, int count,
+int llog_origin_connect(struct llog_ctxt *ctxt,
                         struct llog_logid *logid, struct llog_gen *gen,
                         struct obd_uuid *uuid)
 {

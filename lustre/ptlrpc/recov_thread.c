@@ -492,7 +492,7 @@ static int llog_recov_thread_replay(struct llog_ctxt *ctxt,
         RETURN(rc);
 }
 
-int llog_obd_repl_connect(struct llog_ctxt *ctxt, int count, 
+int llog_obd_repl_connect(struct llog_ctxt *ctxt,
                           struct llog_logid *logid, struct llog_gen *gen,
                           struct obd_uuid *uuid)
 {
