@@ -293,7 +293,7 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
 
         if ((oinfo.oi_oa->o_valid & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS)) !=
             (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS))
-                RETURN(-EINVAL);
+                RETURN(-EPROTO);
 
         rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
