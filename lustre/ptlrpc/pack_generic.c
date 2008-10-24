@@ -2445,6 +2445,7 @@ int quota_get_qdata(void *request, struct qunit_data *qdata,
         int size2 = sizeof(struct qunit_data_old2);
         __u64  flags = is_exp ? req->rq_export->exp_connect_flags :
                        req->rq_import->imp_connect_data.ocd_connect_flags;
+        int rc = 0;
 
         LASSERT(req);
         LASSERT(qdata);
@@ -2470,6 +2471,8 @@ int quota_get_qdata(void *request, struct qunit_data *qdata,
                         new = lustre_swab_repbuf(req, REPLY_REC_OFF,
                                                  sizeof(struct qunit_data),
                                                  lustre_swab_qdata);
+                if (new == NULL)
+                        GOTO(out, rc = -EPROTO);
                 *qdata = *new;
                 QDATA_SET_CHANGE_QS(qdata);
                 return 0;
@@ -2488,6 +2491,8 @@ without_change_qs:
                 else
                         old2 = lustre_swab_repbuf(req, REPLY_REC_OFF, size2,
                                                   lustre_swab_qdata_old2);
+                if (old2 == NULL)
+                        GOTO(out, rc = -EPROTO);
                 qdata_v2_to_v3(old2, qdata);
 
                 return 0;
@@ -2495,8 +2500,8 @@ without_change_qs:
 #else
 #warning "remove quota code above for format absolete in new release"
 #endif
-
-        return 0;
+out:
+        return rc;
 }
 EXPORT_SYMBOL(quota_get_qdata);
 
@@ -2509,6 +2514,7 @@ int quota_copy_qdata(void *request, struct qunit_data *qdata,
         struct qunit_data_old2 *old2;
         __u64  flags = is_exp ? req->rq_export->exp_connect_flags :
                 req->rq_import->imp_connect_data.ocd_connect_flags;
+        int rc = 0;
 
         LASSERT(req);
         LASSERT(qdata);
@@ -2533,7 +2539,7 @@ int quota_copy_qdata(void *request, struct qunit_data *qdata,
                         target = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                                 sizeof(struct qunit_data));
                 if (!target)
-                        return -EINVAL;
+                        GOTO(out, rc = -EPROTO);
                 memcpy(target, qdata, sizeof(*qdata));
                 return 0;
         }
@@ -2549,7 +2555,7 @@ without_change_qs:
                         target = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                                 sizeof(struct qunit_data_old2));
                 if (!target)
-                        return -EINVAL;
+                        GOTO(out, rc = -EPROTO);
                 old2 = qdata_v3_to_v2(qdata);
                 memcpy(target, old2, sizeof(*old2));
                 return 0;
@@ -2557,8 +2563,8 @@ without_change_qs:
 #else
 #warning "remove quota code above for format absolete in new release"
 #endif
-
-        return 0;
+out:
+        return rc;
 }
 EXPORT_SYMBOL(quota_copy_qdata);
 
