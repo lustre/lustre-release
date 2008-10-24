@@ -18,6 +18,8 @@ if [ "$FAILURE_MODE" = "HARD" ] && mixed_ost_devs; then
     ALWAYS_EXCEPT="$ALWAYS_EXCEPT $CONFIG_EXCEPTIONS"
 fi
 
+remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
+
 # also long tests: 19, 21a, 21e, 21f, 23, 27
 #                                   1  2.5  2.5    4    4          (min)"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="17  26a  26b    50   51     57"
@@ -30,6 +32,7 @@ SETUP=${SETUP:-""}
 CLEANUP=${CLEANUP:-""}
 
 cleanup_and_setup_lustre
+
 assert_DIR
 rm -rf $DIR/[df][0-9]*
 
@@ -98,6 +101,8 @@ run_test 8 "touch: drop rep (bug 1423)"
 
 #bug 1420
 test_9() {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     pause_bulk "cp /etc/profile $DIR/$tfile"       || return 1
     do_facet client "cp $SAMPLE_FILE $DIR/${tfile}.2"  || return 2
     do_facet client "sync"
@@ -188,6 +193,8 @@ start_read_ahead() {
 }
 
 test_16() {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     do_facet client cp $SAMPLE_FILE $DIR
     sync
     stop_read_ahead
@@ -207,6 +214,8 @@ run_test 16 "timeout bulk put, don't evict client (2732)"
 
 test_17() {
     local at_max_saved=0
+
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
     # With adaptive timeouts, bulk_get won't expire until adaptive_timeout_max
     if at_is_valid && at_is_enabled; then
@@ -262,6 +271,8 @@ test_18a() {
 run_test 18a "manual ost invalidate clears page cache immediately"
 
 test_18b() {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     do_facet client mkdir -p $DIR/$tdir
     f=$DIR/$tdir/$tfile
     f2=$DIR/$tdir/${tfile}-2
@@ -288,6 +299,8 @@ test_18b() {
 run_test 18b "eviction and reconnect clears page cache (2766)"
 
 test_18c() {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     do_facet client mkdir -p $DIR/$tdir
     f=$DIR/$tdir/$tfile
     f2=$DIR/$tdir/${tfile}-2
@@ -345,6 +358,8 @@ test_19b() {
 run_test 19b "test expired_lock_main on ost (2867)"
 
 test_20a() {	# bug 2983 - ldlm_handle_enqueue cleanup
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
 	mkdir -p $DIR/$tdir
 	lfs setstripe $DIR/$tdir/${tfile} -i 0 -c 1
 	multiop_bg_pause $DIR/$tdir/${tfile} O_wc || return 1
@@ -360,6 +375,8 @@ test_20a() {	# bug 2983 - ldlm_handle_enqueue cleanup
 run_test 20a "ldlm_handle_enqueue error (should return error)" 
 
 test_20b() {	# bug 2986 - ldlm_handle_enqueue error during open
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
 	mkdir -p $DIR/$tdir
 	lfs setstripe $DIR/$tdir/${tfile} -i 0 -c 1
 	cancel_lru_locks osc
@@ -599,6 +616,8 @@ test_23() { #b=4561
 run_test 23 "client hang when close a file after mds crash"
 
 test_24() { # bug 11710 details correct fsync() behavior
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
 	mkdir -p $DIR/$tdir
 	lfs setstripe $DIR/$tdir -s 0 -i 0 -c 1
 	cancel_lru_locks osc
@@ -617,6 +636,7 @@ run_test 24 "fsync error (should return error)"
 test_26a() {      # was test_26 bug 5921 - evict dead exports by pinger
 # this test can only run from a client on a separate node.
 	remote_ost || { skip "local OST" && return 0; }
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 	remote_mds || { skip "local MDS" && return 0; }
 	OST_FILE=obdfilter.${ost1_svc}.num_exports
         OST_EXP="`do_facet ost1 lctl get_param -n $OST_FILE`"
@@ -639,6 +659,8 @@ test_26a() {      # was test_26 bug 5921 - evict dead exports by pinger
 run_test 26a "evict dead exports"
 
 test_26b() {      # bug 10140 - evict dead exports by pinger
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
 	client_df
         zconf_mount `hostname` $MOUNT2 || error "Failed to mount $MOUNT2"
         sleep 1 # wait connections being established
@@ -663,26 +685,28 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 run_test 26b "evict dead exports"
 
 test_27() {
-	remote_mds && { skip "remote MDS" && return 0; }
 	mkdir -p $DIR/$tdir
 	writemany -q -a $DIR/$tdir/$tfile 0 5 &
 	CLIENT_PID=$!
 	sleep 1
+	local save_FAILURE_MODE=$FAILURE_MODE
 	FAILURE_MODE="SOFT"
 	facet_failover $SINGLEMDS
 #define OBD_FAIL_OSC_SHUTDOWN            0x407
-	lctl set_param fail_loc=0x80000407
+	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000407
 	# need to wait for reconnect
 	echo -n waiting for fail_loc
-	while [ `lctl get_param -n fail_loc` -eq -2147482617 ]; do
+	while [ $(do_facet $SINGLEMDS lctl get_param -n fail_loc) -eq -2147482617 ]; do
 	    sleep 1
 	    echo -n .
 	done
+	do_facet $SINGLEMDS lctl get_param -n fail_loc
 	facet_failover $SINGLEMDS
 	#no crashes allowed!
         kill -USR1 $CLIENT_PID
 	wait $CLIENT_PID 
 	true
+	FAILURE_MODE=$save_FAILURE_MODE
 }
 run_test 27 "fail LOV while using OSC's"
 
@@ -770,6 +794,8 @@ test_52_guts() {
 }
 
 test_52() {
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
 	mkdir -p $DIR/$tdir
 	test_52_guts
 	rc=$?
@@ -810,11 +836,12 @@ run_test 54 "back in time"
 
 # bug 11330 - liblustre application death during I/O locks up OST
 test_55() {
-	remote_ost && { skip "remote OST" && return 0; }
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
 	mkdir -p $DIR/$tdir
 
 	# first dd should be finished quickly
+	lfs setstripe DIR/$tdir/$tfile-1 -c 1 -i 0
 	dd if=/dev/zero of=$DIR/$tdir/$tfile-1 bs=32M count=4  &
 	DDPID=$!
 	count=0
@@ -829,8 +856,9 @@ test_55() {
 	done	
 	echo "(dd_pid=$DDPID, time=$count)successful"
 
-        #define OBD_FAIL_OST_DROP_REQ            0x21d
-	do_facet ost lctl set_param fail_loc=0x0000021d
+	lfs setstripe DIR/$tdir/$tfile-2 -c 1 -i 0
+	#define OBD_FAIL_OST_DROP_REQ            0x21d
+	do_facet ost1 lctl set_param fail_loc=0x0000021d
 	# second dd will be never finished
 	dd if=/dev/zero of=$DIR/$tdir/$tfile-2 bs=32M count=4  &	
 	DDPID=$!
@@ -849,7 +877,7 @@ test_55() {
 	echo "(dd_pid=$DDPID, time=$count)successful"
 
 	#Recover fail_loc and dd will finish soon
-	do_facet ost lctl set_param fail_loc=0
+	do_facet ost1 lctl set_param fail_loc=0
 	count=0
 	echo  "step3: testing ......"
 	while [ true ]; do

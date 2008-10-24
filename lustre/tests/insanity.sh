@@ -35,6 +35,9 @@ assert_env mds_HOST MDS_MKFS_OPTS
 assert_env ost_HOST OST_MKFS_OPTS OSTCOUNT
 assert_env LIVE_CLIENT FSNAME
 
+remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
+remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
+
 # FAIL_CLIENTS list should not contain the LIVE_CLIENT
 FAIL_CLIENTS=$(echo " $FAIL_CLIENTS " | sed -re "s/\s+$LIVE_CLIENT\s+/ /g")
 

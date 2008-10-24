@@ -134,9 +134,9 @@ test_2e() {
 run_test 2e "check chmod on root is propagated to others"
 
 test_3() {
-	( cd $DIR1 ; ln -s this/is/good lnk )
-	[ "this/is/good" = "`perl -e 'print readlink("'$DIR2/lnk'");'`" ] || \
-		error
+	( cd $DIR1 ; ln -s this/is/good $tfile )
+	[ "this/is/good" = "`perl -e 'print readlink("'$DIR2/$tfile'");'`" ] ||
+		error "link $DIR2/$tfile not as expected"
 }
 run_test 3 "symlink on one mtpt, readlink on another ==========="
 

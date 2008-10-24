@@ -26,6 +26,9 @@ PERM_CONF=$CONFDIR/perm.conf
 SANITYSECLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 FAIL_ON_ERROR=false
 
+remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
+remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
+
 ID0=${ID0:-500}
 ID1=${ID1:-501}
 USER0=`cat /etc/passwd|grep :$ID0:$ID0:|cut -d: -f1`

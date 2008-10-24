@@ -34,6 +34,8 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
+remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
+
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="100 101"
 
 # $RUNAS_ID may get set incorrectly somewhere else

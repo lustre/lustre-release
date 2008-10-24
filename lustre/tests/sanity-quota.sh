@@ -49,6 +49,9 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
+remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
+remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
+
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="9 10 11"
 
 QUOTALOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}

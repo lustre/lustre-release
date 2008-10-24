@@ -25,6 +25,9 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
+remote_mds && skip "remote MDS" && exit 0
+remote_ost && skip "remote OST" && exit 0
+
 # if nothing mounted, don't nuke MOUNT variable needed in llmount.sh
 WAS_MOUNTED=$(mounted_lustre_filesystems | head -1)
 if [ -z "$WAS_MOUNTED" ]; then

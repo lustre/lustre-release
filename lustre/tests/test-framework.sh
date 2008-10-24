@@ -212,6 +212,7 @@ load_modules() {
     [ -f /etc/modprobe.d/Lustre ] && MODPROBECONF=/etc/modprobe.d/Lustre
     [ -z "$LNETOPTS" -a -n "$MODPROBECONF" ] && \
         LNETOPTS=$(awk '/^options lnet/ { print $0}' $MODPROBECONF | sed 's/^options lnet //g')
+    echo $LNETOPTS | grep -q "accept=all"  || LNETOPTS="$LNETOPTS accept=all";
     echo "lnet options: '$LNETOPTS'"
     # note that insmod will ignore anything in modprobe.conf
     load_module ../lnet/lnet/lnet $LNETOPTS
@@ -1422,15 +1423,6 @@ set_nodes_failloc () {
     done
 }
 
-set_nodes_failloc () {
-    local nodes=$1
-    local node
-
-    for node in $nodes ; do
-        do_node $node lctl set_param fail_loc=$2
-    done
-}
-
 cancel_lru_locks() {
     $LCTL mark "cancel_lru_locks $1 start"
     for d in `lctl get_param -N ldlm.namespaces.*.lru_size | egrep -i $1`; do
@@ -1744,7 +1736,8 @@ osc_to_ost()
 
 remote_mds ()
 {
-    [ -z "$(lctl dl | grep mdt)" ]
+    local var=${SINGLEMDS}_HOST
+    [ "${!var}" != "$(hostname)" ]
 }
 
 remote_mds_nodsh()
@@ -1754,7 +1747,7 @@ remote_mds_nodsh()
 
 remote_ost ()
 {
-    [ -z "$(lctl dl | grep ost)" ]
+    [ "$ost_HOST" != "$(hostname)" ]
 }
 
 remote_ost_nodsh()

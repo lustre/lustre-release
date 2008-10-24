@@ -37,6 +37,9 @@ MDSSIZE=40000
 OSTSIZE=40000
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
+remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
+remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
+
 #
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="0 1 2 3 6 7 15 18 24b 25 30 31 32 33 34a "
 
