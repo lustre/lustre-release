@@ -703,8 +703,9 @@ static int dqacq_interpret(struct ptlrpc_request *req, void *data, int rc)
                               QUOTA_NOSENT(rc) ? QUOTA_REQUEST : QUOTA_REPLY,
                               QUOTA_IMPORT);
         if (rc1 < 0) {
-                DEBUG_REQ(D_ERROR, req, "error unpacking qunit_data\n");
-                GOTO(exit, rc = -EPROTO);
+                DEBUG_REQ(D_ERROR, req,
+                          "error unpacking qunit_data(rc: %d)\n", rc1);
+                GOTO(exit, rc = rc1);
         }
 
         QDATA_DEBUG(qdata, "qdata: interpret rc(%d).\n", rc);
@@ -907,9 +908,9 @@ schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
 
         rc = quota_copy_qdata(req, qdata, QUOTA_REQUEST, QUOTA_IMPORT);
         if (rc < 0) {
-                CDEBUG(D_ERROR, "Can't pack qunit_data\n");
+                CDEBUG(D_ERROR, "Can't pack qunit_data(rc: %d)\n", rc);
                 class_import_put(imp);
-                RETURN(-EPROTO);
+                RETURN(rc);
         }
         ptlrpc_req_set_repsize(req, 2, size);
         req->rq_no_resend = req->rq_no_delay = 1;
