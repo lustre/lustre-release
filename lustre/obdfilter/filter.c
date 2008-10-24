@@ -2458,7 +2458,7 @@ static int filter_llog_connect(struct obd_export *exp,
               obd->obd_name, body->lgdc_logid.lgl_oid, 
               body->lgdc_logid.lgl_ogr, body->lgdc_logid.lgl_ogen);
 
-        rc = llog_connect(ctxt, 1, &body->lgdc_logid,
+        rc = llog_connect(ctxt, &body->lgdc_logid,
                           &body->lgdc_gen, NULL);
         llog_ctxt_put(ctxt);
         if (rc != 0)

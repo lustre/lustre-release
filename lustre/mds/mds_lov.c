@@ -650,8 +650,7 @@ static int __mds_lov_synchronize(void *data)
                 GOTO(out, rc = -ENODEV);
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT, 60);
-        rc = llog_connect(ctxt, obd->u.mds.mds_lov_desc.ld_tgt_count, 
-                          NULL, NULL, uuid); 
+        rc = llog_connect(ctxt, NULL, NULL, uuid); 
         llog_ctxt_put(ctxt);
         if (rc != 0) {
                 CERROR("%s failed at llog_origin_connect: %d\n",
