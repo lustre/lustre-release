@@ -1786,8 +1786,8 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
                 RETURN(-ENOMEM);
         rc = quota_get_qdata(req, qdata, QUOTA_REQUEST, QUOTA_EXPORT);
         if (rc < 0) {
-                CDEBUG(D_ERROR, "Can't unpack qunit_data\n");
-                GOTO(out, rc = -EPROTO);
+                CDEBUG(D_ERROR, "Can't unpack qunit_data(rc: %d)\n", rc);
+                GOTO(out, rc);
         }
 
         /* we use the observer */
@@ -1823,8 +1823,8 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
          * adjust the same form to different forms slaves needed */
         rc = quota_copy_qdata(req, qdata, QUOTA_REPLY, QUOTA_EXPORT);
         if (rc < 0) {
-                CDEBUG(D_ERROR, "Can't pack qunit_data\n");
-                GOTO(out, rc = -EPROTO);
+                CDEBUG(D_ERROR, "Can't pack qunit_data(rc: %d)\n", rc);
+                GOTO(out, rc);
         }
 
         /* Block the quota req. b=14840 */
