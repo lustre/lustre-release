@@ -62,7 +62,7 @@ else
 	echo "without GSS support"
 fi
 
-MDT="`do_facet $SINGLEMDS "lctl get_param -N mdt.\*MDT\*/stats | cut -d"." -f2" || true`"
+MDT="`do_facet $SINGLEMDS "lctl get_param -N mdt.\*MDT\*/stats 2>/dev/null | cut -d"." -f2" || true`"
 if [ ! -z "$MDT" ]; then
         do_facet $SINGLEMDS "mkdir -p $CONFDIR"
 	IDENTITY_FLUSH=mdt.$MDT.identity_flush
@@ -121,23 +121,25 @@ sec_setup
 
 # run as different user
 test_0() {
-	rm -rf $DIR/d0
-	mkdir $DIR/d0
+        umask 0022
 
-	chown $USER0 $DIR/d0 || error "chown (1)"
-	$RUNAS -u $ID0 ls $DIR || error "ls (2)"
-	$RUNAS -u $ID0 touch $DIR/f0 && error "touch (3)"
-	$RUNAS -u $ID0 touch $DIR/d0/f1 || error "touch (4)"
-	$RUNAS -u $ID1 touch $DIR/d0/f2 && error "touch (5)"
-	touch $DIR/d0/f3 || error "touch (6)"
-	chown root $DIR/d0 || error "chown (7)"
-	chgrp $USER0 $DIR/d0 || error "chgrp (8)"
-	chmod 775 $DIR/d0 || error "chmod (9)"
-	$RUNAS -u $ID0 touch $DIR/d0/f4 || error "touch (10)"
-	$RUNAS -u $ID1 touch $DIR/d0/f5 && error "touch (11)"
-	touch $DIR/d0/f6 || error "touch (12)"
-
-	rm -rf $DIR/d0
+        chmod 0755 $DIR || error "chmod (1)"
+	rm -rf $DIR/$tdir || error "rm (1)"
+	mkdir -p $DIR/$tdir || error "mkdir (1)"
+	chown $USER0 $DIR/$tdir || error "chown (1)"
+	$RUNAS -u $ID0 ls $DIR || error "ls (1)"
+        rm -f $DIR/f0 || error "rm (2)"
+	$RUNAS -u $ID0 touch $DIR/f0 && error "touch (1)"
+	$RUNAS -u $ID0 touch $DIR/$tdir/f1 || error "touch (2)"
+	$RUNAS -u $ID1 touch $DIR/$tdir/f2 && error "touch (3)"
+	touch $DIR/$tdir/f3 || error "touch (4)"
+	chown root $DIR/$tdir || error "chown (2)"
+	chgrp $USER0 $DIR/$tdir || error "chgrp (1)"
+	chmod 0775 $DIR/$tdir || error "chmod (2)"
+	$RUNAS -u $ID0 touch $DIR/$tdir/f4 || error "touch (5)"
+	$RUNAS -u $ID1 touch $DIR/$tdir/f5 && error "touch (6)"
+	touch $DIR/$tdir/f6 || error "touch (7)"
+	rm -rf $DIR/$tdir || error "rm (3)"
 }
 run_test 0 "uid permission ============================="
 
@@ -151,28 +153,28 @@ test_1() {
 	do_facet $SINGLEMDS "rm -f $PERM_CONF"
 	do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
 
-	rm -rf $DIR/d1
-	mkdir $DIR/d1
+	rm -rf $DIR/$tdir
+	mkdir -p $DIR/$tdir
 
-	chown $USER0 $DIR/d1 || error "chown (1)"
-	$RUNAS -u $ID1 -v $ID0 touch $DIR/d1/f0 && error "touch (2)"
-	do_facet $SINGLEMDS "echo '* $ID1 setuid' > $PERM_CONF"
+	chown $USER0 $DIR/$tdir || error "chown (1)"
+	$RUNAS -u $ID1 -v $ID0 touch $DIR/$tdir/f0 && error "touch (2)"
 	echo "enable uid $ID1 setuid"
+	do_facet $SINGLEMDS "echo '* $ID1 setuid' > $PERM_CONF"
 	do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
-	$RUNAS -u $ID1 -v $ID0 touch $DIR/d1/f1 || error "touch (3)"
+	$RUNAS -u $ID1 -v $ID0 touch $DIR/$tdir/f1 || error "touch (3)"
 
-	chown root $DIR/d1 || error "chown (4)"
-	chgrp $USER0 $DIR/d1 || error "chgrp (5)"
-	chmod 770 $DIR/d1 || error "chmod (6)"
-	$RUNAS -u $ID1 -g $ID1 touch $DIR/d1/f2 && error "touch (7)"
-	$RUNAS -u $ID1 -g $ID1 -j $ID0 touch $DIR/d1/f3 && error "touch (8)"
-	do_facet $SINGLEMDS "echo '* $ID1 setuid,setgid' > $PERM_CONF"
+	chown root $DIR/$tdir || error "chown (4)"
+	chgrp $USER0 $DIR/$tdir || error "chgrp (5)"
+	chmod 0770 $DIR/$tdir || error "chmod (6)"
+	$RUNAS -u $ID1 -g $ID1 touch $DIR/$tdir/f2 && error "touch (7)"
+	$RUNAS -u $ID1 -g $ID1 -j $ID0 touch $DIR/$tdir/f3 && error "touch (8)"
 	echo "enable uid $ID1 setuid,setgid"
+	do_facet $SINGLEMDS "echo '* $ID1 setuid,setgid' > $PERM_CONF"
 	do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
-	$RUNAS -u $ID1 -g $ID1 -j $ID0 touch $DIR/d1/f4 || error "touch (9)"
-	$RUNAS -u $ID1 -v $ID0 -g $ID1 -j $ID0 touch $DIR/d1/f5 || error "touch (10)"
+	$RUNAS -u $ID1 -g $ID1 -j $ID0 touch $DIR/$tdir/f4 || error "touch (9)"
+	$RUNAS -u $ID1 -v $ID0 -g $ID1 -j $ID0 touch $DIR/$tdir/f5 || error "touch (10)"
 
-	rm -rf $DIR/d1
+	rm -rf $DIR/$tdir
 
 	do_facet $SINGLEMDS "rm -f $PERM_CONF"
 	do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
@@ -253,22 +255,22 @@ run_test 3 "rootsquash ============================="
 # as for remote client, the groups of the specified uid on MDT
 # will be obtained by upcall /sbin/l_getidentity and used.
 test_4() {
-	rm -rf $DIR/d4
-        mkdir $DIR/d4
-        chmod 771 $DIR/d4
-        chgrp $ID0 $DIR/d4
-	$RUNAS -u $ID0 ls $DIR/d4 || error "setgroups (1)"
+	rm -rf $DIR/$tdir
+        mkdir -p $DIR/$tdir
+        chmod 0771 $DIR/$tdir
+        chgrp $ID0 $DIR/$tdir
+	$RUNAS -u $ID0 ls $DIR/$tdir || error "setgroups (1)"
 	if [ "$CLIENT_TYPE" != "remote" ]; then
 		if [ ! -z "$MDT" ]; then
 			do_facet $SINGLEMDS "echo '* $ID1 setgrp' > $PERM_CONF"
 			do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
-        		$RUNAS -u $ID1 -G1,2,$ID0 ls $DIR/d4 || error "setgroups (2)"
+        		$RUNAS -u $ID1 -G1,2,$ID0 ls $DIR/$tdir || error "setgroups (2)"
 			do_facet $SINGLEMDS "rm -f $PERM_CONF"
 			do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
 		fi
 	fi
-	$RUNAS -u $ID1 -G1,2 ls $DIR/d4 && error "setgroups (3)"
-	rm -rf $DIR/d4
+	$RUNAS -u $ID1 -G1,2 ls $DIR/$tdir && error "setgroups (3)"
+	rm -rf $DIR/$tdir
 }
 run_test 4 "set supplementary group ==============="
 
