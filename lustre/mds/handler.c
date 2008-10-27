@@ -424,6 +424,8 @@ static int mds_destroy_export(struct obd_export *export)
         struct lov_mds_md *lmm;
         __u32 lmm_sz, cookie_sz;
         struct llog_cookie *logcookies;
+        struct list_head closing_list;
+        struct mds_file_data *mfd, *n;
         int rc = 0;
         ENTRY;
 
@@ -454,19 +456,23 @@ static int mds_destroy_export(struct obd_export *export)
                 GOTO(out, rc = -ENOMEM);
         }
 
+        CFS_INIT_LIST_HEAD(&closing_list);
         spin_lock(&med->med_open_lock);
         while (!list_empty(&med->med_open_head)) {
                 struct list_head *tmp = med->med_open_head.next;
-                struct mds_file_data *mfd =
-                        list_entry(tmp, struct mds_file_data, mfd_list);
-                int lmm_size = lmm_sz;
-                umode_t mode = mfd->mfd_dentry->d_inode->i_mode;
-                __u64 valid = 0;
+                mfd = list_entry(tmp, struct mds_file_data, mfd_list);
 
                 /* Remove mfd handle so it can't be found again.
                  * We are consuming the mfd_list reference here. */
                 mds_mfd_unlink(mfd, 0);
-                spin_unlock(&med->med_open_lock);
+                list_add_tail(&mfd->mfd_list, &closing_list);
+        }
+        spin_unlock(&med->med_open_lock);
+
+        list_for_each_entry_safe(mfd, n, &closing_list, mfd_list) {
+                int lmm_size = lmm_sz;
+                umode_t mode = mfd->mfd_dentry->d_inode->i_mode;
+                __u64 valid = 0;
 
                 /* If you change this message, be sure to update
                  * replay_single:test_46 */
@@ -506,7 +512,6 @@ static int mds_destroy_export(struct obd_export *export)
                         valid &= ~OBD_MD_FLCOOKIE;
                 }
 
-                spin_lock(&med->med_open_lock);
         }
 
         OBD_FREE(logcookies, cookie_sz);
