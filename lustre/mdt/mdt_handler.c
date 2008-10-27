@@ -4535,6 +4535,8 @@ static int mdt_destroy_export(struct obd_export *export)
         struct md_attr         *ma;
         int lmm_size;
         int cookie_size;
+        CFS_LIST_HEAD(closing_list);
+        struct mdt_file_data *mfd, *n;
         int rc = 0;
         ENTRY;
 
@@ -4576,14 +4578,16 @@ static int mdt_destroy_export(struct obd_export *export)
         spin_lock(&med->med_open_lock);
         while (!list_empty(&med->med_open_head)) {
                 struct list_head *tmp = med->med_open_head.next;
-                struct mdt_file_data *mfd =
-                        list_entry(tmp, struct mdt_file_data, mfd_list);
+                mfd = list_entry(tmp, struct mdt_file_data, mfd_list);
 
                 /* Remove mfd handle so it can't be found again.
                  * We are consuming the mfd_list reference here. */
                 class_handle_unhash(&mfd->mfd_handle);
-                list_del_init(&mfd->mfd_list);
-                spin_unlock(&med->med_open_lock);
+                list_move_tail(&mfd->mfd_list, &closing_list);
+        }
+        spin_unlock(&med->med_open_lock);
+
+        list_for_each_entry_safe(mfd, n, &closing_list, mfd_list) {
                 mdt_mfd_close(info, mfd);
                 /* TODO: if we close the unlinked file,
                  * we need to remove it's objects from OST */
@@ -4593,8 +4597,9 @@ static int mdt_destroy_export(struct obd_export *export)
                 ma->ma_cookie_size = cookie_size;
                 ma->ma_need = MA_LOV | MA_COOKIE;
                 ma->ma_valid = 0;
+                spin_unlock(&med->med_open_lock);
         }
-        spin_unlock(&med->med_open_lock);
+
         info->mti_mdt = NULL;
         mdt_client_del(&env, mdt);
 
