@@ -832,7 +832,8 @@ static inline int obd_reconnect(const struct lu_env *env,
                                 struct obd_export *exp,
                                 struct obd_device *obd,
                                 struct obd_uuid *cluuid,
-                                struct obd_connect_data *d)
+                                struct obd_connect_data *d,
+                                void *localdata)
 {
         int rc;
 #ifdef LIBCFS_DEBUG
@@ -846,7 +847,7 @@ static inline int obd_reconnect(const struct lu_env *env,
         OBD_CHECK_DT_OP(obd, reconnect, 0);
         OBD_COUNTER_INCREMENT(obd, reconnect);
 
-        rc = OBP(obd, reconnect)(env, exp, obd, cluuid, d);
+        rc = OBP(obd, reconnect)(env, exp, obd, cluuid, d, localdata);
         /* check that only subset is granted */
         LASSERT(ergo(d != NULL,
                      (d->ocd_connect_flags & ocf) == d->ocd_connect_flags));

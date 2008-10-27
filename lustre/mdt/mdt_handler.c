@@ -3830,6 +3830,9 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         mdt_seq_fini_cli(m);
         mdt_fld_fini(env, m);
         mdt_procfs_fini(m);
+        lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
+        lprocfs_free_per_client_stats(obd);
+        lprocfs_free_obd_stats(obd);
         ptlrpc_lprocfs_unregister_obd(d->ld_obd);
         lprocfs_obd_cleanup(d->ld_obd);
 
@@ -3981,6 +3984,13 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                 GOTO(err_fini_proc, rc);
         }
 
+        obd->obd_proc_exports_entry = proc_mkdir("exports",
+                                                 obd->obd_proc_entry);
+        if (obd->obd_proc_exports_entry)
+                lprocfs_add_simple(obd->obd_proc_exports_entry,
+                                   "clear", lprocfs_nid_stats_clear_read,
+                                   lprocfs_nid_stats_clear_write, obd, NULL);
+
         /* set server index */
         LASSERT(num);
         lu_site2md(s)->ms_node_id = simple_strtol(num, NULL, 10);
@@ -4098,6 +4108,8 @@ err_fini_stack:
         mdt_stack_fini(env, m, md2lu_dev(m->mdt_child));
 err_fini_proc:
         mdt_procfs_fini(m);
+        if (obd->obd_proc_exports_entry)
+                lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
         ptlrpc_lprocfs_unregister_obd(obd);
         lprocfs_obd_cleanup(obd);
 err_fini_site:
@@ -4393,6 +4405,8 @@ static int mdt_obd_connect(const struct lu_env *env,
                         if (rc != 0) {
                                 OBD_FREE_PTR(lcd);
                                 exp->exp_mdt_data.med_lcd = NULL;
+                        } else {
+                                mdt_export_stats_init(obd, exp, localdata);
                         }
                 } else
                         rc = -ENOMEM;
@@ -4409,7 +4423,8 @@ static int mdt_obd_connect(const struct lu_env *env,
 static int mdt_obd_reconnect(const struct lu_env *env,
                              struct obd_export *exp, struct obd_device *obd,
                              struct obd_uuid *cluuid,
-                             struct obd_connect_data *data)
+                             struct obd_connect_data *data,
+                             void *localdata)
 {
         struct mdt_thread_info *info;
         struct mdt_device      *mdt;
@@ -4448,6 +4463,8 @@ static int mdt_obd_reconnect(const struct lu_env *env,
         spin_unlock(&exp->exp_lock);
 
         rc = mdt_connect_internal(exp, mdt_dev(obd->obd_lu_dev), data);
+        if (rc == 0)
+                mdt_export_stats_init(obd, exp, localdata);
 
         RETURN(rc);
 }

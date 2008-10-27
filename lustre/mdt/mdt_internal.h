@@ -389,10 +389,10 @@ struct mdt_txn_info {
 extern struct lu_context_key mdt_txn_key;
 
 static inline void mdt_trans_add_cb(const struct thandle *th,
-                                    mdt_cb_t cb_func, void *cb_data) 
+                                    mdt_cb_t cb_func, void *cb_data)
 {
         struct mdt_txn_info *txi;
-        
+
         txi = lu_context_key_get(&th->th_ctx, &mdt_txn_key);
         LASSERT(txi->txi_cb_count < ARRAY_SIZE(txi->txi_cb));
 
@@ -540,6 +540,10 @@ int mdt_client_add(const struct lu_env *env,
                    int cl_idx);
 int mdt_client_new(const struct lu_env *env,
                    struct mdt_device *mdt);
+
+int mdt_export_stats_init(struct obd_device *obd,
+                          struct obd_export *exp,
+                          void *client_nid);
 
 int mdt_pin(struct mdt_thread_info* info);
 

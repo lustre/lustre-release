@@ -510,7 +510,7 @@ struct client_obd {
         __u32                    cl_supp_cksum_types;
         /* checksum algorithm to be used */
         cksum_type_t             cl_cksum_type;
- 
+
         /* also protected by the poorly named _loi_list_lock lock above */
         struct osc_async_rc      cl_ar;
 
@@ -1020,7 +1020,7 @@ struct obd_device {
         /* XXX encapsulate all this recovery data into one struct */
         svc_handler_t                    obd_recovery_handler;
         pid_t                            obd_processing_task;
-        
+
         int                              obd_max_recoverable_clients;
         int                              obd_connected_clients;
         int                              obd_recoverable_clients;
@@ -1036,7 +1036,7 @@ struct obd_device {
         time_t                           obd_recovery_end; /* seconds, for lprocfs_status */
         time_t                           obd_recovery_max_time; /* seconds, bz13079 */
         int                              obd_recovery_timeout;
-        
+
         /* new recovery stuff from CMD2 */
         struct target_recovery_data      obd_recovery_data;
         int                              obd_replayed_locks;
@@ -1073,8 +1073,8 @@ struct obd_device {
         atomic_t               obd_evict_inprogress;
         cfs_waitq_t            obd_evict_inprogress_waitq;
 
-        /** 
-         * Ldlm pool part. Save last calculated SLV and Limit. 
+        /**
+         * Ldlm pool part. Save last calculated SLV and Limit.
          */
         rwlock_t               obd_pool_lock;
         int                    obd_pool_limit;
@@ -1137,7 +1137,7 @@ static inline int it_to_lock_mode(struct lookup_intent *it)
                 return LCK_CW;
         else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_LOOKUP))
                 return LCK_CR;
- 
+
         LASSERTF(0, "Invalid it_op: %d\n", it->it_op);
         return -EINVAL;
 }
@@ -1233,7 +1233,8 @@ struct obd_ops {
         int (*o_reconnect)(const struct lu_env *env,
                            struct obd_export *exp, struct obd_device *src,
                            struct obd_uuid *cluuid,
-                           struct obd_connect_data *ocd);
+                           struct obd_connect_data *ocd,
+                           void *localdata);
         int (*o_disconnect)(struct obd_export *exp);
 
         /* Initialize/finalize fids infrastructure. */
@@ -1244,7 +1245,7 @@ struct obd_ops {
         int (*o_fid_alloc)(struct obd_export *exp, struct lu_fid *fid,
                            struct md_op_data *op_data);
 
-        /* 
+        /*
          * Object with @fid is getting deleted, we may want to do something
          * about this.
          */

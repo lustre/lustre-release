@@ -682,6 +682,7 @@ int mdt_client_add(const struct lu_env *env,
         init_mutex(&med->med_lcd_lock);
 
         LASSERTF(med->med_lr_off > 0, "med_lr_off = %llu\n", med->med_lr_off);
+        mdt_export_stats_init(obd, mti->mti_exp, NULL);
 
         RETURN(rc);
 }

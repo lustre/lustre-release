@@ -588,7 +588,7 @@ void target_client_add_cb(struct obd_device *obd, __u64 transno, void *cb_data,
         spin_unlock(&exp->exp_lock);
 }
 EXPORT_SYMBOL(target_client_add_cb);
-static void 
+static void
 target_start_and_reset_recovery_timer(struct obd_device *obd,
                                       struct ptlrpc_request *req,
                                       int new_client);
@@ -798,7 +798,7 @@ int target_handle_connect(struct ptlrpc_request *req)
                 /* If this is the first time a client connects,
                    reset the recovery timer */
                 if (rc == 0)
-                        target_start_and_reset_recovery_timer(target, req, 
+                        target_start_and_reset_recovery_timer(target, req,
                                                               !export);
         }
 
@@ -837,7 +837,7 @@ dont_check_exports:
                 }
         } else {
                 rc = obd_reconnect(req->rq_svc_thread->t_env,
-                                   export, target, &cluuid, data);
+                                   export, target, &cluuid, data, client_nid);
         }
         if (rc)
                 GOTO(out, rc);
@@ -1254,7 +1254,7 @@ void target_cancel_recovery_timer(struct obd_device *obd)
         CDEBUG(D_HA, "%s: cancel recovery timer\n", obd->obd_name);
         cfs_timer_disarm(&obd->obd_recovery_timer);
 }
-  
+
 /* extend = 1 means require at least "duration" seconds left in the timer,
    extend = 0 means set the total duration (start_recovery_timer) */
 static void reset_recovery_timer(struct obd_device *obd, int duration,
@@ -1277,15 +1277,15 @@ static void reset_recovery_timer(struct obd_device *obd, int duration,
                 /* Track the client's largest expected replay time */
                 obd->obd_recovery_timeout = duration;
 #ifdef CRAY_XT3
-        /* 
-         * If total recovery time already exceed the 
-         * obd_recovery_max_time, then CRAY XT3 will 
+        /*
+         * If total recovery time already exceed the
+         * obd_recovery_max_time, then CRAY XT3 will
          * abort the recovery
          */
         if(obd->obd_recovery_timeout > obd->obd_recovery_max_time)
                 obd->obd_recovery_timeout = obd->obd_recovery_max_time;
 #endif
-        obd->obd_recovery_end = obd->obd_recovery_start + 
+        obd->obd_recovery_end = obd->obd_recovery_start +
                                 obd->obd_recovery_timeout;
         if (!cfs_timer_is_armed(&obd->obd_recovery_timer) ||
             cfs_time_before(now, obd->obd_recovery_end)) {
@@ -1315,12 +1315,12 @@ static void check_and_start_recovery_timer(struct obd_device *obd)
 
 /* Reset the timer with each new client connection */
 /*
- * This timer is actually reconnect_timer, which is for making sure 
- * the total recovery window is at least as big as my reconnect 
+ * This timer is actually reconnect_timer, which is for making sure
+ * the total recovery window is at least as big as my reconnect
  * attempt timing. So the initial recovery time_out will be set to
  * OBD_RECOVERY_FACTOR * obd_timeout. If the timeout coming
  * from client is bigger than this, then the recovery time_out will
- * be extend to make sure the client could be reconnected, in the 
+ * be extend to make sure the client could be reconnected, in the
  * process, the timeout from the new client should be ignored.
  */
 
@@ -1329,7 +1329,7 @@ target_start_and_reset_recovery_timer(struct obd_device *obd,
                                       struct ptlrpc_request *req,
                                       int new_client)
 {
-        int req_timeout = OBD_RECOVERY_FACTOR * 
+        int req_timeout = OBD_RECOVERY_FACTOR *
                           lustre_msg_get_timeout(req->rq_reqmsg);
 
         check_and_start_recovery_timer(obd);
@@ -1989,9 +1989,9 @@ int target_pack_pool_reply(struct ptlrpc_request *req)
 {
         struct obd_device *obd;
         ENTRY;
-   
-        /* 
-         * Check that we still have all structures alive as this may 
+
+        /*
+         * Check that we still have all structures alive as this may
          * be some late rpc in shutdown time.
          */
         if (unlikely(!req->rq_export || !req->rq_export->exp_obd ||
@@ -2001,8 +2001,8 @@ int target_pack_pool_reply(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
-        /* 
-         * OBD is alive here as export is alive, which we checked above. 
+        /*
+         * OBD is alive here as export is alive, which we checked above.
          */
         obd = req->rq_export->exp_obd;
 

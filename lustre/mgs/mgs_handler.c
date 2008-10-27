@@ -103,7 +103,8 @@ static int mgs_connect(const struct lu_env *env,
 
 static int mgs_reconnect(const struct lu_env *env,
                          struct obd_export *exp, struct obd_device *obd,
-                         struct obd_uuid *cluuid, struct obd_connect_data *data)
+                         struct obd_uuid *cluuid, struct obd_connect_data *data,
+                         void *localdata)
 {
         ENTRY;
 

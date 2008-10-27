@@ -213,8 +213,13 @@ static int filter_export_stats_init(struct obd_device *obd,
                 RETURN(0);
 
         rc = lprocfs_exp_setup(exp, client_nid, &newnid);
-        if (rc)
+        if (rc) {
+                /* Mask error for already created
+                 * /proc entries */
+                if (rc == -EALREADY)
+                        rc = 0;
                 RETURN(rc);
+        }
 
         if (newnid) {
                 struct nid_stat *tmp = exp->exp_nid_stats;
@@ -237,6 +242,17 @@ static int filter_export_stats_init(struct obd_device *obd,
 
                 rc = lprocfs_register_stats(tmp->nid_proc, "stats",
                                             tmp->nid_stats);
+                if (rc)
+                        RETURN(rc);
+                /* Always add in ldlm_stats */
+                tmp->nid_ldlm_stats = lprocfs_alloc_stats(LDLM_LAST_OPC -
+                                                          LDLM_FIRST_OPC, 0);
+                if (tmp->nid_ldlm_stats == NULL)
+                        return -ENOMEM;
+
+                lprocfs_init_ldlm_stats(tmp->nid_ldlm_stats);
+                rc = lprocfs_register_stats(tmp->nid_proc, "ldlm_stats",
+                                            tmp->nid_ldlm_stats);
                 if (rc)
                         RETURN(rc);
         }
@@ -1417,7 +1433,7 @@ struct dentry *filter_parent(struct obd_device *obd, obd_gr group, obd_id objid)
         struct filter_subdirs *subdirs;
         LASSERT(group < filter->fo_group_count); /* FIXME: object groups */
 
-        if ((group > 0 && group < FILTER_GROUP_MDS0) || 
+        if ((group > 0 && group < FILTER_GROUP_MDS0) ||
              filter->fo_subdir_count == 0)
                 return filter->fo_dentry_O_groups[group];
 
@@ -2438,7 +2454,7 @@ static int filter_llog_connect(struct obd_export *exp,
         int rc;
         ENTRY;
 
-        CDEBUG(D_OTHER, "%s: LLog connect for: "LPX64"/"LPX64":%x\n", 
+        CDEBUG(D_OTHER, "%s: LLog connect for: "LPX64"/"LPX64":%x\n",
                obd->obd_name, body->lgdc_logid.lgl_oid,
                body->lgdc_logid.lgl_ogr, body->lgdc_logid.lgl_ogen);
 
@@ -2455,7 +2471,7 @@ static int filter_llog_connect(struct obd_export *exp,
                  body->lgdc_ctxt_idx);
 
         CWARN("%s: Recovery from log "LPX64"/"LPX64":%x\n",
-              obd->obd_name, body->lgdc_logid.lgl_oid, 
+              obd->obd_name, body->lgdc_logid.lgl_oid,
               body->lgdc_logid.lgl_ogr, body->lgdc_logid.lgl_ogen);
 
         rc = llog_connect(ctxt, &body->lgdc_logid,
@@ -2684,7 +2700,8 @@ static int filter_connect_internal(struct obd_export *exp,
 static int filter_reconnect(const struct lu_env *env,
                             struct obd_export *exp, struct obd_device *obd,
                             struct obd_uuid *cluuid,
-                            struct obd_connect_data *data)
+                            struct obd_connect_data *data,
+                            void *localdata)
 {
         int rc;
         ENTRY;
@@ -2693,6 +2710,8 @@ static int filter_reconnect(const struct lu_env *env,
                 RETURN(-EINVAL);
 
         rc = filter_connect_internal(exp, data);
+        if (rc == 0)
+                filter_export_stats_init(obd, exp, localdata);
 
         RETURN(rc);
 }
@@ -3713,7 +3732,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 cleanup_phase = 3;
 
                 CDEBUG(D_INODE, "%s: filter_precreate(od->o_gr="LPU64
-                       ",od->o_id="LPU64")\n", obd->obd_name, group, 
+                       ",od->o_id="LPU64")\n", obd->obd_name, group,
                        next_id);
 
                 /* We mark object SUID+SGID to flag it for accepting UID+GID

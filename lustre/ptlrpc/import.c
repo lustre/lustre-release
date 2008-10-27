@@ -554,7 +554,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
         imp->imp_msghdr_flags &= ~MSGHDR_AT_SUPPORT;
 
         rc = obd_reconnect(NULL, imp->imp_obd->obd_self_export, obd,
-                           &obd->obd_uuid, &imp->imp_connect_data);
+                           &obd->obd_uuid, &imp->imp_connect_data, NULL);
         if (rc)
                 GOTO(out, rc);
 
