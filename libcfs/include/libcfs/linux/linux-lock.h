@@ -162,6 +162,16 @@ struct lock_class_key {
         do { (void)sizeof (lock);(void)sizeof (key); } while (0)
 /* This has to be a macro, so that `subclass' can be undefined in kernels that
  * do not support lockdep. */
+
+
+static inline void lockdep_off(void)
+{
+}
+
+static inline void lockdep_on(void)
+{
+}
+
 #endif /* lockdep_set_class */
 
 #ifndef CONFIG_DEBUG_LOCK_ALLOC

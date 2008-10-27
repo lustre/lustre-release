@@ -357,12 +357,21 @@ static inline void lockdep_set_class(void *lock, struct lock_class_key *key)
 {
 }
 
+static inline void lockdep_off(void)
+{
+}
+
+static inline void lockdep_on(void)
+{
+}
+
 /* This has to be a macro, so that can be undefined in kernels that do not
  * support lockdep. */
 #define mutex_lock_nested(mutex, subclass) mutex_lock(mutex)
 #define spin_lock_nested(lock, subclass) spin_lock(lock)
 #define down_read_nested(lock, subclass) down_read(lock)
 #define down_write_nested(lock, subclass) down_write(lock)
+
 
 /* !__KERNEL__ */
 #endif

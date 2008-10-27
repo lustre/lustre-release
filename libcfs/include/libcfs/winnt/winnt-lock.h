@@ -109,7 +109,7 @@ typedef KEVENT          event_t;
  * Return Value:
  *   N/A
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 static inline void
@@ -134,7 +134,7 @@ static inline void
  *   Zero:   waiting timeouts
  *   Non Zero: event signaled ...
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -171,7 +171,7 @@ cfs_wait_event_internal(event_t * event, int64_t timeout)
  * Return Value:
  *   N/A
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -191,7 +191,7 @@ cfs_wake_event(event_t * event)
  * Return Value:
  *   N/A
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -209,7 +209,7 @@ cfs_clear_event(event_t * event)
  * Warning:
  *
  * for spinlock operations, try to grab nesting acquisition of
- * spinlock will cause dead-lock in MP system and current irql 
+ * spinlock will cause dead-lock in MP system and current irql
  * overwritten for UP system. (UP system could allow nesting spin
  * acqisition, because it's not spin at all just raising the irql.)
  *
@@ -335,7 +335,7 @@ typedef struct rw_semaphore {
  * Return Value:
  *   N/A
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -355,7 +355,7 @@ static inline void init_rwsem(rw_semaphore_t *s)
  * Return Value:
  *   N/A
  *
- * Notes: 
+ * Notes:
  *   For winnt system, we need this routine to delete the ERESOURCE.
  *   Just define it NULL for other systems.
  */
@@ -376,7 +376,7 @@ static inline void fini_rwsem(rw_semaphore_t *s)
  * Return Value:
  *   N/A
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -398,7 +398,7 @@ static inline void down_read(struct rw_semaphore *s)
  *   Zero: failed to acquire the read lock
  *   Non-Zero: succeeded to acquire the read lock
  *
- * Notes: 
+ * Notes:
  *   This routine will return immediately without waiting.
  */
 
@@ -418,7 +418,7 @@ static inline int down_read_trylock(struct rw_semaphore *s)
  * Return Value:
  *   N/A
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -439,7 +439,7 @@ static inline void down_write(struct rw_semaphore *s)
  *   Zero: failed to acquire the write lock
  *   Non-Zero: succeeded to acquire the read lock
  *
- * Notes: 
+ * Notes:
  *   This routine will return immediately without waiting.
  */
 
@@ -459,7 +459,7 @@ static inline int down_write_trylock(struct rw_semaphore *s)
  * Return Value:
  *   N/A
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -481,7 +481,7 @@ static inline void up_read(struct rw_semaphore *s)
  * Return Value:
  *   N/A
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -525,6 +525,14 @@ void write_unlock(rwlock_t * rwlock);
 
 struct lock_class_key {int foo;};
 #define lockdep_set_class(lock, class) do {} while(0)
+
+static inline void lockdep_off(void)
+{
+}
+
+static inline void lockdep_on(void)
+{
+}
 
 /*
  * Semaphore
@@ -592,7 +600,7 @@ typedef struct semaphore mutex_t;
  * Return Value:
  *   N/A
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 #define mutex_init init_mutex
@@ -612,7 +620,7 @@ static inline void init_mutex(mutex_t *mutex)
  * Return Value:
  *   N/A
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -636,7 +644,7 @@ static inline void mutex_down(mutex_t *mutex)
  * Return Value:
  *   N/A
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -658,7 +666,7 @@ static inline void mutex_up(mutex_t *mutex)
  * Return Value:
  *   N/A
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -697,7 +705,7 @@ struct completion {
  * Return Value:
  *   N/A
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -717,7 +725,7 @@ static inline void init_completion(struct completion *c)
  * Return Value:
  *   N/A
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
@@ -737,7 +745,7 @@ static inline void complete(struct completion *c)
  * Return Value:
  *   N/A
  *
- * Notes: 
+ * Notes:
  *   N/A
  */
 
