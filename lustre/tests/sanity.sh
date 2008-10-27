@@ -4774,7 +4774,7 @@ test_120a() {
         stat $DIR/$tdir > /dev/null
         can1=`lctl get_param -n ldlm.services.ldlm_canceld.stats | awk '/ldlm_cancel/ {print $2}'`
         blk1=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
-        mkdir -p $DIR/$tdir/d1
+        mkdir $DIR/$tdir/d1
         can2=`lctl get_param -n ldlm.services.ldlm_canceld.stats | awk '/ldlm_cancel/ {print $2}'`
         blk2=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
         [ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
