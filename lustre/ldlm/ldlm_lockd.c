@@ -202,10 +202,18 @@ static int expired_lock_main(void *arg)
                                        lock->l_export);
                                 lock->l_export = NULL;
                                 LDLM_ERROR(lock, "free export");
+                                /* release extra ref grabbed by
+                                 * ldlm_add_waiting_lock() or
+                                 * ldlm_failed_ast() */
+                                LDLM_LOCK_PUT(lock);
                                 continue;
                         }
                         export = class_export_get(lock->l_export);
                         spin_unlock_bh(&waiting_locks_spinlock);
+
+                        /* release extra ref grabbed by ldlm_add_waiting_lock()
+                         * or ldlm_failed_ast() */
+                        LDLM_LOCK_PUT(lock);
 
                         do_dump++;
                         class_fail_export(export);
@@ -286,6 +294,9 @@ repeat:
 
                 last = lock;
 
+                /* no needs to take an extra ref on the lock since it was in
+                 * the waiting_locks_list and ldlm_add_waiting_lock()
+                 * already grabbed a ref */
                 list_del(&lock->l_pending_chain);
                 list_add(&lock->l_pending_chain,
                          &expired_lock_thread.elt_expired_locks);
@@ -317,6 +328,8 @@ repeat:
  * lock.  We add it to the pending-callback chain, and schedule the lock-timeout
  * timer to fire appropriately.  (We round up to the next second, to avoid
  * floods of timer firings during periods of high lock contention and traffic).
+ * As done by ldlm_add_waiting_lock(), the caller must grab a lock reference
+ * if it has been added to the waiting list (1 is returned).
  *
  * Called with the namespace lock held.
  */
@@ -364,6 +377,10 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
         }
 
         ret = __ldlm_add_waiting_lock(lock);
+        if (ret)
+                /* grab ref on the lock if it has been added to the
+                 * waiting list */
+                LDLM_LOCK_GET(lock);
         spin_unlock_bh(&waiting_locks_spinlock);
 
         LDLM_DEBUG(lock, "%sadding to wait list",
@@ -375,10 +392,12 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
  * Remove a lock from the pending list, likely because it had its cancellation
  * callback arrive without incident.  This adjusts the lock-timeout timer if
  * needed.  Returns 0 if the lock wasn't pending after all, 1 if it was.
+ * As done by ldlm_del_waiting_lock(), the caller must release the lock
+ * reference when the lock is removed from any list (1 is returned).
  *
  * Called with namespace lock held.
  */
-int __ldlm_del_waiting_lock(struct ldlm_lock *lock)
+static int __ldlm_del_waiting_lock(struct ldlm_lock *lock)
 {
         struct list_head *list_next;
 
@@ -417,6 +436,10 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
         spin_lock_bh(&waiting_locks_spinlock);
         ret = __ldlm_del_waiting_lock(lock);
         spin_unlock_bh(&waiting_locks_spinlock);
+        if (ret)
+                /* release lock ref if it has indeed been removed
+                 * from a list */
+                LDLM_LOCK_PUT(lock);
 
         LDLM_DEBUG(lock, "%s", ret == 0 ? "wasn't waiting" : "removed");
         return ret;
@@ -443,6 +466,8 @@ int ldlm_refresh_waiting_lock(struct ldlm_lock *lock)
                 return 0;
         }
 
+        /* we remove/add the lock to the waiting list, so no needs to
+         * release/take a lock reference */
         __ldlm_del_waiting_lock(lock);
         __ldlm_add_waiting_lock(lock);
         spin_unlock_bh(&waiting_locks_spinlock);
@@ -482,6 +507,10 @@ static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
                 libcfs_debug_dumplog();
 #ifdef __KERNEL__
         spin_lock_bh(&waiting_locks_spinlock);
+        if (__ldlm_del_waiting_lock(lock) == 0)
+                /* the lock was not in any list, grab an extra ref before adding
+                 * the lock to the expired list */
+                LDLM_LOCK_GET(lock);
         list_add(&lock->l_pending_chain, &expired_lock_thread.elt_expired_locks);
         cfs_waitq_signal(&expired_lock_thread.elt_waitq);
         spin_unlock_bh(&waiting_locks_spinlock);
