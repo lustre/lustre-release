@@ -460,7 +460,6 @@ static int mds_destroy_export(struct obd_export *export)
                 /* Remove mfd handle so it can't be found again.
                  * We are consuming the mfd_list reference here. */
                 mds_mfd_unlink(mfd, 0);
-                spin_unlock(&med->med_open_lock);
         }
         spin_unlock(&med->med_open_lock);
 
