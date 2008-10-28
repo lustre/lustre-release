@@ -1224,6 +1224,42 @@ mounted_lustre_filesystems() {
 	awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts
 }
 
+init_facet_vars () {
+    local facet=$1
+    shift
+    local device=$1
+
+    shift
+
+    eval export ${facet}_dev=${device}
+    eval export ${facet}_opt=\"$@\"
+
+    local dev=${facet}_dev
+    local label=$(do_facet ${facet} "e2label ${!dev}")
+    [ -z "$label" ] && echo no label for ${!dev} && exit 1
+
+    eval export ${facet}_svc=${label}
+
+    local varname=${facet}failover_HOST
+    if [ -z "${!varname}" ]; then
+       eval $varname=$(facet_host $facet) 
+    fi
+}
+
+init_facets_vars () {
+    local DEVNAME
+
+    for num in `seq $MDSCOUNT`; do
+        DEVNAME=`mdsdevname $num`
+        init_facet_vars mds$num $DEVNAME $MDS_MOUNT_OPTS
+    done
+
+    for num in `seq $OSTCOUNT`; do
+        DEVNAME=`ostdevname $num`
+        init_facet_vars ost$num $DEVNAME $OST_MOUNT_OPTS
+    done
+}
+
 check_and_setup_lustre() {
     MOUNTED="`mounted_lustre_filesystems`"
     if [ -z "$MOUNTED" ]; then
@@ -1232,6 +1268,8 @@ check_and_setup_lustre() {
         MOUNTED="`mounted_lustre_filesystems`"
         [ -z "$MOUNTED" ] && error "NAME=$NAME not mounted"
         export I_MOUNTED=yes
+    else
+        init_facets_vars
     fi
     if [ "$ONLY" == "setup" ]; then
         exit 0
