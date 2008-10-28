@@ -658,7 +658,7 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
         /* Add to sorted list.  Presumably latest rpcs will have the latest
            deadlines, so search backward. */
         list_for_each_entry_reverse(rq, &svc->srv_at_list, rq_timed_list) {
-                if (req->rq_deadline > rq->rq_deadline) {
+                if (req->rq_deadline >= rq->rq_deadline) {
                         list_add(&req->rq_timed_list, &rq->rq_timed_list);
                         found++;
                         break;
