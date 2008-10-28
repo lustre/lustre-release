@@ -363,10 +363,9 @@ static int mgs_check_target(struct obd_device *obd, struct mgs_target_info *mti)
         rc = mgs_check_index(obd, mti);
         if (rc == 0) {
                 LCONSOLE_ERROR_MSG(0x13b, "%s claims to have registered, but "
-                                  "this MGS does not know about it.  Assuming "
-                                  "writeconf.\n", mti->mti_svname);
-                mti->mti_flags |= LDD_F_WRITECONF;
-                rc = 1;
+                                  "this MGS does not know about it, preventing "
+                                  "registration.\n", mti->mti_svname);
+                rc = -ENOENT;
         } else if (rc == -1) {
                 LCONSOLE_ERROR_MSG(0x13c, "Client log %s-client has "
                                    "disappeared! Regenerating all logs.\n",
@@ -694,7 +693,7 @@ static int mgs_extract_fs_pool(char * arg, char *fsname, char *poolname)
         RETURN(0);
 }
 
-static int mgs_iocontrol_pool(struct obd_device *obd, 
+static int mgs_iocontrol_pool(struct obd_device *obd,
                               struct obd_ioctl_data *data)
 {
         int rc;
