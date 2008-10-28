@@ -100,6 +100,7 @@ static int lfs_rgetfacl(int argc, char **argv);
 static int lfs_cp(int argc, char **argv);
 static int lfs_ls(int argc, char **argv);
 static int lfs_poollist(int argc, char **argv);
+static int lfs_path2fid(int argc, char **argv);
 
 /* all avaialable commands */
 command_t cmdlist[] = {
@@ -194,6 +195,8 @@ command_t cmdlist[] = {
         {"ls", lfs_ls, 0,
          "Remote user list directory contents.\n"
          "usage: ls [OPTION]... [FILE]..."},
+        {"path2fid", lfs_path2fid, 0, "Display the fid for a given path.\n"
+         "usage: path2fid <path>"},
         {"help", Parser_help, 0, "help"},
         {"exit", Parser_quit, 0, "quit"},
         {"quit", Parser_quit, 0, "quit"},
@@ -873,6 +876,32 @@ static int lfs_osts(int argc, char **argv)
         }
 
         return rc;
+}
+
+static int lfs_path2fid(int argc, char **argv)
+{
+        char *path;
+        unsigned long long seq;
+        unsigned long oid, ver;
+        int rc;
+
+        if (argc != 2)
+                return CMD_HELP;
+
+        path = argv[1];
+        rc = llapi_path2fid(path, &seq, &oid, &ver);
+        if (rc) {
+                fprintf(stderr, "error: can't get fid for %s\n", path);
+                return rc;
+        }
+
+        printf("%llu:%lu", seq, oid);
+        if (ver)
+                printf(":%lu", ver);
+
+        printf("\n");
+
+        return 0;
 }
 
 #define COOK(value)                                                     \

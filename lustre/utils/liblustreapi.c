@@ -2351,3 +2351,22 @@ int llapi_ls(int argc, char *argv[])
 
         exit(execvp(argv[0], argv));
 }
+
+int llapi_path2fid(const char *path, unsigned long long *seq,
+                   unsigned long *oid, unsigned long *ver)
+{
+        struct lu_fid fid;
+        int fd, rc;
+
+        fd = open(path, O_RDONLY);
+        if (fd < 0)
+                return -errno;
+
+        rc = ioctl(fd, LL_IOC_PATH2FID, &fid);
+        *seq = fid_seq(&fid);
+        *oid = fid_oid(&fid);
+        *ver = fid_ver(&fid);
+
+        close(fd);
+        return rc;
+}

@@ -102,6 +102,7 @@ struct obd_statfs;
 #define LL_IOC_LLOOP_DETACH             _IOWR('f', 170, long)
 #define LL_IOC_LLOOP_INFO               _IOWR('f', 171, long)
 #define LL_IOC_LLOOP_DETACH_BYDEV       _IOWR('f', 172, long)
+#define LL_IOC_PATH2FID                 _IOR ('f', 173, long)
 
 #define LL_STATFS_MDC           1
 #define LL_STATFS_LOV           2

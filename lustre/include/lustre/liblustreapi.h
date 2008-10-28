@@ -153,6 +153,9 @@ extern int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count);
 extern int llapi_is_lustre_mnttype(const char *type);
 extern int parse_size(char *optarg, unsigned long long *size,
                       unsigned long long *size_units);
+extern int llapi_path2fid(const char *path, unsigned long long *seq,
+                          unsigned long *oid, unsigned long *ver);
+
 struct mntent;
 #define HAVE_LLAPI_IS_LUSTRE_MNT
 extern int llapi_is_lustre_mnt(struct mntent *mnt);
