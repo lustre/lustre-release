@@ -7,6 +7,7 @@ set -e
 
 
 export REFORMAT=${REFORMAT:-""}
+export WRITECONF=${WRITECONF:-""}
 export VERBOSE=false
 export GMNALNID=${GMNALNID:-/usr/sbin/gmlndnid}
 export CATASTROPHE=${CATASTROPHE:-/proc/sys/lnet/catastrophe}
@@ -55,7 +56,7 @@ print_summary () {
         local o=$(echo $O | tr "[:upper:]" "[:lower:]")
         o=${o//_/-}
         o=${o//tyn/tyN}
-        local log=${TMP}/${o}.log 
+        local log=${TMP}/${o}.log
         [ -f $log ] && skipped=$(grep excluded $log | awk '{ printf " %s", $3 }' | sed 's/test_//g')
         [ -f $log ] && slow=$(grep SLOW $log | awk '{ printf " %s", $3 }' | sed 's/test_//g')
         [ "${!O}" = "done" ] && \
@@ -93,13 +94,13 @@ init_test_env() {
     [ ! -f "$MDSRATE" ] && export MDSRATE=$(which mdsrate 2> /dev/null)
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     export LFS=${LFS:-"$LUSTRE/utils/lfs"}
-    [ ! -f "$LCTL" ] && export LCTL=$(which lctl) 
+    [ ! -f "$LCTL" ] && export LCTL=$(which lctl)
     export LFS=${LFS:-"$LUSTRE/utils/lfs"}
-    [ ! -f "$LFS" ] && export LFS=$(which lfs) 
+    [ ! -f "$LFS" ] && export LFS=$(which lfs)
     export MKFS=${MKFS:-"$LUSTRE/utils/mkfs.lustre"}
-    [ ! -f "$MKFS" ] && export MKFS=$(which mkfs.lustre) 
+    [ ! -f "$MKFS" ] && export MKFS=$(which mkfs.lustre)
     export TUNEFS=${TUNEFS:-"$LUSTRE/utils/tunefs.lustre"}
-    [ ! -f "$TUNEFS" ] && export TUNEFS=$(which tunefs.lustre) 
+    [ ! -f "$TUNEFS" ] && export TUNEFS=$(which tunefs.lustre)
     export CHECKSTAT="${CHECKSTAT:-"checkstat -v"} "
     export FSYTPE=${FSTYPE:-"ldiskfs"}
     export NAME=${NAME:-local}
@@ -111,18 +112,19 @@ init_test_env() {
         export PORT_OPT="--port $ACCEPTOR_PORT"
     fi
 
-    # Paths on remote nodes, if different 
+    # Paths on remote nodes, if different
     export RLUSTRE=${RLUSTRE:-$LUSTRE}
     export RPWD=${RPWD:-$PWD}
     export I_MOUNTED=${I_MOUNTED:-"no"}
 
     # command line
-    
-    while getopts "rvf:" opt $*; do 
+
+    while getopts "rvwf:" opt $*; do
         case $opt in
             f) CONFIG=$OPTARG;;
             r) REFORMAT=--reformat;;
             v) VERBOSE=true;;
+            w) WRITECONF=writeconf;;
             \?) usage;;
         esac
     done
@@ -268,7 +270,7 @@ unload_modules() {
     local MODULES=$($LCTL modules | awk '{ print $2 }')
     if [ -n "$MODULES" ]; then
         echo "Modules still loaded: "
-        echo $MODULES 
+        echo $MODULES
         if [ "$(lctl dl)" ]; then
             echo "Lustre still loaded"
             lctl dl || true
@@ -294,7 +296,7 @@ mount_facet() {
     local dev=${facet}_dev
     local opt=${facet}_opt
     echo "Starting ${facet}: ${!opt} $@ ${!dev} ${MOUNT%/*}/${facet}"
-    do_facet ${facet} mount -t lustre ${!opt} $@ ${!dev} ${MOUNT%/*}/${facet}     
+    do_facet ${facet} mount -t lustre ${!opt} $@ ${!dev} ${MOUNT%/*}/${facet}
     RC=${PIPESTATUS[0]}
     if [ $RC -ne 0 ]; then
         echo "mount -t lustre $@ ${!dev} ${MOUNT%/*}/${facet}"
@@ -304,7 +306,7 @@ mount_facet() {
             lctl set_param subsystem_debug=${SUBSYSTEM# }; \
             lctl set_param debug_mb=${DEBUG_SIZE}; \
             sync"
- 
+
         label=$(do_facet ${facet} "e2label ${!dev}")
         [ -z "$label" ] && echo no label for ${!dev} && exit 1
         eval export ${facet}_svc=${label}
@@ -313,7 +315,7 @@ mount_facet() {
     return $RC
 }
 
-# start facet device options 
+# start facet device options
 start() {
     facet=$1
     shift
@@ -424,7 +426,7 @@ shutdown_facet() {
     facet=$1
     if [ "$FAILURE_MODE" = HARD ]; then
         $POWER_DOWN `facet_active_host $facet`
-        sleep 2 
+        sleep 2
     elif [ "$FAILURE_MODE" = SOFT ]; then
         stop $facet
     fi
@@ -508,7 +510,7 @@ wait_mds_recovery_done () {
         echo "Waiting $(($MAX - $WAIT)) secs for MDS recovery done"
     done
     echo "MDS recovery not done in $MAX sec"
-    return 1            
+    return 1
 }
 
 wait_exit_ST () {
@@ -537,7 +539,7 @@ wait_remote_prog () {
    local rc=0
 
    [ "$PDSH" = "no_dsh" ] && return 0
-   
+
    while [ $WAIT -lt $2 ]; do
         running=$(ps uax | grep "$PDSH.*$prog.*$MOUNT" | grep -v grep)
         [ -z "${running}" ] && return 0
@@ -556,7 +558,7 @@ wait_remote_prog () {
         echo "Killing $pid"
         kill -9 $pid || true
         sleep 1
-        ps -P $pid && rc=1 
+        ps -P $pid && rc=1
     done
 
     return $rc
@@ -690,7 +692,7 @@ declare -fx h2ptl
 
 h2tcp() {
     if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
-        echo $1"@tcp" 
+        echo $1"@tcp"
     fi
 }
 declare -fx h2tcp
@@ -740,7 +742,7 @@ facet_active() {
     fi
 
     active=${!activevar}
-    if [ -z "$active" ] ; then 
+    if [ -z "$active" ] ; then
         echo -n ${facet}
     else
         echo -n ${active}
@@ -759,7 +761,7 @@ facet_active_host() {
 
 change_active() {
     local facet=$1
-    failover=${facet}failover 
+    failover=${facet}failover
     host=`facet_host $failover`
     [ -z "$host" ] && return
     curactive=`facet_active $facet`
@@ -793,7 +795,7 @@ do_node() {
 	local command_status="$TMP/cs"
 	rsh $HOST ":> $command_status"
 	rsh $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin;
-		    cd $RPWD; sh -c \"$@\") || 
+		    cd $RPWD; sh -c \"$@\") ||
 		    echo command failed >$command_status"
 	[ -n "$($myPDSH $HOST cat $command_status)" ] && return 1 || true
         return 0
@@ -810,7 +812,7 @@ do_nodes() {
     local rnodes=$1
     shift
 
-    if $(single_local_node $rnodes); then 
+    if $(single_local_node $rnodes); then
         do_node $rnodes $@
         return $?
     fi
@@ -865,8 +867,8 @@ stopall() {
     if [ $activemds != "mds" ]; then
         fail mds
     fi
-    
-    # assume client mount is local 
+
+    # assume client mount is local
     grep " $MOUNT " /proc/mounts && zconf_umount $HOSTNAME $MOUNT $*
     grep " $MOUNT2 " /proc/mounts && zconf_umount $HOSTNAME $MOUNT2 $*
 
@@ -936,12 +938,30 @@ set_obd_timeout() {
     do_facet $facet "lctl set_param timeout=$timeout"
 }
 
+writeconf_facet () {
+    local facet=$1
+    local dev=$2
+
+    do_facet $facet "$TUNEFS --writeconf $dev"
+}
+
+writeconf_all () {
+    writeconf_facet mds $MDSDEV
+
+    for num in `seq $OSTCOUNT`; do
+        DEVNAME=`ostdevname $num`
+        writeconf_facet ost$num $DEVNAME
+    done
+}
+
 setupall() {
     load_modules
     if [ -z "$CLIENTONLY" ]; then
         echo Setup mdt, osts
-        echo $REFORMAT | grep -q "reformat" \
-	    || do_facet mds "$TUNEFS --writeconf $MDSDEV"
+
+        echo $WRITECONF | grep -q "writeconf" && \
+            writeconf_all
+
         set_obd_timeout mds $TIMEOUT
         start mds $MDSDEV $MDS_MOUNT_OPTS
         # We started mds, now we should set failover variable properly.
@@ -995,7 +1015,7 @@ init_facet_vars () {
 
     local varname=${facet}failover_HOST
     if [ -z "${!varname}" ]; then
-       eval $varname=$(facet_host $facet) 
+       eval $varname=$(facet_host $facet)
     fi
 }
 
@@ -1028,7 +1048,7 @@ cleanup_and_setup_lustre() {
     if [ "$ONLY" == "cleanup" -o "`mount | grep $MOUNT`" ]; then
         lctl set_param debug=0 || true
         cleanupall
-        if [ "$ONLY" == "cleanup" ]; then 
+        if [ "$ONLY" == "cleanup" ]; then
     	    exit 0
         fi
     fi
@@ -1045,7 +1065,7 @@ check_and_cleanup_lustre() {
     unset I_MOUNTED
 }
 
-####### 
+#######
 # General functions
 
 check_network() {
@@ -1284,7 +1304,7 @@ debugrestore() {
 }
 
 ##################################
-# Test interface 
+# Test interface
 ##################################
 
 error_noexit() {
@@ -1406,7 +1426,7 @@ run_test() {
 
     LAST_SKIPPED=
     run_one $1 "$2"
-    
+
     return $?
 }
 
@@ -1496,8 +1516,8 @@ canonical_path() {
 }
 
 sync_clients() {
-    [ -d $DIR1 ] && cd $DIR1 && sync; sleep 1; sync 
-    [ -d $DIR2 ] && cd $DIR2 && sync; sleep 1; sync 
+    [ -d $DIR1 ] && cd $DIR1 && sync; sleep 1; sync
+    [ -d $DIR2 ] && cd $DIR2 && sync; sleep 1; sync
 	cd $SAVE_PWD
 }
 
@@ -1515,7 +1535,7 @@ check_grant() {
 	for i in `seq $OSTCOUNT`; do
 		$LFS setstripe $DIR1/${tfile}_check_grant_$i -i $(($i -1)) -c 1
 		dd if=/dev/zero of=$DIR1/${tfile}_check_grant_$i bs=4k \
-					      count=1 > /dev/null 2>&1 
+					      count=1 > /dev/null 2>&1
 	done
     # sync all the data and make sure no pending data on server
     sync_clients
@@ -1535,7 +1555,7 @@ check_grant() {
 	        rm $DIR1/${tfile}_check_grant_$i
 	done
 
-	#check whether client grant == server grant 
+	#check whether client grant == server grant
 	if [ $client_grant != $server_grant ]; then
 		echo "failed: client:${client_grant} server: ${server_grant}"
 		return 1
@@ -1610,7 +1630,7 @@ nodes_list () {
 remote_nodes_list () {
     local rnodes=$(nodes_list)
     rnodes=$(echo " $rnodes " | sed -re "s/\s+$HOSTNAME\s+/ /g")
-    echo $rnodes 
+    echo $rnodes
 }
 
 init_clients_lists () {
@@ -1623,7 +1643,7 @@ init_clients_lists () {
     local clients="$SINGLECLIENT $HOSTNAME $rclients"
 
     # Sanity check: exclude the dup entries from CLIENTS
-    # for those configs which has SINGLCLIENT set to local client 
+    # for those configs which has SINGLCLIENT set to local client
     clients=$(for i in $clients; do echo $i; done | sort -u)
 
     CLIENTS=`comma_list $clients`
@@ -1689,8 +1709,8 @@ check_runas_id() {
     shift
     local myRUNAS=$@
     check_runas_id_ret $myRUNAS_ID $myRUNAS || \
-        error "unable to write to $DIR/d0_runas_test as UID $myRUNAS_ID. 
-        Please set RUNAS_ID to some UID which exists on MDS and client or 
+        error "unable to write to $DIR/d0_runas_test as UID $myRUNAS_ID.
+        Please set RUNAS_ID to some UID which exists on MDS and client or
         add user $myRUNAS_ID:$myRUNAS_ID on these nodes."
 }
 
@@ -1787,6 +1807,6 @@ check_catastrophe () {
     [ -f $CATASTROPHE ] && [ `cat $CATASTROPHE` -ne 0 ] && return 1
     if [ $rnodes ]; then
         do_nodes $rnodes "[ -f $CATASTROPHE ] && { [ \`cat $CATASTROPHE\` -eq 0 ] || false; } || true"
-    fi 
+    fi
 }
 
