@@ -1,8 +1,8 @@
-Index: linux-2.6.5-7.312/include/linux/ext3_fs.h
+Index: linux-2.6.18-53.1.21/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.5-7.312.orig/include/linux/ext3_fs.h
-+++ linux-2.6.5-7.312/include/linux/ext3_fs.h
-@@ -57,6 +57,31 @@ struct statfs;
+--- linux-2.6.18-53.1.21.orig/include/linux/ext3_fs.h
++++ linux-2.6.18-53.1.21/include/linux/ext3_fs.h
+@@ -53,6 +53,31 @@
  #define ext3_debug(f, a...)	do {} while (0)
  #endif
  
@@ -34,7 +34,7 @@ Index: linux-2.6.5-7.312/include/linux/ext3_fs.h
  /*
   * Special inodes numbers
   */
-@@ -358,6 +383,14 @@ struct ext3_inode {
+@@ -398,6 +423,14 @@ struct ext3_inode {
  #define ext3_find_first_zero_bit	ext2_find_first_zero_bit
  #define ext3_find_next_zero_bit		ext2_find_next_zero_bit
  
@@ -49,7 +49,7 @@ Index: linux-2.6.5-7.312/include/linux/ext3_fs.h
  /*
   * Maximal mount counts between two filesystem checks
   */
-@@ -732,6 +765,20 @@ extern unsigned long ext3_count_dirs (st
+@@ -799,6 +832,20 @@ extern unsigned long ext3_count_dirs (st
  extern void ext3_check_inodes_bitmap (struct super_block *);
  extern unsigned long ext3_count_free (struct buffer_head *, unsigned);
  
@@ -69,9 +69,9 @@ Index: linux-2.6.5-7.312/include/linux/ext3_fs.h
 +
  
  /* inode.c */
- extern int ext3_block_truncate_page(handle_t *, struct page *,
-@@ -766,6 +813,10 @@ extern int ext3_htree_fill_tree(struct f
- 				__u32 start_minor_hash, __u32 *next_hash);
+ int ext3_forget(handle_t *handle, int is_metadata, struct inode *inode,
+@@ -843,6 +890,10 @@ extern int ext3_group_extend(struct supe
+ 				ext3_fsblk_t n_blocks_count);
  
  /* super.c */
 +extern struct proc_dir_entry *proc_root_ext3;
@@ -81,13 +81,13 @@ Index: linux-2.6.5-7.312/include/linux/ext3_fs.h
  extern void ext3_error (struct super_block *, const char *, const char *, ...)
  	__attribute__ ((format (printf, 3, 4)));
  extern void __ext3_std_error (struct super_block *, const char *, int);
-Index: linux-2.6.5-7.312/include/linux/ext3_fs_sb.h
+Index: linux-2.6.18-53.1.21/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.6.5-7.312.orig/include/linux/ext3_fs_sb.h
-+++ linux-2.6.5-7.312/include/linux/ext3_fs_sb.h
-@@ -78,6 +78,68 @@ struct ext3_sb_info {
- 	struct timer_list turn_ro_timer;	/* For turning read-only (crash simulation) */
- 	wait_queue_head_t ro_wait_queue;	/* For people waiting for the fs to go read-only */
+--- linux-2.6.18-53.1.21.orig/include/linux/ext3_fs_sb.h
++++ linux-2.6.18-53.1.21/include/linux/ext3_fs_sb.h
+@@ -88,6 +88,68 @@ struct ext3_sb_info {
+ 	unsigned long s_ext_blocks;
+ 	unsigned long s_ext_extents;
  #endif
 +
 +	/* for buddy allocator */
@@ -154,11 +154,11 @@ Index: linux-2.6.5-7.312/include/linux/ext3_fs_sb.h
 +				 [(group) & (EXT3_DESC_PER_BLOCK(sb) - 1)]
 +
  #endif	/* _LINUX_EXT3_FS_SB */
-Index: linux-2.6.5-7.312/fs/ext3/super.c
+Index: linux-2.6.18-53.1.21/fs/ext3/super.c
 ===================================================================
---- linux-2.6.5-7.312.orig/fs/ext3/super.c
-+++ linux-2.6.5-7.312/fs/ext3/super.c
-@@ -389,6 +389,7 @@ void ext3_put_super (struct super_block 
+--- linux-2.6.18-53.1.21.orig/fs/ext3/super.c
++++ linux-2.6.18-53.1.21/fs/ext3/super.c
+@@ -391,6 +391,7 @@ static void ext3_put_super (struct super
  	struct ext3_super_block *es = sbi->s_es;
  	int i;
  
@@ -166,7 +166,7 @@ Index: linux-2.6.5-7.312/fs/ext3/super.c
  	ext3_ext_release(sb);
  	ext3_xattr_put_super(sb);
  	journal_destroy(sbi->s_journal);
-@@ -428,6 +429,8 @@ void ext3_put_super (struct super_block 
+@@ -433,6 +434,8 @@ static void ext3_put_super (struct super
  		invalidate_bdev(sbi->journal_bdev, 0);
  		ext3_blkdev_remove(sbi);
  	}
@@ -175,16 +175,16 @@ Index: linux-2.6.5-7.312/fs/ext3/super.c
  	sb->s_fs_info = NULL;
  	kfree(sbi);
  	return;
-@@ -453,6 +456,8 @@ static struct inode *ext3_alloc_inode(st
+@@ -458,6 +461,8 @@ static struct inode *ext3_alloc_inode(st
  	ei->vfs_inode.i_version = 1;
- 	
+ 
  	memset(&ei->i_cached_extent, 0, sizeof(ei->i_cached_extent));
 +	INIT_LIST_HEAD(&ei->i_prealloc_list);
 +	spin_lock_init(&ei->i_prealloc_lock);
  	return &ei->vfs_inode;
  }
  
-@@ -1151,6 +1156,13 @@ static int ext3_fill_super (struct super
+@@ -1454,6 +1459,13 @@ static int ext3_fill_super (struct super
  	sbi->s_mount_opt = 0;
  	sbi->s_resuid = EXT3_DEF_RESUID;
  	sbi->s_resgid = EXT3_DEF_RESGID;
@@ -196,9 +196,9 @@ Index: linux-2.6.5-7.312/fs/ext3/super.c
 +		return -ENOMEM;
 +	}
  
- 	blocksize = sb_min_blocksize(sb, EXT3_MIN_BLOCK_SIZE);
- 	if (!blocksize) {
-@@ -1526,6 +1538,8 @@ failed_mount:
+ 	unlock_kernel();
+ 
+@@ -1857,6 +1869,8 @@ failed_mount:
  	ext3_blkdev_remove(sbi);
  	brelse(bh);
  out_fail:
@@ -206,8 +206,8 @@ Index: linux-2.6.5-7.312/fs/ext3/super.c
 +	sbi->s_dev_proc = NULL;
  	sb->s_fs_info = NULL;
  	kfree(sbi);
- 	return -EINVAL;
-@@ -2158,9 +2172,46 @@ static struct file_system_type ext3_fs_t
+ 	lock_kernel();
+@@ -2782,9 +2796,46 @@ static struct file_system_type ext3_fs_t
  	.fs_flags	= FS_REQUIRES_DEV,
  };
  
@@ -255,7 +255,7 @@ Index: linux-2.6.5-7.312/fs/ext3/super.c
  	if (err)
  		return err;
  	err = init_inodecache();
-@@ -2189,6 +2240,7 @@ static void __exit exit_ext3_fs(void)
+@@ -2806,6 +2857,7 @@ static void __exit exit_ext3_fs(void)
  	unregister_filesystem(&ext3_fs_type);
  	destroy_inodecache();
  	exit_ext3_xattr();
@@ -263,11 +263,11 @@ Index: linux-2.6.5-7.312/fs/ext3/super.c
  }
  
  int ext3_map_inode_page(struct inode *inode, struct page *page,
-Index: linux-2.6.5-7.312/fs/ext3/mballoc.c
+Index: linux-2.6.18-53.1.21/fs/ext3/mballoc.c
 ===================================================================
 --- /dev/null
-+++ linux-2.6.5-7.312/fs/ext3/mballoc.c
-@@ -0,0 +1,4391 @@
++++ linux-2.6.18-53.1.21/fs/ext3/mballoc.c
+@@ -0,0 +1,4475 @@
 +/*
 + * Copyright 2008 Sun Microsystems, Inc.
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -597,6 +597,7 @@ Index: linux-2.6.5-7.312/fs/ext3/mballoc.c
 +	unsigned short	bb_free;
 +	unsigned short	bb_fragments;
 +	struct		list_head bb_prealloc_list;
++	unsigned long   bb_prealloc_nr;
 +#ifdef DOUBLE_CHECK
 +	void		*bb_bitmap;
 +#endif
@@ -700,7 +701,7 @@ Index: linux-2.6.5-7.312/fs/ext3/mballoc.c
 +	__u16 tail;	/* what tail broke some buddy */
 +	__u16 buddy;	/* buddy the tail ^^^ broke */
 +	__u16 flags;
-+	__u8 cr:3;	/* which phase the result extent was found at */
++	__u8 cr:8;	/* which phase the result extent was found at */
 +	__u8 op:4;
 +	__u8 merged:1;
 +};
@@ -733,7 +734,7 @@ Index: linux-2.6.5-7.312/fs/ext3/mballoc.c
 +void ext3_mb_release_blocks(struct super_block *, int);
 +void ext3_mb_poll_new_transaction(struct super_block *, handle_t *);
 +void ext3_mb_free_committed_blocks(struct super_block *);
-+void ext3_mb_generate_from_pa(struct super_block *sb, void *bitmap, int group);
++int ext3_mb_generate_from_pa(struct super_block *sb, void *bitmap, int group);
 +void ext3_mb_free_consumed_preallocations(struct ext3_allocation_context *ac);
 +void ext3_mb_return_to_preallocation(struct inode *inode, struct ext3_buddy *e3b,
 +					sector_t block, int count);
@@ -1126,7 +1127,7 @@ Index: linux-2.6.5-7.312/fs/ext3/mballoc.c
 +	}
 +}
 +
-+static void
++static int
 +ext3_mb_generate_buddy(struct super_block *sb, void *buddy, void *bitmap,
 +			int group)
 +{
@@ -1158,9 +1159,14 @@ Index: linux-2.6.5-7.312/fs/ext3/mballoc.c
 +	grp->bb_fragments = fragments;
 +
 +	if (free != grp->bb_free) {
-+		printk("EXT3-fs: group %u: %u blocks in bitmap, %u in gd\n",
-+			group, free, grp->bb_free);
-+		grp->bb_free = free;
++		struct ext3_group_desc *gdp;
++		gdp = ext3_get_group_desc (sb, group, NULL);
++		ext3_error(sb, __FUNCTION__,
++			"group %u: %u blocks in bitmap, %u in bb, "
++			"%u in gd, %lu pa's\n", group, free, grp->bb_free,
++			le16_to_cpu(gdp->bg_free_blocks_count),
++			grp->bb_prealloc_nr);
++		return -EIO;
 +	}
 +
 +	clear_bit(EXT3_GROUP_INFO_NEED_INIT_BIT, &grp->bb_state);
@@ -1170,6 +1176,8 @@ Index: linux-2.6.5-7.312/fs/ext3/mballoc.c
 +	EXT3_SB(sb)->s_mb_buddies_generated++;
 +	EXT3_SB(sb)->s_mb_generation_time += period;
 +	spin_unlock(&EXT3_SB(sb)->s_bal_lock);
++
++	return 0;
 +}
 +
 +static int ext3_mb_init_cache(struct page *page, char *incore)
@@ -1247,8 +1255,9 @@ Index: linux-2.6.5-7.312/fs/ext3/mballoc.c
 +		if (!buffer_uptodate(bh[i]))
 +			goto out;
 +
++	err = 0;
 +	first_block = page->index * blocks_per_page;
-+	for (i = 0; i < blocks_per_page; i++) {
++	for (i = 0; i < blocks_per_page && err == 0; i++) {
 +		int group;
 +
 +		group = (first_block + i) >> 1;
@@ -1267,7 +1276,7 @@ Index: linux-2.6.5-7.312/fs/ext3/mballoc.c
 +			EXT3_GROUP_INFO(sb, group)->bb_fragments = 0;
 +			memset(EXT3_GROUP_INFO(sb, group)->bb_counters, 0,
 +			       sizeof(unsigned short)*(sb->s_blocksize_bits+2));
-+			ext3_mb_generate_buddy(sb, data, incore, group);
++			err = ext3_mb_generate_buddy(sb, data, incore, group);
 +			incore = NULL;
 +		} else {
 +			/* this is block of bitmap */
@@ -1280,13 +1289,14 @@ Index: linux-2.6.5-7.312/fs/ext3/mballoc.c
 +			memcpy(data, bitmap, blocksize);
 +
 +			/* mark all preallocated blocks used in in-core bitmap */
-+			ext3_mb_generate_from_pa(sb, data, group);
++			err = ext3_mb_generate_from_pa(sb, data, group);
 +			ext3_unlock_group(sb, group);
 +
 +			incore = data;
 +		}
 +	}
-+	SetPageUptodate(page);
++	if (likely(err == 0))
++		SetPageUptodate(page);
 +
 +out:
 +	if (bh) {
@@ -2264,6 +2274,8 @@ Index: linux-2.6.5-7.312/fs/ext3/mballoc.c
 +			hs->result.fe_start, hs->result.fe_len);
 +		seq_printf(seq, "%-5u %-8u %-23s free\n",
 +				hs->pid, hs->ino, buf2);
++	} else {
++		seq_printf(seq, "unknown op %d\n", hs->op);
 +	}
 +	return 0;
 +}
@@ -2389,8 +2401,9 @@ Index: linux-2.6.5-7.312/fs/ext3/mballoc.c
 +static int ext3_mb_seq_groups_show(struct seq_file *seq, void *v)
 +{
 +	struct super_block *sb = seq->private;
++	struct ext3_group_desc *gdp;
 +	long group = (long) v;
-+	int i, err;
++	int i, err, free = 0;
 +	struct ext3_buddy e3b;
 +	struct sg {
 +		struct ext3_group_info info;
@@ -2399,10 +2412,10 @@ Index: linux-2.6.5-7.312/fs/ext3/mballoc.c
 +
 +	group--;
 +	if (group == 0)
-+		seq_printf(seq, "#%-5s: %-5s %-5s %-5s "
++		seq_printf(seq, "#%-5s: %-5s %-5s %-5s %-5s %-5s "
 +				"[ %-5s %-5s %-5s %-5s %-5s %-5s %-5s "
 +				  "%-5s %-5s %-5s %-5s %-5s %-5s %-5s ]\n",
-+			   "group", "free", "frags", "first",
++			   "group", "free", "ingd", "frags", "first", "pa",
 +			   "2^0", "2^1", "2^2", "2^3", "2^4", "2^5","2^6",
 +			   "2^7", "2^8", "2^9", "2^10", "2^11", "2^12", "2^13");
 +
@@ -2413,13 +2426,20 @@ Index: linux-2.6.5-7.312/fs/ext3/mballoc.c
 +		seq_printf(seq, "#%-5lu: I/O error\n", group);
 +		return 0;
 +	}
++
++	gdp = ext3_get_group_desc(sb, group, NULL);
++	if (gdp != NULL)
++		free = le16_to_cpu(gdp->bg_free_blocks_count);
++
 +	ext3_lock_group(sb, group);
 +	memcpy(&sg, EXT3_GROUP_INFO(sb, group), i);
 +	ext3_unlock_group(sb, group);
 +	ext3_mb_release_desc(&e3b);
 +
-+	seq_printf(seq, "#%-5lu: %-5u %-5u %-5u [", group, sg.info.bb_free,
-+			sg.info.bb_fragments, sg.info.bb_first_free);
++	seq_printf(seq, "#%-5lu: %-5u %-5u %-5u %-5u %-5lu [", group,
++			sg.info.bb_free, free,
++			sg.info.bb_fragments, sg.info.bb_first_free,
++			sg.info.bb_prealloc_nr);
 +	for (i = 0; i <= 13; i++)
 +		seq_printf(seq, " %-5u", i <= sb->s_blocksize_bits + 1 ?
 +				sg.info.bb_counters[i] : 0);
@@ -2525,6 +2545,7 @@ Index: linux-2.6.5-7.312/fs/ext3/mballoc.c
 +	h.tail = ac->ac_tail;
 +	h.buddy = ac->ac_buddy;
 +	h.merged = 0;
++	h.cr = ac->ac_criteria;
 +	if (ac->ac_op == EXT3_MB_HISTORY_ALLOC) {
 +		if (ac->ac_g_ex.fe_start == ac->ac_b_ex.fe_start &&
 +				ac->ac_g_ex.fe_group == ac->ac_b_ex.fe_group)
@@ -3561,17 +3582,59 @@ Index: linux-2.6.5-7.312/fs/ext3/mballoc.c
 +}
 +
 +/*
++ * check free blocks in bitmap match free block in group descriptor
++ * do this before taking preallocated blocks into account to be able
++ * to detect on-disk corruptions
++ */
++int ext3_mb_check_ondisk_bitmap(struct super_block *sb, void *bitmap,
++				struct ext3_group_desc *gdp, int group)
++{
++	unsigned short max = EXT3_BLOCKS_PER_GROUP(sb);
++	unsigned short i, first, free = 0;
++
++	i = mb_find_next_zero_bit(bitmap, max, 0);
++
++	while (i < max) {
++		first = i;
++		i = ext2_find_next_le_bit(bitmap, max, i);
++		if (i > max)
++			i = max;
++		free += i - first;
++		if (i < max)
++			i = mb_find_next_zero_bit(bitmap, max, i);
++	}
++
++	if (free != le16_to_cpu(gdp->bg_free_blocks_count)) {
++		ext3_error(sb, __FUNCTION__, "on-disk bitmap for group %d"
++			"corrupted: %u blocks free in bitmap, %u - in gd\n",
++			group, free, le16_to_cpu(gdp->bg_free_blocks_count));
++		return -EIO;
++	}
++	return 0;
++}
++
++/*
 + * the function goes through all preallocation in this group and marks them
 + * used in in-core bitmap. buddy must be generated from this bitmap
 + */
-+void ext3_mb_generate_from_pa(struct super_block *sb, void *bitmap, int group)
++int ext3_mb_generate_from_pa(struct super_block *sb, void *bitmap, int group)
 +{
 +	struct ext3_group_info *grp = EXT3_GROUP_INFO(sb, group);
 +	struct ext3_prealloc_space *pa;
++	struct ext3_group_desc *gdp;
 +	struct list_head *cur;
 +	unsigned long groupnr;
 +	unsigned long start;
-+	int preallocated = 0, count = 0, len;
++	int preallocated = 0, count = 0, len, skip = 0, err;
++
++	gdp = ext3_get_group_desc (sb, group, NULL);
++	if (gdp == NULL)
++		return -EIO;
++
++	/* before applying preallocations, check bitmap consistency */
++	err = ext3_mb_check_ondisk_bitmap(sb, bitmap, gdp, group);
++	if (err)
++		return err;
 +
 + 	/* all form of preallocation discards first load group,
 +	 * so the only competing code is preallocation use.
@@ -3587,14 +3650,23 @@ Index: linux-2.6.5-7.312/fs/ext3/mballoc.c
 +		ext3_get_group_no_and_offset(sb, pa->pa_pstart, &groupnr, &start);
 +		len = pa->pa_len;
 +		spin_unlock(&pa->pa_lock);
-+		if (unlikely(len == 0))
++		if (unlikely(len == 0)) {
++			skip++;
 +			continue;
++		}
 +		BUG_ON(groupnr != group && len != 0);
 +		mb_set_bits(sb_bgl_lock(EXT3_SB(sb), group), bitmap, start,len);
 +		preallocated += len;
 +		count++;
 +	}
++	if (count + skip != grp->bb_prealloc_nr) {
++		ext3_error(sb, __FUNCTION__, "lost preallocations: "
++			"count %d, bb_prealloc_nr %lu, skip %d\n",
++			count, grp->bb_prealloc_nr, skip);
++		return -EIO;
++	}
 +	mb_debug("prellocated %u for group %u\n", preallocated, group);
++	return 0;
 +}
 +
 +#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,5)
@@ -3654,6 +3726,7 @@ Index: linux-2.6.5-7.312/fs/ext3/mballoc.c
 +	 */
 +	ext3_lock_group(sb, grp);
 +	list_del_rcu(&pa->pa_group_list);
++	EXT3_GROUP_INFO(sb, grp)->bb_prealloc_nr--;
 +	ext3_unlock_group(sb, grp);
 +
 +	spin_lock(pa->pa_obj_lock);
@@ -3738,6 +3811,7 @@ Index: linux-2.6.5-7.312/fs/ext3/mballoc.c
 +
 +	ext3_lock_group(sb, ac->ac_b_ex.fe_group);
 +	list_add_rcu(&pa->pa_group_list, &grp->bb_prealloc_list);
++	grp->bb_prealloc_nr++;
 +	ext3_unlock_group(sb, ac->ac_b_ex.fe_group);
 +
 +	spin_lock(pa->pa_obj_lock);
@@ -3795,6 +3869,7 @@ Index: linux-2.6.5-7.312/fs/ext3/mballoc.c
 +
 +	ext3_lock_group(sb, ac->ac_b_ex.fe_group);
 +	list_add_rcu(&pa->pa_group_list, &grp->bb_prealloc_list);
++	grp->bb_prealloc_nr++;
 +	ext3_unlock_group(sb, ac->ac_b_ex.fe_group);
 +
 +	spin_lock(pa->pa_obj_lock);
@@ -3842,6 +3917,7 @@ Index: linux-2.6.5-7.312/fs/ext3/mballoc.c
 +	ac.ac_sb = sb;
 +	ac.ac_inode = pa->pa_inode;
 +	ac.ac_op = EXT3_MB_HISTORY_DISCARD;
++	ac.ac_o_ex.fe_len = 1;
 +
 +	while (bit < end) {
 +		bit = mb_find_next_zero_bit(bitmap_bh->b_data, end, bit);
@@ -3937,7 +4013,10 @@ Index: linux-2.6.5-7.312/fs/ext3/mballoc.c
 +	}
 +
 +	err = ext3_mb_load_buddy(sb, group, &e3b);
-+	BUG_ON(err != 0); /* error handling here */
++	if (err) {
++		brelse(bitmap_bh);
++		return err;
++	}
 +
 +	if (needed == 0)
 +		needed = EXT3_BLOCKS_PER_GROUP(sb) + 1;
@@ -3968,6 +4047,8 @@ Index: linux-2.6.5-7.312/fs/ext3/mballoc.c
 +
 +		spin_unlock(&pa->pa_lock);
 +
++		BUG_ON(grp->bb_prealloc_nr == 0);
++		grp->bb_prealloc_nr--;
 +		list_del_rcu(&pa->pa_group_list);
 +		list_add(&pa->u.pa_tmp_list, &list);
 +	}
@@ -4084,11 +4165,14 @@ Index: linux-2.6.5-7.312/fs/ext3/mballoc.c
 +		ext3_get_group_no_and_offset(sb, pa->pa_pstart, &group, NULL);
 +
 +		err = ext3_mb_load_buddy(sb, group, &e3b);
-+		BUG_ON(err != 0); /* error handling here */
++		if (err)
++			return;
 +
 +		bitmap_bh = read_block_bitmap(sb, group);
 +
 +		ext3_lock_group(sb, group);
++		BUG_ON(e3b.bd_info->bb_prealloc_nr == 0);
++		e3b.bd_info->bb_prealloc_nr--;
 +		list_del_rcu(&pa->pa_group_list);
 +
 +		/* can be NULL due to IO error, at worst
