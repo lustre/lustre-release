@@ -1417,6 +1417,7 @@ void lprocfs_free_md_stats(struct obd_device *obd)
 
         if (stats != NULL) {
                 obd->md_stats = NULL;
+                obd->md_cntr_base = 0;
                 lprocfs_free_stats(&stats);
         }
 }
