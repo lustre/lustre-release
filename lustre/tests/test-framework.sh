@@ -7,6 +7,7 @@ set -e
 
 
 export REFORMAT=${REFORMAT:-""}
+export WRITECONF=${WRITECONF:-""}
 export VERBOSE=false
 export GMNALNID=${GMNALNID:-/usr/sbin/gmlndnid}
 export CATASTROPHE=${CATASTROPHE:-/proc/sys/lnet/catastrophe}
@@ -157,11 +158,12 @@ init_test_env() {
 
     # command line
 
-    while getopts "rvf:" opt $*; do
+    while getopts "rvwf:" opt $*; do
         case $opt in
             f) CONFIG=$OPTARG;;
             r) REFORMAT=--reformat;;
             v) VERBOSE=true;;
+            w) WRITECONF=writeconf;;
             \?) usage;;
         esac
     done
@@ -321,7 +323,7 @@ unload_modules() {
     local MODULES=$($LCTL modules | awk '{ print $2 }')
     if [ -n "$MODULES" ]; then
         echo "Modules still loaded: "
-        echo $MODULES 
+        echo $MODULES
         if [ "$(lctl dl)" ]; then
             echo "Lustre still loaded"
             lctl dl || true
@@ -441,7 +443,7 @@ mount_facet() {
     local dev=${facet}_dev
     local opt=${facet}_opt
     echo "Starting ${facet}: ${!opt} $@ ${!dev} ${MOUNT%/*}/${facet}"
-    do_facet ${facet} mount -t lustre ${!opt} $@ ${!dev} ${MOUNT%/*}/${facet}     
+    do_facet ${facet} mount -t lustre ${!opt} $@ ${!dev} ${MOUNT%/*}/${facet}
     RC=${PIPESTATUS[0]}
     if [ $RC -ne 0 ]; then
         echo "mount -t lustre $@ ${!dev} ${MOUNT%/*}/${facet}"
@@ -451,7 +453,7 @@ mount_facet() {
             lctl set_param subsystem_debug=${SUBSYSTEM# }; \
             lctl set_param debug_mb=${DEBUG_SIZE}; \
             sync"
- 
+
         label=$(do_facet ${facet} "e2label ${!dev}")
         [ -z "$label" ] && echo no label for ${!dev} && exit 1
         eval export ${facet}_svc=${label}
@@ -513,7 +515,7 @@ zconf_mount() {
     do_node $client "lctl set_param debug=$PTLDEBUG;
         lctl set_param subsystem_debug=${SUBSYSTEM# };
         lctl set_param debug_mb=${DEBUG_SIZE}"
-    
+
     return 0
 }
 
@@ -686,7 +688,7 @@ wait_remote_prog () {
    local rc=0
 
    [ "$PDSH" = "no_dsh" ] && return 0
-   
+
    while [ $WAIT -lt $2 ]; do
         running=$(ps uax | grep "$PDSH.*$prog.*$MOUNT" | grep -v grep)
         [ -z "${running}" ] && return 0
@@ -705,7 +707,7 @@ wait_remote_prog () {
         echo "Killing $pid"
         kill -9 $pid || true
         sleep 1
-        ps -P $pid && rc=1 
+        ps -P $pid && rc=1
     done
 
     return $rc
@@ -934,7 +936,7 @@ do_node() {
 	local command_status="$TMP/cs"
 	rsh $HOST ":> $command_status"
 	rsh $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin;
-		    cd $RPWD; sh -c \"$@\") || 
+		    cd $RPWD; sh -c \"$@\") ||
 		    echo command failed >$command_status"
 	[ -n "$($myPDSH $HOST cat $command_status)" ] && return 1 || true
         return 0
@@ -951,7 +953,7 @@ do_nodes() {
     local rnodes=$1
     shift
 
-    if $(single_local_node $rnodes); then 
+    if $(single_local_node $rnodes); then
         do_node $rnodes $@
         return $?
     fi
@@ -1141,15 +1143,34 @@ set_obd_timeout() {
     do_facet $facet "lctl set_param timeout=$timeout"
 }
 
+writeconf_facet () {
+    local facet=$1
+    local dev=$2
+
+    do_facet $facet "$TUNEFS --writeconf $dev"
+}
+
+writeconf_all () {
+    for num in `seq $MDSCOUNT`; do
+        DEVNAME=$(mdsdevname $num)
+        writeconf_facet mds$num $DEVNAME
+    done
+
+    for num in `seq $OSTCOUNT`; do
+        DEVNAME=$(ostdevname $num)
+        writeconf_facet ost$num $DEVNAME
+    done
+}
+
 setupall() {
     load_modules
     init_gss
     if [ -z "$CLIENTONLY" ]; then
         echo "Setup mdts, osts"
+        echo $WRITECONF | grep -q "writeconf" && \
+            writeconf_all
         for num in `seq $MDSCOUNT`; do
             DEVNAME=$(mdsdevname $num)
-            echo $REFORMAT | grep -q "reformat" \
-            || do_facet mds$num "$TUNEFS --writeconf $DEVNAME"
             set_obd_timeout mds$num $TIMEOUT
             start mds$num $DEVNAME $MDS_MOUNT_OPTS
 
@@ -1799,7 +1820,7 @@ nodes_list () {
 remote_nodes_list () {
     local rnodes=$(nodes_list)
     rnodes=$(echo " $rnodes " | sed -re "s/\s+$HOSTNAME\s+/ /g")
-    echo $rnodes 
+    echo $rnodes
 }
 
 init_clients_lists () {
@@ -1812,7 +1833,7 @@ init_clients_lists () {
     local clients="$SINGLECLIENT $HOSTNAME $rclients"
 
     # Sanity check: exclude the dup entries from CLIENTS
-    # for those configs which has SINGLCLIENT set to local client 
+    # for those configs which has SINGLCLIENT set to local client
     clients=$(for i in $clients; do echo $i; done | sort -u)
 
     CLIENTS=`comma_list $clients`
@@ -1882,8 +1903,8 @@ check_runas_id() {
     shift
     local myRUNAS=$@
     check_runas_id_ret $myRUNAS_ID $myRUNAS || \
-        error "unable to write to $DIR/d0_runas_test as UID $myRUNAS_ID. 
-        Please set RUNAS_ID to some UID which exists on MDS and client or 
+        error "unable to write to $DIR/d0_runas_test as UID $myRUNAS_ID.
+        Please set RUNAS_ID to some UID which exists on MDS and client or
         add user $myRUNAS_ID:$myRUNAS_ID on these nodes."
 }
 
