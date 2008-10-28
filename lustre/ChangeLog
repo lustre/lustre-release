@@ -1736,6 +1736,13 @@ Description: More exported tunables for mballoc
 Details    : Add support for tunable preallocation window and new tunables for
 	     large/small requests
 
+Severity   : normal
+Bugzilla   : 16680
+Description: Detect corruption of block bitmap and checking for preallocations
+Details    : Checks validity of on-disk block bitmap. Also it does better
+	     checking of number of applied preallocations. When corruption is
+	     found, it turns filesystem readonly to prevent further corruptions.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
