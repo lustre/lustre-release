@@ -1631,6 +1631,14 @@ Description: Incorrect file ownership on O_DIRECT output files
 Details    : block usage reported by 'lfs quota' does not take into account
 	     files that have been written with O_DIRECT.
 
+Severity   : normal
+Bugzilla   : 17197
+Description: (rw.c:1323:ll_read_ahead_pages()) ASSERTION(page_idx > ria->ria_stoff) failed
+Details    : Once the unmatched stride IO mode is detected, shrink the stride-ahead
+	     window to 0. If it does hit cache miss, and read-pattern is still 
+	     stride-io mode, does not reset the stride window, but also does not 
+	     increase the stride window length in this case.
+
 --------------------------------------------------------------------------------
 
 2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>
