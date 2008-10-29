@@ -933,7 +933,8 @@ int sptlrpc_cli_unwrap_reply(struct ptlrpc_request *req)
         LASSERT(req->rq_repmsg == NULL);
         LASSERT(req->rq_reply_off + req->rq_nob_received <= req->rq_repbuf_len);
 
-        if (req->rq_reply_off == 0) {
+        if (req->rq_reply_off == 0 &&
+            (lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT)) {
                 CERROR("real reply with offset 0\n");
                 return -EPROTO;
         }

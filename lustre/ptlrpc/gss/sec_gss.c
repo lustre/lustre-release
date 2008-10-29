@@ -1869,7 +1869,10 @@ int gss_svc_sign(struct ptlrpc_request *req,
         rs->rs_repdata_len = rc;
 
         if (likely(req->rq_packed_final)) {
-                req->rq_reply_off = gss_at_reply_off_integ;
+                if (lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT)
+                        req->rq_reply_off = gss_at_reply_off_integ;
+                else
+                        req->rq_reply_off = 0;
         } else {
                 if (svc == SPTLRPC_SVC_NULL)
                         rs->rs_repbuf->lm_cksum = crc32_le(!(__u32) 0,
@@ -2601,7 +2604,8 @@ static int gss_svc_seal(struct ptlrpc_request *req,
         memcpy(lustre_msg_buf(rs->rs_repbuf, 1, 0), token.data, token.len);
 
         /* reply offset */
-        if (likely(req->rq_packed_final))
+        if (req->rq_packed_final &&
+            (lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT))
                 req->rq_reply_off = gss_at_reply_off_priv;
         else
                 req->rq_reply_off = 0;

@@ -779,6 +779,7 @@ __u32 lustre_msghdr_get_flags(struct lustre_msg *msg)
                 return 0;
         }
 }
+EXPORT_SYMBOL(lustre_msghdr_get_flags);
 
 void lustre_msghdr_set_flags(struct lustre_msg *msg, __u32 flags)
 {

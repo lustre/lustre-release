@@ -371,7 +371,10 @@ int null_authorize(struct ptlrpc_request *req)
         rs->rs_repdata_len = req->rq_replen;
 
         if (likely(req->rq_packed_final)) {
-                req->rq_reply_off = lustre_msg_early_size();
+                if (lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT)
+                        req->rq_reply_off = lustre_msg_early_size();
+                else
+                        req->rq_reply_off = 0;
         } else {
                 rs->rs_repbuf->lm_cksum =
                                 crc32_le(!(__u32) 0,
