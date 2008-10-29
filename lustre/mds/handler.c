@@ -613,17 +613,18 @@ int mds_get_md(struct obd_device *obd, struct inode *inode, void *md,
                                 goto out;
                         }
                         rc = fsfilt_get_md(obd, inode, buf, new_size, "lov");
-                        if (rc <= 0) {
-                                OBD_FREE(buf, new_size);
-                                goto out;
-                        }
+                        if (rc <= 0)
+                                goto out_convert;
 
                         /* convert V3 EA to V1 */
                         lmm_size = rc;
                         rc = mds_convert_lov_ea(obd, inode, buf, lmm_size);
+                        if (rc < 0)
+                                goto out_convert;
                         /* copy converted EA to provided buffer */
                         memcpy(md, buf, rc);
                         *size = rc;
+out_convert:
                         OBD_FREE(buf, new_size);
                         goto out;
                }
