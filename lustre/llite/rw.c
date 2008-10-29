@@ -1531,7 +1531,6 @@ static void ras_update_stride_detector(struct ll_readahead_state *ras,
                 ras->ras_stride_length = stride_gap +ras->ras_consecutive_pages;
         }
         RAS_CDEBUG(ras);
-        return;
 }
 
 static unsigned long
