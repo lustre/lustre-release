@@ -759,7 +759,12 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (npages < 0)
                 GOTO(out, rc = npages);
 
-        LASSERT(npages <= OST_THREAD_POOL_SIZE);
+        if (npages > OST_THREAD_POOL_SIZE) {
+                DEBUG_REQ(D_ERROR, req, "number of pages (%d) required are more"
+                          " than the thread pool size (%d)",
+                          npages, OST_THREAD_POOL_SIZE);
+                GOTO(out, rc = -EPROTO);
+        }
 
         ost_nio_pages_get(req, local_nb, npages);
 
@@ -1059,7 +1064,12 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (npages < 0)
                 GOTO(out, rc = npages);
 
-        LASSERT(npages <= OST_THREAD_POOL_SIZE);
+        if (npages > OST_THREAD_POOL_SIZE) {
+                DEBUG_REQ(D_ERROR, req, "number of pages (%d) required are more"
+                          " than the thread pool size (%d)",
+                          npages, OST_THREAD_POOL_SIZE);
+                GOTO(out, rc = -EPROTO);
+        }
 
         ost_nio_pages_get(req, local_nb, npages);
 
