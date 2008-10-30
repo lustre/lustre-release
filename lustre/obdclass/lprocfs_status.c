@@ -135,8 +135,8 @@ int lprocfs_add_simple(struct proc_dir_entry *root, char *name,
         return 0;
 }
 
-
-static ssize_t lprocfs_fops_read(struct file *f, char __user *buf, size_t size, loff_t *ppos)
+static ssize_t lprocfs_fops_read(struct file *f, char __user *buf, size_t size,
+                                 loff_t *ppos)
 {
         struct proc_dir_entry *dp = PDE(f->f_dentry->d_inode);
         char *page, *start = NULL;
@@ -184,7 +184,8 @@ out:
         return rc;
 }
 
-static ssize_t lprocfs_fops_write(struct file *f, const char __user *buf, size_t size, loff_t *ppos)
+static ssize_t lprocfs_fops_write(struct file *f, const char __user *buf,
+                                  size_t size, loff_t *ppos)
 {
         struct proc_dir_entry *dp = PDE(f->f_dentry->d_inode);
         int rc = -EIO;
@@ -612,15 +613,15 @@ int lprocfs_rd_conn_uuid(char *page, char **start, off_t off, int count,
 #define flag2str(flag) \
         if (imp->imp_##flag && max - len > 0) \
                 len += snprintf(str + len, max - len, " " #flag);
-        
+
 /**
  * Append a space separated list of current set flags to str.
  */
-static int obd_import_flags2str(struct obd_import *imp, char *str, 
+static int obd_import_flags2str(struct obd_import *imp, char *str,
                                           int max)
 {
         int len = 0;
-        
+
         if (imp->imp_obd->obd_no_recov)
                 len += snprintf(str, max - len, " no_recov");
 
@@ -648,7 +649,7 @@ int lprocfs_rd_import(char *page, char **start, off_t off, int count,
         imp_state_name = ptlrpc_import_state_name(imp->imp_state);
         *eof = 1;
 
-        rc = snprintf(page, count, 
+        rc = snprintf(page, count,
                       "import: %s\n"
                       "    target: %s@%s\n"
                       "    state: %s\n"
@@ -709,7 +710,6 @@ int lprocfs_rd_timeouts(char *page, char **start, off_t off, int count,
         rc += snprintf(page + rc, count - rc,
                        "%-10s : %ld, "DHMS_FMT" ago\n",
                        "last reply", imp->imp_last_reply_time, DHMS_VARS(&ts));
-
 
         cur = at_get(&imp->imp_at.iat_net_latency);
         worst = imp->imp_at.iat_net_latency.at_worst_ever;
@@ -1458,7 +1458,8 @@ int lprocfs_nid_stats_clear_write(struct file *file, const char *buffer,
                              lprocfs_nid_stats_clear_write_cb, &free_list);
 
         while (!list_empty(&free_list)) {
-                client_stat = list_entry(free_list.next, struct nid_stat, nid_list);
+                client_stat = list_entry(free_list.next, struct nid_stat,
+                                         nid_list);
                 list_del_init(&client_stat->nid_list);
                 lprocfs_free_client_stats(client_stat);
         }
@@ -1507,12 +1508,8 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
         CFS_INIT_LIST_HEAD(&new_stat->nid_uuid_list);
         new_stat->nid = *nid;
         new_stat->nid_obd = exp->exp_obd;
-        new_stat->nid_exp_ref_count = 1; /* need live in hash after destroy export */
-
-       /* protect competitive add to list, not need locking on destroy */
-        spin_lock(&obd->obd_nid_lock);
-        list_add(&new_stat->nid_list, &obd->obd_nid_stats);
-        spin_unlock(&obd->obd_nid_lock);
+        /* need live in hash after destroy export */
+        new_stat->nid_exp_ref_count = 1;
 
         old_stat = lustre_hash_findadd_unique(obd->obd_nid_stats_hash,
                                               nid, &new_stat->nid_hash);
@@ -1533,7 +1530,7 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
                 list_for_each_entry(tmp_uuid, &old_stat->nid_uuid_list,
                                     ns_uuid_list) {
                         if (tmp_uuid && obd_uuid_equals(&tmp_uuid->ns_uuid,
-                                                        &exp->exp_client_uuid)) {
+                                                        &exp->exp_client_uuid)){
                                 found = 1;
                                 --old_stat->nid_exp_ref_count;
                                 break;
@@ -1580,6 +1577,11 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
 
         exp->exp_nid_stats = new_stat;
         *newnid = 1;
+        /* protect competitive add to list, not need locking on destroy */
+        spin_lock(&obd->obd_nid_lock);
+        list_add(&new_stat->nid_list, &obd->obd_nid_stats);
+        spin_unlock(&obd->obd_nid_lock);
+
         RETURN(rc);
 
 destroy_new_ns:
@@ -1587,9 +1589,6 @@ destroy_new_ns:
         OBD_FREE_PTR(new_ns_uuid);
 
 destroy_new:
-        spin_lock(&obd->obd_nid_lock);
-        list_del(&new_stat->nid_list);
-        spin_unlock(&obd->obd_nid_lock);
         OBD_FREE_PTR(new_stat);
         RETURN(rc);
 }
@@ -1612,6 +1611,9 @@ int lprocfs_exp_cleanup(struct obd_export *exp)
                         found = 1;
                         list_del(&cursor->ns_uuid_list);
                         OBD_FREE_PTR(cursor);
+                        --stat->nid_exp_ref_count;
+                        CDEBUG(D_INFO, "Put stat %p - %d\n", stat,
+                               stat->nid_exp_ref_count);
                         break;
                 }
         }
@@ -1619,9 +1621,6 @@ int lprocfs_exp_cleanup(struct obd_export *exp)
         if (!found)
                 CERROR("obd_export's client uuid %s are not found in its "
                        "nid_stats list\n", exp->exp_client_uuid.uuid);
-
-        stat->nid_exp_ref_count--;
-        CDEBUG(D_INFO, "Put stat %p - %d\n", stat, stat->nid_exp_ref_count);
 
         exp->exp_nid_stats = NULL;
         lprocfs_free_stats(&exp->exp_ops_stats);
@@ -1677,7 +1676,8 @@ int lprocfs_write_frac_helper(const char *buffer, unsigned long count,
         return 0;
 }
 
-int lprocfs_read_frac_helper(char *buffer, unsigned long count, long val, int mult)
+int lprocfs_read_frac_helper(char *buffer, unsigned long count, long val,
+                             int mult)
 {
         long decimal_val, frac_val;
         int prtn;
@@ -1695,7 +1695,8 @@ int lprocfs_read_frac_helper(char *buffer, unsigned long count, long val, int mu
 
                 temp_frac = frac_val * 10;
                 buffer[prtn++] = '.';
-                while (frac_bits < 2 && (temp_frac / mult) < 1 ) { /*only reserved 2bits fraction*/
+                while (frac_bits < 2 && (temp_frac / mult) < 1 ) {
+                        /*only reserved 2bits fraction*/
                         buffer[prtn++] ='0';
                         temp_frac *= 10;
                         frac_bits++;
@@ -1712,7 +1713,8 @@ int lprocfs_read_frac_helper(char *buffer, unsigned long count, long val, int mu
                         temp_mult *= 10;
 
                 frac_bits = min((int)count - prtn, 3 - frac_bits);
-                prtn += snprintf(buffer + prtn, frac_bits, "%ld", frac_val * temp_mult / mult);
+                prtn += snprintf(buffer + prtn, frac_bits, "%ld",
+                                 frac_val * temp_mult / mult);
 
                 prtn--;
                 while(buffer[prtn] < '1' || buffer[prtn] > '9') {
