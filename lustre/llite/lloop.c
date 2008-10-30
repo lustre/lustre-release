@@ -824,7 +824,7 @@ static void lloop_exit(void)
                 CDEBUG(D_CONFIG, "unregistered lloop major %d\n", lloop_major);
 
         OBD_FREE(disks, max_loop * sizeof(*disks));
-        OBD_FREE(loop_dev, max_loop * sizeof(loop_dev));
+        OBD_FREE(loop_dev, max_loop * sizeof(*loop_dev));
 }
 
 module_init(lloop_init);
