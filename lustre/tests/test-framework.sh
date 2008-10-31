@@ -1597,6 +1597,10 @@ remote_ost_nodsh()
     remote_ost && [ "$PDSH" = "no_dsh" -o -z "$PDSH" -o -z "$ost_HOST" ]
 }
 
+remote_servers () {
+    remote_ost && remote_mds
+}
+
 osts_nodes () {
     local OSTNODES=$(facet_host ost1)
     local NODES_sort
