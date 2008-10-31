@@ -3681,10 +3681,17 @@ test_99f() {
 run_test 99f "cvs commit ======================================="
 
 test_100() {
-	netstat -tna | while read PROT SND RCV LOCAL REMOTE STAT; do
-		[ "$PROT" != "tcp" ] && continue
-		RPORT=`echo $REMOTE | cut -d: -f2`
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_servers || \
+		{ skip "useless for local single node setup" && return; }
+
+	netstat -tna | ( rc=1; while read PROT SND RCV LOCAL REMOTE STAT; do
+		[ "$PROT" != "$NETTYPE" ] && continue
+		RPORT=$(echo $REMOTE | cut -d: -f2)
 		[ "$RPORT" != "$ACCEPTOR_PORT" ] && continue
+
+		rc=0
 		LPORT=`echo $LOCAL | cut -d: -f2`
 		if [ $LPORT -ge 1024 ]; then
 			echo "bad: $PROT $SND $RCV $LOCAL $REMOTE $STAT"
@@ -3692,7 +3699,7 @@ test_100() {
 			error "local: $LPORT > 1024, remote: $RPORT"
 		fi
 	done
-	true
+	[ "$rc" = 0 ] || error "privileged port not found" )  
 }
 run_test 100 "check local port using privileged port ==========="
 

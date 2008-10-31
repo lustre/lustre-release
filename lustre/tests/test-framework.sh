@@ -1825,6 +1825,10 @@ mdts_nodes () {
     echo $NODES_sort
 }
 
+remote_servers () {
+    remote_ost && remote_mds
+}
+
 osts_nodes () {
     local OSTNODES=$(facet_host ost1)
     local NODES_sort
