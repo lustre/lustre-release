@@ -5630,6 +5630,36 @@ test_130e() {
 }
 run_test 130e "FIEMAP (test continuation FIEMAP calls)"
 
+test_140() { #bug-17379
+        mkdir -p $DIR/$tdir || error "Creating dir $DIR/$tdir"
+        cd $DIR/$tdir || error "Changing to $DIR/$tdir"
+        cp /usr/bin/stat . || error "Copying stat to $DIR/$tdir"
+
+        # VFS limits max symlink depth to 5(4KSTACK) or 8
+        local i=0
+        while i=`expr $i + 1`; do
+                mkdir -p $i || error "Creating dir $i"
+                cd $i || error "Changing to $i"
+                ln -s ../stat stat || error "Creating stat symlink"
+                # Read the symlink until ELOOP present,
+                # not LBUGing the system is considered success,
+                # we didn't overrun the stack.
+                $OPENFILE -f O_RDONLY stat >/dev/null 2>&1; ret=$?
+                [ $ret -ne 0 ] && {
+                        if [ $ret -eq 40 ]; then
+                                break  # -ELOOP
+                        else
+                                error "Open stat symlink"
+                                return
+                        fi
+                }
+        done
+        i=`expr $i - 1`
+        [ $i -eq 5 -o $i -eq 8 ] || error "Invalid symlink depth"
+        echo "The symlink depth = $i"
+}
+run_test 140 "Check reasonable stack depth (shouldn't LBUG) ===="
+
 test_150() {
 	local TF="$TMP/$tfile"
 
