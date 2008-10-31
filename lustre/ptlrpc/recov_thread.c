@@ -212,7 +212,7 @@ static int llcd_send(struct llog_canceld_ctxt *llcd)
          * llog_receptor_accept().
          */
         request = ptlrpc_prep_req(import, LUSTRE_LOG_VERSION,
-                                  OBD_LOG_CANCEL, 2, size,bufs);
+                                  OBD_LOG_CANCEL, 2, size, bufs);
         if (request == NULL) {
                 CERROR("Can't allocate request for sending llcd %p\n", 
                        llcd);
@@ -492,7 +492,7 @@ static int llog_recov_thread_replay(struct llog_ctxt *ctxt,
         RETURN(rc);
 }
 
-int llog_obd_repl_connect(struct llog_ctxt *ctxt, int count, 
+int llog_obd_repl_connect(struct llog_ctxt *ctxt,
                           struct llog_logid *logid, struct llog_gen *gen,
                           struct obd_uuid *uuid)
 {
@@ -535,7 +535,7 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
 
         mutex_down(&ctxt->loc_sem);
         lcm = ctxt->loc_lcm;
-        
+
         /*
          * Let's check if we have all structures alive. We also check for
          * possible shutdown. Do nothing if we're stopping.

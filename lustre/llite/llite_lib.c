@@ -1562,7 +1562,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
         /* POSIX: check before ATTR_*TIME_SET set (from inode_change_ok) */
         if (ia_valid & (ATTR_MTIME_SET | ATTR_ATIME_SET)) {
-                if (current->fsuid != inode->i_uid && !capable(CAP_FOWNER))
+                if (current->fsuid != inode->i_uid &&
+                    !cfs_capable(CFS_CAP_FOWNER))
                         RETURN(-EPERM);
         }
 
@@ -1578,16 +1579,6 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         if (!(ia_valid & ATTR_MTIME_SET) && (attr->ia_valid & ATTR_MTIME)) {
                 attr->ia_mtime = CURRENT_TIME;
                 attr->ia_valid |= ATTR_MTIME_SET;
-        }
-        if ((attr->ia_valid & ATTR_CTIME) && !(attr->ia_valid & ATTR_MTIME)) {
-                /* To avoid stale mtime on mds, obtain it from ost and send
-                   to mds. */
-                rc = ll_glimpse_size(inode, 0);
-                if (rc)
-                        RETURN(rc);
-
-                attr->ia_valid |= ATTR_MTIME_SET | ATTR_MTIME;
-                attr->ia_mtime = inode->i_mtime;
         }
 
         if (attr->ia_valid & (ATTR_MTIME | ATTR_CTIME))
@@ -1650,24 +1641,95 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         if (ia_valid & ATTR_SIZE) {
                 rc = ll_setattr_do_truncate(inode, attr->ia_size);
         } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
-                obd_flag flags;
                 struct obd_info oinfo = { { { 0 } } };
                 struct obdo *oa;
-                OBDO_ALLOC(oa);
+                struct lustre_handle lockh = { 0 };
+                obd_valid valid;
 
                 CDEBUG(D_INODE, "set mtime on OST inode %lu to %lu\n",
                        inode->i_ino, LTIME_S(attr->ia_mtime));
 
+                OBDO_ALLOC(oa);
                 if (oa) {
                         oa->o_id = lsm->lsm_object_id;
                         oa->o_gr = lsm->lsm_object_gr;
                         oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
 
-                        flags = OBD_MD_FLTYPE | OBD_MD_FLATIME |
-                                OBD_MD_FLMTIME | OBD_MD_FLCTIME |
-                                OBD_MD_FLFID | OBD_MD_FLGENER;
+                        valid = OBD_MD_FLTYPE | OBD_MD_FLFID | OBD_MD_FLGENER;
 
-                        obdo_from_inode(oa, inode, flags);
+                        if (LTIME_S(attr->ia_mtime) < LTIME_S(attr->ia_ctime)){
+                                struct ost_lvb xtimes;
+
+                                /* setting mtime to past is performed under PW
+                                 * EOF extent lock */
+                                oinfo.oi_policy.l_extent.start = 0;
+                                oinfo.oi_policy.l_extent.end = OBD_OBJECT_EOF;
+                                rc = ll_extent_lock(NULL, inode, lsm, LCK_PW,
+                                                    &oinfo.oi_policy,
+                                                    &lockh, 0);
+                                if (rc)
+                                        RETURN(rc);
+
+                                /* setattr under locks
+                                 *
+                                 * 1. restore inode's timestamps which
+                                 * are about to be set as long as
+                                 * concurrent stat (via
+                                 * ll_glimpse_size) might bring
+                                 * out-of-date ones
+                                 *
+                                 * 2. update lsm so that next stat
+                                 * (via ll_glimpse_size) could get
+                                 * correct values in lsm */
+                                lov_stripe_lock(lli->lli_smd);
+                                if (ia_valid & ATTR_ATIME) {
+                                        LTIME_S(inode->i_atime) =
+                                                xtimes.lvb_atime =
+                                                LTIME_S(attr->ia_atime);
+                                        valid |= OBD_MD_FLATIME;
+                                }
+                                if (ia_valid & ATTR_MTIME) {
+                                        LTIME_S(inode->i_mtime) =
+                                                xtimes.lvb_mtime =
+                                                LTIME_S(attr->ia_mtime);
+                                        valid |= OBD_MD_FLMTIME;
+                                }
+                                if (ia_valid & ATTR_CTIME) {
+                                        LTIME_S(inode->i_ctime) =
+                                                xtimes.lvb_ctime =
+                                                LTIME_S(attr->ia_ctime);
+                                        valid |= OBD_MD_FLCTIME;
+                                }
+
+                                obd_update_lvb(ll_i2obdexp(inode), lli->lli_smd,
+                                               &xtimes, valid);
+                                lov_stripe_unlock(lli->lli_smd);
+                        } else {
+                                /* lockless setattr
+                                 *
+                                 * 1. do not use inode's timestamps
+                                 * because concurrent stat might fill
+                                 * the inode with out-of-date times,
+                                 * send values from attr instead
+                                 *
+                                 * 2.do no update lsm, as long as stat
+                                 * (via ll_glimpse_size) will bring
+                                 * attributes from osts anyway */
+                                if (ia_valid & ATTR_ATIME) {
+                                        oa->o_atime = LTIME_S(attr->ia_atime);
+                                        oa->o_valid |= OBD_MD_FLATIME;
+                                }
+                                if (ia_valid & ATTR_MTIME) {
+                                        oa->o_mtime = LTIME_S(attr->ia_mtime);
+                                        oa->o_valid |= OBD_MD_FLMTIME;
+                                }
+                                if (ia_valid & ATTR_CTIME) {
+                                        oa->o_ctime = LTIME_S(attr->ia_ctime);
+                                        oa->o_valid |= OBD_MD_FLCTIME;
+                                }
+                        }
+
+                        obdo_from_inode(oa, inode, valid);
 
                         oinfo.oi_oa = oa;
                         oinfo.oi_md = lsm;
@@ -1675,6 +1737,19 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         rc = obd_setattr_rqset(sbi->ll_osc_exp, &oinfo, NULL);
                         if (rc)
                                 CERROR("obd_setattr_async fails: rc=%d\n", rc);
+
+                        if (LTIME_S(attr->ia_mtime) < LTIME_S(attr->ia_ctime)){
+                                int err;
+
+                                err = ll_extent_unlock(NULL, inode, lsm,
+                                                       LCK_PW, &lockh);
+                                if (unlikely(err != 0)) {
+                                        CERROR("extent unlock failed: "
+                                               "err=%d\n", err);
+                                        if (rc == 0)
+                                                rc = err;
+                                }
+                        }
                         OBDO_FREE(oa);
                 } else {
                         rc = -ENOMEM;
@@ -1906,23 +1981,24 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         if (body->valid & OBD_MD_FLGENER)
                 inode->i_generation = body->generation;
 
-        if (body->valid & OBD_MD_FLATIME &&
-            body->atime > LTIME_S(inode->i_atime))
-                LTIME_S(inode->i_atime) = body->atime;
-
-        /* mtime is always updated with ctime, but can be set in past.
-           As write and utime(2) may happen within 1 second, and utime's
-           mtime has a priority over write's one, so take mtime from mds
-           for the same ctimes. */
-        if (body->valid & OBD_MD_FLCTIME &&
-            body->ctime >= LTIME_S(inode->i_ctime)) {
-                LTIME_S(inode->i_ctime) = body->ctime;
-                if (body->valid & OBD_MD_FLMTIME) {
-                        CDEBUG(D_INODE, "setting ino %lu mtime "
-                               "from %lu to "LPU64"\n", inode->i_ino,
+        if (body->valid & OBD_MD_FLATIME) {
+                if (body->atime > LTIME_S(inode->i_atime))
+                        LTIME_S(inode->i_atime) = body->atime;
+                lli->lli_lvb.lvb_atime = body->atime;
+        }
+        if (body->valid & OBD_MD_FLMTIME) {
+                if (body->mtime > LTIME_S(inode->i_mtime)) {
+                        CDEBUG(D_INODE, "setting ino %lu mtime from %lu "
+                               "to "LPU64"\n", inode->i_ino,
                                LTIME_S(inode->i_mtime), body->mtime);
                         LTIME_S(inode->i_mtime) = body->mtime;
                 }
+                lli->lli_lvb.lvb_mtime = body->mtime;
+        }
+        if (body->valid & OBD_MD_FLCTIME) {
+                if (body->ctime > LTIME_S(inode->i_ctime))
+                        LTIME_S(inode->i_ctime) = body->ctime;
+                lli->lli_lvb.lvb_ctime = body->ctime;
         }
         if (body->valid & OBD_MD_FLMODE)
                 inode->i_mode = (inode->i_mode & S_IFMT)|(body->mode & ~S_IFMT);

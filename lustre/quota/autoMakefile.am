@@ -41,10 +41,9 @@ libquota_a_CPPFLAGS = $(LLCPPFLAGS)
 libquota_a_CFLAGS = $(LLCFLAGS)
 endif
 
-if MODULES
+if QUOTA
 modulefs_DATA = lquota$(KMODEXT)
 endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
 DIST_SOURCES := $(lquota-objs:%.o=%.c) quota_internal.h
-DIST_SOURCES += quotactl_test.c quotacheck_test.c

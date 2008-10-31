@@ -13,11 +13,19 @@ CLEANUP=${CLEANUP:-""}
 MOUNT_2=${MOUNT_2:-"yes"}
 . $LUSTRE/tests/test-framework.sh
 
+if [ "$FAILURE_MODE" = "HARD" ] && mixed_ost_devs; then
+    CONFIG_EXCEPTIONS="17"
+    echo -n "Several ost services on one ost node are used with FAILURE_MODE=$FAILURE_MODE. "
+    echo "Except the tests: $CONFIG_EXCEPTIONS"
+    ALWAYS_EXCEPT="$ALWAYS_EXCEPT $CONFIG_EXCEPTIONS"
+fi
+
 init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-#
+remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
+
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="1 2 3 4 5 14"
 
 build_test_filter
@@ -314,6 +322,8 @@ test_16() {
 run_test 16 "fail MDS during recovery (3571)"
 
 test_17() {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     createmany -o $MOUNT1/$tfile- 25
     createmany -o $MOUNT2/$tfile-2- 1
 

@@ -40,6 +40,7 @@
 #include <lustre/lustre_idl.h>
 #include <lustre_dlm.h>
 #include <lprocfs_status.h>
+#include <class_hash.h>
 
 struct lu_export_data {
         struct semaphore        led_lcd_lock; /**< protect led_lcd */
@@ -71,11 +72,6 @@ struct osc_creator {
         struct obdo             oscc_oa;
         int                     oscc_flags;
         cfs_waitq_t             oscc_waitq; /* creating procs wait on this */
-};
-
-struct ldlm_export_data {
-        struct list_head       led_held_locks; /* protected by led_lock below */
-        spinlock_t             led_lock;
 };
 
 struct ec_export_data { /* echo client */
@@ -117,6 +113,12 @@ typedef struct nid_stat {
         int                      nid_exp_ref_count;
 } nid_stat_t;
 
+enum obd_option {
+        OBD_OPT_FORCE =         0x0001,
+        OBD_OPT_FAILOVER =      0x0002,
+        OBD_OPT_ABORT_RECOV =   0x0004,
+};
+
 struct obd_export {
         struct portals_handle     exp_handle;
         atomic_t                  exp_refcount;
@@ -134,7 +136,8 @@ struct obd_export {
         struct lprocfs_stats     *exp_ops_stats;
         struct ptlrpc_connection *exp_connection;
         __u32                     exp_conn_cnt;
-        struct ldlm_export_data   exp_ldlm_data;
+        lustre_hash_t            *exp_lock_hash; /* existing lock hash */
+        spinlock_t                exp_lock_hash_lock;
         struct list_head          exp_outstanding_replies;
         struct list_head          exp_uncommitted_replies;
         spinlock_t                exp_uncommitted_replies_lock;
@@ -143,7 +146,7 @@ struct obd_export {
         spinlock_t                exp_lock; /* protects flags int below */
         /* ^ protects exp_outstanding_replies too */
         __u64                     exp_connect_flags;
-        int                       exp_flags;
+        enum obd_option           exp_flags;
         unsigned long             exp_failed:1,
                                   exp_in_recovery:1,
                                   exp_disconnected:1,
@@ -169,6 +172,7 @@ struct obd_export {
 #define exp_mds_data    u.eu_mds_data
 #define exp_filter_data u.eu_filter_data
 #define exp_ec_data     u.eu_ec_data
+
 static inline int exp_expired(struct obd_export *exp, __u32 age)
 {
         LASSERT(exp->exp_delayed);

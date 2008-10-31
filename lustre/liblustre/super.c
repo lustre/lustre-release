@@ -92,12 +92,12 @@ static int ll_permission(struct inode *inode, int mask)
 
         if ((mask & (MAY_READ|MAY_WRITE)) ||
             (st->st_mode & S_IXUGO))
-                if (capable(CAP_DAC_OVERRIDE))
+                if (cfs_capable(CFS_CAP_DAC_OVERRIDE))
                         return 0;
 
         if (mask == MAY_READ ||
             (S_ISDIR(st->st_mode) && !(mask & MAY_WRITE))) {
-                if (capable(CAP_DAC_READ_SEARCH))
+                if (cfs_capable(CFS_CAP_DAC_READ_SEARCH))
                         return 0;
         }
 
@@ -154,19 +154,20 @@ void llu_update_inode(struct inode *inode, struct mds_body *body,
                 st->st_ino = body->ino;
         if (body->valid & OBD_MD_FLGENER)
                 lli->lli_st_generation = body->generation;
-        if (body->valid & OBD_MD_FLATIME &&
-            body->atime > LTIME_S(st->st_atime))
-                LTIME_S(st->st_atime) = body->atime;
-        
-        /* mtime is always updated with ctime, but can be set in past.
-           As write and utime(2) may happen within 1 second, and utime's
-           mtime has a priority over write's one, so take mtime from mds 
-           for the same ctimes. */
-        if (body->valid & OBD_MD_FLCTIME &&
-            body->ctime >= LTIME_S(st->st_ctime)) {
-                LTIME_S(st->st_ctime) = body->ctime;
-                if (body->valid & OBD_MD_FLMTIME)
+        if (body->valid & OBD_MD_FLMTIME) {
+                if (body->mtime > LTIME_S(st->st_mtime))
                         LTIME_S(st->st_mtime) = body->mtime;
+                lli->lli_lvb.lvb_mtime = body->mtime;
+        }
+        if (body->valid & OBD_MD_FLATIME) {
+                if (body->atime > LTIME_S(st->st_atime))
+                        LTIME_S(st->st_atime) = body->atime;
+                lli->lli_lvb.lvb_atime = body->atime;
+        }
+        if (body->valid & OBD_MD_FLCTIME) {
+                if (body->ctime > LTIME_S(st->st_ctime))
+                        LTIME_S(st->st_ctime) = body->ctime;
+                lli->lli_lvb.lvb_ctime = body->ctime;
         }
         if (body->valid & OBD_MD_FLMODE)
                 st->st_mode = (st->st_mode & S_IFMT)|(body->mode & ~S_IFMT);
@@ -421,6 +422,8 @@ static int llu_have_md_lock(struct inode *inode, __u64 lockpart)
 static int llu_inode_revalidate(struct inode *inode)
 {
         struct lov_stripe_md *lsm = NULL;
+        struct llu_inode_info *lli = llu_i2info(inode);
+        struct intnl_stat *st = llu_i2stat(inode);
         ENTRY;
 
         if (!inode) {
@@ -438,7 +441,7 @@ static int llu_inode_revalidate(struct inode *inode)
 
                 /* Why don't we update all valid MDS fields here, if we're
                  * doing an RPC anyways?  -phil */
-                if (S_ISREG(llu_i2stat(inode)->st_mode)) {
+                if (S_ISREG(st->st_mode)) {
                         ealen = obd_size_diskmd(sbi->ll_osc_exp, NULL);
                         valid |= OBD_MD_FLEASIZE;
                 }
@@ -446,7 +449,7 @@ static int llu_inode_revalidate(struct inode *inode)
                 rc = mdc_getattr(sbi->ll_mdc_exp, &fid, valid, ealen, &req);
                 if (rc) {
                         CERROR("failure %d inode %llu\n", rc,
-                               (long long)llu_i2stat(inode)->st_ino);
+                               (long long)st->st_ino);
                         RETURN(-abs(rc));
                 }
                 rc = mdc_req2lustre_md(req, REPLY_REC_OFF, sbi->ll_osc_exp,&md);
@@ -467,18 +470,23 @@ static int llu_inode_revalidate(struct inode *inode)
 
 
                 llu_update_inode(inode, md.body, md.lsm);
-                if (md.lsm != NULL && llu_i2info(inode)->lli_smd != md.lsm)
+                if (md.lsm != NULL && lli->lli_smd != md.lsm)
                         obd_free_memmd(sbi->ll_osc_exp, &md.lsm);
 
                 if (md.body->valid & OBD_MD_FLSIZE)
                         set_bit(LLI_F_HAVE_MDS_SIZE_LOCK,
-                                &llu_i2info(inode)->lli_flags);
+                                &lli->lli_flags);
                 ptlrpc_req_finished(req);
         }
 
-        lsm = llu_i2info(inode)->lli_smd;
-        if (!lsm)       /* object not yet allocated, don't validate size */
+        lsm = lli->lli_smd;
+        if (!lsm) {
+                /* object not yet allocated, don't validate size */
+                st->st_atime = lli->lli_lvb.lvb_atime;
+                st->st_mtime = lli->lli_lvb.lvb_mtime;
+                st->st_ctime = lli->lli_lvb.lvb_ctime;
                 RETURN(0);
+        }
 
         /* ll_glimpse_size will prefer locally cached writes if they extend
          * the file */
@@ -603,7 +611,7 @@ static int inode_setattr(struct inode * inode, struct iattr * attr)
                 st->st_ctime = attr->ia_ctime;
         if (ia_valid & ATTR_MODE) {
                 st->st_mode = attr->ia_mode;
-                if (!in_group_p(st->st_gid) && !capable(CAP_FSETID))
+                if (!in_group_p(st->st_gid) && !cfs_capable(CFS_CAP_FSETID))
                         st->st_mode &= ~S_ISGID;
         }
         /* mark_inode_dirty(inode); */
@@ -659,16 +667,6 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
         if (!(ia_valid & ATTR_MTIME_SET) && (attr->ia_valid & ATTR_MTIME)) {
                 attr->ia_mtime = CURRENT_TIME;
                 attr->ia_valid |= ATTR_MTIME_SET;
-        }
-        if ((attr->ia_valid & ATTR_CTIME) && !(attr->ia_valid & ATTR_MTIME)) {
-                /* To avoid stale mtime on mds, obtain it from ost and send 
-                   to mds. */
-                rc = llu_glimpse_size(inode);
-                if (rc) 
-                        RETURN(rc);
-                
-                attr->ia_valid |= ATTR_MTIME_SET | ATTR_MTIME;
-                attr->ia_mtime = inode->i_stbuf.st_mtime;
         }
 
         if (attr->ia_valid & (ATTR_MTIME | ATTR_CTIME))
@@ -729,7 +727,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                         } else {
                                 /* from inode_change_ok() */
                                 if (current->fsuid != st->st_uid &&
-                                    !capable(CAP_FOWNER))
+                                    !cfs_capable(CFS_CAP_FOWNER))
                                         RETURN(-EPERM);
                         }
                 }
@@ -790,14 +788,86 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
         } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
                 struct obd_info oinfo = { { { 0 } } };
                 struct obdo oa;
+                struct lustre_handle lockh = { 0 };
+                obd_valid valid;
 
                 CDEBUG(D_INODE, "set mtime on OST inode %llu to %lu\n",
                        (long long)st->st_ino, LTIME_S(attr->ia_mtime));
+
                 oa.o_id = lsm->lsm_object_id;
                 oa.o_valid = OBD_MD_FLID;
 
-                obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
-                                            OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+                valid = OBD_MD_FLTYPE;
+
+                if (LTIME_S(attr->ia_mtime) < LTIME_S(attr->ia_ctime)){
+                        struct ost_lvb xtimes;
+
+                        /* setting mtime to past is performed under PW
+                         * EOF extent lock */
+                        oinfo.oi_policy.l_extent.start = 0;
+                        oinfo.oi_policy.l_extent.end = OBD_OBJECT_EOF;
+                        rc = llu_extent_lock(NULL, inode, lsm, LCK_PW,
+                                             &oinfo.oi_policy,
+                                             &lockh, 0);
+                        if (rc)
+                                RETURN(rc);
+
+                        /* setattr under locks
+                         *
+                         * 1. restore inode's timestamps which are
+                         * about to be set as long as concurrent stat
+                         * (via llu_glimpse_size) might bring
+                         * out-of-date ones
+                         *
+                         * 2. update lsm so that next stat (via
+                         * llu_glimpse_size) could get correct values
+                         * in lsm */
+                        lov_stripe_lock(lsm);
+                        if (ia_valid & ATTR_ATIME) {
+                                st->st_atime = xtimes.lvb_atime =
+                                        attr->ia_atime;
+                                valid |= OBD_MD_FLATIME;
+                        }
+                        if (ia_valid & ATTR_MTIME) {
+                                st->st_mtime = xtimes.lvb_mtime =
+                                        attr->ia_mtime;
+                                valid |= OBD_MD_FLMTIME;
+                        }
+                        if (ia_valid & ATTR_CTIME) {
+                                st->st_ctime = xtimes.lvb_ctime =
+                                        attr->ia_mtime;
+                                valid |= OBD_MD_FLCTIME;
+                        }
+
+                        obd_update_lvb(sbi->ll_osc_exp, lsm,
+                                       &xtimes, valid);
+                        lov_stripe_unlock(lsm);
+                } else {
+                        /* lockless setattr
+                         *
+                         * 1. do not use inode's timestamps because
+                         * concurrent stat might fill the inode with
+                         * out-of-date times, send values from attr
+                         * instead
+                         *
+                         * 2.do no update lsm, as long as stat (via
+                         * ll_glimpse_size) will bring attributes from
+                         * osts anyway */
+                        if (ia_valid & ATTR_ATIME) {
+                                oa.o_atime = attr->ia_atime;
+                                oa.o_valid |= OBD_MD_FLATIME;
+                        }
+                        if (ia_valid & ATTR_MTIME) {
+                                oa.o_mtime = attr->ia_mtime;
+                                oa.o_valid |= OBD_MD_FLMTIME;
+                        }
+                        if (ia_valid & ATTR_CTIME) {
+                                oa.o_ctime = attr->ia_ctime;
+                                oa.o_valid |= OBD_MD_FLCTIME;
+                        }
+                }
+
+                obdo_from_inode(&oa, inode, valid);
 
                 oinfo.oi_oa = &oa;
                 oinfo.oi_md = lsm;
@@ -805,6 +875,19 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                 rc = obd_setattr_rqset(sbi->ll_osc_exp, &oinfo, NULL);
                 if (rc)
                         CERROR("obd_setattr_async fails: rc=%d\n", rc);
+
+                if (LTIME_S(attr->ia_mtime) < LTIME_S(attr->ia_ctime)){
+                        int err;
+
+                        err = llu_extent_unlock(NULL, inode, lsm,
+                                               LCK_PW, &lockh);
+                        if (unlikely(err != 0)) {
+                                CERROR("extent unlock failed: "
+                                       "err=%d\n", err);
+                                if (rc == 0)
+                                        rc = err;
+                        }
+                }
         }
         RETURN(rc);
 }
@@ -880,10 +963,9 @@ static int llu_iop_symlink_raw(struct pnode *pno, const char *tgt)
                 RETURN(err);
 
         llu_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
-        err = mdc_create(sbi->ll_mdc_exp, &op_data,
-                         tgt, strlen(tgt) + 1, S_IFLNK | S_IRWXUGO,
-                         current->fsuid, current->fsgid, current->cap_effective,
-                         0, &request);
+        err = mdc_create(sbi->ll_mdc_exp, &op_data, tgt, strlen(tgt) + 1,
+                         S_IFLNK | S_IRWXUGO, current->fsuid, current->fsgid,
+                         cfs_curproc_cap_pack(), 0, &request);
         ptlrpc_req_finished(request);
         liblustre_wait_event(0);
         RETURN(err);
@@ -1012,7 +1094,7 @@ static int llu_iop_mknod_raw(struct pnode *pno,
                                         0);
                 err = mdc_create(sbi->ll_mdc_exp, &op_data, NULL, 0, mode,
                                  current->fsuid, current->fsgid,
-                                 current->cap_effective, dev, &request);
+                                 cfs_curproc_cap_pack(), dev, &request);
                 ptlrpc_req_finished(request);
                 break;
         case S_IFDIR:
@@ -1240,9 +1322,9 @@ static int llu_iop_mkdir_raw(struct pnode *pno, mode_t mode)
                 RETURN(err);
 
         llu_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
-        err = mdc_create(llu_i2sbi(dir)->ll_mdc_exp, &op_data, NULL, 0, mode | S_IFDIR,
-                         current->fsuid, current->fsgid, current->cap_effective,
-                         0, &request);
+        err = mdc_create(llu_i2sbi(dir)->ll_mdc_exp, &op_data, NULL, 0,
+                         mode | S_IFDIR, current->fsuid, current->fsgid,
+                         cfs_curproc_cap_pack(), 0, &request);
         ptlrpc_req_finished(request);
         liblustre_wait_event(0);
         RETURN(err);

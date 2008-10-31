@@ -107,6 +107,9 @@ struct llu_inode_info {
         /* not for stat, change it later */
         int                     lli_st_flags;
         unsigned long           lli_st_generation;
+        /* the most recent attributes from mds, it is used for timestampts
+         * only so far */
+        struct ost_lvb         lli_lvb;
 };
 
 static inline struct llu_sb_info *llu_fs2sbi(struct filesys *fs)

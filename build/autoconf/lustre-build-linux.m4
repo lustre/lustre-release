@@ -111,7 +111,7 @@ LB_LINUX_TRY_COMPILE([
 		RHEL_KENEL="yes"
 		AC_MSG_RESULT([yes])
 	],[
-	        AC_MSG_RESULT([no])
+		AC_MSG_RESULT([no])
 ])
 
 AC_MSG_CHECKING([that SuSe kernel])
@@ -125,7 +125,7 @@ LB_LINUX_TRY_COMPILE([
 		SUSE_KERNEL="yes"
 		AC_MSG_RESULT([yes])
 	],[
-	        AC_MSG_RESULT([no])
+		AC_MSG_RESULT([no])
 ])
 
 ])
@@ -345,7 +345,7 @@ $2
 AC_DEFUN([LB_LINUX_COMPILE_IFELSE],
 [m4_ifvaln([$1], [LB_LINUX_CONFTEST([$1])])dnl
 rm -f build/conftest.o build/conftest.mod.c build/conftest.ko
-AS_IF([AC_TRY_COMMAND(cp conftest.c build && make [$2] CC="$CC" -f $PWD/build/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="$EXTRA_LNET_INCLUDE -I$LINUX/include -I$LINUX_OBJ/include -I$LINUX_OBJ/include2 -include include/linux/autoconf.h" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $ARCH_UM $MODULE_TARGET=$PWD/build) >/dev/null && AC_TRY_COMMAND([$3])],
+AS_IF([AC_TRY_COMMAND(cp conftest.c build && make -d [$2] ${LD:+"LD=$LD"} CC="$CC" -f $PWD/build/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="$EXTRA_LNET_INCLUDE -I$LINUX/include -I$LINUX_OBJ/include -I$LINUX_OBJ/include2 -include include/linux/autoconf.h" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $ARCH_UM $MODULE_TARGET=$PWD/build) >/dev/null && AC_TRY_COMMAND([$3])],
 	[$4],
 	[_AC_MSG_LOG_CONFTEST
 m4_ifvaln([$5],[$5])dnl])dnl
@@ -462,6 +462,11 @@ AC_DEFUN([LB_PROG_LINUX],
 LB_LINUX_ARCH
 LB_LINUX_SYMVERFILE
 
+#if test $LINUX_ARCH == "powerpc64"; then
+#	AC_MSG_WARN([set compiler with -m64])
+#	CFLAGS="$CFLAGS -m64"
+#	CC="$CC -m64"
+#fi
 
 LB_LINUX_CONFIG([MODULES],[],[
 	AC_MSG_ERROR([module support is required to build Lustre kernel modules.])
@@ -501,14 +506,14 @@ AC_DEFUN([LB_LINUX_CONDITIONALS],
 
 #
 # LB_CHECK_SYMBOL_EXPORT
-# check symbol exported or not 
+# check symbol exported or not
 # $1 - symbol
 # $2 - file(s) for find.
 # $3 - do 'yes'
 # $4 - do 'no'
 #
 # 2.6 based kernels - put modversion info into $LINUX/Module.modvers
-# or check 
+# or check
 AC_DEFUN([LB_CHECK_SYMBOL_EXPORT],
 [AC_MSG_CHECKING([if Linux was built with symbol $1 is exported])
 grep -q -E '[[[:space:]]]$1[[[:space:]]]' $LINUX/$SYMVERFILE 2>/dev/null
@@ -516,7 +521,7 @@ rc=$?
 if test $rc -ne 0; then
     export=0
     for file in $2; do
-    	grep -q -E "EXPORT_SYMBOL.*($1)" "$LINUX/$file" 2>/dev/null
+    	grep -q -E "EXPORT_SYMBOL.*\($1\)" "$LINUX/$file" 2>/dev/null
     	rc=$?
 	if test $rc -eq 0; then
 		export=1

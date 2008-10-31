@@ -638,10 +638,11 @@ static void cleanup_obdclass(void)
         cfs_mem_cache_destroy(obd_lvfs_ctxt_cache);
 
         lprocfs_free_stats(&obd_memory);
-        CDEBUG((memory_leaked | pages_leaked) ? D_ERROR : D_INFO,
-               "obd_memory max: "LPU64", leaked: "LPU64" "
+        CDEBUG((memory_leaked) ? D_ERROR : D_INFO,
+               "obd_memory max: "LPU64", leaked: "LPU64"\n",
+               memory_max, memory_leaked);
+        CDEBUG((pages_leaked) ? D_ERROR : D_INFO,
                "obd_memory_pages max: "LPU64", leaked: "LPU64"\n",
-               memory_max, memory_leaked,
                pages_max, pages_leaked);
 
         EXIT;

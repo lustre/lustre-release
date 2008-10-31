@@ -904,7 +904,7 @@ static int check_write_rcs(struct ptlrpc_request *req,
 
         if (req->rq_bulk->bd_nob_transferred != requested_nob) {
                 CERROR("Unexpected # bytes transferred: %d (requested %d)\n",
-                       requested_nob, req->rq_bulk->bd_nob_transferred);
+                       req->rq_bulk->bd_nob_transferred, requested_nob);
                 return(-EPROTO);
         }
 
@@ -2010,6 +2010,7 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
         void *caller_data = NULL;
         struct osc_async_page *oap;
         struct ldlm_lock *lock = NULL;
+        obd_valid valid;
         int i, rc;
 
         ENTRY;
@@ -2051,14 +2052,32 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
                 CERROR("prep_req failed: %d\n", rc);
                 GOTO(out, req = ERR_PTR(rc));
         }
+        oa = &((struct ost_body *)lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF,
+                                                 sizeof(struct ost_body)))->oa;
 
         /* Need to update the timestamps after the request is built in case
          * we race with setattr (locally or in queue at OST).  If OST gets
          * later setattr before earlier BRW (as determined by the request xid),
          * the OST will not use BRW timestamps.  Sadly, there is no obvious
          * way to do this in a single call.  bug 10150 */
-        ops->ap_update_obdo(caller_data, cmd, oa,
-                            OBD_MD_FLMTIME | OBD_MD_FLCTIME | OBD_MD_FLATIME);
+        if (pga[0]->flag & OBD_BRW_SRVLOCK) {
+                /* in case of lockless read/write do not use inode's
+                 * timestamps because concurrent stat might fill the
+                 * inode with out-of-date times, send current
+                 * instead */
+                if (cmd & OBD_BRW_WRITE) {
+                        oa->o_mtime = oa->o_ctime = LTIME_S(CURRENT_TIME);
+                        oa->o_valid |= OBD_MD_FLMTIME | OBD_MD_FLCTIME;
+                        valid = OBD_MD_FLATIME;
+                } else {
+                        oa->o_atime = LTIME_S(CURRENT_TIME);
+                        oa->o_valid |= OBD_MD_FLATIME;
+                        valid = OBD_MD_FLMTIME | OBD_MD_FLCTIME;
+                }
+        } else {
+                valid = OBD_MD_FLMTIME | OBD_MD_FLCTIME | OBD_MD_FLATIME;
+        }
+        ops->ap_update_obdo(caller_data, cmd, oa, valid);
 
         CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
         aa = ptlrpc_req_async_args(req);
@@ -2586,7 +2605,6 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
                 RETURN(-EBUSY);
 
         /* check if the file's owner/group is over quota */
-#ifdef HAVE_QUOTA_SUPPORT
         if ((cmd & OBD_BRW_WRITE) && !(cmd & OBD_BRW_NOQUOTA)){
                 struct obd_async_page_ops *ops;
                 struct obdo *oa;
@@ -2605,7 +2623,6 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
                 if (rc)
                         RETURN(rc);
         }
-#endif
 
         if (loi == NULL)
                 loi = lsm->lsm_oinfo[0];
@@ -3467,7 +3484,7 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_DESTROY: {
                 struct obdo            *oa;
 
-                if (!capable (CAP_SYS_ADMIN))
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, err = -EPERM);
                 oa = &data->ioc_obdo1;
 
@@ -3706,8 +3723,13 @@ static int osc_llog_init(struct obd_device *obd, struct obd_device *tgt,
 
         rc = llog_setup(obd, LLOG_SIZE_REPL_CTXT, tgt, count, NULL,
                         &osc_size_repl_logops);
-        if (rc)
+        if (rc) {
+                struct llog_ctxt *ctxt = 
+                        llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
+                if (ctxt)
+                        llog_cleanup(ctxt);
                 CERROR("failed LLOG_SIZE_REPL_CTXT\n");
+        }
 out:
         if (rc) {
                 CERROR("osc '%s' tgt '%s' cnt %d catid %p rc=%d\n",

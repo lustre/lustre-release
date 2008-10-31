@@ -406,7 +406,7 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int flags)
         }
 
         if (req->rq_export == NULL || req->rq_export->exp_connection == NULL)
-                conn = ptlrpc_get_connection(req->rq_peer, req->rq_self, NULL);
+                conn = ptlrpc_connection_get(req->rq_peer, req->rq_self, NULL);
         else
                 conn = ptlrpc_connection_addref(req->rq_export->exp_connection);
 
@@ -427,7 +427,7 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int flags)
                 atomic_dec (&svc->srv_outstanding_replies);
                 ptlrpc_req_drop_rs(req);
         }
-        ptlrpc_put_connection(conn);
+        ptlrpc_connection_put(conn);
         return rc;
 }
 
@@ -482,6 +482,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                        request->rq_import->imp_obd->obd_name);
                 /* this prevents us from waiting in ptlrpc_queue_wait */
                 request->rq_err = 1;
+                request->rq_status = -ENODEV;
                 RETURN(-ENODEV);
         }
 
@@ -505,8 +506,12 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                 LASSERT (request->rq_replen != 0);
                 if (request->rq_repbuf == NULL)
                         OBD_ALLOC(request->rq_repbuf, request->rq_replen);
-                if (request->rq_repbuf == NULL)
+                if (request->rq_repbuf == NULL) {
+                        /* this prevents us from looping in ptlrpc_queue_wait */
+                        request->rq_err = 1;
+                        request->rq_status = -ENOMEM;
                         GOTO(cleanup_bulk, rc = -ENOMEM);
+                }
                 request->rq_repmsg = NULL;
 
                 rc = LNetMEAttach(request->rq_reply_portal,/*XXX FIXME bug 249*/
@@ -531,6 +536,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
         request->rq_net_err = 0;
         request->rq_resend = 0;
         request->rq_restart = 0;
+        request->rq_rep_swab_mask = 0;
         spin_unlock(&request->rq_lock);
 
         if (!noreply) {

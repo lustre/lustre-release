@@ -60,7 +60,9 @@
 #include <dirent.h>
 #include <time.h>
 #include <ctype.h>
+#ifdef HAVE_SYS_QUOTA_H
 #include <sys/quota.h>
+#endif
 
 #include <lnet/api-support.h>
 #include <lnet/lnetctl.h>
@@ -83,7 +85,7 @@ static int lfs_osts(int argc, char **argv);
 static int lfs_df(int argc, char **argv);
 static int lfs_check(int argc, char **argv);
 static int lfs_catinfo(int argc, char **argv);
-#ifdef HAVE_QUOTA_SUPPORT
+#ifdef HAVE_SYS_QUOTA_H
 static int lfs_quotachown(int argc, char **argv);
 static int lfs_quotacheck(int argc, char **argv);
 static int lfs_quotaon(int argc, char **argv);
@@ -149,7 +151,7 @@ command_t cmdlist[] = {
          "report filesystem disk space usage or inodes usage"
          "of each MDS/OSD.\n"
          "Usage: df [-i] [-h] [path]"},
-#ifdef HAVE_QUOTA_SUPPORT
+#ifdef HAVE_SYS_QUOTA_H
         {"quotachown",lfs_quotachown, 0,
          "Change files' owner or group on the specified filesystem.\n"
          "usage: quotachown [-i] <filesystem>\n"
@@ -188,6 +190,21 @@ command_t cmdlist[] = {
         { 0, 0, 0, NULL }
 };
 
+static int isnumber(const char *str)
+{
+        const char *ptr;
+
+        if (str[0] != '-' && !isdigit(str[0]))
+                return 0;
+
+        for (ptr = str + 1; *ptr != '\0'; ptr++) {
+                if (!isdigit(*ptr))
+                        return 0;
+        }
+
+        return 1;
+}
+
 /* functions */
 static int lfs_setstripe(int argc, char **argv)
 {
@@ -217,15 +234,12 @@ static int lfs_setstripe(int argc, char **argv)
         st_size = 0;
         st_offset = -1;
         st_count = 0;
-        if (argc == 3 && strcmp(argv[1], "-d") == 0) {
-                /* for compatibility with the existing positional parameter
-                 * usage */
-                fname = argv[2];
-                optind = 2;
-        } else if (argc == 5  &&
-                   (argv[2][0] != '-' || isdigit(argv[2][1])) &&
-                   (argv[3][0] != '-' || isdigit(argv[3][1])) &&
-                   (argv[4][0] != '-' || isdigit(argv[4][1])) ) {
+
+#if LUSTRE_VERSION < OBD_OCD_VERSION(2,1,0,0)
+        if (argc == 5 && argv[1][0] != '-' &&
+            isnumber(argv[2]) && isnumber(argv[3]) && isnumber(argv[4])) {
+                fprintf(stderr, "warning: deprecated usage of setstripe "
+                        "positional parameters.  Use -c, -i, -s instead.\n");
                 /* for compatibility with the existing positional parameter
                  * usage */
                 fname = argv[1];
@@ -233,10 +247,14 @@ static int lfs_setstripe(int argc, char **argv)
                 stripe_off_arg = argv[3];
                 stripe_count_arg = argv[4];
                 optind = 4;
-        } else {
+        } else
+#else
+#warning "remove obsolete positional parameter code"
+#endif
+        {
                 optind = 0;
                 while ((c = getopt_long(argc, argv, "c:di:o:s:p:",
-                                                long_opts, NULL)) >= 0) {
+                                        long_opts, NULL)) >= 0) {
                         switch (c) {
                         case 0:
                                 /* Long options. */
@@ -268,10 +286,7 @@ static int lfs_setstripe(int argc, char **argv)
                         }
                 }
 
-                if (optind < argc)
-                        fname = argv[optind];
-                else
-                        return CMD_HELP;
+                fname = argv[optind];
 
                 if (delete &&
                     (stripe_size_arg != NULL || stripe_off_arg != NULL ||
@@ -283,10 +298,9 @@ static int lfs_setstripe(int argc, char **argv)
                 }
         }
 
-        if (optind != argc - 1) {
-                fprintf(stderr, "error: %s: only 1 filename|dirname can be "
-                                "specified: '%s'\n",
-                                argv[0], argv[argc-1]);
+        if (optind == argc) {
+                fprintf(stderr, "error: %s: missing filename|dirname\n",
+                        argv[0]);
                 return CMD_HELP;
         }
 
@@ -294,8 +308,8 @@ static int lfs_setstripe(int argc, char **argv)
         if (stripe_size_arg != NULL) {
                 result = parse_size(stripe_size_arg, &st_size, &size_units, 0);
                 if (result) {
-                        fprintf(stderr,"error: bad size '%s'\n",
-                                stripe_size_arg);
+                        fprintf(stderr, "error: %s: bad size '%s'\n",
+                                argv[0], stripe_size_arg);
                         return result;
                 }
         }
@@ -318,15 +332,16 @@ static int lfs_setstripe(int argc, char **argv)
                 }
         }
 
-        if (pool_name_arg == NULL)
-                result = llapi_file_create(fname, st_size, st_offset, st_count, 0);
-        else
+        do {
                 result = llapi_file_create_pool(fname, st_size, st_offset,
                                                 st_count, 0, pool_name_arg);
-
-        if (result)
-                fprintf(stderr, "error: %s: create stripe file failed\n",
-                                argv[0]);
+                if (result) {
+                        fprintf(stderr,"error: %s: create stripe file '%s' "
+                                "failed\n", argv[0], fname);
+                        break;
+                }
+                fname = argv[++optind];
+        } while (fname != NULL);
 
         return result;
 }
@@ -364,9 +379,12 @@ static int set_time(time_t *time, time_t *set, char *str)
         return res;
 }
 
+#define USER 0
+#define GROUP 1
+
 static int name2id(unsigned int *id, char *name, int type)
 {
-        if (type == USRQUOTA) {
+        if (type == USER) {
                 struct passwd *entry;
 
                 if (!(entry = getpwnam(name))) {
@@ -393,7 +411,7 @@ static int name2id(unsigned int *id, char *name, int type)
 
 static int id2name(char **name, unsigned int id, int type)
 {
-        if (type == USRQUOTA) {
+        if (type == USER) {
                 struct passwd *entry;
 
                 if (!(entry = getpwuid(id))) {
@@ -463,6 +481,7 @@ static int lfs_find(int argc, char **argv)
         time(&t);
 
         optind = 0;
+        /* when getopt_long_only() hits '!' it returns 1 and puts "!" in optarg */
         while ((c = getopt_long_only(argc, argv, "-A:C:D:g:G:M:n:PpO:qrs:t:u:U:v",
                                      long_opts, NULL)) >= 0) {
                 xtime = NULL;
@@ -470,6 +489,12 @@ static int lfs_find(int argc, char **argv)
                 if (neg_opt)
                         --neg_opt;
                 /* '!' is part of option */
+                /* when getopt_long_only() finds a string which is not
+                 * an option nor a known option argument it returns 1
+                 * in that case if we already have found pathstart and pathend
+                 * (i.e. we have the list of pathnames),
+                 * the only supported value is "!"
+                 */
                 isoption = (c != 1) || (strcmp(optarg, "!") == 0);
                 if (!isoption && pathend != -1) {
                         fprintf(stderr, "err: %s: filename|dirname must either "
@@ -491,6 +516,9 @@ static int lfs_find(int argc, char **argv)
                         /* Long options. */
                         break;
                 case 1:
+                        /* unknown; opt is "!" or path component,
+                         * checking done above.
+                         */
                         if (strcmp(optarg, "!") == 0)
                                 neg_opt = 2;
                       break;
@@ -544,7 +572,7 @@ static int lfs_find(int argc, char **argv)
                         new_fashion = 1;
                         param.gid = strtol(optarg, &endptr, 10);
                         if (optarg == endptr) {
-                                ret = name2id(&param.gid, optarg, GRPQUOTA);
+                                ret = name2id(&param.gid, optarg, GROUP);
                                 if (ret != 0) {
                                         fprintf(stderr, "Group/GID: %s cannot "
                                                 "be found.\n", optarg);
@@ -568,7 +596,7 @@ static int lfs_find(int argc, char **argv)
                         new_fashion = 1;
                         param.uid = strtol(optarg, &endptr, 10);
                         if (optarg == endptr) {
-                                ret = name2id(&param.uid, optarg, USRQUOTA);
+                                ret = name2id(&param.uid, optarg, USER);
                                 if (ret != 0) {
                                         fprintf(stderr, "User/UID: %s cannot "
                                                 "be found.\n", optarg);
@@ -580,17 +608,17 @@ static int lfs_find(int argc, char **argv)
                         break;
                 case FIND_POOL_OPT:
                         new_fashion = 1;
-                        if (strlen(optarg) > MAXPOOLNAME) {
+                        if (strlen(optarg) > LOV_MAXPOOLNAME) {
                                 fprintf(stderr,
                                         "Pool name %s is too long"
                                         " (max is %d)\n", optarg,
-                                        MAXPOOLNAME);
+                                        LOV_MAXPOOLNAME);
                                 return -1;
                         }
                         /* we do check for empty pool because empty pool
                          * is used to find V1 lov attributes */
-                        strncpy(param.poolname, optarg, MAXPOOLNAME);
-                        param.poolname[MAXPOOLNAME] = '\0';
+                        strncpy(param.poolname, optarg, LOV_MAXPOOLNAME);
+                        param.poolname[LOV_MAXPOOLNAME] = '\0';
                         param.exclude_pool = !!neg_opt;
                         param.check_pool = 1;
                         break;
@@ -610,7 +638,7 @@ static int lfs_find(int argc, char **argv)
                         strcpy(buf, (char *)optarg);
 
                         if (param.num_alloc_obds == 0) {
-                                param.obduuid = (struct obd_uuid *)malloc(FIND_MAX_OSTS *
+                                param.obduuid = malloc(FIND_MAX_OSTS *
                                                        sizeof(struct obd_uuid));
                                 if (param.obduuid == NULL)
                                         return -ENOMEM;
@@ -1252,7 +1280,7 @@ out:
         return rc;
 }
 
-#ifdef HAVE_QUOTA_SUPPORT
+#ifdef HAVE_SYS_QUOTA_H
 static int lfs_quotachown(int argc, char **argv)
 {
 
@@ -1278,7 +1306,6 @@ static int lfs_quotachown(int argc, char **argv)
                 fprintf(stderr,"error: change file owner/group failed.\n");
         return rc;
 }
-
 
 static int lfs_quotacheck(int argc, char **argv)
 {
@@ -1320,6 +1347,8 @@ static int lfs_quotacheck(int argc, char **argv)
         memset(&qctl, 0, sizeof(qctl));
         qctl.qc_cmd = LUSTRE_Q_QUOTAOFF;
         qctl.qc_type = check_type;
+        qctl.qc_id = QFMT_LDISKFS; /* compatibility: 1.6.5 and earliers
+                                    * take this parameter into account */
         rc = llapi_quotactl(mnt, &qctl);
         if (rc) {
                 fprintf(stderr, "quota off failed: %s\n", strerror(errno));
@@ -1344,6 +1373,8 @@ static int lfs_quotacheck(int argc, char **argv)
         memset(&qctl, 0, sizeof(qctl));
         qctl.qc_cmd = LUSTRE_Q_QUOTAON;
         qctl.qc_type = check_type;
+        qctl.qc_id = QFMT_LDISKFS; /* compatibility: 1.6.5 and earliers
+                                    * take this parameter into account */
         rc = llapi_quotactl(mnt, &qctl);
         if (rc) {
                 if (*obd_type)
@@ -1367,6 +1398,8 @@ static int lfs_quotaon(int argc, char **argv)
 
         memset(&qctl, 0, sizeof(qctl));
         qctl.qc_cmd = LUSTRE_Q_QUOTAON;
+        qctl.qc_id = QFMT_LDISKFS; /* compatibility: 1.6.5 and earliers
+                                    * take this parameter into account */
 
         optind = 0;
         while ((c = getopt(argc, argv, "ugf")) != -1) {
@@ -1635,11 +1668,11 @@ int lfs_setquota_times(int argc, char **argv)
                 qctl.qc_type = !strcmp(argv[2], "-u") ? USRQUOTA : GRPQUOTA;
 
                 if ((dqi->dqi_bgrace = str2sec(argv[3])) == ULONG_MAX) {
-                        fprintf(stderr, "error: bad block-grace: %s\n", optarg);
+                        fprintf(stderr, "error: bad block-grace: %s\n", argv[3]);
                         return CMD_HELP;
                 }
                 if ((dqi->dqi_igrace = str2sec(argv[4])) == ULONG_MAX) {
-                        fprintf(stderr, "error: bad inode-grace: %s\n", optarg);
+                        fprintf(stderr, "error: bad inode-grace: %s\n", argv[4]);
                         return CMD_HELP;
                 }
                 dqb->dqb_valid = QIF_TIMES;
@@ -1751,9 +1784,10 @@ int lfs_setquota(int argc, char **argv)
                                 " be available in future releases!\n");
 
                 qctl.qc_type = !strcmp(argv[1], "-u") ? USRQUOTA : GRPQUOTA;
-                rc = name2id(&qctl.qc_id, argv[2], qctl.qc_type);
+                rc = name2id(&qctl.qc_id, argv[2],
+                             (qctl.qc_type == USRQUOTA) ? USER : GROUP);
                 if (rc) {
-                        fprintf(stderr, "error: unknown id %s\n", optarg);
+                        fprintf(stderr, "error: unknown id %s\n", argv[2]);
                         return CMD_HELP;
                 }
 
@@ -1781,7 +1815,8 @@ int lfs_setquota(int argc, char **argv)
                                 return CMD_HELP;
                         }
                         qctl.qc_type = (c == 'u') ? USRQUOTA : GRPQUOTA;
-                        rc = name2id(&qctl.qc_id, optarg, qctl.qc_type);
+                        rc = name2id(&qctl.qc_id, optarg,
+                                     (qctl.qc_type == USRQUOTA) ? USER : GROUP);
                         if (rc) {
                                 fprintf(stderr, "error: unknown id %s\n",
                                         optarg);
@@ -2155,7 +2190,8 @@ ug_output:
                         qctl.qc_type = GRPQUOTA;
                         qctl.qc_id = getegid();
                 }
-                rc = id2name(&name, qctl.qc_id, qctl.qc_type);
+                rc = id2name(&name, qctl.qc_id,
+                             (qctl.qc_type == USRQUOTA) ? USER : GROUP);
                 if (rc)
                         name = "<unknown>";
         } else if (qctl.qc_cmd == LUSTRE_Q_GETQUOTA) {
@@ -2165,7 +2201,8 @@ ug_output:
                 }
 
                 name = argv[optind++];
-                rc = name2id(&qctl.qc_id, name, qctl.qc_type);
+                rc = name2id(&qctl.qc_id, name,
+                             (qctl.qc_type == USRQUOTA) ? USER : GROUP);
                 if (rc) {
                         fprintf(stderr,"error: can't find id for name %s: %s\n",
                                 name, strerror(errno));
@@ -2211,7 +2248,7 @@ out:
 
         return 0;
 }
-#endif /* HAVE_QUOTA_SUPPORT */
+#endif /* HAVE_SYS_QUOTA_H! */
 
 int main(int argc, char **argv)
 {

@@ -39,4 +39,4 @@ modulefs_DATA = obdfilter$(KMODEXT)
 endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
-DIST_SOURCES = $(obdfilter-objs:%.o=%.c) filter_io_24.c filter_io_26.c filter_internal.h
+DIST_SOURCES = $(obdfilter-objs:%.o=%.c) filter_io_26.c filter_internal.h

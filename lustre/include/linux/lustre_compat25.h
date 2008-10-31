@@ -608,5 +608,28 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 #define cpu_to_node(cpu)         0
 #endif
 
+#ifndef abs
+static inline int abs(int x)
+{
+        return (x < 0) ? -x : x;
+}
+#endif
+
+#ifndef labs
+static inline long labs(long x)
+{
+        return (x < 0) ? -x : x;
+}
+#endif
+
+/* Using kernel fls(). Userspace will use one defined in user-bitops.h. */
+#ifndef __fls
+#define __fls fls
+#endif
+
+#ifdef HAVE_INVALIDATE_INODE_PAGES
+#define invalidate_mapping_pages(mapping,s,e) invalidate_inode_pages(mapping)
+#endif
+
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */

@@ -112,7 +112,7 @@ int xattr_type_filter(struct ll_sb_info *sbi, int xattr_type)
 
         if (xattr_type == XATTR_USER_T && !(sbi->ll_flags & LL_SBI_USER_XATTR))
                 return -EOPNOTSUPP;
-        if (xattr_type == XATTR_TRUSTED_T && !capable(CAP_SYS_ADMIN))
+        if (xattr_type == XATTR_TRUSTED_T && !cfs_capable(CFS_CAP_SYS_ADMIN))
                 return -EPERM;
         if (xattr_type == XATTR_OTHER_T)
                 return -EOPNOTSUPP;
@@ -148,7 +148,7 @@ int ll_setxattr_common(struct inode *inode, const char *name,
         if (rc) {
                 if (rc == -EOPNOTSUPP && xattr_type == XATTR_USER_T) {
                         LCONSOLE_INFO("Disabling user_xattr feature because "
-                                      "it is not supported on the server\n"); 
+                                      "it is not supported on the server\n");
                         sbi->ll_flags &= ~LL_SBI_USER_XATTR;
                 }
                 RETURN(rc);
@@ -171,10 +171,10 @@ int ll_setxattr(struct dentry *dentry, const char *name,
 
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_SETXATTR, 1);
 
-        if ((strncmp(name, XATTR_TRUSTED_PREFIX, 
+        if ((strncmp(name, XATTR_TRUSTED_PREFIX,
                     sizeof(XATTR_TRUSTED_PREFIX) - 1) == 0 &&
              strcmp(name + sizeof(XATTR_TRUSTED_PREFIX) - 1, "lov") == 0) ||
-            (strncmp(name, XATTR_LUSTRE_PREFIX, 
+            (strncmp(name, XATTR_LUSTRE_PREFIX,
                     sizeof(XATTR_LUSTRE_PREFIX) - 1) == 0 &&
              strcmp(name + sizeof(XATTR_LUSTRE_PREFIX) - 1, "lov") == 0)) {
                 struct lov_user_md *lump = (struct lov_user_md *)value;
@@ -183,16 +183,16 @@ int ll_setxattr(struct dentry *dentry, const char *name,
                 if (S_ISREG(inode->i_mode)) {
                         struct file f;
                         int flags = FMODE_WRITE;
-                        
+
                         f.f_dentry = dentry;
-                        rc = ll_lov_setstripe_ea_info(inode, &f, flags, 
+                        rc = ll_lov_setstripe_ea_info(inode, &f, flags,
                                                       lump, sizeof(*lump));
                         /* b10667: rc always be 0 here for now */
                         rc = 0;
                 } else if (S_ISDIR(inode->i_mode)) {
                         rc = ll_dir_setstripe(inode, lump, 0);
                 }
-                
+
                 return rc;
         }
 
@@ -276,7 +276,7 @@ do_getxattr:
         if (rc) {
                 if (rc == -EOPNOTSUPP && xattr_type == XATTR_USER_T) {
                         LCONSOLE_INFO("Disabling user_xattr feature because "
-                                      "it is not supported on the server\n"); 
+                                      "it is not supported on the server\n");
                         sbi->ll_flags &= ~LL_SBI_USER_XATTR;
                 }
                 RETURN(rc);
@@ -333,23 +333,25 @@ ssize_t ll_getxattr(struct dentry *dentry, const char *name,
 
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_GETXATTR, 1);
 
-        if ((strncmp(name, XATTR_TRUSTED_PREFIX, 
+        if ((strncmp(name, XATTR_TRUSTED_PREFIX,
                     sizeof(XATTR_TRUSTED_PREFIX) - 1) == 0 &&
              strcmp(name + sizeof(XATTR_TRUSTED_PREFIX) - 1, "lov") == 0) ||
-            (strncmp(name, XATTR_LUSTRE_PREFIX, 
+            (strncmp(name, XATTR_LUSTRE_PREFIX,
                     sizeof(XATTR_LUSTRE_PREFIX) - 1) == 0 &&
              strcmp(name + sizeof(XATTR_LUSTRE_PREFIX) - 1, "lov") == 0)) {
                 struct lov_user_md *lump;
                 struct lov_mds_md *lmm = NULL;
                 struct ptlrpc_request *request = NULL;
-                int rc = 0, lmmsize;
+                int rc = 0, lmmsize = 0;
 
                 if (S_ISREG(inode->i_mode)) {
-                        rc = ll_lov_getstripe_ea_info(dentry->d_parent->d_inode, 
-                                                      dentry->d_name.name, &lmm, 
+                        rc = ll_lov_getstripe_ea_info(dentry->d_parent->d_inode,
+                                                      dentry->d_name.name, &lmm,
                                                       &lmmsize, &request);
                 } else if (S_ISDIR(inode->i_mode)) {
                         rc = ll_dir_getstripe(inode, &lmm, &lmmsize, &request);
+                } else {
+                        rc = -ENODATA;
                 }
 
                 if (rc < 0)
@@ -358,8 +360,8 @@ ssize_t ll_getxattr(struct dentry *dentry, const char *name,
                        GOTO(out, rc = lmmsize);
 
                 if (size < lmmsize) {
-                        CERROR("server bug: replied size %u > %u\n",
-                               lmmsize, (int)size);
+                        CERROR("server bug: replied size %d > %d for %s (%s)\n",
+                               lmmsize, (int)size, dentry->d_name.name, name);
                         GOTO(out, rc = -ERANGE);
                 }
 
@@ -397,7 +399,7 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
                 struct lov_stripe_md *lsm = NULL;
                 lsm = lli->lli_smd;
                 if (lsm == NULL)
-                        rc2 = -1; 
+                        rc2 = -1;
         } else if (S_ISDIR(inode->i_mode)) {
                 rc2 = ll_dir_getstripe(inode, &lmm, &lmmsize, &request);
         }
@@ -420,6 +422,6 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
 out:
         ptlrpc_req_finished(request);
         rc = rc + rc2;
-        
+
         return rc;
 }

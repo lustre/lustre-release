@@ -13,6 +13,8 @@ init_test_env $@
 ostfailover_HOST=${ostfailover_HOST:-$ost_HOST}
 #failover= must be defined in OST_MKFS_OPTIONS if ostfailover_HOST != ost_HOST
 
+remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
+
 # Tests that fail on uml
 CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
 [ "$CPU" = "UML" ] && EXCEPT="$EXCEPT 6"
@@ -118,10 +120,12 @@ test_5() {
 run_test 5 "Fail OST during iozone"
 
 kbytesfree() {
-   awk '{total+=$1} END {print total}' /proc/fs/lustre/osc/*-osc-*/kbytesfree
+   calc_osc_kbytes kbytesfree
 }
 
 test_6() {
+    remote_mds_nodsh && skip "remote MDS with nodsh" && return 0
+
     f=$DIR/$tfile
     rm -f $f
     sync && sleep 2 && sync	# wait for delete thread

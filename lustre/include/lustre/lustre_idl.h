@@ -341,8 +341,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_LRU_RESIZE 0x02000000ULL /*Lru resize feature. */
 #define OBD_CONNECT_MDS_MDS    0x04000000ULL /*MDS-MDS connection */
 #define OBD_CONNECT_REAL       0x08000000ULL /*real connection */
-#define OBD_CONNECT_CHANGE_QS  0x10000000ULL /*shrink/enlarge qunit size
-                                              *b=10600 */
+#define OBD_CONNECT_CHANGE_QS  0x10000000ULL /*shrink/enlarge qunit b=10600 */
 #define OBD_CONNECT_CKSUM      0x20000000ULL /*support several cksum algos */
 #define OBD_CONNECT_FID        0x40000000ULL /* FID is supported */
 #define OBD_CONNECT_VBR        0x80000000ULL /* version based recovery */
@@ -504,9 +503,6 @@ typedef __u32 obd_count;
 #define LOV_OBJECT_GROUP_DEFAULT ~0ULL
 #define LOV_OBJECT_GROUP_CLEAR 0ULL
 
-#define MAXPOOLNAME 16
-#define POOLNAMEF "%.16s"
-
 #define lov_ost_data lov_ost_data_v1
 struct lov_ost_data_v1 {          /* per-stripe data structure (little-endian)*/
         __u64 l_object_id;        /* OST object ID */
@@ -533,7 +529,7 @@ struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */
         __u64 lmm_object_gr;      /* LOV object group */
         __u32 lmm_stripe_size;    /* size of stripe in bytes */
         __u32 lmm_stripe_count;   /* num stripes in use for this object */
-        char  lmm_pool_name[MAXPOOLNAME]; /* must be 32bit aligned */
+        char  lmm_pool_name[LOV_MAXPOOLNAME]; /* must be 32bit aligned */
         struct lov_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 };
 
@@ -1705,13 +1701,14 @@ struct cfg_marker {
         __u32             cm_flags;
         __u32             cm_vers;       /* lustre release version number */
         __u32             padding;       /* 64 bit align */
-        time_t            cm_createtime; /*when this record was first created */
-        time_t            cm_canceltime; /*when this record is no longer valid*/
+        __u64             cm_createtime; /*when this record was first created */
+        __u64             cm_canceltime; /*when this record is no longer valid*/
         char              cm_tgtname[MTI_NAME_MAXLEN];
         char              cm_comment[MTI_NAME_MAXLEN];
 };
 
-extern void lustre_swab_cfg_marker(struct cfg_marker *marker);
+extern void lustre_swab_cfg_marker(struct cfg_marker *marker,
+                                   int swab, int size);
 
 /*
  * Opcodes for multiple servers.

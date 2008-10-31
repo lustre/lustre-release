@@ -11,6 +11,15 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
+remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
+
+if [ "$FAILURE_MODE" = "HARD" ] && mixed_ost_devs; then
+    CONFIG_EXCEPTIONS="52"
+    echo -n "Several ost services on one ost node are used with FAILURE_MODE=$FAILURE_MODE. "
+    echo "Except the tests: $CONFIG_EXCEPTIONS"
+    ALWAYS_EXCEPT="$ALWAYS_EXCEPT $CONFIG_EXCEPTIONS"
+fi
+
 # also long tests: 19, 21a, 21e, 21f, 23, 27
 #                                   1  2.5  2.5    4    4          (min)"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="17  26a  26b    50   51     57"
@@ -23,64 +32,70 @@ SETUP=${SETUP:-""}
 CLEANUP=${CLEANUP:-""}
 
 cleanup_and_setup_lustre
+
 assert_DIR
 rm -rf $DIR/[df][0-9]*
 
 test_1() {
-    drop_request "mcreate $MOUNT/1"  || return 1
-    drop_reint_reply "mcreate $MOUNT/2"    || return 2
+    drop_request "mcreate $DIR/f1"  || return 1
+    drop_reint_reply "mcreate $DIR/f2"    || return 2
 }
 run_test 1 "mcreate: drop req, drop rep"
 
 test_2() {
-    drop_request "tchmod 111 $MOUNT/2"  || return 1
-    drop_reint_reply "tchmod 666 $MOUNT/2"    || return 2
+    drop_request "tchmod 111 $DIR/f2"  || return 1
+    drop_reint_reply "tchmod 666 $DIR/f2"    || return 2
 }
 run_test 2 "chmod: drop req, drop rep"
 
 test_3() {
-    drop_request "statone $MOUNT/2" || return 1
-    drop_reply "statone $MOUNT/2"   || return 2
+    drop_request "statone $DIR/f2" || return 1
+    drop_reply "statone $DIR/f2"   || return 2
 }
 run_test 3 "stat: drop req, drop rep"
 
-SAMPLE_NAME=recovery-small.junk
+SAMPLE_NAME=f0.recovery-small.junk
 SAMPLE_FILE=$TMP/$SAMPLE_NAME
 # make this big, else test 9 doesn't wait for bulk -- bz 5595
 dd if=/dev/urandom of=$SAMPLE_FILE bs=1M count=4
 
 test_4() {
-    do_facet client "cp $SAMPLE_FILE $MOUNT/$SAMPLE_NAME" || return 1
-    drop_request "cat $MOUNT/$SAMPLE_NAME > /dev/null"   || return 2
-    drop_reply "cat $MOUNT/$SAMPLE_NAME > /dev/null"     || return 3
+    do_facet client "cp $SAMPLE_FILE $DIR/$SAMPLE_NAME" || return 1
+    drop_request "cat $DIR/$SAMPLE_NAME > /dev/null"   || return 2
+    drop_reply "cat $DIR/$SAMPLE_NAME > /dev/null"     || return 3
 }
 run_test 4 "open: drop req, drop rep"
 
+RENAMED_AGAIN=$DIR/f0.renamed-again
+
 test_5() {
-    drop_request "mv $MOUNT/$SAMPLE_NAME $MOUNT/renamed" || return 1
-    drop_reint_reply "mv $MOUNT/renamed $MOUNT/renamed-again" || return 2
-    do_facet client "checkstat -v $MOUNT/renamed-again"  || return 3
+    drop_request "mv $DIR/$SAMPLE_NAME $DIR/$tfile-renamed" || return 1
+    drop_reint_reply "mv $DIR/$tfile-renamed $RENAMED_AGAIN" || return 2
+    do_facet client "checkstat -v $RENAMED_AGAIN"  || return 3
 }
 run_test 5 "rename: drop req, drop rep"
 
-[ ! -e $MOUNT/renamed-again ] && cp $SAMPLE_FILE $MOUNT/renamed-again
+[ ! -e $RENAMED_AGAIN ] && cp $SAMPLE_FILE $RENAMED_AGAIN
+LINK1=$DIR/f0.link1
+LINK2=$DIR/f0.link2
+
 test_6() {
-    drop_request "mlink $MOUNT/renamed-again $MOUNT/link1" || return 1
-    drop_reint_reply "mlink $MOUNT/renamed-again $MOUNT/link2"   || return 2
+    drop_request "mlink $RENAMED_AGAIN $LINK1" || return 1
+    drop_reint_reply "mlink $RENAMED_AGAIN $LINK2"   || return 2
 }
 run_test 6 "link: drop req, drop rep"
 
-[ ! -e $MOUNT/link1 ] && mlink $MOUNT/renamed-again $MOUNT/link1
-[ ! -e $MOUNT/link2 ] && mlink $MOUNT/renamed-again $MOUNT/link2
+[ ! -e $LINK1 ] && mlink $RENAMED_AGAIN $LINK1
+[ ! -e $LINK2 ] && mlink $RENAMED_AGAIN $LINK2
 test_7() {
-    drop_request "munlink $MOUNT/link1"   || return 1
-    drop_reint_reply "munlink $MOUNT/link2"     || return 2
+    drop_request "munlink $LINK1"   || return 1
+    drop_reint_reply "munlink $LINK2"     || return 2
 }
 run_test 7 "unlink: drop req, drop rep"
 
 #bug 1423
 test_8() {
-    drop_reint_reply "touch $MOUNT/$tfile"    || return 1
+    drop_reint_reply "touch $DIR/$tfile"    || return 1
 }
 run_test 8 "touch: drop rep (bug 1423)"
 
@@ -89,75 +104,77 @@ dd if=/dev/urandom of=$SAMPLE_FILE bs=1M count=4
 
 #bug 1420
 test_9() {
-    pause_bulk "cp /etc/profile $MOUNT/$tfile"       || return 1
-    do_facet client "cp $SAMPLE_FILE $MOUNT/${tfile}.2"  || return 2
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
+    pause_bulk "cp /etc/profile $DIR/$tfile"       || return 1
+    do_facet client "cp $SAMPLE_FILE $DIR/${tfile}.2"  || return 2
     do_facet client "sync"
-    do_facet client "rm $MOUNT/$tfile $MOUNT/${tfile}.2" || return 3
+    do_facet client "rm $DIR/$tfile $DIR/${tfile}.2" || return 3
 }
 run_test 9 "pause bulk on OST (bug 1420)"
 
 #bug 1521
 test_10() {
-    do_facet client mcreate $MOUNT/$tfile        || return 1
-    drop_bl_callback "chmod 0777 $MOUNT/$tfile"  || echo "evicted as expected"
+    do_facet client mcreate $DIR/$tfile        || return 1
+    drop_bl_callback "chmod 0777 $DIR/$tfile"  || echo "evicted as expected"
     # wait for the mds to evict the client
     #echo "sleep $(($TIMEOUT*2))"
     #sleep $(($TIMEOUT*2))
-    do_facet client touch $MOUNT/$tfile || echo "touch failed, evicted"
-    do_facet client checkstat -v -p 0777 $MOUNT/$tfile  || return 3
-    do_facet client "munlink $MOUNT/$tfile"
+    do_facet client touch $DIR/$tfile || echo "touch failed, evicted"
+    do_facet client checkstat -v -p 0777 $DIR/$tfile  || return 3
+    do_facet client "munlink $DIR/$tfile"
 }
 run_test 10 "finish request on server after client eviction (bug 1521)"
 
 #bug 2460
 # wake up a thread waiting for completion after eviction
 test_11(){
-    do_facet client multiop $MOUNT/$tfile Ow  || return 1
-    do_facet client multiop $MOUNT/$tfile or  || return 2
+    do_facet client multiop $DIR/$tfile Ow  || return 1
+    do_facet client multiop $DIR/$tfile or  || return 2
 
     cancel_lru_locks osc
 
-    do_facet client multiop $MOUNT/$tfile or  || return 3
-    drop_bl_callback multiop $MOUNT/$tfile Ow || echo "evicted as expected"
+    do_facet client multiop $DIR/$tfile or  || return 3
+    drop_bl_callback multiop $DIR/$tfile Ow || echo "evicted as expected"
 
-    do_facet client munlink $MOUNT/$tfile  || return 4
+    do_facet client munlink $DIR/$tfile  || return 4
 }
 run_test 11 "wake up a thread waiting for completion after eviction (b=2460)"
 
 #b=2494
 test_12(){
-    $LCTL mark multiop $MOUNT/$tfile OS_c 
+    $LCTL mark multiop $DIR/$tfile OS_c 
     do_facet mds "lctl set_param fail_loc=0x115"
     clear_failloc mds $((TIMEOUT * 2)) &
-    multiop_bg_pause $MOUNT/$tfile OS_c || return 1
+    multiop_bg_pause $DIR/$tfile OS_c || return 1
     PID=$!
 #define OBD_FAIL_MDS_CLOSE_NET           0x115
     kill -USR1 $PID
     echo "waiting for multiop $PID"
     wait $PID || return 2
-    do_facet client munlink $MOUNT/$tfile  || return 3
+    do_facet client munlink $DIR/$tfile  || return 3
 }
 run_test 12 "recover from timed out resend in ptlrpcd (b=2494)"
 
 # Bug 113, check that readdir lost recv timeout works.
 test_13() {
-    mkdir $MOUNT/readdir || return 1
-    touch $MOUNT/readdir/newentry || return
+    mkdir -p $DIR/$tdir || return 1
+    touch $DIR/$tdir/newentry || return
 # OBD_FAIL_MDS_READPAGE_NET|OBD_FAIL_ONCE
     do_facet mds "lctl set_param fail_loc=0x80000104"
-    ls $MOUNT/readdir || return 3
+    ls $DIR/$tdir || return 3
     do_facet mds "lctl set_param fail_loc=0"
-    rm -rf $MOUNT/readdir || return 4
+    rm -rf $DIR/$tdir || return 4
 }
 run_test 13 "mdc_readpage restart test (bug 1138)"
 
 # Bug 113, check that readdir lost send timeout works.
 test_14() {
-    mkdir $MOUNT/readdir
-    touch $MOUNT/readdir/newentry
+    mkdir -p $DIR/$tdir
+    touch $DIR/$tdir/newentry
 # OBD_FAIL_MDS_SENDPAGE|OBD_FAIL_ONCE
     do_facet mds "lctl set_param fail_loc=0x80000106"
-    ls $MOUNT/readdir || return 1
+    ls $DIR/$tdir || return 1
     do_facet mds "lctl set_param fail_loc=0"
 }
 run_test 14 "mdc_readpage resend test (bug 1138)"
@@ -179,7 +196,9 @@ start_read_ahead() {
 }
 
 test_16() {
-    do_facet client cp $SAMPLE_FILE $MOUNT
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
+    do_facet client cp $SAMPLE_FILE $DIR
     sync
     stop_read_ahead
 
@@ -187,17 +206,19 @@ test_16() {
     do_facet ost1 lctl set_param fail_loc=0x80000504
     cancel_lru_locks osc
     # OST bulk will time out here, client resends
-    do_facet client "cmp $SAMPLE_FILE $MOUNT/${SAMPLE_FILE##*/}" || return 1
+    do_facet client "cmp $SAMPLE_FILE $DIR/${SAMPLE_FILE##*/}" || return 1
     do_facet ost1 lctl set_param fail_loc=0
     # give recovery a chance to finish (shouldn't take long)
     sleep $TIMEOUT
-    do_facet client "cmp $SAMPLE_FILE $MOUNT/${SAMPLE_FILE##*/}" || return 2
+    do_facet client "cmp $SAMPLE_FILE $DIR/${SAMPLE_FILE##*/}" || return 2
     start_read_ahead
 }
 run_test 16 "timeout bulk put, don't evict client (2732)"
 
 test_17() {
     local at_max_saved=0
+
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
     # With adaptive timeouts, bulk_get won't expire until adaptive_timeout_max
     if at_is_valid && at_is_enabled; then
@@ -229,8 +250,8 @@ run_test 17 "timeout bulk get, don't evict client (2732)"
 test_18a() {
     [ -z ${ost2_svc} ] && skip "needs 2 osts" && return 0
 
-    do_facet client mkdir -p $MOUNT/$tdir
-    f=$MOUNT/$tdir/$tfile
+    do_facet client mkdir -p $DIR/$tdir
+    f=$DIR/$tdir/$tfile
 
     cancel_lru_locks osc
     pgcache_empty || return 1
@@ -253,9 +274,11 @@ test_18a() {
 run_test 18a "manual ost invalidate clears page cache immediately"
 
 test_18b() {
-    do_facet client mkdir -p $MOUNT/$tdir
-    f=$MOUNT/$tdir/$tfile
-    f2=$MOUNT/$tdir/${tfile}-2
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
+    do_facet client mkdir -p $DIR/$tdir
+    f=$DIR/$tdir/$tfile
+    f2=$DIR/$tdir/${tfile}-2
 
     cancel_lru_locks osc
     pgcache_empty || return 1
@@ -281,9 +304,11 @@ test_18b() {
 run_test 18b "eviction and reconnect clears page cache (2766)"
 
 test_18c() {
-    do_facet client mkdir -p $MOUNT/$tdir
-    f=$MOUNT/$tdir/$tfile
-    f2=$MOUNT/$tdir/${tfile}-2
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
+    do_facet client mkdir -p $DIR/$tdir
+    f=$DIR/$tdir/$tfile
+    f2=$DIR/$tdir/${tfile}-2
 
     cancel_lru_locks osc
     pgcache_empty || return 1
@@ -312,7 +337,7 @@ test_18c() {
 run_test 18c "Dropped connect reply after eviction handing (14755)"
 
 test_19a() {
-    f=$MOUNT/$tfile
+    f=$DIR/$tfile
     do_facet client mcreate $f        || return 1
     drop_ldlm_cancel "chmod 0777 $f"  || echo "evicted as expected"
 
@@ -324,7 +349,7 @@ test_19a() {
 run_test 19a "test expired_lock_main on mds (2867)"
 
 test_19b() {
-    f=$MOUNT/$tfile
+    f=$DIR/$tfile
     do_facet client multiop $f Ow  || return 1
     do_facet client multiop $f or  || return 2
 
@@ -338,6 +363,8 @@ test_19b() {
 run_test 19b "test expired_lock_main on ost (2867)"
 
 test_20a() {	# bug 2983 - ldlm_handle_enqueue cleanup
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
 	mkdir -p $DIR/$tdir
 	lfs setstripe $DIR/$tdir/${tfile} -i 0 -c 1
 	multiop_bg_pause $DIR/$tdir/${tfile} O_wc || return 1
@@ -353,6 +380,8 @@ test_20a() {	# bug 2983 - ldlm_handle_enqueue cleanup
 run_test 20a "ldlm_handle_enqueue error (should return error)" 
 
 test_20b() {	# bug 2986 - ldlm_handle_enqueue error during open
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
 	mkdir -p $DIR/$tdir
 	lfs setstripe $DIR/$tdir/${tfile} -i 0 -c 1
 	cancel_lru_locks osc
@@ -592,6 +621,8 @@ test_23() { #b=4561
 run_test 23 "client hang when close a file after mds crash"
 
 test_24() { # bug 11710 details correct fsync() behavior
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
 	mkdir -p $DIR/$tdir
 	lfs setstripe $DIR/$tdir -s 0 -i 0 -c 1
 	cancel_lru_locks osc
@@ -610,6 +641,7 @@ run_test 24 "fsync error (should return error)"
 test_26a() {      # was test_26 bug 5921 - evict dead exports by pinger
 # this test can only run from a client on a separate node.
 	remote_ost || { skip "local OST" && return 0; }
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 	remote_mds || { skip "local MDS" && return 0; }
 	OST_FILE=obdfilter.${ost1_svc}.num_exports
         OST_EXP="`do_facet ost1 lctl get_param -n $OST_FILE`"
@@ -632,6 +664,8 @@ test_26a() {      # was test_26 bug 5921 - evict dead exports by pinger
 run_test 26a "evict dead exports"
 
 test_26b() {      # bug 10140 - evict dead exports by pinger
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
 	client_df
 	zconf_mount `hostname` $MOUNT2 || error "Failed to mount $MOUNT2"
 	MDS_FILE=mds.${mds_svc}.num_exports
@@ -656,37 +690,39 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 run_test 26b "evict dead exports"
 
 test_27() {
-	remote_mds && { skip "remote MDS" && return 0; }
 	mkdir -p $DIR/$tdir
 	writemany -q -a $DIR/$tdir/$tfile 0 5 &
 	CLIENT_PID=$!
 	sleep 1
+	local save_FAILURE_MODE=$FAILURE_MODE
 	FAILURE_MODE="SOFT"
 	facet_failover mds
 #define OBD_FAIL_OSC_SHUTDOWN            0x407
-	lctl set_param fail_loc=0x80000407
+	do_facet mds lctl set_param fail_loc=0x80000407
 	# need to wait for reconnect
 	echo -n waiting for fail_loc
-	while [ `lctl get_param -n fail_loc` -eq -2147482617 ]; do
+	while [ $(do_facet mds lctl get_param -n fail_loc) -eq -2147482617 ]; do
 	    sleep 1
 	    echo -n .
 	done
+	do_facet mds lctl get_param -n fail_loc
 	facet_failover mds
 	#no crashes allowed!
         kill -USR1 $CLIENT_PID
 	wait $CLIENT_PID 
 	true
+	FAILURE_MODE=$save_FAILURE_MODE
 }
 run_test 27 "fail LOV while using OSC's"
 
 test_28() {      # bug 6086 - error adding new clients
-	do_facet client mcreate $MOUNT/$tfile       || return 1
-	drop_bl_callback "chmod 0777 $MOUNT/$tfile" ||echo "evicted as expected"
+	do_facet client mcreate $DIR/$tfile       || return 1
+	drop_bl_callback "chmod 0777 $DIR/$tfile" ||echo "evicted as expected"
 	#define OBD_FAIL_MDS_ADD_CLIENT 0x12f
 	do_facet mds lctl set_param fail_loc=0x8000012f
 	# fail once (evicted), reconnect fail (fail_loc), ok
 	df || (sleep 1; df) || (sleep 1; df) || error "reconnect failed"
-	rm -f $MOUNT/$tfile
+	rm -f $DIR/$tfile
 	fail mds		# verify MDS last_rcvd can be loaded
 }
 run_test 28 "handle error adding new clients (bug 6086)"
@@ -771,6 +807,8 @@ test_52_guts() {
 }
 
 test_52() {
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
 	mkdir -p $DIR/$tdir
 	test_52_guts 1
 	rc=$?
@@ -811,11 +849,12 @@ run_test 54 "back in time"
 
 # bug 11330 - liblustre application death during I/O locks up OST
 test_55() {
-	remote_ost && { skip "remote OST" && return 0; }
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
 	mkdir -p $DIR/$tdir
 
 	# first dd should be finished quickly
+	lfs setstripe DIR/$tdir/$tfile-1 -c 1 -i 0
 	dd if=/dev/zero of=$DIR/$tdir/$tfile-1 bs=32M count=4  &
 	DDPID=$!
 	count=0
@@ -830,8 +869,9 @@ test_55() {
 	done	
 	echo "(dd_pid=$DDPID, time=$count)successful"
 
-        #define OBD_FAIL_OST_DROP_REQ            0x21d
-	do_facet ost lctl set_param fail_loc=0x0000021d
+	lfs setstripe DIR/$tdir/$tfile-2 -c 1 -i 0
+	#define OBD_FAIL_OST_DROP_REQ            0x21d
+	do_facet ost1 lctl set_param fail_loc=0x0000021d
 	# second dd will be never finished
 	dd if=/dev/zero of=$DIR/$tdir/$tfile-2 bs=32M count=4  &	
 	DDPID=$!
@@ -850,7 +890,7 @@ test_55() {
 	echo "(dd_pid=$DDPID, time=$count)successful"
 
 	#Recover fail_loc and dd will finish soon
-	do_facet ost lctl set_param fail_loc=0
+	do_facet ost1 lctl set_param fail_loc=0
 	count=0
 	echo  "step3: testing ......"
 	while [ true ]; do
@@ -902,14 +942,14 @@ run_test 57 "read procfs entries causes kernel crash"
 
 test_58() { # bug 11546
 #define OBD_FAIL_MDC_ENQUEUE_PAUSE        0x801
-        touch $MOUNT/$tfile
-        ls -la $MOUNT/$tfile
+        touch $DIR/$tfile
+        ls -la $DIR/$tfile
         lctl set_param fail_loc=0x80000801
-        cp $MOUNT/$tfile /dev/null &
+        cp $DIR/$tfile /dev/null &
         pid=$!
         sleep 1
         lctl set_param fail_loc=0
-        drop_bl_callback rm -f $MOUNT/$tfile
+        drop_bl_callback rm -f $DIR/$tfile
         wait $pid
         do_facet client "df $DIR"
 }

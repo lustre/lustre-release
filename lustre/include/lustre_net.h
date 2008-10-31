@@ -159,7 +159,6 @@
 #define ptlrpc_req_async_args(req) ((void *)&req->rq_async_args)
 
 struct ptlrpc_connection {
-        struct list_head        c_link;
         struct hlist_node       c_hash;
         lnet_nid_t              c_self;
         lnet_process_id_t       c_peer;
@@ -524,6 +523,8 @@ struct ptlrpc_thread {
         __u32 t_flags;
 
         unsigned int t_id; /* service thread index, from ptlrpc_start_threads */
+        struct lc_watchdog *t_watchdog; /* put watchdog in the structure per
+                                         * thread b=14840 */
         cfs_waitq_t t_ctl_waitq;
 };
 
@@ -699,14 +700,13 @@ extern void reply_out_callback(lnet_event_t *ev);
 extern void server_bulk_callback (lnet_event_t *ev);
 
 /* ptlrpc/connection.c */
-void ptlrpc_dump_connections(void);
-void ptlrpc_readdress_connection(struct ptlrpc_connection *, struct obd_uuid *);
-struct ptlrpc_connection *ptlrpc_get_connection(lnet_process_id_t peer,
-                                                lnet_nid_t self, struct obd_uuid *uuid);
-int ptlrpc_put_connection(struct ptlrpc_connection *c);
+struct ptlrpc_connection *ptlrpc_connection_get(lnet_process_id_t peer,
+                                                lnet_nid_t self,
+                                                struct obd_uuid *uuid);
+int ptlrpc_connection_put(struct ptlrpc_connection *c);
 struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *);
-int ptlrpc_init_connection(void);
-void ptlrpc_cleanup_connection(void);
+int ptlrpc_connection_init(void);
+void ptlrpc_connection_fini(void);
 extern lnet_pid_t ptl_get_pid(void);
 
 /* ptlrpc/niobuf.c */
@@ -798,7 +798,6 @@ struct ptlrpc_request *ptlrpc_prep_req_pool(struct obd_import *imp,
                                              __u32 version, int opcode,
                                             int count, __u32 *lengths, char **bufs,
                                             struct ptlrpc_request_pool *pool);
-void ptlrpc_free_req(struct ptlrpc_request *request);
 void ptlrpc_req_finished(struct ptlrpc_request *request);
 void ptlrpc_req_finished_with_imp_lock(struct ptlrpc_request *request);
 struct ptlrpc_request *ptlrpc_request_addref(struct ptlrpc_request *req);

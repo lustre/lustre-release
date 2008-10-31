@@ -66,6 +66,7 @@
 #include <lustre_quota.h>
 #include "quota_internal.h"
 
+#ifdef HAVE_QUOTA_SUPPORT
 #ifdef __KERNEL__
 int mds_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
 {
@@ -232,8 +233,8 @@ adjust:
                 else
                         gid = oqctl->qc_id;
 
-                rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt, 
-                                        uid, gid, 1, 0);
+                rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt,
+                                        uid, gid, 1, 0, NULL);
                 if (rc == -EDQUOT || rc == -EBUSY) {
                         CDEBUG(D_QUOTA, "rc: %d.\n", rc);
                         rc = 0;
@@ -253,6 +254,7 @@ adjust:
         RETURN(rc);
 }
 #endif /* __KERNEL__ */
+#endif
 
 int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
 {
@@ -282,8 +284,15 @@ int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         ptlrpc_req_set_repsize(req, 2, size);
 
         rc = ptlrpc_queue_wait(req);
-        oqc = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*oqc),
-                                 lustre_swab_obd_quotactl);
+        if (rc) {
+                CERROR("ptlrpc_queue_wait failed, rc: %d\n", rc);
+                GOTO(out, rc);
+        }
+
+        oqc = NULL;
+        if (req->rq_repmsg)
+                oqc = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*oqc),
+                                         lustre_swab_obd_quotactl);
         if (oqc == NULL) {
                 CERROR ("Can't unpack obd_quotactl\n");
                 GOTO(out, rc = -EPROTO);
@@ -305,9 +314,12 @@ int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         int i, rc = 0;
         ENTRY;
 
-        if (oqctl->qc_cmd != Q_QUOTAON && oqctl->qc_cmd != Q_QUOTAOFF &&
-            oqctl->qc_cmd != Q_GETOQUOTA && oqctl->qc_cmd != Q_INITQUOTA &&
-            oqctl->qc_cmd != Q_SETQUOTA && oqctl->qc_cmd != Q_FINVALIDATE) {
+        if (oqctl->qc_cmd != LUSTRE_Q_QUOTAON &&
+            oqctl->qc_cmd != LUSTRE_Q_QUOTAOFF &&
+            oqctl->qc_cmd != Q_GETOQUOTA &&
+            oqctl->qc_cmd != Q_INITQUOTA &&
+            oqctl->qc_cmd != LUSTRE_Q_SETQUOTA &&
+            oqctl->qc_cmd != Q_FINVALIDATE) {
                 CERROR("bad quota opc %x for lov obd", oqctl->qc_cmd);
                 RETURN(-EFAULT);
         }

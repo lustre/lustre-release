@@ -336,16 +336,17 @@ static int mgc_requeue_add(struct config_llog_data *cld, int later)
         CDEBUG(D_INFO, "log %s: requeue (l=%d r=%d sp=%d st=%x)\n", 
                cld->cld_logname, later, atomic_read(&cld->cld_refcount),
                cld->cld_stopping, rq_state);
-        
+
         /* Hold lock for rq_state */
         spin_lock(&config_list_lock);
-        cld->cld_lostlock = 1;
 
         if (cld->cld_stopping || (rq_state & RQ_STOP)) {
                 spin_unlock(&config_list_lock);
                 config_log_put(cld);
                 RETURN(0);
         }
+
+        cld->cld_lostlock = 1;
 
         if (!(rq_state & RQ_RUNNING)) {
                 LASSERT(rq_state == 0);
@@ -936,6 +937,10 @@ static int mgc_llog_init(struct obd_device *obd, struct obd_device *tgt,
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
                 llog_initiator_connect(ctxt);
                 llog_ctxt_put(ctxt);
+        } else {
+                ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+                if (ctxt)
+                        llog_cleanup(ctxt);
         }
 
         RETURN(rc);

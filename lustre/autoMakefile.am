@@ -58,12 +58,11 @@ if CLIENT
 SUBDIRS += $(CLIENT_SUBDIRS)
 endif
 
-if QUOTA
-SUBDIRS += $(QUOTA_SUBDIRS)
-endif
-
 # this needs to be after the client subdirs
 if LIBLUSTRE
+if QUOTA_LIBLUSTRE
+SUBDIRS += $(QUOTA_SUBDIRS)
+endif
 if !CLIENT
 SUBDIRS += $(CLIENT_SUBDIRS)
 endif

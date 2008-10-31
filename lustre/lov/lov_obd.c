@@ -819,8 +819,9 @@ static void __lov_del_obd(struct obd_device *obd, __u32 index)
 void lov_fix_desc_stripe_size(__u64 *val)
 {
         if (*val < PTLRPC_MAX_BRW_SIZE) {
-                LCONSOLE_WARN("Increasing default stripe size to min %u\n",
-                              PTLRPC_MAX_BRW_SIZE);
+                if (*val)
+                        LCONSOLE_WARN("Increasing default stripe size from "
+                                      LPU64" to %u\n",*val,PTLRPC_MAX_BRW_SIZE);
                 *val = PTLRPC_MAX_BRW_SIZE;
         } else if (*val & (LOV_MIN_STRIPE_SIZE - 1)) {
                 *val &= ~(LOV_MIN_STRIPE_SIZE - 1);
@@ -911,9 +912,6 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         desc->ld_active_tgt_count = 0;
         lov->desc = *desc;
         lov->lov_tgt_size = 0;
-        rc = lov_ost_pool_init(&lov->lov_packed, 0);
-        if (rc)
-                RETURN(rc);
 
         sema_init(&lov->lov_lock, 1);
         atomic_set(&lov->lov_refcount, 0);
@@ -925,11 +923,18 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         /* Default priority is toward free space balance */
         lov->lov_qos.lq_prio_free = 232;
 
-        lustre_hash_init(&lov->lov_pools_hash_body, "POOLS", 128,
-                         &pool_hash_operations);
-
+        lov->lov_pools_hash_body = lustre_hash_init("POOLS", 128, 128,
+                                                    &pool_hash_operations, 0);
         CFS_INIT_LIST_HEAD(&lov->lov_pool_list);
         lov->lov_pool_count = 0;
+        rc = lov_ost_pool_init(&lov->lov_packed, 0);
+        if (rc)
+                RETURN(rc);
+        rc = lov_ost_pool_init(&lov->lov_qos.lq_rr.lqr_pool, 0);
+        if (rc) {
+                lov_ost_pool_free(&lov->lov_packed);
+                RETURN(rc);
+        }
 
         lprocfs_lov_init_vars(&lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
@@ -988,19 +993,18 @@ static int lov_cleanup(struct obd_device *obd)
         struct list_head *pos, *tmp;
         struct pool_desc *pool;
 
+        lprocfs_obd_cleanup(obd);
+
         list_for_each_safe(pos, tmp, &lov->lov_pool_list) {
                 pool = list_entry(pos, struct pool_desc, pool_list);
                 list_del(&pool->pool_list);
-                lustre_hash_delitem_by_key(lov->lov_pools_hash_body, pool->pool_name);
                 lov_ost_pool_free(&(pool->pool_rr.lqr_pool));
                 lov_ost_pool_free(&(pool->pool_obds));
-                OBD_FREE(pool, sizeof(*pool));
+                OBD_FREE_PTR(pool);
         }
-        lustre_hash_exit(&lov->lov_pools_hash_body);
-
-        lprocfs_obd_cleanup(obd);
-
+        lov_ost_pool_free(&(lov->lov_qos.lq_rr.lqr_pool));
         lov_ost_pool_free(&lov->lov_packed);
+        lustre_hash_exit(lov->lov_pools_hash_body);
 
         if (lov->lov_tgts) {
                 int i;
@@ -1023,8 +1027,6 @@ static int lov_cleanup(struct obd_device *obd)
                          lov->lov_tgt_size);
                 lov->lov_tgt_size = 0;
         }
-
-        lov_ost_pool_free(&(lov->lov_qos.lq_rr.lqr_pool));
 
         RETURN(0);
 }
@@ -1149,11 +1151,13 @@ static int lov_clear_orphans(struct obd_export *export, struct obdo *src_oa,
                 /* XXX: LOV STACKING: use real "obj_mdp" sub-data */
                 err = obd_create(lov->lov_tgts[i]->ltd_exp, 
                                  tmp_oa, &obj_mdp, oti);
-                if (err)
+                if (err) {
                         /* This export will be disabled until it is recovered,
                            and then orphan recovery will be completed. */
                         CERROR("error in orphan recovery on OST idx %d/%d: "
                                "rc = %d\n", i, lov->desc.ld_tgt_count, err);
+                        rc = err;
+                }
 
                 if (ost_uuid)
                         break;
@@ -1231,11 +1235,12 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
         if (!lov->desc.ld_active_tgt_count)
                 RETURN(-EIO);
 
+        lov_getref(exp->exp_obd);
         /* Recreate a specific object id at the given OST index */
         if ((src_oa->o_valid & OBD_MD_FLFLAGS) &&
             (src_oa->o_flags & OBD_FL_RECREATE_OBJS)) {
                  rc = lov_recreate(exp, src_oa, ea, oti);
-                 RETURN(rc);
+                 GOTO(out, rc);
         }
 
         maxage = cfs_time_shift_64(-lov->desc.ld_qos_maxage);
@@ -1243,7 +1248,7 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
 
         rc = lov_prep_create_set(exp, &oinfo, ea, src_oa, oti, &set);
         if (rc)
-                RETURN(rc);
+                GOTO(out, rc);
 
         list_for_each_entry(req, &set->set_list, rq_link) {
                 /* XXX: LOV STACKING: use real "obj_mdp" sub-data */
@@ -1252,6 +1257,8 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
                 lov_update_create_set(set, req, rc);
         }
         rc = lov_fini_create_set(set, ea);
+out:
+        lov_putref(exp->exp_obd);
         RETURN(rc);
 }
 
@@ -1273,7 +1280,7 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
         struct lov_request *req;
         struct list_head *pos;
         struct lov_obd *lov;
-        int rc = 0, err;
+        int rc = 0, err = 0;
         ENTRY;
 
         ASSERT_LSM_MAGIC(lsm);
@@ -1287,12 +1294,12 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
         }
 
         lov = &exp->exp_obd->u.lov;
+        lov_getref(exp->exp_obd);
         rc = lov_prep_destroy_set(exp, &oinfo, oa, lsm, oti, &set);
         if (rc)
-                RETURN(rc);
+                GOTO(out, rc);
 
         list_for_each (pos, &set->set_list) {
-                int err;
                 req = list_entry(pos, struct lov_request, rq_link);
 
                 if (oa->o_valid & OBD_MD_FLCOOKIE)
@@ -1316,6 +1323,8 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
                 rc = lsm_op_find(lsm->lsm_magic)->lsm_destroy(lsm, oa, md_exp);
         }
         err = lov_fini_destroy_set(set);
+out:
+        lov_putref(exp->exp_obd);
         RETURN(rc ? rc : err);
 }
 
@@ -3242,6 +3251,7 @@ struct obd_ops lov_obd_ops = {
         .o_trigger_group_io    = lov_trigger_group_io,
         .o_teardown_async_page = lov_teardown_async_page,
         .o_merge_lvb           = lov_merge_lvb,
+        .o_update_lvb          = lov_update_lvb,
         .o_adjust_kms          = lov_adjust_kms,
         .o_punch               = lov_punch,
         .o_sync                = lov_sync,

@@ -251,8 +251,8 @@ int ll_file_release(struct inode *inode, struct file *file)
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
         int rc;
-
         ENTRY;
+
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
 
@@ -262,12 +262,10 @@ int ll_file_release(struct inode *inode, struct file *file)
         fd = LUSTRE_FPRIVATE(file);
         LASSERT(fd != NULL);
 
-        /*
-         * The last ref on @file, maybe not the the owner pid of statahead.
+        /* The last ref on @file, maybe not the the owner pid of statahead.
          * Different processes can open the same dir, "ll_opendir_key" means:
-         * it is me that should stop the statahead thread.
-         */
-        if (lli->lli_opendir_key == fd)
+         * it is me that should stop the statahead thread. */
+        if (lli->lli_opendir_key == fd && lli->lli_opendir_pid != 0)
                 ll_stop_statahead(inode, fd);
 
         if (inode->i_sb->s_root == file->f_dentry) {
@@ -325,7 +323,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
                      it_open_error(DISP_OPEN_OPEN, itp))
                         GOTO(out, rc);
                 ll_release_openhandle(file->f_dentry, itp);
-                GOTO(out_stale, rc);
+                GOTO(out, rc);
         }
 
         if (rc != 0 || it_open_error(DISP_OPEN_OPEN, itp)) {
@@ -342,8 +340,6 @@ static int ll_intent_file_open(struct file *file, void *lmm,
                            req, DLM_REPLY_REC_OFF, NULL);
 out:
         ptlrpc_req_finished(itp->d.lustre.it_data);
-
-out_stale:
         it_clear_disposition(itp, DISP_ENQ_COMPLETE);
         ll_intent_drop_lock(itp);
 
@@ -432,27 +428,29 @@ int ll_file_open(struct inode *inode, struct file *file)
                 RETURN(-ENOMEM);
 
         if (S_ISDIR(inode->i_mode)) {
+again:
                 spin_lock(&lli->lli_lock);
-                /*
-                 * "lli->lli_opendir_pid != 0" means someone has set it.
-                 * "lli->lli_sai != NULL" means the previous statahead has not
-                 *                        been cleanup.
-                 */
-                if (lli->lli_opendir_pid == 0 && lli->lli_sai == NULL) {
-                        opendir_set = 1;
-                        lli->lli_opendir_pid = cfs_curproc_pid();
+                if (lli->lli_opendir_key == NULL && lli->lli_opendir_pid == 0) {
+                        LASSERT(lli->lli_sai == NULL);
                         lli->lli_opendir_key = fd;
-                } else if (unlikely(lli->lli_opendir_pid == cfs_curproc_pid())) {
+                        lli->lli_opendir_pid = cfs_curproc_pid();
+                        opendir_set = 1;
+                } else if (unlikely(lli->lli_opendir_pid == cfs_curproc_pid() &&
+                                    lli->lli_opendir_key != NULL)) {
                         /* Two cases for this:
                          * (1) The same process open such directory many times.
                          * (2) The old process opened the directory, and exited
                          *     before its children processes. Then new process
                          *     with the same pid opens such directory before the
                          *     old process's children processes exit.
-                         * Change the owner to the latest one.
-                         */
-                        opendir_set = 2;
-                        lli->lli_opendir_key = fd;
+                         * reset stat ahead for such cases. */
+                        spin_unlock(&lli->lli_lock);
+                        CDEBUG(D_INFO, "Conflict statahead for %.*s %lu/%u"
+                               " reset it.\n", file->f_dentry->d_name.len,
+                               file->f_dentry->d_name.name,
+                               inode->i_ino, inode->i_generation);
+                        ll_stop_statahead(inode, lli->lli_opendir_key);
+                        goto again;
                 }
                 spin_unlock(&lli->lli_lock);
         }
@@ -598,13 +596,10 @@ out_och_free:
                 }
                 up(&lli->lli_och_sem);
 out_openerr:
-                if (opendir_set) {
-                        lli->lli_opendir_key = NULL;
-                        lli->lli_opendir_pid = 0;
-                } else if (unlikely(opendir_set == 2)) {
+                if (opendir_set != 0)
                         ll_stop_statahead(inode, fd);
-                }
         }
+
         return rc;
 }
 
@@ -905,8 +900,8 @@ static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
 
         LDLM_DEBUG(lock, "i_size: %llu -> stripe number %u -> kms "LPU64
                    " atime "LPU64", mtime "LPU64", ctime "LPU64,
-                   i_size_read(inode), stripe, lvb->lvb_size, lvb->lvb_mtime,
-                   lvb->lvb_atime, lvb->lvb_ctime);
+                   i_size_read(inode), stripe, lvb->lvb_size, lvb->lvb_atime,
+                   lvb->lvb_mtime, lvb->lvb_ctime);
  iput:
         iput(inode);
 
@@ -1014,6 +1009,11 @@ int ll_glimpse_size(struct inode *inode, int ast_flags)
 
         ll_inode_size_lock(inode, 1);
         inode_init_lvb(inode, &lvb);
+        /* merge timestamps the most resently obtained from mds with
+           timestamps obtained from osts */
+        lvb.lvb_atime = lli->lli_lvb.lvb_atime;
+        lvb.lvb_mtime = lli->lli_lvb.lvb_mtime;
+        lvb.lvb_ctime = lli->lli_lvb.lvb_ctime;
         rc = obd_merge_lvb(sbi->ll_osc_exp, lli->lli_smd, &lvb, 0);
         i_size_write(inode, lvb.lvb_size);
         inode->i_blocks = lvb.lvb_blocks;
@@ -1569,6 +1569,22 @@ repeat:
 
         /* turn off the kernel's read-ahead */
         if (lock_style != LL_LOCK_STYLE_NOLOCK) {
+                /* read under locks
+                 *
+                 * 1. update inode's atime as long as concurrent stat
+                 * (via ll_glimpse_size) might bring out-of-date ones
+                 *
+                 * 2. update lsm so that next stat (via
+                 * ll_glimpse_size) could get correct values in lsm */
+                struct ost_lvb xtimes;
+
+                lov_stripe_lock(lsm);
+                LTIME_S(inode->i_atime) = LTIME_S(CURRENT_TIME);
+                xtimes.lvb_atime = LTIME_S(inode->i_atime);
+                obd_update_lvb(sbi->ll_osc_exp, lsm, &xtimes,
+                               OBD_MD_FLATIME);
+                lov_stripe_unlock(lsm);
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 file->f_ramax = 0;
 #else
@@ -1593,6 +1609,11 @@ repeat:
                 ll_file_put_lock(inode, end, lock_style, cookie,
                                  &tree, OBD_BRW_READ);
         } else {
+                /* lockless read
+                 *
+                 * current time will get into request as atime
+                 * (lustre/osc/osc_request.c:osc_build_request())
+                 */
                 retval = ll_file_lockless_io(file, iov_copy, nrsegs_copy, ppos,
                                              READ, chunk);
         }
@@ -1760,16 +1781,41 @@ repeat:
         chunk = end - *ppos + 1;
         CDEBUG(D_INFO, "Writing inode %lu, "LPSZ" bytes, offset %Lu\n",
                inode->i_ino, chunk, *ppos);
-        if (tree_locked)
+        if (tree_locked) {
+                /* write under locks
+                 *
+                 * 1. update inode's mtime and ctime as long as
+                 * concurrent stat (via ll_glimpse_size) might bring
+                 * out-of-date ones
+                 *
+                 * 2. update lsm so that next stat (via
+                 * ll_glimpse_size) could get correct values in lsm */
+                struct ost_lvb xtimes;
+
+                lov_stripe_lock(lsm);
+                LTIME_S(inode->i_mtime) = LTIME_S(CURRENT_TIME);
+                LTIME_S(inode->i_ctime) = LTIME_S(CURRENT_TIME);
+                xtimes.lvb_mtime = LTIME_S(inode->i_mtime);
+                xtimes.lvb_ctime = LTIME_S(inode->i_ctime);
+                obd_update_lvb(sbi->ll_osc_exp, lsm, &xtimes,
+                               OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+                lov_stripe_unlock(lsm);
+
 #ifdef HAVE_FILE_WRITEV
                 retval = generic_file_writev(file, iov_copy, nrsegs_copy, ppos);
 #else
                 retval = generic_file_aio_write(iocb, iov_copy, nrsegs_copy,
                                                 *ppos);
 #endif
-        else
+        } else {
+                /* lockless write
+                 *
+                 * current time will get into request as mtime and
+                 * ctime (lustre/osc/osc_request.c:osc_build_request())
+                 */
                 retval = ll_file_lockless_io(file, iov_copy, nrsegs_copy,
                                              ppos, WRITE, chunk);
+        }
         ll_rw_stats_tally(ll_i2sbi(inode), current->pid, file, chunk, 1);
 
 out_unlock:
@@ -1929,7 +1975,7 @@ static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
         struct lov_stripe_md *lsm, *lsm2;
         ENTRY;
 
-        if (!capable (CAP_SYS_ADMIN))
+        if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                 RETURN(-EPERM);
 
         rc = copy_from_user(&ucreatp, (struct ll_recreate_obj *)arg,
@@ -2151,7 +2197,7 @@ static int ll_lov_setea(struct inode *inode, struct file *file,
         int rc;
         ENTRY;
 
-        if (!capable (CAP_SYS_ADMIN))
+        if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                 RETURN(-EPERM);
 
         OBD_ALLOC(lump, lum_size);
@@ -2276,6 +2322,7 @@ static int ll_put_grouplock(struct inode *inode, struct file *file,
         RETURN(0);
 }
 
+#if LUSTRE_FIX >= 50
 static int join_sanity_check(struct inode *head, struct inode *tail)
 {
         ENTRY;
@@ -2346,6 +2393,8 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
                 ldlm_lock_decref(&lockh, oit.d.lustre.it_lock_mode);
                 oit.d.lustre.it_lock_mode = 0;
         }
+        ptlrpc_req_finished((struct ptlrpc_request *) oit.d.lustre.it_data);
+        it_clear_disposition(&oit, DISP_ENQ_COMPLETE);
         ll_release_openhandle(head_filp->f_dentry, &oit);
 out:
         if (op_data)
@@ -2446,6 +2495,7 @@ cleanup:
         }
         RETURN(rc);
 }
+#endif  /* LUSTRE_FIX >= 50 */
 
 /**
  * Close inode open handle
@@ -2486,7 +2536,8 @@ int ll_release_openhandle(struct dentry *dentry, struct lookup_intent *it)
         OBD_FREE(och, sizeof(*och));
  out:
         /* this one is in place of ll_file_open */
-        ptlrpc_req_finished(it->d.lustre.it_data);
+        if (it_disposition(it, DISP_ENQ_OPEN_REF))
+                ptlrpc_req_finished(it->d.lustre.it_data);
         it_clear_disposition(it, DISP_ENQ_OPEN_REF);
         RETURN(rc);
 }
@@ -2650,6 +2701,8 @@ error:
         case EXT3_IOC_GETVERSION:
                 RETURN(put_user(inode->i_generation, (int *)arg));
         case LL_IOC_JOIN: {
+#if LUSTRE_FIX >= 50
+                /* Allow file join in beta builds to allow debuggging */
                 char *ftail;
                 int rc;
 
@@ -2659,6 +2712,10 @@ error:
                 rc = ll_file_join(inode, file, ftail);
                 putname(ftail);
                 RETURN(rc);
+#else
+                CWARN("file join is not supported in this version of Lustre\n");
+                RETURN(-ENOTTY);
+#endif
         }
         case LL_IOC_GROUP_LOCK:
                 RETURN(ll_get_grouplock(inode, file, arg));
@@ -3023,9 +3080,11 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                    here to preserve get_cwd functionality on 2.6.
                    Bug 10503 */
                 if (!dentry->d_inode->i_nlink) {
+                        spin_lock(&ll_lookup_lock);
                         spin_lock(&dcache_lock);
                         ll_drop_dentry(dentry);
                         spin_unlock(&dcache_lock);
+                        spin_unlock(&ll_lookup_lock);
                 }
 
                 ll_lookup_finish_locks(&oit, dentry);
@@ -3056,8 +3115,12 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
         }
 
         /* if object not yet allocated, don't validate size */
-        if (ll_i2info(inode)->lli_smd == NULL)
+        if (ll_i2info(inode)->lli_smd == NULL) {
+                LTIME_S(inode->i_atime) = ll_i2info(inode)->lli_lvb.lvb_atime;
+                LTIME_S(inode->i_mtime) = ll_i2info(inode)->lli_lvb.lvb_mtime;
+                LTIME_S(inode->i_ctime) = ll_i2info(inode)->lli_lvb.lvb_ctime;
                 GOTO(out, rc = 0);
+        }
 
         /* ll_glimpse_size will prefer locally cached writes if they extend
          * the file */
@@ -3187,10 +3250,10 @@ check_groups:
 check_capabilities:
         if (!(mask & MAY_EXEC) ||
             (inode->i_mode & S_IXUGO) || S_ISDIR(inode->i_mode))
-                if (capable(CAP_DAC_OVERRIDE))
+                if (cfs_capable(CFS_CAP_DAC_OVERRIDE))
                         return 0;
 
-        if (capable(CAP_DAC_READ_SEARCH) && ((mask == MAY_READ) ||
+        if (cfs_capable(CFS_CAP_DAC_READ_SEARCH) && ((mask == MAY_READ) ||
             (S_ISDIR(inode->i_mode) && !(mask & MAY_WRITE))))
                 return 0;
 

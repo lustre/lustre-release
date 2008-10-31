@@ -182,7 +182,7 @@ int llog_obd_origin_add(struct llog_ctxt *ctxt,
                         struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
                         struct llog_cookie *logcookies, int numcookies);
 
-int llog_cat_initialize(struct obd_device *obd, int count, 
+int llog_cat_initialize(struct obd_device *obd, int idx,
                         struct obd_uuid *uuid);
 int obd_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
                   int count, struct llog_catid *logid, struct obd_uuid *uuid);
@@ -197,7 +197,7 @@ int llog_catalog_list(struct obd_device *obd, int count,
 /* llog_net.c */
 int llog_initiator_connect(struct llog_ctxt *ctxt);
 int llog_receptor_accept(struct llog_ctxt *ctxt, struct obd_import *imp);
-int llog_origin_connect(struct llog_ctxt *ctxt, int count,
+int llog_origin_connect(struct llog_ctxt *ctxt,
                         struct llog_logid *logid, struct llog_gen *gen,
                         struct obd_uuid *uuid);
 int llog_handle_connect(struct ptlrpc_request *req);
@@ -207,7 +207,7 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
                          struct lov_stripe_md *lsm, int count,
                          struct llog_cookie *cookies, int flags);
 int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp);
-int llog_obd_repl_connect(struct llog_ctxt *ctxt, int count,
+int llog_obd_repl_connect(struct llog_ctxt *ctxt,
                           struct llog_logid *logid, struct llog_gen *gen,
                           struct obd_uuid *uuid);
 
@@ -236,7 +236,7 @@ struct llog_operations {
                        struct llog_cookie *logcookies, int numcookies);
         int (*lop_cancel)(struct llog_ctxt *ctxt, struct lov_stripe_md *lsm,
                           int count, struct llog_cookie *cookies, int flags);
-        int (*lop_connect)(struct llog_ctxt *ctxt, int count,
+        int (*lop_connect)(struct llog_ctxt *ctxt,
                            struct llog_logid *logid, struct llog_gen *gen,
                            struct obd_uuid *uuid);
         /* XXX add 2 more: commit callbacks and llog recovery functions */
@@ -245,7 +245,11 @@ struct llog_operations {
 /* llog_lvfs.c */
 extern struct llog_operations llog_lvfs_ops;
 int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
-                      char *name, int count, struct llog_catid *idarray);
+                      char *name, int idx, int count,
+                      struct llog_catid *idarray);
+
+int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
+                      char *name, int idx, int count, struct llog_catid *idarray);
 
 struct llog_ctxt {
         int                      loc_idx; /* my index the obd array of ctxt's */
@@ -330,14 +334,6 @@ extern int llog_recov_thread_start(struct llog_commit_master *lcm);
 extern void llog_recov_thread_stop(struct llog_commit_master *lcm, 
                                    int force);
 
-#ifndef __KERNEL__
-
-#define cap_raise(c, flag) do {} while(0)
-
-#define CAP_SYS_RESOURCE 24
-
-#endif   /* !__KERNEL__ */
-
 static inline void llog_gen_init(struct llog_ctxt *ctxt)
 {
         struct obd_device *obd = ctxt->loc_exp->exp_obd;
@@ -415,14 +411,16 @@ static inline struct llog_ctxt *llog_get_context(struct obd_device *obd,
                                                    int index)
 {
          struct llog_ctxt *ctxt;
- 
-         if (index < 0 || index >= LLOG_MAX_CTXTS)
+
+         if (index < 0 || index >= LLOG_MAX_CTXTS) {
+                 CDEBUG(D_INFO, "obd %p bad index %d\n", obd, index);
                  return NULL;
-        
-         spin_lock(&obd->obd_dev_lock);  
+         }
+
+         spin_lock(&obd->obd_dev_lock);
          if (obd->obd_llog_ctxt[index] == NULL) {
                  spin_unlock(&obd->obd_dev_lock);
-                 CDEBUG(D_INFO, "obd %p and ctxt index %d is NULL \n", obd, index);
+                 CDEBUG(D_INFO,"obd %p and ctxt index %d is NULL \n",obd,index);
                  return NULL;
          }
          ctxt = llog_ctxt_get(obd->obd_llog_ctxt[index]);
@@ -441,8 +439,7 @@ static inline int llog_write_rec(struct llog_handle *handle,
                                  int numcookies, void *buf, int idx)
 {
         struct llog_operations *lop;
-        __u32 cap;
-        int rc, buflen;
+        int raised, rc, buflen;
         ENTRY;
 
         rc = llog_handle2ops(handle, &lop);
@@ -458,10 +455,12 @@ static inline int llog_write_rec(struct llog_handle *handle,
                 buflen = rec->lrh_len;
         LASSERT(size_round(buflen) == buflen);
 
-        cap = current->cap_effective;             
-        cap_raise(current->cap_effective, CAP_SYS_RESOURCE); 
+        raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+        if (!raised)
+                cfs_cap_raise(CFS_CAP_SYS_RESOURCE); 
         rc = lop->lop_write_rec(handle, rec, logcookies, numcookies, buf, idx);
-        current->cap_effective = cap; 
+        if (!raised)
+                cfs_cap_lower(CFS_CAP_SYS_RESOURCE); 
         RETURN(rc);
 }
 
@@ -557,8 +556,7 @@ static inline int llog_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                               struct llog_logid *logid, char *name)
 {
         struct llog_operations *lop;
-        __u32 cap;
-        int rc;
+        int raised, rc;
         ENTRY;
 
         rc = llog_obd2ops(ctxt, &lop);
@@ -567,14 +565,16 @@ static inline int llog_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         if (lop->lop_create == NULL)
                 RETURN(-EOPNOTSUPP);
 
-        cap = current->cap_effective;             
-        cap_raise(current->cap_effective, CAP_SYS_RESOURCE);
+        raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+        if (!raised)
+                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
         rc = lop->lop_create(ctxt, res, logid, name);
-        current->cap_effective = cap; 
+        if (!raised)
+                cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
         RETURN(rc);
 }
 
-static inline int llog_connect(struct llog_ctxt *ctxt, int count,
+static inline int llog_connect(struct llog_ctxt *ctxt,
                                struct llog_logid *logid, struct llog_gen *gen,
                                struct obd_uuid *uuid)
 {
@@ -588,7 +588,7 @@ static inline int llog_connect(struct llog_ctxt *ctxt, int count,
         if (lop->lop_connect == NULL)
                 RETURN(-EOPNOTSUPP);
 
-        rc = lop->lop_connect(ctxt, count, logid, gen, uuid);
+        rc = lop->lop_connect(ctxt, logid, gen, uuid);
         RETURN(rc);
 }
 

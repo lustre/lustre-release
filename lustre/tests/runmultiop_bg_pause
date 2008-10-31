@@ -8,4 +8,7 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 
 multiop_bg_pause $*
-exit $?
+pid=$!
+rc=$?
+echo "$pid" > /tmp/multiop_bg.pid
+exit $rc

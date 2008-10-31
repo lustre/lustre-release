@@ -223,9 +223,18 @@ void class_disconnect_exports(struct obd_device *obddev);
 void class_set_export_delayed(struct obd_export *exp);
 void class_handle_stale_exports(struct obd_device *obddev);
 void class_disconnect_expired_exports(struct obd_device *obd);
-void class_disconnect_stale_exports(struct obd_device *obd);
+void class_disconnect_stale_exports(struct obd_device *obddev,
+                                    enum obd_option flags);
 int class_stale_export_list(struct obd_device *obd, struct obd_ioctl_data *data);
 int class_manual_cleanup(struct obd_device *obd);
+
+static inline enum obd_option exp_flags_from_obd(struct obd_device *obd)
+{
+        return ((obd->obd_fail ? OBD_OPT_FAILOVER : 0) |
+                (obd->obd_force ? OBD_OPT_FORCE : 0) |
+                (obd->obd_abort_recovery ? OBD_OPT_ABORT_RECOV : 0) |
+                0);
+}
 
 /* obdo.c */
 void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_flag valid);
@@ -1191,7 +1200,7 @@ static inline int obd_teardown_async_page(struct obd_export *exp,
 
 static inline int obd_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
                              int objcount, struct obd_ioobj *obj,
-                             int niocount, struct niobuf_remote *remote,
+                             struct niobuf_remote *remote, int *pages,
                              struct niobuf_local *local,
                              struct obd_trans_info *oti)
 {
@@ -1201,14 +1210,15 @@ static inline int obd_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
         OBD_CHECK_OP(exp->exp_obd, preprw, -EOPNOTSUPP);
         EXP_COUNTER_INCREMENT(exp, preprw);
 
-        rc = OBP(exp->exp_obd, preprw)(cmd, exp, oa, objcount, obj, niocount,
-                                       remote, local, oti);
+        rc = OBP(exp->exp_obd, preprw)(cmd, exp, oa, objcount, obj, remote,
+                                       pages, local, oti);
         RETURN(rc);
 }
 
 static inline int obd_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                                int objcount, struct obd_ioobj *obj,
-                               int niocount, struct niobuf_local *local,
+                               struct niobuf_remote *rnb, int pages,
+                               struct niobuf_local *local,
                                struct obd_trans_info *oti, int rc)
 {
         ENTRY;
@@ -1216,8 +1226,8 @@ static inline int obd_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
         OBD_CHECK_OP(exp->exp_obd, commitrw, -EOPNOTSUPP);
         EXP_COUNTER_INCREMENT(exp, commitrw);
 
-        rc = OBP(exp->exp_obd, commitrw)(cmd, exp, oa, objcount, obj, niocount,
-                                         local, oti, rc);
+        rc = OBP(exp->exp_obd, commitrw)(cmd, exp, oa, objcount, obj,
+                                         rnb, pages, local, oti, rc);
         RETURN(rc);
 }
 
@@ -1232,6 +1242,20 @@ static inline int obd_merge_lvb(struct obd_export *exp,
         EXP_COUNTER_INCREMENT(exp, merge_lvb);
 
         rc = OBP(exp->exp_obd, merge_lvb)(exp, lsm, lvb, kms_only);
+        RETURN(rc);
+}
+
+static inline int obd_update_lvb(struct obd_export *exp,
+                                 struct lov_stripe_md *lsm,
+                                 struct ost_lvb *lvb, obd_flag valid)
+{
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_OP(exp->exp_obd, update_lvb, -EOPNOTSUPP);
+        EXP_COUNTER_INCREMENT(exp, update_lvb);
+
+        rc = OBP(exp->exp_obd, update_lvb)(exp, lsm, lvb, valid);
         RETURN(rc);
 }
 
@@ -1461,7 +1485,6 @@ static inline int obd_notify_observer(struct obd_device *observer,
         return rc1 ?: rc2;
  }
 
-#ifdef HAVE_QUOTA_SUPPORT
 static inline int obd_quotacheck(struct obd_export *exp,
                                  struct obd_quotactl *oqctl)
 {
@@ -1492,7 +1515,7 @@ static inline int obd_quota_adjust_qunit(struct obd_export *exp,
                                          struct quota_adjust_qunit *oqaq,
                                          struct lustre_quota_ctxt *qctxt)
 {
-#ifdef LPROCFS
+#if defined(LPROCFS) && defined(HAVE_QUOTA_SUPPORT)
         struct timeval work_start;
         struct timeval work_end;
         long timediff;
@@ -1500,7 +1523,7 @@ static inline int obd_quota_adjust_qunit(struct obd_export *exp,
         int rc;
         ENTRY;
 
-#ifdef LPROCFS
+#if defined(LPROCFS) && defined(HAVE_QUOTA_SUPPORT)
         if (qctxt)
                 do_gettimeofday(&work_start);
 #endif
@@ -1509,7 +1532,7 @@ static inline int obd_quota_adjust_qunit(struct obd_export *exp,
 
         rc = OBP(exp->exp_obd, quota_adjust_qunit)(exp, oqaq, qctxt);
 
-#ifdef LPROCFS
+#if defined(LPROCFS) && defined(HAVE_QUOTA_SUPPORT)
         if (qctxt) {
                 do_gettimeofday(&work_end);
                 timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
@@ -1519,7 +1542,6 @@ static inline int obd_quota_adjust_qunit(struct obd_export *exp,
 #endif
         RETURN(rc);
 }
-#endif
 
 static inline int obd_health_check(struct obd_device *obd)
 {
