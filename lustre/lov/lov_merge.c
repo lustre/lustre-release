@@ -1,25 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002, 2003 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #ifndef EXPORT_SYMTAB
@@ -57,6 +69,7 @@ int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
         __u64 current_atime = lvb->lvb_atime;
         __u64 current_ctime = lvb->lvb_ctime;
         int i;
+        int rc = 0;
 
         LASSERT_SPIN_LOCKED(&lsm->lsm_lock);
 #ifdef __KERNEL__
@@ -67,6 +80,11 @@ int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
                 obd_size lov_size, tmpsize;
 
                 loi = lsm->lsm_oinfo[i];
+                if (OST_LVB_IS_ERR(loi->loi_lvb.lvb_blocks)) {
+                        rc = OST_LVB_GET_ERR(loi->loi_lvb.lvb_blocks);
+                        continue;
+                }
+
                 tmpsize = loi->loi_kms;
                 if (kms_only == 0 && loi->loi_lvb.lvb_size > tmpsize)
                         tmpsize = loi->loi_lvb.lvb_size;
@@ -74,19 +92,14 @@ int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
                 lov_size = lov_stripe_size(lsm, tmpsize, i);
                 if (lov_size > size)
                         size = lov_size;
-                /* merge blocks, mtime, atime */
+                /* merge blocks, mtime, atime, ctime */
                 blocks += loi->loi_lvb.lvb_blocks;
+                if (loi->loi_lvb.lvb_mtime > current_mtime)
+                        current_mtime = loi->loi_lvb.lvb_mtime;
                 if (loi->loi_lvb.lvb_atime > current_atime)
                         current_atime = loi->loi_lvb.lvb_atime;
-
-                /* mtime is always updated with ctime, but can be set in past.
-                   As write and utime(2) may happen within 1 second, and utime's
-                   mtime has a priority over write's one, leave mtime from mds 
-                   for the same ctimes. */
-                if (loi->loi_lvb.lvb_ctime > current_ctime) {
+                if (loi->loi_lvb.lvb_ctime > current_ctime)
                         current_ctime = loi->loi_lvb.lvb_ctime;
-                        current_mtime = loi->loi_lvb.lvb_mtime;
-                }
         }
 
         lvb->lvb_size = size;
@@ -94,7 +107,7 @@ int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
         lvb->lvb_mtime = current_mtime;
         lvb->lvb_atime = current_atime;
         lvb->lvb_ctime = current_ctime;
-        RETURN(0);
+        RETURN(rc);
 }
 
 /* Must be called under the lov_stripe_lock() */
@@ -159,8 +172,6 @@ void lov_merge_attrs(struct obdo *tgt, struct obdo *src, obd_flag valid,
                         tgt->o_blksize += src->o_blksize;
                 if (valid & OBD_MD_FLCTIME && tgt->o_ctime < src->o_ctime)
                         tgt->o_ctime = src->o_ctime;
-                /* Only mtime from OSTs are merged here, as they cannot be set
-                   in past (only MDS's mtime can) do not look at ctime. */
                 if (valid & OBD_MD_FLMTIME && tgt->o_mtime < src->o_mtime)
                         tgt->o_mtime = src->o_mtime;
         } else {
@@ -170,4 +181,25 @@ void lov_merge_attrs(struct obdo *tgt, struct obdo *src, obd_flag valid,
                         tgt->o_size = lov_stripe_size(lsm,src->o_size,stripeno);
                 *set = 1;
         }
+}
+
+int lov_update_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
+                   struct ost_lvb *lvb, obd_flag valid)
+{
+        int i;
+        struct lov_oinfo *loi;
+
+        LASSERT_SPIN_LOCKED(&lsm->lsm_lock);
+        LASSERT(lsm->lsm_lock_owner == cfs_current());
+
+        for (i = 0; i < lsm->lsm_stripe_count; i++) {
+                loi = lsm->lsm_oinfo[i];
+                if (valid & OBD_MD_FLATIME)
+                        loi->loi_lvb.lvb_atime = lvb->lvb_atime;
+                if (valid & OBD_MD_FLMTIME)
+                        loi->loi_lvb.lvb_mtime = lvb->lvb_mtime;
+                if (valid & OBD_MD_FLCTIME)
+                        loi->loi_lvb.lvb_ctime = lvb->lvb_ctime;
+        }
+        return 0;
 }

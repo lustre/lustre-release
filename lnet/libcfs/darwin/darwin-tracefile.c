@@ -1,3 +1,38 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ */
 
 #define DEBUG_SUBSYSTEM S_LNET
 #define LUSTRE_TRACEFILE_PRIVATE
@@ -11,13 +46,7 @@
  */
 
 #define M_TCD_MAX_PAGES (128 * 1280)
-extern union trace_data_union trace_data[NR_CPUS];
-extern char *tracefile;
-extern long long tracefile_size;
-extern int trace_start_thread(void);
-extern void trace_stop_thread(void);
 
-long max_debug_mb = M_TCD_MAX_PAGES;
 static long max_permit_mb = (64 * 1024);
 
 spinlock_t trace_cpu_serializer;
@@ -185,95 +214,9 @@ void print_to_console(struct ptldebug_header *hdr, int mask, const char *buf,
 	}
 }
 
-/*
- * Sysctl handle of libcfs
- */
-#define MAX_TRACEFILE_PATH_LEN  256
-int cfs_trace_daemon SYSCTL_HANDLER_ARGS
+int trace_max_debug_mb(void)
 {
-	int error = 0;
-	char *name = NULL;
-
-        if (req->newptr == USER_ADDR_NULL) {
-                /* a read */
-                if (tracefile)
-                        error = sysctl_handle_string(oidp, tracefile, 0, req);
-                else
-                        error = sysctl_handle_string(oidp, "NA", 0, req);
-
-                return error;
-        }
-        
-        /* now hanle write requests */
-	MALLOC(name, char *, MAX_TRACEFILE_PATH_LEN + 1, M_TEMP, M_WAITOK | M_ZERO);
-	if (name == NULL)
-		return -ENOMEM;
-        name[0] = '\0';
-	tracefile_write_lock();
-	error = sysctl_handle_string(oidp, name, MAX_TRACEFILE_PATH_LEN + 1, req);
-	if (!error) {
-		if (strcmp(name, "stop") == 0) {
-			/* stop tracefile daemon */
-			tracefile = NULL;
-			trace_stop_thread();
-			goto out;
-		}else if (strncmp(name, "size=", 5) == 0) {
-			tracefile_size = simple_strtoul(name + 5, NULL, 0);
-			if (tracefile_size < 10 || tracefile_size > 20480)
-				tracefile_size = TRACEFILE_SIZE;
-			else
-				tracefile_size <<= 20;
-			goto out;
-
-		}
-		if (name[0] != '/') {
-			error = -EINVAL;
-			goto out;
-		}
-		if (tracefile != NULL)
-			cfs_free(tracefile);
-		tracefile = name;
-		name = NULL;
-		trace_start_thread();
-	} else {
-		/* Something was wrong with the write request */
-		printf("sysctl debug daemon failed: %d.\n", error);
-		goto out;
-	}
-out:
-	if (name != NULL)
-		FREE(name, M_TEMP);
-	tracefile_write_unlock();
-	return error;
-}
-#undef MAX_TRACEFILE_PATH_LEN
-
-
-int cfs_debug_mb SYSCTL_HANDLER_ARGS
-{
-	int i;
-	int error = 0;
-
-	error = sysctl_handle_long(oidp, oidp->oid_arg1, oidp->oid_arg2, req);
-	if (!error && req->newptr != USER_ADDR_NULL) {
-		/* We have a new value stored in the standard location */
-		if (max_debug_mb <= 0)
-			return -EINVAL;
-		if (max_debug_mb > max_permit_mb) {
-			printf("sysctl debug_mb is too big: %d.\n", max_debug_mb);
-			return 0;
-		}
-		for (i = 0; i < NR_CPUS; i++) {
-			struct trace_cpu_data *tcd;
-			tcd = &trace_data[i].tcd;
-			tcd->tcd_max_pages = max_debug_mb;
-		}
-	} else if (req->newptr != USER_ADDR_NULL) {
-		/* Something was wrong with the write request */
-		printf ("sysctl debug_mb fault: %d.\n", error);
-	}
-
-	return error;
+	return max_permit_mb;
 }
 
 void

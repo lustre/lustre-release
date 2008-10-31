@@ -10,11 +10,13 @@ sbin_scripts = lrun
 bin_scripts = llstat llobdstat plot-llstat
 
 if UTILS
-noinst_PROGRAMS = wirecheck wiretest obdio obdbarrier
+noinst_PROGRAMS = obdio obdbarrier
+EXTRA_PROGRAMS = wirecheck
 # mount only finds helpers in /sbin
 rootsbin_PROGRAMS = mount.lustre
-sbin_PROGRAMS = mkfs.lustre tunefs.lustre lctl \
-	l_getgroups llverfs llverdev llog_reader lr_reader
+sbin_PROGRAMS = mkfs.lustre tunefs.lustre lctl wiretest \
+	l_getgroups llverfs llverdev llog_reader ll_recover_lost_found_objs \
+	lr_reader ltrack_stats
 if LIBPTHREAD
 sbin_PROGRAMS += loadgen
 endif
@@ -26,16 +28,16 @@ endif # UTILS
 lib_LIBRARIES = liblustreapi.a
 
 lctl_SOURCES = parser.c obd.c lustre_cfg.c lctl.c parser.h obdctl.h platform.h
-lctl_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
-lctl_DEPENDENCIES := $(LIBPTLCTL)
+lctl_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
+lctl_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 
 lfs_SOURCES = lfs.c parser.c lustre_cfg.c obd.c
 lfs_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
 lfs_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a 
 
 loadgen_SOURCES = loadgen.c lustre_cfg.c obd.c
-loadgen_LDADD := $(LIBREADLINE) $(LIBPTLCTL) $(PTHREAD_LIBS)
-loadgen_DEPENDENCIES := $(LIBPTLCTL)
+loadgen_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL) $(PTHREAD_LIBS)
+loadgen_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 
 if EXT2FS_DEVEL
 EXT2FSLIB = -lext2fs
@@ -69,13 +71,17 @@ llog_reader_SOURCES = llog_reader.c
 llog_reader_LDADD := $(LIBPTLCTL)
 llog_reader_DEPENDENCIES := $(LIBPTLCTL)
 
+ll_recover_lost_found_objs_SOURCES = ll_recover_lost_found_objs.c
+ll_recover_lost_found_objs_LDADD := $(LIBPTLCTL)
+ll_recover_lost_found_objs_DEPENDENCIES := $(LIBPTLCTL)
+
 lr_reader_SOURCES = lr_reader.c
 
-mount_lustre_SOURCES = mount_lustre.c 
+mount_lustre_SOURCES = mount_lustre.c mount_utils.c mount_utils.h
 mount_lustre_LDADD := $(LIBPTLCTL)
 mount_lustre_DEPENDENCIES := $(LIBPTLCTL)
 
-mkfs_lustre_SOURCES = mkfs_lustre.c
+mkfs_lustre_SOURCES = mkfs_lustre.c mount_utils.c mount_utils.h
 mkfs_lustre_CPPFLAGS = -UTUNEFS $(AM_CPPFLAGS)
 mkfs_lustre_LDADD := $(LIBPTLCTL)
 mkfs_lustre_DEPENDENCIES := $(LIBPTLCTL)
@@ -85,12 +91,14 @@ tunefs_lustre_CPPFLAGS = -DTUNEFS $(AM_CPPFLAGS)
 tunefs_lustre_LDADD := $(mkfs_lustre_LDADD)
 tunefs_lustre_DEPENDENCIES := $(mkfs_lustre_DEPENDENCIES)
 
+ltrack_stats_SOURCES = ltrack_stats.c
+
 EXTRA_DIST = $(sbin_scripts) $(bin_scripts)
 
 # NOTE: this should only be run on i386.
 newwiretest: wirehdr.c wirecheck
 	cp wirehdr.c wiretest.c
-	./wirecheck >> wiretest.c
+	LANG=C ./wirecheck >> wiretest.c
 	cp ../ptlrpc/wirehdr.c ../ptlrpc/wiretest.c
-	./wirecheck >> ../ptlrpc/wiretest.c
+	LANG=C ./wirecheck >> ../ptlrpc/wiretest.c
 

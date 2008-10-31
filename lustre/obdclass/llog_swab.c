@@ -1,29 +1,43 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2004-2005 Cluster File Systems, Inc.
- *   Author: jacob berkman  <jacob@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/obdclass/llog_swab.c
  *
  * Swabbing of llog datatypes (from disk or over the wire).
  *
+ * Author: jacob berkman  <jacob@clusterfs.com>
  */
 
 #define DEBUG_SUBSYSTEM S_LOG
@@ -84,6 +98,14 @@ void lustre_swab_ll_fid(struct ll_fid *fid)
         __swab32s (&fid->f_type);
 }
 EXPORT_SYMBOL(lustre_swab_ll_fid);
+
+void lustre_swab_lu_fid(struct lu_fid *fid)
+{
+        __swab64s(&fid->f_seq);
+        __swab32s(&fid->f_oid);
+        __swab32s(&fid->f_ver);
+}
+EXPORT_SYMBOL(lustre_swab_lu_fid);
 
 void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
 {
@@ -155,7 +177,7 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
                 __swab32s(&lid->lid_id.lgl_ogen);
                 break;
         }
-
+        case LLOG_JOIN_REC:
         case LLOG_PAD_MAGIC:
         /* ignore old pad records of type 0 */
         case 0:
@@ -251,3 +273,67 @@ void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg)
         return;
 }
 EXPORT_SYMBOL(lustre_swab_lustre_cfg);
+
+/* used only for compatibility with old on-disk cfg_marker data */
+struct cfg_marker32 {
+        __u32   cm_step;
+        __u32   cm_flags;
+        __u32   cm_vers;
+        __u32   padding;
+        __u32   cm_createtime;
+        __u32   cm_canceltime;
+        char    cm_tgtname[MTI_NAME_MAXLEN];
+        char    cm_comment[MTI_NAME_MAXLEN];
+};
+
+#define MTI_NAMELEN32    (MTI_NAME_MAXLEN - \
+        (sizeof(struct cfg_marker) - sizeof(struct cfg_marker32)))
+
+void lustre_swab_cfg_marker(struct cfg_marker *marker, int swab, int size)
+{
+        struct cfg_marker32 *cm32 = (struct cfg_marker32*)marker;
+        ENTRY;
+
+        if (swab) {
+                __swab32s(&marker->cm_step);
+                __swab32s(&marker->cm_flags);
+                __swab32s(&marker->cm_vers);
+        }
+        if (size == sizeof(*cm32)) {
+                __u32 createtime, canceltime;
+                /* There was a problem with the original declaration of
+                 * cfg_marker on 32-bit systems because it used time_t as
+                 * a wire protocol structure, and didn't verify this in
+                 * wirecheck.  We now have to convert the offsets of the
+                 * later fields in order to work on 32- and 64-bit systems.
+                 *
+                 * Fortunately, the cm_comment field has no functional use
+                 * so can be sacrificed when converting the timestamp size.
+                 *
+                 * Overwrite fields from the end first, so they are not
+                 * clobbered, and use memmove() instead of memcpy() because
+                 * the source and target buffers overlap.  bug 16771 */
+                createtime = cm32->cm_createtime;
+                canceltime = cm32->cm_canceltime;
+                memmove(marker->cm_comment, cm32->cm_comment, MTI_NAMELEN32);
+                marker->cm_comment[MTI_NAMELEN32 - 1] = '\0';
+                memmove(marker->cm_tgtname, cm32->cm_tgtname,
+                        sizeof(marker->cm_tgtname));
+                if (swab) {
+                        __swab32s(&createtime);
+                        __swab32s(&canceltime);
+                }
+                marker->cm_createtime = createtime;
+                marker->cm_canceltime = canceltime;
+                CDEBUG(D_CONFIG, "Find old cfg_marker(Srv32b,Clt64b) "
+                       "for target %s, converting\n",
+                       marker->cm_tgtname);
+        } else if (swab) {
+                __swab64s(&marker->cm_createtime);
+                __swab64s(&marker->cm_canceltime);
+        }
+
+        EXIT;
+        return;
+}
+EXPORT_SYMBOL(lustre_swab_cfg_marker);

@@ -1,25 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001 Cluster File Systems, Inc. <braam@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- * Basic library routines. 
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
  *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/include/libcfs/linux/linux-fs.h
+ *
+ * Basic library routines.
  */
 
 #ifndef __LIBCFS_LINUX_CFS_FS_H__
@@ -46,9 +62,10 @@
 
 typedef struct file cfs_file_t;
 typedef struct dentry cfs_dentry_t;
+typedef struct dirent64 cfs_dirent_t;
 
 #ifdef __KERNEL__
-#define cfs_filp_size(f)               ((f)->f_dentry->d_inode->i_size)
+#define cfs_filp_size(f)               (i_size_read((f)->f_dentry->d_inode))
 #define cfs_filp_poff(f)                (&(f)->f_pos)
 
 /* 
@@ -75,12 +92,6 @@ typedef struct file_lock cfs_flock_t;
 #define cfs_flock_set_end(fl, end)          do { (fl)->fl_end = (end); } while(0)
 
 ssize_t cfs_user_write (cfs_file_t *filp, const char *buf, size_t count, loff_t *offset);
-
-/*
- * portable UNIX device file identification.
- */
-
-typedef dev_t cfs_rdev_t;
 
 #endif
 

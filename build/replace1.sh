@@ -16,7 +16,7 @@ if [ -f $CONFLICTS ] ; then
 fi
 
 if [ $# -lt 2 -o $# -gt 3 ]; then
-    echo "This is phase 1 of replacing branches. Usage: $0 parent(old) child(new) [dir]"
+    echo "This is phase 1 of replacing branches. Run this in the PARENT tree. Usage: $0 parent(will be replaced) child(will become the new parent) [dir]"
     exit
 fi
 
@@ -105,7 +105,7 @@ echo "done"
 
 # Apply all of the changes to your local tree:
 echo -n "Updating as -j $parent -j $child ..."
-$CVS update -j $parent -j $child $dir
+$CVS update -j $parent -j $child -dP $dir
 echo "done"
 
 echo -n "Recording conflicts in $CONFLICTS ..."

@@ -11,7 +11,8 @@
 
 # result file prefix.  date/time+hostname makes unique
 # NB ensure the path exists if it includes subdirs
-rslt=${rslt:-"/tmp/sgpdd_survey_`date +%F@%R`_`uname -n`"}
+rslt_loc=${rslt_loc:-"/tmp"}
+rslt=${rslt:-"$rslt_loc/sgpdd_survey_`date +%F@%R`_`uname -n`"}
 
 # what to do (read or write)
 actions=${actions:-"write read"}
@@ -37,10 +38,14 @@ thrhi=${thrhi:-4096}
 #####################################################################
 # leave the rest of this alone unless you know what you're doing...
 
-# sgp_dd's idea of disk sector size (Bytes)
-bs=512
 # and max # threads one instance will spawn
 SG_MAX_QUEUE=16
+
+# is the sg module loaded?
+sg_is_loaded=$(grep -q "^sg " /proc/modules && echo true || echo false)
+
+# did we load it?
+sg_was_loaded=false
 
 # map given device names into SG device names
 i=0
@@ -48,15 +53,23 @@ devs=()
 if [ "$scsidevs" ]; then
         # we will test for a LUN, the test for a partition
         # if the partition number is > 9 this will fail
+
+    # make sure sg kernel module is loaded
+    if ! $sg_is_loaded; then
+	echo "loading the sg kernel module"
+	modprobe sg && sg_was_loaded=true
+	sg_is_loaded=true
+    fi
+
     for d in $scsidevs; do
-	devs[$i]=`sg_map | awk "{if ($ 2 == \"$d\") print $ 1}"`
+	devs[$i]=`sg_map | awk "{if (\\\$2 == \"$d\") print \\\$1}"`
         if [ -z "${devs[i]}" ]; then
             echo "Can't find SG device for $d, testing for partition"
             pt=`echo $d | sed 's/[0-9]$//'`
             # Try again
-            devs[$i]=`sg_map | awk "{if ($ 2 == \"$pt\") print $ 1}"`
+            devs[$i]=`sg_map | awk "{if (\\\$2 == \"$pt\") print \\\$1}"`
             if [ -z "${devs[i]}" ]; then
-                echo "Can't find SG device $pt"
+                echo -e "Can't find SG device $pt.\nDo you have the sg module configured for your kernel?"
                 exit 1
            fi
 	fi
@@ -80,6 +93,13 @@ fi
 
 ndevs=${#devs[@]}
 
+# determine block size. This should also work for raw devices
+# If it fails, set to 512
+bs=$((`sg_readcap -b ${devs[0]} | awk '{print $2}'`))
+if [ $bs == 0  ];then
+	echo "sg_readcap failed, setting block size to 512"
+	bs=512
+fi
 rsltf=${rslt}.summary
 workf=${rslt}.detail
 echo -n > $rsltf
@@ -128,6 +148,13 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 		t0=`date +%s.%N`
 		for ((i=0;i<ndevs;i++)); do
 		    dev=${devs[i]}
+		    devsize=$((bs*`sg_readcap -b ${dev} | awk '{print $1}'`/1024))
+		    if [ $devsize -lt $actual_size ]; then
+			_dev=$(sg_map | grep $dev | awk '{ print $2; }')
+			echo -e "device $_dev not big enough: $devsize <" \
+				"$actual_size.\nConsider reducing \$size"
+			exit 1
+		    fi
 		    if [ $action = read ]; then
 			inf="if=$dev"
 			outf="of=/dev/null"
@@ -151,7 +178,9 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 		for ((i=0;i<ndevs;i++)); do
 		    for ((j=0;j<crg;j++)); do
 			rtmp=${tmpf}_${i}_${j}
-			if grep 'time to transfer data' $rtmp > /dev/null 2>&1; then
+			if grep 'error' $rtmp > /dev/null 2>&1; then
+				echo "Error found in $rtmp"
+			elif grep 'time to transfer data' $rtmp > /dev/null 2>&1; then
 			    ok=$((ok + 1))
 			fi
 			cat ${rtmp} >> $tmpf
@@ -176,3 +205,8 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 	done
     done
 done
+
+if $sg_was_loaded; then
+    echo "unloading sg module"
+    rmmod sg
+fi

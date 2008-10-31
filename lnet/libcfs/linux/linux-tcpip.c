@@ -1,22 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2005 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 #define DEBUG_SUBSYSTEM S_LNET
 
@@ -94,8 +109,7 @@ libcfs_ipif_query (char *name, int *up, __u32 *ip, __u32 *mask)
         nob = strnlen(name, IFNAMSIZ);
         if (nob == IFNAMSIZ) {
                 CERROR("Interface name %s too long\n", name);
-                rc = -EINVAL;
-                goto out;
+                return -EINVAL;
         }
 
         CLASSERT (sizeof(ifr.ifr_name) >= IFNAMSIZ);
@@ -105,14 +119,14 @@ libcfs_ipif_query (char *name, int *up, __u32 *ip, __u32 *mask)
 
         if (rc != 0) {
                 CERROR("Can't get flags for interface %s\n", name);
-                goto out;
+                return rc;
         }
 
         if ((ifr.ifr_flags & IFF_UP) == 0) {
                 CDEBUG(D_NET, "Interface %s down\n", name);
                 *up = 0;
                 *ip = *mask = 0;
-                goto out;
+                return 0;
         }
 
         *up = 1;
@@ -123,7 +137,7 @@ libcfs_ipif_query (char *name, int *up, __u32 *ip, __u32 *mask)
 
         if (rc != 0) {
                 CERROR("Can't get IP address for interface %s\n", name);
-                goto out;
+                return rc;
         }
 
         val = ((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr.s_addr;
@@ -135,14 +149,13 @@ libcfs_ipif_query (char *name, int *up, __u32 *ip, __u32 *mask)
 
         if (rc != 0) {
                 CERROR("Can't get netmask for interface %s\n", name);
-                goto out;
+                return rc;
         }
 
         val = ((struct sockaddr_in *)&ifr.ifr_netmask)->sin_addr.s_addr;
         *mask = ntohl(val);
 
- out:
-        return rc;
+        return 0;
 }
 
 EXPORT_SYMBOL(libcfs_ipif_query);
@@ -571,18 +584,16 @@ EXPORT_SYMBOL(libcfs_sock_listen);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,12)
 int sock_create_lite(int family, int type, int protocol, struct socket **res)
 {
-        int err = 0;
         struct socket *sock;
 
         sock = sock_alloc();
-        if (!sock) {
-                err = -ENOMEM;
-                goto out;
-        }
+        if (sock == NULL) 
+                return -ENOMEM;
+
         sock->type = type;
-out:
         *res = sock;
-        return err;
+
+        return 0;
 }
 #endif
 

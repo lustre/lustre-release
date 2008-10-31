@@ -1,8 +1,9 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002 Cluster File Systems, Inc.
- *   Author: Eric Barton <eric@bartonsoftware.com>
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ *
+ * Author: Eric Barton <eric@bartonsoftware.com>
  *
  * This file is part of Portals, http://www.lustre.org
  *
@@ -18,7 +19,6 @@
  * You should have received a copy of the GNU General Public License
  * along with Portals; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
  */
 
 #include "qswlnd.h"
@@ -26,11 +26,11 @@
 void
 kqswnal_notify_peer_down(kqswnal_tx_t *ktx)
 {
-        struct timeval     now;
         time_t             then;
 
-        do_gettimeofday (&now);
-        then = now.tv_sec - (jiffies - ktx->ktx_launchtime)/HZ;
+        then = cfs_time_current_sec() -
+                cfs_duration_sec(cfs_time_current() -
+                                 ktx->ktx_launchtime);
 
         lnet_notify(kqswnal_data.kqn_ni, ktx->ktx_nid, 0, then);
 }
@@ -63,7 +63,7 @@ kqswnal_map_tx_kiov (kqswnal_tx_t *ktx, int offset, int nob,
         int       nfrags    = ktx->ktx_nfrag;
         int       nmapped   = ktx->ktx_nmappedpages;
         int       maxmapped = ktx->ktx_npages;
-        uint32_t  basepage  = ktx->ktx_basepage + nmapped;
+        __u32     basepage  = ktx->ktx_basepage + nmapped;
         char     *ptr;
 
         EP_RAILMASK railmask;
@@ -218,7 +218,7 @@ kqswnal_map_tx_iov (kqswnal_tx_t *ktx, int offset, int nob,
         int       nfrags    = ktx->ktx_nfrag;
         int       nmapped   = ktx->ktx_nmappedpages;
         int       maxmapped = ktx->ktx_npages;
-        uint32_t  basepage  = ktx->ktx_basepage + nmapped;
+        __u32     basepage  = ktx->ktx_basepage + nmapped;
 
         EP_RAILMASK railmask;
         int         rail;
@@ -607,7 +607,7 @@ kqswnal_launch (kqswnal_tx_t *ktx)
         unsigned long flags;
         int   rc;
 
-        ktx->ktx_launchtime = jiffies;
+        ktx->ktx_launchtime = cfs_time_current();
 
         if (kqswnal_data.kqn_shuttingdown)
                 return (-ESHUTDOWN);

@@ -1,30 +1,47 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2006 Cluster File Systems, Inc.
- *   Author: Eric Barton <eric@bartonsoftware.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/klnds/o2iblnd/o2iblnd.h
+ *
+ * Author: Eric Barton <eric@bartonsoftware.com>
  */
 
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
-#ifdef HAVE_KERNEL_CONFIG_H
+#ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
 #include <linux/module.h>
@@ -49,6 +66,7 @@
 #include <linux/kmod.h>
 #include <linux/sysctl.h>
 #include <linux/random.h>
+#include <linux/pci.h>
 
 #include <net/sock.h>
 #include <linux/in.h>
@@ -97,13 +115,15 @@ typedef int gfp_t;
 #define IBLND_TX_MSG_PAGES()  ((IBLND_TX_MSG_BYTES() + PAGE_SIZE - 1)/PAGE_SIZE)
 
 /* RX messages (per connection) */
-#define IBLND_RX_MSGS         (IBLND_MSG_QUEUE_SIZE*2)
+#define IBLND_RX_MSGS         (IBLND_MSG_QUEUE_SIZE * 2)
 #define IBLND_RX_MSG_BYTES    (IBLND_RX_MSGS * IBLND_MSG_SIZE)
 #define IBLND_RX_MSG_PAGES    ((IBLND_RX_MSG_BYTES + PAGE_SIZE - 1)/PAGE_SIZE)
 
-#define IBLND_CQ_ENTRIES()    (IBLND_RX_MSGS +                                  \
-                               (*kiblnd_tunables.kib_concurrent_sends) *        \
+/* WRs and CQEs (per connection) */
+#define IBLND_RECV_WRS        IBLND_RX_MSGS
+#define IBLND_SEND_WRS        ((*kiblnd_tunables.kib_concurrent_sends) * \
                                (1 + IBLND_MAX_RDMA_FRAGS))
+#define IBLND_CQ_ENTRIES()    (IBLND_RECV_WRS + IBLND_SEND_WRS)
 
 typedef struct
 {
@@ -126,8 +146,8 @@ typedef struct
         int              *kib_fmr_flush_trigger; /* When to trigger FMR flush */
         int              *kib_fmr_cache;        /* enable FMR pool cache? */
 #endif
-#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
-        struct ctl_table_header *kib_sysctl;    /* sysctl interface */
+#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
+        cfs_sysctl_table_header_t *kib_sysctl;  /* sysctl interface */
 #endif
 } kib_tunables_t;
 
@@ -392,6 +412,7 @@ typedef struct kib_conn
         int                 ibc_ready:1;        /* CQ callback fired */
         unsigned long       ibc_last_send;      /* time of last send */
         struct list_head    ibc_early_rxs;      /* rxs completed before ESTABLISHED */
+        struct list_head    ibc_tx_noops;       /* IBLND_MSG_NOOPs */
         struct list_head    ibc_tx_queue;       /* sends that need a credit */
         struct list_head    ibc_tx_queue_nocred;/* sends that don't need a credit */
         struct list_head    ibc_tx_queue_rsrvd; /* sends that need to reserve an ACK/DONE msg */
@@ -493,17 +514,39 @@ static inline kib_conn_t *
 kiblnd_get_conn_locked (kib_peer_t *peer)
 {
         LASSERT (!list_empty(&peer->ibp_conns));
-        
+
         /* just return the first connection */
         return list_entry(peer->ibp_conns.next, kib_conn_t, ibc_list);
 }
 
 static inline int
-kiblnd_send_keepalive(kib_conn_t *conn) 
+kiblnd_send_keepalive(kib_conn_t *conn)
 {
         return (*kiblnd_tunables.kib_keepalive > 0) &&
                 time_after(jiffies, conn->ibc_last_send +
                            *kiblnd_tunables.kib_keepalive*HZ);
+}
+
+static inline int
+kiblnd_send_noop(kib_conn_t *conn)
+{
+        LASSERT (conn->ibc_state >= IBLND_CONN_ESTABLISHED);
+
+        if (conn->ibc_outstanding_credits < IBLND_CREDIT_HIGHWATER &&
+            !kiblnd_send_keepalive(conn))
+                return 0; /* No need to send NOOP */
+
+        if (!list_empty(&conn->ibc_tx_noops) ||       /* NOOP already queued */
+            !list_empty(&conn->ibc_tx_queue_nocred) || /* can be piggybacked */
+            conn->ibc_credits == 0)                    /* no credit */
+                return 0;
+
+        if (conn->ibc_credits == 1 &&      /* last credit reserved for */
+            conn->ibc_outstanding_credits == 0) /* giving back credits */
+                return 0;
+
+        /* No tx to piggyback NOOP onto or no credit to send a tx */
+        return (list_empty(&conn->ibc_tx_queue) || conn->ibc_credits == 1);
 }
 
 static inline void
@@ -570,7 +613,7 @@ kiblnd_rd_size (kib_rdma_desc_t *rd)
 }
 #endif
 
-#if (IBLND_OFED_VERSION == 102)
+#ifdef HAVE_OFED_IB_DMA_MAP
 
 static inline __u64 kiblnd_dma_map_single(struct ib_device *dev,
                                           void *msg, size_t size,
@@ -622,7 +665,7 @@ static inline unsigned int kiblnd_sg_dma_len(struct ib_device *dev,
 #define KIBLND_CONN_PARAM(e)            ((e)->param.conn.private_data)
 #define KIBLND_CONN_PARAM_LEN(e)        ((e)->param.conn.private_data_len)
 
-#elif (IBLND_OFED_VERSION == 101)
+#else
 
 static inline dma_addr_t kiblnd_dma_map_single(struct ib_device *dev,
                                                void *msg, size_t size,
@@ -730,6 +773,3 @@ int  kiblnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg);
 int  kiblnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
                  unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
                  unsigned int offset, unsigned int mlen, unsigned int rlen);
-
-
-

@@ -8,7 +8,7 @@ Release: @RELEASE@
 License: GPL
 Group: Development/Kernel
 Source: lustre-ldiskfs-%{version}.tar.gz
-URL: http://clusterfs.com/
+URL: http://www.sun.com/software/products/lustre/index.xml
 BuildRoot: %{_tmppath}/lustre-ldiskfs-%{version}-root
 Requires: modutils >= 2.4.10
 

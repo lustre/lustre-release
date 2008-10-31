@@ -1,95 +1,240 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #include "socklnd.h"
 
-# if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
-static ctl_table ksocknal_ctl_table[21];
+# if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
+static cfs_sysctl_table_t ksocknal_ctl_table[21];
 
-ctl_table ksocknal_top_ctl_table[] = {
-        {200, "socknal", NULL, 0, 0555, ksocknal_ctl_table},
+cfs_sysctl_table_t ksocknal_top_ctl_table[] = {
+        {
+                .ctl_name = 200,
+                .procname = "socknal",
+                .data     = NULL,
+                .maxlen   = 0,
+                .mode     = 0555,
+                .child    = ksocknal_ctl_table
+        },
         { 0 }
 };
 
 int
 ksocknal_lib_tunables_init ()
 {
-	int    i = 0;
-	int    j = 1;
+        int    i = 0;
+        int    j = 1;
 
-        ksocknal_ctl_table[i++] = (ctl_table)
-		{j++, "timeout", ksocknal_tunables.ksnd_timeout,
-		 sizeof (int), 0644, NULL, &proc_dointvec};
-        ksocknal_ctl_table[i++] = (ctl_table)
-		{j++, "credits", ksocknal_tunables.ksnd_credits,
-		 sizeof (int), 0444, NULL, &proc_dointvec};
-        ksocknal_ctl_table[i++] = (ctl_table)
-		{j++, "peer_credits", ksocknal_tunables.ksnd_peercredits,
-		 sizeof (int), 0444, NULL, &proc_dointvec};
-        ksocknal_ctl_table[i++] = (ctl_table)
-		{j++, "nconnds", ksocknal_tunables.ksnd_nconnds,
-		 sizeof (int), 0444, NULL, &proc_dointvec};
-        ksocknal_ctl_table[i++] = (ctl_table)
-		{j++, "min_reconnectms", ksocknal_tunables.ksnd_min_reconnectms,
-		 sizeof (int), 0444, NULL, &proc_dointvec};
-        ksocknal_ctl_table[i++] = (ctl_table)
-		{j++, "max_reconnectms", ksocknal_tunables.ksnd_max_reconnectms,
-		 sizeof (int), 0444, NULL, &proc_dointvec};
-        ksocknal_ctl_table[i++] = (ctl_table)
-		{j++, "eager_ack", ksocknal_tunables.ksnd_eager_ack,
-		 sizeof (int), 0644, NULL, &proc_dointvec};
-        ksocknal_ctl_table[i++] = (ctl_table)
-		{j++, "zero_copy", ksocknal_tunables.ksnd_zc_min_frag,
-		 sizeof (int), 0644, NULL, &proc_dointvec};
-        ksocknal_ctl_table[i++] = (ctl_table)
-		{j++, "typed", ksocknal_tunables.ksnd_typed_conns,
-		 sizeof (int), 0444, NULL, &proc_dointvec};
-        ksocknal_ctl_table[i++] = (ctl_table)
-		{j++, "min_bulk", ksocknal_tunables.ksnd_min_bulk,
-		 sizeof (int), 0644, NULL, &proc_dointvec};
-        ksocknal_ctl_table[i++] = (ctl_table)
-		{j++, "rx_buffer_size", ksocknal_tunables.ksnd_rx_buffer_size,
-		 sizeof(int), 0644, NULL, &proc_dointvec};
-        ksocknal_ctl_table[i++] = (ctl_table)
-		{j++, "tx_buffer_size", ksocknal_tunables.ksnd_tx_buffer_size,
-		 sizeof(int), 0644, NULL, &proc_dointvec};
-        ksocknal_ctl_table[i++] = (ctl_table)
-		{j++, "nagle", ksocknal_tunables.ksnd_nagle,
-		 sizeof(int), 0644, NULL, &proc_dointvec};
-#if CPU_AFFINITY
-        ksocknal_ctl_table[i++] = (ctl_table)
-		{j++, "irq_affinity", ksocknal_tunables.ksnd_irq_affinity,
-		 sizeof(int), 0644, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t) {
+                .ctl_name = j++,
+                .procname = "timeout",
+                .data     = ksocknal_tunables.ksnd_timeout,
+                .maxlen   = sizeof (int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        };
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t) {
+                .ctl_name = j++,
+                .procname = "credits",
+                .data     = ksocknal_tunables.ksnd_credits,
+                .maxlen   = sizeof (int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        };
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t) {
+                .ctl_name = j++,
+                .procname = "peer_credits",
+                .data     = ksocknal_tunables.ksnd_peercredits,
+                .maxlen   = sizeof (int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        };
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t) {
+                .ctl_name = j++,
+                .procname = "nconnds",
+                .data     = ksocknal_tunables.ksnd_nconnds,
+                .maxlen   = sizeof (int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        };
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t) {
+                .ctl_name = j++,
+                .procname = "min_reconnectms",
+                .data     = ksocknal_tunables.ksnd_min_reconnectms,
+                .maxlen   = sizeof (int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        };
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t) {
+                .ctl_name = j++,
+                .procname = "max_reconnectms",
+                .data     = ksocknal_tunables.ksnd_max_reconnectms,
+                .maxlen   = sizeof (int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        };
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t) {
+                .ctl_name = j++,
+                .procname = "eager_ack",
+                .data     = ksocknal_tunables.ksnd_eager_ack,
+                .maxlen   = sizeof (int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        };
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t) {
+                .ctl_name = j++,
+                .procname = "zero_copy",
+                .data     = ksocknal_tunables.ksnd_zc_min_frag,
+                .maxlen   = sizeof (int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        };
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t) {
+                .ctl_name = j++,
+                .procname = "typed",
+                .data     = ksocknal_tunables.ksnd_typed_conns,
+                .maxlen   = sizeof (int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        };
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t) {
+                .ctl_name = j++,
+                .procname = "min_bulk",
+                .data     = ksocknal_tunables.ksnd_min_bulk,
+                .maxlen   = sizeof (int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        };
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t) {
+                .ctl_name = j++,
+                .procname = "rx_buffer_size",
+                .data     = ksocknal_tunables.ksnd_rx_buffer_size,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        };
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t) {
+                .ctl_name = j++,
+                .procname = "tx_buffer_size",
+                .data     = ksocknal_tunables.ksnd_tx_buffer_size,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        };
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t) {
+                .ctl_name = j++,
+                .procname = "nagle",
+                .data     = ksocknal_tunables.ksnd_nagle,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        };
+#ifdef CPU_AFFINITY
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t) {
+                .ctl_name = j++,
+                .procname = "irq_affinity",
+                .data     = ksocknal_tunables.ksnd_irq_affinity,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        };
 #endif
-        ksocknal_ctl_table[i++] = (ctl_table)
-		{j++, "keepalive_idle", ksocknal_tunables.ksnd_keepalive_idle,
-		 sizeof(int), 0644, NULL, &proc_dointvec};
-        ksocknal_ctl_table[i++] = (ctl_table)
-		{j++, "keepalive_count", ksocknal_tunables.ksnd_keepalive_count,
-		 sizeof(int), 0644, NULL, &proc_dointvec};
-	ksocknal_ctl_table[i++] = (ctl_table)
-		{j++, "keepalive_intvl", ksocknal_tunables.ksnd_keepalive_intvl,
-		 sizeof(int), 0644, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t) {
+                .ctl_name = j++,
+                .procname = "keepalive_idle",
+                .data     = ksocknal_tunables.ksnd_keepalive_idle,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        };
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t) {
+                .ctl_name = j++,
+                .procname = "keepalive_count",
+                .data     = ksocknal_tunables.ksnd_keepalive_count,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        };
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t) {
+                .ctl_name = j++,
+                .procname = "keepalive_intvl",
+                .data     = ksocknal_tunables.ksnd_keepalive_intvl,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        };
 #ifdef SOCKNAL_BACKOFF
-        ksocknal_ctl_table[i++] = (ctl_table)
-                {j++, "backoff_init", ksocknal_tunables.ksnd_backoff_init,
-		 sizeof(int), 0644, NULL, &proc_dointvec};
-        ksocknal_ctl_table[i++] = (ctl_table)
-                {j++, "backoff_max", ksocknal_tunables.ksnd_backoff_max,
-		 sizeof(int), 0644, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t) {
+                .ctl_name = j++,
+                .procname = "backoff_init",
+                .data     = ksocknal_tunables.ksnd_backoff_init,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        };
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t) {
+                .ctl_name = j++,
+                .procname = "backoff_max",
+                .data     = ksocknal_tunables.ksnd_backoff_max,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        };
 #endif
+#if SOCKNAL_VERSION_DEBUG
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t) {
+                .ctl_name = j++,
+                .procname = "protocol",
+                .data     = ksocknal_tunables.ksnd_protocol,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        };
+#endif
+        ksocknal_ctl_table[i++] =  (cfs_sysctl_table_t) { 0 };
 
-	LASSERT (j == i+1);
-	LASSERT (i < sizeof(ksocknal_ctl_table)/sizeof(ksocknal_ctl_table[0]));
+        LASSERT (j == i);
+        LASSERT (i <= sizeof(ksocknal_ctl_table)/sizeof(ksocknal_ctl_table[0]));
 
         ksocknal_tunables.ksnd_sysctl =
                 cfs_register_sysctl_table(ksocknal_top_ctl_table, 0);
 
         if (ksocknal_tunables.ksnd_sysctl == NULL)
-		CWARN("Can't setup /proc tunables\n");
+                CWARN("Can't setup /proc tunables\n");
 
-	return 0;
+        return 0;
 }
 
 void
@@ -102,7 +247,7 @@ ksocknal_lib_tunables_fini ()
 int
 ksocknal_lib_tunables_init ()
 {
-	return 0;
+        return 0;
 }
 
 void
@@ -114,7 +259,7 @@ ksocknal_lib_tunables_fini ()
 void
 ksocknal_lib_bind_irq (unsigned int irq)
 {
-#if (defined(CONFIG_SMP) && CPU_AFFINITY)
+#if (defined(CONFIG_SMP) && defined(CPU_AFFINITY))
         int              bind;
         int              cpu;
         char             cmdline[64];
@@ -149,7 +294,7 @@ ksocknal_lib_bind_irq (unsigned int irq)
                   "echo %d > /proc/irq/%u/smp_affinity", 1 << cpu, irq);
 
         LCONSOLE_INFO("Binding irq %u to CPU %d with cmd: %s\n",
-		      irq, cpu, cmdline);
+                      irq, cpu, cmdline);
 
         /* FIXME: Find a better method of setting IRQ affinity...
          */
@@ -162,8 +307,8 @@ int
 ksocknal_lib_get_conn_addrs (ksock_conn_t *conn)
 {
         int rc = libcfs_sock_getaddr(conn->ksnc_sock, 1,
-				     &conn->ksnc_ipaddr,
-				     &conn->ksnc_port);
+                                     &conn->ksnc_ipaddr,
+                                     &conn->ksnc_port);
 
         /* Didn't need the {get,put}connsock dance to deref ksnc_sock... */
         LASSERT (!conn->ksnc_closing);
@@ -174,7 +319,7 @@ ksocknal_lib_get_conn_addrs (ksock_conn_t *conn)
         }
 
         rc = libcfs_sock_getaddr(conn->ksnc_sock, 0,
-				 &conn->ksnc_myipaddr, NULL);
+                                 &conn->ksnc_myipaddr, NULL);
         if (rc != 0) {
                 CERROR ("Error %d getting sock local IP\n", rc);
                 return rc;
@@ -187,7 +332,7 @@ unsigned int
 ksocknal_lib_sock_irq (struct socket *sock)
 {
         int                irq = 0;
-#if CPU_AFFINITY
+#ifdef CPU_AFFINITY
         struct dst_entry  *dst;
 
         if (!*ksocknal_tunables.ksnd_irq_affinity)
@@ -213,7 +358,7 @@ int
 ksocknal_lib_zc_capable(struct socket *sock)
 {
         int  caps = sock->sk->sk_route_caps;
-        
+
         /* ZC if the socket supports scatter/gather and doesn't need software
          * checksums */
         return ((caps & NETIF_F_SG) != 0 &&
@@ -270,7 +415,7 @@ ksocknal_lib_send_iov (ksock_conn_t *conn, ksock_tx_t *tx)
                 rc = sock_sendmsg(sock, &msg, nob);
                 set_fs (oldmm);
         }
-	return rc;
+        return rc;
 }
 
 int
@@ -287,6 +432,7 @@ ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
         if (kiov->kiov_len >= *ksocknal_tunables.ksnd_zc_min_frag &&
             tx->tx_msg.ksm_zc_req_cookie != 0) {
                 /* Zero copy is enabled */
+                struct sock   *sk = sock->sk;
                 struct page   *page = kiov->kiov_page;
                 int            offset = kiov->kiov_offset;
                 int            fragsize = kiov->kiov_len;
@@ -299,7 +445,12 @@ ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
                     fragsize < tx->tx_resid)
                         msgflg |= MSG_MORE;
 
-                rc = tcp_sendpage(sock, page, offset, fragsize, msgflg);
+                if (sk->sk_prot->sendpage != NULL) {
+                        rc = sk->sk_prot->sendpage(sk, page,
+                                                   offset, fragsize, msgflg);
+                } else {
+                        rc = tcp_sendpage(sock, page, offset, fragsize, msgflg);
+                }
         } else {
 #if SOCKNAL_SINGLE_FRAG_TX || !SOCKNAL_RISK_KMAP_DEADLOCK
                 struct iovec  scratch;
@@ -341,7 +492,7 @@ ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
                 for (i = 0; i < niov; i++)
                         kunmap(kiov[i].kiov_page);
         }
-	return rc;
+        return rc;
 }
 
 void
@@ -420,14 +571,14 @@ ksocknal_lib_recv_iov (ksock_conn_t *conn)
                         fragnob = iov[i].iov_len;
                         if (fragnob > sum)
                                 fragnob = sum;
-                
-                        conn->ksnc_rx_csum = ksocknal_csum(conn->ksnc_rx_csum, 
+
+                        conn->ksnc_rx_csum = ksocknal_csum(conn->ksnc_rx_csum,
                                                            iov[i].iov_base, fragnob);
                 }
                 conn->ksnc_msg.ksm_csum = saved_csum;
         }
 
-	return rc;
+        return rc;
 }
 
 int
@@ -487,7 +638,7 @@ ksocknal_lib_recv_kiov (ksock_conn_t *conn)
                         fragnob = kiov[i].kiov_len;
                         if (fragnob > sum)
                                 fragnob = sum;
-                
+
                         conn->ksnc_rx_csum = ksocknal_csum(conn->ksnc_rx_csum,
                                                            base, fragnob);
 
@@ -497,10 +648,11 @@ ksocknal_lib_recv_kiov (ksock_conn_t *conn)
         for (i = 0; i < niov; i++)
                 kunmap(kiov[i].kiov_page);
 
-	return (rc);
+        return (rc);
 }
 
-void ksocknal_lib_csum_tx(ksock_tx_t *tx)
+void
+ksocknal_lib_csum_tx(ksock_tx_t *tx)
 {
         int          i;
         __u32        csum;
@@ -553,13 +705,13 @@ ksocknal_lib_get_conn_tunables (ksock_conn_t *conn, int *txmem, int *rxmem, int 
                 return (-ESHUTDOWN);
         }
 
-	rc = libcfs_sock_getbuf(sock, txmem, rxmem);
+        rc = libcfs_sock_getbuf(sock, txmem, rxmem);
         if (rc == 0) {
                 len = sizeof(*nagle);
-		set_fs(KERNEL_DS);
+                set_fs(KERNEL_DS);
                 rc = sock->ops->getsockopt(sock, SOL_TCP, TCP_NODELAY,
                                            (char *)nagle, &len);
-		set_fs(oldmm);
+                set_fs(oldmm);
         }
 
         ksocknal_connsock_decref(conn);
@@ -624,20 +776,23 @@ ksocknal_lib_setup_sock (struct socket *sock)
                 }
         }
 
-	rc = libcfs_sock_setbuf(sock,
+        rc = libcfs_sock_setbuf(sock,
                                 *ksocknal_tunables.ksnd_tx_buffer_size,
                                 *ksocknal_tunables.ksnd_rx_buffer_size);
-	if (rc != 0) {
-		CERROR ("Can't set buffer tx %d, rx %d buffers: %d\n",
+        if (rc != 0) {
+                CERROR ("Can't set buffer tx %d, rx %d buffers: %d\n",
                         *ksocknal_tunables.ksnd_tx_buffer_size,
                         *ksocknal_tunables.ksnd_rx_buffer_size, rc);
-		return (rc);
-	}
+                return (rc);
+        }
 
 /* TCP_BACKOFF_* sockopt tunables unsupported in stock kernels */
 #ifdef SOCKNAL_BACKOFF
         if (*ksocknal_tunables.ksnd_backoff_init > 0) {
                 option = *ksocknal_tunables.ksnd_backoff_init;
+#ifdef SOCKNAL_BACKOFF_MS
+                option *= 1000;
+#endif
 
                 set_fs (KERNEL_DS);
                 rc = sock->ops->setsockopt (sock, SOL_TCP, TCP_BACKOFF_INIT,
@@ -652,6 +807,9 @@ ksocknal_lib_setup_sock (struct socket *sock)
 
         if (*ksocknal_tunables.ksnd_backoff_max > 0) {
                 option = *ksocknal_tunables.ksnd_backoff_max;
+#ifdef SOCKNAL_BACKOFF_MS
+                option *= 1000;
+#endif
 
                 set_fs (KERNEL_DS);
                 rc = sock->ops->setsockopt (sock, SOL_TCP, TCP_BACKOFF_MAX,
@@ -792,7 +950,7 @@ ksocknal_data_ready (struct sock *sk, int n)
                 LASSERT (sk->sk_data_ready != &ksocknal_data_ready);
                 sk->sk_data_ready (sk, n);
         } else
-		ksocknal_read_callback(conn);
+                ksocknal_read_callback(conn);
 
         read_unlock (&ksocknal_data.ksnd_global_lock);
 
@@ -832,11 +990,11 @@ ksocknal_write_space (struct sock *sk)
         }
 
         if (wspace >= min_wpace) {              /* got enough space */
-		ksocknal_write_callback(conn);
+                ksocknal_write_callback(conn);
 
-		/* Clear SOCK_NOSPACE _after_ ksocknal_write_callback so the
-		 * ENOMEM check in ksocknal_transmit is race-free (think about
-		 * it). */
+                /* Clear SOCK_NOSPACE _after_ ksocknal_write_callback so the
+                 * ENOMEM check in ksocknal_transmit is race-free (think about
+                 * it). */
 
                 clear_bit (SOCK_NOSPACE, &sk->sk_socket->flags);
         }
@@ -847,33 +1005,32 @@ ksocknal_write_space (struct sock *sk)
 void
 ksocknal_lib_save_callback(struct socket *sock, ksock_conn_t *conn)
 {
-	conn->ksnc_saved_data_ready = sock->sk->sk_data_ready;
-	conn->ksnc_saved_write_space = sock->sk->sk_write_space;
+        conn->ksnc_saved_data_ready = sock->sk->sk_data_ready;
+        conn->ksnc_saved_write_space = sock->sk->sk_write_space;
 }
 
 void
 ksocknal_lib_set_callback(struct socket *sock,  ksock_conn_t *conn)
 {
-	sock->sk->sk_user_data = conn;
-	sock->sk->sk_data_ready = ksocknal_data_ready;
-	sock->sk->sk_write_space = ksocknal_write_space;
-	return;
+        sock->sk->sk_user_data = conn;
+        sock->sk->sk_data_ready = ksocknal_data_ready;
+        sock->sk->sk_write_space = ksocknal_write_space;
+        return;
 }
 
 void
 ksocknal_lib_reset_callback(struct socket *sock, ksock_conn_t *conn)
 {
-	/* Remove conn's network callbacks.
-	 * NB I _have_ to restore the callback, rather than storing a noop,
-	 * since the socket could survive past this module being unloaded!! */
-	sock->sk->sk_data_ready = conn->ksnc_saved_data_ready;
-	sock->sk->sk_write_space = conn->ksnc_saved_write_space;
+        /* Remove conn's network callbacks.
+         * NB I _have_ to restore the callback, rather than storing a noop,
+         * since the socket could survive past this module being unloaded!! */
+        sock->sk->sk_data_ready = conn->ksnc_saved_data_ready;
+        sock->sk->sk_write_space = conn->ksnc_saved_write_space;
 
-	/* A callback could be in progress already; they hold a read lock
-	 * on ksnd_global_lock (to serialise with me) and NOOP if
-	 * sk_user_data is NULL. */
-	sock->sk->sk_user_data = NULL;
+        /* A callback could be in progress already; they hold a read lock
+         * on ksnd_global_lock (to serialise with me) and NOOP if
+         * sk_user_data is NULL. */
+        sock->sk->sk_user_data = NULL;
 
-	return ;
+        return ;
 }
-

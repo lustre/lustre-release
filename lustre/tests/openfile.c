@@ -1,5 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #if 0
@@ -7,7 +39,9 @@
 #endif
 
 /* for O_DIRECTORY and O_DIRECT */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
 #include <stdio.h>
 #include <sys/types.h>
@@ -56,15 +90,15 @@ void Usage_and_abort(void)
 int main(int argc, char** argv)
 {
         int    fd;
-        int    flags=0;
-        mode_t mode=0644;
-        char*  fname=NULL;
-        int    mode_set=0;
-        int    flag_set=0;
-        int    file_set=0;
+        int    flags = 0;
+        mode_t mode = 0644;
+        char  *fname = NULL;
+        int    mode_set = 0;
+        int    flag_set = 0;
         int    c;
-        int    save_errno;
-        char*  cloned_flags = NULL;
+        int    save_errno = 0;
+        int    print_usage = 0;
+        char  *cloned_flags = NULL;
 
         if (argc == 1)
                 Usage_and_abort();
@@ -77,10 +111,22 @@ int main(int argc, char** argv)
                         cloned_flags = (char *)malloc(strlen(optarg)+1);
                         if (cloned_flags == NULL) {
                                 fprintf(stderr, "Insufficient memory.\n");
-                                exit(-1);
+                                save_errno = -1;
+                                goto out;
                         }
 
                         strncpy(cloned_flags, optarg, strlen(optarg)+1);
+                        flags = atoi(cloned_flags);
+                        if (flags > 0) {
+                                flag_set = 1;
+#ifdef DEBUG
+                                printf("flags = %d\n",flags);
+#endif
+                                break;
+                        } else {
+                                flags = 0;
+                        }
+
                         for (tmp = strtok(cloned_flags, ":|"); tmp;
                              tmp = strtok(NULL, ":|")) {
                                 int i = 0;
@@ -98,10 +144,10 @@ int main(int argc, char** argv)
                                 if (flag_table[i].flag == -1) {
                                         fprintf(stderr, "No such flag: %s\n",
                                                 tmp);
-                                        exit(-1);
+                                        save_errno = -1;
+                                        goto out;
                                 }
                         }
-                        free(cloned_flags);
 #ifdef DEBUG
                         printf("flags = %x\n", flags);
 #endif
@@ -119,21 +165,23 @@ int main(int argc, char** argv)
                         break;
                 default:
                         fprintf(stderr, "Bad parameters.\n");
-                        Usage_and_abort();
+                        print_usage = 1;
+                        goto out;
                 }
         }
 
         if (optind == argc) {
                 fprintf(stderr, "Bad parameters.\n");
-                Usage_and_abort();
+                print_usage = 1;
+                goto out;
         }
 
         fname = argv[optind];
-        file_set = 1;
 
-        if (!flag_set || !file_set) {
+        if (!flag_set) {
                 fprintf(stderr, "Missing flag or file-name\n");
-                exit(-1);
+                save_errno = -1;
+                goto out;
         }
 
 
@@ -152,14 +200,19 @@ int main(int argc, char** argv)
                         printf(", mode=%o", mode);
                 printf(")\n");
                 close(fd);
-                return 0;
+        } else {
+                fprintf(stderr, "Error in opening file \"%s\"(flags=%s",
+                        fname, cloned_flags);
+                if (mode_set)
+                        fprintf(stderr, ", mode=%o", mode);
+                fprintf(stderr, ") %d: %s\n", save_errno, strerror(save_errno));
         }
 
-        fprintf(stderr, "Error in opening file \"%s\"(flags=%s",
-                fname, cloned_flags);
-        if (mode_set)
-                fprintf(stderr, ", mode=%o", mode);
-        fprintf(stderr, ") %d: %s\n", save_errno, strerror(save_errno));
+out:
+        if (cloned_flags)
+                free(cloned_flags);
+        if (print_usage)
+                Usage_and_abort();
 
         return save_errno;
 }

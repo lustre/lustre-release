@@ -9,237 +9,72 @@
 # ...or...
 # echo_client instances (set 'client_names')
 # ... use 'host:name' for obd instances on other nodes.
-
 # allow these to be passed in via string...
-ost_names_str=${ost_names_str:-""}
-if [ -n "$ost_names_str" ]; then
-    declare -a ost_names
-    count=0
-    for name in $ost_names_str; do
-        ost_names[$count]=$name
-        count=$((count+1))
-    done
-else
-    ost_names=(ost{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16})
-fi
+# OR
+# one can specify only case=disk or case=network or case=netdisk through 
+# command line.
 
-#client_names=(ns8:ECHO_ns8 ns9:ECHO_ns9)
-client_names_str=${client_names_str:-""}
-if [ -n "$client_names_str" ]; then
-    # make sure we unset ost_names so that our client_names get noticed... 
-    unset ost_names
-    declare -a client_names
-    count=0
-    for name in $client_names_str; do
-        client_names[$count]=$name
-        count=$((count+1))
-    done
-fi
+# Perquisite: For "disk" case and "netdisk" case you need to have lustre setup
+#             with one or more ost's. For "network" case  you need to have all
+#             modules (those llmount.sh loades) loaded in kernel. And the 
+#             'lctl dl' output must be blank.
 
+# How to run test:
+# case 1 (local disk):
+#   $ nobjhi=2 thrhi=2 size=1024 case=disk sh obdfilter-survey
+#   one can also run test with user defined targets as follows,
+#   $ nobjhi=2 thrhi=2 size=1024 targets="lustre-OST0000 lustre-OST0001 ..." sh obdfilter-survey
+# case 2 (network):
+#   $ nobjhi=2 thrhi=2 size=1024 targets="<name/ip_of_server>" case=network sh obdfilter-survey
+#   where, targets is name or ip address of system, which you want to 
+#   set as server.
+# case 3 (network and disk):
+#   $ nobjhi=2 thrhi=2 size=1024 case=netdisk sh obdfilter-survey
+#   one can also run test with user defined targets as follows,
+#   $ nobjhi=2 thrhi=2 size=1024 targets="<osc_name> ..." sh obdfilter-survey
+#[ NOTE: It is advised to have automated login (passwordless entry) between server and 
+#  client systems on which this test runs.]
+
+# include library 
+source libecho
+
+# The following variables can be set in the environment, or on the
+# command line
 # result file prefix (date/time + hostname makes unique)
 # NB ensure path to it exists
-rslt=${rslt:-"/tmp/obdfilter_survey_`date +%F@%R`_`uname -n`"}
-
-# lustre root (if running with own source tree)
-# lustre_root=${lustre_root:-"/my/directory/lustre"}
-
-# what tests to run (first must be write)
-tests_str=${tests_str:-""}
-if [ -n "$tests_str" ]; then
-    declare -a tests
-    count=0
-    for name in $tests_str; do
-        tests[$count]=$name
-        count=$((count+1))
-    done
-else
-    #tests=(write rewrite read reread rewrite_again)
-    tests=(write rewrite read)
-fi
+rslt_loc=${rslt_loc:-"/tmp"}
+rslt=${rslt:-"$rslt_loc/obdfilter_survey_`date +%F@%R`_`uname -n`"}
 
 # Set this true to check file contents
-verify=0
+verify=${verify:-0}
 
 # total size (MBytes) per obd instance
 # large enough to avoid cache effects 
 # and to make test startup/shutdown overhead insignificant
 size=${size:-16384}
 
-# record size (KBytes)
+# record size (KBytes) ( 7168 max)
 rszlo=${rszlo:-1024}
 rszhi=${rszhi:-1024}
 
 # number of objects per OST
 nobjlo=${nobjlo:-1}
-nobjhi=${nobjhi:-512}
+#was nobjhi=${nobjhi:-512}
+nobjhi=${nobjhi:-16}
 
 # threads per OST (1024 max)
 thrlo=${thrlo:-1}
-thrhi=${thrhi:-64}
+thrhi=${thrhi:-16}
 
-# restart from here iff all are defined
-restart_rsz=
-restart_thr=1
-restart_nobj=1
+# End of variables
 
-# machine's page size (K)
-if [ -z "$PAGE_SIZE" ]; then
-    if which python >/dev/null; then
-	PAGE_SIZE=`echo 'import resource; print resource.getpagesize()/1024;' |python`
-    fi
-fi
-PAGE_SIZE=${PAGE_SIZE:-4}
-
-# max buffer_mem (total_threads * buffer size)
-# (to avoid lctl ENOMEM problems)
-max_buffer_mem=$((1024*1024))
-
-# how to run commands on other nodes
-# You need to make this work on your cluster if you have specified
-# non-local obd instances above
-custom_remote_shell () {
-    host=$1
-    shift
-    cmds="$*"
-    here=`pwd`
-    # Hop on to the remote node, chdir to 'here' and run the given
-    # commands. One of the following will probably work.
-    ssh $host "cd $here; $cmds"
-    #rsh $host "cd $here; $cmds"
-    # we have to remove the leading `uname -n`: from pdsh output lines
-    #pdsh -w $host "cd $here; $cmds" | sed 's/^[^:]*://'
-}
-
-#####################################################################
-# leave the rest of this alone unless you know what you're doing...
-
-# binaries
-lsmod="/sbin/lsmod"
-modprobe="/sbin/modprobe"
-insmod="/sbin/insmod"
-rmmod="/sbin/rmmod"
-
-# lctl::test_brw bandwidth snapshot interval (seconds)
-snap=1
-
-
-if [ ${#tests[@]} -eq 0 -o "${tests[0]}" != "write" ]; then
-    echo "tests: ${tests[@]}"
-    echo "First test must be 'write'" 1>&2
-    exit 1
-fi
-
-rsltf="${rslt}.summary"
-workf="${rslt}.detail"
-cmdsf="${rslt}.script"
-vmstatf="${rslt}.vmstat"
-echo -n > $rsltf
-echo -n > $workf
-
-declare -a vmstatpids
-
-# hide a little trick to unset this from the command line
-if [ "$lustre_root" == " " ]; then
-    unset lustre_root
-fi
-
-if [ -z "$lustre_root" ]; then
-    lctl=lctl
-else
-    lctl=${lustre_root}/utils/lctl
-fi
-
-remote_shell () {
-    host=$1
-    shift
-    cmds="$*"
-    if [ "$host" = "localhost" -o "$host" = `uname -n` ]; then
-	eval "$cmds"
-    else
-	custom_remote_shell $host "$cmds"
-    fi
-}
-
-obdecho_loaded() {
-    local host=$1
-    remote_shell $host $lsmod | grep obdecho > /dev/null 2>&1
-}
-
-load_obdecho () {
-    local host=$1
-    if [ -z "$lustre_root" ]; then
-	remote_shell $host $modprobe obdecho
-    elif [ -f ${lustre_root}/obdecho/obdecho.ko ]; then
-	remote_shell $host $insmod ${lustre_root}/obdecho/obdecho.ko
-    else
-	remote_shell $host $insmod ${lustre_root}/obdecho/obdecho.o
-    fi
-}
-
-unload_obdecho () {
-    local host=$1
-    remote_shell $host $rmmod obdecho
-}
-
-get_devno () {
-    local host=$1
-    local type=$2
-    local name=$3
-    remote_shell $host $lctl device_list | \
-	awk "{if (\$2 == \"UP\" && \$3 == \"$type\" && \$4 == \"$name\") {\
-	          print \$1; exit}}"
-}
-
-get_ec_devno () {
-    local host=$1
-    local client_name="$2"
-    local ost_name="$3"
-    if [ -z "$client_name" ]; then
-	if [ -z "$ost_name" ]; then
-	    echo "client and ost name both null" 1>&2
-	    return
-	fi
-	client_name=${ost_name}_echo_client
-    fi
-    ec=`get_devno $host echo_client $client_name`
-    if [ -n "$ec" ]; then
-	echo $ec $client_name 0
-	return
-    fi
-    if [ -z "$ost_name" ]; then
-	echo "no echo client and ost_name not set, client: $client_name, host: $host" 1>&2
-	return
-    fi
-    ost=`get_devno $host obdfilter $ost_name`
-    if [ -z "$ost" ]; then
-	echo "OST $ost_name not setup" 1>&2
-	return
-    fi
-    remote_shell $host "$lctl <<EOF
-        attach echo_client $client_name ${client_name}_UUID
-	setup $ost_name
-EOF"
-    ec=`get_devno $host echo_client $client_name`
-    if [ -z "$ec" ]; then
-	echo "Can't setup echo client" 1>&2
-	return
-    fi
-    echo $ec $client_name 1
-}
-
-teardown_ec_devno () {
-    local host=$1
-    local client_name=$2
-    remote_shell $host "$lctl <<EOF
-	cfg $client_name
-	cleanup
-	detach
-EOF"
-}
-
+# create a set of objects, check there are 'n' contiguous ones and
+# return the first or 'ERROR'
+# parameter: 1. hostname
+#	     2. device number
+#	     3. number of object to be created (specified by user)
+#	     4. tempfile name
 create_objects () {
-    # create a set of objects, check there are 'n' contiguous ones and
-    # return the first or 'ERROR'
     local host=$1
     local devno=$2
     local nobj=$3
@@ -276,12 +111,13 @@ create_objects () {
         echo "ERROR" 
     elif [ $error -ne 0 ]; then 
         echo "ERROR: non contiguous objs found" >&2 
-        echo "ERROR" 
     else 
         echo $first 
     fi
 }
 
+# destroys all objects created in create_objects routine
+# parameter: 3. start obj id.
 destroy_objects () {
     local host=$1
     local devno=$2
@@ -293,7 +129,7 @@ destroy_objects () {
 
 get_stats () {
     local rfile=$1
-    awk < $rfile \
+    gawk < $rfile \
 	'/^Selected device [0-9]+$/ {n = 0; next}\
 	/error/ {n = -1; exit}\
 	/^[0-9]+\/[0-9]+ Total: [0-9]+\.[0-9]+\/second$/ {n++; v=strtonum($3); \
@@ -315,6 +151,8 @@ get_global_stats () {
 		       printf "%d %f %f\n", err, min, max}'
 }
 
+# enable or disable data check.
+# parameter: 1. read/write
 testname2type () {
     # 'x' disables data check
     if ((verify)); then
@@ -330,61 +168,186 @@ testname2type () {
 
 print_summary () {
     if [ "$1" = "-n" ]; then
-	minusn=$1; shift
+        minusn=$1; shift
     else
-	minusn=""
+        minusn=""
     fi
     echo $minusn "$*" >> $rsltf
     echo $minusn "$*"
 }
 
-unique () {
-    echo "$@" | xargs -n1 echo | sort -u
-}
+# Customisation variables
+#####################################################################
+# One can change variable values in this section as per requirements
 
-split_hostname () {
-    local name=$1
-    case $name in
-    *:*) host=`echo $name | sed 's/:.*$//'`
-	 name=`echo $name | sed 's/[^:]*://'`
-	 ;;
-    *)   host=localhost
-	 ;;
-    esac
-    echo "$host $name"
-}
-
-# split out hostnames from client/ost names
-ndevs=${#client_names[@]}
-if ((ndevs != 0)); then
-    if ((${#ost_names[@]} != 0)); then
-        echo "Please specify client_names or ost_names, but not both" 1>&2
-	exit 1
-    fi
-    for ((i=0; i<ndevs;i++)); do
-	str=(`split_hostname ${client_names[$i]}`)
-	host_names[$i]=${str[0]}
-	client_names[$i]=${str[1]}
-    done
-else
-    ndevs=${#ost_names[@]}
-    if ((ndevs == 0)); then
-        echo "Please specify either client_names or ost_names" 1>&2
-	exit 1
-    fi
-    for ((i=0; i<ndevs;i++)); do
-	str=(`split_hostname ${ost_names[$i]}`)
-	host_names[$i]=${str[0]}
-	ost_names[$i]=${str[1]}
+targets=${targets:-""}
+case=${case:-"disk"}
+if [ -n "$targets" ]; then
+    declare -a ost_names
+    declare -a client_names
+    count=0
+    for name in $targets; do
+        if [ $case == "disk" ]; then
+            ost_names[$count]=$name
+        else
+            client_names[$count]=$name
+        fi
+        count=$((count+1))
     done
 fi
 
+# what tests to run (first must be write)
+tests_str=${tests_str:-""}
+if [ -n "$tests_str" ]; then
+    declare -a tests
+    count=0
+    for name in $tests_str; do
+        tests[$count]=$name
+        count=$((count+1))
+    done
+else
+    #tests=(write rewrite read reread rewrite_again)
+    tests=(write rewrite read)
+fi
+
+# restart from here iff all are defined
+restart_rsz=
+restart_thr=1
+restart_nobj=1
+
+# machine's page size (K)
+if [ -z "$PAGE_SIZE" ]; then
+    if which python >/dev/null; then
+	PAGE_SIZE=`echo 'import resource; print resource.getpagesize()/1024;' |python`
+    fi
+fi
+PAGE_SIZE=${PAGE_SIZE:-4}
+
+# max buffer_mem (total_threads * buffer size)
+# (to avoid lctl ENOMEM problems)
+max_buffer_mem=$((1024 * 1024))
+snap=1
+clean_srv_OSS=0
+# Customisation variables ends here. 
+#####################################################################
+# leave the rest of this alone unless you know what you're doing...
+
+# check and insert obdecho module
+if ! lsmod | grep obdecho > /dev/null; then
+    modprobe obdecho
+fi
+if [ ${#tests[@]} -eq 0 -o "${tests[0]}" != "write" ]; then
+    echo "tests: ${tests[@]}"
+    echo "First test must be 'write'" 1>&2
+    exit 1
+fi
+
+rsltf="${rslt}.summary"
+workf="${rslt}.detail"
+cmdsf="${rslt}.script"
+vmstatf="${rslt}.vmstat"
+echo -n > $rsltf
+echo -n > $workf
+
+# hide a little trick to unset this from the command line
+if [ "$lustre_root" == " " ]; then
+    unset lustre_root
+fi
+
+if [ -z "$lustre_root" ]; then
+    lctl=lctl
+else
+    lctl=${lustre_root}/utils/lctl
+fi
+
+# split out hostnames from client/ost names
+ndevs=0
+for trgt in $targets; do
+    str=(`split_hostname $trgt`)
+    host_names[$ndevs]=${str[0]}
+    client_names[$ndevs]=${str[1]}
+    ndevs=$((ndevs+1))
+done
+if [ $case == "netdisk" ]; then
+    if [ "$targets" ]; then
+        for ((i = 0; i < $ndevs; i++)); do
+             setup_osc_for_remote_ost ${host_names[$i]} ${client_names[$i]} $i
+	     cleanup_oscs="$cleanup_oscs ${client_names[$i]}_osc"
+	     host_names[$i]=localhost
+        done
+    fi
+        declare -a osc_names
+        declare -a osc_uuids
+        osc_names_str=$(lctl dl |grep osc | awk "{if (\$2 == \"UP\" && \$3 == \"osc\") {print \$4} }")
+        count=0;
+        for name in $osc_names_str; do
+            osc_names[$count]=$name
+            count=$((count+1))
+        done
+        osc_uuid_str=$(lctl dl |grep osc | awk "{if (\$2 == \"UP\" && \$3 == \"osc\") {print \$5} }")
+        count=0;
+        for uuid in $osc_uuid_str; do
+            osc_uuids[$count]=$uuid
+            count=$((count+1))
+        done
+        for (( i = 0; i < $count; i++ ))
+        do
+            ec_using_osc ${osc_names[$i]}
+        done
+        echo_clients=$(lctl dl | grep echo_client | awk "{if (\$2 == \"UP\" && \$3 == \"echo_client\") {print \$4} }")
+        cnt=0;
+        for name in $echo_clients; do
+            client_names[$cnt]=$name
+            host_names[$cnt]=localhost
+            cnt=$((cnt+1))
+        done
+        ndevs=${#client_names[@]}
+fi
+if [ $case == "network" ]; then
+    server_nid=$targets
+    if [ -z "$server_nid" ]; then
+	echo "Specify hostname or ip-address of server"
+	exit 1;
+    fi
+    # check for obdecho module on server
+    if ! dsh $server_nid root "lsmod | grep obdecho > /dev/null"; then
+        dsh $server_nid root "modprobe obdecho"
+    fi
+    # Now do the server setup
+    setup_srv_obd $server_nid "echo_srv"
+    oss_on_srv=`dsh $server_nid root "lctl dl | grep OSS" | awk '{ print $4 }'`
+    if [ -z $oss_on_srv ]; then
+        setup_OSS $server_nid
+        clean_srv_OSS=1
+    fi
+    if ! dsh $server_nid root "lctl dl | grep obdecho > /dev/null 2>&1"; then
+        echo "obdecho not setup on server"
+        exit 1
+    fi
+    if ! dsh $server_nid root "lctl dl | grep ost > /dev/null 2>&1"; then
+        echo "ost not setup on server"
+        exit 1
+    fi
+    # Now start client setup
+    osc_names_str=$(lctl dl)
+    if [ -n "$osc_names_str" ]; then
+        echo "The existing setup must be cleaned";
+        exit 0;
+    fi
+    ec_using_srv_nid $server_nid "echotmp" "echotmp_UUID"
+    client_names[0]="echotmp_ecc"
+fi
+if [ -z "$targets" ]; then
+    if [ $case == "disk" ]; then
+	get_targets
+        ndevs=${#ost_names[@]}	
+    fi	
+fi
 # get vmstat started
-# disable LNET debug and get obdecho loaded on all relevant hosts
+# disable portals debug and get obdecho loaded on all relevant hosts
 unique_hosts=(`unique ${host_names[@]}`)
 pidcount=0
 for host in ${unique_hosts[@]}; do
-    remote_shell $host "echo 0 > /proc/sys/lnet/debug"
     host_vmstatf=${vmstatf}_${host}
     echo -n > $host_vmstatf
     remote_shell $host "vmstat 5 >> $host_vmstatf" &
@@ -403,9 +366,8 @@ for host in ${unique_hosts[@]}; do
     echo "Can't load obdecho on $host" 1>&2
     exit 1
 done
-
 # get all the echo_client device numbers and names
-for ((i=0; i<ndevs; i++)); do
+for ((i=0; i < $ndevs; i++)); do
     host=${host_names[$i]}
     devno=(`get_ec_devno $host "${client_names[$i]}" "${ost_names[$i]}"`)
     if ((${#devno[@]} != 3)); then
@@ -415,10 +377,14 @@ for ((i=0; i<ndevs; i++)); do
     client_names[$i]=${devno[1]}
     do_teardown_ec[$i]=${devno[2]}
 done
-
-for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
-    for ((nobj=$nobjlo;nobj<=$nobjhi;nobj*=2)); do 
-	for ((thr=$thrlo;thr<=$thrhi;thr*=2)); do
+if (($ndevs <= 0 || ${#host_names[@]} <= 0)); then
+    echo "no devices or hosts specified"
+    cleanup 0 $clean_srv_OSS $cleanup_oscs
+fi
+print_summary "$(date) Obdfilter-survey for case=$case from $(hostname)"
+for ((rsz = $rszlo; rsz <= $rszhi; rsz*=2)); do
+    for ((nobj = $nobjlo; nobj <= $nobjhi; nobj*=2)); do 
+	for ((thr = $thrlo; thr <= $thrhi; thr*=2)); do
 	    if ((thr % nobj)); then
 		continue
 	    fi
@@ -453,7 +419,7 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 	    fi
 	    # create the objects
 	    tmpf="${workf}_tmp"
-	    for ((idx=0; idx < ndevs; idx++)); do
+	    for ((idx = 0; idx < $ndevs; idx++)); do
 		host=${host_names[$idx]}
 		devno=${devnos[$idx]}
 		client_name="${host}:${client_names[$idx]}"
@@ -478,7 +444,7 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 		for host in ${unique_hosts[@]}; do
 		    echo -n > ${cmdsf}_${host}
 		done
-		for ((idx=0; idx < ndevs; idx++)); do
+		for ((idx = 0; idx < $ndevs; idx++)); do
 		    host=${host_names[$idx]}
 		    devno=${devnos[$idx]}
 		    tmpfi="${tmpf}_$idx"
@@ -499,9 +465,7 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
                 t0=`date +%s.%N`
                 pidcount=0
                 for host in ${unique_hosts[@]}; do
-		    # brutal hack to deal with a non-shared /tmp
-		    scp -q ${cmdsf}_${host} ${host}:/tmp > /dev/null
-                    remote_shell $host bash ${cmdsf}_${host} &
+                    remote_shell $host bash < ${cmdsf}_${host} &
                     pidarray[$pidcount]=$!
                     pidcount=$((pidcount+1))
                 done
@@ -522,13 +486,12 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 		print_summary -n "$str"
 		# collect/check individual OST stats
 		echo -n > $tmpf
-		for ((idx=0; idx < ndevs; idx++)); do
+		for ((idx = 0; idx < $ndevs; idx++)); do
 		    client_name="${host_names[$idx]}:${client_names[$idx]}"
 		    tmpfi="${tmpf}_$idx"
 		    echo "=============> $test $client_name" >> $workf
 		    host="${host_names[$idx]}"
-		    scp -q ${host}:$tmpfi $tmpfi > /dev/null
-		    cat $tmpfi >> $workf
+		    remote_shell $host cat $tmpfi >> $workf
 		    get_stats $tmpfi >> $tmpf
 		    rm $tmpfi
 		done
@@ -552,7 +515,7 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 	    done
 	    print_summary ""
 	    # destroy objects we created
-	    for ((idx=0; idx < ndevs; idx++)); do
+	    for ((idx = 0; idx < $ndevs; idx++)); do
 		host=${host_names[$idx]}
 		devno=${devnos[$idx]}
 		client_name="${host}:${client_names[$idx]}"
@@ -565,27 +528,5 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 	done
     done
 done
-
-# tear down any echo clients we created
-for ((i=0; i<ndevs; i++)); do
-    host=${host_names[$i]}
-    if ((${do_teardown_ec[$i]})); then
-	teardown_ec_devno $host ${client_names[$i]}
-    fi
-done
-
-# unload any obdecho modules we loaded
-pidcount=0
-for host in ${unique_hosts[@]}; do
-    remote_shell $host "killall vmstat" &
-    pid=$!
-    kill -term ${vmstatpids[$pidcount]}
-    kill -kill ${vmstatpids[$pidcount]} 2>/dev/null
-    wait $pid
-    pidcount=$((pidcount+1))
-    if ((${do_unload_obdecho[$host]})); then
-        unload_obdecho $host
-    fi
-done
-
+cleanup 0 $clean_srv_OSS $cleanup_oscs
 exit 0

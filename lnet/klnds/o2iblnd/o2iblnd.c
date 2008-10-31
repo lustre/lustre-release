@@ -1,24 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2006 Cluster File Systems, Inc.
- *   Author: Eric Barton <eric@bartonsoftware.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/klnds/o2iblnd/o2iblnd.c
+ *
+ * Author: Eric Barton <eric@bartonsoftware.com>
  */
 
 #include "o2iblnd.h"
@@ -191,14 +208,14 @@ kiblnd_unpack_msg(kib_msg_t *msg, int nob)
                         __swab32s(&msg->ibm_u.putack.ibpam_rd.rd_key);
                         __swab32s(&msg->ibm_u.putack.ibpam_rd.rd_nfrags);
                 }
-                
+
                 n = msg->ibm_u.putack.ibpam_rd.rd_nfrags;
                 if (n <= 0 || n > IBLND_MAX_RDMA_FRAGS) {
                         CERROR("Bad PUT_ACK nfrags: %d, should be 0 < n <= %d\n", 
                                n, IBLND_MAX_RDMA_FRAGS);
                         return -EPROTO;
                 }
-                
+
                 if (msg_nob < offsetof(kib_msg_t, ibm_u.putack.ibpam_rd.rd_frags[n])) {
                         CERROR("Short PUT_ACK: %d(%d)\n", msg_nob,
                                (int)offsetof(kib_msg_t, ibm_u.putack.ibpam_rd.rd_frags[n]));
@@ -314,7 +331,7 @@ kiblnd_create_peer (lnet_ni_t *ni, kib_peer_t **peerp, lnet_nid_t nid)
 
         /* always called with a ref on ni, which prevents ni being shutdown */
         LASSERT (net->ibn_shutdown == 0);
-        
+
         /* npeers only grows with the global lock held */
         atomic_inc(&net->ibn_npeers);
 
@@ -598,6 +615,10 @@ kiblnd_debug_conn (kib_conn_t *conn)
         list_for_each(tmp, &conn->ibc_early_rxs)
                 kiblnd_debug_rx(list_entry(tmp, kib_rx_t, rx_list));
 
+        CDEBUG(D_CONSOLE, "   tx_noops:\n");
+        list_for_each(tmp, &conn->ibc_tx_noops)
+                kiblnd_debug_tx(list_entry(tmp, kib_tx_t, tx_list));
+
         CDEBUG(D_CONSOLE, "   tx_queue_nocred:\n");
         list_for_each(tmp, &conn->ibc_tx_queue_nocred)
                 kiblnd_debug_tx(list_entry(tmp, kib_tx_t, tx_list));
@@ -666,6 +687,7 @@ kiblnd_create_conn (kib_peer_t *peer, struct rdma_cm_id *cmid, int state)
         conn->ibc_cmid = cmid;
 
         INIT_LIST_HEAD(&conn->ibc_early_rxs);
+        INIT_LIST_HEAD(&conn->ibc_tx_noops);
         INIT_LIST_HEAD(&conn->ibc_tx_queue);
         INIT_LIST_HEAD(&conn->ibc_tx_queue_rsrvd);
         INIT_LIST_HEAD(&conn->ibc_tx_queue_nocred);
@@ -716,9 +738,15 @@ kiblnd_create_conn (kib_peer_t *peer, struct rdma_cm_id *cmid, int state)
                 }
         }
 
+#ifdef HAVE_OFED_IB_COMP_VECTOR
+        cq = ib_create_cq(cmid->device,
+                          kiblnd_cq_completion, kiblnd_cq_event, conn,
+                          IBLND_CQ_ENTRIES(), 0);
+#else
         cq = ib_create_cq(cmid->device,
                           kiblnd_cq_completion, kiblnd_cq_event, conn,
                           IBLND_CQ_ENTRIES());
+#endif
         if (!IS_ERR(cq)) {
                 conn->ibc_cq = cq;
         } else {
@@ -731,13 +759,12 @@ kiblnd_create_conn (kib_peer_t *peer, struct rdma_cm_id *cmid, int state)
                 CERROR("Can't request completion notificiation: %d\n", rc);
                 goto failed_2;
         }
-        
+
         memset(init_qp_attr, 0, sizeof(*init_qp_attr));
         init_qp_attr->event_handler = kiblnd_qp_event;
         init_qp_attr->qp_context = conn;
-        init_qp_attr->cap.max_send_wr = (*kiblnd_tunables.kib_concurrent_sends) *
-                                        (1 + IBLND_MAX_RDMA_FRAGS);
-        init_qp_attr->cap.max_recv_wr = IBLND_RX_MSGS;
+        init_qp_attr->cap.max_send_wr = IBLND_SEND_WRS;
+        init_qp_attr->cap.max_recv_wr = IBLND_RECV_WRS;
         init_qp_attr->cap.max_send_sge = 1;
         init_qp_attr->cap.max_recv_sge = 1;
         init_qp_attr->sq_sig_type = IB_SIGNAL_REQ_WR;
@@ -844,6 +871,7 @@ kiblnd_destroy_conn (kib_conn_t *conn)
         LASSERT (!in_interrupt());
         LASSERT (atomic_read(&conn->ibc_refcount) == 0);
         LASSERT (list_empty(&conn->ibc_early_rxs));
+        LASSERT (list_empty(&conn->ibc_tx_noops));
         LASSERT (list_empty(&conn->ibc_tx_queue));
         LASSERT (list_empty(&conn->ibc_tx_queue_rsrvd));
         LASSERT (list_empty(&conn->ibc_tx_queue_nocred));
@@ -864,8 +892,8 @@ kiblnd_destroy_conn (kib_conn_t *conn)
                 break;
         }
 
-        if (conn->ibc_cmid->qp != NULL)
-                rdma_destroy_qp(conn->ibc_cmid);
+        if (cmid->qp != NULL)
+                rdma_destroy_qp(cmid);
 
         if (conn->ibc_cq != NULL) {
                 rc = ib_destroy_cq(conn->ibc_cq);
@@ -881,7 +909,7 @@ kiblnd_destroy_conn (kib_conn_t *conn)
 
                         LASSERT (rx->rx_nob >= 0); /* not posted */
 
-                        kiblnd_dma_unmap_single(conn->ibc_cmid->device,
+                        kiblnd_dma_unmap_single(cmid->device,
                                                 KIBLND_UNMAP_ADDR(rx, rx_msgunmap,
                                                                   rx->rx_msgaddr),
                                                 IBLND_MSG_SIZE, DMA_FROM_DEVICE);
@@ -1174,20 +1202,20 @@ kiblnd_alloc_tx_descs (lnet_ni_t *ni)
                         return -ENOMEM;
                 }
 #else
-                LIBCFS_ALLOC(tx->tx_wrq, 
-                             (1 + IBLND_MAX_RDMA_FRAGS) * 
+                LIBCFS_ALLOC(tx->tx_wrq,
+                             (1 + IBLND_MAX_RDMA_FRAGS) *
                              sizeof(*tx->tx_wrq));
                 if (tx->tx_wrq == NULL)
                         return -ENOMEM;
-                
-                LIBCFS_ALLOC(tx->tx_sge, 
-                             (1 + IBLND_MAX_RDMA_FRAGS) * 
+
+                LIBCFS_ALLOC(tx->tx_sge,
+                             (1 + IBLND_MAX_RDMA_FRAGS) *
                              sizeof(*tx->tx_sge));
                 if (tx->tx_sge == NULL)
                         return -ENOMEM;
-                
-                LIBCFS_ALLOC(tx->tx_rd, 
-                             offsetof(kib_rdma_desc_t, 
+
+                LIBCFS_ALLOC(tx->tx_rd,
+                             offsetof(kib_rdma_desc_t,
                                       rd_frags[IBLND_MAX_RDMA_FRAGS]));
                 if (tx->tx_rd == NULL)
                         return -ENOMEM;
@@ -1610,7 +1638,7 @@ kiblnd_startup (lnet_ni_t *ni)
                 if (!IS_ERR(mr)) {
                         ibdev->ibd_mr = mr;
                 } else {
-                        CERROR("Can't get MR: %ld\n", PTR_ERR(pd));
+                        CERROR("Can't get MR: %ld\n", PTR_ERR(mr));
                         goto failed;
                 }
 
@@ -1703,7 +1731,7 @@ kiblnd_module_init (void)
         return 0;
 }
 
-MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
+MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Kernel OpenIB gen2 LND v1.00");
 MODULE_LICENSE("GPL");
 

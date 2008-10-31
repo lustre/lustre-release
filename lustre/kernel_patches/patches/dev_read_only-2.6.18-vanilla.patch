@@ -1,19 +1,6 @@
-Index: linux-2.6/fs/block_dev.c
-===================================================================
---- linux-2.6.orig/fs/block_dev.c	2006-07-06 23:41:48.000000000 +0800
-+++ linux-2.6/fs/block_dev.c	2006-07-15 16:20:25.000000000 +0800
-@@ -1118,6 +1118,7 @@ static int __blkdev_put(struct block_dev
- 	}
- 	unlock_kernel();
- 	mutex_unlock(&bdev->bd_mutex);
-+	dev_clear_rdonly(bdev);
- 	bdput(bdev);
- 	return ret;
- }
-Index: linux-2.6/block/ll_rw_blk.c
-===================================================================
---- linux-2.6.orig/block/ll_rw_blk.c	2006-07-10 22:30:08.000000000 +0800
-+++ linux-2.6/block/ll_rw_blk.c	2006-07-15 16:15:14.000000000 +0800
+diff -urp linux-2.6.18.1.orig/block/ll_rw_blk.c linux-2.6.18.1/block/ll_rw_blk.c
+--- linux-2.6.18.1.orig/block/ll_rw_blk.c	2006-10-14 06:34:03.000000000 +0300
++++ linux-2.6.18.1/block/ll_rw_blk.c	2007-05-29 14:50:46.000000000 +0300
 @@ -2993,6 +2993,8 @@ static void handle_bad_sector(struct bio
  	set_bit(BIO_EOF, &bio->bi_flags);
  }
@@ -36,7 +23,7 @@ Index: linux-2.6/block/ll_rw_blk.c
  
  		/*
  		 * If this device has partitions, remap block n
-@@ -3673,6 +3681,91 @@ void swap_io_context(struct io_context *
+@@ -3675,6 +3683,91 @@ void swap_io_context(struct io_context *
  	*ioc2 = temp;
  }
  EXPORT_SYMBOL(swap_io_context);
@@ -128,11 +115,21 @@ Index: linux-2.6/block/ll_rw_blk.c
  
  /*
   * sysfs parts below
-Index: linux-2.6/include/linux/fs.h
-===================================================================
---- linux-2.6.orig/include/linux/fs.h	2006-07-15 16:14:58.000000000 +0800
-+++ linux-2.6/include/linux/fs.h	2006-07-15 16:15:14.000000000 +0800
-@@ -1648,6 +1648,10 @@ extern void file_kill(struct file *f);
+diff -urp linux-2.6.18.1.orig/fs/block_dev.c linux-2.6.18.1/fs/block_dev.c
+--- linux-2.6.18.1.orig/fs/block_dev.c	2006-10-14 06:34:03.000000000 +0300
++++ linux-2.6.18.1/fs/block_dev.c	2007-05-29 14:53:38.000000000 +0300
+@@ -58,6 +58,7 @@ static void kill_bdev(struct block_devic
+ {
+ 	invalidate_bdev(bdev, 1);
+ 	truncate_inode_pages(bdev->bd_inode->i_mapping, 0);
++	dev_clear_rdonly(bdev);
+ }	
+ 
+ int set_blocksize(struct block_device *bdev, int size)
+diff -urp linux-2.6.18.1.orig/include/linux/fs.h linux-2.6.18.1/include/linux/fs.h
+--- linux-2.6.18.1.orig/include/linux/fs.h	2006-10-14 06:34:03.000000000 +0300
++++ linux-2.6.18.1/include/linux/fs.h	2007-05-29 14:50:46.000000000 +0300
+@@ -1632,6 +1632,10 @@ extern void file_kill(struct file *f);
  struct bio;
  extern void submit_bio(int, struct bio *);
  extern int bdev_read_only(struct block_device *);

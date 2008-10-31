@@ -1,24 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/liblustre/dir.c
+ *
  * Lustre Light directory handling
- *
- *  Copyright (c) 2002-2004 Cluster File Systems, Inc.
- *
- *   This file is part of Lustre, http://www.lustre.org.
- *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
- *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #define DEBUG_SUBSYSTEM S_LLITE
@@ -33,10 +50,10 @@
 #include <fcntl.h>
 #include <sys/queue.h>
 
+#include <sysio.h>
 #ifdef HAVE_XTIO_H
 #include <xtio.h>
 #endif
-#include <sysio.h>
 #include <fs.h>
 #include <mount.h>
 #include <inode.h>
@@ -84,12 +101,14 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         rc = ldlm_lock_match(obddev->obd_namespace, LDLM_FL_BLOCK_GRANTED,
                              &res_id, LDLM_IBITS, &policy, LCK_CR, &lockh);
         if (!rc) {
+                struct ldlm_enqueue_info einfo = {LDLM_IBITS, LCK_CR,
+                        llu_mdc_blocking_ast, ldlm_completion_ast, NULL, inode};
+
                 llu_prepare_mdc_op_data(&data, inode, NULL, NULL, 0, 0);
 
-                rc = mdc_enqueue(sbi->ll_mdc_exp, LDLM_IBITS, &it, LCK_CR,
+                rc = mdc_enqueue(sbi->ll_mdc_exp, &einfo, &it,
                                  &data, &lockh, NULL, 0,
-                                 ldlm_completion_ast, llu_mdc_blocking_ast,
-                                 inode, LDLM_FL_CANCEL_ON_BLOCK);
+                                 LDLM_FL_CANCEL_ON_BLOCK);
                 request = (struct ptlrpc_request *)it.d.lustre.it_data;
                 if (request)
                         ptlrpc_req_finished(request);
@@ -100,7 +119,7 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         }
         ldlm_lock_dump_handle(D_OTHER, &lockh);
 
-        mdc_pack_fid(&mdc_fid, st->st_ino, lli->lli_st_generation, S_IFDIR);
+        ll_pack_fid(&mdc_fid, st->st_ino, lli->lli_st_generation, S_IFDIR);
 
         offset = (__u64)page->index << CFS_PAGE_SHIFT;
         rc = mdc_readpage(sbi->ll_mdc_exp, &mdc_fid,
@@ -110,7 +129,7 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
                                       sizeof(*body));
                 LASSERT(body != NULL);         /* checked by mdc_readpage() */
                 /* swabbed by mdc_readpage() */
-                LASSERT_REPSWABBED(request, REPLY_REC_OFF);
+                LASSERT(lustre_rep_swabbed(request, REPLY_REC_OFF));
 
                 st->st_size = body->size;
         } else {
@@ -129,16 +148,14 @@ static struct page *llu_dir_read_page(struct inode *ino, unsigned long pgidx)
         int rc;
         ENTRY;
 
-        page = alloc_page(0);
-        if (!page) {
-                CERROR("alloc page failed\n");
+        OBD_PAGE_ALLOC(page, 0);
+        if (!page)
                 RETURN(ERR_PTR(-ENOMEM));
-        }
         page->index = pgidx;
 
         rc = llu_dir_do_readpage(ino, page);
         if (rc) {
-                free_page(page);
+                OBD_PAGE_FREE(page);
                 RETURN(ERR_PTR(rc));
         }
 
@@ -251,7 +268,7 @@ ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep,
                                                 + le16_to_cpu(de->rec_len),
                                                 le32_to_cpu(de->inode), d_type, &filled);
                                 if (over) {
-                                        free_page(page);
+                                        OBD_PAGE_FREE(page);
                                         /*
                                          * if buffer overflow with no data
                                          * returned yet, then report error
@@ -265,7 +282,7 @@ ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep,
                         }
                 }
                 
-                free_page(page);
+                OBD_PAGE_FREE(page);
         }
 done:
         lli->lli_dir_pos = (__u64)pgidx << CFS_PAGE_SHIFT | offset;

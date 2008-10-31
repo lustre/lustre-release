@@ -1,9 +1,45 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ */
+
 #ifndef __LNET_TYPES_H__
 #define __LNET_TYPES_H__
 
 #include <libcfs/libcfs.h>
 
-#define LNET_RESERVED_PORTAL      0		/* portals reserved for lnet's own use */
+#define LNET_RESERVED_PORTAL      0  /* portals reserved for lnet's own use */
 
 typedef __u64 lnet_nid_t;
 typedef __u32 lnet_pid_t;
@@ -35,7 +71,7 @@ typedef lnet_handle_any_t lnet_handle_me_t;
 
 static inline int LNetHandleIsEqual (lnet_handle_any_t h1, lnet_handle_any_t h2)
 {
-	return (h1.cookie == h2.cookie);
+        return (h1.cookie == h2.cookie);
 }
 
 typedef struct {
@@ -92,7 +128,7 @@ typedef struct {
 #define LNET_MD_TRUNCATE             (1 << 4)
 #define LNET_MD_ACK_DISABLE          (1 << 5)
 #define LNET_MD_IOVEC                (1 << 6)
-#define LNET_MD_MAX_SIZE	     (1 << 7)
+#define LNET_MD_MAX_SIZE             (1 << 7)
 #define LNET_MD_KIOV                 (1 << 8)
 
 /* For compatibility with Cray Portals */
@@ -104,9 +140,9 @@ typedef struct {
 typedef struct iovec lnet_md_iovec_t;
 
 typedef struct {
-	cfs_page_t      *kiov_page;
-	unsigned int     kiov_len;
-	unsigned int     kiov_offset;
+        cfs_page_t      *kiov_page;
+        unsigned int     kiov_len;
+        unsigned int     kiov_offset;
 } lnet_kiov_t;
 
 typedef enum {
@@ -114,13 +150,13 @@ typedef enum {
         LNET_EVENT_PUT,
         LNET_EVENT_REPLY,
         LNET_EVENT_ACK,
-	LNET_EVENT_SEND,
-	LNET_EVENT_UNLINK,
+        LNET_EVENT_SEND,
+        LNET_EVENT_UNLINK,
 } lnet_event_kind_t;
 
-#define LNET_SEQ_BASETYPE	long
+#define LNET_SEQ_BASETYPE       long
 typedef unsigned LNET_SEQ_BASETYPE lnet_seq_t;
-#define LNET_SEQ_GT(a,b)	(((signed LNET_SEQ_BASETYPE)((a) - (b))) > 0)
+#define LNET_SEQ_GT(a,b)        (((signed LNET_SEQ_BASETYPE)((a) - (b))) > 0)
 
 /* XXX
  * cygwin need the pragma line, not clear if it's needed in other places.

@@ -272,6 +272,72 @@ function service_start()
 }
 
 #
+# client_stats collector
+#
+# CLIENT_INTERVAL:
+# - 0 - collect at start and stop only
+# - N - collect each N seconds
+#
+function client_collector()
+{
+	local file=$1
+	local target=$2
+	local srv=$3
+
+	echo "client stats for ${target}/${srv} " `date`
+
+	# clear old stats
+	echo 0 >$file
+
+	if let "CLIENT_INTERVAL==0"; then
+		grep -v "^[^ ]*[^0-9]*0 samples" $file
+		idle_collector
+		grep -v "^[^ ]*[^0-9]*0 samples" $file
+	elif let "CLIENT_INTERVAL>0"; then
+		while [ "$stop_collector" != "1" ]; do
+			grep -v "^[^ ]*[^0-9]*0 samples" $file
+			sleep $CLIENT_INTERVAL
+		done
+	else
+		echo "Invalid CLIENT_INTERVAL=$CLIENT_INTERVAL"
+		idle_collector
+	fi
+}
+
+function client_start()
+{
+	if [ "$CLIENT_INTERVAL" == "" ]; then
+		return;
+	fi
+
+	# find all osc 
+	for i in /proc/fs/lustre/osc/* ; do
+		target=`basename $i`
+		if [ "$target" == "num_refs" ]; then
+			continue;
+		fi
+		for j in ${i}/*; do
+			stats=`basename $j`
+			if [ "$stats" == "stats" -o "$stats" == "rpc_stats" ]; then
+				run_collector "osc-${stats}" client_collector \
+					${j} $target $stats &
+			fi
+		done
+	done
+	# find all llite stats
+	for i in /proc/fs/lustre/llite/* ; do
+		target=`basename $i`
+		for j in ${i}/*; do
+			stats=`basename $j`
+			if [ "$stats" == "stats" -o "$stats" == "vfs_ops_stats" ]; then
+				run_collector "llite-${stats}" client_collector \
+					${j} $target ${stats} &
+			fi
+		done
+	done
+}
+
+#
 # sdio_stats collector
 #
 # SDIO_INVERVAL:
@@ -529,6 +595,7 @@ function ls_start()
 	mballoc_start
 	io_start
 	jbd_start
+	client_start
 }
 
 #

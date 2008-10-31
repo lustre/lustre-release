@@ -1,26 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002 Cluster File Systems, Inc.
- *   Author: Phil Schwan <phil@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/obdclass/lustre_handles.c
+ *
+ * Author: Phil Schwan <phil@clusterfs.com>
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
@@ -32,13 +47,36 @@
 #include <lustre_handles.h>
 #include <lustre_lib.h>
 
-spinlock_t handle_lock;
+#if !defined(HAVE_RCU) || !defined(__KERNEL__)
+# define list_add_rcu            list_add
+# define list_del_rcu            list_del
+# define list_for_each_rcu       list_for_each
+# define list_for_each_safe_rcu  list_for_each_safe
+# define rcu_read_lock()         spin_lock(&bucket->lock)
+# define rcu_read_unlock()       spin_unlock(&bucket->lock)
+#endif /* ifndef HAVE_RCU */
+
 static __u64 handle_base;
 #define HANDLE_INCR 7
-static struct list_head *handle_hash = NULL;
-static int handle_count = 0;
+static spinlock_t handle_base_lock;
 
+static struct handle_bucket {
+        spinlock_t lock;
+        struct list_head head;
+} *handle_hash;
+
+static atomic_t handle_count = ATOMIC_INIT(0);
+
+#ifdef __arch_um__
+/* For unknown reason, UML uses kmalloc rather than vmalloc to allocate
+ * memory(OBD_VMALLOC). Therefore, we have to redefine the
+ * HANDLE_HASH_SIZE to make the hash heads don't exceed 128K.
+ */
+#define HANDLE_HASH_SIZE 4096
+#else
 #define HANDLE_HASH_SIZE (1 << 14)
+#endif /* ifdef __arch_um__ */
+
 #define HANDLE_HASH_MASK (HANDLE_HASH_SIZE - 1)
 
 /*
@@ -47,25 +85,20 @@ static int handle_count = 0;
  */
 void class_handle_hash(struct portals_handle *h, portals_handle_addref_cb cb)
 {
-        struct list_head *bucket;
+        struct handle_bucket *bucket;
         ENTRY;
 
         LASSERT(h != NULL);
         LASSERT(list_empty(&h->h_link));
 
-        spin_lock(&handle_lock);
-
         /*
          * This is fast, but simplistic cookie generation algorithm, it will
          * need a re-do at some point in the future for security.
          */
-        h->h_cookie = handle_base;
+        spin_lock(&handle_base_lock);
         handle_base += HANDLE_INCR;
 
-        bucket = handle_hash + (h->h_cookie & HANDLE_HASH_MASK);
-        list_add(&h->h_link, bucket);
-        handle_count++;
-
+        h->h_cookie = handle_base;
         if (unlikely(handle_base == 0)) {
                 /*
                  * Cookie of zero is "dangerous", because in many places it's
@@ -75,10 +108,18 @@ void class_handle_hash(struct portals_handle *h, portals_handle_addref_cb cb)
                 CWARN("The universe has been exhausted: cookie wrap-around.\n");
                 handle_base += HANDLE_INCR;
         }
+        spin_unlock(&handle_base_lock);
 
-        spin_unlock(&handle_lock);
-
+        atomic_inc(&handle_count);
         h->h_addref = cb;
+        spin_lock_init(&h->h_lock);
+
+        bucket = &handle_hash[h->h_cookie & HANDLE_HASH_MASK];
+        spin_lock(&bucket->lock);
+        list_add_rcu(&h->h_link, &bucket->head);
+        h->h_in = 1;
+        spin_unlock(&bucket->lock);
+
         CDEBUG(D_INFO, "added object %p with handle "LPX64" to hash\n",
                h, h->h_cookie);
         EXIT;
@@ -95,56 +136,90 @@ static void class_handle_unhash_nolock(struct portals_handle *h)
         CDEBUG(D_INFO, "removing object %p with handle "LPX64" from hash\n",
                h, h->h_cookie);
 
-        handle_count--;
-        list_del_init(&h->h_link);
+        spin_lock(&h->h_lock);
+        if (h->h_in == 0) {
+                spin_unlock(&h->h_lock);
+                return;
+        }
+        h->h_in = 0;
+        spin_unlock(&h->h_lock);
+        list_del_rcu(&h->h_link);
 }
 
 void class_handle_unhash(struct portals_handle *h)
 {
-        spin_lock(&handle_lock);
+        struct handle_bucket *bucket;
+        bucket = handle_hash + (h->h_cookie & HANDLE_HASH_MASK);
+
+        spin_lock(&bucket->lock);
         class_handle_unhash_nolock(h);
-        spin_unlock(&handle_lock);
+        spin_unlock(&bucket->lock);
+
+        atomic_dec(&handle_count);
 }
 
 void *class_handle2object(__u64 cookie)
 {
-        struct list_head *bucket, *tmp;
+        struct handle_bucket *bucket;
+        struct list_head *tmp;
         void *retval = NULL;
         ENTRY;
 
         LASSERT(handle_hash != NULL);
 
+        /* Be careful when you want to change this code. See the 
+         * rcu_read_lock() definition on top this file. - jxiong */
         bucket = handle_hash + (cookie & HANDLE_HASH_MASK);
 
-        spin_lock(&handle_lock);
-        list_for_each(tmp, bucket) {
+        rcu_read_lock();
+        list_for_each_rcu(tmp, &bucket->head) {
                 struct portals_handle *h;
                 h = list_entry(tmp, struct portals_handle, h_link);
+                if (h->h_cookie != cookie)
+                        continue;
 
-                if (h->h_cookie == cookie) {
+                spin_lock(&h->h_lock);
+                if (likely(h->h_in != 0)) {
                         h->h_addref(h);
                         retval = h;
-                        break;
                 }
+                spin_unlock(&h->h_lock);
+                break;
         }
-        spin_unlock(&handle_lock);
+        rcu_read_unlock();
 
         RETURN(retval);
 }
 
+void class_handle_free_cb(struct rcu_head *rcu)
+{
+        struct portals_handle *h = RCU2HANDLE(rcu);
+        if (h->h_free_cb) {
+                h->h_free_cb(h->h_ptr, h->h_size);
+        } else {
+                void *ptr = h->h_ptr;
+                unsigned int size = h->h_size;
+                OBD_FREE(ptr, size);
+        }
+}
+
+
 int class_handle_init(void)
 {
-        struct list_head *bucket;
+        struct handle_bucket *bucket;
 
         LASSERT(handle_hash == NULL);
 
-        OBD_VMALLOC(handle_hash, sizeof(*handle_hash) * HANDLE_HASH_SIZE);
+        OBD_VMALLOC(handle_hash, sizeof(*bucket) * HANDLE_HASH_SIZE);
         if (handle_hash == NULL)
                 return -ENOMEM;
 
+        spin_lock_init(&handle_base_lock);
         for (bucket = handle_hash + HANDLE_HASH_SIZE - 1; bucket >= handle_hash;
-             bucket--)
-                CFS_INIT_LIST_HEAD(bucket);
+             bucket--) {
+                CFS_INIT_LIST_HEAD(&bucket->head);
+                spin_lock_init(&bucket->lock);
+        }
 
         ll_get_random_bytes(&handle_base, sizeof(handle_base));
         LASSERT(handle_base != 0ULL);
@@ -156,10 +231,10 @@ static void cleanup_all_handles(void)
 {
         int i;
 
-        spin_lock(&handle_lock);
         for (i = 0; i < HANDLE_HASH_SIZE; i++) {
                 struct list_head *tmp, *pos;
-                list_for_each_safe(tmp, pos, &(handle_hash[i])) {
+                spin_lock(&handle_hash[i].lock);
+                list_for_each_safe_rcu(tmp, pos, &(handle_hash[i].head)) {
                         struct portals_handle *h;
                         h = list_entry(tmp, struct portals_handle, h_link);
 
@@ -168,22 +243,24 @@ static void cleanup_all_handles(void)
 
                         class_handle_unhash_nolock(h);
                 }
+                spin_unlock(&handle_hash[i].lock);
         }
-        spin_unlock(&handle_lock);
 }
 
 void class_handle_cleanup(void)
 {
+        int count;
         LASSERT(handle_hash != NULL);
 
-        if (handle_count != 0) {
-                CERROR("handle_count at cleanup: %d\n", handle_count);
+        count = atomic_read(&handle_count);
+        if (count != 0) {
+                CERROR("handle_count at cleanup: %d\n", count);
                 cleanup_all_handles();
         }
 
         OBD_VFREE(handle_hash, sizeof(*handle_hash) * HANDLE_HASH_SIZE);
         handle_hash = NULL;
 
-        if (handle_count)
-                CERROR("leaked %d handles\n", handle_count);
+        if (atomic_read(&handle_count))
+                CERROR("leaked %d handles\n", atomic_read(&handle_count));
 }

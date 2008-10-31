@@ -1,17 +1,42 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2006 Cluster File Systems, Inc, All rights reserved.
- * Author: Matt Wu
+ * GPL HEADER START
  *
- * This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * This Lustre Software is proprietary - please refer to the license
- * agreement you received with your software.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/klnds/socklnd/socklnd_lib-winnt.c
  *
  * windows socknal library
- *
- */ 
+ */
 
 #include "socklnd.h"
 
@@ -67,7 +92,7 @@ ksocknal_lib_tunables_init ()
         ksocknal_ctl_table[i++] = (ctl_table)
 		{j++, "nagle", ksocknal_tunables.ksnd_nagle, 
 		 sizeof(int), 0644, NULL, &proc_dointvec};
-#if CPU_AFFINITY
+#ifdef CPU_AFFINITY
         ksocknal_ctl_table[i++] = (ctl_table)
 		{j++, "irq_affinity", ksocknal_tunables.ksnd_irq_affinity, 
 		 sizeof(int), 0644, NULL, &proc_dointvec};
@@ -157,7 +182,7 @@ ksocknal_kvaddr_to_page (unsigned long vaddr)
         if (vaddr >= VMALLOC_START &&
             vaddr < VMALLOC_END)
                 page = vmalloc_to_page ((void *)vaddr);
-#if CONFIG_HIGHMEM
+#ifdef CONFIG_HIGHMEM
         else if (vaddr >= PKMAP_BASE &&
                  vaddr < (PKMAP_BASE + LAST_PKMAP * PAGE_SIZE))
                 page = vmalloc_to_page ((void *)vaddr);
@@ -656,6 +681,7 @@ ksocknal_sched_conn (ksock_conn_t *conn, int mode, ksock_tx_t *tx)
 
         if (mode) { /* transmission can continue ... */ 
 
+#error "This is out of date - we should be calling ksocknal_write_callback()"
                 conn->ksnc_tx_ready = 1;
 
                 if (tx) {
@@ -663,7 +689,7 @@ ksocknal_sched_conn (ksock_conn_t *conn, int mode, ksock_tx_t *tx)
                     list_add (&tx->tx_list, &conn->ksnc_tx_queue);
                 }
 
-                if ( !conn->ksnc_tx_scheduled && 
+                if ( !conn->ksnc_tx_scheduled &&
                      !list_empty(&conn->ksnc_tx_queue)) {  //packets to send
                         list_add_tail (&conn->ksnc_tx_list,
                                        &sched->kss_tx_conns);
@@ -829,4 +855,3 @@ ksocknal_lib_reset_callback(struct socket *sock, ksock_conn_t *conn)
         sock->kstc_sched_cb  = NULL;
         sock->kstc_update_tx = NULL;
 }
-

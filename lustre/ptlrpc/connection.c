@@ -1,26 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2002 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
@@ -33,166 +44,194 @@
 #endif
 
 #include "ptlrpc_internal.h"
+#include <class_hash.h>
 
-static spinlock_t conn_lock;
-static struct list_head conn_list;
-static struct list_head conn_unused_list;
+static lustre_hash_t *conn_hash = NULL;
+static lustre_hash_ops_t conn_hash_ops;
 
-void ptlrpc_dump_connections(void)
+struct ptlrpc_connection *
+ptlrpc_connection_get(lnet_process_id_t peer, lnet_nid_t self,
+                      struct obd_uuid *uuid)
 {
-        struct list_head *tmp;
-        struct ptlrpc_connection *c;
+        struct ptlrpc_connection *conn, *conn2;
         ENTRY;
 
-        list_for_each(tmp, &conn_list) {
-                c = list_entry(tmp, struct ptlrpc_connection, c_link);
-                CERROR("Connection %p/%s has refcount %d (nid=%s->%s)\n",
-                       c, c->c_remote_uuid.uuid, atomic_read(&c->c_refcount),
-                       libcfs_nid2str(c->c_self), 
-                       libcfs_nid2str(c->c_peer.nid));
+        conn = lustre_hash_lookup(conn_hash, &peer);
+        if (conn)
+                GOTO(out, conn);
+
+        OBD_ALLOC_PTR(conn);
+        if (!conn)
+                RETURN(NULL);
+
+        conn->c_peer = peer;
+        conn->c_self = self;
+        INIT_HLIST_NODE(&conn->c_hash);
+        atomic_set(&conn->c_refcount, 1);
+        if (uuid)
+                obd_str2uuid(&conn->c_remote_uuid, uuid->uuid);
+
+        /* 
+         * Add the newly created conn to the hash, on key collision we
+         * lost a racing addition and must destroy our newly allocated
+         * connection.  The object which exists in the has will be
+         * returned and may be compared against out object. 
+         */
+        conn2 = lustre_hash_findadd_unique(conn_hash, &peer, &conn->c_hash);
+        if (conn != conn2) {
+                OBD_FREE_PTR(conn);
+                conn = conn2;
         }
         EXIT;
+out:
+        CDEBUG(D_INFO, "conn=%p refcount %d to %s\n",
+               conn, atomic_read(&conn->c_refcount), 
+               libcfs_nid2str(conn->c_peer.nid));
+        return conn;
 }
-
-struct ptlrpc_connection*
-ptlrpc_lookup_conn_locked (lnet_process_id_t peer)
-{
-        struct ptlrpc_connection *c;
-        struct list_head         *tmp;
-
-        list_for_each(tmp, &conn_list) {
-                c = list_entry(tmp, struct ptlrpc_connection, c_link);
-
-                if (peer.nid == c->c_peer.nid &&
-                    peer.pid == c->c_peer.pid)
-                        return ptlrpc_connection_addref(c);
-        }
-
-        list_for_each(tmp, &conn_unused_list) {
-                c = list_entry(tmp, struct ptlrpc_connection, c_link);
-
-                if (peer.nid == c->c_peer.nid &&
-                    peer.pid == c->c_peer.pid) {
-                        list_del(&c->c_link);
-                        list_add(&c->c_link, &conn_list);
-                        return ptlrpc_connection_addref(c);
-                }
-        }
-
-        return NULL;
-}
-
-
-struct ptlrpc_connection *ptlrpc_get_connection(lnet_process_id_t peer,
-                                                lnet_nid_t self, struct obd_uuid *uuid)
-{
-        struct ptlrpc_connection *c;
-        struct ptlrpc_connection *c2;
-        ENTRY;
-
-        CDEBUG(D_INFO, "self %s peer %s\n", 
-               libcfs_nid2str(self), libcfs_id2str(peer));
-
-        spin_lock(&conn_lock);
-
-        c = ptlrpc_lookup_conn_locked(peer);
-        
-        spin_unlock(&conn_lock);
-
-        if (c != NULL)
-                RETURN (c);
-        
-        OBD_ALLOC(c, sizeof(*c));
-        if (c == NULL)
-                RETURN (NULL);
-
-        atomic_set(&c->c_refcount, 1);
-        c->c_peer = peer;
-        c->c_self = self;
-        if (uuid != NULL)
-                obd_str2uuid(&c->c_remote_uuid, uuid->uuid);
-
-        spin_lock(&conn_lock);
-
-        c2 = ptlrpc_lookup_conn_locked(peer);
-        if (c2 == NULL)
-                list_add(&c->c_link, &conn_list);
-        
-        spin_unlock(&conn_lock);
-
-        if (c2 == NULL)
-                RETURN (c);
-        
-        OBD_FREE(c, sizeof(*c));
-        RETURN (c2);
-}
-
-int ptlrpc_put_connection(struct ptlrpc_connection *c)
+  
+int ptlrpc_connection_put(struct ptlrpc_connection *conn)
 {
         int rc = 0;
-        lnet_process_id_t peer;
         ENTRY;
-
-        if (c == NULL) {
-                CERROR("NULL connection\n");
-                RETURN(0);
-        }
-
-        peer = c->c_peer;
-
-        CDEBUG (D_INFO, "connection=%p refcount %d to %s\n",
-                c, atomic_read(&c->c_refcount) - 1, 
-                libcfs_nid2str(c->c_peer.nid));
-
-        if (atomic_dec_and_test(&c->c_refcount)) {
-                spin_lock(&conn_lock);
-                list_del(&c->c_link);
-                list_add(&c->c_link, &conn_unused_list);
-                spin_unlock(&conn_lock);
+  
+        if (!conn)
+                RETURN(rc);
+  
+        LASSERT(!hlist_unhashed(&conn->c_hash));
+  
+        /*
+         * We do not remove connection from hashtable and 
+         * do not free it even if last caller released ref,
+         * as we want to have it cached for the case it is
+         * needed again.
+         *
+         * Deallocating it and later creating new connection
+         * again would be wastful. This way we also avoid
+         * expensive locking to protect things from get/put 
+         * race when found cached connection is freed by 
+         * ptlrpc_connection_put().
+         *
+         * It will be freed later in module unload time,
+         * when ptlrpc_connection_fini()->lh_exit->conn_exit()
+         * path is called.
+         */
+        if (atomic_dec_return(&conn->c_refcount) == 1)
                 rc = 1;
-        }
-        if (atomic_read(&c->c_refcount) < 0)
-                CERROR("connection %p refcount %d!\n",
-                       c, atomic_read(&c->c_refcount));
+
+        CDEBUG(D_INFO, "PUT conn=%p refcount %d to %s\n",
+               conn, atomic_read(&conn->c_refcount),
+               libcfs_nid2str(conn->c_peer.nid));
 
         RETURN(rc);
 }
-
-struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *c)
+  
+struct ptlrpc_connection *
+ptlrpc_connection_addref(struct ptlrpc_connection *conn)
 {
         ENTRY;
-        atomic_inc(&c->c_refcount);
-        CDEBUG (D_INFO, "connection=%p refcount %d to %s\n",
-                c, atomic_read(&c->c_refcount),
-                libcfs_nid2str(c->c_peer.nid));
-        RETURN(c);
-}
 
-void ptlrpc_init_connection(void)
+        atomic_inc(&conn->c_refcount);
+        CDEBUG(D_INFO, "conn=%p refcount %d to %s\n",
+               conn, atomic_read(&conn->c_refcount),
+               libcfs_nid2str(conn->c_peer.nid));
+
+        RETURN(conn);
+}
+  
+int ptlrpc_connection_init(void)
 {
-        CFS_INIT_LIST_HEAD(&conn_list);
-        CFS_INIT_LIST_HEAD(&conn_unused_list);
-        spin_lock_init(&conn_lock);
+        ENTRY;
+
+        conn_hash = lustre_hash_init("CONN_HASH", 32, 32768,
+                                     &conn_hash_ops, LH_REHASH);
+        if (!conn_hash)
+                RETURN(-ENOMEM);
+  
+        RETURN(0);
+}
+  
+void ptlrpc_connection_fini(void) {
+        ENTRY;
+        lustre_hash_exit(conn_hash);
+        EXIT;
 }
 
-void ptlrpc_cleanup_connection(void)
+/*
+ * Hash operations for net_peer<->connection
+ */
+static unsigned
+conn_hashfn(lustre_hash_t *lh,  void *key, unsigned mask)
 {
-        struct list_head *tmp, *pos;
-        struct ptlrpc_connection *c;
-
-        spin_lock(&conn_lock);
-        list_for_each_safe(tmp, pos, &conn_unused_list) {
-                c = list_entry(tmp, struct ptlrpc_connection, c_link);
-                list_del(&c->c_link);
-                OBD_FREE(c, sizeof(*c));
-        }
-        list_for_each_safe(tmp, pos, &conn_list) {
-                c = list_entry(tmp, struct ptlrpc_connection, c_link);
-                CERROR("Connection %p/%s has refcount %d (nid=%s)\n",
-                       c, c->c_remote_uuid.uuid, atomic_read(&c->c_refcount),
-                       libcfs_nid2str(c->c_peer.nid));
-                list_del(&c->c_link);
-                OBD_FREE(c, sizeof(*c));
-        }
-        spin_unlock(&conn_lock);
+        return lh_djb2_hash(key, sizeof(lnet_process_id_t), mask);
 }
+
+static int
+conn_compare(void *key, struct hlist_node *hnode)
+{
+        struct ptlrpc_connection *conn;
+        lnet_process_id_t *conn_key;
+
+        LASSERT(key != NULL);
+        conn_key = (lnet_process_id_t*)key;
+        conn = hlist_entry(hnode, struct ptlrpc_connection, c_hash);
+
+        return conn_key->nid == conn->c_peer.nid &&
+               conn_key->pid == conn->c_peer.pid;
+}
+
+static void *
+conn_key(struct hlist_node *hnode)
+{
+        struct ptlrpc_connection *conn;
+        conn = hlist_entry(hnode, struct ptlrpc_connection, c_hash);
+        return &conn->c_peer;
+}
+
+static void *
+conn_get(struct hlist_node *hnode)
+{
+        struct ptlrpc_connection *conn;
+
+        conn = hlist_entry(hnode, struct ptlrpc_connection, c_hash);
+        atomic_inc(&conn->c_refcount);
+
+        return conn;
+}
+
+static void *
+conn_put(struct hlist_node *hnode)
+{
+        struct ptlrpc_connection *conn;
+
+        conn = hlist_entry(hnode, struct ptlrpc_connection, c_hash);
+        atomic_dec(&conn->c_refcount);
+
+        return conn;
+}
+
+static void
+conn_exit(struct hlist_node *hnode)
+{
+        struct ptlrpc_connection *conn;
+
+        conn = hlist_entry(hnode, struct ptlrpc_connection, c_hash);
+        /* 
+         * Nothing should be left. Connection user put it and
+         * connection also was deleted from table by this time
+         * so we should have 0 refs.
+         */
+        LASSERTF(atomic_read(&conn->c_refcount) == 0, 
+                 "Busy connection with %d refs\n", 
+                 atomic_read(&conn->c_refcount));
+        OBD_FREE_PTR(conn);
+}
+
+static lustre_hash_ops_t conn_hash_ops = {
+        .lh_hash    = conn_hashfn,
+        .lh_compare = conn_compare,
+        .lh_key     = conn_key,
+        .lh_get     = conn_get,
+        .lh_put     = conn_put,
+        .lh_exit    = conn_exit,
+};

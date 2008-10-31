@@ -1,4 +1,3 @@
-
 From: Jan Kara <jack@suse.cz>
 
 The four patches in this series fix deadlocks with quotas of pagelock (the
@@ -55,9 +54,9 @@ Signed-off-by: Andrew Morton <akpm@osdl.org>
  25-akpm/security/selinux/hooks.c |    4 
  9 files changed, 247 insertions(+), 268 deletions(-)
 
-diff -puN fs/dquot.c~fix-of-quota-deadlock-on-pagelock-quota-core fs/dquot.c
---- 25/fs/dquot.c~fix-of-quota-deadlock-on-pagelock-quota-core	2004-12-03 20:56:04.293107536 -0800
-+++ 25-akpm/fs/dquot.c	2004-12-03 20:56:04.312104648 -0800
+diff -rup RH_2_6_9_55.orig/fs/dquot.c RH_2_6_9_55/fs/dquot.c
+--- RH_2_6_9_55.orig/fs/dquot.c
++++ RH_2_6_9_55/fs/dquot.c
 @@ -49,7 +49,7 @@
   *		New SMP locking.
   *		Jan Kara, <jack@suse.cz>, 10/2002
@@ -83,8 +82,8 @@ diff -puN fs/dquot.c~fix-of-quota-deadlock-on-pagelock-quota-core fs/dquot.c
   *
 - * Lock ordering (including related VFS locks) is following:
 + * Lock ordering (including related VFS locks) is the following:
-  *   i_sem > dqonoff_sem > iprune_sem > journal_lock > dqptr_sem >
-  *   > dquot->dq_lock > dqio_sem
+  *   i_sem > dqonoff_sem > journal_lock > dqptr_sem > dquot->dq_lock > 
+  *   dqio_sem
   * i_sem on quota files is special (it's below dqio_sem)
 @@ -183,8 +184,7 @@ static void put_quota_format(struct quot
   * on all three lists, depending on its current state.
@@ -96,7 +95,7 @@ diff -puN fs/dquot.c~fix-of-quota-deadlock-on-pagelock-quota-core fs/dquot.c
   *
   * Unused dquots (dq_count == 0) are added to the free_dquots list when freed,
   * and this list is searched whenever we need an available dquot.  Dquots are
-@@ -1314,10 +1314,12 @@ int vfs_quota_off(struct super_block *sb
+@@ -1341,10 +1341,12 @@ int vfs_quota_off(struct super_block *sb
  {
  	int cnt;
  	struct quota_info *dqopt = sb_dqopt(sb);
@@ -109,7 +108,7 @@ diff -puN fs/dquot.c~fix-of-quota-deadlock-on-pagelock-quota-core fs/dquot.c
  		if (type != -1 && cnt != type)
  			continue;
  		if (!sb_has_quota_enabled(sb, cnt))
-@@ -1337,7 +1339,7 @@ int vfs_quota_off(struct super_block *sb
+@@ -1364,7 +1366,7 @@ int vfs_quota_off(struct super_block *sb
  			dqopt->ops[cnt]->free_file_info(sb, cnt);
  		put_quota_format(dqopt->info[cnt].dqi_format);
  
@@ -118,7 +117,7 @@ diff -puN fs/dquot.c~fix-of-quota-deadlock-on-pagelock-quota-core fs/dquot.c
  		dqopt->files[cnt] = NULL;
  		dqopt->info[cnt].dqi_flags = 0;
  		dqopt->info[cnt].dqi_igrace = 0;
-@@ -1345,6 +1347,26 @@ int vfs_quota_off(struct super_block *sb
+@@ -1372,6 +1374,26 @@ int vfs_quota_off(struct super_block *sb
  		dqopt->ops[cnt] = NULL;
  	}
  	up(&dqopt->dqonoff_sem);
@@ -145,7 +144,7 @@ diff -puN fs/dquot.c~fix-of-quota-deadlock-on-pagelock-quota-core fs/dquot.c
  	return 0;
  }
  
-@@ -1352,68 +1374,56 @@ int vfs_quota_off(struct super_block *sb
+@@ -1379,68 +1401,56 @@ int vfs_quota_off(struct super_block *sb
   *	Turn quotas on on a device
   */
  
@@ -242,7 +241,7 @@ diff -puN fs/dquot.c~fix-of-quota-deadlock-on-pagelock-quota-core fs/dquot.c
  
  	dqopt->ops[type] = fmt->qf_ops;
  	dqopt->info[type].dqi_format = fmt;
-@@ -1424,6 +1434,7 @@ static int vfs_quota_on_file(struct file
+@@ -1451,6 +1461,7 @@ static int vfs_quota_on_file(struct file
  		goto out_file_init;
  	}
  	up(&dqopt->dqio_sem);
@@ -250,7 +249,7 @@ diff -puN fs/dquot.c~fix-of-quota-deadlock-on-pagelock-quota-core fs/dquot.c
  	set_enable_flags(dqopt, type);
  
  	add_dquot_ref(sb, type);
-@@ -1433,19 +1444,18 @@ static int vfs_quota_on_file(struct file
+@@ -1460,19 +1471,18 @@ static int vfs_quota_on_file(struct file
  
  out_file_init:
  	dqopt->files[type] = NULL;
@@ -275,7 +274,7 @@ diff -puN fs/dquot.c~fix-of-quota-deadlock-on-pagelock-quota-core fs/dquot.c
  out_fmt:
  	put_quota_format(fmt);
  
-@@ -1455,47 +1465,37 @@ out_fmt:
+@@ -1482,47 +1492,37 @@ out_fmt:
  /* Actual function called from quotactl() */
  int vfs_quota_on(struct super_block *sb, int type, int format_id, char *path)
  {
@@ -342,9 +341,9 @@ diff -puN fs/dquot.c~fix-of-quota-deadlock-on-pagelock-quota-core fs/dquot.c
  }
  
  /* Generic routine for getting common part of quota structure */
-diff -puN fs/quota.c~fix-of-quota-deadlock-on-pagelock-quota-core fs/quota.c
---- 25/fs/quota.c~fix-of-quota-deadlock-on-pagelock-quota-core	2004-12-03 20:56:04.295107232 -0800
-+++ 25-akpm/fs/quota.c	2004-12-03 20:56:04.313104496 -0800
+diff -rup RH_2_6_9_55.orig/fs/quota.c RH_2_6_9_55/fs/quota.c
+--- RH_2_6_9_55.orig/fs/quota.c
++++ RH_2_6_9_55/fs/quota.c
 @@ -13,6 +13,8 @@
  #include <linux/kernel.h>
  #include <linux/smp_lock.h>
@@ -354,7 +353,7 @@ diff -puN fs/quota.c~fix-of-quota-deadlock-on-pagelock-quota-core fs/quota.c
 
  /* Check validity of quotactl */
  static int check_quotactl_valid(struct super_block *sb, int type, int cmd, qid_t id)
-@@ -135,16 +136,54 @@ restart:
+@@ -134,16 +136,54 @@ restart:
  	return NULL;
  }
  
@@ -412,9 +411,9 @@ diff -puN fs/quota.c~fix-of-quota-deadlock-on-pagelock-quota-core fs/quota.c
  			drop_super(sb);
  		}
  	}
-diff -puN fs/quota_v1.c~fix-of-quota-deadlock-on-pagelock-quota-core fs/quota_v1.c
---- 25/fs/quota_v1.c~fix-of-quota-deadlock-on-pagelock-quota-core	2004-12-03 20:56:04.296107080 -0800
-+++ 25-akpm/fs/quota_v1.c	2004-12-03 20:56:04.314104344 -0800
+diff -rup RH_2_6_9_55.orig/fs/quota_v1.c RH_2_6_9_55/fs/quota_v1.c
+--- RH_2_6_9_55.orig/fs/quota_v1.c
++++ RH_2_6_9_55/fs/quota_v1.c
 @@ -7,7 +7,6 @@
  #include <linux/init.h>
  #include <linux/module.h>
@@ -576,9 +575,9 @@ diff -puN fs/quota_v1.c~fix-of-quota-deadlock-on-pagelock-quota-core fs/quota_v1
  	return ret;
  }
  
-diff -puN fs/quota_v2.c~fix-of-quota-deadlock-on-pagelock-quota-core fs/quota_v2.c
---- 25/fs/quota_v2.c~fix-of-quota-deadlock-on-pagelock-quota-core	2004-12-03 20:56:04.297106928 -0800
-+++ 25-akpm/fs/quota_v2.c	2004-12-03 20:56:04.318103736 -0800
+diff -rup RH_2_6_9_55.orig/fs/quota_v2.c RH_2_6_9_55/fs/quota_v2.c
+--- RH_2_6_9_55.orig/fs/quota_v2.c
++++ RH_2_6_9_55/fs/quota_v2.c
 @@ -13,7 +13,6 @@
  #include <linux/slab.h>
  
@@ -1175,11 +1174,11 @@ diff -puN fs/quota_v2.c~fix-of-quota-deadlock-on-pagelock-quota-core fs/quota_v2
  		disk2memdqb(&dquot->dq_dqb, &ddquot);
  		if (!dquot->dq_dqb.dqb_bhardlimit &&
  			!dquot->dq_dqb.dqb_bsoftlimit &&
-diff -puN include/linux/fs.h~fix-of-quota-deadlock-on-pagelock-quota-core include/linux/fs.h
---- 25/include/linux/fs.h~fix-of-quota-deadlock-on-pagelock-quota-core	2004-12-03 20:56:04.300106472 -0800
-+++ 25-akpm/include/linux/fs.h	2004-12-03 20:56:04.319103584 -0800
-@@ -1004,6 +1004,9 @@ struct super_operations {
-	void (*umount_begin) (struct super_block *);
+diff -rup RH_2_6_9_55.orig/include/linux/fs.h RH_2_6_9_55/include/linux/fs.h
+--- RH_2_6_9_55.orig/include/linux/fs.h
++++ RH_2_6_9_55/include/linux/fs.h
+@@ -1042,6 +1042,9 @@ struct super_operations {
+	void (*umount_lustre) (struct super_block *);
 
 	int (*show_options)(struct seq_file *, struct vfsmount *);
 +
@@ -1188,10 +1187,9 @@ diff -puN include/linux/fs.h~fix-of-quota-deadlock-on-pagelock-quota-core includ
  };
 
  /* Inode state bits.  Protected by inode_lock. */
-
-diff -puN include/linux/quota.h~fix-of-quota-deadlock-on-pagelock-quota-core include/linux/quota.h
---- 25/include/linux/quota.h~fix-of-quota-deadlock-on-pagelock-quota-core	2004-12-03 20:56:04.301106320 -0800
-+++ 25-akpm/include/linux/quota.h	2004-12-03 20:56:04.320103432 -0800
+diff -rup RH_2_6_9_55.orig/include/linux/quota.h RH_2_6_9_55/include/linux/quota.h
+--- RH_2_6_9_55.orig/include/linux/quota.h
++++ RH_2_6_9_55/include/linux/quota.h
 @@ -285,7 +285,7 @@ struct quota_info {
  	struct semaphore dqio_sem;		/* lock device while I/O in progress */
  	struct semaphore dqonoff_sem;		/* Serialize quotaon & quotaoff */
@@ -1201,9 +1199,9 @@ diff -puN include/linux/quota.h~fix-of-quota-deadlock-on-pagelock-quota-core inc
  	struct mem_dqinfo info[MAXQUOTAS];	/* Information for each quota type */
  	struct quota_format_ops *ops[MAXQUOTAS];	/* Operations for each type */
  };
-diff -puN include/linux/security.h~fix-of-quota-deadlock-on-pagelock-quota-core include/linux/security.h
---- 25/include/linux/security.h~fix-of-quota-deadlock-on-pagelock-quota-core	2004-12-03 20:56:04.303106016 -0800
-+++ 25-akpm/include/linux/security.h	2004-12-03 20:56:04.322103128 -0800
+diff -rup RH_2_6_9_55.orig/include/linux/security.h RH_2_6_9_55/include/linux/security.h
+--- RH_2_6_9_55.orig/include/linux/security.h
++++ RH_2_6_9_55/include/linux/security.h
 @@ -1033,7 +1033,7 @@ struct security_operations {
 	int (*sysctl) (ctl_table * table, int op);
 	int (*capable) (struct task_struct * tsk, int cap);
@@ -1225,7 +1223,7 @@ diff -puN include/linux/security.h~fix-of-quota-deadlock-on-pagelock-quota-core 
  }
  
  static inline int security_syslog(int type)
-@@ -1959,7 +1959,7 @@ static inline int security_quotactl (int
+@@ -1953,7 +1953,7 @@ static inline int security_quotactl (int
  	return 0;
  }
  
@@ -1234,9 +1232,9 @@ diff -puN include/linux/security.h~fix-of-quota-deadlock-on-pagelock-quota-core 
  {
  	return 0;
  }
-diff -puN security/dummy.c~fix-of-quota-deadlock-on-pagelock-quota-core security/dummy.c
---- 25/security/dummy.c~fix-of-quota-deadlock-on-pagelock-quota-core	2004-12-03 20:56:04.304105864 -0800
-+++ 25-akpm/security/dummy.c	2004-12-03 20:56:04.323102976 -0800
+diff -rup RH_2_6_9_55.orig/security/dummy.c RH_2_6_9_55/security/dummy.c
+--- RH_2_6_9_55.orig/security/dummy.c
++++ RH_2_6_9_55/security/dummy.c
 @@ -92,7 +92,7 @@ static int dummy_quotactl (int cmds, int
  	return 0;
  }
@@ -1246,10 +1244,10 @@ diff -puN security/dummy.c~fix-of-quota-deadlock-on-pagelock-quota-core security
  {
  	return 0;
  }
-diff -puN security/selinux/hooks.c~fix-of-quota-deadlock-on-pagelock-quota-core security/selinux/hooks.c
---- 25/security/selinux/hooks.c~fix-of-quota-deadlock-on-pagelock-quota-core	2004-12-03 20:56:04.306105560 -0800
-+++ 25-akpm/security/selinux/hooks.c	2004-12-03 20:56:04.326102520 -0800
-@@ -1494,9 +1494,9 @@ static int selinux_quotactl(int cmds, in
+diff -rup RH_2_6_9_55.orig/security/selinux/hooks.c RH_2_6_9_55/security/selinux/hooks.c
+--- RH_2_6_9_55.orig/security/selinux/hooks.c
++++ RH_2_6_9_55/security/selinux/hooks.c
+@@ -1485,9 +1485,9 @@ static int selinux_quotactl(int cmds, in
  	return rc;
  }
  
@@ -1261,4 +1259,3 @@ diff -puN security/selinux/hooks.c~fix-of-quota-deadlock-on-pagelock-quota-core 
  }
  
  static int selinux_syslog(int type)
-_

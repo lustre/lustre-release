@@ -1,35 +1,48 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  linux/fs/obdfilter/filter_log.c
+ * GPL HEADER START
  *
- *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
- *   Author: Peter Braam <braam@clusterfs.com>
- *   Author: Andreas Dilger <adilger@clusterfs.com>
- *   Author: Phil Schwan <phil@clusterfs.com>
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/obdfilter/filter_lvb.c
+ *
+ * Author: Peter Braam <braam@clusterfs.com>
+ * Author: Andreas Dilger <adilger@clusterfs.com>
+ * Author: Phil Schwan <phil@clusterfs.com>
  */
 
 #define DEBUG_SUBSYSTEM S_FILTER
 
-#ifdef HAVE_KERNEL_CONFIG_H
+#ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
 #include <linux/module.h>
@@ -53,11 +66,6 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         LASSERT(res);
         LASSERT_SEM_LOCKED(&res->lr_lvb_sem);
 
-        /* we only want lvb's for object resources */
-        /* check for internal locks: these have name[1] != 0 */
-        if (res->lr_name.name[1])
-                RETURN(0);
-
         if (res->lr_lvb_data)
                 RETURN(0);
 
@@ -70,6 +78,10 @@ static int filter_lvbo_init(struct ldlm_resource *res)
 
         obd = res->lr_namespace->ns_lvbp;
         LASSERT(obd != NULL);
+
+        CDEBUG(D_INODE, "%s: filter_lvbo_init(o_gr="LPU64", o_id="
+               LPU64")\n", obd->obd_name, res->lr_name.name[1],
+               res->lr_name.name[0]);
 
         dentry = filter_fid2dentry(obd, NULL, 0, res->lr_name.name[0]);
         if (IS_ERR(dentry)) {
@@ -94,6 +106,8 @@ static int filter_lvbo_init(struct ldlm_resource *res)
 out_dentry:
         f_dput(dentry);
 
+        if (rc)
+                OST_LVB_SET_ERR(lvb->lvb_blocks, rc);
         /* Don't free lvb data on lookup error */
         return rc;
 }
@@ -105,7 +119,7 @@ out_dentry:
  *
  *   If 'increase_only' is true, don't allow values to move backwards.
  */
-static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
+static int filter_lvbo_update(struct ldlm_resource *res, struct ptlrpc_request *r,
                               int buf_idx, int increase_only)
 {
         int rc = 0;
@@ -116,11 +130,6 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
 
         LASSERT(res);
 
-        /* we only want lvb's for object resources */
-        /* check for internal locks: these have name[1] != 0 */
-        if (res->lr_name.name[1])
-                RETURN(0);
-
         down(&res->lr_lvb_sem);
         lvb = res->lr_lvb_data;
         if (lvb == NULL) {
@@ -129,11 +138,12 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
         }
 
         /* Update the LVB from the network message */
-        if (m != NULL) {
+        if (r != NULL) {
                 struct ost_lvb *new;
 
-                new = lustre_swab_buf(m, buf_idx, sizeof(*new),
-                                      lustre_swab_ost_lvb);
+                /* XXX update always from reply buffer */
+                new = lustre_swab_repbuf(r, buf_idx, sizeof(*new),
+                                         lustre_swab_ost_lvb);
                 if (new == NULL) {
                         CERROR("lustre_swab_buf failed\n");
                         goto disk_update;
@@ -176,11 +186,11 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
         if (dentry->d_inode == NULL)
                 GOTO(out_dentry, rc = -ENOENT);
 
-        if (dentry->d_inode->i_size > lvb->lvb_size || !increase_only) {
+        if (i_size_read(dentry->d_inode) > lvb->lvb_size || !increase_only) {
                 CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb size from disk: "
                        LPU64" -> %llu\n", res->lr_name.name[0],
-                       lvb->lvb_size, dentry->d_inode->i_size);
-                lvb->lvb_size = dentry->d_inode->i_size;
+                       lvb->lvb_size, i_size_read(dentry->d_inode));
+                lvb->lvb_size = i_size_read(dentry->d_inode);
         }
 
         if (LTIME_S(dentry->d_inode->i_mtime) >lvb->lvb_mtime|| !increase_only){

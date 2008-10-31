@@ -1,24 +1,40 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2003 Los Alamos National Laboratory (LANL)
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org/
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
  */
-
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ *
+ * Copyright (c) 2003 Los Alamos National Laboratory (LANL)
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ */
 
 /*
  *      Portals GM kernel NAL header file
@@ -38,7 +54,7 @@
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
-#ifdef HAVE_KERNEL_CONFIG_H
+#ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
 #include "linux/module.h"
@@ -144,7 +160,8 @@ typedef struct gmnal_tx {
                 struct iovec    *iov;           /* mapped frags */
                 lnet_kiov_t     *kiov;          /* page frags */
         }                        tx_large_frags;
-        unsigned long            tx_launchtime; /* when (in jiffies) the transmit was launched */
+        cfs_time_t               tx_launchtime; /* when (in jiffies) the
+                                                 * transmit was launched */
         struct gmnal_tx         *tx_next;       /* stash on gmni_txs */
 } gmnal_tx_t;
 
@@ -174,7 +191,7 @@ typedef struct gmnal_ni {
         gmnal_tx_t       *gmni_txs;             /* all txs */
         gmnal_rx_t       *gmni_rxs;		/* all rx descs */
         gmnal_txbuf_t    *gmni_ltxbs;           /* all large tx bufs */
-        
+
         atomic_t          gmni_nthreads;        /* total # threads */
         gm_alarm_t        gmni_alarm;           /* alarm to wake caretaker */
         int               gmni_shutdown;	/* tell all threads to exit */
@@ -199,8 +216,8 @@ typedef struct {
         int              *gm_nrx_small;
         int              *gm_nrx_large;
 
-#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
-        struct ctl_table_header *gm_sysctl;    /* sysctl interface */
+#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
+        cfs_sysctl_table_header_t *gm_sysctl;   /* sysctl interface */
 #endif
 } gmnal_tunables_t;
 

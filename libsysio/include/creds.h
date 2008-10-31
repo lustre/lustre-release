@@ -47,6 +47,11 @@
 #define _CREDS_H_
 
 /*
+ * Superuser's UID.
+ */
+#define _SYSIO_ROOT_UID	0
+
+/*
  * Data structure for user credentials
  */
 
@@ -56,4 +61,12 @@ struct creds {
 	int creds_ngids;
 };
 
+
+#ifdef _SYSIO_ROOT_UID
+/*
+ * Is caller the superuser?
+ */
+#define _sysio_is_root(_crp) \
+	((_crp)->creds_uid == _SYSIO_ROOT_UID)
+#endif
 #endif

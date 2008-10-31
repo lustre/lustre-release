@@ -1,29 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/ptlrpc/pinger.c
+ *
  * Portal-RPC reconnection and replay operations, for use in recovery.
- *
- *  Copyright (c) 2003 Cluster File Systems, Inc.
- *   Authors: Phil Schwan <phil@clusterfs.com>
- *            Mike Shaver <shaver@clusterfs.com>
- *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
- *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
- *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
- *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
  */
 
 #ifndef __KERNEL__
@@ -45,7 +57,8 @@ int ptlrpc_ping(struct obd_import *imp)
         int rc = 0;
         ENTRY;
 
-        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, OBD_PING, 1, NULL, NULL);
+        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, OBD_PING, 
+                              1, NULL, NULL);
         if (req) {
                 DEBUG_REQ(D_INFO, req, "pinging %s->%s",
                           imp->imp_obd->obd_uuid.uuid,
@@ -63,16 +76,29 @@ int ptlrpc_ping(struct obd_import *imp)
         RETURN(rc);
 }
 
-static void ptlrpc_update_next_ping(struct obd_import *imp)
+void ptlrpc_update_next_ping(struct obd_import *imp)
 {
-        imp->imp_next_ping = cfs_time_shift(
-                                (imp->imp_state == LUSTRE_IMP_DISCON ?
-                                 RECONNECT_INTERVAL : PING_INTERVAL));
+#ifdef ENABLE_PINGER
+        int time = PING_INTERVAL;
+        if (imp->imp_state == LUSTRE_IMP_DISCON) {
+                int dtime = max_t(int, CONNECTION_SWITCH_MIN,
+                                  AT_OFF ? 0 :
+                                  at_get(&imp->imp_at.iat_net_latency));
+                time = min(time, dtime);
+        }
+        imp->imp_next_ping = cfs_time_shift(time);
+#endif /* ENABLE_PINGER */
 }
 
 void ptlrpc_ping_import_soon(struct obd_import *imp)
 {
         imp->imp_next_ping = cfs_time_current();
+}
+
+static inline int imp_is_deactive(struct obd_import *imp)
+{
+        return (imp->imp_deactive ||
+                OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_IMP_DEACTIVE));
 }
 
 #ifdef __KERNEL__
@@ -108,7 +134,7 @@ static int ptlrpc_pinger_main(void *arg)
                         imp->imp_force_verify = 0;
                         spin_unlock(&imp->imp_lock);
 
-                        CDEBUG(level == LUSTRE_IMP_FULL ? D_INFO : D_HA,
+                        CDEBUG(level == LUSTRE_IMP_FULL ? D_INFO : D_RPCTRACE,
                                "level %s/%u force %u deactive %u pingable %u\n",
                                ptlrpc_import_state_name(level), level,
                                force, imp->imp_deactive, imp->imp_pingable);
@@ -119,14 +145,14 @@ static int ptlrpc_pinger_main(void *arg)
                             cfs_time_aftereq(this_ping, 
                                              imp->imp_next_ping - 5 * CFS_TICK)) {
                                 if (level == LUSTRE_IMP_DISCON &&
-                                    !imp->imp_deactive) {
+                                    !imp_is_deactive(imp)) {
                                         /* wait at least a timeout before
                                            trying recovery again. */
                                         imp->imp_next_ping = cfs_time_shift(obd_timeout);
                                         ptlrpc_initiate_recovery(imp);
                                 } else if (level != LUSTRE_IMP_FULL ||
                                          imp->imp_obd->obd_no_recov ||
-                                         imp->imp_deactive) {
+                                         imp_is_deactive(imp)) {
                                         CDEBUG(D_HA, "not pinging %s "
                                                "(in recovery: %s or recovery "
                                                "disabled: %u/%u)\n",
@@ -135,7 +161,7 @@ static int ptlrpc_pinger_main(void *arg)
                                                imp->imp_deactive,
                                                imp->imp_obd->obd_no_recov);
                                 } else if (imp->imp_pingable || force) {
-                                        ptlrpc_ping(imp);
+                                                ptlrpc_ping(imp);
                                 }
                         } else {
                                 if (!imp->imp_pingable)
@@ -154,6 +180,8 @@ static int ptlrpc_pinger_main(void *arg)
                                 ptlrpc_update_next_ping(imp);
                 }
                 mutex_up(&pinger_sem);
+                /* update memory usage info */
+                obd_update_maxusage();
 
                 /* Wait until the next ping time, or until we're stopped. */
                 time_to_next_ping = cfs_time_sub(cfs_time_add(this_ping, 
@@ -269,6 +297,9 @@ int ptlrpc_pinger_add_import(struct obd_import *imp)
         mutex_down(&pinger_sem);
         CDEBUG(D_HA, "adding pingable import %s->%s\n",
                imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
+        /* if we add to pinger we want recovery on this import */
+        imp->imp_obd->obd_no_recov = 0;
+
         ptlrpc_update_next_ping(imp);
         /* XXX sort, blah blah */
         list_add_tail(&imp->imp_pinger_chain, &pinger_imports);
@@ -290,6 +321,8 @@ int ptlrpc_pinger_del_import(struct obd_import *imp)
         list_del_init(&imp->imp_pinger_chain);
         CDEBUG(D_HA, "removing pingable import %s->%s\n",
                imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
+        /* if we remove from pinger we don't want recovery on this import */
+        imp->imp_obd->obd_no_recov = 1;
         class_import_put(imp);
         mutex_up(&pinger_sem);
         RETURN(0);
@@ -316,7 +349,7 @@ static spinlock_t        pet_lock = SPIN_LOCK_UNLOCKED;
 int ping_evictor_wake(struct obd_export *exp)
 {
         spin_lock(&pet_lock);
-        if (pet_exp) {
+        if (pet_exp || (pet_state != PET_READY)) {
                 /* eventually the new obd will call here again. */
                 spin_unlock(&pet_lock);
                 return 1;
@@ -359,7 +392,7 @@ static int ping_evictor_main(void *arg)
                 obd = pet_exp->exp_obd;
                 spin_unlock(&pet_lock);
 
-                expire_time = CURRENT_SECONDS - (3 * obd_timeout / 2);
+                expire_time = cfs_time_current_sec() - PING_EVICT_TIMEOUT;
 
                 CDEBUG(D_HA, "evicting all exports of obd %s older than %ld\n",
                        obd->obd_name, expire_time);
@@ -381,7 +414,7 @@ static int ping_evictor_main(void *arg)
                                               " it.\n", obd->obd_name,
                                               obd_uuid2str(&exp->exp_client_uuid),
                                               obd_export_nid2str(exp),
-                                              (long)(CURRENT_SECONDS -
+                                              (long)(cfs_time_current_sec() -
                                                      exp->exp_last_request_time));
                                 CDEBUG(D_HA, "Last request was at %ld\n",
                                        exp->exp_last_request_time);
@@ -517,8 +550,8 @@ static int pinger_check_rpcs(void *arg)
                         req->rq_import_generation = generation;
                         ptlrpc_set_add_req(set, req);
                 } else {
-                        CDEBUG(D_HA, "don't need to ping %s ("CFS_TIME_T" > "
-                               CFS_TIME_T")\n", obd2cli_tgt(imp->imp_obd),
+                        CDEBUG(D_INFO, "don't need to ping %s ("CFS_TIME_T
+                               " > "CFS_TIME_T")\n", obd2cli_tgt(imp->imp_obd),
                                imp->imp_next_ping, pd->pd_this_ping);
                 }
         }
@@ -527,13 +560,13 @@ static int pinger_check_rpcs(void *arg)
 
         /* Might be empty, that's OK. */
         if (set->set_remaining == 0)
-                CDEBUG(D_HA, "nothing to ping\n");
+                CDEBUG(D_RPCTRACE, "nothing to ping\n");
 
         list_for_each(iter, &set->set_requests) {
                 struct ptlrpc_request *req =
                         list_entry(iter, struct ptlrpc_request,
                                    rq_set_chain);
-                DEBUG_REQ(D_HA, req, "pinging %s->%s",
+                DEBUG_REQ(D_RPCTRACE, req, "pinging %s->%s",
                           req->rq_import->imp_obd->obd_uuid.uuid,
                           obd2cli_tgt(req->rq_import->imp_obd));
                 (void)ptl_send_rpc(req, 0);
@@ -543,10 +576,9 @@ do_check_set:
         rc = ptlrpc_check_set(set);
 
         /* not finished, and we are not expired, simply return */
-        if (!rc && cfs_time_before(curtime, 
-                                   cfs_time_add(pd->pd_this_ping, 
-                                                cfs_time_seconds(PING_INTERVAL)))) {
-                CDEBUG(D_HA, "not finished, but also not expired\n");
+        if (!rc && cfs_time_before(curtime, cfs_time_add(pd->pd_this_ping,
+                                            cfs_time_seconds(PING_INTERVAL)))) {
+                CDEBUG(D_RPCTRACE, "not finished, but also not expired\n");
                 pd->pd_recursion--;
                 return 0;
         }
@@ -557,7 +589,7 @@ do_check_set:
                 req = list_entry(iter, struct ptlrpc_request,
                                  rq_set_chain);
 
-                if (req->rq_replied)
+                if (req->rq_phase == RQ_PHASE_COMPLETE)
                         continue;
 
                 req->rq_phase = RQ_PHASE_COMPLETE;
@@ -569,7 +601,7 @@ do_check_set:
                         continue;
                 }
 
-                CDEBUG(D_HA, "pinger initiate expire_one_request\n");
+                CDEBUG(D_RPCTRACE, "pinger initiate expire_one_request\n");
                 ptlrpc_expire_one_request(req);
         }
         mutex_up(&pinger_sem);
@@ -582,7 +614,7 @@ out:
                                         cfs_time_seconds(PING_INTERVAL));
         pd->pd_this_ping = 0; /* XXX for debug */
 
-        CDEBUG(D_HA, "finished a round ping\n");
+        CDEBUG(D_INFO, "finished a round ping\n");
         pd->pd_recursion--;
         return 0;
 }
@@ -665,15 +697,16 @@ void ptlrpc_pinger_wake_up()
         /* XXX force pinger to run, if needed */
         struct obd_import *imp;
         list_for_each_entry(imp, &pinger_imports, imp_pinger_chain) {
-                CDEBUG(D_HA, "Checking that we need to do anything about import"
-                             " %s->%s\n", imp->imp_obd->obd_uuid.uuid,
-                             obd2cli_tgt(imp->imp_obd));
+                CDEBUG(D_RPCTRACE, "checking import %s->%s\n",
+                       imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
 #ifdef ENABLE_LIBLUSTRE_RECOVERY
-                if (imp->imp_state == LUSTRE_IMP_DISCON && !imp->imp_deactive)
+                if (imp->imp_state == LUSTRE_IMP_DISCON &&
+                    !imp_is_deactive(imp))
 #else
                 /*XXX only recover for the initial connection */
                 if (!lustre_handle_is_used(&imp->imp_remote_handle) &&
-                    imp->imp_state == LUSTRE_IMP_DISCON && !imp->imp_deactive)
+                    imp->imp_state == LUSTRE_IMP_DISCON &&
+                    !imp_is_deactive(imp))
 #endif
                         ptlrpc_initiate_recovery(imp);
                 else if (imp->imp_state != LUSTRE_IMP_FULL)
@@ -681,7 +714,7 @@ void ptlrpc_pinger_wake_up()
                                      "state %d, deactive %d\n",
                                      imp->imp_obd->obd_uuid.uuid,
                                      obd2cli_tgt(imp->imp_obd), imp->imp_state,
-                                     imp->imp_deactive);
+                                     imp_is_deactive(imp));
         }
 #endif
         EXIT;

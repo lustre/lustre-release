@@ -1,24 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/liblustre/tests/sanity.c
+ *
  * Lustre Light user test program
- *
- *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
- *
- *   This file is part of Lustre, http://www.lustre.org.
- *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
- *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #define _BSD_SOURCE
@@ -32,22 +49,17 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <sys/queue.h>
 #include <signal.h>
 #include <errno.h>
 #include <dirent.h>
 #include <sys/uio.h>
 #include <sys/time.h>
 #include <time.h>
-#include <sys/ioctl.h>
 
+#include <liblustre.h>
 #include "test_common.h"
-#include <ioctl.h>
 #include <lustre/liblustreapi.h>
 
-#ifndef PAGE_SIZE
-#define PAGE_SIZE getpagesize()
-#endif
 #define _npages (2048)
 
 void *buf_alloc;
@@ -57,7 +69,7 @@ struct timeval start;
 
 extern char *lustre_path;
 
-#define ENTRY(str)                                                      \
+#define ENTER(str)                                                      \
         do {                                                            \
                 char buf[100];                                          \
                 int len;                                                \
@@ -99,6 +111,7 @@ int t1(char *name)
 {
         char path[MAX_PATH_LENGTH] = "";
 
+        ENTER("touch+unlink");
         snprintf(path, MAX_PATH_LENGTH, "%s/test_t1", lustre_path);
 
         if (opt_verbose)
@@ -113,7 +126,7 @@ int t2(char *name)
 {
         char path[MAX_PATH_LENGTH] = "";
 
-        ENTRY("mkdir/rmdir");
+        ENTER("mkdir/rmdir");
         snprintf(path, MAX_PATH_LENGTH, "%s/test_t2", lustre_path);
 
         t_mkdir(path);
@@ -125,7 +138,7 @@ int t3(char *name)
 {
         char path[MAX_PATH_LENGTH] = "";
 
-        ENTRY("regular stat");
+        ENTER("regular stat");
         snprintf(path, MAX_PATH_LENGTH, "%s/test_t3", lustre_path);
 
         t_touch(path);
@@ -138,7 +151,7 @@ int t4(char *name)
 {
         char path[MAX_PATH_LENGTH] = "";
 
-        ENTRY("dir stat");
+        ENTER("dir stat");
         snprintf(path, MAX_PATH_LENGTH, "%s/test_t4", lustre_path);
 
         t_mkdir(path);
@@ -152,7 +165,7 @@ int t6(char *name)
         char path[MAX_PATH_LENGTH] = "";
         char path2[MAX_PATH_LENGTH] = "";
 
-        ENTRY("symlink");
+        ENTER("symlink");
         snprintf(path, MAX_PATH_LENGTH, "%s/test_t6", lustre_path);
         snprintf(path2, MAX_PATH_LENGTH, "%s/test_t6_link", lustre_path);
 
@@ -172,7 +185,7 @@ int t6b(char *name)
         char *tmp;
         int fd;
 
-        ENTRY("symlink + chdir and open");
+        ENTER("symlink + chdir and open");
         snprintf(path, MAX_PATH_LENGTH, "%s/test_t6b", lustre_path);
         snprintf(path2, MAX_PATH_LENGTH, "%s/test_t6b_link", lustre_path);
 
@@ -204,7 +217,7 @@ int t7(char *name)
         char path[MAX_PATH_LENGTH] = "";
         int rc;
 
-        ENTRY("mknod");
+        ENTER("mknod");
         snprintf(path, MAX_PATH_LENGTH, "%s/test_t7", lustre_path);
 
         if (geteuid() != 0) {
@@ -225,7 +238,7 @@ int t8(char *name)
 {
         char path[MAX_PATH_LENGTH] = "";
 
-        ENTRY("chmod");
+        ENTER("chmod");
         snprintf(path, MAX_PATH_LENGTH, "%s/test_t8", lustre_path);
 
         /* Check file. */
@@ -248,7 +261,7 @@ int t9(char *name)
         char path[MAX_PATH_LENGTH] = "";
         char path2[MAX_PATH_LENGTH] = "";
 
-        ENTRY("hard link");
+        ENTER("hard link");
         snprintf(path, MAX_PATH_LENGTH, "%s/test_t9", lustre_path);
         snprintf(path2, MAX_PATH_LENGTH, "%s/test_t9_link", lustre_path);
 
@@ -271,7 +284,7 @@ int t10(char *name)
         char rename2[MAX_PATH_LENGTH] = "";
         char rename3[MAX_PATH_LENGTH] = "";
 
-        ENTRY("rename");
+        ENTER("rename");
         snprintf(dir1, MAX_PATH_LENGTH, "%s/test_t10_dir1", lustre_path);
         snprintf(dir2, MAX_PATH_LENGTH, "%s/test_t10_dir2", lustre_path);
         snprintf(path1, MAX_PATH_LENGTH, "%s/test_t10_reg1", lustre_path);
@@ -299,7 +312,7 @@ int t11(char *name)
         char *base=lustre_path;
         char path[MAX_PATH_LENGTH], path2[MAX_PATH_LENGTH];
         int i, j, level = 5, nreg = 5;
-        ENTRY("deep tree");
+        ENTER("deep tree");
 
         safe_strncpy(path, base, MAX_PATH_LENGTH);
 
@@ -335,7 +348,7 @@ int t12(char *name)
         char dir[MAX_PATH_LENGTH] = "";
         char buf[1024*128];
         int fd;
-        ENTRY("empty directory readdir");
+        ENTER("empty directory readdir");
         snprintf(dir, MAX_PATH_LENGTH, "%s/test_t12_dir", lustre_path);
 
         t_mkdir(dir);
@@ -354,7 +367,7 @@ int t13(char *name)
         const int nfiles = 20;
         char *prefix = "test13_filename_prefix_";
         int fd, i;
-        ENTRY("multiple entries directory readdir");
+        ENTER("multiple entries directory readdir");
         snprintf(dir, MAX_PATH_LENGTH, "%s/test_t13_dir/", lustre_path);
 
         t_mkdir(dir);
@@ -385,7 +398,7 @@ int t14(char *name)
         struct dirent64 *ent;
         int fd, i, rc, pos, index;
         loff_t base = 0;
-        ENTRY(">1 block(4k) directory readdir");
+        ENTER(">1 block(4k) directory readdir");
         snprintf(dir, MAX_PATH_LENGTH, "%s/test_t14_dir/", lustre_path);
 
         rc = mkdir(dir, 0755);
@@ -442,7 +455,7 @@ int t15(char *name)
 {
         char file[MAX_PATH_LENGTH] = "";
         int fd;
-        ENTRY("open-stat-close");
+        ENTER("open-stat-close");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t15_file", lustre_path);
 
         t_touch(file);
@@ -456,7 +469,7 @@ int t15(char *name)
 int t16(char *name)
 {
         char file[MAX_PATH_LENGTH] = "";
-        ENTRY("small-write-read");
+        ENTER("small-write-read");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t16_file", lustre_path);
 
         t_echo_create(file, "aaaaaaaaaaaaaaaaaaaaaa");
@@ -469,7 +482,7 @@ int t17(char *name)
 {
         char file[MAX_PATH_LENGTH] = "";
         int fd;
-        ENTRY("open-unlink without close");
+        ENTER("open-unlink without close");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t17_file", lustre_path);
 
         fd = open(file, O_WRONLY | O_CREAT, 0666);
@@ -487,7 +500,7 @@ int t18(char *name)
         char buf[128];
         int fd, i;
         struct stat statbuf[3];
-        ENTRY("write should change mtime/ctime");
+        ENTER("write should change mtime/ctime");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t18_file", lustre_path);
 
         for (i = 0; i < 3; i++) {
@@ -526,7 +539,7 @@ int t18b(char *name)
         char file[MAX_PATH_LENGTH] = "";
         int i;
         struct stat statbuf[3];
-        ENTRY("utime should change mtime/atime/ctime");
+        ENTER("utime should change mtime/atime/ctime");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t18b_file", lustre_path);
         t_touch(file);
 
@@ -574,7 +587,7 @@ int t19(char *name)
         char file[MAX_PATH_LENGTH] = "";
         int fd;
         int result;
-        ENTRY("open(O_TRUNC) should truncate file to 0-length");
+        ENTER("open(O_TRUNC) should truncate file to 0-length");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t19_file", lustre_path);
 
         t_echo_create(file, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
@@ -599,7 +612,7 @@ int t20(char *name)
         struct iovec iov[2];
         char buf[100];
         ssize_t ret;
-        ENTRY("trap app's general bad pointer for file i/o");
+        ENTER("trap app's general bad pointer for file i/o");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t20_file", lustre_path);
 
         fd = open(file, O_RDWR|O_CREAT, (mode_t)0666);
@@ -681,7 +694,7 @@ int t21(char *name)
                 .l_whence = SEEK_SET,
         };
 
-        ENTRY("basic fcntl support");
+        ENTER("basic fcntl support");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t21_file", lustre_path);
 
         fd = open(file, O_RDWR|O_CREAT, (mode_t)0666);
@@ -716,7 +729,7 @@ int t22(char *name)
         char *str = "1234567890";
         char buf[100];
         ssize_t ret;
-        ENTRY("make sure O_APPEND take effect");
+        ENTER("make sure O_APPEND take effect");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t22_file", lustre_path);
 
         fd = open(file, O_RDWR|O_CREAT|O_APPEND, (mode_t)0666);
@@ -780,7 +793,7 @@ int t23(char *name)
         long long ret;
         loff_t off;
 
-        ENTRY("handle seek > 2GB");
+        ENTER("handle seek > 2GB");
         snprintf(path, MAX_PATH_LENGTH, "%s/f%s", lustre_path, name);
 
         fd = open(path, O_WRONLY | O_CREAT | O_LARGEFILE, 0666);
@@ -883,14 +896,14 @@ static int pages_io(int xfer, loff_t pos)
 
         /* create sample data */
         for (i = 0, buf = buf_alloc; i < _npages; i++) {
-                for (j = 0; j < PAGE_SIZE/sizeof(int); j++, buf++) {
+                for (j = 0; j < CFS_PAGE_SIZE/sizeof(int); j++, buf++) {
                         *buf = rand();
                 }
         }
 
         /* compute checksum */
         for (i = 0, buf = buf_alloc; i < _npages; i++) {
-                for (j = 0; j < PAGE_SIZE/sizeof(int); j++, buf++) {
+                for (j = 0; j < CFS_PAGE_SIZE/sizeof(int); j++, buf++) {
                         check_sum[i] += *buf;
                 }
         }
@@ -908,9 +921,9 @@ static int pages_io(int xfer, loff_t pos)
         }
         gettimeofday(&tw1, NULL);
         for (i = 0, buf = buf_alloc; i < _npages;
-             i += xfer, buf += xfer * PAGE_SIZE / sizeof(int)) {
-                rc = write(fd, buf, PAGE_SIZE * xfer);
-                if (rc != PAGE_SIZE * xfer) {
+             i += xfer, buf += xfer * CFS_PAGE_SIZE / sizeof(int)) {
+                rc = write(fd, buf, CFS_PAGE_SIZE * xfer);
+                if (rc != CFS_PAGE_SIZE * xfer) {
                         printf("write error (i %d, rc %d): %s\n", i, rc,
                                strerror(errno));
                         return(1);
@@ -928,9 +941,9 @@ static int pages_io(int xfer, loff_t pos)
         }
         gettimeofday(&tr1, NULL);
         for (i = 0, buf = buf_alloc; i < _npages;
-             i += xfer, buf += xfer * PAGE_SIZE / sizeof(int)) {
-                rc = read(fd, buf, PAGE_SIZE * xfer);
-                if (rc != PAGE_SIZE * xfer) {
+             i += xfer, buf += xfer * CFS_PAGE_SIZE / sizeof(int)) {
+                rc = read(fd, buf, CFS_PAGE_SIZE * xfer);
+                if (rc != CFS_PAGE_SIZE * xfer) {
                         printf("read error (i %d, rc %d): %s\n", i, rc,
                                strerror(errno));
                         return(1);
@@ -941,7 +954,7 @@ static int pages_io(int xfer, loff_t pos)
         /* compute checksum */
         for (i = 0, buf = buf_alloc; i < _npages; i++) {
                 int sum = 0;
-                for (j = 0; j < PAGE_SIZE/sizeof(int); j++, buf++) {
+                for (j = 0; j < CFS_PAGE_SIZE/sizeof(int); j++, buf++) {
                         sum += *buf;
                 }
                 if (sum != check_sum[i]) {
@@ -956,8 +969,8 @@ static int pages_io(int xfer, loff_t pos)
         tw = (tw2.tv_sec - tw1.tv_sec) * 1000000 + (tw2.tv_usec - tw1.tv_usec);
         tr = (tr2.tv_sec - tr1.tv_sec) * 1000000 + (tr2.tv_usec - tr1.tv_usec);
         printf(" (R:%.3fM/s, W:%.3fM/s)\n",
-                (_npages * PAGE_SIZE) / (tw / 1000000.0) / (1024 * 1024),
-                (_npages * PAGE_SIZE) / (tr / 1000000.0) / (1024 * 1024));
+                (_npages * CFS_PAGE_SIZE) / (tw / 1000000.0) / (1024 * 1024),
+                (_npages * CFS_PAGE_SIZE) / (tr / 1000000.0) / (1024 * 1024));
 
         if (data_error)
                 return 1;
@@ -970,7 +983,7 @@ int t50(char *name)
         int np = 1;
         loff_t offset = 0;
 
-        ENTRY("4k aligned i/o sanity");
+        ENTER("4k aligned i/o sanity");
         while (np <= _npages) {
                 printf("%3d per xfer(total %d)...\t", np, _npages);
                 fflush(stdout);
@@ -988,7 +1001,7 @@ int t50b(char *name)
         int i;
         loff_t offset;
 
-        ENTRY("4k un-aligned i/o sanity");
+        ENTER("4k un-aligned i/o sanity");
         for (i = 0; i < sizeof(off_array)/sizeof(loff_t); i++) {
                 offset = off_array[i];
                 printf("16 per xfer(total %d), offset %10lld...\t",
@@ -1015,7 +1028,7 @@ int t51(char *name)
         off_t size;
         int result;
 
-        ENTRY("truncate() should truncate file to proper length");
+        ENTER("truncate() should truncate file to proper length");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t51_file", lustre_path);
 
         for (size = 0; size < T51_NR * T51_STEP; size += T51_STEP) {
@@ -1064,7 +1077,7 @@ int t52(char *name)
         time_t diff;
         int fd, i;
 
-        ENTRY("atime should be updated during read");
+        ENTER("atime should be updated during read");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t52_file", lustre_path);
 
         t_echo_create(file, "check atime update during read");
@@ -1103,7 +1116,7 @@ int t53(char *name)
         struct stat stat_buf;   /* struct buffer to hold file info. */
         time_t mtime, atime;
  
-        ENTRY("mtime/atime should be updated by utime() call");
+        ENTER("mtime/atime should be updated by utime() call");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t53_file", lustre_path);
 
         t_echo_create(file, "check mtime/atime update by utime() call");
@@ -1140,7 +1153,7 @@ int t54(char *name)
         struct flock lock;
         int fd, err;
 
-        ENTRY("fcntl should return 0 when succeed in getting flock");
+        ENTER("fcntl should return 0 when succeed in getting flock");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t54_file", lustre_path);
 
         t_echo_create(file, "fcntl should return 0 when succeed");
@@ -1170,7 +1183,9 @@ int t54(char *name)
 }
 
 /* for O_DIRECTORY */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
 #define STRIPE_SIZE       (2048 * 2048)
 #define STRIPE_OFFSET           0
@@ -1183,7 +1198,7 @@ int t55(char *name)
         struct lov_user_ost_data *lo = NULL;
         int index, fd, buflen, rc;
 
-        ENTRY("setstripe/getstripe");
+        ENTER("setstripe/getstripe");
         snprintf(path, MAX_PATH_LENGTH, "%s/test_t55", lustre_path);
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t55/file_t55", lustre_path);
       
@@ -1346,7 +1361,7 @@ int t56(char *name)
         ssize_t rc = 0;
         struct dirent dir;
 
-        ENTRY("getdirentries should fail if nbytes is too small");
+        ENTER("getdirentries should fail if nbytes is too small");
 
         /* Set count to be very small.  The result should be EINVAL */
         nbytes = 8;
@@ -1357,12 +1372,12 @@ int t56(char *name)
         rc = getdirentries(fd, (char *)&dir, nbytes, &basep);
 
         if (rc != -1) {
-                printf("Test failed: getdirentries returned %d\n", rc);
+                printf("Test failed: getdirentries returned %ld\n", rc);
                 t_close(fd);
                 return -1;
         }
         if (errno != EINVAL) {
-                printf("Test failed: getdirentries returned %d but errno is set"
+                printf("Test failed: getdirentries returned %ld but errno is set"
                                 " to %d (should be EINVAL)\n", rc, errno);
                 t_close(fd);
                 return -1;
@@ -1380,8 +1395,8 @@ extern void __liblustre_cleanup_(void);
 void usage(char *cmd)
 {
         printf("\n"
-               "usage: %s [--only {test}] --target mgsnid:/fsname\n",
-               cmd);
+             "usage: %s [-o test][-e test][-v] --target mgsnid:/fsname\n",
+             cmd);
         printf("       %s --dumpfile dumpfile\n", cmd);
         exit(-1);
 }
@@ -1427,20 +1442,27 @@ struct testlist {
 int main(int argc, char * const argv[])
 {
         struct testlist *test;
-        int opt_index, c, rc = 0, numonly = 0;
-        char *only[100];
+        int opt_index, c, rc = 0, numonly = 0, numexcept = 0;
+        char *only[100], *except[100];
         static struct option long_opts[] = {
                 {"dumpfile", 1, 0, 'd'},
                 {"only", 1, 0, 'o'},
+                {"except", 1, 0, 'e'},
                 {"target", 1, 0, 't'},
                 {"verbose", 1, 0, 'v'},
                 {0, 0, 0, 0}
         };
 
-        while ((c = getopt_long(argc, argv, "d:o:t:v", long_opts, &opt_index)) != -1) {
+        while ((c = getopt_long(argc, argv, "d:e:o:t:v", long_opts, &opt_index)) != -1) {
                 switch (c) {
                 case 'd':
                         setenv(ENV_LUSTRE_DUMPFILE, optarg, 1);
+                        break;
+                case 'e':
+                        if (numexcept == 0)
+                                printf("Not running test(s): ");
+                        printf("%s ", optarg);
+                        except[numexcept++] = optarg;
                         break;
                 case 'o':
                         if (numonly == 0)
@@ -1471,7 +1493,7 @@ int main(int argc, char * const argv[])
 
         __liblustre_setup_();
 
-        buf_size = _npages * PAGE_SIZE;
+        buf_size = _npages * CFS_PAGE_SIZE;
         if (opt_verbose)
                 printf("allocating %d bytes buffer\n", buf_size);
         buf_alloc = calloc(1, buf_size);
@@ -1482,14 +1504,35 @@ int main(int argc, char * const argv[])
 
         for (test = testlist; test->test != NULL; test++) {
                 int run = 1, i;
+                int len, olen;
+
+                if (numexcept > 0) {
+                        len = strlen(test->name);
+                        for (i = 0; i < numexcept; i++) {
+                                olen = strlen(except[i]);
+
+                                if (len < olen)
+                                        continue;
+
+                                if (strncmp(except[i], test->name, olen) == 0) {
+                                        switch(test->name[olen]) {
+                                        case '0': case '1': case '2': case '3':
+                                        case '4': case '5': case '6': case '7':
+                                        case '8': case '9':
+                                                break;
+                                        default:
+                                                run = 0;
+                                                break;
+                                        }
+                                }
+                        }
+                }
 
                 if (numonly > 0) {
-                        int len;
-
                         run = 0;
                         len = strlen(test->name);
                         for (i = 0; i < numonly; i++) {
-                                int olen = strlen(only[i]);
+                                olen = strlen(only[i]);
 
                                 if (len < olen)
                                         continue;

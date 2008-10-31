@@ -1,22 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2004 - 2005 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #include <linux/fs.h>
@@ -49,13 +64,15 @@
 #define XATTR_USER_PREFIX       "user."
 #define XATTR_TRUSTED_PREFIX    "trusted."
 #define XATTR_SECURITY_PREFIX   "security."
+#define XATTR_LUSTRE_PREFIX     "lustre."
 
 #define XATTR_USER_T            (1)
 #define XATTR_TRUSTED_T         (2)
 #define XATTR_SECURITY_T        (3)
 #define XATTR_ACL_ACCESS_T      (4)
 #define XATTR_ACL_DEFAULT_T     (5)
-#define XATTR_OTHER_T           (6)
+#define XATTR_LUSTRE_T          (6)
+#define XATTR_OTHER_T           (7)
 
 static
 int get_xattr_type(const char *name)
@@ -78,6 +95,10 @@ int get_xattr_type(const char *name)
                      sizeof(XATTR_SECURITY_PREFIX) - 1))
                 return XATTR_SECURITY_T;
 
+        if (!strncmp(name, XATTR_LUSTRE_PREFIX,
+                     sizeof(XATTR_LUSTRE_PREFIX) - 1))
+                return XATTR_LUSTRE_T;
+
         return XATTR_OTHER_T;
 }
 
@@ -91,7 +112,7 @@ int xattr_type_filter(struct ll_sb_info *sbi, int xattr_type)
 
         if (xattr_type == XATTR_USER_T && !(sbi->ll_flags & LL_SBI_USER_XATTR))
                 return -EOPNOTSUPP;
-        if (xattr_type == XATTR_TRUSTED_T && !capable(CAP_SYS_ADMIN))
+        if (xattr_type == XATTR_TRUSTED_T && !cfs_capable(CFS_CAP_SYS_ADMIN))
                 return -EPERM;
         if (xattr_type == XATTR_OTHER_T)
                 return -EOPNOTSUPP;
@@ -110,7 +131,6 @@ int ll_setxattr_common(struct inode *inode, const char *name,
         int xattr_type, rc;
         ENTRY;
 
-        lprocfs_counter_incr(sbi->ll_stats, LPROC_LL_SETXATTR);
 
         xattr_type = get_xattr_type(name);
         rc = xattr_type_filter(sbi, xattr_type);
@@ -118,7 +138,8 @@ int ll_setxattr_common(struct inode *inode, const char *name,
                 RETURN(rc);
 
         /* b10667: ignore lustre special xattr for now */
-        if (xattr_type == XATTR_TRUSTED_T && strcmp(name, "trusted.lov") == 0)
+        if ((xattr_type == XATTR_TRUSTED_T && strcmp(name, "trusted.lov") == 0) ||
+            (xattr_type == XATTR_LUSTRE_T && strcmp(name, "lustre.lov") == 0))
                 RETURN(0);
 
         ll_inode2fid(&fid, inode);
@@ -127,7 +148,7 @@ int ll_setxattr_common(struct inode *inode, const char *name,
         if (rc) {
                 if (rc == -EOPNOTSUPP && xattr_type == XATTR_USER_T) {
                         LCONSOLE_INFO("Disabling user_xattr feature because "
-                                      "it is not supported on the server\n"); 
+                                      "it is not supported on the server\n");
                         sbi->ll_flags &= ~LL_SBI_USER_XATTR;
                 }
                 RETURN(rc);
@@ -148,26 +169,30 @@ int ll_setxattr(struct dentry *dentry, const char *name,
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), xattr %s\n",
                inode->i_ino, inode->i_generation, inode, name);
 
-        ll_vfs_ops_tally(ll_i2sbi(inode), VFS_OPS_SETXATTR);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_SETXATTR, 1);
 
-        if (strncmp(name, XATTR_TRUSTED_PREFIX, 8) == 0 &&
-            strcmp(name + 8, "lov") == 0) {
+        if ((strncmp(name, XATTR_TRUSTED_PREFIX,
+                    sizeof(XATTR_TRUSTED_PREFIX) - 1) == 0 &&
+             strcmp(name + sizeof(XATTR_TRUSTED_PREFIX) - 1, "lov") == 0) ||
+            (strncmp(name, XATTR_LUSTRE_PREFIX,
+                    sizeof(XATTR_LUSTRE_PREFIX) - 1) == 0 &&
+             strcmp(name + sizeof(XATTR_LUSTRE_PREFIX) - 1, "lov") == 0)) {
                 struct lov_user_md *lump = (struct lov_user_md *)value;
                 int rc = 0;
 
                 if (S_ISREG(inode->i_mode)) {
                         struct file f;
                         int flags = FMODE_WRITE;
-                        
+
                         f.f_dentry = dentry;
-                        rc = ll_lov_setstripe_ea_info(inode, &f, flags, 
+                        rc = ll_lov_setstripe_ea_info(inode, &f, flags,
                                                       lump, sizeof(*lump));
                         /* b10667: rc always be 0 here for now */
                         rc = 0;
                 } else if (S_ISDIR(inode->i_mode)) {
-                        rc = ll_dir_setstripe(inode, lump);
+                        rc = ll_dir_setstripe(inode, lump, 0);
                 }
-                
+
                 return rc;
         }
 
@@ -185,7 +210,7 @@ int ll_removexattr(struct dentry *dentry, const char *name)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), xattr %s\n",
                inode->i_ino, inode->i_generation, inode, name);
 
-        ll_vfs_ops_tally(ll_i2sbi(inode), VFS_OPS_REMOVEXATTR);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_REMOVEXATTR, 1);
         return ll_setxattr_common(inode, name, NULL, 0, 0,
                                   OBD_MD_FLXATTRRM);
 }
@@ -205,7 +230,6 @@ int ll_getxattr_common(struct inode *inode, const char *name,
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n",
                inode->i_ino, inode->i_generation, inode);
 
-        lprocfs_counter_incr(sbi->ll_stats, LPROC_LL_GETXATTR);
 
         /* listxattr have slightly different behavior from of ext3:
          * without 'user_xattr' ext3 will list all xattr names but
@@ -241,6 +265,8 @@ int ll_getxattr_common(struct inode *inode, const char *name,
                 posix_acl_release(acl);
                 RETURN(rc);
         }
+        if (xattr_type == XATTR_ACL_DEFAULT_T && !S_ISDIR(inode->i_mode))
+                RETURN(-ENODATA);
 #endif
 
 do_getxattr:
@@ -250,7 +276,7 @@ do_getxattr:
         if (rc) {
                 if (rc == -EOPNOTSUPP && xattr_type == XATTR_USER_T) {
                         LCONSOLE_INFO("Disabling user_xattr feature because "
-                                      "it is not supported on the server\n"); 
+                                      "it is not supported on the server\n");
                         sbi->ll_flags &= ~LL_SBI_USER_XATTR;
                 }
                 RETURN(rc);
@@ -258,7 +284,7 @@ do_getxattr:
 
         body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*body));
         LASSERT(body);
-        LASSERT_REPSWABBED(req, REPLY_REC_OFF);
+        LASSERT(lustre_rep_swabbed(req, REPLY_REC_OFF));
 
         /* only detect the xattr size */
         if (size == 0)
@@ -277,7 +303,7 @@ do_getxattr:
         }
 
         /* do not need swab xattr data */
-        LASSERT_REPSWAB(req, REPLY_REC_OFF + 1);
+        lustre_set_rep_swabbed(req, REPLY_REC_OFF + 1);
         xdata = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1,
                                body->eadatasize);
         if (!xdata) {
@@ -305,41 +331,47 @@ ssize_t ll_getxattr(struct dentry *dentry, const char *name,
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), xattr %s\n",
                inode->i_ino, inode->i_generation, inode, name);
 
-        ll_vfs_ops_tally(ll_i2sbi(inode), VFS_OPS_GETXATTR);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_GETXATTR, 1);
 
-         if (strncmp(name, XATTR_TRUSTED_PREFIX, 8) == 0 &&
-             strcmp(name + 8, "lov") == 0) {
-                 struct lov_user_md *lump;
-                 struct lov_mds_md *lmm = NULL;
-                 struct ptlrpc_request *request = NULL;
-                 int rc = 0, lmmsize;
+        if ((strncmp(name, XATTR_TRUSTED_PREFIX,
+                    sizeof(XATTR_TRUSTED_PREFIX) - 1) == 0 &&
+             strcmp(name + sizeof(XATTR_TRUSTED_PREFIX) - 1, "lov") == 0) ||
+            (strncmp(name, XATTR_LUSTRE_PREFIX,
+                    sizeof(XATTR_LUSTRE_PREFIX) - 1) == 0 &&
+             strcmp(name + sizeof(XATTR_LUSTRE_PREFIX) - 1, "lov") == 0)) {
+                struct lov_user_md *lump;
+                struct lov_mds_md *lmm = NULL;
+                struct ptlrpc_request *request = NULL;
+                int rc = 0, lmmsize = 0;
 
-                 if (S_ISREG(inode->i_mode)) {
-                         rc = ll_lov_getstripe_ea_info(dentry->d_parent->d_inode, 
-                                                       dentry->d_name.name, &lmm, 
-                                                       &lmmsize, &request);
-                 } else if (S_ISDIR(inode->i_mode)) {
-                         rc = ll_dir_getstripe(inode, &lmm, &lmmsize, &request);
-                 }
+                if (S_ISREG(inode->i_mode)) {
+                        rc = ll_lov_getstripe_ea_info(dentry->d_parent->d_inode,
+                                                      dentry->d_name.name, &lmm,
+                                                      &lmmsize, &request);
+                } else if (S_ISDIR(inode->i_mode)) {
+                        rc = ll_dir_getstripe(inode, &lmm, &lmmsize, &request);
+                } else {
+                        rc = -ENODATA;
+                }
 
-                 if (rc < 0)
-                        GOTO(out, rc);
-                 if (size == 0)
-                        GOTO(out, rc = lmmsize);
+                if (rc < 0)
+                       GOTO(out, rc);
+                if (size == 0)
+                       GOTO(out, rc = lmmsize);
 
-                 if (size < lmmsize) {
-                         CERROR("server bug: replied size %u > %u\n",
-                                lmmsize, (int)size);
-                         GOTO(out, rc = -ERANGE);
-                 }
+                if (size < lmmsize) {
+                        CERROR("server bug: replied size %d > %d for %s (%s)\n",
+                               lmmsize, (int)size, dentry->d_name.name, name);
+                        GOTO(out, rc = -ERANGE);
+                }
 
-                 lump = (struct lov_user_md *)buffer;
-                 memcpy(lump, lmm, lmmsize);
+                lump = (struct lov_user_md *)buffer;
+                memcpy(lump, lmm, lmmsize);
 
-                 rc = lmmsize;
+                rc = lmmsize;
 out:
-                 ptlrpc_req_finished(request);
-                 return(rc);
+                ptlrpc_req_finished(request);
+                return(rc);
         }
 
         return ll_getxattr_common(inode, name, buffer, size, OBD_MD_FLXATTR);
@@ -349,51 +381,47 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
 {
         struct inode *inode = dentry->d_inode;
         int rc = 0, rc2 = 0;
+        struct lov_mds_md *lmm = NULL;
+        struct ptlrpc_request *request = NULL;
+        int lmmsize;
 
         LASSERT(inode);
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n",
                inode->i_ino, inode->i_generation, inode);
 
-        ll_vfs_ops_tally(ll_i2sbi(inode), VFS_OPS_LISTXATTR);
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_LISTXATTR, 1);
 
         rc = ll_getxattr_common(inode, NULL, buffer, size, OBD_MD_FLXATTRLS);
 
-        if (!capable(CAP_SYS_ADMIN)) {
-                struct lov_mds_md *lmm = NULL;
-                struct ptlrpc_request *request = NULL;
-                int lmmsize;
-
-                if (S_ISREG(inode->i_mode)) {
-                        struct ll_inode_info *lli = ll_i2info(inode);
-                        struct lov_stripe_md *lsm = NULL;
-                        lsm = lli->lli_smd;
-                        if (lsm == NULL)
-                                rc2 = -1; 
-                } else if (S_ISDIR(inode->i_mode)) {
-                        rc2 = ll_dir_getstripe(inode, &lmm, &lmmsize, &request);
-                }
-
-                if (rc2 < 0) {
-                        GOTO(out, rc2 = 0);
-                } else {
-                        const int prefix_len = sizeof(XATTR_TRUSTED_PREFIX)-1;
-                        const size_t name_len   = sizeof("lov") - 1;
-                        const size_t total_len  = prefix_len + name_len + 1;
-
-                        if (buffer && (rc + total_len) <= size) {
-                                buffer += rc;
-                                memcpy(buffer,XATTR_TRUSTED_PREFIX, prefix_len);
-                                memcpy(buffer+prefix_len, "lov", name_len);
-                                buffer[prefix_len + name_len] = '\0';
-                        }
-                        rc2 = total_len;
-                }
-out:
-                ptlrpc_req_finished(request);
-                rc = rc + rc2;
+        if (S_ISREG(inode->i_mode)) {
+                struct ll_inode_info *lli = ll_i2info(inode);
+                struct lov_stripe_md *lsm = NULL;
+                lsm = lli->lli_smd;
+                if (lsm == NULL)
+                        rc2 = -1;
+        } else if (S_ISDIR(inode->i_mode)) {
+                rc2 = ll_dir_getstripe(inode, &lmm, &lmmsize, &request);
         }
-        
+
+        if (rc2 < 0) {
+                GOTO(out, rc2 = 0);
+        } else {
+                const int prefix_len = sizeof(XATTR_LUSTRE_PREFIX) - 1;
+                const size_t name_len   = sizeof("lov") - 1;
+                const size_t total_len  = prefix_len + name_len + 1;
+
+                if (buffer && (rc + total_len) <= size) {
+                        buffer += rc;
+                        memcpy(buffer,XATTR_LUSTRE_PREFIX, prefix_len);
+                        memcpy(buffer+prefix_len, "lov", name_len);
+                        buffer[prefix_len + name_len] = '\0';
+                }
+                rc2 = total_len;
+        }
+out:
+        ptlrpc_req_finished(request);
+        rc = rc + rc2;
+
         return rc;
 }
-

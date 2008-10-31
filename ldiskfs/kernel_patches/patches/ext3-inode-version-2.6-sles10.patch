@@ -2,7 +2,7 @@ Index: linux-2.6.16-sles10/fs/ext3/inode.c
 ===================================================================
 --- linux-2.6.16-sles10.orig/fs/ext3/inode.c
 +++ linux-2.6.16-sles10/fs/ext3/inode.c
-@@ -2558,6 +2558,13 @@ void ext3_read_inode(struct inode * inod
+@@ -2561,6 +2561,13 @@ void ext3_read_inode(struct inode * inod
  	EXT3_INODE_GET_XTIME(i_atime, inode, raw_inode);
  	EXT3_EINODE_GET_XTIME(i_crtime, ei, raw_inode);
  
@@ -16,7 +16,7 @@ Index: linux-2.6.16-sles10/fs/ext3/inode.c
  	if (S_ISREG(inode->i_mode)) {
  		inode->i_op = &ext3_file_inode_operations;
  		inode->i_fop = &ext3_file_operations;
-@@ -2696,8 +2703,14 @@ static int ext3_do_update_inode(handle_t
+@@ -2699,8 +2706,14 @@ static int ext3_do_update_inode(handle_t
  	} else for (block = 0; block < EXT3_N_BLOCKS; block++)
  		raw_inode->i_block[block] = ei->i_data[block];
  
@@ -32,7 +32,7 @@ Index: linux-2.6.16-sles10/fs/ext3/inode.c
  
  	BUFFER_TRACE(bh, "call ext3_journal_dirty_metadata");
  	rc = ext3_journal_dirty_metadata(handle, bh);
-@@ -2971,10 +2984,32 @@ ext3_reserve_inode_write(handle_t *handl
+@@ -2974,10 +2987,32 @@ ext3_reserve_inode_write(handle_t *handl
  int ext3_mark_inode_dirty(handle_t *handle, struct inode *inode)
  {
  	struct ext3_iloc iloc;
@@ -70,7 +70,7 @@ Index: linux-2.6.16-sles10/include/linux/ext3_fs.h
 ===================================================================
 --- linux-2.6.16-sles10.orig/include/linux/ext3_fs.h
 +++ linux-2.6.16-sles10/include/linux/ext3_fs.h
-@@ -205,6 +205,7 @@ struct ext3_group_desc
+@@ -227,6 +227,7 @@ struct ext3_group_desc
  #define EXT3_STATE_JDATA		0x00000001 /* journaled data exists */
  #define EXT3_STATE_NEW			0x00000002 /* inode is newly created */
  #define EXT3_STATE_XATTR		0x00000004 /* has in-inode xattrs */
@@ -78,7 +78,7 @@ Index: linux-2.6.16-sles10/include/linux/ext3_fs.h
  
  /* Used to pass group descriptor data when online resize is done */
  struct ext3_new_group_input {
-@@ -281,7 +282,7 @@ struct ext3_inode {
+@@ -303,7 +304,7 @@ struct ext3_inode {
  	__le32	i_flags;	/* File flags */
  	union {
  		struct {
@@ -87,7 +87,7 @@ Index: linux-2.6.16-sles10/include/linux/ext3_fs.h
  		} linux1;
  		struct {
  			__u32  h_i_translator;
-@@ -326,6 +327,7 @@ struct ext3_inode {
+@@ -348,6 +349,7 @@ struct ext3_inode {
  	__le32  i_atime_extra;  /* extra Access time      (nsec << 2 | epoch) */
  	__le32  i_crtime;       /* File Creation time */
  	__le32  i_crtime_extra; /* extra File Creation time (nsec << 2 | epoch) */
@@ -95,7 +95,7 @@ Index: linux-2.6.16-sles10/include/linux/ext3_fs.h
  };
  
  #define i_size_high	i_dir_acl
-@@ -388,6 +390,8 @@ do {								     	 \
+@@ -410,6 +412,8 @@ do {								     	 \
  				      raw_inode->xtime ## _extra);       \
  } while (0)
  
@@ -117,8 +117,8 @@ Index: linux-2.6.16-sles10/include/linux/ext3_fs_i.h
  struct ext3_reserve_window {
  	__u32			_rsv_start;	/* First byte reserved */
  	__u32			_rsv_end;	/* Last byte reserved or 0 */
-@@ -138,6 +140,8 @@ struct ext3_inode_info {
- 	__u32 i_cached_extent[4];
+@@ -142,6 +144,8 @@ struct ext3_inode_info {
+ 	spinlock_t i_prealloc_lock;
  
  	void *i_filterdata;
 +
@@ -151,16 +151,46 @@ Index: linux-2.6.16-sles10/fs/ext3/xattr.c
  struct ext3_xattr_info {
  	int name_index;
  	const char *name;
-@@ -1007,6 +1021,8 @@ ext3_xattr_set_handle(handle_t *handle, 
+@@ -944,13 +958,18 @@ ext3_xattr_set_handle(handle_t *handle, 
+ 	struct ext3_xattr_block_find bs = {
+ 		.s = { .not_found = -ENODATA, },
+ 	};
++	unsigned long no_expand;
+ 	int error;
+ 
+ 	if (!name)
+ 		return -EINVAL;
+ 	if (strlen(name) > 255)
+ 		return -ERANGE;
++
+ 	down_write(&EXT3_I(inode)->xattr_sem);
++	no_expand = EXT3_I(inode)->i_state & EXT3_STATE_NO_EXPAND;
++	EXT3_I(inode)->i_state |= EXT3_STATE_NO_EXPAND;
++
+ 	error = ext3_get_inode_loc(inode, &is.iloc);
+ 	if (error)
+ 		goto cleanup;
+@@ -1007,7 +1026,10 @@ ext3_xattr_set_handle(handle_t *handle, 
  	if (!error) {
  		ext3_xattr_update_super_block(handle, inode->i_sb);
  		inode->i_ctime = ext3_current_time(inode);
++
+ 		error = ext3_mark_iloc_dirty(handle, inode, &is.iloc);
 +		if (!value)
 +			EXT3_I(inode)->i_state &= ~EXT3_STATE_NO_EXPAND;
- 		ext3_mark_inode_dirty(handle, inode);
  		/*
  		 * The bh is consumed by ext3_mark_iloc_dirty, even with
-@@ -1059,6 +1075,249 @@ retry:
+ 		 * error != 0.
+@@ -1020,6 +1042,8 @@ ext3_xattr_set_handle(handle_t *handle, 
+ cleanup:
+ 	brelse(is.iloc.bh);
+ 	brelse(bs.bh);
++	if (no_expand == 0)
++		EXT3_I(inode)->i_state &= ~EXT3_STATE_NO_EXPAND;
+ 	up_write(&EXT3_I(inode)->xattr_sem);
+ 	return error;
+ }
+@@ -1059,6 +1083,249 @@ retry:
  	return error;
  }
  
@@ -424,3 +454,15 @@ Index: linux-2.6.16-sles10/fs/ext3/xattr.h
  extern int init_ext3_xattr(void);
  extern void exit_ext3_xattr(void);
  
+Index: linux-2.6.16-sles10/fs/ext3/ialloc.c
+===================================================================
+--- linux-2.6.16-sles10.orig/fs/ext3/ialloc.c
++++ linux-2.6.16-sles10/fs/ext3/ialloc.c
+@@ -750,6 +750,7 @@ got:
+ 	ei->i_dtime = 0;
+ 	ei->i_block_alloc_info = NULL;
+ 	ei->i_block_group = group;
++	ei->i_fs_version = 0;
+ 
+ 	ext3_set_inode_flags(inode);
+ 	if (IS_DIRSYNC(inode))

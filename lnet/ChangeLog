@@ -1,17 +1,259 @@
-2006-06-22  Cluster File Systems, Inc. <info@clusterfs.com>
-       * version 1.4.11 / 1.6.1
+tbd  Sun Microsystems, Inc.
+	* version 1.6.6
+	* Support for networks:
+	 socklnd   - any kernel supported by Lustre,
+	 qswlnd    - Qsnet kernel modules 5.20 and later,
+	 openiblnd - IbGold 1.8.2,
+	 o2iblnd   - OFED 1.1, 1.2.0, 1.2.5, and 1.3
+	 viblnd    - Voltaire ibhost 3.4.5 and later,
+	 ciblnd    - Topspin 3.2.0,
+	 iiblnd    - Infiniserv 3.3 + PathBits patch,
+	 gmlnd     - GM 2.1.22 and later,
+	 mxlnd     - MX 1.2.1 or later,
+	 ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
+
+Severity   : 
+Bugzilla   : 
+Description: 
+Details    : 
+
+Severity   : normal
+Bugzilla   : 13490
+Description: fix credit flow deadlock in uptllnd
+
+Severity   : normal
+Bugzilla   : 16308
+Description: finalize network operation in reasonable time
+Details    : conf-sanity test_32a couldn't stop ost and mds because it
+             tried to access non-existent peer and tcp connect took
+             quite long before timing out.
+
+Severity   : major
+Bugzilla   : 16338
+Description: Continuous recovery on 33 of 413 nodes after lustre oss failure
+Details    : Lost reference on conn prevents peer from being destroyed, which
+             could prevent new peer creation if peer count has reached upper
+	     limit.
+
+Severity   : normal
+Bugzilla   : 16102
+Description: LNET Selftest results in Soft lockup on OSS CPU
+Details    : only hits when 8 or more o2ib clients involved and a session is
+             torn down with 'lst end_session' without preceeding 'lst stop'.
+
+Severity   : minor
+Bugzilla   : 16321
+Description: concurrent_sends in IB LNDs should not be changeable at run time
+Details    : concurrent_sends in IB LNDs should not be changeable at run time
+
+Severity   : normal
+Bugzilla   : 15272
+Description: ptl_send_rpc hits LASSERT when ptl_send_buf fails
+Details    : only hits under out-of-memory situations
+
+
+-------------------------------------------------------------------------------
+
+
+04-26-2008  Sun Microsystems, Inc.
+       * version 1.6.5
        * Support for networks:
-	socklnd   - kernels up to 2.6.16
-	qswlnd    - Qsnet kernel modules 5.20 and later
-	openiblnd - IbGold 1.8.2
-	o2iblnd   - OFED 1.1 and 1.2
-	viblnd    - Voltaire ibhost 3.4.5 and later
-	ciblnd    - Topspin 3.2.0
-	iiblnd    - Infiniserv 3.3 + PathBits patch
-	gmlnd     - GM 2.1.22 and later
-	mxlnd     - MX 1.2.1 or later
+	socklnd   - any kernel supported by Lustre,
+	qswlnd    - Qsnet kernel modules 5.20 and later,
+	openiblnd - IbGold 1.8.2,
+	o2iblnd   - OFED 1.1 and 1.2.0, 1.2.5
+	viblnd    - Voltaire ibhost 3.4.5 and later,
+	ciblnd    - Topspin 3.2.0,
+	iiblnd    - Infiniserv 3.3 + PathBits patch,
+	gmlnd     - GM 2.1.22 and later,
+	mxlnd     - MX 1.2.1 or later,
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
-       * bug fixes
+
+Severity   : normal
+Bugzilla   : 14322
+Description: excessive debug information removed
+Details    : excessive debug information removed
+
+Severity   : major
+Bugzilla   : 15712
+Description: ksocknal_create_conn() hit ASSERTION during connection race
+Details    : ksocknal_create_conn() hit ASSERTION during connection race
+
+Severity   : major
+Bugzilla   : 13983
+Description: ksocknal_send_hello() hit ASSERTION while connecting race
+Details    : ksocknal_send_hello() hit ASSERTION while connecting race
+
+Severity   : major
+Bugzilla   : 14425
+Description: o2iblnd/ptllnd credit deadlock in a routed config.
+Details    : o2iblnd/ptllnd credit deadlock in a routed config.
+
+Severity   : normal
+Bugzilla   : 14956
+Description: High load after starting lnet
+Details    : gmlnd should sleep in rx thread in interruptible way. Otherwise,
+	     uptime utility reports high load that looks confusingly.
+
+Severity   : normal
+Bugzilla   : 14838
+Description: ksocklnd fails to establish connection if accept_port is high
+Details    : PID remapping must not be done for active (outgoing) connections
+
+--------------------------------------------------------------------------------
+
+2008-01-11  Sun Microsystems, Inc.
+       * version 1.4.12
+       * Support for networks:
+	socklnd   - any kernel supported by Lustre,
+	qswlnd    - Qsnet kernel modules 5.20 and later,
+	openiblnd - IbGold 1.8.2,
+	o2iblnd   - OFED 1.1 and 1.2.0, 1.2.5
+	viblnd    - Voltaire ibhost 3.4.5 and later,
+	ciblnd    - Topspin 3.2.0,
+	iiblnd    - Infiniserv 3.3 + PathBits patch,
+	gmlnd     - GM 2.1.22 and later,
+	mxlnd     - MX 1.2.1 or later,
+	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
+Severity   : normal
+Bugzilla   : 14387
+Description: liblustre network error
+Details    : liblustre clients should understand LNET_ACCEPT_PORT environment
+	     variable even if they don't start lnet acceptor.
+
+Severity   : normal
+Bugzilla   : 14300
+Description: Strange message from lnet (Ignoring prediction from the future)
+Details    : Incorrect calculation of peer's last_alive value in ksocklnd
+
+--------------------------------------------------------------------------------
+
+2007-12-07         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.6.4
+       * Support for networks:
+	socklnd   - any kernel supported by Lustre,
+	qswlnd    - Qsnet kernel modules 5.20 and later,
+	openiblnd - IbGold 1.8.2,
+	o2iblnd   - OFED 1.1 and 1.2.0, 1.2.5.
+	viblnd    - Voltaire ibhost 3.4.5 and later,
+	ciblnd    - Topspin 3.2.0,
+	iiblnd    - Infiniserv 3.3 + PathBits patch,
+	gmlnd     - GM 2.1.22 and later,
+	mxlnd     - MX 1.2.1 or later,
+	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
+
+Severity   : normal
+Bugzilla   : 14238
+Description: ASSERTION(me == md->md_me) failed in lnet_match_md()
+
+Severity   : normal
+Bugzilla   : 12494
+Description: increase send queue size for ciblnd/openiblnd
+
+Severity   : normal
+Bugzilla   : 12302
+Description: new userspace socklnd
+Details    : Old userspace tcpnal that resided in lnet/ulnds/socklnd replaced
+             with new one - usocklnd.
+
+Severity   : enhancement
+Bugzilla   : 11686
+Description: Console message flood
+Details    : Make cdls ratelimiting more tunable by adding several tunable in
+	     procfs /proc/sys/lnet/console_{min,max}_delay_centisecs and
+	     /proc/sys/lnet/console_backoff.
+
+--------------------------------------------------------------------------------
+
+2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.6.3
+       * Support for networks:
+	socklnd   - any kernel supported by Lustre,
+	qswlnd    - Qsnet kernel modules 5.20 and later,
+	openiblnd - IbGold 1.8.2,
+	o2iblnd   - OFED 1.1 and 1.2,
+	viblnd    - Voltaire ibhost 3.4.5 and later,
+	ciblnd    - Topspin 3.2.0,
+	iiblnd    - Infiniserv 3.3 + PathBits patch,
+	gmlnd     - GM 2.1.22 and later,
+	mxlnd     - MX 1.2.1 or later,
+	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
+
+Severity   : normal
+Bugzilla   : 12782
+Description: /proc/sys/lnet has non-sysctl entries
+Details    : Updating dump_kernel/daemon_file/debug_mb to use sysctl variables
+
+Severity   : major
+Bugzilla   : 13236
+Description: TOE Kernel panic by ksocklnd
+Details    : offloaded sockets provide their own implementation of sendpage,
+             can't call tcp_sendpage() directly
+
+Severity   : normal
+Bugzilla   : 10778
+Description: kibnal_shutdown() doesn't finish; lconf --cleanup hangs
+Details    : races between lnd_shutdown and peer creation prevent 
+             lnd_shutdown from finishing.
+
+Severity   : normal
+Bugzilla   : 13279
+Description: open files rlimit 1024 reached while liblustre testing
+Details    : ulnds/socklnd must close open socket after unsuccessful
+             'say hello' attempt.
+
+Severity   : major 
+Bugzilla   : 13482
+Description: build error
+Details    : fix typos in gmlnd, ptllnd and viblnd
+
+------------------------------------------------------------------------------
+
+2007-07-30  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.6.1
+       * Support for networks:
+	socklnd   - kernels up to 2.6.16,
+	qswlnd    - Qsnet kernel modules 5.20 and later,
+	openiblnd - IbGold 1.8.2,
+	o2iblnd   - OFED 1.1 and 1.2
+	viblnd    - Voltaire ibhost 3.4.5 and later,
+	ciblnd    - Topspin 3.2.0,
+	iiblnd    - Infiniserv 3.3 + PathBits patch,
+	gmlnd     - GM 2.1.22 and later,
+	mxlnd     - MX 1.2.1 or later,
+	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
+
+2007-06-21  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.11
+       * Support for networks:
+	socklnd   - kernels up to 2.6.16,
+	qswlnd    - Qsnet kernel modules 5.20 and later,
+	openiblnd - IbGold 1.8.2,
+	o2iblnd   - OFED 1.1
+	viblnd    - Voltaire ibhost 3.4.5 and later,
+	ciblnd    - Topspin 3.2.0,
+	iiblnd    - Infiniserv 3.3 + PathBits patch,
+	gmlnd     - GM 2.1.22 and later,
+	mxlnd     - MX 1.2.1 or later,
+	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
+
+Severity   : minor
+Bugzilla   : 13288
+Description: Initialize cpumask before use
+
+Severity   : major
+Bugzilla   : 12014
+Description: ASSERTION failures when upgrading to the patchless zero-copy
+             socklnd 
+Details    : This bug affects "rolling upgrades", causing an inconsistent
+             protocol version negotiation and subsequent assertion failure
+	     during rolling upgrades after the first wave of upgrades.
+
+Severity   : minor
+Bugzilla   : 11223
+Details    : Change "dropped message" CERRORs to D_NETERROR so they are
+             logged instead of creating "console chatter" when a lustre
+	     timeout races with normal RPC completion.
 
 Severity   : minor
 Details    : lnet_clear_peer_table can wait forever if user forgets to
@@ -58,17 +300,16 @@ Details    : o2iblnd depends on OFED's modules, if out-tree OFED's modules
 2007-04-01  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.10 / 1.6.0
        * Support for networks:
-	socklnd   - kernels up to 2.6.16
-	qswlnd    - Qsnet kernel modules 5.20 and later
-	openiblnd - IbGold 1.8.2
-	o2iblnd   - OFED 1.1
-	viblnd    - Voltaire ibhost 3.4.5 and later
-	ciblnd    - Topspin 3.2.0
-	iiblnd    - Infiniserv 3.3 + PathBits patch
-	gmlnd     - GM 2.1.22 and later
-	mxlnd     - MX 1.2.1 or later
+	socklnd   - kernels up to 2.6.16,
+	qswlnd    - Qsnet kernel modules 5.20 and later,
+	openiblnd - IbGold 1.8.2,
+	o2iblnd   - OFED 1.1,
+	viblnd    - Voltaire ibhost 3.4.5 and later,
+	ciblnd    - Topspin 3.2.0,
+	iiblnd    - Infiniserv 3.3 + PathBits patch,
+	gmlnd     - GM 2.1.22 and later,
+	mxlnd     - MX 1.2.1 or later,
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
-       * bug fixes
 	
 Severity   : minor
 Frequency  : rare
@@ -103,7 +344,7 @@ Description: Assertion failure in kernel ptllnd caused by posting passive
 	
 Severity   : major
 Frequency  : rare
-Bugzilla   : 12455
+Bugzilla   : 12445
 Description: A race in kernel ptllnd between deleting a peer and posting
              new communications for it could hang communications -
 	     manifesting as "Unexpectedly long timeout" messages.

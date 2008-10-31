@@ -98,8 +98,39 @@ AC_MSG_CHECKING([for Lustre release])
 RELEASE="`echo ${LINUXRELEASE} | tr '-' '_'`_`date +%Y%m%d%H%M`"
 AC_MSG_RESULT($RELEASE)
 AC_SUBST(RELEASE)
+
+# check is redhat/suse kernels
+AC_MSG_CHECKING([that RedHat kernel])
+LB_LINUX_TRY_COMPILE([
+		#include <linux/version.h>
+	],[
+		#ifndef RHEL_MAJOR
+		#error "not redhat kernel"
+		#endif
+	],[
+		RHEL_KENEL="yes"
+		AC_MSG_RESULT([yes])
+	],[
+	        AC_MSG_RESULT([no])
 ])
 
+AC_MSG_CHECKING([that SuSe kernel])
+LB_LINUX_TRY_COMPILE([
+		#include <linux/version.h>
+	],[
+		#ifndef SLE_VERSION_CODE
+		#error "not sles kernel"
+		#endif
+	],[
+		SUSE_KERNEL="yes"
+		AC_MSG_RESULT([yes])
+	],[
+	        AC_MSG_RESULT([no])
+])
+
+])
+
+#
 #
 # LB_LINUX_PATH
 #
@@ -159,12 +190,6 @@ LB_CHECK_FILES([$LINUX_OBJ/include/linux/autoconf.h
 		$LINUX_OBJ/include/linux/version.h
 		],[],
 	[AC_MSG_ERROR([Run make config in $LINUX.])])
-#
-LB_CHECK_FILE([$LINUX_OBJ/include/linux/config.h],
-	[ AC_DEFINE(HAVE_KERNEL_CONFIG_H, 1,
-		[kernel modules need to include config.h])
-	]
-)
 
 # ------------ rhconfig.h includes runtime-generated bits --
 # red hat kernel-source checks
@@ -199,10 +224,62 @@ LB_LINUX_TRY_COMPILE([],[],[
 	AC_MSG_RESULT([no])
 	AC_MSG_WARN([Consult config.log for details.])
 	AC_MSG_WARN([If you are trying to build with a kernel-source rpm, consult build/README.kernel-source])
-	AC_MSG_ERROR([Kernel modules cannot be build.])
+	AC_MSG_ERROR([Kernel modules cannot be built.])
 ])
 
 LB_LINUX_RELEASE
+]) # end of LB_LINUX_PATH
+
+# LB_LINUX_SYMVERFILE
+# SLES 9 uses a different name for this file - unsure about vanilla kernels
+# around this version, but it matters for servers only.
+AC_DEFUN([LB_LINUX_SYMVERFILE],
+	[AC_MSG_CHECKING([name of module symbol version file])
+	if grep -q Modules.symvers $LINUX/scripts/Makefile.modpost ; then
+		SYMVERFILE=Modules.symvers
+	else
+		SYMVERFILE=Module.symvers
+	fi
+	AC_MSG_RESULT($SYMVERFILE)
+	AC_SUBST(SYMVERFILE)
+])
+
+#
+#
+# LB_LINUX_MODPOST
+#
+# Find modpost and check it
+#
+AC_DEFUN([LB_LINUX_MODPOST],
+[
+# Find the modpost utility
+LB_CHECK_FILE([$LINUX_OBJ/scripts/mod/modpost],
+	[MODPOST=$LINUX_OBJ/scripts/mod/modpost],
+	[LB_CHECK_FILE([$LINUX_OBJ/scripts/modpost],
+		[MODPOST=$LINUX_OBJ/scripts/modpost],
+		AC_MSG_ERROR([modpost not found.])
+	)]
+)
+AC_SUBST(MODPOST)
+
+# Ensure it can run
+AC_MSG_CHECKING([if modpost can be run])
+if $MODPOST ; then
+	AC_MSG_RESULT([yes])
+else
+	AC_MSG_ERROR([modpost can not be run.])
+fi
+
+# Check if modpost supports (and therefore requires) -m
+AC_MSG_CHECKING([if modpost supports -m])
+if $MODPOST -m 2>/dev/null ; then
+	AC_MSG_RESULT([yes])
+	MODPOST_ARGS=-m
+else
+	AC_MSG_RESULT([no])
+	MODPOST_ARGS=""
+fi
+AC_SUBST(MODPOST_ARGS)
 ])
 
 #
@@ -268,12 +345,27 @@ $2
 AC_DEFUN([LB_LINUX_COMPILE_IFELSE],
 [m4_ifvaln([$1], [LB_LINUX_CONFTEST([$1])])dnl
 rm -f build/conftest.o build/conftest.mod.c build/conftest.ko
-AS_IF([AC_TRY_COMMAND(cp conftest.c build && make [$2] CC="$CC" -f $PWD/build/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="$EXTRA_LNET_INCLUDE -Iinclude -include include/linux/autoconf.h" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $ARCH_UM $MODULE_TARGET=$PWD/build) >/dev/null && AC_TRY_COMMAND([$3])],
+AS_IF([AC_TRY_COMMAND(cp conftest.c build && make -d [$2] ${LD:+"LD=$LD"} CC="$CC" -f $PWD/build/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="$EXTRA_LNET_INCLUDE -I$LINUX/include -I$LINUX_OBJ/include -I$LINUX_OBJ/include2 -include include/linux/autoconf.h" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $ARCH_UM $MODULE_TARGET=$PWD/build) >/dev/null && AC_TRY_COMMAND([$3])],
 	[$4],
 	[_AC_MSG_LOG_CONFTEST
 m4_ifvaln([$5],[$5])dnl])dnl
 rm -f build/conftest.o build/conftest.mod.c build/conftest.mod.o build/conftest.ko m4_ifval([$1], [build/conftest.c conftest.c])[]dnl
 ])
+
+#
+# LB_LINUX_ARCH
+#
+# Determine the kernel's idea of the current architecture
+#
+AC_DEFUN([LB_LINUX_ARCH],
+         [AC_MSG_CHECKING([Linux kernel architecture])
+          AS_IF([rm -f $PWD/build/arch
+                 make -s --no-print-directory echoarch -f $PWD/build/Makefile \
+                     LUSTRE_LINUX_CONFIG=$LINUX_CONFIG -C $LINUX_OBJ $ARCH_UM \
+                     ARCHFILE=$PWD/build/arch && LINUX_ARCH=`cat $PWD/build/arch`],
+                [AC_MSG_RESULT([$LINUX_ARCH])],
+                [AC_MSG_ERROR([Could not determine the kernel architecture.])])
+          rm -f build/arch])
 
 #
 # LB_LINUX_TRY_COMPILE
@@ -295,9 +387,7 @@ AC_DEFUN([LB_LINUX_TRY_COMPILE],
 AC_DEFUN([LB_LINUX_CONFIG],
 [AC_MSG_CHECKING([if Linux was built with CONFIG_$1])
 LB_LINUX_TRY_COMPILE([
-#ifdef HAVE_KERNEL_CONFIG_H
-#include <linux/config.h>
-#endif
+#include <linux/autoconf.h>
 ],[
 #ifndef CONFIG_$1
 #error CONFIG_$1 not #defined
@@ -318,7 +408,9 @@ $3
 #
 AC_DEFUN([LB_LINUX_CONFIG_IM],
 [AC_MSG_CHECKING([if Linux was built with CONFIG_$1 in or as module])
-LB_LINUX_TRY_COMPILE([#include <linux/config.h>],[
+LB_LINUX_TRY_COMPILE([
+#include <linux/autoconf.h>
+],[
 #if !(defined(CONFIG_$1) || defined(CONFIG_$1_MODULE))
 #error CONFIG_$1 and CONFIG_$1_MODULE not #defined
 #endif
@@ -367,6 +459,9 @@ fi
 #
 AC_DEFUN([LB_PROG_LINUX],
 [LB_LINUX_PATH
+LB_LINUX_ARCH
+LB_LINUX_SYMVERFILE
+
 
 LB_LINUX_CONFIG([MODULES],[],[
 	AC_MSG_ERROR([module support is required to build Lustre kernel modules.])
@@ -416,7 +511,7 @@ AC_DEFUN([LB_LINUX_CONDITIONALS],
 # or check 
 AC_DEFUN([LB_CHECK_SYMBOL_EXPORT],
 [AC_MSG_CHECKING([if Linux was built with symbol $1 is exported])
-grep -q -E '[[[:space:]]]$1[[[:space:]]]' $LINUX/Module.symvers 2>/dev/null
+grep -q -E '[[[:space:]]]$1[[[:space:]]]' $LINUX/$SYMVERFILE 2>/dev/null
 rc=$?
 if test $rc -ne 0; then
     export=0

@@ -1,7 +1,39 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * p30/lib-types.h
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/include/lnet/lib-types.h
  *
  * Types used by the library side routines that do not need to be
  * exposed to the user application
@@ -320,7 +352,7 @@ typedef struct lnet_lnd
          * for success and do NOT give back a receive credit; that has to wait
          * until lnd_recv() gets called.  On failure return < 0 and
          * release resources; lnd_recv() will not be called. */
-	int (*lnd_eager_recv)(struct lnet_ni *ni, void *private, lnet_msg_t *msg,
+        int (*lnd_eager_recv)(struct lnet_ni *ni, void *private, lnet_msg_t *msg,
                               void **new_privatep);
 
         /* notification of peer health */
@@ -335,6 +367,10 @@ typedef struct lnet_lnd
 
         /* ensure non-RDMA messages can be received outside liblustre */
         int (*lnd_setasync)(struct lnet_ni *ni, lnet_process_id_t id, int nasync);
+
+#ifdef HAVE_LIBPTHREAD
+        int (*lnd_accept)(struct lnet_ni *ni, int sock);
+#endif
 #endif
 } lnd_t;
 
@@ -547,6 +583,15 @@ typedef struct
         struct list_head   ln_active_eqs;
 
         lnet_counters_t    ln_counters;
+
+#ifndef __KERNEL__
+        /* Temporary workaround to allow uOSS and test programs force
+         * server mode in userspace. The only place where we use it is
+         * lnet_prepare(). The only way to turn this flag on is to
+         * call lnet_server_mode() */
+
+        int                ln_server_mode_flag;
+#endif        
 } lnet_t;
 
 #endif

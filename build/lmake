@@ -344,9 +344,13 @@ patch_kernel()
 set_make()
 {
     MAKE="make -s"
-    if [ "$CC" ] ; then
-	MAKE_CC="CC=$CC"
-    fi
+    [ "$CC" ] && {
+        if [ "$TARGET_ARCH" == "ppc64" ] ; then
+                MAKE_CC="CC=$CC -m64"
+        else 
+                MAKE_CC="CC=$CC"
+        fi
+    }
     if [ "$ARCH" ] ; then
 	MAKE_ARCH="$MAKE ARCH=$ARCH"
     else
@@ -393,7 +397,11 @@ depend_kernel()
     set_make
     pushd "$TOPDIR/linux" >/dev/null
     echo "Overriding EXTRAVERSION in kernel..."
-    perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = -${EXTRA_VERSION}${TARGET_CONFIG}/" Makefile
+    local extra_version="${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}"
+    if [ -n "${TARGET_CONFIG}" ]; then
+	extra_version="${extra_version}${TARGET_DELIMITER}${TARGET_CONFIG}"
+    fi
+    perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = ${extra_version}/" Makefile
     echo "Making depend in $PWD..."
     $MAKE "$MAKE_CC" mrproper || fatal 1 "Error running make mrproper"
     rm -f rpm-release
@@ -433,28 +441,31 @@ depend_kernel()
             fi
             fatal 1 "update_oldconfig failed: $RC. See log above."
         fi
-        rm -f $logfile
-        # now notify if resulting .config is different than $CONFIG_FILE
-        local tmpfile=$(mktemp /tmp/XXXXXX)
-        diff -I '^#.*' -u "$CONFIG_FILE" .config >$tmpfile
-        if [ -s $tmpfile ]; then
-            { cat <<EOF
-To: qa@lists.clusterfs.com
+    fi
+    rm -f $logfile
+    # now notify if resulting .config is different than $CONFIG_FILE
+    local tmpfile=$(mktemp /tmp/XXXXXX)
+    diff -I '^#.*' -u "$CONFIG_FILE" .config >$tmpfile
+    if [ -s $tmpfile ]; then
+        { cat <<EOF
+To: lustre-qa-team@sun.com
 Subject: kernel_config change 
 
 The result of a make oldconfig on file $CONFIG_FILE resulted in a
 difference when compared to .config in the following way:
 
 EOF
-            cat $tmpfile
-            echo -e "\n\nPlease consider updating $CONFIG_FILE."
-	    # not sure these are entirely useful.  the above and "patch" are good
-	    #echo -e "\nThe entire new .config file:\n"
-            #cat .config
-            } | sendmail -fqa@clusterfs.com -t
-        fi
-        rm -f $tmpfile
+        cat $tmpfile
+        echo -e "\n\nPlease consider updating $CONFIG_FILE for version: $extra_version."
+        # not sure these are entirely useful.  the above and "patch" are good
+        #echo -e "\nThe entire new .config file:\n"
+        #cat .config
+        # sadly, the build roots can't e-mail out, so we can only display this
+        # to stderr for an interested party to inspect
+        #} | sendmail -flustre-qa-team@sun.com -t
+        } >&2
     fi
+    rm -f $tmpfile
 
     case "$VERSION" in
 	2.6*)
@@ -489,6 +500,48 @@ build_kernel()
     popd >/dev/null
 }
 
+build_kernel_ib()
+{
+    (( $BUILD_KERNEL )) || return 0
+    # build kernel-ib{,-devel}
+    # some I/B drivers are architecture dependent and kernel-ib's configure
+    # does not figure it out for us ~sigh~
+    local configure_options=""
+    case "$TARGET_ARCH" in
+	x86_64 | ia64)
+	    configure_options="--with-ipath_inf-mod"
+	    ;;
+	ppc64)
+	    configure_options="--with-ipath_inf-mod --with-ehca-mod"
+	    ;;
+    esac
+    local K_SRC="K_SRC"
+    # ofed 1.3 had a bug in the rpm spec
+    if [ "$OFED_VERSION" = "1.3" ]; then
+        K_SRC="KSRC"
+    fi
+    $RPMBUILD --rebuild --define 'build_kernel_ib 1' --define 'build_kernel_ib_devel 1' \
+	      --define "_topdir $(lbuild_topdir)" --target ${TARGET_ARCH} \
+	      --define "KVERSION ${FULL_VERSION}" \
+	      --define "$K_SRC $PWD/linux" \
+	      --define "LIB_MOD_DIR /lib/modules/${FULL_VERSION}" \
+	      --define "configure_options --without-quilt --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-srp-target-mod --with-core-mod --with-mthca-mod --with-mlx4-mod --with-cxgb3-mod --with-nes-mod --with-ipoib-mod --with-sdp-mod --with-srp-mod --without-srp-target-mod --with-rds-mod --with-iser-mod --with-qlgc_vnic-mod --with-madeye-mod $configure_options" $(lbuild_topdir)/OFED/SRPMS/ofa_kernel-${OFED_VERSION}-ofed${OFED_VERSION}.src.rpm
+
+    if [ ${PIPESTATUS[0]} != 0 ]; then
+        fatal 1 "Error building kernel-ib"
+    fi
+
+    pushd "$TOPDIR" >/dev/null
+    rm -rf kernel-ib-devel
+    mkdir kernel-ib-devel
+    cd kernel-ib-devel
+    local rpm=$(ls $(lbuild_topdir)/RPMS/*/kernel-ib-devel-${OFED_VERSION}-${FULL_VERSION//-/_}.*.rpm)
+    rpm2cpio -itv < $rpm | cpio -id
+    CONFIGURE_FLAGS="--with-o2ib=$(pwd)/usr/src/ofa_kernel ${CONFIGURE_FLAGS}"
+    popd >/dev/null
+}
+
+
 configure_lustre()
 {
     return 0
@@ -505,7 +558,6 @@ build_lustre()
 {
     (( $BUILD_LUSTRE )) || return 0
     set_make
-    FULL_VERSION="${VERSION}-${EXTRA_VERSION}${TARGET_CONFIG}"
     pushd "$TOPDIR" >/dev/null
     sed \
 	-e s^@VERSION@^${LUSTRE_VERSION}^g \
@@ -526,7 +578,6 @@ install_kernel()
 {
     (( $INSTALL_KERNEL )) || return 0
     set_make
-    FULL_VERSION="${VERSION}-${EXTRA_VERSION}${TARGET_CONFIG}"
     pushd "$TOPDIR/linux" >/dev/null
     mkdir -p "$DESTDIR/boot"
 
@@ -583,8 +634,7 @@ cleanup_libmodules()
 {
     (( $INSTALL_LUSTRE )) || return 0
 
-    FULL_VERSION="${VERSION}-${EXTRA_VERSION}${TARGET_CONFIG}"
-    KVERREL="${VERSION}-${EXTRA_VERSION}"
+    KVERREL="${VERSION}${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}"
     i="$DESTDIR/lib/modules/${FULL_VERSION}"
 
     rm -f $i/build
@@ -603,7 +653,6 @@ install_lustre()
     (( $INSTALL_LUSTRE )) || return 0
     return 0
     set_make
-    FULL_VERSION="${VERSION}-${EXTRA_VERSION}${TARGET_CONFIG}"
     pushd "$TOPDIR" >/dev/null
     $MAKE "$MAKE_CC" -s install "DESTDIR=$DESTDIR" KERNELRELEASE="$FULL_VERSION" || fatal 1 "Error installing Lustre."
     popd >/dev/null
@@ -614,7 +663,6 @@ build_kms()
     (( $BUILD_KERNEL )) || return 0
     (( $SUSEBUILD )) || return 0
     set_make
-    FULL_VERSION="${VERSION}-${EXTRA_VERSION}${TARGET_CONFIG}"
     mkdir -p "${TOPDIR}/modules-${FULL_VERSION}"
     for dir in /usr/src/kernel-modules/* ; do
 	# we are replacing lustre-lite, so don't include it
@@ -639,12 +687,16 @@ install_kms()
     (( $INSTALL_KERNEL )) || return 0
     (( $LINUX26 )) || return 0
     set_make
-    FULL_VERSION="${VERSION}-${EXTRA_VERSION}${TARGET_CONFIG}"
     for build_dir in "${TOPDIR}/modules-${FULL_VERSION}/*" ; do
 	[ -d $build_dir ] || continue
         # these modules are terrible, and don't all build
 	$MAKE "$MAKE_CC" -C $build_dir KERNEL_SOURCE="${TOPDIR}/linux" INSTALL_MOD_PATH="$DESTDIR" 
     done
+    local symvers_file="${DESTDIR}/boot/symvers-${VERSION}${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}-${TARGET_ARCH}"
+    if [ -n "$TARGET_CONFIG" ]; then
+	symvers_file="${symvers_file}${TARGET_DELIMITER}${TARGET_CONFIG}"
+    fi
+    symvers_file="$symvers_file.gz"
     (   symver vmlinux
 	moddir="${DESTDIR}/lib/modules/${FULL_VERSION}"
 	cd $moddir/kernel
@@ -656,8 +708,7 @@ install_kms()
 			   -name '*.ko' -print); do
 	    symver $module
 	done
-    ) | sort -u -k2 \
-	| gzip -c9 > "${DESTDIR}/boot/symvers-${VERSION}-${EXTRA_VERSION}-${TARGET_ARCH}${TARGET_CONFIG}.gz"
+    ) | sort -u -k2 | gzip -c9 > $symvers_file
 }
 
 save_headers()
@@ -667,7 +718,7 @@ save_headers()
     echo "Saving headers for ${TARGET_CONFIG:-up} ${TARGET_ARCH}..."
     pushd linux >/dev/null
 
-    KVERREL="${VERSION}-${EXTRA_VERSION}"
+    KVERREL="${VERSION}${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}"
     # deal with the kernel headers that are version specific
     
     saveddir="$RPM_BUILD_ROOT/usr/src/linux-${KVERREL}/savedheaders/${TARGET_ARCH}/${TARGET_CONFIG:-up}"
@@ -809,6 +860,11 @@ done
 
 check_options
 load_target
+EXTRA_VERSION_DELIMITER=${EXTRA_VERSION_DELIMITER:-"-"}
+FULL_VERSION="${VERSION}${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}"
+if [ -n "$TARGET_CONFIG" ]; then
+    FULL_VERSION="${FULL_VERSION}${TARGET_DELIMITER}${TARGET_CONFIG}"
+fi
 setup_ccache_distcc
 
 extract_kernel
@@ -816,6 +872,10 @@ patch_kernel
 
 depend_kernel
 build_kernel
+
+if [ -n "$OFED_VERSION" ]; then
+    build_kernel_ib
+fi
 
 configure_lustre
 build_lustre

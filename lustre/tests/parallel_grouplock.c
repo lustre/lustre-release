@@ -1,23 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002 Cluster File Systems, Inc.
- *   Author: You Feng <youfeng@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/tests/parallel_grouplock.c
+ *
+ * Author: You Feng <youfeng@clusterfs.com>
  */
 
 #include <mpi.h>
@@ -32,7 +50,7 @@
 #include <time.h>
 #include <errno.h>
 #include <lustre/lustre_user.h>
-#include "lp_utils.h"
+#include <lustre/tests/lp_utils.h>
 
 #define LPGL_FILEN 700000
 #define LPGL_TEST_ITEMS 7
@@ -106,7 +124,7 @@ void grouplock_test1(char *filename, int fd, char *errmsg)
         if (rank == 0) {
                 int iter = MAX_WAITING_TIME;
                 int flag1, flag2;
-                
+
                 /* reading task will tell us when it completes */
                 MPI_Irecv(&temp1, 1, MPI_INT, 1, 1, MPI_COMM_WORLD, &req1);
                 /* 2nd locking task will tell us when it completes */
@@ -140,7 +158,7 @@ void grouplock_test1(char *filename, int fd, char *errmsg)
         if (rank == 0) {
                 int iter = MAX_WAITING_TIME;
                 int flag1;
-                
+
                 do {
                         iter--;
                         if (!iter) {
@@ -217,7 +235,7 @@ void grouplock_test2(char *filename, int fd, char *errmsg)
         if (rank == 0) {
                 int iter = MAX_WAITING_TIME;
                 int flag1, flag2, flag3;
-                
+
                 /* 2nd locking task will tell us when it completes */
                 MPI_Irecv(&temp1, 1, MPI_INT, 1, 1, MPI_COMM_WORLD, &req1);
                 /* 3nd locking task will tell us when it completes */
@@ -284,7 +302,7 @@ void grouplock_test2(char *filename, int fd, char *errmsg)
         if (rank == 0) {
                 int iter = MAX_WAITING_TIME;
                 int flag3;
-                
+
                 do {
                         iter--;
                         if (!iter) {
@@ -366,7 +384,7 @@ void grouplock_test3(char *filename, int fd, char *errmsg)
         if (rank == 0) {
                 int iter = MAX_WAITING_TIME;
                 int flag1, flag2;
-                
+
                 /* reading task will tell us when it completes */
                 MPI_Irecv(&temp1, 1, MPI_INT, 1, 1, MPI_COMM_WORLD, &req1);
                 /* 2nd locking task will tell us when it completes */
@@ -400,7 +418,7 @@ void grouplock_test3(char *filename, int fd, char *errmsg)
         if (rank == 0) {
                 int iter = MAX_WAITING_TIME;
                 int flag1;
-                
+
                 do {
                         iter--;
                         usleep(100);
@@ -418,7 +436,7 @@ void grouplock_test3(char *filename, int fd, char *errmsg)
                                 filename, rc);
                         FAIL(errmsg);
                 }
-                
+
                 do {
                         iter--;
                         if (!iter) {
@@ -435,7 +453,7 @@ void grouplock_test3(char *filename, int fd, char *errmsg)
 
 }
 
-/* 
+/*
  * process1 attempts CW(gid=1) -- granted
  * process2 attempts PR on non-blocking fd -> should return -EWOULDBLOCK
  * process3 attempts CW(gid=2) on non-blocking fd -> should return -EWOULDBLOCK
@@ -501,7 +519,7 @@ void grouplock_test4(char *filename, int fd, char *errmsg)
                 int flag1, flag2;
                 MPI_Request req1, req2;
                 int temp1, temp2;
-                
+
                 /* reading task will tell us when it completes */
                 MPI_Irecv(&temp1, 1, MPI_INT, 1, 1, MPI_COMM_WORLD, &req1);
                 /* 2nd locking task will tell us when it completes */
@@ -536,9 +554,7 @@ void grouplock_test4(char *filename, int fd, char *errmsg)
  */
 void grouplock_test5(char *filename, int fd, char *errmsg)
 {
-        int rc, count, gid = 1;
-        char buf[LPGL_FILEN];
-        char zeros[LPGL_FILEN];
+        int rc, gid = 1;
         MPI_Request req1, req2;
         int temp1, temp2;
 
@@ -565,7 +581,7 @@ void grouplock_test5(char *filename, int fd, char *errmsg)
         if (rank == 0) {
                 int iter = MAX_WAITING_TIME;
                 int flag1, flag2;
-                
+
                 /* 3rd locking task will tell us when it completes */
                 MPI_Irecv(&temp1, 1, MPI_INT, 1, 1, MPI_COMM_WORLD, &req1);
                 /* 2nd locking task will tell us when it completes */
@@ -592,7 +608,7 @@ void grouplock_test5(char *filename, int fd, char *errmsg)
                                 filename, rc);
                         FAIL(errmsg);
                 }
-                
+
                 do {
                         iter--;
                         if (!iter) {
@@ -615,8 +631,6 @@ void grouplock_test5(char *filename, int fd, char *errmsg)
         }
 
         MPI_Barrier(MPI_COMM_WORLD);
-
-
 }
 
 /*
@@ -653,7 +667,7 @@ void grouplock_errorstest(char *filename, int fd, char *errmsg)
 
         /* To not do lots of separate tests with lots of fd opening/closing,
            different parts of this test are performed in different processes */
-           
+
         if (rank == 0 || rank == 1 ) {
                 if ((rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid)) == -1) {
                         sprintf(errmsg, "ioctl GROUP_LOCK of file %s return %d",
@@ -668,7 +682,7 @@ void grouplock_errorstest(char *filename, int fd, char *errmsg)
                         if (errno != EINVAL) {
                                 sprintf(errmsg, "Double GROUP lock failed with errno %d instead of EINVAL\n", errno);
                                 FAIL(errmsg);
-                        } 
+                        }
                 } else {
                         FAIL("Taking second GROUP lock on same fd succeed\n");
                 }
@@ -680,7 +694,7 @@ void grouplock_errorstest(char *filename, int fd, char *errmsg)
                         if (errno != EINVAL) {
                                 sprintf(errmsg, "Double GROUP lock different gid failed with errno %d instead of EINVAL\n", errno);
                                 FAIL(errmsg);
-                        } 
+                        }
                 } else {
                         FAIL("Taking second GROUP lock on same fd, different gid, succeed\n");
                 }
@@ -693,7 +707,7 @@ void grouplock_errorstest(char *filename, int fd, char *errmsg)
                                 sprintf(errmsg, "GROUP unlock with wrong gid failed with errno %d instead of EINVAL\n",
                                         errno);
                                 FAIL(errmsg);
-                        } 
+                        }
                 } else {
                         FAIL("GROUP unlock with wrong gid succeed\n");
                 }
@@ -714,7 +728,7 @@ void grouplock_errorstest(char *filename, int fd, char *errmsg)
                                 sprintf(errmsg, "GROUP unlock on never locked fd failed with errno %d instead of EINVAL\n",
                                         errno);
                                 FAIL(errmsg);
-                        } 
+                        }
                 } else {
                         FAIL("GROUP unlock on never locked fd succeed\n");
                 }
@@ -723,7 +737,7 @@ void grouplock_errorstest(char *filename, int fd, char *errmsg)
 
 void grouplock_file(char *name, int items)
 {
-        int i, fd;
+        int fd;
         char filename[MAX_FILENAME_LEN];
         char errmsg[MAX_FILENAME_LEN+20];
 
@@ -821,7 +835,6 @@ int main(int argc, char *argv[])
 {
         char c;
         int i, iterations = 1;
-        int tr = 1;
 
         /* Check for -h parameter before MPI_Init so the binary can be
            called directly, without, for instance, mpirun */
@@ -875,8 +888,8 @@ int main(int argc, char *argv[])
         }
 
         if (testdir == NULL && rank == 0) {
-                fprintf(stderr, "Please specify a test directory! (\"%s -h\" for help)\n",
-                       argv[0]);
+                fprintf(stderr, "Please specify a test directory! "
+                        "(\"%s -h\" for help)\n", argv[0]);
                 MPI_Abort(MPI_COMM_WORLD, 2);
         }
 

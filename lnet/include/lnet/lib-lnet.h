@@ -1,7 +1,39 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * lib-lnet.h
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/include/lnet/lib-lnet.h
  *
  * Top level include for library side routines
  */
@@ -150,6 +182,9 @@ lnet_md_alloc (lnet_md_t *umd)
         md = (lnet_libmd_t *)lnet_freelist_alloc(&the_lnet.ln_free_mds);
         LNET_UNLOCK();
 
+        if (md != NULL)
+                CFS_INIT_LIST_HEAD(&md->md_list);
+
         return (md);
 }
 
@@ -250,6 +285,7 @@ lnet_md_alloc (lnet_md_t *umd)
                 /* Set here in case of early free */
                 md->md_options = umd->options;
                 md->md_niov = niov;
+                CFS_INIT_LIST_HEAD(&md->md_list);
         }
         
         return (md);
@@ -548,6 +584,7 @@ lnet_remotenet_t *lnet_find_net_locked (__u32 net);
 int lnet_islocalnid(lnet_nid_t nid);
 int lnet_islocalnet(__u32 net);
 
+void lnet_build_unlink_event(lnet_libmd_t *md, lnet_event_t *ev);
 void lnet_enq_event_locked(lnet_eq_t *eq, lnet_event_t *ev);
 void lnet_prep_send(lnet_msg_t *msg, int type, lnet_process_id_t target,
                     unsigned int offset, unsigned int len);
@@ -650,6 +687,11 @@ void lnet_connect_console_error(int rc, lnet_nid_t peer_nid,
 int lnet_count_acceptor_nis(lnet_ni_t **first_ni);
 int lnet_accept(lnet_ni_t *blind_ni, cfs_socket_t *sock, __u32 magic);
 int lnet_acceptor_timeout(void);
+int lnet_acceptor_port(void);
+#endif
+
+#ifdef HAVE_LIBPTHREAD
+int lnet_count_acceptor_nis(lnet_ni_t **first_ni);
 int lnet_acceptor_port(void);
 #endif
 

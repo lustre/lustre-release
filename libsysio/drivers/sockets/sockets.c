@@ -53,7 +53,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <assert.h>
-#include <syscall.h>
+#include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/fcntl.h>
