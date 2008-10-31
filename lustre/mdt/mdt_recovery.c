@@ -233,7 +233,8 @@ static inline int mdt_last_rcvd_header_write(const struct lu_env *env,
         lsd_cpu_to_le(&mdt->mdt_lsd, &mti->mti_lsd);
 
         rc = mdt_record_write(env, mdt->mdt_last_rcvd,
-                              mdt_buf_const(env, &mti->mti_lsd, sizeof(mti->mti_lsd)),
+                              mdt_buf_const(env, &mti->mti_lsd,
+                                            sizeof(mti->mti_lsd)),
                               &mti->mti_off, th);
 
         mdt_trans_stop(env, mdt, th);
@@ -321,7 +322,6 @@ static int mdt_last_rcvd_write(const struct lu_env *env,
                         lcd->lcd_last_close_result);
         return rc;
 }
-
 
 static int mdt_clients_data_init(const struct lu_env *env,
                                  struct mdt_device *mdt,
@@ -682,7 +682,6 @@ int mdt_client_add(const struct lu_env *env,
         init_mutex(&med->med_lcd_lock);
 
         LASSERTF(med->med_lr_off > 0, "med_lr_off = %llu\n", med->med_lr_off);
-        mdt_export_stats_init(obd, mti->mti_exp, NULL);
 
         RETURN(rc);
 }
@@ -875,7 +874,8 @@ static int mdt_txn_stop_cb(const struct lu_env *env,
         if (mti->mti_has_trans) {
                 /* XXX: currently there are allowed cases, but the wrong cases
                  * are also possible, so better check is needed here */
-                CDEBUG(D_INFO, "More than one transaction "LPU64"\n", mti->mti_transno);
+                CDEBUG(D_INFO, "More than one transaction "LPU64"\n",
+                       mti->mti_transno);
                 return 0;
         }
 
@@ -1133,7 +1133,8 @@ static void mdt_reconstruct_create(struct mdt_thread_info *mti,
                 req->rq_status = rc;
                 body->valid |= OBD_MD_MDS;
         }
-        mdt_pack_attr2body(mti, body, &mti->mti_attr.ma_attr, mdt_object_fid(child));
+        mdt_pack_attr2body(mti, body, &mti->mti_attr.ma_attr,
+                           mdt_object_fid(child));
         mdt_object_put(mti->mti_env, child);
 }
 
