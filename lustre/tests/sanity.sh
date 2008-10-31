@@ -1061,15 +1061,15 @@ test_27t() { # bug 10864
 run_test 27t "check that utils parse path correctly"
 
 test_27u() { # bug 4900
-	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+        [ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
+        remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
         #define OBD_FAIL_MDS_OSC_PRECREATE      0x13d
 
-        lctl set_param fail_loc=0x13d
+        do_facet $SINGLEMDS lctl set_param fail_loc=0x13d
         mkdir -p $DIR/d27u
         createmany -o $DIR/d27u/t- 1000
-        lctl set_param fail_loc=0
+        do_facet $SINGLEMDS lctl set_param fail_loc=0
 
         TLOG=$DIR/$tfile.getstripe
         $GETSTRIPE $DIR/d27u > $TLOG
