@@ -145,7 +145,7 @@ static void config_log_put(struct config_llog_data *cld)
 
 /* Find a config log by name */
 static struct config_llog_data *config_log_find(char *logname,
-                                                struct config_llog_instance *cfg)
+                                               struct config_llog_instance *cfg)
 {
         struct list_head *tmp;
         struct config_llog_data *cld;
@@ -222,7 +222,7 @@ static int config_log_add(char *logname, struct config_llog_instance *cfg,
         spin_lock(&config_list_lock);
         list_add(&cld->cld_list_chain, &config_llog_list);
         spin_unlock(&config_list_lock);
-        
+
         if (rc) {
                 config_log_put(cld);
                 RETURN(rc);
@@ -260,7 +260,7 @@ static int config_log_end(char *logname, struct config_llog_instance *cfg)
 static int rq_state = 0;
 static cfs_waitq_t rq_waitq;
 
-static int mgc_process_log(struct obd_device *mgc, 
+static int mgc_process_log(struct obd_device *mgc,
                            struct config_llog_data *cld);
 static int mgc_requeue_add(struct config_llog_data *cld, int later);
 
@@ -273,7 +273,7 @@ static int mgc_requeue_thread(void *data)
         ENTRY;
 
         ptlrpc_daemonize(name);
-        
+
         CDEBUG(D_MGC, "Starting requeue thread\n");
 
         lwi_later = LWI_TIMEOUT(60 * HZ, NULL, NULL);
@@ -283,35 +283,35 @@ static int mgc_requeue_thread(void *data)
         spin_lock(&config_list_lock);
         while (rq_state & (RQ_NOW | RQ_LATER)) {
                 /* Any new or requeued lostlocks will change the state */
-                rq_state &= ~(RQ_NOW | RQ_LATER); 
+                rq_state &= ~(RQ_NOW | RQ_LATER);
                 spin_unlock(&config_list_lock);
 
-                /* Always wait a few seconds to allow the server who 
+                /* Always wait a few seconds to allow the server who
                    caused the lock revocation to finish its setup, plus some
                    random so everyone doesn't try to reconnect at once. */
                 lwi_now = LWI_TIMEOUT(3 * HZ + (ll_rand() & 0xff) * (HZ / 100),
                                       NULL, NULL);
                 l_wait_event(rq_waitq, rq_state & RQ_STOP, &lwi_now);
-                
+
                 spin_lock(&config_list_lock);
                 list_for_each_entry_safe(cld, n, &config_llog_list,
                                          cld_list_chain) {
-                        spin_unlock(&config_list_lock);                        
+                        spin_unlock(&config_list_lock);
                         if (cld->cld_lostlock) {
-                                CDEBUG(D_MGC, "updating log %s\n", 
+                                CDEBUG(D_MGC, "updating log %s\n",
                                        cld->cld_logname);
                                 cld->cld_lostlock = 0;
                                 rc = mgc_process_log(cld->cld_mgcexp->exp_obd,
                                                      cld);
-                                /* Whether we enqueued again or not in 
-                                   mgc_process_log, we're done with the ref 
-                                   from the old enqueue */      
+                                /* Whether we enqueued again or not in
+                                   mgc_process_log, we're done with the ref
+                                   from the old enqueue */
                                 config_log_put(cld);
                         }
                         spin_lock(&config_list_lock);
                 }
                 spin_unlock(&config_list_lock);
-                
+
                 /* Wait a bit to see if anyone else needs a requeue */
                 l_wait_event(rq_waitq, rq_state & (RQ_NOW | RQ_STOP),
                              &lwi_later);
@@ -320,7 +320,7 @@ static int mgc_requeue_thread(void *data)
         /* spinlock and while guarantee RQ_NOW and RQ_LATER are not set */
         rq_state &= ~RQ_RUNNING;
         spin_unlock(&config_list_lock);
-        
+
         CDEBUG(D_MGC, "Ending requeue thread\n");
         RETURN(rc);
 }
@@ -331,7 +331,7 @@ static int mgc_requeue_add(struct config_llog_data *cld, int later)
 {
         int rc = 0;
 
-        CDEBUG(D_INFO, "log %s: requeue (l=%d r=%d sp=%d st=%x)\n", 
+        CDEBUG(D_INFO, "log %s: requeue (l=%d r=%d sp=%d st=%x)\n",
                cld->cld_logname, later, atomic_read(&cld->cld_refcount),
                cld->cld_stopping, rq_state);
 
@@ -475,7 +475,7 @@ static int mgc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                 break;
         case OBD_CLEANUP_EXPORTS:
                 if (atomic_dec_and_test(&mgc_count)) {
-                        /* Kick the requeue waitq - cld's should all be 
+                        /* Kick the requeue waitq - cld's should all be
                            stopping */
                         spin_lock(&config_list_lock);
                         rq_state |= RQ_STOP;
@@ -579,9 +579,9 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 }
                 /* Are we done with this log? */
                 if (cld->cld_stopping) {
-                        CDEBUG(D_MGC, "log %s: stopping, won't requeue\n", 
+                        CDEBUG(D_MGC, "log %s: stopping, won't requeue\n",
                                cld->cld_logname);
-                        config_log_put(cld);    
+                        config_log_put(cld);
                         break;
                 }
                 /* Make sure not to re-enqueue when the mgc is stopping
@@ -590,7 +590,7 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                     !lock->l_conn_export->exp_obd->u.cli.cl_conn_count) {
                         CDEBUG(D_MGC, "log %s: disconnecting, won't requeue\n",
                                cld->cld_logname);
-                        config_log_put(cld);    
+                        config_log_put(cld);
                         break;
                 }
                 /* Did we fail to get the lock? */
@@ -678,8 +678,8 @@ static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         rc = ldlm_cli_enqueue(exp, NULL, &einfo, &cld->cld_resid,
                               NULL, flags, NULL, 0, NULL, lockh, 0);
-        /* A failed enqueue should still call the mgc_blocking_ast, 
-           where it will be requeued if needed ("grant failed"). */ 
+        /* A failed enqueue should still call the mgc_blocking_ast,
+           where it will be requeued if needed ("grant failed"). */
 
         RETURN(rc);
 }
@@ -890,7 +890,7 @@ static int mgc_import_event(struct obd_device *obd,
         case IMP_EVENT_ACTIVE:
                 LCONSOLE_WARN("%s: Reactivating import\n", obd->obd_name);
                 /* Clearing obd_no_recov allows us to continue pinging */
-                obd->obd_no_recov = 0;        
+                obd->obd_no_recov = 0;
                 break;
         case IMP_EVENT_OCD:
                 break;
@@ -1008,7 +1008,7 @@ static int mgc_copy_llog(struct obd_device *obd, struct llog_ctxt *rctxt,
            upon successful completion. */
 
         OBD_ALLOC(temp_log, strlen(logname) + 1);
-        if (!temp_log) 
+        if (!temp_log)
                 RETURN(-ENOMEM);
         sprintf(temp_log, "%sT", logname);
 
@@ -1017,7 +1017,7 @@ static int mgc_copy_llog(struct obd_device *obd, struct llog_ctxt *rctxt,
         if (rc)
                 GOTO(out, rc);
         rc = llog_init_handle(local_llh, LLOG_F_IS_PLAIN, NULL);
-        if (rc) 
+        if (rc)
                 GOTO(out, rc);
         rc = llog_destroy(local_llh);
         llog_free_handle(local_llh);
@@ -1143,7 +1143,7 @@ static int mgc_process_log(struct obd_device *mgc,
                                 GOTO(out_pop, rc = -ENOTCONN);
                         }
                         CDEBUG(D_MGC, "Failed to get MGS log %s, using local "
-                                      "copy for now, will try to update later.\n",
+                               "copy for now, will try to update later.\n",
                                cld->cld_logname);
                 }
                 /* Now, whether we copied or not, start using the local llog.
