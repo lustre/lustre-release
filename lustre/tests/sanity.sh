@@ -2350,8 +2350,9 @@ test_53() {
 	# only test MDT0000
         for value in $(do_facet $SINGLEMDS lctl get_param osc.*-osc-MDT0000.prealloc_last_id) ; do
                 param=`echo ${value[0]} | cut -d "=" -f1`
-                mds_last=$(do_facet $SINGLEMDS lctl get_param -n $param)
                 ostname=`echo $param | cut -d "." -f2 | cut -d - -f 1-2`
+                mds_last=$(do_facet $SINGLEMDS lctl get_param -n $param)
+                ostnum=$(echo $ostname | sed "s/${FSNAME}-OST//g" | awk '{print ($1+1)}' )
                 ost_last=$(do_facet ost$ostnum lctl get_param -n obdfilter.$ostname.last_id | head -n 1)
                 echo "$ostname.last_id=$ost_last ; MDS.last_id=$mds_last"
                 if [ $ost_last != $mds_last ]; then
