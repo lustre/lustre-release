@@ -2253,7 +2253,7 @@ test_53() {
 		param=`echo ${VALUE[0]} | cut -d "=" -f1`;
 		ostname=`echo $param | cut -d "." -f2 | cut -d - -f 1-2`
 		mds_last=$(do_facet mds lctl get_param -n $param)
-		ostnum=$(echo $ostname | sed 's/lustre-OST//g' | awk '{print ($1+0)}' )
+		ostnum=$(echo $ostname | sed "s/${FSNAME}-OST//g" | awk '{print ($1+1)}' )
 		ost_last=$(do_facet ost$ostnum lctl get_param -n obdfilter.$ostname.last_id)
 		echo "$ostname.last_id=$ost_last ; MDS.last_id=$mds_last"
 		if [ $ost_last != $mds_last ]; then
