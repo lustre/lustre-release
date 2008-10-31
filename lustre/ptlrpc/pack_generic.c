@@ -1096,6 +1096,7 @@ void *lustre_swab_buf(struct lustre_msg *msg, int index, int min_size,
 {
         void *ptr = NULL;
 
+        LASSERT(msg != NULL);
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V1:
                 ptr = lustre_msg_buf_v1(msg, index - 1, min_size);
