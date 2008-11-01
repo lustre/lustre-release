@@ -1269,7 +1269,12 @@ AC_DEFINE(HAVE___D_MOVE, 1,
 ])
 ])
 
-
+#
+# LC_EXPORT_INVALIDATE_MAPPING_PAGES
+#
+# SLES9, RHEL4, RHEL5, vanilla 2.6.24 export invalidate_mapping_pages() but
+# SLES10 2.6.16 does not, for some reason.  For filter cache invalidation.
+#
 AC_DEFUN([LC_EXPORT_INVALIDATE_MAPPING_PAGES],
     [LB_CHECK_SYMBOL_EXPORT([invalidate_mapping_pages], [mm/truncate.c], [
          AC_DEFINE(HAVE_INVALIDATE_MAPPING_PAGES, 1,
@@ -1280,6 +1285,20 @@ AC_DEFUN([LC_EXPORT_INVALIDATE_MAPPING_PAGES],
        AC_MSG_ERROR([no way to invalidate pages])
   ])
     ],[])
+])
+
+#
+# LC_EXPORT_FILEMAP_FDATASYNC_RANGE
+#
+# No standard kernels export this
+#
+AC_DEFUN([LC_EXPORT_FILEMAP_FDATAWRITE_RANGE],
+[LB_CHECK_SYMBOL_EXPORT([filemap_fdatawrite_range],
+[mm/filemap.c],[
+AC_DEFINE(HAVE_FILEMAP_FDATAWRITE_RANGE, 1,
+            [filemap_fdatawrite_range is exported by the kernel])
+],[
+])
 ])
 
 # The actual symbol exported varies among architectures, so we need
@@ -1608,6 +1627,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_UMOUNTBEGIN_HAS_VFSMOUNT
          if test x$enable_server = xyes ; then
                 LC_EXPORT_INVALIDATE_MAPPING_PAGES
+                LC_EXPORT_FILEMAP_FDATAWRITE_RANGE
          fi
 
          #2.6.18 + RHEL5 (fc6)

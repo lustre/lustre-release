@@ -719,7 +719,9 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                  * be able to proceed in filter_commitrw_write(). thus let's
                  * just wait for writeout completion, should be rare enough.
                  * -bzzz */
-                wait_on_page_writeback(lnb->page);
+                if (obd->u.filter.fo_writethrough_cache)
+                        wait_on_page_writeback(lnb->page);
+                BUG_ON(PageWriteback(lnb->page));
 
                 /* If the filter writes a partial page, then has the file
                  * extended, the client will read in the whole page.  the

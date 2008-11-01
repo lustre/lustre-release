@@ -299,6 +299,45 @@ static inline int mapping_has_pages(struct address_space *mapping)
 #define filemap_fdatawrite(mapping)      filemap_fdatasync(mapping)
 #endif
 
+#include <linux/mpage.h>        /* for generic_writepages */
+#ifndef HAVE_FILEMAP_FDATAWRITE_RANGE
+#include <linux/backing-dev.h>  /* for mapping->backing_dev_info */
+static inline int filemap_fdatawrite_range(struct address_space *mapping,
+                                           loff_t start, loff_t end)
+{
+        int rc;
+        struct writeback_control wbc = {
+                .sync_mode = WB_SYNC_ALL,
+                .nr_to_write = (end - start + PAGE_SIZE - 1) >> PAGE_SHIFT,
+        };
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
+        wbc.range_start = start;
+        wbc.range_end = end;
+#else
+        wbc.start = start;
+        wbc.end = end;
+#endif
+
+#ifdef mapping_cap_writeback_dirty
+        if (!mapping_cap_writeback_dirty(mapping))
+		rc = 0;
+#else
+        if (mapping->backing_dev_info->memory_backed)
+                rc = 0;
+#endif
+        /* do_writepages() */
+        else if (mapping->a_ops->writepages)
+                rc = mapping->a_ops->writepages(mapping, &wbc);
+        else
+                rc = generic_writepages(mapping, &wbc);
+        return rc;
+}
+#else
+int filemap_fdatawrite_range(struct address_space *mapping,
+                             loff_t start, loff_t end);
+#endif
+
 #ifdef HAVE_VFS_KERN_MOUNT
 static inline 
 struct vfsmount *

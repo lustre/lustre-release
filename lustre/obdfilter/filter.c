@@ -2031,7 +2031,7 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
         sema_init(&filter->fo_alloc_lock, 1);
         init_brw_stats(&filter->fo_filter_stats);
         filter->fo_read_cache = 1; /* enable read-only cache by default */
-        filter->fo_writethrough_cache = 0; /* disable writethrough cache */
+        filter->fo_writethrough_cache = 1; /* disable writethrough cache */
         filter->fo_readcache_max_filesize = FILTER_MAX_CACHE_SIZE;
         filter->fo_fmd_max_num = FILTER_FMD_MAX_NUM_DEFAULT;
         filter->fo_fmd_max_age = FILTER_FMD_MAX_AGE_DEFAULT;
@@ -3142,6 +3142,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         struct llog_cookie *fcc = NULL;
         struct filter_obd *filter;
         int rc, err, locked = 0, sync = 0;
+        loff_t old_size = 0;
         unsigned int ia_valid;
         struct inode *inode;
         struct iattr iattr;
@@ -3165,6 +3166,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         }
 
         if (ia_valid & ATTR_SIZE || ia_valid & (ATTR_UID | ATTR_GID)) {
+                old_size = i_size_read(inode);
                 DQUOT_INIT(inode);
                 LOCK_INODE_MUTEX(inode);
                 locked = 1;
@@ -3247,9 +3249,17 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                 fcc = NULL;
         }
 
+        /* For a partial-page truncate flush the page to disk immediately
+         * to avoid data corruption during direct disk write. b=17397 */
+        if (!sync && (iattr.ia_valid & ATTR_SIZE) &&
+            old_size != iattr.ia_size && (iattr.ia_size & ~CFS_PAGE_MASK)) {
+                err = filemap_fdatawrite_range(inode->i_mapping, iattr.ia_size,
+                                               iattr.ia_size + 1);
+                if (!rc)
+                        rc = err;
+        }
+
         if (locked) {
-                /* truncate can leave dirty pages in the cache.
-                 * we'll take care of them in write path -bzzz */
                 UNLOCK_INODE_MUTEX(inode);
                 locked = 0;
         }
