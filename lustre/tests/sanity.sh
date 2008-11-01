@@ -5587,18 +5587,14 @@ test_151() {
 	local CPAGES=3
 
 	# check whether obdfilter is cache capable at all
-	if ! $LCTL get_param -n obdfilter.*.read_cache_enable; then
+	if ! $LCTL get_param obdfilter.*.read_cache_enable > /dev/null; then
 		echo "not cache-capable obdfilter"
 		return 0
 	fi
 
-	# check cache is enabled on all obdfilters
-	if $LCTL get_param -n obdfilter.*.read_cache_enable | grep -q 0; then
-		echo "oss cache is disabled"
-		return 0
-	fi
-
-	$LCTL set_param obdfilter.*.writethrough_cache_enable=1
+	# make sure cache is enabled on all obdfilters
+	$LCTL set_param obdfilter.*.read_cache_enable=1 | filt_param OST
+	$LCTL set_param obdfilter.*.writethrough_cache_enable=1 | filt_param OST
 
 	# pages should be in the case right after write
         dd if=/dev/urandom of=$DIR/$tfile bs=4k count=$CPAGES||error "dd failed"
@@ -5612,7 +5608,7 @@ test_151() {
 
 	# the following read invalidates the cache
         cancel_lru_locks osc
-	$LCTL set_param -n obdfilter.*.read_cache_enable 0
+	$LCTL set_param obdfilter.*.read_cache_enable=0 | filt_param OST
 	cat $DIR/$tfile >/dev/null
 
 	# now data shouldn't be found in the cache
@@ -5624,8 +5620,8 @@ test_151() {
 		error "IN CACHE: before: $BEFORE, after: $AFTER"
 	fi
 
-	$LCTL set_param -n obdfilter.*.read_cache_enable=1
-	$LCTL set_param obdfilter.*.writethrough_cache_enable=0
+	$LCTL set_param obdfilter.*.read_cache_enable=1 | filt_param OST
+	$LCTL set_param obdfilter.*.writethrough_cache_enable=0 | filt_param OST
         rm -f $DIR/$tfile
 }
 run_test 151 "test cache on oss and controls ==============================="
