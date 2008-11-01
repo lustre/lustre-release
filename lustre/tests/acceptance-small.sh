@@ -253,7 +253,10 @@ for NAME in $CONFIGS; do
 		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
 		[ $SPACE -lt $SIZE ] && SIZE=$((SPACE * 3 / 4))
 		$DEBUG_OFF
-		./fsx -c 50 -p 1000 -P $TMP -l $SIZE \
+		FSX_SEED=${FSX_SEED:-$RANDOM}
+		rm -f $MOUNT/fsxfile
+		$LFS setstripe -c -1 $MOUNT/fsxfile
+		./fsx -c 50 -p 1000 -S $FSX_SEED -P $TMP -l $SIZE \
 			-N $(($COUNT * 100)) $MOUNT/fsxfile
 		$DEBUG_ON
 		$CLEANUP
