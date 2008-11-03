@@ -167,22 +167,16 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry, struct n
 #endif
 
         CDEBUG(D_VFSTRACE, "VFS Op\n");
-#if THREAD_SIZE < 8192
-        /* 
-         *  We set the limits recursive symlink to 5 
-         *  instead of default 8 when kernel has 4k stack
-         *  to prevent stack overflow.
-         */
-        if (current->link_count >= 5) {
+        /* Limit the recursive symlink depth to 5 instead of default
+         * 8 links when kernel has 4k stack to prevent stack overflow. */
+        if (THREAD_SIZE < 8192 && current->link_count >= 5) {
                 rc = -ELOOP;
-                GOTO(out_release, rc);
+        } else {
+                down(&lli->lli_size_sem);
+                rc = ll_readlink_internal(inode, &request, &symname);
+                up(&lli->lli_size_sem);
         }
-#endif
-        down(&lli->lli_size_sem);
-        rc = ll_readlink_internal(inode, &request, &symname);
-        up(&lli->lli_size_sem);
         if (rc) {
-out_release:
                 path_release(nd); /* Kernel assumes that ->follow_link()
                                      releases nameidata on error */
                 GOTO(out, rc);
