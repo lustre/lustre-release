@@ -964,6 +964,7 @@ run_test 47 "MDS->OSC failure during precreate cleanup (2824)"
 
 test_48() {
     remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+    [ "$OSTCOUNT" -lt "2" ] && skip "$OSTCOUNT < 2 OSTs -- skipping" && return
 
     replay_barrier mds
     createmany -o $DIR/$tfile 20  || return 1
@@ -974,8 +975,6 @@ test_48() {
 
     createmany -o $DIR/$tfile 20 20 || return 2
     unlinkmany $DIR/$tfile 40 || return 3
-
-    do_facet ost1 "lctl set_param fail_loc=0"
     return 0
 }
 run_test 48 "MDS->OSC failure during precreate cleanup (2824)"
