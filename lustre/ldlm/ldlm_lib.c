@@ -1329,11 +1329,16 @@ target_start_and_reset_recovery_timer(struct obd_device *obd,
                                       struct ptlrpc_request *req,
                                       int new_client)
 {
-        int req_timeout = OBD_RECOVERY_FACTOR *
-                          lustre_msg_get_timeout(req->rq_reqmsg);
+        int req_timeout = lustre_msg_get_timeout(req->rq_reqmsg);
+
+        /* teach server about old server's estimates */
+        if (!new_client)
+                at_add(&req->rq_rqbd->rqbd_service->srv_at_estimate,
+                       at_timeout2est(req_timeout));
 
         check_and_start_recovery_timer(obd);
 
+        req_timeout *= OBD_RECOVERY_FACTOR;
         if (req_timeout > obd->obd_recovery_timeout && !new_client)
                 reset_recovery_timer(obd, req_timeout, 0);
 }

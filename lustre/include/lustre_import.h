@@ -191,6 +191,19 @@ void class_notify_import_observers(struct obd_import *imp, int event,
                                    void *event_arg);
 
 /* import.c */
+static inline unsigned int at_est2timeout(unsigned int val)
+{
+        /* add an arbitrary minimum: 125% +5 sec */
+        return (val + (val >> 2) + 5);
+}
+
+static inline unsigned int at_timeout2est(unsigned int val)
+{
+        /* restore estimate value from timeout */
+        LASSERT(val);
+        return ((val - 1) / 5 * 4);
+}
+
 static inline void at_init(struct adaptive_timeout *at, int val, int flags) {
         memset(at, 0, sizeof(*at));
         at->at_current = val;
