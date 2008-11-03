@@ -983,7 +983,7 @@ test_12() {
 	echo  "   step2: testing ......"
 	count=0
 	while [ true ]; do
-	    if [ -z `ps -ef | awk '$2 == '${DDPID1}' { print $8 }'` ]; then break; fi
+	    if ! ps -p ${DDPID1} > /dev/null 2>&1; then break; fi
 	    count=$[count+1]
 	    if [ $count -gt 64 ]; then
 		lustre_fail ost 0
@@ -999,7 +999,7 @@ test_12() {
 	echo  "   step3: testing ......"
 	count=0
 	while [ true ]; do
-	    if [ -z `ps -ef | awk '$2 == '${DDPID}' { print $8 }'` ]; then break; fi
+	    if ! ps -p ${DDPID} > /dev/null 2>&1; then break; fi
 	    count=$[count+1]
 	    if [ $count -gt 150 ]; then
 		error "dd should be finished!"
@@ -1043,7 +1043,7 @@ test_13() {
 	echo  "   step2: testing ......"
 	count=0
 	while [ true ]; do
-	    if [ -z `ps -ef | awk '$2 == '${DDPID}' { print $8 }'` ]; then break; fi
+	    if ! ps -p ${DDPID} > /dev/null 2>&1; then break; fi
 	    count=$[count+1]
 	    if [ $count -gt 64 ]; then
 		error "dd should be finished!"
@@ -1054,7 +1054,7 @@ test_13() {
 
 	count=0
 	while [ true ]; do
-	    if [ -z `ps -ef | awk '$2 == '${DDPID1}' { print $8 }'` ]; then break; fi
+	    if ! ps -p ${DDPID1} > /dev/null 2>&1 ; then break; fi
 	    count=$[count+1]
 	    if [ $count -gt 64 ]; then
 		error "dd should be finished!"
@@ -1362,6 +1362,9 @@ test_17() {
 	set_blk_unitsz $((128 * 1024))
 	set_blk_tunesz $((128 * 1024 / 2))
 
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $MOUNT
+	$LFS setquota -g $TSTUSR -b 0 -B 0 -i 0 -I 0 $MOUNT
+
 	return $RC
 }
 run_test_with_stat 17 "run for fixing bug14526 ==========="
@@ -1399,9 +1402,9 @@ test_18() {
 	count=0
 	timeout=$(lctl get_param -n timeout)
 	while [ true ]; do
-	    if [ -z `ps -ef | awk '$2 == '${DDPID}' { print $8 }'` ]; then break; fi
+	    if ! ps -p ${DDPID} > /dev/null 2>&1; then break; fi
 	    count=$[count+1]
-	    if [ $count -gt $((2 * $timeout)) ]; then
+	    if [ $count -gt $((4 * $timeout)) ]; then
 		error "count=$count dd should be finished!"
 	    fi
 	    sleep 1
@@ -1413,6 +1416,9 @@ test_18() {
             echo " successful"
         fi
 
+        testfile_size=$(stat -c %s $TESTFILE)
+        [ $testfile_size -ne $((BLK_SZ * 1024 * 100)) ] && \
+            error "verifying file failed!"
 	rm -f $TESTFILE
 	sync; sleep 3; sync;
 
@@ -1452,7 +1458,7 @@ test_18a() {
 	count=0
 	timeout=$(lctl get_param -n timeout)
 	while [ true ]; do
-	    if [ -z `ps -ef | awk '$2 == '${DDPID}' { print $8 }'` ]; then break; fi
+	    if ! ps -p ${DDPID} > /dev/null 2>&1; then break; fi
 	    count=$[count+1]
 	    if [ $count -gt $((3 * $timeout)) ]; then
 		lustre_fail mds 0
@@ -1527,7 +1533,7 @@ test_18bc_sub() {
 
         count=0
         while [ true ]; do
-            if [ -z `ps -ef | awk '$2 == '${DDPID}' { print $8 }'` ]; then break; fi
+	    if ! ps -p ${DDPID} > /dev/null 2>&1; then break; fi
             if [ $((++count % (2 * timeout) )) -eq 0 ]; then
                 log "it took $count second"
             fi
@@ -1698,7 +1704,7 @@ test_21() {
 
 	count=0
 	while [ true ]; do
-	    if [  $(ps -p ${DDPID1} | wc -l) -eq 1 ]; then break; fi
+	    if ! ps -p ${DDPID1} > /dev/null 2>&1; then break; fi
 	    count=$[count+1]
 	    if [ $count -gt 60 ]; then
 		error "dd should be finished!"
@@ -1709,7 +1715,7 @@ test_21() {
 
 	count=0
 	while [ true ]; do
-	    if [ $(ps -p ${DDPID2} | wc -l) -eq 1 ]; then break; fi
+	    if ! ps -p ${DDPID2} > /dev/null 2>&1; then break; fi
 	    count=$[count+1]
 	    if [ $count -gt 60 ]; then
 		error "dd should be finished!"
