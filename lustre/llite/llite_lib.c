@@ -2268,6 +2268,17 @@ int ll_remount_fs(struct super_block *sb, int *flags, char *data)
                 err = obd_set_info_async(sbi->ll_mdc_exp, sizeof(KEY_READONLY),
                                          KEY_READONLY, sizeof(read_only),
                                          &read_only, NULL);
+
+                /* MDS might have expected a different ro key value, b=17493 */
+                if (err == -EINVAL) {
+                        CDEBUG(D_CONFIG, "Retrying remount with 1.6.6 ro key\n");
+                        err = obd_set_info_async(sbi->ll_mdc_exp,
+                                                 sizeof(KEY_READONLY_166COMPAT),
+                                                 KEY_READONLY_166COMPAT,
+                                                 sizeof(read_only),
+                                                 &read_only, NULL);
+                }
+
                 if (err) {
                         CERROR("Failed to change the read-only flag during "
                                "remount: %d\n", err);
