@@ -968,7 +968,7 @@ test_48() {
     replay_barrier mds
     createmany -o $DIR/$tfile 20  || return 1
     # OBD_FAIL_OST_EROFS 0x216
-    fail mds
+    facet_failover mds
     do_facet ost1 "lctl set_param fail_loc=0x80000216"
     df $MOUNT || return 2
 
