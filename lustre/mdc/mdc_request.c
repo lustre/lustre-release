@@ -999,7 +999,8 @@ int mdc_set_info_async(struct obd_export *exp, obd_count keylen,
                        exp->exp_obd->obd_name, imp->imp_initial_recov_bk);
                 RETURN(0);
         }
-        if (KEY_IS(KEY_READONLY)) {
+        /* Accept the broken "read-only" key for 1.6.6 servers. b=17493 */
+        if (KEY_IS(KEY_READONLY) || KEY_IS(KEY_READONLY_166COMPAT)) {
                 struct ptlrpc_request *req;
                 __u32 size[3] = { sizeof(struct ptlrpc_body), keylen, vallen };
                 char *bufs[3] = { NULL, key, val };
