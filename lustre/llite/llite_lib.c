@@ -1054,6 +1054,7 @@ int ll_fill_super(struct super_block *sb)
         sprintf(ll_instance, "%p", sb);
         cfg.cfg_instance = ll_instance;
         cfg.cfg_uuid = lsi->lsi_llsbi->ll_sb_uuid;
+        cfg.cfg_sb = sb;
 
         /* set up client obds */
         if (strchr(profilenm, '/') != NULL) /* COMPAT_146 */
