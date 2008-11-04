@@ -2924,7 +2924,7 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
                 break;
         default:
                 CERROR("unknown fcntl lock type: %d\n", file_lock->fl_type);
-                LBUG();
+                RETURN (-EINVAL);
         }
 
         switch (cmd) {
@@ -2951,7 +2951,7 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
                 break;
         default:
                 CERROR("unknown fcntl lock command: %d\n", cmd);
-                LBUG();
+                RETURN (-EINVAL);
         }
 
         CDEBUG(D_DLMTRACE, "inode=%lu, pid=%u, flags=%#x, mode=%u, "
