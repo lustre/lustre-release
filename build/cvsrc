@@ -1,5 +1,0 @@
-cvs -qz3
-diff -Nup
-checkout -dP
-update -dP
-remove -f

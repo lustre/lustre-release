@@ -1,3 +1,0 @@
-subdir-m += libcfs
-
-@INCLUDE_RULES@
