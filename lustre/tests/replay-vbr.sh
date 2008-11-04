@@ -225,7 +225,7 @@ remote_server ()
 
 test_4a() {
     remote_server $CLIENT2 || \
-        skip "Client $CLIENT2 is on the server node" && return 0
+        { skip "Client $CLIENT2 is on the server node" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -256,7 +256,7 @@ run_test 4a "fail MDS, delayed recovery"
 
 test_4b() {
     remote_server $CLIENT2 || \
-        skip "Client $CLIENT2 is on the server node" && return 0
+        { skip "Client $CLIENT2 is on the server node" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -286,7 +286,7 @@ run_test 4b "fail MDS, normal operation, delayed open recovery"
 
 test_4c() {
     remote_server $CLIENT2 || \
-        skip "Client $CLIENT2 is on the server node" && return 0
+        { skip "Client $CLIENT2 is on the server node" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -316,7 +316,7 @@ run_test 4c "fail MDS, normal operation, delayed recovery"
 
 test_5a() {
     remote_server $CLIENT2 || \
-        skip "Client $CLIENT2 is on the server node" && return 0
+        { skip "Client $CLIENT2 is on the server node" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -346,7 +346,7 @@ run_test 5a "fail MDS, delayed recovery should fail"
 
 test_5b() {
     remote_server $CLIENT2 || \
-        skip "Client $CLIENT2 is on the server node" && return 0
+        { skip "Client $CLIENT2 is on the server node" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -378,7 +378,7 @@ run_test 5b "fail MDS, normal operation, delayed recovery should fail"
 
 test_6a() {
     remote_server $CLIENT2 || \
-        skip "Client $CLIENT2 is on the server node" && return 0
+        { skip "Client $CLIENT2 is on the server node" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -415,7 +415,7 @@ run_test 6a "fail MDS, delayed recovery, fail MDS"
 
 test_7a() {
     remote_server $CLIENT2 || \
-        skip "Client $CLIENT2 is on the server node" && return 0
+        { skip "Client $CLIENT2 is on the server node" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -462,7 +462,7 @@ rmultiop_stop() {
 
 test_8a() {
     remote_server $CLIENT2 || \
-        skip "Client $CLIENT2 is on the server node" && return 0
+        { skip "Client $CLIENT2 is on the server node" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -487,9 +487,7 @@ run_test 8a "orphans are kept until delayed recovery"
 
 test_8b() {
     remote_server $CLIENT2 || \
-        skip "Client $CLIENT2 is on the server node" && return 0
-    [ $CLIENT2 -eq $mds_HOST ] || \
-        { skip "Client one the server node" && return 0; }
+        { skip "Client $CLIENT2 is on the server node" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -514,9 +512,7 @@ run_test 8b "open1 | unlink2 X delayed_replay1, close1"
 
 test_8c() {
     remote_server $CLIENT2 || \
-        skip "Client $CLIENT2 is on the server node" && return 0
-    [ $CLIENT2 -eq $mds_HOST ] || \
-        { skip "Client one the server node" && return 0; }
+        { skip "Client $CLIENT2 is on the server node" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -541,7 +537,7 @@ run_test 8c "open1 | unlink2, close1 X delayed_replay1"
 
 test_8d() {
     remote_server $CLIENT2 || \
-        skip "Client $CLIENT2 is on the server node" && return 0
+        { skip "Client $CLIENT2 is on the server node" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
