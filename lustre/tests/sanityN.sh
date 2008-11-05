@@ -579,7 +579,7 @@ test_30() { #bug #11110
 
 run_test 30 "recreate file race ========="
 
-test_31() {
+test_31a() {
         mkdir -p $DIR1/$tdir || error "Creating dir $DIR1/$tdir"
         writes=`LANG=C dd if=/dev/zero of=$DIR/$tdir/$tfile count=1 2>&1 |
                 awk 'BEGIN { FS="+" } /out/ {print $1}'`
@@ -589,7 +589,24 @@ test_31() {
                awk 'BEGIN { FS="+" } /in/ {print $1}'`
         [ $reads -eq $writes ] || error "read" $reads "blocks, must be" $writes
 }
-run_test 31 "voluntary cancel / blocking ast race=============="
+run_test 31a "voluntary cancel / blocking ast race=============="
+
+test_31b() {
+        remote_ost || { skip "local OST" && return 0; }
+	remote_ost_nodsh && skip "remote OST w/o dsh" && return 0
+        mkdir -p $DIR1/$tdir || error "Creating dir $DIR1/$tdir"
+        lfs setstripe $DIR/$tdir/$tfile -i 0 -c 1
+        cp /etc/hosts $DIR/$tdir/$tfile
+        #define OBD_FAIL_LDLM_CANCEL_BL_CB_RACE   0x314
+        lctl set_param fail_loc=0x314
+        #define OBD_FAIL_LDLM_OST_FAIL_RACE      0x316
+        do_facet ost1 lctl set_param fail_loc=0x316
+        # Don't crash kernel
+        cat $DIR2/$tdir/$tfile > /dev/null 2>&1
+        lctl set_param fail_loc=0
+        do_facet ost1 lctl set_param fail_loc=0
+}
+run_test 31b "voluntary OST cancel / blocking ast race=============="
 
 # enable/disable lockless truncate feature, depending on the arg 0/1
 enable_lockless_truncate() {
