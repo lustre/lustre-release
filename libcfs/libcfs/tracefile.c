@@ -835,7 +835,9 @@ int trace_daemon_command(char *str)
 	tracefile_write_lock();
 
 	if (strcmp(str, "stop") == 0) {
-		trace_stop_thread();
+                tracefile_write_unlock();
+                trace_stop_thread();
+                tracefile_write_lock();
                 memset(tracefile, 0, sizeof(tracefile));
 
 	} else if (strncmp(str, "size=", 5) == 0) {
@@ -1029,6 +1031,25 @@ static int tracefiled(void *arg)
 
                 cfs_filp_close(filp);
                 put_pages_on_daemon_list(&pc);
+                if (!list_empty(&pc.pc_pages)) {
+                        int i;
+
+                        printk(KERN_ALERT "Lustre: trace pages aren't empty\n");
+                        printk(KERN_ERR "total cpus(%d): ", num_possible_cpus());
+                        for (i = 0; i < num_possible_cpus(); i++)
+                                if (cpu_online(i))
+                                        printk(KERN_ERR "%d(on) ", i);
+                                else
+                                        printk(KERN_ERR "%d(off) ", i);
+                        printk(KERN_ERR "\n");
+
+                        i = 0;
+                        list_for_each_entry_safe(tage, tmp, &pc.pc_pages,
+                                                 linkage)
+                                printk(KERN_ERR "page %d belongs to cpu %d\n",
+                                       ++i, tage->cpu);
+                        printk(KERN_ERR "There are %d pages unwritten\n", i);
+                }
                 __LASSERT(list_empty(&pc.pc_pages));
         }
         complete(&tctl->tctl_stop);
