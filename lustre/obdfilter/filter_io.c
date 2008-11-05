@@ -341,7 +341,6 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                               struct obd_trans_info *oti)
 {
         struct obd_device *obd = exp->exp_obd;
-        struct filter_obd *fo = &obd->u.filter;
         struct timeval start, end;
         struct lvfs_run_ctxt saved;
         struct niobuf_local *lnb;
@@ -456,10 +455,6 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                         }
                 }
         }
-
-        if (inode && (fo->fo_read_cache == 0 ||
-                        i_size_read(inode) > fo->fo_readcache_max_filesize))
-                filter_invalidate_cache(obd, obj, nb, inode);
 
         if (rc != 0) {
                 if (dentry != NULL)
@@ -817,6 +812,7 @@ static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
                                 int pages, struct niobuf_local *res,
                                 struct obd_trans_info *oti, int rc)
 {
+        struct filter_obd *fo = &exp->exp_obd->u.filter;
         struct inode *inode = NULL;
         struct ldlm_res_id res_id = { .name = { obj->ioo_id } };
         struct ldlm_resource *resource = NULL;
@@ -846,6 +842,10 @@ static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
                         lnb->page = NULL;
                 }
         }
+
+        if (inode && (fo->fo_read_cache == 0 ||
+                        i_size_read(inode) > fo->fo_readcache_max_filesize))
+                filter_invalidate_cache(exp->exp_obd, obj, rnb, inode);
 
         if (res->dentry != NULL)
                 f_dput(res->dentry);
