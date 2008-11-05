@@ -695,6 +695,14 @@ Details    : Checks validity of on-disk block bitmap. Also it does better
              checking of number of applied preallocations. When corruption is
              found, it turns filesystem readonly to prevent further corruptions.
 
+Severity   : normal
+Bugzilla   : 16438
+Frequency  : only for big-endian servers
+Description: Check if system is big-endian while mounting fs with extents feature
+Details    : Mounting a filesystem with extents feature will fail on big-endian
+             systems since ext3-based ldiskfs is not supported on big-endian
+             systems. This can be over-riden with "bigendian_extents" mount option.
+
 -------------------------------------------------------------------------------
 
 2008-05-26  Sun Microsystems, Inc.
