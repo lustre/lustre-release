@@ -1322,18 +1322,27 @@ target_start_and_reset_recovery_timer(struct obd_device *obd,
                                       struct ptlrpc_request *req,
                                       int new_client)
 {
-        int req_timeout = lustre_msg_get_timeout(req->rq_reqmsg);
+        int service_time = lustre_msg_get_service_time(req->rq_reqmsg);
 
-        /* teach server about old server's estimates */
-        if (!new_client)
+        if (!new_client && service_time)
+                /* Teach server about old server's estimates, as first guess
+                   at how long new requests will take. */
                 at_add(&req->rq_rqbd->rqbd_service->srv_at_estimate,
-                       at_timeout2est(req_timeout));
+                       service_time);
 
         check_and_start_recovery_timer(obd, handler);
 
-        req_timeout *= OBD_RECOVERY_FACTOR;
-        if (req_timeout > obd->obd_recovery_timeout && !new_client)
-                reset_recovery_timer(obd, req_timeout, 0);
+        /* convert the service time to rpc timeout,
+         * reuse service_time to limit stack usage */
+        service_time = at_est2timeout(service_time);
+
+        /* We expect other clients to timeout within service_time, then try
+         * to reconnect, then try the failover server.  The max delay between
+         * connect attempts is SWITCH_MAX + SWITCH_INC + INITIAL */
+        service_time += 2 * (CONNECTION_SWITCH_MAX + CONNECTION_SWITCH_INC +
+                             INITIAL_CONNECT_TIMEOUT);
+        if (service_time > obd->obd_recovery_timeout && !new_client)
+                reset_recovery_timer(obd, service_time, 0);
 }
 
 static int check_for_next_transno(struct obd_device *obd)
@@ -1413,8 +1422,9 @@ static void process_recovery_queue(struct obd_device *obd)
                 DEBUG_REQ(D_HA, req, "processing: ");
                 (void)obd->obd_recovery_handler(req);
                 obd->obd_replayed_requests++;
-                reset_recovery_timer(obd, OBD_RECOVERY_FACTOR *
-                       AT_OFF ? obd_timeout :
+                /* Extend the recovery timer enough to complete the next
+                 * replayed rpc */
+                reset_recovery_timer(obd, AT_OFF ? obd_timeout :
                        at_get(&req->rq_rqbd->rqbd_service->srv_at_estimate), 1);
                 /* bug 1580: decide how to properly sync() in recovery */
                 //mds_fsync_super(obd->u.obt.obt_sb);
