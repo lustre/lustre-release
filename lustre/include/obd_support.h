@@ -233,6 +233,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_LDLM_CLOSE_THREAD       0x313
 #define OBD_FAIL_LDLM_CANCEL_BL_CB_RACE  0x314
 #define OBD_FAIL_LDLM_CP_CB_WAIT         0x315
+#define OBD_FAIL_LDLM_OST_FAIL_RACE      0x316
 
 #define OBD_FAIL_OSC                     0x400
 #define OBD_FAIL_OSC_BRW_READ_BULK       0x401
