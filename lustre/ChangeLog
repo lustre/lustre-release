@@ -13,6 +13,13 @@ tbd  Sun Microsystems, Inc.
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
+Severity   : normal
+Frequency  : Create a symlink file with a very long name
+Bugzilla   : 16578
+Description: ldlm_cancel_pack()) ASSERTION(max >= dlm->lock_count + count)
+Details    : If there is no extra space in the request for early cancels,
+             ldlm_req_handles_avail() returns 0 instead of a negative value.
+
 Severity   : enhancement
 Bugzilla   : 1819
 Description: Add /proc entry for import status
@@ -1549,9 +1556,9 @@ Details    : Kill unused ldlm_handle2lock_ns() function.
 Severity   : normal
 Bugzilla   : 16450
 Description: Add lu_ref support to ldlm_lock
-Details    : lu_ref support for ldlm_lock and ldlm_resource. See lu_ref patch. 
-        lu_ref fields ->l_reference and ->lr_reference are added to ldlm_lock 
-        and ldlm_resource. LDLM interface has to be changed, because code that 
+Details    : lu_ref support for ldlm_lock and ldlm_resource. See lu_ref patch.
+        lu_ref fields ->l_reference and ->lr_reference are added to ldlm_lock
+        and ldlm_resource. LDLM interface has to be changed, because code that
         releases a reference on a lock, has to "know" what reference this is.
         In the most frequent case
 
@@ -1559,12 +1566,12 @@ Details    : lu_ref support for ldlm_lock and ldlm_resource. See lu_ref patch.
                 ...
                 LDLM_LOCK_PUT(lock);
 
-        no changes are required. When any other reference (received _not_ from 
-        ldlm_handle2lock()) is released, LDLM_LOCK_RELEASE() has to be called 
+        no changes are required. When any other reference (received _not_ from
+        ldlm_handle2lock()) is released, LDLM_LOCK_RELEASE() has to be called
         instead of LDLM_LOCK_PUT().
 
         Arguably, changes are pervasive, and interface requires some discipline
-        for proper use. On the other hand, it was very instrumental in finding 
+        for proper use. On the other hand, it was very instrumental in finding
         a few leaked lock references.
 
 Severity   : normal
@@ -1577,7 +1584,7 @@ Details    : Introduce ldlm_lock_addref_try() function (used by CLIO) that
 Severity   : normal
 Bugzilla   : 16450
 Description: Add ldlm_weigh_callback().
-Details    : Add new ->l_weigh_ast() call-back to ldlm_lock. It is called 
+Details    : Add new ->l_weigh_ast() call-back to ldlm_lock. It is called
         by ldlm_cancel_shrink_policy() to estimate lock "value", instead of
         hard-coded `number of pages' logic.
 
@@ -1617,8 +1624,8 @@ Details    : Introduce new lu_context functions that are needed on the client
 Severity   : normal
 Bugzilla   : 16450
 Description: Add start and stop methods to lu_device_type_operations.
-Details    : Introduce two new methods in lu_device_type_operations, that are 
-        invoked  when first instance of a given type is created and last one 
+Details    : Introduce two new methods in lu_device_type_operations, that are
+        invoked  when first instance of a given type is created and last one
         is destroyed respectively. This is need by CLIO.
 
 Severity   : normal
@@ -1663,7 +1670,7 @@ Severity   : normal
 Bugzilla   : 16450
 Description: Introduce struct md_site and move meta-data specific parts of
 	     struct lu_site here.
-Details    : Move md-specific fields out of struct lu_site into special struct 
+Details    : Move md-specific fields out of struct lu_site into special struct
         md_site, so that lu_site can be used on a client.
 
 Severity   : minor
@@ -1747,8 +1754,8 @@ Severity   : normal
 Bugzilla   : 17197
 Description: (rw.c:1323:ll_read_ahead_pages()) ASSERTION(page_idx > ria->ria_stoff) failed
 Details    : Once the unmatched stride IO mode is detected, shrink the stride-ahead
-	     window to 0. If it does hit cache miss, and read-pattern is still 
-	     stride-io mode, does not reset the stride window, but also does not 
+	     window to 0. If it does hit cache miss, and read-pattern is still
+	     stride-io mode, does not reset the stride window, but also does not
 	     increase the stride window length in this case.
 
 --------------------------------------------------------------------------------

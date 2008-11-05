@@ -464,6 +464,16 @@ test_17f() {
 }
 run_test 17f "symlinks: long and very long symlink name ========================"
 
+test_17g() {
+        mkdir -p $DIR/$tdir
+        for ((i = 0; i < 511; ++i)); do
+                LONGSYMLINK="${LONGSYMLINK}01234567"
+        done
+        ln -s $LONGSYMLINK $DIR/$tdir/$tfile
+        ls -l $DIR/$tdir
+}
+run_test 17g "symlinks: really long symlink name ==============================="
+
 test_18() {
 	touch $DIR/f
 	ls $DIR || error
@@ -958,7 +968,7 @@ exhaust_all_precreations() {
 test_27n() {
 	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return        
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27n
@@ -973,7 +983,7 @@ run_test 27n "create file with some full OSTs =================="
 test_27o() {
 	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return        
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27o
@@ -990,7 +1000,7 @@ run_test 27o "create file with all full OSTs (should error) ===="
 test_27p() {
 	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return        
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27p
@@ -1010,7 +1020,7 @@ run_test 27p "append to a truncated file with some full OSTs ==="
 test_27q() {
 	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return        
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27q
@@ -1031,7 +1041,7 @@ run_test 27q "append to truncated file with all OSTs full (should error) ==="
 test_27r() {
 	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return        
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27r
@@ -1083,7 +1093,7 @@ run_test 27u "skip object creation on OSC w/o objects =========="
 test_27v() { # bug 4900
 	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return        
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
         exhaust_all_precreations
 
@@ -2213,7 +2223,7 @@ test_51b() {
 run_test 51b "mkdir .../t-0 --- .../t-$NUMTEST ===================="
 
 test_51bb() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
 	local ndirs=${TEST51BB_NDIRS:-10}
 	local nfiles=${TEST51BB_NFILES:-100}
@@ -2235,7 +2245,7 @@ test_51bb() {
 	declare -a dirs
 	for ((i=0; i < $ndirs; i++)); do
 		dirs[i]=$dir/$RANDOM
-		echo Creating directory ${dirs[i]} 
+		echo Creating directory ${dirs[i]}
 		mkdir -p ${dirs[i]}
 		ls $dir
 		echo Creating $nfiles in dir ${dirs[i]} ...
@@ -3699,7 +3709,7 @@ test_100() {
 			error "local: $LPORT > 1024, remote: $RPORT"
 		fi
 	done
-	[ "$rc" = 0 ] || error "privileged port not found" )  
+	[ "$rc" = 0 ] || error "privileged port not found" )
 }
 run_test 100 "check local port using privileged port ==========="
 
@@ -5729,7 +5739,7 @@ test_151() {
 
 	$LCTL set_param -n obdfilter.*.writethrough_cache_enable 1
 
-	# pages should be in the case right after write 
+	# pages should be in the case right after write
         dd if=/dev/urandom of=$DIR/$tfile bs=4k count=$CPAGES || error "dd failed"
 	BEFORE=`roc_hit`
         cancel_lru_locks osc
