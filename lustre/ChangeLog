@@ -39,6 +39,13 @@ tbd Sun Microsystems, Inc.
 	  old (verbose) output can be obtained by using -v option.
 	* File join has been disabled in this release, refer to Bugzilla 16929.
 
+Severity   : normal
+Frequency  : Create a symlink file with a very long name
+Bugzilla   : 16578
+Description: ldlm_cancel_pack()) ASSERTION(max >= dlm->lock_count + count)
+Details    : If there is no extra space in the request for early cancels,
+             ldlm_req_handles_avail() returns 0 instead of a negative value.
+
 Severity   : major
 Frequency  : rare
 Bugzilla   : 16492
@@ -1635,8 +1642,8 @@ Severity   : normal
 Bugzilla   : 17197
 Description: (rw.c:1323:ll_read_ahead_pages()) ASSERTION(page_idx > ria->ria_stoff) failed
 Details    : Once the unmatched stride IO mode is detected, shrink the stride-ahead
-	     window to 0. If it does hit cache miss, and read-pattern is still 
-	     stride-io mode, does not reset the stride window, but also does not 
+	     window to 0. If it does hit cache miss, and read-pattern is still
+	     stride-io mode, does not reset the stride window, but also does not
 	     increase the stride window length in this case.
 
 --------------------------------------------------------------------------------
