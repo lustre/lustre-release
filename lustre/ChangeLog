@@ -1758,6 +1758,14 @@ Details    : Once the unmatched stride IO mode is detected, shrink the stride-ah
 	     stride-io mode, does not reset the stride window, but also does not
 	     increase the stride window length in this case.
 
+Severity   : normal
+Bugzilla   : 16438
+Frequency  : only for big-endian servers
+Description: Check if system is big-endian while mounting fs with extents feature
+Details    : Mounting a filesystem with extents feature will fail on big-endian
+             systems since ext3-based ldiskfs is not supported on big-endian
+             systems. This can be over-riden with "bigendian_extents" mount option.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
