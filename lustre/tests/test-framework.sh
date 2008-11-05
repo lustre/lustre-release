@@ -1568,9 +1568,14 @@ osc_to_ost()
     echo $ost
 }
 
+remote_node () {
+    local node=$1
+    [ "$node" != "$(hostname)" ]
+}
+
 remote_mds ()
 {
-    [ "$mds_HOST" != "$(hostname)" ]
+    remote_node $mds_HOST
 }
 
 remote_mds_nodsh()
@@ -1580,7 +1585,11 @@ remote_mds_nodsh()
 
 remote_ost ()
 {
-    [ "$ost_HOST" != "$(hostname)" ]
+    local node
+    for node in $(osts_nodes) ; do
+        remote_node $node && return 0
+    done
+    return 1
 }
 
 remote_ost_nodsh()
