@@ -443,6 +443,16 @@ test_17e() {
 }
 run_test 17e "symlinks: create recursive symlink (should return error) ===="
 
+test_17g() {
+        mkdir -p $DIR/$tdir
+        for ((i = 0; i < 511; ++i)); do
+                LONGSYMLINK="${LONGSYMLINK}01234567"
+        done
+        ln -s $LONGSYMLINK $DIR/$tdir/$tfile
+        ls -l $DIR/$tdir
+}
+run_test 17g "symlinks: really long symlink name ==============================="
+
 test_18() {
 	touch $DIR/f
 	ls $DIR || error
@@ -936,7 +946,7 @@ exhaust_all_precreations() {
 test_27n() {
 	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return        
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27n
@@ -951,7 +961,7 @@ run_test 27n "create file with some full OSTs =================="
 test_27o() {
 	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return        
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27o
@@ -967,7 +977,7 @@ run_test 27o "create file with all full OSTs (should error) ===="
 test_27p() {
 	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return        
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27p
@@ -987,7 +997,7 @@ run_test 27p "append to a truncated file with some full OSTs ==="
 test_27q() {
 	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return        
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27q
@@ -1008,7 +1018,7 @@ run_test 27q "append to truncated file with all OSTs full (should error) ==="
 test_27r() {
 	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return        
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
 	rm -f $DIR/d27/f27r
@@ -1060,7 +1070,7 @@ run_test 27u "skip object creation on OSC w/o objects =========="
 test_27v() { # bug 4900
 	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return        
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
         exhaust_all_precreations
 
@@ -3060,7 +3070,7 @@ test_69() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	f="$DIR/$tfile"
-	$SETSTRIPE $f -c 1 -i 0 
+	$SETSTRIPE $f -c 1 -i 0
 
 	$DIRECTIO write ${f}.2 0 1 || error "directio write error"
 
@@ -3629,7 +3639,7 @@ test_100() {
 			error "local: $LPORT > 1024, remote: $RPORT"
 		fi
 	done
-	[ "$rc" = 0 ] || error "privileged port not found" )  
+	[ "$rc" = 0 ] || error "privileged port not found" )
 }
 run_test 100 "check local port using privileged port ==========="
 
