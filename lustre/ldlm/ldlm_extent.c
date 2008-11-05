@@ -49,6 +49,7 @@
 #include <lustre_dlm.h>
 #include <obd_support.h>
 #include <obd.h>
+#include <obd_class.h>
 #include <lustre_lib.h>
 
 #include "ldlm_internal.h"
@@ -707,9 +708,24 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                         ldlm_resource_add_lock(res, &res->lr_waiting, lock);
                 unlock_res(res);
                 rc = ldlm_run_ast_work(&rpc_list, LDLM_WORK_BL_AST);
-                lock_res(res);
 
+                if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_OST_FAIL_RACE) &&
+                    !ns_is_client(res->lr_namespace))
+                        class_fail_export(lock->l_export);
+ 
+                lock_res(res);
                 if (rc == -ERESTART) {
+
+                        /* 15715: The lock was granted and destroyed after
+                         * resource lock was dropped. Interval node was freed
+                         * in ldlm_lock_destroy. Anyway, this always happens
+                         * when a client is being evicted. So it would be
+                         * ok to return an error. -jay */
+                        if (lock->l_destroyed) {
+                                *err = -EAGAIN;
+                                GOTO(out, rc = -EAGAIN);
+                        }
+
                         /* lock was granted while resource was unlocked. */
                         if (lock->l_granted_mode == lock->l_req_mode) {
                                 /* bug 11300: if the lock has been granted,
@@ -798,6 +814,7 @@ void ldlm_interval_free(struct ldlm_interval *node)
 {
         if (node) {
                 LASSERT(list_empty(&node->li_group));
+                LASSERT(!interval_is_intree(&node->li_node));
                 OBD_SLAB_FREE(node, ldlm_interval_slab, sizeof(*node));
         }
 }
@@ -850,6 +867,7 @@ void ldlm_extent_add_lock(struct ldlm_resource *res,
 
         node = lock->l_tree_node;
         LASSERT(node != NULL);
+        LASSERT(!interval_is_intree(&node->li_node));
 
         idx = lock_mode_to_index(lock->l_granted_mode);
         LASSERT(lock->l_granted_mode == 1 << idx);
@@ -877,14 +895,13 @@ void ldlm_extent_add_lock(struct ldlm_resource *res,
 void ldlm_extent_unlink_lock(struct ldlm_lock *lock)
 {
         struct ldlm_resource *res = lock->l_resource;
-        struct ldlm_interval *node;
+        struct ldlm_interval *node = lock->l_tree_node;
         struct ldlm_interval_tree *tree;
         int idx;
 
-        if (lock->l_granted_mode != lock->l_req_mode)
+        if (!node || !interval_is_intree(&node->li_node)) /* duplicate unlink */
                 return;
 
-        LASSERT(lock->l_tree_node != NULL);
         idx = lock_mode_to_index(lock->l_granted_mode);
         LASSERT(lock->l_granted_mode == 1 << idx);
         tree = &res->lr_itree[idx];
