@@ -403,7 +403,8 @@ test_20() { #16389
 }
 run_test 20 "recovery time is not increasing"
 
-test_21() {
+# commit on sharing tests
+test_21a() {
     local param_file=$TMP/$tfile-params
 
     save_lustre_params $(facet_active_host $SINGLEMDS) "mdt.*.commit_on_sharing" > $param_file
@@ -427,7 +428,113 @@ test_21() {
     rm -f $param_file
     return 0
 }
-run_test 21 "commit on sharing"
+run_test 21a "commit on sharing"
+
+shutdown_client() {
+    local client=$1
+    local mnt=$2
+
+    if [ "$FAILURE_MODE" = HARD ]; then
+       $POWER_DOWN $client
+       while ping -w 3 -c 1 $client > /dev/null 2>&1; do
+           echo "waiting for node $client to fail"
+           sleep 1
+       done
+    else
+       zconf_umount_clients $client $mnt -f
+    fi
+}
+
+# CMD: determine mds index where directory inode presents 
+get_mds_dir () {
+    local dir=$1
+    local file=$dir/$tfile
+
+    rm -f $file
+    local iused=$(lfs df -i $dir | grep MDT | awk '{print $3}')
+    local oldused=($iused)
+
+    touch $file
+    sleep 1
+    iused=$(lfs df -i $dir | grep MDT | awk '{print $3}')
+    local newused=($iused)
+
+    local num=0
+    for ((i=0; i<${#newused[@]}; i++)); do
+         if [ ${oldused[$i]} -lt ${newused[$i]} ];  then
+             echo $(( i + 1 ))
+             rm -f $dir/$tfile
+             return 0
+         fi 
+    done
+    error "mdt-s : inodes count OLD ${oldused[@]} NEW ${newused[@]}"
+}
+
+test_21b_sub () {
+    local mds=$1 
+    do_node $CLIENT1 rm -f $MOUNT1/$tfile-*
+
+    do_facet $mds sync
+    do_node $CLIENT1 touch  $MOUNT1/$tfile-1
+    do_node $CLIENT2 mv  $MOUNT1/$tfile-1 $MOUNT1/$tfile-2
+    do_node $CLIENT1 mv  $MOUNT1/$tfile-2 $MOUNT1/$tfile-3
+
+    replay_barrier_nosync $mds
+    shutdown_client $CLIENT2 $MOUNT1
+
+    facet_failover $mds
+
+    # were renames replayed?
+    local rc=0
+    echo UNLINK $MOUNT1/$tfile-3 
+    do_node $CLIENT1 unlink  $MOUNT1/$tfile-3 || \
+        { echo "unlink $tfile-3 fail!" && rc=1; }
+
+    boot_node $CLIENT2
+    zconf_mount_clients $CLIENT2 $MOUNT1 || error "mount $CLIENT2 $MOUNT1 fail" 
+
+    return $rc
+}
+
+test_21b() {
+    [ -z "$CLIENTS" ] && skip "Need two or more clients." && return
+    [ $CLIENTCOUNT -lt 2 ] && \
+        { skip "Need two or more clients, have $CLIENTCOUNT" && return; }
+
+    if [ "$FAILURE_MODE" = "HARD" ] &&  mixed_mdt_devs; then
+        skip "Several mdt services on one mds node are used with FAILURE_MODE=$FAILURE_MODE. "
+        return 0
+    fi
+
+
+    zconf_umount_clients $CLIENTS $MOUNT2
+    zconf_mount_clients $CLIENTS $MOUNT1
+
+    local param_file=$TMP/$tfile-params
+
+    local num=$(get_mds_dir $MOUNT1)
+
+    save_lustre_params $(facet_active_host mds$num) "mdt.*.commit_on_sharing" > $param_file
+
+    # COS enabled
+    local COS=1
+    do_facet mds$num lctl set_param mdt.*.commit_on_sharing=$COS
+
+    test_21b_sub mds$num || error "Not all renames are replayed. COS=$COS"
+
+    # COS disabled (should fail)
+    COS=0
+    do_facet mds$num lctl set_param mdt.*.commit_on_sharing=$COS
+
+    test_21b_sub mds$num && error "Not all renames are replayed. COS=$COS" 
+
+    restore_lustre_params < $param_file
+    rm -f $param_file
+    return 0
+}
+run_test 21b "commit on sharing, two clients"
+
+# end commit on sharing tests 
 
 equals_msg `basename $0`: test complete, cleaning up
 SLEEP=$((`date +%s` - $NOW))
