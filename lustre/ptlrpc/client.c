@@ -1369,7 +1369,8 @@ int ptlrpc_expired_set(void *data)
                         list_entry(tmp, struct ptlrpc_request, rq_set_chain);
 
                 /* Request in-flight? */
-                if (!((req->rq_phase == RQ_PHASE_RPC &&
+                if (!((req->rq_phase & 
+                       (RQ_PHASE_RPC & RQ_PHASE_UNREGISTERING) &&
                        !req->rq_waiting && !req->rq_resend) ||
                       (req->rq_phase == RQ_PHASE_BULK)))
                         continue;
@@ -1408,7 +1409,8 @@ void ptlrpc_interrupted_set(void *data)
                 struct ptlrpc_request *req =
                         list_entry(tmp, struct ptlrpc_request, rq_set_chain);
 
-                if (req->rq_phase != RQ_PHASE_RPC)
+                if (req->rq_phase != RQ_PHASE_RPC &&
+                    req->rq_phase != RQ_PHASE_UNREGISTERING)
                         continue;
 
                 ptlrpc_mark_interrupted(req);
