@@ -868,6 +868,7 @@ struct obd_import *class_new_import(struct obd_device *obd)
         cfs_waitq_init(&imp->imp_recovery_waitq);
 
         atomic_set(&imp->imp_refcount, 2);
+        atomic_set(&imp->imp_unregistering, 0);
         atomic_set(&imp->imp_inflight, 0);
         atomic_set(&imp->imp_replay_inflight, 0);
         atomic_set(&imp->imp_inval_count, 0);
