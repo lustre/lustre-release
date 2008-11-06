@@ -1476,7 +1476,7 @@ int ptlrpc_set_next_timeout(struct ptlrpc_request_set *set)
 
                 /* Check those waiting for long reply unlink every one 
                  * second. */
-                if (req->rq_phase == RQ_PHASE_NEW) {
+                if (req->rq_phase == RQ_PHASE_UNREGISTERING) {
                         timeout = 1;
                         break;
                 }
