@@ -3811,6 +3811,19 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         struct obd_device *obd = m->mdt_md_dev.md_lu_dev.ld_obd;
         ENTRY;
 
+        /* At this point, obd exports might still be on the "obd_zombie_exports"
+         * list, and obd_zombie_impexp_thread() is trying to destroy them.
+         * We wait a little bit until all exports (except the self-export) 
+         * have been destroyed, because the whole mdt stack might be accessed
+         * in mdt_destroy_export(). This will not be a long time, maybe one or
+         * two seconds are enough. This is not a problem while umounting.
+         *
+         * The three references that should be remaining are the
+         * obd_self_export and the attach and setup references.
+         */
+        while (atomic_read(&obd->obd_refcount) > 3)
+                cfs_schedule_timeout(CFS_TASK_UNINT, cfs_time_seconds(1));
+
         ping_evictor_stop();
 
         target_recovery_fini(obd);
