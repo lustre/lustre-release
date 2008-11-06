@@ -260,6 +260,8 @@ struct ptlrpc_reply_state {
 #endif
         /* updates to following flag serialised by srv_request_lock */
         unsigned long          rs_difficult:1;     /* ACK/commit stuff */
+        unsigned long          rs_no_ack:1;    /* no ACK, even for
+                                                  difficult requests */
         unsigned long          rs_scheduled:1;     /* being handled? */
         unsigned long          rs_scheduled_ever:1;/* any schedule attempts? */
         unsigned long          rs_handled:1;  /* been handled yet? */
@@ -661,6 +663,7 @@ struct ptlrpc_service {
         int              srv_watchdog_factor;   /* soft watchdog timeout mutiplier */
         unsigned         srv_cpu_affinity:1;    /* bind threads to CPUs */
         unsigned         srv_at_check:1;        /* check early replies */
+        unsigned         srv_is_stopping:1;     /* under unregister_service */
         cfs_time_t       srv_at_checktime;      /* debug */
 
         __u32            srv_req_portal;
@@ -954,7 +957,7 @@ struct ptlrpc_service_conf {
 
 /* ptlrpc/service.c */
 void ptlrpc_save_lock (struct ptlrpc_request *req,
-                       struct lustre_handle *lock, int mode);
+                       struct lustre_handle *lock, int mode, int no_ack);
 void ptlrpc_commit_replies (struct obd_device *obd);
 void ptlrpc_schedule_difficult_reply (struct ptlrpc_reply_state *rs);
 struct ptlrpc_service *ptlrpc_init_svc_conf(struct ptlrpc_service_conf *c,

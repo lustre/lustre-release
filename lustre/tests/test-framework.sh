@@ -776,6 +776,16 @@ replay_barrier_nodf() {
     $LCTL mark "local REPLAY BARRIER on ${!svc}"
 }
 
+replay_barrier_nosync() {
+    local facet=$1    echo running=${running}
+    local svc=${facet}_svc
+    echo Replay barrier on ${!svc}
+    do_facet $facet $LCTL --device %${!svc} readonly
+    do_facet $facet $LCTL --device %${!svc} notransno
+    do_facet $facet $LCTL mark "$facet REPLAY BARRIER on ${!svc}"
+    $LCTL mark "local REPLAY BARRIER on ${!svc}"
+}
+
 mds_evict_client() {
     UUID=`lctl get_param -n mdc.${mds1_svc}-mdc-*.uuid`
     do_facet mds1 "lctl set_param -n mdt.${mds1_svc}.evict_client $UUID"

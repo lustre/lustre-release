@@ -169,7 +169,7 @@ ptlrpc_grow_req_bufs(struct ptlrpc_service *svc)
 
 void
 ptlrpc_save_lock (struct ptlrpc_request *req,
-                  struct lustre_handle *lock, int mode)
+                  struct lustre_handle *lock, int mode, int no_ack)
 {
         struct ptlrpc_reply_state *rs = req->rq_reply_state;
         int                        idx;
@@ -181,12 +181,14 @@ ptlrpc_save_lock (struct ptlrpc_request *req,
         rs->rs_locks[idx] = *lock;
         rs->rs_modes[idx] = mode;
         rs->rs_difficult = 1;
+        rs->rs_no_ack = !!no_ack;
 }
 
 void
 ptlrpc_schedule_difficult_reply (struct ptlrpc_reply_state *rs)
 {
         struct ptlrpc_service *svc = rs->rs_service;
+        ENTRY;
 
 #ifdef CONFIG_SMP
         LASSERT (spin_is_locked (&svc->srv_lock));
@@ -194,13 +196,16 @@ ptlrpc_schedule_difficult_reply (struct ptlrpc_reply_state *rs)
         LASSERT (rs->rs_difficult);
         rs->rs_scheduled_ever = 1;              /* flag any notification attempt */
 
-        if (rs->rs_scheduled)                   /* being set up or already notified */
+        if (rs->rs_scheduled) {                  /* being set up or already notified */
+                EXIT;
                 return;
+        }
 
         rs->rs_scheduled = 1;
         list_del (&rs->rs_list);
         list_add (&rs->rs_list, &svc->srv_reply_queue);
         cfs_waitq_signal (&svc->srv_waitq);
+        EXIT;
 }
 
 void
@@ -208,6 +213,7 @@ ptlrpc_commit_replies (struct obd_device *obd)
 {
         struct list_head   *tmp;
         struct list_head   *nxt;
+        ENTRY;
 
         /* Find any replies that have been committed and get their service
          * to attend to complete them. */
@@ -232,6 +238,7 @@ ptlrpc_commit_replies (struct obd_device *obd)
         }
 
         spin_unlock(&obd->obd_uncommitted_replies_lock);
+        EXIT;
 }
 
 static int
@@ -1296,6 +1303,11 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
         if (!rs->rs_on_net) {
                 /* Off the net */
                 svc->srv_n_difficult_replies--;
+                if (svc->srv_n_difficult_replies == 0 && svc->srv_is_stopping)
+                        /* wake up threads that are being stopped by
+                           ptlrpc_unregister_service/ptlrpc_stop_threads
+                           and sleep waiting svr_n_difficult_replies == 0 */
+                        cfs_waitq_broadcast(&svc->srv_waitq);
                 spin_unlock(&svc->srv_lock);
 
                 class_export_put (exp);
@@ -1583,7 +1595,9 @@ static void ptlrpc_stop_thread(struct ptlrpc_service *svc,
                                struct ptlrpc_thread *thread)
 {
         struct l_wait_info lwi = { 0 };
+        ENTRY;
 
+        CDEBUG(D_RPCTRACE, "Stopping thread %p\n", thread);
         spin_lock(&svc->srv_lock);
         thread->t_flags = SVC_STOPPING;
         spin_unlock(&svc->srv_lock);
@@ -1597,11 +1611,13 @@ static void ptlrpc_stop_thread(struct ptlrpc_service *svc,
         spin_unlock(&svc->srv_lock);
 
         OBD_FREE_PTR(thread);
+        EXIT;
 }
 
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc)
 {
         struct ptlrpc_thread *thread;
+        ENTRY;
 
         spin_lock(&svc->srv_lock);
         while (!list_empty(&svc->srv_threads)) {
@@ -1614,6 +1630,7 @@ void ptlrpc_stop_all_threads(struct ptlrpc_service *svc)
         }
 
         spin_unlock(&svc->srv_lock);
+        EXIT;
 }
 
 int ptlrpc_start_threads(struct obd_device *dev, struct ptlrpc_service *svc)
@@ -1708,7 +1725,9 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
         struct l_wait_info    lwi;
         struct list_head     *tmp;
         struct ptlrpc_reply_state *rs, *t;
+        ENTRY;
 
+        service->srv_is_stopping = 1;
         cfs_timer_disarm(&service->srv_at_timer);
 
         ptlrpc_stop_all_threads(service);
@@ -1838,7 +1857,7 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
         cfs_timer_disarm(&service->srv_at_timer);
 
         OBD_FREE_PTR(service);
-        return 0;
+        RETURN(0);
 }
 
 /* Returns 0 if the service is healthy.

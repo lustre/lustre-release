@@ -403,6 +403,32 @@ test_20() { #16389
 }
 run_test 20 "recovery time is not increasing"
 
+test_21() {
+    local param_file=$TMP/$tfile-params
+
+    save_lustre_params $(facet_active_host $SINGLEMDS) "mdt.*.commit_on_sharing" > $param_file
+    do_facet $SINGLEMDS lctl set_param mdt.*.commit_on_sharing=1
+    touch  $MOUNT1/$tfile-1
+    mv  $MOUNT2/$tfile-1 $MOUNT2/$tfile-2
+    mv  $MOUNT1/$tfile-2 $MOUNT1/$tfile-3
+    replay_barrier_nosync $SINGLEMDS
+    umount $MOUNT2
+
+    facet_failover $SINGLEMDS
+
+    # all renames are replayed
+    unlink  $MOUNT1/$tfile-3 || return 2
+
+    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
+
+    do_facet $SINGLEMDS lctl set_param mdt.*.commit_on_sharing=0
+    rm -rf $MOUNT1/$tfile-*
+    restore_lustre_params < $param_file
+    rm -f $param_file
+    return 0
+}
+run_test 21 "commit on sharing"
+
 equals_msg `basename $0`: test complete, cleaning up
 SLEEP=$((`date +%s` - $NOW))
 [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP

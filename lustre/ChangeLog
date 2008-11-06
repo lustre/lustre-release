@@ -13,6 +13,12 @@ tbd  Sun Microsystems, Inc.
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
+Severity   : enhancement
+Bugzilla   : 15393
+Description: Commit on sharing. Eliminate inter-client dependencies between
+	     uncommitted transactions by doing transaction commits.
+	     Thereby clients may recovery independently.
+
 Severity   : normal
 Frequency  : Create a symlink file with a very long name
 Bugzilla   : 16578

@@ -703,6 +703,28 @@ static int osd_sync(const struct lu_env *env, struct dt_device *d)
         return ldiskfs_force_commit(osd_sb(osd_dt_dev(d)));
 }
 
+/**
+ * Start commit for OSD device.
+ *
+ * An implementation of dt_commit_async method for OSD device.
+ * Asychronously starts underlayng fs sync and thereby a transaction
+ * commit.
+ *
+ * \param env environment
+ * \param d dt device
+ *
+ * \see dt_device_operations
+ */
+static int osd_commit_async(const struct lu_env *env,
+                            struct dt_device *d)
+{
+        struct super_block *s = osd_sb(osd_dt_dev(d));
+        ENTRY;
+
+        CDEBUG(D_HA, "async commit OSD %s\n", LUSTRE_OSD_NAME);
+        RETURN(s->s_op->sync_fs(s, 0));
+}
+
 /*
  * Concurrency: shouldn't matter.
  */
@@ -786,6 +808,7 @@ static const struct dt_device_operations osd_dt_ops = {
         .dt_conf_get       = osd_conf_get,
         .dt_sync           = osd_sync,
         .dt_ro             = osd_ro,
+        .dt_commit_async   = osd_commit_async,
         .dt_credit_get     = osd_credit_get,
         .dt_init_capa_ctxt = osd_init_capa_ctxt,
 };

@@ -2410,9 +2410,12 @@ EXPORT_SYMBOL(ldlm_lock_dump_handle);
 EXPORT_SYMBOL(ldlm_cancel_locks_for_export);
 EXPORT_SYMBOL(ldlm_reprocess_all_ns);
 EXPORT_SYMBOL(ldlm_lock_allow_match);
+EXPORT_SYMBOL(ldlm_lock_downgrade);
+EXPORT_SYMBOL(ldlm_lock_convert);
 
 /* ldlm_request.c */
 EXPORT_SYMBOL(ldlm_completion_ast_async);
+EXPORT_SYMBOL(ldlm_blocking_ast_nocheck);
 EXPORT_SYMBOL(ldlm_completion_ast);
 EXPORT_SYMBOL(ldlm_blocking_ast);
 EXPORT_SYMBOL(ldlm_glimpse_ast);

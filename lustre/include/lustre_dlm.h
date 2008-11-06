@@ -201,6 +201,7 @@ typedef enum {
 #define LCK_COMPAT_CR  (LCK_COMPAT_CW | LCK_PR | LCK_PW)
 #define LCK_COMPAT_NL  (LCK_COMPAT_CR | LCK_EX | LCK_GROUP)
 #define LCK_COMPAT_GROUP  (LCK_GROUP | LCK_NL)
+#define LCK_COMPAT_COS (LCK_COS)
 
 extern ldlm_mode_t lck_compat_array[];
 
@@ -669,6 +670,9 @@ struct ldlm_lock {
          * Server-side-only members. 
          */
 
+        /* connection cookie for the client originated the opeation */
+        __u64                 l_client_cookie;
+
         /** 
          * Protected by elt_lock. Callbacks pending.
          */
@@ -963,6 +967,7 @@ ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                             struct lustre_handle *);
 struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                                         __u32 *flags);
+void ldlm_lock_downgrade(struct ldlm_lock *lock, int new_mode);
 void ldlm_lock_cancel(struct ldlm_lock *lock);
 void ldlm_cancel_locks_for_export(struct obd_export *export);
 void ldlm_reprocess_all(struct ldlm_resource *res);
@@ -1027,6 +1032,7 @@ struct ldlm_callback_suite {
 
 /* ldlm_request.c */
 int ldlm_expired_completion_wait(void *data);
+int ldlm_blocking_ast_nocheck(struct ldlm_lock *lock);
 int ldlm_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                       void *data, int flag);
 int ldlm_glimpse_ast(struct ldlm_lock *lock, void *reqp);
@@ -1062,6 +1068,7 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
                            ldlm_completion_callback completion,
                            ldlm_glimpse_callback glimpse,
                            void *data, __u32 lvb_len, void *lvb_swabber,
+                           const __u64 *client_cookie,
                            struct lustre_handle *lockh);
 int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *new,
                     void *data, __u32 data_len);

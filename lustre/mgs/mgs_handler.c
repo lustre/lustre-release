@@ -348,7 +348,7 @@ static int mgs_get_cfg_lock(struct obd_device *obd, char *fsname,
                                             LDLM_PLAIN, NULL, LCK_EX,
                                             &flags, ldlm_blocking_ast,
                                             ldlm_completion_ast, NULL,
-                                            fsname, 0, NULL, lockh);
+                                            fsname, 0, NULL, NULL, lockh);
         if (rc)
                 CERROR("can't take cfg lock for %s (%d)\n", fsname, rc);
 

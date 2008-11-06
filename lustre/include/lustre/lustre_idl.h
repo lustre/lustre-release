@@ -1728,10 +1728,11 @@ typedef enum {
         LCK_CR      = 16,
         LCK_NL      = 32,
         LCK_GROUP   = 64,
+        LCK_COS     = 128,
         LCK_MAXMODE
 } ldlm_mode_t;
 
-#define LCK_MODE_NUM    7
+#define LCK_MODE_NUM    8
 
 typedef enum {
         LDLM_PLAIN     = 10,

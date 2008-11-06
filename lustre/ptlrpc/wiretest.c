@@ -237,9 +237,9 @@ void lustre_assert_wire_constants(void)
                  (long long)LCK_NL);
         LASSERTF(LCK_GROUP == 64, " found %lld\n",
                  (long long)LCK_GROUP);
-        LASSERTF(LCK_MAXMODE == 65, " found %lld\n",
+        LASSERTF(LCK_MAXMODE == 129, " found %lld\n",
                  (long long)LCK_MAXMODE);
-        LASSERTF(LCK_MODE_NUM == 7, " found %lld\n",
+        LASSERTF(LCK_MODE_NUM == 8, " found %lld\n",
                  (long long)LCK_MODE_NUM);
         CLASSERT(LDLM_PLAIN == 10);
         CLASSERT(LDLM_EXTENT == 11);

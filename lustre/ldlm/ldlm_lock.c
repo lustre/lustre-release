@@ -62,7 +62,8 @@ char *ldlm_lockname[] = {
         [LCK_CW] "CW",
         [LCK_CR] "CR",
         [LCK_NL] "NL",
-        [LCK_GROUP] "GROUP"
+        [LCK_GROUP] "GROUP",
+        [LCK_COS] "COS"
 };
 
 char *ldlm_typename[] = {
@@ -592,7 +593,7 @@ void ldlm_lock_addref_internal_nolock(struct ldlm_lock *lock, __u32 mode)
                 lock->l_readers++;
                 lu_ref_add_atomic(&lock->l_reference, "reader", lock);
         }
-        if (mode & (LCK_EX | LCK_CW | LCK_PW | LCK_GROUP)) {
+        if (mode & (LCK_EX | LCK_CW | LCK_PW | LCK_GROUP | LCK_COS)) {
                 lock->l_writers++;
                 lu_ref_add_atomic(&lock->l_reference, "writer", lock);
         }
@@ -648,7 +649,7 @@ void ldlm_lock_decref_internal_nolock(struct ldlm_lock *lock, __u32 mode)
                 lu_ref_del(&lock->l_reference, "reader", lock);
                 lock->l_readers--;
         }
-        if (mode & (LCK_EX | LCK_CW | LCK_PW | LCK_GROUP)) {
+        if (mode & (LCK_EX | LCK_CW | LCK_PW | LCK_GROUP | LCK_COS)) {
                 LASSERT(lock->l_writers > 0);
                 lu_ref_del(&lock->l_reference, "writer", lock);
                 lock->l_writers--;
@@ -1447,10 +1448,10 @@ ldlm_work_bl_ast_lock(struct list_head *tmp, struct ldlm_cb_set_arg *arg)
 
         ldlm_lock2desc(lock->l_blocking_lock, &d);
 
-        LDLM_LOCK_RELEASE(lock->l_blocking_lock);
-        lock->l_blocking_lock = NULL;
         lock->l_blocking_ast(lock, &d, (void *)arg,
                              LDLM_CB_BLOCKING);
+        LDLM_LOCK_RELEASE(lock->l_blocking_lock);
+        lock->l_blocking_lock = NULL;
         LDLM_LOCK_RELEASE(lock);
 
         RETURN(1);
@@ -1739,6 +1740,32 @@ void ldlm_cancel_locks_for_export(struct obd_export *exp)
                                    ldlm_cancel_locks_for_export_cb, exp);
 }
 
+/**
+ * Downgrade an exclusive lock.
+ *
+ * A fast variant of ldlm_lock_convert for convertion of exclusive
+ * locks. The convertion is always successful.
+ *
+ * \param lock A lock to convert
+ * \param new_mode new lock mode
+ */
+void ldlm_lock_downgrade(struct ldlm_lock *lock, int new_mode)
+{
+        ENTRY;
+
+        LASSERT(lock->l_granted_mode & (LCK_PW | LCK_EX));
+        LASSERT(new_mode == LCK_COS);
+
+        lock_res_and_lock(lock);
+        ldlm_resource_unlink_lock(lock);
+        lock->l_req_mode = new_mode;
+        ldlm_grant_lock(lock, NULL);
+        unlock_res_and_lock(lock);
+        ldlm_reprocess_all(lock->l_resource);
+
+        EXIT;
+}
+
 struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                                         __u32 *flags)
 {
@@ -1763,7 +1790,7 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
         if (node == NULL)  /* Actually, this causes EDEADLOCK to be returned */
                 RETURN(NULL);
 
-        LASSERTF(new_mode == LCK_PW && lock->l_granted_mode == LCK_PR,
+        LASSERTF((new_mode == LCK_PW && lock->l_granted_mode == LCK_PR),
                  "new_mode %u, granted %u\n", new_mode, lock->l_granted_mode);
 
         lock_res_and_lock(lock);

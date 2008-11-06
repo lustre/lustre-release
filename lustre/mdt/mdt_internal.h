@@ -127,7 +127,8 @@ struct mdt_device {
                                    mo_acl        :1,
                                    mo_compat_resname:1,
                                    mo_mds_capa   :1,
-                                   mo_oss_capa   :1;
+                                   mo_oss_capa   :1,
+                                   mo_cos        :1;
         } mdt_opts;
         /* mdt state flags */
         __u32                      mdt_fl_cfglog:1,
@@ -180,6 +181,7 @@ struct mdt_device {
 #define MDT_SERVICE_WATCHDOG_FACTOR     (2000)
 #define MDT_ROCOMPAT_SUPP       (OBD_ROCOMPAT_LOVOBJID)
 #define MDT_INCOMPAT_SUPP       (OBD_INCOMPAT_MDT | OBD_INCOMPAT_COMMON_LR)
+#define MDT_COS_DEFAULT         (1)
 
 struct mdt_object {
         struct lu_object_header mot_header;
@@ -680,13 +682,15 @@ static inline int is_identity_get_disabled(struct upcall_cache *cache)
         return cache ? (strcmp(cache->uc_upcall, "NONE") == 0) : 1;
 }
 
+int mdt_blocking_ast(struct ldlm_lock*, struct ldlm_lock_desc*, void*, int);
+
 /* Issues dlm lock on passed @ns, @f stores it lock handle into @lh. */
 static inline int mdt_fid_lock(struct ldlm_namespace *ns,
                                struct lustre_handle *lh,
                                ldlm_mode_t mode,
                                ldlm_policy_data_t *policy,
                                const struct ldlm_res_id *res_id,
-                               int flags)
+                               int flags, const __u64 *client_cookie)
 {
         int rc;
 
@@ -694,9 +698,9 @@ static inline int mdt_fid_lock(struct ldlm_namespace *ns,
         LASSERT(lh != NULL);
 
         rc = ldlm_cli_enqueue_local(ns, res_id, LDLM_IBITS, policy,
-                                    mode, &flags, ldlm_blocking_ast,
-                                    ldlm_completion_ast, NULL, NULL,
-                                    0, NULL, lh);
+                                    mode, &flags, mdt_blocking_ast,
+                                    ldlm_completion_ast,
+                                    NULL, NULL, 0, NULL, client_cookie, lh);
         return rc == ELDLM_OK ? 0 : -EIO;
 }
 
@@ -748,6 +752,9 @@ static inline struct lu_name *mdt_name_copy(struct lu_name *tlname,
         tlname->ln_namelen = slname->ln_namelen;
         return tlname;
 }
+
+void mdt_enable_cos(struct mdt_device *, int);
+int mdt_cos_is_enabled(struct mdt_device *);
 
 /* lprocfs stuff */
 void lprocfs_mdt_init_vars(struct lprocfs_static_vars *lvars);

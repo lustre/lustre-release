@@ -1545,7 +1545,7 @@ static int filter_prepare_destroy(struct obd_device *obd, obd_id objid,
         rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id, LDLM_EXTENT,
                                     &policy, LCK_PW, &flags, ldlm_blocking_ast,
                                     ldlm_completion_ast, NULL, NULL, 0, NULL,
-                                    &lockh);
+                                    NULL, &lockh);
 
         /* We only care about the side-effects, just drop the lock. */
         if (rc == ELDLM_OK)

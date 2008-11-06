@@ -276,30 +276,21 @@ noreproc:
         RETURN(ldlm_completion_tail(lock));
 }
 
-/*
- * ->l_blocking_ast() callback for LDLM locks acquired by server-side OBDs.
+/**
+ * A helper to build a blocking ast function
+ *
+ * Perform a common operation for blocking asts:
+ * defferred lock cancellation.
+ *
+ * \param lock the lock blocking or canceling ast was called on
+ * \retval 0
+ * \see mdt_blocking_ast
+ * \see ldlm_blocking_ast
  */
-int ldlm_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
-                      void *data, int flag)
+int ldlm_blocking_ast_nocheck(struct ldlm_lock *lock)
 {
         int do_ast;
         ENTRY;
-
-        if (flag == LDLM_CB_CANCELING) {
-                /* Don't need to do anything here. */
-                RETURN(0);
-        }
-
-        lock_res_and_lock(lock);
-        /* Get this: if ldlm_blocking_ast is racing with intent_policy, such
-         * that ldlm_blocking_ast is called just before intent_policy method
-         * takes the ns_lock, then by the time we get the lock, we might not
-         * be the correct blocking function anymore.  So check, and return
-         * early, if so. */
-        if (lock->l_blocking_ast != ldlm_blocking_ast) {
-                unlock_res_and_lock(lock);
-                RETURN(0);
-        }
 
         lock->l_flags |= LDLM_FL_CBPENDING;
         do_ast = (!lock->l_readers && !lock->l_writers);
@@ -319,6 +310,42 @@ int ldlm_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                            "cancelled later");
         }
         RETURN(0);
+}
+
+/**
+ * Server blocking AST
+ *
+ * ->l_blocking_ast() callback for LDLM locks acquired by server-side
+ * OBDs.
+ *
+ * \param lock the lock which blocks a request or cancelling lock
+ * \param desc unused
+ * \param data unused
+ * \param flag indicates whether this cancelling or blocking callback
+ * \retval 0
+ * \see ldlm_blocking_ast_nocheck
+ */
+int ldlm_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
+                      void *data, int flag)
+{
+        ENTRY;
+
+        if (flag == LDLM_CB_CANCELING) {
+                /* Don't need to do anything here. */
+                RETURN(0);
+        }
+
+        lock_res_and_lock(lock);
+        /* Get this: if ldlm_blocking_ast is racing with intent_policy, such
+         * that ldlm_blocking_ast is called just before intent_policy method
+         * takes the ns_lock, then by the time we get the lock, we might not
+         * be the correct blocking function anymore.  So check, and return
+         * early, if so. */
+        if (lock->l_blocking_ast != ldlm_blocking_ast) {
+                unlock_res_and_lock(lock);
+                RETURN(0);
+        }
+        RETURN(ldlm_blocking_ast_nocheck(lock));
 }
 
 /*
@@ -356,6 +383,7 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
                            ldlm_completion_callback completion,
                            ldlm_glimpse_callback glimpse,
                            void *data, __u32 lvb_len, void *lvb_swabber,
+                           const __u64 *client_cookie,
                            struct lustre_handle *lockh)
 {
         struct ldlm_lock *lock;
@@ -387,6 +415,8 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
         unlock_res_and_lock(lock);
         if (policy != NULL)
                 lock->l_policy_data = *policy;
+        if (client_cookie != NULL)
+                lock->l_client_cookie = *client_cookie;
         if (type == LDLM_EXTENT)
                 lock->l_req_extent = policy->l_extent;
 

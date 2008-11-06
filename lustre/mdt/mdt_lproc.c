@@ -425,6 +425,29 @@ static int lprocfs_mdt_wr_evict_client(struct file *file, const char *buffer,
         return count;
 }
 
+static int lprocfs_rd_cos(char *page, char **start, off_t off,
+                              int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+        return snprintf(page, count, "%u\n", mdt_cos_is_enabled(mdt));
+}
+
+static int lprocfs_wr_cos(struct file *file, const char *buffer,
+                                  unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+        mdt_enable_cos(mdt, val);
+        return count;
+}
+
 static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
         { "uuid",                       lprocfs_rd_uuid,                 0, 0 },
         { "recovery_status",            lprocfs_obd_rd_recovery_status,  0, 0 },
@@ -447,6 +470,7 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
         { "site_stats",                 lprocfs_rd_site_stats,           0, 0 },
         { "evict_client",               0, lprocfs_mdt_wr_evict_client,     0 },
         { "hash_stats",                 lprocfs_obd_rd_hash,    0, 0 },
+        { "commit_on_sharing",          lprocfs_rd_cos, lprocfs_wr_cos, 0 },
         { 0 }
 };
 

@@ -128,6 +128,16 @@ struct dt_device_operations {
         int   (*dt_sync)(const struct lu_env *env, struct dt_device *dev);
         void  (*dt_ro)(const struct lu_env *env, struct dt_device *dev);
         /**
+          * Start a transaction commit asynchronously
+          *
+          * \param env environment
+          * \param dev dt_device to start commit on
+          *
+          * \return 0 success, negative value if error
+          */
+         int   (*dt_commit_async)(const struct lu_env *env,
+                                  struct dt_device *dev);
+        /**
          * Initialize capability context.
          */
         int   (*dt_init_capa_ctxt)(const struct lu_env *env,

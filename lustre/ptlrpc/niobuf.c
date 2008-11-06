@@ -421,7 +421,8 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int flags)
         req->rq_sent = cfs_time_current_sec();
 
         rc = ptl_send_buf (&rs->rs_md_h, rs->rs_repbuf, rs->rs_repdata_len,
-                           rs->rs_difficult ? LNET_ACK_REQ : LNET_NOACK_REQ,
+                           (rs->rs_difficult && !rs->rs_no_ack) ?
+                           LNET_ACK_REQ : LNET_NOACK_REQ,
                            &rs->rs_cb_id, conn, svc->srv_rep_portal,
                            req->rq_xid, req->rq_reply_off);
 out:

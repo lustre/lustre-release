@@ -86,7 +86,7 @@ void oti_to_request(struct obd_trans_info *oti, struct ptlrpc_request *req)
                 if (!ack_lock->mode)
                         break;
                 /* XXX not even calling target_send_reply in some cases... */
-                ptlrpc_save_lock (req, &ack_lock->lock, ack_lock->mode);
+                ptlrpc_save_lock (req, &ack_lock->lock, ack_lock->mode, 0);
         }
 }
 
@@ -253,7 +253,8 @@ static int ost_punch_lock_get(struct obd_export *exp, struct obdo *oa,
         RETURN(ldlm_cli_enqueue_local(exp->exp_obd->obd_namespace, &res_id,
                                       LDLM_EXTENT, &policy, LCK_PW, &flags,
                                       ldlm_blocking_ast, ldlm_completion_ast,
-                                      ldlm_glimpse_ast, NULL, 0, NULL, lh));
+                                      ldlm_glimpse_ast, NULL, 0, NULL,
+                                      NULL, lh));
 }
 
 /*
@@ -452,7 +453,8 @@ static int ost_brw_lock_get(int mode, struct obd_export *exp,
         RETURN(ldlm_cli_enqueue_local(exp->exp_obd->obd_namespace, &res_id,
                                       LDLM_EXTENT, &policy, mode, &flags,
                                       ldlm_blocking_ast, ldlm_completion_ast,
-                                      ldlm_glimpse_ast, NULL, 0, NULL, lh));
+                                      ldlm_glimpse_ast, NULL, 0, NULL,
+                                      NULL, lh));
 }
 
 static void ost_brw_lock_put(int mode,

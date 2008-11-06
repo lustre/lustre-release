@@ -1051,9 +1051,8 @@ static void mdt_steal_ack_locks(struct ptlrpc_request *req)
                       libcfs_nid2str(exp->exp_connection->c_peer.nid));
 
                 for (i = 0; i < oldrep->rs_nlocks; i++)
-                        ptlrpc_save_lock(req,
-                                         &oldrep->rs_locks[i],
-                                         oldrep->rs_modes[i]);
+                        ptlrpc_save_lock(req, &oldrep->rs_locks[i],
+                                         oldrep->rs_modes[i], 0);
                 oldrep->rs_nlocks = 0;
 
                 DEBUG_REQ(D_HA, req, "stole locks for");

@@ -341,7 +341,9 @@ void reply_out_callback(lnet_event_t *ev)
                  * until ptlrpc_server_handle_reply() is done with it */
                 spin_lock(&svc->srv_lock);
                 rs->rs_on_net = 0;
-                ptlrpc_schedule_difficult_reply (rs);
+                if (!rs->rs_no_ack ||
+                    rs->rs_transno <= rs->rs_export->exp_obd->obd_last_committed)
+                        ptlrpc_schedule_difficult_reply (rs);
                 spin_unlock(&svc->srv_lock);
         }
 

@@ -430,7 +430,6 @@ int dev_check_rdonly(lvfs_sbdev_type dev);
 
 void __lvfs_set_rdonly(lvfs_sbdev_type dev, lvfs_sbdev_type jdev)
 {
-        lvfs_sbdev_sync(dev);
         if (jdev && (jdev != dev)) {
                 CDEBUG(D_IOCTL | D_HA, "set journal dev %lx rdonly\n",
                        (long)jdev);

@@ -536,7 +536,7 @@ static int echo_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id, LDLM_PLAIN,
                                     NULL, LCK_NL, &lock_flags, NULL,
                                     ldlm_completion_ast, NULL, NULL,
-                                    0, NULL, &obd->u.echo.eo_nl_lock);
+                                    0, NULL, NULL, &obd->u.echo.eo_nl_lock);
         LASSERT (rc == ELDLM_OK);
 
         lprocfs_echo_init_vars(&lvars);

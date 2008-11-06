@@ -1393,6 +1393,11 @@ static int check_for_next_transno(struct obd_device *obd)
                        next_transno, queue_len, completed, connected, req_transno);
                 obd->obd_next_recovery_transno = req_transno;
                 wake_up = 1;
+        } else if (OBD_FAIL_CHECK(OBD_FAIL_MDS_RECOVERY_ACCEPTS_GAPS)) {
+                CDEBUG(D_HA, "accepting transno gaps is explicitly allowed"
+                       " by fail_lock, waking up ("LPD64")\n", next_transno);
+                obd->obd_next_recovery_transno = req_transno;
+                wake_up = 1;
         } else if (queue_len == atomic_read(&obd->obd_req_replay_clients)) {
                 /* some clients haven't connected in time, but we can try
                  * to replay requests that demand on already committed ones
@@ -2044,15 +2049,19 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         struct obd_device         *obd;
         struct obd_export         *exp;
         struct ptlrpc_service     *svc;
+        ENTRY;
 
-        if (req->rq_no_reply)
+        if (req->rq_no_reply) {
+                EXIT;
                 return;
+        }
 
         svc = req->rq_rqbd->rqbd_service;
         rs = req->rq_reply_state;
         if (rs == NULL || !rs->rs_difficult) {
                 /* no notifiers */
                 target_send_reply_msg (req, rc, fail_id);
+                EXIT;
                 return;
         }
 
@@ -2082,6 +2091,8 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
 
         spin_lock(&obd->obd_uncommitted_replies_lock);
 
+        CDEBUG(D_NET, "rs transno = "LPU64", last committed = "LPU64"\n",
+               rs->rs_transno, obd->obd_last_committed);
         if (rs->rs_transno > obd->obd_last_committed) {
                 /* not committed already */
                 list_add_tail (&rs->rs_obd_list,
@@ -2112,9 +2123,11 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
                 atomic_inc (&svc->srv_outstanding_replies);
         }
 
-        if (!rs->rs_on_net ||                   /* some notifier */
-            list_empty(&rs->rs_exp_list) ||     /* completed already */
-            list_empty(&rs->rs_obd_list)) {
+        if (rs->rs_transno <= obd->obd_last_committed ||
+            (!rs->rs_on_net && !rs->rs_no_ack) ||
+             list_empty(&rs->rs_exp_list) ||     /* completed already */
+             list_empty(&rs->rs_obd_list)) {
+                CDEBUG(D_HA, "Schedule reply immediately\n");
                 list_add_tail (&rs->rs_list, &svc->srv_reply_queue);
                 cfs_waitq_signal (&svc->srv_waitq);
         } else {
@@ -2123,6 +2136,7 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         }
 
         spin_unlock(&svc->srv_lock);
+        EXIT;
 }
 
 int target_handle_ping(struct ptlrpc_request *req)
@@ -2250,7 +2264,8 @@ ldlm_mode_t lck_compat_array[] = {
         [LCK_CW] LCK_COMPAT_CW,
         [LCK_CR] LCK_COMPAT_CR,
         [LCK_NL] LCK_COMPAT_NL,
-        [LCK_GROUP] LCK_COMPAT_GROUP
+        [LCK_GROUP] LCK_COMPAT_GROUP,
+        [LCK_COS] LCK_COMPAT_COS,
 };
 
 /**
