@@ -231,6 +231,8 @@ static int config_log_add(char *logname, struct config_llog_instance *cfg,
         RETURN(rc);
 }
 
+DECLARE_MUTEX(llog_process_lock);
+
 /* Stop watching for updates on this log. */
 static int config_log_end(char *logname, struct config_llog_instance *cfg)
 {
@@ -244,7 +246,10 @@ static int config_log_end(char *logname, struct config_llog_instance *cfg)
         /* drop the ref from the find */
         config_log_put(cld);
 
+        down(&llog_process_lock);
         cld->cld_stopping = 1;
+        up(&llog_process_lock);
+
         /* drop the start ref */
         config_log_put(cld);
         CDEBUG(D_MGC, "end config log %s (%d)\n", logname ? logname : "client",
@@ -1074,8 +1079,6 @@ out:
         RETURN(rc);
 }
 
-DECLARE_MUTEX(llog_process_lock);
-
 /* Get a config log from the MGS and process it.
    This func is called for both clients and servers. */
 static int mgc_process_log(struct obd_device *mgc,
@@ -1094,8 +1097,17 @@ static int mgc_process_log(struct obd_device *mgc,
                 CERROR("Missing cld, aborting log update\n");
                 RETURN(-EINVAL);
         }
-        if (cld->cld_stopping)
+
+        /* I don't want mutliple processes running process_log at once --
+           sounds like badness.  It actually might be fine, as long as
+           we're not trying to update from the same log
+           simultaneously (in which case we should use a per-log sem.) */
+        down(&llog_process_lock);
+
+        if (cld->cld_stopping) {
+                up(&llog_process_lock);
                 RETURN(0);
+        }
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_MGC_PAUSE_PROCESS_LOG, 20);
 
@@ -1107,14 +1119,9 @@ static int mgc_process_log(struct obd_device *mgc,
         ctxt = llog_get_context(mgc, LLOG_CONFIG_REPL_CTXT);
         if (!ctxt) {
                 CERROR("missing llog context\n");
+                up(&llog_process_lock);
                 RETURN(-EINVAL);
         }
-
-        /* I don't want mutliple processes running process_log at once --
-           sounds like badness.  It actually might be fine, as long as
-           we're not trying to update from the same log
-           simultaneously (in which case we should use a per-log sem.) */
-        down(&llog_process_lock);
 
         /* Get the cfg lock on the llog */
         rcl = mgc_enqueue(mgc->u.cli.cl_mgc_mgsexp, NULL, LDLM_PLAIN, NULL,
