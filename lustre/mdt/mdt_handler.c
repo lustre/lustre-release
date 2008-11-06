@@ -4588,6 +4588,7 @@ static int mdt_destroy_export(struct obd_export *export)
         spin_unlock(&med->med_open_lock);
 
         list_for_each_entry_safe(mfd, n, &closing_list, mfd_list) {
+                list_del_init(&mfd->mfd_list);
                 mdt_mfd_close(info, mfd);
                 /* TODO: if we close the unlinked file,
                  * we need to remove it's objects from OST */
