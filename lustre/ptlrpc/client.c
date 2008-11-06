@@ -1102,8 +1102,8 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                         
                         /* Turn fail_loc off to prevent it from looping
                          * forever. */
-                        OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_UNLINK | 
-                                       OBD_FAIL_ONCE);
+                        OBD_FAIL_CHECK_QUIET(OBD_FAIL_PTLRPC_LONG_UNLINK | 
+                                             OBD_FAIL_ONCE);
 
                         /* Move to next phase if reply was successfully 
                          * unlinked. */
@@ -1467,18 +1467,26 @@ int ptlrpc_set_next_timeout(struct ptlrpc_request_set *set)
                 req = list_entry(tmp, struct ptlrpc_request, rq_set_chain);
 
                 /* request in-flight? */
-                if (!(((req->rq_phase & (RQ_PHASE_RPC | 
-                                         RQ_PHASE_UNREGISTERING)) && 
+                if (!(((req->rq_phase & 
+                        (RQ_PHASE_RPC | RQ_PHASE_UNREGISTERING)) && 
                       !req->rq_waiting) ||
                       (req->rq_phase == RQ_PHASE_BULK) ||
                       (req->rq_phase == RQ_PHASE_NEW)))
                         continue;
 
-                if (req->rq_timedout)   /* already timed out */
+                /* Check those waiting for long reply unlink every one 
+                 * second. */
+                if (req->rq_phase == RQ_PHASE_NEW) {
+                        timeout = 1;
+                        break;
+                }
+
+                /* Already timed out. */
+                if (req->rq_timedout)
                         continue;
 
                 if (req->rq_phase == RQ_PHASE_NEW)
-                        deadline = req->rq_sent;        /* delayed send */
+                        deadline = req->rq_sent;    /* delayed send */
                 else
                         deadline = req->rq_deadline;
 
@@ -1694,7 +1702,7 @@ int ptlrpc_unregister_reply(struct ptlrpc_request *request, int async)
 
         /* Let's setup deadline for reply unlink. */
         if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_UNLINK) && 
-            request->rq_reply_deadline == 0)
+            async && request->rq_reply_deadline == 0)
                 request->rq_reply_deadline = cfs_time_current_sec()+LONG_UNLINK;
 
         /* Nothing left to do. */
