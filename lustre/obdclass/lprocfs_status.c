@@ -654,6 +654,7 @@ int lprocfs_rd_import(char *page, char **start, off_t off, int count,
                       "    target: %s@%s\n"
                       "    state: %s\n"
                       "    inflight: %u\n"
+                      "    unregistering: %u\n"
                       "    conn_cnt: %u\n"
                       "    generation: %u\n"
                       "    inval_cnt: %u\n"
@@ -665,6 +666,7 @@ int lprocfs_rd_import(char *page, char **start, off_t off, int count,
                       obd2cli_tgt(obd), imp->imp_connection->c_remote_uuid.uuid,
                       imp_state_name,
                       atomic_read(&imp->imp_inflight),
+                      atomic_read(&imp->imp_unregistering),
                       imp->imp_conn_cnt,
                       imp->imp_generation,
                       atomic_read(&imp->imp_inval_count),

@@ -185,10 +185,11 @@ static int ptlrpcd(void *arg)
          */
         while (1) {
                 struct l_wait_info lwi;
-                cfs_duration_t timeout;
+                int timeout;
 
-                timeout = cfs_time_seconds(ptlrpc_set_next_timeout(pc->pc_set));
-                lwi = LWI_TIMEOUT(timeout, ptlrpc_expired_set, pc->pc_set);
+                timeout = ptlrpc_set_next_timeout(pc->pc_set);
+                lwi = LWI_TIMEOUT(cfs_time_seconds(timeout ? timeout : 1), 
+                                  ptlrpc_expired_set, pc->pc_set);
 
                 l_wait_event(pc->pc_set->set_waitq, ptlrpcd_check(pc), &lwi);
 

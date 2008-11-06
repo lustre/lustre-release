@@ -186,7 +186,7 @@ void ptlrpc_wake_delayed(struct obd_import *imp)
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
 
                 DEBUG_REQ(D_HA, req, "waking (set %p):", req->rq_set);
-                ptlrpc_wake_client_req(req);
+                ptlrpc_client_wake_req(req);
         }
         spin_unlock(&imp->imp_lock);
 }

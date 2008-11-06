@@ -123,6 +123,7 @@ struct obd_import {
         cfs_waitq_t               imp_recovery_waitq;
 
         atomic_t                  imp_inflight;
+        atomic_t                  imp_unregistering;
         atomic_t                  imp_replay_inflight;
         atomic_t                  imp_inval_count;
         enum lustre_imp_state     imp_state;
