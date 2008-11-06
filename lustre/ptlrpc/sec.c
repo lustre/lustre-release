@@ -2223,7 +2223,7 @@ int sptlrpc_unpack_user_desc(struct lustre_msg *msg, int offset)
         if (!pud)
                 return -EINVAL;
 
-        if (lustre_msg_swabbed(msg)) {
+        if (lustre_msg_need_swab(msg)) {
                 __swab32s(&pud->pud_uid);
                 __swab32s(&pud->pud_gid);
                 __swab32s(&pud->pud_fsuid);
@@ -2244,7 +2244,7 @@ int sptlrpc_unpack_user_desc(struct lustre_msg *msg, int offset)
                 return -EINVAL;
         }
 
-        if (lustre_msg_swabbed(msg)) {
+        if (lustre_msg_need_swab(msg)) {
                 for (i = 0; i < pud->pud_ngroups; i++)
                         __swab32s(&pud->pud_groups[i]);
         }

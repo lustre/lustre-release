@@ -950,7 +950,7 @@ static int check_write_rcs(struct ptlrpc_request *req,
                 CDEBUG(D_INFO, "Missing/short RC vector on BRW_WRITE reply\n");
                 return(-EPROTO);
         }
-        if (lustre_msg_swabbed(req->rq_repmsg))
+        if (lustre_rep_need_swab(req))
                 for (i = 0; i < niocount; i++)
                         __swab32s(&remote_rcs[i]);
 

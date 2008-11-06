@@ -960,12 +960,15 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
         req->rq_req_swab_mask = 0;
 
         rc = lustre_unpack_msg(req->rq_reqmsg, req->rq_reqlen);
-        if (rc != 0) {
+        if (rc < 0) {
                 CERROR("error unpacking request: ptl %d from %s x"LPU64"\n",
                        svc->srv_req_portal, libcfs_id2str(req->rq_peer),
                        req->rq_xid);
                 goto err_req;
         }
+
+        if (rc > 0)
+                lustre_set_req_swabbed(req, MSG_PTLRPC_HEADER_OFF);
 
         rc = lustre_unpack_req_ptlrpc_body(req, MSG_PTLRPC_BODY_OFF);
         if (rc) {

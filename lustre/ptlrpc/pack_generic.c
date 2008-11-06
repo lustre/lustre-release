@@ -72,10 +72,54 @@ int lustre_msg_hdr_size(__u32 magic, int count)
 }
 EXPORT_SYMBOL(lustre_msg_hdr_size);
 
-int lustre_msg_swabbed(struct lustre_msg *msg)
+int lustre_msg_need_swab(struct lustre_msg *msg)
 {
         return (msg->lm_magic == LUSTRE_MSG_MAGIC_V2_SWABBED);
 }
+
+/**
+ * \ret 0 - if need swabbed
+ * \ret 1 - otherwise
+ */
+static int ptlrpc_reqbuf_need_swab(struct ptlrpc_request *req, int index)
+{
+        return (lustre_req_need_swab(req) && !lustre_req_swabbed(req, index));
+}
+
+/**
+ *  \ret 0 - if need swabbed
+ *  \ret 1 - otherwise
+ */
+static int ptlrpc_repbuf_need_swab(struct ptlrpc_request *req, int index)
+{
+        return (lustre_rep_need_swab(req) && !lustre_rep_swabbed(req, index));
+}
+
+/**
+ * ptlrpc_req_need_swab - check the @req if need swab.
+ * @req   - ptlrpc_request need to look at.
+ * @inout - =1 reqbuf, =0 repbuf.
+ * @index - message offset
+ *
+ * \ret 0 - swabbed
+ * \ret 1 - need swab
+ */
+int ptlrpc_req_need_swab(struct ptlrpc_request *req, int inout, int index)
+{
+        if (inout)
+                return ptlrpc_reqbuf_need_swab(req, index);
+        else
+                return ptlrpc_repbuf_need_swab(req, index);
+}
+
+void ptlrpc_req_set_swabbed(struct ptlrpc_request *req, int inout, int index)
+{
+       if(inout)
+                lustre_set_req_swabbed(req, index);
+        else
+                lustre_set_rep_swabbed(req, index);
+}
+
 
 static inline int
 lustre_msg_check_version_v2(struct lustre_msg_v2 *msg, __u32 version)
@@ -88,11 +132,9 @@ int lustre_msg_check_version(struct lustre_msg *msg, __u32 version)
 {
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V1:
-        case LUSTRE_MSG_MAGIC_V1_SWABBED:
                 CERROR("msg v1 not supported - please upgrade you system\n");
                 return -EINVAL; 
         case LUSTRE_MSG_MAGIC_V2:
-        case LUSTRE_MSG_MAGIC_V2_SWABBED:
                 return lustre_msg_check_version_v2(msg, version);
         default:
                 CERROR("incorrect message magic: %08x\n", msg->lm_magic);
@@ -497,9 +539,9 @@ static int lustre_unpack_msg_v2(struct lustre_msg_v2 *m, int len)
                 return -EINVAL;
         }
 
-        flipped = lustre_msg_swabbed(m);
-
+        flipped = lustre_msg_need_swab(m);
         if (flipped) {
+                __swab32s(&m->lm_magic);
                 __swab32s(&m->lm_bufcount);
                 __swab32s(&m->lm_secflvr);
                 __swab32s(&m->lm_repsize);
@@ -516,7 +558,7 @@ static int lustre_unpack_msg_v2(struct lustre_msg_v2 *m, int len)
                         len, m->lm_bufcount);
                 return -EINVAL;
         }
-        
+
         for (i = 0; i < m->lm_bufcount; i++) {
                 if (flipped)
                         __swab32s(&m->lm_buflens[i]);
@@ -531,7 +573,7 @@ static int lustre_unpack_msg_v2(struct lustre_msg_v2 *m, int len)
                 return -EINVAL;
         }
 
-        return 0;
+        return flipped;
 }
 
 int lustre_unpack_msg(struct lustre_msg *m, int len)
@@ -567,18 +609,22 @@ int lustre_unpack_msg(struct lustre_msg *m, int len)
         RETURN(rc);
 }
 
-static inline int lustre_unpack_ptlrpc_body_v2(struct lustre_msg_v2 *m,
+static inline int lustre_unpack_ptlrpc_body_v2(struct ptlrpc_request *req,
+                                               int inout,
                                                int offset)
 {
         struct ptlrpc_body *pb;
+        struct lustre_msg_v2 *m = inout ? req->rq_reqmsg : req->rq_repmsg;
 
         pb = lustre_msg_buf_v2(m, offset, sizeof(*pb));
         if (!pb) {
                 CERROR("error unpacking ptlrpc body\n");
                 return -EFAULT;
         }
-        if (lustre_msg_swabbed(m))
+        if (ptlrpc_req_need_swab(req, inout, offset)) {
                 lustre_swab_ptlrpc_body(pb);
+                ptlrpc_req_set_swabbed(req, inout, offset);
+        }
 
         if ((pb->pb_version & ~LUSTRE_VERSION_MASK) != PTLRPC_MSG_VERSION) {
                  CERROR("wrong lustre_msg version %08x\n", pb->pb_version);
@@ -592,9 +638,7 @@ int lustre_unpack_req_ptlrpc_body(struct ptlrpc_request *req, int offset)
 {
         switch (req->rq_reqmsg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2:
-        case LUSTRE_MSG_MAGIC_V2_SWABBED:
-                lustre_set_req_swabbed(req, offset);
-                return lustre_unpack_ptlrpc_body_v2(req->rq_reqmsg, offset);
+                return lustre_unpack_ptlrpc_body_v2(req, 1, offset);
         default:
                 CERROR("bad lustre msg magic: %#08X\n",
                        req->rq_reqmsg->lm_magic);
@@ -606,9 +650,7 @@ int lustre_unpack_rep_ptlrpc_body(struct ptlrpc_request *req, int offset)
 {
         switch (req->rq_repmsg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2:
-        case LUSTRE_MSG_MAGIC_V2_SWABBED:
-                lustre_set_rep_swabbed(req, offset);
-                return lustre_unpack_ptlrpc_body_v2(req->rq_repmsg, offset);
+                return lustre_unpack_ptlrpc_body_v2(req, 0, offset);
         default:
                 CERROR("bad lustre msg magic: %#08X\n",
                        req->rq_repmsg->lm_magic);
@@ -744,7 +786,7 @@ void *lustre_swab_buf(struct lustre_msg *msg, int index, int min_size,
         if (ptr == NULL)
                 return NULL;
 
-        if (swabber != NULL && lustre_msg_swabbed(msg))
+        if (swabber != NULL)
                 ((void (*)(void *))swabber)(ptr);
 
         return ptr;
@@ -753,6 +795,9 @@ void *lustre_swab_buf(struct lustre_msg *msg, int index, int min_size,
 void *lustre_swab_reqbuf(struct ptlrpc_request *req, int index, int min_size,
                          void *swabber)
 {
+        if (!ptlrpc_reqbuf_need_swab(req, index))
+                 swabber = NULL;
+
         lustre_set_req_swabbed(req, index);
         return lustre_swab_buf(req->rq_reqmsg, index, min_size, swabber);
 }
@@ -760,6 +805,9 @@ void *lustre_swab_reqbuf(struct ptlrpc_request *req, int index, int min_size,
 void *lustre_swab_repbuf(struct ptlrpc_request *req, int index, int min_size,
                          void *swabber)
 {
+        if (!ptlrpc_repbuf_need_swab(req, index))
+                 swabber = NULL;
+
         lustre_set_rep_swabbed(req, index);
         return lustre_swab_buf(req->rq_repmsg, index, min_size, swabber);
 }

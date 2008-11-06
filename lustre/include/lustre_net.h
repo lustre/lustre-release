@@ -502,6 +502,16 @@ static inline int lustre_rep_swabbed(struct ptlrpc_request *req, int index)
         return req->rq_rep_swab_mask & (1 << index);
 }
 
+static inline int lustre_req_need_swab(struct ptlrpc_request *req)
+{
+        return req->rq_req_swab_mask & (1 << MSG_PTLRPC_HEADER_OFF);
+}
+ 
+static inline int lustre_rep_need_swab(struct ptlrpc_request *req)
+{
+        return req->rq_rep_swab_mask & (1 << MSG_PTLRPC_HEADER_OFF);
+}
+
 static inline const char *
 ptlrpc_rqphase2str(const struct ptlrpc_request *req)
 {
@@ -987,7 +997,8 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp);
 
 /* ptlrpc/pack_generic.c */
 int ptlrpc_reconnect_import(struct obd_import *imp);
-int lustre_msg_swabbed(struct lustre_msg *msg);
+int ptlrpc_req_need_swab(struct ptlrpc_request *req, int inout, int index);
+void ptlrpc_req_set_swabbed(struct ptlrpc_request *req, int inout, int index);
 int lustre_msg_check_version(struct lustre_msg *msg, __u32 version);
 void lustre_init_msg_v2(struct lustre_msg_v2 *msg, int count, __u32 *lens,
                         char **bufs);

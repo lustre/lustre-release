@@ -284,16 +284,20 @@ static int unpack_reply(struct ptlrpc_request *req)
         req->rq_rep_swab_mask = 0;
 
         rc = lustre_unpack_msg(req->rq_repmsg, req->rq_replen);
-        if (rc) {
+        if (rc < 0) {
                 DEBUG_REQ(D_ERROR, req, "unpack_rep failed: %d", rc);
                 return(-EPROTO);
         }
+
+        if (rc > 0)
+                lustre_set_rep_swabbed(req, MSG_PTLRPC_HEADER_OFF);
 
         rc = lustre_unpack_rep_ptlrpc_body(req, MSG_PTLRPC_BODY_OFF);
         if (rc) {
                 DEBUG_REQ(D_ERROR, req, "unpack ptlrpc body failed: %d", rc);
                 return(-EPROTO);
         }
+
         return 0;
 }
 

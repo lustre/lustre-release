@@ -625,7 +625,8 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 CERROR("Missing/short niobuf\n");
                 GOTO(out, rc = -EFAULT);
         }
-        if (lustre_msg_swabbed(req->rq_reqmsg)) { /* swab remaining niobufs */
+
+        if (lustre_req_need_swab(req)) { /* swab remaining niobufs */
                 for (i = 1; i < niocount; i++)
                         lustre_swab_niobuf_remote (&remote_nb[i]);
         }
@@ -864,7 +865,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (exp->exp_failed)
                 GOTO(out, rc = -ENOTCONN);
 
-        swab = lustre_msg_swabbed(req->rq_reqmsg);
+        swab = lustre_req_need_swab(req);
         body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
                                   lustre_swab_ost_body);
         if (body == NULL) {
