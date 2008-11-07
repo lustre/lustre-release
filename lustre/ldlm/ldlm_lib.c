@@ -518,7 +518,10 @@ int client_disconnect_export(struct obd_export *exp)
          * in obd_namespace. bug 14260 */
         obd->obd_namespace = NULL;
 
-        ptlrpc_free_rq_pool(imp->imp_rq_pool);
+        if (imp->imp_rq_pool) {
+                ptlrpc_free_rq_pool(imp->imp_rq_pool);
+                imp->imp_rq_pool = NULL;
+        }
         destroy_import(imp);
         cli->cl_import = NULL;
 
