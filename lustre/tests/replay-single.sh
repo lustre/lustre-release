@@ -34,7 +34,7 @@ fi
 
 build_test_filter
 
-cleanup_and_setup_lustre
+check_and_setup_lustre
 
 mkdir -p $DIR
 
