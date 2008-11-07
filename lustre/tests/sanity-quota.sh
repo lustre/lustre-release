@@ -60,7 +60,7 @@ QUOTALOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 DIR=${DIR:-$MOUNT}
 DIR2=${DIR2:-$MOUNT2}
 
-cleanup_and_setup_lustre
+check_and_setup_lustre
 
 LOVNAME=`lctl get_param -n llite.*.lov.common_name | tail -n 1`
 OSTCOUNT=`lctl get_param -n lov.$LOVNAME.numobd`
