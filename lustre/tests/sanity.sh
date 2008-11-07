@@ -445,9 +445,7 @@ run_test 17e "symlinks: create recursive symlink (should return error) ===="
 
 test_17g() {
         mkdir -p $DIR/$tdir
-        for ((i = 0; i < 511; ++i)); do
-                LONGSYMLINK="${LONGSYMLINK}01234567"
-        done
+        LONGSYMLINK="$(dd if=/dev/zero bs=4095 count=1 | tr '\0' 'x')"
         ln -s $LONGSYMLINK $DIR/$tdir/$tfile
         ls -l $DIR/$tdir
 }
