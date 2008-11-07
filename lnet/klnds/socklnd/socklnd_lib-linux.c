@@ -37,7 +37,7 @@
 #include "socklnd.h"
 
 # if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
-static cfs_sysctl_table_t ksocknal_ctl_table[21];
+static cfs_sysctl_table_t ksocknal_ctl_table[23];
 
 cfs_sysctl_table_t ksocknal_top_ctl_table[] = {
         {
@@ -56,6 +56,12 @@ ksocknal_lib_tunables_init ()
 {
         int    i = 0;
         int    j = 1;
+
+        if (*ksocknal_tunables.ksnd_zc_recv_min_nfrags < 2)
+                *ksocknal_tunables.ksnd_zc_recv_min_nfrags = 2;
+
+        if (*ksocknal_tunables.ksnd_zc_recv_min_nfrags > LNET_MAX_IOV)
+                *ksocknal_tunables.ksnd_zc_recv_min_nfrags = LNET_MAX_IOV;
 
         ksocknal_ctl_table[i++] = (cfs_sysctl_table_t) {
                 .ctl_name = j++,
@@ -117,6 +123,22 @@ ksocknal_lib_tunables_init ()
                 .ctl_name = j++,
                 .procname = "zero_copy",
                 .data     = ksocknal_tunables.ksnd_zc_min_frag,
+                .maxlen   = sizeof (int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        };
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t) {
+                .ctl_name = j++,
+                .procname = "zero_copy_recv",
+                .data     = ksocknal_tunables.ksnd_zc_recv,
+                .maxlen   = sizeof (int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        };
+        ksocknal_ctl_table[i++] = (cfs_sysctl_table_t) {
+                .ctl_name = j++,
+                .procname = "zero_copy_recv_min_nfrags",
+                .data     = ksocknal_tunables.ksnd_zc_recv_min_nfrags,
                 .maxlen   = sizeof (int),
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec
@@ -387,7 +409,7 @@ ksocknal_lib_send_iov (ksock_conn_t *conn, ksock_tx_t *tx)
                 struct iovec   *scratchiov = &scratch;
                 unsigned int    niov = 1;
 #else
-                struct iovec   *scratchiov = conn->ksnc_tx_scratch_iov;
+                struct iovec   *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
                 unsigned int    niov = tx->tx_niov;
 #endif
                 struct msghdr msg = {
@@ -460,7 +482,7 @@ ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
 #ifdef CONFIG_HIGHMEM
 #warning "XXX risk of kmap deadlock on multiple frags..."
 #endif
-                struct iovec *scratchiov = conn->ksnc_tx_scratch_iov;
+                struct iovec *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
                 unsigned int  niov = tx->tx_nkiov;
 #endif
                 struct msghdr msg = {
@@ -521,7 +543,7 @@ ksocknal_lib_recv_iov (ksock_conn_t *conn)
         struct iovec *scratchiov = &scratch;
         unsigned int  niov = 1;
 #else
-        struct iovec *scratchiov = conn->ksnc_rx_scratch_iov;
+        struct iovec *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
         unsigned int  niov = conn->ksnc_rx_niov;
 #endif
         struct iovec *iov = conn->ksnc_rx_iov;
@@ -581,26 +603,72 @@ ksocknal_lib_recv_iov (ksock_conn_t *conn)
         return rc;
 }
 
+static void
+ksocknal_lib_kiov_vunmap(void *addr)
+{
+        if (addr == NULL)
+                return;
+
+        vunmap(addr);
+}
+
+static void *
+ksocknal_lib_kiov_vmap(lnet_kiov_t *kiov, int niov,
+                       struct iovec *iov, struct page **pages)
+{
+        void             *addr;
+        int               nob;
+        int               i;
+
+        if (!*ksocknal_tunables.ksnd_zc_recv || pages == NULL)
+                return NULL;
+
+        LASSERT (niov <= LNET_MAX_IOV);
+
+        if (niov < 2 ||
+            niov < *ksocknal_tunables.ksnd_zc_recv_min_nfrags)
+                return NULL;
+
+        for (nob = i = 0; i < niov; i++) {
+                if ((kiov[i].kiov_offset != 0 && i > 0) ||
+                    (kiov[i].kiov_offset + kiov[i].kiov_len != CFS_PAGE_SIZE && i < niov - 1))
+                        return NULL;
+
+                pages[i] = kiov[i].kiov_page;
+                nob += kiov[i].kiov_len;
+        }
+
+        addr = vmap(pages, niov, VM_MAP, PAGE_KERNEL);
+        if (addr == NULL)
+                return NULL;
+
+        iov->iov_base = addr + kiov[0].kiov_offset;
+        iov->iov_len = nob;
+
+        return addr;
+}
+
 int
 ksocknal_lib_recv_kiov (ksock_conn_t *conn)
 {
 #if SOCKNAL_SINGLE_FRAG_RX || !SOCKNAL_RISK_KMAP_DEADLOCK
-        struct iovec  scratch;
-        struct iovec *scratchiov = &scratch;
-        unsigned int  niov = 1;
+        struct iovec   scratch;
+        struct iovec  *scratchiov = &scratch;
+        struct page  **pages      = NULL;
+        unsigned int   niov       = 1;
 #else
 #ifdef CONFIG_HIGHMEM
 #warning "XXX risk of kmap deadlock on multiple frags..."
 #endif
-        struct iovec *scratchiov = conn->ksnc_rx_scratch_iov;
-        unsigned int  niov = conn->ksnc_rx_nkiov;
+        struct iovec  *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
+        struct page  **pages      = conn->ksnc_scheduler->kss_rx_scratch_pgs;
+        unsigned int   niov       = conn->ksnc_rx_nkiov;
 #endif
         lnet_kiov_t   *kiov = conn->ksnc_rx_kiov;
         struct msghdr msg = {
                 .msg_name       = NULL,
                 .msg_namelen    = 0,
                 .msg_iov        = scratchiov,
-                .msg_iovlen     = niov,
                 .msg_control    = NULL,
                 .msg_controllen = 0,
                 .msg_flags      = 0
@@ -610,15 +678,26 @@ ksocknal_lib_recv_kiov (ksock_conn_t *conn)
         int          i;
         int          rc;
         void        *base;
+        void        *addr;
         int          sum;
         int          fragnob;
 
         /* NB we can't trust socket ops to either consume our iovs
          * or leave them alone. */
-        for (nob = i = 0; i < niov; i++) {
-                scratchiov[i].iov_base = kmap(kiov[i].kiov_page) + kiov[i].kiov_offset;
-                nob += scratchiov[i].iov_len = kiov[i].kiov_len;
+        if ((addr = ksocknal_lib_kiov_vmap(kiov, niov, scratchiov, pages)) != NULL) {
+                nob = scratchiov[0].iov_len;
+                msg.msg_iovlen = 1;
+
+        } else {
+                for (nob = i = 0; i < niov; i++) {
+                        nob += scratchiov[i].iov_len = kiov[i].kiov_len;
+                        scratchiov[i].iov_base = kmap(kiov[i].kiov_page) +
+                                                 kiov[i].kiov_offset;
+                }
+                msg.msg_iovlen = niov;
         }
+
+
         LASSERT (nob <= conn->ksnc_rx_nob_wanted);
 
         set_fs (KERNEL_DS);
@@ -645,8 +724,13 @@ ksocknal_lib_recv_kiov (ksock_conn_t *conn)
                         kunmap(kiov[i].kiov_page);
                 }
         }
-        for (i = 0; i < niov; i++)
-                kunmap(kiov[i].kiov_page);
+
+        if (addr != NULL) {
+                ksocknal_lib_kiov_vunmap(addr);
+        } else {
+                for (i = 0; i < niov; i++)
+                        kunmap(kiov[i].kiov_page);
+        }
 
         return (rc);
 }

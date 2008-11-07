@@ -1051,6 +1051,7 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
         }
 
         memset (conn, 0, sizeof (*conn));
+
         conn->ksnc_peer = NULL;
         conn->ksnc_route = NULL;
         conn->ksnc_sock = sock;
