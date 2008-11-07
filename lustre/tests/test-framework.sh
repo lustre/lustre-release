@@ -1029,15 +1029,28 @@ init_facets_vars () {
     done
 }
 
+check_config () {
+    local mntpt=$1
+    
+    echo Checking config lustre mounted on $mntpt
+    local mgshost=$(mount | grep " $mntpt " | awk -F@ '{print $1}')
+    if [ "$mgshost" != "$mgs_HOST" ]; then
+        FAIL_ON_ERROR=true \
+            error "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST
+                   Please use correct config or set mds_HOST correctly!"
+    fi
+}
+
 check_and_setup_lustre() {
-    MOUNTED="`mounted_lustre_filesystems`"
-    if [ -z "$MOUNTED" ]; then
+    local MOUNTED=$(mounted_lustre_filesystems)
+    if [ -z "$MOUNTED" ] || ! $(echo $MOUNTED | grep -w -q $MOUNT); then
         [ "$REFORMAT" ] && formatall
         setupall
-        MOUNTED="`mounted_lustre_filesystems`"
+        MOUNTED=$(mounted_lustre_filesystems | head -1)
         [ -z "$MOUNTED" ] && error "NAME=$NAME not mounted"
         export I_MOUNTED=yes
     else
+        check_config $MOUNT
         init_facets_vars
     fi
     if [ "$ONLY" == "setup" ]; then
