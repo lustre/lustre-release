@@ -29,7 +29,7 @@ remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 MOUNT_2=""
 build_test_filter
 
-cleanup_and_setup_lustre
+check_and_setup_lustre
 rm -rf $DIR/[df][0-9]*
 
 [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
