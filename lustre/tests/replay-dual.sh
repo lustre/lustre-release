@@ -30,7 +30,7 @@ remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 
 build_test_filter
 
-cleanup_and_setup_lustre
+check_and_setup_lustre
 assert_DIR
 rm -rf $DIR/[df][0-9]*
 

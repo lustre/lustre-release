@@ -162,7 +162,7 @@ clients_recover_osts() {
 #    do_node $CLIENTS "$LCTL "'--device %OSC_`hostname`_'"${facet}_svc_MNT_client_facet recover"
 }
 
-cleanup_and_setup_lustre
+check_and_setup_lustre
 
 # 9 Different Failure Modes Combinations
 echo "Starting Test 17 at `date`"
