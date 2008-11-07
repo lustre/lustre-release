@@ -31,12 +31,12 @@ assert_env() {
 
 assert_DIR () {
     local failed=""
-    [ -z "`echo :$DIR: | grep :$MOUNT:`" ] && \
-        failed=1 && echo "DIR not in $MOUNT. Aborting."
-    [ -z "`echo :$DIR1: | grep :$MOUNT1:`" ] && \
-        failed=1 && echo "DIR1 not in $MOUNT1. Aborting."
-    [ -z "`echo :$DIR2: | grep :$MOUNT2:`" ] && \
-        failed=1 && echo "DIR2 not in $MOUNT2. Aborting"
+    [[ $DIR/ = $MOUNT/* ]] || \
+        { failed=1 && echo "DIR=$DIR not in $MOUNT. Aborting."; }
+    [[ $DIR1/ = $MOUNT1/* ]] || \
+        { failed=1 && echo "DIR1=$DIR1 not in $MOUNT1. Aborting."; }
+    [[ $DIR2/ = $MOUNT2/* ]] || \
+        { failed=1 && echo "DIR2=$DIR2 not in $MOUNT2. Aborting"; }
 
     [ -n "$failed" ] && exit 99 || true
 }
