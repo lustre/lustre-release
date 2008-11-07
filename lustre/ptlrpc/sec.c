@@ -289,7 +289,7 @@ void sptlrpc_cli_ctx_wakeup(struct ptlrpc_cli_ctx *ctx)
         spin_lock(&ctx->cc_lock);
         list_for_each_entry_safe(req, next, &ctx->cc_req_list, rq_ctx_chain) {
                 list_del_init(&req->rq_ctx_chain);
-                ptlrpc_wake_client_req(req);
+                ptlrpc_client_wake_req(req);
         }
         spin_unlock(&ctx->cc_lock);
 }
@@ -518,7 +518,7 @@ int ctx_refresh_timeout(void *data)
         /* conn_cnt is needed in expire_one_request */
         lustre_msg_set_conn_cnt(req->rq_reqmsg, req->rq_import->imp_conn_cnt);
 
-        rc = ptlrpc_expire_one_request(req);
+        rc = ptlrpc_expire_one_request(req, 1);
         /* if we started recovery, we should mark this ctx dead; otherwise
          * in case of lgssd died nobody would retire this ctx, following
          * connecting will still find the same ctx thus cause deadlock.
@@ -682,7 +682,7 @@ again:
          * - timedout, and we don't want recover from the failure;
          * - timedout, and waked up upon recovery finished;
          * - someone else mark this ctx dead by force;
-         * - someone invalidate the req and call wake_client_req(),
+         * - someone invalidate the req and call ptlrpc_client_wake_req(),
          *   e.g. ptlrpc_abort_inflight();
          */
         if (!cli_ctx_is_refreshed(ctx)) {

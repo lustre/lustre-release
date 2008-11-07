@@ -41,7 +41,7 @@ remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
 
 #
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="0 1 2 3 6 7 15 18 24b 25 30 31 32 33 34a "
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="0 1 2 3 6 7 15 18 24b 25 30 31 32 33 34a 45"
 
 assert_DIR
 
@@ -1416,6 +1416,27 @@ run_test 42 "invalid config param should not prevent client from mounting"
 umount_client $MOUNT
 cleanup_nocli
 cleanup_gss
+
+test_45() { #17310
+        setup
+        check_mount || return 2
+        stop_mds
+        df -h $MOUNT &
+        log "sleep 60 sec"
+        sleep 60
+#define OBD_FAIL_PTLRPC_LONG_UNLINK   0x50f
+        do_facet client "lctl set_param fail_loc=0x50f"
+        log "sleep 10 sec"
+        sleep 10
+        manual_umount_client --force || return 3
+        do_facet client "lctl set_param fail_loc=0x0"
+        start_mds
+        mount_client $MOUNT || return 4
+        cleanup
+        return 0
+}
+run_test 45 "long unlink handling in ptlrpcd"
+
 
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true

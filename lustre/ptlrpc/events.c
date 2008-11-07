@@ -77,7 +77,7 @@ void request_out_callback(lnet_event_t *ev)
                 req->rq_net_err = 1;
                 spin_unlock(&req->rq_lock);
 
-                ptlrpc_wake_client_req(req);
+                ptlrpc_client_wake_req(req);
         }
 
         ptlrpc_req_finished(req);
@@ -161,7 +161,7 @@ void reply_in_callback(lnet_event_t *ev)
 out_wake:
         /* NB don't unlock till after wakeup; req can disappear under us
          * since we don't have our own ref */
-        ptlrpc_wake_client_req(req);
+        ptlrpc_client_wake_req(req);
         spin_unlock(&req->rq_lock);
         EXIT;
 }
@@ -201,7 +201,7 @@ void client_bulk_callback (lnet_event_t *ev)
 
         /* NB don't unlock till after wakeup; desc can disappear under us
          * otherwise */
-        ptlrpc_wake_client_req(desc->bd_req);
+        ptlrpc_client_wake_req(desc->bd_req);
 
         spin_unlock(&desc->bd_lock);
         EXIT;

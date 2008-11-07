@@ -615,7 +615,7 @@ static int pinger_check_rpcs(void *arg)
                         req->rq_no_resend = 1;
                         ptlrpc_request_set_replen(req);
                         req->rq_send_state = LUSTRE_IMP_FULL;
-                        req->rq_phase = RQ_PHASE_RPC;
+                        ptlrpc_rqphase_move(req, RQ_PHASE_RPC);
                         req->rq_import_generation = generation;
                         ptlrpc_set_add_req(set, req);
                 } else {
@@ -661,17 +661,17 @@ do_check_set:
                 if (req->rq_phase == RQ_PHASE_COMPLETE)
                         continue;
 
-                req->rq_phase = RQ_PHASE_COMPLETE;
+                ptlrpc_rqphase_move(req, RQ_PHASE_COMPLETE);
                 atomic_dec(&req->rq_import->imp_inflight);
                 set->set_remaining--;
                 /* If it was disconnected, don't sweat it. */
                 if (list_empty(&req->rq_import->imp_pinger_chain)) {
-                        ptlrpc_unregister_reply(req);
+                        ptlrpc_unregister_reply(req, 0);
                         continue;
                 }
 
                 CDEBUG(D_RPCTRACE, "pinger initiate expire_one_request\n");
-                ptlrpc_expire_one_request(req);
+                ptlrpc_expire_one_request(req, 0);
         }
         mutex_up(&pinger_sem);
 
