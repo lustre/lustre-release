@@ -17,6 +17,12 @@ Bugzilla   :
 Description: 
 Details    : 
 
+Severity   : major
+Bugzilla   : 15093
+Description: Support Zerocopy receive of Chelsio device
+Details    : Chelsio driver can support zerocopy for iov[1] if it's
+             contiguous and large enough.
+
 Severity   : normal
 Bugzilla   : 13490
 Description: fix credit flow deadlock in uptllnd
