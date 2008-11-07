@@ -2587,10 +2587,11 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         memcpy(&new_lock->l_remote_handle, &lock->l_remote_handle,
                sizeof(lock->l_remote_handle));
 
-        lustre_hash_add(new_lock->l_export->exp_lock_hash,
-                        &new_lock->l_remote_handle, &new_lock->l_exp_hash);
-
         unlock_res_and_lock(new_lock);
+
+        lustre_hash_add(new_lock->l_export->exp_lock_hash,
+                        &new_lock->l_remote_handle, 
+                        &new_lock->l_exp_hash);
         LDLM_LOCK_PUT(new_lock);
 
         RETURN(ELDLM_LOCK_REPLACED);
