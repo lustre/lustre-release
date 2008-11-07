@@ -265,7 +265,8 @@ int ldlm_lock_destroy_internal(struct ldlm_lock *lock)
         }
         lock->l_destroyed = 1;
 
-        if (lock->l_export && lock->l_export->exp_lock_hash)
+        if (lock->l_export && lock->l_export->exp_lock_hash && 
+            !hlist_unhashed(&lock->l_exp_hash))
                 lustre_hash_del(lock->l_export->exp_lock_hash,
                                 &lock->l_remote_handle, &lock->l_exp_hash);
 

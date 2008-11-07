@@ -1022,10 +1022,10 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
         }
         lock->l_export = class_export_get(req->rq_export);
 
-        if (lock->l_export->exp_lock_hash)
+        if (lock->l_export->exp_lock_hash) {
                 lustre_hash_add(lock->l_export->exp_lock_hash,
-                                &lock->l_remote_handle, 
-                                &lock->l_exp_hash);
+                                &lock->l_remote_handle, &lock->l_exp_hash);
+        }
 
 existing_lock:
 
@@ -1056,7 +1056,8 @@ existing_lock:
         if (dlm_req->lock_desc.l_resource.lr_type == LDLM_EXTENT)
                 lock->l_req_extent = lock->l_policy_data.l_extent;
 
-        err = ldlm_lock_enqueue(obddev->obd_namespace, &lock, cookie, (int *)&flags);
+        err = ldlm_lock_enqueue(obddev->obd_namespace, &lock, cookie, 
+                                (int *)&flags);
         if (err)
                 GOTO(out, err);
 

@@ -233,8 +233,8 @@ void lustre_hash_exit(lustre_hash_t *lh);
 /* Hash addition functions */
 void lustre_hash_add(lustre_hash_t *lh, void *key,
                      struct hlist_node *hnode);
-int  lustre_hash_add_unique(lustre_hash_t *lh, void *key,
-                            struct hlist_node *hnode);
+int lustre_hash_add_unique(lustre_hash_t *lh, void *key,
+                           struct hlist_node *hnode);
 void *lustre_hash_findadd_unique(lustre_hash_t *lh, void *key,
                                  struct hlist_node *hnode);
 
@@ -269,7 +269,7 @@ __lustre_hash_set_theta(lustre_hash_t *lh, int min, int max)
 {
         LASSERT(min < max);
         lh->lh_min_theta = min;
-        lh->lh_min_theta = max;
+        lh->lh_max_theta = max;
 }
 
 /* Generic debug formatting routines mainly for proc handler */
