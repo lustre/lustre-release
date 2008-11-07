@@ -419,16 +419,17 @@ void ptlrpc_free_rq_pool(struct ptlrpc_request_pool *pool)
         struct list_head *l, *tmp;
         struct ptlrpc_request *req;
 
-        if (!pool)
-                return;
+        LASSERT(pool != NULL);
 
+        spin_lock(&pool->prp_lock);
         list_for_each_safe(l, tmp, &pool->prp_req_list) {
                 req = list_entry(l, struct ptlrpc_request, rq_list);
                 list_del(&req->rq_list);
-                LASSERT (req->rq_reqmsg);
+                LASSERT(req->rq_reqmsg);
                 OBD_FREE(req->rq_reqmsg, pool->prp_rq_size);
                 OBD_FREE(req, sizeof(*req));
         }
+        spin_unlock(&pool->prp_lock);
         OBD_FREE(pool, sizeof(*pool));
 }
 
