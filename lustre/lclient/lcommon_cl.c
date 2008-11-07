@@ -1,0 +1,1188 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright 2008 Sun Microsystems, Inc.  All rights reserved.
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * cl code shared between vvp and liblustre (and other Lustre clients in the
+ * future).
+ *
+ *   Author: Nikita Danilov <nikita.danilov@sun.com>
+ */
+
+#define DEBUG_SUBSYSTEM S_LLITE
+
+#ifdef __KERNEL__
+# include <libcfs/libcfs.h>
+# include <linux/fs.h>
+# include <linux/sched.h>
+# include <linux/mm.h>
+# include <linux/smp_lock.h>
+# include <linux/quotaops.h>
+# include <linux/highmem.h>
+# include <linux/pagemap.h>
+# include <linux/rbtree.h>
+#else /* __KERNEL__ */
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+#include <time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/queue.h>
+#include <fcntl.h>
+# include <sysio.h>
+# ifdef HAVE_XTIO_H
+#  include <xtio.h>
+# endif
+# include <fs.h>
+# include <mount.h>
+# include <inode.h>
+# ifdef HAVE_FILE_H
+#  include <file.h>
+# endif
+# include <liblustre.h>
+#endif
+
+#include <obd.h>
+#include <obd_support.h>
+#include <lustre_fid.h>
+#include <lustre_lite.h>
+#include <lustre_dlm.h>
+#include <lustre_ver.h>
+#include <lustre_mdc.h>
+#include <cl_object.h>
+
+#include <lclient.h>
+
+#ifdef __KERNEL__
+#include "../llite/llite_internal.h"
+#else
+#include "../liblustre/llite_lib.h"
+#endif
+
+const struct cl_req_operations ccc_req_ops;
+
+/*
+ * ccc_ prefix stands for "Common Client Code".
+ */
+
+static cfs_mem_cache_t *ccc_lock_kmem;
+static cfs_mem_cache_t *ccc_object_kmem;
+static cfs_mem_cache_t *ccc_thread_kmem;
+static cfs_mem_cache_t *ccc_session_kmem;
+static cfs_mem_cache_t *ccc_req_kmem;
+
+static struct lu_kmem_descr ccc_caches[] = {
+        {
+                .ckd_cache = &ccc_lock_kmem,
+                .ckd_name  = "ccc_lock_kmem",
+                .ckd_size  = sizeof (struct ccc_lock)
+        },
+        {
+                .ckd_cache = &ccc_object_kmem,
+                .ckd_name  = "ccc_object_kmem",
+                .ckd_size  = sizeof (struct ccc_object)
+        },
+        {
+                .ckd_cache = &ccc_thread_kmem,
+                .ckd_name  = "ccc_thread_kmem",
+                .ckd_size  = sizeof (struct ccc_thread_info),
+        },
+        {
+                .ckd_cache = &ccc_session_kmem,
+                .ckd_name  = "ccc_session_kmem",
+                .ckd_size  = sizeof (struct ccc_session)
+        },
+        {
+                .ckd_cache = &ccc_req_kmem,
+                .ckd_name  = "ccc_req_kmem",
+                .ckd_size  = sizeof (struct ccc_req)
+        },
+        {
+                .ckd_cache = NULL
+        }
+};
+
+/*****************************************************************************
+ *
+ * Vvp device and device type functions.
+ *
+ */
+
+void *ccc_key_init(const struct lu_context *ctx,
+                          struct lu_context_key *key)
+{
+        struct ccc_thread_info *info;
+
+        OBD_SLAB_ALLOC_PTR(info, ccc_thread_kmem);
+        if (info == NULL)
+                info = ERR_PTR(-ENOMEM);
+        return info;
+}
+
+void ccc_key_fini(const struct lu_context *ctx,
+                         struct lu_context_key *key, void *data)
+{
+        struct ccc_thread_info *info = data;
+        OBD_SLAB_FREE_PTR(info, ccc_thread_kmem);
+}
+
+void *ccc_session_key_init(const struct lu_context *ctx,
+                                  struct lu_context_key *key)
+{
+        struct ccc_session *session;
+
+        OBD_SLAB_ALLOC_PTR(session, ccc_session_kmem);
+        if (session == NULL)
+                session = ERR_PTR(-ENOMEM);
+        return session;
+}
+
+void ccc_session_key_fini(const struct lu_context *ctx,
+                                 struct lu_context_key *key, void *data)
+{
+        struct ccc_session *session = data;
+        OBD_SLAB_FREE_PTR(session, ccc_session_kmem);
+}
+
+struct lu_context_key ccc_key = {
+        .lct_tags = LCT_CL_THREAD,
+        .lct_init = ccc_key_init,
+        .lct_fini = ccc_key_fini
+};
+
+struct lu_context_key ccc_session_key = {
+        .lct_tags = LCT_SESSION,
+        .lct_init = ccc_session_key_init,
+        .lct_fini = ccc_session_key_fini
+};
+
+
+/* type constructor/destructor: ccc_type_{init,fini,start,stop}(). */
+// LU_TYPE_INIT_FINI(ccc, &ccc_key, &ccc_session_key);
+
+int ccc_device_init(const struct lu_env *env, struct lu_device *d,
+                           const char *name, struct lu_device *next)
+{
+        struct ccc_device  *vdv;
+        int rc;
+        ENTRY;
+
+        vdv = lu2ccc_dev(d);
+        vdv->cdv_next = lu2cl_dev(next);
+
+        LASSERT(d->ld_site != NULL && next->ld_type != NULL);
+        next->ld_site = d->ld_site;
+        rc = next->ld_type->ldt_ops->ldto_device_init(
+                        env, next, next->ld_type->ldt_name, NULL);
+        if (rc == 0) {
+                lu_device_get(next);
+                lu_ref_add(&next->ld_reference, "lu-stack", &lu_site_init);
+        }
+        RETURN(rc);
+}
+
+struct lu_device *ccc_device_fini(const struct lu_env *env,
+                                         struct lu_device *d)
+{
+        return cl2lu_dev(lu2ccc_dev(d)->cdv_next);
+}
+
+struct lu_device *ccc_device_alloc(const struct lu_env *env,
+                                   struct lu_device_type *t,
+                                   struct lustre_cfg *cfg,
+                                   const struct lu_device_operations *luops,
+                                   const struct cl_device_operations *clops)
+{
+        struct ccc_device *vdv;
+        struct lu_device  *lud;
+        struct cl_site    *site;
+        int rc;
+        ENTRY;
+
+        OBD_ALLOC_PTR(vdv);
+        if (vdv == NULL)
+                RETURN(ERR_PTR(-ENOMEM));
+
+        lud = &vdv->cdv_cl.cd_lu_dev;
+        cl_device_init(&vdv->cdv_cl, t);
+        ccc2lu_dev(vdv)->ld_ops = luops;
+        vdv->cdv_cl.cd_ops = clops;
+
+        OBD_ALLOC_PTR(site);
+        if (site != NULL) {
+                rc = cl_site_init(site, &vdv->cdv_cl);
+                if (rc == 0)
+                        rc = lu_site_init_finish(&site->cs_lu);
+                else {
+                        LASSERT(lud->ld_site == NULL);
+                        CERROR("Cannot init lu_site, rc %d.\n", rc);
+                        OBD_FREE_PTR(site);
+                }
+        } else
+                rc = -ENOMEM;
+        if (rc != 0) {
+                ccc_device_free(env, lud);
+                lud = ERR_PTR(rc);
+        }
+        RETURN(lud);
+}
+
+struct lu_device *ccc_device_free(const struct lu_env *env,
+                                         struct lu_device *d)
+{
+        struct ccc_device *vdv  = lu2ccc_dev(d);
+        struct cl_site    *site = lu2cl_site(d->ld_site);
+        struct lu_device  *next = cl2lu_dev(vdv->cdv_next);
+
+        if (d->ld_site != NULL) {
+                cl_site_fini(site);
+                OBD_FREE_PTR(site);
+        }
+        cl_device_fini(lu2cl_dev(d));
+        OBD_FREE_PTR(vdv);
+        return next;
+}
+
+int ccc_req_init(const struct lu_env *env, struct cl_device *dev,
+                        struct cl_req *req)
+{
+        struct ccc_req *vrq;
+        int result;
+
+        OBD_SLAB_ALLOC_PTR(vrq, ccc_req_kmem);
+        if (vrq != NULL) {
+                cl_req_slice_add(req, &vrq->crq_cl, dev, &ccc_req_ops);
+                result = 0;
+        } else
+                result = -ENOMEM;
+        return result;
+}
+
+/**
+ * An `emergency' environment used by ccc_inode_fini() when cl_env_get()
+ * fails. Access to this environment is serialized by ccc_inode_fini_guard
+ * mutex.
+ */
+static struct lu_env *ccc_inode_fini_env = NULL;
+
+/**
+ * A mutex serializing calls to slp_inode_fini() under extreme memory
+ * pressure, when environments cannot be allocated.
+ */
+static DEFINE_MUTEX(ccc_inode_fini_guard);
+static int dummy_refcheck;
+
+int ccc_global_init(struct lu_device_type *device_type)
+{
+        int result;
+
+        result = lu_kmem_init(ccc_caches);
+        if (result == 0) {
+                result = lu_device_type_init(device_type);
+                ccc_inode_fini_env = cl_env_alloc(&dummy_refcheck,
+                                                  LCT_REMEMBER|LCT_NOREF);
+                if (IS_ERR(ccc_inode_fini_env))
+                        result = PTR_ERR(ccc_inode_fini_env);
+                else
+                        ccc_inode_fini_env->le_ctx.lc_cookie = 0x4;
+        }
+        return result;
+}
+
+void ccc_global_fini(struct lu_device_type *device_type)
+{
+        if (ccc_inode_fini_env != NULL) {
+                cl_env_put(ccc_inode_fini_env, &dummy_refcheck);
+                ccc_inode_fini_env = NULL;
+        }
+        lu_device_type_fini(device_type);
+        lu_kmem_fini(ccc_caches);
+}
+
+/*****************************************************************************
+ *
+ * Object operations.
+ *
+ */
+
+struct lu_object *ccc_object_alloc(const struct lu_env *env,
+                                   const struct lu_object_header *_,
+                                   struct lu_device *dev,
+                                   const struct cl_object_operations *clops,
+                                   const struct lu_object_operations *luops)
+{
+        struct ccc_object *vob;
+        struct lu_object  *obj;
+
+        OBD_SLAB_ALLOC_PTR(vob, ccc_object_kmem);
+        if (vob != NULL) {
+                struct cl_object_header *hdr;
+
+                obj = ccc2lu(vob);
+                hdr = &vob->cob_header;
+                cl_object_header_init(hdr);
+                lu_object_init(obj, &hdr->coh_lu, dev);
+                lu_object_add_top(&hdr->coh_lu, obj);
+
+                vob->cob_cl.co_ops = clops;
+                obj->lo_ops = luops;
+        } else
+                obj = NULL;
+        return obj;
+}
+
+int ccc_object_init0(const struct lu_env *env,
+                            struct ccc_object *vob,
+                            const struct cl_object_conf *conf)
+{
+        vob->cob_inode = conf->coc_inode;
+        vob->cob_transient_pages = 0;
+        return 0;
+}
+
+int ccc_object_init(const struct lu_env *env, struct lu_object *obj,
+                           const struct lu_object_conf *conf)
+{
+        struct ccc_device *dev = lu2ccc_dev(obj->lo_dev);
+        struct ccc_object *vob = lu2ccc(obj);
+        struct lu_object  *below;
+        struct lu_device  *under;
+        int result;
+
+        under = &dev->cdv_next->cd_lu_dev;
+        below = under->ld_ops->ldo_object_alloc(env, obj->lo_header, under);
+        if (below != NULL) {
+                const struct cl_object_conf *cconf;
+
+                cconf = lu2cl_conf(conf);
+                CFS_INIT_LIST_HEAD(&vob->cob_pending_list);
+                lu_object_add(obj, below);
+                result = ccc_object_init0(env, vob, cconf);
+        } else
+                result = -ENOMEM;
+        return result;
+}
+
+void ccc_object_free(const struct lu_env *env, struct lu_object *obj)
+{
+        struct ccc_object *vob = lu2ccc(obj);
+
+        lu_object_fini(obj);
+        lu_object_header_fini(obj->lo_header);
+        OBD_SLAB_FREE_PTR(vob, ccc_object_kmem);
+}
+
+int ccc_lock_init(const struct lu_env *env,
+                  struct cl_object *obj, struct cl_lock *lock,
+                  const struct cl_io *_,
+                  const struct cl_lock_operations *lkops)
+{
+        struct ccc_lock *clk;
+        int result;
+
+        CLOBINVRNT(env, obj, ccc_object_invariant(obj));
+
+        OBD_SLAB_ALLOC_PTR(clk, ccc_lock_kmem);
+        if (clk != NULL) {
+                cl_lock_slice_add(lock, &clk->clk_cl, obj, lkops);
+                result = 0;
+        } else
+                result = -ENOMEM;
+        return result;
+}
+
+int ccc_attr_set(const struct lu_env *env, struct cl_object *obj,
+                 const struct cl_attr *attr, unsigned valid)
+{
+        return 0;
+}
+
+int ccc_object_glimpse(const struct lu_env *env,
+                       const struct cl_object *obj, struct ost_lvb *lvb)
+{
+        struct inode *inode = ccc_object_inode(obj);
+
+        ENTRY;
+        lvb->lvb_mtime = cl_inode_mtime(inode);
+        lvb->lvb_atime = cl_inode_atime(inode);
+        lvb->lvb_ctime = cl_inode_ctime(inode);
+        RETURN(0);
+}
+
+
+
+int ccc_conf_set(const struct lu_env *env, struct cl_object *obj,
+                        const struct cl_object_conf *conf)
+{
+        /* TODO: destroy all pages attached to this object. */
+        return 0;
+}
+
+/*****************************************************************************
+ *
+ * Page operations.
+ *
+ */
+
+cfs_page_t *ccc_page_vmpage(const struct lu_env *env,
+                            const struct cl_page_slice *slice)
+{
+        return cl2vm_page(slice);
+}
+
+int ccc_page_is_under_lock(const struct lu_env *env,
+                           const struct cl_page_slice *slice,
+                           struct cl_io *io)
+{
+        struct ccc_io        *vio  = ccc_env_io(env);
+        struct cl_lock_descr *desc = &ccc_env_info(env)->cti_descr;
+        struct cl_page       *page = slice->cpl_page;
+
+        int result;
+
+        ENTRY;
+
+        if (io->ci_type == CIT_READ || io->ci_type == CIT_WRITE ||
+            io->ci_type == CIT_FAULT) {
+                if (vio->cui_fd->fd_flags & LL_FILE_GROUP_LOCKED)
+                        result = -EBUSY;
+                else {
+                        desc->cld_start = page->cp_index;
+                        desc->cld_end   = page->cp_index;
+                        desc->cld_obj   = page->cp_obj;
+                        desc->cld_mode  = CLM_READ;
+                        result = cl_queue_match(&io->ci_lockset.cls_done,
+                                                desc) ? -EBUSY : 0;
+                }
+        } else
+                result = 0;
+        RETURN(result);
+}
+
+int ccc_fail(const struct lu_env *env, const struct cl_page_slice *slice)
+{
+        /*
+         * Cached read?
+         */
+        LBUG();
+        return 0;
+}
+
+void ccc_transient_page_verify(const struct cl_page *page)
+{
+}
+
+void ccc_transient_page_own(const struct lu_env *env,
+                                   const struct cl_page_slice *slice,
+                                   struct cl_io *_)
+{
+        ccc_transient_page_verify(slice->cpl_page);
+}
+
+void ccc_transient_page_assume(const struct lu_env *env,
+                                      const struct cl_page_slice *slice,
+                                      struct cl_io *_)
+{
+        ccc_transient_page_verify(slice->cpl_page);
+}
+
+void ccc_transient_page_unassume(const struct lu_env *env,
+                                        const struct cl_page_slice *slice,
+                                        struct cl_io *_)
+{
+        ccc_transient_page_verify(slice->cpl_page);
+}
+
+void ccc_transient_page_disown(const struct lu_env *env,
+                                      const struct cl_page_slice *slice,
+                                      struct cl_io *_)
+{
+        ccc_transient_page_verify(slice->cpl_page);
+}
+
+void ccc_transient_page_discard(const struct lu_env *env,
+                                       const struct cl_page_slice *slice,
+                                       struct cl_io *_)
+{
+        struct cl_page *page = slice->cpl_page;
+
+        ccc_transient_page_verify(slice->cpl_page);
+
+        /*
+         * For transient pages, remove it from the radix tree.
+         */
+        cl_page_delete(env, page);
+}
+
+int ccc_transient_page_prep(const struct lu_env *env,
+                                   const struct cl_page_slice *slice,
+                                   struct cl_io *_)
+{
+        ENTRY;
+        /* transient page should always be sent. */
+        RETURN(0);
+}
+
+/*****************************************************************************
+ *
+ * Lock operations.
+ *
+ */
+
+void ccc_lock_fini(const struct lu_env *env, struct cl_lock_slice *slice)
+{
+        struct ccc_lock *clk = cl2ccc_lock(slice);
+
+        CLOBINVRNT(env, slice->cls_obj, ccc_object_invariant(slice->cls_obj));
+        OBD_SLAB_FREE_PTR(clk, ccc_lock_kmem);
+}
+
+int ccc_lock_enqueue(const struct lu_env *env,
+                     const struct cl_lock_slice *slice,
+                     struct cl_io *_, __u32 enqflags)
+{
+        CLOBINVRNT(env, slice->cls_obj, ccc_object_invariant(slice->cls_obj));
+        return 0;
+}
+
+int ccc_lock_unuse(const struct lu_env *env, const struct cl_lock_slice *slice)
+{
+        CLOBINVRNT(env, slice->cls_obj, ccc_object_invariant(slice->cls_obj));
+        return 0;
+}
+
+int ccc_lock_wait(const struct lu_env *env, const struct cl_lock_slice *slice)
+{
+        CLOBINVRNT(env, slice->cls_obj, ccc_object_invariant(slice->cls_obj));
+        return 0;
+}
+
+/**
+ * Implementation of cl_lock_operations::clo_fits_into() methods for ccc
+ * layer. This function is executed every time io finds an existing lock in
+ * the lock cache while creating new lock. This function has to decide whether
+ * cached lock "fits" into io.
+ *
+ * \param slice lock to be checked
+ *
+ * \param io    IO that wants a lock.
+ *
+ * \see lov_lock_fits_into().
+ */
+int ccc_lock_fits_into(const struct lu_env *env,
+                       const struct cl_lock_slice *slice,
+                       const struct cl_lock_descr *need,
+                       const struct cl_io *io)
+{
+        const struct cl_lock       *lock  = slice->cls_lock;
+        const struct cl_lock_descr *descr = &lock->cll_descr;
+        const struct ccc_io        *cio   = ccc_env_io(env);
+        int                         result;
+
+        ENTRY;
+        /*
+         * Work around DLM peculiarity: it assumes that glimpse
+         * (LDLM_FL_HAS_INTENT) lock is always LCK_PR, and returns reads lock
+         * when asked for LCK_PW lock with LDLM_FL_HAS_INTENT flag set. Make
+         * sure that glimpse doesn't get CLM_WRITE top-lock, so that it
+         * doesn't enqueue CLM_WRITE sub-locks.
+         */
+        if (cio->cui_glimpse)
+                result = descr->cld_mode != CLM_WRITE;
+        /*
+         * Also, don't match incomplete write locks for read, otherwise read
+         * would enqueue missing sub-locks in the write mode.
+         *
+         * XXX this is a candidate for generic locking policy, to be moved
+         * into cl_lock_lookup().
+         */
+        else if (need->cld_mode != descr->cld_mode)
+                result = lock->cll_state >= CLS_ENQUEUED;
+        else
+                result = 1;
+        RETURN(result);
+}
+
+/**
+ * Implements cl_lock_operations::clo_state() method for vvp layer, invoked
+ * whenever lock state changes. Transfers object attributes, that might be
+ * updated as a result of lock acquiring into inode.
+ */
+void ccc_lock_state(const struct lu_env *env,
+                    const struct cl_lock_slice *slice,
+                    enum cl_lock_state state)
+{
+        struct cl_lock   *lock;
+        struct cl_object *obj;
+        struct inode     *inode;
+        struct cl_attr   *attr;
+
+        ENTRY;
+        lock = slice->cls_lock;
+
+        /*
+         * Refresh inode attributes when the lock is moving into CLS_HELD
+         * state, and only when this is a result of real enqueue, rather than
+         * of finding lock in the cache.
+         */
+        if (state == CLS_HELD && lock->cll_state < CLS_HELD) {
+                int rc;
+
+                obj   = slice->cls_obj;
+                inode = ccc_object_inode(obj);
+                attr  = &ccc_env_info(env)->cti_attr;
+
+                /* vmtruncate()->ll_truncate() first sets the i_size and then
+                 * the kms under both a DLM lock and the
+                 * ll_inode_size_lock().  If we don't get the
+                 * ll_inode_size_lock() here we can match the DLM lock and
+                 * reset i_size from the kms before the truncating path has
+                 * updated the kms.  generic_file_write can then trust the
+                 * stale i_size when doing appending writes and effectively
+                 * cancel the result of the truncate.  Getting the
+                 * ll_inode_size_lock() after the enqueue maintains the DLM
+                 * -> ll_inode_size_lock() acquiring order. */
+                cl_isize_lock(inode, 0);
+                cl_object_attr_lock(obj);
+                rc = cl_object_attr_get(env, obj, attr);
+                if (rc == 0) {
+                        if (lock->cll_descr.cld_start == 0 &&
+                            lock->cll_descr.cld_end == CL_PAGE_EOF) {
+                                cl_isize_write(inode, attr->cat_kms);
+                                CDEBUG(D_INODE, DFID" updating i_size %llu\n",
+                                       PFID(lu_object_fid(&obj->co_lu)),
+                                       (__u64)cl_isize_read(inode));
+                        }
+                        cl_inode_mtime(inode) = attr->cat_mtime;
+                        cl_inode_atime(inode) = attr->cat_atime;
+                        cl_inode_ctime(inode) = attr->cat_ctime;
+                } else
+                        CL_LOCK_DEBUG(D_ERROR, env, lock, "attr_get: %i\n", rc);
+                cl_object_attr_unlock(obj);
+                cl_isize_unlock(inode, 0);
+        }
+        EXIT;
+}
+
+/*****************************************************************************
+ *
+ * io operations.
+ *
+ */
+
+void ccc_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
+{
+        struct cl_io *io = ios->cis_io;
+
+        CLOBINVRNT(env, io->ci_obj, ccc_object_invariant(io->ci_obj));
+}
+
+int ccc_io_one_lock_index(const struct lu_env *env, struct cl_io *io,
+                          __u32 enqflags, enum cl_lock_mode mode,
+                          pgoff_t start, pgoff_t end)
+{
+        struct ccc_io          *vio   = ccc_env_io(env);
+        struct cl_lock_descr   *descr = &vio->cui_link.cill_descr;
+        struct cl_object       *obj   = io->ci_obj;
+
+        CLOBINVRNT(env, obj, ccc_object_invariant(obj));
+        ENTRY;
+
+        CDEBUG(D_VFSTRACE, "lock: %i [%lu, %lu]\n", mode, start, end);
+
+        memset(&vio->cui_link, 0, sizeof vio->cui_link);
+        descr->cld_mode  = mode;
+        descr->cld_obj   = obj;
+        descr->cld_start = start;
+        descr->cld_end   = end;
+
+        vio->cui_link.cill_enq_flags = enqflags;
+        cl_io_lock_add(env, io, &vio->cui_link);
+        RETURN(0);
+}
+
+int ccc_io_one_lock(const struct lu_env *env, struct cl_io *io,
+                    __u32 enqflags, enum cl_lock_mode mode,
+                    loff_t start, loff_t end)
+{
+        struct cl_object *obj = io->ci_obj;
+
+        return ccc_io_one_lock_index(env, io, enqflags, mode,
+                                     cl_index(obj, start), cl_index(obj, end));
+}
+
+void ccc_io_end(const struct lu_env *env, const struct cl_io_slice *ios)
+{
+        CLOBINVRNT(env, ios->cis_io->ci_obj,
+                   ccc_object_invariant(ios->cis_io->ci_obj));
+}
+
+static void ccc_object_size_lock(struct cl_object *obj, int vfslock)
+{
+        struct inode *inode = ccc_object_inode(obj);
+
+        if (vfslock)
+                cl_isize_lock(inode, 0);
+        cl_object_attr_lock(obj);
+}
+
+static void ccc_object_size_unlock(struct cl_object *obj, int vfslock)
+{
+        struct inode *inode = ccc_object_inode(obj);
+
+        cl_object_attr_unlock(obj);
+        if (vfslock)
+                cl_isize_unlock(inode, 0);
+}
+
+/**
+ * Helper function that if necessary adjusts file size (inode->i_size), when
+ * position at the offset \a pos is accessed. File size can be arbitrary stale
+ * on a Lustre client, but client at least knows KMS. If accessed area is
+ * inside [0, KMS], set file size to KMS, otherwise glimpse file size.
+ *
+ * Locking: cl_isize_lock is used to serialize changes to inode size and to
+ * protect consistency between inode size and cl_object
+ * attributes. cl_object_size_lock() protects consistency between cl_attr's of
+ * top-object and sub-objects.
+ *
+ * In page fault path cl_isize_lock cannot be taken, client has to live with
+ * the resulting races.
+ */
+int ccc_prep_size(const struct lu_env *env, struct cl_object *obj,
+                  struct cl_io *io, loff_t pos, int vfslock)
+{
+        struct cl_attr *attr  = &ccc_env_info(env)->cti_attr;
+        struct inode   *inode = ccc_object_inode(obj);
+        loff_t kms;
+        int result;
+
+        /*
+         * Consistency guarantees: following possibilities exist for the
+         * relation between region being accessed and real file size at this
+         * moment:
+         *
+         *  (A): the region is completely inside of the file;
+         *
+         *  (B-x): x bytes of region are inside of the file, the rest is
+         *  outside;
+         *
+         *  (C): the region is completely outside of the file.
+         *
+         * This classification is stable under DLM lock already acquired by
+         * the caller, because to change the class, other client has to take
+         * DLM lock conflicting with our lock. Also, any updates to ->i_size
+         * by other threads on this client are serialized by
+         * ll_inode_size_lock(). This guarantees that short reads are handled
+         * correctly in the face of concurrent writes and truncates.
+         */
+        ccc_object_size_lock(obj, vfslock);
+        result = cl_object_attr_get(env, obj, attr);
+        if (result == 0) {
+                kms = attr->cat_kms;
+                if (pos > kms) {
+                        /*
+                         * A glimpse is necessary to determine whether we
+                         * return a short read (B) or some zeroes at the end
+                         * of the buffer (C)
+                         */
+                        ccc_object_size_unlock(obj, vfslock);
+                        return cl_glimpse_lock(env, io, inode, obj);
+                } else {
+                        /*
+                         * region is within kms and, hence, within real file
+                         * size (A). We need to increase i_size to cover the
+                         * read region so that generic_file_read() will do its
+                         * job, but that doesn't mean the kms size is
+                         * _correct_, it is only the _minimum_ size. If
+                         * someone does a stat they will get the correct size
+                         * which will always be >= the kms value here.
+                         * b=11081
+                         */
+                        /*
+                         * XXX in a page fault path, change inode size without
+                         * ll_inode_size_lock() held!  there is a race
+                         * condition with truncate path. (see ll_extent_lock)
+                         */
+                        /*
+                         * XXX i_size_write() is not used because it is not
+                         * safe to take the ll_inode_size_lock() due to a
+                         * potential lock inversion (bug 6077).  And since
+                         * it's not safe to use i_size_write() without a
+                         * covering mutex we do the assignment directly.  It
+                         * is not critical that the size be correct.
+                         */
+                        if (cl_isize_read(inode) < kms) {
+                                if (vfslock)
+                                        cl_isize_write(inode, kms);
+                                else
+                                        cl_isize_write_nolock(inode, kms);
+                        }
+                }
+        }
+        ccc_object_size_unlock(obj, vfslock);
+        return result;
+}
+
+/*****************************************************************************
+ *
+ * Transfer operations.
+ *
+ */
+
+void ccc_req_completion(const struct lu_env *env,
+                        const struct cl_req_slice *slice, int ioret)
+{
+        struct ccc_req *vrq;
+
+        vrq = cl2ccc_req(slice);
+        OBD_SLAB_FREE_PTR(vrq, ccc_req_kmem);
+}
+
+/**
+ * Implementation of struct cl_req_operations::cro_attr_set() for ccc
+ * layer. ccc is responsible for
+ *
+ *    - o_[mac]time
+ *
+ *    - o_mode
+ *
+ *    - o_fid (filled with inode number?!)
+ *
+ *    - o_[ug]id
+ *
+ *    - o_generation
+ *
+ *    - and IO epoch (stored in o_easize),
+ *
+ *  and capability.
+ */
+void ccc_req_attr_set(const struct lu_env *env,
+                      const struct cl_req_slice *slice,
+                      const struct cl_object *obj,
+                      struct cl_req_attr *attr, obd_valid flags)
+{
+        struct inode *inode;
+        struct obdo  *oa;
+        obd_flag      valid_flags;
+
+        oa = attr->cra_oa;
+        inode = ccc_object_inode(obj);
+        valid_flags = OBD_MD_FLTYPE|OBD_MD_FLATIME;
+
+        if (flags != (obd_valid)~0ULL)
+                valid_flags |= OBD_MD_FLMTIME|OBD_MD_FLCTIME|OBD_MD_FLATIME;
+        else {
+                LASSERT(attr->cra_capa == NULL);
+                attr->cra_capa = cl_capa_lookup(inode,
+                                                slice->crs_req->crq_type);
+        }
+
+        if (slice->crs_req->crq_type == CRT_WRITE) {
+                if (flags & OBD_MD_FLEPOCH) {
+                        oa->o_valid |= OBD_MD_FLEPOCH;
+                        oa->o_easize = cl_i2info(inode)->lli_ioepoch;
+                        valid_flags |= OBD_MD_FLMTIME|OBD_MD_FLCTIME|
+                                OBD_MD_FLUID|OBD_MD_FLGID|
+                                OBD_MD_FLFID|OBD_MD_FLGENER;
+                }
+        }
+        obdo_from_inode(oa, inode, valid_flags & flags);
+}
+
+const struct cl_req_operations ccc_req_ops = {
+        .cro_attr_set   = ccc_req_attr_set,
+        .cro_completion = ccc_req_completion
+};
+
+/* Setattr helpers */
+int cl_setattr_do_truncate(struct inode *inode, loff_t size,
+                           struct obd_capa *capa)
+{
+        struct lu_env *env;
+        struct cl_io  *io;
+        int            result;
+        int            refcheck;
+
+        ENTRY;
+
+        env = cl_env_get(&refcheck);
+        if (IS_ERR(env))
+                RETURN(PTR_ERR(env));
+
+        io = &ccc_env_info(env)->cti_io;
+        io->ci_obj = cl_i2info(inode)->lli_clob;
+        io->u.ci_truncate.tr_size = size;
+        io->u.ci_truncate.tr_capa = capa;
+        if (cl_io_init(env, io, CIT_TRUNC, io->ci_obj) == 0)
+                result = cl_io_loop(env, io);
+        else
+                result = io->ci_result;
+        cl_io_fini(env, io);
+        cl_env_put(env, &refcheck);
+        RETURN(result);
+}
+
+int cl_setattr_ost(struct inode *inode, struct obd_capa *capa)
+{
+        struct cl_inode_info *lli = cl_i2info(inode);
+        struct lov_stripe_md *lsm = lli->lli_smd;
+        int rc;
+        obd_flag flags;
+        struct obd_info oinfo = { { { 0 } } };
+        struct obdo *oa;
+
+        OBDO_ALLOC(oa);
+        if (oa) {
+                oa->o_id = lsm->lsm_object_id;
+                oa->o_gr = lsm->lsm_object_gr;
+                oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+
+                flags = OBD_MD_FLTYPE | OBD_MD_FLATIME |
+                        OBD_MD_FLMTIME | OBD_MD_FLCTIME |
+                        OBD_MD_FLFID | OBD_MD_FLGENER |
+                        OBD_MD_FLGROUP;
+
+                obdo_from_inode(oa, inode, flags);
+
+                oinfo.oi_oa = oa;
+                oinfo.oi_md = lsm;
+
+                /* XXX: this looks unnecessary now. */
+                rc = obd_setattr_rqset(cl_i2sbi(inode)->ll_dt_exp, &oinfo,
+                                       NULL);
+                if (rc)
+                        CERROR("obd_setattr_async fails: rc=%d\n", rc);
+                OBDO_FREE(oa);
+        } else {
+                rc = -ENOMEM;
+        }
+        return rc;
+}
+
+
+/*****************************************************************************
+ *
+ * Type conversions.
+ *
+ */
+
+struct lu_device *ccc2lu_dev(struct ccc_device *vdv)
+{
+        return &vdv->cdv_cl.cd_lu_dev;
+}
+
+struct ccc_device *lu2ccc_dev(const struct lu_device *d)
+{
+        return container_of0(d, struct ccc_device, cdv_cl.cd_lu_dev);
+}
+
+struct ccc_device *cl2ccc_dev(const struct cl_device *d)
+{
+        return container_of0(d, struct ccc_device, cdv_cl);
+}
+
+struct lu_object *ccc2lu(struct ccc_object *vob)
+{
+        return &vob->cob_cl.co_lu;
+}
+
+struct ccc_object *lu2ccc(const struct lu_object *obj)
+{
+        return container_of0(obj, struct ccc_object, cob_cl.co_lu);
+}
+
+struct ccc_object *cl2ccc(const struct cl_object *obj)
+{
+        return container_of0(obj, struct ccc_object, cob_cl);
+}
+
+struct ccc_lock *cl2ccc_lock(const struct cl_lock_slice *slice)
+{
+        return container_of(slice, struct ccc_lock, clk_cl);
+}
+
+struct ccc_io *cl2ccc_io(const struct lu_env *env,
+                         const struct cl_io_slice *slice)
+{
+        struct ccc_io *cio;
+
+        cio = container_of(slice, struct ccc_io, cui_cl);
+        LASSERT(cio == ccc_env_io(env));
+        return cio;
+}
+
+struct ccc_req *cl2ccc_req(const struct cl_req_slice *slice)
+{
+        return container_of0(slice, struct ccc_req, crq_cl);
+}
+
+cfs_page_t *cl2vm_page(const struct cl_page_slice *slice)
+{
+        return cl2ccc_page(slice)->cpg_page;
+}
+
+/*****************************************************************************
+ *
+ * Accessors.
+ *
+ */
+int ccc_object_invariant(const struct cl_object *obj)
+{
+        struct inode         *inode = ccc_object_inode(obj);
+        struct cl_inode_info *lli   = cl_i2info(inode);
+
+        return (S_ISREG(cl_inode_mode(inode)) ||
+                /* i_mode of unlinked inode is zeroed. */
+                cl_inode_mode(inode) == 0) && lli->lli_clob == obj;
+}
+
+struct inode *ccc_object_inode(const struct cl_object *obj)
+{
+        return cl2ccc(obj)->cob_inode;
+}
+
+/**
+ * Returns a pointer to cl_page associated with \a vmpage, without acquiring
+ * additional reference to the resulting page. This is an unsafe version of
+ * cl_vmpage_page() that can only be used under vmpage lock.
+ */
+struct cl_page *ccc_vmpage_page_transient(cfs_page_t *vmpage)
+{
+        KLASSERT(PageLocked(vmpage));
+        return (struct cl_page *)vmpage->private;
+}
+
+/**
+ * Initializes or updates CLIO part when new meta-data arrives from the
+ * server.
+ *
+ *     - allocates cl_object if necessary,
+ *     - updated layout, if object was already here.
+ */
+int cl_inode_init(struct inode *inode, struct lustre_md *md)
+{
+        struct lu_env        *env;
+        struct cl_inode_info *lli;
+        struct cl_object     *clob;
+        struct lu_site       *site;
+        struct lu_fid        *fid;
+        const struct cl_object_conf conf = {
+                .coc_inode = inode,
+                .u = {
+                        .coc_md    = md
+                }
+        };
+        int result = 0;
+        int refcheck;
+
+        /* LASSERT(inode->i_state & I_NEW); */
+        LASSERT(md->body->valid & OBD_MD_FLID);
+
+        if (!S_ISREG(cl_inode_mode(inode)))
+                return 0;
+
+        env = cl_env_get(&refcheck);
+        if (IS_ERR(env))
+                return PTR_ERR(env);
+
+        site = cl_i2sbi(inode)->ll_site;
+        lli  = cl_i2info(inode);
+        fid  = &lli->lli_fid;
+        LASSERT(fid_is_sane(fid));
+
+        if (lli->lli_clob == NULL) {
+                clob = cl_object_find(env, lu2cl_dev(site->ls_top_dev),
+                                      fid, &conf);
+                if (!IS_ERR(clob)) {
+                        /*
+                         * No locking is necessary, as new inode is
+                         * locked by I_NEW bit.
+                         *
+                         * XXX not true for call from ll_update_inode().
+                         */
+                        lli->lli_clob = clob;
+                        lu_object_ref_add(&clob->co_lu, "inode", inode);
+                } else
+                        result = PTR_ERR(clob);
+        } else
+                result = cl_conf_set(env, lli->lli_clob, &conf);
+        cl_env_put(env, &refcheck);
+
+        if (result != 0)
+                CERROR("Failure to initialize cl object "DFID": %d\n",
+                       PFID(fid), result);
+        return result;
+}
+
+void cl_inode_fini(struct inode *inode)
+{
+        struct lu_env           *env;
+        struct cl_inode_info    *lli  = cl_i2info(inode);
+        struct cl_object        *clob = lli->lli_clob;
+        int refcheck;
+        int emergency;
+
+        if (clob != NULL) {
+                struct lu_object_header *head = clob->co_lu.lo_header;
+                void                    *cookie;
+
+                cookie = cl_env_reenter();
+                env = cl_env_get(&refcheck);
+                emergency = IS_ERR(env);
+                if (emergency) {
+                        mutex_lock(&ccc_inode_fini_guard);
+                        LASSERT(ccc_inode_fini_env != NULL);
+                        cl_env_implant(ccc_inode_fini_env, &refcheck);
+                        env = ccc_inode_fini_env;
+                }
+                /*
+                 * cl_object cache is a slave to inode cache (which, in turn
+                 * is a slave to dentry cache), don't keep cl_object in memory
+                 * when its master is evicted.
+                 */
+                cl_object_kill(env, clob);
+                lu_object_ref_del(&clob->co_lu, "inode", inode);
+                /* XXX temporary: this is racy */
+                LASSERT(atomic_read(&head->loh_ref) == 1);
+                cl_object_put(env, clob);
+                lli->lli_clob = NULL;
+                if (emergency) {
+                        cl_env_unplant(ccc_inode_fini_env, &refcheck);
+                        mutex_unlock(&ccc_inode_fini_guard);
+                } else
+                        cl_env_put(env, &refcheck);
+                cl_env_reexit(cookie);
+        }
+}

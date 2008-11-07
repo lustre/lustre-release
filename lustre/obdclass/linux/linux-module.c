@@ -345,7 +345,7 @@ static void obd_device_list_seq_stop(struct seq_file *p, void *v)
 }
 
 static void *obd_device_list_seq_next(struct seq_file *p, void *v, loff_t *pos)
-{ 
+{
         ++*pos;
         if (*pos >= class_devno_max())
                 return NULL;

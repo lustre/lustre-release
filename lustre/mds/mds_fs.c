@@ -84,7 +84,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
                                    strlen(MDD_OBD_NAME))) {
                 RETURN(0);
         }
-        
+
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, &ucred);
 
         sprintf(fidname, "OBJECTS/%u.%u", tmpname, current->pid);
@@ -126,7 +126,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
 
         lock_kernel();
         rc = ll_vfs_rename(mds->mds_objects_dir->d_inode, filp->f_dentry,
-                           filp->f_vfsmnt, mds->mds_objects_dir->d_inode, 
+                           filp->f_vfsmnt, mds->mds_objects_dir->d_inode,
                            new_child, filp->f_vfsmnt);
         unlock_kernel();
         if (rc)

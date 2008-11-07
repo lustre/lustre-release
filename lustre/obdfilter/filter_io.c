@@ -842,7 +842,9 @@ static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
                 resource = ldlm_resource_get(ns, NULL, &res_id, LDLM_EXTENT, 0);
 
                 if (resource != NULL) {
+                        LDLM_RESOURCE_ADDREF(resource);
                         ns->ns_lvbo->lvbo_update(resource, NULL, 0, 1);
+                        LDLM_RESOURCE_DELREF(resource);
                         ldlm_resource_putref(resource);
                 }
         }

@@ -127,7 +127,7 @@ static int lmv_set_mdc_active(struct lmv_obd *lmv, struct obd_uuid *uuid,
                 GOTO(out_lmv_lock, rc);
         }
 
-        CDEBUG(D_INFO, "Marking OBD %p %sactive\n", obd, 
+        CDEBUG(D_INFO, "Marking OBD %p %sactive\n", obd,
                activate ? "" : "in");
         lmv_activate_target(lmv, tgt, activate);
         EXIT;
@@ -199,7 +199,7 @@ static int lmv_notify(struct obd_device *obd, struct obd_device *watched,
         } else if (ev == OBD_NOTIFY_OCD) {
                 conn_data = &watched->u.cli.cl_import->imp_connect_data;
 
-                /* 
+                /*
                  * Set connect data to desired target, update exp_connect_flags.
                  */
                 rc = lmv_set_mdc_data(lmv, uuid, conn_data);
@@ -219,14 +219,14 @@ static int lmv_notify(struct obd_device *obd, struct obd_device *watched,
         }
 #if 0
         else if (ev == OBD_NOTIFY_DISCON) {
-                /* 
-                 * For disconnect event, flush fld cache for failout MDS case. 
+                /*
+                 * For disconnect event, flush fld cache for failout MDS case.
                  */
                 fld_client_flush(&lmv->lmv_fld);
         }
 #endif
-        /* 
-         * Pass the notification up the chain. 
+        /*
+         * Pass the notification up the chain.
          */
         if (obd->obd_observer)
                 rc = obd_notify(obd->obd_observer, watched, ev, data);
@@ -236,7 +236,7 @@ static int lmv_notify(struct obd_device *obd, struct obd_device *watched,
 
 /**
  * This is fake connect function. Its purpose is to initialize lmv and say
- * caller that everything is okay. Real connection will be performed later. 
+ * caller that everything is okay. Real connection will be performed later.
  */
 static int lmv_connect(const struct lu_env *env,
                        struct lustre_handle *conn, struct obd_device *obd,
@@ -259,9 +259,9 @@ static int lmv_connect(const struct lu_env *env,
 
         exp = class_conn2export(conn);
 
-        /* 
+        /*
          * We don't want to actually do the underlying connections more than
-         * once, so keep track. 
+         * once, so keep track.
          */
         lmv->refcount++;
         if (lmv->refcount > 1) {
@@ -286,11 +286,11 @@ static int lmv_connect(const struct lu_env *env,
         }
 #endif
 
-        /* 
+        /*
          * All real clients should perform actual connection right away, because
          * it is possible, that LMV will not have opportunity to connect targets
          * and MDC stuff will be called directly, for instance while reading
-         * ../mdc/../kbytesfree procfs file, etc. 
+         * ../mdc/../kbytesfree procfs file, etc.
          */
         if (data->ocd_connect_flags & OBD_CONNECT_REAL)
                 rc = lmv_check_connect(obd);
@@ -416,7 +416,7 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 
         mdc_exp = class_conn2export(&conn);
 
-        /* 
+        /*
          * Init fid sequence client for this mdc and add new fld target.
          */
         rc = obd_fid_init(mdc_exp);
@@ -440,7 +440,7 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
         }
 
         if (obd->obd_observer) {
-                /* 
+                /*
                  * Tell the observer about the new target.
                  */
                 rc = obd_notify(obd->obd_observer, mdc_exp->exp_obd,
@@ -455,7 +455,7 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
         tgt->ltd_exp = mdc_exp;
         lmv->desc.ld_active_tgt_count++;
 
-        /* 
+        /*
          * Copy connect data, it may be used later.
          */
         lmv->datas[tgt->ltd_idx] = *mdc_data;
@@ -684,8 +684,8 @@ static int lmv_disconnect(struct obd_export *exp)
         if (!lmv->tgts)
                 goto out_local;
 
-        /* 
-         * Only disconnect the underlying layers on the final disconnect. 
+        /*
+         * Only disconnect the underlying layers on the final disconnect.
          */
         lmv->refcount--;
         if (lmv->refcount != 0)
@@ -807,7 +807,7 @@ static int lmv_nid_policy(struct lmv_obd *lmv)
 {
         struct obd_import *imp;
         __u32              id;
-        
+
         /*
          * XXX: To get nid we assume that underlying obd device is mdc.
          */
@@ -836,7 +836,7 @@ static int lmv_choose_mds(struct lmv_obd *lmv, struct md_op_data *op_data,
 }
 
 /**
- * This is _inode_ placement policy function (not name). 
+ * This is _inode_ placement policy function (not name).
  */
 static int lmv_placement_policy(struct obd_device *obd,
                                 struct md_op_data *op_data,
@@ -913,8 +913,8 @@ int __lmv_fid_alloc(struct lmv_obd *lmv, struct lu_fid *fid,
         ENTRY;
 
         tgt = lmv_get_target(lmv, mds);
-    
-        /* 
+
+        /*
          * New seq alloc and FLD setup should be atomic. Otherwise we may find
          * on server that seq in new allocated fid is not yet known.
          */
@@ -923,20 +923,20 @@ int __lmv_fid_alloc(struct lmv_obd *lmv, struct lu_fid *fid,
         if (!tgt->ltd_active)
                 GOTO(out, rc = -ENODEV);
 
-        /* 
-         * Asking underlaying tgt layer to allocate new fid. 
+        /*
+         * Asking underlaying tgt layer to allocate new fid.
          */
         rc = obd_fid_alloc(tgt->ltd_exp, fid, NULL);
         if (rc > 0) {
                 LASSERT(fid_is_sane(fid));
 
-                /* 
-                 * Client switches to new sequence, setup FLD. 
+                /*
+                 * Client switches to new sequence, setup FLD.
                  */
                 rc = fld_client_create(&lmv->lmv_fld, fid_seq(fid),
                                        mds, NULL);
                 if (rc) {
-                        /* 
+                        /*
                          * Delete just allocated fid sequence in case
                          * of fail back.
                          */
@@ -1218,7 +1218,7 @@ static int lmv_setxattr(struct obd_export *exp, const struct lu_fid *fid,
         if (IS_ERR(tgt))
                 RETURN(PTR_ERR(tgt));
 
-        rc = md_setxattr(tgt->ltd_exp, fid, oc, valid, name, input, 
+        rc = md_setxattr(tgt->ltd_exp, fid, oc, valid, name, input,
                          input_size, output_size, flags, suppgid,
                          request);
 
@@ -1280,7 +1280,7 @@ static int lmv_getattr(struct obd_export *exp, const struct lu_fid *fid,
                                 continue;
                         }
 
-                        /* 
+                        /*
                          * Skip master object.
                          */
                         if (lu_fid_eq(&obj->lo_fid, &obj->lo_stripes[i].ls_fid))
@@ -1369,8 +1369,8 @@ int lmv_handle_split(struct obd_export *exp, const struct lu_fid *fid)
         if (IS_ERR(tgt))
                 RETURN(PTR_ERR(tgt));
 
-        /* 
-         * Time to update mea of parent fid. 
+        /*
+         * Time to update mea of parent fid.
          */
         rc = md_getattr(tgt->ltd_exp, fid, NULL, valid, mealen, &req);
         if (rc) {
@@ -1449,7 +1449,7 @@ repeat:
         else if (rc)
                 RETURN(rc);
 
-        CDEBUG(D_INODE, "CREATE '%*s' on "DFID" -> mds #"LPU64"\n", 
+        CDEBUG(D_INODE, "CREATE '%*s' on "DFID" -> mds #"LPU64"\n",
                op_data->op_namelen, op_data->op_name, PFID(&op_data->op_fid1),
                op_data->op_mds);
 
@@ -1560,8 +1560,8 @@ cleanup:
         OBD_FREE_PTR(op_data2);
 
         if (rc != 0) {
-                /* 
-                 * Drop all taken locks. 
+                /*
+                 * Drop all taken locks.
                  */
                 while (--i >= 0) {
                         if (lockh[i].cookie)
@@ -1599,8 +1599,8 @@ lmv_enqueue_remote(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
         CDEBUG(D_INODE, "REMOTE_ENQUEUE '%s' on "DFID" -> "DFID"\n",
                LL_IT2STR(it), PFID(&op_data->op_fid1), PFID(&body->fid1));
 
-        /* 
-         * We got LOOKUP lock, but we really need attrs. 
+        /*
+         * We got LOOKUP lock, but we really need attrs.
          */
         pmode = it->d.lustre.it_lock_mode;
         LASSERT(pmode != 0);
@@ -1678,7 +1678,7 @@ lmv_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
 
         CDEBUG(D_INODE, "ENQUEUE '%s' on "DFID" -> mds #%d\n",
                LL_IT2STR(it), PFID(&op_data->op_fid1), tgt->ltd_idx);
-        
+
         rc = md_enqueue(tgt->ltd_exp, einfo, it, op_data, lockh,
                         lmm, lmmsize, req, extra_lock_flags);
 
@@ -1803,7 +1803,7 @@ static int lmv_early_cancel_slaves(struct obd_export *exp,
         obj = lmv_object_find(obd, op_fid);
         if (obj == NULL)
                 RETURN(-EALREADY);
-                
+
         policy.l_inodebits.bits = bits;
         for (i = 0; i < obj->lo_objcount; i++) {
                 tgt = lmv_get_target(lmv, obj->lo_stripes[i].ls_mds);
@@ -1811,12 +1811,12 @@ static int lmv_early_cancel_slaves(struct obd_export *exp,
                 if (op_tgt != tgt->ltd_idx) {
                         CDEBUG(D_INODE, "EARLY_CANCEL slave "DFID" -> mds #%d\n",
                                PFID(st_fid), tgt->ltd_idx);
-                        rc = md_cancel_unused(tgt->ltd_exp, st_fid, &policy, 
+                        rc = md_cancel_unused(tgt->ltd_exp, st_fid, &policy,
                                               mode, LDLM_FL_ASYNC, NULL);
                         if (rc)
                                 GOTO(out_put_obj, rc);
                 } else {
-                        CDEBUG(D_INODE, 
+                        CDEBUG(D_INODE,
                                "EARLY_CANCEL skip operation target %d on "DFID"\n",
                                op_tgt, PFID(st_fid));
                         /*
@@ -1865,7 +1865,7 @@ static int lmv_early_cancel(struct obd_export *exp, struct md_op_data *op_data,
                         rc = md_cancel_unused(tgt->ltd_exp, fid, &policy,
                                               mode, LDLM_FL_ASYNC, NULL);
                 } else {
-                        CDEBUG(D_INODE, 
+                        CDEBUG(D_INODE,
                                "EARLY_CANCEL skip operation target %d on "DFID"\n",
                                op_tgt, PFID(fid));
                         op_data->op_flags |= flag;
@@ -1929,8 +1929,8 @@ repeat:
         op_data->op_cap = cfs_curproc_cap_pack();
         tgt = lmv_get_target(lmv, mds);
 
-        /* 
-         * Cancel UPDATE lock on child (fid1). 
+        /*
+         * Cancel UPDATE lock on child (fid1).
          */
         op_data->op_flags |= MF_MDC_CANCEL_FID2;
         rc = lmv_early_cancel(exp, op_data, tgt->ltd_idx, LCK_EX,
@@ -2025,34 +2025,34 @@ repeat:
         src_tgt = lmv_get_target(lmv, mds1);
         tgt_tgt = lmv_get_target(lmv, mds2);
 
-        /* 
+        /*
          * LOOKUP lock on src child (fid3) should also be cancelled for
-         * src_tgt in mdc_rename. 
+         * src_tgt in mdc_rename.
          */
         op_data->op_flags |= MF_MDC_CANCEL_FID1 | MF_MDC_CANCEL_FID3;
 
-        /* 
+        /*
          * Cancel UPDATE locks on tgt parent (fid2), tgt_tgt is its
-         * own target. 
+         * own target.
          */
-        rc = lmv_early_cancel(exp, op_data, src_tgt->ltd_idx, 
-                              LCK_EX, MDS_INODELOCK_UPDATE, 
+        rc = lmv_early_cancel(exp, op_data, src_tgt->ltd_idx,
+                              LCK_EX, MDS_INODELOCK_UPDATE,
                               MF_MDC_CANCEL_FID2);
 
-        /* 
+        /*
          * Cancel LOOKUP locks on tgt child (fid4) for parent tgt_tgt.
          */
         if (rc == 0) {
-                rc = lmv_early_cancel(exp, op_data, src_tgt->ltd_idx, 
+                rc = lmv_early_cancel(exp, op_data, src_tgt->ltd_idx,
                                       LCK_EX, MDS_INODELOCK_LOOKUP,
                                       MF_MDC_CANCEL_FID4);
         }
 
-        /* 
-         * Cancel all the locks on tgt child (fid4). 
+        /*
+         * Cancel all the locks on tgt child (fid4).
          */
         if (rc == 0)
-                rc = lmv_early_cancel(exp, op_data, src_tgt->ltd_idx, 
+                rc = lmv_early_cancel(exp, op_data, src_tgt->ltd_idx,
                                       LCK_EX, MDS_INODELOCK_FULL,
                                       MF_MDC_CANCEL_FID4);
 
@@ -2062,7 +2062,7 @@ repeat:
 
         if (rc == -ERESTART) {
                 LASSERT(*request != NULL);
-                DEBUG_REQ(D_WARNING|D_RPCTRACE, *request, 
+                DEBUG_REQ(D_WARNING|D_RPCTRACE, *request,
                           "Got -ERESTART during rename!\n");
                 ptlrpc_req_finished(*request);
                 *request = NULL;
@@ -2164,7 +2164,7 @@ static int lmv_sync(struct obd_export *exp, const struct lu_fid *fid,
 
 /**
  * Main purpose of LMV blocking ast is to remove split directory LMV
- * presentation object (struct lmv_object) attached to the lock being revoked. 
+ * presentation object (struct lmv_object) attached to the lock being revoked.
  */
 int lmv_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                      void *data, int flag)
@@ -2184,7 +2184,7 @@ int lmv_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 }
                 break;
         case LDLM_CB_CANCELING:
-                /* 
+                /*
                  * Time to drop cached attrs for split directory object
                  */
                 obj = lock->l_ast_data;
@@ -2312,7 +2312,7 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
                 hash_adj += rank * seg_size;
 
                 CDEBUG(D_INODE, "Readpage hash adjustment: %x "LPX64" "
-                       LPX64"/%x -> "LPX64"/%x\n", rank, hash_adj, 
+                       LPX64"/%x -> "LPX64"/%x\n", rank, hash_adj,
                        offset, tgt0_idx, offset + hash_adj, tgt_idx);
 
                 offset = (offset + hash_adj) & MAX_HASH_SIZE;
@@ -2411,17 +2411,17 @@ repeat:
         op_data->op_fsgid = current->fsgid;
         op_data->op_cap = cfs_curproc_cap_pack();
 
-        /* 
+        /*
          * If child's fid is given, cancel unused locks for it if it is from
          * another export than parent.
          *
-         * LOOKUP lock for child (fid3) should also be cancelled on parent 
-         * tgt_tgt in mdc_unlink(). 
+         * LOOKUP lock for child (fid3) should also be cancelled on parent
+         * tgt_tgt in mdc_unlink().
          */
         op_data->op_flags |= MF_MDC_CANCEL_FID1 | MF_MDC_CANCEL_FID3;
 
-        /* 
-         * Cancel FULL locks on child (fid3). 
+        /*
+         * Cancel FULL locks on child (fid3).
          */
         rc = lmv_early_cancel(exp, op_data, tgt->ltd_idx, LCK_EX,
                               MDS_INODELOCK_FULL, MF_MDC_CANCEL_FID3);
@@ -2468,7 +2468,7 @@ static int lmv_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 }
 
 static int lmv_get_info(struct obd_export *exp, __u32 keylen,
-                        void *key, __u32 *vallen, void *val, 
+                        void *key, __u32 *vallen, void *val,
                         struct lov_stripe_md *lsm)
 {
         struct obd_device       *obd;
@@ -2496,8 +2496,8 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
                 for (i = 0, tgts = lmv->tgts; i < lmv->desc.ld_tgt_count;
                      i++, tgts++) {
 
-                        /* 
-                         * All tgts should be connected when this gets called. 
+                        /*
+                         * All tgts should be connected when this gets called.
                          */
                         if (!tgts || !tgts->ltd_exp) {
                                 CERROR("target not setup?\n");
@@ -2514,9 +2514,9 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
                 if (rc)
                         RETURN(rc);
 
-                /* 
+                /*
                  * Forwarding this request to first MDS, it should know LOV
-                 * desc. 
+                 * desc.
                  */
                 rc = obd_get_info(lmv->tgts[0].ltd_exp, keylen, key,
                                   vallen, val, NULL);
@@ -2657,8 +2657,8 @@ int lmv_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
         {
                 magic = le32_to_cpu(mea->mea_magic);
         } else {
-                /* 
-                 * Old mea is not handled here. 
+                /*
+                 * Old mea is not handled here.
                  */
                 CERROR("Old not supportable EA is found\n");
                 LBUG();
@@ -2676,7 +2676,7 @@ int lmv_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
 }
 
 static int lmv_cancel_unused(struct obd_export *exp, const struct lu_fid *fid,
-                             ldlm_policy_data_t *policy, ldlm_mode_t mode, 
+                             ldlm_policy_data_t *policy, ldlm_mode_t mode,
                              int flags, void *opaque)
 {
         struct obd_device       *obd = exp->exp_obd;
@@ -2723,11 +2723,11 @@ ldlm_mode_t lmv_lock_match(struct obd_export *exp, int flags,
 
         CDEBUG(D_INODE, "Lock match for "DFID"\n", PFID(fid));
 
-        /* 
+        /*
          * With CMD every object can have two locks in different namespaces:
          * lookup lock in space of mds storing direntry and update/open lock in
          * space of mds storing inode. Thus we check all targets, not only that
-         * one fid was created in. 
+         * one fid was created in.
          */
         for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
                 rc = md_lock_match(lmv->tgts[i].ltd_exp, flags, fid,
@@ -2862,10 +2862,10 @@ int lmv_intent_getattr_async(struct obd_export *exp,
                                             (char *)op_data->op_name,
                                             op_data->op_namelen);
                         op_data->op_fid1 = obj->lo_stripes[sidx].ls_fid;
-                        tgt = lmv_get_target(lmv, 
+                        tgt = lmv_get_target(lmv,
                                              obj->lo_stripes[sidx].ls_mds);
                         CDEBUG(D_INODE,
-                               "Choose slave dir ("DFID") -> mds #%d\n", 
+                               "Choose slave dir ("DFID") -> mds #%d\n",
                                PFID(&op_data->op_fid1), tgt->ltd_idx);
                 } else {
                         tgt = lmv_find_target(lmv, &op_data->op_fid1);
@@ -2883,7 +2883,7 @@ int lmv_intent_getattr_async(struct obd_export *exp,
                 if (minfo->mi_it.it_op & IT_LOOKUP)
                         minfo->mi_it.it_op = IT_GETATTR;
         }
-        
+
         if (IS_ERR(tgt))
                 RETURN(PTR_ERR(tgt));
 

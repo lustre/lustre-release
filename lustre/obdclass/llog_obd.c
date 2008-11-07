@@ -134,7 +134,7 @@ int llog_cleanup(struct llog_ctxt *ctxt)
         /* try to free the ctxt */
         rc = __llog_ctxt_put(ctxt);
         if (rc)
-                CERROR("Error %d while cleaning up ctxt %p\n", 
+                CERROR("Error %d while cleaning up ctxt %p\n",
                        rc, ctxt);
 
         l_wait_event(olg->olg_waitq,
@@ -227,7 +227,7 @@ int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
                 CERROR("No ctxt\n");
                 RETURN(-ENODEV);
         }
-        
+
         CTXT_CHECK_OP(ctxt, add, -EOPNOTSUPP);
         raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
         if (!raised)
@@ -249,7 +249,7 @@ int llog_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *lsm,
                 CERROR("No ctxt\n");
                 RETURN(-ENODEV);
         }
-        
+
         CTXT_CHECK_OP(ctxt, cancel, -EOPNOTSUPP);
         rc = CTXTP(ctxt, cancel)(ctxt, lsm, count, cookies, flags);
         RETURN(rc);

@@ -1117,9 +1117,13 @@ static int mdt_connect(struct mdt_thread_info *info)
                 LASSERT(req->rq_export != NULL);
                 info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
                 rc = mdt_init_idmap(info);
-                if (rc != 0)
+                if (rc != 0) {
+                        struct obd_export *exp;
+
+                        exp = req->rq_export;
                         /* if mdt_init_idmap failed, revocation for connect */
-                        obd_disconnect(class_export_get(req->rq_export));
+                        obd_disconnect(class_export_get(exp));
+                }
         } else
                 rc = err_serious(rc);
         return rc;
@@ -1867,7 +1871,7 @@ int mdt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         if (lock->l_req_mode == LCK_COS && lock->l_blocking_lock != NULL) {
                 struct lu_env env;
 
-                rc = lu_env_init(&env, NULL, LCT_MD_THREAD);
+                rc = lu_env_init(&env, LCT_MD_THREAD);
                 if (unlikely(rc != 0))
                         CWARN("lu_env initialization failed with rc = %d,"
                               "cannot start asynchronous commit\n", rc);
@@ -3851,18 +3855,10 @@ static struct lu_device *mdt_layer_setup(struct lu_env *env,
                 GOTO(out, rc = -ENODEV);
         }
 
-        rc = lu_context_refill(&env->le_ctx);
+        rc = lu_env_refill((struct lu_env *)env);
         if (rc != 0) {
-                CERROR("Failure to refill context: '%d'\n", rc);
+                CERROR("Failure to refill session: '%d'\n", rc);
                 GOTO(out_type, rc);
-        }
-
-        if (env->le_ses != NULL) {
-                rc = lu_context_refill(env->le_ses);
-                if (rc != 0) {
-                        CERROR("Failure to refill session: '%d'\n", rc);
-                        GOTO(out_type, rc);
-                }
         }
 
         ldt = type->typ_lu;
@@ -3960,7 +3956,7 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 
         /* At this point, obd exports might still be on the "obd_zombie_exports"
          * list, and obd_zombie_impexp_thread() is trying to destroy them.
-         * We wait a little bit until all exports (except the self-export) 
+         * We wait a little bit until all exports (except the self-export)
          * have been destroyed, because the whole mdt stack might be accessed
          * in mdt_destroy_export(). This will not be a long time, maybe one or
          * two seconds are enough. This is not a problem while umounting.
@@ -3975,7 +3971,7 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 
         target_recovery_fini(obd);
         mdt_stop_ptlrpc_service(m);
-
+        obd_zombie_barrier();
         mdt_fs_cleanup(env, m);
 
         upcall_cache_cleanup(m->mdt_identity_cache);
@@ -4014,7 +4010,6 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
                 d->ld_site = NULL;
         }
         LASSERT(atomic_read(&d->ld_ref) == 0);
-        md_device_fini(&m->mdt_md_dev);
 
         EXIT;
 }
@@ -4078,6 +4073,19 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         int                        rc;
         ENTRY;
 
+        md_device_init(&m->mdt_md_dev, ldt);
+        /*
+         * Environment (env) might be missing mdt_thread_key values at that
+         * point, if device is allocated when mdt_thread_key is in QUIESCENT
+         * mode.
+         *
+         * Usually device allocation path doesn't use module key values, but
+         * mdt has to do a lot of work here, so allocate key value.
+         */
+        rc = lu_env_refill((struct lu_env *)env);
+        if (rc != 0)
+                RETURN(rc);
+
         info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
         LASSERT(info != NULL);
 
@@ -4117,7 +4125,6 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         if (mite == NULL)
                 RETURN(-ENOMEM);
 
-        md_device_init(&m->mdt_md_dev, ldt);
         s = &mite->ms_lu;
 
         m->mdt_md_dev.md_lu_dev.ld_ops = &mdt_lu_ops;
@@ -4277,8 +4284,6 @@ err_fini_site:
         lu_site_fini(s);
 err_free_site:
         OBD_FREE_PTR(mite);
-
-        md_device_fini(&m->mdt_md_dev);
         return (rc);
 }
 
@@ -4714,7 +4719,7 @@ static int mdt_destroy_export(struct obd_export *export)
         mdt = mdt_dev(obd->obd_lu_dev);
         LASSERT(mdt != NULL);
 
-        rc = lu_env_init(&env, NULL, LCT_MD_THREAD);
+        rc = lu_env_init(&env, LCT_MD_THREAD);
         if (rc)
                 RETURN(rc);
 
@@ -4752,7 +4757,7 @@ static int mdt_destroy_export(struct obd_export *export)
                 list_del_init(&mfd->mfd_list);
                 mdt_mfd_close(info, mfd);
                 /* TODO: if we close the unlinked file,
-                 * we need to remove it's objects from OST */
+                 * we need to remove its objects from OST */
                 memset(&ma->ma_attr, 0, sizeof(ma->ma_attr));
                 spin_lock(&med->med_open_lock);
                 ma->ma_lmm_size = lmm_size;
@@ -4854,7 +4859,7 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
         ENTRY;
         CDEBUG(D_IOCTL, "handling ioctl cmd %#x\n", cmd);
-        rc = lu_env_init(&env, NULL, LCT_MD_THREAD);
+        rc = lu_env_init(&env, LCT_MD_THREAD);
         if (rc)
                 RETURN(rc);
 
@@ -4900,7 +4905,7 @@ int mdt_obd_postrecov(struct obd_device *obd)
         struct lu_env env;
         int rc;
 
-        rc = lu_env_init(&env, NULL, LCT_MD_THREAD);
+        rc = lu_env_init(&env, LCT_MD_THREAD);
         if (rc)
                 RETURN(rc);
         rc = mdt_postrecov(&env, mdt_dev(obd->obd_lu_dev));
@@ -4936,6 +4941,7 @@ static struct lu_device *mdt_device_free(const struct lu_env *env,
         struct mdt_device *m = mdt_dev(d);
         ENTRY;
 
+        md_device_fini(&m->mdt_md_dev);
         OBD_FREE_PTR(m);
         RETURN(NULL);
 }
@@ -4954,7 +4960,7 @@ static struct lu_device *mdt_device_alloc(const struct lu_env *env,
                 l = &m->mdt_md_dev.md_lu_dev;
                 rc = mdt_init0(env, m, t, cfg);
                 if (rc != 0) {
-                        OBD_FREE_PTR(m);
+                        mdt_device_free(env, l);
                         l = ERR_PTR(rc);
                         return l;
                 }
@@ -4998,7 +5004,7 @@ void mdt_enable_cos(struct mdt_device *mdt, int val)
         int rc;
 
         mdt->mdt_opts.mo_cos = !!val;
-        rc = lu_env_init(&env, NULL, LCT_MD_THREAD);
+        rc = lu_env_init(&env, LCT_MD_THREAD);
         if (unlikely(rc != 0)) {
                 CWARN("lu_env initialization failed with rc = %d,"
                       "cannot sync\n", rc);

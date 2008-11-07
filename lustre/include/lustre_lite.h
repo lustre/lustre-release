@@ -165,15 +165,15 @@ static inline int ll_ocd_update(struct obd_device *host,
         RETURN(result);
 }
 
-/*      
+/*
  * Chain of hash overflow pages.
- */            
+ */
 struct ll_dir_chain {
         /* XXX something. Later */
 };
-        
+
 static inline void ll_dir_chain_init(struct ll_dir_chain *chain)
-{       
+{
 }
 
 static inline void ll_dir_chain_fini(struct ll_dir_chain *chain)

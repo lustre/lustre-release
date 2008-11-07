@@ -161,8 +161,8 @@ static int ldlm_completion_tail(struct ldlm_lock *lock)
 }
 
 /**
- * Implementation of ->l_completion_ast() for a client that doesn't wait
- * until lock is granted. Suitable for locks enqueued through ptlrpcd or
+ * Implementation of ->l_completion_ast() for a client, that doesn't wait
+ * until lock is granted. Suitable for locks enqueued through ptlrpcd, of
  * other threads that cannot block for long.
  */
 int ldlm_completion_ast_async(struct ldlm_lock *lock, int flags, void *data)
@@ -183,6 +183,7 @@ int ldlm_completion_ast_async(struct ldlm_lock *lock, int flags, void *data)
         LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock, "
                    "going forward");
         ldlm_lock_dump(D_OTHER, lock, 0);
+        ldlm_reprocess_all(lock->l_resource);
         RETURN(0);
 }
 
@@ -862,7 +863,9 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
         }
 
         LDLM_DEBUG(lock, "sending request");
+
         rc = ptlrpc_queue_wait(req);
+
         err = ldlm_cli_enqueue_fini(exp, req, einfo->ei_type, policy ? 1 : 0,
                                     einfo->ei_mode, flags, lvb, lvb_len,
                                     lvb_swabber, lockh, rc);
@@ -1119,7 +1122,7 @@ int ldlm_cli_cancel_req(struct obd_export *exp, struct list_head *cancels,
 
                 ptlrpc_request_set_replen(req);
                 if (flags & LDLM_FL_ASYNC) {
-                        ptlrpcd_add_req(req);
+                        ptlrpcd_add_req(req, PSCOPE_OTHER);
                         sent = count;
                         GOTO(out, 0);
                 } else {
@@ -1165,7 +1168,6 @@ int ldlm_cli_update_pool(struct ptlrpc_request *req)
         __u64 old_slv, new_slv;
         __u32 new_limit;
         ENTRY;
-
         if (unlikely(!req->rq_import || !req->rq_import->imp_obd ||
                      !imp_connect_lru_resize(req->rq_import)))
         {
@@ -1330,15 +1332,15 @@ static ldlm_policy_res_t ldlm_cancel_shrink_policy(struct ldlm_namespace *ns,
                          */
                         page_nr = lock->l_weigh_ast(lock);
                 } else {
-                struct ldlm_extent *l_extent;
+                        struct ldlm_extent *l_extent;
 
-                /*
-                 * For all extent locks cost is 1 + number of pages in
-                 * their extent.
-                 */
-                l_extent = &lock->l_policy_data.l_extent;
+                        /*
+                         * For all extent locks cost is 1 + number of pages in
+                         * their extent.
+                         */
+                        l_extent = &lock->l_policy_data.l_extent;
                         page_nr = l_extent->end - l_extent->start;
-                do_div(page_nr, CFS_PAGE_SIZE);
+                        do_div(page_nr, CFS_PAGE_SIZE);
                 }
                 lock_cost = 1 + page_nr;
         } else {
@@ -2182,7 +2184,7 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
         aa = ptlrpc_req_async_args(req);
         aa->lock_handle = body->lock_handle[0];
         req->rq_interpret_reply = (ptlrpc_interpterer_t)replay_lock_interpret;
-        ptlrpcd_add_req(req);
+        ptlrpcd_add_req(req, PSCOPE_OTHER);
 
         RETURN(0);
 }

@@ -82,26 +82,6 @@ struct lov_request_set {
         struct list_head         set_list;
 };
 
-#define LOV_AP_MAGIC 8200
-
-struct lov_async_page {
-        int                             lap_magic;
-        int                             lap_stripe;
-        obd_off                         lap_sub_offset;
-        obd_id                          lap_loi_id;
-        obd_gr                          lap_loi_gr;
-        void                            *lap_sub_cookie;
-        struct obd_async_page_ops       *lap_caller_ops;
-        void                            *lap_caller_data;
-};
-
-static inline struct lov_async_page *lap_from_cookie(void *ptr)
-{
-        struct lov_async_page *ap = ptr;
-        LASSERT(ap->lap_magic == LOV_AP_MAGIC);
-        return ap;
-}
-
 extern cfs_mem_cache_t *lov_oinfo_slab;
 
 static inline void lov_llh_addref(void *llhp)
@@ -142,7 +122,7 @@ static inline void lov_llh_put(struct lov_lock_handles *llh)
                 atomic_read(&llh->llh_refcount) < 0x5a5a);
         if (atomic_dec_and_test(&llh->llh_refcount)) {
                 class_handle_unhash(&llh->llh_handle);
-                /* The structure may be held by other threads because RCU. 
+                /* The structure may be held by other threads because RCU.
                  *   -jxiong */
                 if (atomic_read(&llh->llh_refcount))
                         return;
@@ -163,6 +143,8 @@ int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
                   struct ost_lvb *lvb, int kms_only);
 int lov_adjust_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
                    obd_off size, int shrink);
+int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
+                      struct ost_lvb *lvb, __u64 *kms_place);
 
 /* lov_offset.c */
 obd_size lov_stripe_size(struct lov_stripe_md *lsm, obd_size ost_size,
@@ -264,10 +246,16 @@ void lov_fix_desc_qos_maxage(__u32 *val);
 int lov_get_stripecnt(struct lov_obd *lov, __u32 stripe_count);
 void lov_getref(struct obd_device *obd);
 void lov_putref(struct obd_device *obd);
-
+int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
+                    struct obd_connect_data *data);
+int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg);
+int lov_process_config_base(struct obd_device *obd, struct lustre_cfg *lcfg,
+                            __u32 *indexp, int *genp);
+int lov_del_target(struct obd_device *obd, __u32 index,
+                   struct obd_uuid *uuidp, int gen);
 /* lov_log.c */
 int lov_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                  struct obd_device *tgt, int count, struct llog_catid *logid, 
+                  struct obd_device *tgt, int count, struct llog_catid *logid,
                   struct obd_uuid *uuid);
 int lov_llog_finish(struct obd_device *obd, int count);
 
@@ -312,6 +300,9 @@ static inline void lprocfs_lov_init_vars(struct lprocfs_static_vars *lvars)
 }
 #endif
 
+/* lov_cl.c */
+extern struct lu_device_type lov_device_type;
+
 /* pools */
 extern lustre_hash_ops_t pool_hash_operations;
 /* ost_pool methods */
@@ -329,6 +320,5 @@ int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname);
 void lov_dump_pool(int level, struct pool_desc *pool);
 struct pool_desc *lov_find_pool(struct lov_obd *lov, char *poolname);
 int lov_check_index_in_pool(__u32 idx, struct pool_desc *pool);
-
 
 #endif

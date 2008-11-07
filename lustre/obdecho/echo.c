@@ -47,10 +47,11 @@
 
 #include <obd_support.h>
 #include <obd_class.h>
-#include <obd_echo.h>
 #include <lustre_debug.h>
 #include <lustre_dlm.h>
 #include <lprocfs_status.h>
+
+#include "echo_internal.h"
 
 #define ECHO_INIT_OBJID      0x1000000000000000ULL
 #define ECHO_HANDLE_MAGIC    0xabcd0123fedc9876ULL

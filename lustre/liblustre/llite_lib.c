@@ -67,6 +67,8 @@
 #include "lutil.h"
 #include "llite_lib.h"
 
+int slp_global_init(void);
+
 static int lllib_init(void)
 {
         if (liblustre_init_current("liblustre") ||
@@ -77,7 +79,8 @@ static int lllib_init(void)
             lmv_init() ||
             mdc_init() ||
             lov_init() ||
-            osc_init())
+            osc_init() ||
+            slp_global_init())
                 return -1;
 
         return _sysio_fssw_register("lustre", &llu_fssw_ops);

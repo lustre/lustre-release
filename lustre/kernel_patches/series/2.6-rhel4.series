@@ -29,6 +29,7 @@ quota-deadlock-on-pagelock-core.patch
 quota-umount-race-fix.patch
 quota-deadlock-on-pagelock-ext3.patch
 export-nr_free_buffer_pages.patch
+2.6-rhel4-kgdb-ga.patch 
 vfs-keep-inode-hashed-for-clear-inode.patch
 modpost_external_module_updates_rhel4.patch
 mpt-fusion-downgrade-to-3_02_73-rhel4.patch

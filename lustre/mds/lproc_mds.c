@@ -110,7 +110,7 @@ static int lprocfs_mds_wr_evict_client(struct file *file, const char *buffer,
                 ptlrpc_check_set(NULL, set);
         }
 
-        /* See the comments in function lprocfs_wr_evict_client() 
+        /* See the comments in function lprocfs_wr_evict_client()
          * in ptlrpc/lproc_ptlrpc.c for details. - jay */
         class_incref(obd, __FUNCTION__, cfs_current());
         LPROCFS_EXIT();

@@ -76,7 +76,11 @@
 
 # define LUSTRE_POSIX_ACL_MAX_ENTRIES   (32)
 
+#ifdef __KERNEL__
 # define LUSTRE_POSIX_ACL_MAX_SIZE   XATTR_ACL_SIZE
+#else
+# define LUSTRE_POSIX_ACL_MAX_SIZE   0
+#endif
 
 # else /* CONFIG_FS_POSIX_ACL */
 # define LUSTRE_POSIX_ACL_MAX_SIZE      0

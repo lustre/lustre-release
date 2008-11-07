@@ -479,6 +479,44 @@ static int osc_wr_resend_count(struct file *file, const char *buffer,
         return count;
 }
 
+static int osc_rd_contention_seconds(char *page, char **start, off_t off,
+                                     int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        struct osc_device *od  = obd2osc_dev(obd);
+
+        return snprintf(page, count, "%u\n", od->od_contention_time);
+}
+
+static int osc_wr_contention_seconds(struct file *file, const char *buffer,
+                                     unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct osc_device *od  = obd2osc_dev(obd);
+
+        return lprocfs_write_helper(buffer, count, &od->od_contention_time) ?:
+                count;
+}
+
+static int osc_rd_lockless_truncate(char *page, char **start, off_t off,
+                                    int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        struct osc_device *od  = obd2osc_dev(obd);
+
+        return snprintf(page, count, "%u\n", od->od_lockless_truncate);
+}
+
+static int osc_wr_lockless_truncate(struct file *file, const char *buffer,
+                                    unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct osc_device *od  = obd2osc_dev(obd);
+
+        return lprocfs_write_helper(buffer, count, &od->od_lockless_truncate) ?:
+                count;
+}
+
 static struct lprocfs_vars lprocfs_osc_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
         { "ping",            0, lprocfs_wr_ping,     0, 0, 0222 },
@@ -510,6 +548,10 @@ static struct lprocfs_vars lprocfs_osc_obd_vars[] = {
         { "checksum_type",   osc_rd_checksum_type, osc_wd_checksum_type, 0 },
         { "resend_count",    osc_rd_resend_count, osc_wr_resend_count, 0},
         { "timeouts",        lprocfs_rd_timeouts,      0, 0 },
+        { "contention_seconds", osc_rd_contention_seconds,
+                                osc_wr_contention_seconds, 0 },
+        { "lockless_truncate",  osc_rd_lockless_truncate,
+                                osc_wr_lockless_truncate, 0 },
         { "import",          lprocfs_rd_import,    0, 0 },
         { 0 }
 };
@@ -637,10 +679,48 @@ static ssize_t osc_rpc_stats_seq_write(struct file *file, const char *buf,
 
 LPROC_SEQ_FOPS(osc_rpc_stats);
 
+static int osc_stats_seq_show(struct seq_file *seq, void *v)
+{
+        struct timeval now;
+        struct obd_device *dev = seq->private;
+        struct osc_stats *stats = &obd2osc_dev(dev)->od_stats;
+
+        do_gettimeofday(&now);
+
+        seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
+                   now.tv_sec, now.tv_usec);
+        seq_printf(seq, "lockless_write_bytes\t\t"LPU64"\n",
+                   stats->os_lockless_writes);
+        seq_printf(seq, "lockless_read_bytes\t\t"LPU64"\n",
+                   stats->os_lockless_reads);
+        seq_printf(seq, "lockless_truncate\t\t"LPU64"\n",
+                   stats->os_lockless_truncates);
+        return 0;
+}
+
+static ssize_t osc_stats_seq_write(struct file *file, const char *buf,
+                                   size_t len, loff_t *off)
+{
+        struct seq_file *seq = file->private_data;
+        struct obd_device *dev = seq->private;
+        struct osc_stats *stats = &obd2osc_dev(dev)->od_stats;
+
+        memset(stats, 0, sizeof(*stats));
+        return len;
+}
+
+LPROC_SEQ_FOPS(osc_stats);
+
 int lproc_osc_attach_seqstat(struct obd_device *dev)
 {
-        return lprocfs_obd_seq_create(dev, "rpc_stats", 0444,
-                                      &osc_rpc_stats_fops, dev);
+        int rc;
+
+        rc = lprocfs_seq_create(dev->obd_proc_entry, "osc_stats", 0444,
+                                &osc_stats_fops, dev);
+        if (rc == 0)
+                rc = lprocfs_obd_seq_create(dev, "rpc_stats", 0444,
+                                            &osc_rpc_stats_fops, dev);
+        return rc;
 }
 
 void lprocfs_osc_init_vars(struct lprocfs_static_vars *lvars)

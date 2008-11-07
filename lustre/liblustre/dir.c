@@ -194,12 +194,12 @@ static int filldir(char *buf, int buflen,
         return 0;
 }
 
-/* 
+/*
  * TODO: much of the code here is similar/identical to llite ll_readdir().
  * These code can be factored out and shared in a common module.
  */
 
-ssize_t llu_iop_filldirentries(struct inode *dir, _SYSIO_OFF_T *basep, 
+ssize_t llu_iop_filldirentries(struct inode *dir, _SYSIO_OFF_T *basep,
 			       char *buf, size_t nbytes)
 {
         struct llu_inode_info *lli = llu_i2info(dir);
@@ -237,9 +237,9 @@ ssize_t llu_iop_filldirentries(struct inode *dir, _SYSIO_OFF_T *basep,
                 struct lu_dirent  *ent;
 
                 if (!IS_ERR(page)) {
-                        /* 
+                        /*
                          * If page is empty (end of directoryis reached),
-                         * use this value. 
+                         * use this value.
                          */
                         __u64 hash = DIR_END_OFF;
                         __u64 next;

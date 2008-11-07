@@ -150,7 +150,6 @@ int mdd_init_obd(const struct lu_env *env, struct mdd_device *mdd,
         obd->obd_upcall.onu_upcall = mdd_notify;
         obd->obd_upcall.onu_owner = mdd;
         mdd->mdd_obd_dev = obd;
-
         EXIT;
 class_detach:
         if (rc)
@@ -185,7 +184,7 @@ int mdd_fini_obd(const struct lu_env *env, struct mdd_device *mdd,
         if (rc)
                 GOTO(lcfg_cleanup, rc);
         mdd->mdd_obd_dev = NULL;
-        
+
         EXIT;
 lcfg_cleanup:
         return rc;
@@ -673,10 +672,10 @@ int mdd_setattr_log(const struct lu_env *env, struct mdd_device *mdd,
         /* journal chown/chgrp in llog, just like unlink */
         if (lmm_size > 0) {
                 CDEBUG(D_INFO, "setattr llog for uid/gid=%lu/%lu\n",
-                        (unsigned long)ma->ma_attr.la_uid, 
+                        (unsigned long)ma->ma_attr.la_uid,
                         (unsigned long)ma->ma_attr.la_gid);
                 return mdd_log_op_setattr(obd, ma->ma_attr.la_uid,
-                                          ma->ma_attr.la_gid, lmm, 
+                                          ma->ma_attr.la_gid, lmm,
                                           lmm_size, logcookies,
                                           cookies_size);
         } else
@@ -746,7 +745,7 @@ out:
 }
 
 int mdd_lov_setattr_async(const struct lu_env *env, struct mdd_object *obj,
-                          struct lov_mds_md *lmm, int lmm_size, 
+                          struct lov_mds_md *lmm, int lmm_size,
                           struct llog_cookie *logcookies)
 {
         struct mdd_device   *mdd = mdo2mdd(&obj->mod_obj);

@@ -108,12 +108,12 @@ enum mdd_object_role {
 };
 
 struct mdd_object {
-        struct md_object  mod_obj;
+        struct md_object   mod_obj;
         /* open count */
-        __u32             mod_count;
-        __u32             mod_valid;
-        unsigned long     mod_flags;
-        struct dynlock    mod_pdlock;
+        __u32              mod_count;
+        __u32              mod_valid;
+        unsigned long      mod_flags;
+        struct dynlock     mod_pdlock;
 #ifdef CONFIG_LOCKDEP
         /* "dep_map" name is assumed by lockdep.h macros. */
         struct lockdep_map dep_map;

@@ -261,13 +261,13 @@ struct ldlm_pool_ops {
         int (*po_setup)(struct ldlm_pool *pl, int limit);
 };
 
-/** 
- * One second for pools thread check interval. Each pool has own period. 
+/**
+ * One second for pools thread check interval. Each pool has own period.
  */
 #define LDLM_POOLS_THREAD_PERIOD (1)
 
-/** 
- * 5% margin for modest pools. See ldlm_pool.c for details. 
+/**
+ * 5% margin for modest pools. See ldlm_pool.c for details.
  */
 #define LDLM_POOLS_MODEST_MARGIN (5)
 
@@ -432,7 +432,6 @@ struct ldlm_namespace {
 
         unsigned int           ns_max_unused;
         unsigned int           ns_max_age;
-
          /**
           * Seconds.
           */
@@ -546,7 +545,7 @@ struct ldlm_interval_tree {
 };
 
 struct ldlm_lock {
-        /** 
+        /**
          * Must be first in the structure.
          */
         struct portals_handle    l_handle;
@@ -554,34 +553,34 @@ struct ldlm_lock {
          * Lock reference count.
          */
         atomic_t                 l_refc;
-        /** 
+        /**
          * Internal spinlock protects l_resource.  we should hold this lock
          * first before grabbing res_lock.
          */
         spinlock_t               l_lock;
-        /** 
-         * ldlm_lock_change_resource() can change this. 
+        /**
+         * ldlm_lock_change_resource() can change this.
          */
         struct ldlm_resource    *l_resource;
-        /** 
+        /**
          * Protected by ns_hash_lock. List item for client side lru list.
          */
         struct list_head         l_lru;
-        /** 
-         * Protected by lr_lock, linkage to resource's lock queues. 
+        /**
+         * Protected by lr_lock, linkage to resource's lock queues.
          */
         struct list_head         l_res_link;
-        /** 
-         * Tree node for ldlm_extent. 
+        /**
+         * Tree node for ldlm_extent.
          */
         struct ldlm_interval    *l_tree_node;
-        /** 
+        /**
          * Protected by per-bucket exp->exp_lock_hash locks. Per export hash
          * of locks.
          */
         struct hlist_node        l_exp_hash;
-        /** 
-         * Protected by lr_lock. Requested mode. 
+        /**
+         * Protected by lr_lock. Requested mode.
          */
         ldlm_mode_t              l_req_mode;
         /**
@@ -633,27 +632,27 @@ struct ldlm_lock {
          */
         __u8                  l_destroyed;
 
-        /** 
+        /**
          * If the lock is granted, a process sleeps on this waitq to learn when
          * it's no longer in use.  If the lock is not granted, a process sleeps
-         * on this waitq to learn when it becomes granted. 
+         * on this waitq to learn when it becomes granted.
          */
         cfs_waitq_t           l_waitq;
 
         struct timeval        l_enqueued_time;
 
         /**
-         * Jiffies. Should be converted to time if needed. 
+         * Jiffies. Should be converted to time if needed.
          */
         cfs_time_t            l_last_used;
 
         struct ldlm_extent    l_req_extent;
 
-        /* 
-         * Client-side-only members. 
+        /*
+         * Client-side-only members.
          */
-         
-        /** 
+
+        /**
          * Temporary storage for an LVB received during an enqueue operation.
          */
         __u32                 l_lvb_len;
@@ -666,43 +665,43 @@ struct ldlm_lock {
 
         struct list_head      l_cache_locks_list;
 
-        /* 
-         * Server-side-only members. 
+        /*
+         * Server-side-only members.
          */
 
-        /* connection cookie for the client originated the opeation */
+        /** connection cookie for the client originated the operation. */
         __u64                 l_client_cookie;
 
-        /** 
+        /**
          * Protected by elt_lock. Callbacks pending.
          */
         struct list_head      l_pending_chain;
 
         cfs_time_t            l_callback_timeout;
 
-        /** 
-         * Pid which created this lock. 
+        /**
+         * Pid which created this lock.
          */
         __u32                 l_pid;
 
-        /** 
-         * For ldlm_add_ast_work_item(). 
+        /**
+         * For ldlm_add_ast_work_item().
          */
         struct list_head      l_bl_ast;
-        /** 
-         * For ldlm_add_ast_work_item(). 
+        /**
+         * For ldlm_add_ast_work_item().
          */
         struct list_head      l_cp_ast;
-        /** 
-         * For ldlm_add_ast_work_item(). 
+        /**
+         * For ldlm_add_ast_work_item().
          */
         struct list_head      l_rk_ast;
 
         struct ldlm_lock     *l_blocking_lock;
         int                   l_bl_ast_run;
 
-        /** 
-         * Protected by lr_lock, linkages to "skip lists". 
+        /**
+         * Protected by lr_lock, linkages to "skip lists".
          */
         struct list_head      l_sl_mode;
         struct list_head      l_sl_policy;
@@ -871,7 +870,6 @@ void ldlm_lock2handle(const struct ldlm_lock *lock,
                       struct lustre_handle *lockh);
 struct ldlm_lock *__ldlm_handle2lock(const struct lustre_handle *, int flags);
 void ldlm_cancel_callback(struct ldlm_lock *);
-int ldlm_lock_set_data(struct lustre_handle *, void *data);
 int ldlm_lock_remove_from_lru(struct ldlm_lock *);
 
 static inline struct ldlm_lock *ldlm_handle2lock(const struct lustre_handle *h)
@@ -959,12 +957,10 @@ int  ldlm_lock_addref_try(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_decref_and_cancel(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_allow_match(struct ldlm_lock *lock);
-int ldlm_lock_fast_match(struct ldlm_lock *, int, obd_off, obd_off, void **);
-void ldlm_lock_fast_release(void *, int);
 ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                             const struct ldlm_res_id *, ldlm_type_t type,
                             ldlm_policy_data_t *, ldlm_mode_t mode,
-                            struct lustre_handle *);
+                            struct lustre_handle *, int unref);
 struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                                         __u32 *flags);
 void ldlm_lock_downgrade(struct ldlm_lock *lock, int new_mode);
@@ -1016,7 +1012,7 @@ int ldlm_lock_change_resource(struct ldlm_namespace *, struct ldlm_lock *,
                               const struct ldlm_res_id *);
 
 #define LDLM_RESOURCE_ADDREF(res) do {                                  \
-        lu_ref_add(&(res)->lr_reference, __FUNCTION__, cfs_current());  \
+        lu_ref_add_atomic(&(res)->lr_reference, __FUNCTION__, cfs_current());  \
 } while (0)
 
 #define LDLM_RESOURCE_DELREF(res) do {                                  \

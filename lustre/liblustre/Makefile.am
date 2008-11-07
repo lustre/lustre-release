@@ -59,11 +59,12 @@ install-exec-hook:
 endif
 
 libllite_a_SOURCES = llite_lib.c llite_fid.c super.c namei.c rw.c file.c dir.c \
-		     lutil.c lutil.h llite_lib.h
+		     lutil.c lutil.h llite_lib.h llite_cl.c \
+                     ../lclient/lcommon_cl.c ../lclient/glimpse.c
 
 # for make rpms -- need cleanup
 liblustre_a_SOURCES = llite_lib.c llite_fid.c super.c namei.c rw.c file.c dir.c \
-		     llite_lib.h
+		     llite_lib.h llite_cl.c
 
 liblustre.a : $(LUSTRE_LIBS) $(LND_LIBS) $(LNET_LIBS) $(SYSIO_LIBS) $(QUOTA_LIBS)
 	sh $(srcdir)/genlib.sh "$(SYSIO)" "$(LIBS)" "$(LND_LIBS)" "$(PTHREAD_LIBS)" "$(QUOTA_LIBS)" "$(CAP_LIBS)" "$(ZLIB)"

@@ -194,10 +194,10 @@ static struct lu_object *lu_object_alloc(const struct lu_env *env,
  */
 static void lu_object_free(const struct lu_env *env, struct lu_object *o)
 {
-        struct list_head splice;
+        struct list_head  splice;
         struct lu_object *scan;
-        struct lu_site          *site;
-        struct list_head        *layers;
+        struct lu_site   *site;
+        struct list_head *layers;
 
         site   = o->lo_dev->ld_site;
         layers = &o->lo_header->loh_layers;
@@ -336,7 +336,7 @@ int lu_cdebug_printer(const struct lu_env *env,
         struct lu_cdebug_data       *key;
         int used;
         int complete;
-	va_list args;
+        va_list args;
 
         va_start(args, format);
 
@@ -352,9 +352,9 @@ int lu_cdebug_printer(const struct lu_env *env,
                   ARRAY_SIZE(key->lck_area) - used, format, args);
         if (complete) {
                 if (cdebug_show(info->lpi_mask, info->lpi_subsys))
-                libcfs_debug_msg(NULL, info->lpi_subsys, info->lpi_mask,
-                                 (char *)info->lpi_file, info->lpi_fn,
-                                 info->lpi_line, "%s", key->lck_area);
+                        libcfs_debug_msg(NULL, info->lpi_subsys, info->lpi_mask,
+                                         (char *)info->lpi_file, info->lpi_fn,
+                                         info->lpi_line, "%s", key->lck_area);
                 key->lck_area[0] = 0;
         }
         va_end(args);
@@ -367,7 +367,7 @@ EXPORT_SYMBOL(lu_cdebug_printer);
  */
 void lu_object_header_print(const struct lu_env *env, void *cookie,
                             lu_printer_t printer,
-                                   const struct lu_object_header *hdr)
+                            const struct lu_object_header *hdr)
 {
         (*printer)(env, cookie, "header@%p[%#lx, %d, "DFID"%s%s%s]",
                    hdr, hdr->loh_flags, atomic_read(&hdr->loh_ref),
@@ -400,7 +400,7 @@ void lu_object_print(const struct lu_env *env, void *cookie,
                 (*printer)(env, cookie, "%*.*s%s@%p", depth, depth, ruler,
                            o->lo_dev->ld_type->ldt_name, o);
                 if (o->lo_ops->loo_object_print != NULL)
-                o->lo_ops->loo_object_print(env, cookie, printer, o);
+                        o->lo_ops->loo_object_print(env, cookie, printer, o);
                 (*printer)(env, cookie, "\n");
         }
         (*printer)(env, cookie, "} header@%p\n", top);
@@ -496,8 +496,8 @@ static struct lu_object *lu_object_find_try(const struct lu_env *env,
                                             cfs_waitlink_t *waiter)
 {
         struct lu_site    *s;
-        struct lu_object     *o;
-        struct lu_object     *shadow;
+        struct lu_object  *o;
+        struct lu_object  *shadow;
         struct hlist_head *bucket;
 
         /*
@@ -844,9 +844,12 @@ void lu_device_fini(struct lu_device *d)
         struct lu_device_type *t;
 
         t = d->ld_type;
-        if (d->ld_obd != NULL)
+        if (d->ld_obd != NULL) {
                 /* finish lprocfs */
                 lprocfs_obd_cleanup(d->ld_obd);
+                d->ld_obd->obd_lu_dev = NULL;
+                d->ld_obd = NULL;
+        }
 
         lu_ref_fini(&d->ld_reference);
         LASSERTF(atomic_read(&d->ld_ref) == 0,
@@ -1001,9 +1004,9 @@ void lu_stack_fini(const struct lu_env *env, struct lu_device *top)
                 next = ldt->ldt_ops->ldto_device_free(env, scan);
                 type = ldt->ldt_obd_type;
                 if (type != NULL) {
-                type->typ_refcnt--;
-                class_put_type(type);
-        }
+                        type->typ_refcnt--;
+                        class_put_type(type);
+                }
         }
 }
 EXPORT_SYMBOL(lu_stack_fini);
@@ -1087,6 +1090,8 @@ void lu_context_key_degister(struct lu_context_key *key)
 {
         LASSERT(atomic_read(&key->lct_used) >= 1);
         LINVRNT(0 <= key->lct_index && key->lct_index < ARRAY_SIZE(lu_keys));
+
+        lu_context_key_quiesce(key);
 
         ++key_set_version;
         key_fini(&lu_shrink_env.le_ctx, key->lct_index);
@@ -1205,8 +1210,13 @@ static CFS_LIST_HEAD(lu_context_remembered);
 void lu_context_key_quiesce(struct lu_context_key *key)
 {
         struct lu_context *ctx;
+        extern unsigned cl_env_cache_purge(unsigned nr);
 
         if (!(key->lct_tags & LCT_QUIESCENT)) {
+                /*
+                 * XXX layering violation.
+                 */
+                cl_env_cache_purge(~0);
                 key->lct_tags |= LCT_QUIESCENT;
                 /*
                  * XXX memory barrier has to go here.
@@ -1263,6 +1273,7 @@ static int keys_fill(struct lu_context *ctx)
                         value = key->lct_init(ctx, key);
                         if (unlikely(IS_ERR(value)))
                                 return PTR_ERR(value);
+
                         LASSERT(key->lct_owner != NULL);
                         if (!(ctx->lc_tags & LCT_NOREF))
                                 try_module_get(key->lct_owner);
@@ -1375,29 +1386,15 @@ int lu_context_refill(struct lu_context *ctx)
 }
 EXPORT_SYMBOL(lu_context_refill);
 
-static int lu_env_setup(struct lu_env *env, struct lu_context *ses,
-                        __u32 tags, int noref)
+int lu_env_init(struct lu_env *env, __u32 tags)
 {
         int result;
 
-        LINVRNT(ergo(!noref, !(tags & LCT_NOREF)));
-
-        env->le_ses = ses;
+        env->le_ses = NULL;
         result = lu_context_init(&env->le_ctx, tags);
         if (likely(result == 0))
                 lu_context_enter(&env->le_ctx);
         return result;
-}
-
-static int lu_env_init_noref(struct lu_env *env, struct lu_context *ses,
-                             __u32 tags)
-{
-        return lu_env_setup(env, ses, tags, 1);
-}
-
-int lu_env_init(struct lu_env *env, struct lu_context *ses, __u32 tags)
-{
-        return lu_env_setup(env, ses, tags, 0);
 }
 EXPORT_SYMBOL(lu_env_init);
 
@@ -1455,6 +1452,54 @@ static int lu_cache_shrink(int nr, unsigned int gfp_mask)
         return cached;
 }
 
+/*
+ * Debugging stuff.
+ */
+
+/**
+ * Environment to be used in debugger, contains all tags.
+ */
+struct lu_env lu_debugging_env;
+
+/**
+ * Debugging printer function using printk().
+ */
+int lu_printk_printer(const struct lu_env *env,
+                      void *_, const char *format, ...)
+{
+        va_list args;
+
+        va_start(args, format);
+        vprintk(format, args);
+        va_end(args);
+        return 0;
+}
+
+void lu_debugging_setup(void)
+{
+        lu_env_init(&lu_debugging_env, ~0);
+}
+
+void lu_context_keys_dump(void)
+{
+        int i;
+
+        for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
+                struct lu_context_key *key;
+
+                key = lu_keys[i];
+                if (key != NULL) {
+                        CERROR("[%i]: %p %x (%p,%p,%p) %i %i \"%s\"@%p\n",
+                               i, key, key->lct_tags,
+                               key->lct_init, key->lct_fini, key->lct_exit,
+                               key->lct_index, atomic_read(&key->lct_used),
+                               key->lct_owner ? key->lct_owner->name : "",
+                               key->lct_owner);
+                        lu_ref_print(&key->lct_reference);
+                }
+        }
+}
+EXPORT_SYMBOL(lu_context_keys_dump);
 #else  /* !__KERNEL__ */
 static int lu_cache_shrink(int nr, unsigned int gfp_mask)
 {
@@ -1462,6 +1507,8 @@ static int lu_cache_shrink(int nr, unsigned int gfp_mask)
 }
 #endif /* __KERNEL__ */
 
+int  cl_global_init(void);
+void cl_global_fini(void);
 int  lu_ref_global_init(void);
 void lu_ref_global_fini(void);
 
@@ -1478,21 +1525,21 @@ int lu_global_init(void)
         result = lu_context_key_register(&lu_global_key);
         if (result != 0)
                 return result;
-                /*
+        /*
          * At this level, we don't know what tags are needed, so allocate them
          * conservatively. This should not be too bad, because this
          * environment is global.
-                 */
-                down(&lu_sites_guard);
-                result = lu_env_init_noref(&lu_shrink_env, NULL, LCT_SHRINKER);
-                up(&lu_sites_guard);
+         */
+        down(&lu_sites_guard);
+        result = lu_env_init(&lu_shrink_env, LCT_SHRINKER);
+        up(&lu_sites_guard);
         if (result != 0)
                 return result;
 
         result = lu_ref_global_init();
         if (result != 0)
                 return result;
-                        /*
+        /*
          * seeks estimation: 3 seeks to read a record from oi, one to read
          * inode, one for ea. Unfortunately setting this high value results in
          * lu_object/inode cache consuming all the memory.
@@ -1501,8 +1548,11 @@ int lu_global_init(void)
         if (lu_site_shrinker == NULL)
                 return -ENOMEM;
 
-                                result = lu_time_global_init();
-        return result;
+        result = lu_time_global_init();
+        if (result != 0)
+                return result;
+
+        return cl_global_init();
 }
 
 /**
@@ -1510,6 +1560,7 @@ int lu_global_init(void)
  */
 void lu_global_fini(void)
 {
+        cl_global_fini();
         lu_time_global_fini();
         if (lu_site_shrinker != NULL) {
                 remove_shrinker(lu_site_shrinker);
@@ -1566,6 +1617,7 @@ int lu_site_stats_print(const struct lu_site *s, char *page, int count)
 }
 EXPORT_SYMBOL(lu_site_stats_print);
 
+#ifdef __KERNEL__
 /*
  * XXX: Functions below logically belong to the fid module, but they are used
  * by dt_store_open(). Put them here until better place is found.
@@ -1640,6 +1692,7 @@ int fid_unpack(const struct lu_fid_pack *pack, struct lu_fid *fid)
         return result;
 }
 EXPORT_SYMBOL(fid_unpack);
+#endif  /* #ifdef __KERNEL__ */
 
 const char *lu_time_names[LU_TIME_NR] = {
         [LU_TIME_FIND_LOOKUP] = "find_lookup",

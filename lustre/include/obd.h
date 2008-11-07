@@ -175,7 +175,7 @@ struct lov_stripe_md {
 
 struct obd_info;
 
-typedef int (*obd_enqueue_update_f)(struct obd_info *oinfo, int rc);
+typedef int (*obd_enqueue_update_f)(void *cookie, int rc);
 
 /* obd info for a particular level (lov, osc). */
 struct obd_info {
@@ -239,52 +239,6 @@ struct brw_page {
         obd_flag flag;
 };
 
-enum async_flags {
-        ASYNC_READY = 0x1, /* ap_make_ready will not be called before this
-                              page is added to an rpc */
-        ASYNC_URGENT = 0x2, /* page must be put into an RPC before return */
-        ASYNC_COUNT_STABLE = 0x4, /* ap_refresh_count will not be called
-                                     to give the caller a chance to update
-                                     or cancel the size of the io */
-        ASYNC_GROUP_SYNC = 0x8,  /* ap_completion will not be called, instead
-                                    the page is accounted for in the
-                                    obd_io_group given to
-                                    obd_queue_group_io */
-};
-
-struct obd_async_page_ops {
-        int  (*ap_make_ready)(void *data, int cmd);
-        int  (*ap_refresh_count)(void *data, int cmd);
-        void (*ap_fill_obdo)(void *data, int cmd, struct obdo *oa);
-        void (*ap_update_obdo)(void *data, int cmd, struct obdo *oa,
-                               obd_valid valid);
-        int  (*ap_completion)(void *data, int cmd, struct obdo *oa, int rc);
-        struct obd_capa *(*ap_lookup_capa)(void *data, int cmd);
-};
-
-/* the `oig' is passed down from a caller of obd rw methods.  the callee
- * records enough state such that the caller can sleep on the oig and
- * be woken when all the callees have finished their work */
-struct obd_io_group {
-        spinlock_t      oig_lock;
-        atomic_t        oig_refcount;
-        int             oig_pending;
-        int             oig_rc;
-        struct list_head oig_occ_list;
-        cfs_waitq_t     oig_waitq;
-};
-
-/* the oig callback context lets the callee of obd rw methods register
- * for callbacks from the caller. */
-struct oig_callback_context {
-        struct list_head occ_oig_item;
-        /* called when the caller has received a signal while sleeping.
-         * callees of this method are encouraged to abort their state
-         * in the oig.  This may be called multiple times. */
-        void (*occ_interrupted)(struct oig_callback_context *occ);
-        unsigned long interrupted:1;
-};
-
 /* Individual type definitions */
 
 struct ost_server_data;
@@ -295,11 +249,6 @@ struct obd_device_target {
         atomic_t                  obt_quotachecking;
         struct lustre_quota_ctxt  obt_qctxt;
 };
-
-typedef void (*obd_pin_extent_cb)(void *data);
-typedef int (*obd_page_removal_cb_t)(void *data, int discard);
-typedef int (*obd_lock_cancel_cb)(struct ldlm_lock *,struct ldlm_lock_desc *,
-                                   void *, int);
 
 /* llog contexts */
 enum llog_ctxt_id {
@@ -426,7 +375,6 @@ struct filter_obd {
 
 struct mdc_rpc_lock;
 struct obd_import;
-struct lustre_cache;
 struct client_obd {
         struct rw_semaphore      cl_sem;
         struct obd_uuid          cl_target_uuid;
@@ -448,6 +396,7 @@ struct client_obd {
         /* the grant values are protected by loi_list_lock below */
         long                     cl_dirty;         /* all _dirty_ in bytes */
         long                     cl_dirty_max;     /* allowed w/o rpc */
+        long                     cl_dirty_transit; /* dirty synchronous */
         long                     cl_avail_grant;   /* bytes of credit for ost */
         long                     cl_lost_grant;    /* lost credits (trunc) */
         struct list_head         cl_cache_waiters; /* waiting for cache/grant */
@@ -521,10 +470,6 @@ struct client_obd {
         struct lu_client_seq    *cl_seq;
 
         atomic_t                 cl_resends; /* resend count */
-
-        /* Cache of triples */
-        struct lustre_cache     *cl_cache;
-        obd_lock_cancel_cb       cl_ext_lock_cancel_cb;
 };
 #define obd2cli_tgt(obd) ((char *)(obd)->u.cli.cl_target_uuid.uuid)
 
@@ -639,6 +584,7 @@ struct echo_client_obd {
         struct obd_export   *ec_exp;   /* the local connection to osc/lov */
         spinlock_t           ec_lock;
         struct list_head     ec_objects;
+        struct list_head     ec_locks;
         int                  ec_nstripes;
         __u64                ec_unique;
 };
@@ -734,9 +680,6 @@ struct lov_obd {
         __u32                   lov_death_row;/* tgts scheduled to be deleted */
         __u32                   lov_tgt_size;   /* size of tgts array */
         int                     lov_connects;
-        obd_page_removal_cb_t   lov_page_removal_cb;
-        obd_pin_extent_cb       lov_page_pin_cb;
-        obd_lock_cancel_cb      lov_lock_cancel_cb;
         int                     lov_pool_count;
         lustre_hash_t          *lov_pools_hash_body; /* used for key access */
         struct list_head        lov_pool_list; /* used for sequential access */
@@ -801,8 +744,10 @@ struct niobuf_local {
 #define LUSTRE_CMM_NAME         "cmm"
 #define LUSTRE_MDD_NAME         "mdd"
 #define LUSTRE_OSD_NAME         "osd"
+#define LUSTRE_VVP_NAME         "vvp"
 #define LUSTRE_LMV_NAME         "lmv"
 #define LUSTRE_CMM_MDC_NAME     "cmm-mdc"
+#define LUSTRE_SLP_NAME         "slp"
 
 /* obd device type names */
  /* FIXME all the references to LUSTRE_MDS_NAME should be swapped with LUSTRE_MDT_NAME */
@@ -1281,47 +1226,6 @@ struct obd_ops {
         int (*o_brw)(int rw, struct obd_export *exp, struct obd_info *oinfo,
                      obd_count oa_bufs, struct brw_page *pgarr,
                      struct obd_trans_info *oti);
-        int (*o_brw_async)(int rw, struct obd_export *exp,
-                           struct obd_info *oinfo, obd_count oa_bufs,
-                           struct brw_page *pgarr, struct obd_trans_info *oti,
-                           struct ptlrpc_request_set *);
-        int (*o_prep_async_page)(struct obd_export *exp,
-                                 struct lov_stripe_md *lsm,
-                                 struct lov_oinfo *loi,
-                                 cfs_page_t *page, obd_off offset,
-                                 struct obd_async_page_ops *ops, void *data,
-                                 void **res, int nocache,
-                                 struct lustre_handle *lockh);
-        int (*o_reget_short_lock)(struct obd_export *exp,
-                                  struct lov_stripe_md *lsm,
-                                  void **res, int rw,
-                                  obd_off start, obd_off end,
-                                  void **cookie);
-        int (*o_release_short_lock)(struct obd_export *exp,
-                                    struct lov_stripe_md *lsm, obd_off end,
-                                    void *cookie, int rw);
-        int (*o_queue_async_io)(struct obd_export *exp,
-                                struct lov_stripe_md *lsm,
-                                struct lov_oinfo *loi, void *cookie,
-                                int cmd, obd_off off, int count,
-                                obd_flag brw_flags, obd_flag async_flags);
-        int (*o_queue_group_io)(struct obd_export *exp,
-                                struct lov_stripe_md *lsm,
-                                struct lov_oinfo *loi,
-                                struct obd_io_group *oig,
-                                void *cookie, int cmd, obd_off off, int count,
-                                obd_flag brw_flags, obd_flag async_flags);
-        int (*o_trigger_group_io)(struct obd_export *exp,
-                                  struct lov_stripe_md *lsm,
-                                  struct lov_oinfo *loi,
-                                  struct obd_io_group *oig);
-        int (*o_set_async_flags)(struct obd_export *exp,
-                                struct lov_stripe_md *lsm,
-                                struct lov_oinfo *loi, void *cookie,
-                                obd_flag async_flags);
-        int (*o_teardown_async_page)(struct obd_export *exp,
-                                     struct lov_stripe_md *lsm,
-                                     struct lov_oinfo *loi, void *cookie);
         int (*o_merge_lvb)(struct obd_export *exp, struct lov_stripe_md *lsm,
                            struct ost_lvb *lvb, int kms_only);
         int (*o_adjust_kms)(struct obd_export *exp, struct lov_stripe_md *lsm,
@@ -1355,9 +1259,6 @@ struct obd_ops {
         int (*o_enqueue)(struct obd_export *, struct obd_info *oinfo,
                          struct ldlm_enqueue_info *einfo,
                          struct ptlrpc_request_set *rqset);
-        int (*o_match)(struct obd_export *, struct lov_stripe_md *, __u32 type,
-                       ldlm_policy_data_t *, __u32 mode, int *flags, void *data,
-                       struct lustre_handle *lockh);
         int (*o_change_cbdata)(struct obd_export *, struct lov_stripe_md *,
                                ldlm_iterator_t it, void *data);
         int (*o_cancel)(struct obd_export *, struct lov_stripe_md *md,
@@ -1396,15 +1297,6 @@ struct obd_ops {
 
         int (*o_ping)(struct obd_export *exp);
 
-        int (*o_register_page_removal_cb)(struct obd_export *exp,
-                                          obd_page_removal_cb_t cb,
-                                          obd_pin_extent_cb pin_cb);
-        int (*o_unregister_page_removal_cb)(struct obd_export *exp,
-                                            obd_page_removal_cb_t cb);
-        int (*o_register_lock_cancel_cb)(struct obd_export *exp,
-                                       obd_lock_cancel_cb cb);
-        int (*o_unregister_lock_cancel_cb)(struct obd_export *exp,
-                                         obd_lock_cancel_cb cb);
         /* pools methods */
         int (*o_pool_new)(struct obd_device *obd, char *poolname);
         int (*o_pool_del)(struct obd_device *obd, char *poolname);

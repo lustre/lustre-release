@@ -230,7 +230,7 @@ out_up:
 EXPORT_SYMBOL(simple_mknod);
 
 /* utility to make a directory */
-struct dentry *simple_mkdir(struct dentry *dir, struct vfsmount *mnt, 
+struct dentry *simple_mkdir(struct dentry *dir, struct vfsmount *mnt,
                             char *name, int mode, int fix)
 {
         struct dentry *dchild;
@@ -254,7 +254,7 @@ struct dentry *simple_mkdir(struct dentry *dir, struct vfsmount *mnt,
 
                 /* Fixup directory permissions if necessary */
                 if (fix && (old_mode & S_IALLUGO) != (mode & S_IALLUGO)) {
-                        CDEBUG(D_CONFIG, 
+                        CDEBUG(D_CONFIG,
                                "fixing permissions on %s from %o to %o\n",
                                name, old_mode, mode);
                         dchild->d_inode->i_mode = (mode & S_IALLUGO) |
@@ -279,7 +279,7 @@ out_up:
 EXPORT_SYMBOL(simple_mkdir);
 
 /* utility to rename a file */
-int lustre_rename(struct dentry *dir, struct vfsmount *mnt, 
+int lustre_rename(struct dentry *dir, struct vfsmount *mnt,
                   char *oldname, char *newname)
 {
         struct dentry *dchild_old, *dchild_new;
@@ -287,21 +287,21 @@ int lustre_rename(struct dentry *dir, struct vfsmount *mnt,
         ENTRY;
 
         ASSERT_KERNEL_CTXT("kernel doing rename outside kernel context\n");
-        CDEBUG(D_INODE, "renaming file %.*s to %.*s\n", 
+        CDEBUG(D_INODE, "renaming file %.*s to %.*s\n",
                (int)strlen(oldname), oldname, (int)strlen(newname), newname);
 
         dchild_old = ll_lookup_one_len(oldname, dir, strlen(oldname));
         if (IS_ERR(dchild_old))
                 RETURN(PTR_ERR(dchild_old));
 
-        if (!dchild_old->d_inode) 
+        if (!dchild_old->d_inode)
                 GOTO(put_old, err = -ENOENT);
 
         dchild_new = ll_lookup_one_len(newname, dir, strlen(newname));
         if (IS_ERR(dchild_new))
                 GOTO(put_old, err = PTR_ERR(dchild_new));
 
-        err = ll_vfs_rename(dir->d_inode, dchild_old, mnt, 
+        err = ll_vfs_rename(dir->d_inode, dchild_old, mnt,
                             dir->d_inode, dchild_new, mnt);
 
         dput(dchild_new);
@@ -481,7 +481,7 @@ void obd_update_maxusage()
         if (max2 > obd_max_alloc)
                 obd_max_alloc = max2;
         spin_unlock(&obd_updatemax_lock);
-        
+
 }
 
 __u64 obd_memory_max(void)

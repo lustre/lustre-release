@@ -2278,7 +2278,7 @@ struct ll_crypto_cipher *ll_crypto_alloc_blkcipher(const char * algname,
 {
         char        buf[CRYPTO_MAX_ALG_NAME + 1];
         const char *pan = algname;
-        u32         flag = 0; 
+        u32         flag = 0;
 
         if (strncmp("cbc(", algname, 4) == 0)
                 flag |= CRYPTO_TFM_MODE_CBC;

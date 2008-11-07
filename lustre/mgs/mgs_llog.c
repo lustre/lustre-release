@@ -117,14 +117,14 @@ static inline int name_create(char **newname, char *prefix, char *suffix)
 {
         LASSERT(newname);
         OBD_ALLOC(*newname, strlen(prefix) + strlen(suffix) + 1);
-        if (!*newname) 
+        if (!*newname)
                 return -ENOMEM;
         sprintf(*newname, "%s%s", prefix, suffix);
         return 0;
 }
 
 static inline void name_destroy(char **name)
-{        
+{
         if (*name)
                 OBD_FREE(*name, strlen(*name) + 1);
         *name = NULL;
@@ -135,11 +135,11 @@ static inline void name_destroy(char **name)
         2. what the last config step is
         3. COMPAT_146 lov name
         4. COMPAT_146 mdt lov name
-        5. COMPAT_146 mdc name 
+        5. COMPAT_146 mdc name
 */
 /* It might be better to have a separate db file, instead of parsing the info
    out of the client log.  This is slow and potentially error-prone. */
-static int mgs_fsdb_handler(struct llog_handle *llh, struct llog_rec_hdr *rec, 
+static int mgs_fsdb_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
                             void *data)
 {
         struct fs_db *fsdb = (struct fs_db *)data;
@@ -201,9 +201,9 @@ static int mgs_fsdb_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
             (strcmp(lustre_cfg_string(lcfg, 1), LUSTRE_LOV_NAME) == 0)) {
                 fsdb->fsdb_flags |= FSDB_OLDLOG14;
                 name_destroy(&fsdb->fsdb_clilov);
-                rc = name_create(&fsdb->fsdb_clilov, 
+                rc = name_create(&fsdb->fsdb_clilov,
                                  lustre_cfg_string(lcfg, 0), "");
-                if (rc) 
+                if (rc)
                         RETURN(rc);
                 CDEBUG(D_MGS, "client lov name is %s\n", fsdb->fsdb_clilov);
         }
@@ -215,20 +215,20 @@ static int mgs_fsdb_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
                 fsdb->fsdb_flags |= FSDB_OLDLOG14;
                 ptr = strstr(lustre_cfg_string(lcfg, 1), "_UUID");
                 if (!ptr) {
-                        CERROR("Can't parse MDT uuid %s\n", 
+                        CERROR("Can't parse MDT uuid %s\n",
                                lustre_cfg_string(lcfg, 1));
                         RETURN(-EINVAL);
                 }
                 *ptr = '\0';
                 name_destroy(&fsdb->fsdb_mdtlov);
-                rc = name_create(&fsdb->fsdb_mdtlov, 
+                rc = name_create(&fsdb->fsdb_mdtlov,
                                  "lov_", lustre_cfg_string(lcfg, 1));
-                if (rc) 
+                if (rc)
                         RETURN(rc);
                 name_destroy(&fsdb->fsdb_mdc);
-                rc = name_create(&fsdb->fsdb_mdc, 
+                rc = name_create(&fsdb->fsdb_mdc,
                                  lustre_cfg_string(lcfg, 0), "");
-                if (rc) 
+                if (rc)
                         RETURN(rc);
                 CDEBUG(D_MGS, "MDT lov name is %s\n", fsdb->fsdb_mdtlov);
         }
@@ -341,17 +341,17 @@ static struct fs_db *mgs_new_fsdb(struct obd_device *obd, char *fsname)
         strncpy(fsdb->fsdb_name, fsname, sizeof(fsdb->fsdb_name));
         fsdb->fsdb_name[sizeof(fsdb->fsdb_name) - 1] = 0;
         rc = name_create(&fsdb->fsdb_mdtlov, fsname, "-mdtlov");
-        if (rc) 
+        if (rc)
                 GOTO(err, rc);
         rc = name_create(&fsdb->fsdb_mdtlmv, fsname, "-mdtlmv");
-        if (rc) 
+        if (rc)
                 GOTO(err, rc);
         rc = name_create(&fsdb->fsdb_clilov, fsname, "-clilov");
-        if (rc) 
+        if (rc)
                 GOTO(err, rc);
 
         rc = name_create(&fsdb->fsdb_clilmv, fsname, "-clilmv");
-        if (rc) 
+        if (rc)
                 GOTO(err, rc);
 
         fsdb->fsdb_srpc_fl_udesc = 1;
@@ -367,8 +367,8 @@ err:
                 OBD_FREE(fsdb->fsdb_mdt_index_map, INDEX_MAP_SIZE);
         name_destroy(&fsdb->fsdb_clilov);
         name_destroy(&fsdb->fsdb_clilmv);
-        name_destroy(&fsdb->fsdb_mdtlov); 
-        name_destroy(&fsdb->fsdb_mdtlmv); 
+        name_destroy(&fsdb->fsdb_mdtlov);
+        name_destroy(&fsdb->fsdb_mdtlmv);
         OBD_FREE_PTR(fsdb);
         RETURN(NULL);
 }
@@ -381,11 +381,11 @@ static void mgs_free_fsdb(struct obd_device *obd, struct fs_db *fsdb)
         list_del(&fsdb->fsdb_list);
         OBD_FREE(fsdb->fsdb_ost_index_map, INDEX_MAP_SIZE);
         OBD_FREE(fsdb->fsdb_mdt_index_map, INDEX_MAP_SIZE);
-        name_destroy(&fsdb->fsdb_clilov); 
-        name_destroy(&fsdb->fsdb_clilmv); 
-        name_destroy(&fsdb->fsdb_mdtlov); 
-        name_destroy(&fsdb->fsdb_mdtlmv); 
-        name_destroy(&fsdb->fsdb_mdc); 
+        name_destroy(&fsdb->fsdb_clilov);
+        name_destroy(&fsdb->fsdb_clilmv);
+        name_destroy(&fsdb->fsdb_mdtlov);
+        name_destroy(&fsdb->fsdb_mdtlmv);
+        name_destroy(&fsdb->fsdb_mdc);
         mgs_free_fsdb_srpc(fsdb);
         OBD_FREE_PTR(fsdb);
 }
@@ -411,7 +411,7 @@ int mgs_cleanup_fsdb_list(struct obd_device *obd)
         return 0;
 }
 
-static int mgs_find_or_make_fsdb(struct obd_device *obd, char *name, 
+static int mgs_find_or_make_fsdb(struct obd_device *obd, char *name,
                                struct fs_db **dbh)
 {
         struct mgs_obd *mgs = &obd->u.mgs;
@@ -568,13 +568,13 @@ struct mgs_modify_lookup {
         int               mml_modified;
 };
 
-static int mgs_modify_handler(struct llog_handle *llh, struct llog_rec_hdr *rec, 
+static int mgs_modify_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
                               void *data)
 {
         struct mgs_modify_lookup *mml = (struct mgs_modify_lookup *)data;
         struct cfg_marker *marker;
         struct lustre_cfg *lcfg = (struct lustre_cfg *)(rec + 1);
-        int cfg_len = rec->lrh_len - sizeof(struct llog_rec_hdr) - 
+        int cfg_len = rec->lrh_len - sizeof(struct llog_rec_hdr) -
                 sizeof(struct llog_rec_tail);
         int rc;
         ENTRY;
@@ -592,27 +592,27 @@ static int mgs_modify_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
 
         /* We only care about markers */
         if (lcfg->lcfg_command != LCFG_MARKER)
-                RETURN(0); 
-        
+                RETURN(0);
+
         marker = lustre_cfg_buf(lcfg, 1);
-        if ((strcmp(mml->mml_marker.cm_comment, marker->cm_comment) == 0) && 
+        if ((strcmp(mml->mml_marker.cm_comment, marker->cm_comment) == 0) &&
             (strcmp(mml->mml_marker.cm_tgtname, marker->cm_tgtname) == 0) &&
             !(marker->cm_flags & CM_SKIP)) {
                 /* Found a non-skipped marker match */
                 CDEBUG(D_MGS, "Changing rec %u marker %d %x->%x: %s %s\n",
-                       rec->lrh_index, marker->cm_step, 
+                       rec->lrh_index, marker->cm_step,
                        marker->cm_flags, mml->mml_marker.cm_flags,
                        marker->cm_tgtname, marker->cm_comment);
                 /* Overwrite the old marker llog entry */
                 marker->cm_flags &= ~CM_EXCLUDE; /* in case we're unexcluding */
                 marker->cm_flags |= mml->mml_marker.cm_flags;
                 marker->cm_canceltime = mml->mml_marker.cm_canceltime;
-                /* Header and tail are added back to lrh_len in 
+                /* Header and tail are added back to lrh_len in
                    llog_lvfs_write_rec */
-                rec->lrh_len = cfg_len; 
-                rc = llog_write_rec(llh, rec, NULL, 0, (void *)lcfg, 
+                rec->lrh_len = cfg_len;
+                rc = llog_write_rec(llh, rec, NULL, 0, (void *)lcfg,
                                     rec->lrh_index);
-                if (!rc) 
+                if (!rc)
                          mml->mml_modified++;
         }
 
@@ -621,7 +621,7 @@ static int mgs_modify_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
 
 /* Modify an existing config log record (for CM_SKIP or CM_EXCLUDE) */
 static int mgs_modify(struct obd_device *obd, struct fs_db *fsdb,
-                      struct mgs_target_info *mti, char *logname, 
+                      struct mgs_target_info *mti, char *logname,
                       char *devname, char *comment, int flags)
 {
         struct llog_handle *loghandle;
@@ -634,7 +634,7 @@ static int mgs_modify(struct obd_device *obd, struct fs_db *fsdb,
         CDEBUG(D_MGS, "modify %s/%s/%s\n", logname, devname, comment);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        
+
         ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
         LASSERT(ctxt != NULL);
         rc = llog_create(ctxt, &loghandle, NULL, logname);
@@ -649,7 +649,7 @@ static int mgs_modify(struct obd_device *obd, struct fs_db *fsdb,
                 GOTO(out_close, rc = 0);
 
         OBD_ALLOC_PTR(mml);
-        if (!mml) 
+        if (!mml)
                 GOTO(out_close, rc = -ENOMEM);
         strcpy(mml->mml_marker.cm_comment, comment);
         strcpy(mml->mml_marker.cm_tgtname, devname);
@@ -658,7 +658,7 @@ static int mgs_modify(struct obd_device *obd, struct fs_db *fsdb,
         mml->mml_marker.cm_canceltime = flags ? cfs_time_current_sec() : 0;
         mml->mml_modified = 0;
         rc = llog_process(loghandle, mgs_modify_handler, (void *)mml, NULL);
-        if (!rc && !mml->mml_modified) 
+        if (!rc && !mml->mml_modified)
                 rc = -ENODEV;
         OBD_FREE_PTR(mml);
 
@@ -668,7 +668,7 @@ out_close:
                 rc = rc2;
 out_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        if (rc && rc != -ENODEV) 
+        if (rc && rc != -ENODEV)
                 CERROR("modify %s/%s failed %d\n",
                        mti->mti_svname, comment, rc);
         llog_ctxt_put(ctxt);
@@ -684,10 +684,10 @@ static int record_lcfg(struct obd_device *obd, struct llog_handle *llh,
         struct llog_rec_hdr    rec;
         int buflen, rc;
 
-        if (!lcfg || !llh) 
+        if (!lcfg || !llh)
                 return -ENOMEM;
 
-        LASSERT(llh->lgh_ctxt);        
+        LASSERT(llh->lgh_ctxt);
 
         buflen = lustre_cfg_len(lcfg->lcfg_bufcount,
                                 lcfg->lcfg_buflens);
@@ -698,7 +698,7 @@ static int record_lcfg(struct obd_device *obd, struct llog_handle *llh,
         /* idx = -1 means append */
         rc = llog_write_rec(llh, &rec, NULL, 0, (void *)lcfg, -1);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        if (rc) 
+        if (rc)
                 CERROR("failed %d\n", rc);
         return rc;
 }
@@ -725,7 +725,7 @@ static int record_base(struct obd_device *obd, struct llog_handle *llh,
                 lustre_cfg_bufs_set_string(&bufs, 4, s4);
 
         lcfg = lustre_cfg_new(cmd, &bufs);
-        if (!lcfg) 
+        if (!lcfg)
                 return -ENOMEM;
         lcfg->lcfg_nid = nid;
 
@@ -799,7 +799,7 @@ static int record_lov_setup(struct obd_device *obd, struct llog_handle *llh,
         lustre_cfg_bufs_reset(&bufs, devname);
         lustre_cfg_bufs_set(&bufs, 1, desc, sizeof(*desc));
         lcfg = lustre_cfg_new(LCFG_SETUP, &bufs);
-        if (!lcfg) 
+        if (!lcfg)
                 return -ENOMEM;
         rc = record_lcfg(obd, llh, lcfg);
 
@@ -866,14 +866,14 @@ static int record_marker(struct obd_device *obd, struct llog_handle *llh,
         marker.cm_step = fsdb->fsdb_gen;
         marker.cm_flags = flags;
         marker.cm_vers = LUSTRE_VERSION_CODE;
-        strncpy(marker.cm_tgtname, tgtname, sizeof(marker.cm_tgtname)); 
-        strncpy(marker.cm_comment, comment, sizeof(marker.cm_comment)); 
+        strncpy(marker.cm_tgtname, tgtname, sizeof(marker.cm_tgtname));
+        strncpy(marker.cm_comment, comment, sizeof(marker.cm_comment));
         marker.cm_createtime = cfs_time_current_sec();
         marker.cm_canceltime = 0;
         lustre_cfg_bufs_reset(&bufs, NULL);
         lustre_cfg_bufs_set(&bufs, 1, &marker, sizeof(marker));
         lcfg = lustre_cfg_new(LCFG_MARKER, &bufs);
-        if (!lcfg) 
+        if (!lcfg)
                 return -ENOMEM;
         rc = record_lcfg(obd, llh, lcfg);
 
@@ -889,7 +889,7 @@ static int record_start_log(struct obd_device *obd,
         struct llog_ctxt *ctxt;
         int rc = 0;
 
-        if (*llh) 
+        if (*llh)
                 GOTO(out, rc = -EBUSY);
 
         ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
@@ -953,23 +953,23 @@ static int mgs_log_is_empty(struct obd_device *obd, char *name)
 
 /* write an lcfg directly into a log (with markers) */
 static int mgs_write_log_direct(struct obd_device *obd, struct fs_db *fsdb,
-                                char *logname, struct lustre_cfg *lcfg, 
+                                char *logname, struct lustre_cfg *lcfg,
                                 char *devname, char *comment)
 {
         struct llog_handle *llh = NULL;
         int rc;
         ENTRY;
 
-        if (!lcfg) 
+        if (!lcfg)
                 RETURN(-ENOMEM);
 
         rc = record_start_log(obd, &llh, logname);
-        if (rc) 
+        if (rc)
                 RETURN(rc);
 
         /* FIXME These should be a single journal transaction */
-        rc = record_marker(obd, llh, fsdb, CM_START, devname, comment); 
-        
+        rc = record_marker(obd, llh, fsdb, CM_START, devname, comment);
+
         rc = record_lcfg(obd, llh, lcfg);
 
         rc = record_marker(obd, llh, fsdb, CM_END, devname, comment);
@@ -980,7 +980,7 @@ static int mgs_write_log_direct(struct obd_device *obd, struct fs_db *fsdb,
 
 /* write the lcfg in all logs for the given fs */
 int mgs_write_log_direct_all(struct obd_device *obd, struct fs_db *fsdb,
-                             struct mgs_target_info *mti, 
+                             struct mgs_target_info *mti,
                              struct lustre_cfg *lcfg,
                              char *devname, char *comment)
 {
@@ -991,9 +991,9 @@ int mgs_write_log_direct_all(struct obd_device *obd, struct fs_db *fsdb,
         char *logname;
         int rc = 0, len = strlen(fsname);
         ENTRY;
-        
-        /* We need to set params for any future logs 
-           as well. FIXME Append this file to every new log. 
+
+        /* We need to set params for any future logs
+           as well. FIXME Append this file to every new log.
            Actually, we should store as params (text), not llogs.  Or
            in a database. */
         name_create(&logname, fsname, "-params");
@@ -1003,7 +1003,7 @@ int mgs_write_log_direct_all(struct obd_device *obd, struct fs_db *fsdb,
                 record_end_log(obd, &llh);
         }
         name_destroy(&logname);
-        if (rc) 
+        if (rc)
                 RETURN(rc);
 
         /* Find all the logs in the CONFIGS directory */
@@ -1022,13 +1022,13 @@ int mgs_write_log_direct_all(struct obd_device *obd, struct fs_db *fsdb,
                     strstr(dirent->lld_name, "-sptlrpc") == NULL) {
                         CDEBUG(D_MGS, "Changing log %s\n", dirent->lld_name);
                         /* Erase any old settings of this same parameter */
-                        mgs_modify(obd, fsdb, mti, dirent->lld_name, devname, 
+                        mgs_modify(obd, fsdb, mti, dirent->lld_name, devname,
                                    comment, CM_SKIP);
                         /* Write the new one */
                         rc = mgs_write_log_direct(obd, fsdb, dirent->lld_name,
                                                   lcfg, devname, comment);
                         if (rc)
-                                CERROR("err %d writing log %s\n", rc, 
+                                CERROR("err %d writing log %s\n", rc,
                                        dirent->lld_name);
                 }
                 OBD_FREE(dirent, sizeof(*dirent));
@@ -1131,11 +1131,11 @@ static int mgs_steal_llog_handler(struct llog_handle *llh,
 
         if (got_an_osc_or_mdc == 0 || last_step < 0)
                 RETURN(rc);
-        
+
         if (lcfg->lcfg_command == LCFG_ADD_UUID) {
                 uint64_t nodenid;
                 nodenid = lcfg->lcfg_nid;
-                
+
                 tmti->mti_nids[tmti->mti_nid_count] = nodenid;
                 tmti->mti_nid_count++;
 
@@ -1288,10 +1288,10 @@ static int mgs_write_log_lov(struct obd_device *obd, struct fs_db *fsdb,
         /* This should always be the first entry in a log.
         rc = mgs_clear_log(obd, logname); */
         rc = record_start_log(obd, &llh, logname);
-        if (rc) 
+        if (rc)
                 GOTO(out, rc);
         /* FIXME these should be a single journal transaction */
-        rc = record_marker(obd, llh, fsdb, CM_START, lovname, "lov setup"); 
+        rc = record_marker(obd, llh, fsdb, CM_START, lovname, "lov setup");
         rc = record_attach(obd, llh, lovname, "lov", uuid);
         rc = record_lov_setup(obd, llh, lovname, lovdesc);
         rc = record_marker(obd, llh, fsdb, CM_END, lovname, "lov setup");
@@ -1331,7 +1331,7 @@ static int mgs_write_log_failnids(struct obd_device *obd,
                                    so just use the first nid as the uuid */
                                 rc = name_create(&failnodeuuid,
                                                  libcfs_nid2str(nid), "");
-                                if (rc) 
+                                if (rc)
                                         return rc;
                         }
                         CDEBUG(D_MGS, "add nid %s for failover uuid %s, "
@@ -1359,7 +1359,7 @@ static int mgs_write_log_mdc_to_lmv(struct obd_device *obd, struct fs_db *fsdb,
         char index[5];
         int i, rc;
         ENTRY;
-        
+
         if (mgs_log_is_empty(obd, logname)) {
                 CERROR("log is empty! Logical error\n");
                 RETURN(-EINVAL);
@@ -1388,9 +1388,9 @@ static int mgs_write_log_mdc_to_lmv(struct obd_device *obd, struct fs_db *fsdb,
                            "add mdc");
 
         for (i = 0; i < mti->mti_nid_count; i++) {
-                CDEBUG(D_MGS, "add nid %s for mdt\n", 
+                CDEBUG(D_MGS, "add nid %s for mdt\n",
                        libcfs_nid2str(mti->mti_nids[i]));
-                       
+
                 rc = record_add_uuid(obd, llh, mti->mti_nids[i], nodeuuid);
         }
 
@@ -1402,7 +1402,7 @@ static int mgs_write_log_mdc_to_lmv(struct obd_device *obd, struct fs_db *fsdb,
         rc = record_mdc_add(obd, llh, lmvname, mdcuuid, mti->mti_uuid,
                             index, "1");
         rc = record_marker(obd, llh, fsdb, CM_END, mti->mti_svname,
-                           "add mdc"); 
+                           "add mdc");
         rc = record_end_log(obd, &llh);
 
         name_destroy(&lmvuuid);
@@ -1464,7 +1464,7 @@ static int mgs_write_log_mdc_to_mdt(struct obd_device *obd, struct fs_db *fsdb,
 
         rc = record_mdc_add(obd, llh, logname, mdcuuid, mti->mti_uuid,
                             index, "1");
-        rc = record_marker(obd, llh, fsdb, CM_END, mti->mti_svname, "add mdc"); 
+        rc = record_marker(obd, llh, fsdb, CM_END, mti->mti_svname, "add mdc");
         rc = record_end_log(obd, &llh);
 
         name_destroy(&mdcuuid);
@@ -1502,7 +1502,7 @@ static int mgs_write_log_mdt0(struct obd_device *obd, struct fs_db *fsdb,
         if (uuid == NULL)
                 GOTO(out_srpc, rc = -ENOMEM);
 
-        if (class_find_param(ptr, PARAM_FAILMODE, &ptr) == 0) 
+        if (class_find_param(ptr, PARAM_FAILMODE, &ptr) == 0)
                 failout = (strncmp(ptr, "failout", 7) == 0);
 
         name_create(&lovname, log, "-mdtlov");
@@ -1510,18 +1510,18 @@ static int mgs_write_log_mdt0(struct obd_device *obd, struct fs_db *fsdb,
                 rc = mgs_write_log_lov(obd, fsdb, mti, log, lovname);
 
         sprintf(uuid, "%s_UUID", log);
-        sprintf(mdt_index,"%d",mti->mti_stripe_index);        
+        sprintf(mdt_index,"%d",mti->mti_stripe_index);
 
         /* add MDT itself */
         rc = record_start_log(obd, &llh, log);
-        if (rc) 
+        if (rc)
                 GOTO(out, rc);
-        
+
         /* FIXME this whole fn should be a single journal transaction */
         rc = record_marker(obd, llh, fsdb, CM_START, log, "add mdt");
         rc = record_attach(obd, llh, log, LUSTRE_MDT_NAME, uuid);
         rc = record_mount_opt(obd, llh, log, lovname, NULL);
-        rc = record_setup(obd, llh, log, uuid, mdt_index, lovname, 
+        rc = record_setup(obd, llh, log, uuid, mdt_index, lovname,
                         failout ? "n" : "f");
         rc = record_sptlrpc_conf(obd, llh, log, srpc_log);
         rc = record_marker(obd, llh, fsdb, CM_END, log, "add mdt");
@@ -1553,10 +1553,10 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
                 /* We're starting with an old uuid.  Assume old name for lov
                    as well since the lov entry already exists in the log. */
                 CDEBUG(D_MGS, "old mds uuid %s\n", mti->mti_uuid);
-                if (strncmp(mti->mti_uuid, fsdb->fsdb_mdtlov + 4, 
+                if (strncmp(mti->mti_uuid, fsdb->fsdb_mdtlov + 4,
                             strlen(fsdb->fsdb_mdtlov) - 4) != 0) {
                         CERROR("old mds uuid %s doesn't match log %s (%s)\n",
-                               mti->mti_uuid, fsdb->fsdb_mdtlov, 
+                               mti->mti_uuid, fsdb->fsdb_mdtlov,
                                fsdb->fsdb_mdtlov + 4);
                         RETURN(-EINVAL);
                 }
@@ -1571,19 +1571,19 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
 
         /* add mdt */
         rc = mgs_write_log_mdt0(obd, fsdb, mti);
-        
+
         /* Append the mdt info to the client log */
         name_create(&cliname, mti->mti_fsname, "-client");
-        
-        if (mgs_log_is_empty(obd, cliname)) { 
+
+        if (mgs_log_is_empty(obd, cliname)) {
                 /* Start client log */
-                rc = mgs_write_log_lov(obd, fsdb, mti, cliname, 
+                rc = mgs_write_log_lov(obd, fsdb, mti, cliname,
                                        fsdb->fsdb_clilov);
-                rc = mgs_write_log_lmv(obd, fsdb, mti, cliname, 
+                rc = mgs_write_log_lmv(obd, fsdb, mti, cliname,
                                        fsdb->fsdb_clilmv);
         }
 
-        /* 
+        /*
         #09 L add_uuid nid=uml1@tcp(0x20000c0a80201) 0:  1:uml1_UUID
         #10 L attach   0:MDC_uml1_mdsA_MNT_client  1:mdc  2:1d834_MNT_client_03f
         #11 L setup    0:MDC_uml1_mdsA_MNT_client  1:mdsA_UUID  2:uml1_UUID
@@ -1591,27 +1591,27 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
         #13 L add_conn 0:MDC_uml1_mdsA_MNT_client  1:uml2_UUID
         #14 L mount_option 0:  1:client  2:lov1  3:MDC_uml1_mdsA_MNT_client
         */
-        
+
 #if 0
         /* COMPAT_146 */
-        if (mti->mti_flags & LDD_F_UPGRADE14) { 
+        if (mti->mti_flags & LDD_F_UPGRADE14) {
                 rc = record_start_log(obd, &llh, cliname);
-                if (rc) 
+                if (rc)
                         GOTO(out, rc);
-        
-                rc = record_marker(obd, llh, fsdb, CM_START, 
+
+                rc = record_marker(obd, llh, fsdb, CM_START,
                                    mti->mti_svname,"add mdc");
-                                   
-                /* Old client log already has MDC entry, but needs mount opt 
+
+                /* Old client log already has MDC entry, but needs mount opt
                    for new client name (lustre-client) */
-                /* FIXME Old MDT log already has an old mount opt 
+                /* FIXME Old MDT log already has an old mount opt
                    which we should remove (currently handled by
                    class_del_profiles()) */
                 rc = record_mount_opt(obd, llh, cliname, fsdb->fsdb_clilov,
                                       fsdb->fsdb_mdc);
                 /* end COMPAT_146 */
-                
-                rc = record_marker(obd, llh, fsdb, CM_END, 
+
+                rc = record_marker(obd, llh, fsdb, CM_END,
                                    mti->mti_svname, "add mdc");
         } else
 #endif
@@ -1619,42 +1619,42 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
                 /* copy client info about lov/lmv */
                 comp.comp_mti = mti;
                 comp.comp_fsdb = fsdb;
-                
-                rc = mgs_steal_llog_for_mdt_from_client(obd, cliname, 
+
+                rc = mgs_steal_llog_for_mdt_from_client(obd, cliname,
                                                         &comp);
 
                 rc = mgs_write_log_mdc_to_lmv(obd, fsdb, mti, cliname,
                                               fsdb->fsdb_clilmv);
                 /* add mountopts */
                 rc = record_start_log(obd, &llh, cliname);
-                if (rc) 
+                if (rc)
                         GOTO(out, rc);
 
-                rc = record_marker(obd, llh, fsdb, CM_START, cliname, 
+                rc = record_marker(obd, llh, fsdb, CM_START, cliname,
                                    "mount opts");
                 rc = record_mount_opt(obd, llh, cliname, fsdb->fsdb_clilov,
                                       fsdb->fsdb_clilmv);
-                rc = record_marker(obd, llh, fsdb, CM_END, cliname, 
-                                   "mount opts"); 
+                rc = record_marker(obd, llh, fsdb, CM_END, cliname,
+                                   "mount opts");
         }
-                           
+
         rc = record_end_log(obd, &llh);
 out:
         name_destroy(&cliname);
-        
+
         // for_all_existing_mdt except current one
         for (i = 0; i < INDEX_MAP_SIZE * 8; i++){
                 char *mdtname;
                 if (i !=  mti->mti_stripe_index &&
                     test_bit(i,  fsdb->fsdb_mdt_index_map)) {
                         sprintf(mdt_index,"-MDT%04x",i);
-                        
+
                         name_create(&mdtname, mti->mti_fsname, mdt_index);
                         rc = mgs_write_log_mdc_to_mdt(obd, fsdb, mti, mdtname);
                         name_destroy(&mdtname);
                 }
         }
-        
+
         RETURN(rc);
 }
 
@@ -1673,7 +1673,7 @@ static int mgs_write_log_osc_to_lov(struct obd_device *obd, struct fs_db *fsdb,
         ENTRY;
         CDEBUG(D_INFO, "adding osc for %s to log %s\n",
                mti->mti_svname, logname);
-        
+
         srpc_log = sptlrpc_conf_log_alloc();
         if (IS_ERR(srpc_log))
                 RETURN(PTR_ERR(srpc_log));
@@ -1689,7 +1689,7 @@ static int mgs_write_log_osc_to_lov(struct obd_device *obd, struct fs_db *fsdb,
                    somewhere to add our osc. */
                 rc = mgs_write_log_lov(obd, fsdb, mti, logname, lovname);
         }
-  
+
         name_create(&nodeuuid, libcfs_nid2str(mti->mti_nids[0]), "");
         name_create(&svname, mti->mti_svname, "-osc");
         name_create(&oscname, svname, suffix);
@@ -1707,13 +1707,13 @@ static int mgs_write_log_osc_to_lov(struct obd_device *obd, struct fs_db *fsdb,
         #07 L add_conn 0:OSC_uml1_ost1_MNT_client  1:uml2_UUID
         #08 L lov_modify_tgts add 0:lov1  1:ost1_UUID  2(index):0  3(gen):1
         */
-        
+
         rc = record_start_log(obd, &llh, logname);
-        if (rc) 
+        if (rc)
                 GOTO(out, rc);
         /* FIXME these should be a single journal transaction */
         rc = record_marker(obd, llh, fsdb, CM_START | flags, mti->mti_svname,
-                           "add osc"); 
+                           "add osc");
         for (i = 0; i < mti->mti_nid_count; i++) {
                 CDEBUG(D_MGS, "add nid %s\n", libcfs_nid2str(mti->mti_nids[i]));
                 rc = record_add_uuid(obd, llh, mti->mti_nids[i], nodeuuid);
@@ -1725,9 +1725,9 @@ static int mgs_write_log_osc_to_lov(struct obd_device *obd, struct fs_db *fsdb,
         snprintf(index, sizeof(index), "%d", mti->mti_stripe_index);
         rc = record_lov_add(obd, llh, lovname, mti->mti_uuid, index, "1");
         rc = record_marker(obd, llh, fsdb, CM_END | flags, mti->mti_svname,
-                           "add osc"); 
+                           "add osc");
         rc = record_end_log(obd, &llh);
-out:        
+out:
         name_destroy(&lovuuid);
         name_destroy(&oscuuid);
         name_destroy(&oscname);
@@ -1748,7 +1748,7 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
         char *ptr = mti->mti_params;
         int rc, flags = 0, failout = 0, i;
         ENTRY;
-        
+
         CDEBUG(D_MGS, "writing new ost %s\n", mti->mti_svname);
 
         /* The ost startup log */
@@ -1778,14 +1778,14 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
         attach obdfilter ost1 ost1_UUID
         setup /dev/loop2 ldiskfs f|n errors=remount-ro,user_xattr
         */
-        if (class_find_param(ptr, PARAM_FAILMODE, &ptr) == 0) 
+        if (class_find_param(ptr, PARAM_FAILMODE, &ptr) == 0)
                 failout = (strncmp(ptr, "failout", 7) == 0);
         rc = record_start_log(obd, &llh, mti->mti_svname);
-        if (rc) 
+        if (rc)
                 RETURN(rc);
         /* FIXME these should be a single journal transaction */
-        rc = record_marker(obd, llh, fsdb, CM_START, mti->mti_svname,"add ost"); 
-        if (*mti->mti_uuid == '\0') 
+        rc = record_marker(obd, llh, fsdb, CM_START, mti->mti_svname,"add ost");
+        if (*mti->mti_uuid == '\0')
                 snprintf(mti->mti_uuid, sizeof(mti->mti_uuid),
                          "%s_UUID", mti->mti_svname);
         rc = record_attach(obd, llh, mti->mti_svname,
@@ -1794,10 +1794,10 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
                           "dev"/*ignored*/, "type"/*ignored*/,
                           failout ? "n" : "f", 0/*options*/);
         rc = record_sptlrpc_conf(obd, llh, mti->mti_svname, srpc_log);
-        rc = record_marker(obd, llh, fsdb, CM_END, mti->mti_svname, "add ost"); 
+        rc = record_marker(obd, llh, fsdb, CM_END, mti->mti_svname, "add ost");
         rc = record_end_log(obd, &llh);
 
-        /* We also have to update the other logs where this osc is part of 
+        /* We also have to update the other logs where this osc is part of
            the lov */
 
         if (fsdb->fsdb_flags & FSDB_OLDLOG14) {
@@ -1806,7 +1806,7 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
                 /* Note that we can't add any new failnids, since we don't
                    know the old osc names. */
                 flags = CM_SKIP | CM_UPGRADE146;
-        
+
         } else if ((mti->mti_flags & LDD_F_UPDATE) != LDD_F_UPDATE) {
                 /* If the update flag isn't set, don't update client/mdt
                    logs. */
@@ -1829,7 +1829,7 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
                         name_destroy(&lovname);
                 }
         }
-    
+
         /* Append ost info to the client log */
         name_create(&logname, mti->mti_fsname, "-client");
         mgs_write_log_osc_to_lov(obd, fsdb, mti, logname, "",
@@ -1840,7 +1840,7 @@ out_srpc:
         RETURN(rc);
 }
 
-/* Add additional failnids to an existing log.  
+/* Add additional failnids to an existing log.
    The mdc/osc must have been added to logs first */
 /* tcp nids must be in dotted-quad ascii -
    we can't resolve hostnames from the kernel. */
@@ -1853,7 +1853,7 @@ static int mgs_write_log_add_failnid(struct obd_device *obd, struct fs_db *fsdb,
         ENTRY;
 
         /* FIXME how do we delete a failnid? Currently --writeconf is the
-           only way.  Maybe make --erase-params pass a flag to really 
+           only way.  Maybe make --erase-params pass a flag to really
            erase all params from logs - except it can't erase the failnids
            given when a target first registers, since they aren't processed
            as params... */
@@ -1874,17 +1874,17 @@ static int mgs_write_log_add_failnid(struct obd_device *obd, struct fs_db *fsdb,
         } else {
                 RETURN(-EINVAL);
         }
-        
+
         /* Add failover nids to client log */
         name_create(&logname, mti->mti_fsname, "-client");
         rc = record_start_log(obd, &llh, logname);
-        if (!rc) { 
+        if (!rc) {
                 /* FIXME this fn should be a single journal transaction */
                 rc = record_marker(obd, llh, fsdb, CM_START, mti->mti_svname,
                                    "add failnid");
                 rc = mgs_write_log_failnids(obd, mti, llh, cliname);
                 rc = record_marker(obd, llh, fsdb, CM_END, mti->mti_svname,
-                                   "add failnid"); 
+                                   "add failnid");
                 rc = record_end_log(obd, &llh);
         }
         name_destroy(&logname);
@@ -1894,11 +1894,11 @@ static int mgs_write_log_add_failnid(struct obd_device *obd, struct fs_db *fsdb,
                 name_create(&logname, mti->mti_fsname, "-MDT0000");
                 rc = record_start_log(obd, &llh, logname);
                 if (!rc) {
-                        rc = record_marker(obd, llh, fsdb, CM_START, 
+                        rc = record_marker(obd, llh, fsdb, CM_START,
                                            mti->mti_svname, "add failnid");
                         rc = mgs_write_log_failnids(obd, mti, llh, cliname);
-                        rc = record_marker(obd, llh, fsdb, CM_END, 
-                                           mti->mti_svname, "add failnid"); 
+                        rc = record_marker(obd, llh, fsdb, CM_END,
+                                           mti->mti_svname, "add failnid");
                         rc = record_end_log(obd, &llh);
                 }
                 name_destroy(&logname);
@@ -1908,7 +1908,7 @@ static int mgs_write_log_add_failnid(struct obd_device *obd, struct fs_db *fsdb,
         RETURN(rc);
 }
 
-static int mgs_wlp_lcfg(struct obd_device *obd, struct fs_db *fsdb, 
+static int mgs_wlp_lcfg(struct obd_device *obd, struct fs_db *fsdb,
                         struct mgs_target_info *mti,
                         char *logname, struct lustre_cfg_bufs *bufs,
                         char *tgtname, char *ptr)
@@ -1917,7 +1917,7 @@ static int mgs_wlp_lcfg(struct obd_device *obd, struct fs_db *fsdb,
         char *tmp;
         struct lustre_cfg *lcfg;
         int rc;
-        
+
         /* Erase any old settings of this same parameter */
         memcpy(comment, ptr, MTI_NAME_MAXLEN);
         comment[MTI_NAME_MAXLEN - 1] = 0;
@@ -1932,7 +1932,7 @@ static int mgs_wlp_lcfg(struct obd_device *obd, struct fs_db *fsdb,
         lustre_cfg_bufs_reset(bufs, tgtname);
         lustre_cfg_bufs_set_string(bufs, 1, ptr);
         lcfg = lustre_cfg_new(LCFG_PARAM, bufs);
-        if (!lcfg) 
+        if (!lcfg)
                 return -ENOMEM;
         rc = mgs_write_log_direct(obd, fsdb, logname, lcfg, tgtname, comment);
         lustre_cfg_free(lcfg);
@@ -2012,7 +2012,7 @@ static int mgs_msl_tgt_uuid2name(char *tgtname, char *tgtuuid)
 }
 
 static int mgs_modify_srpc_log_handler(struct llog_handle *llh,
-                                       struct llog_rec_hdr *rec, 
+                                       struct llog_rec_hdr *rec,
                                        void *data)
 {
         struct mgs_msl_data *mmd = (struct mgs_msl_data *)data;
@@ -2026,7 +2026,7 @@ static int mgs_modify_srpc_log_handler(struct llog_handle *llh,
                 RETURN(-EINVAL);
         }
 
-        cfg_len = rec->lrh_len - sizeof(struct llog_rec_hdr) - 
+        cfg_len = rec->lrh_len - sizeof(struct llog_rec_hdr) -
                   sizeof(struct llog_rec_tail);
 
         rc = lustre_cfg_sanity_check(lcfg, cfg_len);
@@ -2130,8 +2130,8 @@ static int mgs_modify_srpc_log_handler(struct llog_handle *llh,
                 }
 
                 /* Overwrite the log */
-                rec->lrh_len = cfg_len; 
-                rc = llog_write_rec(llh, rec, NULL, 0, (void *)lcfg, 
+                rec->lrh_len = cfg_len;
+                rc = llog_write_rec(llh, rec, NULL, 0, (void *)lcfg,
                                     rec->lrh_index);
                 if (rc)
                         CERROR("overwrite sptlrpc conf log failed: %d\n", rc);
@@ -2170,7 +2170,7 @@ static int mgs_modify_srpc_log(struct obd_device *obd,
         CDEBUG(D_MGS, "modify sptlrpc log for %s\n", logname);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        
+
         ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
         LASSERT(ctxt != NULL);
         rc = llog_create(ctxt, &llh, NULL, logname);
@@ -2185,7 +2185,7 @@ static int mgs_modify_srpc_log(struct obd_device *obd,
                 GOTO(out_close, rc = 0);
 
         OBD_ALLOC_PTR(mmd);
-        if (!mmd) 
+        if (!mmd)
                 GOTO(out_close, rc = -ENOMEM);
 
         mmd->mmd_obd = obd;
@@ -2205,7 +2205,7 @@ out_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         llog_ctxt_put(ctxt);
 
-        if (rc) 
+        if (rc)
                 CERROR("modify sptlrpc log %s failed %d\n", logname, rc);
         RETURN(rc);
 }
@@ -2305,7 +2305,7 @@ static int mgs_srpc_set_param_disk(struct obd_device *obd,
         if (mgs_log_is_empty(obd, logname)) {
                 rc = record_start_log(obd, &llh, logname);
                 record_end_log(obd, &llh);
-                if (rc) 
+                if (rc)
                         GOTO(out, rc);
         }
 
@@ -2486,7 +2486,7 @@ struct mgs_srpc_read_data {
 };
 
 static int mgs_srpc_read_handler(struct llog_handle *llh,
-                                 struct llog_rec_hdr *rec, 
+                                 struct llog_rec_hdr *rec,
                                  void *data)
 {
         struct mgs_srpc_read_data *msrd = (struct mgs_srpc_read_data *) data;
@@ -2501,7 +2501,7 @@ static int mgs_srpc_read_handler(struct llog_handle *llh,
                 RETURN(-EINVAL);
         }
 
-        cfg_len = rec->lrh_len - sizeof(struct llog_rec_hdr) - 
+        cfg_len = rec->lrh_len - sizeof(struct llog_rec_hdr) -
                   sizeof(struct llog_rec_tail);
 
         rc = lustre_cfg_sanity_check(lcfg, cfg_len);
@@ -2613,26 +2613,26 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
         int rc = 0;
         ENTRY;
 
-        if (!mti->mti_params) 
+        if (!mti->mti_params)
                 RETURN(0);
 
         /* For various parameter settings, we have to figure out which logs
            care about them (e.g. both mdt and client for lov settings) */
         while (ptr) {
-                while (*ptr == ' ') 
+                while (*ptr == ' ')
                         ptr++;
                 if (*ptr == '\0')
                         break;
                 endptr = strchr(ptr, ' ');
-                if (endptr) 
+                if (endptr)
                         *endptr = '\0';
                 CDEBUG(D_MGS, "next param '%s'\n", ptr);
 
-                /* The params are stored in MOUNT_DATA_FILE and modified 
+                /* The params are stored in MOUNT_DATA_FILE and modified
                    via tunefs.lustre, or set using lctl conf_param */
 
                 /* Processed in lustre_start_mgc */
-                if (class_match_param(ptr, PARAM_MGSNODE, NULL) == 0) 
+                if (class_match_param(ptr, PARAM_MGSNODE, NULL) == 0)
                         GOTO(end_while, rc);
 
                 /* Processed in mgs_write_log_ost */
@@ -2675,12 +2675,12 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
                         /* modify all servers and clients */
                         rc = mgs_write_log_direct_all(obd, fsdb, mti, lcfg,
                                                       mti->mti_fsname,
-                                                      "timeout"); 
+                                                      "timeout");
                         lustre_cfg_free(lcfg);
                         GOTO(end_while, rc);
                 }
 
-                if (class_match_param(ptr, PARAM_OSC""PARAM_ACTIVE, &tmp) == 0) { 
+                if (class_match_param(ptr, PARAM_OSC""PARAM_ACTIVE, &tmp) == 0) {
                         /* active=0 means off, anything else means on */
                         char mdt_index[16];
                         int flag = (*tmp == '0') ? CM_EXCLUDE : 0;
@@ -2697,10 +2697,10 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
                                       flag ? "de": "re", mti->mti_svname);
                         /* Modify clilov */
                         name_create(&logname, mti->mti_fsname, "-client");
-                        rc = mgs_modify(obd, fsdb, mti, logname, 
+                        rc = mgs_modify(obd, fsdb, mti, logname,
                                         mti->mti_svname, "add osc", flag);
                         name_destroy(&logname);
-                        if (rc) 
+                        if (rc)
                                 goto active_err;
                         /* Modify mdtlov */
                         /* FIXME add to all MDT logs for CMD */
@@ -2709,7 +2709,7 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
                                         continue;
                                 sprintf(mdt_index,"-MDT%04x", i);
                                 name_create(&logname, mti->mti_fsname, mdt_index);
-                                rc = mgs_modify(obd, fsdb, mti, logname, 
+                                rc = mgs_modify(obd, fsdb, mti, logname,
                                                 mti->mti_svname, "add osc", flag);
                                 name_destroy(&logname);
                                 if (rc)
@@ -2722,7 +2722,7 @@ active_err:
                                                    "changes were made to the "
                                                    "config log.\n",
                                                    mti->mti_svname, rc);
-                                if (fsdb->fsdb_flags & FSDB_OLDLOG14) 
+                                if (fsdb->fsdb_flags & FSDB_OLDLOG14)
                                         LCONSOLE_ERROR_MSG(0x146, "This may be"
                                                            " because the log "
                                                            "is in the old 1.4"
@@ -2731,21 +2731,21 @@ active_err:
                                                            "update the logs.\n");
                                 goto end_while;
                         }
-                        /* Fall through to osc proc for deactivating 
+                        /* Fall through to osc proc for deactivating
                            live OSC on running MDT / clients. */
                 }
                 /* Below here, let obd's XXX_process_config methods handle it */
- 
+
                 /* All lov. in proc */
                 if (class_match_param(ptr, PARAM_LOV, NULL) == 0) {
                         char mdt_index[16];
                         char *mdtlovname;
-                        
+
                         CDEBUG(D_MGS, "lov param %s\n", ptr);
                         if (!(mti->mti_flags & LDD_F_SV_TYPE_MDT)) {
                                 LCONSOLE_ERROR_MSG(0x147, "LOV params must be "
                                                    "set on the MDT, not %s. "
-                                                   "Ignoring.\n", 
+                                                   "Ignoring.\n",
                                                    mti->mti_svname);
                                 rc = 0;
                                 goto end_while;
@@ -2758,7 +2758,7 @@ active_err:
                         sprintf(mdt_index,"-MDT%04x", mti->mti_stripe_index);
                         name_create(&logname, mti->mti_fsname, mdt_index);
                         name_create(&mdtlovname, logname, "-mdtlov");
-                        rc = mgs_wlp_lcfg(obd, fsdb, mti, mti->mti_svname, 
+                        rc = mgs_wlp_lcfg(obd, fsdb, mti, mti->mti_svname,
                                           &bufs, mdtlovname, ptr);
                         name_destroy(&logname);
                         name_destroy(&mdtlovname);
@@ -2774,13 +2774,13 @@ active_err:
                 }
 
                 /* All osc., mdc., llite. params in proc */
-                if ((class_match_param(ptr, PARAM_OSC, NULL) == 0) || 
+                if ((class_match_param(ptr, PARAM_OSC, NULL) == 0) ||
                     (class_match_param(ptr, PARAM_MDC, NULL) == 0) ||
                     (class_match_param(ptr, PARAM_LLITE, NULL) == 0)) {
                         char *cname;
                         if (memcmp(ptr, PARAM_LLITE, strlen(PARAM_LLITE)) == 0) {
                                 name_create(&cname, mti->mti_fsname, "-client");
-                        /* Add the client type to match the obdname 
+                        /* Add the client type to match the obdname
                            in class_config_llog_handler */
                         } else if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
                                 /* COMPAT_146 */
@@ -2806,13 +2806,13 @@ active_err:
                                         goto end_while;
                                 }
                                 name_create(&cname, mti->mti_svname, "-osc");
-                        } else {       
+                        } else {
                                 rc = -EINVAL;
                                 goto end_while;
                         }
 
                         CDEBUG(D_MGS, "%.3s param %s\n", ptr, ptr + 4);
-                        
+
                         /* Modify client */
                         name_create(&logname, mti->mti_fsname, "-client");
                         rc = mgs_wlp_lcfg(obd, fsdb, mti, logname, &bufs,
@@ -2849,7 +2849,7 @@ active_err:
                 }
 
                 /* All mdt., ost. params in proc */
-                if ((class_match_param(ptr, PARAM_MDT, NULL) == 0) || 
+                if ((class_match_param(ptr, PARAM_MDT, NULL) == 0) ||
                     (class_match_param(ptr, PARAM_MDD, NULL) == 0) ||
                     (class_match_param(ptr, PARAM_OST, NULL) == 0)) {
                         CDEBUG(D_MGS, "%.3s param %s\n", ptr, ptr + 4);
@@ -2869,11 +2869,11 @@ end_while:
                         CERROR("err %d on param '%s\n", rc, ptr);
                         break;
                 }
-                
+
                 if (!endptr)
                         /* last param */
                         break;
-                 
+
                 *endptr = ' ';
                 ptr = endptr + 1;
         }
@@ -2889,20 +2889,20 @@ int mgs_check_failnid(struct obd_device *obd, struct mgs_target_info *mti)
         int rc;
         ENTRY;
 
-        rc = mgs_find_or_make_fsdb(obd, fsname, &fsdb); 
-        if (rc) 
+        rc = mgs_find_or_make_fsdb(obd, fsname, &fsdb);
+        if (rc)
                 RETURN(rc);
 
-        if (mgs_log_is_empty(obd, mti->mti_svname)) 
+        if (mgs_log_is_empty(obd, mti->mti_svname))
                 /* should never happen */
                 RETURN(-ENOENT);
 
         CDEBUG(D_MGS, "Checking for new failnids for %s\n", mti->mti_svname);
 
         /* FIXME We can just check mti->params to see if we're already in
-           the failover list.  Modify mti->params for rewriting back at 
+           the failover list.  Modify mti->params for rewriting back at
            server_register_target(). */
-        
+
         down(&fsdb->fsdb_sem);
         rc = mgs_write_log_add_failnid(obd, fsdb, mti);
         up(&fsdb->fsdb_sem);
@@ -2930,7 +2930,7 @@ int mgs_write_log_target(struct obd_device *obd,
         if (mti->mti_flags & LDD_F_UPGRADE14) {
                 if (rc == EALREADY) {
                         LCONSOLE_INFO("Found index %d for %s 1.4 log, "
-                                      "upgrading\n", mti->mti_stripe_index, 
+                                      "upgrading\n", mti->mti_stripe_index,
                                       mti->mti_svname);
                 } else {
                         LCONSOLE_ERROR_MSG(0x149, "Failed to find %s in the old"
@@ -2948,9 +2948,9 @@ int mgs_write_log_target(struct obd_device *obd,
                 /* end COMPAT_146 */
         } else {
                 if (rc == EALREADY) {
-                        LCONSOLE_WARN("Found index %d for %s, updating log\n", 
+                        LCONSOLE_WARN("Found index %d for %s, updating log\n",
                                       mti->mti_stripe_index, mti->mti_svname);
-                        /* We would like to mark old log sections as invalid 
+                        /* We would like to mark old log sections as invalid
                            and add new log sections in the client and mdt logs.
                            But if we add new sections, then live clients will
                            get repeat setup instructions for already running
@@ -2959,7 +2959,7 @@ int mgs_write_log_target(struct obd_device *obd,
                 }
         }
 
-        rc = mgs_find_or_make_fsdb(obd, mti->mti_fsname, &fsdb); 
+        rc = mgs_find_or_make_fsdb(obd, mti->mti_fsname, &fsdb);
         if (rc) {
                 CERROR("Can't get db for %s\n", mti->mti_fsname);
                 RETURN(rc);
@@ -2967,7 +2967,7 @@ int mgs_write_log_target(struct obd_device *obd,
 
         down(&fsdb->fsdb_sem);
 
-        if (mti->mti_flags & 
+        if (mti->mti_flags &
             (LDD_F_VIRGIN | LDD_F_UPGRADE14 | LDD_F_WRITECONF)) {
                 /* Generate a log from scratch */
                 if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
@@ -2988,7 +2988,7 @@ int mgs_write_log_target(struct obd_device *obd,
                 CDEBUG(D_MGS, "Update params for %s\n", mti->mti_svname);
                 mti->mti_flags |= LDD_F_PARAM;
         }
-        
+
         rc = mgs_write_log_params(obd, fsdb, mti);
 
 out_up:
@@ -2997,30 +2997,30 @@ out_up:
 }
 
 /* COMPAT_146 */
-/* verify that we can handle the old config logs */ 
+/* verify that we can handle the old config logs */
 int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti)
 {
         struct fs_db *fsdb;
         int rc = 0;
         ENTRY;
 
-        /* Create ost log normally, as servers register.  Servers 
+        /* Create ost log normally, as servers register.  Servers
            register with their old uuids (from last_rcvd), so old
            (MDT and client) logs should work.
-         - new MDT won't know about old OSTs, only the ones that have 
-           registered, so we need the old MDT log to get the LOV right 
-           in order for old clients to work. 
-         - Old clients connect to the MDT, not the MGS, for their logs, and 
-           will therefore receive the old client log from the MDT /LOGS dir. 
+         - new MDT won't know about old OSTs, only the ones that have
+           registered, so we need the old MDT log to get the LOV right
+           in order for old clients to work.
+         - Old clients connect to the MDT, not the MGS, for their logs, and
+           will therefore receive the old client log from the MDT /LOGS dir.
          - Old clients can continue to use and connect to old or new OSTs
-         - New clients will contact the MGS for their log 
+         - New clients will contact the MGS for their log
         */
 
-        LCONSOLE_INFO("upgrading server %s from pre-1.6\n", mti->mti_svname); 
+        LCONSOLE_INFO("upgrading server %s from pre-1.6\n", mti->mti_svname);
         server_mti_print("upgrade", mti);
-        
+
         rc = mgs_find_or_make_fsdb(obd, mti->mti_fsname, &fsdb);
-        if (rc) 
+        if (rc)
                 RETURN(rc);
 
         if (fsdb->fsdb_flags & FSDB_LOG_EMPTY) {
@@ -3031,7 +3031,7 @@ int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti)
         }
 
         if (fsdb->fsdb_gen == 0) {
-                /* There were no markers in the client log, meaning we have 
+                /* There were no markers in the client log, meaning we have
                    not updated the logs for this fs */
                 CDEBUG(D_MGS, "found old, unupdated client log\n");
         }
@@ -3047,10 +3047,10 @@ int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti)
                 /* We're starting with an old uuid.  Assume old name for lov
                    as well since the lov entry already exists in the log. */
                 CDEBUG(D_MGS, "old mds uuid %s\n", mti->mti_uuid);
-                if (strncmp(mti->mti_uuid, fsdb->fsdb_mdtlov + 4, 
+                if (strncmp(mti->mti_uuid, fsdb->fsdb_mdtlov + 4,
                             strlen(fsdb->fsdb_mdtlov) - 4) != 0) {
                         CERROR("old mds uuid %s doesn't match log %s (%s)\n",
-                               mti->mti_uuid, fsdb->fsdb_mdtlov, 
+                               mti->mti_uuid, fsdb->fsdb_mdtlov,
                                fsdb->fsdb_mdtlov + 4);
                         RETURN(-EINVAL);
                 }
@@ -3102,7 +3102,7 @@ int mgs_erase_logs(struct obd_device *obd, char *fsname)
         struct l_linux_dirent *dirent, *n;
         int rc, len = strlen(fsname);
         ENTRY;
-        
+
         /* Find all the logs in the CONFIGS directory */
         rc = class_dentry_readdir(obd, mgs->mgs_configs_dir,
                                   mgs->mgs_vfsmnt, &dentry_list);
@@ -3110,12 +3110,12 @@ int mgs_erase_logs(struct obd_device *obd, char *fsname)
                 CERROR("Can't read %s dir\n", MOUNT_CONFIGS_DIR);
                 RETURN(rc);
         }
-                                                                                
+
         down(&mgs->mgs_sem);
-        
+
         /* Delete the fs db */
         fsdb = mgs_find_fsdb(obd, fsname);
-        if (fsdb) 
+        if (fsdb)
                 mgs_free_fsdb(obd, fsdb);
 
         list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
@@ -3126,7 +3126,7 @@ int mgs_erase_logs(struct obd_device *obd, char *fsname)
                 }
                 OBD_FREE(dirent, sizeof(*dirent));
         }
-        
+
         up(&mgs->mgs_sem);
 
         RETURN(rc);
@@ -3150,7 +3150,7 @@ static void print_lustre_cfg(struct lustre_cfg *lcfg)
         if (lcfg->lcfg_bufcount < LUSTRE_CFG_MAX_BUFCOUNT)
                 for (i = 0; i < lcfg->lcfg_bufcount; i++) {
                         CDEBUG(D_MGS, "\tlcfg->lcfg_buflens[%d]: %d %s\n",
-                               i, lcfg->lcfg_buflens[i], 
+                               i, lcfg->lcfg_buflens[i],
                                lustre_cfg_string(lcfg, i));
                 }
         EXIT;
@@ -3168,7 +3168,7 @@ int mgs_setparam(struct obd_device *obd, struct lustre_cfg *lcfg, char *fsname)
         ENTRY;
 
         print_lustre_cfg(lcfg);
-        
+
         /* lustre, lustre-mdtlov, lustre-client, lustre-MDT0000 */
         devname = lustre_cfg_string(lcfg, 0);
         param = lustre_cfg_string(lcfg, 1);
@@ -3199,8 +3199,8 @@ int mgs_setparam(struct obd_device *obd, struct lustre_cfg *lcfg, char *fsname)
         fsname[MTI_NAME_MAXLEN - 1] = 0;
         CDEBUG(D_MGS, "setparam on fs %s device %s\n", fsname, devname);
 
-        rc = mgs_find_or_make_fsdb(obd, fsname, &fsdb); 
-        if (rc) 
+        rc = mgs_find_or_make_fsdb(obd, fsname, &fsdb);
+        if (rc)
                 RETURN(rc);
         if (fsdb->fsdb_flags & FSDB_LOG_EMPTY) {
                 CERROR("No filesystem targets for %s.  cfg_device from lctl "
@@ -3211,25 +3211,25 @@ int mgs_setparam(struct obd_device *obd, struct lustre_cfg *lcfg, char *fsname)
 
         /* Create a fake mti to hold everything */
         OBD_ALLOC_PTR(mti);
-        if (!mti) 
+        if (!mti)
                 GOTO(out, rc = -ENOMEM);
         strncpy(mti->mti_fsname, fsname, MTI_NAME_MAXLEN);
         strncpy(mti->mti_svname, devname, MTI_NAME_MAXLEN);
         strncpy(mti->mti_params, param, sizeof(mti->mti_params));
         rc = server_name2index(mti->mti_svname, &mti->mti_stripe_index, &tmp);
-        if (rc < 0) 
+        if (rc < 0)
                 /* Not a valid server; may be only fsname */
                 rc = 0;
         else
                 /* Strip -osc or -mdc suffix from svname */
-                if (server_make_name(rc, mti->mti_stripe_index, mti->mti_fsname, 
-                                     mti->mti_svname)) 
+                if (server_make_name(rc, mti->mti_stripe_index, mti->mti_fsname,
+                                     mti->mti_svname))
                         GOTO(out, rc = -EINVAL);
 
         mti->mti_flags = rc | LDD_F_PARAM;
 
         down(&fsdb->fsdb_sem);
-        rc = mgs_write_log_params(obd, fsdb, mti); 
+        rc = mgs_write_log_params(obd, fsdb, mti);
         up(&fsdb->fsdb_sem);
 
 out:
@@ -3412,10 +3412,10 @@ static int mgs_backup_llog(struct obd_device *obd, char* fsname)
 
         if (len >= PATH_MAX - 1) {
                 GOTO(out, -ENAMETOOLONG);
-        } 
+        }
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                
+
         bak_filp = l_filp_open(logname, O_RDWR|O_CREAT|O_TRUNC, 0660);
         if (IS_ERR(bak_filp)) {
                 rc = PTR_ERR(bak_filp);

@@ -401,7 +401,7 @@ static struct lu_device *cmm_device_alloc(const struct lu_env *env,
                 if (!m->cmm_fld) {
                         cmm_device_free(env, l);
                         l = ERR_PTR(-ENOMEM);
-        }
+                }
         }
         RETURN(l);
 }
@@ -448,14 +448,14 @@ static int cmm_device_init(const struct lu_env *env, struct lu_device *d,
         ls = cmm2lu_dev(m)->ld_site;
         lu_site2md(ls)->ms_client_fld = m->cmm_fld;
         err = cmm_procfs_init(m, name);
-        
+
         RETURN(err);
 }
 
 static struct lu_device *cmm_device_fini(const struct lu_env *env,
                                          struct lu_device *ld)
 {
-	struct cmm_device *cm = lu2cmm_dev(ld);
+        struct cmm_device *cm = lu2cmm_dev(ld);
         struct mdc_device *mc, *tmp;
         struct lu_site *ls;
         ENTRY;

@@ -339,9 +339,10 @@ struct obd_capa *ll_osscapa_get(struct inode *inode, __u64 opc)
         struct obd_capa *ocapa;
         int found = 0;
 
-        if ((ll_i2sbi(inode)->ll_flags & LL_SBI_OSS_CAPA) == 0)
-                return NULL;
         ENTRY;
+
+        if ((ll_i2sbi(inode)->ll_flags & LL_SBI_OSS_CAPA) == 0)
+                RETURN(NULL);
 
         LASSERT(opc == CAPA_OPC_OSS_WRITE || opc == CAPA_OPC_OSS_RW ||
                 opc == CAPA_OPC_OSS_TRUNC);
@@ -393,7 +394,7 @@ struct obd_capa *ll_mdscapa_get(struct inode *inode)
         ENTRY;
 
         LASSERT(inode != NULL);
-        
+
         if ((ll_i2sbi(inode)->ll_flags & LL_SBI_MDS_CAPA) == 0)
                 RETURN(NULL);
 
@@ -630,7 +631,7 @@ void ll_clear_inode_capas(struct inode *inode)
         ocapa = lli->lli_mds_capa;
         if (ocapa)
                 ll_delete_capa(ocapa);
-                
+
         list_for_each_entry_safe(ocapa, tmp, &lli->lli_oss_capas,
                                  u.cli.lli_list)
                 ll_delete_capa(ocapa);

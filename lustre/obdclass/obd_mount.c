@@ -1164,15 +1164,15 @@ out_mgc:
 
 struct lustre_sb_info *lustre_init_lsi(struct super_block *sb)
 {
-        struct lustre_sb_info *lsi = NULL;
+        struct lustre_sb_info *lsi;
         ENTRY;
 
-        OBD_ALLOC(lsi, sizeof(*lsi));
+        OBD_ALLOC_PTR(lsi);
         if (!lsi)
                 RETURN(NULL);
-        OBD_ALLOC(lsi->lsi_lmd, sizeof(*lsi->lsi_lmd));
+        OBD_ALLOC_PTR(lsi->lsi_lmd);
         if (!lsi->lsi_lmd) {
-                OBD_FREE(lsi, sizeof(*lsi));
+                OBD_FREE_PTR(lsi);
                 RETURN(NULL);
         }
 
@@ -1696,6 +1696,7 @@ int lustre_common_put_super(struct super_block *sb)
         }
         /* Drop a ref to the mounted disk */
         lustre_put_lsi(sb);
+        lu_types_stop();
         RETURN(rc);
 }
 

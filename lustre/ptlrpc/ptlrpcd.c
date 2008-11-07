@@ -51,10 +51,44 @@
 #include <lustre_ha.h>
 #include <obd_class.h>   /* for obd_zombie */
 #include <obd_support.h> /* for OBD_FAIL_CHECK */
+#include <cl_object.h> /* cl_env_{get,put}() */
 #include <lprocfs_status.h>
 
-static struct ptlrpcd_ctl ptlrpcd_pc;
-static struct ptlrpcd_ctl ptlrpcd_recovery_pc;
+enum pscope_thread {
+        PT_NORMAL,
+        PT_RECOVERY,
+        PT_NR
+};
+
+struct ptlrpcd_scope_ctl {
+        struct ptlrpcd_thread {
+                const char        *pt_name;
+                struct ptlrpcd_ctl pt_ctl;
+        } pscope_thread[PT_NR];
+};
+
+static struct ptlrpcd_scope_ctl ptlrpcd_scopes[PSCOPE_NR] = {
+        [PSCOPE_BRW] = {
+                .pscope_thread = {
+                        [PT_NORMAL] = {
+                                .pt_name = "ptlrpcd-brw"
+                        },
+                        [PT_RECOVERY] = {
+                                .pt_name = "ptlrpcd-brw-rcv"
+                        }
+                }
+        },
+        [PSCOPE_OTHER] = {
+                .pscope_thread = {
+                        [PT_NORMAL] = {
+                                .pt_name = "ptlrpcd"
+                        },
+                        [PT_RECOVERY] = {
+                                .pt_name = "ptlrpcd-rcv"
+                        }
+                }
+        }
+};
 
 struct semaphore ptlrpcd_sem;
 static int ptlrpcd_users = 0;
@@ -68,24 +102,26 @@ void ptlrpcd_wake(struct ptlrpc_request *req)
         cfs_waitq_signal(&rq_set->set_waitq);
 }
 
-/* 
+/*
  * Requests that are added to the ptlrpcd queue are sent via
  * ptlrpcd_check->ptlrpc_check_set().
  */
-void ptlrpcd_add_req(struct ptlrpc_request *req)
+void ptlrpcd_add_req(struct ptlrpc_request *req, enum ptlrpcd_scope scope)
 {
         struct ptlrpcd_ctl *pc;
+        enum pscope_thread  pt;
         int rc;
 
-        if (req->rq_send_state == LUSTRE_IMP_FULL)
-                pc = &ptlrpcd_pc;
-        else
-                pc = &ptlrpcd_recovery_pc;
-
+        LASSERT(scope < PSCOPE_NR);
+        pt = req->rq_send_state == LUSTRE_IMP_FULL ? PT_NORMAL : PT_RECOVERY;
+        pc = &ptlrpcd_scopes[scope].pscope_thread[pt].pt_ctl;
         rc = ptlrpc_set_add_new_req(pc, req);
-        if (rc) {
+        /*
+         * XXX disable this for CLIO: environment is needed for interpreter.
+         */
+        if (rc && 0) {
                 ptlrpc_interpterer_t interpreter;
-                                   
+
                 interpreter = req->rq_interpret_reply;
 
                 /*
@@ -118,8 +154,8 @@ static int ptlrpcd_check(const struct lu_env *env, struct ptlrpcd_ctl *pc)
                 req = list_entry(pos, struct ptlrpc_request, rq_set_chain);
                 list_del_init(&req->rq_set_chain);
                 ptlrpc_set_add_req(pc->pc_set, req);
-                /* 
-                 * Need to calculate its timeout. 
+                /*
+                 * Need to calculate its timeout.
                  */
                 rc = 1;
         }
@@ -128,9 +164,9 @@ static int ptlrpcd_check(const struct lu_env *env, struct ptlrpcd_ctl *pc)
         if (pc->pc_set->set_remaining) {
                 rc = rc | ptlrpc_check_set(env, pc->pc_set);
 
-                /* 
+                /*
                  * XXX: our set never completes, so we prune the completed
-                 * reqs after each iteration. boy could this be smarter. 
+                 * reqs after each iteration. boy could this be smarter.
                  */
                 list_for_each_safe(pos, tmp, &pc->pc_set->set_requests) {
                         req = list_entry(pos, struct ptlrpc_request,
@@ -145,8 +181,8 @@ static int ptlrpcd_check(const struct lu_env *env, struct ptlrpcd_ctl *pc)
         }
 
         if (rc == 0) {
-                /* 
-                 * If new requests have been added, make sure to wake up. 
+                /*
+                 * If new requests have been added, make sure to wake up.
                  */
                 spin_lock(&pc->pc_set->set_new_req_lock);
                 rc = !list_empty(&pc->pc_set->set_new_requests);
@@ -157,7 +193,7 @@ static int ptlrpcd_check(const struct lu_env *env, struct ptlrpcd_ctl *pc)
 }
 
 #ifdef __KERNEL__
-/* 
+/*
  * ptlrpc's code paths like to execute in process context, so we have this
  * thread which spins on a set which contains the io rpcs. llite specifies
  * ptlrpcd's set when it pushes pages down into the oscs.
@@ -165,34 +201,60 @@ static int ptlrpcd_check(const struct lu_env *env, struct ptlrpcd_ctl *pc)
 static int ptlrpcd(void *arg)
 {
         struct ptlrpcd_ctl *pc = arg;
+        struct lu_env env = { .le_ses = NULL };
         int rc;
         ENTRY;
 
-        if ((rc = cfs_daemonize_ctxt(pc->pc_name))) {
-                complete(&pc->pc_starting);
-                goto out;
+        rc = cfs_daemonize_ctxt(pc->pc_name);
+        if (rc == 0) {
+                /*
+                 * XXX So far only "client" ptlrpcd uses an environment. In
+                 * the future, ptlrpcd thread (or a thread-set) has to given
+                 * an argument, describing its "scope".
+                 */
+                rc = lu_context_init(&env.le_ctx,
+                                     LCT_CL_THREAD|LCT_REMEMBER|LCT_NOREF);
         }
 
         complete(&pc->pc_starting);
 
-        /* 
+        if (rc != 0)
+                RETURN(rc);
+        env.le_ctx.lc_cookie = 0x7;
+        /*
          * This mainloop strongly resembles ptlrpc_set_wait() except that our
          * set never completes.  ptlrpcd_check() calls ptlrpc_check_set() when
-         * there are requests in the set. New requests come in on the set's 
-         * new_req_list and ptlrpcd_check() moves them into the set. 
+         * there are requests in the set. New requests come in on the set's
+         * new_req_list and ptlrpcd_check() moves them into the set.
          */
         while (1) {
                 struct l_wait_info lwi;
                 int timeout;
 
+                rc = lu_env_refill(&env);
+                if (rc != 0) {
+                        /*
+                         * XXX This is very awkward situation, because
+                         * execution can neither continue (request
+                         * interpreters assume that env is set up), nor repeat
+                         * the loop (as this potentially results in a tight
+                         * loop of -ENOMEM's).
+                         *
+                         * Fortunately, refill only ever does something when
+                         * new modules are loaded, i.e., early during boot up.
+                         */
+                        CERROR("Failure to refill session: %d\n", rc);
+                        continue;
+                }
+
                 timeout = ptlrpc_set_next_timeout(pc->pc_set);
-                lwi = LWI_TIMEOUT(cfs_time_seconds(timeout ? timeout : 1), 
+                lwi = LWI_TIMEOUT(cfs_time_seconds(timeout ? timeout : 1),
                                   ptlrpc_expired_set, pc->pc_set);
 
-                lu_context_enter(&pc->pc_env.le_ctx);
+                lu_context_enter(&env.le_ctx);
                 l_wait_event(pc->pc_set->set_waitq,
-                             ptlrpcd_check(&pc->pc_env, pc), &lwi);
-                lu_context_exit(&pc->pc_env.le_ctx);
+                             ptlrpcd_check(&env, pc), &lwi);
+                lu_context_exit(&env.le_ctx);
 
                 /*
                  * Abort inflight rpcs for forced stop case.
@@ -204,14 +266,14 @@ static int ptlrpcd(void *arg)
                         break;
         }
 
-        /* 
-         * Wait for inflight requests to drain. 
+        /*
+         * Wait for inflight requests to drain.
          */
         if (!list_empty(&pc->pc_set->set_requests))
                 ptlrpc_set_wait(pc->pc_set);
-
+        lu_context_fini(&env.le_ctx);
         complete(&pc->pc_finishing);
-out:
+
         clear_bit(LIOD_START, &pc->pc_flags);
         clear_bit(LIOD_STOP, &pc->pc_flags);
         return 0;
@@ -222,10 +284,10 @@ out:
 int ptlrpcd_check_async_rpcs(void *arg)
 {
         struct ptlrpcd_ctl *pc = arg;
-        int                  rc = 0;
+        int                 rc = 0;
 
-        /* 
-         * Single threaded!! 
+        /*
+         * Single threaded!!
          */
         pc->pc_recurred++;
 
@@ -235,10 +297,10 @@ int ptlrpcd_check_async_rpcs(void *arg)
                 lu_context_exit(&pc->pc_env.le_ctx);
                 if (!rc)
                         ptlrpc_expired_set(pc->pc_set);
-                /* 
-                 * XXX: send replay requests. 
+                /*
+                 * XXX: send replay requests.
                  */
-                if (pc == &ptlrpcd_recovery_pc)
+                if (test_bit(LIOD_RECOVERY, &pc->pc_flags))
                         rc = ptlrpcd_check(&pc->pc_env, pc);
         }
 
@@ -256,13 +318,13 @@ int ptlrpcd_idle(void *arg)
 
 #endif
 
-int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
+int ptlrpcd_start(const char *name, struct ptlrpcd_ctl *pc)
 {
         int rc;
         ENTRY;
- 
-        /* 
-         * Do not allow start second thread for one pc. 
+
+        /*
+         * Do not allow start second thread for one pc.
          */
         if (test_and_set_bit(LIOD_START, &pc->pc_flags)) {
                 CERROR("Starting second thread (%s) for same pc %p\n",
@@ -332,28 +394,52 @@ void ptlrpcd_stop(struct ptlrpcd_ctl *pc, int force)
         ptlrpc_set_destroy(pc->pc_set);
 }
 
+void ptlrpcd_fini(void)
+{
+        int i;
+        int j;
+
+        ENTRY;
+
+        for (i = 0; i < PSCOPE_NR; ++i) {
+                for (j = 0; j < PT_NR; ++j) {
+                        struct ptlrpcd_ctl *pc;
+
+                        pc = &ptlrpcd_scopes[i].pscope_thread[j].pt_ctl;
+
+                        if (test_bit(LIOD_START, &pc->pc_flags))
+                                ptlrpcd_stop(pc, 0);
+                }
+        }
+        EXIT;
+}
+
 int ptlrpcd_addref(void)
 {
         int rc = 0;
+        int i;
+        int j;
         ENTRY;
 
         mutex_down(&ptlrpcd_sem);
-        if (++ptlrpcd_users != 1)
-                GOTO(out, rc);
+        if (++ptlrpcd_users == 1) {
+                for (i = 0; rc == 0 && i < PSCOPE_NR; ++i) {
+                        for (j = 0; rc == 0 && j < PT_NR; ++j) {
+                                struct ptlrpcd_thread *pt;
+                                struct ptlrpcd_ctl    *pc;
 
-        rc = ptlrpcd_start("ptlrpcd", &ptlrpcd_pc);
-        if (rc) {
-                --ptlrpcd_users;
-                GOTO(out, rc);
+                                pt = &ptlrpcd_scopes[i].pscope_thread[j];
+                                pc = &pt->pt_ctl;
+                                if (j == PT_RECOVERY)
+                                        set_bit(LIOD_RECOVERY, &pc->pc_flags);
+                                rc = ptlrpcd_start(pt->pt_name, pc);
+                        }
+                }
+                if (rc != 0) {
+                        --ptlrpcd_users;
+                        ptlrpcd_fini();
+                }
         }
-
-        rc = ptlrpcd_start("ptlrpcd-recov", &ptlrpcd_recovery_pc);
-        if (rc) {
-                ptlrpcd_stop(&ptlrpcd_pc, 0);
-                --ptlrpcd_users;
-                GOTO(out, rc);
-        }
-out:
         mutex_up(&ptlrpcd_sem);
         RETURN(rc);
 }
@@ -361,9 +447,7 @@ out:
 void ptlrpcd_decref(void)
 {
         mutex_down(&ptlrpcd_sem);
-        if (--ptlrpcd_users == 0) {
-                ptlrpcd_stop(&ptlrpcd_pc, 0);
-                ptlrpcd_stop(&ptlrpcd_recovery_pc, 0);
-        }
+        if (--ptlrpcd_users == 0)
+                ptlrpcd_fini();
         mutex_up(&ptlrpcd_sem);
 }

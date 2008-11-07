@@ -88,7 +88,9 @@ struct md_ucred {
 	struct md_identity *mu_identity;
 };
 
-#define MD_CAPAINFO_MAX 5
+enum {
+        MD_CAPAINFO_MAX = 5
+};
 
 /** there are at most 5 fids in one operation, see rename, NOTE the last one
  * is a temporary one used for is_subdir() */
@@ -335,9 +337,9 @@ struct md_upcall {
 };
 
 struct md_device {
-        struct lu_device             md_lu_dev;
+        struct lu_device                   md_lu_dev;
         const struct md_device_operations *md_ops;
-        struct md_upcall             md_upcall;
+        struct md_upcall                   md_upcall;
 };
 
 static inline void md_upcall_init(struct md_device *m, void *upcl)
@@ -377,7 +379,7 @@ static inline int md_do_upcall(const struct lu_env *env, struct md_device *m,
 }
 
 struct md_object {
-        struct lu_object             mo_lu;
+        struct lu_object                   mo_lu;
         const struct md_object_operations *mo_ops;
         const struct md_dir_operations    *mo_dir_ops;
 };
@@ -454,12 +456,12 @@ static inline struct md_site *lu_site2md(const struct lu_site *s)
 
 static inline int md_device_init(struct md_device *md, struct lu_device_type *t)
 {
-	return lu_device_init(&md->md_lu_dev, t);
+        return lu_device_init(&md->md_lu_dev, t);
 }
 
 static inline void md_device_fini(struct md_device *md)
 {
-	lu_device_fini(&md->md_lu_dev);
+        lu_device_fini(&md->md_lu_dev);
 }
 
 static inline struct md_object *md_object_find_slice(const struct lu_env *env,

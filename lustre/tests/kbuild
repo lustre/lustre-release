@@ -1,0 +1,312 @@
+#! /bin/sh
+
+#
+#  lustre/lustre/tests/kbuild
+#
+#  Copyright (C) 2005 Cluster File Systems, Inc.
+#
+#  Author: Nikita Danilov <nikita@clusterfs.com>
+#
+#  This file is part of Lustre, http://www.lustre.org.
+#
+#         Lustre is free  software; you can  redistribute it and/or  modify it
+#         under the terms of  version 2 of  the GNU General Public License  as
+#         published by the Free Software Foundation.
+#
+#         Lustre  is distributed  in the  hope  that it  will  be useful,  but
+#         WITHOUT  ANY   WARRANTY; without  even    the  implied  warranty  of
+#         MERCHANTABILITY or FITNESS FOR   A PARTICULAR PURPOSE.  See the  GNU
+#         General Public License for more details.
+#
+#         You  should have received a copy  of the  GNU General Public License
+#         along with  Lustre; if not, write to  the Free  Software Foundation,
+#         Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+#
+#  kbuild is a swiss-army linux kernel build script. Its purpose is to run
+#  automated kernel builds on given target file system (presumably Lustre) to
+#  measure file system performance and, occasionally, correctness.
+#
+#  Usual kernel build doesn't not stress file system, because the bottleneck
+#  is CPU consumption by the user level (compiler). To work around this,
+#  kbuild uses ccache(1) that eliminates most of CPU load by the compiler,
+#  once the cache is primed.
+#
+#  Options:
+
+function usage()
+{
+        cat <<EOF
+       $pname --- builds a kernel.
+
+Usage: $pname [-s <source>]         \\
+              [-t <target>]         \\
+              [-m <make-options>]   \\
+              [-i <iterations>]     \\
+              [-v <verbosity>]      \\
+              [-c <config-target>]  \\
+              [-S]                  \\
+              [-C <config-file>]
+
+   -s <source>        source of kernel to build. This can be:
+
+                        . path to directory;
+
+                        . tar.gz, .tgz, or .tar.bz2 archive;
+
+                        . ftp or http URL to the source archive;
+
+                      defaults to "$src".
+
+   -t <target>        target directory, where build process takes place.
+                      Defaults to "$tgt".
+
+   -m <make-options>  additional options supplied to each make invocation.
+                      Defaults to "$mopt"
+
+   -c <config-target> kernel makefile target to invoke to configure kernel
+                      (defconfig, allyesconfig, allmodconfig, etc.). This
+                      option conflicts with -C <config-file>. Defaults to
+                      "$mconfig".
+
+   -C <config-file>   use given .config file as kernel configuration. Not
+                      used by default.
+
+   -S                 skip kernel copying: kernel source is already unpacked
+                      in $target. Defaults to false.
+
+   -v                 increase verbosity level.
+
+Examples:
+
+  $pname -s /usr/src/linux-2.6.10-base.tar.gz -t /mnt/lustre2 \\
+         -m -j4 -C /usr/src/.config.fc3
+
+  $pname -s ftp://ftp.clusterfs.com/pub/kernels/fc3-2.6/linux-2.6.10-base.tgz \\
+         -m -j4 -c defconfig -vvv
+
+EOF
+        exit 1
+}
+
+#
+#  Results:
+#
+#  The output of kbuild are times as reported by time. First line is for build
+#  that fills the ccache cache (that is also located on the target file
+#  system). Consecutive times are repeated builds that reuse ccache
+#  cache. Number of iteration is set through -i option. Example output:
+#  
+#  R 783.757 S 319.615 U 281.720
+#  R 540.823 S 277.387 U 54.168
+#  R 557.762 S 263.566 U 53.222
+#  R 543.877 S 278.569 U 54.412
+#  R 544.455 S 279.096 U 53.697
+#  R 545.445 S 280.546 U 53.943
+#
+#  Notes:
+#
+#  Kernel builds can be quite slow as example output above shows. Create your
+#  own .config file to build smaller kernel.
+#
+#
+
+OPTVAL=`getopt -o s:m:i:t:vc:SC:h -n 'kbuild' -- "$@"` || usage
+
+# Note the quotes around `$OPTVAL': they are essential!
+eval set -- "$OPTVAL"
+
+LOG_CRIT=0
+LOG_ERROR=1
+LOG_WARN=2
+LOG_INFO=3
+LOG_PROGRESS=4
+LOG_TRACE=5
+LOG_ALL=6
+LOG_DEBUG=7
+
+src=/usr/src/linux
+tgt=/mnt/lustre
+verbose=$LOG_CRIT
+
+pname=$(basename $0)
+
+mopt=""
+mconfig=allyesconfig
+it=3
+lfile=/tmp/$pname-tmp-log.$$
+skip_copy=0
+conf_file=""
+
+while : ;do
+        case "$1" in
+                -s)
+                        src="$2"
+                        shift 2
+                ;;
+                -t)
+                        tgt="$2"
+                        shift 2
+                ;;
+                -m)
+                        mopt="$2"
+                        shift 2
+                ;;
+                -C)
+                        conf_file="$2"
+                        shift 2
+                ;;
+                -i)
+                        it="$2"
+                        shift 2
+                ;;
+                -c)
+                        mconfig="$2"
+                        shift 2
+                ;;
+                -S)
+                        skip_copy=1
+                        shift
+                ;;
+                -v)
+                        verbose=$(($verbose + 1))
+                        shift
+                ;;
+                -h)
+                        usage
+                ;;
+                --) 
+                        shift 
+                        break 
+                ;;
+                *) 
+                        echo "Internal error!" 
+                        usage
+                ;;
+        esac
+done
+
+[ $verbose -ge $LOG_ALL ] && set -x
+
+
+function warning()
+{
+        echo WARNING $pname: $*
+}
+
+function fail()
+{
+        local rc
+
+        rc=$1
+        shift
+        warning $* ... failing.
+        exit $rc
+}
+
+function log()
+{
+        local level
+
+        level=$1
+        shift
+        if [ $verbose -ge $level ] ;then
+               echo $*
+        fi
+}
+
+function doquiet()
+{
+        local cmd
+
+        cmd="$*"
+        echo >> $lfile
+        echo ---- start: $(date +"%Y-%m-%d %H:%M:%S") ---- >> $lfile
+        for i in $cmd ;do
+                echo "ARG: $i" >> $lfile
+        done
+        log $LOG_PROGRESS "Running '$cmd'..."
+        $cmd >>$lfile 2>&1 || \
+                fail 1 "Errors while running '$cmd'. See $lfile for transcript"
+        log $LOG_PROGRESS "Finished '$cmd'."
+        echo ---- done: $(date +"%Y-%m-%d %H:%M:%S") ---- >> $lfile
+}
+
+function dotime()
+{
+        local cmd
+
+        cmd="$*"
+        export TIMEFORMAT="R %3R S %3S U %3U"
+        time $cmd
+}
+
+ccache_dir=$tgt/ccache_dir
+cc_script=$tgt/cc_script
+
+which ccache >/dev/null || fail 2 "No ccache found"
+mkdir -p $ccache_dir || fail 3 "Cannot create $ccache_dir"
+
+export CCACHE_DIR=$ccache_dir
+
+# start the stuff
+
+cd $tgt || fail 4 "Cannot cd into $tgt"
+
+echo '#! /bin/sh'   >  $cc_script || fail 5 "Cannot write into $cc_script"
+echo 'ccache cc $*' >> $cc_script || fail 6 "Cannot append to $cc_script"
+chmod u+rx $cc_script || fail 7 "Cannot chmod u+rx $cc_script"
+
+cc_opt="CC=$cc_script"
+
+[ $verbose -ge $LOG_TRACE ] && vopt=-v
+
+if [ $skip_copy -eq 0 ] ;then
+        case "$src" in
+        ftp://*|http://*)
+                wget -c $src
+                src=$(basename $src)
+                ;;
+        esac
+
+        case "$src" in
+        */)
+                log $LOG_PROGRESS "Copying directory $src into $tgt"
+                cp -a$vopt "$src" .
+                ;;
+        *.tar.gz|*.tgz)
+                tar xzf "$src" $vopt
+                ;;
+        *.tar.bz2)
+                tar xjf "$src" $vopt
+                ;;
+        *)
+                fail 10 "No $src"
+                ;;
+        esac
+fi
+
+cd linux-* || fail 20 "Cannot change to linux-* from $PWD"
+
+function dokernel()
+{
+        doquiet make $mopt mrproper
+        if [ x$conf_file = x ] ;then
+                doquiet make $mopt $mconfig
+        else
+                cp $conf_file .config   || fail 8 "Cannot copy $conf_file"
+                ls -l .config
+                doquiet make $mopt oldconfig
+        fi
+
+        dotime doquiet make $mopt $cc_opt bzImage modules
+}
+
+log $LOG_PROGRESS Fill the cache...
+
+dokernel
+
+for i in $(seq 1 $it) ;do
+        log $LOG_PROGRESS Iteration $i...
+        dokernel
+done

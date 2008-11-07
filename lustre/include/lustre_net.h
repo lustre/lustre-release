@@ -213,7 +213,7 @@ union ptlrpc_async_args {
          * a pointer to it here.  The pointer_arg ensures this struct is at
          * least big enough for that. */
         void      *pointer_arg[9];
-        __u64      space[4];
+        __u64      space[5];
 };
 
 struct ptlrpc_request_set;
@@ -803,7 +803,11 @@ enum ptlrpcd_ctl_flags {
          * Ptlrpc thread stop force flag. This will cause also
          * aborting any inflight rpcs handled by thread.
          */
-        LIOD_STOP_FORCE  = 1 << 2
+        LIOD_STOP_FORCE  = 1 << 2,
+        /**
+         * This is a recovery ptlrpc thread.
+         */
+        LIOD_RECOVERY    = 1 << 3
 };
 
 /* ptlrpc/events.c */
@@ -1214,10 +1218,25 @@ void ping_evictor_stop(void);
 int ptlrpc_check_and_wait_suspend(struct ptlrpc_request *req);
 
 /* ptlrpc/ptlrpcd.c */
-int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc);
+
+/**
+ * Ptlrpcd scope is a set of two threads: ptlrpcd-foo and ptlrpcd-foo-rcv,
+ * these threads are used to asynchronously send requests queued with
+ * ptlrpcd_add_req(req, PCSOPE_FOO), and to handle completion call-backs for
+ * such requests. Multiple scopes are needed to avoid dead-locks.
+ */
+enum ptlrpcd_scope {
+        /** Scope of bulk read-write rpcs. */
+        PSCOPE_BRW,
+        /** Everything else. */
+        PSCOPE_OTHER,
+        PSCOPE_NR
+};
+
+int ptlrpcd_start(const char *name, struct ptlrpcd_ctl *pc);
 void ptlrpcd_stop(struct ptlrpcd_ctl *pc, int force);
 void ptlrpcd_wake(struct ptlrpc_request *req);
-void ptlrpcd_add_req(struct ptlrpc_request *req);
+void ptlrpcd_add_req(struct ptlrpc_request *req, enum ptlrpcd_scope scope);
 int ptlrpcd_addref(void);
 void ptlrpcd_decref(void);
 

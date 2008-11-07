@@ -318,7 +318,7 @@ struct ptlrpc_sec *plain_create_sec(struct obd_import *imp,
         /*
          * initialize plain_sec
          */
-        plsec->pls_lock = RW_LOCK_UNLOCKED;
+        rwlock_init(&plsec->pls_lock);
         plsec->pls_ctx = NULL;
 
         sec = &plsec->pls_base;

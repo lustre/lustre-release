@@ -116,8 +116,8 @@ struct lu_object *cmm_object_alloc(const struct lu_env *env,
                 struct cml_object *clo;
 
                 OBD_ALLOC_PTR(clo);
-	        if (clo != NULL) {
-		        lo = &clo->cmm_obj.cmo_obj.mo_lu;
+                if (clo != NULL) {
+                        lo = &clo->cmm_obj.cmo_obj.mo_lu;
                         lu_object_init(lo, NULL, ld);
                         clo->cmm_obj.cmo_obj.mo_ops = &cml_mo_ops;
                         clo->cmm_obj.cmo_obj.mo_dir_ops = &cml_dir_ops;
@@ -127,8 +127,8 @@ struct lu_object *cmm_object_alloc(const struct lu_env *env,
                 struct cmr_object *cro;
 
                 OBD_ALLOC_PTR(cro);
-	        if (cro != NULL) {
-		        lo = &cro->cmm_obj.cmo_obj.mo_lu;
+                if (cro != NULL) {
+                        lo = &cro->cmm_obj.cmo_obj.mo_lu;
                         lu_object_init(lo, NULL, ld);
                         cro->cmm_obj.cmo_obj.mo_ops = &cmr_mo_ops;
                         cro->cmm_obj.cmo_obj.mo_dir_ops = &cmr_dir_ops;
@@ -199,9 +199,9 @@ static int cml_object_print(const struct lu_env *env, void *cookie,
 }
 
 static const struct lu_object_operations cml_obj_ops = {
-	.loo_object_init    = cml_object_init,
-	.loo_object_free    = cml_object_free,
-	.loo_object_print   = cml_object_print
+        .loo_object_init    = cml_object_init,
+        .loo_object_free    = cml_object_free,
+        .loo_object_print   = cml_object_print
 };
 
 /* CMM local md_object operations */
@@ -831,9 +831,9 @@ static int cmr_object_print(const struct lu_env *env, void *cookie,
 }
 
 static const struct lu_object_operations cmr_obj_ops = {
-	.loo_object_init    = cmr_object_init,
-	.loo_object_free    = cmr_object_free,
-	.loo_object_print   = cmr_object_print
+        .loo_object_init    = cmr_object_init,
+        .loo_object_free    = cmr_object_free,
+        .loo_object_print   = cmr_object_print
 };
 
 /* CMM remote md_object operations. All are invalid */

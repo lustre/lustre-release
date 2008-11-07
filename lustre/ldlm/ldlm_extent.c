@@ -65,7 +65,7 @@ static void ldlm_extent_internal_policy_fixup(struct ldlm_lock *req,
         __u64 req_start = req->l_req_extent.start;
         __u64 req_end = req->l_req_extent.end;
         __u64 req_align, mask;
- 
+
         if (conflicting > 32 && (req_mode == LCK_PW || req_mode == LCK_CW)) {
                 if (req_end < req_start + LDLM_MAX_GROWN_EXTENT)
                         new_ex->end = min(req_start + LDLM_MAX_GROWN_EXTENT,
@@ -732,7 +732,7 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                                  * break earlier because otherwise, we will go
                                  * to restart and ldlm_resource_unlink will be
                                  * called and it causes the interval node to be
-                                 * freed. Then we will fail at 
+                                 * freed. Then we will fail at
                                  * ldlm_extent_add_lock() */
                                 *flags &= ~(LDLM_FL_BLOCK_GRANTED | LDLM_FL_BLOCK_CONV |
                                             LDLM_FL_BLOCK_WAIT);

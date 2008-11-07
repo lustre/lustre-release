@@ -470,9 +470,9 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK))
                 RETURN(err_serious(-ENOENT));
 
-        /* 
+        /*
          * step 1: lock the parent. Note, this may be child in case of
-         * remote operation denoted by ->mti_cross_ref flag. 
+         * remote operation denoted by ->mti_cross_ref flag.
          */
         parent_lh = &info->mti_lh[MDT_LH_PARENT];
         if (info->mti_cross_ref) {

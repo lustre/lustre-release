@@ -90,7 +90,7 @@ int lustre_msg_check_version(struct lustre_msg *msg, __u32 version)
         case LUSTRE_MSG_MAGIC_V1:
         case LUSTRE_MSG_MAGIC_V1_SWABBED:
                 CERROR("msg v1 not supported - please upgrade you system\n");
-                return -EINVAL; 
+                return -EINVAL;
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED:
                 return lustre_msg_check_version_v2(msg, version);
@@ -516,7 +516,7 @@ static int lustre_unpack_msg_v2(struct lustre_msg_v2 *m, int len)
                         len, m->lm_bufcount);
                 return -EINVAL;
         }
-        
+
         for (i = 0; i < m->lm_bufcount; i++) {
                 if (flipped)
                         __swab32s(&m->lm_buflens[i]);

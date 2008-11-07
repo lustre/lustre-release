@@ -269,7 +269,7 @@ static int __mdd_may_link(const struct lu_env *env, struct mdd_object *obj)
 
         /*
          * Subdir count limitation can be broken through.
-         */ 
+         */
         if (la->la_nlink >= m->mdd_dt_conf.ddp_max_nlink &&
             !S_ISDIR(la->la_mode))
                 RETURN(-EMLINK);
@@ -348,19 +348,19 @@ static inline int mdd_is_sticky(const struct lu_env *env,
                 rc = mdd_la_get(env, pobj, tmp_la, BYPASS_CAPA);
                 if (rc)
                         return rc;
-        
+
                 if (!(tmp_la->la_mode & S_ISVTX) ||
                      (tmp_la->la_uid == uc->mu_fsuid))
                         return 0;
         }
 
         rc = mdd_la_get(env, cobj, tmp_la, BYPASS_CAPA);
-        if (rc) 
+        if (rc)
                 return rc;
-        
+
         if (tmp_la->la_uid == uc->mu_fsuid)
                 return 0;
-        
+
         return !mdd_capable(uc, CFS_CAP_FOWNER);
 }
 
@@ -978,7 +978,7 @@ static int mdd_rename_tgt(const struct lu_env *env,
         if (rc)
                 GOTO(cleanup, rc);
 
-        /* 
+        /*
          * For tobj is remote case cmm layer has processed
          * and pass NULL tobj to here. So when tobj is NOT NULL,
          * it must be local one.
@@ -1658,7 +1658,7 @@ static int mdd_rename(const struct lu_env *env,
                         GOTO(cleanup, rc);
         }
 
-        /* 
+        /*
          * For tobj is remote case cmm layer has processed
          * and set tobj to NULL then. So when tobj is NOT NULL,
          * it must be local one.

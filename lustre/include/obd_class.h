@@ -92,13 +92,6 @@ struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid,
                                            int *next);
 struct obd_device * class_num2obd(int num);
 
-int oig_init(struct obd_io_group **oig);
-int oig_add_one(struct obd_io_group *oig, struct oig_callback_context *occ);
-void oig_complete_one(struct obd_io_group *oig,
-                      struct oig_callback_context *occ, int rc);
-void oig_release(struct obd_io_group *oig);
-int oig_wait(struct obd_io_group *oig);
-
 char *obd_export_nid2str(struct obd_export *exp);
 
 int obd_export_evict_by_nid(struct obd_device *obd, const char *nid);
@@ -107,6 +100,7 @@ int obd_export_evict_by_uuid(struct obd_device *obd, const char *uuid);
 int obd_zombie_impexp_init(void);
 void obd_zombie_impexp_stop(void);
 void obd_zombie_impexp_cull(void);
+void obd_zombie_barrier(void);
 
 /* obd_config.c */
 int class_process_config(struct lustre_cfg *lcfg);
@@ -411,26 +405,39 @@ static inline int obd_set_info_async(struct obd_export *exp, obd_count keylen,
         RETURN(rc);
 }
 
-#ifdef __KERNEL__
+/*
+ * obd-lu integration.
+ *
+ * Functionality is being moved into new lu_device-based layering, but some
+ * pieces of configuration process are still based on obd devices.
+ *
+ * Specifically, lu_device_type_operations::ldto_device_alloc() methods fully
+ * subsume ->o_setup() methods of obd devices they replace. The same for
+ * lu_device_operations::ldo_process_config() and ->o_process_config(). As a
+ * result, obd_setup() and obd_process_config() branch and call one XOR
+ * another.
+ *
+ * Yet neither lu_device_type_operations::ldto_device_fini() nor
+ * lu_device_type_operations::ldto_device_free() fully implement the
+ * functionality of ->o_precleanup() and ->o_cleanup() they override. Hence,
+ * obd_precleanup() and obd_cleanup() call both lu_device and obd operations.
+ */
+
 #define DECLARE_LU_VARS(ldt, d)                 \
-        struct lu_device_type *ldt;             \
+        struct lu_device_type *ldt;       \
         struct lu_device *d
-#else
-#define DECLARE_LU_VARS(ldt, d)                                 \
-        extern void __placeholder_to_put_a_semicolon(void)
-#endif
+
 static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 {
         int rc;
         DECLARE_LU_VARS(ldt, d);
         ENTRY;
 
-#ifdef __KERNEL__
         ldt = obd->obd_type->typ_lu;
         if (ldt != NULL) {
                 struct lu_env env;
 
-                rc = lu_env_init(&env, NULL, ldt->ldt_ctx_tags);
+                rc = lu_env_init(&env, ldt->ldt_ctx_tags);
                 if (rc == 0) {
                         d = ldt->ldt_ops->ldto_device_alloc(&env, ldt, cfg);
                         lu_env_fini(&env);
@@ -441,9 +448,7 @@ static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
                         } else
                                 rc = PTR_ERR(d);
                 }
-        } else
-#endif
-        {
+        } else {
                 OBD_CHECK_DT_OP(obd, setup, -EOPNOTSUPP);
                 OBD_COUNTER_INCREMENT(obd, setup);
                 rc = OBP(obd, setup)(obd, cfg);
@@ -459,29 +464,23 @@ static inline int obd_precleanup(struct obd_device *obd,
         ENTRY;
 
         OBD_CHECK_DEV(obd);
-#ifdef __KERNEL__
         ldt = obd->obd_type->typ_lu;
         d = obd->obd_lu_dev;
         if (ldt != NULL && d != NULL) {
                 if (cleanup_stage == OBD_CLEANUP_EXPORTS) {
                         struct lu_env env;
 
-                        rc = lu_env_init(&env, NULL, ldt->ldt_ctx_tags);
+                        rc = lu_env_init(&env, ldt->ldt_ctx_tags);
                         if (rc == 0) {
                                 ldt->ldt_ops->ldto_device_fini(&env, d);
                                 lu_env_fini(&env);
                         }
-                } else {
-                        rc = 0;
                 }
-        } else
-#endif
-        {
-                OBD_CHECK_DT_OP(obd, precleanup, 0);
-                rc = OBP(obd, precleanup)(obd, cleanup_stage);
         }
-
+        OBD_CHECK_DT_OP(obd, precleanup, 0);
         OBD_COUNTER_INCREMENT(obd, precleanup);
+
+        rc = OBP(obd, precleanup)(obd, cleanup_stage);
         RETURN(rc);
 }
 
@@ -493,25 +492,22 @@ static inline int obd_cleanup(struct obd_device *obd)
 
         OBD_CHECK_DEV(obd);
 
-#ifdef __KERNEL__
         ldt = obd->obd_type->typ_lu;
         d = obd->obd_lu_dev;
         if (ldt != NULL && d != NULL) {
                 struct lu_env env;
 
-                rc = lu_env_init(&env, NULL, ldt->ldt_ctx_tags);
+                rc = lu_env_init(&env, ldt->ldt_ctx_tags);
                 if (rc == 0) {
                         ldt->ldt_ops->ldto_device_free(&env, d);
                         lu_env_fini(&env);
                         obd->obd_lu_dev = NULL;
                 }
-        } else
-#endif
-        {
-                OBD_CHECK_DT_OP(obd, cleanup, 0);
-                rc = OBP(obd, cleanup)(obd);
         }
+        OBD_CHECK_DT_OP(obd, cleanup, 0);
         OBD_COUNTER_INCREMENT(obd, cleanup);
+
+        rc = OBP(obd, cleanup)(obd);
         RETURN(rc);
 }
 
@@ -524,20 +520,17 @@ obd_process_config(struct obd_device *obd, int datalen, void *data)
 
         OBD_CHECK_DEV(obd);
 
-#ifdef __KERNEL__
         ldt = obd->obd_type->typ_lu;
         d = obd->obd_lu_dev;
         if (ldt != NULL && d != NULL) {
                 struct lu_env env;
 
-                rc = lu_env_init(&env, NULL, ldt->ldt_ctx_tags);
+                rc = lu_env_init(&env, ldt->ldt_ctx_tags);
                 if (rc == 0) {
                         rc = d->ld_ops->ldo_process_config(&env, d, data);
                         lu_env_fini(&env);
                 }
-        } else
-#endif
-        {
+        } else {
                 OBD_CHECK_DT_OP(obd, process_config, -EOPNOTSUPP);
                 rc = OBP(obd, process_config)(obd, datalen, data);
         }
@@ -624,9 +617,13 @@ static inline int obd_alloc_memmd(struct obd_export *exp,
 static inline int obd_free_memmd(struct obd_export *exp,
                                  struct lov_stripe_md **mem_tgt)
 {
+        int rc;
+
         LASSERT(mem_tgt);
         LASSERT(*mem_tgt);
-        return obd_unpackmd(exp, mem_tgt, NULL, 0);
+        rc = obd_unpackmd(exp, mem_tgt, NULL, 0);
+        *mem_tgt = NULL;
+        return rc;
 }
 
 static inline int obd_checkmd(struct obd_export *exp,
@@ -811,10 +808,8 @@ static inline int obd_connect(const struct lu_env *env,
                               void *localdata)
 {
         int rc;
-#ifdef LIBCFS_DEBUG
         __u64 ocf = d ? d->ocd_connect_flags : 0; /* for post-condition
                                                    * check */
-#endif
         ENTRY;
 
         OBD_CHECK_DEV_ACTIVE(obd);
@@ -836,10 +831,8 @@ static inline int obd_reconnect(const struct lu_env *env,
                                 void *localdata)
 {
         int rc;
-#ifdef LIBCFS_DEBUG
         __u64 ocf = d ? d->ocd_connect_flags : 0; /* for post-condition
                                                    * check */
-#endif
 
         ENTRY;
 
@@ -1200,230 +1193,6 @@ static inline int obd_brw(int cmd, struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline int obd_brw_async(int cmd, struct obd_export *exp,
-                                struct obd_info *oinfo, obd_count oa_bufs,
-                                struct brw_page *pg, struct obd_trans_info *oti,
-                                struct ptlrpc_request_set *set)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, brw_async);
-        EXP_COUNTER_INCREMENT(exp, brw_async);
-
-        if (!(cmd & OBD_BRW_RWMASK)) {
-                CERROR("obd_brw: cmd must be OBD_BRW_READ or OBD_BRW_WRITE\n");
-                LBUG();
-        }
-
-        rc = OBP(exp->exp_obd, brw_async)(cmd, exp, oinfo, oa_bufs, pg,oti,set);
-        RETURN(rc);
-}
-
-static inline int obd_brw_rqset(int cmd, struct obd_export *exp,
-                                struct obdo *oa, struct lov_stripe_md *lsm,
-                                obd_count oa_bufs, struct brw_page *pg,
-                                struct obd_trans_info *oti,
-                                struct obd_capa *ocapa)
-{
-        struct ptlrpc_request_set *set = NULL;
-        struct obd_info oinfo = { { { 0 } } };
-        int rc = 0;
-        ENTRY;
-
-        set =  ptlrpc_prep_set();
-        if (set == NULL)
-                RETURN(-ENOMEM);
-
-        oinfo.oi_oa = oa;
-        oinfo.oi_md = lsm;
-        oinfo.oi_capa = ocapa;
-        rc = obd_brw_async(cmd, exp, &oinfo, oa_bufs, pg, oti, set);
-        if (rc == 0) {
-                rc = ptlrpc_set_wait(set);
-                if (rc)
-                        CERROR("error from callback: rc = %d\n", rc);
-        } else {
-                CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
-                       "error from obd_brw_async: rc = %d\n", rc);
-        }
-        ptlrpc_set_destroy(set);
-        RETURN(rc);
-}
-
-static inline  int obd_prep_async_page(struct obd_export *exp,
-                                       struct lov_stripe_md *lsm,
-                                       struct lov_oinfo *loi,
-                                       cfs_page_t *page, obd_off offset,
-                                       struct obd_async_page_ops *ops,
-                                       void *data, void **res, int nocache,
-                                       struct lustre_handle *lockh)
-{
-        int ret;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, prep_async_page);
-        EXP_COUNTER_INCREMENT(exp, prep_async_page);
-
-        ret = OBP(exp->exp_obd, prep_async_page)(exp, lsm, loi, page, offset,
-                                                 ops, data, res, nocache,
-                                                 lockh);
-        RETURN(ret);
-}
-
-/**
- * Checks if requested extent lock is compatible with a lock under the page.
- *
- * Checks if the lock under \a page is compatible with a read or write lock
- * (specified by \a rw) for an extent [\a start , \a end].
- *
- * \param exp obd export (lov or osc)
- * \param lsm striping information for the file
- * \param res async_page placeholder
- * \param rw OBD_BRW_READ if requested for reading,
- *           OBD_BRW_WRITE if requested for writing
- * \param start start of the requested extent
- * \param end end of the requested extent
- * \param cookie transparent parameter for passing locking context
- *
- * \post result == 1, *cookie == context, appropriate lock is referenced or
- *
- * \retval 1 owned lock is reused for the request
- * \retval 0 no lock reused for the request
- * \retval -ENOTSUPP reget_short_lock is not exported at this layer
- *
- * \see obd_release_short_lock
- */
-static inline int obd_reget_short_lock(struct obd_export *exp,
-                                       struct lov_stripe_md *lsm,
-                                       void **res, int rw,
-                                       obd_off start, obd_off end,
-                                       void **cookie)
-{
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, reget_short_lock);
-        EXP_COUNTER_INCREMENT(exp, reget_short_lock);
-
-        RETURN(OBP(exp->exp_obd, reget_short_lock)(exp, lsm, res, rw,
-                                                   start, end, cookie));
-}
-
-
-/**
- * Releases a reference to a lock taken in a "fast" way.
- *
- * Releases a read or write (specified by \a rw) lock
- * referenced by \a cookie.
- *
- * \param exp obd export (lov or osc)
- * \param lsm striping information for the file
- * \param end end of the locked extent
- * \param rw OBD_BRW_READ if requested for reading,
- *           OBD_BRW_WRITE if requested for writing
- * \param cookie transparent parameter for passing locking context
- *
- * \post appropriate lock is dereferenced
- *
- * \see obd_reget_short_lock
- */
-static inline int obd_release_short_lock(struct obd_export *exp,
-                                         struct lov_stripe_md *lsm, obd_off end,
-                                         void *cookie, int rw)
-{
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, release_short_lock);
-        EXP_COUNTER_INCREMENT(exp, release_short_lock);
-
-        RETURN(OBP(exp->exp_obd, release_short_lock)(exp, lsm, end,
-                                                     cookie, rw));
-}
-
-static inline int obd_queue_async_io(struct obd_export *exp,
-                                     struct lov_stripe_md *lsm,
-                                     struct lov_oinfo *loi, void *cookie,
-                                     int cmd, obd_off off, int count,
-                                     obd_flag brw_flags, obd_flag async_flags)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, queue_async_io);
-        EXP_COUNTER_INCREMENT(exp, queue_async_io);
-        LASSERT(cmd & OBD_BRW_RWMASK);
-
-        rc = OBP(exp->exp_obd, queue_async_io)(exp, lsm, loi, cookie, cmd, off,
-                                               count, brw_flags, async_flags);
-        RETURN(rc);
-}
-
-static inline int obd_set_async_flags(struct obd_export *exp,
-                                      struct lov_stripe_md *lsm,
-                                      struct lov_oinfo *loi, void *cookie,
-                                      obd_flag async_flags)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, set_async_flags);
-        EXP_COUNTER_INCREMENT(exp, set_async_flags);
-
-        rc = OBP(exp->exp_obd, set_async_flags)(exp, lsm, loi, cookie,
-                                                async_flags);
-        RETURN(rc);
-}
-
-static inline int obd_queue_group_io(struct obd_export *exp,
-                                     struct lov_stripe_md *lsm,
-                                     struct lov_oinfo *loi,
-                                     struct obd_io_group *oig,
-                                     void *cookie, int cmd, obd_off off,
-                                     int count, obd_flag brw_flags,
-                                     obd_flag async_flags)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, queue_group_io);
-        EXP_COUNTER_INCREMENT(exp, queue_group_io);
-        LASSERT(cmd & OBD_BRW_RWMASK);
-
-        rc = OBP(exp->exp_obd, queue_group_io)(exp, lsm, loi, oig, cookie,
-                                               cmd, off, count, brw_flags,
-                                               async_flags);
-        RETURN(rc);
-}
-
-static inline int obd_trigger_group_io(struct obd_export *exp,
-                                       struct lov_stripe_md *lsm,
-                                       struct lov_oinfo *loi,
-                                       struct obd_io_group *oig)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, trigger_group_io);
-        EXP_COUNTER_INCREMENT(exp, trigger_group_io);
-
-        rc = OBP(exp->exp_obd, trigger_group_io)(exp, lsm, loi, oig);
-        RETURN(rc);
-}
-
-static inline int obd_teardown_async_page(struct obd_export *exp,
-                                          struct lov_stripe_md *lsm,
-                                          struct lov_oinfo *loi, void *cookie)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, teardown_async_page);
-        EXP_COUNTER_INCREMENT(exp, teardown_async_page);
-
-        rc = OBP(exp->exp_obd, teardown_async_page)(exp, lsm, loi, cookie);
-        RETURN(rc);
-}
-
 static inline int obd_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
                              int objcount, struct obd_ioobj *obj,
                              struct niobuf_remote *remote, int *pages,
@@ -1533,21 +1302,6 @@ static inline int obd_enqueue(struct obd_export *exp,
         EXP_COUNTER_INCREMENT(exp, enqueue);
 
         rc = OBP(exp->exp_obd, enqueue)(exp, oinfo, einfo, set);
-        RETURN(rc);
-}
-
-static inline int obd_match(struct obd_export *exp, struct lov_stripe_md *ea,
-                            __u32 type, ldlm_policy_data_t *policy, __u32 mode,
-                            int *flags, void *data, struct lustre_handle *lockh)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, match);
-        EXP_COUNTER_INCREMENT(exp, match);
-
-        rc = OBP(exp->exp_obd, match)(exp, ea, type, policy, mode, flags, data,
-                                      lockh);
         RETURN(rc);
 }
 
@@ -1769,6 +1523,7 @@ static inline int obd_register_observer(struct obd_device *obd,
         RETURN(0);
 }
 
+#if 0
 static inline int obd_register_page_removal_cb(struct obd_export *exp,
                                                obd_page_removal_cb_t cb,
                                                obd_pin_extent_cb pin_cb)
@@ -1821,6 +1576,7 @@ static inline int obd_unregister_lock_cancel_cb(struct obd_export *exp,
         rc = OBP(exp->exp_obd, unregister_lock_cancel_cb)(exp, cb);
         RETURN(rc);
 }
+#endif
 
 /* metadata helpers */
 static inline int md_getstatus(struct obd_export *exp,

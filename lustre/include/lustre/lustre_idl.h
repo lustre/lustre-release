@@ -293,7 +293,7 @@ static inline void fid_zero(struct lu_fid *fid)
 /**
  * Check if a fid is igif or not.
  * \param fid the fid to be tested.
- * \return true if the fid is a igif; otherwise false. 
+ * \return true if the fid is a igif; otherwise false.
  */
 static inline int fid_is_igif(const struct lu_fid *fid)
 {
@@ -303,7 +303,7 @@ static inline int fid_is_igif(const struct lu_fid *fid)
 /**
  * Check if a fid is idif or not.
  * \param fid the fid to be tested.
- * \return true if the fid is a idif; otherwise false. 
+ * \return true if the fid is a idif; otherwise false.
  */
 static inline int fid_is_idif(const struct lu_fid *fid)
 {
@@ -324,7 +324,7 @@ static inline ino_t lu_igif_ino(const struct lu_fid *fid)
  * Get inode generation from a igif.
  * \param fid a igif to get inode generation from.
  * \return inode generation for the igif.
- */ 
+ */
 static inline __u32 lu_igif_gen(const struct lu_fid *fid)
 {
         return fid_oid(fid);
@@ -390,7 +390,6 @@ static inline void fid_be_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
  *
  * Variable size, first byte contains the length of the whole record.
  */
-
 struct lu_fid_pack {
         char fp_len;
         char fp_area[sizeof(struct lu_fid)];
@@ -947,7 +946,7 @@ extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OBD_BRW_CHECK           0x10
 #define OBD_BRW_FROM_GRANT      0x20 /* the osc manages this under llite */
 #define OBD_BRW_GRANTED         0x40 /* the ost manages this */
-#define OBD_BRW_DROP            0x80 /* drop the page after IO */
+#define OBD_BRW_NOCACHE         0x80 /* this page is a part of non-cached IO */
 #define OBD_BRW_NOQUOTA        0x100
 #define OBD_BRW_SRVLOCK        0x200 /* Client holds no lock over this page */
 
@@ -976,7 +975,7 @@ extern void lustre_swab_niobuf_remote (struct niobuf_remote *nbr);
 
 /* lock value block communicated between the filter and llite */
 
-/* OST_LVB_ERR_INIT is needed because the return code in rc is 
+/* OST_LVB_ERR_INIT is needed because the return code in rc is
  * negative, i.e. because ((MASK + rc) & MASK) != MASK. */
 #define OST_LVB_ERR_INIT 0xffbadbad80000000ULL
 #define OST_LVB_ERR_MASK 0xffbadbad00000000ULL

@@ -1099,12 +1099,14 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                                     at_get(&svc->srv_at_estimate));
         }
 
-        rc = lu_context_init(&request->rq_session, LCT_SESSION);
+        rc = lu_context_init(&request->rq_session,
+                             LCT_SESSION|LCT_REMEMBER|LCT_NOREF);
         if (rc) {
                 CERROR("Failure to initialize session: %d\n", rc);
                 goto out_req;
         }
         request->rq_session.lc_thread = thread;
+        request->rq_session.lc_cookie = 0x5;
         lu_context_enter(&request->rq_session);
 
         CDEBUG(D_NET, "got req "LPU64"\n", request->rq_xid);
@@ -1457,12 +1459,14 @@ static int ptlrpc_main(void *arg)
                         goto out;
         }
 
-        rc = lu_context_init(&env.le_ctx, svc->srv_ctx_tags);
+        rc = lu_context_init(&env.le_ctx,
+                             svc->srv_ctx_tags|LCT_REMEMBER|LCT_NOREF);
         if (rc)
                 goto out_srv_fini;
 
         thread->t_env = &env;
         env.le_ctx.lc_thread = thread;
+        env.le_ctx.lc_cookie = 0x6;
 
         /* Alloc reply state structure for this one */
         OBD_ALLOC_GFP(rs, svc->srv_max_reply_size, CFS_ALLOC_STD);

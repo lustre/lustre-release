@@ -3163,6 +3163,7 @@ test_72() { # bug 5695 - Test that on 2.6 remove_suid works properly
 	cancel_lru_locks mdc
 	test -u $DIR/f72 -o -g $DIR/f72 && error "S/gid is not dropped on MDS"
 	true
+	rm -f $DIR/f72
 }
 run_test 72 "Test that remove suid works properly (bug5695) ===="
 
@@ -3205,6 +3206,7 @@ test_74a() { # bug 6149, 6184
 	ls $DIR/f74a
 	lctl set_param fail_loc=0
 	true
+	rm -f $DIR/f74a
 }
 run_test 74a "ldlm_enqueue freed-export error path, ls (shouldn't LBUG)"
 
@@ -3218,6 +3220,7 @@ test_74b() { # bug 13310
 	touch $DIR/f74b
 	lctl set_param fail_loc=0
 	true
+	rm -f $DIR/f74b
 }
 run_test 74b "ldlm_enqueue freed-export error path, touch (shouldn't LBUG)"
 
@@ -3410,6 +3413,7 @@ test_77a() { # bug 10889
 	set_checksums 1
 	dd if=$F77_TMP of=$DIR/$tfile bs=1M count=$F77SZ || error "dd error"
 	set_checksums 0
+	rm -f $DIR/$tfile
 }
 run_test 77a "normal checksum read/write operation ============="
 
@@ -3422,6 +3426,7 @@ test_77b() { # bug 10889
 		error "dd error: $?"
 	lctl set_param fail_loc=0
 	set_checksums 0
+	rm -f $DIR/f77b
 }
 run_test 77b "checksum error on client write ===================="
 
@@ -3552,7 +3557,12 @@ test_78() { # bug 10901
 	echo "MemTotal: $MEMTOTAL"
 # reserve 256MB of memory for the kernel and other running processes,
 # and then take 1/2 of the remaining memory for the read/write buffers.
-	MEMTOTAL=$(((MEMTOTAL - 256 ) / 2))
+    if [ $MEMTOTAL -gt 512 ] ;then
+        MEMTOTAL=$(((MEMTOTAL - 256 ) / 2))
+    else
+        # for those poor memory-starved high-end clusters...
+        MEMTOTAL=$((MEMTOTAL / 2))
+    fi
 	echo "Mem to use for directio: $MEMTOTAL"
 	[ $F78SIZE -gt $MEMTOTAL ] && F78SIZE=$MEMTOTAL
 	[ $F78SIZE -gt 512 ] && F78SIZE=512
@@ -3562,11 +3572,12 @@ test_78() { # bug 10901
 	[ $SMALLESTOST -lt 10240 ] && \
 		skip "too small OSTSIZE, useless to run large O_DIRECT test" && return 0
 
-	[ $F78SIZE -gt $((SMALLESTOST * $OSTCOUNT / 1024 - 5)) ] && \
-		F78SIZE=$((SMALLESTOST * $OSTCOUNT / 1024 - 5))
+	[ $F78SIZE -gt $((SMALLESTOST * $OSTCOUNT / 1024 - 80)) ] && \
+		F78SIZE=$((SMALLESTOST * $OSTCOUNT / 1024 - 80))
+
 	[ "$SLOW" = "no" ] && NSEQ=1 && [ $F78SIZE -gt 32 ] && F78SIZE=32
 	echo "File size: $F78SIZE"
-	$SETSTRIPE $DIR/$tfile -c -1 || error "setstripe failed"
+	$SETSTRIPE $DIR/$tfile -c $OSTCOUNT || error "setstripe failed"
  	for i in `seq 1 $NSEQ`
  	do
  		FSIZE=$(($F78SIZE / ($NSEQ - $i + 1)))
@@ -3619,6 +3630,7 @@ test_80() { # bug 10718
                 error "elapsed for 1M@1T = $DIFF"
         fi
         true
+    	rm -f $DIR/$tfile
 }
 run_test 80 "Page eviction is equally fast at high offsets too  ===="
 
@@ -3685,6 +3697,7 @@ test_99f() {
 	[ ! -d $DIR/d99cvsroot ] && test_99d
 	cd $DIR/d99reposname
 	$RUNAS cvs commit -m 'nomsg' foo99
+    rm -fr $DIR/d99cvsroot
 }
 run_test 99f "cvs commit ======================================="
 
@@ -3787,6 +3800,7 @@ cleanup_test101() {
 	[ "$SETUP_TEST101" = "yes" ] || return
 	trap 0
 	rm -rf $DIR/$tdir
+    rm -f $DIR/$tfile
 	SETUP_TEST101=no
 }
 
@@ -3948,6 +3962,7 @@ test_102b() {
 	local stripe_count=`grep "count"  $tmp_file| awk '{print $2}'`
 	[ "$stripe_size" -eq 65536 ] || error "stripe size $stripe_size != 65536"
 	[ "$stripe_count" -eq 2 ] || error "stripe count $stripe_count != 2"
+	rm -f $DIR/$tfile
 }
 run_test 102b "getfattr/setfattr for trusted.lov EAs ============"
 
@@ -4148,6 +4163,7 @@ test_102h() { # bug 15777
 		error "$XBIG different after growing $XSML"
 	fi
 	log "$XBIG still valid after growing $XSML"
+	rm -f $file
 }
 run_test 102h "grow xattr from inside inode to external block"
 
@@ -4225,6 +4241,7 @@ test_104() {
 	lfs df || error "lfs df with deactivated OSC failed"
 	lctl --device %$OSC recover
 	lfs df || error "lfs df with reactivated OSC failed"
+	rm -f $DIR/$tfile
 }
 run_test 104 "lfs df [-ih] [path] test ========================="
 
@@ -4237,6 +4254,7 @@ test_105a() {
         else
                 flocks_test 1 off -f $DIR/$tfile || error "fail flock off"
         fi
+	rm -f $DIR/$tfile
 }
 run_test 105a "flock when mounted without -o flock test ========"
 
@@ -4248,6 +4266,7 @@ test_105b() {
         else
                 flocks_test 1 off -c $DIR/$tfile || error "fail flock off"
         fi
+	rm -f $DIR/$tfile
 }
 run_test 105b "fcntl when mounted without -o flock test ========"
 
@@ -4259,6 +4278,7 @@ test_105c() {
         else
                 flocks_test 1 off -l $DIR/$tfile || error "fail flock off"
         fi
+	rm -f $DIR/$tfile
 }
 run_test 105c "lockf when mounted without -o flock test ========"
 
@@ -4320,6 +4340,7 @@ test_110() {
 	touch $DIR/d110/yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy && error ""create with 256 char should fail, but not
 
 	ls -l $DIR/d110
+    rm -fr $DIR/d110
 }
 run_test 110 "filename length checking"
 
@@ -4462,6 +4483,7 @@ test_117() # bug 10891
         > $DIR/$tfile || error "truncate failed"
         lctl set_param fail_loc=0
         echo "Truncate succeeded."
+	rm -f $DIR/$tfile
 }
 run_test 117 "verify fsfilt_extend =========="
 
@@ -4498,6 +4520,7 @@ test_118a() #bug 11710
 		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
 		return 1;
         fi
+	rm -f $DIR/$tfile
 }
 run_test 118a "verify O_SYNC works =========="
 
@@ -5646,6 +5669,49 @@ test_130e() {
 }
 run_test 130e "FIEMAP (test continuation FIEMAP calls)"
 
+# Test for writev/readv
+test_131a() {
+	rwv -f $DIR/$tfile -w -n 3 524288 1048576 1572864 || \
+	error "writev test failed"
+	rwv -f $DIR/$tfile -r -v -n 2 1572864 1048576 || \
+	error "readv failed"
+	rm -f $DIR/$tfile
+}
+run_test 131a "test iov's crossing stripe boundary for writev/readv"
+
+test_131b() {
+	rwv -f $DIR/$tfile -w -a -n 3 524288 1048576 1572864 || \
+	error "append writev test failed"
+	rwv -f $DIR/$tfile -w -a -n 2 1572864 1048576 || \
+	error "append writev test failed"
+	rm -f $DIR/$tfile
+}
+run_test 131b "test append writev"
+
+test_131c() {
+	rwv -f $DIR/$tfile -w -d -n 1 1048576 || return 0
+	error "NOT PASS"
+}
+run_test 131c "test read/write on file w/o objects"
+
+test_131d() {
+	rwv -f $DIR/$tfile -w -n 1 1572864
+	NOB=`rwv -f $DIR/$tfile -r -n 3 524288 524288 1048576 | awk '/error/ {print $6}'`
+	if [ "$NOB" != 1572864 ]; then
+		error "Short read filed: read $NOB bytes instead of 1572864"
+	fi
+	rm -f $DIR/$tfile
+}
+run_test 131d "test short read"
+
+test_131e() {
+	rwv -f $DIR/$tfile -w -s 1048576 -n 1 1048576
+	rwv -f $DIR/$tfile -r -z -s 0 -n 1 524288 || \
+	error "read hitting hole failed"
+	rm -f $DIR/$tfile
+}
+run_test 131e "test read hitting hole"
+
 test_140() { #bug-17379
         mkdir -p $DIR/$tdir || error "Creating dir $DIR/$tdir"
         cd $DIR/$tdir || error "Changing to $DIR/$tdir"
@@ -5914,6 +5980,15 @@ test_200i() {
 	[ "$res" = "" ] || error "Pool $FSNAME.$POOL is not destroyed"
 }
 run_test 200i "Remove a pool ============================================"
+
+test_212() {
+	size=`date +%s`
+	size=$((size % 8192 + 1))
+	dd if=/dev/urandom of=$DIR/f212 bs=1k count=$size
+	sendfile $DIR/f212 $DIR/f212.xyz || error "sendfile wrong"
+	rm -f $DIR/f212 $DIR/f212.xyz
+}
+run_test 212 "Sendfile test ============================================"
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP

@@ -180,16 +180,16 @@ struct lu_object *mdd_object_alloc(const struct lu_env *env,
 static int mdd_object_init(const struct lu_env *env, struct lu_object *o,
                            const struct lu_object_conf *_)
 {
-	struct mdd_device *d = lu2mdd_dev(o->lo_dev);
-	struct lu_object  *below;
+        struct mdd_device *d = lu2mdd_dev(o->lo_dev);
+        struct lu_object  *below;
         struct lu_device  *under;
         ENTRY;
 
-	under = &d->mdd_child->dd_lu_dev;
-	below = under->ld_ops->ldo_object_alloc(env, o->lo_header, under);
+        under = &d->mdd_child->dd_lu_dev;
+        below = under->ld_ops->ldo_object_alloc(env, o->lo_header, under);
         mdd_pdlock_init(lu2mdd_obj(o));
         if (below == NULL)
-		RETURN(-ENOMEM);
+                RETURN(-ENOMEM);
 
         lu_object_add(o, below);
         RETURN(0);
@@ -206,7 +206,7 @@ static int mdd_object_start(const struct lu_env *env, struct lu_object *o)
 static void mdd_object_free(const struct lu_env *env, struct lu_object *o)
 {
         struct mdd_object *mdd = lu2mdd_obj(o);
-	
+
         lu_object_fini(o);
         OBD_FREE_PTR(mdd);
 }
@@ -239,9 +239,9 @@ static void mdd_object_delete(const struct lu_env *env, struct lu_object *o)
 }
 
 static const struct lu_object_operations mdd_lu_obj_ops = {
-	.loo_object_init    = mdd_object_init,
-	.loo_object_start   = mdd_object_start,
-	.loo_object_free    = mdd_object_free,
+        .loo_object_init    = mdd_object_init,
+        .loo_object_start   = mdd_object_start,
+        .loo_object_free    = mdd_object_free,
         .loo_object_delete  = mdd_object_delete
 };
 
@@ -669,7 +669,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
                         la->la_valid &= ~LA_ATIME;
                 RETURN(0);
         }
- 
+
         /* Check if flags change. */
         if (la->la_valid & LA_FLAGS) {
                 unsigned int oldflags = 0;
@@ -685,7 +685,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
                 if (mdd_is_immutable(obj))
                         oldflags |= LUSTRE_IMMUTABLE_FL;
                 if (mdd_is_append(obj))
-                        oldflags |= LUSTRE_APPEND_FL; 
+                        oldflags |= LUSTRE_APPEND_FL;
                 if ((oldflags ^ newflags) &&
                     !mdd_capable(uc, CFS_CAP_LINUX_IMMUTABLE))
                         RETURN(-EPERM);
@@ -1354,7 +1354,7 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
                 rc = mdd_object_kill(env, mdd_obj, ma);
         else
                 ma->ma_valid &= ~(MA_LOV | MA_COOKIE);
-        
+
         mdd_write_unlock(env, mdd_obj);
         mdd_trans_stop(env, mdo2mdd(obj), rc, handle);
         RETURN(rc);

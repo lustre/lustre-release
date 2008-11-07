@@ -913,7 +913,7 @@ static int mdt_txn_stop_cb(const struct lu_env *env,
         return mdt_last_rcvd_update(mti, txn);
 }
 
-/* commit callback, need to update last_commited value */
+/* commit callback, need to update last_committed value */
 static int mdt_txn_commit_cb(const struct lu_env *env,
                              struct thandle *txn, void *cookie)
 {

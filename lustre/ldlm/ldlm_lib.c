@@ -1583,7 +1583,6 @@ static int target_recovery_thread(void *arg)
         unsigned long flags;
         struct lu_env env;
         struct ptlrpc_thread fake_svc_thread, *thread = &fake_svc_thread;
-        __u32 recov_ctx_tags = LCT_MD_THREAD;
         int rc = 0;
         ENTRY;
 
@@ -1594,7 +1593,7 @@ static int target_recovery_thread(void *arg)
         RECALC_SIGPENDING;
         SIGNAL_MASK_UNLOCK(current, flags);
 
-        rc = lu_context_init(&env.le_ctx, recov_ctx_tags);
+        rc = lu_context_init(&env.le_ctx, LCT_MD_THREAD);
         if (rc)
                 RETURN(rc);
 

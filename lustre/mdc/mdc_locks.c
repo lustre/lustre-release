@@ -155,7 +155,7 @@ ldlm_mode_t mdc_lock_match(struct obd_export *exp, int flags,
 
         fid_build_reg_res_name(fid, &res_id);
         rc = ldlm_lock_match(class_exp2obd(exp)->obd_namespace, flags,
-                             &res_id, type, policy, mode, lockh);
+                             &res_id, type, policy, mode, lockh, 0);
         RETURN(rc);
 }
 
@@ -241,7 +241,7 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
         struct ptlrpc_request *req;
         struct obd_device     *obddev = class_exp2obd(exp);
         struct ldlm_intent    *lit;
-        int                    joinfile = !!((it->it_flags & O_JOIN_FILE) && 
+        int                    joinfile = !!((it->it_flags & O_JOIN_FILE) &&
                                               op_data->op_data);
         CFS_LIST_HEAD(cancels);
         int                    count = 0;
@@ -812,7 +812,7 @@ static int mdc_finish_intent_lock(struct obd_export *exp,
 
                 memcpy(&old_lock, lockh, sizeof(*lockh));
                 if (ldlm_lock_match(NULL, LDLM_FL_BLOCK_GRANTED, NULL,
-                                    LDLM_IBITS, &policy, LCK_NL, &old_lock)) {
+                                    LDLM_IBITS, &policy, LCK_NL, &old_lock, 0)) {
                         ldlm_lock_decref_and_cancel(lockh,
                                                     it->d.lustre.it_lock_mode);
                         memcpy(lockh, &old_lock, sizeof(old_lock));
@@ -1024,7 +1024,7 @@ int mdc_intent_getattr_async(struct obd_export *exp,
         req->rq_async_args.pointer_arg[1] = minfo;
         req->rq_async_args.pointer_arg[2] = einfo;
         req->rq_interpret_reply = mdc_intent_getattr_async_interpret;
-        ptlrpcd_add_req(req);
+        ptlrpcd_add_req(req, PSCOPE_OTHER);
 
         RETURN(0);
 }
@@ -1043,8 +1043,8 @@ int mdc_revalidate_lock(struct obd_export *exp,
         ENTRY;
 
         fid_build_reg_res_name(fid, &res_id);
-        /* As not all attributes are kept under update lock, e.g. 
-           owner/group/acls are under lookup lock, we need both 
+        /* As not all attributes are kept under update lock, e.g.
+           owner/group/acls are under lookup lock, we need both
            ibits for GETATTR. */
         policy.l_inodebits.bits = (it->it_op == IT_GETATTR) ?
                 MDS_INODELOCK_UPDATE | MDS_INODELOCK_LOOKUP :
@@ -1052,7 +1052,7 @@ int mdc_revalidate_lock(struct obd_export *exp,
 
         mode = ldlm_lock_match(exp->exp_obd->obd_namespace,
                                LDLM_FL_BLOCK_GRANTED, &res_id, LDLM_IBITS,
-                               &policy, LCK_CR|LCK_CW|LCK_PR|LCK_PW, &lockh);
+                               &policy, LCK_CR|LCK_CW|LCK_PR|LCK_PW, &lockh, 0);
         if (mode) {
                 it->d.lustre.it_lock_handle = lockh.cookie;
                 it->d.lustre.it_lock_mode = mode;

@@ -84,7 +84,7 @@ static int quotfmt_initialize(struct lustre_quota_info *lqi,
                 LOCK_INODE_MUTEX_PARENT(parent_inode);
                 de = lookup_one_len(name, tgt->obd_lvfs_ctxt.pwd, namelen);
                 if (!IS_ERR(de) && de->d_inode)
-                        ll_vfs_unlink(parent_inode, de, 
+                        ll_vfs_unlink(parent_inode, de,
                                       tgt->obd_lvfs_ctxt.pwdmnt);
                 if (!IS_ERR(de))
                         dput(de);
@@ -380,7 +380,7 @@ static int quotfmt_test_4(struct lustre_quota_info *lqi)
 
 static int quotfmt_test_5(struct lustre_quota_info *lqi)
 {
-#ifndef KERNEL_SUPPORTS_QUOTA_READ 
+#ifndef KERNEL_SUPPORTS_QUOTA_READ
         int i, rc = 0;
 
         for (i = USRQUOTA; i < MAXQUOTAS && !rc; i++) {

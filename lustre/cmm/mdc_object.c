@@ -176,7 +176,7 @@ static int mdc_req2attr_update(const struct lu_env *env,
                 LASSERT(ma->ma_capa != NULL);
                 *ma->ma_capa = *capa;
         }
-                
+
         if ((body->valid & OBD_MD_FLEASIZE) || (body->valid & OBD_MD_FLDIREA)) {
                 if (body->eadatasize == 0) {
                         CERROR("No size defined for easize field\n");
@@ -189,7 +189,7 @@ static int mdc_req2attr_update(const struct lu_env *env,
                         RETURN(-EPROTO);
 
                 LASSERT(ma->ma_lmm != NULL);
-                LASSERT(ma->ma_lmm_size >= body->eadatasize); 
+                LASSERT(ma->ma_lmm_size >= body->eadatasize);
                 ma->ma_lmm_size = body->eadatasize;
                 memcpy(ma->ma_lmm, md, ma->ma_lmm_size);
                 ma->ma_valid |= MA_LOV;
@@ -207,7 +207,7 @@ static int mdc_req2attr_update(const struct lu_env *env,
                         RETURN(-EPROTO);
                 }
 
-                cookie = req_capsule_server_sized_get(&req->rq_pill, 
+                cookie = req_capsule_server_sized_get(&req->rq_pill,
                                                       &RMF_LOGCOOKIES,
                                                       body->aclsize);
                 if (cookie == NULL)
@@ -226,7 +226,7 @@ static int mdc_req2attr_update(const struct lu_env *env,
                         RETURN(-EPROTO);
                 }
 
-                acl = req_capsule_server_sized_get(&req->rq_pill, 
+                acl = req_capsule_server_sized_get(&req->rq_pill,
                                                    &RMF_ACL,
                                                    body->aclsize);
                 if (acl == NULL)
@@ -349,7 +349,7 @@ static int mdc_object_create(const struct lu_env *env,
         mci = mdc_info_init(env);
         mci->mci_opdata.op_bias = MDS_CROSS_REF;
         mci->mci_opdata.op_fid2 = *lu_object_fid(&mo->mo_lu);
-        
+
         /* Parent fid is needed to create dotdot on the remote node. */
         mci->mci_opdata.op_fid1 = *(spec->u.sp_pfid);
         mci->mci_opdata.op_mod_time = la->la_ctime;
@@ -572,7 +572,7 @@ static int mdc_rename_tgt(const struct lu_env *env, struct md_object *mo_p,
 
         RETURN(rc);
 }
-/* 
+/*
  * Return resulting fid in sfid
  * 0: fids are not relatives
  * fid: fid at which search stopped
@@ -594,7 +594,7 @@ static int mdc_is_subdir(const struct lu_env *env, struct md_object *mo,
                 body = req_capsule_server_get(&mci->mci_req->rq_pill,
                                               &RMF_MDT_BODY);
                 LASSERT(body->valid & OBD_MD_FLID);
-        
+
                 CDEBUG(D_INFO, "Remote mdo_is_subdir(), new src "DFID"\n",
                        PFID(&body->fid1));
                 *sfid = body->fid1;

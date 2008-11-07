@@ -1248,15 +1248,6 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, getattr);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, getattr_async);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, brw);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, brw_async);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, prep_async_page);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, reget_short_lock);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, release_short_lock);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, queue_async_io);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, queue_group_io);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, trigger_group_io);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, set_async_flags);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, teardown_async_page);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, merge_lvb);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, adjust_kms);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, punch);
@@ -1267,7 +1258,6 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, preprw);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, commitrw);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, enqueue);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, match);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, change_cbdata);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, cancel);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, cancel_unused);
@@ -1286,10 +1276,6 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, quotacheck);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, quotactl);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, ping);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, register_page_removal_cb);
-        LPROCFS_OBD_OP_INIT(num_private_stats,stats,unregister_page_removal_cb);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, register_lock_cancel_cb);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats,unregister_lock_cancel_cb);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_new);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_rem);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_add);

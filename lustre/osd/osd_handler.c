@@ -217,11 +217,11 @@ static struct thandle     *osd_trans_start  (const struct lu_env *env,
 static journal_t          *osd_journal      (const struct osd_device *dev);
 
 static const struct lu_device_type_operations osd_device_type_ops;
-static struct lu_device_type            osd_device_type;
+static       struct lu_device_type            osd_device_type;
 static const struct lu_object_operations      osd_lu_obj_ops;
-static struct obd_ops                   osd_obd_device_ops;
+static       struct obd_ops                   osd_obd_device_ops;
 static const struct lu_device_operations      osd_lu_ops;
-static struct lu_context_key            osd_key;
+static       struct lu_context_key            osd_key;
 static const struct dt_object_operations      osd_obj_ops;
 static const struct dt_body_operations        osd_body_ops;
 static const struct dt_index_operations       osd_index_ops;
@@ -433,7 +433,7 @@ static int osd_inode_remove(const struct lu_env *env, struct osd_object *obj)
         struct thandle         *th;
         int result;
 
-        txn_param_init(prm, OSD_TXN_OI_DELETE_CREDITS + 
+        txn_param_init(prm, OSD_TXN_OI_DELETE_CREDITS +
                             OSD_TXN_INODE_DELETE_CREDITS);
         th = osd_trans_start(env, &osd->od_dt_dev, prm);
         if (!IS_ERR(th)) {
@@ -532,7 +532,7 @@ int osd_statfs(const struct lu_env *env, struct dt_device *d,
         }
 
         if (likely(result == 0))
-                *sfs = osd->od_kstatfs; 
+                *sfs = osd->od_kstatfs;
         spin_unlock(&osd->od_osfs_lock);
 
         return result;
@@ -572,7 +572,7 @@ static int osd_param_is_sane(const struct osd_device *dev,
 static void osd_trans_commit_cb(struct journal_callback *jcb, int error)
 {
         struct osd_thandle *oh = container_of0(jcb, struct osd_thandle, ot_jcb);
-        struct thandle     *th = &oh->ot_super;
+        struct thandle     *th  = &oh->ot_super;
         struct dt_device   *dev = th->th_dev;
         struct lu_device   *lud = &dev->dd_lu_dev;
 
@@ -790,7 +790,7 @@ static const int osd_dto_credits[DTO_NR] = {
         /* creadits for inode change during write */
         [DTO_WRITE_BASE]    = 3,
         /* credits for single block write */
-        [DTO_WRITE_BLOCK]   = 12 
+        [DTO_WRITE_BLOCK]   = 12
 };
 
 static int osd_credit_get(const struct lu_env *env, struct dt_device *d,
@@ -824,8 +824,8 @@ static void osd_object_read_lock(const struct lu_env *env,
         LASSERT(obj->oo_owner != env);
         down_read_nested(&obj->oo_sem, role);
 
-                LASSERT(obj->oo_owner == NULL);
-                oti->oti_r_locks++;
+        LASSERT(obj->oo_owner == NULL);
+        oti->oti_r_locks++;
 }
 
 static void osd_object_write_lock(const struct lu_env *env,
@@ -839,21 +839,21 @@ static void osd_object_write_lock(const struct lu_env *env,
         LASSERT(obj->oo_owner != env);
         down_write_nested(&obj->oo_sem, role);
 
-                LASSERT(obj->oo_owner == NULL);
-                obj->oo_owner = env;
-                oti->oti_w_locks++;
+        LASSERT(obj->oo_owner == NULL);
+        obj->oo_owner = env;
+        oti->oti_w_locks++;
 }
 
 static void osd_object_read_unlock(const struct lu_env *env,
                                    struct dt_object *dt)
 {
         struct osd_object *obj = osd_dt_obj(dt);
-                struct osd_thread_info *oti = osd_oti_get(env);
+        struct osd_thread_info *oti = osd_oti_get(env);
 
         LINVRNT(osd_invariant(obj));
 
-                LASSERT(oti->oti_r_locks > 0);
-                oti->oti_r_locks--;
+        LASSERT(oti->oti_r_locks > 0);
+        oti->oti_r_locks--;
         up_read(&obj->oo_sem);
 }
 
@@ -861,14 +861,14 @@ static void osd_object_write_unlock(const struct lu_env *env,
                                     struct dt_object *dt)
 {
         struct osd_object *obj = osd_dt_obj(dt);
-                struct osd_thread_info *oti = osd_oti_get(env);
+        struct osd_thread_info *oti = osd_oti_get(env);
 
         LINVRNT(osd_invariant(obj));
 
-                LASSERT(obj->oo_owner == env);
-                LASSERT(oti->oti_w_locks > 0);
-                oti->oti_w_locks--;
-                obj->oo_owner = NULL;
+        LASSERT(obj->oo_owner == env);
+        LASSERT(oti->oti_w_locks > 0);
+        oti->oti_w_locks--;
+        obj->oo_owner = NULL;
         up_write(&obj->oo_sem);
 }
 
@@ -1241,7 +1241,7 @@ static void osd_ah_init(const struct lu_env *env, struct dt_allocation_hint *ah,
  * Concurrency: @dt is write locked.
  */
 static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
-                             struct lu_attr *attr, 
+                             struct lu_attr *attr,
                              struct dt_allocation_hint *hint,
                              struct thandle *th)
 {
@@ -2235,11 +2235,15 @@ static int osd_device_init(const struct lu_env *env, struct lu_device *d,
                            const char *name, struct lu_device *next)
 {
         int rc;
+        struct lu_context *ctx;
+
         /* context for commit hooks */
-        rc = lu_context_init(&osd_dev(d)->od_env_for_commit.le_ctx,
-                             LCT_MD_THREAD);
-        if (rc == 0)
+        ctx = &osd_dev(d)->od_env_for_commit.le_ctx;
+        rc = lu_context_init(ctx, LCT_MD_THREAD|LCT_REMEMBER|LCT_NOREF);
+        if (rc == 0) {
                 rc = osd_procfs_init(osd_dev(d), name);
+                ctx->lc_cookie = 0x3;
+        }
         return rc;
 }
 

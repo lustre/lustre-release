@@ -77,7 +77,7 @@ static int osc_interpret_create(const struct lu_env *env,
 
         oscc = req->rq_async_args.pointer_arg[0];
         LASSERT(oscc && (oscc->oscc_obd != LP_POISON));
-        
+
         spin_lock(&oscc->oscc_lock);
         oscc->oscc_flags &= ~OSCC_FLAG_CREATING;
         switch (rc) {
@@ -101,7 +101,7 @@ static int osc_interpret_create(const struct lu_env *env,
                 DEBUG_REQ(D_INODE, req, "Got EAGAIN - resend \n");
                 break;
         case -ENOSPC:
-        case -EROFS: 
+        case -EROFS:
         case -EFBIG: {
                 oscc->oscc_flags |= OSCC_FLAG_NOSPC;
                 if (body && rc == -ENOSPC) {
@@ -113,7 +113,7 @@ static int osc_interpret_create(const struct lu_env *env,
                 break;
         }
         case -EIO: {
-                /* filter always set body->oa.o_id as the last_id 
+                /* filter always set body->oa.o_id as the last_id
                  * of filter (see filter_handle_precreate for detail)*/
                 if (body && body->oa.o_id > oscc->oscc_last_id)
                         oscc->oscc_last_id = body->oa.o_id;
@@ -194,7 +194,7 @@ static int oscc_internal_create(struct osc_creator *oscc)
 
         request->rq_async_args.pointer_arg[0] = oscc;
         request->rq_interpret_reply = osc_interpret_create;
-        ptlrpcd_add_req(request);
+        ptlrpcd_add_req(request, PSCOPE_OTHER);
 
         RETURN(0);
 }

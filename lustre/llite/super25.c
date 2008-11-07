@@ -105,12 +105,21 @@ struct super_operations lustre_super_operations =
 
 void lustre_register_client_process_config(int (*cpc)(struct lustre_cfg *lcfg));
 
+int vvp_global_init(void);
+void vvp_global_fini(void);
+
 static int __init init_lustre_lite(void)
 {
         int i, rc, seed[2];
         struct timeval tv;
         lnet_process_id_t lnet_id;
- 
+
+        /* print an address of _any_ initialized kernel symbol from this
+         * module, to allow debugging with gdb that doesn't support data
+         * symbols from modules.*/
+        CDEBUG(D_CONSOLE, "Lustre client module (%p).\n",
+               &lustre_super_operations);
+
         rc = ll_init_inodecache();
         if (rc)
                 return -ENOMEM;
@@ -148,8 +157,6 @@ static int __init init_lustre_lite(void)
         proc_lustre_fs_root = proc_lustre_root ?
                               lprocfs_register("llite", proc_lustre_root, NULL, NULL) : NULL;
 
-        ll_register_cache(&ll_cache_definition);
-
         lustre_register_client_fill_super(ll_fill_super);
         lustre_register_kill_super_cb(ll_kill_super);
 
@@ -174,13 +181,20 @@ static int __init init_lustre_lite(void)
         init_timer(&ll_capa_timer);
         ll_capa_timer.function = ll_capa_timer_callback;
         rc = ll_capa_thread_start();
+        /*
+         * XXX normal cleanup is needed here.
+         */
+        if (rc == 0)
+                rc = vvp_global_init();
+
         return rc;
 }
 
 static void __exit exit_lustre_lite(void)
 {
         int rc;
-        
+
+        vvp_global_fini();
         del_timer(&ll_capa_timer);
         ll_capa_thread_stop();
         LASSERTF(capa_count[CAPA_SITE_CLIENT] == 0,
@@ -191,8 +205,6 @@ static void __exit exit_lustre_lite(void)
         lustre_register_kill_super_cb(NULL);
 
         lustre_register_client_process_config(NULL);
-
-        ll_unregister_cache(&ll_cache_definition);
 
         ll_destroy_inodecache();
 
@@ -206,11 +218,6 @@ static void __exit exit_lustre_lite(void)
 
         rc = cfs_mem_cache_destroy(ll_file_data_slab);
         LASSERTF(rc == 0, "couldn't destroy ll_file_data slab\n");
-        if (ll_async_page_slab) {
-                rc = cfs_mem_cache_destroy(ll_async_page_slab);
-                LASSERTF(rc == 0, "couldn't destroy ll_async_page slab\n");
-        }
-
         if (proc_lustre_fs_root)
                 lprocfs_remove(&proc_lustre_fs_root);
 }

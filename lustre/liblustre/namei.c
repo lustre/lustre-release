@@ -212,7 +212,7 @@ static int pnode_revalidate_finish(struct ptlrpc_request *req,
         if (rc)
                 RETURN(rc);
 
-        llu_update_inode(inode, md.body, md.lsm);
+        llu_update_inode(inode, &md);
 
         RETURN(rc);
 }
@@ -381,7 +381,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         /* bug 2334: drop MDS lock before acquiring OST lock */
                         ll_intent_drop_lock(it);
 
-                        rc = llu_glimpse_size(inode);
+                        rc = cl_glimpse_size(inode);
                         if (rc) {
                                 I_RELE(inode);
                                 RETURN(rc);

@@ -65,7 +65,7 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
                 CDEBUG(D_INODE, "valid %x, new time %lu/%lu\n",
-                       valid, LTIME_S(src->i_mtime), 
+                       valid, LTIME_S(src->i_mtime),
                        LTIME_S(src->i_ctime));
 
         if (valid & OBD_MD_FLATIME) {
@@ -185,7 +185,7 @@ void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid)
 
         /* mtime is always updated with ctime, but can be set in past.
            As write and utime(2) may happen within 1 second, and utime's
-           mtime has a priority over write's one, leave mtime from mds 
+           mtime has a priority over write's one, leave mtime from mds
            for the same ctimes. */
         if (valid & OBD_MD_FLCTIME && src->o_ctime > LTIME_S(dst->i_ctime)) {
                 LTIME_S(dst->i_ctime) = src->o_ctime;
@@ -211,6 +211,10 @@ void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid)
 
         /* allocation of space */
         if (valid & OBD_MD_FLBLOCKS && src->o_blocks > dst->i_blocks)
+                /*
+                 * XXX shouldn't overflow be checked here like in
+                 * obdo_to_inode().
+                 */
                 dst->i_blocks = src->o_blocks;
 }
 EXPORT_SYMBOL(obdo_refresh_inode);

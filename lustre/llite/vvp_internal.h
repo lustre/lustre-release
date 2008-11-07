@@ -26,40 +26,43 @@
  * GPL HEADER END
  */
 /*
- * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Copyright 2008 Sun Microsystems, Inc.  All rights reserved.
  * Use is subject to license terms.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * Internal definitions for VVP layer.
+ *
+ *   Author: Nikita Danilov <nikita.danilov@sun.com>
  */
 
-#ifndef _OBD_ECHO_H
-#define _OBD_ECHO_H
+#ifndef VVP_INTERNAL_H
+#define VVP_INTERNAL_H
 
-/* The persistent object (i.e. actually stores stuff!) */
-#define ECHO_PERSISTENT_OBJID    1ULL
-#define ECHO_PERSISTENT_SIZE     ((__u64)(1<<20))
-
-/* block size to use for data verification */
-#define OBD_ECHO_BLOCK_SIZE	(4<<10)
-
-struct ec_object {
-        struct list_head       eco_obj_chain;
-        struct obd_device     *eco_device;
-        int                    eco_refcount;
-        int                    eco_deleted;
-        obd_id                 eco_id;
-        struct lov_stripe_md  *eco_lsm;
-};
-
-struct ec_lock {
-        struct list_head       ecl_exp_chain;
-        struct ec_object      *ecl_object;
-        __u64                  ecl_cookie;
-        struct lustre_handle   ecl_lock_handle;
-        ldlm_policy_data_t     ecl_policy;
-        __u32                  ecl_mode;
-};
-
+#ifndef __KERNEL__
+# error This file is kernel only.
 #endif
+
+#include <cl_object.h>
+#include "llite_internal.h"
+
+int               vvp_io_init     (const struct lu_env *env,
+                                   struct cl_object *obj, struct cl_io *io);
+int               vvp_lock_init   (const struct lu_env *env,
+                                   struct cl_object *obj, struct cl_lock *lock,
+                                   const struct cl_io *io);
+struct cl_page   *vvp_page_init   (const struct lu_env *env,
+                                   struct cl_object *obj,
+                                   struct cl_page *page, cfs_page_t *vmpage);
+struct lu_object *vvp_object_alloc(const struct lu_env *env,
+                                   const struct lu_object_header *hdr,
+                                   struct lu_device *dev);
+
+struct ccc_object *cl_inode2ccc(struct inode *inode);
+
+extern cfs_mem_cache_t *vvp_page_kmem;
+extern cfs_mem_cache_t *vvp_thread_kmem;
+
+#endif /* VVP_INTERNAL_H */

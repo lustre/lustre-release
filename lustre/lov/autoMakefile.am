@@ -36,7 +36,7 @@
 
 if LIBLUSTRE
 noinst_LIBRARIES = liblov.a
-liblov_a_SOURCES = lov_log.c lov_pool.c lov_obd.c lov_pack.c lov_request.c lov_offset.c lov_qos.c lov_merge.c lov_ea.c lov_internal.h
+liblov_a_SOURCES = lov_log.c lov_pool.c lov_obd.c lov_pack.c lov_request.c lov_offset.c lov_qos.c lov_merge.c lov_ea.c lov_internal.h lov_cl_internal.h lov_dev.c lov_object.c lov_page.c lov_lock.c lov_io.c lovsub_dev.c lovsub_object.c lovsub_page.c lovsub_lock.c lovsub_io.c
 liblov_a_CPPFLAGS = $(LLCPPFLAGS)
 liblov_a_CFLAGS = $(LLCFLAGS)
 endif
@@ -51,12 +51,22 @@ macos_PROGRAMS := lov
 
 lov_SOURCES :=          \
         lov_log.c       \
-        lov_pool.c	\
+        lov_pool.c	    \
         lov_obd.c       \
         lov_pack.c      \
         lov_request.c   \
         lov_merge.c     \
         lov_qos.c       \
+        lov_dev.c       \
+        lov_object.c    \
+        lov_page.c      \
+        lov_lock.c      \
+        lov_io.c        \
+        lovsub_dev.c    \
+        lovsub_object.c \
+        lovsub_page.c   \
+        lovsub_lock.c   \
+        lovsub_io.c     \
         lov_offset.c    \
         lov_internal.h
 
@@ -74,5 +84,5 @@ endif # MODULES
 
 install-data-hook: $(install_data_hook)
 
-DIST_SOURCES = $(lov-objs:.o=.c) lov_internal.h
+DIST_SOURCES = $(lov-objs:.o=.c) lov_internal.h lov_cl_internal.h
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 

@@ -216,7 +216,7 @@ int ll_drop_dentry(struct dentry *dentry)
                 spin_lock(&dcache_lock);
                 return 1;
         }
-        /* disconected dentry can not be find without lookup, because we 
+        /* disconected dentry can not be find without lookup, because we
          * not need his to unhash or mark invalid. */
         if (dentry->d_flags & DCACHE_DISCONNECTED) {
                 unlock_dentry(dentry);
@@ -309,7 +309,7 @@ int ll_revalidate_it_finish(struct ptlrpc_request *request,
         if (!request)
                 RETURN(0);
 
-        if (it_disposition(it, DISP_LOOKUP_NEG)) 
+        if (it_disposition(it, DISP_LOOKUP_NEG))
                 RETURN(-ENOENT);
 
         rc = ll_prep_inode(&de->d_inode, request, NULL);
@@ -346,7 +346,7 @@ void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft)
         struct lookup_intent *it = *itp;
 #ifdef HAVE_VFS_INTENT_PATCHES
         if (it) {
-                LASSERTF(it->it_magic == INTENT_MAGIC, 
+                LASSERTF(it->it_magic == INTENT_MAGIC,
                          "%p has bad intent magic: %x\n",
                          it, it->it_magic);
         }
@@ -505,8 +505,8 @@ revalidate_finish:
                 GOTO(out, rc = 0);
         }
 
-        if ((it->it_op & IT_OPEN) && de->d_inode && 
-            !S_ISREG(de->d_inode->i_mode) && 
+        if ((it->it_op & IT_OPEN) && de->d_inode &&
+            !S_ISREG(de->d_inode->i_mode) &&
             !S_ISDIR(de->d_inode->i_mode)) {
                 ll_release_openhandle(de, it);
         }

@@ -45,19 +45,19 @@ extern struct list_head ldlm_cli_namespace_list;
 
 static inline atomic_t *ldlm_namespace_nr(ldlm_side_t client)
 {
-        return client == LDLM_NAMESPACE_SERVER ? 
+        return client == LDLM_NAMESPACE_SERVER ?
                 &ldlm_srv_namespace_nr : &ldlm_cli_namespace_nr;
 }
 
 static inline struct list_head *ldlm_namespace_list(ldlm_side_t client)
 {
-        return client == LDLM_NAMESPACE_SERVER ? 
+        return client == LDLM_NAMESPACE_SERVER ?
                 &ldlm_srv_namespace_list : &ldlm_cli_namespace_list;
 }
 
 static inline struct semaphore *ldlm_namespace_lock(ldlm_side_t client)
 {
-        return client == LDLM_NAMESPACE_SERVER ? 
+        return client == LDLM_NAMESPACE_SERVER ?
                 &ldlm_srv_namespace_lock : &ldlm_cli_namespace_lock;
 }
 
@@ -75,11 +75,11 @@ enum {
         LDLM_CANCEL_LRUR   = 1 << 3  /* Cancel locks from lru resize. */
 };
 
-int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr, ldlm_sync_t sync, 
+int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr, ldlm_sync_t sync,
                     int flags);
 int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                           int count, int max, int cancel_flags, int flags);
-int ldlm_cancel_lru_estimate(struct ldlm_namespace *ns, int count, int max, 
+int ldlm_cancel_lru_estimate(struct ldlm_namespace *ns, int count, int max,
                              int flags);
 extern int ldlm_enqueue_min;
 int ldlm_get_enq_timeout(struct ldlm_lock *lock);
@@ -107,7 +107,7 @@ typedef enum {
         LDLM_WORK_BL_AST,
         LDLM_WORK_CP_AST,
         LDLM_WORK_REVOKE_AST
-} ldlm_desc_ast_t; 
+} ldlm_desc_ast_t;
 
 void ldlm_grant_lock(struct ldlm_lock *lock, struct list_head *work_list);
 struct ldlm_lock *

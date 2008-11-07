@@ -1804,13 +1804,13 @@ static int commit_chkquot(struct super_block *sb, struct qchk_ctxt *qctxt,
         if (cdqb->dqb_bsoftlimit &&
             toqb(cdqb->dqb_curspace) >= cdqb->dqb_bsoftlimit &&
             !cdqb->dqb_btime)
-                cdqb->dqb_btime = 
+                cdqb->dqb_btime =
                         now + qctxt->qckt_dqinfo[cdqb->dqb_type].dqi_bgrace;
 
         if (cdqb->dqb_isoftlimit &&
             cdqb->dqb_curinodes >= cdqb->dqb_isoftlimit &&
             !cdqb->dqb_itime)
-                cdqb->dqb_itime = 
+                cdqb->dqb_itime =
                         now + qctxt->qckt_dqinfo[cdqb->dqb_type].dqi_igrace;
 
         cdqb->dqb_valid = QIF_ALL;
@@ -1925,7 +1925,7 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
 
                 LASSERT(sb_dqopt(sb)->files[i] != NULL);
                 INIT_LIST_HEAD(&id_list);
-#ifndef KERNEL_SUPPORTS_QUOTA_READ 
+#ifndef KERNEL_SUPPORTS_QUOTA_READ
                 rc = lustre_get_qids(sb_dqopt(sb)->files[i], NULL, i, &id_list);
 #else
                 rc = lustre_get_qids(NULL, sb_dqopt(sb)->files[i], i, &id_list);

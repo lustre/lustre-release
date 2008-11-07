@@ -77,6 +77,7 @@ extern unsigned int ldlm_timeout;         /* seconds */
 extern unsigned int obd_sync_filter;
 extern unsigned int obd_max_dirty_pages;
 extern atomic_t obd_dirty_pages;
+extern atomic_t obd_dirty_transit_pages;
 extern cfs_waitq_t obd_race_waitq;
 extern int obd_race_state;
 extern unsigned int obd_alloc_fail_rate;

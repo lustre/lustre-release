@@ -310,7 +310,7 @@ int mds_lov_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
         oa.o_gr = FILTER_GROUP_MDS0 + mds->mds_id;
         oa.o_valid = OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
         if (ost_uuid != NULL)
-                oti.oti_ost_uuid = ost_uuid;       
+                oti.oti_ost_uuid = ost_uuid;
         rc = obd_create(mds->mds_osc_exp, &oa, &empty_ea, &oti);
 
         RETURN(rc);
@@ -646,11 +646,11 @@ static int __mds_lov_synchronize(void *data)
                 GOTO(out, rc);
 
         ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
-        if (!ctxt) 
+        if (!ctxt)
                 GOTO(out, rc = -ENODEV);
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT, 60);
-        rc = llog_connect(ctxt, NULL, NULL, uuid); 
+        rc = llog_connect(ctxt, NULL, NULL, uuid);
         llog_ctxt_put(ctxt);
         if (rc != 0) {
                 CERROR("%s failed at llog_origin_connect: %d\n",

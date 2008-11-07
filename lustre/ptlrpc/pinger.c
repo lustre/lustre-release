@@ -69,7 +69,7 @@ int ptlrpc_ping(struct obd_import *imp)
                   imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
         req->rq_no_resend = req->rq_no_delay = 1;
         ptlrpc_request_set_replen(req);
-        ptlrpcd_add_req(req);
+        ptlrpcd_add_req(req, PSCOPE_OTHER);
 
         RETURN(0);
 }

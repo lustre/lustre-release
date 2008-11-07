@@ -1102,8 +1102,8 @@ int t52(char *name)
                         close(fd);
                         t_unlink(file);
                         return -1;
-                }       
-                atime = statbuf.st_atime; 
+                }
+                atime = statbuf.st_atime;
         }
         close(fd);
         t_unlink(file);
@@ -1117,26 +1117,26 @@ int t53(char *name)
         struct utimbuf times;   /* struct. buffer for utime() */
         struct stat stat_buf;   /* struct buffer to hold file info. */
         time_t mtime, atime;
- 
+
         ENTER("mtime/atime should be updated by utime() call");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t53_file", lustre_path);
 
         t_echo_create(file, "check mtime/atime update by utime() call");
- 
+
         /* Initialize the modification and access time in the times arg */
         times.actime = NEW_TIME+10;
         times.modtime = NEW_TIME;
- 
+
         /* file modification/access time */
         utime(file, &times);
- 
+
         if (stat(file, &stat_buf) < 0) {
                 printf("stat(2) of %s failed, error:%d %s\n",
-                        file, errno, strerror(errno)); 
+                        file, errno, strerror(errno));
         }
         mtime = stat_buf.st_mtime;
         atime = stat_buf.st_atime;
- 
+
         if ((mtime == NEW_TIME) && (atime == NEW_TIME + 10)) {
                 t_unlink(file);
                 LEAVE();
@@ -1144,7 +1144,7 @@ int t53(char *name)
 
         printf("mod time %ld, expected %ld\n", mtime, (long)NEW_TIME);
         printf("acc time %ld, expected %ld\n", atime, (long)NEW_TIME + 10);
- 
+
         t_unlink(file);
         return (-1);
 }
@@ -1170,7 +1170,7 @@ int t54(char *name)
         lock.l_whence = 0;
         lock.l_len    = 1;
         if ((err = t_fcntl(fd, F_SETLKW, &lock)) != 0) {
-                fprintf(stderr, "fcntl returned: %d (%s)\n", 
+                fprintf(stderr, "fcntl returned: %d (%s)\n",
                         err, strerror(err));
                 close(fd);
                 t_unlink(file);
@@ -1203,7 +1203,7 @@ int t55(char *name)
         ENTER("setstripe/getstripe");
         snprintf(path, MAX_PATH_LENGTH, "%s/test_t55", lustre_path);
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t55/file_t55", lustre_path);
-      
+
         buflen = sizeof(struct lov_user_md);
         buflen += STRIPE_COUNT * sizeof(struct lov_user_ost_data);
         lum = (struct lov_user_md *)malloc(buflen);
@@ -1232,7 +1232,7 @@ int t55(char *name)
                 free(lum);
                 return -1;
         }
-        
+
         lum->lmm_magic = LOV_USER_MAGIC;
         lum->lmm_stripe_count = STRIPE_COUNT;
         rc = ioctl(fd, LL_IOC_LOV_GETSTRIPE, lum);
@@ -1255,7 +1255,7 @@ int t55(char *name)
                 printf("lmm_stripe_count:   %u\n", (int)lum->lmm_stripe_count);
                 printf("lmm_stripe_size:    %u\n",      lum->lmm_stripe_size);
                 printf("lmm_stripe_pattern: %x\n",      lum->lmm_pattern);
-        
+
                 for (index = 0; index < lum->lmm_stripe_count; index++) {
                         lo = lum->lmm_objects + index;
                         printf("object %d:\n", index);
@@ -1292,7 +1292,7 @@ int t55(char *name)
         }
         fd = open(file, O_RDWR, 0644);
         if (fd < 0) {
-                printf("failed to open(%s): rc = %d (%s)\n", 
+                printf("failed to open(%s): rc = %d (%s)\n",
                        file, fd, strerror(errno));
                 t_unlink(file);
                 t_rmdir(path);
@@ -1321,7 +1321,7 @@ int t55(char *name)
                 printf("lmm_stripe_count:   %u\n", (int)lum->lmm_stripe_count);
                 printf("lmm_stripe_size:    %u\n",      lum->lmm_stripe_size);
                 printf("lmm_stripe_pattern: %x\n",      lum->lmm_pattern);
-        
+
                 for (index = 0; index < lum->lmm_stripe_count; index++) {
                         lo = lum->lmm_objects + index;
                         printf("object %d:\n", index);

@@ -339,7 +339,7 @@ int filemap_fdatawrite_range(struct address_space *mapping,
 #endif
 
 #ifdef HAVE_VFS_KERN_MOUNT
-static inline 
+static inline
 struct vfsmount *
 ll_kern_mount(const char *fstype, int flags, const char *name, void *data)
 {
@@ -353,45 +353,6 @@ ll_kern_mount(const char *fstype, int flags, const char *name, void *data)
 }
 #else
 #define ll_kern_mount(fstype, flags, name, data) do_kern_mount((fstype), (flags), (name), (data))
-#endif
-
-#ifndef HAVE_GENERIC_FILE_READ
-static inline
-ssize_t
-generic_file_read(struct file *filp, char __user *buf, size_t len, loff_t *ppos)
-{
-        struct iovec iov = { .iov_base = (void __user *)buf, .iov_len = len };
-        struct kiocb kiocb;
-        ssize_t ret;
-
-        init_sync_kiocb(&kiocb, filp);
-        kiocb.ki_pos = *ppos;
-        kiocb.ki_left = len;
-
-        ret = generic_file_aio_read(&kiocb, &iov, 1, kiocb.ki_pos);
-        *ppos = kiocb.ki_pos;
-        return ret;
-}
-#endif
-
-#ifndef HAVE_GENERIC_FILE_WRITE
-static inline
-ssize_t
-generic_file_write(struct file *filp, const char __user *buf, size_t len, loff_t *ppos)
-{
-        struct iovec iov = { .iov_base = (void __user *)buf, .iov_len = len };
-        struct kiocb kiocb;
-        ssize_t ret;
-
-        init_sync_kiocb(&kiocb, filp);
-        kiocb.ki_pos = *ppos;
-        kiocb.ki_left = len;
-
-        ret = generic_file_aio_write(&kiocb, &iov, 1, kiocb.ki_pos);
-        *ppos = kiocb.ki_pos;
-
-        return ret;
-}
 #endif
 
 #ifdef HAVE_STATFS_DENTRY_PARAM
@@ -426,7 +387,7 @@ static inline u32 get_sb_time_gran(struct super_block *sb)
 #ifdef HAVE_UNREGISTER_BLKDEV_RETURN_INT
 #define ll_unregister_blkdev(a,b)       unregister_blkdev((a),(b))
 #else
-static inline 
+static inline
 int ll_unregister_blkdev(unsigned int dev, const char *name)
 {
         unregister_blkdev(dev, name);
@@ -542,7 +503,7 @@ struct blkcipher_desc {
 
 extern struct ll_crypto_cipher *ll_crypto_alloc_blkcipher(
                             const char * algname, u32 type, u32 mask);
-static inline 
+static inline
 struct ll_crypto_hash *ll_crypto_alloc_hash(const char *alg, u32 type, u32 mask)
 {
         char        buf[CRYPTO_MAX_ALG_NAME + 1];
@@ -568,10 +529,10 @@ static inline int ll_crypto_hash_update(struct hash_desc *desc,
 {
         struct scatterlist *sl = sg;
         unsigned int        count;
-                /* 
+                /*
                  * This way is very weakness. We must ensure that
                  * the sum of sg[0..i]->length isn't greater than nbytes.
-                 * In the upstream kernel the crypto_hash_update() also 
+                 * In the upstream kernel the crypto_hash_update() also
                  * via the nbytes computed the count of sg[...].
                  * The old style is more safely. but it gone.
                  */
@@ -617,7 +578,7 @@ static inline int ll_crypto_hmac(struct crypto_tfm *tfm,
 #define ll_vfs_mknod(dir,entry,mnt,mode,dev)            \
                 vfs_mknod(dir,entry,mnt,mode,dev)
 #define ll_security_inode_unlink(dir,entry,mnt)         \
-                security_inode_unlink(dir,entry,mnt)     
+                security_inode_unlink(dir,entry,mnt)
 #define ll_vfs_rename(old,old_dir,mnt,new,new_dir,mnt1) \
                 vfs_rename(old,old_dir,mnt,new,new_dir,mnt1)
 #else
@@ -627,7 +588,7 @@ static inline int ll_crypto_hmac(struct crypto_tfm *tfm,
 #define ll_vfs_link(old,mnt,dir,new,mnt1)       vfs_link(old,dir,new)
 #define ll_vfs_unlink(inode,entry,mnt)          vfs_unlink(inode,entry)
 #define ll_vfs_mknod(dir,entry,mnt,mode,dev)    vfs_mknod(dir,entry,mode,dev)
-#define ll_security_inode_unlink(dir,entry,mnt) security_inode_unlink(dir,entry)     
+#define ll_security_inode_unlink(dir,entry,mnt) security_inode_unlink(dir,entry)
 #define ll_vfs_rename(old,old_dir,mnt,new,new_dir,mnt1) \
                 vfs_rename(old,old_dir,new,new_dir)
 #endif

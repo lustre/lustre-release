@@ -87,7 +87,7 @@ static int mdd_device_init(const struct lu_env *env, struct lu_device *d,
 static struct lu_device *mdd_device_fini(const struct lu_env *env,
                                          struct lu_device *d)
 {
-	struct mdd_device *mdd = lu2mdd_dev(d);
+        struct mdd_device *mdd = lu2mdd_dev(d);
         struct lu_device *next = &mdd->mdd_child->dd_lu_dev;
         int rc;
 
@@ -244,7 +244,7 @@ static int mdd_recovery_complete(const struct lu_env *env,
 }
 
 const struct lu_device_operations mdd_lu_ops = {
-	.ldo_object_alloc      = mdd_object_alloc,
+        .ldo_object_alloc      = mdd_object_alloc,
         .ldo_process_config    = mdd_process_config,
         .ldo_recovery_complete = mdd_recovery_complete
 };
@@ -268,7 +268,7 @@ static int mdd_root_get(const struct lu_env *env,
 static int mdd_statfs(const struct lu_env *env, struct md_device *m,
                       struct kstatfs *sfs)
 {
-	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
+        struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
         int rc;
 
         ENTRY;
@@ -284,7 +284,7 @@ static int mdd_statfs(const struct lu_env *env, struct md_device *m,
 static int mdd_maxsize_get(const struct lu_env *env, struct md_device *m,
                            int *md_size, int *cookie_size)
 {
-	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
+        struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
         ENTRY;
 
         *md_size = mdd_lov_mdsize(env, mdd);
@@ -297,7 +297,7 @@ static int mdd_init_capa_ctxt(const struct lu_env *env, struct md_device *m,
                               int mode, unsigned long timeout, __u32 alg,
                               struct lustre_capa_key *keys)
 {
-	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
+        struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
         struct mds_obd    *mds = &mdd2obd_dev(mdd)->u.mds;
         int rc;
         ENTRY;
@@ -312,7 +312,7 @@ static int mdd_update_capa_key(const struct lu_env *env,
                                struct md_device *m,
                                struct lustre_capa_key *key)
 {
-	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
+        struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
         struct obd_export *lov_exp = mdd2obd_dev(mdd)->u.mds.mds_osc_exp;
         int rc;
         ENTRY;

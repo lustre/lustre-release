@@ -414,7 +414,7 @@ int ldlm_lock_change_resource(struct ldlm_namespace *ns, struct ldlm_lock *lock,
                 lock_res(oldres);
                 lock_res_nested(newres, LRT_NEW);
         } else {
-        lock_res(newres);
+                lock_res(newres);
                 lock_res_nested(oldres, LRT_NEW);
         }
         LASSERT(memcmp(new_resid, &oldres->lr_name,
@@ -619,7 +619,8 @@ int ldlm_lock_addref_try(struct lustre_handle *lockh, __u32 mode)
         lock = ldlm_handle2lock(lockh);
         if (lock != NULL) {
                 lock_res_and_lock(lock);
-                if (!(lock->l_flags & LDLM_FL_CBPENDING)) {
+                if (lock->l_readers != 0 || lock->l_writers != 0 ||
+                    !(lock->l_flags & LDLM_FL_CBPENDING)) {
                         ldlm_lock_addref_internal_nolock(lock, mode);
                         result = 0;
                 }
@@ -916,7 +917,8 @@ void ldlm_grant_lock(struct ldlm_lock *lock, struct list_head *work_list)
 static struct ldlm_lock *search_queue(struct list_head *queue,
                                       ldlm_mode_t *mode,
                                       ldlm_policy_data_t *policy,
-                                      struct ldlm_lock *old_lock, int flags)
+                                      struct ldlm_lock *old_lock,
+                                      int flags, int unref)
 {
         struct ldlm_lock *lock;
         struct list_head *tmp;
@@ -938,7 +940,7 @@ static struct ldlm_lock *search_queue(struct list_head *queue,
                 if (lock->l_flags & LDLM_FL_CBPENDING &&
                     !(flags & LDLM_FL_CBPENDING))
                         continue;
-                if (lock->l_flags & LDLM_FL_CBPENDING &&
+                if (!unref && lock->l_flags & LDLM_FL_CBPENDING &&
                     lock->l_readers == 0 && lock->l_writers == 0)
                         continue;
 
@@ -965,7 +967,8 @@ static struct ldlm_lock *search_queue(struct list_head *queue,
                       policy->l_inodebits.bits))
                         continue;
 
-                if (lock->l_destroyed || (lock->l_flags & LDLM_FL_FAILED))
+                if (!unref &&
+                    (lock->l_destroyed || (lock->l_flags & LDLM_FL_FAILED)))
                         continue;
 
                 if ((flags & LDLM_FL_LOCAL_ONLY) &&
@@ -991,88 +994,6 @@ void ldlm_lock_allow_match(struct ldlm_lock *lock)
         lock->l_flags |= LDLM_FL_LVB_READY;
         cfs_waitq_signal(&lock->l_waitq);
         unlock_res_and_lock(lock);
-}
-
-/**
- * Checks if requested extent lock is compatible with another owned lock.
- *
- * Checks if \a lock is compatible with a read or write lock
- * (specified by \a rw) for an extent [\a start , \a end].
- *
- * \param lock the already owned lock
- * \param rw OBD_BRW_READ if requested for reading,
- *           OBD_BRW_WRITE if requested for writing
- * \param start start of the requested extent
- * \param end end of the requested extent
- * \param cookie transparent parameter for passing locking context
- *
- * \post result == 1, *cookie == context, appropriate lock is referenced
- *
- * \retval 1 owned lock is reused for the request
- * \retval 0 no lock reused for the request
- *
- * \see ldlm_lock_fast_release
- */
-int ldlm_lock_fast_match(struct ldlm_lock *lock, int rw,
-                         obd_off start, obd_off end,
-                         void **cookie)
-{
-        LASSERT(rw == OBD_BRW_READ || rw == OBD_BRW_WRITE);
-
-        if (!lock)
-                return 0;
-
-        lock_res_and_lock(lock);
-        /* check if granted mode is compatible */
-        if (rw == OBD_BRW_WRITE &&
-            !(lock->l_granted_mode & (LCK_PW|LCK_GROUP)))
-                goto no_match;
-
-        /* does the lock cover the region we would like to access? */
-        if ((lock->l_policy_data.l_extent.start > start) ||
-            (lock->l_policy_data.l_extent.end < end))
-                goto no_match;
-
-        /* if we received a blocking callback and the lock is no longer
-         * referenced, don't use it */
-        if ((lock->l_flags & LDLM_FL_CBPENDING) &&
-            !lock->l_writers && !lock->l_readers)
-                goto no_match;
-
-        ldlm_lock_addref_internal_nolock(lock, rw == OBD_BRW_WRITE ?
-                                                        LCK_PW : LCK_PR);
-        unlock_res_and_lock(lock);
-        *cookie = (void *)lock;
-        return 1; /* avoid using rc for stack relief */
-
-no_match:
-        unlock_res_and_lock(lock);
-        return 0;
-}
-
-/**
- * Releases a reference to a lock taken in a "fast" way.
- *
- * Releases a read or write (specified by \a rw) lock
- * referenced by \a cookie.
- *
- * \param rw OBD_BRW_READ if requested for reading,
- *           OBD_BRW_WRITE if requested for writing
- * \param cookie transparent parameter for passing locking context
- *
- * \post appropriate lock is dereferenced
- *
- * \see ldlm_lock_fast_lock
- */
-void ldlm_lock_fast_release(void *cookie, int rw)
-{
-        struct ldlm_lock *lock = (struct ldlm_lock *)cookie;
-
-        LASSERT(lock != NULL);
-        LASSERT(rw == OBD_BRW_READ || rw == OBD_BRW_WRITE);
-        LASSERT(rw == OBD_BRW_READ ||
-                (lock->l_granted_mode & (LCK_PW | LCK_GROUP)));
-        ldlm_lock_decref_internal(lock, rw == OBD_BRW_WRITE ? LCK_PW : LCK_PR);
 }
 
 /* Can be called in two ways:
@@ -1102,7 +1023,7 @@ void ldlm_lock_fast_release(void *cookie, int rw)
 ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                             const struct ldlm_res_id *res_id, ldlm_type_t type,
                             ldlm_policy_data_t *policy, ldlm_mode_t mode,
-                            struct lustre_handle *lockh)
+                            struct lustre_handle *lockh, int unref)
 {
         struct ldlm_resource *res;
         struct ldlm_lock *lock, *old_lock = NULL;
@@ -1128,15 +1049,18 @@ ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,
         LDLM_RESOURCE_ADDREF(res);
         lock_res(res);
 
-        lock = search_queue(&res->lr_granted, &mode, policy, old_lock, flags);
+        lock = search_queue(&res->lr_granted, &mode, policy, old_lock,
+                            flags, unref);
         if (lock != NULL)
                 GOTO(out, rc = 1);
         if (flags & LDLM_FL_BLOCK_GRANTED)
                 GOTO(out, rc = 0);
-        lock = search_queue(&res->lr_converting, &mode, policy, old_lock,flags);
+        lock = search_queue(&res->lr_converting, &mode, policy, old_lock,
+                            flags, unref);
         if (lock != NULL)
                 GOTO(out, rc = 1);
-        lock = search_queue(&res->lr_waiting, &mode, policy, old_lock, flags);
+        lock = search_queue(&res->lr_waiting, &mode, policy, old_lock,
+                            flags, unref);
         if (lock != NULL)
                 GOTO(out, rc = 1);
 

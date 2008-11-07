@@ -161,7 +161,7 @@ unsigned long long lu_time_stamp_get(void)
         /*
          * Return timestamp with microsecond precision. This has to be cheap.
          */
-//#ifdef CONFIG_X86 
+//#ifdef CONFIG_X86
 #if defined(CONFIG_X86) && !defined(CONFIG_X86_64)
 	/*
 	 * do_gettimeofday() goes backwards sometimes :(.  Usethe TSC

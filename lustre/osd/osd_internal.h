@@ -98,7 +98,7 @@ struct osd_device {
         __u32                     od_capa_alg;
         struct lustre_capa_key   *od_capa_keys;
         struct hlist_head        *od_capa_hash;
-        
+
         cfs_proc_dir_entry_t     *od_proc_entry;
         struct lprocfs_stats     *od_stats;
         /*

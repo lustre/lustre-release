@@ -781,7 +781,7 @@ EXPORT_SYMBOL(RMF_REC_JOINFILE);
 const struct req_msg_field RMF_EADATA = DEFINE_MSGF("eadata", 0, -1, NULL);
 EXPORT_SYMBOL(RMF_EADATA);
 
-const struct req_msg_field RMF_ACL = 
+const struct req_msg_field RMF_ACL =
         DEFINE_MSGF("acl", 0, LUSTRE_POSIX_ACL_MAX_SIZE, NULL);
 EXPORT_SYMBOL(RMF_ACL);
 
@@ -799,7 +799,7 @@ const struct req_msg_field RMF_CAPA2 =
                     lustre_swab_lustre_capa);
 EXPORT_SYMBOL(RMF_CAPA2);
 
-/* 
+/*
  * OST request field.
  */
 const struct req_msg_field RMF_OST_BODY =
@@ -863,11 +863,11 @@ DEFINE_REQ_FMT(name, client, ARRAY_SIZE(client), server, ARRAY_SIZE(server))
 const struct req_format RQF_OBD_PING =
         DEFINE_REQ_FMT0("OBD_PING", empty, empty);
 EXPORT_SYMBOL(RQF_OBD_PING);
- 
+
 const struct req_format RQF_SEC_CTX =
         DEFINE_REQ_FMT0("SEC_CTX", empty, empty);
 EXPORT_SYMBOL(RQF_SEC_CTX);
- 
+
 const struct req_format RQF_MGS_TARGET_REG =
         DEFINE_REQ_FMT0("MGS_TARGET_REG", mgs_target_info_only,
                          mgs_target_info_only);
@@ -1002,11 +1002,11 @@ EXPORT_SYMBOL(RQF_MDS_CONNECT);
 const struct req_format RQF_MDS_DISCONNECT =
         DEFINE_REQ_FMT0("MDS_DISCONNECT", empty, empty);
 EXPORT_SYMBOL(RQF_MDS_DISCONNECT);
- 
+
 const struct req_format RQF_MDS_SET_INFO =
         DEFINE_REQ_FMT0("MDS_SET_INFO", mds_set_info_client, empty);
 EXPORT_SYMBOL(RQF_MDS_SET_INFO);
- 
+
 const struct req_format RQF_LDLM_ENQUEUE =
         DEFINE_REQ_FMT0("LDLM_ENQUEUE",
                         ldlm_enqueue_client, ldlm_enqueue_lvb_server);
@@ -1305,7 +1305,7 @@ int req_capsule_filled_sizes(struct req_capsule *pill,
 
         for (i = 0; i < fmt->rf_fields[loc].nr; ++i) {
                 if (pill->rc_area[loc][i] == -1) {
-                        pill->rc_area[loc][i] = 
+                        pill->rc_area[loc][i] =
                                             fmt->rf_fields[loc].d[i]->rmf_size;
                         if (pill->rc_area[loc][i] == -1) {
                                 /* skip the following fields */

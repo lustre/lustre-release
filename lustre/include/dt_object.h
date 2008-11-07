@@ -184,7 +184,7 @@ extern const struct dt_index_features dt_directory_features;
 
 /**
  * This is a general purpose dt allocation hint.
- * It now contains the parent object. 
+ * It now contains the parent object.
  * It can contain any allocation hint in the future.
  */
 struct dt_allocation_hint {
@@ -287,7 +287,7 @@ struct dt_object_operations {
          * postcondition: ergo(result == 0, dt_object_exists(dt));
          */
         int   (*do_create)(const struct lu_env *env, struct dt_object *dt,
-                           struct lu_attr *attr, 
+                           struct lu_attr *attr,
                            struct dt_allocation_hint *hint,
                            struct thandle *th);
 
@@ -414,7 +414,7 @@ struct dt_index_operations {
 };
 
 struct dt_device {
-        struct lu_device             dd_lu_dev;
+        struct lu_device                   dd_lu_dev;
         const struct dt_device_operations *dd_ops;
 
         /**
@@ -422,7 +422,7 @@ struct dt_device {
          * way, because callbacks are supposed to be added/deleted only during
          * single-threaded start-up shut-down procedures.
          */
-        struct list_head             dd_txn_callbacks;
+        struct list_head                   dd_txn_callbacks;
 };
 
 int  dt_device_init(struct dt_device *dev, struct lu_device_type *t);
@@ -440,7 +440,7 @@ static inline struct dt_device * lu2dt_dev(struct lu_device *l)
 }
 
 struct dt_object {
-        struct lu_object             do_lu;
+        struct lu_object                   do_lu;
         const struct dt_object_operations *do_ops;
         const struct dt_body_operations   *do_body_ops;
         const struct dt_index_operations  *do_index_ops;

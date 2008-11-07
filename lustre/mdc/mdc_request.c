@@ -57,11 +57,10 @@
 #include <lustre_param.h>
 #include "mdc_internal.h"
 
-static quota_interface_t *quota_interface;
+quota_interface_t *quota_interface;
 
 #define REQUEST_MINOR 244
 
-static quota_interface_t *quota_interface;
 extern quota_interface_t mdc_quota_interface;
 
 static int mdc_cleanup(struct obd_device *obd);
@@ -150,7 +149,7 @@ int mdc_getstatus(struct obd_export *exp, struct lu_fid *rootfid,
  * from server. Even for cases when acl_size and md_size is zero, RPC header
  * will contain 4 fields and RPC itself will contain zero size fields. This is
  * because mdt_getattr*() _always_ returns 4 fields, but if acl is not needed
- * and thus zero, it shirinks it, making zero size. The same story about
+ * and thus zero, it shrinks it, making zero size. The same story about
  * md_size. And this is course of problem when client waits for smaller number
  * of fields. This issue will be fixed later when client gets aware of RPC
  * layouts.  --umka
@@ -1683,7 +1682,6 @@ static int mdc_process_config(struct obd_device *obd, obd_count len, void *buf)
         int rc = 0;
 
         lprocfs_mdc_init_vars(&lvars);
-
         switch (lcfg->lcfg_command) {
         case LCFG_SPTLRPC_CONF:
                 rc = sptlrpc_cliobd_process_config(obd, lcfg);
@@ -1785,7 +1783,7 @@ static int mdc_renew_capa(struct obd_export *exp, struct obd_capa *oc,
         req->rq_async_args.pointer_arg[0] = oc;
         req->rq_async_args.pointer_arg[1] = cb;
         req->rq_interpret_reply = mdc_interpret_renew_capa;
-        ptlrpcd_add_req(req);
+        ptlrpcd_add_req(req, PSCOPE_OTHER);
         RETURN(0);
 }
 

@@ -251,8 +251,8 @@ load_modules() {
 
     load_module llite/lustre
     load_module llite/llite_lloop
-    rm -f $TMP/ogdb-$HOSTNAME
-    OGDB=$TMP
+    OGDB=${OGDB:-$TMP}
+    rm -f $OGDB/ogdb-$HOSTNAME
     [ -d /r ] && OGDB="/r/tmp"
     $LCTL modules > $OGDB/ogdb-$HOSTNAME
 
@@ -2056,6 +2056,18 @@ clear_llite_stats(){
 # sum llite stat items
 calc_llite_stats() {
         local res=$(lctl get_param -n llite.*.stats |
+                    awk 'BEGIN {s = 0} END {print s} /^'"$1"'/ {s += $2}')
+        echo $res
+}
+
+# reset osc stat counters
+clear_osc_stats(){
+        lctl set_param -n osc.*.osc_stats 0
+}
+
+# sum osc stat items
+calc_osc_stats() {
+        local res=$(lctl get_param -n osc.*.osc_stats |
                     awk 'BEGIN {s = 0} END {print s} /^'"$1"'/ {s += $2}')
         echo $res
 }

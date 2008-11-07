@@ -50,19 +50,16 @@
 
 #include "lov_internal.h"
 
-/* Merge the lock value block(&lvb) attributes from each of the stripes in a
- * file into a single lvb. It is expected that the caller initializes the
- * current atime, mtime, ctime to avoid regressing a more uptodate time on
- * the local client.
- *
- * If @kms_only is set then we do not consider the recently seen size (rss)
- * when updating the known minimum size (kms).  Even when merging RSS, we will
- * take the KMS value if it's larger.  This prevents getattr from stomping on
- * dirty cached pages which extend the file size. */
-int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
-                  struct ost_lvb *lvb, int kms_only)
+/** Merge the lock value block(&lvb) attributes and KMS from each of the
+ * stripes in a file into a single lvb. It is expected that the caller
+ * initializes the current atime, mtime, ctime to avoid regressing a more
+ * uptodate time on the local client.
+ */
+int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
+                      struct ost_lvb *lvb, __u64 *kms_place)
 {
         __u64 size = 0;
+        __u64 kms = 0;
         __u64 blocks = 0;
         __u64 current_mtime = lvb->lvb_mtime;
         __u64 current_atime = lvb->lvb_atime;
@@ -85,7 +82,11 @@ int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
                 }
 
                 tmpsize = loi->loi_kms;
-                if (kms_only == 0 && loi->loi_lvb.lvb_size > tmpsize)
+                lov_size = lov_stripe_size(lsm, tmpsize, i);
+                if (lov_size > kms)
+                        kms = lov_size;
+
+                if (loi->loi_lvb.lvb_size > tmpsize)
                         tmpsize = loi->loi_lvb.lvb_size;
 
                 lov_size = lov_stripe_size(lsm, tmpsize, i);
@@ -98,7 +99,7 @@ int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
 
                 /* mtime is always updated with ctime, but can be set in past.
                    As write and utime(2) may happen within 1 second, and utime's
-                   mtime has a priority over write's one, leave mtime from mds 
+                   mtime has a priority over write's one, leave mtime from mds
                    for the same ctimes. */
                 if (loi->loi_lvb.lvb_ctime > current_ctime) {
                         current_ctime = loi->loi_lvb.lvb_ctime;
@@ -106,11 +107,37 @@ int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
                 }
         }
 
+        *kms_place = kms;
         lvb->lvb_size = size;
         lvb->lvb_blocks = blocks;
         lvb->lvb_mtime = current_mtime;
         lvb->lvb_atime = current_atime;
         lvb->lvb_ctime = current_ctime;
+        RETURN(rc);
+}
+
+/** Merge the lock value block(&lvb) attributes from each of the stripes in a
+ * file into a single lvb. It is expected that the caller initializes the
+ * current atime, mtime, ctime to avoid regressing a more uptodate time on
+ * the local client.
+ *
+ * If @kms_only is set then we do not consider the recently seen size (rss)
+ * when updating the known minimum size (kms).  Even when merging RSS, we will
+ * take the KMS value if it's larger.  This prevents getattr from stomping on
+ * dirty cached pages which extend the file size. */
+int lov_merge_lvb(struct obd_export *exp,
+                  struct lov_stripe_md *lsm, struct ost_lvb *lvb, int kms_only)
+{
+        int   rc;
+        __u64 kms;
+
+        ENTRY;
+        rc = lov_merge_lvb_kms(lsm, lvb, &kms);
+        if (kms_only)
+                lvb->lvb_size = kms;
+        CDEBUG(D_INODE, "merged: %llu %llu %llu %llu %llu\n",
+               lvb->lvb_size, lvb->lvb_mtime, lvb->lvb_atime,
+               lvb->lvb_ctime, lvb->lvb_blocks);
         RETURN(rc);
 }
 

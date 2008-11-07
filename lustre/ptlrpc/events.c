@@ -39,10 +39,12 @@
 #ifndef __KERNEL__
 # include <liblustre.h>
 #else
+# include <libcfs/libcfs.h>
 # ifdef __mips64__
 #  include <linux/kernel.h>
 # endif
 #endif
+
 #include <obd_class.h>
 #include <lustre_net.h>
 #include <lustre_sec.h>
@@ -679,14 +681,14 @@ void
 liblustre_wait_idle(void)
 {
         static int recursed = 0;
-        
+
         struct list_head               *tmp;
         struct liblustre_wait_callback *llwc;
         int                             idle = 0;
 
         LASSERT(!recursed);
         recursed = 1;
-        
+
         do {
                 liblustre_wait_event(0);
 
@@ -695,13 +697,13 @@ liblustre_wait_idle(void)
                 list_for_each(tmp, &liblustre_idle_callbacks) {
                         llwc = list_entry(tmp, struct liblustre_wait_callback,
                                           llwc_list);
-                        
+
                         if (!llwc->llwc_fn(llwc->llwc_arg)) {
                                 idle = 0;
                                 break;
                         }
                 }
-                        
+
         } while (!idle);
 
         recursed = 0;
@@ -722,11 +724,12 @@ int ptlrpc_init_portals(void)
                 liblustre_register_wait_callback("liblustre_check_services",
                                                  &liblustre_check_services,
                                                  NULL);
+        init_completion_module(liblustre_wait_event);
 #endif
         rc = ptlrpcd_addref();
         if (rc == 0)
                 return 0;
-        
+
         CERROR("rpcd initialisation failed\n");
 #ifndef __KERNEL__
         liblustre_deregister_wait_callback(liblustre_services_callback);

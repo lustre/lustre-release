@@ -68,7 +68,7 @@
 #include <lustre_mdc.h>
 #include "fld_internal.h"
 
-/* TODO: these 3 functions are copies of flow-control code from mdc_lib.c 
+/* TODO: these 3 functions are copies of flow-control code from mdc_lib.c
  * It should be common thing. The same about mdc RPC lock */
 static int fld_req_avail(struct client_obd *cli, struct mdc_cache_waiter *mcw)
 {
@@ -105,7 +105,7 @@ static void fld_exit_request(struct client_obd *cli)
         spin_lock(&cli->cl_loi_list_lock);
         cli->cl_r_in_flight--;
         list_for_each_safe(l, tmp, &cli->cl_cache_waiters) {
-                
+
                 if (cli->cl_r_in_flight >= cli->cl_max_rpcs_in_flight) {
                         /* No free request slots anymore */
                         break;
@@ -606,7 +606,7 @@ int fld_client_lookup(struct lu_client_fld *fld,
                 /*
                  * insert the 'inflight' sequence. No need to protect that,
                  * we are trying to reduce numbers of RPC but not restrict
-                 * to them exactly one 
+                 * to them exactly one
                  */
                 fld_cache_insert_inflight(fld->lcf_cache, seq);
                 rc = fld_client_rpc(target->ft_exp,
@@ -619,7 +619,7 @@ int fld_client_lookup(struct lu_client_fld *fld,
                  * The current solution for IGIF is to bind it to mds0.
                  * In the future, this should be fixed once IGIF can be found
                  * in FLD.
-                 */ 
+                 */
                 md_fld.mf_mds = 0;
                 rc = 0;
         }

@@ -90,7 +90,7 @@ static int lmv_rd_placement(char *page, char **start, off_t off, int count,
         LASSERT(dev != NULL);
         lmv = &dev->u.lmv;
         *eof = 1;
-        return snprintf(page, count, "%s\n", 
+        return snprintf(page, count, "%s\n",
                         placement_policy2name(lmv->lmv_placement));
 
 }
@@ -182,7 +182,7 @@ static int lmv_tgt_seq_show(struct seq_file *p, void *v)
         struct obd_device       *dev = p->private;
         struct lmv_obd          *lmv = &dev->u.lmv;
         int                      idx = tgt - &(lmv->tgts[0]);
-        
+
         return seq_printf(p, "%d: %s %sACTIVE\n", idx, tgt->ltd_uuid.uuid,
                           tgt->ltd_active ? "" : "IN");
 }
@@ -199,7 +199,7 @@ static int lmv_target_seq_open(struct inode *inode, struct file *file)
         struct proc_dir_entry   *dp = PDE(inode);
         struct seq_file         *seq;
         int                     rc;
-        
+
         rc = seq_open(file, &lmv_tgt_sops);
         if (rc)
                 return rc;

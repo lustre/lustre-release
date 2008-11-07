@@ -694,7 +694,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
                                         MSG_CONNECT_TRANSNO);
 
         DEBUG_REQ(D_RPCTRACE, request, "(re)connect request");
-        ptlrpcd_add_req(request);
+        ptlrpcd_add_req(request, PSCOPE_OTHER);
         rc = 0;
 out:
         if (rc != 0) {
@@ -1132,7 +1132,7 @@ out:
 
 static int completed_replay_interpret(const struct lu_env *env,
                                       struct ptlrpc_request *req,
-                                    void * data, int rc)
+                                      void * data, int rc)
 {
         ENTRY;
         atomic_dec(&req->rq_import->imp_replay_inflight);
@@ -1170,7 +1170,7 @@ static int signal_completed_replay(struct obd_import *imp)
         req->rq_timeout *= 3;
         req->rq_interpret_reply = completed_replay_interpret;
 
-        ptlrpcd_add_req(req);
+        ptlrpcd_add_req(req, PSCOPE_OTHER);
         RETURN(0);
 }
 

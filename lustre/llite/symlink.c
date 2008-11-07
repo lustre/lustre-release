@@ -78,7 +78,7 @@ static int ll_readlink_internal(struct inode *inode,
                 CERROR("OBD_MD_LINKNAME not set on reply\n");
                 GOTO(failed, rc = -EPROTO);
         }
-        
+
         LASSERT(symlen != 0);
         if (body->eadatasize != symlen) {
                 CERROR("inode %lu: symlink length %d not expected %d\n",
@@ -114,7 +114,6 @@ static int ll_readlink_internal(struct inode *inode,
 static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
 {
         struct inode *inode = dentry->d_inode;
-        struct ll_inode_info *lli = ll_i2info(inode);
         struct ptlrpc_request *request;
         char *symname;
         int rc;
@@ -122,7 +121,7 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
 
         CDEBUG(D_VFSTRACE, "VFS Op\n");
         /* on symlinks lli_open_sem protects lli_symlink_name allocation/data */
-        down(&lli->lli_size_sem);
+        ll_inode_size_lock(inode, 0);
         rc = ll_readlink_internal(inode, &request, &symname);
         if (rc)
                 GOTO(out, rc);
@@ -130,7 +129,7 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
         rc = vfs_readlink(dentry, buffer, buflen, symname);
         ptlrpc_req_finished(request);
  out:
-        up(&lli->lli_size_sem);
+        ll_inode_size_unlock(inode, 0);
         RETURN(rc);
 }
 
@@ -144,7 +143,6 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry,
                                                  struct nameidata *nd)
 {
         struct inode *inode = dentry->d_inode;
-        struct ll_inode_info *lli = ll_i2info(inode);
 #ifdef HAVE_VFS_INTENT_PATCHES
         struct lookup_intent *it = ll_nd2it(nd);
 #endif
@@ -166,8 +164,8 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry,
 
         CDEBUG(D_VFSTRACE, "VFS Op\n");
 #if THREAD_SIZE < 8192
-        /* 
-         *  We set the limits recursive symlink to 5 
+        /*
+         *  We set the limits recursive symlink to 5
          *  instead of default 8 when kernel has 4k stack
          *  to prevent stack overflow.
          */
@@ -176,9 +174,9 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry,
                 GOTO(out_release, rc);
         }
 #endif
-        down(&lli->lli_size_sem);
+        ll_inode_size_lock(inode, 0);
         rc = ll_readlink_internal(inode, &request, &symname);
-        up(&lli->lli_size_sem);
+        ll_inode_size_unlock(inode, 0);
         if (rc) {
 #if THREAD_SIZE < 8192
 out_release:

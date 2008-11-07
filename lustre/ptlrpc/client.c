@@ -1223,9 +1223,9 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
                 }
 
                 /* ptlrpc_queue_wait->l_wait_event guarantees that rq_intr
-                 * will only be set after rq_timedout, but the oig waiting
-                 * path sets rq_intr irrespective of whether ptlrpcd has
-                 * seen a timeout.  our policy is to only interpret
+                 * will only be set after rq_timedout, but the synchronous IO
+                 * waiting path sets rq_intr irrespective of whether ptlrpcd
+                 * has seen a timeout.  our policy is to only interpret
                  * interrupted rpcs after they have timed out */
                 if (req->rq_intr && (req->rq_timedout || req->rq_waiting ||
                                      req->rq_wait_ctx)) {
@@ -1401,7 +1401,7 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
                 if (req->rq_interpret_reply != NULL) {
                         ptlrpc_interpterer_t interpreter =
                                 req->rq_interpret_reply;
-                        req->rq_status = interpreter(NULL, req,
+                        req->rq_status = interpreter(env, req,
                                                      &req->rq_async_args,
                                                      req->rq_status);
                 }
@@ -1902,7 +1902,6 @@ void ptlrpc_free_committed(struct obd_import *imp)
                 EXIT;
                 return;
         }
-
         CDEBUG(D_RPCTRACE, "%s: committing for last_committed "LPU64" gen %d\n",
                imp->imp_obd->obd_name, imp->imp_peer_committed_transno,
                imp->imp_generation);
@@ -2193,7 +2192,6 @@ restart:
         rc = ptl_send_rpc(req, 0);
         if (rc)
                 DEBUG_REQ(D_HA, req, "send failed (%d); recovering", rc);
-
 repeat:
         timeoutl = req->rq_deadline - cfs_time_current_sec();
         timeout = (timeoutl <= 0 || rc) ? CFS_TICK :
@@ -2306,7 +2304,7 @@ struct ptlrpc_replay_async_args {
 
 static int ptlrpc_replay_interpret(const struct lu_env *env,
                                    struct ptlrpc_request *req,
-                                    void * data, int rc)
+                                   void * data, int rc)
 {
         struct ptlrpc_replay_async_args *aa = data;
         struct obd_import *imp = req->rq_import;
@@ -2397,7 +2395,7 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
         atomic_inc(&req->rq_import->imp_replay_inflight);
         ptlrpc_request_addref(req); /* ptlrpcd needs a ref */
 
-        ptlrpcd_add_req(req);
+        ptlrpcd_add_req(req, PSCOPE_OTHER);
         RETURN(0);
 }
 

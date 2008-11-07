@@ -82,7 +82,7 @@ int should_translate_quota (struct obd_import *imp)
         ENTRY;
 
         LASSERT(imp);
-        if ((imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_QUOTA64) && 
+        if ((imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_QUOTA64) &&
             !OBD_FAIL_CHECK(OBD_FAIL_QUOTA_QD_COUNT_32BIT))
                 RETURN(0);
         else
@@ -161,7 +161,7 @@ int compute_remquota(struct obd_device *obd,
                 RETURN(QUOTA_RET_NOLIMIT);
 
         OBD_ALLOC_PTR(qctl);
-        if (qctl == NULL) 
+        if (qctl == NULL)
                 RETURN(-ENOMEM);
 
         /* get fs quota usage & limit */
@@ -173,7 +173,7 @@ int compute_remquota(struct obd_device *obd,
                 if (ret == -ESRCH)      /* no limit */
                         ret = QUOTA_RET_NOLIMIT;
                 else
-                        CDEBUG(D_QUOTA, "can't get fs quota usage! (rc:%d)", 
+                        CDEBUG(D_QUOTA, "can't get fs quota usage! (rc:%d)",
                                ret);
                 GOTO(out, ret);
         }
@@ -395,10 +395,10 @@ static int split_before_schedule_dqacq(struct obd_device *obd, struct lustre_quo
         QDATA_DEBUG(qdata, "%s quota split.\n",
                     (qdata->qd_flags & QUOTA_IS_BLOCK) ? "block" : "inode");
         if (qdata->qd_flags & QUOTA_IS_BLOCK)
-                factor = MAX_QUOTA_COUNT32 / qctxt->lqc_bunit_sz * 
+                factor = MAX_QUOTA_COUNT32 / qctxt->lqc_bunit_sz *
                         qctxt->lqc_bunit_sz;
         else
-                factor = MAX_QUOTA_COUNT32 / qctxt->lqc_iunit_sz * 
+                factor = MAX_QUOTA_COUNT32 / qctxt->lqc_iunit_sz *
                         qctxt->lqc_iunit_sz;
 
         if (qctxt->lqc_import && should_translate_quota(qctxt->lqc_import) &&
@@ -470,17 +470,17 @@ dqacq_completion(struct obd_device *obd,
 
                 switch (opc) {
                 case QUOTA_DQACQ:
-                        CDEBUG(D_QUOTA, "%s(acq):count: %d, hardlimt: "LPU64 
-                               ",type: %s.\n", obd->obd_name, count, *hardlimit, 
+                        CDEBUG(D_QUOTA, "%s(acq):count: %d, hardlimt: "LPU64
+                               ",type: %s.\n", obd->obd_name, count, *hardlimit,
                                qdata_type ? "grp": "usr");
                         INC_QLIMIT(*hardlimit, count);
                         break;
                 case QUOTA_DQREL:
-                        CDEBUG(D_QUOTA, "%s(rel):count: %d, hardlimt: "LPU64 
-                               ",type: %s.\n", obd->obd_name, count, *hardlimit, 
+                        CDEBUG(D_QUOTA, "%s(rel):count: %d, hardlimt: "LPU64
+                               ",type: %s.\n", obd->obd_name, count, *hardlimit,
                                qdata_type ? "grp": "usr");
-                        LASSERTF(count < *hardlimit, 
-                                 "count: %d, hardlimit: "LPU64".\n", 
+                        LASSERTF(count < *hardlimit,
+                                 "count: %d, hardlimit: "LPU64".\n",
                                  count, *hardlimit);
                         *hardlimit -= count;
                         break;
@@ -538,7 +538,7 @@ out:
          *   - local dqacq/dqrel.
          *   - local disk io failure.
          */
-        if (err || (rc && rc != -EBUSY) || 
+        if (err || (rc && rc != -EBUSY) ||
             is_master(obd, qctxt, qdata->qd_id, qdata_type))
                 RETURN(err);
 
@@ -683,18 +683,18 @@ schedule_dqacq(struct obd_device *obd,
         }
 
 	if (qdata->qd_flags & QUOTA_IS_BLOCK)
-	        factor = MAX_QUOTA_COUNT32 / qctxt->lqc_bunit_sz * 
+	        factor = MAX_QUOTA_COUNT32 / qctxt->lqc_bunit_sz *
                          qctxt->lqc_bunit_sz;
         else
-                factor = MAX_QUOTA_COUNT32 / qctxt->lqc_iunit_sz * 
+                factor = MAX_QUOTA_COUNT32 / qctxt->lqc_iunit_sz *
                          qctxt->lqc_iunit_sz;
 
-        LASSERT(!should_translate_quota(qctxt->lqc_import) || 
+        LASSERT(!should_translate_quota(qctxt->lqc_import) ||
                 qdata->qd_count <= factor);
         if (should_translate_quota(qctxt->lqc_import))
         {
                 struct qunit_data_old *reqdata_old, *tmp;
-                        
+
                 reqdata_old = req_capsule_client_get(&req->rq_pill,
                                                      &RMF_QUNIT_DATA);
 
@@ -720,7 +720,7 @@ schedule_dqacq(struct obd_device *obd,
         aa->aa_qunit = qunit;
 
         req->rq_interpret_reply = dqacq_interpret;
-        ptlrpcd_add_req(req);
+        ptlrpcd_add_req(req, PSCOPE_OTHER);
 
         QDATA_DEBUG(qdata, "%s scheduled.\n",
                     opc == QUOTA_DQACQ ? "DQACQ" : "DQREL");
@@ -755,7 +755,7 @@ qctxt_adjust_qunit(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                 qdata[i].qd_id = id[i];
                 qdata[i].qd_flags = 0;
                 qdata[i].qd_flags |= i;
-                qdata[i].qd_flags |= isblk ? QUOTA_IS_BLOCK : 0;        
+                qdata[i].qd_flags |= isblk ? QUOTA_IS_BLOCK : 0;
                 qdata[i].qd_count = 0;
 
                 ret = check_cur_qunit(obd, qctxt, &qdata[i]);
@@ -763,7 +763,7 @@ qctxt_adjust_qunit(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                         int opc;
                         /* need acquire or release */
                         opc = ret == 1 ? QUOTA_DQACQ : QUOTA_DQREL;
-                        ret = split_before_schedule_dqacq(obd, qctxt, &qdata[i], 
+                        ret = split_before_schedule_dqacq(obd, qctxt, &qdata[i],
                                                           opc, wait);
                         if (!rc)
                                 rc = ret;
@@ -907,7 +907,7 @@ static int qslave_recovery_main(void *arg)
 
                 LASSERT(dqopt->files[type] != NULL);
                 CFS_INIT_LIST_HEAD(&id_list);
-#ifndef KERNEL_SUPPORTS_QUOTA_READ 
+#ifndef KERNEL_SUPPORTS_QUOTA_READ
                 rc = fsfilt_qids(obd, dqopt->files[type], NULL, type, &id_list);
 #else
                 rc = fsfilt_qids(obd, NULL, dqopt->files[type], type, &id_list);
