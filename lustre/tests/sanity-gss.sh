@@ -81,7 +81,7 @@ prepare_krb5_creds
 
 # we want double mount
 MOUNT_2=${MOUNT_2:-"yes"}
-cleanup_and_setup_lustre
+check_and_setup_lustre
 
 rm -rf $DIR/[df][0-9]*
 

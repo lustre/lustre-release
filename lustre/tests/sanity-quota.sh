@@ -61,7 +61,7 @@ QUOTALOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 DIR=${DIR:-$MOUNT}
 DIR2=${DIR2:-$MOUNT2}
 
-cleanup_and_setup_lustre
+check_and_setup_lustre
 
 LOVNAME=`cat $LPROC/llite/*/lov/common_name | tail -n 1`
 OSTCOUNT=`cat $LPROC/lov/$LOVNAME/numobd`

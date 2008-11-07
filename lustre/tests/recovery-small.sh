@@ -31,7 +31,7 @@ build_test_filter
 SETUP=${SETUP:-""}
 CLEANUP=${CLEANUP:-""}
 
-cleanup_and_setup_lustre
+check_and_setup_lustre
 
 assert_DIR
 rm -rf $DIR/[df][0-9]*
