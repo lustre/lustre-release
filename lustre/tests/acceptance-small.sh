@@ -50,8 +50,20 @@ FORMAT=${FORMAT:-formatall}
 CLEANUP=${CLEANUP:-stopall}
 
 setup_if_needed() {
-    mount | grep $MOUNT && return
+    local MOUNTED=$(mounted_lustre_filesystems)
+    if $(echo $MOUNTED | grep -w -q $MOUNT); then
+        check_config $MOUNT
+        return
+    fi
+
+    echo "Lustre is not mounted, trying to do setup SETUP=$SETUP ... "
     $FORMAT && $SETUP
+
+    MOUNTED=$(mounted_lustre_filesystems)
+    if ! $(echo $MOUNTED | grep -w -q $MOUNT); then
+        echo "Lustre is not mounted after setup! SETUP=$SETUP"
+        exit 1
+    fi
 }
 
 title() {
@@ -272,7 +284,7 @@ for NAME in $CONFIGS; do
 		mount_client $MOUNT2
 		#echo "can't mount2 for '$NAME', skipping sanityN.sh"
 		START=: CLEAN=: bash sanityN.sh
-		umount $MOUNT2
+		[ "$(mount | grep $MOUNT2)" ] && umount $MOUNT2
 
 		$DEBUG_ON
 		$CLEANUP
