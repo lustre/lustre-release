@@ -90,7 +90,6 @@ void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, cfs_page_t *page,
 void ptl_rpc_wipe_bulk_pages(struct ptlrpc_bulk_desc *desc);
 
 /* pack_generic.c */
-int lustre_msg_need_swab(struct lustre_msg *msg);
 struct ptlrpc_reply_state *lustre_get_emerg_rs(struct ptlrpc_service *svc);
 void lustre_put_emerg_rs(struct ptlrpc_reply_state *rs);
 

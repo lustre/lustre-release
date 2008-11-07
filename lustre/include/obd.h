@@ -1595,7 +1595,7 @@ static inline const struct lsm_operations *lsm_op_find(int magic)
         case LOV_MAGIC_V3:
                return &lsm_v3_ops;
         default:
-               CERROR("Cannot recognize lsm_magic %x\n", magic);
+               CERROR("Cannot recognize lsm_magic %d\n", magic);
                return NULL;
         }
 }

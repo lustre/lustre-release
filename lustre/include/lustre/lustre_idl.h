@@ -593,9 +593,6 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define DLM_LOCKREPLY_OFF               1 /* lockrep offset */
 #define DLM_REPLY_REC_OFF               2 /* reply record offset */
 
-/* only use in req->rq_{req,rep}_swab_mask */
-#define MSG_PTLRPC_HEADER_OFF           31
-
 /* Flags that are operation-specific go in the top 16 bits. */
 #define MSG_OP_FLAG_MASK   0xffff0000
 #define MSG_OP_FLAG_SHIFT  16
