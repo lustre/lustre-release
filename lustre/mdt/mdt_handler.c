@@ -2885,11 +2885,12 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
         new_lock->l_remote_handle = lock->l_remote_handle;
         new_lock->l_flags &= ~LDLM_FL_LOCAL;
 
+        unlock_res_and_lock(new_lock);
+
         lustre_hash_add(new_lock->l_export->exp_lock_hash,
                         &new_lock->l_remote_handle,
                         &new_lock->l_exp_hash);
 
-        unlock_res_and_lock(new_lock);
         LDLM_LOCK_RELEASE(new_lock);
         lh->mlh_reg_lh.cookie = 0;
 
