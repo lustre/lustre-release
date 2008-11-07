@@ -585,7 +585,7 @@ static inline int lustre_unpack_ptlrpc_body_v2(struct lustre_msg_v2 *m,
                  return -EINVAL;
         }
 
-        return flipped;
+        return 0;
 }
 
 int lustre_unpack_req_ptlrpc_body(struct ptlrpc_request *req, int offset)
