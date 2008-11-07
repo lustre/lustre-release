@@ -466,9 +466,7 @@ run_test 17f "symlinks: long and very long symlink name ========================
 
 test_17g() {
         mkdir -p $DIR/$tdir
-        for ((i = 0; i < 511; ++i)); do
-                LONGSYMLINK="${LONGSYMLINK}01234567"
-        done
+        LONGSYMLINK="$(dd if=/dev/zero bs=4095 count=1 | tr '\0' 'x')"
         ln -s $LONGSYMLINK $DIR/$tdir/$tfile
         ls -l $DIR/$tdir
 }
