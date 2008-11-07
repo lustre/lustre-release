@@ -400,18 +400,16 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
                 GOTO(out_err, rc);
         }
 
-        spin_lock(&obd->obd_dev_lock);
-        /* check if pool already exists */
-        if (lustre_hash_lookup(lov->lov_pools_hash_body, poolname) != NULL) {
-                spin_unlock(&obd->obd_dev_lock);
+        INIT_HLIST_NODE(&new_pool->pool_hash);
+        rc = lustre_hash_add_unique(lov->lov_pools_hash_body, poolname,
+                                    &new_pool->pool_hash);
+        if (rc) {
                 lov_ost_pool_free(&new_pool->pool_rr.lqr_pool);
                 lov_ost_pool_free(&new_pool->pool_obds);
                 GOTO(out_err, rc = -EEXIST);
         }
 
-        INIT_HLIST_NODE(&new_pool->pool_hash);
-        lustre_hash_add_unique(lov->lov_pools_hash_body, poolname,
-                               &new_pool->pool_hash);
+        spin_lock(&obd->obd_dev_lock);
         list_add_tail(&new_pool->pool_list, &lov->lov_pool_list);
         lov->lov_pool_count++;
         spin_unlock(&obd->obd_dev_lock);
