@@ -118,11 +118,11 @@ CFS_MODULE_PARM(zc_min_frag, "i", int, 0644,
                 "minimum fragment to zero copy");
 
 static unsigned int zc_recv = 0;
-CFS_MODULE_PARM(zc_recv, "i", int, 0444,
+CFS_MODULE_PARM(zc_recv, "i", int, 0644,
                 "enable ZC recv for Chelsio driver");
 
 static unsigned int zc_recv_min_nfrags = 16;
-CFS_MODULE_PARM(zc_recv_min_nfrags, "i", int, 0444,
+CFS_MODULE_PARM(zc_recv_min_nfrags, "i", int, 0644,
                 "minimum # of fragments to enable ZC recv");
 
 #ifdef SOCKNAL_BACKOFF
