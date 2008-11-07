@@ -1024,8 +1024,7 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
 
         if (lock->l_export->exp_lock_hash)
                 lustre_hash_add(lock->l_export->exp_lock_hash,
-                                &lock->l_remote_handle, 
-                                &lock->l_exp_hash);
+                                &lock->l_remote_handle, &lock->l_exp_hash);
 
 existing_lock:
 
