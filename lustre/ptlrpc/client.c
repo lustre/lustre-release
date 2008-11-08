@@ -707,8 +707,6 @@ void ptlrpc_set_add_req(struct ptlrpc_request_set *set,
         list_add_tail(&req->rq_set_chain, &set->set_requests);
         req->rq_set = set;
         set->set_remaining++;
-
-        atomic_inc(&req->rq_import->imp_inflight);
 }
 
 /** 
@@ -979,13 +977,12 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
                 spin_unlock (&req->rq_lock);
 
                 DEBUG_REQ(D_HA, req, "req from PID %d waiting for recovery: "
-                          "(%s != %s)",
-                          lustre_msg_get_status(req->rq_reqmsg) ,
+                          "(%s != %s)", lustre_msg_get_status(req->rq_reqmsg),
                           ptlrpc_import_state_name(req->rq_send_state),
                           ptlrpc_import_state_name(imp->imp_state));
-                LASSERT(list_empty (&req->rq_list));
-
+                LASSERT(list_empty(&req->rq_list));
                 list_add_tail(&req->rq_list, &imp->imp_delayed_list);
+                atomic_inc(&req->rq_import->imp_inflight);
                 spin_unlock(&imp->imp_lock);
                 RETURN(0);
         }
@@ -997,9 +994,9 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
                 RETURN(rc);
         }
 
-        /* XXX this is the same as ptlrpc_queue_wait */
         LASSERT(list_empty(&req->rq_list));
         list_add_tail(&req->rq_list, &imp->imp_sending_list);
+        atomic_inc(&req->rq_import->imp_inflight);
         spin_unlock(&imp->imp_lock);
 
         lustre_msg_set_status(req->rq_reqmsg, cfs_curproc_pid());
@@ -1272,9 +1269,14 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                        lustre_msg_get_opc(req->rq_reqmsg));
 
                 spin_lock(&imp->imp_lock);
-                if (!list_empty(&req->rq_list))
+                /* Request already may be not on sending or delaying list. This
+                 * may happen in the case of marking it errorneous for the case
+                 * ptlrpc_import_delay_req(req, status) find it impossible to 
+                 * allow sending this rpc and returns *status != 0. */
+                if (!list_empty(&req->rq_list)) {
                         list_del_init(&req->rq_list);
-                atomic_dec(&imp->imp_inflight);
+                        atomic_dec(&imp->imp_inflight);
+                }
                 spin_unlock(&imp->imp_lock);
 
                 set->set_remaining--;
@@ -1898,7 +1900,6 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
 
         LASSERT(req->rq_set == NULL);
         LASSERT(!req->rq_receiving_reply);
-        atomic_inc(&imp->imp_inflight);
 
         /* for distributed debugging */
         lustre_msg_set_status(req->rq_reqmsg, cfs_curproc_pid());
@@ -1918,8 +1919,8 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
 restart:
         if (ptlrpc_import_delay_req(imp, req, &rc)) {
                 list_del(&req->rq_list);
-
                 list_add_tail(&req->rq_list, &imp->imp_delayed_list);
+                atomic_inc(&imp->imp_inflight);
                 spin_unlock(&imp->imp_lock);
 
                 DEBUG_REQ(D_HA, req, "\"%s\" waiting for recovery: (%s != %s)",
@@ -1939,6 +1940,7 @@ restart:
 
                 spin_lock(&imp->imp_lock);
                 list_del_init(&req->rq_list);
+                atomic_dec(&imp->imp_inflight);
 
                 if (req->rq_err) {
                         /* rq_status was set locally */
@@ -1957,7 +1959,6 @@ restart:
         }
 
         if (rc != 0) {
-                list_del_init(&req->rq_list);
                 spin_unlock(&imp->imp_lock);
                 req->rq_status = rc; // XXX this ok?
                 GOTO(out, rc);
@@ -1985,6 +1986,7 @@ restart:
         /* XXX this is the same as ptlrpc_set_wait */
         LASSERT(list_empty(&req->rq_list));
         list_add_tail(&req->rq_list, &imp->imp_sending_list);
+        atomic_inc(&imp->imp_inflight);
         spin_unlock(&imp->imp_lock);
 
         rc = ptl_send_rpc(req, 0);
@@ -2017,14 +2019,15 @@ restart:
                libcfs_nid2str(imp->imp_connection->c_peer.nid),
                lustre_msg_get_opc(req->rq_reqmsg));
 
-        spin_lock(&imp->imp_lock);
-        list_del_init(&req->rq_list);
-        spin_unlock(&imp->imp_lock);
-
         /* If the reply was received normally, this just grabs the spinlock
          * (ensuring the reply callback has returned), sees that
          * req->rq_receiving_reply is clear and returns. */
         ptlrpc_unregister_reply(req, 0);
+
+        spin_lock(&imp->imp_lock);
+        list_del_init(&req->rq_list);
+        atomic_dec(&imp->imp_inflight);
+        spin_unlock(&imp->imp_lock);
 
         if (req->rq_err) {
                 DEBUG_REQ(D_RPCTRACE, req, "err rc=%d status=%d",
@@ -2095,8 +2098,6 @@ restart:
 
         LASSERT(!req->rq_receiving_reply);
         ptlrpc_rqphase_move(req, RQ_PHASE_INTERPRET);
-
-        atomic_dec(&imp->imp_inflight);
         cfs_waitq_signal(&imp->imp_recovery_waitq);
         RETURN(rc);
 }
