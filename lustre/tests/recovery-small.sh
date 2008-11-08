@@ -841,7 +841,7 @@ test_55() {
 	mkdir -p $DIR/$tdir
 
 	# first dd should be finished quickly
-	lfs setstripe DIR/$tdir/$tfile-1 -c 1 -i 0
+	lfs setstripe $DIR/$tdir/$tfile-1 -c 1 -i 0
 	dd if=/dev/zero of=$DIR/$tdir/$tfile-1 bs=32M count=4  &
 	DDPID=$!
 	count=0
@@ -856,7 +856,7 @@ test_55() {
 	done	
 	echo "(dd_pid=$DDPID, time=$count)successful"
 
-	lfs setstripe DIR/$tdir/$tfile-2 -c 1 -i 0
+	lfs setstripe $DIR/$tdir/$tfile-2 -c 1 -i 0
 	#define OBD_FAIL_OST_DROP_REQ            0x21d
 	do_facet ost1 lctl set_param fail_loc=0x0000021d
 	# second dd will be never finished
