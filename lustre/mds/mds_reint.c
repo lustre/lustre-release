@@ -1662,11 +1662,6 @@ retry_locks:
         if (rc)
                 GOTO(cleanup, rc);
 
-        if (!(*dchildp)->d_inode)
-                cleanup_phase = 3; /* parent lock */
-        else
-                cleanup_phase = 4; /* child lock */
-
         /* Step 4: Re-lookup child to verify it hasn't changed since locking */
         rc = mds_verify_child(obd, &parent_res_id, parent_lockh, *dparentp,
                               parent_mode, &child_res_id, child_lockh, dchildp,
@@ -1674,17 +1669,12 @@ retry_locks:
         if (rc > 0)
                 goto retry_locks;
         if (rc < 0) {
-                cleanup_phase = 2;
                 GOTO(cleanup, rc);
         }
 
 cleanup:
         if (rc) {
                 switch (cleanup_phase) {
-                case 4:
-                        ldlm_lock_decref(child_lockh, child_mode);
-                case 3:
-                        ldlm_lock_decref(parent_lockh, parent_mode);
                 case 2:
                         l_dput(*dchildp);
                 case 1:
