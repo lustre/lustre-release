@@ -791,6 +791,7 @@ static int lustre_stop_mgc(struct super_block *sb)
         lsi->lsi_mgc = NULL;
 
         mutex_down(&mgc_start_lock);
+        LASSERT(atomic_read(&obd->u.cli.cl_mgc_refcount) > 0);
         if (!atomic_dec_and_test(&obd->u.cli.cl_mgc_refcount)) {
                 /* This is not fatal, every client that stops
                    will call in here. */
@@ -826,7 +827,8 @@ static int lustre_stop_mgc(struct super_block *sb)
 
         /* Clean the nid uuids */
         if (!niduuid)
-                RETURN(-ENOMEM);
+                GOTO(out, rc = -ENOMEM);
+
         for (i = 0; i < lsi->lsi_lmd->lmd_mgs_failnodes; i++) {
                 sprintf(ptr, "_%x", i);
                 rc = do_lcfg(LUSTRE_MGC_OBDNAME, 0, LCFG_DEL_UUID,
@@ -835,10 +837,11 @@ static int lustre_stop_mgc(struct super_block *sb)
                         CERROR("del MDC UUID %s failed: rc = %d\n",
                                niduuid, rc);
         }
-        OBD_FREE(niduuid, len);
-        /* class_import_put will get rid of the additional connections */
-
 out:
+        if (niduuid)
+                OBD_FREE(niduuid, len);
+
+        /* class_import_put will get rid of the additional connections */
         mutex_up(&mgc_start_lock);
         RETURN(rc);
 }
@@ -1378,7 +1381,6 @@ static void server_put_super(struct super_block *sb)
         int tmpname_sz;
         int lddflags = lsi->lsi_ldd->ldd_flags;
         int lsiflags = lsi->lsi_flags;
-        int rc;
         ENTRY;
 
         LASSERT(lsiflags & LSI_SERVER);
@@ -1423,17 +1425,13 @@ static void server_put_super(struct super_block *sb)
         /* If they wanted the mgs to stop separately from the mdt, they
            should have put it on a different device. */
         if (IS_MGS(lsi->lsi_ldd)) {
-                /* stop the mgc before the mgs so the connection gets cleaned
-                   up */
-                lustre_stop_mgc(sb);
                 /* if MDS start with --nomgs, don't stop MGS then */
                 if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOMGS))
                         server_stop_mgs(sb);
         }
 
         /* Clean the mgc and sb */
-        rc = lustre_common_put_super(sb);
-        /* FIXME how can I report a failure to umount? */
+        lustre_common_put_super(sb);
 
         /* Wait for the targets to really clean up - can't exit (and let the
            sb get destroyed) while the mount is still in use */

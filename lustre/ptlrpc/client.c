@@ -1182,8 +1182,8 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
                          * Turn fail_loc off to prevent it from looping
                          * forever. 
                          */
-                        OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_UNLINK | 
-                                       OBD_FAIL_ONCE);
+                        OBD_FAIL_CHECK_ORSET(OBD_FAIL_PTLRPC_LONG_UNLINK,
+                                             OBD_FAIL_ONCE);
 
                         /* 
                          * Move to next phase if reply was successfully 
