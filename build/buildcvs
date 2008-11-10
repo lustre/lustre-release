@@ -226,6 +226,14 @@ case "$lustretag" in
         libcfstag="HEAD"
         ;;
    
+    # params_tree 
+    b_hd_params_tree)
+        lnettag="HEAD"
+        ldiskfstag="$ldiskfstag_head"
+        libcfstag="b_hd_params_tree"
+        lustretag="b_hd_params_tree"
+        ;;
+   
     # uMDS
     b_dmu_umds)
         lnettag="b_uoss_umds"
