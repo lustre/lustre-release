@@ -283,6 +283,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_TGT_TOOMANY_THREADS     0x706
 #define OBD_FAIL_TGT_REPLAY_DROP         0x707
 #define OBD_FAIL_TGT_FAKE_EXP            0x708
+#define OBD_FAIL_TGT_REPLAY_DELAY        0x709
 
 #define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
 #define OBD_FAIL_MDC_ENQUEUE_PAUSE       0x801
