@@ -65,11 +65,10 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/resize.c
  
  #define outside(b, first, last)	((b) < (first) || (b) >= (last))
  #define inside(b, first, last)	((b) >= (first) && (b) < (last))
-@@ -133,25 +134,6 @@ static struct buffer_head *bclean(handle
- 	return bh;
+@@ -134,25 +135,6 @@ static struct buffer_head *bclean(handle
  }
  
--/*
+ /*
 - * To avoid calling the atomic setbit hundreds or thousands of times, we only
 - * need to use it within a single byte (to ensure we get endianness right).
 - * We can use memset for the rest of the bitmap as there are no other users.
@@ -88,9 +87,10 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/resize.c
 -		memset(bitmap + (i >> 3), 0xff, (end_bit - i) >> 3);
 -}
 -
- /*
+-/*
   * If we have fewer than thresh credits, extend by EXT3_MAX_TRANS_DATA.
   * If that fails, restart the transaction & regain write access for the
+  * buffer head which is used for block_bitmap modifications.
 @@ -818,6 +800,7 @@ int ext3_group_add(struct super_block *s
  	gdp->bg_inode_table = cpu_to_le32(input->inode_table);
  	gdp->bg_free_blocks_count = cpu_to_le16(input->free_blocks_count);

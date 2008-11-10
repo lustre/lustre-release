@@ -18,7 +18,7 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 +++ linux-2.6.18.8/fs/ext3/extents.c	2007-07-17 11:08:59.000000000 +0200
 @@ -0,0 +1,2276 @@
 +/*
-+ * Copyright 2008 Sun Microsystems, Inc.
++ * Copyright 2008, Sun Microsystems, Inc.
 + * Written by Alex Tomas <alex@clusterfs.com>
 + *
 + * Architecture independence:
@@ -1162,10 +1162,10 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 +}
 +
 +/*
-+ * returns first allocated block from next leaf or EXT_MAX_BLOCK
++ * returns first allocated block from next leaf or EXT_UNSET_BLOCK
 + */
 +static unsigned ext3_ext_next_leaf_block(struct inode *inode,
-+					 struct ext3_ext_path *path)
++                                               struct ext3_ext_path *path)
 +{
 +	int depth;
 +
@@ -1174,7 +1174,7 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 +
 +	/* zero-tree has no leaf blocks at all */
 +	if (depth == 0)
-+		return EXT_MAX_BLOCK;
++		return EXT_UNSET_BLOCK;
 +
 +	/* go to index block */
 +	depth--;
@@ -1186,7 +1186,7 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 +		depth--;
 +	}
 +
-+	return EXT_MAX_BLOCK;
++	return EXT_UNSET_BLOCK;
 +}
 +
 +/*
@@ -1248,8 +1248,8 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 +				struct ext3_extent *ex2)
 +{
 +	/* FIXME: 48bit support */
-+	if (le32_to_cpu(ex1->ee_block) + le16_to_cpu(ex1->ee_len) !=
-+	    le32_to_cpu(ex2->ee_block))
++        if (le32_to_cpu(ex1->ee_block) + le16_to_cpu(ex1->ee_len)
++	    != le32_to_cpu(ex2->ee_block))
 +		return 0;
 +
 +#ifdef AGRESSIVE_TEST
@@ -1257,8 +1257,8 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 +		return 0;
 +#endif
 +
-+	if (le32_to_cpu(ex1->ee_start) + le16_to_cpu(ex1->ee_len) ==
-+	    le32_to_cpu(ex2->ee_start))
++        if (le32_to_cpu(ex1->ee_start) + le16_to_cpu(ex1->ee_len)
++			== le32_to_cpu(ex2->ee_start))
 +		return 1;
 +	return 0;
 +}
@@ -1309,7 +1309,7 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 +	fex = EXT_LAST_EXTENT(eh);
 +	next = ext3_ext_next_leaf_block(inode, path);
 +	if (le32_to_cpu(newext->ee_block) > le32_to_cpu(fex->ee_block)
-+	    && next != EXT_MAX_BLOCK) {
++	    && next != EXT_UNSET_BLOCK) {
 +		ext_debug(inode, "next leaf block - %d\n", next);
 +		BUG_ON(npath != NULL);
 +		npath = ext3_ext_find_extent(inode, next, NULL);
@@ -1773,8 +1773,8 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 +		path[depth].p_ext = ex;
 +
 +		a = ex_ee_block > start ? ex_ee_block : start;
-+		b = ex_ee_block + ex_ee_len - 1 < EXT_MAX_BLOCK ?
-+			ex_ee_block + ex_ee_len - 1 : EXT_MAX_BLOCK;
++		b = (unsigned long long)ex_ee_block + ex_ee_len - 1 < 
++		    EXT_MAX_BLOCK ? ex_ee_block + ex_ee_len - 1 : EXT_MAX_BLOCK;
 +
 +		ext_debug(inode, "  border %u:%u\n", a, b);
 +
@@ -2488,7 +2488,7 @@ Index: linux-2.6.18.8/include/linux/ext3_extents.h
 ===================================================================
 --- /dev/null	1970-01-01 00:00:00.000000000 +0000
 +++ linux-2.6.18.8/include/linux/ext3_extents.h	2007-07-17 09:18:14.000000000 +0200
-@@ -0,0 +1,231 @@
+@@ -0,0 +1,232 @@
 +/*
 + * Copyright 2008 Sun Microsystems, Inc.
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -2541,8 +2541,8 @@ Index: linux-2.6.18.8/include/linux/ext3_extents.h
 +#ifdef EXT_DEBUG
 +#define ext_debug(inode,fmt,a...)                       \
 +do {                                                    \
-+	if (test_opt(inode->i_sb, EXTDEBUG))             \
-+		printk(fmt, ##a);                        \
++       if (test_opt(inode->i_sb, EXTDEBUG))             \
++               printk(fmt, ##a);                        \
 +} while (0);
 +#else
 +#define ext_debug(inode,fmt,a...)
@@ -2642,6 +2642,7 @@ Index: linux-2.6.18.8/include/linux/ext3_extents.h
 +
 +
 +#define EXT_MAX_BLOCK	0xffffffff
++#define EXT_UNSET_BLOCK 1
 +
 +#define EXT_FLAGS_CLR_UNKNOWN	0x7  /* Flags cleared on modification */
 +#define EXT_HDR_GEN_BITS	24
@@ -2654,8 +2655,8 @@ Index: linux-2.6.18.8/include/linux/ext3_extents.h
 +	((struct ext3_extent_idx *) (((char *) (__hdr__)) +	\
 +				     sizeof(struct ext3_extent_header)))
 +#define EXT_HAS_FREE_INDEX(__path__) \
-+	(le16_to_cpu((__path__)->p_hdr->eh_entries) < \
-+	                             le16_to_cpu((__path__)->p_hdr->eh_max))
++        (le16_to_cpu((__path__)->p_hdr->eh_entries) \
++	                             < le16_to_cpu((__path__)->p_hdr->eh_max))
 +#define EXT_LAST_EXTENT(__hdr__) \
 +	(EXT_FIRST_EXTENT((__hdr__)) + le16_to_cpu((__hdr__)->eh_entries) - 1)
 +#define EXT_LAST_INDEX(__hdr__) \
