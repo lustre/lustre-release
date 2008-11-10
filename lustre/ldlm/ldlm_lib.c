@@ -1082,7 +1082,8 @@ static void target_send_delayed_replies(struct obd_device *obd)
         LCONSOLE_INFO("%s: sending delayed replies to recovered clients\n",
                       obd->obd_name);
 
-        list_for_each_entry_safe(req, tmp, &obd->obd_delayed_reply_queue, rq_list) {
+        list_for_each_entry_safe(req, tmp, &obd->obd_delayed_reply_queue,
+                                 rq_list) {
                 list_del_init(&req->rq_list);
                 DEBUG_REQ(D_HA, req, "delayed:");
                 ptlrpc_reply(req);
@@ -1094,27 +1095,39 @@ static void target_send_delayed_replies(struct obd_device *obd)
 static void target_finish_recovery(struct obd_device *obd)
 {
         ldlm_reprocess_all_ns(obd->obd_namespace);
-        LASSERT(obd->obd_processing_task == 0);
+        spin_lock_bh(&obd->obd_processing_task_lock);
+        if (list_empty(&obd->obd_recovery_queue)) {
+                obd->obd_processing_task = 0;
+        } else {
+                spin_unlock_bh(&obd->obd_processing_task_lock);
+                CERROR("%s: Recovery queue isn't empty\n", obd->obd_name);
+                LBUG();
+        }
+        spin_unlock_bh(&obd->obd_processing_task_lock);
+                ;
         /* when recovery finished, cleanup orphans on mds and ost */
         if (OBT(obd) && OBP(obd, postrecov)) {
                 int rc = OBP(obd, postrecov)(obd);
                 LCONSOLE_WARN("%s: recovery %s: rc %d\n", obd->obd_name,
                               rc < 0 ? "failed" : "complete", rc);
         }
-        LASSERT(list_empty(&obd->obd_recovery_queue));
         target_send_delayed_replies(obd);
 }
 
 static void abort_recovery_queue(struct obd_device *obd)
 {
-        struct ptlrpc_request *req;
-        struct list_head *tmp, *n;
+        struct ptlrpc_request *req, *n;
+        struct list_head abort_list;
         int rc;
 
-        list_for_each_safe(tmp, n, &obd->obd_recovery_queue) {
-                req = list_entry(tmp, struct ptlrpc_request, rq_list);
+        CFS_INIT_LIST_HEAD(&abort_list);
+        spin_lock_bh(&obd->obd_processing_task_lock);
+        list_splice_init(&obd->obd_recovery_queue, &abort_list);
+        spin_unlock_bh(&obd->obd_processing_task_lock);
+        /* process abort list unlocked */
+        list_for_each_entry_safe(req, n, &abort_list, rq_list) {
                 target_exp_dequeue_req_replay(req);
-                list_del(&req->rq_list);
+                list_del_init(&req->rq_list);
                 DEBUG_REQ(D_ERROR, req, "aborted:");
                 req->rq_status = -ENOTCONN;
                 req->rq_type = PTL_RPC_MSG_ERR;
@@ -1141,6 +1154,7 @@ void target_cleanup_recovery(struct obd_device *obd)
 {
         struct list_head *tmp, *n;
         struct ptlrpc_request *req;
+        struct list_head clean_list;
         ENTRY;
 
         LASSERT(obd->obd_stopping);
@@ -1161,10 +1175,14 @@ void target_cleanup_recovery(struct obd_device *obd)
                 target_release_saved_req(req);
         }
 
-        list_for_each_safe(tmp, n, &obd->obd_recovery_queue) {
+        CFS_INIT_LIST_HEAD(&clean_list);
+        spin_lock_bh(&obd->obd_processing_task_lock);
+        list_splice_init(&obd->obd_recovery_queue, &clean_list);
+        spin_unlock_bh(&obd->obd_processing_task_lock);
+        list_for_each_safe(tmp, n, &clean_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
                 target_exp_dequeue_req_replay(req);
-                list_del(&req->rq_list);
+                list_del_init(&req->rq_list);
                 target_release_saved_req(req);
         }
         EXIT;
@@ -1433,6 +1451,7 @@ static void process_recovery_queue(struct obd_device *obd)
                 ptlrpc_req_drop_rs(req);
                 OBD_FREE(req->rq_reqmsg, req->rq_reqlen);
                 OBD_FREE(req, sizeof *req);
+                OBD_RACE(OBD_FAIL_TGT_REPLAY_DELAY);
                 spin_lock_bh(&obd->obd_processing_task_lock);
                 obd->obd_next_recovery_transno++;
                 if (list_empty(&obd->obd_recovery_queue)) {
@@ -1663,6 +1682,7 @@ int target_queue_last_replay_reply(struct ptlrpc_request *req, int rc)
                 target_cancel_recovery_timer(obd);
                 spin_unlock_bh(&obd->obd_processing_task_lock);
 
+                OBD_RACE(OBD_FAIL_TGT_REPLAY_DELAY);
 
                 if (!delayed_done)
                         target_finish_recovery(obd);
