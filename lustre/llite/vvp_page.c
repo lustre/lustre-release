@@ -386,14 +386,6 @@ static int vvp_page_print(const struct lu_env *env,
         return 0;
 }
 
-static int osc_page_cancel(const struct lu_env *env,
-                           const struct cl_page_slice *slice)
-{
-        struct ccc_page *vp = cl2ccc_page(slice);
-        LASSERT(vp->cpg_sync_io != NULL);
-        return 0;
-}
-
 static const struct cl_page_operations vvp_page_ops = {
         .cpo_own           = vvp_page_own,
         .cpo_assume        = vvp_page_assume,
@@ -408,7 +400,6 @@ static const struct cl_page_operations vvp_page_ops = {
         .cpo_fini          = vvp_page_fini,
         .cpo_print         = vvp_page_print,
         .cpo_is_under_lock = ccc_page_is_under_lock,
-        .cpo_cancel        = osc_page_cancel,
         .io = {
                 [CRT_READ] = {
                         .cpo_prep        = vvp_page_prep_read,
@@ -518,7 +509,6 @@ static const struct cl_page_operations vvp_transient_page_ops = {
         .cpo_is_vmlocked   = vvp_transient_page_is_vmlocked,
         .cpo_print         = vvp_page_print,
         .cpo_is_under_lock = ccc_page_is_under_lock,
-        .cpo_cancel        = osc_page_cancel,
         .io = {
                 [CRT_READ] = {
                         .cpo_prep        = ccc_transient_page_prep,
