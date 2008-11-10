@@ -1847,6 +1847,19 @@ run_test 71d "expired exports, server init removes them, conf_param works"
 
 # end vbr exports tests
 
+test_72() { #bug 16711
+    replay_barrier mds
+    multiop_bg_pause $DIR/$tfile O_c || return 4
+    pid=$!
+#define OBD_FAIL_TGT_REPLAY_DELAY 0x709
+    do_facet mds "lctl set_param fail_loc=0x80000709"
+    fail mds
+    kill -USR1 $pid || return 1
+    wait $pid || return 2
+    $CHECKSTAT -t file $DIR/$tfile || return 3
+}
+run_test 72 "target_finish_recovery vs process_recovery_queue race"
+
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
