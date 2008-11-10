@@ -46,7 +46,7 @@ SETUP=${SETUP:-:}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="12 16"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="12 16 33a"
 
 SANITYLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 FAIL_ON_ERROR=false
@@ -707,6 +707,77 @@ test_32b() { # bug 11270
         rm -f $p
 }
 run_test 32b "lockless i/o"
+
+print_jbd_stat () {
+    local dev=$(basename $(do_facet $SINGLEMDS lctl get_param -n osd.*MDT*.mntdev))
+    do_facet $SINGLEMDS cat /proc/fs/jbd/$dev/info | head -1 
+}
+
+do_and_time () {
+   local cmd=$1
+
+   local start_ts=`date +%s`
+
+   $cmd
+
+   current_ts=`date +%s`
+   ELAPSED=`expr $current_ts - $start_ts`
+}
+
+# commit on sharing tests
+test_33a() {
+    remote_mds_nodsh && skip "remote MDS with nodsh" && return
+
+    [ -n "$CLIENTS" ] || { skip "Need two or more clients" && return 0; }
+    [ $CLIENTCOUNT -ge 2 ] || \
+        { skip "Need two or more clients, have $CLIENTCOUNT" && return 0; }
+
+    zconf_mount_clients $CLIENT1,$CLIENT2 $DIR1
+    zconf_mount_clients $CLIENT1,$CLIENT2 $DIR2
+
+    local nfiles=${TEST33_NFILES:-10000}
+    local param_file=$TMP/$tfile-params
+
+    save_lustre_params $(facet_active_host $SINGLEMDS) "mdt.*.commit_on_sharing" > $param_file
+
+    local COS
+    local jbdold
+    local jbdnew
+    local jbd
+
+    for COS in 0 1; do
+        do_facet $SINGLEMDS lctl set_param mdt.*.commit_on_sharing=$COS
+        avgjbd=0
+        avgtime=0
+        for i in 1 2 3; do
+
+            do_nodes $CLIENT1,$CLIENT2 "mkdir -p $DIR1/$tdir-\\\$(hostname)-$i"
+
+            jbdold=$(print_jbd_stat) 
+            echo "=== START createmany $jbdold"
+            do_and_time "do_nodes $CLIENT1,$CLIENT2 createmany -o $DIR1/$tdir-\\\$(hostname)-$i/f- -r $DIR2/$tdir-\\\$(hostname)-$i/f- $nfiles"
+            jbdnew=$(print_jbd_stat)
+            jbd=$((`echo $jbdnew | cut -d" " -f1` - `echo $jbdold | cut -d" " -f1`))
+            echo "=== END   createmany $jbdnew :  $jbd transactions  nfiles $nfiles time $ELAPSED COS=$COS" 
+            avgjbd=$(( avgjbd + jbd ))
+            avgtime=$(( avgtime + ELAPSED ))
+        done
+        eval cos${COS}_jbd=$((avgjbd / 3))
+        eval cos${COS}_time=$((avgtime / 3))
+    done
+
+    echo "COS=0 transactions (avg): $cos0_jbd  time (avg): $cos0_time"
+    echo "COS=1 transactions (avg): $cos1_jbd  time (avg): $cos1_time" 
+    [ "$cos0_jbd" != 0 ] && echo "COS=1 vs COS=0 jbd:  $((((cos1_jbd/cos0_jbd - 1)) * 100 )) %"
+    [ "$cos0_time" != 0 ] && echo "COS=1 vs COS=0 time: $((((cos1_time/cos0_time - 1)) * 100 )) %"
+
+    restore_lustre_params < $param_file
+    rm -f $param_file
+    return 0
+}
+run_test 33a "commit on sharing, cross crete/delete, 2 clients, benchmark"
+
+# End commit on sharing tests
 
 log "cleanup: ======================================================"
 
