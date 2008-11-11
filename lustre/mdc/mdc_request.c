@@ -916,14 +916,10 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         int rc;
         ENTRY;
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        MOD_INC_USE_COUNT;
-#else
         if (!try_module_get(THIS_MODULE)) {
                 CERROR("Can't get module. Is it alive?");
                 return -EINVAL;
         }
-#endif
         switch (cmd) {
         case OBD_IOC_CLIENT_RECOVER:
                 rc = ptlrpc_recover_import(imp, data->ioc_inlbuf1);
@@ -957,12 +953,7 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 GOTO(out, rc = -ENOTTY);
         }
 out:
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        MOD_DEC_USE_COUNT;
-#else
         module_put(THIS_MODULE);
-#endif
-
         return rc;
 }
 
