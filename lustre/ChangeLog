@@ -3,7 +3,7 @@ tbd Sun Microsystems, Inc.
 	* Support for kernels:
 	 2.6.5-7.312 (SLES 9),
 	 2.6.9-67.0.22.EL (RHEL 4),
-	 2.6.16.60-0.27 (SLES 10),
+	 2.6.16.60-0.31 (SLES 10),
 	 2.6.18-92.1.10.el5 (RHEL 5),
 	 2.6.22.14 vanilla (kernel.org)
 	* Client support for unpatched kernels:
@@ -41,6 +41,10 @@ tbd Sun Microsystems, Inc.
 	  16929.
 	* A new Lustre ADIO driver is available for:
 	  MPICH2-1.0.7
+
+Severity   : enhancement
+Bugzilla   : 17458
+Description: Update to SLES10 SP2 kernel-2.6.16.60-0.31.
 
 Severity   : normal
 Frequency  : Create a symlink file with a very long name
