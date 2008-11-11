@@ -235,11 +235,7 @@ struct inode_operations ll_fast_symlink_inode_operations = {
 #ifdef HAVE_COOKIE_FOLLOW_LINK
         .put_link       = ll_put_link,
 #endif
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        .revalidate_it  = ll_inode_revalidate_it,
-#else 
         .getattr        = ll_getattr,
-#endif
         .permission     = ll_inode_permission,
         .setxattr       = ll_setxattr,
         .getxattr       = ll_getxattr,
