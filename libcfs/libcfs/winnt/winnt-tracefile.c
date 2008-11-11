@@ -259,18 +259,3 @@ int trace_max_debug_mb(void)
 	
 	return MAX(512, (total_mb * 80)/100);
 }
-
-void
-trace_call_on_all_cpus(void (*fn)(void *_arg), void *arg)
-{
-    int         cpu;
-    KAFFINITY   mask = cfs_query_thread_affinity();
-
-    for (cpu = 0; cpu < num_possible_cpus(); cpu++) {
-        if (cfs_tie_thread_to_cpu(cpu)) {
-            ASSERT((int)KeGetCurrentProcessorNumber() == cpu);
-		    fn(arg);
-            cfs_set_thread_affinity(mask);
-        }
-    }
-}
