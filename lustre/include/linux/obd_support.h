@@ -173,9 +173,8 @@ static inline cksum_type_t cksum_type_unpack(obd_flag o_flags)
 #define OBD_FAIL_WRITE(obd, id, sb)                                          \
 {                                                                            \
         if (OBD_FAIL_CHECK(id)) {                                            \
-                BDEVNAME_DECLARE_STORAGE(tmp);                               \
                 CERROR("obd_fail_loc=%x, fail write operation on %s\n",      \
-                       id, ll_bdevname(sb, tmp));                            \
+                       id, sb->s_id);                                        \
                 lvfs_set_rdonly(obd, sb);                                    \
                 /* We set FAIL_ONCE because we never "un-fail" a device */   \
                 obd_fail_loc |= OBD_FAILED | OBD_FAIL_ONCE;                  \
