@@ -45,9 +45,6 @@
 #include <lustre_lite.h>
 #include <linux/pagemap.h>
 #include <linux/file.h>
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-#include <linux/lustre_compat25.h>
-#endif
 #include "llite_internal.h"
 #include <lustre/ll_fiemap.h>
 
@@ -732,14 +729,10 @@ int ll_page_removal_cb(void *data, int discard)
                         CERROR("writepage inode %lu(%p) of page %p "
                                "failed: %d\n", mapping->host->i_ino,
                                mapping->host, page, rc);
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
                         if (rc == -ENOSPC)
                                 set_bit(AS_ENOSPC, &mapping->flags);
                         else
                                 set_bit(AS_EIO, &mapping->flags);
-#else
-                        mapping->gfp_mask |= AS_EIO_MASK;
-#endif
                 }
         }
         if (page->mapping != NULL) {
@@ -1585,11 +1578,7 @@ repeat:
                                OBD_MD_FLATIME);
                 lov_stripe_unlock(lsm);
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                file->f_ramax = 0;
-#else
                 file->f_ra.ra_pages = 0;
-#endif
                 /* initialize read-ahead window once per syscall */
                 if (ra == 0) {
                         ra = 1;
@@ -1867,7 +1856,6 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
 /*
  * Send file content (through pagecache) somewhere with helper
  */
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 static ssize_t ll_file_sendfile(struct file *in_file, loff_t *ppos,size_t count,
                                 read_actor_t actor, void *target)
 {
@@ -1960,7 +1948,6 @@ static ssize_t ll_file_sendfile(struct file *in_file, loff_t *ppos,size_t count,
         ll_tree_unlock(&tree);
         RETURN(retval);
 }
-#endif
 
 static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
                                unsigned long arg)
@@ -2791,12 +2778,7 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
         if (offset >= 0 && offset <= ll_file_maxbytes(inode)) {
                 if (offset != file->f_pos) {
                         file->f_pos = offset;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                        file->f_reada = 0;
-                        file->f_version = ++event;
-#else
                         file->f_version = 0;
-#endif
                 }
                 retval = offset;
         }
@@ -3044,9 +3026,6 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
         }
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),name=%s\n",
                inode->i_ino, inode->i_generation, inode, dentry->d_name.name);
-#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,5,0))
-        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_REVALIDATE, 1);
-#endif
 
         exp = ll_i2mdcexp(inode);
 
@@ -3131,7 +3110,6 @@ out:
         RETURN(rc);
 }
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
                   struct lookup_intent *it, struct kstat *stat)
 {
@@ -3173,7 +3151,6 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat)
 
         return ll_getattr_it(mnt, de, &it, stat);
 }
-#endif
 
 static
 int lustre_check_acl(struct inode *inode, int mask)
@@ -3280,9 +3257,7 @@ struct file_operations ll_file_operations = {
         .release        = ll_file_release,
         .mmap           = ll_file_mmap,
         .llseek         = ll_file_seek,
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         .sendfile       = ll_file_sendfile,
-#endif
         .fsync          = ll_fsync,
 };
 
@@ -3304,9 +3279,7 @@ struct file_operations ll_file_operations_flock = {
         .release        = ll_file_release,
         .mmap           = ll_file_mmap,
         .llseek         = ll_file_seek,
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         .sendfile       = ll_file_sendfile,
-#endif
         .fsync          = ll_fsync,
 #ifdef HAVE_F_OP_FLOCK
         .flock          = ll_file_flock,
@@ -3333,9 +3306,7 @@ struct file_operations ll_file_operations_noflock = {
         .release        = ll_file_release,
         .mmap           = ll_file_mmap,
         .llseek         = ll_file_seek,
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         .sendfile       = ll_file_sendfile,
-#endif
         .fsync          = ll_fsync,
 #ifdef HAVE_F_OP_FLOCK
         .flock          = ll_file_noflock,
@@ -3349,11 +3320,7 @@ struct inode_operations ll_file_inode_operations = {
 #endif
         .setattr        = ll_setattr,
         .truncate       = ll_truncate,
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         .getattr        = ll_getattr,
-#else
-        .revalidate_it  = ll_inode_revalidate_it,
-#endif
         .permission     = ll_inode_permission,
         .setxattr       = ll_setxattr,
         .getxattr       = ll_getxattr,
