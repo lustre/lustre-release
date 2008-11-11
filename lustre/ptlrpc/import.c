@@ -701,8 +701,8 @@ static void ptlrpc_maybe_ping_import_soon(struct obd_import *imp)
          * to have two identical connections in imp_conn_list. We must
          * compare not conn's pointers but NIDs, otherwise we can defeat
          * connection throttling. (See bug 14774.) */
-        if (imp->imp_conn_current->oic_conn->c_self !=
-                                imp_conn->oic_conn->c_self) {
+        if (imp->imp_conn_current->oic_conn->c_peer.nid !=
+                                imp_conn->oic_conn->c_peer.nid) {
                 ptlrpc_ping_import_soon(imp);
                 wake_pinger = 1;
         }
