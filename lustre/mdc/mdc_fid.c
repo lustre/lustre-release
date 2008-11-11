@@ -57,30 +57,17 @@
 #include <obd_support.h>
 #include "mdc_internal.h"
 
-typedef __u64 mdsno_t;
-struct md_fld {
-        seqno_t mf_seq;
-        mdsno_t mf_mds;
-};
-
-enum fld_op {
-        FLD_CREATE = 0,
-        FLD_DELETE = 1,
-        FLD_LOOKUP = 2 
-};
-
-
-static int seq_client_rpc(struct lu_client_seq *seq, struct lu_range *input,
-                          struct lu_range *output, __u32 opc,
+static int seq_client_rpc(struct lu_client_seq *seq, struct lu_seq_range *input,
+                          struct lu_seq_range *output, __u32 opc,
                           const char *opcname)
 {
         int rc;
         __u32 size[3] = { sizeof(struct ptlrpc_body),
                             sizeof(__u32),
-                            sizeof(struct lu_range) };
+                            sizeof(struct lu_seq_range) };
         struct obd_export *exp = seq->lcs_exp;
         struct ptlrpc_request *req;
-        struct lu_range *out, *in;
+        struct lu_seq_range *out, *in;
         __u32 *op;
         ENTRY;
 
@@ -95,13 +82,13 @@ static int seq_client_rpc(struct lu_client_seq *seq, struct lu_range *input,
 
         /* Zero out input range, this is not recovery yet. */
         in = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 1,
-                            sizeof(struct lu_range));
+                            sizeof(struct lu_seq_range));
         if (input != NULL)
                 *in = *input;
         else
-                range_zero(in);
+                range_init(in);
 
-        size[1] = sizeof(struct lu_range);
+        size[1] = sizeof(struct lu_seq_range);
         ptlrpc_req_set_repsize(req, 2, size);
 
         LASSERT(seq->lcs_type == LUSTRE_SEQ_METADATA);
@@ -115,7 +102,7 @@ static int seq_client_rpc(struct lu_client_seq *seq, struct lu_range *input,
                 GOTO(out_req, rc);
 
         out = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
-                            sizeof(struct lu_range));
+                            sizeof(struct lu_seq_range));
         *output = *out;
 
         if (!range_is_sane(output)) {
@@ -134,56 +121,6 @@ static int seq_client_rpc(struct lu_client_seq *seq, struct lu_range *input,
         CDEBUG(D_INFO, "%s: Allocated %s-sequence "DRANGE"]\n",
                seq->lcs_name, opcname, PRANGE(output));
 
-        EXIT;
-out_req:
-        ptlrpc_req_finished(req);
-        return rc;
-}
-
-
-static int fld_client_rpc(struct lu_client_seq *seq,
-                          struct md_fld *mf, __u32 fld_op)
-{
-        __u32 size[3] = { sizeof(struct ptlrpc_body),
-                        sizeof(__u32),
-                        sizeof(struct md_fld) };
-        struct obd_export *exp = seq->lcs_exp;
-        struct ptlrpc_request *req;
-        struct md_fld *pmf;
-        __u32 *op;
-        int rc;
-        ENTRY;
-
-        LASSERT(exp != NULL);
-
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                              FLD_QUERY, 3, size, NULL);
-        if (req == NULL)
-                RETURN(-ENOMEM);
-
-        req->rq_export = class_export_get(exp);
-        op = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(__u32));
-        *op = fld_op;
-
-        pmf = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 1,
-                             sizeof(struct md_fld));
-        *pmf = *mf;
-
-        size[1] = sizeof(struct md_fld);
-        ptlrpc_req_set_repsize(req, 2, size);
-        req->rq_request_portal = FLD_REQUEST_PORTAL;
-
-        mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
-        rc = ptlrpc_queue_wait(req);
-        mdc_put_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
-        if (rc)
-                GOTO(out_req, rc);
-
-        pmf = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
-                             sizeof(struct md_fld));
-        if (pmf == NULL)
-                GOTO(out_req, rc = -EFAULT);
-        *mf = *pmf;
         EXIT;
 out_req:
         ptlrpc_req_finished(req);
@@ -225,8 +162,8 @@ static int seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
         }
 
         LASSERT(!range_is_exhausted(&seq->lcs_space));
-        *seqnr = seq->lcs_space.lr_start;
-        seq->lcs_space.lr_start += 1;
+        *seqnr = seq->lcs_space.lsr_start;
+        seq->lcs_space.lsr_start += 1;
 
         CDEBUG(D_INFO, "%s: Allocated sequence ["LPX64"]\n", seq->lcs_name,
                *seqnr);
@@ -292,22 +229,8 @@ static void seq_client_flush(struct lu_client_seq *seq)
         LASSERT(seq != NULL);
         down(&seq->lcs_sem);
         fid_init(&seq->lcs_fid);
-        range_zero(&seq->lcs_space);
+        range_init(&seq->lcs_space);
         up(&seq->lcs_sem);
-}
-
-static int fld_client_create(struct lu_client_seq *lcs,
-                             seqno_t seq, mdsno_t mds)
-{
-        struct md_fld md_fld = { .mf_seq = seq, .mf_mds = mds };
-        int rc;
-        ENTRY;
-
-        CDEBUG(D_INFO, "%s: Create fld entry (seq: "LPX64"; mds: "
-               LPU64") on target 0\n", lcs->lcs_name, seq, mds);
-
-        rc = fld_client_rpc(lcs, &md_fld, FLD_CREATE);
-        RETURN(rc);
 }
 
 static int seq_client_proc_init(struct lu_client_seq *seq)
@@ -374,15 +297,8 @@ int mdc_fid_alloc(struct lu_client_seq *seq, struct lu_fid *fid)
         ENTRY;
         
         rc = seq_client_alloc_fid(seq, fid);
-        if (rc > 0) {
-                /* Client switches to new sequence, setup FLD. */
-                rc = fld_client_create(seq, fid_seq(fid), 0);
-                if (rc) {
-                        CERROR("Can't create fld entry, rc %d\n", rc);
-                        /* Delete just allocated fid sequence */
-                        seq_client_flush(seq);
-                }
-        }
+        if (rc > 0)
+                rc = 0;
         RETURN(rc);
 }
 
@@ -412,47 +328,58 @@ void fid_le_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
 }
 EXPORT_SYMBOL(fid_le_to_cpu);
 
-void range_cpu_to_le(struct lu_range *dst, const struct lu_range *src)
+void range_cpu_to_le(struct lu_seq_range *dst, const struct lu_seq_range *src)
 {
         /* check that all fields are converted */
-        CLASSERT(sizeof *src ==
-                 sizeof src->lr_start +
-                 sizeof src->lr_end);
-        dst->lr_start = cpu_to_le64(src->lr_start);
-        dst->lr_end = cpu_to_le64(src->lr_end);
+        CLASSERT(sizeof(*src) ==
+                 sizeof(src->lsr_start) +
+                 sizeof(src->lsr_end) +
+                 sizeof(src->lsr_mdt) +
+                 sizeof(src->lsr_padding));
+        dst->lsr_start = cpu_to_le64(src->lsr_start);
+        dst->lsr_end = cpu_to_le64(src->lsr_end);
 }
 EXPORT_SYMBOL(range_cpu_to_le);
 
-void range_le_to_cpu(struct lu_range *dst, const struct lu_range *src)
+void range_le_to_cpu(struct lu_seq_range *dst, const struct lu_seq_range *src)
 {
         /* check that all fields are converted */
-        CLASSERT(sizeof *src ==
-                 sizeof src->lr_start +
-                 sizeof src->lr_end);
-        dst->lr_start = le64_to_cpu(src->lr_start);
-        dst->lr_end = le64_to_cpu(src->lr_end);
+        CLASSERT(sizeof(*src) ==
+                 sizeof(src->lsr_start) +
+                 sizeof(src->lsr_end) +
+                 sizeof(src->lsr_mdt) +
+                 sizeof(src->lsr_padding));
+
+        dst->lsr_start = le64_to_cpu(src->lsr_start);
+        dst->lsr_end = le64_to_cpu(src->lsr_end);
 }
 EXPORT_SYMBOL(range_le_to_cpu);
 
-void range_cpu_to_be(struct lu_range *dst, const struct lu_range *src)
+void range_cpu_to_be(struct lu_seq_range *dst, const struct lu_seq_range *src)
 {
         /* check that all fields are converted */
-        CLASSERT(sizeof *src ==
-                 sizeof src->lr_start +
-                 sizeof src->lr_end);
-        dst->lr_start = cpu_to_be64(src->lr_start);
-        dst->lr_end = cpu_to_be64(src->lr_end);
+        CLASSERT(sizeof(*src) ==
+                 sizeof(src->lsr_start) +
+                 sizeof(src->lsr_end) +
+                 sizeof(src->lsr_mdt) +
+                 sizeof(src->lsr_padding));
+
+        dst->lsr_start = cpu_to_be64(src->lsr_start);
+        dst->lsr_end = cpu_to_be64(src->lsr_end);
 }
 EXPORT_SYMBOL(range_cpu_to_be);
 
-void range_be_to_cpu(struct lu_range *dst, const struct lu_range *src)
+void range_be_to_cpu(struct lu_seq_range *dst, const struct lu_seq_range *src)
 {
         /* check that all fields are converted */
-        CLASSERT(sizeof *src ==
-                 sizeof src->lr_start +
-                 sizeof src->lr_end);
-        dst->lr_start = be64_to_cpu(src->lr_start);
-        dst->lr_end = be64_to_cpu(src->lr_end);
+        CLASSERT(sizeof(*src) ==
+                 sizeof(src->lsr_start) +
+                 sizeof(src->lsr_end) +
+                 sizeof(src->lsr_mdt) +
+                 sizeof(src->lsr_padding));
+
+        dst->lsr_start = be64_to_cpu(src->lsr_start);
+        dst->lsr_end = be64_to_cpu(src->lsr_end);
 }
 EXPORT_SYMBOL(range_be_to_cpu);
 
