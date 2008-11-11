@@ -161,7 +161,6 @@ struct dquot_id {
 #define QFILE_CONVERT           7
 
 /* admin quotafile operations */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 int lustre_check_quota_file(struct lustre_quota_info *lqi, int type);
 int lustre_read_quota_info(struct lustre_quota_info *lqi, int type);
 int lustre_write_quota_info(struct lustre_quota_info *lqi, int type);
@@ -171,46 +170,6 @@ int lustre_init_quota_info(struct lustre_quota_info *lqi, int type);
 int lustre_get_qids(struct file *file, struct inode *inode, int type,
                     struct list_head *list);
 int lustre_quota_convert(struct lustre_quota_info *lqi, int type);
-#else
-
-#ifndef DQ_FAKE_B
-#define DQ_FAKE_B       6
-#endif
-
-static inline int lustre_check_quota_file(struct lustre_quota_info *lqi,
-                                          int type)
-{
-        return 0;
-}
-static inline int lustre_read_quota_info(struct lustre_quota_info *lqi,
-                                         int type)
-{
-        return 0;
-}
-static inline int lustre_write_quota_info(struct lustre_quota_info *lqi,
-                                          int type)
-{
-        return 0;
-}
-static inline int lustre_read_dquot(struct lustre_dquot *dquot)
-{
-        return 0;
-}
-static inline int lustre_commit_dquot(struct lustre_dquot *dquot)
-{
-        return 0;
-}
-static inline int lustre_init_quota_info(struct lustre_quota_info *lqi,
-                                         int type)
-{
-        return 0;
-}
-static inline int lustre_quota_convert(struct lustre_quota_info *lqi,
-                                       int type)
-{
-        return 0;
-}
-#endif  /* KERNEL_VERSION(2,5,0) */
 
 #define LL_DQUOT_OFF(sb)    DQUOT_OFF(sb)
 
