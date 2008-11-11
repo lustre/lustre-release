@@ -76,11 +76,7 @@ struct lustre_intent_data {
 #ifdef HAVE_VFS_INTENT_PATCHES
 static inline struct lookup_intent *ll_nd2it(struct nameidata *nd)
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         return &nd->intent;
-#else
-        return nd->intent;
-#endif
 }
 #endif
 
@@ -186,10 +182,7 @@ struct ll_inode_info {
         /* the most recent attributes from mds, it is used for timestampts
          * only so far */
         struct ost_lvb         lli_lvb;
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         struct inode            lli_vfs_inode;
-#endif
 };
 
 /*
@@ -207,12 +200,7 @@ void ll_inode_size_unlock(struct inode *inode, int unlock_lsm);
 // static inline struct ll_inode_info *LL_I(struct inode *inode)
 static inline struct ll_inode_info *ll_i2info(struct inode *inode)
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         return container_of(inode, struct ll_inode_info, lli_vfs_inode);
-#else
-        CLASSERT(sizeof(inode->u) >= sizeof(struct ll_inode_info));
-        return (struct ll_inode_info *)&(inode->u.generic_ip);
-#endif
 }
 
 /* default to about 40meg of readahead on a given system.  That much tied
@@ -585,11 +573,7 @@ extern struct proc_dir_entry *proc_lustre_fs_root;
 
 static inline struct inode *ll_info2i(struct ll_inode_info *lli)
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         return &lli->lli_vfs_inode;
-#else
-        return list_entry(lli, struct inode, u.generic_ip);
-#endif
 }
 
 struct it_cb_data {
@@ -793,11 +777,9 @@ int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
 int ll_mdc_real_close(struct inode *inode, int flags);
 extern void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid, struct file
                                *file, size_t count, int rw);
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
                struct lookup_intent *it, struct kstat *stat);
 int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat);
-#endif
 struct ll_file_data *ll_file_data_get(void);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
 int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd);
@@ -926,10 +908,8 @@ void ll_close_thread_shutdown(struct ll_close_queue *lcq);
 int ll_close_thread_start(struct ll_close_queue **lcq_ret);
 
 /* llite/llite_mmap.c */
-#if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 typedef struct rb_root  rb_root_t;
 typedef struct rb_node  rb_node_t;
-#endif
 
 struct ll_lock_tree_node;
 struct ll_lock_tree {
@@ -953,18 +933,11 @@ int ll_tree_unlock(struct ll_lock_tree *tree);
 
 #define    ll_s2sbi(sb)        (s2lsi(sb)->lsi_llsbi)
 
-#if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 static inline __u64 ll_ts2u64(struct timespec *time)
 {
         __u64 t = time->tv_sec;
         return t;
 }
-#else  /* 2.4 here */
-static inline __u64 ll_ts2u64(time_t *time)
-{
-        return *time;
-}
-#endif
 
 /* don't need an addref as the sb_info should be holding one */
 static inline struct obd_export *ll_s2obdexp(struct super_block *sb)
