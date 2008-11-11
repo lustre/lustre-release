@@ -2582,12 +2582,10 @@ no_unlink:
         OBD_FAIL_WRITE(obd, OBD_FAIL_MDS_REINT_RENAME_WRITE,
                        de_srcdir->d_inode->i_sb);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
         /* Check if we are moving old entry into its child. 2.6 does not
            check for this in vfs_rename() anymore */
         if (is_subdir(de_new, de_old))
                 GOTO(cleanup, rc = -EINVAL);
-#endif
 
         lmm = lustre_msg_buf(req->rq_repmsg, offset + 1, 0);
         handle = fsfilt_start_log(obd, de_tgtdir->d_inode, FSFILT_OP_RENAME,
