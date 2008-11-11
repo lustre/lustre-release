@@ -182,7 +182,9 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry, struct n
         rc = ll_readlink_internal(inode, &request, &symname);
         up(&lli->lli_size_sem);
         if (rc) {
+#if THREAD_SIZE < 8192
 out_release:
+#endif
                 path_release(nd); /* Kernel assumes that ->follow_link()
                                      releases nameidata on error */
                 GOTO(out, rc);
