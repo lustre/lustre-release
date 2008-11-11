@@ -485,7 +485,7 @@ int seq_server_init(struct lu_server_seq *seq,
 
         seq->lss_cli = NULL;
         seq->lss_type = type;
-        range_zero(&seq->lss_space);
+        range_init(&seq->lss_space);
         sema_init(&seq->lss_sem, 1);
 
         seq->lss_width = is_srv ?

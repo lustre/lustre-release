@@ -92,9 +92,10 @@ EXPORT_SYMBOL(LUSTRE_BFL_FID);
 void range_cpu_to_le(struct lu_range *dst, const struct lu_range *src)
 {
         /* check that all fields are converted */
-        CLASSERT(sizeof *src ==
-                 sizeof src->lr_start +
-                 sizeof src->lr_end);
+        CLASSERT(sizeof(*src) ==
+                 sizeof(src->lr_start) +
+                 sizeof(src->lr_end) +
+                 sizeof(src->lr_padding));
         dst->lr_start = cpu_to_le64(src->lr_start);
         dst->lr_end = cpu_to_le64(src->lr_end);
 }
@@ -103,9 +104,10 @@ EXPORT_SYMBOL(range_cpu_to_le);
 void range_le_to_cpu(struct lu_range *dst, const struct lu_range *src)
 {
         /* check that all fields are converted */
-        CLASSERT(sizeof *src ==
-                 sizeof src->lr_start +
-                 sizeof src->lr_end);
+        CLASSERT(sizeof(*src) ==
+                 sizeof(src->lr_start) +
+                 sizeof(src->lr_end) +
+                 sizeof(src->lr_padding));
         dst->lr_start = le64_to_cpu(src->lr_start);
         dst->lr_end = le64_to_cpu(src->lr_end);
 }
@@ -115,9 +117,10 @@ EXPORT_SYMBOL(range_le_to_cpu);
 void range_cpu_to_be(struct lu_range *dst, const struct lu_range *src)
 {
         /* check that all fields are converted */
-        CLASSERT(sizeof *src ==
-                 sizeof src->lr_start +
-                 sizeof src->lr_end);
+        CLASSERT(sizeof(*src) ==
+                 sizeof(src->lr_start) +
+                 sizeof(src->lr_end) +
+                 sizeof(src->lr_padding));
         dst->lr_start = cpu_to_be64(src->lr_start);
         dst->lr_end = cpu_to_be64(src->lr_end);
 }
@@ -126,9 +129,10 @@ EXPORT_SYMBOL(range_cpu_to_be);
 void range_be_to_cpu(struct lu_range *dst, const struct lu_range *src)
 {
         /* check that all fields are converted */
-        CLASSERT(sizeof *src ==
-                 sizeof src->lr_start +
-                 sizeof src->lr_end);
+        CLASSERT(sizeof(*src) ==
+                 sizeof(src->lr_start) +
+                 sizeof(src->lr_end) +
+                 sizeof(src->lr_padding));
         dst->lr_start = be64_to_cpu(src->lr_start);
         dst->lr_end = be64_to_cpu(src->lr_end);
 }

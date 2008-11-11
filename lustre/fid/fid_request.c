@@ -88,7 +88,7 @@ static int seq_client_rpc(struct lu_client_seq *seq, struct lu_range *input,
         if (input != NULL)
                 *in = *input;
         else
-                range_zero(in);
+                range_init(in);
 
         ptlrpc_request_set_replen(req);
 
@@ -280,7 +280,7 @@ void seq_client_flush(struct lu_client_seq *seq)
         LASSERT(seq != NULL);
         down(&seq->lcs_sem);
         fid_zero(&seq->lcs_fid);
-        range_zero(&seq->lcs_space);
+        range_init(&seq->lcs_space);
         up(&seq->lcs_sem);
 }
 EXPORT_SYMBOL(seq_client_flush);

@@ -174,46 +174,61 @@ typedef __u64 seqno_t;
 struct lu_range {
         __u64 lr_start;
         __u64 lr_end;
+        /** stub for compact fld work. */
+        __u64 lr_padding;
 };
 
-static inline __u64 range_space(struct lu_range *r)
+/**
+ * returns  width of given range \a r
+ */
+
+static inline __u64 range_space(const struct lu_range *range)
 {
-        return r->lr_end - r->lr_start;
+        return range->lr_end - range->lr_start;
 }
 
-static inline void range_zero(struct lu_range *r)
+/**
+ * initialize range to zero
+ */
+static inline void range_init(struct lu_range *range)
 {
-        r->lr_start = r->lr_end = 0;
+        range->lr_start = range->lr_end = 0;
 }
 
-static inline int range_within(struct lu_range *r,
+/**
+ * check if given seq id \a s is within given range \a r
+ */
+static inline int range_within(struct lu_range *range,
                                __u64 s)
 {
-        return s >= r->lr_start && s < r->lr_end;
+        return s >= range->lr_start && s < range->lr_end;
 }
 
-static inline void range_alloc(struct lu_range *r,
-                               struct lu_range *s,
-                               __u64 w)
+/**
+ * allocate \a w units of sequence from range \a from.
+ */
+static inline void range_alloc(struct lu_range *to,
+                               struct lu_range *from,
+                               __u64 width)
 {
-        r->lr_start = s->lr_start;
-        r->lr_end = s->lr_start + w;
-        s->lr_start += w;
+        to->lr_start = from->lr_start;
+        to->lr_end = from->lr_start + width;
+        from->lr_start += width;
 }
 
-static inline int range_is_sane(struct lu_range *r)
+static inline int range_is_sane(const struct lu_range *range)
 {
-        return (r->lr_end >= r->lr_start);
+        return (range->lr_end >= range->lr_start);
 }
 
-static inline int range_is_zero(struct lu_range *r)
+static inline int range_is_zero(const struct lu_range *range)
 {
-        return (r->lr_start == 0 && r->lr_end == 0);
+        return (range->lr_start == 0 && range->lr_end == 0);
 }
 
-static inline int range_is_exhausted(struct lu_range *r)
+static inline int range_is_exhausted(const struct lu_range *range)
 {
-        return range_space(r) == 0;
+        return range_space(range) == 0;
 }
 
 #define DRANGE "[%#16.16"LPF64"x-%#16.16"LPF64"x]"
