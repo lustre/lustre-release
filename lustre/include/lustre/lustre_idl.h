@@ -777,55 +777,67 @@ enum {
 
 typedef __u64 seqno_t;
 
-struct lu_range {
-        __u64 lr_start;
-        __u64 lr_end;
+/**
+ * Describes a range of sequence, lsr_start is included but lsr_end is
+ * not in the range.
+ */
+struct lu_seq_range {
+        __u64 lsr_start;
+        __u64 lsr_end;
+        /** this feild is not used in 1.8 client interop */
+        __u32 lsr_mdt;
+        __u32 lsr_padding;
 };
 
-static inline __u64 range_space(struct lu_range *r)
+/**
+ * returns  width of given range \a r
+ */
+
+static inline __u64 range_space(const struct lu_seq_range *r)
 {
-        return r->lr_end - r->lr_start;
+        return r->lsr_end - r->lsr_start;
 }
 
-static inline void range_zero(struct lu_range *r)
+/**
+ * initialize range to zero
+ */
+static inline void range_init(struct lu_seq_range *r)
 {
-        r->lr_start = r->lr_end = 0;
+        r->lsr_start = r->lsr_end = 0;
 }
 
-static inline int range_within(struct lu_range *r,
+/**
+ * check if given seq id \a s is within given range \a r
+ */
+static inline int range_within(const struct lu_seq_range *r,
                                __u64 s)
 {
-        return s >= r->lr_start && s < r->lr_end;
+        return s >= r->lsr_start && s < r->lsr_end;
 }
 
-static inline void range_alloc(struct lu_range *r,
-                               struct lu_range *s,
-                               __u64 w)
+/**
+ * sanity check for range \a r
+ */
+static inline int range_is_sane(const struct lu_seq_range *r)
 {
-        r->lr_start = s->lr_start;
-        r->lr_end = s->lr_start + w;
-        s->lr_start += w;
-}
-static inline int range_is_sane(struct lu_range *r)
-{
-        return (r->lr_end >= r->lr_start);
+        return (r->lsr_end >= r->lsr_start);
 }
 
-static inline int range_is_zero(struct lu_range *r)
+static inline int range_is_zero(struct lu_seq_range *r)
 {
-        return (r->lr_start == 0 && r->lr_end == 0);
+        return (r->lsr_start == 0 && r->lsr_end == 0);
 }
 
-static inline int range_is_exhausted(struct lu_range *r)
+static inline int range_is_exhausted(const struct lu_seq_range *r)
 {
         return range_space(r) == 0;
 }
 
-#define DRANGE "[%#16.16"LPF64"x-%#16.16"LPF64"x]"
+#define DRANGE "[%#16.16"LPF64"x-%#16.16"LPF64"x)"
 
 #define PRANGE(range)      \
-        (range)->lr_start, \
-        (range)->lr_end
+        (range)->lsr_start, \
+        (range)->lsr_end
 
 enum {
         /*
@@ -849,7 +861,7 @@ struct lu_client_seq {
          * on clients, this contains meta-sequence range. And for servers this
          * contains super-sequence range.
          */
-        struct lu_range         lcs_space;
+        struct lu_seq_range         lcs_space;
 
         /* This holds last allocated fid in last obtained seq */
         struct lu_fid           lcs_fid;
@@ -2096,12 +2108,6 @@ typedef enum {
 } quota_cmd_t;
 #define QUOTA_FIRST_OPC QUOTA_DQACQ
 
-
-enum fld_rpc_opc {
-        FLD_QUERY                       = 600,
-        FLD_LAST_OPC,
-        FLD_FIRST_OPC                   = FLD_QUERY
-};
 
 enum seq_rpc_opc {
         SEQ_QUERY                       = 700,
