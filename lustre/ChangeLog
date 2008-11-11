@@ -1,7 +1,7 @@
 tbd Sun Microsystems, Inc.
 	* version 1.6.7
 	* Support for kernels:
-	 2.6.5-7.312 (SLES 9),
+	 2.6.5-7.314 (SLES 9),
 	 2.6.9-67.0.22.EL (RHEL 4),
 	 2.6.16.60-0.31 (SLES 10),
 	 2.6.18-92.1.10.el5 (RHEL 5),
@@ -41,6 +41,10 @@ tbd Sun Microsystems, Inc.
 	  16929.
 	* A new Lustre ADIO driver is available for:
 	  MPICH2-1.0.7
+
+Severity   : enhancement
+Bugzilla   : 17374
+Description: Update to sles9 kernel-2.6.5-7.314.
 
 Severity   : enhancement
 Bugzilla   : 17458
