@@ -599,7 +599,6 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         return retval;
 }
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 #ifdef HAVE_VFS_INTENT_PATCHES
 static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
                                    struct nameidata *nd)
@@ -727,7 +726,6 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
 
         RETURN(de);
 }
-#endif
 #endif
 
 /* We depend on "mode" being set with the proper file type/umask by now */
@@ -909,7 +907,6 @@ static int ll_mknod_generic(struct inode *dir, struct qstr *name, int mode,
         RETURN(err);
 }
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 #ifndef HAVE_VFS_INTENT_PATCHES
 static int ll_create_nd(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nd)
 {
@@ -953,7 +950,6 @@ static int ll_create_nd(struct inode *dir, struct dentry *dentry, int mode, stru
 
         return ll_create_it(dir, dentry, mode, &nd->intent);
 }
-#endif
 #endif
 
 static int ll_symlink_generic(struct inode *dir, struct qstr *name,
@@ -1261,7 +1257,6 @@ static int ll_mknod(struct inode *dir, struct dentry *dchild, int mode,
                                 old_encode_dev(rdev), dchild);
 }
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 static int ll_unlink(struct inode * dir, struct dentry *dentry)
 {
         return ll_unlink_generic(dir, &dentry->d_name);
@@ -1299,7 +1294,6 @@ static int ll_rename(struct inode *old_dir, struct dentry *old_dentry,
         }
         return err;
 }
-#endif
 
 struct inode_operations ll_dir_inode_operations = {
 #ifdef HAVE_VFS_INTENT_PATCHES
@@ -1314,11 +1308,6 @@ struct inode_operations ll_dir_inode_operations = {
         .setattr_raw        = ll_setattr_raw,
 #endif
         .mknod              = ll_mknod,
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        .create_it          = ll_create_it,
-        .lookup_it          = ll_lookup_it,
-        .revalidate_it      = ll_inode_revalidate_it,
-#else
         .lookup             = ll_lookup_nd,
         .create             = ll_create_nd,
         /* We need all these non-raw things for NFSD, to not patch it. */
@@ -1330,7 +1319,6 @@ struct inode_operations ll_dir_inode_operations = {
         .rename             = ll_rename,
         .setattr            = ll_setattr,
         .getattr            = ll_getattr,
-#endif
         .permission         = ll_inode_permission,
         .setxattr           = ll_setxattr,
         .getxattr           = ll_getxattr,
@@ -1343,11 +1331,7 @@ struct inode_operations ll_special_inode_operations = {
         .setattr_raw    = ll_setattr_raw,
 #endif
         .setattr        = ll_setattr,
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         .getattr        = ll_getattr,
-#else
-        .revalidate_it  = ll_inode_revalidate_it,
-#endif
         .permission     = ll_inode_permission,
         .setxattr       = ll_setxattr,
         .getxattr       = ll_getxattr,
