@@ -59,10 +59,8 @@
 #include <linux/init.h>
 #include <linux/version.h>
 #include <linux/sched.h>
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-# include <linux/mount.h>
-# include <linux/buffer_head.h>
-#endif
+#include <linux/mount.h>
+#include <linux/buffer_head.h>
 
 #include <obd_class.h>
 #include <obd_lov.h>
@@ -1493,12 +1491,9 @@ int filter_vfs_unlink(struct inode *dir, struct dentry *dentry,
          *       here) or some other ordering issue. */
         DQUOT_INIT(dir);
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         rc = ll_security_inode_unlink(dir, dentry, mnt);
         if (rc)
                 GOTO(out, rc);
-#endif
-
         rc = dir->i_op->unlink(dir, dentry);
 out:
         /* need to drop i_mutex before we lose inode reference */
@@ -3826,9 +3821,8 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
                 void *handle;
                 struct super_block *sb = obd->u.obt.obt_sb;
                 struct inode *inode = sb->s_root->d_inode;
-                BDEVNAME_DECLARE_STORAGE(tmp);
                 LCONSOLE_WARN("*** setting obd %s device '%s' read-only ***\n",
-                              obd->obd_name, ll_bdevname(sb, tmp));
+                              obd->obd_name, sb->s_id);
 
                 handle = fsfilt_start(obd, inode, FSFILT_OP_MKNOD, NULL);
                 if (!IS_ERR(handle))
