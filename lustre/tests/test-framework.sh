@@ -518,7 +518,6 @@ wait_exit_ST () {
 
     local WAIT=0
     local INTERVAL=1
-    local running
     # conf-sanity 31 takes a long time cleanup
     while [ $WAIT -lt 300 ]; do
         running=$(do_facet ${facet} "lsmod | grep lnet > /dev/null && lctl dl | grep ' ST '") || true
@@ -725,8 +724,6 @@ declare -fx h2o2ib
 
 facet_host() {
     local facet=$1
-
-    [ "$facet" == client ] && echo -n $HOSTNAME && return
     varname=${facet}_HOST
     if [ -z "${!varname}" ]; then
         if [ "${facet:0:3}" == "ost" ]; then
