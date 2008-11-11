@@ -240,9 +240,6 @@ LB_LINUX_TRY_COMPILE([
 	#include <linux/fs.h>
 	#include <linux/version.h>
 ],[
-	#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,24))
-	#error "down_read_trylock broken before 2.4.24"
-	#endif
 	struct inode i;
 	return (char *)&i.i_alloc_sem - (char *)&i;
 ],[
