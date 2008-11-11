@@ -18,6 +18,17 @@ Description:
 Details    : 
 
 Severity   : major
+Bugzilla   : 15983
+Description: workaround for OOM from o2iblnd
+Details    : OFED needs allocate big chunk of memory for QP while creating
+             connection for o2iblnd, OOM can happen if no such a contiguous
+             memory chunk.
+             QP size is decided by concurrent_sends and max_fragments of
+             o2iblnd, now we permit user to specify smaller value for
+             concurrent_sends of o2iblnd(i.e: concurrent_sends=7), which
+             will decrease memory block size required by creating QP.
+
+Severity   : major
 Bugzilla   : 15093
 Description: Support Zerocopy receive of Chelsio device
 Details    : Chelsio driver can support zerocopy for iov[1] if it's
