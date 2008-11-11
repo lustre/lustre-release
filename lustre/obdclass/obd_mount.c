@@ -167,7 +167,7 @@ struct lustre_mount_info *server_get_mount(const char *name)
         lsi = s2lsi(lmi->lmi_sb);
         mntget(lmi->lmi_mnt);
         atomic_inc(&lsi->lsi_mounts);
-        
+
         CDEBUG(D_MOUNT, "get_mnt %p from %s, refs=%d, vfscount=%d\n",
                lmi->lmi_mnt, name, atomic_read(&lsi->lsi_mounts),
                atomic_read(&lmi->lmi_mnt->mnt_count));
@@ -1938,6 +1938,12 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                 RETURN(-ENOMEM);
         lmd = lsi->lsi_lmd;
 
+        /*
+         * Disable lockdep during mount, because mount locking patterns are
+         * `special'.
+         */
+        lockdep_off();
+
         /* Figure out the lmd from the mount options */
         if (lmd_parse((char *)data, lmd)) {
                 lustre_put_lsi(sb);
@@ -1981,9 +1987,10 @@ out:
                 CERROR("Unable to mount %s (%d)\n",
                        s2lsi(sb) ? lmd->lmd_dev : "", rc);
         } else {
-                CDEBUG(D_SUPER, "Mount %s complete\n", 
+                CDEBUG(D_SUPER, "Mount %s complete\n",
                        lmd->lmd_dev);
         }
+        lockdep_on();
         return rc;
 }
 
