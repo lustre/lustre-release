@@ -1710,16 +1710,16 @@ lnet_parse_get(lnet_ni_t *ni, lnet_msg_t *msg, int rdma_get)
 
         LNET_UNLOCK();
 
+        msg->msg_ev.type = LNET_EVENT_GET;
+        msg->msg_ev.target.pid = hdr->dest_pid;
+        msg->msg_ev.target.nid = hdr->dest_nid;
+        msg->msg_ev.hdr_data = 0;
+
         reply_wmd = hdr->msg.get.return_wmd;
 
         lnet_prep_send(msg, LNET_MSG_REPLY, src, offset, mlength);
 
         msg->msg_hdr.msg.reply.dst_wmd = reply_wmd;
-
-        msg->msg_ev.type = LNET_EVENT_GET;
-        msg->msg_ev.target.pid = hdr->dest_pid;
-        msg->msg_ev.target.nid = hdr->dest_nid;
-        msg->msg_ev.hdr_data = 0;
 
         if (rdma_get) {
                 /* The LND completes the REPLY from her recv procedure */
