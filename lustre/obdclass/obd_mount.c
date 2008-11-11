@@ -2010,7 +2010,6 @@ void lustre_register_kill_super_cb(void (*cfs)(struct super_block *sb))
 
 /***************** FS registration ******************/
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 /* 2.5 and later */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18))
 struct super_block * lustre_get_sb(struct file_system_type *fs_type,
@@ -2051,28 +2050,6 @@ struct file_system_type lustre_fs_type = {
         .fs_flags     = FS_BINARY_MOUNTDATA | FS_REQUIRES_DEV |
                         LL_RENAME_DOES_D_MOVE,
 };
-
-#else
-/* 2.4 */
-static struct super_block *lustre_read_super(struct super_block *sb,
-                                             void *data, int silent)
-{
-        int rc;
-        ENTRY;
-
-        rc = lustre_fill_super(sb, data, silent);
-        if (rc)
-                RETURN(NULL);
-        RETURN(sb);
-}
-
-static struct file_system_type lustre_fs_type = {
-        .owner          = THIS_MODULE,
-        .name           = "lustre",
-        .fs_flags       = FS_NFSEXP_FSID,
-        .read_super     = lustre_read_super,
-};
-#endif
 
 int lustre_register_fs(void)
 {
