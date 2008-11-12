@@ -814,6 +814,8 @@ static int osc_ldlm_glimpse_ast(struct ldlm_lock *dlmlock, void *data)
                  */
                 olck = osc_ast_data_get(dlmlock);
                 if (olck != NULL) {
+                        lock = olck->ols_cl.cls_lock;
+                        cl_lock_mutex_get(env, lock);
                         cap = &req->rq_pill;
                         req_capsule_extend(cap, &RQF_LDLM_GL_CALLBACK);
                         req_capsule_set_size(cap, &RMF_DLM_LVB, RCL_SERVER,
@@ -821,10 +823,10 @@ static int osc_ldlm_glimpse_ast(struct ldlm_lock *dlmlock, void *data)
                         result = req_capsule_server_pack(cap);
                         if (result == 0) {
                                 lvb = req_capsule_server_get(cap, &RMF_DLM_LVB);
-                                lock = olck->ols_cl.cls_lock;
                                 obj = lock->cll_descr.cld_obj;
                                 result = cl_object_glimpse(env, obj, lvb);
                         }
+                        cl_lock_mutex_put(env, lock);
                         osc_ast_data_put(env, olck);
                 } else {
                         /*
