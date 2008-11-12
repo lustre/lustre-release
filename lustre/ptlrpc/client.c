@@ -1372,10 +1372,8 @@ int ptlrpc_expired_set(void *data)
                         list_entry(tmp, struct ptlrpc_request, rq_set_chain);
 
                 /* Request in-flight? */
-                if (!((req->rq_phase & 
-                       (RQ_PHASE_RPC & RQ_PHASE_UNREGISTERING) &&
-                       !req->rq_waiting && !req->rq_resend) ||
-                      (req->rq_phase == RQ_PHASE_BULK)))
+                if (!((req->rq_phase == RQ_PHASE_RPC && !req->rq_waiting && 
+                       !req->rq_resend) || (req->rq_phase == RQ_PHASE_BULK)))
                         continue;
 
                 if (req->rq_timedout ||     /* already dealt with */
@@ -1436,19 +1434,10 @@ int ptlrpc_set_next_timeout(struct ptlrpc_request_set *set)
                 req = list_entry(tmp, struct ptlrpc_request, rq_set_chain);
 
                 /* Request in-flight? */
-                if (!(((req->rq_phase & 
-                        (RQ_PHASE_RPC | RQ_PHASE_UNREGISTERING)) &&
-                      !req->rq_waiting) ||
+                if (!(((req->rq_phase == RQ_PHASE_RPC) && !req->rq_waiting) ||
                       (req->rq_phase == RQ_PHASE_BULK) ||
                       (req->rq_phase == RQ_PHASE_NEW)))
                         continue;
-
-                /* Check those waiting for long reply unlink every one 
-                 * second. */
-                if (req->rq_phase == RQ_PHASE_UNREGISTERING) {
-                        timeout = 1;
-                        break;
-                }
 
                 /* Already timed out. */
                 if (req->rq_timedout)
