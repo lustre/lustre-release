@@ -1881,12 +1881,14 @@ struct cl_lock *cl_lock_request(const struct lu_env *env, struct cl_io *io,
         const struct lu_fid  *fid;
         int                   rc;
         int                   iter;
+        int warn;
 
         ENTRY;
         fid = lu_object_fid(&io->ci_obj->co_lu);
         iter = 0;
         do {
-                CDEBUG(iter >= 16 && IS_PO2(iter) ? D_WARNING : D_DLMTRACE,
+                warn = iter >= 16 && IS_PO2(iter);
+                CDEBUG(warn ? D_WARNING : D_DLMTRACE,
                        DDESCR"@"DFID" %i %08x `%s'\n",
                        PDESCR(need), PFID(fid), iter, enqflags, scope);
                 lock = cl_lock_hold_mutex(env, io, need, scope, source);
@@ -1898,7 +1900,9 @@ struct cl_lock *cl_lock_request(const struct lu_env *env, struct cl_io *io,
                                         cl_lock_lockdep_acquire(env,
                                                                 lock, enqflags);
                                         break;
-                                }
+                                } else if (warn)
+                                        CL_LOCK_DEBUG(D_WARNING, env, lock,
+                                                      "got\n");
                                 cl_unuse_locked(env, lock);
                         }
                         cl_lock_hold_release(env, lock, scope, source);
