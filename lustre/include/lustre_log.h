@@ -282,11 +282,11 @@ struct llog_commit_master {
          * Thread control structure. Used for control commit thread.
          */
         struct ptlrpcd_ctl         lcm_pc;
-        /*
+        /**
          * Lock protecting list of llcds.
          */
         spinlock_t                 lcm_lock;
-        /*
+        /**
          * Llcds in flight for debugging purposes.
          */
         struct list_head           lcm_llcds;
