@@ -313,7 +313,7 @@ struct llog_canceld_ctxt {
          * left in llcd to cookie comming cookies.
          */
         int                        llcd_size;
-        /*
+        /**
          * Link to lcm llcds list.
          */
         struct list_head           llcd_list;
