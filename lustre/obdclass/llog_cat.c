@@ -437,7 +437,7 @@ int llog_cat_process_thread(void *data)
 
         if (cb) {
                 rc = llog_cat_process(llh, (llog_cb_t)cb, NULL);
-                if (rc != LLOG_PROC_BREAK)
+                if (rc != LLOG_PROC_BREAK && rc != 0)
                         CERROR("llog_cat_process() failed %d\n", rc);
         } else {
                 CWARN("No callback function for recovery\n");
