@@ -73,13 +73,6 @@ shutdown_client() {
     fi
 }
 
-reboot_node() {
-    NODE=$1
-    if [ "$FAILURE_MODE" = HARD ]; then
-       $POWER_UP $NODE
-    fi
-}
-
 fail_clients() {
     num=$1
 
@@ -105,7 +98,7 @@ fail_clients() {
     echo "down clients: $DOWN_CLIENTS"
 
     for client in $DOWN_CLIENTS; do
-	reboot_node $client
+	boot_node $client
     done
     DOWN_NUM=`echo $DOWN_CLIENTS | wc -w`
     client_rmdirs
