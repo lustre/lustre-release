@@ -212,9 +212,8 @@ ptlrpc_inflight_deadline(struct ptlrpc_request *req, time_t now)
 {
         long dl;
 
-        if (!(((req->rq_phase & (RQ_PHASE_RPC | RQ_PHASE_UNREGISTERING)) && 
-              !req->rq_waiting) ||
-              (req->rq_phase == RQ_PHASE_BULK) ||
+        if (!(((req->rq_phase == RQ_PHASE_RPC) && !req->rq_waiting) ||
+              (req->rq_phase == RQ_PHASE_BULK) || 
               (req->rq_phase == RQ_PHASE_NEW)))
                 return 0;
 
