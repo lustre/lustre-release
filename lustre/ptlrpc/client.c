@@ -458,7 +458,7 @@ ptlrpc_prep_req_from_pool(struct ptlrpc_request_pool *pool)
 
         request = list_entry(pool->prp_req_list.next, struct ptlrpc_request,
                              rq_list);
-        list_del(&request->rq_list);
+        list_del_init(&request->rq_list);
         spin_unlock(&pool->prp_lock);
 
         LASSERT(request->rq_reqbuf);
@@ -1074,9 +1074,9 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
         req->rq_import_generation = imp->imp_generation;
 
         if (ptlrpc_import_delay_req(imp, req, &rc)) {
-                spin_lock (&req->rq_lock);
+                spin_lock(&req->rq_lock);
                 req->rq_waiting = 1;
-                spin_unlock (&req->rq_lock);
+                spin_unlock(&req->rq_lock);
 
                 DEBUG_REQ(D_HA, req, "req from PID %d waiting for recovery: "
                           "(%s != %s)", lustre_msg_get_status(req->rq_reqmsg),
@@ -2103,7 +2103,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         req->rq_import_generation = imp->imp_generation;
 restart:
         if (ptlrpc_import_delay_req(imp, req, &rc)) {
-                list_del(&req->rq_list);
+                list_del_init(&req->rq_list);
                 list_add_tail(&req->rq_list, &imp->imp_delayed_list);
                 atomic_inc(&imp->imp_inflight);
                 spin_unlock(&imp->imp_lock);

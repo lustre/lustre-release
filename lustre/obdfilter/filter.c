@@ -2334,19 +2334,27 @@ static int filter_llog_finish(struct obd_device *obd, int count)
         ENTRY;
 
         ctxt = llog_group_get_ctxt(&obd->obd_olg, LLOG_MDS_OST_REPL_CTXT);
-        LASSERT(ctxt != NULL);
-        mutex_down(&ctxt->loc_sem);
-        if (ctxt->loc_imp) {
-                /*
-                 * Balance class_import_get() in llog_receptor_accept(). This
-                 * is safe to do here, as llog is already synchronized and its
-                 * import may go.
-                 */
-                class_import_put(ctxt->loc_imp);
-                ctxt->loc_imp = NULL;
+        if (ctxt) {
+                mutex_down(&ctxt->loc_sem);
+                if (ctxt->loc_imp) {
+                        /*
+                         * Make sure that no cached llcds left in recov_thread.
+                         * We actually do sync in disconnect time, but disconnect
+                         * may not come being marked rq_no_resend = 1.
+                         */
+                        llog_sync(ctxt, NULL);
+
+                        /*
+                         * Balance class_import_get() in llog_receptor_accept().
+                         * This is safe to do, as llog is already synchronized
+                         * and its import may go.
+                         */
+                        class_import_put(ctxt->loc_imp);
+                        ctxt->loc_imp = NULL;
+                }
+                mutex_up(&ctxt->loc_sem);
+                llog_ctxt_put(ctxt);
         }
-        mutex_up(&ctxt->loc_sem);
-        llog_ctxt_put(ctxt);
 
         if (filter->fo_lcm) {
                 llog_recov_thread_fini(filter->fo_lcm, obd->obd_force);
@@ -2978,18 +2986,20 @@ static void filter_sync_llogs(struct obd_device *obd, struct obd_export *dexp)
                     (dexp == olg_min->olg_exp || dexp == NULL)) {
                         int err;
                         ctxt = llog_group_get_ctxt(olg_min,
-                                                LLOG_MDS_OST_REPL_CTXT);
-                        LASSERT(ctxt != NULL);
-                        err = llog_sync(ctxt, olg_min->olg_exp);
-                        llog_ctxt_put(ctxt);
-                        if (err)
-                                CERROR("error flushing logs to MDS: rc %d\n",
-                                       err);
+                                                   LLOG_MDS_OST_REPL_CTXT);
+                        if (ctxt) {
+                                err = llog_sync(ctxt, olg_min->olg_exp);
+                                llog_ctxt_put(ctxt);
+                                if (err) {
+                                        CERROR("error flushing logs to MDS: "
+                                               "rc %d\n", err);
+                                }
+                        }
                 }
         } while (olg_min != NULL);
 }
 
-/* also incredibly similar to mds_disconnect */
+/* Also incredibly similar to mds_disconnect */
 static int filter_disconnect(struct obd_export *exp)
 {
         struct obd_device *obd = exp->exp_obd;
@@ -3003,6 +3013,9 @@ static int filter_disconnect(struct obd_export *exp)
                 filter_grant_sanity_check(obd, __FUNCTION__);
         filter_grant_discard(exp);
 
+        /* Flush any remaining cancel messages out to the target */
+        filter_sync_llogs(obd, exp);
+
         /* Disconnect early so that clients can't keep using export */
         rc = class_disconnect(exp);
         if (exp->exp_obd->obd_namespace != NULL)
@@ -3012,8 +3025,6 @@ static int filter_disconnect(struct obd_export *exp)
 
         lprocfs_exp_cleanup(exp);
 
-        /* flush any remaining cancel messages out to the target */
-        filter_sync_llogs(obd, exp);
         class_export_put(exp);
         RETURN(rc);
 }
@@ -4087,10 +4098,10 @@ static int filter_sync(struct obd_export *exp, struct obdo *oa,
 
         filter = &exp->exp_obd->u.filter;
 
-        /* an objid of zero is taken to mean "sync whole filesystem" */
+        /* An objid of zero is taken to mean "sync whole filesystem" */
         if (!oa || !(oa->o_valid & OBD_MD_FLID)) {
                 rc = fsfilt_sync(exp->exp_obd, filter->fo_obt.obt_sb);
-                /* flush any remaining cancel messages out to the target */
+                /* Flush any remaining cancel messages out to the target */
                 filter_sync_llogs(exp->exp_obd, exp);
                 RETURN(rc);
         }

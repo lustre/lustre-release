@@ -95,6 +95,7 @@ static struct llog_canceld_ctxt *llcd_alloc(void)
         if (!llcd)
                 return NULL;
 
+        CFS_INIT_LIST_HEAD(&llcd->llcd_list);
         llcd->llcd_size = llcd_size;
         llcd->llcd_cookiebytes = 0;
         atomic_inc(&llcd_count);
@@ -259,7 +260,10 @@ llcd_attach(struct llog_ctxt *ctxt, struct llog_canceld_ctxt *llcd)
         LASSERT_SEM_LOCKED(&ctxt->loc_sem);
         LASSERT(ctxt->loc_llcd == NULL);
         lcm = ctxt->loc_lcm;
+        spin_lock(&lcm->lcm_lock);
         atomic_inc(&lcm->lcm_count);
+        list_add_tail(&llcd->llcd_list, &lcm->lcm_llcds);
+        spin_unlock(&lcm->lcm_lock);
         CDEBUG(D_RPCTRACE, "Attach llcd %p to ctxt %p (%d)\n",
                llcd, ctxt, atomic_read(&lcm->lcm_count));
         llcd->llcd_ctxt = llog_ctxt_get(ctxt);
@@ -290,7 +294,11 @@ static struct llog_canceld_ctxt *llcd_detach(struct llog_ctxt *ctxt)
                 llcd_print(llcd, __FUNCTION__, __LINE__);
                 LBUG();
         }
+        spin_lock(&lcm->lcm_lock);
+        LASSERT(!list_empty(&llcd->llcd_list));
+        list_del_init(&llcd->llcd_list);
         atomic_dec(&lcm->lcm_count);
+        spin_unlock(&lcm->lcm_lock);
         ctxt->loc_llcd = NULL;
 
         CDEBUG(D_RPCTRACE, "Detach llcd %p from ctxt %p (%d)\n",
@@ -329,9 +337,6 @@ static void llcd_put(struct llog_ctxt *ctxt)
         llcd = llcd_detach(ctxt);
         if (llcd)
                 llcd_free(llcd);
-
-        if (atomic_read(&lcm->lcm_count) == 0)
-                cfs_waitq_signal(&lcm->lcm_waitq);
 }
 
 /**
@@ -376,7 +381,6 @@ int llog_recov_thread_start(struct llog_commit_master *lcm)
                        rc, lcm->lcm_name);
                 RETURN(rc);
         }
-        lcm->lcm_set = lcm->lcm_pc.pc_set;
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_recov_thread_start);
@@ -386,27 +390,40 @@ EXPORT_SYMBOL(llog_recov_thread_start);
  */
 void llog_recov_thread_stop(struct llog_commit_master *lcm, int force)
 {
-        struct l_wait_info lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
         ENTRY;
 
-        /**
+        /*
          * Let all know that we're stopping. This will also make
          * llcd_send() refuse any new llcds.
          */
         set_bit(LLOG_LCM_FL_EXIT, &lcm->lcm_flags);
 
-        /**
+        /*
          * Stop processing thread. No new rpcs will be accepted for
          * for processing now.
          */
         ptlrpcd_stop(&lcm->lcm_pc, force);
 
         /*
-         * Wait for llcd number == 0. Note, this is infinite wait.
-         * All other parts should make sure that no lost llcd is left.
+         * By this point no alive inflight llcds should be left. Only
+         * those forgotten in sync may still be attached to ctxt. Let's
+         * print them.
          */
-        l_wait_event(lcm->lcm_waitq,
-                     atomic_read(&lcm->lcm_count) == 0, &lwi);
+        if (atomic_read(&lcm->lcm_count) != 0) {
+                struct llog_canceld_ctxt *llcd;
+                struct list_head         *tmp;
+
+                CERROR("Busy llcds found (%d) on lcm %p\n", 
+                       atomic_read(&lcm->lcm_count) == 0, lcm);
+
+                spin_lock(&lcm->lcm_lock);
+                list_for_each(tmp, &lcm->lcm_llcds) {
+                        llcd = list_entry(tmp, struct llog_canceld_ctxt,
+                                          llcd_list);
+                        llcd_print(llcd, __FUNCTION__, __LINE__);
+                }
+                spin_unlock(&lcm->lcm_lock);
+        }
         EXIT;
 }
 EXPORT_SYMBOL(llog_recov_thread_stop);
@@ -431,8 +448,9 @@ struct llog_commit_master *llog_recov_thread_init(char *name)
                  "ll_log_commit_%s", name);
 
         strncpy(lcm->lcm_name, name, sizeof(lcm->lcm_name));
-        cfs_waitq_init(&lcm->lcm_waitq);
         atomic_set(&lcm->lcm_count, 0);
+        spin_lock_init(&lcm->lcm_lock);
+        CFS_INIT_LIST_HEAD(&lcm->lcm_llcds);
         rc = llog_recov_thread_start(lcm);
         if (rc) {
                 CERROR("Can't start commit thread, rc %d\n", rc);
@@ -553,11 +571,6 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
                 GOTO(out, rc = -ENODEV);
         }
 
-        if (ctxt->loc_obd->obd_stopping) {
-                CDEBUG(D_RPCTRACE, "Obd is stopping for ctxt %p\n", ctxt);
-                GOTO(out, rc = -ENODEV);
-        }
-
         if (test_bit(LLOG_LCM_FL_EXIT, &lcm->lcm_flags)) {
                 CDEBUG(D_RPCTRACE, "Commit thread is stopping for ctxt %p\n",
                        ctxt);
@@ -602,13 +615,15 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
                 }
 
                 /*
-                 * Copy cookies to @llcd, no matter old or new allocated one.
+                 * Copy cookies to @llcd, no matter old or new allocated
+                 * one.
                  */
                 llcd_copy(llcd, cookies);
         }
 
         /*
-         * Let's check if we need to send copied @cookies asap. If yes - do it.
+         * Let's check if we need to send copied @cookies asap. If yes
+         * then do it.
          */
         if (llcd && (flags & OBD_LLOG_FL_SENDNOW)) {
                 rc = llcd_push(ctxt);
@@ -629,16 +644,25 @@ int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp)
         int rc = 0;
         ENTRY;
 
+        /* 
+         * Flush any remaining llcd. 
+         */
         mutex_down(&ctxt->loc_sem);
         if (exp && (ctxt->loc_imp == exp->exp_imp_reverse)) {
-                CDEBUG(D_RPCTRACE, "Reverse import disconnect\n");
                 /*
-                 * Check for llcd which might be left attached to @ctxt.
-                 * Let's kill it.
+                 * This is ost->mds connection, we can't be sure that mds
+                 * can still receive cookies, let's killed the cached llcd.
                  */
+                CDEBUG(D_RPCTRACE, "Kill cached llcd\n");
                 llcd_put(ctxt);
                 mutex_up(&ctxt->loc_sem);
         } else {
+                /* 
+                 * This is either llog_sync() from generic llog code or sync
+                 * on client disconnect. In either way let's do it and send
+                 * llcds to the target with waiting for completion. 
+                 */
+                CDEBUG(D_RPCTRACE, "Sync cached llcd\n");
                 mutex_up(&ctxt->loc_sem);
                 rc = llog_cancel(ctxt, NULL, 0, NULL, OBD_LLOG_FL_SENDNOW);
         }
