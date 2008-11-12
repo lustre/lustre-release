@@ -441,6 +441,13 @@ reboot_facet() {
     fi
 }
 
+boot_node() {
+    local node=$1
+    if [ "$FAILURE_MODE" = HARD ]; then
+       $POWER_UP $node
+    fi
+}
+
 # verify that lustre actually cleaned up properly
 cleanup_check() {
     [ -f $CATASTROPHE ] && [ `cat $CATASTROPHE` -ne 0 ] && \
