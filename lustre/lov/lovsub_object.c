@@ -74,8 +74,13 @@ int lovsub_object_init(const struct lu_env *env, struct lu_object *obj,
 static void lovsub_object_free(const struct lu_env *env, struct lu_object *obj)
 {
         struct lovsub_object *los = lu2lovsub(obj);
+        struct lov_object    *lov = los->lso_super;
+
+        LASSERT(lov->lo_type == LLT_RAID0);
+        LASSERT(lov->u.raid0.lo_sub[los->lso_index] == los);
 
         ENTRY;
+        lov->u.raid0.lo_sub[los->lso_index] = NULL;
         lu_object_fini(obj);
         lu_object_header_fini(&los->lso_header.coh_lu);
         OBD_SLAB_FREE_PTR(los, lovsub_object_kmem);

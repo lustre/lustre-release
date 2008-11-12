@@ -210,6 +210,21 @@ struct lov_object {
                 struct lov_layout_raid0 {
                         unsigned               lo_nr;
                         struct lov_stripe_md  *lo_lsm;
+                        /**
+                         * Array of sub-objects. Allocated when top-object is
+                         * created (lov_init_raid0()).
+                         *
+                         * Top-object is a strict master of its sub-objects:
+                         * it is created before them, and outlives its
+                         * children (this later is necessary so that basic
+                         * functions like cl_object_top() always
+                         * work). Top-object keeps a reference on every
+                         * sub-object.
+                         *
+                         * When top-object is destroyed (lov_delete_raid0())
+                         * it releases its reference to a sub-object and waits
+                         * until the latter is finally destroyed.
+                         */
                         struct lovsub_object **lo_sub;
                         /**
                          * When this is true, lov_object::lo_attr contains
@@ -394,6 +409,7 @@ struct lov_thread_info {
         struct cl_2queue        lti_cl2q;
         union  lov_layout_state lti_state;
         struct cl_lock_closure  lti_closure;
+        cfs_waitlink_t          lti_waiter;
 };
 
 /**

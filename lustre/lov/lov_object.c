@@ -235,6 +235,41 @@ static void lov_delete_empty(const struct lu_env *env, struct lov_object *lov,
         LASSERT(lov->lo_type == LLT_EMPTY);
 }
 
+static void lov_subobject_kill(const struct lu_env *env, struct lov_object *lov,
+                               struct lovsub_object *los, int idx)
+{
+        struct cl_object        *sub;
+        struct lov_layout_raid0 *r0;
+        struct lu_site          *site;
+        cfs_waitlink_t          *waiter;
+
+        r0  = &lov->u.raid0;
+        sub = lovsub2cl(los);
+        LASSERT(r0->lo_sub[idx] == los);
+
+        cl_object_kill(env, sub);
+        /* release a reference to the sub-object and ... */
+        lu_object_ref_del(&sub->co_lu, "lov-parent", lov);
+        cl_object_put(env, sub);
+
+        /* ... wait until it is actually destroyed---sub-object clears its
+         * ->lo_sub[] slot in lovsub_object_fini() */
+        if (r0->lo_sub[idx] == los) {
+                waiter = &lov_env_info(env)->lti_waiter;
+                site   = sub->co_lu.lo_dev->ld_site;
+                cfs_waitlink_init(waiter);
+                cfs_waitq_add(&site->ls_marche_funebre, waiter);
+                set_current_state(CFS_TASK_UNINT);
+
+                while (r0->lo_sub[idx] == los)
+                        /* this wait-queue is signaled at the end of
+                         * lu_object_free(). */
+                        cfs_waitq_wait(waiter, CFS_TASK_UNINT);
+                cfs_waitq_del(&site->ls_marche_funebre, waiter);
+        }
+        LASSERT(r0->lo_sub[idx] == NULL);
+}
+
 static void lov_delete_raid0(const struct lu_env *env, struct lov_object *lov,
                              union lov_layout_state *state)
 {
@@ -242,17 +277,16 @@ static void lov_delete_raid0(const struct lu_env *env, struct lov_object *lov,
         int                      i;
 
         ENTRY;
-        if (r0->lo_sub != NULL &&
-            lu_object_is_dying(lov->lo_cl.co_lu.lo_header)) {
+        if (r0->lo_sub != NULL) {
                 for (i = 0; i < r0->lo_nr; ++i) {
-                        struct lovsub_object *sub = r0->lo_sub[i];
+                        struct lovsub_object *los = r0->lo_sub[i];
 
-                        if (sub != NULL)
+                        if (los != NULL)
                                 /*
                                  * If top-level object is to be evicted from
                                  * the cache, so are its sub-objects.
                                  */
-                                cl_object_kill(env, lovsub2cl(sub));
+                                lov_subobject_kill(env, lov, los, i);
                 }
         }
         EXIT;
@@ -271,19 +305,6 @@ static void lov_fini_raid0(const struct lu_env *env, struct lov_object *lov,
 
         ENTRY;
         if (r0->lo_sub != NULL) {
-                int i;
-
-                for (i = 0; i < r0->lo_nr; ++i) {
-                        struct cl_object *sub;
-
-                        if (r0->lo_sub[i] == NULL)
-                                continue;
-                        sub = lovsub2cl(r0->lo_sub[i]);
-                        cl_object_header(sub)->coh_parent = NULL;
-                        lu_object_ref_del(&sub->co_lu, "lov-parent", lov);
-                        cl_object_put(env, sub);
-                        r0->lo_sub[i] = NULL;
-                }
                 OBD_FREE(r0->lo_sub, r0->lo_nr * sizeof r0->lo_sub[0]);
                 r0->lo_sub = NULL;
         }
