@@ -5823,7 +5823,7 @@ test_151() {
         cancel_lru_locks osc
 	cat $DIR/$tfile >/dev/null
 	AFTER=`roc_hit`
-	if ! let "AFTER - BEFORE == CPAGES"; then
+	if let "AFTER - BEFORE != 0"; then
 		error "IN CACHE: before: $BEFORE, after: $AFTER"
 	fi
 
