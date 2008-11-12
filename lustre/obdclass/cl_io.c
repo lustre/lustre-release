@@ -1126,16 +1126,18 @@ int cl_page_list_own(const struct lu_env *env,
                      struct cl_io *io, struct cl_page_list *plist)
 {
         struct cl_page *page;
+        struct cl_page *temp;
         int result;
-        int rc;
 
         LINVRNT(plist->pl_owner == cfs_current());
 
         ENTRY;
         result = 0;
-        cl_page_list_for_each(page, plist) {
-                rc = cl_page_own(env, io, page);
+        cl_page_list_for_each_safe(page, temp, plist) {
+                if (cl_page_own(env, io, page) == 0)
                 result = result ?: page->cp_error;
+                else
+                        cl_page_list_del(env, plist, page);
         }
         RETURN(result);
 }
