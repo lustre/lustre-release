@@ -3782,14 +3782,21 @@ static int osc_reconnect(struct obd_export *exp, struct obd_device *obd,
 static int osc_disconnect(struct obd_export *exp)
 {
         struct obd_device *obd = class_exp2obd(exp);
-        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_SIZE_REPL_CTXT);
+        struct llog_ctxt  *ctxt;
         int rc;
 
-        if (obd->u.cli.cl_conn_count == 1)
-                /* flush any remaining cancel messages out to the target */
-                llog_sync(ctxt, exp);
-
-        llog_ctxt_put(ctxt);
+        ctxt = llog_get_context(obd, LLOG_SIZE_REPL_CTXT);
+        if (ctxt) {
+                if (obd->u.cli.cl_conn_count == 1) {
+                        /* Flush any remaining cancel messages out to the 
+                         * target */
+                        llog_sync(ctxt, exp);
+                }
+                llog_ctxt_put(ctxt);
+        } else {
+                CDEBUG(D_HA, "No LLOG_SIZE_REPL_CTXT found in obd %p\n", 
+                       obd);
+        }
 
         rc = client_disconnect_export(exp);
         return rc;
