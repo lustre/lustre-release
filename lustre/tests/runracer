@@ -1,0 +1,113 @@
+#!/bin/bash
+#set -vx
+set -e
+
+LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+. $LUSTRE/tests/test-framework.sh
+init_test_env $@
+. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+
+racer=`which racer.sh`
+[ -z "$racer" ] && echo racer is not installed && exit 1
+
+CLIENTS=${CLIENTS:-$HOSTNAME}
+RDIR=$DIR/racer
+mkdir -p $RDIR
+DURATION=${DURATION:-120}
+
+assert_env CLIENTS
+
+timer_on () {
+	sleep $1 && kill -s ALRM $$ &
+    	TIMERPID=$!
+    	echo TIMERPID=$TIMERPID
+}
+
+do_racer_cleanup () {
+	trap 0
+
+	local WAIT=0
+	local INTERVAL=5
+        local pids
+	local rc=0
+
+	echo "DOING RACER CLEANUP ... "
+
+	# Check if all processes are killed
+
+	local clients=$CLIENTS
+
+	# 1.Let chance to racer to kill all it's processes
+	# FIXME: not sure how long does it take for racer to kill all processes
+	# 80 is sometimes are enough for 2 clients; sometimes it takes more than 150 sec
+	while [ $WAIT -lt 90 ]; do
+		running=$(do_nodes $clients "ps uax | grep $RDIR " | egrep -v "(acceptance|grep|pdsh|bash)" || true)
+		[ -z "$running" ] && rc=0 && break
+		echo "clients $clients are still running the racer processes. Waited $WAIT secs"
+		echo $running
+		rc=1
+		[ $INTERVAL -lt 40 ] && INTERVAL=$((INTERVAL + INTERVAL))
+		sleep $INTERVAL
+		WAIT=$((WAIT + INTERVAL))
+	done
+
+	# 2. Kill the remaining processes
+	if [ $rc -ne 0 ]; then
+		for C in ${clients//,/ } ; do
+			pids=$(do_node $C "ps uax | grep $RDIR " | egrep -v "(acceptance|grep|PATH)" | awk '{print $2}' || true)
+			if [ ! -z "$pids" ]; then
+				echo "client $C still running racer processes after $WAIT seconds. Killing $pids"
+				do_node $C "ps uax | grep $RDIR " | egrep -v "(acceptance|grep|PATH)"
+				do_node $C kill -TERM $pids || true
+				# let processes to be killed
+				sleep 2
+	# 3. Check if the processes were killed
+	# exit error if the processes still exist
+				for pid in $pids; do
+					do_node $C "ps -P $pid" && RC=1 || true
+				done
+			else
+				echo "All processes on client $C exited after $WAIT seconds. OK."
+			fi
+		done
+	else
+		echo "No racer processes running after $WAIT seconds. OK."
+		wait_remote_prog $racer 10
+	fi
+}
+
+racer_cleanup () {
+	if [ "$timeout" == "timeout" ]; then
+		echo $timeout killing RACERPID=$RACERPID
+		kill $RACERPID || true
+		sleep 2	# give chance racer to kill it's processes
+		do_racer_cleanup
+	else
+		echo "Racer completed before DURATION=$DURATION expired. Cleaning up..."
+		kill $TIMERPID
+		do_racer_cleanup
+	fi
+}
+
+racer_timeout () {
+	timeout="timeout"
+	racer_cleanup
+	echo "$0: completed $RC"
+	exit $RC
+}
+
+# run racer
+log "Start racer on clients: $CLIENTS DURATION=$DURATION"
+RC=0
+
+trap racer_timeout ALRM
+
+timer_on $((DURATION + 5))
+
+do_nodes $CLIENTS "DURATION=$DURATION $racer $RDIR" &
+RACERPID=$!
+echo RACERPID=$RACERPID
+wait $RACERPID || RC=2
+racer_cleanup
+echo "$0: completed $RC"
+exit $RC
