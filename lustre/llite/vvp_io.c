@@ -701,7 +701,7 @@ static int vvp_io_read_page(const struct lu_env *env,
 
 static int vvp_page_sync_io(const struct lu_env *env, struct cl_io *io,
                             struct cl_page *page, struct ccc_page *cp,
-                            int from, int to, enum cl_req_type crt)
+                            int to, enum cl_req_type crt)
 {
         struct cl_2queue  *queue;
         struct ccc_object *cobo   = cl2ccc(page->cp_obj);
@@ -722,7 +722,7 @@ static int vvp_page_sync_io(const struct lu_env *env, struct cl_io *io,
 
         cl_sync_io_init(anchor, 1);
         cp->cpg_sync_io = anchor;
-        cl_page_clip(env, page, from, to);
+        cl_page_clip(env, page, 0, to);
         result = cl_io_submit_rw(env, io, crt, queue);
         if (result == 0)
                 result = cl_sync_io_wait(env, io, &queue->c2_qout, anchor);
@@ -772,7 +772,7 @@ static int vvp_io_prepare_partial(const struct lu_env *env, struct cl_io *io,
                         cp->cpg_ra_used = 1;
                 else
                         result = vvp_page_sync_io(env, io, pg, cp,
-                                                  0, CFS_PAGE_SIZE, CRT_READ);
+                                                  CFS_PAGE_SIZE, CRT_READ);
                 /*
                  * In older implementations, obdo_refresh_inode is called here
                  * to update the inode because the write might modify the
@@ -889,7 +889,7 @@ static int vvp_io_commit_write(const struct lu_env *env,
                          * being.
                          */
                         result = vvp_page_sync_io(env, io, pg, cp,
-                                                  from, to, CRT_WRITE);
+                                                  to, CRT_WRITE);
         } else {
                 tallyop = LPROC_LL_DIRTY_HITS;
                 result = 0;
