@@ -58,65 +58,65 @@
 /**
  * Initialize new lustre hash, where:
  * @name     - Descriptive hash name
- * @cur_size - Initial hash table size
- * @max_size - Maximum allowed hash table resize
+ * @cur_bits - Initial hash table size, in bits
+ * @max_bits - Maximum allowed hash table resize, in bits
  * @ops      - Registered hash table operations
  * @flags    - LH_REHASH enable synamic hash resizing
  *           - LH_SORT enable chained hash sort
  */
 lustre_hash_t *
-lustre_hash_init(char *name, unsigned int cur_size, unsigned int max_size,
+lustre_hash_init(char *name, unsigned int cur_bits, unsigned int max_bits,
                  lustre_hash_ops_t *ops, int flags)
 {
         lustre_hash_t *lh;
         int            i;
         ENTRY;
-
+  
         LASSERT(name != NULL);
         LASSERT(ops != NULL);
 
-        /*
-         * Ensure hash is a power of two to allow the use of a bitmask
-         * in the hash function instead of a more expensive modulus.
-         */
-        LASSERTF(cur_size && (cur_size & (cur_size - 1)) == 0,
-                 "Size (%u) is not power of 2\n", cur_size);
-        LASSERTF(max_size && (max_size & (max_size - 1)) == 0,
-                 "Size (%u) is not power of 2\n", max_size);
-
+        LASSERT(cur_bits > 0);
+        LASSERT(max_bits >= cur_bits);
+        LASSERT(max_bits < 31);
+  
         OBD_ALLOC_PTR(lh);
         if (!lh)
                 RETURN(NULL);
-
+  
         strncpy(lh->lh_name, name, sizeof(lh->lh_name));
         atomic_set(&lh->lh_rehash_count, 0);
         atomic_set(&lh->lh_count, 0);
         rwlock_init(&lh->lh_rwlock);
-        lh->lh_cur_size = cur_size;
-        lh->lh_min_size = cur_size;
-        lh->lh_max_size = max_size;
+        lh->lh_cur_bits = cur_bits;
+        lh->lh_cur_mask = (1 << cur_bits) - 1;
+        lh->lh_min_bits = cur_bits;
+        lh->lh_max_bits = max_bits;
+        /* XXX: need to fixup lustre_hash_rehash_bits() before this can be
+         *      anything other than 0.5 and 2.0 */
+        lh->lh_min_theta = 1 << (LH_THETA_BITS - 1);
+        lh->lh_max_theta = 1 << (LH_THETA_BITS + 1);
         lh->lh_ops = ops;
         lh->lh_flags = flags;
 
         /* theta * 1000 */
         __lustre_hash_set_theta(lh, 500, 2000);
 
-        OBD_VMALLOC(lh->lh_buckets, sizeof(*lh->lh_buckets) * lh->lh_cur_size);
+        OBD_VMALLOC(lh->lh_buckets, sizeof(*lh->lh_buckets) << lh->lh_cur_bits);
         if (!lh->lh_buckets) {
                 OBD_FREE_PTR(lh);
                 RETURN(NULL);
         }
-
-        for (i = 0; i < lh->lh_cur_size; i++) {
+  
+        for (i = 0; i <= lh->lh_cur_mask; i++) {
                 INIT_HLIST_HEAD(&lh->lh_buckets[i].lhb_head);
                 rwlock_init(&lh->lh_buckets[i].lhb_rwlock);
                 atomic_set(&lh->lh_buckets[i].lhb_count, 0);
         }
-
+  
         return lh;
 }
 EXPORT_SYMBOL(lustre_hash_init);
-
+  
 /**
  * Cleanup lustre hash @lh.
  */
@@ -130,9 +130,9 @@ lustre_hash_exit(lustre_hash_t *lh)
         ENTRY;
 
         LASSERT(lh != NULL);
-
+  
         write_lock(&lh->lh_rwlock);
-
+  
         lh_for_each_bucket(lh, lhb, i) {
                 write_lock(&lhb->lhb_rwlock);
                 hlist_for_each_safe(hnode, pos, &(lhb->lhb_head)) {
@@ -140,43 +140,39 @@ lustre_hash_exit(lustre_hash_t *lh)
                         __lustre_hash_bucket_del(lh, lhb, hnode);
                         lh_exit(lh, hnode);
                 }
-
+  
                 LASSERT(hlist_empty(&(lhb->lhb_head)));
                 LASSERT(atomic_read(&lhb->lhb_count) == 0);
                 write_unlock(&lhb->lhb_rwlock);
         }
-
-        OBD_VFREE(lh->lh_buckets, sizeof(*lh->lh_buckets) * lh->lh_cur_size);
+  
+        OBD_VFREE(lh->lh_buckets, sizeof(*lh->lh_buckets) << lh->lh_cur_bits);
         LASSERT(atomic_read(&lh->lh_count) == 0);
         write_unlock(&lh->lh_rwlock);
-
+  
         OBD_FREE_PTR(lh);
         EXIT;
 }
 EXPORT_SYMBOL(lustre_hash_exit);
 
-static inline unsigned int lustre_hash_rehash_size(lustre_hash_t *lh)
+static inline unsigned int lustre_hash_rehash_bits(lustre_hash_t *lh)
 {
-        int size;
-
         if (!(lh->lh_flags & LH_REHASH))
                 return 0;
 
-        if ((lh->lh_cur_size < lh->lh_max_size) &&
+        /* XXX: need to handle case with max_theta != 2.0 
+         *      and the case with min_theta != 0.5 */
+        if ((lh->lh_cur_bits < lh->lh_max_bits) &&
             (__lustre_hash_theta(lh) > lh->lh_max_theta))
-                size = min(lh->lh_cur_size * 2, lh->lh_max_size);
-        else if ((lh->lh_cur_size > lh->lh_min_size) &&
+                return lh->lh_cur_bits + 1;
+
+        if ((lh->lh_cur_bits > lh->lh_min_bits) &&
             (__lustre_hash_theta(lh) < lh->lh_min_theta))
-                size = max(lh->lh_cur_size / 2, lh->lh_min_size);
-        else
-                size = 0;
+                return lh->lh_cur_bits - 1;
 
-        if (lh->lh_cur_size == size)
-                size = 0;
-
-        return size;
+        return 0;
 }
-
+  
 /**
  * Add item @hnode to lustre hash @lh using @key.  The registered
  * ops->lh_get function will be called when the item is added.
@@ -185,27 +181,27 @@ void
 lustre_hash_add(lustre_hash_t *lh, void *key, struct hlist_node *hnode)
 {
         lustre_hash_bucket_t *lhb;
-        int                   size;
+        int                   bits;
         unsigned              i;
         ENTRY;
-
+  
         __lustre_hash_key_validate(lh, key, hnode);
 
         read_lock(&lh->lh_rwlock);
-        i = lh_hash(lh, key, lh->lh_cur_size - 1);
+        i = lh_hash(lh, key, lh->lh_cur_mask);
         lhb = &lh->lh_buckets[i];
-        LASSERT(i < lh->lh_cur_size);
+        LASSERT(i <= lh->lh_cur_mask);
         LASSERT(hlist_unhashed(hnode));
 
         write_lock(&lhb->lhb_rwlock);
         __lustre_hash_bucket_add(lh, lhb, hnode);
         write_unlock(&lhb->lhb_rwlock);
 
-        size = lustre_hash_rehash_size(lh);
+        bits = lustre_hash_rehash_bits(lh);
         read_unlock(&lh->lh_rwlock);
-        if (size)
-                lustre_hash_rehash(lh, size);
-
+        if (bits)
+                lustre_hash_rehash(lh, bits);
+  
         EXIT;
 }
 EXPORT_SYMBOL(lustre_hash_add);
@@ -214,18 +210,18 @@ static struct hlist_node *
 lustre_hash_findadd_unique_hnode(lustre_hash_t *lh, void *key,
                                  struct hlist_node *hnode)
 {
-        int                   size = 0;
+        int                   bits = 0;
         struct hlist_node    *ehnode;
         lustre_hash_bucket_t *lhb;
         unsigned              i;
         ENTRY;
-
+  
         __lustre_hash_key_validate(lh, key, hnode);
-
+  
         read_lock(&lh->lh_rwlock);
-        i = lh_hash(lh, key, lh->lh_cur_size - 1);
+        i = lh_hash(lh, key, lh->lh_cur_mask);
         lhb = &lh->lh_buckets[i];
-        LASSERT(i < lh->lh_cur_size);
+        LASSERT(i <= lh->lh_cur_mask);
         LASSERT(hlist_unhashed(hnode));
 
         write_lock(&lhb->lhb_rwlock);
@@ -235,16 +231,16 @@ lustre_hash_findadd_unique_hnode(lustre_hash_t *lh, void *key,
         } else {
                 __lustre_hash_bucket_add(lh, lhb, hnode);
                 ehnode = hnode;
-                size = lustre_hash_rehash_size(lh);
+                bits = lustre_hash_rehash_bits(lh);
         }
         write_unlock(&lhb->lhb_rwlock);
         read_unlock(&lh->lh_rwlock);
-        if (size)
-                lustre_hash_rehash(lh, size);
-
+        if (bits)
+                lustre_hash_rehash(lh, bits);
+  
         RETURN(ehnode);
 }
-
+  
 /**
  * Add item @hnode to lustre hash @lh using @key.  The registered
  * ops->lh_get function will be called if the item was added.
@@ -255,17 +251,16 @@ lustre_hash_add_unique(lustre_hash_t *lh, void *key, struct hlist_node *hnode)
 {
         struct hlist_node    *ehnode;
         ENTRY;
-
+        
         ehnode = lustre_hash_findadd_unique_hnode(lh, key, hnode);
         if (ehnode != hnode) {
                 lh_put(lh, ehnode);
                 RETURN(-EALREADY);
         }
-
         RETURN(0);
 }
 EXPORT_SYMBOL(lustre_hash_add_unique);
-
+  
 /**
  * Add item @hnode to lustre hash @lh using @key.  If this @key
  * already exists in the hash then ops->lh_get will be called on the
@@ -279,14 +274,14 @@ lustre_hash_findadd_unique(lustre_hash_t *lh, void *key,
         struct hlist_node    *ehnode;
         void                 *obj;
         ENTRY;
-
+        
         ehnode = lustre_hash_findadd_unique_hnode(lh, key, hnode);
         obj = lh_get(lh, ehnode);
         lh_put(lh, ehnode);
         RETURN(obj);
 }
 EXPORT_SYMBOL(lustre_hash_findadd_unique);
-
+  
 /**
  * Delete item @hnode from the lustre hash @lh using @key.  The @key
  * is required to ensure the correct hash bucket is locked since there
@@ -301,24 +296,24 @@ lustre_hash_del(lustre_hash_t *lh, void *key, struct hlist_node *hnode)
         unsigned              i;
         void                 *obj;
         ENTRY;
-
+  
         __lustre_hash_key_validate(lh, key, hnode);
-
+  
         read_lock(&lh->lh_rwlock);
-        i = lh_hash(lh, key, lh->lh_cur_size - 1);
+        i = lh_hash(lh, key, lh->lh_cur_mask);
         lhb = &lh->lh_buckets[i];
-        LASSERT(i < lh->lh_cur_size);
+        LASSERT(i <= lh->lh_cur_mask);
         LASSERT(!hlist_unhashed(hnode));
 
         write_lock(&lhb->lhb_rwlock);
         obj = __lustre_hash_bucket_del(lh, lhb, hnode);
         write_unlock(&lhb->lhb_rwlock);
         read_unlock(&lh->lh_rwlock);
-
+  
         RETURN(obj);
 }
 EXPORT_SYMBOL(lustre_hash_del);
-
+  
 /**
  * Delete item given @key in lustre hash @lh.  The first @key found in
  * the hash will be removed, if the key exists multiple times in the hash
@@ -333,11 +328,11 @@ lustre_hash_del_key(lustre_hash_t *lh, void *key)
         unsigned              i;
         void                 *obj = NULL;
         ENTRY;
-
+  
         read_lock(&lh->lh_rwlock);
-        i = lh_hash(lh, key, lh->lh_cur_size - 1);
+        i = lh_hash(lh, key, lh->lh_cur_mask);
         lhb = &lh->lh_buckets[i];
-        LASSERT(i < lh->lh_cur_size);
+        LASSERT(i <= lh->lh_cur_mask);
 
         write_lock(&lhb->lhb_rwlock);
         hnode = __lustre_hash_bucket_lookup(lh, lhb, key);
@@ -346,11 +341,11 @@ lustre_hash_del_key(lustre_hash_t *lh, void *key)
 
         write_unlock(&lhb->lhb_rwlock);
         read_unlock(&lh->lh_rwlock);
-
+  
         RETURN(obj);
 }
 EXPORT_SYMBOL(lustre_hash_del_key);
-
+  
 /**
  * Lookup an item using @key in the lustre hash @lh and return it.
  * If the @key is found in the hash lh->lh_get() is called and the
@@ -367,24 +362,24 @@ lustre_hash_lookup(lustre_hash_t *lh, void *key)
         unsigned              i;
         void                 *obj = NULL;
         ENTRY;
-
+  
         read_lock(&lh->lh_rwlock);
-        i = lh_hash(lh, key, lh->lh_cur_size - 1);
+        i = lh_hash(lh, key, lh->lh_cur_mask);
         lhb = &lh->lh_buckets[i];
-        LASSERT(i < lh->lh_cur_size);
+        LASSERT(i <= lh->lh_cur_mask);
 
         read_lock(&lhb->lhb_rwlock);
         hnode = __lustre_hash_bucket_lookup(lh, lhb, key);
         if (hnode)
                 obj = lh_get(lh, hnode);
-
+  
         read_unlock(&lhb->lhb_rwlock);
         read_unlock(&lh->lh_rwlock);
-
+  
         RETURN(obj);
 }
 EXPORT_SYMBOL(lustre_hash_lookup);
-
+  
 /**
  * For each item in the lustre hash @lh call the passed callback @func
  * and pass to it as an argument each hash item and the private @data.
@@ -400,7 +395,7 @@ lustre_hash_for_each(lustre_hash_t *lh, lh_for_each_cb func, void *data)
         void                 *obj;
         int                   i;
         ENTRY;
-
+  
         read_lock(&lh->lh_rwlock);
         lh_for_each_bucket(lh, lhb, i) {
                 read_lock(&lhb->lhb_rwlock);
@@ -417,7 +412,7 @@ lustre_hash_for_each(lustre_hash_t *lh, lh_for_each_cb func, void *data)
         EXIT;
 }
 EXPORT_SYMBOL(lustre_hash_for_each);
-
+  
 /**
  * For each item in the lustre hash @lh call the passed callback @func
  * and pass to it as an argument each hash item and the private @data.
@@ -437,7 +432,7 @@ lustre_hash_for_each_safe(lustre_hash_t *lh, lh_for_each_cb func, void *data)
         void                 *obj;
         int                   i;
         ENTRY;
-
+  
         read_lock(&lh->lh_rwlock);
         lh_for_each_bucket(lh, lhb, i) {
                 read_lock(&lhb->lhb_rwlock);
@@ -455,7 +450,7 @@ lustre_hash_for_each_safe(lustre_hash_t *lh, lh_for_each_cb func, void *data)
         EXIT;
 }
 EXPORT_SYMBOL(lustre_hash_for_each_safe);
-
+  
 /**
  * For each hash bucket in the lustre hash @lh call the passed callback
  * @func until all the hash buckets are empty.  The passed callback @func
@@ -475,7 +470,7 @@ lustre_hash_for_each_empty(lustre_hash_t *lh, lh_for_each_cb func, void *data)
         void                 *obj;
         int                   i;
         ENTRY;
-
+  
 restart:
         read_lock(&lh->lh_rwlock);
         lh_for_each_bucket(lh, lhb, i) {
@@ -497,14 +492,14 @@ restart:
 }
 EXPORT_SYMBOL(lustre_hash_for_each_empty);
 
-/**
+/*
  * For each item in the lustre hash @lh which matches the @key call
  * the passed callback @func and pass to it as an argument each hash
  * item and the private @data.  Before each callback ops->lh_get will
  * be called, and after each callback ops->lh_put will be called.
  * Finally, during the callback the bucket lock is held so the
  * callback must never sleep.
- */
+   */
 void
 lustre_hash_for_each_key(lustre_hash_t *lh, void *key,
                          lh_for_each_cb func, void *data)
@@ -513,32 +508,32 @@ lustre_hash_for_each_key(lustre_hash_t *lh, void *key,
         lustre_hash_bucket_t *lhb;
         unsigned              i;
         ENTRY;
-
+  
         read_lock(&lh->lh_rwlock);
-        i = lh_hash(lh, key, lh->lh_cur_size - 1);
+        i = lh_hash(lh, key, lh->lh_cur_mask);
         lhb = &lh->lh_buckets[i];
-        LASSERT(i < lh->lh_cur_size);
-
+        LASSERT(i <= lh->lh_cur_mask);
+  
         read_lock(&lhb->lhb_rwlock);
         hlist_for_each(hnode, &(lhb->lhb_head)) {
                 __lustre_hash_bucket_validate(lh, lhb, hnode);
-
+  
                 if (!lh_compare(lh, key, hnode))
                         continue;
-
+  
                 func(lh_get(lh, hnode), data);
                 (void)lh_put(lh, hnode);
         }
-
+  
         read_unlock(&lhb->lhb_rwlock);
         read_unlock(&lh->lh_rwlock);
-
+  
         EXIT;
 }
 EXPORT_SYMBOL(lustre_hash_for_each_key);
-
+  
 /**
- * Rehash the lustre hash @lh to the given @size.  This can be used
+ * Rehash the lustre hash @lh to the given @bits.  This can be used
  * to grow the hash size when excessive chaining is detected, or to
  * shrink the hash when it is larger than needed.  When the LH_REHASH
  * flag is set in @lh the lustre hash may be dynamically rehashed
@@ -549,7 +544,7 @@ EXPORT_SYMBOL(lustre_hash_for_each_key);
  * theta thresholds for @lh are tunable via lustre_hash_set_theta().
  */
 int
-lustre_hash_rehash(lustre_hash_t *lh, int size)
+lustre_hash_rehash(lustre_hash_t *lh, int bits)
 {
         struct hlist_node     *hnode;
         struct hlist_node     *pos;
@@ -558,45 +553,49 @@ lustre_hash_rehash(lustre_hash_t *lh, int size)
         lustre_hash_bucket_t  *lh_lhb;
         lustre_hash_bucket_t  *rehash_lhb;
         int                    i;
-        int                    lh_size;
         int                    theta;
+        int                    lh_mask;
+        int                    lh_bits;
+        int                    mask = (1 << bits) - 1;
         void                  *key;
         ENTRY;
-
-        LASSERT(size > 0);
+  
         LASSERT(!in_interrupt());
+        LASSERT(mask > 0);
 
-        OBD_VMALLOC(rehash_buckets, sizeof(*rehash_buckets) * size);
+        OBD_VMALLOC(rehash_buckets, sizeof(*rehash_buckets) << bits);
         if (!rehash_buckets)
                 RETURN(-ENOMEM);
-
-        for (i = 0; i < size; i++) {
+  
+        for (i = 0; i <= mask; i++) {
                 INIT_HLIST_HEAD(&rehash_buckets[i].lhb_head);
                 rwlock_init(&rehash_buckets[i].lhb_rwlock);
                 atomic_set(&rehash_buckets[i].lhb_count, 0);
         }
-
+  
         write_lock(&lh->lh_rwlock);
 
-        /*
+        /* 
          * Early return for multiple concurrent racing callers,
-         * ensure we only trigger the rehash if it is still needed.
+         * ensure we only trigger the rehash if it is still needed. 
          */
         theta = __lustre_hash_theta(lh);
         if ((theta >= lh->lh_min_theta) && (theta <= lh->lh_max_theta)) {
-                OBD_VFREE(rehash_buckets, sizeof(*rehash_buckets) * size);
+                OBD_VFREE(rehash_buckets, sizeof(*rehash_buckets) << bits);
                 write_unlock(&lh->lh_rwlock);
                 RETURN(-EALREADY);
         }
-
-        lh_size = lh->lh_cur_size;
+  
+        lh_bits = lh->lh_cur_bits;
         lh_buckets = lh->lh_buckets;
-
-        lh->lh_cur_size = size;
+        lh_mask = (1 << lh_bits) - 1;
+  
+        lh->lh_cur_bits = bits;
+        lh->lh_cur_mask = (1 << bits) - 1;
         lh->lh_buckets = rehash_buckets;
         atomic_inc(&lh->lh_rehash_count);
 
-        for (i = 0; i < lh_size; i++) {
+        for (i = 0; i <= lh_mask; i++) {
                 lh_lhb = &lh_buckets[i];
 
                 write_lock(&lh_lhb->lhb_rwlock);
@@ -604,39 +603,39 @@ lustre_hash_rehash(lustre_hash_t *lh, int size)
                         key = lh_key(lh, hnode);
                         LASSERT(key);
 
-                        /*
+                        /* 
                          * Validate hnode is in the correct bucket.
                          */
                         if (unlikely(lh->lh_flags & LH_DEBUG))
-                                LASSERT(lh_hash(lh, key, lh_size - 1) == i);
+                                LASSERT(lh_hash(lh, key, lh_mask) == i);
 
-                        /*
+                        /* 
                          * Delete from old hash bucket.
                          */
                         hlist_del(hnode);
                         LASSERT(atomic_read(&lh_lhb->lhb_count) > 0);
                         atomic_dec(&lh_lhb->lhb_count);
 
-                        /*
-                         * Add to rehash bucket, ops->lh_key must be defined.
+                        /* 
+                         * Add to rehash bucket, ops->lh_key must be defined. 
                          */
-                        rehash_lhb = &rehash_buckets[lh_hash(lh, key, size-1)];
+                        rehash_lhb = &rehash_buckets[lh_hash(lh, key, mask)];
                         hlist_add_head(hnode, &(rehash_lhb->lhb_head));
                         atomic_inc(&rehash_lhb->lhb_count);
                 }
-
+  
                 LASSERT(hlist_empty(&(lh_lhb->lhb_head)));
                 LASSERT(atomic_read(&lh_lhb->lhb_count) == 0);
                 write_unlock(&lh_lhb->lhb_rwlock);
         }
-
-        OBD_VFREE(lh_buckets, sizeof(*lh_buckets) * lh_size);
+  
+        OBD_VFREE(lh_buckets, sizeof(*lh_buckets) << lh_bits);
         write_unlock(&lh->lh_rwlock);
-
+  
         RETURN(0);
 }
 EXPORT_SYMBOL(lustre_hash_rehash);
-
+  
 /**
  * Rehash the object referenced by @hnode in the lustre hash @lh.  The
  * @old_key must be provided to locate the objects previous location
@@ -654,26 +653,26 @@ void lustre_hash_rehash_key(lustre_hash_t *lh, void *old_key, void *new_key,
         unsigned               i;
         int                    j;
         ENTRY;
-
+  
         __lustre_hash_key_validate(lh, new_key, hnode);
         LASSERT(!hlist_unhashed(hnode));
-
+  
         read_lock(&lh->lh_rwlock);
-
-        i = lh_hash(lh, old_key, lh->lh_cur_size - 1);
+  
+        i = lh_hash(lh, old_key, lh->lh_cur_mask);
         old_lhb = &lh->lh_buckets[i];
-        LASSERT(i < lh->lh_cur_size);
+        LASSERT(i <= lh->lh_cur_mask);
 
-        j = lh_hash(lh, new_key, lh->lh_cur_size - 1);
+        j = lh_hash(lh, new_key, lh->lh_cur_mask);
         new_lhb = &lh->lh_buckets[j];
-        LASSERT(j < lh->lh_cur_size);
+        LASSERT(j <= lh->lh_cur_mask);
 
         write_lock(&old_lhb->lhb_rwlock);
         write_lock(&new_lhb->lhb_rwlock);
 
-        /*
+        /* 
          * Migrate item between hash buckets without calling
-         * the lh_get() and lh_put() callback functions.
+         * the lh_get() and lh_put() callback functions. 
          */
         hlist_del(hnode);
         LASSERT(atomic_read(&old_lhb->lhb_count) > 0);
@@ -684,11 +683,11 @@ void lustre_hash_rehash_key(lustre_hash_t *lh, void *old_key, void *new_key,
         write_unlock(&new_lhb->lhb_rwlock);
         write_unlock(&old_lhb->lhb_rwlock);
         read_unlock(&lh->lh_rwlock);
-
+  
         EXIT;
 }
 EXPORT_SYMBOL(lustre_hash_rehash_key);
-
+  
 int lustre_hash_debug_header(char *str, int size)
 {
         return snprintf(str, size,
@@ -712,23 +711,26 @@ int lustre_hash_debug_str(lustre_hash_t *lh, char *str, int size)
         read_lock(&lh->lh_rwlock);
         theta = __lustre_hash_theta(lh);
 
-        c += snprintf(str + c, size - c, "%-36s ",lh->lh_name);
-        c += snprintf(str + c, size - c, "%5d ",  lh->lh_cur_size);
-        c += snprintf(str + c, size - c, "%5d ",  lh->lh_min_size);
-        c += snprintf(str + c, size - c, "%5d ",  lh->lh_max_size);
+        c += snprintf(str + c, size - c, "%-36s ", lh->lh_name);
+        c += snprintf(str + c, size - c, "%5d ",  1 << lh->lh_cur_bits);
+        c += snprintf(str + c, size - c, "%5d ",  1 << lh->lh_min_bits);
+        c += snprintf(str + c, size - c, "%5d ",  1 << lh->lh_max_bits);
         c += snprintf(str + c, size - c, "%d.%03d ",
-                      theta / 1000, theta % 1000);
+                      __lustre_hash_theta_int(theta),
+                      __lustre_hash_theta_frac(theta));
         c += snprintf(str + c, size - c, "%d.%03d ",
-                      lh->lh_min_theta / 1000, lh->lh_min_theta % 1000);
+                      __lustre_hash_theta_int(lh->lh_min_theta),
+                      __lustre_hash_theta_frac(lh->lh_min_theta));
         c += snprintf(str + c, size - c, "%d.%03d ",
-                      lh->lh_max_theta / 1000, lh->lh_max_theta % 1000);
+                      __lustre_hash_theta_int(lh->lh_max_theta),
+                      __lustre_hash_theta_frac(lh->lh_max_theta));
         c += snprintf(str + c, size - c, " 0x%02x ", lh->lh_flags);
         c += snprintf(str + c, size - c, "%6d ",
                       atomic_read(&lh->lh_rehash_count));
         c += snprintf(str + c, size - c, "%5d ",
                       atomic_read(&lh->lh_count));
 
-        /*
+        /* 
          * The distribution is a summary of the chained hash depth in
          * each of the lustre hash buckets.  Each buckets lhb_count is
          * divided by the hash theta value and used to generate a
@@ -742,14 +744,14 @@ int lustre_hash_debug_str(lustre_hash_t *lh, char *str, int size)
          * Non-Uniform hash distribution:  128/125/0/0/0/0/2/1
          */
         lh_for_each_bucket(lh, lhb, i)
-                dist[MIN(__fls(atomic_read(&lhb->lhb_count)/MAX(theta,1)),7)]++;
+                dist[min(__fls(atomic_read(&lhb->lhb_count)/max(theta,1)),7)]++;
 
         for (i = 0; i < 8; i++)
                 c += snprintf(str + c, size - c, "%d%c",  dist[i],
                               (i == 7) ? '\n' : '/');
-
+  
         read_unlock(&lh->lh_rwlock);
-
+  
         return c;
 }
 EXPORT_SYMBOL(lustre_hash_debug_str);
