@@ -212,7 +212,6 @@ static void cl_lock_free(const struct lu_env *env, struct cl_lock *lock)
 
         LASSERT(cl_is_lock(lock));
         LINVRNT(!cl_lock_is_mutexed(lock));
-        LINVRNT(!mutex_is_locked(&lock->cll_guard));
 
         ENTRY;
         might_sleep();
