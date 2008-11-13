@@ -911,7 +911,7 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         /* Default priority is toward free space balance */
         lov->lov_qos.lq_prio_free = 232;
 
-        lov->lov_pools_hash_body = lustre_hash_init("POOLS", 128, 128,
+        lov->lov_pools_hash_body = lustre_hash_init("POOLS", 7, 7,
                                                     &pool_hash_operations, 0);
         CFS_INIT_LIST_HEAD(&lov->lov_pool_list);
         lov->lov_pool_count = 0;
