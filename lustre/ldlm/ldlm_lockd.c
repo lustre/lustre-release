@@ -2131,7 +2131,7 @@ int ldlm_init_export(struct obd_export *exp)
 
         exp->exp_lock_hash =
                 lustre_hash_init(obd_uuid2str(&exp->exp_client_uuid),
-                                 128, 65536, &ldlm_export_lock_ops, LH_REHASH);
+                                 7, 16, &ldlm_export_lock_ops, LH_REHASH);
 
         if (!exp->exp_lock_hash)
                 RETURN(-ENOMEM);

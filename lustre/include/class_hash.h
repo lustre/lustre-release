@@ -50,9 +50,10 @@ typedef struct lustre_hash_bucket {
 #define LUSTRE_MAX_HASH_NAME 16
 
 typedef struct lustre_hash {
-        int                         lh_cur_size;    /* current hash size */
-        int                         lh_min_size;    /* min hash size */
-        int                         lh_max_size;    /* max hash size */
+        int                         lh_cur_bits;    /* current hash bits */
+        int                         lh_cur_mask;    /* current hash mask */
+        int                         lh_min_bits;    /* min hash bits */
+        int                         lh_max_bits;    /* max hash bits */
         int                         lh_min_theta;   /* resize min threshold */
         int                         lh_max_theta;   /* resize max threshold */
         int                         lh_flags;       /* hash flags */
@@ -104,8 +105,7 @@ lh_key(lustre_hash_t *lh, struct hlist_node *hnode)
         return NULL;
 }
 
-/**
- * Returns 1 on a match,
+/* Returns 1 on a match,
  * XXX: This would be better if it returned, -1, 0, or 1 for
  *      <, =, > respectivly.  It could then be used to implement
  *      a LH_SORT feature flags which could keep each lustre hash
@@ -164,9 +164,7 @@ lh_exit(lustre_hash_t *lh, struct hlist_node *hnode)
                 return LHP(lh, exit)(hnode);
 }
 
-/** 
- * Validate hnode references the correct key. 
- */
+/* Validate hnode references the correct key */
 static inline void
 __lustre_hash_key_validate(lustre_hash_t *lh, void *key,
                            struct hlist_node *hnode)
@@ -175,9 +173,7 @@ __lustre_hash_key_validate(lustre_hash_t *lh, void *key,
                 LASSERT(lh_compare(lh, key, hnode));
 }
 
-/** 
- * Validate hnode is in the correct bucket. 
- */
+/* Validate hnode is in the correct bucket */
 static inline void
 __lustre_hash_bucket_validate(lustre_hash_t *lh, lustre_hash_bucket_t *lhb,
                               struct hlist_node *hnode)
@@ -185,7 +181,7 @@ __lustre_hash_bucket_validate(lustre_hash_t *lh, lustre_hash_bucket_t *lhb,
         unsigned i;
 
         if (unlikely(lh->lh_flags & LH_DEBUG)) {
-                i = lh_hash(lh, lh_key(lh, hnode), lh->lh_cur_size - 1);
+                i = lh_hash(lh, lh_key(lh, hnode), lh->lh_cur_mask);
                 LASSERT(&lh->lh_buckets[i] == lhb);
         }
 }
@@ -229,17 +225,13 @@ __lustre_hash_bucket_del(lustre_hash_t *lh,
         return lh_put(lh, hnode);
 }
 
-/* 
- * Hash init/cleanup functions. 
- */
-lustre_hash_t *lustre_hash_init(char *name, unsigned int cur_size, 
-                                unsigned int max_size,
+/* Hash init/cleanup functions */
+lustre_hash_t *lustre_hash_init(char *name, unsigned int cur_bits, 
+                                unsigned int max_bits,
                                 lustre_hash_ops_t *ops, int flags);
 void lustre_hash_exit(lustre_hash_t *lh);
 
-/* 
- * Hash addition functions. 
- */
+/* Hash addition functions */
 void lustre_hash_add(lustre_hash_t *lh, void *key,
                      struct hlist_node *hnode);
 int lustre_hash_add_unique(lustre_hash_t *lh, void *key,
@@ -247,15 +239,11 @@ int lustre_hash_add_unique(lustre_hash_t *lh, void *key,
 void *lustre_hash_findadd_unique(lustre_hash_t *lh, void *key,
                                  struct hlist_node *hnode);
 
-/* 
- * Hash deletion functions. 
- */
+/* Hash deletion functions */
 void *lustre_hash_del(lustre_hash_t *lh, void *key, struct hlist_node *hnode);
 void *lustre_hash_del_key(lustre_hash_t *lh, void *key);
 
-/* 
- * Hash lookup/for_each functions.
- */
+/* Hash lookup/for_each functions */
 void *lustre_hash_lookup(lustre_hash_t *lh, void *key);
 typedef void (*lh_for_each_cb)(void *obj, void *data);
 void lustre_hash_for_each(lustre_hash_t *lh, lh_for_each_cb, void *data);
@@ -268,41 +256,48 @@ void lustre_hash_for_each_key(lustre_hash_t *lh, void *key,
  * Rehash - Theta is calculated to be the average chained
  * hash depth assuming a perfectly uniform hash funcion. 
  */
-int lustre_hash_rehash(lustre_hash_t *lh, int size);
+int lustre_hash_rehash(lustre_hash_t *lh, int bits);
 void lustre_hash_rehash_key(lustre_hash_t *lh, void *old_key,
                             void *new_key, struct hlist_node *hnode);
 
 
-static inline int
-__lustre_hash_theta(lustre_hash_t *lh)
+#define LH_THETA_BITS  10
+
+/* Return integer component of theta */
+static inline int __lustre_hash_theta_int(int theta)
 {
-        return ((atomic_read(&lh->lh_count) * 1000) / lh->lh_cur_size);
+        return (theta >> LH_THETA_BITS);
 }
 
-static inline void
-__lustre_hash_set_theta(lustre_hash_t *lh, int min, int max)
+/* Return a fractional value between 0 and 999 */
+static inline int __lustre_hash_theta_frac(int theta)
+{
+        return ((theta * 1000) >> LH_THETA_BITS) - 
+               (__lustre_hash_theta_int(theta) * 1000);
+}
+
+static inline int __lustre_hash_theta(lustre_hash_t *lh)
+{
+        return (atomic_read(&lh->lh_count) << LH_THETA_BITS) >> lh->lh_cur_bits;
+}
+
+static inline void __lustre_hash_set_theta(lustre_hash_t *lh, int min, int max)
 {
         LASSERT(min < max);
         lh->lh_min_theta = min;
         lh->lh_max_theta = max;
 }
 
-/* 
- * Generic debug formatting routines mainly for proc handler. 
- */
+/* Generic debug formatting routines mainly for proc handler */
 int lustre_hash_debug_header(char *str, int size);
 int lustre_hash_debug_str(lustre_hash_t *lh, char *str, int size);
 
-/* 
- * 2^31 + 2^29 - 2^25 + 2^22 - 2^19 - 2^16 + 1 
- */
+/* 2^31 + 2^29 - 2^25 + 2^22 - 2^19 - 2^16 + 1 */
 #define CFS_GOLDEN_RATIO_PRIME_32 0x9e370001UL
-/* 
- * 2^63 + 2^61 - 2^57 + 2^54 - 2^51 - 2^18 + 1 
- */
+/*  2^63 + 2^61 - 2^57 + 2^54 - 2^51 - 2^18 + 1 */
 #define CFS_GOLDEN_RATIO_PRIME_64 0x9e37fffffffc0001ULL
 
-/**
+/*
  * Generic djb2 hash algorithm for character arrays.
  */
 static inline unsigned
@@ -318,7 +313,7 @@ lh_djb2_hash(void *key, size_t size, unsigned mask)
         return (hash & mask);
 }
 
-/**
+/*
  * Generic u32 hash algorithm.
  */
 static inline unsigned
@@ -327,7 +322,7 @@ lh_u32_hash(__u32 key, unsigned mask)
         return ((key * CFS_GOLDEN_RATIO_PRIME_32) & mask);
 }
 
-/**
+/*
  * Generic u64 hash algorithm.
  */
 static inline unsigned
@@ -338,7 +333,7 @@ lh_u64_hash(__u64 key, unsigned mask)
 
 #define lh_for_each_bucket(lh, lhb, pos)         \
         for (pos = 0;                            \
-             pos < lh->lh_cur_size &&            \
+             pos <= lh->lh_cur_mask &&           \
              ({ lhb = &lh->lh_buckets[i]; 1; }); \
              pos++)
 
