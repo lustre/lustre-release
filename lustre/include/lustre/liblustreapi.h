@@ -67,19 +67,20 @@ enum llapi_message_level {
 extern void llapi_msg_set_level(int level);
 extern void llapi_err(int level, char *fmt, ...);
 extern void llapi_printf(int level, char *fmt, ...);
-extern int llapi_file_create(const char *name, unsigned long stripe_size,
+extern int llapi_file_create(const char *name, unsigned long long stripe_size,
                              int stripe_offset, int stripe_count,
                              int stripe_pattern);
 extern int llapi_file_open(const char *name, int flags, int mode,
-                           unsigned long stripe_size, int stripe_offset,
+                           unsigned long long stripe_size, int stripe_offset,
                            int stripe_count, int stripe_pattern);
-extern int llapi_file_create_pool(const char *name, unsigned long stripe_size,
+extern int llapi_file_create_pool(const char *name,
+                                  unsigned long long stripe_size,
                                   int stripe_offset, int stripe_count,
                                   int stripe_pattern, char *pool_name);
 extern int llapi_file_open_pool(const char *name, int flags, int mode,
-                                unsigned long stripe_size, int stripe_offset,
-                                int stripe_count, int stripe_pattern,
-                                char *pool_name);
+                                unsigned long long stripe_size,
+                                int stripe_offset, int stripe_count,
+                                int stripe_pattern, char *pool_name);
 extern int llapi_poollist(char *name);
 extern int llapi_file_get_stripe(const char *path, struct lov_user_md *lum);
 #define HAVE_LLAPI_FILE_LOOKUP
