@@ -176,7 +176,6 @@ SYSIO_INTERFACE_NAME(rename)(const char *oldpath, const char *newpath)
 		I_GONE(new->p_base->pb_ino);
 	new->p_base->pb_ino = old->p_base->pb_ino;
 	old->p_base->pb_ino = NULL;
-	I_REF(new->p_base->pb_ino);
 
 short_out:
 error1:
