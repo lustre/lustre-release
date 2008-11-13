@@ -372,12 +372,6 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
         }
         stripe_count = lov_get_stripecnt(lov, lum.lmm_stripe_count);
 
-        if ((__u64)lum.lmm_stripe_size * stripe_count > ~0U) {
-                CDEBUG(D_IOCTL, "stripe width %ux%u exceeds %u bytes\n",
-                       lum.lmm_stripe_size, (int)lum.lmm_stripe_count, ~0U);
-                RETURN(-EINVAL);
-        }
-
         rc = lov_alloc_memmd(lsmp, stripe_count, lum.lmm_pattern, LOV_MAGIC);
 
         if (rc < 0)

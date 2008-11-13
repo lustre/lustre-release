@@ -302,4 +302,34 @@ static inline void lprocfs_lov_init_vars(struct lprocfs_static_vars *lvars)
 }
 #endif
 
+#if BITS_PER_LONG == 64
+# define ll_do_div64(n,base) ({                                 \
+        uint64_t __base = (base);                               \
+        uint64_t __rem;                                         \
+        __rem = ((uint64_t)(n)) % __base;                       \
+        (n) = ((uint64_t)(n)) / __base;                         \
+        __rem;                                                  \
+  })
+#elif BITS_PER_LONG == 32
+# define ll_do_div64(n,base) ({                                 \
+        uint64_t __rem;                                         \
+        if ((sizeof(base) > 4) && (((base)&0xffffffff00000000ULL) != 0)) { \
+                int __remainder;                                \
+                LASSERTF(!((base) & (LOV_MIN_STRIPE_SIZE - 1)), "64 bit lov "\
+                          "division %llu / %llu\n", (n), (base)); \
+                __remainder = (n) & (LOV_MIN_STRIPE_SIZE - 1);  \
+                (n) >>= LOV_MIN_STRIPE_BITS;                    \
+                (base) >>= LOV_MIN_STRIPE_BITS;                 \
+                __rem = do_div(n, base);                        \
+                __rem <<= LOV_MIN_STRIPE_BITS;                  \
+                __rem += __remainder;                           \
+        } else {                                                \
+                __rem = do_div(n, base);                        \
+        }                                                       \
+        __rem;                                                  \
+  })
+#else
+#error Unsupported architecture.
+#endif
+
 #endif
