@@ -77,14 +77,12 @@ void *inter_module_get(char *arg)
                 return ldlm_namespace_cleanup;
         else if (!strcmp(arg, "ldlm_replay_locks"))
                 return ldlm_replay_locks;
-#ifdef HAVE_QUOTA_LIBLUSTRE_SUPPORT
         else if (!strcmp(arg, "osc_quota_interface"))
                 return &osc_quota_interface;
         else if (!strcmp(arg, "mdc_quota_interface"))
                 return &mdc_quota_interface;
         else if (!strcmp(arg, "lov_quota_interface"))
                 return &lov_quota_interface;
-#endif
         else
                 return NULL;
 }

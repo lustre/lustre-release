@@ -1535,25 +1535,9 @@ AC_DEFUN([LC_QUOTA_MODULE],
 fi
 ])
 
-#
-# LC_CONFIG_QUOTA_LIBLUSTRE
-#
-# whether to enable quota support(liblustre)
-#
-AC_DEFUN([LC_CONFIG_QUOTA_LIBLUSTRE],
-[enable_quota_liblustre='no'
-if test x$enable_quota != xno; then
-	AC_MSG_CHECKING([if compile liblustre with quota])
-	enable_quota_liblustre='yes'
-	AC_DEFINE(HAVE_QUOTA_LIBLUSTRE_SUPPORT, 1, [Enable liblustre quota support])
-	AC_MSG_RESULT([yes])
-fi
-])
-
 AC_DEFUN([LC_QUOTA],
 [#check global
 LC_CONFIG_QUOTA
-LC_CONFIG_QUOTA_LIBLUSTRE
 #check for utils
 AC_CHECK_HEADER(sys/quota.h,
                 [AC_DEFINE(HAVE_SYS_QUOTA_H, 1, [Define to 1 if you have <sys/quota.h>.])],
@@ -1757,7 +1741,6 @@ AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
 AM_CONDITIONAL(SERVER, test x$enable_server = xyes)
 AM_CONDITIONAL(QUOTA, test x$enable_quota_module = xyes)
-AM_CONDITIONAL(QUOTA_LIBLUSTRE, test x$enable_quota_liblustre = xyes)
 AM_CONDITIONAL(BLKID, test x$ac_cv_header_blkid_blkid_h = xyes)
 AM_CONDITIONAL(EXT2FS_DEVEL, test x$ac_cv_header_ext2fs_ext2fs_h = xyes)
 AM_CONDITIONAL(LIBPTHREAD, test x$enable_libpthread = xyes)
