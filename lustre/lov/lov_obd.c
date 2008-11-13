@@ -867,7 +867,6 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         struct lustre_cfg *lcfg = buf;
         struct lov_desc *desc;
         struct lov_obd *lov = &obd->u.lov;
-        int count;
         int rc;
         ENTRY;
 
@@ -897,17 +896,6 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         }
 
         lov_fix_desc(desc);
-
-        /* Because of 64-bit divide/mod operations only work with a 32-bit
-         * divisor in a 32-bit kernel, we cannot support a stripe width
-         * of 4GB or larger on 32-bit CPUs. */
-        count = desc->ld_default_stripe_count;
-        if ((count > 0 ? count : desc->ld_tgt_count) *
-            desc->ld_default_stripe_size > 0xffffffff) {
-                CERROR("LOV: stripe width "LPU64"x%u > 4294967295 bytes\n",
-                       desc->ld_default_stripe_size, count);
-                RETURN(-EINVAL);
-        }
 
         desc->ld_active_tgt_count = 0;
         lov->desc = *desc;
