@@ -24,7 +24,8 @@ sources:
 
 endif
 
-libcfs-all-objs := debug.o nidstrings.o lwt.o module.o tracefile.o watchdog.o
+libcfs-all-objs := debug.o nidstrings.o lwt.o module.o tracefile.o watchdog.o \
+	libcfs_string.o
 
 libcfs-objs := $(libcfs-linux-objs) $(libcfs-all-objs)
 

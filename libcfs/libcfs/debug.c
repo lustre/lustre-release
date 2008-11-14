@@ -127,7 +127,7 @@ int libcfs_panic_in_progress;
 const char *
 libcfs_debug_subsys2str(int subsys)
 {
-        switch (subsys) {
+        switch (1 << subsys) {
         default:
                 return NULL;
         case S_UNDEFINED:
@@ -184,7 +184,7 @@ libcfs_debug_subsys2str(int subsys)
 const char *
 libcfs_debug_dbg2str(int debug)
 {
-        switch (debug) {
+        switch (1 << debug) {
         default:
                 return NULL;
         case D_TRACE:
@@ -253,7 +253,6 @@ libcfs_debug_mask2str(char *str, int size, int mask, int is_subsys)
                                                  libcfs_debug_dbg2str;
         int           len = 0;
         const char   *token;
-        int           bit;
         int           i;
 
         if (mask == 0) {                        /* "0" */
@@ -262,12 +261,10 @@ libcfs_debug_mask2str(char *str, int size, int mask, int is_subsys)
                 len = 1;
         } else {                                /* space-separated tokens */
                 for (i = 0; i < 32; i++) {
-                        bit = 1 << i;
-
-                        if ((mask & bit) == 0)
+                        if ((mask & (1 << i)) == 0)
                                 continue;
 
-                        token = fn(bit);
+                        token = fn(i);
                         if (token == NULL)              /* unused bit */
                                 continue;
 
@@ -296,55 +293,11 @@ libcfs_debug_mask2str(char *str, int size, int mask, int is_subsys)
 }
 
 int
-libcfs_debug_token2mask(int *mask, const char *str, int len, int is_subsys)
+libcfs_debug_str2mask(int *mask, const char *str, int is_subsys)
 {
         const char *(*fn)(int bit) = is_subsys ? libcfs_debug_subsys2str :
                                                  libcfs_debug_dbg2str;
-        int           i;
-        int           j;
-        int           bit;
-        const char   *token;
-
-        /* match against known tokens */
-        for (i = 0; i < 32; i++) {
-                bit = 1 << i;
-
-                token = fn(bit);
-                if (token == NULL)              /* unused? */
-                        continue;
-
-                /* strcasecmp */
-                for (j = 0; ; j++) {
-                        if (j == len) {         /* end of token */
-                                if (token[j] == 0) {
-                                        *mask = bit;
-                                        return 0;
-                                }
-                                break;
-                        }
-
-                        if (token[j] == 0)
-                                break;
-
-                        if (str[j] == token[j])
-                                continue;
-
-                        if (str[j] < 'A' || 'Z' < str[j])
-                                break;
-
-                        if (str[j] - 'A' + 'a' != token[j])
-                                break;
-                }
-        }
-
-        return -EINVAL;                         /* no match */
-}
-
-int
-libcfs_debug_str2mask(int *mask, const char *str, int is_subsys)
-{
         int         m = 0;
-        char        op = 0;
         int         matched;
         int         n;
         int         t;
@@ -362,55 +315,8 @@ libcfs_debug_str2mask(int *mask, const char *str, int is_subsys)
                 return 0;
         }
 
-        /* <str> must be a list of debug tokens or numbers separated by
-         * whitespace and optionally an operator ('+' or '-').  If an operator
-         * appears first in <str>, '*mask' is used as the starting point
-         * (relative), otherwise 0 is used (absolute).  An operator applies to
-         * all following tokens up to the next operator. */
-
-        matched = 0;
-        while (*str != 0) {
-                while (isspace(*str)) /* skip whitespace */
-                        str++;
-
-                if (*str == 0)
-                        break;
-
-                if (*str == '+' || *str == '-') {
-                        op = *str++;
-
-                        /* op on first token == relative */
-                        if (!matched)
-                                m = *mask;
-
-                        while (isspace(*str)) /* skip whitespace */
-                                str++;
-
-                        if (*str == 0)          /* trailing op */
-                                return -EINVAL;
-                }
-
-                /* find token length */
-                for (n = 0; str[n] != 0 && !isspace(str[n]); n++);
-
-                /* match token */
-                if (libcfs_debug_token2mask(&t, str, n, is_subsys) != 0)
-                        return -EINVAL;
-
-                matched = 1;
-                if (op == '-')
-                        m &= ~t;
-                else
-                        m |= t;
-
-                str += n;
-        }
-
-        if (!matched)
-                return -EINVAL;
-
-        *mask = m;
-        return 0;
+        return libcfs_str2mask(str, fn, mask, is_subsys ? 0 : D_CANTMASK,
+                               0xffffffff);
 }
 
 /**
