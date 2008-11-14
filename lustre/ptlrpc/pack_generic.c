@@ -1892,12 +1892,15 @@ void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn)
 void lustre_swab_mdt_rec_reint (struct mdt_rec_reint *rr)
 {
         __swab32s (&rr->rr_opcode);
-        __swab32s (&rr->rr_fsuid);
-        __swab32s (&rr->rr_fsgid);
         __swab32s (&rr->rr_cap);
+        __swab32s (&rr->rr_fsuid);
+        /* rr_fsuid_h is unused */
+        __swab32s (&rr->rr_fsgid);
+        /* rr_fsgid_h is unused */
         __swab32s (&rr->rr_suppgid1);
+        /* rr_suppgid1_h is unused */
         __swab32s (&rr->rr_suppgid2);
-        /* handle is opaque */
+        /* rr_suppgid2_h is unused */
         lustre_swab_lu_fid (&rr->rr_fid1);
         lustre_swab_lu_fid (&rr->rr_fid2);
         __swab64s (&rr->rr_mtime);

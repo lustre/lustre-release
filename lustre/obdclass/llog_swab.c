@@ -154,6 +154,17 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
                 break;
         }
 
+        case MDS_SETATTR64_REC: {
+                struct llog_setattr64_rec *lsr = (struct llog_setattr64_rec *)rec;
+
+                __swab64s(&lsr->lsr_oid);
+                __swab32s(&lsr->lsr_ogen);
+                __swab32s(&lsr->lsr_uid);
+                __swab32s(&lsr->lsr_gid);
+
+                break;
+        }
+
         case OBD_CFG_REC:
         case PTL_CFG_REC:                       /* obsolete */
                 /* these are swabbed as they are consumed */

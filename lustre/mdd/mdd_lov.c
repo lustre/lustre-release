@@ -623,7 +623,7 @@ int mdd_log_op_setattr(struct obd_device *obd, __u32 uid, __u32 gid,
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lov_stripe_md *lsm = NULL;
-        struct llog_setattr_rec *lsr;
+        struct llog_setattr64_rec *lsr;
         struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
@@ -645,7 +645,7 @@ int mdd_log_op_setattr(struct obd_device *obd, __u32 uid, __u32 gid,
 
         /* prepare setattr log record */
         lsr->lsr_hdr.lrh_len = lsr->lsr_tail.lrt_len = sizeof(*lsr);
-        lsr->lsr_hdr.lrh_type = MDS_SETATTR_REC;
+        lsr->lsr_hdr.lrh_type = MDS_SETATTR64_REC;
         lsr->lsr_uid = uid;
         lsr->lsr_gid = gid;
 

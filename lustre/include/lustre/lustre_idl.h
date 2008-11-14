@@ -1190,6 +1190,12 @@ struct mdt_body {
         __u32          max_mdsize;
         __u32          max_cookiesize;
         __u32          padding_4; /* also fix lustre_swab_mdt_body */
+        __u64          padding_5;
+        __u64          padding_6;
+        __u64          padding_7;
+        __u64          padding_8;
+        __u64          padding_9;
+        __u64          padding_10;
 };
 
 struct mds_body {
@@ -1309,11 +1315,15 @@ extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
 
 struct mdt_rec_setattr {
         __u32           sa_opcode;
-        __u32           sa_fsuid;
-        __u32           sa_fsgid;
         __u32           sa_cap;
+        __u32           sa_fsuid;
+        __u32           sa_fsuid_h;
+        __u32           sa_fsgid;
+        __u32           sa_fsgid_h;
         __u32           sa_suppgid;
+        __u32           sa_suppgid_h;
         __u32           sa_padding_1;
+        __u32           sa_padding_1_h;
         struct lu_fid   sa_fid;
         __u64           sa_valid;
         __u32           sa_uid;
@@ -1451,11 +1461,15 @@ extern void lustre_swab_mds_rec_create (struct mds_rec_create *cr);
 
 struct mdt_rec_create {
         __u32           cr_opcode;
-        __u32           cr_fsuid;
-        __u32           cr_fsgid;
         __u32           cr_cap;
+        __u32           cr_fsuid;
+        __u32           cr_fsuid_h;
+        __u32           cr_fsgid;
+        __u32           cr_fsgid_h;
         __u32           cr_suppgid1;
+        __u32           cr_suppgid1_h;
         __u32           cr_suppgid2;
+        __u32           cr_suppgid2_h;
         struct lu_fid   cr_fid1;
         struct lu_fid   cr_fid2;
         struct lustre_handle cr_old_handle; /* u64 handle in case of open replay */
@@ -1493,11 +1507,15 @@ extern void lustre_swab_mds_rec_link (struct mds_rec_link *lk);
 
 struct mdt_rec_link {
         __u32           lk_opcode;
-        __u32           lk_fsuid;
-        __u32           lk_fsgid;
         __u32           lk_cap;
+        __u32           lk_fsuid;
+        __u32           lk_fsuid_h;
+        __u32           lk_fsgid;
+        __u32           lk_fsgid_h;
         __u32           lk_suppgid1;
+        __u32           lk_suppgid1_h;
         __u32           lk_suppgid2;
+        __u32           lk_suppgid2_h;
         struct lu_fid   lk_fid1;
         struct lu_fid   lk_fid2;
         __u64           lk_time;
@@ -1533,11 +1551,15 @@ extern void lustre_swab_mds_rec_unlink (struct mds_rec_unlink *ul);
 
 struct mdt_rec_unlink {
         __u32           ul_opcode;
-        __u32           ul_fsuid;
-        __u32           ul_fsgid;
         __u32           ul_cap;
+        __u32           ul_fsuid;
+        __u32           ul_fsuid_h;
+        __u32           ul_fsgid;
+        __u32           ul_fsgid_h;
         __u32           ul_suppgid1;
+        __u32           ul_suppgid1_h;
         __u32           ul_suppgid2;
+        __u32           ul_suppgid2_h;
         struct lu_fid   ul_fid1;
         struct lu_fid   ul_fid2;
         __u64           ul_time;
@@ -1573,11 +1595,15 @@ extern void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn);
 
 struct mdt_rec_rename {
         __u32           rn_opcode;
-        __u32           rn_fsuid;
-        __u32           rn_fsgid;
         __u32           rn_cap;
+        __u32           rn_fsuid;
+        __u32           rn_fsuid_h;
+        __u32           rn_fsgid;
+        __u32           rn_fsgid_h;
         __u32           rn_suppgid1;
+        __u32           rn_suppgid1_h;
         __u32           rn_suppgid2;
+        __u32           rn_suppgid2_h;
         struct lu_fid   rn_fid1;
         struct lu_fid   rn_fid2;
         __u64           rn_time;
@@ -1595,11 +1621,15 @@ struct mdt_rec_rename {
 
 struct mdt_rec_setxattr {
         __u32           sx_opcode;
-        __u32           sx_fsuid;
-        __u32           sx_fsgid;
         __u32           sx_cap;
+        __u32           sx_fsuid;
+        __u32           sx_fsuid_h;
+        __u32           sx_fsgid;
+        __u32           sx_fsgid_h;
         __u32           sx_suppgid1;
+        __u32           sx_suppgid1_h;
         __u32           sx_suppgid2;
+        __u32           sx_suppgid2_h;
         struct lu_fid   sx_fid;
         __u64           sx_padding_1; /* These three members are lu_fid size */
         __u32           sx_padding_2;
@@ -1619,11 +1649,15 @@ struct mdt_rec_setxattr {
 
 struct mdt_rec_reint {
         __u32           rr_opcode;
-        __u32           rr_fsuid;
-        __u32           rr_fsgid;
         __u32           rr_cap;
+        __u32           rr_fsuid;
+        __u32           rr_fsuid_h;
+        __u32           rr_fsgid;
+        __u32           rr_fsgid_h;
         __u32           rr_suppgid1;
+        __u32           rr_suppgid1_h;
         __u32           rr_suppgid2;
+        __u32           rr_suppgid2_h;
         struct lu_fid   rr_fid1;
         struct lu_fid   rr_fid2;
         __u64           rr_mtime;
@@ -1963,6 +1997,7 @@ typedef enum {
         OST_RAID1_REC    = LLOG_OP_MAGIC | 0x01000,
         MDS_UNLINK_REC   = LLOG_OP_MAGIC | 0x10000 | (MDS_REINT << 8) | REINT_UNLINK,
         MDS_SETATTR_REC  = LLOG_OP_MAGIC | 0x10000 | (MDS_REINT << 8) | REINT_SETATTR,
+        MDS_SETATTR64_REC= LLOG_OP_MAGIC | 0x90000 | (MDS_REINT << 8) | REINT_SETATTR,
         OBD_CFG_REC      = LLOG_OP_MAGIC | 0x20000,
         PTL_CFG_REC      = LLOG_OP_MAGIC | 0x30000, /* obsolete */
         LLOG_GEN_REC     = LLOG_OP_MAGIC | 0x40000,
@@ -2056,6 +2091,18 @@ struct llog_setattr_rec {
         __u32                   lsr_uid;
         __u32                   lsr_gid;
         __u32                   padding;
+        struct llog_rec_tail    lsr_tail;
+} __attribute__((packed));
+
+struct llog_setattr64_rec {
+        struct llog_rec_hdr     lsr_hdr;
+        obd_id                  lsr_oid;
+        obd_count               lsr_ogen;
+        __u32                   padding;
+        __u32                   lsr_uid;
+        __u32                   lsr_uid_h;
+        __u32                   lsr_gid;
+        __u32                   lsr_gid_h;
         struct llog_rec_tail    lsr_tail;
 } __attribute__((packed));
 
