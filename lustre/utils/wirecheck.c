@@ -940,6 +940,22 @@ check_llog_setattr_rec(void)
 }
 
 static void
+check_llog_setattr64_rec(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(llog_setattr64_rec);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_hdr);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_oid);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_ogen);
+        CHECK_MEMBER(llog_setattr64_rec, padding);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_uid);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_uid_h);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_gid);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_gid_h);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_tail);
+}
+
+static void
 check_llog_size_change_rec(void)
 {
         BLANK_LINE();
@@ -1428,6 +1444,7 @@ main(int argc, char **argv)
         check_llog_orphan_rec();
         check_llog_unlink_rec();
         check_llog_setattr_rec();
+        check_llog_setattr64_rec();
         check_llog_size_change_rec();
         check_llog_gen();
         check_llog_gen_rec();
