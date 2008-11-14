@@ -57,7 +57,7 @@ static void mdc_readdir_pack_18(struct ptlrpc_request *req, int offset,
         ENTRY;
 
         CLASSERT(sizeof(struct ll_fid)   == sizeof(struct lu_fid));
-        CLASSERT(sizeof(struct mds_body) == sizeof(struct mdt_body));
+        CLASSERT(sizeof(struct mds_body) <= sizeof(struct mdt_body));
         CLASSERT((int)offsetof(struct mds_body, max_cookiesize) == 
                  (int)offsetof(struct mdt_body, max_cookiesize));
 
