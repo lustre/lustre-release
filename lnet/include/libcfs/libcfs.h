@@ -345,6 +345,16 @@ do {                                                                    \
 
 #include <libcfs/list.h>
 
+/* for_each_possible_cpu is defined newly, the former is
+ * for_each_cpu(eg. sles9 and sles10) b=15878 */
+#ifndef for_each_possible_cpu
+# ifdef for_each_cpu
+#  define for_each_possible_cpu(cpu) for_each_cpu(cpu)
+# else
+#  error for_each_possible_cpu is not supported by kernel!
+# endif
+#endif
+
 struct libcfs_ioctl_data;                       /* forward ref */
 
 struct libcfs_ioctl_handler {
