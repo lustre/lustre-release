@@ -143,7 +143,7 @@ int ptlrpc_connection_init(void)
 {
         ENTRY;
 
-        conn_hash = lustre_hash_init("CONN_HASH", 32, 32768,
+        conn_hash = lustre_hash_init("CONN_HASH", 5, 15,
                                      &conn_hash_ops, LH_REHASH);
         if (!conn_hash)
                 RETURN(-ENOMEM);

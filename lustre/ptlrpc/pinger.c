@@ -485,6 +485,7 @@ static int pinger_check_rpcs(void *arg)
         struct ptlrpc_request *req;
         struct ptlrpc_request_set *set;
         struct list_head *iter;
+        struct obd_import *imp;
         struct pinger_data *pd = &pinger_args;
         int rc;
 
@@ -546,7 +547,7 @@ static int pinger_check_rpcs(void *arg)
                         req->rq_no_resend = 1;
                         ptlrpc_req_set_repsize(req, 1, NULL);
                         req->rq_send_state = LUSTRE_IMP_FULL;
-                        req->rq_phase = RQ_PHASE_RPC;
+                        ptlrpc_rqphase_move(req, RQ_PHASE_RPC);
                         req->rq_import_generation = generation;
                         ptlrpc_set_add_req(set, req);
                 } else {
@@ -592,17 +593,23 @@ do_check_set:
                 if (req->rq_phase == RQ_PHASE_COMPLETE)
                         continue;
 
-                req->rq_phase = RQ_PHASE_COMPLETE;
-                atomic_dec(&req->rq_import->imp_inflight);
-                set->set_remaining--;
-                /* If it was disconnected, don't sweat it. */
-                if (list_empty(&req->rq_import->imp_pinger_chain)) {
-                        ptlrpc_unregister_reply(req);
-                        continue;
-                }
+                CDEBUG(D_RPCTRACE, "Pinger initiate expire request(%p)\n",
+                       req);
 
-                CDEBUG(D_RPCTRACE, "pinger initiate expire_one_request\n");
-                ptlrpc_expire_one_request(req);
+                /* This will also unregister reply. */
+                ptlrpc_expire_one_request(req, 0);
+
+                /* We're done with this req, let's finally move it to complete
+                 * phase and take care of inflights. */
+                ptlrpc_rqphase_move(req, RQ_PHASE_COMPLETE);
+                imp = req->rq_import;
+                spin_lock(&imp->imp_lock);
+                if (!list_empty(&req->rq_list)) {
+                        list_del_init(&req->rq_list);
+                        atomic_dec(&imp->imp_inflight);
+                }
+                spin_unlock(&imp->imp_lock);
+                set->set_remaining--;
         }
         mutex_up(&pinger_sem);
 

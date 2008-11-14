@@ -1090,8 +1090,10 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
         rc = record_attach(obd, llh, mti->mti_svname, LUSTRE_MDS_NAME, 
                            mti->mti_uuid);
         rc = record_setup(obd, llh, mti->mti_svname,
-                          "dev"/*ignored*/, "type"/*ignored*/,
-                          mti->mti_svname, 0/*options*/);
+                          mti->mti_uuid /* Ignored. Compatible with future. */,
+                          "0" /* MDT Index, default to zero. */,
+                          mti->mti_svname,
+                          0 /* options */);
         rc = record_marker(obd, llh, fsdb, CM_END, mti->mti_svname, "add mdt"); 
         rc = record_end_log(obd, &llh);
 

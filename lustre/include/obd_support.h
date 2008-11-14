@@ -233,6 +233,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_LDLM_CLOSE_THREAD       0x313
 #define OBD_FAIL_LDLM_CANCEL_BL_CB_RACE  0x314
 #define OBD_FAIL_LDLM_CP_CB_WAIT         0x315
+#define OBD_FAIL_LDLM_OST_FAIL_RACE      0x316
 
 #define OBD_FAIL_OSC                     0x400
 #define OBD_FAIL_OSC_BRW_READ_BULK       0x401
@@ -263,6 +264,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_PTLRPC_IMP_DEACTIVE     0x50d
 
 #define OBD_FAIL_PTLRPC_DUMP_LOG         0x50e
+#define OBD_FAIL_PTLRPC_LONG_UNLINK      0x50f
 
 #define OBD_FAIL_OBD_PING_NET            0x600
 #define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601
@@ -281,6 +283,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_TGT_TOOMANY_THREADS     0x706
 #define OBD_FAIL_TGT_REPLAY_DROP         0x707
 #define OBD_FAIL_TGT_FAKE_EXP            0x708
+#define OBD_FAIL_TGT_REPLAY_DELAY        0x709
 
 #define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
 #define OBD_FAIL_MDC_ENQUEUE_PAUSE       0x801

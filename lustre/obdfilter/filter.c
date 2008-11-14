@@ -59,10 +59,8 @@
 #include <linux/init.h>
 #include <linux/version.h>
 #include <linux/sched.h>
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-# include <linux/mount.h>
-# include <linux/buffer_head.h>
-#endif
+#include <linux/mount.h>
+#include <linux/buffer_head.h>
 
 #include <obd_class.h>
 #include <obd_lov.h>
@@ -1493,12 +1491,9 @@ int filter_vfs_unlink(struct inode *dir, struct dentry *dentry,
          *       here) or some other ordering issue. */
         DQUOT_INIT(dir);
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         rc = ll_security_inode_unlink(dir, dentry, mnt);
         if (rc)
                 GOTO(out, rc);
-#endif
-
         rc = dir->i_op->unlink(dir, dentry);
 out:
         /* need to drop i_mutex before we lose inode reference */
@@ -1935,7 +1930,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         sema_init(&filter->fo_alloc_lock, 1);
         init_brw_stats(&filter->fo_filter_stats);
         filter->fo_read_cache = 1; /* enable read-only cache by default */
-        filter->fo_writethrough_cache = 0; /* disable writethrough cache */
+        filter->fo_writethrough_cache = 1; /* disable writethrough cache */
         filter->fo_readcache_max_filesize = FILTER_MAX_CACHE_SIZE;
         filter->fo_fmd_max_num = FILTER_FMD_MAX_NUM_DEFAULT;
         filter->fo_fmd_max_age = FILTER_FMD_MAX_AGE_DEFAULT;
@@ -2150,6 +2145,12 @@ static int filter_llog_finish(struct obd_device *obd, int count)
 
         ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
         if (ctxt) {
+                /*
+                 * Make sure that no cached llcds left in recov_thread. We
+                 * actually do sync in disconnect time, but disconnect may
+                 * not come being marked rq_no_resend = 1.
+                 */
+                llog_sync(ctxt, NULL);
                 /*
                  * Balance class_import_get() called in llog_receptor_accept().
                  * This is safe to do here, as llog is already synchronized and
@@ -2572,11 +2573,20 @@ static int filter_disconnect(struct obd_export *exp)
 {
         struct obd_device *obd = exp->exp_obd;
         struct llog_ctxt *ctxt;
-        int rc, err;
+        int rc;
         ENTRY;
 
         LASSERT(exp);
         class_export_get(exp);
+
+        /* Flush any remaining cancel messages out to the target */
+        ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
+        if (ctxt) {
+                if (ctxt->loc_imp == exp->exp_imp_reverse)
+                        CDEBUG(D_RPCTRACE, "Reverse import disconnect\n");
+                llog_sync(ctxt, exp);
+                llog_ctxt_put(ctxt);
+        }
 
         if (!(exp->exp_flags & OBD_OPT_FORCE))
                 filter_grant_sanity_check(obd, __FUNCTION__);
@@ -2588,15 +2598,6 @@ static int filter_disconnect(struct obd_export *exp)
                 ldlm_cancel_locks_for_export(exp);
 
         lprocfs_exp_cleanup(exp);
-
-        /* flush any remaining cancel messages out to the target */
-        ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
-        err = llog_sync(ctxt, exp);
-        llog_ctxt_put(ctxt);
-
-        if (err)
-                CERROR("error flushing logs to MDS: rc %d\n", err);
-
         class_export_put(exp);
         RETURN(rc);
 }
@@ -2709,6 +2710,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         struct llog_cookie *fcc = NULL;
         struct filter_obd *filter;
         int rc, err, locked = 0, sync = 0;
+        loff_t old_size = 0;
         unsigned int ia_valid;
         struct inode *inode;
         struct iattr iattr;
@@ -2732,6 +2734,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         }
 
         if (ia_valid & ATTR_SIZE || ia_valid & (ATTR_UID | ATTR_GID)) {
+                old_size = i_size_read(inode);
                 DQUOT_INIT(inode);
                 LOCK_INODE_MUTEX(inode);
                 locked = 1;
@@ -2821,9 +2824,17 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                 fcc = NULL;
         }
 
+        /* For a partial-page truncate flush the page to disk immediately
+         * to avoid data corruption during direct disk write. b=17397 */
+        if (!sync && (iattr.ia_valid & ATTR_SIZE) &&
+            old_size != iattr.ia_size && (iattr.ia_size & ~CFS_PAGE_MASK)) {
+                err = filemap_fdatawrite_range(inode->i_mapping, iattr.ia_size,
+                                               iattr.ia_size + 1);
+                if (!rc)
+                        rc = err;
+        }
+
         if (locked) {
-                /* truncate can leave dirty pages in the cache.
-                 * we'll take care of them in write path -bzzz */
                 UNLOCK_INODE_MUTEX(inode);
                 locked = 0;
         }
@@ -3636,13 +3647,19 @@ static int filter_sync(struct obd_export *exp, struct obdo *oa,
 
         filter = &exp->exp_obd->u.filter;
 
-        /* an objid of zero is taken to mean "sync whole filesystem" */
+        /* An objid of zero is taken to mean "sync whole filesystem" */
         if (!oa || !(oa->o_valid & OBD_MD_FLID)) {
                 rc = fsfilt_sync(exp->exp_obd, filter->fo_obt.obt_sb);
-                /* flush any remaining cancel messages out to the target */
+
+                /* Flush any remaining cancel messages out to the target */
                 ctxt = llog_get_context(exp->exp_obd, LLOG_MDS_OST_REPL_CTXT);
-                llog_sync(ctxt, exp);
-                llog_ctxt_put(ctxt);
+                if (ctxt) {
+                        llog_sync(ctxt, exp);
+                        llog_ctxt_put(ctxt);
+                } else {
+                        CERROR("No LLOG_MDS_OST_REPL_CTXT found in obd %p\n",
+                               exp->exp_obd);
+                }
                 RETURN(rc);
         }
 
@@ -3816,9 +3833,8 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
                 void *handle;
                 struct super_block *sb = obd->u.obt.obt_sb;
                 struct inode *inode = sb->s_root->d_inode;
-                BDEVNAME_DECLARE_STORAGE(tmp);
                 LCONSOLE_WARN("*** setting obd %s device '%s' read-only ***\n",
-                              obd->obd_name, ll_bdevname(sb, tmp));
+                              obd->obd_name, sb->s_id);
 
                 handle = fsfilt_start(obd, inode, FSFILT_OP_MKNOD, NULL);
                 if (!IS_ERR(handle))

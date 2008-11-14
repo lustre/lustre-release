@@ -1007,7 +1007,8 @@ enum obd_cleanup_stage {
 #define KEY_LAST_ID             "last_id"
 #define KEY_LOCK_TO_STRIPE      "lock_to_stripe"
 #define KEY_CHECKSUM            "checksum"
-#define KEY_READONLY            "readonly"
+#define KEY_READONLY            "read-only"
+#define KEY_READONLY_166COMPAT  "readonly"
 #define KEY_UNLINKED            "unlinked"
 #define KEY_EVICT_BY_NID        "evict_by_nid"
 #define KEY_REGISTER_TARGET     "register_target"
@@ -1234,9 +1235,9 @@ struct lsm_operations {
         int (*lsm_destroy)(struct lov_stripe_md *, struct obdo *oa,
                            struct obd_export *md_exp);
         void (*lsm_stripe_by_index)(struct lov_stripe_md *, int *, obd_off *,
-                                     unsigned long *);
+                                    obd_off *);
         void (*lsm_stripe_by_offset)(struct lov_stripe_md *, int *, obd_off *,
-                                     unsigned long *);
+                                     obd_off *);
         obd_off (*lsm_stripe_offset_by_index)(struct lov_stripe_md *, int);
         obd_off (*lsm_stripe_offset_by_offset)(struct lov_stripe_md *, obd_off);
         int (*lsm_stripe_index_by_offset)(struct lov_stripe_md *, obd_off);

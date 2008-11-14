@@ -52,14 +52,10 @@
 #include <linux/random.h>
 #include <linux/fs.h>
 #include <linux/jbd.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 # include <linux/smp_lock.h>
 # include <linux/buffer_head.h>
 # include <linux/workqueue.h>
 # include <linux/mount.h>
-#else
-# include <linux/locks.h>
-#endif
 
 #include <obd_class.h>
 #include <lustre_dlm.h>
@@ -487,6 +483,7 @@ static int mds_destroy_export(struct obd_export *export)
                  * is_orphan race, mds_mfd_close drops it */
                 MDS_DOWN_WRITE_ORPHAN_SEM(mfd->mfd_dentry->d_inode);
 
+                list_del_init(&mfd->mfd_list);
                 rc = mds_mfd_close(NULL, REQ_REC_OFF, obd, mfd,
                                    !(export->exp_flags & OBD_OPT_FAILOVER),
                                    lmm, lmm_size, logcookies,
@@ -685,12 +682,9 @@ int mds_pack_posix_acl(struct inode *inode, struct lustre_msg *repmsg,
         if (!inode->i_op || !inode->i_op->getxattr)
                 GOTO(out, 0);
 
-        lock_24kernel();
         rc = inode->i_op->getxattr(&de, MDS_XATTR_NAME_ACL_ACCESS,
                                    lustre_msg_buf(repmsg, repoff, buflen),
                                    buflen);
-        unlock_24kernel();
-
         if (rc >= 0)
                 repbody->aclsize = rc;
         else if (rc != -ENODATA) {
@@ -872,11 +866,8 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
 
                 size[bufcount] = 0;
                 if (inode->i_op && inode->i_op->getxattr) {
-                        lock_24kernel();
                         rc = inode->i_op->getxattr(&de, MDS_XATTR_NAME_ACL_ACCESS,
                                                    NULL, 0);
-                        unlock_24kernel();
-
                         if (rc < 0) {
                                 if (rc != -ENODATA) {
                                         CERROR("got acl size: %d\n", rc);
@@ -1391,7 +1382,8 @@ static int mds_set_info_rpc(struct obd_export *exp, struct ptlrpc_request *req)
 
         lustre_msg_set_status(req->rq_repmsg, 0);
 
-        if (KEY_IS(KEY_READONLY)) {
+        /* Accept the broken "read-only" key from 1.6.6 clients. b=17493 */
+        if (KEY_IS(KEY_READONLY) || KEY_IS(KEY_READONLY_166COMPAT)) {
                 if (val == NULL || vallen < sizeof(__u32)) {
                         DEBUG_REQ(D_HA, req, "no set_info val");
                         RETURN(-EFAULT);
@@ -2586,10 +2578,11 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         memcpy(&new_lock->l_remote_handle, &lock->l_remote_handle,
                sizeof(lock->l_remote_handle));
 
-        lustre_hash_add(new_lock->l_export->exp_lock_hash,
-                        &new_lock->l_remote_handle, &new_lock->l_exp_hash);
-
         unlock_res_and_lock(new_lock);
+
+        lustre_hash_add(new_lock->l_export->exp_lock_hash,
+                        &new_lock->l_remote_handle, 
+                        &new_lock->l_exp_hash);
         LDLM_LOCK_PUT(new_lock);
 
         RETURN(ELDLM_LOCK_REPLACED);

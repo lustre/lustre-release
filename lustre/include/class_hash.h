@@ -50,9 +50,10 @@ typedef struct lustre_hash_bucket {
 #define LUSTRE_MAX_HASH_NAME 16
 
 typedef struct lustre_hash {
-        int                         lh_cur_size;    /* current hash size */
-        int                         lh_min_size;    /* min hash size */
-        int                         lh_max_size;    /* max hash size */
+        int                         lh_cur_bits;    /* current hash bits */
+        int                         lh_cur_mask;    /* current hash mask */
+        int                         lh_min_bits;    /* min hash bits */
+        int                         lh_max_bits;    /* max hash bits */
         int                         lh_min_theta;   /* resize min threshold */
         int                         lh_max_theta;   /* resize max threshold */
         int                         lh_flags;       /* hash flags */
@@ -180,7 +181,7 @@ __lustre_hash_bucket_validate(lustre_hash_t *lh, lustre_hash_bucket_t *lhb,
         unsigned i;
 
         if (unlikely(lh->lh_flags & LH_DEBUG)) {
-                i = lh_hash(lh, lh_key(lh, hnode), lh->lh_cur_size - 1);
+                i = lh_hash(lh, lh_key(lh, hnode), lh->lh_cur_mask);
                 LASSERT(&lh->lh_buckets[i] == lhb);
         }
 }
@@ -225,16 +226,16 @@ __lustre_hash_bucket_del(lustre_hash_t *lh,
 }
 
 /* Hash init/cleanup functions */
-lustre_hash_t *lustre_hash_init(char *name, unsigned int cur_size, 
-                                unsigned int max_size,
+lustre_hash_t *lustre_hash_init(char *name, unsigned int cur_bits, 
+                                unsigned int max_bits,
                                 lustre_hash_ops_t *ops, int flags);
 void lustre_hash_exit(lustre_hash_t *lh);
 
 /* Hash addition functions */
 void lustre_hash_add(lustre_hash_t *lh, void *key,
                      struct hlist_node *hnode);
-int  lustre_hash_add_unique(lustre_hash_t *lh, void *key,
-                            struct hlist_node *hnode);
+int lustre_hash_add_unique(lustre_hash_t *lh, void *key,
+                           struct hlist_node *hnode);
 void *lustre_hash_findadd_unique(lustre_hash_t *lh, void *key,
                                  struct hlist_node *hnode);
 
@@ -251,25 +252,40 @@ void lustre_hash_for_each_empty(lustre_hash_t *lh, lh_for_each_cb, void *data);
 void lustre_hash_for_each_key(lustre_hash_t *lh, void *key,
                               lh_for_each_cb, void *data);
 
-/* Rehash - Theta is calculated to be the average chained
- * hash depth assuming a perfectly uniform hash funcion. */
-int lustre_hash_rehash(lustre_hash_t *lh, int size);
+/* 
+ * Rehash - Theta is calculated to be the average chained
+ * hash depth assuming a perfectly uniform hash funcion. 
+ */
+int lustre_hash_rehash(lustre_hash_t *lh, int bits);
 void lustre_hash_rehash_key(lustre_hash_t *lh, void *old_key,
                             void *new_key, struct hlist_node *hnode);
 
 
-static inline int
-__lustre_hash_theta(lustre_hash_t *lh)
+#define LH_THETA_BITS  10
+
+/* Return integer component of theta */
+static inline int __lustre_hash_theta_int(int theta)
 {
-        return ((atomic_read(&lh->lh_count) * 1000) / lh->lh_cur_size);
+        return (theta >> LH_THETA_BITS);
 }
 
-static inline void
-__lustre_hash_set_theta(lustre_hash_t *lh, int min, int max)
+/* Return a fractional value between 0 and 999 */
+static inline int __lustre_hash_theta_frac(int theta)
+{
+        return ((theta * 1000) >> LH_THETA_BITS) - 
+               (__lustre_hash_theta_int(theta) * 1000);
+}
+
+static inline int __lustre_hash_theta(lustre_hash_t *lh)
+{
+        return (atomic_read(&lh->lh_count) << LH_THETA_BITS) >> lh->lh_cur_bits;
+}
+
+static inline void __lustre_hash_set_theta(lustre_hash_t *lh, int min, int max)
 {
         LASSERT(min < max);
         lh->lh_min_theta = min;
-        lh->lh_min_theta = max;
+        lh->lh_max_theta = max;
 }
 
 /* Generic debug formatting routines mainly for proc handler */
@@ -317,7 +333,7 @@ lh_u64_hash(__u64 key, unsigned mask)
 
 #define lh_for_each_bucket(lh, lhb, pos)         \
         for (pos = 0;                            \
-             pos < lh->lh_cur_size &&            \
+             pos <= lh->lh_cur_mask &&           \
              ({ lhb = &lh->lh_buckets[i]; 1; }); \
              pos++)
 

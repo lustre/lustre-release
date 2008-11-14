@@ -122,6 +122,7 @@ struct obd_import {
         cfs_waitq_t               imp_recovery_waitq;
 
         atomic_t                  imp_inflight;
+        atomic_t                  imp_unregistering;
         atomic_t                  imp_replay_inflight;
         atomic_t                  imp_inval_count;
         enum lustre_imp_state     imp_state;
@@ -180,8 +181,8 @@ static inline unsigned int at_est2timeout(unsigned int val)
 
 static inline unsigned int at_timeout2est(unsigned int val)
 {
-        /* restore estimate value from timeout */
-        return ((val - 1) / 5 * 4);
+        /* restore estimate value from timeout: e=4/5(t-5) */
+        return (max((val << 2) / 5, 5U) - 4);
 }
 
 static inline void at_init(struct adaptive_timeout *at, int val, int flags) {

@@ -1,9 +1,9 @@
 tbd Sun Microsystems, Inc.
 	* version 1.8.0
 	* Support for kernels:
-	 2.6.5-7.312 (SLES 9),
+	 2.6.5-7.314 (SLES 9),
 	 2.6.9-67.0.22.EL (RHEL 4),
-	 2.6.16.60-0.27 (SLES 10),
+	 2.6.16.60-0.31 (SLES 10),
 	 2.6.18-92.1.10.el5 (RHEL 5),
 	 2.6.22.14 vanilla (kernel.org)
 	* Client support for unpatched kernels:
@@ -38,28 +38,45 @@ tbd Sun Microsystems, Inc.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
 	* File join has been disabled in this release, refer to Bugzilla 16929.
+	* A new Lustre ADIO driver is available for:
+	  MPICH2-1.0.7
+
+Severity   : enhancement
+Bugzilla   : 17374
+Description: Update to sles9 kernel-2.6.5-7.314.
+
+Severity   : enhancement
+Bugzilla   : 17458
+Description: Update to SLES10 SP2 kernel-2.6.16.60-0.31.
+
+Severity   : normal
+Frequency  : Create a symlink file with a very long name
+Bugzilla   : 16578
+Description: ldlm_cancel_pack()) ASSERTION(max >= dlm->lock_count + count)
+Details    : If there is no extra space in the request for early cancels,
+	     ldlm_req_handles_avail() returns 0 instead of a negative value.
 
 Severity   : major
 Frequency  : rare
 Bugzilla   : 16492
 Description: mds is deadlocked
 Details    : in rare cases, inode in catalog can have i_no less than have parent
-             i_no, this produce wrong order for locking during open, and parallel
-             unlink can be lock open. this need teach mds_open to grab locks in
-             resouce id order, not at parent -> child order.
+	     i_no, this produce wrong order for locking during open, and parallel
+	     unlink can be lock open. this need teach mds_open to grab locks in
+	     resource id order, not at parent -> child order.
 
 Severity   : enhancement
 Bugzilla   : 1819
 Description: Add /proc entry for import status
 Details    : The mdc, osc, and mgc import directories now have
-             an import directory that contains useful import data for debugging
-             connection problems.
+	     an import directory that contains useful import data for debugging
+	     connection problems.
 
 Severity   : enhancement
 Bugzilla   : 15966
 Description: Re-disable certain /proc logging
 Details    : Enable and disable client's offset_stats, extents_stats and
-             extents_stats_per_process stats logging on the fly.
+	     extents_stats_per_process stats logging on the fly.
 
 Severity   : major
 Frequency  : Only on FC kernels 2.6.22+
@@ -176,7 +193,7 @@ Details    : add workaround for get valid ost count for avoid warnings about
 Severity   : enhancement
 Bugzilla   : 15899
 Description: File striping can now be set to use an arbitrary pool of OSTs.
-	
+
 Severity   : enhancement
 Bugzilla   : 16573
 Description: Export bytes_read/bytes_write count on OSC/OST.
@@ -645,9 +662,9 @@ Severity   : major
 Bugzilla   : 14840
 Description: quota recovery deadlock during mds failover
 Details    : This patch includes att18982, att18236, att18237 in bz14840.
-             Slove the problems:
-             1. fix osts hang when mds does failover with quotaon
-             2. prevent watchdog storm when osts threads wait for the
+	     Solve the problems:
+	     1. fix osts hang when mds does failover with quotaon
+	     2. prevent watchdog storm when osts threads wait for the
 	        recovery of mds
 
 Severity   : normal
@@ -658,7 +675,7 @@ Details    : Do not access dchild->d_inode when IS_ERR(dchild) is true.
 Severity   : enhancement
 Bugzilla   : 14095
 Description: Add lustre_start utility to start or stop multiple Lustre servers
-             from a CSV file.
+	     from a CSV file.
 
 Severity   : major
 Bugzilla   : 17024
@@ -683,8 +700,26 @@ Severity   : normal
 Bugzilla   : 16680
 Description: Detect corruption of block bitmap and checking for preallocations
 Details    : Checks validity of on-disk block bitmap. Also it does better
-             checking of number of applied preallocations. When corruption is
-             found, it turns filesystem readonly to prevent further corruptions.
+	     checking of number of applied preallocations. When corruption is
+	     found, it turns filesystem readonly to prevent further corruptions.
+
+Severity   : normal
+Bugzilla   : 16438
+Frequency  : only for big-endian servers
+Description: Check if system is big-endian while mounting fs with extents feature
+Details    : Mounting a filesystem with extents feature will fail on big-endian
+	     systems since ext3-based ldiskfs is not supported on big-endian
+	     systems. This can be over-riden with "bigendian_extents" mount option.
+
+Severity   : normal
+Bugzilla   : 16860
+Description: Excessive recovery window
+Details    : With AT enabled, the recovery window can be excessively long (6000+
+	     seconds). To address this problem, we no longer use
+	     OBD_RECOVERY_FACTOR when extending the recovery window (the connect
+	     timeout no longer depends on the service time, it is set to
+	     INITIAL_CONNECT_TIMEOUT now) and clients report the old service
+	     time via pb_service_time.
 
 -------------------------------------------------------------------------------
 
@@ -1635,8 +1670,8 @@ Severity   : normal
 Bugzilla   : 17197
 Description: (rw.c:1323:ll_read_ahead_pages()) ASSERTION(page_idx > ria->ria_stoff) failed
 Details    : Once the unmatched stride IO mode is detected, shrink the stride-ahead
-	     window to 0. If it does hit cache miss, and read-pattern is still 
-	     stride-io mode, does not reset the stride window, but also does not 
+	     window to 0. If it does hit cache miss, and read-pattern is still
+	     stride-io mode, does not reset the stride window, but also does not
 	     increase the stride window length in this case.
 
 --------------------------------------------------------------------------------

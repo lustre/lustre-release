@@ -476,9 +476,7 @@ static int client_common_fill_super(struct super_block *sb,
         sbi->ll_rootino = rootfid.id;
 
         sb->s_op = &lustre_super_operations;
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         sb->s_export_op = &lustre_export_operations;
-#endif
 
         /* make root inode
          * XXX: move this to after cbd setup? */
@@ -625,27 +623,6 @@ void lustre_dump_dentry(struct dentry *dentry, int recur)
         }
 }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-void lustre_throw_orphan_dentries(struct super_block *sb)
-{
-        struct dentry *dentry, *next;
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-
-        /* Do this to get rid of orphaned dentries. That is not really trw. */
-        list_for_each_entry_safe(dentry, next, &sbi->ll_orphan_dentry_list,
-                                 d_hash) {
-                CWARN("found orphan dentry %.*s (%p->%p) at unmount, dumping "
-                      "before and after shrink_dcache_parent\n",
-                      dentry->d_name.len, dentry->d_name.name, dentry, next);
-                lustre_dump_dentry(dentry, 1);
-                shrink_dcache_parent(dentry);
-                lustre_dump_dentry(dentry, 1);
-        }
-}
-#else
-#define lustre_throw_orphan_dentries(sb)
-#endif
-
 #ifdef HAVE_EXPORT___IGET
 static void prune_dir_dentries(struct inode *inode)
 {
@@ -762,8 +739,6 @@ void client_common_put_super(struct super_block *sb)
         obd_fid_fini(sbi->ll_mdc_exp);
         obd_disconnect(sbi->ll_mdc_exp);
         sbi->ll_mdc_exp = NULL;
-
-        lustre_throw_orphan_dentries(sb);
 
         EXIT;
 }
@@ -1146,6 +1121,7 @@ int ll_fill_super(struct super_block *sb)
         sprintf(ll_instance, "%p", sb);
         cfg.cfg_instance = ll_instance;
         cfg.cfg_uuid = lsi->lsi_llsbi->ll_sb_uuid;
+        cfg.cfg_sb = sb;
 
         /* set up client obds */
         if (strchr(profilenm, '/') != NULL) /* COMPAT_146 */
@@ -1484,13 +1460,8 @@ static int ll_setattr_do_truncate(struct inode *inode, loff_t new_size)
                         local_lock = 1;
         }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        DOWN_WRITE_I_ALLOC_SEM(inode);
-        LOCK_INODE_MUTEX(inode);
-#else
         LOCK_INODE_MUTEX(inode);
         DOWN_WRITE_I_ALLOC_SEM(inode);
-#endif
         if (likely(rc == 0)) {
                 /* Only ll_inode_size_lock is taken at this level.
                  * lov_stripe_lock() is grabbed by ll_truncate() only over
@@ -2023,11 +1994,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                 inode->i_nlink = body->nlink;
 
         if (body->valid & OBD_MD_FLRDEV)
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                inode->i_rdev = body->rdev;
-#else
                 inode->i_rdev = old_decode_dev(body->rdev);
-#endif
         if (body->valid & OBD_MD_FLSIZE) {
 #if 0           /* Can't block ll_test_inode->ll_update_inode, b=14326*/
                 ll_inode_size_lock(inode, 0);
@@ -2045,7 +2012,6 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         EXIT;
 }
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 static struct backing_dev_info ll_backing_dev_info = {
         .ra_pages       = 0,    /* No readahead */
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,12))
@@ -2054,7 +2020,6 @@ static struct backing_dev_info ll_backing_dev_info = {
         .memory_backed  = 0,    /* Does contribute to dirty memory */
 #endif
 };
-#endif
 
 void ll_read_inode2(struct inode *inode, void *opaque)
 {
@@ -2097,16 +2062,10 @@ void ll_read_inode2(struct inode *inode, void *opaque)
                 EXIT;
         } else {
                 inode->i_op = &ll_special_inode_operations;
-
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
                 init_special_inode(inode, inode->i_mode,
                                    kdev_t_to_nr(inode->i_rdev));
-
                 /* initializing backing dev info. */
                 inode->i_mapping->backing_dev_info = &ll_backing_dev_info;
-#else
-                init_special_inode(inode, inode->i_mode, inode->i_rdev);
-#endif
                 EXIT;
         }
 }
@@ -2268,6 +2227,17 @@ int ll_remount_fs(struct super_block *sb, int *flags, char *data)
                 err = obd_set_info_async(sbi->ll_mdc_exp, sizeof(KEY_READONLY),
                                          KEY_READONLY, sizeof(read_only),
                                          &read_only, NULL);
+
+                /* MDS might have expected a different ro key value, b=17493 */
+                if (err == -EINVAL) {
+                        CDEBUG(D_CONFIG, "Retrying remount with 1.6.6 ro key\n");
+                        err = obd_set_info_async(sbi->ll_mdc_exp,
+                                                 sizeof(KEY_READONLY_166COMPAT),
+                                                 KEY_READONLY_166COMPAT,
+                                                 sizeof(read_only),
+                                                 &read_only, NULL);
+                }
+
                 if (err) {
                         CERROR("Failed to change the read-only flag during "
                                "remount: %d\n", err);

@@ -23,7 +23,7 @@ fi
 [ "$DEBUG_OFF" ] || DEBUG_OFF="eval lctl set_param debug=\"$DEBUG_LVL\""
 [ "$DEBUG_ON" ] || DEBUG_ON="eval lctl set_param debug=0x33f0484"
 
-export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL REPLAY_VBR INSANITY SANITY_QUOTA PERFORMANCE_SANITY LARGE_SCALE"
+export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE RACER REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL REPLAY_VBR INSANITY SANITY_QUOTA PERFORMANCE_SANITY LARGE_SCALE"
 
 if [ "$ACC_SM_ONLY" ]; then
     for O in $TESTSUITE_LIST; do
@@ -50,8 +50,20 @@ FORMAT=${FORMAT:-formatall}
 CLEANUP=${CLEANUP:-stopall}
 
 setup_if_needed() {
-    mount | grep $MOUNT && return
+    local MOUNTED=$(mounted_lustre_filesystems)
+    if $(echo $MOUNTED | grep -w -q $MOUNT); then
+        check_config $MOUNT
+        return
+    fi
+
+    echo "Lustre is not mounted, trying to do setup SETUP=$SETUP ... "
     $FORMAT && $SETUP
+
+    MOUNTED=$(mounted_lustre_filesystems)
+    if ! $(echo $MOUNTED | grep -w -q $MOUNT); then
+        echo "Lustre is not mounted after setup! SETUP=$SETUP"
+        exit 1
+    fi
 }
 
 title() {
@@ -253,7 +265,10 @@ for NAME in $CONFIGS; do
 		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
 		[ $SPACE -lt $SIZE ] && SIZE=$((SPACE * 3 / 4))
 		$DEBUG_OFF
-		./fsx -c 50 -p 1000 -P $TMP -l $SIZE \
+		FSX_SEED=${FSX_SEED:-$RANDOM}
+		rm -f $MOUNT/fsxfile
+		$LFS setstripe -c -1 $MOUNT/fsxfile
+		./fsx -c 50 -p 1000 -S $FSX_SEED -P $TMP -l $SIZE \
 			-N $(($COUNT * 100)) $MOUNT/fsxfile
 		$DEBUG_ON
 		$CLEANUP
@@ -269,7 +284,7 @@ for NAME in $CONFIGS; do
 		mount_client $MOUNT2
 		#echo "can't mount2 for '$NAME', skipping sanityN.sh"
 		START=: CLEAN=: bash sanityN.sh
-		umount $MOUNT2
+		[ "$(mount | grep $MOUNT2)" ] && umount $MOUNT2
 
 		$DEBUG_ON
 		$CLEANUP
@@ -309,7 +324,20 @@ for NAME in $CONFIGS; do
 		LIBLUSTRE="done"
 	fi
 
-	$CLEANUP
+	[ "$RACER" != "no" ] && [ -n "$CLIENTS" -a "$PDSH" = "no_dsh" ] && log "Remote client with no_dsh" && RACER=no 
+	if [ "$RACER" != "no" ]; then
+        	title racer
+		setup_if_needed
+		DURATION=${DURATION:-900}
+		[ "$SLOW" = "no" ] && DURATION=300
+		RACERCLIENTS=$HOSTNAME
+		[ ! -z ${CLIENTS} ] && RACERCLIENTS=$CLIENTS
+		log "racer on clients: $RACERCLIENTS DURATION=$DURATION"
+		CLIENTS=${RACERCLIENTS} DURATION=$DURATION bash runracer
+		$CLEANUP
+		$SETUP
+		RACER="done"
+	fi
 done
 
 [ "$REPLAY_SINGLE" != "no" ] && skip_remmds replay-single && REPLAY_SINGLE=no && MSKIPPED=1
@@ -387,7 +415,6 @@ if [ "$LARGE_SCALE" != "no" ]; then
         bash large-scale.sh
         LARGE_SCALE="done"
 fi
-
 
 RC=$?
 title FINISHED

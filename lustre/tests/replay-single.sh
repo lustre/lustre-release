@@ -34,7 +34,7 @@ fi
 
 build_test_filter
 
-cleanup_and_setup_lustre
+check_and_setup_lustre
 
 mkdir -p $DIR
 
@@ -964,18 +964,17 @@ run_test 47 "MDS->OSC failure during precreate cleanup (2824)"
 
 test_48() {
     remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+    [ "$OSTCOUNT" -lt "2" ] && skip "$OSTCOUNT < 2 OSTs -- skipping" && return
 
     replay_barrier mds
     createmany -o $DIR/$tfile 20  || return 1
     # OBD_FAIL_OST_EROFS 0x216
-    fail mds
+    facet_failover mds
     do_facet ost1 "lctl set_param fail_loc=0x80000216"
     df $MOUNT || return 2
 
     createmany -o $DIR/$tfile 20 20 || return 2
     unlinkmany $DIR/$tfile 40 || return 3
-
-    do_facet ost1 "lctl set_param fail_loc=0"
     return 0
 }
 run_test 48 "MDS->OSC failure during precreate cleanup (2824)"
@@ -1847,6 +1846,19 @@ test_71d() {
 run_test 71d "expired exports, server init removes them, conf_param works"
 
 # end vbr exports tests
+
+test_72() { #bug 16711
+    replay_barrier mds
+    multiop_bg_pause $DIR/$tfile O_c || return 4
+    pid=$!
+#define OBD_FAIL_TGT_REPLAY_DELAY 0x709
+    do_facet mds "lctl set_param fail_loc=0x80000709"
+    fail mds
+    kill -USR1 $pid || return 1
+    wait $pid || return 2
+    $CHECKSTAT -t file $DIR/$tfile || return 3
+}
+run_test 72 "target_finish_recovery vs process_recovery_queue race"
 
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre

@@ -1662,11 +1662,6 @@ retry_locks:
         if (rc)
                 GOTO(cleanup, rc);
 
-        if (!(*dchildp)->d_inode)
-                cleanup_phase = 3; /* parent lock */
-        else
-                cleanup_phase = 4; /* child lock */
-
         /* Step 4: Re-lookup child to verify it hasn't changed since locking */
         rc = mds_verify_child(obd, &parent_res_id, parent_lockh, *dparentp,
                               parent_mode, &child_res_id, child_lockh, dchildp,
@@ -1674,17 +1669,12 @@ retry_locks:
         if (rc > 0)
                 goto retry_locks;
         if (rc < 0) {
-                cleanup_phase = 2;
                 GOTO(cleanup, rc);
         }
 
 cleanup:
         if (rc) {
                 switch (cleanup_phase) {
-                case 4:
-                        ldlm_lock_decref(child_lockh, child_mode);
-                case 3:
-                        ldlm_lock_decref(parent_lockh, parent_mode);
                 case 2:
                         l_dput(*dchildp);
                 case 1:
@@ -2013,10 +2003,19 @@ cleanup:
                 struct iattr iattr;
                 int err;
 
+                /* update ctime of unlinked file, even if last link is
+                   removed because open-unlinked file can be statted */
+                iattr.ia_valid = ATTR_CTIME;
+                LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                err = fsfilt_setattr(obd, dchild, handle, &iattr, 0);
+                if (err)
+                        CERROR("error on unlinked inode time update: "
+                               "rc = %d\n", err);
+
+                /* update mtime and ctime of parent directory*/
                 iattr.ia_valid = ATTR_MTIME | ATTR_CTIME;
                 LTIME_S(iattr.ia_mtime) = rec->ur_time;
                 LTIME_S(iattr.ia_ctime) = rec->ur_time;
-
                 err = fsfilt_setattr(obd, dparent, handle, &iattr, 0);
                 if (err)
                         CERROR("error on parent setattr: rc = %d\n", err);
@@ -2190,6 +2189,27 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         UNLOCK_INODE_MUTEX(de_tgt_dir->d_inode);
         if (rc && rc != -EPERM && rc != -EACCES)
                 CERROR("vfs_link error %d\n", rc);
+        if (rc == 0) {
+                struct iattr iattr;
+                int err;
+
+                /* update ctime of old file */
+                iattr.ia_valid = ATTR_CTIME;
+                LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                err = fsfilt_setattr(obd, de_src, handle, &iattr, 0);
+                if (err)
+                        CERROR("error on old inode time update: "
+                               "rc = %d\n", err);
+
+                /* update mtime and ctime of target directory */
+                iattr.ia_valid = ATTR_MTIME | ATTR_CTIME;
+                LTIME_S(iattr.ia_mtime) = rec->ur_time;
+                LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                err = fsfilt_setattr(obd, de_tgt_dir, handle, &iattr, 0);
+                if (err)
+                        CERROR("error on target dir inode time update: "
+                               "rc = %d\n", err);
+        }
 cleanup:
         inodes[0] = de_tgt_dir ? de_tgt_dir->d_inode : NULL;
         inodes[1] = (dchild && !IS_ERR(dchild)) ? dchild->d_inode : NULL;
@@ -2562,12 +2582,10 @@ no_unlink:
         OBD_FAIL_WRITE(obd, OBD_FAIL_MDS_REINT_RENAME_WRITE,
                        de_srcdir->d_inode->i_sb);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
         /* Check if we are moving old entry into its child. 2.6 does not
            check for this in vfs_rename() anymore */
         if (is_subdir(de_new, de_old))
                 GOTO(cleanup, rc = -EINVAL);
-#endif
 
         lmm = lustre_msg_buf(req->rq_repmsg, offset + 1, 0);
         handle = fsfilt_start_log(obd, de_tgtdir->d_inode, FSFILT_OP_RENAME,
@@ -2583,6 +2601,58 @@ no_unlink:
         rc = ll_vfs_rename(de_srcdir->d_inode, de_old, mds->mds_vfsmnt, 
                            de_tgtdir->d_inode, de_new, mds->mds_vfsmnt);
         unlock_kernel();
+
+        if (rc == 0) {
+                struct iattr iattr;
+                int err;
+
+                /* update ctime of renamed file */
+                iattr.ia_valid = ATTR_CTIME;
+                LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                if (S_ISDIR(de_old->d_inode->i_mode) &&
+                    de_srcdir->d_inode != de_tgtdir->d_inode) {
+                        /* cross directory rename of a directory, ".."
+                           changed, update mtime also */
+                        iattr.ia_valid |= ATTR_MTIME;
+                        LTIME_S(iattr.ia_mtime) = rec->ur_time;
+                }
+                err = fsfilt_setattr(obd, de_old, handle, &iattr, 0);
+                if (err)
+                        CERROR("error on old inode time update: "
+                               "rc = %d\n", err);
+
+                if (de_new->d_inode) {
+                        /* target file exists, update its ctime as it
+                           gets unlinked */
+                        iattr.ia_valid = ATTR_CTIME;
+                        LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                        err = fsfilt_setattr(obd, de_new, handle, &iattr, 0);
+                        if (err)
+                                CERROR("error on target inode time update: "
+                                       "rc = %d\n", err);
+                }
+
+                /* update mtime and ctime of old directory */
+                iattr.ia_valid = ATTR_MTIME | ATTR_CTIME;
+                LTIME_S(iattr.ia_mtime) = rec->ur_time;
+                LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                err = fsfilt_setattr(obd, de_srcdir, handle, &iattr, 0); 
+                if (err)
+                        CERROR("error on old dir inode update: "
+                               "rc = %d\n", err);
+
+                if (de_srcdir->d_inode != de_tgtdir->d_inode) {
+                        /* cross directory rename, update
+                           mtime and ctime of new directory */
+                        iattr.ia_valid = ATTR_MTIME | ATTR_CTIME;
+                        LTIME_S(iattr.ia_mtime) = rec->ur_time;
+                        LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                        err = fsfilt_setattr(obd, de_tgtdir, handle, &iattr, 0);
+                        if (err)
+                                CERROR("error on new dir inode time update: "
+                                       "rc = %d\n", err);
+                }
+        }
 
         if (rc == 0 && new_inode != NULL && new_inode->i_nlink == 0) {
                 if (mds_orphan_needed(obd, new_inode))

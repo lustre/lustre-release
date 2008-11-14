@@ -27,12 +27,12 @@ assert_env() {
 
 assert_DIR () {
     local failed=""
-    [ -z "`echo :$DIR: | grep :$MOUNT:`" ] && \
-        failed=1 && echo "DIR not in $MOUNT. Aborting."
-    [ -z "`echo :$DIR1: | grep :$MOUNT1:`" ] && \
-        failed=1 && echo "DIR1 not in $MOUNT1. Aborting."
-    [ -z "`echo :$DIR2: | grep :$MOUNT2:`" ] && \
-        failed=1 && echo "DIR2 not in $MOUNT2. Aborting"
+    [[ $DIR/ = $MOUNT/* ]] || \
+        { failed=1 && echo "DIR=$DIR not in $MOUNT. Aborting."; }
+    [[ $DIR1/ = $MOUNT1/* ]] || \
+        { failed=1 && echo "DIR1=$DIR1 not in $MOUNT1. Aborting."; }
+    [[ $DIR2/ = $MOUNT2/* ]] || \
+        { failed=1 && echo "DIR2=$DIR2 not in $MOUNT2. Aborting"; }
 
     [ -n "$failed" ] && exit 99 || true
 }
@@ -92,6 +92,9 @@ init_test_env() {
     fi
     export MDSRATE=${MDSRATE:-"$LUSTRE/tests/mdsrate"}
     [ ! -f "$MDSRATE" ] && export MDSRATE=$(which mdsrate 2> /dev/null)
+    if ! echo $PATH | grep -q $LUSTRE/test/racer; then
+        export PATH=$PATH:$LUSTRE/tests/racer
+    fi
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     export LFS=${LFS:-"$LUSTRE/utils/lfs"}
     [ ! -f "$LCTL" ] && export LCTL=$(which lctl)
@@ -441,6 +444,13 @@ reboot_facet() {
     fi
 }
 
+boot_node() {
+    local node=$1
+    if [ "$FAILURE_MODE" = HARD ]; then
+       $POWER_UP $node
+    fi
+}
+
 # verify that lustre actually cleaned up properly
 cleanup_check() {
     [ -f $CATASTROPHE ] && [ `cat $CATASTROPHE` -ne 0 ] && \
@@ -518,6 +528,7 @@ wait_exit_ST () {
 
     local WAIT=0
     local INTERVAL=1
+    local running
     # conf-sanity 31 takes a long time cleanup
     while [ $WAIT -lt 300 ]; do
         running=$(do_facet ${facet} "lsmod | grep lnet > /dev/null && lctl dl | grep ' ST '") || true
@@ -541,8 +552,8 @@ wait_remote_prog () {
    [ "$PDSH" = "no_dsh" ] && return 0
 
    while [ $WAIT -lt $2 ]; do
-        running=$(ps uax | grep "$PDSH.*$prog.*$MOUNT" | grep -v grep)
-        [ -z "${running}" ] && return 0
+        running=$(ps uax | grep "$PDSH.*$prog.*$MOUNT" | grep -v grep) || true
+        [ -z "${running}" ] && return 0 || true
         echo "waited $WAIT for: "
         echo "$running"
         [ $INTERVAL -lt 60 ] && INTERVAL=$((INTERVAL + INTERVAL))
@@ -724,6 +735,8 @@ declare -fx h2o2ib
 
 facet_host() {
     local facet=$1
+
+    [ "$facet" == client ] && echo -n $HOSTNAME && return
     varname=${facet}_HOST
     if [ -z "${!varname}" ]; then
         if [ "${facet:0:3}" == "ost" ]; then
@@ -1028,15 +1041,28 @@ init_facets_vars () {
     done
 }
 
+check_config () {
+    local mntpt=$1
+    
+    echo Checking config lustre mounted on $mntpt
+    local mgshost=$(mount | grep " $mntpt " | awk -F@ '{print $1}')
+    if [ "$mgshost" != "$mgs_HOST" ]; then
+        FAIL_ON_ERROR=true \
+            error "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST
+                   Please use correct config or set mds_HOST correctly!"
+    fi
+}
+
 check_and_setup_lustre() {
-    MOUNTED="`mounted_lustre_filesystems`"
-    if [ -z "$MOUNTED" ]; then
+    local MOUNTED=$(mounted_lustre_filesystems)
+    if [ -z "$MOUNTED" ] || ! $(echo $MOUNTED | grep -w -q $MOUNT); then
         [ "$REFORMAT" ] && formatall
         setupall
-        MOUNTED="`mounted_lustre_filesystems`"
+        MOUNTED=$(mounted_lustre_filesystems | head -1)
         [ -z "$MOUNTED" ] && error "NAME=$NAME not mounted"
         export I_MOUNTED=yes
     else
+        check_config $MOUNT
         init_facets_vars
     fi
     if [ "$ONLY" == "setup" ]; then
@@ -1577,9 +1603,14 @@ osc_to_ost()
     echo $ost
 }
 
+remote_node () {
+    local node=$1
+    [ "$node" != "$(hostname)" ]
+}
+
 remote_mds ()
 {
-    [ "$mds_HOST" != "$(hostname)" ]
+    remote_node $mds_HOST
 }
 
 remote_mds_nodsh()
@@ -1589,7 +1620,11 @@ remote_mds_nodsh()
 
 remote_ost ()
 {
-    [ "$ost_HOST" != "$(hostname)" ]
+    local node
+    for node in $(osts_nodes) ; do
+        remote_node $node && return 0
+    done
+    return 1
 }
 
 remote_ost_nodsh()
@@ -1732,7 +1767,10 @@ multiop_bg_pause() {
     $MULTIOP_PROG $FILE v$ARGS > $TMPPIPE &
 
     echo "TMPPIPE=${TMPPIPE}"
-    read -t 60 multiop_output < $TMPPIPE
+    local multiop_output
+    local multiop_pid
+
+    read -t 60 multiop_output multiop_pid < $TMPPIPE
     if [ $? -ne 0 ]; then
         rm -f $TMPPIPE
         return 1
@@ -1744,6 +1782,7 @@ multiop_bg_pause() {
         return 1
     fi
 
+    echo $multiop_pid
     return 0
 }
 

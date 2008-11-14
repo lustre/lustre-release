@@ -85,6 +85,7 @@ int tracefile_init_arch()
 
 	/* arch related info initialized */
 	tcd_for_each(tcd, i, j) {
+		spin_lock_init(&tcd->tcd_lock);
 		tcd->tcd_pages_factor = pages_factor[i];
 		tcd->tcd_type = i;
 		tcd->tcd_cpu = j;
@@ -173,39 +174,44 @@ trace_put_console_buffer(char *buffer)
 struct trace_cpu_data *
 trace_get_tcd(void)
 {
+	struct trace_cpu_data *tcd;
 	int cpu;
 
 	cpu = get_cpu();
 	if (in_irq())
-		return &(*trace_data[TCD_TYPE_IRQ])[cpu].tcd;
+		tcd = &(*trace_data[TCD_TYPE_IRQ])[cpu].tcd;
 	else if (in_softirq())
-		return &(*trace_data[TCD_TYPE_SOFTIRQ])[cpu].tcd;
-	return &(*trace_data[TCD_TYPE_PROC])[cpu].tcd;
+		tcd = &(*trace_data[TCD_TYPE_SOFTIRQ])[cpu].tcd;
+	else
+		tcd = &(*trace_data[TCD_TYPE_PROC])[cpu].tcd;
+
+	trace_lock_tcd(tcd);
+
+	return tcd;
 }
 
 void
 trace_put_tcd (struct trace_cpu_data *tcd)
 {
+	trace_unlock_tcd(tcd);
+
 	put_cpu();
 }
 
 int trace_lock_tcd(struct trace_cpu_data *tcd)
 {
 	__LASSERT(tcd->tcd_type < TCD_TYPE_MAX);
-	if (tcd->tcd_type == TCD_TYPE_IRQ)
-		local_irq_disable();
-	else if (tcd->tcd_type == TCD_TYPE_SOFTIRQ)
-		local_bh_disable();
+
+	spin_lock_irqsave(&tcd->tcd_lock, tcd->tcd_lock_flags);
+
 	return 1;
 }
 
 void trace_unlock_tcd(struct trace_cpu_data *tcd)
 {
 	__LASSERT(tcd->tcd_type < TCD_TYPE_MAX);
-	if (tcd->tcd_type == TCD_TYPE_IRQ)
-		local_irq_enable();
-	else if (tcd->tcd_type == TCD_TYPE_SOFTIRQ)
-		local_bh_enable();
+
+	spin_unlock_irqrestore(&tcd->tcd_lock, tcd->tcd_lock_flags);
 }
 
 int tcd_owns_tage(struct trace_cpu_data *tcd, struct trace_page *tage)
@@ -276,27 +282,4 @@ int trace_max_debug_mb(void)
 	int  total_mb = (num_physpages >> (20 - CFS_PAGE_SHIFT));
 	
 	return MAX(512, (total_mb * 80)/100);
-}
-
-void
-trace_call_on_all_cpus(void (*fn)(void *arg), void *arg)
-{
-        cpumask_t cpus_allowed = current->cpus_allowed;
-	/* use cpus_allowed to quiet 2.4 UP kernel warning only */
-        cpumask_t m = cpus_allowed;
-        int       cpu;
-
-	/* Run the given routine on every CPU in thread context */
-        for (cpu = 0; cpu < num_possible_cpus(); cpu++) {
-                if (!cpu_online(cpu))
-			continue;
-
-		cpus_clear(m);
-		cpu_set(cpu, m);
-		set_cpus_allowed(current, m);
-
-		fn(arg);
-
-		set_cpus_allowed(current, cpus_allowed);
-        }
 }

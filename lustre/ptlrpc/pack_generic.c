@@ -2659,7 +2659,7 @@ void _debug_req(struct ptlrpc_request *req, __u32 mask,
                 (char *)req->rq_export->exp_connection->c_remote_uuid.uuid :
                 "<?>", req->rq_request_portal,  req->rq_reply_portal,
                 req->rq_reqlen, req->rq_replen,
-                req->rq_early_count, req->rq_timeout, req->rq_deadline,
+                req->rq_early_count, !!req->rq_timeout, req->rq_deadline,
                 atomic_read(&req->rq_refcount), DEBUG_REQ_FLAGS(req),
                 req_fl, rep_fl, req->rq_status, rep_status);
         va_end(args);

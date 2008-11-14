@@ -1073,7 +1073,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                 goto put_rpc_export;
         }
 
-        request->rq_phase = RQ_PHASE_INTERPRET;
+        ptlrpc_rqphase_move(request, RQ_PHASE_INTERPRET);
 
         CDEBUG(D_RPCTRACE, "Handling RPC pname:cluuid+ref:pid:xid:nid:opc "
                "%s:%s+%d:%d:x"LPU64":%s:%d\n", cfs_curproc_comm(),
@@ -1089,7 +1089,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
 
         rc = svc->srv_handler(request);
 
-        request->rq_phase = RQ_PHASE_COMPLETE;
+        ptlrpc_rqphase_move(request, RQ_PHASE_COMPLETE);
 
         CDEBUG(D_RPCTRACE, "Handled RPC pname:cluuid+ref:pid:xid:nid:opc "
                "%s:%s+%d:%d:x"LPU64":%s:%d\n", cfs_curproc_comm(),

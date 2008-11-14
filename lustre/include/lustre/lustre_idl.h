@@ -777,55 +777,67 @@ enum {
 
 typedef __u64 seqno_t;
 
-struct lu_range {
-        __u64 lr_start;
-        __u64 lr_end;
+/**
+ * Describes a range of sequence, lsr_start is included but lsr_end is
+ * not in the range.
+ */
+struct lu_seq_range {
+        __u64 lsr_start;
+        __u64 lsr_end;
+        /** this feild is not used in 1.8 client interop */
+        __u32 lsr_mdt;
+        __u32 lsr_padding;
 };
 
-static inline __u64 range_space(struct lu_range *r)
+/**
+ * returns  width of given range \a r
+ */
+
+static inline __u64 range_space(const struct lu_seq_range *r)
 {
-        return r->lr_end - r->lr_start;
+        return r->lsr_end - r->lsr_start;
 }
 
-static inline void range_zero(struct lu_range *r)
+/**
+ * initialize range to zero
+ */
+static inline void range_init(struct lu_seq_range *r)
 {
-        r->lr_start = r->lr_end = 0;
+        r->lsr_start = r->lsr_end = 0;
 }
 
-static inline int range_within(struct lu_range *r,
+/**
+ * check if given seq id \a s is within given range \a r
+ */
+static inline int range_within(const struct lu_seq_range *r,
                                __u64 s)
 {
-        return s >= r->lr_start && s < r->lr_end;
+        return s >= r->lsr_start && s < r->lsr_end;
 }
 
-static inline void range_alloc(struct lu_range *r,
-                               struct lu_range *s,
-                               __u64 w)
+/**
+ * sanity check for range \a r
+ */
+static inline int range_is_sane(const struct lu_seq_range *r)
 {
-        r->lr_start = s->lr_start;
-        r->lr_end = s->lr_start + w;
-        s->lr_start += w;
-}
-static inline int range_is_sane(struct lu_range *r)
-{
-        return (r->lr_end >= r->lr_start);
+        return (r->lsr_end >= r->lsr_start);
 }
 
-static inline int range_is_zero(struct lu_range *r)
+static inline int range_is_zero(struct lu_seq_range *r)
 {
-        return (r->lr_start == 0 && r->lr_end == 0);
+        return (r->lsr_start == 0 && r->lsr_end == 0);
 }
 
-static inline int range_is_exhausted(struct lu_range *r)
+static inline int range_is_exhausted(const struct lu_seq_range *r)
 {
         return range_space(r) == 0;
 }
 
-#define DRANGE "[%#16.16"LPF64"x-%#16.16"LPF64"x]"
+#define DRANGE "[%#16.16"LPF64"x-%#16.16"LPF64"x)"
 
 #define PRANGE(range)      \
-        (range)->lr_start, \
-        (range)->lr_end
+        (range)->lsr_start, \
+        (range)->lsr_end
 
 enum {
         /*
@@ -849,7 +861,7 @@ struct lu_client_seq {
          * on clients, this contains meta-sequence range. And for servers this
          * contains super-sequence range.
          */
-        struct lu_range         lcs_space;
+        struct lu_seq_range         lcs_space;
 
         /* This holds last allocated fid in last obtained seq */
         struct lu_fid           lcs_fid;
@@ -1037,6 +1049,16 @@ static inline int ll_inode_to_ext_flags(int iflags, int keep)
 }
 #endif
 
+/*
+ * while mds_body is to interact with 1.6, mdt_body is to interact with 2.0.
+ * both of them should have the same fields layout, because at client side
+ * one could be dynamically cast to the other.
+ *
+ * mdt_body has large size than mds_body, with unused padding (48 bytes)
+ * at the end. client always use size of mdt_body to prepare request/reply
+ * buffers, and actual data could be interepeted as mdt_body or mds_body
+ * accordingly.
+ */
 struct mds_body {
         struct ll_fid  fid1;
         struct ll_fid  fid2;
@@ -1069,9 +1091,6 @@ struct mds_body {
 
 extern void lustre_swab_mds_body (struct mds_body *b);
 
-/* struct mdt_body is only used for size checking.
- * mdt_body & mds_body should have the same size.
- */
 struct mdt_body {
         struct lu_fid  fid1;
         struct lu_fid  fid2;
@@ -1100,6 +1119,12 @@ struct mdt_body {
         __u32          max_mdsize;
         __u32          max_cookiesize;
         __u32          padding_4; /* also fix lustre_swab_mdt_body */
+        __u64          padding_5;
+        __u64          padding_6;
+        __u64          padding_7;
+        __u64          padding_8;
+        __u64          padding_9;
+        __u64          padding_10;
 };
 
 #define Q_QUOTACHECK    0x800100
@@ -1241,11 +1266,15 @@ extern void lustre_swab_mds_rec_create (struct mds_rec_create *cr);
 
 struct mdt_rec_create {
         __u32           cr_opcode;
-        __u32           cr_fsuid;
-        __u32           cr_fsgid;
         __u32           cr_cap;
+        __u32           cr_fsuid;
+        __u32           cr_fsuid_h;
+        __u32           cr_fsgid;
+        __u32           cr_fsgid_h;
         __u32           cr_suppgid1;
+        __u32           cr_suppgid1_h;
         __u32           cr_suppgid2;
+        __u32           cr_suppgid2_h;
         struct lu_fid   cr_fid1;
         struct lu_fid   cr_fid2;
         struct lustre_handle cr_old_handle; /* handle in case of open replay */
@@ -1301,11 +1330,15 @@ extern void lustre_swab_mds_rec_link (struct mds_rec_link *lk);
 
 struct mdt_rec_link {
         __u32           lk_opcode;
-        __u32           lk_fsuid;
-        __u32           lk_fsgid;
         __u32           lk_cap;
+        __u32           lk_fsuid;
+        __u32           lk_fsuid_h;
+        __u32           lk_fsgid;
+        __u32           lk_fsgid_h;
         __u32           lk_suppgid1;
+        __u32           lk_suppgid1_h;
         __u32           lk_suppgid2;
+        __u32           lk_suppgid2_h;
         struct lu_fid   lk_fid1;
         struct lu_fid   lk_fid2;
         __u64           lk_time;
@@ -1341,11 +1374,15 @@ extern void lustre_swab_mds_rec_unlink (struct mds_rec_unlink *ul);
 
 struct mdt_rec_unlink {
         __u32           ul_opcode;
-        __u32           ul_fsuid;
-        __u32           ul_fsgid;
         __u32           ul_cap;
+        __u32           ul_fsuid;
+        __u32           ul_fsuid_h;
+        __u32           ul_fsgid;
+        __u32           ul_fsgid_h;
         __u32           ul_suppgid1;
+        __u32           ul_suppgid1_h;
         __u32           ul_padding2;
+        __u32           ul_padding2_h;
         struct lu_fid   ul_fid1;
         struct lu_fid   ul_fid2;
         __u64           ul_time;
@@ -1381,11 +1418,15 @@ extern void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn);
 
 struct mdt_rec_rename {
         __u32           rn_opcode;
-        __u32           rn_fsuid;
-        __u32           rn_fsgid;
         __u32           rn_cap;
+        __u32           rn_fsuid;
+        __u32           rn_fsuid_h;
+        __u32           rn_fsgid;
+        __u32           rn_fsgid_h;
         __u32           rn_suppgid1;
+        __u32           rn_suppgid1_h;
         __u32           rn_suppgid2;
+        __u32           rn_suppgid2_h;
         struct lu_fid   rn_fid1;
         struct lu_fid   rn_fid2;
         __u64           rn_time;
@@ -1403,11 +1444,15 @@ struct mdt_rec_rename {
 
 struct mdt_rec_setattr {
         __u32           sa_opcode;
-        __u32           sa_fsuid;
-        __u32           sa_fsgid;
         __u32           sa_cap;
+        __u32           sa_fsuid;
+        __u32           sa_fsuid_h;
+        __u32           sa_fsgid;
+        __u32           sa_fsgid_h;
         __u32           sa_suppgid;
+        __u32           sa_suppgid_h;
         __u32           sa_padding_1;
+        __u32           sa_padding_1_h;
         struct lu_fid   sa_fid;
         __u64           sa_valid;
         __u32           sa_uid;
@@ -1427,11 +1472,15 @@ struct mdt_rec_setattr {
 
 struct mdt_rec_setxattr {
         __u32           sx_opcode;
-        __u32           sx_fsuid;
-        __u32           sx_fsgid;
         __u32           sx_cap;
+        __u32           sx_fsuid;
+        __u32           sx_fsuid_h;
+        __u32           sx_fsgid;
+        __u32           sx_fsgid_h;
         __u32           sx_suppgid1;
+        __u32           sx_suppgid1_h;
         __u32           sx_suppgid2;
+        __u32           sx_suppgid2_h;
         struct lu_fid   sx_fid;
         __u64           sx_padding_1; /* These three members are lu_fid size */
         __u32           sx_padding_2;
@@ -1474,7 +1523,8 @@ struct lustre_capa {
  *  LOV data structures
  */
 
-#define LOV_MIN_STRIPE_SIZE 65536   /* maximum PAGE_SIZE (ia64), power of 2 */
+#define LOV_MIN_STRIPE_BITS 16   /* maximum PAGE_SIZE (ia64), power of 2 */
+#define LOV_MIN_STRIPE_SIZE (1<<LOV_MIN_STRIPE_BITS)
 #define LOV_MAX_STRIPE_COUNT  160   /* until bug 4424 is fixed */
 #define LOV_V1_INSANE_STRIPE_COUNT 65532 /* maximum stripe count bz13933 */
 
@@ -1760,6 +1810,7 @@ typedef enum {
         OST_RAID1_REC    = LLOG_OP_MAGIC | 0x01000,
         MDS_UNLINK_REC   = LLOG_OP_MAGIC | 0x10000 | (MDS_REINT << 8) | REINT_UNLINK,
         MDS_SETATTR_REC  = LLOG_OP_MAGIC | 0x10000 | (MDS_REINT << 8) | REINT_SETATTR,
+        MDS_SETATTR64_REC= LLOG_OP_MAGIC | 0x90000 | (MDS_REINT << 8) | REINT_SETATTR,
         OBD_CFG_REC      = LLOG_OP_MAGIC | 0x20000,
         PTL_CFG_REC      = LLOG_OP_MAGIC | 0x30000, /* obsolete */
         LLOG_GEN_REC     = LLOG_OP_MAGIC | 0x40000,
@@ -1852,6 +1903,18 @@ struct llog_setattr_rec {
         __u32                   lsr_uid;
         __u32                   lsr_gid;
         __u32                   padding;
+        struct llog_rec_tail    lsr_tail;
+} __attribute__((packed));
+
+struct llog_setattr64_rec {
+        struct llog_rec_hdr     lsr_hdr;
+        obd_id                  lsr_oid;
+        obd_count               lsr_ogen;
+        __u32                   padding;
+        __u32                   lsr_uid;
+        __u32                   lsr_uid_h;
+        __u32                   lsr_gid;
+        __u32                   lsr_gid_h;
         struct llog_rec_tail    lsr_tail;
 } __attribute__((packed));
 
@@ -2096,12 +2159,6 @@ typedef enum {
 } quota_cmd_t;
 #define QUOTA_FIRST_OPC QUOTA_DQACQ
 
-
-enum fld_rpc_opc {
-        FLD_QUERY                       = 600,
-        FLD_LAST_OPC,
-        FLD_FIRST_OPC                   = FLD_QUERY
-};
 
 enum seq_rpc_opc {
         SEQ_QUERY                       = 700,

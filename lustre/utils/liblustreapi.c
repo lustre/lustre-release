@@ -219,7 +219,7 @@ int parse_size(char *optarg, unsigned long long *size,
         return 0;
 }
 
-int llapi_stripe_limit_check(unsigned long stripe_size, int stripe_offset,
+int llapi_stripe_limit_check(unsigned long long stripe_size, int stripe_offset,
                              int stripe_count, int stripe_pattern)
 {
         int page_size;
@@ -253,11 +253,10 @@ int llapi_stripe_limit_check(unsigned long stripe_size, int stripe_offset,
                           stripe_count);
                 return -EINVAL;
         }
-        if (stripe_count > 0 && (__u64)stripe_size * stripe_count > 0xffffffff){
+        if (stripe_size >= (1ULL << 32)) {
                 errno = -EINVAL;
-                llapi_err(LLAPI_MSG_ERROR, "error: stripe_size %lu * "
-                          "stripe_count %u exceeds 4GB", stripe_size, 
-                          stripe_count);
+                llapi_err(LLAPI_MSG_ERROR, "warning: stripe size larger than 4G"
+                          " is not currently supported and would wrap");
                 return -EINVAL;
         }
         return 0;
@@ -266,7 +265,7 @@ int llapi_stripe_limit_check(unsigned long stripe_size, int stripe_offset,
 static int poolpath(char *fsname, char *pathname, char *pool_pathname);
 
 int llapi_file_open_pool(const char *name, int flags, int mode,
-                         unsigned long stripe_size, int stripe_offset,
+                         unsigned long long stripe_size, int stripe_offset,
                          int stripe_count, int stripe_pattern, char *pool_name)
 {
         struct lov_user_md_v3 lum = { 0 };
@@ -337,7 +336,7 @@ out:
 }
 
 int llapi_file_open(const char *name, int flags, int mode,
-                    unsigned long stripe_size, int stripe_offset,
+                    unsigned long long stripe_size, int stripe_offset,
                     int stripe_count, int stripe_pattern)
 {
         return llapi_file_open_pool(name, flags, mode, stripe_size,
@@ -345,7 +344,7 @@ int llapi_file_open(const char *name, int flags, int mode,
                                     stripe_pattern, NULL);
 }
 
-int llapi_file_create(const char *name, unsigned long stripe_size,
+int llapi_file_create(const char *name, unsigned long long stripe_size,
                       int stripe_offset, int stripe_count, int stripe_pattern)
 {
         int fd;
@@ -360,7 +359,7 @@ int llapi_file_create(const char *name, unsigned long stripe_size,
         return 0;
 }
 
-int llapi_file_create_pool(const char *name, unsigned long stripe_size,
+int llapi_file_create_pool(const char *name, unsigned long long stripe_size,
                            int stripe_offset, int stripe_count,
                            int stripe_pattern, char *pool_name)
 {

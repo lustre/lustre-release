@@ -867,7 +867,6 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         struct lustre_cfg *lcfg = buf;
         struct lov_desc *desc;
         struct lov_obd *lov = &obd->u.lov;
-        int count;
         int rc;
         ENTRY;
 
@@ -898,17 +897,6 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
 
         lov_fix_desc(desc);
 
-        /* Because of 64-bit divide/mod operations only work with a 32-bit
-         * divisor in a 32-bit kernel, we cannot support a stripe width
-         * of 4GB or larger on 32-bit CPUs. */
-        count = desc->ld_default_stripe_count;
-        if ((count > 0 ? count : desc->ld_tgt_count) *
-            desc->ld_default_stripe_size > 0xffffffff) {
-                CERROR("LOV: stripe width "LPU64"x%u > 4294967295 bytes\n",
-                       desc->ld_default_stripe_size, count);
-                RETURN(-EINVAL);
-        }
-
         desc->ld_active_tgt_count = 0;
         lov->desc = *desc;
         lov->lov_tgt_size = 0;
@@ -923,7 +911,7 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         /* Default priority is toward free space balance */
         lov->lov_qos.lq_prio_free = 232;
 
-        lov->lov_pools_hash_body = lustre_hash_init("POOLS", 128, 128,
+        lov->lov_pools_hash_body = lustre_hash_init("POOLS", 7, 7,
                                                     &pool_hash_operations, 0);
         CFS_INIT_LIST_HEAD(&lov->lov_pool_list);
         lov->lov_pool_count = 0;

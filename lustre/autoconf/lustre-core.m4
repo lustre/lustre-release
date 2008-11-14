@@ -240,9 +240,6 @@ LB_LINUX_TRY_COMPILE([
 	#include <linux/fs.h>
 	#include <linux/version.h>
 ],[
-	#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,24))
-	#error "down_read_trylock broken before 2.4.24"
-	#endif
 	struct inode i;
 	return (char *)&i.i_alloc_sem - (char *)&i;
 ],[
@@ -1217,7 +1214,12 @@ AC_DEFINE(HAVE___D_MOVE, 1,
 ])
 ])
 
-
+#
+# LC_EXPORT_INVALIDATE_MAPPING_PAGES
+#
+# SLES9, RHEL4, RHEL5, vanilla 2.6.24 export invalidate_mapping_pages() but
+# SLES10 2.6.16 does not, for some reason.  For filter cache invalidation.
+#
 AC_DEFUN([LC_EXPORT_INVALIDATE_MAPPING_PAGES],
     [LB_CHECK_SYMBOL_EXPORT([invalidate_mapping_pages], [mm/truncate.c], [
          AC_DEFINE(HAVE_INVALIDATE_MAPPING_PAGES, 1,
@@ -1228,6 +1230,20 @@ AC_DEFUN([LC_EXPORT_INVALIDATE_MAPPING_PAGES],
        AC_MSG_ERROR([no way to invalidate pages])
   ])
     ],[])
+])
+
+#
+# LC_EXPORT_FILEMAP_FDATASYNC_RANGE
+#
+# No standard kernels export this
+#
+AC_DEFUN([LC_EXPORT_FILEMAP_FDATAWRITE_RANGE],
+[LB_CHECK_SYMBOL_EXPORT([filemap_fdatawrite_range],
+[mm/filemap.c],[
+AC_DEFINE(HAVE_FILEMAP_FDATAWRITE_RANGE, 1,
+            [filemap_fdatawrite_range is exported by the kernel])
+],[
+])
 ])
 
 # The actual symbol exported varies among architectures, so we need
@@ -1438,6 +1454,7 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_UMOUNTBEGIN_HAS_VFSMOUNT
          if test x$enable_server = xyes ; then
                 LC_EXPORT_INVALIDATE_MAPPING_PAGES
+                LC_EXPORT_FILEMAP_FDATAWRITE_RANGE
          fi
 
           #2.6.18 + RHEL5 (fc6)
@@ -1621,25 +1638,9 @@ AC_DEFUN([LC_QUOTA_MODULE],
 fi
 ])
 
-#
-# LC_CONFIG_QUOTA_LIBLUSTRE
-#
-# whether to enable quota support(liblustre)
-#
-AC_DEFUN([LC_CONFIG_QUOTA_LIBLUSTRE],
-[enable_quota_liblustre='no'
-if test x$enable_quota != xno; then
-	AC_MSG_CHECKING([if compile liblustre with quota])
-	enable_quota_liblustre='yes'
-	AC_DEFINE(HAVE_QUOTA_LIBLUSTRE_SUPPORT, 1, [Enable liblustre quota support])
-	AC_MSG_RESULT([yes])
-fi
-])
-
 AC_DEFUN([LC_QUOTA],
 [#check global
 LC_CONFIG_QUOTA
-LC_CONFIG_QUOTA_LIBLUSTRE
 #check for utils
 AC_CHECK_HEADER(sys/quota.h,
                 [AC_DEFINE(HAVE_SYS_QUOTA_H, 1, [Define to 1 if you have <sys/quota.h>.])],
@@ -1869,7 +1870,6 @@ AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
 AM_CONDITIONAL(SERVER, test x$enable_server = xyes)
 AM_CONDITIONAL(QUOTA, test x$enable_quota_module = xyes)
-AM_CONDITIONAL(QUOTA_LIBLUSTRE, test x$enable_quota_liblustre = xyes)
 AM_CONDITIONAL(BLKID, test x$ac_cv_header_blkid_blkid_h = xyes)
 AM_CONDITIONAL(EXT2FS_DEVEL, test x$ac_cv_header_ext2fs_ext2fs_h = xyes)
 AM_CONDITIONAL(LIBPTHREAD, test x$enable_libpthread = xyes)

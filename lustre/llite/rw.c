@@ -1150,14 +1150,10 @@ int ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
                         llap->llap_defer_uptodate = 0;
                 }
                 SetPageError(page);
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
                 if (rc == -ENOSPC)
                         set_bit(AS_ENOSPC, &page->mapping->flags);
                 else
                         set_bit(AS_EIO, &page->mapping->flags);
-#else
-                page->mapping->gfp_mask |= AS_EIO_MASK;
-#endif
         }
 
         /* be carefull about clear WB.

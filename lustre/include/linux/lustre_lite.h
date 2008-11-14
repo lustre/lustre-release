@@ -45,9 +45,7 @@
 
 #include <linux/version.h>
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <asm/statfs.h>
-#endif
 
 #include <linux/fs.h>
 #include <linux/dcache.h>
@@ -112,12 +110,7 @@ enum {
          LPROC_LL_TRUNC,
          LPROC_LL_LOCKLESS_TRUNC,
          LPROC_LL_FLOCK,
-
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
          LPROC_LL_GETATTR,
-#else
-         LPROC_LL_REVALIDATE,
-#endif
          LPROC_LL_STAFS,
          LPROC_LL_ALLOC_INODE,
          LPROC_LL_SETXATTR,

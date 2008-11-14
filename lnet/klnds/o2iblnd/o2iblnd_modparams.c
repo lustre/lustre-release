@@ -316,8 +316,14 @@ kiblnd_tunables_init (void)
 
         if (*kiblnd_tunables.kib_concurrent_sends > IBLND_RX_MSGS)
                 *kiblnd_tunables.kib_concurrent_sends = IBLND_RX_MSGS;
-        if (*kiblnd_tunables.kib_concurrent_sends < IBLND_MSG_QUEUE_SIZE)
-                *kiblnd_tunables.kib_concurrent_sends = IBLND_MSG_QUEUE_SIZE;
+        if (*kiblnd_tunables.kib_concurrent_sends < IBLND_MSG_QUEUE_SIZE / 2)
+                *kiblnd_tunables.kib_concurrent_sends = IBLND_MSG_QUEUE_SIZE / 2;
+
+        if (*kiblnd_tunables.kib_concurrent_sends < IBLND_MSG_QUEUE_SIZE) {
+                CWARN("Concurrent sends %d is lower than message queue size: %d, "
+                      "performance may drop slightly.\n",
+                      *kiblnd_tunables.kib_concurrent_sends, IBLND_MSG_QUEUE_SIZE);
+        }
 
         return 0;
 }

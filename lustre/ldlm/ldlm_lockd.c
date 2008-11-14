@@ -1024,8 +1024,7 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
 
         if (lock->l_export->exp_lock_hash)
                 lustre_hash_add(lock->l_export->exp_lock_hash,
-                                &lock->l_remote_handle, 
-                                &lock->l_exp_hash);
+                                &lock->l_remote_handle, &lock->l_exp_hash);
 
 existing_lock:
 
@@ -1977,7 +1976,7 @@ int ldlm_init_export(struct obd_export *exp)
 
         exp->exp_lock_hash =
                 lustre_hash_init(obd_uuid2str(&exp->exp_client_uuid),
-                                 128, 65536, &ldlm_export_lock_ops, LH_REHASH);
+                                 7, 16, &ldlm_export_lock_ops, LH_REHASH);
 
         if (!exp->exp_lock_hash)
                 RETURN(-ENOMEM);
