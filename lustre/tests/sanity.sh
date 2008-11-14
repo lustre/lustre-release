@@ -3619,13 +3619,17 @@ test_99f() {
 run_test 99f "cvs commit ======================================="
 
 test_100() {
+	[ "$NETTYPE" = tcp ] || \
+		{ skip "TCP secure port test, not useful for NETTYPE=$NETTYPE" && \
+			return ; }
+
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_servers || \
 		{ skip "useless for local single node setup" && return; }
 
 	netstat -tna | ( rc=1; while read PROT SND RCV LOCAL REMOTE STAT; do
-		[ "$PROT" != "$NETTYPE" ] && continue
+		[ "$PROT" != "tcp" ] && continue
 		RPORT=$(echo $REMOTE | cut -d: -f2)
 		[ "$RPORT" != "$ACCEPTOR_PORT" ] && continue
 
