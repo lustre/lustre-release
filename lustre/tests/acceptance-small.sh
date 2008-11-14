@@ -23,7 +23,7 @@ fi
 [ "$DEBUG_OFF" ] || DEBUG_OFF="eval lctl set_param debug=\"$DEBUG_LVL\""
 [ "$DEBUG_ON" ] || DEBUG_ON="eval lctl set_param debug=0x33f0484"
 
-export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL REPLAY_VBR INSANITY SANITY_QUOTA PERFORMANCE_SANITY LARGE_SCALE"
+export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE RACER REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL REPLAY_VBR INSANITY SANITY_QUOTA PERFORMANCE_SANITY LARGE_SCALE"
 
 if [ "$ACC_SM_ONLY" ]; then
     for O in $TESTSUITE_LIST; do
@@ -324,7 +324,20 @@ for NAME in $CONFIGS; do
 		LIBLUSTRE="done"
 	fi
 
-	$CLEANUP
+	[ "$RACER" != "no" ] && [ -n "$CLIENTS" -a "$PDSH" = "no_dsh" ] && log "Remote client with no_dsh" && RACER=no 
+	if [ "$RACER" != "no" ]; then
+        	title racer
+		setup_if_needed
+		DURATION=${DURATION:-900}
+		[ "$SLOW" = "no" ] && DURATION=300
+		RACERCLIENTS=$HOSTNAME
+		[ ! -z ${CLIENTS} ] && RACERCLIENTS=$CLIENTS
+		log "racer on clients: $RACERCLIENTS DURATION=$DURATION"
+		CLIENTS=${RACERCLIENTS} DURATION=$DURATION bash runracer
+		$CLEANUP
+		$SETUP
+		RACER="done"
+	fi
 done
 
 [ "$REPLAY_SINGLE" != "no" ] && skip_remmds replay-single && REPLAY_SINGLE=no && MSKIPPED=1
@@ -402,7 +415,6 @@ if [ "$LARGE_SCALE" != "no" ]; then
         bash large-scale.sh
         LARGE_SCALE="done"
 fi
-
 
 RC=$?
 title FINISHED
