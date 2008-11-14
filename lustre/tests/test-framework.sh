@@ -92,6 +92,9 @@ init_test_env() {
     fi
     export MDSRATE=${MDSRATE:-"$LUSTRE/tests/mdsrate"}
     [ ! -f "$MDSRATE" ] && export MDSRATE=$(which mdsrate 2> /dev/null)
+    if ! echo $PATH | grep -q $LUSTRE/test/racer; then
+        export PATH=$PATH:$LUSTRE/tests/racer
+    fi
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     export LFS=${LFS:-"$LUSTRE/utils/lfs"}
     [ ! -f "$LCTL" ] && export LCTL=$(which lctl)
@@ -551,8 +554,8 @@ wait_remote_prog () {
    [ "$PDSH" = "no_dsh" ] && return 0
 
    while [ $WAIT -lt $2 ]; do
-        running=$(ps uax | grep "$PDSH.*$prog.*$MOUNT" | grep -v grep)
-        [ -z "${running}" ] && return 0
+        running=$(ps uax | grep "$PDSH.*$prog.*$MOUNT" | grep -v grep) || true
+        [ -z "${running}" ] && return 0 || true
         echo "waited $WAIT for: "
         echo "$running"
         [ $INTERVAL -lt 60 ] && INTERVAL=$((INTERVAL + INTERVAL))
