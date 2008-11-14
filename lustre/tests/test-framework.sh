@@ -1764,7 +1764,10 @@ multiop_bg_pause() {
     $MULTIOP_PROG $FILE v$ARGS > $TMPPIPE &
 
     echo "TMPPIPE=${TMPPIPE}"
-    read -t 60 multiop_output < $TMPPIPE
+    local multiop_output
+    local multiop_pid
+
+    read -t 60 multiop_output multiop_pid < $TMPPIPE
     if [ $? -ne 0 ]; then
         rm -f $TMPPIPE
         return 1
@@ -1776,6 +1779,7 @@ multiop_bg_pause() {
         return 1
     fi
 
+    echo $multiop_pid
     return 0
 }
 
