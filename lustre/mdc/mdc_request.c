@@ -72,8 +72,8 @@ static int send_getstatus(struct obd_export *exp, struct ll_fid *rootfid,
         struct ptlrpc_request *req;
         struct mds_body *body;
         __u32 size[3] = { sizeof(struct ptlrpc_body),
-                            sizeof(*body),
-                            sizeof (struct lustre_capa)};
+                          sizeof(struct mdt_body),
+                          sizeof(struct lustre_capa) };
         int rc;
         ENTRY;
 
@@ -126,7 +126,8 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
         struct obd_device *obddev = class_exp2obd(exp);
         struct mds_body *body;
         void *eadata;
-        __u32 size[6] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[6] = { sizeof(struct ptlrpc_body),
+                          sizeof(struct mdt_body) };
         int bufcount = 2, rc;
         ENTRY;
 
@@ -191,7 +192,8 @@ int mdc_getattr(struct obd_export *exp, struct ll_fid *fid,
                 struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
-        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(struct mds_body) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body),
+                          sizeof(struct mdt_body) };
         int acl_size = 0, rc;
         ENTRY;
 
@@ -227,8 +229,8 @@ int mdc_getattr_name(struct obd_export *exp, struct ll_fid *fid,
 {
         struct ptlrpc_request *req;
         __u32 size[4] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
-                            [REQ_REC_OFF] = sizeof(struct mds_body),
-                            [REQ_REC_OFF + 1] = namelen};
+                          [REQ_REC_OFF] = sizeof(struct mdt_body),
+                          [REQ_REC_OFF + 1] = namelen };
         int rc;
         int bufcount = 3;
         int nameoffset = REQ_REC_OFF + 1;
@@ -273,7 +275,7 @@ int mdc_xattr_common(struct obd_export *exp, struct ll_fid *fid,
         struct obd_device *obddev = class_exp2obd(exp);
         struct ptlrpc_request *req;
         __u32 size[5] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
-                        [REQ_REC_OFF] = sizeof(struct mds_body),
+                        [REQ_REC_OFF] = sizeof(struct mdt_body),
                         [REQ_REC_OFF + 1] = 0, /* capa */
                         [REQ_REC_OFF + 2] = 0, /* name */
                         [REQ_REC_OFF + 3] = 0 };
@@ -334,7 +336,7 @@ int mdc_xattr_common(struct obd_export *exp, struct ll_fid *fid,
                 memcpy(tmp, input, input_size);
         }
 
-        size[REPLY_REC_OFF] = sizeof(struct mds_body);
+        size[REPLY_REC_OFF] = sizeof(struct mdt_body);
         if (mdc_exp_is_2_0_server(exp)) {
                 bufcnt = 2;
         } else {
@@ -726,9 +728,9 @@ int mdc_close(struct obd_export *exp, struct mdc_op_data *data, struct obdo *oa,
 {
         struct obd_device *obd = class_exp2obd(exp);
         __u32 reqsize[4] = { sizeof(struct ptlrpc_body),
-                           sizeof(struct mds_body) };
+                             sizeof(struct mdt_body) };
         __u32 repsize[4] = { sizeof(struct ptlrpc_body),
-                               sizeof(struct mds_body),
+                             sizeof(struct mdt_body),
                                obd->u.cli.cl_max_mds_easize,
                                obd->u.cli.cl_max_mds_cookiesize };
         int rc;
@@ -823,7 +825,8 @@ int mdc_done_writing(struct obd_export *exp, struct mdc_op_data *data,
 {
         struct ptlrpc_request *req;
         struct mds_body *body;
-        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body),
+                          sizeof(struct mdt_body) };
         int rc;
         ENTRY;
 
@@ -855,7 +858,8 @@ int mdc_readpage(struct obd_export *exp, struct ll_fid *fid, __u64 offset,
         struct ptlrpc_request *req = NULL;
         struct ptlrpc_bulk_desc *desc = NULL;
         struct mds_body *body;
-        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body),
+                          sizeof(struct mdt_body) };
         int rc;
         ENTRY;
 
@@ -1116,7 +1120,8 @@ static int mdc_pin(struct obd_export *exp, struct ll_fid *fid,
 {
         struct ptlrpc_request *req;
         struct mds_body *body;
-        __u32 size[3] = { sizeof(struct ptlrpc_body), sizeof(*body), 0 };
+        __u32 size[3] = { sizeof(struct ptlrpc_body),
+                          sizeof(struct mdt_body), 0 };
         int rc;
         int bufcount = 2;
         ENTRY;
@@ -1169,7 +1174,8 @@ static int mdc_unpin(struct obd_export *exp,
 {
         struct ptlrpc_request *req;
         struct mds_body *body;
-        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body),
+                          sizeof(struct mdt_body) };
         int rc;
         ENTRY;
 
@@ -1204,7 +1210,8 @@ int mdc_sync(struct obd_export *exp, struct ll_fid *fid,
              struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
-        __u32 size[3] = { sizeof(struct ptlrpc_body), sizeof(struct mds_body), 0 };
+        __u32 size[3] = { sizeof(struct ptlrpc_body),
+                          sizeof(struct mdt_body), 0 };
         int bufcount = 2;
         int rc;
         ENTRY;
