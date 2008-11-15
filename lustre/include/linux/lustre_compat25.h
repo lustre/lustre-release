@@ -39,8 +39,8 @@
 
 #ifdef __KERNEL__
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0) && LINUX_VERSION_CODE < KERNEL_VERSION(2,5,69)
-#error sorry, lustre requires at least 2.5.69
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,5)
+#error sorry, lustre requires at least 2.6.5
 #endif
 
 #include <libcfs/linux/portals_compat25.h>
@@ -135,13 +135,9 @@ void groups_free(struct group_info *ginfo);
 #define gfp_t int
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
-
 #define lock_dentry(___dentry)          spin_lock(&(___dentry)->d_lock)
 #define unlock_dentry(___dentry)        spin_unlock(&(___dentry)->d_lock)
 
-#define lock_24kernel()         do {} while (0)
-#define unlock_24kernel()       do {} while (0)
 #define ll_kernel_locked()      kernel_locked()
 
 /*
@@ -237,204 +233,6 @@ extern void __d_move(struct dentry *dentry, struct dentry *target);
         ((!PageWriteback(page) && (cmd & OBD_BRW_READ)) || \
          (PageWriteback(page) && (cmd & OBD_BRW_WRITE)))
 
-#else /* 2.4.. */
-
-#define ll_flock_lock_file_wait(file, lock, can_sleep) \
-        do {} while(0)
-
-#define lock_dentry(___dentry)
-#define unlock_dentry(___dentry)
-
-#define lock_24kernel()         lock_kernel()
-#define unlock_24kernel()       unlock_kernel()
-#define ll_kernel_locked()      (current->lock_depth >= 0)
-
-/* 2.4 kernels have HZ=100 on i386/x86_64, this should be reasonably safe */
-#define get_jiffies_64()        (__u64)jiffies
-
-#ifdef HAVE_MM_INLINE
-#include <linux/mm_inline.h>
-#endif
-
-#ifndef pgoff_t
-#define pgoff_t unsigned long
-#endif
-
-#define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c)
-#define ll_permission(inode,mask,nd)        permission(inode,mask)
-#define ILOOKUP(sb, ino, test, data)        ilookup4(sb, ino, test, data);
-#define DCACHE_DISCONNECTED                 DCACHE_NFSD_DISCONNECTED
-#define ll_dev_t                            int
-#define old_encode_dev(dev)                 (dev)
-
-/* 2.5 uses hlists for some things, like the d_hash.  we'll treat them
- * as 2.5 and let macros drop back.. */
-#ifndef HLIST_HEAD /* until we get a kernel newer than l28 */
-#define hlist_entry                     list_entry
-#define hlist_head                      list_head
-#define hlist_node                      list_head
-#define HLIST_HEAD                      LIST_HEAD
-#define INIT_HLIST_HEAD                 INIT_LIST_HEAD
-#define hlist_del_init                  list_del_init
-#define hlist_add_head                  list_add
-#endif
-
-#ifndef INIT_HLIST_NODE
-#define INIT_HLIST_NODE(p)              ((p)->next = NULL, (p)->prev = NULL)
-#endif
-
-#ifndef hlist_for_each
-#define hlist_for_each                  list_for_each
-#endif
-
-#ifndef hlist_for_each_safe
-#define hlist_for_each_safe             list_for_each_safe
-#endif
-
-#define KDEVT_INIT(val)                 (val)
-#define ext3_xattr_set_handle           ext3_xattr_set
-#define try_module_get                  __MOD_INC_USE_COUNT
-#define module_put                      __MOD_DEC_USE_COUNT
-#define LTIME_S(time)                   (time)
-
-#if !defined(CONFIG_RH_2_4_20) && !defined(cpu_online)
-#define cpu_online(cpu)                 test_bit(cpu, &(cpu_online_map))
-#endif
-
-static inline int ll_path_lookup(const char *path, unsigned flags,
-                                 struct nameidata *nd)
-{
-        int error = 0;
-        if (path_init(path, flags, nd))
-                error = path_walk(path, nd);
-        return error;
-}
-#define ll_permission(inode,mask,nd)    permission(inode,mask)
-typedef long sector_t;
-
-#define ll_pgcache_lock(mapping)        spin_lock(&pagecache_lock)
-#define ll_pgcache_unlock(mapping)      spin_unlock(&pagecache_lock)
-#define ll_call_writepage(inode, page)  \
-                               (inode)->i_mapping->a_ops->writepage(page)
-#define ll_invalidate_inode_pages(inode) invalidate_inode_pages(inode)
-#define ll_truncate_complete_page(page) truncate_complete_page(page)
-
-static inline void clear_page_dirty(struct page *page)
-{
-        if (PageDirty(page))
-                ClearPageDirty(page);
-}
-
-static inline int clear_page_dirty_for_io(struct page *page)
-{
-        struct address_space *mapping = page->mapping;
-
-        if (page->mapping && PageDirty(page)) {
-                ClearPageDirty(page);
-                ll_pgcache_lock(mapping);
-                list_del(&page->list);
-                list_add(&page->list, &mapping->locked_pages);
-                ll_pgcache_unlock(mapping);
-                return 1;
-        }
-        return 0;
-}
-
-static inline void ll_redirty_page(struct page *page)
-{
-        SetPageDirty(page);
-        ClearPageLaunder(page);
-}
-
-static inline void __d_drop(struct dentry *dentry)
-{
-        list_del_init(&dentry->d_hash);
-}
-
-static inline int cleanup_group_info(void)
-{
-        /* Get rid of unneeded supplementary groups */
-        current->ngroups = 0;
-        memset(current->groups, 0, sizeof(current->groups));
-        return 0;
-}
-
-#ifndef HAVE_COND_RESCHED
-static inline void cond_resched(void)
-{
-        if (unlikely(need_resched())) {
-                set_current_state(TASK_RUNNING);
-                schedule();
-        }
-}
-#endif
-
-/* to find proc_dir_entry from inode. 2.6 has native one -bzzz */
-#ifndef HAVE_PDE
-#define PDE(ii)         ((ii)->u.generic_ip)
-#endif
-
-#define __set_page_ll_data(page, llap) set_page_private(page, (unsigned long)llap)
-#define __clear_page_ll_data(page) set_page_private(page, 0)
-#define PageWriteback(page) 0
-#define CheckWriteback(page, cmd) 1
-#define set_page_writeback(page) do {} while (0)
-#define end_page_writeback(page) do {} while (0)
-
-static inline int mapping_mapped(struct address_space *mapping)
-{
-        if (mapping->i_mmap_shared)
-                return 1;
-        if (mapping->i_mmap)
-                return 1;
-        return 0;
-}
-
-#ifdef ZAP_PAGE_RANGE_VMA
-#define ll_zap_page_range(vma, addr, len)  zap_page_range(vma, addr, len)
-#else
-#define ll_zap_page_range(vma, addr, len)  zap_page_range(vma->vm_mm, addr, len)
-#endif
-
-#ifndef HAVE_PAGE_MAPPED
-/* Poor man's page_mapped. substract from page count, counts from
-   buffers/pagecache and our own count (we are supposed to hold one reference).
-   What is left are user mappings and also others who work with this page now,
-   but there are supposedly none. */
-static inline int page_mapped(struct page *page)
-{
-        return page_count(page) - !!page->mapping - !!page->buffers - 1;
-}
-#endif /* !HAVE_PAGE_MAPPED */
-
-static inline void touch_atime(struct vfsmount *mnt, struct dentry *dentry)
-{
-        update_atime(dentry->d_inode);
-}
-
-static inline void file_accessed(struct file *file)
-{
-#ifdef O_NOATIME
-        if (file->f_flags & O_NOATIME)
-                return;
-#endif
-        touch_atime(file->f_vfsmnt, file->f_dentry);
-}
-
-#ifndef typecheck
-/*
- * Check at compile time that something is of a particular type.
- * Always evaluates to 1 so you may use it easily in comparisons.
- */
-#define typecheck(type,x) \
-({	type __dummy; \
-	typeof(x) __dummy2; \
-	(void)(&__dummy == &__dummy2); \
-	1; \
-})
-#endif
-
-#endif /* end of 2.4 compat macros */
 
 #ifdef HAVE_PAGE_LIST
 static inline int mapping_has_pages(struct address_space *mapping)
@@ -513,6 +311,45 @@ static inline int mapping_has_pages(struct address_space *mapping)
 
 #ifndef HAVE_FILEMAP_FDATAWRITE
 #define filemap_fdatawrite(mapping)      filemap_fdatasync(mapping)
+#endif
+
+#include <linux/mpage.h>        /* for generic_writepages */
+#ifndef HAVE_FILEMAP_FDATAWRITE_RANGE
+#include <linux/backing-dev.h>  /* for mapping->backing_dev_info */
+static inline int filemap_fdatawrite_range(struct address_space *mapping,
+                                           loff_t start, loff_t end)
+{
+        int rc;
+        struct writeback_control wbc = {
+                .sync_mode = WB_SYNC_ALL,
+                .nr_to_write = (end - start + PAGE_SIZE - 1) >> PAGE_SHIFT,
+        };
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
+        wbc.range_start = start;
+        wbc.range_end = end;
+#else
+        wbc.start = start;
+        wbc.end = end;
+#endif
+
+#ifdef mapping_cap_writeback_dirty
+        if (!mapping_cap_writeback_dirty(mapping))
+		rc = 0;
+#else
+        if (mapping->backing_dev_info->memory_backed)
+                rc = 0;
+#endif
+        /* do_writepages() */
+        else if (mapping->a_ops->writepages)
+                rc = mapping->a_ops->writepages(mapping, &wbc);
+        else
+                rc = generic_writepages(mapping, &wbc);
+        return rc;
+}
+#else
+int filemap_fdatawrite_range(struct address_space *mapping,
+                             loff_t start, loff_t end);
 #endif
 
 #ifdef HAVE_VFS_KERN_MOUNT
@@ -606,6 +443,29 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 
 #ifndef cpu_to_node
 #define cpu_to_node(cpu)         0
+#endif
+
+#ifndef abs
+static inline int abs(int x)
+{
+        return (x < 0) ? -x : x;
+}
+#endif
+
+#ifndef labs
+static inline long labs(long x)
+{
+        return (x < 0) ? -x : x;
+}
+#endif
+
+/* Using kernel fls(). Userspace will use one defined in user-bitops.h. */
+#ifndef __fls
+#define __fls fls
+#endif
+
+#ifdef HAVE_INVALIDATE_INODE_PAGES
+#define invalidate_mapping_pages(mapping,s,e) invalidate_inode_pages(mapping)
 #endif
 
 #endif /* __KERNEL__ */

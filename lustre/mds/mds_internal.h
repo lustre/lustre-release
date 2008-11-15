@@ -67,11 +67,7 @@ static inline void mds_export_evict(struct obd_export *exp)
 
 #ifdef __KERNEL__
 /* Open counts for files.  No longer atomic, must hold inode->i_sem */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 # define mds_inode_oatomic(inode)    ((inode)->i_cindex)
-#else
-# define mds_inode_oatomic(inode)    ((inode)->i_attr_flags)
-#endif
 
 #ifdef HAVE_I_ALLOC_SEM
 #define MDS_UP_READ_ORPHAN_SEM(i)          UP_READ_I_ALLOC_SEM(i)
@@ -97,6 +93,13 @@ static inline int mds_orphan_open_count(struct inode *inode)
 {
         LASSERT_MDS_ORPHAN_READ_LOCKED(inode);
         return mds_inode_oatomic(inode);
+}
+
+static inline int mds_orphan_needed(struct obd_device *obd,
+                                    struct inode * inode)
+{
+        return (obd->obd_recovering ||
+                mds_orphan_open_count(inode) > 0);
 }
 
 static inline int mds_orphan_open_inc(struct inode *inode)
@@ -204,7 +207,7 @@ int mds_init_ucred(struct lvfs_ucred *ucred, struct ptlrpc_request *req,
                    int offset);
 void mds_exit_ucred(struct lvfs_ucred *ucred, struct mds_obd *obd);
 void mds_root_squash(struct mds_obd *mds, lnet_nid_t *peernid,
-                     __u32 *fsuid, __u32 *fsgid, __u32 *cap,
+                     __u32 *fsuid, __u32 *fsgid, cfs_kernel_cap_t *cap,
                      __u32 *suppgid, __u32 *suppgid2);
 
 /* mds/mds_unlink_open.c */
@@ -212,6 +215,7 @@ int mds_osc_destroy_orphan(struct obd_device *obd, umode_t mode,
                            struct lov_mds_md *lmm, int lmm_size,
                            struct llog_cookie *logcookies, int log_unlink);
 int mds_cleanup_pending(struct obd_device *obd);
+int mds_check_stale_orphan(struct obd_device *obd, struct ll_fid *fid);
 
 /* mds/mds_log.c */
 int mds_log_op_unlink(struct obd_device *obd,

@@ -272,7 +272,11 @@ int llu_glimpse_size(struct inode *inode)
                 RETURN(rc > 0 ? -EIO : rc);
         }
 
+        lov_stripe_lock(lli->lli_smd);
         inode_init_lvb(inode, &lvb);
+        /* merge timestamps the most resently obtained from mds with
+           timestamps obtained from osts */
+        lvb = lli->lli_lvb;
         rc = obd_merge_lvb(sbi->ll_osc_exp, lli->lli_smd, &lvb, 0);
         st->st_size = lvb.lvb_size;
         st->st_blocks = lvb.lvb_blocks;
@@ -282,6 +286,7 @@ int llu_glimpse_size(struct inode *inode)
         st->st_mtime = lvb.lvb_mtime;
         st->st_atime = lvb.lvb_atime;
         st->st_ctime = lvb.lvb_ctime;
+        lov_stripe_unlock(lli->lli_smd);
 
         CDEBUG(D_DLMTRACE, "glimpse: size: "LPU64", blocks: "LPU64"\n",
                (__u64)st->st_size, (__u64)st->st_blocks);
@@ -705,6 +710,23 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
                 }
         } else if (lli->lli_open_flags & O_APPEND) {
                 pos = st->st_size;
+        }
+
+        if (local_lock) {
+                struct ost_lvb xtimes;
+
+                lov_stripe_lock(lsm);
+                /* inode might mtime and ctime set earlier in race with stat
+                 * which merged into inode timestamps obtained from mds and
+                 * osts */
+                st->st_atime = st->st_mtime = st->st_ctime = CURRENT_TIME;
+                xtimes.lvb_atime = st->st_atime;
+                xtimes.lvb_mtime = st->st_mtime;
+                xtimes.lvb_ctime = st->st_ctime;
+                obd_update_lvb(exp, lsm, &xtimes,
+                               is_read ? OBD_MD_FLATIME :
+                               (OBD_MD_FLMTIME | OBD_MD_FLCTIME));
+                lov_stripe_unlock(lsm);
         }
 
         for (iovidx = 0; iovidx < iovlen; iovidx++) {

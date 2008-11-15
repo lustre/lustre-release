@@ -76,11 +76,7 @@ struct lustre_intent_data {
 #ifdef HAVE_VFS_INTENT_PATCHES
 static inline struct lookup_intent *ll_nd2it(struct nameidata *nd)
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         return &nd->intent;
-#else
-        return nd->intent;
-#endif
 }
 #endif
 
@@ -113,7 +109,6 @@ struct ll_dentry_data {
         struct lookup_intent    *lld_it;
 #endif
         unsigned int             lld_sa_generation;
-        cfs_waitq_t              lld_waitq;
 };
 
 #define ll_d2d(de) ((struct ll_dentry_data*)((de)->d_fsdata))
@@ -184,10 +179,10 @@ struct ll_inode_info {
          * before child -- it is me should cleanup the dir readahead. */
         void                   *lli_opendir_key;
         struct ll_statahead_info *lli_sai;
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+        /* the most recent attributes from mds, it is used for timestampts
+         * only so far */
+        struct ost_lvb         lli_lvb;
         struct inode            lli_vfs_inode;
-#endif
 };
 
 /*
@@ -205,12 +200,7 @@ void ll_inode_size_unlock(struct inode *inode, int unlock_lsm);
 // static inline struct ll_inode_info *LL_I(struct inode *inode)
 static inline struct ll_inode_info *ll_i2info(struct inode *inode)
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         return container_of(inode, struct ll_inode_info, lli_vfs_inode);
-#else
-        CLASSERT(sizeof(inode->u) >= sizeof(struct ll_inode_info));
-        return (struct ll_inode_info *)&(inode->u.generic_ip);
-#endif
 }
 
 /* default to about 40meg of readahead on a given system.  That much tied
@@ -583,11 +573,7 @@ extern struct proc_dir_entry *proc_lustre_fs_root;
 
 static inline struct inode *ll_info2i(struct ll_inode_info *lli)
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         return &lli->lli_vfs_inode;
-#else
-        return list_entry(lli, struct inode, u.generic_ip);
-#endif
 }
 
 struct it_cb_data {
@@ -721,7 +707,6 @@ static inline unsigned long dir_pages(struct inode *inode)
         return (inode->i_size + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
 }
 
-/* llite/namei.c */
 int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir);
 struct inode *ll_iget(struct super_block *sb, ino_t hash,
                       struct lustre_md *lic);
@@ -792,11 +777,9 @@ int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
 int ll_mdc_real_close(struct inode *inode, int flags);
 extern void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid, struct file
                                *file, size_t count, int rw);
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
                struct lookup_intent *it, struct kstat *stat);
 int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat);
-#endif
 struct ll_file_data *ll_file_data_get(void);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
 int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd);
@@ -818,10 +801,12 @@ int ll_fiemap(struct inode *inode, struct ll_user_fiemap *fiemap,
               int num_bytes);
 
 /* llite/dcache.c */
-extern struct dentry_operations ll_init_d_ops;
+/* llite/namei.c */
+/**
+ * protect race ll_find_aliases vs ll_revalidate_it vs ll_unhash_aliases
+ */
+extern spinlock_t ll_lookup_lock;
 extern struct dentry_operations ll_d_ops;
-extern struct dentry_operations ll_fini_d_ops;
-void ll_release(struct dentry *de);
 void ll_intent_drop_lock(struct lookup_intent *);
 void ll_intent_release(struct lookup_intent *);
 extern void ll_set_dd(struct dentry *de);
@@ -923,10 +908,8 @@ void ll_close_thread_shutdown(struct ll_close_queue *lcq);
 int ll_close_thread_start(struct ll_close_queue **lcq_ret);
 
 /* llite/llite_mmap.c */
-#if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 typedef struct rb_root  rb_root_t;
 typedef struct rb_node  rb_node_t;
-#endif
 
 struct ll_lock_tree_node;
 struct ll_lock_tree {
@@ -950,18 +933,11 @@ int ll_tree_unlock(struct ll_lock_tree *tree);
 
 #define    ll_s2sbi(sb)        (s2lsi(sb)->lsi_llsbi)
 
-#if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 static inline __u64 ll_ts2u64(struct timespec *time)
 {
         __u64 t = time->tv_sec;
         return t;
 }
-#else  /* 2.4 here */
-static inline __u64 ll_ts2u64(time_t *time)
-{
-        return *time;
-}
-#endif
 
 /* don't need an addref as the sb_info should be holding one */
 static inline struct obd_export *ll_s2obdexp(struct super_block *sb)
@@ -1043,7 +1019,6 @@ int ll_removexattr(struct dentry *dentry, const char *name);
 /* per inode struct, for dir only */
 struct ll_statahead_info {
         struct inode           *sai_inode;
-        struct dentry          *sai_first;      /* first dentry item */
         unsigned int            sai_generation; /* generation for statahead */
         atomic_t                sai_refcount;   /* when access this struct, hold
                                                  * refcount */
@@ -1081,13 +1056,19 @@ int ll_statahead_exit(struct dentry *dentry, int result);
 void ll_stop_statahead(struct inode *inode, void *key);
 
 static inline
-void ll_d_wakeup(struct dentry *dentry)
+int ll_statahead_mark(struct dentry *dentry)
 {
-        struct ll_dentry_data *lld = ll_d2d(dentry);
+        struct ll_inode_info *lli = ll_i2info(dentry->d_parent->d_inode);
+        struct ll_statahead_info *sai = lli->lli_sai;
+        struct ll_dentry_data *ldd = ll_d2d(dentry);
+        int rc = 0;
 
-        LASSERT(dentry->d_op != &ll_init_d_ops);
-        if (lld != NULL)
-                cfs_waitq_broadcast(&lld->lld_waitq);
+        if (likely(ldd != NULL))
+                ldd->lld_sa_generation = sai->sai_generation;
+        else
+                rc = -ENOMEM;
+
+        return rc;
 }
 
 static inline
@@ -1128,6 +1109,21 @@ int ll_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
                 return -EAGAIN;
 
         return do_statahead_enter(dir, dentryp, lookup);
+}
+
+static void inline ll_dops_init(struct dentry *de, int block)
+{
+        struct ll_dentry_data *lld = ll_d2d(de);
+
+        if (lld == NULL && block != 0) {
+                ll_set_dd(de);
+                lld = ll_d2d(de);
+        }
+
+        if (lld != NULL)
+                lld->lld_sa_generation = 0;
+
+        de->d_op = &ll_d_ops;
 }
 
 /* llite ioctl register support rountine */

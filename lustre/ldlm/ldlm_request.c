@@ -371,6 +371,7 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
 {
         struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
         int is_replay = *flags & LDLM_FL_REPLAY;
+        struct lustre_handle old_hash_key;
         struct ldlm_lock *lock;
         struct ldlm_reply *reply;
         int cleanup_phase = 1;
@@ -422,7 +423,15 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
         cleanup_phase = 0;
 
         lock_res_and_lock(lock);
+        old_hash_key = lock->l_remote_handle;
         lock->l_remote_handle = reply->lock_handle;
+
+        /* Key change rehash lock in per-export hash with new key */
+        if (exp->exp_lock_hash)
+                lustre_hash_rehash_key(exp->exp_lock_hash, &old_hash_key,
+                                       &lock->l_remote_handle,
+                                       &lock->l_exp_hash);
+
         *flags = reply->lock_flags;
         lock->l_flags |= reply->lock_flags & LDLM_INHERIT_FLAGS;
         /* move NO_TIMEOUT flag to the lock to force ldlm_lock_match()
@@ -533,7 +542,10 @@ static inline int ldlm_req_handles_avail(struct obd_export *exp,
 
         avail -= lustre_msg_size(class_exp2cliimp(exp)->imp_msg_magic,
                                  bufcount, size);
-        avail /= sizeof(struct lustre_handle);
+        if (likely(avail >= 0))
+                avail /= (int)sizeof(struct lustre_handle);
+        else
+                avail = 0;
         avail += LDLM_LOCKREQ_HANDLES - off;
 
         return avail;
@@ -567,12 +579,12 @@ struct ptlrpc_request *ldlm_prep_elc_req(struct obd_export *exp, int version,
                 LASSERT(bufoff < bufcount);
 
                 avail = ldlm_req_handles_avail(exp, size, bufcount, canceloff);
-                flags = ns_connect_lru_resize(ns) ? 
+                flags = ns_connect_lru_resize(ns) ?
                         LDLM_CANCEL_LRUR : LDLM_CANCEL_AGED;
                 to_free = !ns_connect_lru_resize(ns) &&
                           opc == LDLM_ENQUEUE ? 1 : 0;
 
-                /* Cancel lru locks here _only_ if the server supports 
+                /* Cancel lru locks here _only_ if the server supports
                  * EARLY_CANCEL. Otherwise we have to send extra CANCEL
                  * rpc, what will make us slower. */
                 if (avail > count)
@@ -1028,27 +1040,27 @@ int ldlm_cli_update_pool(struct ptlrpc_request *req)
         __u32 new_limit;
         ENTRY;
 
-        if (unlikely(!req->rq_import || !req->rq_import->imp_obd || 
+        if (unlikely(!req->rq_import || !req->rq_import->imp_obd ||
                      !imp_connect_lru_resize(req->rq_import)))
         {
-                /* 
-                 * Do nothing for corner cases. 
+                /*
+                 * Do nothing for corner cases.
                  */
                 RETURN(0);
         }
 
-        /* 
-         * In some cases RPC may contain slv and limit zeroed out. This is 
+        /*
+         * In some cases RPC may contain slv and limit zeroed out. This is
          * the case when server does not support lru resize feature. This is
          * also possible in some recovery cases when server side reqs have no
-         * ref to obd export and thus access to server side namespace is no 
-         * possible. 
+         * ref to obd export and thus access to server side namespace is no
+         * possible.
          */
         if (lustre_msg_get_slv(req->rq_repmsg) == 0 ||
             lustre_msg_get_limit(req->rq_repmsg) == 0) {
                 DEBUG_REQ(D_HA, req, "Zero SLV or Limit found "
-                          "(SLV: "LPU64", Limit: %u)", 
-                          lustre_msg_get_slv(req->rq_repmsg), 
+                          "(SLV: "LPU64", Limit: %u)",
+                          lustre_msg_get_slv(req->rq_repmsg),
                           lustre_msg_get_limit(req->rq_repmsg));
                 RETURN(0);
         }
@@ -1057,12 +1069,12 @@ int ldlm_cli_update_pool(struct ptlrpc_request *req)
         new_slv = lustre_msg_get_slv(req->rq_repmsg);
         obd = req->rq_import->imp_obd;
 
-        /* 
-         * Set new SLV and Limit to obd fields to make accessible for pool 
+        /*
+         * Set new SLV and Limit to obd fields to make accessible for pool
          * thread. We do not access obd_namespace and pool directly here
          * as there is no reliable way to make sure that they are still
          * alive in cleanup time. Evil races are possible which may cause
-         * oops in that time. 
+         * oops in that time.
          */
         write_lock(&obd->obd_pool_lock);
         old_slv = obd->obd_pool_slv;
@@ -1156,17 +1168,17 @@ static int ldlm_cancel_list(struct list_head *cancels, int count, int flags)
         RETURN(count);
 }
 
-/* Return 1 to stop lru processing and keep current lock cached. Return zero 
+/* Return 1 to stop lru processing and keep current lock cached. Return zero
  * otherwise. */
 static ldlm_policy_res_t ldlm_cancel_shrink_policy(struct ldlm_namespace *ns,
                                                    struct ldlm_lock *lock,
-                                                   int unused, int added, 
+                                                   int unused, int added,
                                                    int count)
 {
         int lock_cost;
         __u64 page_nr;
 
-        /* Stop lru processing when we reached passed @count or checked all 
+        /* Stop lru processing when we reached passed @count or checked all
          * locks in lru. */
         if (count && added >= count)
                 return LDLM_POLICY_KEEP_LOCK;
@@ -1183,7 +1195,7 @@ static ldlm_policy_res_t ldlm_cancel_shrink_policy(struct ldlm_namespace *ns,
 #ifdef __KERNEL__
                 /* XXX: In fact this is evil hack, we can't access inode
                  * here. For doing it right we need somehow to have number
-                 * of covered by lock. This should be fixed later when 10718 
+                 * of covered by lock. This should be fixed later when 10718
                  * is landed. */
                 if (lock->l_ast_data != NULL) {
                         struct inode *inode = lock->l_ast_data;
@@ -1200,15 +1212,15 @@ static ldlm_policy_res_t ldlm_cancel_shrink_policy(struct ldlm_namespace *ns,
         /* Keep all expensive locks in lru for the memory pressure time
          * cancel policy. They anyways may be canceled by lru resize
          * pplicy if they have not small enough CLV. */
-        return lock_cost > ns->ns_shrink_thumb ? 
+        return lock_cost > ns->ns_shrink_thumb ?
                 LDLM_POLICY_KEEP_LOCK : LDLM_POLICY_CANCEL_LOCK;
 }
 
-/* Return 1 to stop lru processing and keep current lock cached. Return zero 
+/* Return 1 to stop lru processing and keep current lock cached. Return zero
  * otherwise. */
 static ldlm_policy_res_t ldlm_cancel_lrur_policy(struct ldlm_namespace *ns,
-                                                 struct ldlm_lock *lock, 
-                                                 int unused, int added, 
+                                                 struct ldlm_lock *lock,
+                                                 int unused, int added,
                                                  int count)
 {
         cfs_time_t cur = cfs_time_current();
@@ -1216,7 +1228,7 @@ static ldlm_policy_res_t ldlm_cancel_lrur_policy(struct ldlm_namespace *ns,
         __u64 slv, lvf, lv;
         cfs_time_t la;
 
-        /* Stop lru processing when we reached passed @count or checked all 
+        /* Stop lru processing when we reached passed @count or checked all
          * locks in lru. */
         if (count && added >= count)
                 return LDLM_POLICY_KEEP_LOCK;
@@ -1224,63 +1236,63 @@ static ldlm_policy_res_t ldlm_cancel_lrur_policy(struct ldlm_namespace *ns,
         slv = ldlm_pool_get_slv(pl);
         lvf = ldlm_pool_get_lvf(pl);
 
-        la = cfs_duration_sec(cfs_time_sub(cur, 
+        la = cfs_duration_sec(cfs_time_sub(cur,
                               lock->l_last_used));
 
-        /* Stop when slv is not yet come from server or 
+        /* Stop when slv is not yet come from server or
          * lv is smaller than it is. */
         lv = lvf * la * unused;
 
         /* Inform pool about current CLV to see it via proc. */
         ldlm_pool_set_clv(pl, lv);
-        return (slv == 1 || lv < slv) ? 
+        return (slv == 1 || lv < slv) ?
                 LDLM_POLICY_KEEP_LOCK : LDLM_POLICY_CANCEL_LOCK;
 }
 
-/* Return 1 to stop lru processing and keep current lock cached. Return zero 
+/* Return 1 to stop lru processing and keep current lock cached. Return zero
  * otherwise. */
 static ldlm_policy_res_t ldlm_cancel_passed_policy(struct ldlm_namespace *ns,
-                                                   struct ldlm_lock *lock, 
+                                                   struct ldlm_lock *lock,
                                                    int unused, int added,
                                                    int count)
 {
-        /* Stop lru processing when we reached passed @count or checked all 
+        /* Stop lru processing when we reached passed @count or checked all
          * locks in lru. */
-        return (added >= count) ? 
+        return (added >= count) ?
                 LDLM_POLICY_KEEP_LOCK : LDLM_POLICY_CANCEL_LOCK;
 }
 
-/* Return 1 to stop lru processing and keep current lock cached. Return zero 
+/* Return 1 to stop lru processing and keep current lock cached. Return zero
  * otherwise. */
 static ldlm_policy_res_t ldlm_cancel_aged_policy(struct ldlm_namespace *ns,
-                                                 struct ldlm_lock *lock, 
+                                                 struct ldlm_lock *lock,
                                                  int unused, int added,
                                                  int count)
 {
-        /* Stop lru processing if young lock is found and we reached passed 
+        /* Stop lru processing if young lock is found and we reached passed
          * @count. */
-        return ((added >= count) && 
+        return ((added >= count) &&
                 cfs_time_before(cfs_time_current(),
                                 cfs_time_add(lock->l_last_used,
-                                             ns->ns_max_age))) ? 
+                                             ns->ns_max_age))) ?
                 LDLM_POLICY_KEEP_LOCK : LDLM_POLICY_CANCEL_LOCK;
 }
 
-/* Return 1 to stop lru processing and keep current lock cached. Return zero 
+/* Return 1 to stop lru processing and keep current lock cached. Return zero
  * otherwise. */
 static ldlm_policy_res_t ldlm_cancel_default_policy(struct ldlm_namespace *ns,
-                                                    struct ldlm_lock *lock, 
+                                                    struct ldlm_lock *lock,
                                                     int unused, int added,
                                                     int count)
 {
-        /* Stop lru processing when we reached passed @count or checked all 
+        /* Stop lru processing when we reached passed @count or checked all
          * locks in lru. */
-        return (added >= count) ? 
+        return (added >= count) ?
                 LDLM_POLICY_KEEP_LOCK : LDLM_POLICY_CANCEL_LOCK;
 }
 
-typedef ldlm_policy_res_t (*ldlm_cancel_lru_policy_t)(struct ldlm_namespace *, 
-                                                      struct ldlm_lock *, int, 
+typedef ldlm_policy_res_t (*ldlm_cancel_lru_policy_t)(struct ldlm_namespace *,
+                                                      struct ldlm_lock *, int,
                                                       int, int);
 
 static ldlm_cancel_lru_policy_t
@@ -1297,10 +1309,10 @@ ldlm_cancel_lru_policy(struct ldlm_namespace *ns, int flags)
                 if (flags & LDLM_CANCEL_AGED)
                         return ldlm_cancel_aged_policy;
         }
-        
+
         return ldlm_cancel_default_policy;
 }
- 
+
 /* - Free space in lru for @count new locks,
  *   redundant unused locks are canceled locally;
  * - also cancel locally unused aged locks;
@@ -1370,11 +1382,11 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                  * we find a lock that should stay in the cache.
                  * We should take into account lock age anyway
                  * as new lock even if it is small of weight is
-                 * valuable resource. 
+                 * valuable resource.
                  *
                  * That is, for shrinker policy we drop only
                  * old locks, but additionally chose them by
-                 * their weight. Big extent locks will stay in 
+                 * their weight. Big extent locks will stay in
                  * the cache. */
                 if (pf(ns, lock, unused, added, count) == LDLM_POLICY_KEEP_LOCK)
                         break;
@@ -1400,8 +1412,8 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
 
                 /* If we have chosen to cancel this lock voluntarily, we
                  * better send cancel notification to server, so that it
-                 * frees appropriate state. This might lead to a race 
-                 * where while we are doing cancel here, server is also 
+                 * frees appropriate state. This might lead to a race
+                 * where while we are doing cancel here, server is also
                  * silently cancelling this lock. */
                 lock->l_flags &= ~LDLM_FL_CANCEL_ON_BLOCK;
 
@@ -1430,7 +1442,7 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
         RETURN(ldlm_cancel_list(cancels, added, cancel_flags));
 }
 
-/* Returns number of locks which could be canceled next time when 
+/* Returns number of locks which could be canceled next time when
  * ldlm_cancel_lru() is called. Used from locks pool shrinker. */
 int ldlm_cancel_lru_estimate(struct ldlm_namespace *ns,
                              int count, int max, int flags)
@@ -1451,10 +1463,10 @@ int ldlm_cancel_lru_estimate(struct ldlm_namespace *ns,
                         break;
 
                 /* Somebody is already doing CANCEL or there is a
-                 * blocking request will send cancel. Let's not count 
+                 * blocking request will send cancel. Let's not count
                  * this lock. */
                 if ((lock->l_flags & LDLM_FL_CANCELING) ||
-                    (lock->l_flags & LDLM_FL_BL_AST)) 
+                    (lock->l_flags & LDLM_FL_BL_AST))
                         continue;
 
                 /* Pass the lock through the policy filter and see if it
@@ -1473,7 +1485,7 @@ int ldlm_cancel_lru_estimate(struct ldlm_namespace *ns,
  * in a thread and this function will return after the thread has been
  * asked to call the callback.  when called with LDLM_SYNC the blocking
  * callback will be performed in this function. */
-int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr, ldlm_sync_t sync, 
+int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr, ldlm_sync_t sync,
                     int flags)
 {
         CFS_LIST_HEAD(cancels);
@@ -1528,7 +1540,7 @@ int ldlm_cancel_resource_local(struct ldlm_resource *res,
 
                 /* If somebody is already doing CANCEL, or blocking ast came,
                  * skip this lock. */
-                if (lock->l_flags & LDLM_FL_BL_AST || 
+                if (lock->l_flags & LDLM_FL_BL_AST ||
                     lock->l_flags & LDLM_FL_CANCELING)
                         continue;
 
@@ -1871,14 +1883,15 @@ static int ldlm_chain_lock_for_replay(struct ldlm_lock *lock, void *closure)
 static int replay_lock_interpret(struct ptlrpc_request *req,
                                  struct ldlm_async_args *aa, int rc)
 {
-        struct ldlm_lock *lock;
-        struct ldlm_reply *reply;
+        struct lustre_handle  old_hash_key;
+        struct ldlm_lock     *lock;
+        struct ldlm_reply    *reply;
+        struct obd_export    *exp;
 
         ENTRY;
         atomic_dec(&req->rq_import->imp_replay_inflight);
         if (rc != ELDLM_OK)
                 GOTO(out, rc);
-
 
         reply = lustre_swab_repbuf(req, DLM_LOCKREPLY_OFF, sizeof(*reply),
                                    lustre_swab_ldlm_reply);
@@ -1897,7 +1910,16 @@ static int replay_lock_interpret(struct ptlrpc_request *req,
                 GOTO(out, rc = -ESTALE);
         }
 
+        old_hash_key = lock->l_remote_handle;
         lock->l_remote_handle = reply->lock_handle;
+
+        /* Key change rehash lock in per-export hash with new key */
+	exp = req->rq_export;
+        if (exp && exp->exp_lock_hash)
+                lustre_hash_rehash_key(exp->exp_lock_hash, &old_hash_key,
+				       &lock->l_remote_handle,
+                                       &lock->l_exp_hash);
+
         LDLM_DEBUG(lock, "replayed lock:");
         ptlrpc_import_recovery_state_machine(req->rq_import);
         LDLM_LOCK_PUT(lock);

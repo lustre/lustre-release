@@ -745,7 +745,12 @@ int jt_lcfg_setparam(int argc, char **argv)
                 }
                 /* Write the new value to the file */
                 fp = open(glob_info.gl_pathv[i], O_WRONLY);
-                if (fp > 0) {
+                if (fp == -1) {
+                        fprintf(stderr, "error: %s: %s opening %s\n",
+                                jt_cmdname(argv[0]), strerror(rc = errno),
+                                glob_info.gl_pathv[i]);
+                        break;
+                } else {
                         rc = write(fp, value, strlen(value));
                         if (rc < 0)
                                 fprintf(stderr,
@@ -754,10 +759,6 @@ int jt_lcfg_setparam(int argc, char **argv)
                         else
                                 rc = 0;
                         close(fp);
-                } else {
-                        fprintf(stderr, "error: %s: %s opening %s\n",
-                                jt_cmdname(argv[0]), strerror(rc = errno),
-                                glob_info.gl_pathv[i]);
                 }
         }
 

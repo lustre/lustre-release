@@ -92,19 +92,14 @@ int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
                 lov_size = lov_stripe_size(lsm, tmpsize, i);
                 if (lov_size > size)
                         size = lov_size;
-                /* merge blocks, mtime, atime */
+                /* merge blocks, mtime, atime, ctime */
                 blocks += loi->loi_lvb.lvb_blocks;
+                if (loi->loi_lvb.lvb_mtime > current_mtime)
+                        current_mtime = loi->loi_lvb.lvb_mtime;
                 if (loi->loi_lvb.lvb_atime > current_atime)
                         current_atime = loi->loi_lvb.lvb_atime;
-
-                /* mtime is always updated with ctime, but can be set in past.
-                   As write and utime(2) may happen within 1 second, and utime's
-                   mtime has a priority over write's one, leave mtime from mds 
-                   for the same ctimes. */
-                if (loi->loi_lvb.lvb_ctime > current_ctime) {
+                if (loi->loi_lvb.lvb_ctime > current_ctime)
                         current_ctime = loi->loi_lvb.lvb_ctime;
-                        current_mtime = loi->loi_lvb.lvb_mtime;
-                }
         }
 
         lvb->lvb_size = size;
@@ -177,8 +172,6 @@ void lov_merge_attrs(struct obdo *tgt, struct obdo *src, obd_flag valid,
                         tgt->o_blksize += src->o_blksize;
                 if (valid & OBD_MD_FLCTIME && tgt->o_ctime < src->o_ctime)
                         tgt->o_ctime = src->o_ctime;
-                /* Only mtime from OSTs are merged here, as they cannot be set
-                   in past (only MDS's mtime can) do not look at ctime. */
                 if (valid & OBD_MD_FLMTIME && tgt->o_mtime < src->o_mtime)
                         tgt->o_mtime = src->o_mtime;
         } else {
@@ -188,4 +181,25 @@ void lov_merge_attrs(struct obdo *tgt, struct obdo *src, obd_flag valid,
                         tgt->o_size = lov_stripe_size(lsm,src->o_size,stripeno);
                 *set = 1;
         }
+}
+
+int lov_update_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
+                   struct ost_lvb *lvb, obd_flag valid)
+{
+        int i;
+        struct lov_oinfo *loi;
+
+        LASSERT_SPIN_LOCKED(&lsm->lsm_lock);
+        LASSERT(lsm->lsm_lock_owner == cfs_current());
+
+        for (i = 0; i < lsm->lsm_stripe_count; i++) {
+                loi = lsm->lsm_oinfo[i];
+                if (valid & OBD_MD_FLATIME)
+                        loi->loi_lvb.lvb_atime = lvb->lvb_atime;
+                if (valid & OBD_MD_FLMTIME)
+                        loi->loi_lvb.lvb_mtime = lvb->lvb_mtime;
+                if (valid & OBD_MD_FLCTIME)
+                        loi->loi_lvb.lvb_ctime = lvb->lvb_ctime;
+        }
+        return 0;
 }

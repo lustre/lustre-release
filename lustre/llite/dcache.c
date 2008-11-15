@@ -49,8 +49,10 @@
 
 #include "llite_internal.h"
 
+spinlock_t ll_lookup_lock = SPIN_LOCK_UNLOCKED;
+
 /* should NOT be called with the dcache lock, see fs/dcache.c */
-void ll_release(struct dentry *de)
+static void ll_release(struct dentry *de)
 {
         struct ll_dentry_data *lld;
         ENTRY;
@@ -137,14 +139,13 @@ void ll_set_dd(struct dentry *de)
         if (de->d_fsdata == NULL) {
                 struct ll_dentry_data *lld;
 
-                OBD_ALLOC(lld, sizeof(struct ll_dentry_data));
+                OBD_ALLOC_PTR(lld);
                 if (likely(lld != NULL)) {
-                        cfs_waitq_init(&lld->lld_waitq);
                         lock_dentry(de);
                         if (likely(de->d_fsdata == NULL))
                                 de->d_fsdata = lld;
                         else
-                                OBD_FREE(lld, sizeof(struct ll_dentry_data));
+                                OBD_FREE_PTR(lld);
                         unlock_dentry(de);
                 }
         }
@@ -206,7 +207,9 @@ int ll_drop_dentry(struct dentry *dentry)
                 __d_drop(dentry);
                 unlock_dentry(dentry);
                 spin_unlock(&dcache_lock);
+                spin_unlock(&ll_lookup_lock);
                 dput(dentry);
+                spin_lock(&ll_lookup_lock);
                 spin_lock(&dcache_lock);
                 return 1;
         }
@@ -231,14 +234,6 @@ int ll_drop_dentry(struct dentry *dentry)
                  * sys_getcwd() could return -ENOENT -bzzz */
 #ifdef DCACHE_LUSTRE_INVALID
                 dentry->d_flags |= DCACHE_LUSTRE_INVALID;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                __d_drop(dentry);
-                if (dentry->d_inode) {
-                        /* Put positive dentries to orphan list */
-                        list_add(&dentry->d_hash,
-                                 &ll_i2sbi(dentry->d_inode)->ll_orphan_dentry_list);
-                }
-#endif
 #else
                 if (!dentry->d_inode || !S_ISDIR(dentry->d_inode->i_mode))
                         __d_drop(dentry);
@@ -263,6 +258,7 @@ void ll_unhash_aliases(struct inode *inode)
                inode->i_ino, inode->i_generation, inode);
 
         head = &inode->i_dentry;
+        spin_lock(&ll_lookup_lock);
         spin_lock(&dcache_lock);
 restart:
         tmp = head;
@@ -291,6 +287,8 @@ restart:
                           goto restart;
         }
         spin_unlock(&dcache_lock);
+        spin_unlock(&ll_lookup_lock);
+
         EXIT;
 }
 
@@ -326,21 +324,17 @@ void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry)
 
         /* drop lookup or getattr locks immediately */
         if (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR) {
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
                 /* on 2.6 there are situation when several lookups and
                  * revalidations may be requested during single operation.
                  * therefore, we don't release intent here -bzzz */
                 ll_intent_drop_lock(it);
-#else
-                ll_intent_release(it);
-#endif
         }
 }
 
 void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft)
 {
         struct lookup_intent *it = *itp;
-#if defined(HAVE_VFS_INTENT_PATCHES)&&(LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+#ifdef HAVE_VFS_INTENT_PATCHES
         if (it) {
                 LASSERTF(it->it_magic == INTENT_MAGIC, "bad intent magic: %x\n",
                          it->it_magic);
@@ -461,6 +455,9 @@ do_lock:
         it->it_flags &= ~O_CHECK_STALE;
         if (it->it_op == IT_GETATTR && !first)
                 ll_statahead_exit(de, rc);
+        else if (first == -EEXIST)
+                ll_statahead_mark(de);
+
         /* If req is NULL, then mdc_intent_lock only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
         if (req == NULL && rc >= 0) {
@@ -492,12 +489,14 @@ revalidate_finish:
 
         /* unfortunately ll_intent_lock may cause a callback and revoke our
          * dentry */
+        spin_lock(&ll_lookup_lock);
         spin_lock(&dcache_lock);
         lock_dentry(de);
         __d_drop(de);
         unlock_dentry(de);
         d_rehash_cond(de, 0);
         spin_unlock(&dcache_lock);
+        spin_unlock(&ll_lookup_lock);
 
  out:
         /* We do not free request as it may be reused during following lookup
@@ -575,6 +574,8 @@ out_sa:
                 first = ll_statahead_enter(de->d_parent->d_inode, &de, 0);
                 if (!first)
                         ll_statahead_exit(de, rc);
+                else if (first == -EEXIST)
+                        ll_statahead_mark(de);
         }
 
         return rc;
@@ -664,7 +665,6 @@ out_sa:
         return;
 }
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 #ifdef HAVE_VFS_INTENT_PATCHES
 static int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
 {
@@ -748,14 +748,9 @@ out_it:
         RETURN(rc);
 }
 #endif
-#endif
 
 struct dentry_operations ll_d_ops = {
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         .d_revalidate = ll_revalidate_nd,
-#else
-        .d_revalidate_it = ll_revalidate_it,
-#endif
         .d_release = ll_release,
         .d_delete = ll_ddelete,
 #ifdef DCACHE_LUSTRE_INVALID
@@ -765,46 +760,4 @@ struct dentry_operations ll_d_ops = {
         .d_pin = ll_pin,
         .d_unpin = ll_unpin,
 #endif
-};
-
-static int ll_fini_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
-{
-        ENTRY;
-        /* need lookup */
-        RETURN(0);
-}
-
-struct dentry_operations ll_fini_d_ops = {
-        .d_revalidate = ll_fini_revalidate_nd,
-        .d_release = ll_release,
-};
-
-/*
- * It is for the following race condition:
- * When someone (maybe statahead thread) adds the dentry to the dentry hash
- * table, the dentry's "d_op" maybe NULL, at the same time, another (maybe
- * "ls -l") process finds such dentry by "do_lookup()" without "do_revalidate()"
- * called. It causes statahead window lost, and maybe other issues. --Fan Yong
- */
-static int ll_init_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
-{
-        struct l_wait_info lwi = { 0 };
-        struct ll_dentry_data *lld;
-        ENTRY;
-
-        ll_set_dd(dentry);
-        lld = ll_d2d(dentry);
-        if (unlikely(lld == NULL))
-                RETURN(-ENOMEM);
-
-        l_wait_event(lld->lld_waitq, dentry->d_op != &ll_init_d_ops, &lwi);
-        if (likely(dentry->d_op == &ll_d_ops))
-                RETURN(ll_revalidate_nd(dentry, nd));
-        else
-                RETURN(dentry->d_op == &ll_fini_d_ops ? 0 : -EINVAL);
-}
-
-struct dentry_operations ll_init_d_ops = {
-        .d_revalidate = ll_init_revalidate_nd,
-        .d_release = ll_release,
 };

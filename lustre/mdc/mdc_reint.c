@@ -130,7 +130,7 @@ int mdc_setattr(struct obd_export *exp, struct mdc_op_data *op_data,
                         [REQ_REC_OFF + 2] = ea2len,
                         [REQ_REC_OFF + 3] = sizeof(struct ldlm_request) };
         __u32 replysize[6] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
-                             [REPLY_REC_OFF] = sizeof(struct mds_body),
+                             [REPLY_REC_OFF] = sizeof(struct mdt_body),
                              [REPLY_REC_OFF+1] = obd->u.cli.cl_max_mds_easize,
                              [REPLY_REC_OFF+2] = LUSTRE_POSIX_ACL_MAX_SIZE,
                              [REPLY_REC_OFF+3] = sizeof(struct lustre_capa),
@@ -152,7 +152,6 @@ int mdc_setattr(struct obd_export *exp, struct mdc_op_data *op_data,
                 size[REQ_REC_OFF + 5] = sizeof(struct ldlm_request);
                 offset = REQ_REC_OFF + 5;
                 bufcount = 6;
-                replysize[REPLY_REC_OFF] = sizeof(struct mdt_body);
                 replybufcount = 6;
         } else {
                 bufcount = 4;
@@ -196,7 +195,8 @@ int mdc_setattr(struct obd_export *exp, struct mdc_op_data *op_data,
 
 int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
                const void *data, int datalen, int mode, __u32 uid, __u32 gid,
-               __u32 cap_effective, __u64 rdev, struct ptlrpc_request **request)
+               cfs_cap_t cap_effective, __u64 rdev,
+               struct ptlrpc_request **request)
 {
         CFS_LIST_HEAD(cancels);
         struct obd_device *obd = exp->exp_obd;
@@ -251,7 +251,7 @@ int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
         mdc_create_pack(req, REQ_REC_OFF, op_data, data, datalen, mode, uid,
                         gid, cap_effective, rdev);
 
-        size[REPLY_REC_OFF] = sizeof(struct mds_body);
+        size[REPLY_REC_OFF] = sizeof(struct mdt_body);
         size[REPLY_REC_OFF+1] = sizeof(struct ost_lvb);
         ptlrpc_req_set_repsize(req, 3, size);
 
@@ -309,7 +309,7 @@ int mdc_unlink(struct obd_export *exp, struct mdc_op_data *op_data,
                 RETURN(-ENOMEM);
         *request = req;
 
-        size[REPLY_REC_OFF] = sizeof(struct mds_body);
+        size[REPLY_REC_OFF] = sizeof(struct mdt_body);
         size[REPLY_REC_OFF + 1] = obd->u.cli.cl_max_mds_easize;
         size[REPLY_REC_OFF + 2] = obd->u.cli.cl_max_mds_cookiesize;
         ptlrpc_req_set_repsize(req, 4, size);
@@ -360,7 +360,7 @@ int mdc_link(struct obd_export *exp, struct mdc_op_data *op_data,
 
         mdc_link_pack(req, REQ_REC_OFF, op_data);
 
-        size[REPLY_REC_OFF] = sizeof(struct mds_body);
+        size[REPLY_REC_OFF] = sizeof(struct mdt_body);
         ptlrpc_req_set_repsize(req, 2, size);
 
         rc = mdc_reint(req, obd->u.cli.cl_rpc_lock, LUSTRE_IMP_FULL);
@@ -418,7 +418,7 @@ int mdc_rename(struct obd_export *exp, struct mdc_op_data *op_data,
 
         mdc_rename_pack(req, REQ_REC_OFF, op_data, old, oldlen, new, newlen);
 
-        size[REPLY_REC_OFF] = sizeof(struct mds_body);
+        size[REPLY_REC_OFF] = sizeof(struct mdt_body);
         size[REPLY_REC_OFF + 1] = obd->u.cli.cl_max_mds_easize;
         size[REPLY_REC_OFF + 2] = obd->u.cli.cl_max_mds_cookiesize;
         ptlrpc_req_set_repsize(req, 4, size);

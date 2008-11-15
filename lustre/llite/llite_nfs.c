@@ -57,11 +57,7 @@ __u32 get_uuid2int(const char *name, int len)
         return (key0 << 1);
 }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-static int ll_nfs_test_inode(struct inode *inode, unsigned long ino, void *opaque)
-#else
 static int ll_nfs_test_inode(struct inode *inode, void *opaque)
-#endif
 {
         struct ll_fid *iid = opaque;
 
@@ -120,9 +116,6 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
 {
         struct inode *inode;
         struct dentry *result;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        struct list_head *lp;
-#endif
         ENTRY;
 
         if (ino == 0)
@@ -143,51 +136,12 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
                 RETURN(ERR_PTR(-ESTALE));
         }
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         result = d_alloc_anon(inode);
         if (!result) {
                 iput(inode);
                 RETURN(ERR_PTR(-ENOMEM));
         }
-#else
-        /* now to find a dentry.
-         * If possible, get a well-connected one
-         */
-        spin_lock(&dcache_lock);
-        for (lp = inode->i_dentry.next; lp != &inode->i_dentry ; lp=lp->next) {
-                result = list_entry(lp,struct dentry, d_alias);
-                lock_dentry(result);
-                if (!(result->d_flags & DCACHE_DISCONNECTED)) {
-                        dget_locked(result);
-                        ll_set_dflags(result, DCACHE_REFERENCED);
-                        unlock_dentry(result);
-                        spin_unlock(&dcache_lock);
-                        iput(inode);
-                        RETURN(result);
-                }
-                unlock_dentry(result);
-        }
-        spin_unlock(&dcache_lock);
-        result = d_alloc_root(inode);
-        if (result == NULL) {
-                iput(inode);
-                RETURN(ERR_PTR(-ENOMEM));
-        }
-        result->d_flags |= DCACHE_DISCONNECTED;
-
-#endif
-        ll_set_dd(result);
-
-        lock_dentry(result);
-        if (unlikely(result->d_op == &ll_init_d_ops)) {
-                result->d_op = &ll_d_ops;
-                unlock_dentry(result);
-                smp_wmb();
-                ll_d_wakeup(result);
-        } else {
-                result->d_op = &ll_d_ops;
-                unlock_dentry(result);
-        }
+        ll_dops_init(result, 1);
 
         RETURN(result);
 }
@@ -236,7 +190,6 @@ int ll_dentry_to_fh(struct dentry *dentry, __u32 *datap, int *lenp,
         return 1;
 }
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 struct dentry *ll_get_dentry(struct super_block *sb, void *data)
 {
         __u32 *inump = (__u32*)data;
@@ -288,4 +241,3 @@ struct export_operations lustre_export_operations = {
        .get_parent = ll_get_parent,
        .get_dentry = ll_get_dentry, 
 };
-#endif

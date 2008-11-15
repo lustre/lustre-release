@@ -9,7 +9,7 @@ init_test_env $@
 
 assert_env CLIENTS MDSRATE SINGLECLIENT MPIRUN
 
-MACHINEFILE=${MACHINEFILE:-$(basename $0 .sh).machines}
+MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
 TESTDIR=$MOUNT
 
 # Requirements
@@ -42,7 +42,7 @@ log "===== $0 ====== "
 
 check_and_setup_lustre
 
-generate_machine_file $NODES_TO_USE $MACHINEFILE
+generate_machine_file $NODES_TO_USE $MACHINEFILE || error "can not generate machinefile"
 
 $LFS setstripe $TESTDIR -i 0 -c 1
 get_stripe $TESTDIR
@@ -136,6 +136,7 @@ else
 fi
 
 equals_msg `basename $0`: test complete, cleaning up
+rm -f $MACHINEFILE 
 zconf_umount_clients $NODES_TO_USE $MOUNT
 check_and_cleanup_lustre
 #rm -f $LOG

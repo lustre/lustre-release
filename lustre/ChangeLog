@@ -1,9 +1,9 @@
 tbd Sun Microsystems, Inc.
 	* version 1.8.0
 	* Support for kernels:
-	 2.6.5-7.312 (SLES 9),
+	 2.6.5-7.314 (SLES 9),
 	 2.6.9-67.0.22.EL (RHEL 4),
-	 2.6.16.60-0.27 (SLES 10),
+	 2.6.16.60-0.31 (SLES 10),
 	 2.6.18-92.1.10.el5 (RHEL 5),
 	 2.6.22.14 vanilla (kernel.org)
 	* Client support for unpatched kernels:
@@ -37,6 +37,80 @@ tbd Sun Microsystems, Inc.
 	  For more information, please refer to bugzilla 13904.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
+	* File join has been disabled in this release, refer to Bugzilla 16929.
+	* A new Lustre ADIO driver is available for:
+	  MPICH2-1.0.7
+
+Severity   : enhancement
+Bugzilla   : 17374
+Description: Update to sles9 kernel-2.6.5-7.314.
+
+Severity   : enhancement
+Bugzilla   : 17458
+Description: Update to SLES10 SP2 kernel-2.6.16.60-0.31.
+
+Severity   : normal
+Frequency  : Create a symlink file with a very long name
+Bugzilla   : 16578
+Description: ldlm_cancel_pack()) ASSERTION(max >= dlm->lock_count + count)
+Details    : If there is no extra space in the request for early cancels,
+	     ldlm_req_handles_avail() returns 0 instead of a negative value.
+
+Severity   : major
+Frequency  : rare
+Bugzilla   : 16492
+Description: mds is deadlocked
+Details    : in rare cases, inode in catalog can have i_no less than have parent
+	     i_no, this produce wrong order for locking during open, and parallel
+	     unlink can be lock open. this need teach mds_open to grab locks in
+	     resource id order, not at parent -> child order.
+
+Severity   : enhancement
+Bugzilla   : 1819
+Description: Add /proc entry for import status
+Details    : The mdc, osc, and mgc import directories now have
+	     an import directory that contains useful import data for debugging
+	     connection problems.
+
+Severity   : enhancement
+Bugzilla   : 15966
+Description: Re-disable certain /proc logging
+Details    : Enable and disable client's offset_stats, extents_stats and
+	     extents_stats_per_process stats logging on the fly.
+
+Severity   : major
+Frequency  : Only on FC kernels 2.6.22+
+Bugzilla   : 16303
+Description: oops in statahead
+Details    : Do not drop reference count for the dentry from VFS when lookup,
+	     VFS will do that by itself.
+
+Severity   : enhancement
+Bugzilla   : 16643
+Description: Generic /proc file permissions
+Details    : Set /Proc file permissions in a more generic way to enable non-
+	     root users operate on some /proc files.
+
+Severity   : major
+Bugzilla   : 16561
+Description: Hitting mdc_commit_close() ASSERTION
+Details    : Properly handle request reference release in
+	     ll_release_openhandle().
+
+Severity   : normal
+Bugzilla   : 15975
+Frequency  : only patchless client
+Description: add workaround for race between add/remove dentry from hash
+
+Severity   : enhancement
+Bugzilla   : 16845
+Description: Allow OST glimpses to return PW locks
+
+Severity   : minor
+Bugzilla   : 16717
+Description: LBUG when llog conf file is full
+Details    : When llog bitmap is full, ENOSPC should be returned for plain
+	     log.
 
 Severity   : normal
 Bugzilla   : 16907
@@ -46,7 +120,7 @@ Severity   : major
 Bugzilla   : 16750
 Description: service mount cannot take device name with ":"
 Details    : Only when device name contains ":/" will mount treat it as
-             client mount.
+	     client mount.
 
 Severity   : normal
 Bugzilla   : 15927
@@ -119,7 +193,7 @@ Details    : add workaround for get valid ost count for avoid warnings about
 Severity   : enhancement
 Bugzilla   : 15899
 Description: File striping can now be set to use an arbitrary pool of OSTs.
-	
+
 Severity   : enhancement
 Bugzilla   : 16573
 Description: Export bytes_read/bytes_write count on OSC/OST.
@@ -524,6 +598,13 @@ Description: assertion failure in ldlm_handle2lock()
 Details    : fix a race between class_handle_unhash() and class_handle2object()
 	     introduced in lustre 1.6.5 by bug 13622.
 
+Severity   : enhancement
+Bugzilla   : 11817
+Description: superblock lock contention with many SMP cores on one client
+Details    : several client filesystem locks were highly contended on SMP
+	     NUMA systems with 8 or more cores.  Per-CPU datastructures
+	     and more efficient locking implemented to reduce contention.
+
 Severity   : minor
 Frequency  : rare
 Bugzilla   : 12755
@@ -557,8 +638,90 @@ Details    : FIEMAP ioctl will allow an application to efficiently fetch the
 	     extent information of a file. It can be used to map logical blocks
 	     in a file to physical blocks in the block device.
 
--------------------------------------------------------------------------------
+Severity   : normal
+Frequency  : only with adaptive timeout enabled
+Bugzilla   : 16972
+Description: DEBUG_REQ() bad paging request
+Details    : ptlrpc_at_recv_early_reply() should not modify req->rq_repmsg
+	     because it can be accessed by reply_in_callback() without the
+	     rq_lock held.
 
+Severity   : normal
+Frequency  : only on Cray X2
+Bugzilla   : 16813
+Description: X2 build failures
+Details    : fix build failures on Cray X2.
+
+Severity   : normal
+Bugzilla   : 2066
+Description: xid & resent requests
+Details    : Initialize RPC XID from clock at startup (randomly if clock is
+	     bad).
+
+Severity   : major
+Bugzilla   : 14840
+Description: quota recovery deadlock during mds failover
+Details    : This patch includes att18982, att18236, att18237 in bz14840.
+	     Solve the problems:
+	     1. fix osts hang when mds does failover with quotaon
+	     2. prevent watchdog storm when osts threads wait for the
+	        recovery of mds
+
+Severity   : normal
+Bugzilla   : 16695
+Description: kernel panic on racer
+Details    : Do not access dchild->d_inode when IS_ERR(dchild) is true.
+
+Severity   : enhancement
+Bugzilla   : 14095
+Description: Add lustre_start utility to start or stop multiple Lustre servers
+	     from a CSV file.
+
+Severity   : major
+Bugzilla   : 17024
+Description: Lustre GPF in {:ptlrpc:ptlrpc_server_free_request+373}
+Details    : In case of memory pressure, list_del() can be called twice on
+	     req->rq_history_list, causing a kernel oops.
+
+Severity   : normal
+Bugzilla   : 17026
+Description: (ptllnd_peer.c:557:kptllnd_peer_check_sends()) ASSERTION(!in_interrupt()) failed
+Details    : fix stack overflow in the distributed lock manager by defering export
+	     eviction after a failed ast to the elt thread instead of handling
+	     it in the dlm interpret routine.
+
+Severity   : enhancement
+Bugzilla   : 12800
+Description: More exported tunables for mballoc
+Details    : Add support for tunable preallocation window and new tunables for
+	     large/small requests
+
+Severity   : normal
+Bugzilla   : 16680
+Description: Detect corruption of block bitmap and checking for preallocations
+Details    : Checks validity of on-disk block bitmap. Also it does better
+	     checking of number of applied preallocations. When corruption is
+	     found, it turns filesystem readonly to prevent further corruptions.
+
+Severity   : normal
+Bugzilla   : 16438
+Frequency  : only for big-endian servers
+Description: Check if system is big-endian while mounting fs with extents feature
+Details    : Mounting a filesystem with extents feature will fail on big-endian
+	     systems since ext3-based ldiskfs is not supported on big-endian
+	     systems. This can be over-riden with "bigendian_extents" mount option.
+
+Severity   : normal
+Bugzilla   : 16860
+Description: Excessive recovery window
+Details    : With AT enabled, the recovery window can be excessively long (6000+
+	     seconds). To address this problem, we no longer use
+	     OBD_RECOVERY_FACTOR when extending the recovery window (the connect
+	     timeout no longer depends on the service time, it is set to
+	     INITIAL_CONNECT_TIMEOUT now) and clients report the old service
+	     time via pb_service_time.
+
+-------------------------------------------------------------------------------
 
 2008-05-26  Sun Microsystems, Inc.
        * version 1.6.5
@@ -1503,6 +1666,14 @@ Description: Incorrect file ownership on O_DIRECT output files
 Details    : block usage reported by 'lfs quota' does not take into account
 	     files that have been written with O_DIRECT.
 
+Severity   : normal
+Bugzilla   : 17197
+Description: (rw.c:1323:ll_read_ahead_pages()) ASSERTION(page_idx > ria->ria_stoff) failed
+Details    : Once the unmatched stride IO mode is detected, shrink the stride-ahead
+	     window to 0. If it does hit cache miss, and read-pattern is still
+	     stride-io mode, does not reset the stride window, but also does not
+	     increase the stride window length in this case.
+
 --------------------------------------------------------------------------------
 
 2007-09-27         Cluster File Systems, Inc. <info@clusterfs.com>
@@ -2157,10 +2328,10 @@ Details    : Lov_mds_md was not free in an error handler in mds_create_object.
 	     be freed no matter whether fsfilt_commit success or not.
 
 Severity   : minor
-Frequency  : only with huge numbers of clients
+Frequency  : only with large numbers of cores on a single node
 Bugzilla   : 11817
 Description: Prevents from taking the superblock lock in llap_from_page for
-	     a soon died page.
+	     a soon killed page.
 Details    : using LL_ORIGIN_REMOVEPAGE origin flag instead of LL_ORIGIN_UNKNOW
 	     for llap_from_page call in ll_removepage() prevents from taking
 	     the superblock lock for a soon died page.

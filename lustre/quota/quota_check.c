@@ -33,6 +33,8 @@
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
+
+
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
@@ -42,14 +44,10 @@
 # include <linux/version.h>
 # include <linux/module.h>
 # include <linux/init.h>
-# if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #  include <linux/smp_lock.h>
 #  include <linux/buffer_head.h>
 #  include <linux/workqueue.h>
 #  include <linux/mount.h>
-# else
-#  include <linux/locks.h>
-# endif
 #else /* __KERNEL__ */
 # include <liblustre.h>
 #endif
@@ -63,6 +61,7 @@
 #include <lustre_quota.h>
 #include "quota_internal.h"
 
+#ifdef HAVE_QUOTA_SUPPORT
 #ifdef __KERNEL__
 static int target_quotacheck_callback(struct obd_export *exp,
                                       struct obd_quotactl *oqctl)
@@ -168,6 +167,7 @@ out:
 }
 
 #endif /* __KERNEL__ */
+#endif /* HAVE_QUOTA_SUPPORT */
 
 int client_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl)
 {

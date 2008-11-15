@@ -2,8 +2,6 @@ MODULES := lquota
 
 lquota-objs := quota_check.o quota_context.o quota_ctl.o quota_interface.o
 lquota-objs += quota_master.o quota_adjust_qunit.o lproc_quota.o
-quotactl-objs := quotactl_test.o
-quotaccheck-objs := quotacheck_test.o
 
 @INCLUDE_RULES@
 

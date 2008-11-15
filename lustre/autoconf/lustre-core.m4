@@ -122,6 +122,26 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# LC_FUNC_RELEASEPAGE_WITH_GFP
+#
+# if ->releasepage() takes a gfp_t arg in 2.6.9
+# This kernel defines gfp_t (HAS_GFP_T) but doesn't use it for this function,
+# while others either don't have gfp_t or pass gfp_t as the parameter.
+#
+AC_DEFUN([LC_FUNC_RELEASEPAGE_WITH_GFP],
+[AC_MSG_CHECKING([if releasepage has a gfp_t parameter])
+RELEASEPAGE_WITH_GFP="`grep -c 'releasepage.*gfp_t' $LINUX/include/linux/fs.h`"
+if test "$RELEASEPAGE_WITH_GFP" != 0 ; then
+	AC_DEFINE(HAVE_RELEASEPAGE_WITH_GFP, 1,
+                  [releasepage with gfp_t parameter])
+	AC_MSG_RESULT([yes])
+else
+	AC_MSG_RESULT([no])
+fi
+])
+
+
+#
 # LC_FUNC_ZAP_PAGE_RANGE
 #
 # if zap_page_range() takes a vma arg
@@ -220,9 +240,6 @@ LB_LINUX_TRY_COMPILE([
 	#include <linux/fs.h>
 	#include <linux/version.h>
 ],[
-	#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,24))
-	#error "down_read_trylock broken before 2.4.24"
-	#endif
 	struct inode i;
 	return (char *)&i.i_alloc_sem - (char *)&i;
 ],[
@@ -839,7 +856,7 @@ LB_LINUX_TRY_COMPILE([
 # LC_INODE_I_MUTEX
 # after 2.6.15 inode have i_mutex intead of i_sem
 AC_DEFUN([LC_INODE_I_MUTEX],
-[AC_MSG_CHECKING([use inode have i_mutex ])
+[AC_MSG_CHECKING([if inode has i_mutex ])
 LB_LINUX_TRY_COMPILE([
 	#include <linux/mutex.h>
 	#include <linux/fs.h>
@@ -853,7 +870,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_INODE_I_MUTEX, 1,
                 [after 2.6.15 inode have i_mutex intead of i_sem])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -874,7 +891,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_DQUOTOFF_MUTEX, 1,
                 [after 2.6.17 dquote use mutex instead if semaphore])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -934,7 +951,7 @@ LB_LINUX_TRY_COMPILE([
 	AC_DEFINE(HAVE_INVALIDATEPAGE_RETURN_INT, 1,
 		[Define if return type of invalidatepage should be int])
 ],[
-	AC_MSG_RESULT(NO)
+	AC_MSG_RESULT(no)
 ])
 ])
 
@@ -963,7 +980,7 @@ LB_LINUX_TRY_COMPILE([
 	AC_DEFINE(HAVE_UMOUNTBEGIN_VFSMOUNT, 1,
 		[Define umount_begin need second argument])
 ],[
-	AC_MSG_RESULT(NO)
+	AC_MSG_RESULT(no)
 ])
 EXTRA_KCFLAGS="$tmp_flags"
 ])
@@ -982,7 +999,7 @@ LB_LINUX_TRY_COMPILE([
 	AC_DEFINE(HAVE_INODE_BLKSIZE, 1,
 		[struct inode has i_blksize field])
 ],[
-	AC_MSG_RESULT(NO)
+	AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1009,7 +1026,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_VFS_READDIR_U64_INO, 1,
                 [if vfs_readdir need 64bit inode number])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 EXTRA_KCFLAGS="$tmp_flags"
 ])
@@ -1028,7 +1045,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_FILE_WRITEV, 1,
                 [use fops->writev])
 ],[
-	AC_MSG_RESULT(NO)
+	AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1046,7 +1063,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_FILE_READV, 1,
                 [use fops->readv])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1063,7 +1080,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_NR_PAGECACHE, 1,
                 [is kernel export nr_pagecache])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1073,6 +1090,7 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_CANCEL_DIRTY_PAGE],
 [AC_MSG_CHECKING([kernel has cancel_dirty_page])
 LB_LINUX_TRY_COMPILE([
+        #include <linux/mm.h>
         #include <linux/page-flags.h>
 ],[
         cancel_dirty_page(NULL, 0);
@@ -1081,7 +1099,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_CANCEL_DIRTY_PAGE, 1,
                   [kernel has cancel_dirty_page instead of clear_page_dirty])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1095,6 +1113,7 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_PAGE_CONSTANT],
 [AC_MSG_CHECKING([if kernel have PageConstant defined])
 LB_LINUX_TRY_COMPILE([
+        #include <linux/mm.h>
         #include <linux/page-flags.h>
 ],[
         #ifndef PG_constant
@@ -1113,6 +1132,7 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_PG_FS_MISC],
 [AC_MSG_CHECKING([kernel has PG_fs_misc])
 LB_LINUX_TRY_COMPILE([
+        #include <linux/mm.h>
         #include <linux/page-flags.h>
 ],[
         #ifndef PG_fs_misc
@@ -1123,7 +1143,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_PG_FS_MISC, 1,
                   [is kernel have PG_fs_misc])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1131,6 +1151,7 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_PAGE_CHECKED],
 [AC_MSG_CHECKING([kernel has PageChecked and SetPageChecked])
 LB_LINUX_TRY_COMPILE([
+        #include <linux/mm.h>
         #include <linux/page-flags.h>
 ],[
         #ifndef PageChecked
@@ -1144,7 +1165,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_PAGE_CHECKED, 1,
                   [does kernel have PageChecked and SetPageChecked])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1189,6 +1210,38 @@ AC_DEFUN([LC_EXPORT___D_MOVE],
 [fs/dcache.c],[
 AC_DEFINE(HAVE___D_MOVE, 1,
             [__d_move is exported by the kernel])
+],[
+])
+])
+
+#
+# LC_EXPORT_INVALIDATE_MAPPING_PAGES
+#
+# SLES9, RHEL4, RHEL5, vanilla 2.6.24 export invalidate_mapping_pages() but
+# SLES10 2.6.16 does not, for some reason.  For filter cache invalidation.
+#
+AC_DEFUN([LC_EXPORT_INVALIDATE_MAPPING_PAGES],
+    [LB_CHECK_SYMBOL_EXPORT([invalidate_mapping_pages], [mm/truncate.c], [
+         AC_DEFINE(HAVE_INVALIDATE_MAPPING_PAGES, 1,
+                        [exported invalidate_mapping_pages])],
+    [LB_CHECK_SYMBOL_EXPORT([invalidate_inode_pages], [mm/truncate.c], [
+         AC_DEFINE(HAVE_INVALIDATE_INODE_PAGES, 1,
+                        [exported invalidate_inode_pages])], [
+       AC_MSG_ERROR([no way to invalidate pages])
+  ])
+    ],[])
+])
+
+#
+# LC_EXPORT_FILEMAP_FDATASYNC_RANGE
+#
+# No standard kernels export this
+#
+AC_DEFUN([LC_EXPORT_FILEMAP_FDATAWRITE_RANGE],
+[LB_CHECK_SYMBOL_EXPORT([filemap_fdatawrite_range],
+[mm/filemap.c],[
+AC_DEFINE(HAVE_FILEMAP_FDATAWRITE_RANGE, 1,
+            [filemap_fdatawrite_range is exported by the kernel])
 ],[
 ])
 ])
@@ -1332,10 +1385,10 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_CONFIG_PINGER
           LC_CONFIG_CHECKSUM
           LC_CONFIG_LIBLUSTRE_RECOVERY
-          LC_CONFIG_QUOTA
           LC_CONFIG_HEALTH_CHECK_WRITE
           LC_CONFIG_LRU_RESIZE
           LC_CONFIG_ADAPTIVE_TIMEOUTS
+          LC_QUOTA_MODULE
 
           LC_TASK_PPTR
           # RHEL4 patches
@@ -1348,6 +1401,7 @@ AC_DEFUN([LC_PROG_LINUX],
 
           LC_STRUCT_KIOBUF
           LC_FUNC_COND_RESCHED
+          LC_FUNC_RELEASEPAGE_WITH_GFP
           LC_FUNC_ZAP_PAGE_RANGE
           LC_FUNC_PDE
           LC_FUNC_DIRECT_IO
@@ -1398,6 +1452,10 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_VFS_KERN_MOUNT
           LC_INVALIDATEPAGE_RETURN_INT
           LC_UMOUNTBEGIN_HAS_VFSMOUNT
+         if test x$enable_server = xyes ; then
+                LC_EXPORT_INVALIDATE_MAPPING_PAGES
+                LC_EXPORT_FILEMAP_FDATAWRITE_RANGE
+         fi
 
           #2.6.18 + RHEL5 (fc6)
           LC_PG_FS_MISC
@@ -1558,33 +1616,35 @@ fi
 #
 # LC_CONFIG_QUOTA
 #
-# whether to enable quota support
+# whether to enable quota support global control
 #
 AC_DEFUN([LC_CONFIG_QUOTA],
-[AC_ARG_ENABLE([quota], 
+[AC_ARG_ENABLE([quota],
 	AC_HELP_STRING([--enable-quota],
 			[enable quota support]),
-	[],[enable_quota='default'])
-if test x$linux25 != xyes; then
-	enable_quota='no'
-fi
-LB_LINUX_CONFIG([QUOTA],[
-	if test x$enable_quota = xdefault; then
-		enable_quota='yes'
-	fi
-],[
-	if test x$enable_quota = xdefault; then
-		enable_quota='no'
-		AC_MSG_WARN([quota is not enabled because the kernel lacks quota support])
-	else
-		if test x$enable_quota = xyes; then
-			AC_MSG_ERROR([cannot enable quota because the kernel lacks quota support])
-		fi
-	fi
+	[],[enable_quota='yes'])
 ])
-if test x$enable_quota != xno; then
+
+# whether to enable quota support(kernel modules)
+AC_DEFUN([LC_QUOTA_MODULE],
+[if test x$enable_quota != xno; then
+    LB_LINUX_CONFIG([QUOTA],[
+	enable_quota_module='yes'
 	AC_DEFINE(HAVE_QUOTA_SUPPORT, 1, [Enable quota support])
+    ],[
+	enable_quota_module='no'
+	AC_MSG_WARN([quota is not enabled because the kernel - lacks quota support])
+    ])
 fi
+])
+
+AC_DEFUN([LC_QUOTA],
+[#check global
+LC_CONFIG_QUOTA
+#check for utils
+AC_CHECK_HEADER(sys/quota.h,
+                [AC_DEFINE(HAVE_SYS_QUOTA_H, 1, [Define to 1 if you have <sys/quota.h>.])],
+                [AC_MSG_ERROR([don't find <sys/quota.h> in your system])])
 ])
 
 AC_DEFUN([LC_QUOTA_READ],
@@ -1698,7 +1758,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_SECURITY_PLUG, 1,
                 [SLES10 SP2 use extra parameter in vfs])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1809,7 +1869,7 @@ AM_CONDITIONAL(LIBLUSTRE_TESTS, test x$enable_liblustre_tests = xyes)
 AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
 AM_CONDITIONAL(SERVER, test x$enable_server = xyes)
-AM_CONDITIONAL(QUOTA, test x$enable_quota = xyes)
+AM_CONDITIONAL(QUOTA, test x$enable_quota_module = xyes)
 AM_CONDITIONAL(BLKID, test x$ac_cv_header_blkid_blkid_h = xyes)
 AM_CONDITIONAL(EXT2FS_DEVEL, test x$ac_cv_header_ext2fs_ext2fs_h = xyes)
 AM_CONDITIONAL(LIBPTHREAD, test x$enable_libpthread = xyes)

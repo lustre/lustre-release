@@ -78,7 +78,7 @@ void obdo_from_iattr(struct obdo *oa, struct iattr *attr, unsigned int ia_valid)
         if (ia_valid & ATTR_MODE) {
                 oa->o_mode = attr->ia_mode;
                 oa->o_valid |= OBD_MD_FLTYPE | OBD_MD_FLMODE;
-                if (!in_group_p(oa->o_gid) && !capable(CAP_FSETID))
+                if (!in_group_p(oa->o_gid) && !cfs_capable(CFS_CAP_FSETID))
                         oa->o_mode &= ~S_ISGID;
         }
         if (ia_valid & ATTR_UID) {
@@ -126,7 +126,7 @@ void iattr_from_obdo(struct iattr *attr, struct obdo *oa, obd_flag valid)
         if (valid & OBD_MD_FLMODE) {
                 attr->ia_mode = (attr->ia_mode & S_IFMT)|(oa->o_mode & ~S_IFMT);
                 attr->ia_valid |= ATTR_MODE;
-                if (!in_group_p(oa->o_gid) && !capable(CAP_FSETID))
+                if (!in_group_p(oa->o_gid) && !cfs_capable(CFS_CAP_FSETID))
                         attr->ia_mode &= ~S_ISGID;
         }
         if (valid & OBD_MD_FLUID) {
@@ -220,16 +220,10 @@ void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid)
 
         if (valid & OBD_MD_FLATIME && src->o_atime > LTIME_S(dst->i_atime))
                 LTIME_S(dst->i_atime) = src->o_atime;
-
-        /* mtime is always updated with ctime, but can be set in past.
-           As write and utime(2) may happen within 1 second, and utime's
-           mtime has a priority over write's one, leave mtime from mds 
-           for the same ctimes. */
-        if (valid & OBD_MD_FLCTIME && src->o_ctime > LTIME_S(dst->i_ctime)) {
+        if (valid & OBD_MD_FLMTIME && src->o_mtime > LTIME_S(dst->i_mtime))
+                LTIME_S(dst->i_mtime) = src->o_mtime;
+        if (valid & OBD_MD_FLCTIME && src->o_ctime > LTIME_S(dst->i_ctime))
                 LTIME_S(dst->i_ctime) = src->o_ctime;
-                if (valid & OBD_MD_FLMTIME)
-                        LTIME_S(dst->i_mtime) = src->o_mtime;
-        }
         if (valid & OBD_MD_FLSIZE)
                 i_size_write(dst, src->o_size);
         /* optimum IO size */

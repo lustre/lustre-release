@@ -1,4 +1,7 @@
 #!/bin/bash
+
+# vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
+
 #
 # lc_net - script for Lustre cluster network verification
 #
@@ -58,7 +61,7 @@ shift  `expr $OPTIND - 1`
 
 # Here we expect the csv file
 if [ $# -eq 0 ]; then
-	echo >&2 $"`basename $0`: Missing csv file!"
+	error_output "Missing csv file!"
 	usage
 fi
 
@@ -76,7 +79,7 @@ get_hostnames() {
 
 	# Get the list of nodes to be operated on
 	NODES_TO_USE=$(get_nodelist)
-	[ ${PIPESTATUS[0]} -ne 0 ] && echo >&2 "${NODES_TO_USE}" && return 1
+	[ ${PIPESTATUS[0]} -ne 0 ] && error_output "${NODES_TO_USE}" && return 1
 
 	# Check the node list
 	if [ -z "${NODES_TO_USE}" ]; then
@@ -133,7 +136,7 @@ local_check() {
 	# and get the IP address of this host from ping
 	HOST_IPADDRS[i]=$(ping_host ${HOST_NAMES[i]})
 	if [ ${PIPESTATUS[0]} -ne 0 ]; then
-		echo >&2 "${HOST_IPADDRS[i]}"
+		error_output "${HOST_IPADDRS[i]}"
 		return 1
 	fi
 
@@ -153,13 +156,13 @@ remote_check() {
 	cmd="ping -c1 ${HOST_NAMES[i]} 2>&1"
 	ret_str=$(${REMOTE} ${HOST_NAMES[i]} "${cmd}" 2>&1)
 	if [ ${PIPESTATUS[0]} -ne 0 -a -n "${ret_str}" ]; then
-		echo >&2 "`basename $0`: remote_check() error:"\
+		error_output "remote_check():"\
 		"remote to ${HOST_NAMES[i]} error: ${ret_str}!"
 		return 1
 	fi
 
 	if [ -z "${ret_str}" ]; then
-		echo >&2 "`basename $0`: remote_check() error:"\
+		error_output "remote_check():"\
 		"No results from ${HOST_NAMES[i]}! Check the network"\
 		"connectivity between local host and ${HOST_NAMES[i]}!"
 		return 1
@@ -177,7 +180,7 @@ remote_check() {
 	# Check whether ${HOST_NAMES[i]} agrees with the local host
 	# about what its name is resolved to.
 	if [ "${ip_addr}" != "${HOST_IPADDRS[i]}" ]; then
-		echo >&2 "`basename $0`: remote_check() error:"\
+		error_output "remote_check():"\
 		"Local host resolves ${HOST_NAMES[i]} to IP address"\
 		"\"${HOST_IPADDRS[i]}\", while its own resolution is"\
 		"\"${ip_addr}\". They are not the same!"

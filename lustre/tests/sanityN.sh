@@ -3,8 +3,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test:  3192 12652  15528/3811 9977  15528/11549
-ALWAYS_EXCEPT="                 14b  14c    19         28    29           $SANITYN_EXCEPT"
+# bug number for skipped test: 3192 12652  15528/3811 16929 9977 15528/11549
+ALWAYS_EXCEPT="                14b  14c    19         22    28   29          $SANITYN_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # bug number for skipped test:                                                    12652 12652
@@ -50,13 +50,10 @@ FAIL_ON_ERROR=${FAIL_ON_ERROR:-false}
 SETUP=${SETUP:-:}
 TRACE=${TRACE:-""}
 
-LPROC=/proc/fs/lustre
-
 [ "$SANITYLOG" ] && rm -f $SANITYLOG || true
 
 check_and_setup_lustre
 
-LPROC=/proc/fs/lustre
 LOVNAME=`lctl get_param -n llite.*.lov.common_name | tail -n 1`
 OSTCOUNT=`lctl get_param -n lov.$LOVNAME.numobd`
 
@@ -133,9 +130,9 @@ test_2e() {
 run_test 2e "check chmod on root is propagated to others"
 
 test_3() {
-	( cd $DIR1 ; ln -s this/is/good lnk )
-	[ "this/is/good" = "`perl -e 'print readlink("'$DIR2/lnk'");'`" ] || \
-		error
+	( cd $DIR1 ; ln -s this/is/good $tfile )
+	[ "this/is/good" = "`perl -e 'print readlink("'$DIR2/$tfile'");'`" ] ||
+		error "link $DIR2/$tfile not as expected"
 }
 run_test 3 "symlink on one mtpt, readlink on another ==========="
 
@@ -334,16 +331,17 @@ test_16() {
 run_test 16 "2500 iterations of dual-mount fsx ================="
 
 test_17() { # bug 3513, 3667
-	[ ! -d /proc/fs/lustre/ost ] && skip "remote OST, skipping OST-only test" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
-	cp /etc/termcap $DIR1/f17
+	lfs setstripe $DIR1/$tfile -i 0 -c 1
+	cp /etc/termcap $DIR1/$tfile
 	cancel_lru_locks osc > /dev/null
 	#define OBD_FAIL_ONCE|OBD_FAIL_LDLM_CREATE_RESOURCE    0x30a
-	lctl set_param fail_loc=0x8000030a
-	ls -ls $DIR1/f17 | awk '{ print $1,$6 }' > $DIR1/f17-1 & \
-	ls -ls $DIR2/f17 | awk '{ print $1,$6 }' > $DIR2/f17-2
+	do_facet ost1 lctl set_param fail_loc=0x8000030a
+	ls -ls $DIR1/$tfile | awk '{ print $1,$6 }' > $DIR1/$tfile-1 & \
+	ls -ls $DIR2/$tfile | awk '{ print $1,$6 }' > $DIR2/$tfile-2
 	wait
-	diff -u $DIR1/f17-1 $DIR2/f17-2 || error "files are different"
+	diff -u $DIR1/$tfile-1 $DIR2/$tfile-2 || error "files are different"
 }
 run_test 17 "resource creation/LVB creation race ==============="
 
@@ -356,10 +354,8 @@ run_test 18 "mmap sanity check ================================="
 test_19() { # bug3811
 	[ -d /proc/fs/lustre/obdfilter ] || return 0
 
-	MAX=`cat /proc/fs/lustre/obdfilter/*/readcache_max_filesize | head -n 1`
-	for O in /proc/fs/lustre/obdfilter/*OST*; do
-		echo 4096 > $O/readcache_max_filesize
-	done
+	MAX=`lctl get_param -n obdfilter.*.readcache_max_filesize | head -n 1`
+	lctl set_param -n obdfilter.*OST*.readcache_max_filesize=4096
 	dd if=/dev/urandom of=$TMP/f19b bs=512k count=32
 	SUM=`cksum $TMP/f19b | cut -d" " -f 1,2`
 	cp $TMP/f19b $DIR1/f19b
@@ -374,9 +370,7 @@ test_19() { # bug3811
 		[ "`cat $TMP/sum2`" = "$SUM" ] || \
 			error "$DIR2/f19b `cat $TMP/sum2` != $SUM"
 	done
-	for O in /proc/fs/lustre/obdfilter/*OST*; do
-		echo $MAX > $O/readcache_max_filesize
-	done
+	lctl set_param -n obdfilter.*OST*.readcache_max_filesize=$MAX
 	rm $DIR1/f19b
 }
 run_test 19 "test concurrent uncached read races ==============="
@@ -384,12 +378,12 @@ run_test 19 "test concurrent uncached read races ==============="
 test_20() {
 	mkdir $DIR1/d20
 	cancel_lru_locks osc
-	CNT=$((`cat /proc/fs/lustre/llite/*/dump_page_cache | wc -l`))
+	CNT=$((`lctl get_param -n llite.*.dump_page_cache | wc -l`))
 	multiop $DIR1/f20 Ow8190c
 	multiop $DIR2/f20 Oz8194w8190c
 	multiop $DIR1/f20 Oz0r8190c
 	cancel_lru_locks osc
-	CNTD=$((`cat /proc/fs/lustre/llite/*/dump_page_cache | wc -l` - $CNT))
+	CNTD=$((`lctl get_param -n llite.*.dump_page_cache | wc -l` - $CNT))
 	[ $CNTD -gt 0 ] && \
 	    error $CNTD" page left in cache after lock cancel" || true
 }
@@ -585,7 +579,7 @@ test_30() { #bug #11110
 
 run_test 30 "recreate file race ========="
 
-test_31() {
+test_31a() {
         mkdir -p $DIR1/$tdir || error "Creating dir $DIR1/$tdir"
         writes=`LANG=C dd if=/dev/zero of=$DIR/$tdir/$tfile count=1 2>&1 |
                 awk 'BEGIN { FS="+" } /out/ {print $1}'`
@@ -595,7 +589,24 @@ test_31() {
                awk 'BEGIN { FS="+" } /in/ {print $1}'`
         [ $reads -eq $writes ] || error "read" $reads "blocks, must be" $writes
 }
-run_test 31 "voluntary cancel / blocking ast race=============="
+run_test 31a "voluntary cancel / blocking ast race=============="
+
+test_31b() {
+        remote_ost || { skip "local OST" && return 0; }
+        remote_ost_nodsh && skip "remote OST w/o dsh" && return 0
+        mkdir -p $DIR1/$tdir || error "Creating dir $DIR1/$tdir"
+        lfs setstripe $DIR/$tdir/$tfile -i 0 -c 1
+        cp /etc/hosts $DIR/$tdir/$tfile
+        #define OBD_FAIL_LDLM_CANCEL_BL_CB_RACE   0x314
+        lctl set_param fail_loc=0x314
+        #define OBD_FAIL_LDLM_OST_FAIL_RACE      0x316
+        do_facet ost1 lctl set_param fail_loc=0x316
+        # Don't crash kernel
+        cat $DIR2/$tdir/$tfile > /dev/null 2>&1
+        lctl set_param fail_loc=0
+        do_facet ost1 lctl set_param fail_loc=0
+}
+run_test 31b "voluntary OST cancel / blocking ast race=============="
 
 # enable/disable lockless truncate feature, depending on the arg 0/1
 enable_lockless_truncate() {
@@ -637,6 +648,8 @@ test_32a() { # bug 11270
 run_test 32a "lockless truncate"
 
 test_32b() { # bug 11270
+        remote_ost_nodsh && skip "remote OST with nodsh" && return
+
         local node
         local p="$TMP/sanityN-$TESTNAME.parameters"
         save_lustre_params $HOSTNAME "llite.*.contention_seconds" > $p

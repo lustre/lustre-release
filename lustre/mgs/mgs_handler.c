@@ -163,6 +163,7 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         struct mgs_obd *mgs = &obd->u.mgs;
         struct lustre_mount_info *lmi;
         struct lustre_sb_info *lsi;
+        struct llog_ctxt *ctxt;
         struct vfsmount *mnt;
         int rc = 0;
         ENTRY;
@@ -223,7 +224,7 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
 
         if (!mgs->mgs_service) {
                 CERROR("failed to start service\n");
-                GOTO(err_fs, rc = -ENOMEM);
+                GOTO(err_llog, rc = -ENOMEM);
         }
 
         rc = ptlrpc_start_threads(obd, mgs->mgs_service);
@@ -244,6 +245,10 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
 
 err_thread:
         ptlrpc_unregister_service(mgs->mgs_service);
+err_llog:
+        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+        if (ctxt)
+                llog_cleanup(ctxt);
 err_fs:
         /* No extra cleanup needed for llog_init_commit_thread() */
         mgs_fs_cleanup(obd);
@@ -358,10 +363,9 @@ static int mgs_check_target(struct obd_device *obd, struct mgs_target_info *mti)
         rc = mgs_check_index(obd, mti);
         if (rc == 0) {
                 LCONSOLE_ERROR_MSG(0x13b, "%s claims to have registered, but "
-                                  "this MGS does not know about it.  Assuming "
-                                  "writeconf.\n", mti->mti_svname);
-                mti->mti_flags |= LDD_F_WRITECONF;
-                rc = 1;
+                                  "this MGS does not know about it, preventing "
+                                  "registration.\n", mti->mti_svname);
+                rc = -ENOENT;
         } else if (rc == -1) {
                 LCONSOLE_ERROR_MSG(0x13c, "Client log %s-client has "
                                    "disappeared! Regenerating all logs.\n",
@@ -655,11 +659,17 @@ int mgs_handle(struct ptlrpc_request *req)
         RETURN(0);
 }
 
+static inline int mgs_init_export(struct obd_export *exp)
+{
+        return ldlm_init_export(exp);
+}
+
 static inline int mgs_destroy_export(struct obd_export *exp)
 {
         ENTRY;
 
         target_destroy_export(exp);
+        ldlm_destroy_export(exp);
         mgs_client_free(exp);
 
         RETURN(0);
@@ -683,7 +693,7 @@ static int mgs_extract_fs_pool(char * arg, char *fsname, char *poolname)
         RETURN(0);
 }
 
-static int mgs_iocontrol_pool(struct obd_device *obd, 
+static int mgs_iocontrol_pool(struct obd_device *obd,
                               struct obd_ioctl_data *data)
 {
         int rc;
@@ -698,7 +708,7 @@ static int mgs_iocontrol_pool(struct obd_device *obd,
         if (fsname == NULL)
                 RETURN(-ENOMEM);
 
-        OBD_ALLOC(poolname, MAXPOOLNAME + 1);
+        OBD_ALLOC(poolname, LOV_MAXPOOLNAME + 1);
         if (poolname == NULL) {
                 rc = -ENOMEM;
                 GOTO(out_pool, rc);
@@ -788,7 +798,7 @@ out_pool:
                 OBD_FREE(fsname, MTI_NAME_MAXLEN);
 
         if (poolname != NULL)
-                OBD_FREE(poolname, MAXPOOLNAME + 1);
+                OBD_FREE(poolname, LOV_MAXPOOLNAME + 1);
 
         RETURN(rc);
 }
@@ -896,6 +906,7 @@ static struct obd_ops mgs_obd_ops = {
         .o_setup           = mgs_setup,
         .o_precleanup      = mgs_precleanup,
         .o_cleanup         = mgs_cleanup,
+        .o_init_export     = mgs_init_export,
         .o_destroy_export  = mgs_destroy_export,
         .o_iocontrol       = mgs_iocontrol,
 };

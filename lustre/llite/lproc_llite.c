@@ -651,11 +651,7 @@ struct llite_file_opcode {
         { LPROC_LL_TRUNC,          LPROCFS_TYPE_REGS, "truncate" },
         { LPROC_LL_LOCKLESS_TRUNC, LPROCFS_TYPE_REGS, "lockless_truncate" },
         { LPROC_LL_FLOCK,          LPROCFS_TYPE_REGS, "flock" },
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         { LPROC_LL_GETATTR,        LPROCFS_TYPE_REGS, "getattr" },
-#else
-        { LPROC_LL_REVALIDATE,     LPROCFS_TYPE_REGS, "getattr" },
-#endif
         /* special inode operation */
         { LPROC_LL_STAFS,          LPROCFS_TYPE_REGS, "statfs" },
         { LPROC_LL_ALLOC_INODE,    LPROCFS_TYPE_REGS, "alloc_inode" },
@@ -1119,8 +1115,9 @@ static int ll_rw_extents_stats_pp_seq_show(struct seq_file *seq, void *v)
         do_gettimeofday(&now);
 
         if (!sbi->ll_rw_stats_on) {
-                seq_printf(seq, "Disabled\n"
-                                "Write anything in this file to activate\n");
+                seq_printf(seq, "disabled\n"
+                                "write anything in this file to activate, "
+                                "then 0 or \"[D/d]isabled\" to deactivate\n");
                 return 0;
         }
         seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
@@ -1149,8 +1146,18 @@ static ssize_t ll_rw_extents_stats_pp_seq_write(struct file *file,
         struct ll_sb_info *sbi = seq->private;
         struct ll_rw_extents_info *io_extents = &sbi->ll_rw_extents_info;
         int i;
+        int value = 1, rc = 0;
 
-        sbi->ll_rw_stats_on = 1;
+        rc = lprocfs_write_helper(buf, len, &value);
+        if (rc < 0 && (strcmp(buf, "disabled") == 0 ||
+                       strcmp(buf, "Disabled") == 0))
+                value = 0;
+
+        if (value == 0)
+                sbi->ll_rw_stats_on = 0;
+        else
+                sbi->ll_rw_stats_on = 1;
+
         spin_lock(&sbi->ll_pp_extent_lock);
         for(i = 0; i < LL_PROCESS_HIST_MAX; i++) {
                 io_extents->pp_extents[i].pid = 0;
@@ -1172,8 +1179,9 @@ static int ll_rw_extents_stats_seq_show(struct seq_file *seq, void *v)
         do_gettimeofday(&now);
 
         if (!sbi->ll_rw_stats_on) {
-                seq_printf(seq, "Disabled\n"
-                                "Write anything in this file to activate\n");
+                seq_printf(seq, "disabled\n"
+                                "write anything in this file to activate, "
+                                "then 0 or \"[D/d]isabled\" to deactivate\n");
                 return 0;
         }
         seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
@@ -1197,8 +1205,17 @@ static ssize_t ll_rw_extents_stats_seq_write(struct file *file, const char *buf,
         struct ll_sb_info *sbi = seq->private;
         struct ll_rw_extents_info *io_extents = &sbi->ll_rw_extents_info;
         int i;
+        int value = 1, rc = 0;
 
-        sbi->ll_rw_stats_on = 1;
+        rc = lprocfs_write_helper(buf, len, &value);
+        if (rc < 0 && (strcmp(buf, "disabled") == 0 ||
+                       strcmp(buf, "Disabled") == 0))
+                value = 0;
+
+        if (value == 0)
+                sbi->ll_rw_stats_on = 0;
+        else
+                sbi->ll_rw_stats_on = 1;
         spin_lock(&sbi->ll_pp_extent_lock);
         for(i = 0; i <= LL_PROCESS_HIST_MAX; i++)
         {
@@ -1330,8 +1347,9 @@ static int ll_rw_offset_stats_seq_show(struct seq_file *seq, void *v)
         do_gettimeofday(&now);
 
         if (!sbi->ll_rw_stats_on) {
-                seq_printf(seq, "Disabled\n"
-                                "Write anything in this file to activate\n");
+                seq_printf(seq, "disabled\n"
+                                "write anything in this file to activate, "
+                                "then 0 or \"[D/d]isabled\" to deactivate\n");
                 return 0;
         }
         spin_lock(&sbi->ll_process_lock);
@@ -1380,8 +1398,18 @@ static ssize_t ll_rw_offset_stats_seq_write(struct file *file, const char *buf,
         struct ll_sb_info *sbi = seq->private;
         struct ll_rw_process_info *process_info = sbi->ll_rw_process_info;
         struct ll_rw_process_info *offset_info = sbi->ll_rw_offset_info;
+        int value = 1, rc = 0;
 
-        sbi->ll_rw_stats_on = 1;
+        rc = lprocfs_write_helper(buf, len, &value);
+
+        if (rc < 0 && (strcmp(buf, "disabled") == 0 ||
+                           strcmp(buf, "Disabled") == 0))
+                value = 0;
+
+        if (value == 0)
+                sbi->ll_rw_stats_on = 0;
+        else
+                sbi->ll_rw_stats_on = 1;
 
         spin_lock(&sbi->ll_process_lock);
         sbi->ll_offset_process_count = 0;

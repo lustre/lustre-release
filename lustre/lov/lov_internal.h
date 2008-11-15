@@ -157,6 +157,8 @@ int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
                   struct ost_lvb *lvb, int kms_only);
 int lov_adjust_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
                    obd_off size, int shrink);
+int lov_update_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
+                   struct ost_lvb *lvb, obd_flag valid);
 
 /* lov_offset.c */
 obd_size lov_stripe_size(struct lov_stripe_md *lsm, obd_size ost_size,
@@ -306,7 +308,8 @@ static inline void lprocfs_lov_init_vars(struct lprocfs_static_vars *lvars)
 #endif
 
 /* pools */
-extern struct lustre_hash_operations pool_hash_operations;
+extern lustre_hash_ops_t pool_hash_operations;
+
 /* ost_pool methods */
 int lov_ost_pool_init(struct ost_pool *op, unsigned int count);
 int lov_ost_pool_extend(struct ost_pool *op, unsigned int max_count);
@@ -323,5 +326,35 @@ void lov_dump_pool(int level, struct pool_desc *pool);
 struct pool_desc *lov_find_pool(struct lov_obd *lov, char *poolname);
 int lov_check_index_in_pool(__u32 idx, struct pool_desc *pool);
 
+
+#if BITS_PER_LONG == 64
+# define ll_do_div64(n,base) ({                                 \
+        uint64_t __base = (base);                               \
+        uint64_t __rem;                                         \
+        __rem = ((uint64_t)(n)) % __base;                       \
+        (n) = ((uint64_t)(n)) / __base;                         \
+        __rem;                                                  \
+  })
+#elif BITS_PER_LONG == 32
+# define ll_do_div64(n,base) ({                                 \
+        uint64_t __rem;                                         \
+        if ((sizeof(base) > 4) && (((base)&0xffffffff00000000ULL) != 0)) { \
+                int __remainder;                                \
+                LASSERTF(!((base) & (LOV_MIN_STRIPE_SIZE - 1)), "64 bit lov "\
+                          "division %llu / %llu\n", (n), (base)); \
+                __remainder = (n) & (LOV_MIN_STRIPE_SIZE - 1);  \
+                (n) >>= LOV_MIN_STRIPE_BITS;                    \
+                (base) >>= LOV_MIN_STRIPE_BITS;                 \
+                __rem = do_div(n, base);                        \
+                __rem <<= LOV_MIN_STRIPE_BITS;                  \
+                __rem += __remainder;                           \
+        } else {                                                \
+                __rem = do_div(n, base);                        \
+        }                                                       \
+        __rem;                                                  \
+  })
+#else
+#error Unsupported architecture.
+#endif
 
 #endif

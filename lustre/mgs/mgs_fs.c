@@ -49,9 +49,7 @@
 #include <linux/kmod.h>
 #include <linux/version.h>
 #include <linux/sched.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <linux/mount.h>
-#endif
 #include <obd_class.h>
 #include <obd_support.h>
 #include <lustre_disk.h>

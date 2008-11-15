@@ -307,7 +307,9 @@ int mds_finish_transno(struct mds_obd *mds, struct inode **inodes, void *handle,
                         lcd->lcd_last_data    = cpu_to_le32(op_data);
                 }
         }
-        lcd->lcd_last_time = cpu_to_le32(cfs_time_current_sec());
+        /** update trans table */
+        target_trans_table_update(req->rq_export, transno);
+
         if (off <= 0) {
                 CERROR("client idx %d has offset %lld\n", med->med_lr_idx, off);
                 err = -EINVAL;
@@ -800,7 +802,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                       lum->lmm_stripe_offset ==
                       (typeof(lum->lmm_stripe_offset))(-1) &&
                       lum->lmm_stripe_count == 0 &&
-                      lum->lmm_magic != LOV_USER_MAGIC_V3)){
+                      le32_to_cpu(lum->lmm_magic) != LOV_USER_MAGIC_V3)){
                         rc = fsfilt_set_md(obd, inode, handle, NULL, 0, "lov");
                         if (rc)
                                 GOTO(cleanup, rc);
@@ -940,6 +942,7 @@ static void reconstruct_reint_create(struct mds_update_record *rec, int offset,
                               obd_uuid2str(&exp->exp_client_uuid),
                               obd_export_nid2str(exp));
                 mds_export_evict(exp);
+                l_dput(parent);
                 EXIT;
                 return;
         }
@@ -1022,6 +1025,11 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 GOTO(cleanup, rc = -EROFS);
         }
 
+        /** check there is no stale orphan with same inode number */
+        rc = mds_check_stale_orphan(obd, rec->ur_fid2);
+        if (rc)
+                GOTO(cleanup, rc);
+
         /* version recovery check */
         rc = mds_version_get_check(req, dir, 0);
         if (rc)
@@ -1040,9 +1048,11 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 gid = current->fsgid;
 
         /* we try to get enough quota to write here, and let ldiskfs
-         * decide if it is out of quota or not b=14783 */
+         * decide if it is out of quota or not b=14783
+         * FIXME: after CMD is used, pointer to obd_trans_info* couldn't
+         * be NULL, b=14840 */
         lquota_chkquota(mds_quota_interface_ref, obd,
-                        current->fsuid, gid, 1, &rec_pending);
+                        current->fsuid, gid, 1, &rec_pending, NULL);
 
         switch (type) {
         case S_IFREG:{
@@ -1481,6 +1491,10 @@ static int mds_verify_child(struct obd_device *obd,
         int rc = 0, cleanup_phase = 2; /* parent, child locks */
         ENTRY;
 
+        /* not want child - not check it */
+        if (name == NULL)
+                RETURN(0);
+
         vchild = ll_lookup_one_len(name, dparent, namelen - 1);
         if (IS_ERR(vchild))
                 GOTO(cleanup, rc = PTR_ERR(vchild));
@@ -1494,6 +1508,12 @@ static int mds_verify_child(struct obd_device *obd,
                 *dchildp = vchild;
 
                 RETURN(0);
+        }
+        /* resouce is changed, but not want child lock, return new child */
+        if (child_lockh == NULL) {
+                dput(dchild);
+                *dchildp = vchild;
+                GOTO(cleanup, rc = 0);
         }
 
         CDEBUG(D_DLMTRACE, "child inode changed: %p != %p (%lu != "LPU64")\n",
@@ -1534,6 +1554,7 @@ static int mds_verify_child(struct obd_device *obd,
                         GOTO(cleanup, rc = -EIO);
         } else {
                 memset(child_res_id, 0, sizeof(*child_res_id));
+                memset(child_lockh, 0, sizeof(*child_lockh));
         }
 
         EXIT;
@@ -1568,6 +1589,7 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
         struct ldlm_res_id parent_res_id = { .name = {0} };
         ldlm_policy_data_t parent_policy = {.l_inodebits = { parent_lockpart }};
         ldlm_policy_data_t child_policy = {.l_inodebits = { child_lockpart }};
+        static struct ldlm_res_id child_res_id_nolock = { .name = {0} };
         struct inode *inode;
         int rc = 0, cleanup_phase = 0;
         ENTRY;
@@ -1588,6 +1610,8 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
 
         cleanup_phase = 1; /* parent dentry */
 
+        if (name == NULL)
+                GOTO(retry_locks, rc);
         /* Step 2: Lookup child (without DLM lock, to get resource name) */
         *dchildp = mds_lookup(obd, name, *dparentp, namelen - 1);
         if (IS_ERR(*dchildp)) {
@@ -1597,6 +1621,7 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
         }
 
         cleanup_phase = 2; /* child dentry */
+
         inode = (*dchildp)->d_inode;
         if (inode != NULL) {
                 if (is_bad_inode(inode)) {
@@ -1630,15 +1655,12 @@ retry_locks:
          *         exist, we still have to lock the parent and re-lookup. */
         rc = enqueue_ordered_locks(obd,&parent_res_id,parent_lockh,parent_mode,
                                    &parent_policy,
-                                   &child_res_id, child_lockh, child_mode,
+                                   child_lockh ? &child_res_id :
+                                                 &child_res_id_nolock,
+                                   child_lockh, child_mode,
                                    &child_policy);
         if (rc)
                 GOTO(cleanup, rc);
-
-        if (!(*dchildp)->d_inode)
-                cleanup_phase = 3; /* parent lock */
-        else
-                cleanup_phase = 4; /* child lock */
 
         /* Step 4: Re-lookup child to verify it hasn't changed since locking */
         rc = mds_verify_child(obd, &parent_res_id, parent_lockh, *dparentp,
@@ -1647,17 +1669,12 @@ retry_locks:
         if (rc > 0)
                 goto retry_locks;
         if (rc < 0) {
-                cleanup_phase = 2;
                 GOTO(cleanup, rc);
         }
 
 cleanup:
         if (rc) {
                 switch (cleanup_phase) {
-                case 4:
-                        ldlm_lock_decref(child_lockh, child_mode);
-                case 3:
-                        ldlm_lock_decref(parent_lockh, parent_mode);
                 case 2:
                         l_dput(*dchildp);
                 case 1:
@@ -1713,7 +1730,7 @@ static int mds_orphan_add_link(struct mds_update_record *rec,
                S_ISDIR(inode->i_mode) ? "dir" :
                 S_ISREG(inode->i_mode) ? "file" : "other",rec->ur_name,fidname);
 
-        if (mds_orphan_open_count(inode) == 0 || inode->i_nlink != 0)
+        if (!mds_orphan_needed(obd, inode) || inode->i_nlink != 0)
                 RETURN(0);
 
         pending_child = lookup_one_len(fidname, mds->mds_pending_dir, fidlen);
@@ -1827,12 +1844,12 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         cleanup_phase = 1; /* dchild, dparent, locks */
 
+        dget(dchild);
         /* VBR: version recovery check for parent */
         rc = mds_version_get_check(req, dparent->d_inode, 0);
         if (rc)
                 GOTO(cleanup_no_trans, rc);
 
-        dget(dchild);
         child_inode = dchild->d_inode;
         if (child_inode == NULL) {
                 CDEBUG(D_INODE, "child doesn't exist (dir %lu, name %s)\n",
@@ -1894,7 +1911,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
          * only do the object removal later if no open files/links remain. */
         if ((S_ISDIR(child_inode->i_mode) && child_inode->i_nlink == 2) ||
             child_inode->i_nlink == 1) {
-                if (mds_orphan_open_count(child_inode) > 0) {
+                if (mds_orphan_needed(obd, child_inode)) {
                         /* need to lock pending_dir before transaction */
                         LOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode);
                         cleanup_phase = 5; /* UNLOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode); */
@@ -1958,7 +1975,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         }
 
         if (rc == 0 && child_inode->i_nlink == 0) {
-                if (mds_orphan_open_count(child_inode) > 0)
+                if (mds_orphan_needed(obd, child_inode))
                         rc = mds_orphan_add_link(rec, obd, dchild);
 
                 if (rc == 1)
@@ -1986,10 +2003,19 @@ cleanup:
                 struct iattr iattr;
                 int err;
 
+                /* update ctime of unlinked file, even if last link is
+                   removed because open-unlinked file can be statted */
+                iattr.ia_valid = ATTR_CTIME;
+                LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                err = fsfilt_setattr(obd, dchild, handle, &iattr, 0);
+                if (err)
+                        CERROR("error on unlinked inode time update: "
+                               "rc = %d\n", err);
+
+                /* update mtime and ctime of parent directory*/
                 iattr.ia_valid = ATTR_MTIME | ATTR_CTIME;
                 LTIME_S(iattr.ia_mtime) = rec->ur_time;
                 LTIME_S(iattr.ia_ctime) = rec->ur_time;
-
                 err = fsfilt_setattr(obd, dparent, handle, &iattr, 0);
                 if (err)
                         CERROR("error on parent setattr: rc = %d\n", err);
@@ -2132,6 +2158,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         dchild = mds_lookup(obd, rec->ur_name, de_tgt_dir, rec->ur_namelen-1);
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
+                dchild = NULL;
                 if (rc != -EPERM && rc != -EACCES && rc != -ENAMETOOLONG)
                         CERROR("child lookup error %d\n", rc);
                 GOTO(cleanup, rc);
@@ -2162,9 +2189,30 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         UNLOCK_INODE_MUTEX(de_tgt_dir->d_inode);
         if (rc && rc != -EPERM && rc != -EACCES)
                 CERROR("vfs_link error %d\n", rc);
+        if (rc == 0) {
+                struct iattr iattr;
+                int err;
+
+                /* update ctime of old file */
+                iattr.ia_valid = ATTR_CTIME;
+                LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                err = fsfilt_setattr(obd, de_src, handle, &iattr, 0);
+                if (err)
+                        CERROR("error on old inode time update: "
+                               "rc = %d\n", err);
+
+                /* update mtime and ctime of target directory */
+                iattr.ia_valid = ATTR_MTIME | ATTR_CTIME;
+                LTIME_S(iattr.ia_mtime) = rec->ur_time;
+                LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                err = fsfilt_setattr(obd, de_tgt_dir, handle, &iattr, 0);
+                if (err)
+                        CERROR("error on target dir inode time update: "
+                               "rc = %d\n", err);
+        }
 cleanup:
         inodes[0] = de_tgt_dir ? de_tgt_dir->d_inode : NULL;
-        inodes[1] = dchild->d_inode;
+        inodes[1] = (dchild && !IS_ERR(dchild)) ? dchild->d_inode : NULL;
         rc = mds_finish_transno(mds, inodes, handle, req, rc, 0, 0);
         EXIT;
 
@@ -2518,7 +2566,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
 
         if ((S_ISDIR(new_inode->i_mode) && new_inode->i_nlink == 2) ||
             new_inode->i_nlink == 1) {
-                if (mds_orphan_open_count(new_inode) > 0) {
+                if (mds_orphan_needed(obd, new_inode)) {
                         /* need to lock pending_dir before transaction */
                         LOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode);
                         cleanup_phase = 4; /* UNLOCK_INODE_MUTEX(mds->mds_pending_dir->d_inode); */
@@ -2534,12 +2582,10 @@ no_unlink:
         OBD_FAIL_WRITE(obd, OBD_FAIL_MDS_REINT_RENAME_WRITE,
                        de_srcdir->d_inode->i_sb);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
         /* Check if we are moving old entry into its child. 2.6 does not
            check for this in vfs_rename() anymore */
         if (is_subdir(de_new, de_old))
                 GOTO(cleanup, rc = -EINVAL);
-#endif
 
         lmm = lustre_msg_buf(req->rq_repmsg, offset + 1, 0);
         handle = fsfilt_start_log(obd, de_tgtdir->d_inode, FSFILT_OP_RENAME,
@@ -2556,8 +2602,60 @@ no_unlink:
                            de_tgtdir->d_inode, de_new, mds->mds_vfsmnt);
         unlock_kernel();
 
+        if (rc == 0) {
+                struct iattr iattr;
+                int err;
+
+                /* update ctime of renamed file */
+                iattr.ia_valid = ATTR_CTIME;
+                LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                if (S_ISDIR(de_old->d_inode->i_mode) &&
+                    de_srcdir->d_inode != de_tgtdir->d_inode) {
+                        /* cross directory rename of a directory, ".."
+                           changed, update mtime also */
+                        iattr.ia_valid |= ATTR_MTIME;
+                        LTIME_S(iattr.ia_mtime) = rec->ur_time;
+                }
+                err = fsfilt_setattr(obd, de_old, handle, &iattr, 0);
+                if (err)
+                        CERROR("error on old inode time update: "
+                               "rc = %d\n", err);
+
+                if (de_new->d_inode) {
+                        /* target file exists, update its ctime as it
+                           gets unlinked */
+                        iattr.ia_valid = ATTR_CTIME;
+                        LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                        err = fsfilt_setattr(obd, de_new, handle, &iattr, 0);
+                        if (err)
+                                CERROR("error on target inode time update: "
+                                       "rc = %d\n", err);
+                }
+
+                /* update mtime and ctime of old directory */
+                iattr.ia_valid = ATTR_MTIME | ATTR_CTIME;
+                LTIME_S(iattr.ia_mtime) = rec->ur_time;
+                LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                err = fsfilt_setattr(obd, de_srcdir, handle, &iattr, 0); 
+                if (err)
+                        CERROR("error on old dir inode update: "
+                               "rc = %d\n", err);
+
+                if (de_srcdir->d_inode != de_tgtdir->d_inode) {
+                        /* cross directory rename, update
+                           mtime and ctime of new directory */
+                        iattr.ia_valid = ATTR_MTIME | ATTR_CTIME;
+                        LTIME_S(iattr.ia_mtime) = rec->ur_time;
+                        LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                        err = fsfilt_setattr(obd, de_tgtdir, handle, &iattr, 0);
+                        if (err)
+                                CERROR("error on new dir inode time update: "
+                                       "rc = %d\n", err);
+                }
+        }
+
         if (rc == 0 && new_inode != NULL && new_inode->i_nlink == 0) {
-                if (mds_orphan_open_count(new_inode) > 0)
+                if (mds_orphan_needed(obd, new_inode))
                         rc = mds_orphan_add_link(rec, obd, de_new);
 
                 if (rc == 1)
@@ -2585,9 +2683,9 @@ no_unlink:
 
         GOTO(cleanup, rc);
 cleanup:
-        inodes[0] = de_srcdir ? de_srcdir->d_inode : NULL;
+        inodes[0] = de_srcdir && !IS_ERR(de_srcdir) ? de_srcdir->d_inode : NULL;
         inodes[1] = old_inode;
-        inodes[2] = de_tgtdir ? de_tgtdir->d_inode : NULL;
+        inodes[2] = de_tgtdir && !IS_ERR(de_tgtdir) ? de_tgtdir->d_inode : NULL;
         inodes[3] = new_inode;
         rc = mds_finish_transno(mds, inodes, handle, req, rc, 0, 0);
 
@@ -2661,7 +2759,7 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
                  * NB root's creds are believed... */
                 LASSERT (req->rq_uid != 0);
                 rec->ur_uc.luc_fsuid = req->rq_uid;
-                rec->ur_uc.luc_cap = 0;
+                cfs_kernel_cap_unpack(&rec->ur_uc.luc_cap, 0);
         }
 #endif
 

@@ -171,6 +171,14 @@ case "$lustretag" in
         libcfstag="HEAD"
         ;;
 
+    b_hd_lnet_smp_concur)
+        # LNet grained locking and SMP concurrency branch
+        lnettag="b_hd_lnet_smp_concur"
+        ldiskfstag="$ldiskfstag_head"
+        lustretag="HEAD"
+        libcfstag="HEAD"
+        ;;
+
     b_hd_o2ib_new_proto)
         # LNet branch for new o2iblnd protocol (15983, 13621, 14425, 14358)
         lnettag="b_hd_o2ib_new_proto"
@@ -207,7 +215,7 @@ case "$lustretag" in
     # read-only cache for oss
     b_hd_rocache_oss)
         lnettag="HEAD"
-        ldiskfstag="b_hd_rocache_oss"
+        ldiskfstag="b1_8_iam"
         libcfstag="HEAD"
         ;;
  
@@ -216,6 +224,14 @@ case "$lustretag" in
         lnettag="HEAD"
         ldiskfstag="$ldiskfstag_head"
         libcfstag="HEAD"
+        ;;
+   
+    # params_tree 
+    b_hd_params_tree)
+        lnettag="HEAD"
+        ldiskfstag="$ldiskfstag_head"
+        libcfstag="b_hd_params_tree"
+        lustretag="b_hd_params_tree"
         ;;
    
     # uMDS
@@ -250,7 +266,8 @@ case "$lustretag" in
     # windows client porting (lustre: b_client_io_layering, lnet: HEAD) 
     b_winnt_port)
         ldiskfstag="$ldiskfstag_head"
-        lnettag="$lustretag"
+        lnettag="b_winnt_port"
+        libcfstag="b_winnt_port"
         ;;
     
     # v1.0-v1.3, v1.4.0-v1.4.2
@@ -286,7 +303,7 @@ case "$lustretag" in
 
     # Branches that have been updated to include
     # the libcfs split should be added here
-    HEAD|b_head_quota|b_hd_comp_fld)
+    HEAD|b_head_quota|b_hd_cfld|b_hd_changelog|b_hd_sptlrpc|HD_SPTLRPC_BASE)
         lnettag="HEAD"
         ldiskfstag="$ldiskfstag_head"
         libcfstag="HEAD"
@@ -304,12 +321,19 @@ case "$lustretag" in
         libcfstag="b_head_procfs"
 	;;
 
+    b2_0-bld*)
+        lnettag="$lustretag"
+        ldiskfstag="$ldiskfstag_head"
+        libcfstag="$lustretag"
+	;;
+
     # all later v* tags
     v[1-9]*)
         lnettag="$lustretag"
         libsysiotag="$lustretag"
         snmptag="$lustretag"
         ldiskfstag="$lustretag"
+        libcfstag="$lustretag"
         ;;
 
     b_HEAD_*|b_head_*|b_hd_*)

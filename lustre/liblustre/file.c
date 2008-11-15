@@ -132,16 +132,10 @@ void obdo_refresh_inode(struct inode *dst,
 
         if (valid & OBD_MD_FLATIME && src->o_atime > LTIME_S(st->st_atime))
                 LTIME_S(st->st_atime) = src->o_atime;
-        
-        /* mtime is always updated with ctime, but can be set in past.
-           As write and utime(2) may happen within 1 second, and utime's
-           mtime has a priority over write's one, leave mtime from mds 
-           for the same ctimes. */
-        if (valid & OBD_MD_FLCTIME && src->o_ctime > LTIME_S(st->st_ctime)) {
+        if (valid & OBD_MD_FLMTIME && src->o_mtime > LTIME_S(st->st_mtime))
+                LTIME_S(st->st_mtime) = src->o_mtime;
+        if (valid & OBD_MD_FLCTIME && src->o_ctime > LTIME_S(st->st_ctime))
                 LTIME_S(st->st_ctime) = src->o_ctime;
-                if (valid & OBD_MD_FLMTIME)
-                        LTIME_S(st->st_mtime) = src->o_mtime;
-        }
         if (valid & OBD_MD_FLSIZE && src->o_size > st->st_size)
                 st->st_size = src->o_size;
         /* optimum IO size */
@@ -480,6 +474,7 @@ static void llu_truncate(struct inode *inode, obd_flag flags)
         struct intnl_stat *st = llu_i2stat(inode);
         struct obd_info oinfo = { { { 0 } } };
         struct obdo oa = { 0 };
+        obd_valid valid;
         int rc;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%llu/%lu(%p) to %llu\n",
@@ -501,9 +496,41 @@ static void llu_truncate(struct inode *inode, obd_flag flags)
         oa.o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS;
         oa.o_flags = flags; /* We don't actually want to copy inode flags */
  
-        obdo_from_inode(&oa, inode,
-                        OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLATIME |
-                        OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+        valid = OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLATIME;
+        if (flags & OBD_FL_TRUNCLOCK) {
+                /* lockless truncate
+                 *
+                 * 1. do not use inode's timestamps because concurrent
+                 * stat might fill the inode with out-of-date times,
+                 * send current instead
+                 *
+                 * 2.do no update lsm, as long as stat (via
+                 * llu_glimpse_size) will bring attributes from osts
+                 * anyway */
+                oa.o_mtime = oa.o_ctime = CURRENT_TIME;
+                oa.o_valid |= OBD_MD_FLMTIME | OBD_MD_FLCTIME;
+        } else {
+                /* truncate under locks
+                 *
+                 * 1. update inode's mtime and ctime as long as
+                 * concurrent stat (via llu_glimpse_size) might bring
+                 * out-of-date ones
+                 *
+                 * 2. update lsm so that next stat (via
+                 * llu_glimpse_size) could get correct values in lsm */
+                struct ost_lvb xtimes;
+
+                lov_stripe_lock(lli->lli_smd);
+                st->st_mtime = st->st_ctime = CURRENT_TIME;
+                xtimes.lvb_mtime = st->st_mtime;
+                xtimes.lvb_ctime = st->st_ctime;
+                obd_update_lvb(llu_i2obdexp(inode), lli->lli_smd, &xtimes,
+                               OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+                lov_stripe_unlock(lli->lli_smd);
+
+                valid |= OBD_MD_FLMTIME | OBD_MD_FLCTIME;
+        }
+        obdo_from_inode(&oa, inode, valid);
 
         obd_adjust_kms(llu_i2obdexp(inode), lli->lli_smd, st->st_size, 1);
 

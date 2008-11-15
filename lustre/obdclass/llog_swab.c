@@ -147,6 +147,17 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
                 break;
         }
 
+        case MDS_SETATTR64_REC: {
+                struct llog_setattr64_rec *lsr = (struct llog_setattr64_rec *)rec;
+
+                __swab64s(&lsr->lsr_oid);
+                __swab32s(&lsr->lsr_ogen);
+                __swab32s(&lsr->lsr_uid);
+                __swab32s(&lsr->lsr_gid);
+
+                break;
+        }
+
         case OBD_CFG_REC:
         case PTL_CFG_REC:                       /* obsolete */
                 /* these are swabbed as they are consumed */
@@ -274,13 +285,64 @@ void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg)
 }
 EXPORT_SYMBOL(lustre_swab_lustre_cfg);
 
-void lustre_swab_cfg_marker(struct cfg_marker *marker)
+/* used only for compatibility with old on-disk cfg_marker data */
+struct cfg_marker32 {
+        __u32   cm_step;
+        __u32   cm_flags;
+        __u32   cm_vers;
+        __u32   padding;
+        __u32   cm_createtime;
+        __u32   cm_canceltime;
+        char    cm_tgtname[MTI_NAME_MAXLEN];
+        char    cm_comment[MTI_NAME_MAXLEN];
+};
+
+#define MTI_NAMELEN32    (MTI_NAME_MAXLEN - \
+        (sizeof(struct cfg_marker) - sizeof(struct cfg_marker32)))
+
+void lustre_swab_cfg_marker(struct cfg_marker *marker, int swab, int size)
 {
+        struct cfg_marker32 *cm32 = (struct cfg_marker32*)marker;
         ENTRY;
 
-        __swab32s(&marker->cm_step);
-        __swab32s(&marker->cm_flags);
-        __swab32s(&marker->cm_vers);
+        if (swab) {
+                __swab32s(&marker->cm_step);
+                __swab32s(&marker->cm_flags);
+                __swab32s(&marker->cm_vers);
+        }
+        if (size == sizeof(*cm32)) {
+                __u32 createtime, canceltime;
+                /* There was a problem with the original declaration of
+                 * cfg_marker on 32-bit systems because it used time_t as
+                 * a wire protocol structure, and didn't verify this in
+                 * wirecheck.  We now have to convert the offsets of the
+                 * later fields in order to work on 32- and 64-bit systems.
+                 *
+                 * Fortunately, the cm_comment field has no functional use
+                 * so can be sacrificed when converting the timestamp size.
+                 *
+                 * Overwrite fields from the end first, so they are not
+                 * clobbered, and use memmove() instead of memcpy() because
+                 * the source and target buffers overlap.  bug 16771 */
+                createtime = cm32->cm_createtime;
+                canceltime = cm32->cm_canceltime;
+                memmove(marker->cm_comment, cm32->cm_comment, MTI_NAMELEN32);
+                marker->cm_comment[MTI_NAMELEN32 - 1] = '\0';
+                memmove(marker->cm_tgtname, cm32->cm_tgtname,
+                        sizeof(marker->cm_tgtname));
+                if (swab) {
+                        __swab32s(&createtime);
+                        __swab32s(&canceltime);
+                }
+                marker->cm_createtime = createtime;
+                marker->cm_canceltime = canceltime;
+                CDEBUG(D_CONFIG, "Find old cfg_marker(Srv32b,Clt64b) "
+                       "for target %s, converting\n",
+                       marker->cm_tgtname);
+        } else if (swab) {
+                __swab64s(&marker->cm_createtime);
+                __swab64s(&marker->cm_canceltime);
+        }
 
         EXIT;
         return;

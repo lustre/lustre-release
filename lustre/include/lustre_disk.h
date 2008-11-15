@@ -209,6 +209,7 @@ struct lustre_mount_data {
 #define OBD_INCOMPAT_FID        0x00000010 /* FID is enabled */
 #define OBD_INCOMPAT_SOM        0x00000020 /* Size-On-MDS is enabled */
 
+#define LR_EXPIRE_INTERVALS 16 /**< number of intervals to track transno */
 /* Data stored per server at the head of the last_rcvd file.  In le32 order.
    This should be common to filter_internal.h, lustre_mds.h */
 struct lr_server_data {
@@ -229,7 +230,12 @@ struct lr_server_data {
         __u32 lsd_ost_index;       /* index number of OST in LOV */
         __u32 lsd_mdt_index;       /* index number of MDT in LMV */
         __u32 lsd_start_epoch;     /* VBR: start epoch from last boot */
-        __u8  lsd_padding[LR_SERVER_SIZE - 152];
+        /** transaction values since lsd_trans_table_time */
+        __u64 lsd_trans_table[LR_EXPIRE_INTERVALS];
+        /** start point of transno table below */
+        __u32 lsd_trans_table_time; /* time of first slot in table above */
+        __u32 lsd_expire_intervals; /* LR_EXPIRE_INTERVALS */
+        __u8  lsd_padding[LR_SERVER_SIZE - 288];
 };
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
@@ -247,7 +253,8 @@ struct lsd_client_data {
         /* VBR: last versions */
         __u64 lcd_pre_versions[4];
         __u32 lcd_last_epoch;
-        __u32 lcd_last_time;
+        /** orphans handling for delayed export rely on that */
+        __u32 lcd_first_epoch;
         __u8  lcd_padding[LR_CLIENT_SIZE - 128];
 };
 
@@ -277,14 +284,8 @@ struct lustre_sb_info {
 #define LSI_UMOUNT_FORCE                 0x00000010
 #define LSI_UMOUNT_FAILOVER              0x00000020
 
-#if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-# define    s2lsi(sb)        ((struct lustre_sb_info *)((sb)->s_fs_info))
-# define    s2lsi_nocast(sb) ((sb)->s_fs_info)
-#else  /* 2.4 here */
-# define    s2lsi(sb)        ((struct lustre_sb_info *)((sb)->u.generic_sbp))
-# define    s2lsi_nocast(sb) ((sb)->u.generic_sbp)
-#endif
-
+#define    s2lsi(sb)        ((struct lustre_sb_info *)((sb)->s_fs_info))
+#define    s2lsi_nocast(sb) ((sb)->s_fs_info)
 #define     get_profile_name(sb)   (s2lsi(sb)->lsi_lmd->lmd_profile)
 
 #endif /* __KERNEL__ */

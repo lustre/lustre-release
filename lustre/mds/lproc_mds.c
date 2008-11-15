@@ -36,9 +36,7 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <linux/version.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <asm/statfs.h>
-#endif
 #include <obd.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>
@@ -441,6 +439,7 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "fstype",          lprocfs_rd_fstype,      0, 0 },
         { "mntdev",          lprocfs_mds_rd_mntdev,  0, 0 },
         { "recovery_status", lprocfs_obd_rd_recovery_status, 0, 0 },
+        { "hash_stats",      lprocfs_obd_rd_hash,    0, 0 },
         { "evict_client",    0,                lprocfs_mds_wr_evict_client, 0 },
         { "evict_ost_nids",  lprocfs_mds_rd_evictostnids,
                                                lprocfs_mds_wr_evictostnids, 0 },

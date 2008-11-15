@@ -194,7 +194,7 @@ int main(int argc, char **argv)
                 case '_':
                         if (usr1_received == 0) {
                                 if (verbose) {
-                                        printf("PAUSING\n");
+                                        printf("PAUSING %u\n", getpid());
                                         fflush(stdout);
                                 }
                                 pause();

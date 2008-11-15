@@ -55,6 +55,8 @@
 #include <lustre_import.h>
 #include <lprocfs_status.h>
 
+#include <obd_support.h>
+
 /* MD flags we _always_ use */
 #define PTLRPC_MD_OPTIONS  0
 
@@ -159,7 +161,6 @@
 #define ptlrpc_req_async_args(req) ((void *)&req->rq_async_args)
 
 struct ptlrpc_connection {
-        struct list_head        c_link;
         struct hlist_node       c_hash;
         lnet_nid_t              c_self;
         lnet_process_id_t       c_peer;
@@ -261,11 +262,13 @@ struct ptlrpc_reply_state {
 struct ptlrpc_thread;
 
 enum rq_phase {
-        RQ_PHASE_NEW         = 0xebc0de00,
-        RQ_PHASE_RPC         = 0xebc0de01,
-        RQ_PHASE_BULK        = 0xebc0de02,
-        RQ_PHASE_INTERPRET   = 0xebc0de03,
-        RQ_PHASE_COMPLETE    = 0xebc0de04,
+        RQ_PHASE_NEW            = 0xebc0de00,
+        RQ_PHASE_RPC            = 0xebc0de01,
+        RQ_PHASE_BULK           = 0xebc0de02,
+        RQ_PHASE_INTERPRET      = 0xebc0de03,
+        RQ_PHASE_COMPLETE       = 0xebc0de04,
+        RQ_PHASE_UNREGISTERING  = 0xebc0de05,
+        RQ_PHASE_UNDEFINED      = 0xebc0de06
 };
 
 struct ptlrpc_request_pool {
@@ -301,7 +304,8 @@ struct ptlrpc_request {
                 /* server-side flags */
                 rq_packed_final:1,  /* packed final reply */
                 rq_sent_final:1;    /* stop sending early replies */
-        enum rq_phase rq_phase; /* one of RQ_PHASE_* */
+        enum rq_phase rq_phase;     /* one of RQ_PHASE_* */
+        enum rq_phase rq_next_phase; /* one of RQ_PHASE_* to be used next */
         atomic_t rq_refcount;   /* client-side refcount for SENT race,
                                    server-side refcounf for multiple replies */
 
@@ -364,6 +368,7 @@ struct ptlrpc_request {
         volatile time_t rq_deadline;     /* when request must finish. volatile
                so that servers' early reply updates to the deadline aren't
                kept in per-cpu cache */
+        time_t rq_reply_deadline;        /* when req reply unlink must finish. */
         int    rq_timeout;               /* service time estimate (secs) */
 
         /* Multi-rpc bits */
@@ -411,11 +416,10 @@ static inline int lustre_rep_need_swab(struct ptlrpc_request *req)
         return req->rq_rep_swab_mask & (1 << MSG_PTLRPC_HEADER_OFF);
 }
 
-
 static inline const char *
-ptlrpc_rqphase2str(struct ptlrpc_request *req)
+ptlrpc_phase2str(enum rq_phase phase)
 {
-        switch (req->rq_phase) {
+        switch (phase) {
         case RQ_PHASE_NEW:
                 return "New";
         case RQ_PHASE_RPC:
@@ -426,9 +430,17 @@ ptlrpc_rqphase2str(struct ptlrpc_request *req)
                 return "Interpret";
         case RQ_PHASE_COMPLETE:
                 return "Complete";
+        case RQ_PHASE_UNREGISTERING:
+                return "Unregistering";
         default:
                 return "?Phase?";
         }
+}
+
+static inline const char *
+ptlrpc_rqphase2str(struct ptlrpc_request *req)
+{
+        return ptlrpc_phase2str(req->rq_phase);
 }
 
 /* Spare the preprocessor, spoil the bugs. */
@@ -524,6 +536,8 @@ struct ptlrpc_thread {
         __u32 t_flags;
 
         unsigned int t_id; /* service thread index, from ptlrpc_start_threads */
+        struct lc_watchdog *t_watchdog; /* put watchdog in the structure per
+                                         * thread b=14840 */
         cfs_waitq_t t_ctl_waitq;
 };
 
@@ -699,14 +713,13 @@ extern void reply_out_callback(lnet_event_t *ev);
 extern void server_bulk_callback (lnet_event_t *ev);
 
 /* ptlrpc/connection.c */
-void ptlrpc_dump_connections(void);
-void ptlrpc_readdress_connection(struct ptlrpc_connection *, struct obd_uuid *);
-struct ptlrpc_connection *ptlrpc_get_connection(lnet_process_id_t peer,
-                                                lnet_nid_t self, struct obd_uuid *uuid);
-int ptlrpc_put_connection(struct ptlrpc_connection *c);
+struct ptlrpc_connection *ptlrpc_connection_get(lnet_process_id_t peer,
+                                                lnet_nid_t self,
+                                                struct obd_uuid *uuid);
+int ptlrpc_connection_put(struct ptlrpc_connection *c);
 struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *);
-int ptlrpc_init_connection(void);
-void ptlrpc_cleanup_connection(void);
+int ptlrpc_connection_init(void);
+void ptlrpc_connection_fini(void);
 extern lnet_pid_t ptl_get_pid(void);
 
 /* ptlrpc/niobuf.c */
@@ -742,29 +755,9 @@ void ptlrpc_init_client(int req_portal, int rep_portal, char *name,
 void ptlrpc_cleanup_client(struct obd_import *imp);
 struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid);
 
-static inline int
-ptlrpc_client_recv_or_unlink (struct ptlrpc_request *req)
-{
-        int           rc;
-
-        spin_lock(&req->rq_lock);
-        rc = req->rq_receiving_reply || req->rq_must_unlink;
-        spin_unlock(&req->rq_lock);
-        return (rc);
-}
-
-static inline void
-ptlrpc_wake_client_req (struct ptlrpc_request *req)
-{
-        if (req->rq_set == NULL)
-                cfs_waitq_signal(&req->rq_reply_waitq);
-        else
-                cfs_waitq_signal(&req->rq_set->set_waitq);
-}
-
 int ptlrpc_queue_wait(struct ptlrpc_request *req);
 int ptlrpc_replay_req(struct ptlrpc_request *req);
-void ptlrpc_unregister_reply(struct ptlrpc_request *req);
+int ptlrpc_unregister_reply(struct ptlrpc_request *req, int async);
 void ptlrpc_restart_req(struct ptlrpc_request *req);
 void ptlrpc_abort_inflight(struct obd_import *imp);
 void ptlrpc_abort_set(struct ptlrpc_request_set *set);
@@ -798,7 +791,6 @@ struct ptlrpc_request *ptlrpc_prep_req_pool(struct obd_import *imp,
                                              __u32 version, int opcode,
                                             int count, __u32 *lengths, char **bufs,
                                             struct ptlrpc_request_pool *pool);
-void ptlrpc_free_req(struct ptlrpc_request *request);
 void ptlrpc_req_finished(struct ptlrpc_request *request);
 void ptlrpc_req_finished_with_imp_lock(struct ptlrpc_request *request);
 struct ptlrpc_request *ptlrpc_request_addref(struct ptlrpc_request *req);
@@ -922,6 +914,81 @@ void lustre_msg_set_conn_cnt(struct lustre_msg *msg, __u32 conn_cnt);
 void lustre_msg_set_timeout(struct lustre_msg *msg, __u32 timeout);
 void lustre_msg_set_service_time(struct lustre_msg *msg, __u32 service_time);
 void lustre_msg_set_cksum(struct lustre_msg *msg, __u32 cksum);
+
+static inline void
+ptlrpc_rqphase_move(struct ptlrpc_request *req, enum rq_phase new_phase)
+{
+        if (req->rq_phase == new_phase)
+                return;
+        
+        if (new_phase == RQ_PHASE_UNREGISTERING) {
+                req->rq_next_phase = req->rq_phase;
+                if (req->rq_import)
+                        atomic_inc(&req->rq_import->imp_unregistering);
+        }
+        
+        if (req->rq_phase == RQ_PHASE_UNREGISTERING) {
+                if (req->rq_import)
+                        atomic_dec(&req->rq_import->imp_unregistering);
+        }
+
+        DEBUG_REQ(D_RPCTRACE, req, "move req \"%s\" -> \"%s\"", 
+                  ptlrpc_rqphase2str(req), ptlrpc_phase2str(new_phase));
+
+        req->rq_phase = new_phase;
+}
+
+static inline int
+ptlrpc_client_early(struct ptlrpc_request *req)
+{
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_UNLINK) &&
+            req->rq_reply_deadline > cfs_time_current_sec())
+                return 0;
+        return req->rq_early;
+}
+
+static inline int
+ptlrpc_client_replied(struct ptlrpc_request *req)
+{
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_UNLINK) &&
+            req->rq_reply_deadline > cfs_time_current_sec())
+                return 0;
+        return req->rq_replied;
+}
+
+static inline int
+ptlrpc_client_recv(struct ptlrpc_request *req)
+{
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_UNLINK) &&
+            req->rq_reply_deadline > cfs_time_current_sec())
+                return 1;
+        return req->rq_receiving_reply;
+}
+
+static inline int
+ptlrpc_client_recv_or_unlink(struct ptlrpc_request *req)
+{
+        int rc;
+
+        spin_lock(&req->rq_lock);
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_UNLINK) &&
+            req->rq_reply_deadline > cfs_time_current_sec()) {
+                spin_unlock(&req->rq_lock);
+                return 1;
+        }
+        rc = req->rq_receiving_reply || req->rq_must_unlink;
+        spin_unlock(&req->rq_lock);
+        return rc;
+}
+
+static inline void
+ptlrpc_client_wake_req(struct ptlrpc_request *req)
+{
+        if (req->rq_set == NULL)
+                cfs_waitq_signal(&req->rq_reply_waitq);
+        else
+                cfs_waitq_signal(&req->rq_set->set_waitq);
+}
 
 static inline void
 ptlrpc_rs_addref(struct ptlrpc_reply_state *rs)

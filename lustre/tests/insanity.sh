@@ -35,6 +35,9 @@ assert_env mds_HOST MDS_MKFS_OPTS MDSDEV
 assert_env ost_HOST OST_MKFS_OPTS OSTCOUNT
 assert_env LIVE_CLIENT FSNAME
 
+remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
+remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
+
 # FAIL_CLIENTS list should not contain the LIVE_CLIENT
 FAIL_CLIENTS=$(echo " $FAIL_CLIENTS " | sed -re "s/\s+$LIVE_CLIENT\s+/ /g")
 
@@ -70,13 +73,6 @@ shutdown_client() {
     fi
 }
 
-reboot_node() {
-    NODE=$1
-    if [ "$FAILURE_MODE" = HARD ]; then
-       $POWER_UP $NODE
-    fi
-}
-
 fail_clients() {
     num=$1
 
@@ -102,7 +98,7 @@ fail_clients() {
     echo "down clients: $DOWN_CLIENTS"
 
     for client in $DOWN_CLIENTS; do
-	reboot_node $client
+	boot_node $client
     done
     DOWN_NUM=`echo $DOWN_CLIENTS | wc -w`
     client_rmdirs
@@ -159,7 +155,7 @@ clients_recover_osts() {
 #    do_node $CLIENTS "$LCTL "'--device %OSC_`hostname`_'"${facet}_svc_MNT_client_facet recover"
 }
 
-cleanup_and_setup_lustre
+check_and_setup_lustre
 
 # 9 Different Failure Modes Combinations
 echo "Starting Test 17 at `date`"

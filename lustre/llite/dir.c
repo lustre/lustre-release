@@ -44,11 +44,7 @@
 #include <linux/version.h>
 #include <linux/smp_lock.h>
 #include <asm/uaccess.h>
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-# include <linux/locks.h>   // for wait_on_buffer
-#else
-# include <linux/buffer_head.h>   // for wait_on_buffer
-#endif
+#include <linux/buffer_head.h>   // for wait_on_buffer
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
@@ -965,21 +961,21 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
                 fsname = ll_get_fsname(inode);
                 /* Set root stripesize */
                 sprintf(param, "%s-MDT0000.lov.stripesize=%u", fsname,
-                        lump->lmm_stripe_size);
+                        le32_to_cpu(lump->lmm_stripe_size));
                 rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
                 if (rc)
                         goto end;
 
                 /* Set root stripecount */
                 sprintf(param, "%s-MDT0000.lov.stripecount=%u", fsname,
-                        lump->lmm_stripe_count);
+                        le16_to_cpu(lump->lmm_stripe_count));
                 rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
                 if (rc)
                         goto end;
 
                 /* Set root stripeoffset */
                 sprintf(param, "%s-MDT0000.lov.stripeoffset=%u", fsname,
-                        lump->lmm_stripe_offset);
+                        le16_to_cpu(lump->lmm_stripe_offset));
                 rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
                 if (rc)
                         goto end;
@@ -1039,18 +1035,19 @@ int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmmp,
          * little endian.  We convert it to host endian before
          * passing it to userspace.
          */
-        if (LOV_MAGIC != cpu_to_le32(LOV_MAGIC)) {
-            if (cpu_to_le32(LOV_MAGIC_V1) == lmm->lmm_magic) {
-                lustre_swab_lov_user_md_v1((struct lov_user_md_v1 *)lmm);
-                lustre_swab_lov_user_md_objects(
-                        ((struct lov_user_md_v1 *)lmm)->lmm_objects,
-                        ((struct lov_user_md_v1 *)lmm)->lmm_stripe_count);
-            } else if (cpu_to_le32(LOV_MAGIC_V3) == lmm->lmm_magic) {
-                lustre_swab_lov_user_md_v3((struct lov_user_md_v3 *)lmm);
-                lustre_swab_lov_user_md_objects(
-                        ((struct lov_user_md_v3 *)lmm)->lmm_objects,
-                        ((struct lov_user_md_v3 *)lmm)->lmm_stripe_count);
-            }
+        /* We don't swab objects for directories */
+        switch (le32_to_cpu(lmm->lmm_magic)) {
+        case LOV_MAGIC_V1:
+                if (LOV_MAGIC != cpu_to_le32(LOV_MAGIC))
+                        lustre_swab_lov_user_md_v1((struct lov_user_md_v1 *)lmm);
+                break;
+        case LOV_MAGIC_V3:
+                if (LOV_MAGIC != cpu_to_le32(LOV_MAGIC))
+                        lustre_swab_lov_user_md_v3((struct lov_user_md_v3 *)lmm);
+                break;
+        default:
+                CERROR("unknown magic: %lX\n", (unsigned long)lmm->lmm_magic);
+                rc = -EPROTO;
         }
 
 out:
@@ -1265,21 +1262,27 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 if (rc)
                         GOTO(free_lmm, rc = -EFAULT);
 
-                if (lmm->lmm_magic != LOV_USER_MAGIC)
-                        GOTO(free_lmm, rc = -EINVAL);
-
-                if (LOV_USER_MAGIC != cpu_to_le32(LOV_USER_MAGIC)) {
-                    if (cpu_to_le32(LOV_USER_MAGIC_V1) == cpu_to_le32(lmm->lmm_magic)) {
-                        lustre_swab_lov_user_md_v1((struct lov_user_md_v1 *)lmm);
+                switch (lmm->lmm_magic) {
+                case LOV_USER_MAGIC_V1:
+                        if (LOV_USER_MAGIC == cpu_to_le32(LOV_USER_MAGIC))
+                                break;
+                        /* swab objects first so that stripes num will be sane */
                         lustre_swab_lov_user_md_objects(
                                 ((struct lov_user_md_v1 *)lmm)->lmm_objects,
                                 ((struct lov_user_md_v1 *)lmm)->lmm_stripe_count);
-                    } else if (cpu_to_le32(LOV_USER_MAGIC_V3) == cpu_to_le32(lmm->lmm_magic)) {
-                        lustre_swab_lov_user_md_v3((struct lov_user_md_v3 *)lmm);
+                        lustre_swab_lov_user_md_v1((struct lov_user_md_v1 *)lmm);
+                        break;
+                case LOV_USER_MAGIC_V3:
+                        if (LOV_USER_MAGIC == cpu_to_le32(LOV_USER_MAGIC))
+                                break;
+                        /* swab objects first so that stripes num will be sane */
                         lustre_swab_lov_user_md_objects(
                                 ((struct lov_user_md_v3 *)lmm)->lmm_objects,
                                 ((struct lov_user_md_v3 *)lmm)->lmm_stripe_count);
-                    }
+                        lustre_swab_lov_user_md_v3((struct lov_user_md_v3 *)lmm);
+                        break;
+                default:
+                        GOTO(free_lmm, rc = -EINVAL);
                 }
 
                 rc = obd_unpackmd(sbi->ll_osc_exp, &lsm, lmm, lmmsize);
@@ -1355,12 +1358,11 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 obd_ioctl_freedata(buf, len);
                 RETURN(rc);
         }
-#ifdef HAVE_QUOTA_SUPPORT
         case OBD_IOC_QUOTACHECK: {
                 struct obd_quotactl *oqctl;
                 int rc, error = 0;
 
-                if (!capable(CAP_SYS_ADMIN))
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         RETURN(-EPERM);
 
                 OBD_ALLOC_PTR(oqctl);
@@ -1384,7 +1386,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 struct if_quotacheck *check;
                 int rc;
 
-                if (!capable(CAP_SYS_ADMIN))
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         RETURN(-EPERM);
 
                 OBD_ALLOC_PTR(check);
@@ -1440,13 +1442,13 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 case Q_QUOTAOFF:
                 case Q_SETQUOTA:
                 case Q_SETINFO:
-                        if (!capable(CAP_SYS_ADMIN))
+                        if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                                 GOTO(out_quotactl, rc = -EPERM);
                         break;
                 case Q_GETQUOTA:
                         if (((type == USRQUOTA && current->euid != id) ||
                              (type == GRPQUOTA && !in_egroup_p(id))) &&
-                            !capable(CAP_SYS_ADMIN))
+                            !cfs_capable(CFS_CAP_SYS_ADMIN))
                                 GOTO(out_quotactl, rc = -EPERM);
 
                         /* XXX: dqb_valid is borrowed as a flag to mark that
@@ -1527,7 +1529,6 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 OBD_FREE_PTR(oqctl);
                 RETURN(rc);
         }
-#endif /* HAVE_QUOTA_SUPPORT */
         case OBD_IOC_GETNAME_OLD:
         case OBD_IOC_GETNAME: {
                 struct obd_device *obd = class_exp2obd(sbi->ll_osc_exp);

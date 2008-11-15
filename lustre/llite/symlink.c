@@ -167,9 +167,15 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry, struct n
 #endif
 
         CDEBUG(D_VFSTRACE, "VFS Op\n");
-        down(&lli->lli_size_sem);
-        rc = ll_readlink_internal(inode, &request, &symname);
-        up(&lli->lli_size_sem);
+        /* Limit the recursive symlink depth to 5 instead of default
+         * 8 links when kernel has 4k stack to prevent stack overflow. */
+        if (THREAD_SIZE < 8192 && current->link_count >= 5) {
+                rc = -ELOOP;
+        } else {
+                down(&lli->lli_size_sem);
+                rc = ll_readlink_internal(inode, &request, &symname);
+                up(&lli->lli_size_sem);
+        }
         if (rc) {
                 path_release(nd); /* Kernel assumes that ->follow_link()
                                      releases nameidata on error */
@@ -221,11 +227,7 @@ struct inode_operations ll_fast_symlink_inode_operations = {
 #ifdef HAVE_COOKIE_FOLLOW_LINK
         .put_link       = ll_put_link,
 #endif
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        .revalidate_it  = ll_inode_revalidate_it,
-#else 
         .getattr        = ll_getattr,
-#endif
         .permission     = ll_inode_permission,
         .setxattr       = ll_setxattr,
         .getxattr       = ll_getxattr,

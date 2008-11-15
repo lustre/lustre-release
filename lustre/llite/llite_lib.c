@@ -476,9 +476,7 @@ static int client_common_fill_super(struct super_block *sb,
         sbi->ll_rootino = rootfid.id;
 
         sb->s_op = &lustre_super_operations;
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         sb->s_export_op = &lustre_export_operations;
-#endif
 
         /* make root inode
          * XXX: move this to after cbd setup? */
@@ -625,27 +623,6 @@ void lustre_dump_dentry(struct dentry *dentry, int recur)
         }
 }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-void lustre_throw_orphan_dentries(struct super_block *sb)
-{
-        struct dentry *dentry, *next;
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-
-        /* Do this to get rid of orphaned dentries. That is not really trw. */
-        list_for_each_entry_safe(dentry, next, &sbi->ll_orphan_dentry_list,
-                                 d_hash) {
-                CWARN("found orphan dentry %.*s (%p->%p) at unmount, dumping "
-                      "before and after shrink_dcache_parent\n",
-                      dentry->d_name.len, dentry->d_name.name, dentry, next);
-                lustre_dump_dentry(dentry, 1);
-                shrink_dcache_parent(dentry);
-                lustre_dump_dentry(dentry, 1);
-        }
-}
-#else
-#define lustre_throw_orphan_dentries(sb)
-#endif
-
 #ifdef HAVE_EXPORT___IGET
 static void prune_dir_dentries(struct inode *inode)
 {
@@ -762,8 +739,6 @@ void client_common_put_super(struct super_block *sb)
         obd_fid_fini(sbi->ll_mdc_exp);
         obd_disconnect(sbi->ll_mdc_exp);
         sbi->ll_mdc_exp = NULL;
-
-        lustre_throw_orphan_dentries(sb);
 
         EXIT;
 }
@@ -1146,6 +1121,7 @@ int ll_fill_super(struct super_block *sb)
         sprintf(ll_instance, "%p", sb);
         cfg.cfg_instance = ll_instance;
         cfg.cfg_uuid = lsi->lsi_llsbi->ll_sb_uuid;
+        cfg.cfg_sb = sb;
 
         /* set up client obds */
         if (strchr(profilenm, '/') != NULL) /* COMPAT_146 */
@@ -1484,13 +1460,8 @@ static int ll_setattr_do_truncate(struct inode *inode, loff_t new_size)
                         local_lock = 1;
         }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        DOWN_WRITE_I_ALLOC_SEM(inode);
-        LOCK_INODE_MUTEX(inode);
-#else
         LOCK_INODE_MUTEX(inode);
         DOWN_WRITE_I_ALLOC_SEM(inode);
-#endif
         if (likely(rc == 0)) {
                 /* Only ll_inode_size_lock is taken at this level.
                  * lov_stripe_lock() is grabbed by ll_truncate() only over
@@ -1562,7 +1533,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
         /* POSIX: check before ATTR_*TIME_SET set (from inode_change_ok) */
         if (ia_valid & (ATTR_MTIME_SET | ATTR_ATIME_SET)) {
-                if (current->fsuid != inode->i_uid && !capable(CAP_FOWNER))
+                if (current->fsuid != inode->i_uid &&
+                    !cfs_capable(CFS_CAP_FOWNER))
                         RETURN(-EPERM);
         }
 
@@ -1578,16 +1550,6 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         if (!(ia_valid & ATTR_MTIME_SET) && (attr->ia_valid & ATTR_MTIME)) {
                 attr->ia_mtime = CURRENT_TIME;
                 attr->ia_valid |= ATTR_MTIME_SET;
-        }
-        if ((attr->ia_valid & ATTR_CTIME) && !(attr->ia_valid & ATTR_MTIME)) {
-                /* To avoid stale mtime on mds, obtain it from ost and send
-                   to mds. */
-                rc = ll_glimpse_size(inode, 0);
-                if (rc)
-                        RETURN(rc);
-
-                attr->ia_valid |= ATTR_MTIME_SET | ATTR_MTIME;
-                attr->ia_mtime = inode->i_mtime;
         }
 
         if (attr->ia_valid & (ATTR_MTIME | ATTR_CTIME))
@@ -1650,24 +1612,95 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         if (ia_valid & ATTR_SIZE) {
                 rc = ll_setattr_do_truncate(inode, attr->ia_size);
         } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
-                obd_flag flags;
                 struct obd_info oinfo = { { { 0 } } };
                 struct obdo *oa;
-                OBDO_ALLOC(oa);
+                struct lustre_handle lockh = { 0 };
+                obd_valid valid;
 
                 CDEBUG(D_INODE, "set mtime on OST inode %lu to %lu\n",
                        inode->i_ino, LTIME_S(attr->ia_mtime));
 
+                OBDO_ALLOC(oa);
                 if (oa) {
                         oa->o_id = lsm->lsm_object_id;
                         oa->o_gr = lsm->lsm_object_gr;
                         oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
 
-                        flags = OBD_MD_FLTYPE | OBD_MD_FLATIME |
-                                OBD_MD_FLMTIME | OBD_MD_FLCTIME |
-                                OBD_MD_FLFID | OBD_MD_FLGENER;
+                        valid = OBD_MD_FLTYPE | OBD_MD_FLFID | OBD_MD_FLGENER;
 
-                        obdo_from_inode(oa, inode, flags);
+                        if (LTIME_S(attr->ia_mtime) < LTIME_S(attr->ia_ctime)){
+                                struct ost_lvb xtimes;
+
+                                /* setting mtime to past is performed under PW
+                                 * EOF extent lock */
+                                oinfo.oi_policy.l_extent.start = 0;
+                                oinfo.oi_policy.l_extent.end = OBD_OBJECT_EOF;
+                                rc = ll_extent_lock(NULL, inode, lsm, LCK_PW,
+                                                    &oinfo.oi_policy,
+                                                    &lockh, 0);
+                                if (rc)
+                                        RETURN(rc);
+
+                                /* setattr under locks
+                                 *
+                                 * 1. restore inode's timestamps which
+                                 * are about to be set as long as
+                                 * concurrent stat (via
+                                 * ll_glimpse_size) might bring
+                                 * out-of-date ones
+                                 *
+                                 * 2. update lsm so that next stat
+                                 * (via ll_glimpse_size) could get
+                                 * correct values in lsm */
+                                lov_stripe_lock(lli->lli_smd);
+                                if (ia_valid & ATTR_ATIME) {
+                                        LTIME_S(inode->i_atime) =
+                                                xtimes.lvb_atime =
+                                                LTIME_S(attr->ia_atime);
+                                        valid |= OBD_MD_FLATIME;
+                                }
+                                if (ia_valid & ATTR_MTIME) {
+                                        LTIME_S(inode->i_mtime) =
+                                                xtimes.lvb_mtime =
+                                                LTIME_S(attr->ia_mtime);
+                                        valid |= OBD_MD_FLMTIME;
+                                }
+                                if (ia_valid & ATTR_CTIME) {
+                                        LTIME_S(inode->i_ctime) =
+                                                xtimes.lvb_ctime =
+                                                LTIME_S(attr->ia_ctime);
+                                        valid |= OBD_MD_FLCTIME;
+                                }
+
+                                obd_update_lvb(ll_i2obdexp(inode), lli->lli_smd,
+                                               &xtimes, valid);
+                                lov_stripe_unlock(lli->lli_smd);
+                        } else {
+                                /* lockless setattr
+                                 *
+                                 * 1. do not use inode's timestamps
+                                 * because concurrent stat might fill
+                                 * the inode with out-of-date times,
+                                 * send values from attr instead
+                                 *
+                                 * 2.do no update lsm, as long as stat
+                                 * (via ll_glimpse_size) will bring
+                                 * attributes from osts anyway */
+                                if (ia_valid & ATTR_ATIME) {
+                                        oa->o_atime = LTIME_S(attr->ia_atime);
+                                        oa->o_valid |= OBD_MD_FLATIME;
+                                }
+                                if (ia_valid & ATTR_MTIME) {
+                                        oa->o_mtime = LTIME_S(attr->ia_mtime);
+                                        oa->o_valid |= OBD_MD_FLMTIME;
+                                }
+                                if (ia_valid & ATTR_CTIME) {
+                                        oa->o_ctime = LTIME_S(attr->ia_ctime);
+                                        oa->o_valid |= OBD_MD_FLCTIME;
+                                }
+                        }
+
+                        obdo_from_inode(oa, inode, valid);
 
                         oinfo.oi_oa = oa;
                         oinfo.oi_md = lsm;
@@ -1675,6 +1708,19 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         rc = obd_setattr_rqset(sbi->ll_osc_exp, &oinfo, NULL);
                         if (rc)
                                 CERROR("obd_setattr_async fails: rc=%d\n", rc);
+
+                        if (LTIME_S(attr->ia_mtime) < LTIME_S(attr->ia_ctime)){
+                                int err;
+
+                                err = ll_extent_unlock(NULL, inode, lsm,
+                                                       LCK_PW, &lockh);
+                                if (unlikely(err != 0)) {
+                                        CERROR("extent unlock failed: "
+                                               "err=%d\n", err);
+                                        if (rc == 0)
+                                                rc = err;
+                                }
+                        }
                         OBDO_FREE(oa);
                 } else {
                         rc = -ENOMEM;
@@ -1906,23 +1952,24 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         if (body->valid & OBD_MD_FLGENER)
                 inode->i_generation = body->generation;
 
-        if (body->valid & OBD_MD_FLATIME &&
-            body->atime > LTIME_S(inode->i_atime))
-                LTIME_S(inode->i_atime) = body->atime;
-
-        /* mtime is always updated with ctime, but can be set in past.
-           As write and utime(2) may happen within 1 second, and utime's
-           mtime has a priority over write's one, so take mtime from mds
-           for the same ctimes. */
-        if (body->valid & OBD_MD_FLCTIME &&
-            body->ctime >= LTIME_S(inode->i_ctime)) {
-                LTIME_S(inode->i_ctime) = body->ctime;
-                if (body->valid & OBD_MD_FLMTIME) {
-                        CDEBUG(D_INODE, "setting ino %lu mtime "
-                               "from %lu to "LPU64"\n", inode->i_ino,
+        if (body->valid & OBD_MD_FLATIME) {
+                if (body->atime > LTIME_S(inode->i_atime))
+                        LTIME_S(inode->i_atime) = body->atime;
+                lli->lli_lvb.lvb_atime = body->atime;
+        }
+        if (body->valid & OBD_MD_FLMTIME) {
+                if (body->mtime > LTIME_S(inode->i_mtime)) {
+                        CDEBUG(D_INODE, "setting ino %lu mtime from %lu "
+                               "to "LPU64"\n", inode->i_ino,
                                LTIME_S(inode->i_mtime), body->mtime);
                         LTIME_S(inode->i_mtime) = body->mtime;
                 }
+                lli->lli_lvb.lvb_mtime = body->mtime;
+        }
+        if (body->valid & OBD_MD_FLCTIME) {
+                if (body->ctime > LTIME_S(inode->i_ctime))
+                        LTIME_S(inode->i_ctime) = body->ctime;
+                lli->lli_lvb.lvb_ctime = body->ctime;
         }
         if (body->valid & OBD_MD_FLMODE)
                 inode->i_mode = (inode->i_mode & S_IFMT)|(body->mode & ~S_IFMT);
@@ -1947,11 +1994,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                 inode->i_nlink = body->nlink;
 
         if (body->valid & OBD_MD_FLRDEV)
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                inode->i_rdev = body->rdev;
-#else
                 inode->i_rdev = old_decode_dev(body->rdev);
-#endif
         if (body->valid & OBD_MD_FLSIZE) {
 #if 0           /* Can't block ll_test_inode->ll_update_inode, b=14326*/
                 ll_inode_size_lock(inode, 0);
@@ -1969,7 +2012,6 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         EXIT;
 }
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 static struct backing_dev_info ll_backing_dev_info = {
         .ra_pages       = 0,    /* No readahead */
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,12))
@@ -1978,7 +2020,6 @@ static struct backing_dev_info ll_backing_dev_info = {
         .memory_backed  = 0,    /* Does contribute to dirty memory */
 #endif
 };
-#endif
 
 void ll_read_inode2(struct inode *inode, void *opaque)
 {
@@ -2021,16 +2062,10 @@ void ll_read_inode2(struct inode *inode, void *opaque)
                 EXIT;
         } else {
                 inode->i_op = &ll_special_inode_operations;
-
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
                 init_special_inode(inode, inode->i_mode,
                                    kdev_t_to_nr(inode->i_rdev));
-
                 /* initializing backing dev info. */
                 inode->i_mapping->backing_dev_info = &ll_backing_dev_info;
-#else
-                init_special_inode(inode, inode->i_mode, inode->i_rdev);
-#endif
                 EXIT;
         }
 }
@@ -2192,6 +2227,17 @@ int ll_remount_fs(struct super_block *sb, int *flags, char *data)
                 err = obd_set_info_async(sbi->ll_mdc_exp, sizeof(KEY_READONLY),
                                          KEY_READONLY, sizeof(read_only),
                                          &read_only, NULL);
+
+                /* MDS might have expected a different ro key value, b=17493 */
+                if (err == -EINVAL) {
+                        CDEBUG(D_CONFIG, "Retrying remount with 1.6.6 ro key\n");
+                        err = obd_set_info_async(sbi->ll_mdc_exp,
+                                                 sizeof(KEY_READONLY_166COMPAT),
+                                                 KEY_READONLY_166COMPAT,
+                                                 sizeof(read_only),
+                                                 &read_only, NULL);
+                }
+
                 if (err) {
                         CERROR("Failed to change the read-only flag during "
                                "remount: %d\n", err);

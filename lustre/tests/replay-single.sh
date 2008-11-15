@@ -16,16 +16,25 @@ init_test_env $@
 CHECK_GRANT=${CHECK_GRANT:-"yes"}
 GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 
+remote_mds_nodsh && log "SKIP: remote MDS with nodsh" && exit 0
+
 # Skip these tests
 # bug number:
 ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT"
+
+if [ "$FAILURE_MODE" = "HARD" ] && mixed_ost_devs; then
+    CONFIG_EXCEPTIONS="0b 42 47 61a 61c"
+    echo -n "Several ost services on one ost node are used with FAILURE_MODE=$FAILURE_MODE. "
+    echo "Except the tests: $CONFIG_EXCEPTIONS"
+    ALWAYS_EXCEPT="$ALWAYS_EXCEPT $CONFIG_EXCEPTIONS"
+fi
 
 #                                                  63 min  7 min  AT AT AT AT"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="1 2 3 4 6 12 16 44a     44b    65 66 67 68"
 
 build_test_filter
 
-cleanup_and_setup_lustre
+check_and_setup_lustre
 
 mkdir -p $DIR
 
@@ -39,6 +48,8 @@ test_0a() {	# was test_0
 run_test 0a "empty replay"
 
 test_0b() {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     # this test attempts to trigger a race in the precreation code, 
     # and must run before any other objects are created on the filesystem
     fail ost1
@@ -833,6 +844,8 @@ run_test 42 "recovery after ost failure"
 
 # timeout in MDS/OST recovery RPC will LBUG MDS
 test_43() { # bug 2530
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     replay_barrier mds
 
     # OBD_FAIL_OST_CREATE_NET 0x204
@@ -925,6 +938,8 @@ test_46() {
 run_test 46 "Don't leak file handle after open resend (3325)"
 
 test_47() { # bug 2824
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     # create some files to make sure precreate has been done on all 
     # OSTs. (just in case this test is run independently)
     createmany -o $DIR/$tfile 20  || return 1
@@ -948,17 +963,18 @@ test_47() { # bug 2824
 run_test 47 "MDS->OSC failure during precreate cleanup (2824)"
 
 test_48() {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+    [ "$OSTCOUNT" -lt "2" ] && skip "$OSTCOUNT < 2 OSTs -- skipping" && return
+
     replay_barrier mds
     createmany -o $DIR/$tfile 20  || return 1
     # OBD_FAIL_OST_EROFS 0x216
-    fail mds
+    facet_failover mds
     do_facet ost1 "lctl set_param fail_loc=0x80000216"
     df $MOUNT || return 2
 
     createmany -o $DIR/$tfile 20 20 || return 2
     unlinkmany $DIR/$tfile 40 || return 3
-
-    do_facet ost1 "lctl set_param fail_loc=0"
     return 0
 }
 run_test 48 "MDS->OSC failure during precreate cleanup (2824)"
@@ -1308,6 +1324,8 @@ run_test 58c "resend/reconstruct setxattr op"
 # log_commit_thread vs filter_destroy race used to lead to import use after free
 # bug 11658
 test_59() {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     mkdir -p $DIR/$tdir
     createmany -o $DIR/$tdir/$tfile-%d 200
     sync
@@ -1321,6 +1339,21 @@ test_59() {
     rmdir $DIR/$tdir
 }
 run_test 59 "test log_commit_thread vs filter_destroy race"
+
+# bug 17323
+test_59b() {
+    mkdir -p $DIR/$tdir
+    createmany -o $DIR/$tdir/$tfile-%d 2000
+    sync
+#define OBD_FAIL_OBD_LOG_CANCEL_REP      0x606
+    do_facet mds "lctl set_param fail_loc=0x606"
+    unlinkmany $DIR/$tdir/$tfile-%d 2000
+    sleep 60
+    do_facet mds "lctl set_param fail_loc=0x0"
+    do_facet mds $LCTL dk | grep -q "RESENT cancel req" || return 1
+    rmdir $DIR/$tdir
+}
+run_test 59b "resent handle in llog_origin_handle_cancel"
 
 # race between add unlink llog vs cat log init in post_recovery (only for b1_6)
 # bug 12086: should no oops and No ctxt error for this test
@@ -1338,6 +1371,8 @@ run_test 60 "test llog post recovery init vs llog unlink"
 
 #test race  llog recovery thread vs llog cleanup
 test_61a() {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     mkdir -p $DIR/$tdir
     createmany -o $DIR/$tdir/$tfile-%d 800
     replay_barrier ost1 
@@ -1367,6 +1402,8 @@ run_test 61b "test race mds llog sync vs llog cleanup"
 
 #test race  cancel cookie cb vs llog cleanup
 test_61c() {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
 #   OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT 0x222 
     touch $DIR/$tfile 
     do_facet ost "lctl set_param fail_loc=0x80000222"
@@ -1433,24 +1470,35 @@ at_start()
         # speed up the timebase so we can check decreasing AT
 	do_facet mds "echo 8 >> $at_history"
 	do_facet ost1 "echo 8 >> $at_history"
+
+	# sleep for a while to cool down, should be > 8s and also allow
+	# at least one ping to be sent. simply use TIMEOUT to be safe.
+	sleep $TIMEOUT
     fi
 }
 
 test_65a() #bug 3055
 {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     at_start || return 0
     $LCTL dk > /dev/null
     debugsave
     lctl set_param debug="+other"
-    # slow down a request
-    do_facet mds lctl set_param fail_val=30000
+    # Slow down a request to the current service time, this is critical
+    # because previous tests may have caused this value to increase.
+    REQ_DELAY=`lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts |
+               awk '/portal 12/ {print $5}'`
+    REQ_DELAY=$((${REQ_DELAY} + 5))
+
+    do_facet mds lctl set_param fail_val=$((${REQ_DELAY} * 1000))
 #define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
     do_facet mds lctl set_param fail_loc=0x8000050a
     createmany -o $DIR/$tfile 10 > /dev/null
     unlinkmany $DIR/$tfile 10 > /dev/null
     # check for log message
     $LCTL dk | grep "Early reply #" || error "No early reply" 
-    # client should show 30s estimates
+    # client should show REQ_DELAY estimates
     lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts | grep portal
     sleep 9
     lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts | grep portal
@@ -1459,13 +1507,20 @@ run_test 65a "AT: verify early replies"
 
 test_65b() #bug 3055
 {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     at_start || return 0
     # turn on D_ADAPTTO
     debugsave
     lctl set_param debug="+other"
     $LCTL dk > /dev/null
-    # slow down bulk i/o
-    do_facet ost1 lctl set_param fail_val=30
+    # Slow down a request to the current service time, this is critical
+    # because previous tests may have caused this value to increase.
+    REQ_DELAY=`lctl get_param -n osc.${FSNAME}-OST0000-osc-*.timeouts |
+               awk '/portal 6/ {print $5}'`
+    REQ_DELAY=$((${REQ_DELAY} + 5))
+
+    do_facet ost1 lctl set_param fail_val=${REQ_DELAY}
 #define OBD_FAIL_OST_BRW_PAUSE_PACK      0x224
     do_facet ost1 lctl set_param fail_loc=0x224
 
@@ -1478,13 +1533,15 @@ test_65b() #bug 3055
     # check for log message
     $LCTL dk | grep "Early reply #" || error "No early reply"
     debugrestore
-    # client should show 30s estimates
+    # client should show REQ_DELAY estimates
     lctl get_param -n osc.${FSNAME}-OST0000-osc-*.timeouts | grep portal
 }
 run_test 65b "AT: verify early replies on packed reply / bulk"
 
 test_66a() #bug 3055
 {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     at_start || return 0
     lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts | grep "portal 12"
     # adjust 5s at a time so no early reply is sent (within deadline)
@@ -1513,6 +1570,8 @@ run_test 66a "AT: verify MDT service time adjusts with no early replies"
 
 test_66b() #bug 3055
 {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     at_start || return 0
     ORIG=$(lctl get_param -n mdc.${FSNAME}-*.timeouts | awk '/network/ {print $4}')
     lctl set_param fail_val=$(($ORIG + 5))
@@ -1529,6 +1588,8 @@ run_test 66b "AT: verify net latency adjusts"
 
 test_67a() #bug 3055
 {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     at_start || return 0
     CONN1=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
     # sleeping threads may drive values above this
@@ -1548,6 +1609,8 @@ run_test 67a "AT: verify slow request processing doesn't induce reconnects"
 
 test_67b() #bug 3055
 {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     at_start || return 0
     CONN1=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
 #define OBD_FAIL_OST_PAUSE_CREATE        0x223
@@ -1555,7 +1618,7 @@ test_67b() #bug 3055
     do_facet ost1 "lctl set_param fail_loc=0x80000223"
     cp /etc/profile $DIR/$tfile || error "cp failed"
     client_reconnect
-    lctl get_param -n ost.OSS.ost_create.timeouts
+    do_facet ost1 "lctl get_param -n ost.OSS.ost_create.timeouts"
     log "phase 2"
     CONN2=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
     ATTEMPTS=$(($CONN2 - $CONN1))
@@ -1565,8 +1628,8 @@ test_67b() #bug 3055
     cp /etc/profile $DIR/$tfile || error "cp failed"
     do_facet ost1 "lctl set_param fail_loc=0"
     client_reconnect
-    lctl get_param -n ost.OSS.ost_create.timeouts
-    CONN3=$(`lctl get_param -n osc.*.stats` | awk '/_connect/ {total+=$2} END {print total}')
+    do_facet ost1 "lctl get_param -n ost.OSS.ost_create.timeouts"
+    CONN3=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
     ATTEMPTS=$(($CONN3 - $CONN2))
     echo "$ATTEMPTS osc reconnect attemps on 2nd slow"
     [ $ATTEMPTS -gt 0 ] && error "AT should have prevented reconnect"
@@ -1576,6 +1639,8 @@ run_test 67b "AT: verify instant slowdown doesn't induce reconnects"
 
 test_68 () #bug 13813
 {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     at_start || return 0
     local ldlm_enqueue_min=$(find /sys -name ldlm_enqueue_min)
     [ -z "$ldlm_enqueue_min" ] && skip "missing /sys/.../ldlm_enqueue_min" && return 0
@@ -1642,8 +1707,6 @@ test_70a () {
 	done
 	
 	ls $DIR
-
-	zconf_umount_clients $CLIENTS $DIR
 }
 run_test 70a "check multi client t-f"
 
@@ -1681,23 +1744,11 @@ test_70b () {
 		echo "load on ${CLIENT} returned $rc"
 	done
 
-	zconf_umount_clients $CLIENTS $DIR 
 }
 run_test 70b "mds recovery; $CLIENTCOUNT clients"
 # end multi-client tests
 
 # vbr export handling
-create_fake_exports ()
-{
-    local facet=$1
-    local num=$2
-#obd_fail_val = num;
-#define OBD_FAIL_TGT_FAKE_EXP 0x708
-    do_facet $facet "lctl set_param fail_val=$num"
-    do_facet $facet "lctl set_param fail_loc=0x80000708"
-    fail $facet
-}
-
 test_71a() {
     do_facet mds $LCTL get_param version | grep -q ^lustre.*1.6 && \
         skip "skipping test for old 1.6 servers" && return 0
@@ -1713,7 +1764,7 @@ test_71a() {
     OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
     NEW_AGE=10
     do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$NEW_AGE"
-    sleep $NEW_AGE
+    sleep $((NEW_AGE + 2))
     do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep \"$UUID.*EXPIRED\"" || \
         error "exports didn't expire"
     do_facet mds "lctl set_param mds.${mds_svc}.evict_client=$UUID"
@@ -1734,7 +1785,7 @@ test_71b() {
     OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
     NEW_AGE=10
     do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$NEW_AGE"
-    sleep $NEW_AGE
+    sleep $((NEW_AGE + 2))
     EX_NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep -c EXPIRED")
     [ "$EX_NUM" -eq "$NUM" ] || error "not all exports are expired $EX_NUM != $NUM"
     do_facet mds "lctl set_param mds.${mds_svc}.flush_stale_exports=1"
@@ -1755,7 +1806,7 @@ test_71c() {
     OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
     NEW_AGE=10
     do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$NEW_AGE"
-    sleep $NEW_AGE
+    sleep $((NEW_AGE + 2))
     EX_NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep -c EXPIRED")
     [ "$EX_NUM" -eq "$NUM" ] || error "not all exports are expired $EX_NUM != $NUM"
 
@@ -1779,7 +1830,7 @@ test_71d() {
     OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
     NEW_AGE=10
     do_facet mds "lctl conf_param ${mds_svc}.mdt.stale_export_age=$NEW_AGE"
-    sleep $NEW_AGE
+    sleep $((NEW_AGE + 2))
     EX_NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep -c EXPIRED")
     [ "$EX_NUM" -eq "$NUM" ] || error "not all exports are expired $EX_NUM != $NUM"
 
@@ -1795,6 +1846,19 @@ test_71d() {
 run_test 71d "expired exports, server init removes them, conf_param works"
 
 # end vbr exports tests
+
+test_72() { #bug 16711
+    replay_barrier mds
+    multiop_bg_pause $DIR/$tfile O_c || return 4
+    pid=$!
+#define OBD_FAIL_TGT_REPLAY_DELAY 0x709
+    do_facet mds "lctl set_param fail_loc=0x80000709"
+    fail mds
+    kill -USR1 $pid || return 1
+    wait $pid || return 2
+    $CHECKSTAT -t file $DIR/$tfile || return 3
+}
+run_test 72 "target_finish_recovery vs process_recovery_queue race"
 
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre

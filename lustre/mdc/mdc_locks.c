@@ -248,7 +248,7 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
                                          obddev->u.cli.cl_default_mds_easize) };
         __u32 repsize[7] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                            [DLM_LOCKREPLY_OFF]   = sizeof(struct ldlm_reply),
-                           [DLM_REPLY_REC_OFF]   = sizeof(struct mds_body),
+                           [DLM_REPLY_REC_OFF]   = sizeof(struct mdt_body),
                            [DLM_REPLY_REC_OFF+1] = obddev->u.cli.
                                                         cl_max_mds_easize,
                            [DLM_REPLY_REC_OFF+2] = LUSTRE_POSIX_ACL_MAX_SIZE };
@@ -354,7 +354,7 @@ static struct ptlrpc_request *mdc_intent_unlink_pack(struct obd_export *exp,
                         [DLM_INTENT_REC_OFF+1]= data->namelen + 1 };
         __u32 repsize[5] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                            [DLM_LOCKREPLY_OFF]   = sizeof(struct ldlm_reply),
-                           [DLM_REPLY_REC_OFF]   = sizeof(struct mds_body),
+                           [DLM_REPLY_REC_OFF]   = sizeof(struct mdt_body),
                            [DLM_REPLY_REC_OFF+1] = obddev->u.cli.
                                                         cl_max_mds_easize,
                            [DLM_REPLY_REC_OFF+2] = obddev->u.cli.
@@ -386,12 +386,12 @@ static struct ptlrpc_request *mdc_intent_lookup_pack(struct obd_export *exp,
         __u32 size[6] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                         [DLM_LOCKREQ_OFF]     = sizeof(struct ldlm_request),
                         [DLM_INTENT_IT_OFF]   = sizeof(*lit),
-                        [DLM_INTENT_REC_OFF]  = sizeof(struct mds_body),
+                        [DLM_INTENT_REC_OFF]  = sizeof(struct mdt_body),
                         [DLM_INTENT_REC_OFF+1]= data->namelen + 1,
                         [DLM_INTENT_REC_OFF+2]= 0 };
         __u32 repsize[6] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                            [DLM_LOCKREPLY_OFF]   = sizeof(struct ldlm_reply),
-                           [DLM_REPLY_REC_OFF]   = sizeof(struct mds_body),
+                           [DLM_REPLY_REC_OFF]   = sizeof(struct mdt_body),
                            [DLM_REPLY_REC_OFF+1] = obddev->u.cli.
                                                         cl_max_mds_easize,
                            [DLM_REPLY_REC_OFF+2] = LUSTRE_POSIX_ACL_MAX_SIZE,

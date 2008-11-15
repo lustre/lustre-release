@@ -57,7 +57,7 @@ static void mdc_readdir_pack_18(struct ptlrpc_request *req, int offset,
         ENTRY;
 
         CLASSERT(sizeof(struct ll_fid)   == sizeof(struct lu_fid));
-        CLASSERT(sizeof(struct mds_body) == sizeof(struct mdt_body));
+        CLASSERT(sizeof(struct mds_body) <= sizeof(struct mdt_body));
         CLASSERT((int)offsetof(struct mds_body, max_cookiesize) == 
                  (int)offsetof(struct mdt_body, max_cookiesize));
 
@@ -65,7 +65,7 @@ static void mdc_readdir_pack_18(struct ptlrpc_request *req, int offset,
         b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
         b->fsuid = current->fsuid;
         b->fsgid = current->fsgid;
-        b->capability = current->cap_effective;
+        b->capability = cfs_curproc_cap_pack();
         b->fid1 = *fid;
         b->size = pg_off;                       /* !! */
         b->suppgid = -1;
@@ -82,7 +82,7 @@ static void mdc_readdir_pack_20(struct ptlrpc_request *req, int offset,
         b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
         b->fsuid = current->fsuid;
         b->fsgid = current->fsgid;
-        b->capability = current->cap_effective;
+        b->capability = cfs_curproc_cap_pack();
 
         if (fid) {
                 b->fid1 = *((struct lu_fid*)fid);
@@ -118,7 +118,7 @@ static void mdc_pack_req_body_18(struct ptlrpc_request *req, int offset,
         b->flags = flags;
         b->fsuid = current->fsuid;
         b->fsgid = current->fsgid;
-        b->capability = current->cap_effective;
+        b->capability = cfs_curproc_cap_pack();
         EXIT;
 }
 
@@ -140,7 +140,7 @@ static void mdc_pack_req_body_20(struct ptlrpc_request *req, int offset,
 
         b->fsuid = current->fsuid;
         b->fsgid = current->fsgid;
-        b->capability = current->cap_effective;
+        b->capability = cfs_curproc_cap_pack();
         EXIT;
 }
 
@@ -158,7 +158,7 @@ void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
 static void mdc_create_pack_18(struct ptlrpc_request *req, int offset,
                                struct mdc_op_data *op_data, const void *data,
                                int datalen, __u32 mode, __u32 uid, __u32 gid,
-                               __u32 cap_effective, __u64 rdev)
+                               cfs_cap_t cap_effective, __u64 rdev)
 {
         struct mds_rec_create *rec;
         char *tmp;
@@ -190,7 +190,7 @@ static void mdc_create_pack_18(struct ptlrpc_request *req, int offset,
 static void mdc_create_pack_20(struct ptlrpc_request *req, int offset,
                                struct mdc_op_data *op_data, const void *data,
                                int datalen, __u32 mode, __u32 uid, __u32 gid,
-                               __u32 cap_effective, __u64 rdev)
+                               cfs_cap_t cap_effective, __u64 rdev)
 {
         struct mdt_rec_create *rec;
         char *tmp;
@@ -223,7 +223,7 @@ static void mdc_create_pack_20(struct ptlrpc_request *req, int offset,
 void mdc_create_pack(struct ptlrpc_request *req, int offset,
                      struct mdc_op_data *op_data, const void *data,
                      int datalen, __u32 mode, __u32 uid, __u32 gid,
-                     __u32 cap_effective, __u64 rdev)
+                     cfs_cap_t cap_effective, __u64 rdev)
 {
         if (mdc_req_is_2_0_server(req))
                 mdc_create_pack_20(req, offset, op_data, data, datalen,
@@ -310,7 +310,7 @@ static void mdc_open_pack_18(struct ptlrpc_request *req, int offset,
         rec->cr_opcode  = REINT_OPEN;
         rec->cr_fsuid   = current->fsuid;
         rec->cr_fsgid   = current->fsgid;
-        rec->cr_cap     = current->cap_effective;
+        rec->cr_cap     = cfs_curproc_cap_pack();
         rec->cr_fid     = op_data->fid1;
         memset(&rec->cr_replayfid, 0, sizeof(rec->cr_replayfid));
         rec->cr_mode    = mode;
@@ -351,7 +351,7 @@ static void mdc_open_pack_20(struct ptlrpc_request *req, int offset,
         rec->cr_opcode = REINT_OPEN;
         rec->cr_fsuid  = current->fsuid;
         rec->cr_fsgid  = current->fsgid;
-        rec->cr_cap    = current->cap_effective;
+        rec->cr_cap    = cfs_curproc_cap_pack();
         memcpy(&rec->cr_fid1, &op_data->fid1, sizeof(op_data->fid1));
         memcpy(&rec->cr_fid2, &op_data->fid2, sizeof(op_data->fid2));
         rec->cr_mode   = mode;
@@ -446,7 +446,7 @@ void mdc_setattr_pack_18(struct ptlrpc_request *req, int offset,
         rec->sa_opcode = REINT_SETATTR;
         rec->sa_fsuid = current->fsuid;
         rec->sa_fsgid = current->fsgid;
-        rec->sa_cap = current->cap_effective;
+        rec->sa_cap = cfs_curproc_cap_pack();
         rec->sa_fid = data->fid1;
         rec->sa_suppgid = -1;
 
@@ -494,7 +494,7 @@ static void mdc_setattr_pack_20(struct ptlrpc_request *req, int offset,
         rec->sa_opcode  = REINT_SETATTR;
         rec->sa_fsuid   = current->fsuid;
         rec->sa_fsgid   = current->fsgid;
-        rec->sa_cap     = current->cap_effective;
+        rec->sa_cap     = cfs_curproc_cap_pack();
         memcpy(&rec->sa_fid, &data->fid1, sizeof(data->fid1));
         rec->sa_suppgid = -1;
 
@@ -554,7 +554,7 @@ static void mdc_unlink_pack_18(struct ptlrpc_request *req, int offset,
         rec->ul_opcode = REINT_UNLINK;
         rec->ul_fsuid = current->fsuid;
         rec->ul_fsgid = current->fsgid;
-        rec->ul_cap = current->cap_effective;
+        rec->ul_cap = cfs_curproc_cap_pack();
         rec->ul_mode = data->create_mode;
         rec->ul_suppgid = data->suppgids[0];
         rec->ul_fid1 = data->fid1;
@@ -580,7 +580,7 @@ static void mdc_unlink_pack_20(struct ptlrpc_request *req, int offset,
         rec->ul_opcode  = REINT_UNLINK;
         rec->ul_fsuid   = current->fsuid;
         rec->ul_fsgid   = current->fsgid;
-        rec->ul_cap     = current->cap_effective;
+        rec->ul_cap     = cfs_curproc_cap_pack();
         rec->ul_mode    = data->create_mode;
         rec->ul_suppgid1= data->suppgids[0];
         memcpy(&rec->ul_fid1, &data->fid1, sizeof(data->fid1));
@@ -615,7 +615,7 @@ static void mdc_link_pack_18(struct ptlrpc_request *req, int offset,
         rec->lk_opcode = REINT_LINK;
         rec->lk_fsuid = current->fsuid;
         rec->lk_fsgid = current->fsgid;
-        rec->lk_cap = current->cap_effective;
+        rec->lk_cap = cfs_curproc_cap_pack();
         rec->lk_suppgid1 = data->suppgids[0];
         rec->lk_suppgid2 = data->suppgids[1];
         rec->lk_fid1 = data->fid1;
@@ -639,7 +639,7 @@ static void mdc_link_pack_20(struct ptlrpc_request *req, int offset,
         rec->lk_opcode   = REINT_LINK;
         rec->lk_fsuid    = current->fsuid;
         rec->lk_fsgid    = current->fsgid;
-        rec->lk_cap      = current->cap_effective;
+        rec->lk_cap      = cfs_curproc_cap_pack();
         rec->lk_suppgid1 = data->suppgids[0];
         rec->lk_suppgid2 = data->suppgids[1];
         memcpy(&rec->lk_fid1, &data->fid1, sizeof(data->fid1));
@@ -678,7 +678,7 @@ static void mdc_rename_pack_18(struct ptlrpc_request *req, int offset,
         rec->rn_opcode = REINT_RENAME;
         rec->rn_fsuid = current->fsuid;
         rec->rn_fsgid = current->fsgid;
-        rec->rn_cap = current->cap_effective;
+        rec->rn_cap = cfs_curproc_cap_pack();
         rec->rn_suppgid1 = data->suppgids[0];
         rec->rn_suppgid2 = data->suppgids[1];
         rec->rn_fid1 = data->fid1;
@@ -709,7 +709,7 @@ static void mdc_rename_pack_20(struct ptlrpc_request *req, int offset,
         rec->rn_opcode   = REINT_RENAME;
         rec->rn_fsuid    = current->fsuid;
         rec->rn_fsgid    = current->fsgid;
-        rec->rn_cap      = current->cap_effective;
+        rec->rn_cap      = cfs_curproc_cap_pack();
         rec->rn_suppgid1 = data->suppgids[0];
         rec->rn_suppgid2 = data->suppgids[1];
         memcpy(&rec->rn_fid1, &data->fid1, sizeof(data->fid1));
@@ -751,7 +751,7 @@ static void mdc_getattr_pack_18(struct ptlrpc_request *req, int offset,
 
         b->fsuid = current->fsuid;
         b->fsgid = current->fsgid;
-        b->capability = current->cap_effective;
+        b->capability = cfs_curproc_cap_pack();
         b->valid = valid;
         b->flags = flags | MDS_BFLAG_EXT_FLAGS;
         /* skip MDS_BFLAG_EXT_FLAGS to verify the "client < 1.4.7" case 
@@ -783,7 +783,7 @@ static void mdc_getattr_pack_20(struct ptlrpc_request *req, int offset,
 
         b->fsuid = current->fsuid;
         b->fsgid = current->fsgid;
-        b->capability = current->cap_effective;
+        b->capability = cfs_curproc_cap_pack();
         b->valid = valid;
         b->flags = flags | MDS_BFLAG_EXT_FLAGS;
         b->suppgid = data->suppgids[0];
@@ -863,7 +863,7 @@ static void mdc_close_pack_20(struct ptlrpc_request *req, int offset,
         rec->sa_opcode  = REINT_SETATTR;
         rec->sa_fsuid   = current->fsuid;
         rec->sa_fsgid   = current->fsgid;
-        rec->sa_cap     = current->cap_effective;
+        rec->sa_cap     = cfs_curproc_cap_pack();
         rec->sa_suppgid = -1;
 
         memcpy(&rec->sa_fid, &data->fid1, sizeof(data->fid1));

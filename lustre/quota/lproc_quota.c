@@ -44,6 +44,8 @@
 
 #include "quota_internal.h"
 
+#ifdef HAVE_QUOTA_SUPPORT
+
 #ifdef LPROCFS
 int lprocfs_quota_rd_bunit(char *page, char **start, off_t off, int count,
                            int *eof, void *data)
@@ -446,6 +448,36 @@ int lprocfs_quota_wr_switch_seconds(struct file *file, const char *buffer,
 }
 EXPORT_SYMBOL(lprocfs_quota_wr_switch_seconds);
 
+int lprocfs_quota_rd_sync_blk(char *page, char **start, off_t off,
+                              int count, int *eof, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        LASSERT(obd != NULL);
+
+        return snprintf(page, count, "%d\n",
+                        obd->u.obt.obt_qctxt.lqc_sync_blk);
+}
+EXPORT_SYMBOL(lprocfs_quota_rd_sync_blk);
+
+int lprocfs_quota_wr_sync_blk(struct file *file, const char *buffer,
+                              unsigned long count, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        int val, rc;
+        LASSERT(obd != NULL);
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val < 0)
+                return -EINVAL;
+
+        obd->u.obt.obt_qctxt.lqc_sync_blk = val;
+        return count;
+}
+EXPORT_SYMBOL(lprocfs_quota_wr_sync_blk);
+
 int lprocfs_quota_rd_switch_qs(char *page, char **start, off_t off,
                                int count, int *eof, void *data)
 {
@@ -616,6 +648,8 @@ struct lprocfs_vars lprocfs_quota_common_vars[] = {
                             lprocfs_quota_wr_type, 0},
         { "quota_switch_seconds",  lprocfs_quota_rd_switch_seconds,
                                    lprocfs_quota_wr_switch_seconds, 0 },
+        { "quota_sync_blk", lprocfs_quota_rd_sync_blk,
+                            lprocfs_quota_wr_sync_blk, 0},
 };
 
 struct lprocfs_vars lprocfs_quota_master_vars[] = {
@@ -733,3 +767,4 @@ int lquota_proc_cleanup(struct lustre_quota_ctxt *qctxt)
 }
 
 #endif  /* LPROCFS */
+#endif

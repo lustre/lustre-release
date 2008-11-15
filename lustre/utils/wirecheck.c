@@ -808,6 +808,19 @@ check_ldlm_lvb(void)
         CHECK_MEMBER(ost_lvb, lvb_blocks);
 }
 
+static void
+check_cfg_marker(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(cfg_marker);
+        CHECK_MEMBER(cfg_marker, cm_step);
+        CHECK_MEMBER(cfg_marker, cm_flags);
+        CHECK_MEMBER(cfg_marker, cm_vers);
+        CHECK_MEMBER(cfg_marker, cm_createtime);
+        CHECK_MEMBER(cfg_marker, cm_canceltime);
+        CHECK_MEMBER(cfg_marker, cm_tgtname);
+        CHECK_MEMBER(cfg_marker, cm_comment);
+}
 
 static void
 check_llog_logid(void)
@@ -924,6 +937,22 @@ check_llog_setattr_rec(void)
         CHECK_MEMBER(llog_setattr_rec, lsr_gid);
         CHECK_MEMBER(llog_setattr_rec, padding);
         CHECK_MEMBER(llog_setattr_rec, lsr_tail);
+}
+
+static void
+check_llog_setattr64_rec(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(llog_setattr64_rec);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_hdr);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_oid);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_ogen);
+        CHECK_MEMBER(llog_setattr64_rec, padding);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_uid);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_uid_h);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_gid);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_gid_h);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_tail);
 }
 
 static void
@@ -1405,6 +1434,7 @@ main(int argc, char **argv)
         check_ldlm_request();
         check_ldlm_reply();
         check_ldlm_lvb();
+        check_cfg_marker();
         check_llog_logid();
         check_llog_catid();
         check_llog_rec_hdr();
@@ -1414,6 +1444,7 @@ main(int argc, char **argv)
         check_llog_orphan_rec();
         check_llog_unlink_rec();
         check_llog_setattr_rec();
+        check_llog_setattr64_rec();
         check_llog_size_change_rec();
         check_llog_gen();
         check_llog_gen_rec();

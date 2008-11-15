@@ -87,6 +87,12 @@ struct filter_mod_data {
 /* Client cache seconds */
 #define FILTER_FMD_MAX_AGE_DEFAULT ((obd_timeout + 10) * HZ)
 
+#ifndef HAVE_PAGE_CONSTANT
+#define mapping_cap_page_constant_write(mapping) 0
+#define SetPageConstant(page) do {} while (0)
+#define ClearPageConstant(page) do {} while (0)
+#endif
+
 struct filter_mod_data *filter_fmd_find(struct obd_export *exp,
                                         obd_id objid, obd_gr group);
 struct filter_mod_data *filter_fmd_get(struct obd_export *exp,
@@ -97,6 +103,11 @@ void filter_fmd_expire(struct obd_export *exp);
 enum {
         LPROC_FILTER_READ_BYTES = 0,
         LPROC_FILTER_WRITE_BYTES = 1,
+        LPROC_FILTER_GET_PAGE = 2,
+        LPROC_FILTER_NO_PAGE = 3,
+        LPROC_FILTER_CACHE_ACCESS = 4,
+        LPROC_FILTER_CACHE_HIT = 5,
+        LPROC_FILTER_CACHE_MISS = 6,
         LPROC_FILTER_LAST,
 };
 
@@ -144,19 +155,20 @@ extern struct ldlm_valblock_ops filter_lvbo;
 
 /* filter_io.c */
 int filter_preprw(int cmd, struct obd_export *, struct obdo *, int objcount,
-                  struct obd_ioobj *, int niocount, struct niobuf_remote *,
-                  struct niobuf_local *, struct obd_trans_info *);
+                  struct obd_ioobj *, struct niobuf_remote *,
+                  int *, struct niobuf_local *, struct obd_trans_info *);
 int filter_commitrw(int cmd, struct obd_export *, struct obdo *, int objcount,
-                    struct obd_ioobj *, int niocount, struct niobuf_local *,
-                    struct obd_trans_info *, int rc);
+                    struct obd_ioobj *, struct niobuf_remote *,  int,
+                    struct niobuf_local *, struct obd_trans_info *, int rc);
 int filter_brw(int cmd, struct obd_export *, struct obd_info *oinfo,
                obd_count oa_bufs, struct brw_page *pga, struct obd_trans_info *);
-void flip_into_page_cache(struct inode *inode, struct page *new_page);
+void filter_invalidate_cache(struct obd_device *, struct obd_ioobj *,
+                             struct niobuf_remote *, struct inode *);
 
 /* filter_io_*.c */
 struct filter_iobuf;
 int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
-                          struct obd_ioobj *obj, int niocount,
+                          struct obd_ioobj *obj, struct niobuf_remote *, int,
                           struct niobuf_local *res, struct obd_trans_info *oti,
                           int rc);
 obd_size filter_grant_space_left(struct obd_export *exp);

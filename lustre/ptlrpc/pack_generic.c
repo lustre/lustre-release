@@ -68,7 +68,7 @@ static inline int lustre_msg_hdr_size_v2(int count)
         return size_round(offsetof(struct lustre_msg_v2, lm_buflens[count]));
 }
 
-static int lustre_msg_need_swab(struct lustre_msg *msg)
+int lustre_msg_need_swab(struct lustre_msg *msg)
 {
         return (msg->lm_magic == LUSTRE_MSG_MAGIC_V1_SWABBED) ||
                (msg->lm_magic == LUSTRE_MSG_MAGIC_V2_SWABBED);
@@ -914,6 +914,20 @@ static inline int lustre_unpack_ptlrpc_body_v2(struct lustre_msg_v2 *m,
         return 0;
 }
 
+int lustre_unpack_msg_ptlrpc_body(struct lustre_msg *msg,
+                                  int offset, int swab_needed)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+                return 0;
+        case LUSTRE_MSG_MAGIC_V2:
+                return lustre_unpack_ptlrpc_body_v2(msg, offset, swab_needed);
+        default:
+                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+                return -EINVAL;
+        }
+}
+
 int lustre_unpack_req_ptlrpc_body(struct ptlrpc_request *req, int offset)
 {
         switch (req->rq_reqmsg->lm_magic) {
@@ -1097,6 +1111,7 @@ void *lustre_swab_buf(struct lustre_msg *msg, int index, int min_size,
 {
         void *ptr = NULL;
 
+        LASSERT(msg != NULL);
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V1:
                 ptr = lustre_msg_buf_v1(msg, index - 1, min_size);
@@ -2431,6 +2446,7 @@ int quota_get_qdata(void *request, struct qunit_data *qdata,
         int size2 = sizeof(struct qunit_data_old2);
         __u64  flags = is_exp ? req->rq_export->exp_connect_flags :
                        req->rq_import->imp_connect_data.ocd_connect_flags;
+        int rc = 0;
 
         LASSERT(req);
         LASSERT(qdata);
@@ -2456,6 +2472,8 @@ int quota_get_qdata(void *request, struct qunit_data *qdata,
                         new = lustre_swab_repbuf(req, REPLY_REC_OFF,
                                                  sizeof(struct qunit_data),
                                                  lustre_swab_qdata);
+                if (new == NULL)
+                        GOTO(out, rc = -EPROTO);
                 *qdata = *new;
                 QDATA_SET_CHANGE_QS(qdata);
                 return 0;
@@ -2474,6 +2492,8 @@ without_change_qs:
                 else
                         old2 = lustre_swab_repbuf(req, REPLY_REC_OFF, size2,
                                                   lustre_swab_qdata_old2);
+                if (old2 == NULL)
+                        GOTO(out, rc = -EPROTO);
                 qdata_v2_to_v3(old2, qdata);
 
                 return 0;
@@ -2481,8 +2501,8 @@ without_change_qs:
 #else
 #warning "remove quota code above for format absolete in new release"
 #endif
-
-        return 0;
+out:
+        return rc;
 }
 EXPORT_SYMBOL(quota_get_qdata);
 
@@ -2495,6 +2515,7 @@ int quota_copy_qdata(void *request, struct qunit_data *qdata,
         struct qunit_data_old2 *old2;
         __u64  flags = is_exp ? req->rq_export->exp_connect_flags :
                 req->rq_import->imp_connect_data.ocd_connect_flags;
+        int rc = 0;
 
         LASSERT(req);
         LASSERT(qdata);
@@ -2519,7 +2540,7 @@ int quota_copy_qdata(void *request, struct qunit_data *qdata,
                         target = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                                 sizeof(struct qunit_data));
                 if (!target)
-                        return -EINVAL;
+                        GOTO(out, rc = -EPROTO);
                 memcpy(target, qdata, sizeof(*qdata));
                 return 0;
         }
@@ -2535,7 +2556,7 @@ without_change_qs:
                         target = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                                 sizeof(struct qunit_data_old2));
                 if (!target)
-                        return -EINVAL;
+                        GOTO(out, rc = -EPROTO);
                 old2 = qdata_v3_to_v2(qdata);
                 memcpy(target, old2, sizeof(*old2));
                 return 0;
@@ -2543,8 +2564,8 @@ without_change_qs:
 #else
 #warning "remove quota code above for format absolete in new release"
 #endif
-
-        return 0;
+out:
+        return rc;
 }
 EXPORT_SYMBOL(quota_copy_qdata);
 
@@ -2604,6 +2625,9 @@ void _debug_req(struct ptlrpc_request *req, __u32 mask,
         int rep_fl = 0;
         int rep_status = 0;
 
+        /* Caller is responsible holding a reference on the request */
+        LASSERT(req && atomic_read(&req->rq_refcount) > 0);
+
         if (req->rq_reqmsg &&
             (!lustre_msg_need_swab(req->rq_reqmsg) ||
              (lustre_req_need_swab(req) &&
@@ -2621,24 +2645,23 @@ void _debug_req(struct ptlrpc_request *req, __u32 mask,
         }
 
         va_start(args, fmt);
-        libcfs_debug_vmsg2(data->msg_cdls, data->msg_subsys, mask, data->msg_file,
-                           data->msg_fn, data->msg_line, fmt, args,
-                           " req@%p x"LPD64"/t"LPD64" o%d->%s@%s:%d/%d "
-                           "lens %d/%d e %d to %d dl %ld ref %d "
-                           "fl "REQ_FLAGS_FMT"/%x/%x rc %d/%d\n",
-                           req, req->rq_xid, req->rq_transno, opc,
-                           req->rq_import ? obd2cli_tgt(req->rq_import->imp_obd) :
-                           req->rq_export ?
-                                (char*)req->rq_export->exp_client_uuid.uuid : "<?>",
-                           req->rq_import ?
-                                (char *)req->rq_import->imp_connection->c_remote_uuid.uuid :
-                           req->rq_export ?
-                                (char *)req->rq_export->exp_connection->c_remote_uuid.uuid : "<?>",
-                           req->rq_request_portal,  req->rq_reply_portal,
-                           req->rq_reqlen, req->rq_replen,
-                           req->rq_early_count, req->rq_timeout, req->rq_deadline,
-                           atomic_read(&req->rq_refcount), DEBUG_REQ_FLAGS(req),
-                           req_fl, rep_fl, req->rq_status, rep_status);
+        libcfs_debug_vmsg2(data->msg_cdls, data->msg_subsys, mask,
+                data->msg_file, data->msg_fn, data->msg_line, fmt, args,
+                " req@%p x"LPD64"/t"LPD64" o%d->%s@%s:%d/%d lens %d/%d e %d "
+                "to %d dl %ld ref %d fl "REQ_FLAGS_FMT"/%x/%x rc %d/%d\n",
+                req, req->rq_xid, req->rq_transno, opc,
+                req->rq_import ? obd2cli_tgt(req->rq_import->imp_obd) :
+                req->rq_export ?
+                (char*)req->rq_export->exp_client_uuid.uuid : "<?>",
+                req->rq_import ?
+                (char *)req->rq_import->imp_connection->c_remote_uuid.uuid :
+                req->rq_export ?
+                (char *)req->rq_export->exp_connection->c_remote_uuid.uuid :
+                "<?>", req->rq_request_portal,  req->rq_reply_portal,
+                req->rq_reqlen, req->rq_replen,
+                req->rq_early_count, !!req->rq_timeout, req->rq_deadline,
+                atomic_read(&req->rq_refcount), DEBUG_REQ_FLAGS(req),
+                req_fl, rep_fl, req->rq_status, rep_status);
         va_end(args);
 }
 

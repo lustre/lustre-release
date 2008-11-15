@@ -44,10 +44,11 @@
 
 static struct lprocfs_vars lprocfs_mgc_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,          0, 0 },
-        { "ping",            0, lprocfs_wr_ping,          0 },
+        { "ping",            0, lprocfs_wr_ping,       0, 0, 0222 },
         { "connect_flags",   lprocfs_rd_connect_flags, 0, 0 },
         { "mgs_server_uuid", lprocfs_rd_server_uuid,   0, 0 },
         { "mgs_conn_uuid",   lprocfs_rd_conn_uuid,     0, 0 },
+        { "import",          lprocfs_rd_import,    0, 0 },
         { 0 }
 };
 

@@ -84,11 +84,11 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
 
         if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_LLOG_CREATE_FAILED))
                 RETURN(ERR_PTR(-ENOSPC));
-        
+
         rc = llog_create(cathandle->lgh_ctxt, &loghandle, NULL, NULL);
         if (rc)
                 RETURN(ERR_PTR(rc));
-        
+
         rc = llog_init_handle(loghandle,
                               LLOG_F_IS_PLAIN | LLOG_F_ZAP_WHEN_EMPTY,
                               &cathandle->lgh_hdr->llh_tgtuuid);
@@ -128,13 +128,12 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
         LASSERT(list_empty(&loghandle->u.phd.phd_entry));
         list_add_tail(&loghandle->u.phd.phd_entry, &cathandle->u.chd.chd_head);
 
- out_destroy:
+out_destroy:
         if (rc < 0)
                 llog_destroy(loghandle);
 
         RETURN(loghandle);
 }
-EXPORT_SYMBOL(llog_cat_new_log);
 
 /* Open an existent log handle and add it to the open list.
  * This log handle will be closed when all of the records in it are removed.
@@ -309,7 +308,7 @@ EXPORT_SYMBOL(llog_cat_add_rec);
  * Assumes caller has already pushed us into the kernel context.
  */
 int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
-                        struct llog_cookie *cookies)
+                            struct llog_cookie *cookies)
 {
         int i, index, rc = 0;
         ENTRY;
@@ -438,7 +437,7 @@ int llog_cat_process_thread(void *data)
 
         if (cb) {
                 rc = llog_cat_process(llh, (llog_cb_t)cb, NULL);
-                if (rc != LLOG_PROC_BREAK)
+                if (rc != LLOG_PROC_BREAK && rc != 0)
                         CERROR("llog_cat_process() failed %d\n", rc);
         } else {
                 CWARN("No callback function for recovery\n");
@@ -448,14 +447,14 @@ int llog_cat_process_thread(void *data)
          * Make sure that all cached data is sent. 
          */
         llog_sync(ctxt, NULL);
-        EXIT;
+        GOTO(release_llh, rc);
 release_llh:
         rc = llog_cat_put(llh);
         if (rc)
                 CERROR("llog_cat_put() failed %d\n", rc);
 out:
         llog_ctxt_put(ctxt);
-        OBD_FREE(args, sizeof(*args));
+        OBD_FREE_PTR(args);
         return rc;
 }
 EXPORT_SYMBOL(llog_cat_process_thread);
@@ -556,49 +555,3 @@ out:
 
         RETURN(0);
 }
-
-#if 0
-/* Assumes caller has already pushed us into the kernel context. */
-int llog_cat_init(struct llog_handle *cathandle, struct obd_uuid *tgtuuid)
-{
-        struct llog_log_hdr *llh;
-        loff_t offset = 0;
-        int rc = 0;
-        ENTRY;
-
-        LASSERT(sizeof(*llh) == LLOG_CHUNK_SIZE);
-
-        down(&cathandle->lgh_lock);
-        llh = cathandle->lgh_hdr;
-
-        if (i_size_read(cathandle->lgh_file->f_dentry->d_inode) == 0) {
-                llog_write_rec(cathandle, &llh->llh_hdr, NULL, 0, NULL, 0);
-
-write_hdr:
-                rc = lustre_fwrite(cathandle->lgh_file, llh, LLOG_CHUNK_SIZE,
-                                   &offset);
-                if (rc != LLOG_CHUNK_SIZE) {
-                        CERROR("error writing catalog header: rc %d\n", rc);
-                        OBD_FREE(llh, sizeof(*llh));
-                        if (rc >= 0)
-                                rc = -ENOSPC;
-                } else
-                        rc = 0;
-        } else {
-                rc = lustre_fread(cathandle->lgh_file, llh, LLOG_CHUNK_SIZE,
-                                  &offset);
-                if (rc != LLOG_CHUNK_SIZE) {
-                        CERROR("error reading catalog header: rc %d\n", rc);
-                        /* Can we do much else if the header is bad? */
-                        goto write_hdr;
-                } else
-                        rc = 0;
-        }
-
-        cathandle->lgh_tgtuuid = &llh->llh_tgtuuid;
-        up(&cathandle->lgh_lock);
-        RETURN(rc);
-}
-EXPORT_SYMBOL(llog_cat_init);
-
-#endif
