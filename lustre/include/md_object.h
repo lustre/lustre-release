@@ -62,7 +62,7 @@
 struct md_device;
 struct md_device_operations;
 struct md_object;
-
+struct obd_export;
 
 enum {
         UCRED_INVALID   = -1,
@@ -73,18 +73,18 @@ enum {
 
 struct md_ucred {
         __u32               mu_valid;
-        __u32                   mu_o_uid;
-        __u32                   mu_o_gid;
-        __u32                   mu_o_fsuid;
-        __u32                   mu_o_fsgid;
-        __u32                   mu_uid;
-        __u32                   mu_gid;
-        __u32                   mu_fsuid;
-        __u32                   mu_fsgid;
-        __u32                   mu_suppgids[2];
-        cfs_cap_t               mu_cap;
-        __u32                   mu_umask;
-	struct group_info      *mu_ginfo;
+        __u32               mu_o_uid;
+        __u32               mu_o_gid;
+        __u32               mu_o_fsuid;
+        __u32               mu_o_fsgid;
+        __u32               mu_uid;
+        __u32               mu_gid;
+        __u32               mu_fsuid;
+        __u32               mu_fsgid;
+        __u32               mu_suppgids[2];
+        cfs_cap_t           mu_cap;
+        __u32               mu_umask;
+	struct group_info  *mu_ginfo;
 	struct md_identity *mu_identity;
 };
 
@@ -95,6 +95,8 @@ enum {
 /** there are at most 5 fids in one operation, see rename, NOTE the last one
  * is a temporary one used for is_subdir() */
 struct md_capainfo {
+        __u32                   mc_auth;
+        __u32                   mc_padding;
         const struct lu_fid    *mc_fid[MD_CAPAINFO_MAX];
         struct lustre_capa     *mc_capa[MD_CAPAINFO_MAX];
 };
@@ -315,6 +317,82 @@ struct md_device_operations {
         int (*mdo_update_capa_key)(const struct lu_env *env,
                                    struct md_device *m,
                                    struct lustre_capa_key *key);
+
+#ifdef HAVE_QUOTA_SUPPORT
+        struct md_quota_operations {
+                int (*mqo_notify)(const struct lu_env *env,
+                                  struct md_device *m);
+
+                int (*mqo_setup)(const struct lu_env *env,
+                                 struct md_device *m,
+                                 void *data);
+
+                int (*mqo_cleanup)(const struct lu_env *env,
+                                   struct md_device *m);
+
+                int (*mqo_recovery)(const struct lu_env *env,
+                                    struct md_device *m);
+
+                int (*mqo_check)(const struct lu_env *env,
+                                 struct md_device *m,
+                                 struct obd_export *exp,
+                                 __u32 type);
+
+                int (*mqo_on)(const struct lu_env *env,
+                              struct md_device *m,
+                              __u32 type,
+                              __u32 id);
+
+                int (*mqo_off)(const struct lu_env *env,
+                               struct md_device *m,
+                               __u32 type,
+                               __u32 id);
+
+                int (*mqo_setinfo)(const struct lu_env *env,
+                                   struct md_device *m,
+                                   __u32 type,
+                                   __u32 id,
+                                   struct obd_dqinfo *dqinfo);
+
+                int (*mqo_getinfo)(const struct lu_env *env,
+                                   const struct md_device *m,
+                                   __u32 type,
+                                   __u32 id,
+                                   struct obd_dqinfo *dqinfo);
+
+                int (*mqo_setquota)(const struct lu_env *env,
+                                    struct md_device *m,
+                                    __u32 type,
+                                    __u32 id,
+                                    struct obd_dqblk *dqblk);
+
+                int (*mqo_getquota)(const struct lu_env *env,
+                                    const struct md_device *m,
+                                    __u32 type,
+                                    __u32 id,
+                                    struct obd_dqblk *dqblk);
+
+                int (*mqo_getoinfo)(const struct lu_env *env,
+                                    const struct md_device *m,
+                                    __u32 type,
+                                    __u32 id,
+                                    struct obd_dqinfo *dqinfo);
+
+                int (*mqo_getoquota)(const struct lu_env *env,
+                                     const struct md_device *m,
+                                     __u32 type,
+                                     __u32 id,
+                                     struct obd_dqblk *dqblk);
+
+                int (*mqo_invalidate)(const struct lu_env *env,
+                                      struct md_device *m,
+                                      __u32 type);
+
+                int (*mqo_finvalidate)(const struct lu_env *env,
+                                       struct md_device *m,
+                                       __u32 type);
+        } mdo_quota;
+#endif
 };
 
 enum md_upcall_event {

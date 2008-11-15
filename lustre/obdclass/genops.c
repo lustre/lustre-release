@@ -506,18 +506,6 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
         return NULL;
 }
 
-struct obd_device *class_find_client_notype(struct obd_uuid *tgt_uuid,
-                                            struct obd_uuid *grp_uuid)
-{
-        struct obd_device *obd;
-
-        obd = class_find_client_obd(tgt_uuid, LUSTRE_MDC_NAME, NULL);
-        if (!obd)
-                obd = class_find_client_obd(tgt_uuid, LUSTRE_OSC_NAME,
-                                            grp_uuid);
-        return obd;
-}
-
 /* Iterate the obd_device list looking devices have grp_uuid. Start
    searching at *next, and if a device is found, the next index to look
    at is saved in *next. If next is NULL, then the first matching device

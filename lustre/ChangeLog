@@ -66,6 +66,15 @@ Description: Hitting mdc_commit_close() ASSERTION
 Details    : Properly handle request reference release in
 	     ll_release_openhandle().
 
+Severity   : major
+Bugzilla   : 14840
+Description: quota recovery deadlock during mds failover
+Details    : This patch includes att18982, att18236, att18237 in bz14840.
+             Slove the problems:
+             1. fix osts hang when mds does failover with quotaon
+             2. prevent watchdog storm when osts threads wait for the
+	        recovery of mds
+
 Severity   : normal
 Bugzilla   : 15975
 Frequency  : only patchless client
@@ -148,6 +157,23 @@ Bugzilla   : 16237
 Description: Early reply size mismatch, MGC loses connection
 Details    : Apply the MGS_CONNECT_SUPPORTED mask at reconnect time so
 	     the connect flags are properly negotiated.
+
+Severity   : normal
+Frequency  : often
+Bugzilla   : 16125
+Description: quotas are not honored with O_DIRECT
+Details    : all writes with the flag O_DIRECT will use grants which leads to
+	     this problem. Now using OBD_BRW_SYNC to guard this.
+
+Severity   : normal
+Bugzilla   : 15058
+Description: add quota statistics
+Details    : 1. sort out quota proc entries and proc code.
+	     2. add quota statistics
+
+Severity   : enhancement
+Bugzilla   : 13058
+Description: enable quota support for HEAD.
 
 Severity   : normal
 Bugzilla   : 16006

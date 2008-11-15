@@ -931,6 +931,8 @@ int lov_process_config_base(struct obd_device *obd, struct lustre_cfg *lcfg,
 
                 rc = class_process_proc_param(PARAM_LOV, lvars.obd_vars,
                                               lcfg, obd);
+        	if (rc > 0)
+        		rc = 0;
                 GOTO(out, rc);
         }
         case LCFG_POOL_NEW:
@@ -1130,7 +1132,7 @@ do {                                                                            
 
 static int lov_destroy(struct obd_export *exp, struct obdo *oa,
                        struct lov_stripe_md *lsm, struct obd_trans_info *oti,
-                       struct obd_export *md_exp)
+                       struct obd_export *md_exp, void *capa)
 {
         struct lov_request_set *set;
         struct obd_info oinfo;
@@ -1163,7 +1165,7 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
                         oti->oti_logcookies = set->set_cookies + req->rq_stripe;
 
                 err = obd_destroy(lov->lov_tgts[req->rq_idx]->ltd_exp,
-                                  req->rq_oi.oi_oa, NULL, oti, NULL);
+                                  req->rq_oi.oi_oa, NULL, oti, NULL, capa);
                 err = lov_update_common_set(set, req, err);
                 if (err) {
                         CERROR("error: destroying objid "LPX64" subobj "
@@ -1901,7 +1903,7 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 {
         struct obd_device *obddev = class_exp2obd(exp);
         struct lov_obd *lov = &obddev->u.lov;
-        int i, rc = 0, count = lov->desc.ld_tgt_count;
+        int i = 0, rc = 0, count = lov->desc.ld_tgt_count;
         struct obd_uuid *uuidp;
         ENTRY;
 
@@ -1995,6 +1997,53 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case LL_IOC_LOV_SETEA:
                 rc = lov_setea(exp, karg, uarg);
                 break;
+        case OBD_IOC_QUOTACTL: {
+                struct if_quotactl *qctl = karg;
+                struct lov_tgt_desc *tgt = NULL;
+                struct obd_quotactl *oqctl;
+
+                if (qctl->qc_valid == QC_OSTIDX) {
+                        if (qctl->qc_idx < 0 || count <= qctl->qc_idx)
+                                RETURN(-EINVAL);
+
+                        tgt = lov->lov_tgts[qctl->qc_idx];
+                        if (!tgt || !tgt->ltd_exp)
+                                RETURN(-EINVAL);
+                } else if (qctl->qc_valid == QC_UUID) {
+                        for (i = 0; i < count; i++) {
+                                tgt = lov->lov_tgts[i];
+                                if (!tgt ||
+                                    !obd_uuid_equals(&tgt->ltd_uuid,
+                                                     &qctl->obd_uuid))
+                                        continue;
+
+                                if (tgt->ltd_exp == NULL)
+                                        RETURN(-EINVAL);
+
+                                break;
+                        }
+                } else {
+                        RETURN(-EINVAL);
+                }
+
+                if (i >= count)
+                        RETURN(-EAGAIN);
+
+                LASSERT(tgt && tgt->ltd_exp);
+                OBD_ALLOC_PTR(oqctl);
+                if (!oqctl)
+                        RETURN(-ENOMEM);
+
+                QCTL_COPY(oqctl, qctl);
+                rc = obd_quotactl(tgt->ltd_exp, oqctl);
+                if (rc == 0) {
+                        QCTL_COPY(qctl, oqctl);
+                        qctl->qc_valid = QC_OSTIDX;
+                        qctl->obd_uuid = tgt->ltd_uuid;
+                }
+                OBD_FREE_PTR(oqctl);
+                break;
+        }
         default: {
                 int set = 0;
 

@@ -425,6 +425,39 @@ static int lprocfs_mdt_wr_evict_client(struct file *file, const char *buffer,
         return count;
 }
 
+static int lprocfs_rd_sec_level(char *page, char **start, off_t off,
+                                int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+        return snprintf(page, count, "%d\n", mdt->mdt_sec_level);
+}
+
+static int lprocfs_wr_sec_level(struct file *file, const char *buffer,
+                                unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val > LUSTRE_SEC_ALL || val < LUSTRE_SEC_NONE)
+                return -EINVAL;
+
+        if (val == LUSTRE_SEC_SPECIFY) {
+                CWARN("security level %d will be supported in future.\n",
+                      LUSTRE_SEC_SPECIFY);
+                return -EINVAL;
+        }
+
+        mdt->mdt_sec_level = val;
+        return count;
+}
+
 static int lprocfs_rd_cos(char *page, char **start, off_t off,
                               int count, int *eof, void *data)
 {
@@ -470,6 +503,8 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
         { "site_stats",                 lprocfs_rd_site_stats,           0, 0 },
         { "evict_client",               0, lprocfs_mdt_wr_evict_client,     0 },
         { "hash_stats",                 lprocfs_obd_rd_hash,    0, 0 },
+        { "sec_level",                  lprocfs_rd_sec_level,
+                                        lprocfs_wr_sec_level,               0 },
         { "commit_on_sharing",          lprocfs_rd_cos, lprocfs_wr_cos, 0 },
         { 0 }
 };

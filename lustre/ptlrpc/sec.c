@@ -2271,35 +2271,6 @@ EXPORT_SYMBOL(sec2target_str);
  * crypto API helper/alloc blkciper     *
  ****************************************/
 
-#ifdef __KERNEL__
-#ifndef HAVE_ASYNC_BLOCK_CIPHER
-struct ll_crypto_cipher *ll_crypto_alloc_blkcipher(const char * algname,
-                                                   u32 type, u32 mask)
-{
-        char        buf[CRYPTO_MAX_ALG_NAME + 1];
-        const char *pan = algname;
-        u32         flag = 0;
-
-        if (strncmp("cbc(", algname, 4) == 0)
-                flag |= CRYPTO_TFM_MODE_CBC;
-        else if (strncmp("ecb(", algname, 4) == 0)
-                flag |= CRYPTO_TFM_MODE_ECB;
-        if (flag) {
-                char *vp = strnchr(algname, CRYPTO_MAX_ALG_NAME, ')');
-                if (vp) {
-                        memcpy(buf, algname + 4, vp - algname - 4);
-                        buf[vp - algname - 4] = '\0';
-                        pan = buf;
-                } else {
-                        flag = 0;
-                }
-        }
-        return crypto_alloc_tfm(pan, flag);
-}
-EXPORT_SYMBOL(ll_crypto_alloc_blkcipher);
-#endif
-#endif
-
 /****************************************
  * initialize/finalize                  *
  ****************************************/

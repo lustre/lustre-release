@@ -1882,7 +1882,8 @@ void ldlm_revoke_lock_cb(void *obj, void *data)
         LASSERT(!lock->l_blocking_lock);
 
         lock->l_flags |= LDLM_FL_AST_SENT;
-        if (lock->l_export && lock->l_export->exp_lock_hash)
+        if (lock->l_export && lock->l_export->exp_lock_hash &&
+            !hlist_unhashed(&lock->l_exp_hash))
                 lustre_hash_del(lock->l_export->exp_lock_hash,
                                 &lock->l_remote_handle, &lock->l_exp_hash);
         list_add_tail(&lock->l_rk_ast, rpc_list);

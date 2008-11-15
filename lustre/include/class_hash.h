@@ -170,7 +170,7 @@ __lustre_hash_key_validate(lustre_hash_t *lh, void *key,
                            struct hlist_node *hnode)
 {
         if (unlikely(lh->lh_flags & LH_DEBUG))
-                LASSERT(lh_compare(lh, key, hnode));
+                LASSERT(lh_compare(lh, key, hnode) > 0);
 }
 
 /* Validate hnode is in the correct bucket */
@@ -193,7 +193,7 @@ __lustre_hash_bucket_lookup(lustre_hash_t *lh,
         struct hlist_node *hnode;
 
         hlist_for_each(hnode, &lhb->lhb_head)
-                if (lh_compare(lh, key, hnode))
+                if (lh_compare(lh, key, hnode) > 0)
                         return hnode;
 
         return NULL;

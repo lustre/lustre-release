@@ -173,7 +173,7 @@ static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
         oa->o_lcookie = *cookie;
         oid = oa->o_id;
 
-        rc = filter_destroy(exp, oa, NULL, NULL, NULL);
+        rc = filter_destroy(exp, oa, NULL, NULL, NULL, NULL);
         OBDO_FREE(oa);
         if (rc == -ENOENT) {
                 CDEBUG(D_RPCTRACE, "object already removed, send cookie\n");

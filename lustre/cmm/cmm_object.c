@@ -1274,5 +1274,5 @@ static const struct md_dir_operations cmr_dir_ops = {
         .mdo_link        = cmr_link,
         .mdo_unlink      = cmr_unlink,
         .mdo_rename      = cmr_rename,
-        .mdo_rename_tgt  = cmr_rename_tgt,
+        .mdo_rename_tgt  = cmr_rename_tgt
 };

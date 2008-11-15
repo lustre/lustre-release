@@ -760,7 +760,7 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
         if (rc)
                 GOTO(out, rc);
 
-        rc = obd_destroy(handle->lgh_ctxt->loc_exp, oa, NULL, NULL, NULL);
+        rc = obd_destroy(handle->lgh_ctxt->loc_exp, oa, NULL, NULL, NULL, NULL);
  out:
         OBDO_FREE(oa);
         RETURN(rc);

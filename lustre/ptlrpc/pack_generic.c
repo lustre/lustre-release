@@ -733,6 +733,7 @@ void *lustre_swab_buf(struct lustre_msg *msg, int index, int min_size,
 {
         void *ptr = NULL;
 
+        LASSERT(msg != NULL);
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED:
@@ -1744,6 +1745,15 @@ void lustre_swab_obd_quotactl (struct obd_quotactl *q)
         lustre_swab_obd_dqblk (&q->qc_dqblk);
 }
 
+void lustre_swab_quota_adjust_qunit (struct quota_adjust_qunit *q)
+{
+        __swab32s (&q->qaq_flags);
+        __swab32s (&q->qaq_id);
+        __swab64s (&q->qaq_bunit_sz);
+        __swab64s (&q->qaq_iunit_sz);
+        __swab64s (&q->padding1);
+}
+
 void lustre_swab_mds_remote_perm (struct mds_remote_perm *p)
 {
         __swab32s (&p->rp_uid);
@@ -2104,54 +2114,92 @@ void lustre_swab_qdata(struct qunit_data *d)
         __swab32s (&d->qd_id);
         __swab32s (&d->qd_flags);
         __swab64s (&d->qd_count);
-}
-
-void lustre_swab_qdata_old(struct qunit_data_old *d)
-{
-        __swab32s (&d->qd_id);
-        __swab32s (&d->qd_type);
-        __swab32s (&d->qd_count);
-        __swab32s (&d->qd_isblk);
+        __swab64s (&d->qd_qunit);
+        __swab64s (&d->padding);
 }
 
 #ifdef __KERNEL__
-struct qunit_data *lustre_quota_old_to_new(struct qunit_data_old *d)
+
+/**
+ * got qdata from request(req/rep)
+ */
+int quota_get_qdata(void *request, struct qunit_data *qdata,
+                    int is_req, int is_exp)
 {
-        struct qunit_data_old tmp;
-        struct qunit_data *ret;
-        ENTRY;
+        struct ptlrpc_request *req = (struct ptlrpc_request *)request;
+        struct qunit_data *new;
+        __u64  flags = is_exp ? req->rq_export->exp_connect_flags :
+                       req->rq_import->imp_connect_data.ocd_connect_flags;
+        int rc = 0;
 
-        if (!d)
-                return NULL;
+        LASSERT(req);
+        LASSERT(qdata);
 
-        tmp = *d;
-        ret = (struct qunit_data *)d;
-        ret->qd_id = tmp.qd_id;
-        ret->qd_flags = (tmp.qd_type ? QUOTA_IS_GRP : 0) | (tmp.qd_isblk ? QUOTA_IS_BLOCK : 0);
-        ret->qd_count = tmp.qd_count;
-        RETURN(ret);
+        /* support for quota64 and change_qs */
+        if (flags & OBD_CONNECT_CHANGE_QS) {
+                if (!(flags & OBD_CONNECT_QUOTA64)) {
+                        CDEBUG(D_ERROR, "Wire protocol for qunit is broken!\n");
+                        return -EINVAL;
+                }
+                if (is_req == QUOTA_REQUEST)
+                        new = lustre_swab_reqbuf(req, REQ_REC_OFF,
+                                                 sizeof(struct qunit_data),
+                                                 lustre_swab_qdata);
+                else
+                        new = lustre_swab_repbuf(req, REPLY_REC_OFF,
+                                                 sizeof(struct qunit_data),
+                                                 lustre_swab_qdata);
+                if (new == NULL)
+                        GOTO(out, rc = -EPROTO);
+                *qdata = *new;
+                QDATA_SET_CHANGE_QS(qdata);
+                return 0;
+        } else {
+                QDATA_CLR_CHANGE_QS(qdata);
+        }
 
+out:
+        return rc;
 }
-EXPORT_SYMBOL(lustre_quota_old_to_new);
+EXPORT_SYMBOL(quota_get_qdata);
 
-struct qunit_data_old *lustre_quota_new_to_old(struct qunit_data *d)
+/**
+ * copy qdata to request(req/rep)
+ */
+int quota_copy_qdata(void *request, struct qunit_data *qdata,
+                     int is_req, int is_exp)
 {
-        struct qunit_data tmp;
-        struct qunit_data_old *ret;
-        ENTRY;
+        struct ptlrpc_request *req = (struct ptlrpc_request *)request;
+        void *target;
+        __u64  flags = is_exp ? req->rq_export->exp_connect_flags :
+                req->rq_import->imp_connect_data.ocd_connect_flags;
+        int rc = 0;
 
-        if (!d)
-                return NULL;
+        LASSERT(req);
+        LASSERT(qdata);
 
-        tmp = *d;
-        ret = (struct qunit_data_old *)d;
-        ret->qd_id = tmp.qd_id;
-        ret->qd_type = ((tmp.qd_flags & QUOTA_IS_GRP) ? GRPQUOTA : USRQUOTA);
-        ret->qd_count = (__u32)tmp.qd_count;
-        ret->qd_isblk = ((tmp.qd_flags & QUOTA_IS_BLOCK) ? 1 : 0);
-        RETURN(ret);
+        /* support for quota64 and change_qs */
+        if (flags & OBD_CONNECT_CHANGE_QS) {
+                if (!(flags & OBD_CONNECT_QUOTA64)) {
+                        CERROR("Wire protocol for qunit is broken!\n");
+                        return -EINVAL;
+                }
+                if (is_req == QUOTA_REQUEST)
+                        target = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF,
+                                                sizeof(struct qunit_data));
+                else
+                        target = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
+                                                sizeof(struct qunit_data));
+                if (!target)
+                        GOTO(out, rc = -EPROTO);
+                memcpy(target, qdata, sizeof(*qdata));
+                return 0;
+        }
+
+out:
+        return rc;
 }
-EXPORT_SYMBOL(lustre_quota_new_to_old);
+EXPORT_SYMBOL(quota_copy_qdata);
 #endif /* __KERNEL__ */
 
 static inline int req_ptlrpc_body_swabbed(struct ptlrpc_request *req)
@@ -2222,11 +2270,12 @@ void lustre_swab_lustre_capa(struct lustre_capa *c)
 {
         lustre_swab_lu_fid(&c->lc_fid);
         __swab64s (&c->lc_opc);
-        __swab32s (&c->lc_uid);
+        __swab64s (&c->lc_uid);
+        __swab64s (&c->lc_gid);
         __swab32s (&c->lc_flags);
         __swab32s (&c->lc_keyid);
         __swab32s (&c->lc_timeout);
-        __swab64s (&c->lc_expiry);
+        __swab32s (&c->lc_expiry);
 }
 
 void lustre_swab_lustre_capa_key (struct lustre_capa_key *k)

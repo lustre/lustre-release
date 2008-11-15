@@ -280,11 +280,7 @@ struct osc_page {
          * True for a `temporary page' created by read-ahead code, probably
          * outside of any DLM lock.
          */
-                              ops_temp:1,
-        /**
-         * True iff page was created by a user with `appropriate privileges'.
-         */
-                              ops_ignore_quota:1;
+                              ops_temp:1;
         /**
          * Linkage into a per-osc_object list of pages in flight. For
          * debugging.

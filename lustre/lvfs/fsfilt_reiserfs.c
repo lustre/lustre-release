@@ -184,9 +184,7 @@ static int fsfilt_reiserfs_statfs(struct super_block *sb,
         int rc;
 
         memset(&sfs, 0, sizeof(sfs));
-
         rc = ll_do_statfs(sb, &sfs);
-
         statfs_pack(osfs, &sfs);
         return rc;
 }

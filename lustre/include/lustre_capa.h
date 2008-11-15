@@ -95,29 +95,24 @@ enum {
         CAPA_SITE_MAX
 };
 
-static inline __u64 capa_opc(struct lustre_capa *capa)
-{
-        return capa->lc_opc;
-}
-
-static inline __u32 capa_uid(struct lustre_capa *capa)
-{
-        return capa->lc_uid;
-}
-
 static inline struct lu_fid *capa_fid(struct lustre_capa *capa)
 {
         return &capa->lc_fid;
 }
 
-static inline __u32 capa_keyid(struct lustre_capa *capa)
+static inline __u64 capa_opc(struct lustre_capa *capa)
 {
-        return capa->lc_keyid;
+        return capa->lc_opc;
 }
 
-static inline __u64 capa_expiry(struct lustre_capa *capa)
+static inline __u64 capa_uid(struct lustre_capa *capa)
 {
-        return capa->lc_expiry;
+        return capa->lc_uid;
+}
+
+static inline __u64 capa_gid(struct lustre_capa *capa)
+{
+        return capa->lc_gid;
 }
 
 static inline __u32 capa_flags(struct lustre_capa *capa)
@@ -127,9 +122,12 @@ static inline __u32 capa_flags(struct lustre_capa *capa)
 
 static inline __u32 capa_alg(struct lustre_capa *capa)
 {
-        __u32 alg = capa->lc_flags;
+        return (capa->lc_flags >> 24);
+}
 
-        return alg >> 24;
+static inline __u32 capa_keyid(struct lustre_capa *capa)
+{
+        return capa->lc_keyid;
 }
 
 static inline __u64 capa_key_mdsid(struct lustre_capa_key *key)
@@ -142,12 +140,23 @@ static inline __u32 capa_key_keyid(struct lustre_capa_key *key)
         return key->lk_keyid;
 }
 
+static inline __u32 capa_timeout(struct lustre_capa *capa)
+{
+        return capa->lc_timeout;
+}
+
+static inline __u32 capa_expiry(struct lustre_capa *capa)
+{
+        return capa->lc_expiry;
+}
+
 #define DEBUG_CAPA(level, c, fmt, args...)                                     \
 do {                                                                           \
-CDEBUG(level, fmt " capability@%p uid %u opc "LPX64" fid "DFID" keyid %u "     \
-       "expiry "LPU64" flags %u alg %d\n",                                     \
-       ##args, c, capa_uid(c), capa_opc(c), PFID(capa_fid(c)), capa_keyid(c),  \
-       capa_expiry(c), capa_flags(c), capa_alg(c));                            \
+CDEBUG(level, fmt " capability@%p fid "DFID" opc "LPX64" uid "LPU64" gid "     \
+       LPU64" flags %u alg %d keyid %u timeout %u expiry %u\n",                \
+       ##args, c, PFID(capa_fid(c)), capa_opc(c), capa_uid(c), capa_gid(c),    \
+       capa_flags(c), capa_alg(c), capa_keyid(c), capa_timeout(c),             \
+       capa_expiry(c));                                                        \
 } while (0)
 
 #define DEBUG_CAPA_KEY(level, k, fmt, args...)                                 \
@@ -172,38 +181,33 @@ struct obd_capa *capa_lookup(struct hlist_head *hash, struct lustre_capa *capa,
                              int alive);
 
 int capa_hmac(__u8 *hmac, struct lustre_capa *capa, __u8 *key);
+int capa_encrypt_id(__u32 *d, __u32 *s, __u8 *key, int keylen);
+int capa_decrypt_id(__u32 *d, __u32 *s, __u8 *key, int keylen);
 void capa_cpy(void *dst, struct obd_capa *ocapa);
-
-char *dump_capa_content(char *buf, char *key, int len);
-
 static inline struct obd_capa *alloc_capa(int site)
 {
 #ifdef __KERNEL__
         struct obd_capa *ocapa;
 
+        if (unlikely(site != CAPA_SITE_CLIENT && site != CAPA_SITE_SERVER))
+                return ERR_PTR(-EINVAL);
+
         OBD_SLAB_ALLOC(ocapa, capa_cachep, GFP_KERNEL, sizeof(*ocapa));
-        if (ocapa) {
-                atomic_set(&ocapa->c_refc, 0);
-                spin_lock_init(&ocapa->c_lock);
-                CFS_INIT_LIST_HEAD(&ocapa->c_list);
-                ocapa->c_site = site;
-        }
+        if (unlikely(!ocapa))
+                return ERR_PTR(-ENOMEM);
+
+        CFS_INIT_LIST_HEAD(&ocapa->c_list);
+        atomic_set(&ocapa->c_refc, 1);
+        spin_lock_init(&ocapa->c_lock);
+        ocapa->c_site = site;
+        if (ocapa->c_site == CAPA_SITE_CLIENT)
+                CFS_INIT_LIST_HEAD(&ocapa->u.cli.lli_list);
+        else
+                CFS_INIT_HLIST_NODE(&ocapa->u.tgt.c_hash);
+
         return ocapa;
 #else
-        return NULL;
-#endif
-}
-
-static inline void free_capa(struct obd_capa *ocapa)
-{
-#ifdef __KERNEL__
-        if (atomic_read(&ocapa->c_refc)) {
-                DEBUG_CAPA(D_ERROR, &ocapa->c_capa, "refc %d for",
-                           atomic_read(&ocapa->c_refc));
-                LBUG();
-        }
-        OBD_SLAB_FREE(ocapa, capa_cachep, sizeof(*ocapa));
-#else
+        return ERR_PTR(-EOPNOTSUPP);
 #endif
 }
 
@@ -225,7 +229,19 @@ static inline void capa_put(struct obd_capa *ocapa)
                 DEBUG_CAPA(D_ERROR, &ocapa->c_capa, "refc is 0 for");
                 LBUG();
         }
-        atomic_dec(&ocapa->c_refc);
+
+        if (atomic_dec_and_test(&ocapa->c_refc)) {
+                LASSERT(list_empty(&ocapa->c_list));
+                if (ocapa->c_site == CAPA_SITE_CLIENT) {
+                        LASSERT(list_empty(&ocapa->u.cli.lli_list));
+                } else {
+                        struct hlist_node *hnode;
+
+                        hnode = &ocapa->u.tgt.c_hash;
+                        LASSERT(!hnode->next && !hnode->pprev);
+                }
+                OBD_SLAB_FREE(ocapa, capa_cachep, sizeof(*ocapa));
+        }
 }
 
 static inline int open_flags_to_accmode(int flags)
@@ -251,6 +267,11 @@ static inline void set_capa_expiry(struct obd_capa *ocapa)
                                          cfs_time_current_sec());
         ocapa->c_expiry = cfs_time_add(cfs_time_current(),
                                        cfs_time_seconds(expiry));
+}
+
+static inline int capa_is_expired_sec(struct lustre_capa *capa)
+{
+        return (capa->lc_expiry - cfs_time_current_sec() <= 0);
 }
 
 static inline int capa_is_expired(struct obd_capa *ocapa)
@@ -282,6 +303,12 @@ lustre_unpack_capa(struct lustre_msg *msg, unsigned int offset)
 struct filter_capa_key {
         struct list_head        k_list;
         struct lustre_capa_key  k_key;
+};
+
+enum {
+        LC_ID_NONE      = 0,
+        LC_ID_PLAIN     = 1,
+        LC_ID_CONVERT   = 2
 };
 
 #define BYPASS_CAPA (struct lustre_capa *)ERR_PTR(-ENOENT)

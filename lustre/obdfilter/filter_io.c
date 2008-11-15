@@ -328,8 +328,11 @@ void filter_invalidate_cache(struct obd_device *obd, struct obd_ioobj *obj,
         LASSERT(inode != NULL);
 
         for (i = 0, rnb = nb; i < obj->ioo_bufcnt; i++, rnb++) {
-                obd_off start = rnb->offset >> CFS_PAGE_SHIFT;
-                obd_off end = (rnb->offset + rnb->len) >> CFS_PAGE_SHIFT;
+                obd_off start;
+                obd_off end;
+
+                start = rnb->offset >> CFS_PAGE_SHIFT;
+                end = (rnb->offset + rnb->len) >> CFS_PAGE_SHIFT;
                 invalidate_mapping_pages(inode->i_mapping, start, end);
                 /* just to avoid warnings */
                 start = 0;
@@ -648,6 +651,13 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                 CERROR("%s: trying to BRW to non-existent file "LPU64"\n",
                        exp->exp_obd->obd_name, obj->ioo_id);
                 GOTO(cleanup, rc = -ENOENT);
+        }
+
+        if (oa->o_valid & (OBD_MD_FLUID | OBD_MD_FLGID) &&
+            dentry->d_inode->i_mode & (S_ISUID | S_ISGID)) {
+                rc = filter_capa_fixoa(exp, oa, obdo_mdsno(oa), capa);
+                if (rc)
+                        GOTO(cleanup, rc);
         }
 
         rc = filter_map_remote_to_local(objcount, obj, nb, npages, res);

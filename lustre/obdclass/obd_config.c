@@ -888,6 +888,7 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
         int i, keylen, vallen;
         int matched = 0, j = 0;
         int rc = 0;
+        int skip = 0;
         ENTRY;
 
         if (lcfg->lcfg_command != LCFG_PARAM) {
@@ -943,6 +944,7 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                         CERROR("%s: unknown param %s\n",
                                (char *)lustre_cfg_string(lcfg, 0), key);
                         /* rc = -EINVAL;	continue parsing other params */
+                        skip++;
                 } else {
                         LCONSOLE_INFO("%s.%.*s: set parameter %.*s=%s\n",
                                       lustre_cfg_string(lcfg, 0),
@@ -953,6 +955,8 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
 
         if (rc > 0)
                 rc = 0;
+        if (!rc && skip)
+                rc = skip;
         RETURN(rc);
 #else
         CDEBUG(D_CONFIG, "liblustre can't process params.\n");

@@ -131,7 +131,7 @@ int fld_index_create(struct lu_server_fld *fld,
                 rc = dt_obj->do_index_ops->dio_insert(env, dt_obj,
                                                       fld_rec(env, mds),
                                                       fld_key(env, seq),
-                                                      th, BYPASS_CAPA);
+                                                      th, BYPASS_CAPA, 1);
                 dt_dev->dd_ops->dt_trans_stop(env, th);
         } else
                 rc = PTR_ERR(th);

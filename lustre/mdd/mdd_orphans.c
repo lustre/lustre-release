@@ -89,7 +89,7 @@ static int orph_index_insert(const struct lu_env *env,
 
         rc = dor->do_index_ops->dio_insert(env, dor, (struct dt_rec *)offset,
                                            (struct dt_key *)key, th,
-                                           BYPASS_CAPA);
+                                           BYPASS_CAPA, 1);
         RETURN(rc);
 }
 

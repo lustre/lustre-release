@@ -98,7 +98,7 @@ int  osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
                    const struct lu_fid *fid, struct osd_inode_id *id);
 int  osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
                    const struct lu_fid *fid, const struct osd_inode_id *id,
-                   struct thandle *th);
+                   struct thandle *th, int ingore_quota);
 int  osd_oi_delete(struct osd_thread_info *info,
                    struct osd_oi *oi, const struct lu_fid *fid,
                    struct thandle *th);

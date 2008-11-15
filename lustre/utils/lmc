@@ -222,9 +222,9 @@ lmc_options = [
     ('quota', """
     quotaon: enable quota, only u|g|ug is supported now.
       iunit: the unit for slave to acquire/release inode quota from/to master.
-             Int type (>0), default value in Lustre is 5000 inodes.
+             Int type (>0), default value in Lustre is 5120 inodes.
       bunit: the unit for slave to acquire/release block quota from/to master.
-             Mbytes (>0), default value in Lustre is 100(Mbytes).
+             Mbytes (>0), default value in Lustre is 128(Mbytes).
       itune: used to tune the threthold. When inode quota usage reach the threthold,
              slave should acquire/release inode quota from/to master.
              Int type (100 > btune > 0), default value in Lustre is 50 (percentge).

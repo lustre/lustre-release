@@ -779,5 +779,14 @@ int bulk_csum_svc(struct ptlrpc_bulk_desc *desc, int read,
                   struct ptlrpc_bulk_sec_desc *bsdv, int vsize,
                   struct ptlrpc_bulk_sec_desc *bsdr, int rsize);
 
+#define CFS_CAP_CHOWN_MASK (1 << CFS_CAP_CHOWN)
+#define CFS_CAP_SYS_RESOURCE_MASK (1 << CFS_CAP_SYS_RESOURCE)
+
+enum {
+        LUSTRE_SEC_NONE         = 0,
+        LUSTRE_SEC_REMOTE       = 1,
+        LUSTRE_SEC_SPECIFY      = 2,
+        LUSTRE_SEC_ALL          = 3
+};
 
 #endif /* _LUSTRE_SEC_H_ */

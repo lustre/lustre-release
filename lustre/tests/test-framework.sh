@@ -179,6 +179,11 @@ init_test_env() {
 
 }
 
+case `uname -r` in
+2.4.*) EXT=".o"; USE_QUOTA=no; [ ! "$CLIENTONLY" ] && FSTYPE=ext3;;
+    *) EXT=".ko"; USE_QUOTA=yes;;
+esac
+
 load_module() {
     EXT=".ko"
     module=$1
@@ -227,10 +232,7 @@ load_modules() {
     load_module obdclass/obdclass
     load_module ptlrpc/ptlrpc
     load_module ptlrpc/gss/ptlrpc_gss
-    # Now, some modules depend on lquota without USE_QUOTA check,
-    # will fix later. Disable check "$USE_QUOTA" = "yes" temporary.
-    #[ "$USE_QUOTA" = "yes" ] && load_module quota/lquota
-    load_module quota/lquota
+    [ "$USE_QUOTA" = "yes" -a "$LQUOTA" != "no" ] && load_module quota/lquota
     load_module fid/fid
     load_module fld/fld
     load_module lmv/lmv
@@ -747,8 +749,10 @@ client_reconnect() {
 
 facet_failover() {
     facet=$1
+    sleep_time=$2
     echo "Failing $facet on node `facet_active_host $facet`"
     shutdown_facet $facet
+    [ -n "$sleep_time" ] && sleep $sleep_time
     reboot_facet $facet
     client_df &
     DFPID=$!
@@ -1124,7 +1128,7 @@ switch_identity() {
     local num=$1
     local switch=$2
     local j=`expr $num - 1`
-    local MDT="`do_facet mds$num lctl get_param -N mdt.*MDT*$j | cut -d"." -f2 2>/dev/null || true`"
+    local MDT="`(do_facet mds$num lctl get_param -N mdt.*MDT*$j 2>/dev/null | cut -d"." -f2 2>/dev/null) || true`"
 
     if [ -z "$MDT" ]; then
         return 2
@@ -1635,6 +1639,8 @@ basetest() {
     IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
 }
 
+# print a newline if the last test was skipped
+export LAST_SKIPPED=
 run_test() {
     assert_DIR
 
@@ -1642,38 +1648,46 @@ run_test() {
     if [ ! -z "$ONLY" ]; then
         testname=ONLY_$1
         if [ ${!testname}x != x ]; then
+            [ "$LAST_SKIPPED" ] && echo "" && LAST_SKIPPED=
             run_one $1 "$2"
             return $?
         fi
         testname=ONLY_$base
         if [ ${!testname}x != x ]; then
+            [ "$LAST_SKIPPED" ] && echo "" && LAST_SKIPPED=
             run_one $1 "$2"
             return $?
         fi
+        LAST_SKIPPED="y"
         echo -n "."
         return 0
     fi
     testname=EXCEPT_$1
     if [ ${!testname}x != x ]; then
+        LAST_SKIPPED="y"
         TESTNAME=test_$1 skip "skipping excluded test $1"
         return 0
     fi
     testname=EXCEPT_$base
     if [ ${!testname}x != x ]; then
+        LAST_SKIPPED="y"
         TESTNAME=test_$1 skip "skipping excluded test $1 (base $base)"
         return 0
     fi
     testname=EXCEPT_SLOW_$1
     if [ ${!testname}x != x ]; then
+        LAST_SKIPPED="y"
         TESTNAME=test_$1 skip "skipping SLOW test $1"
         return 0
     fi
     testname=EXCEPT_SLOW_$base
     if [ ${!testname}x != x ]; then
+        LAST_SKIPPED="y"
         TESTNAME=test_$1 skip "skipping SLOW test $1 (base $base)"
         return 0
     fi
 
+    LAST_SKIPPED=
     run_one $1 "$2"
 
     return $?

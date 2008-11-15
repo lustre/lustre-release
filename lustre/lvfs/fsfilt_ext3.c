@@ -67,6 +67,8 @@
 #include <linux/ext3_extents.h>
 #endif
 
+#include "lustre_quota_fmt.h"
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,15)
 #define FSFILT_DATA_TRANS_BLOCKS(sb)      EXT3_DATA_TRANS_BLOCKS
 #define FSFILT_DELETE_TRANS_BLOCKS(sb)    EXT3_DELETE_TRANS_BLOCKS
@@ -723,9 +725,7 @@ static int fsfilt_ext3_statfs(struct super_block *sb, struct obd_statfs *osfs)
         int rc;
 
         memset(&sfs, 0, sizeof(sfs));
-
         rc = ll_do_statfs(sb, &sfs);
-
         if (!rc && sfs.f_bfree < sfs.f_ffree) {
                 sfs.f_files = (sfs.f_files - sfs.f_ffree) + sfs.f_bfree;
                 sfs.f_ffree = sfs.f_bfree;
@@ -883,7 +883,6 @@ static unsigned long new_blocks(handle_t *handle, struct ext3_ext_base *base,
         pblock = ext3_mb_new_blocks(handle, &ar, err);
         *count = ar.len;
         return pblock;
-
 }
 #endif
 
@@ -1315,19 +1314,37 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
 
 static int fsfilt_ext3_setup(struct super_block *sb)
 {
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,6)) && \
+     defined(HAVE_QUOTA_SUPPORT)) || defined(S_PDIROPS)
+        struct ext3_sb_info *sbi = EXT3_SB(sb);
 #if 0
-        EXT3_SB(sb)->dx_lock = fsfilt_ext3_dx_lock;
-        EXT3_SB(sb)->dx_unlock = fsfilt_ext3_dx_unlock;
+        sbi->dx_lock = fsfilt_ext3_dx_lock;
+        sbi->dx_unlock = fsfilt_ext3_dx_unlock;
+#endif
 #endif
 #ifdef S_PDIROPS
         CWARN("Enabling PDIROPS\n");
-        set_opt(EXT3_SB(sb)->s_mount_opt, PDIROPS);
+        set_opt(sbi->s_mount_opt, PDIROPS);
         sb->s_flags |= S_PDIROPS;
 #endif
         if (!EXT3_HAS_COMPAT_FEATURE(sb, EXT3_FEATURE_COMPAT_DIR_INDEX))
                 CWARN("filesystem doesn't have dir_index feature enabled\n");
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,13)) && defined(HAVE_QUOTA_SUPPORT)
-        set_opt(EXT3_SB(sb)->s_mount_opt, QUOTA);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,6)) && defined(HAVE_QUOTA_SUPPORT)
+        /* enable journaled quota support */
+        /* kfreed in ext3_put_super() */
+        sbi->s_qf_names[USRQUOTA] = kstrdup("lquota.user.reserved", GFP_KERNEL);
+        if (!sbi->s_qf_names[USRQUOTA])
+                return -ENOMEM;
+        sbi->s_qf_names[GRPQUOTA] = kstrdup("lquota.group.reserved", GFP_KERNEL);
+        if (!sbi->s_qf_names[GRPQUOTA]) {
+                kfree(sbi->s_qf_names[USRQUOTA]);
+                sbi->s_qf_names[USRQUOTA] = NULL;
+                return -ENOMEM;
+        }
+        sbi->s_jquota_fmt = QFMT_VFS_V0;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,13))
+        set_opt(sbi->s_mount_opt, QUOTA);
+#endif
 #endif
         return 0;
 }
@@ -1363,8 +1380,7 @@ static int fsfilt_ext3_get_op_len(int op, struct fsfilt_objinfo *fso, int logs)
         return 0;
 }
 
-static const char *op_quotafile[] = { "lquota.user", "lquota.group" };
-
+#ifdef HAVE_QUOTA_SUPPORT
 #define DQINFO_COPY(out, in)                    \
 do {                                            \
         Q_COPY(out, in, dqi_bgrace);            \
@@ -1385,8 +1401,6 @@ do {                                            \
         Q_COPY(out, in, dqb_itime);             \
         Q_COPY(out, in, dqb_valid);             \
 } while (0)
-
-
 
 static int fsfilt_ext3_quotactl(struct super_block *sb,
                                 struct obd_quotactl *oqc)
@@ -1419,10 +1433,15 @@ static int fsfilt_ext3_quotactl(struct super_block *sb,
                                 continue;
 
                         if (oqc->qc_cmd == Q_QUOTAON) {
+                                char *name[MAXQUOTAS] = LUSTRE_OPQFILES_NAMES_V2;
+
+                                LASSERT(oqc->qc_id == LUSTRE_QUOTA_V2);
+
                                 if (!qcop->quota_on)
                                         GOTO(out, rc = -ENOSYS);
-                                rc = qcop->quota_on(sb, i, oqc->qc_id,
-                                                    (char *)op_quotafile[i]);
+
+                                rc = qcop->quota_on(sb, i, QFMT_VFS_V0,
+                                                    name[i]);
                         } else if (oqc->qc_cmd == Q_QUOTAOFF) {
                                 if (!qcop->quota_off)
                                         GOTO(out, rc = -ENOSYS);
@@ -1455,14 +1474,38 @@ static int fsfilt_ext3_quotactl(struct super_block *sb,
                 if (!qcop->get_dqblk)
                         GOTO(out, rc = -ENOSYS);
                 rc = qcop->get_dqblk(sb, oqc->qc_type, oqc->qc_id, dqblk);
+                if (!rc)
+                        dqblk->dqb_valid = QIF_LIMITS | QIF_USAGE;
                 break;
         case Q_SYNC:
                 if (!sb->s_qcop->quota_sync)
                         GOTO(out, rc = -ENOSYS);
                 qcop->quota_sync(sb, oqc->qc_type);
                 break;
+        case Q_FINVALIDATE:
+                CDEBUG(D_WARNING, "invalidating operational quota files\n");
+                for (i = 0; i < MAXQUOTAS; i++) {
+                        struct file *fp;
+                        char *name[MAXQUOTAS] = LUSTRE_OPQFILES_NAMES_V2;
+
+                        LASSERT(oqc->qc_id == LUSTRE_QUOTA_V2);
+
+                        if (!Q_TYPESET(oqc, i))
+                                continue;
+
+                        fp = filp_open(name[i], O_CREAT | O_TRUNC | O_RDWR, 0644);
+                        if (IS_ERR(fp)) {
+                                rc = PTR_ERR(fp);
+                                CERROR("error invalidating operational quota file"
+                                       " %s (rc:%d)\n", name[i], rc);
+                        } else {
+                                filp_close(fp, 0);
+                        }
+
+                }
+                break;
         default:
-                CERROR("unsupported quotactl command: %d", oqc->qc_cmd);
+                CERROR("unsupported quotactl command: %d\n", oqc->qc_cmd);
                 LBUG();
         }
 out:
@@ -1473,26 +1516,26 @@ out:
         OBD_FREE_PTR(dqblk);
 
         if (rc)
-                CDEBUG(D_QUOTA, "quotactl command %#x, id %u, type %d "
+                CDEBUG(D_QUOTA, "quotactl command %#x, id %u, type %u "
                                 "failed: %d\n",
                        oqc->qc_cmd, oqc->qc_id, oqc->qc_type, rc);
         RETURN(rc);
 }
 
 struct chk_dqblk{
-        struct hlist_node       dqb_hash;        /* quotacheck hash */
-        struct list_head        dqb_list;        /* in list also */
-        qid_t                   dqb_id;          /* uid/gid */
-        short                   dqb_type;        /* USRQUOTA/GRPQUOTA */
-        __u32                   dqb_bhardlimit;  /* block hard limit */
-        __u32                   dqb_bsoftlimit;  /* block soft limit */
-        qsize_t                 dqb_curspace;    /* current space */
-        __u32                   dqb_ihardlimit;  /* inode hard limit */
-        __u32                   dqb_isoftlimit;  /* inode soft limit */
-        __u32                   dqb_curinodes;   /* current inodes */
-        __u64                   dqb_btime;       /* block grace time */
-        __u64                   dqb_itime;       /* inode grace time */
-        __u32                   dqb_valid;       /* flag for above fields */
+        struct hlist_node       dqb_hash;        /** quotacheck hash */
+        struct list_head        dqb_list;        /** in list also */
+        qid_t                   dqb_id;          /** uid/gid */
+        short                   dqb_type;        /** USRQUOTA/GRPQUOTA */
+        qsize_t                 dqb_bhardlimit;  /** block hard limit */
+        qsize_t                 dqb_bsoftlimit;  /** block soft limit */
+        qsize_t                 dqb_curspace;    /** current space */
+        qsize_t                 dqb_ihardlimit;  /** inode hard limit */
+        qsize_t                 dqb_isoftlimit;  /** inode soft limit */
+        qsize_t                 dqb_curinodes;   /** current inodes */
+        __u64                   dqb_btime;       /** block grace time */
+        __u64                   dqb_itime;       /** inode grace time */
+        __u32                   dqb_valid;       /** flag for above fields */
 };
 
 static inline unsigned int chkquot_hash(qid_t id, int type)
@@ -1568,7 +1611,7 @@ cqget(struct super_block *sb, struct hlist_head *hash, struct list_head *list,
         return cdqb;
 }
 
-static inline int quota_onoff(struct super_block *sb, int cmd, int type)
+static inline int quota_onoff(struct super_block *sb, int cmd, int type, int qfmt)
 {
         struct obd_quotactl *oqctl;
         int rc;
@@ -1578,7 +1621,7 @@ static inline int quota_onoff(struct super_block *sb, int cmd, int type)
                 RETURN(-ENOMEM);
 
         oqctl->qc_cmd = cmd;
-        oqctl->qc_id = QFMT_LDISKFS;
+        oqctl->qc_id = qfmt;
         oqctl->qc_type = type;
         rc = fsfilt_ext3_quotactl(sb, oqctl);
 
@@ -1700,24 +1743,8 @@ static int add_inode_quota(struct inode *inode, struct qchk_ctxt *qctxt,
         return rc;
 }
 
-static int v2_write_dqheader(struct file *f, int type)
-{
-        static const __u32 quota_magics[] = V2_INITQMAGICS;
-        static const __u32 quota_versions[] = V2_INITQVERSIONS;
-        struct v2_disk_dqheader dqhead;
-        loff_t offset = 0;
-
-        CLASSERT(ARRAY_SIZE(quota_magics) == ARRAY_SIZE(quota_versions));
-        LASSERT(0 <= type && type < ARRAY_SIZE(quota_magics));
-
-        dqhead.dqh_magic = cpu_to_le32(quota_magics[type]);
-        dqhead.dqh_version = cpu_to_le32(quota_versions[type]);
-
-        return cfs_user_write(f, (char *)&dqhead, sizeof(dqhead), &offset);
-}
-
 /* write dqinfo struct in a new quota file */
-static int v2_write_dqinfo(struct file *f, int type, struct if_dqinfo *info)
+static int v3_write_dqinfo(struct file *f, int type, struct if_dqinfo *info)
 {
         struct v2_disk_dqinfo dqinfo;
         __u32 blocks = V2_DQTREEOFF + 1;
@@ -1741,6 +1768,22 @@ static int v2_write_dqinfo(struct file *f, int type, struct if_dqinfo *info)
         return cfs_user_write(f, (char *)&dqinfo, sizeof(dqinfo), &offset);
 }
 
+static int v3_write_dqheader(struct file *f, int type)
+{
+        static const __u32 quota_magics[] = V2_INITQMAGICS;
+        static const __u32 quota_versions[] = V2_INITQVERSIONS_R1;
+        struct v2_disk_dqheader dqhead;
+        loff_t offset = 0;
+
+        CLASSERT(ARRAY_SIZE(quota_magics) == ARRAY_SIZE(quota_versions));
+        LASSERT(0 <= type && type < ARRAY_SIZE(quota_magics));
+
+        dqhead.dqh_magic = cpu_to_le32(quota_magics[type]);
+        dqhead.dqh_version = cpu_to_le32(quota_versions[type]);
+
+        return cfs_user_write(f, (char *)&dqhead, sizeof(dqhead), &offset);
+}
+
 static int create_new_quota_files(struct qchk_ctxt *qctxt,
                                   struct obd_quotactl *oqc)
 {
@@ -1751,32 +1794,36 @@ static int create_new_quota_files(struct qchk_ctxt *qctxt,
                 struct if_dqinfo *info = qctxt->qckt_first_check[i]?
                                          NULL : &qctxt->qckt_dqinfo[i];
                 struct file *file;
+                const char *name[MAXQUOTAS] = LUSTRE_OPQFILES_NAMES_V2;
 
                 if (!Q_TYPESET(oqc, i))
                         continue;
 
-                file = filp_open(op_quotafile[i], O_RDWR | O_CREAT | O_TRUNC,
-                                 0644);
+                LASSERT(oqc->qc_id == LUSTRE_QUOTA_V2);
+
+                file = filp_open(name[i], O_RDWR | O_CREAT | O_TRUNC, 0644);
                 if (IS_ERR(file)) {
                         rc = PTR_ERR(file);
                         CERROR("can't create %s file: rc = %d\n",
-                               op_quotafile[i], rc);
+                               name[i], rc);
                         GOTO(out, rc);
                 }
 
                 if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
-                        CERROR("file %s is not regular", op_quotafile[i]);
+                        CERROR("file %s is not regular", name[i]);
                         filp_close(file, 0);
                         GOTO(out, rc = -EINVAL);
                 }
 
-                rc = v2_write_dqheader(file, i);
+                DQUOT_DROP(file->f_dentry->d_inode);
+
+                rc = v3_write_dqheader(file, i);
                 if (rc) {
                         filp_close(file, 0);
                         GOTO(out, rc);
                 }
 
-                rc = v2_write_dqinfo(file, i, info);
+                rc = v3_write_dqinfo(file, i, info);
                 filp_close(file, 0);
                 if (rc)
                         GOTO(out, rc);
@@ -1872,12 +1919,12 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
                 if (!Q_TYPESET(oqc, i))
                         continue;
 
-                rc = quota_onoff(sb, Q_QUOTAON, i);
+                rc = quota_onoff(sb, Q_QUOTAON, i, oqc->qc_id);
                 if (!rc || rc == -EBUSY) {
                         rc = read_old_dqinfo(sb, i, qctxt->qckt_dqinfo);
                         if (rc)
                                 GOTO(out, rc);
-                } else if (rc == -ENOENT) {
+                } else if (rc == -ENOENT || rc == -EINVAL || rc == -EEXIST) {
                         qctxt->qckt_first_check[i] = 1;
                 } else if (rc) {
                         GOTO(out, rc);
@@ -1945,14 +1992,14 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
         }
 #endif
         /* turn off quota cause we are to dump chk_dqblk to files */
-        quota_onoff(sb, Q_QUOTAOFF, oqc->qc_type);
+        quota_onoff(sb, Q_QUOTAOFF, oqc->qc_type, oqc->qc_id);
 
         rc = create_new_quota_files(qctxt, oqc);
         if (rc)
                 GOTO(out, rc);
 
         /* we use vfs functions to set dqblk, so turn quota on */
-        rc = quota_onoff(sb, Q_QUOTAON, oqc->qc_type);
+        rc = quota_onoff(sb, Q_QUOTAON, oqc->qc_type, oqc->qc_id);
 out:
         /* dump and free chk_dqblk */
         rc = prune_chkquots(sb, qctxt, rc);
@@ -1960,7 +2007,7 @@ out:
 
         /* turn off quota, `lfs quotacheck` will turn on when all
          * nodes quotacheck finish. */
-        quota_onoff(sb, Q_QUOTAOFF, oqc->qc_type);
+        quota_onoff(sb, Q_QUOTAOFF, oqc->qc_type, oqc->qc_id);
 
         oqc->qc_stat = rc;
         if (rc)
@@ -1969,7 +2016,6 @@ out:
         RETURN(rc);
 }
 
-#ifdef HAVE_QUOTA_SUPPORT
 static int fsfilt_ext3_quotainfo(struct lustre_quota_info *lqi, int type,
                                  int cmd)
 {
@@ -1994,9 +2040,15 @@ static int fsfilt_ext3_quotainfo(struct lustre_quota_info *lqi, int type,
         case QFILE_INIT_INFO:
                 rc = lustre_init_quota_info(lqi, type);
                 break;
+        case QFILE_CONVERT:
+                rc = -ENOTSUPP;
+                CERROR("quota CONVERT command is not supported\n");
+                break;
         default:
-                CERROR("Unsupported admin quota file cmd %d\n", cmd);
-                LBUG();
+                rc = -ENOTSUPP;
+                CERROR("Unsupported admin quota file cmd %d\n"
+                       "Are lquota.ko and fsfilt_ldiskfs.ko modules in sync?\n",
+                       cmd);
                 break;
         }
         RETURN(rc);
@@ -2076,13 +2128,13 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         .fs_setup               = fsfilt_ext3_setup,
         .fs_send_bio            = fsfilt_ext3_send_bio,
         .fs_get_op_len          = fsfilt_ext3_get_op_len,
-        .fs_quotactl            = fsfilt_ext3_quotactl,
-        .fs_quotacheck          = fsfilt_ext3_quotacheck,
 #ifdef HAVE_DISK_INODE_VERSION
         .fs_get_version         = fsfilt_ext3_get_version,
         .fs_set_version         = fsfilt_ext3_set_version,
 #endif
 #ifdef HAVE_QUOTA_SUPPORT
+        .fs_quotactl            = fsfilt_ext3_quotactl,
+        .fs_quotacheck          = fsfilt_ext3_quotacheck,
         .fs_quotainfo           = fsfilt_ext3_quotainfo,
         .fs_qids                = fsfilt_ext3_qids,
         .fs_dquot               = fsfilt_ext3_dquot,

@@ -1275,6 +1275,7 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, get_uuid);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, quotacheck);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, quotactl);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, quota_adjust_qunit);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, ping);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_new);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_rem);
@@ -1377,6 +1378,7 @@ int lprocfs_alloc_md_stats(struct obd_device *obd,
         LPROCFS_MD_OP_INIT(num_private_stats, stats, lock_match);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, cancel_unused);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, renew_capa);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, unpack_capa);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, get_remote_perm);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, intent_getattr_async);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, revalidate_lock);
@@ -1856,7 +1858,7 @@ int lprocfs_write_frac_u64_helper(const char *buffer, unsigned long count,
         __u64 whole, frac = 0, units;
         unsigned frac_d = 1;
 
-        if (count > (sizeof(kernbuf) - 1) )
+        if (count > (sizeof(kernbuf) - 1))
                 return -EINVAL;
 
         if (copy_from_user(kernbuf, buffer, count))

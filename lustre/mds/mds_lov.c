@@ -478,7 +478,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         data->ocd_connect_flags = OBD_CONNECT_VERSION   | OBD_CONNECT_INDEX   |
                                   OBD_CONNECT_REQPORTAL | OBD_CONNECT_QUOTA64 |
                                   OBD_CONNECT_OSS_CAPA  | OBD_CONNECT_FID     |
-                                  OBD_CONNECT_AT;
+                                  OBD_CONNECT_AT | OBD_CONNECT_CHANGE_QS;
 #ifdef HAVE_LRU_RESIZE_SUPPORT
         data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
 #endif
@@ -798,8 +798,6 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
 
         rc = mds_lov_start_synchronize(obd, watched, data,
                                        !(ev == OBD_NOTIFY_SYNC));
-
-        lquota_recovery(mds_quota_interface_ref, obd);
 
         RETURN(rc);
 }

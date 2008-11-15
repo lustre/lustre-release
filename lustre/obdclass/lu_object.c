@@ -1063,7 +1063,7 @@ EXPORT_SYMBOL(lu_context_key_register);
 
 static void key_fini(struct lu_context *ctx, int index)
 {
-        if (ctx->lc_value[index] != NULL) {
+        if (ctx->lc_value != NULL && ctx->lc_value[index] != NULL) {
                 struct lu_context_key *key;
 
                 key = lu_keys[index];

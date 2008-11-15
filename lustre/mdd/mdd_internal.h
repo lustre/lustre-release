@@ -51,6 +51,21 @@
 #include <linux/sched.h>
 #include <linux/capability.h>
 #include <linux/dynlocks.h>
+#ifdef HAVE_QUOTA_SUPPORT
+# include <lustre_quota.h>
+#endif
+#include <lustre_fsfilt.h>
+
+#ifdef HAVE_QUOTA_SUPPORT
+/* quota stuff */
+extern quota_interface_t *mds_quota_interface_ref;
+
+static inline void mdd_quota_wrapper(struct lu_attr *la, unsigned int *qids)
+{
+        qids[0] = la->la_uid;
+        qids[1] = la->la_gid;
+}
+#endif
 
 enum mdd_txn_op {
         MDD_TXN_OBJECT_DESTROY_OP = 0,
@@ -146,6 +161,7 @@ struct mdd_thread_info {
         int                       mti_max_lmm_size;
         struct llog_cookie       *mti_max_cookie;
         int                       mti_max_cookie_size;
+        struct obd_quotactl       mti_oqctl;
 };
 
 struct lov_mds_md *mdd_max_lmm_get(const struct lu_env *env,
@@ -293,11 +309,44 @@ int mdd_get_flags(const struct lu_env *env, struct mdd_object *obj);
 extern const struct md_dir_operations    mdd_dir_ops;
 extern const struct md_object_operations mdd_obj_ops;
 
+/* mdd_quota.c*/
+#ifdef HAVE_QUOTA_SUPPORT
+int mdd_quota_notify(const struct lu_env *env, struct md_device *m);
+int mdd_quota_setup(const struct lu_env *env, struct md_device *m,
+                    void *data);
+int mdd_quota_cleanup(const struct lu_env *env, struct md_device *m);
+int mdd_quota_recovery(const struct lu_env *env, struct md_device *m);
+int mdd_quota_check(const struct lu_env *env, struct md_device *m,
+                    struct obd_export *exp, __u32 type);
+int mdd_quota_on(const struct lu_env *env, struct md_device *m,
+                 __u32 type, __u32 id);
+int mdd_quota_off(const struct lu_env *env, struct md_device *m,
+                  __u32 type, __u32 id);
+int mdd_quota_setinfo(const struct lu_env *env, struct md_device *m,
+                      __u32 type, __u32 id, struct obd_dqinfo *dqinfo);
+int mdd_quota_getinfo(const struct lu_env *env, const struct md_device *m,
+                      __u32 type, __u32 id, struct obd_dqinfo *dqinfo);
+int mdd_quota_setquota(const struct lu_env *env, struct md_device *m,
+                       __u32 type, __u32 id, struct obd_dqblk *dqblk);
+int mdd_quota_getquota(const struct lu_env *env, const struct md_device *m,
+                       __u32 type, __u32 id, struct obd_dqblk *dqblk);
+int mdd_quota_getoinfo(const struct lu_env *env, const struct md_device *m,
+                       __u32 type, __u32 id, struct obd_dqinfo *dqinfo);
+int mdd_quota_getoquota(const struct lu_env *env, const struct md_device *m,
+                        __u32 type, __u32 id, struct obd_dqblk *dqblk);
+int mdd_quota_invalidate(const struct lu_env *env, struct md_device *m,
+                         __u32 type);
+int mdd_quota_finvalidate(const struct lu_env *env, struct md_device *m,
+                          __u32 type);
+#endif
+
 /* mdd_trans.c */
 void mdd_txn_param_build(const struct lu_env *env, struct mdd_device *mdd,
                          enum mdd_txn_op);
 int mdd_log_txn_param_build(const struct lu_env *env, struct md_object *obj,
                             struct md_attr *ma, enum mdd_txn_op);
+int mdd_setattr_txn_param_build(const struct lu_env *env, struct md_object *obj,
+                                struct md_attr *ma, enum mdd_txn_op);
 
 static inline void mdd_object_put(const struct lu_env *env,
                                   struct mdd_object *o)

@@ -405,7 +405,6 @@ EXPORT_SYMBOL(class_name2obd);
 EXPORT_SYMBOL(class_uuid2dev);
 EXPORT_SYMBOL(class_uuid2obd);
 EXPORT_SYMBOL(class_find_client_obd);
-EXPORT_SYMBOL(class_find_client_notype);
 EXPORT_SYMBOL(class_devices_in_group);
 EXPORT_SYMBOL(class_conn2export);
 EXPORT_SYMBOL(class_exp2obd);

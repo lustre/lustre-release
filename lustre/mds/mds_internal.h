@@ -72,12 +72,10 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
                    struct lov_stripe_md **ea, struct obd_trans_info *oti);
 int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
                     struct lov_stripe_md *ea, struct obd_trans_info *oti,
-                    struct obd_export *md_exp);
+                    struct obd_export *md_exp, void *capa);
 
 /* mds/handler.c */
 extern struct lvfs_callback_ops mds_lvfs_ops;
-/* quota stuff */
-extern quota_interface_t *mds_quota_interface_ref;
 
 /* mds/lproc_mds.c */
 enum {

@@ -694,7 +694,7 @@ static int osc_can_send_destroy(struct client_obd *cli)
  * cookies to the MDS after committing destroy transactions. */
 static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                        struct lov_stripe_md *ea, struct obd_trans_info *oti,
-                       struct obd_export *md_export)
+                       struct obd_export *md_export, void *capa)
 {
         struct client_obd     *cli = &exp->exp_obd->u.cli;
         struct ptlrpc_request *req;
@@ -717,6 +717,7 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                 RETURN(-ENOMEM);
         }
 
+        osc_set_capa_size(req, &RMF_CAPA1, (struct obd_capa *)capa);
         rc = ldlm_prep_elc_req(exp, req, LUSTRE_OST_VERSION, OST_DESTROY,
                                0, &cancels, count);
         if (rc) {
@@ -734,6 +735,7 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
         LASSERT(body);
         body->oa = *oa;
 
+        osc_pack_capa(req, body, (struct obd_capa *)capa);
         ptlrpc_request_set_replen(req);
 
         if (!osc_can_send_destroy(cli)) {
@@ -1048,7 +1050,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                                 struct lov_stripe_md *lsm, obd_count page_count,
                                 struct brw_page **pga,
                                 struct ptlrpc_request **reqp,
-                                struct obd_capa *ocapa)
+                                struct obd_capa *ocapa, int reserve)
 {
         struct ptlrpc_request   *req;
         struct ptlrpc_bulk_desc *desc;
@@ -1075,7 +1077,6 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                 opc = OST_READ;
                 req = ptlrpc_request_alloc(cli->cl_import, &RQF_OST_BRW);
         }
-
         if (req == NULL)
                 RETURN(-ENOMEM);
 
@@ -1219,6 +1220,8 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         aa->aa_ppga = pga;
         aa->aa_cli = cli;
         CFS_INIT_LIST_HEAD(&aa->aa_oaps);
+        if (ocapa && reserve)
+                aa->aa_ocapa = capa_get(ocapa);
 
         *reqp = req;
         RETURN(0);
@@ -1448,7 +1451,7 @@ static int osc_brw_internal(int cmd, struct obd_export *exp, struct obdo *oa,
 
 restart_bulk:
         rc = osc_brw_prep_request(cmd, &exp->exp_obd->u.cli, oa, lsm,
-                                  page_count, pga, &req, ocapa);
+                                  page_count, pga, &req, ocapa, 0);
         if (rc != 0)
                 return (rc);
 
@@ -1495,18 +1498,13 @@ int osc_brw_redo_request(struct ptlrpc_request *request,
         }
 
         DEBUG_REQ(D_ERROR, request, "redo for recoverable error");
-/*
-        body = lustre_msg_buf(request->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-        if (body->oa.o_valid & OBD_MD_FLOSSCAPA)
-                ocapa = lustre_unpack_capa(request->rq_reqmsg,
-                                           REQ_REC_OFF + 3);
-*/
+
         rc = osc_brw_prep_request(lustre_msg_get_opc(request->rq_reqmsg) ==
                                         OST_WRITE ? OBD_BRW_WRITE :OBD_BRW_READ,
                                   aa->aa_cli, aa->aa_oa,
                                   NULL /* lsm unused by osc currently */,
                                   aa->aa_page_count, aa->aa_ppga,
-                                  &new_req, NULL /* ocapa */);
+                                  &new_req, aa->aa_ocapa, 0);
         if (rc)
                 RETURN(rc);
 
@@ -1543,6 +1541,9 @@ int osc_brw_redo_request(struct ptlrpc_request *request,
                         oap->oap_request = ptlrpc_request_addref(new_req);
                 }
         }
+
+        new_aa->aa_ocapa = aa->aa_ocapa;
+        aa->aa_ocapa = NULL;
 
         /* use ptlrpc_set_add_req is safe because interpret functions work
          * in check_set context. only one way exist with access to request
@@ -1944,6 +1945,11 @@ static int brw_interpret(const struct lu_env *env,
                         RETURN(0);
         }
 
+        if (aa->aa_ocapa) {
+                capa_put(aa->aa_ocapa);
+                aa->aa_ocapa = NULL;
+        }
+
         cli = aa->aa_cli;
 
         client_obd_list_lock(&cli->cl_loi_list_lock);
@@ -2052,7 +2058,7 @@ static struct ptlrpc_request *osc_build_req(const struct lu_env *env,
 
         sort_brw_pages(pga, page_count);
         rc = osc_brw_prep_request(cmd, cli, oa, NULL, page_count,
-                                  pga, &req, crattr.cra_capa);
+                                  pga, &req, crattr.cra_capa, 1);
         if (rc != 0) {
                 CERROR("prep_req failed: %d\n", rc);
                 GOTO(out, req = ERR_PTR(rc));
@@ -2560,6 +2566,9 @@ int osc_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         oap->oap_page = page;
         oap->oap_obj_off = offset;
+        if (!client_is_remote(exp) &&
+            cfs_capable(CFS_CAP_SYS_RESOURCE))
+                oap->oap_brw_flags = OBD_BRW_NOQUOTA;
 
         LASSERT(!(offset & ~CFS_PAGE_MASK));
 
@@ -2605,7 +2614,6 @@ int osc_queue_async_io(const struct lu_env *env,
                 RETURN(-EBUSY);
 
         /* check if the file's owner/group is over quota */
-#ifdef HAVE_QUOTA_SUPPORT
         if ((cmd & OBD_BRW_WRITE) && !(cmd & OBD_BRW_NOQUOTA)) {
                 struct cl_object *obj;
                 struct cl_attr    attr; /* XXX put attr into thread info */
@@ -2622,7 +2630,6 @@ int osc_queue_async_io(const struct lu_env *env,
                 if (rc)
                         RETURN(rc);
         }
-#endif
 
         if (loi == NULL)
                 loi = lsm->lsm_oinfo[0];
@@ -3964,6 +3971,8 @@ int osc_process_config_base(struct obd_device *obd, struct lustre_cfg *lcfg)
         default:
                 rc = class_process_proc_param(PARAM_OSC, lvars.obd_vars,
                                               lcfg, obd);
+        	if (rc > 0)
+        		rc = 0;
                 break;
         }
 

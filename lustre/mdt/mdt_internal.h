@@ -71,6 +71,7 @@
 #include <lvfs.h>
 #include <lustre_idmap.h>
 #include <lustre_eacl.h>
+#include <lustre_fsfilt.h>
 
 static inline __u64 lcd_last_transno(struct lsd_client_data *lcd)
 {
@@ -176,6 +177,7 @@ struct mdt_device {
 
         cfs_proc_dir_entry_t      *mdt_proc_entry;
         struct lprocfs_stats      *mdt_stats;
+        int                        mdt_sec_level;
 };
 
 #define MDT_SERVICE_WATCHDOG_FACTOR     (2000)
@@ -312,7 +314,7 @@ struct mdt_thread_info {
 
         /*
          * XXX: Part Three:
-         * The following members will be filled explictly
+         * The following members will be filled explicitly
          * with zero in mdt_reint_unpack(), because they are only used
          * by reint requests (including mdt_reint_open()).
          */
@@ -369,6 +371,7 @@ struct mdt_thread_info {
 
         /* Ops object filename */
         struct lu_name             mti_name;
+        struct md_attr             mti_tmp_attr;
 };
 
 typedef void (*mdt_cb_t)(const struct mdt_device *mdt, __u64 transno,
@@ -599,21 +602,16 @@ int mdt_init_ucred_reint(struct mdt_thread_info *);
 void mdt_exit_ucred(struct mdt_thread_info *);
 
 /* mdt_idmap.c */
+int mdt_init_sec_level(struct mdt_thread_info *);
 int mdt_init_idmap(struct mdt_thread_info *);
-
 void mdt_cleanup_idmap(struct mdt_export_data *);
-
 int mdt_handle_idmap(struct mdt_thread_info *);
-
 int ptlrpc_user_desc_do_idmap(struct ptlrpc_request *,
                               struct ptlrpc_user_desc *);
-
 void mdt_body_reverse_idmap(struct mdt_thread_info *,
                             struct mdt_body *);
-
 int mdt_remote_perm_reverse_idmap(struct ptlrpc_request *,
                                   struct mdt_remote_perm *);
-
 int mdt_fix_attr_ucred(struct mdt_thread_info *, __u32);
 
 static inline struct mdt_device *mdt_dev(struct lu_device *d)
@@ -778,11 +776,11 @@ static inline void mdt_set_capainfo(struct mdt_thread_info *info, int offset,
                                     const struct lu_fid *fid,
                                     struct lustre_capa *capa)
 {
-        struct mdt_device *dev = info->mti_mdt;
         struct md_capainfo *ci;
 
         LASSERT(offset >= 0 && offset <= MD_CAPAINFO_MAX);
-        if (!dev->mdt_opts.mo_mds_capa)
+        if (!info->mti_mdt->mdt_opts.mo_mds_capa ||
+            !(info->mti_exp->exp_connect_flags & OBD_CONNECT_MDS_CAPA))
                 return;
 
         ci = md_capainfo(info->mti_env);
@@ -815,5 +813,9 @@ static inline void mdt_dump_capainfo(struct mdt_thread_info *info)
         }
 }
 
+static inline struct obd_device *mdt2obd_dev(const struct mdt_device *mdt)
+{
+        return mdt->mdt_md_dev.md_lu_dev.ld_obd;
+}
 #endif /* __KERNEL__ */
 #endif /* _MDT_H */

@@ -195,7 +195,7 @@ int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
 
 int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
                   const struct lu_fid *fid, const struct osd_inode_id *id0,
-                  struct thandle *th)
+                  struct thandle *th, int ignore_quota)
 {
         struct dt_object    *idx;
         struct osd_inode_id *id;
@@ -210,7 +210,8 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
         id->oii_gen = cpu_to_be32(id0->oii_gen);
         return idx->do_index_ops->dio_insert(info->oti_env, idx,
                                              (const struct dt_rec *)id,
-                                             key, th, BYPASS_CAPA);
+                                             key, th, BYPASS_CAPA,
+                                             ignore_quota);
 }
 
 int osd_oi_delete(struct osd_thread_info *info,

@@ -192,6 +192,8 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_MDS_CLOSE_NET_REP       0x13f
 #define OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT   0x140
 #define OBD_FAIL_MDS_RECOVERY_ACCEPTS_GAPS 0x141
+#define OBD_FAIL_MDS_BLOCK_QUOTA_REQ     0x142
+#define OBD_FAIL_MDS_DROP_QUOTA_REQ      0x143
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
@@ -320,7 +322,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_MGS_PAUSE_REQ           0x904
 #define OBD_FAIL_MGS_PAUSE_TARGET_REG    0x905
 
-#define OBD_FAIL_QUOTA_QD_COUNT_32BIT    0xA00
+#define OBD_FAIL_QUOTA_RET_QDATA         0xA02
 
 #define OBD_FAIL_LPROC_REMOVE            0xB00
 

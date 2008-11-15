@@ -51,7 +51,6 @@
 #include <lustre_sec.h>
 #include "ldlm_internal.h"
 
-
 /* @priority: if non-zero, move the selected to the list head
  * @create: if zero, only search in existed connections
  */
@@ -2166,32 +2165,36 @@ void target_committed_to_req(struct ptlrpc_request *req)
 
 EXPORT_SYMBOL(target_committed_to_req);
 
-#ifdef HAVE_QUOTA_SUPPORT
 int target_handle_qc_callback(struct ptlrpc_request *req)
 {
         struct obd_quotactl *oqctl;
         struct client_obd *cli = &req->rq_export->exp_obd->u.cli;
 
         oqctl = req_capsule_client_get(&req->rq_pill, &RMF_OBD_QUOTACTL);
-        if (oqctl == NULL)
+        if (oqctl == NULL) {
+                CERROR("Can't unpack obd_quotactl\n");
                 RETURN(-EPROTO);
+        }
 
         cli->cl_qchk_stat = oqctl->qc_stat;
 
         return 0;
 }
 
+#ifdef HAVE_QUOTA_SUPPORT
 int target_handle_dqacq_callback(struct ptlrpc_request *req)
 {
 #ifdef __KERNEL__
         struct obd_device *obd = req->rq_export->exp_obd;
         struct obd_device *master_obd;
+        struct obd_device_target *obt;
         struct lustre_quota_ctxt *qctxt;
-        struct qunit_data *qdata;
-        void* rep;
-        struct qunit_data_old *qdata_old;
+        struct qunit_data *qdata = NULL;
         int rc = 0;
         ENTRY;
+
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_DROP_QUOTA_REQ))
+                RETURN(rc);
 
         rc = req_capsule_server_pack(&req->rq_pill);
         if (rc) {
@@ -2201,52 +2204,73 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
 
         LASSERT(req->rq_export);
 
-        /* fixed for bug10707 */
-        if ((req->rq_export->exp_connect_flags & OBD_CONNECT_QUOTA64) &&
-            !OBD_FAIL_CHECK(OBD_FAIL_QUOTA_QD_COUNT_32BIT)) {
-                CDEBUG(D_QUOTA, "qd_count is 64bit!\n");
-                rep = req_capsule_server_get(&req->rq_pill,
-                                             &RMF_QUNIT_DATA);
-                LASSERT(rep);
-                qdata = req_capsule_client_swab_get(&req->rq_pill,
-                                                    &RMF_QUNIT_DATA,
-                                          (void*)lustre_swab_qdata);
-        } else {
-                CDEBUG(D_QUOTA, "qd_count is 32bit!\n");
-                rep = req_capsule_server_get(&req->rq_pill, &RMF_QUNIT_DATA);
-                LASSERT(rep);
-                qdata_old = req_capsule_client_swab_get(&req->rq_pill,
-                                                        &RMF_QUNIT_DATA,
-                                           (void*)lustre_swab_qdata_old);
-                qdata = lustre_quota_old_to_new(qdata_old);
+        OBD_ALLOC(qdata, sizeof(struct qunit_data));
+        if (!qdata)
+                RETURN(-ENOMEM);
+        rc = quota_get_qdata(req, qdata, QUOTA_REQUEST, QUOTA_EXPORT);
+        if (rc < 0) {
+                CDEBUG(D_ERROR, "Can't unpack qunit_data(rc: %d)\n", rc);
+                GOTO(out, rc);
         }
 
-        if (qdata == NULL)
-                RETURN(-EPROTO);
-
         /* we use the observer */
-        LASSERT(obd->obd_observer && obd->obd_observer->obd_observer);
+        if (!obd->obd_observer || !obd->obd_observer->obd_observer) {
+                CERROR("Can't find the observer, it is recovering\n");
+                req->rq_status = -EIO;
+                GOTO(send_reply, rc = -EIO);
+        }
+
         master_obd = obd->obd_observer->obd_observer;
-        qctxt = &master_obd->u.obt.obt_qctxt;
+        obt = &master_obd->u.obt;
+        qctxt = &obt->obt_qctxt;
+
+        if (!qctxt->lqc_setup || !qctxt->lqc_valid) {
+                /* quota_type has not been processed yet, return EAGAIN
+                 * until we know whether or not quotas are supposed to
+                 * be enabled */
+                CDEBUG(D_QUOTA, "quota_type not processed yet, return "
+                       "-EAGAIN\n");
+                req->rq_status = -EAGAIN;
+                rc = ptlrpc_reply(req);
+                GOTO(out, rc);
+        }
+
+        down_read(&obt->obt_rwsem);
+        if (qctxt->lqc_lqs_hash == NULL) {
+                up_read(&obt->obt_rwsem);
+                /* quota_type has not been processed yet, return EAGAIN
+                 * until we know whether or not quotas are supposed to
+                 * be enabled */
+                CDEBUG(D_QUOTA, "quota_ctxt is not ready yet, return "
+                       "-EAGAIN\n");
+                req->rq_status = -EAGAIN;
+                rc = ptlrpc_reply(req);
+                GOTO(out, rc);
+        }
 
         LASSERT(qctxt->lqc_handler);
         rc = qctxt->lqc_handler(master_obd, qdata,
                                 lustre_msg_get_opc(req->rq_reqmsg));
+        up_read(&obt->obt_rwsem);
         if (rc && rc != -EDQUOT)
                 CDEBUG(rc == -EBUSY  ? D_QUOTA : D_ERROR,
                        "dqacq failed! (rc:%d)\n", rc);
-
-        /* the qd_count might be changed in lqc_handler */
-        if ((req->rq_export->exp_connect_flags & OBD_CONNECT_QUOTA64) &&
-            !OBD_FAIL_CHECK(OBD_FAIL_QUOTA_QD_COUNT_32BIT)) {
-                memcpy(rep, qdata, sizeof(*qdata));
-        } else {
-                qdata_old = lustre_quota_new_to_old(qdata);
-                memcpy(rep, qdata_old, sizeof(*qdata_old));
-        }
         req->rq_status = rc;
-        rc = ptlrpc_reply(req);
 
+        /* there are three forms of qunit(historic causes), so we need to
+         * adjust the same form to different forms slaves needed */
+        rc = quota_copy_qdata(req, qdata, QUOTA_REPLY, QUOTA_EXPORT);
+        if (rc < 0) {
+                CDEBUG(D_ERROR, "Can't pack qunit_data(rc: %d)\n", rc);
+                GOTO(out, rc);
+        }
+
+        /* Block the quota req. b=14840 */
+        OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_BLOCK_QUOTA_REQ, obd_timeout);
+send_reply:
+        rc = ptlrpc_reply(req);
+out:
+        OBD_FREE(qdata, sizeof(struct qunit_data));
         RETURN(rc);
 #else
         return 0;

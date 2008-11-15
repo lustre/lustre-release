@@ -180,16 +180,22 @@ static int osc_page_cache_add(const struct lu_env *env,
         struct osc_io     *oio = osc_env_io(env);
         int result;
         int brw_flags;
+        int noquota = 0;
 
         LINVRNT(osc_page_protected(env, opg, CLM_WRITE, 0));
         ENTRY;
 
         /* Set the OBD_BRW_SRVLOCK before the page is queued. */
         brw_flags = oio->oi_lockless ? OBD_BRW_SRVLOCK : 0;
+        if (!client_is_remote(osc_export(obj)) &&
+            cfs_capable(CFS_CAP_SYS_RESOURCE)) {
+                brw_flags |= OBD_BRW_NOQUOTA;
+                noquota = OBD_BRW_NOQUOTA;
+        }
 
         osc_page_transfer_get(opg, "transfer\0cache");
         result = osc_queue_async_io(env, osc_export(obj), NULL, obj->oo_oinfo,
-                                    &opg->ops_oap, OBD_BRW_WRITE,
+                                    &opg->ops_oap, OBD_BRW_WRITE | noquota,
                                     0, 0, brw_flags, 0);
         if (result != 0)
                 osc_page_transfer_put(env, opg);
@@ -467,7 +473,6 @@ struct cl_page *osc_page_init(const struct lu_env *env,
 
                 opg->ops_from = 0;
                 opg->ops_to   = CFS_PAGE_SIZE;
-                opg->ops_ignore_quota = !!cfs_capable(CFS_CAP_SYS_RESOURCE);
 
                 result = osc_prep_async_page(osc_export(osc),
                                              NULL, osc->oo_oinfo, vmpage,
@@ -500,19 +505,24 @@ void osc_io_submit_page(const struct lu_env *env,
         LINVRNT(osc_page_protected(env, opg,
                                    crt == CRT_WRITE ? CLM_WRITE : CLM_READ, 1));
 
+        oap->oap_page_off   = opg->ops_from;
+        oap->oap_count      = opg->ops_to - opg->ops_from;
+        oap->oap_brw_flags |= OBD_BRW_SYNC;
+        if (oio->oi_lockless)
+                oap->oap_brw_flags |= OBD_BRW_SRVLOCK;
+
         oap->oap_cmd = crt == CRT_WRITE ? OBD_BRW_WRITE : OBD_BRW_READ;
-        if (opg->ops_ignore_quota)
+        if (!client_is_remote(osc_export(cl2osc(opg->ops_cl.cpl_obj))) &&
+            cfs_capable(CFS_CAP_SYS_RESOURCE)) {
+                oap->oap_brw_flags |= OBD_BRW_NOQUOTA;
                 oap->oap_cmd |= OBD_BRW_NOQUOTA;
+        }
 
         oap->oap_async_flags |= OSC_FLAGS;
         if (oap->oap_cmd & OBD_BRW_READ)
                 oap->oap_async_flags |= ASYNC_COUNT_STABLE;
         else if (!(oap->oap_brw_page.flag & OBD_BRW_FROM_GRANT))
                 osc_enter_cache_try(env, cli, oap->oap_loi, oap, 1);
-
-        oap->oap_page_off   = opg->ops_from;
-        oap->oap_count      = opg->ops_to - opg->ops_from;
-        oap->oap_brw_flags |= oio->oi_lockless ? OBD_BRW_SRVLOCK : 0;
 
         osc_oap_to_pending(oap);
         osc_page_transfer_get(opg, "transfer\0imm");

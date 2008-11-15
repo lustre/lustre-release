@@ -501,9 +501,32 @@ struct blkcipher_desc {
 #define ll_crypto_blkcipher_encrypt_iv(desc, dst, src, bytes) \
         crypto_cipher_encrypt_iv((desc)->tfm, dst, src, bytes, (desc)->info)
 
-extern struct ll_crypto_cipher *ll_crypto_alloc_blkcipher(
-                            const char * algname, u32 type, u32 mask);
 static inline
+struct ll_crypto_cipher *ll_crypto_alloc_blkcipher(const char * algname,
+                                                   u32 type, u32 mask)
+{
+        char        buf[CRYPTO_MAX_ALG_NAME + 1];
+        const char *pan = algname;
+        u32         flag = 0; 
+
+        if (strncmp("cbc(", algname, 4) == 0)
+                flag |= CRYPTO_TFM_MODE_CBC;
+        else if (strncmp("ecb(", algname, 4) == 0)
+                flag |= CRYPTO_TFM_MODE_ECB;
+        if (flag) {
+                char *vp = strnchr(algname, CRYPTO_MAX_ALG_NAME, ')');
+                if (vp) {
+                        memcpy(buf, algname + 4, vp - algname - 4);
+                        buf[vp - algname - 4] = '\0';
+                        pan = buf;
+                } else {
+                        flag = 0;
+                }
+        }
+        return crypto_alloc_tfm(pan, flag);
+}
+
+static inline 
 struct ll_crypto_hash *ll_crypto_alloc_hash(const char *alg, u32 type, u32 mask)
 {
         char        buf[CRYPTO_MAX_ALG_NAME + 1];

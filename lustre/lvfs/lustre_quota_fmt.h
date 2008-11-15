@@ -41,6 +41,8 @@
 #ifndef _LUSTRE_QUOTA_FMT_H
 #define _LUSTRE_QUOTA_FMT_H
 
+#ifdef HAVE_QUOTA_SUPPORT
+
 #include <linux/types.h>
 #include <linux/quota.h>
 
@@ -49,31 +51,48 @@
  * Same with quota v2's magic
  */
 #define LUSTRE_INITQMAGICS {\
-	0xd9c01f11,	/* USRQUOTA */\
-	0xd9c01927	/* GRPQUOTA */\
+        0xd9c01f11,     /** USRQUOTA */\
+        0xd9c01927      /** GRPQUOTA */\
 }
 
-#define LUSTRE_INITQVERSIONS {\
-	0,		/* USRQUOTA */\
-	0		/* GRPQUOTA */\
+/* Invalid magics that mark quota file as inconsistent */
+#define LUSTRE_BADQMAGICS {\
+        0xbadbadba,     /** USRQUOTA */\
+        0xbadbadba      /** GRPQUOTA */\
+}
+
+/* for the verson 2 of lustre_disk_dqblk*/
+#define LUSTRE_INITQVERSIONS_V2 {\
+        1,		/* USRQUOTA */\
+        1		/* GRPQUOTA */\
 }
 
 /*
  * The following structure defines the format of the disk quota file
  * (as it appears on disk) - the file is a radix tree whose leaves point
- * to blocks of these structures.
+ * to blocks of these structures. for the version 2.
  */
-struct lustre_disk_dqblk {
-        __u32 dqb_id;           /* id this quota applies to */
-        __u32 dqb_ihardlimit;   /* absolute limit on allocated inodes */
-        __u32 dqb_isoftlimit;   /* preferred inode limit */
-        __u32 dqb_curinodes;    /* current # allocated inodes */
-        __u32 dqb_bhardlimit;   /* absolute limit on disk space (in QUOTABLOCK_SIZE) */
-        __u32 dqb_bsoftlimit;   /* preferred limit on disk space (in QUOTABLOCK_SIZE) */
-        __u64 dqb_curspace;     /* current space occupied (in bytes) */
-        __u64 dqb_btime;        /* time limit for excessive disk use */
-        __u64 dqb_itime;        /* time limit for excessive inode use */
+struct lustre_disk_dqblk_v2 {
+        __u32 dqb_id;           /**< id this quota applies to */
+        __u32 padding;
+        __u64 dqb_ihardlimit;   /**< absolute limit on allocated inodes */
+        __u64 dqb_isoftlimit;   /**< preferred inode limit */
+        __u64 dqb_curinodes;    /**< current # allocated inodes */
+        __u64 dqb_bhardlimit;   /**< absolute limit on disk space (in QUOTABLOCK_SIZE) */
+        __u64 dqb_bsoftlimit;   /**< preferred limit on disk space (in QUOTABLOCK_SIZE) */
+        __u64 dqb_curspace;     /**< current space occupied (in bytes) */
+        __u64 dqb_btime;        /**< time limit for excessive disk use */
+        __u64 dqb_itime;        /**< time limit for excessive inode use */
 };
+
+/* Number of entries in one blocks(14 entries) */
+#define LUSTRE_DQSTRINBLK_V2 \
+                ((LUSTRE_DQBLKSIZE - sizeof(struct lustre_disk_dqdbheader)) \
+		/ sizeof(struct lustre_disk_dqblk_v2)) 
+#define GETENTRIES_V2(buf) (((char *)buf)+sizeof(struct lustre_disk_dqdbheader))
+
+#define GETENTRIES(buf,version) ((version == LUSTRE_QUOTA_V2) ? \
+                                GETENTRIES_V2(buf) : 0)
 
 /*
  * Here are header structures as written on disk and their in-memory copies
@@ -117,6 +136,62 @@ static void lprocfs_quotfmt_test_init_vars(struct lprocfs_static_vars *lvars) {}
 #define LUSTRE_DQBLKSIZE	(1 << LUSTRE_DQBLKSIZE_BITS)    /* Size of block with quota structures */
 #define LUSTRE_DQTREEOFF	1       /* Offset of tree in file in blocks */
 #define LUSTRE_DQTREEDEPTH	4       /* Depth of quota tree */
-#define LUSTRE_DQSTRINBLK	((LUSTRE_DQBLKSIZE - sizeof(struct lustre_disk_dqdbheader)) / sizeof(struct lustre_disk_dqblk)) /* Number of entries in one blocks */
 
+typedef char *dqbuf_t;
+
+#define GETIDINDEX(id, depth) (((id) >> ((LUSTRE_DQTREEDEPTH-(depth)-1)*8)) & 0xff)
+
+#define MAX_UL (0xffffffffUL)
+
+#define lustre_info_dirty(info) test_bit(DQF_INFO_DIRTY_B, &(info)->dqi_flags)
+
+struct dqblk {
+        struct list_head link;
+        uint blk;
+};
+
+/* come from lustre_fmt_common.c */
+dqbuf_t getdqbuf(void);
+void freedqbuf(dqbuf_t buf);
+void disk2memdqb(struct lustre_mem_dqblk *m, void *d,
+                        enum lustre_quota_version version);
+void lustre_mark_info_dirty(struct lustre_mem_dqinfo *info);
+int lustre_init_quota_header(struct lustre_quota_info *lqi, int type, 
+                             int fakemagics);
+int lustre_init_quota_info_generic(struct lustre_quota_info *lqi, int type,
+                                   int fakemagics);
+int lustre_read_quota_info(struct lustre_quota_info *lqi, int type);
+int lustre_read_quota_file_info(struct file* f, struct lustre_mem_dqinfo* info);
+int lustre_write_quota_info(struct lustre_quota_info *lqi, int type);
+ssize_t read_blk(struct file *filp, uint blk, dqbuf_t buf);
+ssize_t write_blk(struct file *filp, uint blk, dqbuf_t buf);
+int get_free_dqblk(struct file *filp, struct lustre_mem_dqinfo *info);
+int put_free_dqblk(struct file *filp, struct lustre_mem_dqinfo *info,
+                          dqbuf_t buf, uint blk);
+int remove_free_dqentry(struct file *filp,
+                               struct lustre_mem_dqinfo *info, dqbuf_t buf,
+                               uint blk);
+int insert_free_dqentry(struct file *filp,
+                               struct lustre_mem_dqinfo *info, dqbuf_t buf,
+                               uint blk);
+ssize_t quota_read(struct file *file, struct inode *inode, int type,
+                   uint blk, dqbuf_t buf);
+int walk_tree_dqentry(struct file *filp, struct inode *inode, int type,
+                      uint blk, int depth, struct list_head *list);
+int check_quota_file(struct file *f, struct inode *inode, int type,
+                     lustre_quota_version_t version);
+int lustre_check_quota_file(struct lustre_quota_info *lqi, int type);
+int lustre_read_dquot(struct lustre_dquot *dquot);
+int lustre_commit_dquot(struct lustre_dquot *dquot);
+int lustre_init_quota_info(struct lustre_quota_info *lqi, int type);
+int lustre_get_qids(struct file *fp, struct inode *inode, int type,
+                    struct list_head *list);
+
+#define LUSTRE_ADMIN_QUOTAFILES_V2 {\
+        "admin_quotafile_v2.usr",       /* user admin quotafile */\
+        "admin_quotafile_v2.grp"        /* group admin quotafile */\
+}
+
+#define LUSTRE_OPQFILES_NAMES_V2 { "lquota_v2.user", "lquota_v2.group" }
 #endif                          /* lustre_quota_fmt.h */
+#endif

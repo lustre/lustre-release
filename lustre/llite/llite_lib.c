@@ -232,7 +232,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
                                   OBD_CONNECT_VERSION  | OBD_CONNECT_MDS_CAPA |
                                   OBD_CONNECT_OSS_CAPA | OBD_CONNECT_CANCELSET|
                                   OBD_CONNECT_FID      | OBD_CONNECT_AT |
-                                  OBD_CONNECT_LOV_V3;
+                                  OBD_CONNECT_LOV_V3 | OBD_CONNECT_RMT_CLIENT;
 
 #ifdef HAVE_LRU_RESIZE_SUPPORT
         if (sbi->ll_flags & LL_SBI_LRU_RESIZE)
@@ -263,13 +263,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 
         /* real client */
         data->ocd_connect_flags |= OBD_CONNECT_REAL;
-        if (sbi->ll_flags & LL_SBI_RMT_CLIENT) {
-                data->ocd_connect_flags &= ~OBD_CONNECT_LCL_CLIENT;
-                data->ocd_connect_flags |= OBD_CONNECT_RMT_CLIENT;
-        } else {
-                data->ocd_connect_flags &= ~OBD_CONNECT_RMT_CLIENT;
-                data->ocd_connect_flags |= OBD_CONNECT_LCL_CLIENT;
-        }
+        if (sbi->ll_flags & LL_SBI_RMT_CLIENT)
+                data->ocd_connect_flags |= OBD_CONNECT_RMT_CLIENT_FORCE;
 
         err = obd_connect(NULL, &md_conn, obd, &sbi->ll_sb_uuid, data, NULL);
         if (err == -EBUSY) {
@@ -347,21 +342,16 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
         if (data->ocd_connect_flags & OBD_CONNECT_JOIN)
                 sbi->ll_flags |= LL_SBI_JOIN;
 
-        if (sbi->ll_flags & LL_SBI_RMT_CLIENT) {
-                if (!(data->ocd_connect_flags & OBD_CONNECT_RMT_CLIENT)) {
-                        /* sometimes local client claims to be remote, but mdt
-                         * will disagree when client gss not applied. */
-                        LCONSOLE_INFO("client claims to be remote, but server "
-                                      "rejected, forced to be local.\n");
-                        sbi->ll_flags &= ~LL_SBI_RMT_CLIENT;
+        if (data->ocd_connect_flags & OBD_CONNECT_RMT_CLIENT) {
+                if (!(sbi->ll_flags & LL_SBI_RMT_CLIENT)) {
+                        sbi->ll_flags |= LL_SBI_RMT_CLIENT;
+                        LCONSOLE_INFO("client is set as remote by default.\n");
                 }
         } else {
-                if (!(data->ocd_connect_flags & OBD_CONNECT_LCL_CLIENT)) {
-                        /* with gss applied, remote client can not claim to be
-                         * local, so mdt maybe force client to be remote. */
-                        LCONSOLE_INFO("client claims to be local, but server "
-                                      "rejected, forced to be remote.\n");
-                        sbi->ll_flags |= LL_SBI_RMT_CLIENT;
+                if (sbi->ll_flags & LL_SBI_RMT_CLIENT) {
+                        sbi->ll_flags &= ~LL_SBI_RMT_CLIENT;
+                        LCONSOLE_INFO("client claims to be remote, but server "
+                                      "rejected, forced to be local.\n");
                 }
         }
 
@@ -385,9 +375,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
                                   OBD_CONNECT_REQPORTAL | OBD_CONNECT_BRW_SIZE |
                                   OBD_CONNECT_CANCELSET | OBD_CONNECT_FID      |
                                   OBD_CONNECT_SRVLOCK   | OBD_CONNECT_TRUNCLOCK|
-                                  OBD_CONNECT_AT;
-        if (sbi->ll_flags & LL_SBI_OSS_CAPA)
-                data->ocd_connect_flags |= OBD_CONNECT_OSS_CAPA;
+                                  OBD_CONNECT_AT | OBD_CONNECT_RMT_CLIENT |
+                                  OBD_CONNECT_OSS_CAPA;
 
         if (!OBD_FAIL_CHECK(OBD_FAIL_OSC_CONNECT_CKSUM)) {
                 /* OBD_CONNECT_CKSUM should always be set, even if checksums are
@@ -406,6 +395,9 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 #ifdef HAVE_LRU_RESIZE_SUPPORT
         data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
 #endif
+        if (sbi->ll_flags & LL_SBI_RMT_CLIENT)
+                data->ocd_connect_flags |= OBD_CONNECT_RMT_CLIENT_FORCE;
+
         CDEBUG(D_RPCTRACE, "ocd_connect_flags: "LPX64" ocd_version: %d "
                "ocd_grant: %d\n", data->ocd_connect_flags,
                data->ocd_version, data->ocd_grant);
@@ -471,7 +463,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
         err = md_getattr(sbi->ll_md_exp, &sbi->ll_root_fid, oc, valid, 0,
                          &request);
         if (oc)
-                free_capa(oc);
+                capa_put(oc);
         if (err) {
                 CERROR("md_getattr failed for root: rc = %d\n", err);
                 GOTO(out_lock_cn_cb, err);
@@ -2114,6 +2106,8 @@ int ll_process_config(struct lustre_cfg *lcfg)
            proc fns must be able to handle that! */
         rc = class_process_proc_param(PARAM_LLITE, lvars.obd_vars,
                                       lcfg, sb);
+        if (rc > 0)
+        	rc = 0;
         return(rc);
 }
 

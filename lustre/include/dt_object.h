@@ -66,6 +66,7 @@ struct txn_param;
 struct dt_device;
 struct dt_object;
 struct dt_index_features;
+struct dt_quota_ctxt;
 
 struct dt_device_param {
         unsigned           ddp_max_name_len;
@@ -82,11 +83,12 @@ enum dt_txn_op {
         DTO_IDNEX_UPDATE,
         DTO_OBJECT_CREATE,
         DTO_OBJECT_DELETE,
-        DTO_ATTR_SET,
+        DTO_ATTR_SET_BASE,
         DTO_XATTR_SET,
         DTO_LOG_REC, /**< XXX temporary: dt layer knows nothing about llog. */
         DTO_WRITE_BASE,
         DTO_WRITE_BLOCK,
+        DTO_ATTR_SET_CHOWN,
 
         DTO_NR
 };
@@ -144,6 +146,12 @@ struct dt_device_operations {
                                    struct dt_device *dev,
                                    int mode, unsigned long timeout,
                                    __u32 alg, struct lustre_capa_key *keys);
+        /**
+         * Initialize quota context.
+         */
+        void (*dt_init_quota_ctxt)(const struct lu_env *env,
+                                   struct dt_device *dev,
+                                   struct dt_quota_ctxt *ctxt, void *data);
 
         /**
          *  get transaction credits for given \a op.
@@ -337,7 +345,8 @@ struct dt_body_operations {
          */
         ssize_t (*dbo_write)(const struct lu_env *env, struct dt_object *dt,
                              const struct lu_buf *buf, loff_t *pos,
-                             struct thandle *handle, struct lustre_capa *capa);
+                             struct thandle *handle, struct lustre_capa *capa,
+                             int ignore_quota);
 };
 
 /**
@@ -370,7 +379,8 @@ struct dt_index_operations {
          */
         int (*dio_insert)(const struct lu_env *env, struct dt_object *dt,
                           const struct dt_rec *rec, const struct dt_key *key,
-                          struct thandle *handle, struct lustre_capa *capa);
+                          struct thandle *handle, struct lustre_capa *capa,
+                          int ignore_quota);
         /**
          * precondition: dt_object_exists(dt);
          */

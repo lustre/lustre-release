@@ -128,6 +128,8 @@ int mdt_getxattr(struct mdt_thread_info *info)
         struct mdt_body        *repbody = NULL;
         struct md_object       *next;
         struct lu_buf          *buf;
+        __u32                   remote = exp_connect_rmtclient(info->mti_exp);
+        __u32                   perm;
         int                     easize, rc;
         ENTRY;
 
@@ -147,11 +149,11 @@ int mdt_getxattr(struct mdt_thread_info *info)
         next = mdt_object_child(info->mti_object);
 
         if (info->mti_body->valid & OBD_MD_FLRMTRGETFACL) {
-                __u32 perm = mdt_identity_get_perm(uc->mu_identity,
-                                                   med->med_rmtclient,
-                                                   req->rq_peer.nid);
+                if (unlikely(!remote))
+                        GOTO(out, rc = err_serious(-EINVAL));
 
-                LASSERT(med->med_rmtclient);
+                perm = mdt_identity_get_perm(uc->mu_identity, remote,
+                                             req->rq_peer.nid);
                 if (!(perm & CFS_RMTACL_PERM))
                         GOTO(out, rc = err_serious(-EPERM));
 
@@ -197,7 +199,9 @@ int mdt_getxattr(struct mdt_thread_info *info)
                 if (rc > 0 && flags != CFS_IC_NOTHING) {
                         int rc1;
 
-                        LASSERT(med->med_rmtclient);
+                        if (unlikely(!remote))
+                                GOTO(out, rc = -EINVAL);
+
                         rc1 = lustre_posix_acl_xattr_id2client(uc,
                                         med->med_idmap,
                                         (posix_acl_xattr_header *)(buf->lb_buf),
@@ -275,7 +279,6 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
                        struct mdt_lock_handle *unused)
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
-        struct mdt_export_data  *med = mdt_req2med(req);
         struct md_ucred         *uc  = mdt_ucred(info);
         const char               user_string[] = "user.";
         const char               trust_string[] = "trusted.";
@@ -294,6 +297,8 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
         __u64                    lockpart;
         int                      rc;
         posix_acl_xattr_header  *new_xattr = NULL;
+        __u32                    remote = exp_connect_rmtclient(info->mti_exp);
+        __u32                    perm;
         ENTRY;
 
         CDEBUG(D_INODE, "setxattr for "DFID"\n", PFID(rr->rr_fid1));
@@ -311,11 +316,11 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
                 RETURN(rc);
 
         if (valid & OBD_MD_FLRMTRSETFACL) {
-                __u32 perm = mdt_identity_get_perm(uc->mu_identity,
-                                                   med->med_rmtclient,
-                                                   req->rq_peer.nid);
+                if (unlikely(!remote))
+                        GOTO(out, rc = err_serious(-EINVAL));
 
-                LASSERT(med->med_rmtclient);
+                perm = mdt_identity_get_perm(uc->mu_identity, remote,
+                                             req->rq_peer.nid);
                 if (!(perm & CFS_RMTACL_PERM))
                         GOTO(out, rc = err_serious(-EPERM));
         }
@@ -368,7 +373,9 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
                         xattr = req_capsule_client_get(pill, &RMF_EADATA);
 
                         if (valid & OBD_MD_FLRMTLSETFACL) {
-                                LASSERT(med->med_rmtclient);
+                                if (unlikely(!remote))
+                                        GOTO(out_unlock, rc = -EINVAL);
+
                                 xattr_len = mdt_rmtlsetfacl(info, child,
                                                 xattr_name,
                                                 (ext_acl_xattr_header *)xattr,

@@ -145,7 +145,7 @@ int mdd_init_obd(const struct lu_env *env, struct mdd_device *mdd,
 
         /*
          * Add here for obd notify mechanism, when adding a new ost, the mds
-         * will notify this mdd.
+         * will notify this mdd. The mds will be used for quota also.
          */
         obd->obd_upcall.onu_upcall = mdd_notify;
         obd->obd_upcall.onu_owner = mdd;
@@ -520,16 +520,11 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                 oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
                 oinfo->oi_oa = oa;
                 oinfo->oi_md = lsm;
-                oinfo->oi_capa = mdo_capa_get(env, child, NULL,
-                                              CAPA_OPC_MDS_DEFAULT);
+                oinfo->oi_capa = NULL;
                 oinfo->oi_policy.l_extent.start = la->la_size;
                 oinfo->oi_policy.l_extent.end = OBD_OBJECT_EOF;
 
-                if (IS_ERR(oinfo->oi_capa))
-                        oinfo->oi_capa = NULL;
-
                 rc = obd_punch_rqset(lov_exp, oinfo, oti);
-                capa_put(oinfo->oi_capa);
                 if (rc) {
                         CERROR("Error setting attrs for "DFID": rc %d\n",
                                PFID(mdo2fid(child)), rc);
@@ -752,7 +747,6 @@ int mdd_lov_setattr_async(const struct lu_env *env, struct mdd_object *obj,
         struct obd_device   *obd = mdd2obd_dev(mdd);
         struct lu_attr      *tmp_la = &mdd_env_info(env)->mti_la;
         const struct lu_fid *fid = mdd_object_fid(obj);
-        struct obd_capa     *oc;
         int rc = 0;
         ENTRY;
 
@@ -762,15 +756,8 @@ int mdd_lov_setattr_async(const struct lu_env *env, struct mdd_object *obj,
         if (rc)
                 RETURN(rc);
 
-        oc = mdo_capa_get(env, obj, NULL, CAPA_OPC_MDS_DEFAULT);
-        if (IS_ERR(oc))
-                oc = NULL;
-
         rc = mdd_osc_setattr_async(obd, tmp_la->la_uid, tmp_la->la_gid, lmm,
                                    lmm_size, logcookies, fid_seq(fid),
-                                   fid_oid(fid), oc);
-
-        capa_put(oc);
-
+                                   fid_oid(fid), NULL);
         RETURN(rc);
 }

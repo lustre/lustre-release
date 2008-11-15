@@ -703,6 +703,18 @@ LB_LINUX_CONFIG_IM([CRYPTO_SHA1],[],[
 ])
 ])
 
+#
+# LC_CONFIG_RMTCLIENT
+#
+dnl FIXME
+dnl the AES symbol usually tied with arch, e.g. CRYPTO_AES_586
+dnl FIXME
+AC_DEFUN([LC_CONFIG_RMTCLIENT],
+[LB_LINUX_CONFIG_IM([CRYPTO_AES],[],[
+	AC_MSG_ERROR([Lustre remote client require that CONFIG_CRYPTO_AES is enabled in your kernel.])
+])
+])
+
 AC_DEFUN([LC_SUNRPC_CACHE],
 [AC_MSG_CHECKING([if sunrpc struct cache_head uses kref])
 LB_LINUX_TRY_COMPILE([
@@ -784,11 +796,6 @@ AC_DEFUN([LC_CONFIG_GSS],
                            [AC_MSG_WARN([kernel TWOFISH support is recommended by using GSS.])])
         LB_LINUX_CONFIG_IM([CRYPTO_CAST6],[],
                            [AC_MSG_WARN([kernel CAST6 support is recommended by using GSS.])])
-	dnl FIXME
-	dnl the AES symbol usually tied with arch, e.g. CRYPTO_AES_586
-	dnl FIXME
-	LB_LINUX_CONFIG_IM([CRYPTO_AES],[],
-                           [AC_MSG_WARN([kernel AES support is recommended by using GSS.])])
 
 	AC_CHECK_LIB([gssapi], [gss_init_sec_context],
                      [GSSAPI_LIBS="$GSSAPI_LDFLAGS -lgssapi"],
@@ -1551,9 +1558,9 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_CONFIG_PINGER
          LC_CONFIG_CHECKSUM
          LC_CONFIG_LIBLUSTRE_RECOVERY
-         LC_CONFIG_QUOTA
          LC_CONFIG_HEALTH_CHECK_WRITE
          LC_CONFIG_LRU_RESIZE
+         LC_QUOTA_MODULE
 
          LC_TASK_PPTR
          # RHEL4 patches
@@ -1591,6 +1598,7 @@ AC_DEFUN([LC_PROG_LINUX],
 
          LC_FUNC_SET_FS_PWD
          LC_CAPA_CRYPTO
+         LC_CONFIG_RMTCLIENT
          LC_CONFIG_GSS
          LC_FUNC_MS_FLOCK_LOCK
          LC_FUNC_HAVE_CAN_SLEEP_ARG
@@ -1599,6 +1607,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_COOKIE_FOLLOW_LINK
          LC_FUNC_RCU
          LC_PERCPU_COUNTER
+         LC_QUOTA64
 
          # does the kernel have VFS intent patches?
          LC_VFS_INTENT_PATCHES
@@ -1645,7 +1654,7 @@ AC_DEFUN([LC_PROG_LINUX],
 
          # raid5-zerocopy patch
          LC_PAGE_CONSTANT
-	 	
+
 	 # 2.6.22
          LC_INVALIDATE_BDEV_2ARG
          LC_ASYNC_BLOCK_CIPHER
@@ -1778,33 +1787,50 @@ fi
 #
 # LC_CONFIG_QUOTA
 #
-# whether to enable quota support
+# whether to enable quota support global control
 #
 AC_DEFUN([LC_CONFIG_QUOTA],
 [AC_ARG_ENABLE([quota],
 	AC_HELP_STRING([--enable-quota],
 			[enable quota support]),
-	[],[enable_quota='default'])
-if test x$linux25 != xyes; then
-	enable_quota='no'
-fi
-LB_LINUX_CONFIG([QUOTA],[
-	if test x$enable_quota = xdefault; then
-		enable_quota='yes'
-	fi
-],[
-	if test x$enable_quota = xdefault; then
-		enable_quota='no'
-		AC_MSG_WARN([quota is not enabled because the kernel lacks quota support])
-	else
-		if test x$enable_quota = xyes; then
-			AC_MSG_ERROR([cannot enable quota because the kernel lacks quota support])
-		fi
-	fi
+	[],[enable_quota='yes'])
 ])
-if test x$enable_quota != xno; then
+
+# whether to enable quota support(kernel modules)
+AC_DEFUN([LC_QUOTA_MODULE],
+[if test x$enable_quota != xno; then
+    LB_LINUX_CONFIG([QUOTA],[
+	enable_quota_module='yes'
 	AC_DEFINE(HAVE_QUOTA_SUPPORT, 1, [Enable quota support])
+    ],[
+	enable_quota_module='no'
+	AC_MSG_WARN([quota is not enabled because the kernel - lacks quota support])
+    ])
 fi
+])
+
+AC_DEFUN([LC_QUOTA],
+[#check global
+LC_CONFIG_QUOTA
+#check for utils
+AC_CHECK_HEADER(sys/quota.h,
+                [AC_DEFINE(HAVE_SYS_QUOTA_H, 1, [Define to 1 if you have <sys/quota.h>.])],
+                [AC_MSG_ERROR([don't find <sys/quota.h> in your system])])
+])
+
+AC_DEFUN([LC_QUOTA_READ],
+[AC_MSG_CHECKING([if kernel supports quota_read])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+],[
+	struct super_operations sp;
+        void *i = (void *)sp.quota_read;
+],[
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(KERNEL_SUPPORTS_QUOTA_READ, 1, [quota_read found])
+],[
+	AC_MSG_RESULT([no])
+])
 ])
 
 #
@@ -1822,21 +1848,6 @@ AC_MSG_RESULT([$enable_split])
 if test x$enable_split != xno; then
    AC_DEFINE(HAVE_SPLIT_SUPPORT, 1, [enable split support])
 fi
-])
-
-AC_DEFUN([LC_QUOTA_READ],
-[AC_MSG_CHECKING([if kernel supports quota_read])
-LB_LINUX_TRY_COMPILE([
-	#include <linux/fs.h>
-],[
-	struct super_operations sp;
-        void *i = (void *)sp.quota_read;
-],[
-	AC_MSG_RESULT([yes])
-	AC_DEFINE(KERNEL_SUPPORTS_QUOTA_READ, 1, [quota_read found])
-],[
-	AC_MSG_RESULT([no])
-])
 ])
 
 #
@@ -1937,6 +1948,30 @@ LB_LINUX_TRY_COMPILE([
                 AC_MSG_RESULT([no])
         ])
 ],[
+        AC_MSG_RESULT([no])
+])
+])
+
+#
+# LC_QUOTA64
+# linux kernel may have 64-bit limits support
+#
+AC_DEFUN([LC_QUOTA64],
+[AC_MSG_CHECKING([if kernel has 64-bit quota limits support])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/kernel.h>
+        #include <linux/fs.h>
+        #include <linux/quotaio_v2.h>
+        int versions[] = V2_INITQVERSIONS_R1;
+        struct v2_disk_dqblk_r1 dqblk_r1;
+],[],[
+        AC_DEFINE(HAVE_QUOTA64, 1, [have quota64])
+        AC_MSG_RESULT([yes])
+
+],[
+        AC_MSG_WARN([You have got no 64-bit kernel quota support.])
+        AC_MSG_WARN([Continuing with limited quota support.])
+        AC_MSG_WARN([quotacheck is needed for filesystems with recent quota versions.])
         AC_MSG_RESULT([no])
 ])
 ])
@@ -2046,7 +2081,7 @@ AM_CONDITIONAL(LIBLUSTRE_TESTS, test x$enable_liblustre_tests = xyes)
 AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
 AM_CONDITIONAL(SERVER, test x$enable_server = xyes)
-AM_CONDITIONAL(QUOTA, test x$enable_quota = xyes)
+AM_CONDITIONAL(QUOTA, test x$enable_quota_module = xyes)
 AM_CONDITIONAL(SPLIT, test x$enable_split = xyes)
 AM_CONDITIONAL(BLKID, test x$ac_cv_header_blkid_blkid_h = xyes)
 AM_CONDITIONAL(EXT2FS_DEVEL, test x$ac_cv_header_ext2fs_ext2fs_h = xyes)

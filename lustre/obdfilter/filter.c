@@ -1915,7 +1915,8 @@ static int filter_iobuf_pool_init(struct filter_obd *filter)
  * If we haven't allocated a pool entry for this thread before, do so now. */
 void *filter_iobuf_get(struct filter_obd *filter, struct obd_trans_info *oti)
 {
-        int thread_id                    = oti ? oti->oti_thread_id : -1;
+        int thread_id                    = (oti && oti->oti_thread) ?
+                                           oti->oti_thread->t_id : -1;
         struct filter_iobuf  *pool       = NULL;
         struct filter_iobuf **pool_place = NULL;
 
@@ -2042,7 +2043,7 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
         rwlock_init(&filter->fo_sptlrpc_lock);
         sptlrpc_rule_set_init(&filter->fo_sptlrpc_rset);
 
-        filter->fo_fl_oss_capa = 0;
+        filter->fo_fl_oss_capa = 1;
         CFS_INIT_LIST_HEAD(&filter->fo_capa_keys);
         filter->fo_capa_hash = init_capa_hash();
         if (filter->fo_capa_hash == NULL)
@@ -2920,9 +2921,7 @@ static int filter_destroy_export(struct obd_export *exp)
                        exp->exp_obd->obd_name, exp->exp_client_uuid.uuid,
                        exp, exp->exp_filter_data.fed_pending);
 
-        /* Not ported yet the b1_6 quota functionality
-         * lquota_clearinfo(filter_quota_interface_ref, exp, exp->exp_obd);
-         */
+        lquota_clearinfo(filter_quota_interface_ref, exp, exp->exp_obd);
 
         target_destroy_export(exp);
         ldlm_destroy_export(exp);
@@ -3299,43 +3298,52 @@ out_unlock:
 int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
                    struct obd_trans_info *oti)
 {
+        struct obdo *oa = oinfo->oi_oa;
+        struct lustre_capa *capa = oinfo_capa(oinfo);
         struct ldlm_res_id res_id;
         struct filter_mod_data *fmd;
         struct lvfs_run_ctxt saved;
         struct filter_obd *filter;
         struct ldlm_resource *res;
         struct dentry *dentry;
+        __u64 opc = CAPA_OPC_META_WRITE;
         int rc;
         ENTRY;
 
-        osc_build_res_name(oinfo->oi_oa->o_id, oinfo->oi_oa->o_gr, &res_id);
-        rc = filter_auth_capa(exp, NULL, oinfo_mdsno(oinfo),
-                              oinfo_capa(oinfo), CAPA_OPC_META_WRITE);
+        if (oa->o_valid & OBD_FL_TRUNC)
+                opc |= CAPA_OPC_OSS_TRUNC;
+        rc = filter_auth_capa(exp, NULL, obdo_mdsno(oa), capa, opc);
         if (rc)
                 RETURN(rc);
 
+        if (oa->o_valid & (OBD_MD_FLUID | OBD_MD_FLGID)) {
+                rc = filter_capa_fixoa(exp, oa, obdo_mdsno(oa), capa);
+                if (rc)
+                        RETURN(rc);
+        }
+
+        osc_build_res_name(oa->o_id, oa->o_gr, &res_id);
         /* This would be very bad - accidentally truncating a file when
          * changing the time or similar - bug 12203. */
-        if (oinfo->oi_oa->o_valid & OBD_MD_FLSIZE &&
+        if (oa->o_valid & OBD_MD_FLSIZE &&
             oinfo->oi_policy.l_extent.end != OBD_OBJECT_EOF) {
                 static char mdsinum[48];
 
-                if (oinfo->oi_oa->o_valid & OBD_MD_FLFID)
+                if (oa->o_valid & OBD_MD_FLFID)
                         snprintf(mdsinum, sizeof(mdsinum) - 1,
-                                 " of inode "LPU64"/%u", oinfo->oi_oa->o_fid,
-                                 oinfo->oi_oa->o_generation);
+                                 " of inode "LPU64"/%u", oa->o_fid,
+                                 oa->o_generation);
                 else
                         mdsinum[0] = '\0';
 
                 CERROR("%s: setattr from %s trying to truncate objid "LPU64
                        " %s\n",
                        exp->exp_obd->obd_name, obd_export_nid2str(exp),
-                       oinfo->oi_oa->o_id, mdsinum);
+                       oa->o_id, mdsinum);
                 RETURN(-EPERM);
         }
 
-        dentry = __filter_oa2dentry(exp->exp_obd, oinfo->oi_oa,
-                                    __FUNCTION__, 1);
+        dentry = __filter_oa2dentry(exp->exp_obd, oa, __FUNCTION__, 1);
         if (IS_ERR(dentry))
                 RETURN(PTR_ERR(dentry));
 
@@ -3343,16 +3351,16 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
         lock_kernel();
 
-        if (oinfo->oi_oa->o_valid &
+        if (oa->o_valid &
             (OBD_MD_FLMTIME | OBD_MD_FLATIME | OBD_MD_FLCTIME)) {
-                fmd = filter_fmd_get(exp,oinfo->oi_oa->o_id,oinfo->oi_oa->o_gr);
+                fmd = filter_fmd_get(exp, oa->o_id, oa->o_gr);
                 if (fmd && fmd->fmd_mactime_xid < oti->oti_xid)
                         fmd->fmd_mactime_xid = oti->oti_xid;
                 filter_fmd_put(exp, fmd);
         }
 
         /* setting objects attributes (including owner/group) */
-        rc = filter_setattr_internal(exp, dentry, oinfo->oi_oa, oti);
+        rc = filter_setattr_internal(exp, dentry, oa, oti);
         if (rc)
                 GOTO(out_unlock, rc);
 
@@ -3366,10 +3374,10 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
                 ldlm_resource_putref(res);
         }
 
-        oinfo->oi_oa->o_valid = OBD_MD_FLID;
+        oa->o_valid = OBD_MD_FLID;
 
         /* Quota release need uid/gid info */
-        obdo_from_inode(oinfo->oi_oa, dentry->d_inode,
+        obdo_from_inode(oa, dentry->d_inode,
                         FILTER_VALID_FLAGS | OBD_MD_FLUID | OBD_MD_FLGID);
 
         EXIT;
@@ -3469,7 +3477,7 @@ static int filter_destroy_precreated(struct obd_export *exp, struct obdo *oa,
 
         for (id = last; id > oa->o_id; id--) {
                 doa.o_id = id;
-                rc = filter_destroy(exp, &doa, NULL, NULL, NULL);
+                rc = filter_destroy(exp, &doa, NULL, NULL, NULL, NULL);
                 if (rc && rc != -ENOENT) /* this is pretty fatal... */
                         CEMERG("error destroying precreate objid "LPU64": %d\n",
                                id, rc);
@@ -3888,7 +3896,7 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
 
 int filter_destroy(struct obd_export *exp, struct obdo *oa,
                    struct lov_stripe_md *md, struct obd_trans_info *oti,
-                   struct obd_export *md_exp)
+                   struct obd_export *md_exp, void *capa)
 {
         unsigned int qcids[MAXQUOTAS] = {0, 0};
         struct obd_device *obd;
@@ -3902,6 +3910,11 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
         ENTRY;
 
         LASSERT(oa->o_valid & OBD_MD_FLGROUP);
+
+        rc = filter_auth_capa(exp, NULL, obdo_mdsno(oa),
+                              (struct lustre_capa *)capa, CAPA_OPC_OSS_DESTROY);
+        if (rc)
+                RETURN(rc);
 
         obd = exp->exp_obd;
         filter = &obd->u.filter;
@@ -4047,9 +4060,8 @@ cleanup:
         qcids[GRPQUOTA] = oa->o_gid;
         rc2 = lquota_adjust(filter_quota_interface_ref, obd, qcids, NULL, rc,
                             FSFILT_OP_UNLINK);
-
         if (rc2)
-                CDEBUG(D_QUOTA, "filter adjust qunit! (rc:%d)\n", rc2);
+                CERROR("filter adjust qunit! (rc:%d)\n", rc2);
         return rc;
 }
 
@@ -4071,13 +4083,10 @@ static int filter_truncate(struct obd_export *exp, struct obd_info *oinfo,
                ", o_size = "LPD64"\n", oinfo->oi_oa->o_id,
                oinfo->oi_oa->o_valid, oinfo->oi_policy.l_extent.start);
 
-        rc = filter_auth_capa(exp, NULL, oinfo_mdsno(oinfo),
-                              oinfo_capa(oinfo), CAPA_OPC_OSS_TRUNC);
-        if (rc)
-                RETURN(rc);
-
         oinfo->oi_oa->o_size = oinfo->oi_policy.l_extent.start;
+        oinfo->oi_oa->o_valid |= OBD_FL_TRUNC;
         rc = filter_setattr(exp, oinfo, oti);
+        oinfo->oi_oa->o_valid &= ~OBD_FL_TRUNC;
         RETURN(rc);
 }
 
@@ -4246,6 +4255,7 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
 
         if (KEY_IS(KEY_REVIMP_UPD)) {
                 filter_revimp_update(exp);
+                lquota_clearinfo(filter_quota_interface_ref, exp, exp->exp_obd);
                 RETURN(0);
         }
 
@@ -4273,7 +4283,7 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
         rc = llog_receptor_accept(ctxt, exp->exp_imp_reverse);
         llog_ctxt_put(ctxt);
 
-        lquota_setinfo(filter_quota_interface_ref, exp, obd);
+        lquota_setinfo(filter_quota_interface_ref, obd, exp);
 
         RETURN(rc);
 }
@@ -4414,6 +4424,8 @@ static int filter_process_config(struct obd_device *obd, obd_count len,
 
                 rc = class_process_proc_param(PARAM_OST, lvars.obd_vars,
                                               lcfg, obd);
+        	if (rc > 0)
+        		rc = 0;
                 break;
         }
 

@@ -33,10 +33,12 @@
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
+
+
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
-#define DEBUG_SUBSYSTEM S_MDS
+#define DEBUG_SUBSYSTEM S_LQUOTA
 
 #ifdef __KERNEL__
 # include <linux/version.h>
@@ -62,6 +64,7 @@
 #include <lustre_quota.h>
 #include "quota_internal.h"
 
+#ifdef HAVE_QUOTA_SUPPORT
 #ifdef __KERNEL__
 static int target_quotacheck_callback(struct obd_export *exp,
                                       struct obd_quotactl *oqctl)
@@ -71,7 +74,7 @@ static int target_quotacheck_callback(struct obd_export *exp,
         int                    rc;
         ENTRY;
 
-        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp), &RQF_QC_CALLBACK,
+        req = ptlrpc_request_alloc_pack(exp->exp_imp_reverse, &RQF_QC_CALLBACK,
                                         LUSTRE_OBD_VERSION, OBD_QC_CALLBACK);
         if (req == NULL)
                 RETURN(-ENOMEM);
@@ -99,7 +102,7 @@ static int target_quotacheck_thread(void *data)
         ptlrpc_daemonize("quotacheck");
 
         exp = qta->qta_exp;
-        obd = exp->exp_obd;
+        obd = qta->qta_obd;
         oqctl = &qta->qta_oqctl;
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
@@ -118,9 +121,9 @@ static int target_quotacheck_thread(void *data)
         return rc;
 }
 
-int target_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl)
+int target_quota_check(struct obd_device *obd, struct obd_export *exp,
+                       struct obd_quotactl *oqctl)
 {
-        struct obd_device *obd = exp->exp_obd;
         struct obd_device_target *obt = &obd->u.obt;
         struct quotacheck_thread_args *qta;
         int rc = 0;
@@ -136,7 +139,9 @@ int target_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl)
                 GOTO(out, rc = -ENOMEM);
 
         qta->qta_exp = exp;
+        qta->qta_obd = obd;
         qta->qta_oqctl = *oqctl;
+        qta->qta_oqctl.qc_id = obt->obt_qfmt; /* override qfmt version */
         qta->qta_sb = obt->obt_sb;
         qta->qta_sem = &obt->obt_quotachecking;
 
@@ -166,27 +171,31 @@ out:
 }
 
 #endif /* __KERNEL__ */
+#endif /* HAVE_QUOTA_SUPPORT */
 
-int client_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl)
+int client_quota_check(struct obd_device *unused, struct obd_export *exp,
+                       struct obd_quotactl *oqctl)
 {
-        struct client_obd     *cli = &exp->exp_obd->u.cli;
-        struct ptlrpc_request *req;
-        struct obd_quotactl   *body;
-        int                    ver, opc, rc;
+        struct client_obd       *cli = &exp->exp_obd->u.cli;
+        struct ptlrpc_request   *req;
+        struct obd_quotactl     *body;
+        const struct req_format *rf;
+        int                      ver, opc, rc;
         ENTRY;
 
         if (!strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_MDC_NAME)) {
+                rf  = &RQF_MDS_QUOTACHECK;
                 ver = LUSTRE_MDS_VERSION;
                 opc = MDS_QUOTACHECK;
         } else if (!strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_OSC_NAME)) {
+                rf  = &RQF_OST_QUOTACHECK;
                 ver = LUSTRE_OST_VERSION;
                 opc = OST_QUOTACHECK;
         } else {
                 RETURN(-EINVAL);
         }
 
-        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
-                                        &RQF_MDS_QUOTACHECK, ver, opc);
+        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp), rf, ver, opc);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
@@ -220,18 +229,44 @@ int client_quota_poll_check(struct obd_export *exp, struct if_quotacheck *qchk)
         qchk->obd_uuid = cli->cl_target_uuid;
         /* FIXME change strncmp to strcmp and save the strlen op */
         if (strncmp(exp->exp_obd->obd_type->typ_name, LUSTRE_OSC_NAME,
-            strlen(LUSTRE_OSC_NAME)))
+                    strlen(LUSTRE_OSC_NAME)) == 0)
                 memcpy(qchk->obd_type, LUSTRE_OST_NAME,
                        strlen(LUSTRE_OST_NAME));
         else if (strncmp(exp->exp_obd->obd_type->typ_name, LUSTRE_MDC_NAME,
-                 strlen(LUSTRE_MDC_NAME)))
+                         strlen(LUSTRE_MDC_NAME)) == 0)
                 memcpy(qchk->obd_type, LUSTRE_MDS_NAME,
                        strlen(LUSTRE_MDS_NAME));
 
         RETURN(rc);
 }
 
-int lov_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl)
+int lmv_quota_check(struct obd_device *unused, struct obd_export *exp,
+                    struct obd_quotactl *oqctl)
+{
+        struct obd_device *obd = class_exp2obd(exp);
+        struct lmv_obd *lmv = &obd->u.lmv;
+        struct lmv_tgt_desc *tgt;
+        int i, rc = 0;
+        ENTRY;
+
+        for (i = 0, tgt = lmv->tgts; i < lmv->desc.ld_tgt_count; i++, tgt++) {
+                int err;
+
+                if (!tgt->ltd_active) {
+                        CERROR("lmv idx %d inactive\n", i);
+                        RETURN(-EIO);
+                }
+
+                err = obd_quotacheck(tgt->ltd_exp, oqctl);
+                if (err && tgt->ltd_active && !rc)
+                        rc = err;
+        }
+
+        RETURN(rc);
+}
+
+int lov_quota_check(struct obd_device *unused, struct obd_export *exp,
+                    struct obd_quotactl *oqctl)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct lov_obd *lov = &obd->u.lov;

@@ -80,7 +80,8 @@ static int mdt_create_pack_capa(struct mdt_thread_info *info, int rc,
         if (repbody->valid & OBD_MD_FLMDSCAPA)
                 RETURN(rc);
 
-        if (rc == 0 && info->mti_mdt->mdt_opts.mo_mds_capa) {
+        if (rc == 0 && info->mti_mdt->mdt_opts.mo_mds_capa &&
+            info->mti_exp->exp_connect_flags & OBD_CONNECT_MDS_CAPA) {
                 struct lustre_capa *capa;
 
                 capa = req_capsule_server_get(info->mti_pill, &RMF_CAPA1);
@@ -291,7 +292,6 @@ out_unlock:
 static int mdt_reint_setattr(struct mdt_thread_info *info,
                              struct mdt_lock_handle *lhc)
 {
-        struct mdt_device       *mdt = info->mti_mdt;
         struct md_attr          *ma = &info->mti_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
         struct ptlrpc_request   *req = mdt_info_req(info);
@@ -387,7 +387,8 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 
         mdt_pack_attr2body(info, repbody, &ma->ma_attr, mdt_object_fid(mo));
 
-        if (mdt->mdt_opts.mo_oss_capa &&
+        if (info->mti_mdt->mdt_opts.mo_oss_capa &&
+            info->mti_exp->exp_connect_flags & OBD_CONNECT_OSS_CAPA &&
             S_ISREG(lu_object_attr(&mo->mot_obj.mo_lu)) &&
             (ma->ma_attr.la_valid & LA_SIZE)) {
                 struct lustre_capa *capa;

@@ -212,8 +212,8 @@ union ptlrpc_async_args {
          * big enough.  For _tons_ of context, OBD_ALLOC a struct and store
          * a pointer to it here.  The pointer_arg ensures this struct is at
          * least big enough for that. */
-        void      *pointer_arg[9];
-        __u64      space[5];
+        void      *pointer_arg[11];
+        __u64      space[6];
 };
 
 struct ptlrpc_request_set;
@@ -625,13 +625,23 @@ struct ptlrpc_bulk_desc {
 };
 
 struct ptlrpc_thread {
-
-        struct list_head t_link; /* active threads in svc->srv_threads */
-
-        void *t_data;            /* thread-private data (preallocated memory) */
+        /**
+         * active threads in svc->srv_threads
+         */
+        struct list_head t_link;
+        /**
+         * thread-private data (preallocated memory)
+         */
+        void *t_data;
         __u32 t_flags;
-
-        unsigned int t_id; /* service thread index, from ptlrpc_start_threads */
+        /**
+         * service thread index, from ptlrpc_start_threads
+         */
+        unsigned int t_id;
+        /**
+         * put watchdog in the structure per thread b=14840
+         */
+        struct lc_watchdog *t_watchdog;
         cfs_waitq_t t_ctl_waitq;
         struct lu_env *t_env;
 };

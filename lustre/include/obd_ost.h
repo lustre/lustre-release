@@ -54,6 +54,7 @@ struct osc_brw_async_args {
         struct brw_page  **aa_ppga;
         struct client_obd *aa_cli;
         struct list_head   aa_oaps;
+        struct obd_capa   *aa_ocapa;
         struct cl_req     *aa_clerq;
 };
 

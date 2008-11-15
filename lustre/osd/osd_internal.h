@@ -66,6 +66,16 @@
 
 struct inode;
 
+#define OSD_COUNTERS (0)
+
+#ifdef HAVE_QUOTA_SUPPORT
+struct osd_ctxt {
+        __u32 oc_uid;
+        __u32 oc_gid;
+        __u32 oc_cap;
+};
+#endif
+
 /*
  * osd device.
  */
@@ -145,6 +155,9 @@ struct osd_thread_info {
         int                    oti_r_locks;
         int                    oti_w_locks;
         int                    oti_txns;
+#ifdef HAVE_QUOTA_SUPPORT
+        struct osd_ctxt        oti_ctxt;
+#endif
 };
 
 #ifdef LPROCFS

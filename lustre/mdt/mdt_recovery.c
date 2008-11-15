@@ -101,7 +101,7 @@ int mdt_record_write(const struct lu_env *env,
 
         LASSERTF(dt != NULL, "dt is NULL when we want to write record\n");
         LASSERT(th != NULL);
-        rc = dt->do_body_ops->dbo_write(env, dt, buf, pos, th, BYPASS_CAPA);
+        rc = dt->do_body_ops->dbo_write(env, dt, buf, pos, th, BYPASS_CAPA, 1);
         if (rc == buf->lb_len)
                 rc = 0;
         else if (rc >= 0)
@@ -329,7 +329,7 @@ static int mdt_clients_data_init(const struct lu_env *env,
 {
         struct lr_server_data  *lsd = &mdt->mdt_lsd;
         struct lsd_client_data *lcd = NULL;
-        struct obd_device      *obd = mdt->mdt_md_dev.md_lu_dev.ld_obd;
+        struct obd_device      *obd = mdt2obd_dev(mdt);
         loff_t off;
         int cl_idx;
         int rc = 0;
@@ -423,7 +423,7 @@ static int mdt_server_data_init(const struct lu_env *env,
 {
         struct lr_server_data  *lsd = &mdt->mdt_lsd;
         struct lsd_client_data *lcd = NULL;
-        struct obd_device      *obd = mdt->mdt_md_dev.md_lu_dev.ld_obd;
+        struct obd_device      *obd = mdt2obd_dev(mdt);
         struct mdt_thread_info *mti;
         struct dt_object       *obj;
         struct lu_attr         *la;
@@ -561,7 +561,7 @@ static int mdt_server_data_update(const struct lu_env *env,
 void mdt_cb_new_client(const struct mdt_device *mdt, __u64 transno,
                                   void *data, int err)
 {
-        struct obd_device *obd = mdt->mdt_md_dev.md_lu_dev.ld_obd;
+        struct obd_device *obd = mdt2obd_dev(mdt);
 
         target_client_add_cb(obd, transno, data, err);
 }
@@ -573,7 +573,7 @@ int mdt_client_new(const struct lu_env *env, struct mdt_device *mdt)
         struct mdt_export_data *med;
         struct lsd_client_data *lcd;
         struct lr_server_data  *lsd = &mdt->mdt_lsd;
-        struct obd_device *obd = mdt->mdt_md_dev.md_lu_dev.ld_obd;
+        struct obd_device *obd = mdt2obd_dev(mdt);
         struct thandle *th;
         loff_t off;
         int rc;
@@ -649,7 +649,7 @@ int mdt_client_add(const struct lu_env *env,
         struct mdt_thread_info *mti;
         struct mdt_export_data *med;
         unsigned long *bitmap = mdt->mdt_client_bitmap;
-        struct obd_device *obd = mdt->mdt_md_dev.md_lu_dev.ld_obd;
+        struct obd_device *obd = mdt2obd_dev(mdt);
         struct lr_server_data *lsd = &mdt->mdt_lsd;
         int rc = 0;
         ENTRY;
@@ -691,7 +691,7 @@ int mdt_client_del(const struct lu_env *env, struct mdt_device *mdt)
         struct mdt_thread_info *mti;
         struct mdt_export_data *med;
         struct lsd_client_data *lcd;
-        struct obd_device      *obd = mdt->mdt_md_dev.md_lu_dev.ld_obd;
+        struct obd_device      *obd = mdt2obd_dev(mdt);
         struct thandle *th;
         loff_t off;
         int rc = 0;
@@ -918,7 +918,7 @@ static int mdt_txn_commit_cb(const struct lu_env *env,
                              struct thandle *txn, void *cookie)
 {
         struct mdt_device *mdt = cookie;
-        struct obd_device *obd = md2lu_dev(&mdt->mdt_md_dev)->ld_obd;
+        struct obd_device *obd = mdt2obd_dev(mdt);
         struct mdt_txn_info *txi;
         int i;
 

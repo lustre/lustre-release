@@ -246,7 +246,8 @@ void filter_free_iobuf(struct filter_iobuf *iobuf)
 void filter_iobuf_put(struct filter_obd *filter, struct filter_iobuf *iobuf,
                       struct obd_trans_info *oti)
 {
-        int thread_id = oti ? oti->oti_thread_id : -1;
+        int thread_id = (oti && oti->oti_thread) ?
+                        oti->oti_thread->t_id : -1;
 
         if (unlikely(thread_id < 0)) {
                 filter_free_iobuf(iobuf);
@@ -556,7 +557,8 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         struct obd_device *obd = exp->exp_obd;
         struct filter_obd *fo = &obd->u.filter;
         void *wait_handle;
-        int   total_size = 0, rc2;
+        int total_size = 0;
+        int rec_pending = 0;
         unsigned int qcids[MAXQUOTAS] = {0, 0};
         ENTRY;
 
@@ -567,21 +569,11 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         if (rc != 0)
                 GOTO(cleanup, rc);
 
-        /* Unfortunately, if quota master is too busy to handle the
-         * pre-dqacq in time and quota hash on ost is used up, we
-         * have to wait for the completion of in flight dqacq/dqrel,
-         * then try again */
-        if ((rc2 = lquota_chkquota(filter_quota_interface_ref, obd, oa->o_uid,
-                                   oa->o_gid, niocount)) == QUOTA_RET_ACQUOTA) {
-                OBD_FAIL_TIMEOUT(OBD_FAIL_OST_HOLD_WRITE_RPC, 90);
-                lquota_acquire(filter_quota_interface_ref, obd, oa->o_uid,
-                               oa->o_gid);
-        }
-
-        if (rc2 < 0) {
-                rc = rc2;
-                GOTO(cleanup, rc);
-        }
+        /* we try to get enough quota to write here, and let ldiskfs
+         * decide if it is out of quota or not b=14783 */
+        lquota_chkquota(filter_quota_interface_ref, obd, oa->o_uid,
+                        oa->o_gid, niocount, &rec_pending, oti,
+                        LQUOTA_FLAGS_BLK);
 
         iobuf = filter_iobuf_get(&obd->u.filter, oti);
         if (IS_ERR(iobuf))
@@ -595,9 +587,10 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         iobuf->dr_ignore_quota = 0;
         for (i = 0, lnb = res; i < niocount; i++, lnb++) {
                 loff_t this_size;
+                __u32 flags = lnb->flags;
 
                 /* If overwriting an existing block, we don't need a grant */
-                if (!(lnb->flags & OBD_BRW_GRANTED) && lnb->rc == -ENOSPC &&
+                if (!(flags & OBD_BRW_GRANTED) && lnb->rc == -ENOSPC &&
                     filter_range_is_mapped(inode, lnb->offset, lnb->len))
                         lnb->rc = 0;
 
@@ -627,10 +620,15 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                 if (this_size > iattr.ia_size)
                         iattr.ia_size = this_size;
 
-                /* if one page is a write-back page from client cache, or it's
-                 * written by root, then mark the whole io request as ignore
-                 * quota request */
-                if (lnb->flags & (OBD_BRW_FROM_GRANT | OBD_BRW_NOQUOTA))
+                /* if one page is a write-back page from client cache and
+                 * not from direct_io, or it's written by root, then mark
+                 * the whole io request as ignore quota request, remote
+                 * client can not break through quota. */
+                if (exp_connect_rmtclient(exp))
+                        flags &= ~OBD_BRW_NOQUOTA;
+                if ((flags & OBD_BRW_NOQUOTA) ||
+                    (flags & (OBD_BRW_FROM_GRANT | OBD_BRW_SYNC)) ==
+                     OBD_BRW_FROM_GRANT)
                         iobuf->dr_ignore_quota = 1;
         }
 
@@ -721,6 +719,10 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         fsfilt_check_slow(obd, now, "commitrw commit");
 
 cleanup:
+        if (rec_pending)
+                lquota_pending_commit(filter_quota_interface_ref, obd, oa->o_uid,
+                                      oa->o_gid, niocount, 1);
+
         filter_grant_commit(exp, niocount, res);
 
         switch (cleanup_phase) {

@@ -150,7 +150,7 @@ int filter_common_setup(struct obd_device *, struct lustre_cfg *lcfg,
                         void *option);
 int filter_destroy(struct obd_export *exp, struct obdo *oa,
                    struct lov_stripe_md *md, struct obd_trans_info *,
-                   struct obd_export *);
+                   struct obd_export *, void *);
 int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                             struct obdo *oa, struct obd_trans_info *oti);
 int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
@@ -244,6 +244,8 @@ static inline __u64 obdo_mdsno(struct obdo *oa)
 int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *key);
 int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
                      struct lustre_capa *capa, __u64 opc);
+int filter_capa_fixoa(struct obd_export *exp, struct obdo *oa, __u64 mdsid,
+                      struct lustre_capa *capa);
 void filter_free_capa_keys(struct filter_obd *filter);
 
 void blacklist_add(uid_t uid);

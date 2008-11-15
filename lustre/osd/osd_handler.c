@@ -141,7 +141,7 @@ static int   osd_fid_lookup    (const struct lu_env *env,
                                 const struct lu_fid *fid);
 static void  osd_inode_getattr (const struct lu_env *env,
                                 struct inode *inode, struct lu_attr *attr);
-static void  osd_inode_setattr (const struct lu_env *env,
+static int   osd_inode_setattr (const struct lu_env *env,
                                 struct inode *inode, const struct lu_attr *attr);
 static int   osd_param_is_sane (const struct osd_device *dev,
                                 const struct txn_param *param);
@@ -154,7 +154,8 @@ static int   osd_index_insert  (const struct lu_env *env,
                                 const struct dt_rec *rec,
                                 const struct dt_key *key,
                                 struct thandle *handle,
-                                struct lustre_capa *capa);
+                                struct lustre_capa *capa,
+                                int ingore_quota);
 static int   osd_index_delete  (const struct lu_env *env,
                                 struct dt_object *dt, const struct dt_key *key,
                                 struct thandle *handle,
@@ -235,6 +236,31 @@ struct osd_thandle {
         struct lu_ref_link     *ot_dev_link;
 
 };
+
+#ifdef HAVE_QUOTA_SUPPORT
+static inline void
+osd_push_ctxt(const struct lu_env *env, struct osd_ctxt *save)
+{
+        struct md_ucred    *uc = md_ucred(env);
+
+        LASSERT(uc != NULL);
+
+        save->oc_uid = current->fsuid;
+        save->oc_gid = current->fsgid;
+        save->oc_cap = current->cap_effective;
+        current->fsuid         = uc->mu_fsuid;
+        current->fsgid         = uc->mu_fsgid;
+        current->cap_effective = uc->mu_cap;
+}
+
+static inline void
+osd_pop_ctxt(struct osd_ctxt *save)
+{
+        current->fsuid         = save->oc_uid;
+        current->fsgid         = save->oc_gid;
+        current->cap_effective = save->oc_cap;
+}
+#endif
 
 /*
  * Invariants, assertions.
@@ -758,46 +784,161 @@ static int osd_init_capa_ctxt(const struct lu_env *env, struct dt_device *d,
         RETURN(0);
 }
 
-/* Note: we did not count into QUOTA here, If we mount with --data_journal
- * we may need more*/
-static const int osd_dto_credits[DTO_NR] = {
-        /*
-         * Insert/Delete. IAM EXT3_INDEX_EXTRA_TRANS_BLOCKS(8) +
-         * EXT3_SINGLEDATA_TRANS_BLOCKS 8 XXX Note: maybe iam need more,since
-         * iam have more level than Ext3 htree
+/**
+ * Concurrency: serialization provided by callers.
+ */
+static void osd_init_quota_ctxt(const struct lu_env *env, struct dt_device *d,
+                               struct dt_quota_ctxt *ctxt, void *data)
+{
+        struct obd_device *obd = (void *)ctxt;
+        struct vfsmount *mnt = (struct vfsmount *)data;
+        ENTRY;
+
+        obd->u.obt.obt_sb = mnt->mnt_root->d_inode->i_sb;
+        OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
+        obd->obd_lvfs_ctxt.pwdmnt = mnt;
+        obd->obd_lvfs_ctxt.pwd = mnt->mnt_root;
+        obd->obd_lvfs_ctxt.fs = get_ds();
+
+        EXIT;
+}
+
+/**
+ * Note: we do not count into QUOTA here.
+ * If we mount with --data_journal we may need more.
+ */
+static const int osd_dto_credits_noquota[DTO_NR] = {
+        /**
+         * Insert/Delete.
+         * INDEX_EXTRA_TRANS_BLOCKS(8) +
+         * SINGLEDATA_TRANS_BLOCKS(8)
+         * XXX Note: maybe iam need more, since iam have more level than
+         *           EXT3 htree.
          */
         [DTO_INDEX_INSERT]  = 16,
         [DTO_INDEX_DELETE]  = 16,
+        /**
+         * Unused now
+         */
+        [DTO_IDNEX_UPDATE]  = 16,
+        /**
+         * Create a object. The same as create object in EXT3.
+         * DATA_TRANS_BLOCKS(14) +
+         * INDEX_EXTRA_BLOCKS(8) +
+         * 3(inode bits, groups, GDT)
+         */
+        [DTO_OBJECT_CREATE] = 25,
+        /**
+         * Unused now
+         */
+        [DTO_OBJECT_DELETE] = 25,
+        /**
+         * Attr set credits.
+         * 3(inode bits, group, GDT)
+         */
+        [DTO_ATTR_SET_BASE] = 3,
+        /**
+         * Xattr set. The same as xattr of EXT3.
+         * DATA_TRANS_BLOCKS(14)
+         * XXX Note: in original MDS implmentation INDEX_EXTRA_TRANS_BLOCKS are
+         *           also counted in. Do not know why?
+         */
+        [DTO_XATTR_SET]     = 14,
+        [DTO_LOG_REC]       = 14,
+        /**
+         * creadits for inode change during write.
+         */
+        [DTO_WRITE_BASE]    = 3,
+        /**
+         * credits for single block write.
+         */
+        [DTO_WRITE_BLOCK]   = 14,
+        /**
+         * Attr set credits for chown.
+         * 3 (inode bit, group, GDT)
+         */
+        [DTO_ATTR_SET_CHOWN]= 3
+};
+
+/**
+ * Note: we count into QUOTA here.
+ * If we mount with --data_journal we may need more.
+ */
+static const int osd_dto_credits_quota[DTO_NR] = {
+        /**
+         * INDEX_EXTRA_TRANS_BLOCKS(8) +
+         * SINGLEDATA_TRANS_BLOCKS(8) +
+         * 2 * QUOTA_TRANS_BLOCKS(2)
+         */
+        [DTO_INDEX_INSERT]  = 20,
+        /**
+         * INDEX_EXTRA_TRANS_BLOCKS(8) +
+         * SINGLEDATA_TRANS_BLOCKS(8) +
+         * 2 * QUOTA_TRANS_BLOCKS(2)
+         */
+        [DTO_INDEX_DELETE]  = 20,
+        /**
+         * Unused now.
+         */ 
         [DTO_IDNEX_UPDATE]  = 16,
         /*
-         * Create a object. Same as create object in Ext3 filesystem, but did
-         * not count QUOTA i EXT3_DATA_TRANS_BLOCKS(12) +
-         * INDEX_EXTRA_BLOCKS(8) + 3(inode bits,groups, GDT)
+         * Create a object. Same as create object in EXT3 filesystem.
+         * DATA_TRANS_BLOCKS(16) +
+         * INDEX_EXTRA_BLOCKS(8) +
+         * 3(inode bits, groups, GDT) +
+         * 2 * QUOTA_INIT_BLOCKS(25)
          */
-        [DTO_OBJECT_CREATE] = 23,
-        [DTO_OBJECT_DELETE] = 23,
+        [DTO_OBJECT_CREATE] = 77,
         /*
-         * Attr set credits 3 inode, group, GDT
+         * Unused now.
+         * DATA_TRANS_BLOCKS(16) +
+         * INDEX_EXTRA_BLOCKS(8) +
+         * 3(inode bits, groups, GDT) +
+         * QUOTA(?)
+         */ 
+        [DTO_OBJECT_DELETE] = 27,
+        /**
+         * Attr set credits.
+         * 3 (inode bit, group, GDT) +
          */
-        [DTO_ATTR_SET]      = 3,
-        /*
-         * XATTR_SET. SAME AS XATTR of EXT3 EXT3_DATA_TRANS_BLOCKS XXX Note:
-         * in original MDS implmentation EXT3_INDEX_EXTRA_TRANS_BLOCKS are
-         * also counted in. Do not know why?
+        [DTO_ATTR_SET_BASE] = 3,
+        /**
+         * Xattr set. The same as xattr of EXT3.
+         * DATA_TRANS_BLOCKS(16)
+         * XXX Note: in original MDS implmentation INDEX_EXTRA_TRANS_BLOCKS are
+         *           also counted in. Do not know why?
          */
         [DTO_XATTR_SET]     = 16,
         [DTO_LOG_REC]       = 16,
-        /* creadits for inode change during write */
+        /**
+         * creadits for inode change during write.
+         */
         [DTO_WRITE_BASE]    = 3,
-        /* credits for single block write */
-        [DTO_WRITE_BLOCK]   = 12
+        /**
+         * credits for single block write.
+         */
+        [DTO_WRITE_BLOCK]   = 16,
+        /**
+         * Attr set credits for chown.
+         * 3 (inode bit, group, GDT) +
+         * 2 * QUOTA_INIT_BLOCKS(25) +
+         * 2 * QUOTA_DEL_BLOCKS(9)
+         */
+        [DTO_ATTR_SET_CHOWN]= 71
 };
 
 static int osd_credit_get(const struct lu_env *env, struct dt_device *d,
                           enum dt_txn_op op)
 {
-        LASSERT(0 <= op && op < ARRAY_SIZE(osd_dto_credits));
-        return osd_dto_credits[op];
+        LASSERT(ARRAY_SIZE(osd_dto_credits_noquota) ==
+                ARRAY_SIZE(osd_dto_credits_quota));
+        LASSERT(0 <= op && op < ARRAY_SIZE(osd_dto_credits_noquota));
+#ifdef HAVE_QUOTA_SUPPORT
+        if (test_opt(osd_sb(osd_dt_dev(d)), QUOTA))
+                return osd_dto_credits_quota[op];
+        else
+#endif
+                return osd_dto_credits_noquota[op];
 }
 
 static const struct dt_device_operations osd_dt_ops = {
@@ -811,6 +952,7 @@ static const struct dt_device_operations osd_dt_ops = {
         .dt_commit_async   = osd_commit_async,
         .dt_credit_get     = osd_credit_get,
         .dt_init_capa_ctxt = osd_init_capa_ctxt,
+        .dt_init_quota_ctxt= osd_init_quota_ctxt,
 };
 
 static void osd_object_read_lock(const struct lu_env *env,
@@ -878,6 +1020,7 @@ static int capa_is_sane(const struct lu_env *env,
                         struct lustre_capa_key *keys)
 {
         struct osd_thread_info *oti = osd_oti_get(env);
+        struct lustre_capa *tcapa = &oti->oti_capa;
         struct obd_capa *oc;
         int i, rc = 0;
         ENTRY;
@@ -890,6 +1033,11 @@ static int capa_is_sane(const struct lu_env *env,
                 }
                 capa_put(oc);
                 RETURN(rc);
+        }
+
+        if (capa_is_expired_sec(capa)) {
+                DEBUG_CAPA(D_ERROR, capa, "expired");
+                RETURN(-ESTALE);
         }
 
         spin_lock(&capa_lock);
@@ -906,11 +1054,11 @@ static int capa_is_sane(const struct lu_env *env,
                 RETURN(-ESTALE);
         }
 
-        rc = capa_hmac(oti->oti_capa.lc_hmac, capa, oti->oti_capa_key.lk_key);
+        rc = capa_hmac(tcapa->lc_hmac, capa, oti->oti_capa_key.lk_key);
         if (rc)
                 RETURN(rc);
-        if (memcmp(oti->oti_capa.lc_hmac, capa->lc_hmac, sizeof(capa->lc_hmac)))
-        {
+
+        if (memcmp(tcapa->lc_hmac, capa->lc_hmac, sizeof(capa->lc_hmac))) {
                 DEBUG_CAPA(D_ERROR, capa, "HMAC mismatch");
                 RETURN(-EACCES);
         }
@@ -926,12 +1074,20 @@ static int osd_object_auth(const struct lu_env *env, struct dt_object *dt,
 {
         const struct lu_fid *fid = lu_object_fid(&dt->do_lu);
         struct osd_device *dev = osd_dev(dt->do_lu.lo_dev);
+        struct md_capainfo *ci;
         int rc;
 
         if (!dev->od_fl_capa)
                 return 0;
 
         if (capa == BYPASS_CAPA)
+                return 0;
+
+        ci = md_capainfo(env);
+        if (unlikely(!ci))
+                return 0;
+
+        if (ci->mc_auth == LC_ID_NONE)
                 return 0;
 
         if (!capa) {
@@ -984,6 +1140,7 @@ static int osd_attr_set(const struct lu_env *env,
                         struct lustre_capa *capa)
 {
         struct osd_object *obj = osd_dt_obj(dt);
+        int rc;
 
         LASSERT(handle != NULL);
         LASSERT(dt_object_exists(dt));
@@ -993,11 +1150,12 @@ static int osd_attr_set(const struct lu_env *env,
                 return -EACCES;
 
         spin_lock(&obj->oo_guard);
-        osd_inode_setattr(env, obj->oo_inode, attr);
+        rc = osd_inode_setattr(env, obj->oo_inode, attr);
         spin_unlock(&obj->oo_guard);
 
-        mark_inode_dirty(obj->oo_inode);
-        return 0;
+        if (!rc)
+                mark_inode_dirty(obj->oo_inode);
+        return rc;
 }
 
 static struct timespec *osd_inode_time(const struct lu_env *env,
@@ -1012,14 +1170,32 @@ static struct timespec *osd_inode_time(const struct lu_env *env,
         return t;
 }
 
-static void osd_inode_setattr(const struct lu_env *env,
-                              struct inode *inode, const struct lu_attr *attr)
+static int osd_inode_setattr(const struct lu_env *env,
+                             struct inode *inode, const struct lu_attr *attr)
 {
         __u64 bits;
 
         bits = attr->la_valid;
 
         LASSERT(!(bits & LA_TYPE)); /* Huh? You want too much. */
+
+#ifdef HAVE_QUOTA_SUPPORT
+        if ((bits & LA_UID && attr->la_uid != inode->i_uid) ||
+            (bits & LA_GID && attr->la_gid != inode->i_gid)) {
+                struct osd_ctxt *save = &osd_oti_get(env)->oti_ctxt;
+                struct iattr iattr;
+                int rc;
+
+                iattr.ia_valid = bits & (LA_UID | LA_GID);
+                iattr.ia_uid = attr->la_uid;
+                iattr.ia_gid = attr->la_gid;
+                osd_push_ctxt(env, save);
+                rc = DQUOT_TRANSFER(inode, &iattr) ? -EDQUOT : 0;
+                osd_pop_ctxt(save);
+                if (rc != 0)
+                        return rc;
+        }
+#endif
 
         if (bits & LA_ATIME)
                 inode->i_atime  = *osd_inode_time(env, inode, attr->la_atime);
@@ -1031,8 +1207,14 @@ static void osd_inode_setattr(const struct lu_env *env,
                 LDISKFS_I(inode)->i_disksize = attr->la_size;
                 i_size_write(inode, attr->la_size);
         }
+# if 0
+        /*
+         * OSD should not change "i_blocks" which is used by quota.
+         * "i_blocks" should be changed by ldiskfs only.
+         * Disable this assignment until SOM to fix some EA field. */
         if (bits & LA_BLOCKS)
                 inode->i_blocks = attr->la_blocks;
+#endif
         if (bits & LA_MODE)
                 inode->i_mode   = (inode->i_mode & S_IFMT) |
                         (attr->la_mode & ~S_IFMT);
@@ -1051,6 +1233,7 @@ static void osd_inode_setattr(const struct lu_env *env,
                 li->i_flags = (li->i_flags & ~LDISKFS_FL_USER_MODIFIABLE) |
                         (attr->la_flags & LDISKFS_FL_USER_MODIFIABLE);
         }
+        return 0;
 }
 
 /*
@@ -1087,6 +1270,9 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
         struct osd_thandle *oth;
         struct inode       *parent;
         struct inode       *inode;
+#ifdef HAVE_QUOTA_SUPPORT
+        struct osd_ctxt    *save = &info->oti_ctxt;
+#endif
 
         LINVRNT(osd_invariant(obj));
         LASSERT(obj->oo_inode == NULL);
@@ -1101,7 +1287,13 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
                 parent = osd->od_obj_area->d_inode;
         LASSERT(parent->i_op != NULL);
 
+#ifdef HAVE_QUOTA_SUPPORT
+        osd_push_ctxt(info->oti_env, save);
+#endif
         inode = ldiskfs_create_inode(oth->ot_handle, parent, mode);
+#ifdef HAVE_QUOTA_SUPPORT
+        osd_pop_ctxt(save);
+#endif
         if (!IS_ERR(inode)) {
                 obj->oo_inode = inode;
                 result = 0;
@@ -1271,13 +1463,16 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
         }
         if (result == 0) {
                 struct osd_inode_id *id = &info->oti_id;
+                struct md_ucred     *uc = md_ucred(env);
 
                 LASSERT(obj->oo_inode != NULL);
+                LASSERT(uc != NULL);
 
                 id->oii_ino = obj->oo_inode->i_ino;
                 id->oii_gen = obj->oo_inode->i_generation;
 
-                result = osd_oi_insert(info, &osd->od_oi, fid, id, th);
+                result = osd_oi_insert(info, &osd->od_oi, fid, id, th,
+                                       uc->mu_cap & CFS_CAP_SYS_RESOURCE_MASK);
         }
 
         LASSERT(ergo(result == 0, dt_object_exists(dt)));
@@ -1471,6 +1666,7 @@ static struct obd_capa *osd_capa_get(const struct lu_env *env,
         struct lustre_capa_key *key = &info->oti_capa_key;
         struct lustre_capa *capa = &info->oti_capa;
         struct obd_capa *oc;
+        struct md_capainfo *ci;
         int rc;
         ENTRY;
 
@@ -1484,10 +1680,41 @@ static struct obd_capa *osd_capa_get(const struct lu_env *env,
         if (old && osd_object_auth(env, dt, old, opc))
                 RETURN(ERR_PTR(-EACCES));
 
+        ci = md_capainfo(env);
+        if (unlikely(!ci))
+                RETURN(ERR_PTR(-ENOENT));
+
+        switch (ci->mc_auth) {
+        case LC_ID_NONE:
+                RETURN(NULL);
+        case LC_ID_PLAIN:
+                capa->lc_uid = obj->oo_inode->i_uid;
+                capa->lc_gid = obj->oo_inode->i_gid;
+                capa->lc_flags = LC_ID_PLAIN;
+                break;
+        case LC_ID_CONVERT: {
+                __u32 d[4], s[4];
+
+                s[0] = obj->oo_inode->i_uid;
+                get_random_bytes(&(s[1]), sizeof(__u32));
+                s[2] = obj->oo_inode->i_gid;
+                get_random_bytes(&(s[3]), sizeof(__u32));
+                rc = capa_encrypt_id(d, s, key->lk_key, CAPA_HMAC_KEY_MAX_LEN);
+                if (unlikely(rc))
+                        RETURN(ERR_PTR(rc));
+
+                capa->lc_uid   = ((__u64)d[1] << 32) | d[0];
+                capa->lc_gid   = ((__u64)d[3] << 32) | d[2];
+                capa->lc_flags = LC_ID_CONVERT;
+                break;
+        }
+        default:
+                RETURN(ERR_PTR(-EINVAL));
+        }
+
         capa->lc_fid = *fid;
         capa->lc_opc = opc;
-        capa->lc_uid = 0;
-        capa->lc_flags = dev->od_capa_alg << 24;
+        capa->lc_flags |= dev->od_capa_alg << 24;
         capa->lc_timeout = dev->od_capa_timeout;
         capa->lc_expiry = 0;
 
@@ -1587,11 +1814,15 @@ static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
 
 static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
                          const struct lu_buf *buf, loff_t *pos,
-                         struct thandle *handle, struct lustre_capa *capa)
+                         struct thandle *handle, struct lustre_capa *capa,
+                         int ignore_quota)
 {
         struct inode       *inode = osd_dt_obj(dt)->oo_inode;
         struct osd_thandle *oh;
         ssize_t             result;
+#ifdef HAVE_QUOTA_SUPPORT
+        cfs_cap_t           save = current->cap_effective;
+#endif
 
         LASSERT(handle != NULL);
 
@@ -1600,8 +1831,17 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 
         oh = container_of(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle->h_transaction != NULL);
+#ifdef HAVE_QUOTA_SUPPORT
+        if (ignore_quota)
+                current->cap_effective |= CFS_CAP_SYS_RESOURCE_MASK;
+        else
+                current->cap_effective &= ~CFS_CAP_SYS_RESOURCE_MASK;
+#endif
         result = fsfilt_ldiskfs_write_handle(inode, buf->lb_buf, buf->lb_len,
                                              pos, oh->ot_handle);
+#ifdef HAVE_QUOTA_SUPPORT
+        current->cap_effective = save;
+#endif
         if (result == 0)
                 result = buf->lb_len;
         return result;
@@ -1795,12 +2035,16 @@ static int osd_index_lookup(const struct lu_env *env, struct dt_object *dt,
 
 static int osd_index_insert(const struct lu_env *env, struct dt_object *dt,
                             const struct dt_rec *rec, const struct dt_key *key,
-                            struct thandle *th, struct lustre_capa *capa)
+                            struct thandle *th, struct lustre_capa *capa,
+                            int ignore_quota)
 {
         struct osd_object     *obj = osd_dt_obj(dt);
         struct iam_path_descr *ipd;
         struct osd_thandle    *oh;
         struct iam_container  *bag = &obj->oo_dir->od_container;
+#ifdef HAVE_QUOTA_SUPPORT
+        cfs_cap_t              save = current->cap_effective;
+#endif
         int rc;
 
         ENTRY;
@@ -1820,8 +2064,17 @@ static int osd_index_insert(const struct lu_env *env, struct dt_object *dt,
         oh = container_of0(th, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle != NULL);
         LASSERT(oh->ot_handle->h_transaction != NULL);
+#ifdef HAVE_QUOTA_SUPPORT
+        if (ignore_quota)
+                current->cap_effective |= CFS_CAP_SYS_RESOURCE_MASK;
+        else
+                current->cap_effective &= ~CFS_CAP_SYS_RESOURCE_MASK;
+#endif
         rc = iam_insert(oh->ot_handle, bag, (const struct iam_key *)key,
                         (struct iam_rec *)rec, ipd);
+#ifdef HAVE_QUOTA_SUPPORT
+        current->cap_effective = save;
+#endif
         osd_ipd_put(env, bag, ipd);
         LINVRNT(osd_invariant(obj));
         RETURN(rc);
@@ -2135,7 +2388,8 @@ static int osd_index_compat_insert(const struct lu_env *env,
                                    struct dt_object *dt,
                                    const struct dt_rec *rec,
                                    const struct dt_key *key, struct thandle *th,
-                                   struct lustre_capa *capa)
+                                   struct lustre_capa *capa,
+                                   int ignore_quota)
 {
         struct osd_object     *obj = osd_dt_obj(dt);
 
@@ -2392,7 +2646,7 @@ static int osd_process_config(const struct lu_env *env,
         RETURN(err);
 }
 extern void ldiskfs_orphan_cleanup (struct super_block * sb,
-				    struct ldiskfs_super_block * es);
+                                    struct ldiskfs_super_block * es);
 
 static int osd_recovery_complete(const struct lu_env *env,
                                  struct lu_device *d)

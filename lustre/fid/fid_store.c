@@ -102,7 +102,7 @@ int seq_store_write(struct lu_server_seq *seq,
 
                 rc = dt_obj->do_body_ops->dbo_write(env, dt_obj,
                                                     seq_store_buf(info),
-                                                    &pos, th, BYPASS_CAPA);
+                                                    &pos, th, BYPASS_CAPA, 1);
                 if (rc == sizeof(info->sti_space)) {
                         CDEBUG(D_INFO, "%s: Space - "DRANGE"\n",
                                seq->lss_name, PRANGE(&seq->lss_space));

@@ -302,9 +302,12 @@ static int osc_io_commit_write(const struct lu_env *env,
                                const struct cl_page_slice *slice,
                                unsigned from, unsigned to)
 {
-        LASSERT(to > 0);
-
+        struct osc_page       *opg = cl2osc_page(slice);
+        struct osc_object     *obj = cl2osc(opg->ops_cl.cpl_obj);
+        struct osc_async_page *oap = &opg->ops_oap;
         ENTRY;
+
+        LASSERT(to > 0);
         /*
          * XXX instead of calling osc_page_touch() here and in
          * osc_io_fault_start() it might be more logical to introduce
@@ -312,6 +315,10 @@ static int osc_io_commit_write(const struct lu_env *env,
          * fault code calls.
          */
         osc_page_touch(env, cl2osc_page(slice), to);
+        if (!client_is_remote(osc_export(obj)) &&
+            cfs_capable(CFS_CAP_SYS_RESOURCE))
+                oap->oap_brw_flags |= OBD_BRW_NOQUOTA;
+
         RETURN(0);
 }
 

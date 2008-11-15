@@ -86,8 +86,6 @@ void class_obd_list(void);
 struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
                                           const char * typ_name,
                                           struct obd_uuid *grp_uuid);
-struct obd_device * class_find_client_notype(struct obd_uuid *tgt_uuid,
-                                             struct obd_uuid *grp_uuid);
 struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid,
                                            int *next);
 struct obd_device * class_num2obd(int num);
@@ -669,7 +667,7 @@ static inline int obd_create(struct obd_export *exp, struct obdo *obdo,
 static inline int obd_destroy(struct obd_export *exp, struct obdo *obdo,
                               struct lov_stripe_md *ea,
                               struct obd_trans_info *oti,
-                              struct obd_export *md_exp)
+                              struct obd_export *md_exp, void *capa)
 {
         int rc;
         ENTRY;
@@ -677,7 +675,7 @@ static inline int obd_destroy(struct obd_export *exp, struct obdo *obdo,
         EXP_CHECK_DT_OP(exp, destroy);
         EXP_COUNTER_INCREMENT(exp, destroy);
 
-        rc = OBP(exp->exp_obd, destroy)(exp, obdo, ea, oti, md_exp);
+        rc = OBP(exp->exp_obd, destroy)(exp, obdo, ea, oti, md_exp, capa);
         RETURN(rc);
 }
 
@@ -1469,7 +1467,7 @@ static inline int obd_quotacheck(struct obd_export *exp,
         EXP_CHECK_DT_OP(exp, quotacheck);
         EXP_COUNTER_INCREMENT(exp, quotacheck);
 
-        rc = OBP(exp->exp_obd, quotacheck)(exp, oqctl);
+        rc = OBP(exp->exp_obd, quotacheck)(exp->exp_obd, exp, oqctl);
         RETURN(rc);
 }
 
@@ -1482,7 +1480,39 @@ static inline int obd_quotactl(struct obd_export *exp,
         EXP_CHECK_DT_OP(exp, quotactl);
         EXP_COUNTER_INCREMENT(exp, quotactl);
 
-        rc = OBP(exp->exp_obd, quotactl)(exp, oqctl);
+        rc = OBP(exp->exp_obd, quotactl)(exp->exp_obd, exp, oqctl);
+        RETURN(rc);
+}
+
+static inline int obd_quota_adjust_qunit(struct obd_export *exp,
+                                         struct quota_adjust_qunit *oqaq,
+                                         struct lustre_quota_ctxt *qctxt)
+{
+#if defined(LPROCFS) && defined(HAVE_QUOTA_SUPPORT)
+        struct timeval work_start;
+        struct timeval work_end;
+        long timediff;
+#endif
+        int rc;
+        ENTRY;
+
+#if defined(LPROCFS) && defined(HAVE_QUOTA_SUPPORT)
+        if (qctxt)
+                do_gettimeofday(&work_start);
+#endif
+        EXP_CHECK_DT_OP(exp, quota_adjust_qunit);
+        EXP_COUNTER_INCREMENT(exp, quota_adjust_qunit);
+
+        rc = OBP(exp->exp_obd, quota_adjust_qunit)(exp, oqaq, qctxt);
+
+#if defined(LPROCFS) && defined(HAVE_QUOTA_SUPPORT)
+        if (qctxt) {
+                do_gettimeofday(&work_end);
+                timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
+                lprocfs_counter_add(qctxt->lqc_stats, LQUOTA_ADJUST_QUNIT,
+                                    timediff);
+        }
+#endif
         RETURN(rc);
 }
 
@@ -1929,6 +1959,19 @@ static inline int md_renew_capa(struct obd_export *exp, struct obd_capa *ocapa,
         EXP_CHECK_MD_OP(exp, renew_capa);
         EXP_MD_COUNTER_INCREMENT(exp, renew_capa);
         rc = MDP(exp->exp_obd, renew_capa)(exp, ocapa, cb);
+        RETURN(rc);
+}
+
+static inline int md_unpack_capa(struct obd_export *exp,
+                                 struct ptlrpc_request *req,
+                                 const struct req_msg_field *field,
+                                 struct obd_capa **oc)
+{
+        int rc;
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, unpack_capa);
+        EXP_MD_COUNTER_INCREMENT(exp, unpack_capa);
+        rc = MDP(exp->exp_obd, unpack_capa)(exp, req, field, oc);
         RETURN(rc);
 }
 

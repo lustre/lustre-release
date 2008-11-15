@@ -146,7 +146,7 @@ static int mdc_obd_add(const struct lu_env *env,
                 ocd->ocd_ibits_known = MDS_INODELOCK_UPDATE;
                 ocd->ocd_connect_flags = OBD_CONNECT_VERSION |
                                          OBD_CONNECT_ACL |
-                                         OBD_CONNECT_LCL_CLIENT |
+                                         OBD_CONNECT_RMT_CLIENT |
                                          OBD_CONNECT_MDS_CAPA |
                                          OBD_CONNECT_OSS_CAPA |
                                          OBD_CONNECT_IBITS |

@@ -653,8 +653,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_JOIN       0x00002000ULL /* files can be concatenated */
 #define OBD_CONNECT_ATTRFID    0x00004000ULL /* Server supports GetAttr By Fid */
 #define OBD_CONNECT_NODEVOH    0x00008000ULL /* No open handle for special nodes */
-#define OBD_CONNECT_LCL_CLIENT 0x00010000ULL /* local 1.8 client */
-#define OBD_CONNECT_RMT_CLIENT 0x00020000ULL /* Remote 1.8 client */
+#define OBD_CONNECT_RMT_CLIENT 0x00010000ULL /* Remote client */
+#define OBD_CONNECT_RMT_CLIENT_FORCE 0x00020000ULL /* Remote client by force */
 #define OBD_CONNECT_BRW_SIZE   0x00040000ULL /* Max bytes per rpc */
 #define OBD_CONNECT_QUOTA64    0x00080000ULL /* 64bit qunit_data.qd_count b=10707*/
 #define OBD_CONNECT_MDS_CAPA   0x00100000ULL /* MDS capability */
@@ -683,8 +683,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_ACL | OBD_CONNECT_XATTR | \
                                 OBD_CONNECT_IBITS | OBD_CONNECT_JOIN | \
                                 OBD_CONNECT_NODEVOH |/* OBD_CONNECT_ATTRFID |*/\
-                                OBD_CONNECT_LCL_CLIENT | \
                                 OBD_CONNECT_RMT_CLIENT | \
+                                OBD_CONNECT_RMT_CLIENT_FORCE | \
                                 OBD_CONNECT_MDS_CAPA | OBD_CONNECT_OSS_CAPA | \
                                 OBD_CONNECT_MDS_MDS | OBD_CONNECT_CANCELSET | \
                                 OBD_CONNECT_FID | \
@@ -696,7 +696,9 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_BRW_SIZE | OBD_CONNECT_QUOTA64 | \
                                 OBD_CONNECT_OSS_CAPA | OBD_CONNECT_CANCELSET | \
                                 OBD_CONNECT_CKSUM | LRU_RESIZE_CONNECT_FLAG | \
-                                OBD_CONNECT_AT)
+                                OBD_CONNECT_AT | OBD_CONNECT_CHANGE_QS | \
+                                OBD_CONNECT_RMT_CLIENT | \
+                                OBD_CONNECT_RMT_CLIENT_FORCE)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT)
 
@@ -766,6 +768,7 @@ typedef enum {
         OST_SET_INFO   = 17,
         OST_QUOTACHECK = 18,
         OST_QUOTACTL   = 19,
+        OST_QUOTA_ADJUST_QUNIT = 20,
         OST_LAST_OPC
 } ost_cmd_t;
 #define OST_FIRST_OPC  OST_REPLY
@@ -907,6 +910,8 @@ struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLOSSCAPA   (0x0000040000000000ULL) /* OSS capability */
 #define OBD_MD_FLCKSPLIT   (0x0000080000000000ULL) /* Check split on server */
 #define OBD_MD_FLCROSSREF  (0x0000100000000000ULL) /* Cross-ref case */
+
+#define OBD_FL_TRUNC       (0x0000200000000000ULL) /* for filter_truncate */
 
 #define OBD_MD_FLRMTLSETFACL    (0x0001000000000000ULL) /* lfs lsetfacl case */
 #define OBD_MD_FLRMTLGETFACL    (0x0002000000000000ULL) /* lfs lgetfacl case */
@@ -1244,12 +1249,25 @@ extern void lustre_swab_mdt_epoch (struct mdt_epoch *b);
 #define Q_INITQUOTA     0x800101        /* init slave limits */
 #define Q_GETOINFO      0x800102        /* get obd quota info */
 #define Q_GETOQUOTA     0x800103        /* get obd quotas */
+#define Q_FINVALIDATE   0x800104        /* invalidate operational quotas */
 
-#define Q_TYPESET(oqc, type) \
-        ((oqc)->qc_type == type || (oqc)->qc_type == UGQUOTA)
+#define Q_TYPEMATCH(id, type) \
+        ((id) == (type) || (id) == UGQUOTA)
+
+#define Q_TYPESET(oqc, type) Q_TYPEMATCH((oqc)->qc_type, type)
 
 #define Q_GETOCMD(oqc) \
         ((oqc)->qc_cmd == Q_GETOINFO || (oqc)->qc_cmd == Q_GETOQUOTA)
+
+#define QCTL_COPY(out, in)              \
+do {                                    \
+        Q_COPY(out, in, qc_cmd);        \
+        Q_COPY(out, in, qc_type);       \
+        Q_COPY(out, in, qc_id);         \
+        Q_COPY(out, in, qc_stat);       \
+        Q_COPY(out, in, qc_dqinfo);     \
+        Q_COPY(out, in, qc_dqblk);      \
+} while (0)
 
 struct obd_quotactl {
         __u32                   qc_cmd;
@@ -1261,6 +1279,34 @@ struct obd_quotactl {
 };
 
 extern void lustre_swab_obd_quotactl(struct obd_quotactl *q);
+
+struct quota_adjust_qunit {
+        __u32 qaq_flags;
+        __u32 qaq_id;
+        __u64 qaq_bunit_sz;
+        __u64 qaq_iunit_sz;
+        __u64 padding1;
+};
+extern void lustre_swab_quota_adjust_qunit(struct quota_adjust_qunit *q);
+
+/* flags in qunit_data and quota_adjust_qunit will use macroes below */
+#define LQUOTA_FLAGS_GRP       1UL   /* 0 is user, 1 is group */
+#define LQUOTA_FLAGS_BLK       2UL   /* 0 is inode, 1 is block */
+#define LQUOTA_FLAGS_ADJBLK    4UL   /* adjust the block qunit size */
+#define LQUOTA_FLAGS_ADJINO    8UL   /* adjust the inode qunit size */
+#define LQUOTA_FLAGS_CHG_QS   16UL   /* indicate whether it has capability of
+                                      * OBD_CONNECT_CHANGE_QS */
+
+/* the status of lqsk_flags in struct lustre_qunit_size_key */
+#define LQUOTA_QUNIT_FLAGS (LQUOTA_FLAGS_GRP | LQUOTA_FLAGS_BLK)
+
+#define QAQ_IS_GRP(qaq)    ((qaq)->qaq_flags & LQUOTA_FLAGS_GRP)
+#define QAQ_IS_ADJBLK(qaq) ((qaq)->qaq_flags & LQUOTA_FLAGS_ADJBLK)
+#define QAQ_IS_ADJINO(qaq) ((qaq)->qaq_flags & LQUOTA_FLAGS_ADJINO)
+
+#define QAQ_SET_GRP(qaq)    ((qaq)->qaq_flags |= LQUOTA_FLAGS_GRP)
+#define QAQ_SET_ADJBLK(qaq) ((qaq)->qaq_flags |= LQUOTA_FLAGS_ADJBLK)
+#define QAQ_SET_ADJINO(qaq) ((qaq)->qaq_flags |= LQUOTA_FLAGS_ADJINO)
 
 /* inode access permission for remote user, the inode info are omitted,
  * for client knows them. */
@@ -1277,7 +1323,8 @@ enum {
         CFS_SETUID_PERM = 0x01,
         CFS_SETGID_PERM = 0x02,
         CFS_SETGRP_PERM = 0x04,
-        CFS_RMTACL_PERM = 0x08
+        CFS_RMTACL_PERM = 0x08,
+        CFS_RMTOWN_PERM = 0x10
 };
 
 extern void lustre_swab_mds_remote_perm(struct mds_remote_perm *p);
@@ -1421,7 +1468,8 @@ enum {
         MDS_CROSS_REF    = 1 << 1,
         MDS_VTX_BYPASS   = 1 << 2,
         MDS_PERM_BYPASS  = 1 << 3,
-        MDS_SOM          = 1 << 4
+        MDS_SOM          = 1 << 4,
+        MDS_QUOTA_IGNORE = 1 << 5
 };
 
 struct mds_rec_join {
@@ -2261,7 +2309,6 @@ struct obdo {
 extern void lustre_swab_obdo (struct obdo *o);
 
 /* request structure for OST's */
-
 struct ost_body {
         struct  obdo oa;
 };
@@ -2293,37 +2340,71 @@ extern void lustre_swab_llog_rec(struct llog_rec_hdr  *rec,
 struct lustre_cfg;
 extern void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg);
 
-/* quota. fixed by tianzy for bug10707 */
-#define QUOTA_IS_GRP   0X1UL  /* 0 is user, 1 is group. Used by qd_flags*/
-#define QUOTA_IS_BLOCK 0x2UL  /* 0 is inode, 1 is block. Used by qd_flags*/
-
+/* this will be used when OBD_CONNECT_CHANGE_QS is set */
 struct qunit_data {
-        __u32 qd_id; /* ID appiles to (uid, gid) */
-        __u32 qd_flags; /* Quota type (USRQUOTA, GRPQUOTA) occupy one bit;
-                         * Block quota or file quota occupy one bit */
-        __u64 qd_count; /* acquire/release count (bytes for block quota) */
+        /**
+         * ID appiles to (uid, gid)
+         */
+        __u32 qd_id;
+        /**
+         * LQUOTA_FLAGS_* affect the responding bits
+         */
+        __u32 qd_flags;
+        /**
+         * acquire/release count (bytes for block quota)
+         */
+        __u64 qd_count;
+        /**
+         * when a master returns the reply to a slave, it will
+         * contain the current corresponding qunit size
+         */
+        __u64 qd_qunit;
+        __u64 padding;
 };
 
-struct qunit_data_old {
-        __u32 qd_id;    /* ID appiles to (uid, gid) */
-        __u32 qd_type;  /* Quota type (USRQUOTA, GRPQUOTA) */
-        __u32 qd_count; /* acquire/release count (bytes for block quota) */
-        __u32 qd_isblk; /* Block quota or file quota */
-};
+#define QDATA_IS_GRP(qdata)    ((qdata)->qd_flags & LQUOTA_FLAGS_GRP)
+#define QDATA_IS_BLK(qdata)    ((qdata)->qd_flags & LQUOTA_FLAGS_BLK)
+#define QDATA_IS_ADJBLK(qdata) ((qdata)->qd_flags & LQUOTA_FLAGS_ADJBLK)
+#define QDATA_IS_ADJINO(qdata) ((qdata)->qd_flags & LQUOTA_FLAGS_ADJINO)
+#define QDATA_IS_CHANGE_QS(qdata) ((qdata)->qd_flags & LQUOTA_FLAGS_CHG_QS)
+
+#define QDATA_SET_GRP(qdata)    ((qdata)->qd_flags |= LQUOTA_FLAGS_GRP)
+#define QDATA_SET_BLK(qdata)    ((qdata)->qd_flags |= LQUOTA_FLAGS_BLK)
+#define QDATA_SET_ADJBLK(qdata) ((qdata)->qd_flags |= LQUOTA_FLAGS_ADJBLK)
+#define QDATA_SET_ADJINO(qdata) ((qdata)->qd_flags |= LQUOTA_FLAGS_ADJINO)
+#define QDATA_SET_CHANGE_QS(qdata) ((qdata)->qd_flags |= LQUOTA_FLAGS_CHG_QS)
+
+#define QDATA_CLR_GRP(qdata)        ((qdata)->qd_flags &= ~LQUOTA_FLAGS_GRP)
+#define QDATA_CLR_CHANGE_QS(qdata)  ((qdata)->qd_flags &= ~LQUOTA_FLAGS_CHG_QS)
 
 extern void lustre_swab_qdata(struct qunit_data *d);
-extern void lustre_swab_qdata_old(struct qunit_data_old *d);
-extern struct qunit_data *lustre_quota_old_to_new(struct qunit_data_old *d);
-extern struct qunit_data_old *lustre_quota_new_to_old(struct qunit_data *d);
+extern int quota_get_qdata(void*req, struct qunit_data *qdata,
+                           int is_req, int is_exp);
+extern int quota_copy_qdata(void *request, struct qunit_data *qdata,
+                            int is_req, int is_exp);
 
 typedef enum {
-        QUOTA_DQACQ     = 601,
-        QUOTA_DQREL     = 602,
+        QUOTA_DQACQ     = 901,
+        QUOTA_DQREL     = 902,
+        QUOTA_LAST_OPC
 } quota_cmd_t;
+#define QUOTA_FIRST_OPC QUOTA_DQACQ
 
 #define JOIN_FILE_ALIGN 4096
 
-/** security opcodes */
+#define QUOTA_REQUEST   1
+#define QUOTA_REPLY     0
+#define QUOTA_EXPORT    1
+#define QUOTA_IMPORT    0
+
+/* quota check function */
+#define QUOTA_RET_OK           0 /**< return successfully */
+#define QUOTA_RET_NOQUOTA      1 /**< not support quota */
+#define QUOTA_RET_NOLIMIT      2 /**< quota limit isn't set */
+#define QUOTA_RET_ACQUOTA      4 /**< need to acquire extra quota */
+#define QUOTA_RET_INC_PENDING  8 /**< pending value is increased */
+
+/* security opcodes */
 typedef enum {
         SEC_CTX_INIT            = 801,
         SEC_CTX_INIT_CONT       = 802,
@@ -2341,15 +2422,15 @@ typedef enum {
 /* NB take care when changing the sequence of elements this struct,
  * because the offset info is used in find_capa() */
 struct lustre_capa {
-        struct lu_fid   lc_fid;     /* fid */
-        __u64           lc_opc;     /* operations allowed */
-        __u32           lc_uid;     /* uid, it is obsolete, but maybe used in
-                                     * future, reserve it for 64-bits aligned.*/
-        __u32           lc_flags;   /* HMAC algorithm & flags */
-        __u32           lc_keyid;   /* key used for the capability */
-        __u32           lc_timeout; /* capa timeout value (sec) */
-        __u64           lc_expiry;  /* expiry time (sec) */
-        __u8            lc_hmac[CAPA_HMAC_MAX_LEN];   /* HMAC */
+        struct lu_fid   lc_fid;         /** fid */
+        __u64           lc_opc;         /** operations allowed */
+        __u64           lc_uid;         /** file owner */
+        __u64           lc_gid;         /** file group */
+        __u32           lc_flags;       /** HMAC algorithm & flags */
+        __u32           lc_keyid;       /** key# used for the capability */
+        __u32           lc_timeout;     /** capa timeout value (sec) */
+        __u32           lc_expiry;      /** expiry time (sec) */
+        __u8            lc_hmac[CAPA_HMAC_MAX_LEN];   /** HMAC */
 } __attribute__((packed));
 
 extern void lustre_swab_lustre_capa(struct lustre_capa *c);
@@ -2364,9 +2445,9 @@ enum {
         CAPA_OPC_OSS_WRITE    = 1<<5,  /**< write oss object data */
         CAPA_OPC_OSS_READ     = 1<<6,  /**< read oss object data */
         CAPA_OPC_OSS_TRUNC    = 1<<7,  /**< truncate oss object */
-        CAPA_OPC_META_WRITE   = 1<<8,  /**< write object meta data */
-        CAPA_OPC_META_READ    = 1<<9,  /**< read object meta data */
-
+        CAPA_OPC_OSS_DESTROY  = 1<<8,  /**< destroy oss object */
+        CAPA_OPC_META_WRITE   = 1<<9,  /**< write object meta data */
+        CAPA_OPC_META_READ    = 1<<10, /**< read object meta data */
 };
 
 #define CAPA_OPC_OSS_RW (CAPA_OPC_OSS_READ | CAPA_OPC_OSS_WRITE)
@@ -2374,7 +2455,8 @@ enum {
         (CAPA_OPC_BODY_WRITE | CAPA_OPC_BODY_READ | CAPA_OPC_INDEX_LOOKUP | \
          CAPA_OPC_INDEX_INSERT | CAPA_OPC_INDEX_DELETE)
 #define CAPA_OPC_OSS_ONLY                                                   \
-        (CAPA_OPC_OSS_WRITE | CAPA_OPC_OSS_READ | CAPA_OPC_OSS_TRUNC)
+        (CAPA_OPC_OSS_WRITE | CAPA_OPC_OSS_READ | CAPA_OPC_OSS_TRUNC |      \
+         CAPA_OPC_OSS_DESTROY)
 #define CAPA_OPC_MDS_DEFAULT ~CAPA_OPC_OSS_ONLY
 #define CAPA_OPC_OSS_DEFAULT ~(CAPA_OPC_MDS_ONLY | CAPA_OPC_OSS_ONLY)
 
@@ -2411,11 +2493,6 @@ struct lustre_capa_key {
 
 extern void lustre_swab_lustre_capa_key(struct lustre_capa_key *k);
 
-/* quota check function */
-#define QUOTA_RET_OK           0 /**< return successfully */
-#define QUOTA_RET_NOQUOTA      1 /**< not support quota */
-#define QUOTA_RET_NOLIMIT      2 /**< quota limit isn't set */
-#define QUOTA_RET_ACQUOTA      3 /**< need to acquire extra quota */
 #endif
 
 /** @} lustreidl */

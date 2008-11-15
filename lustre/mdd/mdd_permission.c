@@ -386,7 +386,7 @@ int mdd_capa_get(const struct lu_env *env, struct md_object *obj,
                           capa->lc_opc);
         if (IS_ERR(oc)) {
                 rc = PTR_ERR(oc);
-        } else {
+        } else if (likely(oc != NULL)) {
                 capa_cpy(capa, oc);
                 capa_put(oc);
         }

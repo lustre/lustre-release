@@ -248,6 +248,8 @@ struct obd_device_target {
         struct super_block       *obt_sb;
         atomic_t                  obt_quotachecking;
         struct lustre_quota_ctxt  obt_qctxt;
+        lustre_quota_version_t    obt_qfmt;
+        struct rw_semaphore       obt_rwsem;
 };
 
 /* llog contexts */
@@ -362,6 +364,7 @@ struct filter_obd {
         struct list_head         fo_capa_keys;
         struct hlist_head       *fo_capa_hash;
         struct llog_commit_master *fo_lcm;
+        int                      fo_sec_level;
 };
 
 #define OSC_MAX_RIF_DEFAULT       8
@@ -517,9 +520,9 @@ struct mds_obd {
         __u32                            mds_id;
 
         /* mark pages dirty for write. */
-        bitmap_t                         *mds_lov_page_dirty;
+        bitmap_t                        *mds_lov_page_dirty;
         /* array for store pages with obd_id */
-        void                            **mds_lov_page_array;
+        void                           **mds_lov_page_array;
         /* file for store objid */
         struct file                     *mds_lov_objid_filp;
         __u32                            mds_lov_objid_count;
@@ -537,13 +540,14 @@ struct mds_obd {
                                          mds_fl_acl:1,
                                          mds_evict_ost_nids:1,
                                          mds_fl_cfglog:1,
-                                         mds_fl_synced:1;
+                                         mds_fl_synced:1,
+                                         mds_quota:1;
 
         struct upcall_cache             *mds_identity_cache;
 
         /* for capability keys update */
         struct lustre_capa_key          *mds_capa_keys;
-        struct rw_semaphore             mds_notify_lock;
+        struct rw_semaphore              mds_notify_lock;
 };
 
 /* lov objid */
@@ -788,7 +792,7 @@ struct obd_trans_info {
         int                      oti_numcookies;
 
         /* initial thread handling transaction */
-        int                      oti_thread_id;
+        struct ptlrpc_thread *   oti_thread;
         __u32                    oti_conn_cnt;
 
         struct obd_uuid         *oti_ost_uuid;
@@ -808,7 +812,7 @@ static inline void oti_init(struct obd_trans_info *oti,
 
         if (req->rq_repmsg != NULL)
                 oti->oti_transno = lustre_msg_get_transno(req->rq_repmsg);
-        oti->oti_thread_id = req->rq_svc_thread ? req->rq_svc_thread->t_id : -1;
+        oti->oti_thread = req->rq_svc_thread;
         if (req->rq_reqmsg != NULL)
                 oti->oti_conn_cnt = lustre_msg_get_conn_cnt(req->rq_reqmsg);
 }
@@ -1214,7 +1218,7 @@ struct obd_ops {
                         struct lov_stripe_md **ea, struct obd_trans_info *oti);
         int (*o_destroy)(struct obd_export *exp, struct obdo *oa,
                          struct lov_stripe_md *ea, struct obd_trans_info *oti,
-                         struct obd_export *md_exp);
+                         struct obd_export *md_exp, void *capa);
         int (*o_setattr)(struct obd_export *exp, struct obd_info *oinfo,
                          struct obd_trans_info *oti);
         int (*o_setattr_async)(struct obd_export *exp, struct obd_info *oinfo,
@@ -1292,8 +1296,14 @@ struct obd_ops {
         struct obd_uuid *(*o_get_uuid) (struct obd_export *exp);
 
         /* quota methods */
-        int (*o_quotacheck)(struct obd_export *, struct obd_quotactl *);
-        int (*o_quotactl)(struct obd_export *, struct obd_quotactl *);
+        int (*o_quotacheck)(struct obd_device *, struct obd_export *,
+                            struct obd_quotactl *);
+        int (*o_quotactl)(struct obd_device *, struct obd_export *,
+                          struct obd_quotactl *);
+        int (*o_quota_adjust_qunit)(struct obd_export *exp,
+                                    struct quota_adjust_qunit *oqaq,
+                                    struct lustre_quota_ctxt *qctxt);
+
 
         int (*o_ping)(struct obd_export *exp);
 
@@ -1436,6 +1446,8 @@ struct md_ops {
                                void *opaque);
         int (*m_renew_capa)(struct obd_export *, struct obd_capa *oc,
                             renew_capa_cb_t cb);
+        int (*m_unpack_capa)(struct obd_export *, struct ptlrpc_request *,
+                             const struct req_msg_field *, struct obd_capa **);
 
         int (*m_get_remote_perm)(struct obd_export *, const struct lu_fid *,
                                  struct obd_capa *, __u32,
@@ -1526,6 +1538,7 @@ static inline void init_obd_quota_ops(quota_interface_t *interface,
         LASSERT(obd_ops);
         obd_ops->o_quotacheck = QUOTA_OP(interface, check);
         obd_ops->o_quotactl = QUOTA_OP(interface, ctl);
+        obd_ops->o_quota_adjust_qunit = QUOTA_OP(interface, adjust_qunit);
 }
 
 static inline __u64 oinfo_mdsno(struct obd_info *oinfo)

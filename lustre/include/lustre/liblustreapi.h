@@ -84,7 +84,7 @@ extern int llapi_poollist(char *name);
 extern int llapi_file_get_stripe(const char *path, struct lov_user_md *lum);
 #define HAVE_LLAPI_FILE_LOOKUP
 extern int llapi_file_lookup(int dirfd, const char *name);
- 
+
 struct find_param {
         unsigned int maxdepth;
         time_t  atime;
@@ -151,8 +151,9 @@ extern int llapi_file_get_lov_uuid(const char *path, struct obd_uuid *lov_uuid);
 extern int llapi_file_fget_lov_uuid(int fd, struct obd_uuid *lov_uuid);
 extern int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count);
 extern int llapi_is_lustre_mnttype(const char *type);
+extern int llapi_get_obd_count(char *mnt, int *count, int is_mdt);
 extern int parse_size(char *optarg, unsigned long long *size,
-                      unsigned long long *size_units);
+                      unsigned long long *size_units, int bytes_spec);
 extern int llapi_path2fid(const char *path, unsigned long long *seq,
                           unsigned long *oid, unsigned long *ver);
 

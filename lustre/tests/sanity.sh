@@ -3623,7 +3623,7 @@ test_80() { # bug 10718
         dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=1M
         sync; sleep 1; sync
         BEFORE=`date +%s`
-        cancel_lru_locks OSC
+        cancel_lru_locks osc
         AFTER=`date +%s`
         DIFF=$((AFTER-BEFORE))
         if [ $DIFF -gt 1 ] ; then
@@ -5111,8 +5111,10 @@ test_123a() { # was test 123, statahead(bug 11401)
 		SLOWOK=1
         fi
 
-        remount_client $MOUNT
         mkdir -p $DIR/$tdir
+        rm -rf $DIR/$tdir/*
+        cancel_lru_locks mdc
+        cancel_lru_locks osc
         error=0
         NUMFREE=`df -i -P $DIR | tail -n 1 | awk '{ print $4 }'`
         [ $NUMFREE -gt 100000 ] && NUMFREE=100000 || NUMFREE=$((NUMFREE-1000))

@@ -146,7 +146,7 @@ static int mdd_process_config(const struct lu_env *env,
 
                 lprocfs_mdd_init_vars(&lvars);
                 rc = class_process_proc_param(PARAM_MDD, lvars.obd_vars, cfg,m);
-                if (rc == -ENOSYS)
+                if (rc > 0 || rc == -ENOSYS)
                         /* we don't understand; pass it on */
                         rc = next->ld_ops->ldo_process_config(env, next, cfg);
                 break;
@@ -406,6 +406,25 @@ const struct md_device_operations mdd_ops = {
         .mdo_maxsize_get    = mdd_maxsize_get,
         .mdo_init_capa_ctxt = mdd_init_capa_ctxt,
         .mdo_update_capa_key= mdd_update_capa_key,
+#ifdef HAVE_QUOTA_SUPPORT
+        .mdo_quota          = {
+                .mqo_notify      = mdd_quota_notify,
+                .mqo_setup       = mdd_quota_setup,
+                .mqo_cleanup     = mdd_quota_cleanup,
+                .mqo_recovery    = mdd_quota_recovery,
+                .mqo_check       = mdd_quota_check,
+                .mqo_on          = mdd_quota_on,
+                .mqo_off         = mdd_quota_off,
+                .mqo_setinfo     = mdd_quota_setinfo,
+                .mqo_getinfo     = mdd_quota_getinfo,
+                .mqo_setquota    = mdd_quota_setquota,
+                .mqo_getquota    = mdd_quota_getquota,
+                .mqo_getoinfo    = mdd_quota_getoinfo,
+                .mqo_getoquota   = mdd_quota_getoquota,
+                .mqo_invalidate  = mdd_quota_invalidate,
+                .mqo_finvalidate = mdd_quota_finvalidate
+        }
+#endif
 };
 
 static struct lu_device_type_operations mdd_device_type_ops = {

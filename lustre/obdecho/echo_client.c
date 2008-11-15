@@ -1301,7 +1301,7 @@ static int echo_create_object(struct echo_device *ed, int on_target,
 
  failed:
         if (created && rc)
-                obd_destroy(ec->ec_exp, oa, lsm, oti, NULL);
+                obd_destroy(ec->ec_exp, oa, lsm, oti, NULL, NULL);
         if (lsm)
                 obd_free_memmd(ec->ec_exp, &lsm);
         if (rc)
@@ -1637,7 +1637,7 @@ static int echo_client_brw_ioctl(int rw, struct obd_export *exp,
         struct obd_device *obd = class_exp2obd(exp);
         struct echo_device *ed = obd2echo_dev(obd);
         struct echo_client_obd *ec = ed->ed_ec;
-        struct obd_trans_info dummy_oti = { .oti_thread_id = -1 };
+        struct obd_trans_info dummy_oti = { .oti_thread = NULL };
         struct echo_object *eco;
         int rc;
         int async = 1;
@@ -1762,7 +1762,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                         oa->o_gr = FILTER_GROUP_ECHO;
                         oa->o_valid |= OBD_MD_FLGROUP;
                         rc = obd_destroy(ec->ec_exp, oa, eco->eo_lsm,
-                                         &dummy_oti, NULL);
+                                         &dummy_oti, NULL, NULL);
                         if (rc == 0)
                                 eco->eo_deleted = 1;
                         echo_put_object(eco);

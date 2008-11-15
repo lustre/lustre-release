@@ -78,25 +78,6 @@ void mdc_close_pack(struct ptlrpc_request *req, struct md_op_data *op_data);
 void mdc_enter_request(struct client_obd *cli);
 void mdc_exit_request(struct client_obd *cli);
 
-static inline int client_is_remote(struct obd_export *exp)
-{
-        struct obd_import *imp = class_exp2cliimp(exp);
-
-        if (imp->imp_connect_flags_orig & OBD_CONNECT_RMT_CLIENT) {
-                if (!(imp->imp_connect_data.ocd_connect_flags &
-                    OBD_CONNECT_RMT_CLIENT))
-                        return 0;
-                else
-                        return 1;
-        } else {
-                if (!(imp->imp_connect_data.ocd_connect_flags &
-                    OBD_CONNECT_LCL_CLIENT))
-                        return 1;
-                else
-                        return 0;
-        }
-}
-
 /* mdc/mdc_locks.c */
 int mdc_set_lock_data(struct obd_export *exp,
                       __u64 *lockh, void *data);
