@@ -2823,23 +2823,29 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
                 ptlrpc_req_finished(req);
 
         if (data && lsm) {
-                struct obdo *oa;
+                struct obd_info *oinfo;
 
-                OBDO_ALLOC(oa);
-                if (!oa)
+                OBD_ALLOC_PTR(oinfo);
+                if (!oinfo)
                         RETURN(rc ? rc : -ENOMEM);
-
-                oa->o_id = lsm->lsm_object_id;
-                oa->o_gr = lsm->lsm_object_gr;
-                oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
-                obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
-                                           OBD_MD_FLMTIME | OBD_MD_FLCTIME);
-
-                err = obd_sync(ll_i2sbi(inode)->ll_osc_exp, oa, lsm,
-                               0, OBD_OBJECT_EOF);
+                OBDO_ALLOC(oinfo->oi_oa);
+                if (!oinfo->oi_oa) {
+                        OBD_FREE_PTR(oinfo);
+                        RETURN(rc ? rc : -ENOMEM);
+                }
+                oinfo->oi_oa->o_id = lsm->lsm_object_id;
+                oinfo->oi_oa->o_gr = lsm->lsm_object_gr;
+                oinfo->oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+                obdo_from_inode(oinfo->oi_oa, inode,
+                                OBD_MD_FLTYPE | OBD_MD_FLATIME |
+                                OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+                oinfo->oi_md = lsm;
+                err = obd_sync_rqset(ll_i2sbi(inode)->ll_osc_exp, oinfo,
+                                     0, OBD_OBJECT_EOF);
                 if (!rc)
                         rc = err;
-                OBDO_FREE(oa);
+                OBDO_FREE(oinfo->oi_oa);
+                OBD_FREE_PTR(oinfo);
         }
 
         RETURN(rc);
