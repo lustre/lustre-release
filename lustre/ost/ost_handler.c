@@ -321,6 +321,7 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
 
 static int ost_sync(struct obd_export *exp, struct ptlrpc_request *req)
 {
+        struct obd_info oinfo = { { { 0 } } };
         struct ost_body *body, *repbody;
         __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*repbody) };
         int rc;
@@ -337,9 +338,11 @@ static int ost_sync(struct obd_export *exp, struct ptlrpc_request *req)
 
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
-        memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
-        req->rq_status = obd_sync(exp, &repbody->oa, NULL, repbody->oa.o_size,
-                                  repbody->oa.o_blocks);
+
+        oinfo.oi_oa = &body->oa;
+        req->rq_status = obd_sync(exp, &oinfo, repbody->oa.o_size,
+                                  repbody->oa.o_blocks, NULL);
+        repbody->oa = *oinfo.oi_oa;
         RETURN(0);
 }
 
