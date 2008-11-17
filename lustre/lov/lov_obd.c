@@ -1649,7 +1649,7 @@ static int lov_brw_check(struct lov_obd *lov, struct obd_info *lov_oinfo,
                 obd_off start, end;
 
                 if (!lov_stripe_intersects(lov_oinfo->oi_md, i, pga[i].off,
-                                           pga[i].off + pga[i].count,
+                                           pga[i].off + pga[i].count - 1,
                                            &start, &end))
                         continue;
 
