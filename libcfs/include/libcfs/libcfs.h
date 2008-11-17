@@ -103,6 +103,16 @@ static inline int __is_po2(unsigned long long val)
 
 #include <libcfs/list.h>
 
+/* for_each_possible_cpu is defined newly, the former is
+ * for_each_cpu(eg. sles9 and sles10) b=15878 */
+#ifndef for_each_possible_cpu
+# ifdef for_each_cpu
+#  define for_each_possible_cpu(cpu) for_each_cpu(cpu)
+# else
+#  error for_each_possible_cpu is not supported by kernel!
+# endif
+#endif
+
 /* libcfs tcpip */
 int libcfs_ipif_query(char *name, int *up, __u32 *ip, __u32 *mask);
 int libcfs_ipif_enumerate(char ***names);
