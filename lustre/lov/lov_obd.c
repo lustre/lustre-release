@@ -1633,48 +1633,67 @@ static int lov_punch(struct obd_export *exp, struct obd_info *oinfo,
         RETURN(0);
 }
 
-static int lov_sync(struct obd_export *exp, struct obdo *oa,
-                    struct lov_stripe_md *lsm, obd_off start, obd_off end)
+static int lov_sync_interpret(struct ptlrpc_request_set *rqset,
+                              void *data, int rc)
 {
-        struct lov_request_set *set;
-        struct obd_info oinfo;
+        struct lov_request_set *lovset = (struct lov_request_set *)data;
+        int err;
+        ENTRY;
+
+        if (rc)
+                lovset->set_completes = 0;
+        err = lov_fini_sync_set(lovset);
+        RETURN(rc ? rc : err);
+}
+
+static int lov_sync(struct obd_export *exp, struct obd_info *oinfo,
+                    obd_off start, obd_off end,
+                    struct ptlrpc_request_set *rqset)
+{
+        struct lov_request_set *set = NULL;
         struct lov_obd *lov;
         struct list_head *pos;
         struct lov_request *req;
-        int err = 0, rc = 0;
+        int    rc = 0;
         ENTRY;
 
-        ASSERT_LSM_MAGIC(lsm);
+        ASSERT_LSM_MAGIC(oinfo->oi_md);
+        LASSERT(rqset != NULL);
 
         if (!exp->exp_obd)
                 RETURN(-ENODEV);
 
         lov = &exp->exp_obd->u.lov;
-        rc = lov_prep_sync_set(exp, &oinfo, oa, lsm, start, end, &set);
+        rc = lov_prep_sync_set(exp, oinfo, start, end, &set);
         if (rc)
                 RETURN(rc);
 
         list_for_each (pos, &set->set_list) {
                 req = list_entry(pos, struct lov_request, rq_link);
 
-                rc = obd_sync(lov->lov_tgts[req->rq_idx]->ltd_exp, 
-                              req->rq_oi.oi_oa, NULL, 
+                rc = obd_sync(lov->lov_tgts[req->rq_idx]->ltd_exp, &req->rq_oi,
                               req->rq_oi.oi_policy.l_extent.start,
-                              req->rq_oi.oi_policy.l_extent.end);
-                err = lov_update_common_set(set, req, rc);
-                if (err) {
+                              req->rq_oi.oi_policy.l_extent.end, rqset);
+                if (rc) {
                         CERROR("error: fsync objid "LPX64" subobj "LPX64
                                " on OST idx %d: rc = %d\n",
                                set->set_oi->oi_oa->o_id,
                                req->rq_oi.oi_oa->o_id, req->rq_idx, rc);
-                        if (!rc)
-                                rc = err;
+                        break;
                 }
         }
-        err = lov_fini_sync_set(set);
-        if (!rc)
-                rc = err;
-        RETURN(rc);
+
+        /* If we are not waiting for responses on async requests, return. */
+        if (rc || list_empty(&rqset->set_requests)) {
+                int err = lov_fini_sync_set(set);
+                RETURN(rc ? rc : err);
+        }
+
+        LASSERT(rqset->set_interpret == NULL);
+        rqset->set_interpret = lov_sync_interpret;
+        rqset->set_arg = (void *)set;
+
+        RETURN(0);
 }
 
 static int lov_brw_check(struct lov_obd *lov, struct obd_info *lov_oinfo,
