@@ -2250,9 +2250,9 @@ void lustre_swab_lov_desc (struct lov_desc *ld)
         __swab32s (&ld->ld_tgt_count);
         __swab32s (&ld->ld_active_tgt_count);
         __swab32s (&ld->ld_default_stripe_count);
+        __swab32s (&ld->ld_pattern);
         __swab64s (&ld->ld_default_stripe_size);
         __swab64s (&ld->ld_default_stripe_offset);
-        __swab32s (&ld->ld_pattern);
         __swab32s (&ld->ld_qos_maxage);
         /* uuid endian insensitive */
 }
