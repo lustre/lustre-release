@@ -512,16 +512,39 @@ static int osc_punch(struct obd_export *exp, struct obd_info *oinfo,
         RETURN(0);
 }
 
-static int osc_sync(struct obd_export *exp, struct obdo *oa,
-                    struct lov_stripe_md *md, obd_size start, obd_size end)
+static int osc_sync_interpret(struct ptlrpc_request *req,
+                              struct osc_async_args *aa, int rc)
+{
+        struct ost_body *body;
+        ENTRY;
+
+        if (rc)
+                GOTO(out, rc);
+
+        body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),
+                                  lustre_swab_ost_body);
+        if (body == NULL) {
+                CERROR ("can't unpack ost_body\n");
+                GOTO(out, rc = -EPROTO);
+        }
+
+        *aa->aa_oi->oi_oa = body->oa;
+out:
+        rc = aa->aa_oi->oi_cb_up(aa->aa_oi, rc);
+        RETURN(rc);
+}
+
+static int osc_sync(struct obd_export *exp, struct obd_info *oinfo,
+                    obd_size start, obd_size end,
+                    struct ptlrpc_request_set *set)
 {
         struct ptlrpc_request *req;
         struct ost_body *body;
         __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
-        int rc;
+        struct osc_async_args *aa;
         ENTRY;
 
-        if (!oa) {
+        if (!oinfo->oi_oa) {
                 CERROR("oa NULL\n");
                 RETURN(-EINVAL);
         }
@@ -532,7 +555,7 @@ static int osc_sync(struct obd_export *exp, struct obdo *oa,
                 RETURN(-ENOMEM);
 
         body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-        memcpy(&body->oa, oa, sizeof(*oa));
+        memcpy(&body->oa, oinfo->oi_oa, sizeof(*oinfo->oi_oa));
 
         /* overload the size and blocks fields in the oa with start/end */
         body->oa.o_size = start;
@@ -540,24 +563,14 @@ static int osc_sync(struct obd_export *exp, struct obdo *oa,
         body->oa.o_valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
 
         ptlrpc_req_set_repsize(req, 2, size);
+        req->rq_interpret_reply = osc_sync_interpret;
 
-        rc = ptlrpc_queue_wait(req);
-        if (rc)
-                GOTO(out, rc);
+        CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
+        aa = ptlrpc_req_async_args(req);
+        aa->aa_oi = oinfo;
 
-        body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),
-                                  lustre_swab_ost_body);
-        if (body == NULL) {
-                CERROR ("can't unpack ost_body\n");
-                GOTO (out, rc = -EPROTO);
-        }
-
-        memcpy(oa, &body->oa, sizeof(*oa));
-
-        EXIT;
- out:
-        ptlrpc_req_finished(req);
-        return rc;
+        ptlrpc_set_add_req(set, req);
+        RETURN (0);
 }
 
 /* Find and cancel locally locks matched by @mode in the resource found by
