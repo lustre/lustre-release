@@ -672,10 +672,6 @@ struct dqacq_async_args {
         struct lustre_qunit *aa_qunit;
 };
 
-#define QUOTA_NOSENT(rc)                                                \
-        (rc == -EIO || rc == -EINTR || rc == -ENOTCONN ||               \
-         rc == -ETIMEDOUT || rc == -EWOULDBLOCK)
-
 static int dqacq_interpret(struct ptlrpc_request *req, void *data, int rc)
 {
         struct dqacq_async_args *aa = (struct dqacq_async_args *)data;
@@ -700,7 +696,7 @@ static int dqacq_interpret(struct ptlrpc_request *req, void *data, int rc)
          * this situation we should get qdata from request instead of
          * reply */
         rc1 = quota_get_qdata(req, qdata,
-                              QUOTA_NOSENT(rc) ? QUOTA_REQUEST : QUOTA_REPLY,
+                              (rc != 0) ? QUOTA_REQUEST : QUOTA_REPLY,
                               QUOTA_IMPORT);
         if (rc1 < 0) {
                 DEBUG_REQ(D_ERROR, req,
