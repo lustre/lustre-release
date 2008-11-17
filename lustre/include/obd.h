@@ -607,10 +607,11 @@ struct echo_client_obd {
 struct lov_qos_oss {
         struct obd_uuid     lqo_uuid;       /* ptlrpc's c_remote_uuid */
         struct list_head    lqo_oss_list;   /* link to lov_qos */
-        __u32               lqo_ost_count;  /* number of osts on this oss */
         __u64               lqo_bavail;     /* total bytes avail on OSS */
         __u64               lqo_penalty;    /* current penalty */
         __u64               lqo_penalty_per_obj; /* penalty decrease every obj*/
+        time_t              lqo_used;       /* last used time, seconds */
+        __u32               lqo_ost_count;  /* number of osts on this oss */
 };
 
 struct ltd_qos {
@@ -618,6 +619,7 @@ struct ltd_qos {
         __u64               ltq_penalty;     /* current penalty */
         __u64               ltq_penalty_per_obj; /* penalty decrease every obj*/
         __u64               ltq_weight;      /* net weighting */
+        time_t              ltq_used;        /* last used time, seconds */
         unsigned int        ltq_usable:1;    /* usable for striping */
 };
 
