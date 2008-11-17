@@ -1317,6 +1317,16 @@ ksocknal_process_receive (ksock_conn_t *conn)
                         __swab64s(&conn->ksnc_msg.ksm_zc_ack_cookie);
                 }
 
+                if (conn->ksnc_msg.ksm_type != KSOCK_MSG_NOOP &&
+                    conn->ksnc_msg.ksm_type != KSOCK_MSG_LNET) {
+                        CERROR("%s: Unknown message type: %x\n",
+                               libcfs_id2str(conn->ksnc_peer->ksnp_id),
+                               conn->ksnc_msg.ksm_type);
+                        ksocknal_new_packet(conn, 0);
+                        ksocknal_close_conn_and_siblings(conn, -EPROTO);
+                        return (-EPROTO);
+                }
+
                 if (conn->ksnc_msg.ksm_type == KSOCK_MSG_NOOP &&
                     conn->ksnc_msg.ksm_csum != 0 &&     /* has checksum */
                     conn->ksnc_msg.ksm_csum != conn->ksnc_rx_csum) {
@@ -1348,7 +1358,6 @@ ksocknal_process_receive (ksock_conn_t *conn)
                         ksocknal_new_packet (conn, 0);
                         return 0;       /* NOOP is done and just return */
                 }
-                LASSERT (conn->ksnc_msg.ksm_type == KSOCK_MSG_LNET);
 
                 conn->ksnc_rx_state = SOCKNAL_RX_LNET_HEADER;
                 conn->ksnc_rx_nob_wanted = sizeof(ksock_lnet_msg_t);
