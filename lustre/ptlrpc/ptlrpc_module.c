@@ -199,6 +199,7 @@ EXPORT_SYMBOL(ptlrpc_start_thread);
 EXPORT_SYMBOL(ptlrpc_unregister_service);
 EXPORT_SYMBOL(ptlrpc_daemonize);
 EXPORT_SYMBOL(ptlrpc_service_health_check);
+EXPORT_SYMBOL(ptlrpc_hpreq_reorder);
 
 /* pack_generic.c */
 EXPORT_SYMBOL(lustre_msg_check_version);
