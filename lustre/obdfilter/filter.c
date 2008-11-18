@@ -2151,6 +2151,7 @@ static int filter_llog_finish(struct obd_device *obd, int count)
                  * not come being marked rq_no_resend = 1.
                  */
                 llog_sync(ctxt, NULL);
+
                 /*
                  * Balance class_import_get() called in llog_receptor_accept().
                  * This is safe to do here, as llog is already synchronized and
