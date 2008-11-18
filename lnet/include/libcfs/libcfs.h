@@ -310,6 +310,12 @@ do {                                                                    \
         return RETURN__ret;                                             \
 } while (0)
 
+#define RETURN_EXIT                                                     \
+do {                                                                    \
+        EXIT_NESTING;                                                   \
+        return;                                                         \
+} while (0)
+
 #define ENTRY                                                           \
 ENTRY_NESTING;                                                          \
 do {                                                                    \
