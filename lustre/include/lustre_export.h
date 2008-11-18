@@ -158,6 +158,7 @@ struct obd_export {
                                   exp_replay_needed:1,
                                   exp_need_sync:1, /* needs sync from connect */
                                   exp_libclient:1; /* liblustre client? */
+        struct list_head          exp_queued_rpc;  /* RPC to be handled */
         /* VBR: per-export last committed */
         __u64                     exp_last_committed;
         union {
