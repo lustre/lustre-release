@@ -76,14 +76,26 @@ enum {
         LLOG_LCM_FL_EXIT        = 1 << 1
 };
 
+static void llcd_print(struct llog_canceld_ctxt *llcd, 
+                       const char *func, int line) 
+{
+        CDEBUG(D_RPCTRACE, "Llcd (%p) at %s:%d:\n", llcd, func, line);
+        CDEBUG(D_RPCTRACE, "  size: %d\n", llcd->llcd_size);
+        CDEBUG(D_RPCTRACE, "  ctxt: %p\n", llcd->llcd_ctxt);
+        CDEBUG(D_RPCTRACE, "  lcm : %p\n", llcd->llcd_lcm);
+        CDEBUG(D_RPCTRACE, "  cookiebytes : %d\n", llcd->llcd_cookiebytes);
+}
+
 /** 
  * Allocate new llcd from cache, init it and return to caller.
  * Bumps number of objects allocated.
  */
-static struct llog_canceld_ctxt *llcd_alloc(void)
+static struct llog_canceld_ctxt *llcd_alloc(struct llog_commit_master *lcm)
 {
         struct llog_canceld_ctxt *llcd;
         int llcd_size;
+
+        LASSERT(lcm != NULL);
 
         /* 
          * Payload of lustre_msg V2 is bigger.
@@ -98,7 +110,17 @@ static struct llog_canceld_ctxt *llcd_alloc(void)
         CFS_INIT_LIST_HEAD(&llcd->llcd_list);
         llcd->llcd_size = llcd_size;
         llcd->llcd_cookiebytes = 0;
+
+        spin_lock(&lcm->lcm_lock);
+        llcd->llcd_lcm = lcm;
+        atomic_inc(&lcm->lcm_count);
+        list_add_tail(&llcd->llcd_list, &lcm->lcm_llcds);
+        spin_unlock(&lcm->lcm_lock);
         atomic_inc(&llcd_count);
+
+        CDEBUG(D_RPCTRACE, "Alloc llcd %p on lcm %p (%d)\n",
+               llcd, lcm, atomic_read(&lcm->lcm_count));
+
         return llcd;
 }
 
@@ -107,9 +129,27 @@ static struct llog_canceld_ctxt *llcd_alloc(void)
  */
 static void llcd_free(struct llog_canceld_ctxt *llcd)
 {
+        struct llog_commit_master *lcm = llcd->llcd_lcm;
+
+        if (lcm) {
+                if (atomic_read(&lcm->lcm_count) == 0) {
+                        CERROR("Invalid llcd free %p\n", llcd);
+                        llcd_print(llcd, __FUNCTION__, __LINE__);
+                        LBUG();
+                }
+                spin_lock(&lcm->lcm_lock);
+                LASSERT(!list_empty(&llcd->llcd_list));
+                list_del_init(&llcd->llcd_list);
+                atomic_dec(&lcm->lcm_count);
+                spin_unlock(&lcm->lcm_lock);
+        }
+
+        CDEBUG(D_RPCTRACE, "Free llcd %p on lcm %p (%d)\n", 
+               llcd, lcm, atomic_read(&lcm->lcm_count));
+
         LASSERT(atomic_read(&llcd_count) > 0);
-        OBD_SLAB_FREE(llcd, llcd_cache, llcd->llcd_size);
         atomic_dec(&llcd_count);
+        OBD_SLAB_FREE(llcd, llcd_cache, llcd->llcd_size);
 }
 
 /**
@@ -128,20 +168,10 @@ static void llcd_copy(struct llog_canceld_ctxt *llcd,
  * 1 if yes and 0 otherwise.
  */
 static int llcd_fit(struct llog_canceld_ctxt *llcd,
-                 struct llog_cookie *cookies)
+                    struct llog_cookie *cookies)
 {
         return (llcd->llcd_size - 
                 llcd->llcd_cookiebytes) >= sizeof(*cookies);
-}
-
-static void llcd_print(struct llog_canceld_ctxt *llcd, 
-                       const char *func, int line) 
-{
-        CDEBUG(D_RPCTRACE, "Llcd (%p) at %s:%d:\n", llcd, func, line);
-        CDEBUG(D_RPCTRACE, "  size: %d\n", llcd->llcd_size);
-        CDEBUG(D_RPCTRACE, "  ctxt: %p\n", llcd->llcd_ctxt);
-        CDEBUG(D_RPCTRACE, "  lcm : %p\n", llcd->llcd_lcm);
-        CDEBUG(D_RPCTRACE, "  cookiebytes : %d\n", llcd->llcd_cookiebytes);
 }
 
 /**
@@ -153,7 +183,7 @@ static int
 llcd_interpret(struct ptlrpc_request *req, void *noused, int rc)
 {
         struct llog_canceld_ctxt *llcd = req->rq_async_args.pointer_arg[0];
-        CDEBUG(D_RPCTRACE, "Sent llcd %p (%d)\n", llcd, rc);
+        CDEBUG(D_RPCTRACE, "Sent llcd %p (%d) - killing it\n", llcd, rc);
         llcd_free(llcd);
         return 0;
 }
@@ -255,21 +285,15 @@ exit:
 static int
 llcd_attach(struct llog_ctxt *ctxt, struct llog_canceld_ctxt *llcd)
 {
-        struct llog_commit_master *lcm;
-
         LASSERT(ctxt != NULL && llcd != NULL);
         LASSERT_SEM_LOCKED(&ctxt->loc_sem);
         LASSERT(ctxt->loc_llcd == NULL);
-        lcm = ctxt->loc_lcm;
-        spin_lock(&lcm->lcm_lock);
-        atomic_inc(&lcm->lcm_count);
-        list_add_tail(&llcd->llcd_list, &lcm->lcm_llcds);
-        spin_unlock(&lcm->lcm_lock);
-        CDEBUG(D_RPCTRACE, "Attach llcd %p to ctxt %p (%d)\n",
-               llcd, ctxt, atomic_read(&lcm->lcm_count));
         llcd->llcd_ctxt = llog_ctxt_get(ctxt);
-        llcd->llcd_lcm = ctxt->loc_lcm;
         ctxt->loc_llcd = llcd;
+
+        CDEBUG(D_RPCTRACE, "Attach llcd %p to ctxt %p\n",
+               llcd, ctxt);
+
         return 0;
 }
 
@@ -279,7 +303,6 @@ llcd_attach(struct llog_ctxt *ctxt, struct llog_canceld_ctxt *llcd)
  */
 static struct llog_canceld_ctxt *llcd_detach(struct llog_ctxt *ctxt)
 {
-        struct llog_commit_master *lcm;
         struct llog_canceld_ctxt *llcd;
 
         LASSERT(ctxt != NULL);
@@ -289,22 +312,10 @@ static struct llog_canceld_ctxt *llcd_detach(struct llog_ctxt *ctxt)
         if (!llcd)
                 return NULL;
 
-        lcm = ctxt->loc_lcm;
-        if (atomic_read(&lcm->lcm_count) == 0) {
-                CERROR("Invalid detach occured %p:%p\n", ctxt, llcd);
-                llcd_print(llcd, __FUNCTION__, __LINE__);
-                LBUG();
-        }
-        spin_lock(&lcm->lcm_lock);
-        LASSERT(!list_empty(&llcd->llcd_list));
-        list_del_init(&llcd->llcd_list);
-        atomic_dec(&lcm->lcm_count);
-        spin_unlock(&lcm->lcm_lock);
-        ctxt->loc_llcd = NULL;
-        
-        CDEBUG(D_RPCTRACE, "Detach llcd %p from ctxt %p (%d)\n", 
-               llcd, ctxt, atomic_read(&lcm->lcm_count));
+        CDEBUG(D_RPCTRACE, "Detach llcd %p from ctxt %p\n", 
+               llcd, ctxt);
 
+        ctxt->loc_llcd = NULL;
         llog_ctxt_put(ctxt);
         return llcd;
 }
@@ -317,9 +328,9 @@ static struct llog_canceld_ctxt *llcd_get(struct llog_ctxt *ctxt)
 {
         struct llog_canceld_ctxt *llcd;
 
-        llcd = llcd_alloc();
+        llcd = llcd_alloc(ctxt->loc_lcm);
         if (!llcd) {
-                CERROR("Couldn't alloc an llcd for ctxt %p\n", ctxt);
+                CERROR("Can't alloc an llcd for ctxt %p\n", ctxt);
                 return NULL;
         }
         llcd_attach(ctxt, llcd);
@@ -331,10 +342,8 @@ static struct llog_canceld_ctxt *llcd_get(struct llog_ctxt *ctxt)
  */
 static void llcd_put(struct llog_ctxt *ctxt)
 {
-        struct llog_commit_master *lcm;
         struct llog_canceld_ctxt *llcd;
 
-        lcm = ctxt->loc_lcm;
         llcd = llcd_detach(ctxt);
         if (llcd)
                 llcd_free(llcd);
@@ -424,6 +433,18 @@ void llog_recov_thread_stop(struct llog_commit_master *lcm, int force)
                         llcd_print(llcd, __FUNCTION__, __LINE__);
                 }
                 spin_unlock(&lcm->lcm_lock);
+                
+                /*
+                 * No point to go further with busy llcds at this point
+                 * as this is clear bug. It might mean we got hanging
+                 * rpc which holds import ref and this means we will not
+                 * be able to cleanup anyways.
+                 *
+                 * Or we just missed to kill them when they were not
+                 * attached to ctxt. In this case our slab will remind
+                 * us about this a bit later.
+                 */
+                LBUG();
         }
         EXIT;
 }
@@ -627,6 +648,7 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
          * then do it.
          */
         if (llcd && (flags & OBD_LLOG_FL_SENDNOW)) {
+                CDEBUG(D_RPCTRACE, "Sync llcd %p\n", llcd);
                 rc = llcd_push(ctxt);
                 if (rc)
                         GOTO(out, rc);
