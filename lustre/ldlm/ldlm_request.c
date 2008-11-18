@@ -114,6 +114,7 @@ int ldlm_get_enq_timeout(struct ldlm_lock *lock)
         timeout = timeout + (timeout >> 1); /* 150% */
         return max(timeout, ldlm_enqueue_min);
 }
+EXPORT_SYMBOL(ldlm_get_enq_timeout);
 
 static int is_granted_or_cancelled(struct ldlm_lock *lock)
 {
