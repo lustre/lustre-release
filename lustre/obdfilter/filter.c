@@ -2336,20 +2336,20 @@ static int filter_llog_finish(struct obd_device *obd, int count)
 
         ctxt = llog_group_get_ctxt(&obd->obd_olg, LLOG_MDS_OST_REPL_CTXT);
         if (ctxt) {
+                /*
+                 * Make sure that no cached llcds left in recov_thread.
+                 * We actually do sync in disconnect time, but disconnect
+                 * may not come being marked rq_no_resend = 1.
+                 */
+                llog_sync(ctxt, NULL);
+
+                /*
+                 * Balance class_import_get() in llog_receptor_accept().
+                 * This is safe to do, as llog is already synchronized
+                 * and its import may go.
+                 */
                 mutex_down(&ctxt->loc_sem);
                 if (ctxt->loc_imp) {
-                        /*
-                         * Make sure that no cached llcds left in recov_thread.
-                         * We actually do sync in disconnect time, but disconnect
-                         * may not come being marked rq_no_resend = 1.
-                         */
-                        llog_sync(ctxt, NULL);
-
-                        /*
-                         * Balance class_import_get() in llog_receptor_accept().
-                         * This is safe to do, as llog is already synchronized
-                         * and its import may go.
-                         */
                         class_import_put(ctxt->loc_imp);
                         ctxt->loc_imp = NULL;
                 }
