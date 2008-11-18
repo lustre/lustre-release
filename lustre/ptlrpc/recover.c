@@ -245,19 +245,18 @@ int ptlrpc_set_import_active(struct obd_import *imp, int active)
         if (!active) {
                 LCONSOLE_WARN("setting import %s INACTIVE by administrator "
                               "request\n", obd2cli_tgt(imp->imp_obd));
-                ptlrpc_invalidate_import(imp);
 
+                /* set before invalidate to avoid messages about imp_inval
+                 * set without imp_deactive in ptlrpc_import_delay_req */
                 spin_lock(&imp->imp_lock);
                 imp->imp_deactive = 1;
                 spin_unlock(&imp->imp_lock);
+
+                ptlrpc_invalidate_import(imp);
         }
 
         /* When activating, mark import valid, and attempt recovery */
         if (active) {
-                spin_lock(&imp->imp_lock);
-                imp->imp_deactive = 0;
-                spin_unlock(&imp->imp_lock);
-
                 CDEBUG(D_HA, "setting import %s VALID\n",
                        obd2cli_tgt(imp->imp_obd));
                 rc = ptlrpc_recover_import(imp, NULL);
@@ -271,6 +270,13 @@ int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid)
 {
         int rc;
         ENTRY;
+
+        spin_lock(&imp->imp_lock);
+        if (atomic_read(&imp->imp_inval_count)) {
+                spin_unlock(&imp->imp_lock);
+                RETURN(-EINVAL);
+        }
+        spin_unlock(&imp->imp_lock);
 
         /* force import to be disconnected. */
         ptlrpc_set_import_discon(imp, 0);
