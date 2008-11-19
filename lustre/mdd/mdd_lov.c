@@ -604,7 +604,7 @@ int mdd_lovobj_unlink(const struct lu_env *env, struct mdd_device *mdd,
         CDEBUG(D_INFO, "destroying OSS object %d/%d\n",
                         (int)oa->o_id, (int)oa->o_gr);
 
-        rc = obd_destroy(lov_exp, oa, lsm, oti, NULL, BYPASS_CAPA);
+        rc = obd_destroy(lov_exp, oa, lsm, oti, NULL, NULL);
 
         obd_free_memmd(lov_exp, &lsm);
         RETURN(rc);
