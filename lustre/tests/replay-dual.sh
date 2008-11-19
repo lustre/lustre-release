@@ -31,6 +31,12 @@ remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 build_test_filter
 
 check_and_setup_lustre
+MOUNTED=$(mounted_lustre_filesystems)
+if ! $(echo $MOUNTED | grep -w -q $MOUNT2); then
+    zconf_mount $HOSTNAME $MOUNT2
+    MOUNTED2=yes
+fi
+
 assert_DIR
 rm -rf $DIR/[df][0-9]*
 
@@ -409,5 +415,6 @@ run_test 20 "recovery time is not increasing"
 equals_msg `basename $0`: test complete, cleaning up
 SLEEP=$((`date +%s` - $NOW))
 [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP
+[ "$MOUNTED2" = yes ] && zconf_umount $HOSTNAME $MOUNT2 || true
 check_and_cleanup_lustre
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
