@@ -164,6 +164,9 @@ struct osd_thread_info {
         struct dentry          oti_obj_dentry;
         struct dentry          oti_child_dentry;
 
+        /** dentry for Iterator context. */
+        struct dentry          oti_it_dentry;
+
         struct lu_fid          oti_fid;
         struct osd_inode_id    oti_id;
         /*

@@ -2976,7 +2976,7 @@ static struct dt_it *osd_it_ea_init(const struct lu_env *env,
         struct osd_thread_info  *info = osd_oti_get(env);
         struct osd_it_ea        *it   = &info->oti_it_ea;
         struct lu_object        *lo   = &dt->do_lu;
-        struct dentry           *obj_dentry = &info->oti_obj_dentry;
+        struct dentry           *obj_dentry = &info->oti_it_dentry;
         ENTRY;
         LASSERT(lu_object_exists(lo));
 
