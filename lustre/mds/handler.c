@@ -432,6 +432,9 @@ static int mds_cmd_cleanup(struct obd_device *obd)
                 LCONSOLE_WARN("%s: shutting down for failover; client state "
                               "will be preserved.\n", obd->obd_name);
 
+        if (strncmp(obd->obd_name, MDD_OBD_NAME, strlen(MDD_OBD_NAME)))
+                RETURN(0);
+
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         mds_lov_destroy_objids(obd);

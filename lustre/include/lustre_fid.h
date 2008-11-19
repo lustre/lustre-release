@@ -79,6 +79,38 @@ enum {
         LUSTRE_SEQ_SUPER_WIDTH = (LUSTRE_SEQ_META_WIDTH * LUSTRE_SEQ_META_WIDTH)
 };
 
+/** special fid seq: used for local object create. */
+#define FID_SEQ_LOCAL_FILE      (FID_SEQ_START + 1)
+
+/** special OID for local objects */
+enum {
+        /** \see osd_oi_index_create */
+        OSD_OI_FID_SMALL_OID    = 1UL,
+        OSD_OI_FID_OTHER_OID    = 2UL,
+        /** \see fld_mod_init */
+        FLD_INDEX_OID           = 3UL,
+        /** \see fid_mod_init */
+        FID_SEQ_CTL_OID         = 4UL,
+        FID_SEQ_SRV_OID         = 5UL,
+        /** \see mdd_mod_init */
+        MDD_ROOT_INDEX_OID      = 6UL,
+        MDD_ORPHAN_OID          = 7UL,
+        MDD_LOV_OBJ_OID         = 8UL,
+        MDD_CAPA_KEYS_OID       = 9UL,
+        MDD_OBJECTS_OID         = 10UL,
+        /** \see mdt_mod_init */
+        MDT_LAST_RECV_OID       = 11UL,
+        /** \see osd_mod_init */
+        OSD_REM_OBJ_DIR_OID     = 12UL,
+};
+
+static inline void lu_local_obj_fid(struct lu_fid *fid, __u32 oid)
+{
+        fid->f_seq = FID_SEQ_LOCAL_FILE;
+        fid->f_oid = oid;
+        fid->f_ver = 0;
+}
+
 enum lu_mgr_type {
         LUSTRE_SEQ_SERVER,
         LUSTRE_SEQ_CONTROLLER

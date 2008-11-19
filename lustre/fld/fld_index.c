@@ -64,14 +64,18 @@
 #include "fld_internal.h"
 
 const char fld_index_name[] = "fld";
+EXPORT_SYMBOL(fld_index_name);
 
-static const struct dt_index_features fld_index_features = {
+const struct dt_index_features fld_index_features = {
         .dif_flags       = DT_IND_UPDATE,
         .dif_keysize_min = sizeof(seqno_t),
         .dif_keysize_max = sizeof(seqno_t),
         .dif_recsize_min = sizeof(mdsno_t),
-        .dif_recsize_max = sizeof(mdsno_t)
+        .dif_recsize_max = sizeof(mdsno_t),
+        .dif_ptrsize     = 4
 };
+
+EXPORT_SYMBOL(fld_index_features);
 
 /*
  * number of blocks to reserve for particular operations. Should be function of
@@ -173,8 +177,11 @@ int fld_index_lookup(struct lu_server_fld *fld,
 
         rc = dt_obj->do_index_ops->dio_lookup(env, dt_obj, rec,
                                               fld_key(env, seq), BYPASS_CAPA);
-        if (rc == 0)
+        if (rc > 0) {
                 *mds = be64_to_cpu(*(__u64 *)rec);
+                rc = 0;
+        } else
+                rc = -ENOENT;
         RETURN(rc);
 }
 
@@ -187,7 +194,7 @@ int fld_index_init(struct lu_server_fld *fld,
         int rc;
         ENTRY;
 
-        dt_obj = dt_store_open(env, dt, fld_index_name, &fid);
+        dt_obj = dt_store_open(env, dt, "", fld_index_name, &fid);
         if (!IS_ERR(dt_obj)) {
                 fld->lsf_obj = dt_obj;
                 rc = dt_obj->do_ops->do_index_try(env, dt_obj,

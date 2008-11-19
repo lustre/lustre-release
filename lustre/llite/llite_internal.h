@@ -964,6 +964,7 @@ int lustre_check_remote_perm(struct inode *inode, int mask);
 
 /* llite/llite_fid.c */
 ino_t ll_fid_build_ino(struct ll_sb_info *sbi, struct lu_fid *fid);
+__u32 ll_fid_build_gen(struct ll_sb_info *sbi, struct lu_fid *fid);
 
 /* llite/llite_capa.c */
 extern cfs_timer_t ll_capa_timer;

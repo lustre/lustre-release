@@ -171,6 +171,8 @@ struct dt_index_features {
         size_t dif_recsize_min;
         /** maximal required record size, 0 if no limit */
         size_t dif_recsize_max;
+        /** pointer size for record */
+        size_t dif_ptrsize;
 };
 
 enum dt_index_flags {
@@ -196,9 +198,49 @@ extern const struct dt_index_features dt_directory_features;
  * It can contain any allocation hint in the future.
  */
 struct dt_allocation_hint {
-        struct dt_object *dah_parent;
-        __u32             dah_mode;
+        struct dt_object           *dah_parent;
+        __u32                       dah_mode;
 };
+
+/**
+ * object type specifier.
+ */
+
+enum dt_format_type {
+        DFT_REGULAR,
+        DFT_DIR,
+        /** for mknod */
+        DFT_NODE,
+        /** for special index */
+        DFT_INDEX,
+        /** for symbolic link */
+        DFT_SYM,
+};
+
+/**
+ * object format specifier.
+ */
+struct dt_object_format {
+        /** type for dt object */
+        enum dt_format_type dof_type;
+        union {
+                struct dof_regular {
+                } dof_reg;
+                struct dof_dir {
+                } dof_dir;
+                struct dof_node {
+                } dof_node;
+                /**
+                 * special index need feature as parameter to create
+                 * special idx
+                 */
+                struct dof_index {
+                        const struct dt_index_features *di_feat;
+                } dof_idx;
+        } u;
+};
+
+enum dt_format_type dt_mode_to_dft(__u32 mode);
 
 /**
  * Per-dt-object operations.
@@ -297,6 +339,7 @@ struct dt_object_operations {
         int   (*do_create)(const struct lu_env *env, struct dt_object *dt,
                            struct lu_attr *attr,
                            struct dt_allocation_hint *hint,
+                           struct dt_object_format *dof,
                            struct thandle *th);
 
         /**
@@ -397,7 +440,7 @@ struct dt_index_operations {
                  * precondition: dt_object_exists(dt);
                  */
                 struct dt_it *(*init)(const struct lu_env *env,
-                                      struct dt_object *dt, int writable,
+                                      struct dt_object *dt,
                                       struct lustre_capa *capa);
                 void          (*fini)(const struct lu_env *env,
                                       struct dt_it *di);
@@ -406,8 +449,6 @@ struct dt_index_operations {
                                       const struct dt_key *key);
                 void           (*put)(const struct lu_env *env,
                                       struct dt_it *di);
-                int            (*del)(const struct lu_env *env,
-                                      struct dt_it *di, struct thandle *th);
                 int           (*next)(const struct lu_env *env,
                                       struct dt_it *di);
                 struct dt_key *(*key)(const struct lu_env *env,
@@ -536,10 +577,30 @@ int dt_txn_hook_stop(const struct lu_env *env, struct thandle *txn);
 int dt_txn_hook_commit(const struct lu_env *env, struct thandle *txn);
 
 int dt_try_as_dir(const struct lu_env *env, struct dt_object *obj);
+
+/**
+ * Callback function used for parsing path.
+ * \see llo_store_resolve
+ */
+typedef int (*dt_entry_func_t)(const struct lu_env *env,
+                            const char *name,
+                            void *pvt);
+
+#define DT_MAX_PATH 1024
+
+int dt_path_parser(const struct lu_env *env,
+                   char *local, dt_entry_func_t entry_func,
+                   void *data);
+
 struct dt_object *dt_store_open(const struct lu_env *env,
-                                struct dt_device *dt, const char *name,
+                                struct dt_device *dt,
+                                const char *dirname,
+                                const char *filename,
                                 struct lu_fid *fid);
 
-/** @} dt */
+struct dt_object *dt_locate(const struct lu_env *env,
+                            struct dt_device *dev,
+                            const struct lu_fid *fid);
 
+/** @} dt */
 #endif /* __LUSTRE_DT_OBJECT_H */

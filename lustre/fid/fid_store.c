@@ -167,7 +167,7 @@ int seq_store_init(struct lu_server_seq *seq,
         name = seq->lss_type == LUSTRE_SEQ_SERVER ?
                 LUSTRE_SEQ_SRV_NAME : LUSTRE_SEQ_CTL_NAME;
 
-        dt_obj = dt_store_open(env, dt, name, &fid);
+        dt_obj = dt_store_open(env, dt, "", name, &fid);
         if (!IS_ERR(dt_obj)) {
                 seq->lss_obj = dt_obj;
 		rc = 0;

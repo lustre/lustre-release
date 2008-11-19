@@ -54,6 +54,8 @@
 /* struct dentry */
 #include <linux/dcache.h>
 #include <linux/lustre_iam.h>
+/* struct dirent64 */
+#include <linux/dirent.h>
 
 /* LUSTRE_OSD_NAME */
 #include <obd.h>
@@ -66,6 +68,7 @@
 
 struct inode;
 
+#define OSD_OII_NOGEN (0)
 #define OSD_COUNTERS (0)
 
 #ifdef HAVE_QUOTA_SUPPORT
@@ -90,7 +93,7 @@ struct osd_device {
          * XXX temporary stuff for object index: directory where every object
          * is named by its fid.
          */
-        struct dentry            *od_obj_area;
+        struct dt_object         *od_obj_area;
 
         /* Environment for transaction commit callback.
          * Currently, OSD is based on ext3/JBD. Transaction commit in ext3/JBD
@@ -117,23 +120,59 @@ struct osd_device {
         cfs_time_t                od_osfs_age;
         struct kstatfs            od_kstatfs;
         spinlock_t                od_osfs_lock;
+
+        /**
+         * The following flag indicates, if it is interop mode or not.
+         * It will be initialized, using mount param.
+         */
+        __u32                     od_iop_mode;
 };
 
+/**
+ * This is iterator's in-memory data structure in interoperability
+ * mode (i.e. iterator over ldiskfs style directory)
+ */
+struct osd_it_ea {
+        struct osd_object   *oie_obj;
+        /** used in ldiskfs iterator, to stored file pointer */
+        struct file          oie_file;
+        /** used in ldiskfs iterator, to store directory entry */
+        struct dirent64      oie_dirent64;
+        /** current file position */
+        __u64               oie_curr_pos;
+        /** next file position */
+        __u64               oie_next_pos;
+        /** namelen of the file */
+        __u8                oie_namelen;
+
+};
+
+/**
+ * Iterator's in-memory data structure for IAM mode.
+ */
+struct osd_it_iam {
+        struct osd_object     *oi_obj;
+        struct iam_path_descr *oi_ipd;
+        struct iam_iterator    oi_it;
+};
 
 struct osd_thread_info {
         const struct lu_env   *oti_env;
+        /**
+         * used for index operations.
+         */
+        struct dentry          oti_obj_dentry;
+        struct dentry          oti_child_dentry;
 
         struct lu_fid          oti_fid;
         struct osd_inode_id    oti_id;
         /*
          * XXX temporary: for ->i_op calls.
          */
-        struct qstr            oti_str;
         struct txn_param       oti_txn;
         /*
          * XXX temporary: fake dentry used by xattr calls.
          */
-        struct dentry          oti_dentry;
         struct timespec        oti_time;
         /*
          * XXX temporary: fake struct file for osd_object_sync
@@ -147,14 +186,43 @@ struct osd_thread_info {
 
         struct lu_fid_pack     oti_pack;
 
-        /* union to guarantee that ->oti_ipd[] has proper alignment. */
+        /**
+         * following ipd and it structures are used for osd_index_iam_lookup()
+         * these are defined separately as we might do index operation
+         * in open iterator session.
+         */
+
+        /** osd iterator context used for iterator session */
+
         union {
-        char                   oti_ipd[DX_IPD_MAX_SIZE];
+                struct osd_it_iam      oti_it;
+                /** ldiskfs iterator data structure, see osd_it_ea_{init, fini} */
+                struct osd_it_ea       oti_it_ea;
+        };
+
+
+        /** IAM iterator for index operation. */
+        struct iam_iterator    oti_idx_it;
+
+        /** union to guarantee that ->oti_ipd[] has proper alignment. */
+        union {
+                char           oti_it_ipd[DX_IPD_MAX_SIZE];
                 long long      oti_alignment_lieutenant;
         };
+
+        union {
+                char           oti_idx_ipd[DX_IPD_MAX_SIZE];
+                long long      oti_alignment_lieutenant_colonel;
+        };
+
+
         int                    oti_r_locks;
         int                    oti_w_locks;
         int                    oti_txns;
+        /** used in osd_fid_set() to put xattr */
+        struct lu_buf          oti_buf;
+        /** used in osd_ea_fid_set() to set fid into common ea */
+        struct lustre_mdt_attrs oti_mdt_attrs;
 #ifdef HAVE_QUOTA_SUPPORT
         struct osd_ctxt        oti_ctxt;
 #endif

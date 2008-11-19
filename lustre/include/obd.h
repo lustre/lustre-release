@@ -891,10 +891,39 @@ struct target_recovery_data {
 };
 
 enum filter_groups {
+        FILTER_GROUP_MDS0 = 0,
         FILTER_GROUP_LLOG = 1,
-        FILTER_GROUP_ECHO,
-        FILTER_GROUP_MDS0
+        FILTER_GROUP_ECHO = 2 ,
+        FILTER_GROUP_MDS1_N_BASE = 3
 };
+
+static inline __u64 obdo_mdsno(struct obdo *oa)
+{
+        if (oa->o_gr)
+                return oa->o_gr - FILTER_GROUP_MDS1_N_BASE;
+        return 0;
+}
+
+static inline int mdt_to_obd_objgrp(int mdtid)
+{
+        if (mdtid)
+                return FILTER_GROUP_MDS1_N_BASE + mdtid;
+        return 0;
+}
+
+/**
+  * In HEAD for CMD, the object is created in group number which is 3>=
+  * or indexing starts from 3. To test this assertions are added to disallow
+  * group 0. But to run 2.0 mds server on 1.8.x disk format (i.e. interop_mode)
+  * object in group 0 needs to be allowed.
+  * So for interop mode following changes needs to be done:
+  * 1. No need to assert on group 0 or allow group 0
+  * 2. The group number indexing starts from 0 instead of 3
+  */
+
+#define CHECK_MDS_GROUP(group)          (group == FILTER_GROUP_MDS0 || \
+                                         group > FILTER_GROUP_MDS1_N_BASE)
+#define LASSERT_MDS_GROUP(group)        LASSERT(CHECK_MDS_GROUP(group))
 
 struct obd_llog_group {
         struct list_head   olg_list;
@@ -1545,7 +1574,7 @@ static inline void init_obd_quota_ops(quota_interface_t *interface,
 
 static inline __u64 oinfo_mdsno(struct obd_info *oinfo)
 {
-        return oinfo->oi_oa->o_gr - FILTER_GROUP_MDS0;
+        return obdo_mdsno(oinfo->oi_oa);
 }
 
 static inline struct lustre_capa *oinfo_capa(struct obd_info *oinfo)

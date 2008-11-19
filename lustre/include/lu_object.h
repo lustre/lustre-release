@@ -156,6 +156,16 @@ struct lu_device_operations {
         int (*ldo_recovery_complete)(const struct lu_env *,
                                      struct lu_device *);
 
+        /**
+         * initialize local objects for device. this method called after layer has
+         * been initialized (after LCFG_SETUP stage) and before it starts serving
+         * user requests.
+         */
+
+        int (*ldo_prepare)(const struct lu_env *,
+                           struct lu_device *parent,
+                           struct lu_device *dev);
+
 };
 
 /**
@@ -1268,8 +1278,8 @@ int lu_site_stats_print(const struct lu_site *s, char *page, int count);
  * Common name structure to be passed around for various name related methods.
  */
 struct lu_name {
-        char    *ln_name;
-        int      ln_namelen;
+        const char    *ln_name;
+        int            ln_namelen;
 };
 
 /**
@@ -1320,5 +1330,4 @@ int  lu_kmem_init(struct lu_kmem_descr *caches);
 void lu_kmem_fini(struct lu_kmem_descr *caches);
 
 /** @} lu */
-
 #endif /* __LUSTRE_LU_OBJECT_H */

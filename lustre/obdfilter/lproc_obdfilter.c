@@ -103,8 +103,14 @@ static int lprocfs_filter_rd_last_id(char *page, char **start, off_t off,
 
         if (obd == NULL)
                 return 0;
+        rc = snprintf(page, count, LPU64"\n",filter_last_id(filter, 0));
+        if (rc < 0)
+                return rc;
+        page += rc;
+        count -= rc;
+        retval += rc;
 
-        for (i = FILTER_GROUP_MDS0; i < filter->fo_group_count; i++) {
+        for (i = FILTER_GROUP_MDS1_N_BASE + 1; i < filter->fo_group_count; i++) {
                 rc = snprintf(page, count, LPU64"\n",filter_last_id(filter, i));
                 if (rc < 0) {
                         retval = rc;

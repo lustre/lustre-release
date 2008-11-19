@@ -15,6 +15,7 @@ export GSS=false
 export GSS_KRB5=false
 export GSS_PIPEFS=false
 export IDENTITY_UPCALL=default
+
 #export PDSH="pdsh -S -Rssh -w"
 
 # eg, assert_env LUSTRE MDSNODES OSTNODES CLIENTS
@@ -1080,6 +1081,11 @@ mdsmkfsopts()
 }
 
 formatall() {
+    if [ "$IAMDIR" == "yes" ]; then
+        MDS_MKFS_OPTS="$MDS_MKFS_OPTS --iam-dir"
+        MDSn_MKFS_OPTS="$MDSn_MKFS_OPTS --iam-dir"
+    fi
+
     [ "$FSTYPE" ] && FSTYPE_OPT="--backfstype $FSTYPE"
 
     if [ ! -z $SEC ]; then

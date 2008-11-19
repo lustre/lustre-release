@@ -77,3 +77,15 @@ ino_t ll_fid_build_ino(struct ll_sb_info *sbi,
         ino = ino | 0x80000000;
         RETURN(ino);
 }
+
+__u32 ll_fid_build_gen(struct ll_sb_info *sbi,
+                       struct lu_fid *fid)
+{
+        __u32 gen = 0;
+        ENTRY;
+
+        if (fid_is_igif(fid)) {
+                gen = lu_igif_gen(fid);
+        }
+        RETURN(gen);
+}

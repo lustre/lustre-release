@@ -1512,6 +1512,12 @@ void cl_global_fini(void);
 int  lu_ref_global_init(void);
 void lu_ref_global_fini(void);
 
+int dt_global_init(void);
+void dt_global_fini(void);
+
+int llo_global_init(void);
+void llo_global_fini(void);
+
 /**
  * Initialization of global lu_* data.
  */
@@ -1549,10 +1555,22 @@ int lu_global_init(void)
                 return -ENOMEM;
 
         result = lu_time_global_init();
-        if (result != 0)
-                return result;
+        if (result)
+                GOTO(out, result);
 
-        return cl_global_init();
+#ifdef __KERNEL__
+        result = dt_global_init();
+        if (result)
+                GOTO(out, result);
+
+        result = llo_global_init();
+        if (result)
+                GOTO(out, result);
+#endif
+        result = cl_global_init();
+out:
+
+        return result;
 }
 
 /**
@@ -1561,6 +1579,10 @@ int lu_global_init(void)
 void lu_global_fini(void)
 {
         cl_global_fini();
+#ifdef __KERNEL__
+        llo_global_fini();
+        dt_global_fini();
+#endif
         lu_time_global_fini();
         if (lu_site_shrinker != NULL) {
                 remove_shrinker(lu_site_shrinker);
@@ -1739,4 +1761,3 @@ void lu_kmem_fini(struct lu_kmem_descr *caches)
         }
 }
 EXPORT_SYMBOL(lu_kmem_fini);
-

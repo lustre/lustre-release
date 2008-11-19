@@ -269,10 +269,24 @@ struct lu_fid {
 };
 
 /**
+ * Following struct for MDT attributes, that will be kept inode's EA.
+ * Introduced in 2.0 release (please see b15993, for details)
+ */
+struct lustre_mdt_attrs {
+        /** FID of this inode */
+        struct lu_fid  lma_self_fid;
+        /** SOM state, mdt/ost type, others */
+        __u64   lma_flags;
+        /** total sectors in objects */
+        __u64   lma_som_sectors;
+};
+
+
+/**
  * fid constants
  */
 enum {
-        /* initial fid id value */
+        /** initial fid id value */
         LUSTRE_FID_INIT_OID  = 1UL
 };
 

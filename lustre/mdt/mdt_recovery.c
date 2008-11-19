@@ -108,21 +108,49 @@ int mdt_record_write(const struct lu_env *env,
                 rc = -EFAULT;
         return rc;
 }
-/* only one record write */
 
-enum {
-        MDT_TXN_LAST_RCVD_WRITE_CREDITS = 3
-};
+static inline int mdt_trans_credit_get(const struct lu_env *env,
+                                       struct mdt_device *mdt,
+                                       enum mdt_txn_op op)
+{
+        struct dt_device *dev = mdt->mdt_bottom;
+        int cr;
+        switch (op) {
+                case MDT_TXN_CAPA_KEYS_WRITE_OP:
+                case MDT_TXN_LAST_RCVD_WRITE_OP:
+                        cr = dev->dd_ops->dt_credit_get(env,
+                                                        dev,
+                                                        DTO_WRITE_BLOCK);
+                break;
+                default:
+                        LBUG();
+        }
+        return cr;
+}
+
+void mdt_trans_credit_init(const struct lu_env *env,
+                           struct mdt_device *mdt,
+                           enum mdt_txn_op op)
+{
+        struct mdt_thread_info *mti;
+        struct txn_param *p;
+        int cr;
+
+        mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
+        p = &mti->mti_txn_param;
+
+        cr = mdt_trans_credit_get(env, mdt, op);
+        txn_param_init(p, cr);
+}
 
 struct thandle* mdt_trans_start(const struct lu_env *env,
-                                struct mdt_device *mdt, int credits)
+                                struct mdt_device *mdt)
 {
         struct mdt_thread_info *mti;
         struct txn_param *p;
 
         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
         p = &mti->mti_txn_param;
-        txn_param_init(p, credits);
 
         /* export can require sync operations */
         if (mti->mti_exp != NULL)
@@ -225,7 +253,8 @@ static inline int mdt_last_rcvd_header_write(const struct lu_env *env,
 
         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
 
-        th = mdt_trans_start(env, mdt, MDT_TXN_LAST_RCVD_WRITE_CREDITS);
+        mdt_trans_credit_init(env, mdt, MDT_TXN_LAST_RCVD_WRITE_OP);
+        th = mdt_trans_start(env, mdt);
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
 
@@ -419,7 +448,8 @@ err_client:
 }
 
 static int mdt_server_data_init(const struct lu_env *env,
-                                struct mdt_device *mdt)
+                                struct mdt_device *mdt,
+                                struct lustre_sb_info *lsi)
 {
         struct lr_server_data  *lsd = &mdt->mdt_lsd;
         struct lsd_client_data *lcd = NULL;
@@ -427,6 +457,7 @@ static int mdt_server_data_init(const struct lu_env *env,
         struct mdt_thread_info *mti;
         struct dt_object       *obj;
         struct lu_attr         *la;
+        struct lustre_disk_data  *ldd;
         unsigned long last_rcvd_size;
         __u64 mount_count;
         int rc;
@@ -479,7 +510,13 @@ static int mdt_server_data_init(const struct lu_env *env,
         }
         mount_count = lsd->lsd_mount_count;
 
+        ldd = lsi->lsi_ldd;
+
+        if (ldd->ldd_flags & LDD_F_IAM_DIR)
+                lsd->lsd_feature_incompat |= OBD_INCOMPAT_IAM_DIR;
+
         lsd->lsd_feature_compat = OBD_COMPAT_MDT;
+        lsd->lsd_feature_incompat |= OBD_INCOMPAT_FID;
 
         spin_lock(&mdt->mdt_transno_lock);
         mdt->mdt_last_transno = lsd->lsd_last_transno;
@@ -616,7 +653,8 @@ int mdt_client_new(const struct lu_env *env, struct mdt_device *mdt)
         LASSERTF(med->med_lr_off > 0, "med_lr_off = %llu\n", med->med_lr_off);
         /* write new client data */
         off = med->med_lr_off;
-        th = mdt_trans_start(env, mdt, MDT_TXN_LAST_RCVD_WRITE_CREDITS);
+        mdt_trans_credit_init(env, mdt, MDT_TXN_LAST_RCVD_WRITE_OP);
+        th = mdt_trans_start(env, mdt);
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
 
@@ -739,7 +777,8 @@ int mdt_client_del(const struct lu_env *env, struct mdt_device *mdt)
          * mdt->mdt_last_rcvd may be NULL that time.
          */
         if (mdt->mdt_last_rcvd != NULL) {
-                th = mdt_trans_start(env, mdt, MDT_TXN_LAST_RCVD_WRITE_CREDITS);
+                mdt_trans_credit_init(env, mdt, MDT_TXN_LAST_RCVD_WRITE_OP);
+                th = mdt_trans_start(env, mdt);
                 if (IS_ERR(th))
                         GOTO(free, rc = PTR_ERR(th));
 
@@ -847,7 +886,10 @@ extern struct lu_context_key mdt_thread_key;
 static int mdt_txn_start_cb(const struct lu_env *env,
                             struct txn_param *param, void *cookie)
 {
-        param->tp_credits += MDT_TXN_LAST_RCVD_WRITE_CREDITS;
+        struct mdt_device *mdt = cookie;
+
+        param->tp_credits += mdt_trans_credit_get(env, mdt,
+                                                  MDT_TXN_LAST_RCVD_WRITE_OP);
         return 0;
 }
 
@@ -946,7 +988,8 @@ static int mdt_txn_commit_cb(const struct lu_env *env,
 }
 
 int mdt_fs_setup(const struct lu_env *env, struct mdt_device *mdt,
-                 struct obd_device *obd)
+                 struct obd_device *obd,
+                 struct lustre_sb_info *lsi)
 {
         struct lu_fid fid;
         struct dt_object *o;
@@ -965,10 +1008,10 @@ int mdt_fs_setup(const struct lu_env *env, struct mdt_device *mdt,
 
         dt_txn_callback_add(mdt->mdt_bottom, &mdt->mdt_txn_cb);
 
-        o = dt_store_open(env, mdt->mdt_bottom, LAST_RCVD, &fid);
+        o = dt_store_open(env, mdt->mdt_bottom, "", LAST_RCVD, &fid);
         if (!IS_ERR(o)) {
                 mdt->mdt_last_rcvd = o;
-                rc = mdt_server_data_init(env, mdt);
+                rc = mdt_server_data_init(env, mdt, lsi);
                 if (rc)
                         GOTO(put_last_rcvd, rc);
         } else {
@@ -977,7 +1020,7 @@ int mdt_fs_setup(const struct lu_env *env, struct mdt_device *mdt,
                 RETURN(rc);
         }
 
-        o = dt_store_open(env, mdt->mdt_bottom, CAPA_KEYS, &fid);
+        o = dt_store_open(env, mdt->mdt_bottom, "", CAPA_KEYS, &fid);
         if (!IS_ERR(o)) {
                 mdt->mdt_ck_obj = o;
                 rc = mdt_capa_keys_init(env, mdt);

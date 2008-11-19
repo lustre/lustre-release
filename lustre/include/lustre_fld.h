@@ -46,6 +46,10 @@
 struct lu_client_fld;
 struct lu_server_fld;
 
+extern const struct dt_index_features fld_index_features;
+extern const char fld_index_name[];
+
+
 struct fld_stats {
         __u64   fst_count;
         __u64   fst_cache;

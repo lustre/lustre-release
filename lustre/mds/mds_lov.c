@@ -307,7 +307,7 @@ int mds_lov_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
          * objects above this ID, they will be removed. */
         memset(&oa, 0, sizeof(oa));
         oa.o_flags = OBD_FL_DELORPHAN;
-        oa.o_gr = FILTER_GROUP_MDS0 + mds->mds_id;
+        oa.o_gr = mdt_to_obd_objgrp(mds->mds_id);
         oa.o_valid = OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
         if (ost_uuid != NULL)
                 oti.oti_ost_uuid = ost_uuid;
@@ -483,7 +483,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
 #endif
         data->ocd_version = LUSTRE_VERSION_CODE;
-        data->ocd_group = mds->mds_id +  FILTER_GROUP_MDS0;
+        data->ocd_group = mdt_to_obd_objgrp(mds->mds_id);
         /* NB: lov_connect() needs to fill in .ocd_index for each OST */
         rc = obd_connect(NULL, &conn, mds->mds_osc_obd, &obd->obd_uuid, data, NULL);
         OBD_FREE(data, sizeof(*data));
@@ -633,7 +633,7 @@ static int __mds_lov_synchronize(void *data)
                 CERROR("%s failed at update_mds: %d\n", obd_uuid2str(uuid), rc);
                 GOTO(out, rc);
         }
-        mgi.group = FILTER_GROUP_MDS0 + mds->mds_id;
+        mgi.group = mdt_to_obd_objgrp(mds->mds_id);
         mgi.uuid = uuid;
 
         rc = obd_set_info_async(mds->mds_osc_exp, sizeof(KEY_MDS_CONN),

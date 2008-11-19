@@ -433,10 +433,15 @@ static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 
         ldt = obd->obd_type->typ_lu;
         if (ldt != NULL) {
+                struct lu_context  session_ctx;
                 struct lu_env env;
+                lu_context_init(&session_ctx, LCT_SESSION);
+                session_ctx.lc_thread = NULL;
+                lu_context_enter(&session_ctx);
 
                 rc = lu_env_init(&env, ldt->ldt_ctx_tags);
                 if (rc == 0) {
+                        env.le_ses = &session_ctx;
                         d = ldt->ldt_ops->ldto_device_alloc(&env, ldt, cfg);
                         lu_env_fini(&env);
                         if (!IS_ERR(d)) {
@@ -446,6 +451,9 @@ static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
                         } else
                                 rc = PTR_ERR(d);
                 }
+                lu_context_exit(&session_ctx);
+                lu_context_fini(&session_ctx);
+
         } else {
                 OBD_CHECK_DT_OP(obd, setup, -EOPNOTSUPP);
                 OBD_COUNTER_INCREMENT(obd, setup);

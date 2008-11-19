@@ -230,8 +230,8 @@ out_up:
 EXPORT_SYMBOL(simple_mknod);
 
 /* utility to make a directory */
-struct dentry *simple_mkdir(struct dentry *dir, struct vfsmount *mnt,
-                            char *name, int mode, int fix)
+struct dentry *simple_mkdir(struct dentry *dir, struct vfsmount *mnt, 
+                            const char *name, int mode, int fix)
 {
         struct dentry *dchild;
         int err = 0;

@@ -4028,11 +4028,14 @@ out:
 }
 
 static int mdt_stack_init(struct lu_env *env,
-                          struct mdt_device *m, struct lustre_cfg *cfg)
+                          struct mdt_device *m,
+                          struct lustre_cfg *cfg,
+                          struct lustre_mount_info  *lmi)
 {
         struct lu_device  *d = &m->mdt_md_dev.md_lu_dev;
         struct lu_device  *tmp;
         struct md_device  *md;
+        struct lu_device  *child_lu_dev;
         int rc;
         ENTRY;
 
@@ -4067,7 +4070,15 @@ static int mdt_stack_init(struct lu_env *env,
         /* process setup config */
         tmp = &m->mdt_md_dev.md_lu_dev;
         rc = tmp->ld_ops->ldo_process_config(env, tmp, cfg);
-        GOTO(out, rc);
+        if (rc)
+                GOTO(out, rc);
+
+        /* initialize local objects */
+        child_lu_dev = &m->mdt_child->md_lu_dev;
+
+        rc = child_lu_dev->ld_ops->ldo_prepare(env,
+                                               &m->mdt_md_dev.md_lu_dev,
+                                               child_lu_dev);
 out:
         /* fini from last known good lu_device */
         if (rc)
@@ -4210,6 +4221,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         const char                *num = lustre_cfg_string(cfg, 2);
         struct lustre_mount_info  *lmi = NULL;
         struct lustre_sb_info     *lsi;
+        struct lustre_disk_data   *ldd;
         struct lu_site            *s;
         struct md_site            *mite;
         const char                *identity_upcall = "NONE";
@@ -4217,6 +4229,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         struct md_device          *next;
 #endif
         int                        rc;
+        int                        node_id;
         ENTRY;
 
         md_device_init(&m->mdt_md_dev, ldt);
@@ -4253,6 +4266,15 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         } else {
                 lsi = s2lsi(lmi->lmi_sb);
                 fsoptions_to_mdt_flags(m, lsi->lsi_lmd->lmd_opts);
+                server_put_mount_2(dev, lmi->lmi_mnt);
+                /* CMD is supported only in IAM mode */
+                ldd = lsi->lsi_ldd;
+                LASSERT(num);
+                node_id = simple_strtol(num, NULL, 10);
+                if (!(ldd->ldd_flags & LDD_F_IAM_DIR) && node_id) {
+                        CERROR("CMD Operation not allowed in IOP mode\n");
+                        RETURN(-EINVAL);
+                }
         }
 
         rwlock_init(&m->mdt_sptlrpc_lock);
@@ -4305,12 +4327,11 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                                    lprocfs_nid_stats_clear_write, obd, NULL);
 
         /* set server index */
-        LASSERT(num);
-        lu_site2md(s)->ms_node_id = simple_strtol(num, NULL, 10);
+        lu_site2md(s)->ms_node_id = node_id;
 
         /* failover is the default
          * FIXME: we do not failout mds0/mgs, which may cause some problems.
-         * assumed whose ls_node_id == 0 XXX
+         * assumed whose ms_node_id == 0 XXX
          * */
         obd->obd_replayable = 1;
         /* No connection accepted until configurations will finish */
@@ -4325,7 +4346,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         }
 
         /* init the stack */
-        rc = mdt_stack_init((struct lu_env *)env, m, cfg);
+        rc = mdt_stack_init((struct lu_env *)env, m, cfg, lmi);
         if (rc) {
                 CERROR("Can't init device stack, rc %d\n", rc);
                 GOTO(err_fini_proc, rc);
@@ -4370,7 +4391,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         if (rc)
                 GOTO(err_free_ns, rc);
 
-        rc = mdt_fs_setup(env, m, obd);
+        rc = mdt_fs_setup(env, m, obd, lsi);
         if (rc)
                 GOTO(err_capa, rc);
 
@@ -4492,6 +4513,19 @@ static int mdt_process_config(const struct lu_env *env,
                 struct lprocfs_static_vars lvars;
                 struct obd_device *obd = d->ld_obd;
 
+                /*
+                 * For interoperability between 1.8 and 2.0,
+                 * skip old "mdt.group_upcall" param.
+                 */
+                {
+                        char *param = lustre_cfg_string(cfg, 1);
+                        if (param && !strncmp("mdt.group_upcall", param, 16)) {
+                                CWARN("For 1.8 interoperability, skip this"
+                                       " mdt.group_upcall. It is obsolete\n");
+                                break;
+                        }
+                }
+
                 lprocfs_mdt_init_vars(&lvars);
                 rc = class_process_proc_param(PARAM_MDT, lvars.obd_vars,
                                               cfg, obd);
@@ -4583,7 +4617,7 @@ static void mdt_object_free(const struct lu_env *env, struct lu_object *o)
 
 static const struct lu_device_operations mdt_lu_ops = {
         .ldo_object_alloc   = mdt_object_alloc,
-        .ldo_process_config = mdt_process_config
+        .ldo_process_config = mdt_process_config,
 };
 
 static const struct lu_object_operations mdt_obj_ops = {
@@ -5200,10 +5234,18 @@ static struct lu_device_type mdt_device_type = {
         .ldt_ctx_tags = LCT_MD_THREAD
 };
 
+static struct lu_local_obj_desc mdt_last_recv = {
+        .llod_name      = LAST_RCVD,
+        .llod_oid       = MDT_LAST_RECV_OID,
+        .llod_is_index  = 0,
+};
+
 static int __init mdt_mod_init(void)
 {
         struct lprocfs_static_vars lvars;
         int rc;
+
+        llo_local_obj_register(&mdt_last_recv);
 
         mdt_num_threads = MDT_NUM_THREADS;
         lprocfs_mdt_init_vars(&lvars);

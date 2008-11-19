@@ -183,6 +183,9 @@ struct md_op_spec {
 
         /** Check for split */
         int        sp_ck_split;
+
+        /** to create directory */
+        const struct dt_index_features *sp_feat;
 };
 
 /**
@@ -802,6 +805,51 @@ static inline int mdo_rename_tgt(const struct lu_env *env,
         }
 }
 
-/** @} md */
+struct dt_device;
+/**
+ * Structure to hold object information. This is used to create object
+ */
+struct lu_local_obj_desc {
+        const char                      *llod_name;
+        __u32                            llod_oid;
+        int                              llod_is_index;
+        const struct dt_index_features * llod_feat;
+        struct list_head                 llod_linkage;
+};
 
+struct md_object *llo_store_resolve(const struct lu_env *env,
+                                    struct md_device *md,
+                                    struct dt_device *dt,
+                                    const char *path,
+                                    struct lu_fid *fid);
+
+struct md_object *llo_store_open(const struct lu_env *env,
+                                 struct md_device *md,
+                                 struct dt_device *dt,
+                                 const char *dirname,
+                                 const char *objname,
+                                 struct lu_fid *fid);
+
+struct md_object *llo_store_create_index(const struct lu_env *env,
+                                         struct md_device *md,
+                                         struct dt_device *dt,
+                                         const char *dirname,
+                                         const char *objname,
+                                         const struct lu_fid *fid,
+                                         const struct dt_index_features *feat);
+
+struct md_object *llo_store_create(const struct lu_env *env,
+                                   struct md_device *md,
+                                   struct dt_device *dt,
+                                   const char *dirname,
+                                   const char *objname,
+                                   const struct lu_fid *fid);
+
+int llo_local_obj_register(struct lu_local_obj_desc *);
+
+int llo_local_objects_setup(const struct lu_env *env,
+                             struct md_device * md,
+                             struct dt_device * dt);
+
+/** @} md */
 #endif /* _LINUX_MD_OBJECT_H */

@@ -96,7 +96,7 @@ static int osc_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
 
         if (lsm) {
                 LASSERT(lsm->lsm_object_id);
-                LASSERT(lsm->lsm_object_gr);
+                LASSERT_MDS_GROUP(lsm->lsm_object_gr);
                 (*lmmp)->lmm_object_id = cpu_to_le64(lsm->lsm_object_id);
                 (*lmmp)->lmm_object_gr = cpu_to_le64(lsm->lsm_object_gr);
         }
@@ -153,7 +153,7 @@ static int osc_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
                 (*lsmp)->lsm_object_id = le64_to_cpu (lmm->lmm_object_id);
                 (*lsmp)->lsm_object_gr = le64_to_cpu (lmm->lmm_object_gr);
                 LASSERT((*lsmp)->lsm_object_id);
-                LASSERT((*lsmp)->lsm_object_gr);
+                LASSERT_MDS_GROUP((*lsmp)->lsm_object_gr);
         }
 
         (*lsmp)->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES;
@@ -312,8 +312,10 @@ static int osc_setattr(struct obd_export *exp, struct obd_info *oinfo,
         int                    rc;
         ENTRY;
 
-        LASSERT(!(oinfo->oi_oa->o_valid & OBD_MD_FLGROUP) ||
-                                        oinfo->oi_oa->o_gr > 0);
+        LASSERTF(!(oinfo->oi_oa->o_valid & OBD_MD_FLGROUP) ||
+                 CHECK_MDS_GROUP(oinfo->oi_oa->o_gr),
+                 "oinfo->oi_oa->o_valid="LPU64" oinfo->oi_oa->o_gr="LPU64"\n",
+                 oinfo->oi_oa->o_valid, oinfo->oi_oa->o_gr);
 
         req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_OST_SETATTR);
         if (req == NULL)
@@ -3634,7 +3636,7 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
 
                 oscc->oscc_oa.o_gr = (*(__u32 *)val);
                 oscc->oscc_oa.o_valid |= OBD_MD_FLGROUP;
-                LASSERT(oscc->oscc_oa.o_gr > 0);
+                LASSERT_MDS_GROUP(oscc->oscc_oa.o_gr);
                 req->rq_interpret_reply = osc_setinfo_mds_conn_interpret;
         }
 

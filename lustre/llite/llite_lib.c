@@ -1619,6 +1619,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         }
 #endif
         inode->i_ino = ll_fid_build_ino(sbi, &body->fid1);
+        inode->i_generation = ll_fid_build_gen(sbi, &body->fid1);
 
         if (body->valid & OBD_MD_FLATIME &&
             body->atime > LTIME_S(inode->i_atime))

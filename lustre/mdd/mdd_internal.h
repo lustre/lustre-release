@@ -135,13 +135,6 @@ struct mdd_object {
 #endif
 };
 
-struct orph_key {
-        /* fid of the object*/
-        struct lu_fid ok_fid;
-        /* type of operation: unlink, truncate */
-        __u32         ok_op;
-} __attribute__((packed));
-
 struct mdd_thread_info {
         struct txn_param          mti_param;
         struct lu_fid             mti_fid;
@@ -149,7 +142,7 @@ struct mdd_thread_info {
         struct md_attr            mti_ma;
         struct lu_attr            mti_la_for_fix;
         struct obd_info           mti_oi;
-        struct orph_key           mti_orph_key;
+        char                      mti_orph_key[NAME_MAX + 1];
         struct obd_trans_info     mti_oti;
         struct lu_buf             mti_buf;
         struct obdo               mti_oa;
@@ -161,8 +154,13 @@ struct mdd_thread_info {
         int                       mti_max_lmm_size;
         struct llog_cookie       *mti_max_cookie;
         int                       mti_max_cookie_size;
+        struct dt_object_format   mti_dof;
         struct obd_quotactl       mti_oqctl;
 };
+
+extern const char orph_index_name[];
+
+extern const struct dt_index_features orph_index_features;
 
 struct lov_mds_md *mdd_max_lmm_get(const struct lu_env *env,
                                    struct mdd_device *mdd);
@@ -214,7 +212,8 @@ int mdd_attr_get_internal_locked(const struct lu_env *env,
                                  struct md_attr *ma);
 int mdd_object_create_internal(const struct lu_env *env, struct mdd_object *p,
                                struct mdd_object *c, struct md_attr *ma,
-                               struct thandle *handle);
+                               struct thandle *handle,
+                               const struct md_op_spec *spec);
 int mdd_attr_check_set_internal_locked(const struct lu_env *env,
                                        struct mdd_object *obj,
                                        struct lu_attr *attr,
@@ -262,7 +261,7 @@ int mdd_finish_unlink(const struct lu_env *env, struct mdd_object *obj,
                       struct md_attr *ma, struct thandle *th);
 int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
                           struct mdd_object *child, struct md_attr *ma,
-                          struct thandle *handle);
+                          struct thandle *handle, const struct md_op_spec *spec);
 int mdd_link_sanity_check(const struct lu_env *env, struct mdd_object *tgt_obj,
                           const struct lu_name *lname, struct mdd_object *src_obj);
 /* mdd_lov.c */
@@ -347,6 +346,9 @@ int mdd_log_txn_param_build(const struct lu_env *env, struct md_object *obj,
                             struct md_attr *ma, enum mdd_txn_op);
 int mdd_setattr_txn_param_build(const struct lu_env *env, struct md_object *obj,
                                 struct md_attr *ma, enum mdd_txn_op);
+
+int mdd_lov_destroy(const struct lu_env *env, struct mdd_device *mdd,
+                    struct mdd_object *obj, struct lu_attr *la);
 
 static inline void mdd_object_put(const struct lu_env *env,
                                   struct mdd_object *o)
@@ -473,6 +475,15 @@ static inline struct mdd_device *mdd_obj2mdd_dev(struct mdd_object *obj)
 static inline const struct lu_fid *mdo2fid(const struct mdd_object *obj)
 {
         return lu_object_fid(&obj->mod_obj.mo_lu);
+}
+
+static inline const struct dt_rec *__mdd_fid_rec(const struct lu_env *env,
+                                                 const struct lu_fid *fid)
+{
+        struct lu_fid_pack *pack = &mdd_env_info(env)->mti_pack;
+
+        fid_pack(pack, fid, &mdd_env_info(env)->mti_fid2);
+        return (const struct dt_rec *)pack;
 }
 
 static inline umode_t mdd_object_type(const struct mdd_object *obj)
@@ -658,10 +669,11 @@ static inline
 int mdo_create_obj(const struct lu_env *env, struct mdd_object *o,
                    struct lu_attr *attr,
                    struct dt_allocation_hint *hint,
+                   struct dt_object_format *dof,
                    struct thandle *handle)
 {
         struct dt_object *next = mdd_object_child(o);
-        return next->do_ops->do_create(env, next, attr, hint, handle);
+        return next->do_ops->do_create(env, next, attr, hint, dof, handle);
 }
 
 static inline struct obd_capa *mdo_capa_get(const struct lu_env *env,

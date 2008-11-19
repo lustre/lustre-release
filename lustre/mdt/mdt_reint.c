@@ -145,6 +145,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
                  * or not.
                  */
                 info->mti_spec.sp_cr_lookup = 1;
+                info->mti_spec.sp_feat = &dt_directory_features;
 
                 lname = mdt_name(info->mti_env, (char *)rr->rr_name,
                                  rr->rr_namelen);

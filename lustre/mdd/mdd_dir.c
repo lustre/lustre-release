@@ -75,7 +75,7 @@ static int
 __mdd_lookup_locked(const struct lu_env *env, struct md_object *pobj,
                     const struct lu_name *lname, struct lu_fid* fid, int mask)
 {
-        char *name = lname->ln_name;
+        const char *name = lname->ln_name;
         struct mdd_object *mdd_obj = md2mdd_obj(pobj);
         struct dynlock_handle *dlh;
         int rc;
@@ -232,7 +232,7 @@ static int mdd_dir_is_empty(const struct lu_env *env,
                 RETURN(-ENOTDIR);
 
         iops = &obj->do_index_ops->dio_it;
-        it = iops->init(env, obj, 0, BYPASS_CAPA);
+        it = iops->init(env, obj, BYPASS_CAPA);
         if (it != NULL) {
                 result = iops->get(env, it, (const void *)"");
                 if (result > 0) {
@@ -458,15 +458,6 @@ int mdd_link_sanity_check(const struct lu_env *env,
         RETURN(rc);
 }
 
-const struct dt_rec *__mdd_fid_rec(const struct lu_env *env,
-                                   const struct lu_fid *fid)
-{
-        struct lu_fid_pack *pack = &mdd_env_info(env)->mti_pack;
-
-        fid_pack(pack, fid, &mdd_env_info(env)->mti_fid2);
-        return (const struct dt_rec *)pack;
-}
-
 /**
  * If subdir count is up to ddp_max_nlink, then enable MNLINK_OBJ flag and
  * assign i_nlink to 1 which means the i_nlink for subdir count is incredible
@@ -590,7 +581,7 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
                     struct md_object *src_obj, const struct lu_name *lname,
                     struct md_attr *ma)
 {
-        char *name = lname->ln_name;
+        const char *name = lname->ln_name;
         struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
         struct mdd_object *mdd_tobj = md2mdd_obj(tgt_obj);
         struct mdd_object *mdd_sobj = md2mdd_obj(src_obj);
@@ -682,23 +673,28 @@ int mdd_finish_unlink(const struct lu_env *env,
                       struct thandle *th)
 {
         int rc;
+        int reset = 1;
         ENTRY;
 
         rc = mdd_iattr_get(env, obj, ma);
         if (rc == 0 && ma->ma_attr.la_nlink == 0) {
                 /* add new orphan and the object
-                 * will be deleted during the object_put() */
-                if (__mdd_orphan_add(env, obj, th) == 0)
-                        obj->mod_flags |= ORPHAN_OBJ;
+                 * will be deleted during mdd_close() */
+                if (obj->mod_count) {
+                        rc = __mdd_orphan_add(env, obj, th);
+                        if (rc == 0)
+                                obj->mod_flags |= ORPHAN_OBJ;
+                }
 
                 obj->mod_flags |= DEAD_OBJ;
-                if (obj->mod_count == 0)
+                if (!(obj->mod_flags & ORPHAN_OBJ)) {
                         rc = mdd_object_kill(env, obj, ma);
-                else
-                        /* clear MA_LOV | MA_COOKIE, if we do not
-                         * unlink it in case we get it somewhere */
-                        ma->ma_valid &= ~(MA_LOV | MA_COOKIE);
-        } else
+                        if (rc == 0)
+                                reset = 0;
+                }
+
+        }
+        if (reset)
                 ma->ma_valid &= ~(MA_LOV | MA_COOKIE);
 
         RETURN(rc);
@@ -723,7 +719,7 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
                       struct md_object *cobj, const struct lu_name *lname,
                       struct md_attr *ma)
 {
-        char *name = lname->ln_name;
+        const char *name = lname->ln_name;
         struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
         struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
         struct mdd_object *mdd_cobj = md2mdd_obj(cobj);
@@ -850,7 +846,7 @@ static int mdd_name_insert(const struct lu_env *env,
                            const struct lu_fid *fid,
                            const struct md_attr *ma)
 {
-        char *name = lname->ln_name;
+        const char *name = lname->ln_name;
         struct lu_attr   *la = &mdd_env_info(env)->mti_la_for_fix;
         struct mdd_object *mdd_obj = md2mdd_obj(pobj);
         struct mdd_device *mdd = mdo2mdd(pobj);
@@ -968,7 +964,7 @@ static int mdd_name_remove(const struct lu_env *env,
                            const struct lu_name *lname,
                            const struct md_attr *ma)
 {
-        char *name = lname->ln_name;
+        const char *name = lname->ln_name;
         struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
         struct mdd_object *mdd_obj = md2mdd_obj(pobj);
         struct mdd_device *mdd = mdo2mdd(pobj);
@@ -1074,7 +1070,7 @@ static int mdd_rename_tgt(const struct lu_env *env,
                           const struct lu_fid *lf, const struct lu_name *lname,
                           struct md_attr *ma)
 {
-        char *name = lname->ln_name;
+        const char *name = lname->ln_name;
         struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
         struct mdd_object *mdd_tpobj = md2mdd_obj(pobj);
         struct mdd_object *mdd_tobj = md2mdd_obj(tobj);
@@ -1280,7 +1276,7 @@ static int
 __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
              const struct lu_name *lname, struct lu_fid* fid, int mask)
 {
-        char                *name = lname->ln_name;
+        const char          *name = lname->ln_name;
         const struct dt_key *key = (const struct dt_key *)name;
         struct mdd_object   *mdd_obj = md2mdd_obj(pobj);
         struct mdd_device   *m = mdo2mdd(pobj);
@@ -1315,8 +1311,10 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
                 rc = dir->do_index_ops->dio_lookup(env, dir,
                                                  (struct dt_rec *)pack, key,
                                                  mdd_object_capa(env, mdd_obj));
-                if (rc == 0)
+                if (rc > 0)
                         rc = fid_unpack(pack, fid);
+                else if (rc == 0)
+                        rc = -ENOENT;
         } else
                 rc = -ENOTDIR;
 
@@ -1325,7 +1323,7 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
 
 int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
                           struct mdd_object *child, struct md_attr *ma,
-                          struct thandle *handle)
+                          struct thandle *handle, const struct md_op_spec *spec)
 {
         int rc;
         ENTRY;
@@ -1469,7 +1467,7 @@ static int mdd_create(const struct lu_env *env,
         struct lov_mds_md      *lmm = NULL;
         struct thandle         *handle;
         struct dynlock_handle  *dlh;
-        char                   *name = lname->ln_name;
+        const char             *name = lname->ln_name;
         int rc, created = 0, initialized = 0, inserted = 0, lmm_size = 0;
         int got_def_acl = 0;
 #ifdef HAVE_QUOTA_SUPPORT
@@ -1604,7 +1602,7 @@ static int mdd_create(const struct lu_env *env,
                 GOTO(out_trans, rc = -ENOMEM);
 
         mdd_write_lock(env, son, MOR_TGT_CHILD);
-        rc = mdd_object_create_internal(env, mdd_pobj, son, ma, handle);
+        rc = mdd_object_create_internal(env, mdd_pobj, son, ma, handle, spec);
         if (rc) {
                 mdd_write_unlock(env, son);
                 GOTO(cleanup, rc);
@@ -1629,7 +1627,7 @@ static int mdd_create(const struct lu_env *env,
 #endif
 
         rc = mdd_object_initialize(env, mdo2fid(mdd_pobj),
-                                   son, ma, handle);
+                                   son, ma, handle, spec);
         mdd_write_unlock(env, son);
         if (rc)
                 /*
@@ -1836,8 +1834,8 @@ static int mdd_rename(const struct lu_env *env,
                       struct md_object *tobj, const struct lu_name *ltname,
                       struct md_attr *ma)
 {
-        char *sname = lsname->ln_name;
-        char *tname = ltname->ln_name;
+        const char *sname = lsname->ln_name;
+        const char *tname = ltname->ln_name;
         struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
         struct mdd_object *mdd_spobj = md2mdd_obj(src_pobj);
         struct mdd_object *mdd_tpobj = md2mdd_obj(tgt_pobj);
@@ -1846,6 +1844,10 @@ static int mdd_rename(const struct lu_env *env,
         struct mdd_object *mdd_tobj = NULL;
         struct dynlock_handle *sdlh, *tdlh;
         struct thandle *handle;
+        const struct lu_fid *tpobj_fid = mdo2fid(mdd_tpobj);
+        int is_dir;
+        int rc;
+
 #ifdef HAVE_QUOTA_SUPPORT
         struct obd_device *obd = mdd->mdd_obd_dev;
         struct mds_obd *mds = &obd->u.mds;
@@ -1854,7 +1856,6 @@ static int mdd_rename(const struct lu_env *env,
         unsigned int qtpids[MAXQUOTAS] = { 0, 0 };
         int quota_opc = 0, rec_pending = 0;
 #endif
-        int rc, is_dir;
         ENTRY;
 
         LASSERT(ma->ma_attr.la_mode & S_IFMT);
@@ -1927,6 +1928,20 @@ static int mdd_rename(const struct lu_env *env,
                                 mdd_object_capa(env, mdd_spobj));
         if (rc)
                 GOTO(cleanup, rc);
+
+        /* "mv dir1 dir2" needs "dir1/.." link update */
+        if (is_dir) {
+                rc = __mdd_index_delete(env, mdd_sobj, dotdot, is_dir, handle,
+                                        mdd_object_capa(env, mdd_spobj));
+                if (rc)
+                       GOTO(cleanup, rc);
+
+                rc = __mdd_index_insert(env, mdd_sobj, tpobj_fid, dotdot,
+                                        is_dir, handle,
+                                        mdd_object_capa(env, mdd_tpobj));
+                if (rc)
+                        GOTO(cleanup, rc);
+        }
 
         /*
          * Here tobj can be remote one, so we do index_delete unconditionally

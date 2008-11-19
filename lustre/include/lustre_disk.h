@@ -50,9 +50,10 @@
 
 #define MDT_LOGS_DIR      "LOGS"  /* COMPAT_146 */
 #define MOUNT_CONFIGS_DIR "CONFIGS"
-/* Persistent mount data are stored on the disk in this file. */
-#define MOUNT_DATA_FILE    MOUNT_CONFIGS_DIR"/mountdata"
-#define LAST_RCVD         "last_received"
+#define CONFIGS_FILE      "mountdata"
+/** Persistent mount data are stored on the disk in this file. */
+#define MOUNT_DATA_FILE    MOUNT_CONFIGS_DIR"/"CONFIGS_FILE
+#define LAST_RCVD         "last_rcvd"
 #define LOV_OBJID         "lov_objid"
 #define HEALTH_CHECK      "health_check"
 #define CAPA_KEYS         "capa_keys"
@@ -62,13 +63,22 @@
 #define LDD_F_SV_TYPE_MDT   0x0001
 #define LDD_F_SV_TYPE_OST   0x0002
 #define LDD_F_SV_TYPE_MGS   0x0004
-#define LDD_F_NEED_INDEX    0x0010 /* need an index assignment */
-#define LDD_F_VIRGIN        0x0020 /* never registered */
-#define LDD_F_UPDATE        0x0040 /* update the config logs for this server*/
-#define LDD_F_REWRITE_LDD   0x0080 /* rewrite the LDD */
-#define LDD_F_WRITECONF     0x0100 /* regenerate all logs for this fs */
-#define LDD_F_UPGRADE14     0x0200 /* COMPAT_14 */
-#define LDD_F_PARAM         0x0400 /* process as lctl conf_param */
+/** need an index assignment */
+#define LDD_F_NEED_INDEX    0x0010
+/** never registered */
+#define LDD_F_VIRGIN        0x0020
+/** update the config logs for this server*/
+#define LDD_F_UPDATE        0x0040
+/** rewrite the LDD */
+#define LDD_F_REWRITE_LDD   0x0080
+/** regenerate all logs for this fs */
+#define LDD_F_WRITECONF     0x0100
+/** COMPAT_14 */
+#define LDD_F_UPGRADE14     0x0200
+/** process as lctl conf_param */
+#define LDD_F_PARAM         0x0400
+/** backend fs make use of IAM directory format. */
+#define LDD_F_IAM_DIR       0x0800
 
 enum ldd_mount_type {
         LDD_MT_EXT3 = 0,
@@ -196,17 +206,28 @@ struct lustre_mount_data {
 #define LR_MAX_CLIENTS (CFS_PAGE_SIZE * 8)
 #endif
 
-/* COMPAT_146 */
-#define OBD_COMPAT_OST          0x00000002 /* this is an OST (temporary) */
-#define OBD_COMPAT_MDT          0x00000004 /* this is an MDT (temporary) */
-/* end COMPAT_146 */
+/** COMPAT_146: this is an OST (temporary) */
+#define OBD_COMPAT_OST          0x00000002
+/** COMPAT_146: this is an MDT (temporary) */
+#define OBD_COMPAT_MDT          0x00000004
 
-#define OBD_ROCOMPAT_LOVOBJID   0x00000001 /* MDS handles LOV_OBJID file */
+/** MDS handles LOV_OBJID file */
+#define OBD_ROCOMPAT_LOVOBJID   0x00000001
 
-#define OBD_INCOMPAT_GROUPS     0x00000001 /* OST handles group subdirs */
-#define OBD_INCOMPAT_OST        0x00000002 /* this is an OST */
-#define OBD_INCOMPAT_MDT        0x00000004 /* this is an MDT */
-#define OBD_INCOMPAT_COMMON_LR  0x00000008 /* common last_rvcd format */
+/** OST handles group subdirs */
+#define OBD_INCOMPAT_GROUPS     0x00000001
+/** this is an OST */
+#define OBD_INCOMPAT_OST        0x00000002
+/** this is an MDT */
+#define OBD_INCOMPAT_MDT        0x00000004
+/** common last_rvcd format */
+#define OBD_INCOMPAT_COMMON_LR  0x00000008
+/** FID is enabled */
+#define OBD_INCOMPAT_FID        0x00000010
+/**
+ * lustre disk using iam format to store directory entries
+ */
+#define OBD_INCOMPAT_IAM_DIR    0x00000020
 
 
 /* Data stored per server at the head of the last_rcvd file.  In le32 order.

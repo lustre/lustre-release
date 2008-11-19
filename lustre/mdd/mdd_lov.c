@@ -409,6 +409,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
 {
         struct obd_device     *obd = mdd2obd_dev(mdd);
         struct obd_export     *lov_exp = obd->u.mds.mds_osc_exp;
+        struct lu_site        *site = mdd2lu_dev(mdd)->ld_site;
         struct obdo           *oa;
         struct lov_stripe_md  *lsm = NULL;
         const void            *eadata = spec->u.sp_ea.eadata;
@@ -437,8 +438,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
 
         oa->o_uid = 0; /* must have 0 uid / gid on OST */
         oa->o_gid = 0;
-        oa->o_gr = FILTER_GROUP_MDS0 +
-                lu_site2md(mdd2lu_dev(mdd)->ld_site)->ms_node_id;
+        oa->o_gr = mdt_to_obd_objgrp(lu_site2md(site)->ms_node_id);
         oa->o_mode = S_IFREG | 0600;
         oa->o_id = mdd_lov_create_id(mdd_object_fid(child));
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLFLAGS |
@@ -484,7 +484,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                         }
                         GOTO(out_oti, rc);
                 }
-                LASSERT(lsm->lsm_object_gr >= FILTER_GROUP_MDS0);
+                LASSERT_MDS_GROUP(lsm->lsm_object_gr);
         } else {
                 LASSERT(eadata != NULL);
                 rc = obd_iocontrol(OBD_IOC_LOV_SETEA, lov_exp, 0, &lsm,
@@ -556,6 +556,111 @@ out_ids:
                 obd_free_memmd(lov_exp, &lsm);
 
         return rc;
+}
+
+/*
+ * used when destroying orphans and from mds_reint_unlink() when MDS wants to
+ * destroy objects on OSS.
+ */
+static
+int mdd_lovobj_unlink(const struct lu_env *env, struct mdd_device *mdd,
+                      struct mdd_object *obj, struct lu_attr *la,
+                      struct lov_mds_md *lmm, int lmm_size,
+                      struct llog_cookie *logcookies,
+                      int log_unlink)
+{
+        struct obd_device     *obd = mdd2obd_dev(mdd);
+        struct obd_export     *lov_exp = obd->u.mds.mds_osc_exp;
+        struct lov_stripe_md  *lsm = NULL;
+        struct obd_trans_info *oti = &mdd_env_info(env)->mti_oti;
+        struct obdo           *oa = &mdd_env_info(env)->mti_oa;
+        struct lu_site        *site = mdd2lu_dev(mdd)->ld_site;
+        int rc;
+        ENTRY;
+
+        if (lmm_size == 0)
+                RETURN(0);
+
+        rc = obd_unpackmd(lov_exp, &lsm, lmm, lmm_size);
+        if (rc < 0) {
+                CERROR("Error unpack md %p\n", lmm);
+                RETURN(rc);
+        } else {
+                LASSERT(rc >= sizeof(*lsm));
+                rc = 0;
+        }
+
+        oa->o_id = lsm->lsm_object_id;
+        oa->o_gr = mdt_to_obd_objgrp(lu_site2md(site)->ms_node_id);
+        oa->o_mode = la->la_mode & S_IFMT;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLGROUP;
+
+        oti_init(oti, NULL);
+        if (log_unlink && logcookies) {
+                oa->o_valid |= OBD_MD_FLCOOKIE;
+                oti->oti_logcookies = logcookies;
+        }
+
+        CDEBUG(D_INFO, "destroying OSS object %d/%d\n",
+                        (int)oa->o_id, (int)oa->o_gr);
+
+        rc = obd_destroy(lov_exp, oa, lsm, oti, NULL, BYPASS_CAPA);
+
+        obd_free_memmd(lov_exp, &lsm);
+        RETURN(rc);
+}
+
+/*
+ * called with obj not locked. 
+ */
+
+int mdd_lov_destroy(const struct lu_env *env, struct mdd_device *mdd,
+                    struct mdd_object *obj, struct lu_attr *la)
+{
+        struct md_attr    *ma = &mdd_env_info(env)->mti_ma;
+        int                rc;
+        ENTRY;
+
+        if (unlikely(la->la_nlink != 0)) {
+                CWARN("Attempt to destroy OSS object when nlink == %d\n",
+                      la->la_nlink);
+                RETURN(0);
+        }
+
+        ma->ma_lmm_size = mdd_lov_mdsize(env, mdd);
+        ma->ma_lmm = mdd_max_lmm_get(env, mdd);
+        ma->ma_cookie_size = mdd_lov_cookiesize(env, mdd);
+        ma->ma_cookie = mdd_max_cookie_get(env, mdd);
+        if (ma->ma_lmm == NULL || ma->ma_cookie == NULL)
+                RETURN(rc = -ENOMEM);
+
+        /* get lov ea */
+
+        rc = mdd_get_md_locked(env, obj, ma->ma_lmm, &ma->ma_lmm_size,
+                               MDS_LOV_MD_NAME);
+
+        if (rc <= 0) {
+                CWARN("Get lov ea failed for "DFID" rc = %d\n",
+                         PFID(mdo2fid(obj)), rc);
+                if (rc == 0)
+                        rc = -ENOENT;
+                RETURN(rc);
+        }
+
+        ma->ma_valid = MA_LOV;
+        
+        rc = mdd_unlink_log(env, mdd, obj, ma);
+        if (rc) {
+                CWARN("mds unlink log for "DFID" failed: %d\n",
+                       PFID(mdo2fid(obj)), rc);
+                RETURN(rc);
+        }
+
+        if (ma->ma_valid & MA_COOKIE)
+                rc = mdd_lovobj_unlink(env, mdd, obj, la,
+                                       ma->ma_lmm, ma->ma_lmm_size,
+                                       ma->ma_cookie, 1);
+        RETURN(rc);
 }
 
 int mdd_log_op_unlink(struct obd_device *obd,

@@ -63,6 +63,7 @@
 #include <lprocfs_status.h>
 
 #include <md_object.h>
+#include <lustre_fid.h>
 #include <lustre_req_layout.h>
 #include "fld_internal.h"
 
@@ -76,6 +77,13 @@ LU_CONTEXT_KEY_DEFINE(fld, LCT_MD_THREAD|LCT_DT_THREAD);
 
 cfs_proc_dir_entry_t *fld_type_proc_dir = NULL;
 
+static struct lu_local_obj_desc llod_fld_index = {
+        .llod_name      = fld_index_name,
+        .llod_oid       = FLD_INDEX_OID,
+        .llod_is_index  = 1,
+        .llod_feat      = &fld_index_features,
+};
+
 static int __init fld_mod_init(void)
 {
         fld_type_proc_dir = lprocfs_register(LUSTRE_FLD_NAME,
@@ -83,6 +91,8 @@ static int __init fld_mod_init(void)
                                              NULL, NULL);
         if (IS_ERR(fld_type_proc_dir))
                 return PTR_ERR(fld_type_proc_dir);
+
+        llo_local_obj_register(&llod_fld_index);
 
         LU_CONTEXT_KEY_INIT(&fld_thread_key);
         lu_context_key_register(&fld_thread_key);

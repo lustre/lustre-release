@@ -1022,26 +1022,27 @@ test_32b() {
 	[ -z "$TUNEFS" ] && skip "No tunefs" && return
 	local DISK1_8=$LUSTRE/tests/disk1_8.tgz
 	[ ! -r $DISK1_8 ] && skip "Cannot find $DISK1_8" && return 0
-	mkdir -p $TMP/$tdir
-	tar xjvf $DISK1_8 -C $TMP/$tdir || \
+	local tmpdir=$TMP/$tdir
+	mkdir -p $tmpdir
+	tar xjvf $DISK1_8 -C $tmpdir || \
 		{ skip "Cannot untar $DISK1_8" && return ; }
 
 	load_modules
 	lctl set_param debug=$PTLDEBUG
-	NEWNAME=sofia
+	NEWNAME=lustre
 
 	# writeconf will cause servers to register with their current nids
 	$TUNEFS --writeconf --fsname=$NEWNAME $tmpdir/mds || error "tunefs failed"
-	start mds $tmpdir/mds "-o loop" || return 3
+	start mds1 $tmpdir/mds "-o loop" || return 3
 	local UUID=$(lctl get_param -n mdt.${NEWNAME}-MDT0000.uuid)
 	echo MDS uuid $UUID
-	[ "$UUID" == "mdsA_UUID" ] || error "UUID is wrong: $UUID" 
+	[ "$UUID" == "${NEWNAME}-MDT0000_UUID" ] || error "UUID is wrong: $UUID" 
 
-	$TUNEFS --mgsnode=`hostname` --fsname=$NEWNAME --writeconf $tmpdir/ost1 || error "tunefs failed"
+	$TUNEFS --mgsnode=`hostname` --writeconf --fsname=$NEWNAME $tmpdir/ost1 || error "tunefs failed"
 	start ost1 $tmpdir/ost1 "-o loop" || return 5
 	UUID=$(lctl get_param -n obdfilter.${NEWNAME}-OST0000.uuid)
 	echo OST uuid $UUID
-	[ "$UUID" == "ost1_UUID" ] || error "UUID is wrong: $UUID"
+	[ "$UUID" == "${NEWNAME}-OST0000_UUID" ] || error "UUID is wrong: $UUID"
 
 	echo "OSC changes should succeed:" 
 	$LCTL conf_param ${NEWNAME}-OST0000.osc.max_dirty_mb=15 || return 7
@@ -1059,7 +1060,7 @@ test_32b() {
 	mount_client $MOUNT
 	FSNAME=$OLDFS
 	set_and_check client "lctl get_param -n mdc.*.max_rpcs_in_flight" "${NEWNAME}-MDT0000.mdc.max_rpcs_in_flight" || return 11
-	[ "$(cksum $MOUNT/passwd | cut -d' ' -f 1,2)" == "2479747619 779" ] || return 12  
+	[ "$(cksum $MOUNT/passwd | cut -d' ' -f 1,2)" == "94306271 1478" ] || return 12
 	echo "ok."
 
 	cleanup

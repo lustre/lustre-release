@@ -556,6 +556,18 @@ EXPORT_SYMBOL(seq_server_fini);
 
 cfs_proc_dir_entry_t *seq_type_proc_dir = NULL;
 
+static struct lu_local_obj_desc llod_seq_srv = {
+        .llod_name      = LUSTRE_SEQ_SRV_NAME,
+        .llod_oid       = FID_SEQ_SRV_OID,
+        .llod_is_index  = 0,
+};
+
+static struct lu_local_obj_desc llod_seq_ctl = {
+        .llod_name      = LUSTRE_SEQ_CTL_NAME,
+        .llod_oid       = FID_SEQ_CTL_OID,
+        .llod_is_index  = 0,
+};
+
 static int __init fid_mod_init(void)
 {
         seq_type_proc_dir = lprocfs_register(LUSTRE_SEQ_NAME,
@@ -563,6 +575,9 @@ static int __init fid_mod_init(void)
                                              NULL, NULL);
         if (IS_ERR(seq_type_proc_dir))
                 return PTR_ERR(seq_type_proc_dir);
+
+        llo_local_obj_register(&llod_seq_srv);
+        llo_local_obj_register(&llod_seq_ctl);
 
         LU_CONTEXT_KEY_INIT(&seq_thread_key);
         lu_context_key_register(&seq_thread_key);

@@ -1047,6 +1047,29 @@ static int class_config_llog_handler(struct llog_handle * handle,
                         break;
                 }
 
+                /*
+                 * For interoperability between 1.8 and 2.0,
+                 * rename "mds" obd device type to "mdt".
+                 */
+                {
+                        char *typename = lustre_cfg_string(lcfg, 1);
+                        char *index = lustre_cfg_string(lcfg, 2);
+                        
+                        if ((lcfg->lcfg_command == LCFG_ATTACH && typename &&
+                             strcmp(typename, "mds") == 0)) {
+                                CWARN("For 1.8 interoperability, rename obd "
+                                       "type from mds to mdt\n");
+                                typename[2] = 't';
+                        }
+                        if ((lcfg->lcfg_command == LCFG_SETUP && index &&
+                             strcmp(index, "type") == 0)) {
+                                CWARN("For 1.8 interoperability, set this"
+                                       " index to '0'\n");
+                                index[0] = '0';
+                                index[1] = 0;
+                        }
+                }
+
                 if ((clli->cfg_flags & CFG_F_EXCLUDE) &&
                     (lcfg->lcfg_command == LCFG_LOV_ADD_OBD))
                         /* Add inactive instead */

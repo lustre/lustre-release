@@ -80,7 +80,7 @@
 #include "filter_internal.h"
 
 /* Group 0 is no longer a legal group, to catch uninitialized IDs */
-#define FILTER_MIN_GROUPS FILTER_GROUP_MDS0
+#define FILTER_MIN_GROUPS FILTER_GROUP_MDS1_N_BASE
 static struct lvfs_callback_ops filter_lvfs_ops;
 cfs_mem_cache_t *ll_fmd_cachep;
 
@@ -955,7 +955,9 @@ static int filter_update_last_group(struct obd_device *obd, int group)
                 CDEBUG(D_INODE, "error reading LAST_GROUP: rc %d\n",rc);
                 GOTO(cleanup, rc);
         }
-        LASSERT(off == 0 || last_group >= FILTER_MIN_GROUPS);
+        LASSERTF(off == 0 || CHECK_MDS_GROUP(last_group),
+                 "off = %llu and last_group = %d\n", off, last_group);
+
         CDEBUG(D_INODE, "%s: previous %d, new %d\n",
                obd->obd_name, last_group, group);
 
@@ -1145,8 +1147,6 @@ static int filter_read_groups(struct obd_device *obd, int last_group,
         down(&filter->fo_init_lock);
         old_count = filter->fo_group_count;
         for (group = old_count; group <= last_group; group++) {
-                if (group == 0)
-                        continue; /* no group zero */
 
                 rc = filter_read_group_internal(obd, group, create);
                 if (rc != 0)
@@ -1245,7 +1245,7 @@ static int filter_prep_groups(struct obd_device *obd)
         if (off == 0) {
                 last_group = FILTER_MIN_GROUPS;
         } else {
-                LASSERT(last_group >= FILTER_MIN_GROUPS);
+                LASSERT_MDS_GROUP(last_group);
         }
 
         CWARN("%s: initialize groups [%d,%d]\n", obd->obd_name,
@@ -1369,7 +1369,7 @@ static void filter_post(struct obd_device *obd)
         if (rc)
                 CERROR("error writing server data: rc = %d\n", rc);
 
-        for (i = 1; i < filter->fo_group_count; i++) {
+        for (i = 0; i < filter->fo_group_count; i++) {
                 rc = filter_update_last_objid(obd, i,
                                 (i == filter->fo_group_count - 1));
                 if (rc)
@@ -1416,7 +1416,6 @@ obd_id filter_last_id(struct filter_obd *filter, obd_gr group)
         spin_lock(&filter->fo_objidlock);
         id = filter->fo_last_objids[group];
         spin_unlock(&filter->fo_objidlock);
-
         return id;
 }
 
@@ -1433,7 +1432,7 @@ struct dentry *filter_parent(struct obd_device *obd, obd_gr group, obd_id objid)
         struct filter_subdirs *subdirs;
         LASSERT(group < filter->fo_group_count); /* FIXME: object groups */
 
-        if ((group > 0 && group < FILTER_GROUP_MDS0) ||
+        if ((group > FILTER_GROUP_MDS0 && group < FILTER_GROUP_MDS1_N_BASE) ||
              filter->fo_subdir_count == 0)
                 return filter->fo_dentry_O_groups[group];
 
@@ -2770,8 +2769,6 @@ static int filter_connect(const struct lu_env *env,
         }
 
         group = data->ocd_group;
-        if (group == 0)
-                GOTO(cleanup, rc);
 
         CWARN("%s: Received MDS connection ("LPX64"); group %d\n",
               obd->obd_name, exp->exp_handle.h_cookie, group);
@@ -2948,7 +2945,7 @@ static void filter_sync_llogs(struct obd_device *obd, struct obd_export *dexp)
 {
         struct obd_llog_group *olg_min, *olg;
         struct filter_obd *filter;
-        int worked = 0, group;
+        int worked = -1, group;
         struct llog_ctxt *ctxt;
         ENTRY;
 
@@ -3454,7 +3451,7 @@ static int filter_destroy_precreated(struct obd_export *exp, struct obdo *oa,
         ENTRY;
 
         LASSERT(oa);
-        LASSERT(oa->o_gr != 0);
+        LASSERT_MDS_GROUP(oa->o_gr);
         LASSERT(oa->o_valid & OBD_MD_FLGROUP);
         LASSERT(down_trylock(&filter->fo_create_locks[oa->o_gr]) != 0);
 
@@ -3552,8 +3549,8 @@ static int filter_handle_precreate(struct obd_export *exp, struct obdo *oa,
                                obd->obd_name);
                         GOTO(out, rc = 0);
                 }
-                /* only precreate if group == 0 and o_id is specified */
-                if (group < FILTER_GROUP_MDS0 || oa->o_id == 0)
+                /* only precreate if group == 0 and o_id is specfied */
+                if (group == FILTER_GROUP_LLOG || oa->o_id == 0)
                         diff = 1;
                 else
                         diff = oa->o_id - filter_last_id(filter, group);
@@ -3832,7 +3829,7 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
         CDEBUG(D_INODE, "%s: filter_create(od->o_gr="LPU64",od->o_id="
                LPU64")\n", obd->obd_name, oa->o_gr, oa->o_id);
 
-        if (!(oa->o_valid & OBD_MD_FLGROUP) || group == 0) {
+        if (!(oa->o_valid & OBD_MD_FLGROUP)) {
                 CERROR("!!! nid %s sent invalid object group %d\n",
                         obd_export_nid2str(exp), group);
                 RETURN(-EINVAL);
@@ -4230,13 +4227,32 @@ static int filter_get_info(struct obd_export *exp, __u32 keylen,
         RETURN(-EINVAL);
 }
 
+static inline int filter_setup_llog_group(struct obd_export *exp,
+                                          struct obd_device *obd,
+                                           int group)
+{
+        struct obd_llog_group *olg;
+        struct llog_ctxt *ctxt;
+        int rc;
+
+        olg = filter_find_create_olg(obd, group);
+        if (IS_ERR(olg))
+                RETURN(PTR_ERR(olg));
+
+        llog_group_set_export(olg, exp);
+
+        ctxt = llog_group_get_ctxt(olg, LLOG_MDS_OST_REPL_CTXT);
+        LASSERTF(ctxt != NULL, "ctxt is null\n");
+
+        rc = llog_receptor_accept(ctxt, exp->exp_imp_reverse);
+        llog_ctxt_put(ctxt);
+        return rc;
+}
 static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
                                  void *key, __u32 vallen, void *val,
                                  struct ptlrpc_request_set *set)
 {
         struct obd_device *obd;
-        struct obd_llog_group *olg;
-        struct llog_ctxt *ctxt;
         int rc = 0, group;
         ENTRY;
 
@@ -4268,23 +4284,20 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
 
         /* setup llog imports */
         LASSERT(val != NULL);
+
         group = (int)(*(__u32 *)val);
-        LASSERT(group >= FILTER_GROUP_MDS0);
-
-        olg = filter_find_create_olg(obd, group);
-        if (IS_ERR(olg))
-                RETURN(PTR_ERR(olg));
-
-        llog_group_set_export(olg, exp);
-
-        ctxt = llog_group_get_ctxt(olg, LLOG_MDS_OST_REPL_CTXT);
-        LASSERTF(ctxt != NULL, "ctxt is null\n");
-
-        rc = llog_receptor_accept(ctxt, exp->exp_imp_reverse);
-        llog_ctxt_put(ctxt);
+        LASSERT_MDS_GROUP(group);
+        rc = filter_setup_llog_group(exp, obd, group);
+        if (rc)
+                goto out;
 
         lquota_setinfo(filter_quota_interface_ref, obd, exp);
 
+        if (group == FILTER_GROUP_MDS0) {
+                /* setup llog group 1 for interop */
+                filter_setup_llog_group(exp, obd, FILTER_GROUP_LLOG);
+        }
+out:
         RETURN(rc);
 }
 

@@ -60,10 +60,6 @@ static void make_capa_key(struct lustre_capa_key *key,
         ll_get_random_bytes(key->lk_key, sizeof(key->lk_key));
 }
 
-enum {
-        MDT_TXN_CAPA_KEYS_WRITE_CREDITS = 1
-};
-
 static inline void lck_cpu_to_le(struct lustre_capa_key *tgt,
                                  struct lustre_capa_key *src)
 {
@@ -93,8 +89,8 @@ static int write_capa_keys(const struct lu_env *env,
         int i, rc;
 
         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-
-        th = mdt_trans_start(env, mdt, MDT_TXN_CAPA_KEYS_WRITE_CREDITS);
+        mdt_trans_credit_init(env, mdt, MDT_TXN_CAPA_KEYS_WRITE_OP);
+        th = mdt_trans_start(env, mdt);
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
 

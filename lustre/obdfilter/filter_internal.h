@@ -235,12 +235,6 @@ static void lprocfs_filter_init_vars(struct lprocfs_static_vars *lvars)
 /* Quota stuff */
 extern quota_interface_t *filter_quota_interface_ref;
 
-/* Capability */
-static inline __u64 obdo_mdsno(struct obdo *oa)
-{
-        return oa->o_gr - FILTER_GROUP_MDS0;
-}
-
 int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *key);
 int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
                      struct lustre_capa *capa, __u64 opc);

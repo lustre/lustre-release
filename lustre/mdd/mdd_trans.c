@@ -201,18 +201,28 @@ int mdd_txn_init_credits(const struct lu_env *env, struct mdd_device *mdd)
                                 *c = dt[DTO_INDEX_INSERT];
                                 break;
                         case MDD_TXN_UNLINK_OP:
-                                /* delete index + Unlink log */
-                                *c = dt[DTO_INDEX_DELETE];
+                                /* delete index + Unlink log +
+                                 * mdd orphan handling */
+                                *c = dt[DTO_INDEX_DELETE] +
+                                        dt[DTO_INDEX_DELETE] +
+                                        dt[DTO_INDEX_INSERT] * 2 +
+                                        dt[DTO_XATTR_SET] * 3;
                                 break;
                         case MDD_TXN_RENAME_OP:
                                 /* 2 delete index + 1 insert + Unlink log */
                                 *c = 2 * dt[DTO_INDEX_DELETE] +
-                                         dt[DTO_INDEX_INSERT];
+                                        dt[DTO_INDEX_INSERT] +
+                                        dt[DTO_INDEX_DELETE] +
+                                        dt[DTO_INDEX_INSERT] * 2 +
+                                        dt[DTO_XATTR_SET] * 3;
                                 break;
                         case MDD_TXN_RENAME_TGT_OP:
                                 /* index insert + index delete */
                                 *c = dt[DTO_INDEX_DELETE] +
-                                     dt[DTO_INDEX_INSERT];
+                                        dt[DTO_INDEX_INSERT] +
+                                        dt[DTO_INDEX_DELETE] +
+                                        dt[DTO_INDEX_INSERT] * 2 +
+                                        dt[DTO_XATTR_SET] * 3;
                                 break;
                         case MDD_TXN_CREATE_DATA_OP:
                                 /* same as set xattr(lsm) */

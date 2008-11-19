@@ -54,6 +54,7 @@
 /* struct rw_semaphore */
 #include <linux/rwsem.h>
 #include <lu_object.h>
+#include <md_object.h>
 
 struct lu_fid;
 struct osd_thread_info;
@@ -90,8 +91,11 @@ struct osd_inode_id {
         __u32 oii_gen; /* inode generation */
 };
 
-int  osd_oi_init(struct osd_thread_info *info,
-                 struct osd_oi *oi, struct dt_device *dev);
+int osd_oi_mod_init(void);
+int osd_oi_init(struct osd_thread_info *info,
+                struct osd_oi *oi,
+                struct dt_device *dev,
+                struct md_device *mdev);
 void osd_oi_fini(struct osd_thread_info *info, struct osd_oi *oi);
 
 int  osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,

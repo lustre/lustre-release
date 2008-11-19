@@ -69,6 +69,7 @@
  * </pre>
  *
  * The first 0x400 sequences of normal FID are reserved for special purpose.
+ * FID_SEQ_START + 1 is for local file id generation.
  */
 const struct lu_range LUSTRE_SEQ_SPACE_RANGE = {
         FID_SEQ_START + 0x400ULL,

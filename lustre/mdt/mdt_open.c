@@ -1003,6 +1003,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                  * not exist.
                  */
                 info->mti_spec.sp_cr_lookup = 0;
+                info->mti_spec.sp_feat = &dt_directory_features;
 
                 result = mdo_create(info->mti_env,
                                     mdt_object_child(parent),

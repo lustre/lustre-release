@@ -613,10 +613,24 @@ static int cmm_recovery_complete(const struct lu_env *env,
         RETURN(rc);
 }
 
+static int cmm_prepare(const struct lu_env *env,
+                       struct lu_device *pdev,
+                       struct lu_device *dev)
+{
+        struct cmm_device *cmm = lu2cmm_dev(dev);
+        struct lu_device *next = md2lu_dev(cmm->cmm_child);
+        int rc;
+
+        ENTRY;
+        rc = next->ld_ops->ldo_prepare(env, dev, next);
+        RETURN(rc);
+}
+
 static const struct lu_device_operations cmm_lu_ops = {
 	.ldo_object_alloc      = cmm_object_alloc,
         .ldo_process_config    = cmm_process_config,
-        .ldo_recovery_complete = cmm_recovery_complete
+        .ldo_recovery_complete = cmm_recovery_complete,
+        .ldo_prepare           = cmm_prepare,
 };
 
 /* --- lu_device_type operations --- */
