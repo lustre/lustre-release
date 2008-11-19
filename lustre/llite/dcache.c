@@ -477,6 +477,9 @@ do_lock:
 revalidate_finish:
         rc = revalidate_it_finish(req, DLM_REPLY_REC_OFF, it, de);
         if (rc != 0) {
+                /* we are going release the intent, so clear DISP_ENQ_COMPLETE
+                 * to prevent a double free of the request */
+                it_clear_disposition(it, DISP_ENQ_COMPLETE);
                 ll_intent_release(it);
                 GOTO(out, rc = 0);
         }
@@ -561,6 +564,9 @@ do_lookup:
                 /* see if we got same inode, if not - return error */
                 if(!memcmp(&fid, &mds_body->fid1, sizeof(struct ll_fid)))
                         goto revalidate_finish;
+                /* we are going release the intent, so clear DISP_ENQ_COMPLETE
+                 * to prevent a double free of the request */
+                it_clear_disposition(it, DISP_ENQ_COMPLETE);
                 ll_intent_release(it);
         }
         GOTO(out, rc = 0);
