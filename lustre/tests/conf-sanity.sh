@@ -570,12 +570,12 @@ test_21c() {
 	stop_ost
 	stop_ost2
 	stop_mds
+	#writeconf to remove all ost2 traces for subsequent tests
+	writeconf
 }
 run_test 21c "start mds between two osts, stop mds last"
 
 test_22() {
-        #reformat to remove all logs
-        reformat
 	start_mds
 
 	echo Client mount with ost in logs, but none running
