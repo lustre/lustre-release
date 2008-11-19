@@ -2,7 +2,7 @@ Index: linux-2.6.22.14/fs/ext3/iam_lvar.c
 ===================================================================
 --- /dev/null
 +++ linux-2.6.22.14/fs/ext3/iam_lvar.c
-@@ -0,0 +1,1091 @@
+@@ -0,0 +1,1074 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -914,23 +914,6 @@ Index: linux-2.6.22.14/fs/ext3/iam_lvar.c
 +        return iam_ipd_alloc(area, c->ic_descr->id_ikey_size);
 +}
 +
-+static int root_limit(int rootgap, int blocksize, int size)
-+{
-+        int limit;
-+        int nlimit;
-+
-+        limit = (blocksize - rootgap) / size;
-+        nlimit = blocksize / size;
-+        if (limit == nlimit)
-+                limit--;
-+        return limit;
-+}
-+
-+static int lvar_root_limit(int blocksize, int size)
-+{
-+        return root_limit(sizeof(struct lvar_root), blocksize, size);
-+}
-+
 +static void lvar_root(void *buf,
 +                      int blocksize, int keysize, int ptrsize, int recsize)
 +{
@@ -954,8 +937,8 @@ Index: linux-2.6.22.14/fs/ext3/iam_lvar.c
 +                 * limit itself + one pointer to the leaf.
 +                 */
 +                .count = cpu_to_le16(2),
-+                .limit = lvar_root_limit(blocksize,
-+                                         sizeof (lvar_hash_t) + ptrsize)
++                .limit = iam_root_limit(sizeof(struct lvar_root), blocksize,
++                                        sizeof (lvar_hash_t) + ptrsize)
 +        };
 +
 +        entry = root + 1;
@@ -1098,7 +1081,7 @@ Index: linux-2.6.22.14/fs/ext3/iam_lfix.c
 ===================================================================
 --- /dev/null
 +++ linux-2.6.22.14/fs/ext3/iam_lfix.c
-@@ -0,0 +1,745 @@
+@@ -0,0 +1,854 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -1844,6 +1827,115 @@ Index: linux-2.6.22.14/fs/ext3/iam_lfix.c
 +                char rec[RECSIZE];
 +        } ll_entry[LFIX_LEAF_RECNO];
 +};
++
++#define STORE_UNALIGNED(val, dst)                       \
++({                                                      \
++        typeof(val) __val = (val);                      \
++        CLASSERT(sizeof(val) == sizeof(*(dst)));        \
++        memcpy(dst, &__val, sizeof(*(dst)));            \
++})
++
++#include <linux/jbd.h>
++#include <linux/ldiskfs_fs.h>
++#include <linux/ldiskfs_jbd.h>
++
++static void lfix_root(void *buf,
++                      int blocksize, int keysize, int ptrsize, int recsize)
++{
++        struct iam_lfix_root *root;
++        struct dx_countlimit *limit;
++        void                 *entry;
++
++        root = buf;
++        *root = (typeof(*root)) {
++                .ilr_magic           = cpu_to_le64(IAM_LFIX_ROOT_MAGIC),
++                .ilr_keysize         = cpu_to_le16(keysize),
++                .ilr_recsize         = cpu_to_le16(recsize),
++                .ilr_ptrsize         = cpu_to_le16(ptrsize),
++                .ilr_indirect_levels = 0
++        };
++
++        limit = (void *)(root + 1);
++        *limit = (typeof(*limit)){
++                /*
++                 * limit itself + one pointer to the leaf.
++                 */
++                .count = cpu_to_le16(2),
++                .limit = iam_root_limit(sizeof(struct iam_lfix_root),
++                                        blocksize, keysize + ptrsize)
++        };
++
++        entry = root + 1;
++        /*
++         * Skip over @limit.
++         */
++        entry += keysize + ptrsize;
++
++        /*
++         * Entry format is <key> followed by <ptr>. In the minimal tree
++         * consisting of a root and single node, <key> is a minimal possible
++         * key.
++         *
++         * XXX: this key is hard-coded to be a sequence of 0's.
++         */
++
++        entry += keysize;
++        /* now @entry points to <ptr> */
++        if (ptrsize == 4)
++                STORE_UNALIGNED(cpu_to_le32(1), (u_int32_t *)entry);
++        else
++                STORE_UNALIGNED(cpu_to_le64(1), (u_int64_t *)entry);
++}
++
++static void lfix_leaf(void *buf,
++                      int blocksize, int keysize, int ptrsize, int recsize)
++{
++        struct iam_leaf_head *head;
++
++        /* form leaf */
++        head = buf;
++        *head = (struct iam_leaf_head) {
++                .ill_magic = cpu_to_le16(IAM_LEAF_HEADER_MAGIC),
++                /*
++                 * Leaf contains an entry with the smallest possible key
++                 * (created by zeroing).
++                 */
++                .ill_count = cpu_to_le16(1),
++        };
++}
++
++int iam_lfix_create(struct inode *obj,
++                    int keysize, int ptrsize, int recsize, handle_t *handle)
++{
++        struct buffer_head *root_node;
++        struct buffer_head *leaf_node;
++        struct super_block *sb;
++
++        u32 blknr;
++        int result;
++        unsigned long bsize;
++
++        assert_corr(obj->i_size == 0);
++
++        sb = obj->i_sb;
++        bsize = sb->s_blocksize;
++        root_node = ldiskfs_append(handle, obj, &blknr, &result);
++        leaf_node = ldiskfs_append(handle, obj, &blknr, &result);
++        if (root_node != NULL && leaf_node != NULL) {
++                lfix_root(root_node->b_data, bsize, keysize, ptrsize, recsize);
++                lfix_leaf(leaf_node->b_data, bsize, keysize, ptrsize, recsize);
++                ldiskfs_mark_inode_dirty(handle, obj);
++                result = ldiskfs_journal_dirty_metadata(handle, root_node);
++                if (result == 0)
++                        result = ldiskfs_journal_dirty_metadata(handle, leaf_node);
++                if (result != 0)
++                        ldiskfs_std_error(sb, result);
++        }
++        brelse(leaf_node);
++        brelse(root_node);
++        return result;
++}
++EXPORT_SYMBOL(iam_lfix_create);
 Index: linux-2.6.22.14/fs/ext3/iam_htree.c
 ===================================================================
 --- /dev/null
@@ -2551,7 +2643,7 @@ Index: linux-2.6.22.14/fs/ext3/iam.c
 ===================================================================
 --- /dev/null
 +++ linux-2.6.22.14/fs/ext3/iam.c
-@@ -0,0 +1,1446 @@
+@@ -0,0 +1,1457 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -3998,6 +4090,17 @@ Index: linux-2.6.22.14/fs/ext3/iam.c
 +}
 +EXPORT_SYMBOL(iam_delete);
 +
++int iam_root_limit(int rootgap, int blocksize, int size)
++{
++        int limit;
++        int nlimit;
++
++        limit = (blocksize - rootgap) / size;
++        nlimit = blocksize / size;
++        if (limit == nlimit)
++                limit--;
++        return limit;
++}
 Index: linux-2.6.22.14/fs/ext3/iam-uapi.c
 ===================================================================
 --- /dev/null
@@ -4387,7 +4490,7 @@ Index: linux-2.6.22.14/include/linux/lustre_iam.h
 ===================================================================
 --- /dev/null
 +++ linux-2.6.22.14/include/linux/lustre_iam.h
-@@ -0,0 +1,1089 @@
+@@ -0,0 +1,1090 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -5409,6 +5512,7 @@ Index: linux-2.6.22.14/include/linux/lustre_iam.h
 +};
 +
 +void iam_format_register(struct iam_format *fmt);
++int iam_root_limit(int rootgap, int blocksize, int size);
 +
 +void iam_lfix_format_init(void);
 +void iam_lvar_format_init(void);
