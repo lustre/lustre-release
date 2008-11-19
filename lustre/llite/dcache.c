@@ -213,7 +213,7 @@ int ll_drop_dentry(struct dentry *dentry)
                 spin_lock(&dcache_lock);
                 return 1;
         }
-	/* disconected dentry can not be find without lookup, because we 
+	/* disconected dentry can not be find without lookup, because we
 	 * not need his to unhash or mark invalid. */
 	if (dentry->d_flags & DCACHE_DISCONNECTED) {
 		unlock_dentry(dentry);
@@ -239,7 +239,7 @@ int ll_drop_dentry(struct dentry *dentry)
                 if (dentry->d_inode) {
                         /* Put positive dentries to orphan list */
                         list_add(&dentry->d_hash,
-                                 &ll_i2sbi(dentry->d_inode)->ll_orphan_dentry_list);
+                             &ll_i2sbi(dentry->d_inode)->ll_orphan_dentry_list);
                 }
 #endif
 #else
@@ -488,11 +488,14 @@ do_lock:
 revalidate_finish:
         rc = revalidate_it_finish(req, DLM_REPLY_REC_OFF, it, de);
         if (rc != 0) {
+                /* we are going release the intent, so clear DISP_ENQ_COMPLETE
+                 * to prevent a double free of the request */
+                it_clear_disposition(it, DISP_ENQ_COMPLETE);
                 ll_intent_release(it);
                 GOTO(out, rc = 0);
         }
-        if ((it->it_op & IT_OPEN) && de->d_inode && 
-            !S_ISREG(de->d_inode->i_mode) && 
+        if ((it->it_op & IT_OPEN) && de->d_inode &&
+            !S_ISREG(de->d_inode->i_mode) &&
             !S_ISDIR(de->d_inode->i_mode)) {
                 ll_release_openhandle(de, it);
         }
@@ -572,6 +575,9 @@ do_lookup:
                 /* see if we got same inode, if not - return error */
                 if(!memcmp(&fid, &mds_body->fid1, sizeof(struct ll_fid)))
                         goto revalidate_finish;
+                /* we are going release the intent, so clear DISP_ENQ_COMPLETE
+                 * to prevent a double free of the request */
+                it_clear_disposition(it, DISP_ENQ_COMPLETE);
                 ll_intent_release(it);
         }
         GOTO(out, rc = 0);
@@ -703,7 +709,8 @@ int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
                         RETURN(0);
                 if (it->it_op == (IT_OPEN|IT_CREAT))
                         if (nd->intent.open.flags & O_EXCL) {
-                                CDEBUG(D_VFSTRACE, "create O_EXCL, returning 0\n");
+                                CDEBUG(D_VFSTRACE,
+                                       "create O_EXCL, returning 0\n");
                                 rc = 0;
                                 goto out_it;
                         }
@@ -747,7 +754,7 @@ int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
                         ll_d2d(dentry)->lld_it = it;
                         it = NULL; /* avoid freeing */
                 }
-                        
+
 out_it:
                 if (it) {
                         ll_intent_release(it);
