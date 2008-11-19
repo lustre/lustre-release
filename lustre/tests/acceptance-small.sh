@@ -65,7 +65,8 @@ setup_if_needed() {
     fi
 
     echo "Lustre is not mounted, trying to do setup SETUP=$SETUP ... "
-    $FORMAT && $SETUP
+    [ "$REFORMAT" ] && $FORMAT
+    $SETUP
 
     MOUNTED=$(mounted_lustre_filesystems)
     if ! $(echo $MOUNTED | grep -w -q $MOUNT); then
