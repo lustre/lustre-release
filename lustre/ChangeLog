@@ -41,6 +41,15 @@ tbd Sun Microsystems, Inc.
 	* A new Lustre ADIO driver is available for:
 	  MPICH2-1.0.7
 
+Severity   : normal
+Frequency  : rare, need acl's on inode.
+Bugzilla   : 16492
+Description: client can't handle ost additional correctly
+Details    : if ost was added after client connected to mds client can have 
+             hit lnet_try_match_md ... to big messages to wide striped files.
+             in this case need teach client to handle config events about add
+             lov target and update client max ea size at that event.
+
 Severity   : enhancement
 Bugzilla   : 17374
 Description: Update to sles9 kernel-2.6.5-7.314.
