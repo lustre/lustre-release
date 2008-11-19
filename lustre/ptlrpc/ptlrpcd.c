@@ -146,9 +146,6 @@ static int ptlrpcd_check(const struct lu_env *env, struct ptlrpcd_ctl *pc)
         int rc = 0;
         ENTRY;
 
-        if (test_bit(LIOD_STOP, &pc->pc_flags))
-                RETURN(1);
-
         spin_lock(&pc->pc_set->set_new_req_lock);
         list_for_each_safe(pos, tmp, &pc->pc_set->set_new_requests) {
                 req = list_entry(pos, struct ptlrpc_request, rq_set_chain);
@@ -202,7 +199,7 @@ static int ptlrpcd(void *arg)
 {
         struct ptlrpcd_ctl *pc = arg;
         struct lu_env env = { .le_ses = NULL };
-        int rc;
+        int rc, exit = 0;
         ENTRY;
 
         rc = cfs_daemonize_ctxt(pc->pc_name);
@@ -221,13 +218,14 @@ static int ptlrpcd(void *arg)
         if (rc != 0)
                 RETURN(rc);
         env.le_ctx.lc_cookie = 0x7;
+
         /*
          * This mainloop strongly resembles ptlrpc_set_wait() except that our
          * set never completes.  ptlrpcd_check() calls ptlrpc_check_set() when
          * there are requests in the set. New requests come in on the set's
          * new_req_list and ptlrpcd_check() moves them into the set.
          */
-        while (1) {
+        do {
                 struct l_wait_info lwi;
                 int timeout;
 
@@ -259,12 +257,17 @@ static int ptlrpcd(void *arg)
                 /*
                  * Abort inflight rpcs for forced stop case.
                  */
-                if (test_bit(LIOD_STOP_FORCE, &pc->pc_flags))
-                        ptlrpc_abort_set(pc->pc_set);
+                if (test_bit(LIOD_STOP, &pc->pc_flags)) {
+                        if (test_bit(LIOD_FORCE, &pc->pc_flags))
+                                ptlrpc_abort_set(pc->pc_set);
+                        exit++;
+                }
 
-                if (test_bit(LIOD_STOP, &pc->pc_flags))
-                        break;
-        }
+                /* 
+                 * Let's make one more loop to make sure that ptlrpcd_check()
+                 * copied all raced new rpcs into the set so we can kill them.
+                 */
+        } while (exit < 2);
 
         /*
          * Wait for inflight requests to drain.
@@ -276,6 +279,7 @@ static int ptlrpcd(void *arg)
 
         clear_bit(LIOD_START, &pc->pc_flags);
         clear_bit(LIOD_STOP, &pc->pc_flags);
+        clear_bit(LIOD_FORCE, &pc->pc_flags);
         return 0;
 }
 
@@ -382,7 +386,7 @@ void ptlrpcd_stop(struct ptlrpcd_ctl *pc, int force)
 
         set_bit(LIOD_STOP, &pc->pc_flags);
         if (force)
-                set_bit(LIOD_STOP_FORCE, &pc->pc_flags);
+                set_bit(LIOD_FORCE, &pc->pc_flags);
         cfs_waitq_signal(&pc->pc_set->set_waitq);
 #ifdef __KERNEL__
         wait_for_completion(&pc->pc_finishing);

@@ -813,8 +813,9 @@ struct obd_import *class_import_get(struct obd_import *import)
         LASSERT(atomic_read(&import->imp_refcount) >= 0);
         LASSERT(atomic_read(&import->imp_refcount) < 0x5a5a5a);
         atomic_inc(&import->imp_refcount);
-        CDEBUG(D_INFO, "import %p refcount=%d\n", import,
-               atomic_read(&import->imp_refcount));
+        CDEBUG(D_INFO, "import %p refcount=%d obd=%s\n", import,
+               atomic_read(&import->imp_refcount), 
+               import->imp_obd->obd_name);
         return import;
 }
 EXPORT_SYMBOL(class_import_get);
@@ -827,13 +828,12 @@ void class_import_put(struct obd_import *import)
         LASSERT(atomic_read(&import->imp_refcount) < 0x5a5a5a);
         LASSERT(list_empty(&import->imp_zombie_chain));
 
-        CDEBUG(D_INFO, "import %p refcount=%d\n", import,
-               atomic_read(&import->imp_refcount) - 1);
+        CDEBUG(D_INFO, "import %p refcount=%d obd=%s\n", import,
+               atomic_read(&import->imp_refcount) - 1, 
+               import->imp_obd->obd_name);
 
         if (atomic_dec_and_test(&import->imp_refcount)) {
-
                 CDEBUG(D_INFO, "final put import %p\n", import);
-
                 spin_lock(&obd_zombie_impexp_lock);
                 list_add(&import->imp_zombie_chain, &obd_zombie_imports);
                 spin_unlock(&obd_zombie_impexp_lock);

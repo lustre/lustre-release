@@ -2445,24 +2445,24 @@ void ptlrpc_abort_inflight(struct obd_import *imp)
 
 void ptlrpc_abort_set(struct ptlrpc_request_set *set)
 {
-        struct list_head *tmp, *n;
+        struct list_head *tmp, *pos;
 
         LASSERT(set != NULL);
 
-        list_for_each_safe(tmp, n, &set->set_requests) {
+        list_for_each_safe(pos, tmp, &set->set_requests) {
                 struct ptlrpc_request *req =
-                        list_entry(tmp, struct ptlrpc_request, rq_set_chain);
+                        list_entry(pos, struct ptlrpc_request, rq_set_chain);
 
-                spin_lock (&req->rq_lock);
+                spin_lock(&req->rq_lock);
                 if (req->rq_phase != RQ_PHASE_RPC) {
-                        spin_unlock (&req->rq_lock);
+                        spin_unlock(&req->rq_lock);
                         continue;
                 }
 
                 req->rq_err = 1;
                 req->rq_status = -EINTR;
                 ptlrpc_client_wake_req(req);
-                spin_unlock (&req->rq_lock);
+                spin_unlock(&req->rq_lock);
         }
 }
 
