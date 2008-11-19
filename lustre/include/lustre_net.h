@@ -640,7 +640,7 @@ struct ptlrpc_service {
 
 struct ptlrpcd_ctl {
         /**
-         * Ptlrpc thread control flags (LIOD_START, LIOD_STOP, LIOD_STOP_FORCE)
+         * Ptlrpc thread control flags (LIOD_START, LIOD_STOP, LIOD_FORCE)
          */
         unsigned long               pc_flags;
         /**
@@ -695,10 +695,11 @@ enum ptlrpcd_ctl_flags {
          */
         LIOD_STOP        = 1 << 1,
         /**
-         * Ptlrpc thread stop force flag. This will cause also 
-         * aborting any inflight rpcs handled by thread.
+         * Ptlrpc thread force flag (only stop force so far).
+         * This will cause aborting any inflight rpcs handled
+         * by thread if LIOD_STOP is specified.
          */
-        LIOD_STOP_FORCE  = 1 << 2
+        LIOD_FORCE       = 1 << 2
 };
 
 /* ptlrpc/events.c */
