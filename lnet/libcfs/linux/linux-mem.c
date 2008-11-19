@@ -1,22 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2001, 2002 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 #define DEBUG_SUBSYSTEM S_LNET
 
@@ -51,6 +66,8 @@ static unsigned int cfs_alloc_flags_to_gfp(u_int32_t flags)
 #endif
         if (flags & CFS_ALLOC_FS)
                 mflags |= __GFP_FS;
+        if (flags & CFS_ALLOC_HIGH)
+                mflags |= __GFP_HIGH;
         return mflags;
 }
 
@@ -83,20 +100,29 @@ cfs_free_large(void *addr)
 	vfree(addr);
 }
 
-cfs_page_t *cfs_alloc_page(unsigned int flags)
+cfs_page_t *cfs_alloc_pages(unsigned int flags, unsigned int order)
 {
         /*
          * XXX nikita: do NOT call portals_debug_msg() (CDEBUG/ENTRY/EXIT)
          * from here: this will lead to infinite recursion.
          */
-        return alloc_pages(cfs_alloc_flags_to_gfp(flags), 0);
+        return alloc_pages(cfs_alloc_flags_to_gfp(flags), order);
+}
+
+void __cfs_free_pages(cfs_page_t *page, unsigned int order)
+{
+        __free_pages(page, order);
 }
 
 cfs_mem_cache_t *
 cfs_mem_cache_create (const char *name, size_t size, size_t offset,
                       unsigned long flags)
 {
+#ifdef HAVE_KMEM_CACHE_CREATE_DTOR
         return kmem_cache_create(name, size, offset, flags, NULL, NULL);
+#else
+        return kmem_cache_create(name, size, offset, flags, NULL);
+#endif
 }
 
 int
@@ -126,7 +152,8 @@ EXPORT_SYMBOL(cfs_alloc);
 EXPORT_SYMBOL(cfs_free);
 EXPORT_SYMBOL(cfs_alloc_large);
 EXPORT_SYMBOL(cfs_free_large);
-EXPORT_SYMBOL(cfs_alloc_page);
+EXPORT_SYMBOL(cfs_alloc_pages);
+EXPORT_SYMBOL(__cfs_free_pages);
 EXPORT_SYMBOL(cfs_mem_cache_create);
 EXPORT_SYMBOL(cfs_mem_cache_destroy);
 EXPORT_SYMBOL(cfs_mem_cache_alloc);

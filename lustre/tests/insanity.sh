@@ -8,22 +8,38 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 
 init_test_env $@
 
-. ${CONFIG:=$LUSTRE/tests/cfg/insanity-local.sh}
+. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
 ALWAYS_EXCEPT="10 $INSANITY_EXCEPT"
 
-SETUP=${SETUP:-"setup"}
-CLEANUP=${CLEANUP:-"cleanup"}
+if [ "$FAILURE_MODE" = "HARD" ]; then
+    mixed_ost_devs && CONFIG_EXCEPTIONS="0 2 4 5 6 8" && \
+        echo -n "Several ost services on one ost node are used with FAILURE_MODE=$FAILURE_MODE. " && \
+        echo "Except the tests: $CONFIG_EXCEPTIONS" && \
+        ALWAYS_EXCEPT="$ALWAYS_EXCEPT $CONFIG_EXCEPTIONS"
+fi
+
+#
+[ "$SLOW" = "no" ] && EXCEPT_SLOW=""
+
+SETUP=${SETUP:-""}
+CLEANUP=${CLEANUP:-""}
 
 build_test_filter
+
+SINGLECLIENT=${SINGLECLIENT:-$HOSTNAME}
+LIVE_CLIENT=${LIVE_CLIENT:-$SINGLECLIENT}
+FAIL_CLIENTS=${FAIL_CLIENTS:-$RCLIENTS}
 
 assert_env mds_HOST MDS_MKFS_OPTS MDSDEV
 assert_env ost_HOST OST_MKFS_OPTS OSTCOUNT
 assert_env LIVE_CLIENT FSNAME
 
+remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
+remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
 
-# This can be a regexp, to allow more clients
-CLIENTS=${CLIENTS:-"`comma_list $LIVE_CLIENT $FAIL_CLIENTS $EXTRA_CLIENTS`"}
+# FAIL_CLIENTS list should not contain the LIVE_CLIENT
+FAIL_CLIENTS=$(echo " $FAIL_CLIENTS " | sed -re "s/\s+$LIVE_CLIENT\s+/ /g")
 
 DIR=${DIR:-$MOUNT}
 
@@ -57,20 +73,16 @@ shutdown_client() {
     fi
 }
 
-reboot_node() {
-    NODE=$1
-    if [ "$FAILURE_MODE" = HARD ]; then
-       $POWER_UP $NODE
-    fi
-}
-
 fail_clients() {
     num=$1
+
+    log "Request clients to fail: ${num}. Num of clients to fail: ${FAIL_NUM}, already failed: $DOWN_NUM"
     if [ -z "$num"  ] || [ "$num" -gt $((FAIL_NUM - DOWN_NUM)) ]; then
 	num=$((FAIL_NUM - DOWN_NUM)) 
     fi
     
     if [ -z "$num" ] || [ "$num" -le 0 ]; then
+        log "No clients failed!"
         return
     fi
 
@@ -86,7 +98,7 @@ fail_clients() {
     echo "down clients: $DOWN_CLIENTS"
 
     for client in $DOWN_CLIENTS; do
-	reboot_node $client
+	boot_node $client
     done
     DOWN_NUM=`echo $DOWN_CLIENTS | wc -w`
     client_rmdirs
@@ -104,22 +116,6 @@ reintegrate_clients() {
 
 start_ost() {
     start ost$1 `ostdevname $1` $OST_MOUNT_OPTS
-}
-
-setup() {
-    cleanup
-    rm -rf logs/*
-    formatall
-    setupall
-
-    while ! do_node $CLIENTS "ls -d $LUSTRE" > /dev/null; do sleep 5; done
-    grep " $MOUNT " /proc/mounts || zconf_mount $CLIENTS $MOUNT
-}
-
-cleanup() {
-    zconf_umount $CLIENTS $MOUNT
-    cleanupall
-    cleanup_check
 }
 
 trap exit INT
@@ -159,21 +155,7 @@ clients_recover_osts() {
 #    do_node $CLIENTS "$LCTL "'--device %OSC_`hostname`_'"${facet}_svc_MNT_client_facet recover"
 }
 
-if [ "$ONLY" == "cleanup" ]; then
-    $CLEANUP
-    exit
-fi
-
-if [ ! -z "$EVAL" ]; then
-    eval "$EVAL"
-    exit $?
-fi
-
-$SETUP
-
-if [ "$ONLY" == "setup" ]; then
-    exit 0
-fi
+check_and_setup_lustre
 
 # 9 Different Failure Modes Combinations
 echo "Starting Test 17 at `date`"
@@ -183,13 +165,11 @@ test_0() {
     echo "Waiting for df pid: $DFPID"
     wait $DFPID || { echo "df returned $?" && return 1; }
 
-    facet_failover ost1 || return 4
-    echo "Waiting for df pid: $DFPID"
-    wait $DFPID || { echo "df returned $?" && return 2; }
-
-    facet_failover ost2 || return 5
-    echo "Waiting for df pid: $DFPID"
-    wait $DFPID || { echo "df returned $?" && return 3; }
+    for i in $(seq $OSTCOUNT) ; do
+        facet_failover ost$i || return 4
+        echo "Waiting for df pid: $DFPID"
+        wait $DFPID || { echo "df returned $?" && return 3; }
+    done
     return 0
 }
 run_test 0 "Fail all nodes, independently"
@@ -205,6 +185,8 @@ run_test 1 "MDS/MDS failure"
 ############### Second Failure Mode ###############
 test_2() {
     echo "Verify Lustre filesystem is up and running"
+    [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
+
     client_df
 
     shutdown_facet mds
@@ -243,6 +225,7 @@ run_test 2 "Second Failure Mode: MDS/OST `date`"
 test_3() {
     #Create files
     echo "Verify Lustre filesystem is up and running"
+    [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
     
     #MDS Portion
     facet_failover mds
@@ -315,10 +298,14 @@ run_test 4 "Fourth Failure Mode: OST/MDS `date`"
 
 ############### Fifth Failure Mode ###############
 test_5() {
+    [ $OSTCOUNT -lt 2 ] && skip "$OSTCOUNT < 2, not enough OSTs" && return 0
+
     echo "Fifth Failure Mode: OST/OST `date`"
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
+    [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
+
     client_df
     
     #OST Portion
@@ -365,7 +352,9 @@ test_6() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
-    client_df || return 1
+    [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
+
+    client_df
     client_touch testfile || return 2
 	
     #OST Portion
@@ -376,6 +365,7 @@ test_6() {
     echo "Test Lustre stability after OST failure"
     client_df &
     DFPIDA=$!
+    echo DFPIDA=$DFPIDA
     sleep 5
 
     #CLIENT Portion
@@ -386,19 +376,23 @@ test_6() {
     echo "Test Lustre stability after CLIENTs failure"
     client_df &
     DFPIDB=$!
+    echo DFPIDB=$DFPIDB
     sleep 5
     
     #Reintegration
     echo "Reintegrating OST/CLIENTs"
     wait_for ost1
     start_ost 1
-    reintegrate_clients
+    reintegrate_clients || return 1
     sleep 5 
 
+    wait_remote_prog df $((TIMEOUT * 3 + 10)) 
     wait $DFPIDA
     wait $DFPIDB
+
     echo "Verifying mount"
-    client_df || return 3
+    [ -z "$(mounted_lustre_filesystems)" ] && return 3
+    client_df
 }
 run_test 6 "Sixth Failure Mode: OST/CLIENT `date`"
 ###################################################
@@ -410,6 +404,8 @@ test_7() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
+    [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
+
     client_df
     client_touch testfile  || return 1
 
@@ -429,6 +425,8 @@ test_7() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
+    [ -z "$(mounted_lustre_filesystems)" ] && return 2
+
     client_df
     client_rm testfile
 
@@ -443,8 +441,8 @@ test_7() {
 
     #Reintegration
     echo "Reintegrating CLIENTs"
-    reintegrate_clients
-    client_df || return 2
+    reintegrate_clients || return 2
+    client_df
     
     #Sleep
     echo "wait 1 minutes"
@@ -460,6 +458,8 @@ test_8() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
+    [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
+
     client_df
     client_touch testfile
 	
@@ -479,6 +479,8 @@ test_8() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
+    [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
+
     client_df
     client_touch testfile
 
@@ -498,7 +500,7 @@ test_8() {
     
     #Reintegration
     echo "Reintegrating CLIENTs/OST"
-    reintegrate_clients
+    reintegrate_clients || return 3
     wait_for ost1
     start_ost 1
     wait $DFPID
@@ -519,6 +521,8 @@ test_9() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
+    [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
+
     client_df
     client_touch testfile || return 1
 	
@@ -538,7 +542,8 @@ test_9() {
 
     #Create files
     echo "Verify Lustre filesystem is up and running"
-    $PDSH $LIVE_CLIENT df $MOUNT || return 3
+    $PDSH $LIVE_CLIENT "grep -e $DIR /proc/mounts" || return 3
+    $PDSH $LIVE_CLIENT df $MOUNT
     client_touch testfile || return 4
 
     #CLIENT Portion
@@ -553,8 +558,8 @@ test_9() {
 
     #Reintegration
     echo "Reintegrating  CLIENTs/CLIENTs"
-    reintegrate_clients
-    client_df || return 7
+    reintegrate_clients || return 7
+    client_df
     
     #Sleep
     echo "Wait 1 minutes"
@@ -571,7 +576,6 @@ test_10() {
 }
 run_test 10 "Running Availability for 6 hours..."
 
-equals_msg "Done, cleaning up"
-$CLEANUP
-echo "$0: completed"
-
+equals_msg `basename $0`: test complete, cleaning up
+check_and_cleanup_lustre
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true

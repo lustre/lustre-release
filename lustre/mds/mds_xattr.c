@@ -1,28 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  linux/mds/mds_xattr.c
- *  Lustre Metadata Server (mds) extended attributes handling
+ * GPL HEADER START
  *
- *  Copyright (C) 2004-2005 Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/mds/mds_xattr.c
+ *
+ * Lustre Metadata Server (mds) extended attributes handling
  */
 
 #ifndef EXPORT_SYMTAB
@@ -129,26 +142,21 @@ static int mds_getxattr_internal(struct obd_device *obd,
 
         if (reqbody->valid & OBD_MD_FLXATTR) {
                 xattr_name = lustre_msg_string(req->rq_reqmsg, REQ_REC_OFF+1,0);
-                DEBUG_REQ(D_INODE, req, "getxattr %s\n", xattr_name);
+                DEBUG_REQ(D_INODE, req, "getxattr %s", xattr_name);
 
                 if (inode->i_op && inode->i_op->getxattr) {
-                        lock_24kernel();
                         rc = inode->i_op->getxattr(dentry, xattr_name,
                                                    buf, buflen);
-                        unlock_24kernel();
                 }
 
                 if (rc < 0 && rc != -ENODATA && rc != -EOPNOTSUPP &&
                     rc != -ERANGE)
                         CDEBUG(D_OTHER, "getxattr failed: %d\n", rc);
         } else if (reqbody->valid & OBD_MD_FLXATTRLS) {
-                DEBUG_REQ(D_INODE, req, "listxattr\n");
+                DEBUG_REQ(D_INODE, req, "listxattr");
 
-                if (inode->i_op && inode->i_op->listxattr) {
-                        lock_24kernel();
+                if (inode->i_op && inode->i_op->listxattr)
                         rc = inode->i_op->listxattr(dentry, buf, buflen);
-                        unlock_24kernel();
-                }
                 if (rc < 0)
                         CDEBUG(D_OTHER, "listxattr failed: %d\n", rc);
         } else
@@ -218,12 +226,13 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
         struct obd_device *obd = req->rq_export->exp_obd;
         struct dentry *de;
         struct inode *inode = NULL;
+        struct inode *inodes[PTLRPC_NUM_VERSIONS] = { NULL };
         struct lustre_handle lockh;
         void *handle = NULL;
         char *xattr_name;
         char *xattr = NULL;
         int xattrlen;
-        int rc = -EOPNOTSUPP, err = 0;
+        int rc = -EOPNOTSUPP, err = 0, sync = 0;
         __u64 lockpart;
         ENTRY;
 
@@ -243,7 +252,7 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
                 GOTO(out, rc = -EPROTO);
         }
 
-        DEBUG_REQ(D_INODE, req, "%sxattr %s\n",
+        DEBUG_REQ(D_INODE, req, "%sxattr %s",
                   body->valid & OBD_MD_FLXATTR ? "set" : "remove",
                   xattr_name);
 
@@ -270,6 +279,11 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
 
         OBD_FAIL_WRITE(obd, OBD_FAIL_MDS_SETXATTR_WRITE, inode->i_sb);
 
+        /* version recovery check */
+        rc = mds_version_get_check(req, inode, 0);
+        if (rc)
+                GOTO(out_dput, rc);
+
         /* filter_op simply use setattr one */
         handle = fsfilt_start(obd, inode, FSFILT_OP_SETATTR, NULL);
         if (IS_ERR(handle))
@@ -289,18 +303,14 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
                                                        REQ_REC_OFF+2, xattrlen);
 
                         LOCK_INODE_MUTEX(inode);
-                        lock_24kernel();
                         rc = inode->i_op->setxattr(de, xattr_name, xattr,
                                                    xattrlen, body->flags);
-                        unlock_24kernel();
                         UNLOCK_INODE_MUTEX(inode);
                 }
         } else if (body->valid & OBD_MD_FLXATTRRM) {
                 if (inode->i_op && inode->i_op->removexattr) {
                         LOCK_INODE_MUTEX(inode);
-                        lock_24kernel();
                         rc = inode->i_op->removexattr(de, xattr_name);
-                        unlock_24kernel();
                         UNLOCK_INODE_MUTEX(inode);
                 }
         } else {
@@ -310,8 +320,11 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
 
         LASSERT(rc <= 0);
 out_trans:
-        err = mds_finish_transno(mds, inode, handle, req, rc, 0);
-
+        /* security-replated changes may require sync */
+        if (!strcmp(xattr_name, XATTR_NAME_ACL_ACCESS))
+                sync = mds->mds_sync_permission;
+        inodes[0] = inode;
+        err = mds_finish_transno(mds, inodes, handle, req, rc, 0, sync);
 out_dput:
         l_dput(de);
         if (rc)

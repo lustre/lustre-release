@@ -27,7 +27,14 @@ EOF
 
 if [ -z "$LUSTRECVS_UPDATED" ] ; then
     echo "$progname: updating lustrecvs"
-    cvs up -l || fatal 1 "Error updating lustrecvs"
+
+    # If checking out a specific tag, make sure all of the files here are also
+    # checked out with the same tag to avoid later changes breaking things.
+    case "$1" in
+    v*|b_release_*) TAG="-r $1" ;;
+    esac
+
+    cvs update -l $TAG
     export LUSTRECVS_UPDATED=yes
     exec "$0" "$@"
 fi
@@ -81,6 +88,8 @@ case "$lustretag" in
     # this is the branch table
     # keep this list sorted alphabetically!
 
+    *_gate) buildtag="b_build_gate" ;;
+
     *)
         buildtag="HEAD"
 	;;
@@ -121,6 +130,58 @@ cvs_cmd ()
         echo "$progname: Checking out $dir from $tag"
         cvs co $datecmd -P $cotag -d "$dir" "$module"
     fi
+    if [ $? != 0 ] ; then
+        error_modules="$dir $error_modules"
+    fi
+}
+
+hg_cmd ()
+{
+    dir="$1"
+    base_url="$2"
+    repository="$3"
+
+    if [ ! "$repository" ]; then
+        return
+    fi
+
+    if ! which hg &> /dev/null; then
+    cat <<EOF
+
+Error: Mercurial is missing, try 'yum install mercurial', 'apt-get install
+mercurial' or try http://rpmfind.net/linux/rpm2html/search.php?query=mercurial
+EOF
+        error_modules="$dir $error_modules"
+        return
+    fi
+
+    url="$base_url/$repository"
+
+    # create a cvs date format that will survive shell expansion
+    if [ -n "$pindate" ]; then
+        datecmd=$(date -u +%s -d "$pindate")
+        datecmd="-d \"$datecmd 0\""
+    else
+        datecmd=""
+    fi
+
+    if [ -d "$dir" ]; then
+        echo "$progname: Updating $dir"
+        if [ -f "$dir/update.sh" ]; then
+            ( cd "$dir" && ./update.sh $datecmd )
+        else
+            ( cd "$dir" && hg pull && hg update $datecmd )
+        fi
+    else
+        echo "$progname: Checking out $dir"
+        hg clone $url $dir
+        if [ -f "$dir/setup.sh" ]; then
+            ( cd "$dir" && ./setup.sh $datecmd )
+        else
+            ( cd "$dir" && hg update $datecmd )
+        fi
+    fi
+
     if [ $? != 0 ] ; then
         error_modules="$dir $error_modules"
     fi

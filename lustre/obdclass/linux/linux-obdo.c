@@ -1,28 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/obdclass/linux/linux-obdo.c
+ *
  * Object Devices Class Driver
- *
- *  Copyright (C) 2001-2003 Cluster File Systems, Inc.
- *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
- *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
- *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
- *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
- *
  * These are the only exported functions, they provide some generic
  * infrastructure for managing object devices
  */
@@ -65,7 +78,7 @@ void obdo_from_iattr(struct obdo *oa, struct iattr *attr, unsigned int ia_valid)
         if (ia_valid & ATTR_MODE) {
                 oa->o_mode = attr->ia_mode;
                 oa->o_valid |= OBD_MD_FLTYPE | OBD_MD_FLMODE;
-                if (!in_group_p(oa->o_gid) && !capable(CAP_FSETID))
+                if (!in_group_p(oa->o_gid) && !cfs_capable(CFS_CAP_FSETID))
                         oa->o_mode &= ~S_ISGID;
         }
         if (ia_valid & ATTR_UID) {
@@ -113,7 +126,7 @@ void iattr_from_obdo(struct iattr *attr, struct obdo *oa, obd_flag valid)
         if (valid & OBD_MD_FLMODE) {
                 attr->ia_mode = (attr->ia_mode & S_IFMT)|(oa->o_mode & ~S_IFMT);
                 attr->ia_valid |= ATTR_MODE;
-                if (!in_group_p(oa->o_gid) && !capable(CAP_FSETID))
+                if (!in_group_p(oa->o_gid) && !cfs_capable(CFS_CAP_FSETID))
                         attr->ia_mode &= ~S_ISGID;
         }
         if (valid & OBD_MD_FLUID) {
@@ -151,7 +164,7 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
                 newvalid |= OBD_MD_FLCTIME;
         }
         if (valid & OBD_MD_FLSIZE) {
-                dst->o_size = src->i_size;
+                dst->o_size = i_size_read(src);
                 newvalid |= OBD_MD_FLSIZE;
         }
         if (valid & OBD_MD_FLBLOCKS) {  /* allocation of space (x512 bytes) */
@@ -207,18 +220,12 @@ void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid)
 
         if (valid & OBD_MD_FLATIME && src->o_atime > LTIME_S(dst->i_atime))
                 LTIME_S(dst->i_atime) = src->o_atime;
-        
-        /* mtime is always updated with ctime, but can be set in past.
-           As write and utime(2) may happen within 1 second, and utime's
-           mtime has a priority over write's one, leave mtime from mds 
-           for the same ctimes. */
-        if (valid & OBD_MD_FLCTIME && src->o_ctime > LTIME_S(dst->i_ctime)) {
+        if (valid & OBD_MD_FLMTIME && src->o_mtime > LTIME_S(dst->i_mtime))
+                LTIME_S(dst->i_mtime) = src->o_mtime;
+        if (valid & OBD_MD_FLCTIME && src->o_ctime > LTIME_S(dst->i_ctime))
                 LTIME_S(dst->i_ctime) = src->o_ctime;
-                if (valid & OBD_MD_FLMTIME)
-                        LTIME_S(dst->i_mtime) = src->o_mtime;
-        }
-        if (valid & OBD_MD_FLSIZE) 
-                dst->i_size = src->o_size;
+        if (valid & OBD_MD_FLSIZE)
+                i_size_write(dst, src->o_size);
         /* optimum IO size */
         if (valid & OBD_MD_FLBLKSZ && src->o_blksize > (1<<dst->i_blkbits)) {
                 dst->i_blkbits = ffs(src->o_blksize)-1;
@@ -257,7 +264,7 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
         if (valid & OBD_MD_FLCTIME && src->o_ctime > LTIME_S(dst->i_ctime))
                 LTIME_S(dst->i_ctime) = src->o_ctime;
         if (valid & OBD_MD_FLSIZE)
-                dst->i_size = src->o_size;
+                i_size_write(dst, src->o_size);
         if (valid & OBD_MD_FLBLOCKS) { /* allocation of space */
                 dst->i_blocks = src->o_blocks;
                 if (dst->i_blocks < src->o_blocks) /* overflow */
@@ -285,4 +292,3 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
 }
 EXPORT_SYMBOL(obdo_to_inode);
 #endif
-

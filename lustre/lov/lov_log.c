@@ -1,28 +1,43 @@
- /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002, 2003 Cluster File Systems, Inc.
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/lov/lov_log.c
+ *
  * Author: Phil Schwan <phil@clusterfs.com>
- *         Peter Braam <braam@clusterfs.com>
- *         Mike Shaver <shaver@clusterfs.com>
- *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
- *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
- *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
- *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * Author: Peter Braam <braam@clusterfs.com>
+ * Author: Mike Shaver <shaver@clusterfs.com>
  */
 
 #ifndef EXPORT_SYMTAB
@@ -53,9 +68,9 @@
  * we need to keep cookies in stripe order, even if some are NULL, so that
  * the right cookies are passed back to the right OSTs at the client side.
  * Unset cookies should be all-zero (which will never occur naturally). */
-static int lov_llog_origin_add(struct llog_ctxt *ctxt,
-                        struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
-                        struct llog_cookie *logcookies, int numcookies)
+static int lov_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
+                               struct lov_stripe_md *lsm, 
+                               struct llog_cookie *logcookies, int numcookies)
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct lov_obd *lov = &obd->u.lov;
@@ -86,18 +101,25 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt,
                         lsr->lsr_ogen = loi->loi_gr;
                         break;
                 }
+                case MDS_SETATTR64_REC: {
+                        struct llog_setattr64_rec *lsr = (struct llog_setattr64_rec *)rec;
+                        lsr->lsr_oid = loi->loi_id;
+                        lsr->lsr_ogen = loi->loi_gr;
+                        break;
+                }
                 default:
                         break;
                 }
 
                 rc += llog_add(cctxt, rec, NULL, logcookies + rc,
                                 numcookies - rc);
+                llog_ctxt_put(cctxt);
         }
 
         RETURN(rc);
 }
 
-static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
+static int lov_llog_origin_connect(struct llog_ctxt *ctxt,
                                    struct llog_logid *logid,
                                    struct llog_gen *gen,
                                    struct obd_uuid *uuid)
@@ -108,7 +130,7 @@ static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
         ENTRY;
 
         lov_getref(obd);
-        for (i = 0; i < count; i++) {
+        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 struct obd_device *child;
                 struct llog_ctxt *cctxt;
                 
@@ -116,10 +138,12 @@ static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
                         continue;
                 if (uuid && !obd_uuid_equals(uuid, &lov->lov_tgts[i]->ltd_uuid))
                         continue;
-                CDEBUG(D_CONFIG, "connect %d/%d\n", i, count);
+                CDEBUG(D_CONFIG, "connect %d/%d\n", i, lov->desc.ld_tgt_count);
                 child = lov->lov_tgts[i]->ltd_exp->exp_obd;
                 cctxt = llog_get_context(child, ctxt->loc_idx);
-                rc = llog_connect(cctxt, 1, logid, gen, uuid);
+                rc = llog_connect(cctxt, logid, gen, uuid);
+                llog_ctxt_put(cctxt);
+ 
                 if (rc) {
                         CERROR("error osc_llog_connect tgt %d (%d)\n", i, rc);
                         if (!err) 
@@ -154,6 +178,7 @@ static int lov_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *ls
                 int err;
 
                 err = llog_cancel(cctxt, NULL, 1, cookies, flags);
+                llog_ctxt_put(cctxt);
                 if (err && lov->lov_tgts[loi->loi_ost_idx]->ltd_active) {
                         CERROR("error: objid "LPX64" subobj "LPX64
                                " on OST idx %d: rc = %d\n", lsm->lsm_object_id,
@@ -183,6 +208,8 @@ int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
         int i, rc = 0, err = 0;
         ENTRY;
 
+        LASSERT(uuid);
+
         rc = llog_setup(obd, LLOG_MDS_OST_ORIG_CTXT, tgt, 0, NULL,
                         &lov_mds_ost_orig_logops);
         if (rc)
@@ -191,19 +218,18 @@ int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
         rc = llog_setup(obd, LLOG_SIZE_REPL_CTXT, tgt, 0, NULL,
                         &lov_size_repl_logops);
         if (rc)
-                RETURN(rc);
+                GOTO(err_cleanup, rc);
 
         lov_getref(obd);
-        /* count may not match lov->desc.ld_tgt_count during dynamic ost add */
-        for (i = 0; i < count; i++) {
+        for (i = 0; i < lov->desc.ld_tgt_count ; i++) {
                 if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active)
                         continue;
-                if (uuid && !obd_uuid_equals(uuid, &lov->lov_tgts[i]->ltd_uuid))
+                if (!obd_uuid_equals(uuid, &lov->lov_tgts[i]->ltd_uuid))
                         continue;
                 CDEBUG(D_CONFIG, "init %d/%d\n", i, count);
                 LASSERT(lov->lov_tgts[i]->ltd_exp);
                 child = lov->lov_tgts[i]->ltd_exp->exp_obd;
-                rc = obd_llog_init(child, tgt, 1, logid + i, uuid);
+                rc = obd_llog_init(child, tgt, 1, logid, uuid);
                 if (rc) {
                         CERROR("error osc_llog_init idx %d osc '%s' tgt '%s' "
                                "(rc=%d)\n", i, child->obd_name, tgt->obd_name,
@@ -213,7 +239,18 @@ int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
                 }
         }
         lov_putref(obd);
-        RETURN(err);
+        GOTO(err_cleanup, err);
+err_cleanup:
+        if (err) {
+                struct llog_ctxt *ctxt = 
+                        llog_get_context(obd, LLOG_SIZE_REPL_CTXT);
+                if (ctxt)
+                        llog_cleanup(ctxt);
+                ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
+                if (ctxt)
+                        llog_cleanup(ctxt);
+        }
+        return err;
 }
 
 int lov_llog_finish(struct obd_device *obd, int count)

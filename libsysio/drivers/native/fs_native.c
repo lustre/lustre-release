@@ -56,7 +56,7 @@
 #endif
 #include <errno.h>
 #include <assert.h>
-#include <syscall.h>
+#include <sys/syscall.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -969,7 +969,7 @@ native_ifilldirentries(struct native_inode *nino,
 	int	err;
 	ssize_t	cc;
 #if defined(SYSIO_SYS_getdirentries)
-	_SYSIO_OFF_T	waste;
+	_SYSIO_OFF_T	waste=*posp;
 #endif
 
 	if (*posp < 0)

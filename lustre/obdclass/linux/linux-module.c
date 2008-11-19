@@ -1,35 +1,52 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/obdclass/linux/linux-module.c
+ *
  * Object Devices Class Driver
- *
- *  Copyright (C) 2001-2003 Cluster File Systems, Inc.
- *
- *   This file is part of Lustre, http://www.lustre.org.
- *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
- *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
  * These are the only exported functions, they provide some generic
  * infrastructure for managing object devices
  */
+
 #define DEBUG_SUBSYSTEM S_CLASS
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
 
 #ifdef __KERNEL__
-#ifdef HAVE_KERNEL_CONFIG_H
+#ifndef AUTOCONF_INCLUDED
 #include <linux/config.h> /* for CONFIG_PROC_FS */
 #endif
 #include <linux/module.h>
@@ -66,8 +83,8 @@
 #include <obd_class.h>
 #include <lprocfs_status.h>
 #include <lustre_ver.h>
+#include <lustre/lustre_build_version.h>
 #ifdef __KERNEL__
-#include <linux/lustre_build_version.h>
 #include <linux/lustre_version.h>
 
 int proc_version;
@@ -82,7 +99,7 @@ int obd_ioctl_getdata(char **buf, int *len, void *arg)
         ENTRY;
 
         err = copy_from_user(&hdr, (void *)arg, sizeof(hdr));
-        if ( err ) 
+        if ( err )
                 RETURN(err);
 
         if (hdr.ioc_version != OBD_IOCTL_VERSION) {
@@ -150,8 +167,8 @@ int obd_ioctl_getdata(char **buf, int *len, void *arg)
 
 int obd_ioctl_popdata(void *arg, void *data, int len)
 {
-        int err; 
-        
+        int err;
+
         err = copy_to_user(arg, data, len);
         if (err)
                 err = -EFAULT;
@@ -222,13 +239,14 @@ int obd_proc_read_version(char *page, char **start, off_t off, int count,
                           int *eof, void *data)
 {
         *eof = 1;
-#ifdef LUSTRE_KERNEL_VERSION
+#ifdef HAVE_VFS_INTENT_PATCHES
         return snprintf(page, count, "lustre: %s\nkernel: %u\nbuild:  %s\n",
                         LUSTRE_VERSION_STRING, LUSTRE_KERNEL_VERSION,
                         BUILD_VERSION);
 #else
         return snprintf(page, count, "lustre: %s\nkernel: %s\nbuild:  %s\n",
-                        LUSTRE_VERSION_STRING, "patchless", BUILD_VERSION);
+                        LUSTRE_VERSION_STRING, "patchless_client",
+                        BUILD_VERSION);
 #endif
 }
 
@@ -245,6 +263,21 @@ int obd_proc_read_pinger(char *page, char **start, off_t off, int count,
                        );
 }
 
+/**
+ * Check all obd devices health
+ *
+ * \param page
+ * \param start
+ * \param off
+ * \param count
+ * \param eof
+ * \param data
+ *                  proc read function parameters, please refer to kernel
+ *                  code fs/proc/generic.c proc_file_read()
+ * \param data [in] unused
+ *
+ * \retval number of characters printed
+ */
 static int obd_proc_read_health(char *page, char **start, off_t off,
                                 int count, int *eof, void *data)
 {
@@ -259,7 +292,7 @@ static int obd_proc_read_health(char *page, char **start, off_t off,
                 struct obd_device *obd;
 
                 obd = class_num2obd(i);
-                if (obd == NULL)
+                if (obd == NULL || !obd->obd_attached || !obd->obd_set_up)
                         continue;
 
                 LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
@@ -286,27 +319,6 @@ static int obd_proc_read_health(char *page, char **start, off_t off,
         return rc;
 }
 
-static int obd_proc_rd_health_timeout(char *page, char **start, off_t off,
-                                      int count, int *eof, void *data)
-{
-        *eof = 1;
-        return snprintf(page, count, "%d\n", obd_health_check_timeout);
-}
-
-static int obd_proc_wr_health_timeout(struct file *file, const char *buffer,
-                                      unsigned long count, void *data)
-{
-        int val, rc;
-
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
-
-        obd_health_check_timeout = val;
-
-        return count;
-}
-
 /* Root for /proc/fs/lustre */
 struct proc_dir_entry *proc_lustre_root = NULL;
 
@@ -314,8 +326,6 @@ struct lprocfs_vars lprocfs_base[] = {
         { "version", obd_proc_read_version, NULL, NULL },
         { "pinger", obd_proc_read_pinger, NULL, NULL },
         { "health_check", obd_proc_read_health, NULL, NULL },
-        { "health_check_timeout", obd_proc_rd_health_timeout,
-           obd_proc_wr_health_timeout, NULL },
         { 0 }
 };
 #else
@@ -323,7 +333,7 @@ struct lprocfs_vars lprocfs_base[] = {
 #endif /* LPROCFS */
 
 #ifdef __KERNEL__
-static void *obd_device_list_seq_start(struct seq_file *p, loff_t*pos)
+static void *obd_device_list_seq_start(struct seq_file *p, loff_t *pos)
 {
         if (*pos >= class_devno_max())
                 return NULL;
@@ -336,7 +346,7 @@ static void obd_device_list_seq_stop(struct seq_file *p, void *v)
 }
 
 static void *obd_device_list_seq_next(struct seq_file *p, void *v, loff_t *pos)
-{      
+{
         ++*pos;
         if (*pos >= class_devno_max())
                 return NULL;
@@ -346,8 +356,8 @@ static void *obd_device_list_seq_next(struct seq_file *p, void *v, loff_t *pos)
 
 static int obd_device_list_seq_show(struct seq_file *p, void *v)
 {
-        int index = *(int*)v;
-        struct obd_device *obd = class_num2obd(index);
+        loff_t index = *(loff_t *)v;
+        struct obd_device *obd = class_num2obd((int)index);
         char *status;
 
         if (obd == NULL)
@@ -356,6 +366,8 @@ static int obd_device_list_seq_show(struct seq_file *p, void *v)
         LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
         if (obd->obd_stopping)
                 status = "ST";
+        else if (obd->obd_inactive)
+                status = "IN";
         else if (obd->obd_set_up)
                 status = "UP";
         else if (obd->obd_attached)
@@ -431,7 +443,7 @@ int class_procfs_init(void)
 int class_procfs_clean(void)
 {
         ENTRY;
-        if (proc_lustre_root) 
+        if (proc_lustre_root)
                 lprocfs_remove(&proc_lustre_root);
         RETURN(0);
 }

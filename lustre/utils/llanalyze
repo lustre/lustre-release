@@ -67,7 +67,7 @@ sub extractpid
 {
     $line = shift;
 #    print "$_\n";
-    if ($line =~ m/\d+:\d+:\d+:\d+\.\d+:\d+:\d+:*$/) {
+    if ($line =~ /(\d+)\:(\d+)\:(\d+)\:(\d+\.\d+)\:(\d+)\:(\d+)\:.*/) {
 	return $6;
     }
 }
@@ -76,7 +76,7 @@ sub extracthostpid
 {
     $line = shift;
 #    print "$_\n";
-    if ($line =~ m/\d+:\d+:\d+:\d+\.\d+:\d+:\d+:\d+:*$/) {
+    if ($line =~ /(\d+)\:(\d+)\:(\d+)\:(\d+\.\d+)\:(\d+)\:(\d+)\:(\d+)\:.*/) {
 	return $7;
     }
 }
@@ -271,15 +271,15 @@ print "pid: $pid, dlm_ns: $dlm_ns\n";
 print "extract_start: $extract_start\n";
 print "extract_end:   $extract_end\n";
 while (<LOG>) {
-    if ($extract_start && $extract_start != LLANAYZE_FOUND) {
+    if ($extract_start && $extract_start ne "LLANAYZE_FOUND") {
         next if (index($_, $extract_start, 0) == -1);
-        $extract_start = LLANAYZE_FOUND;
+        $extract_start = "LLANAYZE_FOUND";
     }
 
     if ($extract_end) {
-        next if ($extract_end == LLANAYZE_FOUND);
+	next if ($extract_end eq "LLANAYZE_FOUND");
         if (index($_, $extract_end, 0) != -1) {
-             $extract_end = LLANAYZE_FOUND;
+             $extract_end = "LLANAYZE_FOUND";
         }
     }
 
@@ -344,3 +344,109 @@ while (<LOG>) {
 unmatched_intents();
 hanging_locks();
 # printf "argv %s pid %d\n", $ARGV[0], extractpid($ARGV[0]);
+
+__END__
+
+=head1 NAME
+
+llanalyze - Analyze distributed Lusture debug logs.
+
+=head1 SYNOPSIS
+
+=over 4
+
+=item B<llanalyze> [OPTIONS]... LOG_FILE
+
+=back
+
+=head1 DESCRIPTION
+
+=over
+
+=item
+
+B<llanalyze> formats the distributed lustre debug logs. It is also used for selective display of logs based on component, identifiers and string match.
+
+=over
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<-pid> PID_NUMBER
+
+Display all debug messages with the process identifier specified.
+
+
+=item B<-trace>
+
+
+Display all debug messages which are entry, exit markers.
+
+
+=item B<-silent>
+
+
+Display only those debug messages which are to indicate hanging locks and unmatched intents.
+
+
+=item B<-rpctrace>
+
+
+Displays only those debug messages which are related with subsystem RPC.
+
+
+=item B<-nodlm>
+
+
+Displays all the debug messages except the ones related with subsystem LDLM.
+
+
+=item B<-dlm_ns> STRING
+
+
+Displays all the LDLM related debug messages with the string match.
+
+
+=item B<-noclass>
+
+
+Displays all the debug messages except the ones which are related with subsystem class.
+
+
+=item B<-nonet>
+
+Displays all the debug messages except those related to sub-system NET.
+
+
+=item B<-extract_start> STRING
+
+Displays all the debug messages from the start of the log file till the occurence of the specified string in the debug messages.
+
+
+=item B<-extract_end> STRING
+
+Displays all the debug messages from the occurence of the specified string till the end of the log file.
+
+
+=back
+
+=head1 REPORTING BUGS
+
+Please report all bugs to Sun Microsystems, Inc. http://bugzilla.lustre.org/
+
+
+=head1 AVAILABILITY
+
+llanalyze is part of the Lustre(7) filesystem package and is available from http://www.sun.com/software/products/lustre/index.xml
+
+=head1 SEE ALSO
+
+=over 4
+
+=item   B<lctl>(8), B<lfs>(1)
+
+=back
+
+=cut
+

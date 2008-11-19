@@ -1,15 +1,32 @@
 #!/bin/sh
 
-#########################################################################
 # gather_stats_everywhere:
 # script on a selection of nodes and collect all the results into a single
 # tar ball
 #
-# Copyright (c) 2007 - Cluster File Systems, Inc.
-#########################################################################
+# Copyright 2008 Sun Microsystems, Inc. All rights reserved
+# Use is subject to license terms.
+
 error() {
-	echo "$0: $@"
-	exit 1
+	echo "ERROR: $0: $@"
+}
+
+warning() {
+        echo "WARNING: $@"
+}
+
+info () {
+        if [ ${PRINT_INFO_MSGS} -gt 0 ]
+        then
+                echo "INFO: $@"
+        fi
+}
+
+debug () {
+        if [ ${PRINT_DEBUG_MSGS} -gt 0 ]
+        then
+                echo "DEBUG: $@"
+        fi
 }
 
 usage() {
@@ -80,77 +97,136 @@ GLOBAL_TIMESTAMP=""
 
 if [ ! -r $CONFIG ]; then
 	error "Config_file: $CONFIG does not exist "
+	exit 1
 fi
 
 . $CONFIG
 
 if [ -z "$SCRIPT" ]; then
        	error "SCRIPT in ${CONFIG} is empty"
+       	exit 1
 fi	
 
 if [ -z "$TARGETS" ]; then
        	error "TARGETS in ${CONFIG} is empty"
+       	exit 1
 fi
 
 #check nodes accessiable 
-Check_nodes_avaible() {
-       	local NODES_NOT_AVAIBLE=""
+Check_nodes_available() {
+        local NODES_NOT_AVAILABLE=""
 
+        debug "Entering Check_nodes_available()"
+    
 	for TARGET in $TARGETS; do
-       		if ! ping -c 1 -w 3 $TARGET > /dev/null; then 
-			 NODES_NOT_AVAIBLE=$NODES_NOT_AVAIBLE$TARGET
-		fi
-       	done
-	if [ -z "$NODES_NOT_AVAIBLE" ]; then
+                if ! ping -c 1 -w 3 $TARGET > /dev/null; then 
+                        NODES_NOT_AVAILABLE=$NODES_NOT_AVAILABLE$TARGET
+                fi
+        done
+    
+	if [ -z "$NODES_NOT_AVAILABLE" ]; then
+	        debug "Check_nodes_available() returning 0 (success - all nodes available)"
 		return 0
-	else
-		echo "Nodes ${NODES_NOT_AVAIBLE} not respond to ping"
-		return 1
 	fi
+
+        error "Check_nodes_available: these nodes are not available (did not respond to pings): ${NODES_NOT_AVAILABLE}"
+        debug "Check_nodes_available() returning with errors"
+        
+	return 1
 }
 
-if ! Check_nodes_avaible;  then 
-	error "not all the nodes are availble"
+if ! Check_nodes_available;  then 
+	error "not all the nodes are available"
+	exit 1
 fi
 
-Check_nodes_are_clean() {
-	local NODES_NO_CLEAN=""
+#
+# returns 1 if copies of lstats are found running on any of the $TARGETS nodes
+#
+Nodes_are_not_clean() {
+	local DIRTY_NODES=""
 
+        debug "Entering Nodes_are_not_clean()"
+    
 	# check whether there are running threads on the targets
 	for TARGET in $TARGETS; do
 		ps_str=`$DSH $TARGET "ps aux | grep -v grep | grep ${SCRIPT}-${TARGET}"`
 		if [ -n "$ps_str" ]; then
-		       	NODES_NO_CLEAN=${NODES_NO_CLEAN}$TARGET
+		       	DIRTY_NODES="${DIRTY_NODES} ${TARGET}"
 		fi
 	done
 
-	if [ -n "$NODES_NO_CLEAN" ]; then
-		return 1 
+	if [ -n "$DIRTY_NODES" ]; then
+	        debug "Nodes_are_not_clean() returning 1"
+		return 1
 	fi
 
+        debug "Nodes_are_not_clean() returning 0"
+	return 0 
+}
+
+Clean_nodes() {
+
+        debug "Entering Clean_nodes()"
+    
+        #
+        # if debugging is enabled, show lists of lstats processes
+        # still running on the target nodes before the clean operation
+        #
+        if [ ${PRINT_DEBUG_MSGS} -gt 0 ]
+        then
+                for TARGET in $TARGETS; do
+                        debug "List of processes which need to be cleaned up on ${TARGET}:"
+                        $DSH $TARGET "ps aux | grep -v grep | grep ${SCRIPT}-${TARGET}"
+                        debug "List of pids which need to be cleaned up on ${TARGET}:"
+                        $DSH $TARGET "ps aux | grep ${SCRIPT}-${TARGET} | grep -v grep | ${AWK} '{ print \$2 }'"
+                done
+        fi
+    
+        #
+        # do the actual cleanup
+	# kill any old lstats processes still running on the target nodes
+	#
+	for TARGET in $TARGETS; do
+	    
+                ps_str=`$DSH $TARGET "ps aux | grep -v grep | grep ${SCRIPT}-${TARGET}"`
+                if [ -n "$ps_str" ]; then
+                        debug "cleaning node ${TARGET}"
+                        $DSH $TARGET "ps aux | grep ${SCRIPT}-${TARGET} | grep -v grep | ${AWK} '{ print \$2 }' | ${XARGS} kill"
+                fi
+        done
+
+        debug "Leaving Clean_nodes()"
 	return 0 
 }
 
 copy_target_script() {
 	local target=$1
 
+        debug "Entering copy_target_script()"
+    
 	#copy alex's run scripts to the target
 	copy_cmd="$DCP $SCRIPT ${USER}${target}:$TMP/${SCRIPT}-${target}"
 	${copy_cmd} 1>/dev/null 2>&1 
         if [ ${PIPESTATUS[0]} != 0 ]; then
 		echo "copy command failed: ${copy_cmd}" 2>&1
+		debug "Leaving copy_target_script() (error return)"
 		return 1
-	else
-		echo "$SCRIPT copied to ${USER}${target} (into $TMP)"
-		return 0
 	fi
+	
+        echo "$SCRIPT copied to ${USER}${target} (into $TMP)"
+        debug "Leaving copy_target_script() (normal return)"
+	return 0
 }
 
 start_target_script() {
 	local target=$1
 
+        debug "Entering start_target_script()"
+    
 	if ! copy_target_script $target; then
 		echo "copy_target_script $target failed." 2>&1
+		debug "Leaving start_target_script() (error return)"
 		return 1
 	fi
 
@@ -167,20 +243,25 @@ start_target_script() {
 
 	if [ ${PIPESTATUS[0]} != 0 ]; then
 		echo "Start the ${SCRIPT} on ${target} failed"
+		debug "Leaving start_target_script() (error return)"
 		return 1
-	else	
-		echo "Start the ${SCRIPT} on ${target} success"
-		return 0
 	fi
+		
+	echo "Start the ${SCRIPT} on ${target} success"
+	debug "Leaving start_target_script() (normal return)"
+	return 0
 }
 
 stop_target_script() {
 	local target=$1
 
+        debug "Entering stop_target_script()"
+    
 	#stop the target script first
 	$DSH ${USER}${target} "sh ${TMP}/${SCRIPT}-${target} stop" 1>/dev/null 2>&1
 	if [ ${PIPESTATUS[0]} != 0 ]; then
 		echo  "stop the collecting stats script on ${target} failed"
+		debug "Leaving stop_target_script() (error return)"
 		return 1 
 	else	
 		echo  "stop the collecting stats script on ${target} success"
@@ -189,14 +270,25 @@ stop_target_script() {
 	#remove those tmp file
 	$DSH ${USER}${target} "rm -rf $TMP/${SCRIPT}-${target}" 1>/dev/null 2>&1
 	echo "cleanup ${target} tmp file after stop "
-    	return 0
+	
+	debug "Leaving stop_target_script() (normal return)"
+        return 0
 }
 
+#
+# create a unique timestamp-based name which we can use for
+# naming files on all the $TARGET nodes.
+#
+# By creating one timestamp here on the master node, we avoid
+# the problem of clock skew on the $TARGET nodes causing them
+# to use different filenames than we expect (if their clocks are
+# different from the clock on this node)
+#
 generate_timestamp() {
 	if [ "X${GLOBAL_TIMESTAMP}" = "X" ]
 	then
 		export GLOBAL_TIMESTAMP=`date +%F-%H.%M.%S`
-		echo "Global Timestamp Created: ${GLOBAL_TIMESTAMP}"
+		debug "Global Timestamp Created: ${GLOBAL_TIMESTAMP}"
 	fi
 }
 
@@ -222,8 +314,11 @@ fetch_log() {
 	local -a pids_array
 	local -a clients_array
 
+        debug "Entering fetch_log()"
+    
 	if ! mkdir -p $TMP/$log_name ; then
 		error "can not mkdir $log_name"
+		exit 1
 	fi
 
     	#retrive the log_tarball from remote nodes background 
@@ -232,13 +327,21 @@ fetch_log() {
 		(fetch_target_log ${TARGET}) & 
 		pids_array[$n]=$!
 		clients_array[$n]=$TARGET
-	        let n=$n+1
+		
+		debug "fetch_log: spawned fetch_target_log process for ${TARGET} pid ${pids_array[$n]}"
+                let n=$n+1
 	done
+	
 	local num_pids=$n
 
 	#Waiting log fetch finished
 	for ((n=0; $n < $num_pids; n++)); do
+	        debug "fetch_log(): waiting for pid ${pids_array[$n]}"
 		wait ${pids_array[$n]}
+		
+		#
+		# TODO: add check of exit status from wait()
+		#
 	done
 
 	#compress the log tarball
@@ -251,12 +354,17 @@ fetch_log() {
 	else
 		echo "Compressed logfiles are in $TMP/${stat_tar_name}"
 	fi
+	
+	debug "Leaving fetch_log()"
 }
 
 stop_targets_script() {
 	local -a pids_array
 	local -a clients_array
 	local n=0
+	
+	debug "Entering stop_targets_script()"
+	
 	for TARGET in $TARGETS; do
 		(stop_target_script ${TARGET}) &
 		pids_array[$n]=$!
@@ -271,6 +379,9 @@ stop_targets_script() {
 			echo "${clients_array[$n]}: can not stop stats collect"
 		fi
 	done
+	
+	debug "Leaving stop_targets_script()"
+	
 }
 
 gather_start() {
@@ -278,9 +389,29 @@ gather_start() {
 	local -a clients_array
 	local n=0
 	
+	debug "Entering gather_start()"
+	
 	#check whether the collect scripts already start in some targets 
-	if ! Check_nodes_are_clean ; then
-		error "$SCRIPT already running in some targets, please cleanup first"
+
+        Nodes_are_not_clean
+        ret=$?
+    
+	if [ $ret -gt 0 ]
+	then
+	    warning "$SCRIPT already running in some targets, attempting cleanup..."
+	    
+	    Clean_nodes
+	    
+	    Nodes_are_not_clean
+	    ret=$?
+	    
+	    if [ $ret -gt 0 ]
+	    then
+	        error "$SCRIPT automatic cleanup attempt failed."
+	        error "$SCRIPT Please make sure lstats is no longer running on target nodes and try again."
+	        debug "Error return from gather_start()"
+	        return 1
+	    fi
 	fi
 	
 	for TARGET in $TARGETS; do
@@ -289,6 +420,7 @@ gather_start() {
 		clients_array[$n]=$TARGET
 	        let n=$n+1
 	done
+	
 	local num_pids=$n
 
 	local RC=0	
@@ -303,18 +435,22 @@ gather_start() {
 	if [ $RC != 0 ]; then
 		stop_targets_script
 	fi
+	
+	debug "Leaving gather_start()"
 }
 
 gather_stop() {
-	if Check_nodes_are_clean ; then
-		exit 0
-	fi
 	log=$1
 
+        debug "Entering gather_stop()"
+    
 	if [ -n "$log" ]; then
 		fetch_log $log
 	fi
+	
 	stop_targets_script
+	
+	debug "Leaving gather_stop()"
 }
 
 get_end_line_num()
@@ -341,6 +477,7 @@ get_csv()
 	#currently, it can only analyse client application log
 	if [ "$stat_type" != "client" ]; then
 		error "can not analyse ${statf} ......."
+		exit 1
 	fi
 
 	#create the header
@@ -369,6 +506,8 @@ gather_analyse()
 	local log_tarball=$1
 	local option=$2
 
+        debug "Entering gather_analyze()"
+    
 	#validating option
 	if [ -z "$log_tarball" -o -r "$option" ]; then
 		usage;
@@ -376,6 +515,7 @@ gather_analyse()
 
 	if [ ! -r $log_tarball ]; then
 		error " not exist $log_tarball "
+		return 1
 	fi
 
 	shift
@@ -412,11 +552,13 @@ gather_analyse()
 	$TAR ${TMP}/${logdir}.tar.gz ${TMP}/${logdir} 1>/dev/null 2>&1
 
 	echo "create analysed tarball ${TMP}/${logdir}.tar.gz"
+	
+        debug "Leaving gather_analyze()"
 }
 
 case $OPTION in
 	start) gather_start ;;
 	stop)  gather_stop $@;;
 	analyse) gather_analyse $@;;
-	*) error "Unknown option ${OPTION}"
+	*) error "Unknown option ${OPTION}" ; exit 1
 esac

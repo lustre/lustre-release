@@ -1,22 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2004 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #include <stdlib.h>
@@ -62,14 +77,12 @@ void *inter_module_get(char *arg)
                 return ldlm_namespace_cleanup;
         else if (!strcmp(arg, "ldlm_replay_locks"))
                 return ldlm_replay_locks;
-#ifdef HAVE_QUOTA_SUPPORT
         else if (!strcmp(arg, "osc_quota_interface"))
                 return &osc_quota_interface;
         else if (!strcmp(arg, "mdc_quota_interface"))
                 return &mdc_quota_interface;
         else if (!strcmp(arg, "lov_quota_interface"))
                 return &lov_quota_interface;
-#endif
         else
                 return NULL;
 }
@@ -129,7 +142,7 @@ void liblustre_init_random()
         ll_srand(tv.tv_sec ^ __swab32(seed[0]), tv.tv_usec ^__swab32(getpid()));
 }
 
-static void init_capability(int *res)
+static void init_capability(__u32 *res)
 {
 #ifdef HAVE_LIBCAP
         cap_t syscap;
@@ -210,6 +223,46 @@ int liblustre_init_current(char *comm)
         init_capability(&current->cap_effective);
 
         return 0;
+}
+
+void cfs_cap_raise(cfs_cap_t cap)
+{
+        current->cap_effective |= (1 << cap);
+}
+
+void cfs_cap_lower(cfs_cap_t cap)
+{
+        current->cap_effective &= ~(1 << cap);
+}
+
+int cfs_cap_raised(cfs_cap_t cap)
+{
+        return current->cap_effective & (1 << cap);
+}
+
+void cfs_kernel_cap_pack(cfs_kernel_cap_t kcap, cfs_cap_t *cap)
+{
+        *cap = kcap;
+}
+
+void cfs_kernel_cap_unpack(cfs_kernel_cap_t *kcap, cfs_cap_t cap)
+{
+        *kcap = cap;
+}
+
+cfs_cap_t cfs_curproc_cap_pack(void) {
+        cfs_cap_t cap;
+        cfs_kernel_cap_pack(cfs_current()->cap_effective, &cap);
+        return cap;
+}
+
+void cfs_curproc_cap_unpack(cfs_cap_t cap) {
+        cfs_kernel_cap_unpack(&cfs_current()->cap_effective, cap);
+}
+
+int cfs_capable(cfs_cap_t cap)
+{
+        return cfs_cap_raised(cap);
 }
 
 int init_lib_portals()

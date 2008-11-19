@@ -1,28 +1,43 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2002 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 #define DEBUG_SUBSYSTEM S_CLASS
+
+#ifndef __KERNEL__
+# include <liblustre.h>
+#endif
 
 #include <obd_support.h>
 #include <obd.h>
@@ -51,12 +66,13 @@ struct ll_rpc_opcode {
         { OST_OPEN,         "ost_open" },
         { OST_CLOSE,        "ost_close" },
         { OST_STATFS,       "ost_statfs" },
-        { 14,                NULL },
-        { 15,                NULL },
+        { 14,                NULL },    /* formerly OST_SAN_READ */
+        { 15,                NULL },    /* formerly OST_SAN_WRITE */
         { OST_SYNC,         "ost_sync" },
         { OST_SET_INFO,     "ost_set_info" },
         { OST_QUOTACHECK,   "ost_quotacheck" },
         { OST_QUOTACTL,     "ost_quotactl" },
+        { OST_QUOTA_ADJUST_QUNIT, "ost_quota_adjust_qunit" },
         { MDS_GETATTR,      "mds_getattr" },
         { MDS_GETATTR_NAME, "mds_getattr_lock" },
         { MDS_CLOSE,        "mds_close" },
@@ -81,23 +97,71 @@ struct ll_rpc_opcode {
         { LDLM_BL_CALLBACK, "ldlm_bl_callback" },
         { LDLM_CP_CALLBACK, "ldlm_cp_callback" },
         { LDLM_GL_CALLBACK, "ldlm_gl_callback" },
+        { MGS_CONNECT,      "mgs_connect" },
+        { MGS_DISCONNECT,   "mgs_disconnect" },
+        { MGS_EXCEPTION,    "mgs_exception" },
+        { MGS_TARGET_REG,   "mgs_target_reg" },
+        { MGS_TARGET_DEL,   "mgs_target_del" },
+        { MGS_SET_INFO,     "mgs_set_info" },
         { OBD_PING,         "obd_ping" },
-        { OBD_LOG_CANCEL,   "llog_origin_handle_cancel"},
+        { OBD_LOG_CANCEL,   "llog_origin_handle_cancel" },
+        { OBD_QC_CALLBACK,  "obd_quota_callback" },
+        { LLOG_ORIGIN_HANDLE_CREATE,     "llog_origin_handle_create" },
+        { LLOG_ORIGIN_HANDLE_NEXT_BLOCK, "llog_origin_handle_next_block"},
+        { LLOG_ORIGIN_HANDLE_READ_HEADER,"llog_origin_handle_read_header" },
+        { LLOG_ORIGIN_HANDLE_WRITE_REC,  "llog_origin_handle_write_rec" },
+        { LLOG_ORIGIN_HANDLE_CLOSE,      "llog_origin_handle_close" },
+        { LLOG_ORIGIN_CONNECT,           "llog_origin_connect" },
+        { LLOG_CATINFO,                  "llog_catinfo" },
+        { LLOG_ORIGIN_HANDLE_PREV_BLOCK, "llog_origin_handle_prev_block" },
+        { LLOG_ORIGIN_HANDLE_DESTROY,    "llog_origin_handle_destroy" },
+        { QUOTA_DQACQ,      "quota_acquire" },
+        { QUOTA_DQREL,      "quota_release" },
+        { SEQ_QUERY,        "seq_query" },
 };
 
-const char* ll_opcode2str(__u32 opcode)
+struct ll_eopcode {
+     __u32       opcode;
+     const char *opname;
+} ll_eopcode_table[EXTRA_LAST_OPC] = {
+        { LDLM_GLIMPSE_ENQUEUE, "ldlm_glimpse_enqueue" },
+        { LDLM_PLAIN_ENQUEUE,   "ldlm_plain_enqueue" },
+        { LDLM_EXTENT_ENQUEUE,  "ldlm_extent_enqueue" },
+        { LDLM_FLOCK_ENQUEUE,   "ldlm_flock_enqueue" },
+        { LDLM_IBITS_ENQUEUE,   "ldlm_ibits_enqueue" },
+        { MDS_REINT_SETATTR,    "mds_reint_setattr" },
+        { MDS_REINT_CREATE,     "mds_reint_create" },
+        { MDS_REINT_LINK,       "mds_reint_link" },
+        { MDS_REINT_UNLINK,     "mds_reint_unlink" },
+        { MDS_REINT_RENAME,     "mds_reint_rename" },
+        { MDS_REINT_OPEN,       "mds_reint_open" },
+        { BRW_READ_BYTES,       "read_bytes" },
+        { BRW_WRITE_BYTES,      "write_bytes" },
+};
+
+const char *ll_opcode2str(__u32 opcode)
 {
         /* When one of the assertions below fail, chances are that:
-         *     1) A new opcode was added in lustre_idl.h, but was
-         *        is missing from the table above.
+         *     1) A new opcode was added in include/lustre/lustre_idl.h,
+         *        but is missing from the table above.
          * or  2) The opcode space was renumbered or rearranged,
          *        and the opcode_offset() function in
          *        ptlrpc_internal.h needs to be modified.
          */
         __u32 offset = opcode_offset(opcode);
-        LASSERT(offset < LUSTRE_MAX_OPCODES);
-        LASSERT(ll_rpc_opcode_table[offset].opcode == opcode);
+        LASSERTF(offset < LUSTRE_MAX_OPCODES,
+                 "offset %u >= LUSTRE_MAX_OPCODES %u\n",
+                 offset, LUSTRE_MAX_OPCODES);
+        LASSERTF(ll_rpc_opcode_table[offset].opcode == opcode,
+                 "ll_rpc_opcode_table[%u].opcode %u != opcode %u\n",
+                 offset, ll_rpc_opcode_table[offset].opcode, opcode);
         return ll_rpc_opcode_table[offset].opname;
+}
+
+const char* ll_eopcode2str(__u32 opcode)
+{
+        LASSERT(ll_eopcode_table[opcode].opcode == opcode);
+        return ll_eopcode_table[opcode].opname;
 }
 
 #ifdef LPROCFS
@@ -114,7 +178,7 @@ void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
         LASSERT(*procroot_ret == NULL);
         LASSERT(*stats_ret == NULL);
 
-        svc_stats = lprocfs_alloc_stats(PTLRPC_LAST_CNTR + LUSTRE_MAX_OPCODES);
+        svc_stats = lprocfs_alloc_stats(EXTRA_MAX_OPCODES + LUSTRE_MAX_OPCODES, 0);
         if (svc_stats == NULL)
                 return;
 
@@ -134,14 +198,31 @@ void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
                              svc_counter_config, "req_qdepth", "reqs");
         lprocfs_counter_init(svc_stats, PTLRPC_REQACTIVE_CNTR,
                              svc_counter_config, "req_active", "reqs");
+        lprocfs_counter_init(svc_stats, PTLRPC_TIMEOUT,
+                             svc_counter_config, "req_timeout", "sec");
         lprocfs_counter_init(svc_stats, PTLRPC_REQBUF_AVAIL_CNTR,
                              svc_counter_config, "reqbuf_avail", "bufs");
+        for (i = 0; i < EXTRA_LAST_OPC; i++) {
+                char *units;
+
+                switch(i) {
+                case BRW_WRITE_BYTES:
+                case BRW_READ_BYTES:
+                        units = "bytes";
+                        break;
+                default:
+                        units = "reqs";
+                        break;
+                }
+                lprocfs_counter_init(svc_stats, PTLRPC_LAST_CNTR + i,
+                                     svc_counter_config,
+                                     ll_eopcode2str(i), units);
+        }
         for (i = 0; i < LUSTRE_MAX_OPCODES; i++) {
                 __u32 opcode = ll_rpc_opcode_table[i].opcode;
-                lprocfs_counter_init(svc_stats, PTLRPC_LAST_CNTR + i,
-                                     svc_counter_config, ll_opcode2str(opcode),
-                                     (i == OST_WRITE || i == OST_READ) ? 
-                                     "bytes" : "usec");
+                lprocfs_counter_init(svc_stats,
+                                     EXTRA_MAX_OPCODES + i, svc_counter_config,
+                                     ll_opcode2str(opcode), "usec");
         }
 
         rc = lprocfs_register_stats(svc_procroot, name, svc_stats);
@@ -306,6 +387,36 @@ ptlrpc_lprocfs_svc_req_history_next(struct seq_file *s,
         return srhi;
 }
 
+/* common ost/mdt srv_request_history_print_fn */
+void target_print_req(void *seq_file, struct ptlrpc_request *req)
+{
+        /* Called holding srv_lock with irqs disabled.
+         * Print specific req contents and a newline.
+         * CAVEAT EMPTOR: check request message length before printing!!!
+         * You might have received any old crap so you must be just as
+         * careful here as the service's request parser!!! */
+        struct seq_file *sf = seq_file;
+
+        switch (req->rq_phase) {
+        case RQ_PHASE_NEW:
+                /* still awaiting a service thread's attention, or rejected
+                 * because the generic request message didn't unpack */
+                seq_printf(sf, "<not swabbed>\n");
+                break;
+        case RQ_PHASE_INTERPRET:
+                /* being handled, so basic msg swabbed, and opc is valid
+                 * but racing with mds_handle() */
+        case RQ_PHASE_COMPLETE:
+                /* been handled by mds_handle() reply state possibly still
+                 * volatile */
+                seq_printf(sf, "opc %d\n", lustre_msg_get_opc(req->rq_reqmsg));
+                break;
+        default:
+                DEBUG_REQ(D_ERROR, req, "bad phase %d", req->rq_phase);
+        }
+}
+EXPORT_SYMBOL(target_print_req);
+
 static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
 {
         struct ptlrpc_service      *svc = s->private;
@@ -326,11 +437,13 @@ static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
                  * must be just as careful as the service's request
                  * parser. Currently I only print stuff here I know is OK
                  * to look at coz it was set up in request_in_callback()!!! */
-                seq_printf(s, LPD64":%s:%s:"LPD64":%d:%s ",
-                           req->rq_history_seq, libcfs_nid2str(req->rq_self), 
-                           libcfs_id2str(req->rq_peer), req->rq_xid, 
-                           req->rq_reqlen,ptlrpc_rqphase2str(req));
-
+                seq_printf(s, LPD64":%s:%s:x"LPD64":%d:%s:%ld:%lds(%+lds) ",
+                           req->rq_history_seq, libcfs_nid2str(req->rq_self),
+                           libcfs_id2str(req->rq_peer), req->rq_xid,
+                           req->rq_reqlen, ptlrpc_rqphase2str(req),
+                           req->rq_arrival_time.tv_sec,
+                           req->rq_sent - req->rq_arrival_time.tv_sec,
+                           req->rq_sent - req->rq_deadline);
                 if (svc->srv_request_history_print_fn == NULL)
                         seq_printf(s, "\n");
                 else
@@ -367,6 +480,60 @@ ptlrpc_lprocfs_svc_req_history_open(struct inode *inode, struct file *file)
         return 0;
 }
 
+/* See also lprocfs_rd_timeouts */
+static int ptlrpc_lprocfs_rd_timeouts(char *page, char **start, off_t off,
+                                      int count, int *eof, void *data)
+{
+        struct ptlrpc_service *svc = data;
+        unsigned int cur, worst;
+        time_t worstt;
+        struct dhms ts;
+        int rc = 0;
+
+        *eof = 1;
+        cur = at_get(&svc->srv_at_estimate);
+        worst = svc->srv_at_estimate.at_worst_ever;
+        worstt = svc->srv_at_estimate.at_worst_time;
+        s2dhms(&ts, cfs_time_current_sec() - worstt);
+        if (AT_OFF)
+                rc += snprintf(page + rc, count - rc,
+                              "adaptive timeouts off, using obd_timeout %u\n",
+                              obd_timeout);
+        rc += snprintf(page + rc, count - rc,
+                       "%10s : cur %3u  worst %3u (at %ld, "DHMS_FMT" ago) ",
+                       "service", cur, worst, worstt,
+                       DHMS_VARS(&ts));
+        rc = lprocfs_at_hist_helper(page, count, rc,
+                                    &svc->srv_at_estimate);
+        return rc;
+}
+
+static int ptlrpc_lprocfs_rd_hp_ratio(char *page, char **start, off_t off,
+                                      int count, int *eof, void *data)
+{
+        struct ptlrpc_service *svc = data;
+        int rc = snprintf(page, count, "%d", svc->srv_hpreq_ratio);
+        return rc;
+}
+
+static int ptlrpc_lprocfs_wr_hp_ratio(struct file *file, const char *buffer,
+                                      unsigned long count, void *data)
+{
+        struct ptlrpc_service *svc = data;
+        int rc, val;
+        
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc < 0)
+                return rc;
+        if (val < 0)
+                return -ERANGE;
+
+        spin_lock(&svc->srv_lock);
+        svc->srv_hpreq_ratio = val;
+        spin_unlock(&svc->srv_lock);
+        return count;
+}
+
 void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
                                      struct ptlrpc_service *svc)
 {
@@ -378,6 +545,13 @@ void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
                 {.name       = "req_buffer_history_max",
                  .write_fptr = ptlrpc_lprocfs_write_req_history_max,
                  .read_fptr  = ptlrpc_lprocfs_read_req_history_max,
+                 .data       = svc},
+                {.name       = "timeouts",
+                 .read_fptr  = ptlrpc_lprocfs_rd_timeouts,
+                 .data       = svc},
+                {.name       = "high_priority_ratio",
+                 .read_fptr  = ptlrpc_lprocfs_rd_hp_ratio,
+                 .write_fptr = ptlrpc_lprocfs_wr_hp_ratio,
                  .data       = svc},
                 {NULL}
         };
@@ -418,32 +592,50 @@ EXPORT_SYMBOL(ptlrpc_lprocfs_register_obd);
 void ptlrpc_lprocfs_rpc_sent(struct ptlrpc_request *req)
 {
         struct lprocfs_stats *svc_stats;
-        int opc = opcode_offset(lustre_msg_get_opc(req->rq_reqmsg));
+        __u32 op = lustre_msg_get_opc(req->rq_reqmsg);
+        int opc = opcode_offset(op);
 
         svc_stats = req->rq_import->imp_obd->obd_svc_stats;
         if (svc_stats == NULL || opc <= 0)
                 return;
         LASSERT(opc < LUSTRE_MAX_OPCODES);
-        /* These two use the ptlrpc_lprocfs_brw below */
-        if (!(opc == OST_WRITE || opc == OST_READ))
-                lprocfs_counter_add(svc_stats, opc + PTLRPC_LAST_CNTR, 0);
+        if (!(op == LDLM_ENQUEUE || op == MDS_REINT))
+                lprocfs_counter_add(svc_stats, opc + EXTRA_MAX_OPCODES, 0);
 }
 
-void ptlrpc_lprocfs_brw(struct ptlrpc_request *req, int opc, int bytes)
+void ptlrpc_lprocfs_brw(struct ptlrpc_request *req, int bytes)
 {
         struct lprocfs_stats *svc_stats;
-        svc_stats = req->rq_import->imp_obd->obd_svc_stats;
-        if (!svc_stats) 
+        int idx;
+
+        if (!req->rq_import)
                 return;
-        lprocfs_counter_add(svc_stats, opc + PTLRPC_LAST_CNTR, bytes);
+        svc_stats = req->rq_import->imp_obd->obd_svc_stats;
+        if (!svc_stats)
+                return;
+        idx = lustre_msg_get_opc(req->rq_reqmsg);
+        switch (idx) {
+        case OST_READ:
+                idx = BRW_READ_BYTES + PTLRPC_LAST_CNTR;
+                break;
+        case OST_WRITE:
+                idx = BRW_WRITE_BYTES + PTLRPC_LAST_CNTR;
+                break;
+        default:
+                LASSERTF(0, "unsupported opcode %u\n", idx);
+                break;
+        }
+
+        lprocfs_counter_add(svc_stats, idx, bytes);
 }
+
 EXPORT_SYMBOL(ptlrpc_lprocfs_brw);
 
 void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc)
 {
-        if (svc->srv_procroot != NULL) 
+        if (svc->srv_procroot != NULL)
                 lprocfs_remove(&svc->srv_procroot);
-        if (svc->srv_stats) 
+        if (svc->srv_stats)
                 lprocfs_free_stats(&svc->srv_stats);
 }
 
@@ -463,18 +655,23 @@ int lprocfs_wr_evict_client(struct file *file, const char *buffer,
         struct obd_device *obd = data;
         char tmpbuf[sizeof(struct obd_uuid)];
 
-        /* Kludge code(deadlock situation): the lprocfs lock has been held 
+        /* Kludge code(deadlock situation): the lprocfs lock has been held
          * since the client is evicted by writting client's
-         * uuid/nid to procfs "evict_client" entry. However, 
+         * uuid/nid to procfs "evict_client" entry. However,
          * obd_export_evict_by_uuid() will call lprocfs_remove() to destroy
          * the proc entries under the being destroyed export{}, so I have
-         * to drop the lock at first here. 
+         * to drop the lock at first here.
          * - jay, jxiong@clusterfs.com */
         class_incref(obd);
         LPROCFS_EXIT();
 
         sscanf(buffer, "%40s", tmpbuf);
-        obd_export_evict_by_uuid(obd, tmpbuf);
+        if (strncmp(tmpbuf, "nid:", 4) == 0)
+                obd_export_evict_by_nid(obd, tmpbuf + 4);
+        else if (strncmp(tmpbuf, "uuid:", 5) == 0)
+                obd_export_evict_by_uuid(obd, tmpbuf + 5);
+        else
+                obd_export_evict_by_uuid(obd, tmpbuf);
 
         LPROCFS_ENTRY();
         class_decref(obd);
@@ -501,6 +698,7 @@ int lprocfs_wr_ping(struct file *file, const char *buffer,
         ptlrpc_req_set_repsize(req, 1, NULL);
         req->rq_send_state = LUSTRE_IMP_FULL;
         req->rq_no_resend = 1;
+        req->rq_no_delay = 1;
 
         rc = ptlrpc_queue_wait(req);
 

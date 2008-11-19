@@ -9,7 +9,7 @@ Release: @RELEASE@
 License: GPL
 Group: Utilities/System
 Source: lustre-%{version}.tar.gz
-URL: http://clusterfs.com/
+URL: http://www.sun.com/software/products/lustre/index.xml
 BuildRoot: %{_tmppath}/lustre-%{version}-root
 Obsoletes: lustre-lite, lustre-lite-utils, lustre-ldap nfs-utils-lustre
 Provides: lustre-lite = %{version}, lustre-lite-utils = %{version}
@@ -72,7 +72,7 @@ systems.
 Summary: Lustre testing framework
 Group: Development/Kernel
 Provides: lustre-tests = %{version}
-Requires: lustre = %{version}
+Requires: lustre = %{version}, lustre-modules = %{version}
 
 %description tests
 This package contains a set of test binaries and scripts that are intended
@@ -124,6 +124,7 @@ mkdir -p $RPM_BUILD_ROOT/usr/src
 rm -f lustre-source
 ln -s $RPM_BUILD_ROOT/usr/src lustre-source
 make distdir distdir=lustre-source/lustre-%{version}
+chmod -R go-w lustre-source/lustre-%{version}
 
 cat >lustre.files <<EOF
 %attr(-, root, root) /sbin/mount.lustre
@@ -141,6 +142,10 @@ cat >lustre.files <<EOF
 %attr(-, root, root) %{_libdir}/lustre/lc_common
 EOF
 
+if [ -f $RPM_BUILD_ROOT%{_libdir}/libcfsutil.a ] ; then
+  echo '%attr(-, root, root) %{_libdir}/libcfsutil.a' >>lustre.files
+fi
+
 if [ -f $RPM_BUILD_ROOT%{_libdir}/liblustre.so ] ; then
   echo '%attr(-, root, root) %{_libdir}/liblustre.a' >>lustre.files
   echo '%attr(-, root, root) %{_libdir}/liblustre.so' >>lustre.files
@@ -157,10 +162,13 @@ fi
 
 # Have universal lustre headers 
 if [ -f $RPM_BUILD_DIR/lustre-%{version}/lustre/include/lustre/lustre_idl.h ] ; then
-  echo '%attr(-, root, root) /usr/include/linux/lustre_types.h' >>lustre.files
   echo '%attr(-, root, root) /usr/include/linux/lustre_user.h' >>lustre.files
 else
   echo '%attr(-, root, root) /usr/include/linux/lustre_idl.h' >>lustre.files
+fi
+
+if [ -f $RPM_BUILD_DIR/lustre-%{version}/lustre/include/linux/lustre_types.h ] ; then
+  echo '%attr(-, root, root) /usr/include/linux/lustre_types.h' >>lustre.files
 fi
 
 echo '%attr(-, root, root) %{_libdir}/lustre/tests/*' >lustre-tests.files
@@ -194,6 +202,13 @@ if [ -f /boot/System.map-%{kversion} ]; then
 else
 	depmod -ae %{kversion} || exit 0
 fi
+cat <<EOF
+Congratulations on finishing your Lustre installation!  To register  
+your copy of Lustre and find out more about Lustre Support, Service,  
+and Training offerings please visit
+
+http://www.sun.com/software/products/lustre/lustre_reg.jsp
+EOF
 
 # for update from < v1.4.6
 

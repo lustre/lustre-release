@@ -1,7 +1,39 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *   This file is part of Lustre, http://www.lustre.org
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/include/linux/lustre_user.h
  *
  * Lustre public user-space interface definitions.
  */
@@ -23,9 +55,6 @@
 # endif
 #else
 # include <linux/version.h>
-# if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,21)
-#  define NEED_QUOTA_DEFS
-# endif
 # ifdef HAVE_QUOTA_SUPPORT
 #  include <linux/quota.h>
 # endif
@@ -46,7 +75,7 @@
 #endif
 
 #if defined(__x86_64__) || defined(__ia64__) || defined(__ppc64__) || \
-    defined(__craynv) || defined (__mips64__)
+    defined(__craynv) || defined (__mips64__) || defined(__powerpc64__)
 typedef struct stat     lstat_t;
 #define lstat_f         lstat
 #define HAVE_LOV_USER_MDS_DATA
@@ -55,37 +84,5 @@ typedef struct stat64   lstat_t;
 #define lstat_f         lstat64
 #define HAVE_LOV_USER_MDS_DATA
 #endif
-
-#ifndef LPU64
-/* this is a bit chunky */
-#if defined(__KERNEL__)
- #define _LWORDSIZE BITS_PER_LONG
-#else
- #define _LWORDSIZE __WORDSIZE
-#endif
-/* x86_64 defines __u64 as "long" in userspace, but "long long" in the kernel */
-#if (defined(__x86_64__) && (defined(__KERNEL__) || defined(CRAY_XT3)))
-# define LPU64 "%Lu"
-# define LPD64 "%Ld"
-# define LPX64 "%#Lx"
-# define LPSZ  "%lu"
-# define LPSSZ "%ld"
-#elif (_LWORDSIZE == 32)
-# define LPU64 "%Lu"
-# define LPD64 "%Ld"
-# define LPX64 "%#Lx"
-# define LPSZ  "%u"
-# define LPSSZ "%d"
-#elif (_LWORDSIZE == 64)
-# define LPU64 "%lu"
-# define LPD64 "%ld"
-# define LPX64 "%#lx"
-# define LPSZ  "%lu"
-# define LPSSZ "%ld"
-#endif
-
-#undef _LWORDSIZE
-
-#endif /* !LPU64 */
 
 #endif /* _LUSTRE_USER_H */

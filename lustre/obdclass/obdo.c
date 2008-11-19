@@ -1,28 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/obdclass/obdo.c
+ *
  * Object Devices Class Driver
- *
- *  Copyright (C) 2001-2003 Cluster File Systems, Inc.
- *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
- *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
- *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
- *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
- *
  * These are the only exported functions, they provide some generic
  * infrastructure for managing object devices
  */
@@ -42,9 +55,6 @@
 void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_flag valid)
 {
 #ifdef __KERNEL__
-        CLASSERT(sizeof(struct lustre_handle) +
-                 sizeof(struct llog_cookie) <= sizeof(src->o_inline));
-        
         CDEBUG(D_INODE, "src obdo "LPX64" valid "LPX64", dst obdo "LPX64"\n",
                src->o_id, src->o_valid, dst->o_id);
 #endif
@@ -72,8 +82,10 @@ void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_flag valid)
                 dst->o_flags = src->o_flags;
         if (valid & OBD_MD_FLGENER)
                 dst->o_generation = src->o_generation;
-        if (valid & OBD_MD_FLINLINE)
-                memcpy(dst->o_inline, src->o_inline, sizeof(src->o_inline));
+        if (valid & OBD_MD_FLHANDLE)
+                dst->o_handle = src->o_handle;
+        if (valid & OBD_MD_FLCOOKIE)
+                dst->o_lcookie = src->o_lcookie;
 
         dst->o_valid |= valid;
 }

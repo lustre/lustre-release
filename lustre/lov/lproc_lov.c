@@ -1,33 +1,42 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2002 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <linux/version.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <asm/statfs.h>
-#endif
 #include <lprocfs_status.h>
 #include <obd_class.h>
 #include <linux/seq_file.h>
@@ -60,8 +69,8 @@ static int lov_wr_stripesize(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
+        lov_fix_desc_stripe_size(&val);
         desc->ld_default_stripe_size = val;
-        lov_fix_desc(desc);
         return count;
 }
 
@@ -92,7 +101,6 @@ static int lov_wr_stripeoffset(struct file *file, const char *buffer,
                 return rc;
 
         desc->ld_default_stripe_offset = val;
-        lov_fix_desc(desc);
         return count;
 }
 
@@ -121,8 +129,8 @@ static int lov_wr_stripetype(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
+        lov_fix_desc_pattern(&val);
         desc->ld_pattern = val;
-        lov_fix_desc(desc);
         return count;
 }
 
@@ -135,7 +143,8 @@ static int lov_rd_stripecount(char *page, char **start, off_t off, int count,
         LASSERT(dev != NULL);
         desc = &dev->u.lov.desc;
         *eof = 1;
-        return snprintf(page, count, "%u\n", desc->ld_default_stripe_count);
+        return snprintf(page, count, "%d\n",
+                        (__s16)(desc->ld_default_stripe_count + 1) - 1);
 }
 
 static int lov_wr_stripecount(struct file *file, const char *buffer,
@@ -151,8 +160,8 @@ static int lov_wr_stripecount(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
+        lov_fix_desc_stripe_count(&val);
         desc->ld_default_stripe_count = val;
-        lov_fix_desc(desc);
         return count;
 }
 
@@ -264,8 +273,12 @@ static void *lov_tgt_seq_start(struct seq_file *p, loff_t *pos)
         struct obd_device *dev = p->private;
         struct lov_obd *lov = &dev->u.lov;
 
-        return (*pos >= lov->desc.ld_tgt_count) ? NULL : lov->lov_tgts[*pos];
-
+        while (*pos < lov->desc.ld_tgt_count) {
+                if (lov->lov_tgts[*pos])
+                        return lov->lov_tgts[*pos];
+                ++*pos;
+        }
+        return NULL;
 }
 
 static void lov_tgt_seq_stop(struct seq_file *p, void *v)
@@ -317,7 +330,7 @@ static int lov_target_seq_open(struct inode *inode, struct file *file)
         return 0;
 }
 
-struct lprocfs_vars lprocfs_obd_vars[] = {
+struct lprocfs_vars lprocfs_lov_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid,        0, 0 },
         { "stripesize",   lov_rd_stripesize,      lov_wr_stripesize, 0 },
         { "stripeoffset", lov_rd_stripeoffset,    lov_wr_stripeoffset, 0 },
@@ -338,10 +351,16 @@ struct lprocfs_vars lprocfs_obd_vars[] = {
         { 0 }
 };
 
-static struct lprocfs_vars lprocfs_module_vars[] = {
+static struct lprocfs_vars lprocfs_lov_module_vars[] = {
         { "num_refs",     lprocfs_rd_numrefs,     0, 0 },
         { 0 }
 };
+
+void lprocfs_lov_init_vars(struct lprocfs_static_vars *lvars)
+{
+    lvars->module_vars  = lprocfs_lov_module_vars;
+    lvars->obd_vars     = lprocfs_lov_obd_vars;
+}
 
 struct file_operations lov_proc_target_fops = {
         .owner   = THIS_MODULE,
@@ -350,6 +369,4 @@ struct file_operations lov_proc_target_fops = {
         .llseek  = seq_lseek,
         .release = lprocfs_seq_release,
 };
-
-LPROCFS_INIT_VARS(lov, lprocfs_module_vars, lprocfs_obd_vars)
 #endif /* LPROCFS */

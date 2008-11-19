@@ -1,28 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Portal-RPC reconnection and replay operations, for use in recovery.
+ * GPL HEADER START
  *
- *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
- *   Author: Mike Shaver <shaver@clusterfs.com>
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/ptlrpc/recover.c
+ *
+ * Author: Mike Shaver <shaver@clusterfs.com>
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
@@ -97,20 +110,21 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
          */
         list_for_each_safe(tmp, pos, &imp->imp_replay_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_replay_list);
-
                 /* If need to resend the last sent transno (because a
                    reconnect has occurred), then stop on the matching
                    req and send it again. If, however, the last sent
                    transno has been committed then we continue replay
                    from the next request. */
-                if (imp->imp_resend_replay && 
+                if (imp->imp_resend_replay &&
                     req->rq_transno == last_transno) {
                         lustre_msg_add_flags(req->rq_reqmsg, MSG_RESENT);
                         break;
                 }
 
                 if (req->rq_transno > last_transno) {
+                        spin_lock(&imp->imp_lock);
                         imp->imp_last_replay_transno = req->rq_transno;
+                        spin_unlock(&imp->imp_lock);
                         break;
                 }
 
@@ -150,7 +164,6 @@ int ptlrpc_resend(struct obd_import *imp)
                 spin_unlock(&imp->imp_lock);
                 RETURN(-1);
         }
-        spin_unlock(&imp->imp_lock);
 
         list_for_each_entry_safe(req, next, &imp->imp_sending_list, rq_list) {
                 LASSERTF((long)req > CFS_PAGE_SIZE && req != LP_POISON,
@@ -159,6 +172,7 @@ int ptlrpc_resend(struct obd_import *imp)
                 if (!req->rq_no_resend)
                         ptlrpc_resend_req(req);
         }
+        spin_unlock(&imp->imp_lock);
 
         RETURN(0);
 }
@@ -173,7 +187,7 @@ void ptlrpc_wake_delayed(struct obd_import *imp)
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
 
                 DEBUG_REQ(D_HA, req, "waking (set %p):", req->rq_set);
-                ptlrpc_wake_client_req(req);
+                ptlrpc_client_wake_req(req);
         }
         spin_unlock(&imp->imp_lock);
 }
@@ -232,19 +246,18 @@ int ptlrpc_set_import_active(struct obd_import *imp, int active)
         if (!active) {
                 LCONSOLE_WARN("setting import %s INACTIVE by administrator "
                               "request\n", obd2cli_tgt(imp->imp_obd));
-                ptlrpc_invalidate_import(imp);
 
+                /* set before invalidate to avoid messages about imp_inval
+                 * set without imp_deactive in ptlrpc_import_delay_req */
                 spin_lock(&imp->imp_lock);
                 imp->imp_deactive = 1;
                 spin_unlock(&imp->imp_lock);
+
+                ptlrpc_invalidate_import(imp);
         }
 
         /* When activating, mark import valid, and attempt recovery */
         if (active) {
-                spin_lock(&imp->imp_lock);
-                imp->imp_deactive = 0;
-                spin_unlock(&imp->imp_lock);
-
                 CDEBUG(D_HA, "setting import %s VALID\n",
                        obd2cli_tgt(imp->imp_obd));
                 rc = ptlrpc_recover_import(imp, NULL);
@@ -258,6 +271,13 @@ int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid)
 {
         int rc;
         ENTRY;
+
+        spin_lock(&imp->imp_lock);
+        if (atomic_read(&imp->imp_inval_count)) {
+                spin_unlock(&imp->imp_lock);
+                RETURN(-EINVAL);
+        }
+        spin_unlock(&imp->imp_lock);
 
         /* force import to be disconnected. */
         ptlrpc_set_import_discon(imp, 0);

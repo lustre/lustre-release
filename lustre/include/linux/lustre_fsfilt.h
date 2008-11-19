@@ -1,25 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001-2004 Cluster File Systems, Inc. <info@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/include/linux/lustre_fsfilt.h
  *
  * Filesystem interface helper.
- *
  */
 
 #ifndef _LINUX_LUSTRE_FSFILT_H
@@ -92,8 +108,6 @@ struct fsfilt_operations {
                                        int pages, unsigned long *blocks,
                                        int *created, int create,
                                        struct semaphore *sem);
-        int     (* fs_prep_san_write)(struct inode *inode, long *blocks,
-                                      int nblocks, loff_t newsize);
         int     (* fs_write_record)(struct file *, void *, int size, loff_t *,
                                     int force_sync);
         int     (* fs_read_record)(struct file *, void *, int size, loff_t *);
@@ -101,6 +115,8 @@ struct fsfilt_operations {
         int     (* fs_get_op_len)(int, struct fsfilt_objinfo *, int);
         int     (* fs_quotacheck)(struct super_block *sb,
                                   struct obd_quotactl *oqctl);
+        __u64   (* fs_get_version) (struct inode *inode);
+        __u64   (* fs_set_version) (struct inode *inode, __u64 new_version);
         int     (* fs_quotactl)(struct super_block *sb,
                                 struct obd_quotactl *oqctl);
         int     (* fs_quotainfo)(struct lustre_quota_info *lqi, int type,
@@ -164,19 +180,25 @@ static inline lvfs_sbdev_type fsfilt_journal_sbdev(struct obd_device *obd,
 #define FSFILT_OP_JOIN          11
 #define FSFILT_OP_NOOP          15
 
-#define fsfilt_check_slow(obd, start, timeout, msg)                     \
+#define __fsfilt_check_slow(obd, start, msg)                            \
 do {                                                                    \
         if (time_before(jiffies, start + 15 * HZ))                      \
                 break;                                                  \
         else if (time_before(jiffies, start + 30 * HZ))                 \
                 CDEBUG(D_VFSTRACE, "%s: slow %s %lus\n", obd->obd_name, \
                        msg, (jiffies-start) / HZ);                      \
-        else if (time_before(jiffies, start + timeout / 2 * HZ))        \
+        else if (time_before(jiffies, start + DISK_TIMEOUT * HZ))       \
                 CWARN("%s: slow %s %lus\n", obd->obd_name, msg,         \
                       (jiffies - start) / HZ);                          \
         else                                                            \
                 CERROR("%s: slow %s %lus\n", obd->obd_name, msg,        \
                        (jiffies - start) / HZ);                         \
+} while (0)
+
+#define fsfilt_check_slow(obd, start, msg)    \
+do {                                          \
+        __fsfilt_check_slow(obd, start, msg); \
+        start = jiffies;                      \
 } while (0)
 
 static inline void *fsfilt_start_log(struct obd_device *obd,
@@ -202,7 +224,7 @@ static inline void *fsfilt_start_log(struct obd_device *obd,
                         LBUG();
                 }
         }
-        fsfilt_check_slow(obd, now, obd_timeout, "journal start");
+        fsfilt_check_slow(obd, now, "journal start");
         return handle;
 }
 
@@ -237,7 +259,7 @@ static inline void *fsfilt_brw_start_log(struct obd_device *obd, int objcount,
                         LBUG();
                 }
         }
-        fsfilt_check_slow(obd, now, obd_timeout, "journal start");
+        fsfilt_check_slow(obd, now, "journal start");
 
         return handle;
 }
@@ -257,7 +279,7 @@ static inline int fsfilt_extend(struct obd_device *obd, struct inode *inode,
         int rc = obd->obd_fsops->fs_extend(inode, nblocks, handle);
         CDEBUG(D_INFO, "extending handle %p with %u blocks\n", handle, nblocks);
 
-        fsfilt_check_slow(obd, now, obd_timeout, "journal extend");
+        fsfilt_check_slow(obd, now, "journal extend");
 
         return rc;
 }
@@ -269,7 +291,7 @@ static inline int fsfilt_commit(struct obd_device *obd, struct inode *inode,
         int rc = obd->obd_fsops->fs_commit(inode, handle, force_sync);
         CDEBUG(D_INFO, "committing handle %p\n", handle);
 
-        fsfilt_check_slow(obd, now, obd_timeout, "journal start");
+        fsfilt_check_slow(obd, now, "journal start");
 
         return rc;
 }
@@ -282,7 +304,7 @@ static inline int fsfilt_commit_async(struct obd_device *obd,
         int rc = obd->obd_fsops->fs_commit_async(inode, handle, wait_handle);
 
         CDEBUG(D_INFO, "committing handle %p (async)\n", *wait_handle);
-        fsfilt_check_slow(obd, now, obd_timeout, "journal start");
+        fsfilt_check_slow(obd, now, "journal start");
 
         return rc;
 }
@@ -293,7 +315,7 @@ static inline int fsfilt_commit_wait(struct obd_device *obd,
         unsigned long now = jiffies;
         int rc = obd->obd_fsops->fs_commit_wait(inode, handle);
         CDEBUG(D_INFO, "waiting for completion %p\n", handle);
-        fsfilt_check_slow(obd, now, obd_timeout, "journal start");
+        fsfilt_check_slow(obd, now, "journal start");
         return rc;
 }
 
@@ -303,7 +325,7 @@ static inline int fsfilt_setattr(struct obd_device *obd, struct dentry *dentry,
         unsigned long now = jiffies;
         int rc;
         rc = obd->obd_fsops->fs_setattr(dentry, handle, iattr, do_trunc);
-        fsfilt_check_slow(obd, now, obd_timeout, "setattr");
+        fsfilt_check_slow(obd, now, "setattr");
         return rc;
 }
 
@@ -404,7 +426,7 @@ static inline int fsfilt_quotainfo(struct obd_device *obd,
 }
 
 static inline int fsfilt_qids(struct obd_device *obd, struct file *file,
-                              struct inode *inode, int type, 
+                              struct inode *inode, int type,
                               struct list_head *list)
 {
         if (obd->obd_fsops->fs_qids)
@@ -430,13 +452,6 @@ static inline int fsfilt_map_inode_pages(struct obd_device *obd,
                                                   created, create, sem);
 }
 
-static inline int fs_prep_san_write(struct obd_device *obd, struct inode *inode,
-                                    long *blocks, int nblocks, loff_t newsize)
-{
-        return obd->obd_fsops->fs_prep_san_write(inode, blocks,
-                                                 nblocks, newsize);
-}
-
 static inline int fsfilt_read_record(struct obd_device *obd, struct file *file,
                                      void *buf, loff_t size, loff_t *offs)
 {
@@ -455,6 +470,22 @@ static inline int fsfilt_setup(struct obd_device *obd, struct super_block *fs)
         if (obd->obd_fsops->fs_setup)
                 return obd->obd_fsops->fs_setup(fs);
         return 0;
+}
+
+static inline __u64 fsfilt_set_version(struct obd_device *obd,
+                                      struct inode *inode, __u64 new_version)
+{
+        if (obd->obd_fsops->fs_set_version)
+                return obd->obd_fsops->fs_set_version(inode, new_version);
+        return -EOPNOTSUPP;
+}
+
+static inline __u64 fsfilt_get_version(struct obd_device *obd,
+                                       struct inode *inode)
+{
+        if (obd->obd_fsops->fs_set_version)
+                return obd->obd_fsops->fs_get_version(inode);
+        return -EOPNOTSUPP;
 }
 
 #endif /* __KERNEL__ */

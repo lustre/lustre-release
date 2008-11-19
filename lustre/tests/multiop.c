@@ -1,7 +1,42 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
  */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ */
+
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE /* pull in O_DIRECTORY in bits/fcntl.h */
+#endif
 #include <stdio.h>
 #include <fcntl.h>
 #include <string.h>
@@ -12,15 +47,20 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <lustre/liblustreapi.h>
 
 #define T1 "write data before unlink\n"
 #define T2 "write data after unlink\n"
-char buf[] = "yabba dabba doo, I'm coming for you, I live in a shoe, I don't know what to do.\n'Bigger, bigger,and bigger yet!' cried the Creator.  'You are not yet substantial enough for my boundless intents!'  And ever greater and greater the object became, until all was lost 'neath its momentus bulk.\n";
+char msg[] = "yabba dabba doo, I'm coming for you, I live in a shoe, I don't know what to do.\n'Bigger, bigger,and bigger yet!' cried the Creator.  'You are not yet substantial enough for my boundless intents!'  And ever greater and greater the object became, until all was lost 'neath its momentus bulk.\n";
+char *buf, *buf_align;
+int bufsize = 0;
+#define ALIGN 65535
 
 char usage[] = 
 "Usage: %s filename command-sequence\n"
 "    command-sequence items:\n"
 "        c  close\n"
+"        C[num] create with optional stripes\n"
 "        d  mkdir\n"
 "        D  open(O_DIRECTORY)\n"
 "        L  link\n"
@@ -138,6 +178,7 @@ int main(int argc, char **argv)
         int rc, len, fd = -1;
         int flags;
         int save_errno;
+        int verbose = 0;
 
         if (argc < 3) {
                 fprintf(stderr, usage, argv[0]);
@@ -151,8 +192,13 @@ int main(int argc, char **argv)
         for (commands = argv[2]; *commands; commands++) {
                 switch (*commands) {
                 case '_':
-                        if (usr1_received == 0)
+                        if (usr1_received == 0) {
+                                if (verbose) {
+                                        printf("PAUSING %u\n", getpid());
+                                        fflush(stdout);
+                                }
                                 pause();
+                        }
                         usr1_received = 0;
                         signal(SIGUSR1, usr1_handler);
                         break;
@@ -163,6 +209,16 @@ int main(int argc, char **argv)
                                 exit(save_errno);
                         }
                         fd = -1;
+                        break;
+                case 'C':
+                        len = atoi(commands+1);
+                        fd = llapi_file_open(fname, O_CREAT | O_WRONLY, 0644,
+                                             0, 0, len, 0);
+                        if (fd == -1) {
+                                save_errno = errno;
+                                perror("create stripe file");
+                                exit(save_errno);
+                        }
                         break;
                 case 'd':
                         if (mkdir(fname, 0755) == -1) {
@@ -248,21 +304,28 @@ int main(int argc, char **argv)
                         len = atoi(commands+1);
                         if (len <= 0)
                                 len = 1;
-                        while(len > 0) {
-                                if (read(fd, &buf,
-                                         min(len,sizeof(buf))) == -1) {
+                        if (bufsize < len) {
+                                buf = realloc(buf, len + ALIGN);
+                                if (buf == NULL) {
+                                        save_errno = errno;
+                                        perror("allocating buf for read\n");
+                                        exit(save_errno);
+                                }
+                                bufsize = len;
+                                buf_align = (char *)((long)(buf + ALIGN) &
+                                                     ~ALIGN);
+                        }
+                        while (len > 0) {
+                                rc = read(fd, buf_align, len);
+                                if (rc == -1) {
                                         save_errno = errno;
                                         perror("read");
                                         exit(save_errno);
                                 }
-                                len -= sizeof(buf);
-                        }
-                        break;
-                case 'S':
-                        if (fstat(fd, &st) == -1) {
-                                save_errno = errno;
-                                perror("fstat");
-                                exit(save_errno);
+                                if (rc < len)
+                                        fprintf(stderr, "short read: %u/%u\n",
+                                                rc, len);
+                                len -= rc;
                         }
                         break;
                 case 'R':
@@ -273,6 +336,13 @@ int main(int argc, char **argv)
                         if (stat(fname, &st) == -1) {
                                 save_errno = errno;
                                 perror("stat");
+                                exit(save_errno);
+                        }
+                        break;
+                case 'S':
+                        if (fstat(fd, &st) == -1) {
+                                save_errno = errno;
+                                perror("fstat");
                                 exit(save_errno);
                         }
                         break;
@@ -306,19 +376,36 @@ int main(int argc, char **argv)
                                 exit(save_errno);
                         }
                         break;
+                case 'v':
+                        verbose = 1;
+                        break;
                 case 'w':
                         len = atoi(commands+1);
                         if (len <= 0)
                                 len = 1;
-                        while(len > 0) {
-                                if ((rc = write(fd, buf,
-                                                min(len, sizeof(buf))))
-                                    == -1) {
+                        if (bufsize < len) {
+                                buf = realloc(buf, len + ALIGN);
+                                if (buf == NULL) {
+                                        save_errno = errno;
+                                        perror("allocating buf for write\n");
+                                        exit(save_errno);
+                                }
+                                bufsize = len;
+                                buf_align = (char *)((long)(buf + ALIGN) &
+                                                     ~ALIGN);
+                                strncpy(buf_align, msg, bufsize);
+                        }
+                        while (len > 0) {
+                                rc = write(fd, buf_align, len);
+                                if (rc == -1) {
                                         save_errno = errno;
                                         perror("write");
                                         exit(save_errno);
                                 }
-                                len -= sizeof(buf);
+                                if (rc < len)
+                                        fprintf(stderr, "short write: %u/%u\n",
+                                                rc, len);
+                                len -= rc;
                         }
                         break;
                 case 'W':
@@ -363,6 +450,9 @@ int main(int argc, char **argv)
                         exit(1);
                 }
         }
+
+        if (buf)
+                free(buf);
 
         return 0;
 }

@@ -8,9 +8,11 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 SRCDIR="`dirname $0`"
 export PATH=/sbin:/usr/sbin:$SRCDIR:$SRCDIR/../utils:$PATH
 
+export NAME=${NAME:-local}
+
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
+. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
 SETUP=${SETUP:-setupall}
 FORMAT=${FORMAT:-formatall}
@@ -22,15 +24,10 @@ fail() {
 	exit $RC
 }
 
-log() {
-	echo "$*"
-	lctl mark "$*"
-}
-
-
 ERROR=
-SRC=/etc
+RUNTESTS_SRC=${RUNTESTS_SRC:-"/etc /bin"}
 [ "$COUNT" ] || COUNT=1000
+[ "$SLOW" = "no" ] && COUNT=100
 
 [ "$MCREATE" ] || MCREATE=mcreate
 
@@ -44,15 +41,16 @@ while [ "$1" ]; do
 	shift
 done
 
-EXISTING_MOUNT=`awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts`
-if [ -z "$EXISTING_MOUNT" ]; then
-        $FORMAT
-        $SETUP
-	EXISTING_MOUNT=`awk '($3 ~ "lustre" && $1 ~ ":") { print $2 }' /proc/mounts`
-	[ -z "$EXISTING_MOUNT" ] && fail "no lustre filesystem mounted" 1
-	I_MOUNTED="yes"
+MOUNTED=$(mounted_lustre_filesystems | head -1)
+if [ -z "$MOUNTED" ]; then
+	formatall
+	setupall
+	MOUNTED="`mounted_lustre_filesystems`"
+	[ -z "$MOUNTED" ] && error "NAME=$NAME not mounted"
+	I_MOUNTED=yes
 fi
-MOUNT=$EXISTING_MOUNT
+
+MOUNT=$MOUNTED
 
 OSCTMP=`echo $MOUNT | tr "/" "."`
 USED=`df | awk "/$OSCTMP/ { print \\$3 }" | tail -n 1`
@@ -93,9 +91,11 @@ mkdir $DST || fail "can't mkdir $DST" 10
 
 # ok, that hopefully worked, so let's do a little more, with files that
 # haven't changed in the last day (hopefully they don't change during test)
-FILES=`find $SRC -type f -mtime +1 -ctime +1 | head -n $COUNT`
-log "copying files from $SRC to $DST$SRC at `date`"
-tar cf - $FILES | tar xvf - -C $DST > /dev/null || fail "copying $SRC" 11
+FILES=`find $RUNTESTS_SRC -type f -mtime +1 | head -n $COUNT`
+[ -z "$FILES" ] && fail "No unchanged files - is $RUNTESTS_SRC a new dir?"
+
+log "copying files from $RUNTESTS_SRC to $DST$RUNTESTS_SRC at `date`"
+tar cf - $FILES | tar xvf - -C $DST > /dev/null || fail "copying $RUNTESTS_SRC" 11
 
 log "comparing newly copied files at `date`"
 for f in $FILES; do
@@ -150,6 +150,5 @@ if [ `expr $NOWUSED - $USED` -gt 1024 ]; then
 fi
 
 if [ "$I_MOUNTED" = "yes" ]; then
-	sync && sleep 2 && sync     # wait for delete thread
 	$CLEANUP
 fi

@@ -1,4 +1,4 @@
 MODULES := mgc
-mgc-objs := mgc_request.o
+mgc-objs := mgc_request.o lproc_mgc.o
 
 @INCLUDE_RULES@

@@ -1,35 +1,52 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2002 Cluster File Systems, Inc.
- *   Author: Peter J. Braam <braam@clusterfs.com>
- *   Author: Phil Schwan <phil@clusterfs.com>
- *   Author: Andreas Dilger <adilger@clusterfs.com>
- *   Author: Robert Read <rread@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
  */
-
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/utils/lustre_cfg.c
+ *
+ * Author: Peter J. Braam <braam@clusterfs.com>
+ * Author: Phil Schwan <phil@clusterfs.com>
+ * Author: Andreas Dilger <adilger@clusterfs.com>
+ * Author: Robert Read <rread@clusterfs.com>
+ */
 
 #include <stdlib.h>
 #include <sys/ioctl.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <ctype.h>
+#include <glob.h>
 
 #ifndef __KERNEL__
 #include <liblustre.h>
@@ -40,7 +57,7 @@
 #include <lustre_dlm.h>
 #include <obd.h>          /* for struct lov_stripe_md */
 #include <obd_lov.h>
-#include <linux/lustre_build_version.h>
+#include <lustre/lustre_build_version.h>
 
 #include <unistd.h>
 #include <sys/un.h>
@@ -507,4 +524,244 @@ int jt_lcfg_mgsparam(int argc, char **argv)
         return rc;
 }
 
+/* Display the path in the same format as sysctl
+ * For eg. obdfilter.lustre-OST0000.stats */
+static char *display_name(char *filename)
+{
+        char *tmp;
 
+        filename += strlen("/proc/");
+        if (strncmp(filename, "fs/", strlen("fs/")) == 0)
+                filename += strlen("fs/");
+        else
+                filename += strlen("sys/");
+
+        if (strncmp(filename, "lustre/", strlen("lustre/")) == 0)
+                filename += strlen("lustre/");
+
+        /* replace '/' with '.' to match conf_param and sysctl */
+        tmp = filename;
+        while ((tmp = strchr(tmp, '/')) != NULL)
+                *tmp = '.';
+
+        return filename;
+}
+
+/* Find a character in a length limited string */
+static char *strnchr(const char *p, char c, size_t n)
+{
+       if (!p)
+               return (0);
+
+       while (n-- > 0) {
+               if (*p == c)
+                       return ((char *)p);
+               p++;
+       }
+       return (0);
+}
+
+int jt_lcfg_getparam(int argc, char **argv)
+{
+        int fp;
+        int rc = 0, i, show_path = 0, only_path = 0;
+        char pattern[PATH_MAX];
+        char *path, *tmp, *buf;
+        glob_t glob_info;
+
+        if (argc == 3 && (strcmp(argv[1], "-n") == 0 ||
+                          strcmp(argv[1], "-N") == 0)) {
+                path = argv[2];
+                if (strcmp(argv[1], "-N") == 0) {
+                        only_path = 1;
+                        show_path = 1;
+                }
+        } else if (argc == 2) {
+                show_path = 1;
+                path = argv[1];
+        } else {
+                return CMD_HELP;
+        }
+
+        /* If the input is in form Eg. obdfilter.*.stats */
+        if (strchr(path, '.')) {
+                tmp = path;
+                while (*tmp != '\0') {
+                        if (*tmp == '.')
+                                *tmp = '/';
+                        tmp ++;
+                }
+        }
+
+        /* If the entire path is specified as input */
+        fp = open(path, O_RDONLY);
+        if (fp < 0)
+                snprintf(pattern, PATH_MAX, "/proc/{fs,sys}/{lnet,lustre}/%s",
+                         path);
+        else {
+                strcpy(pattern, path);
+                close(fp);
+        }
+
+        rc = glob(pattern, GLOB_BRACE, NULL, &glob_info);
+        if (rc) {
+                fprintf(stderr, "error : glob %s: %s \n", pattern,strerror(rc));
+                return rc;
+        }
+
+        buf = malloc(CFS_PAGE_SIZE);
+        for (i = 0; i  < glob_info.gl_pathc; i++) {
+                char *valuename = NULL;
+
+                memset(buf, 0, CFS_PAGE_SIZE);
+                if (show_path) {
+                        char *filename;
+                        filename = strdup(glob_info.gl_pathv[i]);
+                        valuename = display_name(filename);
+                        if (valuename && only_path) {
+                                printf("%s\n", valuename);
+                                continue;
+                        }
+                }
+
+                /* Write the contents of file to stdout */
+                fp = open(glob_info.gl_pathv[i], O_RDONLY);
+                if (fp < 0) {
+                        fprintf(stderr, "error: %s: opening('%s') failed: %s\n",
+                                jt_cmdname(argv[0]), glob_info.gl_pathv[i],
+                                strerror(errno));
+                        continue;
+                }
+
+                do {
+                        rc = read(fp, buf, CFS_PAGE_SIZE);
+                        if (rc == 0)
+                                break;
+                        if (rc < 0) {
+                                fprintf(stderr, "error: %s: read('%s') "
+                                        "failed: %s\n", jt_cmdname(argv[0]),
+                                        glob_info.gl_pathv[i], strerror(errno));
+                                break;
+                        }
+                        /* Print the output in the format path=value if the
+                         * value contains no new line character or cab be
+                         * occupied in a line, else print value on new line */
+                        if (valuename && show_path) {
+                                int longbuf = strnchr(buf, rc - 1, '\n') != NULL
+                                              || rc > 60;
+                                printf("%s=%s", valuename, longbuf ? "\n" : buf);
+                                valuename = NULL;
+                                if (!longbuf)
+                                        continue;
+                                fflush(stdout);
+                        }
+                        rc = write(fileno(stdout), buf, rc);
+                        if (rc < 0) {
+                                fprintf(stderr, "error: %s: write to stdout "
+                                        "failed: %s\n", jt_cmdname(argv[0]),
+                                        strerror(errno));
+                                break;
+                        }
+                } while (1);
+                close(fp);
+        }
+
+        globfree(&glob_info);
+        free(buf);
+        return rc;
+}
+
+
+int jt_lcfg_setparam(int argc, char **argv)
+{
+        int rc = 0, i;
+        int fp, show_path = 0;
+        char pattern[PATH_MAX];
+        char *path, *value, *tmp;
+        glob_t glob_info;
+
+        path = argv[1];
+        if (argc == 4 && (strcmp(argv[1], "-n") == 0)) {
+                /* Format: lctl set_param -n param value */
+                path = argv[2];
+                value = argv[3];
+        } else if (argc == 3) {
+                if (strcmp(argv[1], "-n") != 0) {
+                        /* Format: lctl set_param param value */
+                        show_path = 1;
+                        value = argv[2];
+                } else if ((value = strchr(argv[2], '=')) != NULL) {
+                        /* Format: lctl set_param -n param=value */
+                        path = argv[2];
+                        *value = '\0';
+                        value ++;
+                } else {
+                        fprintf(stderr, "error: %s Incorrect arguments."
+                                        "See Usage\n",
+                                jt_cmdname(argv[0]));
+                        return CMD_HELP;
+                }
+        } else if (argc == 2 && ((value = strchr(argv[1], '=')) != NULL)) {
+                /* Format: lctl set_param param=value */
+                show_path = 1;
+                *value = '\0';
+                value++;
+        } else {
+                fprintf(stderr, "error: %s Incorrect arguments. See Usage\n",
+                        jt_cmdname(argv[0]));
+                return CMD_HELP;
+        }
+
+        /* If the input is in form Eg. obdfilter.*.stats */
+        if (strchr(path, '.')) {
+                tmp = path;
+                while (*tmp != '\0') {
+                        if (*tmp == '.')
+                                *tmp = '/';
+                        tmp ++;
+                }
+        }
+
+        fp = open(path, O_RDONLY);
+        if (fp < 0)
+                snprintf(pattern, PATH_MAX, "/proc/{fs,sys}/{lnet,lustre}/%s",
+                         path);
+        else {
+                strcpy(pattern, path);
+                close(fp);
+        }
+
+        rc = glob(pattern, GLOB_BRACE, NULL, &glob_info);
+        if (rc) {
+                fprintf(stderr, "error : glob %s: %s \n", pattern,strerror(rc));
+                return rc;
+        }
+        for (i = 0; i  < glob_info.gl_pathc; i++) {
+                if (show_path) {
+                        char *valuename, *filename;
+                        filename = strdup(glob_info.gl_pathv[i]);
+                        valuename = display_name(filename);
+                        printf("%s=%s\n", valuename, value);
+                }
+                /* Write the new value to the file */
+                fp = open(glob_info.gl_pathv[i], O_WRONLY);
+                if (fp == -1) {
+                        fprintf(stderr, "error: %s: %s opening %s\n",
+                                jt_cmdname(argv[0]), strerror(rc = errno),
+                                glob_info.gl_pathv[i]);
+                        break;
+                } else {
+                        rc = write(fp, value, strlen(value));
+                        if (rc < 0)
+                                fprintf(stderr,
+                                        "error writing to file %s (%s)\n",
+                                        glob_info.gl_pathv[i], strerror(errno));
+                        else
+                                rc = 0;
+                        close(fp);
+                }
+        }
+
+        globfree(&glob_info);
+        return rc;
+}

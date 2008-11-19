@@ -24,7 +24,11 @@ The cp utility should only copy ACLs if `-p' is given.
 	> blubb
 
 	$ rm -r i
-	$ setfacl -R -m u:bin:rwX h
+
+Use to be "$setfacl -R -m u:bin:rwX h", but RHEL4 uncorrectly set the x flag,
+so we change to the following test
+
+	$ setfacl -R -m u:bin:rwx h
 	$ getfacl --omit-header h/x
 	> user::rw-
 	> user:bin:rwx

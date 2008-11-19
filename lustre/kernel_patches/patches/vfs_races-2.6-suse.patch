@@ -4,28 +4,26 @@
 
 --- linux-2.6.0-test1/fs/dcache.c~vfs_races_2.5.72_rev1	2003-07-24 15:52:47.000000000 +0400
 +++ linux-2.6.0-test1-alexey/fs/dcache.c	2003-09-13 16:21:16.000000000 +0400
-@@ -212,7 +212,14 @@ int d_invalidate(struct dentry * dentry)
+@@ -212,6 +212,13 @@ int d_invalidate(struct dentry * dentry)
  		spin_unlock(&dcache_lock);
  		return 0;
  	}
--	/*
 +
-+        /* network invalidation by Lustre */
++	/* network invalidation by Lustre */
 +	if (dentry->d_flags & DCACHE_LUSTRE_INVALID) {
 +		spin_unlock(&dcache_lock);
 +		return 0;
 +	}
 +
-+        /*
+ 	/*
  	 * Check whether to do a partial shrink_dcache
  	 * to get rid of unused child entries.
- 	 */
 @@ -1135,14 +1142,23 @@ void d_delete(struct dentry * dentry)
   * Adds a dentry to the hash according to its name.
   */
   
 -void d_rehash(struct dentry * entry)
-+void __d_rehash(struct dentry * entry, int lock)
++void d_rehash_cond(struct dentry * entry, int lock)
  {
  	struct hlist_head *list = d_hash(entry->d_parent, entry->d_name.hash);
 -	spin_lock(&dcache_lock);
@@ -39,11 +37,11 @@
 +		spin_unlock(&dcache_lock);
 +}
 +
-+EXPORT_SYMBOL(__d_rehash);
++EXPORT_SYMBOL(d_rehash_cond);
 +
 +void d_rehash(struct dentry * entry)
 +{
-+	__d_rehash(entry, 1);
++	d_rehash_cond(entry, 1);
  }
  
  #define do_switch(x,y) do { \
@@ -58,5 +56,13 @@
  
  extern spinlock_t dcache_lock;
  
+@@ -254,6 +255,7 @@ extern int have_submounts(struct dentry 
+  * This adds the entry to the hash queues.
+  */
+ extern void d_rehash(struct dentry *);
++extern void d_rehash_cond(struct dentry *, int lock);
+ 
+ /**
+  * d_add - add dentry to hash queues
 
 _

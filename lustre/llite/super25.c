@@ -1,24 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Lustre Light Super operations
+ * GPL HEADER START
  *
- *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #define DEBUG_SUBSYSTEM S_LLITE
@@ -35,13 +48,13 @@
 #include <lprocfs_status.h>
 #include "llite_internal.h"
 
-static kmem_cache_t *ll_inode_cachep;
+static cfs_mem_cache_t *ll_inode_cachep;
 
 static struct inode *ll_alloc_inode(struct super_block *sb)
 {
         struct ll_inode_info *lli;
-        lprocfs_counter_incr((ll_s2sbi(sb))->ll_stats, LPROC_LL_ALLOC_INODE);
-        OBD_SLAB_ALLOC(lli, ll_inode_cachep, SLAB_KERNEL, sizeof *lli);
+        ll_stats_ops_tally(ll_s2sbi(sb), LPROC_LL_ALLOC_INODE, 1);
+        OBD_SLAB_ALLOC_PTR(lli, ll_inode_cachep);
         if (lli == NULL)
                 return NULL;
 
@@ -54,24 +67,14 @@ static struct inode *ll_alloc_inode(struct super_block *sb)
 static void ll_destroy_inode(struct inode *inode)
 {
         struct ll_inode_info *ptr = ll_i2info(inode);
-        OBD_SLAB_FREE(ptr, ll_inode_cachep, sizeof(*ptr));
-}
-
-static void init_once(void * foo, kmem_cache_t * cachep, unsigned long flags)
-{
-        struct ll_inode_info *lli = foo;
-
-        if ((flags & (SLAB_CTOR_VERIFY|SLAB_CTOR_CONSTRUCTOR)) ==
-            SLAB_CTOR_CONSTRUCTOR)
-                inode_init_once(&lli->lli_vfs_inode);
+        OBD_SLAB_FREE_PTR(ptr, ll_inode_cachep);
 }
 
 int ll_init_inodecache(void)
 {
-        ll_inode_cachep = kmem_cache_create("lustre_inode_cache",
-                                            sizeof(struct ll_inode_info),
-                                            0, SLAB_HWCACHE_ALIGN,
-                                            init_once, NULL);
+        ll_inode_cachep = cfs_mem_cache_create("lustre_inode_cache",
+                                               sizeof(struct ll_inode_info),
+                                               0, SLAB_HWCACHE_ALIGN);
         if (ll_inode_cachep == NULL)
                 return -ENOMEM;
         return 0;
@@ -79,14 +82,10 @@ int ll_init_inodecache(void)
 
 void ll_destroy_inodecache(void)
 {
-#ifdef HAVE_KMEM_CACHE_DESTROY_INT
         int rc;
- 
-        rc = kmem_cache_destroy(ll_inode_cachep);
+
+        rc = cfs_mem_cache_destroy(ll_inode_cachep);
         LASSERTF(rc == 0, "ll_inode_cache: not all structures were freed\n");
-#else
-        kmem_cache_destroy(ll_inode_cachep);
-#endif
 }
 
 /* exported operations */
@@ -99,6 +98,7 @@ struct super_operations lustre_super_operations =
         .statfs        = ll_statfs,
         .umount_begin  = ll_umount_begin,
         .remount_fs    = ll_remount_fs,
+        .show_options  = ll_show_options,
 };
 
 
@@ -111,13 +111,13 @@ static int __init init_lustre_lite(void)
         lnet_process_id_t lnet_id;
 
         printk(KERN_INFO "Lustre: Lustre Client File System; "
-               "info@clusterfs.com\n");
+               "http://www.lustre.org/\n");
         rc = ll_init_inodecache();
         if (rc)
                 return -ENOMEM;
-        ll_file_data_slab = kmem_cache_create("ll_file_data",
-                                              sizeof(struct ll_file_data), 0,
-                                              SLAB_HWCACHE_ALIGN, NULL, NULL);
+        ll_file_data_slab = cfs_mem_cache_create("ll_file_data",
+                                                 sizeof(struct ll_file_data), 0,
+                                                 SLAB_HWCACHE_ALIGN);
         if (ll_file_data_slab == NULL) {
                 ll_destroy_inodecache();
                 return -ENOMEM;
@@ -129,6 +129,8 @@ static int __init init_lustre_lite(void)
         ll_register_cache(&ll_cache_definition);
 
         lustre_register_client_fill_super(ll_fill_super);
+        lustre_register_kill_super_cb(ll_kill_super);
+
         lustre_register_client_process_config(ll_process_config);
 
         ll_get_random_bytes(seed, sizeof(seed));
@@ -152,36 +154,29 @@ static int __init init_lustre_lite(void)
 
 static void __exit exit_lustre_lite(void)
 {
-#ifdef HAVE_KMEM_CACHE_DESTROY_INT
         int rc;
-#endif
 
         lustre_register_client_fill_super(NULL);
+        lustre_register_kill_super_cb(NULL);
+
         lustre_register_client_process_config(NULL);
 
         ll_unregister_cache(&ll_cache_definition);
 
         ll_destroy_inodecache();
-#ifdef HAVE_KMEM_CACHE_DESTROY_INT
-        rc = kmem_cache_destroy(ll_file_data_slab);
+        rc = cfs_mem_cache_destroy(ll_file_data_slab);
         LASSERTF(rc == 0, "couldn't destroy ll_file_data slab\n");
-#else
-        kmem_cache_destroy(ll_file_data_slab);
-#endif
+        
         if (ll_async_page_slab) {
-#ifdef HAVE_KMEM_CACHE_DESTROY_INT
-                rc = kmem_cache_destroy(ll_async_page_slab);
+                rc = cfs_mem_cache_destroy(ll_async_page_slab);
                 LASSERTF(rc == 0, "couldn't destroy ll_async_page slab\n");
-#else
-                kmem_cache_destroy(ll_async_page_slab);
-#endif
         }
 
-        if (proc_lustre_fs_root) 
+        if (proc_lustre_fs_root)
                 lprocfs_remove(&proc_lustre_fs_root);
 }
 
-MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
+MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre Lite Client File System");
 MODULE_LICENSE("GPL");
 

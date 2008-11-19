@@ -1,19 +1,37 @@
-/* -*- mode: c; c-basic-offset: 4; indent-tabs-mode: nil; -*-
- * vim:expandtab:shiftwidth=4:tabstop=4:
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2004 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or modify it under
- *   the terms of version 2 of the GNU General Public License as published by
- *   the Free Software Foundation. Lustre is distributed in the hope that it
- *   will be useful, but WITHOUT ANY WARRANTY; without even the implied
- *   warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details. You should have received a
- *   copy of the GNU General Public License along with Lustre; if not, write
- *   to the Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139,
- *   USA.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #define DEBUG_SUBSYSTEM S_LNET
@@ -28,9 +46,7 @@
 #define put_cpu() do { } while (0)
 #endif
 
-extern union trace_data_union trace_data[NR_CPUS];
-extern char *tracefile;
-extern int64_t tracefile_size;
+#define TCD_TYPE_MAX        1
 
 event_t     tracefile_event;
 
@@ -38,8 +54,24 @@ void tracefile_init_arch()
 {
 	int    i;
 	int    j;
+    struct trace_cpu_data *tcd;
 
     cfs_init_event(&tracefile_event, TRUE, TRUE);
+
+    /* initialize trace_data */
+    memset(trace_data, 0, sizeof(trace_data));
+    for (i = 0; i < TCD_TYPE_MAX; i++) {
+        trace_data[i]=cfs_alloc(sizeof(struct trace_data_union)*NR_CPUS, 0);
+        if (trace_data[i] == NULL)
+            goto out;
+    }
+
+    /* arch related info initialized */
+    tcd_for_each(tcd, i, j) {
+        tcd->tcd_pages_factor = 100; /* Only one type */
+        tcd->tcd_cpu = j;
+        tcd->tcd_type = i;
+    }
 
     memset(trace_console_buffers, 0, sizeof(trace_console_buffers));
 
@@ -49,15 +81,17 @@ void tracefile_init_arch()
 				cfs_alloc(TRACE_CONSOLE_BUFFER_SIZE,
 					CFS_ALLOC_ZERO);
 
-			if (trace_console_buffers[i][j] == NULL) {
-				tracefile_fini_arch();
-				KsPrint((0, "Can't allocate console message buffer\n"));
-				return -ENOMEM;
-			}
+			if (trace_console_buffers[i][j] == NULL)
+                goto out;
 		}
     }
 
 	return 0;
+
+out:
+	tracefile_fini_arch();
+	KsPrint((0, "lnet: No enough memory\n"));
+	return -ENOMEM;
 }
 
 void tracefile_fini_arch()
@@ -72,6 +106,11 @@ void tracefile_fini_arch()
 				trace_console_buffers[i][j] = NULL;
 			}
         }
+    }
+
+    for (i = 0; trace_data[i] != NULL; i++) {
+        cfs_free(trace_data[i]);
+        trace_data[i] = NULL;
     }
 }
 
@@ -114,12 +153,25 @@ trace_get_tcd(void)
 #pragma message("todo: return NULL if in interrupt context")
 
 	int cpu = (int) KeGetCurrentProcessorNumber();
-	return &trace_data[cpu].tcd;
+	return &(*trace_data[0])[cpu].tcd;
 }
 
 void
 trace_put_tcd (struct trace_cpu_data *tcd, unsigned long flags)
 {
+}
+
+int 
+trace_lock_tcd(struct trace_cpu_data *tcd)
+{
+    __LASSERT(tcd->tcd_type < TCD_TYPE_MAX);
+    return 1;
+}
+
+void
+trace_unlock_tcd(struct trace_cpu_data *tcd)
+{
+    __LASSERT(tcd->tcd_type < TCD_TYPE_MAX);
 }
 
 void
@@ -175,126 +227,9 @@ int tcd_owns_tage(struct trace_cpu_data *tcd, struct trace_page *tage)
 	return 1;
 }
 
-
-int trace_write_daemon_file(struct file *file, const char *buffer,
-                            unsigned long count, void *data)
+int trace_max_debug_mb(void)
 {
-	char *name;
-	unsigned long off;
-	int rc;
-
-	name =cfs_alloc(count + 1, 0);
-	if (name == NULL)
-		return -ENOMEM;
-
-	if (copy_from_user((void *)name, (void*)buffer, count)) {
-		rc = -EFAULT;
-		goto out;
-	}
-
-	/* be nice and strip out trailing '\n' */
-	for (off = count ; off > 2 && isspace(name[off - 1]); off--)
-		;
-
-	name[off] = '\0';
-
-	tracefile_write_lock();
-	if (strcmp(name, "stop") == 0) {
-		tracefile = NULL;
-		trace_stop_thread();
-		goto out_sem;
-	} else if (strncmp(name, "size=", 5) == 0) {
-		tracefile_size = simple_strtoul(name + 5, NULL, 0);
-		if (tracefile_size < 10 || tracefile_size > 20480)
-			tracefile_size = TRACEFILE_SIZE;
-		else
-			tracefile_size <<= 20;
-		goto out_sem;
-	}
-
-	if (tracefile != NULL)
-		cfs_free(tracefile);
-
-	tracefile = name;
-	name = NULL;
-	printk(KERN_INFO "Lustre: debug daemon will attempt to start writing "
-	       "to %s (%lukB max)\n", tracefile, (long)(tracefile_size >> 10));
-
-	trace_start_thread();
-out_sem:
-    tracefile_write_unlock();
-out:
-    if (name != NULL)
-	    cfs_free(name);
-	return count;
+	int  total_mb = (num_physpages >> (20 - CFS_PAGE_SHIFT));
+	
+	return MAX(512, (total_mb * 80)/100);
 }
-
-int trace_read_daemon_file(char *page, char **start, off_t off, int count,
-                           int *eof, void *data)
-{
-	int rc;
-
-	tracefile_read_lock();
-	rc = snprintf(page, count, "%s", tracefile);
-	tracefile_read_unlock();
-
-	return rc;
-}
-
-int trace_write_debug_mb(struct file *file, const char *buffer,
-                         unsigned long count, void *data)
-{
-	char string[32];
-	int i;
-	unsigned max;
-
-	if (count >= sizeof(string)) {
-		printk(KERN_ERR "Lustre: value too large (length %lu bytes)\n",
-		       count);
-		return -EOVERFLOW;
-	}
-
-	if (copy_from_user((void *)string, (void *)buffer, count))
-		return -EFAULT;
-
-	max = simple_strtoul(string, NULL, 0);
-	if (max == 0)
-		return -EINVAL;
-
-	if (max > (num_physpages >> (20 - 2 - CFS_PAGE_SHIFT)) / 5 || max >= 512) {
-		printk(KERN_ERR "Lustre: Refusing to set debug buffer size to "
-		       "%dMB, which is more than 80%% of available RAM (%lu)\n",
-		       max, (num_physpages >> (20 - 2 - CFS_PAGE_SHIFT)) / 5);
-		return -EINVAL;
-	}
-
-	max /= smp_num_cpus;
-
-	for (i = 0; i < NR_CPUS; i++) {
-		struct trace_cpu_data *tcd;
-		tcd = &trace_data[i].tcd;
-		tcd->tcd_max_pages = max << (20 - CFS_PAGE_SHIFT);
-	}
-	return count;
-}
-
-int trace_read_debug_mb(char *page, char **start, off_t off, int count,
-                        int *eof, void *data)
-{
-	struct trace_cpu_data *tcd;
-	int rc;
-
-	tcd = trace_get_tcd();
-        LASSERT (tcd != NULL);
-	rc = snprintf(page, count, "%lu\n",
-		      (tcd->tcd_max_pages >> (20 - CFS_PAGE_SHIFT)) * smp_num_cpus);
-	trace_put_tcd(tcd);
-	return rc;
-}
-
-void
-trace_call_on_all_cpus(void (*fn)(void *arg), void *arg)
-{
-#error "tbd"
-}
-

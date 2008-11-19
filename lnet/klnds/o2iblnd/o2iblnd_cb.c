@@ -1,24 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2006 Cluster File Systems, Inc.
- *   Author: Eric Barton <eric@bartonsoftware.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/klnds/o2iblnd/o2iblnd_cb.c
+ *
+ * Author: Eric Barton <eric@bartonsoftware.com>
  */
 
 #include "o2iblnd.h"
@@ -376,6 +393,10 @@ kiblnd_handle_rx (kib_rx_t *rx)
 
                 conn->ibc_credits += credits;
 
+                /* This ensures the credit taken by NOOP can be returned */
+                if (msg->ibm_type == IBLND_MSG_NOOP)
+                        conn->ibc_outstanding_credits++;
+
                 spin_unlock(&conn->ibc_lock);
                 kiblnd_check_sends(conn);
         }
@@ -389,7 +410,10 @@ kiblnd_handle_rx (kib_rx_t *rx)
                 break;
 
         case IBLND_MSG_NOOP:
-                post_credit = IBLND_POSTRX_PEER_CREDIT;
+                if (credits != 0) /* credit already posted */
+                        post_credit = IBLND_POSTRX_NO_CREDIT;
+                else              /* a keepalive NOOP */
+                        post_credit = IBLND_POSTRX_PEER_CREDIT;
                 break;
 
         case IBLND_MSG_IMMEDIATE:
@@ -498,7 +522,7 @@ kiblnd_rx_complete (kib_rx_t *rx, int status, int nob)
         LASSERT (net != NULL);
         LASSERT (rx->rx_nob < 0);               /* was posted */
         rx->rx_nob = 0;                         /* isn't now */
-        
+
         if (conn->ibc_state > IBLND_CONN_ESTABLISHED)
                 goto ignore;
 
@@ -887,10 +911,7 @@ kiblnd_check_sends (kib_conn_t *conn)
                 conn->ibc_reserved_credits--;
         }
 
-        if (list_empty(&conn->ibc_tx_queue) &&
-            list_empty(&conn->ibc_tx_queue_nocred) &&
-            (conn->ibc_outstanding_credits >= IBLND_CREDIT_HIGHWATER ||
-             kiblnd_send_keepalive(conn))) {
+        if (kiblnd_send_noop(conn)) {
                 spin_unlock(&conn->ibc_lock);
 
                 tx = kiblnd_get_idle_tx(ni);
@@ -904,13 +925,17 @@ kiblnd_check_sends (kib_conn_t *conn)
         }
 
         for (;;) {
-                if (!list_empty (&conn->ibc_tx_queue_nocred)) {
-                        tx = list_entry (conn->ibc_tx_queue_nocred.next, 
-                                         kib_tx_t, tx_list);
+                if (!list_empty(&conn->ibc_tx_queue_nocred)) {
+                        tx = list_entry(conn->ibc_tx_queue_nocred.next, 
+                                        kib_tx_t, tx_list);
                         consume_cred = 0;
-                } else if (!list_empty (&conn->ibc_tx_queue)) {
-                        tx = list_entry (conn->ibc_tx_queue.next,
-                                         kib_tx_t, tx_list);
+                } else if (!list_empty(&conn->ibc_tx_noops)) {
+                        tx = list_entry(conn->ibc_tx_noops.next,
+                                        kib_tx_t, tx_list);
+                        consume_cred = 1;
+                } else if (!list_empty(&conn->ibc_tx_queue)) {
+                        tx = list_entry(conn->ibc_tx_queue.next,
+                                        kib_tx_t, tx_list);
                         consume_cred = 1;
                 } else {
                         /* nothing to send right now */
@@ -939,27 +964,25 @@ kiblnd_check_sends (kib_conn_t *conn)
                         if (conn->ibc_credits == 0) {   /* no credits */
                                 CDEBUG(D_NET, "%s: no credits\n",
                                        libcfs_nid2str(conn->ibc_peer->ibp_nid));
-                                break;
+                                break; /* NB ibc_tx_queue_nocred checked */
                         }
 
-                        if (conn->ibc_credits == 1 &&   /* last credit reserved for */
-                            conn->ibc_outstanding_credits == 0) { /* giving back credits */
+                        /* Last credit reserved for NOOP */
+                        if (conn->ibc_credits == 1 &&
+                            tx->tx_msg->ibm_type != IBLND_MSG_NOOP) {
                                 CDEBUG(D_NET, "%s: not using last credit\n",
                                        libcfs_nid2str(conn->ibc_peer->ibp_nid));
-                                break;
+                                break; /* NB ibc_tx_noops checked */
                         }
                 }
 
-                list_del (&tx->tx_list);
+                list_del(&tx->tx_list);
                 tx->tx_queued = 0;
 
                 /* NB don't drop ibc_lock before bumping tx_sending */
 
                 if (tx->tx_msg->ibm_type == IBLND_MSG_NOOP &&
-                    (!list_empty(&conn->ibc_tx_queue) ||
-                     !list_empty(&conn->ibc_tx_queue_nocred) ||
-                     (conn->ibc_outstanding_credits < IBLND_CREDIT_HIGHWATER &&
-                      !kiblnd_send_keepalive(conn)))) {
+                    !kiblnd_send_noop(conn)) {
                         /* redundant NOOP */
                         spin_unlock(&conn->ibc_lock);
                         kiblnd_tx_done(ni, tx);
@@ -1070,7 +1093,7 @@ kiblnd_tx_complete (kib_tx_t *tx, int status)
         if (failed) {
                 if (conn->ibc_state == IBLND_CONN_ESTABLISHED)
                         CDEBUG(D_NETERROR, "Tx -> %s cookie "LPX64
-                               "sending %d waiting %d: failed %d\n",
+                               " sending %d waiting %d: failed %d\n",
                                libcfs_nid2str(conn->ibc_peer->ibp_nid),
                                tx->tx_cookie, tx->tx_sending, tx->tx_waiting,
                                status);
@@ -1252,7 +1275,7 @@ kiblnd_init_rdma (lnet_ni_t *ni, kib_tx_t *tx, int type,
                         dstfrag++;
                         dstidx++;
                 }
-                
+
                 tx->tx_nwrq++;
         }
 
@@ -1304,6 +1327,9 @@ kiblnd_queue_tx_locked (kib_tx_t *tx, kib_conn_t *conn)
                 break;
 
         case IBLND_MSG_NOOP:
+                q = &conn->ibc_tx_noops;
+                break;
+
         case IBLND_MSG_IMMEDIATE:
                 q = &conn->ibc_tx_queue;
                 break;
@@ -1326,9 +1352,12 @@ void
 kiblnd_connect_peer (kib_peer_t *peer)
 {
         struct rdma_cm_id *cmid;
-        struct sockaddr_in sockaddr;
+        kib_net_t         *net = peer->ibp_ni->ni_data;
+        struct sockaddr_in srcaddr;
+        struct sockaddr_in dstaddr;
         int                rc;
 
+        LASSERT (net != NULL);
         LASSERT (peer->ibp_connecting > 0);
 
         cmid = rdma_create_id(kiblnd_cm_callback, peer, RDMA_PS_TCP);
@@ -1339,14 +1368,20 @@ kiblnd_connect_peer (kib_peer_t *peer)
                 goto failed;
         }
 
-        memset(&sockaddr, 0, sizeof(sockaddr));
-        sockaddr.sin_family = AF_INET;
-        sockaddr.sin_port = htons(*kiblnd_tunables.kib_service);
-        sockaddr.sin_addr.s_addr = htonl(LNET_NIDADDR(peer->ibp_nid));
+        memset(&srcaddr, 0, sizeof(srcaddr));
+        srcaddr.sin_family = AF_INET;
+        srcaddr.sin_addr.s_addr = htonl(net->ibn_dev->ibd_ifip);
+
+        memset(&dstaddr, 0, sizeof(dstaddr));
+        dstaddr.sin_family = AF_INET;
+        dstaddr.sin_port = htons(*kiblnd_tunables.kib_service);
+        dstaddr.sin_addr.s_addr = htonl(LNET_NIDADDR(peer->ibp_nid));
 
         kiblnd_peer_addref(peer);               /* cmid's ref */
 
-        rc = rdma_resolve_addr(cmid, NULL, (struct sockaddr *)&sockaddr,
+        rc = rdma_resolve_addr(cmid,
+                               (struct sockaddr *)&srcaddr,
+                               (struct sockaddr *)&dstaddr,
                                *kiblnd_tunables.kib_timeout * 1000);
         if (rc == 0)
                 return;
@@ -1457,6 +1492,9 @@ kiblnd_launch_tx (lnet_ni_t *ni, kib_tx_t *tx, lnet_nid_t nid)
         /* Brand new peer */
         LASSERT (peer->ibp_connecting == 0);
         peer->ibp_connecting = 1;
+
+        /* always called with a ref on ni, which prevents ni being shutdown */
+        LASSERT (((kib_net_t *)ni->ni_data)->ibn_shutdown == 0);
 
         list_add_tail(&tx->tx_list, &peer->ibp_tx_queue);
 
@@ -1851,7 +1889,7 @@ kiblnd_peer_notify (kib_peer_t *peer)
         time_t        last_alive = 0;
         int           error = 0;
         unsigned long flags;
-        
+
         read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
         if (list_empty(&peer->ibp_conns) &&
@@ -1860,14 +1898,14 @@ kiblnd_peer_notify (kib_peer_t *peer)
             peer->ibp_error != 0) {
                 error = peer->ibp_error;
                 peer->ibp_error = 0;
-                
+
                 last_alive = cfs_time_current_sec() -
                              cfs_duration_sec(cfs_time_current() -
                                               peer->ibp_last_alive);
         }
-        
+
         read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
-        
+
         if (error != 0)
                 lnet_notify(peer->ibp_ni,
                             peer->ibp_nid, 0, last_alive);
@@ -1894,6 +1932,7 @@ kiblnd_close_conn_locked (kib_conn_t *conn, int error)
                 return; /* already being handled  */
 
         if (error == 0 &&
+            list_empty(&conn->ibc_tx_noops) &&
             list_empty(&conn->ibc_tx_queue) &&
             list_empty(&conn->ibc_tx_queue_rsrvd) &&
             list_empty(&conn->ibc_tx_queue_nocred) &&
@@ -1901,9 +1940,10 @@ kiblnd_close_conn_locked (kib_conn_t *conn, int error)
                 CDEBUG(D_NET, "closing conn to %s\n", 
                        libcfs_nid2str(peer->ibp_nid));
         } else {
-                CDEBUG(D_NETERROR, "Closing conn to %s: error %d%s%s%s%s\n",
+                CDEBUG(D_NETERROR, "Closing conn to %s: error %d%s%s%s%s%s\n",
                        libcfs_nid2str(peer->ibp_nid), error,
                        list_empty(&conn->ibc_tx_queue) ? "" : "(sending)",
+                       list_empty(&conn->ibc_tx_noops) ? "" : "(sending_noops)",
                        list_empty(&conn->ibc_tx_queue_rsrvd) ? "" : "(sending_rsrvd)",
                        list_empty(&conn->ibc_tx_queue_nocred) ? "" : "(sending_nocred)",
                        list_empty(&conn->ibc_active_txs) ? "" : "(waiting)");
@@ -2018,6 +2058,7 @@ kiblnd_finalise_conn (kib_conn_t *conn)
         /* Complete all tx descs not waiting for sends to complete.
          * NB we should be safe from RDMA now that the QP has changed state */
 
+        kiblnd_abort_txs(conn, &conn->ibc_tx_noops);
         kiblnd_abort_txs(conn, &conn->ibc_tx_queue);
         kiblnd_abort_txs(conn, &conn->ibc_tx_queue_rsrvd);
         kiblnd_abort_txs(conn, &conn->ibc_tx_queue_nocred);
@@ -2105,7 +2146,7 @@ kiblnd_connreq_done(kib_conn_t *conn, int status)
 
         if (status != 0) {
                 /* failed to establish connection */
-                kiblnd_peer_connect_failed(conn->ibc_peer, active, status);
+                kiblnd_peer_connect_failed(peer, active, status);
                 kiblnd_finalise_conn(conn);
                 return;
         }
@@ -2126,21 +2167,24 @@ kiblnd_connreq_done(kib_conn_t *conn, int status)
         else
                 peer->ibp_accepting--;
 
-        kiblnd_close_stale_conns_locked(conn->ibc_peer,
-                                        conn->ibc_incarnation);
-
-        if (!kiblnd_peer_active(peer) ||        /* peer has been deleted */
-            conn->ibc_comms_error != 0) {       /* error has happened already */
-
-                /* start to shut down connection */
-                kiblnd_close_conn_locked(conn, -ECONNABORTED);
-                write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
-                return;
-        }
+        kiblnd_close_stale_conns_locked(peer, conn->ibc_incarnation);
 
         /* grab pending txs while I have the lock */
         list_add(&txs, &peer->ibp_tx_queue);
         list_del_init(&peer->ibp_tx_queue);
+
+        if (!kiblnd_peer_active(peer) ||        /* peer has been deleted */
+            conn->ibc_comms_error != 0) {       /* error has happened already */
+                lnet_ni_t *ni = peer->ibp_ni;
+
+                /* start to shut down connection */
+                kiblnd_close_conn_locked(conn, -ECONNABORTED);
+                write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
+
+                kiblnd_txlist_done(ni, &txs, -ECONNABORTED);
+
+                return;
+        }
 
         write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
@@ -2242,8 +2286,8 @@ kiblnd_passive_connect (struct rdma_cm_id *cmid, void *priv, int priv_nob)
         if (reqmsg->ibm_u.connparams.ibcp_max_frags != IBLND_MAX_RDMA_FRAGS) {
                 CERROR("Can't accept %s: incompatible max_frags %d (%d wanted)\n",
                        libcfs_nid2str(nid),
-                       reqmsg->ibm_u.connparams.ibcp_queue_depth,
-                       IBLND_MSG_QUEUE_SIZE);
+                       reqmsg->ibm_u.connparams.ibcp_max_frags,
+                       IBLND_MAX_RDMA_FRAGS);
                 goto failed;
         }
 
@@ -2302,6 +2346,9 @@ kiblnd_passive_connect (struct rdma_cm_id *cmid, void *priv, int priv_nob)
                 LASSERT (peer->ibp_accepting == 0);
                 peer->ibp_accepting = 1;
 
+                /* I have a ref on ni that prevents it being shutdown */
+                LASSERT (((kib_net_t *)ni->ni_data)->ibn_shutdown == 0);
+
                 kiblnd_peer_addref(peer);
                 list_add_tail(&peer->ibp_list, kiblnd_nid2peerlist(nid));
 
@@ -2319,8 +2366,8 @@ kiblnd_passive_connect (struct rdma_cm_id *cmid, void *priv, int priv_nob)
         /* conn now "owns" cmid, so I return success from here on to ensure the
          * CM callback doesn't destroy cmid. */
 
-        conn->ibc_incarnation = reqmsg->ibm_srcstamp;
-        conn->ibc_credits = IBLND_MSG_QUEUE_SIZE;
+        conn->ibc_incarnation      = reqmsg->ibm_srcstamp;
+        conn->ibc_credits          = IBLND_MSG_QUEUE_SIZE;
         conn->ibc_reserved_credits = IBLND_MSG_QUEUE_SIZE;
         LASSERT (conn->ibc_credits + conn->ibc_reserved_credits
                  <= IBLND_RX_MSGS);
@@ -2500,8 +2547,8 @@ kiblnd_check_connreply (kib_conn_t *conn, void *priv, int priv_nob)
         if (msg->ibm_u.connparams.ibcp_max_frags != IBLND_MAX_RDMA_FRAGS) {
                 CERROR("%s has incompatible max_frags %d (%d wanted)\n",
                        libcfs_nid2str(peer->ibp_nid),
-                       msg->ibm_u.connparams.ibcp_queue_depth,
-                       IBLND_MSG_QUEUE_SIZE);
+                       msg->ibm_u.connparams.ibcp_max_frags,
+                       IBLND_MAX_RDMA_FRAGS);
                 rc = -EPROTO;
                 goto failed;
         }
@@ -2529,8 +2576,8 @@ kiblnd_check_connreply (kib_conn_t *conn, void *priv, int priv_nob)
                 goto failed;
         }
 
-        conn->ibc_incarnation = msg->ibm_srcstamp;
-        conn->ibc_credits = IBLND_MSG_QUEUE_SIZE;
+        conn->ibc_incarnation      = msg->ibm_srcstamp;
+        conn->ibc_credits          = IBLND_MSG_QUEUE_SIZE;
         conn->ibc_reserved_credits = IBLND_MSG_QUEUE_SIZE;
         LASSERT (conn->ibc_credits + conn->ibc_reserved_credits
                  <= IBLND_RX_MSGS);
@@ -2750,14 +2797,14 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
                 kiblnd_conn_decref(conn);
                 return 0;
 
-	case RDMA_CM_EVENT_DEVICE_REMOVAL:
-                LCONSOLE_ERROR_MSG(0x131, 
+        case RDMA_CM_EVENT_DEVICE_REMOVAL:
+                LCONSOLE_ERROR_MSG(0x131,
                                    "Received notification of device removal\n"
                                    "Please shutdown LNET to allow this to proceed\n");
                 /* Can't remove network from underneath LNET for now, so I have
                  * to ignore this */
-		return 0;
-	}
+                return 0;
+        }
 }
 
 int
@@ -2777,7 +2824,7 @@ kiblnd_check_txs (kib_conn_t *conn, struct list_head *txs)
                 } else {
                         LASSERT (!tx->tx_queued);
                         LASSERT (tx->tx_waiting || tx->tx_sending != 0);
-                }                        
+                }
 
                 if (time_after_eq (jiffies, tx->tx_deadline)) {
                         timed_out = 1;
@@ -2793,6 +2840,7 @@ int
 kiblnd_conn_timed_out (kib_conn_t *conn)
 {
         return  kiblnd_check_txs(conn, &conn->ibc_tx_queue) ||
+                kiblnd_check_txs(conn, &conn->ibc_tx_noops) ||
                 kiblnd_check_txs(conn, &conn->ibc_tx_queue_rsrvd) ||
                 kiblnd_check_txs(conn, &conn->ibc_tx_queue_nocred) ||
                 kiblnd_check_txs(conn, &conn->ibc_active_txs);

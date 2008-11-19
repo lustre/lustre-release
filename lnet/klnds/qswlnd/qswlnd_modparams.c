@@ -1,6 +1,9 @@
-/*
- * Copyright (C) 2002-2004 Cluster File Systems, Inc.
- *   Author: Eric Barton <eric@bartonsoftware.com>
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ *
+ * Author: Eric Barton <eric@bartonsoftware.com>
  *
  * This file is part of Portals, http://www.lustre.org
  *
@@ -23,123 +26,196 @@
 
 static int tx_maxcontig = (1<<10);
 CFS_MODULE_PARM(tx_maxcontig, "i", int, 0444,
-		"maximum payload to de-fragment");
+                "maximum payload to de-fragment");
 
 static int ntxmsgs = 512;
 CFS_MODULE_PARM(ntxmsgs, "i", int, 0444,
-		"# tx msg buffers");
+                "# tx msg buffers");
 
 static int credits = 128;
 CFS_MODULE_PARM(credits, "i", int, 0444,
-		"# concurrent sends");
+                "# concurrent sends");
 
 static int peer_credits = 8;
 CFS_MODULE_PARM(peer_credits, "i", int, 0444,
-		"# per-peer concurrent sends");
+                "# per-peer concurrent sends");
 
 static int nrxmsgs_large = 64;
 CFS_MODULE_PARM(nrxmsgs_large, "i", int, 0444,
-		"# 'large' rx msg buffers");
+                "# 'large' rx msg buffers");
 
 static int ep_envelopes_large = 256;
 CFS_MODULE_PARM(ep_envelopes_large, "i", int, 0444,
-		"# 'large' rx msg envelope buffers");
+                "# 'large' rx msg envelope buffers");
 
 static int nrxmsgs_small = 256;
 CFS_MODULE_PARM(nrxmsgs_small, "i", int, 0444,
-		"# 'small' rx msg buffers");
+                "# 'small' rx msg buffers");
 
 static int ep_envelopes_small = 2048;
 CFS_MODULE_PARM(ep_envelopes_small, "i", int, 0444,
-		"# 'small' rx msg envelope buffers");
+                "# 'small' rx msg envelope buffers");
 
 static int optimized_puts = (32<<10);
 CFS_MODULE_PARM(optimized_puts, "i", int, 0644,
-		"zero-copy puts >= this size");
+                "zero-copy puts >= this size");
 
 static int optimized_gets = 2048;
 CFS_MODULE_PARM(optimized_gets, "i", int, 0644,
-		"zero-copy gets >= this size");
+                "zero-copy gets >= this size");
 
 #if KQSW_CKSUM
 static int inject_csum_error = 0;
 CFS_MODULE_PARM(inject_csum_error, "i", int, 0644,
-		"test checksumming");
+                "test checksumming");
 #endif
 
 kqswnal_tunables_t kqswnal_tunables = {
-	.kqn_tx_maxcontig       = &tx_maxcontig,
-	.kqn_ntxmsgs            = &ntxmsgs,
-	.kqn_credits            = &credits,
-	.kqn_peercredits        = &peer_credits,
-	.kqn_nrxmsgs_large      = &nrxmsgs_large,
-	.kqn_ep_envelopes_large = &ep_envelopes_large,
-	.kqn_nrxmsgs_small      = &nrxmsgs_small,
-	.kqn_ep_envelopes_small = &ep_envelopes_small,
-	.kqn_optimized_puts     = &optimized_puts,
-	.kqn_optimized_gets     = &optimized_gets,
+        .kqn_tx_maxcontig       = &tx_maxcontig,
+        .kqn_ntxmsgs            = &ntxmsgs,
+        .kqn_credits            = &credits,
+        .kqn_peercredits        = &peer_credits,
+        .kqn_nrxmsgs_large      = &nrxmsgs_large,
+        .kqn_ep_envelopes_large = &ep_envelopes_large,
+        .kqn_nrxmsgs_small      = &nrxmsgs_small,
+        .kqn_ep_envelopes_small = &ep_envelopes_small,
+        .kqn_optimized_puts     = &optimized_puts,
+        .kqn_optimized_gets     = &optimized_gets,
 #if KQSW_CKSUM
-	.kqn_inject_csum_error  = &inject_csum_error,
+        .kqn_inject_csum_error  = &inject_csum_error,
 #endif
 };
 
-#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
-static ctl_table kqswnal_ctl_table[] = {
-	{1, "tx_maxcontig", &tx_maxcontig, 
-	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{2, "ntxmsgs", &ntxmsgs, 
-	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{3, "credits", &credits, 
-	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{4, "peer_credits", &peer_credits, 
-	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{5, "nrxmsgs_large", &nrxmsgs_large, 
-	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{6, "ep_envelopes_large", &ep_envelopes_large, 
-	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{7, "nrxmsgs_small", &nrxmsgs_small, 
-	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{8, "ep_envelopes_small", &ep_envelopes_small, 
-	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{9, "optimized_puts", &optimized_puts, 
-	 sizeof (int), 0644, NULL, &proc_dointvec},
-	{10, "optimized_gets", &optimized_gets, 
-	 sizeof (int), 0644, NULL, &proc_dointvec},
+#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
+static cfs_sysctl_table_t kqswnal_ctl_table[] = {
+        {
+                .ctl_name = 1,
+                .procname = "tx_maxcontig",
+                .data     = &tx_maxcontig,
+                .maxlen   = sizeof (int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 2,
+                .procname = "ntxmsgs",
+                .data     = &ntxmsgs,
+                .maxlen   = sizeof (int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 3,
+                .procname = "credits",
+                .data     = &credits,
+                .maxlen   = sizeof (int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 4,
+                .procname = "peer_credits",
+                .data     = &peer_credits,
+                .maxlen   = sizeof (int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 5,
+                .procname = "nrxmsgs_large",
+                .data     = &nrxmsgs_large,
+                .maxlen   = sizeof (int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 6,
+                .procname = "ep_envelopes_large",
+                .data     = &ep_envelopes_large,
+                .maxlen   = sizeof (int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 7,
+                .procname = "nrxmsgs_small",
+                .data     = &nrxmsgs_small,
+                .maxlen   = sizeof (int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 8,
+                .procname = "ep_envelopes_small",
+                .data     = &ep_envelopes_small,
+                .maxlen   = sizeof (int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 9,
+                .procname = "optimized_puts",
+                .data     = &optimized_puts,
+                .maxlen   = sizeof (int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 10,
+                .procname = "optimized_gets",
+                .data     = &optimized_gets,
+                .maxlen   = sizeof (int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
 #if KQSW_CKSUM
-	{11, "inject_csum_error", &inject_csum_error, 
-	 sizeof (int), 0644, NULL, &proc_dointvec},
+        {
+                .ctl_name = 11,
+                .procname = "inject_csum_error",
+                .data     = &inject_csum_error,
+                .maxlen   = sizeof (int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
 #endif
-	{0}
+        {0}
 };
 
-static ctl_table kqswnal_top_ctl_table[] = {
-	{201, "qswnal", NULL, 0, 0555, kqswnal_ctl_table},
-	{0}
+static cfs_sysctl_table_t kqswnal_top_ctl_table[] = {
+        {
+                .ctl_name = 201,
+                .procname = "qswnal",
+                .data     = NULL,
+                .maxlen   = 0,
+                .mode     = 0555,
+                .child    = kqswnal_ctl_table
+        },
+        {0}
 };
 
 int
 kqswnal_tunables_init ()
 {
-	kqswnal_tunables.kqn_sysctl =
-		cfs_register_sysctl_table(kqswnal_top_ctl_table, 0);
-	
-	if (kqswnal_tunables.kqn_sysctl == NULL)
-		CWARN("Can't setup /proc tunables\n");
+        kqswnal_tunables.kqn_sysctl =
+                cfs_register_sysctl_table(kqswnal_top_ctl_table, 0);
 
-	return 0;
+        if (kqswnal_tunables.kqn_sysctl == NULL)
+                CWARN("Can't setup /proc tunables\n");
+
+        return 0;
 }
 
 void
 kqswnal_tunables_fini ()
 {
-	if (kqswnal_tunables.kqn_sysctl != NULL)
-		cfs_unregister_sysctl_table(kqswnal_tunables.kqn_sysctl);
+        if (kqswnal_tunables.kqn_sysctl != NULL)
+                cfs_unregister_sysctl_table(kqswnal_tunables.kqn_sysctl);
 }
 #else
-int 
+int
 kqswnal_tunables_init ()
 {
-	return 0;
+        return 0;
 }
 
 void

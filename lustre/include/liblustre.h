@@ -1,26 +1,43 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001 Cluster File Systems, Inc. <info@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/include/liblustre.h
  *
  * User-space Lustre headers.
- *
  */
+
 #ifndef LIBLUSTRE_H__
 #define LIBLUSTRE_H__
 
@@ -66,6 +83,7 @@
 #include <libcfs/list.h>
 #include <lnet/lnet.h>
 #include <libcfs/kp30.h>
+#include <libcfs/user-bitops.h>
 
 /* definitions for liblustre */
 
@@ -84,6 +102,10 @@ typedef unsigned short umode_t;
 # define CURRENT_SECONDS time(0)
 #endif
 
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(a) ((sizeof (a))/(sizeof ((a)[0])))
+#endif
+
 /* This is because lprocfs_status.h gets included here indirectly.  It would
  * be much better to just avoid lprocfs being included into liblustre entirely
  * but that requires more header surgery than I can handle right now.
@@ -91,8 +113,11 @@ typedef unsigned short umode_t;
 #ifndef smp_processor_id
 #define smp_processor_id() 0
 #endif
-#ifndef smp_num_cpus
-#define smp_num_cpus 1
+#ifndef num_online_cpus
+#define num_online_cpus() 1
+#endif
+#ifndef num_possible_cpus
+#define num_possible_cpus() 1
 #endif
 
 /* always adopt 2.5 definitions */
@@ -103,7 +128,6 @@ typedef unsigned short umode_t;
 #define page_private(page) ((page)->private)
 #define set_page_private(page, v) ((page)->private = (v))
 #endif
-
 
 static inline void inter_module_put(void *a)
 {
@@ -145,7 +169,7 @@ static inline void *kmalloc(int size, int prot)
 #define GFP_HIGHUSER 1
 #define GFP_ATOMIC 1
 #define GFP_NOFS 1
-#define IS_ERR(a) ((unsigned long)(a) < 1000)
+#define IS_ERR(a) ((unsigned long)(a) > (unsigned long)-1000L)
 #define PTR_ERR(a) ((long)(a))
 #define ERR_PTR(a) ((void*)((long)(a)))
 
@@ -184,48 +208,19 @@ typedef int (write_proc_t)(struct file *file, const char *buffer,
  * to allow the compiler to adjust the bit shifting accordingly
  */
 
-/* test if bit nr is set in bitmap addr; returns previous value of bit nr */
-static __inline__ int set_bit(int nr, long * addr)
-{
-        long    mask;
-
-        addr += nr / BITS_PER_LONG;
-        mask = 1UL << (nr & (BITS_PER_LONG - 1));
-        nr = (mask & *addr) != 0;
-        *addr |= mask;
-        return nr;
-}
-
-/* clear bit nr in bitmap addr; returns previous value of bit nr*/
-static __inline__ int clear_bit(int nr, long * addr)
-{
-        long    mask;
-
-        addr += nr / BITS_PER_LONG;
-        mask = 1UL << (nr & (BITS_PER_LONG - 1));
-        nr = (mask & *addr) != 0;
-        *addr &= ~mask;
-        return nr;
-}
-
-static __inline__ int test_bit(int nr, long * addr)
-{
-        return ((1UL << (nr & (BITS_PER_LONG - 1))) & ((addr)[nr / BITS_PER_LONG])) != 0;
-}
-
 static __inline__ int ext2_set_bit(int nr, void *addr)
 {
-        return set_bit(nr, (long*)addr);
+        return set_bit(nr, addr);
 }
 
 static __inline__ int ext2_clear_bit(int nr, void *addr)
 {
-        return clear_bit(nr, (long*)addr);
+        return clear_bit(nr, addr);
 }
 
 static __inline__ int ext2_test_bit(int nr, void *addr)
 {
-        return test_bit(nr, (long*)addr);
+        return test_bit(nr, addr);
 }
 
 /* modules */
@@ -295,6 +290,8 @@ extern int echo_client_init(void);
 
 #define EXPORT_SYMBOL(S)
 
+struct rcu_head { };
+
 typedef struct { } spinlock_t;
 typedef __u64 kdev_t;
 
@@ -314,6 +311,14 @@ static inline void spin_unlock_bh(spinlock_t *l) {}
 static inline void spin_lock_irqsave(spinlock_t *a, unsigned long b) {}
 static inline void spin_unlock_irqrestore(spinlock_t *a, unsigned long b) {}
 
+typedef spinlock_t rwlock_t;
+#define RW_LOCK_UNLOCKED        SPIN_LOCK_UNLOCKED
+#define read_lock(l)            spin_lock(l)
+#define read_unlock(l)          spin_unlock(l)
+#define write_lock(l)           spin_lock(l)
+#define write_unlock(l)         spin_unlock(l)
+#define rwlock_init(l)          spin_lock_init(l)
+
 #define min(x,y) ((x)<(y) ? (x) : (y))
 #define max(x,y) ((x)>(y) ? (x) : (y))
 
@@ -332,6 +337,7 @@ static inline void spin_unlock_irqrestore(spinlock_t *a, unsigned long b) {}
 #ifndef ERESTARTSYS
 #define ERESTARTSYS ERESTART
 #endif
+#undef HZ
 #define HZ 1
 
 /* random */
@@ -411,8 +417,10 @@ static inline cfs_page_t *alloc_pages(int mask, unsigned long order)
         }
         return pg;
 }
+#define cfs_alloc_pages(mask, order)  alloc_pages((mask), (order))
 
-#define alloc_page(mask) alloc_pages((mask), 0)
+#define alloc_page(mask)      alloc_pages((mask), 0)
+#define cfs_alloc_page(mask)  alloc_page(mask)
 
 static inline void __free_pages(cfs_page_t *pg, int what)
 {
@@ -423,9 +431,11 @@ static inline void __free_pages(cfs_page_t *pg, int what)
 #endif
         free(pg);
 }
+#define __cfs_free_pages(pg, order)  __free_pages((pg), (order))
 
 #define __free_page(page) __free_pages((page), 0)
 #define free_page(page) __free_page(page)
+#define __cfs_free_page(page)  __cfs_free_pages((page), 0)
 
 static inline cfs_page_t* __grab_cache_page(unsigned long index)
 {
@@ -463,6 +473,8 @@ static inline cfs_page_t* __grab_cache_page(unsigned long index)
 #define ATTR_RAW        0x0800  /* file system, not vfs will massage attrs */
 #define ATTR_FROM_OPEN  0x1000  /* called from open path, ie O_TRUNC */
 #define ATTR_CTIME_SET  0x2000
+#define ATTR_KILL_SUID  0
+#define ATTR_KILL_SGID  0
 
 struct iattr {
         unsigned int    ia_valid;
@@ -585,7 +597,7 @@ struct task_struct {
         int max_groups;
         int ngroups;
         gid_t *groups;
-        __u32 cap_effective;
+        cfs_cap_t cap_effective;
 };
 
 typedef struct task_struct cfs_task_t;
@@ -595,13 +607,6 @@ typedef struct task_struct cfs_task_t;
 
 extern struct task_struct *current;
 int in_group_p(gid_t gid);
-static inline int capable(int cap)
-{
-        if (current->cap_effective & (1 << cap))
-                return 1;
-        else
-                return 0;
-}
 
 #define set_current_state(foo) do { current->state = foo; } while (0)
 
@@ -612,9 +617,9 @@ static inline int capable(int cap)
 
 #define DECLARE_WAIT_QUEUE_HEAD(HEAD)                           \
         wait_queue_head_t HEAD = {                              \
-                .sleepers = LIST_HEAD_INIT(HEAD.sleepers)       \
+                .sleepers = CFS_LIST_HEAD_INIT(HEAD.sleepers)       \
         }
-#define init_waitqueue_head(l) INIT_LIST_HEAD(&(l)->sleepers)
+#define init_waitqueue_head(l) CFS_INIT_LIST_HEAD(&(l)->sleepers)
 #define wake_up(l) do { int a = 0; a++; } while (0)
 #define TASK_INTERRUPTIBLE 0
 #define TASK_UNINTERRUPTIBLE 1
@@ -685,7 +690,7 @@ static inline int timer_pending(struct timer_list *l)
 
 static inline int init_timer(struct timer_list *l)
 {
-        INIT_LIST_HEAD(&l->tl_list);
+        CFS_INIT_LIST_HEAD(&l->tl_list);
         return 0;
 }
 
@@ -701,6 +706,8 @@ static inline void del_timer(struct timer_list *l)
 
 typedef struct { volatile int counter; } atomic_t;
 
+#define ATOMIC_INIT(i) { i }
+
 #define atomic_read(a) ((a)->counter)
 #define atomic_set(a,b) do {(a)->counter = b; } while (0)
 #define atomic_dec_and_test(a) ((--((a)->counter)) == 0)
@@ -708,7 +715,11 @@ typedef struct { volatile int counter; } atomic_t;
 #define atomic_inc(a)  (((a)->counter)++)
 #define atomic_dec(a)  do { (a)->counter--; } while (0)
 #define atomic_add(b,a)  do {(a)->counter += b;} while (0)
+#define atomic_add_return(n,a) ((a)->counter += n)
+#define atomic_inc_return(a) atomic_add_return(1,a)
 #define atomic_sub(b,a)  do {(a)->counter -= b;} while (0)
+#define atomic_sub_return(n,a) ((a)->counter -= n)
+#define atomic_dec_return(a)  atomic_sub_return(1,a)
 
 #ifndef likely
 #define likely(exp) (exp)
@@ -735,18 +746,9 @@ typedef enum {
     CAP_SET=1
 } cap_flag_value_t;
 
-#define CAP_DAC_OVERRIDE        1
-#define CAP_DAC_READ_SEARCH     2
-#define CAP_FOWNER              3
-#define CAP_FSETID              4
-#define CAP_SYS_ADMIN          21
-
 cap_t   cap_get_proc(void);
 int     cap_get_flag(cap_t, cap_value_t, cap_flag_t, cap_flag_value_t *);
 
-/* log related */
-static inline int llog_init_commit_master(void) { return 0; }
-static inline int llog_cleanup_commit_master(int force) { return 0; }
 static inline void libcfs_run_lbug_upcall(char *file, const char *fn,
                                            const int l){}
 
@@ -782,7 +784,7 @@ void *liblustre_register_wait_callback(const char *name,
 void liblustre_deregister_wait_callback(void *notifier);
 int liblustre_wait_event(int timeout);
 
-void *liblustre_register_idle_callback(const char *name, 
+void *liblustre_register_idle_callback(const char *name,
                                        int (*fn)(void *arg), void *arg);
 void liblustre_deregister_idle_callback(void *notifier);
 void liblustre_wait_idle(void);
@@ -815,7 +817,7 @@ typedef struct file_lock {
         unsigned long fl_break_time;    /* for nonblocking lease breaks */
 
         union {
-                struct nfs_lock_info    nfs_fl;       
+                struct nfs_lock_info    nfs_fl;
         } fl_u;
 } cfs_flock_t;
 
@@ -886,6 +888,21 @@ static inline
 void posix_acl_release(struct posix_acl *acl)
 {
 }
+
+#ifdef LIBLUSTRE_POSIX_ACL
+ #ifndef posix_acl_xattr_entry 
+  #define posix_acl_xattr_entry xattr_acl_entry
+ #endif
+ #ifndef posix_acl_xattr_header 
+  #define posix_acl_xattr_header xattr_acl_header
+ #endif
+ #ifndef posix_acl_xattr_size
+  #define posix_acl_xattr_size(entry) xattr_acl_size(entry)
+ #endif
+ #ifndef CONFIG_FS_POSIX_ACL
+  #define CONFIG_FS_POSIX_ACL 1
+ #endif
+#endif
 
 #ifndef ENOTSUPP
 #define ENOTSUPP ENOTSUP

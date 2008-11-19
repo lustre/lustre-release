@@ -2,21 +2,12 @@ Index: linux-2.6.11/fs/dcache.c
 ===================================================================
 --- linux-2.6.11.orig/fs/dcache.c	2005-04-13 22:44:37.698760922 -0400
 +++ linux-2.6.11/fs/dcache.c	2005-04-13 22:44:50.482498026 -0400
-@@ -1183,7 +1183,7 @@
- 	spin_unlock(&dcache_lock);
- }
- 
--static void __d_rehash(struct dentry * entry, struct hlist_head *list)
-+static void __d_rehash_internal(struct dentry * entry, struct hlist_head *list)
- {
- 
-  	entry->d_flags &= ~DCACHE_UNHASHED;
 @@ -1197,15 +1197,24 @@
   * Adds a dentry to the hash according to its name.
   */
   
 -void d_rehash(struct dentry * entry)
-+void __d_rehash(struct dentry * entry, int lock)
++void d_rehash_cond(struct dentry * entry, int lock)
  {
  	struct hlist_head *list = d_hash(entry->d_parent, entry->d_name.hash);
  
@@ -24,31 +15,21 @@ Index: linux-2.6.11/fs/dcache.c
 +	if (lock)
 +		spin_lock(&dcache_lock);
  	spin_lock(&entry->d_lock);
--	__d_rehash(entry, list);
-+	__d_rehash_internal(entry, list);
+ 	__d_rehash(entry, list);
  	spin_unlock(&entry->d_lock);
 -	spin_unlock(&dcache_lock);
 +	if (lock)
 +		spin_unlock(&dcache_lock);
 +}
 +
-+EXPORT_SYMBOL(__d_rehash);
++EXPORT_SYMBOL(d_rehash_cond);
 +
 +void d_rehash(struct dentry * entry)
 +{
-+	__d_rehash(entry, 1);
++	d_rehash_cond(entry, 1);
  }
  
  #define do_switch(x,y) do { \
-@@ -1308,7 +1317,7 @@
- 
- already_unhashed:
- 	list = d_hash(target->d_parent, target->d_name.hash);
--	__d_rehash(dentry, list);
-+	__d_rehash_internal(dentry, list);
- 
- 	/* Unhash the target: dput() will then get rid of it */
- 	__d_drop(target);
 Index: linux-2.6.11/include/linux/dcache.h
 ===================================================================
 --- linux-2.6.11.orig/include/linux/dcache.h	2005-04-13 22:35:23.515178600 -0400
@@ -62,3 +43,11 @@ Index: linux-2.6.11/include/linux/dcache.h
  
  extern spinlock_t dcache_lock;
  
+@@ -254,6 +255,7 @@ extern int have_submounts(struct dentry 
+  * This adds the entry to the hash queues.
+  */
+ extern void d_rehash(struct dentry *);
++extern void d_rehash_cond(struct dentry *, int lock);
+ 
+ /**
+  * d_add - add dentry to hash queues

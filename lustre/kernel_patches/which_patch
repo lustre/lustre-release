@@ -1,24 +1,20 @@
-SERIES             VERSION                  COMMENT
+SERIES                VERSION                  COMMENT
 
 SUPPORTED KERNELS:
-rhel-2.4.21        RHEL3: 2.4.21-47.0.1.EL
-2.6-suse           SLES9 before SP1         already in SLES9 SP1 kernel
-2.6-suse-newer     SLES9: 2.6.5-7.282       extra patches for SLES9 after SP1
-2.6-rhel4          RHEL4: 2.6.9-42.0.8.EL
-2.6.12-vanilla     kernel.org: 2.6.12.6
-2.6-sles10         SLES10: 2.6.16.21-0.8
+2.6-suse              SLES9 before SP1         already in SLES9 SP1 kernel
+2.6-suse-newer        SLES9: 2.6.5-7.314       extra patches for SLES9 after SP1
+2.6-rhel4             RHEL4: 2.6.9-67.0.22.EL
+2.6-sles10            SLES10: 2.6.16.60-0.31
+2.6-rhel5             RHEL5: 2.6.18-92.1.10.el5
+2.6.18-vanilla        kernel.org: 2.6.18.8
+2.6.22-vanilla        kernel.org: 2.6.22.14
 
 CLIENT SUPPORT FOR UNPATCHED KERNELS:
-                   kernel.org 2.6.16-2.6.19
+                   kernel.org 2.6.16-2.6.22
                    RHEL4: 2.6.9-42.0.8EL
 
-NB - The patches in the 2.6-suse series should already be in the SLES9 SP1
+NB - The patches in the 2.6-suse series are already in the SLES9 SP1
      kernel.  The patches in the 2.6-suse-newer series are patches that
      have been created since the SP1 kernel was released and should be
-     applied to the already-patched SP1 kernel.
-
-NB - The patches in the ldiskfs series should not be applied to the kernel.
-     They are instead applied by the lustre build process to create the
-     ldiskfs kernel module instead of modifying the core ext3 code.
-
-
+     applied to the already-patched SP1 kernel.  Only the 2.6-suse-newer
+     series needs to be applied via quilt to any recent SLES9 kernel.

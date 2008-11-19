@@ -1,23 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002 Cluster File Systems, Inc.
- *   Author: Phil Schwan <phil@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/libcfs/nidstrings.c
+ *
+ * Author: Phil Schwan <phil@clusterfs.com>
  */
 
 #ifndef EXPORT_SYMTAB
@@ -84,19 +102,19 @@ libcfs_next_nidstring (void)
         return str;
 }
 
-static int  libcfs_lo_str2addr(char *str, int nob, __u32 *addr);
+static int  libcfs_lo_str2addr(const char *str, int nob, __u32 *addr);
 static void libcfs_ip_addr2str(__u32 addr, char *str);
-static int  libcfs_ip_str2addr(char *str, int nob, __u32 *addr);
+static int  libcfs_ip_str2addr(const char *str, int nob, __u32 *addr);
 static void libcfs_decnum_addr2str(__u32 addr, char *str);
 static void libcfs_hexnum_addr2str(__u32 addr, char *str);
-static int  libcfs_num_str2addr(char *str, int nob, __u32 *addr);
+static int  libcfs_num_str2addr(const char *str, int nob, __u32 *addr);
 
 struct netstrfns {
         int          nf_type;
         char        *nf_name;
         char        *nf_modname;
         void       (*nf_addr2str)(__u32 addr, char *str);
-        int        (*nf_str2addr)(char *str, int nob, __u32 *addr);
+        int        (*nf_str2addr)(const char *str, int nob, __u32 *addr);
 };
 
 static struct netstrfns  libcfs_netstrfns[] = {
@@ -167,7 +185,7 @@ static struct netstrfns  libcfs_netstrfns[] = {
 const int libcfs_nnetstrfns = sizeof(libcfs_netstrfns)/sizeof(libcfs_netstrfns[0]);
 
 int
-libcfs_lo_str2addr(char *str, int nob, __u32 *addr)
+libcfs_lo_str2addr(const char *str, int nob, __u32 *addr)
 {
         *addr = 0;
         return 1;
@@ -200,7 +218,7 @@ libcfs_ip_addr2str(__u32 addr, char *str)
  * fine too :) */
 
 int
-libcfs_ip_str2addr(char *str, int nob, __u32 *addr)
+libcfs_ip_str2addr(const char *str, int nob, __u32 *addr)
 {
         int   a;
         int   b;
@@ -259,7 +277,7 @@ libcfs_hexnum_addr2str(__u32 addr, char *str)
 }
 
 int
-libcfs_num_str2addr(char *str, int nob, __u32 *addr)
+libcfs_num_str2addr(const char *str, int nob, __u32 *addr)
 {
         int     n;
 
@@ -274,7 +292,7 @@ libcfs_num_str2addr(char *str, int nob, __u32 *addr)
         n = nob;
         if (sscanf(str, "%u%n", addr, &n) >= 1 && n == nob)
                 return 1;
-        
+
         return 0;
 }
 
@@ -292,7 +310,7 @@ libcfs_lnd2netstrfns(int lnd)
 }
 
 struct netstrfns *
-libcfs_name2netstrfns(char *name)
+libcfs_name2netstrfns(const char *name)
 {
         int    i;
 
@@ -333,7 +351,7 @@ libcfs_lnd2str(int lnd)
 }
 
 int
-libcfs_str2lnd(char *str)
+libcfs_str2lnd(const char *str)
 {
         struct netstrfns *nf = libcfs_name2netstrfns(str);
 
@@ -395,7 +413,7 @@ libcfs_nid2str(lnet_nid_t nid)
 }
 
 static struct netstrfns *
-libcfs_str2net_internal(char *str, __u32 *net)
+libcfs_str2net_internal(const char *str, __u32 *net)
 {
         struct netstrfns *nf;
         int               nob;
@@ -432,7 +450,7 @@ libcfs_str2net_internal(char *str, __u32 *net)
 }
 
 __u32
-libcfs_str2net(char *str)
+libcfs_str2net(const char *str)
 {
         __u32  net;
 
@@ -443,9 +461,9 @@ libcfs_str2net(char *str)
 }
 
 lnet_nid_t
-libcfs_str2nid(char *str)
+libcfs_str2nid(const char *str)
 {
-        char             *sep = strchr(str, '@');
+        const char       *sep = strchr(str, '@');
         struct netstrfns *nf;
         __u32             net;
         __u32             addr;
@@ -485,7 +503,7 @@ libcfs_id2str(lnet_process_id_t id)
 }
 
 int
-libcfs_str2anynid(lnet_nid_t *nidp, char *str)
+libcfs_str2anynid(lnet_nid_t *nidp, const char *str)
 {
         if (!strcmp(str, "*")) {
                 *nidp = LNET_NID_ANY;

@@ -1,0 +1,32 @@
+Index: linux-2.6.22.14/include/linux/ext3_fs.h
+===================================================================
+--- linux-2.6.22.14.orig/include/linux/ext3_fs.h
++++ linux-2.6.22.14/include/linux/ext3_fs.h
+@@ -923,6 +923,13 @@ struct mmp_struct {
+ #define EXT3_MMP_MIN_CHECK_INTERVAL	5
+ 
+ /*
++ * Indicates that ctime should not be updated in ext3_xattr_set_handle()
++ */
++#ifndef XATTR_NO_CTIME
++#define XATTR_NO_CTIME 0x80
++#endif
++
++/*
+  * Function prototypes
+  */
+ 
+Index: linux-2.6.22.14/fs/ext3/xattr.c
+===================================================================
+--- linux-2.6.22.14.orig/fs/ext3/xattr.c
++++ linux-2.6.22.14/fs/ext3/xattr.c
+@@ -1039,7 +1039,8 @@ ext3_xattr_set_handle(handle_t *handle, 
+ 	}
+ 	if (!error) {
+ 		ext3_xattr_update_super_block(handle, inode->i_sb);
+-		inode->i_ctime = ext3_current_time(inode);
++		if (!(flags & XATTR_NO_CTIME))
++			inode->i_ctime = ext3_current_time(inode);
+ 		error = ext3_mark_iloc_dirty(handle, inode, &is.iloc);
+ 		if (!value)
+ 			EXT3_I(inode)->i_state &= ~EXT3_STATE_NO_EXPAND;

@@ -1,4 +1,7 @@
 #!/bin/bash
+
+# vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
+
 #
 # lc_hb - script for generating the Heartbeat HA software's
 #         configuration files
@@ -62,7 +65,7 @@ while getopts "r:n:vd:" OPTION; do
 		HBVER_OPT=$OPTARG
 		if [ "${HBVER_OPT}" != "${HBVER_HBV1}" ] \
 		&& [ "${HBVER_OPT}" != "${HBVER_HBV2}" ]; then
-			echo >&2 $"`basename $0`: Invalid Heartbeat software" \
+			error_output "Invalid Heartbeat software" \
 				  "version - ${HBVER_OPT}!"
 			usage
 		fi
@@ -71,17 +74,17 @@ while getopts "r:n:vd:" OPTION; do
 		HOSTNAME_OPT=$OPTARG 
 		PRIM_NODENAME=`echo ${HOSTNAME_OPT} | awk -F":" '{print $1}'`
 		if [ -z "${PRIM_NODENAME}" ]; then
-			echo >&2 $"`basename $0`: Missing primary nodename!"
+			error_output "Missing primary nodename!"
 			usage
 		fi
 		HOSTNAME_NUM=`echo ${HOSTNAME_OPT} | awk -F":" '{print NF}'`
 		if [ ${HOSTNAME_NUM} -lt 2 ]; then
-			echo >&2 $"`basename $0`: Missing failover nodenames!"
+			error_output "Missing failover nodenames!"
 			usage
 		fi
 		if [ "${HBVER_OPT}" = "${HBVER_HBV1}" -a ${HOSTNAME_NUM} -gt 2 ]
 		then
-			echo >&2 $"`basename $0`: Heartbeat version 1 can" \
+			error_output "Heartbeat version 1 can" \
 				  "only support 2 nodes!"
 			usage
 		fi
@@ -94,11 +97,11 @@ while getopts "r:n:vd:" OPTION; do
 		TARGET_DEVNAMES[TARGET_NUM]=`echo ${DEVICE_OPT}|awk -F: '{print $1}'`
 		TARGET_MNTPNTS[TARGET_NUM]=`echo ${DEVICE_OPT}|awk -F: '{print $2}'`
 		if [ -z "${TARGET_DEVNAMES[TARGET_NUM]}" ]; then
-			echo >&2 $"`basename $0`: Missing target device name!"
+			error_output "Missing target device name!"
 			usage
 		fi
 		if [ -z "${TARGET_MNTPNTS[TARGET_NUM]}" ]; then
-			echo >&2 $"`basename $0`: Missing mount point for target"\
+			error_output "Missing mount point for target"\
 				  "${TARGET_DEVNAMES[TARGET_NUM]}!"
 			usage
 		fi
@@ -111,17 +114,17 @@ done
 
 # Check the required parameters
 if [ -z "${HBVER_OPT}" ]; then
-	echo >&2 $"`basename $0`: Missing -r option!"
+	error_output "Missing -r option!"
 	usage
 fi
 
 if [ -z "${HOSTNAME_OPT}" ]; then
-	echo >&2 $"`basename $0`: Missing -n option!"
+	error_output "Missing -n option!"
 	usage
 fi
 
 if [ -z "${DEVICE_OPT}" ]; then
-	echo >&2 $"`basename $0`: Missing -d option!"
+	error_output "Missing -d option!"
 	usage
 fi
 
@@ -152,13 +155,13 @@ check_remote_file() {
 	local file_name=$2
 
 	if [ -z "${host_name}" ]; then
-		echo >&2 "`basename $0`: check_remote_file() error:"\
+		error_output "check_remote_file():"\
 			 "Missing hostname!"
 		return 1
 	fi
 
 	if [ -z "${file_name}" ]; then
-		echo >&2 "`basename $0`: check_remote_file() error:"\
+		error_output "check_remote_file():"\
 			 "Missing file name!"
 		return 1
 	fi
@@ -166,7 +169,7 @@ check_remote_file() {
 	# Execute remote command to check the file 
 	${REMOTE} ${host_name} "[ -e ${file_name} ]"
 	if [ $? -ne 0 ]; then
-		echo >&2 "`basename $0`: check_remote_file() error:"\
+		error_output "check_remote_file():"\
 		"${file_name} does not exist in host ${host_name}!"
 		return 1
 	fi
@@ -184,7 +187,7 @@ hb_running() {
 	ret_str=`${REMOTE} ${host_name} "${CL_STATUS} hbstatus" 2>&1`
 	if [ $? -ne 0 ]; then
 		if [ "${ret_str}" = "${ret_str#*stop*}" ]; then
-			echo >&2 "`basename $0`: hb_running() error:"\
+			error_output "hb_running():"\
 			"remote command to ${host_name} error: ${ret_str}!"
 			return 2
 		else
@@ -202,9 +205,10 @@ stop_heartbeat() {
 	local host_name=$1
 	local ret_str
 
-	ret_str=`${REMOTE} ${host_name} "/sbin/service heartbeat stop" 2>&1`
+	ret_str=$(${REMOTE} ${host_name} "PATH=\$PATH:/sbin:/usr/sbin
+service heartbeat stop < /dev/null" 2>&1)
 	if [ $? -ne 0 ]; then
-		echo >&2 "`basename $0`: stop_heartbeat() error:"\
+		error_output "stop_heartbeat():"\
 		"remote command to ${host_name} error: ${ret_str}!"
 		return 1
 	fi
@@ -223,7 +227,7 @@ check_heartbeat() {
 	for ((idx = 0; idx < ${#NODE_NAMES[@]}; idx++)); do
 		# Check Heartbeat configuration directory
 		if ! check_remote_file ${NODE_NAMES[idx]} ${HA_DIR}; then
-			echo >&2 "`basename $0`: check_heartbeat() error:"\
+			error_output "check_heartbeat():"\
 			"Is Heartbeat package installed?"
 			return 1
 		fi
@@ -231,8 +235,8 @@ check_heartbeat() {
 		if [ "${HBVER_OPT}" = "${HBVER_HBV1}" ]; then
 			# Check mon configuration directory
 			if ! check_remote_file ${NODE_NAMES[idx]} ${MON_DIR}; then
-				echo >&2 "`basename $0`: check_heartbeat()"\
-				"error: Is mon package installed?"
+				error_output "check_heartbeat():"\
+				"Is mon package installed?"
 				return 1
 			fi
 		fi
@@ -240,8 +244,8 @@ check_heartbeat() {
 		if [ "${HBVER_OPT}" = "${HBVER_HBV2}" ]; then
 			# Check crm directory
 			if ! check_remote_file ${NODE_NAMES[idx]} ${CIB_DIR}; then
-				echo >&2 "`basename $0`: check_heartbeat()"\
-				"error: Is Heartbeat v2 package installed?"
+				error_output "check_heartbeat():"\
+				"Is Heartbeat v2 package installed?"
 				return 1
 			fi
 		fi
@@ -284,8 +288,8 @@ get_srvname() {
 	local ret_str
 
 	# Execute remote command to get the target server name
-	ret_str=`${REMOTE} ${host_name} \
-		"${TUNEFS} --print --verbose ${target_devname} | grep Target:" 2>&1`
+	ret_str=$(${REMOTE} ${host_name} "PATH=\$PATH:/sbin:/usr/sbin
+${TUNEFS} --print --verbose ${target_devname} | grep Target:" 2>&1)
 	if [ $? -ne 0 ]; then
 		echo "`basename $0`: get_srvname() error:" \
 		     "from host ${host_name} - ${ret_str}"
@@ -321,7 +325,7 @@ get_srvnames() {
 		TARGET_SRVNAMES[i]=$(get_srvname ${PRIM_NODENAME} \
 				     ${TARGET_DEVNAMES[i]})
 		if [ $? -ne 0 ]; then
-			echo >&2 "${TARGET_SRVNAMES[i]}"
+			error_output "${TARGET_SRVNAMES[i]}"
 			return 1
 		fi
 	done
@@ -397,7 +401,7 @@ create_hacf() {
 		touch ${TMP_DIR}$"/ha.cf."${NODE_NAMES[idx]}
 		scp ${HACF_LUSTRE} ${NODE_NAMES[idx]}:${HA_DIR}/
 		if [ $? -ne 0 ]; then
-			echo >&2 "`basename $0`: Failed to scp ha.cf file"\
+			error_output "Failed to scp ha.cf file"\
 				 "to node ${NODE_NAMES[idx]}!"
 			return 1
 		fi
@@ -444,7 +448,7 @@ create_haresources() {
 		python ${CIB_GEN_SCRIPT} --stdout \
 		${HARES_LUSTRE} > ${CIB_LUSTRE}
 		if [ $? -ne 0 ]; then
-			echo >&2 "`basename $0`: Failed to generate cib.xml file"\
+			error_output "Failed to generate cib.xml file"\
 				 "for node ${PRIM_NODENAME}!"
 			return 1
 		fi
@@ -455,7 +459,7 @@ create_haresources() {
 		/bin/cp -f ${HARES_LUSTRE} ${TMP_DIR}$"/haresources."${NODE_NAMES[idx]}
 		scp ${HARES_LUSTRE} ${NODE_NAMES[idx]}:${HA_DIR}/
 		if [ $? -ne 0 ]; then
-			echo >&2 "`basename $0`: Failed to scp haresources file"\
+			error_output "Failed to scp haresources file"\
 				 "to node ${NODE_NAMES[idx]}!"
 			return 1
 		fi
@@ -463,7 +467,7 @@ create_haresources() {
 		if [ "${HBVER_OPT}" = "${HBVER_HBV2}" ]; then
 			scp ${CIB_LUSTRE} ${NODE_NAMES[idx]}:${CIB_DIR}/
 			if [ $? -ne 0 ]; then
-				echo >&2 "`basename $0`: Failed to scp cib.xml"\
+				error_output "Failed to scp cib.xml"\
 				 	 "file to node ${NODE_NAMES[idx]}!"
 				return 1
 			fi
@@ -491,7 +495,7 @@ create_authkeys() {
 		touch ${TMP_DIR}$"/authkeys."${NODE_NAMES[idx]}
 		scp -p ${AUTHKEYS_TEMP} ${NODE_NAMES[idx]}:${HA_DIR}/
 		if [ $? -ne 0 ]; then
-			echo >&2 "`basename $0`: Failed to scp authkeys file"\
+			error_output "Failed to scp authkeys file"\
 				 "to node ${NODE_NAMES[idx]}!"
 			return 1
 		fi
@@ -547,7 +551,7 @@ create_moncf() {
 
 	${SCRIPT_GEN_MONCF} ${params}
 	if [ $? -ne 0 ]; then
-		echo >&2 "`basename $0`: Failed to generate mon.cf file"\
+		error_output "Failed to generate mon.cf file"\
 			 "by using ${SCRIPT_GEN_MONCF}!"
 		return 1
 	fi
@@ -560,7 +564,7 @@ create_moncf() {
 
 		scp ${MONCF_LUSTRE} ${NODE_NAMES[idx]}:${MON_DIR}/
 		if [ $? -ne 0 ]; then
-			echo >&2 "`basename $0`: Failed to scp mon.cf file"\
+			error_output "Failed to scp mon.cf file"\
 				 "to node ${NODE_NAMES[idx]}!"
 			return 1
 		fi

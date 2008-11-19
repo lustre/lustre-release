@@ -1,25 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002, 2003 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #ifndef EXPORT_SYMTAB
@@ -42,8 +54,9 @@
 obd_size lov_stripe_size(struct lov_stripe_md *lsm, obd_size ost_size,
                          int stripeno)
 {
-        unsigned long ssize  = lsm->lsm_stripe_size;
-        unsigned long swidth, stripe_size;
+        obd_size ssize  = lsm->lsm_stripe_size;
+        unsigned long stripe_size;
+        obd_off swidth;
         int sindex = stripeno;
         obd_size lov_size;
         int magic = lsm->lsm_magic;
@@ -55,8 +68,8 @@ obd_size lov_stripe_size(struct lov_stripe_md *lsm, obd_size ost_size,
         LASSERT(lsm_op_find(magic) != NULL);
         lsm_op_find(magic)->lsm_stripe_by_index(lsm, &stripeno, NULL, &swidth);
  
-        /* do_div(a, b) returns a % b, and a = a / b */
-        stripe_size = do_div(ost_size, ssize);
+        /* ll_do_div64(a, b) returns a % b, and a = a / b */
+        stripe_size = ll_do_div64(ost_size, ssize);
         if (stripe_size)
                 lov_size = ost_size * swidth + stripeno * ssize + stripe_size;
         else
@@ -115,42 +128,43 @@ obd_size lov_stripe_size(struct lov_stripe_md *lsm, obd_size ost_size,
  * falls in the stripe and no shifting was done; > 0 when the offset
  * was outside the stripe and was pulled back to its final byte. */
 int lov_stripe_offset(struct lov_stripe_md *lsm, obd_off lov_off,
-                      int stripeno, obd_off *obd_off)
+                      int stripeno, obd_off *obdoff)
 {
         unsigned long ssize  = lsm->lsm_stripe_size;
-        unsigned long swidth, stripe_off, this_stripe;
-        uint64_t l_off, s_off;
+        unsigned long stripe_off, this_stripe;
+        __u64 l_off, s_off;
+        obd_off swidth;
         int magic = lsm->lsm_magic;
         int ret = 0;
 
         if (lov_off == OBD_OBJECT_EOF) {
-                *obd_off = OBD_OBJECT_EOF;
+                *obdoff = OBD_OBJECT_EOF;
                 return 0;
         }
 
         LASSERT(lsm_op_find(magic) != NULL);
         /*It will check whether the lov_off and stripeno 
          *are in the same extent. 
-         *1) lov_off extent < stripeno extent, ret = -1, obd_off = 0
+         *1) lov_off extent < stripeno extent, ret = -1, obdoff = 0
          *2) lov_off extent > stripeno extent, ret = 1, 
-         *   obd_off = lov_off extent offset*/
+         *   obdoff = lov_off extent offset*/
         l_off = lsm_op_find(magic)->lsm_stripe_offset_by_index(lsm, stripeno);
         s_off = lsm_op_find(magic)->lsm_stripe_offset_by_offset(lsm, lov_off);
         if (s_off < l_off) {
                 ret = -1;
-                *obd_off = 0;
+                *obdoff = 0;
                 return ret;
         } else if (s_off > l_off) {
                 ret = 1;
-                *obd_off = s_off;
+                *obdoff = s_off;
                 return ret;
         }
         /*If they are in the same extent, original logic*/
         lsm_op_find(magic)->lsm_stripe_by_index(lsm, &stripeno, &lov_off,
                                                 &swidth);
        
-        /* do_div(a, b) returns a % b, and a = a / b */
-        stripe_off = do_div(lov_off, swidth);
+        /* ll_do_div64(a, b) returns a % b, and a = a / b */
+        stripe_off = ll_do_div64(lov_off, swidth);
 
         this_stripe = stripeno * ssize;
         if (stripe_off < this_stripe) {
@@ -165,7 +179,7 @@ int lov_stripe_offset(struct lov_stripe_md *lsm, obd_off lov_off,
                 }
         }
 
-        *obd_off = lov_off * ssize + stripe_off;
+        *obdoff = lov_off * ssize + stripe_off;
         return ret;
 }
 
@@ -192,7 +206,8 @@ obd_off lov_size_to_stripe(struct lov_stripe_md *lsm, obd_off file_size,
                            int stripeno)
 {
         unsigned long ssize  = lsm->lsm_stripe_size;
-        unsigned long swidth, stripe_off, this_stripe;
+        unsigned long stripe_off, this_stripe;
+        obd_off swidth;
         int magic = lsm->lsm_magic;
 
         if (file_size == OBD_OBJECT_EOF)
@@ -202,8 +217,8 @@ obd_off lov_size_to_stripe(struct lov_stripe_md *lsm, obd_off file_size,
         lsm_op_find(magic)->lsm_stripe_by_index(lsm, &stripeno, &file_size,
                                                 &swidth);
 
-        /* do_div(a, b) returns a % b, and a = a / b */
-        stripe_off = do_div(file_size, swidth);
+        /* ll_do_div64(a, b) returns a % b, and a = a / b */
+        stripe_off = ll_do_div64(file_size, swidth);
 
         this_stripe = stripeno * ssize;
         if (stripe_off < this_stripe) {
@@ -265,14 +280,15 @@ int lov_stripe_intersects(struct lov_stripe_md *lsm, int stripeno,
 int lov_stripe_number(struct lov_stripe_md *lsm, obd_off lov_off)
 {
         unsigned long ssize  = lsm->lsm_stripe_size;
-        unsigned long swidth, stripe_off;
+        unsigned long stripe_off;
+        obd_off swidth;
         obd_off offset = lov_off;
         int magic = lsm->lsm_magic;
 
         LASSERT(lsm_op_find(magic) != NULL);
         lsm_op_find(magic)->lsm_stripe_by_offset(lsm, NULL, &lov_off, &swidth);
 
-        stripe_off = do_div(lov_off, swidth);
+        stripe_off = ll_do_div64(lov_off, swidth);
 
         return (stripe_off/ssize +
                 lsm_op_find(magic)->lsm_stripe_index_by_offset(lsm, offset));

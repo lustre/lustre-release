@@ -1,25 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001 Cluster File Systems, Inc. <braam@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/klnds/qswlnd/qswlnd.h
  *
  * Basic library routines.
- *
  */
 
 #ifndef _QSWNAL_H
@@ -30,7 +46,7 @@
 
 #include <qsnet/kernel.h>
 #undef printf                                   /* nasty QSW #define */
-#ifdef HAVE_KERNEL_CONFIG_H
+#ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
 #include <linux/module.h>
@@ -59,7 +75,6 @@
 #include <linux/stat.h>
 #include <linux/list.h>
 #include <linux/sysctl.h>
-#include <asm/segment.h>
 
 #define DEBUG_SUBSYSTEM S_LND
 
@@ -198,14 +213,15 @@ typedef struct kqswnal_tx
         struct kqswnal_tx *ktx_alloclist;       /* stack in kqn_txds */
         unsigned int      ktx_state:7;          /* What I'm doing */
         unsigned int      ktx_firsttmpfrag:1;   /* ktx_frags[0] is in my ebuffer ? 0 : 1 */
-        uint32_t          ktx_basepage;         /* page offset in reserved elan tx vaddrs for mapping pages */
+        __u32             ktx_basepage;         /* page offset in reserved elan tx vaddrs for mapping pages */
         int               ktx_npages;           /* pages reserved for mapping messages */
         int               ktx_nmappedpages;     /* # pages mapped for current message */
         int               ktx_port;             /* destination ep port */
         lnet_nid_t        ktx_nid;              /* destination node */
         void             *ktx_args[3];          /* completion passthru */
         char             *ktx_buffer;           /* pre-allocated contiguous buffer for hdr + small payloads */
-        unsigned long     ktx_launchtime;       /* when (in jiffies) the transmit was launched */
+        cfs_time_t        ktx_launchtime;       /*  when (in jiffies) the transmit
+                                                 *  was launched */
         int               ktx_status;           /* completion status */
 #if KQSW_CKSUM
         __u32             ktx_cksum;            /* optimized GET payload checksum */
@@ -242,8 +258,8 @@ typedef struct
         int               *kqn_inject_csum_error; /* # csum errors to inject */
 #endif
 
-#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
-        struct ctl_table_header *kqn_sysctl;    /* sysctl interface */
+#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
+        cfs_sysctl_table_header_t *kqn_sysctl;  /* sysctl interface */
 #endif
 } kqswnal_tunables_t;
 

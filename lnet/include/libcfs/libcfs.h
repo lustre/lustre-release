@@ -1,5 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ */
+
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
  */
 #ifndef __LIBCFS_LIBCFS_H__
 #define __LIBCFS_LIBCFS_H__
@@ -44,7 +80,13 @@
 #define container_of0(ptr, type, member)                        \
 ({                                                              \
         typeof(ptr) __ptr = (ptr);                              \
-        __ptr ? container_of(__ptr, type, member) : NULL;       \
+        type       *__res;                                      \
+                                                                \
+        if (unlikely(IS_ERR(__ptr) || __ptr == NULL))           \
+                __res = (type *)__ptr;                          \
+        else                                                    \
+                __res = container_of(__ptr, type, member);      \
+        __res;                                                  \
 })
 
 /*
@@ -68,8 +110,11 @@ extern unsigned int libcfs_stack;
 extern unsigned int libcfs_debug;
 extern unsigned int libcfs_printk;
 extern unsigned int libcfs_console_ratelimit;
+extern cfs_duration_t libcfs_console_max_delay;
+extern cfs_duration_t libcfs_console_min_delay;
+extern unsigned int libcfs_console_backoff;
 extern unsigned int libcfs_debug_binary;
-extern char debug_file_path[1024];
+extern char debug_file_path_arr[1024];
 
 int libcfs_debug_mask2str(char *str, int size, int mask, int is_subsys);
 int libcfs_debug_str2mask(int *mask, const char *str, int is_subsys);
@@ -104,7 +149,7 @@ extern unsigned int libcfs_panic_on_lbug;
 #define S_ECHO        0x00008000
 #define S_LDLM        0x00010000
 #define S_LOV         0x00020000
-/* unused */
+#define S_LQUOTA      0x00040000
 /* unused */
 /* unused */
 /* unused */
@@ -158,7 +203,9 @@ extern unsigned int libcfs_panic_on_lbug;
 # define DEBUG_SUBSYSTEM S_UNDEFINED
 #endif
 
-#define CDEBUG_MAX_LIMIT 600
+#define CDEBUG_DEFAULT_MAX_DELAY (cfs_time_seconds(600))         /* jiffies */
+#define CDEBUG_DEFAULT_MIN_DELAY ((cfs_time_seconds(1) + 1) / 2) /* jiffies */
+#define CDEBUG_DEFAULT_BACKOFF   2
 typedef struct {
         cfs_time_t      cdls_next;
         int             cdls_count;
@@ -168,7 +215,7 @@ typedef struct {
 /* Controlled via configure key */
 /* #define CDEBUG_ENABLED */
 
-#ifdef __KERNEL__
+#if defined(__KERNEL__) || (defined(__arch_lib__) && !defined(LUSTRE_UTILS))
 
 #ifdef CDEBUG_ENABLED
 #define __CDEBUG(cdls, mask, format, a...)                              \
@@ -198,20 +245,6 @@ do {                                            \
 #warning "CDEBUG IS DISABLED. THIS SHOULD NEVER BE DONE FOR PRODUCTION!"
 #endif
 
-#elif defined(__arch_lib__) && !defined(LUSTRE_UTILS)
-
-#define CDEBUG(mask, format, a...)                                      \
-do {                                                                    \
-        if (((mask) & D_CANTMASK) != 0 ||                               \
-            ((libcfs_debug & (mask)) != 0 &&                            \
-             (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))          \
-                libcfs_debug_msg(NULL, DEBUG_SUBSYSTEM, mask,           \
-                                 __FILE__, __FUNCTION__, __LINE__,      \
-                                 format, ## a);                         \
-} while (0)
-
-#define CDEBUG_LIMIT CDEBUG
-
 #else
 
 #define CDEBUG(mask, format, a...)                                      \
@@ -225,8 +258,8 @@ do {                                                                    \
 
 #endif /* !__KERNEL__ */
 
-/* 
- * Lustre Error Checksum: calculates checksum 
+/*
+ * Lustre Error Checksum: calculates checksum
  * of Hex number by XORing each bit.
  */
 #define LERRCHKSUM(hexnum) (((hexnum) & 0xf) ^ ((hexnum) >> 4 & 0xf) ^ \
@@ -277,6 +310,12 @@ do {                                                                    \
         return RETURN__ret;                                             \
 } while (0)
 
+#define RETURN_EXIT                                                     \
+do {                                                                    \
+        EXIT_NESTING;                                                   \
+        return;                                                         \
+} while (0)
+
 #define ENTRY                                                           \
 ENTRY_NESTING;                                                          \
 do {                                                                    \
@@ -312,6 +351,16 @@ do {                                                                    \
 
 #include <libcfs/list.h>
 
+/* for_each_possible_cpu is defined newly, the former is
+ * for_each_cpu(eg. sles9 and sles10) b=15878 */
+#ifndef for_each_possible_cpu
+# ifdef for_each_cpu
+#  define for_each_possible_cpu(cpu) for_each_cpu(cpu)
+# else
+#  error for_each_possible_cpu is not supported by kernel!
+# endif
+#endif
+
 struct libcfs_ioctl_data;                       /* forward ref */
 
 struct libcfs_ioctl_handler {
@@ -329,9 +378,6 @@ int libcfs_register_ioctl(struct libcfs_ioctl_handler *hand);
 int libcfs_deregister_ioctl(struct libcfs_ioctl_handler *hand);
 
 /* libcfs tcpip */
-#define LNET_ACCEPTOR_MIN_RESERVED_PORT    512
-#define LNET_ACCEPTOR_MAX_RESERVED_PORT    1023
-
 int libcfs_ipif_query(char *name, int *up, __u32 *ip, __u32 *mask);
 int libcfs_ipif_enumerate(char ***names);
 void libcfs_ipif_free_enumeration(char **names, int n);
@@ -358,6 +404,7 @@ struct lc_watchdog *lc_watchdog_add(int time,
                                     void *data);
 
 /* Enables a watchdog and resets its timer. */
+void lc_watchdog_touch_ms(struct lc_watchdog *lcw, int timeout_ms);
 void lc_watchdog_touch(struct lc_watchdog *lcw);
 
 /* Disable a watchdog; touch it to restart it. */
@@ -371,6 +418,10 @@ void lc_watchdog_dumplog(pid_t pid, void *data);
 
 /* __KERNEL__ */
 #endif
+
+/* need both kernel and user-land acceptor */
+#define LNET_ACCEPTOR_MIN_RESERVED_PORT    512
+#define LNET_ACCEPTOR_MAX_RESERVED_PORT    1023
 
 /*
  * libcfs pseudo device operations
@@ -515,7 +566,7 @@ static inline void cfs_slow_warning(cfs_time_t now, int seconds, char *msg)
 {
         if (cfs_time_after(cfs_time_current(),
                            cfs_time_add(now, cfs_time_seconds(15))))
-                CERROR("slow %s %lu sec\n", msg,
+                CERROR("slow %s "CFS_TIME_T" sec\n", msg,
                        cfs_duration_sec(cfs_time_sub(cfs_time_current(),now)));
 }
 
@@ -546,18 +597,18 @@ static inline cfs_duration_t cfs_timeout_cap(cfs_duration_t timeout)
  */
 enum cfs_alloc_flags {
         /* allocation is not allowed to block */
-        CFS_ALLOC_ATOMIC = (1 << 0),
+        CFS_ALLOC_ATOMIC = 0x1,
         /* allocation is allowed to block */
-        CFS_ALLOC_WAIT = (1 << 1),
+        CFS_ALLOC_WAIT   = 0x2,
         /* allocation should return zeroed memory */
-        CFS_ALLOC_ZERO   = (1 << 2),
+        CFS_ALLOC_ZERO   = 0x4,
         /* allocation is allowed to call file-system code to free/clean
          * memory */
-        CFS_ALLOC_FS     = (1 << 3),
+        CFS_ALLOC_FS     = 0x8,
         /* allocation is allowed to do io to free/clean memory */
-        CFS_ALLOC_IO     = (1 << 4),
+        CFS_ALLOC_IO     = 0x10,
         /* don't report allocation failure to the console */
-        CFS_ALLOC_NOWARN = (1 << 5),
+        CFS_ALLOC_NOWARN = 0x20,
         /* standard allocator flag combination */
         CFS_ALLOC_STD    = CFS_ALLOC_FS | CFS_ALLOC_IO,
         CFS_ALLOC_USER   = CFS_ALLOC_WAIT | CFS_ALLOC_FS | CFS_ALLOC_IO,
@@ -567,39 +618,9 @@ enum cfs_alloc_flags {
 enum cfs_alloc_page_flags {
         /* allow to return page beyond KVM. It has to be mapped into KVM by
          * cfs_page_map(); */
-        CFS_ALLOC_HIGH   = (1 << 5),
+        CFS_ALLOC_HIGH   = 0x40,
         CFS_ALLOC_HIGHUSER = CFS_ALLOC_WAIT | CFS_ALLOC_FS | CFS_ALLOC_IO | CFS_ALLOC_HIGH,
 };
-
-/*
- * portable UNIX device file identification. (This is not _very_
- * portable. Probably makes no sense for Windows.)
- */
-/*
- * Platform defines
- *
- * cfs_rdev_t
- */
-
-typedef unsigned int cfs_major_nr_t;
-typedef unsigned int cfs_minor_nr_t;
-
-/*
- * Defined by platform.
- */
-cfs_rdev_t     cfs_rdev_build(cfs_major_nr_t major, cfs_minor_nr_t minor);
-cfs_major_nr_t cfs_rdev_major(cfs_rdev_t rdev);
-cfs_minor_nr_t cfs_rdev_minor(cfs_rdev_t rdev);
-
-/*
- * Generic on-wire rdev format.
- */
-
-typedef __u32 cfs_wire_rdev_t;
-
-cfs_wire_rdev_t cfs_wire_rdev_build(cfs_major_nr_t major, cfs_minor_nr_t minor);
-cfs_major_nr_t  cfs_wire_rdev_major(cfs_wire_rdev_t rdev);
-cfs_minor_nr_t  cfs_wire_rdev_minor(cfs_wire_rdev_t rdev);
 
 /*
  * Drop into debugger, if possible. Implementation is provided by platform.

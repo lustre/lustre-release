@@ -1,0 +1,36 @@
+Index: LINUX-SRC-TREE/include/linux/fs.h
+===================================================================
+--- LINUX-SRC-TREE.orig/include/linux/fs.h
++++ LINUX-SRC-TREE/include/linux/fs.h
+@@ -61,6 +61,7 @@ extern int dir_notify_enable;
+ 
+ #define FMODE_READ 1
+ #define FMODE_WRITE 2
++#define FMODE_EXEC 16
+ 
+ /* Internal kernel extensions */
+ #define FMODE_LSEEK	4
+Index: LINUX-SRC-TREE/fs/exec.c
+===================================================================
+--- LINUX-SRC-TREE.orig/fs/exec.c
++++ LINUX-SRC-TREE/fs/exec.c
+@@ -129,7 +129,8 @@ asmlinkage long sys_uselib(const char __
+ 	struct nameidata nd;
+ 	int error;
+ 
+-	error = __user_path_lookup_open(library, LOOKUP_FOLLOW, &nd, FMODE_READ);
++	error = __user_path_lookup_open(library, LOOKUP_FOLLOW, &nd,
++					FMODE_READ | FMODE_EXEC);
+ 	if (error)
+ 		goto out;
+ 
+@@ -481,7 +483,8 @@ struct file *open_exec(const char *name)
+ 	int err;
+ 	struct file *file;
+ 
+-	err = path_lookup_open(AT_FDCWD, name, LOOKUP_FOLLOW, &nd, FMODE_READ);
++	err = path_lookup_open(AT_FDCWD, name, LOOKUP_FOLLOW, &nd,
++			       FMODE_READ | FMODE_EXEC);
+ 	file = ERR_PTR(err);
+ 
+ 	if (!err) {

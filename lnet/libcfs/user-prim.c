@@ -1,35 +1,54 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2004 Cluster File Systems, Inc.
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/libcfs/user-prim.c
+ *
+ * Implementations of portable APIs for liblustre
+ *
  * Author: Nikita Danilov <nikita@clusterfs.com>
- *
- * This file is part of Lustre, http://www.lustre.org.
- *
- * Lustre is free software; you can redistribute it and/or modify it under the
- * terms of version 2 of the GNU General Public License as published by the
- * Free Software Foundation.
- *
- * Lustre is distributed in the hope that it will be useful, but WITHOUT ANY
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
- * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details.
- *
- * You should have received a copy of the GNU General Public License along
- * with Lustre; if not, write to the Free Software Foundation, Inc., 675 Mass
- * Ave, Cambridge, MA 02139, USA.
- *
- * Implementation of portable APIs for user-level.
- *
  */
 
-/* Implementations of portable APIs for liblustre */
 
 /*
  * liblustre is single-threaded, so most "synchronization" APIs are trivial.
  */
 
 #ifndef __KERNEL__
+
+#include <libcfs/libcfs.h>
+#include <libcfs/kp30.h>
 
 #include <sys/mman.h>
 #ifndef  __CYGWIN__
@@ -48,10 +67,9 @@
 #include <signal.h>
 #include <errno.h>
 #include <sys/stat.h>
+#ifdef	HAVE_SYS_VFS_H
 #include <sys/vfs.h>
-
-#include <libcfs/libcfs.h>
-#include <libcfs/kp30.h>
+#endif
 
 /*
  * Sleep channel. No-op implementation.
@@ -120,13 +138,13 @@ void cfs_waitq_signal_nr(struct cfs_waitq *waitq, int nr)
         (void)waitq;
 }
 
-void cfs_waitq_broadcast(struct cfs_waitq *waitq, int state)
+void cfs_waitq_broadcast(struct cfs_waitq *waitq)
 {
         LASSERT(waitq != NULL);
         (void)waitq;
 }
 
-void cfs_waitq_wait(struct cfs_waitlink *link)
+void cfs_waitq_wait(struct cfs_waitlink *link, int state)
 {
         LASSERT(link != NULL);
         (void)link;
@@ -137,6 +155,69 @@ int64_t cfs_waitq_timedwait(struct cfs_waitlink *link, int state, int64_t timeou
         LASSERT(link != NULL);
         (void)link;
         return 0;
+}
+
+#ifdef HAVE_LIBPTHREAD
+
+/*
+ * Threads
+ */
+
+struct lustre_thread_arg {
+        cfs_thread_t f; 
+        void *arg;
+};
+static void *cfs_thread_helper(void *data)
+{
+        struct lustre_thread_arg *targ = data;
+        cfs_thread_t f  = targ->f;
+        void *arg = targ->arg;
+
+        free(targ);
+        
+        (void)f(arg);
+        return NULL;
+}
+int cfs_create_thread(cfs_thread_t func, void *arg)
+{
+        pthread_t tid;
+        pthread_attr_t tattr;
+        int rc;
+        struct lustre_thread_arg *targ_p = malloc(sizeof(struct lustre_thread_arg));
+
+        if ( targ_p == NULL )
+                return -ENOMEM;
+        
+        targ_p->f = func;
+        targ_p->arg = arg;
+
+        pthread_attr_init(&tattr); 
+        pthread_attr_setdetachstate(&tattr, PTHREAD_CREATE_DETACHED);
+        rc = pthread_create(&tid, &tattr, cfs_thread_helper, targ_p);
+        pthread_attr_destroy(&tattr);
+        return -rc;
+}
+#endif
+
+uid_t cfs_curproc_uid(void)
+{
+        return getuid();
+}
+
+int cfs_parse_int_tunable(int *value, char *name)
+{
+        char    *env = getenv(name);
+        char    *end;
+
+        if (env == NULL)
+                return 0;
+
+        *value = strtoull(env, &end, 0);
+        if (*end == 0)
+                return 0;
+
+        CERROR("Can't parse tunable %s=%s\n", name, env);
+        return -EINVAL;
 }
 
 /*
@@ -213,36 +294,6 @@ void cfs_mem_cache_free(cfs_mem_cache_t *c, void *addr)
         cfs_free(addr);
 }
 
-/*
- * This uses user-visible declarations from <linux/kdev_t.h>
- */
-#ifdef __LINUX__
-#include <linux/kdev_t.h>
-#endif
-
-#ifndef MKDEV
-
-#define MAJOR(dev)      ((dev)>>8)
-#define MINOR(dev)      ((dev) & 0xff)
-#define MKDEV(ma,mi)    ((ma)<<8 | (mi))
-
-#endif
-
-cfs_rdev_t cfs_rdev_build(cfs_major_nr_t major, cfs_minor_nr_t minor)
-{
-        return MKDEV(major, minor);
-}
-
-cfs_major_nr_t cfs_rdev_major(cfs_rdev_t rdev)
-{
-        return MAJOR(rdev);
-}
-
-cfs_minor_nr_t cfs_rdev_minor(cfs_rdev_t rdev)
-{
-        return MINOR(rdev);
-}
-
 void cfs_enter_debugger(void)
 {
         /*
@@ -253,6 +304,11 @@ void cfs_enter_debugger(void)
 void cfs_daemonize(char *str)
 {
         return;
+}
+
+int cfs_daemonize_ctxt(char *str)
+{
+        return 0;
 }
 
 cfs_sigset_t cfs_block_allsigs(void)
@@ -305,7 +361,7 @@ void cfs_clear_sigpending(void)
         return;
 }
 
-#ifdef __LINUX__
+#ifdef __linux__
 
 /*
  * In glibc (NOT in Linux, so check above is not right), implement
@@ -335,16 +391,15 @@ void *cfs_stack_trace_frame(struct cfs_stack_trace *trace, int frame_no)
         return NULL;
 }
 
-/* __LINUX__ */
+/* __linux__ */
 #endif
 
-void lbug_with_loc(char *file, const char *func, const int line)
+void lbug_with_loc(const char *file, const char *func, const int line)
 {
         /* No libcfs_catastrophe in userspace! */
         libcfs_debug_msg(NULL, 0, D_EMERG, file, func, line, "LBUG\n");
         abort();
 }
-
 
 /* !__KERNEL__ */
 #endif

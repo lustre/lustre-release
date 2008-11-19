@@ -1,26 +1,44 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002 Cluster File Systems, Inc.
- * Author: Phil Schwan <phil@clusterfs.com>
+ * GPL HEADER START
  *
- * This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * Lustre is free software; you can redistribute it and/or
- * modify it under the terms of version 2 of the GNU General Public
- * License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- * Lustre is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
  * You should have received a copy of the GNU General Public License
- * along with Lustre; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/klnds/socklnd/socklnd_lib-darwin.c
  *
  * Darwin porting library
  * Make things easy to port
+ *
+ * Author: Phil Schwan <phil@clusterfs.com>
  */
 #include <mach/mach_types.h>
 #include <string.h>
@@ -197,7 +215,7 @@ ksocknal_lib_send_iov (ksock_conn_t *conn, ksock_tx_t *tx)
         struct iovec   *scratchiov = &scratch;
         unsigned int    niov = 1;
 #else
-        struct iovec   *scratchiov = conn->ksnc_tx_scratch_iov;
+        struct iovec   *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
         unsigned int    niov = tx->tx_niov;
 #endif
         struct msghdr msg = {
@@ -242,7 +260,7 @@ ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
         struct iovec *scratchiov = &scratch;
         unsigned int  niov = 1;
 #else
-        struct iovec *scratchiov = conn->ksnc_tx_scratch_iov;
+        struct iovec *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
         unsigned int  niov = tx->tx_nkiov;
 #endif
         struct msghdr msg = {
@@ -284,7 +302,7 @@ ksocknal_lib_recv_iov (ksock_conn_t *conn)
         struct iovec *scratchiov = &scratch;
         unsigned int  niov = 1;
 #else
-        struct iovec *scratchiov = conn->ksnc_rx_scratch_iov;
+        struct iovec *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
         unsigned int  niov = conn->ksnc_rx_niov;
 #endif
         struct iovec *iov = conn->ksnc_rx_iov;
@@ -324,7 +342,7 @@ ksocknal_lib_recv_kiov (ksock_conn_t *conn)
         struct iovec *scratchiov = &scratch;
         unsigned int  niov = 1;
 #else
-        struct iovec *scratchiov = conn->ksnc_rx_scratch_iov;
+        struct iovec *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
         unsigned int  niov = conn->ksnc_rx_nkiov;
 #endif
         lnet_kiov_t   *kiov = conn->ksnc_rx_kiov;
@@ -526,7 +544,7 @@ ksocknal_lib_send_iov (ksock_conn_t *conn, ksock_tx_t *tx)
         struct iovec   *scratchiov = &scratch; 
         unsigned int    niov = 1;
 #else 
-        struct iovec   *scratchiov = conn->ksnc_tx_scratch_iov; 
+        struct iovec   *scratchiov = conn->ksnc_scheduler->kss_scratch_iov; 
         unsigned int    niov = tx->tx_niov;
 #endif
         struct socket *sock = conn->ksnc_sock;
@@ -582,7 +600,7 @@ ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
         struct iovec *scratchiov = &scratch; 
         unsigned int  niov = 1;
 #else
-        struct iovec *scratchiov = conn->ksnc_tx_scratch_iov; 
+        struct iovec *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
         unsigned int  niov = tx->tx_nkiov;
 #endif
         struct socket *sock = conn->ksnc_sock;
@@ -720,7 +738,7 @@ ksocknal_lib_recv_iov (ksock_conn_t *conn)
         struct iovec *scratchiov = &scratch; 
         unsigned int  niov = 1;
 #else 
-        struct iovec *scratchiov = conn->ksnc_rx_scratch_iov; 
+        struct iovec *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
         unsigned int  niov = conn->ksnc_rx_niov;
 #endif
         struct iovec *iov = conn->ksnc_rx_iov;
@@ -774,7 +792,7 @@ ksocknal_lib_recv_kiov (ksock_conn_t *conn)
         struct iovec *scratchiov = &scratch; 
         unsigned int  niov = 1;
 #else 
-        struct iovec *scratchiov = conn->ksnc_rx_scratch_iov; 
+        struct iovec *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
         unsigned int  niov = conn->ksnc_rx_nkiov;
 #endif
         lnet_kiov_t    *kiov = conn->ksnc_rx_kiov;

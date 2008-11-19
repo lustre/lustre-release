@@ -1,12 +1,45 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
- * 
- * Author: Liang Zhen <liangzhen@clusterfs.com>
  *
- * This file is part of Lustre, http://www.lustre.org
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/selftest/conctl.c
  *
  * Console framework rpcs
+ *
+ * Author: Liang Zhen <liangzhen@clusterfs.com>
  */
+
 #ifdef __KERNEL__
 
 #include <libcfs/libcfs.h>
@@ -23,22 +56,14 @@ lstcon_rpc_done(srpc_client_rpc_t *rpc)
 {
         lstcon_rpc_t *crpc = (lstcon_rpc_t *)rpc->crpc_priv;
 
-        LASSERT (!list_empty(&crpc->crp_link));
         LASSERT (crpc != NULL && rpc == crpc->crp_rpc);
         LASSERT (crpc->crp_posted && !crpc->crp_finished);
 
         spin_lock(&rpc->crpc_lock);
 
         if (crpc->crp_trans == NULL) {
-                /* orphan RPC */
-                spin_lock(&console_session.ses_rpc_lock);
-
-                /* delete from orphan rpcs list */
-                console_session.ses_rpc_pending --;
-                list_del_init(&crpc->crp_link);
-
-                spin_unlock(&console_session.ses_rpc_lock);
-
+                /* Orphan RPC is not in any transaction, 
+                 * I'm just a poor body and nobody loves me */
                 spin_unlock(&rpc->crpc_lock);
 
                 /* release it */
@@ -57,8 +82,7 @@ lstcon_rpc_done(srpc_client_rpc_t *rpc)
                 crpc->crp_status = rpc->crpc_status;
         }
 
-        /* wakeup thread waiting on the group if 
-         * it's the last rpc in the group */
+        /* wakeup (transaction)thread if I'm the last RPC in the transaction */
         if (atomic_dec_and_test(&crpc->crp_trans->tas_remaining))
                 cfs_waitq_signal(&crpc->crp_trans->tas_waitq);
 
@@ -86,6 +110,8 @@ lstcon_rpc_init(lstcon_node_t *nd, int service,
         crpc->crp_static   = !cached;
         CFS_INIT_LIST_HEAD(&crpc->crp_link);
 
+        atomic_inc(&console_session.ses_rpc_counter);
+
         return 0;
 }
 
@@ -101,7 +127,7 @@ lstcon_rpc_prep(lstcon_node_t *nd, int service,
         if (!list_empty(&console_session.ses_rpc_freelist)) {
                 crpc = list_entry(console_session.ses_rpc_freelist.next,
                                   lstcon_rpc_t, crp_link);
-                list_del(&crpc->crp_link);
+                list_del_init(&crpc->crp_link);
         }
 
         spin_unlock(&console_session.ses_rpc_lock);
@@ -141,16 +167,20 @@ lstcon_rpc_put(lstcon_rpc_t *crpc)
         srpc_client_rpc_decref(crpc->crp_rpc);
 
         if (crpc->crp_static) {
+                /* Static RPC, not allocated */
                 memset(crpc, 0, sizeof(*crpc));
                 crpc->crp_static = 1;
-                return;
+
+        } else {
+                spin_lock(&console_session.ses_rpc_lock);
+
+                list_add(&crpc->crp_link, &console_session.ses_rpc_freelist);
+
+                spin_unlock(&console_session.ses_rpc_lock);
         }
 
-        spin_lock(&console_session.ses_rpc_lock);
-
-        list_add(&crpc->crp_link, &console_session.ses_rpc_freelist);
-
-        spin_unlock(&console_session.ses_rpc_lock);
+        /* RPC is not alive now */
+        atomic_dec(&console_session.ses_rpc_counter);
 }
 
 void
@@ -321,7 +351,7 @@ lstcon_rpc_trans_postwait(lstcon_rpc_trans_t *trans, int timeout)
 
         mutex_up(&console_session.ses_mutex);
 
-        rc = wait_event_interruptible_timeout(trans->tas_waitq,
+        rc = cfs_waitq_wait_event_interruptible_timeout(trans->tas_waitq,
                                               lstcon_rpc_trans_check(trans),
                                               timeout * HZ);
 
@@ -419,7 +449,7 @@ lstcon_rpc_trans_stat(lstcon_rpc_trans_t *trans, lstcon_trans_stat_t *stat)
                                       crpc->crp_node, stat);
         }
 
-        CDEBUG(D_NET, "transaction %s success, %d failure, %d total %d, "
+        CDEBUG(D_NET, "transaction %s : success %d, failure %d, total %d, "
                       "RPC error(%d), Framework error(%d)\n",
                lstcon_rpc_trans_name(trans->tas_opc),
                lstcon_rpc_stat_success(stat, 0),
@@ -530,22 +560,15 @@ lstcon_rpc_trans_destroy(lstcon_rpc_trans_t *trans)
 
                 /* rpcs can be still not callbacked (even LNetMDUnlink is called)
                  * because huge timeout for inaccessible network, don't make
-                 * user wait for them, just put rpcs in orphan list */
+                 * user wait for them, just abandon them, they will be recycled 
+                 * in callback */
 
                 LASSERT (crpc->crp_status != 0);
 
                 crpc->crp_node  = NULL;
                 crpc->crp_trans = NULL;
-                list_del(&crpc->crp_link);
-
-                spin_lock(&console_session.ses_rpc_lock);
-
+                list_del_init(&crpc->crp_link);
                 count ++;
-                /* add to orphan list */
-                console_session.ses_rpc_pending ++;
-                list_add_tail(&crpc->crp_link, &console_session.ses_rpc_list);
-
-                spin_unlock(&console_session.ses_rpc_lock);
 
                 spin_unlock(&rpc->crpc_lock);
 
@@ -979,8 +1002,9 @@ lstcon_rpc_stat_reply(int transop, srpc_msg_t *msg,
 
 int
 lstcon_rpc_trans_ndlist(struct list_head *ndlist,
-                        struct list_head *translist, int transop, void *arg,
-                        lstcon_rpc_cond_func_t condition, lstcon_rpc_trans_t **transpp)
+                        struct list_head *translist, int transop,
+                        void *arg, lstcon_rpc_cond_func_t condition,
+                        lstcon_rpc_trans_t **transpp)
 {
         lstcon_rpc_trans_t *trans;
         lstcon_ndlink_t    *ndl;
@@ -1181,9 +1205,8 @@ lstcon_rpc_pinger_start(void)
         stt_timer_t    *ptimer;
         int             rc;
 
-        LASSERT (console_session.ses_rpc_pending == 0);
-        LASSERT (list_empty(&console_session.ses_rpc_list));
         LASSERT (list_empty(&console_session.ses_rpc_freelist));
+        LASSERT (atomic_read(&console_session.ses_rpc_counter) == 0);
 
         rc = lstcon_rpc_trans_prep(NULL, LST_TRANS_SESPING,
                                    &console_session.ses_ping);
@@ -1224,20 +1247,24 @@ lstcon_rpc_cleanup_wait(void)
         struct list_head   *pacer;
         struct list_head    zlist;
 
+        /* Called with hold of global mutex */
+
         LASSERT (console_session.ses_shutdown);
 
         while (!list_empty(&console_session.ses_trans_list)) { 
                 list_for_each(pacer, &console_session.ses_trans_list) {
                         trans = list_entry(pacer, lstcon_rpc_trans_t, tas_link);
-                        cfs_waitq_signal(&trans->tas_waitq);
 
                         CDEBUG(D_NET, "Session closed, wakeup transaction %s\n",
                                lstcon_rpc_trans_name(trans->tas_opc));
+
+                        cfs_waitq_signal(&trans->tas_waitq);
                 }
 
                 mutex_up(&console_session.ses_mutex);
 
-                CWARN("Session is shutting down, close all transactions\n");
+                CWARN("Session is shutting down, "
+                      "waiting for termination of transactions\n");
                 cfs_pause(cfs_time_seconds(1));
 
                 mutex_down(&console_session.ses_mutex);
@@ -1245,18 +1272,16 @@ lstcon_rpc_cleanup_wait(void)
 
         spin_lock(&console_session.ses_rpc_lock);
 
-        lst_wait_until(list_empty(&console_session.ses_rpc_list),
+        lst_wait_until((atomic_read(&console_session.ses_rpc_counter) == 0),
                        console_session.ses_rpc_lock,
                        "Network is not accessable or target is down, "
-                       "waiting for %d console rpcs to die\n",
-                       console_session.ses_rpc_pending);
+                       "waiting for %d console RPCs to being recycled\n",
+                       atomic_read(&console_session.ses_rpc_counter));
 
         list_add(&zlist, &console_session.ses_rpc_freelist);
         list_del_init(&console_session.ses_rpc_freelist);
 
         spin_unlock(&console_session.ses_rpc_lock);
-
-        LASSERT (console_session.ses_rpc_pending == 0);
 
         while (!list_empty(&zlist)) {
                 crpc = list_entry(zlist.next, lstcon_rpc_t, crp_link);
@@ -1274,9 +1299,9 @@ lstcon_rpc_module_init(void)
         console_session.ses_ping_timer.stt_data = &console_session.ses_ping_timer;
 
         console_session.ses_ping = NULL;
-        console_session.ses_rpc_pending = 0;
+
         spin_lock_init(&console_session.ses_rpc_lock);
-        CFS_INIT_LIST_HEAD(&console_session.ses_rpc_list);
+        atomic_set(&console_session.ses_rpc_counter, 0);
         CFS_INIT_LIST_HEAD(&console_session.ses_rpc_freelist);
 
         return 0;
@@ -1285,9 +1310,8 @@ lstcon_rpc_module_init(void)
 void
 lstcon_rpc_module_fini(void)
 {
-        LASSERT (console_session.ses_rpc_pending == 0);
-        LASSERT (list_empty(&console_session.ses_rpc_list));
         LASSERT (list_empty(&console_session.ses_rpc_freelist));
+        LASSERT (atomic_read(&console_session.ses_rpc_counter) == 0);
 }
 
 #endif

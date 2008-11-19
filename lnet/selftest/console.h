@@ -1,11 +1,43 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Author: Liang Zhen <liangzhen@clusterfs.com>
- * 
- * This file is part of Lustre, http://www.lustre.org
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/selftest/console.h
  *
  * kernel structure for LST console
+ *
+ * Author: Liang Zhen <liangzhen@clusterfs.com>
  */
 
 #ifndef __LST_CONSOLE_H__
@@ -124,8 +156,7 @@ typedef struct {
         struct list_head       *ses_ndl_hash;   /* hash table of nodes */
 
         spinlock_t              ses_rpc_lock;   /* serialize */
-        int                     ses_rpc_pending; /* number of pending RPCs */
-        struct list_head        ses_rpc_list;   /* list head of RPCs */
+        atomic_t                ses_rpc_counter;/* # of initialized RPCs */
         struct list_head        ses_rpc_freelist; /* idle console rpc */
 } lstcon_session_t;                             /*** session descriptor */
 

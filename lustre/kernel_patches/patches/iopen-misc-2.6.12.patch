@@ -1,10 +1,10 @@
-Index: linux-2.6.4-51.0/Documentation/filesystems/ext2.txt
+Index: linux-2.6.16.46-0.14/Documentation/filesystems/ext2.txt
 ===================================================================
---- linux-2.6.4-51.0.orig/Documentation/filesystems/ext2.txt	2004-05-06 22:21:26.000000000 -0400
-+++ linux-2.6.4-51.0/Documentation/filesystems/ext2.txt	2004-05-06 22:24:42.000000000 -0400
-@@ -35,6 +35,22 @@
+--- linux-2.6.16.46-0.14.orig/Documentation/filesystems/ext2.txt
++++ linux-2.6.16.46-0.14/Documentation/filesystems/ext2.txt
+@@ -58,6 +58,22 @@ nobh				Do not attach buffer_heads to fi
  
- sb=n				Use alternate superblock at this location.
+ xip				Use execute in place (no caching) if possible
  
 +iopen				Makes an invisible pseudo-directory called 
 +				__iopen__ available in the root directory
@@ -25,16 +25,46 @@ Index: linux-2.6.4-51.0/Documentation/filesystems/ext2.txt
  grpquota,noquota,quota,usrquota	Quota options are silently ignored by ext2.
  
  
-Index: linux-2.6.4-51.0/fs/dcache.c
+Index: linux-2.6.16.46-0.14/fs/dcache.c
 ===================================================================
---- linux-2.6.4-51.0.orig/fs/dcache.c	2004-05-06 22:24:42.000000000 -0400
-+++ linux-2.6.4-51.0/fs/dcache.c	2004-05-06 22:58:37.000000000 -0400
-@@ -1195,14 +1195,13 @@
+--- linux-2.6.16.46-0.14.orig/fs/dcache.c
++++ linux-2.6.16.46-0.14/fs/dcache.c
+@@ -1309,17 +1309,26 @@ static void __d_rehash(struct dentry * e
+  * Adds a dentry to the hash according to its name.
+  */
+  
+-void d_rehash(struct dentry * entry)
++void d_rehash_cond(struct dentry * entry, int lock)
+ {
+ 	struct hlist_head *list = d_hash(entry->d_parent, entry->d_name.hash);
+ 
+-	spin_lock(&dcache_lock);
++	if (lock)
++		spin_lock(&dcache_lock);
+ 	spin_lock(&entry->d_lock);
+ 	__d_rehash(entry, list);
+ 	spin_unlock(&entry->d_lock);
+-	spin_unlock(&dcache_lock);
++	if (lock)
++		spin_unlock(&dcache_lock);
+ }
+ 
++EXPORT_SYMBOL(d_rehash_cond);
++
++void d_rehash(struct dentry * entry)
++{
++	d_rehash_cond(entry, 1);
++ }
++
+ #define do_switch(x,y) do { \
+ 	__typeof__ (x) __tmp = x; \
+ 	x = y; y = __tmp; } while (0)
+@@ -1392,14 +1401,13 @@ static void switch_names(struct dentry *
   * dcache entries should not be moved in this way.
   */
  
 -void d_move(struct dentry * dentry, struct dentry * target)
-+void __d_move(struct dentry * dentry, struct dentry * target)
++void d_move_locked(struct dentry * dentry, struct dentry * target)
  {
  	struct hlist_head *list;
  
@@ -45,26 +75,26 @@ Index: linux-2.6.4-51.0/fs/dcache.c
  	write_seqlock(&rename_lock);
  	/*
  	 * XXXX: do we really need to take target->d_lock?
-@@ -1253,6 +1252,14 @@
- 	spin_unlock(&target->d_lock);
+@@ -1450,6 +1458,14 @@ already_unhashed:
+ 	fsnotify_d_move(dentry);
  	spin_unlock(&dentry->d_lock);
  	write_sequnlock(&rename_lock);
 +}
 +
-+EXPORT_SYMBOL(__d_move);
++EXPORT_SYMBOL(d_move_locked);
 +
 +void d_move(struct dentry *dentry, struct dentry *target)
 +{
 +	spin_lock(&dcache_lock);
-+	__d_move(dentry, target);
++	d_move_locked(dentry, target);
  	spin_unlock(&dcache_lock);
  }
  
-Index: linux-2.6.4-51.0/include/linux/dcache.h
+Index: linux-2.6.16.46-0.14/include/linux/dcache.h
 ===================================================================
---- linux-2.6.4-51.0.orig/include/linux/dcache.h	2004-05-06 22:24:42.000000000 -0400
-+++ linux-2.6.4-51.0/include/linux/dcache.h	2004-05-06 23:03:43.000000000 -0400
-@@ -234,6 +234,7 @@
+--- linux-2.6.16.46-0.14.orig/include/linux/dcache.h
++++ linux-2.6.16.46-0.14/include/linux/dcache.h
+@@ -236,6 +236,7 @@ extern int have_submounts(struct dentry 
   * This adds the entry to the hash queues.
   */
  extern void d_rehash(struct dentry *);
@@ -72,11 +102,11 @@ Index: linux-2.6.4-51.0/include/linux/dcache.h
  
  /**
   * d_add - add dentry to hash queues
-@@ -252,6 +253,7 @@
+@@ -271,6 +272,7 @@ static inline struct dentry *d_add_uniqu
  
  /* used for rename() and baskets */
  extern void d_move(struct dentry *, struct dentry *);
-+extern void __d_move(struct dentry *, struct dentry *);
++extern void d_move_locked(struct dentry *, struct dentry *);
  
  /* appendix may either be NULL or be used for transname suffixes */
  extern struct dentry * d_lookup(struct dentry *, struct qstr *);

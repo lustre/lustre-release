@@ -1,27 +1,42 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
- *   Author: Peter Braam <braam@clusterfs.com>
- *   Author: Phil Schwan <phil@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/ldlm/ldlm_plain.c
+ *
+ * Author: Peter Braam <braam@clusterfs.com>
+ * Author: Phil Schwan <phil@clusterfs.com>
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
@@ -54,31 +69,32 @@ ldlm_plain_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                 if (req == lock)
                         RETURN(compat);
 
-                if (lockmode_compat(lock->l_req_mode, req_mode)) {
-                        /* jump to next mode group */
-                        if (LDLM_SL_HEAD(&lock->l_sl_mode))
-                                tmp = &list_entry(lock->l_sl_mode.next, 
-                                                  struct ldlm_lock,
-                                                  l_sl_mode)->l_res_link;
+                /* last lock in mode group */
+                tmp = &list_entry(lock->l_sl_mode.prev,
+                                  struct ldlm_lock,
+                                  l_sl_mode)->l_res_link;
+
+                if (lockmode_compat(lock->l_req_mode, req_mode))
                         continue;
-                }
 
                 if (!work_list)
                         RETURN(0);
 
                 compat = 0;
+
+                /* add locks of the mode group to @work_list as
+                 * blocking locks for @req */
                 if (lock->l_blocking_ast)
                         ldlm_add_ast_work_item(lock, req, work_list);
-                if (LDLM_SL_HEAD(&lock->l_sl_mode)) {
-                        /* add all members of the mode group */
-                        do {
-                                tmp = lock->l_res_link.next;
-                                lock = list_entry(tmp, struct ldlm_lock, 
-                                                  l_res_link);
+
+                {
+                        struct list_head *head;
+
+                        head = &lock->l_sl_mode;
+                        list_for_each_entry(lock, head, l_sl_mode)
                                 if (lock->l_blocking_ast)
-                                        ldlm_add_ast_work_item(
-                                                        lock, req, work_list);
-                        } while (!LDLM_SL_TAIL(&lock->l_sl_mode));
+                                        ldlm_add_ast_work_item(lock, req,
+                                                               work_list);
                 }
         }
 
@@ -87,12 +103,10 @@ ldlm_plain_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 
 /* If first_enq is 0 (ie, called from ldlm_reprocess_queue):
  *   - blocking ASTs have already been sent
- *   - the caller has already initialized req->lr_tmp
  *   - must call this function with the resource lock held
  *
  * If first_enq is 1 (ie, called from ldlm_lock_enqueue):
  *   - blocking ASTs have not been sent
- *   - the caller has NOT initialized req->lr_tmp, so we must
  *   - must call this function with the resource lock held */
 int ldlm_process_plain_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                             ldlm_error_t *err, struct list_head *work_list)

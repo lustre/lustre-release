@@ -1,25 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #define DEBUG_SUBSYSTEM S_ECHO
@@ -544,7 +556,7 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
                 LASSERT (pgp->pg == NULL);      /* for cleanup */
 
                 rc = -ENOMEM;
-                pgp->pg = cfs_alloc_page (gfp_mask);
+                OBD_PAGE_ALLOC(pgp->pg, gfp_mask);
                 if (pgp->pg == NULL)
                         goto out;
 
@@ -576,95 +588,11 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
                         if (vrc != 0 && rc == 0)
                                 rc = vrc;
                 }
-                cfs_free_page(pgp->pg);
+                OBD_PAGE_FREE(pgp->pg);
         }
         OBD_FREE(pga, npages * sizeof(*pga));
         return (rc);
 }
-
-#ifdef __KERNEL__
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-#include <linux/iobuf.h>
-
-static int echo_client_ubrw(struct obd_device *obd, int rw,
-                            struct obdo *oa, struct lov_stripe_md *lsm,
-                            obd_off offset, obd_size count, char *buffer,
-                            struct obd_trans_info *oti)
-{
-        struct echo_client_obd *ec = &obd->u.echo_client;
-        struct obd_info         oinfo = { { { 0 } } };
-        obd_count               npages;
-        struct brw_page        *pga;
-        struct brw_page        *pgp;
-        obd_off                 off;
-        struct kiobuf          *kiobuf;
-        int                     i;
-        int                     rc;
-
-        LASSERT (rw == OBD_BRW_WRITE || rw == OBD_BRW_READ);
-
-        /* NB: for now, only whole pages, page aligned */
-
-        if (count <= 0 ||
-            ((long)buffer & (~CFS_PAGE_MASK)) != 0 ||
-            (count & (~CFS_PAGE_MASK)) != 0 ||
-            (lsm != NULL && lsm->lsm_object_id != oa->o_id))
-                return (-EINVAL);
-
-        /* XXX think again with misaligned I/O */
-        npages = count >> CFS_PAGE_SHIFT;
-
-        OBD_ALLOC(pga, npages * sizeof(*pga));
-        if (pga == NULL)
-                return (-ENOMEM);
-
-        rc = alloc_kiovec (1, &kiobuf);
-        if (rc != 0)
-                goto out_1;
-
-        rc = map_user_kiobuf ((rw == OBD_BRW_READ) ? READ : WRITE,
-                              kiobuf, (unsigned long)buffer, count);
-        if (rc != 0)
-                goto out_2;
-
-        LASSERT (kiobuf->offset == 0);
-        LASSERT (kiobuf->nr_pages == npages);
-
-        for (i = 0, off = offset, pgp = pga;
-             i < npages;
-             i++, off += CFS_PAGE_SIZE, pgp++) {
-                pgp->off = off;
-                pgp->pg = kiobuf->maplist[i];
-                pgp->count = CFS_PAGE_SIZE;
-                pgp->flag = 0;
-        }
-
-        oinfo.oi_oa = oa;
-        oinfo.oi_md = lsm;
-        rc = obd_brw(rw, ec->ec_exp, &oinfo, npages, pga, oti);
-
-        //        if (rw == OBD_BRW_READ)
-        //                mark_dirty_kiobuf (kiobuf, count);
-
-        unmap_kiobuf (kiobuf);
- out_2:
-        free_kiovec (1, &kiobuf);
- out_1:
-        OBD_FREE(pga, npages * sizeof(*pga));
-        return (rc);
-}
-#else
-static int echo_client_ubrw(struct obd_device *obd, int rw,
-                            struct obdo *oa, struct lov_stripe_md *lsm,
-                            obd_off offset, obd_size count, char *buffer,
-                            struct obd_trans_info *oti)
-{
-        /* echo_client_ubrw() needs to be ported on 2.6 yet */
-        LBUG();
-        return 0;
-}
-#endif
-#endif
 
 struct echo_async_state;
 
@@ -807,13 +735,14 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
         /* prepare the group of pages that we're going to be keeping
          * in flight */
         for (i = 0; i < npages; i++) {
-                cfs_page_t *page = cfs_alloc_page(CFS_ALLOC_STD);
+                cfs_page_t *page;
+                OBD_PAGE_ALLOC(page, CFS_ALLOC_STD);
                 if (page == NULL)
                         GOTO(out, rc = -ENOMEM);
 
                 OBD_ALLOC(eap, sizeof(*eap));
                 if (eap == NULL) {
-                        cfs_free_page(page);
+                        OBD_PAGE_FREE(page);
                         GOTO(out, rc = -ENOMEM);
                 }
 
@@ -857,7 +786,7 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
 
                 rc = obd_prep_async_page(exp, lsm, NULL, eap->eap_page,
                                          eap->eap_off, &ec_async_page_ops,
-                                         eap, &eap->eap_cookie);
+                                         eap, &eap->eap_cookie, 1, NULL);
                 if (rc) {
                         spin_lock(&eas.eas_lock);
                         eas.eas_rc = rc;
@@ -908,7 +837,7 @@ out:
                                 obd_teardown_async_page(exp, lsm, NULL,
                                                         eap->eap_cookie);
                         OBD_FREE(eap, sizeof(*eap));
-                        cfs_free_page(page);
+                        OBD_PAGE_FREE(page);
                 }
                 OBD_FREE(aps, npages * sizeof aps[0]);
         }
@@ -947,6 +876,8 @@ static int echo_client_prep_commit(struct obd_export *exp, int rw,
         off = offset;
 
         for(; tot_pages; tot_pages -= npages) {
+                int lpages;
+
                 if (tot_pages < npages)
                         npages = tot_pages;
 
@@ -958,11 +889,13 @@ static int echo_client_prep_commit(struct obd_export *exp, int rw,
                 ioo.ioo_bufcnt = npages;
                 oti->oti_transno = 0;
 
-                ret = obd_preprw(rw, exp, oa, 1, &ioo, npages, rnb, lnb, oti);
+                lpages = npages;
+                ret = obd_preprw(rw, exp, oa, 1, &ioo, rnb, &lpages, lnb, oti);
                 if (ret != 0)
                         GOTO(out, ret);
+                LASSERT(lpages == npages);
 
-                for (i = 0; i < npages; i++) {
+                for (i = 0; i < lpages; i++) {
                         cfs_page_t *page = lnb[i].page;
 
                         /* read past eof? */
@@ -986,7 +919,7 @@ static int echo_client_prep_commit(struct obd_export *exp, int rw,
                                                              rnb[i].len);
                 }
 
-                ret = obd_commitrw(rw, exp, oa, 1, &ioo, npages, lnb, oti, ret);
+                ret = obd_commitrw(rw, exp, oa, 1,&ioo,rnb,npages,lnb,oti,ret);
                 if (ret != 0)
                         GOTO(out, ret);
         }
@@ -1004,7 +937,7 @@ int echo_client_brw_ioctl(int rw, struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct echo_client_obd *ec = &obd->u.echo_client;
-        struct obd_trans_info dummy_oti = { .oti_thread_id = -1 };
+        struct obd_trans_info dummy_oti = { .oti_thread = NULL };
         struct ec_object *eco;
         int rc;
         ENTRY;
@@ -1019,18 +952,9 @@ int echo_client_brw_ioctl(int rw, struct obd_export *exp,
 
         switch((long)data->ioc_pbuf1) {
         case 1:
-                if (data->ioc_pbuf2 == NULL) { // NULL user data pointer
-                        rc = echo_client_kbrw(obd, rw, &data->ioc_obdo1,
-                                              eco->eco_lsm, data->ioc_offset,
-                                              data->ioc_count, &dummy_oti);
-                } else {
-#ifdef __KERNEL__
-                        rc = echo_client_ubrw(obd, rw, &data->ioc_obdo1,
-                                              eco->eco_lsm, data->ioc_offset,
-                                              data->ioc_count, data->ioc_pbuf2,
-                                              &dummy_oti);
-#endif
-                }
+                rc = echo_client_kbrw(obd, rw, &data->ioc_obdo1,
+                                      eco->eco_lsm, data->ioc_offset,
+                                      data->ioc_count, &dummy_oti);
                 break;
         case 2:
                 rc = echo_client_async_page(ec->ec_exp, rw, &data->ioc_obdo1,
@@ -1101,8 +1025,8 @@ echo_client_enqueue(struct obd_export *exp, struct obdo *oa,
 {
         struct obd_device      *obd = exp->exp_obd;
         struct echo_client_obd *ec = &obd->u.echo_client;
-        struct lustre_handle   *ulh = obdo_handle (oa);
-        struct obd_enqueue_info einfo = { 0 };
+        struct lustre_handle   *ulh = &oa->o_handle;
+        struct ldlm_enqueue_info einfo = { 0 };
         struct obd_info oinfo = { { { 0 } } };
         struct ec_object       *eco;
         struct ec_lock         *ecl;
@@ -1140,7 +1064,7 @@ echo_client_enqueue(struct obd_export *exp, struct obdo *oa,
         oinfo.oi_policy = ecl->ecl_policy;
         oinfo.oi_lockh = &ecl->ecl_lock_handle;
         oinfo.oi_md = eco->eco_lsm;
-        rc = obd_enqueue(ec->ec_exp, &oinfo, &einfo);
+        rc = obd_enqueue(ec->ec_exp, &oinfo, &einfo, NULL);
         if (rc != 0)
                 goto failed_1;
 
@@ -1169,7 +1093,7 @@ echo_client_cancel(struct obd_export *exp, struct obdo *oa)
 {
         struct obd_device      *obd = exp->exp_obd;
         struct echo_client_obd *ec = &obd->u.echo_client;
-        struct lustre_handle   *ulh = obdo_handle (oa);
+        struct lustre_handle   *ulh = &oa->o_handle;
         struct ec_lock         *ecl = NULL;
         int                     found = 0;
         struct list_head       *el;
@@ -1228,7 +1152,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
 
         switch (cmd) {
         case OBD_IOC_CREATE:                    /* may create echo object */
-                if (!capable (CAP_SYS_ADMIN))
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
 
                 rc = echo_create_object (obd, 1, &data->ioc_obdo1,
@@ -1237,7 +1161,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 GOTO(out, rc);
 
         case OBD_IOC_DESTROY:
-                if (!capable (CAP_SYS_ADMIN))
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
                 rc = echo_get_object (&eco, obd, &data->ioc_obdo1);
                 if (rc == 0) {
@@ -1264,7 +1188,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 GOTO(out, rc);
 
         case OBD_IOC_SETATTR:
-                if (!capable (CAP_SYS_ADMIN))
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
 
                 rc = echo_get_object (&eco, obd, &data->ioc_obdo1);
@@ -1279,7 +1203,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 GOTO(out, rc);
 
         case OBD_IOC_BRW_WRITE:
-                if (!capable (CAP_SYS_ADMIN))
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
 
                 rw = OBD_BRW_WRITE;
@@ -1298,7 +1222,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 GOTO(out, rc);
 
         case ECHO_IOC_SET_STRIPE:
-                if (!capable (CAP_SYS_ADMIN))
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
 
                 if (data->ioc_pbuf1 == NULL) {  /* unset */
@@ -1315,7 +1239,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 GOTO (out, rc);
 
         case ECHO_IOC_ENQUEUE:
-                if (!capable (CAP_SYS_ADMIN))
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
 
                 rc = echo_client_enqueue(exp, &data->ioc_obdo1,
@@ -1383,10 +1307,10 @@ echo_client_setup(struct obd_device *obddev, obd_count len, void *buf)
                 return -ENOMEM;
         }
 
-        ocd->ocd_connect_flags = OBD_CONNECT_VERSION;
+        ocd->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_REQPORTAL;
         ocd->ocd_version = LUSTRE_VERSION_CODE;
 
-        rc = obd_connect(&conn, tgt, &echo_uuid, ocd);
+        rc = obd_connect(&conn, tgt, &echo_uuid, ocd, NULL);
 
         OBD_FREE(ocd, sizeof(*ocd));
 
@@ -1433,7 +1357,7 @@ static int echo_client_cleanup(struct obd_device *obddev)
 
 static int echo_client_connect(struct lustre_handle *conn,
                                struct obd_device *src, struct obd_uuid *cluuid,
-                               struct obd_connect_data *data)
+                               struct obd_connect_data *data, void *localdata)
 {
         struct obd_export *exp;
         int                rc;
@@ -1496,9 +1420,9 @@ static struct obd_ops echo_obd_ops = {
 
 int echo_client_init(void)
 {
-        struct lprocfs_static_vars lvars;
+        struct lprocfs_static_vars lvars = { 0 };
 
-        lprocfs_init_vars(echo, &lvars);
+        lprocfs_echo_init_vars(&lvars);
         return class_register_type(&echo_obd_ops, lvars.module_vars,
                                    LUSTRE_ECHO_CLIENT_NAME);
 }

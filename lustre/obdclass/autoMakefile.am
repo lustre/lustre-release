@@ -8,11 +8,11 @@ if LIBLUSTRE
 
 noinst_LIBRARIES = liblustreclass.a
 liblustreclass_a_SOURCES = class_obd.c debug.c genops.c statfs_pack.c uuid.c 
-liblustreclass_a_SOURCES += lustre_handles.c lustre_peer.c lprocfs_status.c
+liblustreclass_a_SOURCES += lustre_handles.c lustre_peer.c lprocfs_status.c class_hash.c
 liblustreclass_a_SOURCES += obdo.c obd_config.c llog.c llog_obd.c llog_cat.c 
 liblustreclass_a_SOURCES += llog_lvfs.c llog_swab.c 
-liblustreclass_a_SOURCES += prng.c #llog_ioctl.c rbtree.c
-liblustreclass_a_CPPFLAGS = $(LLCPPFLAGS) -DLUSTRE_VERSION=\"32\" -DBUILD_VERSION=\"1\"
+liblustreclass_a_SOURCES += #llog_ioctl.c rbtree.c
+liblustreclass_a_CPPFLAGS = $(LLCPPFLAGS)
 liblustreclass_a_CFLAGS = $(LLCFLAGS)
 
 endif
@@ -32,7 +32,7 @@ obdclass_SOURCES := \
         darwin/darwin-module.c darwin/darwin-sysctl.c 		\
         class_obd.c genops.c lprocfs_status.c           	\
         lustre_handles.c lustre_peer.c obd_config.c     	\
-        obdo.c debug.c llog_ioctl.c uuid.c prng.c               \
+        obdo.c debug.c llog_ioctl.c uuid.c                      \
         llog_swab.c llog_obd.c llog.c llog_cat.c llog_lvfs.c
 
 obdclass_CFLAGS := $(EXTRA_KCFLAGS)

@@ -1,24 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2004 Cluster File Systems, Inc.
- *   Author: Eric Barton <eric@bartonsoftware.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lnet/klnds/iiblnd/iiblnd_cb.c
+ *
+ * Author: Eric Barton <eric@bartonsoftware.com>
  */
 
 #include "iiblnd.h"
@@ -525,7 +542,7 @@ kibnal_kvaddr_to_page (unsigned long vaddr)
                 LASSERT (page != NULL);
                 return page;
         }
-#if CONFIG_HIGHMEM
+#ifdef CONFIG_HIGHMEM
         if (vaddr >= PKMAP_BASE &&
             vaddr < (PKMAP_BASE + LAST_PKMAP * PAGE_SIZE)) {
                 /* No highmem pages only used for bulk (kiov) I/O */
@@ -2506,6 +2523,15 @@ kibnal_accept (kib_conn_t **connp, IB_HANDLE cep, kib_msg_t *msg, int nob)
         }
         
         write_lock_irqsave (&kibnal_data.kib_global_lock, flags);
+
+        if (kibnal_data.kib_listener_cep == NULL) { /* shutdown started */
+                write_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
+
+                kibnal_peer_decref(peer);
+                kibnal_conn_decref(conn);
+                kibnal_reject(nid, cep, IBNAL_REJECT_NO_RESOURCES);
+                return -ESHUTDOWN;
+        }
 
         peer2 = kibnal_find_peer_locked(nid);
         if (peer2 == NULL) {

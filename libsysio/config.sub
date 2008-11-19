@@ -299,7 +299,7 @@ case $basic_machine in
 	| avr-* \
 	| bs2000-* \
 	| c[123]* | c30-* | [cjt]90-* | c4x-* | c54x-* | c55x-* | c6x-* \
-	| clipper-* | cydra-* \
+	| clipper-* | craynv-* | cydra-* \
 	| d10v-* | d30v-* | dlx-* \
 	| elxsi-* \
 	| f30[01]-* | f700-* | fr30-* | frv-* | fx80-* \

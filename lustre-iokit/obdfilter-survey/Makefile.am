@@ -1,3 +1,3 @@
-bin_SCRIPTS = create-echoclient obdfilter-survey obparse
+bin_SCRIPTS = obdfilter-survey libecho plot-obdfilter
 CLEANFILE = $(bin_SCRIPTS)
-EXTRA_DIST = README.obdfilter-survey create-echoclient obdfilter-survey obparse
+EXTRA_DIST = README.obdfilter-survey obdfilter-survey libecho plot-obdfilter

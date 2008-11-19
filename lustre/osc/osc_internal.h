@@ -1,5 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #ifndef OSC_INTERNAL_H
@@ -28,8 +60,11 @@ struct osc_async_page {
         struct client_obd       *oap_cli;
         struct lov_oinfo        *oap_loi;
 
-	struct obd_async_page_ops *oap_caller_ops;
+        struct obd_async_page_ops *oap_caller_ops;
         void                    *oap_caller_data;
+        struct list_head         oap_page_list;
+        struct ldlm_lock        *oap_ldlm_lock;
+        spinlock_t               oap_lock;
 };
 
 #define oap_page        oap_brw_page.pg
@@ -54,6 +89,7 @@ struct osc_cache_waiter {
 #define OSCC_FLAG_LOW                0x10
 #define OSCC_FLAG_EXITING            0x20
 
+int osc_precreate(struct obd_export *exp);
 int osc_create(struct obd_export *exp, struct obdo *oa,
 	       struct lov_stripe_md **ea, struct obd_trans_info *oti);
 int osc_real_create(struct obd_export *exp, struct obdo *oa,
@@ -63,13 +99,36 @@ void osc_wake_cache_waiters(struct client_obd *cli);
 
 #ifdef LPROCFS
 int lproc_osc_attach_seqstat(struct obd_device *dev);
+void lprocfs_osc_init_vars(struct lprocfs_static_vars *lvars);
 #else
 static inline int lproc_osc_attach_seqstat(struct obd_device *dev) {return 0;}
+static inline void lprocfs_osc_init_vars(struct lprocfs_static_vars *lvars)
+{
+        memset(lvars, 0, sizeof(*lvars));
+}
 #endif
 
 #ifndef min_t
 #define min_t(type,x,y) \
         ({ type __x = (x); type __y = (y); __x < __y ? __x: __y; })
 #endif
+
+static inline int osc_recoverable_error(int rc)
+{
+        return (rc == -EIO || rc == -EROFS || rc == -ENOMEM || rc == -EAGAIN);
+}
+
+/* return 1 if osc should be resend request */
+static inline int osc_should_resend(int resend, struct client_obd *cli)
+{
+        return atomic_read(&cli->cl_resends) ? 
+                atomic_read(&cli->cl_resends) > resend : 1; 
+}
+
+static inline int osc_exp_is_2_0_server(struct obd_export *exp) {
+       LASSERT(exp);
+       return !!(exp->exp_connect_flags & OBD_CONNECT_FID);
+}
+
 
 #endif /* OSC_INTERNAL_H */

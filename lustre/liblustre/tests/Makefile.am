@@ -4,13 +4,13 @@ AM_CPPFLAGS = -I$(SYSIO)/include -I/opt/lam/include $(LLCPPFLAGS) -I$(top_srcdir
 AM_CFLAGS = $(LLCFLAGS)
 AM_LIBS = $(LIBEFENCE) $(LIBREADLINE)
 
-LLIB_EXEC = $(top_builddir)/lustre/utils/liblustreapi.a $(top_builddir)/lustre/liblustre/liblustre.a $(CAP_LIBS) $(PTHREAD_LIBS)
+LLIB_EXEC = $(top_builddir)/lustre/utils/liblustreapi.a $(top_builddir)/lustre/liblustre/liblustre.a $(CAP_LIBS) $(PTHREAD_LIBS) $(ZLIB)
 
 if LIBLUSTRE
 noinst_LIBRARIES = libtestcommon.a
 
 if LIBLUSTRE_TESTS
-noinst_PROGRAMS = sanity echo_test
+noinst_PROGRAMS = sanity
 
 if !CRAY_XT3
 noinst_PROGRAMS += recovery_small replay_single replay_ost_single
@@ -20,15 +20,14 @@ if MPITESTS
 noinst_PROGRAMS += test_lock_cancel
 endif # MPITESTS
 
+liblustre_testdir=$(libdir)/lustre/liblustre/tests
+liblustre_test_PROGRAMS = $(noinst_PROGRAMS)
+liblustre_test_LIBRARIES = $(noinst_LIBRARIES)
+
 endif # LIBLUSTRE_TESTS
 endif # LIBLUSTRE
 
 libtestcommon_a_SOURCES = test_common.c test_common.h
-
-echo_test_SOURCES = echo_test.c  $(top_srcdir)/lustre/utils/parser.c $(top_srcdir)/lustre/utils/obd.c $(top_srcdir)/lustre/utils/lustre_cfg.c
-echo_test_CFLAGS = $(LL_CFLAGS)
-echo_test_LDADD = $(top_builddir)/lustre/liblustre/liblsupport.a $(LIBREADLINE) $(CAP_LIBS) $(PTHREAD_LIBS) 
-echo_test_DEPENDENCIES=$(top_builddir)/lustre/liblustre/liblsupport.a
 
 sanity_SOURCES = sanity.c
 sanity_CFLAGS = $(LL_CFLAGS)
@@ -53,7 +52,8 @@ replay_ost_single_DEPENDENCIES = $(top_builddir)/lustre/liblustre/liblustre.a li
 if MPITESTS
 test_lock_cancel_SOURCES = test_lock_cancel.c
 test_lock_cancel_CFLAGS = $(LL_CFLAGS) -I/opt/lam/include
-test_lock_cancel_LDADD :=  $(LLIB_EXEC)  -L/opt/lam/lib -lmpi -llam
+#test_lock_cancel_LDADD :=  $(LLIB_EXEC)  -L/opt/lam/lib -lmpi -llam
+test_lock_cancel_LDADD :=  $(LLIB_EXEC)  -lmpich
 endif
 
 

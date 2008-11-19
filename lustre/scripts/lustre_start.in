@@ -1,0 +1,372 @@
+#!/bin/bash
+
+# vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
+
+#
+# lustre_start - start or stop multiple Lustre servers from a CSV file
+#
+# This script is used to parse each line of a CSV (Comma-Separated Value) file
+# and execute remote command to start/stop the service on every Lustre server
+# target that will be part of the Lustre cluster.
+#
+################################################################################
+
+# Usage
+usage() {
+    cat <<EOF
+
+Usage: $(basename $0) [options] <-a|-w|-x> <CSV file>
+
+    This script is used to start or stop multiple Lustre servers from a
+    CSV file.
+
+    Options:
+    -a          select all the nodes from the CSV file to operate on
+    -w hostname,hostname,...
+                select the specified list of nodes (separated by commas) to
+                operate on rather than all the nodes in the CSV file
+    -x hostname,hostname,...
+                exclude the specified list of nodes (separated by commas)
+    -n          no net - don't verify network connectivity and hostnames
+                in the cluster
+    -m          pass "mount options" item in the CSV file to mount command line
+    -k          stop the services on Lustre server targets
+    -v          verbose mode
+    -h          help
+    CSV file    a comma-separated value file that contains configuration
+                parameters for each target in a Lustre cluster
+
+    Please refer to "lustre_config -h" for the description of CSV file formats.
+
+EOF
+}
+
+# Get the library of functions
+. @scriptlibdir@/lc_common
+
+SPECIFY_MNTOPTS=false
+STOP_SERVICE=false
+# Get and check the positional parameters
+while getopts "aw:x:nmkhv" OPTION; do
+    case $OPTION in
+    a)
+        [ -z "$SPECIFIED_NODELIST" ] && [ -z "$EXCLUDED_NODELIST" ] \
+        && USE_ALLNODES=true
+        NODELIST_OPT="$NODELIST_OPT -a"
+        ;;
+    w)
+        USE_ALLNODES=false
+        SPECIFIED_NODELIST=$OPTARG
+        NODELIST_OPT="$NODELIST_OPT -w $SPECIFIED_NODELIST"
+        ;;
+    x)
+        USE_ALLNODES=false
+        EXCLUDED_NODELIST=$OPTARG
+        NODELIST_OPT="$NODELIST_OPT -x $EXCLUDED_NODELIST"
+        ;;
+    n)
+        VERIFY_CONNECT=false
+        ;;
+    m)
+        SPECIFY_MNTOPTS=true
+        ;;
+    k)
+        STOP_SERVICE=true 
+        ;;
+    h)
+        usage
+        exit 0
+        ;;
+    v)
+        VERBOSE_OPT="-v"
+        VERBOSE_OUTPUT=true
+        ;;
+    ?)
+        usage 1>&2
+        exit 1
+        ;;
+    esac
+done
+
+# Toss out the parameters we've already processed
+shift $((OPTIND - 1))
+
+# Here we expect the CSV file
+if [ $# -eq 0 ]; then
+    error_output "Missing CSV file!"
+    usage 1>&2
+    exit 1
+fi
+
+CSV_FILE=$1
+
+# get_fstab_mntopts host_name device_name mount_point
+# Get the mount options from the /etc/fstab file
+get_fstab_mntopts() {
+    local host_name=$1
+    local dev_name=$2
+    local mnt_pnt=$3
+
+    local mnt_opts=""
+
+    if [ -z "$host_name" -o -z "$dev_name" -o -z "$mnt_pnt" ]; then
+        echo "get_fstab_mntopts(): Missing argument!"
+        return 1
+    fi
+
+    # Execute remote command to get the mount options from /etc/fstab file
+    mnt_opts=$($REMOTE $host_name "grep -w ^$dev_name /etc/fstab | \
+grep -w $mnt_pnt | awk '{print \$4}'" 2>/dev/null)
+
+    mnt_opts=${mnt_opts//$host_name: /}
+
+    echo $mnt_opts
+    return 0
+}
+
+# Start the service on one Lustre server target
+start_service() {
+    declare -i i=$1
+    shift
+    local extra_mntopts="$*"
+    local mntopts=""
+
+    # Get mount options
+    if $SPECIFY_MNTOPTS; then
+        # Use the "mount options" item from the CSV file
+        [ -n "${MOUNT_OPTIONS[i]}" ] && mntopts=${MOUNT_OPTIONS[i]}
+    else
+        # Do not use the "mount options" item from the CSV file
+        mntopts=$(get_fstab_mntopts ${HOST_NAME[i]} ${DEVICE_NAME[i]} \
+                ${MOUNT_POINT[i]})
+        [ ${PIPESTATUS[0]} -ne 0 ] && error_output "$mntopts" && return 1
+    fi
+
+    [ -n "$mntopts" ] && mntopts="-o $mntopts"
+    [ -n "$extra_mntopts" ] && mntopts="$mntopts $extra_mntopts"
+    # Strip of any leading space
+    mntopts=${mntopts# }
+
+    # Execute remote command to start the service
+    verbose_output "Mounting Lustre ${DEVICE_TYPE[i]} target"\
+    "${DEVICE_NAME[i]} (opts: $mntopts) on ${HOST_NAME[i]}:${MOUNT_POINT[i]}..."
+    $REMOTE ${HOST_NAME[i]} "PATH=\$PATH:/sbin:/usr/sbin
+error() { set +x; echo \"ERROR: \$2: \$1\"; echo \"XXRETCODE:\$1\"; exit \$1; }
+mkdir -p ${MOUNT_POINT[i]} || \\
+    error \${PIPESTATUS[0]} \"failed to mkdir ${MOUNT_POINT[i]}\"
+mount -t $FS_TYPE $mntopts ${DEVICE_NAME[i]} ${MOUNT_POINT[i]} || \\
+    error \${PIPESTATUS[0]} \\
+        \"failed to mount ${DEVICE_NAME[i]} on host ${HOST_NAME[i]}\""
+    return ${PIPESTATUS[0]}
+}
+
+# Stop the service on one Lustre server target
+stop_service() {
+    declare -i i=$1
+
+    # Execute remote command to stop the service
+    verbose_output "Unmounting Lustre ${DEVICE_TYPE[i]} target"\
+    "${DEVICE_NAME[i]} on ${HOST_NAME[i]}:${MOUNT_POINT[i]}..."
+    $REMOTE ${HOST_NAME[i]} "PATH=\$PATH:/sbin:/usr/sbin
+error() { set +x; echo \"ERROR: \$2: \$1\"; echo \"XXRETCODE:\$1\"; exit \$1; }
+if grep -q \" ${MOUNT_POINT[i]} \" /proc/mounts; then
+    umount -d -f ${MOUNT_POINT[i]} || \\
+        error \${PIPESTATUS[0]} \\
+            \"failed to unmount ${DEVICE_NAME[i]} on host ${HOST_NAME[i]}\"
+else
+    echo \"${DEVICE_NAME[i]} was not mounted on\"\\
+    \"${HOST_NAME[i]}:${MOUNT_POINT[i]}\"
+fi"
+    return ${PIPESTATUS[0]}
+}
+
+# mass_op op_type target_type
+# Start/stop the services on Lustre server targets in parallel
+mass_op() {
+    local op_type=$1
+    local target_type=$2
+
+    local op_func
+    declare -i i
+    declare -i pid_num=0
+    declare -a REMOTE_PID
+    local RC=0
+
+    if [ -z "$op_type" -o -z "$target_type" ]; then
+        error_output "mass_op(): Missing argument!"
+        return 1
+    fi
+
+    case "$op_type" in
+    "start")  op_func=start_service;;
+    "stop")   op_func=stop_service;;
+    *)  error_output "mass_op(): Invalid op type \"$op_type\"!" && return 1;;
+    esac
+
+    for ((i = 0; i < ${#HOST_NAME[@]}; i++)); do
+        if [ "${DEVICE_TYPE[i]}" = "$target_type" ] \
+        && [[ "${FORMAT_OPTIONS[i]}" != *noformat* ]]; then
+            eval "$op_func $i &"
+            REMOTE_PID[$pid_num]=$!
+            let pid_num=$pid_num+1
+        fi
+    done
+
+    for ((pid_num = 0; pid_num < ${#REMOTE_PID[@]}; pid_num++)); do
+        wait ${REMOTE_PID[${pid_num}]}
+        local RC1=${PIPESTATUS[0]}
+        [ $RC1 -ne 0 ] && RC=$RC1
+    done
+
+    [ $RC -ne 0 ] && return $RC
+
+    return 0
+}
+
+# Unload the modules to make cleanup
+unload_modules() {
+    local command
+    local host
+    local host_list
+
+    host_list=$(comma_list "${HOST_NAME[@]}")
+    [ -z "$host_list" ] && return 0
+
+    command="PATH=\$PATH:/sbin:/usr/sbin
+if grep -q libcfs /proc/modules; then
+    lctl net down 1>/dev/null 2>&1
+    lustre_rmmod
+fi"
+
+    if is_pdsh; then
+        $REMOTE $host_list "$command"
+    else
+        for host in ${host_list//,/ }; do
+            $REMOTE $host "$command"
+        done
+    fi
+}
+
+# Start the services on Lustre server targets
+mass_start() {
+    declare -i i
+    local combo_mgs_mdt=false
+
+    if [ ${#HOST_NAME[@]} -eq 0 ]; then
+        verbose_output "There are no Lustre targets specified."
+        return 0
+    fi
+
+    # Start lnet network on the MGS node
+    start_mgs_lnet || return ${PIPESTATUS[0]}
+
+    local checked_hosts=""
+    for ((i = 0; i < ${#HOST_NAME[@]}; i++)); do
+        host_in_hostlist ${HOST_NAME[i]} $checked_hosts && continue
+        if ! is_mgs_node ${HOST_NAME[i]}; then
+            # Add module options to the module configuration file
+            add_module_options $i ${HOST_NAME[i]} || return ${PIPESTATUS[0]}
+
+            # Check lnet networks
+            check_lnet $i || return ${PIPESTATUS[0]}
+
+            checked_hosts="$checked_hosts,${HOST_NAME[i]}"
+        fi
+    done
+
+    # Start MGS or the MGS service on combo MGS/MDT (with "-o nosvc -n" options)
+    if [ -n "${MGS_NODENAME[0]}" ]; then
+        local idx=${MGS_IDX[0]}
+        if [ "${DEVICE_TYPE[idx]#*mdt*}" != "${DEVICE_TYPE[idx]}" ]; then
+            # Combo MGS/MDT
+            combo_mgs_mdt=true
+            start_service ${MGS_IDX[0]} "-o nosvc -n" || return ${PIPESTATUS[0]}
+        else
+            start_service ${MGS_IDX[0]} || return ${PIPESTATUS[0]}
+        fi
+    fi
+
+    # Start OST(s)
+    mass_op "start" "ost" || return ${PIPESTATUS[0]}
+
+    # Start the MDT service on combo MGS/MDT (with "-o nomgs" option)
+    if $combo_mgs_mdt; then
+        start_service ${MGS_IDX[0]} "-o nomgs" || return ${PIPESTATUS[0]}
+    fi
+
+    # Start MDT(s)
+    mass_op "start" "mdt" || return ${PIPESTATUS[0]}
+
+    verbose_output "Success on all Lustre targets!"
+    return 0
+}
+
+# Stop the services on Lustre server targets
+mass_stop() {
+    declare -i i
+
+    if [ ${#HOST_NAME[@]} -eq 0 ]; then
+        verbose_output "There are no Lustre targets specified."
+        return 0
+    fi
+
+    # Stop MDT(s)
+    mass_op "stop" "mdt" || return ${PIPESTATUS[0]}
+
+    # Stop the MDT service on combo MGS/MDT
+    if [ -n "${MGS_NODENAME[0]}" ]; then
+        local idx=${MGS_IDX[0]}
+        if [ "${DEVICE_TYPE[idx]#*mdt*}" != "${DEVICE_TYPE[idx]}" ]; then
+            # Combo MGS/MDT
+            stop_service ${MGS_IDX[0]} || return ${PIPESTATUS[0]}
+        fi
+    fi
+
+    # Stop OST(s)
+    mass_op "stop" "ost" || return ${PIPESTATUS[0]}
+    
+    # Stop MGS or the MGS service on combo MGS/MDT
+    if [ -n "${MGS_NODENAME[0]}" ]; then
+        stop_service ${MGS_IDX[0]} || return ${PIPESTATUS[0]}
+    fi
+
+    unload_modules
+
+    return 0
+}
+
+#********************************* Main Flow **********************************#
+
+# Check the CSV file
+check_file $CSV_FILE || exit ${PIPESTATUS[0]}
+
+# Get the list of nodes to be operated on
+NODES_TO_USE=$(get_nodelist) || error_exit ${PIPESTATUS[0]} "$NODES_TO_USE"
+
+# Check the node list
+check_nodelist $NODES_TO_USE || exit ${PIPESTATUS[0]}
+
+# Check the network connectivity and hostnames
+if $VERIFY_CONNECT; then
+    verbose_output "Checking the cluster network connectivity and hostnames..."
+    $VERIFY_CLUSTER_NET $NODELIST_OPT $VERBOSE_OPT $CSV_FILE || \
+        exit ${PIPESTATUS[0]}
+    verbose_output "Check the cluster network connectivity and hostnames OK!"
+fi
+
+# Configure the Lustre cluster
+echo "$(basename $0): ******** Lustre cluster configuration BEGIN ********"
+
+get_lustre_items $CSV_FILE || exit ${PIPESTATUS[0]}
+
+check_mgs || exit ${PIPESTATUS[0]}
+
+if ! $STOP_SERVICE; then
+    mass_start || exit ${PIPESTATUS[0]}
+else
+    mass_stop || exit ${PIPESTATUS[0]}
+fi
+
+echo "$(basename $0): ******** Lustre cluster configuration END **********"
+
+exit 0

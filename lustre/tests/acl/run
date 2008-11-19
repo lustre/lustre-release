@@ -26,6 +26,7 @@ if (isatty(fileno(STDOUT))) {
 }
 
 sub exec_test($$);
+sub process_test($$$$);
 
 my ($prog, $in, $out) = ([], [], []);
 my $line_number = 0;

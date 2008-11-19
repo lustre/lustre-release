@@ -1,23 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2005 Cluster File Systems, Inc.
- *   Author: PJ Kirner <pjkirner@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * snmp/lustre-snmp.c
+ *
+ * Author: PJ Kirner <pjkirner@clusterfs.com>
  */
  
 #include <net-snmp/net-snmp-config.h>
@@ -88,6 +106,7 @@ struct variable7 clusterFileSystems_variables[] = {
   { MDDFREECAPACITY     , ASN_COUNTER64 , RONLY , var_mdsTable, 6, { 2,1,4,2,1,5 } },
   { MDDFILES            , ASN_COUNTER64 , RONLY , var_mdsTable, 6, { 2,1,4,2,1,6 } },
   { MDDFREEFILES        , ASN_COUNTER64 , RONLY , var_mdsTable, 6, { 2,1,4,2,1,7 } },
+  { MDSNBSAMPLEDREQ     , ASN_COUNTER64 , RONLY , var_mdsNbSampledReq, 4, { 2,1,4,3 } },
 
   /* metaDataClients 2.1.5 */
   { MDCNUMBER           , ASN_UNSIGNED  , RONLY , var_clusterFileSystems, 4, { 2,1,5,1 } },
@@ -511,6 +530,36 @@ var_ldlmTable(struct variable *vp,
 
 
 /*****************************************************************************
+ * Function: var_mdsNbSampledReq
+ *
+ ****************************************************************************/
+unsigned char *
+var_mdsNbSampledReq(struct variable *vp,
+            oid     *name,
+            size_t  *length,
+            int     exact,
+            size_t  *var_len,
+            WriteMethod **write_method)
+{
+  unsigned long long nb_sample=0,min=0,max=0,sum=0,sum_square=0;
+  static counter64 c64;
+
+  if (header_generic(vp,name,length,exact,var_len,write_method)
+                                  == MATCH_FAILED )
+    return NULL;
+
+  if( mds_stats_values(STR_REQ_WAITIME,&nb_sample,&min,&max,&sum,&sum_square) == ERROR) return NULL;
+
+  c64.low = (u_long) (0x0FFFFFFFF & nb_sample);
+  nb_sample >>= 32;
+  c64.high = (u_long) (0x0FFFFFFFF & nb_sample);
+
+  *var_len = sizeof(c64);
+  return (unsigned char *) &c64;
+}
+
+
+/*****************************************************************************
  * Function: write_sysStatus
  *
  ****************************************************************************/
@@ -598,4 +647,3 @@ write_sysStatus(int      action,
   }
   return SNMP_ERR_NOERROR;
 }
-

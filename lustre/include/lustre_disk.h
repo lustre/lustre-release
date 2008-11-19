@@ -1,26 +1,43 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2006 Cluster File Systems, Inc.
- *   Author: Nathan Rutman <nathan@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/include/lustre_disk.h
  *
  * Lustre disk format definitions.
+ *
+ * Author: Nathan Rutman <nathan@clusterfs.com>
  */
 
 #ifndef _LUSTRE_DISK_H
@@ -53,14 +70,14 @@
 #define LDD_F_PARAM         0x0400 /* process as lctl conf_param */
 
 enum ldd_mount_type {
-        LDD_MT_EXT3 = 0, 
+        LDD_MT_EXT3 = 0,
         LDD_MT_LDISKFS,
-        LDD_MT_SMFS,   
+        LDD_MT_SMFS,
         LDD_MT_REISERFS,
         LDD_MT_LDISKFS2,
         LDD_MT_LAST
 };
-       
+
 static inline char *mt_str(enum ldd_mount_type mt)
 {
         static char *mount_type_string[] = {
@@ -84,7 +101,7 @@ struct lustre_disk_data {
         __u32      ldd_feature_compat;  /* compatible feature flags */
         __u32      ldd_feature_rocompat;/* read-only compatible feature flags */
         __u32      ldd_feature_incompat;/* incompatible feature flags */
-        
+
         __u32      ldd_config_ver;      /* config rewrite count - not used */
         __u32      ldd_flags;           /* LDD_SV_TYPE */
         __u32      ldd_svindex;         /* server index (0001), must match 
@@ -93,7 +110,7 @@ struct lustre_disk_data {
         char       ldd_fsname[64];      /* filesystem this server is part of */
         char       ldd_svname[64];      /* this server's name (lustre-mdt0001)*/
         __u8       ldd_uuid[40];        /* server UUID (COMPAT_146) */
-   
+
 /*200*/ char       ldd_userdata[1024 - 200]; /* arbitrary user string */
 /*1024*/__u8       ldd_padding[4096 - 1024];
 /*4096*/char       ldd_mount_opts[4096]; /* target fs mount opts */
@@ -149,8 +166,10 @@ struct lustre_mount_data {
 #define LMD_FLG_SERVER       0x0001  /* Mounting a server */
 #define LMD_FLG_CLIENT       0x0002  /* Mounting a client */
 #define LMD_FLG_ABORT_RECOV  0x0008  /* Abort recovery */
-#define LMD_FLG_NOSVC        0x0010  /* Only start MGS/MGC for servers, 
+#define LMD_FLG_NOSVC        0x0010  /* Only start MGS/MGC for servers,
                                         no other services */
+#define LMD_FLG_NOMGS        0x0020  /* Only start target for servers, reusing
+                                        existing MGS services */
 
 #define lmd_is_client(x) ((x)->lmd_flags & LMD_FLG_CLIENT) 
 
@@ -163,11 +182,18 @@ struct lustre_mount_data {
 #if LR_CLIENT_START < LR_SERVER_SIZE
 #error "Can't have LR_CLIENT_START < LR_SERVER_SIZE"
 #endif
-/* This limit is arbitrary (32k clients on x86), but it is convenient to use
- * 2^n * CFS_PAGE_SIZE * 8 for the number of bits that fit an order-n allocation. */
-#define LR_MAX_CLIENTS (CFS_PAGE_SIZE * 8)
 
-                                                                                
+/*
+ * This limit is arbitrary (131072 clients on x86), but it is convenient to use
+ * 2^n * CFS_PAGE_SIZE * 8 for the number of bits that fit an order-n allocation.
+ * If we need more than 131072 clients (order-2 allocation on x86) then this
+ * should become an array of single-page pointers that are allocated on demand.
+ */
+#define LR_MAX_CLIENTS max(128 * 1024UL, CFS_PAGE_SIZE * 8)
+/* version recovery */
+#define LR_EPOCH_BITS   32
+#define lr_epoch(a) ((a) >> LR_EPOCH_BITS)
+
 /* COMPAT_146 */
 #define OBD_COMPAT_OST          0x00000002 /* this is an OST (temporary) */
 #define OBD_COMPAT_MDT          0x00000004 /* this is an MDT (temporary) */
@@ -180,8 +206,10 @@ struct lustre_mount_data {
 #define OBD_INCOMPAT_OST        0x00000002 /* this is an OST */
 #define OBD_INCOMPAT_MDT        0x00000004 /* this is an MDT */
 #define OBD_INCOMPAT_COMMON_LR  0x00000008 /* common last_rvcd format */
+#define OBD_INCOMPAT_FID        0x00000010 /* FID is enabled */
+#define OBD_INCOMPAT_SOM        0x00000020 /* Size-On-MDS is enabled */
 
-
+#define LR_EXPIRE_INTERVALS 16 /**< number of intervals to track transno */
 /* Data stored per server at the head of the last_rcvd file.  In le32 order.
    This should be common to filter_internal.h, lustre_mds.h */
 struct lr_server_data {
@@ -201,7 +229,13 @@ struct lr_server_data {
         __u8  lsd_peeruuid[40];    /* UUID of MDS associated with this OST */
         __u32 lsd_ost_index;       /* index number of OST in LOV */
         __u32 lsd_mdt_index;       /* index number of MDT in LMV */
-        __u8  lsd_padding[LR_SERVER_SIZE - 148];
+        __u32 lsd_start_epoch;     /* VBR: start epoch from last boot */
+        /** transaction values since lsd_trans_table_time */
+        __u64 lsd_trans_table[LR_EXPIRE_INTERVALS];
+        /** start point of transno table below */
+        __u32 lsd_trans_table_time; /* time of first slot in table above */
+        __u32 lsd_expire_intervals; /* LR_EXPIRE_INTERVALS */
+        __u8  lsd_padding[LR_SERVER_SIZE - 288];
 };
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
@@ -216,9 +250,21 @@ struct lsd_client_data {
         __u64 lcd_last_close_xid;     /* xid for the last transaction */
         __u32 lcd_last_close_result;  /* result from last RPC */
         __u32 lcd_last_close_data;    /* per-op data */
-        __u8  lcd_padding[LR_CLIENT_SIZE - 88];
+        /* VBR: last versions */
+        __u64 lcd_pre_versions[4];
+        __u32 lcd_last_epoch;
+        /** orphans handling for delayed export rely on that */
+        __u32 lcd_first_epoch;
+        __u8  lcd_padding[LR_CLIENT_SIZE - 128];
 };
 
+static inline __u64 lsd_last_transno(struct lsd_client_data *lcd)
+{
+        return le64_to_cpu(lcd->lcd_last_transno) >
+               le64_to_cpu(lcd->lcd_last_close_transno) ?
+               le64_to_cpu(lcd->lcd_last_transno) :
+               le64_to_cpu(lcd->lcd_last_close_transno);
+}
 
 #ifdef __KERNEL__
 /****************** superblock additional info *********************/
@@ -238,14 +284,8 @@ struct lustre_sb_info {
 #define LSI_UMOUNT_FORCE                 0x00000010
 #define LSI_UMOUNT_FAILOVER              0x00000020
 
-#if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-# define    s2lsi(sb)        ((struct lustre_sb_info *)((sb)->s_fs_info))
-# define    s2lsi_nocast(sb) ((sb)->s_fs_info)
-#else  /* 2.4 here */
-# define    s2lsi(sb)        ((struct lustre_sb_info *)((sb)->u.generic_sbp))
-# define    s2lsi_nocast(sb) ((sb)->u.generic_sbp)
-#endif
-
+#define    s2lsi(sb)        ((struct lustre_sb_info *)((sb)->s_fs_info))
+#define    s2lsi_nocast(sb) ((sb)->s_fs_info)
 #define     get_profile_name(sb)   (s2lsi(sb)->lsi_lmd->lmd_profile)
 
 #endif /* __KERNEL__ */
@@ -266,6 +306,9 @@ struct lustre_mount_info {
 
 /* obd_mount.c */
 void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb));
+void lustre_register_kill_super_cb(void (*cfs)(struct super_block *sb));
+
+
 int lustre_common_put_super(struct super_block *sb);
 int lustre_process_log(struct super_block *sb, char *logname, 
                      struct config_llog_instance *cfg);
@@ -278,7 +321,7 @@ struct mgs_target_info;
 int server_mti_print(char *title, struct mgs_target_info *mti);
 
 /* mgc_request.c */
-int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id);
+int mgc_fsname2resid(char *fsname, struct ldlm_res_id *res_id);
 
 #endif
 

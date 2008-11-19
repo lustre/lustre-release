@@ -30,9 +30,12 @@ install-sh
 .tmp_versions
 config.h
 config.h.in
+Module.symvers
+Modules.symvers
 stamp-h1
 INSTALL
 .pc
 patches
 series
 lustre.spec
+acl.size
