@@ -1,6 +1,11 @@
 tbd  Sun Microsystems, Inc.
 	* version 3.0.6
 
+Severity   : enhancement
+Bugzilla   : 11826
+Description: Interoperability at server side (Disk interoperability)
+Details    : Exported some ldiskfs functions which are required for iop
+
 Severity   : normal
 Bugzilla   : 15320
 Description: OSS crashes frequently, e2fsck does not fix

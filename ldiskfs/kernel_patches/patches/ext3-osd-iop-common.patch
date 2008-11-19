@@ -1,0 +1,172 @@
+Index: linux-2.6.18-53.1.14/fs/ext3/namei.c
+===================================================================
+--- linux-2.6.18-53.1.14.org/fs/ext3/namei.c	2008-09-02 13:24:58.000000000 +0530
++++ linux-2.6.18-53.1.14/fs/ext3/namei.c	2008-09-02 15:48:16.000000000 +0530
+@@ -820,8 +820,8 @@ static inline int search_dirblock(struct
+  * The returned buffer_head has ->b_count elevated.  The caller is expected
+  * to brelse() it when appropriate.
+  */
+-static struct buffer_head * ext3_find_entry (struct dentry *dentry,
+-					struct ext3_dir_entry_2 ** res_dir)
++struct buffer_head * ext3_find_entry (struct dentry *dentry,
++					struct ext3_dir_entry_2 ** res_dir)
+ {
+ 	struct super_block * sb;
+ 	struct buffer_head * bh_use[NAMEI_RA_SIZE];
+@@ -932,6 +932,7 @@ cleanup_and_exit:
+ 		brelse (bh_use[ra_ptr]);
+ 	return ret;
+ }
++EXPORT_SYMBOL(ext3_find_entry);
+ 
+ #ifdef CONFIG_EXT3_INDEX
+ static struct buffer_head * ext3_dx_find_entry(struct dentry *dentry,
+@@ -1417,8 +1418,8 @@ static int make_indexed_dir(handle_t *ha
+  * may not sleep between calling this and putting something into
+  * the entry, as someone else might have used it while you slept.
+  */
+-static int ext3_add_entry (handle_t *handle, struct dentry *dentry,
+-	struct inode *inode)
++int ext3_add_entry (handle_t *handle, struct dentry *dentry,
++	struct inode *inode)
+ {
+ 	struct inode *dir = dentry->d_parent->d_inode;
+ 	unsigned long offset;
+@@ -1470,6 +1471,7 @@ static int ext3_add_entry (handle_t *han
+ 	de->rec_len = cpu_to_le16(blocksize);
+ 	return add_dirent_to_buf(handle, dentry, inode, de, bh);
+ }
++EXPORT_SYMBOL(ext3_add_entry);
+ 
+ #ifdef CONFIG_EXT3_INDEX
+ /*
+@@ -1612,10 +1614,10 @@ cleanup:
+  * ext3_delete_entry deletes a directory entry by merging it with the
+  * previous entry
+  */
+-static int ext3_delete_entry (handle_t *handle,
+-			      struct inode * dir,
+-			      struct ext3_dir_entry_2 * de_del,
+-			      struct buffer_head * bh)
++int ext3_delete_entry (handle_t *handle,
++			struct inode * dir,
++			struct ext3_dir_entry_2 * de_del,
++			struct buffer_head * bh)
+ {
+ 	struct ext3_dir_entry_2 * de, * pde;
+ 	int i;
+@@ -1647,6 +1649,7 @@ static int ext3_delete_entry (handle_t *
+ 	}
+ 	return -ENOENT;
+ }
++EXPORT_SYMBOL(ext3_delete_entry);
+ 
+ /*
+  * ext3_mark_inode_dirty is somewhat expensive, so unlike ext2 we
+@@ -1751,12 +1754,64 @@ retry:
+ 	return err;
+ }
+ 
++/**
++ * This function will add dot & dotdot entries into ext3 directory.
++ * Add considering interoperability (between 1.8 & 2.0) requirement.
++ */
++int ext3_add_dot_dotdot(handle_t *handle, struct inode * dir,
++			 struct inode *inode)
++{
++	struct buffer_head * dir_block;
++	struct ext3_dir_entry_2 * de;
++	int err = 0;
++
++	if (IS_ERR(handle))
++		return PTR_ERR(handle);
++
++	if (IS_DIRSYNC(dir))
++		handle->h_sync = 1;
++
++	inode->i_op = &ext3_dir_inode_operations;
++	inode->i_fop = &ext3_dir_operations;
++	inode->i_size = EXT3_I(inode)->i_disksize = inode->i_sb->s_blocksize;
++	dir_block = ext3_bread (handle, inode, 0, 1, &err);
++	if (!dir_block) {
++		inode->i_nlink--; /* is this nlink == 0? */
++		ext3_mark_inode_dirty(handle, inode);
++		iput (inode);
++		goto get_out;
++	}
++	BUFFER_TRACE(dir_block, "get_write_access");
++	ext3_journal_get_write_access(handle, dir_block);
++	de = (struct ext3_dir_entry_2 *) dir_block->b_data;
++	de->inode = cpu_to_le32(inode->i_ino);
++	de->name_len = 1;
++	de->rec_len = cpu_to_le16(EXT3_DIR_REC_LEN(de->name_len));
++	strcpy (de->name, ".");
++	ext3_set_de_type(dir->i_sb, de, S_IFDIR);
++	de = (struct ext3_dir_entry_2 *)
++			((char *) de + le16_to_cpu(de->rec_len));
++	de->inode = cpu_to_le32(dir->i_ino);
++	de->rec_len = cpu_to_le16(inode->i_sb->s_blocksize-EXT3_DIR_REC_LEN(1));
++	de->name_len = 2;
++	strcpy (de->name, "..");
++	ext3_set_de_type(dir->i_sb, de, S_IFDIR);
++	inode->i_nlink = 2;
++	BUFFER_TRACE(dir_block, "call ext3_journal_dirty_metadata");
++	ext3_journal_dirty_metadata(handle, dir_block);
++	brelse (dir_block);
++	ext3_mark_inode_dirty(handle, inode);
++
++get_out:
++	return err;
++
++}
++EXPORT_SYMBOL(ext3_add_dot_dotdot);
++
+ static int ext3_mkdir(struct inode * dir, struct dentry * dentry, int mode)
+ {
+ 	handle_t *handle;
+ 	struct inode * inode;
+-	struct buffer_head * dir_block;
+-	struct ext3_dir_entry_2 * de;
+ 	int err, retries = 0;
+ 
+ 	if (dir->i_nlink >= EXT3_LINK_MAX)
+@@ -1777,36 +1832,10 @@ retry:
+ 	if (IS_ERR(inode))
+ 		goto out_stop;
+ 
+-	inode->i_op = &ext3_dir_inode_operations;
+-	inode->i_fop = &ext3_dir_operations;
+-	inode->i_size = EXT3_I(inode)->i_disksize = inode->i_sb->s_blocksize;
+-	dir_block = ext3_bread (handle, inode, 0, 1, &err);
+-	if (!dir_block) {
+-		inode->i_nlink--; /* is this nlink == 0? */
+-		ext3_mark_inode_dirty(handle, inode);
+-		iput (inode);
++	err = ext3_add_dot_dotdot(handle, dir, inode);
++	if (err)
+ 		goto out_stop;
+-	}
+-	BUFFER_TRACE(dir_block, "get_write_access");
+-	ext3_journal_get_write_access(handle, dir_block);
+-	de = (struct ext3_dir_entry_2 *) dir_block->b_data;
+-	de->inode = cpu_to_le32(inode->i_ino);
+-	de->name_len = 1;
+-	de->rec_len = cpu_to_le16(EXT3_DIR_REC_LEN(de->name_len));
+-	strcpy (de->name, ".");
+-	ext3_set_de_type(dir->i_sb, de, S_IFDIR);
+-	de = (struct ext3_dir_entry_2 *)
+-			((char *) de + le16_to_cpu(de->rec_len));
+-	de->inode = cpu_to_le32(dir->i_ino);
+-	de->rec_len = cpu_to_le16(inode->i_sb->s_blocksize-EXT3_DIR_REC_LEN(1));
+-	de->name_len = 2;
+-	strcpy (de->name, "..");
+-	ext3_set_de_type(dir->i_sb, de, S_IFDIR);
+-	inode->i_nlink = 2;
+-	BUFFER_TRACE(dir_block, "call ext3_journal_dirty_metadata");
+-	ext3_journal_dirty_metadata(handle, dir_block);
+-	brelse (dir_block);
+-	ext3_mark_inode_dirty(handle, inode);
++
+ 	err = ext3_add_entry (handle, dentry, inode);
+ 	if (err) {
+ 		inode->i_nlink = 0;
