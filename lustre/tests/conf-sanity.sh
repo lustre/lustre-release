@@ -374,7 +374,9 @@ test_9() {
 	do_facet ost1 lctl set_param subsystem_debug=\'mds ost\' || return 1
 
         CHECK_PTLDEBUG="`do_facet ost1 lctl get_param -n debug`"
-        if [ "$CHECK_PTLDEBUG" ] && [ "$CHECK_PTLDEBUG" = "trace inode" ];then
+        if [ "$CHECK_PTLDEBUG" ] && { \
+	   [ "$CHECK_PTLDEBUG" = "trace inode warning error emerg console" ] ||
+	   [ "$CHECK_PTLDEBUG" = "trace inode" ]; }; then   
            echo "lnet.debug success"
         else
            echo "lnet.debug: want 'trace inode', have '$CHECK_PTLDEBUG'"
