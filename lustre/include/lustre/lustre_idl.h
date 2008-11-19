@@ -1507,17 +1507,16 @@ struct mdt_rec_setxattr {
 /* NB take care when changing the sequence of elements this struct,
  * because the offset info is used in find_capa() */
 struct lustre_capa {
-        struct lu_fid   lc_fid;     /* fid */
-        __u64           lc_opc;     /* operations allowed */
-        __u32           lc_uid;     /* uid, it is obsolete, but maybe used in
-                                     * future, reserve it for 64-bits aligned.*/
-        __u32           lc_flags;   /* HMAC algorithm & flags */
-        __u32           lc_keyid;   /* key used for the capability */
-        __u32           lc_timeout; /* capa timeout value (sec) */
-        __u64           lc_expiry;  /* expiry time (sec) */
-        __u8            lc_hmac[CAPA_HMAC_MAX_LEN];   /* HMAC */
+        struct lu_fid   lc_fid;         /** fid */
+        __u64           lc_opc;         /** operations allowed */
+        __u64           lc_uid;         /** file owner */
+        __u64           lc_gid;         /** file group */
+        __u32           lc_flags;       /** HMAC algorithm & flags */
+        __u32           lc_keyid;       /** key# used for the capability */
+        __u32           lc_timeout;     /** capa timeout value (sec) */
+        __u32           lc_expiry;      /** expiry time (sec) */
+        __u8            lc_hmac[CAPA_HMAC_MAX_LEN];   /** HMAC */
 } __attribute__((packed));
-
 
 /*
  *  LOV data structures
