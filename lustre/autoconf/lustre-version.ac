@@ -1,6 +1,6 @@
 m4_define([LUSTRE_MAJOR],[1])
 m4_define([LUSTRE_MINOR],[9])
-m4_define([LUSTRE_PATCH],[100])
+m4_define([LUSTRE_PATCH],[110])
 m4_define([LUSTRE_FIX],[0])
 
 dnl # don't forget to update the service tags info
