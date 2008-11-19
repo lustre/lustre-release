@@ -338,6 +338,8 @@ static int client_common_fill_super(struct super_block *sb,
         sbi->ll_osc_exp = class_conn2export(&osc_conn);
         spin_lock(&sbi->ll_lco.lco_lock);
         sbi->ll_lco.lco_flags = data->ocd_connect_flags;
+        sbi->ll_lco.lco_mdc_exp = sbi->ll_mdc_exp;
+        sbi->ll_lco.lco_osc_exp = sbi->ll_osc_exp;
         spin_unlock(&sbi->ll_lco.lco_lock);
 
         err = obd_register_page_removal_cb(sbi->ll_osc_exp,
@@ -352,12 +354,6 @@ static int client_common_fill_super(struct super_block *sb,
         if (err) {
                 CERROR("cannot register lock cancel callback: rc = %d\n", err);
                 GOTO(out_page_rm_cb, err);
-        }
-
-        err = mdc_init_ea_size(sbi->ll_mdc_exp, sbi->ll_osc_exp);
-        if (err) {
-                CERROR("cannot set max EA and cookie sizes: rc = %d\n", err);
-                GOTO(out_lock_cn_cb, err);
         }
 
         err = obd_prep_async_page(sbi->ll_osc_exp, NULL, NULL, NULL,

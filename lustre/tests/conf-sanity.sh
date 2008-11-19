@@ -1485,6 +1485,47 @@ test_45() { #17310
 }
 run_test 45 "long unlink handling in ptlrpcd"
 
+test_46a() {
+	OSTCOUNT=6
+	reformat
+	start_mds || return 1
+	#first client should see only one ost
+	start_ost || return 2
+	#start_client
+	mount_client $MOUNT || return 3
+	
+	start_ost2 || return 4
+	start ost3 `ostdevname 3` $OST_MOUNT_OPTS || return 5
+	start ost4 `ostdevname 4` $OST_MOUNT_OPTS || return 6
+	start ost5 `ostdevname 5` $OST_MOUNT_OPTS || return 7
+	# wait until ost2-5 is sync
+	sleep 5
+	#second client see both ost's
+
+	mount_client $MOUNT2 || return 8
+	$LFS setstripe $MOUNT2 -c -1 || return 9
+	$LFS getstripe $MOUNT2 || return 10
+
+	echo "ok" > $MOUNT2/widestripe
+	$LFS getstripe $MOUNT2/widestripe || return 11
+	# fill acl buffer for avoid expand lsm to them
+	awk -F : '{if (FNR < 25) { print "u:"$1":rwx" }}' /etc/passwd | while read acl; do  
+	    setfacl -m $acl $MOUNT2/widestripe
+	done
+
+	# will be deadlock
+	stat $MOUNT/widestripe || return 12
+
+	umount_client $MOUNT2 || return 13
+	umount_client $MOUNT || return 14
+	stop ost5 -f || return 20
+	stop ost4 -f || return 21
+	stop ost3 -f || return 22
+	stop_ost2 || return 23
+	stop_ost || return 24
+	stop_mds || return 25
+}
+run_test 46a "handle ost additional - wide striped file"
 
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true

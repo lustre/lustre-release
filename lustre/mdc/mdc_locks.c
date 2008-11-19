@@ -505,24 +505,6 @@ static int mdc_finish_enqueue(struct obd_export *exp,
                                 CERROR ("Missing/short eadata\n");
                                 RETURN (-EPROTO);
                         }
-                        if (body->valid & OBD_MD_FLMODEASIZE) {
-                                struct obd_device *obddev = class_exp2obd(exp);
-
-                                if (obddev->u.cli.cl_max_mds_easize < 
-                                                        body->max_mdsize) {
-                                        obddev->u.cli.cl_max_mds_easize = 
-                                                body->max_mdsize;
-                                        CDEBUG(D_INFO, "maxeasize become %d\n",
-                                               body->max_mdsize);
-                                }
-                                if (obddev->u.cli.cl_max_mds_cookiesize <
-                                                        body->max_cookiesize) {
-                                        obddev->u.cli.cl_max_mds_cookiesize =
-                                                body->max_cookiesize;
-                                        CDEBUG(D_INFO, "cookiesize become %d\n",
-                                               body->max_cookiesize);
-                                }
-                        }
                         /* We save the reply LOV EA in case we have to replay
                          * a create for recovery.  If we didn't allocate a
                          * large enough request buffer above we need to

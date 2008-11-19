@@ -1999,6 +1999,9 @@ llu_fsswop_mount(const char *source,
         }
         sbi->ll_osc_exp = class_conn2export(&osc_conn);
         sbi->ll_lco.lco_flags = ocd.ocd_connect_flags;
+        sbi->ll_lco.lco_mdc_exp = sbi->ll_mdc_exp;
+        sbi->ll_lco.lco_osc_exp = sbi->ll_osc_exp;
+
 
         err = obd_register_lock_cancel_cb(sbi->ll_osc_exp,
                                           llu_extent_lock_cancel_cb);
@@ -2006,8 +2009,6 @@ llu_fsswop_mount(const char *source,
                 CERROR("cannot register lock cancel callback: rc = %d\n", err);
                 GOTO(out_osc, err);
         }
-
-        mdc_init_ea_size(sbi->ll_mdc_exp, sbi->ll_osc_exp);
 
         err = mdc_getstatus(sbi->ll_mdc_exp, &rootfid);
         if (err) {
