@@ -754,6 +754,9 @@ void *lustre_swab_buf(struct lustre_msg *msg, int index, int min_size,
 void *lustre_swab_reqbuf(struct ptlrpc_request *req, int index, int min_size,
                          void *swabber)
 {
+        if (lustre_req_swabbed(req, index))
+                return lustre_msg_buf(req->rq_reqmsg, index, min_size);
+
         lustre_set_req_swabbed(req, index);
         return lustre_swab_buf(req->rq_reqmsg, index, min_size, swabber);
 }
@@ -761,6 +764,9 @@ void *lustre_swab_reqbuf(struct ptlrpc_request *req, int index, int min_size,
 void *lustre_swab_repbuf(struct ptlrpc_request *req, int index, int min_size,
                          void *swabber)
 {
+        if (lustre_rep_swabbed(req, index))
+                return lustre_msg_buf(req->rq_repmsg, index, min_size);
+
         lustre_set_rep_swabbed(req, index);
         return lustre_swab_buf(req->rq_repmsg, index, min_size, swabber);
 }

@@ -432,6 +432,7 @@ struct ldlm_namespace {
 
         unsigned int           ns_max_unused;
         unsigned int           ns_max_age;
+        unsigned int           ns_timeouts;
          /**
           * Seconds.
           */

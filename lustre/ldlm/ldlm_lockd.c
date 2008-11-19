@@ -238,6 +238,31 @@ static int expired_lock_main(void *arg)
 
 static int ldlm_add_waiting_lock(struct ldlm_lock *lock);
 
+/**
+ * Check if there is a request in the export request list
+ * which prevents the lock canceling.
+ */
+static int ldlm_lock_busy(struct ldlm_lock *lock)
+{
+        struct ptlrpc_request *req;
+        int match = 0;
+        ENTRY;
+
+        if (lock->l_export == NULL)
+                return 0;
+
+        spin_lock(&lock->l_export->exp_lock);
+        list_for_each_entry(req, &lock->l_export->exp_queued_rpc, rq_exp_list) {
+                if (req->rq_ops->hpreq_lock_match) {
+                        match = req->rq_ops->hpreq_lock_match(req, lock);
+                        if (match)
+                                break;
+                }
+        }
+        spin_unlock(&lock->l_export->exp_lock);
+        RETURN(match);
+}
+
 /* This is called from within a timer interrupt and cannot schedule */
 static void waiting_locks_callback(unsigned long unused)
 {
@@ -248,7 +273,6 @@ repeat:
         while (!list_empty(&waiting_locks_list)) {
                 lock = list_entry(waiting_locks_list.next, struct ldlm_lock,
                                   l_pending_chain);
-
                 if (cfs_time_after(lock->l_callback_timeout, cfs_time_current()) ||
                     (lock->l_req_mode == LCK_GROUP))
                         break;
@@ -286,6 +310,29 @@ repeat:
                         goto repeat;
                 }
 
+                /* Check if we need to prolong timeout */
+                if (!OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_TIMEOUT) &&
+                    ldlm_lock_busy(lock)) {
+                        int cont = 1;
+
+                        if (lock->l_pending_chain.next == &waiting_locks_list)
+                                cont = 0;
+
+                        LDLM_LOCK_GET(lock);
+                        spin_unlock_bh(&waiting_locks_spinlock);
+                        LDLM_DEBUG(lock, "prolong the busy lock");
+                        ldlm_refresh_waiting_lock(lock);
+                        spin_lock_bh(&waiting_locks_spinlock);
+
+                        if (!cont) {
+                                LDLM_LOCK_PUT(lock);
+                                break;
+                        }
+
+                        LDLM_LOCK_PUT(lock);
+                        continue;
+                }
+                lock->l_resource->lr_namespace->ns_timeouts++;
                 LDLM_ERROR(lock, "lock callback timer expired after %lds: "
                            "evicting client at %s ",
                            cfs_time_current_sec()- lock->l_enqueued_time.tv_sec,
@@ -335,15 +382,21 @@ repeat:
  */
 static int __ldlm_add_waiting_lock(struct ldlm_lock *lock)
 {
-        int timeout;
+        cfs_time_t timeout;
         cfs_time_t timeout_rounded;
 
         if (!list_empty(&lock->l_pending_chain))
                 return 0;
 
-        timeout = ldlm_get_enq_timeout(lock);
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT) ||
+            OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_TIMEOUT))
+                timeout = 2;
+        else
+                timeout = ldlm_get_enq_timeout(lock);
 
-        lock->l_callback_timeout = cfs_time_shift(timeout);
+        timeout = cfs_time_shift(timeout);
+        if (likely(cfs_time_after(timeout, lock->l_callback_timeout)))
+                lock->l_callback_timeout = timeout;
 
         timeout_rounded = round_timeout(lock->l_callback_timeout);
 
@@ -475,7 +528,6 @@ int ldlm_refresh_waiting_lock(struct ldlm_lock *lock)
         LDLM_DEBUG(lock, "refreshed");
         return 1;
 }
-
 #else /* !__KERNEL__ */
 
 static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
@@ -621,6 +673,30 @@ static inline int ldlm_bl_and_cp_ast_fini(struct ptlrpc_request *req,
         RETURN(rc);
 }
 
+/**
+ * Check if there are requests in the export request list which prevent
+ * the lock canceling and make these requests high priority ones.
+ */
+static void ldlm_lock_reorder_req(struct ldlm_lock *lock)
+{
+        struct ptlrpc_request *req;
+        ENTRY;
+
+        if (lock->l_export == NULL) {
+                LDLM_DEBUG(lock, "client lock: no-op");
+                RETURN_EXIT;
+        }
+
+        spin_lock(&lock->l_export->exp_lock);
+        list_for_each_entry(req, &lock->l_export->exp_queued_rpc, rq_exp_list) {
+                if (!req->rq_hp && req->rq_ops->hpreq_lock_match &&
+                    req->rq_ops->hpreq_lock_match(req, lock))
+                        ptlrpc_hpreq_reorder(req);
+        }
+        spin_unlock(&lock->l_export->exp_lock);
+        EXIT;
+}
+
 /*
  * ->l_blocking_ast() method for server-side locks. This is invoked when newly
  * enqueued server lock conflicts with given one.
@@ -649,6 +725,8 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
                 LDLM_ERROR(lock, "BUG 6063: lock collide during recovery");
                 ldlm_lock_dump(D_ERROR, lock, 0);
         }
+
+        ldlm_lock_reorder_req(lock);
 
         req = ptlrpc_request_alloc_pack(lock->l_export->exp_imp_reverse,
                                         &RQF_LDLM_BL_CALLBACK,
@@ -2193,7 +2271,7 @@ static int ldlm_setup(void)
                                 ldlm_svc_proc_dir, NULL,
                                 ldlm_min_threads, ldlm_max_threads,
                                 "ldlm_cb",
-                                LCT_MD_THREAD|LCT_DT_THREAD);
+                                LCT_MD_THREAD|LCT_DT_THREAD, NULL);
 
         if (!ldlm_state->ldlm_cb_service) {
                 CERROR("failed to start service\n");
@@ -2208,7 +2286,8 @@ static int ldlm_setup(void)
                                 ldlm_svc_proc_dir, NULL,
                                 ldlm_min_threads, ldlm_max_threads,
                                 "ldlm_cn",
-                                LCT_MD_THREAD|LCT_DT_THREAD|LCT_CL_THREAD);
+                                LCT_MD_THREAD|LCT_DT_THREAD|LCT_CL_THREAD,
+                                NULL);
 
         if (!ldlm_state->ldlm_cancel_service) {
                 CERROR("failed to start service\n");

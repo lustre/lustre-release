@@ -294,6 +294,11 @@ do {                                                                    \
 
 #endif /* !CDEBUG_ENTRY_EXIT */
 
+#define RETURN_EXIT                                                     \
+do {                                                                    \
+        EXIT_NESTING;                                                   \
+        return;                                                         \
+} while (0)
 
 struct libcfs_debug_msg_data {
         cfs_debug_limit_state_t *msg_cdls;

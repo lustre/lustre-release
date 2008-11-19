@@ -169,7 +169,7 @@
 #define MGS_MAXREPSIZE  (9 * 1024)
 
 /* Absolute limits */
-#define OSS_THREADS_MIN 2
+#define OSS_THREADS_MIN 3       /* difficult replies, HPQ, others */
 #define OSS_THREADS_MAX 512
 #define OST_NBUFS       (64 * num_online_cpus())
 #define OST_BUFSIZE     (8 * 1024)
@@ -317,6 +317,20 @@ struct ptlrpc_request_pool {
 struct lu_context;
 struct lu_env;
 
+struct ldlm_lock;
+
+struct ptlrpc_hpreq_ops {
+        /**
+         * Check if the lock handle of the given lock is the same as
+         * taken from the request.
+         */
+        int  (*hpreq_lock_match)(struct ptlrpc_request *, struct ldlm_lock *);
+        /**
+         * Check if the request is a high priority one.
+         */
+        int  (*hpreq_check)(struct ptlrpc_request *);
+};
+
 /**
  * Represents remote procedure call.
  */
@@ -325,6 +339,8 @@ struct ptlrpc_request {
         struct list_head rq_list;
         struct list_head rq_timed_list;         /* server-side early replies */
         struct list_head rq_history_list;       /* server-side history */
+        struct list_head rq_exp_list;           /* server-side per-export list */
+        struct ptlrpc_hpreq_ops *rq_ops;        /* server-side hp handlers */
         __u64            rq_history_seq;        /* history sequence # */
         int rq_status;
         spinlock_t rq_lock;
@@ -348,7 +364,8 @@ struct ptlrpc_request {
                 rq_early:1, rq_must_unlink:1,
                 /* server-side flags */
                 rq_packed_final:1,  /* packed final reply */
-                rq_sent_final:1;    /* stop sending early replies */
+                rq_sent_final:1,    /* stop sending early replies */
+                rq_hp:1;            /* high priority RPC */
 
         enum rq_phase rq_phase; /* one of RQ_PHASE_* */
         enum rq_phase rq_next_phase; /* one of RQ_PHASE_* to be used next */
@@ -548,9 +565,9 @@ ptlrpc_rqphase2str(struct ptlrpc_request *req)
         FLAG(req->rq_restart, "T"), FLAG(req->rq_replay, "P"),                  \
         FLAG(req->rq_no_resend, "N"),                                           \
         FLAG(req->rq_waiting, "W"),                                             \
-        FLAG(req->rq_wait_ctx, "C")
+        FLAG(req->rq_wait_ctx, "C"), FLAG(req->rq_hp, "H")
 
-#define REQ_FLAGS_FMT "%s:%s%s%s%s%s%s%s%s%s%s"
+#define REQ_FLAGS_FMT "%s:%s%s%s%s%s%s%s%s%s%s%s"
 
 void _debug_req(struct ptlrpc_request *req, __u32 mask,
                 struct libcfs_debug_msg_data *data, const char *fmt, ...)
@@ -659,6 +676,9 @@ struct ptlrpc_request_buffer_desc {
 
 typedef int (*svc_handler_t)(struct ptlrpc_request *req);
 typedef void (*svcreq_printfn_t)(void *, struct ptlrpc_request *);
+typedef int (*svc_hpreq_handler_t)(struct ptlrpc_request *);
+
+#define PTLRPC_SVC_HP_RATIO 10
 
 struct ptlrpc_service {
         struct list_head srv_list;              /* chain thru all services */
@@ -673,6 +693,7 @@ struct ptlrpc_service {
         int              srv_threads_running;   /* # running threads */
         int              srv_n_difficult_replies; /* # 'difficult' replies */
         int              srv_n_active_reqs;     /* # reqs being served */
+        int              srv_n_hpreq;           /* # HPreqs being served */
         cfs_duration_t   srv_rqbd_timeout;      /* timeout before re-posting reqs, in tick */
         int              srv_watchdog_factor;   /* soft watchdog timeout mutiplier */
         unsigned         srv_cpu_affinity:1;    /* bind threads to CPUs */
@@ -690,8 +711,11 @@ struct ptlrpc_service {
         cfs_timer_t       srv_at_timer;         /* early reply timer */
 
         int               srv_n_queued_reqs;    /* # reqs in either of the queues below */
+        int               srv_hpreq_count;      /* # hp requests handled */
+        int               srv_hpreq_ratio;      /* # hp per lp reqs to handle */
         struct list_head  srv_req_in_queue;     /* incoming reqs */
         struct list_head  srv_request_queue;    /* reqs waiting for service */
+        struct list_head  srv_request_hpq;      /* high priority queue */
 
         struct list_head  srv_request_history;  /* request history */
         __u64             srv_request_seq;      /* next request sequence # */
@@ -716,6 +740,7 @@ struct ptlrpc_service {
 
         struct list_head   srv_threads;         /* service thread list */
         svc_handler_t      srv_handler;
+        svc_hpreq_handler_t srv_hpreq_handler;  /* hp request handler */
 
         char *srv_name; /* only statically allocated strings here; we don't clean them */
         char *srv_thread_name; /* only statically allocated strings here; we don't clean them */
@@ -973,7 +998,8 @@ struct ptlrpc_service *ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
                                        cfs_proc_dir_entry_t *proc_entry,
                                        svcreq_printfn_t,
                                        int min_threads, int max_threads,
-                                       char *threadname, __u32 ctx_tags);
+                                       char *threadname, __u32 ctx_tags,
+                                       svc_hpreq_handler_t);
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc);
 
 int ptlrpc_start_threads(struct obd_device *dev, struct ptlrpc_service *svc);
@@ -982,6 +1008,7 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service);
 int liblustre_check_services (void *arg);
 void ptlrpc_daemonize(char *name);
 int ptlrpc_service_health_check(struct ptlrpc_service *);
+void ptlrpc_hpreq_reorder(struct ptlrpc_request *req);
 
 
 struct ptlrpc_svc_data {

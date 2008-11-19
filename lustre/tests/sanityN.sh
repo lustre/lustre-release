@@ -779,6 +779,56 @@ run_test 33a "commit on sharing, cross crete/delete, 2 clients, benchmark"
 
 # End commit on sharing tests
 
+test_33() { #16129
+        for OPER in notimeout timeout ; do
+                rm $DIR1/$tfile 2>/dev/null
+                lock_in=0;
+                for f in `lctl get_param -n ldlm/namespaces/*/lock_timeouts`; do
+                        lock_in=$(($lock_in + $f))
+                done
+                if [ $OPER == "timeout" ] ; then
+                        for j in `seq $OSTCOUNT`; do
+                                #define OBD_FAIL_PTLRPC_HPREQ_TIMEOUT    0x510
+                                do_facet ost$j lctl set_param fail_loc=0x510
+                        done
+                        echo lock should expire
+                else
+                        for j in `seq $OSTCOUNT`; do
+                                #define OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT  0x511
+                                do_facet ost$j lctl set_param fail_loc=0x511
+                        done
+                        echo lock should not expire
+                fi
+                echo writing on client1
+                dd if=/dev/zero of=$DIR1/$tfile count=100 conv=notrunc > /dev/null 2>&1
+                sync &
+                # wait for the flush
+                sleep 1
+                echo reading on client2
+                dd of=/dev/null if=$DIR2/$tfile > /dev/null 2>&1
+                # wait for a lock timeout
+                sleep 4
+                lock_out=0
+                for f in `lctl get_param -n ldlm/namespaces/*/lock_timeouts`; do
+                        lock_out=$(($lock_out + $f))
+                done
+                if [ $OPER == "timeout" ] ; then 
+                        if [ $lock_in == $lock_out ]; then
+                                error "no lock timeout happened"
+                        else
+                                echo "success"
+                        fi
+                else
+                        if [ $lock_in != $lock_out ]; then
+                                error "lock timeout happened"
+                        else
+                                echo "success"
+                        fi
+                fi
+        done
+}
+run_test 33 "no lock timeout under IO"
+
 log "cleanup: ======================================================"
 
 check_and_cleanup_lustre

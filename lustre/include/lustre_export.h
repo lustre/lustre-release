@@ -148,6 +148,7 @@ struct obd_export {
                                   exp_flvr_changed:1,
                                   exp_flvr_adapt:1,
                                   exp_libclient:1; /* liblustre client? */
+        struct list_head          exp_queued_rpc;  /* RPC to be handled */
         /* also protected by exp_lock */
         enum lustre_sec_part      exp_sp_peer;
         struct sptlrpc_flavor     exp_flvr;             /* current */
