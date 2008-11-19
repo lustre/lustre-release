@@ -779,7 +779,7 @@ run_test 33a "commit on sharing, cross crete/delete, 2 clients, benchmark"
 
 # End commit on sharing tests
 
-test_33() { #16129
+test_34() { #16129
         for OPER in notimeout timeout ; do
                 rm $DIR1/$tfile 2>/dev/null
                 lock_in=0;
@@ -827,7 +827,7 @@ test_33() { #16129
                 fi
         done
 }
-run_test 33 "no lock timeout under IO"
+run_test 34 "no lock timeout under IO"
 
 log "cleanup: ======================================================"
 
