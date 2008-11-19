@@ -1,0 +1,125 @@
+Index: linux-2.6.9/fs/ext3/hash.c
+===================================================================
+--- linux-2.6.9.orig/fs/ext3/hash.c	2006-04-23 22:39:01.000000000 +0800
++++ linux-2.6.9/fs/ext3/hash.c	2006-04-23 22:39:16.000000000 +0800
+@@ -127,6 +127,11 @@
+ 	return a;
+ }
+ 
++static __u32 dx_same_hash(const signed char *msg, int len)
++{
++	return 0xcafebabeUL;
++}
++
+ static void str2hashbuf(const char *msg, int len, __u32 *buf, int num)
+ {
+ 	__u32	pad, val;
+@@ -220,6 +225,9 @@
+ 	case DX_HASH_R5:
+ 		hash = dx_r5_hash(name, len);
+ 		break;
++	case DX_HASH_SAME:
++		hash = dx_same_hash(name, len);
++		break;
+ 	default:
+ 		hinfo->hash = 0;
+ 		return -1;
+Index: linux-2.6.9/fs/ext3/super.c
+===================================================================
+--- linux-2.6.9.orig/fs/ext3/super.c	2006-08-17 09:26:01.000000000 +0300
++++ linux-2.6.9/fs/ext3/super.c	2006-08-17 09:31:22.000000000 +0300
+@@ -599,6 +599,7 @@ enum {
+ 	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
+ 	Opt_extents, Opt_noextents, Opt_extdebug,
+ 	Opt_mballoc, Opt_nomballoc, Opt_stripe,
++	Opt_hashfunc,
+ };
+ 
+ static match_table_t tokens = {
+@@ -655,6 +656,7 @@ static match_table_t tokens = {
+ 	{Opt_stripe, "stripe=%u"},
+ 	{Opt_err, NULL},
+ 	{Opt_resize, "resize"},
++	{Opt_hashfunc,"hash=%s"},
+ };
+ 
+ static unsigned long get_sb_block(void **data)
+@@ -679,6 +681,7 @@ static unsigned long get_sb_block(void *
+ 	return sb_block;
+ }
+ 
++int user_selected_hash_function = -1;
+ static int parse_options (char * options, struct super_block *sb,
+ 			  unsigned long * inum, unsigned long *n_blocks_count, int is_remount)
+ {
+@@ -980,6 +983,22 @@ clear_qf_name:
+ 				return 0;
+ 			sbi->s_stripe = option;
+ 			break;
++		case Opt_hashfunc:
++			if (strncmp (args[0].from,"legacy",6) == 0){
++                                user_selected_hash_function = 0;
++                        } else if (strncmp (args[0].from,"half_md4",8) == 0){
++                                user_selected_hash_function = 1;
++                        } else if (strncmp (args[0].from,"tea",3) == 0){
++                                user_selected_hash_function = 2;
++                        } else if (strncmp (args[0].from,"r5",2) == 0){
++                                user_selected_hash_function = 3;
++                        } else if (strncmp (args[0].from,"same",4) == 0){
++                                user_selected_hash_function = 4;
++                        } else {
++                                printk ("Hashfunc name wrong\n");
++                                return 0;
++                        }
++		 	break;
+ 		default:
+ 			printk (KERN_ERR
+ 				"EXT3-fs: Unrecognized mount option \"%s\" "
+Index: linux-2.6.9/fs/ext3/namei.c
+===================================================================
+--- linux-2.6.9.orig/fs/ext3/namei.c	2006-04-23 22:39:02.000000000 +0800
++++ linux-2.6.9/fs/ext3/namei.c	2006-04-23 22:39:16.000000000 +0800
+@@ -365,10 +365,7 @@
+ 		struct htree_cookie *hc = cookie;
+ 
+ 		root = data;
+-		if (root->info.hash_version != DX_HASH_TEA &&
+-		    root->info.hash_version != DX_HASH_HALF_MD4 &&
+-		    root->info.hash_version != DX_HASH_R5 &&
+-		    root->info.hash_version != DX_HASH_LEGACY) {
++		if (root->info.hash_version > DX_HASH_MAX) {
+ 			ext3_warning(sb, __FUNCTION__,
+ 				     "Unrecognised inode hash code %d",
+ 				     root->info.hash_version);
+@@ -1467,6 +1464,7 @@
+  * This converts a one block unindexed directory to a 3 block indexed
+  * directory, and adds the dentry to the indexed directory.
+  */
++extern int user_selected_hash_function;
+ static int make_indexed_dir(handle_t *handle, struct dentry *dentry,
+ 			    struct inode *inode, struct buffer_head *bh)
+ {
+@@ -1522,7 +1520,9 @@
+ 	memset (&root->info, 0, sizeof(root->info));
+ 	root->info.info_length = sizeof(root->info);
+ 	root->info.hash_version = EXT3_SB(dir->i_sb)->s_def_hash_version;
+-	root->info.hash_version = DX_HASH_R5;
++	if (user_selected_hash_function >= 0 &&
++	    user_selected_hash_function <= DX_HASH_MAX)
++		root->info.hash_version = user_selected_hash_function;
+ 	entries = (void *)root->entries;
+ 	dx_set_block (&path, entries, 1);
+ 	dx_set_count (entries, 1);
+Index: linux-2.6.9/include/linux/ext3_fs.h
+===================================================================
+--- linux-2.6.9.orig/include/linux/ext3_fs.h	2006-04-23 22:39:01.000000000 +0800
++++ linux-2.6.9/include/linux/ext3_fs.h	2006-04-23 22:39:16.000000000 +0800
+@@ -665,6 +665,8 @@
+ #define DX_HASH_HALF_MD4	1
+ #define DX_HASH_TEA		2
+ #define DX_HASH_R5		3
++#define DX_HASH_SAME		4
++#define DX_HASH_MAX		4
+ 
+ /* hash info structure used by the directory hash */
+ struct dx_hash_info

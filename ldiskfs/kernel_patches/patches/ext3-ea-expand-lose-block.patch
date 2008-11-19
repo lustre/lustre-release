@@ -10,10 +10,11 @@ with the new value which require more than free space.
 Signed-off-by: Tiger Yang <tiger.yang@oracle.com>
 
 
-diff --git a/fs/ext3/xattr.c b/fs/ext3/xattr.c
---- a/fs/ext3/xattr.c
-+++ b/fs/ext3/xattr.c
-@@ -1000,6 +1000,11 @@ ext3_xattr_set_handle(handle_t *handle, struct inode *inode, int name_index,
+Index: linux-2.6.18-53.1.14/fs/ext3/xattr.c
+===================================================================
+--- linux-2.6.18-53.1.14.orig/fs/ext3/xattr.c
++++ linux-2.6.18-53.1.14/fs/ext3/xattr.c
+@@ -1014,6 +1014,11 @@ ext3_xattr_set_handle(handle_t *handle, 
  			i.value = NULL;
  			error = ext3_xattr_block_set(handle, inode, &i, &bs);
  		} else if (error == -ENOSPC) {

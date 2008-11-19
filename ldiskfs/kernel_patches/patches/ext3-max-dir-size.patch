@@ -36,7 +36,7 @@ Index: linux-2.6.18-92.1.6/fs/ext3/super.c
  static int ext3_load_journal(struct super_block *, struct ext3_super_block *,
  			     unsigned long journal_devnum);
  static int ext3_create_journal(struct super_block *, struct ext3_super_block *,
-@@ -440,6 +446,7 @@ static void ext3_put_super (struct super
+@@ -442,6 +448,7 @@ static void ext3_put_super (struct super
  	if (sbi->s_mmp_tsk)
  		kthread_stop(sbi->s_mmp_tsk);
  
@@ -44,7 +44,7 @@ Index: linux-2.6.18-92.1.6/fs/ext3/super.c
  	remove_proc_entry(sb->s_id, proc_root_ext3);
  	sbi->s_dev_proc = NULL;
  	sb->s_fs_info = NULL;
-@@ -1853,6 +1860,45 @@ failed:
+@@ -1879,6 +1886,45 @@ failed:
  	return 1;
  }
  
@@ -90,7 +90,7 @@ Index: linux-2.6.18-92.1.6/fs/ext3/super.c
  
  static int ext3_fill_super (struct super_block *sb, void *data, int silent)
  {
-@@ -1873,6 +1919,7 @@ static int ext3_fill_super (struct super
+@@ -1899,6 +1945,7 @@ static int ext3_fill_super (struct super
  	int i;
  	int needs_recovery;
  	__le32 features;
@@ -98,7 +98,7 @@ Index: linux-2.6.18-92.1.6/fs/ext3/super.c
  
  	sbi = kmalloc(sizeof(*sbi), GFP_KERNEL);
  	if (!sbi)
-@@ -1892,6 +1939,23 @@ static int ext3_fill_super (struct super
+@@ -1918,6 +1965,23 @@ static int ext3_fill_super (struct super
  
  	unlock_kernel();
  
@@ -122,7 +122,7 @@ Index: linux-2.6.18-92.1.6/fs/ext3/super.c
  	blocksize = sb_min_blocksize(sb, EXT3_MIN_BLOCK_SIZE);
  	if (!blocksize) {
  		printk(KERN_ERR "EXT3-fs: unable to set blocksize\n");
-@@ -2327,6 +2391,7 @@ failed_mount:
+@@ -2352,6 +2416,7 @@ failed_mount:
  	ext3_blkdev_remove(sbi);
  	brelse(bh);
  out_fail:
@@ -138,7 +138,7 @@ Index: linux-2.6.18-92.1.6/include/linux/ext3_fs_sb.h
  	unsigned long s_mb_last_group;
  	unsigned long s_mb_last_start;
  
-+	unsigned long s_max_dir_size;
++        unsigned long s_max_dir_size;
 +
  	/* history to debug policy */
  	struct ext3_mb_history *s_mb_history;
