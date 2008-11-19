@@ -1696,6 +1696,13 @@ __u32 lustre_msg_get_cksum(struct lustre_msg *msg)
         }
 }
 
+/*
+ * the sizeof ptlrpc_body in 1.6 is 88 bytes (64 bytes shorter than current
+ * size), to be able to interoperate with 1.6 we only calculate checksum
+ * aginst first 88 bytes of ptlrpc_body.
+ */
+static const int ptlrpc_body_size_16 = 88;
+
 __u32 lustre_msg_calc_cksum(struct lustre_msg *msg)
 {
         switch (msg->lm_magic) {
@@ -1704,7 +1711,8 @@ __u32 lustre_msg_calc_cksum(struct lustre_msg *msg)
         case LUSTRE_MSG_MAGIC_V2: {
                 struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
-                return crc32_le(~(__u32)0, (unsigned char *)pb, sizeof(*pb));
+                return crc32_le(~(__u32)0, (unsigned char *)pb,
+                                ptlrpc_body_size_16);
         }
         default:
                 CERROR("incorrect message magic: %08x\n", msg->lm_magic);
