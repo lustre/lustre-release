@@ -4082,6 +4082,7 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         struct lu_device *d    = &m->mdt_md_dev.md_lu_dev;
         struct lu_site   *ls   = d->ld_site;
         struct obd_device *obd = mdt2obd_dev(m);
+        int             waited = 0;
         ENTRY;
 
         /* At this point, obd exports might still be on the "obd_zombie_exports"
@@ -4094,8 +4095,16 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
          * The three references that should be remaining are the
          * obd_self_export and the attach and setup references.
          */
-        while (atomic_read(&obd->obd_refcount) > 3)
+        while (atomic_read(&obd->obd_refcount) > 3) {
                 cfs_schedule_timeout(CFS_TASK_UNINT, cfs_time_seconds(1));
+                ++waited;
+                if (waited > 5 && IS_PO2(waited))
+                        LCONSOLE_WARN("Waiting for obd_zombie_impexp_thread "
+                                      "more than %d seconds to destroy all "
+                                      "the exports. The current obd refcount ="
+                                      " %d. Is it stuck there?\n",
+                                      waited, atomic_read(&obd->obd_refcount));
+        }
 
         ping_evictor_stop();
 
