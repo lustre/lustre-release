@@ -130,6 +130,8 @@ struct lustre_client_ocd {
          */
         __u64      lco_flags;
         spinlock_t lco_lock;
+        struct obd_export *lco_mdc_exp;
+        struct obd_export *lco_osc_exp;
 };
 
 /*
@@ -158,7 +160,11 @@ static inline int ll_ocd_update(struct obd_device *host,
                        lco->lco_flags, flags);
                 spin_lock(&lco->lco_lock);
                 lco->lco_flags &= flags;
+                /* for each osc event update ea size */
+                if (lco->lco_osc_exp)
+                        mdc_init_ea_size(lco->lco_mdc_exp, lco->lco_osc_exp);
                 spin_unlock(&lco->lco_lock);
+
                 result = 0;
         } else {
                 CERROR("unexpected notification from %s %s!\n",
