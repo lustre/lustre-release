@@ -5530,6 +5530,19 @@ test_140() { #bug-17379
 }
 run_test 140 "Check reasonable stack depth (shouldn't LBUG) ===="
 
+test_141() {
+        local ls
+        #define OBD_FAIL_MGC_PAUSE_PROCESS_LOG   0x903
+        $LCTL set_param fail_loc=0x903
+        # cancel_lru_locks mgc - does not work due to lctl set_param syntax
+        for ls in /proc/fs/lustre/ldlm/namespaces/MGC*/lru_size; do
+                echo "clear" > $ls
+        done
+        cleanup || error "failed to cleanup"
+        setup || error "failed to setup"
+}
+run_test 141 "umount should not race with any mgc requeue thread"
+
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
 HOME=$OLDHOME
