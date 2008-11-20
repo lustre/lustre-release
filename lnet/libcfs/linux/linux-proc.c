@@ -83,7 +83,8 @@ extern char lnet_upcall[1024];
  */
 extern char lnet_debug_log_upcall[1024];
 
-#define PSDEV_LNET  (0x100)
+#ifndef HAVE_SYSCTL_UNNUMBERED
+#define CTL_LNET        (0x100)
 enum {
         PSDEV_DEBUG = 1,          /* control debugging */
         PSDEV_SUBSYSTEM_DEBUG,    /* control debugging */
@@ -103,6 +104,27 @@ enum {
         PSDEV_LNET_DEBUG_MB,      /* size of debug buffer */
         PSDEV_LNET_DEBUG_LOG_UPCALL, /* debug log upcall script */
 };
+#else
+#define CTL_LNET                        CTL_UNNUMBERED
+#define PSDEV_DEBUG                     CTL_UNNUMBERED
+#define PSDEV_SUBSYSTEM_DEBUG           CTL_UNNUMBERED
+#define PSDEV_PRINTK                    CTL_UNNUMBERED
+#define PSDEV_CONSOLE_RATELIMIT         CTL_UNNUMBERED
+#define PSDEV_CONSOLE_MAX_DELAY_CS      CTL_UNNUMBERED
+#define PSDEV_CONSOLE_MIN_DELAY_CS      CTL_UNNUMBERED
+#define PSDEV_CONSOLE_BACKOFF           CTL_UNNUMBERED
+#define PSDEV_DEBUG_PATH                CTL_UNNUMBERED
+#define PSDEV_DEBUG_DUMP_PATH           CTL_UNNUMBERED
+#define PSDEV_LNET_UPCALL               CTL_UNNUMBERED
+#define PSDEV_LNET_MEMUSED              CTL_UNNUMBERED
+#define PSDEV_LNET_CATASTROPHE          CTL_UNNUMBERED
+#define PSDEV_LNET_PANIC_ON_LBUG        CTL_UNNUMBERED
+#define PSDEV_LNET_DUMP_KERNEL          CTL_UNNUMBERED
+#define PSDEV_LNET_DAEMON_FILE          CTL_UNNUMBERED
+#define PSDEV_LNET_DEBUG_MB             CTL_UNNUMBERED
+#define PSDEV_LNET_DEBUG_LOG_UPCALL     CTL_UNNUMBERED
+#endif
+
 
 static int
 proc_call_handler(void *data, int write,
@@ -123,17 +145,7 @@ proc_call_handler(void *data, int write,
         }
         return 0;
 }
-
-#define DECLARE_PROC_HANDLER(name)                      \
-static int                                              \
-LL_PROC_PROTO(name)                                     \
-{                                                       \
-        DECLARE_LL_PROC_PPOS_DECL;                      \
-                                                        \
-        return proc_call_handler(table->data, write,    \
-                                 ppos, buffer, lenp,    \
-                                 __##name);             \
-}
+EXPORT_SYMBOL(proc_call_handler);
 
 static int __proc_dobitmasks(void *data, int write,
                              loff_t pos, void *buffer, int nob)
@@ -324,7 +336,7 @@ static cfs_sysctl_table_t lnet_table[] = {
                 .data     = &libcfs_debug,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
-                .proc_handler = &proc_dobitmasks
+                .proc_handler = &proc_dobitmasks,
         },
         {
                 .ctl_name = PSDEV_SUBSYSTEM_DEBUG,
@@ -332,7 +344,7 @@ static cfs_sysctl_table_t lnet_table[] = {
                 .data     = &libcfs_subsystem_debug,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
-                .proc_handler = &proc_dobitmasks
+                .proc_handler = &proc_dobitmasks,
         },
         {
                 .ctl_name = PSDEV_PRINTK,
@@ -340,7 +352,7 @@ static cfs_sysctl_table_t lnet_table[] = {
                 .data     = &libcfs_printk,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
-                .proc_handler = &proc_dobitmasks
+                .proc_handler = &proc_dobitmasks,
         },
         {
                 .ctl_name = PSDEV_CONSOLE_RATELIMIT,
@@ -402,7 +414,8 @@ static cfs_sysctl_table_t lnet_table[] = {
                 .data     = (int *)&libcfs_kmemory.counter,
                 .maxlen   = sizeof(int),
                 .mode     = 0444,
-                .proc_handler = &proc_dointvec
+                .proc_handler = &proc_dointvec,
+                .strategy = &sysctl_intvec,
         },
         {
                 .ctl_name = PSDEV_LNET_CATASTROPHE,
@@ -410,7 +423,8 @@ static cfs_sysctl_table_t lnet_table[] = {
                 .data     = &libcfs_catastrophe,
                 .maxlen   = sizeof(int),
                 .mode     = 0444,
-                .proc_handler = &proc_dointvec
+                .proc_handler = &proc_dointvec,
+                .strategy = &sysctl_intvec,
         },
         {
                 .ctl_name = PSDEV_LNET_PANIC_ON_LBUG,
@@ -418,11 +432,13 @@ static cfs_sysctl_table_t lnet_table[] = {
                 .data     = &libcfs_panic_on_lbug,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
-                .proc_handler = &proc_dointvec
+                .proc_handler = &proc_dointvec,
+                .strategy = &sysctl_intvec,
         },
         {
                 .ctl_name = PSDEV_LNET_DUMP_KERNEL,
                 .procname = "dump_kernel",
+                .maxlen   = 256,
                 .mode     = 0200,
                 .proc_handler = &proc_dump_kernel,
         },
@@ -430,6 +446,7 @@ static cfs_sysctl_table_t lnet_table[] = {
                 .ctl_name = PSDEV_LNET_DAEMON_FILE,
                 .procname = "daemon_file",
                 .mode     = 0644,
+                .maxlen   = 256,
                 .proc_handler = &proc_daemon_file,
         },
         {
@@ -441,21 +458,24 @@ static cfs_sysctl_table_t lnet_table[] = {
         {0}
 };
 
-static cfs_sysctl_table_t top_table[2] = {
+static cfs_sysctl_table_t top_table[] = {
         {
-                .ctl_name = PSDEV_LNET,
+                .ctl_name = CTL_LNET,
                 .procname = "lnet",
+                .mode     = 0555,
                 .data     = NULL,
                 .maxlen   = 0,
-                .mode     = 0555,
-                .child    = lnet_table
+                .child    = lnet_table,
         },
-        {0}
+        {
+                .ctl_name = 0
+        }
 };
 
 int insert_proc(void)
 {
 #ifdef CONFIG_SYSCTL
+	printk("call register\n");
         if (lnet_table_header == NULL)
                 lnet_table_header = cfs_register_sysctl_table(top_table, 0);
 #endif
