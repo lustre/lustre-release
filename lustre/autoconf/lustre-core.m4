@@ -1954,26 +1954,29 @@ LB_LINUX_TRY_COMPILE([
 
 #
 # LC_QUOTA64
-# linux kernel may have 64-bit limits support
+# linux kernel have 64-bit limits support
 #
 AC_DEFUN([LC_QUOTA64],
-[AC_MSG_CHECKING([if kernel has 64-bit quota limits support])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/kernel.h>
-        #include <linux/fs.h>
-        #include <linux/quotaio_v2.h>
-        int versions[] = V2_INITQVERSIONS_R1;
-        struct v2_disk_dqblk_r1 dqblk_r1;
-],[],[
-        AC_DEFINE(HAVE_QUOTA64, 1, [have quota64])
-        AC_MSG_RESULT([yes])
-
-],[
-        AC_MSG_WARN([You have got no 64-bit kernel quota support.])
-        AC_MSG_WARN([Continuing with limited quota support.])
-        AC_MSG_WARN([quotacheck is needed for filesystems with recent quota versions.])
-        AC_MSG_RESULT([no])
-])
+[if test x$enable_quota_module = xyes; then
+        AC_MSG_CHECKING([if kernel has 64-bit quota limits support])
+        LB_LINUX_TRY_COMPILE([
+                #include <linux/kernel.h>
+                #include <linux/fs.h>
+                #include <linux/quotaio_v2.h>
+                int versions[] = V2_INITQVERSIONS_R1;
+                struct v2_disk_dqblk_r1 dqblk_r1;
+        ],[],[
+                AC_DEFINE(HAVE_QUOTA64, 1, [have quota64])
+                AC_MSG_RESULT([yes])
+        ],[
+                LB_CHECK_FILE([$LINUX/include/linux/lustre_version.h],[
+                        if test x$enable_server = xyes ; then
+                                AC_MSG_ERROR([You have got no 64-bit kernel quota support.])
+                        fi
+                ],[])
+                AC_MSG_RESULT([no])
+        ])
+fi
 ])
 
 #
