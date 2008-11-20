@@ -261,6 +261,8 @@ extern unsigned int obd_alloc_fail_rate;
 
 #define OBD_FAIL_PTLRPC_DUMP_LOG         0x50e
 #define OBD_FAIL_PTLRPC_LONG_UNLINK      0x50f
+#define OBD_FAIL_PTLRPC_HPREQ_TIMEOUT    0x510
+#define OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT  0x511
 
 #define OBD_FAIL_OBD_PING_NET            0x600
 #define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601

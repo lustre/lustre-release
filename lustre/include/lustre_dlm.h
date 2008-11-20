@@ -390,7 +390,8 @@ struct ldlm_namespace {
 
         unsigned int           ns_max_unused;
         unsigned int           ns_max_age;
-        
+        unsigned int           ns_timeouts;
+
         /* Lower limit to number of pages in lock to keep it in cache */
         unsigned int           ns_shrink_thumb;
         cfs_time_t             ns_next_dump;   /* next debug dump, jiffies */

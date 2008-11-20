@@ -358,6 +358,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
         CFS_INIT_LIST_HEAD(&lock->l_extents_list);
         spin_lock_init(&lock->l_extents_list_lock);
         CFS_INIT_LIST_HEAD(&lock->l_cache_locks_list);
+        lock->l_callback_timeout = 0;
 
         RETURN(lock);
 }
@@ -1792,7 +1793,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
                                    data->msg_fn, data->msg_line, fmt, args,
                                    " ns: \?\? lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
                                    "res: \?\? rrc=\?\? type: \?\?\? flags: %x remote: "
-                                   LPX64" expref: %d pid: %u\n", lock,
+                                   LPX64" expref: %d pid: %u timeout: %lu\n", lock,
                                    lock->l_handle.h_cookie, atomic_read(&lock->l_refc),
                                    lock->l_readers, lock->l_writers,
                                    ldlm_lockname[lock->l_granted_mode],
@@ -1800,7 +1801,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
                                    lock->l_flags, lock->l_remote_handle.cookie,
                                    lock->l_export ?
                                         atomic_read(&lock->l_export->exp_refcount) : -99,
-                                   lock->l_pid);
+                                   lock->l_pid, lock->l_callback_timeout);
 		va_end(args);
                 return;
         }
@@ -1812,7 +1813,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
                                    " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
                                    "res: "LPU64"/"LPU64" rrc: %d type: %s ["LPU64"->"LPU64
                                    "] (req "LPU64"->"LPU64") flags: %x remote: "LPX64
-                                    " expref: %d pid: %u\n",
+                                    " expref: %d pid: %u timeout %lu\n",
                                     lock->l_resource->lr_namespace->ns_name, lock,
                                     lock->l_handle.h_cookie, atomic_read(&lock->l_refc),
                                     lock->l_readers, lock->l_writers,
@@ -1828,7 +1829,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
                                     lock->l_flags, lock->l_remote_handle.cookie,
                                     lock->l_export ?
                                         atomic_read(&lock->l_export->exp_refcount) : -99,
-                                    lock->l_pid);
+                                    lock->l_pid, lock->l_callback_timeout);
                 break;
         case LDLM_FLOCK:
                 libcfs_debug_vmsg2(cdls, data->msg_subsys, level, data->msg_file,
@@ -1836,7 +1837,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
                                    " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
                                    "res: "LPU64"/"LPU64" rrc: %d type: %s pid: %d "
                                    "["LPU64"->"LPU64"] flags: %x remote: "LPX64
-                                   " expref: %d pid: %u\n",
+                                   " expref: %d pid: %u timeout: %lu\n",
                                    lock->l_resource->lr_namespace->ns_name, lock,
                                    lock->l_handle.h_cookie, atomic_read(&lock->l_refc),
                                    lock->l_readers, lock->l_writers,
@@ -1852,7 +1853,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
                                    lock->l_flags, lock->l_remote_handle.cookie,
                                    lock->l_export ?
                                         atomic_read(&lock->l_export->exp_refcount) : -99,
-                                   lock->l_pid);
+                                   lock->l_pid, lock->l_callback_timeout);
                 break;
         case LDLM_IBITS:
                 libcfs_debug_vmsg2(cdls, data->msg_subsys, level, data->msg_file,
@@ -1860,7 +1861,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
                                    " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
                                    "res: "LPU64"/"LPU64" bits "LPX64" rrc: %d type: %s "
                                    "flags: %x remote: "LPX64" expref: %d "
-                                   "pid %u\n",
+                                   "pid: %u timeout: %lu\n",
                                    lock->l_resource->lr_namespace->ns_name,
                                    lock, lock->l_handle.h_cookie,
                                    atomic_read (&lock->l_refc),
@@ -1875,14 +1876,14 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
                                    lock->l_flags, lock->l_remote_handle.cookie,
                                    lock->l_export ?
                                         atomic_read(&lock->l_export->exp_refcount) : -99,
-                                   lock->l_pid);
+                                   lock->l_pid, lock->l_callback_timeout);
                 break;
         default:
                 libcfs_debug_vmsg2(cdls, data->msg_subsys, level, data->msg_file,
                                    data->msg_fn, data->msg_line, fmt, args,
                                    " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
                                    "res: "LPU64"/"LPU64" rrc: %d type: %s flags: %x "
-                                   "remote: "LPX64" expref: %d pid: %u\n",
+                                   "remote: "LPX64" expref: %d pid: %u timeout %lu\n",
                                    lock->l_resource->lr_namespace->ns_name,
                                    lock, lock->l_handle.h_cookie,
                                    atomic_read (&lock->l_refc),
@@ -1896,7 +1897,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
                                    lock->l_flags, lock->l_remote_handle.cookie,
                                    lock->l_export ?
                                          atomic_read(&lock->l_export->exp_refcount) : -99,
-                                   lock->l_pid);
+                                   lock->l_pid, lock->l_callback_timeout);
                 break;
         }
         va_end(args);

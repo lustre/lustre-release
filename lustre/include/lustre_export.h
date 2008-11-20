@@ -139,6 +139,7 @@ struct obd_export {
                                   exp_replay_needed:1,
                                   exp_need_sync:1, /* needs sync from connect */
                                   exp_libclient:1; /* liblustre client? */
+        struct list_head          exp_queued_rpc;  /* RPC to be handled */
         union {
                 struct mds_export_data    eu_mds_data;
                 struct filter_export_data eu_filter_data;

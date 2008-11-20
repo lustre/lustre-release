@@ -507,6 +507,32 @@ static int ptlrpc_lprocfs_rd_timeouts(char *page, char **start, off_t off,
         return rc;
 }
 
+static int ptlrpc_lprocfs_rd_hp_ratio(char *page, char **start, off_t off,
+                                      int count, int *eof, void *data)
+{
+        struct ptlrpc_service *svc = data;
+        int rc = snprintf(page, count, "%d", svc->srv_hpreq_ratio);
+        return rc;
+}
+
+static int ptlrpc_lprocfs_wr_hp_ratio(struct file *file, const char *buffer,
+                                      unsigned long count, void *data)
+{
+        struct ptlrpc_service *svc = data;
+        int rc, val;
+        
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc < 0)
+                return rc;
+        if (val < 0)
+                return -ERANGE;
+
+        spin_lock(&svc->srv_lock);
+        svc->srv_hpreq_ratio = val;
+        spin_unlock(&svc->srv_lock);
+        return count;
+}
+
 void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
                                      struct ptlrpc_service *svc)
 {
@@ -521,6 +547,10 @@ void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
                  .data       = svc},
                 {.name       = "timeouts",
                  .read_fptr  = ptlrpc_lprocfs_rd_timeouts,
+                 .data       = svc},
+                {.name       = "high_priority_ratio",
+                 .read_fptr  = ptlrpc_lprocfs_rd_hp_ratio,
+                 .write_fptr = ptlrpc_lprocfs_wr_hp_ratio,
                  .data       = svc},
                 {NULL}
         };

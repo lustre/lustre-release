@@ -2689,7 +2689,8 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
                                 MDC_REPLY_PORTAL, MDS_SERVICE_WATCHDOG_FACTOR,
                                 mds_handle, LUSTRE_MDS_NAME,
                                 obd->obd_proc_entry, target_print_req,
-                                mds_min_threads, mds_max_threads, "ll_mdt");
+                                mds_min_threads, mds_max_threads, "ll_mdt",
+                                NULL);
 
         if (!mds->mds_service) {
                 CERROR("failed to start service\n");
@@ -2707,7 +2708,7 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
                                 mds_handle, "mds_setattr",
                                 obd->obd_proc_entry, target_print_req,
                                 mds_min_threads, mds_max_threads,
-                                "ll_mdt_attr");
+                                "ll_mdt_attr", NULL);
         if (!mds->mds_setattr_service) {
                 CERROR("failed to start getattr service\n");
                 GOTO(err_thread, rc = -ENOMEM);
@@ -2724,7 +2725,7 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
                                 mds_handle, "mds_readpage",
                                 obd->obd_proc_entry, target_print_req,
                                 MDS_THREADS_MIN_READPAGE, mds_max_threads,
-                                "ll_mdt_rdpg");
+                                "ll_mdt_rdpg", NULL);
         if (!mds->mds_readpage_service) {
                 CERROR("failed to start readpage service\n");
                 GOTO(err_thread2, rc = -ENOMEM);

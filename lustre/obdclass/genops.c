@@ -677,6 +677,7 @@ void class_export_destroy(struct obd_export *exp)
 
         LASSERT(list_empty(&exp->exp_outstanding_replies));
         LASSERT(list_empty(&exp->exp_req_replay_queue));
+        LASSERT(list_empty(&exp->exp_queued_rpc));
         obd_destroy_export(exp);
 
         OBD_FREE_RCU(exp, sizeof(*exp), &exp->exp_handle);
@@ -703,6 +704,7 @@ struct obd_export *class_new_export(struct obd_device *obd,
         export->exp_obd = obd;
         CFS_INIT_LIST_HEAD(&export->exp_outstanding_replies);
         CFS_INIT_LIST_HEAD(&export->exp_req_replay_queue);
+        CFS_INIT_LIST_HEAD(&export->exp_queued_rpc);
         CFS_INIT_LIST_HEAD(&export->exp_handle.h_link);
         class_handle_hash(&export->exp_handle, export_handle_addref);
         export->exp_last_request_time = cfs_time_current_sec();

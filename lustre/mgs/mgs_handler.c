@@ -220,7 +220,7 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
                                 mgs_handle, LUSTRE_MGS_NAME,
                                 obd->obd_proc_entry, NULL,
                                 MGS_THREADS_AUTO_MIN, MGS_THREADS_AUTO_MAX,
-                                "ll_mgs");
+                                "ll_mgs", NULL);
 
         if (!mgs->mgs_service) {
                 CERROR("failed to start service\n");
