@@ -1734,9 +1734,6 @@ test_70b () {
 	log "$TESTNAME fail mds 1"
 	fail mds
 
-# wait for client to reconnect to MDS
-	sleep $TIMEOUT
-
 	for CLIENT in ${CLIENTS//,/ }; do
 		PID=`cat pid.$CLIENT`
 		wait $PID
