@@ -94,7 +94,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
         {
                 .ctl_name = SOCKLND_TIMEOUT,
                 .procname = "timeout",
-                .data     = ksocknal_tunables.ksnd_timeout,
+                .data     = &ksocknal_tunables.ksnd_timeout,
                 .maxlen   = sizeof (int),
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec,
@@ -103,7 +103,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
         {
                 .ctl_name = SOCKLND_CREDITS,
                 .procname = "credits",
-                .data     = ksocknal_tunables.ksnd_credits,
+                .data     = &ksocknal_tunables.ksnd_credits,
                 .maxlen   = sizeof (int),
                 .mode     = 0444,
                 .proc_handler = &proc_dointvec,
@@ -112,7 +112,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
          {
                 .ctl_name = SOCKLND_PEER_CREDITS,
                 .procname = "peer_credits",
-                .data     = ksocknal_tunables.ksnd_peercredits,
+                .data     = &ksocknal_tunables.ksnd_peercredits,
                 .maxlen   = sizeof (int),
                 .mode     = 0444,
                 .proc_handler = &proc_dointvec,
@@ -121,7 +121,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
         {
                 .ctl_name = SOCKLND_NCONNDS,
                 .procname = "nconnds",
-                .data     = ksocknal_tunables.ksnd_nconnds,
+                .data     = &ksocknal_tunables.ksnd_nconnds,
                 .maxlen   = sizeof (int),
                 .mode     = 0444,
                 .proc_handler = &proc_dointvec,
@@ -130,7 +130,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
         {
                 .ctl_name = SOCKLND_RECONNECTS_MIN,
                 .procname = "min_reconnectms",
-                .data     = ksocknal_tunables.ksnd_min_reconnectms,
+                .data     = &ksocknal_tunables.ksnd_min_reconnectms,
                 .maxlen   = sizeof (int),
                 .mode     = 0444,
                 .proc_handler = &proc_dointvec,
@@ -139,7 +139,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
         {
                 .ctl_name = SOCKLND_RECONNECTS_MAX,
                 .procname = "max_reconnectms",
-                .data     = ksocknal_tunables.ksnd_max_reconnectms,
+                .data     = &ksocknal_tunables.ksnd_max_reconnectms,
                 .maxlen   = sizeof (int),
                 .mode     = 0444,
                 .proc_handler = &proc_dointvec,
@@ -148,7 +148,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
         {
                 .ctl_name = SOCKLND_EAGER_ACK,
                 .procname = "eager_ack",
-                .data     = ksocknal_tunables.ksnd_eager_ack,
+                .data     = &ksocknal_tunables.ksnd_eager_ack,
                 .maxlen   = sizeof (int),
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec,
@@ -157,7 +157,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
         {
                 .ctl_name = SOCKLND_ZERO_COPY,
                 .procname = "zero_copy",
-                .data     = ksocknal_tunables.ksnd_zc_min_frag,
+                .data     = &ksocknal_tunables.ksnd_zc_min_frag,
                 .maxlen   = sizeof (int),
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec,
@@ -166,7 +166,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
         {
                 .ctl_name = SOCKLND_ZERO_COPY_RECV,
                 .procname = "zero_copy_recv",
-                .data     = ksocknal_tunables.ksnd_zc_recv,
+                .data     = &ksocknal_tunables.ksnd_zc_recv,
                 .maxlen   = sizeof (int),
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec,
@@ -176,7 +176,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
         {
                 .ctl_name = SOCKLND_ZERO_COPY_RECV_MIN_NFRAGS,
                 .procname = "zero_copy_recv",
-                .data     = ksocknal_tunables.ksnd_zc_recv_min_nfrags
+                .data     = &ksocknal_tunables.ksnd_zc_recv_min_nfrags,
                 .maxlen   = sizeof (int),
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec,
@@ -185,7 +185,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
         {
                 .ctl_name = SOCKLND_TYPED,
                 .procname = "typed",
-                .data     = ksocknal_tunables.ksnd_typed_conns,
+                .data     = &ksocknal_tunables.ksnd_typed_conns,
                 .maxlen   = sizeof (int),
                 .mode     = 0444,
                 .proc_handler = &proc_dointvec,
@@ -194,7 +194,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
         {
                 .ctl_name = SOCKLND_BULK_MIN,
                 .procname = "min_bulk",
-                .data     = ksocknal_tunables.ksnd_min_bulk,
+                .data     = &ksocknal_tunables.ksnd_min_bulk,
                 .maxlen   = sizeof (int),
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec,
@@ -203,7 +203,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
         {
                 .ctl_name = SOCKLND_RX_BUFFER_SIZE,
                 .procname = "rx_buffer_size",
-                .data     = ksocknal_tunables.ksnd_rx_buffer_size,
+                .data     = &ksocknal_tunables.ksnd_rx_buffer_size,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec,
@@ -212,7 +212,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
         {
                 .ctl_name = SOCKLND_TX_BUFFER_SIZE,
                 .procname = "tx_buffer_size",
-                .data     = ksocknal_tunables.ksnd_tx_buffer_size,
+                .data     = &ksocknal_tunables.ksnd_tx_buffer_size,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec,
@@ -221,7 +221,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
         {
                 .ctl_name = SOCKLND_NAGLE,
                 .procname = "nagle",
-                .data     = ksocknal_tunables.ksnd_nagle,
+                .data     = &ksocknal_tunables.ksnd_nagle,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec,
@@ -231,7 +231,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
         {
                 .ctl_name = SOCKLND_IRQ_AFFINITY,
                 .procname = "irq_affinity",
-                .data     = ksocknal_tunables.ksnd_irq_affinity,
+                .data     = &ksocknal_tunables.ksnd_irq_affinity,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec,
@@ -241,7 +241,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
         {
                 .ctl_name = SOCKLND_KEEPALIVE_IDLE,
                 .procname = "keepalive_idle",
-                .data     = ksocknal_tunables.ksnd_keepalive_idle,
+                .data     = &ksocknal_tunables.ksnd_keepalive_idle,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec,
@@ -250,7 +250,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
         {
                 .ctl_name = SOCKLND_KEEPALIVE_COUNT,
                 .procname = "keepalive_count",
-                .data     = ksocknal_tunables.ksnd_keepalive_count,
+                .data     = &ksocknal_tunables.ksnd_keepalive_count,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec,
@@ -259,7 +259,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
         {
                 .ctl_name = SOCKLND_KEEPALIVE_INTVL,
                 .procname = "keepalive_intvl",
-                .data     = ksocknal_tunables.ksnd_keepalive_intvl,
+                .data     = &ksocknal_tunables.ksnd_keepalive_intvl,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec,
@@ -269,7 +269,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
         {
                 .ctl_name = SOCKLND_BACKOFF_INIT,
                 .procname = "backoff_init",
-                .data     = ksocknal_tunables.ksnd_backoff_init,
+                .data     = &ksocknal_tunables.ksnd_backoff_init,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec,
@@ -278,7 +278,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
         {
                 .ctl_name = SOCKLND_BACKOFF_MAX,
                 .procname = "backoff_max",
-                .data     = ksocknal_tunables.ksnd_backoff_max,
+                .data     = &ksocknal_tunables.ksnd_backoff_max,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec,
@@ -289,7 +289,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
         {
                 .ctl_name = SOCKLND_PROTOCOL,
                 .procname = "protocol",
-                .data     = ksocknal_tunables.ksnd_protocol,
+                .data     = &ksocknal_tunables.ksnd_protocol,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec,
