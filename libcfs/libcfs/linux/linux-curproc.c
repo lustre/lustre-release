@@ -138,28 +138,29 @@ int cfs_cap_raised(cfs_cap_t cap)
 {
         return cap_raised(cfs_current()->cap_effective, cfs_cap_unpack(cap));
 }
-void cfs_kernel_cap_pack(cfs_kernel_cap_t kcap, cfs_cap_t *cap)
+
+cfs_cap_t cfs_curproc_cap_pack(void)
 {
 #if defined (_LINUX_CAPABILITY_VERSION) && _LINUX_CAPABILITY_VERSION == 0x19980330
-        *cap = cfs_cap_pack(kcap);
+        return cfs_cap_pack(current->cap_effective);
 #elif defined (_LINUX_CAPABILITY_VERSION) && _LINUX_CAPABILITY_VERSION == 0x20071026
-        *cap = cfs_cap_pack(kcap[0]);
+        return cfs_cap_pack(current->cap_effective[0]);
 #elif defined(_KERNEL_CAPABILITY_VERSION) && _KERNEL_CAPABILITY_VERSION == 0x20080522
         /* XXX lost high byte */
-        *cap = cfs_cap_pack(kcap.cap[0]);
+        return cfs_cap_pack(current->cap_effective.cap[0]);
 #else
         #error "need correct _KERNEL_CAPABILITY_VERSION "
 #endif
 }
 
-void cfs_kernel_cap_unpack(cfs_kernel_cap_t *kcap, cfs_cap_t cap)
+void cfs_curproc_cap_unpack(cfs_cap_t cap)
 {
 #if defined (_LINUX_CAPABILITY_VERSION) && _LINUX_CAPABILITY_VERSION == 0x19980330
-        *kcap = cfs_cap_unpack(cap);
+        current->cap_effective = cfs_cap_unpack(cap);
 #elif defined (_LINUX_CAPABILITY_VERSION) && _LINUX_CAPABILITY_VERSION == 0x20071026
-        (*kcap)[0] = cfs_cap_unpack(cap);
+        current->cap_effective[0] = cfs_cap_unpack(cap);
 #elif defined(_KERNEL_CAPABILITY_VERSION) && _KERNEL_CAPABILITY_VERSION == 0x20080522
-        kcap->cap[0] = cfs_cap_unpack(cap);
+        current->cap_effective.cap[0] = cfs_cap_unpack(cap);
 #else
         #error "need correct _KERNEL_CAPABILITY_VERSION "
 #endif
