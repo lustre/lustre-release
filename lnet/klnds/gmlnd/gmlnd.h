@@ -82,6 +82,7 @@
 #include "libcfs/kp30.h"
 #include "lnet/lnet.h"
 #include "lnet/lib-lnet.h"
+#include "lnet/lnet-sysctl.h"
 
 /* undefine these before including the GM headers which clash */
 #undef PACKAGE_BUGREPORT
