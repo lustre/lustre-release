@@ -264,7 +264,7 @@ int ll_file_release(struct inode *inode, struct file *file)
          * Different processes can open the same dir, "ll_opendir_key" means:
          * it is me that should stop the statahead thread. */
         if (lli->lli_opendir_key == fd && lli->lli_opendir_pid != 0)
-                ll_stop_statahead(inode, fd);
+                ll_stop_statahead(inode, lli->lli_opendir_key);
 
         if (inode->i_sb->s_root == file->f_dentry) {
                 LUSTRE_FPRIVATE(file) = NULL;
@@ -593,7 +593,7 @@ out_och_free:
                 up(&lli->lli_och_sem);
 out_openerr:
                 if (opendir_set != 0)
-                        ll_stop_statahead(inode, fd);
+                        ll_stop_statahead(inode, lli->lli_opendir_key);
         }
 
         return rc;

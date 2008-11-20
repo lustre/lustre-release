@@ -934,23 +934,23 @@ struct ll_statahead_info {
 };
 
 int do_statahead_enter(struct inode *dir, struct dentry **dentry, int lookup);
-int ll_statahead_exit(struct dentry *dentry, int result);
+void ll_statahead_exit(struct dentry *dentry, int result);
 void ll_stop_statahead(struct inode *inode, void *key);
 
 static inline
-int ll_statahead_mark(struct dentry *dentry)
+void ll_statahead_mark(struct dentry *dentry)
 {
         struct ll_inode_info *lli = ll_i2info(dentry->d_parent->d_inode);
-        struct ll_statahead_info *sai = lli->lli_sai;
         struct ll_dentry_data *ldd = ll_d2d(dentry);
-        int rc = 0;
 
-        if (likely(ldd != NULL))
-                ldd->lld_sa_generation = sai->sai_generation;
-        else
-                rc = -ENOMEM;
+        /* not the same process, don't mark */
+        if (lli->lli_opendir_pid != cfs_curproc_pid())
+                return;
 
-        return rc;
+        spin_lock(&lli->lli_lock);
+        if (likely(lli->lli_sai != NULL && ldd != NULL))
+                ldd->lld_sa_generation = lli->lli_sai->sai_generation;
+        spin_unlock(&lli->lli_lock);
 }
 
 static inline

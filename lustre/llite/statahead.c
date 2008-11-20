@@ -711,12 +711,22 @@ static int ll_statahead_thread(void *arg)
         struct inode             *dir = parent->d_inode;
         struct ll_inode_info     *lli = ll_i2info(dir);
         struct ll_sb_info        *sbi = ll_i2sbi(dir);
-        struct ll_statahead_info *sai = ll_sai_get(lli->lli_sai);
-        struct ptlrpc_thread     *thread = &sai->sai_thread;
+        struct ll_statahead_info *sai;
+        struct ptlrpc_thread     *thread;
         unsigned long             index = 0;
         int                       first = 0;
         int                       rc = 0;
         ENTRY;
+
+        spin_lock(&lli->lli_lock);
+        if (unlikely(lli->lli_sai == NULL)) {
+                spin_unlock(&lli->lli_lock);
+                dput(parent);
+                RETURN(-EAGAIN);
+        } else {
+                sai = ll_sai_get(lli->lli_sai);
+                spin_unlock(&lli->lli_lock);
+        }
 
         {
                 char pname[16];
@@ -724,6 +734,7 @@ static int ll_statahead_thread(void *arg)
                 cfs_daemonize(pname);
         }
 
+        thread = &sai->sai_thread;
         sbi->ll_sa_total++;
         spin_lock(&lli->lli_lock);
         thread->t_flags = SVC_RUNNING;
@@ -999,6 +1010,7 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
  * \retval 1       -- stat ahead thread process such dentry, for lookup, it hit
  * \retval -EEXIST -- stat ahead thread started, and this is the first dentry
  * \retval -EBADFD -- statahead thread exit and not dentry available
+ * \retval -EAGAIN -- try to stat by caller
  * \retval others  -- error
  */
 int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
@@ -1119,7 +1131,7 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
                 sai->sai_thread.t_flags = SVC_STOPPED;
                 ll_sai_put(sai);
                 LASSERT(lli->lli_sai == NULL);
-                RETURN(rc);
+                RETURN(-EAGAIN);
         }
 
         l_wait_event(sai->sai_thread.t_ctl_waitq, 
@@ -1136,20 +1148,16 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
 /**
  * update hit/miss count.
  */
-int ll_statahead_exit(struct dentry *dentry, int result)
+void ll_statahead_exit(struct dentry *dentry, int result)
 {
-        struct dentry         *parent = dentry->d_parent;
-        struct ll_inode_info  *lli = ll_i2info(parent->d_inode);
-        struct ll_sb_info     *sbi = ll_i2sbi(parent->d_inode);
-        int                    rc = 0;
+        struct dentry            *parent = dentry->d_parent;
+        struct ll_inode_info     *lli = ll_i2info(parent->d_inode);
+        struct ll_sb_info        *sbi = ll_i2sbi(parent->d_inode);
+        struct ll_statahead_info *sai = lli->lli_sai;
+        struct ll_dentry_data    *ldd = ll_d2d(dentry);
         ENTRY;
 
-        if (lli->lli_opendir_pid != cfs_curproc_pid())
-                RETURN(-EBADFD);
-
-        if (lli->lli_sai) {
-                struct ll_statahead_info *sai = lli->lli_sai;
-
+        if (lli->lli_opendir_pid == cfs_curproc_pid() && sai) {
                 if (result >= 1) {
                         sbi->ll_sa_hit++;
                         sai->sai_hit++;
@@ -1179,7 +1187,8 @@ int ll_statahead_exit(struct dentry *dentry, int result)
                 if (!sa_is_stopped(sai))
                         cfs_waitq_signal(&sai->sai_thread.t_ctl_waitq);
                 ll_sai_entry_fini(sai);
-                rc = ll_statahead_mark(dentry);
+                if (likely(ldd != NULL))
+                        ldd->lld_sa_generation = sai->sai_generation;
         }
-        RETURN(rc);
+        EXIT;
 }
