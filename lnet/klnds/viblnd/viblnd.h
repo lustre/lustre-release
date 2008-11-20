@@ -76,6 +76,7 @@
 #include <libcfs/kp30.h>
 #include <lnet/lnet.h>
 #include <lnet/lib-lnet.h>
+#include <lnet/lnet-sysctl.h>
 
 /* CPU_{L,B}E #defines needed by Voltaire headers */
 #include <asm/byteorder.h>
