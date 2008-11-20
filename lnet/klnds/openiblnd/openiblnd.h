@@ -74,6 +74,7 @@
 #include <libcfs/kp30.h>
 #include <lnet/lnet.h>
 #include <lnet/lib-lnet.h>
+#include <lnet/lnet-sysctl.h>
 
 #include <ts_ib_core.h>
 #include <ts_ib_cm.h>
