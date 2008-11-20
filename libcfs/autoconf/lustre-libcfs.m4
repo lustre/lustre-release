@@ -363,6 +363,59 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# 2.6.24 request not use real numbers for ctl_name
+AC_DEFUN([LN_SYSCTL_UNNUMBERED],
+[AC_MSG_CHECKING([for CTL_UNNUMBERED])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/sysctl.h>
+],[
+	#ifndef CTL_UNNUMBERED
+	#error CTL_UNNUMBERED not exist in kernel
+	#endif
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_SYSCTL_UNNUMBERED, 1,
+                  [sysctl has CTL_UNNUMBERED])
+],[
+        AC_MSG_RESULT(NO)
+])
+])
+
+# 2.6.24 lost scatterlist->page
+AC_DEFUN([LN_SCATTERLIST_SETPAGE],
+[AC_MSG_CHECKING([for exist sg_set_page])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/scatterlist.h>
+],[
+	sg_set_page(NULL,NULL,0,0);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_SCATTERLIST_SETPAGE, 1,
+                  [struct scatterlist has page member])
+],[
+        AC_MSG_RESULT(NO)
+])
+])
+
+# 2.6.26 use int instead of atomic for sem.count
+AC_DEFUN([LN_SEM_COUNT],
+[AC_MSG_CHECKING([atomic sem.count])
+LB_LINUX_TRY_COMPILE([
+        #include <asm/semaphore.h>
+],[
+	struct semaphore s;
+	
+	atomic_read(&s.count);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_SEM_COUNT_ATOMIC, 1,
+                  [semaphore counter is atomic])
+],[
+        AC_MSG_RESULT(NO)
+])
+])
+
+
 #
 # LIBCFS_PROG_LINUX
 #
@@ -393,6 +446,11 @@ LIBCFS_2ARGS_REGISTER_SYSCTL
 LIBCFS_KMEM_CACHE
 # 2.6.23
 LIBCFS_KMEM_CACHE_CREATE_DTOR
+# 2.6.24
+LN_SYSCTL_UNNUMBERED
+LN_SCATTERLIST_SETPAGE
+# 2.6.26
+LN_SEM_COUNT
 ])
 
 #

@@ -88,6 +88,17 @@ typedef struct ctl_table_header		cfs_sysctl_table_header_t;
 #endif
 #define cfs_unregister_sysctl_table(t)	unregister_sysctl_table(t)
 
+#define DECLARE_PROC_HANDLER(name)                      \
+static int                                              \
+LL_PROC_PROTO(name)                                     \
+{                                                       \
+        DECLARE_LL_PROC_PPOS_DECL;                      \
+                                                        \
+        return proc_call_handler(table->data, write,    \
+                                 ppos, buffer, lenp,    \
+                                 __##name);             \
+}
+
 /*
  * Symbol register
  */

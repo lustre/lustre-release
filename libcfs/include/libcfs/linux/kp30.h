@@ -76,6 +76,7 @@
 # include <linux/kallsyms.h>
 # include <linux/moduleparam.h>
 #endif
+#include <linux/scatterlist.h>
 
 #include <libcfs/linux/portals_compat25.h>
 
@@ -136,6 +137,12 @@ static inline void our_cond_resched(void)
 #define LASSERT_SPIN_LOCKED(lock) do {} while(0)
 #endif
 #define LASSERT_SEM_LOCKED(sem) LASSERT(down_trylock(sem) != 0)
+
+#ifdef HAVE_SEM_COUNT_ATOMIC
+#define SEM_COUNT(sem)          (atomic_read(&(sem)->count))
+#else
+#define SEM_COUNT(sem)          ((sem)->count)
+#endif
 
 #define LIBCFS_PANIC(msg)            panic(msg)
 
@@ -383,5 +390,17 @@ extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
 #endif
 
 #undef _LWORDSIZE
+
+/* compat macroses */
+#ifndef HAVE_SCATTERLIST_SETPAGE
+static inline void sg_set_page(struct scatterlist *sg, struct page *page,
+                               unsigned int len, unsigned int offset)
+{
+        sg->page = page;
+        sg->offset = offset;
+        sg->length = len;
+}
+#endif
+
 
 #endif

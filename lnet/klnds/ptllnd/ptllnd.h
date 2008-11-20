@@ -76,6 +76,7 @@
 #include <libcfs/libcfs.h>
 #include <lnet/lnet.h>
 #include <lnet/lib-lnet.h>
+#include <lnet/lnet-sysctl.h>
 #include <portals/p30.h>
 #ifdef CRAY_XT3
 #include <portals/ptltrace.h>

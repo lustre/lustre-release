@@ -33,12 +33,13 @@
 
 /* this is really lnet_proc.c */
 
-#define LNET_PROC_STATS   "sys/lnet/stats"
-#define LNET_PROC_ROUTES  "sys/lnet/routes"
-#define LNET_PROC_ROUTERS "sys/lnet/routers"
-#define LNET_PROC_PEERS   "sys/lnet/peers"
-#define LNET_PROC_BUFFERS "sys/lnet/buffers"
-#define LNET_PROC_NIS     "sys/lnet/nis"
+#define LNET_PROC_ROOT    "sys/lnet"
+#define LNET_PROC_STATS   LNET_PROC_ROOT"/stats"
+#define LNET_PROC_ROUTES  LNET_PROC_ROOT"/routes"
+#define LNET_PROC_ROUTERS LNET_PROC_ROOT"/routers"
+#define LNET_PROC_PEERS   LNET_PROC_ROOT"/peers"
+#define LNET_PROC_BUFFERS LNET_PROC_ROOT"/buffers"
+#define LNET_PROC_NIS     LNET_PROC_ROOT"/nis"
 
 static int
 lnet_router_proc_stats_read (char *page, char **start, off_t off,
@@ -1028,6 +1029,13 @@ lnet_proc_init(void)
 {
         struct proc_dir_entry *pde;
 
+#if 0
+        pde = proc_mkdir(LNET_PROC_ROOT, NULL);
+        if (pde == NULL) {
+                CERROR("couldn't create "LNET_PROC_ROOT"\n");
+                return; 
+        }
+#endif
         /* Initialize LNET_PROC_STATS */
         pde = create_proc_entry (LNET_PROC_STATS, 0644, NULL);
         if (pde == NULL) {
@@ -1104,6 +1112,9 @@ lnet_proc_fini(void)
         remove_proc_entry(LNET_PROC_PEERS, 0);
         remove_proc_entry(LNET_PROC_BUFFERS, 0);
         remove_proc_entry(LNET_PROC_NIS, 0);
+#if 0   
+        remove_proc_entry(LNET_PROC_ROOT, 0);
+#endif
 }
 
 #else

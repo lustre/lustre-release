@@ -78,9 +78,34 @@ gmnal_tunables_t gmnal_tunables = {
 };
 
 #if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
+
+#ifndef HAVE_SYSCTL_UNNUMBERED
+
+enum {
+        GMLND_PORT = 1,
+        GMLND_NTX,
+        GMLND_CREDITS,
+        GMLND_PEERCREDITS,
+        GMLND_NLARGE_TX_BUFS,
+        GMLND_NRX_SMALL,
+        GMLND_NRX_LARGE
+};
+
+#else
+
+#define GMLND_PORT              CTL_UNNUMBERED
+#define GMLND_NTX               CTL_UNNUMBERED
+#define GMLND_CREDITS           CTL_UNNUMBERED
+#define GMLND_PEERCREDITS       CTL_UNNUMBERED
+#define GMLND_NLARGE_TX_BUFS    CTL_UNNUMBERED
+#define GMLND_NRX_SMALL         CTL_UNNUMBERED
+#define GMLND_NRX_LARGE         CTL_UNNUMBERED
+
+#endif
+
 static cfs_sysctl_table_t gmnal_ctl_table[] = {
         {
-                .ctl_name = 1,
+                .ctl_name = GMLND_PORT,
                 .procname = "port",
                 .data     = &port,
                 .maxlen   = sizeof (int),
@@ -88,7 +113,7 @@ static cfs_sysctl_table_t gmnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 2,
+                .ctl_name = GMLND_NTX,
                 .procname = "ntx",
                 .data     = &ntx,
                 .maxlen   = sizeof (int),
@@ -96,7 +121,7 @@ static cfs_sysctl_table_t gmnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 3,
+                .ctl_name = GMLND_CREDITS,
                 .procname = "credits",
                 .data     = &credits,
                 .maxlen   = sizeof (int),
@@ -104,7 +129,7 @@ static cfs_sysctl_table_t gmnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 4,
+                .ctl_name = GMLND_PEERCREDITS,
                 .procname = "peer_credits",
                 .data     = &peer_credits,
                 .maxlen   = sizeof (int),
@@ -112,7 +137,7 @@ static cfs_sysctl_table_t gmnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 5,
+                .ctl_name = GMLND_NLARGE_TX_BUFS,
                 .procname = "nlarge_tx_bufs",
                 .data     = &nlarge_tx_bufs,
                 .maxlen   = sizeof (int),
@@ -120,7 +145,7 @@ static cfs_sysctl_table_t gmnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 6,
+                .ctl_name = GMLND_NRX_SMALL,
                 .procname = "nrx_small",
                 .data     = &nrx_small,
                 .maxlen   = sizeof (int),
@@ -128,7 +153,7 @@ static cfs_sysctl_table_t gmnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 7,
+                .ctl_name = GMLND_NRX_LARGE,
                 .procname = "nrx_large",
                 .data     = &nrx_large,
                 .maxlen   = sizeof (int),
@@ -140,7 +165,7 @@ static cfs_sysctl_table_t gmnal_ctl_table[] = {
 
 static cfs_sysctl_table_t gmnal_top_ctl_table[] = {
         {
-                .ctl_name = 207,
+                .ctl_name = CTL_GMLND,
                 .procname = "gmnal",
                 .data     = NULL,
                 .maxlen   = 0,
