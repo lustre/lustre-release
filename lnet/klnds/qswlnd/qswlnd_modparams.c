@@ -87,9 +87,41 @@ kqswnal_tunables_t kqswnal_tunables = {
 };
 
 #if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
+
+#ifndef HAVE_SYSCTL_UNNUMBERED
+
+enum
+	KQSWNAL_TX_MAXCONTIG = 1,
+	KQSWNAL_NTXMSG,
+	KQSWNAL_CREDITS,
+	KQSWNAL_PEERCREDITS,
+	KQSWNAL_NRXMSGS_LARGE,
+	KQSWNAL_EP_ENVELOPES_LARGE,
+	KQSWNAL_NRXMSGS_SMALL,
+	KQSWNAL_EP_ENVELOPES_SMALL,
+	KQSWNAL_OPTIMIZED_PUTS,
+	KQSWNAL_OPTIMIZED_GETS,
+	KQSWNAL_INJECT_CSUM_ERROR
+};
+#else
+
+#define KQSWNAL_TX_MAXCONTIG    CTL_UNNUMBERED
+#define KQSWNAL_NTXMSG          CTL_UNNUMBERED
+#define KQSWNAL_CREDITS         CTL_UNNUMBERED
+#define KQSWNAL_PEERCREDITS     CTL_UNNUMBERED
+#define KQSWNAL_NRXMSGS_LARGE   CTL_UNNUMBERED
+#define KQSWNAL_EP_ENVELOPES_LARGE CTL_UNNUMBERED
+#define KQSWNAL_NRXMSGS_SMALL   CTL_UNNUMBERED
+#define KQSWNAL_EP_ENVELOPES_SMALL CTL_UNNUMBERED
+#define KQSWNAL_OPTIMIZED_PUTS  CTL_UNNUMBERED
+#define KQSWNAL_OPTIMIZED_GETS  CTL_UNNUMBERED
+#define KQSWNAL_INJECT_CSUM_ERROR CTL_UNNUMBERED
+
+#endif
+
 static cfs_sysctl_table_t kqswnal_ctl_table[] = {
         {
-                .ctl_name = 1,
+                .ctl_name = KQSWNAL_TX_MAXCONTIG,
                 .procname = "tx_maxcontig",
                 .data     = &tx_maxcontig,
                 .maxlen   = sizeof (int),
@@ -97,7 +129,7 @@ static cfs_sysctl_table_t kqswnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 2,
+                .ctl_name = KQSWNAL_NTXMSG,
                 .procname = "ntxmsgs",
                 .data     = &ntxmsgs,
                 .maxlen   = sizeof (int),
@@ -105,7 +137,7 @@ static cfs_sysctl_table_t kqswnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 3,
+                .ctl_name = KQSWNAL_CREDITS,
                 .procname = "credits",
                 .data     = &credits,
                 .maxlen   = sizeof (int),
@@ -113,7 +145,7 @@ static cfs_sysctl_table_t kqswnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 4,
+                .ctl_name = KQSWNAL_PEERCREDITS,
                 .procname = "peer_credits",
                 .data     = &peer_credits,
                 .maxlen   = sizeof (int),
@@ -121,7 +153,7 @@ static cfs_sysctl_table_t kqswnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 5,
+                .ctl_name = KQSWNAL_NRXMSGS_LARGE,
                 .procname = "nrxmsgs_large",
                 .data     = &nrxmsgs_large,
                 .maxlen   = sizeof (int),
@@ -129,7 +161,7 @@ static cfs_sysctl_table_t kqswnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 6,
+                .ctl_name = KQSWNAL_EP_ENVELOPES_LARGE,
                 .procname = "ep_envelopes_large",
                 .data     = &ep_envelopes_large,
                 .maxlen   = sizeof (int),
@@ -137,7 +169,7 @@ static cfs_sysctl_table_t kqswnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 7,
+                .ctl_name = KQSWNAL_NRXMSGS_SMALL,
                 .procname = "nrxmsgs_small",
                 .data     = &nrxmsgs_small,
                 .maxlen   = sizeof (int),
@@ -145,7 +177,7 @@ static cfs_sysctl_table_t kqswnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 8,
+                .ctl_name = KQSWNAL_EP_ENVELOPES_SMALL,
                 .procname = "ep_envelopes_small",
                 .data     = &ep_envelopes_small,
                 .maxlen   = sizeof (int),
@@ -153,7 +185,7 @@ static cfs_sysctl_table_t kqswnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 9,
+                .ctl_name = KQSWNAL_OPTIMIZED_PUTS,
                 .procname = "optimized_puts",
                 .data     = &optimized_puts,
                 .maxlen   = sizeof (int),
@@ -161,7 +193,7 @@ static cfs_sysctl_table_t kqswnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 10,
+                .ctl_name = KQSWNAL_OPTIMIZED_GETS,
                 .procname = "optimized_gets",
                 .data     = &optimized_gets,
                 .maxlen   = sizeof (int),
@@ -170,7 +202,7 @@ static cfs_sysctl_table_t kqswnal_ctl_table[] = {
         },
 #if KQSW_CKSUM
         {
-                .ctl_name = 11,
+                .ctl_name = KQSWNAL_INJECT_CSUM_ERROR,
                 .procname = "inject_csum_error",
                 .data     = &inject_csum_error,
                 .maxlen   = sizeof (int),
@@ -183,7 +215,7 @@ static cfs_sysctl_table_t kqswnal_ctl_table[] = {
 
 static cfs_sysctl_table_t kqswnal_top_ctl_table[] = {
         {
-                .ctl_name = 201,
+                .ctl_name = CTL_KQSWNAL,
                 .procname = "qswnal",
                 .data     = NULL,
                 .maxlen   = 0,
