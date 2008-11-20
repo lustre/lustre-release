@@ -527,6 +527,12 @@ void mdt_shrink_reply(struct mdt_thread_info *info)
 
         acl_size = body->aclsize;
 
+        /* this replay - not send info to client */
+        if (info->mti_spec.no_create == 1) {
+                md_size = 0;
+                acl_size = 0;
+        }
+
         CDEBUG(D_INFO, "Shrink to md_size = %d cookie/acl_size = %d"
                         " MDSCAPA = "LPX64", OSSCAPA = "LPX64"\n",
                         md_size, acl_size,
@@ -1019,13 +1025,15 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
         } else {
                 rr->rr_name = NULL;
                 rr->rr_namelen = 0;
-                
         }
         info->mti_spec.sp_ck_split = !!(rec->ul_bias & MDS_CHECK_SPLIT);
         if (rec->ul_bias & MDS_VTX_BYPASS)
                 ma->ma_attr_flags |= MDS_VTX_BYPASS;
         else
                 ma->ma_attr_flags &= ~MDS_VTX_BYPASS;
+
+        if (lustre_msg_get_flags(mdt_info_req(info)->rq_reqmsg) & MSG_REPLAY)
+                info->mti_spec.no_create = 1;
 
         rc = mdt_dlmreq_unpack(info);
         RETURN(rc);
@@ -1158,7 +1166,7 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
         if (sp->u.sp_ea.eadatalen) {
                 sp->u.sp_ea.eadata = req_capsule_client_get(pill, &RMF_EADATA);
                 if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
-                        sp->u.sp_ea.no_lov_create = 1;
+                        sp->no_create = 1;
         }
 
         RETURN(0);

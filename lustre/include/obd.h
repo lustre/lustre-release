@@ -526,6 +526,7 @@ struct mds_obd {
         /* file for store objid */
         struct file                     *mds_lov_objid_filp;
         __u32                            mds_lov_objid_count;
+        __u32                            mds_lov_objid_max_index;
         __u32                            mds_lov_objid_lastpage;
         __u32                            mds_lov_objid_lastidx;
 
@@ -541,7 +542,9 @@ struct mds_obd {
                                          mds_evict_ost_nids:1,
                                          mds_fl_cfglog:1,
                                          mds_fl_synced:1,
-                                         mds_quota:1;
+                                         mds_quota:1,
+                                         mds_fl_target:1; /* mds have one or
+                                                           * more targets */
 
         struct upcall_cache             *mds_identity_cache;
 
@@ -868,8 +871,9 @@ enum obd_notify_event {
 
 /* bit-mask flags for config events */
 enum config_flags {
-        CONFIG_LOG = 0x1,  /* finished processing config log */
-        CONFIG_SYNC = 0x2  /* mdt synced 1 ost */
+        CONFIG_LOG      = 0x1,  /* finished processing config log */
+        CONFIG_SYNC     = 0x2,  /* mdt synced 1 ost */
+        CONFIG_TARGET   = 0x4   /* one target is added */
 };
 
 /*

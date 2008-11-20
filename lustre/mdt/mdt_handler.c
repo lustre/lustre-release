@@ -1480,6 +1480,16 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
                 GOTO(out_shrink, rc = err_serious(rc));
         }
 
+        /* for replay no cookkie / lmm need, because client have this already */
+        if (info->mti_spec.no_create == 1)  {
+                if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
+                        req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER, 0);
+
+                if (req_capsule_has_field(pill, &RMF_LOGCOOKIES, RCL_SERVER))
+                        req_capsule_set_size(pill, &RMF_LOGCOOKIES, RCL_SERVER,
+                                             0);
+        }
+
         rc = mdt_init_ucred_reint(info);
         if (rc)
                 GOTO(out_shrink, rc);
@@ -4955,10 +4965,12 @@ static void mdt_allow_cli(struct mdt_device *m, unsigned int flag)
 {
         if (flag & CONFIG_LOG)
                 m->mdt_fl_cfglog = 1;
+
+        /* also notify active event */
         if (flag & CONFIG_SYNC)
                 m->mdt_fl_synced = 1;
 
-        if (m->mdt_fl_cfglog /* bz11778: && m->mdt_fl_synced */)
+        if (m->mdt_fl_cfglog && m->mdt_fl_synced)
                 /* Open for clients */
                 m->mdt_md_dev.md_lu_dev.ld_obd->obd_no_conn = 0;
 }

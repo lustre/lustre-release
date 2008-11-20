@@ -14,6 +14,13 @@ tbd  Sun Microsystems, Inc.
        * File join has been disabled in this release, refer to Bugzilla 16929.
  
 
+Severity   : normal
+Bugzilla   : 16080
+Description: more cleanup in mds_lov
+Details    : not send LOV EA under replay, we can't know about they size at this
+             time. Don't allow client connect to mds before any ost connected,
+             for avoid problems with LOV EA size and returning EIO to client.
+
 Severity   : enhancement
 Bugzilla   : 11826
 Description: Interoperability at server side (Disk interoperability)
@@ -148,6 +155,7 @@ Description: avoid Already found the key in hash [CONN_UNUSED_HASH] messages
 Details    : When connection is reused this not moved from CONN_UNUSED_HASH
 	     into CONN_USED_HASH and this prodice warning when put connection
 	     again in unused hash.
+
 
 Severity   : enhancement
 Bugzilla   : 15899

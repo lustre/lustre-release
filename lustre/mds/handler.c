@@ -404,9 +404,6 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (rc)
                 GOTO(err_objects, rc);
 
-        mds->mds_max_mdsize = sizeof(struct lov_mds_md_v3);
-        mds->mds_max_cookiesize = sizeof(struct llog_cookie);
-
 err_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         RETURN(rc);

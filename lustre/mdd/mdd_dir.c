@@ -1247,7 +1247,7 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
 
         /* Replay creates has objects already */
 #if 0
-        if (spec->u.sp_ea.no_lov_create) {
+        if (spec->no_create) {
                 CDEBUG(D_INFO, "we already have lov ea\n");
                 rc = mdd_lov_set_md(env, mdd_pobj, son,
                                     (struct lov_mds_md *)spec->u.sp_ea.eadata,

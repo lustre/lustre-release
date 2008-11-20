@@ -104,6 +104,12 @@ void lov_putref(struct obd_device *obd)
         mutex_up(&lov->lov_lock);
 }
 
+static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
+                              int activate);
+static int lov_notify(struct obd_device *obd, struct obd_device *watched,
+                      enum obd_notify_event ev, void *data);
+
+
 #define MAX_STRING_SIZE 128
 int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
                     struct obd_connect_data *data)
@@ -263,6 +269,16 @@ static int lov_connect(const struct lu_env *env,
                                obd->obd_name, i, rc);
                         continue;
                 }
+                /* connect to administrative disabled ost */
+                if (!lov->lov_tgts[i]->ltd_exp)
+                        continue;
+
+                rc = lov_notify(obd, lov->lov_tgts[i]->ltd_exp->exp_obd,
+                                OBD_NOTIFY_ACTIVE, (void *)&i);
+                if (rc) {
+                        CERROR("%s error sending notify %d\n",
+                               obd->obd_name, rc);
+                }
         }
         lov_putref(obd);
 
@@ -368,7 +384,9 @@ out:
 /* Error codes:
  *
  *  -EINVAL  : UUID can't be found in the LOV's target list
- * - any other is lov index
+ *  -ENOTCONN: The UUID is found, but the target connection is bad (!)
+ *  -EBADF   : The UUID is found, but the OBD is the wrong type (!)
+ *  any >= 0 : is log target index
  */
 static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
                               int activate)
@@ -428,7 +446,7 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
 {
         int rc = 0;
         ENTRY;
-
+	
         if (ev == OBD_NOTIFY_ACTIVE || ev == OBD_NOTIFY_INACTIVE) {
                 struct obd_uuid *uuid;
 
@@ -452,6 +470,7 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
                                obd_uuid2str(uuid), rc);
                         RETURN(rc);
                 }
+                /* active event should be pass lov target index as data */
                 data = &rc;
         }
 
@@ -474,6 +493,7 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
                                 data = &i;
 
                         tgt_obd = class_exp2obd(lov->lov_tgts[i]->ltd_exp);
+
                         rc = obd_notify_observer(obd, tgt_obd, ev, data);
                         if (rc) {
                                 CERROR("%s: notify %s of %s failed %d\n",
@@ -586,6 +606,10 @@ int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
         rc = lov_connect_obd(obd, index, active, &lov->lov_ocd);
         if (rc)
                 GOTO(out, rc);
+
+        /* connect to administrative disabled ost */
+        if (!tgt->ltd_exp)
+                GOTO(out, rc = 0);
 
         rc = lov_notify(obd, tgt->ltd_exp->exp_obd,
                         active ? OBD_NOTIFY_ACTIVE : OBD_NOTIFY_INACTIVE,

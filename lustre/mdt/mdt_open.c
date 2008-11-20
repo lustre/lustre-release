@@ -683,7 +683,10 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
         ma->ma_lmm = req_capsule_server_get(pill, &RMF_MDT_MD);
         ma->ma_lmm_size = req_capsule_get_size(pill, &RMF_MDT_MD,
                                                RCL_SERVER);
-        ma->ma_need = MA_INODE | MA_LOV;
+        ma->ma_need = MA_INODE;
+        if (ma->ma_lmm_size > 0)
+                ma->ma_need |= MA_LOV;
+
         ma->ma_valid = 0;
 
         mdt_req_from_lcd(req, med->med_lcd);
@@ -884,7 +887,10 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         ma->ma_lmm = req_capsule_server_get(info->mti_pill, &RMF_MDT_MD);
         ma->ma_lmm_size = req_capsule_get_size(info->mti_pill, &RMF_MDT_MD,
                                                RCL_SERVER);
-        ma->ma_need = MA_INODE | MA_LOV;
+        ma->ma_need = MA_INODE;
+        if (ma->ma_lmm_size > 0)
+                ma->ma_need |= MA_LOV;
+
         ma->ma_valid = 0;
 
         LASSERT(info->mti_pill->rc_fmt == &RQF_LDLM_INTENT_OPEN);

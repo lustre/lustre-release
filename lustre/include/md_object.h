@@ -166,11 +166,12 @@ struct md_op_spec {
                 struct md_spec_reg {
                         /** lov objs exist already */
                         const struct lu_fid   *fid;
-                        int no_lov_create;
                         const void *eadata;
                         int  eadatalen;
                 } sp_ea;
         } u;
+        /** don't create lov objects or llog cookie - this replay */
+        int no_create;
 
         /** Create flag from client: such as MDS_OPEN_CREAT, and others. */
         __u32      sp_cr_flags;

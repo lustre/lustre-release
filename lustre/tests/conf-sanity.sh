@@ -572,10 +572,6 @@ run_test 21c "start mds between two osts, stop mds last"
 
 test_22() {
 	start_mds
-	echo Client mount before any osts are in the logs
-	mount_client $MOUNT
-	check_mount && return 41
-	pass
 
 	echo Client mount with ost in logs, but none running
 	start_ost

@@ -206,7 +206,7 @@ int mdd_get_md(const struct lu_env *env, struct mdd_object *obj,
                 *md_size = 0;
                 rc = 0;
         } else if (rc < 0) {
-                CERROR("Error %d reading eadata \n", rc);
+                CERROR("Error %d reading eadata - %d\n", rc, *md_size);
         } else {
                 /* XXX: Convert lov EA but fixed after verification test. */
                 *md_size = rc;
@@ -356,49 +356,23 @@ static obd_id mdd_lov_create_id(const struct lu_fid *fid)
         return fid_flatten(fid);
 }
 
-static void mdd_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm)
+int mdd_lov_objid_prepare(struct mdd_device *mdd, struct lov_mds_md *lmm)
 {
-        struct mds_obd *mds = &obd->u.mds;
-        int j;
-        struct lov_ost_data_v1 *lmm_objects;
-        ENTRY;
-
-        /* if we create file without objects - lmm is NULL */
-        if (lmm == NULL)
-                return;
-
-        if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V3)
-                lmm_objects = ((struct lov_mds_md_v3 *)lmm)->lmm_objects;
-        else
-                lmm_objects = lmm->lmm_objects;
-
-        for (j = 0; j < le32_to_cpu(lmm->lmm_stripe_count); j++) {
-                int i = le32_to_cpu(lmm_objects[j].l_ost_idx);
-                obd_id id = le64_to_cpu(lmm_objects[j].l_object_id);
-                int page = i / OBJID_PER_PAGE();
-                int idx = i % OBJID_PER_PAGE();
-                obd_id *data = mds->mds_lov_page_array[page];
-
-                CDEBUG(D_INODE,"update last object for ost %d - new %llu"
-                               " old %llu\n", i, id, data[idx]);
-                if (id > data[idx]) {
-                        data[idx] = id;
-                        cfs_bitmap_set(mds->mds_lov_page_dirty, page);
-                }
-        }
-        EXIT;
+        /* copy mds_lov code is using wrong layer */
+        return mds_lov_prepare_objids(mdd->mdd_obd_dev, lmm);
 }
 
 void mdd_lov_objid_update(struct mdd_device *mdd, struct lov_mds_md *lmm)
 {
-        mdd_lov_update_objids(mdd->mdd_obd_dev, lmm);
+        /* copy mds_lov code is using wrong layer */
+        mds_lov_update_objids(mdd->mdd_obd_dev, lmm);
 }
 
 void mdd_lov_create_finish(const struct lu_env *env, struct mdd_device *mdd,
                            struct lov_mds_md *lmm, int lmm_size,
                            const struct md_op_spec *spec)
 {
-        if (lmm && !spec->u.sp_ea.no_lov_create)
+        if (lmm && !spec->no_create)
                 OBD_FREE(lmm, lmm_size);
 }
 
@@ -424,7 +398,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
         oti_init(oti, NULL);
 
         /* replay case, has objects already, only get lov from eadata */
-        if (spec->u.sp_ea.no_lov_create != 0) {
+        if (spec->no_create != 0) {
                 *lmm = (struct lov_mds_md *)spec->u.sp_ea.eadata;
                 *lmm_size = spec->u.sp_ea.eadatalen;
                 RETURN(0);
@@ -545,6 +519,12 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
         if (rc < 0) {
                 CERROR("Cannot pack lsm, err = %d\n", rc);
                 GOTO(out_oti, rc);
+        }
+        if (mdd_lov_objid_prepare(mdd, *lmm) != 0) {
+                CERROR("Not have memory for update objid\n");
+                OBD_FREE(*lmm, rc);
+                *lmm = NULL;
+                GOTO(out_oti, rc = -ENOMEM);
         }
         *lmm_size = rc;
         rc = 0;

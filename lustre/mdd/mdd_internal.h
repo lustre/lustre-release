@@ -183,6 +183,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                    struct mdd_object *parent, struct mdd_object *child,
                    struct lov_mds_md **lmm, int *lmm_size,
                    const struct md_op_spec *spec, struct lu_attr *la);
+int mdd_lov_objid_prepare(struct mdd_device *mdd, struct lov_mds_md *lmm);
 void mdd_lov_objid_update(struct mdd_device *mdd, struct lov_mds_md *lmm);
 void mdd_lov_create_finish(const struct lu_env *env, struct mdd_device *mdd,
                            struct lov_mds_md *lmm, int lmm_size,
