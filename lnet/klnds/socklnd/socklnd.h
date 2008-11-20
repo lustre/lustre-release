@@ -46,6 +46,7 @@
 #include <lnet/lnet.h>
 #include <lnet/lib-lnet.h>
 #include <lnet/socklnd.h>
+#include <lnet/lnet-sysctl.h>
 
 #define SOCKNAL_PEER_HASH_SIZE  101             /* # peer lists */
 #define SOCKNAL_RESCHED         100             /* # scheduler loops before reschedule */

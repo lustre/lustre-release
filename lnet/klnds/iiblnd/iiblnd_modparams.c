@@ -119,9 +119,47 @@ kib_tunables_t kibnal_tunables = {
  * not to truncate the printout; it only needs to be the actual size of the
  * string buffer if we allow writes (and we don't) */
 
+#ifdef HAVE_SYSCTL_UNNUMBERED
+
+enum {
+        IIBLND_IPIF_BASENAME = 1,
+        IIBLND_SERVICE_NAME,
+        IIBLND_SERVICE_NUMBER,
+        IIBLND_RECONNECT_MIN,
+        IIBLND_RECONNECT_MAX,
+        IIBLND_CONCURRENT_PEERS,
+        IIBLND_CKSUM,
+        IIBLND_TIMEOUT,
+        IIBLND_NTX,
+        IIBLND_CREDITS,
+        IIBLND_PEER_CREDITS,
+        IIBLND_SD_RETRIES,
+        IIBLND_KEEPALIVE,
+        IIBLND_CONCURRENT_SENDS
+};
+
+#else
+
+#define IIBLND_IPIF_BASENAME    CTL_UNNUMBERED
+#define IIBLND_SERVICE_NAME     CTL_UNNUMBERED
+#define IIBLND_SERVICE_NUMBER   CTL_UNNUMBERED
+#define IIBLND_RECONNECT_MIN    CTL_UNNUMBERED
+#define IIBLND_RECONNECT_MAX    CTL_UNNUMBERED
+#define IIBLND_CONCURRENT_PEERS CTL_UNNUMBERED
+#define IIBLND_CKSUM            CTL_UNNUMBERED
+#define IIBLND_TIMEOUT          CTL_UNNUMBERED
+#define IIBLND_NTX              CTL_UNNUMBERED
+#define IIBLND_CREDITS          CTL_UNNUMBERED
+#define IIBLND_PEER_CREDITS     CTL_UNNUMBERED
+#define IIBLND_SD_RETRIES       CTL_UNNUMBERED
+#define IIBLND_KEEPALIVE        CTL_UNNUMBERED
+#define IIBLND_CONCURRENT_SENDS CTL_UNNUMBERED
+
+#endif
+
 static cfs_sysctl_table_t kibnal_ctl_table[] = {
         {
-                .ctl_name = 1,
+                .ctl_name = IBBLND_IPIF_BASENAME,
                 .procname = "ipif_basename",
                 .data     = &ipif_basename,
                 .maxlen   = 1024,
@@ -129,7 +167,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dostring
         },
         {
-                .ctl_name = 2,
+                .ctl_name = IIBLND_SERVICE_NAME,
                 .procname = "service_name",
                 .data     = &service_name,
                 .maxlen   = 1024,
@@ -137,7 +175,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dostring
         },
         {
-                .ctl_name = 3,
+                .ctl_name = IIBLND_SERVICE_NUMBER,
                 .procname = "service_number",
                 .data     = &service_number,
                 .maxlen   = sizeof(int),
@@ -145,7 +183,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 4,
+                .ctl_name = IIBLND_RECONNECT_MIN,
                 .procname = "min_reconnect_interval",
                 .data     = &min_reconnect_interval,
                 .maxlen   = sizeof(int),
@@ -153,7 +191,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 5,
+                .ctl_name = IIBLND_RECONNECT_MAX,
                 .procname = "max_reconnect_interval",
                 .data     = &max_reconnect_interval,
                 .maxlen   = sizeof(int),
@@ -161,7 +199,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 6,
+                .ctl_name = IIBLND_CONCURRENT_PEERS,
                 .procname = "concurrent_peers",
                 .data     = &concurrent_peers,
                 .maxlen   = sizeof(int),
@@ -169,7 +207,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 7,
+                .ctl_name = IIBLND_CKSUM,
                 .procname = "cksum",
                 .data     = &cksum,
                 .maxlen   = sizeof(int),
@@ -177,7 +215,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 8,
+                .ctl_name = IIBLND_TIMEOUT,
                 .procname = "timeout",
                 .data     = &timeout,
                 .maxlen   = sizeof(int),
@@ -185,7 +223,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 9,
+                .ctl_name = IIBLND_NTX,
                 .procname = "ntx",
                 .data     = &ntx,
                 .maxlen   = sizeof(int),
@@ -193,7 +231,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 10,
+                .ctl_name = IIBLND_CREDITS,
                 .procname = "credits",
                 .data     = &credits,
                 .maxlen   = sizeof(int),
@@ -201,7 +239,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 11,
+                .ctl_name = IIBLND_PEER_CREDITS,
                 .procname = "peer_credits",
                 .data     = &peer_credits,
                 .maxlen   = sizeof(int),
@@ -209,7 +247,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 12,
+                .ctl_name = IIBLND_SD_RETRIES,
                 .procname = "sd_retries",
                 .data     = &sd_retries,
                 .maxlen   = sizeof(int),
@@ -217,7 +255,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 13,
+                .ctl_name = IIBLND_KEEPALIVE,
                 .procname = "keepalive",
                 .data     = &keepalive,
                 .maxlen   = sizeof(int),
@@ -225,7 +263,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 14,
+                .ctl_name = IIBLND_CONCURRENT_SENDS,
                 .procname = "concurrent_sends",
                 .data     = &concurrent_sends,
                 .maxlen   = sizeof(int),
@@ -237,7 +275,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
 
 static cfs_sysctl_table_t kibnal_top_ctl_table[] = {
         {
-                .ctl_name = 203,
+                .ctl_name = CTL_IIBLND,
                 .procname = "openibnal",
                 .data     = NULL,
                 .maxlen   = 0,

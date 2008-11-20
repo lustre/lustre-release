@@ -142,6 +142,53 @@ kib_tunables_t kibnal_tunables = {
 #endif
 };
 
+#ifndef HAVE_SYSCTL_UNNUMBERED
+
+enum {
+        VIBLND_SERVICE = 1,
+        VIBLND_RECONNECT_MIN,
+        VIBLND_RECONNECT_MAX,
+        VIBLND_CONCURRENT_PEERS,
+        VIBLND_CHKSUM,
+        VIBLND_TIMEOUT,
+        VIBLND_NTX,
+        VIBLND_CREDITS,
+        VIBLND_PEER_CREDITS,
+        VIBLND_ARP_RETRIES,
+        VIBLND_HCA_BASENAME,
+        VIBLND_IPIF_BASENAME,
+        VIBLND_LOCAL_ACK_TIMEOUT,
+        VIBLND_RETRY_CNT,
+        VIBLND_RNR_CNT,
+        VIBLND_RNR_NAK_TIMER,
+        VIBLND_KEEPALIVE,
+        VIBLND_CONCURRENT_SENDS,
+        VIBLND_FMR_REMAPS
+};        
+#else
+
+#define VIBLND_SERVICE          CTL_UNNUMBERED
+#define VIBLND_RECONNECT_MIN    CTL_UNNUMBERED
+#define VIBLND_RECONNECT_MAX    CTL_UNNUMBERED
+#define VIBLND_CONCURRENT_PEERS CTL_UNNUMBERED
+#define VIBLND_CHKSUM           CTL_UNNUMBERED
+#define VIBLND_TIMEOUT          CTL_UNNUMBERED
+#define VIBLND_NTX              CTL_UNNUMBERED
+#define VIBLND_CREDITS          CTL_UNNUMBERED
+#define VIBLND_PEER_CREDITS     CTL_UNNUMBERED
+#define VIBLND_ARP_RETRIES      CTL_UNNUMBERED
+#define VIBLND_HCA_BASENAME     CTL_UNNUMBERED
+#define VIBLND_IPIF_BASENAME    CTL_UNNUMBERED
+#define VIBLND_LOCAL_ACK_TIMEOUT CTL_UNNUMBERED
+#define VIBLND_RETRY_CNT        CTL_UNNUMBERED
+#define VIBLND_RNR_CNT          CTL_UNNUMBERED
+#define VIBLND_RNR_NAK_TIMER    CTL_UNNUMBERED
+#define VIBLND_KEEPALIVE        CTL_UNNUMBERED
+#define VIBLND_CONCURRENT_SENDS CTL_UNNUMBERED
+#define VIBLND_FMR_REMAPS       CTL_UNNUMBERED
+
+#endif
+
 #if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
 
 static char hca_basename_space[32];
@@ -149,7 +196,7 @@ static char ipif_basename_space[32];
 
 static cfs_sysctl_table_t kibnal_ctl_table[] = {
         {
-                .ctl_name = 1,
+                .ctl_name = VIBLND_SERVICE,
                 .procname = "service_number",
                 .data     = &service_number,
                 .maxlen   = sizeof(int),
@@ -157,7 +204,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 2,
+                .ctl_name = VIBLND_RECONNECT_MIN,
                 .procname = "min_reconnect_interval",
                 .data     = &min_reconnect_interval,
                 .maxlen   = sizeof(int),
@@ -165,7 +212,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 3,
+                .ctl_name = VIBLND_RECONNECT_MAX,
                 .procname = "max_reconnect_interval",
                 .data     = &max_reconnect_interval,
                 .maxlen   = sizeof(int),
@@ -173,7 +220,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 4,
+                .ctl_name = VIBLND_CONCURRENT_PEERS,
                 .procname = "concurrent_peers",
                 .data     = &concurrent_peers,
                 .maxlen   = sizeof(int),
@@ -181,7 +228,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 5,
+                .ctl_name = VIBLND_CHKSUM,
                 .procname = "cksum",
                 .data     = &cksum,
                 .maxlen   = sizeof(int),
@@ -189,7 +236,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 6,
+                .ctl_name = VIBLND_TIMEOUT,
                 .procname = "timeout",
                 .data     = &timeout,
                 .maxlen   = sizeof(int),
@@ -197,7 +244,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 7,
+                .ctl_name = VIBLND_NTX,
                 .procname = "ntx",
                 .data     = &ntx,
                 .maxlen   = sizeof(int),
@@ -205,7 +252,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 8,
+                .ctl_name = VIBLND_CREDITS,
                 .procname = "credits",
                 .data     = &credits,
                 .maxlen   = sizeof(int),
@@ -213,7 +260,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 9,
+                .ctl_name = VIBLND_PEER_CREDITS,
                 .procname = "peer_credits",
                 .data     = &peer_credits,
                 .maxlen   = sizeof(int),
@@ -221,7 +268,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 10,
+                .ctl_name = VIBLND_ARP_RETRIES,
                 .procname = "arp_retries",
                 .data     = &arp_retries,
                 .maxlen   = sizeof(int),
@@ -229,7 +276,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 11,
+                .ctl_name = VIBLND_HCA_BASENAME,
                 .procname = "hca_basename",
                 .data     = hca_basename_space,
                 .maxlen   = sizeof(hca_basename_space),
@@ -237,7 +284,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dostring
         },
         {
-                .ctl_name = 12,
+                .ctl_name = VIBLND_IPIF_BASENAME,
                 .procname = "ipif_basename",
                 .data     = ipif_basename_space,
                 .maxlen   = sizeof(ipif_basename_space),
@@ -245,7 +292,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dostring
         },
         {
-                .ctl_name = 13,
+                .ctl_name = VIBLND_LOCAL_ACK_TIMEOUT,
                 .procname = "local_ack_timeout",
                 .data     = &local_ack_timeout,
                 .maxlen   = sizeof(int),
@@ -253,7 +300,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 14,
+                .ctl_name = VIBLND_RETRY_CNT,
                 .procname = "retry_cnt",
                 .data     = &retry_cnt,
                 .maxlen   = sizeof(int),
@@ -261,7 +308,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 15,
+                .ctl_name = VIBLND_RNR_CNT,
                 .procname = "rnr_cnt",
                 .data     = &rnr_cnt,
                 .maxlen   = sizeof(int),
@@ -269,7 +316,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 16,
+                .ctl_name = VIBLND_RNR_NAK_TIMER,
                 .procname = "rnr_nak_timer",
                 .data     = &rnr_nak_timer,
                 .maxlen   = sizeof(int),
@@ -277,7 +324,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 17,
+                .ctl_name = VIBLND_KEEPALIVE,
                 .procname = "keepalive",
                 .data     = &keepalive,
                 .maxlen   = sizeof(int),
@@ -285,7 +332,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 18,
+                .ctl_name = VIBLND_CONCURRENT_SENDS,
                 .procname = "concurrent_sends",
                 .data     = &concurrent_sends,
                 .maxlen   = sizeof(int),
@@ -294,7 +341,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
         },
 #if IBNAL_USE_FMR
         {
-                .ctl_name = 19,
+                .ctl_name = VIBLND_FMR_REMAPS,
                 .procname = "fmr_remaps",
                 .data     = &fmr_remaps,
                 .maxlen   = sizeof(int),
@@ -307,7 +354,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
 
 static cfs_sysctl_table_t kibnal_top_ctl_table[] = {
         {
-                .ctl_name = 203,
+                .ctl_name = CTL_VIBLND,
                 .procname = "vibnal",
                 .data     = NULL,
                 .maxlen   = 0,
