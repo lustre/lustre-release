@@ -356,16 +356,14 @@ int mds_check_stale_orphan(struct obd_device *obd, struct ll_fid *fid)
         if (!inode)
                 GOTO(out, rc = 0);
 
-        if (fid->generation && (inode->i_generation == fid->generation)) {
-                CWARN("The same "LPU64"/%u exists already\n",
-                       fid->id, fid->generation);
-                GOTO(out, rc = -EFAULT);
-        }
-
         LOCK_INODE_MUTEX(pending_dir);
         MDS_DOWN_READ_ORPHAN_SEM(inode);
         if (mds_inode_is_orphan(inode)) {
                 struct dentry *orphan;
+
+                /* The exactly same inode can't be orphan */
+                LASSERT(inode->i_generation != fid->generation);
+
                 if (mds_orphan_open_count(inode) > 0) {
                         CERROR("Orphan "LPU64"/%u is in use!\n",
                                fid->id, fid->generation);
