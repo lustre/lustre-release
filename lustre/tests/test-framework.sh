@@ -257,7 +257,7 @@ check_mem_leak () {
         echo "$LEAK_LUSTRE" 1>&2
         echo "$LEAK_PORTALS" 1>&2
         mv $TMP/debug $TMP/debug-leak.`date +%s` || true
-        log "Memory leaks detected"
+        echo "Memory leaks detected"
         [ -n "$IGNORE_LEAK" ] && { echo "ignoring leaks" && return 0; } || true
         return 1
     fi
