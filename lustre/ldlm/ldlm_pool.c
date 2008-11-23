@@ -906,6 +906,7 @@ void ldlm_pool_add(struct ldlm_pool *pl, struct ldlm_lock *lock)
                 return;
         ENTRY;
 
+        LDLM_DEBUG(lock, "add lock to pool");
         atomic_inc(&pl->pl_granted);
         atomic_inc(&pl->pl_grant_rate);
         atomic_inc(&pl->pl_grant_speed);
@@ -935,6 +936,7 @@ void ldlm_pool_del(struct ldlm_pool *pl, struct ldlm_lock *lock)
                 return;
         ENTRY;
 
+        LDLM_DEBUG(lock, "del lock from pool");
         LASSERT(atomic_read(&pl->pl_granted) > 0);
         atomic_dec(&pl->pl_granted);
         atomic_inc(&pl->pl_cancel_rate);

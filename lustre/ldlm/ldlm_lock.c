@@ -1677,6 +1677,7 @@ void ldlm_cancel_locks_for_export(struct obd_export *exp)
  */
 void ldlm_lock_downgrade(struct ldlm_lock *lock, int new_mode)
 {
+        struct ldlm_namespace *ns;
         ENTRY;
 
         LASSERT(lock->l_granted_mode & (LCK_PW | LCK_EX));
@@ -1684,6 +1685,13 @@ void ldlm_lock_downgrade(struct ldlm_lock *lock, int new_mode)
 
         lock_res_and_lock(lock);
         ldlm_resource_unlink_lock(lock);
+        /*
+         * Remove the lock from pool as it will be added again in
+         * ldlm_grant_lock() called below.
+         */
+        ns = lock->l_resource->lr_namespace;
+        ldlm_pool_del(&ns->ns_pool, lock);
+
         lock->l_req_mode = new_mode;
         ldlm_grant_lock(lock, NULL);
         unlock_res_and_lock(lock);
@@ -1745,6 +1753,12 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                         node = NULL;
                 }
         }
+        
+        /* 
+         * Remove old lock from the pool before adding the lock with new
+         * mode below in ->policy()
+         */
+        ldlm_pool_del(&ns->ns_pool, lock);
 
         /* If this is a local resource, put it on the appropriate list. */
         if (ns_is_client(res->lr_namespace)) {
