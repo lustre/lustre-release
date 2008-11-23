@@ -190,9 +190,7 @@ ptlrpc_schedule_difficult_reply (struct ptlrpc_reply_state *rs)
         struct ptlrpc_service *svc = rs->rs_service;
         ENTRY;
 
-#ifdef CONFIG_SMP
-        LASSERT (spin_is_locked (&svc->srv_lock));
-#endif
+        LASSERT_SPIN_LOCKED(&svc->srv_lock);
         LASSERT (rs->rs_difficult);
         rs->rs_scheduled_ever = 1;              /* flag any notification attempt */
 

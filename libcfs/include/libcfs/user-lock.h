@@ -85,8 +85,9 @@ struct spin_lock {int foo;};
 typedef struct spin_lock spinlock_t;
 
 #define SPIN_LOCK_UNLOCKED (spinlock_t) { }
-#define LASSERT_SPIN_LOCKED(lock) do {} while(0)
-#define LASSERT_SEM_LOCKED(sem) do {} while(0)
+#define LASSERT_SPIN_LOCKED(lock) do {(void)sizeof(lock);} while(0)
+#define LINVRNT_SPIN_LOCKED(lock) do {(void)sizeof(lock);} while(0)
+#define LASSERT_SEM_LOCKED(sem) do {(void)sizeof(sem);} while(0)
 
 void spin_lock_init(spinlock_t *lock);
 void spin_lock(spinlock_t *lock);

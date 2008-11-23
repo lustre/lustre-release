@@ -137,11 +137,14 @@ cl_page_at_trusted(const struct cl_page *page,
                    const struct lu_device_type *dtype)
 {
         const struct cl_page_slice *slice;
+
+#ifdef INVARIANT_CHECK
         struct cl_object_header *ch = cl_object_header(page->cp_obj);
 
+        if (!atomic_read(&page->cp_ref))
+                LASSERT_SPIN_LOCKED(&ch->coh_page_guard);
+#endif
         ENTRY;
-        LINVRNT(ergo(!atomic_read(&page->cp_ref),
-                spin_is_locked(&ch->coh_page_guard)));
 
         page = cl_page_top_trusted((struct cl_page *)page);
         do {
@@ -164,7 +167,7 @@ struct cl_page *cl_page_lookup(struct cl_object_header *hdr, pgoff_t index)
 {
         struct cl_page *page;
 
-        LASSERT(spin_is_locked(&hdr->coh_page_guard));
+        LASSERT_SPIN_LOCKED(&hdr->coh_page_guard);
 
         page = radix_tree_lookup(&hdr->coh_tree, index);
         if (page != NULL) {

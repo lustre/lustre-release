@@ -403,7 +403,7 @@ static struct cl_lock *cl_lock_lookup(const struct lu_env *env,
 
         head = cl_object_header(obj);
         site = cl_object_site(obj);
-        LINVRNT(spin_is_locked(&head->coh_lock_guard));
+        LINVRNT_SPIN_LOCKED(&head->coh_lock_guard);
         atomic_inc(&site->cs_locks.cs_lookup);
         list_for_each_entry(lock, &head->coh_locks, cll_linkage) {
                 int matched;
