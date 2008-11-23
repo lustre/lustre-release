@@ -1344,6 +1344,7 @@ test_59b() {
 
     # make sure that all llcds left ost and nothing left cached
     sync
+    sleep 10
     do_facet mds "lctl set_param fail_loc=0x0"
 
     # sleep 2 obd_timeouts from ost to make sure that we get resents.
