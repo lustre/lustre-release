@@ -752,7 +752,7 @@ extern lnet_pid_t ptl_get_pid(void);
 
 /* ptlrpc/niobuf.c */
 int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc);
-void ptlrpc_abort_bulk(struct ptlrpc_request *req);
+void ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc);
 int ptlrpc_register_bulk(struct ptlrpc_request *req);
 int ptlrpc_unregister_bulk(struct ptlrpc_request *req, int async);
 
