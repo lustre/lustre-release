@@ -1442,4 +1442,4 @@ run_test 45 "long unlink handling in ptlrpcd"
 
 
 equals_msg `basename $0`: test complete
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true

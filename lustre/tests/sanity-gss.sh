@@ -1058,4 +1058,4 @@ run_test 102 "survive from insanely fast flavor switch"
 
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
