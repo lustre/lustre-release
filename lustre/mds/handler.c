@@ -142,8 +142,8 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                 CERROR("Req deadline already passed %lu (now: %lu)\n",
                        req->rq_deadline, cfs_time_current_sec());
         }
-        lwi = LWI_TIMEOUT(max(timeout, 1) * HZ, NULL, NULL);
-        rc = l_wait_event(desc->bd_waitq, !ptlrpc_bulk_active(desc), &lwi);
+        lwi = LWI_TIMEOUT(cfs_time_seconds(max(timeout, 1)), NULL, NULL);
+        rc = l_wait_event(desc->bd_waitq, !ptlrpc_server_bulk_active(desc), &lwi);
         LASSERT (rc == 0 || rc == -ETIMEDOUT);
 
         if (rc == 0) {
@@ -164,7 +164,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
 
         EXIT;
  abort_bulk:
-        ptlrpc_abort_bulk (desc);
+        ptlrpc_abort_bulk(req);
  cleanup_buf:
         for (i = 0; i < npages; i++)
                 if (pages[i])
