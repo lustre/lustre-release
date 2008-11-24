@@ -513,8 +513,8 @@ static int lfs_find(int argc, char **argv)
         time(&t);
 
         optind = 0;
-        /* when getopt_long_only() hits '!' it returns 1 and puts "!" in optarg */
-        while ((c = getopt_long_only(argc, argv, "-A:C:D:g:G:M:n:PpO:qrs:t:u:U:v",
+        /* when getopt_long_only() hits '!' it returns 1, puts "!" in optarg */
+        while ((c = getopt_long_only(argc,argv,"-A:C:D:g:G:M:n:PpO:qrs:t:u:U:v",
                                      long_opts, NULL)) >= 0) {
                 xtime = NULL;
                 xsign = NULL;
@@ -2178,7 +2178,7 @@ ug_output:
 
         rc1 = llapi_quotactl(mnt, &qctl);
         if (rc1 == -1 && errno == ESRCH) {
-                fprintf(stderr, "\n%s quotas are not enabled.\n", 
+                fprintf(stderr, "\n%s quotas are not enabled.\n",
                         qctl.qc_type == USRQUOTA ? "user" : "group");
                 goto out;
         }
