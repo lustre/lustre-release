@@ -1135,6 +1135,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
         if (rc) {
                 CERROR("failed to start server %s: %d\n",
                        lsi->lsi_ldd->ldd_svname, rc);
+                server_deregister_mount(lsi->lsi_ldd->ldd_svname);
                 GOTO(out_mgc, rc);
         }
 

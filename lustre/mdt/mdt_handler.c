@@ -4276,14 +4276,13 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         } else {
                 lsi = s2lsi(lmi->lmi_sb);
                 fsoptions_to_mdt_flags(m, lsi->lsi_lmd->lmd_opts);
-                server_put_mount_2(dev, lmi->lmi_mnt);
                 /* CMD is supported only in IAM mode */
                 ldd = lsi->lsi_ldd;
                 LASSERT(num);
                 node_id = simple_strtol(num, NULL, 10);
                 if (!(ldd->ldd_flags & LDD_F_IAM_DIR) && node_id) {
                         CERROR("CMD Operation not allowed in IOP mode\n");
-                        RETURN(-EINVAL);
+                        GOTO(err_lmi, rc = -EINVAL);
                 }
         }
 
