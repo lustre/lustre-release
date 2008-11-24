@@ -419,7 +419,7 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 
                 if (!IS_ERR(page)) {
                         /*
-                         * If page is empty (end of directoryis reached),
+                         * If page is empty (end of directory is reached),
                          * use this value.
                          */
                         __u64 hash = DIR_END_OFF;
