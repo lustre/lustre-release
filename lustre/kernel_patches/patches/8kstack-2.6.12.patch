@@ -1,3 +1,6 @@
+Increase the stack size to 8kB.  This is only required for i386 arch,
+because other kernels always have 8kB stack sizes.
+
 Index: linux-2.6.9-5.0.3.EL/include/asm-i386/thread_info.h
 ===================================================================
 --- linux-2.6.9-5.0.3.EL.orig/include/asm-i386/thread_info.h	2005-02-25 10:25:33.000000000 +0200
