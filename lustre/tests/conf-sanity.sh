@@ -1528,4 +1528,4 @@ test_46a() {
 run_test 46a "handle ost additional - wide striped file"
 
 equals_msg `basename $0`: test complete
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
