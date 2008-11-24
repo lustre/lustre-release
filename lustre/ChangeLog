@@ -13,6 +13,14 @@ tbd  Sun Microsystems, Inc.
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
  
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 16081
+Description: don't skip ost target if they assigned to file
+Details    : Drop slow OSCs if we can, but not for requested start idx.
+             This means "if OSC is slow and it is not the requested
+             start OST, then it can be skipped, otherwise skip it only
+             if it is inactive/recovering/out-of-space.
 
 Severity   : normal
 Bugzilla   : 16080
