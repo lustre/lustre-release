@@ -151,12 +151,11 @@ int ptlrpc_set_import_discon(struct obd_import *imp, __u32 conn_cnt)
                                libcfs_nid2str(imp->imp_connection->c_peer.nid));
                 } else {
                         LCONSOLE_ERROR_MSG(0x166, "%s: Connection to service "
-                                           "%.*s via nid %s was lost; in progress"
-                                           "operations using this service will"
-                                           "fail.\n",
-                                           imp->imp_obd->obd_name,
-                                           target_len, target_start,
-                                 libcfs_nid2str(imp->imp_connection->c_peer.nid));
+                               "%.*s via nid %s was lost; in progress "
+                               "operations using this service will fail.\n",
+                               imp->imp_obd->obd_name,
+                               target_len, target_start,
+                               libcfs_nid2str(imp->imp_connection->c_peer.nid));
                 }
                 ptlrpc_deactivate_timeouts(imp);
                 IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_DISCON);
