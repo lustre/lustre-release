@@ -1,15 +1,8 @@
-Index: linux-2.6/fs/open.c
-===================================================================
---- linux-2.6.orig/fs/open.c	2006-07-15 16:10:37.000000000 +0800
-+++ linux-2.6/fs/open.c	2006-07-15 16:22:04.000000000 +0800
-@@ -808,7 +808,6 @@ asmlinkage long sys_lchown(const char __
- 	return error;
- }
- 
--
- asmlinkage long sys_fchown(unsigned int fd, uid_t user, gid_t group)
- {
- 	struct file * file;
+Allow starting the commit of a journal transaction, without waiting for
+it to complete.  This is a performance enhancement for OST IO so that
+the journal commit can run concurrently with the file IO.  It isn't
+necessary if the client can handle bulk IO recovery (bug 16919).
+
 Index: linux-2.6/fs/jbd/journal.c
 ===================================================================
 --- linux-2.6.orig/fs/jbd/journal.c	2006-07-15 16:13:50.000000000 +0800
