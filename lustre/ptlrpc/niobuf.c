@@ -343,6 +343,7 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
 
         if (!(flags & PTLRPC_REPLY_EARLY) &&
             (req->rq_type != PTL_RPC_MSG_ERR) &&
+            (req->rq_reqmsg != NULL) &&
             !(lustre_msg_get_flags(req->rq_reqmsg) &
               (MSG_RESENT | MSG_REPLAY | MSG_LAST_REPLAY))) {
                 /* early replies, errors and recovery requests don't count

@@ -192,9 +192,13 @@ enum lustre_sec_part {
         LUSTRE_SP_CLI           = 0,
         LUSTRE_SP_MDT,
         LUSTRE_SP_OST,
+        LUSTRE_SP_MGC,
         LUSTRE_SP_MGS,
         LUSTRE_SP_ANY           = 0xFF
 };
+
+const char *sptlrpc_part2name(enum lustre_sec_part sp);
+enum lustre_sec_part sptlrpc_target_sec_part(struct obd_device *obd);
 
 struct sptlrpc_rule {
         __u32                   sr_netid;   /* LNET network ID */
@@ -210,18 +214,6 @@ struct sptlrpc_rule_set {
         struct sptlrpc_rule    *srs_rules;
 };
 
-#define SPTLRPC_CONF_LOG_MAX    (64)
-
-struct sptlrpc_conf_log {
-        __u32               scl_max;            /* maximum rules # */
-        __u32               scl_nrule;          /* rules # */
-        __u8                scl_part;           /* which part am i */
-        __u8                scl_pad0;
-        __u16               scl_pad1;
-        __u32               scl_pad2;
-        struct sptlrpc_rule scl_rules[SPTLRPC_CONF_LOG_MAX];
-};
-
 static inline void sptlrpc_rule_set_init(struct sptlrpc_rule_set *set)
 {
         memset(set, 0, sizeof(*set));
@@ -232,31 +224,21 @@ int  sptlrpc_rule_set_expand(struct sptlrpc_rule_set *set, int expand);
 int  sptlrpc_rule_set_merge(struct sptlrpc_rule_set *set,
                             struct sptlrpc_rule *rule,
                             int expand);
-int sptlrpc_rule_set_from_log(struct sptlrpc_rule_set *rset,
-                              struct sptlrpc_conf_log *log);
-void sptlrpc_rule_set_choose(struct sptlrpc_rule_set *rset,
-                             enum lustre_sec_part from,
-                             lnet_nid_t nid,
-                             struct sptlrpc_flavor *flavor);
 void sptlrpc_rule_set_dump(struct sptlrpc_rule_set *set);
 
-struct sptlrpc_conf_log *sptlrpc_conf_log_alloc(void);
-void sptlrpc_conf_log_free(struct sptlrpc_conf_log *log);
-int sptlrpc_conf_log_populate(struct sptlrpc_rule_set *gen,
-                              struct sptlrpc_rule_set *tgt,
-                              enum lustre_sec_part from,
-                              enum lustre_sec_part to,
-                              unsigned int fl_udesc,
-                              struct sptlrpc_conf_log *log);
-struct sptlrpc_conf_log *sptlrpc_conf_log_extract(struct lustre_cfg *lcfg);
-void sptlrpc_conf_log_cleanup(struct sptlrpc_conf_log *log);
-void sptlrpc_conf_log_dump(struct sptlrpc_conf_log *log);
-
-const char *sptlrpc_part2name(enum lustre_sec_part part);
-enum lustre_sec_part sptlrpc_target_sec_part(struct obd_device *obd);
-
-int sptlrpc_cliobd_process_config(struct obd_device *obd,
-                                  struct lustre_cfg *lcfg);
+int  sptlrpc_process_config(struct lustre_cfg *lcfg);
+void sptlrpc_conf_log_start(const char *logname);
+void sptlrpc_conf_log_stop(const char *logname);
+void sptlrpc_conf_log_update_begin(const char *logname);
+void sptlrpc_conf_log_update_end(const char *logname);
+void sptlrpc_conf_client_adapt(struct obd_device *obd);
+int  sptlrpc_conf_target_get_rules(struct obd_device *obd,
+                                   struct sptlrpc_rule_set *rset,
+                                   int initial);
+void sptlrpc_target_choose_flavor(struct sptlrpc_rule_set *rset,
+                                  enum lustre_sec_part from,
+                                  lnet_nid_t nid,
+                                  struct sptlrpc_flavor *flavor);
 
 /* The maximum length of security payload. 1024 is enough for Kerberos 5,
  * and should be enough for other future mechanisms but not sure.

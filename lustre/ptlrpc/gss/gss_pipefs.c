@@ -1210,7 +1210,7 @@ int __init gss_init_pipefs_upcall(void)
 
         de_pipes[MECH_KRB5] = de;
         CFS_INIT_LIST_HEAD(&upcall_lists[MECH_KRB5]);
-        upcall_locks[MECH_KRB5] = SPIN_LOCK_UNLOCKED;
+        spin_lock_init(&upcall_locks[MECH_KRB5]);
 
         return 0;
 }

@@ -75,7 +75,6 @@ static struct {
         atomic_t        oos_svc_replay[3];   /* server replay detected */
         atomic_t        oos_svc_pass[3];     /* server verified ok */
 } gss_stat_oos = {
-        .oos_lock       = SPIN_LOCK_UNLOCKED,
         .oos_cli_count  = ATOMIC_INIT(0),
         .oos_cli_behind = 0,
         .oos_svc_replay = { ATOMIC_INIT(0), },
@@ -155,6 +154,8 @@ int gss_init_lproc(void)
 {
         struct proc_dir_entry  *ent;
         int                     rc;
+
+        spin_lock_init(&gss_stat_oos.oos_lock);
 
         gss_proc_root = lprocfs_register("gss", sptlrpc_proc_root,
                                          gss_lprocfs_vars, NULL);

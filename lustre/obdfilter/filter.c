@@ -1888,6 +1888,30 @@ static void filter_iobuf_pool_done(struct filter_obd *filter)
         EXIT;
 }
 
+static int filter_adapt_sptlrpc_conf(struct obd_device *obd, int initial)
+{
+        struct filter_obd       *filter = &obd->u.filter;
+        struct sptlrpc_rule_set  tmp_rset;
+        int                      rc;
+
+        sptlrpc_rule_set_init(&tmp_rset);
+        rc = sptlrpc_conf_target_get_rules(obd, &tmp_rset, initial);
+        if (rc) {
+                CERROR("obd %s: failed get sptlrpc rules: %d\n",
+                       obd->obd_name, rc);
+                return rc;
+        }
+
+        sptlrpc_target_update_exp_flavor(obd, &tmp_rset);
+
+        write_lock(&filter->fo_sptlrpc_lock);
+        sptlrpc_rule_set_free(&filter->fo_sptlrpc_rset);
+        filter->fo_sptlrpc_rset = tmp_rset;
+        write_unlock(&filter->fo_sptlrpc_lock);
+
+        return 0;
+}
+
 /*
  * pre-allocate pool of iobuf's to be used by filter_{prep,commit}rw_write().
  */
@@ -2039,9 +2063,6 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
         CFS_INIT_LIST_HEAD(&filter->fo_llog_list);
         spin_lock_init(&filter->fo_llog_list_lock);
 
-        rwlock_init(&filter->fo_sptlrpc_lock);
-        sptlrpc_rule_set_init(&filter->fo_sptlrpc_rset);
-
         filter->fo_fl_oss_capa = 1;
         CFS_INIT_LIST_HEAD(&filter->fo_capa_keys);
         filter->fo_capa_hash = init_capa_hash();
@@ -2065,6 +2086,11 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
                 CERROR("failed to setup llogging subsystems\n");
                 GOTO(err_post, rc);
         }
+
+        rwlock_init(&filter->fo_sptlrpc_lock);
+        sptlrpc_rule_set_init(&filter->fo_sptlrpc_rset);
+        /* do this after llog being initialized */
+        filter_adapt_sptlrpc_conf(obd, 1);
 
         rc = lquota_setup(filter_quota_interface_ref, obd);
         if (rc)
@@ -2221,10 +2247,18 @@ static int filter_olg_fini(struct obd_llog_group *olg)
                 rc = llog_cleanup(ctxt);
 
         ctxt = llog_group_get_ctxt(olg, LLOG_SIZE_ORIG_CTXT);
-        if (ctxt)
+        if (ctxt) {
                 rc2 = llog_cleanup(ctxt);
-        if (!rc)
-                rc = rc2;
+                if (!rc)
+                        rc = rc2;
+        }
+
+        ctxt = llog_group_get_ctxt(olg, LLOG_CONFIG_ORIG_CTXT);
+        if (ctxt) {
+                rc2 = llog_cleanup(ctxt);
+                if (!rc)
+                        rc = rc2;
+        }
 
         RETURN(rc);
 }
@@ -2276,6 +2310,11 @@ filter_default_olg_init(struct obd_device *obd, struct obd_llog_group *olg,
         rc = filter_olg_init(obd, olg, tgt);
         if (rc)
                 GOTO(cleanup_lcm, rc);
+
+        rc = llog_setup(obd, olg, LLOG_CONFIG_ORIG_CTXT, tgt, 0, NULL,
+                        &llog_lvfs_ops);
+        if (rc)
+                GOTO(cleanup_olg, rc);
 
         ctxt = llog_group_get_ctxt(olg, LLOG_MDS_OST_REPL_CTXT);
         if (!ctxt) {
@@ -4275,6 +4314,11 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
                 RETURN(0);
         }
 
+        if (KEY_IS(KEY_SPTLRPC_CONF)) {
+                filter_adapt_sptlrpc_conf(obd, 0);
+                RETURN(0);
+        }
+
         if (!KEY_IS(KEY_MDS_CONN))
                 RETURN(-EINVAL);
 
@@ -4404,34 +4448,6 @@ static int filter_process_config(struct obd_device *obd, obd_count len,
         int rc = 0;
 
         switch (lcfg->lcfg_command) {
-        case LCFG_SPTLRPC_CONF: {
-                struct filter_obd       *filter = &obd->u.filter;
-                struct sptlrpc_conf_log *log;
-                struct sptlrpc_rule_set  tmp_rset;
-
-                log = sptlrpc_conf_log_extract(lcfg);
-                if (IS_ERR(log)) {
-                        rc = PTR_ERR(log);
-                        break;
-                }
-
-                sptlrpc_rule_set_init(&tmp_rset);
-
-                rc = sptlrpc_rule_set_from_log(&tmp_rset, log);
-                if (rc) {
-                        CERROR("obd %s: failed get sptlrpc rules: %d\n",
-                               obd->obd_name, rc);
-                        break;
-                }
-
-                write_lock(&filter->fo_sptlrpc_lock);
-                sptlrpc_rule_set_free(&filter->fo_sptlrpc_rset);
-                filter->fo_sptlrpc_rset = tmp_rset;
-                write_unlock(&filter->fo_sptlrpc_lock);
-
-                sptlrpc_target_update_exp_flavor(obd, &tmp_rset);
-                break;
-        }
         default:
                 lprocfs_filter_init_vars(&lvars);
 

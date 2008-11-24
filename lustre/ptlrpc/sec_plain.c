@@ -328,7 +328,7 @@ struct ptlrpc_sec *plain_create_sec(struct obd_import *imp,
         sec->ps_id = sptlrpc_get_next_secid();
         sec->ps_import = class_import_get(imp);
         sec->ps_flvr = *sf;
-        sec->ps_lock = SPIN_LOCK_UNLOCKED;
+        spin_lock_init(&sec->ps_lock);
         CFS_INIT_LIST_HEAD(&sec->ps_gc_list);
         sec->ps_gc_interval = 0;
         sec->ps_gc_next = 0;

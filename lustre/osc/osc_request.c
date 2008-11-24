@@ -3596,6 +3596,11 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
 
+        if (KEY_IS(KEY_SPTLRPC_CONF)) {
+                sptlrpc_conf_client_adapt(obd);
+                RETURN(0);
+        }
+
         if (KEY_IS(KEY_FLUSH_CTX)) {
                 sptlrpc_import_flush_my_ctx(imp);
                 RETURN(0);
@@ -3967,9 +3972,6 @@ int osc_process_config_base(struct obd_device *obd, struct lustre_cfg *lcfg)
         lprocfs_osc_init_vars(&lvars);
 
         switch (lcfg->lcfg_command) {
-        case LCFG_SPTLRPC_CONF:
-                rc = sptlrpc_cliobd_process_config(obd, lcfg);
-                break;
         default:
                 rc = class_process_proc_param(PARAM_OSC, lvars.obd_vars,
                                               lcfg, obd);

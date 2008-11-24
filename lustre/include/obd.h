@@ -389,9 +389,8 @@ struct client_obd {
         int                      cl_max_mds_easize;
         int                      cl_max_mds_cookiesize;
 
-        /* security configuration */
-        struct sptlrpc_rule_set  cl_sptlrpc_rset;
-        enum lustre_sec_part     cl_sec_part;
+        enum lustre_sec_part     cl_sp_me;
+        enum lustre_sec_part     cl_sp_to;
 
         //struct llog_canceld_ctxt *cl_llcd; /* it's included by obd_llog_ctxt */
         void                    *cl_llcd_offset;
@@ -693,6 +692,7 @@ struct lov_obd {
         lustre_hash_t          *lov_pools_hash_body; /* used for key access */
         struct list_head        lov_pool_list; /* used for sequential access */
         cfs_proc_dir_entry_t   *lov_pool_proc_entry;
+        enum lustre_sec_part    lov_sp_me;
 };
 
 struct lmv_tgt_desc {
@@ -1108,6 +1108,7 @@ enum obd_cleanup_stage {
 #define KEY_BLOCKSIZE           "blocksize"
 #define KEY_BLOCKSIZE_BITS      "blocksize_bits"
 #define KEY_FIEMAP              "FIEMAP"
+#define KEY_SPTLRPC_CONF        "sptlrpc_conf"
 /* XXX unused ?*/
 #define KEY_INTERMDS            "inter_mds"
 #define KEY_ASYNC               "async"

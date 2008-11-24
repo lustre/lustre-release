@@ -1018,8 +1018,9 @@ static int class_config_llog_handler(struct llog_handle * handle,
                                         CDEBUG(D_CONFIG, "SKIP #%d\n",
                                                marker->cm_step);
                                 } else if ((marker->cm_flags & CM_EXCLUDE) ||
-                                           lustre_check_exclusion(clli->cfg_sb,
-                                                          marker->cm_tgtname)) {
+                                           (clli->cfg_sb &&
+                                            lustre_check_exclusion(clli->cfg_sb,
+                                                         marker->cm_tgtname))) {
                                         clli->cfg_flags |= CFG_F_EXCLUDE;
                                         CDEBUG(D_CONFIG, "EXCLUDE %d\n",
                                                marker->cm_step);
@@ -1099,6 +1100,22 @@ static int class_config_llog_handler(struct llog_handle * handle,
                     lcfg->lcfg_command == LCFG_ATTACH) {
                         lustre_cfg_bufs_set_string(&bufs, 2,
                                                    clli->cfg_uuid.uuid);
+                }
+                /*
+                 * sptlrpc config record, we expect 2 data segments:
+                 *  [0]: fs_name/target_name,
+                 *  [1]: rule string
+                 * moving them to index [1] and [2], and insert MGC's
+                 * obdname at index [0].
+                 */
+                if (clli && clli->cfg_instance == NULL &&
+                    lcfg->lcfg_command == LCFG_SPTLRPC_CONF) {
+                        lustre_cfg_bufs_set(&bufs, 2, bufs.lcfg_buf[1],
+                                            bufs.lcfg_buflen[1]);
+                        lustre_cfg_bufs_set(&bufs, 1, bufs.lcfg_buf[0],
+                                            bufs.lcfg_buflen[0]);
+                        lustre_cfg_bufs_set_string(&bufs, 0,
+                                                   clli->cfg_obdname);
                 }
 
                 lcfg_new = lustre_cfg_new(lcfg->lcfg_command, &bufs);

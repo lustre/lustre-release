@@ -633,6 +633,8 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
                 GOTO(err_exit, rc);
         }
 
+        mds->mds_osc_obd->u.lov.lov_sp_me = LUSTRE_SP_MDT;
+
         OBD_ALLOC(data, sizeof(*data));
         if (data == NULL)
                 RETURN(-ENOMEM);

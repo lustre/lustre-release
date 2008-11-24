@@ -624,7 +624,7 @@ test_7() {
     [ $num_osts -lt 2 ] && echo "skipping $TESTNAME (must have >= 2 OSTs)" && return
 
     mkdir $tdir || error
-    $LFS setstripe $tdir 0 -1 -1 || error
+    $LFS setstripe -c $num_osts $tdir || error
 
     echo "creating..."
     for ((i=0;i<20;i++)); do
@@ -640,14 +640,15 @@ run_test 7 "exercise enlarge_reqbuf()"
 
 test_8()
 {
-    debugsave
-    sysctl -w lnet.debug="other"
+    sleep $TIMEOUT
     $LCTL dk > /dev/null
+    debugsave
+    sysctl -w lnet.debug="+other"
 
     # sleep sometime in ctx handle
-    do_facet mds sysctl -w lustre.fail_val=60
+    do_facet mds lctl set_param fail_val=30
 #define OBD_FAIL_SEC_CTX_HDL_PAUSE       0x1204
-    do_facet mds sysctl -w lustre.fail_loc=0x1204
+    do_facet mds lctl set_param fail_loc=0x1204
 
     $RUNAS $LFS flushctx || error "can't flush ctx"
 
@@ -780,6 +781,8 @@ test_90() {
         $LFS flushctx
     done
     check_dbench
+    #sleep to let ctxs be re-established
+    sleep 10
     stop_dbench
 }
 run_test 90 "recoverable from losing contexts under load"
@@ -787,7 +790,7 @@ run_test 90 "recoverable from losing contexts under load"
 test_99() {
     local nrule_old=0
     local nrule_new=0
-    local max=32
+    local max=64
 
     #
     # general rules
@@ -799,7 +802,6 @@ test_99() {
     for ((i = $nrule_old; i < $max; i++)); do
         set_rule $FSNAME elan$i any krb5n || error "set rule $i"
     done
-    set_rule $FSNAME elan100 any krb5n && error "set $max rule should fail"
     for ((i = $nrule_old; i < $max; i++)); do
         set_rule $FSNAME elan$i any || error "remove rule $i"
     done
@@ -820,7 +822,6 @@ test_99() {
     for ((i = $nrule_old; i < $max; i++)); do
         set_rule $FSNAME-MDT0000 elan$i any krb5i || error "set rule $i"
     done
-    set_rule $FSNAME-MDT0000 elan100 any krb5i && error "set $max rule should fail"
     for ((i = $nrule_old; i < $max; i++)); do
         set_rule $FSNAME-MDT0000 elan$i any || error "remove rule $i"
     done
@@ -831,7 +832,7 @@ test_99() {
         error "general rule: $nrule_new != $nrule_old"
     fi
 }
-run_test 99 "maximum sptlrpc rules limitation"
+run_test 99 "set large number of sptlrpc rules"
 
 error_dbench()
 {

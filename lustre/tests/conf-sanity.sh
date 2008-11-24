@@ -183,11 +183,11 @@ if [ "$ONLY" == "cleanup" ]; then
 	exit
 fi
 
+init_gss
+
 #create single point mountpoint
 
 gen_config
-
-init_gss
 
 test_0() {
         setup
@@ -903,6 +903,7 @@ test_29() {
 	writeconf
 	start_mds
 	start_ost
+	sleep 5
 	cleanup
 }
 run_test 29 "permanently remove an OST"
@@ -1418,7 +1419,6 @@ run_test 42 "invalid config param should not prevent client from mounting"
 
 umount_client $MOUNT
 cleanup_nocli
-cleanup_gss
 
 test_45() { #17310
         setup
@@ -1440,6 +1440,6 @@ test_45() { #17310
 }
 run_test 45 "long unlink handling in ptlrpcd"
 
-
+cleanup_gss
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true

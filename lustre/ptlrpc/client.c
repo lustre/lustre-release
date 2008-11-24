@@ -1307,6 +1307,7 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
                                 if (status) {
                                         if (req->rq_err) {
                                                 req->rq_status = status;
+                                                req->rq_wait_ctx = 0;
                                                 force_timer_recalc = 1;
                                         } else {
                                                 req->rq_wait_ctx = 1;
@@ -1528,6 +1529,10 @@ int ptlrpc_expired_set(void *data)
         list_for_each (tmp, &set->set_requests) {
                 struct ptlrpc_request *req =
                         list_entry(tmp, struct ptlrpc_request, rq_set_chain);
+
+                /* don't expire request waiting for context */
+                if (req->rq_wait_ctx)
+                        continue;
 
                 /* Request in-flight? */
                 if (!((req->rq_phase == RQ_PHASE_RPC &&
@@ -2181,9 +2186,11 @@ restart:
                          */
                         spin_lock(&imp->imp_lock);
                         list_del_init(&req->rq_list);
+                        atomic_dec(&imp->imp_inflight);
                         spin_unlock(&imp->imp_lock);
 
-                        CERROR("Failed to refresh ctx of req %p: %d\n", req, rc);
+                        CERROR("Failed to refresh ctx of req %p: %d\n",
+                               req, rc);
                         GOTO(out, rc);
                 }
                 /* simulating we got error during send rpc */

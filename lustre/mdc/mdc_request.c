@@ -1175,6 +1175,10 @@ int mdc_set_info_async(struct obd_export *exp,
                 rc = do_set_info_async(exp, keylen, key, vallen, val, set);
                 RETURN(rc);
         }
+        if (KEY_IS(KEY_SPTLRPC_CONF)) {
+                sptlrpc_conf_client_adapt(exp->exp_obd);
+                RETURN(0);
+        }
         if (KEY_IS(KEY_FLUSH_CTX)) {
                 sptlrpc_import_flush_my_ctx(imp);
                 RETURN(0);
@@ -1687,9 +1691,6 @@ static int mdc_process_config(struct obd_device *obd, obd_count len, void *buf)
 
         lprocfs_mdc_init_vars(&lvars);
         switch (lcfg->lcfg_command) {
-        case LCFG_SPTLRPC_CONF:
-                rc = sptlrpc_cliobd_process_config(obd, lcfg);
-                break;
         default:
                 rc = class_process_proc_param(PARAM_MDC, lvars.obd_vars,
                                               lcfg, obd);

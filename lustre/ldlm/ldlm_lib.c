@@ -221,14 +221,20 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
                 rq_portal = OST_REQUEST_PORTAL;
                 rp_portal = OSC_REPLY_PORTAL;
                 connect_op = OST_CONNECT;
+                cli->cl_sp_me = LUSTRE_SP_CLI;
+                cli->cl_sp_to = LUSTRE_SP_OST;
         } else if (!strcmp(name, LUSTRE_MDC_NAME)) {
                 rq_portal = MDS_REQUEST_PORTAL;
                 rp_portal = MDC_REPLY_PORTAL;
                 connect_op = MDS_CONNECT;
+                cli->cl_sp_me = LUSTRE_SP_CLI;
+                cli->cl_sp_to = LUSTRE_SP_MDT;
         } else if (!strcmp(name, LUSTRE_MGC_NAME)) {
                 rq_portal = MGS_REQUEST_PORTAL;
                 rp_portal = MGC_REPLY_PORTAL;
                 connect_op = MGS_CONNECT;
+                cli->cl_sp_me = LUSTRE_SP_MGC;
+                cli->cl_sp_to = LUSTRE_SP_MGS;
         } else {
                 CERROR("unknown client OBD type \"%s\", can't setup\n",
                        name);
@@ -257,8 +263,6 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 
         init_rwsem(&cli->cl_sem);
         sema_init(&cli->cl_mgc_sem, 1);
-        sptlrpc_rule_set_init(&cli->cl_sptlrpc_rset);
-        cli->cl_sec_part = LUSTRE_SP_ANY;
         cli->cl_conn_count = 0;
         memcpy(server_uuid.uuid, lustre_cfg_buf(lcfg, 2),
                min_t(unsigned int, LUSTRE_CFG_BUFLEN(lcfg, 2),
@@ -374,7 +378,6 @@ err:
 int client_obd_cleanup(struct obd_device *obddev)
 {
         ENTRY;
-        sptlrpc_rule_set_free(&obddev->u.cli.cl_sptlrpc_rset);
         ldlm_put_ref();
         RETURN(0);
 }

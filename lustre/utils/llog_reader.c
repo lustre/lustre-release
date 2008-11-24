@@ -363,6 +363,11 @@ void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
                 print_1_cfg(lcfg);
                 break;
         }
+        case(LCFG_SPTLRPC_CONF):{
+                printf("sptlrpc_conf ");
+                print_1_cfg(lcfg);
+                break;
+        }
         case(LCFG_MARKER):{
                 struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
                 char createtime[26], canceltime[26] = "";

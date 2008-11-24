@@ -538,6 +538,49 @@ struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
         return NULL;
 }
 
+/**
+ * to notify sptlrpc log for @fsname has changed, let every relevant OBD
+ * adjust sptlrpc settings accordingly.
+ */
+int class_notify_sptlrpc_conf(const char *fsname, int namelen)
+{
+        struct obd_device  *obd;
+        const char         *type;
+        int                 i, rc = 0, rc2;
+
+        LASSERT(namelen > 0);
+
+        spin_lock(&obd_dev_lock);
+        for (i = 0; i < class_devno_max(); i++) {
+                obd = class_num2obd(i);
+
+                if (obd == NULL || obd->obd_set_up == 0 || obd->obd_stopping)
+                        continue;
+
+                /* only notify mdc, osc, mdt, ost */
+                type = obd->obd_type->typ_name;
+                if (strcmp(type, LUSTRE_MDC_NAME) != 0 &&
+                    strcmp(type, LUSTRE_OSC_NAME) != 0 &&
+                    strcmp(type, LUSTRE_MDT_NAME) != 0 &&
+                    strcmp(type, LUSTRE_OST_NAME) != 0)
+                        continue;
+
+                if (strncmp(obd->obd_name, fsname, namelen))
+                        continue;
+
+                class_incref(obd, __FUNCTION__, obd);
+                spin_unlock(&obd_dev_lock);
+                rc2 = obd_set_info_async(obd->obd_self_export,
+                                         sizeof(KEY_SPTLRPC_CONF),
+                                         KEY_SPTLRPC_CONF, 0, NULL, NULL);
+                rc = rc ? rc : rc2;
+                class_decref(obd, __FUNCTION__, obd);
+                spin_lock(&obd_dev_lock);
+        }
+        spin_unlock(&obd_dev_lock);
+        return rc;
+}
+EXPORT_SYMBOL(class_notify_sptlrpc_conf);
 
 void obd_cleanup_caches(void)
 {

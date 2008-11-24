@@ -90,6 +90,8 @@ struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid,
                                            int *next);
 struct obd_device * class_num2obd(int num);
 
+int class_notify_sptlrpc_conf(const char *fsname, int namelen);
+
 char *obd_export_nid2str(struct obd_export *exp);
 
 int obd_export_evict_by_nid(struct obd_device *obd, const char *nid);
@@ -132,6 +134,7 @@ static inline void lprocfs_echo_init_vars(struct lprocfs_static_vars *lvars)
 /* Passed as data param to class_config_parse_llog */
 struct config_llog_instance {
         char *              cfg_instance;
+        char *              cfg_obdname;
         struct super_block *cfg_sb;
         struct obd_uuid     cfg_uuid;
         int                 cfg_last_idx; /* for partial llog processing */
@@ -149,9 +152,11 @@ struct config_llog_data {
         struct config_llog_instance cld_cfg;
         struct list_head    cld_list_chain;
         atomic_t            cld_refcount;
+        struct config_llog_data *cld_sptlrpc;/* depended sptlrpc log */
         struct obd_export  *cld_mgcexp;
         unsigned int        cld_stopping:1, /* we were told to stop watching */
-                            cld_lostlock:1; /* lock not requeued */
+                            cld_lostlock:1, /* lock not requeued */
+                            cld_is_sptlrpc:1;
 };
 
 struct lustre_profile {

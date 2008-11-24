@@ -1229,6 +1229,10 @@ setupall() {
 
         done
     fi
+    # wait a while to allow sptlrpc configuration be propogated to targets,
+    # only needed when mounting new target devices.
+    $GSS && sleep 10
+
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     mount_client $MOUNT
     [ -n "$CLIENTS" ] && zconf_mount_clients $CLIENTS $MOUNT

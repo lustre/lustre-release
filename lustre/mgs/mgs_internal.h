@@ -87,6 +87,7 @@ struct fs_db {
 
 int mgs_init_fsdb_list(struct obd_device *obd);
 int mgs_cleanup_fsdb_list(struct obd_device *obd);
+int mgs_get_fsdb_srpc_from_llog(struct obd_device *obd, struct fs_db *fsdb);
 int mgs_check_index(struct obd_device *obd, struct mgs_target_info *mti);
 int mgs_check_failnid(struct obd_device *obd, struct mgs_target_info *mti);
 int mgs_write_log_target(struct obd_device *obd, struct mgs_target_info *mti);

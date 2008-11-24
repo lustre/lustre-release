@@ -144,6 +144,9 @@ int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
                 RETURN(-EINVAL);
         }
 
+        /* override the sp_me from lov */
+        tgt_obd->u.cli.cl_sp_me = lov->lov_sp_me;
+
         if (data && (data->ocd_connect_flags & OBD_CONNECT_INDEX))
                 data->ocd_index = index;
 
@@ -801,6 +804,7 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         atomic_set(&lov->lov_refcount, 0);
         CFS_INIT_LIST_HEAD(&lov->lov_qos.lq_oss_list);
         init_rwsem(&lov->lov_qos.lq_rw_sem);
+        lov->lov_sp_me = LUSTRE_SP_CLI;
         lov->lov_qos.lq_dirty = 1;
         lov->lov_qos.lq_rr.lqr_dirty = 1;
         lov->lov_qos.lq_reset = 1;

@@ -1411,41 +1411,54 @@ static int ost_init_sec_level(struct ptlrpc_request *req)
         RETURN(rc);
 }
 
-static int filter_export_check_flavor(struct filter_obd *filter,
-                                      struct obd_export *exp,
-                                      struct ptlrpc_request *req)
+/*
+ * FIXME
+ * this should be done in filter_connect()/filter_reconnect(), but
+ * we can't obtain information like NID, which stored in incoming
+ * request, thus can't decide what flavor to use. so we do it here.
+ *
+ * This hack should be removed after the OST stack be rewritten, just
+ * like what we are doing in mdt_obd_connect()/mdt_obd_reconnect().
+ */
+static int ost_connect_check_sptlrpc(struct ptlrpc_request *req)
 {
-        int     rc = 0;
+        struct obd_export     *exp = req->rq_export;
+        struct filter_obd     *filter = &exp->exp_obd->u.filter;
+        struct sptlrpc_flavor  flvr;
+        int                    rc = 0;
 
-        /* FIXME
-         * this should be done in filter_connect()/filter_reconnect(), but
-         * we can't obtain information like NID, which stored in incoming
-         * request, thus can't decide what flavor to use. so we do it here.
-         *
-         * This hack should be removed after the OST stack be rewritten, just
-         * like what we are doing in mdt_obd_connect()/mdt_obd_reconnect().
-         */
-        if (exp->exp_flvr.sf_rpc != SPTLRPC_FLVR_INVALID)
-                return 0;
+        if (exp->exp_flvr.sf_rpc == SPTLRPC_FLVR_INVALID) {
+                read_lock(&filter->fo_sptlrpc_lock);
+                sptlrpc_target_choose_flavor(&filter->fo_sptlrpc_rset,
+                                             req->rq_sp_from,
+                                             req->rq_peer.nid,
+                                             &flvr);
+                read_unlock(&filter->fo_sptlrpc_lock);
 
-        CDEBUG(D_SEC, "from %s\n", sptlrpc_part2name(req->rq_sp_from));
-        spin_lock(&exp->exp_lock);
-        exp->exp_sp_peer = req->rq_sp_from;
+                spin_lock(&exp->exp_lock);
 
-        read_lock(&filter->fo_sptlrpc_lock);
-        sptlrpc_rule_set_choose(&filter->fo_sptlrpc_rset, exp->exp_sp_peer,
-                                req->rq_peer.nid, &exp->exp_flvr);
-        read_unlock(&filter->fo_sptlrpc_lock);
+                exp->exp_sp_peer = req->rq_sp_from;
+                exp->exp_flvr = flvr;
 
-        if (exp->exp_flvr.sf_rpc != req->rq_flvr.sf_rpc) {
-                CERROR("invalid rpc flavor %x, expect %x, from %s\n",
-                       req->rq_flvr.sf_rpc, exp->exp_flvr.sf_rpc,
-                       libcfs_nid2str(req->rq_peer.nid));
-                exp->exp_flvr.sf_rpc = SPTLRPC_FLVR_INVALID;
-                rc = -EACCES;
+                if (exp->exp_flvr.sf_rpc != req->rq_flvr.sf_rpc) {
+                        CERROR("unauthorized rpc flavor %x from %s, "
+                               "expect %x\n", req->rq_flvr.sf_rpc,
+                               libcfs_nid2str(req->rq_peer.nid),
+                               exp->exp_flvr.sf_rpc);
+                        rc = -EACCES;
+                }
+
+                spin_unlock(&exp->exp_lock);
+        } else {
+                if (exp->exp_sp_peer != req->rq_sp_from) {
+                        CERROR("RPC source %s doesn't match %s\n",
+                               sptlrpc_part2name(req->rq_sp_from),
+                               sptlrpc_part2name(exp->exp_sp_peer));
+                        rc = -EACCES;
+                } else {
+                        rc = sptlrpc_target_export_check(exp, req);
+                }
         }
-
-        spin_unlock(&exp->exp_lock);
 
         return rc;
 }
@@ -1860,13 +1873,8 @@ int ost_handle(struct ptlrpc_request *req)
                         RETURN(0);
                 if (!rc) {
                         rc = ost_init_sec_level(req);
-                        if (!rc) {
-                                struct obd_export *exp = req->rq_export;
-
-                                obd = exp->exp_obd;
-                                rc = filter_export_check_flavor(&obd->u.filter,
-                                                                exp, req);
-                        }
+                        if (!rc)
+                                rc = ost_connect_check_sptlrpc(req);
                 }
                 break;
         }

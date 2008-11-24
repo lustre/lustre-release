@@ -74,7 +74,7 @@
 
 #define GSS_SVC_UPCALL_TIMEOUT  (20)
 
-static spinlock_t __ctx_index_lock = SPIN_LOCK_UNLOCKED;
+static spinlock_t __ctx_index_lock;
 static __u64 __ctx_index;
 
 __u64 gss_get_next_ctx_index(void)
@@ -1416,6 +1416,16 @@ int __init gss_init_svc_upcall(void)
 {
         int     i;
 
+        spin_lock_init(&__ctx_index_lock);
+        /*
+         * this helps reducing context index confliction. after server reboot,
+         * conflicting request from clients might be filtered out by initial
+         * sequence number checking, thus no chance to sent error notification
+         * back to clients.
+         */
+        get_random_bytes(&__ctx_index, sizeof(__ctx_index));
+
+
         cache_register(&rsi_cache);
         cache_register(&rsc_cache);
 
@@ -1435,12 +1445,6 @@ int __init gss_init_svc_upcall(void)
         if (atomic_read(&rsi_cache.readers) == 0)
                 CWARN("Init channel is not opened by lsvcgssd, following "
                       "request might be dropped until lsvcgssd is active\n");
-
-        /* this helps reducing context index confliction. after server reboot,
-         * conflicting request from clients might be filtered out by initial
-         * sequence number checking, thus no chance to sent error notification
-         * back to clients. */
-        get_random_bytes(&__ctx_index, sizeof(__ctx_index));
 
         return 0;
 }
