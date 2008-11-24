@@ -5,7 +5,7 @@ Severity   : normal
 Bugzilla   : 15320
 Description: OSS crashes frequently, e2fsck does not fix
 Details    : Add an extra check to ldiskfs extents code for the condition, 
-             eh_entries = 0 & eh_depth != 0
+	     eh_entries = 0 & eh_depth != 0
 
 Severity   : normal
 Bugzilla   : 15459
@@ -42,7 +42,7 @@ Frequency  : blocks per group is less than blocksize*8 and uninit_groups is enab
 Bugzilla   : 15932
 Description: ldiskfs error: XXX blocks in bitmap, YYY in gd
 Details    : If blocks per group is less than blocksize*8, set rest of the
-             bitmap to 1.
+	     bitmap to 1.
 
 Severity   : enhancement
 Bugzilla   : 10555
