@@ -40,6 +40,9 @@ tbd Sun Microsystems, Inc.
 	* File join has been disabled in this release, refer to Bugzilla
 	  16929.
 	* A new Lustre ADIO driver is available for MPICH2-1.0.7.
+	* NFS export disabled when stack size < 8192. Since the NFSv4 export of 
+	  Lustre filesystem with 4K stack may cause a stack overflow. For more
+	  information, please refer to bugzilla 17630.
 
 Severity   : enhancement
 Bugzilla   : 17201
