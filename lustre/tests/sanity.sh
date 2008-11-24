@@ -1003,13 +1003,13 @@ test_27p() {
 	reset_enospc
 	rm -f $DIR/d27/f27p
 
-	$MCREATE $DIR/d27/f27p || error
-	$TRUNCATE $DIR/d27/f27p 80000000 || error
-	$CHECKSTAT -s 80000000 $DIR/d27/f27p || error
+	$MCREATE $DIR/d27/f27p || error "mcreate failed"
+	$TRUNCATE $DIR/d27/f27p 80000000 || error "truncate failed"
+	$CHECKSTAT -s 80000000 $DIR/d27/f27p || error "checkstat failed"
 
 	exhaust_precreations 0 0x80000215
-	echo foo >> $DIR/d27/f27p || error
-	$CHECKSTAT -s 80000004 $DIR/d27/f27p || error
+	echo foo >> $DIR/d27/f27p || error "append failed"
+	$CHECKSTAT -s 80000004 $DIR/d27/f27p || error "checkstat failed"
 
 	reset_enospc
 }
@@ -2990,6 +2990,21 @@ test_65i() { # bug6367
 }
 run_test 65i "set non-default striping on root directory (bug 6367)="
 
+test_65ia() { # bug12836
+	$LFS getstripe $MOUNT || error "getstripe $MOUNT failed"
+}
+run_test 65ia "getstripe on -1 default directory striping"
+
+test_65ib() { # bug12836
+	$LFS getstripe -v $MOUNT || error "getstripe -v $MOUNT failed"
+}
+run_test 65ib "getstripe -v on -1 default directory striping"
+
+test_65ic() { # bug12836
+	$LFS find -mtime -1 $MOUNT || error "find $MOUNT failed"
+}
+run_test 65ic "new find on -1 default directory striping"
+
 test_65j() { # bug6367
 	sync; sleep 1
 	# if we aren't already remounting for each test, do so for this test
@@ -3241,9 +3256,6 @@ test75_prep() {
 }
 
 test_75a() {
-#	skipped temporarily: we do not have join file currently
-#	please remove this when ready - huanghua
-	return
         test75_prep
 
         cp -p ${F128k} ${FHEAD}
@@ -3261,9 +3273,6 @@ test_75a() {
 run_test 75a "TEST join file ===================================="
 
 test_75b() {
-#	skipped temporarily: we do not have join file currently
-#	please remove this when ready - huanghua
-	return
         test75_prep
 
         cp -p ${F128k} ${FTAIL}
@@ -3277,9 +3286,6 @@ test_75b() {
 run_test 75b "TEST join file 2 =================================="
 
 test_75c() {
-#	skipped temporarily: we do not have join file currently
-#	please remove this when ready - huanghua
-	return
         test75_prep
 
         cp -p ${F128k} ${FTAIL}
@@ -3293,9 +3299,6 @@ test_75c() {
 run_test 75c "TEST join file 3 =================================="
 
 test_75d() {
-#	skipped temporarily: we do not have join file currently
-#	please remove this when ready - huanghua
-	return
         test75_prep
 
         cp -p ${F128k} ${FHEAD}
@@ -3310,9 +3313,6 @@ test_75d() {
 run_test 75d "TEST join file 4 =================================="
 
 test_75e() {
-#	skipped temporarily: we do not have join file currently
-#	please remove this when ready - huanghua
-	return
         test75_prep
 
         rm -rf ${FHEAD} || "delete join file error"
@@ -3320,9 +3320,6 @@ test_75e() {
 run_test 75e "TEST join file 5 (remove joined file) ============="
 
 test_75f() {
-#	skipped temporarily: we do not have join file currently
-#	please remove this when ready - huanghua
-	return
         test75_prep
 
         cp -p ${F128k} ${F75}_join_10_compare
@@ -3340,9 +3337,6 @@ test_75f() {
 run_test 75f "TEST join file 6 (join 10 files) =================="
 
 test_75g() {
-#	skipped temporarily: we do not have join file currently
-#	please remove this when ready - huanghua
-	return
         [ ! -f ${F75}_join_10 ] && echo "${F75}_join_10 missing" && return
         $LFS getstripe ${F75}_join_10
 
