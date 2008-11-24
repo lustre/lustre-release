@@ -164,7 +164,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
 
         EXIT;
  abort_bulk:
-        ptlrpc_abort_bulk(req);
+        ptlrpc_abort_bulk(desc);
  cleanup_buf:
         for (i = 0; i < npages; i++)
                 if (pages[i])
