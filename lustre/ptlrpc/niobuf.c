@@ -166,15 +166,14 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 
 /* Server side bulk abort. Idempotent. Not thread-safe (i.e. only
  * serialises with completion callback) */
-void ptlrpc_abort_bulk(struct ptlrpc_request *req)
+void ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
 {
-        struct ptlrpc_bulk_desc *desc = req->rq_bulk;
         struct l_wait_info       lwi;
         int                      rc;
 
         LASSERT(!in_interrupt());               /* might sleep */
 
-        if (!ptlrpc_client_bulk_active(req))           /* completed or */
+        if (!ptlrpc_server_bulk_active(desc))   /* completed or */
                 return;                         /* never started */
         
         /* Do not send any meaningful data over the wire for evicted clients */
@@ -194,7 +193,7 @@ void ptlrpc_abort_bulk(struct ptlrpc_request *req)
                 lwi = LWI_TIMEOUT_INTERVAL(cfs_time_seconds(LONG_UNLINK),
                                            cfs_time_seconds(1), NULL, NULL);
                 rc = l_wait_event(desc->bd_waitq, 
-                                  !ptlrpc_client_bulk_active(req), &lwi);
+                                  !ptlrpc_server_bulk_active(desc), &lwi);
                 if (rc == 0)
                         return;
 

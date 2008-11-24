@@ -890,11 +890,11 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                           req->rq_deadline - start,
                                           cfs_time_current_sec() -
                                           req->rq_deadline);
-                                ptlrpc_abort_bulk(req);
+                                ptlrpc_abort_bulk(desc);
                         } else if (exp->exp_failed) {
                                 DEBUG_REQ(D_ERROR, req, "Eviction on bulk PUT");
                                 rc = -ENOTCONN;
-                                ptlrpc_abort_bulk(req);
+                                ptlrpc_abort_bulk(desc);
                         } else if (!desc->bd_success ||
                                    desc->bd_nob_transferred != desc->bd_nob) {
                                 DEBUG_REQ(D_ERROR, req, "%s bulk PUT %d(%d)",
@@ -1122,11 +1122,11 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                   req->rq_deadline - start,
                                   cfs_time_current_sec() -
                                   req->rq_deadline);
-                        ptlrpc_abort_bulk(req);
+                        ptlrpc_abort_bulk(desc);
                 } else if (desc->bd_export->exp_failed) {
                         DEBUG_REQ(D_ERROR, req, "Eviction on bulk GET");
                         rc = -ENOTCONN;
-                        ptlrpc_abort_bulk(req);
+                        ptlrpc_abort_bulk(desc);
                 } else if (!desc->bd_success ||
                            desc->bd_nob_transferred != desc->bd_nob) {
                         DEBUG_REQ(D_ERROR, req, "%s bulk GET %d(%d)",

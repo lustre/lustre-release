@@ -360,9 +360,8 @@ static void failed_lock_cleanup(struct ldlm_namespace *ns,
 
         /* XXX - HACK because we shouldn't call ldlm_lock_destroy()
          *       from llite/file.c/ll_file_flock(). */
-        if (lock->l_resource->lr_type == LDLM_FLOCK) {
+        if (lock->l_resource->lr_type == LDLM_FLOCK)
                 ldlm_lock_destroy(lock);
-        }
 }
 
 int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
