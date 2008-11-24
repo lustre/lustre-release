@@ -44,6 +44,15 @@ tbd Sun Microsystems, Inc.
 	  Lustre filesystem with 4K stack may cause a stack overflow. For more
 	  information, please refer to bugzilla 17630.
 
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 16081
+Description: don't skip ost target if they assigned to file
+Details    : Drop slow OSCs if we can, but not for requested start idx.
+             This means "if OSC is slow and it is not the requested
+             start OST, then it can be skipped, otherwise skip it only
+             if it is inactive/recovering/out-of-space.
+
 Severity   : enhancement
 Bugzilla   : 17201
 Description: Update to RHEL5 kernel-2.6.18-92.1.17.el5.

@@ -636,9 +636,13 @@ repeat_find:
                 if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_PRECREATE) && ost_idx == 0)
                         continue;
 
-                /* Drop slow OSCs if we can, but not for requested start idx */
+                /* Drop slow OSCs if we can, but not for requested start idx.
+                 *
+                 * This means "if OSC is slow and it is not the requested
+                 * start OST, then it can be skipped, otherwise skip it only
+                 * if it is inactive/recovering/out-of-space." */
                 if ((obd_precreate(lov->lov_tgts[ost_idx]->ltd_exp) > speed) &&
-                    (i != 0 || speed < 2))
+                    (i != 0 || speed >= 2))
                         continue;
 
                 *idx_pos = ost_idx;
