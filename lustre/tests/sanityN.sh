@@ -788,14 +788,14 @@ test_34() { #16129
                 done
                 if [ $OPER == "timeout" ] ; then
                         for j in `seq $OSTCOUNT`; do
-                                #define OBD_FAIL_PTLRPC_HPREQ_TIMEOUT    0x510
-                                do_facet ost$j lctl set_param fail_loc=0x510
+                                #define OBD_FAIL_PTLRPC_HPREQ_TIMEOUT    0x511
+                                do_facet ost$j lctl set_param fail_loc=0x511
                         done
                         echo lock should expire
                 else
                         for j in `seq $OSTCOUNT`; do
-                                #define OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT  0x511
-                                do_facet ost$j lctl set_param fail_loc=0x511
+                                #define OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT  0x512
+                                do_facet ost$j lctl set_param fail_loc=0x512
                         done
                         echo lock should not expire
                 fi

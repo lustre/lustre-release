@@ -761,7 +761,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                                            ost_bulk_timeout,
                                                            desc);
                                 rc = l_wait_event(desc->bd_waitq,
-                                                  !ptlrpc_bulk_active(desc) ||
+                                                  !ptlrpc_server_bulk_active(desc) ||
                                                   exp->exp_failed, &lwi);
                                 LASSERT(rc == 0 || rc == -ETIMEDOUT);
                                 /* Wait again if we changed deadline */
@@ -976,7 +976,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (desc->bd_export->exp_failed)
                 rc = -ENOTCONN;
         else
-                rc = ptlrpc_start_bulk_transfer (desc);
+                rc = ptlrpc_start_bulk_transfer(desc);
         if (rc == 0) {
                 time_t start = cfs_time_current_sec();
                 do {
@@ -987,7 +987,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         lwi = LWI_TIMEOUT_INTERVAL(timeout, cfs_time_seconds(1),
                                                    ost_bulk_timeout, desc);
                         rc = l_wait_event(desc->bd_waitq,
-                                          !ptlrpc_bulk_active(desc) ||
+                                          !ptlrpc_server_bulk_active(desc) ||
                                           desc->bd_export->exp_failed, &lwi);
                         LASSERT(rc == 0 || rc == -ETIMEDOUT);
                         /* Wait again if we changed deadline */
