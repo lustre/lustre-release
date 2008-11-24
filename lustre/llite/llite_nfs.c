@@ -190,6 +190,7 @@ int ll_dentry_to_fh(struct dentry *dentry, __u32 *datap, int *lenp,
         return 1;
 }
 
+#if THREAD_SIZE >= 8192
 struct dentry *ll_get_dentry(struct super_block *sb, void *data)
 {
         __u32 *inump = (__u32*)data;
@@ -241,3 +242,4 @@ struct export_operations lustre_export_operations = {
        .get_parent = ll_get_parent,
        .get_dentry = ll_get_dentry, 
 };
+#endif
