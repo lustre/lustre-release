@@ -387,6 +387,7 @@ struct ptlrpc_request {
                so that servers' early reply updates to the deadline aren't
                kept in per-cpu cache */
         time_t rq_reply_deadline;        /* when req reply unlink must finish. */
+        time_t rq_bulk_deadline;         /* when req bulk unlink must finish. */
         int    rq_timeout;               /* service time estimate (secs) */
 
         /* Multi-rpc bits */
@@ -751,18 +752,40 @@ extern lnet_pid_t ptl_get_pid(void);
 
 /* ptlrpc/niobuf.c */
 int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc);
-void ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc);
+void ptlrpc_abort_bulk(struct ptlrpc_request *req);
 int ptlrpc_register_bulk(struct ptlrpc_request *req);
-void ptlrpc_unregister_bulk (struct ptlrpc_request *req);
+int ptlrpc_unregister_bulk(struct ptlrpc_request *req, int async);
 
-static inline int ptlrpc_bulk_active (struct ptlrpc_bulk_desc *desc)
+static inline int ptlrpc_server_bulk_active(struct ptlrpc_bulk_desc *desc)
 {
-        int           rc;
+        int rc;
+
+        LASSERT(desc != NULL);
 
         spin_lock(&desc->bd_lock);
         rc = desc->bd_network_rw;
         spin_unlock(&desc->bd_lock);
-        return (rc);
+        return rc;
+}
+
+static inline int ptlrpc_client_bulk_active(struct ptlrpc_request *req)
+{
+        struct ptlrpc_bulk_desc *desc = req->rq_bulk;
+        int                      rc;
+
+        LASSERT(req != NULL);
+
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_BULK_UNLINK) &&
+            req->rq_bulk_deadline > cfs_time_current_sec())
+                return 1;
+
+        if (!desc)
+                return 0;
+
+        spin_lock(&desc->bd_lock);
+        rc = desc->bd_network_rw;
+        spin_unlock(&desc->bd_lock);
+        return rc;
 }
 
 #define PTLRPC_REPLY_MAYBE_DIFFICULT 0x01
@@ -969,7 +992,7 @@ ptlrpc_rqphase_move(struct ptlrpc_request *req, enum rq_phase new_phase)
 static inline int
 ptlrpc_client_early(struct ptlrpc_request *req)
 {
-        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_UNLINK) &&
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK) &&
             req->rq_reply_deadline > cfs_time_current_sec())
                 return 0;
         return req->rq_early;
@@ -978,7 +1001,7 @@ ptlrpc_client_early(struct ptlrpc_request *req)
 static inline int
 ptlrpc_client_replied(struct ptlrpc_request *req)
 {
-        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_UNLINK) &&
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK) &&
             req->rq_reply_deadline > cfs_time_current_sec())
                 return 0;
         return req->rq_replied;
@@ -987,7 +1010,7 @@ ptlrpc_client_replied(struct ptlrpc_request *req)
 static inline int
 ptlrpc_client_recv(struct ptlrpc_request *req)
 {
-        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_UNLINK) &&
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK) &&
             req->rq_reply_deadline > cfs_time_current_sec())
                 return 1;
         return req->rq_receiving_reply;
@@ -999,7 +1022,7 @@ ptlrpc_client_recv_or_unlink(struct ptlrpc_request *req)
         int rc;
 
         spin_lock(&req->rq_lock);
-        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_UNLINK) &&
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK) &&
             req->rq_reply_deadline > cfs_time_current_sec()) {
                 spin_unlock(&req->rq_lock);
                 return 1;
