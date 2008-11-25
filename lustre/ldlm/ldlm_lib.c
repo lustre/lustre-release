@@ -1803,8 +1803,8 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         /* we use the observer */
         if (!obd->obd_observer || !obd->obd_observer->obd_observer) {
                 CERROR("Can't find the observer, it is recovering\n");
-                req->rq_status = -EIO;
-                GOTO(send_reply, rc = -EIO);
+                req->rq_status = -EAGAIN;
+                GOTO(send_reply, rc = -EAGAIN);
         }
 
         master_obd = obd->obd_observer->obd_observer;
