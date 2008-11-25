@@ -473,7 +473,6 @@ struct llog_commit_master *llog_recov_thread_init(char *name)
         snprintf(lcm->lcm_name, sizeof(lcm->lcm_name),
                  "ll_log_commit_%s", name);
 
-        strncpy(lcm->lcm_name, name, sizeof(lcm->lcm_name));
         atomic_set(&lcm->lcm_count, 0);
         spin_lock_init(&lcm->lcm_lock);
         CFS_INIT_LIST_HEAD(&lcm->lcm_llcds);
