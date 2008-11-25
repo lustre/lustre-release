@@ -391,6 +391,8 @@ static int client_common_fill_super(struct super_block *sb,
 
         sb->s_op = &lustre_super_operations;
 #if THREAD_SIZE >= 8192
+        /* Disable the NFS export because of stack overflow
+         * when THREAD_SIZE < 8192. Please refer to 17630. */
         sb->s_export_op = &lustre_export_operations;
 #endif
 
