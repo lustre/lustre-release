@@ -49,22 +49,22 @@ Frequency  : rare
 Bugzilla   : 16081
 Description: don't skip ost target if they assigned to file
 Details    : Drop slow OSCs if we can, but not for requested start idx.
-             This means "if OSC is slow and it is not the requested
-             start OST, then it can be skipped, otherwise skip it only
-             if it is inactive/recovering/out-of-space.
+	     This means "if OSC is slow and it is not the requested
+	     start OST, then it can be skipped, otherwise skip it only
+	     if it is inactive/recovering/out-of-space.
 
 Severity   : enhancement
 Bugzilla   : 17201
 Description: Update to RHEL5 kernel-2.6.18-92.1.17.el5.
 
 Severity   : normal
-Frequency  : rare, need acls on inode.
+Frequency  : rare, need ACLs on inode.
 Bugzilla   : 16492
 Description: client can't handle ost additional correctly
 Details    : if ost was added after client connected to mds client can have 
-             hit lnet_try_match_md ... to big messages to wide striped files.
-             in this case need teach client to handle config events about add
-             lov target and update client max ea size at that event.
+	     hit lnet_try_match_md ... to big messages to wide striped files.
+	     in this case need teach client to handle config events about add
+	     lov target and update client max ea size at that event.
 
 Severity   : enhancement
 Bugzilla   : 17374
@@ -82,13 +82,13 @@ Details    : If there is no extra space in the request for early cancels,
 	     ldlm_req_handles_avail() returns 0 instead of a negative value.
 
 Severity   : major
-Frequency  : rare
+Frequency  : rare, during racing unlink and create in same directory
 Bugzilla   : 16492
 Description: mds is deadlocked
-Details    : in rare cases, inode in catalog can have i_no less than have parent
-	     i_no, this produce wrong order for locking during open, and parallel
-	     unlink can be lock open. this need teach mds_open to grab locks in
-	     resource id order, not at parent -> child order.
+Details    : in rare cases, inode in directory can have inode number lower than
+	     parent inode number.  This produces wrong locking order during
+	     open and parallel unlink.  Teach mds_open to grab locks in
+	     inode number order, not parent -> child order.
 
 Severity   : enhancement
 Bugzilla   : 1819
@@ -119,9 +119,10 @@ Severity   : normal
 Bugzilla   : 16907
 Description: Prevent import from entering FULL state when server in recovery
 
-Severity   : major
+Severity   : normal
+Frequency  : only with devices that have a ':' in the name
 Bugzilla   : 16750
-Description: service mount cannot take device name with ":"
+Description: service mount cannot take device name with ':'
 Details    : Only when device name contains ":/" will mount treat it as
 	     client mount.
 
@@ -158,24 +159,17 @@ Details    : Allow for a user mode script to be called once a Lustre log has
 Severity   : minor
 Bugzilla   : 16583
 Frequency  : rare
-Description: avoid messages about idr_remove called for id  which is not allocated.
-Details    : Move assigment s_dev for clustered nfs to end of initialization, for
-	     avoid problem with error handling.
-
-Severity   : minor
-Bugzilla   : 16583
-Frequency  : rare
-Description: avoid messages about idr_remove called for id  which is not allocated.
-Details    : Move assigment s_dev for clustered nfs to end of initialization, for avoid
-	     problem with error handling.
+Description: avoid messages about idr_remove called for unallocated id.
+Details    : Move s_dev assigment for clustered NFS to end of initialization,
+	     to avoid problem with error handling.
 
 Severity   : minor
 Bugzilla   : 16109
 Frequency  : rare
 Description: avoid Already found the key in hash [CONN_UNUSED_HASH] messages
-Details    : When connection is reused this not moved from CONN_UNUSED_HASH into
-	     CONN_USED_HASH and this prodice warning when put connection again
-	     in unused hash.
+Details    : When connection is reused this not moved from CONN_UNUSED_HASH
+	     into CONN_USED_HASH and this prodice warning when put connection
+	     again in unused hash.
 
 Severity   : enhancement
 Bugzilla   : 16573
@@ -203,10 +197,10 @@ Description: Add lustre_start utility to start or stop multiple Lustre servers
 
 Severity   : normal
 Bugzilla   : 17026
-Description: (ptllnd_peer.c:557:kptllnd_peer_check_sends()) ASSERTION(!in_interrupt()) failed
-Details    : fix stack overflow in the distributed lock manager by defering export
-	     eviction after a failed ast to the elt thread instead of handling
-	     it in the dlm interpret routine.
+Description: kptllnd_peer_check_sends() ASSERTION(!in_interrupt()) failed
+Details    : fix stack overflow in distributed lock manager by defering export
+	     eviction after a failed callback to the ELT thread instead of
+	     handling it in the DLM interpret routine.
 
 Severity   : enhancement
 Bugzilla   : 12800
@@ -223,25 +217,25 @@ Details    : Checks validity of on-disk block bitmap. Also it does better
 
 Severity   : normal
 Bugzilla   : 17197
-Description: (rw.c:1323:ll_read_ahead_pages()) ASSERTION(page_idx > ria->ria_stoff) failed
-Details    : Once the unmatched stride IO mode is detected, shrink the stride-ahead
-	     window to 0. If it does hit cache miss, and read-pattern is still
-	     stride-io mode, does not reset the stride window, but also does not
-	     increase the stride window length in this case.
+Description: ll_read_ahead_pages()) ASSERTION(page_idx > ria->ria_stoff) failed
+Details    : Once the unmatched stride IO mode is detected, shrink the
+	     stride-ahead window to 0. If it does hit cache miss, and read
+	     pattern is still stride-io mode, does not reset the stride window,
+	     but also does not increase the stride window length in this case.
 
 Severity   : normal
 Bugzilla   : 16438
 Frequency  : only for big-endian servers
-Description: Check if system is big-endian while mounting fs with extents feature
+Description: Check if system is big-endian while mounting fs with extents
 Details    : Mounting a filesystem with extents feature will fail on big-endian
 	     systems since ext3-based ldiskfs is not supported on big-endian
-	     systems. This can be over-riden with "bigendian_extents" mount option.
+	     systems.  Can be bypassed with "bigendian_extents" mount option.
 
 Severity   : normal
 Bugzilla   : 16860
 Description: Excessive recovery window
-Details    : With AT enabled, the recovery window can be excessively long (6000+
-	     seconds). To address this problem, we no longer use
+Details    : With AT enabled, the recovery window can be excessively long
+	     (6000+ seconds). To address this problem, we no longer use
 	     OBD_RECOVERY_FACTOR when extending the recovery window (the connect
 	     timeout no longer depends on the service time, it is set to
 	     INITIAL_CONNECT_TIMEOUT now) and clients report the old service
