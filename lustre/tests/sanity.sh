@@ -5107,7 +5107,7 @@ test_124a() {
         
         # Let's make sure that we really have some margin. Client checks
         # cached locks every 10 sec.
-        SLEEP=$((SLEEP+10))
+        SLEEP=$((SLEEP+20))
         log "Sleep ${SLEEP} sec"
         local SEC=0
         while ((SEC<$SLEEP)); do
