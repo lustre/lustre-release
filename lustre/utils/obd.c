@@ -207,9 +207,6 @@ out:
         if (rc) {
                 if (errno == ENOSYS)
                         fprintf(stderr, "Make sure cfg_device is set first.\n");
-                if (errno == EINVAL)
-                        fprintf(stderr, "cfg_device should be of the form "
-                                "'lustre-MDT0000'\n");
         }
         return rc;
 }

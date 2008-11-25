@@ -162,7 +162,8 @@ enum sptlrpc_service_type {
                       SPTLRPC_MECH_GSS_KRB5,            \
                       SPTLRPC_SVC_PRIV)
 
-#define SPTLRPC_FLVR_INVALID            ((__u16) -1)
+#define SPTLRPC_FLVR_ANY                ((__u16) 0xf000)
+#define SPTLRPC_FLVR_INVALID            ((__u16) 0xffff)
 
 #define SPTLRPC_FLVR_DEFAULT            SPTLRPC_FLVR_NULL
 
@@ -214,6 +215,8 @@ struct sptlrpc_rule_set {
         struct sptlrpc_rule    *srs_rules;
 };
 
+int sptlrpc_parse_flavor(const char *str, struct sptlrpc_flavor *flvr);
+
 static inline void sptlrpc_rule_set_init(struct sptlrpc_rule_set *set)
 {
         memset(set, 0, sizeof(*set));
@@ -224,6 +227,11 @@ int  sptlrpc_rule_set_expand(struct sptlrpc_rule_set *set, int expand);
 int  sptlrpc_rule_set_merge(struct sptlrpc_rule_set *set,
                             struct sptlrpc_rule *rule,
                             int expand);
+int sptlrpc_rule_set_choose(struct sptlrpc_rule_set *rset,
+                            enum lustre_sec_part from,
+                            enum lustre_sec_part to,
+                            lnet_nid_t nid,
+                            struct sptlrpc_flavor *sf);
 void sptlrpc_rule_set_dump(struct sptlrpc_rule_set *set);
 
 int  sptlrpc_process_config(struct lustre_cfg *lcfg);

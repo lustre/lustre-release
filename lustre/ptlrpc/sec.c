@@ -1329,10 +1329,17 @@ int sptlrpc_import_sec_adapt(struct obd_import *imp,
 
         if (svc_ctx == NULL) {
                 struct client_obd *cliobd = &imp->imp_obd->u.cli;
-                /* normal import, determine flavor from rule set */
-                sptlrpc_conf_choose_flavor(cliobd->cl_sp_me, cliobd->cl_sp_to,
-                                           &cliobd->cl_target_uuid,
-                                           conn->c_self, &sf);
+                /*
+                 * normal import, determine flavor from rule set, except
+                 * for mgc the flavor is predetermined.
+                 */
+                if (cliobd->cl_sp_me == LUSTRE_SP_MGC)
+                        sf = cliobd->cl_flvr_mgc;
+                else 
+                        sptlrpc_conf_choose_flavor(cliobd->cl_sp_me,
+                                                   cliobd->cl_sp_to,
+                                                   &cliobd->cl_target_uuid,
+                                                   conn->c_self, &sf);
 
                 sp = imp->imp_obd->u.cli.cl_sp_me;
         } else {
@@ -1648,7 +1655,7 @@ static int flavor_allowed(struct sptlrpc_flavor *exp,
 {
         struct sptlrpc_flavor *flvr = &req->rq_flvr;
 
-        if (exp->sf_rpc == flvr->sf_rpc)
+        if (exp->sf_rpc == SPTLRPC_FLVR_ANY || exp->sf_rpc == flvr->sf_rpc)
                 return 1;
 
         if ((req->rq_ctx_init || req->rq_ctx_fini) &&

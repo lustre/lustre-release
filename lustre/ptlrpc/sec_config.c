@@ -200,7 +200,7 @@ static __u16 __flavors[] = {
  *  krb5i-bulkp
  *  krb5i-bulkp:sha512/arc4
  */
-static int parse_flavor(const char *str, struct sptlrpc_flavor *flvr)
+int sptlrpc_parse_flavor(const char *str, struct sptlrpc_flavor *flvr)
 {
         const char     *f;
         char           *bulk, *alg, *enc;
@@ -321,6 +321,7 @@ invalid:
         CERROR("invalid flavor string: %s\n", str);
         return -EINVAL;
 }
+EXPORT_SYMBOL(sptlrpc_parse_flavor);
 
 /****************************************
  * configure rules                      *
@@ -387,7 +388,7 @@ int sptlrpc_parse_rule(char *param, struct sptlrpc_rule *rule)
         }
 
         /* 2.1 flavor */
-        rc = parse_flavor(flavor, &rule->sr_flvr);
+        rc = sptlrpc_parse_flavor(flavor, &rule->sr_flvr);
         if (rc)
                 RETURN(-EINVAL);
 
@@ -559,11 +560,11 @@ EXPORT_SYMBOL(sptlrpc_rule_set_merge);
  * given from/to/nid, determine a matching flavor in ruleset.
  * return 1 if a match found, otherwise return 0.
  */
-static int sptlrpc_rule_set_choose(struct sptlrpc_rule_set *rset,
-                                   enum lustre_sec_part from,
-                                   enum lustre_sec_part to,
-                                   lnet_nid_t nid,
-                                   struct sptlrpc_flavor *sf)
+int sptlrpc_rule_set_choose(struct sptlrpc_rule_set *rset,
+                            enum lustre_sec_part from,
+                            enum lustre_sec_part to,
+                            lnet_nid_t nid,
+                            struct sptlrpc_flavor *sf)
 {
         struct sptlrpc_rule    *r;
         int                     n;
@@ -590,6 +591,7 @@ static int sptlrpc_rule_set_choose(struct sptlrpc_rule_set *rset,
 
         return 0;
 }
+EXPORT_SYMBOL(sptlrpc_rule_set_choose);
 
 void sptlrpc_rule_set_dump(struct sptlrpc_rule_set *rset)
 {
@@ -826,6 +828,8 @@ static int __sptlrpc_process_config(struct lustre_cfg *lcfg,
                 CERROR("missing parameter\n");
                 RETURN(-EINVAL);
         }
+
+        CDEBUG(D_SEC, "got one rule: %s.%s\n", target, param);
 
         /* parse rule to make sure the format is correct */
         if (strncmp(param, PARAM_SRPC_FLVR, sizeof(PARAM_SRPC_FLVR) - 1) != 0) {

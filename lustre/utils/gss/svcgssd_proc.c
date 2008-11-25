@@ -344,8 +344,9 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
         if (host)
                 *host++ = '\0';
 
-	if (strcmp(sname, GSSD_SERVICE_OSS) == 0) {
-		printerr(0, "forbid "GSSD_SERVICE_OSS" as user name\n");
+	if (strcmp(sname, GSSD_SERVICE_OSS) == 0 ||
+	    strcmp(sname, GSSD_SERVICE_MGS) == 0) {
+		printerr(0, "forbid %s as user name\n", sname);
 		goto out_free;
 	}
 

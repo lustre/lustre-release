@@ -391,6 +391,7 @@ struct client_obd {
 
         enum lustre_sec_part     cl_sp_me;
         enum lustre_sec_part     cl_sp_to;
+        struct sptlrpc_flavor    cl_flvr_mgc;   /* fixed flavor of mgc->mgs */
 
         //struct llog_canceld_ctxt *cl_llcd; /* it's included by obd_llog_ctxt */
         void                    *cl_llcd_offset;
@@ -1109,6 +1110,7 @@ enum obd_cleanup_stage {
 #define KEY_BLOCKSIZE_BITS      "blocksize_bits"
 #define KEY_FIEMAP              "FIEMAP"
 #define KEY_SPTLRPC_CONF        "sptlrpc_conf"
+#define KEY_MGSSEC              "mgssec"
 /* XXX unused ?*/
 #define KEY_INTERMDS            "inter_mds"
 #define KEY_ASYNC               "async"

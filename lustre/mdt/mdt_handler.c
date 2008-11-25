@@ -4774,7 +4774,8 @@ static int mdt_connect_check_sptlrpc(struct mdt_device *mdt,
                 exp->exp_sp_peer = req->rq_sp_from;
                 exp->exp_flvr = flvr;
 
-                if (exp->exp_flvr.sf_rpc != req->rq_flvr.sf_rpc) {
+                if (exp->exp_flvr.sf_rpc != SPTLRPC_FLVR_ANY &&
+                    exp->exp_flvr.sf_rpc != req->rq_flvr.sf_rpc) {
                         CERROR("unauthorized rpc flavor %x from %s, "
                                "expect %x\n", req->rq_flvr.sf_rpc,
                                libcfs_nid2str(req->rq_peer.nid),

@@ -320,37 +320,46 @@ static struct fs_db *mgs_new_fsdb(struct obd_device *obd, char *fsname)
         int rc;
         ENTRY;
 
+        if (strlen(fsname) >= sizeof(fsdb->fsdb_name)) {
+                CERROR("fsname %s is too long\n", fsname);
+                RETURN(NULL);
+        }
+
         OBD_ALLOC_PTR(fsdb);
         if (!fsdb)
                 RETURN(NULL);
 
-        OBD_ALLOC(fsdb->fsdb_ost_index_map, INDEX_MAP_SIZE);
-        OBD_ALLOC(fsdb->fsdb_mdt_index_map, INDEX_MAP_SIZE);
-        if (!fsdb->fsdb_ost_index_map || !fsdb->fsdb_mdt_index_map) {
-                CERROR("No memory for index maps\n");
-                GOTO(err, 0);
+        strcpy(fsdb->fsdb_name, fsname);
+        sema_init(&fsdb->fsdb_sem, 1);
+        fsdb->fsdb_fl_udesc = 1;
+
+        if (strcmp(fsname, MGSSELF_NAME) == 0) {
+                fsdb->fsdb_fl_mgsself = 1;
+        } else {
+                OBD_ALLOC(fsdb->fsdb_ost_index_map, INDEX_MAP_SIZE);
+                OBD_ALLOC(fsdb->fsdb_mdt_index_map, INDEX_MAP_SIZE);
+                if (!fsdb->fsdb_ost_index_map || !fsdb->fsdb_mdt_index_map) {
+                        CERROR("No memory for index maps\n");
+                        GOTO(err, 0);
+                }
+
+                rc = name_create(&fsdb->fsdb_mdtlov, fsname, "-mdtlov");
+                if (rc)
+                        GOTO(err, rc);
+                rc = name_create(&fsdb->fsdb_mdtlmv, fsname, "-mdtlmv");
+                if (rc)
+                        GOTO(err, rc);
+                rc = name_create(&fsdb->fsdb_clilov, fsname, "-clilov");
+                if (rc)
+                        GOTO(err, rc);
+                rc = name_create(&fsdb->fsdb_clilmv, fsname, "-clilmv");
+                if (rc)
+                        GOTO(err, rc);
+
+                lproc_mgs_add_live(obd, fsdb);
         }
 
-        strncpy(fsdb->fsdb_name, fsname, sizeof(fsdb->fsdb_name));
-        fsdb->fsdb_name[sizeof(fsdb->fsdb_name) - 1] = 0;
-        rc = name_create(&fsdb->fsdb_mdtlov, fsname, "-mdtlov");
-        if (rc)
-                GOTO(err, rc);
-        rc = name_create(&fsdb->fsdb_mdtlmv, fsname, "-mdtlmv");
-        if (rc)
-                GOTO(err, rc);
-        rc = name_create(&fsdb->fsdb_clilov, fsname, "-clilov");
-        if (rc)
-                GOTO(err, rc);
-
-        rc = name_create(&fsdb->fsdb_clilmv, fsname, "-clilmv");
-        if (rc)
-                GOTO(err, rc);
-
-        fsdb->fsdb_srpc_fl_udesc = 1;
-        sema_init(&fsdb->fsdb_sem, 1);
         list_add(&fsdb->fsdb_list, &mgs->mgs_fs_db_list);
-        lproc_mgs_add_live(obd, fsdb);
 
         RETURN(fsdb);
 err:
@@ -372,8 +381,10 @@ static void mgs_free_fsdb(struct obd_device *obd, struct fs_db *fsdb)
         down(&fsdb->fsdb_sem);
         lproc_mgs_del_live(obd, fsdb);
         list_del(&fsdb->fsdb_list);
-        OBD_FREE(fsdb->fsdb_ost_index_map, INDEX_MAP_SIZE);
-        OBD_FREE(fsdb->fsdb_mdt_index_map, INDEX_MAP_SIZE);
+        if (fsdb->fsdb_ost_index_map)
+                OBD_FREE(fsdb->fsdb_ost_index_map, INDEX_MAP_SIZE);
+        if (fsdb->fsdb_mdt_index_map)
+                OBD_FREE(fsdb->fsdb_mdt_index_map, INDEX_MAP_SIZE);
         name_destroy(&fsdb->fsdb_clilov);
         name_destroy(&fsdb->fsdb_clilmv);
         name_destroy(&fsdb->fsdb_mdtlov);
@@ -404,8 +415,8 @@ int mgs_cleanup_fsdb_list(struct obd_device *obd)
         return 0;
 }
 
-static int mgs_find_or_make_fsdb(struct obd_device *obd, char *name,
-                               struct fs_db **dbh)
+int mgs_find_or_make_fsdb(struct obd_device *obd, char *name,
+                          struct fs_db **dbh)
 {
         struct mgs_obd *mgs = &obd->u.mgs;
         struct fs_db *fsdb;
@@ -425,12 +436,14 @@ static int mgs_find_or_make_fsdb(struct obd_device *obd, char *name,
         if (!fsdb)
                 return -ENOMEM;
 
-        /* populate the db from the client llog */
-        rc = mgs_get_fsdb_from_llog(obd, fsdb);
-        if (rc) {
-                CERROR("Can't get db from client log %d\n", rc);
-                mgs_free_fsdb(obd, fsdb);
-                return rc;
+        if (!fsdb->fsdb_fl_mgsself) {
+                /* populate the db from the client llog */
+                rc = mgs_get_fsdb_from_llog(obd, fsdb);
+                if (rc) {
+                        CERROR("Can't get db from client log %d\n", rc);
+                        mgs_free_fsdb(obd, fsdb);
+                        return rc;
+                }
         }
 
         /* populate srpc rules from params llog */
@@ -1923,10 +1936,10 @@ static int mgs_srpc_set_param_udesc_mem(struct fs_db *fsdb,
                 goto error_out;
 
         if (strcmp(ptr, "yes") == 0) {
-                fsdb->fsdb_srpc_fl_udesc = 1;
+                fsdb->fsdb_fl_udesc = 1;
                 CWARN("Enable user descriptor shipping from client to MDT\n");
         } else if (strcmp(ptr, "no") == 0) {
-                fsdb->fsdb_srpc_fl_udesc = 0;
+                fsdb->fsdb_fl_udesc = 0;
                 CWARN("Disable user descriptor shipping from client to MDT\n");
         } else {
                 *(ptr - 1) = '=';
@@ -1968,6 +1981,15 @@ static int mgs_srpc_set_param_mem(struct fs_db *fsdb,
         rc = sptlrpc_parse_rule(param, &rule);
         if (rc)
                 RETURN(rc);
+
+        /* mgs rules implies must be mgc->mgs */
+        if (fsdb->fsdb_fl_mgsself) {
+                if ((rule.sr_from != LUSTRE_SP_MGC &&
+                     rule.sr_from != LUSTRE_SP_ANY) ||
+                    (rule.sr_to != LUSTRE_SP_MGS &&
+                     rule.sr_to != LUSTRE_SP_ANY))
+                        RETURN(-EINVAL);
+        }
 
         /* preapre room for this coming rule. svcname format should be:
          * - fsname: general rule
@@ -2038,6 +2060,17 @@ static int mgs_srpc_set_param(struct obd_device *obd,
 
         /* previous steps guaranteed the syntax is correct */
         rc = mgs_srpc_set_param_disk(obd, fsdb, mti, copy);
+        if (rc)
+                goto out_free;
+
+        if (fsdb->fsdb_fl_mgsself) {
+                /*
+                 * for mgs rules, make them effective immediately.
+                 */
+                LASSERT(fsdb->fsdb_srpc_tgt == NULL);
+                sptlrpc_target_update_exp_flavor(obd, &fsdb->fsdb_srpc_gen);
+        }
+
 out_free:
         OBD_FREE(copy, copy_size);
         RETURN(rc);
@@ -2765,7 +2798,7 @@ int mgs_setparam(struct obd_device *obd, struct lustre_cfg *lcfg, char *fsname)
         rc = mgs_find_or_make_fsdb(obd, fsname, &fsdb);
         if (rc)
                 RETURN(rc);
-        if (fsdb->fsdb_flags & FSDB_LOG_EMPTY) {
+        if (!fsdb->fsdb_fl_mgsself && fsdb->fsdb_flags & FSDB_LOG_EMPTY) {
                 CERROR("No filesystem targets for %s.  cfg_device from lctl "
                        "is '%s'\n", fsname, devname);
                 mgs_free_fsdb(obd, fsdb);

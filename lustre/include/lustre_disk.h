@@ -169,6 +169,7 @@ struct lustre_mount_data {
         int        lmd_exclude_count;
         char      *lmd_dev;           /* device name */
         char      *lmd_profile;       /* client only */
+        char      *lmd_mgssec;        /* sptlrpc flavor to mgs */
         char      *lmd_opts;          /* lustre mount options (as opposed to 
                                          _device_ mount options) */
         __u32     *lmd_exclude;       /* array of OSTs to ignore */

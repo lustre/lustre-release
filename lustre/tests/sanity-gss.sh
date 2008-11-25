@@ -59,9 +59,7 @@ cnt_all2ost=0
 cnt_all2mdt=0
 cnt_all2all=0
 DBENCH_PID=0
-PROC_CLI="srpc.info"
-# Escape "." to use lctl
-PROC_CLI=${PROC_CLI//\./\*} 
+PROC_CLI="srpc_info"
 
 # set manually
 GSS=true
@@ -228,6 +226,14 @@ flvr_cnt_mdt2ost()
         cnt=$((cnt + tmpcnt))
     done
     echo $cnt;
+}
+
+flvr_cnt_mgc2mgs()
+{
+    local flavor=$1
+
+    output=`do_facet client lctl get_param -n mgc.*.$PROC_CLI 2>/dev/null`
+    count_flvr "$output" $flavor
 }
 
 do_check_flavor()
@@ -452,6 +458,7 @@ test_1() {
     chmod 0777 $DIR || error "chmod $DIR failed"
     # access w/o cred
     $RUNAS kdestroy
+    $RUNAS $LFS flushctx || error "can't flush ctx"
     $RUNAS touch $file && error "unexpected success"
 
     # access w/ cred
@@ -1056,6 +1063,70 @@ test_102() {
     stop_dbench
 }
 run_test 102 "survive from insanely fast flavor switch"
+
+test_150() {
+    local save_opts
+
+    # started from default flavors
+    restore_to_default_flavor
+
+    # at this time no rules has been set on mgs; mgc use null
+    # flavor connect to mgs.
+    count=`flvr_cnt_mgc2mgs null`
+    [ $count -eq 1 ] || error "$count mgc connection use null flavor"
+
+    # umount both clients
+    zconf_umount $HOSTNAME $MOUNT || return 1
+    zconf_umount $HOSTNAME $MOUNT2 || return 2
+
+    # mount client with default flavor - should succeed
+    zconf_mount $HOSTNAME $MOUNT || error "mount with default flavor should have succeeded"
+    zconf_umount $HOSTNAME $MOUNT || return 5
+
+    # mount client with conflict flavor - should fail
+    save_opts=$MOUNTOPT
+    MOUNTOPT="$MOUNTOPT,mgssec=krb5p"
+    zconf_mount $HOSTNAME $MOUNT && error "mount with conflict flavor should have failed"
+    MOUNTOPT=$save_opts
+
+    # mount client with same flavor - should succeed
+    save_opts=$MOUNTOPT
+    MOUNTOPT="$MOUNTOPT,mgssec=null"
+    zconf_mount $HOSTNAME $MOUNT || error "mount with same flavor should have succeeded"
+    zconf_umount $HOSTNAME $MOUNT || return 6
+    MOUNTOPT=$save_opts
+}
+run_test 150 "secure mgs connection: client flavor setting"
+
+test_151() {
+    local save_opts
+
+    # set mgs only accept krb5p
+    set_rule _mgs any any krb5p
+
+    # umount everything, modules still loaded
+    stopall
+
+    # mount mgs with default flavor, in current framework it means mgs+mdt1.
+    # the connection of mgc of mdt1 to mgs is expected fail.
+    DEVNAME=$(mdsdevname 1)
+    start mds1 $DEVNAME $MDS_MOUNT_OPTS && error "mount with default flavor should have failed"
+
+    # mount with unauthorized flavor should fail
+    save_opts=$MDS_MOUNT_OPTS
+    MDS_MOUNT_OPTS="$MDS_MOUNT_OPTS,mgssec=null"
+    start mds1 $DEVNAME $MDS_MOUNT_OPTS && error "mount with unauthorized flavor should have failed"
+    MDS_MOUNT_OPTS=$save_opts
+
+    # mount with designated flavor should succeed
+    save_opts=$MDS_MOUNT_OPTS
+    MDS_MOUNT_OPTS="$MDS_MOUNT_OPTS,mgssec=krb5p"
+    start mds1 $DEVNAME $MDS_MOUNT_OPTS || error "mount with designated flavor should have succeeded"
+    MDS_MOUNT_OPTS=$save_opts
+
+    stop mds1 -f
+}
+run_test 151 "secure mgs connection: server flavor control"
 
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre

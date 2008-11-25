@@ -316,17 +316,29 @@ DECLARE_MUTEX(llog_process_lock);
 /* Stop watching for updates on this log. */
 static int config_log_end(char *logname, struct config_llog_instance *cfg)
 {
-        struct config_llog_data *cld, *cld_sptlrpc;
+        struct config_llog_data *cld, *cld_sptlrpc = NULL;
         int rc = 0;
         ENTRY;
 
         cld = config_log_find(logname, cfg);
         if (IS_ERR(cld))
                 RETURN(PTR_ERR(cld));
-        /* drop the ref from the find */
-        config_log_put(cld);
 
         down(&llog_process_lock);
+        /*
+         * if cld_stopping is set, it means we didn't start the log thus
+         * not owning the start ref. this can happen after previous umount:
+         * the cld still hanging there waiting for lock cancel, and we
+         * remount again but failed in the middle and call log_end without
+         * calling start_log.
+         */
+        if (unlikely(cld->cld_stopping)) {
+                up(&llog_process_lock);
+                /* drop the ref from the find */
+                config_log_put(cld);
+                RETURN(rc);
+        }
+
         cld->cld_stopping = 1;
         up(&llog_process_lock);
 
@@ -338,8 +350,11 @@ static int config_log_end(char *logname, struct config_llog_instance *cfg)
         if (cld_sptlrpc)
                 config_log_put(cld_sptlrpc);
 
+        /* drop the ref from the find */
+        config_log_put(cld);
         /* drop the start ref */
         config_log_put(cld);
+
         CDEBUG(D_MGC, "end config log %s (%d)\n", logname ? logname : "client",
                rc);
         RETURN(rc);
@@ -671,6 +686,7 @@ static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         lprocfs_mgc_init_vars(&lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
+        sptlrpc_lprocfs_cliobd_attach(obd);
 
         spin_lock(&config_list_lock);
         atomic_inc(&mgc_count);
@@ -1002,6 +1018,49 @@ int mgc_set_info_async(struct obd_export *exp, obd_count keylen,
 
                 msp = (struct mgs_send_param *)val;
                 rc =  mgc_set_mgs_param(exp, msp);
+                RETURN(rc);
+        }
+        if (KEY_IS(KEY_MGSSEC)) {
+                struct client_obd     *cli = &exp->exp_obd->u.cli;
+                struct sptlrpc_flavor  flvr;
+
+                /*
+                 * empty string means using current flavor, if which haven't
+                 * been set yet, set it as null.
+                 *
+                 * if flavor has been set previously, check the asking flavor
+                 * must match the existing one.
+                 */
+                if (vallen == 0) {
+                        if (cli->cl_flvr_mgc.sf_rpc != SPTLRPC_FLVR_INVALID)
+                                RETURN(0);
+                        val = "null";
+                        vallen = 4;
+                }
+
+                rc = sptlrpc_parse_flavor(val, &flvr);
+                if (rc) {
+                        CERROR("invalid sptlrpc flavor %s to MGS\n",
+                               (char *) val);
+                        RETURN(rc);
+                }
+
+                /*
+                 * caller already hold a mutex
+                 */
+                if (cli->cl_flvr_mgc.sf_rpc == SPTLRPC_FLVR_INVALID) {
+                        cli->cl_flvr_mgc = flvr;
+                } else if (memcmp(&cli->cl_flvr_mgc, &flvr,
+                                  sizeof(flvr)) != 0) {
+                        char    str[20];
+
+                        sptlrpc_flavor2name(&cli->cl_flvr_mgc,
+                                            str, sizeof(str));
+                        LCONSOLE_ERROR("asking sptlrpc flavor %s to MGS but "
+                                       "currently %s is in use\n",
+                                       (char *) val, str);
+                        rc = -EPERM;
+                }
                 RETURN(rc);
         }
 
