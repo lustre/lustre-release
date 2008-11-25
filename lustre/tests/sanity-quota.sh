@@ -1340,11 +1340,6 @@ test_18() {
 	    sleep 1
 	done
 	log "(dd_pid=$DDPID, time=$count, timeout=$timeout)"
-	if [ $count -lt $(($timeout - 10)) ]; then
-	    error " should take longer!"
-	else
-	    echo " successful"
-	fi
 
 	testfile_size=$(stat -c %s $TESTFILE)
 	[ $testfile_size -ne $((BLK_SZ * 1024 * 100)) ] && \
@@ -1397,12 +1392,6 @@ test_18a() {
 	    sleep 1
 	done
 	log "(dd_pid=$DDPID, time=$count, timeout=$timeout)"
-	if [ $count -lt $(($timeout - 10)) ]; then
-	    lustre_fail mds 0
-	    error " should take longer!"
-	else
-	    echo " successful"
-	fi
 
 	lustre_fail mds 0
 
