@@ -1046,6 +1046,7 @@ check_config () {
     
     echo Checking config lustre mounted on $mntpt
     local mgshost=$(mount | grep " $mntpt " | awk -F@ '{print $1}')
+    mgshost=$(echo $mgshost | awk -F: '{print $1}')
     if [ "$mgshost" != "$mgs_HOST" ]; then
         FAIL_ON_ERROR=true \
             error "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST
