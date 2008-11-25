@@ -443,6 +443,12 @@ static int client_common_fill_super(struct super_block *sb,
                 GOTO(out_page_rm_cb, err);
         }
 
+        err = mdc_init_ea_size(sbi->ll_mdc_exp, sbi->ll_osc_exp);
+        if (err) {
+                CERROR("cannot set max EA and cookie sizes: rc = %d\n", err);
+                GOTO(out_lock_cn_cb, err);
+        }
+
         err = obd_prep_async_page(sbi->ll_osc_exp, NULL, NULL, NULL,
                                   0, NULL, NULL, NULL, 0, NULL);
         if (err < 0) {
