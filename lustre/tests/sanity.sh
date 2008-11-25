@@ -5645,7 +5645,7 @@ test_151() {
 	fi
 
 	$LCTL set_param -n obdfilter.*.read_cache_enable=1
-	$LCTL set_param obdfilter.*.writethrough_cache_enable=0
+	$LCTL set_param obdfilter.*.writethrough_cache_enable=1
         rm -f $DIR/$tfile
 }
 run_test 151 "test cache on oss and controls ==============================="
