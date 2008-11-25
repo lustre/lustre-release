@@ -1,6 +1,6 @@
-diff -pur linux-2.6.18-53.orig/drivers/md/raid5.c linux-2.6.18-53/drivers/md/raid5.c
---- linux-2.6.18-53.orig/drivers/md/raid5.c	2007-12-28 19:09:20.000000000 +0800
-+++ linux-2.6.18-53/drivers/md/raid5.c	2007-12-28 19:09:32.000000000 +0800
+diff -pur linux-2.6.18-53.1.21.orig/drivers/md/raid5.c linux-2.6.18-53.1.21/drivers/md/raid5.c
+--- linux-2.6.18-53.1.21.orig/drivers/md/raid5.c	2008-11-25 11:09:16.000000000 +0800
++++ linux-2.6.18-53.1.21/drivers/md/raid5.c	2008-11-25 11:09:48.000000000 +0800
 @@ -633,6 +633,7 @@ static int raid5_end_read_request(struct
  		clear_buffer_uptodate(bh);
  	}
@@ -307,9 +307,9 @@ diff -pur linux-2.6.18-53.orig/drivers/md/raid5.c linux-2.6.18-53/drivers/md/rai
  	seq_printf (seq, "\n\t\t%u delayed, %u bit delayed, %u active, queues: %u in, %u out\n",
  			atomic_read(&conf->delayed), atomic_read(&conf->bit_delayed),
  			atomic_read(&conf->active_stripes),
-diff -pur linux-2.6.18-53.orig/include/linux/backing-dev.h linux-2.6.18-53/include/linux/backing-dev.h
---- linux-2.6.18-53.orig/include/linux/backing-dev.h	2007-12-28 14:49:26.000000000 +0800
-+++ linux-2.6.18-53/include/linux/backing-dev.h	2007-12-28 19:09:32.000000000 +0800
+diff -pur linux-2.6.18-53.1.21.orig/include/linux/backing-dev.h linux-2.6.18-53.1.21/include/linux/backing-dev.h
+--- linux-2.6.18-53.1.21.orig/include/linux/backing-dev.h	2008-11-25 11:09:20.000000000 +0800
++++ linux-2.6.18-53.1.21/include/linux/backing-dev.h	2008-11-25 11:09:48.000000000 +0800
 @@ -48,6 +48,7 @@ struct backing_dev_info {
  #define BDI_CAP_READ_MAP	0x00000010	/* Can be mapped for reading */
  #define BDI_CAP_WRITE_MAP	0x00000020	/* Can be mapped for writing */
@@ -337,17 +337,17 @@ diff -pur linux-2.6.18-53.orig/include/linux/backing-dev.h linux-2.6.18-53/inclu
 +
  
  #endif		/* _LINUX_BACKING_DEV_H */
-diff -pur linux-2.6.18-53.orig/include/linux/page-flags.h linux-2.6.18-53/include/linux/page-flags.h
---- linux-2.6.18-53.orig/include/linux/page-flags.h	2007-12-28 14:49:26.000000000 +0800
-+++ linux-2.6.18-53/include/linux/page-flags.h	2007-12-28 19:09:32.000000000 +0800
+diff -pur linux-2.6.18-53.1.21.orig/include/linux/page-flags.h linux-2.6.18-53.1.21/include/linux/page-flags.h
+--- linux-2.6.18-53.1.21.orig/include/linux/page-flags.h	2008-11-25 11:09:20.000000000 +0800
++++ linux-2.6.18-53.1.21/include/linux/page-flags.h	2008-11-25 11:12:08.000000000 +0800
 @@ -86,6 +86,7 @@
  #define PG_reclaim		17	/* To be reclaimed asap */
  #define PG_nosave_free		18	/* Free, should not be written */
  #define PG_buddy		19	/* Page is free, on buddy lists */
-+#define PG_constant		20	/* To mark if the page is constant */
- #define PG_xpmem		27	/* Testing for xpmem. */
++#define PG_constant     20  /* To mark if the page is constant */
  
  /* PG_owner_priv_1 users should have descriptive aliases */
+ #define PG_checked              PG_owner_priv_1 /* Used by some filesystems */
 @@ -252,6 +253,14 @@
  
  struct page;	/* forward declaration */
@@ -363,9 +363,9 @@ diff -pur linux-2.6.18-53.orig/include/linux/page-flags.h linux-2.6.18-53/includ
  int test_clear_page_dirty(struct page *page);
  int test_clear_page_writeback(struct page *page);
  int test_set_page_writeback(struct page *page);
-diff -pur linux-2.6.18-53.orig/include/linux/raid/raid5.h linux-2.6.18-53/include/linux/raid/raid5.h
---- linux-2.6.18-53.orig/include/linux/raid/raid5.h	2007-12-28 18:55:24.000000000 +0800
-+++ linux-2.6.18-53/include/linux/raid/raid5.h	2007-12-28 19:09:32.000000000 +0800
+diff -pur linux-2.6.18-53.1.21.orig/include/linux/raid/raid5.h linux-2.6.18-53.1.21/include/linux/raid/raid5.h
+--- linux-2.6.18-53.1.21.orig/include/linux/raid/raid5.h	2008-11-25 11:09:20.000000000 +0800
++++ linux-2.6.18-53.1.21/include/linux/raid/raid5.h	2008-11-25 11:09:48.000000000 +0800
 @@ -156,8 +156,9 @@ struct stripe_head {
  #define	R5_Overlap	7	/* There is a pending overlapping request on this block */
  #define	R5_ReadError	8	/* seen a read error here recently */
@@ -377,9 +377,9 @@ diff -pur linux-2.6.18-53.orig/include/linux/raid/raid5.h linux-2.6.18-53/includ
  /*
   * Write method
   */
-diff -pur linux-2.6.18-53.orig/mm/filemap.c linux-2.6.18-53/mm/filemap.c
---- linux-2.6.18-53.orig/mm/filemap.c	2007-12-28 14:49:26.000000000 +0800
-+++ linux-2.6.18-53/mm/filemap.c	2007-12-28 19:09:32.000000000 +0800
+diff -pur linux-2.6.18-53.1.21.orig/mm/filemap.c linux-2.6.18-53.1.21/mm/filemap.c
+--- linux-2.6.18-53.1.21.orig/mm/filemap.c	2008-11-25 11:09:15.000000000 +0800
++++ linux-2.6.18-53.1.21/mm/filemap.c	2008-11-25 11:09:48.000000000 +0800
 @@ -30,6 +30,7 @@
  #include <linux/security.h>
  #include <linux/syscalls.h>
