@@ -5550,8 +5550,8 @@ test_141() {
         for ls in /proc/fs/lustre/ldlm/namespaces/MGC*/lru_size; do
                 echo "clear" > $ls
         done
-        cleanup || error "failed to cleanup"
-        setup || error "failed to setup"
+        FAIL_ON_ERROR=true cleanup
+        FAIL_ON_ERROR=true setup
 }
 run_test 141 "umount should not race with any mgc requeue thread"
 
