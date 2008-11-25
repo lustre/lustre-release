@@ -2010,6 +2010,8 @@ llu_fsswop_mount(const char *source,
                 GOTO(out_osc, err);
         }
 
+        mdc_init_ea_size(sbi->ll_mdc_exp, sbi->ll_osc_exp);
+
         err = mdc_getstatus(sbi->ll_mdc_exp, &rootfid);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
