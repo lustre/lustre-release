@@ -1,0 +1,13 @@
+Index: linux-2.6.18-92.1.10/drivers/md/raid5.c
+===================================================================
+--- linux-2.6.18-92.1.10.orig/drivers/md/raid5.c	2008-11-10 11:00:51.000000000 +0900
++++ linux-2.6.18-92.1.10/drivers/md/raid5.c	2008-11-10 11:02:38.000000000 +0900
+@@ -3251,6 +3251,8 @@
+ 		handle_stripe(sh, conf->spare_page, NULL);
+ 		release_stripe(sh);
+ 
++		cond_resched();
++
+ 		spin_lock_irq(&conf->device_lock);
+ 	}
+ 	PRINTK("%d stripes handled\n", handled);
