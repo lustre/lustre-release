@@ -1831,10 +1831,19 @@ cleanup:
                 struct iattr iattr;
                 int err;
 
+                /* update ctime of unlinked file, even if last link is
+                   removed because open-unlinked file can be statted */
+                iattr.ia_valid = ATTR_CTIME;
+                LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                err = fsfilt_setattr(obd, dchild, handle, &iattr, 0);
+                if (err)
+                        CERROR("error on unlinked inode time update: "
+                               "rc = %d\n", err);
+
+                /* update mtime and ctime of parent directory*/
                 iattr.ia_valid = ATTR_MTIME | ATTR_CTIME;
                 LTIME_S(iattr.ia_mtime) = rec->ur_time;
                 LTIME_S(iattr.ia_ctime) = rec->ur_time;
-
                 err = fsfilt_setattr(obd, dparent, handle, &iattr, 0);
                 if (err)
                         CERROR("error on parent setattr: rc = %d\n", err);
@@ -1995,6 +2004,27 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         UNLOCK_INODE_MUTEX(de_tgt_dir->d_inode);
         if (rc && rc != -EPERM && rc != -EACCES)
                 CERROR("vfs_link error %d\n", rc);
+        if (rc == 0) {
+                struct iattr iattr;
+                int err;
+
+                /* update ctime of old file */
+                iattr.ia_valid = ATTR_CTIME;
+                LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                err = fsfilt_setattr(obd, de_src, handle, &iattr, 0);
+                if (err)
+                        CERROR("error on old inode time update: "
+                               "rc = %d\n", err);
+
+                /* update mtime and ctime of target directory */
+                iattr.ia_valid = ATTR_MTIME | ATTR_CTIME;
+                LTIME_S(iattr.ia_mtime) = rec->ur_time;
+                LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                err = fsfilt_setattr(obd, de_tgt_dir, handle, &iattr, 0);
+                if (err)
+                        CERROR("error on target dir inode time update: "
+                               "rc = %d\n", err);
+        }
 cleanup:
         rc = mds_finish_transno(mds, de_tgt_dir ? de_tgt_dir->d_inode : NULL,
                                 handle, req, rc, 0, 0);
@@ -2370,6 +2400,58 @@ no_unlink:
         rc = ll_vfs_rename(de_srcdir->d_inode, de_old, mds->mds_vfsmnt, 
                            de_tgtdir->d_inode, de_new, mds->mds_vfsmnt);
         unlock_kernel();
+
+        if (rc == 0) {
+                struct iattr iattr;
+                int err;
+
+                /* update ctime of renamed file */
+                iattr.ia_valid = ATTR_CTIME;
+                LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                if (S_ISDIR(de_old->d_inode->i_mode) &&
+                    de_srcdir->d_inode != de_tgtdir->d_inode) {
+                        /* cross directory rename of a directory, ".."
+                           changed, update mtime also */
+                        iattr.ia_valid |= ATTR_MTIME;
+                        LTIME_S(iattr.ia_mtime) = rec->ur_time;
+                }
+                err = fsfilt_setattr(obd, de_old, handle, &iattr, 0);
+                if (err)
+                        CERROR("error on old inode time update: "
+                               "rc = %d\n", err);
+
+                if (de_new->d_inode) {
+                        /* target file exists, update its ctime as it
+                           gets unlinked */
+                        iattr.ia_valid = ATTR_CTIME;
+                        LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                        err = fsfilt_setattr(obd, de_new, handle, &iattr, 0);
+                        if (err)
+                                CERROR("error on target inode time update: "
+                                       "rc = %d\n", err);
+                }
+
+                /* update mtime and ctime of old directory */
+                iattr.ia_valid = ATTR_MTIME | ATTR_CTIME;
+                LTIME_S(iattr.ia_mtime) = rec->ur_time;
+                LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                err = fsfilt_setattr(obd, de_srcdir, handle, &iattr, 0); 
+                if (err)
+                        CERROR("error on old dir inode update: "
+                               "rc = %d\n", err);
+
+                if (de_srcdir->d_inode != de_tgtdir->d_inode) {
+                        /* cross directory rename, update
+                           mtime and ctime of new directory */
+                        iattr.ia_valid = ATTR_MTIME | ATTR_CTIME;
+                        LTIME_S(iattr.ia_mtime) = rec->ur_time;
+                        LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                        err = fsfilt_setattr(obd, de_tgtdir, handle, &iattr, 0);
+                        if (err)
+                                CERROR("error on new dir inode time update: "
+                                       "rc = %d\n", err);
+                }
+        }
 
         if (rc == 0 && new_inode != NULL && new_inode->i_nlink == 0) {
                 if (mds_orphan_open_count(new_inode) > 0)
