@@ -961,23 +961,22 @@ void llapi_lov_dump_user_lmm(struct find_param *param,
         case LOV_USER_MAGIC_V3: {
                 char pool_name[LOV_MAXPOOLNAME + 1];
                 struct lov_user_ost_data_v1 *objects;
+                struct lov_user_md_v3 *lmmv3 = (void *)&param->lmd->lmd_lmm;
 
-                strncpy(pool_name,
-                        ((struct lov_user_md_v3 *)(&param->lmd->lmd_lmm))->lmm_pool_name,
-                        LOV_MAXPOOLNAME);
+                strncpy(pool_name, lmmv3->lmm_pool_name, LOV_MAXPOOLNAME);
                 pool_name[LOV_MAXPOOLNAME] = '\0';
-                objects = ((struct lov_user_md_v3 *)(&param->lmd->lmd_lmm))->lmm_objects;
+                objects = lmmv3->lmm_objects;
                 lov_dump_user_lmm_v1v3(&param->lmd->lmd_lmm, pool_name,
-                                      objects, path, is_dir,
-                                      param->obdindex, param->quiet,
-                                      param->verbose,
-                                      (param->verbose || !param->obduuid));
+                                       objects, path, is_dir,
+                                       param->obdindex, param->quiet,
+                                       param->verbose,
+                                       (param->verbose || !param->obduuid));
                 break;
         }
         default:
                 llapi_printf(LLAPI_MSG_NORMAL, "unknown lmm_magic:  %#x "
                              "(expecting one of %#x %#x %#x)\n",
-                             *(__u32 *)&param->lmd->lmd_lmm,
+                             param->lmd->lmd_lmm.lmm_magic,
                              LOV_USER_MAGIC_V1, LOV_USER_MAGIC_JOIN,
                              LOV_USER_MAGIC_V3);
                 return;
@@ -1306,6 +1305,7 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
                         void *data, struct dirent64 *de)
 {
         struct find_param *param = (struct find_param *)data;
+        struct lov_user_md_v3 *lmmv3 = (void *)&param->lmd->lmd_lmm;
         int decision = 1; /* 1 is accepted; -1 is rejected. */
         lstat_t *st = &param->lmd->lmd_st;
         int lustre_fs = 1;
@@ -1410,13 +1410,12 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
 
         if (param->check_pool) {
                 /* empty requested pool is taken as no pool search => V1 */
-                if (((param->lmd->lmd_lmm.lmm_magic == LOV_USER_MAGIC_V1) &&
-                     (param->poolname[0] == '\0')) ||
-                    ((param->lmd->lmd_lmm.lmm_magic == LOV_USER_MAGIC_V3) &&
-                     (strncmp(((struct lov_user_md_v3 *)(&(param->lmd->lmd_lmm)))->lmm_pool_name,
-                              param->poolname, LOV_MAXPOOLNAME) == 0)) ||
-                    ((param->lmd->lmd_lmm.lmm_magic == LOV_USER_MAGIC_V3) &&
-                     (strcmp(param->poolname, "*") == 0))) {
+                if ((param->lmd->lmd_lmm.lmm_magic == LOV_USER_MAGIC_V1 &&
+                     param->poolname[0] == '\0') ||
+                    (param->lmd->lmd_lmm.lmm_magic == LOV_USER_MAGIC_V3 &&
+                     (strncmp(lmmv3->lmm_pool_name, param->poolname,
+                              LOV_MAXPOOLNAME) == 0 ||
+                      strcmp(param->poolname, "*") == 0))) {
                         if (param->exclude_pool)
                                 goto decided;
                 } else {
@@ -1487,13 +1486,10 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
                         int i, j;
                         struct lov_user_ost_data_v1 *lmm_objects;
 
-                        if (param->lmd->lmd_lmm.lmm_magic ==
-                             LOV_USER_MAGIC_V3) {
-                                lmm_objects =
-                                 ((struct lov_user_md_v3 *)(&(param->lmd->lmd_lmm)))->lmm_objects;
-                        } else {
+                        if (param->lmd->lmd_lmm.lmm_magic == LOV_USER_MAGIC_V3)
+                                lmm_objects = lmmv3->lmm_objects;
+                        else
                                 lmm_objects = param->lmd->lmd_lmm.lmm_objects;
-                        }
 
                         for (i = 0;
                              i < param->lmd->lmd_lmm.lmm_stripe_count; i++) {
