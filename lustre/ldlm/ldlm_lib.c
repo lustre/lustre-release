@@ -1240,10 +1240,13 @@ static void target_recovery_expired(unsigned long castmeharder)
                       cfs_time_current_sec()- obd->obd_recovery_start,
                       obd->obd_connected_clients);
 
-
-        /* VBR: stale exports should be marked as delayed */
-        class_handle_stale_exports(obd);
-
+        /** check is fs version-capable */
+        if (target_fs_version_capable(obd)) {
+                class_handle_stale_exports(obd);
+        } else {
+                CWARN("Versions are not supported by ldiskfs, VBR is OFF\n");
+                class_disconnect_stale_exports(obd, exp_flags_from_obd(obd));
+        }
         spin_lock_bh(&obd->obd_processing_task_lock);
         /* VBR: no clients are remained to replay, stop recovery */
         if (obd->obd_recovering && obd->obd_recoverable_clients == 0)
