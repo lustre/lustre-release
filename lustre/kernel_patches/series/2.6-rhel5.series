@@ -16,7 +16,7 @@ raid5-large-io-rhel5.patch
 raid5-stripe-by-stripe-handling-rhel5.patch
 raid5-merge-ios-rhel5.patch
 raid5-zerocopy-rhel5.patch
-md-rebuild-policy-rhel5.patch
+md-rebuild-policy.patch
 md-soft-lockups.patch
 jbd-journal-chksum-2.6.18-vanilla.patch
 quota-large-limits-rhel5.patch
