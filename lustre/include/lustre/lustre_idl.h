@@ -260,7 +260,7 @@ struct ptlrpc_body {
         __u64 pb_padding[4];
 };
 
-extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
+extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb, int msgsize);
 
 /* message body offset for lustre_msg_v2 */
 /* ptlrpc body offset in all request/reply messages */
