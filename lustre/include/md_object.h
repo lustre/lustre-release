@@ -809,8 +809,10 @@ static inline int mdo_rename_tgt(const struct lu_env *env,
 struct dt_device;
 /**
  * Structure to hold object information. This is used to create object
+ * \pre llod_dir exist
  */
 struct lu_local_obj_desc {
+        const char                      *llod_dir;
         const char                      *llod_name;
         __u32                            llod_oid;
         int                              llod_is_index;
@@ -846,7 +848,8 @@ struct md_object *llo_store_create(const struct lu_env *env,
                                    const char *objname,
                                    const struct lu_fid *fid);
 
-int llo_local_obj_register(struct lu_local_obj_desc *);
+void llo_local_obj_register(struct lu_local_obj_desc *);
+void llo_local_obj_unregister(struct lu_local_obj_desc *);
 
 int llo_local_objects_setup(const struct lu_env *env,
                              struct md_device * md,

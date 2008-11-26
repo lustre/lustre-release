@@ -586,6 +586,9 @@ static int __init fid_mod_init(void)
 
 static void __exit fid_mod_exit(void)
 {
+        llo_local_obj_unregister(&llod_seq_srv);
+        llo_local_obj_unregister(&llod_seq_ctl);
+
         lu_context_key_degister(&seq_thread_key);
         if (seq_type_proc_dir != NULL && !IS_ERR(seq_type_proc_dir)) {
                 lprocfs_remove(&seq_type_proc_dir);

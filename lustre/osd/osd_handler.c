@@ -3784,6 +3784,7 @@ static int __init osd_mod_init(void)
 
 static void __exit osd_mod_exit(void)
 {
+        llo_local_obj_unregister(&llod_osd_rem_obj_dir);
         class_unregister_type(LUSTRE_OSD_NAME);
 }
 

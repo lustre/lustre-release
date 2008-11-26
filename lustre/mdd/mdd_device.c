@@ -510,6 +510,10 @@ static int __init mdd_mod_init(void)
 
 static void __exit mdd_mod_exit(void)
 {
+        llo_local_obj_unregister(&llod_capa_key);
+        llo_local_obj_unregister(&llod_mdd_orphan);
+        llo_local_obj_unregister(&llod_mdd_root);
+
         class_unregister_type(LUSTRE_MDD_NAME);
 }
 

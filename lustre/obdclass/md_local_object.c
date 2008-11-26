@@ -135,7 +135,7 @@ static int llo_lookup(const struct lu_env  *env,
 
         spec->sp_feat = NULL;
         spec->sp_cr_flags = 0;
-        spec->sp_cr_lookup = 1;
+        spec->sp_cr_lookup = 0;
         spec->sp_cr_mode = 0;
         spec->sp_ck_split = 0;
 
@@ -148,6 +148,10 @@ static int llo_lookup(const struct lu_env  *env,
 /**
  * Function to look up path component, this is passed to parsing
  * function. \see llo_store_resolve
+ *
+ * \retval      rc returns error code for lookup or locate operation
+ *
+ * pointer to object is returned in data (lfh->lfh_pobj)
  */
 static int llo_find_entry(const struct lu_env  *env,
                           const char *name, void *data)
@@ -205,7 +209,7 @@ struct md_object *llo_store_resolve(const struct lu_env *env,
         struct llo_thread_info *info = llo_env_info(env);
         struct llo_find_hint *lfh = &info->lti_lfh;
         char *local = info->lti_buf;
-        struct md_object        *obj = lfh->lfh_pobj;
+        struct md_object        *obj;
         int result;
 
         strncpy(local, path, DT_MAX_PATH);
@@ -224,6 +228,8 @@ struct md_object *llo_store_resolve(const struct lu_env *env,
                         result = dt_path_parser(env, local, llo_find_entry, lfh);
                         if (result != 0)
                                 obj = ERR_PTR(result);
+                        else
+                                obj = lfh->lfh_pobj;
                 }
         } else {
                 obj = ERR_PTR(result);
@@ -367,18 +373,26 @@ EXPORT_SYMBOL(llo_store_create);
 
 /**
  * Register object for 'create on first mount' facility.
+ * objects are created in order of registration.
  */
 
-int llo_local_obj_register(struct lu_local_obj_desc *llod)
+void llo_local_obj_register(struct lu_local_obj_desc *llod)
 {
         mutex_lock(&llo_lock);
-        list_add(&llod->llod_linkage, &llo_lobj_list);
+        list_add_tail(&llod->llod_linkage, &llo_lobj_list);
         mutex_unlock(&llo_lock);
-
-        return 0;
 }
 
 EXPORT_SYMBOL(llo_local_obj_register);
+
+void llo_local_obj_unregister(struct lu_local_obj_desc *llod)
+{
+        mutex_lock(&llo_lock);
+        list_del(&llod->llod_linkage);
+        mutex_unlock(&llo_lock);
+}
+
+EXPORT_SYMBOL(llo_local_obj_unregister);
 
 /**
  * Created registed objects.
@@ -392,24 +406,26 @@ int llo_local_objects_setup(const struct lu_env *env,
         struct lu_fid *fid;
         struct lu_local_obj_desc *scan;
         struct md_object *mdo;
+        const char *dir;
         int rc = 0;
 
         fid = &info->lti_cfid;
-
         mutex_lock(&llo_lock);
 
         list_for_each_entry(scan, &llo_lobj_list, llod_linkage) {
-
                 lu_local_obj_fid(fid, scan->llod_oid);
+                dir = "";
+                if (scan->llod_dir)
+                        dir = scan->llod_dir;
 
                 if (scan->llod_is_index)
                         mdo = llo_store_create_index(env, md, dt ,
-                                                     "", scan->llod_name,
+                                                     dir, scan->llod_name,
                                                      fid,
                                                      scan->llod_feat);
                 else
                         mdo = llo_store_create(env, md, dt,
-                                               "", scan->llod_name,
+                                               dir, scan->llod_name,
                                                fid);
                 if (IS_ERR(mdo) && PTR_ERR(mdo) != -EEXIST) {
                         rc = PTR_ERR(mdo);
@@ -444,4 +460,5 @@ int llo_global_init(void)
 void llo_global_fini(void)
 {
         lu_context_key_degister(&llod_key);
+        LASSERT(list_empty(&llo_lobj_list));
 }

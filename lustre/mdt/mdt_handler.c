@@ -5353,6 +5353,7 @@ static int __init mdt_mod_init(void)
 
 static void __exit mdt_mod_exit(void)
 {
+        llo_local_obj_unregister(&mdt_last_recv);
         class_unregister_type(LUSTRE_MDT_NAME);
 }
 

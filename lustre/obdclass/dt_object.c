@@ -313,7 +313,7 @@ static struct dt_object *dt_store_resolve(const struct lu_env *env,
         struct dt_thread_info *info = lu_context_key_get(&env->le_ctx,
                                                          &dt_key);
         struct dt_find_hint *dfh = &info->dti_dfh;
-        struct dt_object     *obj = dfh->dfh_o;
+        struct dt_object     *obj;
         char *local = info->dti_buf;
         int result;
 
@@ -331,6 +331,8 @@ static struct dt_object *dt_store_resolve(const struct lu_env *env,
                         result = dt_path_parser(env, local, dt_find_entry, dfh);
                         if (result != 0)
                                 obj = ERR_PTR(result);
+                        else
+                                obj = dfh->dfh_o;
                 }
         } else {
                 obj = ERR_PTR(result);

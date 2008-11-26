@@ -101,6 +101,7 @@ static int __init fld_mod_init(void)
 
 static void __exit fld_mod_exit(void)
 {
+        llo_local_obj_unregister(&llod_fld_index);
         lu_context_key_degister(&fld_thread_key);
         if (fld_type_proc_dir != NULL && !IS_ERR(fld_type_proc_dir)) {
                 lprocfs_remove(&fld_type_proc_dir);

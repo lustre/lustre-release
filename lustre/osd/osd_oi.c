@@ -123,7 +123,7 @@ static int osd_oi_index_create(struct osd_thread_info *info,
                 oi_feat.dif_keysize_max = oi_descr[i].fid_size,
 
                 mdo = llo_store_create_index(env, mdev, dev,
-                                             "/", name,
+                                             "", name,
                                              oi_fid, &oi_feat);
 
                 if (IS_ERR(mdo))
