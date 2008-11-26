@@ -1051,13 +1051,6 @@ qctxt_wait_pending_dqacq(struct lustre_quota_ctxt *qctxt, unsigned int id,
                 l_wait_event(qunit->lq_waitq, got_qunit(qunit), &lwi);
                 CDEBUG(D_QUOTA, "qunit(%p) finishes waiting. (rc:%d)\n",
                        qunit, qunit->lq_rc);
-                qunit_put(qunit);
-                do_gettimeofday(&work_end);
-                timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
-                lprocfs_counter_add(qctxt->lqc_stats,
-                                    isblk ? LQUOTA_WAIT_PENDING_BLK_QUOTA :
-                                            LQUOTA_WAIT_PENDING_INO_QUOTA,
-                                    timediff);
                 /* keep same as schedule_dqacq() b=17030 */
                 spin_lock(&qunit->lq_lock);
                 if (qunit->lq_rc == 0)
@@ -1065,6 +1058,13 @@ qctxt_wait_pending_dqacq(struct lustre_quota_ctxt *qctxt, unsigned int id,
                 else
                         rc = qunit->lq_rc;
                 spin_unlock(&qunit->lq_lock);
+                qunit_put(qunit);
+                do_gettimeofday(&work_end);
+                timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
+                lprocfs_counter_add(qctxt->lqc_stats,
+                                    isblk ? LQUOTA_WAIT_PENDING_BLK_QUOTA :
+                                            LQUOTA_WAIT_PENDING_INO_QUOTA,
+                                    timediff);
         } else {
                 do_gettimeofday(&work_end);
                 timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
