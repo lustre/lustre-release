@@ -50,9 +50,7 @@
 #include <linux/version.h>
 #include <linux/sched.h>
 #include <lustre_quota.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <linux/mount.h>
-#endif
 #include <lustre_mds.h>
 #include <obd_class.h>
 #include <obd_support.h>

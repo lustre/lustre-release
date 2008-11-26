@@ -797,9 +797,8 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_SET_READONLY: {
                 void *handle;
                 struct inode *inode = obd->u.obt.obt_sb->s_root->d_inode;
-                BDEVNAME_DECLARE_STORAGE(tmp);
                 LCONSOLE_WARN("*** setting obd %s device '%s' read-only ***\n",
-                       obd->obd_name, ll_bdevname(obd->u.obt.obt_sb, tmp));
+                       obd->obd_name, obd->u.obt.obt_sb->s_id);
 
                 handle = fsfilt_start(obd, inode, FSFILT_OP_MKNOD, NULL);
                 if (!IS_ERR(handle))

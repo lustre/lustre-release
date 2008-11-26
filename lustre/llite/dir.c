@@ -44,11 +44,7 @@
 #include <linux/version.h>
 #include <linux/smp_lock.h>
 #include <asm/uaccess.h>
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-# include <linux/locks.h>   // for wait_on_buffer
-#else
-# include <linux/buffer_head.h>   // for wait_on_buffer
-#endif
+#include <linux/buffer_head.h>   // for wait_on_buffer
 
 #define DEBUG_SUBSYSTEM S_LLITE
 

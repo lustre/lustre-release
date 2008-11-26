@@ -358,7 +358,6 @@ static void brw_stats_show(struct seq_file *seq, struct brw_stats *brw_stats)
                           &brw_stats->hist[BRW_R_DIO_FRAGS],
                           &brw_stats->hist[BRW_W_DIO_FRAGS], 0);
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         display_brw_stats(seq, "disk I/Os in flight", "ios",
                           &brw_stats->hist[BRW_R_RPC_HIST],
                           &brw_stats->hist[BRW_W_RPC_HIST], 0);
@@ -374,7 +373,6 @@ static void brw_stats_show(struct seq_file *seq, struct brw_stats *brw_stats)
         display_brw_stats(seq, "disk I/O size", "ios",
                           &brw_stats->hist[BRW_R_DISK_IOSIZE],
                           &brw_stats->hist[BRW_W_DISK_IOSIZE], 1);
-#endif
 }
 
 #undef pct

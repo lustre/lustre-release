@@ -50,12 +50,8 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/version.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-# include <linux/buffer_head.h>
-# include <linux/workqueue.h>
-#else
-# include <linux/locks.h>
-#endif
+#include <linux/buffer_head.h>
+#include <linux/workqueue.h>
 
 #include <obd_class.h>
 #include <obd_lov.h>

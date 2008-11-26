@@ -41,9 +41,6 @@
 #include <linux/mm.h>
 #include <linux/sysctl.h>
 #include <linux/version.h>
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-#include <linux/swapctl.h>
-#endif
 #include <linux/proc_fs.h>
 #include <linux/slab.h>
 #include <linux/stat.h>

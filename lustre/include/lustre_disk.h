@@ -260,14 +260,8 @@ struct lustre_sb_info {
 #define LSI_UMOUNT_FORCE                 0x00000010
 #define LSI_UMOUNT_FAILOVER              0x00000020
 
-#if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-# define    s2lsi(sb)        ((struct lustre_sb_info *)((sb)->s_fs_info))
-# define    s2lsi_nocast(sb) ((sb)->s_fs_info)
-#else  /* 2.4 here */
-# define    s2lsi(sb)        ((struct lustre_sb_info *)((sb)->u.generic_sbp))
-# define    s2lsi_nocast(sb) ((sb)->u.generic_sbp)
-#endif
-
+#define    s2lsi(sb)        ((struct lustre_sb_info *)((sb)->s_fs_info))
+#define    s2lsi_nocast(sb) ((sb)->s_fs_info)
 #define     get_profile_name(sb)   (s2lsi(sb)->lsi_lmd->lmd_profile)
 
 #endif /* __KERNEL__ */

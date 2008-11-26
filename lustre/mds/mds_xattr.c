@@ -145,10 +145,8 @@ static int mds_getxattr_internal(struct obd_device *obd,
                 DEBUG_REQ(D_INODE, req, "getxattr %s", xattr_name);
 
                 if (inode->i_op && inode->i_op->getxattr) {
-                        lock_24kernel();
                         rc = inode->i_op->getxattr(dentry, xattr_name,
                                                    buf, buflen);
-                        unlock_24kernel();
                 }
 
                 if (rc < 0 && rc != -ENODATA && rc != -EOPNOTSUPP &&
@@ -157,11 +155,8 @@ static int mds_getxattr_internal(struct obd_device *obd,
         } else if (reqbody->valid & OBD_MD_FLXATTRLS) {
                 DEBUG_REQ(D_INODE, req, "listxattr");
 
-                if (inode->i_op && inode->i_op->listxattr) {
-                        lock_24kernel();
+                if (inode->i_op && inode->i_op->listxattr)
                         rc = inode->i_op->listxattr(dentry, buf, buflen);
-                        unlock_24kernel();
-                }
                 if (rc < 0)
                         CDEBUG(D_OTHER, "listxattr failed: %d\n", rc);
         } else
@@ -302,18 +297,14 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
                                                        REQ_REC_OFF+2, xattrlen);
 
                         LOCK_INODE_MUTEX(inode);
-                        lock_24kernel();
                         rc = inode->i_op->setxattr(de, xattr_name, xattr,
                                                    xattrlen, body->flags);
-                        unlock_24kernel();
                         UNLOCK_INODE_MUTEX(inode);
                 }
         } else if (body->valid & OBD_MD_FLXATTRRM) {
                 if (inode->i_op && inode->i_op->removexattr) {
                         LOCK_INODE_MUTEX(inode);
-                        lock_24kernel();
                         rc = inode->i_op->removexattr(de, xattr_name);
-                        unlock_24kernel();
                         UNLOCK_INODE_MUTEX(inode);
                 }
         } else {

@@ -616,11 +616,7 @@ struct llite_file_opcode {
         { LPROC_LL_TRUNC,          LPROCFS_TYPE_REGS, "truncate" },
         { LPROC_LL_LOCKLESS_TRUNC, LPROCFS_TYPE_REGS, "lockless_truncate" },
         { LPROC_LL_FLOCK,          LPROCFS_TYPE_REGS, "flock" },
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         { LPROC_LL_GETATTR,        LPROCFS_TYPE_REGS, "getattr" },
-#else
-        { LPROC_LL_REVALIDATE,     LPROCFS_TYPE_REGS, "getattr" },
-#endif
         /* special inode operation */
         { LPROC_LL_STAFS,          LPROCFS_TYPE_REGS, "statfs" },
         { LPROC_LL_ALLOC_INODE,    LPROCFS_TYPE_REGS, "alloc_inode" },
