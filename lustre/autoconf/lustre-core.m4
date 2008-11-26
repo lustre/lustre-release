@@ -759,8 +759,6 @@ AC_DEFUN([LC_CONFIG_GSS_KEYRING],
  fi
 ])
 
-m4_pattern_allow(AC_KERBEROS_V5)
-
 #
 # LC_CONFIG_GSS (default disabled)
 #
