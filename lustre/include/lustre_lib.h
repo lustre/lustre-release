@@ -75,6 +75,7 @@ void target_trans_table_init(struct obd_device *obd);
 __u32 target_trans_table_last_time(struct obd_export *exp);
 void target_trans_table_recalc(struct obd_device *obd, __u32 new_age);
 void target_trans_table_update(struct obd_export *exp, __u64 transno);
+int target_fs_version_capable(struct obd_device *obd);
 int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler);
 int target_handle_disconnect(struct ptlrpc_request *req);
 void target_destroy_export(struct obd_export *exp);
