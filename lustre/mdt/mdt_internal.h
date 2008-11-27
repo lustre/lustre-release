@@ -175,6 +175,14 @@ struct mdt_device {
         struct lustre_capa_key     mdt_capa_keys[2];
         unsigned int               mdt_capa_conf:1;
 
+        /* root squash */
+        uid_t                      mdt_squash_uid;
+        gid_t                      mdt_squash_gid;
+        struct list_head           mdt_nosquash_nids;
+        char                      *mdt_nosquash_str;
+        int                        mdt_nosquash_strlen;
+        struct rw_semaphore        mdt_squash_sem;
+
         cfs_proc_dir_entry_t      *mdt_proc_entry;
         struct lprocfs_stats      *mdt_stats;
         int                        mdt_sec_level;

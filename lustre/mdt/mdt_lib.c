@@ -53,6 +53,7 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include "mdt_internal.h"
+#include <lnet/lib-lnet.h>
 
 
 typedef enum ucred_init_type {
@@ -81,11 +82,48 @@ void mdt_exit_ucred(struct mdt_thread_info *info)
         }
 }
 
-/* XXX: root_squash will be redesigned in Lustre 1.7.
- * Do not root_squash for inter-MDS operations */
-static int mdt_root_squash(struct mdt_thread_info *info)
+static int match_nosquash_list(struct rw_semaphore *sem,
+                               struct list_head *nidlist,
+                               lnet_nid_t peernid)
 {
-        return 0;
+        int rc;
+        ENTRY;
+        down_read(sem);
+        rc = cfs_match_nid(peernid, nidlist);
+        up_read(sem);
+        RETURN(rc);
+}
+
+/* root_squash for inter-MDS operations */
+static int mdt_root_squash(struct mdt_thread_info *info, lnet_nid_t peernid)
+{
+        struct md_ucred *ucred = mdt_ucred(info);
+        ENTRY;
+
+        if (!info->mti_mdt->mdt_squash_uid || ucred->mu_fsuid)
+                RETURN(0);
+
+        if (match_nosquash_list(&info->mti_mdt->mdt_squash_sem,
+                                &info->mti_mdt->mdt_nosquash_nids,
+                                peernid)) {
+                CDEBUG(D_OTHER, "%s is in nosquash_nids list\n",
+                       libcfs_nid2str(peernid));
+                RETURN(0);
+        }
+
+        CDEBUG(D_OTHER, "squash req from %s, (%d:%d/%x)=>(%d:%d/%x)\n",
+               libcfs_nid2str(peernid),
+               ucred->mu_fsuid, ucred->mu_fsgid, ucred->mu_cap,
+               info->mti_mdt->mdt_squash_uid, info->mti_mdt->mdt_squash_gid,
+               0);
+
+        ucred->mu_fsuid = info->mti_mdt->mdt_squash_uid;
+        ucred->mu_fsgid = info->mti_mdt->mdt_squash_gid;
+        ucred->mu_cap = 0;
+        ucred->mu_suppgids[0] = -1;
+        ucred->mu_suppgids[1] = -1;
+
+        RETURN(0);
 }
 
 static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
@@ -237,8 +275,8 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
         ucred->mu_fsuid = pud->pud_fsuid;
         ucred->mu_fsgid = pud->pud_fsgid;
 
-        /* XXX: need to process root_squash here. */
-        mdt_root_squash(info);
+        /* process root_squash here. */
+        mdt_root_squash(info, peernid);
 
         /* remove fs privilege for non-root user. */
         if (ucred->mu_fsuid)
@@ -403,8 +441,8 @@ static int old_init_ucred(struct mdt_thread_info *info,
         }
         uc->mu_identity = identity;
 
-        /* XXX: need to process root_squash here. */
-        mdt_root_squash(info);
+        /* process root_squash here. */
+        mdt_root_squash(info, mdt_info_req(info)->rq_peer.nid);
 
         /* remove fs privilege for non-root user. */
         if (uc->mu_fsuid)
@@ -443,8 +481,8 @@ static int old_init_ucred_reint(struct mdt_thread_info *info)
         }
         uc->mu_identity = identity;
 
-        /* XXX: need to process root_squash here. */
-        mdt_root_squash(info);
+        /* process root_squash here. */
+        mdt_root_squash(info, mdt_info_req(info)->rq_peer.nid);
 
         /* remove fs privilege for non-root user. */
         if (uc->mu_fsuid)

@@ -1831,6 +1831,17 @@ Details    : Mounting a filesystem with extents feature will fail on big-endian
              systems since ext3-based ldiskfs is not supported on big-endian
              systems. This can be over-riden with "bigendian_extents" mount option.
 
+Severity   : enhancement
+Bugzilla   : 12749
+Description: The root squash functionality
+Details    : A security feature, which is to prevent users from being able
+             to mount lustre on their desktop, run as root, and delete
+             all of the files in the filesystem. The goal is accomplished by
+             remapping user id (UID) and group id (GID) of the root user to
+             a UID and GID specified by the system administartor via Lustre
+             configuration management server (MGS). The functionality also
+             allows to specify sets of clients for which the remapping does
+             not apply.
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

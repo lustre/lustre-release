@@ -2428,9 +2428,50 @@ static int mgs_write_log_param(struct obd_device *obd, struct fs_db *fsdb,
                 GOTO(end, rc);
         }
 
-        /* All mdt., ost. params in proc */
-        if ((class_match_param(ptr, PARAM_MDT, NULL) == 0) ||
-            (class_match_param(ptr, PARAM_MDD, NULL) == 0) ||
+        /* All mdt. params in proc */
+        if (class_match_param(ptr, PARAM_MDT, NULL) == 0) {
+                char mdt_index[16];
+                int i;
+                __u32 idx;
+
+                CDEBUG(D_MGS, "%.3s param %s\n", ptr, ptr + 4);
+                if (strncmp(mti->mti_svname, mti->mti_fsname,
+                            MTI_NAME_MAXLEN) == 0)
+                        /* device is unspecified completely? */
+                        rc = LDD_F_SV_TYPE_MDT | LDD_F_SV_ALL;
+                else
+                        rc = server_name2index(mti->mti_svname, &idx, NULL);
+                if (rc < 0)
+                        goto active_err;
+                if ((rc & LDD_F_SV_TYPE_MDT) == 0)
+                        goto active_err;
+                if (rc & LDD_F_SV_ALL) {
+                        for (i = 0; i < INDEX_MAP_SIZE * 8; i++) {
+                                if (!test_bit(i,
+                                              fsdb->fsdb_mdt_index_map))
+                                        continue;
+                                sprintf(mdt_index,"-MDT%04x", i);
+                                name_create(&logname, mti->mti_fsname,
+                                            mdt_index);
+                                rc = mgs_wlp_lcfg(obd, fsdb, mti,
+                                                  logname, &bufs,
+                                                  logname, ptr);
+                                name_destroy(&logname);
+                                if (rc)
+                                        goto active_err;
+                        }
+                } else {
+                        rc = mgs_wlp_lcfg(obd, fsdb, mti,
+                                          mti->mti_svname, &bufs,
+                                          mti->mti_svname, ptr);
+                        if (rc)
+                                goto active_err;
+                }
+                GOTO(end, rc);
+        }
+
+        /* All mdd., ost. params in proc */
+        if ((class_match_param(ptr, PARAM_MDD, NULL) == 0) ||
             (class_match_param(ptr, PARAM_OST, NULL) == 0)) {
                 CDEBUG(D_MGS, "%.3s param %s\n", ptr, ptr + 4);
                 if (mgs_log_is_empty(obd, mti->mti_svname))

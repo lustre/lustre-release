@@ -4194,6 +4194,13 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
                 d->ld_obd->obd_namespace = m->mdt_namespace = NULL;
         }
 
+        cfs_free_nidlist(&m->mdt_nosquash_nids);
+        if (m->mdt_nosquash_str) {
+                OBD_FREE(m->mdt_nosquash_str, m->mdt_nosquash_strlen);
+                m->mdt_nosquash_str = NULL;
+                m->mdt_nosquash_strlen = 0;
+        }
+
         mdt_seq_fini(env, m);
         mdt_seq_fini_cli(m);
         mdt_fld_fini(env, m);
@@ -4368,6 +4375,12 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         m->mdt_capa_timeout = CAPA_TIMEOUT;
         m->mdt_capa_alg = CAPA_HMAC_ALG_SHA1;
         m->mdt_ck_timeout = CAPA_KEY_TIMEOUT;
+        m->mdt_squash_uid = 0;
+        m->mdt_squash_gid = 0;
+        CFS_INIT_LIST_HEAD(&m->mdt_nosquash_nids);
+        m->mdt_nosquash_str = NULL;
+        m->mdt_nosquash_strlen = 0;
+        init_rwsem(&m->mdt_squash_sem);
 
         spin_lock_init(&m->mdt_client_bitmap_lock);
 

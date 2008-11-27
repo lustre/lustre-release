@@ -63,6 +63,7 @@
 #define LDD_F_SV_TYPE_MDT   0x0001
 #define LDD_F_SV_TYPE_OST   0x0002
 #define LDD_F_SV_TYPE_MGS   0x0004
+#define LDD_F_SV_ALL        0x0008
 /** need an index assignment */
 #define LDD_F_NEED_INDEX    0x0010
 /** never registered */
@@ -138,9 +139,10 @@ static inline int server_make_name(__u32 flags, __u16 index, char *fs,
                                    char *name)
 {
         if (flags & (LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_OST)) {
-                sprintf(name, "%.8s-%s%04x", fs,
-                        (flags & LDD_F_SV_TYPE_MDT) ? "MDT" : "OST",
-                        index);
+                if (!(flags & LDD_F_SV_ALL))
+                        sprintf(name, "%.8s-%s%04x", fs,
+                                (flags & LDD_F_SV_TYPE_MDT) ? "MDT" : "OST",
+                                index);
         } else if (flags & LDD_F_SV_TYPE_MGS) {
                 sprintf(name, "MGS");
         } else {
