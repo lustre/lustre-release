@@ -2757,7 +2757,9 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
         const struct lu_fid_pack *pack  = (const struct lu_fid_pack *)rec;
         const char               *name  = (const char *)key;
         struct osd_object        *child;
-
+#ifdef HAVE_QUOTA_SUPPORT
+        cfs_cap_t              save = current->cap_effective;
+#endif
         int rc;
 
         ENTRY;
@@ -2774,7 +2776,17 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
                 RETURN(rc);
         child = osd_object_find(env, dt, fid);
         if (!IS_ERR(child)) {
+#ifdef HAVE_QUOTA_SUPPORT
+                if (ignore_quota)
+                        current->cap_effective |= CFS_CAP_SYS_RESOURCE_MASK;
+                else
+                        current->cap_effective &= ~CFS_CAP_SYS_RESOURCE_MASK;
+#endif
                 rc = osd_ea_add_rec(env, obj, child, name, th);
+
+#ifdef HAVE_QUOTA_SUPPORT
+                current->cap_effective = save;
+#endif
                 osd_object_put(env, child);
         } else {
                 rc = PTR_ERR(child);
