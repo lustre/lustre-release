@@ -76,6 +76,72 @@ int class_find_param(char *buf, char *key, char **valp)
         return 0;
 }
 
+/**
+ * Finds a parameter in \a params and copies it to \a copy.
+ *
+ * Leading spaces are skipped. Next space or end of string is the
+ * parameter terminator with the exception that spaces inside single or double
+ * quotes get included into a parameter. The parameter is copied into \a copy
+ * which has to be allocated big enough by a caller, quotes are stripped in
+ * the copy and the copy is terminated by 0.
+ *
+ * On return \a params is set to next parameter or to NULL if last
+ * parameter is returned.
+ *
+ * \retval 0 if parameter is returned in \a copy
+ * \retval 1 otherwise
+ * \retval -EINVAL if unbalanced quota is found
+ */
+int class_get_next_param(char **params, char *copy)
+{
+        char *q1, *q2, *str;
+        int len;
+
+        str = *params;
+        while (*str == ' ')
+                str++;
+
+        if (*str == '\0') {
+                *params = NULL;
+                return 1;
+        }
+
+        while (1) {
+                q1 = strpbrk(str, " '\"");
+                if (q1 == NULL) {
+                        len = strlen(str);
+                        memcpy(copy, str, len);
+                        copy[len] = '\0';
+                        *params = NULL;
+                        return 0;
+                }
+                len = q1 - str;
+                if (*q1 == ' ') {
+                        memcpy(copy, str, len);
+                        copy[len] = '\0';
+                        *params = str + len;
+                        return 0;
+                }
+
+                memcpy(copy, str, len);
+                copy += len;
+
+                /* search for the matching closing quote */
+                str = q1 + 1;
+                q2 = strchr(str, *q1);
+                if (q2 == NULL) {
+                        CERROR("Unbalanced quota in parameters: \"%s\"\n",
+                               *params);
+                        return -EINVAL;
+                }
+                len = q2 - str;
+                memcpy(copy, str, len);
+                copy += len;
+                str = q2 + 1;
+        }
+        return 1;
+}
+
 /* returns 0 if this is the first key in the buffer, else 1.
    valp points to first char after key. */
 int class_match_param(char *buf, char *key, char **valp)
@@ -129,6 +195,7 @@ int class_parse_nid(char *buf, lnet_nid_t *nid, char **endh)
 }
 
 EXPORT_SYMBOL(class_find_param);
+EXPORT_SYMBOL(class_get_next_param);
 EXPORT_SYMBOL(class_match_param);
 EXPORT_SYMBOL(class_parse_nid);
 

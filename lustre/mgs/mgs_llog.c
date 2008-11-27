@@ -2198,281 +2198,254 @@ out:
         RETURN(rc);
 }
 
-static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
-                                struct mgs_target_info *mti)
+static int mgs_write_log_param(struct obd_device *obd, struct fs_db *fsdb,
+                               struct mgs_target_info *mti, char *ptr)
 {
         struct lustre_cfg_bufs bufs;
         struct lustre_cfg *lcfg;
         char *logname;
-        char *ptr = mti->mti_params;
-        char *endptr, *tmp;
+        char *tmp;
         int rc = 0;
         ENTRY;
 
-        if (!mti->mti_params)
-                RETURN(0);
-
         /* For various parameter settings, we have to figure out which logs
            care about them (e.g. both mdt and client for lov settings) */
-        while (ptr) {
-                while (*ptr == ' ')
-                        ptr++;
-                if (*ptr == '\0')
-                        break;
-                endptr = strchr(ptr, ' ');
-                if (endptr)
-                        *endptr = '\0';
-                CDEBUG(D_MGS, "next param '%s'\n", ptr);
+        CDEBUG(D_MGS, "next param '%s'\n", ptr);
 
-                /* The params are stored in MOUNT_DATA_FILE and modified
-                   via tunefs.lustre, or set using lctl conf_param */
+        /* The params are stored in MOUNT_DATA_FILE and modified via
+           tunefs.lustre, or set using lctl conf_param */
 
-                /* Processed in lustre_start_mgc */
-                if (class_match_param(ptr, PARAM_MGSNODE, NULL) == 0)
-                        GOTO(end_while, rc);
+        /* Processed in lustre_start_mgc */
+        if (class_match_param(ptr, PARAM_MGSNODE, NULL) == 0)
+                GOTO(end, rc);
 
-                /* Processed in mgs_write_log_ost */
-                if (class_match_param(ptr, PARAM_FAILMODE, NULL) == 0) {
-                        if (mti->mti_flags & LDD_F_PARAM) {
-                                LCONSOLE_ERROR_MSG(0x169, "%s can only be "
-                                                   "changed with tunefs.lustre"
-                                                   "and --writeconf\n", ptr);
-                                rc = -EPERM;
-                        }
-                        GOTO(end_while, rc);
+        /* Processed in mgs_write_log_ost */
+        if (class_match_param(ptr, PARAM_FAILMODE, NULL) == 0) {
+                if (mti->mti_flags & LDD_F_PARAM) {
+                        LCONSOLE_ERROR_MSG(0x169, "%s can only be "
+                                           "changed with tunefs.lustre"
+                                           "and --writeconf\n", ptr);
+                        rc = -EPERM;
                 }
+                GOTO(end, rc);
+        }
 
-                if (class_match_param(ptr, PARAM_SRPC, NULL) == 0) {
-                        rc = mgs_srpc_set_param(obd, fsdb, mti, ptr);
-                        GOTO(end_while, rc);
+        if (class_match_param(ptr, PARAM_SRPC, NULL) == 0) {
+                rc = mgs_srpc_set_param(obd, fsdb, mti, ptr);
+                GOTO(end, rc);
+        }
+
+        if (class_match_param(ptr, PARAM_FAILNODE, NULL) == 0) {
+                /* Add a failover nidlist */
+                rc = 0;
+                /* We already processed failovers params for new
+                   targets in mgs_write_log_target */
+                if (mti->mti_flags & LDD_F_PARAM) {
+                        CDEBUG(D_MGS, "Adding failnode\n");
+                        rc = mgs_write_log_add_failnid(obd, fsdb, mti);
                 }
+                GOTO(end, rc);
+        }
 
-                if (class_match_param(ptr, PARAM_FAILNODE, NULL) == 0) {
-                        /* Add a failover nidlist */
-                        rc = 0;
-                        /* We already processed failovers params for new
-                           targets in mgs_write_log_target */
-                        if (mti->mti_flags & LDD_F_PARAM) {
-                                CDEBUG(D_MGS, "Adding failnode\n");
-                                rc = mgs_write_log_add_failnid(obd, fsdb, mti);
-                        }
-                        GOTO(end_while, rc);
+        if (class_match_param(ptr, PARAM_SYS_TIMEOUT, &tmp) == 0) {
+                /* Change obd timeout */
+                int timeout;
+                timeout = simple_strtoul(tmp, NULL, 0);
+
+                CDEBUG(D_MGS, "obd timeout %d\n", timeout);
+                lustre_cfg_bufs_reset(&bufs, NULL);
+                lcfg = lustre_cfg_new(LCFG_SET_TIMEOUT, &bufs);
+                lcfg->lcfg_num = timeout;
+                /* modify all servers and clients */
+                rc = mgs_write_log_direct_all(obd, fsdb, mti, lcfg,
+                                              mti->mti_fsname,
+                                              "timeout");
+                lustre_cfg_free(lcfg);
+                GOTO(end, rc);
+        }
+
+        if (class_match_param(ptr, PARAM_OSC""PARAM_ACTIVE, &tmp) == 0) {
+                /* active=0 means off, anything else means on */
+                char mdt_index[16];
+                int flag = (*tmp == '0') ? CM_EXCLUDE : 0;
+                int i;
+
+                if (!(mti->mti_flags & LDD_F_SV_TYPE_OST)) {
+                        LCONSOLE_ERROR_MSG(0x144, "%s: Only OSCs can "
+                                           "be (de)activated.\n",
+                                           mti->mti_svname);
+                        GOTO(end, rc = -EINVAL);
                 }
-
-                if (class_match_param(ptr, PARAM_SYS_TIMEOUT, &tmp) == 0) {
-                        /* Change obd timeout */
-                        int timeout;
-                        timeout = simple_strtoul(tmp, NULL, 0);
-
-                        CDEBUG(D_MGS, "obd timeout %d\n", timeout);
-                        lustre_cfg_bufs_reset(&bufs, NULL);
-                        lcfg = lustre_cfg_new(LCFG_SET_TIMEOUT, &bufs);
-                        lcfg->lcfg_num = timeout;
-                        /* modify all servers and clients */
-                        rc = mgs_write_log_direct_all(obd, fsdb, mti, lcfg,
-                                                      mti->mti_fsname,
-                                                      "timeout");
-                        lustre_cfg_free(lcfg);
-                        GOTO(end_while, rc);
-                }
-
-                if (class_match_param(ptr, PARAM_OSC""PARAM_ACTIVE, &tmp) == 0) {
-                        /* active=0 means off, anything else means on */
-                        char mdt_index[16];
-                        int flag = (*tmp == '0') ? CM_EXCLUDE : 0;
-                        int i;
-
-                        if (!(mti->mti_flags & LDD_F_SV_TYPE_OST)) {
-                                LCONSOLE_ERROR_MSG(0x144, "%s: Only OSCs can "
-                                                   "be (de)activated.\n",
-                                                   mti->mti_svname);
-                                rc = -EINVAL;
-                                goto end_while;
-                        }
-                        LCONSOLE_WARN("Permanently %sactivating %s\n",
-                                      flag ? "de": "re", mti->mti_svname);
-                        /* Modify clilov */
-                        name_create(&logname, mti->mti_fsname, "-client");
+                LCONSOLE_WARN("Permanently %sactivating %s\n",
+                              flag ? "de": "re", mti->mti_svname);
+                /* Modify clilov */
+                name_create(&logname, mti->mti_fsname, "-client");
+                rc = mgs_modify(obd, fsdb, mti, logname,
+                                mti->mti_svname, "add osc", flag);
+                name_destroy(&logname);
+                if (rc)
+                        goto active_err;
+                /* Modify mdtlov */
+                /* FIXME add to all MDT logs for CMD */
+                for (i = 0; i < INDEX_MAP_SIZE * 8; i++) {
+                        if (!test_bit(i, fsdb->fsdb_mdt_index_map))
+                                continue;
+                        sprintf(mdt_index,"-MDT%04x", i);
+                        name_create(&logname, mti->mti_fsname, mdt_index);
                         rc = mgs_modify(obd, fsdb, mti, logname,
                                         mti->mti_svname, "add osc", flag);
                         name_destroy(&logname);
                         if (rc)
                                 goto active_err;
-                        /* Modify mdtlov */
-                        /* FIXME add to all MDT logs for CMD */
-                        for (i = 0; i < INDEX_MAP_SIZE * 8; i++) {
+                }
+        active_err:
+                if (rc) {
+                        LCONSOLE_ERROR_MSG(0x145, "Couldn't find %s in"
+                                           "log (%d). No permanent "
+                                           "changes were made to the "
+                                           "config log.\n",
+                                           mti->mti_svname, rc);
+                        if (fsdb->fsdb_flags & FSDB_OLDLOG14)
+                                LCONSOLE_ERROR_MSG(0x146, "This may be"
+                                                   " because the log"
+                                                   "is in the old 1.4"
+                                                   "style. Consider "
+                                                   " --writeconf to "
+                                                   "update the logs.\n");
+                        GOTO(end, rc);
+                }
+                /* Fall through to osc proc for deactivating live OSC
+                   on running MDT / clients. */
+        }
+        /* Below here, let obd's XXX_process_config methods handle it */
+
+        /* All lov. in proc */
+        if (class_match_param(ptr, PARAM_LOV, NULL) == 0) {
+                char mdt_index[16];
+                char *mdtlovname;
+
+                CDEBUG(D_MGS, "lov param %s\n", ptr);
+                if (!(mti->mti_flags & LDD_F_SV_TYPE_MDT)) {
+                        LCONSOLE_ERROR_MSG(0x147, "LOV params must be "
+                                           "set on the MDT, not %s. "
+                                           "Ignoring.\n",
+                                           mti->mti_svname);
+                        GOTO(end, rc = 0);
+                }
+
+                /* Modify mdtlov */
+                if (mgs_log_is_empty(obd, mti->mti_svname))
+                        GOTO(end, rc = -ENODEV);
+
+                sprintf(mdt_index,"-MDT%04x", mti->mti_stripe_index);
+                name_create(&logname, mti->mti_fsname, mdt_index);
+                name_create(&mdtlovname, logname, "-mdtlov");
+                rc = mgs_wlp_lcfg(obd, fsdb, mti, mti->mti_svname,
+                                  &bufs, mdtlovname, ptr);
+                name_destroy(&logname);
+                name_destroy(&mdtlovname);
+                if (rc)
+                        GOTO(end, rc);
+
+                /* Modify clilov */
+                name_create(&logname, mti->mti_fsname, "-client");
+                rc = mgs_wlp_lcfg(obd, fsdb, mti, logname, &bufs,
+                                  fsdb->fsdb_clilov, ptr);
+                name_destroy(&logname);
+                GOTO(end, rc);
+        }
+
+        /* All osc., mdc., llite. params in proc */
+        if ((class_match_param(ptr, PARAM_OSC, NULL) == 0) ||
+            (class_match_param(ptr, PARAM_MDC, NULL) == 0) ||
+            (class_match_param(ptr, PARAM_LLITE, NULL) == 0)) {
+                char *cname;
+                if (memcmp(ptr, PARAM_LLITE, strlen(PARAM_LLITE)) == 0) {
+                        name_create(&cname, mti->mti_fsname, "-client");
+                        /* Add the client type to match the obdname in
+                           class_config_llog_handler */
+                } else if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
+                        /* COMPAT_146 */
+                        if (fsdb->fsdb_mdc)
+                                name_create(&cname, fsdb->fsdb_mdc, "");
+                        else
+                                name_create(&cname, mti->mti_svname,
+                                            "-mdc");
+                } else if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
+                        /* COMPAT_146 */
+                        if (fsdb->fsdb_flags & FSDB_OLDLOG14) {
+                                LCONSOLE_ERROR_MSG(0x148, "Upgraded "
+                                                   "client logs for %s"
+                                                   " cannot be "
+                                                   "modified. Consider"
+                                                   " updating the "
+                                                   "configuration with"
+                                                   " --writeconf\n",
+                                                   mti->mti_svname);
+                                /* We don't know the names of all the
+                                   old oscs*/
+                                GOTO(end, rc = -EINVAL);
+                        }
+                        name_create(&cname, mti->mti_svname, "-osc");
+                } else {
+                        GOTO(end, rc = -EINVAL);
+                }
+
+                CDEBUG(D_MGS, "%.3s param %s\n", ptr, ptr + 4);
+
+                /* Modify client */
+                name_create(&logname, mti->mti_fsname, "-client");
+                rc = mgs_wlp_lcfg(obd, fsdb, mti, logname, &bufs,
+                                  cname, ptr);
+
+                /* osc params affect the MDT as well */
+                if (!rc && (mti->mti_flags & LDD_F_SV_TYPE_OST)) {
+                        char mdt_index[16];
+                        int i;
+
+                        for (i = 0; i < INDEX_MAP_SIZE * 8; i++){
                                 if (!test_bit(i, fsdb->fsdb_mdt_index_map))
                                         continue;
-                                sprintf(mdt_index,"-MDT%04x", i);
-                                name_create(&logname, mti->mti_fsname, mdt_index);
-                                rc = mgs_modify(obd, fsdb, mti, logname,
-                                                mti->mti_svname, "add osc", flag);
+                                name_destroy(&cname);
+                                sprintf(mdt_index, "-osc-MDT%04x", i);
+                                name_create(&cname, mti->mti_svname,
+                                            mdt_index);
                                 name_destroy(&logname);
+                                sprintf(mdt_index, "-MDT%04x", i);
+                                name_create(&logname, mti->mti_fsname,
+                                            mdt_index);
+                                if (!mgs_log_is_empty(obd, logname))
+                                        rc = mgs_wlp_lcfg(obd, fsdb,
+                                                          mti, logname,
+                                                          &bufs, cname,
+                                                          ptr);
                                 if (rc)
-                                        goto active_err;
+                                        break;
                         }
-active_err:
-                        if (rc) {
-                                LCONSOLE_ERROR_MSG(0x145, "Couldn't find %s in"
-                                                   "log (%d). No permanent "
-                                                   "changes were made to the "
-                                                   "config log.\n",
-                                                   mti->mti_svname, rc);
-                                if (fsdb->fsdb_flags & FSDB_OLDLOG14)
-                                        LCONSOLE_ERROR_MSG(0x146, "This may be"
-                                                           " because the log "
-                                                           "is in the old 1.4"
-                                                           "style. Consider "
-                                                           " --writeconf to "
-                                                           "update the logs.\n");
-                                goto end_while;
-                        }
-                        /* Fall through to osc proc for deactivating
-                           live OSC on running MDT / clients. */
                 }
-                /* Below here, let obd's XXX_process_config methods handle it */
-
-                /* All lov. in proc */
-                if (class_match_param(ptr, PARAM_LOV, NULL) == 0) {
-                        char mdt_index[16];
-                        char *mdtlovname;
-
-                        CDEBUG(D_MGS, "lov param %s\n", ptr);
-                        if (!(mti->mti_flags & LDD_F_SV_TYPE_MDT)) {
-                                LCONSOLE_ERROR_MSG(0x147, "LOV params must be "
-                                                   "set on the MDT, not %s. "
-                                                   "Ignoring.\n",
-                                                   mti->mti_svname);
-                                rc = 0;
-                                goto end_while;
-                        }
-
-                        /* Modify mdtlov */
-                        if (mgs_log_is_empty(obd, mti->mti_svname))
-                                GOTO(end_while, rc = -ENODEV);
-
-                        sprintf(mdt_index,"-MDT%04x", mti->mti_stripe_index);
-                        name_create(&logname, mti->mti_fsname, mdt_index);
-                        name_create(&mdtlovname, logname, "-mdtlov");
-                        rc = mgs_wlp_lcfg(obd, fsdb, mti, mti->mti_svname,
-                                          &bufs, mdtlovname, ptr);
-                        name_destroy(&logname);
-                        name_destroy(&mdtlovname);
-                        if (rc)
-                                GOTO(end_while, rc);
-
-                        /* Modify clilov */
-                        name_create(&logname, mti->mti_fsname, "-client");
-                        rc = mgs_wlp_lcfg(obd, fsdb, mti, logname, &bufs,
-                                          fsdb->fsdb_clilov, ptr);
-                        name_destroy(&logname);
-                        GOTO(end_while, rc);
-                }
-
-                /* All osc., mdc., llite. params in proc */
-                if ((class_match_param(ptr, PARAM_OSC, NULL) == 0) ||
-                    (class_match_param(ptr, PARAM_MDC, NULL) == 0) ||
-                    (class_match_param(ptr, PARAM_LLITE, NULL) == 0)) {
-                        char *cname;
-                        if (memcmp(ptr, PARAM_LLITE, strlen(PARAM_LLITE)) == 0) {
-                                name_create(&cname, mti->mti_fsname, "-client");
-                        /* Add the client type to match the obdname
-                           in class_config_llog_handler */
-                        } else if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
-                                /* COMPAT_146 */
-                                if (fsdb->fsdb_mdc)
-                                        name_create(&cname, fsdb->fsdb_mdc, "");
-                                else
-                                        name_create(&cname, mti->mti_svname,
-                                                    "-mdc");
-                        } else if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
-                                /* COMPAT_146 */
-                                if (fsdb->fsdb_flags & FSDB_OLDLOG14) {
-                                        LCONSOLE_ERROR_MSG(0x148, "Upgraded "
-                                                           "client logs for %s"
-                                                           " cannot be "
-                                                           "modified. Consider"
-                                                           " updating the "
-                                                           "configuration with"
-                                                           " --writeconf\n",
-                                                           mti->mti_svname);
-                                        /* We don't know the names of all the
-                                           old oscs*/
-                                        rc = -EINVAL;
-                                        goto end_while;
-                                }
-                                name_create(&cname, mti->mti_svname, "-osc");
-                        } else {
-                                rc = -EINVAL;
-                                goto end_while;
-                        }
-
-                        CDEBUG(D_MGS, "%.3s param %s\n", ptr, ptr + 4);
-
-                        /* Modify client */
-                        name_create(&logname, mti->mti_fsname, "-client");
-                        rc = mgs_wlp_lcfg(obd, fsdb, mti, logname, &bufs,
-                                          cname, ptr);
-
-                        /* osc params affect the MDT as well */
-                        if (!rc && (mti->mti_flags & LDD_F_SV_TYPE_OST)) {
-                                char mdt_index[16];
-                                int i;
-
-                                for (i = 0; i < INDEX_MAP_SIZE * 8; i++){
-                                        if (!test_bit(i, fsdb->fsdb_mdt_index_map))
-                                                continue;
-                                        name_destroy(&cname);
-                                        sprintf(mdt_index, "-osc-MDT%04x", i);
-                                        name_create(&cname, mti->mti_svname,
-                                                    mdt_index);
-                                        name_destroy(&logname);
-                                        sprintf(mdt_index, "-MDT%04x", i);
-                                        name_create(&logname, mti->mti_fsname,
-                                                    mdt_index);
-                                        if (!mgs_log_is_empty(obd, logname))
-                                                rc = mgs_wlp_lcfg(obd, fsdb,
-                                                                  mti, logname,
-                                                                  &bufs, cname,
-                                                                  ptr);
-                                        if (rc)
-                                                break;
-                                }
-                        }
-                        name_destroy(&logname);
-                        name_destroy(&cname);
-                        GOTO(end_while, rc);
-                }
-
-                /* All mdt., ost. params in proc */
-                if ((class_match_param(ptr, PARAM_MDT, NULL) == 0) ||
-                    (class_match_param(ptr, PARAM_MDD, NULL) == 0) ||
-                    (class_match_param(ptr, PARAM_OST, NULL) == 0)) {
-                        CDEBUG(D_MGS, "%.3s param %s\n", ptr, ptr + 4);
-                        if (mgs_log_is_empty(obd, mti->mti_svname)) {
-                                rc = -ENODEV;
-                                goto end_while;
-                        }
-                        rc = mgs_wlp_lcfg(obd, fsdb, mti, mti->mti_svname,
-                                          &bufs, mti->mti_svname, ptr);
-                        GOTO(end_while, rc);
-                }
-
-                LCONSOLE_WARN("Ignoring unrecognized param '%s'\n", ptr);
-
-end_while:
-                if (rc) {
-                        CERROR("err %d on param '%s\n", rc, ptr);
-                        break;
-                }
-
-                if (!endptr)
-                        /* last param */
-                        break;
-
-                *endptr = ' ';
-                ptr = endptr + 1;
+                name_destroy(&logname);
+                name_destroy(&cname);
+                GOTO(end, rc);
         }
+
+        /* All mdt., ost. params in proc */
+        if ((class_match_param(ptr, PARAM_MDT, NULL) == 0) ||
+            (class_match_param(ptr, PARAM_MDD, NULL) == 0) ||
+            (class_match_param(ptr, PARAM_OST, NULL) == 0)) {
+                CDEBUG(D_MGS, "%.3s param %s\n", ptr, ptr + 4);
+                if (mgs_log_is_empty(obd, mti->mti_svname))
+                        GOTO(end, rc = -ENODEV);
+
+                rc = mgs_wlp_lcfg(obd, fsdb, mti, mti->mti_svname,
+                                  &bufs, mti->mti_svname, ptr);
+                GOTO(end, rc);
+        }
+
+        LCONSOLE_WARN("Ignoring unrecognized param '%s'\n", ptr);
+
+end:
+        if (rc)
+                CERROR("err %d on param '%s'\n", rc, ptr);
 
         RETURN(rc);
 }
@@ -2513,6 +2486,7 @@ int mgs_write_log_target(struct obd_device *obd,
 {
         struct fs_db *fsdb;
         int rc = -EINVAL;
+        char *buf, *params;
         ENTRY;
 
         /* set/check the new target index */
@@ -2585,7 +2559,29 @@ int mgs_write_log_target(struct obd_device *obd,
                 mti->mti_flags |= LDD_F_PARAM;
         }
 
-        rc = mgs_write_log_params(obd, fsdb, mti);
+        /* allocate temporary buffer, where class_get_next_param will
+           make copy of a current  parameter */
+        OBD_ALLOC(buf, strlen(mti->mti_params) + 1);
+        if (buf == NULL)
+                GOTO(out_up, rc = -ENOMEM);
+        params = mti->mti_params;
+        while (params != NULL) {
+                rc = class_get_next_param(&params, buf);
+                if (rc) {
+                        if (rc == 1)
+                                /* there is no next parameter, that is
+                                   not an error */
+                                rc = 0;
+                        break;
+                }
+                CDEBUG(D_MGS, "remaining string: '%s', param: '%s'\n",
+                       params, buf);
+                rc = mgs_write_log_param(obd, fsdb, mti, buf);
+                if (rc)
+                        break;
+        }
+
+        OBD_FREE(buf, strlen(mti->mti_params) + 1);
 
 out_up:
         up(&fsdb->fsdb_sem);
@@ -2825,7 +2821,9 @@ int mgs_setparam(struct obd_device *obd, struct lustre_cfg *lcfg, char *fsname)
         mti->mti_flags = rc | LDD_F_PARAM;
 
         down(&fsdb->fsdb_sem);
-        rc = mgs_write_log_params(obd, fsdb, mti);
+        /* this is lctl conf_param's single param path, there is not
+           need to loop through parameters */
+        rc = mgs_write_log_param(obd, fsdb, mti, mti->mti_params);
         up(&fsdb->fsdb_sem);
 
 out:
