@@ -3910,17 +3910,6 @@ test_102c() {
 }
 run_test 102c "non-root getfattr/setfattr for lustre.lov EAs ==========="
 
-get_stripe_info() {
-	stripe_size=0
-	stripe_count=0
-	stripe_offset=0
-	local lines=`sed -n '/obdidx/=' $1`
-	stripe_size=`awk '{if($1~/size/) print $2}' $1`
-	stripe_count=`awk '{if($1~/count/) print $2}' $1`
-	lines=`expr $lines + 1`
-	stripe_offset=`sed -n ${lines}p $1 |awk '{print $1}'`
-}
-
 compare_stripe_info1() {
 	for num in 1 2 3 4
 	do
@@ -3930,22 +3919,16 @@ compare_stripe_info1() {
 			do
 				local size=`expr $STRIPE_SIZE \* $num`
 				local file=file"$num-$offset-$count"
-				local tmp_file=out
-				$GETSTRIPE -v $file > $tmp_file
-				get_stripe_info  $tmp_file
-				if test $stripe_size -ne $size
-				then
+				get_stripe_info client $file
+				if [ $stripe_size -ne $size ]; then
 					error "$file: different stripe size" && return
 				fi
-				if test $stripe_count -ne $count
-				then
+				if [ $stripe_count -ne $count ]; then
 					error "$file: different stripe count" && return
 				fi
-				if test $stripe_offset -ne 0
-				then
+				if [ $stripe_index -ne 0 ]; then
 					error "$file: different stripe offset" && return
 				fi
-				rm -f $tmp_file
 			done
 		done
 	done
@@ -3960,22 +3943,16 @@ compare_stripe_info2() {
 			do
 				local size=`expr $STRIPE_SIZE \* $num`
 				local file=file"$num-$offset-$count"
-				local tmp_file=out
-				$GETSTRIPE -v $file > $tmp_file
-				get_stripe_info  $tmp_file
-				if test $stripe_size -ne $size
-				then
+				get_stripe_info client $file
+				if [ $stripe_size -ne $size ]; then
 					error "$file: different stripe size" && return	
 				fi
-				if test $stripe_count -ne $count
-				then
+				if [ $stripe_count -ne $count ]; then
 					error "$file: different stripe count" && return
 				fi
-				if test $stripe_offset -ne $offset
-				then
+				if [ $stripe_index -ne $offset ]; then
 					error "$file: different stripe offset" && return
 				fi
-				rm -f $tmp_file
 			done
 		done
 	done
