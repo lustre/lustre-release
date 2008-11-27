@@ -49,6 +49,7 @@
 #include <obd_lov.h>
 #include <lustre_lib.h>
 #include <lustre_fsfilt.h>
+#include <obd_cksum.h>
 
 #include "mds_internal.h"
 
@@ -641,12 +642,17 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         data->ocd_connect_flags = OBD_CONNECT_VERSION   | OBD_CONNECT_INDEX   |
                                   OBD_CONNECT_REQPORTAL | OBD_CONNECT_QUOTA64 |
                                   OBD_CONNECT_OSS_CAPA  | OBD_CONNECT_FID     |
+                                  OBD_CONNECT_BRW_SIZE  | OBD_CONNECT_CKSUM   |
                                   OBD_CONNECT_AT | OBD_CONNECT_CHANGE_QS;
 #ifdef HAVE_LRU_RESIZE_SUPPORT
         data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
 #endif
         data->ocd_version = LUSTRE_VERSION_CODE;
         data->ocd_group = mdt_to_obd_objgrp(mds->mds_id);
+        /* send max bytes per rpc */
+        data->ocd_brw_size = PTLRPC_MAX_BRW_PAGES << CFS_PAGE_SHIFT;
+        /* send the list of supported checksum types */
+        data->ocd_cksum_types = OBD_CKSUM_ALL;
         /* NB: lov_connect() needs to fill in .ocd_index for each OST */
         rc = obd_connect(NULL, &conn, mds->mds_osc_obd, &obd->obd_uuid, data, NULL);
         OBD_FREE(data, sizeof(*data));
