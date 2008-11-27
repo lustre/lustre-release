@@ -1855,3 +1855,20 @@ check_catastrophe () {
     fi
 }
 
+# $1 node
+# $2 file
+get_stripe_info() {
+	local tmp_file
+
+	stripe_size=0
+	stripe_count=0
+	stripe_index=0
+	tmp_file=$(mktemp)
+
+	do_facet $1 lfs getstripe -v $2 > $tmp_file
+
+	stripe_size=`awk '$1 ~ /size/ {print $2}' $tmp_file`
+	stripe_count=`awk '$1 ~ /count/ {print $2}' $tmp_file`
+	stripe_index=`awk '/obdidx/ {start = 1; getline; print $1; exit}' $tmp_file`
+	rm -f $tmp_file
+}
