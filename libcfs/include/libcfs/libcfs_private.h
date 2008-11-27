@@ -312,6 +312,10 @@ __u32       libcfs_str2net(const char *str);
 lnet_nid_t  libcfs_str2nid(const char *str);
 int         libcfs_str2anynid(lnet_nid_t *nid, const char *str);
 char       *libcfs_id2str(lnet_process_id_t id);
+int         cfs_iswhite(char c);
+void        cfs_free_nidlist(struct list_head *list);
+int         cfs_parse_nidlist(char *str, int len, struct list_head *list);
+int         cfs_match_nid(lnet_nid_t nid, struct list_head *list);
 
 /* how an LNET NID encodes net:address */
 #define LNET_NIDADDR(nid)      ((__u32)((nid) & 0xffffffff))
@@ -321,6 +325,9 @@ char       *libcfs_id2str(lnet_process_id_t id);
 #define LNET_NETNUM(net)       ((net) & 0xffff)
 #define LNET_NETTYP(net)       (((net) >> 16) & 0xffff)
 #define LNET_MKNET(typ,num)    ((((__u32)(typ))<<16)|((__u32)(num)))
+
+/* max value for numeric network address */
+#define MAX_NUMERIC_VALUE 0xffffffff
 
 /* implication */
 #define ergo(a, b) (!(a) || (b))

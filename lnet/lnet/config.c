@@ -86,31 +86,17 @@ lnet_issep (char c)
 	}
 }
 
-int
-lnet_iswhite (char c)
-{
-	switch (c) {
-	case ' ':
-	case '\t':
-	case '\n':
-	case '\r':
-		return 1;
-	default:
-		return 0;
-	}
-}
-
 char *
 lnet_trimwhite(char *str)
 {
 	char *end;
 	
-	while (lnet_iswhite(*str))
+        while (cfs_iswhite(*str))
 		str++;
 	
 	end = str + strlen(str);
 	while (end > str) {
-		if (!lnet_iswhite(end[-1]))
+                if (!cfs_iswhite(end[-1]))
 			break;
 		end--;
 	}
@@ -394,7 +380,7 @@ lnet_str2tbs_sep (struct list_head *tbs, char *str)
 	/* Split 'str' into separate commands */
 	for (;;) {
                 /* skip leading whitespace */
-                while (lnet_iswhite(*str))
+                while (cfs_iswhite(*str))
                         str++;
                 
 		/* scan for separator or comment */
@@ -411,7 +397,7 @@ lnet_str2tbs_sep (struct list_head *tbs, char *str)
 			}
 			
                         for (i = 0; i < nob; i++)
-                                if (lnet_iswhite(str[i]))
+                                if (cfs_iswhite(str[i]))
                                         ltb->ltb_text[i] = ' ';
                                 else
                                         ltb->ltb_text[i] = str[i];
@@ -586,7 +572,7 @@ lnet_parse_route (char *str, int *im_a_router)
 	sep = str;
 	for (;;) {
 		/* scan for token start */
-		while (lnet_iswhite(*sep))
+                while (cfs_iswhite(*sep))
 			sep++;
 		if (*sep == 0) {
 			if (ntokens < (got_hops ? 3 : 2))
@@ -598,7 +584,7 @@ lnet_parse_route (char *str, int *im_a_router)
 		token = sep++;
 
 		/* scan for token end */
-		while (*sep != 0 && !lnet_iswhite(*sep))
+                while (*sep != 0 && !cfs_iswhite(*sep))
 			sep++;
 		if (*sep != 0)
 			*sep++ = 0;
@@ -946,7 +932,7 @@ lnet_match_network_tokens(char *net_entry, __u32 *ipaddrs, int nip)
         sep = tokens;
         for (;;) {
                 /* scan for token start */
-                while (lnet_iswhite(*sep))
+                while (cfs_iswhite(*sep))
                         sep++;
                 if (*sep == 0)
                         break;
@@ -954,7 +940,7 @@ lnet_match_network_tokens(char *net_entry, __u32 *ipaddrs, int nip)
                 token = sep++;
                 
                 /* scan for token end */
-                while (*sep != 0 && !lnet_iswhite(*sep))
+                while (*sep != 0 && !cfs_iswhite(*sep))
                         sep++;
                 if (*sep != 0)
                         *sep++ = 0;
