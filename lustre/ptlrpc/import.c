@@ -655,6 +655,19 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
                 GOTO(out, rc);
         }
 
+        /* Report the rpc service time to the server so that it knows how long
+         * to wait for clients to join recovery */
+        lustre_msg_set_service_time(request->rq_reqmsg,
+                                    at_timeout2est(request->rq_timeout));
+
+        /* The amount of time we give the server to process the connect req.
+         * import_select_connection will increase the net latency on
+         * repeated reconnect attempts to cover slow networks.
+         * We override/ignore the server rpc completion estimate here,
+         * which may be large if this is a reconnect attempt */
+        request->rq_timeout = INITIAL_CONNECT_TIMEOUT;
+        lustre_msg_set_timeout(request->rq_reqmsg, request->rq_timeout);
+
 #ifndef __KERNEL__
         lustre_msg_add_op_flags(request->rq_reqmsg, MSG_CONNECT_LIBCLIENT);
 #endif
@@ -681,10 +694,6 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
                 spin_unlock(&imp->imp_lock);
                 lustre_msg_add_op_flags(request->rq_reqmsg,
                                         MSG_CONNECT_INITIAL);
-                if (AT_OFF)
-                        /* AT will use INITIAL_CONNECT_TIMEOUT the first
-                           time, adaptive after that. */
-                        request->rq_timeout = INITIAL_CONNECT_TIMEOUT;
         }
 
         if (set_transno)

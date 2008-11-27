@@ -1842,6 +1842,17 @@ Details    : A security feature, which is to prevent users from being able
              configuration management server (MGS). The functionality also
              allows to specify sets of clients for which the remapping does
              not apply.
+
+Severity   : normal
+Bugzilla   : 16860
+Description: Excessive recovery window
+Details    : With AT enabled, the recovery window can be excessively long (6000+
+	     seconds). To address this problem, we no longer use
+	     OBD_RECOVERY_FACTOR when extending the recovery window (the connect
+	     timeout no longer depends on the service time, it is set to
+	     INITIAL_CONNECT_TIMEOUT now) and clients report the old service
+	     time via pb_service_time.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

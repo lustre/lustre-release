@@ -200,9 +200,9 @@ static inline unsigned int at_est2timeout(unsigned int val)
 
 static inline unsigned int at_timeout2est(unsigned int val)
 {
-        /* restore estimate value from timeout */
+        /* restore estimate value from timeout: e=4/5(t-5) */
         LASSERT(val);
-        return ((val - 1) / 5 * 4);
+        return (max((val << 2) / 5, 5U) - 4);
 }
 
 static inline void at_init(struct adaptive_timeout *at, int val, int flags) {
