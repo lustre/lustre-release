@@ -258,7 +258,7 @@ int lmv_quota_check(struct obd_device *unused, struct obd_export *exp,
                 }
 
                 err = obd_quotacheck(tgt->ltd_exp, oqctl);
-                if (err && tgt->ltd_active && !rc)
+                if (err && !rc)
                         rc = err;
         }
 
@@ -282,7 +282,7 @@ int lov_quota_check(struct obd_device *unused, struct obd_export *exp,
                 }
 
                 err = obd_quotacheck(lov->lov_tgts[i]->ltd_exp, oqctl);
-                if (err && lov->lov_tgts[i]->ltd_active && !rc)
+                if (err && !rc)
                         rc = err;
         }
 
