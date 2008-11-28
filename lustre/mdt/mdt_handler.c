@@ -1729,10 +1729,10 @@ static int mdt_quotactl_handle(struct mdt_thread_info *info)
 
         switch (oqctl->qc_cmd) {
         case Q_QUOTAON:
-                rc = mqo->mqo_on(info->mti_env, next, oqctl->qc_type, id);
+                rc = mqo->mqo_on(info->mti_env, next, oqctl->qc_type);
                 break;
         case Q_QUOTAOFF:
-                rc = mqo->mqo_off(info->mti_env, next, oqctl->qc_type, id);
+                rc = mqo->mqo_off(info->mti_env, next, oqctl->qc_type);
                 break;
         case Q_SETINFO:
                 rc = mqo->mqo_setinfo(info->mti_env, next, oqctl->qc_type, id,

@@ -49,6 +49,7 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 DIRECTIO=${DIRECTIO:-$LUSTRE/tests/directio}
 
+[ $MDSCOUNT -gt 1 ] && skip "CMD case" && exit 0
 remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
 

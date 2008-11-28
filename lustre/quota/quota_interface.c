@@ -526,6 +526,11 @@ static int mds_quota_setup(struct obd_device *obd)
         int rc;
         ENTRY;
 
+        if (unlikely(mds->mds_quota)) {
+                CWARN("try to reinitialize quota context!\n");
+                RETURN(0);
+        }
+
         init_rwsem(&obt->obt_rwsem);
         obt->obt_qfmt = LUSTRE_QUOTA_V2;
         mds->mds_quota_info.qi_version = LUSTRE_QUOTA_V2;
@@ -544,7 +549,9 @@ static int mds_quota_setup(struct obd_device *obd)
 static int mds_quota_cleanup(struct obd_device *obd)
 {
         ENTRY;
-        obd->u.mds.mds_quota = 0;
+        if (unlikely(!obd->u.mds.mds_quota))
+                RETURN(0);
+
         qctxt_cleanup(&obd->u.obt.obt_qctxt, 0);
         RETURN(0);
 }
@@ -553,6 +560,9 @@ static int mds_quota_setinfo(struct obd_device *obd, void *data)
 {
         struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
         ENTRY;
+
+        if (unlikely(!obd->u.mds.mds_quota))
+                RETURN(0);
 
         if (data != NULL)
                 QUOTA_MASTER_READY(qctxt);
@@ -567,6 +577,10 @@ static int mds_quota_fs_cleanup(struct obd_device *obd)
         struct obd_quotactl oqctl;
         ENTRY;
 
+        if (unlikely(!mds->mds_quota))
+                RETURN(0);
+
+        mds->mds_quota = 0;
         memset(&oqctl, 0, sizeof(oqctl));
         oqctl.qc_type = UGQUOTA;
 

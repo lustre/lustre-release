@@ -107,7 +107,7 @@ int mdd_quota_check(const struct lu_env *env, struct md_device *m,
 }
 
 int mdd_quota_on(const struct lu_env *env, struct md_device *m,
-                 __u32 type, __u32 id)
+                 __u32 type)
 {
         struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
         struct obd_device *obd = mdd->mdd_obd_dev;
@@ -117,13 +117,12 @@ int mdd_quota_on(const struct lu_env *env, struct md_device *m,
 
         oqctl->qc_cmd = Q_QUOTAON;
         oqctl->qc_type = type;
-        oqctl->qc_id = id;
         rc = lquota_ctl(mds_quota_interface_ref, obd, oqctl);
         RETURN(rc);
 }
 
 int mdd_quota_off(const struct lu_env *env, struct md_device *m,
-                  __u32 type, __u32 id)
+                  __u32 type)
 {
         struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
         struct obd_device *obd = mdd->mdd_obd_dev;
@@ -133,7 +132,6 @@ int mdd_quota_off(const struct lu_env *env, struct md_device *m,
 
         oqctl->qc_cmd = Q_QUOTAOFF;
         oqctl->qc_type = type;
-        oqctl->qc_id = id;
         rc = lquota_ctl(mds_quota_interface_ref, obd, oqctl);
         RETURN(rc);
 }

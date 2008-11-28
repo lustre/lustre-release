@@ -1597,10 +1597,14 @@ free:
 
 int mds_quota_recovery(struct obd_device *obd)
 {
-        struct lov_obd *lov = &obd->u.mds.mds_osc_obd->u.lov;
+        struct mds_obd *mds = &obd->u.mds;
+        struct lov_obd *lov = &mds->mds_osc_obd->u.lov;
         struct qmaster_recov_thread_data data;
         int rc = 0;
         ENTRY;
+
+        if (unlikely(!mds->mds_quota))
+                RETURN(rc);
 
         mutex_down(&lov->lov_lock);
         if (lov->desc.ld_tgt_count != lov->desc.ld_active_tgt_count) {

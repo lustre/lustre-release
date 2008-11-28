@@ -344,13 +344,11 @@ struct md_device_operations {
 
                 int (*mqo_on)(const struct lu_env *env,
                               struct md_device *m,
-                              __u32 type,
-                              __u32 id);
+                              __u32 type);
 
                 int (*mqo_off)(const struct lu_env *env,
                                struct md_device *m,
-                               __u32 type,
-                               __u32 id);
+                               __u32 type);
 
                 int (*mqo_setinfo)(const struct lu_env *env,
                                    struct md_device *m,
