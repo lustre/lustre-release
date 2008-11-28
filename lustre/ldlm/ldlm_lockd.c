@@ -1727,6 +1727,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                         RETURN(0);
                 break;
         case OBD_LOG_CANCEL: /* remove this eventually - for 1.4.0 compat */
+                CERROR("shouldn't be handling OBD_LOG_CANCEL on DLM thread\n");
                 req_capsule_set(&req->rq_pill, &RQF_LOG_CANCEL);
                 if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOG_CANCEL_NET))
                         RETURN(0);
