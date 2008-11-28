@@ -58,6 +58,8 @@
 #include <lu_object.h>
 #include <lustre_req_layout.h>
 
+#include <obd_support.h>
+
 /* MD flags we _always_ use */
 #define PTLRPC_MD_OPTIONS  0
 
@@ -167,7 +169,7 @@
 #define MGS_MAXREPSIZE  (9 * 1024)
 
 /* Absolute limits */
-#define OSS_THREADS_MIN 2
+#define OSS_THREADS_MIN 3       /* difficult replies, HPQ, others */
 #define OSS_THREADS_MAX 512
 #define OST_NBUFS       (64 * num_online_cpus())
 #define OST_BUFSIZE     (8 * 1024)
@@ -210,8 +212,8 @@ union ptlrpc_async_args {
          * big enough.  For _tons_ of context, OBD_ALLOC a struct and store
          * a pointer to it here.  The pointer_arg ensures this struct is at
          * least big enough for that. */
-        void      *pointer_arg[9];
-        __u64      space[4];
+        void      *pointer_arg[11];
+        __u64      space[6];
 };
 
 struct ptlrpc_request_set;
@@ -260,6 +262,8 @@ struct ptlrpc_reply_state {
 #endif
         /* updates to following flag serialised by srv_request_lock */
         unsigned long          rs_difficult:1;     /* ACK/commit stuff */
+        unsigned long          rs_no_ack:1;    /* no ACK, even for
+                                                  difficult requests */
         unsigned long          rs_scheduled:1;     /* being handled? */
         unsigned long          rs_scheduled_ever:1;/* any schedule attempts? */
         unsigned long          rs_handled:1;  /* been handled yet? */
@@ -289,11 +293,13 @@ struct ptlrpc_reply_state {
 struct ptlrpc_thread;
 
 enum rq_phase {
-        RQ_PHASE_NEW         = 0xebc0de00,
-        RQ_PHASE_RPC         = 0xebc0de01,
-        RQ_PHASE_BULK        = 0xebc0de02,
-        RQ_PHASE_INTERPRET   = 0xebc0de03,
-        RQ_PHASE_COMPLETE    = 0xebc0de04,
+        RQ_PHASE_NEW            = 0xebc0de00,
+        RQ_PHASE_RPC            = 0xebc0de01,
+        RQ_PHASE_BULK           = 0xebc0de02,
+        RQ_PHASE_INTERPRET      = 0xebc0de03,
+        RQ_PHASE_COMPLETE       = 0xebc0de04,
+        RQ_PHASE_UNREGISTERING  = 0xebc0de05,
+        RQ_PHASE_UNDEFINED      = 0xebc0de06
 };
 
 /** Type of request interpreter call-back */
@@ -311,6 +317,20 @@ struct ptlrpc_request_pool {
 struct lu_context;
 struct lu_env;
 
+struct ldlm_lock;
+
+struct ptlrpc_hpreq_ops {
+        /**
+         * Check if the lock handle of the given lock is the same as
+         * taken from the request.
+         */
+        int  (*hpreq_lock_match)(struct ptlrpc_request *, struct ldlm_lock *);
+        /**
+         * Check if the request is a high priority one.
+         */
+        int  (*hpreq_check)(struct ptlrpc_request *);
+};
+
 /**
  * Represents remote procedure call.
  */
@@ -319,6 +339,8 @@ struct ptlrpc_request {
         struct list_head rq_list;
         struct list_head rq_timed_list;         /* server-side early replies */
         struct list_head rq_history_list;       /* server-side history */
+        struct list_head rq_exp_list;           /* server-side per-export list */
+        struct ptlrpc_hpreq_ops *rq_ops;        /* server-side hp handlers */
         __u64            rq_history_seq;        /* history sequence # */
         int rq_status;
         spinlock_t rq_lock;
@@ -342,9 +364,11 @@ struct ptlrpc_request {
                 rq_early:1, rq_must_unlink:1,
                 /* server-side flags */
                 rq_packed_final:1,  /* packed final reply */
-                rq_sent_final:1;    /* stop sending early replies */
+                rq_sent_final:1,    /* stop sending early replies */
+                rq_hp:1;            /* high priority RPC */
 
         enum rq_phase rq_phase; /* one of RQ_PHASE_* */
+        enum rq_phase rq_next_phase; /* one of RQ_PHASE_* to be used next */
         atomic_t rq_refcount;   /* client-side refcount for SENT race,
                                    server-side refcounf for multiple replies */
 
@@ -452,6 +476,8 @@ struct ptlrpc_request {
         volatile time_t rq_deadline;     /* when request must finish. volatile
                so that servers' early reply updates to the deadline aren't
                kept in per-cpu cache */
+        time_t rq_reply_deadline;        /* when req reply unlink must finish. */
+        time_t rq_bulk_deadline;         /* when req bulk unlink must finish. */
         int    rq_timeout;               /* service time estimate (secs) */
 
         /* Multi-rpc bits */
@@ -503,9 +529,9 @@ static inline int lustre_rep_swabbed(struct ptlrpc_request *req, int index)
 }
 
 static inline const char *
-ptlrpc_rqphase2str(const struct ptlrpc_request *req)
+ptlrpc_phase2str(enum rq_phase phase)
 {
-        switch (req->rq_phase) {
+        switch (phase) {
         case RQ_PHASE_NEW:
                 return "New";
         case RQ_PHASE_RPC:
@@ -516,9 +542,17 @@ ptlrpc_rqphase2str(const struct ptlrpc_request *req)
                 return "Interpret";
         case RQ_PHASE_COMPLETE:
                 return "Complete";
+        case RQ_PHASE_UNREGISTERING:
+                return "Unregistering";
         default:
                 return "?Phase?";
         }
+}
+
+static inline const char *
+ptlrpc_rqphase2str(struct ptlrpc_request *req)
+{
+        return ptlrpc_phase2str(req->rq_phase);
 }
 
 /* Spare the preprocessor, spoil the bugs. */
@@ -532,9 +566,9 @@ ptlrpc_rqphase2str(const struct ptlrpc_request *req)
         FLAG(req->rq_restart, "T"), FLAG(req->rq_replay, "P"),                  \
         FLAG(req->rq_no_resend, "N"),                                           \
         FLAG(req->rq_waiting, "W"),                                             \
-        FLAG(req->rq_wait_ctx, "C")
+        FLAG(req->rq_wait_ctx, "C"), FLAG(req->rq_hp, "H")
 
-#define REQ_FLAGS_FMT "%s:%s%s%s%s%s%s%s%s%s%s"
+#define REQ_FLAGS_FMT "%s:%s%s%s%s%s%s%s%s%s%s%s"
 
 void _debug_req(struct ptlrpc_request *req, __u32 mask,
                 struct libcfs_debug_msg_data *data, const char *fmt, ...)
@@ -609,13 +643,23 @@ struct ptlrpc_bulk_desc {
 };
 
 struct ptlrpc_thread {
-
-        struct list_head t_link; /* active threads in svc->srv_threads */
-
-        void *t_data;            /* thread-private data (preallocated memory) */
+        /**
+         * active threads in svc->srv_threads
+         */
+        struct list_head t_link;
+        /**
+         * thread-private data (preallocated memory)
+         */
+        void *t_data;
         __u32 t_flags;
-
-        unsigned int t_id; /* service thread index, from ptlrpc_start_threads */
+        /**
+         * service thread index, from ptlrpc_start_threads
+         */
+        unsigned int t_id;
+        /**
+         * put watchdog in the structure per thread b=14840
+         */
+        struct lc_watchdog *t_watchdog;
         cfs_waitq_t t_ctl_waitq;
         struct lu_env *t_env;
 };
@@ -633,6 +677,9 @@ struct ptlrpc_request_buffer_desc {
 
 typedef int (*svc_handler_t)(struct ptlrpc_request *req);
 typedef void (*svcreq_printfn_t)(void *, struct ptlrpc_request *);
+typedef int (*svc_hpreq_handler_t)(struct ptlrpc_request *);
+
+#define PTLRPC_SVC_HP_RATIO 10
 
 struct ptlrpc_service {
         struct list_head srv_list;              /* chain thru all services */
@@ -647,10 +694,12 @@ struct ptlrpc_service {
         int              srv_threads_running;   /* # running threads */
         int              srv_n_difficult_replies; /* # 'difficult' replies */
         int              srv_n_active_reqs;     /* # reqs being served */
+        int              srv_n_hpreq;           /* # HPreqs being served */
         cfs_duration_t   srv_rqbd_timeout;      /* timeout before re-posting reqs, in tick */
         int              srv_watchdog_factor;   /* soft watchdog timeout mutiplier */
         unsigned         srv_cpu_affinity:1;    /* bind threads to CPUs */
         unsigned         srv_at_check:1;        /* check early replies */
+        unsigned         srv_is_stopping:1;     /* under unregister_service */
         cfs_time_t       srv_at_checktime;      /* debug */
 
         __u32            srv_req_portal;
@@ -663,8 +712,11 @@ struct ptlrpc_service {
         cfs_timer_t       srv_at_timer;         /* early reply timer */
 
         int               srv_n_queued_reqs;    /* # reqs in either of the queues below */
+        int               srv_hpreq_count;      /* # hp requests handled */
+        int               srv_hpreq_ratio;      /* # hp per lp reqs to handle */
         struct list_head  srv_req_in_queue;     /* incoming reqs */
         struct list_head  srv_request_queue;    /* reqs waiting for service */
+        struct list_head  srv_request_hpq;      /* high priority queue */
 
         struct list_head  srv_request_history;  /* request history */
         __u64             srv_request_seq;      /* next request sequence # */
@@ -689,6 +741,7 @@ struct ptlrpc_service {
 
         struct list_head   srv_threads;         /* service thread list */
         svc_handler_t      srv_handler;
+        svc_hpreq_handler_t srv_hpreq_handler;  /* hp request handler */
 
         char *srv_name; /* only statically allocated strings here; we don't clean them */
         char *srv_thread_name; /* only statically allocated strings here; we don't clean them */
@@ -724,7 +777,7 @@ struct ptlrpc_service {
 
 struct ptlrpcd_ctl {
         /**
-         * Ptlrpc thread control flags (LIOD_START, LIOD_STOP, LIOD_STOP_FORCE)
+         * Ptlrpc thread control flags (LIOD_START, LIOD_STOP, LIOD_FORCE)
          */
         unsigned long               pc_flags;
         /**
@@ -783,10 +836,15 @@ enum ptlrpcd_ctl_flags {
          */
         LIOD_STOP        = 1 << 1,
         /**
-         * Ptlrpc thread stop force flag. This will cause also
-         * aborting any inflight rpcs handled by thread.
+         * Ptlrpc thread force flag (only stop force so far).
+         * This will cause aborting any inflight rpcs handled
+         * by thread if LIOD_STOP is specified.
          */
-        LIOD_STOP_FORCE  = 1 << 2
+        LIOD_FORCE       = 1 << 2,
+        /**
+         * This is a recovery ptlrpc thread.
+         */
+        LIOD_RECOVERY    = 1 << 3
 };
 
 /* ptlrpc/events.c */
@@ -814,16 +872,38 @@ extern lnet_pid_t ptl_get_pid(void);
 int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc);
 void ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc);
 int ptlrpc_register_bulk(struct ptlrpc_request *req);
-void ptlrpc_unregister_bulk (struct ptlrpc_request *req);
+int ptlrpc_unregister_bulk(struct ptlrpc_request *req, int async);
 
-static inline int ptlrpc_bulk_active (struct ptlrpc_bulk_desc *desc)
+static inline int ptlrpc_server_bulk_active(struct ptlrpc_bulk_desc *desc)
 {
-        int           rc;
+        int rc;
+
+        LASSERT(desc != NULL);
 
         spin_lock(&desc->bd_lock);
         rc = desc->bd_network_rw;
         spin_unlock(&desc->bd_lock);
-        return (rc);
+        return rc;
+}
+
+static inline int ptlrpc_client_bulk_active(struct ptlrpc_request *req)
+{
+        struct ptlrpc_bulk_desc *desc = req->rq_bulk;
+        int                      rc;
+
+        LASSERT(req != NULL);
+
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_BULK_UNLINK) &&
+            req->rq_bulk_deadline > cfs_time_current_sec())
+                return 1;
+
+        if (!desc)
+                return 0;
+
+        spin_lock(&desc->bd_lock);
+        rc = desc->bd_network_rw;
+        spin_unlock(&desc->bd_lock);
+        return rc;
 }
 
 #define PTLRPC_REPLY_MAYBE_DIFFICULT 0x01
@@ -843,29 +923,9 @@ void ptlrpc_init_client(int req_portal, int rep_portal, char *name,
 void ptlrpc_cleanup_client(struct obd_import *imp);
 struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid);
 
-static inline int
-ptlrpc_client_recv_or_unlink (struct ptlrpc_request *req)
-{
-        int           rc;
-
-        spin_lock(&req->rq_lock);
-        rc = req->rq_receiving_reply || req->rq_must_unlink;
-        spin_unlock(&req->rq_lock);
-        return (rc);
-}
-
-static inline void
-ptlrpc_wake_client_req (struct ptlrpc_request *req)
-{
-        if (req->rq_set == NULL)
-                cfs_waitq_signal(&req->rq_reply_waitq);
-        else
-                cfs_waitq_signal(&req->rq_set->set_waitq);
-}
-
 int ptlrpc_queue_wait(struct ptlrpc_request *req);
 int ptlrpc_replay_req(struct ptlrpc_request *req);
-void ptlrpc_unregister_reply(struct ptlrpc_request *req);
+int ptlrpc_unregister_reply(struct ptlrpc_request *req, int async);
 void ptlrpc_restart_req(struct ptlrpc_request *req);
 void ptlrpc_abort_inflight(struct obd_import *imp);
 void ptlrpc_abort_set(struct ptlrpc_request_set *set);
@@ -944,7 +1004,7 @@ struct ptlrpc_service_conf {
 
 /* ptlrpc/service.c */
 void ptlrpc_save_lock (struct ptlrpc_request *req,
-                       struct lustre_handle *lock, int mode);
+                       struct lustre_handle *lock, int mode, int no_ack);
 void ptlrpc_commit_replies (struct obd_device *obd);
 void ptlrpc_schedule_difficult_reply (struct ptlrpc_reply_state *rs);
 struct ptlrpc_service *ptlrpc_init_svc_conf(struct ptlrpc_service_conf *c,
@@ -961,7 +1021,8 @@ struct ptlrpc_service *ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
                                        cfs_proc_dir_entry_t *proc_entry,
                                        svcreq_printfn_t,
                                        int min_threads, int max_threads,
-                                       char *threadname, __u32 ctx_tags);
+                                       char *threadname, __u32 ctx_tags,
+                                       svc_hpreq_handler_t);
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc);
 
 int ptlrpc_start_threads(struct obd_device *dev, struct ptlrpc_service *svc);
@@ -970,6 +1031,7 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service);
 int liblustre_check_services (void *arg);
 void ptlrpc_daemonize(char *name);
 int ptlrpc_service_health_check(struct ptlrpc_service *);
+void ptlrpc_hpreq_reorder(struct ptlrpc_request *req);
 
 
 struct ptlrpc_svc_data {
@@ -1074,6 +1136,81 @@ lustre_shrink_reply(struct ptlrpc_request *req, int segment,
 }
 
 static inline void
+ptlrpc_rqphase_move(struct ptlrpc_request *req, enum rq_phase new_phase)
+{
+        if (req->rq_phase == new_phase)
+                return;
+        
+        if (new_phase == RQ_PHASE_UNREGISTERING) {
+                req->rq_next_phase = req->rq_phase;
+                if (req->rq_import)
+                        atomic_inc(&req->rq_import->imp_unregistering);
+        }
+        
+        if (req->rq_phase == RQ_PHASE_UNREGISTERING) {
+                if (req->rq_import)
+                        atomic_dec(&req->rq_import->imp_unregistering);
+        }
+
+        DEBUG_REQ(D_RPCTRACE, req, "move req \"%s\" -> \"%s\"", 
+                  ptlrpc_rqphase2str(req), ptlrpc_phase2str(new_phase));
+
+        req->rq_phase = new_phase;
+}
+
+static inline int
+ptlrpc_client_early(struct ptlrpc_request *req)
+{
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK) &&
+            req->rq_reply_deadline > cfs_time_current_sec())
+                return 0;
+        return req->rq_early;
+}
+
+static inline int
+ptlrpc_client_replied(struct ptlrpc_request *req)
+{
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK) &&
+            req->rq_reply_deadline > cfs_time_current_sec())
+                return 0;
+        return req->rq_replied;
+}
+
+static inline int
+ptlrpc_client_recv(struct ptlrpc_request *req)
+{
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK) &&
+            req->rq_reply_deadline > cfs_time_current_sec())
+                return 1;
+        return req->rq_receiving_reply;
+}
+
+static inline int
+ptlrpc_client_recv_or_unlink(struct ptlrpc_request *req)
+{
+        int rc;
+
+        spin_lock(&req->rq_lock);
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK) &&
+            req->rq_reply_deadline > cfs_time_current_sec()) {
+                spin_unlock(&req->rq_lock);
+                return 1;
+        }
+        rc = req->rq_receiving_reply || req->rq_must_unlink;
+        spin_unlock(&req->rq_lock);
+        return rc;
+}
+
+static inline void
+ptlrpc_client_wake_req(struct ptlrpc_request *req)
+{
+        if (req->rq_set == NULL)
+                cfs_waitq_signal(&req->rq_reply_waitq);
+        else
+                cfs_waitq_signal(&req->rq_set->set_waitq);
+}
+
+static inline void
 ptlrpc_rs_addref(struct ptlrpc_reply_state *rs)
 {
         LASSERT(atomic_read(&rs->rs_refcount) > 0);
@@ -1142,10 +1279,25 @@ void ping_evictor_stop(void);
 int ptlrpc_check_and_wait_suspend(struct ptlrpc_request *req);
 
 /* ptlrpc/ptlrpcd.c */
-int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc);
+
+/**
+ * Ptlrpcd scope is a set of two threads: ptlrpcd-foo and ptlrpcd-foo-rcv,
+ * these threads are used to asynchronously send requests queued with
+ * ptlrpcd_add_req(req, PCSOPE_FOO), and to handle completion call-backs for
+ * such requests. Multiple scopes are needed to avoid dead-locks.
+ */
+enum ptlrpcd_scope {
+        /** Scope of bulk read-write rpcs. */
+        PSCOPE_BRW,
+        /** Everything else. */
+        PSCOPE_OTHER,
+        PSCOPE_NR
+};
+
+int ptlrpcd_start(const char *name, struct ptlrpcd_ctl *pc);
 void ptlrpcd_stop(struct ptlrpcd_ctl *pc, int force);
 void ptlrpcd_wake(struct ptlrpc_request *req);
-void ptlrpcd_add_req(struct ptlrpc_request *req);
+void ptlrpcd_add_req(struct ptlrpc_request *req, enum ptlrpcd_scope scope);
 int ptlrpcd_addref(void);
 void ptlrpcd_decref(void);
 

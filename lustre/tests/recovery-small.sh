@@ -31,7 +31,7 @@ build_test_filter
 SETUP=${SETUP:-""}
 CLEANUP=${CLEANUP:-""}
 
-cleanup_and_setup_lustre
+check_and_setup_lustre
 
 assert_DIR
 rm -rf $DIR/[df][0-9]*
@@ -255,6 +255,11 @@ test_18a() {
 
     # 1 stripe on ost2
     lfs setstripe $f -s $((128 * 1024)) -i 1 -c 1
+    get_stripe_info client $f
+    if [ $stripe_index -ne 1 ]; then
+        lfs getstripe $f
+        error "$f: different stripe offset ($stripe_index)" && return
+    fi
 
     do_facet client cp $SAMPLE_FILE $f
     sync
@@ -275,14 +280,17 @@ test_18b() {
 
     do_facet client mkdir -p $DIR/$tdir
     f=$DIR/$tdir/$tfile
-    f2=$DIR/$tdir/${tfile}-2
 
     cancel_lru_locks osc
     pgcache_empty || return 1
 
     # shouldn't have to set stripe size of count==1
     lfs setstripe $f -s $((128 * 1024)) -i 0 -c 1
-    lfs setstripe $f2 -s $((128 * 1024)) -i 0 -c 1
+    get_stripe_info client $f
+    if [ $stripe_index -ne 0 ]; then
+        lfs getstripe $f
+        error "$f: different stripe offset ($stripe_index)" && return
+    fi
 
     do_facet client cp $SAMPLE_FILE $f
     sync
@@ -293,7 +301,7 @@ test_18b() {
     # cache after the client reconnects?     
     rc=0
     pgcache_empty || rc=2
-    rm -f $f $f2
+    rm -f $f
     return $rc
 }
 run_test 18b "eviction and reconnect clears page cache (2766)"
@@ -303,14 +311,17 @@ test_18c() {
 
     do_facet client mkdir -p $DIR/$tdir
     f=$DIR/$tdir/$tfile
-    f2=$DIR/$tdir/${tfile}-2
 
     cancel_lru_locks osc
     pgcache_empty || return 1
 
     # shouldn't have to set stripe size of count==1
     lfs setstripe $f -s $((128 * 1024)) -i 0 -c 1
-    lfs setstripe $f2 -s $((128 * 1024)) -i 0 -c 1
+    get_stripe_info client $f
+    if [ $stripe_index -ne 0 ]; then
+        lfs getstripe $f
+        error "$f: different stripe offset ($stripe_index)" && return
+    fi
 
     do_facet client cp $SAMPLE_FILE $f
     sync
@@ -326,7 +337,7 @@ test_18c() {
     # cache after the client reconnects?     
     rc=0
     pgcache_empty || rc=2
-    rm -f $f $f2
+    rm -f $f
     return $rc
 }
 run_test 18c "Dropped connect reply after eviction handing (14755)"
@@ -841,7 +852,7 @@ test_55() {
 	mkdir -p $DIR/$tdir
 
 	# first dd should be finished quickly
-	lfs setstripe DIR/$tdir/$tfile-1 -c 1 -i 0
+	lfs setstripe $DIR/$tdir/$tfile-1 -c 1 -i 0
 	dd if=/dev/zero of=$DIR/$tdir/$tfile-1 bs=32M count=4  &
 	DDPID=$!
 	count=0
@@ -856,7 +867,7 @@ test_55() {
 	done	
 	echo "(dd_pid=$DDPID, time=$count)successful"
 
-	lfs setstripe DIR/$tdir/$tfile-2 -c 1 -i 0
+	lfs setstripe $DIR/$tdir/$tfile-2 -c 1 -i 0
 	#define OBD_FAIL_OST_DROP_REQ            0x21d
 	do_facet ost1 lctl set_param fail_loc=0x0000021d
 	# second dd will be never finished
@@ -962,4 +973,4 @@ run_test 59 "Read cancel race on client eviction"
 
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true

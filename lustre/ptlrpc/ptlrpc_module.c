@@ -211,6 +211,7 @@ EXPORT_SYMBOL(ptlrpc_start_thread);
 EXPORT_SYMBOL(ptlrpc_unregister_service);
 EXPORT_SYMBOL(ptlrpc_daemonize);
 EXPORT_SYMBOL(ptlrpc_service_health_check);
+EXPORT_SYMBOL(ptlrpc_hpreq_reorder);
 
 /* pack_generic.c */
 EXPORT_SYMBOL(lustre_msg_swabbed);
@@ -264,7 +265,7 @@ EXPORT_SYMBOL(lustre_swab_ldlm_lock_desc);
 EXPORT_SYMBOL(lustre_swab_ldlm_request);
 EXPORT_SYMBOL(lustre_swab_ldlm_reply);
 EXPORT_SYMBOL(lustre_swab_qdata);
-EXPORT_SYMBOL(lustre_swab_qdata_old);
+EXPORT_SYMBOL(lustre_swab_quota_adjust_qunit);
 EXPORT_SYMBOL(lustre_msg_get_flags);
 EXPORT_SYMBOL(lustre_msg_add_flags);
 EXPORT_SYMBOL(lustre_msg_set_flags);
@@ -297,7 +298,6 @@ EXPORT_SYMBOL(lustre_msg_set_transno);
 EXPORT_SYMBOL(lustre_msg_set_status);
 EXPORT_SYMBOL(lustre_msg_set_conn_cnt);
 EXPORT_SYMBOL(lustre_swab_mgs_target_info);
-EXPORT_SYMBOL(lustre_swab_md_fld);
 EXPORT_SYMBOL(lustre_swab_generic_32s);
 EXPORT_SYMBOL(lustre_swab_lustre_capa);
 EXPORT_SYMBOL(lustre_swab_lustre_capa_key);

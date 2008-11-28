@@ -501,8 +501,8 @@ static int mdt_finish_open(struct mdt_thread_info *info,
                            int flags, int created, struct ldlm_reply *rep)
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
+        struct obd_export       *exp = req->rq_export;
         struct mdt_export_data  *med = &req->rq_export->exp_mdt_data;
-        struct mdt_device       *mdt = info->mti_mdt;
         struct md_attr          *ma  = &info->mti_attr;
         struct lu_attr          *la  = &ma->ma_attr;
         struct mdt_file_data    *mfd;
@@ -521,7 +521,7 @@ static int mdt_finish_open(struct mdt_thread_info *info,
         islnk = S_ISLNK(la->la_mode);
         mdt_pack_attr2body(info, repbody, la, mdt_object_fid(o));
 
-        if (med->med_rmtclient) {
+        if (exp_connect_rmtclient(exp)) {
                 void *buf = req_capsule_server_get(info->mti_pill, &RMF_ACL);
 
                 rc = mdt_pack_remote_perm(info, o, buf);
@@ -534,7 +534,7 @@ static int mdt_finish_open(struct mdt_thread_info *info,
                 }
         }
 #ifdef CONFIG_FS_POSIX_ACL
-        else if (req->rq_export->exp_connect_flags & OBD_CONNECT_ACL) {
+        else if (exp->exp_connect_flags & OBD_CONNECT_ACL) {
                 const struct lu_env *env = info->mti_env;
                 struct md_object *next = mdt_object_child(o);
                 struct lu_buf *buf = &info->mti_buf;
@@ -564,26 +564,26 @@ static int mdt_finish_open(struct mdt_thread_info *info,
         }
 #endif
 
-        if (mdt->mdt_opts.mo_mds_capa) {
+        if (info->mti_mdt->mdt_opts.mo_mds_capa &&
+            exp->exp_connect_flags & OBD_CONNECT_MDS_CAPA) {
                 struct lustre_capa *capa;
 
                 capa = req_capsule_server_get(info->mti_pill, &RMF_CAPA1);
                 LASSERT(capa);
                 capa->lc_opc = CAPA_OPC_MDS_DEFAULT;
-                capa->lc_uid = 0;
                 rc = mo_capa_get(info->mti_env, mdt_object_child(o), capa, 0);
                 if (rc)
                         RETURN(rc);
                 repbody->valid |= OBD_MD_FLMDSCAPA;
         }
-        if (mdt->mdt_opts.mo_oss_capa &&
+        if (info->mti_mdt->mdt_opts.mo_oss_capa &&
+            exp->exp_connect_flags & OBD_CONNECT_OSS_CAPA &&
             S_ISREG(lu_object_attr(&o->mot_obj.mo_lu))) {
                 struct lustre_capa *capa;
 
                 capa = req_capsule_server_get(info->mti_pill, &RMF_CAPA2);
                 LASSERT(capa);
                 capa->lc_opc = CAPA_OPC_OSS_DEFAULT | capa_open_opc(flags);
-                capa->lc_uid = 0;
                 rc = mo_capa_get(info->mti_env, mdt_object_child(o), capa, 0);
                 if (rc)
                         RETURN(rc);
@@ -683,7 +683,10 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
         ma->ma_lmm = req_capsule_server_get(pill, &RMF_MDT_MD);
         ma->ma_lmm_size = req_capsule_get_size(pill, &RMF_MDT_MD,
                                                RCL_SERVER);
-        ma->ma_need = MA_INODE | MA_LOV;
+        ma->ma_need = MA_INODE;
+        if (ma->ma_lmm_size > 0)
+                ma->ma_need |= MA_LOV;
+
         ma->ma_valid = 0;
 
         mdt_req_from_lcd(req, med->med_lcd);
@@ -884,7 +887,10 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         ma->ma_lmm = req_capsule_server_get(info->mti_pill, &RMF_MDT_MD);
         ma->ma_lmm_size = req_capsule_get_size(info->mti_pill, &RMF_MDT_MD,
                                                RCL_SERVER);
-        ma->ma_need = MA_INODE | MA_LOV;
+        ma->ma_need = MA_INODE;
+        if (ma->ma_lmm_size > 0)
+                ma->ma_need |= MA_LOV;
+
         ma->ma_valid = 0;
 
         LASSERT(info->mti_pill->rc_fmt == &RQF_LDLM_INTENT_OPEN);
@@ -1003,6 +1009,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                  * not exist.
                  */
                 info->mti_spec.sp_cr_lookup = 0;
+                info->mti_spec.sp_feat = &dt_directory_features;
 
                 result = mdo_create(info->mti_env,
                                     mdt_object_child(parent),

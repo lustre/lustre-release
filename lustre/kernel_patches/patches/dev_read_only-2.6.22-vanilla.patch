@@ -1,3 +1,11 @@
+Set the underlying block device "read only" and silently discard writes
+to the device at the block layer.  This allows the block device queue
+to drain quickly for controlled failback of the device.
+
+At one time it was required to avoid crashes in the JBD layer during
+failover, but it may also be possible to just allow the inflight IO to
+complete and have Lustre handle this more gracefully.
+
 diff -urp linux-2.6.18.1.orig/block/ll_rw_blk.c linux-2.6.18.1/block/ll_rw_blk.c
 --- linux-2.6.18.1.orig/block/ll_rw_blk.c	2006-10-14 06:34:03.000000000 +0300
 +++ linux-2.6.18.1/block/ll_rw_blk.c	2007-05-29 14:50:46.000000000 +0300

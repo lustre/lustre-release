@@ -328,8 +328,11 @@ void filter_invalidate_cache(struct obd_device *obd, struct obd_ioobj *obj,
         LASSERT(inode != NULL);
 
         for (i = 0, rnb = nb; i < obj->ioo_bufcnt; i++, rnb++) {
-                obd_off start = rnb->offset >> CFS_PAGE_SHIFT;
-                obd_off end = (rnb->offset + rnb->len) >> CFS_PAGE_SHIFT;
+                obd_off start;
+                obd_off end;
+
+                start = rnb->offset >> CFS_PAGE_SHIFT;
+                end = (rnb->offset + rnb->len) >> CFS_PAGE_SHIFT;
                 invalidate_mapping_pages(inode->i_mapping, start, end);
                 /* just to avoid warnings */
                 start = 0;
@@ -345,7 +348,6 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                               struct lustre_capa *capa)
 {
         struct obd_device *obd = exp->exp_obd;
-        struct filter_obd *fo = &obd->u.filter;
         struct timeval start, end;
         struct lvfs_run_ctxt saved;
         struct niobuf_local *lnb;
@@ -466,10 +468,6 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                         }
                 }
         }
-
-        if (inode && (fo->fo_read_cache == 0 ||
-                        i_size_read(inode) > fo->fo_readcache_max_filesize))
-                filter_invalidate_cache(obd, obj, nb, inode);
 
         if (rc != 0) {
                 if (dentry != NULL)
@@ -655,6 +653,13 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                 GOTO(cleanup, rc = -ENOENT);
         }
 
+        if (oa->o_valid & (OBD_MD_FLUID | OBD_MD_FLGID) &&
+            dentry->d_inode->i_mode & (S_ISUID | S_ISGID)) {
+                rc = filter_capa_fixoa(exp, oa, obdo_mdsno(oa), capa);
+                if (rc)
+                        GOTO(cleanup, rc);
+        }
+
         rc = filter_map_remote_to_local(objcount, obj, nb, npages, res);
         if (rc)
                 GOTO(cleanup, rc);
@@ -830,6 +835,7 @@ static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
                                 int npages, struct niobuf_local *res,
                                 struct obd_trans_info *oti, int rc)
 {
+        struct filter_obd *fo = &exp->exp_obd->u.filter;
         struct inode *inode = NULL;
         struct ldlm_res_id res_id;
         struct ldlm_resource *resource = NULL;
@@ -846,7 +852,9 @@ static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
                 resource = ldlm_resource_get(ns, NULL, &res_id, LDLM_EXTENT, 0);
 
                 if (resource != NULL) {
+                        LDLM_RESOURCE_ADDREF(resource);
                         ns->ns_lvbo->lvbo_update(resource, NULL, 0, 1);
+                        LDLM_RESOURCE_DELREF(resource);
                         ldlm_resource_putref(resource);
                 }
         }
@@ -860,6 +868,10 @@ static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
                         lnb->page = NULL;
                 }
         }
+
+        if (inode && (fo->fo_read_cache == 0 ||
+                        i_size_read(inode) > fo->fo_readcache_max_filesize))
+                filter_invalidate_cache(exp->exp_obd, obj, rnb, inode);
 
         if (res->dentry != NULL)
                 f_dput(res->dentry);

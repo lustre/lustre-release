@@ -181,7 +181,7 @@ int llog_cat_id2handle(struct llog_handle *cathandle, struct llog_handle **res,
         if (!rc) {
                 loghandle->u.phd.phd_cat_handle = cathandle;
                 loghandle->u.phd.phd_cookie.lgc_lgl = cathandle->lgh_id;
-                loghandle->u.phd.phd_cookie.lgc_index = 
+                loghandle->u.phd.phd_cookie.lgc_index =
                         loghandle->lgh_hdr->llh_cat_idx;
         }
 
@@ -446,14 +446,14 @@ int llog_cat_process_thread(void *data)
 
         if (cb) {
                 rc = llog_cat_process(llh, (llog_cb_t)cb, NULL);
-                if (rc != LLOG_PROC_BREAK)
+                if (rc != LLOG_PROC_BREAK && rc != 0)
                         CERROR("llog_cat_process() failed %d\n", rc);
         } else {
                 CWARN("No callback function for recovery\n");
         }
 
-        /* 
-         * Make sure that all cached data is sent. 
+        /*
+         * Make sure that all cached data is sent.
          */
         llog_sync(ctxt, NULL);
         GOTO(release_llh, rc);

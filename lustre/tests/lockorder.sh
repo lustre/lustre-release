@@ -42,7 +42,7 @@ while [ $MINRES -gt $MAXRES ]; do
 		MAXDIR=$DIRTMP
 		MAXRES=$DIRRES
 	fi
-	if [ $FILERES -lt $MINRES ]; then
+	if [ $FILERES -lt $MINRES -o -z "$MINFILE" ]; then
 		[ -f "$MINFILE" ] && rm $MINFILE
 		MINFILE=$FILETMP
 		MINRES=$FILERES

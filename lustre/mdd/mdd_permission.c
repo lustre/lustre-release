@@ -65,7 +65,7 @@
  * Get default acl EA only.
  * Hold read_lock for mdd_obj.
  */
-int mdd_def_acl_get(const struct lu_env *env, struct mdd_object *mdd_obj, 
+int mdd_def_acl_get(const struct lu_env *env, struct mdd_object *mdd_obj,
                     struct md_attr *ma)
 {
         struct lu_buf *buf;
@@ -74,7 +74,7 @@ int mdd_def_acl_get(const struct lu_env *env, struct mdd_object *mdd_obj,
 
         if (ma->ma_valid & MA_ACL_DEF)
                 RETURN(0);
-        
+
         buf = mdd_buf_get(env, ma->ma_acl, ma->ma_acl_size);
         rc = mdo_xattr_get(env, mdd_obj, buf, XATTR_NAME_ACL_DEFAULT,
                            BYPASS_CAPA);
@@ -91,7 +91,7 @@ int mdd_def_acl_get(const struct lu_env *env, struct mdd_object *mdd_obj,
 /*
  * Hold write_lock for o.
  */
-int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode, 
+int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode,
                   struct thandle *handle)
 {
         struct lu_buf           *buf;
@@ -102,9 +102,9 @@ int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode,
 
         ENTRY;
 
-        buf = mdd_buf_get(env, mdd_env_info(env)->mti_xattr_buf, 
+        buf = mdd_buf_get(env, mdd_env_info(env)->mti_xattr_buf,
                           sizeof(mdd_env_info(env)->mti_xattr_buf));
-        
+
         rc = mdo_xattr_get(env, o, buf, XATTR_NAME_ACL_ACCESS, BYPASS_CAPA);
         if ((rc == -EOPNOTSUPP) || (rc == -ENODATA))
                 RETURN(0);
@@ -118,7 +118,7 @@ int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode,
                       sizeof(posix_acl_xattr_entry);
         if (entry_count <= 0)
                 RETURN(0);
-       
+
         rc = lustre_posix_acl_chmod_masq(entry, mode, entry_count);
         if (rc)
                 RETURN(rc);
@@ -147,13 +147,13 @@ int __mdd_acl_init(const struct lu_env *env, struct mdd_object *obj,
                       sizeof(posix_acl_xattr_entry);
         if (entry_count <= 0)
                 RETURN(0);
-       
-	if (S_ISDIR(*mode)) {
-                rc = mdo_xattr_set(env, obj, buf, XATTR_NAME_ACL_DEFAULT, 0, 
+
+        if (S_ISDIR(*mode)) {
+                rc = mdo_xattr_set(env, obj, buf, XATTR_NAME_ACL_DEFAULT, 0,
                                    handle, BYPASS_CAPA);
                 if (rc)
                         RETURN(rc);
-	}
+        }
 
         rc = lustre_posix_acl_create_masq(entry, mode, entry_count);
         if (rc <= 0)
@@ -180,7 +180,7 @@ static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
         int rc;
         ENTRY;
 
-        buf = mdd_buf_get(env, mdd_env_info(env)->mti_xattr_buf, 
+        buf = mdd_buf_get(env, mdd_env_info(env)->mti_xattr_buf,
                           sizeof(mdd_env_info(env)->mti_xattr_buf));
         rc = mdo_xattr_get(env, obj, buf, XATTR_NAME_ACL_ACCESS,
                            mdd_object_capa(env, obj));
@@ -270,7 +270,7 @@ check_capabilities:
         RETURN(-EACCES);
 }
 
-int mdd_permission(const struct lu_env *env, 
+int mdd_permission(const struct lu_env *env,
                    struct md_object *pobj, struct md_object *cobj,
                    struct md_attr *ma, int mask)
 {
@@ -386,7 +386,7 @@ int mdd_capa_get(const struct lu_env *env, struct md_object *obj,
                           capa->lc_opc);
         if (IS_ERR(oc)) {
                 rc = PTR_ERR(oc);
-        } else {
+        } else if (likely(oc != NULL)) {
                 capa_cpy(capa, oc);
                 capa_put(oc);
         }

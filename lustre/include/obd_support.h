@@ -77,6 +77,7 @@ extern unsigned int ldlm_timeout;         /* seconds */
 extern unsigned int obd_sync_filter;
 extern unsigned int obd_max_dirty_pages;
 extern atomic_t obd_dirty_pages;
+extern atomic_t obd_dirty_transit_pages;
 extern cfs_waitq_t obd_race_waitq;
 extern int obd_race_state;
 extern unsigned int obd_alloc_fail_rate;
@@ -190,6 +191,9 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_MDS_LOV_SYNC_RACE       0x13e
 #define OBD_FAIL_MDS_CLOSE_NET_REP       0x13f
 #define OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT   0x140
+#define OBD_FAIL_MDS_RECOVERY_ACCEPTS_GAPS 0x141
+#define OBD_FAIL_MDS_BLOCK_QUOTA_REQ     0x142
+#define OBD_FAIL_MDS_DROP_QUOTA_REQ      0x143
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
@@ -253,6 +257,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_LDLM_CLOSE_THREAD       0x313
 #define OBD_FAIL_LDLM_CANCEL_BL_CB_RACE  0x314
 #define OBD_FAIL_LDLM_CP_CB_WAIT         0x315
+#define OBD_FAIL_LDLM_OST_FAIL_RACE      0x316
 
 /* LOCKLESS IO */
 #define OBD_FAIL_LDLM_SET_CONTENTION     0x315
@@ -286,6 +291,10 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_PTLRPC_PAUSE_REP        0x50c
 
 #define OBD_FAIL_PTLRPC_DUMP_LOG         0x50e
+#define OBD_FAIL_PTLRPC_LONG_REPL_UNLINK 0x50f
+#define OBD_FAIL_PTLRPC_LONG_BULK_UNLINK 0x510
+#define OBD_FAIL_PTLRPC_HPREQ_TIMEOUT    0x511
+#define OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT  0x512
 
 #define OBD_FAIL_OBD_PING_NET            0x600
 #define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601
@@ -316,7 +325,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_MGS_PAUSE_REQ           0x904
 #define OBD_FAIL_MGS_PAUSE_TARGET_REG    0x905
 
-#define OBD_FAIL_QUOTA_QD_COUNT_32BIT    0xA00
+#define OBD_FAIL_QUOTA_RET_QDATA         0xA02
 
 #define OBD_FAIL_LPROC_REMOVE            0xB00
 

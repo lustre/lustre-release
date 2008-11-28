@@ -52,7 +52,6 @@ static inline int lov_mds_md_size(int stripes, int lmm_magic)
                         stripes * sizeof(struct lov_ost_data_v1);
 }
 
-
 #define IOC_LOV_TYPE                   'g'
 #define IOC_LOV_MIN_NR                 50
 #define IOC_LOV_SET_OSC_ACTIVE         _IOWR('g', 50, long)

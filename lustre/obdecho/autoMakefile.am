@@ -68,4 +68,4 @@ endif # MODULES
 install-data-hook: $(install_data_hook)
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
-DIST_SOURCES = $(obdecho-objs:%.o=%.c)
+DIST_SOURCES = $(obdecho-objs:%.o=%.c) echo_internal.h

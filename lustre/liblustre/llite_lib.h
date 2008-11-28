@@ -47,7 +47,11 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-/* This should not be "optimized" use ~0ULL because page->index is a long and 
+/* for struct cl_lock_descr and struct cl_io */
+#include <cl_object.h>
+#include <lclient.h>
+
+/* This should not be "optimized" use ~0ULL because page->index is a long and
  * 32-bit systems are therefore limited to 16TB in a mapping */
 #define PAGE_CACHE_MAXBYTES ((__u64)(~0UL) << CFS_PAGE_SHIFT)
 
@@ -70,6 +74,8 @@ struct llu_sb_info {
         struct obd_uuid          ll_mds_uuid;
         struct obd_uuid          ll_mds_peer_uuid;
         char                    *ll_instance;
+        struct lu_site           *ll_site;
+        struct cl_device         *ll_cl;
 };
 
 #define LL_SBI_NOLCK            0x1
@@ -109,7 +115,9 @@ struct llu_inode_info {
         /* not for stat, change it later */
         int                     lli_st_flags;
         unsigned long           lli_st_generation;
+        struct cl_object       *lli_clob;
 };
+
 
 static inline struct llu_sb_info *llu_fs2sbi(struct filesys *fs)
 {
@@ -218,8 +226,7 @@ int ll_parse_mount_target(const char *target, char **mgsnid,
 extern struct mount_option_s mount_option;
 
 /* super.c */
-void llu_update_inode(struct inode *inode, struct mdt_body *body,
-                      struct lov_stripe_md *lmm);
+void llu_update_inode(struct inode *inode, struct lustre_md *md);
 void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid);
 void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid);
 int ll_it_open_error(int phase, struct lookup_intent *it);
@@ -253,11 +260,7 @@ int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir);
 int llu_iop_read(struct inode *ino, struct ioctx *ioctxp);
 int llu_iop_write(struct inode *ino, struct ioctx *ioctxp);
 int llu_iop_iodone(struct ioctx *ioctxp);
-int llu_local_size(struct inode *inode);
 int llu_glimpse_size(struct inode *inode);
-int llu_extent_lock_cancel_cb(struct ldlm_lock *lock,
-                              struct ldlm_lock_desc *new, void *data,
-                              int flag);
 int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
                     struct lov_stripe_md *lsm, int mode,
                     ldlm_policy_data_t *policy, struct lustre_handle *lockh,
@@ -278,11 +281,11 @@ int llu_md_blocking_ast(struct ldlm_lock *lock,
                         void *data, int flag);
 
 /* dir.c */
-ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep, 
+ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep,
                                char *buf, size_t nbytes);
 
 /* liblustre/llite_fid.c*/
-unsigned long llu_fid_build_ino(struct llu_sb_info *sbi, 
+unsigned long llu_fid_build_ino(struct llu_sb_info *sbi,
                                 struct lu_fid *fid);
 
 /* ext2 related */
@@ -306,6 +309,8 @@ static inline struct ext2_dirent *ext2_next_entry(struct ext2_dirent *p)
         return (struct ext2_dirent*)((char*) p + le16_to_cpu(p->rec_len));
 }
 
+int llu_merge_lvb(struct inode *inode);
+
 static inline void inode_init_lvb(struct inode *inode, struct ost_lvb *lvb)
 {
         struct intnl_stat *st = llu_i2stat(inode);
@@ -314,6 +319,93 @@ static inline void inode_init_lvb(struct inode *inode, struct ost_lvb *lvb)
         lvb->lvb_mtime = st->st_mtime;
         lvb->lvb_atime = st->st_atime;
         lvb->lvb_ctime = st->st_ctime;
+}
+
+#define LLU_IO_GROUP_SIZE(x) \
+        (sizeof(struct llu_io_group) + \
+         (sizeof(struct ll_async_page) + \
+          sizeof(cfs_page_t) + \
+          llap_cookie_size) * (x))
+
+#define LLU_IO_SESSION_SIZE(x)  \
+        (sizeof(struct llu_io_session) + (x) * 2 * sizeof(void *))
+
+struct llu_io_session {
+        struct inode           *lis_inode;
+        int                     lis_cmd;
+        int                     lis_max_groups;
+        int                     lis_ngroups;
+        struct llu_io_group    *lis_groups[0];
+};
+
+struct llu_io_group
+{
+        struct lustre_rw_params *lig_params;
+        int                     lig_rc;
+        __u64                   lig_rwcount;
+};
+
+struct llu_io_session;
+void put_io_group(struct llu_io_group *group);
+
+int cl_sb_init(struct llu_sb_info *sbi);
+int cl_sb_fini(struct llu_sb_info *sbi);
+int cl_inode_init(struct inode *inode, struct lustre_md *md);
+void cl_inode_fini(struct inode *inode);
+
+void llu_io_init(struct cl_io *io, struct inode *inode, int write);
+
+struct slp_io {
+        struct llu_io_session *sio_session;
+};
+
+struct slp_session {
+        struct slp_io ss_ios;
+};
+
+static inline struct slp_session *slp_env_session(const struct lu_env *env)
+{
+        extern struct lu_context_key slp_session_key;
+        struct slp_session *ses;
+        ses = lu_context_key_get(env->le_ses, &slp_session_key);
+        LASSERT(ses != NULL);
+        return ses;
+}
+static inline struct slp_io *slp_env_io(const struct lu_env *env)
+{
+        return &slp_env_session(env)->ss_ios;
+}
+
+/* lclient compat stuff */
+#define cl_inode_info llu_inode_info
+#define cl_i2info(info) llu_i2info(info)
+#define cl_inode_mode(inode) (llu_i2stat(inode)->st_mode)
+#define cl_i2sbi llu_i2sbi
+#define cl_isize_read(inode) (llu_i2stat(inode)->st_size)
+#define cl_isize_write(inode,kms) do{llu_i2stat(inode)->st_size = kms;}while(0)
+#define cl_isize_write_nolock(inode,kms) do{llu_i2stat(inode)->st_size = kms;}while(0)
+
+static inline void cl_isize_lock(struct inode *inode, int lsmlock)
+{
+}
+
+static inline void cl_isize_unlock(struct inode *inode, int lsmlock)
+{
+}
+
+static inline int cl_merge_lvb(struct inode *inode)
+{
+        return llu_merge_lvb(inode);
+}
+
+#define cl_inode_atime(inode) (llu_i2stat(inode)->st_atime)
+#define cl_inode_ctime(inode) (llu_i2stat(inode)->st_ctime)
+#define cl_inode_mtime(inode) (llu_i2stat(inode)->st_mtime)
+
+static inline struct obd_capa *cl_capa_lookup(struct inode *inode,
+                                              enum cl_req_type crt)
+{
+        return NULL;
 }
 
 #endif

@@ -206,8 +206,8 @@ static void check_obd_connect_data(void)
         CHECK_CDEFINE(OBD_CONNECT_JOIN);
         CHECK_CDEFINE(OBD_CONNECT_ATTRFID);
         CHECK_CDEFINE(OBD_CONNECT_NODEVOH);
-        CHECK_CDEFINE(OBD_CONNECT_LCL_CLIENT);
         CHECK_CDEFINE(OBD_CONNECT_RMT_CLIENT);
+        CHECK_CDEFINE(OBD_CONNECT_RMT_CLIENT_FORCE);
         CHECK_CDEFINE(OBD_CONNECT_BRW_SIZE);
         CHECK_CDEFINE(OBD_CONNECT_QUOTA64);
         CHECK_CDEFINE(OBD_CONNECT_MDS_CAPA);
@@ -914,6 +914,22 @@ check_llog_setattr_rec(void)
 }
 
 static void
+check_llog_setattr64_rec(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(llog_setattr64_rec);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_hdr);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_oid);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_ogen);
+        CHECK_MEMBER(llog_setattr64_rec, padding);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_uid);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_uid_h);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_gid);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_gid_h);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_tail);
+}
+
+static void
 check_llog_size_change_rec(void)
 {
         BLANK_LINE();
@@ -1035,17 +1051,8 @@ check_qunit_data(void)
         CHECK_MEMBER(qunit_data, qd_id);
         CHECK_MEMBER(qunit_data, qd_flags);
         CHECK_MEMBER(qunit_data, qd_count);
-}
-
-static void
-check_qunit_data_old(void)
-{
-        BLANK_LINE();
-        CHECK_STRUCT(qunit_data_old);
-        CHECK_MEMBER(qunit_data_old, qd_id);
-        CHECK_MEMBER(qunit_data_old, qd_type);
-        CHECK_MEMBER(qunit_data_old, qd_count);
-        CHECK_MEMBER(qunit_data_old, qd_isblk);
+        CHECK_MEMBER(qunit_data, qd_qunit);
+        CHECK_MEMBER(qunit_data, padding);
 }
 
 static void
@@ -1103,6 +1110,18 @@ check_posix_acl_xattr_header(void)
         CHECK_STRUCT_TYPEDEF(posix_acl_xattr_header);
         CHECK_MEMBER_TYPEDEF(posix_acl_xattr_header, a_version);
         CHECK_MEMBER_TYPEDEF(posix_acl_xattr_header, a_entries);
+}
+
+static void
+check_quota_adjust_qunit(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(quota_adjust_qunit);
+        CHECK_MEMBER(quota_adjust_qunit, qaq_flags);
+        CHECK_MEMBER(quota_adjust_qunit, qaq_id);
+        CHECK_MEMBER(quota_adjust_qunit, qaq_bunit_sz);
+        CHECK_MEMBER(quota_adjust_qunit, qaq_iunit_sz);
+        CHECK_MEMBER(quota_adjust_qunit, padding1);
 }
 
 static void
@@ -1253,6 +1272,7 @@ main(int argc, char **argv)
         CHECK_VALUE(OST_SYNC);
         CHECK_VALUE(OST_QUOTACHECK);
         CHECK_VALUE(OST_QUOTACTL);
+        CHECK_VALUE(OST_QUOTA_ADJUST_QUNIT);
         CHECK_VALUE(OST_LAST_OPC);
 
         CHECK_DEFINE(OBD_OBJECT_EOF);
@@ -1384,6 +1404,7 @@ main(int argc, char **argv)
         check_llog_orphan_rec();
         check_llog_unlink_rec();
         check_llog_setattr_rec();
+        check_llog_setattr64_rec();
         check_llog_size_change_rec();
         check_llog_gen();
         check_llog_gen_rec();
@@ -1394,7 +1415,7 @@ main(int argc, char **argv)
         check_llog_array_rec();
         check_mds_extent_desc();
         check_qunit_data();
-        check_qunit_data_old();
+        check_quota_adjust_qunit();
         check_mgs_target_info();
         check_lustre_disk_data();
         check_ll_user_fiemap();

@@ -287,6 +287,12 @@ void ldlm_proc_namespace(struct ldlm_namespace *ns)
                 lock_vars[0].write_fptr = lprocfs_wr_uint;
                 lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
 
+                snprintf(lock_name, MAX_STRING_SIZE, "%s/lock_timeouts",
+                         ns->ns_name);
+                lock_vars[0].data = &ns->ns_timeouts;
+                lock_vars[0].read_fptr = lprocfs_rd_uint;
+                lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
+
                 snprintf(lock_name, MAX_STRING_SIZE, "%s/max_nolock_bytes",
                          ns->ns_name);
                 lock_vars[0].data = &ns->ns_max_nolock_size;
@@ -370,6 +376,7 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
         ns->ns_max_unused = LDLM_DEFAULT_LRU_SIZE;
         ns->ns_max_age = LDLM_DEFAULT_MAX_ALIVE;
         ns->ns_ctime_age_limit = LDLM_CTIME_AGE_LIMIT;
+        ns->ns_timeouts = 0;
         spin_lock_init(&ns->ns_unused_lock);
         ns->ns_orig_connect_flags = 0;
         ns->ns_connect_flags = 0;

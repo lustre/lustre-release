@@ -71,7 +71,7 @@ typedef unsigned short umode_t;
 /*
  * The inter_module_get implementation is specific to liblustre, so this needs
  * to stay here for now.
- */ 
+ */
 static inline void inter_module_put(void *a)
 {
         return;
@@ -251,6 +251,7 @@ struct task_struct {
         int ngroups;
         gid_t *groups;
         __u32 cap_effective;
+        void *journal_info;
 };
 
 
@@ -378,7 +379,7 @@ void *liblustre_register_wait_callback(const char *name,
 void liblustre_deregister_wait_callback(void *notifier);
 int liblustre_wait_event(int timeout);
 
-void *liblustre_register_idle_callback(const char *name, 
+void *liblustre_register_idle_callback(const char *name,
                                        int (*fn)(void *arg), void *arg);
 void liblustre_deregister_idle_callback(void *notifier);
 void liblustre_wait_idle(void);
@@ -484,10 +485,10 @@ void posix_acl_release(struct posix_acl *acl)
 }
 
 #ifdef LIBLUSTRE_POSIX_ACL
-# ifndef posix_acl_xattr_entry 
+# ifndef posix_acl_xattr_entry
 #  define posix_acl_xattr_entry xattr_acl_entry
 # endif
-# ifndef posix_acl_xattr_header 
+# ifndef posix_acl_xattr_header
 #  define posix_acl_xattr_header xattr_acl_header
 # endif
 # ifndef posix_acl_xattr_size

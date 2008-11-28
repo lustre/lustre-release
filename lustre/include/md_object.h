@@ -62,7 +62,7 @@
 struct md_device;
 struct md_device_operations;
 struct md_object;
-
+struct obd_export;
 
 enum {
         UCRED_INVALID   = -1,
@@ -73,26 +73,30 @@ enum {
 
 struct md_ucred {
         __u32               mu_valid;
-        __u32                   mu_o_uid;
-        __u32                   mu_o_gid;
-        __u32                   mu_o_fsuid;
-        __u32                   mu_o_fsgid;
-        __u32                   mu_uid;
-        __u32                   mu_gid;
-        __u32                   mu_fsuid;
-        __u32                   mu_fsgid;
-        __u32                   mu_suppgids[2];
-        cfs_cap_t               mu_cap;
-        __u32                   mu_umask;
-	struct group_info      *mu_ginfo;
+        __u32               mu_o_uid;
+        __u32               mu_o_gid;
+        __u32               mu_o_fsuid;
+        __u32               mu_o_fsgid;
+        __u32               mu_uid;
+        __u32               mu_gid;
+        __u32               mu_fsuid;
+        __u32               mu_fsgid;
+        __u32               mu_suppgids[2];
+        cfs_cap_t           mu_cap;
+        __u32               mu_umask;
+	struct group_info  *mu_ginfo;
 	struct md_identity *mu_identity;
 };
 
-#define MD_CAPAINFO_MAX 5
+enum {
+        MD_CAPAINFO_MAX = 5
+};
 
 /** there are at most 5 fids in one operation, see rename, NOTE the last one
  * is a temporary one used for is_subdir() */
 struct md_capainfo {
+        __u32                   mc_auth;
+        __u32                   mc_padding;
         const struct lu_fid    *mc_fid[MD_CAPAINFO_MAX];
         struct lustre_capa     *mc_capa[MD_CAPAINFO_MAX];
 };
@@ -162,11 +166,12 @@ struct md_op_spec {
                 struct md_spec_reg {
                         /** lov objs exist already */
                         const struct lu_fid   *fid;
-                        int no_lov_create;
                         const void *eadata;
                         int  eadatalen;
                 } sp_ea;
         } u;
+        /** don't create lov objects or llog cookie - this replay */
+        int no_create;
 
         /** Create flag from client: such as MDS_OPEN_CREAT, and others. */
         __u32      sp_cr_flags;
@@ -179,6 +184,9 @@ struct md_op_spec {
 
         /** Check for split */
         int        sp_ck_split;
+
+        /** to create directory */
+        const struct dt_index_features *sp_feat;
 };
 
 /**
@@ -313,6 +321,80 @@ struct md_device_operations {
         int (*mdo_update_capa_key)(const struct lu_env *env,
                                    struct md_device *m,
                                    struct lustre_capa_key *key);
+
+#ifdef HAVE_QUOTA_SUPPORT
+        struct md_quota_operations {
+                int (*mqo_notify)(const struct lu_env *env,
+                                  struct md_device *m);
+
+                int (*mqo_setup)(const struct lu_env *env,
+                                 struct md_device *m,
+                                 void *data);
+
+                int (*mqo_cleanup)(const struct lu_env *env,
+                                   struct md_device *m);
+
+                int (*mqo_recovery)(const struct lu_env *env,
+                                    struct md_device *m);
+
+                int (*mqo_check)(const struct lu_env *env,
+                                 struct md_device *m,
+                                 struct obd_export *exp,
+                                 __u32 type);
+
+                int (*mqo_on)(const struct lu_env *env,
+                              struct md_device *m,
+                              __u32 type);
+
+                int (*mqo_off)(const struct lu_env *env,
+                               struct md_device *m,
+                               __u32 type);
+
+                int (*mqo_setinfo)(const struct lu_env *env,
+                                   struct md_device *m,
+                                   __u32 type,
+                                   __u32 id,
+                                   struct obd_dqinfo *dqinfo);
+
+                int (*mqo_getinfo)(const struct lu_env *env,
+                                   const struct md_device *m,
+                                   __u32 type,
+                                   __u32 id,
+                                   struct obd_dqinfo *dqinfo);
+
+                int (*mqo_setquota)(const struct lu_env *env,
+                                    struct md_device *m,
+                                    __u32 type,
+                                    __u32 id,
+                                    struct obd_dqblk *dqblk);
+
+                int (*mqo_getquota)(const struct lu_env *env,
+                                    const struct md_device *m,
+                                    __u32 type,
+                                    __u32 id,
+                                    struct obd_dqblk *dqblk);
+
+                int (*mqo_getoinfo)(const struct lu_env *env,
+                                    const struct md_device *m,
+                                    __u32 type,
+                                    __u32 id,
+                                    struct obd_dqinfo *dqinfo);
+
+                int (*mqo_getoquota)(const struct lu_env *env,
+                                     const struct md_device *m,
+                                     __u32 type,
+                                     __u32 id,
+                                     struct obd_dqblk *dqblk);
+
+                int (*mqo_invalidate)(const struct lu_env *env,
+                                      struct md_device *m,
+                                      __u32 type);
+
+                int (*mqo_finvalidate)(const struct lu_env *env,
+                                       struct md_device *m,
+                                       __u32 type);
+        } mdo_quota;
+#endif
 };
 
 enum md_upcall_event {
@@ -335,9 +417,9 @@ struct md_upcall {
 };
 
 struct md_device {
-        struct lu_device             md_lu_dev;
+        struct lu_device                   md_lu_dev;
         const struct md_device_operations *md_ops;
-        struct md_upcall             md_upcall;
+        struct md_upcall                   md_upcall;
 };
 
 static inline void md_upcall_init(struct md_device *m, void *upcl)
@@ -377,7 +459,7 @@ static inline int md_do_upcall(const struct lu_env *env, struct md_device *m,
 }
 
 struct md_object {
-        struct lu_object             mo_lu;
+        struct lu_object                   mo_lu;
         const struct md_object_operations *mo_ops;
         const struct md_dir_operations    *mo_dir_ops;
 };
@@ -454,12 +536,12 @@ static inline struct md_site *lu_site2md(const struct lu_site *s)
 
 static inline int md_device_init(struct md_device *md, struct lu_device_type *t)
 {
-	return lu_device_init(&md->md_lu_dev, t);
+        return lu_device_init(&md->md_lu_dev, t);
 }
 
 static inline void md_device_fini(struct md_device *md)
 {
-	lu_device_fini(&md->md_lu_dev);
+        lu_device_fini(&md->md_lu_dev);
 }
 
 static inline struct md_object *md_object_find_slice(const struct lu_env *env,
@@ -722,6 +804,54 @@ static inline int mdo_rename_tgt(const struct lu_env *env,
         }
 }
 
-/** @} md */
+struct dt_device;
+/**
+ * Structure to hold object information. This is used to create object
+ * \pre llod_dir exist
+ */
+struct lu_local_obj_desc {
+        const char                      *llod_dir;
+        const char                      *llod_name;
+        __u32                            llod_oid;
+        int                              llod_is_index;
+        const struct dt_index_features * llod_feat;
+        struct list_head                 llod_linkage;
+};
 
+struct md_object *llo_store_resolve(const struct lu_env *env,
+                                    struct md_device *md,
+                                    struct dt_device *dt,
+                                    const char *path,
+                                    struct lu_fid *fid);
+
+struct md_object *llo_store_open(const struct lu_env *env,
+                                 struct md_device *md,
+                                 struct dt_device *dt,
+                                 const char *dirname,
+                                 const char *objname,
+                                 struct lu_fid *fid);
+
+struct md_object *llo_store_create_index(const struct lu_env *env,
+                                         struct md_device *md,
+                                         struct dt_device *dt,
+                                         const char *dirname,
+                                         const char *objname,
+                                         const struct lu_fid *fid,
+                                         const struct dt_index_features *feat);
+
+struct md_object *llo_store_create(const struct lu_env *env,
+                                   struct md_device *md,
+                                   struct dt_device *dt,
+                                   const char *dirname,
+                                   const char *objname,
+                                   const struct lu_fid *fid);
+
+void llo_local_obj_register(struct lu_local_obj_desc *);
+void llo_local_obj_unregister(struct lu_local_obj_desc *);
+
+int llo_local_objects_setup(const struct lu_env *env,
+                             struct md_device * md,
+                             struct dt_device * dt);
+
+/** @} md */
 #endif /* _LINUX_MD_OBJECT_H */

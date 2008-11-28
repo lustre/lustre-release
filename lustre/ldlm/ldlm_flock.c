@@ -112,7 +112,7 @@ ldlm_flock_destroy(struct ldlm_lock *lock, ldlm_mode_t mode, int flags)
                 /* client side - set a flag to prevent sending a CANCEL */
                 lock->l_flags |= LDLM_FL_LOCAL_ONLY | LDLM_FL_CBPENDING;
 
-                /* when reaching here, it is under lock_res_and_lock(). Thus, 
+                /* when reaching here, it is under lock_res_and_lock(). Thus,
                    need call the nolock version of ldlm_lock_decref_internal*/
                 ldlm_lock_decref_internal_nolock(lock, mode);
         }
@@ -405,9 +405,8 @@ reprocess:
                                                 &new2->l_remote_handle,
                                                 &new2->l_exp_hash);
                 }
-                if (*flags == LDLM_FL_WAIT_NOREPROC) {
+                if (*flags == LDLM_FL_WAIT_NOREPROC)
                         ldlm_lock_addref_internal_nolock(new2, lock->l_granted_mode);
-                }
 
                 /* insert new2 at lock */
                 ldlm_resource_add_lock(res, ownlocks, new2);
@@ -524,7 +523,7 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
          * holding the lock even if app still believes it has it, since
          * server already dropped it anyway. Only for granted locks too. */
         lock_res_and_lock(lock);
-        if ((lock->l_flags & (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) == 
+        if ((lock->l_flags & (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) ==
             (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) {
                 unlock_res_and_lock(lock);
                 if (lock->l_req_mode == lock->l_granted_mode &&

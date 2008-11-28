@@ -36,7 +36,7 @@
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
-#define DEBUG_SUBSYSTEM S_MDS
+#define DEBUG_SUBSYSTEM S_LQUOTA
 
 #ifdef __KERNEL__
 # include <linux/version.h>
@@ -44,7 +44,6 @@
 # include <linux/init.h>
 # include <linux/fs.h>
 # include <linux/jbd.h>
-# include <linux/ext3_fs.h>
 # include <linux/quota.h>
 # include <linux/smp_lock.h>
 # include <linux/buffer_head.h>
@@ -63,19 +62,25 @@
 #include <lustre_quota.h>
 #include "quota_internal.h"
 
+#ifdef HAVE_QUOTA_SUPPORT
 #ifdef __KERNEL__
-int mds_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
+int mds_quota_ctl(struct obd_device *obd, struct obd_export *unused,
+                  struct obd_quotactl *oqctl)
 {
-        struct obd_device *obd = exp->exp_obd;
+        struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
+        struct timeval work_start;
+        struct timeval work_end;
+        long timediff;
         int rc = 0;
         ENTRY;
 
+        do_gettimeofday(&work_start);
         switch (oqctl->qc_cmd) {
         case Q_QUOTAON:
                 rc = mds_quota_on(obd, oqctl);
                 break;
         case Q_QUOTAOFF:
-                mds_quota_off(obd, oqctl);
+                rc = mds_quota_off(obd, oqctl);
                 break;
         case Q_SETINFO:
                 rc = mds_set_dqinfo(obd, oqctl);
@@ -93,6 +98,12 @@ int mds_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         case Q_GETOQUOTA:
                 rc = mds_get_obd_quota(obd, oqctl);
                 break;
+        case LUSTRE_Q_INVALIDATE:
+                rc = mds_quota_invalidate(obd, oqctl);
+                break;
+        case LUSTRE_Q_FINVALIDATE:
+                rc = mds_quota_finvalidate(obd, oqctl);
+                break;
         default:
                 CERROR("%s: unsupported mds_quotactl command: %d\n",
                        obd->obd_name, oqctl->qc_cmd);
@@ -103,19 +114,29 @@ int mds_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                 CDEBUG(D_INFO, "mds_quotactl admin quota command %d, id %u, "
                                "type %d, failed: rc = %d\n",
                        oqctl->qc_cmd, oqctl->qc_id, oqctl->qc_type, rc);
+        do_gettimeofday(&work_end);
+        timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
+        lprocfs_counter_add(qctxt->lqc_stats, LQUOTA_QUOTA_CTL, timediff);
 
         RETURN(rc);
 }
 
-int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
+int filter_quota_ctl(struct obd_device *unused, struct obd_export *exp,
+                     struct obd_quotactl *oqctl)
 {
         struct obd_device *obd = exp->exp_obd;
         struct obd_device_target *obt = &obd->u.obt;
         struct lvfs_run_ctxt saved;
+        struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
+        struct timeval work_start;
+        struct timeval work_end;
+        long timediff;
         int rc = 0;
         ENTRY;
 
+        do_gettimeofday(&work_start);
         switch (oqctl->qc_cmd) {
+        case Q_FINVALIDATE:
         case Q_QUOTAON:
         case Q_QUOTAOFF:
                 if (!atomic_dec_and_test(&obt->obt_quotachecking)) {
@@ -124,6 +145,12 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                         rc = -EBUSY;
                         break;
                 }
+                if (oqctl->qc_cmd == Q_FINVALIDATE &&
+                    (obt->obt_qctxt.lqc_flags & UGQUOTA2LQC(oqctl->qc_type))) {
+                        rc = -EBUSY;
+                        break;
+                }
+                oqctl->qc_id = obt->obt_qfmt; /* override qfmt version */
         case Q_GETOINFO:
         case Q_GETOQUOTA:
         case Q_GETQUOTA:
@@ -137,18 +164,21 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                                                  1);
 
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                rc = fsfilt_quotactl(obd, obd->u.obt.obt_sb, oqctl);
+                rc = fsfilt_quotactl(obd, obt->obt_sb, oqctl);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
-                if (oqctl->qc_cmd == Q_QUOTAON || oqctl->qc_cmd == Q_QUOTAOFF) {
-                        if (!rc)
-                                obt->obt_qctxt.lqc_status = 
-                                        (oqctl->qc_cmd == Q_QUOTAON) ? 1 : 0;
+                if (oqctl->qc_cmd == Q_QUOTAON || oqctl->qc_cmd == Q_QUOTAOFF ||
+                    oqctl->qc_cmd == Q_FINVALIDATE) {
+                        if (!rc && oqctl->qc_cmd == Q_QUOTAON)
+                                obt->obt_qctxt.lqc_flags |= UGQUOTA2LQC(oqctl->qc_type);
+                        if (!rc && oqctl->qc_cmd == Q_QUOTAOFF)
+                                obt->obt_qctxt.lqc_flags &= ~UGQUOTA2LQC(oqctl->qc_type);
                         atomic_inc(&obt->obt_quotachecking);
                 }
                 break;
         case Q_SETQUOTA:
-                qctxt_wait_pending_dqacq(&obd->u.obt.obt_qctxt, 
+                /* currently, it is only used for nullifying the quota */
+                qctxt_wait_pending_dqacq(&obd->u.obt.obt_qctxt,
                                          oqctl->qc_id, oqctl->qc_type, 1);
 
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
@@ -170,14 +200,14 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                 LASSERT(oqctl->qc_dqblk.dqb_bsoftlimit == 0);
 
                 /* There might be a pending dqacq/dqrel (which is going to
-                 * clear stale limits on slave). we should wait for it's 
+                 * clear stale limits on slave). we should wait for it's
                  * completion then initialize limits */
-                qctxt_wait_pending_dqacq(&obd->u.obt.obt_qctxt, 
+                qctxt_wait_pending_dqacq(&obd->u.obt.obt_qctxt,
                                          oqctl->qc_id, oqctl->qc_type, 1);
 
                 if (!oqctl->qc_dqblk.dqb_bhardlimit)
                         goto adjust;
-                
+
                 LASSERT(oqctl->qc_dqblk.dqb_bhardlimit == MIN_QLIMIT);
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = fsfilt_quotactl(obd, obd->u.obt.obt_sb, oqctl);
@@ -200,8 +230,13 @@ adjust:
                 else
                         gid = oqctl->qc_id;
 
-                rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt, 
-                                        uid, gid, 1, 0);
+                rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt,
+                                        uid, gid, 1, 0, NULL);
+                if (rc == -EDQUOT || rc == -EBUSY) {
+                        CDEBUG(D_QUOTA, "rc: %d.\n", rc);
+                        rc = 0;
+                }
+
                 break;
                 }
         default:
@@ -209,30 +244,37 @@ adjust:
                        obd->obd_name, oqctl->qc_cmd);
                 RETURN(-EFAULT);
         }
+        do_gettimeofday(&work_end);
+        timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
+        lprocfs_counter_add(qctxt->lqc_stats, LQUOTA_QUOTA_CTL, timediff);
 
         RETURN(rc);
 }
 #endif /* __KERNEL__ */
+#endif
 
-int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
+int client_quota_ctl(struct obd_device *unused, struct obd_export *exp,
+                     struct obd_quotactl *oqctl)
 {
-        struct ptlrpc_request *req;
-        struct obd_quotactl   *oqc;
-        int                    ver, opc, rc;
+        struct ptlrpc_request   *req;
+        struct obd_quotactl     *oqc;
+        const struct req_format *rf;
+        int                      ver, opc, rc;
         ENTRY;
 
         if (!strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_MDC_NAME)) {
+                rf  = &RQF_MDS_QUOTACTL;
                 ver = LUSTRE_MDS_VERSION,
                 opc = MDS_QUOTACTL;
         } else if (!strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_OSC_NAME)) {
+                rf  = &RQF_OST_QUOTACTL;
                 ver = LUSTRE_OST_VERSION,
                 opc = OST_QUOTACTL;
         } else {
                 RETURN(-EINVAL);
         }
 
-        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
-                                        &RQF_MDS_QUOTACTL, ver, opc);
+        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp), rf, ver, opc);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
@@ -242,30 +284,65 @@ int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         ptlrpc_request_set_replen(req);
 
         rc = ptlrpc_queue_wait(req);
-        if (!rc) {
-                oqc = req_capsule_server_get(&req->rq_pill, &RMF_OBD_QUOTACTL);
-                if (oqc == NULL)
-                        GOTO(out, rc = -EPROTO);
-
-                *oqctl = *oqc;
+        if (rc) {
+                CERROR("ptlrpc_queue_wait failed, rc: %d\n", rc);
+                GOTO(out, rc);
         }
+
+        oqc = NULL;
+        if (req->rq_repmsg)
+                oqc = req_capsule_server_get(&req->rq_pill, &RMF_OBD_QUOTACTL);
+
+        if (oqc == NULL) {
+                CERROR ("Can't unpack obd_quotactl\n");
+                GOTO(out, rc = -EPROTO);
+        }
+
+        *oqctl = *oqc;
+        EXIT;
 out:
         ptlrpc_req_finished(req);
-        RETURN (rc);
+        return rc;
 }
 
-int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
+/**
+ * For lmv, only need to send request to master MDT, and the master MDT will
+ * process with other slave MDTs.
+ */
+int lmv_quota_ctl(struct obd_device *unused, struct obd_export *exp,
+                  struct obd_quotactl *oqctl)
+{
+        struct obd_device *obd = class_exp2obd(exp);
+        struct lmv_obd *lmv = &obd->u.lmv;
+        struct lmv_tgt_desc *tgt = &lmv->tgts[0];
+        int rc;
+        ENTRY;
+
+        if (!lmv->desc.ld_tgt_count || !tgt->ltd_active) {
+                CERROR("master lmv inactive\n");
+                RETURN(-EIO);
+        }
+
+        rc = obd_quotactl(tgt->ltd_exp, oqctl);
+        RETURN(rc);
+}
+
+int lov_quota_ctl(struct obd_device *unused, struct obd_export *exp,
+                  struct obd_quotactl *oqctl)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct lov_obd *lov = &obd->u.lov;
         __u64 curspace = 0;
-        __u32 bhardlimit = 0;
+        __u64 bhardlimit = 0;
         int i, rc = 0;
         ENTRY;
 
-        if (oqctl->qc_cmd != Q_QUOTAON && oqctl->qc_cmd != Q_QUOTAOFF &&
-            oqctl->qc_cmd != Q_GETOQUOTA && oqctl->qc_cmd != Q_INITQUOTA &&
-            oqctl->qc_cmd != Q_SETQUOTA) {
+        if (oqctl->qc_cmd != LUSTRE_Q_QUOTAON &&
+            oqctl->qc_cmd != LUSTRE_Q_QUOTAOFF &&
+            oqctl->qc_cmd != Q_GETOQUOTA &&
+            oqctl->qc_cmd != Q_INITQUOTA &&
+            oqctl->qc_cmd != LUSTRE_Q_SETQUOTA &&
+            oqctl->qc_cmd != Q_FINVALIDATE) {
                 CERROR("bad quota opc %x for lov obd", oqctl->qc_cmd);
                 RETURN(-EFAULT);
         }
@@ -277,11 +354,10 @@ int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                         if (oqctl->qc_cmd == Q_GETOQUOTA) {
                                 CERROR("ost %d is inactive\n", i);
                                 rc = -EIO;
-                                break;
                         } else {
                                 CDEBUG(D_HA, "ost %d is inactive\n", i);
-                                continue;
                         }
+                        continue;
                 }
 
                 err = obd_quotactl(lov->lov_tgts[i]->ltd_exp, oqctl);

@@ -134,8 +134,8 @@ struct lloop_device {
         loff_t             lo_offset;
         loff_t             lo_sizelimit;
         int                lo_flags;
-        int                (*ioctl)(struct lloop_device *, int cmd, 
-                                 unsigned long arg); 
+        int                (*ioctl)(struct lloop_device *, int cmd,
+                                 unsigned long arg);
 
         struct file *      lo_backing_file;
         struct block_device *lo_device;
@@ -241,8 +241,8 @@ static int do_bio_filebacked(struct lloop_device *lo, struct bio *bio)
         oinfo.oi_md = lsm;
         opc = cmd & OBD_BRW_WRITE ? CAPA_OPC_OSS_WRITE : CAPA_OPC_OSS_RW;
         oinfo.oi_capa = ll_osscapa_get(inode, opc);
-        ret = obd_brw(cmd, ll_i2dtexp(inode), &oinfo, 
-                      (obd_count)(i - bio->bi_idx), 
+        ret = obd_brw(cmd, ll_i2dtexp(inode), &oinfo,
+                      (obd_count)(i - bio->bi_idx),
                       lo->lo_requests[0].lrd_pages, NULL);
         capa_put(oinfo.oi_capa);
         if (ret == 0)
@@ -470,7 +470,7 @@ static int loop_set_fd(struct lloop_device *lo, struct file *unused,
         return error;
 }
 
-static int loop_clr_fd(struct lloop_device *lo, struct block_device *bdev, 
+static int loop_clr_fd(struct lloop_device *lo, struct block_device *bdev,
                        int count)
 {
         struct file *filp = lo->lo_backing_file;
@@ -532,7 +532,7 @@ static int lo_release(struct inode *inode, struct file *file)
 }
 
 /* lloop device node's ioctl function. */
-static int lo_ioctl(struct inode *inode, struct file *unused, 
+static int lo_ioctl(struct inode *inode, struct file *unused,
         unsigned int cmd, unsigned long arg)
 {
         struct lloop_device *lo = inode->i_bdev->bd_disk->private_data;
@@ -556,7 +556,7 @@ static int lo_ioctl(struct inode *inode, struct file *unused,
 
                 if (put_user(ino, (__u64 *)arg))
                         err = -EFAULT;
-                break; 
+                break;
         }
 
         default:
@@ -575,13 +575,13 @@ static struct block_device_operations lo_fops = {
         .ioctl =        lo_ioctl,
 };
 
-/* dynamic iocontrol callback. 
- * This callback is registered in lloop_init and will be called by 
- * ll_iocontrol_call. 
- * This is a llite regular file ioctl function. It takes the responsibility 
- * of attaching a file, and detaching a file by a lloop's device numner. 
+/* dynamic iocontrol callback.
+ * This callback is registered in lloop_init and will be called by
+ * ll_iocontrol_call.
+ * This is a llite regular file ioctl function. It takes the responsibility
+ * of attaching a file, and detaching a file by a lloop's device numner.
  */
-static enum llioc_iter lloop_ioctl(struct inode *unused, struct file *file, 
+static enum llioc_iter lloop_ioctl(struct inode *unused, struct file *file,
                 unsigned int cmd, unsigned long arg,
                 void *magic, int *rcp)
 {
@@ -611,7 +611,7 @@ static enum llioc_iter lloop_ioctl(struct inode *unused, struct file *file,
                                         lo_free = lo;
                                 continue;
                         }
-                        if (lo->lo_backing_file->f_dentry->d_inode == 
+                        if (lo->lo_backing_file->f_dentry->d_inode ==
                             file->f_dentry->d_inode)
                                 break;
                 }
@@ -641,7 +641,7 @@ static enum llioc_iter lloop_ioctl(struct inode *unused, struct file *file,
 
         case LL_IOC_LLOOP_DETACH_BYDEV: {
                 int minor;
-                
+
                 dev = old_decode_dev(arg);
                 if (MAJOR(dev) != lloop_major)
                         GOTO(out, err = -EINVAL);

@@ -57,6 +57,8 @@
 
 #include "lustre_quota_fmt.h"
 
+#ifdef HAVE_QUOTA_SUPPORT
+
 char *test_quotafile[2] = { "usrquota_test", "grpquota_test" };
 
 static int quotfmt_initialize(struct lustre_quota_info *lqi,
@@ -65,7 +67,7 @@ static int quotfmt_initialize(struct lustre_quota_info *lqi,
 {
         struct lustre_disk_dqheader dqhead;
         static const uint quota_magics[] = LUSTRE_INITQMAGICS;
-        static const uint quota_versions[] = LUSTRE_INITQVERSIONS;
+        static const uint quota_versions[] = LUSTRE_INITQVERSIONS_V2;
         struct file *fp;
         struct inode *parent_inode = tgt->obd_lvfs_ctxt.pwd->d_inode;
         size_t size;
@@ -84,7 +86,7 @@ static int quotfmt_initialize(struct lustre_quota_info *lqi,
                 LOCK_INODE_MUTEX_PARENT(parent_inode);
                 de = lookup_one_len(name, tgt->obd_lvfs_ctxt.pwd, namelen);
                 if (!IS_ERR(de) && de->d_inode)
-                        ll_vfs_unlink(parent_inode, de, 
+                        ll_vfs_unlink(parent_inode, de,
                                       tgt->obd_lvfs_ctxt.pwdmnt);
                 if (!IS_ERR(de))
                         dput(de);
@@ -107,7 +109,7 @@ static int quotfmt_initialize(struct lustre_quota_info *lqi,
                                        sizeof(struct lustre_disk_dqheader),
                                        &offset);
                 if (size != sizeof(struct lustre_disk_dqheader)) {
-                        CERROR("error writing quoafile header %s (rc = %d)\n",
+                        CERROR("error writing quotafile header %s (rc = %d)\n",
                                name, rc);
                         rc = size;
                         break;
@@ -166,7 +168,7 @@ static int quotfmt_test_1(struct lustre_quota_info *lqi)
         ENTRY;
 
         for (i = 0; i < MAXQUOTAS; i++) {
-                if (!lustre_check_quota_file(lqi, i))
+                if (lustre_check_quota_file(lqi, i))
                         RETURN(-EINVAL);
         }
         RETURN(0);
@@ -256,7 +258,7 @@ static void put_rand_dquot(struct lustre_dquot *dquot)
 static int write_check_dquot(struct lustre_quota_info *lqi)
 {
         struct lustre_dquot *dquot;
-        struct mem_dqblk dqblk;
+        struct lustre_mem_dqblk dqblk;
         int rc = 0;
         ENTRY;
 
@@ -380,7 +382,7 @@ static int quotfmt_test_4(struct lustre_quota_info *lqi)
 
 static int quotfmt_test_5(struct lustre_quota_info *lqi)
 {
-#ifndef KERNEL_SUPPORTS_QUOTA_READ 
+#ifndef KERNEL_SUPPORTS_QUOTA_READ
         int i, rc = 0;
 
         for (i = USRQUOTA; i < MAXQUOTAS && !rc; i++) {
@@ -541,3 +543,5 @@ MODULE_LICENSE("GPL");
 
 module_init(quotfmt_test_init);
 module_exit(quotfmt_test_exit);
+
+#endif /* HAVE_QUOTA_SUPPORT */

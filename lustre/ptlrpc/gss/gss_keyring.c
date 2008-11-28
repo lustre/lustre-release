@@ -1236,7 +1236,9 @@ int gss_kt_instantiate(struct key *key, const void *data, size_t datalen)
          */
         LASSERT(cfs_current()->signal->session_keyring);
 
+        lockdep_off();
         rc = key_link(cfs_current()->signal->session_keyring, key);
+        lockdep_on();
         if (unlikely(rc)) {
                 CERROR("failed to link key %08x to keyring %08x: %d\n",
                        key->serial,
@@ -1267,13 +1269,13 @@ int gss_kt_update(struct key *key, const void *data, size_t datalen)
                 RETURN(-EINVAL);
         }
 
-        /* there's a race between userspace parent - child processes. if
-         * child finish negotiation too fast and call kt_update(), the ctx
+        /* if upcall finished negotiation too fast (mostly likely because
+         * of local error happened) and call kt_update(), the ctx
          * might be still NULL. but the key will finally be associate
          * with a context, or be revoked. if key status is fine, return
          * -EAGAIN to allow userspace sleep a while and call again. */
         if (ctx == NULL) {
-                CWARN("race in userspace. key %p(%x) flags %lx\n",
+                CDEBUG(D_SEC, "update too soon: key %p(%x) flags %lx\n",
                       key, key->serial, key->flags);
 
                 rc = key_validate(key);

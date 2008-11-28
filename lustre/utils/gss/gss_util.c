@@ -90,11 +90,14 @@
 #include "lsupport.h"
 
 /* Global gssd_credentials handle */
+gss_cred_id_t  gssd_cred_mgs;
 gss_cred_id_t  gssd_cred_mds;
 gss_cred_id_t  gssd_cred_oss;
+int            gssd_cred_mgs_valid = 0;
 int            gssd_cred_mds_valid = 0;
 int            gssd_cred_oss_valid = 0;
 
+char *mgs_local_realm = NULL;
 char *mds_local_realm = NULL;
 char *oss_local_realm = NULL;
 
@@ -284,8 +287,14 @@ int gssd_acquire_cred(char *server_name, gss_cred_id_t *cred,
 	return 0;
 }
 
-int gssd_prepare_creds(int must_srv_mds, int must_srv_oss)
+int gssd_prepare_creds(int must_srv_mgs, int must_srv_mds, int must_srv_oss)
 {
+        if (gssd_acquire_cred(GSSD_SERVICE_MGS, &gssd_cred_mgs,
+                              &mgs_local_realm, &gssd_cred_mgs_valid)) {
+                if (must_srv_mgs)
+                        return -1;
+        }
+
         if (gssd_acquire_cred(GSSD_SERVICE_MDS, &gssd_cred_mds,
                               &mds_local_realm, &gssd_cred_mds_valid)) {
                 if (must_srv_mds)
@@ -298,11 +307,16 @@ int gssd_prepare_creds(int must_srv_mds, int must_srv_oss)
                         return -1;
         }
 
-        if (!gssd_cred_mds_valid && !gssd_cred_oss_valid) {
-                printerr(0, "can't obtain both mds & oss creds, exit\n");
+        if (!gssd_cred_mgs_valid &&
+	    !gssd_cred_mds_valid &&
+            !gssd_cred_oss_valid) {
+                printerr(0, "can't obtain any service creds, exit\n");
                 return -1;
         }
 
+	if (gssd_cred_mgs_valid)
+		printerr(0, "Ready to serve Lustre MGS in realm %s\n",
+			 mgs_local_realm ? mgs_local_realm : "N/A");
 	if (gssd_cred_mds_valid)
 		printerr(0, "Ready to serve Lustre MDS in realm %s\n",
 			 mds_local_realm ? mds_local_realm : "N/A");
@@ -316,6 +330,12 @@ int gssd_prepare_creds(int must_srv_mds, int must_srv_oss)
 gss_cred_id_t gssd_select_svc_cred(int lustre_svc)
 {
         switch (lustre_svc) {
+	case LUSTRE_GSS_SVC_MGS:
+		if (!gssd_cred_mgs_valid) {
+                        printerr(0, "ERROR: service cred for mgs not ready\n");
+                        return NULL;
+		}
+		return gssd_cred_mgs;
         case LUSTRE_GSS_SVC_MDS:
                 if (!gssd_cred_mds_valid) {
                         printerr(0, "ERROR: service cred for mds not ready\n");

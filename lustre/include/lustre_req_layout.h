@@ -177,6 +177,7 @@ extern const struct req_format RQF_OST_CONNECT;
 extern const struct req_format RQF_OST_DISCONNECT;
 extern const struct req_format RQF_OST_QUOTACHECK;
 extern const struct req_format RQF_OST_QUOTACTL;
+extern const struct req_format RQF_OST_QUOTA_ADJUST_QUNIT;
 extern const struct req_format RQF_OST_GETATTR;
 extern const struct req_format RQF_OST_SETATTR;
 extern const struct req_format RQF_OST_CREATE;
@@ -244,6 +245,7 @@ extern const struct req_msg_field RMF_CAPA1;
 extern const struct req_msg_field RMF_CAPA2;
 extern const struct req_msg_field RMF_OBD_QUOTACHECK;
 extern const struct req_msg_field RMF_OBD_QUOTACTL;
+extern const struct req_msg_field RMF_QUOTA_ADJUST_QUNIT;
 extern const struct req_msg_field RMF_QUNIT_DATA;
 extern const struct req_msg_field RMF_STRING;
 

@@ -686,6 +686,7 @@ int lprocfs_rd_import(char *page, char **start, off_t off, int count,
                       "    target: %s@%s\n"
                       "    state: %s\n"
                       "    inflight: %u\n"
+                      "    unregistering: %u\n"
                       "    conn_cnt: %u\n"
                       "    generation: %u\n"
                       "    inval_cnt: %u\n"
@@ -697,6 +698,7 @@ int lprocfs_rd_import(char *page, char **start, off_t off, int count,
                       obd2cli_tgt(obd), imp->imp_connection->c_remote_uuid.uuid,
                       imp_state_name,
                       atomic_read(&imp->imp_inflight),
+                      atomic_read(&imp->imp_unregistering),
                       imp->imp_conn_cnt,
                       imp->imp_generation,
                       atomic_read(&imp->imp_inval_count),
@@ -1246,15 +1248,6 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, getattr);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, getattr_async);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, brw);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, brw_async);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, prep_async_page);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, reget_short_lock);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, release_short_lock);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, queue_async_io);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, queue_group_io);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, trigger_group_io);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, set_async_flags);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, teardown_async_page);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, merge_lvb);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, adjust_kms);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, punch);
@@ -1265,7 +1258,6 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, preprw);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, commitrw);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, enqueue);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, match);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, change_cbdata);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, cancel);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, cancel_unused);
@@ -1283,11 +1275,8 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, get_uuid);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, quotacheck);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, quotactl);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, quota_adjust_qunit);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, ping);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, register_page_removal_cb);
-        LPROCFS_OBD_OP_INIT(num_private_stats,stats,unregister_page_removal_cb);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, register_lock_cancel_cb);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats,unregister_lock_cancel_cb);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_new);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_rem);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_add);
@@ -1389,6 +1378,7 @@ int lprocfs_alloc_md_stats(struct obd_device *obd,
         LPROCFS_MD_OP_INIT(num_private_stats, stats, lock_match);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, cancel_unused);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, renew_capa);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, unpack_capa);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, get_remote_perm);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, intent_getattr_async);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, revalidate_lock);
@@ -1868,7 +1858,7 @@ int lprocfs_write_frac_u64_helper(const char *buffer, unsigned long count,
         __u64 whole, frac = 0, units;
         unsigned frac_d = 1;
 
-        if (count > (sizeof(kernbuf) - 1) )
+        if (count > (sizeof(kernbuf) - 1))
                 return -EINVAL;
 
         if (copy_from_user(kernbuf, buffer, count))

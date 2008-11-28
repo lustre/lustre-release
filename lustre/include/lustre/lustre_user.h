@@ -98,6 +98,8 @@ struct obd_statfs;
 #define LL_IOC_FLUSHCTX                 _IOW ('f', 166, long)
 #define LL_IOC_RMTACL                   _IOW ('f', 167, long)
 
+#define LL_IOC_GETOBDCOUNT              _IOR ('f', 168, long)
+
 #define LL_IOC_LLOOP_ATTACH             _IOWR('f', 169, long)
 #define LL_IOC_LLOOP_DETACH             _IOWR('f', 170, long)
 #define LL_IOC_LLOOP_INFO               _IOWR('f', 171, long)
@@ -228,16 +230,18 @@ static inline char *obd_uuid2str(struct obd_uuid *uuid)
         return (char *)(uuid->uuid);
 }
 
-#define LUSTRE_Q_QUOTAON  0x800002     /* turn quotas on */
-#define LUSTRE_Q_QUOTAOFF 0x800003     /* turn quotas off */
-#define LUSTRE_Q_GETINFO  0x800005     /* get information about quota files */
-#define LUSTRE_Q_SETINFO  0x800006     /* set information about quota files */
-#define LUSTRE_Q_GETQUOTA 0x800007     /* get user quota structure */
-#define LUSTRE_Q_SETQUOTA 0x800008     /* set user quota structure */
+/* these must be explicitly translated into linux Q_* in ll_dir_ioctl */
+#define LUSTRE_Q_QUOTAON    0x800002     /* turn quotas on */
+#define LUSTRE_Q_QUOTAOFF   0x800003     /* turn quotas off */
+#define LUSTRE_Q_GETINFO    0x800005     /* get information about quota files */
+#define LUSTRE_Q_SETINFO    0x800006     /* set information about quota files */
+#define LUSTRE_Q_GETQUOTA   0x800007     /* get user quota structure */
+#define LUSTRE_Q_SETQUOTA   0x800008     /* set user quota structure */
+/* lustre-specific control commands */
+#define LUSTRE_Q_INVALIDATE  0x80000b     /* invalidate quota data */
+#define LUSTRE_Q_FINVALIDATE 0x80000c     /* invalidate filter quota data */
 
 #define UGQUOTA 2       /* set both USRQUOTA and GRPQUOTA */
-
-#define QFMT_LDISKFS 2  /* QFMT_VFS_V0(2), quota format for ldiskfs */
 
 struct if_quotacheck {
         char                    obd_type[16];
@@ -306,6 +310,10 @@ enum {
 
 #endif /* !__KERNEL__ */
 
+typedef enum lustre_quota_version {
+        LUSTRE_QUOTA_V2 = 1
+} lustre_quota_version_t;
+
 /* XXX: same as if_dqinfo struct in kernel */
 struct obd_dqinfo {
         __u64 dqi_bgrace;
@@ -328,11 +336,20 @@ struct obd_dqblk {
         __u32 padding;
 };
 
+enum {
+        QC_GENERAL      = 0,
+        QC_MDTIDX       = 1,
+        QC_OSTIDX       = 2,
+        QC_UUID         = 3
+};
+
 struct if_quotactl {
         __u32                   qc_cmd;
         __u32                   qc_type;
         __u32                   qc_id;
         __u32                   qc_stat;
+        __u32                   qc_valid;
+        __u32                   qc_idx;
         struct obd_dqinfo       qc_dqinfo;
         struct obd_dqblk        qc_dqblk;
         char                    obd_type[16];

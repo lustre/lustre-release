@@ -113,12 +113,12 @@ struct fsfilt_operations {
         int     (* fs_read_record)(struct file *, void *, int size, loff_t *);
         int     (* fs_setup)(struct super_block *sb);
         int     (* fs_get_op_len)(int, struct fsfilt_objinfo *, int);
-        int     (* fs_quotactl)(struct super_block *sb,
-                                struct obd_quotactl *oqctl);
         int     (* fs_quotacheck)(struct super_block *sb,
                                   struct obd_quotactl *oqctl);
         __u64   (* fs_get_version) (struct inode *inode);
         __u64   (* fs_set_version) (struct inode *inode, __u64 new_version);
+        int     (* fs_quotactl)(struct super_block *sb,
+                                struct obd_quotactl *oqctl);
         int     (* fs_quotainfo)(struct lustre_quota_info *lqi, int type,
                                  int cmd);
         int     (* fs_qids)(struct file *file, struct inode *inode, int type,
@@ -167,18 +167,21 @@ static inline lvfs_sbdev_type fsfilt_journal_sbdev(struct obd_device *obd,
         return (lvfs_sbdev_type)0;
 }
 
-#define FSFILT_OP_UNLINK         1
-#define FSFILT_OP_RMDIR          2
-#define FSFILT_OP_RENAME         3
-#define FSFILT_OP_CREATE         4
-#define FSFILT_OP_MKDIR          5
-#define FSFILT_OP_SYMLINK        6
-#define FSFILT_OP_MKNOD          7
-#define FSFILT_OP_SETATTR        8
-#define FSFILT_OP_LINK           9
-#define FSFILT_OP_CANCEL_UNLINK 10
-#define FSFILT_OP_JOIN          11
-#define FSFILT_OP_NOOP          15
+#define FSFILT_OP_UNLINK                1
+#define FSFILT_OP_RMDIR                 2
+#define FSFILT_OP_RENAME                3
+#define FSFILT_OP_CREATE                4
+#define FSFILT_OP_MKDIR                 5
+#define FSFILT_OP_SYMLINK               6
+#define FSFILT_OP_MKNOD                 7
+#define FSFILT_OP_SETATTR               8
+#define FSFILT_OP_LINK                  9
+#define FSFILT_OP_CANCEL_UNLINK         10
+#define FSFILT_OP_JOIN                  11
+#define FSFILT_OP_NOOP                  15
+#define FSFILT_OP_UNLINK_PARTIAL_CHILD  21
+#define FSFILT_OP_UNLINK_PARTIAL_PARENT 22
+#define FSFILT_OP_CREATE_PARTIAL_CHILD  23
 
 #define __fsfilt_check_slow(obd, start, msg)                            \
 do {                                                                    \

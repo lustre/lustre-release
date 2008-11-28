@@ -37,7 +37,7 @@
 
 int handle_nullreq(FILE *f);
 void svcgssd_run(void);
-int gssd_prepare_creds(int must_srv_mds, int must_srv_oss);
+int gssd_prepare_creds(int must_srv_mgs, int must_srv_mds, int must_srv_oss);
 gss_cred_id_t gssd_select_svc_cred(int lustre_svc);
 
 extern char *mds_local_realm;
@@ -46,6 +46,7 @@ extern char *oss_local_realm;
 #define GSSD_SERVICE_NAME	"lustre"
 
 /* XXX */
+#define GSSD_SERVICE_MGS			"lustre_mgs"
 #define GSSD_SERVICE_MDS			"lustre_mds"
 #define GSSD_SERVICE_OSS			"lustre_oss"
 #define LUSTRE_ROOT_NAME			"lustre_root"

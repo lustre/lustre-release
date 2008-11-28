@@ -15,3 +15,4 @@ jbd-16tb-overflow-fixes.patch
 jbd-check-for-unmapped-buffer.patch
 jbd-stats-2.6-rhel5.patch
 export-nr_free_buffer_pages.patch
+kgdb-2.6.18-vanilla.patch

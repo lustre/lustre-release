@@ -161,6 +161,7 @@ static int qos_calc_ppo(struct obd_device *obd)
         __u64 ba_max, ba_min, temp;
         __u32 num_active;
         int rc, i, prio_wide;
+        time_t now, age;
         ENTRY;
 
         if (!lov->lov_qos.lq_dirty)
@@ -183,6 +184,7 @@ static int qos_calc_ppo(struct obd_device *obd)
 
         ba_min = (__u64)(-1);
         ba_max = 0;
+        now = cfs_time_current_sec();
         /* Calculate OST penalty per object */
         /* (lov ref taken in alloc_qos) */
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
@@ -205,8 +207,17 @@ static int qos_calc_ppo(struct obd_device *obd)
                 lov->lov_tgts[i]->ltd_qos.ltq_penalty_per_obj =
                         (temp * prio_wide) >> 8;
 
-                if (lov->lov_qos.lq_reset == 0)
+                age = (now - lov->lov_tgts[i]->ltd_qos.ltq_used) >> 3;
+                if (lov->lov_qos.lq_reset || age > 32 * lov->desc.ld_qos_maxage)
                         lov->lov_tgts[i]->ltd_qos.ltq_penalty = 0;
+                else if (age > lov->desc.ld_qos_maxage)
+                        /* Decay the penalty by half for every 8x the update
+                         * interval that the device has been idle.  That gives
+                         * lots of time for the statfs information to be
+                         * updated (which the penalty is only a proxy for),
+                         * and avoids penalizing OSS/OSTs under light load. */
+                        lov->lov_tgts[i]->ltd_qos.ltq_penalty >>=
+                                (age / lov->desc.ld_qos_maxage);
         }
 
         num_active = lov->lov_qos.lq_active_oss_count - 1;
@@ -226,8 +237,17 @@ static int qos_calc_ppo(struct obd_device *obd)
                 temp = oss->lqo_bavail >> 1;
                 do_div(temp, oss->lqo_ost_count * num_active);
                 oss->lqo_penalty_per_obj = (temp * prio_wide) >> 8;
-                if (lov->lov_qos.lq_reset == 0)
+
+                age = (now - oss->lqo_used) >> 3;
+                if (lov->lov_qos.lq_reset || age > 32 * lov->desc.ld_qos_maxage)
                         oss->lqo_penalty = 0;
+                else if (age > lov->desc.ld_qos_maxage)
+                        /* Decay the penalty by half for every 8x the update
+                         * interval that the device has been idle.  That gives
+                         * lots of time for the statfs information to be
+                         * updated (which the penalty is only a proxy for),
+                         * and avoids penalizing OSS/OSTs under light load. */
+                        oss->lqo_penalty >>= (age / lov->desc.ld_qos_maxage);
         }
 
         lov->lov_qos.lq_dirty = 0;
@@ -242,7 +262,7 @@ static int qos_calc_ppo(struct obd_device *obd)
                 /* Difference is less than 20% */
                 lov->lov_qos.lq_same_space = 1;
                 /* Reset weights for the next time we enter qos mode */
-                lov->lov_qos.lq_reset = 0;
+                lov->lov_qos.lq_reset = 1;
         }
         rc = 0;
 
@@ -284,6 +304,10 @@ static int qos_used(struct lov_obd *lov, struct ost_pool *osts,
            want it to run away.) */
         lov->lov_tgts[index]->ltd_qos.ltq_penalty >>= 1;
         oss->lqo_penalty >>= 1;
+
+        /* mark the OSS and OST as recently used */
+        lov->lov_tgts[index]->ltd_qos.ltq_used =
+                oss->lqo_used = cfs_time_current_sec();
 
         /* Set max penalties for this OST and OSS */
         lov->lov_tgts[index]->ltd_qos.ltq_penalty +=
@@ -669,9 +693,13 @@ repeat_find:
                 if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_PRECREATE) && ost_idx == 0)
                         continue;
 
-                /* Drop slow OSCs if we can, but not for requested start idx */
+                /* Drop slow OSCs if we can, but not for requested start idx.
+                 *
+                 * This means "if OSC is slow and it is not the requested
+                 * start OST, then it can be skipped, otherwise skip it only
+                 * if it is inactive/recovering/out-of-space." */
                 if ((obd_precreate(lov->lov_tgts[ost_idx]->ltd_exp) > speed) &&
-                    (i != 0 || speed < 2))
+                    (i != 0 || speed >= 2))
                         continue;
 
                 *idx_pos = ost_idx;

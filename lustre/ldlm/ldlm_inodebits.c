@@ -86,7 +86,22 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                         tmp = mode_tail;
                         continue;
                 }
-                
+
+                if (lock->l_req_mode == LCK_COS) {
+                        if (lock->l_client_cookie == req->l_client_cookie) {
+                                tmp = mode_tail;
+                        } else {
+                                tmp = mode_tail;
+                                if (!work_list)
+                                        RETURN(0);
+                                compat = 0;
+                                if (lock->l_blocking_ast)
+                                        ldlm_add_ast_work_item(lock, req,
+                                                               work_list);
+                        }
+                        continue;
+                }
+
                 for (;;) {
                         struct list_head *head;
 

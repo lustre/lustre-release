@@ -222,7 +222,7 @@ static inline int opcode_offset(__u32 opc) {
                         (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
                         (MDS_LAST_OPC - MDS_FIRST_OPC) +
                         (OST_LAST_OPC - OST_FIRST_OPC));
-} else if (opc < FLD_LAST_OPC) {
+        } else if (opc < FLD_LAST_OPC) {
                 /* FLD opcode */
                 return (opc - FLD_FIRST_OPC +
                         (LLOG_LAST_OPC - LLOG_FIRST_OPC) +
@@ -252,6 +252,18 @@ static inline int opcode_offset(__u32 opc) {
                         (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
                         (MDS_LAST_OPC - MDS_FIRST_OPC) +
                         (OST_LAST_OPC - OST_FIRST_OPC));
+        } else if (opc < QUOTA_LAST_OPC) {
+                /* LQUOTA Opcode */
+                return (opc - QUOTA_FIRST_OPC +
+                        (SEC_LAST_OPC - SEC_FIRST_OPC) +
+                        (SEQ_LAST_OPC - SEQ_FIRST_OPC) +
+                        (FLD_LAST_OPC - FLD_FIRST_OPC) +
+                        (LLOG_LAST_OPC - LLOG_FIRST_OPC) +
+                        (OBD_LAST_OPC - OBD_FIRST_OPC) +
+                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
+                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC));
         } else {
                 /* Unknown Opcode */
                 return -1;
@@ -266,7 +278,8 @@ static inline int opcode_offset(__u32 opc) {
                             (SEQ_LAST_OPC - SEQ_FIRST_OPC)     + \
                             (MGS_LAST_OPC - MGS_FIRST_OPC)     + \
                             (LLOG_LAST_OPC - LLOG_FIRST_OPC)   + \
-                            (SEC_LAST_OPC - SEC_FIRST_OPC))
+                            (SEC_LAST_OPC - SEC_FIRST_OPC)     + \
+                            (QUOTA_LAST_OPC - QUOTA_FIRST_OPC))
 
 #define EXTRA_MAX_OPCODES ((PTLRPC_LAST_CNTR - PTLRPC_FIRST_CNTR)  + \
                            (EXTRA_LAST_OPC - EXTRA_FIRST_OPC))
@@ -288,12 +301,13 @@ enum {
         LDLM_EXTENT_ENQUEUE,
         LDLM_FLOCK_ENQUEUE,
         LDLM_IBITS_ENQUEUE,
+        MDS_REINT_SETATTR,
         MDS_REINT_CREATE,
         MDS_REINT_LINK,
-        MDS_REINT_OPEN,
-        MDS_REINT_SETATTR,
-        MDS_REINT_RENAME,
         MDS_REINT_UNLINK,
+        MDS_REINT_RENAME,
+        MDS_REINT_OPEN,
+        MDS_REINT_SETXATTR,
         BRW_READ_BYTES,
         BRW_WRITE_BYTES,
         EXTRA_LAST_OPC
@@ -617,6 +631,56 @@ int lprocfs_obd_rd_recovery_maxtime(char *page, char **start, off_t off,
 /* lprocfs_status.c: write recovery max time bz13079 */
 int lprocfs_obd_wr_recovery_maxtime(struct file *file, const char *buffer,
                                     unsigned long count, void *data);
+
+/* all quota proc functions */
+extern int lprocfs_quota_rd_bunit(char *page, char **start, off_t off, int count,
+                                  int *eof, void *data);
+extern int lprocfs_quota_wr_bunit(struct file *file, const char *buffer,
+                                  unsigned long count, void *data);
+extern int lprocfs_quota_rd_btune(char *page, char **start, off_t off, int count,
+                                  int *eof, void *data);
+extern int lprocfs_quota_wr_btune(struct file *file, const char *buffer,
+                                  unsigned long count, void *data);
+extern int lprocfs_quota_rd_iunit(char *page, char **start, off_t off, int count,
+                                  int *eof, void *data);
+extern int lprocfs_quota_wr_iunit(struct file *file, const char *buffer,
+                                  unsigned long count, void *data);
+extern int lprocfs_quota_rd_itune(char *page, char **start, off_t off, int count,
+                                  int *eof, void *data);
+extern int lprocfs_quota_wr_itune(struct file *file, const char *buffer,
+                                  unsigned long count, void *data);
+extern int lprocfs_quota_rd_type(char *page, char **start, off_t off, int count,
+                                 int *eof, void *data);
+extern int lprocfs_quota_wr_type(struct file *file, const char *buffer,
+                                 unsigned long count, void *data);
+extern int lprocfs_quota_rd_switch_seconds(char *page, char **start, off_t off,
+                                           int count, int *eof, void *data);
+extern int lprocfs_quota_wr_switch_seconds(struct file *file, const char *buffer,
+                                           unsigned long count, void *data);
+extern int lprocfs_quota_rd_sync_blk(char *page, char **start, off_t off,
+                                     int count, int *eof, void *data);
+extern int lprocfs_quota_wr_sync_blk(struct file *file, const char *buffer,
+                                     unsigned long count, void *data);
+extern int lprocfs_quota_rd_switch_qs(char *page, char **start, off_t off,
+                                      int count, int *eof, void *data);
+extern int lprocfs_quota_wr_switch_qs(struct file *file, const char *buffer,
+                                      unsigned long count, void *data);
+extern int lprocfs_quota_rd_boundary_factor(char *page, char **start, off_t off,
+                                            int count, int *eof, void *data);
+extern int lprocfs_quota_wr_boundary_factor(struct file *file, const char *buffer,
+                                            unsigned long count, void *data);
+extern int lprocfs_quota_rd_least_bunit(char *page, char **start, off_t off,
+                                        int count, int *eof, void *data);
+extern int lprocfs_quota_wr_least_bunit(struct file *file, const char *buffer,
+                                        unsigned long count, void *data);
+extern int lprocfs_quota_rd_least_iunit(char *page, char **start, off_t off,
+                                        int count, int *eof, void *data);
+extern int lprocfs_quota_wr_least_iunit(struct file *file, const char *buffer,
+                                        unsigned long count, void *data);
+extern int lprocfs_quota_rd_qs_factor(char *page, char **start, off_t off,
+                                      int count, int *eof, void *data);
+extern int lprocfs_quota_wr_qs_factor(struct file *file, const char *buffer,
+                                      unsigned long count, void *data);
 #else
 /* LPROCFS is not defined */
 static inline void lprocfs_counter_add(struct lprocfs_stats *stats,
@@ -651,7 +715,7 @@ static inline void lprocfs_init_ops_stats(int num_private_stats,
 static inline void lprocfs_init_ldlm_stats(struct lprocfs_stats *ldlm_stats)
 { return; }
 static inline int lprocfs_alloc_obd_stats(struct obd_device *obddev,
-                                             unsigned int num_private_stats)
+                                          unsigned int num_private_stats)
 { return 0; }
 static inline int lprocfs_alloc_md_stats(struct obd_device *obddev,
                                          unsigned int num_private_stats)
@@ -663,7 +727,7 @@ struct obd_export;
 static inline int lprocfs_add_clear_entry(struct obd_export *exp)
 { return 0; }
 static inline int lprocfs_exp_setup(struct obd_export *exp,
-                             	    lnet_nid_t *peer_nid, int *newnid)
+                                    lnet_nid_t *peer_nid, int *newnid)
 { return 0; }
 static inline int lprocfs_exp_cleanup(struct obd_export *exp)
 { return 0; }

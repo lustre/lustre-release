@@ -78,7 +78,7 @@ static int ll_readlink_internal(struct inode *inode,
                 CERROR("OBD_MD_LINKNAME not set on reply\n");
                 GOTO(failed, rc = -EPROTO);
         }
-        
+
         LASSERT(symlen != 0);
         if (body->eadatasize != symlen) {
                 CERROR("inode %lu: symlink length %d not expected %d\n",
@@ -114,7 +114,6 @@ static int ll_readlink_internal(struct inode *inode,
 static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
 {
         struct inode *inode = dentry->d_inode;
-        struct ll_inode_info *lli = ll_i2info(inode);
         struct ptlrpc_request *request;
         char *symname;
         int rc;
@@ -122,7 +121,7 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
 
         CDEBUG(D_VFSTRACE, "VFS Op\n");
         /* on symlinks lli_open_sem protects lli_symlink_name allocation/data */
-        down(&lli->lli_size_sem);
+        ll_inode_size_lock(inode, 0);
         rc = ll_readlink_internal(inode, &request, &symname);
         if (rc)
                 GOTO(out, rc);
@@ -130,7 +129,7 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
         rc = vfs_readlink(dentry, buffer, buflen, symname);
         ptlrpc_req_finished(request);
  out:
-        up(&lli->lli_size_sem);
+        ll_inode_size_unlock(inode, 0);
         RETURN(rc);
 }
 
@@ -144,11 +143,10 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry,
                                                  struct nameidata *nd)
 {
         struct inode *inode = dentry->d_inode;
-        struct ll_inode_info *lli = ll_i2info(inode);
 #ifdef HAVE_VFS_INTENT_PATCHES
         struct lookup_intent *it = ll_nd2it(nd);
 #endif
-        struct ptlrpc_request *request;
+        struct ptlrpc_request *request = NULL;
         int rc;
         char *symname;
         ENTRY;
@@ -165,24 +163,16 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry,
 #endif
 
         CDEBUG(D_VFSTRACE, "VFS Op\n");
-#if THREAD_SIZE < 8192
-        /* 
-         *  We set the limits recursive symlink to 5 
-         *  instead of default 8 when kernel has 4k stack
-         *  to prevent stack overflow.
-         */
-        if (current->link_count >= 5) {
+        /* Limit the recursive symlink depth to 5 instead of default
+         * 8 links when kernel has 4k stack to prevent stack overflow. */
+        if (THREAD_SIZE < 8192 && current->link_count >= 5) {
                 rc = -ELOOP;
-                GOTO(out_release, rc);
+        } else {
+                ll_inode_size_lock(inode, 0);
+                rc = ll_readlink_internal(inode, &request, &symname);
+                ll_inode_size_unlock(inode, 0);
         }
-#endif
-        down(&lli->lli_size_sem);
-        rc = ll_readlink_internal(inode, &request, &symname);
-        up(&lli->lli_size_sem);
         if (rc) {
-#if THREAD_SIZE < 8192
-out_release:
-#endif
                 path_release(nd); /* Kernel assumes that ->follow_link()
                                      releases nameidata on error */
                 GOTO(out, rc);

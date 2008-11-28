@@ -64,10 +64,14 @@ fi
 
 MDT="`do_facet $SINGLEMDS "lctl get_param -N mdt.\*MDT\*/stats 2>/dev/null | cut -d"." -f2" || true`"
 if [ ! -z "$MDT" ]; then
-        do_facet $SINGLEMDS "mkdir -p $CONFDIR"
+	do_facet $SINGLEMDS "mkdir -p $CONFDIR"
 	IDENTITY_FLUSH=mdt.$MDT.identity_flush
 	MDSCAPA=mdt.$MDT.capa
 	CAPA_TIMEOUT=mdt.$MDT.capa_timeout
+	MDSSECLEVEL=mdt.$MDT.sec_level
+	LOCALMDT=$MDT
+else
+	LOCALMDT=""
 fi
 
 # for CLIENT_TYPE
@@ -121,25 +125,41 @@ sec_setup
 
 # run as different user
 test_0() {
-        umask 0022
+	umask 0022
 
-        chmod 0755 $DIR || error "chmod (1)"
-	rm -rf $DIR/$tdir || error "rm (1)"
+	chmod 0755 $DIR || error "chmod (1)"
+	rm -rf $DIR/* || error "rm (1)"
 	mkdir -p $DIR/$tdir || error "mkdir (1)"
-	chown $USER0 $DIR/$tdir || error "chown (1)"
+
+	if [ "$CLIENT_TYPE" = "remote" ]; then
+		[ -z "$MDT" ] && skip "do not support do_facet operations." && return
+		do_facet $SINGLEMDS "echo '* 0 normtown' > $PERM_CONF"
+	        do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
+		chown $USER0 $DIR/$tdir && error "chown (1)"
+		do_facet $SINGLEMDS "echo '* 0 rmtown' > $PERM_CONF"
+	        do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
+	else
+		chown $USER0 $DIR/$tdir || error "chown (2)"
+	fi
+
 	$RUNAS -u $ID0 ls $DIR || error "ls (1)"
         rm -f $DIR/f0 || error "rm (2)"
 	$RUNAS -u $ID0 touch $DIR/f0 && error "touch (1)"
 	$RUNAS -u $ID0 touch $DIR/$tdir/f1 || error "touch (2)"
 	$RUNAS -u $ID1 touch $DIR/$tdir/f2 && error "touch (3)"
 	touch $DIR/$tdir/f3 || error "touch (4)"
-	chown root $DIR/$tdir || error "chown (2)"
+	chown root $DIR/$tdir || error "chown (3)"
 	chgrp $USER0 $DIR/$tdir || error "chgrp (1)"
 	chmod 0775 $DIR/$tdir || error "chmod (2)"
 	$RUNAS -u $ID0 touch $DIR/$tdir/f4 || error "touch (5)"
 	$RUNAS -u $ID1 touch $DIR/$tdir/f5 && error "touch (6)"
 	touch $DIR/$tdir/f6 || error "touch (7)"
-	rm -rf $DIR/$tdir || error "rm (3)"
+	rm -rf $DIR/* || error "rm (3)"
+
+	if [ "$CLIENT_TYPE" = "remote" ]; then
+		do_facet $SINGLEMDS "rm -f $PERM_CONF"
+	        do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
+	fi
 }
 run_test 0 "uid permission ============================="
 
@@ -147,11 +167,11 @@ run_test 0 "uid permission ============================="
 test_1() {
 	[ $GSS_SUP = 0 ] && skip "without GSS support." && return
 	[ -z "$MDT" ] && skip "do not support do_facet operations." && return
-	[ "$CLIENT_TYPE" = "remote" ] && \
-		skip "test_1 for local client only" && return
 
-	do_facet $SINGLEMDS "rm -f $PERM_CONF"
-	do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
+	if [ "$CLIENT_TYPE" = "remote" ]; then
+		do_facet $SINGLEMDS "echo '* 0 rmtown' > $PERM_CONF"
+	        do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
+	fi
 
 	rm -rf $DIR/$tdir
 	mkdir -p $DIR/$tdir
@@ -159,7 +179,7 @@ test_1() {
 	chown $USER0 $DIR/$tdir || error "chown (1)"
 	$RUNAS -u $ID1 -v $ID0 touch $DIR/$tdir/f0 && error "touch (2)"
 	echo "enable uid $ID1 setuid"
-	do_facet $SINGLEMDS "echo '* $ID1 setuid' > $PERM_CONF"
+	do_facet $SINGLEMDS "echo '* $ID1 setuid' >> $PERM_CONF"
 	do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
 	$RUNAS -u $ID1 -v $ID0 touch $DIR/$tdir/f1 || error "touch (3)"
 
@@ -196,6 +216,10 @@ test_2 () {
     	[ -z "$(which setfacl 2>/dev/null)" ] && \
 		skip "could not find setfacl" && return
 	[ "$UID" != 0 ] && skip "must run as root" && return
+	[ -z "$MDT" ] && skip "do not support do_facet operations." && return
+
+	do_facet $SINGLEMDS "echo '* 0 rmtacl,rmtown' > $PERM_CONF"
+	do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
 
 	sec_login root root
 	sec_login bin bin
@@ -206,17 +230,8 @@ test_2 () {
     	umask 0022
     	cd $DIR
 
-	if [ ! -z "$MDT" ]; then
-		do_facet $SINGLEMDS "echo '* 0 rmtacl' > $PERM_CONF"
-		do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
-	fi
-
-        if lfs rgetfacl $DIR; then
-                echo "performing cp ..."
-                run_rmtacl_subtest cp || error "cp"
-        else
-                echo "server doesn't permit current user 'lfs r{s,g}etfacl', skip cp test."
-        fi
+        echo "performing cp ..."
+        run_rmtacl_subtest cp || error "cp"
     	echo "performing getfacl-noacl..."
     	run_rmtacl_subtest getfacl-noacl || error "getfacl-noacl"
     	echo "performing misc..."
@@ -233,13 +248,11 @@ test_2 () {
     	run_rmtacl_subtest inheritance || error "inheritance"
     	rm -f make-tree
 
-	if [ ! -z "$MDT" ]; then
-		do_facet $SINGLEMDS "rm -f $PERM_CONF"
-		do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
-	fi
-
     	cd $SAVE_PWD
     	umask $SAVE_UMASK
+
+	do_facet $SINGLEMDS "rm -f $PERM_CONF"
+	do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
 }
 run_test 2 "rmtacl ============================="
 
@@ -255,22 +268,31 @@ run_test 3 "rootsquash ============================="
 # as for remote client, the groups of the specified uid on MDT
 # will be obtained by upcall /sbin/l_getidentity and used.
 test_4() {
+	if [ "$CLIENT_TYPE" = "remote" ]; then
+		[ -z "$MDT" ] && skip "do not support do_facet operations." && return
+		do_facet $SINGLEMDS "echo '* 0 rmtown' > $PERM_CONF"
+	        do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
+	fi
+
 	rm -rf $DIR/$tdir
         mkdir -p $DIR/$tdir
         chmod 0771 $DIR/$tdir
         chgrp $ID0 $DIR/$tdir
 	$RUNAS -u $ID0 ls $DIR/$tdir || error "setgroups (1)"
-	if [ "$CLIENT_TYPE" != "remote" ]; then
+	if [ "$CLIENT_TYPE" = "local" ]; then
 		if [ ! -z "$MDT" ]; then
 			do_facet $SINGLEMDS "echo '* $ID1 setgrp' > $PERM_CONF"
 			do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
-        		$RUNAS -u $ID1 -G1,2,$ID0 ls $DIR/$tdir || error "setgroups (2)"
-			do_facet $SINGLEMDS "rm -f $PERM_CONF"
-			do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
+			$RUNAS -u $ID1 -G1,2,$ID0 ls $DIR/$tdir || error "setgroups (2)"
 		fi
 	fi
 	$RUNAS -u $ID1 -G1,2 ls $DIR/$tdir && error "setgroups (3)"
 	rm -rf $DIR/$tdir
+
+	if [ ! -z "$MDT" ]; then
+		do_facet $SINGLEMDS "rm -f $PERM_CONF"
+	        do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
+	fi
 }
 run_test 4 "set supplementary group ==============="
 
@@ -279,6 +301,39 @@ mds_capability_timeout() {
 
         echo "Set mds capability timeout as $1 seconds"
 	do_facet $SINGLEMDS "lctl set_param -n $CAPA_TIMEOUT=$1"
+        return 0
+}
+
+mds_sec_level_switch() {
+        [ $# -lt 1 ] && echo "Miss mds sec level switch value" && return 1
+
+        case $1 in
+                0) echo "Disable capa for all clients";;
+                1) echo "Enable capa for remote client";;
+		3) echo "Enable capa for all clients";;
+                *) echo "Invalid mds sec level switch value" && return 2;;
+        esac
+
+	do_facet $SINGLEMDS "lctl set_param -n $MDSSECLEVEL=$1"
+        return 0
+}
+
+oss_sec_level_switch() {
+        [ $# -lt 1 ] && echo "Miss oss sec level switch value" && return 1
+
+        case $1 in
+                0) echo "Disable capa for all clients";;
+                1) echo "Enable capa for remote client";;
+		3) echo "Enable capa for all clients";;
+                *) echo "Invalid oss sec level switch value" && return 2;;
+        esac
+
+	for i in `seq $OSTCOUNT`; do
+		local j=`expr $i - 1`
+		local OST="`do_facet ost$i "lctl get_param -N obdfilter.\*OST\*$j/stats 2>/dev/null | cut -d"." -f2" || true`"
+                [ -z "$OST" ] && return 3
+		do_facet ost$i "lctl set_param -n obdfilter.$OST.sec_level=$1"
+	done
         return 0
 }
 
@@ -306,9 +361,22 @@ oss_capability_switch() {
 
 	for i in `seq $OSTCOUNT`; do
 		local j=`expr $i - 1`
-		local OST="`do_facet ost$i "lctl get_param -N obdfilter.\*OST\*$j/stats | cut -d"." -f2" || true`"
+		local OST="`do_facet ost$i "lctl get_param -N obdfilter.\*OST\*$j/stats 2>/dev/null | cut -d"." -f2" || true`"
+                [ -z "$OST" ] && return 3
 		do_facet ost$i "lctl set_param -n obdfilter.$OST.capa=$1"
 	done
+        return 0
+}
+
+turn_mds_capa_on() {
+        mds_capability_switch 3 || return 1
+	mds_sec_level_switch 3	|| return 2
+        return 0
+}
+
+turn_oss_capa_on() {
+        oss_capability_switch 1 || return 1
+	oss_sec_level_switch 3	|| return 2
         return 0
 }
 
@@ -320,13 +388,22 @@ turn_capability_on() {
         # is turned on on all MDS/OSS servers before
         # client mount.
 
-        umount $MOUNT || return 1
+	turn_mds_capa_on || return 1
+	turn_oss_capa_on || return 2
+        mds_capability_timeout $capa_timeout || return 3
+        remount_client $MOUNT || return 4
+        return 0
+}
 
-        mds_capability_switch 3 || return 2
-        oss_capability_switch 1 || return 3
-        mds_capability_timeout $capa_timeout || return 4
+turn_mds_capa_off() {
+	mds_sec_level_switch 0	|| return 1
+        mds_capability_switch 0 || return 2
+        return 0
+}
 
-        mount_client $MOUNT || return 5
+turn_oss_capa_off() {
+	oss_sec_level_switch 0	|| return 1
+        oss_capability_switch 0 || return 2
         return 0
 }
 
@@ -335,8 +412,8 @@ turn_capability_off() {
         # it in a live system. But, please turn off
         # capability of all OSS servers before MDS servers.
 
-        oss_capability_switch 0 || return 1
-        mds_capability_switch 0 || return 2
+	turn_oss_capa_off || return 1
+	turn_mds_capa_off || return 2
         return 0
 }
 
@@ -347,24 +424,29 @@ turn_capability_off() {
 test_5() {
         local file=$DIR/f5
 
+	[ $GSS_SUP = 0 ] && skip "without GSS support." && return
 	[ -z "$MDT" ] && skip "do not support do_facet operations." && return
+	[ ! -z "$LOCALMDT" ] && skip "client should be separated from server." && return
+	rm -f $file
+
 	turn_capability_off
 	if [ $? != 0 ]; then
 		error "turn_capability_off"
 		return 1
 	fi
-	rm -f $file
 
-        # Disable proc variable
-        mds_capability_switch 0
+        turn_oss_capa_on
 	if [ $? != 0 ]; then
-		error "mds_capability_switch 0"
+		error "turn_oss_capa_on"
 		return 2
 	fi
-        oss_capability_switch 1
-	if [ $? != 0 ]; then
-		error "oss_capability_switch 1"
-		return 3
+
+	if [ "$CLIENT_TYPE" = "remote" ]; then
+		remount_client $MOUNT && return 3
+		turn_oss_capa_off
+		return 0
+	else
+        	remount_client $MOUNT || return 4
 	fi
 
         # proc variable disabled -- access to the objects in the filesystem
@@ -374,14 +456,15 @@ test_5() {
 	$WTL $file 30
 	if [ $? == 0 ]; then
         	error "Write worked well even though secrets not supplied."
-		return 4
+		return 5
         fi
 
         turn_capability_on
 	if [ $? != 0 ]; then
 		error "turn_capability_on"
-		return 4
+		return 6
 	fi
+
         sleep 5
 
         # proc variable enabled, secrets supplied -- write should work now
@@ -390,13 +473,13 @@ test_5() {
 	$WTL $file 30
 	if [ $? != 0 ]; then
         	error "Write failed even though secrets supplied."
-		return 5
+		return 7
         fi
 
 	turn_capability_off
 	if [ $? != 0 ]; then
 		error "turn_capability_off"
-		return 7
+		return 8
 	fi
 	rm -f $file
 }
@@ -409,12 +492,16 @@ run_test 5 "capa secrets ========================="
 test_6() {
         local file=$DIR/f6
 
+	[ $GSS_SUP = 0 ] && skip "without GSS support." && return
 	[ -z "$MDT" ] && skip "do not support do_facet operations." && return
+	[ ! -z "$LOCALMDT" ] && skip "client should be separated from server." && return
+
 	turn_capability_off
 	if [ $? != 0 ]; then
 		error "turn_capability_off"
 		return 1
 	fi
+
 	rm -f $file
 
         turn_capability_on 30
@@ -422,6 +509,7 @@ test_6() {
 		error "turn_capability_on 30"
 		return 2
 	fi
+
         # Token expiry
 	$WTL $file 60
 	if [ $? != 0 ]; then
@@ -435,14 +523,15 @@ test_6() {
 		error "mds_capability_timeout 30"
 		return 4
 	fi
+
 	$WTL $file 60 &
 	local PID=$!
 	sleep 5
 
         # To disable automatic renew, only need turn capa off on MDS.
-        mds_capability_switch 0
+	turn_mds_capa_off
 	if [ $? != 0 ]; then
-		error "mds_capability_switch 0"
+		error "turn_mds_capa_off"
 		return 5
 	fi
 

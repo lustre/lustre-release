@@ -71,8 +71,9 @@
 #endif
 #include "lsupport.h"
 
-const char * lustre_svc_name[] = 
+const char * lustre_svc_name[] =
 {
+        [LUSTRE_GSS_SVC_MGS]    = "MGS",
         [LUSTRE_GSS_SVC_MDS]    = "MDS",
         [LUSTRE_GSS_SVC_OSS]    = "OSS",
 };

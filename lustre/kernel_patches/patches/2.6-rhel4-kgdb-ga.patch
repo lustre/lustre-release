@@ -1573,7 +1573,7 @@ Index: linux/MAINTAINERS
 ===================================================================
 --- linux.orig/MAINTAINERS
 +++ linux/MAINTAINERS
-@@ -1242,6 +1242,12 @@ W:	http://sf.net/projects/kernel-janitor
+@@ -1247,6 +1247,12 @@ W:	http://sf.net/projects/kernel-janitor
  W:	http://developer.osdl.org/rddunlap/kj-patches/
  S:	Maintained
  
@@ -1590,7 +1590,7 @@ Index: linux/arch/i386/Kconfig
 ===================================================================
 --- linux.orig/arch/i386/Kconfig
 +++ linux/arch/i386/Kconfig
-@@ -1250,6 +1250,14 @@ menu "Executable file formats"
+@@ -1292,6 +1292,14 @@ menu "Executable file formats"
  
  source "fs/Kconfig.binfmt"
  
@@ -1800,7 +1800,7 @@ Index: linux/arch/i386/Makefile
 ===================================================================
 --- linux.orig/arch/i386/Makefile
 +++ linux/arch/i386/Makefile
-@@ -98,6 +98,9 @@ core-$(CONFIG_X86_ES7000)	:= arch/i386/m
+@@ -102,6 +102,9 @@ core-$(CONFIG_X86_ES7000)	:= arch/i386/m
  # default subarch .h files
  mflags-y += -Iinclude/asm-i386/mach-default
  
@@ -1855,7 +1855,7 @@ Index: linux/arch/i386/kernel/entry.S
  
  #define __RESTORE_INT_REGS \
  	popl %ebx;	\
-@@ -357,6 +370,7 @@ need_resched:
+@@ -361,6 +374,7 @@ need_resched:
  	# sysenter call handler stub
  ENTRY(sysenter_entry)
  	movl TSS_sysenter_esp0(%esp),%esp
@@ -1863,7 +1863,7 @@ Index: linux/arch/i386/kernel/entry.S
  sysenter_past_esp:
  	sti
  	pushl $(__USER_DS)
-@@ -437,6 +451,19 @@ syscall_exit:
+@@ -441,6 +455,19 @@ syscall_exit:
  	testw $_TIF_ALLWORK_MASK, %cx	# current->work
  	jne syscall_exit_work
  restore_all:
@@ -4382,7 +4382,7 @@ Index: linux/arch/i386/kernel/traps.c
  		if (notify_die(DIE_GPF, "general protection fault", regs,
  				error_code, 13, SIGSEGV) == NOTIFY_STOP)
  			return;
-@@ -829,8 +874,18 @@ asmlinkage void do_debug(struct pt_regs 
+@@ -835,8 +880,18 @@ asmlinkage void do_debug(struct pt_regs 
  		 * allowing programs to debug themselves without the ptrace()
  		 * interface.
  		 */
@@ -4401,7 +4401,7 @@ Index: linux/arch/i386/kernel/traps.c
  		if ((tsk->ptrace & (PT_DTRACE|PT_PTRACED)) == PT_DTRACE)
  			goto clear_TF;
  	}
-@@ -842,6 +897,17 @@ asmlinkage void do_debug(struct pt_regs 
+@@ -848,6 +903,17 @@ asmlinkage void do_debug(struct pt_regs 
  	info.si_errno = 0;
  	info.si_code = TRAP_BRKPT;
  	
@@ -4419,7 +4419,7 @@ Index: linux/arch/i386/kernel/traps.c
  	/* If this is a kernel mode trap, save the user PC on entry to 
  	 * the kernel, that's what the debugger can make sense of.
  	 */
-@@ -856,6 +922,7 @@ clear_dr7:
+@@ -862,6 +928,7 @@ clear_dr7:
  	__asm__("movl %0,%%db7"
  		: /* no output */
  		: "r" (0));
@@ -4427,7 +4427,7 @@ Index: linux/arch/i386/kernel/traps.c
  	return;
  
  debug_vm86:
-@@ -1151,6 +1218,12 @@ static void __init set_task_gate(unsigne
+@@ -1157,6 +1224,12 @@ static void __init set_task_gate(unsigne
  {
  	_set_gate(idt_table+n,5,0,0,(gdt_entry<<3));
  }
@@ -4440,7 +4440,7 @@ Index: linux/arch/i386/kernel/traps.c
  
  
  void __init trap_init(void)
-@@ -1169,7 +1242,11 @@ void __init trap_init(void)
+@@ -1175,7 +1248,11 @@ void __init trap_init(void)
  	set_trap_gate(0,&divide_error);
  	set_intr_gate(1,&debug);
  	set_intr_gate(2,&nmi);
@@ -5051,7 +5051,7 @@ Index: linux/drivers/serial/8250.c
 ===================================================================
 --- linux.orig/drivers/serial/8250.c
 +++ linux/drivers/serial/8250.c
-@@ -880,7 +880,7 @@ receive_chars(struct uart_8250_port *up,
+@@ -882,7 +882,7 @@ receive_chars(struct uart_8250_port *up,
  		if (unlikely(tty->flip.count >= TTY_FLIPBUF_SIZE)) {
  			tty->flip.work.func((void *)tty);
  			if (tty->flip.count >= TTY_FLIPBUF_SIZE)
@@ -5060,7 +5060,7 @@ Index: linux/drivers/serial/8250.c
  		}
  		ch = serial_inp(up, UART_RX);
  		*tty->flip.char_buf_ptr = ch;
-@@ -1241,12 +1241,21 @@ static void serial8250_break_ctl(struct 
+@@ -1245,12 +1245,21 @@ static void serial8250_break_ctl(struct 
  	spin_unlock_irqrestore(&up->port.lock, flags);
  }
  
@@ -5082,7 +5082,7 @@ Index: linux/drivers/serial/8250.c
  	up->capabilities = uart_config[up->port.type].flags;
  	up->mcr = 0;
  
-@@ -1877,6 +1886,10 @@ static void __init serial8250_register_p
+@@ -1881,6 +1890,10 @@ static void __init serial8250_register_p
  	for (i = 0; i < UART_NR; i++) {
  		struct uart_8250_port *up = &serial8250_ports[i];
  
@@ -5093,7 +5093,7 @@ Index: linux/drivers/serial/8250.c
  		up->port.line = i;
  		up->port.ops = &serial8250_pops;
  		init_timer(&up->timer);
-@@ -2160,6 +2173,31 @@ void serial8250_resume_port(int line)
+@@ -2181,6 +2194,31 @@ void serial8250_resume_port(int line)
  	uart_resume_port(&serial8250_reg, &serial8250_ports[line].port);
  }
  
@@ -6317,20 +6317,12 @@ Index: linux/include/linux/spinlock.h
 +                SET_WHO(x, current)       \
  	} while (0)
  
- /* without debugging, spin_is_locked on UP always says
-@@ -151,6 +162,7 @@ typedef struct {
- 		(x)->lock = 1; \
- 		(x)->owner = __FILE__; \
- 		(x)->oline = __LINE__; \
-+                SET_WHO(x, current)       \
- 		1; \
- 	})
- 
+ #define spin_is_locked(x) \
 Index: linux/kernel/pid.c
 ===================================================================
 --- linux.orig/kernel/pid.c
 +++ linux/kernel/pid.c
-@@ -276,6 +276,9 @@ int pid_alive(struct task_struct *p)
+@@ -320,6 +320,9 @@ struct pid *find_ge_pid(int nr)
   * machine.  From a minimum of 16 slots up to 4096 slots at one gigabyte or
   * more.
   */
@@ -6340,7 +6332,7 @@ Index: linux/kernel/pid.c
  void __init pidhash_init(void)
  {
  	int i, j, pidhash_size;
-@@ -297,6 +300,9 @@ void __init pidhash_init(void)
+@@ -341,6 +344,9 @@ void __init pidhash_init(void)
  		for (j = 0; j < pidhash_size; j++)
  			INIT_HLIST_HEAD(&pid_hash[i][j]);
  	}
@@ -6354,7 +6346,7 @@ Index: linux/kernel/sched.c
 ===================================================================
 --- linux.orig/kernel/sched.c
 +++ linux/kernel/sched.c
-@@ -3190,6 +3190,13 @@ out_unlock:
+@@ -3207,6 +3207,13 @@ out_unlock:
  
  EXPORT_SYMBOL(set_user_nice);
  

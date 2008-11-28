@@ -177,7 +177,7 @@ sig_hup(int signal)
 static void
 usage(char *progname)
 {
-	fprintf(stderr, "usage: %s [-n] [-f] [-v] [-r] [-m] [-o]\n",
+	fprintf(stderr, "usage: %s [-n] [-f] [-v] [-r] [-m] [-o] [-g]\n",
 		progname);
 	exit(1);
 }
@@ -189,11 +189,11 @@ main(int argc, char *argv[])
 	int fg = 0;
 	int verbosity = 0;
 	int opt;
-	int must_srv_mds = 0, must_srv_oss = 0;
+	int must_srv_mds = 0, must_srv_oss = 0, must_srv_mgs = 0;
 	extern char *optarg;
 	char *progname;
 
-	while ((opt = getopt(argc, argv, "fivrnp:")) != -1) {
+	while ((opt = getopt(argc, argv, "fvrnmog:")) != -1) {
 		switch (opt) {
 			case 'f':
 				fg = 1;
@@ -211,6 +211,10 @@ main(int argc, char *argv[])
 			case 'o':
 				get_creds = 1;
 				must_srv_oss = 1;
+				break;
+			case 'g':
+				get_creds = 1;
+				must_srv_mgs = 1;
 				break;
 			default:
 				usage(argv[0]);
@@ -235,10 +239,11 @@ main(int argc, char *argv[])
 		exit(1);
 	}
   
-	if (get_creds && gssd_prepare_creds(must_srv_mds, must_srv_oss)) {
+	if (get_creds &&
+	    gssd_prepare_creds(must_srv_mgs, must_srv_mds, must_srv_oss)) {
                 printerr(0, "unable to obtain root (machine) credentials\n");
                 printerr(0, "do you have a keytab entry for "
-			    "nfs/<your.host>@<YOUR.REALM> in "
+			    "<lustre_xxs>/<your.host>@<YOUR.REALM> in "
 			    "/etc/krb5.keytab?\n");
 		exit(1);
 	}

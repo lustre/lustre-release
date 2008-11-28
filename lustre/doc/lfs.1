@@ -44,13 +44,33 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs quotaoff [-ug] <filesystem>
 .br
-.B lfs setquota [-u|-g] <username|groupname> <block-softlimit>
-             \fB<block-hardlimit> <inode-softlimit> <inode-hardlimit>
+.B lfs quotainv [-ug] [-f] <filesystem>
+.br
+.B lfs setquota [-u|--user|-g|--group] <username|groupname>
+             \fB[--block-softlimit <block-softlimit>]
+             \fB[--block-hardlimit <block-hardlimit>]
+             \fB[--inode-softlimit <inode-softlimit>]
+             \fB[--inode-hardlimit <inode-hardlimit>]
              \fB<filesystem>\fR
 .br
-.B lfs setquota -t [-u|-g] <block-grace> <inode-grace> <filesystem>
+.B lfs setquota [-u|--user|-g|--group] <username|groupname>
+             \fB[-b <block-softlimit>] [-B <block-hardlimit>]
+             \fB[-i <inode-softlimit>] [-I <inode-hardlimit>]
+             \fB<filesystem>\fR
 .br
-.B lfs quota [-o obd_uuid] [-u|-g] <username|groupname> <filesystem>
+.B lfs setquota -t [-u|-g]
+             \fB[--block-grace <block-grace>]
+             \fB[--inode-grace <inode-grace>]
+             \fB<filesystem>\fR
+.br
+.B lfs setquota -t [-u|-g]
+             \fB[-b <block-grace>] [-i <inode-grace>]
+             \fB<filesystem>\fR
+.br
+
+.B lfs quota [-v] [-o obd_uuid|-i mdt_idx|-I ost_idx] [-u|-g] <username|groupname> <filesystem>
+.br
+.B lfs quota <filesystem>
 .br
 .B lfs quota -t [-u|-g] <filesystem>
 .br
@@ -121,14 +141,17 @@ To turn filesystem quotas on. Options specify quota for users (-u) groups (-g) a
 .B quotaoff [-ugf] <filesystem>
 To turn filesystem quotas off.  Options specify quota for users (-u) groups (-g) and force (-f)
 .TP
-.B setquota  [-u|-g] <name> <block-softlimit> <block-hardlimit> <inode-softlimit> <inode-hardlimit> <filesystem>
-To set filesystem quotas for users or groups. Limits are specific as blocks and inodes, see EXAMPLES
+.B quotainv [-ug] [-f] <filesystem>
+Clear quota files (administrative quota files if used without -f, operational quota files otherwise), all of their quota entries, for (-u) users or (-g) groups; after quotainv one must use quotacheck before using quotas. DO NOT USE THIS COMMAND UNLESS YOU REALLY KNOW WHAT IT DOES. IT IS MAINLY FOR INTERNAL PURPOSES.
 .TP
-.B setquota -t [-u|-g] <block-grace> <inode-grace> <filesystem>
+.B setquota  [-u|-g] <name> [--block-softlimit <block-softlimit>] [--block-hardlimit <block-hardlimit>] [--inode-softlimit <inode-softlimit>] [--inode-hardlimit <inode-hardlimit>] <filesystem>
+To set filesystem quotas for users or groups. Limits can be specified with -b, -k, -m, -g, -t, -p suffixes which specify units of 1, 2^10, 2^20, 2^30, 2^40 and 2^50 accordingly. Block limits unit is kilobyte (1024) by default and block limits are always kilobyte-grained (even if specified in bytes), see EXAMPLES
+.TP
+.B setquota -t [-u|-g] [--block-grace <block-grace>] [--inode-grace <inode-grace>] <filesystem>
 To set filesystem quota grace times for users or groups. Grace time is specified in "XXwXXdXXhXXmXXs" format or as an integer seconds value, see EXAMPLES
 .TP
-.B quota [-o obd_uuid] [-u|-g] <username|groupname> <filesystem>
-To display disk usage and limits, either for the full filesystem, or for objects on a specific obd. A user or group name must be specified.
+.B quota [-v] [-o obd_uuid|-i mdt_idx|-I ost_idx] [-u|-g] <username|groupname> <filesystem>
+To display disk usage and limits, either for the full filesystem, or for objects on a specific obd. A user or group name can be specified. If both user and group are omitted quotas for current uid/gid are shown. -v provides more verbose (with per-obd statistics) output.
 .TP
 .B quota -t [-u|-g] <filesystem>
 To display block and inode grace times for user (-u) or group (-g) quotas
@@ -141,7 +164,7 @@ Quit the interactive lfs session
 .SH EXAMPLES
 .TP
 .B $ lfs setstripe -s 128k -c 2 /mnt/lustre/file1
-This creats a file striped on two OSTs with 128kB on each stripe.
+This creates a file striped on two OSTs with 128kB on each stripe.
 .TP
 .B $ lfs setstripe -d /mnt/lustre/dir
 This deletes a default stripe pattern on dir. New files will use the default striping pattern created therein.
@@ -182,10 +205,10 @@ Turn quotas of user and group on
 .B $ lfs quotaoff -ug /mnt/lustre
 Turn quotas of user and group off
 .TP
-.B $ lfs setquota -u bob 0 1000000 0 10000 /mnt/lustre
-Set quotas of user `bob': 1GB block quota and 10,000 file quota
+.B $ lfs setquota -u bob --block-softlimit 2000000 --block-hardlimit 1000000 /mnt/lustre
+Set quotas of user `bob': 1GB block quota hardlimit and 2 GB block quota softlimit
 .TP
-.B $ lfs setquota -t -u 1000 1w4d /mnt/lustre
+.B $ lfs setquota -t -u --block-grace 1000 --inode-grace 1w4d /mnt/lustre
 Set grace times for user quotas: 1000 seconds for block quotas, 1 week and 4 days for inode quotas
 .TP
 .B $ lfs quota -u bob /mnt/lustre

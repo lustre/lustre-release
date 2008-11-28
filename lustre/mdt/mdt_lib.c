@@ -53,6 +53,7 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include "mdt_internal.h"
+#include <lnet/lib-lnet.h>
 
 
 typedef enum ucred_init_type {
@@ -81,23 +82,60 @@ void mdt_exit_ucred(struct mdt_thread_info *info)
         }
 }
 
-/* XXX: root_squash will be redesigned in Lustre 1.7.
- * Do not root_squash for inter-MDS operations */
-static int mdt_root_squash(struct mdt_thread_info *info)
+static int match_nosquash_list(struct rw_semaphore *sem,
+                               struct list_head *nidlist,
+                               lnet_nid_t peernid)
 {
-        return 0;
+        int rc;
+        ENTRY;
+        down_read(sem);
+        rc = cfs_match_nid(peernid, nidlist);
+        up_read(sem);
+        RETURN(rc);
+}
+
+/* root_squash for inter-MDS operations */
+static int mdt_root_squash(struct mdt_thread_info *info, lnet_nid_t peernid)
+{
+        struct md_ucred *ucred = mdt_ucred(info);
+        ENTRY;
+
+        if (!info->mti_mdt->mdt_squash_uid || ucred->mu_fsuid)
+                RETURN(0);
+
+        if (match_nosquash_list(&info->mti_mdt->mdt_squash_sem,
+                                &info->mti_mdt->mdt_nosquash_nids,
+                                peernid)) {
+                CDEBUG(D_OTHER, "%s is in nosquash_nids list\n",
+                       libcfs_nid2str(peernid));
+                RETURN(0);
+        }
+
+        CDEBUG(D_OTHER, "squash req from %s, (%d:%d/%x)=>(%d:%d/%x)\n",
+               libcfs_nid2str(peernid),
+               ucred->mu_fsuid, ucred->mu_fsgid, ucred->mu_cap,
+               info->mti_mdt->mdt_squash_uid, info->mti_mdt->mdt_squash_gid,
+               0);
+
+        ucred->mu_fsuid = info->mti_mdt->mdt_squash_uid;
+        ucred->mu_fsgid = info->mti_mdt->mdt_squash_gid;
+        ucred->mu_cap = 0;
+        ucred->mu_suppgids[0] = -1;
+        ucred->mu_suppgids[1] = -1;
+
+        RETURN(0);
 }
 
 static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
                           void *buf)
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
-        struct mdt_export_data  *med = mdt_req2med(req);
         struct mdt_device       *mdt = info->mti_mdt;
         struct ptlrpc_user_desc *pud = req->rq_user_desc;
         struct md_ucred         *ucred = mdt_ucred(info);
         lnet_nid_t               peernid = req->rq_peer.nid;
         __u32                    perm = 0;
+        __u32                    remote = exp_connect_rmtclient(info->mti_exp);
         int                      setuid;
         int                      setgid;
         int                      rc = 0;
@@ -123,7 +161,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
         }
 
         /* sanity check: we expect the uid which client claimed is true */
-        if (med->med_rmtclient) {
+        if (remote) {
                 if (req->rq_auth_mapped_uid == INVALID_UID) {
                         CDEBUG(D_SEC, "remote user not mapped, deny access!\n");
                         RETURN(-EACCES);
@@ -153,7 +191,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
         }
 
         if (is_identity_get_disabled(mdt->mdt_identity_cache)) {
-                if (med->med_rmtclient) {
+                if (remote) {
                         CDEBUG(D_SEC, "remote client must run with identity_get "
                                "enabled!\n");
                         RETURN(-EACCES);
@@ -169,7 +207,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
                                             pud->pud_uid);
                 if (IS_ERR(identity)) {
                         if (unlikely(PTR_ERR(identity) == -EREMCHG &&
-                                     !med->med_rmtclient)) {
+                                     !remote)) {
                                 ucred->mu_identity = NULL;
                                 perm = CFS_SETUID_PERM | CFS_SETGID_PERM |
                                        CFS_SETGRP_PERM;
@@ -181,8 +219,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
                 } else {
                         ucred->mu_identity = identity;
                         perm = mdt_identity_get_perm(ucred->mu_identity,
-                                                     med->med_rmtclient,
-                                                     peernid);
+                                                     remote, peernid);
                 }
         }
 
@@ -211,7 +248,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
         /*
          * NB: remote client not allowed to setgroups anyway.
          */
-        if (!med->med_rmtclient && perm & CFS_SETGRP_PERM) {
+        if (!remote && perm & CFS_SETGRP_PERM) {
                 if (pud->pud_ngroups) {
                         /* setgroups for local client */
                         ucred->mu_ginfo = groups_alloc(pud->pud_ngroups);
@@ -238,14 +275,17 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
         ucred->mu_fsuid = pud->pud_fsuid;
         ucred->mu_fsgid = pud->pud_fsgid;
 
-        /* XXX: need to process root_squash here. */
-        mdt_root_squash(info);
+        /* process root_squash here. */
+        mdt_root_squash(info, peernid);
 
-        /* remove fs privilege for non-root user */
+        /* remove fs privilege for non-root user. */
         if (ucred->mu_fsuid)
                 ucred->mu_cap = pud->pud_cap & ~CFS_CAP_FS_MASK;
         else
                 ucred->mu_cap = pud->pud_cap;
+        if (remote && !(perm & CFS_RMTOWN_PERM))
+                ucred->mu_cap &= ~(CFS_CAP_SYS_RESOURCE_MASK |
+                                   CFS_CAP_CHOWN_MASK);
         ucred->mu_valid = UCRED_NEW;
 
         EXIT;
@@ -269,13 +309,13 @@ out:
 int mdt_check_ucred(struct mdt_thread_info *info)
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
-        struct mdt_export_data  *med = mdt_req2med(req);
         struct mdt_device       *mdt = info->mti_mdt;
         struct ptlrpc_user_desc *pud = req->rq_user_desc;
         struct md_ucred         *ucred = mdt_ucred(info);
         struct md_identity      *identity = NULL;
         lnet_nid_t               peernid = req->rq_peer.nid;
         __u32                    perm = 0;
+        __u32                    remote = exp_connect_rmtclient(info->mti_exp);
         int                      setuid;
         int                      setgid;
         int                      rc = 0;
@@ -290,7 +330,7 @@ int mdt_check_ucred(struct mdt_thread_info *info)
 
         /* sanity check: if we use strong authentication, we expect the
          * uid which client claimed is true */
-        if (med->med_rmtclient) {
+        if (remote) {
                 if (req->rq_auth_mapped_uid == INVALID_UID) {
                         CDEBUG(D_SEC, "remote user not mapped, deny access!\n");
                         RETURN(-EACCES);
@@ -320,7 +360,7 @@ int mdt_check_ucred(struct mdt_thread_info *info)
         }
 
         if (is_identity_get_disabled(mdt->mdt_identity_cache)) {
-                if (med->med_rmtclient) {
+                if (remote) {
                         CDEBUG(D_SEC, "remote client must run with identity_get "
                                "enabled!\n");
                         RETURN(-EACCES);
@@ -331,7 +371,7 @@ int mdt_check_ucred(struct mdt_thread_info *info)
         identity = mdt_identity_get(mdt->mdt_identity_cache, pud->pud_uid);
         if (IS_ERR(identity)) {
                 if (unlikely(PTR_ERR(identity) == -EREMCHG &&
-                             !med->med_rmtclient)) {
+                             !remote)) {
                         RETURN(0);
                 } else {
                         CDEBUG(D_SEC, "Deny access without identity: uid %u\n",
@@ -340,7 +380,7 @@ int mdt_check_ucred(struct mdt_thread_info *info)
                }
         }
 
-        perm = mdt_identity_get_perm(identity, med->med_rmtclient, peernid);
+        perm = mdt_identity_get_perm(identity, remote, peernid);
         /* find out the setuid/setgid attempt */
         setuid = (pud->pud_uid != pud->pud_fsuid);
         setgid = (pud->pud_gid != pud->pud_fsgid ||
@@ -401,10 +441,10 @@ static int old_init_ucred(struct mdt_thread_info *info,
         }
         uc->mu_identity = identity;
 
-        /* XXX: need to process root_squash here. */
-        mdt_root_squash(info);
+        /* process root_squash here. */
+        mdt_root_squash(info, mdt_info_req(info)->rq_peer.nid);
 
-        /* remove fs privilege for non-root user */
+        /* remove fs privilege for non-root user. */
         if (uc->mu_fsuid)
                 uc->mu_cap = body->capability & ~CFS_CAP_FS_MASK;
         else
@@ -441,10 +481,10 @@ static int old_init_ucred_reint(struct mdt_thread_info *info)
         }
         uc->mu_identity = identity;
 
-        /* XXX: need to process root_squash here. */
-        mdt_root_squash(info);
+        /* process root_squash here. */
+        mdt_root_squash(info, mdt_info_req(info)->rq_peer.nid);
 
-        /* remove fs privilege for non-root user */
+        /* remove fs privilege for non-root user. */
         if (uc->mu_fsuid)
                 uc->mu_cap &= ~CFS_CAP_FS_MASK;
         uc->mu_valid = UCRED_OLD;
@@ -525,6 +565,12 @@ void mdt_shrink_reply(struct mdt_thread_info *info)
 
         acl_size = body->aclsize;
 
+        /* this replay - not send info to client */
+        if (info->mti_spec.no_create == 1) {
+                md_size = 0;
+                acl_size = 0;
+        }
+
         CDEBUG(D_INFO, "Shrink to md_size = %d cookie/acl_size = %d"
                         " MDSCAPA = "LPX64", OSSCAPA = "LPX64"\n",
                         md_size, acl_size,
@@ -571,6 +617,7 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
 {
         struct mdt_body       *repbody;
         const struct lu_attr *la = &ma->ma_attr;
+        int rc;
         ENTRY;
 
         repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
@@ -603,6 +650,21 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
         if (ma->ma_cookie_size && (ma->ma_valid & MA_COOKIE)) {
                 repbody->aclsize = ma->ma_cookie_size;
                 repbody->valid |= OBD_MD_FLCOOKIE;
+        }
+
+        if (info->mti_mdt->mdt_opts.mo_oss_capa &&
+            info->mti_exp->exp_connect_flags & OBD_CONNECT_OSS_CAPA &&
+            repbody->valid & OBD_MD_FLEASIZE) {
+                struct lustre_capa *capa;
+
+                capa = req_capsule_server_get(info->mti_pill, &RMF_CAPA2);
+                LASSERT(capa);
+                capa->lc_opc = CAPA_OPC_OSS_DESTROY;
+                rc = mo_capa_get(info->mti_env, mdt_object_child(mo), capa, 0);
+                if (rc)
+                        RETURN(rc);
+
+                repbody->valid |= OBD_MD_FLOSSCAPA;
         }
 
         RETURN(0);
@@ -1001,13 +1063,15 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
         } else {
                 rr->rr_name = NULL;
                 rr->rr_namelen = 0;
-                
         }
         info->mti_spec.sp_ck_split = !!(rec->ul_bias & MDS_CHECK_SPLIT);
         if (rec->ul_bias & MDS_VTX_BYPASS)
                 ma->ma_attr_flags |= MDS_VTX_BYPASS;
         else
                 ma->ma_attr_flags &= ~MDS_VTX_BYPASS;
+
+        if (lustre_msg_get_flags(mdt_info_req(info)->rq_reqmsg) & MSG_REPLAY)
+                info->mti_spec.no_create = 1;
 
         rc = mdt_dlmreq_unpack(info);
         RETURN(rc);
@@ -1140,7 +1204,7 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
         if (sp->u.sp_ea.eadatalen) {
                 sp->u.sp_ea.eadata = req_capsule_client_get(pill, &RMF_EADATA);
                 if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
-                        sp->u.sp_ea.no_lov_create = 1;
+                        sp->no_create = 1;
         }
 
         RETURN(0);

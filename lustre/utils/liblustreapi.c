@@ -160,18 +160,25 @@ void llapi_printf(int level, char *fmt, ...)
         va_end(args);
 }
 
+/**
+ * size_units is unchanged if no specifier used
+ */
 int parse_size(char *optarg, unsigned long long *size,
-               unsigned long long *size_units)
+               unsigned long long *size_units, int bytes_spec)
 {
         char *end;
 
-        *size = strtoul(optarg, &end, 0);
+        *size = strtoull(optarg, &end, 0);
 
         if (*end != '\0') {
                 if ((*end == 'b') && *(end+1) == '\0' &&
-                    (*size & (~0ULL << (64 - 9))) == 0) {
+                    (*size & (~0ULL << (64 - 9))) == 0 &&
+                    !bytes_spec) {
                         *size <<= 9;
                         *size_units = 1 << 9;
+                } else if ((*end == 'b') && *(end+1) == '\0' &&
+                           bytes_spec) {
+                        *size_units = 1;
                 } else if ((*end == 'k' || *end == 'K') &&
                            *(end+1) == '\0' && (*size &
                            (~0ULL << (64 - 10))) == 0) {
@@ -649,6 +656,24 @@ int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
 
         *ost_count = index;
         return rc;
+}
+
+int llapi_get_obd_count(char *mnt, int *count, int is_mdt)
+{
+        DIR *root;
+        int rc; 
+
+        root = opendir(mnt);
+        if (!root) {
+                llapi_err(LLAPI_MSG_ERROR, "open %s failed", mnt);
+                return -1;
+        }
+
+        *count = is_mdt;
+        rc = ioctl(dirfd(root), LL_IOC_GETOBDCOUNT, count);
+
+        closedir(root);
+        return rc; 
 }
 
 /* Here, param->obduuid points to a single obduuid, the index of which is
@@ -1201,7 +1226,7 @@ err:
  * @mds indicates if this is MDS timestamps and there are attributes on OSTs.
  *
  * The result is -1 if it does not match, 0 if not yet clear, 1 if matches.
- * The table bolow gives the answers for the specified parameters (value and
+ * The table below gives the answers for the specified parameters (value and
  * sign), 1st column is the answer for the MDS value, the 2nd is for the OST:
  * --------------------------------------
  * 1 | file > limit; sign > 0 | -1 / -1 |

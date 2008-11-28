@@ -46,7 +46,6 @@
 #include <linux/kmod.h>
 #include <linux/version.h>
 #include <linux/sched.h>
-#include <lustre_quota.h>
 #include <linux/mount.h>
 #include <lustre_mds.h>
 #include <obd_class.h>
@@ -84,7 +83,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
                                    strlen(MDD_OBD_NAME))) {
                 RETURN(0);
         }
-        
+
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, &ucred);
 
         sprintf(fidname, "OBJECTS/%u.%u", tmpname, current->pid);
@@ -126,7 +125,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
 
         lock_kernel();
         rc = ll_vfs_rename(mds->mds_objects_dir->d_inode, filp->f_dentry,
-                           filp->f_vfsmnt, mds->mds_objects_dir->d_inode, 
+                           filp->f_vfsmnt, mds->mds_objects_dir->d_inode,
                            new_child, filp->f_vfsmnt);
         unlock_kernel();
         if (rc)
@@ -136,7 +135,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         err = fsfilt_commit(exp->exp_obd, mds->mds_objects_dir->d_inode,
                             handle, 0);
         if (!err) {
-                oa->o_gr = FILTER_GROUP_MDS0 + mds->mds_id;
+                oa->o_gr = mdt_to_obd_objgrp(mds->mds_id);
                 oa->o_valid |= OBD_MD_FLID | OBD_MD_FLGENER | OBD_MD_FLGROUP;
         } else if (!rc)
                 rc = err;
@@ -157,7 +156,7 @@ out_pop:
 
 int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
                     struct lov_stripe_md *ea, struct obd_trans_info *oti,
-                    struct obd_export *md_exp)
+                    struct obd_export *md_exp, void *capa)
 {
         struct mds_obd *mds = &exp->exp_obd->u.mds;
         struct inode *parent_inode = mds->mds_objects_dir->d_inode;

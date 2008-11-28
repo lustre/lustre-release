@@ -40,4 +40,5 @@ endif
 
 DIST_SOURCES := $(lustre-objs:.o=.c) llite_internal.h rw26.c super25.c 
 DIST_SOURCES += $(llite_lloop-objs:.o=.c)
+DIST_SOURCES += vvp_internal.h
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 

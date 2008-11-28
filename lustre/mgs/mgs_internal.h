@@ -52,6 +52,8 @@ int class_dentry_readdir(struct obd_device *obd, struct dentry *dir,
                          struct vfsmount *inmnt,
                          struct list_head *dentry_list);
 
+#define MGSSELF_NAME    "_mgs"
+
 struct mgs_tgt_srpc_conf {
         struct mgs_tgt_srpc_conf  *mtsc_next;
         char                      *mtsc_tgt;
@@ -82,11 +84,15 @@ struct fs_db {
         /* in-memory copy of the srpc rules, guarded by fsdb_sem */
         struct sptlrpc_rule_set   fsdb_srpc_gen;
         struct mgs_tgt_srpc_conf *fsdb_srpc_tgt;
-        unsigned int              fsdb_srpc_fl_udesc:1;
+        unsigned int              fsdb_fl_udesc:1,
+                                  fsdb_fl_mgsself:1;
 };
 
 int mgs_init_fsdb_list(struct obd_device *obd);
 int mgs_cleanup_fsdb_list(struct obd_device *obd);
+int mgs_find_or_make_fsdb(struct obd_device *obd, char *name, 
+                          struct fs_db **dbh);
+int mgs_get_fsdb_srpc_from_llog(struct obd_device *obd, struct fs_db *fsdb);
 int mgs_check_index(struct obd_device *obd, struct mgs_target_info *mti);
 int mgs_check_failnid(struct obd_device *obd, struct mgs_target_info *mti);
 int mgs_write_log_target(struct obd_device *obd, struct mgs_target_info *mti);

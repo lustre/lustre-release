@@ -45,9 +45,74 @@
 #include <dt_object.h>
 
 #include <libcfs/libcfs.h>
-
 #include <lustre_req_layout.h>
 #include <lustre_fld.h>
+
+enum {
+        LUSTRE_FLD_INIT = 1 << 0,
+        LUSTRE_FLD_RUN  = 1 << 1
+};
+
+struct fld_stats {
+        __u64   fst_count;
+        __u64   fst_cache;
+        __u64   fst_inflight;
+};
+
+typedef int (*fld_hash_func_t) (struct lu_client_fld *, __u64);
+
+typedef struct lu_fld_target *
+(*fld_scan_func_t) (struct lu_client_fld *, __u64);
+
+struct lu_fld_hash {
+        const char              *fh_name;
+        fld_hash_func_t          fh_hash_func;
+        fld_scan_func_t          fh_scan_func;
+};
+
+struct fld_cache_entry {
+        struct list_head         fce_lru;
+        struct list_head         fce_list;
+        /**
+         * fld cache entries are sorted on range->lsr_start field. */
+        struct lu_seq_range      fce_range;
+};
+
+struct fld_cache {
+        /**
+         * Cache guard, protects fci_hash mostly because others immutable after
+         * init is finished.
+         */
+        spinlock_t               fci_lock;
+
+        /**
+         * Cache shrink threshold */
+        int                      fci_threshold;
+
+        /**
+         * Prefered number of cached entries */
+        int                      fci_cache_size;
+
+        /**
+         * Current number of cached entries. Protected by @fci_lock */
+        int                      fci_cache_count;
+
+        /**
+         * LRU list fld entries. */
+        struct list_head         fci_lru;
+
+        /**
+         * sorted fld entries. */
+        struct list_head         fci_entries_head;
+
+        /**
+         * Cache statistics. */
+        struct fld_stats         fci_stat;
+
+        /**
+         * Cache name used for debug and messages. */
+        char                     fci_name[80];
+};
 
 enum fld_op {
         FLD_CREATE = 0,
@@ -71,29 +136,25 @@ enum {
         FLD_CLIENT_CACHE_THRESHOLD = 10
 };
 
-enum {
-        /*
-         * One page is used for hashtable. That is sizeof(struct hlist_head) *
-         * 1024.
-         */
-        FLD_CLIENT_HTABLE_SIZE     = (1024 * 1),
-
-        /* 
-         * Here 4 pages are used for hashtable of server cache. This is is
-         * because cache it self is 4 times bugger.
-         */
-        FLD_SERVER_HTABLE_SIZE     = (1024 * 4)
-};
-
 extern struct lu_fld_hash fld_hash[];
 
 #ifdef __KERNEL__
+
 struct fld_thread_info {
         struct req_capsule *fti_pill;
         __u64               fti_key;
-        __u64               fti_rec;
-        __u32               fti_flags;
+        struct lu_seq_range fti_rec;
+        struct lu_seq_range fti_lrange;
+        struct lu_seq_range fti_irange;
+        struct txn_param    fti_txn_param;
 };
+
+
+struct thandle* fld_trans_start(struct lu_server_fld *fld,
+                                const struct lu_env *env, int credit);
+
+void fld_trans_stop(struct lu_server_fld *fld,
+                    const struct lu_env *env, struct thandle* th);
 
 int fld_index_init(struct lu_server_fld *fld,
                    const struct lu_env *env,
@@ -104,15 +165,20 @@ void fld_index_fini(struct lu_server_fld *fld,
 
 int fld_index_create(struct lu_server_fld *fld,
                      const struct lu_env *env,
-                     seqno_t seq, mdsno_t mds);
+                     const struct lu_seq_range *range,
+                     struct thandle *th);
 
 int fld_index_delete(struct lu_server_fld *fld,
                      const struct lu_env *env,
-                     seqno_t seq);
+                     struct lu_seq_range *range,
+                     struct thandle *th);
 
 int fld_index_lookup(struct lu_server_fld *fld,
                      const struct lu_env *env,
-                     seqno_t seq, mdsno_t *mds);
+                     seqno_t seq, struct lu_seq_range *range);
+
+int fld_client_rpc(struct obd_export *exp,
+                   struct lu_seq_range *range, __u32 fld_op);
 
 #ifdef LPROCFS
 extern struct lprocfs_vars fld_server_proc_list[];
@@ -120,6 +186,22 @@ extern struct lprocfs_vars fld_client_proc_list[];
 #endif
 
 #endif
+
+struct fld_cache *fld_cache_init(const char *name,
+                                 int cache_size, int cache_threshold);
+
+void fld_cache_fini(struct fld_cache *cache);
+
+void fld_cache_flush(struct fld_cache *cache);
+
+void fld_cache_insert(struct fld_cache *cache,
+                      const struct lu_seq_range *range);
+
+void fld_cache_delete(struct fld_cache *cache,
+                      const struct lu_seq_range *range);
+
+int fld_cache_lookup(struct fld_cache *cache,
+                     const seqno_t seq, struct lu_seq_range *range);
 
 static inline const char *
 fld_target_name(struct lu_fld_target *tar)

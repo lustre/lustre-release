@@ -48,6 +48,7 @@
 #define GSSD_DEFAULT_CRED_PREFIX		"krb5cc_"
 #define GSSD_DEFAULT_MACHINE_CRED_SUFFIX	"machine"
 #define GSSD_DEFAULT_KEYTAB_FILE		"/etc/krb5.keytab"
+#define GSSD_SERVICE_MGS			"lustre_mgs"
 #define GSSD_SERVICE_MDS			"lustre_mds"
 #define GSSD_SERVICE_OSS			"lustre_oss"
 #define GSSD_SERVICE_MDS_NAMELEN		10

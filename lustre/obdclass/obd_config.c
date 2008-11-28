@@ -76,6 +76,72 @@ int class_find_param(char *buf, char *key, char **valp)
         return 0;
 }
 
+/**
+ * Finds a parameter in \a params and copies it to \a copy.
+ *
+ * Leading spaces are skipped. Next space or end of string is the
+ * parameter terminator with the exception that spaces inside single or double
+ * quotes get included into a parameter. The parameter is copied into \a copy
+ * which has to be allocated big enough by a caller, quotes are stripped in
+ * the copy and the copy is terminated by 0.
+ *
+ * On return \a params is set to next parameter or to NULL if last
+ * parameter is returned.
+ *
+ * \retval 0 if parameter is returned in \a copy
+ * \retval 1 otherwise
+ * \retval -EINVAL if unbalanced quota is found
+ */
+int class_get_next_param(char **params, char *copy)
+{
+        char *q1, *q2, *str;
+        int len;
+
+        str = *params;
+        while (*str == ' ')
+                str++;
+
+        if (*str == '\0') {
+                *params = NULL;
+                return 1;
+        }
+
+        while (1) {
+                q1 = strpbrk(str, " '\"");
+                if (q1 == NULL) {
+                        len = strlen(str);
+                        memcpy(copy, str, len);
+                        copy[len] = '\0';
+                        *params = NULL;
+                        return 0;
+                }
+                len = q1 - str;
+                if (*q1 == ' ') {
+                        memcpy(copy, str, len);
+                        copy[len] = '\0';
+                        *params = str + len;
+                        return 0;
+                }
+
+                memcpy(copy, str, len);
+                copy += len;
+
+                /* search for the matching closing quote */
+                str = q1 + 1;
+                q2 = strchr(str, *q1);
+                if (q2 == NULL) {
+                        CERROR("Unbalanced quota in parameters: \"%s\"\n",
+                               *params);
+                        return -EINVAL;
+                }
+                len = q2 - str;
+                memcpy(copy, str, len);
+                copy += len;
+                str = q2 + 1;
+        }
+        return 1;
+}
+
 /* returns 0 if this is the first key in the buffer, else 1.
    valp points to first char after key. */
 int class_match_param(char *buf, char *key, char **valp)
@@ -129,6 +195,7 @@ int class_parse_nid(char *buf, lnet_nid_t *nid, char **endh)
 }
 
 EXPORT_SYMBOL(class_find_param);
+EXPORT_SYMBOL(class_get_next_param);
 EXPORT_SYMBOL(class_match_param);
 EXPORT_SYMBOL(class_parse_nid);
 
@@ -289,19 +356,19 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         spin_unlock(&obd->obd_dev_lock);
 
         /* create an uuid-export lustre hash */
-        obd->obd_uuid_hash = lustre_hash_init("UUID_HASH", 128, 128,
+        obd->obd_uuid_hash = lustre_hash_init("UUID_HASH", 7, 7,
                                               &uuid_hash_ops, 0);
         if (!obd->obd_uuid_hash)
                 GOTO(err_hash, err = -ENOMEM);
  
         /* create a nid-export lustre hash */
-        obd->obd_nid_hash = lustre_hash_init("NID_HASH", 128, 128,
+        obd->obd_nid_hash = lustre_hash_init("NID_HASH", 7, 7,
                                              &nid_hash_ops, 0);
         if (!obd->obd_nid_hash)
                 GOTO(err_hash, err = -ENOMEM);
  
         /* create a nid-stats lustre hash */
-        obd->obd_nid_stats_hash = lustre_hash_init("NID_STATS", 128, 128,
+        obd->obd_nid_stats_hash = lustre_hash_init("NID_STATS", 7, 7,
                                                    &nid_stat_hash_ops, 0);
         if (!obd->obd_nid_stats_hash)
                 GOTO(err_hash, err = -ENOMEM);
@@ -439,11 +506,15 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                                 obd->obd_fail = 1;
                                 obd->obd_no_transno = 1;
                                 obd->obd_no_recov = 1;
-                                /* Set the obd readonly if we can */
-                                if (OBP(obd, iocontrol))
+                                if (OBP(obd, iocontrol)) {
+                                        obd_iocontrol(OBD_IOC_SYNC,
+                                                      obd->obd_self_export,
+                                                      0, NULL, NULL);
+                                 /* Set the obd readonly if we can */
                                         obd_iocontrol(OBD_IOC_SET_READONLY,
                                                       obd->obd_self_export,
                                                       0, NULL, NULL);
+                                }
                                 break;
                         default:
                                 CERROR("unrecognised flag '%c'\n",
@@ -884,6 +955,7 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
         int i, keylen, vallen;
         int matched = 0, j = 0;
         int rc = 0;
+        int skip = 0;
         ENTRY;
 
         if (lcfg->lcfg_command != LCFG_PARAM) {
@@ -939,6 +1011,7 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                         CERROR("%s: unknown param %s\n",
                                (char *)lustre_cfg_string(lcfg, 0), key);
                         /* rc = -EINVAL;	continue parsing other params */
+                        skip++;
                 } else {
                         LCONSOLE_INFO("%s.%.*s: set parameter %.*s=%s\n",
                                       lustre_cfg_string(lcfg, 0),
@@ -949,6 +1022,8 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
 
         if (rc > 0)
                 rc = 0;
+        if (!rc && skip)
+                rc = skip;
         RETURN(rc);
 #else
         CDEBUG(D_CONFIG, "liblustre can't process params.\n");
@@ -1010,8 +1085,9 @@ static int class_config_llog_handler(struct llog_handle * handle,
                                         CDEBUG(D_CONFIG, "SKIP #%d\n",
                                                marker->cm_step);
                                 } else if ((marker->cm_flags & CM_EXCLUDE) ||
-                                           lustre_check_exclusion(clli->cfg_sb,
-                                                          marker->cm_tgtname)) {
+                                           (clli->cfg_sb &&
+                                            lustre_check_exclusion(clli->cfg_sb,
+                                                         marker->cm_tgtname))) {
                                         clli->cfg_flags |= CFG_F_EXCLUDE;
                                         CDEBUG(D_CONFIG, "EXCLUDE %d\n",
                                                marker->cm_step);
@@ -1037,6 +1113,29 @@ static int class_config_llog_handler(struct llog_handle * handle,
                         rc = 0;
                         /* No processing! */
                         break;
+                }
+
+                /*
+                 * For interoperability between 1.8 and 2.0,
+                 * rename "mds" obd device type to "mdt".
+                 */
+                {
+                        char *typename = lustre_cfg_string(lcfg, 1);
+                        char *index = lustre_cfg_string(lcfg, 2);
+                        
+                        if ((lcfg->lcfg_command == LCFG_ATTACH && typename &&
+                             strcmp(typename, "mds") == 0)) {
+                                CWARN("For 1.8 interoperability, rename obd "
+                                       "type from mds to mdt\n");
+                                typename[2] = 't';
+                        }
+                        if ((lcfg->lcfg_command == LCFG_SETUP && index &&
+                             strcmp(index, "type") == 0)) {
+                                CWARN("For 1.8 interoperability, set this"
+                                       " index to '0'\n");
+                                index[0] = '0';
+                                index[1] = 0;
+                        }
                 }
 
                 if ((clli->cfg_flags & CFG_F_EXCLUDE) &&
@@ -1068,6 +1167,22 @@ static int class_config_llog_handler(struct llog_handle * handle,
                     lcfg->lcfg_command == LCFG_ATTACH) {
                         lustre_cfg_bufs_set_string(&bufs, 2,
                                                    clli->cfg_uuid.uuid);
+                }
+                /*
+                 * sptlrpc config record, we expect 2 data segments:
+                 *  [0]: fs_name/target_name,
+                 *  [1]: rule string
+                 * moving them to index [1] and [2], and insert MGC's
+                 * obdname at index [0].
+                 */
+                if (clli && clli->cfg_instance == NULL &&
+                    lcfg->lcfg_command == LCFG_SPTLRPC_CONF) {
+                        lustre_cfg_bufs_set(&bufs, 2, bufs.lcfg_buf[1],
+                                            bufs.lcfg_buflen[1]);
+                        lustre_cfg_bufs_set(&bufs, 1, bufs.lcfg_buf[0],
+                                            bufs.lcfg_buflen[0]);
+                        lustre_cfg_bufs_set_string(&bufs, 0,
+                                                   clli->cfg_obdname);
                 }
 
                 lcfg_new = lustre_cfg_new(lcfg->lcfg_command, &bufs);

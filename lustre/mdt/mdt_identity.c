@@ -285,10 +285,8 @@ __u32 mdt_identity_get_perm(struct md_identity *identity,
 int mdt_pack_remote_perm(struct mdt_thread_info *info, struct mdt_object *o,
                          void *buf)
 {
-        struct ptlrpc_request   *req = mdt_info_req(info);
         struct md_ucred         *uc = mdt_ucred(info);
         struct md_object        *next = mdt_object_child(o);
-        struct mdt_export_data  *med = mdt_req2med(req);
         struct mdt_remote_perm  *perm = buf;
 
         ENTRY;
@@ -296,7 +294,7 @@ int mdt_pack_remote_perm(struct mdt_thread_info *info, struct mdt_object *o,
         /* remote client request always pack ptlrpc_user_desc! */
         LASSERT(perm);
 
-        if (!med->med_rmtclient)
+        if (!exp_connect_rmtclient(info->mti_exp))
                 RETURN(-EBADE);
 
         if ((uc->mu_valid != UCRED_OLD) && (uc->mu_valid != UCRED_NEW))

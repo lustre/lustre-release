@@ -108,7 +108,7 @@ static int llog_lvfs_write_blob(struct obd_device *obd, struct l_file *file,
 
         file->f_pos = off;
 
-        if (buflen == 0) 
+        if (buflen == 0)
                 CWARN("0-length record\n");
 
         if (!buf) {
@@ -244,8 +244,8 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                 RETURN(rc);
 
         if (buf)
-                /* write_blob adds header and tail to lrh_len. */ 
-                reclen = sizeof(*rec) + rec->lrh_len + 
+                /* write_blob adds header and tail to lrh_len. */
+                reclen = sizeof(*rec) + rec->lrh_len +
                          sizeof(struct llog_rec_tail);
 
         if (idx != -1) {
@@ -260,7 +260,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                 if (idx && llh->llh_size && llh->llh_size != rec->lrh_len)
                         RETURN(-EINVAL);
 
-                if (!ext2_test_bit(idx, llh->llh_bitmap)) 
+                if (!ext2_test_bit(idx, llh->llh_bitmap))
                         CERROR("Modify unset record %u\n", idx);
                 if (idx != rec->lrh_index)
                         CERROR("Index mismatch %d %u\n", idx, rec->lrh_index);
@@ -290,13 +290,13 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                                 RETURN(-EFAULT);
                         }
 #if 1  /* FIXME remove this safety check at some point */
-                        /* Verify that the record we're modifying is the 
+                        /* Verify that the record we're modifying is the
                            right one. */
                         rc = llog_lvfs_read_blob(obd, file, &check,
                                                  sizeof(check), saved_offset);
                         if (check.lrh_index != idx || check.lrh_len != reclen) {
                                 CERROR("Bad modify idx %u/%u size %u/%u (%d)\n",
-                                       idx, check.lrh_index, reclen, 
+                                       idx, check.lrh_index, reclen,
                                        check.lrh_len, rc);
                                 RETURN(-EFAULT);
                         }
@@ -366,7 +366,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         if (rc == 0 && reccookie) {
                 reccookie->lgc_lgl = loghandle->lgh_id;
                 reccookie->lgc_index = index;
-                if ((rec->lrh_type == MDS_UNLINK_REC) || 
+                if ((rec->lrh_type == MDS_UNLINK_REC) ||
                                 (rec->lrh_type == MDS_SETATTR_REC))
                         reccookie->lgc_subsys = LLOG_MDS_OST_ORIG_CTXT;
                 else if (rec->lrh_type == OST_SZ_REC)
@@ -639,12 +639,12 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         } else if (name) {
                 /* COMPAT_146 */
                 if (strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME) == 0) {
-                        handle->lgh_file = llog_filp_open(MDT_LOGS_DIR, name, 
+                        handle->lgh_file = llog_filp_open(MDT_LOGS_DIR, name,
                                                           open_flags, 0644);
                 } else {
                         /* end COMPAT_146 */
                         handle->lgh_file = llog_filp_open(MOUNT_CONFIGS_DIR,
-                                                          name, open_flags, 
+                                                          name, open_flags,
                                                           0644);
                 }
                 if (IS_ERR(handle->lgh_file))
@@ -760,7 +760,7 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
         if (rc)
                 GOTO(out, rc);
 
-        rc = obd_destroy(handle->lgh_ctxt->loc_exp, oa, NULL, NULL, NULL);
+        rc = obd_destroy(handle->lgh_ctxt->loc_exp, oa, NULL, NULL, NULL, NULL);
  out:
         OBDO_FREE(oa);
         RETURN(rc);
@@ -777,7 +777,7 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
         loff_t off = idx *  sizeof(*idarray);
         ENTRY;
 
-        if (!count) 
+        if (!count)
                 RETURN(0);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);

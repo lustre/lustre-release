@@ -56,7 +56,6 @@ struct mdt_export_data {
         __u64                   med_ibits_known;
         loff_t                  med_lr_off;
         int                     med_lr_idx;
-        unsigned int            med_rmtclient:1; /* remote client? */
         struct semaphore           med_idmap_sem;
         struct lustre_idmap_table *med_idmap;
 };
@@ -149,6 +148,7 @@ struct obd_export {
                                   exp_flvr_changed:1,
                                   exp_flvr_adapt:1,
                                   exp_libclient:1; /* liblustre client? */
+        struct list_head          exp_queued_rpc;  /* RPC to be handled */
         /* also protected by exp_lock */
         enum lustre_sec_part      exp_sp_peer;
         struct sptlrpc_flavor     exp_flvr;             /* current */
@@ -176,6 +176,20 @@ static inline int exp_connect_lru_resize(struct obd_export *exp)
 {
         LASSERT(exp != NULL);
         return !!(exp->exp_connect_flags & OBD_CONNECT_LRU_RESIZE);
+}
+
+static inline int exp_connect_rmtclient(struct obd_export *exp)
+{
+        LASSERT(exp != NULL);
+        return !!(exp->exp_connect_flags & OBD_CONNECT_RMT_CLIENT);
+}
+
+static inline int client_is_remote(struct obd_export *exp)
+{
+        struct obd_import *imp = class_exp2cliimp(exp);
+
+        return !!(imp->imp_connect_data.ocd_connect_flags &
+                  OBD_CONNECT_RMT_CLIENT);
 }
 
 static inline int imp_connect_lru_resize(struct obd_import *imp)

@@ -389,6 +389,7 @@ struct interval_node *interval_insert(struct interval_node *node,
         struct interval_node **p, *parent = NULL;
         ENTRY;
 
+        LASSERT(!interval_is_intree(node));
         p = root;
         while (*p) {
                 parent = *p;
@@ -412,6 +413,7 @@ struct interval_node *interval_insert(struct interval_node *node,
         *p = node;
 
         interval_insert_color(node, root);
+        node->in_intree = 1;
 
         RETURN(NULL);
 }
@@ -527,6 +529,8 @@ void interval_erase(struct interval_node *node,
         int color;
         ENTRY;
 
+        LASSERT(interval_is_intree(node));
+        node->in_intree = 0;
         if (!node->in_left) {
                 child = node->in_right;
         } else if (!node->in_right) {

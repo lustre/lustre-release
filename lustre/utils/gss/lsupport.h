@@ -20,8 +20,9 @@ void gssd_exit_unique(int type);
  * copied from lustre source
  */
 
-#define LUSTRE_GSS_SVC_MDS      0
-#define LUSTRE_GSS_SVC_OSS      1
+#define LUSTRE_GSS_SVC_MGS      0
+#define LUSTRE_GSS_SVC_MDS      1
+#define LUSTRE_GSS_SVC_OSS      2
 
 extern const char * lustre_svc_name[];
 

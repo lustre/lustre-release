@@ -282,17 +282,17 @@ struct llog_commit_master {
          */
         atomic_t                   lcm_count;
         /**
-         * Ptlrpc requests set. All cancel rpcs go via this request set.
-         */
-        struct ptlrpc_request_set *lcm_set;
-        /**
          * Thread control structure. Used for control commit thread.
          */
         struct ptlrpcd_ctl         lcm_pc;
         /**
-         * Busy resources waitq
+         * Lock protecting list of llcds.
          */
-        cfs_waitq_t                lcm_waitq;
+        spinlock_t                 lcm_lock;
+        /**
+         * Llcds in flight for debugging purposes.
+         */
+        struct list_head           lcm_llcds;
         /**
          * Commit thread name buffer. Only used for thread start.
          */
@@ -316,6 +316,10 @@ struct llog_canceld_ctxt {
          * left in llcd to cookie comming cookies.
          */
         int                        llcd_size;
+        /**
+         * Link to lcm llcds list.
+         */
+        struct list_head           llcd_list;
         /**
          * Current llcd size while gathering cookies. This should not be
          * more than ->llcd_size. Used for determining if we need to

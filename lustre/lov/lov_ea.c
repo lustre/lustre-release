@@ -500,7 +500,7 @@ static int lsm_revalidate_join(struct lov_stripe_md *lsm,
         OBD_ALLOC(lsm->lsm_array->lai_ext_array,lsm->lsm_array->lai_ext_count *
                                                 sizeof (struct lov_extent));
         if (!lsm->lsm_array->lai_ext_array)
-                GOTO(release_ctxt, rc = -ENOMEM);        
+                GOTO(release_ctxt, rc = -ENOMEM);
 
         CDEBUG(D_INFO, "get lsm logid: "LPU64":"LPU64"\n",
                lsm->lsm_array->lai_array_id.lgl_oid,
@@ -526,7 +526,7 @@ release_ctxt:
         RETURN(rc);
 }
 
-int lsm_destroy_join(struct lov_stripe_md *lsm, struct obdo *oa, 
+int lsm_destroy_join(struct lov_stripe_md *lsm, struct obdo *oa,
                       struct obd_export *md_exp)
 {
         struct llog_ctxt *ctxt;

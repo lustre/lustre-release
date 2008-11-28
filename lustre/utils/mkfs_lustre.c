@@ -98,6 +98,7 @@ char *progname;
 int verbose = 1;
 static int print_only = 0;
 static int failover = 0;
+static int upgrade_to_18 = 0;
 
 void usage(FILE *out)
 {
@@ -130,6 +131,7 @@ void usage(FILE *out)
                 "\t\t--mkfsoptions=<opts> : format options\n"
                 "\t\t--reformat: overwrite an existing disk\n"
                 "\t\t--stripe-count-hint=#N : used for optimizing MDT inode size\n"
+                "\t\t--iam-dir: make use of IAM directory format on backfs, incompatible with ext3.\n"
 #else
                 "\t\t--erase-params : erase all old parameter settings\n"
                 "\t\t--nomgs: turn off MGS service on this MDT\n"
@@ -716,7 +718,7 @@ void print_ldd(char *str, struct lustre_disk_data *ldd)
         printf("Lustre FS:  %s\n", ldd->ldd_fsname);
         printf("Mount type: %s\n", MT_STR(ldd));
         printf("Flags:      %#x\n", ldd->ldd_flags);
-        printf("              (%s%s%s%s%s%s%s%s)\n",
+        printf("              (%s%s%s%s%s%s%s%s%s)\n",
                IS_MDT(ldd) ? "MDT ":"",
                IS_OST(ldd) ? "OST ":"",
                IS_MGS(ldd) ? "MGS ":"",
@@ -724,12 +726,74 @@ void print_ldd(char *str, struct lustre_disk_data *ldd)
                ldd->ldd_flags & LDD_F_VIRGIN     ? "first_time ":"",
                ldd->ldd_flags & LDD_F_UPDATE     ? "update ":"",
                ldd->ldd_flags & LDD_F_WRITECONF  ? "writeconf ":"",
+               ldd->ldd_flags & LDD_F_IAM_DIR  ? "IAM_dir_format ":"",
                ldd->ldd_flags & LDD_F_UPGRADE14  ? "upgrade1.4 ":"");
         printf("Persistent mount opts: %s\n", ldd->ldd_mount_opts);
         printf("Parameters:%s\n", ldd->ldd_params);
         if (ldd->ldd_userdata[0])
                 printf("Comment: %s\n", ldd->ldd_userdata);
         printf("\n");
+}
+
+static int touch_file(char *filename)
+{
+        int fd;
+
+        if (filename == NULL) {
+                return 1;
+        }
+
+        fd = open(filename, O_CREAT | O_TRUNC, 0600);
+        if (fd < 0) {
+                return 1;
+        } else {
+                close(fd);
+                return 0;
+        }
+}
+
+/* keep it less than LL_FID_NAMELEN */
+#define DUMMY_FILE_NAME_LEN             25
+#define EXT3_DIRENT_SIZE                DUMMY_FILE_NAME_LEN
+
+/* Need to add these many entries to this directory to make HTREE dir. */
+#define MIN_ENTRIES_REQ_FOR_HTREE       ((L_BLOCK_SIZE / EXT3_DIRENT_SIZE))
+
+static int add_dummy_files(char *dir)
+{
+        char fpname[PATH_MAX];
+        int i;
+        int rc;
+
+        for (i = 0; i < MIN_ENTRIES_REQ_FOR_HTREE; i++) {
+                snprintf(fpname, PATH_MAX, "%s/%0*d", dir,
+                         DUMMY_FILE_NAME_LEN, i);
+
+                rc = touch_file(fpname);
+                if (rc && rc != -EEXIST) {
+                        fprintf(stderr,
+                                "%s: Can't create dummy file %s: %s\n",
+                                progname, fpname , strerror(errno));
+                        return rc;
+                }
+        }
+        return 0;
+}
+
+static int __l_mkdir(char * filepnm, int mode , struct mkfs_opts *mop)
+{
+        int ret;
+
+        ret = mkdir(filepnm, mode);
+        if (ret && ret != -EEXIST)
+                return ret;
+
+        /* IAM mode supports ext3 directories of HTREE type only. So add dummy
+         * entries to new directory to create htree type of container for
+         * this directory. */
+        if (mop->mo_ldd.ldd_flags & LDD_F_IAM_DIR)
+                return add_dummy_files(filepnm);
+        return 0;
 }
 
 /* Write the server config files */
@@ -766,19 +830,9 @@ int write_local_files(struct mkfs_opts *mop)
 
         /* Set up initial directories */
         sprintf(filepnm, "%s/%s", mntpt, MOUNT_CONFIGS_DIR);
-        ret = mkdir(filepnm, 0777);
+        ret = __l_mkdir(filepnm, 0777, mop);
         if ((ret != 0) && (errno != EEXIST)) {
                 fprintf(stderr, "%s: Can't make configs dir %s (%s)\n",
-                        progname, filepnm, strerror(errno));
-                goto out_umnt;
-        } else if (errno == EEXIST) {
-                ret = 0;
-        }
-
-        sprintf(filepnm, "%s/%s", mntpt, "ROOT");
-        ret = mkdir(filepnm, 0777);
-        if ((ret != 0) && (errno != EEXIST)) {
-                fprintf(stderr, "%s: Can't make ROOT dir %s (%s)\n",
                         progname, filepnm, strerror(errno));
                 goto out_umnt;
         } else if (errno == EEXIST) {
@@ -797,7 +851,6 @@ int write_local_files(struct mkfs_opts *mop)
         }
         fwrite(&mop->mo_ldd, sizeof(mop->mo_ldd), 1, filep);
         fclose(filep);
-
         /* COMPAT_146 */
 #ifdef TUNEFS
         /* Check for upgrade */
@@ -858,7 +911,6 @@ int write_local_files(struct mkfs_opts *mop)
         }
 #endif
         /* end COMPAT_146 */
-
 
 out_umnt:
         umount(mntpt);
@@ -1102,6 +1154,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                char **mountopts)
 {
         static struct option long_opt[] = {
+                {"iam-dir", 0, 0, 'a'},
                 {"backfstype", 1, 0, 'b'},
                 {"stripe-count-hint", 1, 0, 'c'},
                 {"comment", 1, 0, 'u'},
@@ -1129,6 +1182,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 {"reformat", 0, 0, 'r'},
                 {"verbose", 0, 0, 'v'},
                 {"writeconf", 0, 0, 'w'},
+                {"upgrade_to_18", 0, 0, 'U'},
                 {0, 0, 0, 0}
         };
         char *optstring = "b:c:C:d:ef:Ghi:k:L:m:MnNo:Op:Pqru:vw";
@@ -1138,6 +1192,11 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
         while ((opt = getopt_long(argc, argv, optstring, long_opt, &longidx)) !=
                EOF) {
                 switch (opt) {
+                case 'a': {
+                        if (IS_MDT(&mop->mo_ldd))
+                                mop->mo_ldd.ldd_flags |= LDD_F_IAM_DIR;
+                        break;
+                }
                 case 'b': {
                         int i = 0;
                         while (i < LDD_MT_LAST) {
@@ -1289,6 +1348,9 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 case 'w':
                         mop->mo_ldd.ldd_flags |= LDD_F_WRITECONF;
                         break;
+                case 'U':
+                        upgrade_to_18 = 1;
+                        break;
                 default:
                         if (opt != '?') {
                                 fatal();
@@ -1307,227 +1369,6 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 
         return 0;
 }
-
-#include <lustre/libiam.h>
-
-#define LDISKFS_IOC_GETVERSION _IOR('f', 3, long)
-
-#ifndef TUNEFS /* mkfs.lustre */
-static int mkfs_iam_insert(int key_need_convert, char *keybuf,
-                           int rec_need_convert, char *recbuf, char *filename)
-{
-        int fd;
-        int ret;
-        struct iam_uapi_info ua;
-
-        fd = iam_open(filename, &ua);
-        if (fd < 0) {
-                fprintf(stderr, "failed to iam_open %s\n", filename);
-                return 1;
-        }
-
-        ret = iam_insert(fd, &ua,
-                         key_need_convert, keybuf,
-                         rec_need_convert, recbuf);
-        iam_close(fd);
-        if (ret) {
-                fprintf(stderr, "failed to iam_insert %s\n", filename);
-                return 1;
-        } else {
-                return 0;
-        }
-}
-
-static int touch_file(char *filename)
-{
-        int fd;
-
-        if (filename == NULL) {
-                return 1;
-        }
-
-        fd = open(filename, O_CREAT | O_TRUNC, 0600);
-        if (fd < 0) {
-                return 1;
-        } else {
-                close(fd);
-                return 0;
-        }
-}
-
-static int get_generation(char *filename, unsigned long *result)
-{
-        int fd;
-        int ret;
-
-        if (filename == NULL) {
-                return 1;
-        }
-
-        fd = open(filename, O_RDONLY);
-        if (fd < 0) {
-                fprintf(stderr, "%s: failed to open %s\n",
-                        __FUNCTION__, filename);
-                return 1;
-        }
-
-        ret = ioctl(fd, LDISKFS_IOC_GETVERSION, result);
-        close(fd);
-
-        return ((ret < 0) ? ret : 0);
-}
-
-static int mkfs_mdt(struct mkfs_opts *mop)
-{
-        char mntpt[] = "/tmp/mntXXXXXX";
-        char fstype[] = "ldiskfs";
-        char filepnm[128];
-        char recbuf[64];
-        char *source;
-        int ret;
-        unsigned long generation;
-        struct stat st;
-
-        source = mop->mo_device;
-        if (mop->mo_flags & MO_IS_LOOP) {
-                source = mop->mo_loopdev;
-        }
-
-        if ((source == NULL) || (*source == 0)) {
-                return 1;
-        }
-
-        if (!mkdtemp(mntpt)) {
-                fprintf(stderr, "%s: failed to mkdtemp %s\n",
-                        __FUNCTION__, mntpt);
-                return errno;
-        }
-
-        ret = mount(source, mntpt, fstype, 0, NULL);
-        if (ret) {
-                goto out_rmdir;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "seq_ctl");
-        ret = touch_file(filepnm);
-        if (ret) {
-                goto out_umount;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "seq_srv");
-        ret = touch_file(filepnm);
-        if (ret) {
-                goto out_umount;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "last_received");
-        ret = touch_file(filepnm);
-        if (ret) {
-                goto out_umount;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "lov_objid");
-        ret = touch_file(filepnm);
-        if (ret) {
-                goto out_umount;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "root");
-        ret = iam_creat(filepnm, FMT_LVAR, L_BLOCK_SIZE, 4, 17, 4);
-        if (ret) {
-                goto out_umount;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "fld");
-        ret = iam_creat(filepnm, FMT_LFIX, L_BLOCK_SIZE, 8, 8, 4);
-        if (ret) {
-                goto out_umount;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "orphans");
-        ret = iam_creat(filepnm, FMT_LFIX, L_BLOCK_SIZE, 20, 8, 4);
-        if (ret) {
-                goto out_umount;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "oi.16");
-        ret = iam_creat(filepnm, FMT_LFIX, L_BLOCK_SIZE, 16, 8, 4);
-        if (ret) {
-                goto out_umount;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "oi.5");
-        ret = iam_creat(filepnm, FMT_LFIX, L_BLOCK_SIZE, 5, 8, 4);
-        if (ret) {
-                goto out_umount;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, CAPA_KEYS);
-        ret = touch_file(filepnm);
-        if (ret) {
-                goto out_umount;
-        }
-
-        umount(mntpt);
-        ret = mount(source, mntpt, fstype, 0, NULL);
-        if (ret) {
-                goto out_rmdir;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "root");
-        ret = iam_polymorph(filepnm, 040755);
-        if (ret) {
-                perror("IAM_IOC_POLYMORPH");
-                goto out_umount;
-        }
-
-        umount(mntpt);
-        ret = mount(source, mntpt, fstype, 0, NULL);
-        if (ret) {
-                goto out_rmdir;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "fld");
-        ret = mkfs_iam_insert(1, "0000000000000002", 1, "0000000000000000", filepnm);
-        if (ret) {
-                goto out_umount;
-        }
-
-        ret = mkfs_iam_insert(1, "0000000000000001", 1, "0000000000000000", filepnm);
-        if (ret) {
-                goto out_umount;
-        }
-
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "root");
-        ret = stat(filepnm, &st);
-        if (ret) {
-                goto out_umount;
-        }
-
-        ret = get_generation(filepnm, &generation);
-        if (ret) {
-                goto out_umount;
-        }
-
-        snprintf(recbuf, sizeof(recbuf) - 1, "110000000000000001%8.8x%8.8x",
-                 (unsigned int)st.st_ino, (unsigned int)generation);
-        ret = mkfs_iam_insert(0, ".", 1, recbuf, filepnm);
-        if (ret) {
-                goto out_umount;
-        }
-
-        ret = mkfs_iam_insert(0, "..", 1, recbuf, filepnm);
-        if (ret) {
-                goto out_umount;
-        }
-
-out_umount:
-        umount(mntpt);
-out_rmdir:
-        rmdir(mntpt);
-        return ret;
-}
-#endif
 
 int main(int argc, char *const argv[])
 {
@@ -1757,16 +1598,6 @@ int main(int argc, char *const argv[])
                 fprintf(stderr, "failed to write local files\n");
                 goto out;
         }
-
-#ifndef TUNEFS /* mkfs.lustre */
-        if (IS_MDT(ldd)) {
-                ret = mkfs_mdt(&mop);
-                if (ret != 0) {
-                        fprintf(stderr, "failed to mkfs_mdt\n");
-                        goto out;
-                }
-        }
-#endif
 
 out:
         loop_cleanup(&mop);

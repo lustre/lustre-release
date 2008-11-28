@@ -42,7 +42,7 @@ ALWAYS_SUBDIRS := include lvfs obdclass ldlm ptlrpc osc lov obdecho \
 
 SERVER_SUBDIRS := obdfilter ost mds mgs mdt cmm mdd osd
 
-CLIENT_SUBDIRS := mdc lmv llite
+CLIENT_SUBDIRS := mdc lmv llite lclient
 
 QUOTA_SUBDIRS := quota
 
@@ -58,9 +58,7 @@ if CLIENT
 SUBDIRS += $(CLIENT_SUBDIRS)
 endif
 
-if QUOTA
 SUBDIRS += $(QUOTA_SUBDIRS)
-endif
 
 # this needs to be after the client subdirs
 if LIBLUSTRE

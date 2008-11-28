@@ -137,10 +137,10 @@ void obdo_refresh_inode(struct inode *dst,
 
         if (valid & OBD_MD_FLATIME && src->o_atime > LTIME_S(st->st_atime))
                 LTIME_S(st->st_atime) = src->o_atime;
-        
+
         /* mtime is always updated with ctime, but can be set in past.
            As write and utime(2) may happen within 1 second, and utime's
-           mtime has a priority over write's one, leave mtime from mds 
+           mtime has a priority over write's one, leave mtime from mds
            for the same ctimes. */
         if (valid & OBD_MD_FLCTIME && src->o_ctime > LTIME_S(st->st_ctime)) {
                 LTIME_S(st->st_ctime) = src->o_ctime;
@@ -320,7 +320,7 @@ int llu_objects_destroy(struct ptlrpc_request *req, struct inode *dir)
                 }
         }
 
-        rc = obd_destroy(llu_i2obdexp(dir), oa, lsm, &oti, NULL);
+        rc = obd_destroy(llu_i2obdexp(dir), oa, lsm, &oti, NULL, NULL);
         OBDO_FREE(oa);
         if (rc)
                 CERROR("obd destroy objid 0x"LPX64" error %d\n",
@@ -340,10 +340,10 @@ int llu_sizeonmds_update(struct inode *inode, struct md_open_data *mod,
         struct obdo oa;
         int rc;
         ENTRY;
-        
+
         LASSERT(!(lli->lli_flags & LLIF_MDS_SIZE_LOCK));
         LASSERT(sbi->ll_lco.lco_flags & OBD_CONNECT_SOM);
-        
+
         rc = llu_inode_getattr(inode, &oa);
         if (rc == -ENOENT) {
                 oa.o_valid = 0;
@@ -356,7 +356,7 @@ int llu_sizeonmds_update(struct inode *inode, struct md_open_data *mod,
                        lli->lli_st_generation);
                 RETURN(rc);
         }
-        
+
         md_from_obdo(&op_data, &oa, oa.o_valid);
         memcpy(&op_data.op_handle, fh, sizeof(*fh));
         op_data.op_ioepoch = ioepoch;
@@ -387,7 +387,7 @@ int llu_md_close(struct obd_export *md_exp, struct inode *inode)
 
         op_data.op_attr.ia_valid = ATTR_MODE | ATTR_ATIME_SET |
                                 ATTR_MTIME_SET | ATTR_CTIME_SET;
-        
+
         if (fd->fd_flags & FMODE_WRITE) {
                 struct llu_sb_info *sbi = llu_i2sbi(inode);
                 if (!(sbi->ll_lco.lco_flags & OBD_CONNECT_SOM) ||
@@ -400,11 +400,11 @@ int llu_md_close(struct obd_export *md_exp, struct inode *inode)
                          * are really changed.  */
                         op_data.op_flags |= MF_SOM_CHANGE;
 
-                        /* Pack Size-on-MDS attributes if we are in IO epoch and 
+                        /* Pack Size-on-MDS attributes if we are in IO epoch and
                          * attributes are valid. */
                         LASSERT(!(lli->lli_flags & LLIF_MDS_SIZE_LOCK));
-                        if (!llu_local_size(inode))
-                                op_data.op_attr.ia_valid |= 
+                        if (!cl_local_size(inode))
+                                op_data.op_attr.ia_valid |=
                                         OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
                 }
         }
@@ -512,72 +512,4 @@ _SYSIO_OFF_T llu_iop_pos(struct inode *ino, _SYSIO_OFF_T off)
                 RETURN(-EINVAL);
 
         RETURN(off);
-}
-
-/* this isn't where truncate starts.  roughly:
- * llu_iop_{open,setattr}->llu_setattr_raw->llu_vmtruncate->llu_truncate
- * we grab the lock back in setattr_raw to avoid races. */
-static void llu_truncate(struct inode *inode, obd_flag flags)
-{
-        struct llu_inode_info *lli = llu_i2info(inode);
-        struct intnl_stat *st = llu_i2stat(inode);
-        struct obd_info oinfo = { { { 0 } } };
-        struct obdo oa = { 0 };
-        int rc;
-        ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%llu/%lu(%p) to %llu\n",
-               (long long)st->st_ino, lli->lli_st_generation, inode,
-               (long long)st->st_size);
-
-        if (!lli->lli_smd) {
-                CDEBUG(D_INODE, "truncate on inode %llu with no objects\n",
-                       (long long)st->st_ino);
-                EXIT;
-                return;
-        }
-
-        oinfo.oi_md = lli->lli_smd;
-        oinfo.oi_policy.l_extent.start = st->st_size;
-        oinfo.oi_policy.l_extent.end = OBD_OBJECT_EOF;
-        oinfo.oi_oa = &oa;
-        oa.o_id = lli->lli_smd->lsm_object_id;
-        oa.o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS;
-        oa.o_flags = flags; /* We don't actually want to copy inode flags */
- 
-        obdo_from_inode(&oa, inode,
-                        OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLATIME |
-                        OBD_MD_FLMTIME | OBD_MD_FLCTIME);
-
-        obd_adjust_kms(llu_i2obdexp(inode), lli->lli_smd, st->st_size, 1);
-
-        CDEBUG(D_INFO, "calling punch for "LPX64" (all bytes after %Lu)\n",
-               oa.o_id, (long long)st->st_size);
-
-        /* truncate == punch from new size to absolute end of file */
-        rc = obd_punch_rqset(llu_i2obdexp(inode), &oinfo, NULL);
-        if (rc)
-                CERROR("obd_truncate fails (%d) ino %llu\n",
-                       rc, (long long)st->st_ino);
-        else
-                obdo_to_inode(inode, &oa, OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
-                                          OBD_MD_FLATIME | OBD_MD_FLMTIME |
-                                          OBD_MD_FLCTIME);
-
-        EXIT;
-        return;
-} /* llu_truncate */
-
-int llu_vmtruncate(struct inode * inode, loff_t offset, obd_flag flags)
-{
-        llu_i2stat(inode)->st_size = offset;
-
-        /*
-         * llu_truncate() is only called from this
-         * point. llu_vmtruncate/llu_truncate split exists to mimic the
-         * structure of Linux VFS truncate code path.
-         */
-
-        llu_truncate(inode, flags);
-
-        return 0;
 }

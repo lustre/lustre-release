@@ -11,8 +11,8 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 
-# bug number for skipped test: 13739 
-HEAD_EXCEPT="                  32a 32b "
+# bug number for skipped test: 13739
+HEAD_EXCEPT="                  32a 32b"
 
 # bug number for skipped test:                                 
 ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $HEAD_EXCEPT"
@@ -41,7 +41,7 @@ remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
 
 #
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="0 1 2 3 6 7 15 18 24b 25 30 31 32 33 34a "
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="0 1 2 3 6 7 15 18 24b 25 30 31 32 33 34a 45"
 
 assert_DIR
 
@@ -129,8 +129,12 @@ umount_client() {
 }
 
 manual_umount_client(){
+	local rc
+	local FORCE=$1
 	echo "manual umount lustre on ${MOUNT}...."
-	do_facet client "umount -d $MOUNT"
+	do_facet client "umount -d ${FORCE} $MOUNT"
+	rc=$?
+	return $rc
 }
 
 setup() {
@@ -179,11 +183,11 @@ if [ "$ONLY" == "cleanup" ]; then
 	exit
 fi
 
+init_gss
+
 #create single point mountpoint
 
 gen_config
-
-init_gss
 
 test_0() {
         setup
@@ -370,7 +374,9 @@ test_9() {
 	do_facet ost1 lctl set_param subsystem_debug=\'mds ost\' || return 1
 
         CHECK_PTLDEBUG="`do_facet ost1 lctl get_param -n debug`"
-        if [ "$CHECK_PTLDEBUG" ] && [ "$CHECK_PTLDEBUG" = "trace inode" ];then
+        if [ "$CHECK_PTLDEBUG" ] && { \
+	   [ "$CHECK_PTLDEBUG" = "trace inode warning error emerg console" ] ||
+	   [ "$CHECK_PTLDEBUG" = "trace inode" ]; }; then   
            echo "lnet.debug success"
         else
            echo "lnet.debug: want 'trace inode', have '$CHECK_PTLDEBUG'"
@@ -559,17 +565,13 @@ test_21c() {
 	stop_ost
 	stop_ost2
 	stop_mds
+	#writeconf to remove all ost2 traces for subsequent tests
+	writeconf
 }
 run_test 21c "start mds between two osts, stop mds last"
 
 test_22() {
-	#reformat to remove all logs
-	reformat
 	start_mds
-	echo Client mount before any osts are in the logs
-	mount_client $MOUNT
-	check_mount && return 41
-	pass
 
 	echo Client mount with ost in logs, but none running
 	start_ost
@@ -901,6 +903,7 @@ test_29() {
 	writeconf
 	start_mds
 	start_ost
+	sleep 5
 	cleanup
 }
 run_test 29 "permanently remove an OST"
@@ -1016,26 +1019,27 @@ test_32b() {
 	[ -z "$TUNEFS" ] && skip "No tunefs" && return
 	local DISK1_8=$LUSTRE/tests/disk1_8.tgz
 	[ ! -r $DISK1_8 ] && skip "Cannot find $DISK1_8" && return 0
-	mkdir -p $TMP/$tdir
-	tar xjvf $DISK1_8 -C $TMP/$tdir || \
+	local tmpdir=$TMP/$tdir
+	mkdir -p $tmpdir
+	tar xjvf $DISK1_8 -C $tmpdir || \
 		{ skip "Cannot untar $DISK1_8" && return ; }
 
 	load_modules
 	lctl set_param debug=$PTLDEBUG
-	NEWNAME=sofia
+	NEWNAME=lustre
 
 	# writeconf will cause servers to register with their current nids
 	$TUNEFS --writeconf --fsname=$NEWNAME $tmpdir/mds || error "tunefs failed"
-	start mds $tmpdir/mds "-o loop" || return 3
+	start mds1 $tmpdir/mds "-o loop" || return 3
 	local UUID=$(lctl get_param -n mdt.${NEWNAME}-MDT0000.uuid)
 	echo MDS uuid $UUID
-	[ "$UUID" == "mdsA_UUID" ] || error "UUID is wrong: $UUID" 
+	[ "$UUID" == "${NEWNAME}-MDT0000_UUID" ] || error "UUID is wrong: $UUID" 
 
-	$TUNEFS --mgsnode=`hostname` --fsname=$NEWNAME --writeconf $tmpdir/ost1 || error "tunefs failed"
+	$TUNEFS --mgsnode=`hostname` --writeconf --fsname=$NEWNAME $tmpdir/ost1 || error "tunefs failed"
 	start ost1 $tmpdir/ost1 "-o loop" || return 5
 	UUID=$(lctl get_param -n obdfilter.${NEWNAME}-OST0000.uuid)
 	echo OST uuid $UUID
-	[ "$UUID" == "ost1_UUID" ] || error "UUID is wrong: $UUID"
+	[ "$UUID" == "${NEWNAME}-OST0000_UUID" ] || error "UUID is wrong: $UUID"
 
 	echo "OSC changes should succeed:" 
 	$LCTL conf_param ${NEWNAME}-OST0000.osc.max_dirty_mb=15 || return 7
@@ -1053,7 +1057,7 @@ test_32b() {
 	mount_client $MOUNT
 	FSNAME=$OLDFS
 	set_and_check client "lctl get_param -n mdc.*.max_rpcs_in_flight" "${NEWNAME}-MDT0000.mdc.max_rpcs_in_flight" || return 11
-	[ "$(cksum $MOUNT/passwd | cut -d' ' -f 1,2)" == "2479747619 779" ] || return 12  
+	[ "$(cksum $MOUNT/passwd | cut -d' ' -f 1,2)" == "94306271 1478" ] || return 12
 	echo "ok."
 
 	cleanup
@@ -1415,7 +1419,27 @@ run_test 42 "invalid config param should not prevent client from mounting"
 
 umount_client $MOUNT
 cleanup_nocli
-cleanup_gss
 
+test_45() { #17310
+        setup
+        check_mount || return 2
+        stop_mds
+        df -h $MOUNT &
+        log "sleep 60 sec"
+        sleep 60
+#define OBD_FAIL_PTLRPC_LONG_UNLINK   0x50f
+        do_facet client "lctl set_param fail_loc=0x50f"
+        log "sleep 10 sec"
+        sleep 10
+        manual_umount_client --force || return 3
+        do_facet client "lctl set_param fail_loc=0x0"
+        start_mds
+        mount_client $MOUNT || return 4
+        cleanup
+        return 0
+}
+run_test 45 "long unlink handling in ptlrpcd"
+
+cleanup_gss
 equals_msg `basename $0`: test complete
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true

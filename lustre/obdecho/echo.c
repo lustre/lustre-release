@@ -47,10 +47,11 @@
 
 #include <obd_support.h>
 #include <obd_class.h>
-#include <obd_echo.h>
 #include <lustre_debug.h>
 #include <lustre_dlm.h>
 #include <lprocfs_status.h>
+
+#include "echo_internal.h"
 
 #define ECHO_INIT_OBJID      0x1000000000000000ULL
 #define ECHO_HANDLE_MAGIC    0xabcd0123fedc9876ULL
@@ -152,7 +153,7 @@ int echo_create(struct obd_export *exp, struct obdo *oa,
 
 int echo_destroy(struct obd_export *exp, struct obdo *oa,
                  struct lov_stripe_md *ea, struct obd_trans_info *oti,
-                 struct obd_export *md_exp)
+                 struct obd_export *md_exp, void *capa)
 {
         struct obd_device *obd = class_exp2obd(exp);
 
@@ -536,7 +537,7 @@ static int echo_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id, LDLM_PLAIN,
                                     NULL, LCK_NL, &lock_flags, NULL,
                                     ldlm_completion_ast, NULL, NULL,
-                                    0, NULL, &obd->u.echo.eo_nl_lock);
+                                    0, NULL, NULL, &obd->u.echo.eo_nl_lock);
         LASSERT (rc == ELDLM_OK);
 
         lprocfs_echo_init_vars(&lvars);

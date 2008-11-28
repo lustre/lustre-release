@@ -84,7 +84,7 @@ int main(int argc, char **argv)
 
         if ( st1.st_size != st2.st_size ) {
                 printf("Sizes don't match %lu, %lu\n",
-                       (unsigned long)st1.st_size, 
+                       (unsigned long)st1.st_size,
 		       (unsigned long)st2.st_size);
                 return 1;
         }

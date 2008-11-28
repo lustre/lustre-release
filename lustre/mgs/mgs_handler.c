@@ -80,8 +80,6 @@ static int mgs_connect(const struct lu_env *env,
         exp = class_conn2export(conn);
         LASSERT(exp);
 
-        exp->exp_flvr.sf_rpc = SPTLRPC_FLVR_NULL;
-
         mgs_counter_incr(exp, LPROC_MGS_CONNECT);
 
         if (data != NULL) {
@@ -248,7 +246,7 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                                 mgs_handle, LUSTRE_MGS_NAME,
                                 obd->obd_proc_entry, target_print_req,
                                 MGS_THREADS_AUTO_MIN, MGS_THREADS_AUTO_MAX,
-                                "ll_mgs", LCT_MD_THREAD);
+                                "ll_mgs", LCT_MD_THREAD, NULL);
 
         if (!mgs->mgs_service) {
                 CERROR("failed to start service\n");
@@ -348,7 +346,7 @@ static int mgs_get_cfg_lock(struct obd_device *obd, char *fsname,
                                             LDLM_PLAIN, NULL, LCK_EX,
                                             &flags, ldlm_blocking_ast,
                                             ldlm_completion_ast, NULL,
-                                            fsname, 0, NULL, lockh);
+                                            fsname, 0, NULL, NULL, lockh);
         if (rc)
                 CERROR("can't take cfg lock for %s (%d)\n", fsname, rc);
 
@@ -560,6 +558,60 @@ static int mgs_set_info_rpc(struct ptlrpc_request *req)
         RETURN(rc);
 }
 
+/*
+ * similar as in ost_connect_check_sptlrpc()
+ */
+static int mgs_connect_check_sptlrpc(struct ptlrpc_request *req)
+{
+        struct obd_export     *exp = req->rq_export;
+        struct obd_device     *obd = exp->exp_obd;
+        struct fs_db          *fsdb;
+        struct sptlrpc_flavor  flvr;
+        int                    rc = 0;
+
+        if (exp->exp_flvr.sf_rpc == SPTLRPC_FLVR_INVALID) {
+                rc = mgs_find_or_make_fsdb(obd, MGSSELF_NAME, &fsdb);
+                if (rc)
+                        return rc;
+
+                down(&fsdb->fsdb_sem);
+                if (sptlrpc_rule_set_choose(&fsdb->fsdb_srpc_gen,
+                                            LUSTRE_SP_MGC, LUSTRE_SP_MGS,
+                                            req->rq_peer.nid,
+                                            &flvr) == 0) {
+                        /* by defualt allow any flavors */
+                        flvr.sf_rpc = SPTLRPC_FLVR_ANY;
+                }
+                up(&fsdb->fsdb_sem);
+
+                spin_lock(&exp->exp_lock);
+
+                exp->exp_sp_peer = req->rq_sp_from;
+                exp->exp_flvr = flvr;
+
+                if (exp->exp_flvr.sf_rpc != SPTLRPC_FLVR_ANY &&
+                    exp->exp_flvr.sf_rpc != req->rq_flvr.sf_rpc) {
+                        CERROR("invalid rpc flavor %x, expect %x, from %s\n",
+                               req->rq_flvr.sf_rpc, exp->exp_flvr.sf_rpc,
+                               libcfs_nid2str(req->rq_peer.nid));
+                        rc = -EACCES;
+                }
+
+                spin_unlock(&exp->exp_lock);
+        } else {
+                if (exp->exp_sp_peer != req->rq_sp_from) {
+                        CERROR("RPC source %s doesn't match %s\n",
+                               sptlrpc_part2name(req->rq_sp_from),
+                               sptlrpc_part2name(exp->exp_sp_peer));
+                        rc = -EACCES;
+                } else {
+                        rc = sptlrpc_target_export_check(exp, req);
+                }
+        }
+
+        return rc;
+}
+
 /* Called whenever a target cleans up. */
 /* XXX - Currently unused */
 static int mgs_handle_target_del(struct ptlrpc_request *req)
@@ -591,6 +643,12 @@ int mgs_handle(struct ptlrpc_request *req)
 
         LASSERT(current->journal_info == NULL);
         opc = lustre_msg_get_opc(req->rq_reqmsg);
+
+        if (opc == SEC_CTX_INIT ||
+            opc == SEC_CTX_INIT_CONT ||
+            opc == SEC_CTX_FINI)
+                GOTO(out, rc = 0);
+
         if (opc != MGS_CONNECT) {
                 if (req->rq_export == NULL) {
                         CERROR("lustre_mgs: operation %d on unconnected MGS\n",
@@ -606,6 +664,9 @@ int mgs_handle(struct ptlrpc_request *req)
                 /* MGS and MDS have same request format for connect */
                 req_capsule_set(&req->rq_pill, &RQF_MDS_CONNECT);
                 rc = target_handle_connect(req);
+                if (rc == 0)
+                        rc = mgs_connect_check_sptlrpc(req);
+
                 if (!rc && (lustre_msg_get_conn_cnt(req->rq_reqmsg) > 1))
                         /* Make clients trying to reconnect after a MGS restart
                            happy; also requires obd_replayable */

@@ -77,7 +77,7 @@ static int osc_interpret_create(const struct lu_env *env,
 
         oscc = req->rq_async_args.pointer_arg[0];
         LASSERT(oscc && (oscc->oscc_obd != LP_POISON));
-        
+
         spin_lock(&oscc->oscc_lock);
         oscc->oscc_flags &= ~OSCC_FLAG_CREATING;
         switch (rc) {
@@ -101,7 +101,7 @@ static int osc_interpret_create(const struct lu_env *env,
                 DEBUG_REQ(D_INODE, req, "Got EAGAIN - resend \n");
                 break;
         case -ENOSPC:
-        case -EROFS: 
+        case -EROFS:
         case -EFBIG: {
                 oscc->oscc_flags |= OSCC_FLAG_NOSPC;
                 if (body && rc == -ENOSPC) {
@@ -113,7 +113,7 @@ static int osc_interpret_create(const struct lu_env *env,
                 break;
         }
         case -EIO: {
-                /* filter always set body->oa.o_id as the last_id 
+                /* filter always set body->oa.o_id as the last_id
                  * of filter (see filter_handle_precreate for detail)*/
                 if (body && body->oa.o_id > oscc->oscc_last_id)
                         oscc->oscc_last_id = body->oa.o_id;
@@ -184,7 +184,7 @@ static int oscc_internal_create(struct osc_creator *oscc)
         spin_lock(&oscc->oscc_lock);
         body->oa.o_id = oscc->oscc_last_id + oscc->oscc_grow_count;
         body->oa.o_gr = oscc->oscc_oa.o_gr;
-        LASSERT(body->oa.o_gr > 0);
+        LASSERT_MDS_GROUP(body->oa.o_gr);
         body->oa.o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP;
         spin_unlock(&oscc->oscc_lock);
         CDEBUG(D_RPCTRACE, "prealloc through id "LPU64" (last seen "LPU64")\n",
@@ -194,7 +194,7 @@ static int oscc_internal_create(struct osc_creator *oscc)
 
         request->rq_async_args.pointer_arg[0] = oscc;
         request->rq_interpret_reply = osc_interpret_create;
-        ptlrpcd_add_req(request);
+        ptlrpcd_add_req(request, PSCOPE_OTHER);
 
         RETURN(0);
 }
@@ -283,6 +283,9 @@ int osc_precreate(struct obd_export *exp)
         if (imp != NULL && imp->imp_deactive)
                 RETURN(1000);
 
+        if (oscc_recovering(oscc))
+                RETURN(2);
+
         if (oscc->oscc_last_id < oscc->oscc_next_id) {
                 spin_lock(&oscc->oscc_lock);
                 if (oscc->oscc_flags & OSCC_FLAG_NOSPC) {
@@ -293,11 +296,6 @@ int osc_precreate(struct obd_export *exp)
                         spin_unlock(&oscc->oscc_lock);
                         RETURN(1);
                 }
-                if (oscc->oscc_flags & OSCC_FLAG_RECOVERING) {
-                        spin_unlock(&oscc->oscc_lock);
-                        RETURN(2);
-                }
-
                 if (oscc->oscc_flags & OSCC_FLAG_CREATING) {
                         spin_unlock(&oscc->oscc_lock);
                         RETURN(1);
@@ -319,7 +317,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
 
         LASSERT(oa);
         LASSERT(ea);
-        LASSERT(oa->o_gr > 0);
+        LASSERT_MDS_GROUP(oa->o_gr);
         LASSERT(oa->o_valid & OBD_MD_FLGROUP);
 
         if ((oa->o_valid & OBD_MD_FLFLAGS) &&

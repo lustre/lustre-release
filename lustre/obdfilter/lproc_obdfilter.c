@@ -103,8 +103,14 @@ static int lprocfs_filter_rd_last_id(char *page, char **start, off_t off,
 
         if (obd == NULL)
                 return 0;
+        rc = snprintf(page, count, LPU64"\n",filter_last_id(filter, 0));
+        if (rc < 0)
+                return rc;
+        page += rc;
+        count -= rc;
+        retval += rc;
 
-        for (i = FILTER_GROUP_MDS0; i < filter->fo_group_count; i++) {
+        for (i = FILTER_GROUP_MDS1_N_BASE + 1; i < filter->fo_group_count; i++) {
                 rc = snprintf(page, count, LPU64"\n",filter_last_id(filter, i));
                 if (rc < 0) {
                         retval = rc;
@@ -142,7 +148,6 @@ int lprocfs_filter_wr_readcache(struct file *file, const char *buffer,
         obd->u.filter.fo_readcache_max_filesize = val;
         return count;
 }
-
 
 int lprocfs_filter_rd_fmd_max_num(char *page, char **start, off_t off,
                                   int count, int *eof, void *data)
@@ -242,6 +247,37 @@ static int lprocfs_filter_rd_capa_count(char *page, char **start, off_t off,
                         capa_count[CAPA_SITE_SERVER]);
 }
 
+static int lprocfs_rd_sec_level(char *page, char **start, off_t off,
+                                int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+
+        return snprintf(page, count, "%d\n", obd->u.filter.fo_sec_level);
+}
+
+static int lprocfs_wr_sec_level(struct file *file, const char *buffer,
+                                unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val > LUSTRE_SEC_ALL || val < LUSTRE_SEC_NONE)
+                return -EINVAL;
+
+        if (val == LUSTRE_SEC_SPECIFY) {
+                CWARN("security level %d will be supported in future.\n",
+                      LUSTRE_SEC_SPECIFY);
+                return -EINVAL;
+        }
+
+        obd->u.filter.fo_sec_level = val;
+        return count;
+}
+
 static int lprocfs_filter_rd_cache(char *page, char **start, off_t off,
                                    int count, int *eof, void *data)
 {
@@ -318,11 +354,8 @@ static struct lprocfs_vars lprocfs_filter_obd_vars[] = {
                           lprocfs_filter_rd_readcache,
                           lprocfs_filter_wr_readcache, 0 },
 #ifdef HAVE_QUOTA_SUPPORT
-        { "quota_bunit_sz", lprocfs_rd_bunit, lprocfs_wr_bunit, 0},
-        { "quota_btune_sz", lprocfs_rd_btune, lprocfs_wr_btune, 0},
-        { "quota_iunit_sz", lprocfs_rd_iunit, lprocfs_wr_iunit, 0},
-        { "quota_itune_sz", lprocfs_rd_itune, lprocfs_wr_itune, 0},
-        { "quota_type",     lprocfs_rd_type, lprocfs_wr_type, 0},
+        { "quota_type",     lprocfs_quota_rd_type,
+                            lprocfs_quota_wr_type, 0},
 #endif
         { "client_cache_count", lprocfs_filter_rd_fmd_max_num,
                           lprocfs_filter_wr_fmd_max_num, 0 },
@@ -331,6 +364,8 @@ static struct lprocfs_vars lprocfs_filter_obd_vars[] = {
         { "capa",         lprocfs_filter_rd_capa,
                           lprocfs_filter_wr_capa, 0 },
         { "capa_count",   lprocfs_filter_rd_capa_count, 0, 0 },
+        { "sec_level",    lprocfs_rd_sec_level,
+                          lprocfs_wr_sec_level,            0 },
         { "read_cache_enable", lprocfs_filter_rd_cache, lprocfs_filter_wr_cache, 0},
         { "writethrough_cache_enable", lprocfs_filter_rd_wcache,
                           lprocfs_filter_wr_wcache, 0},

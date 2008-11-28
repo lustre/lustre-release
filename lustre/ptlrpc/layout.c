@@ -105,6 +105,10 @@ static const struct req_msg_field *quotactl_only[] = {
         &RMF_PTLRPC_BODY,
         &RMF_OBD_QUOTACTL
 };
+static const struct req_msg_field *quota_adjust_qunit_only[] = {
+        &RMF_PTLRPC_BODY,
+        &RMF_QUOTA_ADJUST_QUNIT
+};
 
 static const struct req_msg_field *qunit_data_only[] = {
         &RMF_PTLRPC_BODY,
@@ -240,7 +244,9 @@ static const struct req_msg_field *mds_last_unlink_server[] = {
         &RMF_PTLRPC_BODY,
         &RMF_MDT_BODY,
         &RMF_MDT_MD,
-        &RMF_LOGCOOKIES
+        &RMF_LOGCOOKIES,
+        &RMF_CAPA1,
+        &RMF_CAPA2
 };
 
 static const struct req_msg_field *mds_reint_setattr_client[] = {
@@ -465,7 +471,8 @@ static const struct req_msg_field *ost_body_capa[] = {
 static const struct req_msg_field *ost_destroy_client[] = {
         &RMF_PTLRPC_BODY,
         &RMF_OST_BODY,
-        &RMF_DLM_REQ
+        &RMF_DLM_REQ,
+        &RMF_CAPA1
 };
 
 
@@ -518,10 +525,10 @@ static const struct req_msg_field *ost_get_fiemap_server[] = {
 static const struct req_format *req_formats[] = {
         &RQF_OBD_PING,
         &RQF_SEC_CTX,
-        &RQF_SEQ_QUERY,
-        &RQF_FLD_QUERY,
         &RQF_MGS_TARGET_REG,
         &RQF_MGS_SET_INFO,
+        &RQF_SEQ_QUERY,
+        &RQF_FLD_QUERY,
         &RQF_MDS_CONNECT,
         &RQF_MDS_DISCONNECT,
         &RQF_MDS_SET_INFO,
@@ -552,10 +559,12 @@ static const struct req_format *req_formats[] = {
         &RQF_MDS_QUOTACHECK,
         &RQF_MDS_QUOTACTL,
         &RQF_MDS_QUOTA_DQACQ,
+        &RQF_QC_CALLBACK,
         &RQF_OST_CONNECT,
         &RQF_OST_DISCONNECT,
         &RQF_OST_QUOTACHECK,
         &RQF_OST_QUOTACTL,
+        &RQF_OST_QUOTA_ADJUST_QUNIT,
         &RQF_OST_GETATTR,
         &RQF_OST_SETATTR,
         &RQF_OST_CREATE,
@@ -647,7 +656,7 @@ EXPORT_SYMBOL(RMF_SEQ_OPC);
 
 const struct req_msg_field RMF_SEQ_RANGE =
         DEFINE_MSGF("seq_query_range", 0,
-                    sizeof(struct lu_range), lustre_swab_lu_range);
+                    sizeof(struct lu_seq_range), lustre_swab_lu_seq_range);
 EXPORT_SYMBOL(RMF_SEQ_RANGE);
 
 const struct req_msg_field RMF_FLD_OPC =
@@ -657,7 +666,7 @@ EXPORT_SYMBOL(RMF_FLD_OPC);
 
 const struct req_msg_field RMF_FLD_MDFLD =
         DEFINE_MSGF("fld_query_mdfld", 0,
-                    sizeof(struct md_fld), lustre_swab_md_fld);
+                    sizeof(struct lu_seq_range), lustre_swab_lu_seq_range);
 EXPORT_SYMBOL(RMF_FLD_MDFLD);
 
 const struct req_msg_field RMF_MDT_BODY =
@@ -669,6 +678,12 @@ const struct req_msg_field RMF_OBD_QUOTACTL =
         DEFINE_MSGF("obd_quotactl", 0,
                     sizeof(struct obd_quotactl), lustre_swab_obd_quotactl);
 EXPORT_SYMBOL(RMF_OBD_QUOTACTL);
+
+const struct req_msg_field RMF_QUOTA_ADJUST_QUNIT =
+        DEFINE_MSGF("quota_adjust_qunit", 0,
+                    sizeof(struct quota_adjust_qunit),
+                    lustre_swab_quota_adjust_qunit);
+EXPORT_SYMBOL(RMF_QUOTA_ADJUST_QUNIT);
 
 const struct req_msg_field RMF_QUNIT_DATA =
         DEFINE_MSGF("qunit_data", 0,
@@ -781,7 +796,7 @@ EXPORT_SYMBOL(RMF_REC_JOINFILE);
 const struct req_msg_field RMF_EADATA = DEFINE_MSGF("eadata", 0, -1, NULL);
 EXPORT_SYMBOL(RMF_EADATA);
 
-const struct req_msg_field RMF_ACL = 
+const struct req_msg_field RMF_ACL =
         DEFINE_MSGF("acl", 0, LUSTRE_POSIX_ACL_MAX_SIZE, NULL);
 EXPORT_SYMBOL(RMF_ACL);
 
@@ -799,7 +814,7 @@ const struct req_msg_field RMF_CAPA2 =
                     lustre_swab_lustre_capa);
 EXPORT_SYMBOL(RMF_CAPA2);
 
-/* 
+/*
  * OST request field.
  */
 const struct req_msg_field RMF_OST_BODY =
@@ -863,11 +878,11 @@ DEFINE_REQ_FMT(name, client, ARRAY_SIZE(client), server, ARRAY_SIZE(server))
 const struct req_format RQF_OBD_PING =
         DEFINE_REQ_FMT0("OBD_PING", empty, empty);
 EXPORT_SYMBOL(RQF_OBD_PING);
- 
+
 const struct req_format RQF_SEC_CTX =
         DEFINE_REQ_FMT0("SEC_CTX", empty, empty);
 EXPORT_SYMBOL(RQF_SEC_CTX);
- 
+
 const struct req_format RQF_MGS_TARGET_REG =
         DEFINE_REQ_FMT0("MGS_TARGET_REG", mgs_target_info_only,
                          mgs_target_info_only);
@@ -877,6 +892,14 @@ const struct req_format RQF_MGS_SET_INFO =
         DEFINE_REQ_FMT0("MGS_SET_INTO", mgs_set_info,
                          mgs_set_info);
 EXPORT_SYMBOL(RQF_MGS_SET_INFO);
+
+const struct req_format RQF_SEQ_QUERY =
+        DEFINE_REQ_FMT0("SEQ_QUERY", seq_query_client, seq_query_server);
+EXPORT_SYMBOL(RQF_SEQ_QUERY);
+
+const struct req_format RQF_FLD_QUERY =
+        DEFINE_REQ_FMT0("FLD_QUERY", fld_query_client, fld_query_server);
+EXPORT_SYMBOL(RQF_FLD_QUERY);
 
 const struct req_format RQF_LOG_CANCEL =
         DEFINE_REQ_FMT0("OBD_LOG_CANCEL", log_cancel_client, empty);
@@ -898,6 +921,11 @@ const struct req_format RQF_OST_QUOTACTL =
         DEFINE_REQ_FMT0("OST_QUOTACTL", quotactl_only, quotactl_only);
 EXPORT_SYMBOL(RQF_OST_QUOTACTL);
 
+const struct req_format RQF_OST_QUOTA_ADJUST_QUNIT =
+        DEFINE_REQ_FMT0("OST_QUOTA_ADJUST_QUNIT", quota_adjust_qunit_only,
+                        quota_adjust_qunit_only);
+EXPORT_SYMBOL(RQF_OST_QUOTA_ADJUST_QUNIT);
+
 const struct req_format RQF_QC_CALLBACK =
         DEFINE_REQ_FMT0("QC_CALLBACK", quotactl_only, empty);
 EXPORT_SYMBOL(RQF_QC_CALLBACK);
@@ -905,14 +933,6 @@ EXPORT_SYMBOL(RQF_QC_CALLBACK);
 const struct req_format RQF_MDS_QUOTA_DQACQ =
         DEFINE_REQ_FMT0("MDS_QUOTA_DQACQ", qunit_data_only, qunit_data_only);
 EXPORT_SYMBOL(RQF_MDS_QUOTA_DQACQ);
-
-const struct req_format RQF_SEQ_QUERY =
-        DEFINE_REQ_FMT0("SEQ_QUERY", seq_query_client, seq_query_server);
-EXPORT_SYMBOL(RQF_SEQ_QUERY);
-
-const struct req_format RQF_FLD_QUERY =
-        DEFINE_REQ_FMT0("FLD_QUERY", fld_query_client, fld_query_server);
-EXPORT_SYMBOL(RQF_FLD_QUERY);
 
 const struct req_format RQF_MDS_GETSTATUS =
         DEFINE_REQ_FMT0("MDS_GETSTATUS", mdt_body_only, mdt_body_capa);
@@ -1002,11 +1022,11 @@ EXPORT_SYMBOL(RQF_MDS_CONNECT);
 const struct req_format RQF_MDS_DISCONNECT =
         DEFINE_REQ_FMT0("MDS_DISCONNECT", empty, empty);
 EXPORT_SYMBOL(RQF_MDS_DISCONNECT);
- 
+
 const struct req_format RQF_MDS_SET_INFO =
         DEFINE_REQ_FMT0("MDS_SET_INFO", mds_set_info_client, empty);
 EXPORT_SYMBOL(RQF_MDS_SET_INFO);
- 
+
 const struct req_format RQF_LDLM_ENQUEUE =
         DEFINE_REQ_FMT0("LDLM_ENQUEUE",
                         ldlm_enqueue_client, ldlm_enqueue_lvb_server);
@@ -1305,7 +1325,7 @@ int req_capsule_filled_sizes(struct req_capsule *pill,
 
         for (i = 0; i < fmt->rf_fields[loc].nr; ++i) {
                 if (pill->rc_area[loc][i] == -1) {
-                        pill->rc_area[loc][i] = 
+                        pill->rc_area[loc][i] =
                                             fmt->rf_fields[loc].d[i]->rmf_size;
                         if (pill->rc_area[loc][i] == -1) {
                                 /* skip the following fields */

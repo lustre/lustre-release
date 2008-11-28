@@ -43,7 +43,7 @@
 #define _LUSTRE_LINUX_ACL_H
 
 #ifndef	_LUSTRE_ACL_H
-#error	Shoud not include direectly. use #include <lustre/lustre_acl.h> instead
+#error	Shoud not include direectly. use #include <lustre_acl.h> instead
 #endif
 
 #ifdef __KERNEL__
@@ -76,7 +76,11 @@
 
 # define LUSTRE_POSIX_ACL_MAX_ENTRIES   (32)
 
+#ifdef __KERNEL__
 # define LUSTRE_POSIX_ACL_MAX_SIZE   XATTR_ACL_SIZE
+#else
+# define LUSTRE_POSIX_ACL_MAX_SIZE   0
+#endif
 
 # else /* CONFIG_FS_POSIX_ACL */
 # define LUSTRE_POSIX_ACL_MAX_SIZE      0

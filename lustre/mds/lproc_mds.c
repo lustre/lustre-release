@@ -110,7 +110,7 @@ static int lprocfs_mds_wr_evict_client(struct file *file, const char *buffer,
                 ptlrpc_check_set(NULL, set);
         }
 
-        /* See the comments in function lprocfs_wr_evict_client() 
+        /* See the comments in function lprocfs_wr_evict_client()
          * in ptlrpc/lproc_ptlrpc.c for details. - jay */
         class_incref(obd, __FUNCTION__, cfs_current());
         LPROCFS_EXIT();
@@ -129,162 +129,6 @@ static int lprocfs_mds_wr_evict_client(struct file *file, const char *buffer,
         ptlrpc_set_destroy(set);
         return count;
 }
-
-#if 0
-static int lprocfs_wr_group_info(struct file *file, const char *buffer,
-                                 unsigned long count, void *data)
-{
-        struct obd_device *obd = data;
-        struct mds_obd *mds = &obd->u.mds;
-        struct mds_grp_downcall_data sparam, *param = &sparam;
-        int size = 0, rc = count;
-
-        if (count < sizeof(param)) {
-                CERROR("%s: invalid data size %lu\n", obd->obd_name, count);
-                return count;
-        }
-
-        if (copy_from_user(param, buffer, sizeof(*param)) ||
-            param->mgd_magic != MDS_GRP_DOWNCALL_MAGIC) {
-                CERROR("%s: MDS group downcall bad params\n", obd->obd_name);
-                return count;
-        }
-
-        if (param->mgd_ngroups > NGROUPS_MAX) {
-                CWARN("%s: uid %u groups %d more than maximum %d\n",
-                      obd->obd_name, param->mgd_uid, param->mgd_ngroups,
-                      NGROUPS_MAX);
-                param->mgd_ngroups = NGROUPS_MAX;
-        }
-
-        if (param->mgd_ngroups > 0) {
-                size = offsetof(struct mds_grp_downcall_data,
-                                mgd_groups[param->mgd_ngroups]);
-                OBD_ALLOC(param, size);
-                if (!param) {
-                        CERROR("%s: fail to alloc %d bytes for uid %u"
-                               " with %d groups\n", obd->obd_name, size,
-                               sparam.mgd_uid, sparam.mgd_ngroups);
-                        param = &sparam;
-                        param->mgd_ngroups = 0;
-                } else if (copy_from_user(param, buffer, size)) {
-                        CERROR("%s: uid %u bad supplementary group data\n",
-                               obd->obd_name, sparam.mgd_uid);
-                        OBD_FREE(param, size);
-                        param = &sparam;
-                        param->mgd_ngroups = 0;
-                }
-        }
-        rc = upcall_cache_downcall(mds->mds_group_hash, param->mgd_err,
-                                   param->mgd_uid, param->mgd_gid,
-                                   param->mgd_ngroups, param->mgd_groups);
-
-        if (param && param != &sparam)
-                OBD_FREE(param, size);
-
-        return rc;
-}
-
-static int lprocfs_rd_group_expire(char *page, char **start, off_t off,
-                                   int count, int *eof, void *data)
-{
-        struct obd_device *obd = data;
-
-        *eof = 1;
-        return snprintf(page, count, "%lu\n",
-                        obd->u.mds.mds_group_hash->uc_entry_expire / HZ);
-}
-
-static int lprocfs_wr_group_expire(struct file *file, const char *buffer,
-                                   unsigned long count, void *data)
-{
-        struct obd_device *obd = data;
-        int val, rc;
-
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
-
-        if (val > 5)
-                obd->u.mds.mds_group_hash->uc_entry_expire = val * HZ;
-        else
-                CERROR("invalid expire time %u for group cache\n", val);
-
-        return count;
-}
-
-static int lprocfs_rd_group_acquire_expire(char *page, char **start, off_t off,
-                                           int count, int *eof, void *data)
-{
-        struct obd_device *obd = data;
-
-        *eof = 1;
-        return snprintf(page, count, "%lu\n",
-                        obd->u.mds.mds_group_hash->uc_acquire_expire / HZ);
-}
-
-static int lprocfs_wr_group_acquire_expire(struct file *file,const char *buffer,
-                                           unsigned long count, void *data)
-{
-        struct obd_device *obd = data;
-        int val, rc = 0;
-
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
-
-        if (val > 2)
-                obd->u.mds.mds_group_hash->uc_acquire_expire = val * HZ;
-
-        return count;
-}
-
-static int lprocfs_rd_group_upcall(char *page, char **start, off_t off,
-                                   int count, int *eof, void *data)
-{
-        struct obd_device *obd = data;
-
-        *eof = 1;
-        return snprintf(page, count, "%s\n",
-                        obd->u.mds.mds_group_hash->uc_upcall);
-}
-
-static int lprocfs_wr_group_upcall(struct file *file, const char *buffer,
-                                   unsigned long count, void *data)
-{
-        struct obd_device *obd = data;
-        struct upcall_cache *hash = obd->u.mds.mds_group_hash;
-        char kernbuf[UC_CACHE_UPCALL_MAXPATH] = { '\0' };
-
-        if (count >= UC_CACHE_UPCALL_MAXPATH) {
-                CERROR("%s: group upcall too long\n", obd->obd_name);
-                return -EINVAL;
-        }
-
-        if (copy_from_user(kernbuf, buffer,
-                           min(count, UC_CACHE_UPCALL_MAXPATH - 1)))
-                return -EFAULT;
-
-        /* Remove any extraneous bits from the upcall (e.g. linefeeds) */
-        sscanf(kernbuf, "%s", hash->uc_upcall);
-
-        if (strcmp(hash->uc_name, obd->obd_name) != 0)
-                CWARN("%s: write to upcall name %s for MDS %s\n",
-                      obd->obd_name, hash->uc_upcall, obd->obd_name);
-        CWARN("%s: group upcall set to %s\n", obd->obd_name, hash->uc_upcall);
-
-        return count;
-}
-
-static int lprocfs_wr_group_flush(struct file *file, const char *buffer,
-                                  unsigned long count, void *data)
-{
-        struct obd_device *obd = data;
-
-        upcall_cache_flush_idle(obd->u.mds.mds_group_hash);
-        return count;
-}
-#endif
 
 static int lprocfs_wr_atime_diff(struct file *file, const char *buffer,
                                  unsigned long count, void *data)
@@ -336,23 +180,6 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "evict_ost_nids",  lprocfs_mds_rd_evictostnids,
                                                lprocfs_mds_wr_evictostnids, 0 },
         { "num_exports",     lprocfs_rd_num_exports, 0, 0 },
-#ifdef HAVE_QUOTA_SUPPORT
-        { "quota_bunit_sz",  lprocfs_rd_bunit, lprocfs_wr_bunit, 0 },
-        { "quota_btune_sz",  lprocfs_rd_btune, lprocfs_wr_btune, 0 },
-        { "quota_iunit_sz",  lprocfs_rd_iunit, lprocfs_wr_iunit, 0 },
-        { "quota_itune_sz",  lprocfs_rd_itune, lprocfs_wr_itune, 0 },
-        { "quota_type",      lprocfs_rd_type, lprocfs_wr_type, 0 },
-#endif
-#if 0
-        { "group_expire_interval", lprocfs_rd_group_expire,
-                             lprocfs_wr_group_expire, 0},
-        { "group_acquire_expire", lprocfs_rd_group_acquire_expire,
-                             lprocfs_wr_group_acquire_expire, 0},
-        { "group_upcall",    lprocfs_rd_group_upcall,
-                             lprocfs_wr_group_upcall, 0},
-        { "group_flush",     0, lprocfs_wr_group_flush, 0},
-        { "group_info",      0, lprocfs_wr_group_info, 0 },
-#endif
         { "atime_diff",      lprocfs_rd_atime_diff, lprocfs_wr_atime_diff, 0 },
         { 0 }
 };

@@ -76,6 +76,7 @@ unsigned int obd_timeout = OBD_TIMEOUT_DEFAULT;   /* seconds */
 unsigned int ldlm_timeout = LDLM_TIMEOUT_DEFAULT; /* seconds */
 unsigned int obd_max_dirty_pages = 256;
 atomic_t obd_dirty_pages;
+atomic_t obd_dirty_transit_pages;
 
 cfs_waitq_t obd_race_waitq;
 int obd_race_state;
@@ -390,6 +391,7 @@ EXPORT_SYMBOL(obd_timeout);
 EXPORT_SYMBOL(ldlm_timeout);
 EXPORT_SYMBOL(obd_max_dirty_pages);
 EXPORT_SYMBOL(obd_dirty_pages);
+EXPORT_SYMBOL(obd_dirty_transit_pages);
 EXPORT_SYMBOL(ptlrpc_put_connection_superhack);
 
 EXPORT_SYMBOL(proc_lustre_root);
@@ -403,7 +405,6 @@ EXPORT_SYMBOL(class_name2obd);
 EXPORT_SYMBOL(class_uuid2dev);
 EXPORT_SYMBOL(class_uuid2obd);
 EXPORT_SYMBOL(class_find_client_obd);
-EXPORT_SYMBOL(class_find_client_notype);
 EXPORT_SYMBOL(class_devices_in_group);
 EXPORT_SYMBOL(class_conn2export);
 EXPORT_SYMBOL(class_exp2obd);
@@ -590,10 +591,10 @@ int init_obdclass(void)
         err = obd_init_caches();
         if (err)
                 return err;
-#ifdef __KERNEL__
         err = lu_global_init();
         if (err)
                 return err;
+#ifdef __KERNEL__
         err = class_procfs_init();
         if (err)
                 return err;

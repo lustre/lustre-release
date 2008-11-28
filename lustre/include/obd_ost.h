@@ -36,7 +36,7 @@
  * lustre/include/obd_ost.h
  *
  * Data structures for object storage targets and client: OST & OSC's
- * 
+ *
  * See also lustre_idl.h for wire formats of requests.
  */
 
@@ -54,21 +54,35 @@ struct osc_brw_async_args {
         struct brw_page  **aa_ppga;
         struct client_obd *aa_cli;
         struct list_head   aa_oaps;
+        struct obd_capa   *aa_ocapa;
+        struct cl_req     *aa_clerq;
 };
 
 struct osc_async_args {
         struct obd_info   *aa_oi;
 };
 
-struct osc_enqueue_args {
-        struct obd_export       *oa_exp;
-        struct obd_info         *oa_oi;
-        struct ldlm_enqueue_info*oa_ei;
+struct osc_punch_args {
+        struct obdo         *pa_oa;
+        obd_enqueue_update_f pa_upcall;
+        void                *pa_cookie;
 };
 
+struct osc_enqueue_args {
+        struct obd_export        *oa_exp;
+        int                      *oa_flags;
+        obd_enqueue_update_f      oa_upcall;
+        void                     *oa_cookie;
+        struct ost_lvb           *oa_lvb;
+        struct lustre_handle     *oa_lockh;
+        struct ldlm_enqueue_info *oa_ei;
+};
+
+#if 0
 int osc_extent_blocking_cb(struct ldlm_lock *lock,
                            struct ldlm_lock_desc *new, void *data,
                            int flag);
+#endif
 
 /** 
  * Build DLM resource name from object id & group for osc-ost extent lock.

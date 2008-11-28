@@ -23,7 +23,7 @@ fi
 [ "$DEBUG_OFF" ] || DEBUG_OFF="eval lctl set_param debug=\"$DEBUG_LVL\""
 [ "$DEBUG_ON" ] || DEBUG_ON="eval lctl set_param debug=0x33f0484"
 
-export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL INSANITY SANITY_QUOTA SANITY_SEC SANITY_GSS PERFORMANCE_SANITY"
+export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE RACER REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL INSANITY SANITY_QUOTA SANITY_SEC SANITY_GSS PERFORMANCE_SANITY"
 
 if [ "$ACC_SM_ONLY" ]; then
     for O in $TESTSUITE_LIST; do
@@ -36,7 +36,6 @@ if [ "$ACC_SM_ONLY" ]; then
     done
 fi
 LFSCK="no" # bug 13698
-SANITY_QUOTA="no" # bug 13058
 
 LIBLUSTRETESTS=${LIBLUSTRETESTS:-../liblustre/tests}
 
@@ -59,8 +58,21 @@ FORMAT=${FORMAT:-formatall}
 CLEANUP=${CLEANUP:-stopall}
 
 setup_if_needed() {
-    mount | grep $MOUNT && return
-    $FORMAT && $SETUP
+    local MOUNTED=$(mounted_lustre_filesystems)
+    if $(echo $MOUNTED | grep -w -q $MOUNT); then
+        check_config $MOUNT
+        return
+    fi
+
+    echo "Lustre is not mounted, trying to do setup SETUP=$SETUP ... "
+    [ "$REFORMAT" ] && $FORMAT
+    $SETUP
+
+    MOUNTED=$(mounted_lustre_filesystems)
+    if ! $(echo $MOUNTED | grep -w -q $MOUNT); then
+        echo "Lustre is not mounted after setup! SETUP=$SETUP"
+        exit 1
+    fi
 }
 
 title() {
@@ -281,7 +293,7 @@ for NAME in $CONFIGS; do
 		mount_client $MOUNT2
 		#echo "can't mount2 for '$NAME', skipping sanityN.sh"
 		START=: CLEAN=: bash sanityN.sh
-		umount $MOUNT2
+		[ "$(mount | grep $MOUNT2)" ] && umount $MOUNT2
 
 		$DEBUG_ON
 		$CLEANUP
@@ -321,7 +333,20 @@ for NAME in $CONFIGS; do
 		LIBLUSTRE="done"
 	fi
 
-	$CLEANUP
+	[ "$RACER" != "no" ] && [ -n "$CLIENTS" -a "$PDSH" = "no_dsh" ] && log "Remote client with no_dsh" && RACER=no 
+	if [ "$RACER" != "no" ]; then
+        	title racer
+		setup_if_needed
+		DURATION=${DURATION:-900}
+		[ "$SLOW" = "no" ] && DURATION=300
+		RACERCLIENTS=$HOSTNAME
+		[ ! -z ${CLIENTS} ] && RACERCLIENTS=$CLIENTS
+		log "racer on clients: $RACERCLIENTS DURATION=$DURATION"
+		CLIENTS=${RACERCLIENTS} DURATION=$DURATION bash runracer
+		$CLEANUP
+		$SETUP
+		RACER="done"
+	fi
 done
 
 [ "$REPLAY_SINGLE" != "no" ] && skip_remmds replay-single && REPLAY_SINGLE=no && MSKIPPED=1

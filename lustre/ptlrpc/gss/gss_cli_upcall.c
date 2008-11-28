@@ -248,8 +248,8 @@ int gss_do_ctx_init_rpc(__user char *buffer, unsigned long count)
         int                       rc;
 
         if (count != sizeof(param)) {
-                CERROR("ioctl size %lu, expect %lu, please check lgssd version\n",
-                        count, (unsigned long) sizeof(param));
+                CERROR("ioctl size %lu, expect %lu, please check lgss_keyring "
+                       "version\n", count, (unsigned long) sizeof(param));
                 RETURN(-EINVAL);
         }
         if (copy_from_user(&param, buffer, sizeof(param))) {
@@ -275,11 +275,40 @@ int gss_do_ctx_init_rpc(__user char *buffer, unsigned long count)
                 RETURN(-EINVAL);
         }
 
-        imp = class_import_get(obd->u.cli.cl_import);
-        LASSERT(imp->imp_sec);
+        if (unlikely(!obd->obd_set_up)) {
+                CERROR("obd %s not setup\n", obdname);
+                RETURN(-EINVAL);
+        }
 
-        /* force this import to use v2 msg */
-        imp->imp_msg_magic = LUSTRE_MSG_MAGIC_V2;
+        spin_lock(&obd->obd_dev_lock);
+        if (obd->obd_stopping) {
+                CERROR("obd %s has stopped\n", obdname);
+                spin_unlock(&obd->obd_dev_lock);
+                RETURN(-EINVAL);
+        }
+
+        if (strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME) &&
+            strcmp(obd->obd_type->typ_name, LUSTRE_OSC_NAME) &&
+            strcmp(obd->obd_type->typ_name, LUSTRE_MGC_NAME)) {
+                CERROR("obd %s is not a client device\n", obdname);
+                spin_unlock(&obd->obd_dev_lock);
+                RETURN(-EINVAL);
+        }
+        spin_unlock(&obd->obd_dev_lock);
+
+        down_read(&obd->u.cli.cl_sem);
+        if (obd->u.cli.cl_import == NULL) {
+                CERROR("import has gone\n");
+                RETURN(-EINVAL);
+        }
+        imp = class_import_get(obd->u.cli.cl_import);
+        up_read(&obd->u.cli.cl_sem);
+
+        if (imp->imp_deactive) {
+                CERROR("import has been deactivated\n");
+                class_import_put(imp);
+                RETURN(-EINVAL);
+        }
 
         req = ptlrpc_request_alloc_pack(imp, &RQF_SEC_CTX, LUSTRE_OBD_VERSION,
                                         SEC_CTX_INIT);

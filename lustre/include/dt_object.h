@@ -66,6 +66,7 @@ struct txn_param;
 struct dt_device;
 struct dt_object;
 struct dt_index_features;
+struct dt_quota_ctxt;
 
 struct dt_device_param {
         unsigned           ddp_max_name_len;
@@ -82,11 +83,12 @@ enum dt_txn_op {
         DTO_IDNEX_UPDATE,
         DTO_OBJECT_CREATE,
         DTO_OBJECT_DELETE,
-        DTO_ATTR_SET,
+        DTO_ATTR_SET_BASE,
         DTO_XATTR_SET,
         DTO_LOG_REC, /**< XXX temporary: dt layer knows nothing about llog. */
         DTO_WRITE_BASE,
         DTO_WRITE_BLOCK,
+        DTO_ATTR_SET_CHOWN,
 
         DTO_NR
 };
@@ -128,12 +130,28 @@ struct dt_device_operations {
         int   (*dt_sync)(const struct lu_env *env, struct dt_device *dev);
         void  (*dt_ro)(const struct lu_env *env, struct dt_device *dev);
         /**
+          * Start a transaction commit asynchronously
+          *
+          * \param env environment
+          * \param dev dt_device to start commit on
+          *
+          * \return 0 success, negative value if error
+          */
+         int   (*dt_commit_async)(const struct lu_env *env,
+                                  struct dt_device *dev);
+        /**
          * Initialize capability context.
          */
         int   (*dt_init_capa_ctxt)(const struct lu_env *env,
                                    struct dt_device *dev,
                                    int mode, unsigned long timeout,
                                    __u32 alg, struct lustre_capa_key *keys);
+        /**
+         * Initialize quota context.
+         */
+        void (*dt_init_quota_ctxt)(const struct lu_env *env,
+                                   struct dt_device *dev,
+                                   struct dt_quota_ctxt *ctxt, void *data);
 
         /**
          *  get transaction credits for given \a op.
@@ -153,6 +171,8 @@ struct dt_index_features {
         size_t dif_recsize_min;
         /** maximal required record size, 0 if no limit */
         size_t dif_recsize_max;
+        /** pointer size for record */
+        size_t dif_ptrsize;
 };
 
 enum dt_index_flags {
@@ -174,13 +194,53 @@ extern const struct dt_index_features dt_directory_features;
 
 /**
  * This is a general purpose dt allocation hint.
- * It now contains the parent object. 
+ * It now contains the parent object.
  * It can contain any allocation hint in the future.
  */
 struct dt_allocation_hint {
-        struct dt_object *dah_parent;
-        __u32             dah_mode;
+        struct dt_object           *dah_parent;
+        __u32                       dah_mode;
 };
+
+/**
+ * object type specifier.
+ */
+
+enum dt_format_type {
+        DFT_REGULAR,
+        DFT_DIR,
+        /** for mknod */
+        DFT_NODE,
+        /** for special index */
+        DFT_INDEX,
+        /** for symbolic link */
+        DFT_SYM,
+};
+
+/**
+ * object format specifier.
+ */
+struct dt_object_format {
+        /** type for dt object */
+        enum dt_format_type dof_type;
+        union {
+                struct dof_regular {
+                } dof_reg;
+                struct dof_dir {
+                } dof_dir;
+                struct dof_node {
+                } dof_node;
+                /**
+                 * special index need feature as parameter to create
+                 * special idx
+                 */
+                struct dof_index {
+                        const struct dt_index_features *di_feat;
+                } dof_idx;
+        } u;
+};
+
+enum dt_format_type dt_mode_to_dft(__u32 mode);
 
 /**
  * Per-dt-object operations.
@@ -277,8 +337,9 @@ struct dt_object_operations {
          * postcondition: ergo(result == 0, dt_object_exists(dt));
          */
         int   (*do_create)(const struct lu_env *env, struct dt_object *dt,
-                           struct lu_attr *attr, 
+                           struct lu_attr *attr,
                            struct dt_allocation_hint *hint,
+                           struct dt_object_format *dof,
                            struct thandle *th);
 
         /**
@@ -327,7 +388,8 @@ struct dt_body_operations {
          */
         ssize_t (*dbo_write)(const struct lu_env *env, struct dt_object *dt,
                              const struct lu_buf *buf, loff_t *pos,
-                             struct thandle *handle, struct lustre_capa *capa);
+                             struct thandle *handle, struct lustre_capa *capa,
+                             int ignore_quota);
 };
 
 /**
@@ -360,7 +422,8 @@ struct dt_index_operations {
          */
         int (*dio_insert)(const struct lu_env *env, struct dt_object *dt,
                           const struct dt_rec *rec, const struct dt_key *key,
-                          struct thandle *handle, struct lustre_capa *capa);
+                          struct thandle *handle, struct lustre_capa *capa,
+                          int ignore_quota);
         /**
          * precondition: dt_object_exists(dt);
          */
@@ -377,7 +440,7 @@ struct dt_index_operations {
                  * precondition: dt_object_exists(dt);
                  */
                 struct dt_it *(*init)(const struct lu_env *env,
-                                      struct dt_object *dt, int writable,
+                                      struct dt_object *dt,
                                       struct lustre_capa *capa);
                 void          (*fini)(const struct lu_env *env,
                                       struct dt_it *di);
@@ -386,8 +449,6 @@ struct dt_index_operations {
                                       const struct dt_key *key);
                 void           (*put)(const struct lu_env *env,
                                       struct dt_it *di);
-                int            (*del)(const struct lu_env *env,
-                                      struct dt_it *di, struct thandle *th);
                 int           (*next)(const struct lu_env *env,
                                       struct dt_it *di);
                 struct dt_key *(*key)(const struct lu_env *env,
@@ -404,7 +465,7 @@ struct dt_index_operations {
 };
 
 struct dt_device {
-        struct lu_device             dd_lu_dev;
+        struct lu_device                   dd_lu_dev;
         const struct dt_device_operations *dd_ops;
 
         /**
@@ -412,7 +473,7 @@ struct dt_device {
          * way, because callbacks are supposed to be added/deleted only during
          * single-threaded start-up shut-down procedures.
          */
-        struct list_head             dd_txn_callbacks;
+        struct list_head                   dd_txn_callbacks;
 };
 
 int  dt_device_init(struct dt_device *dev, struct lu_device_type *t);
@@ -430,7 +491,7 @@ static inline struct dt_device * lu2dt_dev(struct lu_device *l)
 }
 
 struct dt_object {
-        struct lu_object             do_lu;
+        struct lu_object                   do_lu;
         const struct dt_object_operations *do_ops;
         const struct dt_body_operations   *do_body_ops;
         const struct dt_index_operations  *do_index_ops;
@@ -516,10 +577,30 @@ int dt_txn_hook_stop(const struct lu_env *env, struct thandle *txn);
 int dt_txn_hook_commit(const struct lu_env *env, struct thandle *txn);
 
 int dt_try_as_dir(const struct lu_env *env, struct dt_object *obj);
+
+/**
+ * Callback function used for parsing path.
+ * \see llo_store_resolve
+ */
+typedef int (*dt_entry_func_t)(const struct lu_env *env,
+                            const char *name,
+                            void *pvt);
+
+#define DT_MAX_PATH 1024
+
+int dt_path_parser(const struct lu_env *env,
+                   char *local, dt_entry_func_t entry_func,
+                   void *data);
+
 struct dt_object *dt_store_open(const struct lu_env *env,
-                                struct dt_device *dt, const char *name,
+                                struct dt_device *dt,
+                                const char *dirname,
+                                const char *filename,
                                 struct lu_fid *fid);
 
-/** @} dt */
+struct dt_object *dt_locate(const struct lu_env *env,
+                            struct dt_device *dev,
+                            const struct lu_fid *fid);
 
+/** @} dt */
 #endif /* __LUSTRE_DT_OBJECT_H */

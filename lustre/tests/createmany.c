@@ -43,69 +43,103 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <getopt.h>
 
-void usage(char *prog)
+static void usage(char *prog)
 {
-        printf("usage: %s {-o|-m|-d|-l<tgt>} filenamefmt count\n", prog);
-        printf("       %s {-o|-m|-d|-l<tgt>} filenamefmt -seconds\n", prog);
-        printf("       %s {-o|-m|-d|-l<tgt>} filenamefmt start count\n", prog);
+        printf("usage: %s {-o|-m|-d|-l<tgt>} [-r altpath ] filenamefmt count\n", prog);
+        printf("       %s {-o|-m|-d|-l<tgt>} [-r altpath ] filenamefmt ] -seconds\n", prog);
+        printf("       %s {-o|-m|-d|-l<tgt>} [-r altpath ] filenamefmt start count\n", prog);
+        exit(EXIT_FAILURE);
+}
+
+static char *get_file_name(const char *fmt, long n, int has_fmt_spec)
+{
+        static char filename[4096];
+        int bytes;
+
+        bytes = has_fmt_spec ? snprintf(filename, 4095, fmt, n) :
+                snprintf(filename, 4095, "%s%ld", fmt, n);
+        if (bytes >= 4095) {
+                printf("file name too long\n");
+                exit(EXIT_FAILURE);
+        }
+        return filename;
 }
 
 int main(int argc, char ** argv)
 {
-        int i, rc = 0, do_open = 0, do_link = 0, do_mkdir = 0;
-        char format[4096], *fmt, *tgt = NULL;
-        char filename[4096];
-        long start, last, end;
-        long begin = 0, count;
+        long i;
+        int rc = 0, do_open = 0, do_link = 0, do_mkdir = 0;
+        int do_unlink = 0, do_mknod = 0;
+        char *filename;
+        char *fmt = NULL, *fmt_unlink = NULL, *tgt = NULL;
+        long start, last, end = ~0UL >> 1;
+        long begin = 0, count = ~0UL >> 1;
+        int c, has_fmt_spec = 0, unlink_has_fmt_spec = 0;
 
-        if (argc < 4 || argc > 5) {
+        /* Handle the last argument in form of "-seconds" */
+        if (argc > 1 && argv[argc - 1][0] == '-') {
+                char *endp;
+
+                argc--;
+                end = strtol(argv[argc] + 1, &endp, 0);
+                if (end <= 0 || *endp != '\0')
+                        usage(argv[0]);
+                end = end + time(NULL);
+        }
+
+        while ((c = getopt(argc, argv, "omdl:r:")) != -1) {
+                switch(c) {
+                case 'o':
+                        do_open++;
+                        break;
+                case 'm':
+                        do_mknod++;
+                        break;
+                case 'd':
+                        do_mkdir++;
+                        break;
+                case 'l':
+                        do_link++;
+                        tgt = optarg;
+                        break;
+                case 'r':
+                        do_unlink++;
+                        fmt_unlink = optarg;
+                        break;
+                case '?':
+                        printf("Unknown option '%c'\n", optopt);
+                        usage(argv[0]);
+                }
+        }
+
+        if (do_open + do_mkdir + do_link + do_mknod != 1 ||
+            do_unlink > 1)
                 usage(argv[0]);
-                return 1;
-        }
 
-        if (strcmp(argv[1], "-d") == 0) {
-                do_mkdir = 1;
-        } else if (strcmp(argv[1], "-o") == 0) {
-                do_open = 1;
-        } else if (strncmp(argv[1], "-l", 2) == 0 && argv[1][2]) {
-                tgt = argv[1] + 2;
-                do_link = 1;
-        } else if (strcmp(argv[1], "-m") != 0) {
+        switch (argc - optind) {
+        case 3:
+                begin = strtol(argv[argc - 2], NULL, 0);
+        case 2:
+                count = strtol(argv[argc - 1], NULL, 0);
+                if (end != ~0UL >> 1)
+                        usage(argv[0]);
+        case 1:
+                fmt = argv[optind];
+                break;
+        default:
                 usage(argv[0]);
-                return 1;
         }
 
-        if (strlen(argv[2]) > 4080) {
-                printf("name too long\n");
-                return 1;
-        }
+        start = last = time(NULL);
 
-        start = last = time(0);
+        has_fmt_spec = strchr(fmt, '%') != NULL;
+        if (do_unlink)
+                unlink_has_fmt_spec = strchr(fmt_unlink, '%') != NULL;
 
-        if (argc == 4) {
-                end = strtol(argv[3], NULL, 0);
-        } else {
-                begin = strtol(argv[3], NULL, 0);
-                end = strtol(argv[4], NULL, 0);
-        }
-
-        if (end > 0) {
-                count = end;
-                end = -1UL >> 1;
-        } else {
-                end = start - end;
-                count = -1UL >> 1;
-        }
-
-        if (strchr(argv[2], '%'))
-                fmt = argv[2];
-        else {
-                sprintf(format, "%s%%d", argv[2]);
-                fmt = format;
-        }
-        for (i = 0; i < count && time(0) < end; i++, begin++) {
-                sprintf(filename, fmt, begin);
+        for (i = 0; i < count && time(NULL) < end; i++, begin++) {
+                filename = get_file_name(fmt, begin, has_fmt_spec);
                 if (do_open) {
                         int fd = open(filename, O_CREAT|O_RDWR, 0644);
                         if (fd < 0) {
@@ -140,14 +174,27 @@ int main(int argc, char ** argv)
                                 break;
                         }
                 }
+                if (do_unlink) {
+                        filename = get_file_name(fmt_unlink, begin,
+                                      unlink_has_fmt_spec);
+                        rc = do_mkdir ? rmdir(filename) : unlink(filename);
+                        if (rc) {
+                                printf("unlink(%s) error: %s\n",
+                                       filename, strerror(errno));
+                                rc = errno;
+                                break;
+                        }
+                }
+
                 if ((i % 10000) == 0) {
-                        printf(" - created %d (time %ld total %ld last %ld)\n",
+                        printf(" - created %ld (time %ld total %ld last %ld)\n",
                                i, time(0), time(0) - start, time(0) - last);
-                        last = time(0);
+                        last = time(NULL);
                 }
         }
-        printf("total: %d creates in %ld seconds: %f creates/second\n", i,
-               time(0) - start, ((float)i / (time(0) - start)));
+        printf("total: %ld creates%s in %ld seconds: %f creates/second\n", i,
+               do_unlink ? "/deletions" : "",
+               time(NULL) - start, ((float)i / (time(0) - start)));
 
         return rc;
 }

@@ -66,6 +66,7 @@
 #include <lprocfs_status.h>
 #include <lu_time.h>
 #include "mdt_internal.h"
+#include <lnet/lib-lnet.h>
 
 static const char *mdt_proc_names[LPROC_MDT_NR] = {
 };
@@ -425,6 +426,227 @@ static int lprocfs_mdt_wr_evict_client(struct file *file, const char *buffer,
         return count;
 }
 
+static int lprocfs_rd_sec_level(char *page, char **start, off_t off,
+                                int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+        return snprintf(page, count, "%d\n", mdt->mdt_sec_level);
+}
+
+static int lprocfs_wr_sec_level(struct file *file, const char *buffer,
+                                unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val > LUSTRE_SEC_ALL || val < LUSTRE_SEC_NONE)
+                return -EINVAL;
+
+        if (val == LUSTRE_SEC_SPECIFY) {
+                CWARN("security level %d will be supported in future.\n",
+                      LUSTRE_SEC_SPECIFY);
+                return -EINVAL;
+        }
+
+        mdt->mdt_sec_level = val;
+        return count;
+}
+
+static int lprocfs_rd_cos(char *page, char **start, off_t off,
+                              int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+        return snprintf(page, count, "%u\n", mdt_cos_is_enabled(mdt));
+}
+
+static int lprocfs_wr_cos(struct file *file, const char *buffer,
+                                  unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+        mdt_enable_cos(mdt, val);
+        return count;
+}
+
+static int lprocfs_rd_root_squash(char *page, char **start, off_t off,
+                                  int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+        ENTRY;
+
+        return snprintf(page, count, "%u:%u\n", mdt->mdt_squash_uid,
+                        mdt->mdt_squash_gid);
+}
+
+static int safe_strtoul(const char *str, char **endp, unsigned long *res)
+{
+        char n[24];
+
+        *res = simple_strtoul(str, endp, 0);
+        if (str == *endp)
+                return 1;
+
+        sprintf(n, "%lu", *res);
+        if (strncmp(n, str, *endp - str))
+                /* overflow */
+                return 1;
+        return 0;
+}
+
+static int lprocfs_wr_root_squash(struct file *file, const char *buffer,
+                                  unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+        char kernbuf[50], *tmp, *end;
+        unsigned long uid, gid;
+        int nouid, nogid;
+        ENTRY;
+
+        if (count > (sizeof(kernbuf) - 1) ||
+            copy_from_user(kernbuf, buffer, count)) {
+                CWARN("%s: can't copy string to kernel space, "
+                      "uid:gid is expected, "
+                      "continue with %u:%u, "
+                      "there will be 0:0 on MDS restart\n",
+                      obd->obd_name, mdt->mdt_squash_uid,
+                      mdt->mdt_squash_gid);
+                RETURN(count);
+        }
+
+        if (copy_from_user(kernbuf, buffer, count))
+                RETURN(-EFAULT);
+
+        kernbuf[count] = '\0';
+
+        nouid = nogid = 0;
+        if (safe_strtoul(buffer, &tmp, &uid)) {
+                uid = mdt->mdt_squash_uid;
+                nouid = 1;
+        }
+
+        /* skip ':' */
+        if (*tmp == ':') {
+                tmp++;
+                if (safe_strtoul(tmp, &end, &gid)) {
+                        gid = mdt->mdt_squash_gid;
+                        nogid = 1;
+                }
+        } else {
+                gid = mdt->mdt_squash_gid;
+                nogid = 1;
+        }
+
+        mdt->mdt_squash_uid = uid;
+        mdt->mdt_squash_gid = gid;
+
+        if (nouid || nogid)
+                CWARN("%s: can't parse \"\%s\", uid:gid is expected, "
+                      "continue with %u:%u, "
+                      "there will be %u:%u on MDS restart\n",
+                      obd->obd_name,
+                      buffer, mdt->mdt_squash_uid, mdt->mdt_squash_gid,
+                      nouid ? 0 : mdt->mdt_squash_uid,
+                      nogid ? 0 : mdt->mdt_squash_gid);
+        else
+                LCONSOLE_INFO("%s: root_squash is set to %u:%u\n",
+                              obd->obd_name,
+                              mdt->mdt_squash_uid,  mdt->mdt_squash_gid);
+        RETURN(count);
+}
+
+static int lprocfs_rd_nosquash_nids(char *page, char **start, off_t off,
+                                    int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+        if (mdt->mdt_nosquash_str)
+                return snprintf(page, count, "%s\n", mdt->mdt_nosquash_str);
+        return snprintf(page, count, "NONE\n");
+}
+
+static int lprocfs_wr_nosquash_nids(struct file *file, const char *buffer,
+                                    unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+        int rc;
+        char *new;
+        struct list_head tmp;
+        ENTRY;
+
+        /* copy to kernel space */
+        OBD_ALLOC(new, count + 1);
+        if (new == 0)
+                GOTO(failed, rc = -ENOMEM);
+
+        if (copy_from_user(new, buffer, count))
+                GOTO(failed, rc = -EFAULT);
+
+        new[count] = 0;
+        if (strlen(new) != count)
+                GOTO(failed, rc = -EINVAL);
+
+        if (!strcmp(new, "NONE") || !strcmp(new, "clear")) {
+                /* empty string is special case */
+                down_write(&mdt->mdt_squash_sem);
+                if (!list_empty(&mdt->mdt_nosquash_nids)) {
+                        cfs_free_nidlist(&mdt->mdt_nosquash_nids);
+                        OBD_FREE(mdt->mdt_nosquash_str,
+                                 mdt->mdt_nosquash_strlen);
+                        mdt->mdt_nosquash_str = NULL;
+                        mdt->mdt_nosquash_strlen = 0;
+                }
+                up_write(&mdt->mdt_squash_sem);
+                LCONSOLE_INFO("%s: nosquash_nids is cleared\n",
+                              obd->obd_name);
+                OBD_FREE(new, count + 1);
+                RETURN(0);
+        }
+
+        CFS_INIT_LIST_HEAD(&tmp);
+        if (cfs_parse_nidlist(new, count, &tmp) <= 0)
+                GOTO(failed, rc = -EINVAL);
+
+        down_write(&mdt->mdt_squash_sem);
+        if (!list_empty(&mdt->mdt_nosquash_nids)) {
+                cfs_free_nidlist(&mdt->mdt_nosquash_nids);
+                OBD_FREE(mdt->mdt_nosquash_str, mdt->mdt_nosquash_strlen);
+        }
+        mdt->mdt_nosquash_str = new;
+        mdt->mdt_nosquash_strlen = count + 1;
+        list_splice(&tmp, &mdt->mdt_nosquash_nids);
+
+        LCONSOLE_INFO("%s: nosquash_nids is set to %s\n", obd->obd_name, new);
+        up_write(&mdt->mdt_squash_sem);
+        RETURN(count);
+
+ failed:
+        CWARN("%s: failed to set nosquash_nids (rc %d), "
+              "on MDS restart we will try to set it again, "
+              "continue with current nosquash_nids\n",
+              obd->obd_name, rc);
+        if (new)
+                OBD_FREE(new, count + 1);
+        RETURN(count);
+}
+
 static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
         { "uuid",                       lprocfs_rd_uuid,                 0, 0 },
         { "recovery_status",            lprocfs_obd_rd_recovery_status,  0, 0 },
@@ -447,6 +669,13 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
         { "site_stats",                 lprocfs_rd_site_stats,           0, 0 },
         { "evict_client",               0, lprocfs_mdt_wr_evict_client,     0 },
         { "hash_stats",                 lprocfs_obd_rd_hash,    0, 0 },
+        { "sec_level",                  lprocfs_rd_sec_level,
+                                        lprocfs_wr_sec_level,               0 },
+        { "commit_on_sharing",          lprocfs_rd_cos, lprocfs_wr_cos, 0 },
+        { "root_squash",                lprocfs_rd_root_squash,
+                                        lprocfs_wr_root_squash,             0 },
+        { "nosquash_nids",              lprocfs_rd_nosquash_nids,
+                                        lprocfs_wr_nosquash_nids,          0 },
         { 0 }
 };
 

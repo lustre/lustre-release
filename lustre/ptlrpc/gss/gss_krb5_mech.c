@@ -77,7 +77,7 @@
 #include "gss_asn1.h"
 #include "gss_krb5.h"
 
-spinlock_t krb5_seq_lock = SPIN_LOCK_UNLOCKED;
+static spinlock_t krb5_seq_lock;
 
 struct krb5_enctype {
         char           *ke_dispname;
@@ -1325,6 +1325,8 @@ static struct gss_api_mech gss_kerberos_mech = {
 int __init init_kerberos_module(void)
 {
         int status;
+
+        spin_lock_init(&krb5_seq_lock);
 
         status = lgss_mech_register(&gss_kerberos_mech);
         if (status)

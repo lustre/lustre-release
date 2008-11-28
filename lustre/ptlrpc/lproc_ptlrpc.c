@@ -72,6 +72,7 @@ struct ll_rpc_opcode {
         { OST_SET_INFO,     "ost_set_info" },
         { OST_QUOTACHECK,   "ost_quotacheck" },
         { OST_QUOTACTL,     "ost_quotactl" },
+        { OST_QUOTA_ADJUST_QUNIT, "ost_quota_adjust_qunit" },
         { MDS_GETATTR,      "mds_getattr" },
         { MDS_GETATTR_NAME, "mds_getattr_lock" },
         { MDS_CLOSE,        "mds_close" },
@@ -106,7 +107,7 @@ struct ll_rpc_opcode {
         { MGS_SET_INFO,     "mgs_set_info" },
         { OBD_PING,         "obd_ping" },
         { OBD_LOG_CANCEL,   "llog_origin_handle_cancel" },
-        { OBD_QC_CALLBACK,  "obd_qc_callback" },
+        { OBD_QC_CALLBACK,  "obd_quota_callback" },
         { LLOG_ORIGIN_HANDLE_CREATE,     "llog_origin_handle_create" },
         { LLOG_ORIGIN_HANDLE_NEXT_BLOCK, "llog_origin_handle_next_block" },
         { LLOG_ORIGIN_HANDLE_READ_HEADER,"llog_origin_handle_read_header" },
@@ -120,7 +121,9 @@ struct ll_rpc_opcode {
         { SEQ_QUERY,        "seq_query" },
         { SEC_CTX_INIT,     "sec_ctx_init" },
         { SEC_CTX_INIT_CONT,"sec_ctx_init_cont" },
-        { SEC_CTX_FINI,     "sec_ctx_fini" }
+        { SEC_CTX_FINI,     "sec_ctx_fini" },
+        { QUOTA_DQACQ,      "quota_acquire" },
+        { QUOTA_DQREL,      "quota_release" }
 };
 
 struct ll_eopcode {
@@ -132,12 +135,13 @@ struct ll_eopcode {
         { LDLM_EXTENT_ENQUEUE,  "ldlm_extent_enqueue" },
         { LDLM_FLOCK_ENQUEUE,   "ldlm_flock_enqueue" },
         { LDLM_IBITS_ENQUEUE,   "ldlm_ibits_enqueue" },
+        { MDS_REINT_SETATTR,    "mds_reint_setattr" },
         { MDS_REINT_CREATE,     "mds_reint_create" },
         { MDS_REINT_LINK,       "mds_reint_link" },
-        { MDS_REINT_OPEN,       "mds_reint_open" },
-        { MDS_REINT_SETATTR,    "mds_reint_setattr" },
-        { MDS_REINT_RENAME,     "mds_reint_rename" },
         { MDS_REINT_UNLINK,     "mds_reint_unlink" },
+        { MDS_REINT_RENAME,     "mds_reint_rename" },
+        { MDS_REINT_OPEN,       "mds_reint_open" },
+        { MDS_REINT_SETXATTR,   "mds_reint_setxattr" },
         { BRW_READ_BYTES,       "read_bytes" },
         { BRW_WRITE_BYTES,      "write_bytes" },
 };
@@ -145,15 +149,19 @@ struct ll_eopcode {
 const char *ll_opcode2str(__u32 opcode)
 {
         /* When one of the assertions below fail, chances are that:
-         *     1) A new opcode was added in lustre_idl.h, but was
-         *        is missing from the table above.
+         *     1) A new opcode was added in include/lustre/lustre_idl.h,
+         *        but is missing from the table above.
          * or  2) The opcode space was renumbered or rearranged,
          *        and the opcode_offset() function in
          *        ptlrpc_internal.h needs to be modified.
          */
         __u32 offset = opcode_offset(opcode);
-        LASSERT(offset < LUSTRE_MAX_OPCODES);
-        LASSERT(ll_rpc_opcode_table[offset].opcode == opcode);
+        LASSERTF(offset < LUSTRE_MAX_OPCODES,
+                 "offset %u >= LUSTRE_MAX_OPCODES %u\n",
+                 offset, LUSTRE_MAX_OPCODES);
+        LASSERTF(ll_rpc_opcode_table[offset].opcode == opcode,
+                 "ll_rpc_opcode_table[%u].opcode %u != opcode %u\n",
+                 offset, ll_rpc_opcode_table[offset].opcode, opcode);
         return ll_rpc_opcode_table[offset].opname;
 }
 
@@ -506,6 +514,32 @@ static int ptlrpc_lprocfs_rd_timeouts(char *page, char **start, off_t off,
         return rc;
 }
 
+static int ptlrpc_lprocfs_rd_hp_ratio(char *page, char **start, off_t off,
+                                      int count, int *eof, void *data)
+{
+        struct ptlrpc_service *svc = data;
+        int rc = snprintf(page, count, "%d", svc->srv_hpreq_ratio);
+        return rc;
+}
+
+static int ptlrpc_lprocfs_wr_hp_ratio(struct file *file, const char *buffer,
+                                      unsigned long count, void *data)
+{
+        struct ptlrpc_service *svc = data;
+        int rc, val;
+        
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc < 0)
+                return rc;
+        if (val < 0)
+                return -ERANGE;
+
+        spin_lock(&svc->srv_lock);
+        svc->srv_hpreq_ratio = val;
+        spin_unlock(&svc->srv_lock);
+        return count;
+}
+
 void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
                                      struct ptlrpc_service *svc)
 {
@@ -520,6 +554,10 @@ void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
                  .data       = svc},
                 {.name       = "timeouts",
                  .read_fptr  = ptlrpc_lprocfs_rd_timeouts,
+                 .data       = svc},
+                {.name       = "high_priority_ratio",
+                 .read_fptr  = ptlrpc_lprocfs_rd_hp_ratio,
+                 .write_fptr = ptlrpc_lprocfs_wr_hp_ratio,
                  .data       = svc},
                 {NULL}
         };

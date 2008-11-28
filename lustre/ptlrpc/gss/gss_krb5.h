@@ -49,8 +49,6 @@
 #ifndef PTLRPC_GSS_KRB5_H
 #define PTLRPC_GSS_KRB5_H
 
-extern spinlock_t krb5_seq_lock;
-
 /*
  * RFC 4142
  */

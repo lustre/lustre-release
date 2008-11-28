@@ -76,12 +76,24 @@
 
 #include "mdt_internal.h"
 
-int mdt_init_idmap(struct mdt_thread_info *info)
+#define mdt_init_sec_none(reply, exp)                                   \
+do {                                                                    \
+        reply->ocd_connect_flags &= ~(OBD_CONNECT_RMT_CLIENT |          \
+                                      OBD_CONNECT_RMT_CLIENT_FORCE |    \
+                                      OBD_CONNECT_MDS_CAPA |            \
+                                      OBD_CONNECT_OSS_CAPA);            \
+        spin_lock(&exp->exp_lock);                                      \
+        exp->exp_connect_flags = reply->ocd_connect_flags;              \
+        spin_unlock(&exp->exp_lock);                                    \
+} while (0)
+
+int mdt_init_sec_level(struct mdt_thread_info *info)
 {
+        struct mdt_device *mdt = info->mti_mdt;
         struct ptlrpc_request *req = mdt_info_req(info);
         char *client = libcfs_nid2str(req->rq_peer.nid);
-        struct mdt_export_data *med = mdt_req2med(req);
-        struct obd_device *obd = req->rq_export->exp_obd;
+        struct obd_export *exp = req->rq_export;
+        struct obd_device *obd = exp->exp_obd;
         struct obd_connect_data *data, *reply;
         int rc = 0, remote;
         ENTRY;
@@ -91,26 +103,116 @@ int mdt_init_idmap(struct mdt_thread_info *info)
         if (data == NULL || reply == NULL)
                 RETURN(-EFAULT);
 
-        if (!req->rq_auth_gss || req->rq_auth_usr_mdt) {
-                med->med_rmtclient = 0;
-                reply->ocd_connect_flags &= ~OBD_CONNECT_RMT_CLIENT;
+        /* connection from MDT is always trusted */
+        if (req->rq_auth_usr_mdt) {
+                mdt_init_sec_none(reply, exp);
                 RETURN(0);
         }
 
-        remote = data->ocd_connect_flags & OBD_CONNECT_RMT_CLIENT;
-
-        if (remote) {
-                med->med_rmtclient = 1;
-                if (!req->rq_auth_remote)
-                        CDEBUG(D_SEC, "client (local realm) %s -> target %s "
-                               "asked to be remote!\n", client, obd->obd_name);
-        } else if (req->rq_auth_remote) {
-                med->med_rmtclient = 1;
-                CDEBUG(D_SEC, "client (remote realm) %s -> target %s forced "
-                       "to be remote!\n", client, obd->obd_name);
+        /* no GSS support case */
+        if (!req->rq_auth_gss) {
+                if (mdt->mdt_sec_level > LUSTRE_SEC_NONE) {
+                        CWARN("client %s -> target %s does not user GSS, "
+                              "can not run under security level %d.\n",
+                              client, obd->obd_name, mdt->mdt_sec_level);
+                        RETURN(-EACCES);
+                } else {
+                        mdt_init_sec_none(reply, exp);
+                        RETURN(0);
+                }
         }
 
-        if (med->med_rmtclient) {
+        /* old version case */
+        if (unlikely(!(data->ocd_connect_flags & OBD_CONNECT_RMT_CLIENT) ||
+                     !(data->ocd_connect_flags & OBD_CONNECT_MDS_CAPA) ||
+                     !(data->ocd_connect_flags & OBD_CONNECT_OSS_CAPA))) {
+                if (mdt->mdt_sec_level > LUSTRE_SEC_NONE) {
+                        CWARN("client %s -> target %s uses old version, "
+                              "can not run under security level %d.\n",
+                              client, obd->obd_name, mdt->mdt_sec_level);
+                        RETURN(-EACCES);
+                } else {
+                        CWARN("client %s -> target %s uses old version, "
+                              "run under security level %d.\n",
+                              client, obd->obd_name, mdt->mdt_sec_level);
+                        mdt_init_sec_none(reply, exp);
+                        RETURN(0);
+                }
+        }
+
+        remote = data->ocd_connect_flags & OBD_CONNECT_RMT_CLIENT_FORCE;
+        if (remote) {
+                if (!req->rq_auth_remote)
+                        CDEBUG(D_SEC, "client (local realm) %s -> target %s "
+                               "asked to be remote.\n", client, obd->obd_name);
+        } else if (req->rq_auth_remote) {
+                remote = 1;
+                CDEBUG(D_SEC, "client (remote realm) %s -> target %s is set "
+                       "as remote by default.\n", client, obd->obd_name);
+        }
+
+        if (remote) {
+                if (!mdt->mdt_opts.mo_oss_capa) {
+                        CDEBUG(D_SEC, "client %s -> target %s is set as remote,"
+                               " but OSS capabilities are not enabled: %d.\n",
+                               client, obd->obd_name, mdt->mdt_opts.mo_oss_capa);
+                        RETURN(-EACCES);
+                }
+        } else {
+                if (req->rq_auth_uid == INVALID_UID) {
+                        CDEBUG(D_SEC, "client %s -> target %s: user is not "
+                               "authenticated!\n", client, obd->obd_name);
+                        RETURN(-EACCES);
+                }
+        }
+
+        switch (mdt->mdt_sec_level) {
+        case LUSTRE_SEC_NONE:
+                if (!remote) {
+                        mdt_init_sec_none(reply, exp);
+                        break;
+                } else {
+                        CDEBUG(D_SEC, "client %s -> target %s is set as remote, "
+                               "can not run under security level %d.\n",
+                               client, obd->obd_name, mdt->mdt_sec_level);
+                        RETURN(-EACCES);
+                }
+        case LUSTRE_SEC_REMOTE:
+                if (!remote)
+                        mdt_init_sec_none(reply, exp);
+                break;
+        case LUSTRE_SEC_ALL:
+                if (!remote) {
+                        reply->ocd_connect_flags &= ~(OBD_CONNECT_RMT_CLIENT |
+                                                      OBD_CONNECT_RMT_CLIENT_FORCE);
+                        if (!mdt->mdt_opts.mo_mds_capa)
+                                reply->ocd_connect_flags &= ~OBD_CONNECT_MDS_CAPA;
+                        if (!mdt->mdt_opts.mo_oss_capa)
+                                reply->ocd_connect_flags &= ~OBD_CONNECT_OSS_CAPA;
+
+                        spin_lock(&exp->exp_lock);
+                        exp->exp_connect_flags = reply->ocd_connect_flags;
+                        spin_unlock(&exp->exp_lock);
+                }
+                break;
+        default:
+                RETURN(-EINVAL);
+        }
+
+        RETURN(rc);
+}
+
+int mdt_init_idmap(struct mdt_thread_info *info)
+{
+        struct ptlrpc_request *req = mdt_info_req(info);
+        struct mdt_export_data *med = mdt_req2med(req);
+        struct obd_export *exp = req->rq_export;
+        char *client = libcfs_nid2str(req->rq_peer.nid);
+        struct obd_device *obd = exp->exp_obd;
+        int rc = 0;
+        ENTRY;
+
+        if (exp_connect_rmtclient(exp)) {
                 down(&med->med_idmap_sem);
                 if (!med->med_idmap)
                         med->med_idmap = lustre_idmap_init();
@@ -131,28 +233,16 @@ int mdt_init_idmap(struct mdt_thread_info *info)
                         RETURN(-ENOMEM);
                 }
 
-                reply->ocd_connect_flags &= ~OBD_CONNECT_LCL_CLIENT;
                 CDEBUG(D_SEC, "client %s -> target %s is remote.\n",
                        client, obd->obd_name);
-
                 /* NB, MDS_CONNECT establish root idmap too! */
                 rc = mdt_handle_idmap(info);
-        } else {
-                if (req->rq_auth_uid == INVALID_UID) {
-                        CDEBUG(D_SEC, "client %s -> target %s: user is not "
-                               "authenticated!\n", client, obd->obd_name);
-                        RETURN(-EACCES);
-                }
-                reply->ocd_connect_flags &= ~OBD_CONNECT_RMT_CLIENT;
         }
-
         RETURN(rc);
 }
 
 void mdt_cleanup_idmap(struct mdt_export_data *med)
 {
-        LASSERT(med->med_rmtclient);
-
         down(&med->med_idmap_sem);
         if (med->med_idmap != NULL) {
                 lustre_idmap_fini(med->med_idmap);
@@ -185,7 +275,7 @@ int mdt_handle_idmap(struct mdt_thread_info *info)
                 RETURN(0);
 
         med = mdt_req2med(req);
-        if (!med->med_rmtclient)
+        if (!exp_connect_rmtclient(info->mti_exp))
                 RETURN(0);
 
         opc = lustre_msg_get_opc(req->rq_reqmsg);
@@ -262,7 +352,7 @@ int ptlrpc_user_desc_do_idmap(struct ptlrpc_request *req,
         gid_t gid, fsgid;
 
         /* Only remote client need desc_to_idmap. */
-        if (!med->med_rmtclient)
+        if (!exp_connect_rmtclient(req->rq_export))
                 return 0;
 
         uid = lustre_idmap_lookup_uid(NULL, idmap, 0, pud->pud_uid);
@@ -317,7 +407,7 @@ void mdt_body_reverse_idmap(struct mdt_thread_info *info, struct mdt_body *body)
         struct mdt_export_data    *med = mdt_req2med(req);
         struct lustre_idmap_table *idmap = med->med_idmap;
 
-        if (!med->med_rmtclient)
+        if (!exp_connect_rmtclient(info->mti_exp))
                 return;
 
         if (body->valid & OBD_MD_FLUID) {
@@ -366,7 +456,7 @@ int mdt_fix_attr_ucred(struct mdt_thread_info *info, __u32 op)
                  * done in cmm/mdd layer, here set all cases as uc->mu_fsgid. */
                 if ((attr->la_valid & LA_GID) && (attr->la_gid != -1))
                         attr->la_gid = uc->mu_fsgid;
-        } else if (med->med_rmtclient) {
+        } else if (exp_connect_rmtclient(info->mti_exp)) {
                 /* NB: -1 case will be handled by mdt_fix_attr() later. */
                 if ((attr->la_valid & LA_UID) && (attr->la_uid != -1)) {
                         uid_t uid = lustre_idmap_lookup_uid(uc, idmap, 0,

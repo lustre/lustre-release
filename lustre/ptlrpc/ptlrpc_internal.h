@@ -81,7 +81,7 @@ void ptlrpc_lprocfs_do_request_stat (struct ptlrpc_request *req,
 
 /* recovd_thread.c */
 
-int ptlrpc_expire_one_request(struct ptlrpc_request *req);
+int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink);
 
 /* pers.c */
 void ptlrpc_fill_bulk_md(lnet_md_t *md, struct ptlrpc_bulk_desc *desc);
@@ -124,8 +124,17 @@ int  sptlrpc_lproc_init(void);
 void sptlrpc_lproc_fini(void);
 
 /* sec_gc.c */
-int sptlrpc_gc_start_thread(void);
-void sptlrpc_gc_stop_thread(void);
+int sptlrpc_gc_init(void);
+void sptlrpc_gc_fini(void);
+
+/* sec_config.c */
+void sptlrpc_conf_choose_flavor(enum lustre_sec_part from,
+                                enum lustre_sec_part to,
+                                struct obd_uuid *target,
+                                lnet_nid_t nid,
+                                struct sptlrpc_flavor *sf);
+int  sptlrpc_conf_init(void);
+void sptlrpc_conf_fini(void);
 
 /* sec.c */
 int  __init sptlrpc_init(void);

@@ -89,7 +89,7 @@ static int mdc_obd_update(struct obd_device *host,
                 CDEBUG(D_INFO, "Update connect_flags: "LPX64"\n",
                        conn_data->ocd_connect_flags);
         }
-        
+
         RETURN(rc);
 }
 /* MDC OBD is set up already and connected to the proper MDS
@@ -146,9 +146,9 @@ static int mdc_obd_add(const struct lu_env *env,
                 ocd->ocd_ibits_known = MDS_INODELOCK_UPDATE;
                 ocd->ocd_connect_flags = OBD_CONNECT_VERSION |
                                          OBD_CONNECT_ACL |
-                                         OBD_CONNECT_LCL_CLIENT | 
+                                         OBD_CONNECT_RMT_CLIENT |
                                          OBD_CONNECT_MDS_CAPA |
-                                         OBD_CONNECT_OSS_CAPA | 
+                                         OBD_CONNECT_OSS_CAPA |
                                          OBD_CONNECT_IBITS |
                                          OBD_CONNECT_MDS_MDS |
                                          OBD_CONNECT_FID |
@@ -173,7 +173,7 @@ static int mdc_obd_add(const struct lu_env *env,
                                 mdc->obd_upcall.onu_upcall = mdc_obd_update;
                         }
                 }
-                
+
                 if (rc) {
                         obd_disconnect(desc->cl_exp);
                         desc->cl_exp = NULL;
@@ -205,7 +205,7 @@ static int mdc_obd_del(const struct lu_env *env, struct mdc_device *mc,
                 mdc_obd->obd_force = mdt_obd->obd_force;
                 mdc_obd->obd_fail = 0;
         }
-        
+
         rc = obd_fid_fini(desc->cl_exp);
         if (rc)
                 CERROR("Fid fini error %d\n", rc);
@@ -246,7 +246,7 @@ static int mdc_process_config(const struct lu_env *env,
 }
 
 static const struct lu_device_operations mdc_lu_ops = {
-	.ldo_object_alloc   = mdc_object_alloc,
+        .ldo_object_alloc   = mdc_object_alloc,
         .ldo_process_config = mdc_process_config
 };
 
@@ -254,12 +254,12 @@ void cmm_mdc_init_ea_size(const struct lu_env *env, struct mdc_device *mc,
                       int max_mdsize, int max_cookiesize)
 {
         struct obd_device *obd = class_exp2obd(mc->mc_desc.cl_exp);
-       
+
         obd->u.cli.cl_max_mds_easize = max_mdsize;
         obd->u.cli.cl_max_mds_cookiesize = max_cookiesize;
 }
 
-static int mdc_device_init(const struct lu_env *env, struct lu_device *ld, 
+static int mdc_device_init(const struct lu_env *env, struct lu_device *ld,
                            const char *name, struct lu_device *next)
 {
         return 0;
@@ -286,10 +286,9 @@ static struct lu_device *mdc_device_alloc(const struct lu_env *env,
         } else {
                 md_device_init(&mc->mc_md_dev, ldt);
                 mc->mc_md_dev.md_ops = &mdc_md_ops;
-	        ld = mdc2lu_dev(mc);
+                ld = mdc2lu_dev(mc);
                 ld->ld_ops = &mdc_lu_ops;
                 sema_init(&mc->mc_fid_sem, 1);
-
         }
 
         RETURN (ld);
@@ -300,7 +299,7 @@ static struct lu_device *mdc_device_free(const struct lu_env *env,
 {
         struct mdc_device *mc = lu2mdc_dev(ld);
 
-	LASSERTF(atomic_read(&ld->ld_ref) == 0,
+        LASSERTF(atomic_read(&ld->ld_ref) == 0,
                  "Refcount = %i\n", atomic_read(&ld->ld_ref));
         LASSERT(list_empty(&mc->mc_linkage));
         md_device_fini(&mc->mc_md_dev);

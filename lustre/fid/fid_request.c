@@ -63,13 +63,13 @@
 #include <lustre_mdc.h>
 #include "fid_internal.h"
 
-static int seq_client_rpc(struct lu_client_seq *seq, struct lu_range *input,
-                          struct lu_range *output, __u32 opc,
+static int seq_client_rpc(struct lu_client_seq *seq, struct lu_seq_range *input,
+                          struct lu_seq_range *output, __u32 opc,
                           const char *opcname)
 {
         struct obd_export     *exp = seq->lcs_exp;
         struct ptlrpc_request *req;
-        struct lu_range       *out, *in;
+        struct lu_seq_range       *out, *in;
         __u32                 *op;
         int                    rc;
         ENTRY;
@@ -88,16 +88,20 @@ static int seq_client_rpc(struct lu_client_seq *seq, struct lu_range *input,
         if (input != NULL)
                 *in = *input;
         else
-                range_zero(in);
+                range_init(in);
 
         ptlrpc_request_set_replen(req);
 
         if (seq->lcs_type == LUSTRE_SEQ_METADATA) {
                 req->rq_request_portal = (opc == SEQ_ALLOC_SUPER) ?
                         SEQ_CONTROLLER_PORTAL : SEQ_METADATA_PORTAL;
+                /* update mdt field of *in, it is required for fld update
+                 * on super sequence allocator node. */
+                if (opc == SEQ_ALLOC_SUPER)
+                        in->lsr_mdt = seq->lcs_space.lsr_mdt;
         } else {
-                req->rq_request_portal = (opc == SEQ_ALLOC_SUPER) ?
-                        SEQ_CONTROLLER_PORTAL : SEQ_DATA_PORTAL;
+                LASSERT(opc == SEQ_ALLOC_META);
+                req->rq_request_portal = SEQ_DATA_PORTAL;
         }
         ptlrpc_at_set_req_timeout(req);
 
@@ -135,7 +139,7 @@ out_req:
 
 /* Request sequence-controller node to allocate new super-sequence. */
 int seq_client_replay_super(struct lu_client_seq *seq,
-                            struct lu_range *range,
+                            struct lu_seq_range *range,
                             const struct lu_env *env)
 {
         int rc;
@@ -212,8 +216,8 @@ static int seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
         }
 
         LASSERT(!range_is_exhausted(&seq->lcs_space));
-        *seqnr = seq->lcs_space.lr_start;
-        seq->lcs_space.lr_start += 1;
+        *seqnr = seq->lcs_space.lsr_start;
+        seq->lcs_space.lsr_start += 1;
 
         CDEBUG(D_INFO, "%s: Allocated sequence ["LPX64"]\n", seq->lcs_name,
                *seqnr);
@@ -280,7 +284,14 @@ void seq_client_flush(struct lu_client_seq *seq)
         LASSERT(seq != NULL);
         down(&seq->lcs_sem);
         fid_zero(&seq->lcs_fid);
-        range_zero(&seq->lcs_space);
+        /**
+         * this id shld not be used for seq range allocation.
+         * set to -1 for dgb check.
+         */
+
+        seq->lcs_space.lsr_mdt = -1;
+
+        range_init(&seq->lcs_space);
         up(&seq->lcs_sem);
 }
 EXPORT_SYMBOL(seq_client_flush);

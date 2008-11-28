@@ -49,15 +49,15 @@
 	((it) ? ldlm_it2str((it)->it_op) : "0")
 
 struct lmv_stripe {
-        /** 
-         * Dir stripe fid. 
+        /**
+         * Dir stripe fid.
          */
         struct lu_fid           ls_fid;
-        /** 
-         * Cached home mds number for @li_fid. 
+        /**
+         * Cached home mds number for @li_fid.
          */
         mdsno_t                 ls_mds;
-        /** 
+        /**
          * Stripe object size.
          */
         unsigned long           ls_size;
@@ -78,15 +78,15 @@ struct lmv_object {
          * Sema for protecting fields.
          */
         struct semaphore        lo_guard;
-        /** 
+        /**
          * Object state like O_FREEING.
          */
         int                     lo_state;
-        /** 
-         * Object ref counter. 
+        /**
+         * Object ref counter.
          */
         atomic_t                lo_count;
-        /** 
+        /**
          * Object master fid.
          */
         struct lu_fid           lo_fid;
@@ -94,15 +94,15 @@ struct lmv_object {
          * Object hash type to find stripe by name.
          */
         __u32		        lo_hashtype;
-        /** 
-         * Number of stripes. 
+        /**
+         * Number of stripes.
          */
         int                     lo_objcount;
-        /** 
-         * Array of sub-objs. 
+        /**
+         * Array of sub-objs.
          */
         struct lmv_stripe      *lo_stripes;
-        /** 
+        /**
          * Pointer to LMV obd.
          */
         struct obd_device      *lo_obd;
@@ -233,7 +233,7 @@ lmv_find_target(struct lmv_obd *lmv, const struct lu_fid *fid)
 {
         mdsno_t mds;
         int rc;
-        
+
         rc = lmv_fld_lookup(lmv, fid, &mds);
         if (rc)
                 return ERR_PTR(rc);

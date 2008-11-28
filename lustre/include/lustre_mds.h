@@ -65,8 +65,9 @@ struct mds_group_info {
         int group;
 };
 
-/* mds/mds_reint.c */
+/* mds/mds_lov.c */
 int mds_lov_write_objids(struct obd_device *obd);
+int mds_lov_prepare_objids(struct obd_device *obd, struct lov_mds_md *lmm);
 void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm);
 
 

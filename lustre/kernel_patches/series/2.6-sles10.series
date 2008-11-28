@@ -10,7 +10,9 @@ export_symbol_numa-2.6-fc5.patch
 blkdev_tunables-2.6-sles10.patch
 jbd-stats-2.6-sles10.patch
 i_filter_data.patch
+quota-fix-oops-in-invalidate_dquots.patch
 jbd-journal-chksum-2.6-sles10.patch
 proc-sleep-2.6.16-sles10.patch 
 export-nr_free_buffer_pages.patch 
 fmode-exec-2.6-sles10.patch
+quota-large-limits-sles10.patch

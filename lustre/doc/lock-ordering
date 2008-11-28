@@ -1,0 +1,309 @@
+/* this is dot(1) input file for lock-ordering diagram */
+/* it should be passed through C preprocessor first */
+/* cpp -P -DFITPAGE lock-ordering | tred | dot -Tps | gv -media a4 - */
+
+/*
+sb->s_umount
+    libcfs_nidstring_lock
+    obd_dev_lock
+    g_uuid_lock
+    obd_types_lock
+    type->obd_type_lock
+    obd->obd_dev_lock
+    handle_base_lock
+    bucket->lock
+    _lprocfs_lock
+    the_lnet.ln_lock
+        request->rq_lock
+    ptlrpc_all_services_lock
+    service->srv_lock
+    shrinker_rwsem
+    conn_lock
+        hash_body->lchb_hash_tables[i].lhb_lock
+    hash_body->lchb_hash_tables[i].lhb_lock
+    imp->imp_lock
+    olg->olg_lock
+    cli->cl_sem
+        handle_base_lock
+        bucket->lock
+        obd->obd_dev_lock
+            ref->lf_guard
+            hash_body->lchb_hash_tables[i].lhb_lock
+        h->h_lock
+        _lprocfs_lock
+        imp->imp_lock
+            h->h_lock
+        policy_lock
+        null_sec.ps_lock
+        ptlrpc_last_xid_lock
+        set->set_new_req_lock
+    h->h_lock
+    ns->ns_hash_lock
+    ns->ns_unused_lock
+    lock->l_lock
+    null_sec.ps_lock
+    ptlrpc_last_xid_lock
+    request->rq_lock
+    ksocknal_data.ksnd_global_lock
+    at->at_lock
+    fld->lcf_lock
+    obd->obd_pool_lock
+    obd->obd_osfs_lock
+    lov->lov_qos.lq_rw_sem
+    sbi->ll_lco.lco_lock
+    cache->fci_lock
+    inode_lock
+    dcache_lock
+        dentry->d_lock
+slock-AF_INET/1
+    ksocknal_data.ksnd_global_lock
+        ksocknal_data.ksnd_connd_lock
+        kss->kss_lock
+pl->pl_lock
+    obd->obd_pool_lock
+inode->i_mutex
+    ns->ns_unused_lock
+    ns->ns_hash_lock
+    imp->imp_lock
+    null_sec.ps_lock
+    ptlrpc_last_xid_lock
+    bucket->lock
+    lock->l_lock
+        res->lr_lock
+            ns->ns_unused_lock
+            bucket->lock
+                h->h_lock
+            res->lr_lock/1
+            inode_lock
+            osc_ast_guard_class
+                ref->lf_guard
+    ksocknal_data.ksnd_global_lock
+    at->at_lock
+    h->h_lock
+    blp->blp_lock
+    cache->fci_lock
+    obd->obd_pool_lock
+    fld->lcf_lock
+    pl->pl_lock
+    lu_site_guard_class
+    files_lock
+lov->lo_type_guard
+    h->coh_lock_guard
+    ref->lf_guard
+    cl_lock_guard_class
+        ref->lf_guard
+        cl_lock_guard_class#2
+            cl_lock_guard_class#2
+            ref->lf_guard
+            ns->ns_hash_lock
+            ns->ns_unused_lock
+            imp->imp_lock
+            null_sec.ps_lock
+            ptlrpc_last_xid_lock
+            handle_base_lock
+            bucket->lock
+            lock->l_lock
+            set->set_new_req_lock
+            h->h_lock
+        h->coh_lock_guard
+        h->coh_page_guard
+
+*/
+#define CATTR fontsize=8 /*, fontname=Helvetica */
+#define NATTR CATTR
+#define EATTR CATTR
+
+#define SYSATTR color=yellow, style=filled
+#define PSEUDOATTR color=pink, style=filled, peripheries=2
+
+#define BLOCKATTR shape=ellipse
+#define SPINATTR shape=box
+
+#define CONDATTR color=blue, peripheries=2, BLOCKATTR
+
+#define MARKBLOCK(name) /* name -> schedulable [style=invis, weight=0] */
+
+#define SBLOCK(name, l) name [label=l, NATTR, BLOCKATTR, SYSATTR]; MARKBLOCK(name)
+
+#define SPSEUDO(name) name [NATTR, BLOCKATTR, PSEUDOATTR]; MARKBLOCK(name)
+
+#define LBLOCK(name, l) name [label=l, NATTR, BLOCKATTR]; MARKBLOCK(name)
+
+#define RCOND(name, l) name [label=l, NATTR, CONDATTR]; MARKBLOCK(name)
+
+#define MARKSPIN(name) /* schedulable -> name [style=invis, weight=0] */
+
+#define SSPIN(name, l) name [label=l, NATTR, SYSATTR, SPINATTR]; MARKSPIN(name)
+#define LSPIN(name, l) name [label=l, NATTR, SPINATTR]; MARKSPIN(name)
+
+#define ARC(from, to, func, ...) from -> to [EATTR, label=func, ## __VA_ARGS__]
+
+digraph locks {
+
+    subgraph blocking {
+        SBLOCK(sb__s_umount, "sb->s_umount")
+        LBLOCK(_lprocfs_lock, "_lprocfs_lock")
+        LBLOCK(cli__cl_sem, "cli->cl_sem")
+        SBLOCK(shrinker_rwsem, "shrinker_rwsem")
+        LBLOCK(lov__lov_qos_lq_rw_sem, "lov->lov_qos.lq_rw_sem")
+        SBLOCK(inode__i_mutex, "inode->i_mutex")
+        LBLOCK(lov__lo_type_guard, "lov->lo_type_guard")
+        LBLOCK(cl_lock_guard_class, "cl_lock_guard_class")
+    }
+
+    subgraph spin {
+        LSPIN(h__coh_lock_guard, "h->coh_lock_guard")
+        LSPIN(h__coh_page_guard, "h->coh_page_guard")
+        LSPIN(libcfs_nidstring_lock, "libcfs_nidstring_lock")
+        LSPIN(obd_dev_lock, "obd_dev_lock")
+        LSPIN(g_uuid_lock, "g_uuid_lock")
+        LSPIN(obd_types_lock, "obd_types_lock")
+        LSPIN(obd_type__obd_type_lock, "obd_type->obd_type_lock")
+        LSPIN(obd__obd_dev_lock, "obd->obd_dev_lock")
+        LSPIN(handle_base_lock, "handle_base_lock")
+        LSPIN(bucket__lock, "bucket->lock")
+        LSPIN(the_lnet_ln_lock, "the_lnet.ln_lock")
+        LSPIN(request__rq_lock, "request->rq_lock")
+        LSPIN(hash_body__lchb_hash_tables_i__lhb_lock, "hash_body->lchb_hash_tables[i].lhb_lock")
+        LSPIN(imp__imp_lock, "imp->imp_lock")
+        LSPIN(ref__lf_guard, "ref->lf_guard")
+        LSPIN(h__h_lock, "h->h_lock")
+        LSPIN(null_sec_ps_lock, "null_sec.ps_lock")
+        LSPIN(set__set_new_req_lock, "set->set_new_req_lock")
+        LSPIN(ns__ns_hash_lock, "ns->ns_hash_lock")
+        LSPIN(ns__ns_unused_lock, "ns->ns_unused_lock")
+        LSPIN(lock__l_lock, "lock->l_lock")
+        LSPIN(ksocknal_data_ksnd_global_lock, "ksocknal_data.ksnd_global_lock")
+        LSPIN(at__at_lock, "at->at_lock")
+        LSPIN(fld__lcf_lock, "fld->lcf_lock")
+        LSPIN(obd__obd_pool_lock, "obd->obd_pool_lock")
+        LSPIN(service__srv_lock, "service->srv_lock")
+        LSPIN(obd__obd_osfs_lock, "obd->obd_osfs_lock")
+        LSPIN(sbi__ll_lco_lco_lock, "sbi->ll_lco.lco_lock")
+        LSPIN(cache__fci_lock, "cache->fci_lock")
+        SSPIN(inode_lock, "inode_lock")
+        SSPIN(dcache_lock, "dcache_lock")
+        SSPIN(dentry__d_lock, "dentry->d_lock")
+        LSPIN(ksocknal_data_ksnd_connd_lock, "ksocknal_data.ksnd_connd_lock")
+        LSPIN(kss__kss_lock, "kss->kss_lock")
+        LSPIN(pl__pl_lock, "pl->pl_lock")
+        LSPIN(osc_ast_guard_class, "osc_ast_guard_class")
+        LSPIN(blp__blp_lock, "blp->blp_lock")
+        LSPIN(lu_site_guard_class, "lu_site_guard_class")
+        SSPIN(files_lock, "files_lock")
+        LSPIN(ptlrpc_all_services_lock, "ptlrpc_all_services_lock")
+        LSPIN(conn_lock, "conn_lock")
+        LSPIN(olg__olg_lock, "olg->olg_lock")
+        LSPIN(policy_lock, "policy_lock")
+        LSPIN(ptlrpc_last_xid_lock, "ptlrpc_last_xid_lock")
+    }
+
+ARC(sb__s_umount, libcfs_nidstring_lock, "")
+ARC(sb__s_umount, obd_dev_lock, "")
+ARC(sb__s_umount, g_uuid_lock, "")
+ARC(sb__s_umount, obd_types_lock, "")
+ARC(sb__s_umount, type__obd_type_lock, "")
+ARC(sb__s_umount, obd__obd_dev_lock, "")
+ARC(sb__s_umount, handle_base_lock, "")
+ARC(sb__s_umount, bucket__lock, "")
+ARC(sb__s_umount, _lprocfs_lock, "")
+ARC(sb__s_umount, the_lnet_ln_lock, "")
+ARC(sb__s_umount, ptlrpc_all_services_lock, "")
+ARC(sb__s_umount, service__srv_lock, "")
+ARC(sb__s_umount, shrinker_rwsem, "")
+ARC(sb__s_umount, conn_lock, "")
+ARC(sb__s_umount, hash_body__lchb_hash_tables_i__lhb_lock, "")
+ARC(sb__s_umount, imp__imp_lock, "")
+ARC(sb__s_umount, olg__olg_lock, "")
+ARC(sb__s_umount, cli__cl_sem, "")
+ARC(sb__s_umount, h__h_lock, "")
+ARC(sb__s_umount, ns__ns_hash_lock, "")
+ARC(sb__s_umount, ns__ns_unused_lock, "")
+ARC(sb__s_umount, lock__l_lock, "")
+ARC(sb__s_umount, null_sec_ps_lock, "")
+ARC(sb__s_umount, ptlrpc_last_xid_lock, "")
+ARC(sb__s_umount, request__rq_lock, "")
+ARC(sb__s_umount, ksocknal_data_ksnd_global_lock, "")
+ARC(sb__s_umount, at__at_lock, "")
+ARC(sb__s_umount, fld__lcf_lock, "")
+ARC(sb__s_umount, obd__obd_pool_lock, "")
+ARC(sb__s_umount, obd__obd_osfs_lock, "")
+ARC(sb__s_umount, lov__lov_qos_lq_rw_sem, "")
+ARC(sb__s_umount, sbi__ll_lco_lco_lock, "")
+ARC(sb__s_umount, cache__fci_lock, "")
+ARC(sb__s_umount, inode_lock, "")
+ARC(sb__s_umount, dcache_lock, "")
+
+ARC(the_lnet_ln_lock, request__rq_lock, "")
+ARC(conn_lock, hash_body__lchb_hash_tables_i__lhb_lock, "")
+ARC(cli__cl_sem, handle_base_lock, "")
+ARC(cli__cl_sem, bucket__lock, "")
+ARC(cli__cl_sem, obd__obd_dev_lock, "")
+ARC(cli__cl_sem, h__h_lock, "")
+ARC(cli__cl_sem, _lprocfs_lock, "")
+ARC(cli__cl_sem, imp__imp_lock, "")
+ARC(cli__cl_sem, policy_lock, "")
+ARC(cli__cl_sem, null_sec_ps_lock, "")
+ARC(cli__cl_sem, ptlrpc_last_xid_lock, "")
+ARC(cli__cl_sem, set__set_new_req_lock, "")
+
+ARC(obd__obd_dev_lock, ref__lf_guard, "")
+ARC(obd__obd_dev_lock, hash_body__lchb_hash_tables_i__lhb_lock, "")
+ARC(imp__imp_lock, h__h_lock, "")
+
+ARC(dcache_lock, dentry__d_lock, "")
+
+ARC(ksocknal_data_ksnd_global_lock, ksocknal_data_ksnd_connd_lock, "")
+ARC(ksocknal_data_ksnd_global_lock, kss__kss_lock, "")
+ARC(pl__pl_lock, obd__obd_pool_lock, "")
+
+ARC(inode__i_mutex, ns__ns_unused_lock, "")
+ARC(inode__i_mutex, ns__ns_hash_lock, "")
+ARC(inode__i_mutex, imp__imp_lock, "")
+ARC(inode__i_mutex, null_sec_ps_lock, "")
+ARC(inode__i_mutex, ptlrpc_last_xid_lock, "")
+ARC(inode__i_mutex, bucket__lock, "")
+ARC(inode__i_mutex, lock__l_lock, "")
+ARC(inode__i_mutex, ksocknal_data_ksnd_global_lock, "")
+ARC(inode__i_mutex, at__at_lock, "")
+ARC(inode__i_mutex, h__h_lock, "")
+ARC(inode__i_mutex, blp__blp_lock, "")
+ARC(inode__i_mutex, cache__fci_lock, "")
+ARC(inode__i_mutex, obd__obd_pool_lock, "")
+ARC(inode__i_mutex, fld__lcf_lock, "")
+ARC(inode__i_mutex, pl__pl_lock, "")
+ARC(inode__i_mutex, lu_site_guard_class, "")
+ARC(inode__i_mutex, files_lock, "")
+
+ARC(lock__l_lock, res__lr_lock, "")
+ARC(res__lr_lock, ns__ns_unused_lock, "")
+ARC(res__lr_lock, bucket__lock, "")
+ARC(res__lr_lock, res__lr_lock, "")
+ARC(res__lr_lock, inode_lock, "")
+ARC(res__lr_lock, osc_ast_guard_class, "")
+
+ARC(osc_ast_guard_class, ref__lf_guard, "")
+ARC(bucket__lock, h__h_lock, "")
+
+ARC(cl_lock_guard_class, cl_lock_guard_class, "")
+ARC(cl_lock_guard_class, ref__lf_guard, "")
+ARC(cl_lock_guard_class, ns__ns_hash_lock, "")
+ARC(cl_lock_guard_class, ns__ns_unused_lock, "")
+ARC(cl_lock_guard_class, imp__imp_lock, "")
+ARC(cl_lock_guard_class, null_sec_ps_lock, "")
+ARC(cl_lock_guard_class, ptlrpc_last_xid_lock, "")
+ARC(cl_lock_guard_class, handle_base_lock, "")
+ARC(cl_lock_guard_class, bucket__lock, "")
+ARC(cl_lock_guard_class, lock__l_lock, "")
+ARC(cl_lock_guard_class, set__set_new_req_lock, "")
+ARC(cl_lock_guard_class, h__h_lock, "")
+ARC(cl_lock_guard_class, ref__lf_guard, "")
+ARC(cl_lock_guard_class, cl_lock_guard_class, "")
+ARC(cl_lock_guard_class, h__coh_lock_guard, "")
+ARC(cl_lock_guard_class, h__coh_page_guard, "")
+
+ARC(lov__lo_type_guard, h__coh_lock_guard, "")
+ARC(lov__lo_type_guard, ref__lf_guard, "")
+ARC(lov__lo_type_guard, cl_lock_guard_class, "")
+
+}

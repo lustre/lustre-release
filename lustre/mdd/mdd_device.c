@@ -53,6 +53,8 @@
 #include <obd_support.h>
 #include <lprocfs_status.h>
 
+#include <lustre_disk.h>
+#include <lustre_fid.h>
 #include <linux/ldiskfs_fs.h>
 #include <lustre_mds.h>
 #include <lustre/lustre_idl.h>
@@ -62,7 +64,8 @@
 
 const struct md_device_operations mdd_ops;
 
-static const char *mdd_root_dir_name = "root";
+static const char mdd_root_dir_name[] = "ROOT";
+
 static int mdd_device_init(const struct lu_env *env, struct lu_device *d,
                            const char *name, struct lu_device *next)
 {
@@ -87,7 +90,7 @@ static int mdd_device_init(const struct lu_env *env, struct lu_device *d,
 static struct lu_device *mdd_device_fini(const struct lu_env *env,
                                          struct lu_device *d)
 {
-	struct mdd_device *mdd = lu2mdd_dev(d);
+        struct mdd_device *mdd = lu2mdd_dev(d);
         struct lu_device *next = &mdd->mdd_child->dd_lu_dev;
         int rc;
 
@@ -97,25 +100,6 @@ static struct lu_device *mdd_device_fini(const struct lu_env *env,
                 return ERR_PTR(rc);
         }
         return next;
-}
-
-static int mdd_mount(const struct lu_env *env, struct mdd_device *mdd)
-{
-        int rc;
-        struct dt_object *root;
-        ENTRY;
-
-        dt_txn_callback_add(mdd->mdd_child, &mdd->mdd_txn_cb);
-        root = dt_store_open(env, mdd->mdd_child, mdd_root_dir_name,
-                             &mdd->mdd_root_fid);
-        if (!IS_ERR(root)) {
-                LASSERT(root != NULL);
-                lu_object_put(env, &root->do_lu);
-                rc = orph_index_init(env, mdd);
-        } else
-                rc = PTR_ERR(root);
-
-        RETURN(rc);
 }
 
 static void mdd_device_shutdown(const struct lu_env *env,
@@ -146,7 +130,7 @@ static int mdd_process_config(const struct lu_env *env,
 
                 lprocfs_mdd_init_vars(&lvars);
                 rc = class_process_proc_param(PARAM_MDD, lvars.obd_vars, cfg,m);
-                if (rc == -ENOSYS)
+                if (rc > 0 || rc == -ENOSYS)
                         /* we don't understand; pass it on */
                         rc = next->ld_ops->ldo_process_config(env, next, cfg);
                 break;
@@ -162,9 +146,6 @@ static int mdd_process_config(const struct lu_env *env,
                         CERROR("lov init error %d \n", rc);
                         GOTO(out, rc);
                 }
-                rc = mdd_mount(env, m);
-                if (rc)
-                        GOTO(out, rc);
                 rc = mdd_txn_init_credits(env, m);
                 break;
         case LCFG_CLEANUP:
@@ -243,10 +224,39 @@ static int mdd_recovery_complete(const struct lu_env *env,
         RETURN(rc);
 }
 
+static int mdd_prepare(const struct lu_env *env,
+                       struct lu_device *pdev,
+                       struct lu_device *cdev)
+{
+        struct mdd_device *mdd = lu2mdd_dev(cdev);
+        struct lu_device *next = &mdd->mdd_child->dd_lu_dev;
+        struct dt_object *root;
+        int rc;
+
+        ENTRY;
+        rc = next->ld_ops->ldo_prepare(env, cdev, next);
+        if (rc)
+                GOTO(out, rc);
+
+        dt_txn_callback_add(mdd->mdd_child, &mdd->mdd_txn_cb);
+        root = dt_store_open(env, mdd->mdd_child, "", mdd_root_dir_name,
+                             &mdd->mdd_root_fid);
+        if (!IS_ERR(root)) {
+                LASSERT(root != NULL);
+                lu_object_put(env, &root->do_lu);
+                rc = orph_index_init(env, mdd);
+        } else
+                rc = PTR_ERR(root);
+
+out:
+        RETURN(rc);
+}
+
 const struct lu_device_operations mdd_lu_ops = {
-	.ldo_object_alloc      = mdd_object_alloc,
+        .ldo_object_alloc      = mdd_object_alloc,
         .ldo_process_config    = mdd_process_config,
-        .ldo_recovery_complete = mdd_recovery_complete
+        .ldo_recovery_complete = mdd_recovery_complete,
+        .ldo_prepare           = mdd_prepare,
 };
 
 /*
@@ -268,7 +278,7 @@ static int mdd_root_get(const struct lu_env *env,
 static int mdd_statfs(const struct lu_env *env, struct md_device *m,
                       struct kstatfs *sfs)
 {
-	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
+        struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
         int rc;
 
         ENTRY;
@@ -284,7 +294,7 @@ static int mdd_statfs(const struct lu_env *env, struct md_device *m,
 static int mdd_maxsize_get(const struct lu_env *env, struct md_device *m,
                            int *md_size, int *cookie_size)
 {
-	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
+        struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
         ENTRY;
 
         *md_size = mdd_lov_mdsize(env, mdd);
@@ -297,7 +307,7 @@ static int mdd_init_capa_ctxt(const struct lu_env *env, struct md_device *m,
                               int mode, unsigned long timeout, __u32 alg,
                               struct lustre_capa_key *keys)
 {
-	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
+        struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
         struct mds_obd    *mds = &mdd2obd_dev(mdd)->u.mds;
         int rc;
         ENTRY;
@@ -312,7 +322,7 @@ static int mdd_update_capa_key(const struct lu_env *env,
                                struct md_device *m,
                                struct lustre_capa_key *key)
 {
-	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
+        struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
         struct obd_export *lov_exp = mdd2obd_dev(mdd)->u.mds.mds_osc_exp;
         int rc;
         ENTRY;
@@ -406,6 +416,25 @@ const struct md_device_operations mdd_ops = {
         .mdo_maxsize_get    = mdd_maxsize_get,
         .mdo_init_capa_ctxt = mdd_init_capa_ctxt,
         .mdo_update_capa_key= mdd_update_capa_key,
+#ifdef HAVE_QUOTA_SUPPORT
+        .mdo_quota          = {
+                .mqo_notify      = mdd_quota_notify,
+                .mqo_setup       = mdd_quota_setup,
+                .mqo_cleanup     = mdd_quota_cleanup,
+                .mqo_recovery    = mdd_quota_recovery,
+                .mqo_check       = mdd_quota_check,
+                .mqo_on          = mdd_quota_on,
+                .mqo_off         = mdd_quota_off,
+                .mqo_setinfo     = mdd_quota_setinfo,
+                .mqo_getinfo     = mdd_quota_getinfo,
+                .mqo_setquota    = mdd_quota_setquota,
+                .mqo_getquota    = mdd_quota_getquota,
+                .mqo_getoinfo    = mdd_quota_getoinfo,
+                .mqo_getoquota   = mdd_quota_getoquota,
+                .mqo_invalidate  = mdd_quota_invalidate,
+                .mqo_finvalidate = mdd_quota_finvalidate
+        }
+#endif
 };
 
 static struct lu_device_type_operations mdd_device_type_ops = {
@@ -446,16 +475,45 @@ static void mdd_key_fini(const struct lu_context *ctx,
 /* context key: mdd_thread_key */
 LU_CONTEXT_KEY_DEFINE(mdd, LCT_MD_THREAD);
 
+static struct lu_local_obj_desc llod_capa_key = {
+        .llod_name      = CAPA_KEYS,
+        .llod_oid       = MDD_CAPA_KEYS_OID,
+        .llod_is_index  = 0,
+};
+
+static struct lu_local_obj_desc llod_mdd_orphan = {
+        .llod_name      = orph_index_name,
+        .llod_oid       = MDD_ORPHAN_OID,
+        .llod_is_index  = 1,
+        .llod_feat      = &dt_directory_features,
+};
+
+static struct lu_local_obj_desc llod_mdd_root = {
+        .llod_name      = mdd_root_dir_name,
+        .llod_oid       = MDD_ROOT_INDEX_OID,
+        .llod_is_index  = 1,
+        .llod_feat      = &dt_directory_features,
+};
+
 static int __init mdd_mod_init(void)
 {
         struct lprocfs_static_vars lvars;
         lprocfs_mdd_init_vars(&lvars);
+
+        llo_local_obj_register(&llod_capa_key);
+        llo_local_obj_register(&llod_mdd_orphan);
+        llo_local_obj_register(&llod_mdd_root);
+
         return class_register_type(&mdd_obd_device_ops, NULL, lvars.module_vars,
                                    LUSTRE_MDD_NAME, &mdd_device_type);
 }
 
 static void __exit mdd_mod_exit(void)
 {
+        llo_local_obj_unregister(&llod_capa_key);
+        llo_local_obj_unregister(&llod_mdd_orphan);
+        llo_local_obj_unregister(&llod_mdd_root);
+
         class_unregister_type(LUSTRE_MDD_NAME);
 }
 

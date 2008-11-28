@@ -1,3 +1,7 @@
+Export more statistics from the SCSI layer.
+
+A nice to have patch, but not required for Lustre to work.
+
 Index: linux-2.6.22.19/drivers/scsi/Kconfig
 ===================================================================
 --- linux-2.6.22.19.orig/drivers/scsi/Kconfig

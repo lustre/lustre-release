@@ -1,8 +1,8 @@
 tbd  Sun Microsystems, Inc.
        * version 2.0.0
        * Support for kernels:
-        2.6.16.60-0.27 (SLES 10),
-        2.6.18-92.1.10.el5 (RHEL 5),
+        2.6.16.60-0.31 (SLES 10),
+        2.6.18-92.1.17.el5 (RHEL 5),
         2.6.22.14 vanilla (kernel.org).
        * Client support for unpatched kernels:
 	 (see http://wiki.lustre.org/index.php?title=Patchless_Client)
@@ -12,6 +12,59 @@ tbd  Sun Microsystems, Inc.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
+
+Severity   : enhancement
+Bugzilla   : 15957
+Description: compact fld format with extents
+Details    : Store range of seq rather than every seq in FLD. Seq
+             controller update FLD rather than clients. In Case of CMD, mdt0
+             has FLD, all other metadata server act as non persistent proxy
+             for FLD queries and cache fld entries in fld cache.
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 16081
+Description: don't skip ost target if they assigned to file
+Details    : Drop slow OSCs if we can, but not for requested start idx.
+             This means "if OSC is slow and it is not the requested
+             start OST, then it can be skipped, otherwise skip it only
+             if it is inactive/recovering/out-of-space.
+
+Severity   : normal
+Bugzilla   : 16080
+Description: more cleanup in mds_lov
+Details    : not send LOV EA under replay, we can't know about they size at this
+             time. Don't allow client connect to mds before any ost connected,
+             for avoid problems with LOV EA size and returning EIO to client.
+
+Severity   : enhancement
+Bugzilla   : 11826
+Description: Interoperability at server side (Disk interoperability)
+
+Severity   : enhancement
+Bugzilla   : 17201
+Description: Update to RHEL5 kernel-2.6.18-92.1.17.el5.
+ 
+Severity   : enhancement
+Bugzilla   : 17458
+Description: Update to SLES10 SP2 kernel-2.6.16.60-0.31.
+
+Severity   : enhancement
+Bugzilla   : 14166
+Description: New client IO stack (CLIO).
+
+Severity   : enhancement
+Bugzilla   : 15393
+Description: Commit on sharing. Eliminate inter-client dependencies between
+	     uncommitted transactions by doing transaction commits.
+	     Thereby clients may recovery independently.
+
+Severity   : normal
+Frequency  : Create a symlink file with a very long name
+Bugzilla   : 16578
+Description: ldlm_cancel_pack()) ASSERTION(max >= dlm->lock_count + count)
+Details    : If there is no extra space in the request for early cancels,
+             ldlm_req_handles_avail() returns 0 instead of a negative value.
 
 Severity   : enhancement
 Bugzilla   : 1819
@@ -44,6 +97,15 @@ Bugzilla   : 16561
 Description: Hitting mdc_commit_close() ASSERTION
 Details    : Properly handle request reference release in
 	     ll_release_openhandle().
+
+Severity   : major
+Bugzilla   : 14840
+Description: quota recovery deadlock during mds failover
+Details    : This patch includes att18982, att18236, att18237 in bz14840.
+             Slove the problems:
+             1. fix osts hang when mds does failover with quotaon
+             2. prevent watchdog storm when osts threads wait for the
+	        recovery of mds
 
 Severity   : normal
 Bugzilla   : 15975
@@ -114,6 +176,7 @@ Details    : When connection is reused this not moved from CONN_UNUSED_HASH
 	     into CONN_USED_HASH and this prodice warning when put connection
 	     again in unused hash.
 
+
 Severity   : enhancement
 Bugzilla   : 15899
 Description: File striping can now be set to use an arbitrary pool of OSTs.
@@ -127,6 +190,23 @@ Bugzilla   : 16237
 Description: Early reply size mismatch, MGC loses connection
 Details    : Apply the MGS_CONNECT_SUPPORTED mask at reconnect time so
 	     the connect flags are properly negotiated.
+
+Severity   : normal
+Frequency  : often
+Bugzilla   : 16125
+Description: quotas are not honored with O_DIRECT
+Details    : all writes with the flag O_DIRECT will use grants which leads to
+	     this problem. Now using OBD_BRW_SYNC to guard this.
+
+Severity   : normal
+Bugzilla   : 15058
+Description: add quota statistics
+Details    : 1. sort out quota proc entries and proc code.
+	     2. add quota statistics
+
+Severity   : enhancement
+Bugzilla   : 13058
+Description: enable quota support for HEAD.
 
 Severity   : normal
 Bugzilla   : 16006
@@ -1549,9 +1629,9 @@ Details    : Kill unused ldlm_handle2lock_ns() function.
 Severity   : normal
 Bugzilla   : 16450
 Description: Add lu_ref support to ldlm_lock
-Details    : lu_ref support for ldlm_lock and ldlm_resource. See lu_ref patch. 
-        lu_ref fields ->l_reference and ->lr_reference are added to ldlm_lock 
-        and ldlm_resource. LDLM interface has to be changed, because code that 
+Details    : lu_ref support for ldlm_lock and ldlm_resource. See lu_ref patch.
+        lu_ref fields ->l_reference and ->lr_reference are added to ldlm_lock
+        and ldlm_resource. LDLM interface has to be changed, because code that
         releases a reference on a lock, has to "know" what reference this is.
         In the most frequent case
 
@@ -1559,12 +1639,12 @@ Details    : lu_ref support for ldlm_lock and ldlm_resource. See lu_ref patch.
                 ...
                 LDLM_LOCK_PUT(lock);
 
-        no changes are required. When any other reference (received _not_ from 
-        ldlm_handle2lock()) is released, LDLM_LOCK_RELEASE() has to be called 
+        no changes are required. When any other reference (received _not_ from
+        ldlm_handle2lock()) is released, LDLM_LOCK_RELEASE() has to be called
         instead of LDLM_LOCK_PUT().
 
         Arguably, changes are pervasive, and interface requires some discipline
-        for proper use. On the other hand, it was very instrumental in finding 
+        for proper use. On the other hand, it was very instrumental in finding
         a few leaked lock references.
 
 Severity   : normal
@@ -1577,7 +1657,7 @@ Details    : Introduce ldlm_lock_addref_try() function (used by CLIO) that
 Severity   : normal
 Bugzilla   : 16450
 Description: Add ldlm_weigh_callback().
-Details    : Add new ->l_weigh_ast() call-back to ldlm_lock. It is called 
+Details    : Add new ->l_weigh_ast() call-back to ldlm_lock. It is called
         by ldlm_cancel_shrink_policy() to estimate lock "value", instead of
         hard-coded `number of pages' logic.
 
@@ -1617,8 +1697,8 @@ Details    : Introduce new lu_context functions that are needed on the client
 Severity   : normal
 Bugzilla   : 16450
 Description: Add start and stop methods to lu_device_type_operations.
-Details    : Introduce two new methods in lu_device_type_operations, that are 
-        invoked  when first instance of a given type is created and last one 
+Details    : Introduce two new methods in lu_device_type_operations, that are
+        invoked  when first instance of a given type is created and last one
         is destroyed respectively. This is need by CLIO.
 
 Severity   : normal
@@ -1663,7 +1743,7 @@ Severity   : normal
 Bugzilla   : 16450
 Description: Introduce struct md_site and move meta-data specific parts of
 	     struct lu_site here.
-Details    : Move md-specific fields out of struct lu_site into special struct 
+Details    : Move md-specific fields out of struct lu_site into special struct
         md_site, so that lu_site can be used on a client.
 
 Severity   : minor
@@ -1747,9 +1827,39 @@ Severity   : normal
 Bugzilla   : 17197
 Description: (rw.c:1323:ll_read_ahead_pages()) ASSERTION(page_idx > ria->ria_stoff) failed
 Details    : Once the unmatched stride IO mode is detected, shrink the stride-ahead
-	     window to 0. If it does hit cache miss, and read-pattern is still 
-	     stride-io mode, does not reset the stride window, but also does not 
+	     window to 0. If it does hit cache miss, and read-pattern is still
+	     stride-io mode, does not reset the stride window, but also does not
 	     increase the stride window length in this case.
+
+Severity   : normal
+Bugzilla   : 16438
+Frequency  : only for big-endian servers
+Description: Check if system is big-endian while mounting fs with extents feature
+Details    : Mounting a filesystem with extents feature will fail on big-endian
+             systems since ext3-based ldiskfs is not supported on big-endian
+             systems. This can be over-riden with "bigendian_extents" mount option.
+
+Severity   : enhancement
+Bugzilla   : 12749
+Description: The root squash functionality
+Details    : A security feature, which is to prevent users from being able
+             to mount lustre on their desktop, run as root, and delete
+             all of the files in the filesystem. The goal is accomplished by
+             remapping user id (UID) and group id (GID) of the root user to
+             a UID and GID specified by the system administartor via Lustre
+             configuration management server (MGS). The functionality also
+             allows to specify sets of clients for which the remapping does
+             not apply.
+
+Severity   : normal
+Bugzilla   : 16860
+Description: Excessive recovery window
+Details    : With AT enabled, the recovery window can be excessively long (6000+
+	     seconds). To address this problem, we no longer use
+	     OBD_RECOVERY_FACTOR when extending the recovery window (the connect
+	     timeout no longer depends on the service time, it is set to
+	     INITIAL_CONNECT_TIMEOUT now) and clients report the old service
+	     time via pb_service_time.
 
 --------------------------------------------------------------------------------
 

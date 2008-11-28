@@ -128,6 +128,9 @@ int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
         if (!filter->fo_fl_oss_capa)
                 RETURN(0);
 
+        if (!(exp->exp_connect_flags & OBD_CONNECT_OSS_CAPA))
+                RETURN(0);
+
         if (capa == NULL) {
                 if (fid)
                         CERROR("mdsno/fid/opc "LPU64"/"DFID"/"LPX64
@@ -164,8 +167,13 @@ int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
                 RETURN(rc);
         }
 
+        if (capa_is_expired_sec(capa)) {
+                DEBUG_CAPA(D_ERROR, capa, "expired");
+                RETURN(-ESTALE);
+        }
+
         spin_lock(&capa_lock);
-        list_for_each_entry(k, &filter->fo_capa_keys, k_list)
+        list_for_each_entry(k, &filter->fo_capa_keys, k_list) {
                 if (k->k_key.lk_mdsid == mdsid) {
                         keys_ready = 1;
                         if (k->k_key.lk_keyid == capa_keyid(capa)) {
@@ -174,6 +182,7 @@ int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
                                 break;
                         }
                 }
+        }
         spin_unlock(&capa_lock);
 
         if (!keys_ready) {
@@ -210,6 +219,64 @@ int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
         oc = capa_add(filter->fo_capa_hash, capa);
         capa_put(oc);
         RETURN(0);
+}
+
+int filter_capa_fixoa(struct obd_export *exp, struct obdo *oa, __u64 mdsid,
+                      struct lustre_capa *capa)
+{
+        int rc = 0;
+        ENTRY;
+
+        if (!(exp->exp_connect_flags & OBD_CONNECT_OSS_CAPA))
+                RETURN(0);
+
+        if (unlikely(!capa))
+                RETURN(-EACCES);
+
+        if (capa_flags(capa) == LC_ID_CONVERT) {
+                struct obd_device *obd = exp->exp_obd;
+                struct filter_obd *filter = &obd->u.filter;
+                struct filter_capa_key *k;
+                int found = 0;
+
+                spin_lock(&capa_lock);
+                list_for_each_entry(k, &filter->fo_capa_keys, k_list) {
+                        if (k->k_key.lk_mdsid == mdsid &&
+                            k->k_key.lk_keyid == capa_keyid(capa)) {
+                                found = 1;
+                                break;
+                        }
+                }
+                spin_unlock(&capa_lock);
+
+                if (found) {
+                        union {
+                                __u64 id64;
+                                __u32 id32[2];
+                        } uid, gid;
+                        __u32 d[4], s[4];
+
+                        uid.id64 = capa_uid(capa);
+                        gid.id64 = capa_gid(capa);
+                        s[0] = uid.id32[0];
+                        s[1] = uid.id32[1];
+                        s[2] = gid.id32[0];
+                        s[3] = gid.id32[1];
+
+                        rc = capa_decrypt_id(d, s, k->k_key.lk_key,
+                                             CAPA_HMAC_KEY_MAX_LEN);
+                        if (unlikely(rc))
+                                RETURN(rc);
+
+                        oa->o_uid = d[0];
+                        oa->o_gid = d[2];
+                } else {
+                        DEBUG_CAPA(D_ERROR, capa, "no matched capability key for");
+                        rc = -ESTALE;
+                }
+        }
+
+        RETURN(rc);
 }
 
 void filter_free_capa_keys(struct filter_obd *filter)

@@ -506,18 +506,6 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
         return NULL;
 }
 
-struct obd_device *class_find_client_notype(struct obd_uuid *tgt_uuid,
-                                            struct obd_uuid *grp_uuid)
-{
-        struct obd_device *obd;
-
-        obd = class_find_client_obd(tgt_uuid, LUSTRE_MDC_NAME, NULL);
-        if (!obd)
-                obd = class_find_client_obd(tgt_uuid, LUSTRE_OSC_NAME,
-                                            grp_uuid);
-        return obd;
-}
-
 /* Iterate the obd_device list looking devices have grp_uuid. Start
    searching at *next, and if a device is found, the next index to look
    at is saved in *next. If next is NULL, then the first matching device
@@ -550,6 +538,49 @@ struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
         return NULL;
 }
 
+/**
+ * to notify sptlrpc log for @fsname has changed, let every relevant OBD
+ * adjust sptlrpc settings accordingly.
+ */
+int class_notify_sptlrpc_conf(const char *fsname, int namelen)
+{
+        struct obd_device  *obd;
+        const char         *type;
+        int                 i, rc = 0, rc2;
+
+        LASSERT(namelen > 0);
+
+        spin_lock(&obd_dev_lock);
+        for (i = 0; i < class_devno_max(); i++) {
+                obd = class_num2obd(i);
+
+                if (obd == NULL || obd->obd_set_up == 0 || obd->obd_stopping)
+                        continue;
+
+                /* only notify mdc, osc, mdt, ost */
+                type = obd->obd_type->typ_name;
+                if (strcmp(type, LUSTRE_MDC_NAME) != 0 &&
+                    strcmp(type, LUSTRE_OSC_NAME) != 0 &&
+                    strcmp(type, LUSTRE_MDT_NAME) != 0 &&
+                    strcmp(type, LUSTRE_OST_NAME) != 0)
+                        continue;
+
+                if (strncmp(obd->obd_name, fsname, namelen))
+                        continue;
+
+                class_incref(obd, __FUNCTION__, obd);
+                spin_unlock(&obd_dev_lock);
+                rc2 = obd_set_info_async(obd->obd_self_export,
+                                         sizeof(KEY_SPTLRPC_CONF),
+                                         KEY_SPTLRPC_CONF, 0, NULL, NULL);
+                rc = rc ? rc : rc2;
+                class_decref(obd, __FUNCTION__, obd);
+                spin_lock(&obd_dev_lock);
+        }
+        spin_unlock(&obd_dev_lock);
+        return rc;
+}
+EXPORT_SYMBOL(class_notify_sptlrpc_conf);
 
 void obd_cleanup_caches(void)
 {
@@ -729,6 +760,7 @@ static void class_export_destroy(struct obd_export *exp)
 
         LASSERT(list_empty(&exp->exp_outstanding_replies));
         LASSERT(list_empty(&exp->exp_req_replay_queue));
+        LASSERT(list_empty(&exp->exp_queued_rpc));
         obd_destroy_export(exp);
         class_decref(obd, "export", exp);
 
@@ -757,6 +789,7 @@ struct obd_export *class_new_export(struct obd_device *obd,
         CFS_INIT_LIST_HEAD(&export->exp_outstanding_replies);
         CFS_INIT_LIST_HEAD(&export->exp_req_replay_queue);
         CFS_INIT_LIST_HEAD(&export->exp_handle.h_link);
+        CFS_INIT_LIST_HEAD(&export->exp_queued_rpc);
         class_handle_hash(&export->exp_handle, export_handle_addref);
         export->exp_last_request_time = cfs_time_current_sec();
         spin_lock_init(&export->exp_lock);
@@ -825,8 +858,9 @@ struct obd_import *class_import_get(struct obd_import *import)
         LASSERT(atomic_read(&import->imp_refcount) >= 0);
         LASSERT(atomic_read(&import->imp_refcount) < 0x5a5a5a);
         atomic_inc(&import->imp_refcount);
-        CDEBUG(D_INFO, "import %p refcount=%d\n", import,
-               atomic_read(&import->imp_refcount));
+        CDEBUG(D_INFO, "import %p refcount=%d obd=%s\n", import,
+               atomic_read(&import->imp_refcount), 
+               import->imp_obd->obd_name);
         return import;
 }
 EXPORT_SYMBOL(class_import_get);
@@ -839,13 +873,12 @@ void class_import_put(struct obd_import *import)
         LASSERT(atomic_read(&import->imp_refcount) < 0x5a5a5a);
         LASSERT(list_empty(&import->imp_zombie_chain));
 
-        CDEBUG(D_INFO, "import %p refcount=%d\n", import,
-               atomic_read(&import->imp_refcount) - 1);
+        CDEBUG(D_INFO, "import %p refcount=%d obd=%s\n", import,
+               atomic_read(&import->imp_refcount) - 1, 
+               import->imp_obd->obd_name);
 
         if (atomic_dec_and_test(&import->imp_refcount)) {
-
                 CDEBUG(D_INFO, "final put import %p\n", import);
-
                 spin_lock(&obd_zombie_impexp_lock);
                 list_add(&import->imp_zombie_chain, &obd_zombie_imports);
                 spin_unlock(&obd_zombie_impexp_lock);
@@ -917,6 +950,7 @@ struct obd_import *class_new_import(struct obd_device *obd)
         cfs_waitq_init(&imp->imp_recovery_waitq);
 
         atomic_set(&imp->imp_refcount, 2);
+        atomic_set(&imp->imp_unregistering, 0);
         atomic_set(&imp->imp_inflight, 0);
         atomic_set(&imp->imp_replay_inflight, 0);
         atomic_set(&imp->imp_inval_count, 0);
@@ -1164,146 +1198,6 @@ int class_disconnect_stale_exports(struct obd_device *obd,
 }
 EXPORT_SYMBOL(class_disconnect_stale_exports);
 
-int oig_init(struct obd_io_group **oig_out)
-{
-        struct obd_io_group *oig;
-        ENTRY;
-
-        OBD_ALLOC(oig, sizeof(*oig));
-        if (oig == NULL)
-                RETURN(-ENOMEM);
-
-        spin_lock_init(&oig->oig_lock);
-        oig->oig_rc = 0;
-        oig->oig_pending = 0;
-        atomic_set(&oig->oig_refcount, 1);
-        cfs_waitq_init(&oig->oig_waitq);
-        CFS_INIT_LIST_HEAD(&oig->oig_occ_list);
-
-        *oig_out = oig;
-        RETURN(0);
-};
-EXPORT_SYMBOL(oig_init);
-
-static inline void oig_grab(struct obd_io_group *oig)
-{
-        atomic_inc(&oig->oig_refcount);
-}
-
-void oig_release(struct obd_io_group *oig)
-{
-        if (atomic_dec_and_test(&oig->oig_refcount))
-                OBD_FREE(oig, sizeof(*oig));
-}
-EXPORT_SYMBOL(oig_release);
-
-int oig_add_one(struct obd_io_group *oig, struct oig_callback_context *occ)
-{
-        int rc = 0;
-        CDEBUG(D_CACHE, "oig %p ready to roll\n", oig);
-        spin_lock(&oig->oig_lock);
-        if (oig->oig_rc) {
-                rc = oig->oig_rc;
-        } else {
-                oig->oig_pending++;
-                if (occ != NULL)
-                        list_add_tail(&occ->occ_oig_item, &oig->oig_occ_list);
-        }
-        spin_unlock(&oig->oig_lock);
-        oig_grab(oig);
-
-        return rc;
-}
-EXPORT_SYMBOL(oig_add_one);
-
-void oig_complete_one(struct obd_io_group *oig,
-                      struct oig_callback_context *occ, int rc)
-{
-        cfs_waitq_t *wake = NULL;
-        int old_rc;
-
-        spin_lock(&oig->oig_lock);
-
-        if (occ != NULL)
-                list_del_init(&occ->occ_oig_item);
-
-        old_rc = oig->oig_rc;
-        if (oig->oig_rc == 0 && rc != 0)
-                oig->oig_rc = rc;
-
-        if (--oig->oig_pending <= 0)
-                wake = &oig->oig_waitq;
-
-        spin_unlock(&oig->oig_lock);
-
-        CDEBUG(D_CACHE, "oig %p completed, rc %d -> %d via %d, %d now "
-                        "pending (racey)\n", oig, old_rc, oig->oig_rc, rc,
-                        oig->oig_pending);
-        if (wake)
-                cfs_waitq_signal(wake);
-        oig_release(oig);
-}
-EXPORT_SYMBOL(oig_complete_one);
-
-static int oig_done(struct obd_io_group *oig)
-{
-        int rc = 0;
-        spin_lock(&oig->oig_lock);
-        if (oig->oig_pending <= 0)
-                rc = 1;
-        spin_unlock(&oig->oig_lock);
-        return rc;
-}
-
-static void interrupted_oig(void *data)
-{
-        struct obd_io_group *oig = data;
-        struct oig_callback_context *occ;
-
-        spin_lock(&oig->oig_lock);
-        /* We need to restart the processing each time we drop the lock, as
-         * it is possible other threads called oig_complete_one() to remove
-         * an entry elsewhere in the list while we dropped lock.  We need to
-         * drop the lock because osc_ap_completion() calls oig_complete_one()
-         * which re-gets this lock ;-) as well as a lock ordering issue. */
-restart:
-        list_for_each_entry(occ, &oig->oig_occ_list, occ_oig_item) {
-                if (occ->interrupted)
-                        continue;
-                occ->interrupted = 1;
-                spin_unlock(&oig->oig_lock);
-                occ->occ_interrupted(occ);
-                spin_lock(&oig->oig_lock);
-                goto restart;
-        }
-        spin_unlock(&oig->oig_lock);
-}
-
-int oig_wait(struct obd_io_group *oig)
-{
-        struct l_wait_info lwi = LWI_INTR(interrupted_oig, oig);
-        int rc;
-
-        CDEBUG(D_CACHE, "waiting for oig %p\n", oig);
-
-        do {
-                rc = l_wait_event(oig->oig_waitq, oig_done(oig), &lwi);
-                LASSERTF(rc == 0 || rc == -EINTR, "rc: %d\n", rc);
-                /* we can't continue until the oig has emptied and stopped
-                 * referencing state that the caller will free upon return */
-                if (rc == -EINTR)
-                        lwi = (struct l_wait_info){ 0, };
-        } while (rc == -EINTR);
-
-        LASSERTF(oig->oig_pending == 0,
-                 "exiting oig_wait(oig = %p) with %d pending\n", oig,
-                 oig->oig_pending);
-
-        CDEBUG(D_CACHE, "done waiting on oig %p rc %d\n", oig, oig->oig_rc);
-        return oig->oig_rc;
-}
-EXPORT_SYMBOL(oig_wait);
-
 void class_fail_export(struct obd_export *exp)
 {
         int rc, already_failed;
@@ -1461,7 +1355,7 @@ enum {
 /**
  * check for work for kill zombie import/export thread.
  */
-int obd_zombie_impexp_check(void *arg)
+static int obd_zombie_impexp_check(void *arg)
 {
         int rc;
 
@@ -1482,6 +1376,32 @@ static void obd_zombie_impexp_notify(void)
 {
         cfs_waitq_signal(&obd_zombie_waitq);
 }
+
+/**
+ * check whether obd_zombie is idle
+ */
+static int obd_zombie_is_idle(void)
+{
+        int rc;
+
+        LASSERT(!test_bit(OBD_ZOMBIE_STOP, &obd_zombie_flags));
+        spin_lock(&obd_zombie_impexp_lock);
+        rc = list_empty(&obd_zombie_imports) &&
+             list_empty(&obd_zombie_exports);
+        spin_unlock(&obd_zombie_impexp_lock);
+        return rc;
+}
+
+/**
+ * wait when obd_zombie import/export queues become empty
+ */
+void obd_zombie_barrier(void)
+{
+        struct l_wait_info lwi = { 0 };
+
+        l_wait_event(obd_zombie_waitq, obd_zombie_is_idle(), &lwi);
+}
+EXPORT_SYMBOL(obd_zombie_barrier);
 
 #ifdef __KERNEL__
 
@@ -1505,6 +1425,8 @@ static int obd_zombie_impexp_thread(void *unused)
                 l_wait_event(obd_zombie_waitq, !obd_zombie_impexp_check(NULL), &lwi);
 
                 obd_zombie_impexp_cull();
+                /* Notify obd_zombie_barrier callers that queues may be empty */
+                cfs_waitq_signal(&obd_zombie_waitq);
         }
 
         complete(&obd_zombie_stop);

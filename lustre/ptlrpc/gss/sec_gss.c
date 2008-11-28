@@ -1087,7 +1087,7 @@ int gss_sec_create_common(struct gss_sec *gsec,
         sec->ps_id = sptlrpc_get_next_secid();
         sec->ps_flvr = *sf;
         sec->ps_import = class_import_get(imp);
-        sec->ps_lock = SPIN_LOCK_UNLOCKED;
+        spin_lock_init(&sec->ps_lock);
         CFS_INIT_LIST_HEAD(&sec->ps_gc_list);
 
         if (!svcctx) {

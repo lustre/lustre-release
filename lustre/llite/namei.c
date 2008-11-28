@@ -123,22 +123,28 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
         if (inode) {
                 lli = ll_i2info(inode);
                 if (inode->i_state & I_NEW) {
-                        ll_read_inode2(inode, md);
-                        unlock_new_inode(inode);
-                } else {
-                        if (!(inode->i_state & (I_FREEING | I_CLEAR)))
-                                ll_update_inode(inode, md);
-                }
-                CDEBUG(D_VFSTRACE, "got inode: %lu/%u(%p) for "DFID"\n",
-                       inode->i_ino, inode->i_generation, inode,
-                       PFID(&lli->lli_fid));
-        }
+                        int rc;
 
+                        ll_read_inode2(inode, md);
+                        rc = cl_inode_init(inode, md);
+                        if (rc != 0) {
+                                md->lsm = NULL;
+                                make_bad_inode(inode);
+                                unlock_new_inode(inode);
+                                iput(inode);
+                                inode = ERR_PTR(rc);
+                        } else
+                                unlock_new_inode(inode);
+                } else if (!(inode->i_state & (I_FREEING | I_CLEAR)))
+                                ll_update_inode(inode, md);
+                CDEBUG(D_VFSTRACE, "got inode: %p for "DFID"\n",
+                       inode, PFID(&md->body->fid1));
+        }
         RETURN(inode);
 }
 
 static void ll_drop_negative_dentry(struct inode *dir)
-{ 
+{
         struct dentry *dentry, *tmp_alias, *tmp_subdir;
 
         spin_lock(&ll_lookup_lock);
@@ -438,7 +444,7 @@ int ll_lookup_it_finish(struct ptlrpc_request *request,
                    2.4 and
                    vfs_getattr_it->ll_getattr()->ll_inode_revalidate_it() in 2.6
                    Everybody else who needs correct file size would call
-                   ll_glimpse_size or some equivalent themselves anyway.
+                   cl_glimpse_size or some equivalent themselves anyway.
                    Also see bug 7198. */
 
                 ll_dops_init(*de, 1);
@@ -461,7 +467,7 @@ int ll_lookup_it_finish(struct ptlrpc_request *request,
                    might get picked up later when UPDATE lock will appear */
                 if (ll_have_md_lock(parent, MDS_INODELOCK_UPDATE)) {
                         spin_lock(&dcache_lock);
-                        ll_d_add(*de, inode);
+                        ll_d_add(*de, NULL);
                         spin_unlock(&dcache_lock);
                 } else {
                         (*de)->d_inode = NULL;
@@ -996,7 +1002,7 @@ static void ll_get_child_fid(struct inode * dir, struct qstr *name,
                              struct lu_fid *fid)
 {
         struct dentry *parent, *child;
-        
+
         parent = list_entry(dir->i_dentry.next, struct dentry, d_alias);
         child = d_lookup(parent, name);
         if (child) {
@@ -1013,7 +1019,7 @@ static int ll_rmdir_generic(struct inode *dir, struct dentry *dparent,
         struct md_op_data *op_data;
         int rc;
         ENTRY;
-        
+
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
                name->len, name->name, dir->i_ino, dir->i_generation, dir);
 
@@ -1041,6 +1047,7 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         struct lov_stripe_md *lsm = NULL;
         struct obd_trans_info oti = { 0 };
         struct obdo *oa;
+        struct obd_capa *oc = NULL;
         int rc;
         ENTRY;
 
@@ -1084,7 +1091,7 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
 
         if (body->valid & OBD_MD_FLCOOKIE) {
                 oa->o_valid |= OBD_MD_FLCOOKIE;
-                oti.oti_logcookies = 
+                oti.oti_logcookies =
                         req_capsule_server_sized_get(&request->rq_pill,
                                                      &RMF_LOGCOOKIES,
                                                    sizeof(struct llog_cookie) *
@@ -1095,7 +1102,14 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
                 }
         }
 
-        rc = obd_destroy(ll_i2dtexp(dir), oa, lsm, &oti, ll_i2mdexp(dir));
+        if (body->valid & OBD_MD_FLOSSCAPA) {
+                rc = md_unpack_capa(ll_i2mdexp(dir), request, &RMF_CAPA2, &oc);
+                if (rc)
+                        GOTO(out_free_memmd, rc);
+        }
+
+        rc = obd_destroy(ll_i2dtexp(dir), oa, lsm, &oti, ll_i2mdexp(dir), oc);
+        capa_put(oc);
         OBDO_FREE(oa);
         if (rc)
                 CERROR("obd destroy objid "LPX64" error %d\n",

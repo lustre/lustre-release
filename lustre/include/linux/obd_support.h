@@ -45,9 +45,12 @@
 #ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
+#include <linux/seq_file.h>
+#include <linux/module.h>
 #include <linux/autoconf.h>
 #include <linux/slab.h>
 #include <linux/highmem.h>
+#include <linux/swap.h>
 #endif
 #include <libcfs/libcfs.h>
 #include <linux/lustre_compat25.h>

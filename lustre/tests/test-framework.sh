@@ -15,6 +15,7 @@ export GSS=false
 export GSS_KRB5=false
 export GSS_PIPEFS=false
 export IDENTITY_UPCALL=default
+
 #export PDSH="pdsh -S -Rssh -w"
 
 # eg, assert_env LUSTRE MDSNODES OSTNODES CLIENTS
@@ -31,12 +32,12 @@ assert_env() {
 
 assert_DIR () {
     local failed=""
-    [ -z "`echo :$DIR: | grep :$MOUNT:`" ] && \
-        failed=1 && echo "DIR not in $MOUNT. Aborting."
-    [ -z "`echo :$DIR1: | grep :$MOUNT1:`" ] && \
-        failed=1 && echo "DIR1 not in $MOUNT1. Aborting."
-    [ -z "`echo :$DIR2: | grep :$MOUNT2:`" ] && \
-        failed=1 && echo "DIR2 not in $MOUNT2. Aborting"
+    [[ $DIR/ = $MOUNT/* ]] || \
+        { failed=1 && echo "DIR=$DIR not in $MOUNT. Aborting."; }
+    [[ $DIR1/ = $MOUNT1/* ]] || \
+        { failed=1 && echo "DIR1=$DIR1 not in $MOUNT1. Aborting."; }
+    [[ $DIR2/ = $MOUNT2/* ]] || \
+        { failed=1 && echo "DIR2=$DIR2 not in $MOUNT2. Aborting"; }
 
     [ -n "$failed" ] && exit 99 || true
 }
@@ -98,7 +99,10 @@ init_test_env() {
 	export PATH=$PATH:$LUSTRE/tests
     fi
     export MDSRATE=${MDSRATE:-"$LUSTRE/tests/mdsrate"}
-    [ ! -f "$MDSRATE" ] && export MDSRATE=$(which mdsrate)
+    [ ! -f "$MDSRATE" ] && export MDSRATE=$(which mdsrate 2> /dev/null)
+    if ! echo $PATH | grep -q $LUSTRE/test/racer; then
+        export PATH=$PATH:$LUSTRE/tests/racer
+    fi
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     [ ! -f "$LCTL" ] && export LCTL=$(which lctl)
     export LFS=${LFS:-"$LUSTRE/utils/lfs"}
@@ -176,6 +180,11 @@ init_test_env() {
 
 }
 
+case `uname -r` in
+2.4.*) EXT=".o"; USE_QUOTA=no; [ ! "$CLIENTONLY" ] && FSTYPE=ext3;;
+    *) EXT=".ko"; USE_QUOTA=yes;;
+esac
+
 load_module() {
     EXT=".ko"
     module=$1
@@ -210,9 +219,10 @@ load_modules() {
     load_module ../libcfs/libcfs/libcfs
     [ "$PTLDEBUG" ] && lctl set_param debug=$PTLDEBUG
     [ "$SUBSYSTEM" ] && lctl set_param subsystem_debug=${SUBSYSTEM# }
+    local MODPROBECONF=
     [ -f /etc/modprobe.conf ] && MODPROBECONF=/etc/modprobe.conf
-    [ -f /etc/modprobe.d/Lustre ] && MODPROBECONF=/etc/modprobe.d/Lustre
-    [ -z "$LNETOPTS" -a -n "$MODPROBECONF" ] && \
+    [ ! "$MODPROBECONF" -a -d /etc/modprobe.d ] && MODPROBECONF=/etc/modprobe.d/Lustre
+    [ -z "$LNETOPTS" -a "$MODPROBECONF" ] && \
         LNETOPTS=$(awk '/^options lnet/ { print $0}' $MODPROBECONF | sed 's/^options lnet //g')
     echo $LNETOPTS | grep -q "accept=all"  || LNETOPTS="$LNETOPTS accept=all";
     echo "lnet options: '$LNETOPTS'"
@@ -224,12 +234,9 @@ load_modules() {
     load_module obdclass/obdclass
     load_module ptlrpc/ptlrpc
     load_module ptlrpc/gss/ptlrpc_gss
-    # Now, some modules depend on lquota without USE_QUOTA check,
-    # will fix later. Disable check "$USE_QUOTA" = "yes" temporary.
-    #[ "$USE_QUOTA" = "yes" ] && load_module quota/lquota
-    load_module quota/lquota
-    load_module fid/fid
+    [ "$USE_QUOTA" = "yes" -a "$LQUOTA" != "no" ] && load_module quota/lquota
     load_module fld/fld
+    load_module fid/fid
     load_module lmv/lmv
     load_module mdc/mdc
     load_module osc/osc
@@ -251,8 +258,8 @@ load_modules() {
 
     load_module llite/lustre
     load_module llite/llite_lloop
-    rm -f $TMP/ogdb-$HOSTNAME
-    OGDB=$TMP
+    OGDB=${OGDB:-$TMP}
+    rm -f $OGDB/ogdb-$HOSTNAME
     [ -d /r ] && OGDB="/r/tmp"
     $LCTL modules > $OGDB/ogdb-$HOSTNAME
 
@@ -307,7 +314,7 @@ check_mem_leak () {
         echo "$LEAK_LUSTRE" 1>&2
         echo "$LEAK_PORTALS" 1>&2
         mv $TMP/debug $TMP/debug-leak.`date +%s` || true
-        log "Memory leaks detected"
+        echo "Memory leaks detected"
         [ -n "$IGNORE_LEAK" ] && { echo "ignoring leaks" && return 0; } || true
         return 1
     fi
@@ -590,6 +597,13 @@ reboot_facet() {
     fi
 }
 
+boot_node() {
+    local node=$1
+    if [ "$FAILURE_MODE" = HARD ]; then
+       $POWER_UP $node
+    fi
+}
+
 # verify that lustre actually cleaned up properly
 cleanup_check() {
     [ -f $CATASTROPHE ] && [ `cat $CATASTROPHE` -ne 0 ] && \
@@ -690,8 +704,8 @@ wait_remote_prog () {
    [ "$PDSH" = "no_dsh" ] && return 0
 
    while [ $WAIT -lt $2 ]; do
-        running=$(ps uax | grep "$PDSH.*$prog.*$MOUNT" | grep -v grep)
-        [ -z "${running}" ] && return 0
+        running=$(ps uax | grep "$PDSH.*$prog.*$MOUNT" | grep -v grep) || true
+        [ -z "${running}" ] && return 0 || true
         echo "waited $WAIT for: "
         echo "$running"
         [ $INTERVAL -lt 60 ] && INTERVAL=$((INTERVAL + INTERVAL))
@@ -737,8 +751,10 @@ client_reconnect() {
 
 facet_failover() {
     facet=$1
+    sleep_time=$2
     echo "Failing $facet on node `facet_active_host $facet`"
     shutdown_facet $facet
+    [ -n "$sleep_time" ] && sleep $sleep_time
     reboot_facet $facet
     client_df &
     DFPID=$!
@@ -768,6 +784,16 @@ replay_barrier() {
 replay_barrier_nodf() {
     local facet=$1    echo running=${running}
     do_facet $facet sync
+    local svc=${facet}_svc
+    echo Replay barrier on ${!svc}
+    do_facet $facet $LCTL --device %${!svc} readonly
+    do_facet $facet $LCTL --device %${!svc} notransno
+    do_facet $facet $LCTL mark "$facet REPLAY BARRIER on ${!svc}"
+    $LCTL mark "local REPLAY BARRIER on ${!svc}"
+}
+
+replay_barrier_nosync() {
+    local facet=$1    echo running=${running}
     local svc=${facet}_svc
     echo Replay barrier on ${!svc}
     do_facet $facet $LCTL --device %${!svc} readonly
@@ -1056,6 +1082,11 @@ mdsmkfsopts()
 }
 
 formatall() {
+    if [ "$IAMDIR" == "yes" ]; then
+        MDS_MKFS_OPTS="$MDS_MKFS_OPTS --iam-dir"
+        MDSn_MKFS_OPTS="$MDSn_MKFS_OPTS --iam-dir"
+    fi
+
     [ "$FSTYPE" ] && FSTYPE_OPT="--backfstype $FSTYPE"
 
     if [ ! -z $SEC ]; then
@@ -1104,7 +1135,7 @@ switch_identity() {
     local num=$1
     local switch=$2
     local j=`expr $num - 1`
-    local MDT="`do_facet mds$num lctl get_param -N mdt.*MDT*$j | cut -d"." -f2 2>/dev/null || true`"
+    local MDT="`(do_facet mds$num lctl get_param -N mdt.*MDT*$j 2>/dev/null | cut -d"." -f2 2>/dev/null) || true`"
 
     if [ -z "$MDT" ]; then
         return 2
@@ -1199,6 +1230,10 @@ setupall() {
 
         done
     fi
+    # wait a while to allow sptlrpc configuration be propogated to targets,
+    # only needed when mounting new target devices.
+    $GSS && sleep 10
+
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     mount_client $MOUNT
     [ -n "$CLIENTS" ] && zconf_mount_clients $CLIENTS $MOUNT
@@ -1260,15 +1295,29 @@ init_facets_vars () {
     done
 }
 
+check_config () {
+    local mntpt=$1
+    
+    echo Checking config lustre mounted on $mntpt
+    local mgshost=$(mount | grep " $mntpt " | awk -F@ '{print $1}')
+    mgshost=$(echo $mgshost | awk -F: '{print $1}')
+    if [ "$mgshost" != "$mgs_HOST" ]; then
+        FAIL_ON_ERROR=true \
+            error "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST
+                   Please use correct config or set mds_HOST correctly!"
+    fi
+}
+
 check_and_setup_lustre() {
-    MOUNTED="`mounted_lustre_filesystems`"
-    if [ -z "$MOUNTED" ]; then
+    local MOUNTED=$(mounted_lustre_filesystems)
+    if [ -z "$MOUNTED" ] || ! $(echo $MOUNTED | grep -w -q $MOUNT); then
         [ "$REFORMAT" ] && formatall
         setupall
-        MOUNTED="`mounted_lustre_filesystems`"
+        MOUNTED=$(mounted_lustre_filesystems | head -1)
         [ -z "$MOUNTED" ] && error "NAME=$NAME not mounted"
         export I_MOUNTED=yes
     else
+        check_config $MOUNT
         init_facets_vars
     fi
     if [ "$ONLY" == "setup" ]; then
@@ -1602,6 +1651,8 @@ basetest() {
     IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
 }
 
+# print a newline if the last test was skipped
+export LAST_SKIPPED=
 run_test() {
     assert_DIR
 
@@ -1609,38 +1660,46 @@ run_test() {
     if [ ! -z "$ONLY" ]; then
         testname=ONLY_$1
         if [ ${!testname}x != x ]; then
+            [ "$LAST_SKIPPED" ] && echo "" && LAST_SKIPPED=
             run_one $1 "$2"
             return $?
         fi
         testname=ONLY_$base
         if [ ${!testname}x != x ]; then
+            [ "$LAST_SKIPPED" ] && echo "" && LAST_SKIPPED=
             run_one $1 "$2"
             return $?
         fi
+        LAST_SKIPPED="y"
         echo -n "."
         return 0
     fi
     testname=EXCEPT_$1
     if [ ${!testname}x != x ]; then
+        LAST_SKIPPED="y"
         TESTNAME=test_$1 skip "skipping excluded test $1"
         return 0
     fi
     testname=EXCEPT_$base
     if [ ${!testname}x != x ]; then
+        LAST_SKIPPED="y"
         TESTNAME=test_$1 skip "skipping excluded test $1 (base $base)"
         return 0
     fi
     testname=EXCEPT_SLOW_$1
     if [ ${!testname}x != x ]; then
+        LAST_SKIPPED="y"
         TESTNAME=test_$1 skip "skipping SLOW test $1"
         return 0
     fi
     testname=EXCEPT_SLOW_$base
     if [ ${!testname}x != x ]; then
+        LAST_SKIPPED="y"
         TESTNAME=test_$1 skip "skipping SLOW test $1 (base $base)"
         return 0
     fi
 
+    LAST_SKIPPED=
     run_one $1 "$2"
 
     return $?
@@ -1793,10 +1852,18 @@ osc_to_ost()
     echo $ost
 }
 
+remote_node () {
+    local node=$1
+    [ "$node" != "$(hostname)" ]
+}
+
 remote_mds ()
 {
-    local var=${SINGLEMDS}_HOST
-    [ "${!var}" != "$(hostname)" ]
+    local node
+    for node in $(mdts_nodes); do
+        remote_node $node && return 0
+    done
+    return 1
 }
 
 remote_mds_nodsh()
@@ -1806,7 +1873,11 @@ remote_mds_nodsh()
 
 remote_ost ()
 {
-    [ "$ost_HOST" != "$(hostname)" ]
+    local node
+    for node in $(osts_nodes) ; do
+        remote_node $node && return 0
+    done
+    return 1
 }
 
 remote_ost_nodsh()
@@ -1902,6 +1973,12 @@ mixed_ost_devs () {
     local nodes=$(osts_nodes)
     local osscount=$(get_node_count "$nodes")
     [ ! "$OSTCOUNT" = "$osscount" ]
+}
+
+mixed_mdt_devs () {
+    local nodes=$(mdts_nodes)
+    local mdtcount=$(get_node_count "$nodes")
+    [ ! "$MDSCOUNT" = "$mdtcount" ]
 }
 
 generate_machine_file() {
@@ -2012,6 +2089,18 @@ calc_llite_stats() {
         echo $res
 }
 
+# reset osc stat counters
+clear_osc_stats(){
+        lctl set_param -n osc.*.osc_stats 0
+}
+
+# sum osc stat items
+calc_osc_stats() {
+        local res=$(lctl get_param -n osc.*.osc_stats |
+                    awk 'BEGIN {s = 0} END {print s} /^'"$1"'/ {s += $2}')
+        echo $res
+}
+
 calc_sum () {
         awk 'BEGIN {s = 0}; {s += $1}; END {print s}'
 }
@@ -2046,3 +2135,20 @@ check_catastrophe () {
     fi 
 }
 
+# $1 node
+# $2 file
+get_stripe_info() {
+	local tmp_file
+
+	stripe_size=0
+	stripe_count=0
+	stripe_index=0
+	tmp_file=$(mktemp)
+
+	do_facet $1 lfs getstripe -v $2 > $tmp_file
+
+	stripe_size=`awk '$1 ~ /size/ {print $2}' $tmp_file`
+	stripe_count=`awk '$1 ~ /count/ {print $2}' $tmp_file`
+	stripe_index=`awk '/obdidx/ {start = 1; getline; print $1; exit}' $tmp_file`
+	rm -f $tmp_file
+}

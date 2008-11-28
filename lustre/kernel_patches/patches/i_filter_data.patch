@@ -1,3 +1,7 @@
+The i_filterdata is currently only used by the size-on-mds to store the
+epoch number for the inode.  This could be moved to another field in
+ldiskfs or elsewhere in the inode that isn't used by Lustre callers.
+
 Index: linux-2.6.18.8/include/linux/fs.h
 ===================================================================
 --- linux-2.6.18.8.orig/include/linux/fs.h	2007-06-05 12:55:19.000000000 +0200

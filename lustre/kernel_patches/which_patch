@@ -2,8 +2,8 @@ SERIES                VERSION                  COMMENT
 
 SUPPORTED KERNELS:
 2.6-rhel4             RHEL4: 2.6.9-67.0.20.EL
-2.6-sles10            SLES10: 2.6.16.60-0.27
-2.6-rhel5             RHEL5: 2.6.18-92.1.10.el5
+2.6-sles10            SLES10: 2.6.16.60-0.31
+2.6-rhel5             RHEL5: 2.6.18-92.1.17.el5
 2.6.18-vanilla        kernel.org: 2.6.18.8
 2.6.22-vanilla        kernel.org: 2.6.22.14
 

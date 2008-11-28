@@ -106,9 +106,9 @@ enum ptlrpc_gss_proc {
 };
 
 enum ptlrpc_gss_tgt {
-        LUSTRE_GSS_TGT_MDS              = 0,
-        LUSTRE_GSS_TGT_OSS              = 1,
-        LUSTRE_GSS_TGT_MGS              = 2,
+        LUSTRE_GSS_TGT_MGS              = 0,
+        LUSTRE_GSS_TGT_MDS              = 1,
+        LUSTRE_GSS_TGT_OSS              = 2,
 };
 
 enum ptlrpc_gss_header_flags {
@@ -121,6 +121,8 @@ __u32 import_to_gss_svc(struct obd_import *imp)
 {
         const char *name = imp->imp_obd->obd_type->typ_name;
 
+        if (!strcmp(name, LUSTRE_MGC_NAME))
+                return LUSTRE_GSS_TGT_MGS;
         if (!strcmp(name, LUSTRE_MDC_NAME))
                 return LUSTRE_GSS_TGT_MDS;
         if (!strcmp(name, LUSTRE_OSC_NAME))

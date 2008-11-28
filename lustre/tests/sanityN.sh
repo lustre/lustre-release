@@ -46,7 +46,7 @@ SETUP=${SETUP:-:}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="12 16"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="12 16 33a"
 
 SANITYLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 FAIL_ON_ERROR=false
@@ -598,7 +598,7 @@ test_30() { #bug #11110
 
 run_test 30 "recreate file race ========="
 
-test_31() {
+test_31a() {
         mkdir -p $DIR1/$tdir || error "Creating dir $DIR1/$tdir"
         writes=`LANG=C dd if=/dev/zero of=$DIR/$tdir/$tfile count=1 2>&1 |
                 awk 'BEGIN { FS="+" } /out/ {print $1}'`
@@ -608,39 +608,56 @@ test_31() {
                awk 'BEGIN { FS="+" } /in/ {print $1}'`
         [ $reads -eq $writes ] || error "read" $reads "blocks, must be" $writes
 }
-run_test 31 "voluntary cancel / blocking ast race=============="
+run_test 31a "voluntary cancel / blocking ast race=============="
+
+test_31b() {
+        remote_ost || { skip "local OST" && return 0; }
+        remote_ost_nodsh && skip "remote OST w/o dsh" && return 0
+        mkdir -p $DIR1/$tdir || error "Creating dir $DIR1/$tdir"
+        lfs setstripe $DIR/$tdir/$tfile -i 0 -c 1
+        cp /etc/hosts $DIR/$tdir/$tfile
+        #define OBD_FAIL_LDLM_CANCEL_BL_CB_RACE   0x314
+        lctl set_param fail_loc=0x314
+        #define OBD_FAIL_LDLM_OST_FAIL_RACE      0x316
+        do_facet ost1 lctl set_param fail_loc=0x316
+        # Don't crash kernel
+        cat $DIR2/$tdir/$tfile > /dev/null 2>&1
+        lctl set_param fail_loc=0
+        do_facet ost1 lctl set_param fail_loc=0
+}
+run_test 31b "voluntary OST cancel / blocking ast race=============="
 
 # enable/disable lockless truncate feature, depending on the arg 0/1
 enable_lockless_truncate() {
-        lctl set_param -n llite.*.lockless_truncate $1
+        lctl set_param -n osc.*.lockless_truncate $1
 }
 
 test_32a() { # bug 11270
         local p="$TMP/sanityN-$TESTNAME.parameters"
-        save_lustre_params $HOSTNAME llite.*.lockless_truncate > $p
+        save_lustre_params $HOSTNAME osc.*.lockless_truncate > $p
         cancel_lru_locks osc
-        clear_llite_stats
+        clear_osc_stats
         enable_lockless_truncate 1
         dd if=/dev/zero of=$DIR1/$tfile count=10 bs=1M > /dev/null 2>&1
 
         log "checking cached lockless truncate"
         $TRUNCATE $DIR1/$tfile 8000000
         $CHECKSTAT -s 8000000 $DIR2/$tfile || error "wrong file size"
-        [ $(calc_llite_stats lockless_truncate) -eq 0 ] ||
+        [ $(calc_osc_stats lockless_truncate) -eq 0 ] ||
                 error "lockless truncate doesn't use cached locks"
 
         log "checking not cached lockless truncate"
         $TRUNCATE $DIR2/$tfile 5000000
         $CHECKSTAT -s 5000000 $DIR1/$tfile || error "wrong file size"
-        [ $(calc_llite_stats lockless_truncate) -ne 0 ] ||
+        [ $(calc_osc_stats lockless_truncate) -ne 0 ] ||
                 error "not cached trancate isn't lockless"
 
         log "disabled lockless truncate"
         enable_lockless_truncate 0
-        clear_llite_stats
+        clear_osc_stats
         $TRUNCATE $DIR2/$tfile 3000000
         $CHECKSTAT -s 3000000 $DIR1/$tfile || error "wrong file size"
-        [ $(calc_llite_stats lockless_truncate) -eq 0 ] ||
+        [ $(calc_osc_stats lockless_truncate) -eq 0 ] ||
                 error "lockless truncate disabling failed"
         rm $DIR1/$tfile
         # restore lockless_truncate default values
@@ -654,42 +671,163 @@ test_32b() { # bug 11270
 
         local node
         local p="$TMP/sanityN-$TESTNAME.parameters"
-        save_lustre_params $HOSTNAME "llite.*.contention_seconds" > $p
+        save_lustre_params $HOSTNAME "osc.*.contention_seconds" > $p
         for node in $(osts_nodes); do
                 save_lustre_params $node "ldlm.namespaces.filter-*.max_nolock_bytes" >> $p
                 save_lustre_params $node "ldlm.namespaces.filter-*.contended_locks" >> $p
                 save_lustre_params $node "ldlm.namespaces.filter-*.contention_seconds" >> $p
         done
-        clear_llite_stats
+        clear_osc_stats
         # agressive lockless i/o settings 
         for node in $(osts_nodes); do
                 do_node $node 'lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes 2000000; lctl set_param -n ldlm.namespaces.filter-*.contended_locks 0; lctl set_param -n ldlm.namespaces.filter-*.contention_seconds 60'
         done
-        lctl set_param -n llite.*.contention_seconds 60
+        lctl set_param -n osc.*.contention_seconds 60
         for i in $(seq 5); do
                 dd if=/dev/zero of=$DIR1/$tfile bs=4k count=1 conv=notrunc > /dev/null 2>&1
                 dd if=/dev/zero of=$DIR2/$tfile bs=4k count=1 conv=notrunc > /dev/null 2>&1
         done
-        [ $(calc_llite_stats lockless_write_bytes) -ne 0 ] || error "lockless i/o was not triggered" 
+        [ $(calc_osc_stats lockless_write_bytes) -ne 0 ] || error "lockless i/o was not triggered" 
         # disable lockless i/o (it is disabled by default)
         for node in $(osts_nodes); do
                 do_node $node 'lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes 0; lctl set_param -n ldlm.namespaces.filter-*.contended_locks 32; lctl set_param -n ldlm.namespaces.filter-*.contention_seconds 0'
         done
         # set contention_seconds to 0 at client too, otherwise Lustre still
         # remembers lock contention
-        lctl set_param -n llite.*.contention_seconds 0
-        clear_llite_stats
-        for i in $(seq 5); do
+        lctl set_param -n osc.*.contention_seconds 0
+        clear_osc_stats
+        for i in $(seq 1); do
                 dd if=/dev/zero of=$DIR1/$tfile bs=4k count=1 conv=notrunc > /dev/null 2>&1
                 dd if=/dev/zero of=$DIR2/$tfile bs=4k count=1 conv=notrunc > /dev/null 2>&1
         done
-        [ $(calc_llite_stats lockless_write_bytes) -eq 0 ] ||
+        [ $(calc_osc_stats lockless_write_bytes) -eq 0 ] ||
                 error "lockless i/o works when disabled" 
         rm -f $DIR1/$tfile
         restore_lustre_params <$p
         rm -f $p
 }
 run_test 32b "lockless i/o"
+
+print_jbd_stat () {
+    local dev=$(basename $(do_facet $SINGLEMDS lctl get_param -n osd.*MDT*.mntdev))
+    do_facet $SINGLEMDS cat /proc/fs/jbd/$dev/info | head -1 
+}
+
+do_and_time () {
+   local cmd=$1
+
+   local start_ts=`date +%s`
+
+   $cmd
+
+   current_ts=`date +%s`
+   ELAPSED=`expr $current_ts - $start_ts`
+}
+
+# commit on sharing tests
+test_33a() {
+    remote_mds_nodsh && skip "remote MDS with nodsh" && return
+
+    [ -n "$CLIENTS" ] || { skip "Need two or more clients" && return 0; }
+    [ $CLIENTCOUNT -ge 2 ] || \
+        { skip "Need two or more clients, have $CLIENTCOUNT" && return 0; }
+
+    zconf_mount_clients $CLIENT1,$CLIENT2 $DIR1
+    zconf_mount_clients $CLIENT1,$CLIENT2 $DIR2
+
+    local nfiles=${TEST33_NFILES:-10000}
+    local param_file=$TMP/$tfile-params
+
+    save_lustre_params $(facet_active_host $SINGLEMDS) "mdt.*.commit_on_sharing" > $param_file
+
+    local COS
+    local jbdold
+    local jbdnew
+    local jbd
+
+    for COS in 0 1; do
+        do_facet $SINGLEMDS lctl set_param mdt.*.commit_on_sharing=$COS
+        avgjbd=0
+        avgtime=0
+        for i in 1 2 3; do
+
+            do_nodes $CLIENT1,$CLIENT2 "mkdir -p $DIR1/$tdir-\\\$(hostname)-$i"
+
+            jbdold=$(print_jbd_stat) 
+            echo "=== START createmany $jbdold"
+            do_and_time "do_nodes $CLIENT1,$CLIENT2 createmany -o $DIR1/$tdir-\\\$(hostname)-$i/f- -r $DIR2/$tdir-\\\$(hostname)-$i/f- $nfiles"
+            jbdnew=$(print_jbd_stat)
+            jbd=$((`echo $jbdnew | cut -d" " -f1` - `echo $jbdold | cut -d" " -f1`))
+            echo "=== END   createmany $jbdnew :  $jbd transactions  nfiles $nfiles time $ELAPSED COS=$COS" 
+            avgjbd=$(( avgjbd + jbd ))
+            avgtime=$(( avgtime + ELAPSED ))
+        done
+        eval cos${COS}_jbd=$((avgjbd / 3))
+        eval cos${COS}_time=$((avgtime / 3))
+    done
+
+    echo "COS=0 transactions (avg): $cos0_jbd  time (avg): $cos0_time"
+    echo "COS=1 transactions (avg): $cos1_jbd  time (avg): $cos1_time" 
+    [ "$cos0_jbd" != 0 ] && echo "COS=1 vs COS=0 jbd:  $((((cos1_jbd/cos0_jbd - 1)) * 100 )) %"
+    [ "$cos0_time" != 0 ] && echo "COS=1 vs COS=0 time: $((((cos1_time/cos0_time - 1)) * 100 )) %"
+
+    restore_lustre_params < $param_file
+    rm -f $param_file
+    return 0
+}
+run_test 33a "commit on sharing, cross crete/delete, 2 clients, benchmark"
+
+# End commit on sharing tests
+
+test_34() { #16129
+        for OPER in notimeout timeout ; do
+                rm $DIR1/$tfile 2>/dev/null
+                lock_in=0;
+                for f in `lctl get_param -n ldlm/namespaces/*/lock_timeouts`; do
+                        lock_in=$(($lock_in + $f))
+                done
+                if [ $OPER == "timeout" ] ; then
+                        for j in `seq $OSTCOUNT`; do
+                                #define OBD_FAIL_PTLRPC_HPREQ_TIMEOUT    0x511
+                                do_facet ost$j lctl set_param fail_loc=0x511
+                        done
+                        echo lock should expire
+                else
+                        for j in `seq $OSTCOUNT`; do
+                                #define OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT  0x512
+                                do_facet ost$j lctl set_param fail_loc=0x512
+                        done
+                        echo lock should not expire
+                fi
+                echo writing on client1
+                dd if=/dev/zero of=$DIR1/$tfile count=100 conv=notrunc > /dev/null 2>&1
+                sync &
+                # wait for the flush
+                sleep 1
+                echo reading on client2
+                dd of=/dev/null if=$DIR2/$tfile > /dev/null 2>&1
+                # wait for a lock timeout
+                sleep 4
+                lock_out=0
+                for f in `lctl get_param -n ldlm/namespaces/*/lock_timeouts`; do
+                        lock_out=$(($lock_out + $f))
+                done
+                if [ $OPER == "timeout" ] ; then 
+                        if [ $lock_in == $lock_out ]; then
+                                error "no lock timeout happened"
+                        else
+                                echo "success"
+                        fi
+                else
+                        if [ $lock_in != $lock_out ]; then
+                                error "lock timeout happened"
+                        else
+                                echo "success"
+                        fi
+                fi
+        done
+}
+run_test 34 "no lock timeout under IO"
 
 log "cleanup: ======================================================"
 

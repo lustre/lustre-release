@@ -151,12 +151,11 @@ int ptlrpc_set_import_discon(struct obd_import *imp, __u32 conn_cnt)
                                libcfs_nid2str(imp->imp_connection->c_peer.nid));
                 } else {
                         LCONSOLE_ERROR_MSG(0x166, "%s: Connection to service "
-                                           "%.*s via nid %s was lost; in progress"
-                                           "operations using this service will"
-                                           "fail.\n",
-                                           imp->imp_obd->obd_name,
-                                           target_len, target_start,
-                                 libcfs_nid2str(imp->imp_connection->c_peer.nid));
+                               "%.*s via nid %s was lost; in progress "
+                               "operations using this service will fail.\n",
+                               imp->imp_obd->obd_name,
+                               target_len, target_start,
+                               libcfs_nid2str(imp->imp_connection->c_peer.nid));
                 }
                 ptlrpc_deactivate_timeouts(imp);
                 IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_DISCON);
@@ -207,6 +206,46 @@ void ptlrpc_deactivate_import(struct obd_import *imp)
         ptlrpc_deactivate_and_unlock_import(imp);
 }
 
+static unsigned int 
+ptlrpc_inflight_deadline(struct ptlrpc_request *req, time_t now)
+{
+        long dl;
+
+        if (!(((req->rq_phase == RQ_PHASE_RPC) && !req->rq_waiting) ||
+              (req->rq_phase == RQ_PHASE_BULK) || 
+              (req->rq_phase == RQ_PHASE_NEW)))
+                return 0;
+
+        if (req->rq_timedout)
+                return 0;
+
+        if (req->rq_phase == RQ_PHASE_NEW)
+                dl = req->rq_sent;
+        else
+                dl = req->rq_deadline;
+
+        if (dl <= now)
+                return 0;
+
+        return dl - now;
+}
+
+static unsigned int ptlrpc_inflight_timeout(struct obd_import *imp)
+{
+        time_t now = cfs_time_current_sec();
+        struct list_head *tmp, *n;
+        struct ptlrpc_request *req;
+        unsigned int timeout = 0;
+
+        spin_lock(&imp->imp_lock);
+        list_for_each_safe(tmp, n, &imp->imp_sending_list) {
+                req = list_entry(tmp, struct ptlrpc_request, rq_list);
+                timeout = max(ptlrpc_inflight_deadline(req, now), timeout);
+        }
+        spin_unlock(&imp->imp_lock);
+        return timeout;
+}
+
 /*
  * This function will invalidate the import, if necessary, then block
  * for all the RPC completions, and finally notify the obd to
@@ -218,6 +257,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
         struct list_head *tmp, *n;
         struct ptlrpc_request *req;
         struct l_wait_info lwi;
+        unsigned int timeout;
         int rc;
 
         atomic_inc(&imp->imp_inval_count);
@@ -234,32 +274,78 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
 
         LASSERT(imp->imp_invalid);
 
-        /* wait for all requests to error out and call completion callbacks.
-           Cap it at obd_timeout -- these should all have been locally
-           cancelled by ptlrpc_abort_inflight. */
-        lwi = LWI_TIMEOUT_INTERVAL(
-                cfs_timeout_cap(cfs_time_seconds(obd_timeout)),
-                cfs_time_seconds(1), NULL, NULL);
-        rc = l_wait_event(imp->imp_recovery_waitq,
-                          (atomic_read(&imp->imp_inflight) == 0), &lwi);
+        /* Wait forever until inflight == 0. We really can't do it another
+         * way because in some cases we need to wait for very long reply 
+         * unlink. We can't do anything before that because there is really
+         * no guarantee that some rdma transfer is not in progress right now. */
+        do {
+                /* Calculate max timeout for waiting on rpcs to error 
+                 * out. Use obd_timeout if calculated value is smaller
+                 * than it. */
+                timeout = ptlrpc_inflight_timeout(imp);
+                timeout += timeout / 3;
+             
+                if (timeout == 0)
+                        timeout = obd_timeout;
+             
+                CDEBUG(D_RPCTRACE, "Sleeping %d sec for inflight to error out\n",
+                       timeout);
 
-        if (rc) {
-                CERROR("%s: rc = %d waiting for callback (%d != 0)\n",
-                         obd2cli_tgt(imp->imp_obd), rc,
-                         atomic_read(&imp->imp_inflight));
-                spin_lock(&imp->imp_lock);
-                list_for_each_safe(tmp, n, &imp->imp_sending_list) {
-                        req = list_entry(tmp, struct ptlrpc_request, rq_list);
-                        DEBUG_REQ(D_ERROR, req, "still on sending list");
-                }
-                list_for_each_safe(tmp, n, &imp->imp_delayed_list) {
-                        req = list_entry(tmp, struct ptlrpc_request, rq_list);
-                        DEBUG_REQ(D_ERROR, req, "still on delayed list");
-                }
-                spin_unlock(&imp->imp_lock);
-                LASSERT(atomic_read(&imp->imp_inflight) == 0);
-        }
+                /* Wait for all requests to error out and call completion
+                 * callbacks. Cap it at obd_timeout -- these should all
+                 * have been locally cancelled by ptlrpc_abort_inflight. */
+                lwi = LWI_TIMEOUT_INTERVAL(
+                        cfs_timeout_cap(cfs_time_seconds(timeout)),
+                        cfs_time_seconds(1), NULL, NULL);
+                rc = l_wait_event(imp->imp_recovery_waitq,
+                                (atomic_read(&imp->imp_inflight) == 0), &lwi);
+                if (rc) {
+                        const char *cli_tgt = obd2cli_tgt(imp->imp_obd);
 
+                        CERROR("%s: rc = %d waiting for callback (%d != 0)\n",
+                               cli_tgt, rc, atomic_read(&imp->imp_inflight));
+
+                        spin_lock(&imp->imp_lock);
+                        list_for_each_safe(tmp, n, &imp->imp_sending_list) {
+                                req = list_entry(tmp, struct ptlrpc_request, 
+                                                 rq_list);
+                                DEBUG_REQ(D_ERROR, req, "still on sending list");
+                        }
+                        list_for_each_safe(tmp, n, &imp->imp_delayed_list) {
+                                req = list_entry(tmp, struct ptlrpc_request, 
+                                                 rq_list);
+                                DEBUG_REQ(D_ERROR, req, "still on delayed list");
+                        }
+                     
+                        if (atomic_read(&imp->imp_unregistering) == 0) {
+                                /* We know that only "unregistering" rpcs may
+                                 * still survive in sending or delaying lists
+                                 * (They are waiting for long reply unlink in
+                                 * sluggish nets). Let's check this. If there
+                                 * is no unregistering and inflight != 0 this
+                                 * is bug. */
+                                LASSERT(atomic_read(&imp->imp_inflight) == 0);
+                             
+                                /* Let's save one loop as soon as inflight have
+                                 * dropped to zero. No new inflights possible at
+                                 * this point. */
+                                rc = 0;
+                        } else {
+                                CERROR("%s: RPCs in \"%s\" phase found (%d). "
+                                       "Network is sluggish? Waiting them "
+                                       "to error out.\n", cli_tgt,
+                                       ptlrpc_phase2str(RQ_PHASE_UNREGISTERING),
+                                       atomic_read(&imp->imp_unregistering));
+                        }
+                        spin_unlock(&imp->imp_lock);
+                  }
+        } while (rc != 0);
+
+        /* 
+         * Let's additionally check that no new rpcs added to import in
+         * "invalidate" state. 
+         */
+        LASSERT(atomic_read(&imp->imp_inflight) == 0);
 out:
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
         sptlrpc_import_flush_all_ctx(imp);
@@ -569,11 +655,25 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
                 GOTO(out, rc);
         }
 
+        /* Report the rpc service time to the server so that it knows how long
+         * to wait for clients to join recovery */
+        lustre_msg_set_service_time(request->rq_reqmsg,
+                                    at_timeout2est(request->rq_timeout));
+
+        /* The amount of time we give the server to process the connect req.
+         * import_select_connection will increase the net latency on
+         * repeated reconnect attempts to cover slow networks.
+         * We override/ignore the server rpc completion estimate here,
+         * which may be large if this is a reconnect attempt */
+        request->rq_timeout = INITIAL_CONNECT_TIMEOUT;
+        lustre_msg_set_timeout(request->rq_reqmsg, request->rq_timeout);
+
 #ifndef __KERNEL__
         lustre_msg_add_op_flags(request->rq_reqmsg, MSG_CONNECT_LIBCLIENT);
 #endif
         lustre_msg_add_op_flags(request->rq_reqmsg, MSG_CONNECT_NEXT_VER);
 
+        request->rq_no_resend = request->rq_no_delay = 1;
         request->rq_send_state = LUSTRE_IMP_CONNECTING;
         /* Allow a slightly larger reply for future growth compatibility */
         req_capsule_set_size(&request->rq_pill, &RMF_CONNECT_DATA, RCL_SERVER,
@@ -594,10 +694,6 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
                 spin_unlock(&imp->imp_lock);
                 lustre_msg_add_op_flags(request->rq_reqmsg,
                                         MSG_CONNECT_INITIAL);
-                if (AT_OFF)
-                        /* AT will use INITIAL_CONNECT_TIMEOUT the first
-                           time, adaptive after that. */
-                        request->rq_timeout = INITIAL_CONNECT_TIMEOUT;
         }
 
         if (set_transno)
@@ -605,7 +701,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
                                         MSG_CONNECT_TRANSNO);
 
         DEBUG_REQ(D_RPCTRACE, request, "(re)connect request");
-        ptlrpcd_add_req(request);
+        ptlrpcd_add_req(request, PSCOPE_OTHER);
         rc = 0;
 out:
         if (rc != 0) {
@@ -638,8 +734,8 @@ static void ptlrpc_maybe_ping_import_soon(struct obd_import *imp)
          * to have two identical connections in imp_conn_list. We must
          * compare not conn's pointers but NIDs, otherwise we can defeat
          * connection throttling. (See bug 14774.) */
-        if (imp->imp_conn_current->oic_conn->c_self !=
-                                imp_conn->oic_conn->c_self) {
+        if (imp->imp_conn_current->oic_conn->c_peer.nid !=
+                                imp_conn->oic_conn->c_peer.nid) {
                 ptlrpc_ping_import_soon(imp);
                 wake_pinger = 1;
         }
@@ -1043,7 +1139,7 @@ out:
 
 static int completed_replay_interpret(const struct lu_env *env,
                                       struct ptlrpc_request *req,
-                                    void * data, int rc)
+                                      void * data, int rc)
 {
         ENTRY;
         atomic_dec(&req->rq_import->imp_replay_inflight);
@@ -1081,7 +1177,7 @@ static int signal_completed_replay(struct obd_import *imp)
         req->rq_timeout *= 3;
         req->rq_interpret_reply = completed_replay_interpret;
 
-        ptlrpcd_add_req(req);
+        ptlrpcd_add_req(req, PSCOPE_OTHER);
         RETURN(0);
 }
 

@@ -47,15 +47,15 @@
 
 #include <libcfs/libcfs.h>
 
+#define LGSS_SVC_MGS_STR        "lustre_mgs"
 #define LGSS_SVC_MDS_STR        "lustre_mds"
 #define LGSS_SVC_OST_STR        "lustre_oss"
-#define LGSS_SVC_MGS_STR        "lustre_mgs"
 #define LGSS_USR_ROOT_STR       "lustre_root"
 
 typedef enum {
-        LGSS_SVC_MDS    = 0,
-        LGSS_SVC_OSS    = 1,
-        LGSS_SVC_MGS    = 2,
+        LGSS_SVC_MGS    = 0,
+        LGSS_SVC_MDS    = 1,
+        LGSS_SVC_OSS    = 2,
         LGSS_SVC_MAX
 } lgss_svc_t;
 

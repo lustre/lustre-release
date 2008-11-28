@@ -58,12 +58,12 @@
 
 #ifdef __KERNEL__
 
-static DECLARE_MUTEX(sec_gc_mutex);
+static struct mutex sec_gc_mutex;
 static CFS_LIST_HEAD(sec_gc_list);
-static spinlock_t sec_gc_list_lock = SPIN_LOCK_UNLOCKED;
+static spinlock_t sec_gc_list_lock;
 
 static CFS_LIST_HEAD(sec_gc_ctx_list);
-static spinlock_t sec_gc_ctx_list_lock = SPIN_LOCK_UNLOCKED;
+static spinlock_t sec_gc_ctx_list_lock;
 
 static struct ptlrpc_thread sec_gc_thread;
 static atomic_t sec_gc_wait_del = ATOMIC_INIT(0);
@@ -100,8 +100,8 @@ void sptlrpc_gc_del_sec(struct ptlrpc_sec *sec)
         spin_unlock(&sec_gc_list_lock);
 
         /* barrier */
-        mutex_down(&sec_gc_mutex);
-        mutex_up(&sec_gc_mutex);
+        mutex_lock(&sec_gc_mutex);
+        mutex_unlock(&sec_gc_mutex);
 
         atomic_dec(&sec_gc_wait_del);
 
@@ -190,19 +190,19 @@ again:
                  * to trace each sec as order of expiry time.
                  * another issue here is we wakeup as fixed interval instead of
                  * according to each sec's expiry time */
-                mutex_down(&sec_gc_mutex);
+                mutex_lock(&sec_gc_mutex);
                 list_for_each_entry(sec, &sec_gc_list, ps_gc_list) {
                         /* if someone is waiting to be deleted, let it
                          * proceed as soon as possible. */
                         if (atomic_read(&sec_gc_wait_del)) {
                                 CWARN("deletion pending, start over\n");
-                                mutex_up(&sec_gc_mutex);
+                                mutex_unlock(&sec_gc_mutex);
                                 goto again;
                         }
 
                         sec_do_gc(sec);
                 }
-                mutex_up(&sec_gc_mutex);
+                mutex_unlock(&sec_gc_mutex);
 
                 /* check ctx list again before sleep */
                 sec_process_ctx_list();
@@ -223,10 +223,14 @@ again:
         return 0;
 }
 
-int sptlrpc_gc_start_thread(void)
+int sptlrpc_gc_init(void)
 {
         struct l_wait_info lwi = { 0 };
         int                rc;
+
+        mutex_init(&sec_gc_mutex);
+        spin_lock_init(&sec_gc_list_lock);
+        spin_lock_init(&sec_gc_ctx_list_lock);
 
         /* initialize thread control */
         memset(&sec_gc_thread, 0, sizeof(sec_gc_thread));
@@ -244,7 +248,7 @@ int sptlrpc_gc_start_thread(void)
         return 0;
 }
 
-void sptlrpc_gc_stop_thread(void)
+void sptlrpc_gc_fini(void)
 {
         struct l_wait_info lwi = { 0 };
 
@@ -263,11 +267,11 @@ void sptlrpc_gc_add_sec(struct ptlrpc_sec *sec)
 void sptlrpc_gc_del_sec(struct ptlrpc_sec *sec)
 {
 }
-int sptlrpc_gc_start_thread(void)
+int sptlrpc_gc_init(void)
 {
         return 0;
 }
-void sptlrpc_gc_stop_thread(void)
+void sptlrpc_gc_fini(void)
 {
 }
 

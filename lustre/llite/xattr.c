@@ -238,7 +238,9 @@ int ll_setxattr(struct dentry *dentry, const char *name,
                 }
 
                 return rc;
-        }
+
+        } else if (strcmp(name, "trusted.lma") == 0) /* b17288: ignore common_ea */
+                return 0;
 
         return ll_setxattr_common(inode, name, value, size, flags,
                                   OBD_MD_FLXATTR);

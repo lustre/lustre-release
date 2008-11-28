@@ -57,8 +57,6 @@
 #include <lustre_param.h>
 #include "mdc_internal.h"
 
-static quota_interface_t *quota_interface;
-
 #define REQUEST_MINOR 244
 
 static quota_interface_t *quota_interface;
@@ -66,25 +64,27 @@ extern quota_interface_t mdc_quota_interface;
 
 static int mdc_cleanup(struct obd_device *obd);
 
-static struct obd_capa *mdc_unpack_capa(struct ptlrpc_request *req,
-                                        const struct req_msg_field *field)
+int mdc_unpack_capa(struct obd_export *exp, struct ptlrpc_request *req,
+                    const struct req_msg_field *field, struct obd_capa **oc)
 {
         struct lustre_capa *capa;
-        struct obd_capa *oc;
+        struct obd_capa *c;
+        ENTRY;
 
         /* swabbed already in mdc_enqueue */
         capa = req_capsule_server_get(&req->rq_pill, field);
         if (capa == NULL)
-                return ERR_PTR(-EPROTO);
+                RETURN(-EPROTO);
 
-        oc = alloc_capa(CAPA_SITE_CLIENT);
-        if (!oc) {
+        c = alloc_capa(CAPA_SITE_CLIENT);
+        if (IS_ERR(c)) {
                 CDEBUG(D_INFO, "alloc capa failed!\n");
-                return ERR_PTR(-ENOMEM);
+                RETURN(PTR_ERR(c));
+        } else {
+                c->c_capa = *capa;
+                *oc = c;
+                RETURN(0);
         }
-        oc->c_capa = *capa;
-
-        return oc;
 }
 
 /* Helper that implements most of mdc_getstatus and signal_completed_replay. */
@@ -117,12 +117,9 @@ static int send_getstatus(struct obd_import *imp, struct lu_fid *rootfid,
                 GOTO(out, rc = -EPROTO);
 
         if (body->valid & OBD_MD_FLMDSCAPA) {
-                struct obd_capa *oc;
-
-                oc = mdc_unpack_capa(req, &RMF_CAPA1);
-                if (IS_ERR(oc))
-                        GOTO(out, rc = PTR_ERR(oc));
-                *pc = oc;
+                rc = mdc_unpack_capa(NULL, req, &RMF_CAPA1, pc);
+                if (rc)
+                        GOTO(out, rc);
         }
 
         *rootfid = body->fid1;
@@ -150,7 +147,7 @@ int mdc_getstatus(struct obd_export *exp, struct lu_fid *rootfid,
  * from server. Even for cases when acl_size and md_size is zero, RPC header
  * will contain 4 fields and RPC itself will contain zero size fields. This is
  * because mdt_getattr*() _always_ returns 4 fields, but if acl is not needed
- * and thus zero, it shirinks it, making zero size. The same story about
+ * and thus zero, it shrinks it, making zero size. The same story about
  * md_size. And this is course of problem when client waits for smaller number
  * of fields. This issue will be fixed later when client gets aware of RPC
  * layouts.  --umka
@@ -585,28 +582,34 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
                 }
         }
         if (md->body->valid & OBD_MD_FLMDSCAPA) {
-                struct obd_capa *oc = mdc_unpack_capa(req, &RMF_CAPA1);
+                struct obd_capa *oc = NULL;
 
-                if (IS_ERR(oc))
-                        GOTO(out, rc = PTR_ERR(oc));
+                rc = mdc_unpack_capa(NULL, req, &RMF_CAPA1, &oc);
+                if (rc)
+                        GOTO(out, rc);
                 md->mds_capa = oc;
         }
 
         if (md->body->valid & OBD_MD_FLOSSCAPA) {
-                struct obd_capa *oc = mdc_unpack_capa(req, &RMF_CAPA2);
+                struct obd_capa *oc = NULL;
 
-                if (IS_ERR(oc))
-                        GOTO(out, rc = PTR_ERR(oc));
+                rc = mdc_unpack_capa(NULL, req, &RMF_CAPA2, &oc);
+                if (rc)
+                        GOTO(out, rc);
                 md->oss_capa = oc;
         }
 
         EXIT;
 out:
         if (rc) {
-                if (md->oss_capa)
-                        free_capa(md->oss_capa);
-                if (md->mds_capa)
-                        free_capa(md->mds_capa);
+                if (md->oss_capa) {
+                        capa_put(md->oss_capa);
+                        md->oss_capa = NULL;
+                }
+                if (md->mds_capa) {
+                        capa_put(md->mds_capa);
+                        md->mds_capa = NULL;
+                }
 #ifdef CONFIG_FS_POSIX_ACL
                 posix_acl_release(md->posix_acl);
 #endif
@@ -1172,6 +1175,10 @@ int mdc_set_info_async(struct obd_export *exp,
                 rc = do_set_info_async(exp, keylen, key, vallen, val, set);
                 RETURN(rc);
         }
+        if (KEY_IS(KEY_SPTLRPC_CONF)) {
+                sptlrpc_conf_client_adapt(exp->exp_obd);
+                RETURN(0);
+        }
         if (KEY_IS(KEY_FLUSH_CTX)) {
                 sptlrpc_import_flush_my_ctx(imp);
                 RETURN(0);
@@ -1610,11 +1617,12 @@ static int mdc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                    client import will not have been cleaned. */
                 if (obd->u.cli.cl_import) {
                         struct obd_import *imp;
+                        down_write(&obd->u.cli.cl_sem);
                         imp = obd->u.cli.cl_import;
                         CERROR("client import never connected\n");
                         ptlrpc_invalidate_import(imp);
-                        ptlrpc_free_rq_pool(imp->imp_rq_pool);
                         class_destroy_import(imp);
+                        up_write(&obd->u.cli.cl_sem);
                         obd->u.cli.cl_import = NULL;
                 }
                 rc = obd_llog_finish(obd, 0);
@@ -1682,14 +1690,12 @@ static int mdc_process_config(struct obd_device *obd, obd_count len, void *buf)
         int rc = 0;
 
         lprocfs_mdc_init_vars(&lvars);
-
         switch (lcfg->lcfg_command) {
-        case LCFG_SPTLRPC_CONF:
-                rc = sptlrpc_cliobd_process_config(obd, lcfg);
-                break;
         default:
                 rc = class_process_proc_param(PARAM_MDC, lvars.obd_vars,
                                               lcfg, obd);
+        	if (rc > 0)
+        		rc = 0;
                 break;
         }
         return(rc);
@@ -1784,7 +1790,7 @@ static int mdc_renew_capa(struct obd_export *exp, struct obd_capa *oc,
         req->rq_async_args.pointer_arg[0] = oc;
         req->rq_async_args.pointer_arg[1] = cb;
         req->rq_interpret_reply = mdc_interpret_renew_capa;
-        ptlrpcd_add_req(req);
+        ptlrpcd_add_req(req, PSCOPE_OTHER);
         RETURN(0);
 }
 
@@ -1863,12 +1869,11 @@ struct md_ops mdc_md_ops = {
         .m_set_open_replay_data = mdc_set_open_replay_data,
         .m_clear_open_replay_data = mdc_clear_open_replay_data,
         .m_renew_capa       = mdc_renew_capa,
+        .m_unpack_capa      = mdc_unpack_capa,
         .m_get_remote_perm  = mdc_get_remote_perm,
         .m_intent_getattr_async = mdc_intent_getattr_async,
         .m_revalidate_lock      = mdc_revalidate_lock
 };
-
-extern quota_interface_t mdc_quota_interface;
 
 int __init mdc_init(void)
 {

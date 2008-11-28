@@ -50,8 +50,10 @@ MKFSOPT=""
     MKFSOPT=$MKFSOPT" -i $MDSISIZE"
 [ "x$MKFSOPT" != "x" ] &&
     MKFSOPT="--mkfsoptions=\\\"$MKFSOPT\\\""
+[ "x$SECLEVEL" != "x" ] &&
+    MOUNTOPT=$MOUNTOPT" --param mdt.sec_level=$SECLEVEL"
 [ "x$MDSCAPA" != "x" ] &&
-    MKFSOPT="--param mdt.capa=$MDSCAPA"
+    MOUNTOPT=$MOUNTOPT" --param mdt.capa=$MDSCAPA"
 [ "x$mdsfailover_HOST" != "x" ] &&
     MDSOPT=$MDSOPT" --failnode=`h2$NETTYPE $mdsfailover_HOST`"
 [ "x$STRIPE_BYTES" != "x" ] &&
@@ -69,8 +71,10 @@ MKFSOPT=""
     MKFSOPT=$MKFSOPT" -J size=$OSTJOURNALSIZE"
 [ "x$MKFSOPT" != "x" ] &&
     MKFSOPT="--mkfsoptions=\\\"$MKFSOPT\\\""
+[ "x$SECLEVEL" != "x" ] &&
+    MOUNTOPT=$MOUNTOPT" --param ost.sec_level=$SECLEVEL"
 [ "x$OSSCAPA" != "x" ] &&
-    MKFSOPT="--param ost.capa=$OSSCAPA"
+    MOUNTOPT=$MOUNTOPT" --param ost.capa=$OSSCAPA"
 [ "x$ostfailover_HOST" != "x" ] &&
     OSTOPT=$OSTOPT" --failnode=`h2$NETTYPE $ostfailover_HOST`"
 OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID --param sys.timeout=$TIMEOUT $MKFSOPT $OSTOPT $OST_MKFS_OPTS"
@@ -79,6 +83,7 @@ MDS_MOUNT_OPTS=${MDS_MOUNT_OPTS:-"-o loop,user_xattr,acl"}
 OST_MOUNT_OPTS=${OST_MOUNT_OPTS:-"-o loop"}
 
 #client
+MOUNTOPT=""
 MOUNT=${MOUNT:-/mnt/${FSNAME}}
 MOUNT1=${MOUNT1:-$MOUNT}
 MOUNT2=${MOUNT2:-${MOUNT}2}

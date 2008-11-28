@@ -258,9 +258,9 @@ LB_LINUX_TRY_COMPILE([
 # LC_FUNC_REGISTER_CACHE
 #
 # if register_cache() is defined by kernel
-# 
+#
 # There are two ways to shrink one customized cache in linux kernels. For the
-# kernels are prior than 2.6.5(?), register_cache() is used, and for latest 
+# kernels are prior than 2.6.5(?), register_cache() is used, and for latest
 # kernels, set_shrinker() is used instead.
 #
 AC_DEFUN([LC_FUNC_REGISTER_CACHE],
@@ -342,7 +342,7 @@ LB_LINUX_TRY_COMPILE([
         AC_MSG_RESULT([yes])
         AC_DEFINE(HAVE_DEV_SET_RDONLY, 1, [kernel has new dev_set_rdonly])
 ],[
-        AC_MSG_RESULT([no, Linux kernel source needs to be patches by lustre 
+        AC_MSG_RESULT([no, Linux kernel source needs to be patches by lustre
 kernel patches from Lustre version 1.4.3 or above.])
 ])
 ])
@@ -580,7 +580,7 @@ AC_DEFUN([LC_BIT_SPINLOCK_H],
 #
 # LC_POSIX_ACL_XATTR
 #
-# If we have xattr_acl.h 
+# If we have xattr_acl.h
 #
 AC_DEFUN([LC_XATTR_ACL],
 [LB_CHECK_FILE([$LINUX/include/linux/xattr_acl.h],[
@@ -703,6 +703,18 @@ LB_LINUX_CONFIG_IM([CRYPTO_SHA1],[],[
 ])
 ])
 
+#
+# LC_CONFIG_RMTCLIENT
+#
+dnl FIXME
+dnl the AES symbol usually tied with arch, e.g. CRYPTO_AES_586
+dnl FIXME
+AC_DEFUN([LC_CONFIG_RMTCLIENT],
+[LB_LINUX_CONFIG_IM([CRYPTO_AES],[],[
+	AC_MSG_ERROR([Lustre remote client require that CONFIG_CRYPTO_AES is enabled in your kernel.])
+])
+])
+
 AC_DEFUN([LC_SUNRPC_CACHE],
 [AC_MSG_CHECKING([if sunrpc struct cache_head uses kref])
 LB_LINUX_TRY_COMPILE([
@@ -729,7 +741,7 @@ AC_DEFUN([LC_CONFIG_SUNRPC],
 #
 AC_DEFUN([LC_CONFIG_GSS_KEYRING],
 [AC_MSG_CHECKING([whether to enable gss keyring backend])
- AC_ARG_ENABLE([gss_keyring], 
+ AC_ARG_ENABLE([gss_keyring],
 	       [AC_HELP_STRING([--disable-gss-keyring],
                                [disable gss keyring backend])],
 	       [],[enable_gss_keyring='yes'])
@@ -747,8 +759,6 @@ AC_DEFUN([LC_CONFIG_GSS_KEYRING],
  fi
 ])
 
-m4_pattern_allow(AC_KERBEROS_V5)
-
 #
 # LC_CONFIG_GSS (default disabled)
 #
@@ -757,7 +767,7 @@ m4_pattern_allow(AC_KERBEROS_V5)
 #
 AC_DEFUN([LC_CONFIG_GSS],
 [AC_MSG_CHECKING([whether to enable gss/krb5 support])
- AC_ARG_ENABLE([gss], 
+ AC_ARG_ENABLE([gss],
                [AC_HELP_STRING([--enable-gss], [enable gss/krb5 support])],
                [],[enable_gss='no'])
  AC_MSG_RESULT([$enable_gss])
@@ -784,11 +794,6 @@ AC_DEFUN([LC_CONFIG_GSS],
                            [AC_MSG_WARN([kernel TWOFISH support is recommended by using GSS.])])
         LB_LINUX_CONFIG_IM([CRYPTO_CAST6],[],
                            [AC_MSG_WARN([kernel CAST6 support is recommended by using GSS.])])
-	dnl FIXME
-	dnl the AES symbol usually tied with arch, e.g. CRYPTO_AES_586
-	dnl FIXME
-	LB_LINUX_CONFIG_IM([CRYPTO_AES],[],
-                           [AC_MSG_WARN([kernel AES support is recommended by using GSS.])])
 
 	AC_CHECK_LIB([gssapi], [gss_init_sec_context],
                      [GSSAPI_LIBS="$GSSAPI_LDFLAGS -lgssapi"],
@@ -949,7 +954,7 @@ LB_LINUX_TRY_COMPILE([
         AC_MSG_RESULT(no)
 ])
 ])
- 
+
 #
 # LC_STATFS_DENTRY_PARAM
 # starting from 2.6.18 linux kernel uses dentry instead of
@@ -990,7 +995,7 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# 
+#
 # LC_INVALIDATEPAGE_RETURN_INT
 # more 2.6 api changes.  return type for the invalidatepage
 # address_space_operation is 'void' in new kernels but 'int' in old
@@ -1048,7 +1053,7 @@ LB_LINUX_TRY_COMPILE([
 #include <linux/fs.h>
 ],[
 	struct inode i;
-	i.i_blksize = 0; 
+	i.i_blksize = 0;
 ],[
 	AC_MSG_RESULT(yes)
 	AC_DEFINE(HAVE_INODE_BLKSIZE, 1,
@@ -1086,37 +1091,37 @@ LB_LINUX_TRY_COMPILE([
 EXTRA_KCFLAGS="$tmp_flags"
 ])
 
-# LC_GENERIC_FILE_WRITE
-# 2.6.19 introduce do_sync_write instead of
-# generic_file_write
-AC_DEFUN([LC_GENERIC_FILE_WRITE],
-[AC_MSG_CHECKING([use generic_file_write])
+# LC_FILE_WRITEV
+# 2.6.19 replaced writev with aio_write
+AC_DEFUN([LC_FILE_WRITEV],
+[AC_MSG_CHECKING([writev in fops])
 LB_LINUX_TRY_COMPILE([
         #include <linux/fs.h>
 ],[
-        int result = generic_file_read(NULL, NULL, 0, 0);
+        struct file_operations *fops;
+        fops->writev = NULL;
 ],[
         AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_GENERIC_FILE_WRITE, 1,
-                [use generic_file_write])
+        AC_DEFINE(HAVE_FILE_WRITEV, 1,
+                [use fops->writev])
 ],[
 	AC_MSG_RESULT(no)
 ])
 ])
 
 # LC_GENERIC_FILE_READ
-# 2.6.19 need to use do_sync_read instead of
-# generic_file_read
-AC_DEFUN([LC_GENERIC_FILE_READ],
-[AC_MSG_CHECKING([use generic_file_read])
+# 2.6.19 replaced readv with aio_read
+AC_DEFUN([LC_FILE_READV],
+[AC_MSG_CHECKING([readv in fops])
 LB_LINUX_TRY_COMPILE([
         #include <linux/fs.h>
 ],[
-        int result = generic_file_read(NULL, NULL, 0, 0);
+        struct file_operations *fops;
+        fops->readv = NULL;
 ],[
         AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_GENERIC_FILE_READ, 1,
-                [use generic_file_read])
+        AC_DEFINE(HAVE_FILE_READV, 1,
+                [use fops->readv])
 ],[
         AC_MSG_RESULT(no)
 ])
@@ -1140,7 +1145,7 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 # LC_CANCEL_DIRTY_PAGE
-# 2.6.20 introduse cancel_dirty_page instead of 
+# 2.6.20 introduse cancel_dirty_page instead of
 # clear_page_dirty.
 AC_DEFUN([LC_CANCEL_DIRTY_PAGE],
 [AC_MSG_CHECKING([kernel has cancel_dirty_page])
@@ -1348,7 +1353,7 @@ LB_LINUX_TRY_COMPILE([
         int i = unregister_blkdev(0,NULL);
 ],[
         AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_UNREGISTER_BLKDEV_RETURN_INT, 1, 
+        AC_DEFINE(HAVE_UNREGISTER_BLKDEV_RETURN_INT, 1,
                 [unregister_blkdev return int])
 ],[
         AC_MSG_RESULT([no])
@@ -1467,7 +1472,7 @@ AC_TRY_RUN([
 #include <linux/autoconf.h>
 #include <linux/types.h>
 #undef __KERNEL__
-// block include 
+// block include
 #define __LINUX_POSIX_ACL_H
 
 # ifdef CONFIG_FS_POSIX_ACL
@@ -1504,7 +1509,7 @@ CFLAGS="$tmp_flags"
 ])
 
 #
-# check for crypto API 
+# check for crypto API
 #
 AC_DEFUN([LC_ASYNC_BLOCK_CIPHER],
 [AC_MSG_CHECKING([if kernel has block cipher support])
@@ -1551,9 +1556,9 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_CONFIG_PINGER
          LC_CONFIG_CHECKSUM
          LC_CONFIG_LIBLUSTRE_RECOVERY
-         LC_CONFIG_QUOTA
          LC_CONFIG_HEALTH_CHECK_WRITE
          LC_CONFIG_LRU_RESIZE
+         LC_QUOTA_MODULE
 
          LC_TASK_PPTR
          # RHEL4 patches
@@ -1591,6 +1596,7 @@ AC_DEFUN([LC_PROG_LINUX],
 
          LC_FUNC_SET_FS_PWD
          LC_CAPA_CRYPTO
+         LC_CONFIG_RMTCLIENT
          LC_CONFIG_GSS
          LC_FUNC_MS_FLOCK_LOCK
          LC_FUNC_HAVE_CAN_SLEEP_ARG
@@ -1599,6 +1605,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_COOKIE_FOLLOW_LINK
          LC_FUNC_RCU
          LC_PERCPU_COUNTER
+         LC_QUOTA64
 
          # does the kernel have VFS intent patches?
          LC_VFS_INTENT_PATCHES
@@ -1637,15 +1644,15 @@ AC_DEFUN([LC_PROG_LINUX],
          # 2.6.19
          LC_INODE_BLKSIZE
          LC_VFS_READDIR_U64_INO
-         LC_GENERIC_FILE_READ
-         LC_GENERIC_FILE_WRITE
+         LC_FILE_WRITEV
+         LC_FILE_READV
 
          # 2.6.20
          LC_CANCEL_DIRTY_PAGE
 
          # raid5-zerocopy patch
          LC_PAGE_CONSTANT
-	 	  
+
 	 # 2.6.22
          LC_INVALIDATE_BDEV_2ARG
          LC_ASYNC_BLOCK_CIPHER
@@ -1765,7 +1772,7 @@ LC_CONFIG_LIBLUSTRE_RECOVERY
 
 AC_DEFUN([LC_CONFIG_LRU_RESIZE],
 [AC_MSG_CHECKING([whether to enable lru self-adjusting])
-AC_ARG_ENABLE([lru_resize], 
+AC_ARG_ENABLE([lru_resize],
 	AC_HELP_STRING([--enable-lru-resize],
 			[enable lru resize support]),
 	[],[enable_lru_resize='yes'])
@@ -1778,52 +1785,37 @@ fi
 #
 # LC_CONFIG_QUOTA
 #
-# whether to enable quota support
+# whether to enable quota support global control
 #
 AC_DEFUN([LC_CONFIG_QUOTA],
-[AC_ARG_ENABLE([quota], 
+[AC_ARG_ENABLE([quota],
 	AC_HELP_STRING([--enable-quota],
 			[enable quota support]),
-	[],[enable_quota='default'])
-if test x$linux25 != xyes; then
-	enable_quota='no'
-fi
-LB_LINUX_CONFIG([QUOTA],[
-	if test x$enable_quota = xdefault; then
-		enable_quota='yes'
-	fi
-],[
-	if test x$enable_quota = xdefault; then
-		enable_quota='no'
-		AC_MSG_WARN([quota is not enabled because the kernel lacks quota support])
-	else
-		if test x$enable_quota = xyes; then
-			AC_MSG_ERROR([cannot enable quota because the kernel lacks quota support])
-		fi
-	fi
+	[],[enable_quota='yes'])
 ])
-if test x$enable_quota != xno; then
+
+# whether to enable quota support(kernel modules)
+AC_DEFUN([LC_QUOTA_MODULE],
+[if test x$enable_quota != xno; then
+    LB_LINUX_CONFIG([QUOTA],[
+	enable_quota_module='yes'
 	AC_DEFINE(HAVE_QUOTA_SUPPORT, 1, [Enable quota support])
+    ],[
+	enable_quota_module='no'
+	AC_MSG_WARN([quota is not enabled because the kernel - lacks quota support])
+    ])
 fi
 ])
 
-#
-# LC_CONFIG_SPLIT
-#
-# whether to enable split support
-#
-AC_DEFUN([LC_CONFIG_SPLIT],
-[AC_MSG_CHECKING([whether to enable split support])
-AC_ARG_ENABLE([split], 
-	AC_HELP_STRING([--enable-split],
-			[enable split support]),
-	[],[enable_split='no'])
-AC_MSG_RESULT([$enable_split])
-if test x$enable_split != xno; then
-   AC_DEFINE(HAVE_SPLIT_SUPPORT, 1, [enable split support])
-fi
+AC_DEFUN([LC_QUOTA],
+[#check global
+LC_CONFIG_QUOTA
+#check for utils
+AC_CHECK_HEADER(sys/quota.h,
+                [AC_DEFINE(HAVE_SYS_QUOTA_H, 1, [Define to 1 if you have <sys/quota.h>.])],
+                [AC_MSG_ERROR([don't find <sys/quota.h> in your system])])
 ])
- 
+
 AC_DEFUN([LC_QUOTA_READ],
 [AC_MSG_CHECKING([if kernel supports quota_read])
 LB_LINUX_TRY_COMPILE([
@@ -1837,6 +1829,23 @@ LB_LINUX_TRY_COMPILE([
 ],[
 	AC_MSG_RESULT([no])
 ])
+])
+
+#
+# LC_CONFIG_SPLIT
+#
+# whether to enable split support
+#
+AC_DEFUN([LC_CONFIG_SPLIT],
+[AC_MSG_CHECKING([whether to enable split support])
+AC_ARG_ENABLE([split],
+	AC_HELP_STRING([--enable-split],
+			[enable split support]),
+	[],[enable_split='no'])
+AC_MSG_RESULT([$enable_split])
+if test x$enable_split != xno; then
+   AC_DEFINE(HAVE_SPLIT_SUPPORT, 1, [enable split support])
+fi
 ])
 
 #
@@ -1866,7 +1875,7 @@ LB_LINUX_TRY_COMPILE([
 #
 # LC_FUNC_RCU
 #
-# kernels prior than 2.6.0(?) have no RCU supported; in kernel 2.6.5(SUSE), 
+# kernels prior than 2.6.0(?) have no RCU supported; in kernel 2.6.5(SUSE),
 # call_rcu takes three parameters.
 #
 AC_DEFUN([LC_FUNC_RCU],
@@ -1887,7 +1896,7 @@ LB_LINUX_TRY_COMPILE([
                 AC_DEFINE(HAVE_CALL_RCU_PARAM, 1, [call_rcu takes three parameters])
                 AC_MSG_RESULT([yes])
         ],[
-                AC_MSG_RESULT([no]) 
+                AC_MSG_RESULT([no])
         ])
 ],[
         AC_MSG_RESULT([no])
@@ -1895,7 +1904,7 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 # LC_SECURITY_PLUG  # for SLES10 SP2
-# check security plug in sles10 sp2 kernel 
+# check security plug in sles10 sp2 kernel
 AC_DEFUN([LC_SECURITY_PLUG],
 [AC_MSG_CHECKING([If kernel has security plug support])
 LB_LINUX_TRY_COMPILE([
@@ -1939,6 +1948,33 @@ LB_LINUX_TRY_COMPILE([
 ],[
         AC_MSG_RESULT([no])
 ])
+])
+
+#
+# LC_QUOTA64
+# linux kernel have 64-bit limits support
+#
+AC_DEFUN([LC_QUOTA64],
+[if test x$enable_quota_module = xyes; then
+        AC_MSG_CHECKING([if kernel has 64-bit quota limits support])
+        LB_LINUX_TRY_COMPILE([
+                #include <linux/kernel.h>
+                #include <linux/fs.h>
+                #include <linux/quotaio_v2.h>
+                int versions[] = V2_INITQVERSIONS_R1;
+                struct v2_disk_dqblk_r1 dqblk_r1;
+        ],[],[
+                AC_DEFINE(HAVE_QUOTA64, 1, [have quota64])
+                AC_MSG_RESULT([yes])
+        ],[
+                LB_CHECK_FILE([$LINUX/include/linux/lustre_version.h],[
+                        if test x$enable_server = xyes ; then
+                                AC_MSG_ERROR([You have got no 64-bit kernel quota support.])
+                        fi
+                ],[])
+                AC_MSG_RESULT([no])
+        ])
+fi
 ])
 
 #
@@ -2046,7 +2082,7 @@ AM_CONDITIONAL(LIBLUSTRE_TESTS, test x$enable_liblustre_tests = xyes)
 AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
 AM_CONDITIONAL(SERVER, test x$enable_server = xyes)
-AM_CONDITIONAL(QUOTA, test x$enable_quota = xyes)
+AM_CONDITIONAL(QUOTA, test x$enable_quota_module = xyes)
 AM_CONDITIONAL(SPLIT, test x$enable_split = xyes)
 AM_CONDITIONAL(BLKID, test x$ac_cv_header_blkid_blkid_h = xyes)
 AM_CONDITIONAL(EXT2FS_DEVEL, test x$ac_cv_header_ext2fs_ext2fs_h = xyes)
@@ -2085,6 +2121,7 @@ lustre/liblustre/Makefile
 lustre/liblustre/tests/Makefile
 lustre/llite/Makefile
 lustre/llite/autoMakefile
+lustre/lclient/Makefile
 lustre/lov/Makefile
 lustre/lov/autoMakefile
 lustre/lvfs/Makefile

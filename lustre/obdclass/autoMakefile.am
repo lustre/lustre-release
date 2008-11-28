@@ -11,7 +11,8 @@ liblustreclass_a_SOURCES = class_obd.c debug.c genops.c statfs_pack.c mea.c uuid
 liblustreclass_a_SOURCES += lustre_handles.c lustre_peer.c lprocfs_status.c class_hash.c
 liblustreclass_a_SOURCES += obdo.c obd_config.c llog.c llog_obd.c llog_cat.c 
 liblustreclass_a_SOURCES += llog_lvfs.c llog_swab.c capa.c
-liblustreclass_a_SOURCES += lu_object.c lu_ref.c lu_time.c
+liblustreclass_a_SOURCES += lu_object.c cl_object.c lu_time.c lu_ref.c
+liblustreclass_a_SOURCES += cl_page.c cl_lock.c cl_io.c
 liblustreclass_a_SOURCES += #llog_ioctl.c rbtree.c
 liblustreclass_a_CPPFLAGS = $(LLCPPFLAGS)
 liblustreclass_a_CFLAGS = $(LLCFLAGS)
@@ -53,4 +54,4 @@ install-data-hook: $(install_data_hook)
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@  llog-test.c
 MOSTLYCLEANFILES += linux/*.o darwin/*.o
-DIST_SOURCES = $(filter-out llog-test.c,$(obdclass-all-objs:.o=.c)) $(llog-test-objs:.o=.c) llog_test.c llog_internal.h
+DIST_SOURCES = $(filter-out llog-test.c,$(obdclass-all-objs:.o=.c)) $(llog-test-objs:.o=.c) llog_test.c llog_internal.h cl_internal.h
