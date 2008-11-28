@@ -268,13 +268,8 @@ static int cmm_split_fid_alloc(const struct lu_env *env,
 
         /* Alloc new fid on @mc. */
         rc = obd_fid_alloc(mc->mc_desc.cl_exp, fid, NULL);
-        if (rc > 0) {
-                /* Setup FLD for new sequenceif needed. */
-                rc = fld_client_create(cmm->cmm_fld, fid_seq(fid),
-                                       mc->mc_num, env);
-                if (rc)
-                        CERROR("Can't create fld entry, rc %d\n", rc);
-        }
+        if (rc > 0)
+                rc = 0;
         up(&mc->mc_fid_sem);
 
         RETURN(rc);

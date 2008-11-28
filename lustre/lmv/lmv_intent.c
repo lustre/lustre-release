@@ -768,7 +768,7 @@ int lmv_allocate_slaves(struct obd_device *obd, struct lu_fid *pid,
         }
 
         CDEBUG(D_INODE, "Allocate new fid "DFID" for slave "
-               "obj -> mds #"LPU64"\n", PFID(fid), mds);
+               "obj -> mds #%x\n", PFID(fid), mds);
 
         RETURN(rc);
 }

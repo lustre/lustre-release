@@ -12,7 +12,15 @@ tbd  Sun Microsystems, Inc.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
- 
+
+Severity   : enhancement
+Bugzilla   : 15957
+Description: compact fld format with extents
+Details    : Store range of seq rather than every seq in FLD. Seq
+             controller update FLD rather than clients. In Case of CMD, mdt0
+             has FLD, all other metadata server act as non persistent proxy
+             for FLD queries and cache fld entries in fld cache.
+
 Severity   : normal
 Frequency  : rare
 Bugzilla   : 16081

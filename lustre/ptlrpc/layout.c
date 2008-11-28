@@ -656,7 +656,7 @@ EXPORT_SYMBOL(RMF_SEQ_OPC);
 
 const struct req_msg_field RMF_SEQ_RANGE =
         DEFINE_MSGF("seq_query_range", 0,
-                    sizeof(struct lu_range), lustre_swab_lu_range);
+                    sizeof(struct lu_seq_range), lustre_swab_lu_seq_range);
 EXPORT_SYMBOL(RMF_SEQ_RANGE);
 
 const struct req_msg_field RMF_FLD_OPC =
@@ -666,7 +666,7 @@ EXPORT_SYMBOL(RMF_FLD_OPC);
 
 const struct req_msg_field RMF_FLD_MDFLD =
         DEFINE_MSGF("fld_query_mdfld", 0,
-                    sizeof(struct md_fld), lustre_swab_md_fld);
+                    sizeof(struct lu_seq_range), lustre_swab_lu_seq_range);
 EXPORT_SYMBOL(RMF_FLD_MDFLD);
 
 const struct req_msg_field RMF_MDT_BODY =

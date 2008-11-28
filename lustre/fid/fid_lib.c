@@ -71,14 +71,14 @@
  * The first 0x400 sequences of normal FID are reserved for special purpose.
  * FID_SEQ_START + 1 is for local file id generation.
  */
-const struct lu_range LUSTRE_SEQ_SPACE_RANGE = {
+const struct lu_seq_range LUSTRE_SEQ_SPACE_RANGE = {
         FID_SEQ_START + 0x400ULL,
         (__u64)~0ULL
 };
 EXPORT_SYMBOL(LUSTRE_SEQ_SPACE_RANGE);
 
 /* Zero range, used for init and other purposes. */
-const struct lu_range LUSTRE_SEQ_ZERO_RANGE = {
+const struct lu_seq_range LUSTRE_SEQ_ZERO_RANGE = {
         0,
         0
 };
@@ -89,54 +89,3 @@ const struct lu_fid LUSTRE_BFL_FID = { .f_seq = 0x0000000000000003,
                                        .f_oid = 0x0000000000000001,
                                        .f_ver = 0x0000000000000000 };
 EXPORT_SYMBOL(LUSTRE_BFL_FID);
-
-void range_cpu_to_le(struct lu_range *dst, const struct lu_range *src)
-{
-        /* check that all fields are converted */
-        CLASSERT(sizeof(*src) ==
-                 sizeof(src->lr_start) +
-                 sizeof(src->lr_end) +
-                 sizeof(src->lr_padding));
-        dst->lr_start = cpu_to_le64(src->lr_start);
-        dst->lr_end = cpu_to_le64(src->lr_end);
-}
-EXPORT_SYMBOL(range_cpu_to_le);
-
-void range_le_to_cpu(struct lu_range *dst, const struct lu_range *src)
-{
-        /* check that all fields are converted */
-        CLASSERT(sizeof(*src) ==
-                 sizeof(src->lr_start) +
-                 sizeof(src->lr_end) +
-                 sizeof(src->lr_padding));
-        dst->lr_start = le64_to_cpu(src->lr_start);
-        dst->lr_end = le64_to_cpu(src->lr_end);
-}
-EXPORT_SYMBOL(range_le_to_cpu);
-
-#ifdef __KERNEL__
-void range_cpu_to_be(struct lu_range *dst, const struct lu_range *src)
-{
-        /* check that all fields are converted */
-        CLASSERT(sizeof(*src) ==
-                 sizeof(src->lr_start) +
-                 sizeof(src->lr_end) +
-                 sizeof(src->lr_padding));
-        dst->lr_start = cpu_to_be64(src->lr_start);
-        dst->lr_end = cpu_to_be64(src->lr_end);
-}
-EXPORT_SYMBOL(range_cpu_to_be);
-
-void range_be_to_cpu(struct lu_range *dst, const struct lu_range *src)
-{
-        /* check that all fields are converted */
-        CLASSERT(sizeof(*src) ==
-                 sizeof(src->lr_start) +
-                 sizeof(src->lr_end) +
-                 sizeof(src->lr_padding));
-        dst->lr_start = be64_to_cpu(src->lr_start);
-        dst->lr_end = be64_to_cpu(src->lr_end);
-}
-EXPORT_SYMBOL(range_be_to_cpu);
-
-#endif

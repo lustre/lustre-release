@@ -2396,5 +2396,18 @@ void lustre_assert_wire_constants(void)
         LASSERTF((int)sizeof(((xattr_acl_header *)0)->a_entries) == 0, " found %lld\n",
                  (long long)(int)sizeof(((xattr_acl_header *)0)->a_entries));
 #endif
+
+        /* check fid range */
+        LASSERTF((int)sizeof(struct lu_seq_range) == 24, " found %lld\n",
+                 (long long)(int)sizeof(struct lu_seq_range));
+        LASSERTF((int)offsetof(struct lu_seq_range, lsr_start) == 0, " found %lld\n",
+                 (long long)(int)offsetof(struct lu_seq_range, lsr_start));
+        LASSERTF((int)offsetof(struct lu_seq_range, lsr_end) == 8, " found %lld\n",
+                 (long long)(int)offsetof(struct lu_seq_range, lsr_end));
+        LASSERTF((int)offsetof(struct lu_seq_range, lsr_mdt) == 16, " found %lld\n",
+                 (long long)(int)offsetof(struct lu_seq_range, lsr_mdt));
+        LASSERTF((int)offsetof(struct lu_seq_range, lsr_padding) == 20, " found %lld\n",
+                 (long long)(int)offsetof(struct lu_seq_range, lsr_padding));
+
 }
 

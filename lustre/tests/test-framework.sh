@@ -235,8 +235,8 @@ load_modules() {
     load_module ptlrpc/ptlrpc
     load_module ptlrpc/gss/ptlrpc_gss
     [ "$USE_QUOTA" = "yes" -a "$LQUOTA" != "no" ] && load_module quota/lquota
-    load_module fid/fid
     load_module fld/fld
+    load_module fid/fid
     load_module lmv/lmv
     load_module mdc/mdc
     load_module osc/osc

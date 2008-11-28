@@ -447,6 +447,7 @@ static int cmm_add_mdc(const struct lu_env *env,
         struct lu_device *ld;
         struct lu_device *cmm_lu = cmm2lu_dev(cm);
         mdsno_t mdc_num;
+        struct lu_site *site = cmm2lu_dev(cm)->ld_site;
         int rc;
         ENTRY;
 
@@ -471,7 +472,7 @@ static int cmm_add_mdc(const struct lu_env *env,
         if (IS_ERR(ld))
                 RETURN(PTR_ERR(ld));
 
-        ld->ld_site = cmm2lu_dev(cm)->ld_site;
+        ld->ld_site = site;
 
         rc = ldt->ldt_ops->ldto_device_init(env, ld, NULL, NULL);
         if (rc) {
@@ -509,6 +510,13 @@ static int cmm_add_mdc(const struct lu_env *env,
         target.ft_exp = mc->mc_desc.cl_exp;
         fld_client_add_target(cm->cmm_fld, &target);
 
+        if (mc->mc_num == 0) {
+                /* this is mdt0 -> mc export, fld lookup need this export
+                   to forward fld lookup request. */
+                LASSERT(!lu_site2md(site)->ms_server_fld->lsf_control_exp);
+                lu_site2md(site)->ms_server_fld->lsf_control_exp =
+                                          mc->mc_desc.cl_exp;
+        }
         /* Set max md size for the mdc. */
         rc = cmm_post_init_mdc(env, cm);
         RETURN(rc);

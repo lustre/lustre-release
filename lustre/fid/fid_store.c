@@ -62,9 +62,6 @@
 #include "fid_internal.h"
 
 #ifdef __KERNEL__
-enum {
-        SEQ_TXN_STORE_CREDITS = 20
-};
 
 static struct lu_buf *seq_store_buf(struct seq_thread_info *info)
 {
@@ -76,47 +73,68 @@ static struct lu_buf *seq_store_buf(struct seq_thread_info *info)
         return buf;
 }
 
-/* This function implies that caller takes care about locking. */
-int seq_store_write(struct lu_server_seq *seq,
-                    const struct lu_env *env)
+struct thandle * seq_store_trans_start(struct lu_server_seq *seq,
+                                       const struct lu_env *env, int credit)
 {
-        struct dt_object *dt_obj = seq->lss_obj;
         struct seq_thread_info *info;
         struct dt_device *dt_dev;
         struct thandle *th;
-        loff_t pos = 0;
-	int rc;
-	ENTRY;
+        ENTRY;
 
         dt_dev = lu2dt_dev(seq->lss_obj->do_lu.lo_dev);
         info = lu_context_key_get(&env->le_ctx, &seq_thread_key);
         LASSERT(info != NULL);
 
-        /* Stub here, will fix it later. */
-        txn_param_init(&info->sti_txn, SEQ_TXN_STORE_CREDITS);
+        txn_param_init(&info->sti_txn, credit);
 
         th = dt_dev->dd_ops->dt_trans_start(env, dt_dev, &info->sti_txn);
-        if (!IS_ERR(th)) {
-                /* Store ranges in le format. */
-                range_cpu_to_le(&info->sti_space, &seq->lss_space);
+        return th;
+}
 
-                rc = dt_obj->do_body_ops->dbo_write(env, dt_obj,
-                                                    seq_store_buf(info),
-                                                    &pos, th, BYPASS_CAPA, 1);
-                if (rc == sizeof(info->sti_space)) {
-                        CDEBUG(D_INFO, "%s: Space - "DRANGE"\n",
-                               seq->lss_name, PRANGE(&seq->lss_space));
-                        rc = 0;
-                } else if (rc >= 0) {
-                        rc = -EIO;
-                }
+void seq_store_trans_stop(struct lu_server_seq *seq,
+                          const struct lu_env *env,
+                          struct thandle *th)
+{
+        struct dt_device *dt_dev;
+        ENTRY;
 
-                dt_dev->dd_ops->dt_trans_stop(env, th);
-        } else {
-                rc = PTR_ERR(th);
+        dt_dev = lu2dt_dev(seq->lss_obj->do_lu.lo_dev);
+
+        dt_dev->dd_ops->dt_trans_stop(env, th);
+}
+
+/* This function implies that caller takes care about locking. */
+int seq_store_write(struct lu_server_seq *seq,
+                    const struct lu_env *env,
+                    struct thandle *th)
+{
+        struct dt_object *dt_obj = seq->lss_obj;
+        struct seq_thread_info *info;
+        struct dt_device *dt_dev;
+        loff_t pos = 0;
+        int rc;
+        ENTRY;
+
+        dt_dev = lu2dt_dev(seq->lss_obj->do_lu.lo_dev);
+        info = lu_context_key_get(&env->le_ctx, &seq_thread_key);
+        LASSERT(info != NULL);
+
+        /* Store ranges in le format. */
+        range_cpu_to_le(&info->sti_space, &seq->lss_space);
+
+        rc = dt_obj->do_body_ops->dbo_write(env, dt_obj,
+                                            seq_store_buf(info),
+                                            &pos, th, BYPASS_CAPA, 1);
+        if (rc == sizeof(info->sti_space)) {
+                CDEBUG(D_INFO, "%s: Space - "DRANGE"\n",
+                       seq->lss_name, PRANGE(&seq->lss_space));
+                rc = 0;
+        } else if (rc >= 0) {
+                rc = -EIO;
         }
-	
-	RETURN(rc);
+
+
+        RETURN(rc);
 }
 
 /*

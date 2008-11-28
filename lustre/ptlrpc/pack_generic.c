@@ -1956,12 +1956,6 @@ void lustre_swab_lmv_desc (struct lmv_desc *ld)
         __swab32s (&ld->ld_active_tgt_count);
         /* uuid endian insensitive */
 }
-/*end adding MDT by huanghua@clusterfs.com*/
-void lustre_swab_md_fld (struct md_fld *mf)
-{
-        __swab64s(&mf->mf_seq);
-        __swab64s(&mf->mf_mds);
-}
 
 static void print_lum (struct lov_user_md *lum)
 {

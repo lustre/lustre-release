@@ -66,12 +66,12 @@ int cmm_fld_lookup(struct cmm_device *cm, const struct lu_fid *fid,
         }
 
         if (*mds > cm->cmm_tgt_count) {
-                CERROR("Got invalid mdsno: "LPU64" (max: %u)\n",
+                CERROR("Got invalid mdsno: %x (max: %x)\n",
                        *mds, cm->cmm_tgt_count);
                 rc = -EINVAL;
         } else {
-                CDEBUG(D_INFO, "CMM: got MDS "LPU64" for sequence: "
-                       LPU64"\n", *mds, fid_seq(fid));
+                CDEBUG(D_INFO, "CMM: got MDS %x for sequence: "
+                       LPX64"\n", *mds, fid_seq(fid));
         }
 
         RETURN (rc);

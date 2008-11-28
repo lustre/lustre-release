@@ -49,8 +49,12 @@
 struct seq_thread_info {
         struct req_capsule     *sti_pill;
         struct txn_param        sti_txn;
-        struct lu_range         sti_space;
+        struct lu_seq_range     sti_space;
         struct lu_buf           sti_buf;
+};
+
+enum {
+        SEQ_TXN_STORE_CREDITS = 20
 };
 
 extern struct lu_context_key seq_thread_key;
@@ -60,7 +64,7 @@ int seq_client_alloc_super(struct lu_client_seq *seq,
                            const struct lu_env *env);
 
 int seq_client_replay_super(struct lu_client_seq *seq,
-                            struct lu_range *range,
+                            struct lu_seq_range *range,
                             const struct lu_env *env);
 
 /* Store API functions. */
@@ -72,10 +76,18 @@ void seq_store_fini(struct lu_server_seq *seq,
                     const struct lu_env *env);
 
 int seq_store_write(struct lu_server_seq *seq,
-                    const struct lu_env *env);
+                    const struct lu_env *env,
+                    struct thandle *th);
 
 int seq_store_read(struct lu_server_seq *seq,
                    const struct lu_env *env);
+
+struct thandle * seq_store_trans_start(struct lu_server_seq *seq,
+                                       const struct lu_env *env,
+                                       int credits);
+void seq_store_trans_stop(struct lu_server_seq *seq,
+                          const struct lu_env *env,
+                          struct thandle *th);
 
 #ifdef LPROCFS
 extern struct lprocfs_vars seq_server_proc_list[];

@@ -168,74 +168,85 @@
 #define LUSTRE_LOG_VERSION  0x00050000
 #define LUSTRE_MGS_VERSION  0x00060000
 
-typedef __u64 mdsno_t;
+typedef __u32 mdsno_t;
 typedef __u64 seqno_t;
 
-struct lu_range {
-        __u64 lr_start;
-        __u64 lr_end;
-        /** stub for compact fld work. */
-        __u64 lr_padding;
+/**
+ * Describes a range of sequence, lsr_start is included but lsr_end is
+ * not in the range.
+ * Same structure is used in fld module where lsr_mdt field holds mdt id
+ * of the home mdt.
+ */
+
+struct lu_seq_range {
+        __u64 lsr_start;
+        __u64 lsr_end;
+        __u32 lsr_mdt;
+        __u32 lsr_padding;
 };
 
 /**
  * returns  width of given range \a r
  */
 
-static inline __u64 range_space(const struct lu_range *range)
+static inline __u64 range_space(const struct lu_seq_range *range)
 {
-        return range->lr_end - range->lr_start;
+        return range->lsr_end - range->lsr_start;
 }
 
 /**
  * initialize range to zero
  */
-static inline void range_init(struct lu_range *range)
+
+static inline void range_init(struct lu_seq_range *range)
 {
-        range->lr_start = range->lr_end = 0;
+        range->lsr_start = range->lsr_end = range->lsr_mdt = 0;
 }
 
 /**
  * check if given seq id \a s is within given range \a r
  */
-static inline int range_within(struct lu_range *range,
+
+static inline int range_within(const struct lu_seq_range *range,
                                __u64 s)
 {
-        return s >= range->lr_start && s < range->lr_end;
+        return s >= range->lsr_start && s < range->lsr_end;
 }
 
 /**
  * allocate \a w units of sequence from range \a from.
  */
-static inline void range_alloc(struct lu_range *to,
-                               struct lu_range *from,
+static inline void range_alloc(struct lu_seq_range *to,
+                               struct lu_seq_range *from,
                                __u64 width)
 {
-        to->lr_start = from->lr_start;
-        to->lr_end = from->lr_start + width;
-        from->lr_start += width;
+        to->lsr_start = from->lsr_start;
+        to->lsr_end = from->lsr_start + width;
+        from->lsr_start += width;
 }
 
-static inline int range_is_sane(const struct lu_range *range)
+static inline int range_is_sane(const struct lu_seq_range *range)
 {
-        return (range->lr_end >= range->lr_start);
+        return (range->lsr_end >= range->lsr_start);
 }
 
-static inline int range_is_zero(const struct lu_range *range)
+static inline int range_is_zero(const struct lu_seq_range *range)
 {
-        return (range->lr_start == 0 && range->lr_end == 0);
+        return (range->lsr_start == 0 && range->lsr_end == 0);
 }
 
-static inline int range_is_exhausted(const struct lu_range *range)
+static inline int range_is_exhausted(const struct lu_seq_range *range)
+
 {
         return range_space(range) == 0;
 }
 
-#define DRANGE "[%#16.16"LPF64"x-%#16.16"LPF64"x]"
+#define DRANGE "[%#16.16"LPF64"x-%#16.16"LPF64"x):%x"
 
 #define PRANGE(range)      \
-        (range)->lr_start, \
-        (range)->lr_end
+        (range)->lsr_start, \
+        (range)->lsr_end,    \
+        (range)->lsr_mdt
 
 /** \defgroup lu_fid lu_fid
  * @{ */
@@ -443,7 +454,7 @@ static inline int fid_is_zero(const struct lu_fid *fid)
 }
 
 extern void lustre_swab_lu_fid(struct lu_fid *fid);
-extern void lustre_swab_lu_range(struct lu_range *range);
+extern void lustre_swab_lu_seq_range(struct lu_seq_range *range);
 
 static inline int lu_fid_eq(const struct lu_fid *f0,
                             const struct lu_fid *f1)
@@ -1744,13 +1755,6 @@ struct lmv_desc {
 };
 
 extern void lustre_swab_lmv_desc (struct lmv_desc *ld);
-
-struct md_fld {
-        seqno_t mf_seq;
-        mdsno_t mf_mds;
-};
-
-extern void lustre_swab_md_fld (struct md_fld *mf);
 
 enum fld_rpc_opc {
         FLD_QUERY                       = 600,

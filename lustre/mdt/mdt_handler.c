@@ -3373,7 +3373,7 @@ static void mdt_seq_adjust(const struct lu_env *env,
                           struct mdt_device *m, int lost)
 {
         struct md_site *ms = mdt_md_site(m);
-        struct lu_range out;
+        struct lu_seq_range out;
         ENTRY;
 
         LASSERT(ms && ms->ms_server_seq);
@@ -3439,6 +3439,7 @@ static int mdt_seq_init(const struct lu_env *env,
                 rc = seq_server_init(ms->ms_control_seq,
                                      m->mdt_bottom, uuid,
                                      LUSTRE_SEQ_CONTROLLER,
+                                     ms,
                                      env);
 
                 if (rc)
@@ -3480,6 +3481,7 @@ static int mdt_seq_init(const struct lu_env *env,
         rc = seq_server_init(ms->ms_server_seq,
                              m->mdt_bottom, uuid,
                              LUSTRE_SEQ_SERVER,
+                             ms,
                              env);
         if (rc)
                 GOTO(out_seq_fini, rc = -ENOMEM);
@@ -3634,7 +3636,8 @@ static int mdt_fld_init(const struct lu_env *env,
                 RETURN(rc = -ENOMEM);
 
         rc = fld_server_init(ms->ms_server_fld,
-                             m->mdt_bottom, uuid, env);
+                             m->mdt_bottom, uuid,
+                             env, ms->ms_node_id);
         if (rc) {
                 OBD_FREE_PTR(ms->ms_server_fld);
                 ms->ms_server_fld = NULL;

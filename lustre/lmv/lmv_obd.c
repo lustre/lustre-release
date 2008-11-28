@@ -978,20 +978,7 @@ int __lmv_fid_alloc(struct lmv_obd *lmv, struct lu_fid *fid,
         rc = obd_fid_alloc(tgt->ltd_exp, fid, NULL);
         if (rc > 0) {
                 LASSERT(fid_is_sane(fid));
-
-                /*
-                 * Client switches to new sequence, setup FLD.
-                 */
-                rc = fld_client_create(&lmv->lmv_fld, fid_seq(fid),
-                                       mds, NULL);
-                if (rc) {
-                        /*
-                         * Delete just allocated fid sequence in case
-                         * of fail back.
-                         */
-                        CERROR("Can't create fld entry, rc %d\n", rc);
-                        obd_fid_delete(tgt->ltd_exp, NULL);
-                }
+                rc = 0;
         }
 
         EXIT;
@@ -1498,7 +1485,7 @@ repeat:
         else if (rc)
                 RETURN(rc);
 
-        CDEBUG(D_INODE, "CREATE '%*s' on "DFID" -> mds #"LPU64"\n",
+        CDEBUG(D_INODE, "CREATE '%*s' on "DFID" -> mds #%x\n",
                op_data->op_namelen, op_data->op_name, PFID(&op_data->op_fid1),
                op_data->op_mds);
 
@@ -1970,7 +1957,7 @@ repeat:
                         RETURN(rc);
         }
 
-        CDEBUG(D_INODE, "Forward to mds #"LPU64" ("DFID")\n",
+        CDEBUG(D_INODE, "Forward to mds #%x ("DFID")\n",
                mds, PFID(&op_data->op_fid1));
 
         op_data->op_fsuid = current->fsuid;
