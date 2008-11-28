@@ -1,3 +1,12 @@
+Implement a JBD per-transaction commit callback.  Users can attach arbitrary
+callbacks to a journal handle, which are propagated to the transaction at
+journal handle stop time.  The commit callbacks are run when the transaction
+is finished commit, and will be passed a non-zero error code if there was
+a commit error.
+
+Signed-off-by: Andreas Dilger <adilger@sun.com>
+
+
 Index: linux-2.6/include/linux/jbd.h
 ===================================================================
 --- linux-2.6.orig/include/linux/jbd.h	2006-07-15 16:08:35.000000000 +0800
@@ -8,23 +17,23 @@ Index: linux-2.6/include/linux/jbd.h
  
 +#define HAVE_JOURNAL_CALLBACK_STATUS
 +/**
-+ *   struct journal_callback - Base structure for callback information.
-+ *   @jcb_list: list information for other callbacks attached to the same handle.
-+ *   @jcb_func: Function to call with this callback structure. 
++ * struct journal_callback - Base structure for callback information
++ * @jcb_list: list information for other callbacks attached to the same handle
++ * @jcb_func: Function to call with this callback structure
 + *
-+ *   This struct is a 'seed' structure for a using with your own callback
-+ *   structs. If you are using callbacks you must allocate one of these
-+ *   or another struct of your own definition which has this struct 
-+ *   as it's first element and pass it to journal_callback_set().
++ * This struct is a 'seed' structure for a using with your own callback
++ * structs. If you are using callbacks you must allocate one of these
++ * or another struct of your own definition which has this struct 
++ * as it's first element and pass it to journal_callback_set().
 + *
-+ *   This is used internally by jbd to maintain callback information.
++ * This is used internally by jbd to maintain callback information.
 + *
-+ *   See journal_callback_set for more information.
++ * See journal_callback_set for more information.
 + **/
 +struct journal_callback {
 +	struct list_head jcb_list;		/* t_jcb_lock */
 +	void (*jcb_func)(struct journal_callback *jcb, int error);
-+	/* user data goes here */
++	/* caller data goes here */
 +};
 +
  struct jbd_revoke_table_s;
@@ -104,7 +113,7 @@ Index: linux-2.6/fs/jbd/commit.c
 ===================================================================
 --- linux-2.6.orig/fs/jbd/commit.c	2006-07-15 16:08:36.000000000 +0800
 +++ linux-2.6/fs/jbd/commit.c	2006-07-15 16:13:01.000000000 +0800
-@@ -708,6 +708,30 @@ wait_for_iobuf:
+@@ -708,6 +708,32 @@ wait_for_iobuf:
             transaction can be removed from any checkpoint list it was on
             before. */
  
@@ -113,7 +122,9 @@ Index: linux-2.6/fs/jbd/commit.c
 +	 * transaction.  It is up to the callback to free any allocated
 +	 * memory.
 +	 *
-+	 * The spinlocking (t_jcb_lock) here is surely unnecessary...
++	 * Locking not strictly required, since this is the only process
++	 * touching this transaction anymore, but is done to keep code
++	 * checkers happy and has no contention in any case. */
 +	 */
 +	spin_lock(&commit_transaction->t_jcb_lock);
 +	if (!list_empty(&commit_transaction->t_jcb)) {
@@ -124,7 +135,7 @@ Index: linux-2.6/fs/jbd/commit.c
 +			struct journal_callback *jcb;
 +
 +			jcb = list_entry(p, struct journal_callback, jcb_list);
-+			list_del(p);
++			list_del_init(p);
 +			spin_unlock(&commit_transaction->t_jcb_lock);
 +			jcb->jcb_func(jcb, error);
 +			spin_lock(&commit_transaction->t_jcb_lock);
@@ -177,7 +188,7 @@ Index: linux-2.6/fs/jbd/transaction.c
  
  	return handle;
  }
-@@ -1291,6 +1294,36 @@ drop:
+@@ -1291,6 +1294,35 @@ drop:
  }
  
  /**
@@ -187,12 +198,11 @@ Index: linux-2.6/fs/jbd/transaction.c
 + * @jcb:  structure with additional information required by func() , and
 + *        some space for jbd internal information.
 + * 
-+ * The function will be
-+ * called when the transaction that this handle is part of has been
-+ * committed to disk with the original callback data struct and the
-+ * error status of the journal as parameters.  There is no guarantee of
-+ * ordering between handles within a single transaction, nor between
-+ * callbacks registered on the same handle.
++ * The function will be called when the transaction that this handle is
++ * part of has been committed to disk with the original callback data
++ * struct and the error status of the journal as parameters.  There is no
++ * guarantee of ordering between handles within a single transaction, nor
++ * between callbacks registered on the same handle.
 + *
 + * The caller is responsible for allocating the journal_callback struct.
 + * This is to allow the caller to add as much extra data to the callback
@@ -204,10 +214,10 @@ Index: linux-2.6/fs/jbd/transaction.c
 +			void (*func)(struct journal_callback *jcb, int error),
 +			struct journal_callback *jcb)
 +{
++	jcb->jcb_func = func;
 +	spin_lock(&handle->h_transaction->t_jcb_lock);
 +	list_add_tail(&jcb->jcb_list, &handle->h_jcb);
 +	spin_unlock(&handle->h_transaction->t_jcb_lock);
-+	jcb->jcb_func = func;
 +}
 +
 +/**
