@@ -69,7 +69,7 @@
 
 typedef struct                                  /* per scheduler state */
 {
-        spinlock_t        kss_lock;             /* serialise */
+        cfs_spinlock_t    kss_lock;             /* serialise */
         struct list_head  kss_rx_conns;         /* conn waiting to be read */
         struct list_head  kss_tx_conns;         /* conn waiting to be written */
         struct list_head  kss_zombie_noop_txs;  /* zombie noop tx list */
@@ -140,7 +140,7 @@ typedef struct
 typedef struct
 {
         __u64             ksnn_incarnation;     /* my epoch */
-        spinlock_t        ksnn_lock;            /* serialise */
+        cfs_spinlock_t    ksnn_lock;            /* serialise */
         int               ksnn_npeers;          /* # peers */
         int               ksnn_shutdown;        /* shutting down? */
         int               ksnn_ninterfaces;     /* IP interfaces */
@@ -152,7 +152,7 @@ typedef struct
         int               ksnd_init;            /* initialisation state */
         int               ksnd_nnets;           /* # networks set up */
 
-        rwlock_t          ksnd_global_lock;     /* stabilize peer/conn ops */
+        cfs_rwlock_t      ksnd_global_lock;     /* stabilize peer/conn ops */
         struct list_head *ksnd_peers;           /* hash table of all my known peers */
         int               ksnd_peer_hash_size;  /* size of ksnd_peers */
 
@@ -161,14 +161,14 @@ typedef struct
         int               ksnd_nschedulers;     /* # schedulers */
         ksock_sched_t    *ksnd_schedulers;      /* their state */
 
-        atomic_t          ksnd_nactive_txs;     /* #active txs */
+        cfs_atomic_t      ksnd_nactive_txs;     /* #active txs */
 
         struct list_head  ksnd_deathrow_conns;  /* conns to close: reaper_lock*/
         struct list_head  ksnd_zombie_conns;    /* conns to free: reaper_lock */
         struct list_head  ksnd_enomem_conns;    /* conns to retry: reaper_lock*/
         cfs_waitq_t       ksnd_reaper_waitq;    /* reaper sleeps here */
         cfs_time_t        ksnd_reaper_waketime; /* when reaper will wake */
-        spinlock_t        ksnd_reaper_lock;     /* serialise */
+        cfs_spinlock_t    ksnd_reaper_lock;     /* serialise */
 
         int               ksnd_enomem_tx;       /* test ENOMEM sender */
         int               ksnd_stall_tx;        /* test sluggish sender */
@@ -178,10 +178,10 @@ typedef struct
         struct list_head  ksnd_connd_routes;    /* routes waiting to be connected */
         cfs_waitq_t       ksnd_connd_waitq;     /* connds sleep here */
         int               ksnd_connd_connecting;/* # connds connecting */
-        spinlock_t        ksnd_connd_lock;      /* serialise */
+        cfs_spinlock_t    ksnd_connd_lock;      /* serialise */
 
         struct list_head  ksnd_idle_noop_txs;   /* list head for freed noop tx */
-        spinlock_t        ksnd_tx_lock;         /* serialise, NOT safe in g_lock */
+        cfs_spinlock_t    ksnd_tx_lock;         /* serialise, NOT safe in g_lock */
 
         ksock_irqinfo_t   ksnd_irqinfo[NR_IRQS];/* irq->scheduler lookup */
 
@@ -209,7 +209,7 @@ typedef struct                                  /* transmit packet */
 {
         struct list_head        tx_list;        /* queue on conn for transmission etc */
         struct list_head        tx_zc_list;     /* queue on peer for ZC request */
-        atomic_t                tx_refcount;    /* tx reference count */
+        cfs_atomic_t            tx_refcount;    /* tx reference count */
         int                     tx_nob;         /* # packet bytes */
         int                     tx_resid;       /* residual bytes */
         int                     tx_niov;        /* # packet iovec frags */
@@ -259,8 +259,8 @@ typedef struct ksock_conn
         cfs_socket_t       *ksnc_sock;          /* actual socket */
         void               *ksnc_saved_data_ready; /* socket's original data_ready() callback */
         void               *ksnc_saved_write_space; /* socket's original write_space() callback */
-        atomic_t            ksnc_conn_refcount; /* conn refcount */
-        atomic_t            ksnc_sock_refcount; /* sock refcount */
+        cfs_atomic_t        ksnc_conn_refcount; /* conn refcount */
+        cfs_atomic_t        ksnc_sock_refcount; /* sock refcount */
         ksock_sched_t      *ksnc_scheduler;     /* who schedules this connection */
         __u32               ksnc_myipaddr;      /* my IP */
         __u32               ksnc_ipaddr;        /* peer's IP */
@@ -300,7 +300,7 @@ typedef struct ksock_conn
                                                  * b. noop ZC-ACK packet */
         cfs_time_t          ksnc_tx_deadline;   /* when (in jiffies) tx times out */
         int                 ksnc_tx_bufnob;     /* send buffer marker */
-        atomic_t            ksnc_tx_nob;        /* # bytes queued */
+        cfs_atomic_t        ksnc_tx_nob;        /* # bytes queued */
         int                 ksnc_tx_ready;      /* write space */
         int                 ksnc_tx_scheduled;  /* being progressed */
 } ksock_conn_t;
@@ -310,7 +310,7 @@ typedef struct ksock_route
         struct list_head    ksnr_list;          /* chain on peer route list */
         struct list_head    ksnr_connd_list;    /* chain on ksnr_connd_routes */
         struct ksock_peer  *ksnr_peer;          /* owning peer */
-        atomic_t            ksnr_refcount;      /* # users */
+        cfs_atomic_t        ksnr_refcount;      /* # users */
         cfs_time_t          ksnr_timeout;       /* when (in jiffies) reconnection can happen next */
         cfs_duration_t      ksnr_retry_interval; /* how long between retries */
         __u32               ksnr_myipaddr;      /* my IP */
@@ -328,7 +328,7 @@ typedef struct ksock_peer
 {
         struct list_head    ksnp_list;          /* stash on global peer list */
         lnet_process_id_t   ksnp_id;            /* who's on the other end(s) */
-        atomic_t            ksnp_refcount;      /* # users */
+        cfs_atomic_t        ksnp_refcount;      /* # users */
         int                 ksnp_sharecount;    /* lconf usage counter */
         int                 ksnp_closing;       /* being closed */
         int                 ksnp_accepting;     /* # passive connections pending */
@@ -339,7 +339,7 @@ typedef struct ksock_peer
         struct list_head    ksnp_conns;         /* all active connections */
         struct list_head    ksnp_routes;        /* routes */
         struct list_head    ksnp_tx_queue;      /* waiting packets */
-        spinlock_t          ksnp_lock;          /* serialize, NOT safe in g_lock */
+        cfs_spinlock_t      ksnp_lock;          /* serialize, NOT safe in g_lock */
         struct list_head    ksnp_zc_req_list;   /* zero copy requests wait for ACK  */
         cfs_time_t          ksnp_last_alive;    /* when (in jiffies) I was last alive */
         lnet_ni_t          *ksnp_ni;            /* which network */
@@ -399,8 +399,8 @@ ksocknal_nid2peerlist (lnet_nid_t nid)
 static inline void
 ksocknal_conn_addref (ksock_conn_t *conn)
 {
-        LASSERT (atomic_read(&conn->ksnc_conn_refcount) > 0);
-        atomic_inc(&conn->ksnc_conn_refcount);
+        LASSERT (cfs_atomic_read(&conn->ksnc_conn_refcount) > 0);
+        cfs_atomic_inc(&conn->ksnc_conn_refcount);
 }
 
 extern void ksocknal_queue_zombie_conn (ksock_conn_t *conn);
@@ -409,8 +409,8 @@ extern void ksocknal_finalize_zcreq(ksock_conn_t *conn);
 static inline void
 ksocknal_conn_decref (ksock_conn_t *conn)
 {
-        LASSERT (atomic_read(&conn->ksnc_conn_refcount) > 0);
-        if (atomic_dec_and_test(&conn->ksnc_conn_refcount))
+        LASSERT (cfs_atomic_read(&conn->ksnc_conn_refcount) > 0);
+        if (cfs_atomic_dec_and_test(&conn->ksnc_conn_refcount))
                 ksocknal_queue_zombie_conn(conn);
 }
 
@@ -419,13 +419,13 @@ ksocknal_connsock_addref (ksock_conn_t *conn)
 {
         int   rc = -ESHUTDOWN;
 
-        read_lock (&ksocknal_data.ksnd_global_lock);
+        cfs_read_lock (&ksocknal_data.ksnd_global_lock);
         if (!conn->ksnc_closing) {
-                LASSERT (atomic_read(&conn->ksnc_sock_refcount) > 0);
-                atomic_inc(&conn->ksnc_sock_refcount);
+                LASSERT (cfs_atomic_read(&conn->ksnc_sock_refcount) > 0);
+                cfs_atomic_inc(&conn->ksnc_sock_refcount);
                 rc = 0;
         }
-        read_unlock (&ksocknal_data.ksnd_global_lock);
+        cfs_read_unlock (&ksocknal_data.ksnd_global_lock);
 
         return (rc);
 }
@@ -433,8 +433,8 @@ ksocknal_connsock_addref (ksock_conn_t *conn)
 static inline void
 ksocknal_connsock_decref (ksock_conn_t *conn)
 {
-        LASSERT (atomic_read(&conn->ksnc_sock_refcount) > 0);
-        if (atomic_dec_and_test(&conn->ksnc_sock_refcount)) {
+        LASSERT (cfs_atomic_read(&conn->ksnc_sock_refcount) > 0);
+        if (cfs_atomic_dec_and_test(&conn->ksnc_sock_refcount)) {
                 LASSERT (conn->ksnc_closing);
                 libcfs_sock_release(conn->ksnc_sock);
                 conn->ksnc_sock = NULL;
@@ -445,8 +445,8 @@ ksocknal_connsock_decref (ksock_conn_t *conn)
 static inline void
 ksocknal_tx_addref (ksock_tx_t *tx)
 {
-        LASSERT (atomic_read(&tx->tx_refcount) > 0);
-        atomic_inc(&tx->tx_refcount);
+        LASSERT (cfs_atomic_read(&tx->tx_refcount) > 0);
+        cfs_atomic_inc(&tx->tx_refcount);
 }
 
 extern void ksocknal_tx_done (lnet_ni_t *ni, ksock_tx_t *tx);
@@ -454,16 +454,16 @@ extern void ksocknal_tx_done (lnet_ni_t *ni, ksock_tx_t *tx);
 static inline void
 ksocknal_tx_decref (ksock_tx_t *tx)
 {
-        LASSERT (atomic_read(&tx->tx_refcount) > 0);
-        if (atomic_dec_and_test(&tx->tx_refcount))
+        LASSERT (cfs_atomic_read(&tx->tx_refcount) > 0);
+        if (cfs_atomic_dec_and_test(&tx->tx_refcount))
                 ksocknal_tx_done(NULL, tx);
 }
 
 static inline void
 ksocknal_route_addref (ksock_route_t *route)
 {
-        LASSERT (atomic_read(&route->ksnr_refcount) > 0);
-        atomic_inc(&route->ksnr_refcount);
+        LASSERT (cfs_atomic_read(&route->ksnr_refcount) > 0);
+        cfs_atomic_inc(&route->ksnr_refcount);
 }
 
 extern void ksocknal_destroy_route (ksock_route_t *route);
@@ -471,16 +471,16 @@ extern void ksocknal_destroy_route (ksock_route_t *route);
 static inline void
 ksocknal_route_decref (ksock_route_t *route)
 {
-        LASSERT (atomic_read (&route->ksnr_refcount) > 0);
-        if (atomic_dec_and_test(&route->ksnr_refcount))
+        LASSERT (cfs_atomic_read (&route->ksnr_refcount) > 0);
+        if (cfs_atomic_dec_and_test(&route->ksnr_refcount))
                 ksocknal_destroy_route (route);
 }
 
 static inline void
 ksocknal_peer_addref (ksock_peer_t *peer)
 {
-        LASSERT (atomic_read (&peer->ksnp_refcount) > 0);
-        atomic_inc(&peer->ksnp_refcount);
+        LASSERT (cfs_atomic_read (&peer->ksnp_refcount) > 0);
+        cfs_atomic_inc(&peer->ksnp_refcount);
 }
 
 extern void ksocknal_destroy_peer (ksock_peer_t *peer);
@@ -488,8 +488,8 @@ extern void ksocknal_destroy_peer (ksock_peer_t *peer);
 static inline void
 ksocknal_peer_decref (ksock_peer_t *peer)
 {
-        LASSERT (atomic_read (&peer->ksnp_refcount) > 0);
-        if (atomic_dec_and_test(&peer->ksnp_refcount))
+        LASSERT (cfs_atomic_read (&peer->ksnp_refcount) > 0);
+        if (cfs_atomic_dec_and_test(&peer->ksnp_refcount))
                 ksocknal_destroy_peer (peer);
 }
 
@@ -558,3 +558,7 @@ extern int ksocknal_lib_tunables_init(void);
 extern void ksocknal_lib_tunables_fini(void);
 
 extern void ksocknal_lib_csum_tx(ksock_tx_t *tx);
+
+extern int ksocknal_lib_memory_pressure(ksock_conn_t *conn);
+extern __u64 ksocknal_lib_new_incarnation(void);
+extern int ksocknal_lib_bind_thread_to_cpu(int id);
