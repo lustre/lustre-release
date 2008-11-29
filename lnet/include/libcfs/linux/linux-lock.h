@@ -111,6 +111,30 @@
  * - wait_for_completion(c)
  */
 
+/*
+ * spinlock "implementation"
+ */
+
+typedef spinlock_t cfs_spinlock_t;
+
+#define cfs_spin_lock_init(lock) spin_lock_init(lock)
+#define cfs_spin_lock(lock)      spin_lock(lock)
+#define cfs_spin_lock_bh(lock)   spin_lock_bh(lock)
+#define cfs_spin_unlock(lock)    spin_unlock(lock)
+#define cfs_spin_unlock_bh(lock) spin_unlock_bh(lock)
+
+/*
+ * rwlock "implementation"
+ */
+
+typedef rwlock_t cfs_rwlock_t;
+
+#define cfs_rwlock_init(lock)      rwlock_init(lock)
+#define cfs_read_lock(lock)        read_lock(lock)
+#define cfs_read_unlock(lock)      read_unlock(lock)
+#define cfs_write_lock_bh(lock)    write_lock_bh(lock)
+#define cfs_write_unlock_bh(lock)  write_unlock_bh(lock)
+
 /* __KERNEL__ */
 #else
 
