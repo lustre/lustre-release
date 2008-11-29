@@ -1901,7 +1901,7 @@ struct cl_lock *cl_lock_request(const struct lu_env *env, struct cl_io *io,
                                         break;
                                 } else if (warn)
                                         CL_LOCK_DEBUG(D_WARNING, env, lock,
-                                                      "got\n");
+                                                      "got (see bug 17665)\n");
                                 cl_unuse_locked(env, lock);
                         }
                         cl_lock_hold_release(env, lock, scope, source);
