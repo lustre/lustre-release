@@ -1546,20 +1546,15 @@ test_18b() {
 	test_18bc_sub normal
 	test_18bc_sub directio
 	# check if watchdog is triggered
-	MSG="test 18b: run for fixing bug14840"
-	do_facet ost1 "dmesg > $TMP/lustre-log-${TESTNAME}.log"
-	do_facet client cat > $TMP/lustre-log-${TESTNAME}.awk <<-EOF
-		/$MSG/ {
-		    start = 1;
-		}
-		/Watchdog triggered/ {
-		    if (start) {
-		        print \$0;
-		    }
-		}
-	EOF
-	watchdog=`do_facet ost1 awk -f $TMP/lustre-log-${TESTNAME}.awk $TMP/lustre-log-${TESTNAME}.log`
+	do_facet ost1 dmesg > $TMP/lustre-log-${TESTNAME}.log
+	watchdog=`awk '/test 18b/ {start = 1;}
+	               /Watchdog triggered/ {
+			       if (start) {
+				       print;
+			       }
+		       }' $TMP/lustre-log-${TESTNAME}.log`
 	if [ -n "$watchdog" ]; then error "$watchdog"; fi
+	rm -f $TMP/lustre-log-${TESTNAME}.log
 }
 run_test_with_stat 18b "run for fixing bug14840(mds failover, no watchdog) ==========="
 
