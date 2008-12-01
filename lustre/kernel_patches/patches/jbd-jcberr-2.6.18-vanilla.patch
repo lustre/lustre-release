@@ -124,7 +124,7 @@ Index: linux-2.6/fs/jbd/commit.c
 +	 *
 +	 * Locking not strictly required, since this is the only process
 +	 * touching this transaction anymore, but is done to keep code
-+	 * checkers happy and has no contention in any case. */
++	 * checkers happy and has no contention in any case.
 +	 */
 +	spin_lock(&commit_transaction->t_jcb_lock);
 +	if (!list_empty(&commit_transaction->t_jcb)) {
