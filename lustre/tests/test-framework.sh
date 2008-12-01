@@ -1005,6 +1005,7 @@ setupall() {
         [ -n "$CLIENTS" ] && zconf_mount_clients $CLIENTS $MOUNT2
     fi
     sleep 5
+    init_versions_vars
 }
 
 mounted_lustre_filesystems() {
@@ -1042,6 +1043,12 @@ init_facets_vars () {
     done
 }
 
+init_versions_vars () {
+    export MDSVER=$(do_facet mds "lctl get_param version" | cut -d. -f1,2)
+    export OSTVER=$(do_facet ost1 "lctl get_param version" | cut -d. -f1,2)
+    export CLIVER=$(lctl get_param version | cut -d. -f 1,2)
+}
+
 check_config () {
     local mntpt=$1
     
@@ -1066,6 +1073,7 @@ check_and_setup_lustre() {
     else
         check_config $MOUNT
         init_facets_vars
+        init_versions_vars
     fi
     if [ "$ONLY" == "setup" ]; then
         exit 0
@@ -1702,9 +1710,13 @@ is_patchless ()
     lctl get_param version | grep -q patchless
 }
 
+check_versions () {
+    [ "$MDSVER" = "$CLIVER" -a "$OSTVER" = "$CLIVER" ]
+}
+
 get_node_count() {
-   local nodes="$@"
-   echo $nodes | wc -w || true
+    local nodes="$@"
+    echo $nodes | wc -w || true
 }
 
 mixed_ost_devs () {
