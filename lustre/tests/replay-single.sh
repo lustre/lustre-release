@@ -1811,31 +1811,22 @@ test_70b () {
 
 	zconf_mount_clients $CLIENTS $DIR
 	
-	local duration="-t 60"
-	local cmd="rundbench 1 $duration "
+	local duration=120
+	[ "$SLOW" = "no" ] && duration=60
+	local cmd="rundbench 1 -t $duration"
 	local PID=""
-	for CLIENT in ${CLIENTS//,/ }; do
-		$PDSH $CLIENT "set -x; PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests/:${DBENCH_LIB} DBENCH_LIB=${DBENCH_LIB} $cmd" &
-		PID=$!
-		echo $PID >pid.$CLIENT
-		echo "Started load PID=`cat pid.$CLIENT`"
-	done
+	do_nodes $CLIENTS "set -x; PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests/:$DBENCH_LIB DBENCH_LIB=$DBENCH_LIB $cmd" &
+	PID=$!
+	log "Started rundbench load PID=$PID ..."
 
+	sleep $((duration / 4))
 	replay_barrier $SINGLEMDS 
 	sleep 3 # give clients a time to do operations
 
 	log "$TESTNAME fail mds 1"
 	fail $SINGLEMDS
 
-# wait for client to reconnect to MDS
-	sleep $TIMEOUT
-
-	for CLIENT in ${CLIENTS//,/ }; do
-		PID=`cat pid.$CLIENT`
-		wait $PID
-		rc=$?
-		echo "load on ${CLIENT} returned $rc"
-	done
+	wait $PID || error "rundbench load on $CLIENTS failed!"
 
 }
 run_test 70b "mds recovery; $CLIENTCOUNT clients"
