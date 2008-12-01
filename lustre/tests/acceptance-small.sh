@@ -61,6 +61,7 @@ setup_if_needed() {
     local MOUNTED=$(mounted_lustre_filesystems)
     if $(echo $MOUNTED | grep -w -q $MOUNT); then
         check_config $MOUNT
+        init_versions_vars
         return
     fi
 
@@ -315,8 +316,12 @@ for NAME in $CONFIGS; do
 	fi
 
 	[ "$NETTYPE" = "tcp" -o "$NETTYPE" = "ptl" ] || LIBLUSTRE=no # bug 15660
+	if [ "$LIBLUSTRE" != "no" ] && ! check_versions ; then
+		skip liblustre version mismatch: cli $CLIVER, mds $MDSVER, ost $OSTVER
+		LIBLUSTRE=no	# bug 17696
+	fi
 	if [ "$LIBLUSTRE" != "no" ]; then
-	        title liblustre
+		title liblustre
 		assert_env MGSNID MOUNT2
 		export LIBLUSTRE_MOUNT_POINT=$MOUNT2
 		export LIBLUSTRE_MOUNT_RETRY=5
