@@ -734,7 +734,7 @@ int t22(char *name)
         ENTER("make sure O_APPEND take effect");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t22_file", lustre_path);
 
-        fd = open(file, O_RDWR|O_CREAT|O_APPEND, (mode_t)0666);
+        fd = open(file, O_TRUNC|O_RDWR|O_CREAT|O_APPEND, (mode_t)0666);
         if (fd < 0) {
                 printf("error open file: %s\n", strerror(errno));
                 return(-1);

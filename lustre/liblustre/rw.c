@@ -446,11 +446,10 @@ void llu_io_init(struct cl_io *io, struct inode *inode, int write)
                 io->u.ci_wr.wr_append = lli->lli_open_flags & O_APPEND;
         io->ci_obj  = llu_i2info(inode)->lli_clob;
 
-        if (lli->lli_open_flags & O_APPEND)
+        if ((lli->lli_open_flags & O_APPEND) && write)
                 io->ci_lockreq = CILR_MANDATORY;
         else
                 io->ci_lockreq = CILR_NEVER;
-
 }
 
 int llu_iop_read(struct inode *ino,

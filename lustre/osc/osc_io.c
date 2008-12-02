@@ -602,19 +602,15 @@ static void osc_req_attr_set(const struct lu_env *env,
                 opg = osc_cl_page_osc(apage);
                 apage = opg->ops_cl.cpl_page; /* now apage is a sub-page */
                 lock = cl_lock_at_page(env, apage->cp_obj, apage, NULL, 1, 1);
-                if (lock != NULL) {
-                        olck = osc_lock_at(lock);
-                        LASSERT(olck != NULL);
-                        /* check for lockless io. */
-                        if (olck->ols_lock != NULL) {
-                                oa->o_handle = olck->ols_lock->l_remote_handle;
-                                oa->o_valid |= OBD_MD_FLHANDLE;
-                        }
-                        cl_lock_put(env, lock);
-                } else {
-                        /* Should only be possible with liblustre */
-                        LASSERT(LIBLUSTRE_CLIENT);
+                LASSERT(lock != NULL);
+                olck = osc_lock_at(lock);
+                LASSERT(olck != NULL);
+                /* check for lockless io. */
+                if (olck->ols_lock != NULL) {
+                        oa->o_handle = olck->ols_lock->l_remote_handle;
+                        oa->o_valid |= OBD_MD_FLHANDLE;
                 }
+                cl_lock_put(env, lock);
         }
 }
 
