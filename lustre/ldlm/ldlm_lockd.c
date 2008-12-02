@@ -321,7 +321,8 @@ repeat:
                         LDLM_LOCK_GET(lock);
                         spin_unlock_bh(&waiting_locks_spinlock);
                         LDLM_DEBUG(lock, "prolong the busy lock");
-                        ldlm_refresh_waiting_lock(lock);
+                        ldlm_refresh_waiting_lock(lock,
+                                                  ldlm_get_enq_timeout(lock));
                         spin_lock_bh(&waiting_locks_spinlock);
 
                         if (!cont) {
@@ -380,7 +381,7 @@ repeat:
  *
  * Called with the namespace lock held.
  */
-static int __ldlm_add_waiting_lock(struct ldlm_lock *lock)
+static int __ldlm_add_waiting_lock(struct ldlm_lock *lock, int seconds)
 {
         cfs_time_t timeout;
         cfs_time_t timeout_rounded;
@@ -390,11 +391,9 @@ static int __ldlm_add_waiting_lock(struct ldlm_lock *lock)
 
         if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT) ||
             OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_TIMEOUT))
-                timeout = 2;
-        else
-                timeout = ldlm_get_enq_timeout(lock);
+                seconds = 2;
 
-        timeout = cfs_time_shift(timeout);
+        timeout = cfs_time_shift(seconds);
         if (likely(cfs_time_after(timeout, lock->l_callback_timeout)))
                 lock->l_callback_timeout = timeout;
 
@@ -429,7 +428,7 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
                 return 0;
         }
 
-        ret = __ldlm_add_waiting_lock(lock);
+        ret = __ldlm_add_waiting_lock(lock, ldlm_get_enq_timeout(lock));
         if (ret)
                 /* grab ref on the lock if it has been added to the
                  * waiting list */
@@ -503,7 +502,7 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
  *
  * Called with namespace lock held.
  */
-int ldlm_refresh_waiting_lock(struct ldlm_lock *lock)
+int ldlm_refresh_waiting_lock(struct ldlm_lock *lock, int timeout)
 {
         if (lock->l_export == NULL) {
                 /* We don't have a "waiting locks list" on clients. */
@@ -522,7 +521,7 @@ int ldlm_refresh_waiting_lock(struct ldlm_lock *lock)
         /* we remove/add the lock to the waiting list, so no needs to
          * release/take a lock reference */
         __ldlm_del_waiting_lock(lock);
-        __ldlm_add_waiting_lock(lock);
+        __ldlm_add_waiting_lock(lock, timeout);
         spin_unlock_bh(&waiting_locks_spinlock);
 
         LDLM_DEBUG(lock, "refreshed");
@@ -541,7 +540,7 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
         RETURN(0);
 }
 
-int ldlm_refresh_waiting_lock(struct ldlm_lock *lock)
+int ldlm_refresh_waiting_lock(struct ldlm_lock *lock, int timeout)
 {
         RETURN(0);
 }
