@@ -256,7 +256,7 @@ int mds_client_add(struct obd_device *obd, struct obd_export *exp,
                         exp->exp_last_request_time = cfs_time_current_sec();
                         /* remember first epoch of client for orphan handling */
                         med->med_lcd->lcd_first_epoch =
-                                 cpu_to_le32(lr_epoch(mds->mds_last_transno));
+                                  cpu_to_le32(lr_epoch(mds->mds_last_transno));
                         rc = fsfilt_add_journal_cb(obd, 0, handle,
                                                    target_client_add_cb, exp);
                         if (rc == 0) {
@@ -681,8 +681,11 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 /* bz13079: this won't be changed for mds */
                 obd->obd_recovery_max_time = OBD_RECOVERY_MAX_TIME;
 #endif
+        } else {
+                LASSERT(!obd->obd_recovering);
+                /* VBR: update boot epoch after recovery */
+                mds_update_last_epoch(obd);
         }
-
         mds->mds_mount_count = mount_count + 1;
         lsd->lsd_mount_count = lsd->lsd_compat14 =
                 cpu_to_le64(mds->mds_mount_count);
