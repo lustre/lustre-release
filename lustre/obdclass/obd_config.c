@@ -448,19 +448,22 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
 
 static void dump_exports(struct obd_device *obd)
 {
-        struct obd_export *exp, *n;
+        struct obd_export *exp;
 
-        list_for_each_entry_safe(exp, n, &obd->obd_exports, exp_obd_chain) {
+        spin_lock(&obd->obd_dev_lock);
+        list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain) {
                 struct ptlrpc_reply_state *rs;
                 struct ptlrpc_reply_state *first_reply = NULL;
                 int                        nreplies = 0;
 
+                spin_lock(&exp->exp_lock);
                 list_for_each_entry (rs, &exp->exp_outstanding_replies,
                                      rs_exp_list) {
                         if (nreplies == 0)
                                 first_reply = rs;
                         nreplies++;
                 }
+                spin_unlock(&exp->exp_lock);
 
                 CDEBUG(D_IOCTL, "%s: %p %s %s %d %d %d: %p %s\n",
                        obd->obd_name, exp, exp->exp_client_uuid.uuid,
@@ -469,6 +472,7 @@ static void dump_exports(struct obd_device *obd)
                        exp->exp_failed, nreplies, first_reply,
                        nreplies > 3 ? "..." : "");
         }
+        spin_unlock(&obd->obd_dev_lock);
 }
 
 int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
