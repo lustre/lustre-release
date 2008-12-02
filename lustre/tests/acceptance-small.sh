@@ -272,13 +272,15 @@ for NAME in $CONFIGS; do
 
 	if [ "$FSX" != "no" ]; then
 	        title fsx
+		FSX_SIZE=$((RAMKB / 2))
 		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
-		[ $SPACE -lt $SIZE ] && SIZE=$((SPACE * 3 / 4))
+		[ $SPACE -lt $FSX_SIZE ] && FSX_SIZE=$((SPACE * 3 / 4))
 		$DEBUG_OFF
 		FSX_SEED=${FSX_SEED:-$RANDOM}
 		rm -f $MOUNT/fsxfile
 		$LFS setstripe -c -1 $MOUNT/fsxfile
-		./fsx -c 50 -p 1000 -S $FSX_SEED -P $TMP -l $SIZE \
+		echo Using FSX_SEED=$FSX_SEED FSX_SIZE=$FSX_SIZE COUNT=$COUNT
+		./fsx -c 50 -p 1000 -S $FSX_SEED -P $TMP -l $FSX_SIZE \
 			-N $(($COUNT * 100)) $MOUNT/fsxfile
 		$DEBUG_ON
 		$CLEANUP
