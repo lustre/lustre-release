@@ -5059,7 +5059,7 @@ test_124a() {
         # them (10-100 locks). This depends on how fast ther were created.
         # Many of them were touched in almost the same moment and thus will
         # be killed in groups.
-        local LVF=$(($MAX_HRS * 60 * 60 / $SLEEP))
+        local LVF=$(($MAX_HRS * 60 * 60 / $SLEEP * $LIMIT / $LRU_SIZE))
 
         # Use $LRU_SIZE_B here to take into account real number of locks
         # created in the case of CMD, LRU_SIZE_B != $NR in most of cases
