@@ -1131,8 +1131,8 @@ static int class_config_llog_handler(struct llog_handle * handle,
                         }
                         if ((lcfg->lcfg_command == LCFG_SETUP && index &&
                              strcmp(index, "type") == 0)) {
-                                CWARN("For 1.8 interoperability, set this"
-                                       " index to '0'\n");
+                                CDEBUG(D_INFO, "For 1.8 interoperability, "
+                                       "set this index to '0'\n");
                                 index[0] = '0';
                                 index[1] = 0;
                         }
