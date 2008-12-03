@@ -2215,9 +2215,16 @@ void ll_umount_begin(struct super_block *sb)
 
         /* Really, we'd like to wait until there are no requests outstanding,
          * and then continue.  For now, we just invalidate the requests,
-         * schedule, and hope.
+         * sleep 1 second, and hope it is OK.
          */
-        schedule();
+        if (atomic_read(&vfsmnt->mnt_count) > 2) {
+                cfs_schedule_timeout(CFS_TASK_INTERRUPTIBLE,
+                                     cfs_time_seconds(1));
+                if (atomic_read(&vfsmnt->mnt_count) > 2)
+                        LCONSOLE_WARN("Mount still busy with %d refs! You "
+                                      "may try to umount it a bit later\n",
+                                      atomic_read(&vfsmnt->mnt_count));
+        }
 
         EXIT;
 }
