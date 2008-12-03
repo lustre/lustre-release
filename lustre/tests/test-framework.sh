@@ -1051,13 +1051,18 @@ init_versions_vars () {
 
 check_config () {
     local mntpt=$1
-    
+    local myMGS_host=$mgs_HOST   
+    if [ "$NETTYPE" = "ptl" ]; then
+        myMGS_host=$(h2ptl $mgs_HOST | sed -e s/@ptl//) 
+    fi
+
     echo Checking config lustre mounted on $mntpt
     local mgshost=$(mount | grep " $mntpt " | awk -F@ '{print $1}')
     mgshost=$(echo $mgshost | awk -F: '{print $1}')
-    if [ "$mgshost" != "$mgs_HOST" ]; then
+
+    if [ "$mgshost" != "$myMGS_host" ]; then
         FAIL_ON_ERROR=true \
-            error "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST
+            error "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST, NETTYPE=$NETTYPE
                    Please use correct config or set mds_HOST correctly!"
     fi
 }
