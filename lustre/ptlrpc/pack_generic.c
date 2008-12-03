@@ -320,6 +320,8 @@ int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
         rs->rs_service = req->rq_rqbd->rqbd_service;
         CFS_INIT_LIST_HEAD(&rs->rs_exp_list);
         CFS_INIT_LIST_HEAD(&rs->rs_obd_list);
+        CFS_INIT_LIST_HEAD(&rs->rs_list);
+        spin_lock_init(&rs->rs_lock);
 
         req->rq_replen = msg_len;
         req->rq_reply_state = rs;

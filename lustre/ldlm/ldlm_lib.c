@@ -2150,7 +2150,7 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
 
         spin_lock(&svc->srv_lock);
 
-        svc->srv_n_difficult_replies++;
+        atomic_inc(&svc->srv_n_difficult_replies);
 
         if (netrc != 0) {
                 /* error sending: reply is off the net.  Also we need +1
@@ -2163,18 +2163,18 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
                 atomic_inc (&svc->srv_outstanding_replies);
         }
 
+        spin_lock(&rs->rs_lock);
         if (rs->rs_transno <= obd->obd_last_committed ||
             (!rs->rs_on_net && !rs->rs_no_ack) ||
              list_empty(&rs->rs_exp_list) ||     /* completed already */
              list_empty(&rs->rs_obd_list)) {
                 CDEBUG(D_HA, "Schedule reply immediately\n");
-                list_add_tail (&rs->rs_list, &svc->srv_reply_queue);
-                cfs_waitq_signal (&svc->srv_waitq);
+                ptlrpc_dispatch_difficult_reply(rs);
         } else {
                 list_add (&rs->rs_list, &svc->srv_active_replies);
                 rs->rs_scheduled = 0;           /* allow notifier to schedule */
         }
-
+        spin_unlock(&rs->rs_lock);
         spin_unlock(&svc->srv_lock);
         EXIT;
 }
