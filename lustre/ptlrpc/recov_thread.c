@@ -223,7 +223,7 @@ static int llcd_send(struct llog_canceld_ctxt *llcd)
                 GOTO(exit, rc = 0);
 
         lcm = llcd->llcd_lcm;
-        
+
         /* 
          * Check if we're in exit stage. Do not send llcd in
          * this case. 
@@ -271,6 +271,11 @@ static int llcd_send(struct llog_canceld_ctxt *llcd)
         ptlrpc_at_set_req_timeout(req);
         req->rq_interpret_reply = llcd_interpret;
         req->rq_async_args.pointer_arg[0] = llcd;
+
+        /* llog cancels will be replayed after reconnect so this will do twice
+         * first from replay llog, second for resended rpc */
+        req->rq_no_delay = req->rq_no_resend = 1;
+
         rc = ptlrpc_set_add_new_req(&lcm->lcm_pc, req);
         if (rc) {
                 ptlrpc_req_finished(req);
