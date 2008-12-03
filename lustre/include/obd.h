@@ -93,8 +93,8 @@ struct lov_oinfo {                 /* per-stripe data structure */
         /* used by the osc to keep track of what objects to build into rpcs */
         struct loi_oap_pages loi_read_lop;
         struct loi_oap_pages loi_write_lop;
-        /* _cli_ is poorly named, it should be _ready_ */
-        struct list_head loi_cli_item;
+        struct list_head loi_ready_item;
+        struct list_head loi_hp_ready_item;
         struct list_head loi_write_item;
         struct list_head loi_read_item;
 
@@ -112,7 +112,8 @@ static inline void loi_init(struct lov_oinfo *loi)
         CFS_INIT_LIST_HEAD(&loi->loi_write_lop.lop_pending);
         CFS_INIT_LIST_HEAD(&loi->loi_write_lop.lop_urgent);
         CFS_INIT_LIST_HEAD(&loi->loi_write_lop.lop_pending_group);
-        CFS_INIT_LIST_HEAD(&loi->loi_cli_item);
+        CFS_INIT_LIST_HEAD(&loi->loi_ready_item);
+        CFS_INIT_LIST_HEAD(&loi->loi_hp_ready_item);
         CFS_INIT_LIST_HEAD(&loi->loi_write_item);
         CFS_INIT_LIST_HEAD(&loi->loi_read_item);
 }
@@ -235,6 +236,7 @@ enum async_flags {
                                     the page is accounted for in the
                                     obd_io_group given to
                                     obd_queue_group_io */
+        ASYNC_HP = 0x10,
 };
 
 struct obd_async_page_ops {
@@ -431,6 +433,7 @@ struct client_obd {
          */
         client_obd_lock_t        cl_loi_list_lock;
         struct list_head         cl_loi_ready_list;
+        struct list_head         cl_loi_hp_ready_list;
         struct list_head         cl_loi_write_list;
         struct list_head         cl_loi_read_list;
         int                      cl_r_in_flight;
