@@ -44,6 +44,12 @@ tbd Sun Microsystems, Inc.
 	  Lustre filesystem with 4K stack may cause a stack overflow. For more
 	  information, please refer to bugzilla 17630.
 
+Severity   : minor
+Frequency  : always
+Bugzilla   : 16693
+Description: shrink LOV EAs before replying   
+Details    : correctly adjust LOV EA buffer for reply.
+
 Severity   : normal
 Frequency  : rare
 Bugzilla   : 16081

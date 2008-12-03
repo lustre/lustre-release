@@ -1886,7 +1886,7 @@ cleanup:
         }
         req->rq_status = rc;
 
-        mds_shrink_reply(obd, req, body, REPLY_REC_OFF + 1);
+        mds_shrink_reply(obd, req, body, offset + 1);
 
         /* trigger dqrel on the owner of child and parent */
         lquota_adjust(mds_quota_interface_ref, obd, qcids, qpids, rc,
@@ -2515,6 +2515,8 @@ cleanup:
                 LBUG();
         }
         req->rq_status = rc;
+
+        mds_shrink_reply(obd, req, body, offset + 1);
 
         /* acquire/release qunit */
         lquota_adjust(mds_quota_interface_ref, obd, qcids, qpids, rc,
