@@ -140,7 +140,7 @@ for NAME in $CONFIGS; do
 		$DEBUG_OFF
 		myUID=$RUNAS_ID
 		myRUNAS=$RUNAS
-		FAIL_ON_ERROR=false check_runas_id_ret $myUID $myRUNAS || { myRUNAS="" && myUID=$UID; }
+		FAIL_ON_ERROR=false check_runas_id_ret $myUID $myUID $myRUNAS || { myRUNAS="" && myUID=$UID; }
 		chown $myUID:$myUID $DBENCHDIR
 		duration=""
 		[ "$SLOW" = "no" ] && duration=" -t 120"
@@ -175,7 +175,7 @@ for NAME in $CONFIGS; do
 		$DEBUG_OFF
 		myUID=$RUNAS_ID
 		myRUNAS=$RUNAS
-		FAIL_ON_ERROR=false check_runas_id_ret $myUID $myRUNAS || { myRUNAS="" && myUID=$UID; }
+		FAIL_ON_ERROR=false check_runas_id_ret $myUID $myUID $myRUNAS || { myRUNAS="" && myUID=$UID; }
 		chown $myUID:$myUID $BONDIR		
 		$myRUNAS bonnie++ -f -r 0 -s$((SIZE / 1024)) -n 10 -u$myUID:$myUID -d$BONDIR
 		$DEBUG_ON
@@ -205,7 +205,7 @@ for NAME in $CONFIGS; do
 		$DEBUG_OFF
 		myUID=$RUNAS_ID
 		myRUNAS=$RUNAS
-		FAIL_ON_ERROR=false check_runas_id_ret $myUID $myRUNAS || { myRUNAS="" && myUID=$UID; }
+		FAIL_ON_ERROR=false check_runas_id_ret $myUID $myUID $myRUNAS || { myRUNAS="" && myUID=$UID; }
 		chown $myUID:$myUID $IOZDIR
 		$myRUNAS iozone $IOZONE_OPTS -s $SIZE -f $IOZFILE 2>&1 | tee $IOZLOG
 		tail -1 $IOZLOG | grep -q complete || \
