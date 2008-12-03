@@ -1964,7 +1964,7 @@ int mgs_setparam(struct obd_device *obd, struct lustre_cfg *lcfg, char *fsname)
         memset(fsname, 0, MTI_NAME_MAXLEN);
         if (ptr && (server_name2index(ptr, &index, NULL) >= 0)) {
                 /* param related to llite isn't allowed to set by OST or MDT */
-                if (strncmp(param, "llite", 5) == 0)
+                if (strncmp(param, PARAM_LLITE, sizeof(PARAM_LLITE)) == 0)
                         RETURN(-EINVAL);
 
                 strncpy(fsname, devname, ptr - devname);
