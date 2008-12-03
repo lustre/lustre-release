@@ -348,6 +348,9 @@ static int cache_remove_extents_from_lock(struct lustre_cache *cache,
                            cache_extent_removal_event */
                         ext_data = extent->oap_page;
                         cache->lc_pin_extent_cb(extent->oap_page);
+
+                        if (lock->l_flags & LDLM_FL_BL_AST)
+                                extent->oap_async_flags |= ASYNC_HP;
                         spin_unlock(&extent->oap_lock);
                         spin_unlock(&lock->l_extents_list_lock);
                         cache_extent_removal_event(cache, ext_data,
