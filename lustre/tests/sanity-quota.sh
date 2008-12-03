@@ -135,10 +135,10 @@ lustre_fail() {
 	esac
 }
 
-RUNAS="runas -u $TSTID"
-RUNAS2="runas -u $TSTID2"
-FAIL_ON_ERROR=true check_runas_id $TSTID $RUNAS
-FAIL_ON_ERROR=true check_runas_id $TSTID2 $RUNAS2
+RUNAS="runas -u $TSTID -g $TSTID"
+RUNAS2="runas -u $TSTID2 -g $TSTID2"
+FAIL_ON_ERROR=true check_runas_id $TSTID $TSTID $RUNAS
+FAIL_ON_ERROR=true check_runas_id $TSTID2 $TSTID2 $RUNAS2
 
 FAIL_ON_ERROR=false
 
@@ -1161,7 +1161,7 @@ test_14b(){
 
         MISSING_USERS=""
         for i in `seq 1 30`; do
-                check_runas_id_ret quota15_$i "runas -u quota15_$i" >/dev/null 2>/dev/null
+                check_runas_id_ret quota15_$i quota_usr "runas -u quota15_$i -g quota_usr" >/dev/null 2>/dev/null
                 if [ "$?" != "0" ]; then
                        MISSING_USERS="$MISSING_USERS quota15_$i"
                 fi
