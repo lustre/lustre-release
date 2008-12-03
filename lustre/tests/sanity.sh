@@ -3540,21 +3540,14 @@ test_80() { # bug 10718
 }
 run_test 80 "Page eviction is equally fast at high offsets too  ===="
 
-# on the LLNL clusters, runas will still pick up root's $TMP settings,
-# which will not be writable for the runas user, and then you get a CVS
-# error message with a corrupt path string (CVS bug) and panic.
-# We're not using much space, so just stick it in /tmp, which is safe.
-OLDTMPDIR=$TMPDIR
-OLDTMP=$TMP
-TMPDIR=/tmp
-TMP=/tmp
-OLDHOME=$HOME
-[ $RUNAS_ID -ne $UID ] && HOME=/tmp
-
 test_99a() {
 	mkdir -p $DIR/d99cvsroot || error "mkdir $DIR/d99cvsroot failed"
 	chown $RUNAS_ID $DIR/d99cvsroot || error "chown $DIR/d99cvsroot failed"
+	local oldPWD=$PWD	# bug 13584, use $TMP as working dir
+	cd $TMP
+	
 	$RUNAS cvs -d $DIR/d99cvsroot init || error "cvs init failed"
+	cd $oldPWD
 }
 run_test 99a "cvs init ========================================="
 
@@ -5531,10 +5524,6 @@ test_141() {
         FAIL_ON_ERROR=true setup
 }
 run_test 141 "umount should not race with any mgc requeue thread"
-
-TMPDIR=$OLDTMPDIR
-TMP=$OLDTMP
-HOME=$OLDHOME
 
 log "cleanup: ======================================================"
 check_and_cleanup_lustre
