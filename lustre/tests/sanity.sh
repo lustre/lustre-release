@@ -5784,7 +5784,11 @@ test_200i() {
 }
 run_test 200i "Remove a pool ============================================"
 
-test_141() {
+#
+# tests that do cleanup/setup should be run at the end
+#
+
+test_900() {
         local ls
         #define OBD_FAIL_MGC_PAUSE_PROCESS_LOG   0x903
         $LCTL set_param fail_loc=0x903
@@ -5795,7 +5799,7 @@ test_141() {
         FAIL_ON_ERROR=true cleanup
         FAIL_ON_ERROR=true setup
 }
-run_test 141 "umount should not race with any mgc requeue thread"
+run_test 900 "umount should not race with any mgc requeue thread"
 
 log "cleanup: ======================================================"
 check_and_cleanup_lustre
