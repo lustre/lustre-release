@@ -1249,8 +1249,11 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
                                         continue;
 
                                 spin_lock(&imp->imp_lock);
-
                                 if (ptlrpc_import_delay_req(imp, req, &status)){
+                                        /* put on delay list - only if we wait
+                                         * recovery finished - before send */
+                                        list_del_init(&req->rq_list);
+                                        list_add_tail(&req->rq_list, &imp->imp_delayed_list);
                                         spin_unlock(&imp->imp_lock);
                                         continue;
                                 }
@@ -1282,8 +1285,6 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
                                         /* This is re-sending anyways, 
                                          * let's mark req as resend. */
                                         req->rq_resend = 1;
-                                        lustre_msg_add_flags(req->rq_reqmsg,
-                                                             MSG_RESENT);
                                         if (req->rq_bulk) {
                                                 __u64 old_xid;
 
@@ -1352,17 +1353,8 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
                         spin_unlock(&req->rq_lock);
 
                         req->rq_status = after_reply(req);
-                        if (req->rq_resend) {
-                                /* Add this req to the delayed list so
-                                   it can be errored if the import is
-                                   evicted after recovery. */
-                                spin_lock(&imp->imp_lock);
-                                list_del_init(&req->rq_list);
-                                list_add_tail(&req->rq_list,
-                                              &imp->imp_delayed_list);
-                                spin_unlock(&imp->imp_lock);
+                        if (req->rq_resend)
                                 continue;
-                        }
 
                         /* If there is no bulk associated with this request,
                          * then we're done and should let the interpreter
@@ -2154,8 +2146,6 @@ restart:
         }
 
         if (req->rq_resend) {
-                lustre_msg_add_flags(req->rq_reqmsg, MSG_RESENT);
-
                 if (req->rq_bulk != NULL) {
                         ptlrpc_unregister_bulk(req, 0);
 
@@ -2246,16 +2236,16 @@ after_send:
         }
 
         /* Resend if we need to */
-        if (req->rq_resend) {
+        if (req->rq_resend||req->rq_timedout) {
                 /* ...unless we were specifically told otherwise. */
                 if (req->rq_no_resend)
                         GOTO(out, rc = -ETIMEDOUT);
                 spin_lock(&imp->imp_lock);
+                /* we can have rq_timeout on dlm fake import which not support
+                 * recovery - but me need resend request on this import instead
+                 * of return error */
+                req->rq_resend = 1;
                 goto restart;
-        }
-
-        if (req->rq_timedout) {                 /* non-recoverable timeout */
-                GOTO(out, rc = -ETIMEDOUT);
         }
 
         if (!ptlrpc_client_replied(req)) {

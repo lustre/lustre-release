@@ -270,6 +270,11 @@ static int llcd_send(struct llog_canceld_ctxt *llcd)
         req->rq_reply_portal = LDLM_CANCEL_REPLY_PORTAL;
         req->rq_interpret_reply = (ptlrpc_interpterer_t)llcd_interpret;
         req->rq_async_args.pointer_arg[0] = llcd;
+
+        /* llog cancels will be replayed after reconnect so this will do twice
+         * first from replay llog, second for resended rpc */
+        req->rq_no_delay = req->rq_no_resend = 1;
+
         rc = ptlrpc_set_add_new_req(&lcm->lcm_pc, req);
         if (rc) {
                 ptlrpc_request_free(req);
