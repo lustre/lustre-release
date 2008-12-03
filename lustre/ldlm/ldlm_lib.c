@@ -266,6 +266,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                 cli->cl_dirty_max = num_physpages << (CFS_PAGE_SHIFT - 3);
         CFS_INIT_LIST_HEAD(&cli->cl_cache_waiters);
         CFS_INIT_LIST_HEAD(&cli->cl_loi_ready_list);
+        CFS_INIT_LIST_HEAD(&cli->cl_loi_hp_ready_list);
         CFS_INIT_LIST_HEAD(&cli->cl_loi_write_list);
         CFS_INIT_LIST_HEAD(&cli->cl_loi_read_list);
         client_obd_list_lock_init(&cli->cl_loi_list_lock);
