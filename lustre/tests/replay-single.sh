@@ -1340,33 +1340,6 @@ test_59() {
 }
 run_test 59 "test log_commit_thread vs filter_destroy race"
 
-# bug 17323
-test_59b() {
-    do_facet mds "lctl set_param debug=+rpctrace"
-    mkdir -p $DIR/$tdir
-    createmany -o $DIR/$tdir/$tfile-%d 2000
-    sync
-#define OBD_FAIL_OBD_LOG_CANCEL_REP      0x606
-    do_facet mds "lctl set_param fail_loc=0x606"
-    unlinkmany $DIR/$tdir/$tfile-%d 2000
-
-    # make sure that all llcds left ost and nothing left cached
-    sync
-    sleep 10
-    do_facet mds "lctl set_param fail_loc=0x0"
-
-    # sleep 2 obd_timeouts from ost to make sure that we get resents.
-    local timeout=$(do_facet ost1 lctl get_param -n timeout)
-    timeout=$((timeout * 2))
-    log "Sleep $timeout"
-    sleep $timeout
-    do_facet mds $LCTL dk | grep -q "RESENT cancel req"
-    local res=$?
-    rmdir $DIR/$tdir
-    return $res
-}
-run_test 59b "resent handle in llog_origin_handle_cancel"
-
 # race between add unlink llog vs cat log init in post_recovery (only for b1_6)
 # bug 12086: should no oops and No ctxt error for this test
 test_60() {
