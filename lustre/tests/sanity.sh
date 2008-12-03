@@ -5726,19 +5726,6 @@ test_140() { #bug-17379
 }
 run_test 140 "Check reasonable stack depth (shouldn't LBUG) ===="
 
-test_141() {
-        local ls
-        #define OBD_FAIL_MGC_PAUSE_PROCESS_LOG   0x903
-        $LCTL set_param fail_loc=0x903
-        # cancel_lru_locks mgc - does not work due to lctl set_param syntax
-        for ls in /proc/fs/lustre/ldlm/namespaces/MGC*/lru_size; do
-                echo "clear" > $ls
-        done
-        FAIL_ON_ERROR=true cleanup
-        FAIL_ON_ERROR=true setup
-}
-run_test 141 "umount should not race with any mgc requeue thread"
-
 test_150() {
 	local TF="$TMP/$tfile"
 
@@ -5986,6 +5973,23 @@ test_212() {
 	rm -f $DIR/f212 $DIR/f212.xyz
 }
 run_test 212 "Sendfile test ============================================"
+
+#
+# tests that do cleanup/setup should be run at the end
+#
+
+test_900() {
+        local ls
+        #define OBD_FAIL_MGC_PAUSE_PROCESS_LOG   0x903
+        $LCTL set_param fail_loc=0x903
+        # cancel_lru_locks mgc - does not work due to lctl set_param syntax
+        for ls in /proc/fs/lustre/ldlm/namespaces/MGC*/lru_size; do
+                echo "clear" > $ls
+        done
+        FAIL_ON_ERROR=true cleanup
+        FAIL_ON_ERROR=true setup
+}
+run_test 900 "umount should not race with any mgc requeue thread"
 
 log "cleanup: ======================================================"
 check_and_cleanup_lustre
