@@ -137,10 +137,10 @@ lustre_fail() {
 	esac
 }
 
-RUNAS="runas -u $TSTID"
-RUNAS2="runas -u $TSTID2"
-FAIL_ON_ERROR=true check_runas_id $TSTID $RUNAS
-FAIL_ON_ERROR=true check_runas_id $TSTID2 $RUNAS2
+RUNAS="runas -u $TSTID -g $TSTID"
+RUNAS2="runas -u $TSTID2 -g $TSTID2"
+FAIL_ON_ERROR=true check_runas_id $TSTID $TSTID $RUNAS
+FAIL_ON_ERROR=true check_runas_id $TSTID2 $TSTID2 $RUNAS2
 
 FAIL_ON_ERROR=false
 

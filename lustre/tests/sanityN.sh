@@ -67,7 +67,7 @@ rm -rf $DIR1/[df][0-9]* $DIR1/lnk
 # $RUNAS_ID may get set incorrectly somewhere else
 [ $UID -eq 0 -a $RUNAS_ID -eq 0 ] && error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 
-check_runas_id $RUNAS_ID $RUNAS
+check_runas_id $RUNAS_ID $RUNAS_ID $RUNAS
 
 build_test_filter
 
