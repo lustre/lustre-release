@@ -84,6 +84,7 @@ print_summary () {
 init_test_env() {
     export LUSTRE=`absolute_path $LUSTRE`
     export TESTSUITE=`basename $0 .sh`
+    export TEST_FAILED=false
 
     #[ -d /r ] && export ROOT=${ROOT:-/r}
     export TMP=${TMP:-$ROOT/tmp}
@@ -1613,6 +1614,7 @@ error_noexit() {
     done
     debugrestore
     [ "$TESTSUITELOG" ] && echo "$0: ${TYPE}: $TESTNAME $@" >> $TESTSUITELOG
+    TEST_FAILED=true
 }
 
 error() {
@@ -1760,7 +1762,8 @@ trace() {
 }
 
 pass() {
-    echo PASS $@
+    $TEST_FAILED && echo -n "FAIL " || echo -n "PASS " 
+    echo $@
 }
 
 check_mds() {
@@ -1783,6 +1786,7 @@ run_one() {
     message=$2
     tfile=f${testnum}
     export tdir=d0.${TESTSUITE}/d${base}
+
     local SAVE_UMASK=`umask`
     umask 0022
 
@@ -1790,6 +1794,7 @@ run_one() {
     log "== test $testnum: $message ============ `date +%H:%M:%S` ($BEFORE)"
     #check_mds
     export TESTNAME=test_$testnum
+    TEST_FAILED=false
     test_${testnum} || error "test_$testnum failed with $?"
     #check_mds
     cd $SAVE_PWD
@@ -1798,6 +1803,7 @@ run_one() {
     check_catastrophe || error "LBUG/LASSERT detected"
     ps auxww | grep -v grep | grep -q multiop && error "multiop still running"
     pass "($((`date +%s` - $BEFORE))s)"
+    TEST_FAILED=false
     unset TESTNAME
     unset tdir
     umask $SAVE_UMASK
