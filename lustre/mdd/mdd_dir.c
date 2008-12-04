@@ -1930,7 +1930,7 @@ static int mdd_rename(const struct lu_env *env,
                 GOTO(cleanup, rc);
 
         /* "mv dir1 dir2" needs "dir1/.." link update */
-        if (is_dir) {
+        if (is_dir && mdd_sobj) {
                 rc = __mdd_index_delete(env, mdd_sobj, dotdot, is_dir, handle,
                                         mdd_object_capa(env, mdd_spobj));
                 if (rc)
