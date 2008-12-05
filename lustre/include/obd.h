@@ -622,7 +622,7 @@ struct ost_pool {
                                                 lov_obd->lov_tgts */
         unsigned int        op_count;        /* number of OSTs in the array */
         unsigned int        op_size;         /* allocated size of lp_array */
-        rwlock_t            op_rwlock;       /* to protect lov_pool use */
+        struct rw_semaphore op_rw_sem;       /* to protect ost_pool use */
 };
 
 /* Round-robin allocator data */
@@ -662,12 +662,13 @@ struct lov_tgt_desc {
 #define pool_tgt_size(_p)   _p->pool_obds.op_size
 #define pool_tgt_count(_p)  _p->pool_obds.op_count
 #define pool_tgt_array(_p)  _p->pool_obds.op_array
-#define pool_tgt_rwlock(_p) _p->pool_obds.op_rwlock
+#define pool_tgt_rw_sem(_p) _p->pool_obds.op_rw_sem
 #define pool_tgt(_p, _i)    _p->pool_lov->lov_tgts[_p->pool_obds.op_array[_i]]
 
 struct pool_desc {
         char                  pool_name[LOV_MAXPOOLNAME + 1]; /* name of pool */
         struct ost_pool       pool_obds;              /* pool members */
+        atomic_t              pool_refcount;          /* pool ref. counter */
         struct lov_qos_rr     pool_rr;                /* round robin qos */
         struct hlist_node     pool_hash;              /* access by poolname */
         struct list_head      pool_list;              /* serial access */

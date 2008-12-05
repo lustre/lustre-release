@@ -879,10 +879,8 @@ static int lov_cleanup(struct obd_device *obd)
 
         list_for_each_safe(pos, tmp, &lov->lov_pool_list) {
                 pool = list_entry(pos, struct pool_desc, pool_list);
-                list_del(&pool->pool_list);
-                lov_ost_pool_free(&(pool->pool_rr.lqr_pool));
-                lov_ost_pool_free(&(pool->pool_obds));
-                OBD_FREE_PTR(pool);
+                /* free pool structs */
+                lov_pool_del(obd, pool->pool_name);
         }
         lov_ost_pool_free(&(lov->lov_qos.lq_rr.lqr_pool));
         lov_ost_pool_free(&lov->lov_packed);

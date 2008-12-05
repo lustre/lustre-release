@@ -560,7 +560,7 @@ static int alloc_rr(struct lov_obd *lov, int *idx_arr, int *stripe_cnt,
                 osts = &(lov->lov_packed);
                 lqr = &(lov->lov_qos.lq_rr);
         } else {
-                read_lock(&pool_tgt_rwlock(pool));
+                down_read(&pool_tgt_rw_sem(pool));
                 osts = &(pool->pool_obds);
                 lqr = &(pool->pool_rr);
         }
@@ -637,8 +637,12 @@ repeat_find:
 
         *stripe_cnt = idx_pos - idx_arr;
 out:
-        if (pool != NULL)
-                read_unlock(&pool_tgt_rwlock(pool));
+        if (pool != NULL) {
+                up_read(&pool_tgt_rw_sem(pool));
+                /* put back ref got by lov_find_pool() */
+                lh_put(lov->lov_pools_hash_body, &pool->pool_hash);
+        }
+
         RETURN(rc);
 }
 
@@ -657,7 +661,7 @@ static int alloc_specific(struct lov_obd *lov, struct lov_stripe_md *lsm,
         if (pool == NULL) {
                 osts = &(lov->lov_packed);
         } else {
-                read_lock(&pool_tgt_rwlock(pool));
+                down_read(&pool_tgt_rw_sem(pool));
                 osts = &(pool->pool_obds);
         }
 
@@ -725,8 +729,12 @@ repeat_find:
                lsm->lsm_stripe_count);
         rc = -EFBIG;
 out:
-        if (pool != NULL)
-                read_unlock(&pool_tgt_rwlock(pool));
+        if (pool != NULL) {
+                up_read(&pool_tgt_rw_sem(pool));
+                /* put back ref got by lov_find_pool() */
+                lh_put(lov->lov_pools_hash_body, &pool->pool_hash);
+        }
+
         RETURN(rc);
 }
 
@@ -756,7 +764,7 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
                 osts = &(lov->lov_packed);
                 lqr = &(lov->lov_qos.lq_rr);
         } else {
-                read_lock(&pool_tgt_rwlock(pool));
+                down_read(&pool_tgt_rw_sem(pool));
                 osts = &(pool->pool_obds);
                 lqr = &(pool->pool_rr);
         }
@@ -916,8 +924,11 @@ out:
         up_write(&lov->lov_qos.lq_rw_sem);
 
 out_nolock:
-        if (pool != NULL)
-                read_unlock(&pool_tgt_rwlock(pool));
+        if (pool != NULL) {
+                up_read(&pool_tgt_rw_sem(pool));
+                /* put back ref got by lov_find_pool() */
+                lh_put(lov->lov_pools_hash_body, &pool->pool_hash);
+        }
 
         if (rc == -EAGAIN)
                 rc = alloc_rr(lov, idx_arr, stripe_cnt, poolname, flags);
