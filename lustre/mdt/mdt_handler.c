@@ -5140,11 +5140,87 @@ static int mdt_obd_notify(struct obd_device *host,
         RETURN(0);
 }
 
+static int mdt_ioc_fid2path(struct lu_env *env, struct mdt_device *mdt,
+                            struct obd_ioctl_data *data)
+{
+        struct lu_context  ioctl_session;
+        struct mdt_object *obj;
+        struct lu_fid     *fid;
+        char  *path = NULL;
+        __u64  recno;
+        int    pathlen = data->ioc_plen1;
+        int    linkno;
+        int    rc;
+        ENTRY;
+
+
+        fid = (struct lu_fid *)data->ioc_inlbuf1;
+        memcpy(&recno, data->ioc_inlbuf2, sizeof(recno));
+        memcpy(&linkno, data->ioc_inlbuf3, sizeof(linkno));
+        CDEBUG(D_IOCTL, "path get "DFID" from "LPU64" #%d\n",
+               PFID(fid), recno, linkno);
+
+        if (!fid_is_sane(fid))
+                RETURN(-EINVAL);
+
+        if (pathlen < 3)
+                RETURN(-EOVERFLOW);
+
+        rc = lu_context_init(&ioctl_session, LCT_SESSION);
+        if (rc)
+                RETURN(rc);
+        ioctl_session.lc_thread = (struct ptlrpc_thread *)cfs_current();
+        lu_context_enter(&ioctl_session);
+        env->le_ses = &ioctl_session;
+
+        OBD_ALLOC(path, pathlen);
+        if (path == NULL)
+                GOTO(out_context, rc = -ENOMEM);
+
+        obj = mdt_object_find(env, mdt, fid);
+        if (obj == NULL || IS_ERR(obj)) {
+                CDEBUG(D_IOCTL, "no object "DFID": %ld\n", PFID(fid),
+                       PTR_ERR(obj));
+                GOTO(out_free, rc = -EINVAL);
+        }
+
+        rc = lu_object_exists(&obj->mot_obj.mo_lu);
+        if (rc <= 0) {
+                if (rc == -1)
+                        rc = -EREMOTE;
+                else
+                        rc = -ENOENT;
+                mdt_object_put(env, obj);
+                CDEBUG(D_IOCTL, "nonlocal object "DFID": %d\n", PFID(fid),
+                       rc);
+                GOTO(out_free, rc);
+        }
+
+        rc = mo_path(env, md_object_next(&obj->mot_obj), path, pathlen, recno,
+                     &linkno);
+        mdt_object_put(env, obj);
+        if (rc)
+               GOTO(out_free, rc);
+
+        if (copy_to_user(data->ioc_pbuf1, path, pathlen))
+                rc = -EFAULT;
+
+        memcpy(data->ioc_inlbuf3, &linkno, sizeof(linkno));
+
+        EXIT;
+out_free:
+        OBD_FREE(path, pathlen);
+out_context:
+        lu_context_exit(&ioctl_session);
+        lu_context_fini(&ioctl_session);
+        return rc;
+}
+
 static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                          void *karg, void *uarg)
 {
         struct lu_env      env;
-        struct obd_device *obd= exp->exp_obd;
+        struct obd_device *obd = exp->exp_obd;
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
         struct dt_device  *dt = mdt->mdt_bottom;
         int rc;
@@ -5166,6 +5242,9 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 CERROR("Aborting recovery for device %s\n", obd->obd_name);
                 target_stop_recovery_thread(obd);
                 rc = 0;
+                break;
+        case OBD_IOC_FID2PATH:
+                rc = mdt_ioc_fid2path(&env, mdt, karg);
                 break;
         default:
                 CERROR("Not supported cmd = %d for device %s\n",

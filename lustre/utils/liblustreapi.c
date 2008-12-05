@@ -66,6 +66,7 @@
 #include <unistd.h>
 #endif
 
+#include <libcfs/libcfsutil.h>  /* l_ioctl */
 #include <liblustre.h>
 #include <lnet/lnetctl.h>
 #include <obd.h>
@@ -429,7 +430,6 @@ static int search_fsname(char *pathname, char *fsname)
         }
         endmntent(fp);
         return -ENOENT;
-
 }
 
 /*
@@ -661,7 +661,7 @@ int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
 int llapi_get_obd_count(char *mnt, int *count, int is_mdt)
 {
         DIR *root;
-        int rc; 
+        int rc;
 
         root = opendir(mnt);
         if (!root) {
@@ -673,7 +673,7 @@ int llapi_get_obd_count(char *mnt, int *count, int is_mdt)
         rc = ioctl(dirfd(root), LL_IOC_GETOBDCOUNT, count);
 
         closedir(root);
-        return rc; 
+        return rc;
 }
 
 /* Here, param->obduuid points to a single obduuid, the index of which is
@@ -1824,8 +1824,6 @@ int llapi_target_iterate(int type_num, char **obd_type,void *args,llapi_cb_t cb)
                 char *obd_type_name = NULL;
                 char *obd_name = NULL;
                 char *obd_uuid = NULL;
-                char rawbuf[OBD_MAX_IOCTL_BUFFER];
-                char *bufl = rawbuf;
                 char *bufp = buf;
                 struct obd_ioctl_data datal = { 0, };
                 struct obd_statfs osfs_buffer;
@@ -1841,7 +1839,6 @@ int llapi_target_iterate(int type_num, char **obd_type,void *args,llapi_cb_t cb)
 
                 memset(&osfs_buffer, 0, sizeof (osfs_buffer));
 
-                memset(bufl, 0, sizeof(rawbuf));
                 datal.ioc_pbuf1 = (char *)&osfs_buffer;
                 datal.ioc_plen1 = sizeof(osfs_buffer);
 
@@ -2123,7 +2120,7 @@ static int rmtacl_notify(int ops)
                 if (rc < 0) {
                         perror("ioctl");
                 return -1;
-        }
+                }
 
                 found++;
         }
@@ -2377,6 +2374,164 @@ int llapi_ls(int argc, char *argv[])
         exit(execvp(argv[0], argv));
 }
 
+/* format must have %s%s, buf must be > 16 */
+static int get_mdtname(const char *name, char *format, char *buf)
+{
+        char suffix[]="-MDT0000";
+        int len = strlen(name);
+
+        if (len > 16) {
+                llapi_err(LLAPI_MSG_ERROR, "bad MDT name |%s|\n", name);
+                return -EINVAL;
+        }
+
+        if ((len > 8) && (strncmp(name + len - 8, "-MDT", 4) == 0))
+                suffix[0] = '\0';
+
+        return sprintf(buf, format, name, suffix);
+}
+
+#define CHANGELOG_FILE "/proc/fs/lustre/mdd/%s%s/changelog"
+
+/* return a file desc to readable changelog */
+int llapi_changelog_open(const char *mdtname, long long startrec)
+{
+        char path[256];
+        int rc, fd;
+
+        if (get_mdtname(mdtname, CHANGELOG_FILE, path) <0)
+                return -EINVAL;
+
+        if ((fd = open(path, O_RDONLY)) < 0) {
+                llapi_err(LLAPI_MSG_ERROR, "error: can't open |%s|\n", path);
+                return -errno;
+        }
+
+        rc = lseek(fd, (off_t)startrec, SEEK_SET);
+        if (rc < 0) {
+                llapi_err(LLAPI_MSG_ERROR, "can't seek rc=%d\n", rc);
+                return -errno;
+        }
+
+        return fd;
+}
+
+int llapi_changelog_clear(const char *mdtname, long long endrec)
+{
+        char path[256];
+        char val[20];
+        int fd, len;
+
+        if (endrec < 0) {
+                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                          "can't purge negative records\n");
+                return -EINVAL;
+        }
+
+        if (get_mdtname(mdtname, CHANGELOG_FILE, path) <0)
+                return -EINVAL;
+
+        if ((fd = open(path, O_WRONLY)) < 0) {
+                llapi_err(LLAPI_MSG_ERROR, "error: can't open |%s|\n", path);
+                return errno;
+        }
+
+        snprintf(val, sizeof(val), "%llu", endrec);
+        len = write(fd, val, strlen(val));
+        close(fd);
+        if (len != strlen(val)) {
+                llapi_err(LLAPI_MSG_ERROR, "purge err\n");
+                return errno;
+        }
+
+        return 0;
+}
+
+static int dev_ioctl(struct obd_ioctl_data *data, int dev, int cmd)
+{
+        int rc;
+        static char rawbuf[8192];
+        static char *buf = rawbuf;
+
+        data->ioc_dev = dev;
+        memset(buf, 0, sizeof(rawbuf));
+
+        if ((rc = obd_ioctl_pack(data, &buf, sizeof(rawbuf)))) {
+                llapi_err(LLAPI_MSG_ERROR,
+                          "error: ioctl pack (%d) failed: rc %d", cmd, rc);
+                return rc;
+        }
+
+        rc = l_ioctl(OBD_DEV_ID, cmd, buf);
+        if (rc < 0) {
+                /* ioctl returns -1 with errno set */
+                rc = -errno;
+                return rc;
+        }
+
+        if (obd_ioctl_unpack(data, buf, sizeof(rawbuf))) {
+                llapi_err(LLAPI_MSG_ERROR,
+                          "error: invalid reply\n");
+                return -EPROTO;
+        }
+        return rc;
+}
+
+/* should we just grep it from proc? */
+static int dev_name2dev(char *name)
+{
+        struct obd_ioctl_data data;
+        int rc;
+
+        memset(&data, 0, sizeof(data));
+        data.ioc_inllen1 = strlen(name) + 1;
+        data.ioc_inlbuf1 = name;
+        rc = dev_ioctl(&data, -1, OBD_IOC_NAME2DEV);
+
+        if (rc < 0) {
+                llapi_err(LLAPI_MSG_ERROR, "Device %s not found %d\n", name,rc);
+                return rc;
+        }
+        return data.ioc_dev;
+}
+
+int llapi_fid2path(char *device, char *fidstr, char *buf, int buflen,
+                   __u64 recno, int *linkno)
+{
+        struct lu_fid fid;
+        struct obd_ioctl_data data;
+        int dev, rc;
+
+        while (*fidstr == '[')
+                fidstr++;
+
+        sscanf(fidstr, "0x%llx:0x%x:0x%x", &(fid.f_seq), &(fid.f_oid),
+               &(fid.f_ver));
+        if (!fid_is_sane(&fid)) {
+                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                          "bad FID format [%s], should be "DFID"\n",
+                          fidstr, (__u64)1, 2, 0);
+                return -EINVAL;
+        }
+
+        dev = dev_name2dev(device);
+        if (dev < 0)
+                return dev;
+
+        memset(&data, 0, sizeof(data));
+        data.ioc_inlbuf1 = (char *)&fid;
+        data.ioc_inllen1 = sizeof(fid);
+        data.ioc_inlbuf2 = (char *)&recno;
+        data.ioc_inllen2 = sizeof(__u64);
+        data.ioc_inlbuf3 = (char *)linkno;
+        data.ioc_inllen3 = sizeof(int);
+        data.ioc_plen1 = buflen;
+        data.ioc_pbuf1 = buf;
+        rc = dev_ioctl(&data, dev, OBD_IOC_FID2PATH);
+
+        return rc;
+}
+
 int llapi_path2fid(const char *path, unsigned long long *seq,
                    unsigned long *oid, unsigned long *ver)
 {
@@ -2395,3 +2550,4 @@ int llapi_path2fid(const char *path, unsigned long long *seq,
         close(fd);
         return rc;
 }
+

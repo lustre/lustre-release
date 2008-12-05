@@ -57,7 +57,7 @@ char *buf, *buf_align;
 int bufsize = 0;
 #define ALIGN 65535
 
-char usage[] = 
+char usage[] =
 "Usage: %s filename command-sequence\n"
 "    command-sequence items:\n"
 "        c  close\n"
@@ -79,6 +79,7 @@ char usage[] =
 "        T[num] ftruncate [optional position, default 0]\n"
 "        u  unlink\n"
 "        U  munmap\n"
+"        v  verbose\n"
 "        w[num] write optional length\n"
 "        W  write entire mmap-ed region\n"
 "        y  fsync\n"
@@ -327,6 +328,8 @@ int main(int argc, char **argv)
                                         fprintf(stderr, "short read: %u/%u\n",
                                                 rc, len);
                                 len -= rc;
+                                if (verbose >= 2)
+                                        printf("%.*s\n", rc, buf_align);
                         }
                         break;
                 case 'R':
@@ -378,7 +381,7 @@ int main(int argc, char **argv)
                         }
                         break;
                 case 'v':
-                        verbose = 1;
+                        verbose++;
                         break;
                 case 'w':
                         len = atoi(commands+1);

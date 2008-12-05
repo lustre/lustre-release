@@ -3629,6 +3629,8 @@ test_80() { # bug 10718
 run_test 80 "Page eviction is equally fast at high offsets too  ===="
 
 test_99a() {
+        [ -z "$(which cvs 2>/dev/null)" ] && skip "could not find cvs" && \
+	    return
 	mkdir -p $DIR/d99cvsroot
 	chown $RUNAS_ID $DIR/d99cvsroot
 	local oldPWD=$PWD	# bug 13584, use $TMP as working dir
@@ -5839,6 +5841,138 @@ test_152() {
 }
 run_test 152 "test read/write with enomem ============================"
 
+#Changelogs
+test_160() {
+    remote_mds && skip "remote MDS" && return
+    lctl set_param -n mdd.*.changelog on
+    $LFS changelog_clear $FSNAME 0
+
+    # change something
+    mkdir -p $DIR/$tdir/pics/2008/zachy
+    touch $DIR/$tdir/pics/2008/zachy/timestamp
+    cp /etc/hosts $DIR/$tdir/pics/2008/zachy/pic1.jpg
+    mv $DIR/$tdir/pics/2008/zachy $DIR/$tdir/pics/zach
+    ln $DIR/$tdir/pics/zach/pic1.jpg $DIR/$tdir/pics/2008/portland.jpg
+    ln -s $DIR/$tdir/pics/2008/portland.jpg $DIR/$tdir/pics/desktop.jpg
+    rm $DIR/$tdir/pics/desktop.jpg
+
+    # verify contents
+    $LFS changelog $FSNAME
+    # check target fid
+    fidc=$($LFS changelog $FSNAME | grep timestamp | grep "CREAT" | tail -1 | \
+	awk '{print $5}')
+    fidf=$($LFS path2fid $DIR/$tdir/pics/zach/timestamp)
+    [ "$fidc" == "t=$fidf" ] || \
+	error "fid in changelog $fidc != file fid $fidf"
+    # check parent fid
+    fidc=$($LFS changelog $FSNAME | grep timestamp | grep "CREAT" | tail -1 | \
+	awk '{print $6}')
+    fidf=$($LFS path2fid $DIR/$tdir/pics/zach)
+    [ "$fidc" == "p=$fidf" ] || \
+	error "pfid in changelog $fidc != dir fid $fidf" 
+
+    # verify purge
+    FIRST_REC=$($LFS changelog $FSNAME | head -1 | awk '{print $1}')
+    $LFS changelog_clear $FSNAME $(($FIRST_REC + 5)) 
+    PURGE_REC=$($LFS changelog $FSNAME | head -1 | awk '{print $1}')
+    [ $PURGE_REC == $(($FIRST_REC + 6)) ] || \
+     error "first rec after purge should be $(($FIRST_REC + 6)); is $PURGE_REC"
+    # purge all
+    $LFS changelog_clear $FSNAME 0
+    lctl set_param -n mdd.*.changelog off
+}
+run_test 160 "changelog sanity"
+
+test_161() {
+    # need local MDT for fid2path
+    remote_mds && skip "remote MDS" && return
+
+    mkdir -p $DIR/$tdir
+    cp /etc/hosts $DIR/$tdir/$tfile
+    mkdir $DIR/$tdir/foo1
+    mkdir $DIR/$tdir/foo2
+    ln $DIR/$tdir/$tfile $DIR/$tdir/foo1/sofia
+    ln $DIR/$tdir/$tfile $DIR/$tdir/foo2/zachary
+    ln $DIR/$tdir/$tfile $DIR/$tdir/foo1/luna
+    ln $DIR/$tdir/$tfile $DIR/$tdir/foo2/thor
+    local FID=$($LFS path2fid $DIR/$tdir/$tfile)
+    if [ "$($LFS fid2path ${mds1_svc} $FID | wc -l)" != "5" ]; then
+	$LFS fid2path ${mds1_svc} $FID
+	error "bad link ea"
+    fi
+    # middle
+    rm $DIR/$tdir/foo2/zachary
+    # last
+    rm $DIR/$tdir/foo2/thor
+    # first
+    rm $DIR/$tdir/$tfile
+    # rename
+    mv $DIR/$tdir/foo1/sofia $DIR/$tdir/foo2/maggie
+    if [ "$($LFS fid2path ${mds1_svc} --link 1 $FID)" != "/$tdir/foo2/maggie" ]
+	then
+	$LFS fid2path ${mds1_svc} $FID
+	error "bad link rename"
+    fi
+    rm $DIR/$tdir/foo2/maggie
+
+    # overflow the EA
+    local longname=filename_avg_len_is_thirty_two_
+    createmany -l$DIR/$tdir/foo1/luna $DIR/$tdir/foo2/$longname 1000 || \
+	error "failed to hardlink many files"
+    links=$($LFS fid2path ${mds1_svc} $FID | wc -l)
+    echo -n "${links}/1000 links in link EA"
+    [ ${links} -gt 60 ] || error "expected at least 60 links in link EA"
+    unlinkmany $DIR/$tdir/foo2/$longname 1000 || \
+	error "failed to unlink many hardlinks" 
+}
+run_test 161 "link ea sanity"
+
+check_path() {
+    local expected=$1
+    shift
+    local fid=$2
+
+    local path=$(${LFS} fid2path $*)
+    RC=$?
+
+    if [ $RC -ne 0 ]; then
+      	error "path looked up of $expected failed. Error $RC"
+ 	return $RC
+    elif [ "${path}" != "${expected}" ]; then
+      	error "path looked up \"${path}\" instead of \"${expected}\""
+ 	return 2
+    fi
+    echo "fid $fid resolves to path $path"
+}
+
+test_162() {
+    # need local MDT for fid2path
+    remote_mds && skip "remote MDS" && return
+
+    # Make changes to filesystem
+    mkdir -p $DIR/$tdir/d2
+    touch $DIR/$tdir/d2/$tfile
+    touch $DIR/$tdir/d2/x1
+    touch $DIR/$tdir/d2/x2
+    mkdir -p $DIR/$tdir/d2/a/b/c
+    mkdir -p $DIR/$tdir/d2/p/q/r
+    fid=$($LFS path2fid $DIR/$tdir/d2/$tfile)
+    check_path "/$tdir/d2/$tfile" ${mds1_svc} $fid --link 0
+    ln $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/p/q/r/hlink
+    mv $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/a/b/c/new_file
+    fid=$($LFS path2fid $DIR/$tdir/d2/a/b/c/new_file)
+    check_path "/$tdir/d2/a/b/c/new_file" ${mds1_svc} $fid --link 1
+    check_path "/$tdir/d2/p/q/r/hlink" ${mds1_svc} $fid --link 0
+    # check that there are 2 links, and that --rec doesnt break anything
+    ${LFS} fid2path ${mds1_svc} $fid --rec 20 | wc -l | grep -q 2 || \
+	error "expected 2 links" 
+
+    rm $DIR/$tdir/d2/p/q/r/hlink
+    check_path "/$tdir/d2/a/b/c/new_file" ${mds1_svc} $fid --link 0
+}
+run_test 162 "path lookup sanity"
+
+# OST pools tests
 POOL=${POOL:-cea1}
 TGT_COUNT=$OSTCOUNT
 TGTPOOL_FIRST=1

@@ -184,7 +184,7 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
         struct llog_create_rec lcr;
         int rc, i;
         int num_recs = 1;       /* 1 for the header */
-	ENTRY;
+        ENTRY;
 
         lcr.lcr_hdr.lrh_len = lcr.lcr_tail.lrt_len = sizeof(lcr);
         lcr.lcr_hdr.lrh_type = OST_SZ_REC;
@@ -258,9 +258,9 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
                         if (rc == -ENOSPC) {
                                 break;
                         } else {
-                        	CERROR("3c: write recs failed at #%d: %d\n",
-                               		i + 1, rc);
-                        	RETURN(rc);
+                                CERROR("3c: write recs failed at #%d: %d\n",
+                                        i + 1, rc);
+                                RETURN(rc);
                         }
                 }
                 num_recs++;
@@ -449,7 +449,7 @@ static int llog_test_5(struct obd_device *obd)
         }
 
         CWARN("5c: Cancel 40000 records, see one log zapped\n");
-        rc = llog_cat_process(llh, llog_cancel_rec_cb, "foobar");
+        rc = llog_cat_process(llh, llog_cancel_rec_cb, "foobar", 0, 0);
         if (rc != -4711) {
                 CERROR("5c: process with cat_cancel_cb failed: %d\n", rc);
                 GOTO(out, rc);
@@ -471,7 +471,7 @@ static int llog_test_5(struct obd_device *obd)
         }
 
         CWARN("5e: print plain log entries.. expect 6\n");
-        rc = llog_cat_process(llh, plain_print_cb, "foobar");
+        rc = llog_cat_process(llh, plain_print_cb, "foobar", 0, 0);
         if (rc) {
                 CERROR("5e: process with plain_print_cb failed: %d\n", rc);
                 GOTO(out, rc);

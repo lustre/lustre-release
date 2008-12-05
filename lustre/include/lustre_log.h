@@ -124,6 +124,11 @@ struct llog_process_data {
          * in catalog.
          */
         llog_cb_t            lpd_cb;
+        /**
+         * Start processing the catalog from startcat/startidx
+         */
+        int                  lpd_startcat;
+        int                  lpd_startidx;
 };
 
 struct llog_process_cat_data {
@@ -157,14 +162,19 @@ int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
                      struct llog_cookie *reccookie, void *buf);
 int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
                             struct llog_cookie *cookies);
-int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data);
+int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data,
+                     int startcat, int startidx);
 int llog_cat_process_thread(void *data);
 int llog_cat_reverse_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data);
 int llog_cat_set_first_idx(struct llog_handle *cathandle, int index);
 
 /* llog_obd.c */
+int llog_setup_named(struct obd_device *obd, struct obd_llog_group *olg,
+                     int index, struct obd_device *disk_obd, int count,
+                     struct llog_logid *logid, const char *logname,
+                     struct llog_operations *op);
 int llog_setup(struct obd_device *obd, struct obd_llog_group *olg, int index,
-               struct obd_device *disk_obd, int count,  struct llog_logid *logid,
+               struct obd_device *disk_obd, int count, struct llog_logid *logid,
                struct llog_operations *op);
 int __llog_ctxt_put(struct llog_ctxt *ctxt);
 int llog_cleanup(struct llog_ctxt *);
@@ -177,7 +187,7 @@ int llog_cancel(struct llog_ctxt *, struct lov_stripe_md *lsm,
 
 int llog_obd_origin_setup(struct obd_device *obd, struct obd_llog_group *olg,
                           int index, struct obd_device *disk_obd, int count,
-                          struct llog_logid *logid);
+                          struct llog_logid *logid, const char *name);
 int llog_obd_origin_cleanup(struct llog_ctxt *ctxt);
 int llog_obd_origin_add(struct llog_ctxt *ctxt,
                         struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
@@ -228,9 +238,9 @@ struct llog_operations {
         int (*lop_close)(struct llog_handle *handle);
         int (*lop_read_header)(struct llog_handle *handle);
 
-        int (*lop_setup)(struct obd_device *obd, struct obd_llog_group *olg, 
+        int (*lop_setup)(struct obd_device *obd, struct obd_llog_group *olg,
                          int ctxt_idx, struct obd_device *disk_obd, int count,
-                         struct llog_logid *logid);
+                         struct llog_logid *logid, const char *name);
         int (*lop_sync)(struct llog_ctxt *ctxt, struct obd_export *exp);
         int (*lop_cleanup)(struct llog_ctxt *ctxt);
         int (*lop_add)(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
@@ -335,10 +345,10 @@ struct llog_canceld_ctxt {
 
 /* ptlrpc/recov_thread.c */
 extern struct llog_commit_master *llog_recov_thread_init(char *name);
-extern void llog_recov_thread_fini(struct llog_commit_master *lcm, 
+extern void llog_recov_thread_fini(struct llog_commit_master *lcm,
                                    int force);
 extern int llog_recov_thread_start(struct llog_commit_master *lcm);
-extern void llog_recov_thread_stop(struct llog_commit_master *lcm, 
+extern void llog_recov_thread_stop(struct llog_commit_master *lcm,
                                     int force);
 
 static inline void llog_gen_init(struct llog_ctxt *ctxt)
@@ -425,7 +435,7 @@ static inline void llog_group_set_export(struct obd_llog_group *olg,
                                          struct obd_export *exp)
 {
         LASSERT(exp != NULL);
-        
+
         spin_lock(&olg->olg_lock);
         if (olg->olg_exp != NULL && olg->olg_exp != exp)
                 CWARN("%s: export for group %d is changed: 0x%p -> 0x%p\n",
@@ -440,7 +450,7 @@ static inline int llog_group_set_ctxt(struct obd_llog_group *olg,
 {
         LASSERT(index >= 0 && index < LLOG_MAX_CTXTS);
 
-        spin_lock(&olg->olg_lock);  
+        spin_lock(&olg->olg_lock);
         if (olg->olg_ctxts[index] != NULL) {
                 spin_unlock(&olg->olg_lock);
                 return -EEXIST;
@@ -457,7 +467,7 @@ static inline struct llog_ctxt *llog_group_get_ctxt(struct obd_llog_group *olg,
 
         LASSERT(index >= 0 && index < LLOG_MAX_CTXTS);
 
-        spin_lock(&olg->olg_lock);  
+        spin_lock(&olg->olg_lock);
         if (olg->olg_ctxts[index] == NULL) {
                 ctxt = NULL;
         } else {
@@ -508,10 +518,10 @@ static inline int llog_write_rec(struct llog_handle *handle,
 
         raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
         if (!raised)
-                cfs_cap_raise(CFS_CAP_SYS_RESOURCE); 
+                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
         rc = lop->lop_write_rec(handle, rec, logcookies, numcookies, buf, idx);
         if (!raised)
-                cfs_cap_lower(CFS_CAP_SYS_RESOURCE); 
+                cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
         RETURN(rc);
 }
 

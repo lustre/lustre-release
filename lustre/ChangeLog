@@ -14,6 +14,14 @@ tbd  Sun Microsystems, Inc.
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
 Severity   : enhancement
+Bugzilla   : 15699
+Description: Changelogs
+Details    : Changelogs are a lightweight mechanism to track filesystem
+             metadata and namespace changes.  The changelog is recorded
+             permanently on the MDTs, and is periodically "consumed" / purged
+             when records are no longer needed.
+
+Severity   : enhancement
 Bugzilla   : 15957
 Description: compact fld format with extents
 Details    : Store range of seq rather than every seq in FLD. Seq

@@ -971,6 +971,51 @@ test_59() { # bug 10589
 }
 run_test 59 "Read cancel race on client eviction"
 
+test_60() {
+	remote_mds && { skip "remote MDS" && return 0; }
+
+	NUM_FILES=15000
+	mkdir -p $DIR/$tdir
+
+	# Enable and clear changelog
+	$LCTL conf_param ${mds1_svc}.mdd.changelog=on
+	$LCTL set_param -n mdd.*.changelog on
+	$LFS changelog_clear $FSNAME 0
+
+	# Create NUM_FILES in the background
+	createmany -o $DIR/$tdir/$tfile $NUM_FILES
+	sync
+	sleep 5
+
+	# Unlink files in the background
+	unlinkmany $DIR/$tdir/$tfile $NUM_FILES	&
+	CLIENT_PID=$!
+	sleep 1
+
+	# Failover the MDS while creates are happening
+	facet_failover $SINGLEMDS
+
+	# Wait for unlinkmany to finish
+	wait $CLIENT_PID
+
+	# Check if NUM_FILES create/unlink events were recorded
+	# in the changelog
+	$LFS changelog $FSNAME >> $DIR/$tdir/changelog
+	local cl_count=$(grep UNLNK $DIR/$tdir/changelog | wc -l)
+	echo "$cl_count unlinks in changelog"
+
+	[ $cl_count -eq $NUM_FILES ] || error "Recorded ${cl_count} unlinks out
+of $NUM_FILES"
+
+	# Also make sure we can clear large changelogs
+	lctl set_param -n mdd.*.changelog off
+	$LFS changelog_clear $FSNAME 0
+
+	cl_count=$($LFS changelog $FSNAME | wc -l)
+	[ $cl_count -eq 1 ] || error "Changelog not empty: $cl_count entries"
+}
+run_test 60 "Add Changelog entries during MDS failover"
+
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true

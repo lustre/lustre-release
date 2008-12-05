@@ -1659,8 +1659,8 @@ static int mdc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
 
         LASSERT(olg == &obd->obd_olg);
 
-        rc = llog_setup(obd, olg, LLOG_LOVEA_REPL_CTXT, tgt, 0,
-                        NULL, &llog_client_ops);
+        rc = llog_setup(obd, olg, LLOG_LOVEA_REPL_CTXT, tgt, 0, NULL,
+                        &llog_client_ops);
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_LOVEA_REPL_CTXT);
                 llog_initiator_connect(ctxt);

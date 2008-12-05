@@ -1289,6 +1289,7 @@ struct lu_name {
 struct lu_buf {
         void   *lb_buf;
         ssize_t lb_len;
+        int     lb_vmalloc:1;
 };
 
 /** null buffer */

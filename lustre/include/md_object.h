@@ -84,8 +84,8 @@ struct md_ucred {
         __u32               mu_suppgids[2];
         cfs_cap_t           mu_cap;
         __u32               mu_umask;
-	struct group_info  *mu_ginfo;
-	struct md_identity *mu_identity;
+        struct group_info  *mu_ginfo;
+        struct md_identity *mu_identity;
 };
 
 enum {
@@ -244,7 +244,11 @@ struct md_object_operations {
 
         int (*moo_capa_get)(const struct lu_env *, struct md_object *,
                             struct lustre_capa *, int renewal);
+
         int (*moo_object_sync)(const struct lu_env *, struct md_object *);
+
+        int (*moo_path)(const struct lu_env *env, struct md_object *obj,
+                        char *path, int pathlen, __u64 recno, int *linkno);
 };
 
 /**
@@ -678,6 +682,13 @@ static inline int mo_capa_get(const struct lu_env *env,
 {
         LASSERT(m->mo_ops->moo_capa_get);
         return m->mo_ops->moo_capa_get(env, m, c, renewal);
+}
+
+static inline int mo_path(const struct lu_env *env, struct md_object *m,
+                          char *path, int pathlen, __u64 recno, int *linkno)
+{
+        LASSERT(m->mo_ops->moo_path);
+        return m->mo_ops->moo_path(env, m, path, pathlen, recno, linkno);
 }
 
 static inline int mo_object_sync(const struct lu_env *env, struct md_object *m)

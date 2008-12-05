@@ -82,7 +82,7 @@ int lcfg_set_devname(char *name)
                 /* quietly strip the unnecessary '$' */
                 if (*name == '$' || *name == '%')
                         name++;
-                if (isdigit(*name)) { 
+                if (isdigit(*name)) {
                         /* We can't translate from dev # to name */
                         lcfg_devname = NULL;
                 } else {
@@ -90,7 +90,7 @@ int lcfg_set_devname(char *name)
                 }
         } else {
                 lcfg_devname = NULL;
-        } 
+        }
         return 0;
 }
 
@@ -154,8 +154,8 @@ int jt_lcfg_setup(int argc, char **argv)
 
         if (lcfg_devname == NULL) {
                 fprintf(stderr, "%s: please use 'device name' to set the "
-                        "device name for config commands.\n", 
-                        jt_cmdname(argv[0])); 
+                        "device name for config commands.\n",
+                        jt_cmdname(argv[0]));
                 return -EINVAL;
         }
 
@@ -186,8 +186,8 @@ int jt_obd_detach(int argc, char **argv)
 
         if (lcfg_devname == NULL) {
                 fprintf(stderr, "%s: please use 'device name' to set the "
-                        "device name for config commands.\n", 
-                        jt_cmdname(argv[0])); 
+                        "device name for config commands.\n",
+                        jt_cmdname(argv[0]));
                 return -EINVAL;
         }
 
@@ -218,8 +218,8 @@ int jt_obd_cleanup(int argc, char **argv)
 
         if (lcfg_devname == NULL) {
                 fprintf(stderr, "%s: please use 'device name' to set the "
-                        "device name for config commands.\n", 
-                        jt_cmdname(argv[0])); 
+                        "device name for config commands.\n",
+                        jt_cmdname(argv[0]));
                 return -EINVAL;
         }
 
@@ -256,8 +256,8 @@ int jt_obd_cleanup(int argc, char **argv)
         return rc;
 }
 
-static 
-int do_add_uuid(char * func, char *uuid, lnet_nid_t nid) 
+static
+int do_add_uuid(char * func, char *uuid, lnet_nid_t nid)
 {
         int rc;
         struct lustre_cfg_bufs bufs;
@@ -269,7 +269,7 @@ int do_add_uuid(char * func, char *uuid, lnet_nid_t nid)
 
         lcfg = lustre_cfg_new(LCFG_ADD_UUID, &bufs);
         lcfg->lcfg_nid = nid;
-        /* Poison NAL -- pre 1.4.6 will LASSERT on 0 NAL, this way it 
+        /* Poison NAL -- pre 1.4.6 will LASSERT on 0 NAL, this way it
            doesn't work without crashing (bz 10130) */
         lcfg->lcfg_nal = 0x5a;
 
@@ -292,8 +292,8 @@ int do_add_uuid(char * func, char *uuid, lnet_nid_t nid)
 int jt_lcfg_add_uuid(int argc, char **argv)
 {
         lnet_nid_t nid;
-        
-        if (argc != 3) {                
+
+        if (argc != 3) {
                 return CMD_HELP;
         }
 
@@ -325,7 +325,7 @@ int jt_lcfg_del_uuid(int argc, char **argv)
         lustre_cfg_bufs_reset(&bufs, lcfg_devname);
         if (strcmp (argv[1], "_all_"))
                 lustre_cfg_bufs_set_string(&bufs, 1, argv[1]);
-        
+
         lcfg = lustre_cfg_new(LCFG_DEL_UUID, &bufs);
         rc = lcfg_ioctl(argv[0], OBD_DEV_ID, lcfg);
         lustre_cfg_free(lcfg);
@@ -382,7 +382,7 @@ int jt_lcfg_set_timeout(int argc, char **argv)
         lustre_cfg_bufs_reset(&bufs, lcfg_devname);
         lcfg = lustre_cfg_new(LCFG_SET_TIMEOUT, &bufs);
         lcfg->lcfg_num = atoi(argv[1]);
-        
+
         rc = lcfg_ioctl(argv[0], OBD_DEV_ID, lcfg);
         //rc = lcfg_mgs_ioctl(argv[0], OBD_DEV_ID, lcfg);
 
@@ -412,8 +412,8 @@ int jt_lcfg_add_conn(int argc, char **argv)
 
         if (lcfg_devname == NULL) {
                 fprintf(stderr, "%s: please use 'device name' to set the "
-                        "device name for config commands.\n", 
-                        jt_cmdname(argv[0])); 
+                        "device name for config commands.\n",
+                        jt_cmdname(argv[0]));
                 return -EINVAL;
         }
 
@@ -445,8 +445,8 @@ int jt_lcfg_del_conn(int argc, char **argv)
 
         if (lcfg_devname == NULL) {
                 fprintf(stderr, "%s: please use 'device name' to set the "
-                        "device name for config commands.\n", 
-                        jt_cmdname(argv[0])); 
+                        "device name for config commands.\n",
+                        jt_cmdname(argv[0]));
                 return -EINVAL;
         }
 
@@ -484,7 +484,7 @@ int jt_lcfg_param(int argc, char **argv)
         }
 
         lcfg = lustre_cfg_new(LCFG_PARAM, &bufs);
-        
+
         rc = lcfg_ioctl(argv[0], OBD_DEV_ID, lcfg);
         lustre_cfg_free(lcfg);
         if (rc < 0) {
@@ -519,7 +519,7 @@ int jt_lcfg_mgsparam(int argc, char **argv)
                 fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
                         strerror(rc = errno));
         }
-        
+
         return rc;
 }
 

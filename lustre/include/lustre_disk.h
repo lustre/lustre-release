@@ -57,6 +57,8 @@
 #define LOV_OBJID         "lov_objid"
 #define HEALTH_CHECK      "health_check"
 #define CAPA_KEYS         "capa_keys"
+#define CHANGELOG_CATALOG "changelog_catalog"
+
 
 /****************** persistent mount data *********************/
 
@@ -116,7 +118,7 @@ struct lustre_disk_data {
 
         __u32      ldd_config_ver;      /* config rewrite count - not used */
         __u32      ldd_flags;           /* LDD_SV_TYPE */
-        __u32      ldd_svindex;         /* server index (0001), must match 
+        __u32      ldd_svindex;         /* server index (0001), must match
                                            svname */
         __u32      ldd_mount_type;      /* target fs type LDD_MT_* */
         char       ldd_fsname[64];      /* filesystem this server is part of */
@@ -158,7 +160,7 @@ int server_name2index(char *svname, __u32 *idx, char **endptr);
 
 /****************** mount command *********************/
 
-/* The lmd is only used internally by Lustre; mount simply passes 
+/* The lmd is only used internally by Lustre; mount simply passes
    everything as string options */
 
 #define LMD_MAGIC    0xbdacbd03
@@ -172,7 +174,7 @@ struct lustre_mount_data {
         char      *lmd_dev;           /* device name */
         char      *lmd_profile;       /* client only */
         char      *lmd_mgssec;        /* sptlrpc flavor to mgs */
-        char      *lmd_opts;          /* lustre mount options (as opposed to 
+        char      *lmd_opts;          /* lustre mount options (as opposed to
                                          _device_ mount options) */
         __u32     *lmd_exclude;       /* array of OSTs to ignore */
 };
@@ -180,12 +182,12 @@ struct lustre_mount_data {
 #define LMD_FLG_SERVER       0x0001  /* Mounting a server */
 #define LMD_FLG_CLIENT       0x0002  /* Mounting a client */
 #define LMD_FLG_ABORT_RECOV  0x0008  /* Abort recovery */
-#define LMD_FLG_NOSVC        0x0010  /* Only start MGS/MGC for servers, 
+#define LMD_FLG_NOSVC        0x0010  /* Only start MGS/MGC for servers,
                                         no other services */
 #define LMD_FLG_NOMGS        0x0020  /* Only start target for servers, reusing
                                         existing MGS services */
 
-#define lmd_is_client(x) ((x)->lmd_flags & LMD_FLG_CLIENT) 
+#define lmd_is_client(x) ((x)->lmd_flags & LMD_FLG_CLIENT)
 
 
 /****************** last_rcvd file *********************/
@@ -271,8 +273,9 @@ struct lsd_client_data {
 };
 
 
-#ifdef __KERNEL__
 /****************** superblock additional info *********************/
+#ifdef __KERNEL__
+
 struct ll_sb_info;
 
 struct lustre_sb_info {
@@ -316,9 +319,9 @@ void lustre_register_kill_super_cb(void (*cfs)(struct super_block *sb));
 
 
 int lustre_common_put_super(struct super_block *sb);
-int lustre_process_log(struct super_block *sb, char *logname, 
+int lustre_process_log(struct super_block *sb, char *logname,
                      struct config_llog_instance *cfg);
-int lustre_end_log(struct super_block *sb, char *logname, 
+int lustre_end_log(struct super_block *sb, char *logname,
                        struct config_llog_instance *cfg);
 struct lustre_mount_info *server_get_mount(const char *name);
 struct lustre_mount_info *server_get_mount_2(const char *name);

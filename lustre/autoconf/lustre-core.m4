@@ -934,6 +934,25 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# LC_SEQ_LOCK
+# after 2.6.18 seq_file has lock intead of sem
+AC_DEFUN([LC_SEQ_LOCK],
+[AC_MSG_CHECKING([if struct seq_file has lock field])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/seq_file.h>
+],[
+	struct seq_file seq;
+
+	mutex_unlock(&seq.lock);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_SEQ_LOCK, 1,
+                [after 2.6.18 seq_file has lock intead of sem])
+],[
+        AC_MSG_RESULT(NO)
+])
+])
+
 # LC_DQUOTOFF_MUTEX
 # after 2.6.17 dquote use mutex instead if semaphore
 AC_DEFUN([LC_DQUOTOFF_MUTEX],
@@ -1466,7 +1485,7 @@ EXTRA_KCFLAGS="$tmp_flags"
 AC_DEFUN([LC_CONST_ACL_SIZE],
 [AC_MSG_CHECKING([calc acl size])
 tmp_flags="$CFLAGS"
-CFLAGS="$CFLAGS -I $LINUX_OBJ/include $EXTRA_KCFLAGS"
+CFLAGS="$CFLAGS -I$LINUX/include -I$LINUX_OBJ/include -I$LINUX_OBJ/include2 $EXTRA_KCFLAGS"
 AC_TRY_RUN([
 #define __KERNEL__
 #include <linux/autoconf.h>
@@ -1632,6 +1651,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_VFS_KERN_MOUNT
          LC_INVALIDATEPAGE_RETURN_INT
          LC_UMOUNTBEGIN_HAS_VFSMOUNT
+         LC_SEQ_LOCK
          if test x$enable_server = xyes ; then
                 LC_EXPORT_INVALIDATE_MAPPING_PAGES
                 LC_EXPORT_FILEMAP_FDATAWRITE_RANGE

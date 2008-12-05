@@ -88,6 +88,28 @@ struct mdd_txn_op_descr {
         unsigned int    mod_credits;
 };
 
+/* Changelog flags */
+/** changelog is recording */
+#define CLM_ON    0x00001
+/** internal error prevented changelogs from starting */
+#define CLM_ERR   0x00002
+/* Marker flags */
+/** changelogs turned on */
+#define CLM_START 0x10000
+/** changelogs turned off */
+#define CLM_FINI  0x20000
+/** some changelog records purged */
+#define CLM_PURGE 0x40000
+
+struct mdd_changelog {
+        spinlock_t                       mc_lock;    /* for index */
+        cfs_waitq_t                      mc_waitq;
+        int                              mc_flags;
+        int                              mc_mask;
+        __u64                            mc_index;
+        __u64                            mc_starttime;
+};
+
 struct mdd_device {
         struct md_device                 mdd_md_dev;
         struct dt_device                *mdd_child;
@@ -99,6 +121,7 @@ struct mdd_device {
         cfs_proc_dir_entry_t            *mdd_proc_entry;
         struct lprocfs_stats            *mdd_stats;
         struct mdd_txn_op_descr          mdd_tod[MDD_TXN_LAST_OP];
+        struct mdd_changelog             mdd_cl;
         unsigned long                    mdd_atime_diff;
 };
 
@@ -126,10 +149,11 @@ enum mdd_object_role {
 struct mdd_object {
         struct md_object   mod_obj;
         /* open count */
-        __u32              mod_count;
-        __u32              mod_valid;
-        unsigned long      mod_flags;
-        struct dynlock     mod_pdlock;
+        __u32             mod_count;
+        __u32             mod_valid;
+        __u64             mod_cltime;
+        unsigned long     mod_flags;
+        struct dynlock    mod_pdlock;
 #ifdef CONFIG_LOCKDEP
         /* "dep_map" name is assumed by lockdep.h macros. */
         struct lockdep_map dep_map;
@@ -139,16 +163,18 @@ struct mdd_object {
 struct mdd_thread_info {
         struct txn_param          mti_param;
         struct lu_fid             mti_fid;
+        struct lu_fid             mti_fid2; /* used for be & cpu converting */
         struct lu_attr            mti_la;
-        struct md_attr            mti_ma;
         struct lu_attr            mti_la_for_fix;
+        struct md_attr            mti_ma;
         struct obd_info           mti_oi;
         char                      mti_orph_key[NAME_MAX + 1];
         struct obd_trans_info     mti_oti;
         struct lu_buf             mti_buf;
+        struct lu_buf             mti_big_buf; /* biggish persistent buf */
+        struct lu_name            mti_name;
         struct obdo               mti_oa;
         char                      mti_xattr_buf[LUSTRE_POSIX_ACL_MAX_SIZE];
-        struct lu_fid             mti_fid2; /* used for be & cpu converting */
         struct lu_fid_pack        mti_pack;
         struct dt_allocation_hint mti_hint;
         struct lov_mds_md        *mti_max_lmm;
@@ -173,6 +199,9 @@ int mdd_init_obd(const struct lu_env *env, struct mdd_device *mdd,
                  struct lustre_cfg *cfg);
 int mdd_fini_obd(const struct lu_env *env, struct mdd_device *mdd,
                  struct lustre_cfg *lcfg);
+int __mdd_xattr_set(const struct lu_env *env, struct mdd_object *obj,
+                    const struct lu_buf *buf, const char *name,
+                    int fl, struct thandle *handle);
 int mdd_xattr_set_txn(const struct lu_env *env, struct mdd_object *obj,
                       const struct lu_buf *buf, const char *name, int fl,
                       struct thandle *txn);
@@ -223,6 +252,7 @@ int mdd_attr_check_set_internal_locked(const struct lu_env *env,
                                        int needacl);
 int mdd_lmm_get_locked(const struct lu_env *env, struct mdd_object *mdd_obj,
                        struct md_attr *ma);
+
 /* mdd_lock.c */
 void mdd_write_lock(const struct lu_env *env, struct mdd_object *obj,
                     enum mdd_object_role role);
@@ -262,10 +292,20 @@ int mdd_unlink_sanity_check(const struct lu_env *env, struct mdd_object *pobj,
 int mdd_finish_unlink(const struct lu_env *env, struct mdd_object *obj,
                       struct md_attr *ma, struct thandle *th);
 int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
-                          struct mdd_object *child, struct md_attr *ma,
-                          struct thandle *handle, const struct md_op_spec *spec);
+                          const struct lu_name *lname, struct mdd_object *child,
+                          struct md_attr *ma, struct thandle *handle,
+                          const struct md_op_spec *spec);
 int mdd_link_sanity_check(const struct lu_env *env, struct mdd_object *tgt_obj,
                           const struct lu_name *lname, struct mdd_object *src_obj);
+int mdd_is_root(struct mdd_device *mdd, const struct lu_fid *fid);
+int mdd_lookup(const struct lu_env *env,
+               struct md_object *pobj, const struct lu_name *lname,
+               struct lu_fid* fid, struct md_op_spec *spec);
+struct lu_buf *mdd_links_get(const struct lu_env *env,
+                             struct mdd_object *mdd_obj);
+void mdd_lee_unpack(const struct link_ea_entry *lee, int *reclen,
+                    struct lu_name *lname, struct lu_fid *pfid);
+
 /* mdd_lov.c */
 int mdd_unlink_log(const struct lu_env *env, struct mdd_device *mdd,
                    struct mdd_object *mdd_cobj, struct md_attr *ma);
@@ -305,10 +345,22 @@ void mdd_lprocfs_time_start(const struct lu_env *env);
 void mdd_lprocfs_time_end(const struct lu_env *env,
                           struct mdd_device *mdd, int op);
 
+/* mdd_object.c */
 int mdd_get_flags(const struct lu_env *env, struct mdd_object *obj);
+struct lu_buf *mdd_buf_alloc(const struct lu_env *env, ssize_t len);
+int mdd_buf_grow(const struct lu_env *env, ssize_t len);
+void mdd_buf_put(struct lu_buf *buf);
 
 extern const struct md_dir_operations    mdd_dir_ops;
 extern const struct md_object_operations mdd_obj_ops;
+
+int accmode(const struct lu_env *env, struct lu_attr *la, int flags);
+extern struct lu_context_key mdd_thread_key;
+extern const struct lu_device_operations mdd_lu_ops;
+
+struct mdd_object *mdd_object_find(const struct lu_env *env,
+                                   struct mdd_device *d,
+                                   const struct lu_fid *f);
 
 /* mdd_quota.c*/
 #ifdef HAVE_QUOTA_SUPPORT
@@ -376,15 +428,12 @@ int mdd_txn_commit_cb(const struct lu_env *env, struct thandle *txn,
 struct lu_object *mdd_object_alloc(const struct lu_env *env,
                                    const struct lu_object_header *hdr,
                                    struct lu_device *d);
-
-/* mdd_object.c */
-int accmode(const struct lu_env *env, struct lu_attr *la, int flags);
-extern struct lu_context_key mdd_thread_key;
-extern const struct lu_device_operations mdd_lu_ops;
-
-struct mdd_object *mdd_object_find(const struct lu_env *env,
-                                   struct mdd_device *d,
-                                   const struct lu_fid *f);
+struct llog_changelog_rec;
+int mdd_changelog_llog_write(struct mdd_device         *mdd,
+                             struct llog_changelog_rec *rec,
+                             struct thandle            *handle);
+int mdd_changelog_llog_cancel(struct mdd_device *mdd, long long endrec);
+int mdd_changelog_write_header(struct mdd_device *mdd, int markerflags);
 
 /* mdd_permission.c */
 #define mdd_cap_t(x) (x)
@@ -417,24 +466,24 @@ int mdd_capa_get(const struct lu_env *env, struct md_object *obj,
 
 static inline int lu_device_is_mdd(struct lu_device *d)
 {
-	return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &mdd_lu_ops);
+        return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &mdd_lu_ops);
 }
 
 static inline struct mdd_device* lu2mdd_dev(struct lu_device *d)
 {
-	LASSERT(lu_device_is_mdd(d));
-	return container_of0(d, struct mdd_device, mdd_md_dev.md_lu_dev);
+        LASSERT(lu_device_is_mdd(d));
+        return container_of0(d, struct mdd_device, mdd_md_dev.md_lu_dev);
 }
 
 static inline struct lu_device *mdd2lu_dev(struct mdd_device *d)
 {
-	return (&d->mdd_md_dev.md_lu_dev);
+        return (&d->mdd_md_dev.md_lu_dev);
 }
 
 static inline struct mdd_object *lu2mdd_obj(struct lu_object *o)
 {
-	LASSERT(ergo(o != NULL, lu_device_is_mdd(o->lo_dev)));
-	return container_of0(o, struct mdd_object, mod_obj.mo_lu);
+        LASSERT(ergo(o != NULL, lu_device_is_mdd(o->lo_dev)));
+        return container_of0(o, struct mdd_object, mod_obj.mo_lu);
 }
 
 static inline struct mdd_device* mdo2mdd(struct md_object *mdo)

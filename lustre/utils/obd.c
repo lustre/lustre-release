@@ -1911,11 +1911,10 @@ int jt_cfg_dump_log(int argc, char **argv)
         struct obd_ioctl_data data;
         int rc;
 
-        IOC_INIT(data);
-
         if (argc != 2)
                 return CMD_HELP;
 
+        IOC_INIT(data);
         data.ioc_inllen1 = strlen(argv[1]) + 1;
         data.ioc_inlbuf1 = argv[1];
 

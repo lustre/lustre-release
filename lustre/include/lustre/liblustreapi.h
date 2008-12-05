@@ -61,7 +61,7 @@ enum llapi_message_level {
 
 /* the bottom three bits reserved for llapi_message_level */
 #define LLAPI_MSG_MASK          0x00000007
-#define LLAPI_MSG_NO_ERRNO      0x00000010 
+#define LLAPI_MSG_NO_ERRNO      0x00000010
 
 /* liblustreapi.c */
 extern void llapi_msg_set_level(int level);
@@ -171,4 +171,10 @@ extern int llapi_rsetfacl(int argc, char *argv[]);
 extern int llapi_rgetfacl(int argc, char *argv[]);
 extern int llapi_cp(int argc, char *argv[]);
 extern int llapi_ls(int argc, char *argv[]);
+extern int llapi_changelog_open(const char *mdtname, long long startrec);
+extern int llapi_changelog_clear(const char *mdtname, long long endrec);
+struct lu_fid;
+extern int llapi_fid2path(char *device, char *fid, char *path, int pathlen,
+                          __u64 recno, int *linkno);
 #endif
+

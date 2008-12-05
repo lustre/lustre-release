@@ -128,7 +128,6 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
 
                 lustre_swab_ll_fid(&lsc->lsc_fid);
                 __swab32s(&lsc->lsc_ioepoch);
-
                 break;
         }
 
@@ -140,7 +139,6 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
 
                 __swab64s(&lur->lur_oid);
                 __swab32s(&lur->lur_ogen);
-
                 break;
         }
 
@@ -151,7 +149,20 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
                 __swab32s(&lsr->lsr_ogen);
                 __swab32s(&lsr->lsr_uid);
                 __swab32s(&lsr->lsr_gid);
+                break;
+        }
 
+        case CHANGELOG_REC: {
+                struct llog_changelog_rec *cr = (struct llog_changelog_rec*)rec;
+
+                __swab16s(&cr->cr_flags);
+                __swab16s(&cr->cr_namelen);
+                __swab32s(&cr->cr_type);
+                __swab64s(&cr->cr_index);
+                __swab64s(&cr->cr_prev);
+                __swab64s(&cr->cr_time);
+                lustre_swab_lu_fid(&cr->cr_tfid);
+                lustre_swab_lu_fid(&cr->cr_pfid);
                 break;
         }
 
@@ -167,7 +178,6 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
         }
 
         case OBD_CFG_REC:
-        case PTL_CFG_REC:                       /* obsolete */
                 /* these are swabbed as they are consumed */
                 break;
 
@@ -184,7 +194,6 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
                         __swab32s(&llh->llh_tail.lrt_index);
                         __swab32s(&llh->llh_tail.lrt_len);
                 }
-
                 break;
         }
 
@@ -198,8 +207,6 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
         }
         case LLOG_JOIN_REC:
         case LLOG_PAD_MAGIC:
-        /* ignore old pad records of type 0 */
-        case 0:
                 break;
 
         default:

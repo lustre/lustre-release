@@ -345,6 +345,15 @@ static int cml_capa_get(const struct lu_env *env, struct md_object *mo,
         RETURN(rc);
 }
 
+static int cml_path(const struct lu_env *env, struct md_object *mo,
+                    char *path, int pathlen, __u64 recno, int *linkno)
+{
+        int rc;
+        ENTRY;
+        rc = mo_path(env, md_object_next(mo), path, pathlen, recno, linkno);
+        RETURN(rc);
+}
+
 static int cml_object_sync(const struct lu_env *env, struct md_object *mo)
 {
         int rc;
@@ -370,6 +379,7 @@ static const struct md_object_operations cml_mo_ops = {
         .moo_readlink      = cml_readlink,
         .moo_capa_get      = cml_capa_get,
         .moo_object_sync   = cml_object_sync,
+        .moo_path          = cml_path,
 };
 
 /* md_dir operations */
@@ -931,6 +941,12 @@ static int cmr_capa_get(const struct lu_env *env, struct md_object *mo,
         return -EFAULT;
 }
 
+static int cmr_path(const struct lu_env *env, struct md_object *obj,
+                    char *path, int pathlen, __u64 recno, int *linkno)
+{
+        return -EREMOTE;
+}
+
 static int cmr_object_sync(const struct lu_env *env, struct md_object *mo)
 {
         return -EFAULT;
@@ -953,6 +969,7 @@ static const struct md_object_operations cmr_mo_ops = {
         .moo_readlink      = cmr_readlink,
         .moo_capa_get      = cmr_capa_get,
         .moo_object_sync   = cmr_object_sync,
+        .moo_path          = cmr_path,
 };
 
 /* remote part of md_dir operations */

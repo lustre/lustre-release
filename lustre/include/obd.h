@@ -266,6 +266,7 @@ enum llog_ctxt_id {
         LLOG_TEST_REPL_CTXT,
         LLOG_LOVEA_ORIG_CTXT,
         LLOG_LOVEA_REPL_CTXT,
+        LLOG_CHANGELOG_ORIG_CTXT,   /**< changelog context */
         LLOG_MAX_CTXTS
 };
 

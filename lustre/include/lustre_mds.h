@@ -71,11 +71,12 @@ int mds_lov_prepare_objids(struct obd_device *obd, struct lov_mds_md *lmm);
 void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm);
 
 
-#define MDS_LOV_MD_NAME "trusted.lov"
-#define MDS_LMV_MD_NAME "trusted.lmv"
-#define MDD_OBD_NAME    "mdd_obd"
-#define MDD_OBD_UUID    "mdd_obd_uuid"
-#define MDD_OBD_TYPE    "mds"
+#define MDS_LOV_MD_NAME  "trusted.lov"
+#define MDS_LMV_MD_NAME  "trusted.lmv"
+#define MDS_LINK_EA_NAME "trusted.link"
+#define MDD_OBD_NAME     "mdd_obd"
+#define MDD_OBD_UUID     "mdd_obd_uuid"
+#define MDD_OBD_TYPE     "mds"
 
 static inline int md_should_create(__u32 flags)
 {

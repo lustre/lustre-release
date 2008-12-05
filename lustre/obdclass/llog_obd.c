@@ -97,9 +97,9 @@ int __llog_ctxt_put(struct llog_ctxt *ctxt)
 
         /* obd->obd_starting is needed for the case of cleanup
          * in error case while obd is starting up. */
-        LASSERTF(obd->obd_starting == 1 || 
+        LASSERTF(obd->obd_starting == 1 ||
                  obd->obd_stopping == 1 || obd->obd_set_up == 0,
-                 "wrong obd state: %d/%d/%d\n", !!obd->obd_starting, 
+                 "wrong obd state: %d/%d/%d\n", !!obd->obd_starting,
                  !!obd->obd_stopping, !!obd->obd_set_up);
 
         /* cleanup the llog ctxt here */
@@ -144,9 +144,10 @@ int llog_cleanup(struct llog_ctxt *ctxt)
 }
 EXPORT_SYMBOL(llog_cleanup);
 
-int llog_setup(struct obd_device *obd,  struct obd_llog_group *olg, int index,
-               struct obd_device *disk_obd, int count, struct llog_logid *logid,
-               struct llog_operations *op)
+int llog_setup_named(struct obd_device *obd,  struct obd_llog_group *olg,
+                     int index, struct obd_device *disk_obd, int count,
+                     struct llog_logid *logid, const char *logname,
+                     struct llog_operations *op)
 {
         int rc = 0;
         struct llog_ctxt *ctxt;
@@ -190,14 +191,25 @@ int llog_setup(struct obd_device *obd,  struct obd_llog_group *olg, int index,
                 GOTO(out, rc);
         }
 
-        if (op->lop_setup)
-                rc = op->lop_setup(obd, olg, index, disk_obd, count, logid);
-
-        if (rc) {
-                llog_ctxt_destroy(ctxt);
+        if (op->lop_setup) {
+                rc = op->lop_setup(obd, olg, index, disk_obd, count, logid,
+                                   logname);
+                if (rc) {
+                        CERROR("obd %s ctxt %d lop_setup=%p failed %d\n",
+                               obd->obd_name, index, op->lop_setup, rc);
+                        llog_ctxt_put(ctxt);
+                }
         }
 out:
         RETURN(rc);
+}
+EXPORT_SYMBOL(llog_setup_named);
+
+int llog_setup(struct obd_device *obd,  struct obd_llog_group *olg,
+               int index, struct obd_device *disk_obd, int count,
+               struct llog_logid *logid, struct llog_operations *op)
+{
+        return llog_setup_named(obd,olg,index,disk_obd,count,logid,NULL,op);
 }
 EXPORT_SYMBOL(llog_setup);
 
@@ -308,7 +320,7 @@ static int cat_cancel_cb(struct llog_handle *cathandle,
 // XXX how to set exports
 int llog_obd_origin_setup(struct obd_device *obd, struct obd_llog_group *olg,
                           int index, struct obd_device *disk_obd, int count,
-                          struct llog_logid *logid)
+                          struct llog_logid *logid, const char *name)
 {
         struct llog_ctxt *ctxt;
         struct llog_handle *handle;
@@ -327,11 +339,11 @@ int llog_obd_origin_setup(struct obd_device *obd, struct obd_llog_group *olg,
         LASSERT(ctxt);
         llog_gen_init(ctxt);
 
-        if (logid->lgl_oid)
+        if (logid && logid->lgl_oid) {
                 rc = llog_create(ctxt, &handle, logid, NULL);
-        else {
-                rc = llog_create(ctxt, &handle, NULL, NULL);
-                if (!rc)
+        } else {
+                rc = llog_create(ctxt, &handle, NULL, (char *)name);
+                if (!rc && logid)
                         *logid = handle->lgh_id;
         }
         if (rc)
@@ -407,7 +419,7 @@ int llog_obd_origin_add(struct llog_ctxt *ctxt,
         cathandle = ctxt->loc_handle;
         LASSERT(cathandle != NULL);
         rc = llog_cat_add_rec(cathandle, rec, logcookies, NULL);
-        if (rc != 1)
+        if ((rc < 0) || (!logcookies && rc))
                 CERROR("write one catalog record failed: %d\n", rc);
         RETURN(rc);
 }

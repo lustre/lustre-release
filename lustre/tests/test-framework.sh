@@ -259,9 +259,9 @@ load_modules() {
 
     load_module llite/lustre
     load_module llite/llite_lloop
+    [ -d /r ] && OGDB=${OGDB:-"/r/tmp"}
     OGDB=${OGDB:-$TMP}
     rm -f $OGDB/ogdb-$HOSTNAME
-    [ -d /r ] && OGDB="/r/tmp"
     $LCTL modules > $OGDB/ogdb-$HOSTNAME
 
     # 'mount' doesn't look in $PATH, just sbin

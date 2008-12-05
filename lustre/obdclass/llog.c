@@ -323,10 +323,6 @@ static int llog_process_thread(void *arg)
                                                  lpi->lpi_cbdata);
                                 last_called_index = index;
                                 if (rc == LLOG_PROC_BREAK) {
-                                        CDEBUG(D_HA, "recovery from log: "LPX64
-                                               ":%x stopped\n",
-                                               loghandle->lgh_id.lgl_oid,
-                                               loghandle->lgh_id.lgl_ogen);
                                         GOTO(out, rc);
                                 } else if (rc == LLOG_DEL_RECORD) {
                                         llog_cancel_rec(loghandle,
@@ -462,10 +458,6 @@ int llog_reverse_process(struct llog_handle *loghandle, llog_cb_t cb,
                         if (ext2_test_bit(index, llh->llh_bitmap)) {
                                 rc = cb(loghandle, rec, data);
                                 if (rc == LLOG_PROC_BREAK) {
-                                        CWARN("recovery from log: "LPX64":%x"
-                                              " stopped\n",
-                                              loghandle->lgh_id.lgl_oid,
-                                              loghandle->lgh_id.lgl_ogen);
                                         GOTO(out, rc);
                                 }
                                 if (rc)

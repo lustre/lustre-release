@@ -98,6 +98,14 @@ do {mutex_lock_nested(&(inode)->i_mutex, I_MUTEX_PARENT); } while(0)
 #define LOCK_INODE_MUTEX_PARENT(inode) LOCK_INODE_MUTEX(inode)
 #endif /* HAVE_INODE_I_MUTEX */
 
+#ifdef HAVE_SEQ_LOCK
+#define LL_SEQ_LOCK(seq) mutex_lock(&(seq)->lock)
+#define LL_SEQ_UNLOCK(seq) mutex_unlock(&(seq)->lock)
+#else
+#define LL_SEQ_LOCK(seq) down(&(seq)->sem)
+#define LL_SEQ_UNLOCK(seq) up(&(seq)->sem)
+#endif
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15)
 #define d_child d_u.d_child
 #define d_rcu d_u.d_rcu
@@ -321,7 +329,7 @@ static inline int filemap_fdatawrite_range(struct address_space *mapping,
 
 #ifdef mapping_cap_writeback_dirty
         if (!mapping_cap_writeback_dirty(mapping))
-		rc = 0;
+                rc = 0;
 #else
         if (mapping->backing_dev_info->memory_backed)
                 rc = 0;
@@ -377,7 +385,7 @@ static inline u32 get_sb_time_gran(struct super_block *sb)
 #endif
 
 #ifdef HAVE_RW_TREE_LOCK
-#define TREE_READ_LOCK_IRQ(mapping)	read_lock_irq(&(mapping)->tree_lock)
+#define TREE_READ_LOCK_IRQ(mapping)     read_lock_irq(&(mapping)->tree_lock)
 #define TREE_READ_UNLOCK_IRQ(mapping) read_unlock_irq(&(mapping)->tree_lock)
 #else
 #define TREE_READ_LOCK_IRQ(mapping) spin_lock_irq(&(mapping)->tree_lock)
@@ -408,9 +416,9 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 #endif
 
 #ifdef HAVE_FS_RENAME_DOES_D_MOVE
-#define LL_RENAME_DOES_D_MOVE	FS_RENAME_DOES_D_MOVE
+#define LL_RENAME_DOES_D_MOVE   FS_RENAME_DOES_D_MOVE
 #else
-#define LL_RENAME_DOES_D_MOVE	FS_ODD_RENAME
+#define LL_RENAME_DOES_D_MOVE   FS_ODD_RENAME
 #endif
 
 /* add a lustre compatible layer for crypto API */
@@ -507,7 +515,7 @@ struct ll_crypto_cipher *ll_crypto_alloc_blkcipher(const char * algname,
 {
         char        buf[CRYPTO_MAX_ALG_NAME + 1];
         const char *pan = algname;
-        u32         flag = 0; 
+        u32         flag = 0;
 
         if (strncmp("cbc(", algname, 4) == 0)
                 flag |= CRYPTO_TFM_MODE_CBC;
@@ -526,7 +534,7 @@ struct ll_crypto_cipher *ll_crypto_alloc_blkcipher(const char * algname,
         return crypto_alloc_tfm(pan, flag);
 }
 
-static inline 
+static inline
 struct ll_crypto_hash *ll_crypto_alloc_hash(const char *alg, u32 type, u32 mask)
 {
         char        buf[CRYPTO_MAX_ALG_NAME + 1];
