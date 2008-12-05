@@ -123,7 +123,7 @@ rm -rf $DIR/[Rdfs][0-9]*
 # $RUNAS_ID may get set incorrectly somewhere else
 [ $UID -eq 0 -a $RUNAS_ID -eq 0 ] && error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 
-check_runas_id $RUNAS_ID $RUNAS
+check_runas_id $RUNAS_ID $RUNAS_ID $RUNAS
 
 build_test_filter
 
@@ -3102,7 +3102,7 @@ test_72() { # bug 5695 - Test that on 2.6 remove_suid works properly
 	[ "$RUNAS_ID" = "$UID" ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 
         # Check that testing environment is properly set up. Skip if not
-        FAIL_ON_ERROR=false check_runas_id_ret $RUNAS_ID $RUNAS || {
+        FAIL_ON_ERROR=false check_runas_id_ret $RUNAS_ID $RUNAS_ID $RUNAS || {
                 skip "User $RUNAS_ID does not exist - skipping"
                 return 0
         }
@@ -3548,22 +3548,15 @@ test_80() { # bug 10718
 }
 run_test 80 "Page eviction is equally fast at high offsets too  ===="
 
-# on the LLNL clusters, runas will still pick up root's $TMP settings,
-# which will not be writable for the runas user, and then you get a CVS
-# error message with a corrupt path string (CVS bug) and panic.
-# We're not using much space, so just stick it in /tmp, which is safe.
-OLDTMPDIR=$TMPDIR
-OLDTMP=$TMP
-TMPDIR=/tmp
-TMP=/tmp
-OLDHOME=$HOME
-[ $RUNAS_ID -ne $UID ] && HOME=/tmp
-
 test_99a() {
-        [ -z "$(which cvs 2>/dev/null)" ] && skip "could not find cvs" && return
+	[ -z "$(which cvs 2>/dev/null)" ] && skip "could not find cvs" && return
 	mkdir -p $DIR/d99cvsroot || error "mkdir $DIR/d99cvsroot failed"
 	chown $RUNAS_ID $DIR/d99cvsroot || error "chown $DIR/d99cvsroot failed"
+	local oldPWD=$PWD	# bug 13584, use $TMP as working dir
+	cd $TMP
+	
 	$RUNAS cvs -d $DIR/d99cvsroot init || error "cvs init failed"
+	cd $oldPWD
 }
 run_test 99a "cvs init ========================================="
 
@@ -3910,17 +3903,6 @@ test_102c() {
 }
 run_test 102c "non-root getfattr/setfattr for lustre.lov EAs ==========="
 
-get_stripe_info() {
-	stripe_size=0
-	stripe_count=0
-	stripe_offset=0
-	local lines=`sed -n '/obdidx/=' $1`
-	stripe_size=`awk '{if($1~/size/) print $2}' $1`
-	stripe_count=`awk '{if($1~/count/) print $2}' $1`
-	lines=`expr $lines + 1`
-	stripe_offset=`sed -n ${lines}p $1 |awk '{print $1}'`
-}
-
 compare_stripe_info1() {
 	for num in 1 2 3 4
 	do
@@ -3930,22 +3912,16 @@ compare_stripe_info1() {
 			do
 				local size=`expr $STRIPE_SIZE \* $num`
 				local file=file"$num-$offset-$count"
-				local tmp_file=out
-				$GETSTRIPE -v $file > $tmp_file
-				get_stripe_info  $tmp_file
-				if test $stripe_size -ne $size
-				then
+				get_stripe_info client $file
+				if [ $stripe_size -ne $size ]; then
 					error "$file: different stripe size" && return
 				fi
-				if test $stripe_count -ne $count
-				then
+				if [ $stripe_count -ne $count ]; then
 					error "$file: different stripe count" && return
 				fi
-				if test $stripe_offset -ne 0
-				then
+				if [ $stripe_index -ne 0 ]; then
 					error "$file: different stripe offset" && return
 				fi
-				rm -f $tmp_file
 			done
 		done
 	done
@@ -3960,22 +3936,16 @@ compare_stripe_info2() {
 			do
 				local size=`expr $STRIPE_SIZE \* $num`
 				local file=file"$num-$offset-$count"
-				local tmp_file=out
-				$GETSTRIPE -v $file > $tmp_file
-				get_stripe_info  $tmp_file
-				if test $stripe_size -ne $size
-				then
+				get_stripe_info client $file
+				if [ $stripe_size -ne $size ]; then
 					error "$file: different stripe size" && return	
 				fi
-				if test $stripe_count -ne $count
-				then
+				if [ $stripe_count -ne $count ]; then
 					error "$file: different stripe count" && return
 				fi
-				if test $stripe_offset -ne $offset
-				then
+				if [ $stripe_index -ne $offset ]; then
 					error "$file: different stripe offset" && return
 				fi
-				rm -f $tmp_file
 			done
 		done
 	done
@@ -5055,10 +5025,9 @@ run_test 123b "not panic with network error in statahead enqueue (bug 15027)"
 test_124a() {
 	[ -z "`lctl get_param -n mdc.*.connect_flags | grep lru_resize`" ] && \
                skip "no lru resize on server" && return 0
-        NR=2000
+        local NR=2000
         mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
 
-        # use touch to produce $NR new locks
         log "create $NR files at $DIR/$tdir"
         createmany -o $DIR/$tdir/f $NR ||
                 error "failed to create $NR files in $DIR/$tdir"
@@ -5066,14 +5035,14 @@ test_124a() {
         cancel_lru_locks mdc
         ls -l $DIR/$tdir > /dev/null
 
-        NSDIR=""
-        LRU_SIZE=0
+        local NSDIR=""
+        local LRU_SIZE=0
         for VALUE in `lctl get_param ldlm.namespaces.*mdc-*.lru_size`; do
-                PARAM=`echo ${VALUE[0]} | cut -d "=" -f1`
+                local PARAM=`echo ${VALUE[0]} | cut -d "=" -f1`
                 LRU_SIZE=$(lctl get_param -n $PARAM)
                 if [ $LRU_SIZE -gt $(default_lru_size) ]; then
                         NSDIR=$(echo $PARAM | cut -d "." -f1-3)
-                        log "using $(basename $NSDIR) namespace"
+                        log "NS=$(basename $NSDIR)"
                         break
                 fi
         done
@@ -5082,40 +5051,53 @@ test_124a() {
                 skip "Not enough cached locks created!"
                 return 0
         fi
-        log "created $LRU_SIZE lock(s)"
+        log "LRU=$LRU_SIZE"
 
-        # we want to sleep 30s to not make test too long
-        SLEEP=30
-        SLEEP_ADD=2
+        local SLEEP=30
 
-        # we know that lru resize allows one client to hold $LIMIT locks for 10h
-        MAX_HRS=10
+        # We know that lru resize allows one client to hold $LIMIT locks
+        # for 10h. After that locks begin to be killed by client.
+        local MAX_HRS=10
+        local LIMIT=`lctl get_param -n $NSDIR.pool.limit`
 
-        # get the pool limit
-        LIMIT=`lctl get_param -n $NSDIR.pool.limit`
+        # Make LVF so higher that sleeping for $SLEEP is enough to _start_
+        # killing locks. Some time was spent for creating locks. This means
+        # that up to the moment of sleep finish we must have killed some of
+        # them (10-100 locks). This depends on how fast ther were created.
+        # Many of them were touched in almost the same moment and thus will
+        # be killed in groups.
+        local LVF=$(($MAX_HRS * 60 * 60 / $SLEEP * $LIMIT / $LRU_SIZE))
 
-        # calculate lock volume factor taking into account data set size and the
-        # rule that number of locks will be getting smaller durring sleep interval
-        # and we need to additionally enforce LVF to take this into account.
-        # Use $LRU_SIZE_B here to take into account real number of locks created
-        # in the case of CMD, LRU_SIZE_B != $NR in most of cases
-        LVF=$(($MAX_HRS * 60 * 60 * $LIMIT / $SLEEP))
-        LRU_SIZE_B=$LRU_SIZE
-        log "make client drop locks $LVF times faster so that ${SLEEP}s is enough to cancel $LRU_SIZE lock(s)"
-        OLD_LVF=`lctl get_param -n $NSDIR.pool.lock_volume_factor`
+        # Use $LRU_SIZE_B here to take into account real number of locks
+        # created in the case of CMD, LRU_SIZE_B != $NR in most of cases
+        local LRU_SIZE_B=$LRU_SIZE
+        log "LVF=$LVF"
+        local OLD_LVF=`lctl get_param -n $NSDIR.pool.lock_volume_factor`
         lctl set_param -n $NSDIR.pool.lock_volume_factor $LVF
-        log "sleep for $((SLEEP+SLEEP_ADD))s"
-        sleep $((SLEEP+SLEEP_ADD))
+        
+        # Let's make sure that we really have some margin. Client checks
+        # cached locks every 10 sec.
+        SLEEP=$((SLEEP+20))
+        log "Sleep ${SLEEP} sec"
+        local SEC=0
+        while ((SEC<$SLEEP)); do
+                echo -n "..."
+                sleep 5
+                SEC=$((SEC+5))
+                LRU_SIZE=`lctl get_param -n $NSDIR/lru_size`
+                echo -n "$LRU_SIZE"
+        done
+        echo ""
         lctl set_param -n $NSDIR.pool.lock_volume_factor $OLD_LVF
-        LRU_SIZE_A=`lctl get_param -n $NSDIR/lru_size`
+        local LRU_SIZE_A=`lctl get_param -n $NSDIR/lru_size`
 
         [ $LRU_SIZE_B -gt $LRU_SIZE_A ] || {
-                error "No locks dropped in "$((SLEEP+SLEEP_ADD))"s. LRU size: $LRU_SIZE_A"
+                error "No locks dropped in ${SLEEP}s. LRU size: $LRU_SIZE_A"
                 unlinkmany $DIR/$tdir/f $NR
                 return
         }
 
-        log "Dropped "$((LRU_SIZE_B-LRU_SIZE_A))" locks in "$((SLEEP+SLEEP_ADD))"s"
+        log "Dropped "$((LRU_SIZE_B-LRU_SIZE_A))" locks in ${SLEEP}s"
         log "unlink $NR files at $DIR/$tdir"
         unlinkmany $DIR/$tdir/f $NR
 }
@@ -5633,7 +5615,7 @@ test_151() {
 	fi
 
 	$LCTL set_param -n obdfilter.*.read_cache_enable=1
-	$LCTL set_param obdfilter.*.writethrough_cache_enable=0
+	$LCTL set_param obdfilter.*.writethrough_cache_enable=1
         rm -f $DIR/$tfile
 }
 run_test 151 "test cache on oss and controls ==============================="
@@ -5802,9 +5784,22 @@ test_200i() {
 }
 run_test 200i "Remove a pool ============================================"
 
-TMPDIR=$OLDTMPDIR
-TMP=$OLDTMP
-HOME=$OLDHOME
+#
+# tests that do cleanup/setup should be run at the end
+#
+
+test_900() {
+        local ls
+        #define OBD_FAIL_MGC_PAUSE_PROCESS_LOG   0x903
+        $LCTL set_param fail_loc=0x903
+        # cancel_lru_locks mgc - does not work due to lctl set_param syntax
+        for ls in /proc/fs/lustre/ldlm/namespaces/MGC*/lru_size; do
+                echo "clear" > $ls
+        done
+        FAIL_ON_ERROR=true cleanup
+        FAIL_ON_ERROR=true setup
+}
+run_test 900 "umount should not race with any mgc requeue thread"
 
 log "cleanup: ======================================================"
 check_and_cleanup_lustre

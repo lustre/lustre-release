@@ -250,7 +250,7 @@ int lov_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl)
                 }
 
                 err = obd_quotacheck(lov->lov_tgts[i]->ltd_exp, oqctl);
-                if (err && lov->lov_tgts[i]->ltd_active && !rc)
+                if (err && !rc)
                         rc = err;
         }
 

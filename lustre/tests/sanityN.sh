@@ -63,7 +63,7 @@ rm -rf $DIR1/[df][0-9]* $DIR1/lnk
 # $RUNAS_ID may get set incorrectly somewhere else
 [ $UID -eq 0 -a $RUNAS_ID -eq 0 ] && error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 
-check_runas_id $RUNAS_ID $RUNAS
+check_runas_id $RUNAS_ID $RUNAS_ID $RUNAS
 
 build_test_filter
 
@@ -690,22 +690,22 @@ test_32b() { # bug 11270
 run_test 32b "lockless i/o"
 
 test_33() { #16129
+        local OPER
+        local lock_in
+        local lock_out
         for OPER in notimeout timeout ; do
                 rm $DIR1/$tfile 2>/dev/null
-                lock_in=0;
-                for f in `lctl get_param -n ldlm/namespaces/*/lock_timeouts`; do
-                        lock_in=$(($lock_in + $f))
-                done
+                lock_in=$(do_nodes $(osts_nodes) "lctl get_param -n ldlm.namespaces.filter-*.lock_timeouts" | calc_sum)
                 if [ $OPER == "timeout" ] ; then
                         for j in `seq $OSTCOUNT`; do
-                                #define OBD_FAIL_PTLRPC_HPREQ_TIMEOUT    0x510
-                                do_facet ost$j lctl set_param fail_loc=0x510
+                                #define OBD_FAIL_PTLRPC_HPREQ_TIMEOUT    0x511
+                                do_facet ost$j lctl set_param fail_loc=0x511
                         done
                         echo lock should expire
                 else
                         for j in `seq $OSTCOUNT`; do
-                                #define OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT  0x511
-                                do_facet ost$j lctl set_param fail_loc=0x511
+                                #define OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT  0x512
+                                do_facet ost$j lctl set_param fail_loc=0x512
                         done
                         echo lock should not expire
                 fi
@@ -718,10 +718,7 @@ test_33() { #16129
                 dd of=/dev/null if=$DIR2/$tfile > /dev/null 2>&1
                 # wait for a lock timeout
                 sleep 4
-                lock_out=0
-                for f in `lctl get_param -n ldlm/namespaces/*/lock_timeouts`; do
-                        lock_out=$(($lock_out + $f))
-                done
+                lock_out=$(do_nodes $(osts_nodes) "lctl get_param -n ldlm.namespaces.filter-*.lock_timeouts" | calc_sum)
                 if [ $OPER == "timeout" ] ; then 
                         if [ $lock_in == $lock_out ]; then
                                 error "no lock timeout happened"

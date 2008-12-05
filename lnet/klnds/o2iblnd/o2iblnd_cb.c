@@ -643,9 +643,7 @@ kiblnd_setup_rd_iov(lnet_ni_t *ni, kib_tx_t *tx, kib_rdma_desc_t *rd,
                 fragnob = min((int)(iov->iov_len - offset), nob);
                 fragnob = min(fragnob, (int)PAGE_SIZE - page_offset);
 
-                sg->page = page;
-                sg->offset = page_offset;
-                sg->length = fragnob;
+                sg_set_page(sg, page, fragnob, page_offset);
                 sg++;
 
                 if (offset + fragnob < iov->iov_len) {
@@ -708,11 +706,10 @@ kiblnd_setup_rd_kiov (lnet_ni_t *ni, kib_tx_t *tx, kib_rdma_desc_t *rd,
                 fragnob = min((int)(kiov->kiov_len - offset), nob);
 
                 memset(sg, 0, sizeof(*sg));
-                sg->page = kiov->kiov_page;
-                sg->offset = kiov->kiov_offset + offset;
-                sg->length = fragnob;
+                sg_set_page(sg, kiov->kiov_page, fragnob,
+                            kiov->kiov_offset + offset);
                 sg++;
-                
+ 
                 offset = 0;
                 kiov++;
                 nkiov--;
@@ -3155,12 +3152,28 @@ kiblnd_scheduler(void *arg)
                         if (rc == 0) {
                                 rc = ib_req_notify_cq(conn->ibc_cq,
                                                       IB_CQ_NEXT_COMP);
-                                LASSERT (rc >= 0);
+                                if (rc < 0) {
+                                        CWARN("%s: ib_req_notify_cq failed: %d, "
+                                              "closing connection\n",
+                                              libcfs_nid2str(conn->ibc_peer->ibp_nid), rc);
+                                        kiblnd_close_conn(conn, -EIO);
+                                        kiblnd_conn_decref(conn);
+                                        spin_lock_irqsave(&kiblnd_data.kib_sched_lock, flags);
+                                        continue;
+                                }
 
                                 rc = ib_poll_cq(conn->ibc_cq, 1, &wc);
                         }
 
-                        LASSERT (rc >= 0);
+                        if (rc < 0) {
+                                CWARN("%s: ib_poll_cq failed: %d, "
+                                      "closing connection\n",
+                                      libcfs_nid2str(conn->ibc_peer->ibp_nid), rc);
+                                kiblnd_close_conn(conn, -EIO);
+                                kiblnd_conn_decref(conn);
+                                spin_lock_irqsave(&kiblnd_data.kib_sched_lock, flags);
+                                continue;
+                        }
 
                         spin_lock_irqsave(&kiblnd_data.kib_sched_lock,
                                           flags);

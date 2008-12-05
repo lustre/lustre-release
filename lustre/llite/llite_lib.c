@@ -425,6 +425,8 @@ static int client_common_fill_super(struct super_block *sb,
         sbi->ll_osc_exp = class_conn2export(&osc_conn);
         spin_lock(&sbi->ll_lco.lco_lock);
         sbi->ll_lco.lco_flags = data->ocd_connect_flags;
+        sbi->ll_lco.lco_mdc_exp = sbi->ll_mdc_exp;
+        sbi->ll_lco.lco_osc_exp = sbi->ll_osc_exp;
         spin_unlock(&sbi->ll_lco.lco_lock);
 
         err = obd_register_page_removal_cb(sbi->ll_osc_exp,
@@ -476,7 +478,11 @@ static int client_common_fill_super(struct super_block *sb,
         sbi->ll_rootino = rootfid.id;
 
         sb->s_op = &lustre_super_operations;
+#if THREAD_SIZE >= 8192
+        /* Disable the NFS export because of stack overflow
+         * when THREAD_SIZE < 8192. Please refer to 17630. */
         sb->s_export_op = &lustre_export_operations;
+#endif
 
         /* make root inode
          * XXX: move this to after cbd setup? */

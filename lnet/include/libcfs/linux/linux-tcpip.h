@@ -69,9 +69,19 @@ typedef struct socket   cfs_socket_t;
 #endif
 
 #define SOCK_SNDBUF(so)         ((so)->sk->sk_sndbuf)
-#define SOCK_WMEM_QUEUED(so)    ((so)->sk->sk_wmem_queued)
-#define SOCK_ERROR(so)          ((so)->sk->sk_err)
 #define SOCK_TEST_NOSPACE(so)   test_bit(SOCK_NOSPACE, &(so)->flags)
+
+static inline int
+libcfs_sock_error(struct socket *sock)
+{
+        return sock->sk->sk_err;
+}
+
+static inline int
+libcfs_sock_wmem_queued(struct socket *sock)
+{
+        return sock->sk->sk_wmem_queued;
+}
 
 #else   /* !__KERNEL__ */
 

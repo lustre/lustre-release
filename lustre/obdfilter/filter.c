@@ -1002,8 +1002,11 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 /* b13079: this should be set to desired value for ost */
                 obd->obd_recovery_max_time = OBD_RECOVERY_MAX_TIME;
 #endif
+        } else {
+                LASSERT(!obd->obd_recovering);
+                /* VBR: update boot epoch after recovery */
+                filter_update_last_epoch(obd);
         }
-
 out:
         filter->fo_mount_count = mount_count + 1;
         fsd->lsd_mount_count = cpu_to_le64(filter->fo_mount_count);
@@ -1918,10 +1921,6 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         obd->obd_lvfs_ctxt.fs = get_ds();
         obd->obd_lvfs_ctxt.cb_ops = filter_lvfs_ops;
 
-        rc = filter_prep(obd);
-        if (rc)
-                GOTO(err_ops, rc);
-
         filter->fo_destroy_in_progress = 0;
         sema_init(&filter->fo_create_lock, 1);
         spin_lock_init(&filter->fo_translock);
@@ -1930,10 +1929,14 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         sema_init(&filter->fo_alloc_lock, 1);
         init_brw_stats(&filter->fo_filter_stats);
         filter->fo_read_cache = 1; /* enable read-only cache by default */
-        filter->fo_writethrough_cache = 1; /* disable writethrough cache */
+        filter->fo_writethrough_cache = 1; /* enable writethrough cache */
         filter->fo_readcache_max_filesize = FILTER_MAX_CACHE_SIZE;
         filter->fo_fmd_max_num = FILTER_FMD_MAX_NUM_DEFAULT;
         filter->fo_fmd_max_age = FILTER_FMD_MAX_AGE_DEFAULT;
+
+        rc = filter_prep(obd);
+        if (rc)
+                GOTO(err_ops, rc);
 
         sprintf(ns_name, "filter-%s", obd->obd_uuid.uuid);
         obd->obd_namespace = ldlm_namespace_new(obd, ns_name, LDLM_NAMESPACE_SERVER,
@@ -2735,9 +2738,9 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         }
 
         if (ia_valid & ATTR_SIZE || ia_valid & (ATTR_UID | ATTR_GID)) {
-                old_size = i_size_read(inode);
                 DQUOT_INIT(inode);
                 LOCK_INODE_MUTEX(inode);
+                old_size = i_size_read(inode);
                 locked = 1;
         }
 

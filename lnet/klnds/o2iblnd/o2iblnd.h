@@ -76,6 +76,7 @@
 #include <libcfs/kp30.h>
 #include <lnet/lnet.h>
 #include <lnet/lib-lnet.h>
+#include <lnet/lnet-sysctl.h>
 
 #if !HAVE_GFP_T
 typedef int gfp_t;
@@ -773,3 +774,14 @@ int  kiblnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg);
 int  kiblnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
                  unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
                  unsigned int offset, unsigned int mlen, unsigned int rlen);
+
+/* compat macroses */
+#ifndef HAVE_SCATTERLIST_SETPAGE
+static inline void sg_set_page(struct scatterlist *sg, struct page *page,
+                               unsigned int len, unsigned int offset)
+{
+        sg->page = page;
+        sg->offset = offset;
+        sg->length = len;
+}
+#endif

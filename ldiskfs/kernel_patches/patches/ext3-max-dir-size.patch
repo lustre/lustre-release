@@ -1,8 +1,8 @@
-Index: linux-2.6.16.60-0.27/fs/ext3/ialloc.c
+Index: linux-2.6.18-92.1.17/fs/ext3/ialloc.c
 ===================================================================
---- linux-2.6.16.60-0.27.orig/fs/ext3/ialloc.c
-+++ linux-2.6.16.60-0.27/fs/ext3/ialloc.c
-@@ -519,12 +519,15 @@ struct inode *ext3_new_inode(handle_t *h
+--- linux-2.6.18-92.1.17.orig/fs/ext3/ialloc.c
++++ linux-2.6.18-92.1.17/fs/ext3/ialloc.c
+@@ -521,12 +521,15 @@ struct inode *ext3_new_inode(handle_t *h
  		return ERR_PTR(-EPERM);
  
  	sb = dir->i_sb;
@@ -19,11 +19,11 @@ Index: linux-2.6.16.60-0.27/fs/ext3/ialloc.c
  	es = sbi->s_es;
  	if (goal) {
  		group = (goal - 1) / EXT3_INODES_PER_GROUP(sb);
-Index: linux-2.6.16.60-0.27/fs/ext3/super.c
+Index: linux-2.6.18-92.1.17/fs/ext3/super.c
 ===================================================================
---- linux-2.6.16.60-0.27.orig/fs/ext3/super.c
-+++ linux-2.6.16.60-0.27/fs/ext3/super.c
-@@ -46,6 +46,12 @@
+--- linux-2.6.18-92.1.17.orig/fs/ext3/super.c
++++ linux-2.6.18-92.1.17/fs/ext3/super.c
+@@ -45,6 +45,12 @@
  #include "namei.h"
  #include "group.h"
  
@@ -36,15 +36,15 @@ Index: linux-2.6.16.60-0.27/fs/ext3/super.c
  static int ext3_load_journal(struct super_block *, struct ext3_super_block *,
  			     unsigned long journal_devnum);
  static int ext3_create_journal(struct super_block *, struct ext3_super_block *,
-@@ -441,6 +447,7 @@ static void ext3_put_super (struct super
+@@ -439,6 +445,7 @@ static void ext3_put_super (struct super
+ 	}
  	if (sbi->s_mmp_tsk)
  		kthread_stop(sbi->s_mmp_tsk);
- 
 +	remove_proc_entry(EXT3_MAX_DIR_SIZE_NAME, sbi->s_dev_proc);
- 	remove_proc_entry(sb->s_id, proc_root_ext3);
- 	sbi->s_dev_proc = NULL;
- 	sb->s_fs_info = NULL;
-@@ -1835,6 +1842,45 @@ failed:
+ 	if (sbi->s_dev_proc) {
+ 		remove_proc_entry(sbi->s_dev_proc->name, proc_root_ext3);
+ 		sbi->s_dev_proc = NULL;
+@@ -1854,6 +1861,45 @@ failed:
  	return 1;
  }
  
@@ -90,7 +90,7 @@ Index: linux-2.6.16.60-0.27/fs/ext3/super.c
  
  static int ext3_fill_super (struct super_block *sb, void *data, int silent)
  {
-@@ -1855,6 +1901,7 @@ static int ext3_fill_super (struct super
+@@ -1875,6 +1921,7 @@ static int ext3_fill_super (struct super
  	int i;
  	int needs_recovery;
  	__le32 features;
@@ -98,7 +98,7 @@ Index: linux-2.6.16.60-0.27/fs/ext3/super.c
  
  	sbi = kmalloc(sizeof(*sbi), GFP_KERNEL);
  	if (!sbi)
-@@ -1874,6 +1921,23 @@ static int ext3_fill_super (struct super
+@@ -1903,6 +1950,23 @@ static int ext3_fill_super (struct super
  
  	unlock_kernel();
  
@@ -122,19 +122,19 @@ Index: linux-2.6.16.60-0.27/fs/ext3/super.c
  	blocksize = sb_min_blocksize(sb, EXT3_MIN_BLOCK_SIZE);
  	if (!blocksize) {
  		printk(KERN_ERR "EXT3-fs: unable to set blocksize\n");
-@@ -2309,6 +2373,7 @@ failed_mount:
+@@ -2338,6 +2402,7 @@ failed_mount:
  	ext3_blkdev_remove(sbi);
  	brelse(bh);
  out_fail:
 +	remove_proc_entry(EXT3_MAX_DIR_SIZE_NAME, sbi->s_dev_proc);
- 	remove_proc_entry(sb->s_id, proc_root_ext3);
- 	sbi->s_dev_proc = NULL;
- 	sb->s_fs_info = NULL;
-Index: linux-2.6.16.60-0.27/include/linux/ext3_fs_sb.h
+ 	if (sbi->s_dev_proc) {
+ 		remove_proc_entry(sbi->s_dev_proc->name, proc_root_ext3);
+ 		sbi->s_dev_proc = NULL;
+Index: linux-2.6.18-92.1.17/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.6.16.60-0.27.orig/include/linux/ext3_fs_sb.h
-+++ linux-2.6.16.60-0.27/include/linux/ext3_fs_sb.h
-@@ -121,6 +121,8 @@ struct ext3_sb_info {
+--- linux-2.6.18-92.1.17.orig/include/linux/ext3_fs_sb.h
++++ linux-2.6.18-92.1.17/include/linux/ext3_fs_sb.h
+@@ -132,6 +132,8 @@ struct ext3_sb_info {
  	unsigned long s_mb_last_group;
  	unsigned long s_mb_last_start;
  

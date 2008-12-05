@@ -150,7 +150,7 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry, struct n
 #ifdef HAVE_VFS_INTENT_PATCHES
         struct lookup_intent *it = ll_nd2it(nd);
 #endif
-        struct ptlrpc_request *request;
+        struct ptlrpc_request *request = NULL;
         int rc;
         char *symname;
         ENTRY;

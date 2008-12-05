@@ -2088,6 +2088,9 @@ llu_fsswop_mount(const char *source,
         }
         sbi->ll_osc_exp = class_conn2export(&osc_conn);
         sbi->ll_lco.lco_flags = ocd.ocd_connect_flags;
+        sbi->ll_lco.lco_mdc_exp = sbi->ll_mdc_exp;
+        sbi->ll_lco.lco_osc_exp = sbi->ll_osc_exp;
+
 
         err = obd_register_lock_cancel_cb(sbi->ll_osc_exp,
                                           llu_extent_lock_cancel_cb);

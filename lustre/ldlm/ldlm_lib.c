@@ -266,6 +266,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                 cli->cl_dirty_max = num_physpages << (CFS_PAGE_SHIFT - 3);
         CFS_INIT_LIST_HEAD(&cli->cl_cache_waiters);
         CFS_INIT_LIST_HEAD(&cli->cl_loi_ready_list);
+        CFS_INIT_LIST_HEAD(&cli->cl_loi_hp_ready_list);
         CFS_INIT_LIST_HEAD(&cli->cl_loi_write_list);
         CFS_INIT_LIST_HEAD(&cli->cl_loi_read_list);
         client_obd_list_lock_init(&cli->cl_loi_list_lock);
@@ -1240,10 +1241,13 @@ static void target_recovery_expired(unsigned long castmeharder)
                       cfs_time_current_sec()- obd->obd_recovery_start,
                       obd->obd_connected_clients);
 
-
-        /* VBR: stale exports should be marked as delayed */
-        class_handle_stale_exports(obd);
-
+        /** check is fs version-capable */
+        if (target_fs_version_capable(obd)) {
+                class_handle_stale_exports(obd);
+        } else {
+                CWARN("Versions are not supported by ldiskfs, VBR is OFF\n");
+                class_disconnect_stale_exports(obd, exp_flags_from_obd(obd));
+        }
         spin_lock_bh(&obd->obd_processing_task_lock);
         /* VBR: no clients are remained to replay, stop recovery */
         if (obd->obd_recovering && obd->obd_recoverable_clients == 0)
@@ -1979,8 +1983,8 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         /* we use the observer */
         if (!obd->obd_observer || !obd->obd_observer->obd_observer) {
                 CERROR("Can't find the observer, it is recovering\n");
-                req->rq_status = -EIO;
-                GOTO(send_reply, rc = -EIO);
+                req->rq_status = -EAGAIN;
+                GOTO(send_reply, rc = -EAGAIN);
         }
 
         master_obd = obd->obd_observer->obd_observer;

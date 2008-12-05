@@ -100,9 +100,39 @@ kib_tunables_t kibnal_tunables = {
 
 #if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
 
+#ifndef HAVE_SYSCTL_UNNUMBERED
+enum {
+        KIBNAL_IPIF_BASENAME = 1,
+        KIBNAL_N_CONND,
+        KIBNAL_RECONNECT_MIN,
+        KIBNAL_RECONNECT_MAX,
+        KIBNAL_CONCURRENT_PEERS,
+        KIBNAL_CKSUM,
+        KIBNAL_TIMEOUT,
+        KIBNAL_NTX,
+        KIBNAL_CREDITS,
+        KIBNAL_PEER_CREDITS,
+        KIBNAL_KEEPALIVE
+};
+#else
+
+#define KIBNAL_IPIF_BASENAME    CTL_UNNUMBERED
+#define KIBNAL_N_CONND          CTL_UNNUMBERED
+#define KIBNAL_RECONNECT_MIN    CTL_UNNUMBERED
+#define KIBNAL_RECONNECT_MAX    CTL_UNNUMBERED
+#define KIBNAL_CONCURRENT_PEERS CTL_UNNUMBERED
+#define KIBNAL_CKSUM            CTL_UNNUMBERED
+#define KIBNAL_TIMEOUT          CTL_UNNUMBERED
+#define KIBNAL_NTX              CTL_UNNUMBERED
+#define KIBNAL_CREDITS          CTL_UNNUMBERED
+#define KIBNAL_PEER_CREDITS     CTL_UNNUMBERED
+#define KIBNAL_KEEPALIVE        CTL_UNNUMBERED
+
+#endif
+
 static cfs_sysctl_table_t kibnal_ctl_table[] = {
         {
-                .ctl_name = 1,
+                .ctl_name = KIBNAL_IPIF_BASENAME,
                 .procname = "ipif_basename",
                 .data     = &ipif_basename,
                 .maxlen   = 1024,
@@ -110,7 +140,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dostring
         },
         {
-                .ctl_name = 2,
+                .ctl_name = KIBNAL_N_CONND,
                 .procname = "n_connd",
                 .data     = &n_connd,
                 .maxlen   = sizeof(int),
@@ -118,7 +148,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 3,
+                .ctl_name = KIBNAL_RECONNECT_MIN,
                 .procname = "min_reconnect_interval",
                 .data     = &min_reconnect_interval,
                 .maxlen   = sizeof(int),
@@ -126,7 +156,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 4,
+                .ctl_name = KIBNAL_RECONNECT_MAX,
                 .procname = "max_reconnect_interval",
                 .data     = &max_reconnect_interval,
                 .maxlen   = sizeof(int),
@@ -134,7 +164,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 5,
+                .ctl_name = KIBNAL_CONCURRENT_PEERS,
                 .procname = "concurrent_peers",
                 .data     = &concurrent_peers,
                 .maxlen   = sizeof(int),
@@ -142,7 +172,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 6,
+                .ctl_name = KIBNAL_CKSUM,
                 .procname = "cksum",
                 .data     = &cksum,
                 .maxlen   = sizeof(int),
@@ -150,7 +180,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 7,
+                .ctl_name = KIBNAL_TIMEOUT,
                 .procname = "timeout",
                 .data     = &timeout,
                 .maxlen   = sizeof(int),
@@ -158,7 +188,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 8,
+                .ctl_name = KIBNAL_NTX,
                 .procname = "ntx",
                 .data     = &ntx,
                 .maxlen   = sizeof(int),
@@ -166,7 +196,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 9,
+                .ctl_name = KIBNAL_CREDITS,
                 .procname = "credits",
                 .data     = &credits,
                 .maxlen   = sizeof(int),
@@ -174,7 +204,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 10,
+                .ctl_name = KIBNAL_PEER_CREDITS,
                 .procname = "peer_credits",
                 .data     = &peer_credits,
                 .maxlen   = sizeof(int),
@@ -182,7 +212,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 11,
+                .ctl_name = KIBNAL_KEEPALIVE,
                 .procname = "keepalive",
                 .data     = &keepalive,
                 .maxlen   = sizeof(int),
@@ -194,7 +224,7 @@ static cfs_sysctl_table_t kibnal_ctl_table[] = {
 
 static cfs_sysctl_table_t kibnal_top_ctl_table[] = {
         {
-                .ctl_name = 203,
+                .ctl_name = CTL_KIBNAL,
                 .procname = "openibnal",
                 .data     = NULL,
                 .maxlen   = 0,

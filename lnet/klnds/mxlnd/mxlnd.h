@@ -85,6 +85,7 @@
 #include "libcfs/kp30.h"
 #include "lnet/lnet.h"
 #include "lnet/lib-lnet.h"
+#include <lnet/lnet-sysctl.h>
 
 #define MX_KERNEL 1
 #include "mx_extensions.h"

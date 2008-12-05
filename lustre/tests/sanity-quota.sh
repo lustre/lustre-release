@@ -135,10 +135,10 @@ lustre_fail() {
 	esac
 }
 
-RUNAS="runas -u $TSTID"
-RUNAS2="runas -u $TSTID2"
-FAIL_ON_ERROR=true check_runas_id $TSTID $RUNAS
-FAIL_ON_ERROR=true check_runas_id $TSTID2 $RUNAS2
+RUNAS="runas -u $TSTID -g $TSTID"
+RUNAS2="runas -u $TSTID2 -g $TSTID2"
+FAIL_ON_ERROR=true check_runas_id $TSTID $TSTID $RUNAS
+FAIL_ON_ERROR=true check_runas_id $TSTID2 $TSTID2 $RUNAS2
 
 FAIL_ON_ERROR=false
 
@@ -1161,7 +1161,7 @@ test_14b(){
 
         MISSING_USERS=""
         for i in `seq 1 30`; do
-                check_runas_id_ret quota15_$i "runas -u quota15_$i" >/dev/null 2>/dev/null
+                check_runas_id_ret quota15_$i quota_usr "runas -u quota15_$i -g quota_usr" >/dev/null 2>/dev/null
                 if [ "$?" != "0" ]; then
                        MISSING_USERS="$MISSING_USERS quota15_$i"
                 fi
@@ -1410,11 +1410,6 @@ test_18() {
 	    sleep 1
 	done
         log "(dd_pid=$DDPID, time=$count, timeout=$timeout)"
-        if [ $count -lt $(($timeout - 10)) ]; then
-            error " should take longer!"
-        else
-            echo " successful"
-        fi
 
         testfile_size=$(stat -c %s $TESTFILE)
         [ $testfile_size -ne $((BLK_SZ * 1024 * 100)) ] && \
@@ -1467,12 +1462,6 @@ test_18a() {
 	    sleep 1
 	done
         log "(dd_pid=$DDPID, time=$count, timeout=$timeout)"
-        if [ $count -lt $(($timeout - 10)) ]; then
-	    lustre_fail mds 0
-            error " should take longer!"
-        else
-            echo " successful"
-        fi
 
         lustre_fail mds 0
 
@@ -1557,20 +1546,15 @@ test_18b() {
 	test_18bc_sub normal
 	test_18bc_sub directio
 	# check if watchdog is triggered
-	MSG="test 18b: run for fixing bug14840"
-	do_facet ost1 "dmesg > $TMP/lustre-log-${TESTNAME}.log"
-	do_facet client cat > $TMP/lustre-log-${TESTNAME}.awk <<-EOF
-		/$MSG/ {
-		    start = 1;
-		}
-		/Watchdog triggered/ {
-		    if (start) {
-		        print \$0;
-		    }
-		}
-	EOF
-	watchdog=`do_facet ost1 awk -f $TMP/lustre-log-${TESTNAME}.awk $TMP/lustre-log-${TESTNAME}.log`
+	do_facet ost1 dmesg > $TMP/lustre-log-${TESTNAME}.log
+	watchdog=`awk '/test 18b/ {start = 1;}
+	               /Watchdog triggered/ {
+			       if (start) {
+				       print;
+			       }
+		       }' $TMP/lustre-log-${TESTNAME}.log`
 	if [ -n "$watchdog" ]; then error "$watchdog"; fi
+	rm -f $TMP/lustre-log-${TESTNAME}.log
 }
 run_test_with_stat 18b "run for fixing bug14840(mds failover, no watchdog) ==========="
 

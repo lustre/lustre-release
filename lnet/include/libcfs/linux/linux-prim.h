@@ -84,6 +84,17 @@ typedef struct ctl_table_header		cfs_sysctl_table_header_t;
 #endif
 #define cfs_unregister_sysctl_table(t)	unregister_sysctl_table(t)
 
+#define DECLARE_PROC_HANDLER(name)                      \
+static int                                              \
+LL_PROC_PROTO(name)                                     \
+{                                                       \
+        DECLARE_LL_PROC_PPOS_DECL;                      \
+                                                        \
+        return proc_call_handler(table->data, write,    \
+                                 ppos, buffer, lenp,    \
+                                 __##name);             \
+}
+
 /*
  * Symbol register
  */
@@ -118,6 +129,9 @@ typedef struct proc_dir_entry           cfs_proc_dir_entry_t;
  */
 #define CFS_TASK_INTERRUPTIBLE          TASK_INTERRUPTIBLE
 #define CFS_TASK_UNINT                  TASK_UNINTERRUPTIBLE
+#define CFS_TASK_RUNNING                TASK_RUNNING
+
+#define cfs_set_current_state(state) set_current_state(state)
 
 typedef wait_queue_t			cfs_waitlink_t;
 typedef wait_queue_head_t		cfs_waitq_t;
@@ -316,6 +330,37 @@ do {                                                           \
 #else
 #define cfs_waitq_wait_event_interruptible_timeout wait_event_interruptible_timeout
 #endif
+
+#define cfs_wait_event_interruptible_exclusive(wq, condition, rc)       \
+({                                                                      \
+        rc = wait_event_interruptible_exclusive(wq, condition);         \
+})
+
+/*
+ * atomic
+ */
+
+typedef atomic_t cfs_atomic_t;
+
+#define cfs_atomic_read(atom)         atomic_read(atom)
+#define cfs_atomic_inc(atom)          atomic_inc(atom)
+#define cfs_atomic_dec(atom)          atomic_dec(atom)
+#define cfs_atomic_dec_and_test(atom) atomic_dec_and_test(atom)
+#define cfs_atomic_set(atom, value)   atomic_set(atom, value)
+#define cfs_atomic_add(value, atom)   atomic_add(value, atom)
+#define cfs_atomic_sub(value, atom)   atomic_sub(value, atom)
+
+/*
+ * membar
+ */
+
+#define cfs_mb() mb()
+
+/*
+ * interrupt
+ */
+
+#define cfs_in_interrupt() in_interrupt()
 
 #else   /* !__KERNEL__ */
 

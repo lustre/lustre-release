@@ -175,3 +175,12 @@ void target_trans_table_update(struct obd_export *exp, __u64 transno)
         spin_unlock(&obt->obt_trans_table_lock);
 }
 EXPORT_SYMBOL(target_trans_table_update);
+
+int target_fs_version_capable(struct obd_device *obd)
+{
+        struct inode * inode = obd->u.obt.obt_rcvd_filp->f_dentry->d_inode;
+        /** check inode has version */
+        return (fsfilt_get_version(obd, inode) != -EOPNOTSUPP);
+}
+EXPORT_SYMBOL(target_fs_version_capable);
+

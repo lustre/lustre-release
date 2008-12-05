@@ -973,6 +973,13 @@ int mds_open(struct mds_update_record *rec, int offset,
                         RETURN(-EFAULT);
                 }
 
+                /** check there is no stale orphan with same inode number */
+                if (rec->ur_flags & MDS_OPEN_CREAT) {
+                        rc = mds_check_stale_orphan(obd, rec->ur_fid2);
+                        if (rc)
+                                RETURN(rc);
+                }
+
                 rc = mds_open_by_fid(req, rec->ur_fid2, body, rec->ur_flags,
                                      rec, rep);
                 if (rc != -ENOENT) {
@@ -1376,9 +1383,9 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
         CDEBUG(D_INODE, "inode %p ino %s nlink %d orphan %d\n", inode, fidname,
                inode->i_nlink, mds_orphan_open_count(inode));
 
-        last_orphan = (!obd->obd_recovering &&
-                       mds_orphan_open_dec_test(inode) &&
-                       mds_inode_is_orphan(inode));
+        last_orphan = (mds_orphan_open_dec_test(inode) &&
+                       mds_inode_is_orphan(inode) &&
+                       !obd->obd_recovering);
 
         /* this is half of the actual "close" */
         if (mfd->mfd_mode & FMODE_WRITE) {

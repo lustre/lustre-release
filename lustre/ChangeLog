@@ -4,7 +4,7 @@ tbd Sun Microsystems, Inc.
 	 2.6.5-7.314 (SLES 9),
 	 2.6.9-67.0.22.EL (RHEL 4),
 	 2.6.16.60-0.31 (SLES 10),
-	 2.6.18-92.1.10.el5 (RHEL 5),
+	 2.6.18-92.1.17.el5 (RHEL 5),
 	 2.6.22.14 vanilla (kernel.org)
 	* Client support for unpatched kernels:
 	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
@@ -38,8 +38,38 @@ tbd Sun Microsystems, Inc.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
 	* File join has been disabled in this release, refer to Bugzilla 16929.
-	* A new Lustre ADIO driver is available for:
-	  MPICH2-1.0.7
+	* A new Lustre ADIO driver is available for MPICH2-1.0.7.
+	* NFS export disabled when stack size < 8192. Since the NFSv4 export of 
+	  Lustre filesystem with 4K stack may cause a stack overflow. For more
+	  information, please refer to bugzilla 17630.
+
+Severity   : minor
+Frequency  : always
+Bugzilla   : 16693
+Description: shrink LOV EAs before replying   
+Details    : correctly adjust LOV EA buffer for reply.
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 16081
+Description: don't skip ost target if they assigned to file
+Details    : Drop slow OSCs if we can, but not for requested start idx.
+             This means "if OSC is slow and it is not the requested
+             start OST, then it can be skipped, otherwise skip it only
+             if it is inactive/recovering/out-of-space.
+
+Severity   : enhancement
+Bugzilla   : 17201
+Description: Update to RHEL5 kernel-2.6.18-92.1.17.el5.
+
+Severity   : normal
+Frequency  : rare, need acl's on inode.
+Bugzilla   : 16492
+Description: client can't handle ost additional correctly
+Details    : if ost was added after client connected to mds client can have 
+             hit lnet_try_match_md ... to big messages to wide striped files.
+             in this case need teach client to handle config events about add
+             lov target and update client max ea size at that event.
 
 Severity   : enhancement
 Bugzilla   : 17374

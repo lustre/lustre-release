@@ -1021,6 +1021,20 @@ set_rpm_smp_type()
     done
 }
 
+# This function takes a linux source pool and digs out the linux release
+# from it
+find_linux_release() {
+    local SRCDIR="$1"
+
+    local LINUXRELEASEHEADER=$SRCDIR/include/linux/version.h
+    if [ -s $SRCDIR/include/linux/utsrelease.h ]; then
+        LINUXRELEASEHEADER=$SRCDIR/include/linux/utsrelease.h
+    fi
+
+    sed -ne 's/#define UTS_RELEASE "\(.*\)"$/\1/p' $LINUXRELEASEHEADER
+
+}
+
 #unpack kernel(/source/devel) RPM
 unpack_linux_rpm()
 {
@@ -1078,13 +1092,9 @@ unpack_linux_rpm()
             RC=255
         else
             # dig out the release version
-            local LINUXRELEASEHEADER=version.h
-            if test -s ${LINUXOBJ:-$LINUX}/include/linux/utsrelease.h ; then
-                LINUXRELEASEHEADER=utsrelease.h
-            fi
-            LINUXRELEASE=$(sed -ne 's/#define UTS_RELEASE "\(.*\)"$/\1/p' ${LINUXOBJ:-$LINUX}/include/linux/$LINUXRELEASEHEADER)
+            LINUXRELEASE=$(find_linux_release ${LINUXOBJ:-$LINUX})
             if [ -z "$LINUXRELEASE" ]; then
-                echo "Failed to find linux release in ${LINUXOBJ:-$LINUX}/include/linux/$LINUXRELEASEHEADER"
+                echo "Failed to find linux release in ${LINUXOBJ:-$LINUX}"
                 RC=255
             fi
         fi
@@ -1303,6 +1313,22 @@ build_kernel_ib()
 #build patchless lustre
 patchless_build_sequence()
 {
+    if [ -f $LINUX/Makefile ]; then
+        # Get the correct kernel release - I'm unsure how this can ever
+        # work otherwise, unless you're using the exact same kernel version
+        # Lustre is shipped with.
+
+        local LINUXRELEASE=$(find_linux_release ${LINUXOBJ:-$LINUX})
+        if [ -z "$LINUXRELEASE" ]; then
+            echo "Failed to find linux release in ${LINUXOBJ:-$LINUX}"
+            RC=255
+        fi
+
+	lnxmaj=$(echo $LINUXRELEASE | cut -f1 -d-)
+	EXTRA_VERSION=$(echo $LINUXRELEASE | cut -f2 -d-)_lustre.$LUSTRE_VERSION
+        RPMSMPTYPE=" "
+        build_lustre && buildsuccess=true
+    else
     #try to build from kernel-devel RPM (RHEL)
     LINUX=
     TARGET_ARCH=
@@ -1335,6 +1361,7 @@ patchless_build_sequence()
         $rpmfound && build_kernel_ib
     fi
     ( $rpmfound ) && build_lustre && buildsuccess=true && find_linux_source_rpm
+    fi
 
     if $buildsuccess; then
         [ -d "RPMS/${TARGET_ARCH}" ] && [ -f "$KERNELRPM" ] && \

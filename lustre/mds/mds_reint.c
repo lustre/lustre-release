@@ -1845,11 +1845,6 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         cleanup_phase = 1; /* dchild, dparent, locks */
 
         dget(dchild);
-        /* VBR: version recovery check for parent */
-        rc = mds_version_get_check(req, dparent->d_inode, 0);
-        if (rc)
-                GOTO(cleanup_no_trans, rc);
-
         child_inode = dchild->d_inode;
         if (child_inode == NULL) {
                 CDEBUG(D_INODE, "child doesn't exist (dir %lu, name %s)\n",
@@ -1864,6 +1859,11 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         qpids[GRPQUOTA] = dparent->d_inode->i_gid;
 
         cleanup_phase = 2; /* dchild has a lock */
+
+        /* VBR: version recovery check for parent */
+        rc = mds_version_get_check(req, dparent->d_inode, 0);
+        if (rc)
+                GOTO(cleanup_no_trans, rc);
 
         /* version recovery check */
         rc = mds_version_get_check(req, child_inode, 1);
@@ -2059,7 +2059,7 @@ cleanup_no_trans:
         }
         req->rq_status = rc;
 
-        mds_shrink_reply(obd, req, body, REPLY_REC_OFF + 1);
+        mds_shrink_reply(obd, req, body, offset + 1);
 
         /* trigger dqrel on the owner of child and parent */
         lquota_adjust(mds_quota_interface_ref, obd, qcids, qpids, rc,
@@ -2722,6 +2722,8 @@ cleanup_no_trans:
                 LBUG();
         }
         req->rq_status = rc;
+
+        mds_shrink_reply(obd, req, body, offset + 1);
 
         /* acquire/release qunit */
         lquota_adjust(mds_quota_interface_ref, obd, qcids, qpids, rc,

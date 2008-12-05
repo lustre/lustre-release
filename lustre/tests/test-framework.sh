@@ -79,6 +79,7 @@ print_summary () {
 init_test_env() {
     export LUSTRE=`absolute_path $LUSTRE`
     export TESTSUITE=`basename $0 .sh`
+    export TEST_FAILED=false
 
     #[ -d /r ] && export ROOT=${ROOT:-/r}
     export TMP=${TMP:-$ROOT/tmp}
@@ -172,9 +173,10 @@ load_modules() {
     load_module ../lnet/libcfs/libcfs
     [ "$PTLDEBUG" ] && lctl set_param debug=$PTLDEBUG
     [ "$SUBSYSTEM" ] && lctl set_param subsystem_debug=${SUBSYSTEM# }
+    local MODPROBECONF=
     [ -f /etc/modprobe.conf ] && MODPROBECONF=/etc/modprobe.conf
-    [ -f /etc/modprobe.d/Lustre ] && MODPROBECONF=/etc/modprobe.d/Lustre
-    [ -z "$LNETOPTS" -a -n "$MODPROBECONF" ] && \
+    [ ! "$MODPROBECONF" -a -d /etc/modprobe.d ] && MODPROBECONF=/etc/modprobe.d/Lustre
+    [ -z "$LNETOPTS" -a "$MODPROBECONF" ] && \
         LNETOPTS=$(awk '/^options lnet/ { print $0}' $MODPROBECONF | sed 's/^options lnet //g')
     echo $LNETOPTS | grep -q "accept=all"  || LNETOPTS="$LNETOPTS accept=all";
     echo "lnet options: '$LNETOPTS'"
@@ -257,7 +259,7 @@ check_mem_leak () {
         echo "$LEAK_LUSTRE" 1>&2
         echo "$LEAK_PORTALS" 1>&2
         mv $TMP/debug $TMP/debug-leak.`date +%s` || true
-        log "Memory leaks detected"
+        echo "Memory leaks detected"
         [ -n "$IGNORE_LEAK" ] && { echo "ignoring leaks" && return 0; } || true
         return 1
     fi
@@ -1004,6 +1006,7 @@ setupall() {
         [ -n "$CLIENTS" ] && zconf_mount_clients $CLIENTS $MOUNT2
     fi
     sleep 5
+    init_versions_vars
 }
 
 mounted_lustre_filesystems() {
@@ -1041,14 +1044,26 @@ init_facets_vars () {
     done
 }
 
+init_versions_vars () {
+    export MDSVER=$(do_facet mds "lctl get_param version" | cut -d. -f1,2)
+    export OSTVER=$(do_facet ost1 "lctl get_param version" | cut -d. -f1,2)
+    export CLIVER=$(lctl get_param version | cut -d. -f 1,2)
+}
+
 check_config () {
     local mntpt=$1
-    
+    local myMGS_host=$mgs_HOST   
+    if [ "$NETTYPE" = "ptl" ]; then
+        myMGS_host=$(h2ptl $mgs_HOST | sed -e s/@ptl//) 
+    fi
+
     echo Checking config lustre mounted on $mntpt
     local mgshost=$(mount | grep " $mntpt " | awk -F@ '{print $1}')
-    if [ "$mgshost" != "$mgs_HOST" ]; then
+    mgshost=$(echo $mgshost | awk -F: '{print $1}')
+
+    if [ "$mgshost" != "$myMGS_host" ]; then
         FAIL_ON_ERROR=true \
-            error "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST
+            error "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST, NETTYPE=$NETTYPE
                    Please use correct config or set mds_HOST correctly!"
     fi
 }
@@ -1064,6 +1079,7 @@ check_and_setup_lustre() {
     else
         check_config $MOUNT
         init_facets_vars
+        init_versions_vars
     fi
     if [ "$ONLY" == "setup" ]; then
         exit 0
@@ -1347,6 +1363,7 @@ error_noexit() {
     done
     debugrestore
     [ "$TESTSUITELOG" ] && echo "$0: ${TYPE}: $TESTNAME $@" >> $TESTSUITELOG
+    TEST_FAILED=true
 }
 
 error() {
@@ -1494,7 +1511,8 @@ trace() {
 }
 
 pass() {
-    echo PASS $@
+    $TEST_FAILED && echo -n "FAIL " || echo -n "PASS " 
+    echo $@
 }
 
 check_mds() {
@@ -1517,6 +1535,7 @@ run_one() {
     message=$2
     tfile=f${testnum}
     export tdir=d0.${TESTSUITE}/d${base}
+
     local SAVE_UMASK=`umask`
     umask 0022
 
@@ -1524,6 +1543,7 @@ run_one() {
     log "== test $testnum: $message ============ `date +%H:%M:%S` ($BEFORE)"
     #check_mds
     export TESTNAME=test_$testnum
+    TEST_FAILED=false
     test_${testnum} || error "test_$testnum failed with $?"
     #check_mds
     cd $SAVE_PWD
@@ -1532,6 +1552,7 @@ run_one() {
     check_catastrophe || error "LBUG/LASSERT detected"
     ps auxww | grep -v grep | grep -q multiop && error "multiop still running"
     pass "($((`date +%s` - $BEFORE))s)"
+    TEST_FAILED=false
     unset TESTNAME
     unset tdir
     umask $SAVE_UMASK
@@ -1700,9 +1721,13 @@ is_patchless ()
     lctl get_param version | grep -q patchless
 }
 
+check_versions () {
+    [ "$MDSVER" = "$CLIVER" -a "$OSTVER" = "$CLIVER" ]
+}
+
 get_node_count() {
-   local nodes="$@"
-   echo $nodes | wc -w || true
+    local nodes="$@"
+    echo $nodes | wc -w || true
 }
 
 mixed_ost_devs () {
@@ -1729,28 +1754,30 @@ get_stripe () {
 
 check_runas_id_ret() {
     local myRC=0
-    local myRUNAS_ID=$1
-    shift
+    local myRUNAS_UID=$1
+    local myRUNAS_GID=$2
+    shift 2
     local myRUNAS=$@
     if [ -z "$myRUNAS" ]; then
         error_exit "myRUNAS command must be specified for check_runas_id"
     fi
     mkdir $DIR/d0_runas_test
     chmod 0755 $DIR
-    chown $myRUNAS_ID:$myRUNAS_ID $DIR/d0_runas_test
+    chown $myRUNAS_UID:$myRUNAS_GID $DIR/d0_runas_test
     $myRUNAS touch $DIR/d0_runas_test/f$$ || myRC=1
     rm -rf $DIR/d0_runas_test
     return $myRC
 }
 
 check_runas_id() {
-    local myRUNAS_ID=$1
-    shift
+    local myRUNAS_UID=$1
+    local myRUNAS_GID=$2
+    shift 2
     local myRUNAS=$@
-    check_runas_id_ret $myRUNAS_ID $myRUNAS || \
-        error "unable to write to $DIR/d0_runas_test as UID $myRUNAS_ID.
+    check_runas_id_ret $myRUNAS_UID $myRUNAS_GID $myRUNAS || \
+        error "unable to write to $DIR/d0_runas_test as UID $myRUNAS_UID.
         Please set RUNAS_ID to some UID which exists on MDS and client or
-        add user $myRUNAS_ID:$myRUNAS_ID on these nodes."
+        add user $myRUNAS_UID:$myRUNAS_GID on these nodes."
 }
 
 # Run multiop in the background, but wait for it to print
@@ -1853,3 +1880,20 @@ check_catastrophe () {
     fi
 }
 
+# $1 node
+# $2 file
+get_stripe_info() {
+	local tmp_file
+
+	stripe_size=0
+	stripe_count=0
+	stripe_index=0
+	tmp_file=$(mktemp)
+
+	do_facet $1 lfs getstripe -v $2 > $tmp_file
+
+	stripe_size=`awk '$1 ~ /size/ {print $2}' $tmp_file`
+	stripe_count=`awk '$1 ~ /count/ {print $2}' $tmp_file`
+	stripe_index=`awk '/obdidx/ {start = 1; getline; print $1; exit}' $tmp_file`
+	rm -f $tmp_file
+}

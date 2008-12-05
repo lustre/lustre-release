@@ -1340,21 +1340,6 @@ test_59() {
 }
 run_test 59 "test log_commit_thread vs filter_destroy race"
 
-# bug 17323
-test_59b() {
-    mkdir -p $DIR/$tdir
-    createmany -o $DIR/$tdir/$tfile-%d 2000
-    sync
-#define OBD_FAIL_OBD_LOG_CANCEL_REP      0x606
-    do_facet mds "lctl set_param fail_loc=0x606"
-    unlinkmany $DIR/$tdir/$tfile-%d 2000
-    sleep 60
-    do_facet mds "lctl set_param fail_loc=0x0"
-    do_facet mds $LCTL dk | grep -q "RESENT cancel req" || return 1
-    rmdir $DIR/$tdir
-}
-run_test 59b "resent handle in llog_origin_handle_cancel"
-
 # race between add unlink llog vs cat log init in post_recovery (only for b1_6)
 # bug 12086: should no oops and No ctxt error for this test
 test_60() {
@@ -1718,31 +1703,22 @@ test_70b () {
 
 	zconf_mount_clients $CLIENTS $DIR
 	
-	local duration="-t 60"
-	local cmd="rundbench 1 $duration "
+	local duration=120
+	[ "$SLOW" = "no" ] && duration=60
+	local cmd="rundbench 1 -t $duration"
 	local PID=""
-	for CLIENT in ${CLIENTS//,/ }; do
-		$PDSH $CLIENT "set -x; PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests/:${DBENCH_LIB} DBENCH_LIB=${DBENCH_LIB} $cmd" &
-		PID=$!
-		echo $PID >pid.$CLIENT
-		echo "Started load PID=`cat pid.$CLIENT`"
-	done
+	do_nodes $CLIENTS "set -x; PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests/:$DBENCH_LIB DBENCH_LIB=$DBENCH_LIB $cmd" &
+	PID=$!
+	log "Started rundbench load PID=$PID ..."
 
+	sleep $((duration / 4))
 	replay_barrier mds 
 	sleep 3 # give clients a time to do operations
 
 	log "$TESTNAME fail mds 1"
 	fail mds
 
-# wait for client to reconnect to MDS
-	sleep $TIMEOUT
-
-	for CLIENT in ${CLIENTS//,/ }; do
-		PID=`cat pid.$CLIENT`
-		wait $PID
-		rc=$?
-		echo "load on ${CLIENT} returned $rc"
-	done
+	wait $PID || error "rundbench load on $CLIENTS failed!"
 
 }
 run_test 70b "mds recovery; $CLIENTCOUNT clients"
@@ -1862,4 +1838,4 @@ run_test 72 "target_finish_recovery vs process_recovery_queue race"
 
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true

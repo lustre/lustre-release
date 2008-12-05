@@ -16,6 +16,7 @@ wirecheck
 wiretest
 llog_reader
 lr_reader
+lshowmount
 ltrack_stats
 obdio
 obdbarrier
