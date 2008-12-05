@@ -1,7 +1,7 @@
-Index: linux-2.6.9/fs/ext3/super.c
+Index: linux-2.6.9-67.0.22/fs/ext3/super.c
 ===================================================================
---- linux-2.6.9.orig/fs/ext3/super.c
-+++ linux-2.6.9/fs/ext3/super.c
+--- linux-2.6.9-67.0.22.orig/fs/ext3/super.c
++++ linux-2.6.9-67.0.22/fs/ext3/super.c
 @@ -35,6 +35,8 @@
  #include <linux/mount.h>
  #include <linux/namei.h>
@@ -11,17 +11,16 @@ Index: linux-2.6.9/fs/ext3/super.c
  #include <asm/uaccess.h>
  #include "xattr.h"
  #include "acl.h"
-@@ -440,6 +442,9 @@ void ext3_put_super (struct super_block 
+@@ -440,6 +442,8 @@ void ext3_put_super (struct super_block 
  		invalidate_bdev(sbi->journal_bdev, 0);
  		ext3_blkdev_remove(sbi);
  	}
 +	if (sbi->s_mmp_tsk)
 +		kthread_stop(sbi->s_mmp_tsk);
-+
- 	remove_proc_entry(sb->s_id, proc_root_ext3);
- 	sbi->s_dev_proc = NULL;
- 	sb->s_fs_info = NULL;
-@@ -1439,6 +1444,314 @@ static unsigned long descriptor_loc(stru
+ 	if (sbi->s_dev_proc) {
+ 		remove_proc_entry(sbi->s_dev_proc->name, proc_root_ext3);
+ 		sbi->s_dev_proc = NULL;
+@@ -1430,6 +1434,314 @@ static unsigned long descriptor_loc(stru
  	return (first_data_block + has_super + (bg * sbi->s_blocks_per_group));
  }
  
@@ -336,7 +335,7 @@ Index: linux-2.6.9/fs/ext3/super.c
  
  static int ext3_fill_super (struct super_block *sb, void *data, int silent)
  {
-@@ -1738,6 +2051,11 @@ static int ext3_fill_super (struct super
+@@ -1754,6 +2066,11 @@ static int ext3_fill_super (struct super
  			  EXT3_HAS_INCOMPAT_FEATURE(sb,
  				    EXT3_FEATURE_INCOMPAT_RECOVER));
  
@@ -348,7 +347,7 @@ Index: linux-2.6.9/fs/ext3/super.c
  	/*
  	 * The first inode we look at is the journal inode.  Don't try
  	 * root first: it may be modified in the journal!
-@@ -2371,6 +2689,11 @@ int ext3_remount (struct super_block * s
+@@ -2404,6 +2721,11 @@ int ext3_remount (struct super_block * s
  				return ret;
  			if (!ext3_setup_super (sb, es, 0))
  				sb->s_flags &= ~MS_RDONLY;
@@ -360,11 +359,11 @@ Index: linux-2.6.9/fs/ext3/super.c
  		}
  	}
  	return 0;
-Index: linux-2.6.9/include/linux/ext3_fs.h
+Index: linux-2.6.9-67.0.22/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.9.orig/include/linux/ext3_fs.h
-+++ linux-2.6.9/include/linux/ext3_fs.h
-@@ -577,13 +577,17 @@ struct ext3_super_block {
+--- linux-2.6.9-67.0.22.orig/include/linux/ext3_fs.h
++++ linux-2.6.9-67.0.22/include/linux/ext3_fs.h
+@@ -575,13 +575,17 @@ struct ext3_super_block {
  	__le32	s_first_meta_bg;	/* First metablock block group */
  	__le32	s_mkfs_time;		/* When the filesystem was created */
  	__le32	s_jnl_blocks[17];	/* Backup of the journal inode */
@@ -385,7 +384,7 @@ Index: linux-2.6.9/include/linux/ext3_fs.h
  };
  
  #ifdef __KERNEL__
-@@ -667,12 +671,14 @@ static inline struct ext3_inode_info *EX
+@@ -665,12 +669,14 @@ static inline struct ext3_inode_info *EX
  #define EXT3_FEATURE_INCOMPAT_JOURNAL_DEV	0x0008 /* Journal device */
  #define EXT3_FEATURE_INCOMPAT_META_BG		0x0010
  #define EXT3_FEATURE_INCOMPAT_EXTENTS		0x0040 /* extents support */
@@ -401,7 +400,7 @@ Index: linux-2.6.9/include/linux/ext3_fs.h
  #define EXT3_FEATURE_RO_COMPAT_SUPP	(EXT3_FEATURE_RO_COMPAT_SPARSE_SUPER| \
  					 EXT3_FEATURE_RO_COMPAT_LARGE_FILE| \
  					 EXT4_FEATURE_RO_COMPAT_GDT_CSUM| \
-@@ -832,6 +838,39 @@ struct dir_private_info {
+@@ -830,6 +836,39 @@ struct dir_private_info {
  #define ERR_BAD_DX_DIR	-75000
  
  /*
@@ -441,11 +440,11 @@ Index: linux-2.6.9/include/linux/ext3_fs.h
   * Function prototypes
   */
  
-Index: linux-2.6.9/include/linux/ext3_fs_sb.h
+Index: linux-2.6.9-67.0.22/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.6.9.orig/include/linux/ext3_fs_sb.h
-+++ linux-2.6.9/include/linux/ext3_fs_sb.h
-@@ -143,6 +143,7 @@ struct ext3_sb_info {
+--- linux-2.6.9-67.0.22.orig/include/linux/ext3_fs_sb.h
++++ linux-2.6.9-67.0.22/include/linux/ext3_fs_sb.h
+@@ -150,6 +150,7 @@ struct ext3_sb_info {
  	/* locality groups */
  	struct ext3_locality_group *s_locality_groups;
  
