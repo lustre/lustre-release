@@ -359,21 +359,70 @@ AM_CONDITIONAL(POSIX_OSD_ENABLED, test x$posix_osd = xyes)
 # LB_PATH_DMU
 #
 AC_DEFUN([LB_PATH_DMU],
-[AC_MSG_CHECKING([whether to enable DMU])
-if test x$enable_uoss = xyes -a x$enable_posix_osd != xyes; then
-	DMU_SRC="$PWD/lustre/zfs-lustre"
+[AC_ARG_ENABLE([dmu],
+	AC_HELP_STRING([--enable-dmu],
+	               [enable the DMU backend]),
+	[],[with_dmu='default'])
+AC_MSG_CHECKING([whether to enable DMU])
+case x$with_dmu in
+	xyes)
+		dmu_osd='yes'
+		;;
+	xno)
+		dmu_osd='no'
+		;;
+	xdefault)
+		if test x$enable_uoss = xyes -a x$posix_osd != xyes; then
+			# Enable the DMU if we're configuring a userspace server
+			dmu_osd='yes'
+		else
+			# Enable the DMU by default on the b_hd_kdmu branch
+			if test -d $PWD/zfs -a x$linux25$enable_server = xyesyes; then
+				dmu_osd='yes'
+			else
+				dmu_osd='no'
+			fi
+		fi
+		;;
+	*)
+		dmu_osd='yes'
+		;;
+esac
+AC_MSG_RESULT([$dmu_osd])
+if test x$dmu_osd = xyes; then
 	AC_DEFINE(DMU_OSD, 1, Enable DMU OSD)
-	AC_MSG_RESULT([yes])
-	LB_CHECK_FILE([$DMU_SRC/src/.patched],[],[
-		AC_MSG_ERROR([A complete (patched) DMU tree was not found.])
-	])
-	AC_CONFIG_SUBDIRS(lustre/zfs-lustre)
-	dmu_osd='yes'
-else
-	AC_MSG_RESULT([no])
+	if test x$enable_uoss = xyes; then
+		# Userspace DMU
+		DMU_SRC="$PWD/lustre/zfs-lustre"
+		AC_SUBST(DMU_SRC)
+		LB_CHECK_FILE([$DMU_SRC/src/.patched],[],[
+			AC_MSG_ERROR([A complete (patched) DMU tree was not found.])
+		])
+		AC_CONFIG_SUBDIRS(lustre/zfs-lustre)
+	else
+		# Kernel DMU
+		SPL_DIR="$PWD/spl"
+		ZFS_DIR="$PWD/zfs"
+		AC_SUBST(SPL_DIR)
+		AC_SUBST(ZFS_DIR)
+
+		AC_SUBST(spl_src)
+
+		LB_CHECK_FILE([$SPL_DIR/modules/spl/spl-generic.c],[],[
+			AC_MSG_ERROR([A complete SPL tree was not found in $SPL_DIR.])
+		])
+
+		LB_CHECK_FILE([$ZFS_DIR/zfs/lib/libzpool/dmu.c],[],[
+			AC_MSG_ERROR([A complete kernel DMU tree was not found in $ZFS_DIR.])
+		])
+
+		AC_CONFIG_SUBDIRS(spl)
+		ac_configure_args="$ac_configure_args --with-spl=$SPL_DIR"
+		AC_CONFIG_SUBDIRS(zfs)
+	fi
 fi
-AC_SUBST(DMU_SRC)
 AM_CONDITIONAL(DMU_OSD_ENABLED, test x$dmu_osd = xyes)
+AM_CONDITIONAL(KDMU, test x$dmu_osd$enable_uoss = xyesno)
 ])
 
 #
@@ -684,7 +733,6 @@ LB_PROG_CC
 
 LB_UOSS
 LB_POSIX_OSD
-LB_PATH_DMU
 
 LB_CONFIG_DOCS
 LB_CONFIG_UTILS
@@ -698,6 +746,7 @@ LC_QUOTA
 
 LB_CONFIG_MODULES
 
+LB_PATH_DMU
 LB_PATH_LIBSYSIO
 LB_PATH_SNMP
 LB_PATH_LDISKFS
