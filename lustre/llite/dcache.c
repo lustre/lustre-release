@@ -454,7 +454,10 @@ do_lock:
                              &req, ll_mdc_blocking_ast, 0);
         it->it_flags &= ~O_CHECK_STALE;
         if (it->it_op == IT_GETATTR && !first)
-                ll_statahead_exit(de, rc);
+                /* If there are too many locks on client-side, then some
+                 * locks taken by statahead maybe dropped automatically
+                 * before the real "revalidate" using them. */
+                ll_statahead_exit(de, req == NULL ? rc : 0);
         else if (first == -EEXIST)
                 ll_statahead_mark(de);
 
@@ -579,7 +582,7 @@ out_sa:
         if (it && it->it_op == IT_GETATTR && rc == 1) {
                 first = ll_statahead_enter(de->d_parent->d_inode, &de, 0);
                 if (!first)
-                        ll_statahead_exit(de, rc);
+                        ll_statahead_exit(de, 1);
                 else if (first == -EEXIST)
                         ll_statahead_mark(de);
         }
