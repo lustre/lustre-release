@@ -5088,6 +5088,7 @@ test_123a() { # was test 123, statahead(bug 11401)
         for ((i=1, j=0; i<=$NUMFREE; j=$i, i=$((i * MULT)) )); do
                 createmany -o $DIR/$tdir/$tfile $j $((i - j))
 
+                swrong=`lctl get_param -n llite.*.statahead_stats | grep "statahead wrong:" | awk '{print $3}'`
                 lctl get_param -n llite.*.statahead_max | grep '[0-9]'
                 cancel_lru_locks mdc
                 cancel_lru_locks osc
@@ -5097,6 +5098,7 @@ test_123a() { # was test 123, statahead(bug 11401)
                 delta_sa=$((etime - stime))
                 log "ls $i files with statahead:    $delta_sa sec"
 		lctl get_param -n llite.*.statahead_stats
+                ewrong=`lctl get_param -n llite.*.statahead_stats | grep "statahead wrong:" | awk '{print $3}'`
 
                 max=`lctl get_param -n llite.*.statahead_max | head -n 1`
                 lctl set_param -n llite.*.statahead_max 0
@@ -5110,6 +5112,9 @@ test_123a() { # was test 123, statahead(bug 11401)
                 log "ls $i files without statahead: $delta sec"
 
                 lctl set_param llite.*.statahead_max=$max
+                if [ $swrong -lt $ewrong ]; then
+                        log "statahead was stopped, maybe too many locks held!"
+                fi
                 if [ $delta_sa -gt $(($delta + 2)) ]; then
                         log "ls $i files is slower with statahead!"
                         error=1
