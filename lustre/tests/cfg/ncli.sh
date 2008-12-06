@@ -13,5 +13,5 @@ init_clients_lists
 
 MPIBIN=${MPIBIN:-/testsuite/tests/`arch`/bin}
 export PATH=:$PATH:$MPIBIN
-MPIRUN=$(which mpirun)
-
+MPIRUN=$(which mpirun) || true
+MPI_USER=${MPI_USER:-mpiuser}
