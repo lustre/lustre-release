@@ -2095,7 +2095,7 @@ check_rate() {
 
     # We need to use bc since the rate is a floating point number
     local RES=$(echo "${RATE} < ${TARGET_RATE}" | bc -l )
-    if [ ${RES} -eq 0 ]; then
+    if [ "${RES}" = 0 ]; then
         echo "Success: ${RATE} ${OP}s/sec met target rate" \
              "${TARGET_RATE} ${OP}s/sec for ${NUM_CLIENTS} client(s)."
         return 0
@@ -2181,3 +2181,19 @@ get_stripe_info() {
 	stripe_index=`awk '/obdidx/ {start = 1; getline; print $1; exit}' $tmp_file`
 	rm -f $tmp_file
 }
+
+mpi_run () {
+    local mpirun="$MPIRUN $MPIRUN_OPTIONS"
+    local command="$mpirun $@"
+
+    if [ "$MPI_USER" != root -a $mpirun ]; then
+        echo "+ chmod 0777 $MOUNT"
+        chmod 0777 $MOUNT
+        command="su $MPI_USER sh -c \"$command \""
+    fi
+
+    ls -ald $MOUNT
+    echo "+ $command"
+    eval $command
+}
+

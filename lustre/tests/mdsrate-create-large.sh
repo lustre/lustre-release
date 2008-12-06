@@ -49,8 +49,7 @@ else
     COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --create --time ${TIME_PERIOD}
                         --dir ${TESTDIR_SINGLE} --filefmt 'f%%d'"
     echo "+ ${COMMAND}"
-    $MPIRUN -np 1 -machinefile ${MACHINEFILE} \
-        ${MPIRUN_OPTIONS} ${COMMAND} | tee ${LOG}
+    mpi_run -np 1 -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
 	[ -f $LOG ] && cat $LOG
@@ -66,8 +65,7 @@ else
     COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --unlink --time ${TIME_PERIOD}
                  --nfiles ${NUM_FILES} --dir ${TESTDIR_SINGLE} --filefmt 'f%%d'"
     echo "+ ${COMMAND}"
-    $MPIRUN -np 1 -machinefile ${MACHINEFILE} \
-        ${MPIRUN_OPTIONS} ${COMMAND} | tee ${LOG}
+    mpi_run -np 1 -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
  
     if [ ${PIPESTATUS[0]} != 0 ]; then
 	[ -f $LOG ] && cat $LOG
@@ -87,8 +85,7 @@ else
     COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --create --time ${TIME_PERIOD}
                         --dir ${TESTDIR_MULTI} --filefmt 'f%%d'"
     echo "+ ${COMMAND}"
-   $MPIRUN -np ${NUM_CLIENTS} -machinefile ${MACHINEFILE} \
-        ${MPIRUN_OPTIONS} ${COMMAND} | tee ${LOG}
+    mpi_run -np ${NUM_CLIENTS} -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
 	[ -f $LOG ] && cat $LOG
@@ -103,8 +100,7 @@ else
     COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --unlink --time ${TIME_PERIOD}
                   --nfiles ${NUM_FILES} --dir ${TESTDIR_MULTI} --filefmt 'f%%d'"
     echo "+ ${COMMAND}"
-    $MPIRUN -np ${NUM_CLIENTS} -machinefile ${MACHINEFILE} \
-        ${MPIRUN_OPTIONS} ${COMMAND} | tee ${LOG}
+    mpi_run -np ${NUM_CLIENTS} -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
 	[ -f $LOG ] && cat $LOG

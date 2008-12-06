@@ -63,8 +63,7 @@ else
         NUM_THREADS=$NUM_CLIENTS
     fi
 
-    $MPIRUN -np ${NUM_THREADS} -machinefile ${MACHINEFILE} \
-        ${MPIRUN_OPTIONS} ${COMMAND} 2>&1
+    mpi_run -np ${NUM_THREADS} -machinefile ${MACHINEFILE} ${COMMAND} 2>&1
     [ ${PIPESTATUS[0]} != 0 ] && error "mpirun ... mdsrate ... file creation failed, aborting"
 
 fi
@@ -81,7 +80,7 @@ else
     echo "Running stats on 1 node(s)."
     echo "+" ${COMMAND}
 
-    $MPIRUN -np 1 -machinefile ${MACHINEFILE} ${MPIRUN_OPTIONS} ${COMMAND} | tee ${LOG}
+    mpi_run -np 1 -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
         [ -f $LOG ] && cat $LOG
@@ -99,7 +98,7 @@ else
     echo "+" ${COMMAND}
 
     NUM_THREADS=$(get_node_count ${NODES_TO_USE//,/ })
-    $MPIRUN -np ${NUM_THREADS} -machinefile ${MACHINEFILE} ${MPIRUN_OPTIONS} ${COMMAND} | tee ${LOG}
+    mpi_run -np ${NUM_THREADS} -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
         [ -f $LOG ] && cat $LOG
