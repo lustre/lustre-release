@@ -723,8 +723,8 @@ static inline int mdo_create(const struct lu_env *env,
                              struct md_op_spec *spc,
                              struct md_attr *at)
 {
-        LASSERT(c->mo_dir_ops->mdo_create);
-        return c->mo_dir_ops->mdo_create(env, p, lchild_name, c, spc, at);
+        LASSERT(p->mo_dir_ops->mdo_create);
+        return p->mo_dir_ops->mdo_create(env, p, lchild_name, c, spc, at);
 }
 
 static inline int mdo_create_data(const struct lu_env *env,
@@ -776,8 +776,8 @@ static inline int mdo_unlink(const struct lu_env *env,
                              const struct lu_name *lname,
                              struct md_attr *ma)
 {
-        LASSERT(c->mo_dir_ops->mdo_unlink);
-        return c->mo_dir_ops->mdo_unlink(env, p, c, lname, ma);
+        LASSERT(p->mo_dir_ops->mdo_unlink);
+        return p->mo_dir_ops->mdo_unlink(env, p, c, lname, ma);
 }
 
 static inline int mdo_name_insert(const struct lu_env *env,
