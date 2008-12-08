@@ -1466,7 +1466,7 @@ test_65a() #bug 3055
     # because previous tests may have caused this value to increase.
     REQ_DELAY=`lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts |
                awk '/portal 12/ {print $5}'`
-    REQ_DELAY=$((${REQ_DELAY} + 5))
+    REQ_DELAY=$((${REQ_DELAY} + ${REQ_DELAY} / 4 + 5))
 
     do_facet mds lctl set_param fail_val=$((${REQ_DELAY} * 1000))
 #define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
@@ -1495,7 +1495,7 @@ test_65b() #bug 3055
     # because previous tests may have caused this value to increase.
     REQ_DELAY=`lctl get_param -n osc.${FSNAME}-OST0000-osc-*.timeouts |
                awk '/portal 6/ {print $5}'`
-    REQ_DELAY=$((${REQ_DELAY} + 5))
+    REQ_DELAY=$((${REQ_DELAY} + ${REQ_DELAY} / 4 + 5))
 
     do_facet ost1 lctl set_param fail_val=${REQ_DELAY}
 #define OBD_FAIL_OST_BRW_PAUSE_PACK      0x224
