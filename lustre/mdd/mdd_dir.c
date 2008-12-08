@@ -2271,6 +2271,9 @@ static int __mdd_links_add(const struct lu_env *env, struct lu_buf *buf,
         struct link_ea_entry *lee;
         int reclen;
 
+        if (lname == NULL || pfid == NULL)
+                return -EINVAL;
+
         /* Make sure our buf is big enough for the new one */
         leh = buf->lb_buf;
         reclen = lname->ln_namelen + sizeof(struct link_ea_entry);
