@@ -1,16 +1,16 @@
 A large part of this code is from the generic VFS code in fs/ioctl.c in the
 upstream kernel.
 
-Index: linux-2.6.18-53.1.14/fs/ext3/ioctl.c
+Index: linux-2.6.18-53.1.21/fs/ext3/ioctl.c
 ===================================================================
---- linux-2.6.18-53.1.14.orig/fs/ext3/ioctl.c
-+++ linux-2.6.18-53.1.14/fs/ext3/ioctl.c
-@@ -15,7 +15,159 @@
- #include <linux/time.h>
- #include <asm/uaccess.h>
+--- linux-2.6.18-53.1.21.orig/fs/ext3/ioctl.c
++++ linux-2.6.18-53.1.21/fs/ext3/ioctl.c
+@@ -17,6 +17,159 @@
  #include <linux/namei.h>
-+#include "fiemap.h"
  
+ #include <linux/lustre_iam.h>
++#include "fiemap.h"
++  
 +/* So that the fiemap access checks can't overflow on 32 bit machines. */
 +#define FIEMAP_MAX_EXTENTS     (UINT_MAX / sizeof(struct fiemap_extent))
 +
@@ -108,7 +108,7 @@ Index: linux-2.6.18-53.1.14/fs/ext3/ioctl.c
 + * userspace. For this reason, a return code of -EBADR should be preserved.
 + *
 + * Returns 0 on success, -EBADR on bad flags.
-+*/
++ */
 +int fiemap_check_flags(struct fiemap_extent_info *fieinfo, u32 fs_flags)
 +{
 +	u32 incompat_flags;
@@ -165,7 +165,7 @@ Index: linux-2.6.18-53.1.14/fs/ext3/ioctl.c
  
  int ext3_ioctl (struct inode * inode, struct file * filp, unsigned int cmd,
  		unsigned long arg)
-@@ -272,7 +424,9 @@ flags_err:
+@@ -273,7 +426,9 @@ flags_err:
  
  		return err;
  	}
@@ -175,11 +175,11 @@ Index: linux-2.6.18-53.1.14/fs/ext3/ioctl.c
 +	}
  
  	default:
- 		return -ENOTTY;
-Index: linux-2.6.18-53.1.14/include/linux/ext3_fs.h
+ 		return iam_uapi_ioctl(inode, filp, cmd, arg);
+Index: linux-2.6.18-53.1.21/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.18-53.1.14.orig/include/linux/ext3_fs.h
-+++ linux-2.6.18-53.1.14/include/linux/ext3_fs.h
+--- linux-2.6.18-53.1.21.orig/include/linux/ext3_fs.h
++++ linux-2.6.18-53.1.21/include/linux/ext3_fs.h
 @@ -257,15 +257,19 @@ struct ext3_new_group_data {
  #define	EXT3_IOC_SETFLAGS		_IOW('f', 2, long)
  #define	EXT3_IOC_GETVERSION		_IOR('f', 3, long)
@@ -220,10 +220,10 @@ Index: linux-2.6.18-53.1.14/include/linux/ext3_fs.h
  #endif	/* __KERNEL__ */
  
  /* EXT3_IOC_CREATE_INUM at bottom of file (visible to kernel and user). */
-Index: linux-2.6.18-53.1.14/include/linux/ext3_extents.h
+Index: linux-2.6.18-53.1.21/include/linux/ext3_extents.h
 ===================================================================
---- linux-2.6.18-53.1.14.orig/include/linux/ext3_extents.h
-+++ linux-2.6.18-53.1.14/include/linux/ext3_extents.h
+--- linux-2.6.18-53.1.21.orig/include/linux/ext3_extents.h
++++ linux-2.6.18-53.1.21/include/linux/ext3_extents.h
 @@ -142,8 +142,10 @@ struct ext3_ext_path {
   * callback must return valid extent (passed or newly created)
   */
@@ -277,10 +277,10 @@ Index: linux-2.6.18-53.1.14/include/linux/ext3_extents.h
  extern int ext3_ext_search_left(struct inode *, struct ext3_ext_path *, unsigned long *, unsigned long *);
  extern int ext3_ext_search_right(struct inode *, struct ext3_ext_path *, unsigned long *, unsigned long *);
  extern int ext3_extent_tree_init(handle_t *, struct inode *);
-Index: linux-2.6.18-53.1.14/fs/ext3/extents.c
+Index: linux-2.6.18-53.1.21/fs/ext3/extents.c
 ===================================================================
---- linux-2.6.18-53.1.14.orig/fs/ext3/extents.c
-+++ linux-2.6.18-53.1.14/fs/ext3/extents.c
+--- linux-2.6.18-53.1.21.orig/fs/ext3/extents.c
++++ linux-2.6.18-53.1.21/fs/ext3/extents.c
 @@ -41,6 +41,7 @@
  #include <linux/string.h>
  #include <linux/slab.h>
@@ -402,18 +402,18 @@ Index: linux-2.6.18-53.1.14/fs/ext3/extents.c
  EXPORT_SYMBOL(ext3_mark_inode_dirty);
  EXPORT_SYMBOL(ext3_ext_invalidate_cache);
  EXPORT_SYMBOL(ext3_ext_insert_extent);
-Index: linux-2.6.18-53.1.14/fs/ext3/fiemap.h
+Index: linux-2.6.18-53.1.21/fs/ext3/fiemap.h
 ===================================================================
 --- /dev/null
-+++ linux-2.6.18-53.1.14/fs/ext3/fiemap.h
++++ linux-2.6.18-53.1.21/fs/ext3/fiemap.h
 @@ -0,0 +1,84 @@
 +/*
 + * FIEMAP ioctl infrastructure.
 + *
-+ * Copyright 2008 Sun Microsystems, Inc.
++ * Copyright 2008 Sun Microsystems, Inc
 + *
 + * Author: Kalpak Shah <kalpak.shah@sun.com>
-+ *	 Andreas Dilger <adilger@sun.com>
++ *	    Andreas Dilger <adilger@sun.com>
 + */
 +
 +#ifndef _LINUX_EXT3_FIEMAP_H
@@ -491,4 +491,3 @@ Index: linux-2.6.18-53.1.14/fs/ext3/fiemap.h
 +
 +#endif /* _LINUX_EXT3_FIEMAP_H */
 +
-

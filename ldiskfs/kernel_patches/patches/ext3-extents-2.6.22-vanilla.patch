@@ -265,10 +265,10 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 +		error_msg = "invalid eh_entries";
 +		goto corrupted;
 +	}
-+	if (unlikely((eh->eh_entries == 0) && (eh->eh_depth != 0))) {
-+		error_msg = "invalid index, eh_entries=0 && eh_depth != 0";
-+		goto corrupted;
-+	}
++       if (unlikely((eh->eh_entries == 0) && (eh->eh_depth != 0))) {
++               error_msg = "invalid index, eh_entries=0 && eh_depth != 0";
++               goto corrupted;
++       }
 +	return 0;
 +
 +corrupted:
@@ -1165,7 +1165,7 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 + * returns first allocated block from next leaf or EXT_MAX_BLOCK
 + */
 +static unsigned ext3_ext_next_leaf_block(struct inode *inode,
-+					 struct ext3_ext_path *path)
++                                               struct ext3_ext_path *path)
 +{
 +	int depth;
 +
@@ -1248,8 +1248,8 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 +				struct ext3_extent *ex2)
 +{
 +	/* FIXME: 48bit support */
-+	if (le32_to_cpu(ex1->ee_block) + le16_to_cpu(ex1->ee_len) !=
-+	    le32_to_cpu(ex2->ee_block))
++        if (le32_to_cpu(ex1->ee_block) + le16_to_cpu(ex1->ee_len)
++	    != le32_to_cpu(ex2->ee_block))
 +		return 0;
 +
 +#ifdef AGRESSIVE_TEST
@@ -1257,8 +1257,8 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 +		return 0;
 +#endif
 +
-+	if (le32_to_cpu(ex1->ee_start) + le16_to_cpu(ex1->ee_len) ==
-+	    le32_to_cpu(ex2->ee_start))
++        if (le32_to_cpu(ex1->ee_start) + le16_to_cpu(ex1->ee_len)
++			== le32_to_cpu(ex2->ee_start))
 +		return 1;
 +	return 0;
 +}
@@ -2542,8 +2542,8 @@ Index: linux-2.6.18.8/include/linux/ext3_extents.h
 +#ifdef EXT_DEBUG
 +#define ext_debug(inode,fmt,a...)                       \
 +do {                                                    \
-+	if (test_opt(inode->i_sb, EXTDEBUG))             \
-+		printk(fmt, ##a);                        \
++       if (test_opt(inode->i_sb, EXTDEBUG))             \
++               printk(fmt, ##a);                        \
 +} while (0);
 +#else
 +#define ext_debug(inode,fmt,a...)
@@ -2655,8 +2655,8 @@ Index: linux-2.6.18.8/include/linux/ext3_extents.h
 +	((struct ext3_extent_idx *) (((char *) (__hdr__)) +	\
 +				     sizeof(struct ext3_extent_header)))
 +#define EXT_HAS_FREE_INDEX(__path__) \
-+	(le16_to_cpu((__path__)->p_hdr->eh_entries) < \
-+	                             le16_to_cpu((__path__)->p_hdr->eh_max))
++        (le16_to_cpu((__path__)->p_hdr->eh_entries) \
++	                             < le16_to_cpu((__path__)->p_hdr->eh_max))
 +#define EXT_LAST_EXTENT(__hdr__) \
 +	(EXT_FIRST_EXTENT((__hdr__)) + le16_to_cpu((__hdr__)->eh_entries) - 1)
 +#define EXT_LAST_INDEX(__hdr__) \

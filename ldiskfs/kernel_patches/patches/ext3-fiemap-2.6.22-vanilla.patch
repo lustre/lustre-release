@@ -5,10 +5,10 @@ Index: linux-2.6.22.14/fs/ext3/ioctl.c
 ===================================================================
 --- linux-2.6.22.14.orig/fs/ext3/ioctl.c
 +++ linux-2.6.22.14/fs/ext3/ioctl.c
-@@ -17,6 +17,159 @@
- #include <linux/smp_lock.h>
+@@ -18,6 +18,159 @@
  #include <asm/uaccess.h>
  #include <linux/namei.h>
+ #include <linux/lustre_iam.h>
 +#include "fiemap.h"
 +
 +/* So that the fiemap access checks can't overflow on 32 bit machines. */
@@ -108,7 +108,7 @@ Index: linux-2.6.22.14/fs/ext3/ioctl.c
 + * userspace. For this reason, a return code of -EBADR should be preserved.
 + *
 + * Returns 0 on success, -EBADR on bad flags.
-+*/
++ */
 +int fiemap_check_flags(struct fiemap_extent_info *fieinfo, u32 fs_flags)
 +{
 +	u32 incompat_flags;
@@ -165,7 +165,7 @@ Index: linux-2.6.22.14/fs/ext3/ioctl.c
  
  int ext3_ioctl (struct inode * inode, struct file * filp, unsigned int cmd,
  		unsigned long arg)
-@@ -274,7 +427,9 @@ flags_err:
+@@ -275,7 +428,9 @@ flags_err:
  
  		return err;
  	}
@@ -175,7 +175,7 @@ Index: linux-2.6.22.14/fs/ext3/ioctl.c
 +	}
  
  	default:
- 		return -ENOTTY;
+ 		return iam_uapi_ioctl(inode, filp, cmd, arg);
 Index: linux-2.6.22.14/include/linux/ext3_fs.h
 ===================================================================
 --- linux-2.6.22.14.orig/include/linux/ext3_fs.h
@@ -199,17 +199,16 @@ Index: linux-2.6.22.14/include/linux/ext3_fs.h
  
  /*
   * ioctl commands in 32 bit emulation
-@@ -281,6 +282,9 @@ struct ext3_new_group_data {
+@@ -280,6 +281,8 @@ struct ext3_new_group_data {
+ #define EXT3_IOC32_GETVERSION_OLD	FS_IOC32_GETVERSION
  #define EXT3_IOC32_SETVERSION_OLD	FS_IOC32_SETVERSION
- 
  
 +/* FIEMAP flags supported by ext3 */
 +#define	EXT3_FIEMAP_FLAGS_COMPAT (FIEMAP_FLAG_SYNC)
-+
+ 
  /*
   *  Mount options
-  */
-@@ -1056,6 +1060,9 @@ extern int ext3_block_truncate_page(hand
+@@ -1063,6 +1066,9 @@ extern int ext3_block_truncate_page(hand
  extern int ext3_ioctl (struct inode *, struct file *, unsigned int,
  		       unsigned long);
  extern long ext3_compat_ioctl (struct file *, unsigned int, unsigned long);
@@ -219,7 +218,7 @@ Index: linux-2.6.22.14/include/linux/ext3_fs.h
  
  /* namei.c */
  extern int ext3_orphan_add(handle_t *, struct inode *);
-@@ -1133,7 +1140,6 @@ ext3_get_blocks_wrap(handle_t *handle, s
+@@ -1140,7 +1146,6 @@ ext3_get_blocks_wrap(handle_t *handle, s
  	return ret;
  }
  
@@ -417,7 +416,7 @@ Index: linux-2.6.22.14/fs/ext3/fiemap.h
 +/*
 + * FIEMAP ioctl infrastructure.
 + *
-+ * Copyright 2008 Sun Microsystems, Inc.
++ * Copyright 2008 Sun Microsystems, Inc
 + *
 + * Author: Kalpak Shah <kalpak.shah@sun.com>
 + *	    Andreas Dilger <adilger@sun.com>

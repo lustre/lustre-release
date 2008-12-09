@@ -5,12 +5,12 @@ Index: linux-2.6.16.60-0.23/fs/ext3/ioctl.c
 ===================================================================
 --- linux-2.6.16.60-0.23.orig/fs/ext3/ioctl.c
 +++ linux-2.6.16.60-0.23/fs/ext3/ioctl.c
-@@ -15,7 +15,159 @@
- #include <linux/time.h>
- #include <asm/uaccess.h>
+@@ -17,6 +17,159 @@
  #include <linux/namei.h>
-+#include "fiemap.h"
  
+ #include <linux/lustre_iam.h>
++#include "fiemap.h"
++
 +/* So that the fiemap access checks can't overflow on 32 bit machines. */
 +#define FIEMAP_MAX_EXTENTS     (UINT_MAX / sizeof(struct fiemap_extent))
 +
@@ -165,7 +165,7 @@ Index: linux-2.6.16.60-0.23/fs/ext3/ioctl.c
  
  int ext3_ioctl (struct inode * inode, struct file * filp, unsigned int cmd,
  		unsigned long arg)
-@@ -262,7 +414,9 @@ flags_err:
+@@ -263,7 +416,9 @@ flags_err:
  
  		return err;
  	}
@@ -175,7 +175,7 @@ Index: linux-2.6.16.60-0.23/fs/ext3/ioctl.c
 +	}
  
  	default:
- 		return -ENOTTY;
+ 		return iam_uapi_ioctl(inode, filp, cmd, arg);
 Index: linux-2.6.16.60-0.23/include/linux/ext3_fs.h
 ===================================================================
 --- linux-2.6.16.60-0.23.orig/include/linux/ext3_fs.h
@@ -202,7 +202,7 @@ Index: linux-2.6.16.60-0.23/include/linux/ext3_fs.h
  
  /*
   *  Mount options
-@@ -996,6 +1000,9 @@ extern int ext3_writepage_trans_blocks(s
+@@ -1017,6 +1021,9 @@ extern int ext3_writepage_trans_blocks(s
  /* ioctl.c */
  extern int ext3_ioctl (struct inode *, struct file *, unsigned int,
  		       unsigned long);
@@ -385,9 +385,9 @@ Index: linux-2.6.16.60-0.23/fs/ext3/extents.c
 +	tree.private = fieinfo;
 +
 +	/*
-+	 * Walk the extent tree gathering extent information.
-+	 * ext3_ext_fiemap_cb will push extents back to user.
-+	 */
++	  * Walk the extent tree gathering extent information.
++	  * ext3_ext_fiemap_cb will push extents back to user.
++	  */
 +	down(&EXT3_I(inode)->truncate_sem);
 +	error = ext3_ext_walk_space(&tree, start_blk, len_blks,
 +				    ext3_ext_fiemap_cb);
@@ -410,7 +410,7 @@ Index: linux-2.6.16.60-0.23/fs/ext3/fiemap.h
 + * Copyright 2008 Sun Microsystems, Inc.
 + *
 + * Author: Kalpak Shah <kalpak.shah@sun.com>
-+ *	    Andreas Dilger <adilger@sun.com>
++ *	   Andreas Dilger <adilger@sun.com>
 + */
 +
 +#ifndef _LINUX_EXT3_FIEMAP_H

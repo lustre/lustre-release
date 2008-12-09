@@ -6,10 +6,10 @@ group descriptor to avoid reading or scanning them at e2fsck time.
 A checksum of each group descriptor is used to ensure that corruption in
 the group descriptor's bit flags does not cause incorrect operation.
 
-Index: linux-2.6.9-67.0.15/include/linux/ext3_fs.h
+Index: linux-2.6.9-full/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.9-67.0.15.orig/include/linux/ext3_fs.h
-+++ linux-2.6.9-67.0.15/include/linux/ext3_fs.h
+--- linux-2.6.9-full.orig/include/linux/ext3_fs.h	2007-03-28 18:35:41.000000000 +0400
++++ linux-2.6.9-full/include/linux/ext3_fs.h	2007-03-28 18:36:16.000000000 +0400
 @@ -153,16 +153,22 @@ struct ext3_allocation_request {
   */
  struct ext3_group_desc
@@ -37,7 +37,7 @@ Index: linux-2.6.9-67.0.15/include/linux/ext3_fs.h
  /*
   * Macro-instructions used to manage group descriptors
   */
-@@ -580,6 +586,7 @@ static inline struct ext3_inode_info *EX
+@@ -572,6 +578,7 @@ static inline struct ext3_inode_info *EX
  #define EXT3_FEATURE_RO_COMPAT_SPARSE_SUPER	0x0001
  #define EXT3_FEATURE_RO_COMPAT_LARGE_FILE	0x0002
  #define EXT3_FEATURE_RO_COMPAT_BTREE_DIR	0x0004
@@ -45,7 +45,7 @@ Index: linux-2.6.9-67.0.15/include/linux/ext3_fs.h
  #define EXT4_FEATURE_RO_COMPAT_DIR_NLINK	0x0020
  
  #define EXT3_FEATURE_INCOMPAT_COMPRESSION	0x0001
-@@ -596,6 +603,7 @@ static inline struct ext3_inode_info *EX
+@@ -588,6 +595,7 @@ static inline struct ext3_inode_info *EX
  					 EXT3_FEATURE_INCOMPAT_EXTENTS)
  #define EXT3_FEATURE_RO_COMPAT_SUPP	(EXT3_FEATURE_RO_COMPAT_SPARSE_SUPER| \
  					 EXT3_FEATURE_RO_COMPAT_LARGE_FILE| \
@@ -53,10 +53,10 @@ Index: linux-2.6.9-67.0.15/include/linux/ext3_fs.h
  					 EXT4_FEATURE_RO_COMPAT_DIR_NLINK| \
  					 EXT3_FEATURE_RO_COMPAT_BTREE_DIR)
  
-Index: linux-2.6.9-67.0.15/fs/ext3/resize.c
+Index: linux-2.6.9-full/fs/ext3/resize.c
 ===================================================================
---- linux-2.6.9-67.0.15.orig/fs/ext3/resize.c
-+++ linux-2.6.9-67.0.15/fs/ext3/resize.c
+--- linux-2.6.9-full.orig/fs/ext3/resize.c	2006-03-10 18:20:03.000000000 +0300
++++ linux-2.6.9-full/fs/ext3/resize.c	2007-03-28 18:36:16.000000000 +0400
 @@ -19,6 +19,7 @@
  #include <linux/errno.h>
  #include <linux/slab.h>
@@ -65,33 +65,7 @@ Index: linux-2.6.9-67.0.15/fs/ext3/resize.c
  
  #define outside(b, first, last)	((b) < (first) || (b) >= (last))
  #define inside(b, first, last)	((b) >= (first) && (b) < (last))
-@@ -132,25 +133,6 @@ static struct buffer_head *bclean(handle
- }
- 
- /*
-- * To avoid calling the atomic setbit hundreds or thousands of times, we only
-- * need to use it within a single byte (to ensure we get endianness right).
-- * We can use memset for the rest of the bitmap as there are no other users.
-- */
--static void mark_bitmap_end(int start_bit, int end_bit, char *bitmap)
--{
--	int i;
--
--	if (start_bit >= end_bit)
--		return;
--
--	ext3_debug("mark end bits +%d through +%d used\n", start_bit, end_bit);
--	for (i = start_bit; i < ((start_bit + 7) & ~7UL); i++)
--		ext3_set_bit(i, bitmap);
--	if (i < end_bit)
--		memset(bitmap + (i >> 3), 0xff, (end_bit - i) >> 3);
--}
--
--/*
-  * Set up the block and inode bitmaps, and the inode table for the new group.
-  * This doesn't need to be part of the main transaction, since we are only
-  * changing blocks outside the actual filesystem.  We still do journaling to
-@@ -807,6 +789,7 @@ int ext3_group_add(struct super_block *s
+@@ -807,6 +808,7 @@ int ext3_group_add(struct super_block *s
  	gdp->bg_inode_table = cpu_to_le32(input->inode_table);
  	gdp->bg_free_blocks_count = cpu_to_le16(input->free_blocks_count);
  	gdp->bg_free_inodes_count = cpu_to_le16(EXT3_INODES_PER_GROUP(sb));
@@ -99,19 +73,19 @@ Index: linux-2.6.9-67.0.15/fs/ext3/resize.c
  
  	/*
  	 * Make the new blocks and inodes valid next.  We do this before
-Index: linux-2.6.9-67.0.15/fs/ext3/super.c
+Index: linux-2.6.9-full/fs/ext3/super.c
 ===================================================================
---- linux-2.6.9-67.0.15.orig/fs/ext3/super.c
-+++ linux-2.6.9-67.0.15/fs/ext3/super.c
+--- linux-2.6.9-full.orig/fs/ext3/super.c	2007-03-28 18:35:42.000000000 +0400
++++ linux-2.6.9-full/fs/ext3/super.c	2007-03-28 18:36:16.000000000 +0400
 @@ -38,6 +38,7 @@
  #include <asm/uaccess.h>
  #include "xattr.h"
  #include "acl.h"
 +#include "group.h"
  
- static int ext3_load_journal(struct super_block *, struct ext3_super_block *);
- static int ext3_create_journal(struct super_block *, struct ext3_super_block *,
-@@ -1130,6 +1131,90 @@ static int ext3_setup_super(struct super
+ static int ext3_load_journal(struct super_block *, struct ext3_super_block *,
+ 			     unsigned long journal_devnum);
+@@ -1090,6 +1091,90 @@ static int ext3_setup_super(struct super
  	return res;
  }
  
@@ -202,7 +176,7 @@ Index: linux-2.6.9-67.0.15/fs/ext3/super.c
  /* Called at mount-time, super-block is locked */
  static int ext3_check_descriptors (struct super_block * sb)
  {
-@@ -1179,6 +1264,13 @@ static int ext3_check_descriptors (struc
+@@ -1139,6 +1224,13 @@ static int ext3_check_descriptors (struc
  					le32_to_cpu(gdp->bg_inode_table));
  			return 0;
  		}
@@ -216,11 +190,11 @@ Index: linux-2.6.9-67.0.15/fs/ext3/super.c
  		block += EXT3_BLOCKS_PER_GROUP(sb);
  		gdp++;
  	}
-Index: linux-2.6.9-67.0.15/fs/ext3/group.h
+Index: linux-2.6.9-full/fs/ext3/group.h
 ===================================================================
---- /dev/null
-+++ linux-2.6.9-67.0.15/fs/ext3/group.h
-@@ -0,0 +1,30 @@
+--- linux-2.6.9-full.orig/fs/ext3/group.h	2007-02-13 18:39:59.640066087 +0300
++++ linux-2.6.9-full/fs/ext3/group.h	2007-03-28 18:36:16.000000000 +0400
+@@ -0,0 +1,29 @@
 +/*
 + *  linux/fs/ext3/group.h
 + *
@@ -249,12 +223,11 @@ Index: linux-2.6.9-67.0.15/fs/ext3/group.h
 +extern unsigned ext3_init_inode_bitmap(struct super_block *sb,
 +				       struct buffer_head *bh, int group,
 +				       struct ext3_group_desc *desc);
-+extern void mark_bitmap_end(int start_bit, int end_bit, char *bitmap);
 +#endif /* _LINUX_EXT3_GROUP_H */
-Index: linux-2.6.9-67.0.15/fs/ext3/ialloc.c
+Index: linux-2.6.9-full/fs/ext3/ialloc.c
 ===================================================================
---- linux-2.6.9-67.0.15.orig/fs/ext3/ialloc.c
-+++ linux-2.6.9-67.0.15/fs/ext3/ialloc.c
+--- linux-2.6.9-full.orig/fs/ext3/ialloc.c	2007-03-28 18:35:38.000000000 +0400
++++ linux-2.6.9-full/fs/ext3/ialloc.c	2007-03-28 18:36:16.000000000 +0400
 @@ -28,6 +28,7 @@
  
  #include "xattr.h"
@@ -272,7 +245,7 @@ Index: linux-2.6.9-67.0.15/fs/ext3/ialloc.c
 + * need to use it within a single byte (to ensure we get endianness right).
 + * We can use memset for the rest of the bitmap as there are no other users.
 + */
-+void mark_bitmap_end(int start_bit, int end_bit, char *bitmap)
++static void mark_bitmap_end(int start_bit, int end_bit, char *bitmap)
 +{
 +	int i;
 +
@@ -347,7 +320,7 @@ Index: linux-2.6.9-67.0.15/fs/ext3/ialloc.c
  			spin_unlock(sb_bgl_lock(sbi, block_group));
  			percpu_counter_inc(&sbi->s_freeinodes_counter);
  			if (is_directory)
-@@ -452,7 +512,7 @@ struct inode *ext3_new_inode(handle_t *h
+@@ -453,7 +513,7 @@ struct inode *ext3_new_inode(handle_t *h
  	struct ext3_sb_info *sbi;
  	int err = 0;
  	struct inode *ret;
@@ -356,7 +329,7 @@ Index: linux-2.6.9-67.0.15/fs/ext3/ialloc.c
  
  	/* Cannot create files in a deleted directory */
  	if (!dir || !dir->i_nlink)
-@@ -568,11 +628,13 @@ repeat_in_this_group:
+@@ -566,11 +626,13 @@ repeat_in_this_group:
  	goto out;
  
  got:
@@ -375,7 +348,7 @@ Index: linux-2.6.9-67.0.15/fs/ext3/ialloc.c
  		err = -EIO;
  		goto fail;
  	}
-@@ -580,13 +642,65 @@ got:
+@@ -578,13 +640,65 @@ got:
  	BUFFER_TRACE(bh2, "get_write_access");
  	err = ext3_journal_get_write_access(handle, bh2);
  	if (err) goto fail;
@@ -441,7 +414,7 @@ Index: linux-2.6.9-67.0.15/fs/ext3/ialloc.c
  	spin_unlock(sb_bgl_lock(sbi, group));
  	BUFFER_TRACE(bh2, "call ext3_journal_dirty_metadata");
  	err = ext3_journal_dirty_metadata(handle, bh2);
-@@ -608,7 +722,7 @@ got:
+@@ -606,7 +720,7 @@ got:
  		inode->i_gid = current->fsgid;
  	inode->i_mode = mode;
  
@@ -450,10 +423,10 @@ Index: linux-2.6.9-67.0.15/fs/ext3/ialloc.c
  	/* This is the optimal IO size (for stat), not the fs block size */
  	inode->i_blksize = PAGE_SIZE;
  	inode->i_blocks = 0;
-Index: linux-2.6.9-67.0.15/fs/ext3/mballoc.c
+Index: linux-2.6.9-full/fs/ext3/mballoc.c
 ===================================================================
---- linux-2.6.9-67.0.15.orig/fs/ext3/mballoc.c
-+++ linux-2.6.9-67.0.15/fs/ext3/mballoc.c
+--- linux-2.6.9-full.orig/fs/ext3/mballoc.c	2007-03-28 15:42:45.000000000 +0400
++++ linux-2.6.9-full/fs/ext3/mballoc.c	2007-03-28 18:36:16.000000000 +0400
 @@ -36,6 +36,8 @@
  #include <linux/seq_file.h>
  #include <linux/version.h>
@@ -471,7 +444,7 @@ Index: linux-2.6.9-67.0.15/fs/ext3/mballoc.c
  	unsigned short	bb_first_free;
  	unsigned short	bb_free;
  	unsigned short	bb_fragments;
-@@ -943,10 +946,7 @@ static int ext3_mb_init_cache(struct pag
+@@ -928,10 +931,7 @@ static int ext3_mb_init_cache(struct pag
  		if (first_group + i >= EXT3_SB(sb)->s_groups_count)
  			break;
  
@@ -483,7 +456,7 @@ Index: linux-2.6.9-67.0.15/fs/ext3/mballoc.c
  
  		err = -ENOMEM;
  		bh[i] = sb_getblk(sb, le32_to_cpu(desc->bg_block_bitmap));
-@@ -961,7 +961,12 @@ static int ext3_mb_init_cache(struct pag
+@@ -946,7 +946,12 @@ static int ext3_mb_init_cache(struct pag
  			unlock_buffer(bh[i]);
  			continue;
  		}
@@ -497,7 +470,7 @@ Index: linux-2.6.9-67.0.15/fs/ext3/mballoc.c
  		get_bh(bh[i]);
  		bh[i]->b_end_io = end_buffer_read_sync;
  		submit_bh(READ, bh[i]);
-@@ -1733,6 +1738,10 @@ static int ext3_mb_good_group(struct ext
+@@ -1703,6 +1708,10 @@ static int ext3_mb_good_group(struct ext
  	switch (cr) {
  		case 0:
  			BUG_ON(ac->ac_2order == 0);
@@ -508,7 +481,7 @@ Index: linux-2.6.9-67.0.15/fs/ext3/mballoc.c
  			bits = ac->ac_sb->s_blocksize_bits + 1;
  			for (i = ac->ac_2order; i <= bits; i++)
  				if (grp->bb_counters[i] > 0)
-@@ -1826,7 +1835,9 @@ repeat:
+@@ -1796,7 +1805,9 @@ repeat:
  			}
  
  			ac->ac_groups_scanned++;
@@ -519,7 +492,7 @@ Index: linux-2.6.9-67.0.15/fs/ext3/mballoc.c
  				ext3_mb_simple_scan_group(ac, &e3b);
  			else if (cr == 1 && ac->ac_g_ex.fe_len == sbi->s_stripe)
  				ext3_mb_scan_aligned(ac, &e3b);
-@@ -2306,12 +2317,13 @@ int ext3_mb_init_backend(struct super_bl
+@@ -2267,12 +2278,13 @@ int ext3_mb_init_backend(struct super_bl
  			i--;
  			goto err_freebuddy;
  		}
@@ -534,8 +507,8 @@ Index: linux-2.6.9-67.0.15/fs/ext3/mballoc.c
  		set_bit(EXT3_GROUP_INFO_NEED_INIT_BIT,
  			&meta_group_info[j]->bb_state);
  
-@@ -2945,9 +2957,17 @@ int ext3_mb_mark_diskspace_used(struct e
- 		    ac->ac_b_ex.fe_start, ac->ac_b_ex.fe_len);
+@@ -2936,9 +2948,17 @@ int ext3_mb_mark_diskspace_used(struct e
+ 	mb_set_bits(bitmap_bh->b_data, ac->ac_b_ex.fe_start, ac->ac_b_ex.fe_len);
  
  	spin_lock(sb_bgl_lock(sbi, ac->ac_b_ex.fe_group));
 +	if (gdp->bg_flags & cpu_to_le16(EXT3_BG_BLOCK_UNINIT)) {
@@ -552,7 +525,7 @@ Index: linux-2.6.9-67.0.15/fs/ext3/mballoc.c
  	spin_unlock(sb_bgl_lock(sbi, ac->ac_b_ex.fe_group));
  	percpu_counter_mod(&sbi->s_freeblocks_counter, - ac->ac_b_ex.fe_len);
  
-@@ -4357,6 +4377,7 @@ do_more:
+@@ -4303,6 +4323,7 @@ do_more:
  	spin_lock(sb_bgl_lock(sbi, block_group));
  	gdp->bg_free_blocks_count =
  		cpu_to_le16(le16_to_cpu(gdp->bg_free_blocks_count) + count);
@@ -560,10 +533,10 @@ Index: linux-2.6.9-67.0.15/fs/ext3/mballoc.c
  	spin_unlock(sb_bgl_lock(sbi, block_group));
  	percpu_counter_mod(&sbi->s_freeblocks_counter, count);
  
-Index: linux-2.6.9-67.0.15/fs/ext3/balloc.c
+Index: linux-2.6.9-full/fs/ext3/balloc.c
 ===================================================================
---- linux-2.6.9-67.0.15.orig/fs/ext3/balloc.c
-+++ linux-2.6.9-67.0.15/fs/ext3/balloc.c
+--- linux-2.6.9-full.orig/fs/ext3/balloc.c	2007-03-28 15:45:41.000000000 +0400
++++ linux-2.6.9-full/fs/ext3/balloc.c	2007-03-28 18:36:16.000000000 +0400
 @@ -20,6 +20,7 @@
  #include <linux/quotaops.h>
  #include <linux/buffer_head.h>
@@ -572,7 +545,7 @@ Index: linux-2.6.9-67.0.15/fs/ext3/balloc.c
  /*
   * balloc.c contains the blocks allocation and deallocation routines
   */
-@@ -73,6 +74,83 @@ struct ext3_group_desc * ext3_get_group_
+@@ -73,6 +74,75 @@ struct ext3_group_desc * ext3_get_group_
  	return gdp + desc;
  }
  
@@ -640,14 +613,6 @@ Index: linux-2.6.9-67.0.15/fs/ext3/balloc.c
 +		for (bit = le32_to_cpu(gdp->bg_inode_table) - start,
 +		     bit_max = bit + sbi->s_itb_per_group; bit < bit_max; bit++)
 +			ext3_set_bit(bit, bh->b_data);
-+
-+		/*
-+		 * Also if the number of blocks within the group is
-+		 * less than the blocksize * 8 ( which is the size
-+		 * of bitmap ), set rest of the block bitmap to 1
-+		 */
-+		mark_bitmap_end(EXT3_BLOCKS_PER_GROUP(sb), sb->s_blocksize * 8,
-+				bh->b_data);
 +	}
 +
 +	return free_blocks - sbi->s_itb_per_group - 2;
@@ -656,7 +621,7 @@ Index: linux-2.6.9-67.0.15/fs/ext3/balloc.c
  /*
   * Read the bitmap for a given block_group, reading into the specified 
   * slot in the superblock's bitmap cache.
-@@ -88,7 +166,19 @@ read_block_bitmap(struct super_block *sb
+@@ -88,7 +158,19 @@ read_block_bitmap(struct super_block *sb
  	desc = ext3_get_group_desc (sb, block_group, NULL);
  	if (!desc)
  		goto error_out;
@@ -677,7 +642,7 @@ Index: linux-2.6.9-67.0.15/fs/ext3/balloc.c
  	if (!bh)
  		ext3_error (sb, "read_block_bitmap",
  			    "Cannot read block bitmap - "
-@@ -429,6 +519,7 @@ do_more:
+@@ -429,6 +511,7 @@ do_more:
  	gdp->bg_free_blocks_count =
  		cpu_to_le16(le16_to_cpu(gdp->bg_free_blocks_count) +
  			*pdquot_freed_blocks);
@@ -685,7 +650,7 @@ Index: linux-2.6.9-67.0.15/fs/ext3/balloc.c
  	spin_unlock(sb_bgl_lock(sbi, block_group));
  	percpu_counter_mod(&sbi->s_freeblocks_counter, count);
  
-@@ -1330,8 +1421,11 @@ allocated:
+@@ -1330,8 +1413,11 @@ allocated:
  			ret_block, goal_hits, goal_attempts);
  
  	spin_lock(sb_bgl_lock(sbi, group_no));

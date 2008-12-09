@@ -1,7 +1,7 @@
-Index: linux-2.6.9-67.0.15/fs/ext3/extents.c
+Index: linux-2.6.9-67/fs/ext3/extents.c
 ===================================================================
 --- /dev/null
-+++ linux-2.6.9-67.0.15/fs/ext3/extents.c
++++ linux-2.6.9-67/fs/ext3/extents.c
 @@ -0,0 +1,2265 @@
 +/*
 + * Copyright 2008 Sun Microsystems, Inc.
@@ -2260,7 +2260,7 @@ Index: linux-2.6.9-67.0.15/fs/ext3/extents.c
 +	ext3_init_tree_desc(&tree, inode);
 +	return ext3_ext_calc_metadata_amount(&tree, blocks);
 +}
-+
++	
 +EXPORT_SYMBOL(ext3_init_tree_desc);
 +EXPORT_SYMBOL(ext3_mark_inode_dirty);
 +EXPORT_SYMBOL(ext3_ext_invalidate_cache);
@@ -2268,10 +2268,10 @@ Index: linux-2.6.9-67.0.15/fs/ext3/extents.c
 +EXPORT_SYMBOL(ext3_ext_walk_space);
 +EXPORT_SYMBOL(ext3_ext_find_goal);
 +EXPORT_SYMBOL(ext3_ext_calc_credits_for_insert);
-Index: linux-2.6.9-67.0.15/fs/ext3/ialloc.c
+Index: linux-2.6.9-67/fs/ext3/ialloc.c
 ===================================================================
---- linux-2.6.9-67.0.15.orig/fs/ext3/ialloc.c
-+++ linux-2.6.9-67.0.15/fs/ext3/ialloc.c
+--- linux-2.6.9-67.orig/fs/ext3/ialloc.c
++++ linux-2.6.9-67/fs/ext3/ialloc.c
 @@ -602,7 +602,7 @@ got:
  	ei->i_dir_start_lookup = 0;
  	ei->i_disksize = 0;
@@ -2300,10 +2300,10 @@ Index: linux-2.6.9-67.0.15/fs/ext3/ialloc.c
  	err = ext3_mark_inode_dirty(handle, inode);
  	if (err) {
  		ext3_std_error(sb, err);
-Index: linux-2.6.9-67.0.15/fs/ext3/inode.c
+Index: linux-2.6.9-67/fs/ext3/inode.c
 ===================================================================
---- linux-2.6.9-67.0.15.orig/fs/ext3/inode.c
-+++ linux-2.6.9-67.0.15/fs/ext3/inode.c
+--- linux-2.6.9-67.orig/fs/ext3/inode.c
++++ linux-2.6.9-67/fs/ext3/inode.c
 @@ -797,6 +797,17 @@ changed:
  	goto reread;
  }
@@ -2380,10 +2380,10 @@ Index: linux-2.6.9-67.0.15/fs/ext3/inode.c
  	if (ext3_should_journal_data(inode))
  		ret = 3 * (bpp + indirects) + 2;
  	else
-Index: linux-2.6.9-67.0.15/fs/ext3/Makefile
+Index: linux-2.6.9-67/fs/ext3/Makefile
 ===================================================================
---- linux-2.6.9-67.0.15.orig/fs/ext3/Makefile
-+++ linux-2.6.9-67.0.15/fs/ext3/Makefile
+--- linux-2.6.9-67.orig/fs/ext3/Makefile
++++ linux-2.6.9-67/fs/ext3/Makefile
 @@ -5,7 +5,8 @@
  obj-$(CONFIG_EXT3_FS) += ext3.o
  
@@ -2394,10 +2394,10 @@ Index: linux-2.6.9-67.0.15/fs/ext3/Makefile
  
  ext3-$(CONFIG_EXT3_FS_XATTR)	 += xattr.o xattr_user.o xattr_trusted.o
  ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o
-Index: linux-2.6.9-67.0.15/fs/ext3/super.c
+Index: linux-2.6.9-67/fs/ext3/super.c
 ===================================================================
---- linux-2.6.9-67.0.15.orig/fs/ext3/super.c
-+++ linux-2.6.9-67.0.15/fs/ext3/super.c
+--- linux-2.6.9-67.orig/fs/ext3/super.c
++++ linux-2.6.9-67/fs/ext3/super.c
 @@ -394,6 +394,7 @@ void ext3_put_super (struct super_block 
  	struct ext3_super_block *es = sbi->s_es;
  	int i;
@@ -2415,7 +2415,7 @@ Index: linux-2.6.9-67.0.15/fs/ext3/super.c
  	return &ei->vfs_inode;
  }
  
-@@ -642,6 +645,7 @@ enum {
+@@ -635,6 +638,7 @@ enum {
  	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0,
  	Opt_ignore, Opt_barrier, Opt_err, Opt_resize,
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
@@ -2423,7 +2423,7 @@ Index: linux-2.6.9-67.0.15/fs/ext3/super.c
  };
  
  static match_table_t tokens = {
-@@ -691,6 +695,9 @@ static match_table_t tokens = {
+@@ -684,6 +688,9 @@ static match_table_t tokens = {
  	{Opt_iopen, "iopen"},
  	{Opt_noiopen, "noiopen"},
  	{Opt_iopen_nopriv, "iopen_nopriv"},
@@ -2433,7 +2433,7 @@ Index: linux-2.6.9-67.0.15/fs/ext3/super.c
  	{Opt_barrier, "barrier=%u"},
  	{Opt_err, NULL},
  	{Opt_resize, "resize"},
-@@ -999,6 +1006,15 @@ clear_qf_name:
+@@ -988,6 +995,15 @@ clear_qf_name:
  			match_int(&args[0], &option);
  			*n_blocks_count = option;
  			break;
@@ -2449,7 +2449,7 @@ Index: linux-2.6.9-67.0.15/fs/ext3/super.c
  		default:
  			printk (KERN_ERR
  				"EXT3-fs: Unrecognized mount option \"%s\" "
-@@ -1693,6 +1709,8 @@ static int ext3_fill_super (struct super
+@@ -1682,6 +1698,8 @@ static int ext3_fill_super (struct super
  	percpu_counter_mod(&sbi->s_dirs_counter,
  		ext3_count_dirs(sb));
  
@@ -2458,10 +2458,10 @@ Index: linux-2.6.9-67.0.15/fs/ext3/super.c
  	return 0;
  
  failed_mount3:
-Index: linux-2.6.9-67.0.15/include/linux/ext3_fs.h
+Index: linux-2.6.9-67/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.9-67.0.15.orig/include/linux/ext3_fs.h
-+++ linux-2.6.9-67.0.15/include/linux/ext3_fs.h
+--- linux-2.6.9-67.orig/include/linux/ext3_fs.h
++++ linux-2.6.9-67/include/linux/ext3_fs.h
 @@ -185,9 +185,10 @@ struct ext3_group_desc
  #define EXT3_NOTAIL_FL			0x00008000 /* file tail should not be merged */
  #define EXT3_DIRSYNC_FL			0x00010000 /* dirsync behaviour (directories only) */
@@ -2523,13 +2523,13 @@ Index: linux-2.6.9-67.0.15/include/linux/ext3_fs.h
  
  #endif	/* __KERNEL__ */
  
-Index: linux-2.6.9-67.0.15/include/linux/ext3_extents.h
+Index: linux-2.6.9-67/include/linux/ext3_extents.h
 ===================================================================
 --- /dev/null
-+++ linux-2.6.9-67.0.15/include/linux/ext3_extents.h
++++ linux-2.6.9-67/include/linux/ext3_extents.h
 @@ -0,0 +1,262 @@
 +/*
-+ * Copyright 2008 Sun Microsystems, Inc.
++ * Copyright 2008, Sun Microsystems, Inc.
 + * Written by Alex Tomas <alex@clusterfs.com>
 + *
 + * This program is free software; you can redistribute it and/or modify
@@ -2790,10 +2790,10 @@ Index: linux-2.6.9-67.0.15/include/linux/ext3_extents.h
 +		tree->cex->ec_type = EXT3_EXT_CACHE_NO;
 +}
 +#endif /* _LINUX_EXT3_EXTENTS */
-Index: linux-2.6.9-67.0.15/include/linux/ext3_fs_i.h
+Index: linux-2.6.9-67/include/linux/ext3_fs_i.h
 ===================================================================
---- linux-2.6.9-67.0.15.orig/include/linux/ext3_fs_i.h
-+++ linux-2.6.9-67.0.15/include/linux/ext3_fs_i.h
+--- linux-2.6.9-67.orig/include/linux/ext3_fs_i.h
++++ linux-2.6.9-67/include/linux/ext3_fs_i.h
 @@ -128,6 +128,8 @@ struct ext3_inode_info {
  	 */
  	struct semaphore truncate_sem;

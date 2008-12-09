@@ -970,7 +970,7 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/extents.c
 +}
 +
 +/*
-+ * returns first allocated block from next leaf or EXT_MAX_BLOCK
++ * returns first allocated block from next leaf or EXT_UNSET_BLOCK
 + */
 +static unsigned ext3_ext_next_leaf_block(struct ext3_extents_tree *tree,
 +					 struct ext3_ext_path *path)
@@ -982,7 +982,7 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/extents.c
 +
 +	/* zero-tree has no leaf blocks at all */
 +	if (depth == 0)
-+		return EXT_MAX_BLOCK;
++		return EXT_UNSET_BLOCK;
 +
 +	/* go to index block */
 +	depth--;
@@ -994,7 +994,7 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/extents.c
 +		depth--;        
 +	}
 +
-+	return EXT_MAX_BLOCK;
++	return EXT_UNSET_BLOCK;
 +}
 +
 +/*
@@ -1112,7 +1112,7 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/extents.c
 +	/* probably next leaf has space for us? */
 +	fex = EXT_LAST_EXTENT(eh);
 +	next = ext3_ext_next_leaf_block(tree, path);
-+	if (newext->ee_block > fex->ee_block && next != EXT_MAX_BLOCK) {
++	if (newext->ee_block > fex->ee_block && next != EXT_UNSET_BLOCK) {
 +		ext_debug(tree, "next leaf block - %d\n", next);
 +		EXT_ASSERT(!npath);
 +		npath = ext3_ext_find_extent(tree, next, NULL);
@@ -1577,7 +1577,7 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/extents.c
 +		path[depth].p_ext = ex;
 +	
 +		a = ex->ee_block > start ? ex->ee_block : start;
-+		b = ex->ee_block + ex->ee_len - 1 < end ?
++		b = (unsigned long long)ex->ee_block + ex->ee_len - 1 < end ?
 +			ex->ee_block + ex->ee_len - 1 : end;
 +		
 +		ext_debug(tree, "  border %u:%u\n", a, b);
@@ -2547,7 +2547,7 @@ Index: linux-2.6.16.54-0.2.5/include/linux/ext3_extents.h
 ===================================================================
 --- /dev/null
 +++ linux-2.6.16.54-0.2.5/include/linux/ext3_extents.h
-@@ -0,0 +1,262 @@
+@@ -0,0 +1,263 @@
 +/*
 + * Copyright 2008 Sun Microsystems, Inc.
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -2728,6 +2728,7 @@ Index: linux-2.6.16.54-0.2.5/include/linux/ext3_extents.h
 +
 +
 +#define EXT_MAX_BLOCK	0xffffffff
++#define EXT_UNSET_BLOCK 1
 +
 +
 +#define EXT_FIRST_EXTENT(__hdr__) \
