@@ -64,6 +64,7 @@
 #include "gss_api.h"
 
 static struct proc_dir_entry *gss_proc_root = NULL;
+static struct proc_dir_entry *gss_proc_lk = NULL;
 
 /*
  * statistic of "out-of-sequence-window"
@@ -146,45 +147,81 @@ static int gss_proc_write_secinit(struct file *file, const char *buffer,
 
 static struct lprocfs_vars gss_lprocfs_vars[] = {
         { "replays", gss_proc_read_oos, NULL },
-        { "init_channel", NULL, gss_proc_write_secinit, NULL },
+        { "init_channel", NULL, gss_proc_write_secinit, NULL, NULL, 0222 },
         { NULL }
 };
 
+/*
+ * for userspace helper lgss_keyring.
+ *
+ * debug_level: [0, 4], defined in utils/gss/lgss_utils.h
+ */
+static int gss_lk_debug_level = 1;
+
+static int gss_lk_proc_read_dl(char *page, char **start, off_t off,
+                               int count, int *eof, void *data)
+{
+        return snprintf(page, count, "%u\n", gss_lk_debug_level);
+}
+
+static int gss_lk_proc_write_dl(struct file *file, const char *buffer,
+                                unsigned long count, void *data)
+{
+        int     val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc < 0)
+                return rc;
+
+        if (val < 0 || val > 4)
+                return -ERANGE;
+
+        gss_lk_debug_level = val;
+        return count;
+}
+
+static struct lprocfs_vars gss_lk_lprocfs_vars[] = {
+        { "debug_level", gss_lk_proc_read_dl, gss_lk_proc_write_dl, NULL },
+        { NULL }
+};
+
+void gss_exit_lproc(void)
+{
+        if (gss_proc_lk) {
+                lprocfs_remove(&gss_proc_lk);
+                gss_proc_lk = NULL;
+        }
+
+        if (gss_proc_root) {
+                lprocfs_remove(&gss_proc_root);
+                gss_proc_root = NULL;
+        }
+}
+
 int gss_init_lproc(void)
 {
-        struct proc_dir_entry  *ent;
-        int                     rc;
+        int     rc;
 
         spin_lock_init(&gss_stat_oos.oos_lock);
 
         gss_proc_root = lprocfs_register("gss", sptlrpc_proc_root,
                                          gss_lprocfs_vars, NULL);
-
         if (IS_ERR(gss_proc_root)) {
-                rc = PTR_ERR(gss_proc_root);
                 gss_proc_root = NULL;
-                CERROR("failed to initialize lproc entries: %d\n", rc);
-                return rc;
+                GOTO(err_out, rc = PTR_ERR(gss_proc_root));
         }
 
-        /* FIXME
-         * here we should hold proc_subdir_lock which is not exported
-         */
-        ent = gss_proc_root->subdir;
-        while (ent != NULL) {
-                if (strcmp(ent->name, "init_channel") == 0) {
-                        ent->mode |= 0222;
-                        break;
-                }
+        gss_proc_lk = lprocfs_register("lgss_keyring", gss_proc_root,
+                                       gss_lk_lprocfs_vars, NULL);
+        if (IS_ERR(gss_proc_lk)) {
+                gss_proc_lk = NULL;
+                GOTO(err_out, rc = PTR_ERR(gss_proc_root));
         }
-        
+
         return 0;
-}
 
-void gss_exit_lproc(void)
-{
-        if (gss_proc_root) {
-                lprocfs_remove(&gss_proc_root);
-                gss_proc_root = NULL;
-        }
+err_out:
+        CERROR("failed to initialize gss lproc entries: %d\n", rc);
+        gss_exit_lproc();
+        return rc;
 }
