@@ -547,6 +547,7 @@ struct lprocfs_vars lprocfs_quota_common_vars[] = {
                                    lprocfs_quota_wr_switch_seconds, 0 },
         { "quota_sync_blk", lprocfs_quota_rd_sync_blk,
                             lprocfs_quota_wr_sync_blk, 0},
+        { NULL }
 };
 
 struct lprocfs_vars lprocfs_quota_master_vars[] = {
@@ -560,6 +561,7 @@ struct lprocfs_vars lprocfs_quota_master_vars[] = {
                                lprocfs_quota_wr_least_iunit, 0 },
         { "quota_qs_factor",   lprocfs_quota_rd_qs_factor,
                                lprocfs_quota_wr_qs_factor, 0 },
+        { NULL }
 };
 
 int lquota_proc_setup(struct obd_device *obd, int is_master)
