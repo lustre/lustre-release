@@ -1117,7 +1117,7 @@ AC_DEFUN([LC_FILE_WRITEV],
 LB_LINUX_TRY_COMPILE([
         #include <linux/fs.h>
 ],[
-        struct file_operations *fops;
+        struct file_operations *fops = NULL;
         fops->writev = NULL;
 ],[
         AC_MSG_RESULT(yes)
@@ -1135,7 +1135,7 @@ AC_DEFUN([LC_FILE_READV],
 LB_LINUX_TRY_COMPILE([
         #include <linux/fs.h>
 ],[
-        struct file_operations *fops;
+        struct file_operations *fops = NULL;
         fops->readv = NULL;
 ],[
         AC_MSG_RESULT(yes)
