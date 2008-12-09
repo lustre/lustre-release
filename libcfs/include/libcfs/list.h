@@ -156,6 +156,25 @@ static inline int list_empty(struct list_head *head)
 	return head->next == head;
 }
 
+/**
+ * list_empty_careful - tests whether a list is empty and not being modified
+ * @head: the list to test
+ *
+ * Description:
+ * tests whether a list is empty _and_ checks that no other CPU might be
+ * in the process of modifying either member (next or prev)
+ *
+ * NOTE: using list_empty_careful() without synchronization
+ * can only be safe if the only activity that can happen
+ * to the list entry is list_del_init(). Eg. it cannot be used
+ * if another CPU could re-list_add() it.
+ */
+static inline int list_empty_careful(const struct list_head *head)
+{
+        struct list_head *next = head->next;
+        return (next == head) && (next == head->prev);
+}
+
 static inline void __list_splice(struct list_head *list,
 				 struct list_head *head)
 {
