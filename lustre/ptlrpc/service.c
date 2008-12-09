@@ -1598,18 +1598,18 @@ ptlrpc_handle_rs (struct ptlrpc_reply_state *rs)
         list_del_init (&rs->rs_exp_list);
         spin_unlock (&exp->exp_lock);
 
+        /* Avoid obd_uncommitted_replies_lock contention if we 100% sure that
+         * rs has been removed from the list already */
+        if (!list_empty_careful(&rs->rs_obd_list)) {
+                spin_lock(&obd->obd_uncommitted_replies_lock);
+                list_del_init(&rs->rs_obd_list);
+                spin_unlock(&obd->obd_uncommitted_replies_lock);
+        }
+
         spin_lock(&rs->rs_lock);
 
         been_handled = rs->rs_handled;
         rs->rs_handled = 1;
-
-        if (!list_empty(&rs->rs_obd_list)) {
-                spin_unlock(&rs->rs_lock);
-                spin_lock(&obd->obd_uncommitted_replies_lock);
-                spin_lock(&rs->rs_lock);
-                list_del_init(&rs->rs_obd_list);
-                spin_unlock(&obd->obd_uncommitted_replies_lock);
-        }
 
         nlocks = rs->rs_nlocks;                 /* atomic "steal", but */
         rs->rs_nlocks = 0;                      /* locks still on rs_locks! */
