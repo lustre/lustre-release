@@ -180,15 +180,6 @@ static int mdc_getattr_common(struct obd_export *exp,
                         RETURN(-EPROTO);
         }
 
-        if (body->valid & OBD_MD_FLMODEASIZE) {
-                struct client_obd *cli = &exp->exp_obd->u.cli;
-
-                if (cli->cl_max_mds_easize < body->max_mdsize)
-                        cli->cl_max_mds_easize = body->max_mdsize;
-                if (cli->cl_max_mds_cookiesize < body->max_cookiesize)
-                        cli->cl_max_mds_cookiesize = body->max_cookiesize;
-        }
-
         if (body->valid & OBD_MD_FLRMTPERM) {
                 struct mdt_remote_perm *perm;
 

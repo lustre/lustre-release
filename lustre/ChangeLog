@@ -13,6 +13,15 @@ tbd  Sun Microsystems, Inc.
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
+Severity   : normal
+Frequency  : rare, need acl's on inode.
+Bugzilla   : 16492
+Description: client can't handle ost additional correctly
+Details    : if ost was added after client connected to mds client can have 
+             hit lnet_try_match_md ... to big messages to wide striped files.
+             in this case need teach client to handle config events about add
+             lov target and update client max ea size at that event.
+
 Severity   : enhancement
 Bugzilla   : 15699
 Description: Changelogs
