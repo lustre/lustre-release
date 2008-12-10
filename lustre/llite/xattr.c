@@ -194,7 +194,10 @@ int ll_setxattr(struct dentry *dentry, const char *name,
                 }
 
                 return rc;
-        }
+        } else if (strcmp(name, "trusted.lma") == 0 &&
+                   !OBD_FAIL_CHECK(OBD_FAIL_MDS_ALLOW_COMMON_EA_SETTING))
+                return 0;
+
 
         return ll_setxattr_common(inode, name, value, size, flags,
                                   OBD_MD_FLXATTR);

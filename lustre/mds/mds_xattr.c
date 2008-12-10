@@ -259,6 +259,9 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
         if (strncmp(xattr_name, "trusted.", 8) == 0) {
                 if (strcmp(xattr_name + 8, XATTR_LUSTRE_MDS_LOV_EA) == 0)
                         GOTO(out, rc = -EACCES);
+                if (strcmp(xattr_name + 8, "lma") == 0 &&
+                    !OBD_FAIL_CHECK(OBD_FAIL_MDS_ALLOW_COMMON_EA_SETTING))
+                        GOTO(out, rc = 0);
         }
 
         if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_XATTR) &&

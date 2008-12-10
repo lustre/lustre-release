@@ -1462,7 +1462,12 @@ test_43() { #bug 15993
         lma="this-should-be-removed-after-remount-and-accessed"
         touch $testfile
         echo "set/get trusted.lma"
+#define OBD_FAIL_MDS_ALLOW_COMMON_EA_SETTING    0x13f
+        do_facet mds "lctl set_param fail_loc=0x13f"
+        lctl set_param fail_loc=0x13f
         setfattr -n trusted.lma -v $lma $testfile || error "create common EA"
+        do_facet mds "lctl set_param fail_loc=0"
+        lctl set_param fail_loc=0
         ATTR=$(getfattr -n trusted.lma $testfile 2> /dev/null | grep trusted.lma)
         [ "$ATTR" = "trusted.lma=\"$lma\"" ] || error "check common EA"
         umount_client $MOUNT
