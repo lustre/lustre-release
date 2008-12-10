@@ -534,7 +534,7 @@ zconf_umount() {
     local running=$(do_node $client "grep -c $mnt' ' /proc/mounts") || true
     if [ $running -ne 0 ]; then
         echo "Stopping client $client $mnt (opts:$force)"
-        lsof | grep "$mnt" || true
+        do_node $client lsof | grep "$mnt" || true
         do_node $client umount $force $mnt
     fi
 }
