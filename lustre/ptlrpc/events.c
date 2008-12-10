@@ -105,11 +105,13 @@ void reply_in_callback(lnet_event_t *ev)
 
         req->rq_receiving_reply = 0;
         req->rq_early = 0;
+        if (ev->unlinked)
+                req->rq_must_unlink = 0;
 
         if (ev->status)
                 goto out_wake;
         if (ev->type == LNET_EVENT_UNLINK) {
-                req->rq_must_unlink = 0;
+                LASSERT(ev->unlinked);
                 DEBUG_REQ(D_RPCTRACE, req, "unlink");
                 goto out_wake;
         }
@@ -127,18 +129,10 @@ void reply_in_callback(lnet_event_t *ev)
                                ev->mlength, lustre_msg_early_size(req));
 
                 req->rq_early_count++; /* number received, client side */
-                if (req->rq_replied) {
-                        /* If we already got the real reply, then we need to
-                         * check if lnet_finalize() unlinked the md.  In that
-                         * case, there will be no further callback of type
-                         * LNET_EVENT_UNLINK.
-                         */
-                        if (ev->unlinked)
-                                req->rq_must_unlink = 0;
-                        else
-                                DEBUG_REQ(D_RPCTRACE, req, "unlinked in reply");
+
+                if (req->rq_replied)   /* already got the real reply */
                         goto out_wake;
-                }
+
                 req->rq_early = 1;
                 req->rq_nob_received = ev->mlength;
                 /* repmsg points to early reply */
