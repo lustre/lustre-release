@@ -1177,6 +1177,8 @@ int mds_open(struct mds_update_record *rec, int offset,
 
 found_child:
         mds_pack_inode2fid(&body->fid1, dchild->d_inode);
+        if (obd->obd_self_export->exp_bflag)
+                body->flags |= MDS_BFLAG_EXT_FLAGS;
         mds_pack_inode2body(body, dchild->d_inode);
 
         if (S_ISREG(dchild->d_inode->i_mode)) {

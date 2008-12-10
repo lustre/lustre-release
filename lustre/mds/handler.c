@@ -764,6 +764,18 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
 
         mds_pack_inode2fid(&body->fid1, inode);
         body->flags = reqbody->flags; /* copy MDS_BFLAG_EXT_FLAGS if present */
+
+        /* Compatibility for clients that do not set BLFAG_EXT_FLAGS in
+         * intent lock requests even though they check it in the reply.
+         * In 1.8+ this is set unconditionally, but 1.4.6- clients do
+         * not understand this flag.  b=17465 */
+        if ((reqbody->flags & MDS_BFLAG_EXT_FLAGS) &&
+            !obd->obd_self_export->exp_bflag) {
+                spin_lock(&obd->obd_self_export->exp_lock);
+                obd->obd_self_export->exp_bflag = 1;
+                spin_unlock(&obd->obd_self_export->exp_lock);
+        }
+
         mds_pack_inode2body(body, inode);
         reply_off++;
 

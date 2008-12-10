@@ -138,6 +138,8 @@ struct obd_export {
                                   exp_connecting:1,
                                   exp_replay_needed:1,
                                   exp_need_sync:1, /* needs sync from connect */
+                                  exp_bflag:1,     /* for 1.6 only to track
+                                                      MDS_BFLAG_EXT_FLAGS */
                                   exp_libclient:1; /* liblustre client? */
         struct list_head          exp_queued_rpc;  /* RPC to be handled */
         union {
