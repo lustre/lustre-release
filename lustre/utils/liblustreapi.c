@@ -417,7 +417,8 @@ static int search_fsname(char *pathname, char *fsname)
                 if (llapi_is_lustre_mnt(mnt)) {
                         /* search by pathname */
                         if (strncmp(mnt->mnt_dir, pathname,
-                                    strlen(mnt->mnt_dir)) == 0) {
+                                    max(strlen(pathname),
+                                        strlen(mnt->mnt_dir))) == 0) {
                                 ptr = strchr(mnt->mnt_fsname, '/');
                                 if (ptr == NULL)
                                         return -EINVAL;
