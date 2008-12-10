@@ -2041,6 +2041,7 @@ int lprocfs_obd_wr_recovery_maxtime(struct file *file, const char *buffer,
 EXPORT_SYMBOL(lprocfs_obd_wr_recovery_maxtime);
 #endif /* CRAY_XT3 */
 
+#ifdef HAVE_DELAYED_RECOVERY
 int lprocfs_obd_rd_stale_export_age(char *page, char **start, off_t off,
                                     int count, int *eof, void *data)
 {
@@ -2111,6 +2112,7 @@ int lprocfs_obd_wr_flush_stale_exports(struct file *file, const char *buffer,
         return count;
 }
 EXPORT_SYMBOL(lprocfs_obd_wr_flush_stale_exports);
+#endif
 
 EXPORT_SYMBOL(lprocfs_register);
 EXPORT_SYMBOL(lprocfs_srch);

@@ -1159,6 +1159,10 @@ void class_handle_stale_exports(struct obd_device *obd)
                 if (obd->obd_version_recov || !exp->exp_in_recovery)
                         list_move_tail(&exp->exp_obd_chain, &delay_list);
         }
+#ifndef HAVE_DELAYED_RECOVERY
+        /* delayed recovery is turned off, evict all delayed exports */
+        list_splice_init(&obd->obd_delayed_exports, &evict_list);
+#endif
         spin_unlock(&obd->obd_dev_lock);
 
         list_for_each_entry_safe(exp, n, &delay_list, exp_obd_chain) {

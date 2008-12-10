@@ -1388,6 +1388,7 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_CONFIG_HEALTH_CHECK_WRITE
           LC_CONFIG_LRU_RESIZE
           LC_CONFIG_ADAPTIVE_TIMEOUTS
+          LC_CONFIG_DELAYED_RECOVERY
           LC_QUOTA_MODULE
 
           LC_TASK_PPTR
@@ -1610,6 +1611,19 @@ AC_ARG_ENABLE([adaptive_timeouts],
 AC_MSG_RESULT([$enable_adaptive_timeouts])
 if test x$enable_adaptive_timeouts == xyes; then
    AC_DEFINE(HAVE_AT_SUPPORT, 1, [Enable adaptive timeouts support])
+fi
+])
+
+# config delayed recovery
+AC_DEFUN([LC_CONFIG_DELAYED_RECOVERY],
+[AC_MSG_CHECKING([whether to enable delayed recovery support])
+AC_ARG_ENABLE([delayed-recovery],
+	AC_HELP_STRING([--enable-delayed-recovery],
+			[enable late recovery after main one]),
+	[],[enable_delayed_recovery='no'])
+AC_MSG_RESULT([$enable_delayed_recovery])
+if test x$enable_delayed_recovery == xyes; then
+   AC_DEFINE(HAVE_DELAYED_RECOVERY, 1, [Enable delayed recovery support])
 fi
 ])
 

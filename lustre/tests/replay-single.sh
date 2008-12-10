@@ -1726,8 +1726,8 @@ run_test 70b "mds recovery; $CLIENTCOUNT clients"
 
 # vbr export handling
 test_71a() {
-    do_facet mds $LCTL get_param version | grep -q ^lustre.*1.6 && \
-        skip "skipping test for old 1.6 servers" && return 0
+    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
+
     UUID=$(lctl dl | awk '/mdc.*-mdc-/ { print $5 }')
     echo "Client UUID is $UUID"
     replay_barrier mds
@@ -1752,8 +1752,8 @@ test_71a() {
 run_test 71a "lost client export is kept"
 
 test_71b() {
-    do_facet mds $LCTL get_param version | grep -q ^lustre.*1.6 && \
-        skip "skipping test for old 1.6 servers" && return 0
+    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
+
     FAKE_NUM=10
     create_fake_exports mds $FAKE_NUM
     NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|wc -l")
@@ -1773,8 +1773,8 @@ test_71b() {
 run_test 71b "stale exports are expired, lctl flushes them"
 
 test_71c() {
-    do_facet mds $LCTL get_param version | grep -q ^lustre.*1.6 && \
-        skip "skipping test for old 1.6 servers" && return 0
+    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
+
     FAKE_NUM=10
     create_fake_exports mds $FAKE_NUM
     NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|wc -l")
@@ -1797,8 +1797,8 @@ test_71c() {
 run_test 71c "stale exports are expired, new client connection flush them"
 
 test_71d() {
-    do_facet mds $LCTL get_param version | grep -q ^lustre.*1.6 && \
-        skip "skipping test for old 1.6 servers" && return 0
+    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
+
     FAKE_NUM=10
     create_fake_exports mds $FAKE_NUM
     NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|wc -l")

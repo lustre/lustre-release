@@ -92,19 +92,19 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
                 case MDS_UNLINK_REC: {
                         struct llog_unlink_rec *lur = (struct llog_unlink_rec *)rec;
                         lur->lur_oid = loi->loi_id;
-                        lur->lur_ogen = loi->loi_gr;
+                        lur->lur_ogr = loi->loi_gr;
                         break;
                 }
                 case MDS_SETATTR_REC: {
                         struct llog_setattr_rec *lsr = (struct llog_setattr_rec *)rec;
                         lsr->lsr_oid = loi->loi_id;
-                        lsr->lsr_ogen = loi->loi_gr;
+                        lsr->lsr_ogr = loi->loi_gr;
                         break;
                 }
                 case MDS_SETATTR64_REC: {
                         struct llog_setattr64_rec *lsr = (struct llog_setattr64_rec *)rec;
                         lsr->lsr_oid = loi->loi_id;
-                        lsr->lsr_ogen = loi->loi_gr;
+                        lsr->lsr_ogr = loi->loi_gr;
                         break;
                 }
                 default:

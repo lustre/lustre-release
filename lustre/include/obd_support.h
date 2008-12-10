@@ -70,7 +70,11 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_TIMEOUT_DEFAULT             100
 #define LDLM_TIMEOUT_DEFAULT            20
 #define MDS_LDLM_TIMEOUT_DEFAULT        6
+#ifdef HAVE_DELAYED_RECOVERY
 #define STALE_EXPORT_MAXTIME_DEFAULT    (24*60*60) /**< one day, in seconds */
+#else
+#define STALE_EXPORT_MAXTIME_DEFAULT    (0) /**< zero if no delayed recovery */
+#endif
 #ifdef CRAY_XT3
  #define OBD_RECOVERY_MAX_TIME (obd_timeout * 18) /* b13079 */
 #endif

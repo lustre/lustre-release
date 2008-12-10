@@ -356,8 +356,11 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 lmm = rec->ur_eadata;
                 LASSERT(lmm);
 
-                if (*handle == NULL)
-                        *handle = fsfilt_start(obd,inode,FSFILT_OP_CREATE,NULL);
+                if (*handle == NULL) {
+                        int stripe_count = le32_to_cpu(lmm->lmm_stripe_count);
+                        *handle = fsfilt_start_log(obd, inode, FSFILT_OP_CREATE,
+                                                   NULL, stripe_count);
+                }
                 if (IS_ERR(*handle)) {
                         rc = PTR_ERR(*handle);
                         *handle = NULL;

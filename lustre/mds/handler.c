@@ -2014,7 +2014,9 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
             lprocfs_alloc_obd_stats(obd, LPROC_MDS_LAST) == 0) {
                 /* Init private stats here */
                 mds_stats_counter_init(obd->obd_stats);
+#ifdef HAVE_DELAYED_RECOVERY
                 lprocfs_obd_attach_stale_exports(obd);
+#endif
                 obd->obd_proc_exports_entry = proc_mkdir("exports",
                                                          obd->obd_proc_entry);
         }

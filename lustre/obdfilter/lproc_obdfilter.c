@@ -285,9 +285,11 @@ static struct lprocfs_vars lprocfs_filter_obd_vars[] = {
         { "read_cache_enable", lprocfs_filter_rd_cache, lprocfs_filter_wr_cache, 0},
         { "writethrough_cache_enable", lprocfs_filter_rd_wcache,
                           lprocfs_filter_wr_wcache, 0},
+#ifdef HAVE_DELAYED_RECOVERY
         { "stale_export_age", lprocfs_obd_rd_stale_export_age,
                               lprocfs_obd_wr_stale_export_age, 0},
         { "flush_stale_exports", 0, lprocfs_obd_wr_flush_stale_exports, 0 },
+#endif
         { 0 }
 };
 

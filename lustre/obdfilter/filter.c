@@ -2064,7 +2064,9 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
                                      LPROCFS_CNTR_AVGMINMAX,
                                      "cache_miss", "pages");
                 lproc_filter_attach_seqstat(obd);
+#ifdef HAVE_DELAYED_RECOVERY
                 lprocfs_obd_attach_stale_exports(obd);
+#endif
                 obd->obd_proc_exports_entry = proc_mkdir("exports",
                                                          obd->obd_proc_entry);
         }

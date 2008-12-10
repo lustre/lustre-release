@@ -221,6 +221,7 @@ int mds_check_stale_orphan(struct obd_device *obd, struct ll_fid *fid);
 int mds_log_op_unlink(struct obd_device *obd,
                       struct lov_mds_md *lmm, int lmm_size,
                       struct llog_cookie *logcookies, int cookies_size);
+int mds_log_op_orphan(struct obd_device *, struct lov_stripe_md *, obd_count);
 int mds_log_op_setattr(struct obd_device *obd, struct inode *inode,
                       struct lov_mds_md *lmm, int lmm_size,
                       struct llog_cookie *logcookies, int cookies_size);

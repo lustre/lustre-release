@@ -897,7 +897,7 @@ check_llog_create_rec(void)
         CHECK_MEMBER(llog_create_rec, lcr_hdr);
         CHECK_MEMBER(llog_create_rec, lcr_fid);
         CHECK_MEMBER(llog_create_rec, lcr_oid);
-        CHECK_MEMBER(llog_create_rec, lcr_ogen);
+        CHECK_MEMBER(llog_create_rec, lcr_ogr);
         CHECK_MEMBER(llog_create_rec, padding);
 }
 
@@ -920,8 +920,8 @@ check_llog_unlink_rec(void)
         CHECK_STRUCT(llog_unlink_rec);
         CHECK_MEMBER(llog_unlink_rec, lur_hdr);
         CHECK_MEMBER(llog_unlink_rec, lur_oid);
-        CHECK_MEMBER(llog_unlink_rec, lur_ogen);
-        CHECK_MEMBER(llog_unlink_rec, padding);
+        CHECK_MEMBER(llog_unlink_rec, lur_ogr);
+        CHECK_MEMBER(llog_unlink_rec, lur_count);
         CHECK_MEMBER(llog_unlink_rec, lur_tail);
 }
 
@@ -932,7 +932,7 @@ check_llog_setattr_rec(void)
         CHECK_STRUCT(llog_setattr_rec);
         CHECK_MEMBER(llog_setattr_rec, lsr_hdr);
         CHECK_MEMBER(llog_setattr_rec, lsr_oid);
-        CHECK_MEMBER(llog_setattr_rec, lsr_ogen);
+        CHECK_MEMBER(llog_setattr_rec, lsr_ogr);
         CHECK_MEMBER(llog_setattr_rec, lsr_uid);
         CHECK_MEMBER(llog_setattr_rec, lsr_gid);
         CHECK_MEMBER(llog_setattr_rec, padding);
@@ -946,7 +946,7 @@ check_llog_setattr64_rec(void)
         CHECK_STRUCT(llog_setattr64_rec);
         CHECK_MEMBER(llog_setattr64_rec, lsr_hdr);
         CHECK_MEMBER(llog_setattr64_rec, lsr_oid);
-        CHECK_MEMBER(llog_setattr64_rec, lsr_ogen);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_ogr);
         CHECK_MEMBER(llog_setattr64_rec, padding);
         CHECK_MEMBER(llog_setattr64_rec, lsr_uid);
         CHECK_MEMBER(llog_setattr64_rec, lsr_uid_h);

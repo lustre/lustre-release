@@ -1897,3 +1897,8 @@ get_stripe_info() {
 	stripe_index=`awk '/obdidx/ {start = 1; getline; print $1; exit}' $tmp_file`
 	rm -f $tmp_file
 }
+
+delayed_recovery_enabled () {
+    do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age" > /dev/null 2>&1
+}
+
