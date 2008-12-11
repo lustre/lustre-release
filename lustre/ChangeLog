@@ -13,6 +13,15 @@ tbd  Sun Microsystems, Inc.
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 17802
+Description: shutdown vs evict race
+Details    : client_disconnect_export vs connect request race.
+	     if client will evicted at this time - we start invalidate
+             thread without referece to import and import can be freed
+             at same time.
+
 Severity   : normal
 Frequency  : rare, need acl's on inode.
 Bugzilla   : 16492

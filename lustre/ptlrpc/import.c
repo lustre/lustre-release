@@ -1185,6 +1185,7 @@ static int signal_completed_replay(struct obd_import *imp)
 static int ptlrpc_invalidate_import_thread(void *data)
 {
         struct obd_import *imp = data;
+        int disconnect;
 
         ENTRY;
 
@@ -1196,6 +1197,13 @@ static int ptlrpc_invalidate_import_thread(void *data)
 
         ptlrpc_invalidate_import(imp);
 
+        /* is client_disconnect_export in flight ? */
+        spin_lock(&imp->imp_lock);
+        disconnect = imp->imp_deactive;
+        spin_unlock(&imp->imp_lock);
+        if (disconnect)
+                GOTO(out, 0 );
+
         if (obd_dump_on_eviction) {
                 CERROR("dump the log upon eviction\n");
                 libcfs_debug_dumplog();
@@ -1204,6 +1212,8 @@ static int ptlrpc_invalidate_import_thread(void *data)
         IMPORT_SET_STATE(imp, LUSTRE_IMP_RECOVER);
         ptlrpc_import_recovery_state_machine(imp);
 
+out:
+        class_import_put(imp);
         RETURN(0);
 }
 #endif
@@ -1232,12 +1242,19 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                        imp->imp_connection->c_remote_uuid.uuid);
 
 #ifdef __KERNEL__
+                /* bug 17802:  XXX client_disconnect_export vs connect request
+                 * race. if client will evicted at this time, we start invalidate
+                 * thread without referece to import and import can be freed
+                 * at same time. */
+                class_import_get(imp);
                 rc = cfs_kernel_thread(ptlrpc_invalidate_import_thread, imp,
                                        CLONE_VM | CLONE_FILES);
-                if (rc < 0)
+                if (rc < 0) {
+                        class_import_put(imp);
                         CERROR("error starting invalidate thread: %d\n", rc);
-                else
+                } else {
                         rc = 0;
+                }
                 RETURN(rc);
 #else
                 ptlrpc_invalidate_import(imp);
