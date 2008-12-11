@@ -3912,7 +3912,7 @@ compare_stripe_info1() {
 			do
 				local size=`expr $STRIPE_SIZE \* $num`
 				local file=file"$num-$offset-$count"
-				get_stripe_info client $file
+				get_stripe_info client $PWD/$file
 				if [ $stripe_size -ne $size ]; then
 					error "$file: different stripe size" && return
 				fi
@@ -3936,7 +3936,7 @@ compare_stripe_info2() {
 			do
 				local size=`expr $STRIPE_SIZE \* $num`
 				local file=file"$num-$offset-$count"
-				get_stripe_info client $file
+				get_stripe_info client $PWD/$file
 				if [ $stripe_size -ne $size ]; then
 					error "$file: different stripe size" && return	
 				fi
