@@ -316,6 +316,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb, int msgsize);
 /* Connect flags */
 #define OBD_CONNECT_RDONLY            0x1ULL /*client allowed read-only access*/
 #define OBD_CONNECT_INDEX             0x2ULL /*connect to specific LOV idx */
+#define OBD_CONNECT_MDS               0x4ULL /*connect from MDT to OST */
 #define OBD_CONNECT_GRANT             0x8ULL /*OSC acquires grant at connect */
 #define OBD_CONNECT_SRVLOCK          0x10ULL /*server takes locks for client */
 #define OBD_CONNECT_VERSION          0x20ULL /*Lustre versions in ocd */
@@ -368,7 +369,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb, int msgsize);
                                 OBD_CONNECT_BRW_SIZE | OBD_CONNECT_QUOTA64 | \
                                 OBD_CONNECT_CANCELSET | OBD_CONNECT_AT | \
                                 LRU_RESIZE_CONNECT_FLAG | OBD_CONNECT_CKSUM | \
-                                OBD_CONNECT_VBR | OBD_CONNECT_CHANGE_QS)
+                                OBD_CONNECT_VBR | OBD_CONNECT_CHANGE_QS | \
+                                OBD_CONNECT_MDS)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT)
 
