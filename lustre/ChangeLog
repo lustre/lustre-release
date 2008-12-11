@@ -45,6 +45,15 @@ tbd Sun Microsystems, Inc.
 	  information, please refer to bugzilla 17630.
 
 Severity   : minor
+Frequency  : rare
+Bugzilla   : 17802
+Description: shutdown vs evict race
+Details    : client_disconnect_export vs connect request race.
+	     if client will evicted at this time - we start invalidate
+             thread without referece to import and import can be freed
+             at same time.
+
+Severity   : minor
 Frequency  : always
 Bugzilla   : 16693
 Description: shrink LOV EAs before replying   
