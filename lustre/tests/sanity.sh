@@ -5648,6 +5648,11 @@ test_152() {
 }
 run_test 152 "test read/write with enomem ============================"
 
+test_153() {
+        multiop $DIR/$tfile Ow4096Ycu || error "multiop failed"
+}
+run_test 153 "test if fdatasync does not crash ======================="
+
 POOL=${POOL:-cea1}
 TGT_COUNT=$OSTCOUNT
 TGTPOOL_FIRST=1
