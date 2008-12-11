@@ -2200,18 +2200,18 @@ struct lu_buf *mdd_links_get(const struct lu_env *env,
                 return ERR_PTR(-ENOMEM);
 
         capa = mdd_object_capa(env, mdd_obj);
-        rc = mdo_xattr_get(env, mdd_obj, buf, MDS_LINK_EA_NAME, capa);
+        rc = mdo_xattr_get(env, mdd_obj, buf, XATTR_NAME_LINK, capa);
         if (rc == -ERANGE) {
                 /* Buf was too small, figure out what we need. */
                 buf->lb_buf = NULL;
                 buf->lb_len = 0;
-                rc = mdo_xattr_get(env, mdd_obj, buf, MDS_LINK_EA_NAME, capa);
+                rc = mdo_xattr_get(env, mdd_obj, buf, XATTR_NAME_LINK, capa);
                 if (rc < 0)
                         return ERR_PTR(rc);
                 buf = mdd_buf_alloc(env, rc);
                 if (buf->lb_buf == NULL)
                         return ERR_PTR(-ENOMEM);
-                rc = mdo_xattr_get(env, mdd_obj, buf, MDS_LINK_EA_NAME, capa);
+                rc = mdo_xattr_get(env, mdd_obj, buf, XATTR_NAME_LINK, capa);
         }
         if (rc < 0)
                 return ERR_PTR(rc);
@@ -2340,7 +2340,7 @@ static int mdd_links_add(const struct lu_env *env,
         leh = buf->lb_buf;
         rc = __mdd_xattr_set(env, mdd_obj,
                              mdd_buf_get_const(env, buf->lb_buf, leh->leh_len),
-                             MDS_LINK_EA_NAME, 0, handle);
+                             XATTR_NAME_LINK, 0, handle);
         if (rc)
                 CERROR("link_ea add failed %d "DFID"\n", rc,
                        PFID(mdd_object_fid(mdd_obj)));
@@ -2418,7 +2418,7 @@ static int mdd_links_rename(const struct lu_env *env,
 
         rc = __mdd_xattr_set(env, mdd_obj,
                              mdd_buf_get_const(env, buf->lb_buf, leh->leh_len),
-                             MDS_LINK_EA_NAME, 0, handle);
+                             XATTR_NAME_LINK, 0, handle);
 
 out:
         if (rc)

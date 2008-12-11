@@ -243,7 +243,7 @@ static int mdd_lov_set_stripe_md(const struct lu_env *env,
                 RETURN(rc);
         obd_free_memmd(lov_exp, &lsm);
 
-        rc = mdd_xattr_set_txn(env, obj, buf, MDS_LOV_MD_NAME, 0, handle);
+        rc = mdd_xattr_set_txn(env, obj, buf, XATTR_NAME_LOV, 0, handle);
 
         CDEBUG(D_INFO, "set lov ea of "DFID" rc %d \n", PFID(mdo2fid(obj)), rc);
         RETURN(rc);
@@ -270,7 +270,7 @@ static int mdd_lov_set_dir_md(const struct lu_env *env,
             lum->lmm_stripe_offset == (typeof(lum->lmm_stripe_offset))(-1) &&
             lum->lmm_magic != LOV_USER_MAGIC_V3) {
                 rc = mdd_xattr_set_txn(env, obj, &LU_BUF_NULL,
-                                       MDS_LOV_MD_NAME, 0, handle);
+                                       XATTR_NAME_LOV, 0, handle);
                 if (rc == -ENODATA)
                         rc = 0;
                 CDEBUG(D_INFO, "delete lov ea of "DFID" rc %d \n",
@@ -316,7 +316,7 @@ int mdd_lov_set_md(const struct lu_env *env, struct mdd_object *pobj,
                         rc = mdd_lov_set_stripe_md(env, child, buf, handle);
                 } else {
                         rc = mdd_xattr_set_txn(env, child, buf,
-                                               MDS_LOV_MD_NAME, 0, handle);
+                                               XATTR_NAME_LOV, 0, handle);
                 }
         } else if (S_ISDIR(mode)) {
                 if (lmmp == NULL && lmm_size == 0) {
@@ -327,11 +327,11 @@ int mdd_lov_set_md(const struct lu_env *env, struct mdd_object *pobj,
                         /* Get parent dir stripe and set */
                         if (pobj != NULL)
                                 rc = mdd_get_md_locked(env, pobj, lmm, &size,
-                                                       MDS_LOV_MD_NAME);
+                                                       XATTR_NAME_LOV);
                         if (rc > 0) {
                                 buf = mdd_buf_get(env, lmm, size);
                                 rc = mdd_xattr_set_txn(env, child, buf,
-                                               MDS_LOV_MD_NAME, 0, handle);
+                                               XATTR_NAME_LOV, 0, handle);
                                 if (rc)
                                         CERROR("error on copy stripe info: rc "
                                                 "= %d\n", rc);
@@ -441,7 +441,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
 
                         rc = mdd_get_md_locked(env, parent, _lmm,
                                                &_lmm_size,
-                                               MDS_LOV_MD_NAME);
+                                               XATTR_NAME_LOV);
                         if (rc > 0)
                                 rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
                                                    lov_exp, 0, &lsm, _lmm);
@@ -617,7 +617,7 @@ int mdd_lov_destroy(const struct lu_env *env, struct mdd_device *mdd,
         /* get lov ea */
 
         rc = mdd_get_md_locked(env, obj, ma->ma_lmm, &ma->ma_lmm_size,
-                               MDS_LOV_MD_NAME);
+                               XATTR_NAME_LOV);
 
         if (rc <= 0) {
                 CWARN("Get lov ea failed for "DFID" rc = %d\n",

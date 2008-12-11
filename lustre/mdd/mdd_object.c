@@ -605,7 +605,7 @@ static int __mdd_lmm_get(const struct lu_env *env,
                 RETURN(0);
 
         rc = mdd_get_md(env, mdd_obj, ma->ma_lmm, &ma->ma_lmm_size,
-                        MDS_LOV_MD_NAME);
+                        XATTR_NAME_LOV);
 
         if (rc == 0 && (ma->ma_need & MA_LOV_DEF)) {
                 rc = mdd_get_default_md(mdd_obj, ma->ma_lmm,
@@ -642,7 +642,7 @@ static int __mdd_lmv_get(const struct lu_env *env,
                 RETURN(0);
 
         rc = mdd_get_md(env, mdd_obj, ma->ma_lmv, &ma->ma_lmv_size,
-                        MDS_LMV_MD_NAME);
+                        XATTR_NAME_LMV);
         if (rc > 0) {
                 ma->ma_valid |= MA_LMV;
                 rc = 0;
@@ -1217,7 +1217,7 @@ static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
                         GOTO(cleanup, rc = -ENOMEM);
 
                 rc = mdd_get_md_locked(env, mdd_obj, lmm, &lmm_size,
-                                MDS_LOV_MD_NAME);
+                                XATTR_NAME_LOV);
 
                 if (rc < 0)
                         GOTO(cleanup, rc);
@@ -1604,7 +1604,7 @@ static int mdd_object_create(const struct lu_env *env,
 
                 rc = __mdd_xattr_set(env, mdd_obj,
                                      mdd_buf_get_const(env, lmv, lmv_size),
-                                     MDS_LMV_MD_NAME, 0, handle);
+                                     XATTR_NAME_LMV, 0, handle);
                 if (rc)
                         GOTO(unlock, rc);
 

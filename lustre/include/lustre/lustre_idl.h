@@ -875,7 +875,16 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 
 #define XATTR_NAME_ACL_ACCESS   "system.posix_acl_access"
 #define XATTR_NAME_ACL_DEFAULT  "system.posix_acl_default"
+#define XATTR_USER_PREFIX       "user."
+#define XATTR_TRUSTED_PREFIX    "trusted."
+#define XATTR_SECURITY_PREFIX   "security."
+#define XATTR_LUSTRE_PREFIX     "lustre."
+
 #define XATTR_NAME_LOV          "trusted.lov"
+#define XATTR_NAME_LMA          "trusted.lma"
+#define XATTR_NAME_LMV          "trusted.lmv"
+#define XATTR_NAME_LINK         "trusted.link"
+
 
 struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */
         __u32 lmm_magic;          /* magic number = LOV_MAGIC_V3 */
