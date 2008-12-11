@@ -5517,6 +5517,11 @@ test_140() { #bug-17379
 }
 run_test 140 "Check reasonable stack depth (shouldn't LBUG) ===="
 
+test_153() {
+        multiop $DIR/$tfile Ow4096Ycu || error "multiop failed"
+}
+run_test 153 "test if fdatasync does not crash ======================="
+
 #
 # tests that do cleanup/setup should be run at the end
 #
