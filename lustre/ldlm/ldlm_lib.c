@@ -737,14 +737,25 @@ int target_handle_connect(struct ptlrpc_request *req)
                    req->rq_peer.nid != export->exp_connection->c_peer.nid) {
                 /* make darn sure this is coming from the same peer
                  * if the UUIDs matched */
-                  CWARN("%s: cookie %s seen on new NID %s when "
-                          "existing NID %s is already connected\n",
-                        target->obd_name, cluuid.uuid,
-                  libcfs_nid2str(req->rq_peer.nid),
-                  libcfs_nid2str(export->exp_connection->c_peer.nid));
-                  class_export_put(export);
-                  export = NULL;
-                  rc = -EALREADY;
+                if (data && data->ocd_connect_flags & OBD_CONNECT_MDS) {
+                        /* the MDS UUID can be reused, don't need to wait
+                         * for the export to be evicted */
+                        CWARN("%s: received MDS connection from a new NID %s,"
+                              " removing former export from NID %s\n",
+                            target->obd_name,
+                            libcfs_nid2str(req->rq_peer.nid),
+                            libcfs_nid2str(export->exp_connection->c_peer.nid));
+                        class_fail_export(export);
+                } else {
+                        CWARN("%s: cookie %s seen on new NID %s when "
+                              "existing NID %s is already connected\n",
+                            target->obd_name, cluuid.uuid,
+                            libcfs_nid2str(req->rq_peer.nid),
+                            libcfs_nid2str(export->exp_connection->c_peer.nid));
+                        rc = -EALREADY;
+                }
+                class_export_put(export);
+                export = NULL;
         } else if (export != NULL) {
                 spin_lock(&export->exp_lock);
                 export->exp_connecting = 1;

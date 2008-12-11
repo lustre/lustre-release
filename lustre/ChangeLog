@@ -1887,6 +1887,14 @@ Details    : With AT enabled, the recovery window can be excessively long (6000+
 	     INITIAL_CONNECT_TIMEOUT now) and clients report the old service
 	     time via pb_service_time.
 
+Severity   : normal
+Bugzilla   : 16522
+Description: Watchdog triggered on MDS failover
+Details    : enable OBD_CONNECT_MDT flag when connecting from the MDS so that
+	     the OSTs know that the MDS "UUID" can be reused for the same export
+	     from a different NID, so we do not need to wait for the export to be
+	     evicted
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

@@ -643,7 +643,8 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
                                   OBD_CONNECT_REQPORTAL | OBD_CONNECT_QUOTA64 |
                                   OBD_CONNECT_OSS_CAPA  | OBD_CONNECT_FID     |
                                   OBD_CONNECT_BRW_SIZE  | OBD_CONNECT_CKSUM   |
-                                  OBD_CONNECT_AT | OBD_CONNECT_CHANGE_QS;
+                                  OBD_CONNECT_CHANGE_QS | OBD_CONNECT_AT      |
+                                  OBD_CONNECT_MDS;
 #ifdef HAVE_LRU_RESIZE_SUPPORT
         data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
 #endif
