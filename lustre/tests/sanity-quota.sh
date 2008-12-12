@@ -1344,7 +1344,7 @@ test_18() {
 
 	testfile_size=$(stat -c %s $TESTFILE)
 	[ $testfile_size -ne $((BLK_SZ * 1024 * 100)) ] && \
-	    error "verifying file failed!"
+	    error "expect $((BLK_SZ * 1024 * 100)), got ${testfile_size}. Verifying file failed!"
 	rm -f $TESTFILE
 	sync; sleep 3; sync;
 
@@ -1464,7 +1464,7 @@ test_18bc_sub() {
 
 	testfile_size=$(stat -c %s $TESTFILE)
 	[ $testfile_size -ne $((BLK_SZ * 1024 * 100)) ] && \
-	    error "verifying file failed!"
+	    error "expect $((BLK_SZ * 1024 * 100)), got ${testfile_size}. Verifying file failed!"
 	$SHOW_QUOTA_USER
 	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $MOUNT
 	rm -rf $TESTFILE
