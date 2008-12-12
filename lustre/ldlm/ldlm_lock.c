@@ -639,6 +639,10 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                 LDLM_LOCK_GET(lock); /* dropped by bl thread */
                 ldlm_lock_remove_from_lru(lock);
                 unlock_res_and_lock(lock);
+
+                if (lock->l_flags & LDLM_FL_FAIL_LOC)
+                        OBD_RACE(OBD_FAIL_LDLM_CP_BL_RACE);
+
                 if ((lock->l_flags & LDLM_FL_ATOMIC_CB) ||
                     ldlm_bl_to_thread_lock(ns, NULL, lock) != 0)
                         ldlm_handle_bl_callback(ns, NULL, lock);
