@@ -105,6 +105,16 @@ extern int  trace_max_debug_mb(void);
 union trace_data_union {
 	struct trace_cpu_data {
 		/*
+		 * Even though this structure is meant to be per-CPU, locking
+		 * is needed because in some places the data may be accessed
+		 * from other CPUs. This lock is directly used in trace_get_tcd
+		 * and trace_put_tcd, which are called in libcfs_debug_vmsg2 and
+		 * tcd_for_each_type_lock
+		 */
+		spinlock_t              tcd_lock;
+		unsigned long           tcd_lock_flags;
+
+		/*
 		 * pages with trace records not yet processed by tracefiled.
 		 */
 		struct list_head        tcd_pages;
@@ -176,9 +186,9 @@ extern union trace_data_union (*trace_data[TCD_MAX_TYPES])[NR_CPUS];
         for (j = 0, ((tcd) = &(*trace_data[i])[j].tcd);               \
              j < num_possible_cpus(); j++, (tcd) = &(*trace_data[i])[j].tcd)
 
-#define tcd_for_each_type_lock(tcd, i)                                \
+#define tcd_for_each_type_lock(tcd, i, cpu)                           \
     for (i = 0; trace_data[i] &&                                      \
-         (tcd = &(*trace_data[i])[smp_processor_id()].tcd) &&         \
+         (tcd = &(*trace_data[i])[cpu].tcd) &&                        \
          trace_lock_tcd(tcd); trace_unlock_tcd(tcd), i++)
 
 /* XXX nikita: this declaration is internal to tracefile.c and should probably
@@ -252,8 +262,6 @@ extern int trace_lock_tcd(struct trace_cpu_data *tcd);
 extern void trace_unlock_tcd(struct trace_cpu_data *tcd);
 extern char *trace_get_console_buffer(void);
 extern void trace_put_console_buffer(char *buffer);
-
-extern void trace_call_on_all_cpus(void (*fn)(void *arg), void *arg);
 
 int trace_refill_stock(struct trace_cpu_data *tcd, int gfp,
 		       struct list_head *stock);

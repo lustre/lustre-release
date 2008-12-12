@@ -199,6 +199,46 @@ void ptlrpc_deactivate_import(struct obd_import *imp)
         ptlrpc_deactivate_and_unlock_import(imp);
 }
 
+static unsigned int 
+ptlrpc_inflight_deadline(struct ptlrpc_request *req, time_t now)
+{
+        long dl;
+
+        if (!(((req->rq_phase == RQ_PHASE_RPC) && !req->rq_waiting) ||
+              (req->rq_phase == RQ_PHASE_BULK) || 
+              (req->rq_phase == RQ_PHASE_NEW)))
+                return 0;
+
+        if (req->rq_timedout)
+                return 0;
+
+        if (req->rq_phase == RQ_PHASE_NEW)
+                dl = req->rq_sent;
+        else
+                dl = req->rq_deadline;
+
+        if (dl <= now)
+                return 0;
+
+        return dl - now;
+}
+
+static unsigned int ptlrpc_inflight_timeout(struct obd_import *imp)
+{
+        time_t now = cfs_time_current_sec();
+        struct list_head *tmp, *n;
+        struct ptlrpc_request *req;
+        unsigned int timeout = 0;
+
+        spin_lock(&imp->imp_lock);
+        list_for_each_safe(tmp, n, &imp->imp_sending_list) {
+                req = list_entry(tmp, struct ptlrpc_request, rq_list);
+                timeout = max(ptlrpc_inflight_deadline(req, now), timeout);
+        }
+        spin_unlock(&imp->imp_lock);
+        return timeout;
+}
+
 /*
  * This function will invalidate the import, if necessary, then block
  * for all the RPC completions, and finally notify the obd to
@@ -210,6 +250,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
         struct list_head *tmp, *n;
         struct ptlrpc_request *req;
         struct l_wait_info lwi;
+        unsigned int timeout;
         int rc;
 
         atomic_inc(&imp->imp_inval_count);
@@ -226,33 +267,78 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
 
         LASSERT(imp->imp_invalid);
 
-        /* wait for all requests to error out and call completion callbacks.
-           Cap it at obd_timeout -- these should all have been locally
-           cancelled by ptlrpc_abort_inflight. */
-        lwi = LWI_TIMEOUT_INTERVAL(
-                cfs_timeout_cap(cfs_time_seconds(obd_timeout)),
-                cfs_time_seconds(1), NULL, NULL);
-        rc = l_wait_event(imp->imp_recovery_waitq,
-                          (atomic_read(&imp->imp_inflight) == 0), &lwi);
+        /* Wait forever until inflight == 0. We really can't do it another
+         * way because in some cases we need to wait for very long reply 
+         * unlink. We can't do anything before that because there is really
+         * no guarantee that some rdma transfer is not in progress right now. */
+        do {
+                /* Calculate max timeout for waiting on rpcs to error 
+                 * out. Use obd_timeout if calculated value is smaller
+                 * than it. */
+                timeout = ptlrpc_inflight_timeout(imp);
+                timeout += timeout / 3;
+                
+                if (timeout == 0)
+                        timeout = obd_timeout;
+                
+                CDEBUG(D_RPCTRACE, "Sleeping %d sec for inflight to error out\n",
+                       timeout);
 
-        if (rc) {
-                CERROR("%s: rc = %d waiting for callback (%d != 0)\n",
-                       obd2cli_tgt(imp->imp_obd), rc,
-                       atomic_read(&imp->imp_inflight));
-                spin_lock(&imp->imp_lock);
-                list_for_each_safe(tmp, n, &imp->imp_sending_list) {
-                        req = list_entry(tmp, struct ptlrpc_request, rq_list);
-                        DEBUG_REQ(D_ERROR, req, "still on sending list");
-                }
-                list_for_each_safe(tmp, n, &imp->imp_delayed_list) {
-                        req = list_entry(tmp, struct ptlrpc_request, rq_list);
-                        DEBUG_REQ(D_ERROR, req, "still on delayed list");
-                }
-                spin_unlock(&imp->imp_lock);
-                LASSERT(atomic_read(&imp->imp_inflight) == 0);
-        }
+                /* Wait for all requests to error out and call completion
+                 * callbacks. Cap it at obd_timeout -- these should all
+                 * have been locally cancelled by ptlrpc_abort_inflight. */
+                lwi = LWI_TIMEOUT_INTERVAL(
+                        cfs_timeout_cap(cfs_time_seconds(timeout)),
+                        cfs_time_seconds(1), NULL, NULL);
+                rc = l_wait_event(imp->imp_recovery_waitq,
+                                (atomic_read(&imp->imp_inflight) == 0), &lwi);
+                if (rc) {
+                        const char *cli_tgt = obd2cli_tgt(imp->imp_obd);
 
-out:
+                        CERROR("%s: rc = %d waiting for callback (%d != 0)\n",
+                               cli_tgt, rc, atomic_read(&imp->imp_inflight));
+
+                        spin_lock(&imp->imp_lock);
+                        list_for_each_safe(tmp, n, &imp->imp_sending_list) {
+                                req = list_entry(tmp, struct ptlrpc_request, 
+                                        rq_list);
+                                DEBUG_REQ(D_ERROR, req, "still on sending list");
+                        }
+                        list_for_each_safe(tmp, n, &imp->imp_delayed_list) {
+                                req = list_entry(tmp, struct ptlrpc_request, 
+                                        rq_list);
+                                DEBUG_REQ(D_ERROR, req, "still on delayed list");
+                        }
+                        
+                        if (atomic_read(&imp->imp_unregistering) == 0) {
+                                /* We know that only "unregistering" rpcs may
+                                 * still survive in sending or delaying lists
+                                 * (They are waiting for long reply unlink in
+                                 * sluggish nets). Let's check this. If there
+                                 * is no unregistering and inflight != 0 this
+                                 * is bug. */
+                                LASSERT(atomic_read(&imp->imp_inflight) == 0);
+                                
+                                /* Let's save one loop as soon as inflight have
+                                 * dropped to zero. No new inflights possible at
+                                 * this point. */
+                                rc = 0;
+                        } else {
+                                CERROR("%s: RPCs in \"%s\" phase found (%d). "
+                                       "Network is sluggish? Waiting them "
+                                       "to error out.\n", cli_tgt,
+                                       ptlrpc_phase2str(RQ_PHASE_UNREGISTERING),
+                                       atomic_read(&imp->imp_unregistering));
+                        }
+                        spin_unlock(&imp->imp_lock);
+                }
+        } while (rc != 0);
+
+        /* Let's additionally check that no new rpcs added to import in
+         * "invalidate" state. */
+        LASSERT(atomic_read(&imp->imp_inflight) == 0);
+
+  out:
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
 
         atomic_dec(&imp->imp_inval_count);
@@ -301,7 +387,6 @@ void ptlrpc_fail_import(struct obd_import *imp, __u32 conn_cnt)
 
 int ptlrpc_reconnect_import(struct obd_import *imp)
 {
-
         ptlrpc_set_import_discon(imp, 0);
         /* Force a new connect attempt */
         ptlrpc_invalidate_import(imp);
@@ -415,13 +500,13 @@ static int import_select_connection(struct obd_import *imp)
 
         /* switch connection, don't mind if it's same as the current one */
         if (imp->imp_connection)
-                ptlrpc_put_connection(imp->imp_connection);
+                ptlrpc_connection_put(imp->imp_connection);
         imp->imp_connection = ptlrpc_connection_addref(imp_conn->oic_conn);
 
         dlmexp =  class_conn2export(&imp->imp_dlm_handle);
         LASSERT(dlmexp != NULL);
         if (dlmexp->exp_connection)
-                ptlrpc_put_connection(dlmexp->exp_connection);
+                ptlrpc_connection_put(dlmexp->exp_connection);
         dlmexp->exp_connection = ptlrpc_connection_addref(imp_conn->oic_conn);
         class_export_put(dlmexp);
 
@@ -539,6 +624,19 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
         if (!request)
                 GOTO(out, rc = -ENOMEM);
 
+        /* Report the rpc service time to the server so that it knows how long
+         * to wait for clients to join recovery */
+        lustre_msg_set_service_time(request->rq_reqmsg,
+                                    at_timeout2est(request->rq_timeout));
+
+        /* The amount of time we give the server to process the connect req.
+         * import_select_connection will increase the net latency on
+         * repeated reconnect attempts to cover slow networks.
+         * We override/ignore the server rpc completion estimate here,
+         * which may be large if this is a reconnect attempt */
+        request->rq_timeout = INITIAL_CONNECT_TIMEOUT;
+        lustre_msg_set_timeout(request->rq_reqmsg, request->rq_timeout);
+
 #ifndef __KERNEL__
         lustre_msg_add_op_flags(request->rq_reqmsg, MSG_CONNECT_LIBCLIENT);
 #endif
@@ -546,6 +644,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
                 lustre_msg_add_op_flags(request->rq_reqmsg,
                                         MSG_CONNECT_NEXT_VER);
 
+        request->rq_no_resend = request->rq_no_delay = 1;
         request->rq_send_state = LUSTRE_IMP_CONNECTING;
         /* Allow a slightly larger reply for future growth compatibility */
         size[REPLY_REC_OFF] = sizeof(struct obd_connect_data) +
@@ -553,7 +652,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
         ptlrpc_req_set_repsize(request, 2, size);
         request->rq_interpret_reply = ptlrpc_connect_interpret;
 
-        CLASSERT(sizeof(*aa) <= sizeof(request->rq_async_args));
+        CLASSERT(sizeof (*aa) <= sizeof (request->rq_async_args));
         aa = ptlrpc_req_async_args(request);
         memset(aa, 0, sizeof *aa);
 
@@ -563,10 +662,6 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
                 spin_lock(&imp->imp_lock);
                 imp->imp_replayable = 1;
                 spin_unlock(&imp->imp_lock);
-                if (AT_OFF)
-                        /* AT will use INITIAL_CONNECT_TIMEOUT the first
-                           time, adaptive after that. */
-                        request->rq_timeout = INITIAL_CONNECT_TIMEOUT;
         }
 
         DEBUG_REQ(D_RPCTRACE, request, "%sconnect request %d",
@@ -605,8 +700,8 @@ static void ptlrpc_maybe_ping_import_soon(struct obd_import *imp)
          * to have two identical connections in imp_conn_list. We must
          * compare not conn's pointers but NIDs, otherwise we can defeat
          * connection throttling. (See bug 14774.) */
-        if (imp->imp_conn_current->oic_conn->c_self !=
-                                imp_conn->oic_conn->c_self) {
+        if (imp->imp_conn_current->oic_conn->c_peer.nid !=
+                                imp_conn->oic_conn->c_peer.nid) {
                 ptlrpc_ping_import_soon(imp);
                 wake_pinger = 1;
         }
@@ -695,6 +790,7 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 } else {
                         spin_unlock(&imp->imp_lock);
                 }
+
                 GOTO(finish, rc = 0);
         } else {
                 spin_unlock(&imp->imp_lock);
@@ -760,11 +856,6 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
 
                         spin_lock(&imp->imp_lock);
                         imp->imp_resend_replay = 1;
-                        /* VBR: delayed connection */
-                        if (MSG_CONNECT_DELAYED & msg_flags) {
-                                imp->imp_delayed_recovery = 1;
-                                imp->imp_no_lock_replay = 1;
-                        }
                         spin_unlock(&imp->imp_lock);
 
                         IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY);
@@ -776,13 +867,6 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 imp->imp_remote_handle =
                                 *lustre_msg_get_handle(request->rq_repmsg);
                 imp->imp_last_replay_transno = 0;
-                /* VBR: delayed connection */
-                if (MSG_CONNECT_DELAYED & msg_flags) {
-                        spin_lock(&imp->imp_lock);
-                        imp->imp_delayed_recovery = 1;
-                        imp->imp_no_lock_replay = 1;
-                        spin_unlock(&imp->imp_lock);
-                }
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY);
         } else {
                 DEBUG_REQ(D_HA, request, "evicting (not initial connect and "
@@ -1014,25 +1098,19 @@ finish:
 }
 
 static int completed_replay_interpret(struct ptlrpc_request *req,
-                                      void * data, int rc)
+                                    void * data, int rc)
 {
         ENTRY;
         atomic_dec(&req->rq_import->imp_replay_inflight);
-        if (req->rq_status == 0 &&
-            !req->rq_import->imp_vbr_failed) {
+        if (req->rq_status == 0) {
                 ptlrpc_import_recovery_state_machine(req->rq_import);
         } else {
-                if (req->rq_import->imp_vbr_failed)
-                        CDEBUG(D_WARNING,
-                               "%s: version recovery fails, reconnecting\n",
-                               req->rq_import->imp_obd->obd_name);
-                else
-                        CDEBUG(D_HA, "%s: LAST_REPLAY message error: %d, "
-                                     "reconnecting\n",
-                               req->rq_import->imp_obd->obd_name,
-                               req->rq_status);
+                CDEBUG(D_HA, "%s: LAST_REPLAY message error: %d, "
+                       "reconnecting\n",
+                       req->rq_import->imp_obd->obd_name, req->rq_status);
                 ptlrpc_connect_import(req->rq_import, NULL);
         }
+
         RETURN(0);
 }
 
@@ -1053,8 +1131,6 @@ static int signal_completed_replay(struct obd_import *imp)
         ptlrpc_req_set_repsize(req, 1, NULL);
         req->rq_send_state = LUSTRE_IMP_REPLAY_WAIT;
         lustre_msg_add_flags(req->rq_reqmsg, MSG_LAST_REPLAY);
-        if (imp->imp_delayed_recovery)
-                lustre_msg_add_flags(req->rq_reqmsg, MSG_DELAY_REPLAY);
         req->rq_timeout *= 3;
         req->rq_interpret_reply = completed_replay_interpret;
 
@@ -1066,6 +1142,7 @@ static int signal_completed_replay(struct obd_import *imp)
 static int ptlrpc_invalidate_import_thread(void *data)
 {
         struct obd_import *imp = data;
+        int disconnect;
 
         ENTRY;
 
@@ -1077,6 +1154,13 @@ static int ptlrpc_invalidate_import_thread(void *data)
 
         ptlrpc_invalidate_import(imp);
 
+        /* is client_disconnect_export in flight ? */
+        spin_lock(&imp->imp_lock);
+        disconnect = imp->imp_deactive;
+        spin_unlock(&imp->imp_lock);
+        if (disconnect)
+                GOTO(out, 0 );
+
         if (obd_dump_on_eviction) {
                 CERROR("dump the log upon eviction\n");
                 libcfs_debug_dumplog();
@@ -1085,6 +1169,8 @@ static int ptlrpc_invalidate_import_thread(void *data)
         IMPORT_SET_STATE(imp, LUSTRE_IMP_RECOVER);
         ptlrpc_import_recovery_state_machine(imp);
 
+out:
+        class_import_put(imp);
         RETURN(0);
 }
 #endif
@@ -1113,12 +1199,19 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                        imp->imp_connection->c_remote_uuid.uuid);
 
 #ifdef __KERNEL__
+                /* bug 17802:  XXX client_disconnect_export vs connect request
+                 * race. if client will evicted at this time, we start invalidate
+                 * thread without referece to import and import can be freed
+                 * at same time. */
+                class_import_get(imp);
                 rc = cfs_kernel_thread(ptlrpc_invalidate_import_thread, imp,
                                    CLONE_VM | CLONE_FILES);
-                if (rc < 0)
+                if (rc < 0) {
+                        class_import_put(imp);
                         CERROR("error starting invalidate thread: %d\n", rc);
-                else
+                } else {
                         rc = 0;
+                }
                 RETURN(rc);
 #else
                 ptlrpc_invalidate_import(imp);

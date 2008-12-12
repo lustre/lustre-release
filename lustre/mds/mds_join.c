@@ -86,8 +86,7 @@ static int mds_insert_join_lmm(struct llog_handle *llh,
         ENTRY;
 
 
-        sz_med = lov_mds_md_size(le32_to_cpu(lmm->lmm_stripe_count),
-                                 LOV_MAGIC);
+        sz_med = lov_mds_md_size(le32_to_cpu(lmm->lmm_stripe_count));
         sz_med += 2 * sizeof(__u64);
         sz_med = size_round(sz_med);
 
@@ -103,8 +102,7 @@ static int mds_insert_join_lmm(struct llog_handle *llh,
         med->med_start = start;
         med->med_len = len;
         memcpy(&med->med_lmm, lmm,
-                lov_mds_md_size(le32_to_cpu(lmm->lmm_stripe_count),
-                                LOV_MAGIC));
+                lov_mds_md_size(le32_to_cpu(lmm->lmm_stripe_count)));
 
         rc = llog_write_rec(llh, &rec, NULL, 0, med, -1);
         OBD_FREE(med, sz_med);
@@ -175,12 +173,11 @@ static int mdsea_cancel_last_extent(struct llog_handle *llh_tail,
                        med->med_start, cbdata->mc_headfile_sz);
                 if (!cbdata->mc_lmm) {
                         int stripe = le32_to_cpu(med->med_lmm.lmm_stripe_count);
-                        OBD_ALLOC(cbdata->mc_lmm,
-                                  lov_mds_md_size(stripe, LOV_MAGIC));
+                        OBD_ALLOC(cbdata->mc_lmm, lov_mds_md_size(stripe));
                         if (!cbdata->mc_lmm)
                                 RETURN(-ENOMEM);
                         memcpy(cbdata->mc_lmm, &med->med_lmm,
-                               lov_mds_md_size(stripe, LOV_MAGIC));
+                               lov_mds_md_size(stripe));
                 }
                 RETURN(LLOG_DEL_RECORD);
         }
@@ -223,8 +220,7 @@ static int  mds_adjust_last_extent(struct llog_handle *llh_head,
 exit:
         if (cbdata && cbdata->mc_lmm)
                 OBD_FREE(cbdata->mc_lmm,
-                         lov_mds_md_size(cbdata->mc_lmm->lmm_stripe_count,
-                                         LOV_MAGIC));
+                         lov_mds_md_size(cbdata->mc_lmm->lmm_stripe_count));
         if (cbdata)
                 OBD_FREE_PTR(cbdata);
 
@@ -234,8 +230,8 @@ exit:
 static void mds_finish_join(struct mds_obd *mds, struct ptlrpc_request *req,
                            struct inode *inode, struct lov_mds_md_join *lmmj)
 {
-        struct mds_body *body = (struct mds_body *)
-                                lustre_msg_buf(req->rq_repmsg, 1, 0);
+        struct mds_body *body = lustre_msg_buf(req->rq_repmsg,DLM_REPLY_REC_OFF,
+                                               sizeof(*body));
         int max_cookiesize = lmmj->lmmj_md.lmm_stripe_count *
                                 sizeof(struct llog_cookie);
         int max_easize = sizeof(*lmmj);
@@ -243,7 +239,7 @@ static void mds_finish_join(struct mds_obd *mds, struct ptlrpc_request *req,
         CDEBUG(D_INFO, "change the max md size from %d to "LPSZ"\n",
                mds->mds_max_mdsize, sizeof(*lmmj));
 
-        if (mds->mds_max_mdsize < max_easize || 
+        if (mds->mds_max_mdsize < max_easize ||
             mds->mds_max_cookiesize < max_cookiesize) {
                 body->max_mdsize = mds->mds_max_mdsize > max_easize ?
                                    mds->mds_max_mdsize : max_easize;
@@ -258,6 +254,7 @@ static void mds_finish_join(struct mds_obd *mds, struct ptlrpc_request *req,
                 CDEBUG(D_INODE, "updating max_mdsize/max_cookiesize: %d/%d\n",
                        mds->mds_max_mdsize, mds->mds_max_cookiesize);
 
+        mds_pack_inode2fid(&body->fid1, inode);
         mds_pack_inode2body(body, inode);
 }
 
@@ -281,7 +278,7 @@ static int mds_join_unlink_tail_inode(struct mds_update_record *rec,
                 ldlm_lock_decref(lockh, LCK_EX);
 
         head_inode = dchild->d_inode;
-        ll_pack_fid(&head_fid, head_inode->i_ino, head_inode->i_generation,
+        mdc_pack_fid(&head_fid, head_inode->i_ino, head_inode->i_generation,
                       head_inode->i_mode & S_IFMT);
 
         rc = mds_get_parents_children_locked(obd, mds, &join_rec->jr_fid,
@@ -316,8 +313,7 @@ static int mds_join_unlink_tail_inode(struct mds_update_record *rec,
                 GOTO(cleanup, rc);
         }
 
-        rc = mds_get_md(obd, tail_inode, tail_lmm, &lmm_size, 1, 0,
-                        req->rq_export->exp_connect_flags);
+        rc = mds_get_md(obd, tail_inode, tail_lmm, &lmm_size, 1, 0);
         if (rc < 0) /* get md fails */
                 GOTO(cleanup, rc);
 
@@ -360,7 +356,6 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
 {
         struct mds_obd *mds = mds_req2mds(req);
         struct obd_device *obd = req->rq_export->exp_obd;
-        struct inode *inodes[PTLRPC_NUM_VERSIONS] = { NULL };
         struct inode *head_inode = NULL;
         struct lvfs_run_ctxt saved;
         void *handle = NULL;
@@ -408,8 +403,7 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
 
         LOCK_INODE_MUTEX(head_inode);
         cleanup_phase = 1;
-        rc = mds_get_md(obd, head_inode, head_lmm, &size, 0, 0,
-                        req->rq_export->exp_connect_flags);
+        rc = mds_get_md(obd, head_inode, head_lmm, &size, 0, 0);
         if (rc < 0)
                 GOTO(cleanup, rc);
 
@@ -504,8 +498,7 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
                       sizeof(struct lov_mds_md_join), "lov");
         mds_finish_join(mds, req, head_inode, head_lmmj);
 cleanup:
-        inodes[0] = head_inode;
-        rc = mds_finish_transno(mds, inodes, handle, req, rc, 0, 0);
+        rc = mds_finish_transno(mds, head_inode, handle, req, rc, 0, 0);
         switch(cleanup_phase){
         case 3:
                 llog_close(llh_head);

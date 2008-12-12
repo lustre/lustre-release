@@ -14,12 +14,12 @@ tags-recursive:
 TAGS:
 
 tags:
-	rm -f $(top_srcdir)/TAGS
+	$(RM) $(top_srcdir)/TAGS
 	ETAGSF=`etags --version | grep -iq exuberant && \
 		echo "-I __initdata,__exitdata,EXPORT_SYMBOL"`; \
 	find $(top_srcdir) -name .pc -prune -o -name '*.[hc]' |xargs etags $$ETAGSF -a
 
-	rm -f $(top_srcdir)/tags
+	$(RM) $(top_srcdir)/tags
 	CTAGSF=`ctags --version | grep -iq exuberant && \
 		echo "-I __initdata,__exitdata,EXPORT_SYMBOL"`; \
 	find $(top_srcdir) -name .pc -prune -o -name '*.[hc]' |xargs ctags $$CTAGSF -a
@@ -59,8 +59,8 @@ endif # LINUX
 endif # MODULES
 
 dist-hook:
-	rm -f $(distdir)/ldiskfs/*.spec
-	rm -f $(distdir)/lustre-iokit/*.spec
+	$(RM) $(distdir)/ldiskfs/*.spec
+	$(RM) $(distdir)/lustre-iokit/*.spec
 	find $(distdir) -name .deps -o \
 			-name CVS -o \
 			-name .svn -o \
@@ -89,6 +89,7 @@ rpms:
 	for subdir in $(RPM_SUBDIRS) ; do				\
 		echo "Making rpms in $$subdir";				\
 		(cd $$subdir && $(MAKE) $(AM_MAKEFLAGS) rpms);		\
+		echo "Finished rpms in $$subdir";			\
 	done;								\
 	$(MAKE) $(AM_MAKEFLAGS) rpms-real
 
@@ -96,6 +97,7 @@ srpm:
 	for subdir in $(RPM_SUBDIRS) ; do				\
 		echo "Making srpm in $$subdir";				\
 		(cd $$subdir && $(MAKE) $(AM_MAKEFLAGS) srpm);		\
+		echo "Finished srpms in $$subdir";			\
 	done;								\
 	$(MAKE) $(AM_MAKEFLAGS) srpm-real
 

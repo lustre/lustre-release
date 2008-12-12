@@ -9,7 +9,7 @@ init_test_env $@
 
 assert_env CLIENTS MDSRATE SINGLECLIENT MPIRUN
 
-MACHINEFILE=${MACHINEFILE:-$(basename $0 .sh).machines}
+MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
 TESTDIR=$MOUNT
 
 # Requirements
@@ -42,7 +42,7 @@ log "===== $0 ====== "
 
 check_and_setup_lustre
 
-generate_machine_file $NODES_TO_USE $MACHINEFILE
+generate_machine_file $NODES_TO_USE $MACHINEFILE || error "can not generate machinefile"
 
 $LFS setstripe $TESTDIR -i 0 -c 1
 get_stripe $TESTDIR
@@ -61,8 +61,7 @@ else
         COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --create --time ${TIME_PERIOD}
                             --dir ${TESTDIR_SINGLE} --filefmt 'f%%d'"
         echo "+ ${COMMAND}"
-        $MPIRUN -np 1 -machinefile ${MACHINEFILE} \
-            ${MPIRUN_OPTIONS} ${COMMAND} | tee ${LOG}
+        mpi_run -np 1 -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
 
         if [ ${PIPESTATUS[0]} != 0 ]; then
         [ -f $LOG ] && cat $LOG
@@ -81,8 +80,7 @@ else
         COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --unlink --time ${TIME_PERIOD}
                      --nfiles ${NUM_FILES} --dir ${TESTDIR_SINGLE} --filefmt 'f%%d'"
         echo "+ ${COMMAND}"
-        $MPIRUN -np 1 -machinefile ${MACHINEFILE} \
-            ${MPIRUN_OPTIONS} ${COMMAND} | tee ${LOG}
+        mpi_run -np 1 -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
 
         if [ ${PIPESTATUS[0]} != 0 ]; then
         [ -f $LOG ] && cat $LOG
@@ -106,8 +104,8 @@ else
         COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --create --time ${TIME_PERIOD}
                             --dir ${TESTDIR_MULTI} --filefmt 'f%%d'"
         echo "+ ${COMMAND}"
-        $MPIRUN -np $((${NUM_CLIENTS}*THREADS_PER_CLIENT)) -machinefile ${MACHINEFILE} \
-            ${MPIRUN_OPTIONS} ${COMMAND} | tee ${LOG}
+        mpi_run -np $((NUM_CLIENTS * THREADS_PER_CLIENT)) -machinefile ${MACHINEFILE} \
+            ${COMMAND} | tee ${LOG}
         if [ ${PIPESTATUS[0]} != 0 ]; then
             [ -f $LOG ] && cat $LOG
             error "mpirun ... mdsrate ... failed, aborting"
@@ -125,8 +123,8 @@ else
         COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --unlink --time ${TIME_PERIOD}
                       --nfiles ${NUM_FILES} --dir ${TESTDIR_MULTI} --filefmt 'f%%d'"
         echo "+ ${COMMAND}"
-        $MPIRUN -np $((${NUM_CLIENTS}*THREADS_PER_CLIENT)) -machinefile ${MACHINEFILE} \
-            ${MPIRUN_OPTIONS} ${COMMAND} | tee ${LOG}
+        mpi_run -np $((NUM_CLIENTS * THREADS_PER_CLIENT)) -machinefile ${MACHINEFILE} \
+            ${COMMAND} | tee ${LOG}
         if [ ${PIPESTATUS[0]} != 0 ]; then
             [ -f $LOG ] && cat $LOG
             error "mpirun ... mdsrate ... failed, aborting"
@@ -136,6 +134,7 @@ else
 fi
 
 equals_msg `basename $0`: test complete, cleaning up
+rm -f $MACHINEFILE 
 zconf_umount_clients $NODES_TO_USE $MOUNT
 check_and_cleanup_lustre
 #rm -f $LOG

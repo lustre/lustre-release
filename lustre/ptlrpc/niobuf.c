@@ -96,7 +96,7 @@ static int ptl_send_buf (lnet_handle_md_t *mdh, void *base, int len,
         RETURN (0);
 }
 
-int ptlrpc_start_bulk_transfer (struct ptlrpc_bulk_desc *desc)
+int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 {
         struct ptlrpc_connection *conn = desc->bd_export->exp_connection;
         int                       rc;
@@ -164,16 +164,16 @@ int ptlrpc_start_bulk_transfer (struct ptlrpc_bulk_desc *desc)
         RETURN(0);
 }
 
-void ptlrpc_abort_bulk (struct ptlrpc_bulk_desc *desc)
+/* Server side bulk abort. Idempotent. Not thread-safe (i.e. only
+ * serialises with completion callback) */
+void ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
 {
-        /* Server side bulk abort. Idempotent. Not thread-safe (i.e. only
-         * serialises with completion callback) */
-        struct l_wait_info lwi;
-        int                rc;
+        struct l_wait_info       lwi;
+        int                      rc;
 
-        LASSERT (!in_interrupt ());             /* might sleep */
+        LASSERT(!in_interrupt());               /* might sleep */
 
-        if (!ptlrpc_bulk_active(desc))          /* completed or */
+        if (!ptlrpc_server_bulk_active(desc))   /* completed or */
                 return;                         /* never started */
         
         /* Do not send any meaningful data over the wire for evicted clients */
@@ -185,14 +185,15 @@ void ptlrpc_abort_bulk (struct ptlrpc_bulk_desc *desc)
          * but we must still l_wait_event() in this case, to give liblustre
          * a chance to run server_bulk_callback()*/
 
-        LNetMDUnlink (desc->bd_md_h);
+        LNetMDUnlink(desc->bd_md_h);
 
         for (;;) {
                 /* Network access will complete in finite time but the HUGE
                  * timeout lets us CWARN for visibility of sluggish NALs */
-                lwi = LWI_TIMEOUT (cfs_time_seconds(300), NULL, NULL);
+                lwi = LWI_TIMEOUT_INTERVAL(cfs_time_seconds(LONG_UNLINK),
+                                           cfs_time_seconds(1), NULL, NULL);
                 rc = l_wait_event(desc->bd_waitq, 
-                                  !ptlrpc_bulk_active(desc), &lwi);
+                                  !ptlrpc_server_bulk_active(desc), &lwi);
                 if (rc == 0)
                         return;
 
@@ -201,7 +202,7 @@ void ptlrpc_abort_bulk (struct ptlrpc_bulk_desc *desc)
         }
 }
 
-int ptlrpc_register_bulk (struct ptlrpc_request *req)
+int ptlrpc_register_bulk(struct ptlrpc_request *req)
 {
         struct ptlrpc_bulk_desc *desc = req->rq_bulk;
         lnet_process_id_t peer;
@@ -275,29 +276,45 @@ int ptlrpc_register_bulk (struct ptlrpc_request *req)
         RETURN(0);
 }
 
-void ptlrpc_unregister_bulk (struct ptlrpc_request *req)
+/* Disconnect a bulk desc from the network. Idempotent. Not
+ * thread-safe (i.e. only interlocks with completion callback). */
+int ptlrpc_unregister_bulk(struct ptlrpc_request *req, int async)
 {
-        /* Disconnect a bulk desc from the network. Idempotent. Not
-         * thread-safe (i.e. only interlocks with completion callback). */
         struct ptlrpc_bulk_desc *desc = req->rq_bulk;
         cfs_waitq_t             *wq;
         struct l_wait_info       lwi;
         int                      rc;
+        ENTRY;
 
-        LASSERT (!in_interrupt ());     /* might sleep */
+        LASSERT(!in_interrupt());     /* might sleep */
 
-        if (!ptlrpc_bulk_active(desc))  /* completed or */
-                return;                 /* never registered */
+        /* Let's setup deadline for reply unlink. */
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_BULK_UNLINK) && 
+            async && req->rq_bulk_deadline == 0)
+                req->rq_bulk_deadline = cfs_time_current_sec() + LONG_UNLINK;
 
-        LASSERT (desc->bd_req == req);  /* bd_req NULL until registered */
+        if (!ptlrpc_client_bulk_active(req))  /* completed or */
+                RETURN(1);                    /* never registered */
+
+        LASSERT(desc->bd_req == req);  /* bd_req NULL until registered */
 
         /* the unlink ensures the callback happens ASAP and is the last
          * one.  If it fails, it must be because completion just happened,
          * but we must still l_wait_event() in this case to give liblustre
          * a chance to run client_bulk_callback() */
 
-        LNetMDUnlink (desc->bd_md_h);
-        
+        LNetMDUnlink(desc->bd_md_h);
+
+        if (!ptlrpc_client_bulk_active(req))  /* completed or */
+                RETURN(1);                    /* never registered */
+
+        /* Move to "Unregistering" phase as bulk was not unlinked yet. */
+        ptlrpc_rqphase_move(req, RQ_PHASE_UNREGISTERING);
+
+        /* Do not wait for unlink to finish. */
+        if (async)
+                RETURN(0);
+
         if (req->rq_set != NULL)
                 wq = &req->rq_set->set_waitq;
         else
@@ -306,18 +323,22 @@ void ptlrpc_unregister_bulk (struct ptlrpc_request *req)
         for (;;) {
                 /* Network access will complete in finite time but the HUGE
                  * timeout lets us CWARN for visibility of sluggish NALs */
-                lwi = LWI_TIMEOUT (cfs_time_seconds(300), NULL, NULL);
-                rc = l_wait_event(*wq, !ptlrpc_bulk_active(desc), &lwi);
-                if (rc == 0)
-                        return;
+                lwi = LWI_TIMEOUT_INTERVAL(cfs_time_seconds(LONG_UNLINK),
+                                           cfs_time_seconds(1), NULL, NULL);
+                rc = l_wait_event(*wq, !ptlrpc_client_bulk_active(req), &lwi);
+                if (rc == 0) {
+                        ptlrpc_rqphase_move(req, req->rq_next_phase);
+                        RETURN(1);
+                }
 
-                LASSERT (rc == -ETIMEDOUT);
-                DEBUG_REQ(D_WARNING,req,"Unexpectedly long timeout: desc %p",
+                LASSERT(rc == -ETIMEDOUT);
+                DEBUG_REQ(D_WARNING, req, "Unexpectedly long timeout: desc %p",
                           desc);
         }
+        RETURN(0);
 }
 
-int ptlrpc_send_reply (struct ptlrpc_request *req, int flags)
+int ptlrpc_send_reply(struct ptlrpc_request *req, int flags)
 {
         struct ptlrpc_service     *svc = req->rq_rqbd->rqbd_service;
         struct ptlrpc_reply_state *rs = req->rq_reply_state;
@@ -394,7 +415,7 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int flags)
                         lustre_msg_set_cksum(req->rq_repmsg, 
                                          lustre_msg_calc_cksum(req->rq_repmsg));
                 } else {
-                        offset = lustre_msg_early_size(req);
+                        offset = lustre_msg_early_size();
                 }
         } else {
                 CDEBUG(D_ADAPTTO, "No early reply support: flags=%#x "
@@ -406,7 +427,7 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int flags)
         }
 
         if (req->rq_export == NULL || req->rq_export->exp_connection == NULL)
-                conn = ptlrpc_get_connection(req->rq_peer, req->rq_self, NULL);
+                conn = ptlrpc_connection_get(req->rq_peer, req->rq_self, NULL);
         else
                 conn = ptlrpc_connection_addref(req->rq_export->exp_connection);
 
@@ -427,7 +448,7 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int flags)
                 atomic_dec (&svc->srv_outstanding_replies);
                 ptlrpc_req_drop_rs(req);
         }
-        ptlrpc_put_connection(conn);
+        ptlrpc_connection_put(conn);
         return rc;
 }
 
@@ -474,7 +495,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 
         /* If this is a re-transmit, we're required to have disengaged
          * cleanly from the previous attempt */
-        LASSERT (!request->rq_receiving_reply);
+        LASSERT(!request->rq_receiving_reply);
 
         if (request->rq_import->imp_obd &&
             request->rq_import->imp_obd->obd_fail) {
@@ -482,6 +503,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                        request->rq_import->imp_obd->obd_name);
                 /* this prevents us from waiting in ptlrpc_queue_wait */
                 request->rq_err = 1;
+                request->rq_status = -ENODEV;
                 RETURN(-ENODEV);
         }
 
@@ -501,12 +523,19 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
         lustre_msghdr_set_flags(request->rq_reqmsg,
                                 request->rq_import->imp_msghdr_flags);
 
+        if (request->rq_resend)
+                lustre_msg_add_flags(request->rq_reqmsg, MSG_RESENT);
+
         if (!noreply) {
                 LASSERT (request->rq_replen != 0);
                 if (request->rq_repbuf == NULL)
                         OBD_ALLOC(request->rq_repbuf, request->rq_replen);
-                if (request->rq_repbuf == NULL)
+                if (request->rq_repbuf == NULL) {
+                        /* this prevents us from looping in ptlrpc_queue_wait */
+                        request->rq_err = 1;
+                        request->rq_status = -ENOMEM;
                         GOTO(cleanup_bulk, rc = -ENOMEM);
+                }
                 request->rq_repmsg = NULL;
 
                 rc = LNetMEAttach(request->rq_reply_portal,/*XXX FIXME bug 249*/
@@ -531,6 +560,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
         request->rq_net_err = 0;
         request->rq_resend = 0;
         request->rq_restart = 0;
+        request->rq_rep_swab_mask = 0;
         spin_unlock(&request->rq_lock);
 
         if (!noreply) {
@@ -605,7 +635,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
         rc2 = LNetMEUnlink(reply_me_h);
         LASSERT (rc2 == 0);
         /* UNLINKED callback called synchronously */
-        LASSERT (!request->rq_receiving_reply);
+        LASSERT(!request->rq_receiving_reply);
 
  cleanup_repmsg:
         OBD_FREE(request->rq_repbuf, request->rq_replen);
@@ -613,13 +643,13 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
         request->rq_repmsg = NULL; //remove
 
  cleanup_bulk:
-        if (request->rq_bulk != NULL)
-                ptlrpc_unregister_bulk(request);
-
+        /* We do sync unlink here as there was no real transfer here so
+         * the chance to have long unlink to sluggish net is smaller here. */
+        ptlrpc_unregister_bulk(request, 0);
         return rc;
 }
 
-int ptlrpc_register_rqbd (struct ptlrpc_request_buffer_desc *rqbd)
+int ptlrpc_register_rqbd(struct ptlrpc_request_buffer_desc *rqbd)
 {
         struct ptlrpc_service   *service = rqbd->rqbd_service;
         static lnet_process_id_t  match_id = {LNET_NID_ANY, LNET_PID_ANY};

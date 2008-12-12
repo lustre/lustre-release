@@ -74,7 +74,7 @@ void request_out_callback(lnet_event_t *ev)
                 req->rq_net_err = 1;
                 spin_unlock(&req->rq_lock);
 
-                ptlrpc_wake_client_req(req);
+                ptlrpc_client_wake_req(req);
         }
 
         ptlrpc_req_finished(req);
@@ -93,7 +93,7 @@ void reply_in_callback(lnet_event_t *ev)
 
         DEBUG_REQ((ev->status == 0) ? D_NET : D_ERROR, req,
                   "type %d, status %d", ev->type, ev->status);
-
+        
         LASSERT(ev->type == LNET_EVENT_PUT || ev->type == LNET_EVENT_UNLINK);
         LASSERT(ev->md.start == req->rq_repbuf);
         LASSERT(ev->mlength <= req->rq_replen);
@@ -105,16 +105,18 @@ void reply_in_callback(lnet_event_t *ev)
 
         req->rq_receiving_reply = 0;
         req->rq_early = 0;
-
+        if (ev->unlinked)
+                req->rq_must_unlink = 0;
+        
         if (ev->status)
                 goto out_wake;
         if (ev->type == LNET_EVENT_UNLINK) {
-                req->rq_must_unlink = 0;
+                LASSERT(ev->unlinked);
                 DEBUG_REQ(D_RPCTRACE, req, "unlink");
                 goto out_wake;
         }
 
-        if ((ev->offset == 0) &&
+        if ((ev->offset == 0) && 
             (lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT)) {
                 /* Early reply */
                 DEBUG_REQ(D_ADAPTTO, req,
@@ -122,23 +124,15 @@ void reply_in_callback(lnet_event_t *ev)
                           "replied=%d unlinked=%d", ev->mlength, ev->offset,
                           req->rq_replen, req->rq_replied, ev->unlinked);
 
-                if (unlikely(ev->mlength != lustre_msg_early_size(req)))
+                if (unlikely(ev->mlength != lustre_msg_early_size()))
                         CERROR("early reply sized %u, expect %u\n",
-                               ev->mlength, lustre_msg_early_size(req));
+                               ev->mlength, lustre_msg_early_size());
 
                 req->rq_early_count++; /* number received, client side */
-                if (req->rq_replied) {
-                        /* If we already got the real reply, then we need to
-                         * check if lnet_finalize() unlinked the md.  In that
-                         * case, there will be no further callback of type
-                         * LNET_EVENT_UNLINK.
-                         */
-                        if (ev->unlinked)
-                                req->rq_must_unlink = 0;
-                        else
-                                DEBUG_REQ(D_RPCTRACE, req, "unlinked in reply");
+
+                if (req->rq_replied)   /* already got the real reply */
                         goto out_wake;
-                }
+
                 req->rq_early = 1;
                 req->rq_nob_received = ev->mlength;
                 /* repmsg points to early reply */
@@ -165,7 +159,7 @@ void reply_in_callback(lnet_event_t *ev)
 out_wake:
         /* NB don't unlock till after wakeup; req can disappear under us
          * since we don't have our own ref */
-        ptlrpc_wake_client_req(req);
+        ptlrpc_client_wake_req(req);
         spin_unlock(&req->rq_lock);
         EXIT;
 }
@@ -206,7 +200,7 @@ void client_bulk_callback (lnet_event_t *ev)
 
         /* NB don't unlock till after wakeup; desc can disappear under us
          * otherwise */
-        ptlrpc_wake_client_req(desc->bd_req);
+        ptlrpc_client_wake_req(desc->bd_req);
 
         spin_unlock(&desc->bd_lock);
         EXIT;

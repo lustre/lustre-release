@@ -53,10 +53,30 @@ if test "$YAST_IS_RUNNING" != instsys ; then
     fi
 fi
 
-if [ "$YAST_IS_RUNNING" != instsys -a -x /sbin/new-kernel-pkg ]; then
+if [ "$YAST_IS_RUNNING" != instsys ]; then
     # Notify boot loader that a new kernel image has been installed.
     # (during initial installation the boot loader configuration does not
     #  yet exist when the kernel is installed, but yast kicks the boot
     #  loader itself later.)
-    /sbin/new-kernel-pkg %ver_str
+    if [ -x /sbin/new-kernel-pkg ]; then
+        /sbin/new-kernel-pkg %ver_str
+    elif [ -x /usr/lib/bootloader/bootloader_entry ]; then
+        # handle 10.2 and SLES10 SP1
+	/usr/lib/bootloader/bootloader_entry \
+	    add \
+	    %flavor \
+	    %ver_str \
+	    vmlinuz-%ver_str \
+	    initrd-%ver_str
+    elif [ -x /sbin/update-bootloader ]; then
+	# handle 10.1 and SLES10 GA
+	/sbin/update-bootloader \
+	    --add \
+	    --image /boot/vmlinuz-%ver_str \
+	    --initrd /boot/initrd-%ver_str
+	/sbin/update-bootloader --refresh
+    else
+	echo "You may need to setup and install the boot loader using the"
+	echo "available bootloader for your platform (e.g. grub, lilo, zipl, ...)."
+    fi
 fi

@@ -16,7 +16,7 @@ EXTRA_PROGRAMS = wirecheck
 rootsbin_PROGRAMS = mount.lustre
 sbin_PROGRAMS = mkfs.lustre tunefs.lustre lctl wiretest \
 	l_getgroups llverfs llverdev llog_reader ll_recover_lost_found_objs \
-	lr_reader ltrack_stats
+	lr_reader ltrack_stats lshowmount
 if LIBPTHREAD
 sbin_PROGRAMS += loadgen
 endif
@@ -28,16 +28,19 @@ endif # UTILS
 lib_LIBRARIES = liblustreapi.a
 
 lctl_SOURCES = parser.c obd.c lustre_cfg.c lctl.c parser.h obdctl.h platform.h
-lctl_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
-lctl_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
+lctl_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
+lctl_DEPENDENCIES := $(LIBPTLCTL)
 
 lfs_SOURCES = lfs.c parser.c lustre_cfg.c obd.c
 lfs_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
 lfs_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a 
 
 loadgen_SOURCES = loadgen.c lustre_cfg.c obd.c
-loadgen_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL) $(PTHREAD_LIBS)
-loadgen_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
+loadgen_LDADD := $(LIBREADLINE) $(LIBPTLCTL) $(PTHREAD_LIBS)
+loadgen_DEPENDENCIES := $(LIBPTLCTL)
+
+lshowmount_SOURCES    = lshowmount.h lshowmount.c hash.c hash.h \
+			thread.c thread.h hostlist.c hostlist.h
 
 if EXT2FS_DEVEL
 EXT2FSLIB = -lext2fs

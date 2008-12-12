@@ -438,10 +438,6 @@ extern int is_suser(void);
 #define lock_kernel()				do {} while(0)
 #define unlock_kernel()				do {} while(0)
 
-#define CAP_SYS_BOOT				0
-#define CAP_SYS_ADMIN                           1
-#define capable(a)				((a) == CAP_SYS_BOOT ? is_suser(): is_suser1())
-
 #define USERMODEHELPER(path, argv, envp)	(0)
 
 #define cfs_module(name, version, init, fini)				\

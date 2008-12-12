@@ -39,140 +39,302 @@
 
 #include <lustre_lib.h>
 
-/* #define LUSTRE_HASH_DEBUG 1 */
+struct lustre_hash_ops;
 
-/* define the hash bucket*/
-struct lustre_hash_bucket { 
-        struct hlist_head lhb_head;
-        spinlock_t lhb_lock;
-#ifdef LUSTRE_HASH_DEBUG
-        /* the number of hash item per bucket, 
-         * it will help us to analyse the hash distribute 
-         */
-        int lhb_item_count; 
-#endif
-};
+typedef struct lustre_hash_bucket {
+        struct hlist_head           lhb_head;       /* entries list */
+        atomic_t                    lhb_count;      /* current entries */
+        rwlock_t                    lhb_rwlock;     /* lustre_hash_bucket */
+} lustre_hash_bucket_t;
 
-struct lustre_hash_operations;
+#define LUSTRE_MAX_HASH_NAME 16
 
-struct lustre_class_hash_body {
-        char hashname[128];
-        spinlock_t lchb_lock; /* body lock */
-        struct lustre_hash_bucket *lchb_hash_tables;
-        __u32 lchb_hash_max_size; /* define the hash tables size */
-        /* define the hash operations */
-        struct lustre_hash_operations *lchb_hash_operations;
-};
+typedef struct lustre_hash {
+        int                         lh_cur_bits;    /* current hash bits */
+        int                         lh_cur_mask;    /* current hash mask */
+        int                         lh_min_bits;    /* min hash bits */
+        int                         lh_max_bits;    /* max hash bits */
+        int                         lh_min_theta;   /* resize min threshold */
+        int                         lh_max_theta;   /* resize max threshold */
+        int                         lh_flags;       /* hash flags */
+        atomic_t                    lh_count;       /* current entries */
+        atomic_t                    lh_rehash_count;/* resize count */
+        struct lustre_hash_bucket  *lh_buckets;     /* hash buckets */
+        struct lustre_hash_ops     *lh_ops;         /* hash operations */
+        rwlock_t                    lh_rwlock;      /* lustre_hash */
+        char                        lh_name[LUSTRE_MAX_HASH_NAME];
+} lustre_hash_t;
 
-/* hash operations method define */
-struct lustre_hash_operations {
-        __u32 (*lustre_hashfn) (struct lustre_class_hash_body *hash_body, 
-                                void *key);
-        int   (*lustre_hash_key_compare) (void *key, 
-                                          struct hlist_node *compared_hnode);
-        /* add refcount */ 
-        void* (*lustre_hash_object_refcount_get) (struct hlist_node *hash_item);
-        /* dec refcount */
-        void  (*lustre_hash_object_refcount_put) (struct hlist_node *hash_item);
-};
+typedef struct lustre_hash_ops {
+        unsigned (*lh_hash)(lustre_hash_t *lh, void *key, unsigned mask);
+        void *   (*lh_key)(struct hlist_node *hnode);
+        int      (*lh_compare)(void *key, struct hlist_node *hnode);
+        void *   (*lh_get)(struct hlist_node *hnode);
+        void *   (*lh_put)(struct hlist_node *hnode);
+        void     (*lh_exit)(struct hlist_node *hnode);
+} lustre_hash_ops_t;
 
-static inline struct hlist_node * 
-lustre_hash_getitem_in_bucket_nolock(struct lustre_class_hash_body *hash_body, 
-                                     int hashent, void *key)
+#define LH_DEBUG        0x0001          /* Enable expensive debug checks */
+#define LH_REHASH       0x0002          /* Enable dynamic hash resizing */
+
+#define LHO(lh)         (lh)->lh_ops
+#define LHP(lh, op)     (lh)->lh_ops->lh_ ## op
+
+static inline unsigned
+lh_hash(lustre_hash_t *lh, void *key, unsigned mask)
 {
-        struct lustre_hash_bucket *bucket;
-        struct hlist_node  *hash_item_node;
-        struct lustre_hash_operations *hop = hash_body->lchb_hash_operations;
-        int find = 0;
-        ENTRY;
+        LASSERT(lh);
+        LASSERT(LHO(lh));
 
-        bucket = &hash_body->lchb_hash_tables[hashent];
-        hlist_for_each(hash_item_node, &(bucket->lhb_head)) {
-                find = hop->lustre_hash_key_compare(key, hash_item_node);
-                if (find == 1)
-                        break;
+        if (LHP(lh, hash))
+                return LHP(lh, hash)(lh, key, mask);
+
+        return -EOPNOTSUPP;
+}
+
+static inline void *
+lh_key(lustre_hash_t *lh, struct hlist_node *hnode)
+{
+        LASSERT(lh);
+        LASSERT(hnode);
+        LASSERT(LHO(lh));
+
+        if (LHP(lh, key))
+                return LHP(lh, key)(hnode);
+
+        return NULL;
+}
+
+/* Returns 1 on a match,
+ * XXX: This would be better if it returned, -1, 0, or 1 for
+ *      <, =, > respectivly.  It could then be used to implement
+ *      a LH_SORT feature flags which could keep each lustre hash
+ *      bucket in order.  This would increase insertion times
+ *      but could reduce lookup times for deep chains.  Ideally,
+ *      the rehash should keep chain depth short but if that
+ *      ends up not being the case this would be a nice feature.
+ */
+static inline int
+lh_compare(lustre_hash_t *lh, void *key, struct hlist_node *hnode)
+{
+        LASSERT(lh);
+        LASSERT(hnode);
+        LASSERT(LHO(lh));
+
+        if (LHP(lh, compare))
+                return LHP(lh, compare)(key, hnode);
+
+        return -EOPNOTSUPP;
+}
+
+static inline void *
+lh_get(lustre_hash_t *lh, struct hlist_node *hnode)
+{
+        LASSERT(lh);
+        LASSERT(hnode);
+        LASSERT(LHO(lh));
+
+        if (LHP(lh, get))
+                return LHP(lh, get)(hnode);
+
+        return NULL;
+}
+
+static inline void *
+lh_put(lustre_hash_t *lh, struct hlist_node *hnode)
+{
+        LASSERT(lh);
+        LASSERT(hnode);
+        LASSERT(LHO(lh));
+
+        if (LHP(lh, put))
+                return LHP(lh, put)(hnode);
+
+        return NULL;
+}
+
+static inline void
+lh_exit(lustre_hash_t *lh, struct hlist_node *hnode)
+{
+        LASSERT(lh);
+        LASSERT(hnode);
+        LASSERT(LHO(lh));
+
+        if (LHP(lh, exit))
+                return LHP(lh, exit)(hnode);
+}
+
+/* Validate hnode references the correct key */
+static inline void
+__lustre_hash_key_validate(lustre_hash_t *lh, void *key,
+                           struct hlist_node *hnode)
+{
+        if (unlikely(lh->lh_flags & LH_DEBUG))
+                LASSERT(lh_compare(lh, key, hnode));
+}
+
+/* Validate hnode is in the correct bucket */
+static inline void
+__lustre_hash_bucket_validate(lustre_hash_t *lh, lustre_hash_bucket_t *lhb,
+                              struct hlist_node *hnode)
+{
+        unsigned i;
+
+        if (unlikely(lh->lh_flags & LH_DEBUG)) {
+                i = lh_hash(lh, lh_key(lh, hnode), lh->lh_cur_mask);
+                LASSERT(&lh->lh_buckets[i] == lhb);
         }
-        RETURN(find == 1 ? hash_item_node : NULL);
 }
 
-static inline int 
-lustre_hash_delitem_nolock(struct lustre_class_hash_body *hash_body, 
-                           int hashent, struct hlist_node * hash_item)
+static inline struct hlist_node *
+__lustre_hash_bucket_lookup(lustre_hash_t *lh,
+                            lustre_hash_bucket_t *lhb, void *key)
 {
-        struct lustre_hash_operations *hop = hash_body->lchb_hash_operations;
+        struct hlist_node *hnode;
 
-        hlist_del_init(hash_item);
+        hlist_for_each(hnode, &lhb->lhb_head)
+                if (lh_compare(lh, key, hnode))
+                        return hnode;
 
-        hop->lustre_hash_object_refcount_put(hash_item);
-
-#ifdef LUSTRE_HASH_DEBUG
-        hash_body->lchb_hash_tables[hashent].lhb_item_count--;
-        CDEBUG(D_INFO, "hashname[%s] bucket[%d] has [%d] hashitem\n", 
-                        hash_body->hashname, hashent, 
-                        hash_body->lchb_hash_tables[hashent].lhb_item_count);
-#endif
-
-        RETURN(0);
+        return NULL;
 }
 
-typedef void (*hash_item_iterate_cb) (void *obj, void *data);
+static inline void *
+__lustre_hash_bucket_add(lustre_hash_t *lh,
+                         lustre_hash_bucket_t *lhb,
+                         struct hlist_node *hnode)
+{
+        hlist_add_head(hnode, &(lhb->lhb_head));
+        atomic_inc(&lhb->lhb_count);
+        atomic_inc(&lh->lh_count);
 
-int lustre_hash_init(struct lustre_class_hash_body **hash_body,
-                     char *hashname, __u32 hashsize, 
-                     struct lustre_hash_operations *hash_operations);
-void lustre_hash_exit(struct lustre_class_hash_body **hash_body);
-int lustre_hash_additem_unique(struct lustre_class_hash_body *hash_body, 
-                               void *key, struct hlist_node *actual_hnode);
-void *lustre_hash_findadd_unique(struct lustre_class_hash_body *hash_body,
-                                 void *key, struct hlist_node *actual_hnode);
-int lustre_hash_additem(struct lustre_class_hash_body *hash_body, void *key, 
-                        struct hlist_node *actual_hnode);
-int lustre_hash_delitem_by_key(struct lustre_class_hash_body *hash_body, 
-                               void *key);
-int lustre_hash_delitem(struct lustre_class_hash_body *hash_body, void *key, 
-                        struct hlist_node *hash_item);
-void lustre_hash_bucket_iterate(struct lustre_class_hash_body *hash_body,
-                                void *key, hash_item_iterate_cb,
-                                void *data);
-void lustre_hash_iterate_all(struct lustre_class_hash_body *hash_body,
-                             hash_item_iterate_cb, void *data);
+        return lh_get(lh, hnode);
+}
 
-void * lustre_hash_get_object_by_key(struct lustre_class_hash_body *hash_body,
-                                      void *key);
+static inline void *
+__lustre_hash_bucket_del(lustre_hash_t *lh,
+                         lustre_hash_bucket_t *lhb,
+                         struct hlist_node *hnode)
+{
+        hlist_del_init(hnode);
+        LASSERT(atomic_read(&lhb->lhb_count) > 0);
+        atomic_dec(&lhb->lhb_count);
+        LASSERT(atomic_read(&lh->lh_count) > 0);
+        atomic_dec(&lh->lh_count);
 
-__u32 djb2_hashfn(struct lustre_class_hash_body *hash_body, void* key,
-                  size_t size);
+        return lh_put(lh, hnode);
+}
 
-/* ( uuid <-> export ) hash operations define */
-__u32 uuid_hashfn(struct lustre_class_hash_body *hash_body,  void * key);
-int uuid_hash_key_compare(void *key, struct hlist_node * compared_hnode);
-void * uuid_export_refcount_get(struct hlist_node * actual_hnode);
-void uuid_export_refcount_put(struct hlist_node * actual_hnode);
+/* Hash init/cleanup functions */
+lustre_hash_t *lustre_hash_init(char *name, unsigned int cur_bits, 
+                                unsigned int max_bits,
+                                lustre_hash_ops_t *ops, int flags);
+void lustre_hash_exit(lustre_hash_t *lh);
 
-/* ( nid <-> export ) hash operations define */
-__u32 nid_hashfn(struct lustre_class_hash_body *hash_body,  void * key);
-int nid_hash_key_compare(void *key, struct hlist_node * compared_hnode);
-void * nid_export_refcount_get(struct hlist_node * actual_hnode);
-void nid_export_refcount_put(struct hlist_node * actual_hnode);
+/* Hash addition functions */
+void lustre_hash_add(lustre_hash_t *lh, void *key,
+                     struct hlist_node *hnode);
+int lustre_hash_add_unique(lustre_hash_t *lh, void *key,
+                           struct hlist_node *hnode);
+void *lustre_hash_findadd_unique(lustre_hash_t *lh, void *key,
+                                 struct hlist_node *hnode);
 
-/* ( net_peer <-> connection ) hash operations define */
-__u32 conn_hashfn(struct lustre_class_hash_body *hash_body,  void * key);
-int conn_hash_key_compare(void *key, struct hlist_node * compared_hnode);
-void * conn_refcount_get(struct hlist_node * actual_hnode);
-void conn_refcount_put(struct hlist_node * actual_hnode);
+/* Hash deletion functions */
+void *lustre_hash_del(lustre_hash_t *lh, void *key, struct hlist_node *hnode);
+void *lustre_hash_del_key(lustre_hash_t *lh, void *key);
 
-/* ( nid <-> nidstats ) hash operations define. uses nid_hashfn */
-int nidstats_hash_key_compare(void *key, struct hlist_node * compared_hnode);
-void* nidstats_refcount_get(struct hlist_node * actual_hnode);
-void nidstats_refcount_put(struct hlist_node * actual_hnode);
-extern struct lustre_hash_operations nid_stat_hash_operations;
+/* Hash lookup/for_each functions */
+void *lustre_hash_lookup(lustre_hash_t *lh, void *key);
+typedef void (*lh_for_each_cb)(void *obj, void *data);
+void lustre_hash_for_each(lustre_hash_t *lh, lh_for_each_cb, void *data);
+void lustre_hash_for_each_safe(lustre_hash_t *lh, lh_for_each_cb, void *data);
+void lustre_hash_for_each_empty(lustre_hash_t *lh, lh_for_each_cb, void *data);
+void lustre_hash_for_each_key(lustre_hash_t *lh, void *key,
+                              lh_for_each_cb, void *data);
 
-#ifdef __KERNEL__
-/* ( lqs <-> qctxt ) hash operations define b=10600 */
-__u32 lqs_hashfn(struct lustre_class_hash_body *hash_body,  void * key);
-int lqs_hash_key_compare(void *key, struct hlist_node * compared_hnode);
-void * lqs_refcount_get(struct hlist_node * actual_hnode);
-void lqs_refcount_put(struct hlist_node * actual_hnode);
-#endif
+/* 
+ * Rehash - Theta is calculated to be the average chained
+ * hash depth assuming a perfectly uniform hash funcion. 
+ */
+int lustre_hash_rehash(lustre_hash_t *lh, int bits);
+void lustre_hash_rehash_key(lustre_hash_t *lh, void *old_key,
+                            void *new_key, struct hlist_node *hnode);
+
+
+#define LH_THETA_BITS  10
+
+/* Return integer component of theta */
+static inline int __lustre_hash_theta_int(int theta)
+{
+        return (theta >> LH_THETA_BITS);
+}
+
+/* Return a fractional value between 0 and 999 */
+static inline int __lustre_hash_theta_frac(int theta)
+{
+        return ((theta * 1000) >> LH_THETA_BITS) - 
+               (__lustre_hash_theta_int(theta) * 1000);
+}
+
+static inline int __lustre_hash_theta(lustre_hash_t *lh)
+{
+        return (atomic_read(&lh->lh_count) << LH_THETA_BITS) >> lh->lh_cur_bits;
+}
+
+static inline void __lustre_hash_set_theta(lustre_hash_t *lh, int min, int max)
+{
+        LASSERT(min < max);
+        lh->lh_min_theta = min;
+        lh->lh_max_theta = max;
+}
+
+/* Generic debug formatting routines mainly for proc handler */
+int lustre_hash_debug_header(char *str, int size);
+int lustre_hash_debug_str(lustre_hash_t *lh, char *str, int size);
+
+/* 2^31 + 2^29 - 2^25 + 2^22 - 2^19 - 2^16 + 1 */
+#define CFS_GOLDEN_RATIO_PRIME_32 0x9e370001UL
+/*  2^63 + 2^61 - 2^57 + 2^54 - 2^51 - 2^18 + 1 */
+#define CFS_GOLDEN_RATIO_PRIME_64 0x9e37fffffffc0001ULL
+
+/*
+ * Generic djb2 hash algorithm for character arrays.
+ */
+static inline unsigned
+lh_djb2_hash(void *key, size_t size, unsigned mask)
+{
+        unsigned i, hash = 5381;
+
+        LASSERT(key != NULL);
+
+        for (i = 0; i < size; i++)
+                hash = hash * 33 + ((char *)key)[i];
+
+        return (hash & mask);
+}
+
+/*
+ * Generic u32 hash algorithm.
+ */
+static inline unsigned
+lh_u32_hash(__u32 key, unsigned mask)
+{
+        return ((key * CFS_GOLDEN_RATIO_PRIME_32) & mask);
+}
+
+/*
+ * Generic u64 hash algorithm.
+ */
+static inline unsigned
+lh_u64_hash(__u64 key, unsigned mask)
+{
+        return ((unsigned)(key * CFS_GOLDEN_RATIO_PRIME_64) & mask);
+}
+
+#define lh_for_each_bucket(lh, lhb, pos)         \
+        for (pos = 0;                            \
+             pos <= lh->lh_cur_mask &&           \
+             ({ lhb = &lh->lh_buckets[i]; 1; }); \
+             pos++)
 
 #endif /* __CLASS_HASH_H */

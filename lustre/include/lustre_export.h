@@ -40,25 +40,17 @@
 #include <lustre/lustre_idl.h>
 #include <lustre_dlm.h>
 #include <lprocfs_status.h>
+#include <class_hash.h>
 
-struct lu_export_data {
-        struct semaphore        led_lcd_lock; /**< protect led_lcd */
-        struct lsd_client_data *led_lcd;      /**< client data */
-        loff_t                  led_lr_off;   /**< offset in last_rcvd */
-        int                     led_lr_idx;   /**< client index */
-};
-
+/* Data stored per client in the last_rcvd file.  In le32 order. */
 struct mds_export_data {
-        struct lu_export_data   med_led;
         struct list_head        med_open_head;
         spinlock_t              med_open_lock; /* lock med_open_head, mfd_list*/
+        struct lsd_client_data *med_lcd;
         __u64                   med_ibits_known;
+        loff_t                  med_lr_off;
+        int                     med_lr_idx;
 };
-
-#define med_lcd_lock    med_led.led_lcd_lock
-#define med_lcd         med_led.led_lcd
-#define med_lr_off      med_led.led_lr_off
-#define med_lr_idx      med_led.led_lr_idx
 
 struct osc_creator {
         spinlock_t              oscc_lock;
@@ -73,19 +65,16 @@ struct osc_creator {
         cfs_waitq_t             oscc_waitq; /* creating procs wait on this */
 };
 
-struct ldlm_export_data {
-        struct list_head       led_held_locks; /* protected by led_lock below */
-        spinlock_t             led_lock;
-};
-
 struct ec_export_data { /* echo client */
         struct list_head eced_locks;
 };
 
 /* In-memory access to client data from OST struct */
 struct filter_export_data {
-        struct lu_export_data      fed_led;
-        spinlock_t                 fed_lock;      /**< protects fed_mod_list */
+        spinlock_t                 fed_lock;      /* protects fed_open_head */
+        struct lsd_client_data    *fed_lcd;
+        loff_t                     fed_lr_off;
+        int                        fed_lr_idx;
         long                       fed_dirty;    /* in bytes */
         long                       fed_grant;    /* in bytes */
         struct list_head           fed_mod_list; /* files being modified */
@@ -93,11 +82,6 @@ struct filter_export_data {
         long                       fed_pending;  /* bytes just being written */
         struct brw_stats           fed_brw_stats;
 };
-
-#define fed_lcd_lock    fed_led.led_lcd_lock
-#define fed_lcd         fed_led.led_lcd
-#define fed_lr_off      fed_led.led_lr_off
-#define fed_lr_idx      fed_led.led_lr_idx
 
 typedef struct nid_stat_uuid {
         struct list_head ns_uuid_list;
@@ -117,6 +101,12 @@ typedef struct nid_stat {
         int                      nid_exp_ref_count;
 } nid_stat_t;
 
+enum obd_option {
+        OBD_OPT_FORCE =         0x0001,
+        OBD_OPT_FAILOVER =      0x0002,
+        OBD_OPT_ABORT_RECOV =   0x0004,
+};
+
 struct obd_export {
         struct portals_handle     exp_handle;
         atomic_t                  exp_refcount;
@@ -134,47 +124,35 @@ struct obd_export {
         struct lprocfs_stats     *exp_ops_stats;
         struct ptlrpc_connection *exp_connection;
         __u32                     exp_conn_cnt;
-        struct ldlm_export_data   exp_ldlm_data;
+        lustre_hash_t            *exp_lock_hash; /* existing lock hash */
+        spinlock_t                exp_lock_hash_lock;
         struct list_head          exp_outstanding_replies;
-        struct list_head          exp_uncommitted_replies;
-        spinlock_t                exp_uncommitted_replies_lock;
         time_t                    exp_last_request_time;
         struct list_head          exp_req_replay_queue;
         spinlock_t                exp_lock; /* protects flags int below */
         /* ^ protects exp_outstanding_replies too */
         __u64                     exp_connect_flags;
-        int                       exp_flags;
+        enum obd_option           exp_flags;
         unsigned long             exp_failed:1,
-                                  exp_in_recovery:1,
                                   exp_disconnected:1,
                                   exp_connecting:1,
-                                  /* VBR: export missed recovery */
-                                  exp_delayed:1,
-                                  /* VBR: failed version checking */
-                                  exp_vbr_failed:1,
                                   exp_replay_needed:1,
                                   exp_need_sync:1, /* needs sync from connect */
+                                  exp_bflag:1,     /* for 1.6 only to track
+                                                      MDS_BFLAG_EXT_FLAGS */
                                   exp_libclient:1; /* liblustre client? */
-        /* VBR: per-export last committed */
-        __u64                     exp_last_committed;
+        struct list_head          exp_queued_rpc;  /* RPC to be handled */
         union {
-                struct lu_export_data     eu_target_data;
                 struct mds_export_data    eu_mds_data;
                 struct filter_export_data eu_filter_data;
                 struct ec_export_data     eu_ec_data;
         } u;
 };
 
-#define exp_target_data u.eu_target_data
 #define exp_mds_data    u.eu_mds_data
+#define exp_lov_data    u.eu_lov_data
 #define exp_filter_data u.eu_filter_data
 #define exp_ec_data     u.eu_ec_data
-static inline int exp_expired(struct obd_export *exp, __u32 age)
-{
-        LASSERT(exp->exp_delayed);
-        return cfs_time_before(exp->exp_last_request_time + age,
-                               cfs_time_current_sec());
-}
 
 static inline int exp_connect_cancelset(struct obd_export *exp)
 {
@@ -186,13 +164,6 @@ static inline int exp_connect_lru_resize(struct obd_export *exp)
 {
         LASSERT(exp != NULL);
         return !!(exp->exp_connect_flags & OBD_CONNECT_LRU_RESIZE);
-}
-
-static inline int exp_connect_vbr(struct obd_export *exp)
-{
-        LASSERT(exp != NULL);
-        LASSERT(exp->exp_connection);
-        return !!(exp->exp_connect_flags & OBD_CONNECT_VBR);
 }
 
 static inline int imp_connect_lru_resize(struct obd_import *imp)

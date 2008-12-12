@@ -74,12 +74,12 @@ __init int ptlrpc_init(void)
                 RETURN(rc);
         cleanup_phase = 1;
 
-        rc = ptlrpc_init_connection();
+        rc = ptlrpc_connection_init();
         if (rc)
                 GOTO(cleanup, rc);
         cleanup_phase = 2;
 
-        ptlrpc_put_connection_superhack = ptlrpc_put_connection;
+        ptlrpc_put_connection_superhack = ptlrpc_connection_put;
 
         rc = ptlrpc_start_pinger();
         if (rc)
@@ -113,7 +113,7 @@ cleanup:
         case 3:
                 ptlrpc_stop_pinger();
         case 2:
-                ptlrpc_cleanup_connection();
+                ptlrpc_connection_fini();
         case 1:
                 ptlrpc_exit_portals();
         default: ;
@@ -129,18 +129,16 @@ static void __exit ptlrpc_exit(void)
         ldlm_exit();
         ptlrpc_stop_pinger();
         ptlrpc_exit_portals();
-        ptlrpc_cleanup_connection();
+        ptlrpc_connection_fini();
         cfs_mem_cache_destroy(ptlrpc_cbdata_slab);
 }
 
 /* connection.c */
-EXPORT_SYMBOL(ptlrpc_dump_connections);
-EXPORT_SYMBOL(ptlrpc_readdress_connection);
-EXPORT_SYMBOL(ptlrpc_get_connection);
-EXPORT_SYMBOL(ptlrpc_put_connection);
+EXPORT_SYMBOL(ptlrpc_connection_get);
+EXPORT_SYMBOL(ptlrpc_connection_put);
 EXPORT_SYMBOL(ptlrpc_connection_addref);
-EXPORT_SYMBOL(ptlrpc_init_connection);
-EXPORT_SYMBOL(ptlrpc_cleanup_connection);
+EXPORT_SYMBOL(ptlrpc_connection_init);
+EXPORT_SYMBOL(ptlrpc_connection_fini);
 
 /* niobuf.c */
 EXPORT_SYMBOL(ptlrpc_start_bulk_transfer);
@@ -167,7 +165,6 @@ EXPORT_SYMBOL(ptlrpc_free_rq_pool);
 EXPORT_SYMBOL(ptlrpc_prep_req_pool);
 EXPORT_SYMBOL(ptlrpc_at_set_req_timeout);
 EXPORT_SYMBOL(ptlrpc_prep_req);
-EXPORT_SYMBOL(ptlrpc_free_req);
 EXPORT_SYMBOL(ptlrpc_unregister_reply);
 EXPORT_SYMBOL(ptlrpc_req_finished);
 EXPORT_SYMBOL(ptlrpc_req_finished_with_imp_lock);
@@ -203,6 +200,7 @@ EXPORT_SYMBOL(ptlrpc_start_thread);
 EXPORT_SYMBOL(ptlrpc_unregister_service);
 EXPORT_SYMBOL(ptlrpc_daemonize);
 EXPORT_SYMBOL(ptlrpc_service_health_check);
+EXPORT_SYMBOL(ptlrpc_hpreq_reorder);
 
 /* pack_generic.c */
 EXPORT_SYMBOL(lustre_msg_check_version);
@@ -235,8 +233,7 @@ EXPORT_SYMBOL(lustre_swab_mds_rec_link);
 EXPORT_SYMBOL(lustre_swab_mds_rec_unlink);
 EXPORT_SYMBOL(lustre_swab_mds_rec_rename);
 EXPORT_SYMBOL(lustre_swab_lov_desc);
-EXPORT_SYMBOL(lustre_swab_lov_user_md_v1);
-EXPORT_SYMBOL(lustre_swab_lov_user_md_v3);
+EXPORT_SYMBOL(lustre_swab_lov_user_md);
 EXPORT_SYMBOL(lustre_swab_lov_user_md_objects);
 EXPORT_SYMBOL(lustre_swab_lov_user_md_join);
 EXPORT_SYMBOL(lustre_swab_ldlm_res_id);
@@ -247,6 +244,11 @@ EXPORT_SYMBOL(lustre_swab_ldlm_lock_desc);
 EXPORT_SYMBOL(lustre_swab_ldlm_request);
 EXPORT_SYMBOL(lustre_swab_ldlm_reply);
 EXPORT_SYMBOL(lustre_swab_qdata);
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 7, 0, 0)
+EXPORT_SYMBOL(lustre_swab_qdata_old);
+#else
+#warning "remove quota code above for format absolete in new release"
+#endif
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 9, 0, 0)
 EXPORT_SYMBOL(lustre_swab_qdata_old2);
 #else
@@ -267,7 +269,6 @@ EXPORT_SYMBOL(lustre_msg_add_version);
 EXPORT_SYMBOL(lustre_msg_get_opc);
 EXPORT_SYMBOL(lustre_msg_get_last_xid);
 EXPORT_SYMBOL(lustre_msg_get_last_committed);
-EXPORT_SYMBOL(lustre_msg_get_versions);
 EXPORT_SYMBOL(lustre_msg_get_transno);
 EXPORT_SYMBOL(lustre_msg_get_status);
 EXPORT_SYMBOL(lustre_msg_get_slv);
@@ -282,7 +283,6 @@ EXPORT_SYMBOL(lustre_msg_set_type);
 EXPORT_SYMBOL(lustre_msg_set_opc);
 EXPORT_SYMBOL(lustre_msg_set_last_xid);
 EXPORT_SYMBOL(lustre_msg_set_last_committed);
-EXPORT_SYMBOL(lustre_msg_set_versions);
 EXPORT_SYMBOL(lustre_msg_set_transno);
 EXPORT_SYMBOL(lustre_msg_set_status);
 EXPORT_SYMBOL(lustre_msg_set_conn_cnt);

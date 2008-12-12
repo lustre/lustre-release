@@ -218,9 +218,3 @@ int trace_max_debug_mb(void)
 {
 	return max_permit_mb;
 }
-
-void
-trace_call_on_all_cpus(void (*fn)(void *arg), void *arg)
-{
-#error "tbd"
-}

@@ -59,6 +59,8 @@
 #include <obd_support.h>
 #include "lustre_quota_fmt.h"
 
+#ifdef HAVE_QUOTA_SUPPORT
+
 static int admin_convert_dqinfo(struct file *fp_v1, struct file *fp_v2,
                                 struct lustre_quota_info *lqi, int type)
 {
@@ -300,4 +302,5 @@ out:
         return rc;
 }
 EXPORT_SYMBOL(lustre_slave_quota_convert);
-#endif
+#endif /* HAVE_QUOTA64 */
+#endif /* HAVE_QUOTA_SUPPORT */

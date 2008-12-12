@@ -82,11 +82,12 @@ void ptlrpcd_add_req(struct ptlrpc_request *req)
                 pc = &ptlrpcd_pc;
         else
                 pc = &ptlrpcd_recovery_pc;
+
         rc = ptlrpc_set_add_new_req(pc, req);
         if (rc) {
                 int (*interpreter)(struct ptlrpc_request *,
                                    void *, int);
-                                
+                                   
                 interpreter = req->rq_interpret_reply;
 
                 /*
@@ -95,7 +96,7 @@ void ptlrpcd_add_req(struct ptlrpc_request *req)
                  * interpret for it to let know we're killing it
                  * so that higher levels might free assosiated
                  * resources.
-                */
+                 */
                 req->rq_status = -EBADR;
                 interpreter(req, &req->rq_async_args,
                             req->rq_status);
@@ -110,9 +111,6 @@ static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
         struct ptlrpc_request *req;
         int rc = 0;
         ENTRY;
-
-        if (test_bit(LIOD_STOP, &pc->pc_flags))
-                RETURN(1);
 
         spin_lock(&pc->pc_set->set_new_req_lock);
         list_for_each_safe(pos, tmp, &pc->pc_set->set_new_requests) {
@@ -166,7 +164,7 @@ static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
 static int ptlrpcd(void *arg)
 {
         struct ptlrpcd_ctl *pc = arg;
-        int rc;
+        int rc, exit = 0;
         ENTRY;
 
         if ((rc = cfs_daemonize_ctxt(pc->pc_name))) {
@@ -182,24 +180,30 @@ static int ptlrpcd(void *arg)
          * there are requests in the set. New requests come in on the set's 
          * new_req_list and ptlrpcd_check() moves them into the set. 
          */
-        while (1) {
+        do {
                 struct l_wait_info lwi;
-                cfs_duration_t timeout;
+                int timeout;
 
-                timeout = cfs_time_seconds(ptlrpc_set_next_timeout(pc->pc_set));
-                lwi = LWI_TIMEOUT(timeout, ptlrpc_expired_set, pc->pc_set);
+                timeout = ptlrpc_set_next_timeout(pc->pc_set);
+                lwi = LWI_TIMEOUT(cfs_time_seconds(timeout ? timeout : 1), 
+                                  ptlrpc_expired_set, pc->pc_set);
 
                 l_wait_event(pc->pc_set->set_waitq, ptlrpcd_check(pc), &lwi);
 
                 /*
                  * Abort inflight rpcs for forced stop case.
                  */
-                if (test_bit(LIOD_STOP_FORCE, &pc->pc_flags))
-                        ptlrpc_abort_set(pc->pc_set);
+                if (test_bit(LIOD_STOP, &pc->pc_flags)) {
+                        if (test_bit(LIOD_FORCE, &pc->pc_flags))
+                                ptlrpc_abort_set(pc->pc_set);
+                        exit++;
+                }
 
-                if (test_bit(LIOD_STOP, &pc->pc_flags))
-                        break;
-        }
+                /* 
+                 * Let's make one more loop to make sure that ptlrpcd_check()
+                 * copied all raced new rpcs into the set so we can kill them.
+                 */
+        } while (exit < 2);
 
         /* 
          * Wait for inflight requests to drain. 
@@ -211,6 +215,7 @@ static int ptlrpcd(void *arg)
 out:
         clear_bit(LIOD_START, &pc->pc_flags);
         clear_bit(LIOD_STOP, &pc->pc_flags);
+        clear_bit(LIOD_FORCE, &pc->pc_flags);
         return 0;
 }
 
@@ -306,7 +311,7 @@ void ptlrpcd_stop(struct ptlrpcd_ctl *pc, int force)
 
         set_bit(LIOD_STOP, &pc->pc_flags);
         if (force)
-                set_bit(LIOD_STOP_FORCE, &pc->pc_flags);
+                set_bit(LIOD_FORCE, &pc->pc_flags);
         cfs_waitq_signal(&pc->pc_set->set_waitq);
 #ifdef __KERNEL__
         wait_for_completion(&pc->pc_finishing);

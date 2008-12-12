@@ -218,7 +218,7 @@ static int filter_recov_log_setattr_cb(struct llog_ctxt *ctxt,
 }
 
 int filter_recov_log_mds_ost_cb(struct llog_handle *llh,
-                               struct llog_rec_hdr *rec, void *data)
+                                struct llog_rec_hdr *rec, void *data)
 {
         struct llog_ctxt *ctxt = llh->lgh_ctxt;
         struct llog_cookie cookie;

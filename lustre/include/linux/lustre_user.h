@@ -55,9 +55,6 @@
 # endif
 #else
 # include <linux/version.h>
-# if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,21)
-#  define NEED_QUOTA_DEFS
-# endif
 # ifdef HAVE_QUOTA_SUPPORT
 #  include <linux/quota.h>
 # endif

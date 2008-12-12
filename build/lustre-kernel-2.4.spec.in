@@ -154,7 +154,7 @@ Release: %{release}%{?targetboard:%{targetboard}}%{?debuglevel_1:.dbg}
 %define KVERREL %{PACKAGE_VERSION}%{kextraverdelim}%{kextraver}%{?targetboard:%{targetboard}}%{?debuglevel_1:.dbg}
 License: GPL
 Group: System Environment/Kernel
-ExclusiveArch: %{all_x86} x86_64 ia64 ppc
+ExclusiveArch: %{all_x86} x86_64 ia64 ppc ppc64
 ExclusiveOS: Linux
 Obsoletes: kernel-modules, kernel-sparc
 Provides: kernel = %{version}
@@ -406,7 +406,7 @@ for flavor in "" smp bigmem bigsmp pseries64 BOOT jensen ; do
 				# than installed, so force modules.dep to be recreated
 				echo "rm -f /lib/modules/%{KVERREL}${delim_flavor}/modules.dep" >> ${script}
 				echo "if [ -f /etc/modprobe.conf ] ; then" >> ${script}			
-				sed -e "s^%ver_str^%{KVERREL}${delim_flavor}^g" %{SOURCE26} >> ${script}
+				sed -e "s^%ver_str^%{KVERREL}${delim_flavor}^g" -e "s^%flavor^${flavor}^" %{SOURCE26} >> ${script}
 
 				echo "else" >> ${script}
 				sed -e "s^%ver_str^%{KVERREL}${delim_flavor}^g" -e "s^%%{cfg_name}^${delim_flavor}^g" %{SOURCE29} >> ${script}

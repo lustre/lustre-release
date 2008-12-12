@@ -39,6 +39,8 @@
 
 #include <lustre_quota.h>
 
+#ifdef HAVE_QUOTA_SUPPORT
+
 /* QUSG covnert bytes to blocks when counting block quota */
 #define QUSG(count, isblk)      (isblk ? toqb(count) : count)
 
@@ -99,7 +101,8 @@
 void qunit_cache_cleanup(void);
 int qunit_cache_init(void);
 int qctxt_adjust_qunit(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
-                       uid_t uid, gid_t gid, __u32 isblk, int wait);
+                       uid_t uid, gid_t gid, __u32 isblk, int wait,
+                       struct obd_trans_info *oti);
 int qctxt_wait_pending_dqacq(struct lustre_quota_ctxt *qctxt, unsigned int id,
                              unsigned short type, int isblk);
 int qctxt_init(struct obd_device *obd, dqacq_handler_t handler);
@@ -109,6 +112,7 @@ void qslave_start_recovery(struct obd_device *obd,
 int compute_remquota(struct obd_device *obd,
                      struct lustre_quota_ctxt *qctxt, struct qunit_data *qdata,
                      int isblk);
+int check_qm(struct lustre_quota_ctxt *qctxt);
 /* quota_master.c */
 int lustre_dquot_init(void);
 void lustre_dquot_exit(void);
@@ -141,38 +145,10 @@ int dquot_create_oqaq(struct lustre_quota_ctxt *qctxt, struct lustre_dquot
 /* quota_ctl.c */
 int mds_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl);
 int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl);
-int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl);
-int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl);
 
 /* quota_chk.c */
 int target_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl);
-int client_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl);
-int lov_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl);
-int client_quota_poll_check(struct obd_export *exp, struct if_quotacheck *qchk);
 
-#ifdef LPROCFS
-void lprocfs_quotactl_test_init_vars(struct lprocfs_static_vars *lvars);
-void lprocfs_quotacheck_test_init_vars(struct lprocfs_static_vars *lvars);
-#else
-static inline void lprocfs_quotactl_test_init_vars
-                                (struct lprocfs_static_vars *lvars)
-{
-        memset(lvars, 0, sizeof(*lvars));
-}
-static inline void lprocfs_quotacheck_test_init_vars
-                                (struct lprocfs_static_vars *lvars)
-{
-        memset(lvars, 0, sizeof(*lvars));
-}
-#endif
-
-/* quota_adjust_qunit.c */
-int client_quota_adjust_qunit(struct obd_export *exp,
-                              struct quota_adjust_qunit *oqaq,
-                              struct lustre_quota_ctxt *qctxt);
-int lov_quota_adjust_qunit(struct obd_export *exp,
-                           struct quota_adjust_qunit *oqaq,
-                           struct lustre_quota_ctxt *qctxt);
 int quota_adjust_slave_lqs(struct quota_adjust_qunit *oqaq, struct
                           lustre_quota_ctxt *qctxt);
 void qdata_to_oqaq(struct qunit_data *qdata,
@@ -209,4 +185,16 @@ extern cfs_proc_dir_entry_t *lquota_type_proc_dir;
 #define LQS_INO_INCREASE 8
 
 
+#endif
+int client_quota_adjust_qunit(struct obd_export *exp,
+                              struct quota_adjust_qunit *oqaq,
+                              struct lustre_quota_ctxt *qctxt);
+int lov_quota_adjust_qunit(struct obd_export *exp,
+                           struct quota_adjust_qunit *oqaq,
+                           struct lustre_quota_ctxt *qctxt);
+int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl);
+int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl);
+int client_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl);
+int lov_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl);
+int client_quota_poll_check(struct obd_export *exp, struct if_quotacheck *qchk);
 #endif

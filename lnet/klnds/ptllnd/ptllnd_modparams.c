@@ -156,9 +156,51 @@ kptllnd_init_strtunable(char **str_param, char *space, int size)
 }
 #endif
 
+#ifndef HAVE_SYSCTL_UNNUMBERED
+
+enum {
+        KPTLLND_NTX     = 1,
+        KPTLLND_MAX_NODES,
+        KPTLLND_MAX_PROC_PER_NODE,
+        KPTLLND_CHECKSUM,
+        KPTLLND_TIMEOUT,
+        KPTLLND_PORTAL,
+        KPTLLND_PID,
+        KPTLLND_RXB_PAGES,
+        KPTLLND_CREDITS,
+        KPTLLND_PEERCREDITS,
+        KPTLLND_MAX_MSG_SIZE,
+        KPTLLND_PEER_HASH_SIZE,
+        KPTLLND_RESHEDULE_LOOPS,
+        KPTLLND_ACK_PUTS,
+        KPTLLND_TRACETIMEOUT,
+        KPTLLND_TRACEBASENAME,
+        KPTLLND_SIMULATION_BITMAP
+};
+#else
+
+#define KPTLLND_NTX             CTL_UNNUMBERED
+#define KPTLLND_MAX_NODES       CTL_UNNUMBERED
+#define KPTLLND_MAX_PROC_PER_NODE CTL_UNNUMBERED
+#define KPTLLND_CHECKSUM        CTL_UNNUMBERED
+#define KPTLLND_TIMEOUT         CTL_UNNUMBERED
+#define KPTLLND_PORTAL          CTL_UNNUMBERED
+#define KPTLLND_PID             CTL_UNNUMBERED
+#define KPTLLND_RXB_PAGES       CTL_UNNUMBERED
+#define KPTLLND_CREDITS         CTL_UNNUMBERED
+#define KPTLLND_PEERCREDITS     CTL_UNNUMBERED
+#define KPTLLND_MAX_MSG_SIZE    CTL_UNNUMBERED
+#define KPTLLND_PEER_HASH_SIZE  CTL_UNNUMBERED
+#define KPTLLND_RESHEDULE_LOOPS CTL_UNNUMBERED
+#define KPTLLND_ACK_PUTS        CTL_UNNUMBERED
+#define KPTLLND_TRACETIMEOUT    CTL_UNNUMBERED
+#define KPTLLND_TRACEBASENAME   CTL_UNNUMBERED
+#define KPTLLND_SIMULATION_BITMAP CTL_UNNUMBERED
+#endif
+
 static cfs_sysctl_table_t kptllnd_ctl_table[] = {
         {
-                .ctl_name = 1,
+                .ctl_name = KPTLLND_NTX,
                 .procname = "ntx",
                 .data     = &ntx,
                 .maxlen   = sizeof(int),
@@ -166,7 +208,7 @@ static cfs_sysctl_table_t kptllnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 2,
+                .ctl_name = KPTLLND_MAX_NODES,
                 .procname = "max_nodes",
                 .data     = &max_nodes,
                 .maxlen   = sizeof(int),
@@ -174,7 +216,7 @@ static cfs_sysctl_table_t kptllnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 3,
+                .ctl_name = KPTLLND_MAX_PROC_PER_NODE,
                 .procname = "max_procs_per_node",
                 .data     = &max_procs_per_node,
                 .maxlen   = sizeof(int),
@@ -182,7 +224,7 @@ static cfs_sysctl_table_t kptllnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 4,
+                .ctl_name = KPTLLND_CHECKSUM,
                 .procname = "checksum",
                 .data     = &checksum,
                 .maxlen   = sizeof(int),
@@ -190,7 +232,7 @@ static cfs_sysctl_table_t kptllnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 5,
+                .ctl_name = KPTLLND_TIMEOUT,
                 .procname = "timeout",
                 .data     = &timeout,
                 .maxlen   = sizeof(int),
@@ -198,7 +240,7 @@ static cfs_sysctl_table_t kptllnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 6,
+                .ctl_name = KPTLLND_PORTAL,
                 .procname = "portal",
                 .data     = &portal,
                 .maxlen   = sizeof(int),
@@ -206,7 +248,7 @@ static cfs_sysctl_table_t kptllnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 7,
+                .ctl_name = KPTLLND_PID,
                 .procname = "pid",
                 .data     = &pid,
                 .maxlen   = sizeof(int),
@@ -214,7 +256,7 @@ static cfs_sysctl_table_t kptllnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 8,
+                .ctl_name = KPTLLND_RXB_PAGES,
                 .procname = "rxb_npages",
                 .data     = &rxb_npages,
                 .maxlen   = sizeof(int),
@@ -222,7 +264,7 @@ static cfs_sysctl_table_t kptllnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 9,
+                .ctl_name = KPTLLND_CREDITS,
                 .procname = "credits",
                 .data     = &credits,
                 .maxlen   = sizeof(int),
@@ -230,7 +272,7 @@ static cfs_sysctl_table_t kptllnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 10,
+                .ctl_name = KPTLLND_PEERCREDITS,
                 .procname = "peercredits",
                 .data     = &peercredits,
                 .maxlen   = sizeof(int),
@@ -238,7 +280,7 @@ static cfs_sysctl_table_t kptllnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 11,
+                .ctl_name = KPTLLND_MAX_MSG_SIZE,
                 .procname = "max_msg_size",
                 .data     = &max_msg_size,
                 .maxlen   = sizeof(int),
@@ -246,7 +288,7 @@ static cfs_sysctl_table_t kptllnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 12,
+                .ctl_name = KPTLLND_PEER_HASH_SIZE,
                 .procname = "peer_hash_table_size",
                 .data     = &peer_hash_table_size,
                 .maxlen   = sizeof(int),
@@ -254,7 +296,7 @@ static cfs_sysctl_table_t kptllnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 13,
+                .ctl_name = KPTLLND_RESHEDULE_LOOPS,
                 .procname = "reschedule_loops",
                 .data     = &reschedule_loops,
                 .maxlen   = sizeof(int),
@@ -262,7 +304,7 @@ static cfs_sysctl_table_t kptllnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 14,
+                .ctl_name = KPTLLND_ACK_PUTS,
                 .procname = "ack_puts",
                 .data     = &ack_puts,
                 .maxlen   = sizeof(int),
@@ -271,7 +313,7 @@ static cfs_sysctl_table_t kptllnd_ctl_table[] = {
         },
 #ifdef CRAY_XT3
         {
-                .ctl_name = 15,
+                .ctl_name = KPTLLND_TRACETIMEOUT,
                 .procname = "ptltrace_on_timeout",
                 .data     = &ptltrace_on_timeout,
                 .maxlen   = sizeof(int),
@@ -279,7 +321,7 @@ static cfs_sysctl_table_t kptllnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 16,
+                .ctl_name = KPTLLND_TRACEBASENAME,
                 .procname = "ptltrace_basename",
                 .data     = ptltrace_basename_space,
                 .maxlen   = sizeof(ptltrace_basename_space),
@@ -290,7 +332,7 @@ static cfs_sysctl_table_t kptllnd_ctl_table[] = {
 #endif
 #ifdef PJK_DEBUGGING
         {
-                .ctl_name = 17,
+                .ctl_name = KPTLLND_SIMULATION_BITMAP,
                 .procname = "simulation_bitmap",
                 .data     = &simulation_bitmap,
                 .maxlen   = sizeof(int),
@@ -304,7 +346,7 @@ static cfs_sysctl_table_t kptllnd_ctl_table[] = {
 
 static cfs_sysctl_table_t kptllnd_top_ctl_table[] = {
         {
-                .ctl_name = 203,
+                .ctl_name = CTL_PTLLND,
                 .procname = "ptllnd",
                 .data     = NULL,
                 .maxlen   = 0,

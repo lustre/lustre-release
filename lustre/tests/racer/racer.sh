@@ -3,16 +3,12 @@
 MAX_FILES=${MAX_FILES:-20}
 DIR=${DIR:-$1}
 DIR=${DIR:-"/mnt/lustre/racer"}
-if ! [ -d "$DIR" -o -d "`basename $DIR`" ]; then
-	echo "$0: '$DIR' and '`basename $DIR`' are not directories"
-	exit 1
-fi
 DURATION=${DURATION:-$((60*5))}
 
 NUM_THREADS=${NUM_THREADS:-$2}
 NUM_THREADS=${NUM_THREADS:-3}
 
-[ -e $DIR ] || mkdir $DIR
+mkdir -p $DIR
 
 racer_cleanup()
 {
@@ -32,7 +28,7 @@ trap "
     echo \"Cleaning up\" 
     racer_cleanup
     exit 0
-" 2
+" 2 15
 
 cd `dirname $0`
 for N in `seq 1 $NUM_THREADS`; do

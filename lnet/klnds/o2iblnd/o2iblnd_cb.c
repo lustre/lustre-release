@@ -643,9 +643,7 @@ kiblnd_setup_rd_iov(lnet_ni_t *ni, kib_tx_t *tx, kib_rdma_desc_t *rd,
                 fragnob = min((int)(iov->iov_len - offset), nob);
                 fragnob = min(fragnob, (int)PAGE_SIZE - page_offset);
 
-                sg->page = page;
-                sg->offset = page_offset;
-                sg->length = fragnob;
+                sg_set_page(sg, page, fragnob, page_offset);
                 sg++;
 
                 if (offset + fragnob < iov->iov_len) {
@@ -708,11 +706,10 @@ kiblnd_setup_rd_kiov (lnet_ni_t *ni, kib_tx_t *tx, kib_rdma_desc_t *rd,
                 fragnob = min((int)(kiov->kiov_len - offset), nob);
 
                 memset(sg, 0, sizeof(*sg));
-                sg->page = kiov->kiov_page;
-                sg->offset = kiov->kiov_offset + offset;
-                sg->length = fragnob;
+                sg_set_page(sg, kiov->kiov_page, fragnob,
+                            kiov->kiov_offset + offset);
                 sg++;
-                
+ 
                 offset = 0;
                 kiov++;
                 nkiov--;

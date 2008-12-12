@@ -40,6 +40,7 @@
 #include <lustre_handles.h>
 #include <lustre/lustre_idl.h>
 
+
 /* Adaptive Timeout stuff */
 #define D_ADAPTTO D_OTHER
 #define AT_BINS 4                  /* "bin" means "N seconds of history" */
@@ -95,7 +96,7 @@ struct obd_import_conn {
         __u64                     oic_last_attempt; /* jiffies, 64-bit */
 };
 
-#define IMP_AT_MAX_PORTALS 8
+#define IMP_AT_MAX_PORTALS 4
 struct imp_at {
         int                     iat_portal[IMP_AT_MAX_PORTALS];
         struct adaptive_timeout iat_net_latency;
@@ -122,6 +123,7 @@ struct obd_import {
         cfs_waitq_t               imp_recovery_waitq;
 
         atomic_t                  imp_inflight;
+        atomic_t                  imp_unregistering;
         atomic_t                  imp_replay_inflight;
         atomic_t                  imp_inval_count;
         enum lustre_imp_state     imp_state;
@@ -148,11 +150,8 @@ struct obd_import {
                                   imp_replayable:1,       /* try to recover the import */
                                   imp_dlm_fake:1,         /* don't run recovery (timeout instead) */
                                   imp_server_timeout:1,   /* use 1/2 timeout on MDS' OSCs */
-                                  imp_initial_recov:1,    /* retry the initial connection */
+                                  imp_initial_recov:1,    /* retry the initial connection */  
                                   imp_initial_recov_bk:1, /* turn off init_recov after trying all failover nids */
-                                  imp_delayed_recovery:1, /* VBR: imp in delayed recovery */
-                                  imp_no_lock_replay:1,   /* VBR: if gap was found then no lock replays */
-                                  imp_vbr_failed:1,       /* recovery by versions was failed */
                                   imp_force_verify:1,     /* force an immidiate ping */
                                   imp_pingable:1,         /* pingable */
                                   imp_resend_replay:1,    /* resend for replay */
@@ -172,6 +171,18 @@ struct obd_import {
 };
 
 /* import.c */
+static inline unsigned int at_est2timeout(unsigned int val)
+{
+        /* add an arbitrary minimum: 125% +5 sec */
+        return (val + (val >> 2) + 5);
+}
+
+static inline unsigned int at_timeout2est(unsigned int val)
+{
+        /* restore estimate value from timeout: e=4/5(t-5) */
+        return (max((val << 2) / 5, 5U) - 4);
+}
+
 static inline void at_init(struct adaptive_timeout *at, int val, int flags) {
         memset(at, 0, sizeof(*at));
         at->at_current = val;

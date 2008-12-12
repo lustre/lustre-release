@@ -76,7 +76,7 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
 
         oscc = req->rq_async_args.pointer_arg[0];
         LASSERT(oscc && (oscc->oscc_obd != LP_POISON));
-
+        
         spin_lock(&oscc->oscc_lock);
         oscc->oscc_flags &= ~OSCC_FLAG_CREATING;
         switch (rc) {
@@ -280,21 +280,17 @@ int osc_precreate(struct obd_export *exp)
         if (imp != NULL && imp->imp_deactive)
                 RETURN(1000);
 
-        if (oscc->oscc_last_id < oscc->oscc_next_id) {
-                spin_lock(&oscc->oscc_lock);
-                if (oscc->oscc_flags & OSCC_FLAG_NOSPC) {
-                        spin_unlock(&oscc->oscc_lock);
-                        RETURN(1000);
-                }
-                if (oscc->oscc_flags & OSCC_FLAG_SYNC_IN_PROGRESS) {
-                        spin_unlock(&oscc->oscc_lock);
-                        RETURN(1);
-                }
-                if (oscc->oscc_flags & OSCC_FLAG_RECOVERING) {
-                        spin_unlock(&oscc->oscc_lock);
-                        RETURN(2);
-                }
+        if (oscc_recovering(oscc))
+                RETURN(2);
 
+        if (oscc->oscc_flags & OSCC_FLAG_NOSPC)
+                RETURN(1000);
+
+        if (oscc->oscc_last_id < oscc->oscc_next_id) {
+                if (oscc->oscc_flags & OSCC_FLAG_SYNC_IN_PROGRESS)
+                        RETURN(1);
+
+                spin_lock(&oscc->oscc_lock);
                 if (oscc->oscc_flags & OSCC_FLAG_CREATING) {
                         spin_unlock(&oscc->oscc_lock);
                         RETURN(1);

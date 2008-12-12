@@ -34,52 +34,37 @@
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <errno.h>
-#include <string.h>
-#include <fcntl.h>
-#include <getopt.h>
-#include <unistd.h>
-#include <time.h>
-#include <limits.h>
-#include <sys/ioctl.h>
-#include <liblustre.h>
-#include <obd.h>
-#include <lustre_lib.h>
+#ifndef __LNET_SYSCTL_H__
+#define __LNET_SYSCTL_H__
 
-static int usage(char *prog, FILE *out)
-{
-        fprintf(out,
-		"Usage: %s <dir> <desired child ino>\n", prog);
-        exit(out == stderr);
-}
+#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
 
-#define LDISKFS_IOC_CREATE_INUM            _IOW('f', 5, long)
+#ifndef HAVE_SYSCTL_UNNUMBERED
 
-int main(int argc, char ** argv)
-{
-        int dirfd, wantedi, rc;
+#define CTL_KRANAL      201
+#define CTL_GMLND       202
+#define CTL_KIBNAL      203
+#define CTL_IIBBLND     204
+#define CTL_O2IBLND     205
+#define CTL_PTLLND      206
+#define CTL_QSWNAL      207
+#define CTL_SOCKLND     208
+#define CTL_VIBLND      209
 
-	if (argc < 2 || argc > 3)
-		usage(argv[0], stderr);
-	
-	dirfd = open(argv[1], O_RDONLY);
-	if (dirfd < 0) {
-	       perror("open");
-	       exit(1);
-	}
-        
-	wantedi = atoi(argv[2]);
-	printf("Creating %s/%d with ino %d\n", argv[1], wantedi, wantedi);
+#else
 
-	rc = ioctl(dirfd, LDISKFS_IOC_CREATE_INUM, wantedi);
-	if (rc < 0) {
-	       perror("ioctl(LDISKFS_IOC_CREATE_INUM)");
-	       exit(2);
-	}
+#define CTL_KRANAL      CTL_UNNUMBERED
+#define CTL_GMLND       CTL_UNNUMBERED
+#define CTL_KIBNAL      CTL_UNNUMBERED
+#define CTL_IIBLND      CTL_UNNUMBERED
+#define CTL_O2IBLND     CTL_UNNUMBERED
+#define CTL_PTLLND      CTL_UNNUMBERED
+#define CTL_QSWNAL	CTL_UNNUMBERED
+#define CTL_SOCKLND     CTL_UNNUMBERED
+#define CTL_VIBLND      CTL_UNNUMBERED
 
-        return 0;
-}
+#endif /* sysctl id */
+
+#endif
+
+#endif

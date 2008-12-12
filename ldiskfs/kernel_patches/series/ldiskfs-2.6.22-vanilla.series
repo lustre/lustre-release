@@ -24,3 +24,5 @@ ext3-max-dir-size.patch
 ext3-print-inum-in-htree-warning.patch
 ext3-xattr-no-update-ctime-2.6.22-vanilla.patch
 ext3-check-bad-inode.patch
+ext3-get-raid-stripe-from-sb.patch
+ext3-big-endian-check-2.6.22-vanilla.patch

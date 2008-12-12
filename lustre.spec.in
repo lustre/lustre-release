@@ -72,7 +72,7 @@ systems.
 Summary: Lustre testing framework
 Group: Development/Kernel
 Provides: lustre-tests = %{version}
-Requires: lustre = %{version}
+Requires: lustre = %{version}, lustre-modules = %{version}
 
 %description tests
 This package contains a set of test binaries and scripts that are intended
@@ -203,7 +203,11 @@ else
 	depmod -ae %{kversion} || exit 0
 fi
 cat <<EOF
-Lustre package installation complete.
+Congratulations on finishing your Lustre installation!  To register  
+your copy of Lustre and find out more about Lustre Support, Service,  
+and Training offerings please visit
+
+http://www.sun.com/software/products/lustre/lustre_reg.jsp
 EOF
 
 # for update from < v1.4.6

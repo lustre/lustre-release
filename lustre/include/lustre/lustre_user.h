@@ -114,10 +114,6 @@ struct obd_statfs;
 #define LL_IOC_OBD_STATFS       IOC_OBD_STATFS
 #define IOC_MDC_GETSTRIPE       IOC_MDC_GETFILESTRIPE
 
-/* Do not define O_CHECK_STALE as 0200000000,
- * which is conflict with MDS_OPEN_OWNEROVERRIDE */
-#define O_CHECK_STALE       020000000  /* hopefully this does not conflict */
-
 #define O_LOV_DELAY_CREATE 0100000000  /* hopefully this does not conflict */
 #define O_JOIN_FILE        0400000000  /* hopefully this does not conflict */
 
@@ -127,14 +123,12 @@ struct obd_statfs;
 
 #define LOV_USER_MAGIC_V1 0x0BD10BD0
 #define LOV_USER_MAGIC    LOV_USER_MAGIC_V1
+
 #define LOV_USER_MAGIC_JOIN 0x0BD20BD0
-#define LOV_USER_MAGIC_V3 0x0BD30BD0
 
 #define LOV_PATTERN_RAID0 0x001
 #define LOV_PATTERN_RAID1 0x002
 #define LOV_PATTERN_FIRST 0x100
-
-#define MAXPOOLNAME 16
 
 #define lov_user_ost_data lov_user_ost_data_v1
 struct lov_user_ost_data_v1 {     /* per-stripe data structure */
@@ -156,18 +150,6 @@ struct lov_user_md_v1 {           /* LOV EA user data (host-endian) */
         struct lov_user_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 } __attribute__((packed));
 
-struct lov_user_md_v3 {           /* LOV EA user data (host-endian) */
-        __u32 lmm_magic;          /* magic number = LOV_USER_MAGIC_V3 */
-        __u32 lmm_pattern;        /* LOV_PATTERN_RAID0, LOV_PATTERN_RAID1 */
-        __u64 lmm_object_id;      /* LOV object ID */
-        __u64 lmm_object_gr;      /* LOV object group */
-        __u32 lmm_stripe_size;    /* size of stripe in bytes */
-        __u16 lmm_stripe_count;   /* num stripes in use for this object */
-        __u16 lmm_stripe_offset;  /* starting stripe offset in lmm_objects */
-        char  lmm_pool_name[MAXPOOLNAME]; /* pool name */
-        struct lov_user_ost_data_v1 lmm_objects[0]; /* per-stripe data */
-} __attribute__((packed));
-
 /* Compile with -D_LARGEFILE64_SOURCE or -D_GNU_SOURCE (or #define) to
  * use this.  It is unsafe to #define those values in this header as it
  * is possible the application has already #included <sys/stat.h>. */
@@ -175,12 +157,7 @@ struct lov_user_md_v3 {           /* LOV EA user data (host-endian) */
 #define lov_user_mds_data lov_user_mds_data_v1
 struct lov_user_mds_data_v1 {
         lstat_t lmd_st;                 /* MDS stat struct */
-        struct lov_user_md_v1 lmd_lmm;  /* LOV EA V1 user data */
-} __attribute__((packed));
-
-struct lov_user_mds_data_v3 {
-        lstat_t lmd_st;                 /* MDS stat struct */
-        struct lov_user_md_v3 lmd_lmm;  /* LOV EA V3 user data */
+        struct lov_user_md_v1 lmd_lmm;  /* LOV EA user data */
 } __attribute__((packed));
 #endif
 
@@ -292,6 +269,8 @@ struct mds_grp_downcall_data {
 #endif
 
 #endif /* !__KERNEL__ */
+
+#define QFMT_LDISKFS 2 /* pre-1.6.6 compatibility */
 
 typedef enum lustre_quota_version {
         LUSTRE_QUOTA_V1 = 0,

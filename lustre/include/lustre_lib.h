@@ -80,22 +80,20 @@ int target_handle_ping(struct ptlrpc_request *req);
 int target_pack_pool_reply(struct ptlrpc_request *req);
 void target_committed_to_req(struct ptlrpc_request *req);
 
-#ifdef HAVE_QUOTA_SUPPORT
 /* quotacheck callback, dqacq/dqrel callback handler */
 int target_handle_qc_callback(struct ptlrpc_request *req);
+#ifdef HAVE_QUOTA_SUPPORT
 int target_handle_dqacq_callback(struct ptlrpc_request *req);
 #else
 #define target_handle_dqacq_callback(req) ldlm_callback_reply(req, -ENOTSUPP)
-#define target_handle_qc_callback(req) (0)
 #endif
 
 void target_cancel_recovery_timer(struct obd_device *obd);
 void target_abort_recovery(void *data);
-int target_recovery_check_and_stop(struct obd_device *obd);
 void target_cleanup_recovery(struct obd_device *obd);
 int target_queue_recovery_request(struct ptlrpc_request *req,
                                   struct obd_device *obd);
-int target_handle_reply(struct ptlrpc_request *req, int rc, int fail);
+int target_queue_last_replay_reply(struct ptlrpc_request *req, int rc);
 void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id);
 
 /* client.c */
@@ -493,7 +491,6 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_DUMP_LOG               _IOWR('f', 185, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_CLEAR_LOG              _IOWR('f', 186, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_PARAM                  _IOW ('f', 187, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_POOL                   _IOWR('f', 188, OBD_IOC_DATA_TYPE)
 
 #define OBD_IOC_CATLOGLIST             _IOWR('f', 190, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_LLOG_INFO              _IOWR('f', 191, OBD_IOC_DATA_TYPE)

@@ -56,6 +56,8 @@ void ptlrpc_handle_failed_import(struct obd_import *imp);
 int ptlrpc_replay_next(struct obd_import *imp, int *inflight);
 void ptlrpc_initiate_recovery(struct obd_import *imp);
 
+int lustre_msg_need_swab(struct lustre_msg *msg);
+int lustre_unpack_msg_ptlrpc_body(struct lustre_msg *msg, int offset, int swab);
 int lustre_unpack_req_ptlrpc_body(struct ptlrpc_request *req, int offset);
 int lustre_unpack_rep_ptlrpc_body(struct ptlrpc_request *req, int offset);
 
@@ -74,7 +76,7 @@ void ptlrpc_lprocfs_do_request_stat (struct ptlrpc_request *req,
 #endif /* LPROCFS */
 
 /* recovd_thread.c */
-int ptlrpc_expire_one_request(struct ptlrpc_request *req);
+int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink);
 
 /* pers.c */
 void ptlrpc_fill_bulk_md(lnet_md_t *md, struct ptlrpc_bulk_desc *desc);

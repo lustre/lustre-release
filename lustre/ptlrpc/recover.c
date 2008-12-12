@@ -110,21 +110,20 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
          */
         list_for_each_safe(tmp, pos, &imp->imp_replay_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_replay_list);
+
                 /* If need to resend the last sent transno (because a
                    reconnect has occurred), then stop on the matching
                    req and send it again. If, however, the last sent
                    transno has been committed then we continue replay
                    from the next request. */
-                if (imp->imp_resend_replay &&
+                if (imp->imp_resend_replay && 
                     req->rq_transno == last_transno) {
                         lustre_msg_add_flags(req->rq_reqmsg, MSG_RESENT);
                         break;
                 }
 
                 if (req->rq_transno > last_transno) {
-                        spin_lock(&imp->imp_lock);
                         imp->imp_last_replay_transno = req->rq_transno;
-                        spin_unlock(&imp->imp_lock);
                         break;
                 }
 
@@ -187,7 +186,7 @@ void ptlrpc_wake_delayed(struct obd_import *imp)
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
 
                 DEBUG_REQ(D_HA, req, "waking (set %p):", req->rq_set);
-                ptlrpc_wake_client_req(req);
+                ptlrpc_client_wake_req(req);
         }
         spin_unlock(&imp->imp_lock);
 }
@@ -246,19 +245,18 @@ int ptlrpc_set_import_active(struct obd_import *imp, int active)
         if (!active) {
                 LCONSOLE_WARN("setting import %s INACTIVE by administrator "
                               "request\n", obd2cli_tgt(imp->imp_obd));
-                ptlrpc_invalidate_import(imp);
 
+                /* set before invalidate to avoid messages about imp_inval
+                 * set without imp_deactive in ptlrpc_import_delay_req */
                 spin_lock(&imp->imp_lock);
                 imp->imp_deactive = 1;
                 spin_unlock(&imp->imp_lock);
+
+                ptlrpc_invalidate_import(imp);
         }
 
         /* When activating, mark import valid, and attempt recovery */
         if (active) {
-                spin_lock(&imp->imp_lock);
-                imp->imp_deactive = 0;
-                spin_unlock(&imp->imp_lock);
-
                 CDEBUG(D_HA, "setting import %s VALID\n",
                        obd2cli_tgt(imp->imp_obd));
                 rc = ptlrpc_recover_import(imp, NULL);
@@ -272,6 +270,13 @@ int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid)
 {
         int rc;
         ENTRY;
+
+        spin_lock(&imp->imp_lock);
+        if (atomic_read(&imp->imp_inval_count)) {
+                spin_unlock(&imp->imp_lock);
+                RETURN(-EINVAL);
+        }
+        spin_unlock(&imp->imp_lock);
 
         /* force import to be disconnected. */
         ptlrpc_set_import_discon(imp, 0);

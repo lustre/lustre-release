@@ -70,7 +70,6 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_TIMEOUT_DEFAULT             100
 #define LDLM_TIMEOUT_DEFAULT            20
 #define MDS_LDLM_TIMEOUT_DEFAULT        6
-#define STALE_EXPORT_MAXTIME_DEFAULT    (24*60*60) /**< one day, in seconds */
 #ifdef CRAY_XT3
  #define OBD_RECOVERY_MAX_TIME (obd_timeout * 18) /* b13079 */
 #endif
@@ -169,7 +168,6 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_MDS_CLOSE_NET_REP       0x13b
 #define OBD_FAIL_MDS_BLOCK_QUOTA_REQ     0x13c
 #define OBD_FAIL_MDS_DROP_QUOTA_REQ      0x13d
-#define OBD_FAIL_MDS_REMOVE_COMMON_EA    0x13e
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
@@ -232,6 +230,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_LDLM_CLOSE_THREAD       0x313
 #define OBD_FAIL_LDLM_CANCEL_BL_CB_RACE  0x314
 #define OBD_FAIL_LDLM_CP_CB_WAIT         0x315
+#define OBD_FAIL_LDLM_OST_FAIL_RACE      0x316
 
 #define OBD_FAIL_OSC                     0x400
 #define OBD_FAIL_OSC_BRW_READ_BULK       0x401
@@ -259,9 +258,12 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_PTLRPC_CLIENT_BULK_CB   0x508
 #define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
 #define OBD_FAIL_PTLRPC_PAUSE_REP        0x50c
-#define OBD_FAIL_PTLRPC_IMP_DEACTIVE     0x50d
 
 #define OBD_FAIL_PTLRPC_DUMP_LOG         0x50e
+#define OBD_FAIL_PTLRPC_LONG_REPL_UNLINK 0x50f
+#define OBD_FAIL_PTLRPC_LONG_BULK_UNLINK 0x510
+#define OBD_FAIL_PTLRPC_HPREQ_TIMEOUT    0x511
+#define OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT  0x512
 
 #define OBD_FAIL_OBD_PING_NET            0x600
 #define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601
@@ -269,6 +271,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_OBD_QC_CALLBACK_NET     0x603
 #define OBD_FAIL_OBD_DQACQ               0x604
 #define OBD_FAIL_OBD_LLOG_SETUP          0x605
+#define OBD_FAIL_OBD_LOG_CANCEL_REP      0x606
 
 #define OBD_FAIL_TGT_REPLY_NET           0x700
 #define OBD_FAIL_TGT_CONN_RACE           0x701
@@ -278,7 +281,6 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_TGT_DELAY_PRECREATE     0x705
 #define OBD_FAIL_TGT_TOOMANY_THREADS     0x706
 #define OBD_FAIL_TGT_REPLAY_DROP         0x707
-#define OBD_FAIL_TGT_FAKE_EXP            0x708
 
 #define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
 #define OBD_FAIL_MDC_ENQUEUE_PAUSE       0x801
@@ -292,6 +294,11 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_MGS_PAUSE_REQ           0x904
 #define OBD_FAIL_MGS_PAUSE_TARGET_REG    0x905
 
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 7, 0, 0)
+#define OBD_FAIL_QUOTA_QD_COUNT_32BIT    0xA00
+#else
+#warning "remove quota code above for format obsolete in new release"
+#endif
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(1, 9, 0, 0)
 #define OBD_FAIL_QUOTA_WITHOUT_CHANGE_QS    0xA01
 #else

@@ -81,6 +81,7 @@
 #include <libcfs/kp30.h>
 #include <lnet/lnet.h>
 #include <lnet/lib-lnet.h>
+#include <lnet/lnet-sysctl.h>
 
 /* fixed constants */
 #define KQSW_SMALLMSG                  (4<<10)  /* small/large ep receiver breakpoint */

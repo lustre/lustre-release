@@ -220,12 +220,17 @@ int class_connect(struct lustre_handle *conn, struct obd_device *obd,
 int class_disconnect(struct obd_export *exp);
 void class_fail_export(struct obd_export *exp);
 void class_disconnect_exports(struct obd_device *obddev);
-void class_set_export_delayed(struct obd_export *exp);
-void class_handle_stale_exports(struct obd_device *obddev);
-void class_disconnect_expired_exports(struct obd_device *obd);
-void class_disconnect_stale_exports(struct obd_device *obd);
-int class_stale_export_list(struct obd_device *obd, struct obd_ioctl_data *data);
+void class_disconnect_stale_exports(struct obd_device *obddev,
+                                    enum obd_option flags);
 int class_manual_cleanup(struct obd_device *obd);
+
+static inline enum obd_option exp_flags_from_obd(struct obd_device *obd)
+{
+        return ((obd->obd_fail ? OBD_OPT_FAILOVER : 0) |
+                (obd->obd_force ? OBD_OPT_FORCE : 0) |
+                (obd->obd_abort_recovery ? OBD_OPT_ABORT_RECOV : 0) |
+                0);
+}
 
 /* obdo.c */
 void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_flag valid);
@@ -713,30 +718,6 @@ static inline int obd_disconnect(struct obd_export *exp)
         RETURN(rc);
 }
 
-static inline int obd_fid_init(struct obd_export *exp)
-{
-        int rc;
-        ENTRY;
-
-        OBD_CHECK_OP(exp->exp_obd, fid_init, 0);
-        EXP_COUNTER_INCREMENT(exp, fid_init);
-
-        rc = OBP(exp->exp_obd, fid_init)(exp);
-        RETURN(rc);
-}
-
-static inline int obd_fid_fini(struct obd_export *exp)
-{
-        int rc;
-        ENTRY;
-
-        OBD_CHECK_OP(exp->exp_obd, fid_fini, 0);
-        EXP_COUNTER_INCREMENT(exp, fid_fini);
-
-        rc = OBP(exp->exp_obd, fid_fini)(exp);
-        RETURN(rc);
-}
-
 static inline int obd_ping(struct obd_export *exp)
 {
         int rc;
@@ -746,54 +727,6 @@ static inline int obd_ping(struct obd_export *exp)
         EXP_COUNTER_INCREMENT(exp, ping);
 
         rc = OBP(exp->exp_obd, ping)(exp);
-        RETURN(rc);
-}
-
-static inline int obd_pool_new(struct obd_device *obd, char *poolname)
-{
-        int rc;
-        ENTRY;
-
-        OBD_CHECK_OP(obd, pool_new, -EOPNOTSUPP);
-        OBD_COUNTER_INCREMENT(obd, pool_new);
-
-        rc = OBP(obd, pool_new)(obd, poolname);
-        RETURN(rc);
-}
-
-static inline int obd_pool_del(struct obd_device *obd, char *poolname)
-{
-        int rc;
-        ENTRY;
-
-        OBD_CHECK_OP(obd, pool_del, -EOPNOTSUPP);
-        OBD_COUNTER_INCREMENT(obd, pool_del);
-
-        rc = OBP(obd, pool_del)(obd, poolname);
-        RETURN(rc);
-}
-
-static inline int obd_pool_add(struct obd_device *obd, char *poolname, char *ostname)
-{
-        int rc;
-        ENTRY;
-
-        OBD_CHECK_OP(obd, pool_add, -EOPNOTSUPP);
-        OBD_COUNTER_INCREMENT(obd, pool_add);
-
-        rc = OBP(obd, pool_add)(obd, poolname, ostname);
-        RETURN(rc);
-}
-
-static inline int obd_pool_rem(struct obd_device *obd, char *poolname, char *ostname)
-{
-        int rc;
-        ENTRY;
-
-        OBD_CHECK_OP(obd, pool_rem, -EOPNOTSUPP);
-        OBD_COUNTER_INCREMENT(obd, pool_rem);
-
-        rc = OBP(obd, pool_rem)(obd, poolname, ostname);
         RETURN(rc);
 }
 
@@ -1369,8 +1302,8 @@ static inline int obd_join_lru(struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline int obd_pin(struct obd_export *exp, struct ll_fid *fid,
-                          struct obd_client_handle *handle, int flag)
+static inline int obd_pin(struct obd_export *exp, obd_id ino, __u32 gen,
+                          int type, struct obd_client_handle *handle, int flag)
 {
         int rc;
         ENTRY;
@@ -1378,7 +1311,7 @@ static inline int obd_pin(struct obd_export *exp, struct ll_fid *fid,
         EXP_CHECK_OP(exp, pin);
         EXP_COUNTER_INCREMENT(exp, pin);
 
-        rc = OBP(exp->exp_obd, pin)(exp, fid, handle, flag);
+        rc = OBP(exp->exp_obd, pin)(exp, ino, gen, type, handle, flag);
         RETURN(rc);
 }
 
@@ -1461,7 +1394,6 @@ static inline int obd_notify_observer(struct obd_device *observer,
         return rc1 ?: rc2;
  }
 
-#ifdef HAVE_QUOTA_SUPPORT
 static inline int obd_quotacheck(struct obd_export *exp,
                                  struct obd_quotactl *oqctl)
 {
@@ -1492,7 +1424,7 @@ static inline int obd_quota_adjust_qunit(struct obd_export *exp,
                                          struct quota_adjust_qunit *oqaq,
                                          struct lustre_quota_ctxt *qctxt)
 {
-#ifdef LPROCFS
+#if defined(LPROCFS) && defined(HAVE_QUOTA_SUPPORT)
         struct timeval work_start;
         struct timeval work_end;
         long timediff;
@@ -1500,7 +1432,7 @@ static inline int obd_quota_adjust_qunit(struct obd_export *exp,
         int rc;
         ENTRY;
 
-#ifdef LPROCFS
+#if defined(LPROCFS) && defined(HAVE_QUOTA_SUPPORT)
         if (qctxt)
                 do_gettimeofday(&work_start);
 #endif
@@ -1509,7 +1441,7 @@ static inline int obd_quota_adjust_qunit(struct obd_export *exp,
 
         rc = OBP(exp->exp_obd, quota_adjust_qunit)(exp, oqaq, qctxt);
 
-#ifdef LPROCFS
+#if defined(LPROCFS) && defined(HAVE_QUOTA_SUPPORT)
         if (qctxt) {
                 do_gettimeofday(&work_end);
                 timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
@@ -1519,7 +1451,6 @@ static inline int obd_quota_adjust_qunit(struct obd_export *exp,
 #endif
         RETURN(rc);
 }
-#endif
 
 static inline int obd_health_check(struct obd_device *obd)
 {

@@ -16,16 +16,25 @@ init_test_env $@
 CHECK_GRANT=${CHECK_GRANT:-"yes"}
 GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 
+remote_mds_nodsh && log "SKIP: remote MDS with nodsh" && exit 0
+
 # Skip these tests
 # bug number:
 ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT"
+
+if [ "$FAILURE_MODE" = "HARD" ] && mixed_ost_devs; then
+    CONFIG_EXCEPTIONS="0b 42 47 61a 61c"
+    echo -n "Several ost services on one ost node are used with FAILURE_MODE=$FAILURE_MODE. "
+    echo "Except the tests: $CONFIG_EXCEPTIONS"
+    ALWAYS_EXCEPT="$ALWAYS_EXCEPT $CONFIG_EXCEPTIONS"
+fi
 
 #                                                  63 min  7 min  AT AT AT AT"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="1 2 3 4 6 12 16 44a     44b    65 66 67 68"
 
 build_test_filter
 
-cleanup_and_setup_lustre
+check_and_setup_lustre
 
 mkdir -p $DIR
 
@@ -39,6 +48,8 @@ test_0a() {	# was test_0
 run_test 0a "empty replay"
 
 test_0b() {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     # this test attempts to trigger a race in the precreation code, 
     # and must run before any other objects are created on the filesystem
     fail ost1
@@ -46,15 +57,6 @@ test_0b() {
     unlinkmany $DIR/$tfile 20 || return 2
 }
 run_test 0b "ensure object created after recover exists. (3284)"
-
-test_0c() {
-    replay_barrier mds
-    umount $DIR
-    facet_failover mds
-    zconf_mount `hostname` $DIR || error "mount fails"
-    df $DIR || error "post-failover df failed"
-}
-run_test 0c "expired recovery with no clients"
 
 test_1() {
     replay_barrier mds
@@ -311,6 +313,7 @@ test_15() {
     return 0
 }
 run_test 15 "open(O_CREAT), unlink |X|  touch new, close"
+
 
 test_16() {
     replay_barrier mds
@@ -833,6 +836,8 @@ run_test 42 "recovery after ost failure"
 
 # timeout in MDS/OST recovery RPC will LBUG MDS
 test_43() { # bug 2530
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     replay_barrier mds
 
     # OBD_FAIL_OST_CREATE_NET 0x204
@@ -925,6 +930,8 @@ test_46() {
 run_test 46 "Don't leak file handle after open resend (3325)"
 
 test_47() { # bug 2824
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     # create some files to make sure precreate has been done on all 
     # OSTs. (just in case this test is run independently)
     createmany -o $DIR/$tfile 20  || return 1
@@ -948,17 +955,18 @@ test_47() { # bug 2824
 run_test 47 "MDS->OSC failure during precreate cleanup (2824)"
 
 test_48() {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+    [ "$OSTCOUNT" -lt "2" ] && skip "$OSTCOUNT < 2 OSTs -- skipping" && return
+
     replay_barrier mds
     createmany -o $DIR/$tfile 20  || return 1
     # OBD_FAIL_OST_EROFS 0x216
-    fail mds
+    facet_failover mds
     do_facet ost1 "lctl set_param fail_loc=0x80000216"
     df $MOUNT || return 2
 
     createmany -o $DIR/$tfile 20 20 || return 2
     unlinkmany $DIR/$tfile 40 || return 3
-
-    do_facet ost1 "lctl set_param fail_loc=0"
     return 0
 }
 run_test 48 "MDS->OSC failure during precreate cleanup (2824)"
@@ -1001,7 +1009,7 @@ test_53a() {
     #define OBD_FAIL_MDS_CLOSE_NET 0x115
     do_facet mds "lctl set_param fail_loc=0x80000115"
     kill -USR1 $close_pid
-    cancel_lru_locks mdc # force the close
+    cancel_lru_locks MDC # force the close
     do_facet mds "lctl set_param fail_loc=0"
     mcreate $DIR/${tdir}-2/f || return 1
     
@@ -1031,7 +1039,7 @@ test_53b() {
 
     do_facet mds "lctl set_param fail_loc=0"
     kill -USR1 $close_pid
-    cancel_lru_locks mdc # force the close
+    cancel_lru_locks MDC # force the close
     wait $close_pid || return 1
     # open should still be here
     [ -d /proc/$open_pid ] || return 2
@@ -1059,7 +1067,7 @@ test_53c() {
 
     do_facet mds "lctl set_param fail_loc=0x80000115"
     kill -USR1 $close_pid
-    cancel_lru_locks mdc  # force the close
+    cancel_lru_locks MDC  # force the close
 
     replay_barrier_nodf mds
     fail_nodf mds
@@ -1086,10 +1094,10 @@ test_53d() {
     # define OBD_FAIL_MDS_CLOSE_NET_REP 0X138    
     do_facet mds "lctl set_param fail_loc=0x8000013b"
     kill -USR1 $close_pid
-    cancel_lru_locks mdc  # force the close
+    cancel_lru_locks MDC  # force the close
     do_facet mds "lctl set_param fail_loc=0"
     mcreate $DIR/${tdir}-2/f || return 1
-
+    
     # close should still be here
     [ -d /proc/$close_pid ] || return 2
     replay_barrier_nodf mds
@@ -1113,14 +1121,14 @@ test_53e() {
     mcreate $DIR/${tdir}-2/f &
     open_pid=$!
     sleep 1
-
+    
     do_facet mds "lctl set_param fail_loc=0"
     kill -USR1 $close_pid
-    cancel_lru_locks mdc  # force the close
+    cancel_lru_locks MDC  # force the close
     wait $close_pid || return 1
     # open should still be here
     [ -d /proc/$open_pid ] || return 2
-
+    
     replay_barrier_nodf mds
     fail mds
     wait $open_pid || return 3
@@ -1144,7 +1152,7 @@ test_53f() {
 
         do_facet mds "lctl set_param fail_loc=0x8000013b"
         kill -USR1 $close_pid
-        cancel_lru_locks mdc
+        cancel_lru_locks MDC
 
         replay_barrier_nodf mds
         fail_nodf mds
@@ -1173,7 +1181,7 @@ test_53g() {
 
         do_facet mds "lctl set_param fail_loc=0x80000115"
         kill -USR1 $close_pid
-        cancel_lru_locks mdc # force the close
+        cancel_lru_locks MDC # force the close
 
         do_facet mds "lctl set_param fail_loc=0"
         replay_barrier_nodf mds
@@ -1199,10 +1207,10 @@ test_53h() {
     mcreate $DIR/${tdir}-2/f &
     open_pid=$!
     sleep 1
-
+    
     do_facet mds "lctl set_param fail_loc=0x8000013b"
     kill -USR1 $close_pid
-    cancel_lru_locks mdc  # force the close
+    cancel_lru_locks MDC  # force the close
     sleep 1
 
     replay_barrier_nodf mds
@@ -1301,13 +1309,15 @@ test_58c() { # bug 16570
         [ x$VAL = x"bar1" ] || return 4
         rm -f $DIR/$tdir/$tfile
         rmdir $DIR/$tdir
-       	zconf_umount `hostname` $MOUNT2
+        zconf_umount `hostname` $MOUNT2
 }
 run_test 58c "resend/reconstruct setxattr op"
 
 # log_commit_thread vs filter_destroy race used to lead to import use after free
 # bug 11658
 test_59() {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     mkdir -p $DIR/$tdir
     createmany -o $DIR/$tdir/$tfile-%d 200
     sync
@@ -1338,6 +1348,8 @@ run_test 60 "test llog post recovery init vs llog unlink"
 
 #test race  llog recovery thread vs llog cleanup
 test_61a() {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     mkdir -p $DIR/$tdir
     createmany -o $DIR/$tdir/$tfile-%d 800
     replay_barrier ost1 
@@ -1367,6 +1379,8 @@ run_test 61b "test race mds llog sync vs llog cleanup"
 
 #test race  cancel cookie cb vs llog cleanup
 test_61c() {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
 #   OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT 0x222 
     touch $DIR/$tfile 
     do_facet ost "lctl set_param fail_loc=0x80000222"
@@ -1433,24 +1447,35 @@ at_start()
         # speed up the timebase so we can check decreasing AT
 	do_facet mds "echo 8 >> $at_history"
 	do_facet ost1 "echo 8 >> $at_history"
+
+	# sleep for a while to cool down, should be > 8s and also allow
+	# at least one ping to be sent. simply use TIMEOUT to be safe.
+	sleep $TIMEOUT
     fi
 }
 
 test_65a() #bug 3055
 {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     at_start || return 0
     $LCTL dk > /dev/null
     debugsave
     lctl set_param debug="+other"
-    # slow down a request
-    do_facet mds lctl set_param fail_val=30000
+    # Slow down a request to the current service time, this is critical
+    # because previous tests may have caused this value to increase.
+    REQ_DELAY=`lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts |
+               awk '/portal 12/ {print $5}'`
+    REQ_DELAY=$((${REQ_DELAY} + ${REQ_DELAY} / 4 + 5))
+
+    do_facet mds lctl set_param fail_val=$((${REQ_DELAY} * 1000))
 #define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
     do_facet mds lctl set_param fail_loc=0x8000050a
     createmany -o $DIR/$tfile 10 > /dev/null
     unlinkmany $DIR/$tfile 10 > /dev/null
     # check for log message
     $LCTL dk | grep "Early reply #" || error "No early reply" 
-    # client should show 30s estimates
+    # client should show REQ_DELAY estimates
     lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts | grep portal
     sleep 9
     lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts | grep portal
@@ -1459,13 +1484,20 @@ run_test 65a "AT: verify early replies"
 
 test_65b() #bug 3055
 {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     at_start || return 0
     # turn on D_ADAPTTO
     debugsave
     lctl set_param debug="+other"
     $LCTL dk > /dev/null
-    # slow down bulk i/o
-    do_facet ost1 lctl set_param fail_val=30
+    # Slow down a request to the current service time, this is critical
+    # because previous tests may have caused this value to increase.
+    REQ_DELAY=`lctl get_param -n osc.${FSNAME}-OST0000-osc-*.timeouts |
+               awk '/portal 6/ {print $5}'`
+    REQ_DELAY=$((${REQ_DELAY} + ${REQ_DELAY} / 4 + 5))
+
+    do_facet ost1 lctl set_param fail_val=${REQ_DELAY}
 #define OBD_FAIL_OST_BRW_PAUSE_PACK      0x224
     do_facet ost1 lctl set_param fail_loc=0x224
 
@@ -1478,13 +1510,15 @@ test_65b() #bug 3055
     # check for log message
     $LCTL dk | grep "Early reply #" || error "No early reply"
     debugrestore
-    # client should show 30s estimates
+    # client should show REQ_DELAY estimates
     lctl get_param -n osc.${FSNAME}-OST0000-osc-*.timeouts | grep portal
 }
 run_test 65b "AT: verify early replies on packed reply / bulk"
 
 test_66a() #bug 3055
 {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     at_start || return 0
     lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts | grep "portal 12"
     # adjust 5s at a time so no early reply is sent (within deadline)
@@ -1513,6 +1547,8 @@ run_test 66a "AT: verify MDT service time adjusts with no early replies"
 
 test_66b() #bug 3055
 {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     at_start || return 0
     ORIG=$(lctl get_param -n mdc.${FSNAME}-*.timeouts | awk '/network/ {print $4}')
     lctl set_param fail_val=$(($ORIG + 5))
@@ -1529,6 +1565,8 @@ run_test 66b "AT: verify net latency adjusts"
 
 test_67a() #bug 3055
 {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     at_start || return 0
     CONN1=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
     # sleeping threads may drive values above this
@@ -1548,6 +1586,8 @@ run_test 67a "AT: verify slow request processing doesn't induce reconnects"
 
 test_67b() #bug 3055
 {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     at_start || return 0
     CONN1=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
 #define OBD_FAIL_OST_PAUSE_CREATE        0x223
@@ -1555,7 +1595,7 @@ test_67b() #bug 3055
     do_facet ost1 "lctl set_param fail_loc=0x80000223"
     cp /etc/profile $DIR/$tfile || error "cp failed"
     client_reconnect
-    lctl get_param -n ost.OSS.ost_create.timeouts
+    do_facet ost1 "lctl get_param -n ost.OSS.ost_create.timeouts"
     log "phase 2"
     CONN2=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
     ATTEMPTS=$(($CONN2 - $CONN1))
@@ -1565,8 +1605,8 @@ test_67b() #bug 3055
     cp /etc/profile $DIR/$tfile || error "cp failed"
     do_facet ost1 "lctl set_param fail_loc=0"
     client_reconnect
-    lctl get_param -n ost.OSS.ost_create.timeouts
-    CONN3=$(`lctl get_param -n osc.*.stats` | awk '/_connect/ {total+=$2} END {print total}')
+    do_facet ost1 "lctl get_param -n ost.OSS.ost_create.timeouts"
+    CONN3=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
     ATTEMPTS=$(($CONN3 - $CONN2))
     echo "$ATTEMPTS osc reconnect attemps on 2nd slow"
     [ $ATTEMPTS -gt 0 ] && error "AT should have prevented reconnect"
@@ -1576,6 +1616,8 @@ run_test 67b "AT: verify instant slowdown doesn't induce reconnects"
 
 test_68 () #bug 13813
 {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     at_start || return 0
     local ldlm_enqueue_min=$(find /sys -name ldlm_enqueue_min)
     [ -z "$ldlm_enqueue_min" ] && skip "missing /sys/.../ldlm_enqueue_min" && return 0
@@ -1642,8 +1684,6 @@ test_70a () {
 	done
 	
 	ls $DIR
-
-	zconf_umount_clients $CLIENTS $DIR
 }
 run_test 70a "check multi client t-f"
 
@@ -1655,147 +1695,27 @@ test_70b () {
 
 	zconf_mount_clients $CLIENTS $DIR
 	
-	local duration="-t 60"
-	local cmd="rundbench 1 $duration "
+	local duration=120
+	[ "$SLOW" = "no" ] && duration=60
+	local cmd="rundbench 1 -t $duration"
 	local PID=""
-	for CLIENT in ${CLIENTS//,/ }; do
-		$PDSH $CLIENT "set -x; PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests/:${DBENCH_LIB} DBENCH_LIB=${DBENCH_LIB} $cmd" &
-		PID=$!
-		echo $PID >pid.$CLIENT
-		echo "Started load PID=`cat pid.$CLIENT`"
-	done
+	do_nodes $CLIENTS "set -x; PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests/:$DBENCH_LIB DBENCH_LIB=$DBENCH_LIB $cmd" &
+	PID=$!
+	log "Started rundbench load PID=$PID ..."
 
+	sleep $((duration / 4))
 	replay_barrier mds 
 	sleep 3 # give clients a time to do operations
 
 	log "$TESTNAME fail mds 1"
 	fail mds
 
-# wait for client to reconnect to MDS
-	sleep $TIMEOUT
+	wait $PID || error "rundbench load on $CLIENTS failed!"
 
-	for CLIENT in ${CLIENTS//,/ }; do
-		PID=`cat pid.$CLIENT`
-		wait $PID
-		rc=$?
-		echo "load on ${CLIENT} returned $rc"
-	done
-
-	zconf_umount_clients $CLIENTS $DIR 
 }
 run_test 70b "mds recovery; $CLIENTCOUNT clients"
 # end multi-client tests
 
-# vbr export handling
-create_fake_exports ()
-{
-    local facet=$1
-    local num=$2
-#obd_fail_val = num;
-#define OBD_FAIL_TGT_FAKE_EXP 0x708
-    do_facet $facet "lctl set_param fail_val=$num"
-    do_facet $facet "lctl set_param fail_loc=0x80000708"
-    fail $facet
-}
-
-test_71a() {
-    do_facet mds $LCTL get_param version | grep -q ^lustre.*1.6 && \
-        skip "skipping test for old 1.6 servers" && return 0
-    UUID=$(lctl dl | awk '/mdc.*-mdc-/ { print $5 }')
-    echo "Client UUID is $UUID"
-    replay_barrier mds
-    umount $DIR
-    facet_failover mds
-    zconf_mount `hostname` $DIR || error "mount fails"
-    df $DIR || error "post-failover df failed"
-    do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep $UUID" || \
-        error "no delayed exports"
-    OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
-    NEW_AGE=10
-    do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$NEW_AGE"
-    sleep $NEW_AGE
-    do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep \"$UUID.*EXPIRED\"" || \
-        error "exports didn't expire"
-    do_facet mds "lctl set_param mds.${mds_svc}.evict_client=$UUID"
-    do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep $UUID" && \
-        error "Export wasn't removed manually"
-    do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$OLD_AGE"
-    return 0;
-}
-run_test 71a "lost client export is kept"
-
-test_71b() {
-    do_facet mds $LCTL get_param version | grep -q ^lustre.*1.6 && \
-        skip "skipping test for old 1.6 servers" && return 0
-    FAKE_NUM=10
-    create_fake_exports mds $FAKE_NUM
-    NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|wc -l")
-    [ $NUM -eq 0 ] && error "no fake exports $NUM - $FAKE_NUM"
-    OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
-    NEW_AGE=10
-    do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$NEW_AGE"
-    sleep $NEW_AGE
-    EX_NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep -c EXPIRED")
-    [ "$EX_NUM" -eq "$NUM" ] || error "not all exports are expired $EX_NUM != $NUM"
-    do_facet mds "lctl set_param mds.${mds_svc}.flush_stale_exports=1"
-    do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep EXPIRED" && \
-        error "Exports weren't flushed"
-    do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$OLD_AGE"
-    return 0;
-}
-run_test 71b "stale exports are expired, lctl flushes them"
-
-test_71c() {
-    do_facet mds $LCTL get_param version | grep -q ^lustre.*1.6 && \
-        skip "skipping test for old 1.6 servers" && return 0
-    FAKE_NUM=10
-    create_fake_exports mds $FAKE_NUM
-    NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|wc -l")
-    [ "$NUM" -eq "$FAKE_NUM" ] || error "no fake exports $NUM - $FAKE_NUM"
-    OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
-    NEW_AGE=10
-    do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$NEW_AGE"
-    sleep $NEW_AGE
-    EX_NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep -c EXPIRED")
-    [ "$EX_NUM" -eq "$NUM" ] || error "not all exports are expired $EX_NUM != $NUM"
-
-    umount $DIR
-    zconf_mount `hostname` $DIR || error "mount fails"
-
-    NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|wc -l")
-    [ $NUM -eq 0 ] || error "$NUM fake exports are still exists"
-    do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$OLD_AGE"
-    return 0;
-}
-run_test 71c "stale exports are expired, new client connection flush them"
-
-test_71d() {
-    do_facet mds $LCTL get_param version | grep -q ^lustre.*1.6 && \
-        skip "skipping test for old 1.6 servers" && return 0
-    FAKE_NUM=10
-    create_fake_exports mds $FAKE_NUM
-    NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|wc -l")
-    [ "$NUM" -eq "$FAKE_NUM" ] || error "no fake exports $NUM - $FAKE_NUM"
-    OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
-    NEW_AGE=10
-    do_facet mds "lctl conf_param ${mds_svc}.mdt.stale_export_age=$NEW_AGE"
-    sleep $NEW_AGE
-    EX_NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep -c EXPIRED")
-    [ "$EX_NUM" -eq "$NUM" ] || error "not all exports are expired $EX_NUM != $NUM"
-
-    fail mds
-
-    FAIL_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
-    [ $FAIL_AGE -eq $NEW_AGE ] || error "new age wasn't set after recovery"
-    NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|wc -l")
-    [ $NUM -eq 0 ] || error "$NUM fake exports are still exists"
-    do_facet mds "lctl conf_param ${mds_svc}.mdt.stale_export_age=$OLD_AGE"
-    return 0;
-}
-run_test 71d "expired exports, server init removes them, conf_param works"
-
-# end vbr exports tests
-
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true

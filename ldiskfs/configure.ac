@@ -134,7 +134,7 @@ LB_CHECK_SYMBOL_EXPORT([__d_move],
 LB_CONFIG_FILES
 AC_CONFIG_FILES([ldiskfs/autoMakefile ldiskfs/Makefile])
 
-MOSTLYCLEANFILES='.*.cmd .*.flags *.o *.ko *.mod.c .depend .*.1.*'
+MOSTLYCLEANFILES='.*.cmd .*.flags *.o *.ko *.mod.c .depend .*.1.* Modules.symvers Module.symvers'
 AC_SUBST(MOSTLYCLEANFILES)
 
 AC_OUTPUT

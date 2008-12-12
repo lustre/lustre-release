@@ -95,12 +95,6 @@ void ptlrpc_ping_import_soon(struct obd_import *imp)
         imp->imp_next_ping = cfs_time_current();
 }
 
-static inline int imp_is_deactive(struct obd_import *imp)
-{
-        return (imp->imp_deactive ||
-                OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_IMP_DEACTIVE));
-}
-
 #ifdef __KERNEL__
 static int ptlrpc_pinger_main(void *arg)
 {
@@ -145,14 +139,14 @@ static int ptlrpc_pinger_main(void *arg)
                             cfs_time_aftereq(this_ping, 
                                              imp->imp_next_ping - 5 * CFS_TICK)) {
                                 if (level == LUSTRE_IMP_DISCON &&
-                                    !imp_is_deactive(imp)) {
+                                    !imp->imp_deactive) {
                                         /* wait at least a timeout before
                                            trying recovery again. */
                                         imp->imp_next_ping = cfs_time_shift(obd_timeout);
                                         ptlrpc_initiate_recovery(imp);
                                 } else if (level != LUSTRE_IMP_FULL ||
                                          imp->imp_obd->obd_no_recov ||
-                                         imp_is_deactive(imp)) {
+                                         imp->imp_deactive) {
                                         CDEBUG(D_HA, "not pinging %s "
                                                "(in recovery: %s or recovery "
                                                "disabled: %u/%u)\n",
@@ -161,7 +155,7 @@ static int ptlrpc_pinger_main(void *arg)
                                                imp->imp_deactive,
                                                imp->imp_obd->obd_no_recov);
                                 } else if (imp->imp_pingable || force) {
-                                                ptlrpc_ping(imp);
+                                        ptlrpc_ping(imp);
                                 }
                         } else {
                                 if (!imp->imp_pingable)
@@ -485,6 +479,7 @@ static int pinger_check_rpcs(void *arg)
         struct ptlrpc_request *req;
         struct ptlrpc_request_set *set;
         struct list_head *iter;
+        struct obd_import *imp;
         struct pinger_data *pd = &pinger_args;
         int rc;
 
@@ -546,7 +541,7 @@ static int pinger_check_rpcs(void *arg)
                         req->rq_no_resend = 1;
                         ptlrpc_req_set_repsize(req, 1, NULL);
                         req->rq_send_state = LUSTRE_IMP_FULL;
-                        req->rq_phase = RQ_PHASE_RPC;
+                        ptlrpc_rqphase_move(req, RQ_PHASE_RPC);
                         req->rq_import_generation = generation;
                         ptlrpc_set_add_req(set, req);
                 } else {
@@ -592,17 +587,23 @@ do_check_set:
                 if (req->rq_phase == RQ_PHASE_COMPLETE)
                         continue;
 
-                req->rq_phase = RQ_PHASE_COMPLETE;
-                atomic_dec(&req->rq_import->imp_inflight);
-                set->set_remaining--;
-                /* If it was disconnected, don't sweat it. */
-                if (list_empty(&req->rq_import->imp_pinger_chain)) {
-                        ptlrpc_unregister_reply(req);
-                        continue;
-                }
+                CDEBUG(D_RPCTRACE, "Pinger initiate expire request(%p)\n",
+                       req);
 
-                CDEBUG(D_RPCTRACE, "pinger initiate expire_one_request\n");
-                ptlrpc_expire_one_request(req);
+                /* This will also unregister reply. */
+                ptlrpc_expire_one_request(req, 0);
+
+                /* We're done with this req, let's finally move it to complete
+                 * phase and take care of inflights. */
+                ptlrpc_rqphase_move(req, RQ_PHASE_COMPLETE);
+                imp = req->rq_import;
+                spin_lock(&imp->imp_lock);
+                if (!list_empty(&req->rq_list)) {
+                        list_del_init(&req->rq_list);
+                        atomic_dec(&imp->imp_inflight);
+                }
+                spin_unlock(&imp->imp_lock);
+                set->set_remaining--;
         }
         mutex_up(&pinger_sem);
 
@@ -700,13 +701,11 @@ void ptlrpc_pinger_wake_up()
                 CDEBUG(D_RPCTRACE, "checking import %s->%s\n",
                        imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
 #ifdef ENABLE_LIBLUSTRE_RECOVERY
-                if (imp->imp_state == LUSTRE_IMP_DISCON &&
-                    !imp_is_deactive(imp))
+                if (imp->imp_state == LUSTRE_IMP_DISCON && !imp->imp_deactive)
 #else
                 /*XXX only recover for the initial connection */
                 if (!lustre_handle_is_used(&imp->imp_remote_handle) &&
-                    imp->imp_state == LUSTRE_IMP_DISCON &&
-                    !imp_is_deactive(imp))
+                    imp->imp_state == LUSTRE_IMP_DISCON && !imp->imp_deactive)
 #endif
                         ptlrpc_initiate_recovery(imp);
                 else if (imp->imp_state != LUSTRE_IMP_FULL)
@@ -714,7 +713,7 @@ void ptlrpc_pinger_wake_up()
                                      "state %d, deactive %d\n",
                                      imp->imp_obd->obd_uuid.uuid,
                                      obd2cli_tgt(imp->imp_obd), imp->imp_state,
-                                     imp_is_deactive(imp));
+                                     imp->imp_deactive);
         }
 #endif
         EXIT;

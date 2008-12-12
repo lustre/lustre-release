@@ -59,9 +59,7 @@ void iattr_from_obdo(struct iattr *attr, struct obdo *oa, obd_flag valid);
 void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid);
 void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid);
 void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid);
-#endif
-
-#if !defined(__KERNEL__) || (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#else
 #define to_kdev_t(dev) dev
 #define kdev_t_to_nr(dev) dev
 #endif

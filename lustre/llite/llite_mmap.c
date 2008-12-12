@@ -53,9 +53,6 @@
 #include <linux/mm.h>
 #include <linux/pagemap.h>
 #include <linux/smp_lock.h>
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-#include <linux/iobuf.h>
-#endif
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
@@ -605,8 +602,7 @@ int ll_file_mmap(struct file * file, struct vm_area_struct * vma)
         ll_stats_ops_tally(ll_i2sbi(file->f_dentry->d_inode), LPROC_LL_MAP, 1);
         rc = generic_file_mmap(file, vma);
         if (rc == 0) {
-#if !defined(HAVE_FILEMAP_POPULATE) && \
-    (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+#ifndef HAVE_FILEMAP_POPULATE
                 if (!filemap_populate)
                         filemap_populate = vma->vm_ops->populate;
 #endif

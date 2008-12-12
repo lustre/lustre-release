@@ -41,8 +41,7 @@
 #include <lustre_mds.h>
 
 #define MDT_ROCOMPAT_SUPP       (OBD_ROCOMPAT_LOVOBJID)
-#define MDT_INCOMPAT_SUPP       (OBD_INCOMPAT_MDT | OBD_INCOMPAT_COMMON_LR | \
-                                 OBD_INCOMPAT_FID)
+#define MDT_INCOMPAT_SUPP       (OBD_INCOMPAT_MDT | OBD_INCOMPAT_COMMON_LR)
 
 #define MDS_SERVICE_WATCHDOG_FACTOR 2000
 
@@ -67,11 +66,7 @@ static inline void mds_export_evict(struct obd_export *exp)
 
 #ifdef __KERNEL__
 /* Open counts for files.  No longer atomic, must hold inode->i_sem */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 # define mds_inode_oatomic(inode)    ((inode)->i_cindex)
-#else
-# define mds_inode_oatomic(inode)    ((inode)->i_attr_flags)
-#endif
 
 #ifdef HAVE_I_ALLOC_SEM
 #define MDS_UP_READ_ORPHAN_SEM(i)          UP_READ_I_ALLOC_SEM(i)
@@ -155,8 +150,9 @@ int enqueue_ordered_locks(struct obd_device *obd, struct ldlm_res_id *p1_res_id,
                           struct lustre_handle *p2_lockh, int p2_lock_mode,
                           ldlm_policy_data_t *p2_policy);
 void mds_commit_cb(struct obd_device *, __u64 last_rcvd, void *data, int error);
-int mds_finish_transno(struct mds_obd *, struct inode **, void *,
-                       struct ptlrpc_request *, int, __u32, int force_sync);
+int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
+                       struct ptlrpc_request *req, int rc, __u32 op_data,
+                       int force_sync);
 void mds_reconstruct_generic(struct ptlrpc_request *req);
 void mds_req_from_lcd(struct ptlrpc_request *req, struct lsd_client_data *cd);
 int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
@@ -188,15 +184,9 @@ int mds_get_parents_children_locked(struct obd_device *obd,
                                     struct lustre_handle *dlm_handles,
                                     int child_mode);
 
-struct dentry *mds_lookup(struct obd_device *obd,
-                          const char *fid_name,
-                          struct dentry *dparent,
-                          int fid_namelen);
-
 void mds_shrink_reply(struct obd_device *obd, struct ptlrpc_request *req,
                       struct mds_body *body, int md_off);
 int mds_get_cookie_size(struct obd_device *obd, struct lov_mds_md *lmm);
-int mds_version_get_check(struct ptlrpc_request *, struct inode *, int);
 /* mds/mds_lib.c */
 int mds_update_unpack(struct ptlrpc_request *, int offset,
                       struct mds_update_record *);
@@ -204,7 +194,7 @@ int mds_init_ucred(struct lvfs_ucred *ucred, struct ptlrpc_request *req,
                    int offset);
 void mds_exit_ucred(struct lvfs_ucred *ucred, struct mds_obd *obd);
 void mds_root_squash(struct mds_obd *mds, lnet_nid_t *peernid,
-                     __u32 *fsuid, __u32 *fsgid, __u32 *cap,
+                     __u32 *fsuid, __u32 *fsgid, cfs_kernel_cap_t *cap,
                      __u32 *suppgid, __u32 *suppgid2);
 
 /* mds/mds_unlink_open.c */
@@ -242,8 +232,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
 int mds_get_default_md(struct obd_device *obd, struct lov_mds_md *lmm,
                        int *lmmsize);
 int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
-                       struct lov_mds_md *lmm, int lmm_size,
-                       __u64 connect_flags);
+                       struct lov_mds_md *lmm, int lmm_size);
 int mds_init_lov_desc(struct obd_device *obd, struct obd_export *osc_exp);
 
 /* mds/mds_open.c */
@@ -265,8 +254,6 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
                   struct dentry *dchild, struct lustre_handle *lockh);
 
 /* mds/mds_fs.c */
-int mds_update_client_epoch(struct obd_export *exp);
-void mds_update_last_epoch(struct obd_device *obd);
 int mds_export_stats_init(struct obd_device *obd,
                           struct obd_export *exp,
                           void *client_nid);
@@ -287,10 +274,10 @@ int mds_postrecov(struct obd_device *obd);
 int mds_init_export(struct obd_export *exp);
 #ifdef __KERNEL__
 int mds_get_md(struct obd_device *, struct inode *, void *md, int *size,
-               int lock, int flags, __u64 connect_flags);
+               int lock, int flags);
 int mds_pack_md(struct obd_device *, struct lustre_msg *, int offset,
-                struct mds_body *, struct inode *, int lock, int flags,
-                __u64 connect_flags);
+                struct mds_body *, struct inode *, int lock, int flags);
+void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode);
 void mds_pack_inode2body(struct mds_body *body, struct inode *inode);
 #endif
 int mds_pack_acl(struct mds_export_data *med, struct inode *inode,

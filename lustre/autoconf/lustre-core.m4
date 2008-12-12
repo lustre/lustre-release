@@ -220,9 +220,6 @@ LB_LINUX_TRY_COMPILE([
 	#include <linux/fs.h>
 	#include <linux/version.h>
 ],[
-	#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,24))
-	#error "down_read_trylock broken before 2.4.24"
-	#endif
 	struct inode i;
 	return (char *)&i.i_alloc_sem - (char *)&i;
 ],[
@@ -237,52 +234,27 @@ LB_LINUX_TRY_COMPILE([
 # LC_FUNC_REGISTER_CACHE
 #
 # if register_cache() is defined by kernel
-# 
-# There are two ways to shrink one customized cache in linux kernels. For the
-# kernels are prior than 2.6.5(?), register_cache() is used, and for latest 
-# kernels, set_shrinker() is used instead.
 #
 AC_DEFUN([LC_FUNC_REGISTER_CACHE],
-[AC_MSG_CHECKING([if kernel defines cache pressure hook])
+[AC_MSG_CHECKING([if kernel defines register_cache()])
 LB_LINUX_TRY_COMPILE([
-	#include <linux/mm.h>
+	#include <linux/list.h>
+	#include <linux/cache_def.h>
 ],[
-	shrinker_t shrinker;
-
-	set_shrinker(1, shrinker);
+	struct cache_definition cache;
 ],[
-	AC_MSG_RESULT([set_shrinker])
-	AC_DEFINE(HAVE_SHRINKER_CACHE, 1, [shrinker_cache found])
-	AC_DEFINE(HAVE_CACHE_RETURN_INT, 1, [shrinkers should return int])
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_REGISTER_CACHE, 1, [register_cache found])
+	AC_MSG_CHECKING([if kernel expects return from cache shrink function])
+	HAVE_CACHE_RETURN_INT="`grep -c 'int.*shrink' $LINUX/include/linux/cache_def.h`"
+	if test "$HAVE_CACHE_RETURN_INT" != 0 ; then
+		AC_DEFINE(HAVE_CACHE_RETURN_INT, 1, [kernel expects return from shrink_cache])
+		AC_MSG_RESULT(yes)
+	else
+		AC_MSG_RESULT(no)
+	fi
 ],[
-	LB_LINUX_TRY_COMPILE([
-		#include <linux/list.h>
-		#include <linux/cache_def.h>
-	],[
-		struct cache_definition cache;
-	],[
-		AC_MSG_RESULT([register_cache])
-		AC_DEFINE(HAVE_REGISTER_CACHE, 1, [register_cache found])
-		AC_MSG_CHECKING([if kernel expects return from cache shrink ])
-		tmp_flags="$EXTRA_KCFLAGS"
-		EXTRA_KCFLAGS="-Werror"
-		LB_LINUX_TRY_COMPILE([
-			#include <linux/list.h>
-			#include <linux/cache_def.h>
-		],[
-			struct cache_definition c;
-			c.shrinker = (int (*)(int, unsigned int))1;
-		],[
-			AC_DEFINE(HAVE_CACHE_RETURN_INT, 1,
-				  [kernel expects return from shrink_cache])
-			AC_MSG_RESULT(yes)
-		],[
-			AC_MSG_RESULT(no)
-		])
-		EXTRA_KCFLAGS="$tmp_flags"
-	],[
-		AC_MSG_RESULT([no])
-	])
+	AC_MSG_RESULT([no])
 ])
 ])
 
@@ -839,7 +811,7 @@ LB_LINUX_TRY_COMPILE([
 # LC_INODE_I_MUTEX
 # after 2.6.15 inode have i_mutex intead of i_sem
 AC_DEFUN([LC_INODE_I_MUTEX],
-[AC_MSG_CHECKING([use inode have i_mutex ])
+[AC_MSG_CHECKING([if inode has i_mutex ])
 LB_LINUX_TRY_COMPILE([
 	#include <linux/mutex.h>
 	#include <linux/fs.h>
@@ -853,7 +825,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_INODE_I_MUTEX, 1,
                 [after 2.6.15 inode have i_mutex intead of i_sem])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -874,7 +846,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_DQUOTOFF_MUTEX, 1,
                 [after 2.6.17 dquote use mutex instead if semaphore])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -934,7 +906,7 @@ LB_LINUX_TRY_COMPILE([
 	AC_DEFINE(HAVE_INVALIDATEPAGE_RETURN_INT, 1,
 		[Define if return type of invalidatepage should be int])
 ],[
-	AC_MSG_RESULT(NO)
+	AC_MSG_RESULT(no)
 ])
 ])
 
@@ -963,7 +935,7 @@ LB_LINUX_TRY_COMPILE([
 	AC_DEFINE(HAVE_UMOUNTBEGIN_VFSMOUNT, 1,
 		[Define umount_begin need second argument])
 ],[
-	AC_MSG_RESULT(NO)
+	AC_MSG_RESULT(no)
 ])
 EXTRA_KCFLAGS="$tmp_flags"
 ])
@@ -982,7 +954,7 @@ LB_LINUX_TRY_COMPILE([
 	AC_DEFINE(HAVE_INODE_BLKSIZE, 1,
 		[struct inode has i_blksize field])
 ],[
-	AC_MSG_RESULT(NO)
+	AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1009,7 +981,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_VFS_READDIR_U64_INO, 1,
                 [if vfs_readdir need 64bit inode number])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 EXTRA_KCFLAGS="$tmp_flags"
 ])
@@ -1021,14 +993,14 @@ AC_DEFUN([LC_FILE_WRITEV],
 LB_LINUX_TRY_COMPILE([
         #include <linux/fs.h>
 ],[
-        struct file_operations *fops;
+        struct file_operations *fops = NULL;
         fops->writev = NULL;
 ],[
         AC_MSG_RESULT(yes)
         AC_DEFINE(HAVE_FILE_WRITEV, 1,
                 [use fops->writev])
 ],[
-	AC_MSG_RESULT(NO)
+	AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1039,14 +1011,14 @@ AC_DEFUN([LC_FILE_READV],
 LB_LINUX_TRY_COMPILE([
         #include <linux/fs.h>
 ],[
-        struct file_operations *fops;
+        struct file_operations *fops = NULL;
         fops->readv = NULL;
 ],[
         AC_MSG_RESULT(yes)
         AC_DEFINE(HAVE_FILE_READV, 1,
                 [use fops->readv])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1063,7 +1035,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_NR_PAGECACHE, 1,
                 [is kernel export nr_pagecache])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1073,6 +1045,7 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_CANCEL_DIRTY_PAGE],
 [AC_MSG_CHECKING([kernel has cancel_dirty_page])
 LB_LINUX_TRY_COMPILE([
+        #include <linux/mm.h>
         #include <linux/page-flags.h>
 ],[
         cancel_dirty_page(NULL, 0);
@@ -1081,7 +1054,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_CANCEL_DIRTY_PAGE, 1,
                   [kernel has cancel_dirty_page instead of clear_page_dirty])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1095,6 +1068,7 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_PAGE_CONSTANT],
 [AC_MSG_CHECKING([if kernel have PageConstant defined])
 LB_LINUX_TRY_COMPILE([
+        #include <linux/mm.h>
         #include <linux/page-flags.h>
 ],[
         #ifndef PG_constant
@@ -1113,6 +1087,7 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_PG_FS_MISC],
 [AC_MSG_CHECKING([kernel has PG_fs_misc])
 LB_LINUX_TRY_COMPILE([
+        #include <linux/mm.h>
         #include <linux/page-flags.h>
 ],[
         #ifndef PG_fs_misc
@@ -1123,7 +1098,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_PG_FS_MISC, 1,
                   [is kernel have PG_fs_misc])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1131,6 +1106,7 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_PAGE_CHECKED],
 [AC_MSG_CHECKING([kernel has PageChecked and SetPageChecked])
 LB_LINUX_TRY_COMPILE([
+        #include <linux/mm.h>
         #include <linux/page-flags.h>
 ],[
         #ifndef PageChecked
@@ -1144,7 +1120,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_PAGE_CHECKED, 1,
                   [does kernel have PageChecked and SetPageChecked])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1256,26 +1232,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# 2.6.12 merge patch from oracle to convert tree_lock from spinlock to rwlock
-AC_DEFUN([LC_RW_TREE_LOCK],
-[AC_MSG_CHECKING([if kernel has tree_lock as rwlock])
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-],[
-        struct address_space a;
-
-        write_lock(&a.tree_lock);
-],[
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_RW_TREE_LOCK, 1, [kernel has tree_lock as rw_lock])
-],[
-        AC_MSG_RESULT([no])
-])
-EXTRA_KCFLAGS="$tmp_flags"
-])
-
 # 2.6.23 have return type 'void' for unregister_blkdev
 AC_DEFUN([LC_UNREGISTER_BLKDEV_RETURN_INT],
 [AC_MSG_CHECKING([if unregister_blkdev return int])
@@ -1332,10 +1288,10 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_CONFIG_PINGER
           LC_CONFIG_CHECKSUM
           LC_CONFIG_LIBLUSTRE_RECOVERY
-          LC_CONFIG_QUOTA
           LC_CONFIG_HEALTH_CHECK_WRITE
           LC_CONFIG_LRU_RESIZE
           LC_CONFIG_ADAPTIVE_TIMEOUTS
+          LC_QUOTA_MODULE
 
           LC_TASK_PPTR
           # RHEL4 patches
@@ -1374,14 +1330,10 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_QUOTA_READ
           LC_COOKIE_FOLLOW_LINK
           LC_FUNC_RCU
-          LC_PERCPU_COUNTER
           LC_QUOTA64
 
           # does the kernel have VFS intent patches?
           LC_VFS_INTENT_PATCHES
-
-          # 2.6.12
-          LC_RW_TREE_LOCK
 
           # 2.6.15
           LC_INODE_I_MUTEX
@@ -1414,8 +1366,8 @@ AC_DEFUN([LC_PROG_LINUX],
 
           # raid5-zerocopy patch
           LC_PAGE_CONSTANT
-
-          # 2.6.22
+	  
+	  # 2.6.22
           LC_INVALIDATE_BDEV_2ARG
           LC_FS_RENAME_DOES_D_MOVE
           # 2.6.23
@@ -1546,9 +1498,9 @@ fi
 AC_DEFUN([LC_CONFIG_ADAPTIVE_TIMEOUTS],
 [AC_MSG_CHECKING([whether to enable ptlrpc adaptive timeouts support])
 AC_ARG_ENABLE([adaptive_timeouts],
-	AC_HELP_STRING([--disable-adaptive-timeouts],
-			[disable ptlrpc adaptive timeouts support]),
-	[],[enable_adaptive_timeouts='yes'])
+	AC_HELP_STRING([--enable-adaptive-timeouts],
+			[enable ptlrpc adaptive timeouts support]),
+	[],[enable_adaptive_timeouts='no'])
 AC_MSG_RESULT([$enable_adaptive_timeouts])
 if test x$enable_adaptive_timeouts == xyes; then
    AC_DEFINE(HAVE_AT_SUPPORT, 1, [Enable adaptive timeouts support])
@@ -1558,33 +1510,35 @@ fi
 #
 # LC_CONFIG_QUOTA
 #
-# whether to enable quota support
+# whether to enable quota support global control
 #
 AC_DEFUN([LC_CONFIG_QUOTA],
-[AC_ARG_ENABLE([quota], 
+[AC_ARG_ENABLE([quota],
 	AC_HELP_STRING([--enable-quota],
 			[enable quota support]),
-	[],[enable_quota='default'])
-if test x$linux25 != xyes; then
-	enable_quota='no'
-fi
-LB_LINUX_CONFIG([QUOTA],[
-	if test x$enable_quota = xdefault; then
-		enable_quota='yes'
-	fi
-],[
-	if test x$enable_quota = xdefault; then
-		enable_quota='no'
-		AC_MSG_WARN([quota is not enabled because the kernel lacks quota support])
-	else
-		if test x$enable_quota = xyes; then
-			AC_MSG_ERROR([cannot enable quota because the kernel lacks quota support])
-		fi
-	fi
+	[],[enable_quota='yes'])
 ])
-if test x$enable_quota != xno; then
+
+# whether to enable quota support(kernel modules)
+AC_DEFUN([LC_QUOTA_MODULE],
+[if test x$enable_quota != xno; then
+    LB_LINUX_CONFIG([QUOTA],[
+	enable_quota_module='yes'
 	AC_DEFINE(HAVE_QUOTA_SUPPORT, 1, [Enable quota support])
+    ],[
+	enable_quota_module='no'
+	AC_MSG_WARN([quota is not enabled because the kernel - lacks quota support])
+    ])
 fi
+])
+
+AC_DEFUN([LC_QUOTA],
+[#check global
+LC_CONFIG_QUOTA
+#check for utils
+AC_CHECK_HEADER(sys/quota.h,
+                [AC_DEFINE(HAVE_SYS_QUOTA_H, 1, [Define to 1 if you have <sys/quota.h>.])],
+                [AC_MSG_ERROR([don't find <sys/quota.h> in your system])])
 ])
 
 AC_DEFUN([LC_QUOTA_READ],
@@ -1698,33 +1652,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_SECURITY_PLUG, 1,
                 [SLES10 SP2 use extra parameter in vfs])
 ],[
-        AC_MSG_RESULT(NO)
-])
-])
-
-AC_DEFUN([LC_PERCPU_COUNTER],
-[AC_MSG_CHECKING([if have struct percpu_counter defined])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/percpu_counter.h>
-],[],[
-        AC_DEFINE(HAVE_PERCPU_COUNTER, 1, [percpu_counter found])
-        AC_MSG_RESULT([yes])
-
-        AC_MSG_CHECKING([if percpu_counter_inc takes the 2nd argument])
-        LB_LINUX_TRY_COMPILE([
-                #include <linux/percpu_counter.h>
-        ],[
-                struct percpu_counter c;
-                percpu_counter_init(&c, 0);
-        ],[
-                AC_DEFINE(HAVE_PERCPU_2ND_ARG, 1, [percpu_counter_init has two
-                                                   arguments])
-                AC_MSG_RESULT([yes])
-        ],[
-                AC_MSG_RESULT([no])
-        ])
-],[
-        AC_MSG_RESULT([no])
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1809,7 +1737,7 @@ AM_CONDITIONAL(LIBLUSTRE_TESTS, test x$enable_liblustre_tests = xyes)
 AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
 AM_CONDITIONAL(SERVER, test x$enable_server = xyes)
-AM_CONDITIONAL(QUOTA, test x$enable_quota = xyes)
+AM_CONDITIONAL(QUOTA, test x$enable_quota_module = xyes)
 AM_CONDITIONAL(BLKID, test x$ac_cv_header_blkid_blkid_h = xyes)
 AM_CONDITIONAL(EXT2FS_DEVEL, test x$ac_cv_header_ext2fs_ext2fs_h = xyes)
 AM_CONDITIONAL(LIBPTHREAD, test x$enable_libpthread = xyes)

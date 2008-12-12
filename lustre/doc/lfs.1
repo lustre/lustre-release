@@ -17,28 +17,17 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
         \fB[[!] --uid|-u N] [[!] --user|-U <name>]
         \fB<dirname|filename>\fR
 .br
-.B lfs osts
-.br
 .B lfs getstripe [--obd|-O <uuid>] [--quiet|-q] [--verbose|-v] 
-        \fB[--recursive|-r] <dirname|filename>\fR
+              \fB[--recursive|-r] <dirname|filename>\fR
 .br
 .B lfs setstripe [--size|-s stripe-size] [--count|-c stripe-cnt]
-        \fB[--offset|-o start-ost] [--pool|-p pool-name]
-        \fB<dir|filename>\fR
+              \fB[--index|-i start-ost] <filename|dirname>\fR
 .br
-.B lfs setstripe -d <dir>
-.br
-.B lfs poollist <filesystem>[.<pool>] | <pathname>
-.br
-.B lfs quota [-v] [-o obd_uuid] [-u|-g] <username|groupname> <filesystem>
-.br
-.B lfs quota <filesystem>
-.br
-.B lfs quota -t [-u|-g] <filesystem>
-.br
-.B lfs quotacheck [-ug] <filesystem>
+.B lfs setstripe -d <dirname>
 .br
 .B lfs quotachown [-i] <filesystem>
+.br
+.B lfs quotacheck [-ug] <filesystem>
 .br
 .B lfs quotaon [-ugf] <filesystem>
 .br
@@ -67,10 +56,17 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
              \fB[-b <block-grace>] [-i <inode-grace>]
              \fB<filesystem>\fR
 .br
+
+.B lfs quota [-v] [-o obd_uuid] [-u|-g] <username|groupname> <filesystem>
+.br
+.B lfs quota <filesystem>
+.br
+.B lfs quota -t [-u|-g] <filesystem>
+.br
 .B lfs help
 .SH DESCRIPTION
 .B lfs
-can be used to create a new file with a specific striping pattern, determine the default striping pattern, gather the extended attributes (object numbers and location) for a specific file, find files with specific attributes, list OST information, or set quota limits. It can be invoked interactively without any arguments or in a non-interactive mode with one of the arguements supported. 
+can be used to create a new file with a specific striping pattern, determine the default striping pattern, gather the extended attributes (object numbers and location) for a specific file. It can be invoked interactively without any arguments or in a non-interactive mode with one of the arguements supported. 
 .SH OPTIONS
 The various options supported by lctl are listed and explained below:
 .TP
@@ -83,15 +79,13 @@ Report filesystem disk space usage or inodes usage of each MDT/OST.
 .B find 
 To search the directory tree rooted at the given dir/file name for the files that match the given parameters: \fB--atime\fR (file was last accessed N*24 hours ago), \fB--ctime\fR (file's status was last changed N*24 hours ago), \fB--mtime\fR (file's data was last modified N*24 hours ago), \fB--obd\fR (file has an object on a specific OST or OSTs), \fB--size\fR (file has size in bytes, or \fBk\fRilo-, \fBM\fRega-, \fBG\fRiga-, \fBT\fRera-, \fBP\fReta-, or \fBE\fRxabytes if a suffix is given), \fB--type\fR (file has the type: \fBb\fRlock, \fBc\fRharacter, \fBd\fRirectory, \fBp\fRipe, \fBf\fRile, sym\fBl\fRink, \fBs\fRocket, or \fBD\fRoor (Solaris)), \fB--uid\fR (file has specific numeric user ID), \fB--user\fR (file owned by specific user, numeric user ID allowed), \fB--gid\fR (file has specific group ID), \fB--group\fR (file belongs to specific group, numeric group ID allowed). The option \fB--maxdepth\fR allows find to decend at most N levels of directory tree. The options \fB--print\fR and \fB--print0\fR print full file name, followed by a newline or NUL character correspondingly.  Using \fB!\fR before an option negates its meaning (\fIfiles NOT matching the parameter\fR).  Using \fB+\fR before a numeric value means \fIfiles with the parameter OR MORE\fR, while \fB-\fR before a numeric value means \fIfiles with the parameter OR LESS\fR.
 .TP
-.B osts 
-List all the OSTs for the filesystem
-.TP
 .B getstripe
 To list the striping info for a given filename or files in a directory, optionally recursively, for all files in a directory tree: \fB--quiet\fR (don't print object IDs), \fB--verbose\fR (print striping parameters), \fB--recursive\fR (recurse into subdirectories).
 .TP
-.B setstripe [--size stripe-size] [--count stripe-cnt] 
-	\fB[--offset start-ost] [--pool pool-name]\fR
-.br
+.B osts 
+List all the OSTs for the filesystem
+.TP
+.B setstripe [--size stripe-size] [--count stripe-cnt] [--index start-ost]
 To create a new file, or set the directory default, with the specified striping parameters.  The
 .I stripe-count
 is the number of OSTs to stripe a file over. A
@@ -104,23 +98,14 @@ is the number of bytes to store on each OST before moving to the next OST.  A
 .I stripe-size
 of 0 means to use the filesystem-wide default stripe size (default 1MB).  The
 .I start-ost
-is the OST index (base 10, starting at 0) on which to start striping for this file.  A
+is the OST index (starting at 0) on which to start striping for this file.  A
 .I start-ost
-of -1 allows the MDS to choose the starting index and it is strongly recommended, as this allows space and load balancing to be done by the MDS as needed.  The
-.I pool-name
-is the name of a predefined pool of OSTs (see 
-.I lctl
-) that will be used for striping. The 
-.I stripe-count, stripe-size, start-ost
-will be used as well; the 
-.I start-ost
-must be part of the pool or an error will be returned. 
+of -1 allows the MDS to specify the starting index and it is strongly
+recommended that the starting OST not be given, as this allows space and
+load balancing to be done by the MDS as needed.
 .TP
-.B setstripe -d
+.B lfs setstripe -d
 Delete the default striping on the specified directory.
-.TP
-.B poollist <filesystem>[.<pool>] | <pathname>
-List the pools in \fBfilesystem\fR or \fBpathname\fR, or the OSTs in \fBfilesystem.pool\fR
 .TP
 .B quotachown
 To change files' owner and group on OSTs of the specified filesystem

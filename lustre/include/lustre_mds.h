@@ -203,13 +203,14 @@ struct obd_client_handle;
 void mdc_set_open_replay_data(struct obd_client_handle *och,
                               struct ptlrpc_request *open_req);
 void mdc_clear_open_replay_data(struct obd_client_handle *och);
-int mdc_close(struct obd_export *, struct mdc_op_data *, struct obdo *,
-              struct obd_client_handle *, struct ptlrpc_request **);
+int mdc_close(struct obd_export *, struct obdo *, struct obd_client_handle *,
+              struct ptlrpc_request **);
 int mdc_readpage(struct obd_export *exp, struct ll_fid *mdc_fid, __u64 offset,
                  struct page *, struct ptlrpc_request **);
 int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
                const void *data, int datalen, int mode, __u32 uid, __u32 gid,
-               __u32 cap_effective, __u64 rdev,struct ptlrpc_request **request);
+               cfs_cap_t cap_effective, __u64 rdev,
+               struct ptlrpc_request **request);
 int mdc_unlink(struct obd_export *exp, struct mdc_op_data *data,
                struct ptlrpc_request **request);
 int mdc_link(struct obd_export *exp, struct mdc_op_data *data,
@@ -228,10 +229,10 @@ int mdc_resource_get_unused(struct obd_export *exp, struct ll_fid *fid,
 void mdc_store_inode_generation(struct ptlrpc_request *req, int reqoff,
                                 int repoff);
 int mdc_llog_process(struct obd_export *, char *logname, llog_cb_t, void *data);
-int mdc_done_writing(struct obd_export *, struct mdc_op_data *, struct obdo *);
+int mdc_done_writing(struct obd_export *exp, struct obdo *);
 
-static inline void ll_pack_fid(struct ll_fid *fid, obd_id ino, __u32 gen,
-                               int type)
+static inline void mdc_pack_fid(struct ll_fid *fid, obd_id ino, __u32 gen,
+                                int type)
 {
         fid->id = ino;
         fid->generation = gen;

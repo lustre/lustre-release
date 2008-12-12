@@ -163,6 +163,7 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         struct mgs_obd *mgs = &obd->u.mgs;
         struct lustre_mount_info *lmi;
         struct lustre_sb_info *lsi;
+        struct llog_ctxt *ctxt;
         struct vfsmount *mnt;
         int rc = 0;
         ENTRY;
@@ -219,11 +220,11 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
                                 mgs_handle, LUSTRE_MGS_NAME,
                                 obd->obd_proc_entry, NULL,
                                 MGS_THREADS_AUTO_MIN, MGS_THREADS_AUTO_MAX,
-                                "ll_mgs");
+                                "ll_mgs", NULL);
 
         if (!mgs->mgs_service) {
                 CERROR("failed to start service\n");
-                GOTO(err_fs, rc = -ENOMEM);
+                GOTO(err_llog, rc = -ENOMEM);
         }
 
         rc = ptlrpc_start_threads(obd, mgs->mgs_service);
@@ -244,6 +245,10 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
 
 err_thread:
         ptlrpc_unregister_service(mgs->mgs_service);
+err_llog:
+        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+        if (ctxt)
+                llog_cleanup(ctxt);
 err_fs:
         /* No extra cleanup needed for llog_init_commit_thread() */
         mgs_fs_cleanup(obd);
@@ -332,21 +337,6 @@ static int mgs_put_cfg_lock(struct lustre_handle *lockh)
         RETURN(0);
 }
 
-static void mgs_revoke_lock(struct obd_device *obd, char *fsname,
-                            struct lustre_handle *lockh)
-{
-        int lockrc;
-
-        if (fsname[0]) {
-                lockrc = mgs_get_cfg_lock(obd, fsname, lockh);
-                if (lockrc != ELDLM_OK)
-                        CERROR("lock error %d for fs %s\n", lockrc,
-                               fsname);
-                else
-                        mgs_put_cfg_lock(lockh);
-        }
-}
-
 /* rc=0 means ok
       1 means update
      <0 means error */
@@ -358,10 +348,9 @@ static int mgs_check_target(struct obd_device *obd, struct mgs_target_info *mti)
         rc = mgs_check_index(obd, mti);
         if (rc == 0) {
                 LCONSOLE_ERROR_MSG(0x13b, "%s claims to have registered, but "
-                                  "this MGS does not know about it.  Assuming "
-                                  "writeconf.\n", mti->mti_svname);
-                mti->mti_flags |= LDD_F_WRITECONF;
-                rc = 1;
+                                  "this MGS does not know about it, preventing "
+                                  "registration.\n", mti->mti_svname);
+                rc = -ENOENT;
         } else if (rc == -1) {
                 LCONSOLE_ERROR_MSG(0x13c, "Client log %s-client has "
                                    "disappeared! Regenerating all logs.\n",
@@ -498,7 +487,7 @@ static int mgs_set_info_rpc(struct ptlrpc_request *req)
         struct mgs_send_param *msp, *rep_msp;
         struct lustre_handle lockh;
         int rep_size[] = { sizeof(struct ptlrpc_body), sizeof(*msp) };
-        int rc;
+        int lockrc, rc;
         struct lustre_cfg_bufs bufs;
         struct lustre_cfg *lcfg;
         char fsname[MTI_NAME_MAXLEN];
@@ -517,9 +506,19 @@ static int mgs_set_info_rpc(struct ptlrpc_request *req)
                 RETURN(rc);
         }
 
-        /* request for update */
-        mgs_revoke_lock(obd, fsname, &lockh);
-
+        /* Revoke lock so everyone updates.  Should be alright if
+         * someone was already reading while we were updating the logs,
+         * so we don't really need to hold the lock while we're
+         * writing.
+         */
+        if (fsname[0]) {
+                lockrc = mgs_get_cfg_lock(obd, fsname, &lockh);
+                if (lockrc != ELDLM_OK)
+                        CERROR("lock error %d for fs %s\n", lockrc,
+                               fsname);
+                else
+                        mgs_put_cfg_lock(&lockh);
+        }
         lustre_cfg_free(lcfg);
 
         lustre_pack_reply(req, 2, rep_size, NULL);
@@ -655,142 +654,20 @@ int mgs_handle(struct ptlrpc_request *req)
         RETURN(0);
 }
 
+static inline int mgs_init_export(struct obd_export *exp)
+{
+        return ldlm_init_export(exp);
+}
+
 static inline int mgs_destroy_export(struct obd_export *exp)
 {
         ENTRY;
 
         target_destroy_export(exp);
+        ldlm_destroy_export(exp);
         mgs_client_free(exp);
 
         RETURN(0);
-}
-
-static int mgs_extract_fs_pool(char * arg, char *fsname, char *poolname)
-{
-        char *ptr;
-
-        ENTRY;
-        for (ptr = arg;  (*ptr != '\0') && (*ptr != '.'); ptr++ ) {
-                *fsname = *ptr;
-                fsname++;
-        }
-        if (*ptr == '\0')
-                return -EINVAL;
-        *fsname = '\0';
-        ptr++;
-        strcpy(poolname, ptr);
-
-        RETURN(0);
-}
-
-static int mgs_iocontrol_pool(struct obd_device *obd, 
-                              struct obd_ioctl_data *data)
-{
-        int rc;
-        struct lustre_handle lockh;
-        struct lustre_cfg *lcfg = NULL;
-        struct llog_rec_hdr rec;
-        char *fsname = NULL;
-        char *poolname = NULL;
-        ENTRY;
-
-        OBD_ALLOC(fsname, MTI_NAME_MAXLEN);
-        if (fsname == NULL)
-                RETURN(-ENOMEM);
-
-        OBD_ALLOC(poolname, MAXPOOLNAME + 1);
-        if (poolname == NULL) {
-                rc = -ENOMEM;
-                GOTO(out_pool, rc);
-        }
-        rec.lrh_len = llog_data_len(data->ioc_plen1);
-
-        if (data->ioc_type == LUSTRE_CFG_TYPE) {
-                rec.lrh_type = OBD_CFG_REC;
-        } else {
-                CERROR("unknown cfg record type:%d \n", data->ioc_type);
-                rc = -EINVAL;
-                GOTO(out_pool, rc);
-        }
-
-        if (data->ioc_plen1 > CFS_PAGE_SIZE) {
-                rc = -E2BIG;
-                GOTO(out_pool, rc);
-        }
-
-        OBD_ALLOC(lcfg, data->ioc_plen1);
-        if (lcfg == NULL) {
-                rc = -ENOMEM;
-                GOTO(out_pool, rc);
-        }
-        rc = copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1);
-        if (rc)
-                GOTO(out_pool, rc);
-
-        if (lcfg->lcfg_bufcount < 2) {
-                rc = -EINVAL;
-                GOTO(out_pool, rc);
-        }
-
-        /* first arg is always <fsname>.<poolname> */
-        mgs_extract_fs_pool(lustre_cfg_string(lcfg, 1), fsname,
-                            poolname);
-
-        switch (lcfg->lcfg_command) {
-        case LCFG_POOL_NEW: {
-                if (lcfg->lcfg_bufcount != 2)
-                        RETURN(-EINVAL);
-                rc = mgs_pool_cmd(obd, LCFG_POOL_NEW, fsname,
-                                  poolname, NULL);
-                break;
-        }
-        case LCFG_POOL_ADD: {
-                if (lcfg->lcfg_bufcount != 3)
-                        RETURN(-EINVAL);
-                rc = mgs_pool_cmd(obd, LCFG_POOL_ADD, fsname, poolname,
-                                  lustre_cfg_string(lcfg, 2));
-                break;
-        }
-        case LCFG_POOL_REM: {
-                if (lcfg->lcfg_bufcount != 3)
-                        RETURN(-EINVAL);
-                rc = mgs_pool_cmd(obd, LCFG_POOL_REM, fsname, poolname,
-                                  lustre_cfg_string(lcfg, 2));
-                break;
-        }
-        case LCFG_POOL_DEL: {
-                if (lcfg->lcfg_bufcount != 2)
-                        RETURN(-EINVAL);
-                rc = mgs_pool_cmd(obd, LCFG_POOL_DEL, fsname,
-                                  poolname, NULL);
-                break;
-        }
-        default: {
-                 rc = -EINVAL;
-                 GOTO(out_pool, rc);
-        }
-        }
-
-        if (rc) {
-                CERROR("OBD_IOC_POOL err %d, cmd %X for pool %s.%s\n",
-                       rc, lcfg->lcfg_command, fsname, poolname);
-                GOTO(out_pool, rc);
-        }
-
-        /* request for update */
-        mgs_revoke_lock(obd, fsname, &lockh);
-
-out_pool:
-        if (lcfg != NULL)
-                OBD_FREE(lcfg, data->ioc_plen1);
-
-        if (fsname != NULL)
-                OBD_FREE(fsname, MTI_NAME_MAXLEN);
-
-        if (poolname != NULL)
-                OBD_FREE(poolname, MAXPOOLNAME + 1);
-
-        RETURN(rc);
 }
 
 /* from mdt_iocontrol */
@@ -812,6 +689,7 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 struct lustre_cfg *lcfg;
                 struct llog_rec_hdr rec;
                 char fsname[MTI_NAME_MAXLEN];
+                int lockrc;
 
                 rec.lrh_len = llog_data_len(data->ioc_plen1);
 
@@ -842,15 +720,18 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                    someone was already reading while we were updating the logs,
                    so we don't really need to hold the lock while we're
                    writing (above). */
-                mgs_revoke_lock(obd, fsname, &lockh);
+                if (fsname[0]) {
+                        lockrc = mgs_get_cfg_lock(obd, fsname, &lockh);
+                        if (lockrc != ELDLM_OK)
+                                CERROR("lock error %d for fs %s\n", lockrc,
+                                       fsname);
+                        else
+                                mgs_put_cfg_lock(&lockh);
+                }
 
 out_free:
                 OBD_FREE(lcfg, data->ioc_plen1);
                 RETURN(rc);
-        }
-
-        case OBD_IOC_POOL: {
-                RETURN(mgs_iocontrol_pool(obd, data));
         }
 
         case OBD_IOC_DUMP_LOG: {
@@ -896,6 +777,7 @@ static struct obd_ops mgs_obd_ops = {
         .o_setup           = mgs_setup,
         .o_precleanup      = mgs_precleanup,
         .o_cleanup         = mgs_cleanup,
+        .o_init_export     = mgs_init_export,
         .o_destroy_export  = mgs_destroy_export,
         .o_iocontrol       = mgs_iocontrol,
 };

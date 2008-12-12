@@ -323,18 +323,16 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         /* NOTE: padding is a record, but no bit is set */
         if (left != 0 && left != reclen &&
             left < (reclen + LLOG_MIN_REC_SIZE)) {
-                loghandle->lgh_last_idx++;
-                rc = llog_lvfs_pad(obd, file, left, loghandle->lgh_last_idx);
+                index = loghandle->lgh_last_idx + 1;
+                rc = llog_lvfs_pad(obd, file, left, index);
                 if (rc)
                         RETURN(rc);
-                /* if it's the last idx in log file, then return -ENOSPC */
-                if (loghandle->lgh_last_idx == LLOG_BITMAP_SIZE(llh) - 1)
-                        RETURN(-ENOSPC);
+                loghandle->lgh_last_idx++; /*for pad rec*/
         }
-
-        loghandle->lgh_last_idx++;
-        index = loghandle->lgh_last_idx;
-        LASSERT(index < LLOG_BITMAP_SIZE(llh));
+        /* if it's the last idx in log file, then return -ENOSPC */
+        if (loghandle->lgh_last_idx >= LLOG_BITMAP_SIZE(llh) - 1)
+                RETURN(-ENOSPC);
+        index = ++loghandle->lgh_last_idx;
         rec->lrh_index = index;
         if (buf == NULL) {
                 lrt = (struct llog_rec_tail *)
@@ -342,6 +340,9 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                 lrt->lrt_len = rec->lrh_len;
                 lrt->lrt_index = rec->lrh_index;
         }
+        /*The caller should make sure only 1 process access the lgh_last_idx,
+         *Otherwise it might hit the assert.*/
+        LASSERT(index < LLOG_BITMAP_SIZE(llh));
         if (ext2_set_bit(index, llh->llh_bitmap)) {
                 CERROR("argh, index %u already set in log bitmap?\n", index);
                 LBUG(); /* should never happen */
@@ -764,17 +765,19 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
 
 /* reads the catalog list */
 int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
-                      char *name, int count, struct llog_catid *idarray)
+                      char *name, int idx, int count, struct llog_catid *idarray)
 {
         struct lvfs_run_ctxt saved;
         struct l_file *file;
-        int rc;
+        int rc, rc1 = 0;
         int size = sizeof(*idarray) * count;
-        loff_t off = 0;
+        loff_t off = idx *  sizeof(*idarray);
         ENTRY;
 
         if (!count) 
                 RETURN(0);
+
+        LASSERT_SEM_LOCKED(&obd->obd_llog_cat_process);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);
@@ -784,7 +787,7 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                        name, rc);
                 GOTO(out, rc);
         }
-        
+
         if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
                 CERROR("%s is not a regular file!: mode = %o\n", name,
                        file->f_dentry->d_inode->i_mode);
@@ -793,6 +796,11 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
 
         CDEBUG(D_CONFIG, "cat list: disk size=%d, read=%d\n",
                (int)i_size_read(file->f_dentry->d_inode), size);
+
+        memset(idarray, 0, size);
+        /* read for new ost index or for empty file */
+        if (i_size_read(file->f_dentry->d_inode) < off)
+                GOTO(out, rc = 0);
 
         rc = fsfilt_read_record(disk_obd, file, idarray, size, &off);
         if (rc) {
@@ -804,24 +812,27 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
  out:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         if (file && !IS_ERR(file))
-                rc = filp_close(file, 0);
+                rc1 = filp_close(file, 0);
+        if (rc == 0)
+                rc = rc1;
         return rc;
 }
 EXPORT_SYMBOL(llog_get_cat_list);
 
 /* writes the cat list */
 int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
-                      char *name, int count, struct llog_catid *idarray)
+                      char *name, int idx, int count, struct llog_catid *idarray)
 {
         struct lvfs_run_ctxt saved;
         struct l_file *file;
-        int rc;
+        int rc, rc1 = 0;
         int size = sizeof(*idarray) * count;
-        loff_t off = 0;
+        loff_t off = idx * sizeof(*idarray);
 
-        if (!count) 
-                return (0);
+        if (!count)
+                GOTO(out1, rc = 0);
 
+        LASSERT_SEM_LOCKED(&obd->obd_llog_cat_process);
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);
         if (!file || IS_ERR(file)) {
@@ -839,17 +850,22 @@ int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
 
         rc = fsfilt_write_record(disk_obd, file, idarray, size, &off, 1);
         if (rc) {
-                CDEBUG(D_INODE,"OBD filter: error reading %s: rc %d\n",
+                CDEBUG(D_INODE,"OBD filter: error writeing %s: rc %d\n",
                        name, rc);
                 GOTO(out, rc);
         }
 
- out:
+out:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         if (file && !IS_ERR(file))
-                rc = filp_close(file, 0);
+                rc1 = filp_close(file, 0);
+
+        if (rc == 0)
+                rc = rc1;
+out1:
         RETURN(rc);
 }
+EXPORT_SYMBOL(llog_put_cat_list);
 
 struct llog_operations llog_lvfs_ops = {
         lop_write_rec:   llog_lvfs_write_rec,
@@ -916,14 +932,14 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
 }
 
 int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
-                      char *name, int count, struct llog_catid *idarray)
+                      char *name, int idx, int count, struct llog_catid *idarray)
 {
         LBUG();
         return 0;
 }
 
 int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
-                      char *name, int count, struct llog_catid *idarray)
+                      char *name, int idx, int count, struct llog_catid *idarray)
 {
         LBUG();
         return 0;

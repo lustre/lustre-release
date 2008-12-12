@@ -105,7 +105,7 @@ ldlm_flock_destroy(struct ldlm_lock *lock, ldlm_mode_t mode, int flags)
                 /* client side - set a flag to prevent sending a CANCEL */
                 lock->l_flags |= LDLM_FL_LOCAL_ONLY | LDLM_FL_CBPENDING;
 
-                /* when reaching here, it is under lock_res_and_lock(). Thus,
+                /* when reaching here, it is under lock_res_and_lock(). Thus, 
                    need call the nolock version of ldlm_lock_decref_internal*/
                 ldlm_lock_decref_internal_nolock(lock, mode);
         }
@@ -391,14 +391,14 @@ reprocess:
                 new2->l_conn_export = lock->l_conn_export;
                 if (lock->l_export != NULL) {
                         new2->l_export = class_export_get(lock->l_export);
-                        spin_lock(&new2->l_export->exp_ldlm_data.led_lock);
-                        list_add(&new2->l_export_chain,
-                                 &new2->l_export->exp_ldlm_data.led_held_locks);
-                        spin_unlock(&new2->l_export->exp_ldlm_data.led_lock);
+                        if (new2->l_export->exp_lock_hash && 
+                            hlist_unhashed(&new2->l_exp_hash))
+                                lustre_hash_add(new2->l_export->exp_lock_hash,
+                                                &new2->l_remote_handle,
+                                                &new2->l_exp_hash);
                 }
-                if (*flags == LDLM_FL_WAIT_NOREPROC) {
+                if (*flags == LDLM_FL_WAIT_NOREPROC)
                         ldlm_lock_addref_internal_nolock(new2, lock->l_granted_mode);
-                }
 
                 /* insert new2 at lock */
                 ldlm_resource_add_lock(res, ownlocks, new2);
@@ -423,7 +423,7 @@ reprocess:
         if (*flags != LDLM_FL_WAIT_NOREPROC) {
                 if (first_enq) {
                         /* If this is an unlock, reprocess the waitq and
-                         * send completions ASTs for locks that can now be
+                         * send completions ASTs for locks that can now be 
                          * granted. The only problem with doing this
                          * reprocessing here is that the completion ASTs for
                          * newly granted locks will be sent before the unlock
@@ -515,7 +515,7 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
          * holding the lock even if app still believes it has it, since
          * server already dropped it anyway. Only for granted locks too. */
         lock_res_and_lock(lock);
-        if ((lock->l_flags & (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) ==
+        if ((lock->l_flags & (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) == 
             (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) {
                 unlock_res_and_lock(lock);
                 if (lock->l_req_mode == lock->l_granted_mode &&
@@ -556,7 +556,7 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 
         LDLM_DEBUG(lock, "client-side enqueue waking up: rc = %d", rc);
         RETURN(rc);
-
+ 
 granted:
         OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_CP_CB_WAIT, 10);
         LDLM_DEBUG(lock, "client-side enqueue granted");

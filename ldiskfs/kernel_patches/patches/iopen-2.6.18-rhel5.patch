@@ -2,7 +2,7 @@ Index: linux-2.6.18-53.1.21/fs/ext3/iopen.c
 ===================================================================
 --- /dev/null
 +++ linux-2.6.18-53.1.21/fs/ext3/iopen.c
-@@ -0,0 +1,290 @@
+@@ -0,0 +1,291 @@
 +/*
 + * linux/fs/ext3/iopen.c
 + *
@@ -283,6 +283,7 @@ Index: linux-2.6.18-53.1.21/fs/ext3/iopen.c
 +	inode->i_ctime = CURRENT_TIME;
 +	inode->i_mtime = CURRENT_TIME;
 +	EXT3_I(inode)->i_dtime = 0;
++	EXT3_I(inode)->i_file_acl = 0;
 +	inode->i_blocks = 0;
 +	inode->i_version = 1;
 +	inode->i_generation = 0;

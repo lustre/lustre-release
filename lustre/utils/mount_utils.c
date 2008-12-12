@@ -110,7 +110,7 @@ int get_mountdata(char *dev, struct lustre_disk_data *mo_ldd)
         /* Make a temporary directory to hold Lustre data files. */
         if (!mkdtemp(tmpdir)) {
                 verrprint("%s: Can't create temporary directory %s: %s\n",
-			  progname, tmpdir, strerror(errno));
+                        progname, tmpdir, strerror(errno));
                 return errno;
         }
 
@@ -133,7 +133,7 @@ int get_mountdata(char *dev, struct lustre_disk_data *mo_ldd)
                 verrprint("%s: Unable to read %d.%d config %s.\n",
                           progname, LUSTRE_MAJOR, LUSTRE_MINOR, filepnm);
                 goto out_close;
-	}
+	}	
 
 out_close:
         fclose(filep);
@@ -199,7 +199,7 @@ static int stclient(char *type, char *arch)
         pclose(fp);
 
         snprintf(cmd, 1024, "/opt/sun/servicetag/bin/stclient -a -p '%s' "
-               "-e %d.%d.%d -t '%s' -S mount -F '%s' -P '%s' -m SUN "
+               "-e %d.%d.%d -t '%s' -S mount.lustre -F '%s' -P '%s' -m SUN "
                "-A %s -z global", product, LUSTRE_MAJOR, LUSTRE_MINOR,
                LUSTRE_PATCH, urn, PARENT_URN, PARENT_PRODUCT, arch);
 

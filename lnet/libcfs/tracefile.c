@@ -496,19 +496,21 @@ panic_collect_pages(struct page_collection *pc)
         }
 }
 
-static void collect_pages_on_cpu(void *info)
+static void collect_pages_on_all_cpus(struct page_collection *pc)
 {
         struct trace_cpu_data *tcd;
-        struct page_collection *pc = info;
-        int i;
+        int i, cpu;
 
         spin_lock(&pc->pc_lock);
-        tcd_for_each_type_lock(tcd, i) {
-                list_splice_init(&tcd->tcd_pages, &pc->pc_pages);
-                tcd->tcd_cur_pages = 0;
-                if (pc->pc_want_daemon_pages) {
-                        list_splice_init(&tcd->tcd_daemon_pages, &pc->pc_pages);
-                        tcd->tcd_cur_daemon_pages = 0;
+        for_each_possible_cpu(cpu) {
+                tcd_for_each_type_lock(tcd, i, cpu) {
+                        list_splice_init(&tcd->tcd_pages, &pc->pc_pages);
+                        tcd->tcd_cur_pages = 0;
+                        if (pc->pc_want_daemon_pages) {
+                                list_splice_init(&tcd->tcd_daemon_pages,
+                                                 &pc->pc_pages);
+                                tcd->tcd_cur_daemon_pages = 0;
+                        }
                 }
         }
         spin_unlock(&pc->pc_lock);
@@ -521,31 +523,33 @@ static void collect_pages(struct page_collection *pc)
         if (libcfs_panic_in_progress)
                 panic_collect_pages(pc);
         else
-                trace_call_on_all_cpus(collect_pages_on_cpu, pc);
+                collect_pages_on_all_cpus(pc);
 }
 
-static void put_pages_back_on_cpu(void *info)
+static void put_pages_back_on_all_cpus(struct page_collection *pc)
 {
-        struct page_collection *pc = info;
         struct trace_cpu_data *tcd;
         struct list_head *cur_head;
         struct trace_page *tage;
         struct trace_page *tmp;
-        int i;
+        int i, cpu;
 
         spin_lock(&pc->pc_lock);
-        tcd_for_each_type_lock(tcd, i) {
-                cur_head = tcd->tcd_pages.next;
+        for_each_possible_cpu(cpu) {
+                tcd_for_each_type_lock(tcd, i, cpu) {
+                        cur_head = tcd->tcd_pages.next;
 
-                list_for_each_entry_safe(tage, tmp, &pc->pc_pages, linkage) {
+                        list_for_each_entry_safe(tage, tmp, &pc->pc_pages,
+                                                 linkage) {
 
-                        __LASSERT_TAGE_INVARIANT(tage);
+                                __LASSERT_TAGE_INVARIANT(tage);
 
-                        if (tage->cpu != smp_processor_id() || tage->type != i)
-                                continue;
+                                if (tage->cpu != cpu || tage->type != i)
+                                        continue;
 
-                        tage_to_tail(tage, cur_head);
-                        tcd->tcd_cur_pages++;
+                                tage_to_tail(tage, cur_head);
+                                tcd->tcd_cur_pages++;
+                        }
                 }
         }
         spin_unlock(&pc->pc_lock);
@@ -554,7 +558,7 @@ static void put_pages_back_on_cpu(void *info)
 static void put_pages_back(struct page_collection *pc)
 {
         if (!libcfs_panic_in_progress)
-                trace_call_on_all_cpus(put_pages_back_on_cpu, pc);
+                put_pages_back_on_all_cpus(pc);
 }
 
 /* Add pages to a per-cpu debug daemon ringbuffer.  This buffer makes sure that
@@ -572,8 +576,7 @@ static void put_pages_on_tcd_daemon_list(struct page_collection *pc,
 
                 __LASSERT_TAGE_INVARIANT(tage);
 
-                if (tage->cpu != smp_processor_id() ||
-                    tage->type != tcd->tcd_type)
+                if (tage->cpu != tcd->tcd_cpu || tage->type != tcd->tcd_type)
                         continue;
 
                 tage_to_tail(tage, &tcd->tcd_daemon_pages);
@@ -595,18 +598,15 @@ static void put_pages_on_tcd_daemon_list(struct page_collection *pc,
         spin_unlock(&pc->pc_lock);
 }
 
-static void put_pages_on_daemon_list_on_cpu(void *info)
-{
-        struct trace_cpu_data *tcd;
-        int i;
-
-        tcd_for_each_type_lock(tcd, i)
-                put_pages_on_tcd_daemon_list(info, tcd);
-}
-
 static void put_pages_on_daemon_list(struct page_collection *pc)
 {
-        trace_call_on_all_cpus(put_pages_on_daemon_list_on_cpu, pc);
+        struct trace_cpu_data *tcd;
+        int i, cpu;
+
+        for_each_possible_cpu(cpu) {
+                tcd_for_each_type_lock(tcd, i, cpu)
+                        put_pages_on_tcd_daemon_list(pc, tcd);
+        }
 }
 
 void trace_debug_print(void)
@@ -827,7 +827,9 @@ int trace_daemon_command(char *str)
 	tracefile_write_lock();
 
 	if (strcmp(str, "stop") == 0) {
+                tracefile_write_unlock();
 		trace_stop_thread();
+                tracefile_write_lock();
                 memset(tracefile, 0, sizeof(tracefile));
 
 	} else if (strncmp(str, "size=", 5) == 0) {
@@ -1020,6 +1022,25 @@ static int tracefiled(void *arg)
 
                 cfs_filp_close(filp);
                 put_pages_on_daemon_list(&pc);
+                if (!list_empty(&pc.pc_pages)) {
+                        int i;
+
+                        printk(KERN_ALERT "Lustre: trace pages aren't empty\n");
+                        printk(KERN_ALERT "total cpus(%d): ", num_possible_cpus());
+                        for (i = 0; i < num_possible_cpus(); i++)
+                                if (cpu_online(i))
+                                        printk(KERN_ALERT "%d(on) ", i);
+                                else
+                                        printk(KERN_ALERT "%d(off) ", i);
+                        printk(KERN_ALERT "\n");
+
+                        i = 0;
+                        list_for_each_entry_safe(tage, tmp, &pc.pc_pages,
+                                                 linkage)
+                                printk(KERN_ALERT "page %d belongs to cpu %d\n",
+                                       ++i, tage->cpu);
+                        printk(KERN_ALERT "There are %d pages unwritten\n", i);
+                }
                 __LASSERT(list_empty(&pc.pc_pages));
         }
         complete(&tctl->tctl_stop);
@@ -1095,23 +1116,27 @@ int tracefile_init(int max_pages)
         return 0;
 }
 
-static void trace_cleanup_on_cpu(void *info)
+static void trace_cleanup_on_all_cpus(void)
 {
         struct trace_cpu_data *tcd;
         struct trace_page *tage;
         struct trace_page *tmp;
-        int i;
+        int i, cpu;
 
-        tcd_for_each_type_lock(tcd, i) {
-                tcd->tcd_shutting_down = 1;
+        for_each_possible_cpu(cpu) {
+                tcd_for_each_type_lock(tcd, i, cpu) {
+                        tcd->tcd_shutting_down = 1;
 
-                list_for_each_entry_safe(tage, tmp, &tcd->tcd_pages, linkage) {
-                        __LASSERT_TAGE_INVARIANT(tage);
+                        list_for_each_entry_safe(tage, tmp, &tcd->tcd_pages,
+                                                 linkage) {
+                                __LASSERT_TAGE_INVARIANT(tage);
 
-                        list_del(&tage->linkage);
-                        tage_free(tage);
+                                list_del(&tage->linkage);
+                                tage_free(tage);
+                        }
+
+                        tcd->tcd_cur_pages = 0;
                 }
-                tcd->tcd_cur_pages = 0;
         }
 }
 
@@ -1122,7 +1147,7 @@ static void trace_cleanup(void)
         CFS_INIT_LIST_HEAD(&pc.pc_pages);
         spin_lock_init(&pc.pc_lock);
 
-        trace_call_on_all_cpus(trace_cleanup_on_cpu, &pc);
+        trace_cleanup_on_all_cpus();
 
         tracefile_fini_arch();
 }

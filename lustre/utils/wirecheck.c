@@ -191,8 +191,6 @@ check_ptlrpc_body(void)
         CHECK_MEMBER(ptlrpc_body, pb_service_time);
         CHECK_MEMBER(ptlrpc_body, pb_slv);
         CHECK_MEMBER(ptlrpc_body, pb_limit);
-        CHECK_MEMBER(ptlrpc_body, pb_pre_versions);
-        CHECK_MEMBER(ptlrpc_body, pb_padding);
 }
 
 static void check_obd_connect_data(void)
@@ -240,9 +238,7 @@ static void check_obd_connect_data(void)
         CHECK_CDEFINE(OBD_CONNECT_LRU_RESIZE);
         CHECK_CDEFINE(OBD_CONNECT_MDS_MDS);
         CHECK_CDEFINE(OBD_CONNECT_REAL);
-        CHECK_CDEFINE(OBD_CONNECT_FID);
         CHECK_CDEFINE(OBD_CONNECT_CKSUM);
-        CHECK_CDEFINE(OBD_CONNECT_VBR);
 }
 
 static void
@@ -368,33 +364,6 @@ check_lov_mds_md_join(void)
         CHECK_MEMBER(lov_mds_md_join, lmmj_md);
         CHECK_MEMBER(lov_mds_md_join, lmmj_array_id);
         CHECK_MEMBER(lov_mds_md_join, lmmj_extent_count);
-}
-
-static void
-check_lov_mds_md_v3(void)
-{
-        BLANK_LINE();
-        CHECK_STRUCT(lov_mds_md_v3);
-        CHECK_MEMBER(lov_mds_md_v3, lmm_magic);
-        CHECK_MEMBER(lov_mds_md_v3, lmm_pattern);
-        CHECK_MEMBER(lov_mds_md_v3, lmm_object_id);
-        CHECK_MEMBER(lov_mds_md_v3, lmm_object_gr);
-        CHECK_MEMBER(lov_mds_md_v3, lmm_stripe_size);
-        CHECK_MEMBER(lov_mds_md_v3, lmm_stripe_count);
-        CHECK_MEMBER(lov_mds_md_v3, lmm_pool_name);
-        CHECK_MEMBER(lov_mds_md_v3, lmm_objects);
-
-        BLANK_LINE();
-        CHECK_STRUCT(lov_ost_data_v1);
-        CHECK_MEMBER(lov_ost_data_v1, l_object_id);
-        CHECK_MEMBER(lov_ost_data_v1, l_object_gr);
-        CHECK_MEMBER(lov_ost_data_v1, l_ost_gen);
-        CHECK_MEMBER(lov_ost_data_v1, l_ost_idx);
-
-        CHECK_CDEFINE(LOV_MAGIC_V3);
-
-        CHECK_VALUE(LOV_PATTERN_RAID0);
-        CHECK_VALUE(LOV_PATTERN_RAID1);
 }
 
 static void
@@ -808,6 +777,19 @@ check_ldlm_lvb(void)
         CHECK_MEMBER(ost_lvb, lvb_blocks);
 }
 
+static void
+check_cfg_marker(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(cfg_marker);
+        CHECK_MEMBER(cfg_marker, cm_step);
+        CHECK_MEMBER(cfg_marker, cm_flags);
+        CHECK_MEMBER(cfg_marker, cm_vers);
+        CHECK_MEMBER(cfg_marker, cm_createtime);
+        CHECK_MEMBER(cfg_marker, cm_canceltime);
+        CHECK_MEMBER(cfg_marker, cm_tgtname);
+        CHECK_MEMBER(cfg_marker, cm_comment);
+}
 
 static void
 check_llog_logid(void)
@@ -1063,6 +1045,17 @@ check_qunit_data_old2(void)
 }
 
 static void
+check_qunit_data_old(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(qunit_data_old);
+        CHECK_MEMBER(qunit_data_old, qd_id);
+        CHECK_MEMBER(qunit_data_old, qd_type);
+        CHECK_MEMBER(qunit_data_old, qd_count);
+        CHECK_MEMBER(qunit_data_old, qd_isblk);
+}
+
+static void
 check_mgs_target_info(void)
 {
         BLANK_LINE();
@@ -1308,7 +1301,6 @@ main(int argc, char **argv)
         CHECK_VALUE(REINT_UNLINK);
         CHECK_VALUE(REINT_RENAME);
         CHECK_VALUE(REINT_OPEN);
-        CHECK_VALUE(REINT_SETXATTR);
         CHECK_VALUE(REINT_MAX);
 
         CHECK_VALUE(MGS_CONNECT);
@@ -1361,7 +1353,7 @@ main(int argc, char **argv)
 
         CHECK_VALUE(MGS_CONNECT);
         CHECK_VALUE(MGS_DISCONNECT);
-        CHECK_VALUE(MGS_EXCEPTION);
+        CHECK_VALUE(MGS_EXCEPTION);   
         CHECK_VALUE(MGS_TARGET_REG);
         CHECK_VALUE(MGS_TARGET_DEL);
         CHECK_VALUE(MGS_SET_INFO);
@@ -1378,7 +1370,6 @@ main(int argc, char **argv)
         check_obd_connect_data();
         check_obdo();
         check_lov_mds_md_v1();
-        check_lov_mds_md_v3();
         check_lov_mds_md_join();
         check_obd_statfs();
         check_obd_ioobj();
@@ -1405,6 +1396,7 @@ main(int argc, char **argv)
         check_ldlm_request();
         check_ldlm_reply();
         check_ldlm_lvb();
+        check_cfg_marker();
         check_llog_logid();
         check_llog_catid();
         check_llog_rec_hdr();
@@ -1425,6 +1417,7 @@ main(int argc, char **argv)
         check_mds_extent_desc();
         check_qunit_data();
         check_qunit_data_old2();
+        check_qunit_data_old();
         check_quota_adjust_qunit();
         check_mgs_target_info();
         check_lustre_disk_data();

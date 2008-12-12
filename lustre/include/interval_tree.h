@@ -49,8 +49,10 @@ struct interval_node {
         struct interval_node   *in_left;
         struct interval_node   *in_right;
         struct interval_node   *in_parent;
-        __u8                    in_color;
-        __u8                    res1[7];  /* tags, 8-bytes aligned */
+        unsigned                in_color:1,
+                                in_intree:1, /** set if the node is in tree */
+                                in_res1:30;
+        __u8                    in_res2[4];  /** tags, 8-bytes aligned */
         __u64                   in_max_high;
         struct interval_node_extent {
                 __u64 start;
@@ -62,6 +64,11 @@ enum interval_iter {
         INTERVAL_ITER_CONT = 1,
         INTERVAL_ITER_STOP = 2
 };
+
+static inline int interval_is_intree(struct interval_node *node)
+{
+        return node->in_intree == 1;
+}
 
 static inline __u64 interval_low(struct interval_node *node)
 {

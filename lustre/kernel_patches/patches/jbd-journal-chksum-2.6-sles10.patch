@@ -1,7 +1,7 @@
-Index: linux-2.6.16.53-0.16/fs/jbd/commit.c
+Index: linux-2.6.16.60-0.27/fs/jbd/commit.c
 ===================================================================
---- linux-2.6.16.53-0.16.orig/fs/jbd/commit.c
-+++ linux-2.6.16.53-0.16/fs/jbd/commit.c
+--- linux-2.6.16.60-0.27.orig/fs/jbd/commit.c
++++ linux-2.6.16.60-0.27/fs/jbd/commit.c
 @@ -22,6 +22,7 @@
  #include <linux/pagemap.h>
  #include <linux/smp_lock.h>
@@ -73,30 +73,27 @@ Index: linux-2.6.16.53-0.16/fs/jbd/commit.c
 +	if (journal->j_flags & JFS_BARRIER &&
 +		!JFS_HAS_INCOMPAT_FEATURE(journal,
 +					 JFS_FEATURE_INCOMPAT_ASYNC_COMMIT)) {
-+
  		set_buffer_ordered(bh);
  		barrier_done = 1;
  	}
 -	ret = sync_dirty_buffer(bh);
++
 +	ret = submit_bh(WRITE, bh);
 +
- 	/* is it possible for another commit to fail at roughly
- 	 * the same time as this one?  If so, we don't want to
- 	 * trust the barrier flag in the super, but instead want
-@@ -153,12 +172,84 @@ static int journal_write_commit_record(j
+ 	if (barrier_done)
  		clear_buffer_ordered(bh);
+ 	/* is it possible for another commit to fail at roughly
+@@ -154,12 +173,84 @@ static int journal_write_commit_record(j
+ 		/* And try again, without the barrier */
  		set_buffer_uptodate(bh);
  		set_buffer_dirty(bh);
 -		ret = sync_dirty_buffer(bh);
 +		ret = submit_bh(WRITE, bh);
- 	}
--	put_bh(bh);		/* One for getblk() */
--	journal_put_journal_head(descriptor);
++	}
 +	*cbh = bh;
 +	return ret;
 +}
- 
--	return (ret == -EIO);
++
 +/*
 + * This function along with journal_submit_commit_record
 + * allows to write the commit record asynchronously.
@@ -153,10 +150,13 @@ Index: linux-2.6.16.53-0.16/fs/jbd/commit.c
 +		}
 +		put_bh(bh);
 +		cond_resched_lock(&journal->j_list_lock);
-+	}
+ 	}
+-	put_bh(bh);		/* One for getblk() */
+-	journal_put_journal_head(descriptor);
 +	return ret;
 +}
-+
+ 
+-	return (ret == -EIO);
 +static inline __u32 jbd_checksum_data(__u32 crc32_sum, struct buffer_head *bh)
 +{
 +	struct page *page = bh->b_page;
@@ -171,8 +171,8 @@ Index: linux-2.6.16.53-0.16/fs/jbd/commit.c
 +	return checksum;
  }
  
- /*
-@@ -184,6 +275,8 @@ void journal_commit_transaction(journal_
+ void journal_do_submit_data(struct buffer_head **wbuf, int bufs)
+@@ -296,6 +387,8 @@ void journal_commit_transaction(journal_
  	int first_tag = 0;
  	int tag_flag;
  	int i;
@@ -181,20 +181,17 @@ Index: linux-2.6.16.53-0.16/fs/jbd/commit.c
  
  	/*
  	 * First job: lock down the current transaction and wait for
-@@ -395,37 +488,14 @@ write_out_data:
- 	}
+@@ -439,38 +532,16 @@ void journal_commit_transaction(journal_
+ 	journal_submit_data_buffers(journal, commit_transaction);
  
  	/*
 -	 * Wait for all previously submitted IO to complete.
 +	 * Wait for all previously submitted IO to complete if commit
 +	 * record is to be written synchronously.
  	 */
+ 	spin_lock(&journal->j_list_lock);
 -	while (commit_transaction->t_locked_list) {
 -		struct buffer_head *bh;
-+	if (!JFS_HAS_INCOMPAT_FEATURE(journal,
-+		JFS_FEATURE_INCOMPAT_ASYNC_COMMIT))
-+		err = journal_wait_on_locked_list(journal,
-+						  commit_transaction);
  
 -		jh = commit_transaction->t_locked_list->b_tprev;
 -		bh = jh2bh(jh);
@@ -222,10 +219,15 @@ Index: linux-2.6.16.53-0.16/fs/jbd/commit.c
 -		put_bh(bh);
 -		cond_resched_lock(&journal->j_list_lock);
 -	}
++	if (!JFS_HAS_INCOMPAT_FEATURE(journal,
++		JFS_FEATURE_INCOMPAT_ASYNC_COMMIT))
++		err = journal_wait_on_locked_list(journal,
++						  commit_transaction);
++
  	spin_unlock(&journal->j_list_lock);
  
  	if (err)
-@@ -598,6 +668,16 @@ write_out_data:
+@@ -643,6 +714,16 @@ void journal_commit_transaction(journal_
  start_journal_io:
  			for (i = 0; i < bufs; i++) {
  				struct buffer_head *bh = wbuf[i];
@@ -242,7 +244,7 @@ Index: linux-2.6.16.53-0.16/fs/jbd/commit.c
  				lock_buffer(bh);
  				clear_buffer_dirty(bh);
  				set_buffer_uptodate(bh);
-@@ -614,6 +694,23 @@ start_journal_io:
+@@ -659,6 +740,23 @@ start_journal_io:
  		}
  	}
  
@@ -266,7 +268,7 @@ Index: linux-2.6.16.53-0.16/fs/jbd/commit.c
  	/* Lo and behold: we have just managed to send a transaction to
             the log.  Before we can commit it, wait for the IO so far to
             complete.  Control buffers being written are on the
-@@ -712,9 +809,15 @@ wait_for_iobuf:
+@@ -757,9 +855,15 @@ wait_for_iobuf:
  	}
  
  	jbd_debug(3, "JBD: commit phase 6\n");
@@ -285,10 +287,10 @@ Index: linux-2.6.16.53-0.16/fs/jbd/commit.c
  
  	if (err)
  		__journal_abort_hard(journal);
-Index: linux-2.6.16.53-0.16/include/linux/jbd.h
+Index: linux-2.6.16.60-0.27/include/linux/jbd.h
 ===================================================================
---- linux-2.6.16.53-0.16.orig/include/linux/jbd.h
-+++ linux-2.6.16.53-0.16/include/linux/jbd.h
+--- linux-2.6.16.60-0.27.orig/include/linux/jbd.h
++++ linux-2.6.16.60-0.27/include/linux/jbd.h
 @@ -142,6 +142,29 @@ typedef struct journal_header_s
  	__be32		h_sequence;
  } journal_header_t;
@@ -348,10 +350,10 @@ Index: linux-2.6.16.53-0.16/include/linux/jbd.h
  extern int	   journal_create     (journal_t *);
  extern int	   journal_load       (journal_t *journal);
  extern void	   journal_destroy    (journal_t *);
-Index: linux-2.6.16.53-0.16/fs/jbd/recovery.c
+Index: linux-2.6.16.60-0.27/fs/jbd/recovery.c
 ===================================================================
---- linux-2.6.16.53-0.16.orig/fs/jbd/recovery.c
-+++ linux-2.6.16.53-0.16/fs/jbd/recovery.c
+--- linux-2.6.16.60-0.27.orig/fs/jbd/recovery.c
++++ linux-2.6.16.60-0.27/fs/jbd/recovery.c
 @@ -21,6 +21,7 @@
  #include <linux/jbd.h>
  #include <linux/errno.h>
@@ -548,10 +550,10 @@ Index: linux-2.6.16.53-0.16/fs/jbd/recovery.c
  		/* It's really bad news if different passes end up at
  		 * different places (but possible due to IO errors). */
  		if (info->end_transaction != next_commit_ID) {
-Index: linux-2.6.16.53-0.16/fs/jbd/journal.c
+Index: linux-2.6.16.60-0.27/fs/jbd/journal.c
 ===================================================================
---- linux-2.6.16.53-0.16.orig/fs/jbd/journal.c
-+++ linux-2.6.16.53-0.16/fs/jbd/journal.c
+--- linux-2.6.16.60-0.27.orig/fs/jbd/journal.c
++++ linux-2.6.16.60-0.27/fs/jbd/journal.c
 @@ -64,6 +64,7 @@ EXPORT_SYMBOL(journal_update_format);
  EXPORT_SYMBOL(journal_check_used_features);
  EXPORT_SYMBOL(journal_check_available_features);
@@ -594,10 +596,10 @@ Index: linux-2.6.16.53-0.16/fs/jbd/journal.c
  
  /**
   * int journal_update_format () - Update on-disk journal structure.
-Index: linux-2.6.16.53-0.16/fs/Kconfig
+Index: linux-2.6.16.60-0.27/fs/Kconfig
 ===================================================================
---- linux-2.6.16.53-0.16.orig/fs/Kconfig
-+++ linux-2.6.16.53-0.16/fs/Kconfig
+--- linux-2.6.16.60-0.27.orig/fs/Kconfig
++++ linux-2.6.16.60-0.27/fs/Kconfig
 @@ -140,6 +140,7 @@ config EXT3_FS_SECURITY
  
  config JBD
@@ -606,10 +608,10 @@ Index: linux-2.6.16.53-0.16/fs/Kconfig
  	help
  	  This is a generic journaling layer for block devices.  It is
  	  currently used by the ext3 and OCFS2 file systems, but it could
-Index: linux-2.6.16.53-0.16/Documentation/filesystems/ext3.txt
+Index: linux-2.6.16.60-0.27/Documentation/filesystems/ext3.txt
 ===================================================================
---- linux-2.6.16.53-0.16.orig/Documentation/filesystems/ext3.txt
-+++ linux-2.6.16.53-0.16/Documentation/filesystems/ext3.txt
+--- linux-2.6.16.60-0.27.orig/Documentation/filesystems/ext3.txt
++++ linux-2.6.16.60-0.27/Documentation/filesystems/ext3.txt
 @@ -14,6 +14,16 @@ Options
  When mounting an ext3 filesystem, the following option are accepted:
  (*) == default

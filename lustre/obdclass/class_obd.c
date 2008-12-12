@@ -273,16 +273,16 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 if (!data->ioc_inlbuf1) {
                         CERROR("No buffer passed in ioctl\n");
                         GOTO(out, err = -EINVAL);
-                }
+                } 
                 if (data->ioc_inllen1 < 128) {
                         CERROR("ioctl buffer too small to hold version\n");
                         GOTO(out, err = -EINVAL);
                 }
-
+                                
                 obd = class_num2obd(index);
                 if (!obd)
                         GOTO(out, err = -ENOENT);
-
+                
                 if (obd->obd_stopping)
                         status = "ST";
                 else if (obd->obd_set_up)
@@ -290,7 +290,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 else if (obd->obd_attached)
                         status = "AT";
                 else
-                        status = "--";
+                        status = "--"; 
                 str = (char *)data->ioc_bulk;
                 snprintf(str, len - sizeof(*data), "%3d %s %s %s %s %d",
                          (int)index, status, obd->obd_type->typ_name,
@@ -328,9 +328,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 }
                 CDEBUG(D_HA, "%s: disabling committed-transno notification\n",
                        obd->obd_name);
-                spin_lock_bh(&obd->obd_processing_task_lock);
                 obd->obd_no_transno = 1;
-                spin_unlock_bh(&obd->obd_processing_task_lock);
                 GOTO(out, err = 0);
         }
 
@@ -500,7 +498,7 @@ int obd_init_checks(void)
                 ret = -EINVAL;
         }
         if ((u64val & ~CFS_PAGE_MASK) >= CFS_PAGE_SIZE) {
-                CWARN("mask failed: u64val "LPU64" >= %lu\n", u64val,
+                CWARN("mask failed: u64val "LPU64" >= %lu\n", u64val, 
                       (unsigned long)CFS_PAGE_SIZE);
                 ret = -EINVAL;
         }
@@ -527,14 +525,14 @@ int init_obdclass(void)
 #endif
 
         LCONSOLE_INFO("OBD class driver, http://www.lustre.org/\n");
-        LCONSOLE_INFO("    Lustre Version: "LUSTRE_VERSION_STRING"\n");
-        LCONSOLE_INFO("    Build Version: "BUILD_VERSION"\n");
+        LCONSOLE_INFO("        Lustre Version: "LUSTRE_VERSION_STRING"\n");
+        LCONSOLE_INFO("        Build Version: "BUILD_VERSION"\n");
 
         spin_lock_init(&obd_types_lock);
         cfs_waitq_init(&obd_race_waitq);
         obd_zombie_impexp_init();
 #ifdef LPROCFS
-        obd_memory = lprocfs_alloc_stats(OBD_STATS_NUM,
+        obd_memory = lprocfs_alloc_stats(OBD_STATS_NUM, 
                                          LPROCFS_STATS_FLAG_PERCPU);
         if (obd_memory == NULL) {
                 CERROR("kmalloc of 'obd_memory' failed\n");
@@ -542,10 +540,10 @@ int init_obdclass(void)
         }
 
         lprocfs_counter_init(obd_memory, OBD_MEMORY_STAT,
-                             LPROCFS_CNTR_AVGMINMAX,
+                             LPROCFS_CNTR_AVGMINMAX, 
                              "memused", "bytes");
         lprocfs_counter_init(obd_memory, OBD_MEMORY_PAGES_STAT,
-                             LPROCFS_CNTR_AVGMINMAX,
+                             LPROCFS_CNTR_AVGMINMAX, 
                              "pagesused", "pages");
 #endif
         obd_lvfs_ctxt_cache = cfs_mem_cache_create("obd_lvfs_ctxt_cache",
@@ -638,10 +636,11 @@ static void cleanup_obdclass(void)
         cfs_mem_cache_destroy(obd_lvfs_ctxt_cache);
 
         lprocfs_free_stats(&obd_memory);
-        CDEBUG((memory_leaked | pages_leaked) ? D_ERROR : D_INFO,
-               "obd_memory max: "LPU64", leaked: "LPU64" "
+        CDEBUG((memory_leaked) ? D_ERROR : D_INFO,
+               "obd_memory max: "LPU64", leaked: "LPU64"\n",
+               memory_max, memory_leaked);
+        CDEBUG((pages_leaked) ? D_ERROR : D_INFO,
                "obd_memory_pages max: "LPU64", leaked: "LPU64"\n",
-               memory_max, memory_leaked,
                pages_max, pages_leaked);
 
         EXIT;

@@ -19,10 +19,10 @@ lr_reader
 ltrack_stats
 obdio
 obdbarrier
-ll_recover_lost_found_objs
 lload
 llverfs
 llverdev
+ll_recover_lost_found_objs
 l_getgroups
 .*.cmd
 .*.d

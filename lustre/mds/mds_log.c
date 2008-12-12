@@ -55,9 +55,9 @@
 #include <lustre_log.h>
 #include "mds_internal.h"
 
-static int mds_llog_origin_add(struct llog_ctxt *ctxt,
-                        struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
-                        struct llog_cookie *logcookies, int numcookies)
+static int mds_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
+                               struct lov_stripe_md *lsm,
+                               struct llog_cookie *logcookies, int numcookies)
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct obd_device *lov_obd = obd->u.mds.mds_osc_obd;
@@ -72,7 +72,7 @@ static int mds_llog_origin_add(struct llog_ctxt *ctxt,
         RETURN(rc);
 }
 
-static int mds_llog_origin_connect(struct llog_ctxt *ctxt, int count,
+static int mds_llog_origin_connect(struct llog_ctxt *ctxt,
                                    struct llog_logid *logid,
                                    struct llog_gen *gen,
                                    struct obd_uuid *uuid)
@@ -84,7 +84,7 @@ static int mds_llog_origin_connect(struct llog_ctxt *ctxt, int count,
         ENTRY;
 
         lctxt = llog_get_context(lov_obd, ctxt->loc_idx);
-        rc = llog_connect(lctxt, count, logid, gen, uuid);
+        rc = llog_connect(lctxt, logid, gen, uuid);
         llog_ctxt_put(lctxt);
         RETURN(rc);
 }
@@ -200,6 +200,7 @@ int mds_llog_init(struct obd_device *obd, struct obd_device *tgt,
                   int count, struct llog_catid *logid, struct obd_uuid *uuid)
 {
         struct obd_device *lov_obd = obd->u.mds.mds_osc_obd;
+        struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
 
@@ -211,13 +212,23 @@ int mds_llog_init(struct obd_device *obd, struct obd_device *tgt,
         rc = llog_setup(obd, LLOG_SIZE_REPL_CTXT, tgt, 0, NULL,
                         &mds_size_repl_logops);
         if (rc)
-                RETURN(rc);
+                GOTO(err_llog, rc);
 
         rc = obd_llog_init(lov_obd, tgt, count, logid, uuid);
-        if (rc)
+        if (rc) {
                 CERROR("lov_llog_init err %d\n", rc);
-
+                GOTO(err_cleanup, rc);
+        }
         RETURN(rc);
+err_cleanup:
+        ctxt = llog_get_context(obd, LLOG_SIZE_REPL_CTXT);
+        if (ctxt)
+                llog_cleanup(ctxt);
+err_llog:
+        ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
+        if (ctxt)
+                llog_cleanup(ctxt);
+        return rc;
 }
 
 int mds_llog_finish(struct obd_device *obd, int count)

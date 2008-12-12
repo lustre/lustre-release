@@ -327,17 +327,12 @@ static int osc_setattr_async(struct obd_export *exp, struct obd_info *oinfo,
 {
         struct ptlrpc_request *req;
         struct ost_body *body;
-        __u32 size[3] = { sizeof(struct ptlrpc_body), sizeof(*body), 0 };
-        int bufcount = 2;
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         struct osc_async_args *aa;
         ENTRY;
 
-        if (osc_exp_is_2_0_server(exp)) {
-                bufcount = 3;
-        }
-
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
-                              OST_SETATTR, bufcount, size, NULL);
+                              OST_SETATTR, 2, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -563,18 +558,16 @@ static int osc_sync(struct obd_export *exp, struct obdo *oa,
 /* Find and cancel locally locks matched by @mode in the resource found by
  * @objid. Found locks are added into @cancel list. Returns the amount of
  * locks added to @cancels list. */
-static int osc_resource_get_unused(struct obd_export *exp, struct obdo *oa,
+static int osc_resource_get_unused(struct obd_export *exp, __u64 objid,
                                    struct list_head *cancels, ldlm_mode_t mode,
                                    int lock_flags)
 {
         struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
-        struct ldlm_res_id res_id;
-        struct ldlm_resource *res;
+        struct ldlm_res_id res_id = { .name = { objid } };
+        struct ldlm_resource *res = ldlm_resource_get(ns, NULL, res_id, 0, 0);
         int count;
         ENTRY;
 
-        osc_build_res_name(oa->o_id, oa->o_gr, &res_id);
-        res = ldlm_resource_get(ns, NULL, res_id, 0, 0);
         if (res == NULL)
                 RETURN(0);
 
@@ -642,7 +635,7 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
 
         LASSERT(oa->o_id != 0);
 
-        count = osc_resource_get_unused(exp, oa, &cancels, LCK_PW,
+        count = osc_resource_get_unused(exp, oa->o_id, &cancels, LCK_PW,
                                         LDLM_FL_DISCARD_DATA);
         if (exp_connect_cancelset(exp))
                 bufcount = 3;
@@ -904,7 +897,7 @@ static int check_write_rcs(struct ptlrpc_request *req,
 
         if (req->rq_bulk->bd_nob_transferred != requested_nob) {
                 CERROR("Unexpected # bytes transferred: %d (requested %d)\n",
-                       requested_nob, req->rq_bulk->bd_nob_transferred);
+                       req->rq_bulk->bd_nob_transferred, requested_nob);
                 return(-EPROTO);
         }
 
@@ -1184,7 +1177,7 @@ static int check_write_checksum(struct obdo *oa, const lnet_process_id_t *peer,
 /* Note rc enters this function as number of bytes transferred */
 static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 {
-        struct osc_brw_async_args *aa = ptlrpc_req_async_args(req);
+        struct osc_brw_async_args *aa = (void *)&req->rq_async_args;
         const lnet_process_id_t *peer =
                         &req->rq_import->imp_connection->c_peer;
         struct client_obd *cli = aa->aa_cli;
@@ -1466,7 +1459,6 @@ static int async_internal(int cmd, struct obd_export *exp, struct obdo *oa,
         rc = osc_brw_prep_request(cmd, &exp->exp_obd->u.cli, oa, lsm,
                                   page_count, pga, &request);
 
-        CLASSERT(sizeof(*aa) <= sizeof(request->rq_async_args));
         aa = ptlrpc_req_async_args(request);
         if (cmd == OBD_BRW_READ) {
                 lprocfs_oh_tally_log2(&cli->cl_read_page_hist, page_count);
@@ -1779,6 +1771,25 @@ static int lop_makes_rpc(struct client_obd *cli, struct loi_oap_pages *lop,
         RETURN(0);
 }
 
+static int lop_makes_hprpc(struct loi_oap_pages *lop)
+{
+        struct osc_async_page *oap;
+        ENTRY;
+
+        if (list_empty(&lop->lop_urgent))
+                RETURN(0);
+
+        oap = list_entry(lop->lop_urgent.next,
+                         struct osc_async_page, oap_urgent_item);
+
+        if (oap->oap_async_flags & ASYNC_HP) {
+                CDEBUG(D_CACHE, "hp request forcing RPC\n");
+                RETURN(1);
+        }
+
+        RETURN(0);
+}
+
 static void on_list(struct list_head *item, struct list_head *list,
                     int should_be_on)
 {
@@ -1792,9 +1803,17 @@ static void on_list(struct list_head *item, struct list_head *list,
  * can find pages to build into rpcs quickly */
 static void loi_list_maint(struct client_obd *cli, struct lov_oinfo *loi)
 {
-        on_list(&loi->loi_cli_item, &cli->cl_loi_ready_list,
-                lop_makes_rpc(cli, &loi->loi_write_lop, OBD_BRW_WRITE) ||
-                lop_makes_rpc(cli, &loi->loi_read_lop, OBD_BRW_READ));
+        if (lop_makes_hprpc(&loi->loi_write_lop) ||
+            lop_makes_hprpc(&loi->loi_read_lop)) {
+                /* HP rpc */
+                on_list(&loi->loi_ready_item, &cli->cl_loi_ready_list, 0);
+                on_list(&loi->loi_hp_ready_item, &cli->cl_loi_hp_ready_list, 1);
+        } else {
+                on_list(&loi->loi_hp_ready_item, &cli->cl_loi_hp_ready_list, 0);
+                on_list(&loi->loi_ready_item, &cli->cl_loi_ready_list,
+                        lop_makes_rpc(cli, &loi->loi_write_lop, OBD_BRW_WRITE)||
+                        lop_makes_rpc(cli, &loi->loi_read_lop, OBD_BRW_READ));
+        }
 
         on_list(&loi->loi_write_item, &cli->cl_loi_write_list,
                 loi->loi_write_lop.lop_num_pending);
@@ -1890,8 +1909,10 @@ static void osc_oap_to_pending(struct osc_async_page *oap)
         else
                 lop = &oap->oap_loi->loi_read_lop;
 
-        if (oap->oap_async_flags & ASYNC_URGENT)
+        if (oap->oap_async_flags & ASYNC_HP)
                 list_add(&oap->oap_urgent_item, &lop->lop_urgent);
+        else if (oap->oap_async_flags & ASYNC_URGENT)
+                list_add_tail(&oap->oap_urgent_item, &lop->lop_urgent);
         list_add_tail(&oap->oap_pending_item, &lop->lop_pending);
         lop_update_pending(oap->oap_cli, lop, oap->oap_cmd, 1);
 }
@@ -2103,6 +2124,15 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
         int srvlock = 0;
         ENTRY;
 
+        /* If there are HP OAPs we need to handle at least 1 of them,
+         * move it the beginning of the pending list for that. */
+        if (!list_empty(&lop->lop_urgent)) {
+                oap = list_entry(lop->lop_urgent.next,
+                                 struct osc_async_page, oap_urgent_item);
+                if (oap->oap_async_flags & ASYNC_HP)
+                        list_move(&oap->oap_pending_item, &lop->lop_pending);
+        }
+
         /* first we find the pages we're allowed to work with */
         list_for_each_entry_safe(oap, tmp, &lop->lop_pending, oap_pending_item){
                 ops = oap->oap_caller_ops;
@@ -2299,7 +2329,8 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
 
 #define LOI_DEBUG(LOI, STR, args...)                                     \
         CDEBUG(D_INODE, "loi ready %d wr %d:%d rd %d:%d " STR,           \
-               !list_empty(&(LOI)->loi_cli_item),                        \
+               !list_empty(&(LOI)->loi_ready_item) ||                    \
+               !list_empty(&(LOI)->loi_hp_ready_item),                   \
                (LOI)->loi_write_lop.lop_num_pending,                     \
                !list_empty(&(LOI)->loi_write_lop.lop_urgent),            \
                (LOI)->loi_read_lop.lop_num_pending,                      \
@@ -2311,11 +2342,15 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
 struct lov_oinfo *osc_next_loi(struct client_obd *cli)
 {
         ENTRY;
-        /* first return all objects which we already know to have
-         * pages ready to be stuffed into rpcs */
+        /* First return objects that have blocked locks so that they
+         * will be flushed quickly and other clients can get the lock,
+         * then objects which have pages ready to be stuffed into RPCs */
+        if (!list_empty(&cli->cl_loi_hp_ready_list))
+                RETURN(list_entry(cli->cl_loi_hp_ready_list.next,
+                                  struct lov_oinfo, loi_hp_ready_item));
         if (!list_empty(&cli->cl_loi_ready_list))
                 RETURN(list_entry(cli->cl_loi_ready_list.next,
-                                  struct lov_oinfo, loi_cli_item));
+                                  struct lov_oinfo, loi_ready_item));
 
         /* then if we have cache waiters, return all objects with queued
          * writes.  This is especially important when many small files
@@ -2339,6 +2374,26 @@ struct lov_oinfo *osc_next_loi(struct client_obd *cli)
         RETURN(NULL);
 }
 
+static int osc_max_rpc_in_flight(struct client_obd *cli, struct lov_oinfo *loi)
+{
+        struct osc_async_page *oap;
+        int hprpc = 0;
+
+        if (!list_empty(&loi->loi_write_lop.lop_urgent)) {
+                oap = list_entry(loi->loi_write_lop.lop_urgent.next,
+                                 struct osc_async_page, oap_urgent_item);
+                hprpc = !!(oap->oap_async_flags & ASYNC_HP);
+        }
+
+        if (!hprpc && !list_empty(&loi->loi_read_lop.lop_urgent)) {
+                oap = list_entry(loi->loi_write_lop.lop_urgent.next,
+                                 struct osc_async_page, oap_urgent_item);
+                hprpc = !!(oap->oap_async_flags & ASYNC_HP);
+        }
+
+        return rpcs_in_flight(cli) >= cli->cl_max_rpcs_in_flight + hprpc;
+}
+
 /* called with the loi list lock held */
 static void osc_check_rpcs(struct client_obd *cli)
 {
@@ -2349,7 +2404,7 @@ static void osc_check_rpcs(struct client_obd *cli)
         while ((loi = osc_next_loi(cli)) != NULL) {
                 LOI_DEBUG(loi, "%lu in flight\n", rpcs_in_flight(cli));
 
-                if (rpcs_in_flight(cli) >= cli->cl_max_rpcs_in_flight)
+                if (osc_max_rpc_in_flight(cli, loi))
                         break;
 
                 /* attempt some read/write balancing by alternating between
@@ -2381,8 +2436,10 @@ static void osc_check_rpcs(struct client_obd *cli)
 
                 /* attempt some inter-object balancing by issueing rpcs
                  * for each object in turn */
-                if (!list_empty(&loi->loi_cli_item))
-                        list_del_init(&loi->loi_cli_item);
+                if (!list_empty(&loi->loi_hp_ready_item))
+                        list_del_init(&loi->loi_hp_ready_item);
+                if (!list_empty(&loi->loi_ready_item))
+                        list_del_init(&loi->loi_ready_item);
                 if (!list_empty(&loi->loi_write_item))
                         list_del_init(&loi->loi_write_item);
                 if (!list_empty(&loi->loi_read_item))
@@ -2541,7 +2598,7 @@ int osc_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         /* If the page was marked as notcacheable - don't add to any locks */
         if (!nocache) {
-                osc_build_res_name(loi->loi_id, loi->loi_gr, &oid);
+                oid.name[0] = loi->loi_id;
                 /* This is the only place where we can call cache_add_extent
                    without oap_lock, because this page is locked now, and
                    the lock we are adding it to is referenced, so cannot lose
@@ -2586,7 +2643,6 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
                 RETURN(-EBUSY);
 
         /* check if the file's owner/group is over quota */
-#ifdef HAVE_QUOTA_SUPPORT
         if ((cmd & OBD_BRW_WRITE) && !(cmd & OBD_BRW_NOQUOTA)){
                 struct obd_async_page_ops *ops;
                 struct obdo *oa;
@@ -2605,7 +2661,6 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
                 if (rc)
                         RETURN(rc);
         }
-#endif
 
         if (loi == NULL)
                 loi = lsm->lsm_oinfo[0];
@@ -2689,11 +2744,14 @@ static int osc_set_async_flags(struct obd_export *exp,
         if (SETTING(oap->oap_async_flags, async_flags, ASYNC_READY))
                 oap->oap_async_flags |= ASYNC_READY;
 
-        if (SETTING(oap->oap_async_flags, async_flags, ASYNC_URGENT)) {
-                if (list_empty(&oap->oap_rpc_item)) {
+        if (SETTING(oap->oap_async_flags, async_flags, ASYNC_URGENT) &&
+            list_empty(&oap->oap_rpc_item)) {
+                if (oap->oap_async_flags & ASYNC_HP)
                         list_add(&oap->oap_urgent_item, &lop->lop_urgent);
-                        loi_list_maint(cli, loi);
-                }
+                else
+                        list_add_tail(&oap->oap_urgent_item, &lop->lop_urgent);
+                oap->oap_async_flags |= ASYNC_URGENT;
+                loi_list_maint(cli, loi);
         }
 
         LOI_DEBUG(loi, "oap %p page %p has flags %x\n", oap, oap->oap_page,
@@ -2828,8 +2886,9 @@ static int osc_teardown_async_page(struct obd_export *exp,
 
         if (!list_empty(&oap->oap_urgent_item)) {
                 list_del_init(&oap->oap_urgent_item);
-                oap->oap_async_flags &= ~ASYNC_URGENT;
+                oap->oap_async_flags &= ~(ASYNC_URGENT | ASYNC_HP);
         }
+
         if (!list_empty(&oap->oap_pending_item)) {
                 list_del_init(&oap->oap_pending_item);
                 lop_update_pending(cli, lop, oap->oap_cmd, -1);
@@ -2920,10 +2979,9 @@ static void osc_set_data_with_check(struct lustre_handle *lockh, void *data,
 static int osc_change_cbdata(struct obd_export *exp, struct lov_stripe_md *lsm,
                              ldlm_iterator_t replace, void *data)
 {
-        struct ldlm_res_id res_id;
+        struct ldlm_res_id res_id = { .name = {lsm->lsm_object_id} };
         struct obd_device *obd = class_exp2obd(exp);
 
-        osc_build_res_name(lsm->lsm_object_id, lsm->lsm_object_gr, &res_id);
         ldlm_resource_iterate(obd->obd_namespace, &res_id, replace, data);
         return 0;
 }
@@ -3007,7 +3065,7 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                        struct ldlm_enqueue_info *einfo,
                        struct ptlrpc_request_set *rqset)
 {
-        struct ldlm_res_id res_id;
+        struct ldlm_res_id res_id = { .name = {oinfo->oi_md->lsm_object_id} };
         struct obd_device *obd = exp->exp_obd;
         struct ldlm_reply *rep;
         struct ptlrpc_request *req = NULL;
@@ -3016,8 +3074,6 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
         int rc;
         ENTRY;
 
-        osc_build_res_name(oinfo->oi_md->lsm_object_id,
-                           oinfo->oi_md->lsm_object_gr, &res_id);
         /* Filesystem lock extents are extended to page boundaries so that
          * dealing with the page cache is a little smoother.  */
         oinfo->oi_policy.l_extent.start -=
@@ -3125,13 +3181,11 @@ static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
                      __u32 type, ldlm_policy_data_t *policy, __u32 mode,
                      int *flags, void *data, struct lustre_handle *lockh)
 {
-        struct ldlm_res_id res_id;
+        struct ldlm_res_id res_id = { .name = {lsm->lsm_object_id} };
         struct obd_device *obd = exp->exp_obd;
         int lflags = *flags;
         ldlm_mode_t rc;
         ENTRY;
-
-        osc_build_res_name(lsm->lsm_object_id, lsm->lsm_object_gr, &res_id);
 
         OBD_FAIL_RETURN(OBD_FAIL_OSC_MATCH, -EIO);
 
@@ -3178,30 +3232,19 @@ static int osc_cancel_unused(struct obd_export *exp,
                              struct lov_stripe_md *lsm, int flags, void *opaque)
 {
         struct obd_device *obd = class_exp2obd(exp);
-        struct ldlm_res_id res_id, *resp = NULL;
+        struct ldlm_res_id res_id = { .name = {lsm->lsm_object_id} };
 
-        if (lsm != NULL) {
-                resp = osc_build_res_name(lsm->lsm_object_id,
-                                          lsm->lsm_object_gr, &res_id);
-        }
-
-        return ldlm_cli_cancel_unused(obd->obd_namespace, resp, flags, opaque);
-
+        return ldlm_cli_cancel_unused(obd->obd_namespace, &res_id, flags,
+                                      opaque);
 }
 
 static int osc_join_lru(struct obd_export *exp,
                         struct lov_stripe_md *lsm, int join)
 {
         struct obd_device *obd = class_exp2obd(exp);
-        struct ldlm_res_id res_id, *resp = NULL;
+        struct ldlm_res_id res_id = { .name = {lsm->lsm_object_id} };
 
-        if (lsm != NULL) {
-                resp = osc_build_res_name(lsm->lsm_object_id,
-                                          lsm->lsm_object_gr, &res_id);
-        }
-
-        return ldlm_cli_join_lru(obd->obd_namespace, resp, join);
-
+        return ldlm_cli_join_lru(obd->obd_namespace, &res_id, join);
 }
 
 static int osc_statfs_interpret(struct ptlrpc_request *req,
@@ -3328,48 +3371,32 @@ static int osc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
  *
  * @lmmu is a pointer to an in-core struct with lmm_ost_count indicating
  * the maximum number of OST indices which will fit in the user buffer.
- * lmm_magic must be LOV_MAGIC_V1 or LOV_MAGIC_V3 (we only use 1 slot here).
+ * lmm_magic must be LOV_MAGIC (we only use 1 slot here).
  */
 static int osc_getstripe(struct lov_stripe_md *lsm, struct lov_user_md *lump)
 {
-        /* we use lov_user_md_v3 because it is larger than lov_user_md_v1 */
-        struct lov_user_md_v3 lum, *lumk;
+        struct lov_user_md lum, *lumk;
         int rc = 0, lum_size;
-        struct lov_user_ost_data_v1 *lmm_objects;
         ENTRY;
 
         if (!lsm)
                 RETURN(-ENODATA);
 
-        /* we only need the header part from user space to get lmm_magic and
-         * lmm_stripe_count, (the header part is common to v1 and v3) */
-        lum_size = sizeof(struct lov_user_md_v1);
-        if (copy_from_user(&lum, lump, lum_size))
+        if (copy_from_user(&lum, lump, sizeof(lum)))
                 RETURN(-EFAULT);
 
-        if ((lum.lmm_magic != LOV_USER_MAGIC_V1) &&
-            (lum.lmm_magic != LOV_USER_MAGIC_V3))
+        if (lum.lmm_magic != LOV_USER_MAGIC)
                 RETURN(-EINVAL);
 
-        /* lov_user_md_vX and lov_mds_md_vX must have the same size */
-        LASSERT(sizeof(struct lov_user_md_v1) == sizeof(struct lov_mds_md_v1));
-        LASSERT(sizeof(struct lov_user_md_v3) == sizeof(struct lov_mds_md_v3));
-        LASSERT(sizeof(lum.lmm_objects[0]) == sizeof(lumk->lmm_objects[0]));
-
-        /* we can use lov_mds_md_size() to compute lum_size
-         * because lov_user_md_vX and lov_mds_md_vX have the same size */
         if (lum.lmm_stripe_count > 0) {
-                lum_size = lov_mds_md_size(lum.lmm_stripe_count, lum.lmm_magic);
+                lum_size = sizeof(lum) + sizeof(lum.lmm_objects[0]);
                 OBD_ALLOC(lumk, lum_size);
                 if (!lumk)
                         RETURN(-ENOMEM);
-                if (lum.lmm_magic == LOV_USER_MAGIC_V1)
-                        lmm_objects = &(((struct lov_user_md_v1 *)lumk)->lmm_objects[0]);
-                else
-                        lmm_objects = &(lumk->lmm_objects[0]);
-                lmm_objects->l_object_id = lsm->lsm_object_id;
+
+                lumk->lmm_objects[0].l_object_id = lsm->lsm_object_id;
         } else {
-                lum_size = lov_mds_md_size(0, lum.lmm_magic);
+                lum_size = sizeof(lum);
                 lumk = &lum;
         }
 
@@ -3385,7 +3412,6 @@ static int osc_getstripe(struct lov_stripe_md *lsm, struct lov_user_md *lump)
         RETURN(rc);
 }
 
-
 static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                          void *karg, void *uarg)
 {
@@ -3394,14 +3420,10 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         int err = 0;
         ENTRY;
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        MOD_INC_USE_COUNT;
-#else
         if (!try_module_get(THIS_MODULE)) {
                 CERROR("Can't get module. Is it alive?");
                 return -EINVAL;
         }
-#endif
         switch (cmd) {
         case OBD_IOC_LOV_GET_CONFIG: {
                 char *buf;
@@ -3467,7 +3489,7 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_DESTROY: {
                 struct obdo            *oa;
 
-                if (!capable (CAP_SYS_ADMIN))
+                if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, err = -EPERM);
                 oa = &data->ioc_obdo1;
 
@@ -3485,16 +3507,12 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 GOTO(out, err = -ENOTTY);
         }
 out:
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        MOD_DEC_USE_COUNT;
-#else
         module_put(THIS_MODULE);
-#endif
         return err;
 }
 
-static int osc_get_info(struct obd_export *exp, obd_count keylen,
-                        void *key, __u32 *vallen, void *val, struct lov_stripe_md *lsm)
+static int osc_get_info(struct obd_export *exp, obd_count keylen, void *key,
+                        __u32 *vallen, void *val, struct lov_stripe_md *lsm)
 {
         ENTRY;
         if (!vallen || !val)
@@ -3674,7 +3692,6 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
         RETURN(0);
 }
 
-
 static struct llog_operations osc_size_repl_logops = {
         lop_cancel: llog_obd_repl_cancel
 };
@@ -3706,8 +3723,13 @@ static int osc_llog_init(struct obd_device *obd, struct obd_device *tgt,
 
         rc = llog_setup(obd, LLOG_SIZE_REPL_CTXT, tgt, count, NULL,
                         &osc_size_repl_logops);
-        if (rc)
+        if (rc) {
+                struct llog_ctxt *ctxt = 
+                        llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
+                if (ctxt)
+                        llog_cleanup(ctxt);
                 CERROR("failed LLOG_SIZE_REPL_CTXT\n");
+        }
 out:
         if (rc) {
                 CERROR("osc '%s' tgt '%s' cnt %d catid %p rc=%d\n",
@@ -3768,14 +3790,21 @@ static int osc_reconnect(struct obd_export *exp, struct obd_device *obd,
 static int osc_disconnect(struct obd_export *exp)
 {
         struct obd_device *obd = class_exp2obd(exp);
-        struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_SIZE_REPL_CTXT);
+        struct llog_ctxt  *ctxt;
         int rc;
 
-        if (obd->u.cli.cl_conn_count == 1)
-                /* flush any remaining cancel messages out to the target */
-                llog_sync(ctxt, exp);
-
-        llog_ctxt_put(ctxt);
+        ctxt = llog_get_context(obd, LLOG_SIZE_REPL_CTXT);
+        if (ctxt) {
+                if (obd->u.cli.cl_conn_count == 1) {
+                        /* Flush any remaining cancel messages out to the 
+                         * target */
+                        llog_sync(ctxt, exp);
+                }
+                llog_ctxt_put(ctxt);
+        } else {
+                CDEBUG(D_HA, "No LLOG_SIZE_REPL_CTXT found in obd %p\n", 
+                       obd);
+        }
 
         rc = client_disconnect_export(exp);
         return rc;
@@ -3924,12 +3953,17 @@ static int osc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                    client import will not have been cleaned. */
                 if (obd->u.cli.cl_import) {
                         struct obd_import *imp;
+                        down_write(&obd->u.cli.cl_sem);
                         imp = obd->u.cli.cl_import;
                         CDEBUG(D_CONFIG, "%s: client import never connected\n",
                                obd->obd_name);
                         ptlrpc_invalidate_import(imp);
-                        ptlrpc_free_rq_pool(imp->imp_rq_pool);
+                        if (imp->imp_rq_pool) {
+                                ptlrpc_free_rq_pool(imp->imp_rq_pool);
+                                imp->imp_rq_pool = NULL;
+                        }
                         class_destroy_import(imp);
+                        up_write(&obd->u.cli.cl_sem);
                         obd->u.cli.cl_import = NULL;
                 }
                 rc = obd_llog_finish(obd, 0);

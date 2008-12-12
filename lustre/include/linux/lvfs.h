@@ -64,7 +64,7 @@ struct lvfs_ucred {
         struct upcall_cache_entry *luc_uce;
         __u32 luc_fsuid;
         __u32 luc_fsgid;
-        __u32 luc_cap;
+        cfs_kernel_cap_t luc_cap;
         __u32 luc_suppgid1;
         __u32 luc_suppgid2;
         __u32 luc_umask;
@@ -110,6 +110,10 @@ int lustre_fread(struct file *file, void *buf, int len, loff_t *off);
 int lustre_fwrite(struct file *file, const void *buf, int len, loff_t *off);
 int lustre_fsync(struct file *file);
 long l_readdir(struct file * file, struct list_head *dentry_list);
+int l_notify_change(struct vfsmount *mnt, struct dentry *dchild,
+                    struct iattr *newattrs);
+int simple_truncate(struct dentry *dir, struct vfsmount *mnt,
+                               char *name, loff_t length);
 
 static inline void l_dput(struct dentry *de)
 {

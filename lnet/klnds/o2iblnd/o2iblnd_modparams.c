@@ -130,9 +130,48 @@ kib_tunables_t kiblnd_tunables = {
 
 static char ipif_basename_space[32];
 
+#ifndef HAVE_SYSCTL_UNNUMBERED
+
+enum {
+        O2IBLND_SERVICE  = 1,
+        O2IBLND_CKSUM,
+        O2IBLND_TIMEOUT,
+        O2IBLND_NTX,
+        O2IBLND_CREDITS,
+        O2IBLND_PEER_CREDITS,
+        O2IBLND_IPIF_BASENAME,
+        O2IBLND_RETRY_COUNT,
+        O2IBLND_RNR_RETRY_COUNT,
+        O2IBLND_KEEPALIVE,
+        O2IBLND_CONCURRENT_SENDS,
+        O2IBLND_IB_MTU,
+        O2IBLND_FMR_POOL_SIZE,
+        O2IBLND_FMR_FLUSH_TRIGGER,
+        O2IBLND_FMR_CACHE
+};
+#else
+
+#define O2IBLND_SERVICE          CTL_UNNUMBERED
+#define O2IBLND_CKSUM            CTL_UNNUMBERED
+#define O2IBLND_TIMEOUT          CTL_UNNUMBERED
+#define O2IBLND_NTX              CTL_UNNUMBERED
+#define O2IBLND_CREDITS          CTL_UNNUMBERED
+#define O2IBLND_PEER_CREDITS     CTL_UNNUMBERED
+#define O2IBLND_IPIF_BASENAME    CTL_UNNUMBERED
+#define O2IBLND_RETRY_COUNT      CTL_UNNUMBERED
+#define O2IBLND_RNR_RETRY_COUNT  CTL_UNNUMBERED
+#define O2IBLND_KEEPALIVE        CTL_UNNUMBERED
+#define O2IBLND_CONCURRENT_SENDS CTL_UNNUMBERED
+#define O2IBLND_IB_MTU           CTL_UNNUMBERED
+#define O2IBLND_FMR_POOL_SIZE    CTL_UNNUMBERED
+#define O2IBLND_FMR_FLUSH_TRIGGER CTL_UNNUMBERED
+#define O2IBLND_FMR_CACHE        CTL_UNNUMBERED
+
+#endif
+
 static cfs_sysctl_table_t kiblnd_ctl_table[] = {
         {
-                .ctl_name = 1,
+                .ctl_name = O2IBLND_SERVICE,
                 .procname = "service",
                 .data     = &service,
                 .maxlen   = sizeof(int),
@@ -140,7 +179,7 @@ static cfs_sysctl_table_t kiblnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 2,
+                .ctl_name = O2IBLND_CKSUM,
                 .procname = "cksum",
                 .data     = &cksum,
                 .maxlen   = sizeof(int),
@@ -148,7 +187,7 @@ static cfs_sysctl_table_t kiblnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 3,
+                .ctl_name = O2IBLND_TIMEOUT,
                 .procname = "timeout",
                 .data     = &timeout,
                 .maxlen   = sizeof(int),
@@ -156,7 +195,7 @@ static cfs_sysctl_table_t kiblnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 4,
+                .ctl_name = O2IBLND_NTX,
                 .procname = "ntx",
                 .data     = &ntx,
                 .maxlen   = sizeof(int),
@@ -164,7 +203,7 @@ static cfs_sysctl_table_t kiblnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 5,
+                .ctl_name = O2IBLND_CREDITS,
                 .procname = "credits",
                 .data     = &credits,
                 .maxlen   = sizeof(int),
@@ -172,7 +211,7 @@ static cfs_sysctl_table_t kiblnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 6,
+                .ctl_name = O2IBLND_PEER_CREDITS,
                 .procname = "peer_credits",
                 .data     = &peer_credits,
                 .maxlen   = sizeof(int),
@@ -180,7 +219,7 @@ static cfs_sysctl_table_t kiblnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 7,
+                .ctl_name = O2IBLND_IPIF_BASENAME,
                 .procname = "ipif_name",
                 .data     = ipif_basename_space,
                 .maxlen   = sizeof(ipif_basename_space),
@@ -188,7 +227,7 @@ static cfs_sysctl_table_t kiblnd_ctl_table[] = {
                 .proc_handler = &proc_dostring
         },
         {
-                .ctl_name = 8,
+                .ctl_name = O2IBLND_RETRY_COUNT,
                 .procname = "retry_count",
                 .data     = &retry_count,
                 .maxlen   = sizeof(int),
@@ -196,7 +235,7 @@ static cfs_sysctl_table_t kiblnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 9,
+                .ctl_name = O2IBLND_RNR_RETRY_COUNT,
                 .procname = "rnr_retry_count",
                 .data     = &rnr_retry_count,
                 .maxlen   = sizeof(int),
@@ -204,7 +243,7 @@ static cfs_sysctl_table_t kiblnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 10,
+                .ctl_name = O2IBLND_KEEPALIVE,
                 .procname = "keepalive",
                 .data     = &keepalive,
                 .maxlen   = sizeof(int),
@@ -212,7 +251,7 @@ static cfs_sysctl_table_t kiblnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 11,
+                .ctl_name = O2IBLND_CONCURRENT_SENDS,
                 .procname = "concurrent_sends",
                 .data     = &concurrent_sends,
                 .maxlen   = sizeof(int),
@@ -220,7 +259,7 @@ static cfs_sysctl_table_t kiblnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 12,
+                .ctl_name = O2IBLND_IB_MTU,
                 .procname = "ib_mtu",
                 .data     = &ib_mtu,
                 .maxlen   = sizeof(int),
@@ -229,7 +268,7 @@ static cfs_sysctl_table_t kiblnd_ctl_table[] = {
         },
 #if IBLND_MAP_ON_DEMAND
         {
-                .ctl_name = 13,
+                .ctl_name = O2IBLND_FMR_POOL_SIZE,
                 .procname = "fmr_pool_size",
                 .data     = &fmr_pool_size,
                 .maxlen   = sizeof(int),
@@ -237,7 +276,7 @@ static cfs_sysctl_table_t kiblnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 14,
+                .ctl_name = O2IBLND_FMR_FLUSH_TRIGGER,
                 .procname = "fmr_flush_trigger",
                 .data     = &fmr_flush_trigger,
                 .maxlen   = sizeof(int),
@@ -245,7 +284,7 @@ static cfs_sysctl_table_t kiblnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = 15,
+                .ctl_name = O2IBLND_FMR_CACHE,
                 .procname = "fmr_cache",
                 .data     = &fmr_cache,
                 .maxlen   = sizeof(int),
@@ -258,7 +297,7 @@ static cfs_sysctl_table_t kiblnd_ctl_table[] = {
 
 static cfs_sysctl_table_t kiblnd_top_ctl_table[] = {
         {
-                .ctl_name = 203,
+                .ctl_name = CTL_O2IBLND,
                 .procname = "o2iblnd",
                 .data     = NULL,
                 .maxlen   = 0,

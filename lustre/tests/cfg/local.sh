@@ -6,6 +6,7 @@ mdsfailover_HOST=${mdsfailover_HOST}
 mgs_HOST=${mgs_HOST:-$mds_HOST}
 ost_HOST=${ost_HOST:-`hostname`}
 ostfailover_HOST=${ostfailover_HOST}
+CLIENTS=""
 PDSH=${PDSH:-no_dsh}
 
 TMP=${TMP:-/tmp}
@@ -50,7 +51,7 @@ MKFSOPT=""
     MDSOPT=$MDSOPT" --param lov.stripecount=$STRIPES_PER_OBJ"
 [ "x$L_GETGROUPS" != "x" ] &&
     MDSOPT=$MDSOPT" --param mdt.group_upcall=$L_GETGROUPS"
-MDS_MKFS_OPTS="--mgs --mdt --fsname=$FSNAME --device-size=$MDSSIZE --param sys.timeout=$TIMEOUT $MKFSOPT $MDSOPT"
+MDS_MKFS_OPTS="--mgs --mdt --fsname=$FSNAME --device-size=$MDSSIZE --param sys.timeout=$TIMEOUT $MKFSOPT $MDSOPT $MDS_MKFS_OPTS"
 
 MKFSOPT=""
 [ "x$OSTJOURNALSIZE" != "x" ] &&
@@ -59,7 +60,7 @@ MKFSOPT=""
     MKFSOPT="--mkfsoptions=\\\"$MKFSOPT\\\""
 [ "x$ostfailover_HOST" != "x" ] &&
     OSTOPT=$OSTOPT" --failnode=`h2$NETTYPE $ostfailover_HOST`"
-OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID --param sys.timeout=$TIMEOUT $MKFSOPT $OSTOPT"
+OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID --param sys.timeout=$TIMEOUT $MKFSOPT $OSTOPT $OST_MKFS_OPTS"
 
 MDS_MOUNT_OPTS=${MDS_MOUNT_OPTS:-"-o loop"}
 OST_MOUNT_OPTS=${OST_MOUNT_OPTS:-"-o loop"}

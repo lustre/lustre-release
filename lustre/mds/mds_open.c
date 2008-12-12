@@ -50,12 +50,8 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/version.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-# include <linux/buffer_head.h>
-# include <linux/workqueue.h>
-#else
-# include <linux/locks.h>
-#endif
+#include <linux/buffer_head.h>
+#include <linux/workqueue.h>
 
 #include <obd_class.h>
 #include <obd_lov.h>
@@ -411,8 +407,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
 
                         lmm_size = lmm_sz;
                         rc = mds_get_md(obd, dchild->d_parent->d_inode,
-                                        lmm, &lmm_size, 1, 0,
-                                        req->rq_export->exp_connect_flags);
+                                        lmm, &lmm_size, 1, 0);
                         if (rc > 0)
                                 rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
                                                    mds->mds_osc_exp,
@@ -421,7 +416,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                         if (rc)
                                 GOTO(out_oa, rc);
                 }
-                rc = obd_create(mds->mds_osc_exp, oinfo.oi_oa, 
+                rc = obd_create(mds->mds_osc_exp, oinfo.oi_oa,
                                 &oinfo.oi_md, &oti);
                 if (rc) {
                         int level = D_ERROR;
@@ -544,7 +539,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         parent = mds_fid2dentry(mds, rec->ur_fid1, NULL);
         if (IS_ERR(parent)) {
                 rc = PTR_ERR(parent);
-                LCONSOLE_WARN("Parent "LPU64"/%u lookup error %d." 
+                LCONSOLE_WARN("Parent "LPU64"/%u lookup error %d."
                               " Evicting client %s with export %s.\n",
                               rec->ur_fid1->id, rec->ur_fid1->generation, rc,
                               obd_uuid2str(&exp->exp_client_uuid),
@@ -554,15 +549,16 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                 return;
         }
 
-        dchild = mds_lookup(obd, rec->ur_name, parent, rec->ur_namelen - 1);
+        dchild = ll_lookup_one_len(rec->ur_name, parent, rec->ur_namelen - 1);
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
-                LCONSOLE_WARN("Child "LPU64"/%u lookup error %d." 
+                LCONSOLE_WARN("Child "LPU64"/%u lookup error %d."
                               " Evicting client %s with export %s.\n",
                               rec->ur_fid1->id, rec->ur_fid1->generation, rc,
                               obd_uuid2str(&exp->exp_client_uuid),
                               obd_export_nid2str(exp));
                 mds_export_evict(exp);
+                l_dput(parent);
                 EXIT;
                 return;
         }
@@ -579,11 +575,11 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                 GOTO(out_dput, 0);
         }
 
+        mds_pack_inode2fid(&body->fid1, dchild->d_inode);
         mds_pack_inode2body(body, dchild->d_inode);
         if (S_ISREG(dchild->d_inode->i_mode)) {
                 rc = mds_pack_md(obd, req->rq_repmsg, DLM_REPLY_REC_OFF + 1,
-                                 body, dchild->d_inode, 1, 0,
-                                 req->rq_export->exp_connect_flags);
+                                 body, dchild->d_inode, 1, 0);
 
                 if (rc)
                         LASSERT(rc == req->rq_status);
@@ -648,9 +644,16 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
          * to detect a re-open */
         if (mfd == NULL) {
                 if (rec->ur_flags & MDS_OPEN_JOIN_FILE) {
+#if LUSTRE_FIX >= 50
+                        /* Allow file join in beta builds to allow debugging */
                         rc = mds_join_file(rec, req, dchild, NULL);
                         if (rc)
                                 GOTO(out_dput, rc);
+#else
+                        CWARN("file join is not supported in this version of "
+                              "Lustre\n");
+                        GOTO(out_dput, req->rq_status = rc = -EOPNOTSUPP);
+#endif
                 }
                 mntget(mds->mds_vfsmnt);
                 CERROR("Re-opened file \n");
@@ -721,8 +724,7 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
         if (S_ISREG(dchild->d_inode->i_mode) &&
             !(body->valid & OBD_MD_FLEASIZE)) {
                 rc = mds_pack_md(obd, req->rq_repmsg, DLM_REPLY_REC_OFF + 1,
-                                 body, dchild->d_inode, 0, 0,
-                                 req->rq_export->exp_connect_flags);
+                                 body, dchild->d_inode, 0, 0);
                 if (rc) {
                         UNLOCK_INODE_MUTEX(dchild->d_inode);
                         RETURN(rc);
@@ -735,11 +737,18 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                         RETURN(-EEXIST);
                 }
                 if (rec->ur_flags & MDS_OPEN_JOIN_FILE) {
+#if LUSTRE_FIX >= 50
+                        /* Allow file join in beta builds to allow debugging */
                         UNLOCK_INODE_MUTEX(dchild->d_inode);
                         rc = mds_join_file(rec, req, dchild, lockh);
                         if (rc)
                                 RETURN(rc);
                         LOCK_INODE_MUTEX(dchild->d_inode);
+#else
+                        CWARN("file join is not supported in this version of "
+                              "Lustre\n");
+                        RETURN(-EOPNOTSUPP);
+#endif
                 }
                 if (!(body->valid & OBD_MD_FLEASIZE) &&
                     !(body->valid & OBD_MD_FLMODEASIZE)) {
@@ -801,7 +810,6 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
                            struct mds_body *body, int flags,
                            struct mds_update_record *rec,struct ldlm_reply *rep)
 {
-        struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_obd *mds = mds_req2mds(req);
         struct dentry *dchild;
         char fidname[LL_FID_NAMELEN];
@@ -810,7 +818,7 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
         ENTRY;
 
         fidlen = ll_fid2str(fidname, fid->id, fid->generation);
-        dchild = mds_lookup(obd, fidname, mds->mds_pending_dir, fidlen);
+        dchild = ll_lookup_one_len(fidname, mds->mds_pending_dir, fidlen);
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
                 CERROR("error looking up %s in PENDING: rc = %d\n",fidname, rc);
@@ -831,12 +839,13 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
                         RETURN(PTR_ERR(dchild));
         }
 
+        mds_pack_inode2fid(&body->fid1, dchild->d_inode);
         mds_pack_inode2body(body, dchild->d_inode);
         intent_set_disposition(rep, DISP_LOOKUP_EXECD);
         intent_set_disposition(rep, DISP_LOOKUP_POS);
 
         rc = mds_finish_open(req, dchild, body, flags, &handle, rec, rep, NULL);
-        rc = mds_finish_transno(mds, NULL, handle,
+        rc = mds_finish_transno(mds, dchild->d_inode, handle,
                                 req, rc, rep ? rep->lock_policy_res1 : 0, 0);
         /* XXX what do we do here if mds_finish_transno itself failed? */
 
@@ -905,7 +914,6 @@ int mds_open(struct mds_update_record *rec, int offset,
         struct ldlm_reply *rep = NULL;
         struct mds_body *body = NULL;
         struct dentry *dchild = NULL, *dparent = NULL;
-        struct inode *inodes[PTLRPC_NUM_VERSIONS] = { NULL };
         struct mds_export_data *med;
         struct lustre_handle parent_lockh;
         int rc = 0, cleanup_phase = 0, acc_mode, created = 0;
@@ -917,10 +925,9 @@ int mds_open(struct mds_update_record *rec, int offset,
         int child_mode = LCK_CR;
         /* Always returning LOOKUP lock if open succesful to guard
            dentry on client. */
-        ldlm_policy_data_t policy = {.l_inodebits={MDS_INODELOCK_LOOKUP}};
-        struct ldlm_res_id child_res_id = { .name = {0}};
         int lock_flags = 0;
         int rec_pending = 0;
+        int use_parent, need_open_lock;
         unsigned int gid = current->fsgid;
         ENTRY;
 
@@ -994,17 +1001,45 @@ int mds_open(struct mds_update_record *rec, int offset,
                 RETURN(-ENOMEM);
         }
 
-        /* Step 1: Find and lock the parent */
         if (rec->ur_flags & (MDS_OPEN_CREAT | MDS_OPEN_JOIN_FILE))
                 parent_mode = LCK_EX;
-        dparent = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, parent_mode,
-                                        &parent_lockh, rec->ur_name,
-                                        rec->ur_namelen - 1,
-                                        MDS_INODELOCK_UPDATE);
-        if (IS_ERR(dparent)) {
-                rc = PTR_ERR(dparent);
+
+        /* We cannot use acc_mode here, because it is zeroed in case of
+           creating a file, so we get wrong lockmode */
+        if (rec->ur_flags & FMODE_WRITE)
+                child_mode = LCK_CW;
+        else if (rec->ur_flags & MDS_FMODE_EXEC)
+                child_mode = LCK_PR;
+        else
+                child_mode = LCK_CR;
+
+        /* join file and nfsd can't need lookup dchild as use parent for it */
+        use_parent = (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) &&
+                     (rec->ur_flags & MDS_OPEN_LOCK) && (rec->ur_namelen == 1)) ||
+                     (rec->ur_flags & MDS_OPEN_JOIN_FILE);
+
+        need_open_lock = !(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) &&
+                           (rec->ur_flags & MDS_OPEN_LOCK);
+
+        /* Try to lock both parent and child first. If child is not found,
+         * return only locked parent.  This is enough to prevent other
+         * threads from changing this directory until creation is finished. */
+        rc = mds_get_parent_child_locked(obd, &obd->u.mds,
+                                         rec->ur_fid1,
+                                         &parent_lockh,
+                                         &dparent, parent_mode,
+                                         MDS_INODELOCK_UPDATE,
+                                         use_parent ? NULL : rec->ur_name,
+                                         rec->ur_namelen,
+                                         (rec->ur_flags & MDS_OPEN_LOCK) ?
+                                                child_lockh : NULL,
+                                         &dchild, child_mode,
+                                         MDS_INODELOCK_LOOKUP |
+                                         MDS_INODELOCK_OPEN);
+
+        if (rc) {
                 if (rc != -ENOENT) {
-                        CERROR("parent "LPU64"/%u lookup error %d\n",
+                        CERROR("parent "LPU64"/%u lookup/take lock error %d\n",
                                rec->ur_fid1->id, rec->ur_fid1->generation, rc);
                 } else {
                         /* Just cannot find parent - make it look like
@@ -1018,32 +1053,19 @@ int mds_open(struct mds_update_record *rec, int offset,
 
         cleanup_phase = 1; /* parent dentry and lock */
 
-        if (rec->ur_flags & MDS_OPEN_JOIN_FILE) {
+        if (use_parent) {
                 dchild = dget(dparent);
-                cleanup_phase = 2; /* child dentry */
-                acc_mode = accmode(dchild->d_inode, rec->ur_flags);
-                GOTO(found_child, rc);
         }
 
-        /* Step 2: Lookup the child */
-
-        if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) &&
-            (rec->ur_flags & MDS_OPEN_LOCK) && (rec->ur_namelen == 1)) {
-                /* hack for nfsd with no_subtree_check, it will use anon
-                 * dentry w/o filename to open the file. the anon dentry's
-                 * parent was set to itself, so rec->ur_fid1 is the file.
-                 * And in MDC it cannot derive the dentry's parent dentry,
-                 * hence the file's name, so we hack here in MDS, 
-                 * refer to bug 13030. */
-                dchild = mds_fid2dentry(mds, rec->ur_fid1, NULL);
-        } else {
-                dchild = mds_lookup(obd, rec->ur_name, dparent,
-                                    rec->ur_namelen - 1);
-        }
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
                 dchild = NULL; /* don't confuse mds_finish_transno() below */
                 GOTO(cleanup, rc);
+        }
+
+        if (rec->ur_flags & MDS_OPEN_JOIN_FILE) {
+                acc_mode = accmode(dchild->d_inode, rec->ur_flags);
+                GOTO(found_child, rc);
         }
 
         cleanup_phase = 2; /* child dentry */
@@ -1068,20 +1090,17 @@ int mds_open(struct mds_update_record *rec, int offset,
                 if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
                         GOTO(cleanup, rc = -EROFS);
 
-                /* version recovery check */
-                rc = mds_version_get_check(req, dparent->d_inode, 0);
-                if (rc)
-                        GOTO(cleanup_no_trans, rc);
-
                 if (dparent->d_inode->i_mode & S_ISGID)
                         gid = dparent->d_inode->i_gid;
                 else
                         gid = current->fsgid;
 
                 /* we try to get enough quota to write here, and let ldiskfs
-                 * decide if it is out of quota or not b=14783 */
+                 * decide if it is out of quota or not b=14783
+                 * FIXME: after CMD is used, pointer to obd_trans_info* couldn't
+                 * be NULL, b=14840 */
                 lquota_chkquota(mds_quota_interface_ref, obd,
-                                current->fsuid, gid, 1, &rec_pending);
+                                current->fsuid, gid, 1, &rec_pending, NULL);
 
                 intent_set_disposition(rep, DISP_OPEN_CREATE);
                 handle = fsfilt_start(obd, dparent->d_inode, FSFILT_OP_CREATE,
@@ -1106,24 +1125,16 @@ int mds_open(struct mds_update_record *rec, int offset,
                         GOTO(cleanup, rc);
                 }
                 inode = dchild->d_inode;
+                created = 1;
                 if (ino) {
-                        if (ino != inode->i_ino) {
-                                /* FID support is needed to replay this
-                                 * correctly. Now fail gracefully like there is
-                                 * version mismatch */
-                                if (req->rq_export->exp_delayed)
-                                        rc = -EOVERFLOW;
-                                else
-                                        rc = -EFAULT;
-                                GOTO(cleanup, rc);
-                        }
+                        if (ino != inode->i_ino)
+                                GOTO(cleanup, rc = -EFAULT);
                         /* Written as part of setattr */
                         inode->i_generation = rec->ur_fid2->generation;
                         CDEBUG(D_HA, "recreated ino %lu with gen %u\n",
                                inode->i_ino, inode->i_generation);
                 }
 
-                created = 1;
                 LTIME_S(iattr.ia_atime) = rec->ur_time;
                 LTIME_S(iattr.ia_ctime) = rec->ur_time;
                 LTIME_S(iattr.ia_mtime) = rec->ur_time;
@@ -1149,6 +1160,14 @@ int mds_open(struct mds_update_record *rec, int offset,
                 acc_mode = 0;           /* Don't check for permissions */
         } else {
                 acc_mode = accmode(dchild->d_inode, rec->ur_flags);
+                /* Child previously existed so the lookup and lock is already
+                 * done, so no further locking is needed. */
+                /* for nfs and join - we need two locks for same fid, but
+                 * with different mode */
+                if (need_open_lock && !use_parent)  {
+                        intent_set_disposition(rep, DISP_OPEN_LOCK);
+                        need_open_lock = 0;
+                }
         }
 
         LASSERTF(!mds_inode_is_orphan(dchild->d_inode),
@@ -1157,6 +1176,9 @@ int mds_open(struct mds_update_record *rec, int offset,
                  dchild->d_inode->i_ino, dchild->d_inode->i_generation);
 
 found_child:
+        mds_pack_inode2fid(&body->fid1, dchild->d_inode);
+        if (obd->obd_self_export->exp_bflag)
+                body->flags |= MDS_BFLAG_EXT_FLAGS;
         mds_pack_inode2body(body, dchild->d_inode);
 
         if (S_ISREG(dchild->d_inode->i_mode)) {
@@ -1211,20 +1233,10 @@ found_child:
                 GOTO(cleanup, rc = -EAGAIN);
         }
 
-        /* Obtain OPEN lock as well */
-        policy.l_inodebits.bits |= MDS_INODELOCK_OPEN;
+        if (need_open_lock) {
+                ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_LOOKUP | MDS_INODELOCK_OPEN } };
+                struct ldlm_res_id child_res_id;
 
-        /* We cannot use acc_mode here, because it is zeroed in case of
-           creating a file, so we get wrong lockmode */
-        if (rec->ur_flags & FMODE_WRITE)
-                child_mode = LCK_CW;
-        else if (rec->ur_flags & MDS_FMODE_EXEC)
-                child_mode = LCK_PR;
-        else
-                child_mode = LCK_CR;
-
-        if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) &&
-             (rec->ur_flags & MDS_OPEN_LOCK)) {
                 /* In case of replay we do not get a lock assuming that the
                    caller has it already */
                 child_res_id.name[0] = dchild->d_inode->i_ino;
@@ -1240,7 +1252,6 @@ found_child:
 
                 /* Let mds_intent_policy know that we have a lock to return */
                 intent_set_disposition(rep, DISP_OPEN_LOCK);
-                cleanup_phase = 3;
         }
 
         if (!S_ISREG(dchild->d_inode->i_mode) &&
@@ -1257,21 +1268,14 @@ found_child:
         GOTO(cleanup, rc);
 
  cleanup:
-        inodes[0] = (!created || IS_ERR(dparent)) ? NULL : dparent->d_inode;
-        inodes[1] = (created && dchild) ? dchild->d_inode : NULL;
-        rc = mds_finish_transno(mds, inodes, handle, req, rc,
-                                rep ? rep->lock_policy_res1 : 0, 0);
+        rc = mds_finish_transno(mds, dchild ? dchild->d_inode : NULL, handle,
+                                req, rc, rep ? rep->lock_policy_res1 : 0, 0);
 
  cleanup_no_trans:
         if (rec_pending)
                 lquota_pending_commit(mds_quota_interface_ref, obd,
                                       current->fsuid, gid, 1);
         switch (cleanup_phase) {
-        case 3:
-                if (rc)
-                        /* It is safe to leave IT_OPEN_LOCK set, if rc is not 0,
-                         * mds_intent_policy won't try to return any locks */
-                        ldlm_lock_decref(child_lockh, child_mode);
         case 2:
                 if (rc && created) {
                         int err;
@@ -1290,8 +1294,14 @@ found_child:
                         qpids[USRQUOTA] = dparent->d_inode->i_uid;
                         qpids[GRPQUOTA] = dparent->d_inode->i_gid;
                 }
-                l_dput(dchild);
         case 1:
+                if (dchild) {
+                        l_dput(dchild);
+                        /* It is safe to leave IT_OPEN_LOCK set, if rc is not 0,
+                         * mds_intent_policy won't try to return any locks */
+                        if (rc && child_lockh->cookie)
+                                ldlm_lock_decref(child_lockh, child_mode);
+                }
                 if (dparent == NULL)
                         break;
 
@@ -1356,7 +1366,7 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
         } else if (mfd->mfd_mode & MDS_FMODE_EXEC) {
                 mds_allow_write_access(inode);
         }
-        /* here writecount change also needs protection from orphan write sem. 
+        /* here writecount change also needs protection from orphan write sem.
          * so drop orphan write sem after mds_put_write_access, bz 12888. */
         MDS_UP_WRITE_ORPHAN_SEM(inode);
 
@@ -1387,7 +1397,7 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
 
                 cleanup_phase = 2; /* dput(pending_child) when finished */
                 if (S_ISDIR(pending_child->d_inode->i_mode)) {
-                        rc = ll_vfs_rmdir(pending_dir, pending_child, 
+                        rc = ll_vfs_rmdir(pending_dir, pending_child,
                                           mds->mds_vfsmnt);
                         if (rc)
                                 CERROR("error unlinking orphan dir %s: rc %d\n",
@@ -1482,7 +1492,7 @@ out:
 
  cleanup:
         if (req != NULL && reply_body != NULL) {
-                rc = mds_finish_transno(mds, NULL, handle, req, rc, 0, 0);
+                rc = mds_finish_transno(mds, pending_dir, handle, req, rc, 0, 0);
         } else if (handle) {
                 int err = fsfilt_commit(obd, pending_dir, handle, 0);
                 if (err) {
@@ -1565,10 +1575,10 @@ int mds_close(struct ptlrpc_request *req, int offset)
                                       sizeof(*body));
                 LASSERT(body != NULL);
 
+                mds_pack_inode2fid(&body->fid1, inode);
                 mds_pack_inode2body(body, inode);
                 mds_pack_md(obd, req->rq_repmsg, REPLY_REC_OFF + 1, body, inode,
-                            MDS_PACK_MD_LOCK, 0,
-                            req->rq_export->exp_connect_flags);
+                            MDS_PACK_MD_LOCK, 0);
         }
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
