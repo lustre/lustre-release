@@ -347,7 +347,16 @@ Index: linux-2.6.9-67.0.22/fs/ext3/super.c
  	/*
  	 * The first inode we look at is the journal inode.  Don't try
  	 * root first: it may be modified in the journal!
-@@ -2404,6 +2721,11 @@ int ext3_remount (struct super_block * s
+@@ -1877,6 +2194,8 @@ static int ext3_fill_super (struct super
+ 	return 0;
+ 
+ failed_mount3:
++	if (sbi->s_mmp_tsk)
++		kthread_stop(sbi->s_mmp_tsk);
+ 	journal_destroy(sbi->s_journal);
+ failed_mount2:
+ 	for (i = 0; i < db_count; i++)
+@@ -2404,6 +2723,11 @@ int ext3_remount (struct super_block * s
  				return ret;
  			if (!ext3_setup_super (sb, es, 0))
  				sb->s_flags &= ~MS_RDONLY;

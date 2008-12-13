@@ -1,7 +1,7 @@
-Index: linux-2.6.22.19/fs/ext3/super.c
+Index: linux-2.6.22.14/fs/ext3/super.c
 ===================================================================
---- linux-2.6.22.19.orig/fs/ext3/super.c
-+++ linux-2.6.22.19/fs/ext3/super.c
+--- linux-2.6.22.14.orig/fs/ext3/super.c
++++ linux-2.6.22.14/fs/ext3/super.c
 @@ -35,6 +35,8 @@
  #include <linux/namei.h>
  #include <linux/quotaops.h>
@@ -346,7 +346,16 @@ Index: linux-2.6.22.19/fs/ext3/super.c
  	/*
  	 * The first inode we look at is the journal inode.  Don't try
  	 * root first: it may be modified in the journal!
-@@ -2482,7 +2798,7 @@ static int ext3_remount (struct super_bl
+@@ -2007,6 +2323,8 @@ cantfind_ext3:
+ failed_mount4:
+ 	journal_destroy(sbi->s_journal);
+ failed_mount3:
++	if (sbi->s_mmp_tsk)
++		kthread_stop(sbi->s_mmp_tsk);
+ 	percpu_counter_destroy(&sbi->s_freeblocks_counter);
+ 	percpu_counter_destroy(&sbi->s_freeinodes_counter);
+ 	percpu_counter_destroy(&sbi->s_dirs_counter);
+@@ -2482,7 +2800,7 @@ static int ext3_remount (struct super_bl
  	ext3_fsblk_t n_blocks_count = 0;
  	unsigned long old_sb_flags;
  	struct ext3_mount_options old_opts;
@@ -355,7 +364,7 @@ Index: linux-2.6.22.19/fs/ext3/super.c
  #ifdef CONFIG_QUOTA
  	int i;
  #endif
-@@ -2580,6 +2896,11 @@ static int ext3_remount (struct super_bl
+@@ -2580,6 +2898,11 @@ static int ext3_remount (struct super_bl
  				goto restore_opts;
  			if (!ext3_setup_super (sb, es, 0))
  				sb->s_flags &= ~MS_RDONLY;
@@ -367,10 +376,10 @@ Index: linux-2.6.22.19/fs/ext3/super.c
  		}
  	}
  #ifdef CONFIG_QUOTA
-Index: linux-2.6.22.19/include/linux/ext3_fs.h
+Index: linux-2.6.22.14/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.22.19.orig/include/linux/ext3_fs.h
-+++ linux-2.6.22.19/include/linux/ext3_fs.h
+--- linux-2.6.22.14.orig/include/linux/ext3_fs.h
++++ linux-2.6.22.14/include/linux/ext3_fs.h
 @@ -608,13 +608,17 @@ struct ext3_super_block {
  	__le32	s_first_meta_bg;	/* First metablock block group */
  	__le32	s_mkfs_time;		/* When the filesystem was created */
@@ -448,10 +457,10 @@ Index: linux-2.6.22.19/include/linux/ext3_fs.h
   * Function prototypes
   */
  
-Index: linux-2.6.22.19/include/linux/ext3_fs_sb.h
+Index: linux-2.6.22.14/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.6.22.19.orig/include/linux/ext3_fs_sb.h
-+++ linux-2.6.22.19/include/linux/ext3_fs_sb.h
+--- linux-2.6.22.14.orig/include/linux/ext3_fs_sb.h
++++ linux-2.6.22.14/include/linux/ext3_fs_sb.h
 @@ -158,6 +158,7 @@ struct ext3_sb_info {
  	/* locality groups */
  	struct ext3_locality_group *s_locality_groups;
