@@ -183,6 +183,9 @@ typedef enum {
 /* measure lock contention and return -EUSERS if locking contention is high */
 #define LDLM_FL_DENY_ON_CONTENTION 0x40000000
 
+/* 0x80000000 is occupied by LDLM_AST_DISCARD_DATA */
+#define LDLM_FL_FAIL_LOC       0x100000000ULL
+
 /* The blocking callback is overloaded to perform two functions.  These flags
  * indicate which operation should be performed. */
 #define LDLM_CB_BLOCKING    1
@@ -517,7 +520,7 @@ struct ldlm_lock {
         ldlm_policy_data_t    l_policy_data;
 
         /* protected by lr_lock */
-        __u32                 l_flags;
+        __u64                 l_flags;
         __u32                 l_readers;
         __u32                 l_writers;
         __u8                  l_destroyed;

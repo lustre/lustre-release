@@ -736,6 +736,48 @@ test_33() { #16129
 }
 run_test 33 "no lock timeout under IO"
 
+test_34() { # bug 17645
+        local generation=[]
+        local count=0
+        for imp in /proc/fs/lustre/osc/$FSNAME-OST*-osc-*; do
+            g=$(awk '/generation/{print $2}' $imp/import)
+            generation[count]=$g
+            let count=count+1
+        done
+
+        dd if=/dev/zero of=$MOUNT1/$tfile bs=1M count=10
+        sync
+        cancel_lru_locks osc
+
+        # Let's get some read locks so that later we have something to
+        # conflict with
+        dd if=$MOUNT1/$tfile of=$MOUNT1/${tfile}-1 bs=1k count=10000
+        
+        # Let's initiate -EINTR situation by setting fail_loc and take
+        # write lock on same file from same client. This will not cause
+        # bl_ast yet as lock is already in local cache.
+#define OBD_FAIL_LDLM_INTR_CP_AST        0x317
+        do_facet client "lctl set_param fail_loc=0x80000317"
+        dd if=$MOUNT1/${tfile}-1 of=$MOUNT1/$tfile bs=1k count=10000 &
+        sleep 1
+        
+        # Let's take write lock on same file from another mount. This
+        # should cause conflict and bl_ast
+        dd if=$MOUNT2/${tfile}-1 of=$MOUNT2/$tfile bs=1k count=10000 &
+        wait
+        do_facet client "lctl set_param fail_loc=0x0"
+        df -h $MOUNT1 $MOUNT2
+        count=0
+        for imp in /proc/fs/lustre/osc/$FSNAME-OST*-osc-*; do
+            g=$(awk '/generation/{print $2}' $imp/import)
+            if ! test "$g" -eq "${generation[count]}"; then
+                error "Eviction happened on import $(basename $imp)"
+            fi
+            let count=count+1
+        done
+}
+run_test 34 "-EINTR cp_ast vs. bl_ast race does not evict client"
+
 log "cleanup: ======================================================"
 
 check_and_cleanup_lustre
