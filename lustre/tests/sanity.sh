@@ -5269,9 +5269,17 @@ test_129() {
 }
 run_test 129 "test directory size limit ========================"
 
+OLDIFS="$IFS"
+cleanup_130() {
+	trap 0
+	IFS="$OLDIFS"
+}
+
 test_130a() {
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
+
+	trap cleanup_130 EXIT RETURN
 
 	local fm_file=$DIR/$tfile
 	lfs setstripe -s 65536 -c 1 $fm_file || error "setstripe failed on $fm_file"
@@ -5290,6 +5298,7 @@ test_130a() {
 		frag_lun=`echo $line | cut -d: -f5`
 		ext_len=`echo $line | cut -d: -f4`
 		if (( $frag_lun != $lun )); then
+			cleanup_130
 			error "FIEMAP on 1-stripe file($fm_file) failed"
 			return
 		fi
@@ -5297,9 +5306,13 @@ test_130a() {
 	done
 
 	if (( lun != frag_lun || start_blk != 0 || tot_len != 64 )); then
+		cleanup_130
 		error "FIEMAP on 1-stripe file($fm_file) failed;"
 		return
 	fi
+
+	cleanup_130
+
 	echo "FIEMAP on single striped file succeeded"
 }
 run_test 130a "FIEMAP (1-stripe file)"
@@ -5309,6 +5322,8 @@ test_130b() {
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
+
+	trap cleanup_130 EXIT RETURN
 
 	local fm_file=$DIR/$tfile
 	lfs setstripe -s 65536 -c 2 $fm_file || error "setstripe failed on $fm_file"
@@ -5328,6 +5343,7 @@ test_130b() {
 		ext_len=`echo $line | cut -d: -f4`
 		if (( $frag_lun != $last_lun )); then
 			if (( tot_len != 1024 )); then
+				cleanup_130
 				error "FIEMAP on $fm_file failed; returned len $tot_len for OST $last_lun instead of 256"
 				return
 			else
@@ -5339,9 +5355,12 @@ test_130b() {
 		last_lun=$frag_lun
 	done
 	if (( num_luns != 2 || tot_len != 1024 )); then
+		cleanup_130
 		error "FIEMAP on $fm_file failed; returned wrong number of luns or wrong len for OST $last_lun"
 		return
 	fi
+
+	cleanup_130
 
 	echo "FIEMAP on 2-stripe file succeeded"
 }
@@ -5352,6 +5371,8 @@ test_130c() {
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
+
+	trap cleanup_130 EXIT RETURN
 
 	local fm_file=$DIR/$tfile
 	lfs setstripe -s 65536 -c 2 $fm_file || error "setstripe failed on $fm_file"
@@ -5372,10 +5393,12 @@ test_130c() {
 		if (( $frag_lun != $last_lun )); then
 			logical=`echo $line | cut -d: -f2 | cut -d. -f1`
 			if (( logical != 512 )); then
+				cleanup_130
 				error "FIEMAP on $fm_file failed; returned logical start for lun $logical instead of 512"
 				return
 			fi
 			if (( tot_len != 512 )); then
+				cleanup_130
 				error "FIEMAP on $fm_file failed; returned len $tot_len for OST $last_lun instead of 1024"
 				return
 			else
@@ -5387,9 +5410,12 @@ test_130c() {
 		last_lun=$frag_lun
 	done
 	if (( num_luns != 2 || tot_len != 512 )); then
+		cleanup_130
 		error "FIEMAP on $fm_file failed; returned wrong number of luns or wrong len for OST $last_lun"
 		return
 	fi
+
+	cleanup_130
 
 	echo "FIEMAP on 2-stripe file with hole succeeded"
 }
@@ -5400,6 +5426,8 @@ test_130d() {
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
+
+	trap cleanup_130 EXIT RETURN
 
 	local fm_file=$DIR/$tfile
 	lfs setstripe -s 65536 -c $OSTCOUNT $fm_file || error "setstripe failed on $fm_file"
@@ -5419,6 +5447,7 @@ test_130d() {
 		ext_len=`echo $line | cut -d: -f4`
 		if (( $frag_lun != $last_lun )); then
 			if (( tot_len != 1024 )); then
+				cleanup_130
 				error "FIEMAP on $fm_file failed; returned len $tot_len for OST $last_lun instead of 1024"
 				return
 			else
@@ -5430,9 +5459,12 @@ test_130d() {
 		last_lun=$frag_lun
 	done
 	if (( num_luns != OSTCOUNT || tot_len != 1024 )); then
+		cleanup_130
 		error "FIEMAP on $fm_file failed; returned wrong number of luns or wrong len for OST $last_lun"
 		return
 	fi
+
+	cleanup_130
 
 	echo "FIEMAP on N-stripe file succeeded"
 }
@@ -5443,6 +5475,8 @@ test_130e() {
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
+
+	trap cleanup_130 EXIT RETURN
 
 	local fm_file=$DIR/$tfile
 	lfs setstripe -s 65536 -c 2 $fm_file || error "setstripe failed on $fm_file"
@@ -5467,6 +5501,7 @@ test_130e() {
 		ext_len=`echo $line | cut -d: -f4`
 		if (( $frag_lun != $last_lun )); then
 			if (( tot_len != $EXPECTED_LEN )); then
+				cleanup_130
 				error "FIEMAP on $fm_file failed; returned len $tot_len for OST $last_lun instead of $EXPECTED_LEN"
 				return
 			else
@@ -5478,10 +5513,12 @@ test_130e() {
 		last_lun=$frag_lun
 	done
 	if (( num_luns != 2 || tot_len != $EXPECTED_LEN )); then
-		echo "$num_luns $tot_len"
+		cleanup_130
 		error "FIEMAP on $fm_file failed; returned wrong number of luns or wrong len for OST $last_lun"
 		return
 	fi
+
+	cleanup_130
 
 	echo "FIEMAP with continuation calls succeeded"
 }
