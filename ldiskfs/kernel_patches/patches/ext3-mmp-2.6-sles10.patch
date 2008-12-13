@@ -20,7 +20,7 @@ Index: linux-2.6.16.60-0.31/fs/ext3/super.c
  	if (sbi->s_dev_proc) {
  		remove_proc_entry(sbi->s_dev_proc->name, proc_root_ext3);
  		sbi->s_dev_proc = NULL;
-@@ -1525,6 +1529,313 @@ static unsigned long descriptor_loc(stru
+@@ -1541,6 +1545,313 @@ static unsigned long descriptor_loc(stru
  	return (first_data_block + has_super + (bg * sbi->s_blocks_per_group));
  }
  
@@ -334,7 +334,7 @@ Index: linux-2.6.16.60-0.31/fs/ext3/super.c
  
  static int ext3_fill_super (struct super_block *sb, void *data, int silent)
  {
-@@ -1849,6 +2160,11 @@ static int ext3_fill_super (struct super
+@@ -1865,6 +2176,11 @@ static int ext3_fill_super (struct super
  			  EXT3_HAS_INCOMPAT_FEATURE(sb,
  				    EXT3_FEATURE_INCOMPAT_RECOVER));
  
@@ -346,7 +346,16 @@ Index: linux-2.6.16.60-0.31/fs/ext3/super.c
  	/*
  	 * The first inode we look at is the journal inode.  Don't try
  	 * root first: it may be modified in the journal!
-@@ -2463,7 +2779,7 @@ static int ext3_remount (struct super_bl
+@@ -2024,6 +2340,8 @@ cantfind_ext3:
+ 	goto failed_mount;
+ 
+ failed_mount3:
++	if (sbi->s_mmp_tsk)
++		kthread_stop(sbi->s_mmp_tsk);
+ 	journal_destroy(sbi->s_journal);
+ failed_mount2:
+ 	for (i = 0; i < db_count; i++)
+@@ -2496,7 +2814,7 @@ static int ext3_remount (struct super_bl
  	unsigned long n_blocks_count = 0;
  	unsigned long old_sb_flags;
  	struct ext3_mount_options old_opts;
@@ -355,7 +364,7 @@ Index: linux-2.6.16.60-0.31/fs/ext3/super.c
  #ifdef CONFIG_QUOTA
  	int i;
  #endif
-@@ -2547,6 +2863,11 @@ static int ext3_remount (struct super_bl
+@@ -2580,6 +2898,11 @@ static int ext3_remount (struct super_bl
  			}
  			if (!ext3_setup_super (sb, es, 0))
  				sb->s_flags &= ~MS_RDONLY;
@@ -371,7 +380,7 @@ Index: linux-2.6.16.60-0.31/include/linux/ext3_fs.h
 ===================================================================
 --- linux-2.6.16.60-0.31.orig/include/linux/ext3_fs.h
 +++ linux-2.6.16.60-0.31/include/linux/ext3_fs.h
-@@ -597,13 +597,17 @@ struct ext3_super_block {
+@@ -602,13 +602,17 @@ struct ext3_super_block {
  	__le32	s_first_meta_bg;	/* First metablock block group */
  	__le32	s_mkfs_time;		/* When the filesystem was created */
  	__le32	s_jnl_blocks[17];	/* Backup of the journal inode */
@@ -392,7 +401,7 @@ Index: linux-2.6.16.60-0.31/include/linux/ext3_fs.h
  };
  
  #ifdef __KERNEL__
-@@ -697,12 +701,14 @@ static inline int ext3_valid_inum(struct
+@@ -702,12 +706,14 @@ static inline int ext3_valid_inum(struct
  #define EXT3_FEATURE_INCOMPAT_JOURNAL_DEV	0x0008 /* Journal device */
  #define EXT3_FEATURE_INCOMPAT_META_BG		0x0010
  #define EXT3_FEATURE_INCOMPAT_EXTENTS		0x0040 /* extents support */
@@ -408,7 +417,7 @@ Index: linux-2.6.16.60-0.31/include/linux/ext3_fs.h
  #define EXT3_FEATURE_RO_COMPAT_SUPP	(EXT3_FEATURE_RO_COMPAT_SPARSE_SUPER| \
  					 EXT3_FEATURE_RO_COMPAT_LARGE_FILE| \
  					 EXT4_FEATURE_RO_COMPAT_GDT_CSUM| \
-@@ -862,6 +868,39 @@ struct dir_private_info {
+@@ -867,6 +873,39 @@ struct dir_private_info {
  #define ERR_BAD_DX_DIR	-75000
  
  /*
