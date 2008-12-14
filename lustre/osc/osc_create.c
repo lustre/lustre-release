@@ -283,16 +283,14 @@ int osc_precreate(struct obd_export *exp)
         if (oscc_recovering(oscc))
                 RETURN(2);
 
+        if (oscc->oscc_flags & OSCC_FLAG_NOSPC)
+                RETURN(1000);
+
         if (oscc->oscc_last_id < oscc->oscc_next_id) {
-                spin_lock(&oscc->oscc_lock);
-                if (oscc->oscc_flags & OSCC_FLAG_NOSPC) {
-                        spin_unlock(&oscc->oscc_lock);
-                        RETURN(1000);
-                }
-                if (oscc->oscc_flags & OSCC_FLAG_SYNC_IN_PROGRESS) {
-                        spin_unlock(&oscc->oscc_lock);
+                if (oscc->oscc_flags & OSCC_FLAG_SYNC_IN_PROGRESS)
                         RETURN(1);
-                }
+
+                spin_lock(&oscc->oscc_lock);
                 if (oscc->oscc_flags & OSCC_FLAG_CREATING) {
                         spin_unlock(&oscc->oscc_lock);
                         RETURN(1);
