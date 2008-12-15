@@ -680,7 +680,8 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
                         /* get block quota for parent */
                         lquota_chkquota(mds_quota_interface_ref, obd,
                                         qids[USRQUOTA], qids[GRPQUOTA], 1,
-                                        &rec_pending, NULL, LQUOTA_FLAGS_BLK);
+                                        &rec_pending, NULL, LQUOTA_FLAGS_BLK,
+                                        NULL, 0);
                 }
         }
 #endif
@@ -735,7 +736,7 @@ out_pending:
                 if (rec_pending)
                         lquota_pending_commit(mds_quota_interface_ref, obd,
                                               qids[USRQUOTA], qids[GRPQUOTA],
-                                              1, 1);
+                                              rec_pending, 1);
                 /* Trigger dqacq for the parent owner. If failed,
                  * the next call for lquota_chkquota will process it. */
                 lquota_adjust(mds_quota_interface_ref, obd, 0, qids, rc,
@@ -965,7 +966,7 @@ static int mdd_name_insert(const struct lu_env *env,
                                 lquota_chkquota(mds_quota_interface_ref, obd,
                                                 qids[USRQUOTA], qids[GRPQUOTA],
                                                 1, &rec_pending, NULL,
-                                                LQUOTA_FLAGS_BLK);
+                                                LQUOTA_FLAGS_BLK, NULL, 0);
                         }
                 } else {
                         uc->mu_cap |= CFS_CAP_SYS_RESOURCE_MASK;
@@ -1014,7 +1015,8 @@ out_pending:
                         if (rec_pending)
                                 lquota_pending_commit(mds_quota_interface_ref,
                                                       obd, qids[USRQUOTA],
-                                                      qids[GRPQUOTA], 1, 1);
+                                                      qids[GRPQUOTA],
+                                                      rec_pending, 1);
                         /* Trigger dqacq for the parent owner. If failed,
                          * the next call for lquota_chkquota will process it*/
                         lquota_adjust(mds_quota_interface_ref, obd, 0, qids,
@@ -1187,7 +1189,8 @@ static int mdd_rename_tgt(const struct lu_env *env,
                         /* get block quota for target parent */
                         lquota_chkquota(mds_quota_interface_ref, obd,
                                         qpids[USRQUOTA], qpids[GRPQUOTA], 1,
-                                        &rec_pending, NULL, LQUOTA_FLAGS_BLK);
+                                        &rec_pending, NULL, LQUOTA_FLAGS_BLK,
+                                        NULL, 0);
                 }
         }
 #endif
@@ -1276,7 +1279,7 @@ out_pending:
                         lquota_pending_commit(mds_quota_interface_ref, obd,
                                               qpids[USRQUOTA],
                                               qpids[GRPQUOTA],
-                                              1, 1);
+                                              rec_pending, 1);
                 if (quota_opc)
                         /* Trigger dqrel/dqacq on the target owner of child and
                          * parent. If failed, the next call for lquota_chkquota
@@ -1636,7 +1639,7 @@ static int mdd_create(const struct lu_env *env,
                         /* get file quota for child */
                         lquota_chkquota(mds_quota_interface_ref, obd,
                                         qcids[USRQUOTA], qcids[GRPQUOTA], 1,
-                                        &inode_pending, NULL, 0);
+                                        &inode_pending, NULL, 0, NULL, 0);
                         switch (ma->ma_attr.la_mode & S_IFMT) {
                         case S_IFLNK:
                         case S_IFDIR:
@@ -1657,12 +1660,12 @@ static int mdd_create(const struct lu_env *env,
                                                 qcids[USRQUOTA], qcids[GRPQUOTA],
                                                 block_count,
                                                 &block_pending, NULL,
-                                                LQUOTA_FLAGS_BLK);
+                                                LQUOTA_FLAGS_BLK, NULL, 0);
                         if (!same)
                                 lquota_chkquota(mds_quota_interface_ref, obd,
                                                 qpids[USRQUOTA], qpids[GRPQUOTA], 1,
                                                 &parent_pending, NULL,
-                                                LQUOTA_FLAGS_BLK);
+                                                LQUOTA_FLAGS_BLK, NULL, 0);
                 }
         }
 #endif
@@ -1834,15 +1837,15 @@ out_pending:
                 if (inode_pending)
                         lquota_pending_commit(mds_quota_interface_ref, obd,
                                               qcids[USRQUOTA], qcids[GRPQUOTA],
-                                              1, 0);
+                                              inode_pending, 0);
                 if (block_pending)
                         lquota_pending_commit(mds_quota_interface_ref, obd,
                                               qcids[USRQUOTA], qcids[GRPQUOTA],
-                                              block_count, 1);
+                                              block_pending, 1);
                 if (parent_pending)
                         lquota_pending_commit(mds_quota_interface_ref, obd,
                                               qpids[USRQUOTA], qpids[GRPQUOTA],
-                                              1, 1);
+                                              parent_pending, 1);
                 /* Trigger dqacq on the owner of child and parent. If failed,
                  * the next call for lquota_chkquota will process it. */
                 lquota_adjust(mds_quota_interface_ref, obd, qcids, qpids, rc,
@@ -1989,7 +1992,8 @@ static int mdd_rename(const struct lu_env *env,
                                                         obd, qtpids[USRQUOTA],
                                                         qtpids[GRPQUOTA], 1,
                                                         &rec_pending, NULL,
-                                                        LQUOTA_FLAGS_BLK);
+                                                        LQUOTA_FLAGS_BLK,
+                                                        NULL, 0);
                                 }
                         }
                 }
@@ -2159,7 +2163,7 @@ out_pending:
                         lquota_pending_commit(mds_quota_interface_ref, obd,
                                               qtpids[USRQUOTA],
                                               qtpids[GRPQUOTA],
-                                              1, 1);
+                                              rec_pending, 1);
                 /* Trigger dqrel on the source owner of parent.
                  * If failed, the next call for lquota_chkquota will
                  * process it. */

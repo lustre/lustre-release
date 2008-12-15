@@ -240,12 +240,14 @@ static int filter_quota_getflag(struct obd_device *obd, struct obdo *oa)
  * or inode_create rpc. When need to acquire quota, return QUOTA_RET_ACQUOTA
  */
 static int quota_check_common(struct obd_device *obd, unsigned int uid,
-                              unsigned int gid, int count, int cycle, int isblk)
+                              unsigned int gid, int count, int cycle, int isblk,
+                              struct inode *inode, int frags, int *pending)
 {
         struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
         int i;
         __u32 id[MAXQUOTAS] = { uid, gid };
         struct qunit_data qdata[MAXQUOTAS];
+        int mb = 0;
         int rc = 0, rc2[2] = { 0, 0 };
         ENTRY;
 
@@ -280,25 +282,37 @@ static int quota_check_common(struct obd_device *obd, unsigned int uid,
                 rc2[i] = compute_remquota(obd, qctxt, &qdata[i], isblk);
                 spin_lock(&lqs->lqs_lock);
                 if (!cycle) {
-                        rc = QUOTA_RET_INC_PENDING;
-                        if (isblk)
-                                lqs->lqs_bwrite_pending += count;
-                        else
-                                lqs->lqs_iwrite_pending += count;
+                        if (isblk) {
+                                *pending = count * CFS_PAGE_SIZE;
+                                /* in order to complete this write, we need extra
+                                 * meta blocks. This function can get it through
+                                 * data needed to be written b=16542 */
+                                mb = *pending;
+                                LASSERT(inode && frags > 0);
+                                if (fsfilt_get_mblk(obd, qctxt->lqc_sb, &mb,
+                                                    inode, frags) < 0)
+                                        CDEBUG(D_ERROR,
+                                               "can't get extra meta blocks.\n");
+                                else
+                                        *pending += mb;
+                                lqs->lqs_bwrite_pending += *pending;
+                        } else {
+                                *pending = count;
+                                lqs->lqs_iwrite_pending += *pending;
+                        }
                 }
                 if (rc2[i] == QUOTA_RET_OK) {
-                        if (isblk && qdata[i].qd_count <
-                            lqs->lqs_bwrite_pending * CFS_PAGE_SIZE)
+                        if (isblk && qdata[i].qd_count < lqs->lqs_bwrite_pending)
                                 rc2[i] = QUOTA_RET_ACQUOTA;
                         if (!isblk && qdata[i].qd_count <
                             lqs->lqs_iwrite_pending)
                                 rc2[i] = QUOTA_RET_ACQUOTA;
                 }
                 spin_unlock(&lqs->lqs_lock);
-                CDEBUG(D_QUOTA, "count: %d, write pending: %lu, qd_count: "LPU64
-                       ".\n", count,
+                CDEBUG(D_QUOTA, "count: %d, lqs pending: %lu, qd_count: "LPU64
+                       ", metablocks: %d, isblk: %d, pending: %d.\n", count,
                        isblk ? lqs->lqs_bwrite_pending : lqs->lqs_iwrite_pending,
-                       qdata[i].qd_count);
+                       qdata[i].qd_count, mb, isblk, *pending);
 
                 /* When cycle is zero, lqs_*_pending will be changed. We will
                  * get reference of the lqs here and put reference of lqs in
@@ -311,7 +325,7 @@ static int quota_check_common(struct obd_device *obd, unsigned int uid,
         }
 
         if (rc2[0] == QUOTA_RET_ACQUOTA || rc2[1] == QUOTA_RET_ACQUOTA)
-                RETURN(rc | QUOTA_RET_ACQUOTA);
+                RETURN(QUOTA_RET_ACQUOTA);
         else
                 RETURN(rc);
 }
@@ -319,7 +333,8 @@ static int quota_check_common(struct obd_device *obd, unsigned int uid,
 static int quota_chk_acq_common(struct obd_device *obd, unsigned int uid,
                                 unsigned int gid, int count, int *pending,
                                 quota_acquire acquire,
-                                struct obd_trans_info *oti, int isblk)
+                                struct obd_trans_info *oti, int isblk,
+                                struct inode *inode, int frags)
 {
         struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
         struct timeval work_start;
@@ -336,7 +351,8 @@ static int quota_chk_acq_common(struct obd_device *obd, unsigned int uid,
          * have to wait for the completion of in flight dqacq/dqrel,
          * in order to get enough quota for write b=12588 */
         do_gettimeofday(&work_start);
-        while ((rc = quota_check_common(obd, uid, gid, count, cycle, isblk)) &
+        while ((rc = quota_check_common(obd, uid, gid, count, cycle, isblk,
+                                        inode, frags, pending)) &
                QUOTA_RET_ACQUOTA) {
 
                 spin_lock(&qctxt->lqc_lock);
@@ -355,9 +371,6 @@ static int quota_chk_acq_common(struct obd_device *obd, unsigned int uid,
                 } else {
                         spin_unlock(&qctxt->lqc_lock);
                 }
-
-                if (rc & QUOTA_RET_INC_PENDING)
-                        *pending = 1;
 
                 cycle++;
                 if (isblk)
@@ -414,10 +427,6 @@ static int quota_chk_acq_common(struct obd_device *obd, unsigned int uid,
                 CDEBUG(D_QUOTA, "recheck quota with rc: %d, cycle: %d\n", rc,
                        cycle);
         }
-
-        if (!cycle && rc & QUOTA_RET_INC_PENDING)
-                *pending = 1;
-
         do_gettimeofday(&work_end);
         timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
         lprocfs_counter_add(qctxt->lqc_stats,
@@ -433,7 +442,7 @@ static int quota_chk_acq_common(struct obd_device *obd, unsigned int uid,
  * pending blocks and inodes
  */
 static int quota_pending_commit(struct obd_device *obd, unsigned int uid,
-                                unsigned int gid, int count, int isblk)
+                                unsigned int gid, int pending, int isblk)
 {
         struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
         struct timeval work_start;
@@ -465,13 +474,10 @@ static int quota_pending_commit(struct obd_device *obd, unsigned int uid,
                 quota_search_lqs(&qdata[i], NULL, qctxt, &lqs);
                 if (lqs) {
                         int flag = 0;
-                        CDEBUG(D_QUOTA, "pending: %lu, count: %d.\n",
-                               isblk ? lqs->lqs_bwrite_pending :
-                               lqs->lqs_iwrite_pending, count);
                         spin_lock(&lqs->lqs_lock);
                         if (isblk) {
-                                if (lqs->lqs_bwrite_pending >= count) {
-                                        lqs->lqs_bwrite_pending -= count;
+                                if (lqs->lqs_bwrite_pending >= pending) {
+                                        lqs->lqs_bwrite_pending -= pending;
                                         spin_unlock(&lqs->lqs_lock);
                                         flag = 1;
                                 } else {
@@ -480,8 +486,8 @@ static int quota_pending_commit(struct obd_device *obd, unsigned int uid,
                                                "there are too many blocks!\n");
                                 }
                         } else {
-                                if (lqs->lqs_iwrite_pending >= count) {
-                                        lqs->lqs_iwrite_pending -= count;
+                                if (lqs->lqs_iwrite_pending >= pending) {
+                                        lqs->lqs_iwrite_pending -= pending;
                                         spin_unlock(&lqs->lqs_lock);
                                         flag = 1;
                                 } else {
@@ -490,6 +496,10 @@ static int quota_pending_commit(struct obd_device *obd, unsigned int uid,
                                                "there are too many files!\n");
                                 }
                         }
+                        CDEBUG(D_QUOTA, "lqs pending: %lu, pending: %d, "
+                               "isblk: %d.\n",
+                               isblk ? lqs->lqs_bwrite_pending :
+                               lqs->lqs_iwrite_pending, pending, isblk);
 
                         lqs_putref(lqs);
                         /* When lqs_*_pening is changed back, we'll putref lqs
