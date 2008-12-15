@@ -2185,7 +2185,6 @@ enum seq_op {
 #define QUOTA_RET_NOQUOTA      1 /* not support quota */
 #define QUOTA_RET_NOLIMIT      2 /* quota limit isn't set */
 #define QUOTA_RET_ACQUOTA      4 /* need to acquire extra quota */
-#define QUOTA_RET_INC_PENDING  8 /* pending value is increased */
 
 extern int quota_get_qunit_data_size(__u64 flag);
 #endif

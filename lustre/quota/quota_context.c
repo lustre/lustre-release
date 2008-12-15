@@ -292,7 +292,7 @@ check_cur_qunit(struct obd_device *obd,
         if (QDATA_IS_BLK(qdata)) {
                 qunit_sz = lqs->lqs_bunit_sz;
                 tune_sz  = lqs->lqs_btune_sz;
-                pending_write = lqs->lqs_bwrite_pending * CFS_PAGE_SIZE;
+                pending_write = lqs->lqs_bwrite_pending;
                 record   = lqs->lqs_blk_rec;
                 LASSERT(!(qunit_sz % QUOTABLOCK_SIZE));
         } else {

@@ -548,7 +548,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         struct lvfs_run_ctxt saved;
         struct fsfilt_objinfo fso;
         struct iattr iattr = { 0 };
-        struct inode *inode = NULL;
+        struct inode *inode = res->dentry->d_inode;
         unsigned long now = jiffies;
         int i, err, cleanup_phase = 0;
         struct obd_device *obd = exp->exp_obd;
@@ -568,8 +568,8 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 
         /* we try to get enough quota to write here, and let ldiskfs
          * decide if it is out of quota or not b=14783 */
-        lquota_chkquota(filter_quota_interface_ref, obd, oa->o_uid,
-                        oa->o_gid, niocount, &rec_pending, oti);
+        lquota_chkquota(filter_quota_interface_ref, obd, oa->o_uid, oa->o_gid,
+                        niocount, &rec_pending, oti, inode, obj->ioo_bufcnt);
 
         iobuf = filter_iobuf_get(&obd->u.filter, oti);
         if (IS_ERR(iobuf))
@@ -578,7 +578,6 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 
         fso.fso_dentry = res->dentry;
         fso.fso_bufcnt = obj->ioo_bufcnt;
-        inode = res->dentry->d_inode;
 
         iobuf->dr_ignore_quota = 0;
         for (i = 0, lnb = res; i < niocount; i++, lnb++) {
@@ -713,7 +712,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 cleanup:
         if (rec_pending)
                 lquota_pending_commit(filter_quota_interface_ref, obd,
-                                      oa->o_uid, oa->o_gid, niocount);
+                                      oa->o_uid, oa->o_gid, rec_pending);
 
         filter_grant_commit(exp, niocount, res);
 

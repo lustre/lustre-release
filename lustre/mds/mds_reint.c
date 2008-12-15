@@ -1052,7 +1052,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
          * FIXME: after CMD is used, pointer to obd_trans_info* couldn't
          * be NULL, b=14840 */
         lquota_chkquota(mds_quota_interface_ref, obd,
-                        current->fsuid, gid, 1, &rec_pending, NULL);
+                        current->fsuid, gid, 1, &rec_pending, NULL, NULL, 0);
 
         switch (type) {
         case S_IFREG:{
@@ -1190,7 +1190,7 @@ cleanup:
 cleanup_no_trans:
         if (rec_pending)
                 lquota_pending_commit(mds_quota_interface_ref, obd,
-                                      current->fsuid, gid, 1);
+                                      current->fsuid, gid, rec_pending);
 
         if (rc && created) {
                 /* Destroy the file we just created.  This should not need
