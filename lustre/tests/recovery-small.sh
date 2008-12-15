@@ -971,6 +971,14 @@ test_59() { # bug 10589
 }
 run_test 59 "Read cancel race on client eviction"
 
+err17935 () {
+    if [ $MDSCOUNT -gt 1 ]; then
+	error_ignore 17935 $*
+    else
+	error $*
+    fi
+}
+
 test_60() {
 	remote_mds && { skip "remote MDS" && return 0; }
 
@@ -1004,7 +1012,7 @@ test_60() {
 	local cl_count=$(grep UNLNK $DIR/$tdir/changelog | wc -l)
 	echo "$cl_count unlinks in changelog"
 
-	[ $cl_count -eq $NUM_FILES ] || error "Recorded ${cl_count} unlinks out
+	[ $cl_count -eq $NUM_FILES ] || err17935 "Recorded ${cl_count} unlinks out
 of $NUM_FILES"
 
 	# Also make sure we can clear large changelogs

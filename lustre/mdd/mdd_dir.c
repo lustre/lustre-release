@@ -2229,6 +2229,8 @@ struct lu_buf *mdd_links_get(const struct lu_env *env,
         }
         if (leh->leh_magic != LINK_EA_MAGIC)
                 return ERR_PTR(-EINVAL);
+        if (leh->leh_reccount == 0)
+                return ERR_PTR(-ENODATA);
 
         return buf;
 }
@@ -2282,8 +2284,7 @@ static int __mdd_links_add(const struct lu_env *env, struct lu_buf *buf,
         leh = buf->lb_buf;
         reclen = lname->ln_namelen + sizeof(struct link_ea_entry);
         if (leh->leh_len + reclen > buf->lb_len) {
-                mdd_buf_grow(env, leh->leh_len + reclen);
-                if (buf->lb_buf == NULL)
+                if (mdd_buf_grow(env, leh->leh_len + reclen) < 0)
                         return -ENOMEM;
         }
 
@@ -2370,7 +2371,8 @@ static int mdd_links_rename(const struct lu_env *env,
         struct lu_name *tmpname = &mdd_env_info(env)->mti_name;
         struct lu_fid  *tmpfid = &mdd_env_info(env)->mti_fid;
         int reclen = 0;
-        int rc, count;
+        int count;
+        int rc, rc2 = 0;
         ENTRY;
 
         if (!mdd_linkea_enable)
@@ -2414,9 +2416,8 @@ static int mdd_links_rename(const struct lu_env *env,
 
         /* If renaming, add the new record */
         if (newpfid != NULL) {
-                rc = __mdd_links_add(env, buf, newpfid, newlname);
-                if (rc)
-                        GOTO(out, rc);
+                /* if the add fails, we still delete the out-of-date old link */
+                rc2 = __mdd_links_add(env, buf, newpfid, newlname);
                 leh = buf->lb_buf;
         }
 
@@ -2425,6 +2426,8 @@ static int mdd_links_rename(const struct lu_env *env,
                              XATTR_NAME_LINK, 0, handle);
 
 out:
+        if (rc == 0)
+                rc = rc2;
         if (rc)
                 CDEBUG(D_INODE, "link_ea mv/unlink '%.*s' failed %d "DFID"\n",
                        oldlname->ln_namelen, oldlname->ln_name, rc,

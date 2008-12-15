@@ -155,7 +155,11 @@ struct lu_buf *mdd_buf_alloc(const struct lu_env *env, ssize_t len)
         return buf;
 }
 
-/* preserve old data */
+/** Increase the size of the \a mti_big_buf.
+ * preserves old data in buffer
+ * old buffer remains unchanged on error
+ * \retval 0 or -ENOMEM
+ */
 int mdd_buf_grow(const struct lu_env *env, ssize_t len)
 {
         struct lu_buf *oldbuf = &mdd_env_info(env)->mti_big_buf;
@@ -423,12 +427,10 @@ static int mdd_path_current(const struct lu_env *env,
                 /* Get parent fid and object name */
                 mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
                 buf = mdd_links_get(env, mdd_obj);
-                if (IS_ERR(buf))
-                        GOTO(out, rc = PTR_ERR(buf));
                 mdd_read_unlock(env, mdd_obj);
                 mdd_object_put(env, mdd_obj);
-                if (rc < 0)
-                        GOTO(out, rc);
+                if (IS_ERR(buf))
+                        GOTO(out, rc = PTR_ERR(buf));
 
                 leh = buf->lb_buf;
                 lee = (struct link_ea_entry *)(leh + 1); /* link #0 */

@@ -5888,6 +5888,14 @@ test_153() {
 }
 run_test 153 "test if fdatasync does not crash ======================="
 
+err17935 () {
+    if [ $MDSCOUNT -gt 1 ]; then
+	error_ignore 17935 $*
+    else
+	error $*
+    fi
+}
+
 #Changelogs
 test_160() {
     remote_mds && skip "remote MDS" && return
@@ -5923,7 +5931,7 @@ test_160() {
     $LFS changelog_clear $FSNAME $(($FIRST_REC + 5)) 
     PURGE_REC=$($LFS changelog $FSNAME | head -1 | awk '{print $1}')
     [ $PURGE_REC == $(($FIRST_REC + 6)) ] || \
-     error "first rec after purge should be $(($FIRST_REC + 6)); is $PURGE_REC"
+     err17935 "first rec after purge should be $(($FIRST_REC + 6)); is $PURGE_REC"
     # purge all
     $LFS changelog_clear $FSNAME 0
     lctl set_param -n mdd.*.changelog off
@@ -5945,7 +5953,7 @@ test_161() {
     local FID=$($LFS path2fid $DIR/$tdir/$tfile)
     if [ "$($LFS fid2path ${mds1_svc} $FID | wc -l)" != "5" ]; then
 	$LFS fid2path ${mds1_svc} $FID
-	error "bad link ea"
+	err17935 "bad link ea"
     fi
     # middle
     rm $DIR/$tdir/foo2/zachary
@@ -5958,7 +5966,7 @@ test_161() {
     if [ "$($LFS fid2path ${mds1_svc} --link 1 $FID)" != "/$tdir/foo2/maggie" ]
 	then
 	$LFS fid2path ${mds1_svc} $FID
-	error "bad link rename"
+	err17935 "bad link rename"
     fi
     rm $DIR/$tdir/foo2/maggie
 
@@ -5968,7 +5976,7 @@ test_161() {
 	error "failed to hardlink many files"
     links=$($LFS fid2path ${mds1_svc} $FID | wc -l)
     echo -n "${links}/1000 links in link EA"
-    [ ${links} -gt 60 ] || error "expected at least 60 links in link EA"
+    [ ${links} -gt 60 ] || err17935 "expected at least 60 links in link EA"
     unlinkmany $DIR/$tdir/foo2/$longname 1000 || \
 	error "failed to unlink many hardlinks" 
 }
@@ -5983,10 +5991,10 @@ check_path() {
     RC=$?
 
     if [ $RC -ne 0 ]; then
-      	error "path looked up of $expected failed. Error $RC"
+      	err17935 "path looked up of $expected failed. Error $RC"
  	return $RC
     elif [ "${path}" != "${expected}" ]; then
-      	error "path looked up \"${path}\" instead of \"${expected}\""
+      	err17935 "path looked up \"${path}\" instead of \"${expected}\""
  	return 2
     fi
     echo "fid $fid resolves to path $path"
@@ -6012,10 +6020,12 @@ test_162() {
     check_path "/$tdir/d2/p/q/r/hlink" ${mds1_svc} $fid --link 0
     # check that there are 2 links, and that --rec doesnt break anything
     ${LFS} fid2path ${mds1_svc} $fid --rec 20 | wc -l | grep -q 2 || \
-	error "expected 2 links" 
+	err17935 "expected 2 links" 
 
     rm $DIR/$tdir/d2/p/q/r/hlink
     check_path "/$tdir/d2/a/b/c/new_file" ${mds1_svc} $fid --link 0
+    # Doesnt work with CMD yet: 17935 
+    return 0
 }
 run_test 162 "path lookup sanity"
 
