@@ -5918,13 +5918,13 @@ test_160() {
 	awk '{print $5}')
     fidf=$($LFS path2fid $DIR/$tdir/pics/zach/timestamp)
     [ "$fidc" == "t=$fidf" ] || \
-	error "fid in changelog $fidc != file fid $fidf"
+	err17935 "fid in changelog $fidc != file fid $fidf"
     # check parent fid
     fidc=$($LFS changelog $FSNAME | grep timestamp | grep "CREAT" | tail -1 | \
 	awk '{print $6}')
     fidf=$($LFS path2fid $DIR/$tdir/pics/zach)
     [ "$fidc" == "p=$fidf" ] || \
-	error "pfid in changelog $fidc != dir fid $fidf" 
+	err17935 "pfid in changelog $fidc != dir fid $fidf" 
 
     # verify purge
     FIRST_REC=$($LFS changelog $FSNAME | head -1 | awk '{print $1}')
