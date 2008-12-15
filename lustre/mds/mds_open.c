@@ -1100,7 +1100,8 @@ int mds_open(struct mds_update_record *rec, int offset,
                  * FIXME: after CMD is used, pointer to obd_trans_info* couldn't
                  * be NULL, b=14840 */
                 lquota_chkquota(mds_quota_interface_ref, obd,
-                                current->fsuid, gid, 1, &rec_pending, NULL);
+                                current->fsuid, gid, 1, &rec_pending,
+                                NULL, NULL, 0);
 
                 intent_set_disposition(rep, DISP_OPEN_CREATE);
                 handle = fsfilt_start(obd, dparent->d_inode, FSFILT_OP_CREATE,
@@ -1274,7 +1275,7 @@ found_child:
  cleanup_no_trans:
         if (rec_pending)
                 lquota_pending_commit(mds_quota_interface_ref, obd,
-                                      current->fsuid, gid, 1);
+                                      current->fsuid, gid, rec_pending);
         switch (cleanup_phase) {
         case 2:
                 if (rc && created) {
