@@ -428,7 +428,7 @@ zconf_umount_clients() {
 }
 
 shutdown_facet() {
-    facet=$1
+    local facet=$1
     if [ "$FAILURE_MODE" = HARD ]; then
         $POWER_DOWN `facet_active_host $facet`
         sleep 2
@@ -452,6 +452,92 @@ boot_node() {
        $POWER_UP $node
     fi
 }
+
+# recovery-scale functions
+check_progs_installed () {
+    local clients=$1
+    shift
+    local progs=$@
+
+    do_nodes $clients "set -x ; PATH=:$PATH status=true; for prog in $progs; do
+        which \\\$prog || { echo \\\$prog missing on \\\$(hostname) && status=false; }
+        done;
+        eval \\\$status"
+}
+
+start_client_load() {
+    local list=(${1//,/ })
+    local nodenum=$2
+
+    local numloads=${#CLIENT_LOADS[@]}
+    local testnum=$((nodenum % numloads))
+
+    do_node ${list[nodenum]} "PATH=$PATH MOUNT=$MOUNT ERRORS_OK=$ERRORS_OK \
+                              BREAK_ON_ERROR=$BREAK_ON_ERROR \
+                              END_RUN_FILE=$END_RUN_FILE \
+                              LOAD_PID_FILE=$LOAD_PID_FILE \
+                              TESTSUITELOG=$TESTSUITELOG \
+                              run_${CLIENT_LOADS[testnum]}.sh" &
+    CLIENT_LOAD_PIDS="$CLIENT_LOAD_PIDS $!"
+    log "Started client load: ${CLIENT_LOADS[testnum]} on ${list[nodenum]}"
+
+    eval export ${list[nodenum]}_load=${CLIENT_LOADS[testnum]}
+    return 0
+}
+
+start_client_loads () {
+    local clients=(${1//,/ })
+
+    for ((num=0; num < ${#clients[@]}; num++ )); do
+        start_client_load $1 $num
+    done
+}
+
+# only for remote client 
+check_client_load () {
+    local client=$1
+    local var=${client}_load
+
+    local TESTLOAD=run_${!var}.sh
+
+    ps auxww | grep -v grep | grep $client | grep -q "$TESTLOAD" || return 1
+
+    check_catastrophe $client || return 2
+
+    # see if the load is still on the client
+    local tries=3
+    local RC=254
+    while [ $RC = 254 -a $tries -gt 0 ]; do
+        let tries=$tries-1
+        # assume success
+        RC=0
+        if ! do_node $client "ps auxwww | grep -v grep | grep -q $TESTLOAD"; then
+            RC=${PIPESTATUS[0]}
+            sleep 30
+        fi
+    done
+    if [ $RC = 254 ]; then
+        echo "got a return status of $RC from do_node while checking (i.e. with 'ps') the client load on the remote system"
+        # see if we can diagnose a bit why this is
+    fi
+
+    return $RC
+}
+check_client_loads () {
+   local clients=${1//,/ }
+   local client=
+   local rc=0
+
+   for client in $clients; do
+      check_client_load $client
+      rc=$?
+      if [ "$rc" != 0 ]; then
+        log "Client load failed on node $client, rc=$rc"
+        return $rc
+      fi
+   done
+}
+# End recovery-scale functions
 
 # verify that lustre actually cleaned up properly
 cleanup_check() {
@@ -1146,6 +1232,16 @@ comma_list() {
     echo "$*" | tr -s " " "\n" | sort -b -u | tr "\n" " " | sed 's/ \([^$]\)/,\1/g'
 }
 
+# list is comma separated list
+exclude_item_from_list () {
+    local list=$1
+    local excluded=$2
+
+    list=${list//,/ }
+    list=$(echo " $list " | sed -re "s/\s+$excluded\s+/ /g")
+    echo $(comma_list $list) 
+}
+
 absolute_path() {
     (cd `dirname $1`; echo $PWD/`basename $1`)
 }
@@ -1716,6 +1812,18 @@ init_clients_lists () {
     CLIENTCOUNT=$((${#remoteclients[@]} + 1))
 }
 
+get_random_entry () {
+    local rnodes=$1
+
+    rnodes=${rnodes//,/ }
+
+    local nodes=($rnodes)
+    local num=${#nodes[@]} 
+    local i=$((RANDOM * num  / 65536))
+
+    echo ${nodes[i]}
+}
+
 is_patchless ()
 {
     lctl get_param version | grep -q patchless
@@ -1872,11 +1980,11 @@ restore_lustre_params() {
 }
 
 check_catastrophe () {
-    local rnodes=$(comma_list $(remote_nodes_list))
+    local rnodes=${1:-$(comma_list $(remote_nodes_list))}
 
-    [ -f $CATASTROPHE ] && [ `cat $CATASTROPHE` -ne 0 ] && return 1
+    [ -f $CATASTROPHE ] && [ $(cat $CATASTROPHE) -ne 0 ] && return 1
     if [ $rnodes ]; then
-        do_nodes $rnodes "[ -f $CATASTROPHE ] && { [ \`cat $CATASTROPHE\` -eq 0 ] || false; } || true"
+        do_nodes $rnodes "set -x; [ -f $CATASTROPHE ] && { [ \`cat $CATASTROPHE\` -eq 0 ] || false; } || true"
     fi
 }
 

@@ -23,7 +23,7 @@ fi
 [ "$DEBUG_OFF" ] || DEBUG_OFF="eval lctl set_param debug=\"$DEBUG_LVL\""
 [ "$DEBUG_ON" ] || DEBUG_ON="eval lctl set_param debug=0x33f0484"
 
-export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE RACER REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL REPLAY_VBR INSANITY SANITY_QUOTA PERFORMANCE_SANITY LARGE_SCALE"
+export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE RACER REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL REPLAY_VBR INSANITY SANITY_QUOTA PERFORMANCE_SANITY LARGE_SCALE RECOVERY_MDS_SCALE"
 
 if [ "$ACC_SM_ONLY" ]; then
     for O in $TESTSUITE_LIST; do
@@ -422,6 +422,15 @@ if [ "$LARGE_SCALE" != "no" ]; then
         title large-scale
         bash large-scale.sh
         LARGE_SCALE="done"
+fi
+
+[ "$SLOW" = no ] && RECOVERY_MDS_SCALE="no"
+[ "$RECOVERY_MDS_SCALE" != "no" ] && skip_remmds recovery-mds-scale && RECOVERY_MDS_SCALE=no && MSKIPPED=1
+[ "$RECOVERY_MDS_SCALE" != "no" ] && skip_remost recovery-mds-scale && RECOVERY_MDS_SCALE=no && OSKIPPED=1
+if [ "$RECOVERY_MDS_SCALE" != "no" ]; then
+        title recovery-mds-scale
+        bash recovery-mds-scale.sh
+        RECOVERY_MDS_SCALE="done"
 fi
 
 RC=$?
