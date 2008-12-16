@@ -3501,6 +3501,9 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 err = osc_destroy(exp, oa, NULL, NULL, NULL);
                 GOTO(out, err);
         }
+        case OBD_IOC_PING_TARGET:
+                err = ptlrpc_obd_ping(obd);
+                GOTO(out, err);
         default:
                 CDEBUG(D_INODE, "unrecognised ioctl %#x by %s\n",
                        cmd, cfs_curproc_comm());

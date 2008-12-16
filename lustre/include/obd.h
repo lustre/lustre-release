@@ -799,6 +799,7 @@ struct obd_notify_upcall {
 /* corresponds to one of the obd's */
 #define MAX_OBD_NAME 128
 #define OBD_DEVICE_MAGIC        0XAB5CD6EF
+#define OBD_DEV_BY_DEVNAME      0xffffd0de
 struct obd_device {
         struct obd_type        *obd_type;
         __u32                   obd_magic;

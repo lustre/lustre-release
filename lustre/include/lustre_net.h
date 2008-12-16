@@ -1108,6 +1108,8 @@ int import_set_conn_priority(struct obd_import *imp, struct obd_uuid *uuid);
 /* ptlrpc/pinger.c */
 int ptlrpc_pinger_add_import(struct obd_import *imp);
 int ptlrpc_pinger_del_import(struct obd_import *imp);
+struct ptlrpc_request * ptlrpc_prep_ping(struct obd_import *imp);
+int ptlrpc_obd_ping(struct obd_device *obd);
 #ifdef __KERNEL__
 void ping_evictor_start(void);
 void ping_evictor_stop(void);

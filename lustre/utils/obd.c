@@ -2340,3 +2340,28 @@ void obd_finalize(int argc, char **argv)
         shmem_stop();
         do_disconnect(argv[0], 1);
 }
+
+void  llapi_ping_target(char *obd_type, char *obd_name,
+                        char *obd_uuid, void *args)
+{
+        int  rc;
+        struct obd_ioctl_data data;
+
+        IOC_INIT(data);
+        data.ioc_inlbuf4 = obd_name;
+        data.ioc_inllen4 = strlen(obd_name) + 1;
+        data.ioc_dev = OBD_DEV_BY_DEVNAME;
+        IOC_PACK("ping", data);
+        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_PING_TARGET, buf);
+        if (rc)
+                rc = errno;
+        if (rc == ENOTCONN || rc == ESHUTDOWN) {
+                printf("%s inactive.\n", obd_name);
+        } else if (rc) {
+                fprintf(stderr, "error: check '%s' %s\n",
+                        obd_name, strerror(errno));
+        } else {
+                printf("%s active.\n", obd_name);
+        }
+
+}

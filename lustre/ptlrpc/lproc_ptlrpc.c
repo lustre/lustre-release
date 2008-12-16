@@ -688,16 +688,12 @@ int lprocfs_wr_ping(struct file *file, const char *buffer,
         ENTRY;
 
         LPROCFS_CLIMP_CHECK(obd);
-        req = ptlrpc_prep_req(obd->u.cli.cl_import, LUSTRE_OBD_VERSION,
-                              OBD_PING, 1, NULL, NULL);
+        req = ptlrpc_prep_ping(obd->u.cli.cl_import);
         LPROCFS_CLIMP_EXIT(obd);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        ptlrpc_req_set_repsize(req, 1, NULL);
         req->rq_send_state = LUSTRE_IMP_FULL;
-        req->rq_no_resend = 1;
-        req->rq_no_delay = 1;
 
         rc = ptlrpc_queue_wait(req);
 

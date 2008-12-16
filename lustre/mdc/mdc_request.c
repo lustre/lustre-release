@@ -874,6 +874,9 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 rc = lquota_poll_check(quota_interface, exp,
                                        (struct if_quotacheck *)karg);
                 GOTO(out, rc);
+        case OBD_IOC_PING_TARGET:
+                rc = ptlrpc_obd_ping(obd);
+                GOTO(out, rc);
         default:
                 CERROR("mdc_ioctl(): unrecognised ioctl %#x\n", cmd);
                 GOTO(out, rc = -ENOTTY);
