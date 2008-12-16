@@ -13,6 +13,13 @@ tbd  Sun Microsystems, Inc.
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
+Severity   : normal
+Frequency  : race on file read and write
+Bugzilla   : 16417
+Description: Lustre doesn't delete files
+Details    : Clients drop lock reference and release openhandle when they find
+             stale inode.
+
 Severity   : minor
 Frequency  : rare
 Bugzilla   : 17802
@@ -26,7 +33,7 @@ Severity   : normal
 Frequency  : rare, need acl's on inode.
 Bugzilla   : 16492
 Description: client can't handle ost additional correctly
-Details    : if ost was added after client connected to mds client can have 
+Details    : if ost was added after client connected to mds client can have
              hit lnet_try_match_md ... to big messages to wide striped files.
              in this case need teach client to handle config events about add
              lov target and update client max ea size at that event.
@@ -70,7 +77,7 @@ Description: Interoperability at server side (Disk interoperability)
 Severity   : enhancement
 Bugzilla   : 17201
 Description: Update to RHEL5 kernel-2.6.18-92.1.17.el5.
- 
+
 Severity   : enhancement
 Bugzilla   : 17458
 Description: Update to SLES10 SP2 kernel-2.6.16.60-0.31.
