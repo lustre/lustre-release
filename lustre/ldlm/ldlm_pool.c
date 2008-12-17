@@ -1079,7 +1079,7 @@ static int ldlm_pools_shrink(ldlm_side_t client, int nr,
                 total += ldlm_pool_shrink(&ns->ns_pool, 0, gfp_mask);
                 ldlm_namespace_put(ns, 1);
         }
- 
+
         if (nr == 0 || total == 0)
                 return total;
 
