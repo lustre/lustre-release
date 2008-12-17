@@ -156,6 +156,8 @@ extern int parse_size(char *optarg, unsigned long long *size,
                       unsigned long long *size_units, int bytes_spec);
 extern int llapi_path2fid(const char *path, unsigned long long *seq,
                           unsigned long *oid, unsigned long *ver);
+extern void llapi_ping_target(char *obd_type, char *obd_name,
+                              char *obd_uuid, void *args);
 
 struct mntent;
 #define HAVE_LLAPI_IS_LUSTRE_MNT
