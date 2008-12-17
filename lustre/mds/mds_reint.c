@@ -1011,6 +1011,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         dchild = mds_lookup(obd, rec->ur_name, dparent, rec->ur_namelen - 1);
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
+                dchild = NULL;
                 CDEBUG(D_DENTRY, "child lookup error %d\n", rc);
                 GOTO(cleanup, rc);
         }
