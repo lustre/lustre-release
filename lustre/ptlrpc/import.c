@@ -761,6 +761,7 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
         struct obd_import *imp = request->rq_import;
         struct client_obd *cli = &imp->imp_obd->u.cli;
         struct lustre_handle old_hdl;
+        __u64 old_connect_flags;
         int msg_flags;
         ENTRY;
 
@@ -971,6 +972,7 @@ finish:
                                imp->imp_obd->obd_name);
                         GOTO(out, rc = -ENODEV);
                 }
+                old_connect_flags = exp->exp_connect_flags;
                 exp->exp_connect_flags = ocd->ocd_connect_flags;
                 imp->imp_obd->obd_self_export->exp_connect_flags =
                                                         ocd->ocd_connect_flags;
@@ -1047,10 +1049,19 @@ finish:
                                 ocd->ocd_brw_size >> CFS_PAGE_SHIFT;
                 }
 
-                imp->imp_obd->obd_namespace->ns_connect_flags =
-                                                        ocd->ocd_connect_flags;
-                imp->imp_obd->obd_namespace->ns_orig_connect_flags =
-                                                        ocd->ocd_connect_flags;
+                /* Reset ns_connect_flags only for initial connect. It might be
+                 * changed in while using FS and if we reset it in reconnect
+                 * this leads to lossing user settings done before such as
+                 * disable lru_resize, etc. */
+                if (old_connect_flags != exp->exp_connect_flags ||
+                    aa->pcaa_initial_connect) {
+                        CWARN("Reseting ns_connect_flags to server flags: "LPU64"\n", 
+                              ocd->ocd_connect_flags);
+                        imp->imp_obd->obd_namespace->ns_connect_flags =
+                                ocd->ocd_connect_flags;
+                        imp->imp_obd->obd_namespace->ns_orig_connect_flags =
+                                ocd->ocd_connect_flags;
+                }
 
                 if ((ocd->ocd_connect_flags & OBD_CONNECT_AT) &&
                     (imp->imp_msg_magic == LUSTRE_MSG_MAGIC_V2))
