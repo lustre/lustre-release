@@ -1185,7 +1185,7 @@ existing_lock:
                 if (!(lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK) ||
                     !(dlm_rep->lock_flags & LDLM_FL_CANCEL_ON_BLOCK)) {
                         CERROR("Granting sync lock to libclient. "
-                               "req fl %d, rep fl %d, lock fl %d\n",
+                               "req fl %d, rep fl %d, lock fl "LPX64"\n",
                                dlm_req->lock_flags, dlm_rep->lock_flags,
                                lock->l_flags);
                         LDLM_ERROR(lock, "sync lock");

@@ -152,11 +152,6 @@ typedef enum {
 /* Flags flags inherited from parent lock when doing intents. */
 #define LDLM_INHERIT_FLAGS     (LDLM_FL_CANCEL_ON_BLOCK)
 
-/* These are flags that are mapped into the flags and ASTs of blocking locks */
-#define LDLM_AST_DISCARD_DATA  0x80000000 /* Add FL_DISCARD to blocking ASTs */
-/* Flags sent in AST lock_flags to be mapped into the receiving lock. */
-#define LDLM_AST_FLAGS         (LDLM_FL_DISCARD_DATA)
-
 /* completion ast to be executed */
 #define LDLM_FL_CP_REQD        0x1000000
 
@@ -183,8 +178,15 @@ typedef enum {
 /* measure lock contention and return -EUSERS if locking contention is high */
 #define LDLM_FL_DENY_ON_CONTENTION 0x40000000
 
-/* 0x80000000 is occupied by LDLM_AST_DISCARD_DATA */
-#define LDLM_FL_FAIL_LOC       0x100000000
+/* These are flags that are mapped into the flags and ASTs of blocking locks */
+#define LDLM_AST_DISCARD_DATA  0x80000000 /* Add FL_DISCARD to blocking ASTs */
+
+/* Flags sent in AST lock_flags to be mapped into the receiving lock. */
+#define LDLM_AST_FLAGS         (LDLM_FL_DISCARD_DATA)
+
+/* Lock marked with this flag is going to fail to obtain cp_ast with emulating 
+ * -EINTR while waiting. */
+#define LDLM_FL_FAIL_LOC       0x100000000ULL
 
 /* The blocking callback is overloaded to perform two functions.  These flags
  * indicate which operation should be performed. */
