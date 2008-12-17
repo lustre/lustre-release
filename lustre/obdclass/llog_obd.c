@@ -66,15 +66,16 @@ static struct llog_ctxt* llog_new_ctxt(struct obd_device *obd)
 
 static void llog_ctxt_destroy(struct llog_ctxt *ctxt)
 {
-        if (ctxt->loc_exp)
+        if (ctxt->loc_exp) {
                 class_export_put(ctxt->loc_exp);
+                ctxt->loc_exp = NULL;
+        }
         if (ctxt->loc_imp) {
                 class_import_put(ctxt->loc_imp);
                 ctxt->loc_imp = NULL;
         }
         LASSERT(ctxt->loc_llcd == NULL);
         OBD_FREE_PTR(ctxt);
-        return;
 }
 
 int __llog_ctxt_put(struct llog_ctxt *ctxt)
@@ -119,19 +120,25 @@ int llog_cleanup(struct llog_ctxt *ctxt)
         int rc, idx;
         ENTRY;
 
-        if (!ctxt) {
-                CERROR("No ctxt\n");
-                RETURN(-ENODEV);
-        }
+        LASSERT(ctxt != NULL);
+        LASSERT(ctxt != LP_POISON);
 
         olg = ctxt->loc_olg;
+        LASSERT(olg != NULL);
+        LASSERT(olg != LP_POISON);
+
         idx = ctxt->loc_idx;
 
-        /* banlance the ctxt get when calling llog_cleanup */
+        /* 
+         * Banlance the ctxt get when calling llog_cleanup()
+         */
+        LASSERT(atomic_read(&ctxt->loc_refcount) < 0x5a5a5a);
         LASSERT(atomic_read(&ctxt->loc_refcount) > 1);
         llog_ctxt_put(ctxt);
 
-        /* try to free the ctxt */
+        /* 
+         * Try to free the ctxt. 
+         */
         rc = __llog_ctxt_put(ctxt);
         if (rc)
                 CERROR("Error %d while cleaning up ctxt %p\n",
@@ -149,58 +156,64 @@ int llog_setup_named(struct obd_device *obd,  struct obd_llog_group *olg,
                      struct llog_logid *logid, const char *logname,
                      struct llog_operations *op)
 {
-        int rc = 0;
         struct llog_ctxt *ctxt;
+        int rc = 0;
         ENTRY;
 
         if (index < 0 || index >= LLOG_MAX_CTXTS)
-                RETURN(-EFAULT);
+                RETURN(-EINVAL);
 
         LASSERT(olg != NULL);
 
         ctxt = llog_new_ctxt(obd);
         if (!ctxt)
-                GOTO(out, rc = -ENOMEM);
+                RETURN(-ENOMEM);
 
         ctxt->loc_obd = obd;
-        ctxt->loc_exp = class_export_get(disk_obd->obd_self_export);
         ctxt->loc_olg = olg;
         ctxt->loc_idx = index;
         ctxt->loc_logops = op;
         sema_init(&ctxt->loc_sem, 1);
+        ctxt->loc_exp = class_export_get(disk_obd->obd_self_export);
 
         rc = llog_group_set_ctxt(olg, ctxt, index);
         if (rc) {
                 llog_ctxt_destroy(ctxt);
                 if (rc == -EEXIST) {
-                        /* sanity check */
                         ctxt = llog_group_get_ctxt(olg, index);
-
-                        /* mds_lov_update_mds might call here multiple times.
-                         * So if the llog is already set up then don't to do
-                         * it again. */
-                        CDEBUG(D_CONFIG, "obd %s ctxt %d already set up\n",
-                                obd->obd_name, index);
-                        LASSERT(ctxt->loc_olg == olg);
-                        LASSERT(ctxt->loc_obd == obd);
-                        LASSERT(ctxt->loc_exp == disk_obd->obd_self_export);
-                        LASSERT(ctxt->loc_logops == op);
-                        llog_ctxt_put(ctxt);
+                        if (ctxt) {
+                                /* 
+                                 * mds_lov_update_desc() might call here multiple
+                                 * times. So if the llog is already set up then
+                                 * don't to do it again. 
+                                 */
+                                CDEBUG(D_CONFIG, "obd %s ctxt %d already set up\n",
+                                       obd->obd_name, index);
+                                LASSERT(ctxt->loc_olg == olg);
+                                LASSERT(ctxt->loc_obd == obd);
+                                LASSERT(ctxt->loc_exp == disk_obd->obd_self_export);
+                                LASSERT(ctxt->loc_logops == op);
+                                llog_ctxt_put(ctxt);
+                        }
                         rc = 0;
                 }
-                GOTO(out, rc);
+                RETURN(rc);
         }
 
-        if (op->lop_setup) {
-                rc = op->lop_setup(obd, olg, index, disk_obd, count, logid,
-                                   logname);
-                if (rc) {
-                        CERROR("obd %s ctxt %d lop_setup=%p failed %d\n",
-                               obd->obd_name, index, op->lop_setup, rc);
-                        llog_ctxt_put(ctxt);
-                }
+        if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LLOG_SETUP)) {
+                rc = -ENOTSUPP;
+        } else {
+                if (op->lop_setup)
+                        rc = op->lop_setup(obd, olg, index, disk_obd, count,
+                                           logid, logname);
         }
-out:
+
+        if (rc) {
+                CERROR("obd %s ctxt %d lop_setup=%p failed %d\n",
+                       obd->obd_name, index, op->lop_setup, rc);
+                llog_ctxt_put(ctxt);
+        }
+
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_setup_named);
@@ -335,8 +348,8 @@ int llog_obd_origin_setup(struct obd_device *obd, struct obd_llog_group *olg,
 
         LASSERT(olg != NULL);
         ctxt = llog_group_get_ctxt(olg, index);
-
-        LASSERT(ctxt);
+        if (!ctxt)
+                RETURN(-ENODEV);
         llog_gen_init(ctxt);
 
         if (logid && logid->lgl_oid) {
@@ -358,10 +371,11 @@ int llog_obd_origin_setup(struct obd_device *obd, struct obd_llog_group *olg,
 
         rc = llog_process(handle, (llog_cb_t)cat_cancel_cb, NULL, NULL);
         if (rc)
-                CERROR("llog_process with cat_cancel_cb failed: %d\n", rc);
+                CERROR("llog_process() with cat_cancel_cb failed: %d\n", rc);
+        GOTO(out, rc);
 out:
         llog_ctxt_put(ctxt);
-        RETURN(rc);
+        return rc;
 }
 EXPORT_SYMBOL(llog_obd_origin_setup);
 

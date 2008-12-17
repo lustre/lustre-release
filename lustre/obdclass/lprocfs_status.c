@@ -882,6 +882,7 @@ int lprocfs_obd_cleanup(struct obd_device *obd)
                 /* Should be no exports left */
                 LASSERT(obd->obd_proc_exports_entry->subdir == NULL);
                 lprocfs_remove(&obd->obd_proc_exports_entry);
+                obd->obd_proc_exports_entry = NULL;
         }
         lprocfs_remove(&obd->obd_proc_entry);
         return 0;

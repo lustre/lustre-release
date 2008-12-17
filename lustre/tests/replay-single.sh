@@ -1487,6 +1487,16 @@ test_61c() {
 }
 run_test 61c "test race mds llog sync vs llog cleanup"
 
+test_61d() { # bug 16002 # bug 17466
+#define OBD_FAIL_OBD_LLOG_SETUP        0x605
+    shutdown_facet $SINGLEMDS
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x605"
+    start $SINGLEMDS `mdsdevname 1` $MDS_MOUNT_OPTS && error "mds start should have failed"
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+    start $SINGLEMDS `mdsdevname 1` $MDS_MOUNT_OPTS || error "cannot restart mds"
+}
+run_test 61d "error in llog_setup should cleanup the llog context correctly"
+
 test_62() { # Bug 15756 - don't mis-drop resent replay
     mkdir -p $DIR/$tdir
     replay_barrier $SINGLEMDS

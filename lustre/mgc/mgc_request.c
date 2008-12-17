@@ -1120,6 +1120,12 @@ static int mgc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                         &llog_client_ops);
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
+                if (!ctxt) {
+                        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+                        if (ctxt)
+                                llog_cleanup(ctxt);
+                        RETURN(-ENODEV);
+                }
                 llog_initiator_connect(ctxt);
                 llog_ctxt_put(ctxt);
         } else {

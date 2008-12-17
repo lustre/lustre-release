@@ -3683,7 +3683,7 @@ static int osc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                         &catid->lci_logid, &osc_mds_ost_orig_logops);
         if (rc) {
                 CERROR("failed LLOG_MDS_OST_ORIG_CTXT\n");
-                GOTO (out, rc);
+                GOTO(out, rc);
         }
 
         rc = llog_setup(obd, &obd->obd_olg, LLOG_SIZE_REPL_CTXT, tgt, count,

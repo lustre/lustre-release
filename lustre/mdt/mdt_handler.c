@@ -4114,7 +4114,7 @@ static int mdt_obd_llog_setup(struct obd_device *obd,
 
         obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
         if (IS_ERR(obd->obd_fsops))
-                return (int) PTR_ERR(obd->obd_fsops);
+                return PTR_ERR(obd->obd_fsops);
 
         rc = fsfilt_setup(obd, lsi->lsi_srv_mnt->mnt_sb);
         if (rc) {
@@ -4130,7 +4130,7 @@ static int mdt_obd_llog_setup(struct obd_device *obd,
         rc = llog_setup(obd, &obd->obd_olg, LLOG_CONFIG_ORIG_CTXT, obd,
                         0, NULL, &llog_lvfs_ops);
         if (rc) {
-                CERROR("llog setup failed: %d\n", rc);
+                CERROR("llog_setup() failed: %d\n", rc);
                 fsfilt_put_ops(obd->obd_fsops);
         }
 
@@ -4145,17 +4145,19 @@ static void mdt_obd_llog_cleanup(struct obd_device *obd)
         if (ctxt)
                 llog_cleanup(ctxt);
 
-        if (obd->obd_fsops)
+        if (obd->obd_fsops) {
                 fsfilt_put_ops(obd->obd_fsops);
+                obd->obd_fsops = NULL;
+        }
 }
 
 static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 {
-        struct md_device *next = m->mdt_child;
-        struct lu_device *d    = &m->mdt_md_dev.md_lu_dev;
-        struct lu_site   *ls   = d->ld_site;
+        struct md_device  *next = m->mdt_child;
+        struct lu_device  *d    = &m->mdt_md_dev.md_lu_dev;
+        struct lu_site    *ls   = d->ld_site;
         struct obd_device *obd = mdt2obd_dev(m);
-        int             waited = 0;
+        int                waited = 0;
         ENTRY;
 
         /* At this point, obd exports might still be on the "obd_zombie_exports"
@@ -4208,7 +4210,10 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         mdt_seq_fini_cli(m);
         mdt_fld_fini(env, m);
         mdt_procfs_fini(m);
-        lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
+        if (obd->obd_proc_exports_entry) {
+                lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
+                obd->obd_proc_exports_entry = NULL;
+        }
         lprocfs_free_per_client_stats(obd);
         lprocfs_free_obd_stats(obd);
         ptlrpc_lprocfs_unregister_obd(d->ld_obd);
@@ -4220,7 +4225,9 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         cfs_timer_disarm(&m->mdt_ck_timer);
         mdt_ck_thread_stop(m);
 
-        /* finish the stack */
+        /* 
+         * Finish the stack 
+         */
         mdt_stack_fini(env, m, md2lu_dev(m->mdt_child));
 
         if (ls) {
@@ -4563,8 +4570,10 @@ err_fini_stack:
         mdt_stack_fini(env, m, md2lu_dev(m->mdt_child));
 err_fini_proc:
         mdt_procfs_fini(m);
-        if (obd->obd_proc_exports_entry)
+        if (obd->obd_proc_exports_entry) {
                 lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
+                obd->obd_proc_exports_entry = NULL;
+        }
         ptlrpc_lprocfs_unregister_obd(obd);
         lprocfs_obd_cleanup(obd);
 err_fini_site:

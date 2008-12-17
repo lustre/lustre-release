@@ -397,8 +397,10 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         RETURN(0);
 err_exp:
-        class_unlink_export(obd->obd_self_export);
-        obd->obd_self_export = NULL;
+        if (obd->obd_self_export) {
+                class_unlink_export(obd->obd_self_export);
+                obd->obd_self_export = NULL;
+        }
 err_hash:
         if (obd->obd_uuid_hash) {
                 lustre_hash_exit(obd->obd_uuid_hash);
@@ -497,7 +499,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
         /* Leave this on forever */
         obd->obd_stopping = 1;
         spin_unlock(&obd->obd_dev_lock);
-
+        
         if (lcfg->lcfg_bufcount >= 2 && LUSTRE_CFG_BUFLEN(lcfg, 1) > 0) {
                 for (flag = lustre_cfg_string(lcfg, 1); *flag != 0; flag++)
                         switch (*flag) {
@@ -514,32 +516,22 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                                         obd_iocontrol(OBD_IOC_SYNC,
                                                       obd->obd_self_export,
                                                       0, NULL, NULL);
-                                 /* Set the obd readonly if we can */
+                                        /* Set the obd readonly if we can */
                                         obd_iocontrol(OBD_IOC_SET_READONLY,
                                                       obd->obd_self_export,
                                                       0, NULL, NULL);
                                 }
                                 break;
                         default:
-                                CERROR("unrecognised flag '%c'\n",
-                                       *flag);
+                                CERROR("Unrecognised flag '%c'\n", *flag);
                         }
         }
+
+        LASSERT(obd->obd_self_export);
 
         /* The three references that should be remaining are the
          * obd_self_export and the attach and setup references. */
         if (atomic_read(&obd->obd_refcount) > 3) {
-#if 0           /* We should never fail to cleanup with mountconf */
-                if (!(obd->obd_fail || obd->obd_force)) {
-                        CERROR("OBD %s is still busy with %d references\n"
-                               "You should stop active file system users,"
-                               " or use the --force option to cleanup.\n",
-                               obd->obd_name, atomic_read(&obd->obd_refcount));
-                        dump_exports(obd);
-                        /* Allow a failed cleanup to try again. */
-                        obd->obd_stopping = 0;
-                }
-#endif
                 /* refcounf - 3 might be the number of real exports
                    (excluding self export). But class_incref is called
                    by other things as well, so don't count on it. */
@@ -548,16 +540,24 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 dump_exports(obd);
                 class_disconnect_exports(obd);
         }
-        LASSERT(obd->obd_self_export);
 
         /* destroy an uuid-export hash body */
-        lustre_hash_exit(obd->obd_uuid_hash);
+        if (obd->obd_uuid_hash) {
+                lustre_hash_exit(obd->obd_uuid_hash);
+                obd->obd_uuid_hash = NULL;
+        }
 
         /* destroy a nid-export hash body */
-        lustre_hash_exit(obd->obd_nid_hash);
+        if (obd->obd_nid_hash) {
+                lustre_hash_exit(obd->obd_nid_hash);
+                obd->obd_nid_hash = NULL;
+        }
 
         /* destroy a nid-stats hash body */
-        lustre_hash_exit(obd->obd_nid_stats_hash);
+        if (obd->obd_nid_stats_hash) {
+                lustre_hash_exit(obd->obd_nid_stats_hash);
+                obd->obd_nid_stats_hash = NULL;
+        }
 
         /* Precleanup, we must make sure all exports get destroyed. */
         err = obd_precleanup(obd, OBD_CLEANUP_EXPORTS);
@@ -620,7 +620,7 @@ void class_decref(struct obd_device *obd, const char *scope, const void *source)
                                        obd->obd_name, err);
                 }
                 if (OBP(obd, detach)) {
-                        err = OBP(obd,detach)(obd);
+                        err = OBP(obd, detach)(obd);
                         if (err)
                                 CERROR("Detach returned %d\n", err);
                 }
@@ -1360,10 +1360,10 @@ parse_out:
 /* Cleanup and detach */
 int class_manual_cleanup(struct obd_device *obd)
 {
-        struct lustre_cfg *lcfg;
-        struct lustre_cfg_bufs bufs;
-        int rc;
-        char flags[3]="";
+        char                    flags[3] = "";
+        struct lustre_cfg      *lcfg;
+        struct lustre_cfg_bufs  bufs;
+        int                     rc;
         ENTRY;
 
         if (!obd) {
@@ -1382,6 +1382,8 @@ int class_manual_cleanup(struct obd_device *obd)
         lustre_cfg_bufs_reset(&bufs, obd->obd_name);
         lustre_cfg_bufs_set_string(&bufs, 1, flags);
         lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
+        if (!lcfg)
+                RETURN(-ENOMEM);
 
         rc = class_process_config(lcfg);
         if (rc) {
