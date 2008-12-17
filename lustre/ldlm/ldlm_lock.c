@@ -1748,7 +1748,7 @@ void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
                lock->l_resource->lr_name.name[0],
                lock->l_resource->lr_name.name[1]);
         CDEBUG(level, "  Req mode: %s, grant mode: %s, rc: %u, read: %d, "
-               "write: %d flags: %#x\n", ldlm_lockname[lock->l_req_mode],
+               "write: %d flags: "LPX64"\n", ldlm_lockname[lock->l_req_mode],
                ldlm_lockname[lock->l_granted_mode],
                atomic_read(&lock->l_refc), lock->l_readers, lock->l_writers,
                lock->l_flags);
@@ -1796,7 +1796,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
                 libcfs_debug_vmsg2(cdls, data->msg_subsys, level, data->msg_file,
                                    data->msg_fn, data->msg_line, fmt, args,
                                    " ns: \?\? lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
-                                   "res: \?\? rrc=\?\? type: \?\?\? flags: %x remote: "
+                                   "res: \?\? rrc=\?\? type: \?\?\? flags: "LPX64" remote: "
                                    LPX64" expref: %d pid: %u timeout: %lu\n", lock,
                                    lock->l_handle.h_cookie, atomic_read(&lock->l_refc),
                                    lock->l_readers, lock->l_writers,
@@ -1816,7 +1816,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
                                    data->msg_fn, data->msg_line, fmt, args,
                                    " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
                                    "res: "LPU64"/"LPU64" rrc: %d type: %s ["LPU64"->"LPU64
-                                   "] (req "LPU64"->"LPU64") flags: %x remote: "LPX64
+                                   "] (req "LPU64"->"LPU64") flags: "LPX64" remote: "LPX64
                                     " expref: %d pid: %u timeout %lu\n",
                                     lock->l_resource->lr_namespace->ns_name, lock,
                                     lock->l_handle.h_cookie, atomic_read(&lock->l_refc),
@@ -1840,7 +1840,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
                                    data->msg_fn, data->msg_line, fmt, args,
                                    " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
                                    "res: "LPU64"/"LPU64" rrc: %d type: %s pid: %d "
-                                   "["LPU64"->"LPU64"] flags: %x remote: "LPX64
+                                   "["LPU64"->"LPU64"] flags: "LPX64" remote: "LPX64
                                    " expref: %d pid: %u timeout: %lu\n",
                                    lock->l_resource->lr_namespace->ns_name, lock,
                                    lock->l_handle.h_cookie, atomic_read(&lock->l_refc),
@@ -1864,7 +1864,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
                                    data->msg_fn, data->msg_line, fmt, args,
                                    " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
                                    "res: "LPU64"/"LPU64" bits "LPX64" rrc: %d type: %s "
-                                   "flags: %x remote: "LPX64" expref: %d "
+                                   "flags: "LPX64" remote: "LPX64" expref: %d "
                                    "pid: %u timeout: %lu\n",
                                    lock->l_resource->lr_namespace->ns_name,
                                    lock, lock->l_handle.h_cookie,
@@ -1886,7 +1886,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
                 libcfs_debug_vmsg2(cdls, data->msg_subsys, level, data->msg_file,
                                    data->msg_fn, data->msg_line, fmt, args,
                                    " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
-                                   "res: "LPU64"/"LPU64" rrc: %d type: %s flags: %x "
+                                   "res: "LPU64"/"LPU64" rrc: %d type: %s flags: "LPX64" "
                                    "remote: "LPX64" expref: %d pid: %u timeout %lu\n",
                                    lock->l_resource->lr_namespace->ns_name,
                                    lock, lock->l_handle.h_cookie,
