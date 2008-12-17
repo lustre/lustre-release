@@ -1566,5 +1566,37 @@ test_46a() {
 }
 run_test 46a "handle ost additional - wide striped file"
 
+test_47() { #17674
+        setup
+        check_mount || return 2
+        $LCTL set_param ldlm.namespaces.$FSNAME-*-*-*.lru_size=100
+
+        local lru_size=[]
+        local count=0
+        for ns in $($LCTL get_param ldlm.namespaces.$FSNAME-*-*-*.lru_size); do
+            lrs=$(echo $ns | sed 's/.*lru_size=//')
+            lru_size[count]=$lrs
+            let count=count+1
+        done
+        
+        facet_failover ost1
+        facet_failover mds
+        df -h $MOUNT || return 3
+
+        count=0
+        for ns in $($LCTL get_param ldlm.namespaces.$FSNAME-*-*-*.lru_size); do
+            lrs=$(echo $ns | sed 's/.*lru_size=//')
+            if ! test "$lrs" -eq "${lru_size[count]}"; then
+                n=$(echo $ns | sed -e 's/ldlm.namespaces.//' -e 's/.lru_size=.*//')
+                error "$n has lost lru_size: $lrs vs. ${lru_size[count]}"
+            fi
+            let count=count+1
+        done
+        
+        cleanup
+        return 0
+}
+run_test 47 "server restart does not make client loss lru_resize settings"
+
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
