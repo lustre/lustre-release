@@ -687,6 +687,52 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         EXIT;
 }
 
+/* if client disconnects during recovery it may resend opens which were replayed
+ * on server but their transno less then last_transno on server so they will not
+ * be detected as reconstructs */
+static int open_replay_reconstruct(struct ptlrpc_request *req)
+{
+        struct mds_export_data *med = &req->rq_export->exp_mds_data;
+        struct mds_file_data *mfd = NULL;
+        struct list_head *t;
+
+        if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT))
+                return 0;
+
+        if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY))
+                return 0;
+
+        /* if mfd exists then replay was done already */
+        spin_lock(&med->med_open_lock);
+        list_for_each(t, &med->med_open_head) {
+                mfd = list_entry(t, struct mds_file_data, mfd_list);
+                if (mfd->mfd_xid == req->rq_xid) {
+                        mds_mfd_addref(mfd);
+                        break;
+                }
+                mfd = NULL;
+        }
+        spin_unlock(&med->med_open_lock);
+
+        if (mfd) {
+                struct mds_body *body = lustre_msg_buf(req->rq_repmsg,
+                                                       DLM_REPLY_REC_OFF,
+                                                       sizeof(*body));
+                __u64 *pre_versions = lustre_msg_get_versions(req->rq_reqmsg);
+
+                body->handle.cookie = mfd->mfd_handle.h_cookie;
+                CDEBUG(D_INODE, "resend mfd %p, cookie "LPX64"\n", mfd,
+                       mfd->mfd_handle.h_cookie);
+                mds_mfd_put(mfd);
+                lustre_msg_set_versions(req->rq_repmsg, pre_versions);
+                lustre_msg_set_transno(req->rq_repmsg,
+                                       lustre_msg_get_transno(req->rq_reqmsg));
+                lustre_msg_set_status(req->rq_repmsg, 0);
+                return 1;
+        }
+        return 0;
+}
+
 /* do NOT or the MAY_*'s, you'll get the weakest */
 static int accmode(struct inode *inode, int flags)
 {
@@ -956,6 +1002,10 @@ int mds_open(struct mds_update_record *rec, int offset,
                 body = NULL;
                 LBUG();
         }
+
+        /* check the open resent|replay case */
+        if (open_replay_reconstruct(req))
+                RETURN(0);
 
         MDS_CHECK_RESENT(req, reconstruct_open(rec, offset, req, child_lockh));
 

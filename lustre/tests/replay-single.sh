@@ -1836,6 +1836,54 @@ test_72() { #bug 16711
 }
 run_test 72 "target_finish_recovery vs process_recovery_queue race"
 
+test_73a() {
+    multiop_bg_pause $DIR/$tfile O_tSc || return 3
+    pid=$!
+    rm -f $DIR/$tfile
+
+    replay_barrier mds
+#define OBD_FAIL_LDLM_ENQUEUE       0x302
+    do_facet mds "lctl set_param fail_loc=0x80000302"
+    fail mds
+    kill -USR1 $pid
+    wait $pid || return 1
+    [ -e $DIR/$tfile ] && return 2
+    return 0
+}
+run_test 73a "open(O_CREAT), unlink, replay, reconnect before open replay , close"
+
+test_73b() {
+    multiop_bg_pause $DIR/$tfile O_tSc || return 3
+    pid=$!
+    rm -f $DIR/$tfile
+
+    replay_barrier mds
+#define OBD_FAIL_LDLM_REPLY       0x30c
+    do_facet mds "lctl set_param fail_loc=0x8000030c"
+    fail mds
+    kill -USR1 $pid
+    wait $pid || return 1
+    [ -e $DIR/$tfile ] && return 2
+    return 0
+}
+run_test 73b "open(O_CREAT), unlink, replay, reconnect at open_replay reply, close"
+
+test_73c() {
+    multiop_bg_pause $DIR/$tfile O_tSc || return 3
+    pid=$!
+    rm -f $DIR/$tfile
+
+    replay_barrier mds
+#define OBD_FAIL_TGT_LAST_REPLAY       0x710
+    do_facet mds "lctl set_param fail_loc=0x80000710"
+    fail mds
+    kill -USR1 $pid
+    wait $pid || return 1
+    [ -e $DIR/$tfile ] && return 2
+    return 0
+}
+run_test 73c "open(O_CREAT), unlink, replay, reconnect at last_replay, close"
+
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true

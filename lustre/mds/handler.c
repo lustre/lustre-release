@@ -2361,11 +2361,11 @@ static void fixup_handle_for_resent_req(struct ptlrpc_request *req, int offset,
         /* If the xid matches, then we know this is a resent request,
          * and allow it. (It's probably an OPEN, for which we don't
          * send a lock */
-        if (req->rq_xid ==
+        if (req->rq_xid <=
             le64_to_cpu(exp->exp_mds_data.med_lcd->lcd_last_xid))
                 return;
 
-        if (req->rq_xid ==
+        if (req->rq_xid <=
             le64_to_cpu(exp->exp_mds_data.med_lcd->lcd_last_close_xid))
                 return;
 
@@ -2442,7 +2442,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
                 repsize[repbufcnt++] = mds->mds_max_cookiesize;
 
         /* if we do recovery we isn't send reply mds state is restored */
-        if(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
                 repsize[DLM_REPLY_REC_OFF+1] = 0;
                 if (it->opc & IT_UNLINK)
                         repsize[DLM_REPLY_REC_OFF+2] = 0;
