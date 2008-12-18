@@ -2402,7 +2402,7 @@ Index: linux-2.6.5-7.311/fs/ext3/super.c
 ===================================================================
 --- linux-2.6.5-7.311.orig/fs/ext3/super.c
 +++ linux-2.6.5-7.311/fs/ext3/super.c
-@@ -390,6 +390,7 @@ void ext3_put_super (struct super_block 
+@@ -389,6 +389,7 @@ void ext3_put_super (struct super_block 
  	struct ext3_super_block *es = sbi->s_es;
  	int i;
  
@@ -2410,7 +2410,7 @@ Index: linux-2.6.5-7.311/fs/ext3/super.c
  	ext3_xattr_put_super(sb);
  	journal_destroy(sbi->s_journal);
  	if (!(sb->s_flags & MS_RDONLY)) {
-@@ -451,6 +452,8 @@ static struct inode *ext3_alloc_inode(st
+@@ -450,6 +451,8 @@ static struct inode *ext3_alloc_inode(st
  #endif
  	ei->i_rsv_window.rsv_end = EXT3_RESERVE_WINDOW_NOT_ALLOCATED;
  	ei->vfs_inode.i_version = 1;
@@ -2419,7 +2419,7 @@ Index: linux-2.6.5-7.311/fs/ext3/super.c
  	return &ei->vfs_inode;
  }
  
-@@ -615,6 +618,7 @@ enum {
+@@ -584,6 +587,7 @@ enum {
  	Opt_ignore, Opt_barrier,
  	Opt_err,
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
@@ -2427,7 +2427,7 @@ Index: linux-2.6.5-7.311/fs/ext3/super.c
  };
  
  static match_table_t tokens = {
-@@ -658,6 +662,9 @@ static match_table_t tokens = {
+@@ -627,6 +631,9 @@ static match_table_t tokens = {
  	{Opt_iopen, "iopen"},
  	{Opt_noiopen, "noiopen"},
  	{Opt_iopen_nopriv, "iopen_nopriv"},
@@ -2437,7 +2437,7 @@ Index: linux-2.6.5-7.311/fs/ext3/super.c
  	{Opt_barrier, "barrier=%u"},
  	{Opt_err, NULL}
  };
-@@ -874,6 +881,15 @@ static int parse_options (char * options
+@@ -843,6 +850,15 @@ static int parse_options (char * options
  			break;
  		case Opt_ignore:
  			break;
@@ -2453,7 +2453,7 @@ Index: linux-2.6.5-7.311/fs/ext3/super.c
  		default:
  			printk (KERN_ERR
  				"EXT3-fs: Unrecognized mount option \"%s\" "
-@@ -1528,6 +1544,8 @@ static int ext3_fill_super (struct super
+@@ -1495,6 +1511,8 @@ static int ext3_fill_super (struct super
  	percpu_counter_mod(&sbi->s_dirs_counter,
  		ext3_count_dirs(sb));
  

@@ -410,7 +410,7 @@ Index: linux-2.6.18-53.1.14/fs/ext3/fiemap.h
 +/*
 + * FIEMAP ioctl infrastructure.
 + *
-+ * Copyright 2008 Sun Microsystems, Inc.
++ * Copyright 2008 Sun Microsystems, Inc
 + *
 + * Author: Kalpak Shah <kalpak.shah@sun.com>
 + *	 Andreas Dilger <adilger@sun.com>
