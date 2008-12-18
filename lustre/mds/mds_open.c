@@ -515,7 +515,9 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         struct obd_export *exp = req->rq_export;
         struct obd_device *obd = exp->exp_obd;
         struct dentry *parent, *dchild;
+        struct ldlm_request *dlmreq;
         struct ldlm_reply *rep;
+        struct ldlm_lock *lock;
         struct mds_body *body;
         int rc;
         struct list_head *t;
@@ -675,6 +677,23 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         }
 
         mds_mfd_put(mfd);
+
+        if (!intent_disposition(rep, DISP_OPEN_LOCK))
+                GOTO(out_dput, 0);
+
+        dlmreq = lustre_msg_buf(req->rq_reqmsg, DLM_LOCKREQ_OFF, 
+                                sizeof(*dlmreq));
+        /* find granted lock in obd_export->exp_lock_hash by remote handle */
+        lock = lustre_hash_lookup(exp->exp_lock_hash, &dlmreq->lock_handle[0]);
+
+        if (lock != NULL) {
+                /* grant the lock again! */
+                ldlm_lock2handle(lock, child_lockh);
+                lh_put(exp->exp_lock_hash, &lock->l_exp_hash);
+        } else {
+                /* the lock is already canceled! clear DISP_OPEN_LOCK */
+                intent_disposition(rep, ~DISP_OPEN_LOCK);
+        }
 
  out_dput:
         if (put_child)
