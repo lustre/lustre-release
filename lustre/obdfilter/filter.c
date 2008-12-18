@@ -377,7 +377,7 @@ static int filter_client_free(struct obd_export *exp)
                 GOTO(free, 0);
 
         CDEBUG(D_INFO, "freeing client at idx %u, offset %lld with UUID '%s'\n",
-               fed->fed_lr_idx, off, fed->fed_lcd->lcd_uuid);
+               fed->fed_lr_idx, fed->fed_lr_off, fed->fed_lcd->lcd_uuid);
 
         LASSERT(filter->fo_last_rcvd_slots != NULL);
 
