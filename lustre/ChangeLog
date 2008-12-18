@@ -44,6 +44,13 @@
 	  Lustre filesystem with 4K stack may cause a stack overflow. For more
 	  information, please refer to bugzilla 17630.
 
+Severity   : major
+Frequency  : on remount
+Bugzilla   : 18018
+Description: external journal device not working after the remount
+Details    : clear dev_rdonly flag for external journal devices in 
+             blkdev_put()
+
 Severity   : minor
 Frequency  : rare
 Bugzilla   : 17802
