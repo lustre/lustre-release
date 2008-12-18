@@ -1,7 +1,8 @@
-diff -ur linux-2.6.5-lnxi.orig/drivers/block/ll_rw_blk.c linux-2.6.5-lnxi/drivers/block/ll_rw_blk.c
---- linux-2.6.5-lnxi.orig/drivers/block/ll_rw_blk.c	2004-11-11 07:28:51.000000000 -0800
-+++ linux-2.6.5-lnxi/drivers/block/ll_rw_blk.c	2005-04-11 09:42:22.750936924 -0700
-@@ -2458,7 +2458,7 @@ static inline void blk_partition_remap(s
+Index: linux-2.6.5-lnxi/drivers/block/ll_rw_blk.c
+===================================================================
+--- linux-2.6.5-lnxi.orig/drivers/block/ll_rw_blk.c
++++ linux-2.6.5-lnxi/drivers/block/ll_rw_blk.c
+@@ -2718,7 +2718,7 @@ static inline void blk_partition_remap(s
  	}
  }
  
@@ -10,7 +11,7 @@ diff -ur linux-2.6.5-lnxi.orig/drivers/block/ll_rw_blk.c linux-2.6.5-lnxi/driver
  
  /**
   * generic_make_request: hand a buffer to its device driver for I/O
-@@ -2550,7 +2550,7 @@ end_io:
+@@ -2810,7 +2810,7 @@ end_io:
  
  		/* this is cfs's dev_rdonly check */
  		if (bio->bi_rw == WRITE &&
@@ -19,7 +20,7 @@ diff -ur linux-2.6.5-lnxi.orig/drivers/block/ll_rw_blk.c linux-2.6.5-lnxi/driver
  			bio_endio(bio, bio->bi_size, 0);
  			break;
  		}
-@@ -3086,53 +3086,86 @@ void swap_io_context(struct io_context *
+@@ -3395,53 +3395,86 @@ void swap_io_context(struct io_context *
  	*ioc2 = temp;
  }
  
@@ -140,21 +141,23 @@ diff -ur linux-2.6.5-lnxi.orig/drivers/block/ll_rw_blk.c linux-2.6.5-lnxi/driver
  }
  
  EXPORT_SYMBOL(dev_set_rdonly);
-diff -ur linux-2.6.5-lnxi.orig/fs/block_dev.c linux-2.6.5-lnxi/fs/block_dev.c
---- linux-2.6.5-lnxi.orig/fs/block_dev.c	2004-11-11 07:28:30.000000000 -0800
-+++ linux-2.6.5-lnxi/fs/block_dev.c	2005-04-11 09:49:01.891407856 -0700
-@@ -739,6 +739,7 @@ int blkdev_put(struct block_device *bdev
+Index: linux-2.6.5-lnxi/fs/block_dev.c
+===================================================================
+--- linux-2.6.5-lnxi.orig/fs/block_dev.c
++++ linux-2.6.5-lnxi/fs/block_dev.c
+@@ -767,6 +767,7 @@ int blkdev_put(struct block_device *bdev
+ 			blkdev_put(bdev->bd_contains);
+ 		}
+ 		bdev->bd_contains = NULL;
++		dev_clear_rdonly(bdev);
  	}
  	unlock_kernel();
  	up(&bdev->bd_sem);
-+	dev_clear_rdonly(bdev);
- 	bdput(bdev);
- 	return ret;
- }
-diff -ur linux-2.6.5-lnxi.orig/include/linux/fs.h linux-2.6.5-lnxi/include/linux/fs.h
---- linux-2.6.5-lnxi.orig/include/linux/fs.h	2004-11-11 07:28:45.000000000 -0800
-+++ linux-2.6.5-lnxi/include/linux/fs.h	2005-04-11 09:43:27.423116140 -0700
-@@ -1385,6 +1385,10 @@ extern void file_kill(struct file *f);
+Index: linux-2.6.5-lnxi/include/linux/fs.h
+===================================================================
+--- linux-2.6.5-lnxi.orig/include/linux/fs.h
++++ linux-2.6.5-lnxi/include/linux/fs.h
+@@ -1424,6 +1424,10 @@ extern void file_kill(struct file *f);
  struct bio;
  extern int submit_bio(int, struct bio *);
  extern int bdev_read_only(struct block_device *);
