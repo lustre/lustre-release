@@ -738,7 +738,7 @@ kiblnd_create_conn (kib_peer_t *peer, struct rdma_cm_id *cmid, int state)
                 }
         }
 
-#if (IBLND_OFED_VERSION == 1025)
+#ifdef HAVE_OFED_IB_COMP_VECTOR
         cq = ib_create_cq(cmid->device,
                           kiblnd_cq_completion, kiblnd_cq_event, conn,
                           IBLND_CQ_ENTRIES(), 0);
@@ -892,8 +892,8 @@ kiblnd_destroy_conn (kib_conn_t *conn)
                 break;
         }
 
-        if (conn->ibc_cmid->qp != NULL)
-                rdma_destroy_qp(conn->ibc_cmid);
+        if (cmid->qp != NULL)
+                rdma_destroy_qp(cmid);
 
         if (conn->ibc_cq != NULL) {
                 rc = ib_destroy_cq(conn->ibc_cq);
@@ -909,7 +909,7 @@ kiblnd_destroy_conn (kib_conn_t *conn)
 
                         LASSERT (rx->rx_nob >= 0); /* not posted */
 
-                        kiblnd_dma_unmap_single(conn->ibc_cmid->device,
+                        kiblnd_dma_unmap_single(cmid->device,
                                                 KIBLND_UNMAP_ADDR(rx, rx_msgunmap,
                                                                   rx->rx_msgaddr),
                                                 IBLND_MSG_SIZE, DMA_FROM_DEVICE);

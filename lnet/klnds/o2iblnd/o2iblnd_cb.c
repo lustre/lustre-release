@@ -1090,7 +1090,7 @@ kiblnd_tx_complete (kib_tx_t *tx, int status)
         if (failed) {
                 if (conn->ibc_state == IBLND_CONN_ESTABLISHED)
                         CDEBUG(D_NETERROR, "Tx -> %s cookie "LPX64
-                               "sending %d waiting %d: failed %d\n",
+                               " sending %d waiting %d: failed %d\n",
                                libcfs_nid2str(conn->ibc_peer->ibp_nid),
                                tx->tx_cookie, tx->tx_sending, tx->tx_waiting,
                                status);
@@ -3152,12 +3152,28 @@ kiblnd_scheduler(void *arg)
                         if (rc == 0) {
                                 rc = ib_req_notify_cq(conn->ibc_cq,
                                                       IB_CQ_NEXT_COMP);
-                                LASSERT (rc >= 0);
+                                if (rc < 0) {
+                                        CWARN("%s: ib_req_notify_cq failed: %d, "
+                                              "closing connection\n",
+                                              libcfs_nid2str(conn->ibc_peer->ibp_nid), rc);
+                                        kiblnd_close_conn(conn, -EIO);
+                                        kiblnd_conn_decref(conn);
+                                        spin_lock_irqsave(&kiblnd_data.kib_sched_lock, flags);
+                                        continue;
+                                }
 
                                 rc = ib_poll_cq(conn->ibc_cq, 1, &wc);
                         }
 
-                        LASSERT (rc >= 0);
+                        if (rc < 0) {
+                                CWARN("%s: ib_poll_cq failed: %d, "
+                                      "closing connection\n",
+                                      libcfs_nid2str(conn->ibc_peer->ibp_nid), rc);
+                                kiblnd_close_conn(conn, -EIO);
+                                kiblnd_conn_decref(conn);
+                                spin_lock_irqsave(&kiblnd_data.kib_sched_lock, flags);
+                                continue;
+                        }
 
                         spin_lock_irqsave(&kiblnd_data.kib_sched_lock,
                                           flags);

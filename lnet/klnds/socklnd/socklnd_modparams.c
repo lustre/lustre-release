@@ -117,6 +117,14 @@ static unsigned int zc_min_frag = (2<<10);
 CFS_MODULE_PARM(zc_min_frag, "i", int, 0644,
                 "minimum fragment to zero copy");
 
+static unsigned int zc_recv = 0;
+CFS_MODULE_PARM(zc_recv, "i", int, 0644,
+                "enable ZC recv for Chelsio driver");
+
+static unsigned int zc_recv_min_nfrags = 16;
+CFS_MODULE_PARM(zc_recv_min_nfrags, "i", int, 0644,
+                "minimum # of fragments to enable ZC recv");
+
 #ifdef SOCKNAL_BACKOFF
 static int backoff_init = 3;
 CFS_MODULE_PARM(backoff_init, "i", int, 0644,
@@ -152,6 +160,8 @@ ksock_tunables_t ksocknal_tunables = {
         .ksnd_enable_csum     = &enable_csum,
         .ksnd_inject_csum_error = &inject_csum_error,
         .ksnd_zc_min_frag     = &zc_min_frag,
+        .ksnd_zc_recv         = &zc_recv,
+        .ksnd_zc_recv_min_nfrags = &zc_recv_min_nfrags,
 #ifdef CPU_AFFINITY
         .ksnd_irq_affinity    = &enable_irq_affinity,
 #endif

@@ -438,6 +438,7 @@ void libcfs_debug_dumplog_internal(void *arg)
                          cfs_time_current_sec(), (long)arg);
                 printk(KERN_ALERT "LustreError: dumping log to %s\n",
                        debug_file_name);
+
                 tracefile_dump_all_pages(debug_file_name);
                 libcfs_run_debug_log_upcall(debug_file_name);
         }
