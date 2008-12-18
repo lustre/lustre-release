@@ -266,8 +266,16 @@ noreproc:
                 spin_unlock(&imp->imp_lock);
         }
 
-        /* Go to sleep until the lock is granted or cancelled. */
-        rc = l_wait_event(lock->l_waitq, is_granted_or_cancelled(lock), &lwi);
+        if (ns_is_client(lock->l_resource->lr_namespace) && 
+            OBD_FAIL_CHECK_RESET(OBD_FAIL_LDLM_INTR_CP_AST,
+                                 OBD_FAIL_LDLM_CP_BL_RACE | OBD_FAIL_ONCE)) {
+                lock->l_flags |= LDLM_FL_FAIL_LOC;
+                rc = -EINTR;
+        } else {
+                /* Go to sleep until the lock is granted or cancelled. */
+                rc = l_wait_event(lock->l_waitq, 
+                                  is_granted_or_cancelled(lock), &lwi);
+        }
 
         if (rc) {
                 LDLM_DEBUG(lock, "client-side enqueue waking up: failed (%d)",
@@ -447,13 +455,31 @@ static void failed_lock_cleanup(struct ldlm_namespace *ns,
                                 struct ldlm_lock *lock,
                                 struct lustre_handle *lockh, int mode)
 {
+        int need_cancel = 0;
+
         /* Set a flag to prevent us from sending a CANCEL (bug 407) */
         lock_res_and_lock(lock);
-        lock->l_flags |= LDLM_FL_LOCAL_ONLY;
+        /* Check that lock is not granted or failed, we might race. */
+        if ((lock->l_req_mode != lock->l_granted_mode) && 
+            !(lock->l_flags & LDLM_FL_FAILED)) {
+                /* Make sure that this lock will not be found by raced
+                 * bl_ast and -EINVAL reply is sent to server anyways. 
+                 * bug 17645 */
+                lock->l_flags |= LDLM_FL_LOCAL_ONLY | LDLM_FL_FAILED | 
+                                 LDLM_FL_ATOMIC_CB;
+                need_cancel = 1;
+        }
         unlock_res_and_lock(lock);
-        LDLM_DEBUG(lock, "setting FL_LOCAL_ONLY");
-
-        ldlm_lock_decref_and_cancel(lockh, mode);
+  
+        if (need_cancel) {
+                LDLM_DEBUG(lock, 
+                           "setting FL_LOCAL_ONLY | LDLM_FL_FAILED | " 
+                           "LDLM_FL_ATOMIC_CB");
+                ldlm_lock_decref_and_cancel(lockh, mode);
+        } else {
+                LDLM_DEBUG(lock, "lock was granted or failed in race");
+                ldlm_lock_decref(lockh, mode);
+        }
 
         /* XXX - HACK because we shouldn't call ldlm_lock_destroy()
          *       from llite/file.c/ll_file_flock(). */

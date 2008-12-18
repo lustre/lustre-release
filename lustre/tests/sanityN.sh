@@ -826,6 +826,45 @@ test_34() { #16129
 }
 run_test 34 "no lock timeout under IO"
 
+test_35() { # bug 17645
+        local generation=[]
+        local count=0
+        for imp in /proc/fs/lustre/mdc/$FSNAME-MDT*-mdc-*; do
+            g=$(awk '/generation/{print $2}' $imp/import)
+            generation[count]=$g
+            let count=count+1
+        done
+
+        mkdir -p $MOUNT1/$tfile
+        createmany -o $MOUNT1/$tfile/a 2000
+        sync
+        cancel_lru_locks mdc
+
+        # Let's initiate -EINTR situation by setting fail_loc and take
+        # write lock on same file from same client. This will not cause
+        # bl_ast yet as lock is already in local cache.
+#define OBD_FAIL_LDLM_INTR_CP_AST        0x317
+        do_facet client "lctl set_param fail_loc=0x80000317"
+        ls -la $MOUNT1/$tfile > /dev/null &
+        sleep 1
+        
+        # Let's take write lock on same file from another mount. This
+        # should cause conflict and bl_ast
+        createmany -o $MOUNT2/$tfile/a 2000 &
+        wait
+        do_facet client "lctl set_param fail_loc=0x0"
+        df -h $MOUNT1 $MOUNT2
+        count=0
+        for imp in /proc/fs/lustre/mdc/$FSNAME-MDT*-mdc-*; do
+            g=$(awk '/generation/{print $2}' $imp/import)
+            if ! test "$g" -eq "${generation[count]}"; then
+                error "Eviction happened on import $(basename $imp)"
+            fi
+            let count=count+1
+        done
+}
+run_test 35 "-EINTR cp_ast vs. bl_ast race does not evict client"
+
 log "cleanup: ======================================================"
 
 check_and_cleanup_lustre

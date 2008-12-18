@@ -1187,7 +1187,7 @@ existing_lock:
                 if (unlikely(!(lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK) ||
                              !(dlm_rep->lock_flags & LDLM_FL_CANCEL_ON_BLOCK))){
                         CERROR("Granting sync lock to libclient. "
-                               "req fl %d, rep fl %d, lock fl %d\n",
+                               "req fl %d, rep fl %d, lock fl "LPX64"\n",
                                dlm_req->lock_flags, dlm_rep->lock_flags,
                                lock->l_flags);
                         LDLM_ERROR(lock, "sync lock");
@@ -1812,15 +1812,21 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
+        if ((lock->l_flags & LDLM_FL_FAIL_LOC) && 
+            lustre_msg_get_opc(req->rq_reqmsg) == LDLM_BL_CALLBACK)
+                OBD_RACE(OBD_FAIL_LDLM_CP_BL_RACE);
+
         /* Copy hints/flags (e.g. LDLM_FL_DISCARD_DATA) from AST. */
         lock_res_and_lock(lock);
         lock->l_flags |= (dlm_req->lock_flags & LDLM_AST_FLAGS);
         if (lustre_msg_get_opc(req->rq_reqmsg) == LDLM_BL_CALLBACK) {
-                /* If somebody cancels locks and cache is already droped,
+                /* If somebody cancels lock and cache is already droped,
+                 * or lock is failed before cp_ast received on client,
                  * we can tell the server we have no lock. Otherwise, we
                  * should send cancel after dropping the cache. */
-                if ((lock->l_flags & LDLM_FL_CANCELING) &&
-                    (lock->l_flags & LDLM_FL_BL_DONE)) {
+                if (((lock->l_flags & LDLM_FL_CANCELING) &&
+                    (lock->l_flags & LDLM_FL_BL_DONE)) ||
+                    (lock->l_flags & LDLM_FL_FAILED)) {
                         LDLM_DEBUG(lock, "callback on lock "
                                    LPX64" - lock disappeared\n",
                                    dlm_req->lock_handle[0].cookie);
