@@ -352,24 +352,31 @@ static int cmp_rec(const void *p1, const void *p2)
                 return 0;
         return 1;
 }
-
-static void print_rec(struct dbg_line **linev, int used, FILE *out)
+  
+static void print_rec(struct dbg_line ***linevp, int used, int fdout)
 {
+        struct dbg_line **linev = *linevp;
         int i;
 
+        qsort(linev, used, sizeof(struct dbg_line *), cmp_rec);
         for (i = 0; i < used; i++) {
                 struct dbg_line *line = linev[i];
                 struct ptldebug_header *hdr = line->hdr;
+                char out[4097];
+                int bytes;
 
-                fprintf(out, "%08x:%08x:%u:%u." LPU64 ":%u:%u:%u:(%s:%u:%s()) %s",
-                        hdr->ph_subsys, hdr->ph_mask, hdr->ph_cpu_id,
-                        hdr->ph_sec, (unsigned long long)hdr->ph_usec,
-                        hdr->ph_stack, hdr->ph_pid, hdr->ph_extern_pid,
-                        line->file, hdr->ph_line_num, line->fn, line->text);
+                bytes = sprintf(out, "%08x:%08x:%u:%u.%06llu:%u:%u:%u:(%s:%u:%s()) %s",
+                                hdr->ph_subsys, hdr->ph_mask, hdr->ph_cpu_id,
+                                hdr->ph_sec, (unsigned long long)hdr->ph_usec,
+                                hdr->ph_stack, hdr->ph_pid, hdr->ph_extern_pid,
+                                line->file, hdr->ph_line_num, line->fn, line->text);
+
+                write(fdout, out, bytes);
                 free(line->hdr);
                 free(line);
         }
         free(linev);
+        *linevp = NULL;
 }
 
 static int add_rec(struct dbg_line *line, struct dbg_line ***linevp, int *lenp,
@@ -378,96 +385,183 @@ static int add_rec(struct dbg_line *line, struct dbg_line ***linevp, int *lenp,
         struct dbg_line **linev = *linevp;
 
         if (used == *lenp) {
-                int nlen = *lenp + 512;
+                int nlen = *lenp + 4096;
                 int nsize = nlen * sizeof(struct dbg_line *);
 
-                linev = *linevp ? realloc(*linevp, nsize) : malloc(nsize);
+                linev = realloc(*linevp, nsize);
                 if (!linev)
-                        return 0;
+                        return -ENOMEM;
+
                 *linevp = linev;
                 *lenp = nlen;
         }
-        linev[used] = line; 
-        return 1;
-}
+        linev[used] = line;
 
-static int parse_buffer(FILE *in, FILE *out)
+        return 0;
+}
+  
+static void dump_hdr(unsigned long long offset, struct ptldebug_header *hdr)
+{
+        fprintf(stderr, "badly-formed record at offset = %llu\n", offset);
+        fprintf(stderr, "  len = %u\n", hdr->ph_len);
+        fprintf(stderr, "  flags = %x\n", hdr->ph_flags);
+        fprintf(stderr, "  subsystem = %x\n", hdr->ph_subsys);
+        fprintf(stderr, "  mask = %x\n", hdr->ph_mask);
+        fprintf(stderr, "  cpu_id = %u\n", hdr->ph_cpu_id);
+        fprintf(stderr, "  seconds = %u\n", hdr->ph_sec);
+        fprintf(stderr, "  microseconds = %lu\n", (long)hdr->ph_usec);
+        fprintf(stderr, "  stack = %u\n", hdr->ph_stack);
+        fprintf(stderr, "  pid = %u\n", hdr->ph_pid);
+        fprintf(stderr, "  host pid = %u\n", hdr->ph_extern_pid);
+        fprintf(stderr, "  line number = %u\n", hdr->ph_line_num);
+}
+ 
+#define HDR_SIZE sizeof(*hdr)
+ 
+static int parse_buffer(int fdin, int fdout)
 {
         struct dbg_line *line;
         struct ptldebug_header *hdr;
-        char buf[4097], *p;
-        int rc;
-        unsigned long dropped = 0, kept = 0;
+        char buf[4097], *ptr;
+        unsigned long dropped = 0, kept = 0, bad = 0;
         struct dbg_line **linev = NULL;
         int linev_len = 0;
-
+        int rc;
+ 
+        hdr = (void *)buf;
+  
         while (1) {
-                rc = fread(buf, sizeof(hdr->ph_len) + sizeof(hdr->ph_flags), 1, in);
+                int first_bad = 1;
+                int count;
+ 
+                count = HDR_SIZE;
+                ptr = buf;
+        readhdr:
+                rc = read(fdin, ptr, count);
                 if (rc <= 0)
-                        break;
+                         goto print;
+  
+                ptr += rc;
+                count -= rc;
+                if (count > 0)
+                        goto readhdr;
+                
+                if (hdr->ph_len > 4094 ||       /* is this header bogus? */
+                    hdr->ph_cpu_id > 65536 ||
+                    hdr->ph_stack > 65536 ||
+                    hdr->ph_sec < (1 << 30) ||
+                    hdr->ph_usec > 1000000000 ||
+                    hdr->ph_line_num > 65536) {
+                        if (first_bad)
+                                dump_hdr(lseek(fdin, 0, SEEK_CUR), hdr);
+                        bad += first_bad;
+                        first_bad = 0;
+ 
+                        /* try to restart on next line */
+                        while (count < HDR_SIZE && buf[count] != '\n')
+                                count++;
+                        if (buf[count] == '\n')
+                                count++; /* move past '\n' */
+                        if (HDR_SIZE - count > 0) {
+                                int left = HDR_SIZE - count;
 
-                hdr = (void *)buf;
-                if (hdr->ph_len == 0)
-                        break;
-                if (hdr->ph_len > 4094) {
-                        fprintf(stderr, "unexpected large record: %d bytes.  "
-                                "aborting.\n",
-                                hdr->ph_len);
-                        break;
+                                memmove(buf, buf + count, left);
+                                ptr = buf + left;
+
+                                goto readhdr;
+                        }
+
+                        continue;
                 }
+  
+                if (hdr->ph_len == 0)
+                        continue;
 
-                rc = fread(buf + sizeof(hdr->ph_len) + sizeof(hdr->ph_flags), 1,
-                           hdr->ph_len - sizeof(hdr->ph_len) - sizeof(hdr->ph_flags), in);
+                count = hdr->ph_len - HDR_SIZE;
+        readmore:
+                rc = read(fdin, ptr, count);
                 if (rc <= 0)
                         break;
+  
+                ptr += rc;
+                count -= rc;
+                if (count > 0)
+                        goto readmore;
+ 
+                first_bad = 1;
 
                 if ((hdr->ph_subsys && !(subsystem_mask & hdr->ph_subsys)) ||
-                    (hdr->ph_mask   && !(debug_mask & hdr->ph_mask))) {
+                    (hdr->ph_mask && !(debug_mask & hdr->ph_mask))) {
                         dropped++;
                         continue;
                 }
-
+  
+        retry_alloc:
                 line = malloc(sizeof(*line));
                 if (line == NULL) {
-                        fprintf(stderr, "malloc failed; printing accumulated "
-                                "records and exiting.\n");
+                         if (linev) {
+                                fprintf(stderr, "error: line malloc(%u): "
+                                        "printing accumulated records\n",
+                                        sizeof(*line));
+                                print_rec(&linev, kept, fdout);
+
+                                goto retry_alloc;
+                        }
+                        fprintf(stderr, "error: line malloc(%u): exiting\n",
+                                sizeof(*line));
                         break;
                 }
 
                 line->hdr = malloc(hdr->ph_len + 1);
                 if (line->hdr == NULL) {
                         free(line);
-                        fprintf(stderr, "malloc failed; printing accumulated "
-                                "records and exiting.\n");
+                        if (linev) {
+                                fprintf(stderr, "error: hdr malloc(%u): "
+                                        "printing accumulated records\n",
+                                        hdr->ph_len + 1);
+                                print_rec(&linev, kept, fdout);
+ 
+                                goto retry_alloc;
+                        }
+                        fprintf(stderr, "error: hdr malloc(%u): exiting\n",
+                                        hdr->ph_len + 1);
                         break;
                 }
-
-                p = (void *)line->hdr;
+  
+                ptr = (void *)line->hdr;
                 memcpy(line->hdr, buf, hdr->ph_len);
-                p[hdr->ph_len] = '\0';
+                ptr[hdr->ph_len] = '\0';
 
-                p += sizeof(*hdr);
-                line->file = p;
-                p += strlen(line->file) + 1;
-                line->fn = p;
-                p += strlen(line->fn) + 1;
-                line->text = p;
+                ptr += sizeof(*hdr);
+                line->file = ptr;
+                ptr += strlen(line->file) + 1;
+                line->fn = ptr;
+                ptr += strlen(line->fn) + 1;
+                line->text = ptr;
+ 
+        retry_add:
+                if (add_rec(line, &linev, &linev_len, kept) < 0) {
+                        if (linev) {
+                                fprintf(stderr, "error: add_rec[%u] failed; "
+                                        "print accumulated records\n",
+                                        linev_len);
+                                print_rec(&linev, kept, fdout);
 
-                if (!add_rec(line, &linev, &linev_len, kept)) {
-                        fprintf(stderr, "malloc failed; printing accumulated " 
-                                "records and exiting.\n");
+                                goto retry_add;
+                        }
+                        fprintf(stderr, "error: add_rec[0] failed; exiting\n");
                         break;
-                }        
+                }
                 kept++;
         }
 
-        if (linev) {
-                qsort(linev, kept, sizeof(struct dbg_line *), cmp_rec);
-                print_rec(linev, kept, out);
-        }
+print:
+        if (linev)
+                print_rec(&linev, kept, fdout);
 
-        printf("Debug log: %lu lines, %lu kept, %lu dropped.\n",
-                dropped + kept, kept, dropped);
+        printf("Debug log: %lu lines, %lu kept, %lu dropped, %lu bad.\n",
+                dropped + kept + bad, kept, dropped, bad);
+  
         return 0;
 }
 
@@ -475,8 +569,11 @@ int jt_dbg_debug_kernel(int argc, char **argv)
 {
         char filename[4096];
         struct stat st;
-        int rc, raw = 0, fd;
-        FILE *in, *out = stdout;
+        int raw = 0;
+        int save_errno;
+        int fdin;
+        int fdout;
+        int rc;
 
         if (argc > 3) {
                 fprintf(stderr, "usage: %s [file] [raw]\n", argv[0]);
@@ -501,49 +598,50 @@ int jt_dbg_debug_kernel(int argc, char **argv)
 
         if (stat(filename, &st) == 0 && S_ISREG(st.st_mode))
                 unlink(filename);
-
-        fd = dbg_open_ctlhandle(DUMP_KERNEL_CTL_NAME);
-        if (fd < 0) {
+  
+        fdin = dbg_open_ctlhandle(DUMP_KERNEL_CTL_NAME);
+        if (fdin < 0) {
                 fprintf(stderr, "open(dump_kernel) failed: %s\n",
                         strerror(errno));
                 return 1;
         }
 
-        rc = dbg_write_cmd(fd, filename, strlen(filename));
+        rc = dbg_write_cmd(fdin, filename, strlen(filename));
+        save_errno = errno;
+        dbg_close_ctlhandle(fdin);
         if (rc != 0) {
                 fprintf(stderr, "write(%s) failed: %s\n", filename,
-                        strerror(errno));
-                dbg_close_ctlhandle(fd);
+                        strerror(save_errno));
                 return 1;
         }
-        dbg_close_ctlhandle(fd);
 
         if (raw)
                 return 0;
-
-        in = fopen(filename, "r");
-        if (in == NULL) {
+  
+        fdin = open(filename, O_RDONLY);
+        if (fdin < 0) {
                 if (errno == ENOENT) /* no dump file created */
                         return 0;
-
                 fprintf(stderr, "fopen(%s) failed: %s\n", filename,
                         strerror(errno));
                 return 1;
         }
         if (argc > 1) {
-                out = fopen(argv[1], "w");
-                if (out == NULL) {
+                fdout = open(argv[1], O_WRONLY|O_CREAT);
+                if (fdout < 0) {
                         fprintf(stderr, "fopen(%s) failed: %s\n", argv[1],
                                 strerror(errno));
-                        fclose(in);
+                        close(fdin);
                         return 1;
                 }
-        }
+        } else {
+		fdout = fileno(stdout);
+	}
 
-        rc = parse_buffer(in, out);
-        fclose(in);
+        rc = parse_buffer(fdin, fdout);
+        close(fdin);
         if (argc > 1)
-                fclose(out);
+                close(fdout);
         if (rc) {
                 fprintf(stderr, "parse_buffer failed; leaving tmp file %s "
                         "behind.\n", filename);
@@ -554,6 +652,7 @@ int jt_dbg_debug_kernel(int argc, char **argv)
                                 "unlink tmp file %s: %s\n", filename,
                                 strerror(errno));
         }
+
         return rc;
 }
 
@@ -561,8 +660,6 @@ int jt_dbg_debug_file(int argc, char **argv)
 {
         int    fdin;
         int    fdout;
-        FILE  *in;
-        FILE  *out = stdout;
         int    rc;
 
         if (argc > 3 || argc < 2) {
@@ -571,43 +668,30 @@ int jt_dbg_debug_file(int argc, char **argv)
         }
 
         fdin = open(argv[1], O_RDONLY | O_LARGEFILE);
-        if (fdin == -1) {
+        if (fdin < 0) {
                 fprintf(stderr, "open(%s) failed: %s\n", argv[1],
                         strerror(errno));
-                return 1;
-        }
-        in = fdopen(fdin, "r");
-        if (in == NULL) {
-                fprintf(stderr, "fopen(%s) failed: %s\n", argv[1],
-                        strerror(errno));
-                close(fdin);
                 return 1;
         }
         if (argc > 2) {
                 fdout = open(argv[2],
                              O_CREAT | O_TRUNC | O_WRONLY | O_LARGEFILE,
                              0600);
-                if (fdout == -1) {
+                if (fdout < 0) {
                         fprintf(stderr, "open(%s) failed: %s\n", argv[2],
                                 strerror(errno));
-                        fclose(in);
+                        close(fdin);
                         return 1;
                 }
-                out = fdopen(fdout, "w");
-                if (out == NULL) {
-                        fprintf(stderr, "fopen(%s) failed: %s\n", argv[2],
-                                strerror(errno));
-                        fclose(in);
-                        close(fdout);
-                        return 1;
-                }
+        } else {
+                fdout = fileno(stdout);
         }
 
-        rc = parse_buffer(in, out);
+        rc = parse_buffer(fdin, fdout);
 
-        fclose(in);
-        if (out != stdout)
-                fclose(out);
+        close(fdin);
+        if (fdout != fileno(stdout))
+                close(fdout);
 
         return rc;
 }
