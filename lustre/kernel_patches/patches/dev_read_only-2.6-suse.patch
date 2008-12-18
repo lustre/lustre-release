@@ -2,7 +2,7 @@ Index: linux-2.6.9/drivers/block/ll_rw_blk.c
 ===================================================================
 --- linux-2.6.9.orig/drivers/block/ll_rw_blk.c
 +++ linux-2.6.9/drivers/block/ll_rw_blk.c
-@@ -2326,6 +2326,8 @@ static inline int attempt_front_merge(re
+@@ -2331,6 +2331,8 @@ static inline int attempt_front_merge(re
  	return 0;
  }
  
@@ -11,7 +11,7 @@ Index: linux-2.6.9/drivers/block/ll_rw_blk.c
  /**
   * blk_attempt_remerge  - attempt to remerge active head with next request
   * @q:    The &request_queue_t belonging to the device
-@@ -2631,6 +2633,13 @@ end_io:
+@@ -2636,6 +2638,13 @@ end_io:
  		if (test_bit(QUEUE_FLAG_DEAD, &q->queue_flags))
  			goto end_io;
  
@@ -25,7 +25,7 @@ Index: linux-2.6.9/drivers/block/ll_rw_blk.c
  		/*
  		 * If this device has partitions, remap block n
  		 * of partition p to block n+start(p) of the disk.
-@@ -3180,6 +3189,92 @@ void swap_io_context(struct io_context *
+@@ -3185,6 +3194,92 @@ void swap_io_context(struct io_context *
  
  
  /*
@@ -122,19 +122,19 @@ Index: linux-2.6.9/fs/block_dev.c
 ===================================================================
 --- linux-2.6.9.orig/fs/block_dev.c
 +++ linux-2.6.9/fs/block_dev.c
-@@ -60,6 +60,7 @@ static void kill_bdev(struct block_devic
- {
- 	invalidate_bdev(bdev, 1);
- 	truncate_inode_pages(bdev->bd_inode->i_mapping, 0);
-+	dev_clear_rdonly(bdev);
- }	
- 
- int set_blocksize(struct block_device *bdev, int size)
+@@ -744,6 +744,7 @@ int blkdev_put(struct block_device *bdev
+ 			blkdev_put(bdev->bd_contains);
+ 		}
+ 		bdev->bd_contains = NULL;
++		dev_clear_rdonly(bdev);
+ 	}
+ 	unlock_kernel();
+ 	up(&bdev->bd_sem);
 Index: linux-2.6.9/include/linux/fs.h
 ===================================================================
 --- linux-2.6.9.orig/include/linux/fs.h
 +++ linux-2.6.9/include/linux/fs.h
-@@ -1492,6 +1492,10 @@ extern void file_kill(struct file *f);
+@@ -1479,6 +1479,10 @@ extern void file_kill(struct file *f);
  struct bio;
  extern void submit_bio(int, struct bio *);
  extern int bdev_read_only(struct block_device *);
