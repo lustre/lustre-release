@@ -1,6 +1,14 @@
 lnxmaj="2.6.22"
 lnxrel="14"
 
+# this is the delimeter that goes between $lnxmaj and $lnxrel
+# defaults to "-"
+EXTRA_VERSION_DELIMITER="."
+
+# this is the delimeter that goes before the "smp" at the end of the version
+# defaults to empty
+TARGET_DELIMITER="-"
+
 KERNEL=linux-$lnxmaj.$lnxrel.tar.bz2
 SERIES=2.6.22-vanilla.series
 VERSION=$lnxmaj
@@ -16,8 +24,9 @@ BASE_ARCHS="i686 x86_64"
 BIGMEM_ARCHS=""
 BOOT_ARCHS=""
 JENSEN_ARCHS=""
-SMP_ARCHS="i686 x86_64"
-BIGSMP_ARCHS=""
+SMP_ARCHS="x86_64"
+BIGSMP_ARCHS="i686"
+PSERIES64_ARCHS=""
 UP_ARCHS=""
 SRC_ARCHS=""
 
