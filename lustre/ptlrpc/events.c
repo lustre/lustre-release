@@ -141,6 +141,7 @@ void reply_in_callback(lnet_event_t *ev)
                 req->rq_receiving_reply = 1;
         } else {
                 /* Real reply */
+                req->rq_rep_swab_mask = 0;
                 req->rq_replied = 1;
                 req->rq_reply_off = ev->offset;
                 req->rq_nob_received = ev->mlength;
