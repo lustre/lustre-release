@@ -1207,7 +1207,7 @@ __u32 lustre_msg_get_flags(struct lustre_msg *msg)
                 return pb->pb_flags;
         }
         default:
-                CERROR("Wrong magic %x\n", msg->lm_magic);
+                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
                 /* flags might be printed in debug code while message
                  * uninitialized */
                 return 0;
@@ -1502,10 +1502,8 @@ int lustre_msg_get_status(struct lustre_msg *msg)
 {
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V1:
-        case LUSTRE_MSG_MAGIC_V1_SWABBED:
                 return ((struct lustre_msg_v1 *)msg)->lm_status;
-        case LUSTRE_MSG_MAGIC_V2:
-        case LUSTRE_MSG_MAGIC_V2_SWABBED: {
+        case LUSTRE_MSG_MAGIC_V2: {
                 struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 if (!pb) {
                         CERROR("invalid msg %p: no ptlrpc body!\n", msg);
